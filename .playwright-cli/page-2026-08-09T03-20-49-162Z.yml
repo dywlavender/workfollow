@@ -1,0 +1,68 @@
+- generic [ref=e3]:
+  - complementary [ref=e4]:
+    - link "WorkFollow 首页" [ref=e5] [cursor=pointer]:
+      - /url: /
+      - generic [ref=e6]: W
+    - navigation "全局导航" [ref=e7]:
+      - link "首页" [ref=e8] [cursor=pointer]:
+        - /url: /
+      - link "任务" [active] [ref=e13] [cursor=pointer]:
+        - /url: /todos
+      - link "日历" [ref=e17] [cursor=pointer]:
+        - /url: /calendar
+      - link "全部笔记" [ref=e20] [cursor=pointer]:
+        - /url: /notes
+      - link "共享笔记" [ref=e24] [cursor=pointer]:
+        - /url: /shared-notes
+      - link "通知" [ref=e28] [cursor=pointer]:
+        - /url: /notifications
+      - link "AI 助手" [ref=e32] [cursor=pointer]:
+        - /url: /notes?panel=ai
+    - generic "切换工作空间" [ref=e37] [cursor=pointer]:
+      - combobox "切换工作空间" [ref=e43]:
+        - option "个人空间" [selected]
+        - option "Acceptance Team"
+    - link "设置" [ref=e45] [cursor=pointer]:
+      - /url: /settings
+  - main [ref=e54]:
+    - generic [ref=e288]:
+      - complementary "任务视图" [ref=e289]:
+        - generic [ref=e290]: 任务
+        - navigation "任务视图" [ref=e292]:
+          - link "今天 0" [ref=e293] [cursor=pointer]:
+            - /url: /todos?view=today
+            - strong [ref=e297]: 今天
+            - generic [ref=e298]: "0"
+          - link "本周 0" [ref=e299] [cursor=pointer]:
+            - /url: /todos?view=week
+            - strong [ref=e303]: 本周
+            - generic [ref=e304]: "0"
+          - link "收集箱 0" [ref=e305] [cursor=pointer]:
+            - /url: /todos?view=inbox
+            - strong [ref=e310]: 收集箱
+            - generic [ref=e311]: "0"
+          - link "本月 0" [ref=e312] [cursor=pointer]:
+            - /url: /todos?view=month
+            - strong [ref=e316]: 本月
+            - generic [ref=e317]: "0"
+        - generic [ref=e318]:
+          - heading "记录" [level=2] [ref=e319]
+          - navigation "记录" [ref=e320]:
+            - link "已完成 0" [ref=e321] [cursor=pointer]:
+              - /url: /todos?view=completed
+              - strong [ref=e326]: 已完成
+              - generic [ref=e327]: "0"
+      - region "待办列表" [ref=e328]:
+        - generic [ref=e329]:
+          - generic [ref=e330]:
+            - generic [ref=e331]: 2026年8月9日 · 周日
+            - heading "今天" [level=2] [ref=e332]
+          - generic [ref=e333]:
+            - button "切换任务排序" [ref=e334] [cursor=pointer]
+            - button "打开搜索" [ref=e338] [cursor=pointer]
+            - button "更多列表操作" [ref=e344] [cursor=pointer]
+        - button "添加任务" [ref=e352] [cursor=pointer]
+        - generic [ref=e355]:
+          - strong [ref=e359]: 这里还没有待办
+          - paragraph [ref=e360]: 当前视图没有符合条件的待办。
+          - button "添加任务" [ref=e361] [cursor=pointer]

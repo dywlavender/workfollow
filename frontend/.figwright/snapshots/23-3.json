@@ -1,0 +1,3091 @@
+{
+  "figwrightSnapshot": 2,
+  "nodeId": "23:3",
+  "capturedAt": "2026-08-12T16:00:06.626Z",
+  "context": {
+    "nodes": [
+      {
+        "id": "23:3",
+        "name": "Todo Web · 3024×1900",
+        "type": "FRAME",
+        "x": 0,
+        "y": 0,
+        "width": 3024,
+        "height": 1900,
+        "constraints": {
+          "horizontal": "MIN",
+          "vertical": "MIN"
+        },
+        "clipsContent": true,
+        "fill": "fill_16zfsl5",
+        "children": [
+          {
+            "id": "23:4",
+            "name": "Vector",
+            "type": "VECTOR",
+            "x": 0,
+            "y": 0,
+            "width": 3024,
+            "height": 1900,
+            "constraints": {
+              "horizontal": "SCALE",
+              "vertical": "SCALE"
+            },
+            "fill": "fill_nll9eq"
+          },
+          {
+            "id": "23:5",
+            "name": "Vector",
+            "type": "VECTOR",
+            "x": 0,
+            "y": 0,
+            "width": 124,
+            "height": 1900,
+            "constraints": {
+              "horizontal": "SCALE",
+              "vertical": "SCALE"
+            },
+            "fill": "fill_35l2ws"
+          },
+          {
+            "id": "23:6",
+            "name": "Vector",
+            "type": "VECTOR",
+            "x": 124,
+            "y": 0,
+            "width": 480,
+            "height": 1900,
+            "constraints": {
+              "horizontal": "SCALE",
+              "vertical": "SCALE"
+            },
+            "fill": "fill_1u0dly4"
+          },
+          {
+            "id": "23:7",
+            "name": "Vector",
+            "type": "VECTOR",
+            "x": 604,
+            "y": 0,
+            "width": 790,
+            "height": 1900,
+            "constraints": {
+              "horizontal": "SCALE",
+              "vertical": "SCALE"
+            },
+            "fill": "fill_nll9eq"
+          },
+          {
+            "id": "23:8",
+            "name": "Vector",
+            "type": "VECTOR",
+            "x": 1394,
+            "y": 0,
+            "width": 1630,
+            "height": 1900,
+            "constraints": {
+              "horizontal": "SCALE",
+              "vertical": "SCALE"
+            },
+            "fill": "fill_nll9eq"
+          },
+          {
+            "id": "23:9",
+            "name": "Vector",
+            "type": "VECTOR",
+            "x": 604,
+            "y": 0,
+            "width": 0,
+            "height": 1900,
+            "strokeWeight": 1,
+            "strokeAlign": "CENTER",
+            "constraints": {
+              "horizontal": "SCALE",
+              "vertical": "SCALE"
+            },
+            "fill": "fill_1s3vosi",
+            "stroke": "stroke_mtuiai"
+          },
+          {
+            "id": "23:10",
+            "name": "Vector",
+            "type": "VECTOR",
+            "x": 1394,
+            "y": 0,
+            "width": 0,
+            "height": 1900,
+            "strokeWeight": 1,
+            "strokeAlign": "CENTER",
+            "constraints": {
+              "horizontal": "SCALE",
+              "vertical": "SCALE"
+            },
+            "fill": "fill_1s3vosi",
+            "stroke": "stroke_mtuiai"
+          },
+          {
+            "id": "23:11",
+            "name": "Vector",
+            "type": "VECTOR",
+            "x": 30,
+            "y": 84,
+            "width": 62,
+            "height": 64,
+            "constraints": {
+              "horizontal": "SCALE",
+              "vertical": "SCALE"
+            },
+            "fill": "fill_nll9eq"
+          },
+          {
+            "id": "23:12",
+            "name": "Vector",
+            "type": "VECTOR",
+            "x": 46,
+            "y": 96,
+            "width": 30,
+            "height": 30,
+            "constraints": {
+              "horizontal": "SCALE",
+              "vertical": "SCALE"
+            },
+            "fill": "fill_27xzh8"
+          },
+          {
+            "id": "23:13",
+            "name": "Vector",
+            "type": "VECTOR",
+            "x": 42,
+            "y": 115,
+            "width": 38,
+            "height": 28,
+            "constraints": {
+              "horizontal": "SCALE",
+              "vertical": "SCALE"
+            },
+            "fill": "fill_27xzh8"
+          },
+          {
+            "id": "23:14",
+            "name": "Vector",
+            "type": "VECTOR",
+            "x": 77,
+            "y": 76,
+            "width": 24,
+            "height": 24,
+            "constraints": {
+              "horizontal": "SCALE",
+              "vertical": "SCALE"
+            },
+            "fill": "fill_luf0jy"
+          },
+          {
+            "id": "23:15",
+            "name": "♛",
+            "type": "TEXT",
+            "x": 82.5,
+            "y": 80,
+            "width": 13,
+            "height": 16,
+            "constraints": {
+              "horizontal": "SCALE",
+              "vertical": "SCALE"
+            },
+            "characters": "♛",
+            "textAlignHorizontal": "CENTER",
+            "fill": "fill_nll9eq",
+            "textStyle": "text_ji6diy"
+          },
+          {
+            "id": "23:16",
+            "name": "Vector",
+            "type": "VECTOR",
+            "x": 41,
+            "y": 207,
+            "width": 42,
+            "height": 42,
+            "constraints": {
+              "horizontal": "SCALE",
+              "vertical": "SCALE"
+            },
+            "fill": "fill_nll9eq"
+          },
+          {
+            "id": "23:17",
+            "name": "Vector",
+            "type": "VECTOR",
+            "x": 53,
+            "y": 215,
+            "width": 19,
+            "height": 20,
+            "fills": [],
+            "strokeWeight": 4,
+            "strokeAlign": "CENTER",
+            "strokeCap": "ROUND",
+            "constraints": {
+              "horizontal": "SCALE",
+              "vertical": "SCALE"
+            },
+            "stroke": "fill_35l2ws"
+          },
+          {
+            "id": "23:18",
+            "name": "Vector",
+            "type": "VECTOR",
+            "x": 41,
+            "y": 303,
+            "width": 42,
+            "height": 42,
+            "constraints": {
+              "horizontal": "SCALE",
+              "vertical": "SCALE"
+            },
+            "fill": "fill_1nvwge5"
+          },
+          {
+            "id": "23:19",
+            "name": "Vector",
+            "type": "VECTOR",
+            "x": 48,
+            "y": 315,
+            "width": 28,
+            "height": 18,
+            "fills": [],
+            "strokeWeight": 3,
+            "strokeAlign": "CENTER",
+            "strokeCap": "ROUND",
+            "strokeJoin": "ROUND",
+            "constraints": {
+              "horizontal": "SCALE",
+              "vertical": "SCALE"
+            },
+            "stroke": "stroke_hofkul"
+          },
+          {
+            "id": "23:20",
+            "name": "Group",
+            "type": "GROUP",
+            "x": 41,
+            "y": 397,
+            "width": 42,
+            "height": 42,
+            "children": [
+              {
+                "id": "23:21",
+                "name": "Vector",
+                "type": "VECTOR",
+                "x": 41,
+                "y": 397,
+                "width": 20,
+                "height": 20,
+                "constraints": {
+                  "horizontal": "SCALE",
+                  "vertical": "SCALE"
+                },
+                "fill": "fill_nrr5rx"
+              },
+              {
+                "id": "23:22",
+                "name": "Vector",
+                "type": "VECTOR",
+                "x": 63,
+                "y": 397,
+                "width": 20,
+                "height": 20,
+                "constraints": {
+                  "horizontal": "SCALE",
+                  "vertical": "SCALE"
+                },
+                "fill": "fill_nrr5rx"
+              },
+              {
+                "id": "23:23",
+                "name": "Vector",
+                "type": "VECTOR",
+                "x": 41,
+                "y": 419,
+                "width": 20,
+                "height": 20,
+                "constraints": {
+                  "horizontal": "SCALE",
+                  "vertical": "SCALE"
+                },
+                "fill": "fill_nrr5rx"
+              },
+              {
+                "id": "23:24",
+                "name": "Vector",
+                "type": "VECTOR",
+                "x": 63,
+                "y": 419,
+                "width": 20,
+                "height": 20,
+                "constraints": {
+                  "horizontal": "SCALE",
+                  "vertical": "SCALE"
+                },
+                "fill": "fill_nrr5rx"
+              }
+            ]
+          },
+          {
+            "id": "23:25",
+            "name": "Vector",
+            "type": "VECTOR",
+            "x": 41,
+            "y": 495,
+            "width": 42,
+            "height": 42,
+            "constraints": {
+              "horizontal": "SCALE",
+              "vertical": "SCALE"
+            },
+            "fill": "fill_n4avpm"
+          },
+          {
+            "id": "23:26",
+            "name": "Vector",
+            "type": "VECTOR",
+            "x": 48,
+            "y": 503,
+            "width": 28,
+            "height": 27,
+            "constraints": {
+              "horizontal": "SCALE",
+              "vertical": "SCALE"
+            },
+            "fill": "fill_35l2ws"
+          },
+          {
+            "id": "23:27",
+            "name": "Vector",
+            "type": "VECTOR",
+            "x": 45,
+            "y": 593,
+            "width": 34,
+            "height": 34,
+            "fills": [],
+            "strokeWeight": 3,
+            "strokeAlign": "CENTER",
+            "strokeCap": "ROUND",
+            "strokeJoin": "ROUND",
+            "constraints": {
+              "horizontal": "SCALE",
+              "vertical": "SCALE"
+            },
+            "stroke": "stroke_hofkul"
+          },
+          {
+            "id": "23:28",
+            "name": "Vector",
+            "type": "VECTOR",
+            "x": 74,
+            "y": 622,
+            "width": 13,
+            "height": 13,
+            "fills": [],
+            "strokeWeight": 3,
+            "strokeAlign": "CENTER",
+            "strokeCap": "ROUND",
+            "strokeJoin": "ROUND",
+            "constraints": {
+              "horizontal": "SCALE",
+              "vertical": "SCALE"
+            },
+            "stroke": "stroke_hofkul"
+          },
+          {
+            "id": "23:29",
+            "name": "Vector",
+            "type": "VECTOR",
+            "x": 41.99802780151367,
+            "y": 1598,
+            "width": 40.000003814697266,
+            "height": 34.280967712402344,
+            "fills": [],
+            "strokeWeight": 3,
+            "strokeAlign": "CENTER",
+            "strokeCap": "ROUND",
+            "strokeJoin": "ROUND",
+            "constraints": {
+              "horizontal": "SCALE",
+              "vertical": "SCALE"
+            },
+            "stroke": "stroke_hofkul"
+          },
+          {
+            "id": "23:30",
+            "name": "Vector",
+            "type": "VECTOR",
+            "x": 48,
+            "y": 1592.2808837890625,
+            "width": 34,
+            "height": 19.719131469726562,
+            "fills": [],
+            "strokeWeight": 3,
+            "strokeAlign": "CENTER",
+            "strokeCap": "ROUND",
+            "strokeJoin": "ROUND",
+            "constraints": {
+              "horizontal": "SCALE",
+              "vertical": "SCALE"
+            },
+            "stroke": "stroke_hofkul"
+          },
+          {
+            "id": "23:31",
+            "name": "Vector",
+            "type": "VECTOR",
+            "x": 37,
+            "y": 1693,
+            "width": 50,
+            "height": 31,
+            "constraints": {
+              "horizontal": "SCALE",
+              "vertical": "SCALE"
+            },
+            "fill": "fill_nrr5rx"
+          },
+          {
+            "id": "23:32",
+            "name": "Vector",
+            "type": "VECTOR",
+            "x": 57,
+            "y": 1725,
+            "width": 10,
+            "height": 10,
+            "constraints": {
+              "horizontal": "SCALE",
+              "vertical": "SCALE"
+            },
+            "fill": "fill_nrr5rx"
+          },
+          {
+            "id": "23:33",
+            "name": "Vector",
+            "type": "VECTOR",
+            "x": 40,
+            "y": 1788,
+            "width": 44,
+            "height": 44,
+            "constraints": {
+              "horizontal": "SCALE",
+              "vertical": "SCALE"
+            },
+            "fill": "fill_nrr5rx"
+          },
+          {
+            "id": "23:34",
+            "name": "?",
+            "type": "TEXT",
+            "x": 54.5,
+            "y": 1793,
+            "width": 15,
+            "height": 31,
+            "constraints": {
+              "horizontal": "SCALE",
+              "vertical": "SCALE"
+            },
+            "characters": "?",
+            "textAlignHorizontal": "CENTER",
+            "fill": "fill_35l2ws",
+            "textStyle": "text_1gore87"
+          },
+          {
+            "id": "23:35",
+            "name": "Vector",
+            "type": "VECTOR",
+            "x": 139,
+            "y": 28,
+            "width": 450,
+            "height": 70,
+            "constraints": {
+              "horizontal": "SCALE",
+              "vertical": "SCALE"
+            },
+            "fill": "fill_1hihtvr"
+          },
+          {
+            "id": "23:36",
+            "name": "Vector",
+            "type": "VECTOR",
+            "x": 169,
+            "y": 50,
+            "width": 27,
+            "height": 25,
+            "fills": [],
+            "strokeWeight": 3,
+            "strokeAlign": "CENTER",
+            "strokeCap": "ROUND",
+            "strokeJoin": "ROUND",
+            "constraints": {
+              "horizontal": "SCALE",
+              "vertical": "SCALE"
+            },
+            "stroke": "stroke_16dr562"
+          },
+          {
+            "id": "23:37",
+            "name": "今天",
+            "type": "TEXT",
+            "x": 211,
+            "y": 47,
+            "width": 58,
+            "height": 41,
+            "constraints": {
+              "horizontal": "SCALE",
+              "vertical": "SCALE"
+            },
+            "characters": "今天",
+            "fill": "fill_uvx7zc",
+            "textStyle": "text_1bzw2zm"
+          },
+          {
+            "id": "23:38",
+            "name": "2",
+            "type": "TEXT",
+            "x": 556,
+            "y": 53,
+            "width": 12,
+            "height": 23,
+            "constraints": {
+              "horizontal": "SCALE",
+              "vertical": "SCALE"
+            },
+            "characters": "2",
+            "fill": "fill_1vgmv5c",
+            "textStyle": "text_16j96l8"
+          },
+          {
+            "id": "23:39",
+            "name": "Group",
+            "type": "GROUP",
+            "x": 168,
+            "y": 126,
+            "width": 399,
+            "height": 38,
+            "children": [
+              {
+                "id": "23:40",
+                "name": "Vector",
+                "type": "VECTOR",
+                "x": 168,
+                "y": 130,
+                "width": 28,
+                "height": 25,
+                "fills": [],
+                "strokeWeight": 3,
+                "strokeAlign": "CENTER",
+                "strokeCap": "ROUND",
+                "strokeJoin": "ROUND",
+                "constraints": {
+                  "horizontal": "SCALE",
+                  "vertical": "SCALE"
+                },
+                "stroke": "stroke_16dr562"
+              },
+              {
+                "id": "23:41",
+                "name": "最近 7 天",
+                "type": "TEXT",
+                "x": 211,
+                "y": 126,
+                "width": 114,
+                "height": 38,
+                "constraints": {
+                  "horizontal": "SCALE",
+                  "vertical": "SCALE"
+                },
+                "characters": "最近 7 天",
+                "fill": "fill_uvx7zc",
+                "textStyle": "text_vrnxtw"
+              },
+              {
+                "id": "23:42",
+                "name": "5",
+                "type": "TEXT",
+                "x": 556,
+                "y": 132,
+                "width": 11,
+                "height": 22,
+                "constraints": {
+                  "horizontal": "SCALE",
+                  "vertical": "SCALE"
+                },
+                "characters": "5",
+                "fill": "fill_1vgmv5c",
+                "textStyle": "text_t0ijv9"
+              }
+            ]
+          },
+          {
+            "id": "23:43",
+            "name": "Group",
+            "type": "GROUP",
+            "x": 171,
+            "y": 205,
+            "width": 148,
+            "height": 38,
+            "children": [
+              {
+                "id": "23:44",
+                "name": "Vector",
+                "type": "VECTOR",
+                "x": 176,
+                "y": 211,
+                "width": 12,
+                "height": 12,
+                "fills": [],
+                "strokeWeight": 3,
+                "strokeAlign": "CENTER",
+                "strokeCap": "ROUND",
+                "strokeJoin": "ROUND",
+                "constraints": {
+                  "horizontal": "SCALE",
+                  "vertical": "SCALE"
+                },
+                "stroke": "stroke_16dr562"
+              },
+              {
+                "id": "23:45",
+                "name": "Vector",
+                "type": "VECTOR",
+                "x": 171,
+                "y": 222,
+                "width": 22,
+                "height": 13,
+                "fills": [],
+                "strokeWeight": 3,
+                "strokeAlign": "CENTER",
+                "strokeCap": "ROUND",
+                "strokeJoin": "ROUND",
+                "constraints": {
+                  "horizontal": "SCALE",
+                  "vertical": "SCALE"
+                },
+                "stroke": "stroke_16dr562"
+              },
+              {
+                "id": "23:46",
+                "name": "指派给我",
+                "type": "TEXT",
+                "x": 211,
+                "y": 205,
+                "width": 108,
+                "height": 38,
+                "constraints": {
+                  "horizontal": "SCALE",
+                  "vertical": "SCALE"
+                },
+                "characters": "指派给我",
+                "fill": "fill_uvx7zc",
+                "textStyle": "text_vrnxtw"
+              }
+            ]
+          },
+          {
+            "id": "23:47",
+            "name": "Group",
+            "type": "GROUP",
+            "x": 170,
+            "y": 277,
+            "width": 398,
+            "height": 38,
+            "children": [
+              {
+                "id": "23:48",
+                "name": "Vector",
+                "type": "VECTOR",
+                "x": 170,
+                "y": 283,
+                "width": 27,
+                "height": 20,
+                "fills": [],
+                "strokeWeight": 3,
+                "strokeAlign": "CENTER",
+                "strokeCap": "ROUND",
+                "strokeJoin": "ROUND",
+                "constraints": {
+                  "horizontal": "SCALE",
+                  "vertical": "SCALE"
+                },
+                "stroke": "stroke_16dr562"
+              },
+              {
+                "id": "23:49",
+                "name": "收集箱",
+                "type": "TEXT",
+                "x": 211,
+                "y": 277,
+                "width": 81,
+                "height": 38,
+                "constraints": {
+                  "horizontal": "SCALE",
+                  "vertical": "SCALE"
+                },
+                "characters": "收集箱",
+                "fill": "fill_uvx7zc",
+                "textStyle": "text_vrnxtw"
+              },
+              {
+                "id": "23:50",
+                "name": "9",
+                "type": "TEXT",
+                "x": 556,
+                "y": 281,
+                "width": 12,
+                "height": 22,
+                "constraints": {
+                  "horizontal": "SCALE",
+                  "vertical": "SCALE"
+                },
+                "characters": "9",
+                "fill": "fill_1vgmv5c",
+                "textStyle": "text_t0ijv9"
+              }
+            ]
+          },
+          {
+            "id": "23:51",
+            "name": "Group",
+            "type": "GROUP",
+            "x": 169,
+            "y": 352,
+            "width": 96,
+            "height": 38,
+            "children": [
+              {
+                "id": "23:52",
+                "name": "Vector",
+                "type": "VECTOR",
+                "x": 169,
+                "y": 354,
+                "width": 27,
+                "height": 27,
+                "fills": [],
+                "strokeWeight": 3,
+                "strokeAlign": "CENTER",
+                "strokeCap": "ROUND",
+                "strokeJoin": "ROUND",
+                "constraints": {
+                  "horizontal": "SCALE",
+                  "vertical": "SCALE"
+                },
+                "stroke": "stroke_16dr562"
+              },
+              {
+                "id": "23:53",
+                "name": "Vector",
+                "type": "VECTOR",
+                "x": 176,
+                "y": 363,
+                "width": 13,
+                "height": 8,
+                "fills": [],
+                "strokeWeight": 3,
+                "strokeAlign": "CENTER",
+                "strokeCap": "ROUND",
+                "strokeJoin": "ROUND",
+                "constraints": {
+                  "horizontal": "SCALE",
+                  "vertical": "SCALE"
+                },
+                "stroke": "stroke_16dr562"
+              },
+              {
+                "id": "23:54",
+                "name": "摘要",
+                "type": "TEXT",
+                "x": 211,
+                "y": 352,
+                "width": 54,
+                "height": 38,
+                "constraints": {
+                  "horizontal": "SCALE",
+                  "vertical": "SCALE"
+                },
+                "characters": "摘要",
+                "fill": "fill_uvx7zc",
+                "textStyle": "text_vrnxtw"
+              }
+            ]
+          },
+          {
+            "id": "23:55",
+            "name": "Vector",
+            "type": "VECTOR",
+            "x": 139,
+            "y": 435,
+            "width": 449,
+            "height": 0,
+            "strokeWeight": 1,
+            "strokeAlign": "CENTER",
+            "constraints": {
+              "horizontal": "SCALE",
+              "vertical": "SCALE"
+            },
+            "fill": "fill_1s3vosi",
+            "stroke": "stroke_y0uap2"
+          },
+          {
+            "id": "23:56",
+            "name": "清单",
+            "type": "TEXT",
+            "x": 164,
+            "y": 497,
+            "width": 42,
+            "height": 29,
+            "constraints": {
+              "horizontal": "SCALE",
+              "vertical": "SCALE"
+            },
+            "characters": "清单",
+            "fill": "fill_1vgmv5c",
+            "textStyle": "text_dl9hfb"
+          },
+          {
+            "id": "23:57",
+            "name": "👋",
+            "type": "TEXT",
+            "x": 166,
+            "y": 565,
+            "width": 30,
+            "height": 30,
+            "constraints": {
+              "horizontal": "SCALE",
+              "vertical": "SCALE"
+            },
+            "characters": "👋",
+            "fill": "fill_1s3vosi",
+            "textStyle": "text_1tmtbp3"
+          },
+          {
+            "id": "23:58",
+            "name": "欢迎",
+            "type": "TEXT",
+            "x": 216,
+            "y": 568,
+            "width": 54,
+            "height": 38,
+            "constraints": {
+              "horizontal": "SCALE",
+              "vertical": "SCALE"
+            },
+            "characters": "欢迎",
+            "fill": "fill_uvx7zc",
+            "textStyle": "text_vrnxtw"
+          },
+          {
+            "id": "23:59",
+            "name": "12",
+            "type": "TEXT",
+            "x": 548,
+            "y": 573,
+            "width": 20,
+            "height": 22,
+            "constraints": {
+              "horizontal": "SCALE",
+              "vertical": "SCALE"
+            },
+            "characters": "12",
+            "fill": "fill_1vgmv5c",
+            "textStyle": "text_t0ijv9"
+          },
+          {
+            "id": "23:60",
+            "name": "过滤器",
+            "type": "TEXT",
+            "x": 164,
+            "y": 649,
+            "width": 63,
+            "height": 29,
+            "constraints": {
+              "horizontal": "SCALE",
+              "vertical": "SCALE"
+            },
+            "characters": "过滤器",
+            "fill": "fill_1vgmv5c",
+            "textStyle": "text_dl9hfb"
+          },
+          {
+            "id": "23:61",
+            "name": "Vector",
+            "type": "VECTOR",
+            "x": 143,
+            "y": 704,
+            "width": 442,
+            "height": 92,
+            "constraints": {
+              "horizontal": "SCALE",
+              "vertical": "SCALE"
+            },
+            "fill": "fill_9xwoqr"
+          },
+          {
+            "id": "23:62",
+            "name": "根据清单、时间、优先级、标签等过",
+            "type": "TEXT",
+            "x": 162,
+            "y": 721,
+            "width": 352,
+            "height": 31,
+            "constraints": {
+              "horizontal": "SCALE",
+              "vertical": "SCALE"
+            },
+            "characters": "根据清单、时间、优先级、标签等过",
+            "fill": "fill_1vgmv5c",
+            "textStyle": "text_h4yg6g"
+          },
+          {
+            "id": "23:63",
+            "name": "滤出特定的任务",
+            "type": "TEXT",
+            "x": 162,
+            "y": 753,
+            "width": 154,
+            "height": 31,
+            "constraints": {
+              "horizontal": "SCALE",
+              "vertical": "SCALE"
+            },
+            "characters": "滤出特定的任务",
+            "fill": "fill_1vgmv5c",
+            "textStyle": "text_h4yg6g"
+          },
+          {
+            "id": "23:64",
+            "name": "标签",
+            "type": "TEXT",
+            "x": 164,
+            "y": 831,
+            "width": 42,
+            "height": 29,
+            "constraints": {
+              "horizontal": "SCALE",
+              "vertical": "SCALE"
+            },
+            "characters": "标签",
+            "fill": "fill_1vgmv5c",
+            "textStyle": "text_dl9hfb"
+          },
+          {
+            "id": "23:65",
+            "name": "Vector",
+            "type": "VECTOR",
+            "x": 143,
+            "y": 887,
+            "width": 442,
+            "height": 122,
+            "constraints": {
+              "horizontal": "SCALE",
+              "vertical": "SCALE"
+            },
+            "fill": "fill_9xwoqr"
+          },
+          {
+            "id": "23:66",
+            "name": "以标签的维度展示不同清单的任务",
+            "type": "TEXT",
+            "x": 162,
+            "y": 907,
+            "width": 330,
+            "height": 31,
+            "constraints": {
+              "horizontal": "SCALE",
+              "vertical": "SCALE"
+            },
+            "characters": "以标签的维度展示不同清单的任务",
+            "fill": "fill_1vgmv5c",
+            "textStyle": "text_h4yg6g"
+          },
+          {
+            "id": "23:67",
+            "name": "在添加任务时输入“#”可快速选择标",
+            "type": "TEXT",
+            "x": 162,
+            "y": 939,
+            "width": 345,
+            "height": 31,
+            "constraints": {
+              "horizontal": "SCALE",
+              "vertical": "SCALE"
+            },
+            "characters": "在添加任务时输入“#”可快速选择标",
+            "fill": "fill_1vgmv5c",
+            "textStyle": "text_h4yg6g"
+          },
+          {
+            "id": "23:68",
+            "name": "签",
+            "type": "TEXT",
+            "x": 162,
+            "y": 969,
+            "width": 22,
+            "height": 31,
+            "constraints": {
+              "horizontal": "SCALE",
+              "vertical": "SCALE"
+            },
+            "characters": "签",
+            "fill": "fill_1vgmv5c",
+            "textStyle": "text_h4yg6g"
+          },
+          {
+            "id": "23:69",
+            "name": "Vector",
+            "type": "VECTOR",
+            "x": 143,
+            "y": 1050,
+            "width": 442,
+            "height": 0,
+            "strokeWeight": 1,
+            "strokeAlign": "CENTER",
+            "constraints": {
+              "horizontal": "SCALE",
+              "vertical": "SCALE"
+            },
+            "fill": "fill_1s3vosi",
+            "stroke": "stroke_wj2ezf"
+          },
+          {
+            "id": "23:70",
+            "name": "Group",
+            "type": "GROUP",
+            "x": 168,
+            "y": 1102,
+            "width": 124,
+            "height": 38,
+            "children": [
+              {
+                "id": "23:71",
+                "name": "Vector",
+                "type": "VECTOR",
+                "x": 168,
+                "y": 1104,
+                "width": 27,
+                "height": 27,
+                "fills": [],
+                "strokeWeight": 3,
+                "strokeAlign": "CENTER",
+                "strokeCap": "ROUND",
+                "strokeJoin": "ROUND",
+                "constraints": {
+                  "horizontal": "SCALE",
+                  "vertical": "SCALE"
+                },
+                "stroke": "stroke_16dr562"
+              },
+              {
+                "id": "23:72",
+                "name": "Vector",
+                "type": "VECTOR",
+                "x": 175,
+                "y": 1111,
+                "width": 14,
+                "height": 12,
+                "fills": [],
+                "strokeWeight": 3,
+                "strokeAlign": "CENTER",
+                "strokeCap": "ROUND",
+                "strokeJoin": "ROUND",
+                "constraints": {
+                  "horizontal": "SCALE",
+                  "vertical": "SCALE"
+                },
+                "stroke": "stroke_16dr562"
+              },
+              {
+                "id": "23:73",
+                "name": "已完成",
+                "type": "TEXT",
+                "x": 211,
+                "y": 1102,
+                "width": 81,
+                "height": 38,
+                "constraints": {
+                  "horizontal": "SCALE",
+                  "vertical": "SCALE"
+                },
+                "characters": "已完成",
+                "fill": "fill_uvx7zc",
+                "textStyle": "text_vrnxtw"
+              }
+            ]
+          },
+          {
+            "id": "23:74",
+            "name": "Group",
+            "type": "GROUP",
+            "x": 171,
+            "y": 1179,
+            "width": 121,
+            "height": 38,
+            "children": [
+              {
+                "id": "23:75",
+                "name": "Vector",
+                "type": "VECTOR",
+                "x": 171,
+                "y": 1183,
+                "width": 26,
+                "height": 29,
+                "fills": [],
+                "strokeWeight": 3,
+                "strokeAlign": "CENTER",
+                "strokeCap": "ROUND",
+                "strokeJoin": "ROUND",
+                "constraints": {
+                  "horizontal": "SCALE",
+                  "vertical": "SCALE"
+                },
+                "stroke": "stroke_16dr562"
+              },
+              {
+                "id": "23:76",
+                "name": "垃圾桶",
+                "type": "TEXT",
+                "x": 211,
+                "y": 1179,
+                "width": 81,
+                "height": 38,
+                "constraints": {
+                  "horizontal": "SCALE",
+                  "vertical": "SCALE"
+                },
+                "characters": "垃圾桶",
+                "fill": "fill_uvx7zc",
+                "textStyle": "text_vrnxtw"
+              }
+            ]
+          },
+          {
+            "id": "23:77",
+            "name": "Group",
+            "type": "GROUP",
+            "x": 645,
+            "y": 40,
+            "width": 131,
+            "height": 53,
+            "children": [
+              {
+                "id": "23:78",
+                "name": "Vector",
+                "type": "VECTOR",
+                "x": 645,
+                "y": 47,
+                "width": 22,
+                "height": 26,
+                "fills": [],
+                "strokeWeight": 3,
+                "strokeAlign": "CENTER",
+                "strokeCap": "ROUND",
+                "strokeJoin": "ROUND",
+                "constraints": {
+                  "horizontal": "SCALE",
+                  "vertical": "SCALE"
+                },
+                "stroke": "stroke_16dr562"
+              },
+              {
+                "id": "23:79",
+                "name": "今天",
+                "type": "TEXT",
+                "x": 700,
+                "y": 40,
+                "width": 76,
+                "height": 53,
+                "constraints": {
+                  "horizontal": "SCALE",
+                  "vertical": "SCALE"
+                },
+                "characters": "今天",
+                "fill": "fill_uvx7zc",
+                "textStyle": "text_q2l40k"
+              },
+              {
+                "id": "23:80",
+                "name": "☼",
+                "type": "TEXT",
+                "visible": false,
+                "x": 1171,
+                "y": 41,
+                "width": 37,
+                "height": 41,
+                "constraints": {
+                  "horizontal": "SCALE",
+                  "vertical": "SCALE"
+                },
+                "characters": "☼",
+                "fill": "fill_uvx7zc",
+                "textStyle": "text_1enz7s3"
+              },
+              {
+                "id": "23:81",
+                "name": "⇅",
+                "type": "TEXT",
+                "visible": false,
+                "x": 1238,
+                "y": 44,
+                "width": 31,
+                "height": 38,
+                "constraints": {
+                  "horizontal": "SCALE",
+                  "vertical": "SCALE"
+                },
+                "characters": "⇅",
+                "fill": "fill_uvx7zc",
+                "textStyle": "text_14qreby"
+              },
+              {
+                "id": "23:82",
+                "name": "•••",
+                "type": "TEXT",
+                "visible": false,
+                "x": 1307,
+                "y": 41,
+                "width": 53,
+                "height": 38,
+                "constraints": {
+                  "horizontal": "SCALE",
+                  "vertical": "SCALE"
+                },
+                "characters": "•••",
+                "fill": "fill_uvx7zc",
+                "textStyle": "text_14qreby"
+              }
+            ]
+          },
+          {
+            "id": "23:83",
+            "name": "Vector",
+            "type": "VECTOR",
+            "x": 641,
+            "y": 118,
+            "width": 706,
+            "height": 74,
+            "constraints": {
+              "horizontal": "SCALE",
+              "vertical": "SCALE"
+            },
+            "fill": "fill_14lvr9i"
+          },
+          {
+            "id": "23:84",
+            "name": "＋ 添加任务至 “收集箱”",
+            "type": "TEXT",
+            "x": 670,
+            "y": 135,
+            "width": 301,
+            "height": 39,
+            "constraints": {
+              "horizontal": "SCALE",
+              "vertical": "SCALE"
+            },
+            "characters": "＋ 添加任务至 “收集箱”",
+            "fill": "fill_ffd8cu",
+            "textStyle": "text_1yjtduu"
+          },
+          {
+            "id": "23:85",
+            "name": "⌄",
+            "type": "TEXT",
+            "x": 643,
+            "y": 238,
+            "width": 22,
+            "height": 27,
+            "constraints": {
+              "horizontal": "SCALE",
+              "vertical": "SCALE"
+            },
+            "characters": "⌄",
+            "fill": "fill_1vgmv5c",
+            "textStyle": "text_8lro4e"
+          },
+          {
+            "id": "23:86",
+            "name": "已过期",
+            "type": "TEXT",
+            "x": 668,
+            "y": 233,
+            "width": 81,
+            "height": 38,
+            "constraints": {
+              "horizontal": "SCALE",
+              "vertical": "SCALE"
+            },
+            "characters": "已过期",
+            "fill": "fill_uvx7zc",
+            "textStyle": "text_vrnxtw"
+          },
+          {
+            "id": "23:87",
+            "name": "1",
+            "type": "TEXT",
+            "x": 758,
+            "y": 240,
+            "width": 10,
+            "height": 24,
+            "constraints": {
+              "horizontal": "SCALE",
+              "vertical": "SCALE"
+            },
+            "characters": "1",
+            "fill": "fill_1vgmv5c",
+            "textStyle": "text_1t62koo"
+          },
+          {
+            "id": "23:88",
+            "name": "顺延",
+            "type": "TEXT",
+            "x": 1301,
+            "y": 238,
+            "width": 44,
+            "height": 31,
+            "constraints": {
+              "horizontal": "SCALE",
+              "vertical": "SCALE"
+            },
+            "characters": "顺延",
+            "fill": "fill_17ej75k",
+            "textStyle": "text_18sh2mj"
+          },
+          {
+            "id": "23:89",
+            "name": "Vector",
+            "type": "VECTOR",
+            "x": 635,
+            "y": 276,
+            "width": 726,
+            "height": 82,
+            "constraints": {
+              "horizontal": "SCALE",
+              "vertical": "SCALE"
+            },
+            "fill": "fill_4oyqq2"
+          },
+          {
+            "id": "23:90",
+            "name": "Vector",
+            "type": "VECTOR",
+            "x": 668,
+            "y": 301,
+            "width": 27,
+            "height": 27,
+            "fills": [],
+            "strokeWeight": 2.5,
+            "strokeAlign": "CENTER",
+            "constraints": {
+              "horizontal": "SCALE",
+              "vertical": "SCALE"
+            },
+            "stroke": "stroke_1fbj7ie"
+          },
+          {
+            "id": "23:91",
+            "name": "3",
+            "type": "TEXT",
+            "x": 712,
+            "y": 301,
+            "width": 18,
+            "height": 34,
+            "constraints": {
+              "horizontal": "SCALE",
+              "vertical": "SCALE"
+            },
+            "characters": "3",
+            "fill": "fill_uvx7zc",
+            "textStyle": "text_orggj4"
+          },
+          {
+            "id": "23:92",
+            "name": "收集箱",
+            "type": "TEXT",
+            "x": 1172,
+            "y": 308,
+            "width": 57,
+            "height": 27,
+            "constraints": {
+              "horizontal": "SCALE",
+              "vertical": "SCALE"
+            },
+            "characters": "收集箱 ",
+            "fill": "fill_1vgmv5c",
+            "textStyle": "text_ph2djy"
+          },
+          {
+            "id": "23:93",
+            "name": "8月10日",
+            "type": "TEXT",
+            "x": 1273,
+            "y": 307,
+            "width": 73,
+            "height": 28,
+            "constraints": {
+              "horizontal": "SCALE",
+              "vertical": "SCALE"
+            },
+            "characters": "8月10日",
+            "fill": "fill_157nxf3",
+            "textStyle": "text_14htpn9"
+          },
+          {
+            "id": "23:94",
+            "name": "⌄",
+            "type": "TEXT",
+            "x": 643,
+            "y": 392,
+            "width": 22,
+            "height": 27,
+            "constraints": {
+              "horizontal": "SCALE",
+              "vertical": "SCALE"
+            },
+            "characters": "⌄",
+            "fill": "fill_1vgmv5c",
+            "textStyle": "text_8lro4e"
+          },
+          {
+            "id": "23:95",
+            "name": "今天",
+            "type": "TEXT",
+            "x": 668,
+            "y": 387,
+            "width": 54,
+            "height": 38,
+            "constraints": {
+              "horizontal": "SCALE",
+              "vertical": "SCALE"
+            },
+            "characters": "今天",
+            "fill": "fill_uvx7zc",
+            "textStyle": "text_vrnxtw"
+          },
+          {
+            "id": "23:96",
+            "name": "1",
+            "type": "TEXT",
+            "x": 736,
+            "y": 394,
+            "width": 10,
+            "height": 24,
+            "constraints": {
+              "horizontal": "SCALE",
+              "vertical": "SCALE"
+            },
+            "characters": "1",
+            "fill": "fill_1vgmv5c",
+            "textStyle": "text_1t62koo"
+          },
+          {
+            "id": "23:97",
+            "name": "Vector",
+            "type": "VECTOR",
+            "x": 668,
+            "y": 466,
+            "width": 27,
+            "height": 27,
+            "fills": [],
+            "strokeWeight": 2.5,
+            "strokeAlign": "CENTER",
+            "constraints": {
+              "horizontal": "SCALE",
+              "vertical": "SCALE"
+            },
+            "stroke": "fill_157nxf3"
+          },
+          {
+            "id": "23:98",
+            "name": "测试 2",
+            "type": "TEXT",
+            "x": 712,
+            "y": 463,
+            "width": 83,
+            "height": 39,
+            "constraints": {
+              "horizontal": "SCALE",
+              "vertical": "SCALE"
+            },
+            "characters": "测试 2",
+            "fill": "fill_uvx7zc",
+            "textStyle": "text_1yjtduu"
+          },
+          {
+            "id": "23:99",
+            "name": "收集箱",
+            "type": "TEXT",
+            "x": 1208,
+            "y": 469,
+            "width": 57,
+            "height": 27,
+            "constraints": {
+              "horizontal": "SCALE",
+              "vertical": "SCALE"
+            },
+            "characters": "收集箱 ",
+            "fill": "fill_1vgmv5c",
+            "textStyle": "text_ph2djy"
+          },
+          {
+            "id": "23:100",
+            "name": "今天",
+            "type": "TEXT",
+            "x": 1311,
+            "y": 468,
+            "width": 40,
+            "height": 28,
+            "constraints": {
+              "horizontal": "SCALE",
+              "vertical": "SCALE"
+            },
+            "characters": "今天",
+            "fill": "fill_17ej75k",
+            "textStyle": "text_14htpn9"
+          },
+          {
+            "id": "23:101",
+            "name": "- [ ] asd",
+            "type": "TEXT",
+            "x": 712,
+            "y": 511,
+            "width": 90,
+            "height": 29,
+            "constraints": {
+              "horizontal": "SCALE",
+              "vertical": "SCALE"
+            },
+            "characters": "- [ ] asd",
+            "fill": "fill_1vgmv5c",
+            "textStyle": "text_eo00ok"
+          },
+          {
+            "id": "23:102",
+            "name": "Vector",
+            "type": "VECTOR",
+            "x": 708,
+            "y": 560,
+            "width": 640,
+            "height": 0,
+            "strokeWeight": 1,
+            "strokeAlign": "CENTER",
+            "constraints": {
+              "horizontal": "SCALE",
+              "vertical": "SCALE"
+            },
+            "fill": "fill_1s3vosi",
+            "stroke": "stroke_1nluc27"
+          },
+          {
+            "id": "23:103",
+            "name": "⌄",
+            "type": "TEXT",
+            "x": 643,
+            "y": 608,
+            "width": 22,
+            "height": 27,
+            "constraints": {
+              "horizontal": "SCALE",
+              "vertical": "SCALE"
+            },
+            "characters": "⌄",
+            "fill": "fill_1vgmv5c",
+            "textStyle": "text_8lro4e"
+          },
+          {
+            "id": "23:104",
+            "name": "已完成",
+            "type": "TEXT",
+            "x": 668,
+            "y": 603,
+            "width": 81,
+            "height": 38,
+            "constraints": {
+              "horizontal": "SCALE",
+              "vertical": "SCALE"
+            },
+            "characters": "已完成",
+            "fill": "fill_uvx7zc",
+            "textStyle": "text_vrnxtw"
+          },
+          {
+            "id": "23:105",
+            "name": "4",
+            "type": "TEXT",
+            "x": 772,
+            "y": 610,
+            "width": 13,
+            "height": 24,
+            "constraints": {
+              "horizontal": "SCALE",
+              "vertical": "SCALE"
+            },
+            "characters": "4",
+            "fill": "fill_1vgmv5c",
+            "textStyle": "text_1t62koo"
+          },
+          {
+            "id": "23:106",
+            "name": "Group",
+            "type": "GROUP",
+            "x": 668,
+            "y": 670,
+            "width": 680,
+            "height": 378,
+            "opacity": 0.25,
+            "children": [
+              {
+                "id": "23:107",
+                "name": "Vector",
+                "type": "VECTOR",
+                "x": 668,
+                "y": 671,
+                "width": 27,
+                "height": 27,
+                "constraints": {
+                  "horizontal": "SCALE",
+                  "vertical": "SCALE"
+                },
+                "fill": "fill_ltrwc9"
+              },
+              {
+                "id": "23:108",
+                "name": "Vector",
+                "type": "VECTOR",
+                "x": 675,
+                "y": 677,
+                "width": 15,
+                "height": 13,
+                "fills": [],
+                "strokeWeight": 2.5,
+                "strokeAlign": "CENTER",
+                "constraints": {
+                  "horizontal": "SCALE",
+                  "vertical": "SCALE"
+                },
+                "stroke": "fill_nll9eq"
+              },
+              {
+                "id": "23:109",
+                "name": "测试 4",
+                "type": "TEXT",
+                "x": 712,
+                "y": 670,
+                "width": 80,
+                "height": 38,
+                "constraints": {
+                  "horizontal": "SCALE",
+                  "vertical": "SCALE"
+                },
+                "characters": "测试 4",
+                "fill": "fill_uvx7zc",
+                "textStyle": "text_mqflzx"
+              },
+              {
+                "id": "23:110",
+                "name": "收集箱 今天",
+                "type": "TEXT",
+                "x": 1208,
+                "y": 676,
+                "width": 108,
+                "height": 27,
+                "constraints": {
+                  "horizontal": "SCALE",
+                  "vertical": "SCALE"
+                },
+                "characters": "收集箱  今天",
+                "fill": "fill_1vgmv5c",
+                "textStyle": "text_ph2djy"
+              },
+              {
+                "id": "23:111",
+                "name": "a",
+                "type": "TEXT",
+                "x": 712,
+                "y": 718,
+                "width": 13,
+                "height": 28,
+                "constraints": {
+                  "horizontal": "SCALE",
+                  "vertical": "SCALE"
+                },
+                "characters": "a",
+                "fill": "fill_uvx7zc",
+                "textStyle": "text_10kbhmv"
+              },
+              {
+                "id": "23:112",
+                "name": "Vector",
+                "type": "VECTOR",
+                "x": 708,
+                "y": 768,
+                "width": 640,
+                "height": 0,
+                "strokeWeight": 1,
+                "strokeAlign": "CENTER",
+                "constraints": {
+                  "horizontal": "SCALE",
+                  "vertical": "SCALE"
+                },
+                "fill": "fill_1s3vosi",
+                "stroke": "stroke_13d273k"
+              },
+              {
+                "id": "23:113",
+                "name": "Vector",
+                "type": "VECTOR",
+                "x": 668,
+                "y": 793,
+                "width": 27,
+                "height": 27,
+                "constraints": {
+                  "horizontal": "SCALE",
+                  "vertical": "SCALE"
+                },
+                "fill": "fill_ltrwc9"
+              },
+              {
+                "id": "23:114",
+                "name": "Vector",
+                "type": "VECTOR",
+                "x": 675,
+                "y": 799,
+                "width": 15,
+                "height": 13,
+                "fills": [],
+                "strokeWeight": 2.5,
+                "strokeAlign": "CENTER",
+                "constraints": {
+                  "horizontal": "SCALE",
+                  "vertical": "SCALE"
+                },
+                "stroke": "fill_nll9eq"
+              },
+              {
+                "id": "23:115",
+                "name": "测试",
+                "type": "TEXT",
+                "x": 712,
+                "y": 792,
+                "width": 54,
+                "height": 38,
+                "constraints": {
+                  "horizontal": "SCALE",
+                  "vertical": "SCALE"
+                },
+                "characters": "测试",
+                "fill": "fill_uvx7zc",
+                "textStyle": "text_mqflzx"
+              },
+              {
+                "id": "23:116",
+                "name": "收集箱 昨天",
+                "type": "TEXT",
+                "x": 1208,
+                "y": 798,
+                "width": 108,
+                "height": 27,
+                "constraints": {
+                  "horizontal": "SCALE",
+                  "vertical": "SCALE"
+                },
+                "characters": "收集箱  昨天",
+                "fill": "fill_1vgmv5c",
+                "textStyle": "text_ph2djy"
+              },
+              {
+                "id": "23:117",
+                "name": "1. 1 2. 2 3. 3 4. 4 1　/",
+                "type": "TEXT",
+                "x": 712,
+                "y": 840,
+                "width": 225,
+                "height": 28,
+                "constraints": {
+                  "horizontal": "SCALE",
+                  "vertical": "SCALE"
+                },
+                "characters": "1. 1 2. 2 3. 3 4. 4 1　/",
+                "fill": "fill_uvx7zc",
+                "textStyle": "text_10kbhmv"
+              },
+              {
+                "id": "23:118",
+                "name": "Vector",
+                "type": "VECTOR",
+                "x": 708,
+                "y": 889,
+                "width": 640,
+                "height": 0,
+                "strokeWeight": 1,
+                "strokeAlign": "CENTER",
+                "constraints": {
+                  "horizontal": "SCALE",
+                  "vertical": "SCALE"
+                },
+                "fill": "fill_1s3vosi",
+                "stroke": "stroke_13d273k"
+              },
+              {
+                "id": "23:119",
+                "name": "Vector",
+                "type": "VECTOR",
+                "x": 668,
+                "y": 915,
+                "width": 27,
+                "height": 27,
+                "constraints": {
+                  "horizontal": "SCALE",
+                  "vertical": "SCALE"
+                },
+                "fill": "fill_ltrwc9"
+              },
+              {
+                "id": "23:120",
+                "name": "Vector",
+                "type": "VECTOR",
+                "x": 675,
+                "y": 921,
+                "width": 15,
+                "height": 13,
+                "fills": [],
+                "strokeWeight": 2.5,
+                "strokeAlign": "CENTER",
+                "constraints": {
+                  "horizontal": "SCALE",
+                  "vertical": "SCALE"
+                },
+                "stroke": "fill_nll9eq"
+              },
+              {
+                "id": "23:121",
+                "name": "1",
+                "type": "TEXT",
+                "x": 712,
+                "y": 914,
+                "width": 13,
+                "height": 33,
+                "constraints": {
+                  "horizontal": "SCALE",
+                  "vertical": "SCALE"
+                },
+                "characters": "1",
+                "fill": "fill_uvx7zc",
+                "textStyle": "text_exzrn7"
+              },
+              {
+                "id": "23:122",
+                "name": "收集箱 8月9日",
+                "type": "TEXT",
+                "x": 1208,
+                "y": 920,
+                "width": 125,
+                "height": 27,
+                "constraints": {
+                  "horizontal": "SCALE",
+                  "vertical": "SCALE"
+                },
+                "characters": "收集箱 8月9日",
+                "fill": "fill_1vgmv5c",
+                "textStyle": "text_ph2djy"
+              },
+              {
+                "id": "23:123",
+                "name": "Vector",
+                "type": "VECTOR",
+                "x": 708,
+                "y": 969,
+                "width": 640,
+                "height": 0,
+                "strokeWeight": 1,
+                "strokeAlign": "CENTER",
+                "constraints": {
+                  "horizontal": "SCALE",
+                  "vertical": "SCALE"
+                },
+                "fill": "fill_1s3vosi",
+                "stroke": "stroke_13d273k"
+              },
+              {
+                "id": "23:124",
+                "name": "Vector",
+                "type": "VECTOR",
+                "x": 668,
+                "y": 993,
+                "width": 27,
+                "height": 27,
+                "constraints": {
+                  "horizontal": "SCALE",
+                  "vertical": "SCALE"
+                },
+                "fill": "fill_ltrwc9"
+              },
+              {
+                "id": "23:125",
+                "name": "Vector",
+                "type": "VECTOR",
+                "x": 675,
+                "y": 999,
+                "width": 15,
+                "height": 13,
+                "fills": [],
+                "strokeWeight": 2.5,
+                "strokeAlign": "CENTER",
+                "constraints": {
+                  "horizontal": "SCALE",
+                  "vertical": "SCALE"
+                },
+                "stroke": "fill_nll9eq"
+              },
+              {
+                "id": "23:126",
+                "name": "2",
+                "type": "TEXT",
+                "x": 712,
+                "y": 992,
+                "width": 17,
+                "height": 33,
+                "constraints": {
+                  "horizontal": "SCALE",
+                  "vertical": "SCALE"
+                },
+                "characters": "2",
+                "fill": "fill_uvx7zc",
+                "textStyle": "text_exzrn7"
+              },
+              {
+                "id": "23:127",
+                "name": "收集箱 8月7日",
+                "type": "TEXT",
+                "x": 1208,
+                "y": 998,
+                "width": 124,
+                "height": 27,
+                "constraints": {
+                  "horizontal": "SCALE",
+                  "vertical": "SCALE"
+                },
+                "characters": "收集箱 8月7日",
+                "fill": "fill_1vgmv5c",
+                "textStyle": "text_ph2djy"
+              },
+              {
+                "id": "23:128",
+                "name": "Vector",
+                "type": "VECTOR",
+                "x": 708,
+                "y": 1048,
+                "width": 640,
+                "height": 0,
+                "strokeWeight": 1,
+                "strokeAlign": "CENTER",
+                "constraints": {
+                  "horizontal": "SCALE",
+                  "vertical": "SCALE"
+                },
+                "fill": "fill_1s3vosi",
+                "stroke": "stroke_13d273k"
+              }
+            ]
+          },
+          {
+            "id": "23:129",
+            "name": "Vector",
+            "type": "VECTOR",
+            "x": 1394,
+            "y": 115,
+            "width": 1630,
+            "height": 0,
+            "strokeWeight": 1,
+            "strokeAlign": "CENTER",
+            "constraints": {
+              "horizontal": "SCALE",
+              "vertical": "SCALE"
+            },
+            "fill": "fill_1s3vosi",
+            "stroke": "stroke_1nluc27"
+          },
+          {
+            "id": "23:130",
+            "name": "Vector",
+            "type": "VECTOR",
+            "x": 1435,
+            "y": 51,
+            "width": 28,
+            "height": 28,
+            "fills": [],
+            "strokeWeight": 2.5,
+            "strokeAlign": "CENTER",
+            "constraints": {
+              "horizontal": "SCALE",
+              "vertical": "SCALE"
+            },
+            "stroke": "fill_1vgmv5c"
+          },
+          {
+            "id": "23:131",
+            "name": "Vector",
+            "type": "VECTOR",
+            "x": 1487,
+            "y": 51,
+            "width": 0,
+            "height": 32,
+            "strokeWeight": 1,
+            "strokeAlign": "CENTER",
+            "constraints": {
+              "horizontal": "SCALE",
+              "vertical": "SCALE"
+            },
+            "fill": "fill_1s3vosi",
+            "stroke": "stroke_1qeujqy"
+          },
+          {
+            "id": "23:132",
+            "name": "Group",
+            "type": "GROUP",
+            "x": 1514,
+            "y": 48,
+            "width": 199,
+            "height": 35,
+            "children": [
+              {
+                "id": "23:133",
+                "name": "Vector",
+                "type": "VECTOR",
+                "x": 1514,
+                "y": 48,
+                "width": 27,
+                "height": 27,
+                "fills": [],
+                "strokeWeight": 2.5,
+                "strokeAlign": "CENTER",
+                "constraints": {
+                  "horizontal": "SCALE",
+                  "vertical": "SCALE"
+                },
+                "stroke": "fill_157nxf3"
+              },
+              {
+                "id": "23:134",
+                "name": "Vector",
+                "type": "VECTOR",
+                "x": 1519,
+                "y": 53,
+                "width": 17,
+                "height": 5,
+                "strokeWeight": 2,
+                "strokeAlign": "CENTER",
+                "constraints": {
+                  "horizontal": "SCALE",
+                  "vertical": "SCALE"
+                },
+                "fill": "fill_1s3vosi",
+                "stroke": "fill_157nxf3"
+              },
+              {
+                "id": "23:135",
+                "name": "前天, 8月10日",
+                "type": "TEXT",
+                "x": 1557,
+                "y": 48,
+                "width": 156,
+                "height": 35,
+                "constraints": {
+                  "horizontal": "SCALE",
+                  "vertical": "SCALE"
+                },
+                "characters": "前天, 8月10日",
+                "fill": "fill_157nxf3",
+                "textStyle": "text_fp5n1i"
+              }
+            ]
+          },
+          {
+            "id": "23:136",
+            "name": "Vector",
+            "type": "VECTOR",
+            "x": 2948,
+            "y": 52,
+            "width": 25,
+            "height": 34,
+            "fills": [],
+            "strokeWeight": 3,
+            "strokeAlign": "CENTER",
+            "strokeCap": "ROUND",
+            "strokeJoin": "ROUND",
+            "constraints": {
+              "horizontal": "SCALE",
+              "vertical": "SCALE"
+            },
+            "stroke": "stroke_hofkul"
+          },
+          {
+            "id": "23:137",
+            "name": "3",
+            "type": "TEXT",
+            "x": 1432,
+            "y": 151,
+            "width": 27,
+            "height": 48,
+            "constraints": {
+              "horizontal": "SCALE",
+              "vertical": "SCALE"
+            },
+            "characters": "3",
+            "fill": "fill_uvx7zc",
+            "textStyle": "text_1t9su2f"
+          },
+          {
+            "id": "23:138",
+            "name": "≡",
+            "type": "TEXT",
+            "visible": false,
+            "x": 2948,
+            "y": 160,
+            "width": 32,
+            "height": 39,
+            "constraints": {
+              "horizontal": "SCALE",
+              "vertical": "SCALE"
+            },
+            "characters": "≡",
+            "fill": "fill_1vgmv5c",
+            "textStyle": "text_3mctkh"
+          },
+          {
+            "id": "23:139",
+            "name": "H₂",
+            "type": "TEXT",
+            "x": 1402,
+            "y": 299,
+            "width": 24,
+            "height": 24,
+            "constraints": {
+              "horizontal": "SCALE",
+              "vertical": "SCALE"
+            },
+            "characters": "H₂",
+            "fill": "fill_1vgmv5c",
+            "textStyle": "text_1t62koo"
+          },
+          {
+            "id": "23:140",
+            "name": "＋",
+            "type": "TEXT",
+            "visible": false,
+            "x": 1400,
+            "y": 359,
+            "width": 29,
+            "height": 35,
+            "constraints": {
+              "horizontal": "SCALE",
+              "vertical": "SCALE"
+            },
+            "characters": "＋",
+            "fill": "fill_1vgmv5c",
+            "textStyle": "text_qz44ah"
+          },
+          {
+            "id": "23:141",
+            "name": "＋",
+            "type": "TEXT",
+            "visible": false,
+            "x": 1400,
+            "y": 445,
+            "width": 29,
+            "height": 35,
+            "constraints": {
+              "horizontal": "SCALE",
+              "vertical": "SCALE"
+            },
+            "characters": "＋",
+            "fill": "fill_1vgmv5c",
+            "textStyle": "text_qz44ah"
+          },
+          {
+            "id": "23:142",
+            "name": "Vector",
+            "type": "VECTOR",
+            "x": 1432,
+            "y": 445,
+            "width": 0,
+            "height": 40,
+            "strokeWeight": 4,
+            "strokeAlign": "CENTER",
+            "constraints": {
+              "horizontal": "SCALE",
+              "vertical": "SCALE"
+            },
+            "fill": "fill_1s3vosi",
+            "stroke": "fill_17ej75k"
+          },
+          {
+            "id": "23:143",
+            "name": "Group",
+            "type": "GROUP",
+            "x": 1434,
+            "y": 1830,
+            "width": 117,
+            "height": 35,
+            "children": [
+              {
+                "id": "23:144",
+                "name": "Vector",
+                "type": "VECTOR",
+                "x": 1434,
+                "y": 1831,
+                "width": 27,
+                "height": 25,
+                "fills": [],
+                "strokeWeight": 3,
+                "strokeAlign": "CENTER",
+                "strokeCap": "ROUND",
+                "strokeJoin": "ROUND",
+                "constraints": {
+                  "horizontal": "SCALE",
+                  "vertical": "SCALE"
+                },
+                "stroke": "stroke_16dr562"
+              },
+              {
+                "id": "23:145",
+                "name": "收集箱",
+                "type": "TEXT",
+                "x": 1476,
+                "y": 1830,
+                "width": 75,
+                "height": 35,
+                "constraints": {
+                  "horizontal": "SCALE",
+                  "vertical": "SCALE"
+                },
+                "characters": "收集箱",
+                "fill": "fill_uvx7zc",
+                "textStyle": "text_1xnjfhf"
+              }
+            ]
+          },
+          {
+            "id": "23:146",
+            "name": "A̲",
+            "type": "TEXT",
+            "visible": false,
+            "x": 2833,
+            "y": 1831,
+            "width": 20,
+            "height": 35,
+            "constraints": {
+              "horizontal": "SCALE",
+              "vertical": "SCALE"
+            },
+            "characters": "A̲",
+            "fill": "fill_uvx7zc",
+            "textStyle": "text_qz44ah"
+          },
+          {
+            "id": "23:147",
+            "name": "▢",
+            "type": "TEXT",
+            "visible": false,
+            "x": 2891,
+            "y": 1832,
+            "width": 26,
+            "height": 34,
+            "constraints": {
+              "horizontal": "SCALE",
+              "vertical": "SCALE"
+            },
+            "characters": "▢",
+            "fill": "fill_uvx7zc",
+            "textStyle": "text_orggj4"
+          },
+          {
+            "id": "23:148",
+            "name": "•••",
+            "type": "TEXT",
+            "visible": false,
+            "x": 2946,
+            "y": 1827,
+            "width": 53,
+            "height": 38,
+            "constraints": {
+              "horizontal": "SCALE",
+              "vertical": "SCALE"
+            },
+            "characters": "•••",
+            "fill": "fill_uvx7zc",
+            "textStyle": "text_14qreby"
+          },
+          {
+            "id": "23:150",
+            "name": "Theme icon",
+            "type": "FRAME",
+            "x": 1172,
+            "y": 49,
+            "width": 34,
+            "height": 34,
+            "constraints": {
+              "horizontal": "MIN",
+              "vertical": "MIN"
+            },
+            "clipsContent": true,
+            "fill": "fill_16zfsl5",
+            "children": [
+              {
+                "id": "23:151",
+                "name": "Vector",
+                "type": "VECTOR",
+                "x": 10,
+                "y": 10,
+                "width": 14,
+                "height": 14,
+                "fills": [],
+                "strokeWeight": 2.5,
+                "strokeAlign": "CENTER",
+                "constraints": {
+                  "horizontal": "SCALE",
+                  "vertical": "SCALE"
+                },
+                "stroke": "stroke_16dr562"
+              },
+              {
+                "id": "23:152",
+                "name": "Vector",
+                "type": "VECTOR",
+                "x": 2,
+                "y": 2,
+                "width": 30,
+                "height": 30,
+                "strokeWeight": 2.5,
+                "strokeAlign": "CENTER",
+                "strokeCap": "ROUND",
+                "constraints": {
+                  "horizontal": "SCALE",
+                  "vertical": "SCALE"
+                },
+                "fill": "fill_1s3vosi",
+                "stroke": "stroke_16dr562"
+              }
+            ]
+          },
+          {
+            "id": "23:153",
+            "name": "Sort icon",
+            "type": "FRAME",
+            "x": 1245,
+            "y": 49,
+            "width": 34,
+            "height": 34,
+            "constraints": {
+              "horizontal": "MIN",
+              "vertical": "MIN"
+            },
+            "clipsContent": true,
+            "fill": "fill_16zfsl5",
+            "children": [
+              {
+                "id": "23:154",
+                "name": "Vector",
+                "type": "VECTOR",
+                "x": 7,
+                "y": 6,
+                "width": 20,
+                "height": 22,
+                "fills": [],
+                "strokeWeight": 2.5,
+                "strokeAlign": "CENTER",
+                "strokeCap": "ROUND",
+                "strokeJoin": "ROUND",
+                "constraints": {
+                  "horizontal": "SCALE",
+                  "vertical": "SCALE"
+                },
+                "stroke": "stroke_16dr562"
+              }
+            ]
+          },
+          {
+            "id": "23:155",
+            "name": "More icon top",
+            "type": "FRAME",
+            "x": 1312,
+            "y": 57,
+            "width": 32,
+            "height": 16,
+            "constraints": {
+              "horizontal": "MIN",
+              "vertical": "MIN"
+            },
+            "clipsContent": true,
+            "fill": "fill_16zfsl5",
+            "children": [
+              {
+                "id": "23:156",
+                "name": "Vector",
+                "type": "VECTOR",
+                "x": 2.5999999046325684,
+                "y": 5.599999904632568,
+                "width": 4.800000190734863,
+                "height": 4.799999713897705,
+                "constraints": {
+                  "horizontal": "SCALE",
+                  "vertical": "SCALE"
+                },
+                "fill": "stroke_16dr562"
+              },
+              {
+                "id": "23:157",
+                "name": "Vector",
+                "type": "VECTOR",
+                "x": 13.600000381469727,
+                "y": 5.599999904632568,
+                "width": 4.799999237060547,
+                "height": 4.799999713897705,
+                "constraints": {
+                  "horizontal": "SCALE",
+                  "vertical": "SCALE"
+                },
+                "fill": "stroke_16dr562"
+              },
+              {
+                "id": "23:158",
+                "name": "Vector",
+                "type": "VECTOR",
+                "x": 24.600000381469727,
+                "y": 5.599999904632568,
+                "width": 4.799999237060547,
+                "height": 4.799999713897705,
+                "constraints": {
+                  "horizontal": "SCALE",
+                  "vertical": "SCALE"
+                },
+                "fill": "stroke_16dr562"
+              }
+            ]
+          },
+          {
+            "id": "23:159",
+            "name": "List icon",
+            "type": "FRAME",
+            "x": 2945,
+            "y": 160,
+            "width": 30,
+            "height": 30,
+            "constraints": {
+              "horizontal": "MIN",
+              "vertical": "MIN"
+            },
+            "clipsContent": true,
+            "fill": "fill_16zfsl5",
+            "children": [
+              {
+                "id": "23:160",
+                "name": "Vector",
+                "type": "VECTOR",
+                "x": 10,
+                "y": 8,
+                "width": 15,
+                "height": 14,
+                "strokeWeight": 2.5,
+                "strokeAlign": "CENTER",
+                "strokeCap": "ROUND",
+                "constraints": {
+                  "horizontal": "SCALE",
+                  "vertical": "SCALE"
+                },
+                "fill": "fill_1s3vosi",
+                "stroke": "fill_1vgmv5c"
+              },
+              {
+                "id": "23:161",
+                "name": "Vector",
+                "type": "VECTOR",
+                "x": 2.5,
+                "y": 6.5,
+                "width": 3,
+                "height": 3,
+                "constraints": {
+                  "horizontal": "SCALE",
+                  "vertical": "SCALE"
+                },
+                "fill": "fill_1vgmv5c"
+              },
+              {
+                "id": "23:162",
+                "name": "Vector",
+                "type": "VECTOR",
+                "x": 2.5,
+                "y": 13.5,
+                "width": 3,
+                "height": 3,
+                "constraints": {
+                  "horizontal": "SCALE",
+                  "vertical": "SCALE"
+                },
+                "fill": "fill_1vgmv5c"
+              },
+              {
+                "id": "23:163",
+                "name": "Vector",
+                "type": "VECTOR",
+                "x": 2.5,
+                "y": 20.5,
+                "width": 3,
+                "height": 3,
+                "constraints": {
+                  "horizontal": "SCALE",
+                  "vertical": "SCALE"
+                },
+                "fill": "fill_1vgmv5c"
+              }
+            ]
+          },
+          {
+            "id": "23:164",
+            "name": "Add row 1",
+            "type": "FRAME",
+            "x": 1400,
+            "y": 366,
+            "width": 28,
+            "height": 28,
+            "constraints": {
+              "horizontal": "MIN",
+              "vertical": "MIN"
+            },
+            "clipsContent": true,
+            "fill": "fill_16zfsl5",
+            "children": [
+              {
+                "id": "23:165",
+                "name": "Vector",
+                "type": "VECTOR",
+                "x": 5,
+                "y": 5,
+                "width": 18,
+                "height": 18,
+                "strokeWeight": 2,
+                "strokeAlign": "CENTER",
+                "strokeCap": "ROUND",
+                "constraints": {
+                  "horizontal": "SCALE",
+                  "vertical": "SCALE"
+                },
+                "fill": "fill_1s3vosi",
+                "stroke": "stroke_13d273k"
+              }
+            ]
+          },
+          {
+            "id": "23:166",
+            "name": "Add row 2",
+            "type": "FRAME",
+            "x": 1400,
+            "y": 452,
+            "width": 28,
+            "height": 28,
+            "constraints": {
+              "horizontal": "MIN",
+              "vertical": "MIN"
+            },
+            "clipsContent": true,
+            "fill": "fill_16zfsl5",
+            "children": [
+              {
+                "id": "23:167",
+                "name": "Vector",
+                "type": "VECTOR",
+                "x": 5,
+                "y": 5,
+                "width": 18,
+                "height": 18,
+                "strokeWeight": 2,
+                "strokeAlign": "CENTER",
+                "strokeCap": "ROUND",
+                "constraints": {
+                  "horizontal": "SCALE",
+                  "vertical": "SCALE"
+                },
+                "fill": "fill_1s3vosi",
+                "stroke": "stroke_13d273k"
+              }
+            ]
+          },
+          {
+            "id": "23:168",
+            "name": "Format icon",
+            "type": "FRAME",
+            "x": 2830,
+            "y": 1832,
+            "width": 30,
+            "height": 30,
+            "constraints": {
+              "horizontal": "MIN",
+              "vertical": "MIN"
+            },
+            "clipsContent": true,
+            "fill": "fill_16zfsl5",
+            "children": [
+              {
+                "id": "23:169",
+                "name": "Vector",
+                "type": "VECTOR",
+                "x": 5,
+                "y": 5,
+                "width": 20,
+                "height": 22,
+                "fills": [],
+                "strokeWeight": 2,
+                "strokeAlign": "CENTER",
+                "strokeCap": "ROUND",
+                "strokeJoin": "ROUND",
+                "constraints": {
+                  "horizontal": "SCALE",
+                  "vertical": "SCALE"
+                },
+                "stroke": "stroke_16dr562"
+              }
+            ]
+          },
+          {
+            "id": "23:170",
+            "name": "Comment icon",
+            "type": "FRAME",
+            "x": 2888,
+            "y": 1832,
+            "width": 30,
+            "height": 30,
+            "constraints": {
+              "horizontal": "MIN",
+              "vertical": "MIN"
+            },
+            "clipsContent": true,
+            "fill": "fill_16zfsl5",
+            "children": [
+              {
+                "id": "23:171",
+                "name": "Vector",
+                "type": "VECTOR",
+                "x": 5,
+                "y": 6,
+                "width": 20,
+                "height": 19,
+                "fills": [],
+                "strokeWeight": 2.200000047683716,
+                "strokeAlign": "CENTER",
+                "strokeJoin": "ROUND",
+                "constraints": {
+                  "horizontal": "SCALE",
+                  "vertical": "SCALE"
+                },
+                "stroke": "stroke_16dr562"
+              },
+              {
+                "id": "23:172",
+                "name": "Vector",
+                "type": "VECTOR",
+                "x": 10,
+                "y": 11,
+                "width": 10,
+                "height": 4,
+                "strokeWeight": 2,
+                "strokeAlign": "CENTER",
+                "strokeCap": "ROUND",
+                "constraints": {
+                  "horizontal": "SCALE",
+                  "vertical": "SCALE"
+                },
+                "fill": "fill_1s3vosi",
+                "stroke": "stroke_16dr562"
+              }
+            ]
+          },
+          {
+            "id": "23:173",
+            "name": "More icon bottom",
+            "type": "FRAME",
+            "x": 2944,
+            "y": 1839,
+            "width": 32,
+            "height": 16,
+            "constraints": {
+              "horizontal": "MIN",
+              "vertical": "MIN"
+            },
+            "clipsContent": true,
+            "fill": "fill_16zfsl5",
+            "children": [
+              {
+                "id": "23:174",
+                "name": "Vector",
+                "type": "VECTOR",
+                "x": 2.5999999046325684,
+                "y": 5.599999904632568,
+                "width": 4.800000190734863,
+                "height": 4.799999713897705,
+                "constraints": {
+                  "horizontal": "SCALE",
+                  "vertical": "SCALE"
+                },
+                "fill": "stroke_16dr562"
+              },
+              {
+                "id": "23:175",
+                "name": "Vector",
+                "type": "VECTOR",
+                "x": 13.600000381469727,
+                "y": 5.599999904632568,
+                "width": 4.799999237060547,
+                "height": 4.799999713897705,
+                "constraints": {
+                  "horizontal": "SCALE",
+                  "vertical": "SCALE"
+                },
+                "fill": "stroke_16dr562"
+              },
+              {
+                "id": "23:176",
+                "name": "Vector",
+                "type": "VECTOR",
+                "x": 24.600000381469727,
+                "y": 5.599999904632568,
+                "width": 4.799999237060547,
+                "height": 4.799999713897705,
+                "constraints": {
+                  "horizontal": "SCALE",
+                  "vertical": "SCALE"
+                },
+                "fill": "stroke_16dr562"
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "globalVars": {
+      "styles": {
+        "fill_16zfsl5": [
+          {
+            "type": "SOLID",
+            "color": "#FFFFFF",
+            "visible": false
+          }
+        ],
+        "fill_nll9eq": [
+          {
+            "type": "SOLID",
+            "color": "#FFFFFF"
+          }
+        ],
+        "fill_35l2ws": [
+          {
+            "type": "SOLID",
+            "color": "#4E78F4"
+          }
+        ],
+        "fill_1u0dly4": [
+          {
+            "type": "SOLID",
+            "color": "#F4F6FF"
+          }
+        ],
+        "fill_1s3vosi": [
+          {
+            "type": "SOLID",
+            "color": "#000000"
+          }
+        ],
+        "stroke_mtuiai": [
+          {
+            "type": "SOLID",
+            "color": "#E9E9EC"
+          }
+        ],
+        "fill_27xzh8": [
+          {
+            "type": "SOLID",
+            "color": "#E9E9E9"
+          }
+        ],
+        "fill_luf0jy": [
+          {
+            "type": "SOLID",
+            "color": "#B4AC91"
+          }
+        ],
+        "text_ji6diy": {
+          "fontFamily": "Inter",
+          "fontStyle": "Regular",
+          "fontSize": 13
+        },
+        "fill_1nvwge5": [
+          {
+            "type": "SOLID",
+            "color": "#81A0FA"
+          }
+        ],
+        "stroke_hofkul": [
+          {
+            "type": "SOLID",
+            "color": "#9BA0A8"
+          }
+        ],
+        "fill_nrr5rx": [
+          {
+            "type": "SOLID",
+            "color": "#8FA9F7"
+          }
+        ],
+        "fill_n4avpm": [
+          {
+            "type": "SOLID",
+            "color": "#88A5F8"
+          }
+        ],
+        "text_1gore87": {
+          "fontFamily": "Inter",
+          "fontStyle": "Bold",
+          "fontSize": 26
+        },
+        "fill_1hihtvr": [
+          {
+            "type": "SOLID",
+            "color": "#E3E8FB"
+          }
+        ],
+        "stroke_16dr562": [
+          {
+            "type": "SOLID",
+            "color": "#222222"
+          }
+        ],
+        "fill_uvx7zc": [
+          {
+            "type": "SOLID",
+            "color": "#191919"
+          }
+        ],
+        "text_1bzw2zm": {
+          "fontFamily": "PingFang SC",
+          "fontStyle": "Semibold",
+          "fontSize": 29
+        },
+        "fill_1vgmv5c": [
+          {
+            "type": "SOLID",
+            "color": "#999999"
+          }
+        ],
+        "text_16j96l8": {
+          "fontFamily": "Inter",
+          "fontStyle": "Regular",
+          "fontSize": 19
+        },
+        "text_vrnxtw": {
+          "fontFamily": "PingFang SC",
+          "fontStyle": "Semibold",
+          "fontSize": 27
+        },
+        "text_t0ijv9": {
+          "fontFamily": "Inter",
+          "fontStyle": "Regular",
+          "fontSize": 18
+        },
+        "stroke_y0uap2": [
+          {
+            "type": "SOLID",
+            "color": "#ECEEF4"
+          }
+        ],
+        "text_dl9hfb": {
+          "fontFamily": "PingFang SC",
+          "fontStyle": "Regular",
+          "fontSize": 21
+        },
+        "text_1tmtbp3": {
+          "fontFamily": "Inter",
+          "fontStyle": "Regular",
+          "fontSize": 30
+        },
+        "fill_9xwoqr": [
+          {
+            "type": "SOLID",
+            "color": "#E9EBF2"
+          }
+        ],
+        "text_h4yg6g": {
+          "fontFamily": "PingFang SC",
+          "fontStyle": "Regular",
+          "fontSize": 22
+        },
+        "stroke_wj2ezf": [
+          {
+            "type": "SOLID",
+            "color": "#E6E8EF"
+          }
+        ],
+        "text_q2l40k": {
+          "fontFamily": "PingFang SC",
+          "fontStyle": "Semibold",
+          "fontSize": 38
+        },
+        "text_1enz7s3": {
+          "fontFamily": "Inter",
+          "fontStyle": "Regular",
+          "fontSize": 34
+        },
+        "text_14qreby": {
+          "fontFamily": "Inter",
+          "fontStyle": "Regular",
+          "fontSize": 31
+        },
+        "fill_14lvr9i": [
+          {
+            "type": "SOLID",
+            "color": "#F5F5F6"
+          }
+        ],
+        "fill_ffd8cu": [
+          {
+            "type": "SOLID",
+            "color": "#C9C9C9"
+          }
+        ],
+        "text_1yjtduu": {
+          "fontFamily": "PingFang SC",
+          "fontStyle": "Regular",
+          "fontSize": 28
+        },
+        "text_8lro4e": {
+          "fontFamily": "Inter",
+          "fontStyle": "Regular",
+          "fontSize": 22
+        },
+        "text_1t62koo": {
+          "fontFamily": "Inter",
+          "fontStyle": "Regular",
+          "fontSize": 20
+        },
+        "fill_17ej75k": [
+          {
+            "type": "SOLID",
+            "color": "#4F7DF7"
+          }
+        ],
+        "text_18sh2mj": {
+          "fontFamily": "PingFang SC",
+          "fontStyle": "Semibold",
+          "fontSize": 22
+        },
+        "fill_4oyqq2": [
+          {
+            "type": "SOLID",
+            "color": "#EDF1FF"
+          }
+        ],
+        "stroke_1fbj7ie": [
+          {
+            "type": "SOLID",
+            "color": "#A7A7A7"
+          }
+        ],
+        "text_orggj4": {
+          "fontFamily": "Inter",
+          "fontStyle": "Regular",
+          "fontSize": 28
+        },
+        "text_ph2djy": {
+          "fontFamily": "PingFang SC",
+          "fontStyle": "Regular",
+          "fontSize": 19
+        },
+        "fill_157nxf3": [
+          {
+            "type": "SOLID",
+            "color": "#FF4D47"
+          }
+        ],
+        "text_14htpn9": {
+          "fontFamily": "PingFang SC",
+          "fontStyle": "Semibold",
+          "fontSize": 20
+        },
+        "text_eo00ok": {
+          "fontFamily": "Inter",
+          "fontStyle": "Regular",
+          "fontSize": 24
+        },
+        "stroke_1nluc27": [
+          {
+            "type": "SOLID",
+            "color": "#EDEDED"
+          }
+        ],
+        "fill_ltrwc9": [
+          {
+            "type": "SOLID",
+            "color": "#8E8E8E"
+          }
+        ],
+        "text_mqflzx": {
+          "fontFamily": "PingFang SC",
+          "fontStyle": "Regular",
+          "fontSize": 27
+        },
+        "text_10kbhmv": {
+          "fontFamily": "Inter",
+          "fontStyle": "Regular",
+          "fontSize": 23
+        },
+        "stroke_13d273k": [
+          {
+            "type": "SOLID",
+            "color": "#AAAAAA"
+          }
+        ],
+        "text_exzrn7": {
+          "fontFamily": "Inter",
+          "fontStyle": "Regular",
+          "fontSize": 27
+        },
+        "stroke_1qeujqy": [
+          {
+            "type": "SOLID",
+            "color": "#DDDDDD"
+          }
+        ],
+        "text_fp5n1i": {
+          "fontFamily": "PingFang SC",
+          "fontStyle": "Semibold",
+          "fontSize": 25
+        },
+        "text_1t9su2f": {
+          "fontFamily": "Inter",
+          "fontStyle": "Bold",
+          "fontSize": 40
+        },
+        "text_3mctkh": {
+          "fontFamily": "Inter",
+          "fontStyle": "Regular",
+          "fontSize": 32
+        },
+        "text_qz44ah": {
+          "fontFamily": "Inter",
+          "fontStyle": "Regular",
+          "fontSize": 29
+        },
+        "text_1xnjfhf": {
+          "fontFamily": "PingFang SC",
+          "fontStyle": "Regular",
+          "fontSize": 25
+        }
+      }
+    },
+    "metrics": {
+      "nodeCount": 173,
+      "maxDepth": 3,
+      "styleCount": 57,
+      "tokenCount": 0,
+      "inlineSizeKb": 54.49,
+      "dedupedSizeKb": 38.02
+    }
+  }
+}

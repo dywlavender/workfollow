@@ -1,0 +1,149 @@
+- generic [ref=f1e62]:
+  - complementary [ref=f1e63]:
+    - link "WorkFollow 首页" [ref=f1e64] [cursor=pointer]:
+      - /url: /
+      - generic [ref=f1e65]: W
+    - navigation "全局导航" [ref=f1e71]:
+      - link "首页" [ref=f1e72] [cursor=pointer]:
+        - /url: /
+      - link "任务" [ref=f1e78] [cursor=pointer]:
+        - /url: /todos
+      - link "日历" [ref=f1e83] [cursor=pointer]:
+        - /url: /calendar
+      - link "全部笔记" [ref=f1e87] [cursor=pointer]:
+        - /url: /notes
+      - link "常用" [ref=f1e92] [cursor=pointer]:
+        - /url: /common
+      - link "通知" [ref=f1e98] [cursor=pointer]:
+        - /url: /notifications
+    - generic [ref=f1e103]:
+      - link "团队管理" [ref=f1e104] [cursor=pointer]:
+        - /url: /teams
+      - link "设置" [ref=f1e111] [cursor=pointer]:
+        - /url: /settings
+  - main [ref=f1e124]:
+    - generic [ref=f1e276]:
+      - complementary "任务视图" [ref=f1e277]:
+        - generic [ref=f1e278]: 任务
+        - navigation "任务视图" [ref=f1e281]:
+          - link "所有 2" [ref=f1e433] [cursor=pointer]:
+            - /url: /todos?view=all
+            - strong [ref=f1e285]: 所有
+            - generic [ref=f1e286]: "2"
+          - link "今天 1" [ref=f1e287] [cursor=pointer]:
+            - /url: /todos?view=today
+            - strong [ref=f1e291]: 今天
+            - generic [ref=f1e292]: "1"
+          - link "本周 1" [ref=f1e293] [cursor=pointer]:
+            - /url: /todos?view=week
+            - strong [ref=f1e297]: 本周
+            - generic [ref=f1e298]: "1"
+          - link "无日期 1" [ref=f1e434] [cursor=pointer]:
+            - /url: /todos?view=inbox
+            - strong [ref=f1e304]: 无日期
+            - generic [ref=f1e305]: "1"
+          - link "本月 1" [ref=f1e306] [cursor=pointer]:
+            - /url: /todos?view=month
+            - strong [ref=f1e310]: 本月
+            - generic [ref=f1e311]: "1"
+        - generic [ref=f1e312]:
+          - heading "记录" [level=2] [ref=f1e313]
+          - navigation "记录" [ref=f1e314]:
+            - link "已完成 0" [ref=f1e315] [cursor=pointer]:
+              - /url: /todos?view=completed
+              - strong [ref=f1e320]: 已完成
+              - generic [ref=f1e321]: "0"
+        - generic [ref=f1e322]:
+          - heading "清单" [level=2] [ref=f1e323]
+          - navigation "清单" [ref=f1e324]:
+            - link "收集箱 2" [ref=f1e435] [cursor=pointer]:
+              - /url: /todos?list=%E6%94%B6%E9%9B%86%E7%AE%B1
+              - strong [ref=f1e328]: 收集箱
+              - generic [ref=f1e329]: "2"
+            - link "工作 0" [ref=f1e330] [cursor=pointer]:
+              - /url: /todos?list=%E5%B7%A5%E4%BD%9C
+              - strong [ref=f1e333]: 工作
+              - generic [ref=f1e334]: "0"
+            - link "个人 0" [ref=f1e335] [cursor=pointer]:
+              - /url: /todos?list=%E4%B8%AA%E4%BA%BA
+              - strong [ref=f1e338]: 个人
+              - generic [ref=f1e339]: "0"
+            - link "学习 0" [ref=f1e340] [cursor=pointer]:
+              - /url: /todos?list=%E5%AD%A6%E4%B9%A0
+              - strong [ref=f1e343]: 学习
+              - generic [ref=f1e344]: "0"
+      - region "待办列表" [ref=f1e345]:
+        - generic [ref=f1e346]:
+          - generic [ref=f1e347]:
+            - generic [ref=f1e348]: 2026年8月12日 · 周三
+            - heading "所有" [level=2] [ref=f1e437]
+          - generic [ref=f1e350]:
+            - button "打开搜索" [ref=f1e355] [cursor=pointer]
+            - button "更多列表操作" [ref=f1e361] [cursor=pointer]
+        - generic [ref=f1e368]:
+          - generic [ref=f1e396]:
+            - generic [ref=f1e399]: 快速添加待办
+            - textbox "快速添加待办" [ref=f1e400]:
+              - /placeholder: 添加任务至收集箱
+            - button "创建" [disabled] [ref=f1e401]
+            - button "取消添加" [ref=f1e406] [cursor=pointer]
+          - generic "任务属性" [ref=f1e410]:
+            - button "无日期" [ref=f1e412] [cursor=pointer]
+            - button "优先级" [ref=f1e418] [cursor=pointer]
+            - button "收集箱" [ref=f1e422] [cursor=pointer]
+            - button "标签" [ref=f1e429] [cursor=pointer]
+        - generic [ref=f1e481]:
+          - generic [ref=f1e482]:
+            - strong [ref=f1e483]: 所有任务
+            - generic [ref=f1e484]: "2"
+          - article [ref=f1e485] [cursor=pointer]:
+            - button "完成 阅读《使用指南》并完成首次设置" [ref=f1e486]
+            - generic [ref=f1e487]:
+              - strong [ref=f1e488]: 阅读《使用指南》并完成首次设置
+              - generic [ref=f1e489]: 收集箱
+            - button "今天" [ref=f1e493]
+            - button "更多任务操作" [ref=f1e498]
+          - article [ref=f1e503] [cursor=pointer]:
+            - button "完成 验收无日期自适应任务" [ref=f1e504]
+            - generic [ref=f1e505]:
+              - strong [ref=f1e506]: 验收无日期自适应任务
+              - generic [ref=f1e507]: 收集箱
+            - button "无日期" [ref=f1e511]
+            - button "更多任务操作" [ref=f1e515]
+      - separator "调整任务列表与详情宽度" [ref=f1e520]
+      - complementary "任务正文" [ref=f1e522]:
+        - generic [ref=f1e523]:
+          - button "完成任务" [ref=f1e524] [cursor=pointer]
+          - generic [ref=f1e528]: 任务标题
+          - textbox "任务标题" [ref=f1e529]: 验收无日期自适应任务
+          - button "设置日期" [ref=f1e531] [cursor=pointer]
+          - button "无优先级" [ref=f1e536] [cursor=pointer]
+        - generic [ref=f1e539]:
+          - toolbar "编辑工具栏" [ref=f1e540]:
+            - button "二级标题" [ref=f1e541] [cursor=pointer]: H2
+            - button "粗体" [ref=f1e542] [cursor=pointer]:
+              - strong [ref=f1e543]: B
+            - button "斜体" [ref=f1e544] [cursor=pointer]:
+              - emphasis [ref=f1e545]: I
+            - button "下划线" [ref=f1e546] [cursor=pointer]:
+              - generic [ref=f1e547]: U
+            - button "无序列表" [ref=f1e548] [cursor=pointer]
+            - button "有序列表" [ref=f1e550] [cursor=pointer]
+            - button "任务列表" [ref=f1e554] [cursor=pointer]
+            - button "文字颜色" [ref=f1e560] [cursor=pointer]:
+              - strong [ref=f1e561]: A
+            - button "背景颜色" [ref=f1e563] [cursor=pointer]
+            - button "引用" [ref=f1e569] [cursor=pointer]
+            - button "代码块" [ref=f1e573] [cursor=pointer]
+            - button "链接" [ref=f1e578] [cursor=pointer]
+            - button "表格" [ref=f1e583] [cursor=pointer]
+            - button "图片或附件" [ref=f1e586] [cursor=pointer]
+          - textbox "任务正文" [ref=f1e590]:
+            - paragraph [ref=f1e591]: 输入内容，或输入 / 插入格式
+          - generic [ref=f1e592]: 已保存
+          - button "Choose File" [ref=f1e593]
+        - generic [ref=f1e594]:
+          - generic [ref=f1e595]: 收集箱
+          - generic [ref=f1e600]:
+            - button "评论" [ref=f1e601] [cursor=pointer]
+            - button "更多正文操作" [ref=f1e605] [cursor=pointer]

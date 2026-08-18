@@ -1,0 +1,106 @@
+- generic [ref=e58]:
+  - complementary [ref=e59]:
+    - link "WorkFollow 首页" [ref=e60] [cursor=pointer]:
+      - /url: /
+      - generic [ref=e61]: W
+    - navigation "全局导航" [ref=e62]:
+      - link "首页" [ref=e63] [cursor=pointer]:
+        - /url: /
+      - link "任务" [ref=e68] [cursor=pointer]:
+        - /url: /todos
+      - link "日历" [ref=e72] [cursor=pointer]:
+        - /url: /calendar
+      - link "全部笔记" [ref=e75] [cursor=pointer]:
+        - /url: /notes
+      - link "常用" [ref=e79] [cursor=pointer]:
+        - /url: /common
+      - link "通知" [ref=e84] [cursor=pointer]:
+        - /url: /notifications
+    - generic [ref=e88]:
+      - link "团队管理" [ref=e89] [cursor=pointer]:
+        - /url: /teams
+      - link "设置" [ref=e95] [cursor=pointer]:
+        - /url: /settings
+  - main [ref=e104]:
+    - generic [ref=e105]:
+      - region "新手指引" [ref=e106]:
+        - generic [ref=e107]:
+          - generic [ref=e108]: FIRST RUN
+          - strong [ref=e109]: 欢迎来到 WorkFollow
+          - paragraph [ref=e110]: 先阅读这份使用指南，再开始安排你的工作。
+        - button "开始使用" [ref=e111] [cursor=pointer]
+      - generic [ref=e112]:
+        - complementary [ref=e113]:
+          - generic [ref=e114]:
+            - heading "笔记" [level=2] [ref=e116]
+            - button "新建文件夹" [ref=e117] [cursor=pointer]
+          - navigation "笔记视图" [ref=e120]:
+            - button "最近" [ref=e121] [cursor=pointer]
+            - button "全部" [ref=e125] [cursor=pointer]
+            - button "收藏" [ref=e129] [cursor=pointer]
+          - generic [ref=e133]:
+            - generic [ref=e134]: 我的文件夹
+            - button "新建文件夹" [ref=e135] [cursor=pointer]
+        - complementary [ref=e138]:
+          - generic [ref=e139]:
+            - heading "笔记" [level=2] [ref=e141]
+            - button "新建笔记" [ref=e142] [cursor=pointer]
+          - textbox [ref=e150]:
+            - /placeholder: 搜索笔记
+          - button "从模板创建" [ref=e151] [cursor=pointer]
+          - article [ref=e159]:
+            - button "使用指南 欢迎使用 WorkFollow 任务 在任务页面创建、编辑和完成任务。 日期与提醒 给任务设置日期和提醒时间。 笔记 创建和管理个人笔记。 常用 查看系统管理员配置的网站。 通知 查看任务、团队投稿和审核结果提醒。 团队与权限 了解团队角色和系统 ROOT 权限。 8月17日 15:42" [ref=e160] [cursor=pointer]:
+              - strong [ref=e161]: 使用指南
+              - paragraph [ref=e162]: 欢迎使用 WorkFollow 任务 在任务页面创建、编辑和完成任务。 日期与提醒 给任务设置日期和提醒时间。 笔记 创建和管理个人笔记。 常用 查看系统管理员配置的网站。 通知 查看任务、团队投稿和审核结果提醒。 团队与权限 了解团队角色和系统 ROOT 权限。
+              - generic [ref=e163]: 8月17日 15:42
+            - button "删除笔记" [ref=e164] [cursor=pointer]
+        - generic [ref=e168]:
+          - generic [ref=e169]:
+            - generic [ref=e170]:
+              - textbox "笔记标题" [ref=e171]: 使用指南
+              - button "更多笔记操作" [ref=e174] [cursor=pointer]
+            - generic [ref=e179]:
+              - combobox "移动到文件夹" [ref=e180]:
+                - option "未分类" [selected]
+              - generic [ref=e181]: 本地笔记
+          - toolbar "编辑工具栏" [ref=e182]:
+            - button "二级标题" [ref=e183] [cursor=pointer]: H2
+            - button "粗体" [ref=e184] [cursor=pointer]:
+              - strong [ref=e185]: B
+            - button "斜体" [ref=e186] [cursor=pointer]:
+              - emphasis [ref=e187]: I
+            - button "下划线" [ref=e188] [cursor=pointer]:
+              - generic [ref=e189]: U
+            - button "无序列表" [ref=e190] [cursor=pointer]
+            - button "有序列表" [ref=e192] [cursor=pointer]
+            - button "任务列表" [ref=e196] [cursor=pointer]
+            - button "文字颜色" [ref=e202] [cursor=pointer]:
+              - strong [ref=e203]: A
+            - button "背景颜色" [ref=e205] [cursor=pointer]
+            - button "引用" [ref=e211] [cursor=pointer]
+            - button "代码块" [ref=e215] [cursor=pointer]
+            - button "链接" [ref=e220] [cursor=pointer]
+            - button "表格" [ref=e225] [cursor=pointer]
+            - button "图片或附件" [ref=e228] [cursor=pointer]
+          - button "Choose File" [ref=e231]
+          - textbox "笔记正文" [ref=e233]:
+            - heading "欢迎使用 WorkFollow" [level=1] [ref=e234]
+            - paragraph [ref=e235]: 这是一份简短的上手指南。完成右侧的新手任务后，你就可以开始管理自己的工作。
+            - heading "任务" [level=2] [ref=e236]
+            - paragraph [ref=e237]: 在任务页面创建、编辑任务；勾选任务即可完成。日期、负责人和优先级都可以在任务详情中调整。
+            - heading "日期与提醒" [level=2] [ref=e238]
+            - paragraph [ref=e239]: 给任务设置日期后，它会出现在首页、日历和对应的任务视图中；需要提醒时再设置提醒时间。
+            - heading "笔记" [level=2] [ref=e240]
+            - paragraph [ref=e241]: 在笔记页面创建和管理个人笔记，可以使用文件夹整理内容，也可以从笔记创建任务。
+            - heading "常用" [level=2] [ref=e242]
+            - paragraph [ref=e243]: 常用页面集中展示系统管理员配置的网站。点击网站卡片会在新标签页打开。
+            - heading "通知" [level=2] [ref=e244]
+            - paragraph [ref=e245]: 通知页面用于查看任务、团队投稿和审核结果提醒；标记已读与删除通知是两个独立操作。
+            - heading "团队与权限" [level=2] [ref=e246]
+            - paragraph [ref=e247]: 团队任务和团队笔记只对有权限的成员开放。OWNER、ADMIN、MEMBER 是团队内部角色，系统 ROOT 是全局权限。
+          - generic [ref=e248]:
+            - generic [ref=e249]:
+              - strong [ref=e250]: 附件
+              - generic [ref=e251]: "0"
+              - button "上传" [ref=e252] [cursor=pointer]
+            - paragraph [ref=e254]: 可上传图片、PDF、DOCX、XLSX、Markdown 和文本文件；也可直接粘贴截图。

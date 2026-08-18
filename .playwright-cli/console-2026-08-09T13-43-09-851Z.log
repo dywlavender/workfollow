@@ -1,0 +1,14 @@
+[     276ms] [ERROR] Failed to load resource: the server responded with a status of 401 (Unauthorized) @ http://127.0.0.1:5173/api/auth/me:0
+[     349ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://127.0.0.1:5173/favicon.ico:0
+[     374ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://127.0.0.1:5173/favicon.ico:0
+[  887812ms] [ERROR] Failed to load resource: the server responded with a status of 401 (Unauthorized) @ http://127.0.0.1:5173/api/notifications?unreadOnly=true:0
+[  947588ms] [ERROR] Failed to load resource: the server responded with a status of 401 (Unauthorized) @ http://127.0.0.1:5173/api/notifications?unreadOnly=true:0
+[ 1007389ms] [ERROR] Failed to load resource: the server responded with a status of 401 (Unauthorized) @ http://127.0.0.1:5173/api/notifications?unreadOnly=true:0
+[ 1067451ms] [ERROR] Failed to load resource: the server responded with a status of 401 (Unauthorized) @ http://127.0.0.1:5173/api/notifications?unreadOnly=true:0
+[ 1127392ms] [ERROR] Failed to load resource: the server responded with a status of 401 (Unauthorized) @ http://127.0.0.1:5173/api/notifications?unreadOnly=true:0
+[ 1187395ms] [ERROR] Failed to load resource: the server responded with a status of 401 (Unauthorized) @ http://127.0.0.1:5173/api/notifications?unreadOnly=true:0
+[ 1247629ms] [ERROR] Failed to load resource: the server responded with a status of 401 (Unauthorized) @ http://127.0.0.1:5173/api/notifications?unreadOnly=true:0
+[ 1307387ms] [ERROR] Failed to load resource: the server responded with a status of 401 (Unauthorized) @ http://127.0.0.1:5173/api/notifications?unreadOnly=true:0
+[ 1367399ms] [ERROR] Failed to load resource: the server responded with a status of 401 (Unauthorized) @ http://127.0.0.1:5173/api/notifications?unreadOnly=true:0
+[ 1427391ms] [ERROR] Failed to load resource: the server responded with a status of 401 (Unauthorized) @ http://127.0.0.1:5173/api/notifications?unreadOnly=true:0
+[ 1487393ms] [ERROR] Failed to load resource: the server responded with a status of 401 (Unauthorized) @ http://127.0.0.1:5173/api/notifications?unreadOnly=true:0

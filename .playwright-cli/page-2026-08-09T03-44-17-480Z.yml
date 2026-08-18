@@ -1,0 +1,46 @@
+- generic [ref=f1e3]:
+  - complementary [ref=f1e4]:
+    - link "WorkFollow 首页" [ref=f1e5] [cursor=pointer]:
+      - /url: /
+      - generic [ref=f1e6]: W
+    - navigation "全局导航" [ref=f1e7]:
+      - link "首页" [ref=f1e8] [cursor=pointer]:
+        - /url: /
+      - link "任务" [ref=f1e13] [cursor=pointer]:
+        - /url: /todos
+      - link "日历" [ref=f1e17] [cursor=pointer]:
+        - /url: /calendar
+      - link "全部笔记" [ref=f1e20] [cursor=pointer]:
+        - /url: /notes
+      - link "共享笔记" [ref=f1e24] [cursor=pointer]:
+        - /url: /shared-notes
+      - link "通知" [ref=f1e28] [cursor=pointer]:
+        - /url: /notifications
+      - link "AI 助手" [ref=f1e32] [cursor=pointer]:
+        - /url: /notes?panel=ai
+    - generic "切换工作空间" [ref=f1e37] [cursor=pointer]:
+      - combobox "切换工作空间" [ref=f1e43]:
+        - option "个人空间" [selected]
+        - option "Acceptance Team"
+    - link "设置" [ref=f1e45] [cursor=pointer]:
+      - /url: /settings
+  - main [ref=f1e54]:
+    - main [ref=f1e219]:
+      - generic [ref=f1e220]:
+        - generic [ref=f1e221]:
+          - generic [ref=f1e222]: W
+          - strong [ref=f1e223]: WorkFollow
+        - generic [ref=f1e224]: WELCOME BACK
+        - heading "登录 WorkFollow" [level=1] [ref=f1e225]
+        - paragraph [ref=f1e226]: 登录后继续处理你的任务和笔记。
+        - generic [ref=f1e227]:
+          - generic [ref=f1e228]:
+            - text: 用户名或邮箱
+            - textbox "用户名或邮箱" [active] [ref=f1e229]
+          - generic [ref=f1e230]:
+            - text: 密码
+            - textbox "密码" [ref=f1e231]
+          - button "登录" [ref=f1e232] [cursor=pointer]
+        - link "还没有账号？创建账号" [ref=f1e233] [cursor=pointer]:
+          - /url: /register
+        - paragraph [ref=f1e234]: 本地迁移数据默认账号：local / local-only-change-me

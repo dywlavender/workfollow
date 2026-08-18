@@ -1,0 +1,116 @@
+- generic [ref=f1e62]:
+  - complementary [ref=f1e63]:
+    - link "WorkFollow 首页" [ref=f1e64] [cursor=pointer]:
+      - /url: /
+      - generic [ref=f1e65]: W
+    - navigation "全局导航" [ref=f1e71]:
+      - link "首页" [ref=f1e72] [cursor=pointer]:
+        - /url: /
+      - link "任务" [ref=f1e78] [cursor=pointer]:
+        - /url: /todos
+      - link "日历" [ref=f1e83] [cursor=pointer]:
+        - /url: /calendar
+      - link "全部笔记" [ref=f1e87] [cursor=pointer]:
+        - /url: /notes
+      - link "常用" [ref=f1e92] [cursor=pointer]:
+        - /url: /common
+      - link "通知" [ref=f1e98] [cursor=pointer]:
+        - /url: /notifications
+    - generic [ref=f1e103]:
+      - link "团队管理" [ref=f1e104] [cursor=pointer]:
+        - /url: /teams
+      - link "设置" [ref=f1e111] [cursor=pointer]:
+        - /url: /settings
+  - main [ref=f1e124]:
+    - generic [ref=f1e276]:
+      - button "关闭任务导航" [ref=f1e659] [cursor=pointer]
+      - complementary "任务视图" [ref=f1e277]:
+        - generic [ref=f1e278]:
+          - generic [ref=f1e279]: 任务
+          - button "关闭任务导航" [ref=f1e660] [cursor=pointer]
+        - navigation "任务视图" [ref=f1e281]:
+          - link "所有 2" [ref=f1e433] [cursor=pointer]:
+            - /url: /todos?view=all
+            - strong [ref=f1e285]: 所有
+            - generic [ref=f1e286]: "2"
+          - link "今天 1" [ref=f1e287] [cursor=pointer]:
+            - /url: /todos?view=today
+            - strong [ref=f1e291]: 今天
+            - generic [ref=f1e292]: "1"
+          - link "本周 1" [ref=f1e293] [cursor=pointer]:
+            - /url: /todos?view=week
+            - strong [ref=f1e297]: 本周
+            - generic [ref=f1e298]: "1"
+          - link "无日期 1" [ref=f1e434] [cursor=pointer]:
+            - /url: /todos?view=inbox
+            - strong [ref=f1e304]: 无日期
+            - generic [ref=f1e305]: "1"
+          - link "本月 1" [ref=f1e306] [cursor=pointer]:
+            - /url: /todos?view=month
+            - strong [ref=f1e310]: 本月
+            - generic [ref=f1e311]: "1"
+        - generic [ref=f1e312]:
+          - heading "记录" [level=2] [ref=f1e313]
+          - navigation "记录" [ref=f1e314]:
+            - link "已完成 0" [ref=f1e315] [cursor=pointer]:
+              - /url: /todos?view=completed
+              - strong [ref=f1e320]: 已完成
+              - generic [ref=f1e321]: "0"
+        - generic [ref=f1e322]:
+          - heading "清单" [level=2] [ref=f1e323]
+          - navigation "清单" [ref=f1e324]:
+            - link "收集箱 2" [ref=f1e435] [cursor=pointer]:
+              - /url: /todos?list=%E6%94%B6%E9%9B%86%E7%AE%B1
+              - strong [ref=f1e328]: 收集箱
+              - generic [ref=f1e329]: "2"
+            - link "工作 0" [ref=f1e330] [cursor=pointer]:
+              - /url: /todos?list=%E5%B7%A5%E4%BD%9C
+              - strong [ref=f1e333]: 工作
+              - generic [ref=f1e334]: "0"
+            - link "个人 0" [ref=f1e335] [cursor=pointer]:
+              - /url: /todos?list=%E4%B8%AA%E4%BA%BA
+              - strong [ref=f1e338]: 个人
+              - generic [ref=f1e339]: "0"
+            - link "学习 0" [ref=f1e340] [cursor=pointer]:
+              - /url: /todos?list=%E5%AD%A6%E4%B9%A0
+              - strong [ref=f1e343]: 学习
+              - generic [ref=f1e344]: "0"
+      - region "待办列表" [ref=f1e345]:
+        - generic [ref=f1e346]:
+          - button "打开任务导航" [expanded] [active] [ref=f1e610] [cursor=pointer]
+          - generic [ref=f1e347]:
+            - generic [ref=f1e348]: 2026年8月12日 · 周三
+            - heading "所有" [level=2] [ref=f1e437]
+          - generic [ref=f1e350]:
+            - button "打开搜索" [ref=f1e355] [cursor=pointer]
+            - button "更多列表操作" [ref=f1e361] [cursor=pointer]
+        - generic [ref=f1e368]:
+          - generic [ref=f1e396]:
+            - generic [ref=f1e399]: 快速添加待办
+            - textbox "快速添加待办" [ref=f1e400]:
+              - /placeholder: 添加任务至收集箱
+            - button "创建" [disabled] [ref=f1e401]
+            - button "取消添加" [ref=f1e406] [cursor=pointer]
+          - generic "任务属性" [ref=f1e410]:
+            - button "无日期" [ref=f1e412] [cursor=pointer]
+            - button "优先级" [ref=f1e418] [cursor=pointer]
+            - button "收集箱" [ref=f1e422] [cursor=pointer]
+            - button "标签" [ref=f1e429] [cursor=pointer]
+        - generic [ref=f1e620]:
+          - generic [ref=f1e621]:
+            - strong [ref=f1e622]: 所有任务
+            - generic [ref=f1e623]: "2"
+          - article [ref=f1e624] [cursor=pointer]:
+            - button "完成 阅读《使用指南》并完成首次设置" [ref=f1e625]
+            - generic [ref=f1e626]:
+              - strong [ref=f1e627]: 阅读《使用指南》并完成首次设置
+              - generic [ref=f1e628]: 收集箱
+            - button "今天" [ref=f1e632]
+            - button "更多任务操作" [ref=f1e637]
+          - article [ref=f1e642] [cursor=pointer]:
+            - button "完成 验收无日期自适应任务" [ref=f1e643]
+            - generic [ref=f1e644]:
+              - strong [ref=f1e645]: 验收无日期自适应任务
+              - generic [ref=f1e646]: 收集箱
+            - button "无日期" [ref=f1e650]
+            - button "更多任务操作" [ref=f1e654]

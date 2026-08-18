@@ -1,0 +1,34 @@
+- main [ref=f1e5]:
+  - generic [ref=f1e6]:
+    - complementary "WorkFollow 产品介绍" [ref=f1e7]:
+      - generic [ref=f1e8]:
+        - generic [ref=f1e9]: W
+        - strong [ref=f1e10]: WorkFollow
+      - generic [ref=f1e11]:
+        - generic [ref=f1e12]: FOCUS · ORGANIZE · DELIVER
+        - heading "把今天要做的事， 安静地推进。" [level=2] [ref=f1e13]: 把今天要做的事，安静地推进。
+        - paragraph [ref=f1e14]: 任务、笔记与团队协作汇聚在一个清晰的工作空间里。
+      - list [ref=f1e15]:
+        - listitem [ref=f1e16]: 个人任务与团队任务统一查看
+        - listitem [ref=f1e19]: 富文本笔记沉淀过程与结论
+        - listitem [ref=f1e22]: 清晰权限让协作保持边界
+    - generic [ref=f1e29]:
+      - generic [ref=f1e30]:
+        - generic [ref=f1e31]: 欢迎回来
+        - heading "登录 WorkFollow" [level=1] [ref=f1e32]
+        - paragraph [ref=f1e33]: 输入账号信息，继续今天的工作。
+      - generic [ref=f1e34]:
+        - generic [ref=f1e35]:
+          - generic [ref=f1e36]: 用户名
+          - textbox "用户名" [active] [ref=f1e41]:
+            - /placeholder: 输入用户名
+        - generic [ref=f1e42]:
+          - generic [ref=f1e43]: 密码
+          - textbox "密码" [ref=f1e49]:
+            - /placeholder: 至少 8 个字符
+        - button "登录" [ref=f1e50] [cursor=pointer]
+      - paragraph [ref=f1e55]:
+        - text: 第一次使用 WorkFollow？
+        - link "创建账号" [ref=f1e56] [cursor=pointer]:
+          - /url: /register?redirect=/todos
+      - paragraph [ref=f1e57]: 本地迁移账号可继续使用原用户名和密码登录

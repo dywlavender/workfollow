@@ -1,0 +1,26 @@
+- generic [ref=e3]:
+  - complementary [ref=e4]:
+    - link "WorkFollow 首页" [ref=e5] [cursor=pointer]:
+      - /url: /
+      - generic [ref=e6]: W
+    - navigation "全局导航" [ref=e7]:
+      - link "首页" [ref=e8] [cursor=pointer]:
+        - /url: /
+      - link "任务" [ref=e13] [cursor=pointer]:
+        - /url: /todos
+      - link "日历" [ref=e17] [cursor=pointer]:
+        - /url: /calendar
+      - link "全部笔记" [ref=e20] [cursor=pointer]:
+        - /url: /notes
+      - link "共享笔记" [ref=e24] [cursor=pointer]:
+        - /url: /shared-notes
+      - link "通知" [ref=e28] [cursor=pointer]:
+        - /url: /notifications
+      - link "AI 助手" [ref=e32] [cursor=pointer]:
+        - /url: /notes?panel=ai
+    - generic "切换工作空间" [ref=e37] [cursor=pointer]:
+      - combobox "切换工作空间" [ref=e43]:
+        - option "个人空间" [selected]
+    - link "设置" [ref=e45] [cursor=pointer]:
+      - /url: /settings
+  - main [ref=e54]

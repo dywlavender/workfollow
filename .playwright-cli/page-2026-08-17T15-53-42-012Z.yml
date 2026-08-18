@@ -1,0 +1,94 @@
+- generic [ref=f107e5]:
+  - complementary [ref=f107e6]:
+    - link "WorkFollow 首页" [ref=f107e7] [cursor=pointer]:
+      - /url: /
+      - generic [ref=f107e8]: W
+    - navigation "全局导航" [ref=f107e9]:
+      - link "首页" [ref=f107e10] [cursor=pointer]:
+        - /url: /
+      - link "任务" [ref=f107e15] [cursor=pointer]:
+        - /url: /todos
+      - link "日历" [ref=f107e19] [cursor=pointer]:
+        - /url: /calendar
+      - link "全部笔记" [ref=f107e22] [cursor=pointer]:
+        - /url: /notes
+      - link "常用" [ref=f107e26] [cursor=pointer]:
+        - /url: /common
+      - link "通知" [ref=f107e31] [cursor=pointer]:
+        - /url: /notifications
+    - generic [ref=f107e35]:
+      - link "团队管理" [ref=f107e36] [cursor=pointer]:
+        - /url: /team/0277776d-65e9-4e12-9848-98ad479472b2
+      - link "设置" [ref=f107e42] [cursor=pointer]:
+        - /url: /settings
+  - main [ref=f107e51]:
+    - generic [ref=f107e637]:
+      - generic [ref=f107e638]:
+        - generic [ref=f107e639]:
+          - generic [ref=f107e640]: WORKFOLLOW
+          - heading "设置" [level=1] [ref=f107e641]
+          - paragraph [ref=f107e642]: 调整应用的外观与使用偏好。
+        - link "返回工作台" [ref=f107e643] [cursor=pointer]:
+          - /url: /
+      - generic [ref=f107e647]:
+        - complementary "设置分类" [ref=f107e648]:
+          - generic [ref=f107e649]: 设置
+          - button "外观" [ref=f107e653] [cursor=pointer]
+        - main [ref=f107e660]:
+          - region [ref=f107e661]:
+            - generic [ref=f107e662]:
+              - generic [ref=f107e663]:
+                - generic [ref=f107e664]: APPEARANCE
+                - heading "外观" [level=2] [ref=f107e665]
+                - paragraph [ref=f107e666]: 明暗模式与配色相互独立，现有配色均可继续扩展。
+              - generic [ref=f107e667]: 当前：靛蓝
+            - generic [ref=f107e668]:
+              - heading "界面模式" [level=3] [ref=f107e669]
+              - radiogroup "界面模式" [ref=f107e670]:
+                - radio "跟随系统 自动匹配设备外观" [checked] [active] [ref=f107e671] [cursor=pointer]:
+                  - generic [ref=f107e674]:
+                    - strong [ref=f107e675]: 跟随系统
+                    - generic [ref=f107e676]: 自动匹配设备外观
+                - radio "浅色 始终使用浅色界面" [ref=f107e677] [cursor=pointer]:
+                  - generic [ref=f107e681]:
+                    - strong [ref=f107e682]: 浅色
+                    - generic [ref=f107e683]: 始终使用浅色界面
+                - radio "深色 始终使用深色界面" [ref=f107e684] [cursor=pointer]:
+                  - generic [ref=f107e687]:
+                    - strong [ref=f107e688]: 深色
+                    - generic [ref=f107e689]: 始终使用深色界面
+            - generic [ref=f107e692]:
+              - heading "主题配色" [level=3] [ref=f107e693]
+              - radiogroup "颜色主题" [ref=f107e694]:
+                - radio "靛蓝主题" [checked] [ref=f107e695] [cursor=pointer]:
+                  - generic [ref=f107e699]: 靛蓝
+                - radio "晴蓝主题" [ref=f107e700] [cursor=pointer]:
+                  - generic [ref=f107e702]: 晴蓝
+                - radio "松石主题" [ref=f107e703] [cursor=pointer]:
+                  - generic [ref=f107e705]: 松石
+                - radio "秘青主题" [ref=f107e706] [cursor=pointer]:
+                  - generic [ref=f107e708]: 秘青
+                - radio "霜荫主题" [ref=f107e709] [cursor=pointer]:
+                  - generic [ref=f107e711]: 霜荫
+                - radio "杏黄主题" [ref=f107e712] [cursor=pointer]:
+                  - generic [ref=f107e714]: 杏黄
+                - radio "桃夭主题" [ref=f107e715] [cursor=pointer]:
+                  - generic [ref=f107e717]: 桃夭
+                - radio "暮山紫主题" [ref=f107e718] [cursor=pointer]:
+                  - generic [ref=f107e720]: 暮山紫
+                - radio "沉香主题" [ref=f107e721] [cursor=pointer]:
+                  - generic [ref=f107e723]: 沉香
+                - radio "藏蓝主题" [ref=f107e724] [cursor=pointer]:
+                  - generic [ref=f107e726]: 藏蓝
+                - radio "石墨主题" [ref=f107e727] [cursor=pointer]:
+                  - generic [ref=f107e729]: 石墨
+          - generic [ref=f107e730]:
+            - generic [ref=f107e731]:
+              - strong [ref=f107e732]: 主题颜色会自动保存
+              - paragraph [ref=f107e733]: 下次打开 WorkFollow 时会继续使用当前主题。
+            - generic [ref=f107e734]: 已应用
+          - generic [ref=f107e737]:
+            - generic [ref=f107e738]:
+              - strong [ref=f107e739]: root
+              - paragraph [ref=f107e740]: "@root"
+            - button "退出登录" [ref=f107e741] [cursor=pointer]

@@ -1,0 +1,445 @@
+- generic [ref=f107e5]:
+  - complementary [ref=f107e6]:
+    - link "WorkFollow 首页" [ref=f107e7] [cursor=pointer]:
+      - /url: /
+      - generic [ref=f107e8]: W
+    - navigation "全局导航" [ref=f107e9]:
+      - link "首页" [ref=f107e10] [cursor=pointer]:
+        - /url: /
+      - link "任务" [ref=f107e15] [cursor=pointer]:
+        - /url: /todos
+      - link "日历" [ref=f107e19] [cursor=pointer]:
+        - /url: /calendar
+      - link "全部笔记" [ref=f107e22] [cursor=pointer]:
+        - /url: /notes
+      - link "常用" [ref=f107e26] [cursor=pointer]:
+        - /url: /common
+      - link "通知" [ref=f107e31] [cursor=pointer]:
+        - /url: /notifications
+    - generic [ref=f107e35]:
+      - link "团队管理" [ref=f107e36] [cursor=pointer]:
+        - /url: /team/0277776d-65e9-4e12-9848-98ad479472b2
+      - link "设置" [ref=f107e42] [cursor=pointer]:
+        - /url: /settings
+  - main [ref=f107e51]:
+    - generic [ref=f107e745]:
+      - complementary "任务视图" [ref=f107e746]:
+        - navigation "任务视图" [ref=f107e748]:
+          - link "所有 33" [active] [ref=f107e1040] [cursor=pointer]:
+            - /url: /todos?view=all
+            - strong [ref=f107e752]: 所有
+            - generic [ref=f107e753]: "33"
+          - link "今天 7" [ref=f107e1041] [cursor=pointer]:
+            - /url: /todos?view=today
+            - strong [ref=f107e758]: 今天
+            - generic [ref=f107e759]: "7"
+          - link "本周 7" [ref=f107e1042] [cursor=pointer]:
+            - /url: /todos?view=week
+            - strong [ref=f107e764]: 本周
+            - generic [ref=f107e765]: "7"
+          - link "无日期 7" [ref=f107e1043] [cursor=pointer]:
+            - /url: /todos?view=inbox
+            - strong [ref=f107e771]: 无日期
+            - generic [ref=f107e772]: "7"
+          - link "本月 7" [ref=f107e1044] [cursor=pointer]:
+            - /url: /todos?view=month
+            - strong [ref=f107e777]: 本月
+            - generic [ref=f107e778]: "7"
+        - generic [ref=f107e779]:
+          - heading "协作" [level=2] [ref=f107e780]
+          - navigation "协作" [ref=f107e781]:
+            - link "协作任务 2" [ref=f107e782] [cursor=pointer]:
+              - /url: /todos?view=collaboration
+              - strong [ref=f107e789]: 协作任务
+              - generic [ref=f107e790]: "2"
+            - link "分配给我的 0" [ref=f107e791] [cursor=pointer]:
+              - /url: /todos?view=assigned-to-me
+              - strong [ref=f107e798]: 分配给我的
+              - generic [ref=f107e799]: "0"
+            - link "我分配的 2" [ref=f107e800] [cursor=pointer]:
+              - /url: /todos?view=assigned-by-me
+              - strong [ref=f107e805]: 我分配的
+              - generic [ref=f107e806]: "2"
+        - generic [ref=f107e807]:
+          - heading "记录" [level=2] [ref=f107e808]
+          - navigation "记录" [ref=f107e809]:
+            - link "已完成 20" [ref=f107e810] [cursor=pointer]:
+              - /url: /todos?view=completed
+              - strong [ref=f107e815]: 已完成
+              - generic [ref=f107e816]: "20"
+        - generic [ref=f107e817]:
+          - heading "清单" [level=2] [ref=f107e818]
+          - navigation "清单" [ref=f107e819]:
+            - link "收集箱 26" [ref=f107e1045] [cursor=pointer]:
+              - /url: /todos?list=%E6%94%B6%E9%9B%86%E7%AE%B1
+              - strong [ref=f107e823]: 收集箱
+              - generic [ref=f107e824]: "26"
+            - link "工作 4" [ref=f107e825] [cursor=pointer]:
+              - /url: /todos?list=%E5%B7%A5%E4%BD%9C
+              - strong [ref=f107e828]: 工作
+              - generic [ref=f107e829]: "4"
+            - link "个人 2" [ref=f107e830] [cursor=pointer]:
+              - /url: /todos?list=%E4%B8%AA%E4%BA%BA
+              - strong [ref=f107e833]: 个人
+              - generic [ref=f107e834]: "2"
+            - link "学习 1" [ref=f107e835] [cursor=pointer]:
+              - /url: /todos?list=%E5%AD%A6%E4%B9%A0
+              - strong [ref=f107e838]: 学习
+              - generic [ref=f107e839]: "1"
+      - region "待办列表" [ref=f107e840]:
+        - generic [ref=f107e841]:
+          - button "收起任务导航" [expanded] [ref=f107e842] [cursor=pointer]
+          - heading "所有" [level=2] [ref=f107e1046]
+          - button "更多列表操作" [ref=f107e854] [cursor=pointer]
+        - generic [ref=f107e861]:
+          - generic [ref=f107e862]:
+            - generic [ref=f107e863]: 快速添加待办
+            - textbox "快速添加待办" [ref=f107e864]:
+              - /placeholder: 添加任务
+            - generic [ref=f107e865]: 输入任务后按回车创建
+            - button "无日期" [ref=f107e1047] [cursor=pointer]
+            - button "更多任务设置" [ref=f107e869] [cursor=pointer]
+          - generic "任务属性"
+        - generic [ref=f107e1050]:
+          - generic [ref=f107e1051]:
+            - strong [ref=f107e1052]: 所有任务
+            - generic [ref=f107e1053]: "33"
+          - article [ref=f107e1054] [cursor=pointer]:
+            - button "完成 ss" [ref=f107e1055]
+            - generic [ref=f107e1056]:
+              - strong [ref=f107e1057]: ss
+              - generic [ref=f107e1058]: 收集箱
+            - button "今天" [ref=f107e1062]
+            - generic [ref=f107e1066]:
+              - button [ref=f107e1068]
+              - button "更多任务操作" [ref=f107e1074]
+          - article [ref=f107e1079] [cursor=pointer]:
+            - button "完成 sd" [ref=f107e1080]
+            - generic [ref=f107e1081]:
+              - strong [ref=f107e1082]: sd
+              - generic [ref=f107e1083]: 收集箱
+            - button "今天" [ref=f107e1087]
+            - generic [ref=f107e1091]:
+              - button [ref=f107e1093]
+              - button "更多任务操作" [ref=f107e1099]
+          - article [ref=f107e1104] [cursor=pointer]:
+            - button "完成 天上" [ref=f107e1105]
+            - generic [ref=f107e1106]:
+              - strong [ref=f107e1107]: 天上
+              - generic [ref=f107e1109]:
+                - generic [ref=f107e1110]: 工作
+                - generic [ref=f107e1111]: ·#0
+                - generic "HIGH 优先级" [ref=f107e1112]: ·
+                - generic "重复任务" [ref=f107e1115]: ·
+                - generic "已设置提醒" [ref=f107e1119]: ·
+            - button "8月15日 11:18" [ref=f107e1124]
+            - generic [ref=f107e1128]:
+              - button [ref=f107e1130]
+              - button "更多任务操作" [ref=f107e1136]
+          - article [ref=f107e1141] [cursor=pointer]:
+            - button "恢复 添加" [ref=f107e1142]
+            - generic [ref=f107e1145]:
+              - strong [ref=f107e1146]: 添加
+              - generic [ref=f107e1147]: 收集箱
+            - button "8月15日" [ref=f107e1151]
+            - generic [ref=f107e1155]:
+              - button [ref=f107e1157]
+              - button "更多任务操作" [ref=f107e1163]
+          - article [ref=f107e1168] [cursor=pointer]:
+            - button "完成 QA-任务页全功能验收-20260812" [ref=f107e1169]
+            - generic [ref=f107e1170]:
+              - strong [ref=f107e1171]: QA-任务页全功能验收-20260812
+              - paragraph [ref=f107e1172]: 验收正文第一行 加粗
+              - generic [ref=f107e1174]:
+                - generic [ref=f107e1175]: 工作
+                - generic [ref=f107e1176]: ·#交互验收
+                - generic "HIGH 优先级" [ref=f107e1177]: ·
+                - generic "重复任务" [ref=f107e1180]: ·
+            - button "8月14日" [ref=f107e1185]
+            - generic [ref=f107e1189]:
+              - button [ref=f107e1191]
+              - button "更多任务操作" [ref=f107e1197]
+          - article [ref=f107e1202] [cursor=pointer]:
+            - button "完成 测试" [disabled] [ref=f107e1203]
+            - generic [ref=f107e1204]:
+              - strong [ref=f107e1205]: 测试
+              - generic [ref=f107e1207]:
+                - generic [ref=f107e1208]: 收集箱
+                - generic "MEDIUM 优先级" [ref=f107e1209]: ·
+                - generic "重复任务" [ref=f107e1212]: ·
+                - generic [ref=f107e1216]: ·0/2
+            - button "8月14日" [ref=f107e1223]
+            - generic [ref=f107e1227]:
+              - button [ref=f107e1229]
+              - button "更多任务操作" [ref=f107e1235]
+          - article [ref=f107e1240] [cursor=pointer]:
+            - button "完成 篇" [ref=f107e1241]
+            - generic [ref=f107e1242]:
+              - strong [ref=f107e1243]: 篇
+              - generic [ref=f107e1245]:
+                - generic [ref=f107e1246]: 收集箱
+                - generic "重复任务" [ref=f107e1247]: ·
+                - generic "已设置提醒" [ref=f107e1251]: ·
+            - button "8月13日 15:30" [ref=f107e1256]
+            - generic [ref=f107e1260]:
+              - button [ref=f107e1262]
+              - button "更多任务操作" [ref=f107e1268]
+          - article [ref=f107e1273] [cursor=pointer]:
+            - button "完成 p" [ref=f107e1274]
+            - generic [ref=f107e1275]:
+              - strong [ref=f107e1276]: p
+              - generic [ref=f107e1277]: 收集箱
+            - button "8月13日" [ref=f107e1281]
+            - generic [ref=f107e1285]:
+              - button [ref=f107e1287]
+              - button "更多任务操作" [ref=f107e1293]
+          - article [ref=f107e1298] [cursor=pointer]:
+            - button "完成 什么事" [ref=f107e1299]
+            - generic [ref=f107e1300]:
+              - strong [ref=f107e1301]: 什么事
+              - generic [ref=f107e1302]: 收集箱
+            - button "8月13日" [ref=f107e1306]
+            - generic [ref=f107e1310]:
+              - button [ref=f107e1312]
+              - button "更多任务操作" [ref=f107e1318]
+          - article [ref=f107e1323] [cursor=pointer]:
+            - button "恢复 QA-任务页全功能验收-20260812" [ref=f107e1324]
+            - generic [ref=f107e1327]:
+              - strong [ref=f107e1328]: QA-任务页全功能验收-20260812
+              - generic [ref=f107e1330]:
+                - generic [ref=f107e1331]: 工作
+                - generic [ref=f107e1332]: ·#交互验收
+                - generic "HIGH 优先级" [ref=f107e1333]: ·
+                - generic "重复任务" [ref=f107e1336]: ·
+                - generic "已设置提醒" [ref=f107e1340]: ·
+            - button "8月13日" [ref=f107e1345]
+            - generic [ref=f107e1349]:
+              - button [ref=f107e1351]
+              - button "更多任务操作" [ref=f107e1357]
+          - article [ref=f107e1362] [cursor=pointer]:
+            - button "恢复 创建" [ref=f107e1363]
+            - generic [ref=f107e1366]:
+              - strong [ref=f107e1367]: 创建
+              - paragraph [ref=f107e1368]: 什么事真的 不知道
+              - generic [ref=f107e1370]:
+                - generic [ref=f107e1371]: 收集箱
+                - generic "MEDIUM 优先级" [ref=f107e1372]: ·
+                - generic "重复任务" [ref=f107e1375]: ·
+                - generic "已设置提醒" [ref=f107e1379]: ·
+            - button "8月12日" [ref=f107e1384]
+            - generic [ref=f107e1388]:
+              - button [ref=f107e1390]
+              - button "更多任务操作" [ref=f107e1396]
+          - article [ref=f107e1401] [cursor=pointer]:
+            - button "恢复 弄清楚 planning" [ref=f107e1402]
+            - generic [ref=f107e1405]:
+              - strong [ref=f107e1406]: 弄清楚 planning
+              - paragraph [ref=f107e1407]: 什么事天气 整的吗
+              - generic [ref=f107e1408]: 收集箱
+            - button "8月11日" [ref=f107e1412]
+            - generic [ref=f107e1416]:
+              - button [ref=f107e1418]
+              - button "更多任务操作" [ref=f107e1424]
+          - article [ref=f107e1429] [cursor=pointer]:
+            - button "恢复 效果： 1、评估方法改造带来的影响 2、识别功能的链路 3、回答业务问题" [ref=f107e1430]
+            - generic [ref=f107e1433]:
+              - strong [ref=f107e1434]: 效果： 1、评估方法改造带来的影响 2、识别功能的链路 3、回答业务问题
+              - generic [ref=f107e1435]: 收集箱
+            - button "8月11日" [ref=f107e1439]
+            - generic [ref=f107e1443]:
+              - button [ref=f107e1445]
+              - button "更多任务操作" [ref=f107e1451]
+          - article [ref=f107e1456] [cursor=pointer]:
+            - button "恢复 完成营销小助手开发" [ref=f107e1457]
+            - generic [ref=f107e1460]:
+              - strong [ref=f107e1461]: 完成营销小助手开发
+              - generic [ref=f107e1462]: 收集箱
+            - button "8月11日" [ref=f107e1466]
+            - generic [ref=f107e1470]:
+              - button [ref=f107e1472]
+              - button "更多任务操作" [ref=f107e1478]
+          - article [ref=f107e1483] [cursor=pointer]:
+            - button "恢复 e" [ref=f107e1484]
+            - generic [ref=f107e1487]:
+              - strong [ref=f107e1488]: e
+              - generic [ref=f107e1489]: 收集箱
+            - button "8月10日" [ref=f107e1493]
+            - generic [ref=f107e1497]:
+              - button [ref=f107e1499]
+              - button "更多任务操作" [ref=f107e1505]
+          - article [ref=f107e1510] [cursor=pointer]:
+            - button "恢复 个人" [ref=f107e1511]
+            - generic [ref=f107e1514]:
+              - strong [ref=f107e1515]: 个人
+              - generic [ref=f107e1516]: 个人
+            - button "8月10日" [ref=f107e1520]
+            - generic [ref=f107e1524]:
+              - button [ref=f107e1526]
+              - button "更多任务操作" [ref=f107e1532]
+          - article [ref=f107e1537] [cursor=pointer]:
+            - button "恢复 工作1" [ref=f107e1538]
+            - generic [ref=f107e1541]:
+              - strong [ref=f107e1542]: 工作1
+              - generic [ref=f107e1543]: 工作
+            - button "8月10日" [ref=f107e1547]
+            - generic [ref=f107e1551]:
+              - button [ref=f107e1553]
+              - button "更多任务操作" [ref=f107e1559]
+          - article [ref=f107e1564] [cursor=pointer]:
+            - button "恢复 学习" [ref=f107e1565]
+            - generic [ref=f107e1568]:
+              - strong [ref=f107e1569]: 学习
+              - generic [ref=f107e1570]: 学习
+            - button "8月10日" [ref=f107e1574]
+            - generic [ref=f107e1578]:
+              - button [ref=f107e1580]
+              - button "更多任务操作" [ref=f107e1586]
+          - article [ref=f107e1591] [cursor=pointer]:
+            - button "恢复 9990" [ref=f107e1592]
+            - generic [ref=f107e1595]:
+              - strong [ref=f107e1596]: "9990"
+              - generic [ref=f107e1597]: 收集箱
+            - button "8月9日" [ref=f107e1601]
+            - generic [ref=f107e1605]:
+              - button [ref=f107e1607]
+              - button "更多任务操作" [ref=f107e1613]
+          - article [ref=f107e1618] [cursor=pointer]:
+            - button "恢复 0" [ref=f107e1619]
+            - generic [ref=f107e1622]:
+              - strong [ref=f107e1623]: "0"
+              - generic [ref=f107e1624]: 收集箱
+            - button "8月9日" [ref=f107e1628]
+            - generic [ref=f107e1632]:
+              - button [ref=f107e1634]
+              - button "更多任务操作" [ref=f107e1640]
+          - article [ref=f107e1645] [cursor=pointer]:
+            - button "恢复 00" [ref=f107e1646]
+            - generic [ref=f107e1649]:
+              - strong [ref=f107e1650]: "00"
+              - generic [ref=f107e1651]: 收集箱
+            - button "8月9日" [ref=f107e1655]
+            - generic [ref=f107e1659]:
+              - button [ref=f107e1661]
+              - button "更多任务操作" [ref=f107e1667]
+          - article [ref=f107e1672] [cursor=pointer]:
+            - button "恢复 00" [ref=f107e1673]
+            - generic [ref=f107e1676]:
+              - strong [ref=f107e1677]: "00"
+              - generic [ref=f107e1678]: 收集箱
+            - button "8月9日" [ref=f107e1682]
+            - generic [ref=f107e1686]:
+              - button [ref=f107e1688]
+              - button "更多任务操作" [ref=f107e1694]
+          - article [ref=f107e1699] [cursor=pointer]:
+            - button "恢复 123" [ref=f107e1700]
+            - generic [ref=f107e1703]:
+              - strong [ref=f107e1704]: "123"
+              - generic [ref=f107e1705]: 收集箱
+            - button "8月9日" [ref=f107e1709]
+            - generic [ref=f107e1713]:
+              - button [ref=f107e1715]
+              - button "更多任务操作" [ref=f107e1721]
+          - article [ref=f107e1726] [cursor=pointer]:
+            - button "恢复 2" [ref=f107e1727]
+            - generic [ref=f107e1730]:
+              - strong [ref=f107e1731]: "2"
+              - generic [ref=f107e1732]: 收集箱
+            - button "8月9日" [ref=f107e1736]
+            - generic [ref=f107e1740]:
+              - button [ref=f107e1742]
+              - button "更多任务操作" [ref=f107e1748]
+          - article [ref=f107e1753] [cursor=pointer]:
+            - button "恢复 添加2" [ref=f107e1754]
+            - generic [ref=f107e1757]:
+              - strong [ref=f107e1758]: 添加2
+              - generic [ref=f107e1760]:
+                - generic [ref=f107e1761]: 个人
+                - generic "HIGH 优先级" [ref=f107e1762]: ·
+            - button "8月9日" [ref=f107e1766]
+            - generic [ref=f107e1770]:
+              - button [ref=f107e1772]
+              - button "更多任务操作" [ref=f107e1778]
+          - article [ref=f107e1783] [cursor=pointer]:
+            - button "恢复 1" [ref=f107e1784]
+            - generic [ref=f107e1787]:
+              - strong [ref=f107e1788]: "1"
+              - paragraph [ref=f107e1789]: 主题1 今天怎么样 挺不错的 检查代码 检查项目 1 2 怎么样 什么 dasdasdada adasdad sdasda as asd asd 十大天气
+              - generic [ref=f107e1791]:
+                - generic [ref=f107e1792]: 收集箱
+                - generic [ref=f107e1793]: ·#1
+                - generic "HIGH 优先级" [ref=f107e1794]: ·
+            - button "8月7日" [ref=f107e1798]
+            - generic [ref=f107e1802]:
+              - button [ref=f107e1804]
+              - button "更多任务操作" [ref=f107e1810]
+          - article [ref=f107e1815] [cursor=pointer]:
+            - button "完成 11" [ref=f107e1816]
+            - generic [ref=f107e1817]:
+              - strong [ref=f107e1818]: "11"
+              - generic [ref=f107e1819]: 收集箱
+            - button "无日期" [ref=f107e1823]
+            - generic [ref=f107e1826]:
+              - button [ref=f107e1828]
+              - button "更多任务操作" [ref=f107e1834]
+          - article [ref=f107e1839] [cursor=pointer]:
+            - button "完成 是" [ref=f107e1840]
+            - generic [ref=f107e1841]:
+              - strong [ref=f107e1842]: 是
+              - generic [ref=f107e1843]: 收集箱
+            - button "无日期" [ref=f107e1847]
+            - generic [ref=f107e1850]:
+              - button [ref=f107e1852]
+              - button "更多任务操作" [ref=f107e1858]
+          - article [ref=f107e1863] [cursor=pointer]:
+            - button "完成 2" [ref=f107e1864]
+            - generic [ref=f107e1865]:
+              - strong [ref=f107e1866]: "2"
+              - paragraph [ref=f107e1867]: /
+              - generic [ref=f107e1868]: 收集箱
+            - button "无日期" [ref=f107e1872]
+            - generic [ref=f107e1875]:
+              - button [ref=f107e1877]
+              - button "更多任务操作" [ref=f107e1883]
+          - article [ref=f107e1888] [cursor=pointer]:
+            - button "完成 3" [ref=f107e1889]
+            - generic [ref=f107e1890]:
+              - strong [ref=f107e1891]: "3"
+              - generic [ref=f107e1892]: 收集箱
+            - button "无日期" [ref=f107e1896]
+            - generic [ref=f107e1899]:
+              - button [ref=f107e1901]
+              - button "更多任务操作" [ref=f107e1907]
+          - article [ref=f107e1912] [cursor=pointer]:
+            - button "完成 2" [ref=f107e1913]
+            - generic [ref=f107e1914]:
+              - strong [ref=f107e1915]: "2"
+              - generic [ref=f107e1916]: 收集箱
+            - button "无日期" [ref=f107e1920]
+            - generic [ref=f107e1923]:
+              - button [ref=f107e1925]
+              - button "更多任务操作" [ref=f107e1931]
+          - article [ref=f107e1936] [cursor=pointer]:
+            - button "完成 1" [ref=f107e1937]
+            - generic [ref=f107e1938]:
+              - strong [ref=f107e1939]: "1"
+              - generic [ref=f107e1940]: 收集箱
+            - button "无日期" [ref=f107e1944]
+            - generic [ref=f107e1947]:
+              - button [ref=f107e1949]
+              - button "更多任务操作" [ref=f107e1955]
+          - article [ref=f107e1960] [cursor=pointer]:
+            - button "恢复 [自测] 团队任务三栏交互" [ref=f107e1961]
+            - generic [ref=f107e1964]:
+              - strong [ref=f107e1965]: "[自测] 团队任务三栏交互"
+              - generic [ref=f107e1967]:
+                - generic [ref=f107e1968]: 收集箱
+                - generic [ref=f107e1969]: ·1/3
+            - button "无日期" [ref=f107e1976]
+            - generic [ref=f107e1979]:
+              - button [ref=f107e1981]
+              - button "更多任务操作" [ref=f107e1987]
+      - separator "调整任务列表与详情宽度" [ref=f107e1032]
+      - complementary "任务详情" [ref=f107e1034]:
+        - generic [ref=f107e1035]:
+          - strong [ref=f107e1038]: 选择一个任务
+          - paragraph [ref=f107e1039]: 任务详情会显示在这里。

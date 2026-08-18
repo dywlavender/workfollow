@@ -1,0 +1,82 @@
+- generic [ref=e58]:
+  - complementary [ref=e59]:
+    - navigation "全局导航" [ref=e62]:
+      - link "首页" [ref=e63] [cursor=pointer]:
+        - /url: /
+      - link "任务" [ref=e68] [cursor=pointer]:
+        - /url: /todos
+      - link "日历" [ref=e72] [cursor=pointer]:
+        - /url: /calendar
+      - link "全部笔记" [ref=e75] [cursor=pointer]:
+        - /url: /notes
+  - main [ref=e104]:
+    - generic [ref=e106]:
+      - region "待办列表" [ref=e173]:
+        - generic [ref=e174]:
+          - button "打开任务导航" [ref=e411] [cursor=pointer]
+          - heading "今天" [level=2] [ref=e176]
+          - generic [ref=e177]:
+            - button "切换任务排序" [ref=e178] [cursor=pointer]
+            - button "打开搜索" [ref=e182] [cursor=pointer]
+            - button "更多列表操作" [ref=e188] [cursor=pointer]
+        - button "添加任务" [ref=e196] [cursor=pointer]
+        - generic [ref=e463]:
+          - generic [ref=e464]:
+            - strong [ref=e465]: 逾期
+            - generic [ref=e466]: "3"
+          - article [ref=e467] [cursor=pointer]:
+            - button "完成 3" [ref=e468]
+            - generic [ref=e469]:
+              - strong [ref=e470]: "3"
+              - generic [ref=e471]: 收集箱
+            - button "更多任务操作" [ref=e475]
+          - article [ref=e480] [cursor=pointer]:
+            - button "完成 1" [ref=e481]
+            - generic [ref=e482]:
+              - strong [ref=e483]: "1"
+              - paragraph [ref=e484]: 标题1 标题2 标题3 1、喜庆价值评估吗的1 大
+              - generic [ref=e485]: 收集箱
+            - button "更多任务操作" [ref=e489]
+          - article [ref=e494] [cursor=pointer]:
+            - button "完成 2" [ref=e495]
+            - generic [ref=e496]:
+              - strong [ref=e497]: "2"
+              - generic [ref=e498]: 收集箱
+            - button "更多任务操作" [ref=e502]
+      - complementary "任务正文" [ref=e507]:
+        - generic [ref=e508]:
+          - button "完成任务" [ref=e509] [cursor=pointer]
+          - generic [ref=e513]: 任务标题
+          - textbox "任务标题" [ref=e514]: "3"
+          - button "8月9日，18:00" [ref=e516] [cursor=pointer]
+          - button "无优先级" [ref=e521] [cursor=pointer]
+          - button "关闭详情" [ref=e524] [cursor=pointer]
+        - generic [ref=e528]:
+          - toolbar "编辑工具栏" [ref=e529]:
+            - button "二级标题" [ref=e530] [cursor=pointer]: H2
+            - button "粗体" [ref=e531] [cursor=pointer]:
+              - strong [ref=e532]: B
+            - button "斜体" [ref=e533] [cursor=pointer]:
+              - emphasis [ref=e534]: I
+            - button "下划线" [ref=e535] [cursor=pointer]:
+              - generic [ref=e536]: U
+            - button "无序列表" [ref=e537] [cursor=pointer]
+            - button "有序列表" [ref=e539] [cursor=pointer]
+            - button "任务列表" [ref=e543] [cursor=pointer]
+            - button "文字颜色" [ref=e549] [cursor=pointer]:
+              - strong [ref=e550]: A
+            - button "背景颜色" [ref=e552] [cursor=pointer]
+            - button "引用" [ref=e558] [cursor=pointer]
+            - button "代码块" [ref=e562] [cursor=pointer]
+            - button "链接" [ref=e567] [cursor=pointer]
+            - button "表格" [ref=e572] [cursor=pointer]
+            - button "图片或附件" [ref=e575] [cursor=pointer]
+          - textbox "任务正文" [ref=e579]:
+            - paragraph [ref=e580]: 输入内容，或输入 / 插入格式
+          - generic [ref=e581]: 已保存
+          - button "Choose File" [ref=e582]
+        - generic [ref=e583]:
+          - generic [ref=e584]: 收集箱
+          - generic [ref=e589]:
+            - button "评论" [ref=e590] [cursor=pointer]
+            - button "更多正文操作" [ref=e594] [cursor=pointer]

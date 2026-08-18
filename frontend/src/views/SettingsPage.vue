@@ -1,0 +1,139 @@
+<script setup lang="ts">
+import { computed } from 'vue'
+import { useRouter } from 'vue-router'
+import {
+  IconArrowLeft,
+  IconCheck,
+  IconDeviceDesktop,
+  IconMoon,
+  IconPalette,
+  IconSettings,
+  IconSun,
+} from '@tabler/icons-vue'
+
+import {
+  appearanceModes,
+  appearancePalettes,
+  getAppearancePalette,
+  type AppearanceMode,
+  type AppearancePalette,
+} from '@/modules/theme'
+import { useAppStore } from '@/stores/app'
+import { useAuthStore } from '@/stores/auth'
+
+const appStore = useAppStore()
+const authStore = useAuthStore()
+const router = useRouter()
+const selectedPalette = computed(() => getAppearancePalette(appStore.appearancePalette))
+const modeIcons = { system: IconDeviceDesktop, light: IconSun, dark: IconMoon }
+
+function selectPalette(palette: AppearancePalette) {
+  appStore.setAppearancePalette(palette)
+}
+
+function selectMode(mode: AppearanceMode) {
+  appStore.setAppearanceMode(mode)
+}
+
+async function signOut() {
+  await authStore.signOut()
+  await router.replace({ name: 'login' })
+}
+</script>
+
+<template>
+  <div class="settings-page">
+    <header class="settings-page-header">
+      <div>
+        <span class="eyebrow">WORKFOLLOW</span>
+        <h1>设置</h1>
+        <p>调整应用的外观与使用偏好。</p>
+      </div>
+      <RouterLink class="secondary-button" to="/">
+        <IconArrowLeft :size="15" />
+        返回工作台
+      </RouterLink>
+    </header>
+
+    <div class="settings-layout">
+      <aside class="settings-navigation" aria-label="设置分类">
+        <div class="settings-navigation-title"><IconSettings :size="18" />设置</div>
+        <button class="settings-navigation-item active" type="button" aria-current="page">
+          <IconPalette :size="18" />
+          <span>外观</span>
+        </button>
+      </aside>
+
+      <main class="settings-content">
+        <section class="settings-panel" aria-labelledby="appearance-title">
+          <header class="settings-panel-header">
+            <div>
+              <span class="section-label">APPEARANCE</span>
+              <h2 id="appearance-title">外观</h2>
+              <p>明暗模式与配色相互独立，现有配色均可继续扩展。</p>
+            </div>
+            <span class="settings-current-theme">当前：{{ selectedPalette.label }}</span>
+          </header>
+
+          <div class="appearance-section">
+            <h3>界面模式</h3>
+            <div class="appearance-mode-grid" role="radiogroup" aria-label="界面模式">
+              <button
+                v-for="mode in appearanceModes"
+                :key="mode.id"
+                class="appearance-mode-option"
+                :class="{ selected: appStore.appearanceMode === mode.id }"
+                type="button"
+                role="radio"
+                :aria-checked="appStore.appearanceMode === mode.id"
+                @click="selectMode(mode.id)"
+              >
+                <component :is="modeIcons[mode.id]" :size="20" :stroke-width="1.8" />
+                <span><strong>{{ mode.label }}</strong><small>{{ mode.description }}</small></span>
+                <IconCheck v-if="appStore.appearanceMode === mode.id" class="mode-check" :size="17" />
+              </button>
+            </div>
+          </div>
+
+          <div class="appearance-section">
+            <h3>主题配色</h3>
+            <div class="appearance-theme-grid" role="radiogroup" aria-label="颜色主题">
+            <button
+              v-for="theme in appearancePalettes"
+              :key="theme.id"
+              class="appearance-theme-option"
+              :class="{ selected: appStore.appearancePalette === theme.id }"
+              type="button"
+              role="radio"
+              :aria-checked="appStore.appearancePalette === theme.id"
+              :aria-label="`${theme.label}主题`"
+              @click="selectPalette(theme.id)"
+            >
+              <span class="appearance-theme-swatch" :style="{ background: theme.swatch }">
+                <IconCheck v-if="appStore.appearancePalette === theme.id" :size="21" :stroke-width="2.8" />
+              </span>
+              <span>{{ theme.label }}</span>
+            </button>
+            </div>
+          </div>
+        </section>
+
+        <section class="settings-info-row">
+          <div>
+            <strong>主题颜色会自动保存</strong>
+            <p>下次打开 WorkFollow 时会继续使用当前主题。</p>
+          </div>
+          <span class="settings-saved-badge"><IconCheck :size="14" />已应用</span>
+        </section>
+
+        <section class="settings-info-row">
+          <div>
+            <strong>{{ authStore.user?.nickname }}</strong>
+            <p>@{{ authStore.user?.username }}</p>
+          </div>
+          <button class="secondary-button" type="button" @click="signOut">退出登录</button>
+        </section>
+      </main>
+    </div>
+  </div>
+</template>

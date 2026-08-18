@@ -1,0 +1,587 @@
+/*
+ * Application layout contract.
+ *
+ * Page-level width, height and responsive navigation rules live here. Feature
+ * files own only their internal composition. Keeping this file last in the
+ * import order prevents feature styling from silently changing the app shell.
+ */
+:root {
+  --app-header-height: 76px;
+  --app-page-gutter: clamp(16px, 2vw, 24px);
+  --app-page-bottom-space: 48px;
+  --app-mobile-nav-height: calc(58px + env(safe-area-inset-bottom));
+  --app-content-max: 1280px;
+  --app-reading-max: 1040px;
+  --app-settings-max: 1440px;
+}
+
+html,
+body,
+#app {
+  width: 100%;
+  min-width: 320px;
+  min-height: 100%;
+  overflow-x: clip;
+}
+
+.app-shell.task-app-shell {
+  width: 100%;
+  height: 100dvh;
+  min-height: 100dvh;
+  grid-template-columns: var(--workspace-rail-width) minmax(0, 1fr);
+  color: var(--color-text-primary);
+}
+
+.main-area {
+  width: 100%;
+  min-width: 0;
+  height: 100dvh;
+  min-height: 0;
+  overflow: auto;
+}
+
+/* Pages fill the shell, while their readable content keeps a useful line
+   length on large displays. Full-width treatment is reserved for workspaces. */
+.page-content:not(.tasks-page):not(.calendar-month-page),
+.home-dashboard,
+.settings-page,
+.unified-page,
+.common-links-page {
+  width: 100%;
+  min-width: 0;
+  min-height: 100dvh;
+  margin: 0;
+}
+
+.page-content:not(.tasks-page):not(.calendar-month-page) {
+  padding: 0 var(--app-page-gutter) var(--app-page-bottom-space);
+}
+
+.page-content:not(.tasks-page) > .workspace-heading {
+  width: calc(100% + var(--app-page-gutter) + var(--app-page-gutter));
+  margin-inline: calc(0px - var(--app-page-gutter));
+}
+
+/* When a page only owns a heading and one content region, let the region
+   absorb the remaining viewport height. Without this, empty states and
+   sparse content leave the body visually uncovered at the bottom. */
+.notifications-page,
+.common-links-page {
+  display: flex;
+  flex-direction: column;
+}
+
+.notifications-page > .state-message {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.notifications-page > .notification-list,
+.common-links-page > .common-links-body {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.notifications-page > .notification-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.notifications-page > .notification-list > .state-message,
+.common-links-body > .common-links-empty {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.common-links-body {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Team management and audit are sparse content pages: let the primary
+   surface absorb the remaining viewport height so a small team list or an
+   empty audit log still covers the body instead of hovering at the top. */
+.team-page,
+.team-audit-page {
+  display: flex;
+  flex-direction: column;
+}
+
+.team-page > .team-members-panel {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.team-audit-page > .state-message,
+.team-audit-page > .audit-list {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.team-audit-page > .audit-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.team-audit-page > .audit-list > .state-message.empty {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* The dashboard shell spans the whole content area; its 12-column grid owns
+   the proportions. Readability capping happens inside panels, not on the shell. */
+.home-dashboard {
+  padding: 0 var(--app-page-gutter) 44px;
+}
+
+.settings-page,
+.unified-page,
+.common-links-page {
+  padding: 0;
+}
+
+/* Full-height workspaces own their internal scrolling. */
+.tasks-page,
+.tasks-workspace,
+.calendar-page-shell,
+.calendar-month-page,
+.team-tasks-page,
+.team-tasks-workspace {
+  width: 100%;
+  max-width: none;
+  min-width: 0;
+  height: 100dvh;
+  min-height: 0;
+  margin: 0;
+}
+
+.tasks-page,
+.tasks-workspace,
+.calendar-month-page,
+.team-tasks-page,
+.team-tasks-workspace {
+  overflow: hidden;
+}
+
+/* The notes page may render an onboarding banner or an error strip above the
+   workspace. It is a flex column so those bars keep their natural height and
+   the workspace absorbs the rest of the viewport. A workspace pinned to
+   100dvh would push its bottom (attachment panel, list tail) past the clip. */
+.notes-page {
+  width: 100%;
+  max-width: none;
+  min-width: 0;
+  height: 100dvh;
+  min-height: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.notes-page > .onboarding-banner,
+.notes-page > .notes-page-error {
+  flex: 0 0 auto;
+}
+
+.notes-workspace {
+  width: 100%;
+  max-width: none;
+  min-width: 0;
+  flex: 1 1 auto;
+  height: auto;
+  min-height: 0;
+  margin: 0;
+  overflow: hidden;
+}
+
+.calendar-page-shell {
+  display: grid;
+  place-items: stretch;
+  padding: 0;
+  overflow: hidden;
+}
+
+.calendar-month-page {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+/* Keep the productive three-pane notes layout inside the available workspace.
+   The editor may shrink; it must never be clipped by fixed pane minimums. */
+.notes-workspace {
+  grid-template-columns: 220px 300px minmax(0, 1fr);
+}
+
+/* Desktop workspaces are viewport-sized rows. Every pane must be allowed to
+   shrink to that row and own its scrolling; otherwise a long editor body can
+   raise the grid row and stretch the neighboring list pane with it. */
+@media (min-width: 1024px) {
+  .tasks-workspace,
+  .notes-workspace {
+    grid-template-rows: minmax(0, 1fr);
+  }
+
+  .tasks-workspace > *,
+  .notes-workspace > * {
+    min-height: 0;
+  }
+
+  .notes-workspace > .folder-column,
+  .notes-workspace > .note-list-column {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .notes-workspace > .folder-column .folder-tree,
+  .notes-workspace > .note-list-column .note-list-items {
+    min-height: 0;
+    max-height: none;
+    flex: 1 1 auto;
+    overflow: auto;
+  }
+}
+
+/* Readable pages stay bounded. Complex editors and calendars are deliberately
+   excluded because their panes need the whole workspace. */
+.notification-list,
+.audit-list,
+.admin-users-panel {
+  width: 100%;
+  max-width: var(--app-reading-max);
+  margin-inline: auto;
+}
+
+/* The task editor's prose caps its measure like the note editor does; a wide
+   detail pane must not stretch the body into an unreadable river. */
+.task-editor-area > .editor-toolbar,
+.task-editor-area > .task-body-editor {
+  width: 100%;
+  max-width: 760px;
+  margin-inline: auto;
+}
+
+/* Team-management cards are content surfaces, not workspaces: each component
+   declares its own comfortable width cap (see styles.css). No shell-level
+   override here — a single source keeps wide-screen behavior predictable. */
+.team-summary-card,
+.team-members-panel,
+.team-danger-zone,
+.team-notes-layout,
+.shared-notes-layout,
+.team-submissions-panel {
+  margin-inline: auto;
+}
+
+.settings-page-header,
+.settings-layout {
+  width: min(100%, var(--app-settings-max));
+  margin-inline: auto;
+}
+
+.settings-layout {
+  grid-template-columns: 220px minmax(0, 1fr);
+}
+
+.settings-content {
+  width: 100%;
+  max-width: 1180px;
+  margin-inline: auto;
+}
+
+.appearance-mode-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.appearance-theme-grid {
+  grid-template-columns: repeat(auto-fit, minmax(76px, 92px));
+  justify-content: start;
+}
+
+/* The detail pane is part of the desktop task workspace. Keep it visible at
+   common Windows effective widths (125%/150% display scaling included). */
+@media (min-width: 1120px) {
+  .tasks-page .tasks-workspace,
+  .tasks-page .tasks-workspace.has-selection,
+  .tasks-page .tasks-workspace:not(.has-selection) {
+    grid-template-columns: 218px minmax(360px, var(--task-list-width, 430px)) 1px minmax(320px, 1fr);
+  }
+
+  .tasks-page .tasks-workspace.navigation-collapsed,
+  .tasks-page .tasks-workspace.navigation-collapsed.has-selection,
+  .tasks-page .tasks-workspace.navigation-collapsed:not(.has-selection) {
+    grid-template-columns: 0 minmax(360px, var(--task-list-width, 430px)) 1px minmax(320px, 1fr);
+  }
+
+  .tasks-page .task-list-resizer {
+    display: block;
+  }
+
+  .tasks-page .task-detail {
+    position: relative;
+    inset: auto;
+    z-index: auto;
+    width: auto;
+    box-shadow: none;
+  }
+
+  .tasks-page .task-detail-empty {
+    display: grid;
+    place-items: center;
+    padding: 32px;
+    color: var(--color-text-tertiary);
+    text-align: center;
+  }
+
+  .tasks-page .task-detail-empty > div {
+    display: grid;
+    justify-items: center;
+    gap: 8px;
+    max-width: 240px;
+  }
+}
+
+@media (min-width: 1024px) and (max-width: 1119px) {
+  .tasks-page .tasks-workspace.navigation-collapsed,
+  .tasks-page .tasks-workspace.navigation-collapsed.has-selection,
+  .tasks-page .tasks-workspace.navigation-collapsed:not(.has-selection) {
+    grid-template-columns: 0 minmax(300px, 1fr) minmax(280px, 1fr);
+  }
+}
+
+@media (min-width: 1024px) {
+  .tasks-page .tasks-workspace {
+    transition: grid-template-columns 240ms cubic-bezier(.22, 1, .36, 1);
+  }
+
+  .tasks-page .tasks-workspace > .task-view-sidebar {
+    opacity: 1;
+    transition:
+      opacity 150ms ease 70ms,
+      padding-inline 240ms cubic-bezier(.22, 1, .36, 1),
+      border-color 160ms ease;
+  }
+
+  .tasks-page .tasks-workspace.navigation-collapsed > .task-view-sidebar {
+    min-width: 0;
+    padding-inline: 0;
+    overflow: hidden;
+    border-right: 0;
+    opacity: 0;
+    pointer-events: none;
+    transition:
+      opacity 100ms ease,
+      padding-inline 240ms cubic-bezier(.22, 1, .36, 1),
+      border-color 100ms ease;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tasks-page .tasks-workspace,
+  .tasks-page .tasks-workspace > .task-view-sidebar {
+    transition: none;
+  }
+}
+
+@media (max-width: 1023px) {
+  :root { --app-page-gutter: 18px; }
+
+  .settings-layout { grid-template-columns: 180px minmax(0, 1fr); }
+  .home-dashboard-panel { grid-column: span 6; min-height: 0; }
+  .notes-workspace { grid-template-columns: 190px 270px minmax(0, 1fr); }
+}
+
+@media (max-width: 767px) {
+  :root {
+    --app-header-height: 66px;
+    --app-page-gutter: 14px;
+    --app-page-bottom-space: 32px;
+  }
+
+  .app-shell.task-app-shell {
+    display: block;
+    height: auto;
+    min-height: 100dvh;
+  }
+
+  .main-area {
+    height: auto;
+    min-height: calc(100dvh - var(--app-mobile-nav-height));
+    overflow: visible;
+    padding-bottom: var(--app-mobile-nav-height);
+  }
+
+  .page-content:not(.tasks-page):not(.calendar-month-page),
+  .home-dashboard,
+  .settings-page,
+  .unified-page,
+  .common-links-page {
+    min-height: calc(100dvh - var(--app-mobile-nav-height));
+  }
+
+  .page-content:not(.tasks-page):not(.calendar-month-page) {
+    padding: 0 var(--app-page-gutter) var(--app-page-bottom-space);
+  }
+
+  .home-dashboard { padding: 0 var(--app-page-gutter) 30px; }
+
+  .tasks-page,
+  .tasks-workspace,
+  .notes-page,
+  .calendar-page-shell,
+  .calendar-month-page,
+  .team-tasks-page,
+  .team-tasks-workspace {
+    height: calc(100dvh - var(--app-mobile-nav-height));
+  }
+
+  /* The three desktop note panes become bounded vertical regions on phones.
+     Without explicit rows, the editor's legacy minimum height collapses the
+     first two grid tracks and their contents overlap the editor. */
+  .notes-workspace {
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(110px, .75fr) minmax(164px, 1fr) minmax(280px, 2fr);
+  }
+
+  .folder-column,
+  .note-list-column,
+  .editor-column {
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .folder-column,
+  .note-list-column {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .folder-tree,
+  .note-list-items {
+    min-height: 0;
+    max-height: none;
+    flex: 1;
+  }
+
+  .team-page > .workspace-heading {
+    height: auto;
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .team-header-actions {
+    width: 100%;
+    min-width: 0;
+    flex-wrap: wrap;
+  }
+
+  .knowledge-metadata-edit {
+    flex-wrap: wrap;
+    padding-inline: var(--app-page-gutter);
+  }
+
+  .knowledge-metadata-edit select,
+  .knowledge-metadata-edit input {
+    min-width: 0;
+    flex: 1 1 140px;
+  }
+
+  .home-dashboard-grid { grid-template-columns: 1fr; }
+  .home-dashboard-panel { grid-column: 1; }
+  .settings-layout { display: block; }
+}
+
+@media (max-width: 479px) {
+  :root { --app-page-gutter: 12px; }
+}
+
+/* Large displays (2K/4K, ≥1600px effective width): step the whole token
+   ladder up so type, spacing and the rail grow together. Derived tokens
+   (type-page-title, card-title, dialog, input, …) all reference these base
+   values, so this single block scales every surface without touching the
+   100dvh viewport-lock contract. Sub-1600 stays unscaled.
+
+   The rail's inner controls are hard-coded px, so they are stepped up
+   alongside the --workspace-rail-width token to stay proportional. */
+@media (min-width: 1600px) {
+  :root {
+    --font-size-micro: 11px;
+    --font-size-caption: 12px;
+    --font-size-label: 13px;
+    --font-size-body-sm: 14px;
+    --font-size-body: 15px;
+    --font-size-title-sm: 17px;
+    --font-size-title: 19px;
+    --font-size-heading-sm: 21px;
+    --font-size-heading: 23px;
+    --font-size-heading-lg: 25px;
+    --font-size-display-sm: 30px;
+    --font-size-display: 34px;
+
+    --space-1: 5px;
+    --space-2: 9px;
+    --space-3: 13px;
+    --space-4: 18px;
+    --space-5: 22px;
+    --space-6: 26px;
+    --space-7: 30px;
+    --space-8: 34px;
+
+    --workspace-rail-width: 66px;
+  }
+
+  .task-app-shell > .sidebar.is-task-shell {
+    padding: 20px 8px 14px;
+  }
+
+  .task-app-shell > .sidebar.is-task-shell .brand {
+    width: 44px;
+    height: 44px;
+  }
+
+  .task-app-shell > .sidebar.is-task-shell .brand-mark {
+    width: 36px;
+    height: 36px;
+    flex-basis: 36px;
+    border-radius: 9px;
+    font-size: var(--font-size-body-sm);
+  }
+
+  .task-app-shell > .sidebar.is-task-shell .rail-navigation {
+    gap: 9px;
+    margin-top: 30px;
+  }
+
+  .task-app-shell > .sidebar.is-task-shell .rail-item,
+  .task-app-shell > .sidebar.is-task-shell .sidebar-settings-link {
+    width: 44px;
+    min-height: 44px;
+    height: 44px;
+    border-radius: 10px;
+  }
+
+  .task-app-shell > .sidebar.is-task-shell .rail-item svg,
+  .task-app-shell > .sidebar.is-task-shell .sidebar-settings-link svg {
+    width: 21px;
+    height: 21px;
+  }
+
+  .task-app-shell > .sidebar.is-task-shell .rail-badge {
+    top: 2px;
+    min-width: 18px;
+    height: 18px;
+  }
+
+  .task-app-shell > .sidebar.is-task-shell .user-card { min-height: 44px; }
+
+  .task-app-shell > .sidebar.is-task-shell .avatar {
+    width: 31px;
+    height: 31px;
+  }
+}

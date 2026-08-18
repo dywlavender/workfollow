@@ -1,0 +1,127 @@
+- generic [ref=e57]:
+  - complementary [ref=e58]:
+    - link "WorkFollow 首页" [ref=e59] [cursor=pointer]:
+      - /url: /
+      - generic [ref=e60]: W
+    - navigation "全局导航" [ref=e61]:
+      - link "首页" [ref=e62] [cursor=pointer]:
+        - /url: /
+      - link "任务" [ref=e68] [cursor=pointer]:
+        - /url: /todos
+      - link "日历" [ref=e73] [cursor=pointer]:
+        - /url: /calendar
+      - link "全部笔记" [ref=e77] [cursor=pointer]:
+        - /url: /notes
+        - generic [ref=e81]: 笔记
+      - link "通知" [ref=e82] [cursor=pointer]:
+        - /url: /notifications
+    - generic [ref=e87]:
+      - link "设置" [ref=e88] [cursor=pointer]:
+        - /url: /settings
+      - strong [ref=e99]: 本地用户
+  - status:
+    - generic: 任务已完成
+  - main [ref=e100]:
+    - generic [ref=e295]:
+      - complementary "任务视图" [ref=e296]:
+        - generic [ref=e297]: 任务
+        - navigation "任务视图" [ref=e299]:
+          - link "所有 19" [ref=e472] [cursor=pointer]:
+            - /url: /todos?view=all
+            - strong [ref=e303]: 所有
+            - generic [ref=e304]: "19"
+          - link "今天 3" [ref=e563] [cursor=pointer]:
+            - /url: /todos?view=today
+            - strong [ref=e309]: 今天
+            - generic [ref=e310]: "3"
+          - link "本周 4" [ref=e564] [cursor=pointer]:
+            - /url: /todos?view=week
+            - strong [ref=e315]: 本周
+            - generic [ref=e316]: "4"
+          - link "无日期 9" [ref=e317] [cursor=pointer]:
+            - /url: /todos?view=inbox
+            - strong [ref=e322]: 无日期
+            - generic [ref=e323]: "9"
+          - link "本月 5" [ref=e565] [cursor=pointer]:
+            - /url: /todos?view=month
+            - strong [ref=e328]: 本月
+            - generic [ref=e329]: "5"
+        - generic [ref=e330]:
+          - heading "记录" [level=2] [ref=e331]
+          - navigation "记录" [ref=e332]:
+            - link "已完成 5" [ref=e566] [cursor=pointer]:
+              - /url: /todos?view=completed
+              - strong [ref=e338]: 已完成
+              - generic [ref=e339]: "5"
+        - generic [ref=e340]:
+          - heading "清单" [level=2] [ref=e341]
+          - navigation "清单" [ref=e342]:
+            - link "收集箱 19" [ref=e476] [cursor=pointer]:
+              - /url: /todos?list=%E6%94%B6%E9%9B%86%E7%AE%B1
+              - strong [ref=e346]: 收集箱
+              - generic [ref=e347]: "19"
+            - link "工作 0" [ref=e348] [cursor=pointer]:
+              - /url: /todos?list=%E5%B7%A5%E4%BD%9C
+              - strong [ref=e351]: 工作
+              - generic [ref=e352]: "0"
+            - link "个人 0" [ref=e353] [cursor=pointer]:
+              - /url: /todos?list=%E4%B8%AA%E4%BA%BA
+              - strong [ref=e356]: 个人
+              - generic [ref=e357]: "0"
+            - link "学习 0" [ref=e358] [cursor=pointer]:
+              - /url: /todos?list=%E5%AD%A6%E4%B9%A0
+              - strong [ref=e361]: 学习
+              - generic [ref=e362]: "0"
+      - region "待办列表" [ref=e363]:
+        - generic [ref=e364]:
+          - generic [ref=e365]:
+            - generic [ref=e366]: 2026年8月11日 · 周二
+            - heading "今天" [level=2] [ref=e367]
+          - generic [ref=e368]:
+            - button "切换任务排序" [ref=e369] [cursor=pointer]
+            - button "打开搜索" [ref=e373] [cursor=pointer]
+            - button "更多列表操作" [ref=e379] [cursor=pointer]
+        - button "添加任务" [ref=e477] [cursor=pointer]
+        - status [ref=e567]: 任务已完成。
+        - generic [ref=e482]:
+          - generic [ref=e483]:
+            - generic [ref=e484]:
+              - strong [ref=e485]: 逾期
+              - generic [ref=e486]: "3"
+            - article [ref=e487] [cursor=pointer]:
+              - button "完成 3" [ref=e488]
+              - generic [ref=e489]:
+                - strong [ref=e490]: "3"
+                - generic [ref=e491]: 收集箱
+              - button "8月9日 18:00" [ref=e495]
+              - button "更多任务操作" [ref=e500]
+            - article [ref=e505] [cursor=pointer]:
+              - button "完成 1" [ref=e506]
+              - generic [ref=e507]:
+                - strong [ref=e508]: "1"
+                - generic [ref=e509]: 收集箱
+              - button "8月9日 18:00" [ref=e513]
+              - button "更多任务操作" [ref=e518]
+            - article [ref=e523] [cursor=pointer]:
+              - button "完成 2" [ref=e524]
+              - generic [ref=e525]:
+                - strong [ref=e526]: "2"
+                - generic [ref=e527]: 收集箱
+              - button "昨天" [ref=e531]
+              - button "更多任务操作" [ref=e536]
+          - generic [ref=e568]:
+            - generic [ref=e569]:
+              - strong [ref=e570]: 已完成和已放弃
+              - generic [ref=e571]: "1"
+            - article [ref=e572] [cursor=pointer]:
+              - button "恢复 浏览器回归临时任务" [ref=e573]
+              - generic [ref=e576]:
+                - strong [ref=e577]: 浏览器回归临时任务
+                - generic [ref=e578]: 收集箱
+              - button "今天" [ref=e582]
+              - button "更多任务操作" [ref=e587]
+      - separator "调整任务列表与详情宽度" [ref=e450]
+      - complementary "任务详情" [ref=e452]:
+        - generic [ref=e453]:
+          - strong [ref=e456]: 选择一个任务
+          - paragraph [ref=e457]: 任务详情会显示在这里。

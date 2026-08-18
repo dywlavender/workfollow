@@ -1,0 +1,17 @@
+.DS_Store
+.idea/
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+frontend/node_modules/
+frontend/dist/
+frontend/.npm-cache/
+data/*.db
+data/*.db-*
+data/uploads/*
+!data/uploads/.gitkeep
+data/files/*
+!data/files/.gitkeep
+.env

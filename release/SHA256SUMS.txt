@@ -1,0 +1,2 @@
+523aa9c0779069408247e254a32b0133a75d059e63ba06761f86beccc5aa58f3  WorkFollow-0.1.0-linux-x86_64.tar.gz
+dd36ca124ee9b5d085ab43ed04f4e2f0d7eb34311572eb2dfba5370b17428e09  WorkFollow-0.1.0-windows-x64.zip

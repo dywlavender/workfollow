@@ -1,0 +1,72 @@
+- generic [ref=f1e3]:
+  - complementary [ref=f1e4]:
+    - link "WorkFollow 首页" [ref=f1e5] [cursor=pointer]:
+      - /url: /
+      - generic [ref=f1e6]: W
+    - navigation "全局导航" [ref=f1e7]:
+      - link "首页" [ref=f1e8] [cursor=pointer]:
+        - /url: /
+      - link "任务" [ref=f1e13] [cursor=pointer]:
+        - /url: /todos
+      - link "日历" [ref=f1e17] [cursor=pointer]:
+        - /url: /calendar
+      - link "全部笔记" [ref=f1e20] [cursor=pointer]:
+        - /url: /notes
+      - link "共享笔记" [ref=f1e24] [cursor=pointer]:
+        - /url: /shared-notes
+      - link "通知" [ref=f1e28] [cursor=pointer]:
+        - /url: /notifications
+      - link "AI 助手" [ref=f1e32] [cursor=pointer]:
+        - /url: /notes?panel=ai
+    - generic "切换工作空间" [ref=f1e37] [cursor=pointer]:
+      - combobox "切换工作空间" [ref=f1e43]:
+        - option "个人空间" [selected]
+    - link "设置" [ref=f1e45] [cursor=pointer]:
+      - /url: /settings
+  - main [ref=f1e54]:
+    - generic [ref=f1e75]:
+      - generic [ref=f1e76]:
+        - generic [ref=f1e77]:
+          - generic [ref=f1e78]: 8月9日
+          - heading "下午好" [level=1] [ref=f1e79]
+        - link "打开日历" [ref=f1e80] [cursor=pointer]:
+          - /url: /calendar
+      - generic [ref=f1e83]:
+        - link "添加任务 支持日期和重复识别 Enter" [ref=f1e84] [cursor=pointer]:
+          - /url: /todos?view=today&add=1
+          - generic [ref=f1e86]: 添加任务
+          - generic [ref=f1e87]: 支持日期和重复识别
+          - generic [ref=f1e88]: Enter
+        - generic [ref=f1e89]:
+          - main [ref=f1e90]:
+            - generic [ref=f1e91]:
+              - generic [ref=f1e92]:
+                - generic [ref=f1e93]:
+                  - generic [ref=f1e94]: 今天
+                  - heading "待办" [level=2] [ref=f1e95]
+                - link "查看全部" [ref=f1e96] [cursor=pointer]:
+                  - /url: /todos?view=today
+              - generic [ref=f1e100]:
+                - generic [ref=f1e104]: 今天没有截止事项
+                - link "添加第一项" [ref=f1e105] [cursor=pointer]:
+                  - /url: /todos?view=today
+            - generic [ref=f1e106]:
+              - generic [ref=f1e107]:
+                - generic [ref=f1e108]:
+                  - generic [ref=f1e109]: 接下来
+                  - heading "即将到期" [level=2] [ref=f1e110]
+                - link "本周任务" [ref=f1e111] [cursor=pointer]:
+                  - /url: /todos?view=week
+              - generic [ref=f1e115]: 最近几天没有安排事项
+          - complementary [ref=f1e119]:
+            - generic [ref=f1e120]:
+              - generic [ref=f1e121]:
+                - generic [ref=f1e122]:
+                  - generic [ref=f1e123]: 最近编辑
+                  - heading "笔记" [level=2] [ref=f1e124]
+                - link "查看全部" [ref=f1e125] [cursor=pointer]:
+                  - /url: /notes
+              - generic [ref=f1e129]:
+                - generic [ref=f1e133]: 还没有笔记
+                - link "新建" [ref=f1e134] [cursor=pointer]:
+                  - /url: /notes

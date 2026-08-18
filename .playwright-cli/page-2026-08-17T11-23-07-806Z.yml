@@ -1,0 +1,36 @@
+- generic [ref=f3e4]:
+  - complementary [ref=f3e5]:
+    - link "WorkFollow 首页" [ref=f3e6] [cursor=pointer]:
+      - /url: /
+      - generic [ref=f3e7]: W
+    - navigation "全局导航" [ref=f3e8]:
+      - link "首页" [ref=f3e9] [cursor=pointer]:
+        - /url: /
+      - link "任务" [ref=f3e14] [cursor=pointer]:
+        - /url: /todos
+      - link "日历" [ref=f3e18] [cursor=pointer]:
+        - /url: /calendar
+      - link "全部笔记" [ref=f3e21] [cursor=pointer]:
+        - /url: /notes
+      - link "常用" [ref=f3e25] [cursor=pointer]:
+        - /url: /common
+      - link "通知" [ref=f3e30] [cursor=pointer]:
+        - /url: /notifications
+    - generic [ref=f3e34]:
+      - link "团队管理" [ref=f3e35] [cursor=pointer]:
+        - /url: /team/0277776d-65e9-4e12-9848-98ad479472b2
+      - link "设置" [ref=f3e41] [cursor=pointer]:
+        - /url: /settings
+  - main [ref=f3e50]:
+    - generic [ref=f3e51]:
+      - generic [ref=f3e52]:
+        - generic [ref=f3e53]:
+          - generic [ref=f3e54]: TEAM MANAGEMENT
+          - heading "团队管理" [level=1] [ref=f3e55]
+          - paragraph [ref=f3e56]: 管理可协作的成员和权限；任务仍在统一任务页中处理。
+        - generic [ref=f3e57]:
+          - button "权限管理" [ref=f3e58] [cursor=pointer]
+          - button "新建团队" [ref=f3e61] [cursor=pointer]
+          - link "查看协作任务" [ref=f3e63] [cursor=pointer]:
+            - /url: /todos?view=collaboration
+      - paragraph [ref=f3e64]: 正在加载团队…

@@ -1,0 +1,76 @@
+- generic [ref=f1e4]:
+  - complementary [ref=f1e5]:
+    - link "WorkFollow 首页" [ref=f1e244] [cursor=pointer]:
+      - /url: /
+      - generic [ref=f1e245]: W
+    - generic [ref=f1e246]:
+      - generic "当前空间：个人空间，点击切换" [ref=f1e259] [cursor=pointer]:
+        - combobox "切换工作空间" [ref=f1e248]:
+          - option "个人空间" [selected]
+          - option "中台"
+      - button "创建团队" [ref=f1e249] [cursor=pointer]
+    - navigation "全局导航" [ref=f1e6]:
+      - link "首页" [ref=f1e7] [cursor=pointer]:
+        - /url: /
+      - link "任务" [active] [ref=f1e12] [cursor=pointer]:
+        - /url: /todos
+      - link "日历" [ref=f1e16] [cursor=pointer]:
+        - /url: /calendar
+      - link "全部笔记" [ref=f1e19] [cursor=pointer]:
+        - /url: /notes
+      - link "共享笔记" [ref=f1e23] [cursor=pointer]:
+        - /url: /shared-notes
+      - link "通知，1 条未读" [ref=f1e139] [cursor=pointer]:
+        - /url: /notifications
+        - generic: "1"
+      - link "AI 助手" [ref=f1e31] [cursor=pointer]:
+        - /url: /notes?panel=ai
+    - link "设置" [ref=f1e37] [cursor=pointer]:
+      - /url: /settings
+  - main [ref=f1e41]:
+    - generic [ref=f1e264]:
+      - complementary "任务视图" [ref=f1e265]:
+        - generic [ref=f1e266]: 任务
+        - navigation "任务视图" [ref=f1e268]:
+          - link "今天 0" [ref=f1e269] [cursor=pointer]:
+            - /url: /todos?view=today
+            - strong [ref=f1e273]: 今天
+            - generic [ref=f1e274]: "0"
+          - link "本周 0" [ref=f1e275] [cursor=pointer]:
+            - /url: /todos?view=week
+            - strong [ref=f1e279]: 本周
+            - generic [ref=f1e280]: "0"
+          - link "收集箱 0" [ref=f1e281] [cursor=pointer]:
+            - /url: /todos?view=inbox
+            - strong [ref=f1e286]: 收集箱
+            - generic [ref=f1e287]: "0"
+          - link "本月 0" [ref=f1e288] [cursor=pointer]:
+            - /url: /todos?view=month
+            - strong [ref=f1e292]: 本月
+            - generic [ref=f1e293]: "0"
+        - generic [ref=f1e294]:
+          - heading "记录" [level=2] [ref=f1e295]
+          - navigation "记录" [ref=f1e296]:
+            - link "已完成 0" [ref=f1e297] [cursor=pointer]:
+              - /url: /todos?view=completed
+              - strong [ref=f1e302]: 已完成
+              - generic [ref=f1e303]: "0"
+      - region "待办列表" [ref=f1e304]:
+        - generic [ref=f1e305]:
+          - generic [ref=f1e306]:
+            - generic [ref=f1e307]: 2026年8月9日 · 周日
+            - heading "今天" [level=2] [ref=f1e308]
+          - generic [ref=f1e309]:
+            - button "切换任务排序" [ref=f1e310] [cursor=pointer]
+            - button "打开搜索" [ref=f1e314] [cursor=pointer]
+            - button "更多列表操作" [ref=f1e320] [cursor=pointer]
+        - button "添加任务" [ref=f1e328] [cursor=pointer]
+        - generic [ref=f1e331]:
+          - strong [ref=f1e335]: 这里还没有待办
+          - paragraph [ref=f1e336]: 当前视图没有符合条件的待办。
+          - button "添加任务" [ref=f1e337] [cursor=pointer]
+      - separator "调整任务列表与详情宽度" [ref=f1e338]
+      - complementary "任务正文" [ref=f1e340]:
+        - generic [ref=f1e341]:
+          - strong [ref=f1e344]: 选择一个任务
+          - paragraph [ref=f1e345]: 任务正文会显示在这里。

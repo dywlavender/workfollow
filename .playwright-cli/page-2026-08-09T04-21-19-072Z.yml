@@ -1,0 +1,51 @@
+- generic [ref=e3]:
+  - complementary [ref=e4]:
+    - link "WorkFollow 首页" [ref=e5] [cursor=pointer]:
+      - /url: /
+      - generic [ref=e6]: W
+    - navigation "全局导航" [ref=e7]:
+      - link "首页" [ref=e8] [cursor=pointer]:
+        - /url: /
+      - link "任务" [ref=e13] [cursor=pointer]:
+        - /url: /todos
+      - link "日历" [ref=e17] [cursor=pointer]:
+        - /url: /calendar
+      - link "全部笔记" [ref=e20] [cursor=pointer]:
+        - /url: /notes
+      - link "共享笔记" [ref=e24] [cursor=pointer]:
+        - /url: /shared-notes
+      - link "通知" [ref=e28] [cursor=pointer]:
+        - /url: /notifications
+      - link "AI 助手" [ref=e32] [cursor=pointer]:
+        - /url: /notes?panel=ai
+    - generic "切换工作空间" [ref=e37] [cursor=pointer]:
+      - combobox "切换工作空间" [ref=e43]:
+        - option "个人空间" [selected]
+    - link "设置" [ref=e45] [cursor=pointer]:
+      - /url: /settings
+  - main [ref=e54]:
+    - main [ref=e55]:
+      - generic [ref=e56]:
+        - generic [ref=e57]:
+          - generic [ref=e58]: W
+          - strong [ref=e59]: WorkFollow
+        - generic [ref=e60]: CREATE ACCOUNT
+        - heading "创建你的工作空间" [level=1] [ref=e61]
+        - paragraph [ref=e62]: 个人任务、笔记和团队协作从这里开始。
+        - generic [ref=e63]:
+          - generic [ref=e64]:
+            - text: 用户名
+            - textbox "用户名" [ref=e65]
+          - generic [ref=e66]:
+            - text: 邮箱
+            - textbox "邮箱" [ref=e67]
+          - generic [ref=e68]:
+            - text: 昵称
+            - textbox "昵称" [ref=e69]
+          - generic [ref=e70]:
+            - text: 密码
+            - textbox "密码" [ref=e71]
+          - button "注册并进入" [ref=e72] [cursor=pointer]
+        - link "已有账号？去登录" [ref=e73] [cursor=pointer]:
+          - /url: /login
+        - paragraph [ref=e74]: 本地迁移数据默认账号：local / local-only-change-me

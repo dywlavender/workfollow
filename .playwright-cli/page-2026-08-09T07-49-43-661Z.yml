@@ -1,0 +1,116 @@
+- generic [ref=e57]:
+  - complementary [ref=e58]:
+    - link "WorkFollow 首页" [ref=e59] [cursor=pointer]:
+      - /url: /
+      - generic [ref=e60]: W
+    - generic [ref=e61]:
+      - generic "当前空间：中台，点击切换" [ref=e220] [cursor=pointer]:
+        - generic: 中
+        - combobox "切换工作空间" [ref=e66]:
+          - option "个人空间"
+          - option "渠道"
+          - option "中台" [selected]
+      - button "创建团队" [ref=e67] [cursor=pointer]
+    - navigation "全局导航" [ref=e69]:
+      - link "首页" [ref=e70] [cursor=pointer]:
+        - /url: /team/0f5ec852-84be-4608-a2c6-cbdf0e3eac8d
+      - link "任务" [ref=e75] [cursor=pointer]:
+        - /url: /team/0f5ec852-84be-4608-a2c6-cbdf0e3eac8d/tasks
+      - link "日历" [ref=e79] [cursor=pointer]:
+        - /url: /team/0f5ec852-84be-4608-a2c6-cbdf0e3eac8d/calendar
+      - link "全部笔记" [ref=e82] [cursor=pointer]:
+        - /url: /team/0f5ec852-84be-4608-a2c6-cbdf0e3eac8d/notes
+      - link "共享笔记" [ref=e86] [cursor=pointer]:
+        - /url: /shared-notes
+      - link "通知" [ref=e90] [cursor=pointer]:
+        - /url: /notifications
+      - link "AI 助手" [ref=e94] [cursor=pointer]:
+        - /url: /team/0f5ec852-84be-4608-a2c6-cbdf0e3eac8d/notes?panel=ai
+    - link "设置" [ref=e100] [cursor=pointer]:
+      - /url: /settings
+  - main [ref=e109]:
+    - generic [ref=e341]:
+      - complementary "团队任务视图" [ref=e342]:
+        - generic [ref=e343]:
+          - generic [ref=e344]: 团队空间
+          - strong [ref=e345]: 中台
+          - generic [ref=e346]: 所有者
+        - navigation [ref=e347]:
+          - button "我负责 1" [ref=e459] [cursor=pointer]:
+            - strong [ref=e354]: 我负责
+            - generic [ref=e355]: "1"
+          - button "我创建 1" [ref=e460] [cursor=pointer]:
+            - strong [ref=e362]: 我创建
+            - generic [ref=e363]: "1"
+          - button "进行中 1" [ref=e461] [cursor=pointer]:
+            - strong [ref=e370]: 进行中
+            - generic [ref=e371]: "1"
+          - button "已完成 0" [ref=e372] [cursor=pointer]:
+            - strong [ref=e377]: 已完成
+            - generic [ref=e378]: "0"
+        - button "创建团队任务" [ref=e379] [cursor=pointer]
+      - region "团队任务列表" [ref=e381]:
+        - generic [ref=e382]:
+          - generic [ref=e383]:
+            - generic [ref=e384]: 中台
+            - heading "我负责" [level=2] [ref=e385]
+          - generic [ref=e386]:
+            - search [ref=e387]:
+              - textbox "搜索团队任务" [ref=e391]:
+                - /placeholder: 搜索任务
+            - button "切换排序" [ref=e393] [cursor=pointer]
+        - status [ref=e462]:
+          - text: 团队任务已创建。
+          - button [ref=e463] [cursor=pointer]
+        - generic [ref=e468]:
+          - generic [ref=e469]:
+            - strong [ref=e470]: 未安排
+            - generic [ref=e471]: "1"
+          - article [ref=e472]:
+            - button "完成 [自测] 团队任务三栏交互" [ref=e473] [cursor=pointer]
+            - generic [ref=e474]:
+              - strong [ref=e475]: "[自测] 团队任务三栏交互"
+              - generic [ref=e476]:
+                - generic [ref=e477]: 中台
+                - generic [ref=e478]: 未安排
+                - generic [ref=e479]:
+                  - generic "222416" [ref=e480]: "2"
+                  - generic "root" [ref=e481]: R
+                - generic [ref=e482]: 0/2 完成
+            - generic [ref=e483]: 0%
+            - button "更多团队任务操作" [ref=e485] [cursor=pointer]
+      - complementary "团队任务详情" [ref=e490]:
+        - generic [ref=e491]:
+          - button "完成我的任务" [ref=e492] [cursor=pointer]
+          - generic [ref=e493]:
+            - generic [ref=e494]: 中台
+            - heading "[自测] 团队任务三栏交互" [level=2] [ref=e495]
+            - generic [ref=e496]: 进行中
+          - button "关闭详情" [ref=e497] [cursor=pointer]
+        - generic [ref=e501]:
+          - generic [ref=e502]:
+            - heading "分派与进度" [level=3] [ref=e503]
+            - generic [ref=e504]:
+              - strong [ref=e505]: 0/2
+              - generic [ref=e506]: 0%
+            - generic [ref=e507]:
+              - generic [ref=e508]:
+                - generic [ref=e509]: "2"
+                - text: "222416"
+              - generic [ref=e510]:
+                - generic [ref=e511]: R
+                - text: root
+          - generic [ref=e512]:
+            - heading "任务内容" [level=3] [ref=e513]
+            - textbox [ref=e516]:
+              - paragraph [ref=e517]
+          - generic [ref=e518]:
+            - heading "附件" [level=3] [ref=e519]
+            - generic [ref=e520]:
+              - generic [ref=e521]: 暂无附件
+              - generic [ref=e522]: 上传附件
+        - generic [ref=e523]:
+          - generic [ref=e524]: 管理操作
+          - generic [ref=e525]:
+            - button "编辑" [ref=e526] [cursor=pointer]
+            - button "取消任务" [ref=e527] [cursor=pointer]

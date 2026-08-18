@@ -1,0 +1,246 @@
+- generic [ref=f22e5]:
+  - complementary [ref=f22e6]:
+    - link "WorkFollow 首页" [ref=f22e7] [cursor=pointer]:
+      - /url: /
+      - generic [ref=f22e8]: W
+    - navigation "全局导航" [ref=f22e9]:
+      - link "首页" [ref=f22e10] [cursor=pointer]:
+        - /url: /
+      - link "任务" [ref=f22e15] [cursor=pointer]:
+        - /url: /todos
+      - link "日历" [ref=f22e19] [cursor=pointer]:
+        - /url: /calendar
+      - link "全部笔记" [ref=f22e22] [cursor=pointer]:
+        - /url: /notes
+      - link "常用" [ref=f22e26] [cursor=pointer]:
+        - /url: /common
+      - link "通知" [ref=f22e31] [cursor=pointer]:
+        - /url: /notifications
+    - generic [ref=f22e35]:
+      - link "团队管理" [ref=f22e36] [cursor=pointer]:
+        - /url: /teams
+      - link "设置" [ref=f22e42] [cursor=pointer]:
+        - /url: /settings
+  - main [ref=f22e51]:
+    - generic [ref=f22e53]:
+      - complementary "任务视图" [ref=f22e54]:
+        - navigation "任务视图" [ref=f22e56]:
+          - link "所有 18" [ref=f22e57] [cursor=pointer]:
+            - /url: /todos?view=all
+            - strong [ref=f22e60]: 所有
+            - generic [ref=f22e61]: "18"
+          - link "今天 3" [ref=f22e62] [cursor=pointer]:
+            - /url: /todos?view=today
+            - strong [ref=f22e66]: 今天
+            - generic [ref=f22e67]: "3"
+          - link "本周 4" [ref=f22e68] [cursor=pointer]:
+            - /url: /todos?view=week
+            - strong [ref=f22e72]: 本周
+            - generic [ref=f22e73]: "4"
+          - link "无日期 9" [ref=f22e74] [cursor=pointer]:
+            - /url: /todos?view=inbox
+            - strong [ref=f22e79]: 无日期
+            - generic [ref=f22e80]: "9"
+          - link "本月 5" [ref=f22e81] [cursor=pointer]:
+            - /url: /todos?view=month
+            - strong [ref=f22e85]: 本月
+            - generic [ref=f22e86]: "5"
+        - generic [ref=f22e87]:
+          - heading "记录" [level=2] [ref=f22e88]
+          - navigation "记录" [ref=f22e89]:
+            - link "已完成 4" [ref=f22e90] [cursor=pointer]:
+              - /url: /todos?view=completed
+              - strong [ref=f22e95]: 已完成
+              - generic [ref=f22e96]: "4"
+        - generic [ref=f22e97]:
+          - heading "清单" [level=2] [ref=f22e98]
+          - navigation "清单" [ref=f22e99]:
+            - link "收集箱 18" [ref=f22e100] [cursor=pointer]:
+              - /url: /todos?list=%E6%94%B6%E9%9B%86%E7%AE%B1
+              - strong [ref=f22e103]: 收集箱
+              - generic [ref=f22e104]: "18"
+            - link "工作 0" [ref=f22e105] [cursor=pointer]:
+              - /url: /todos?list=%E5%B7%A5%E4%BD%9C
+              - strong [ref=f22e108]: 工作
+              - generic [ref=f22e109]: "0"
+            - link "个人 0" [ref=f22e110] [cursor=pointer]:
+              - /url: /todos?list=%E4%B8%AA%E4%BA%BA
+              - strong [ref=f22e113]: 个人
+              - generic [ref=f22e114]: "0"
+            - link "学习 0" [ref=f22e115] [cursor=pointer]:
+              - /url: /todos?list=%E5%AD%A6%E4%B9%A0
+              - strong [ref=f22e118]: 学习
+              - generic [ref=f22e119]: "0"
+      - region "待办列表" [ref=f22e120]:
+        - generic [ref=f22e121]:
+          - heading "今天" [level=2] [ref=f22e123]
+          - generic [ref=f22e124]:
+            - button "切换任务排序" [ref=f22e125] [cursor=pointer]
+            - button "打开搜索" [ref=f22e129] [cursor=pointer]
+            - button "更多列表操作" [ref=f22e135] [cursor=pointer]
+        - generic [ref=f22e142]:
+          - generic [ref=f22e143]:
+            - generic [ref=f22e144]: 快速添加待办
+            - textbox "快速添加待办" [ref=f22e145]:
+              - /placeholder: 添加任务
+            - generic [ref=f22e146]: 输入任务后按回车创建
+            - button "8月21日" [expanded] [ref=f22e300] [cursor=pointer]
+            - button "更多任务设置" [ref=f22e150] [cursor=pointer]
+          - generic "任务属性":
+            - dialog "设置日期和提醒" [ref=f22e214]:
+              - generic [ref=f22e215]:
+                - button "今天" [ref=f22e216] [cursor=pointer]
+                - button "明天" [ref=f22e217] [cursor=pointer]
+                - button "下周" [ref=f22e218] [cursor=pointer]
+                - button "今晚" [ref=f22e219] [cursor=pointer]
+              - generic [ref=f22e220]:
+                - button "上个月" [ref=f22e221] [cursor=pointer]
+                - strong [ref=f22e224]: 2026年8月
+                - button "下个月" [ref=f22e225] [cursor=pointer]
+              - generic [ref=f22e228]:
+                - generic [ref=f22e229]: 一
+                - generic [ref=f22e230]: 二
+                - generic [ref=f22e231]: 三
+                - generic [ref=f22e232]: 四
+                - generic [ref=f22e233]: 五
+                - generic [ref=f22e234]: 六
+                - generic [ref=f22e235]: 日
+              - grid [ref=f22e236]:
+                - button "2026年7月27日" [ref=f22e237] [cursor=pointer]: "27"
+                - button "2026年7月28日" [ref=f22e238] [cursor=pointer]: "28"
+                - button "2026年7月29日" [ref=f22e239] [cursor=pointer]: "29"
+                - button "2026年7月30日" [ref=f22e240] [cursor=pointer]: "30"
+                - button "2026年7月31日" [ref=f22e241] [cursor=pointer]: "31"
+                - button "2026年8月1日" [ref=f22e242] [cursor=pointer]: "1"
+                - button "2026年8月2日" [ref=f22e243] [cursor=pointer]: "2"
+                - button "2026年8月3日" [ref=f22e244] [cursor=pointer]: "3"
+                - button "2026年8月4日" [ref=f22e245] [cursor=pointer]: "4"
+                - button "2026年8月5日" [ref=f22e246] [cursor=pointer]: "5"
+                - button "2026年8月6日" [ref=f22e247] [cursor=pointer]: "6"
+                - button "2026年8月7日" [ref=f22e248] [cursor=pointer]: "7"
+                - button "2026年8月8日" [ref=f22e249] [cursor=pointer]: "8"
+                - button "2026年8月9日" [ref=f22e250] [cursor=pointer]: "9"
+                - button "2026年8月10日" [ref=f22e251] [cursor=pointer]: "10"
+                - button "2026年8月11日" [ref=f22e252] [cursor=pointer]: "11"
+                - button "2026年8月12日" [ref=f22e253] [cursor=pointer]: "12"
+                - button "2026年8月13日" [ref=f22e254] [cursor=pointer]: "13"
+                - button "2026年8月14日" [ref=f22e255] [cursor=pointer]: "14"
+                - button "2026年8月15日" [ref=f22e256] [cursor=pointer]: "15"
+                - button "2026年8月16日" [ref=f22e257] [cursor=pointer]: "16"
+                - button "2026年8月17日" [ref=f22e258] [cursor=pointer]: "17"
+                - button "2026年8月18日" [ref=f22e259] [cursor=pointer]: "18"
+                - button "2026年8月19日" [ref=f22e260] [cursor=pointer]: "19"
+                - button "2026年8月20日" [ref=f22e261] [cursor=pointer]: "20"
+                - button "2026年8月21日" [active] [ref=f22e262] [cursor=pointer]: "21"
+                - button "2026年8月22日" [ref=f22e263] [cursor=pointer]: "22"
+                - button "2026年8月23日" [ref=f22e264] [cursor=pointer]: "23"
+                - button "2026年8月24日" [ref=f22e265] [cursor=pointer]: "24"
+                - button "2026年8月25日" [ref=f22e266] [cursor=pointer]: "25"
+                - button "2026年8月26日" [ref=f22e267] [cursor=pointer]: "26"
+                - button "2026年8月27日" [ref=f22e268] [cursor=pointer]: "27"
+                - button "2026年8月28日" [ref=f22e269] [cursor=pointer]: "28"
+                - button "2026年8月29日" [ref=f22e270] [cursor=pointer]: "29"
+                - button "2026年8月30日" [ref=f22e271] [cursor=pointer]: "30"
+                - button "2026年8月31日" [ref=f22e272] [cursor=pointer]: "31"
+                - button "2026年9月1日" [ref=f22e273] [cursor=pointer]: "1"
+                - button "2026年9月2日" [ref=f22e274] [cursor=pointer]: "2"
+                - button "2026年9月3日" [ref=f22e275] [cursor=pointer]: "3"
+                - button "2026年9月4日" [ref=f22e276] [cursor=pointer]: "4"
+                - button "2026年9月5日" [ref=f22e277] [cursor=pointer]: "5"
+                - button "2026年9月6日" [ref=f22e278] [cursor=pointer]: "6"
+              - generic [ref=f22e279]:
+                - generic [ref=f22e280]: 时间
+                - combobox "时间" [ref=f22e284]:
+                  - option "不设置时间" [selected]
+                  - option "00:00"
+                  - option "00:30"
+                  - option "01:00"
+                  - option "01:30"
+                  - option "02:00"
+                  - option "02:30"
+                  - option "03:00"
+                  - option "03:30"
+                  - option "04:00"
+                  - option "04:30"
+                  - option "05:00"
+                  - option "05:30"
+                  - option "06:00"
+                  - option "06:30"
+                  - option "07:00"
+                  - option "07:30"
+                  - option "08:00"
+                  - option "08:30"
+                  - option "09:00"
+                  - option "09:30"
+                  - option "10:00"
+                  - option "10:30"
+                  - option "11:00"
+                  - option "11:30"
+                  - option "12:00"
+                  - option "12:30"
+                  - option "13:00"
+                  - option "13:30"
+                  - option "14:00"
+                  - option "14:30"
+                  - option "15:00"
+                  - option "15:30"
+                  - option "16:00"
+                  - option "16:30"
+                  - option "17:00"
+                  - option "17:30"
+                  - option "18:00"
+                  - option "18:30"
+                  - option "19:00"
+                  - option "19:30"
+                  - option "20:00"
+                  - option "20:30"
+                  - option "21:00"
+                  - option "21:30"
+                  - option "22:00"
+                  - option "22:30"
+                  - option "23:00"
+                  - option "23:30"
+              - generic [ref=f22e285]:
+                - generic [ref=f22e286]: 提醒
+                - combobox "提醒" [ref=f22e290]:
+                  - option "不提醒" [selected]
+                  - option "准时"
+                  - option "提前 10 分钟"
+                  - option "提前 1 小时"
+                  - option "提前 1 天"
+              - generic [ref=f22e291]:
+                - generic [ref=f22e292]: 重复
+                - combobox "重复" [ref=f22e296]:
+                  - option "不重复" [selected]
+                  - option "每天"
+                  - option "每周"
+                  - option "每月"
+              - generic [ref=f22e297]:
+                - button "清除" [ref=f22e298] [cursor=pointer]
+                - button "完成" [ref=f22e299] [cursor=pointer]
+        - generic [ref=f22e155]:
+          - generic [ref=f22e156]:
+            - strong [ref=f22e157]: 逾期
+            - generic [ref=f22e158]: "3"
+          - article [ref=f22e159] [cursor=pointer]:
+            - button "完成 3" [ref=f22e160]
+            - generic [ref=f22e161]:
+              - strong [ref=f22e162]: "3"
+              - generic [ref=f22e163]: 收集箱
+            - button "8月9日 18:00" [ref=f22e167]
+            - button "更多任务操作" [ref=f22e172]
+          - article [ref=f22e177] [cursor=pointer]:
+            - button "完成 1" [ref=f22e178]
+            - generic [ref=f22e179]:
+              - strong [ref=f22e180]: "1"
+              - paragraph [ref=f22e181]: 标题1 标题2 标题3 1、喜庆价值评估吗的1 大
+              - generic [ref=f22e182]: 收集箱
+            - button "8月9日 18:00" [ref=f22e186]
+            - button "更多任务操作" [ref=f22e191]
+          - article [ref=f22e196] [cursor=pointer]:
+            - button "完成 2" [ref=f22e197]
+            - generic [ref=f22e198]:
+              - strong [ref=f22e199]: "2"
+              - generic [ref=f22e200]: 收集箱
+            - button "8月10日 18:00" [ref=f22e204]
+            - button "更多任务操作" [ref=f22e209]

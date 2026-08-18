@@ -1,0 +1,113 @@
+- generic [ref=e57]:
+  - complementary [ref=e58]:
+    - link "WorkFollow 首页" [ref=e59] [cursor=pointer]:
+      - /url: /
+      - generic [ref=e60]: W
+    - generic [ref=e61]:
+      - generic "当前空间：个人空间，点击切换" [ref=e62] [cursor=pointer]:
+        - generic: 空间
+        - combobox "切换工作空间" [ref=e66]:
+          - option "个人空间" [selected]
+          - option "渠道"
+          - option "中台"
+      - button "创建团队" [ref=e67] [cursor=pointer]:
+        - generic: 新建
+    - navigation "全局导航" [ref=e69]:
+      - link "首页" [ref=e70] [cursor=pointer]:
+        - /url: /
+      - link "任务" [active] [ref=e76] [cursor=pointer]:
+        - /url: /todos
+      - link "日历" [ref=e81] [cursor=pointer]:
+        - /url: /calendar
+      - link "全部笔记" [ref=e85] [cursor=pointer]:
+        - /url: /notes
+        - generic [ref=e89]: 笔记
+      - link "共享笔记" [ref=e90] [cursor=pointer]:
+        - /url: /shared-notes
+        - generic [ref=e94]: 共享
+      - link "通知" [ref=e95] [cursor=pointer]:
+        - /url: /notifications
+      - link "AI 助手" [ref=e100] [cursor=pointer]:
+        - /url: /notes?panel=ai
+        - generic [ref=e105]: AI
+    - generic [ref=e106]:
+      - link "设置" [ref=e107] [cursor=pointer]:
+        - /url: /settings
+      - strong [ref=e118]: root
+  - main [ref=e119]:
+    - generic [ref=e231]:
+      - complementary "任务视图" [ref=e232]:
+        - generic [ref=e233]: 任务
+        - navigation "任务视图" [ref=e235]:
+          - link "今天 2" [ref=e236] [cursor=pointer]:
+            - /url: /todos?view=today
+            - strong [ref=e240]: 今天
+            - generic [ref=e241]: "2"
+          - link "本周 2" [ref=e242] [cursor=pointer]:
+            - /url: /todos?view=week
+            - strong [ref=e246]: 本周
+            - generic [ref=e247]: "2"
+          - link "收集箱 0" [ref=e248] [cursor=pointer]:
+            - /url: /todos?view=inbox
+            - strong [ref=e253]: 收集箱
+            - generic [ref=e254]: "0"
+          - link "本月 3" [ref=e255] [cursor=pointer]:
+            - /url: /todos?view=month
+            - strong [ref=e259]: 本月
+            - generic [ref=e260]: "3"
+        - generic [ref=e261]:
+          - heading "记录" [level=2] [ref=e262]
+          - navigation "记录" [ref=e263]:
+            - link "已完成 1" [ref=e264] [cursor=pointer]:
+              - /url: /todos?view=completed
+              - strong [ref=e269]: 已完成
+              - generic [ref=e270]: "1"
+      - region "待办列表" [ref=e271]:
+        - generic [ref=e272]:
+          - generic [ref=e273]:
+            - generic [ref=e274]: 2026年8月9日 · 周日
+            - heading "今天" [level=2] [ref=e275]
+          - generic [ref=e276]:
+            - button "切换任务排序" [ref=e277] [cursor=pointer]
+            - button "打开搜索" [ref=e281] [cursor=pointer]
+            - button "更多列表操作" [ref=e287] [cursor=pointer]
+        - button "添加任务" [ref=e295] [cursor=pointer]
+        - generic [ref=e299]:
+          - generic [ref=e300]:
+            - generic [ref=e301]:
+              - strong [ref=e302]: 逾期
+              - generic [ref=e303]: "1"
+            - article [ref=e304] [cursor=pointer]:
+              - button "完成 1" [ref=e305]
+              - generic [ref=e306]:
+                - strong [ref=e307]: "1"
+                - generic [ref=e308]: 收集箱
+              - button "8月7日" [ref=e312]
+              - button "更多任务操作" [ref=e317]
+          - generic [ref=e322]:
+            - generic [ref=e323]:
+              - strong [ref=e324]: 今天
+              - generic [ref=e325]: "1"
+            - article [ref=e326] [cursor=pointer]:
+              - button "完成 添加2" [ref=e327]
+              - generic [ref=e328]:
+                - strong [ref=e329]: 添加2
+                - generic [ref=e330]: 收集箱
+              - button "今天" [ref=e334]
+              - button "更多任务操作" [ref=e339]
+          - generic [ref=e344]:
+            - generic [ref=e345]:
+              - strong [ref=e346]: 已完成和已放弃
+              - generic [ref=e347]: "1"
+            - article [ref=e348] [cursor=pointer]:
+              - button "恢复 2" [ref=e349]
+              - generic [ref=e352]:
+                - strong [ref=e353]: "2"
+                - generic [ref=e354]: 收集箱
+              - button "今天" [ref=e358]
+              - button "更多任务操作" [ref=e363]
+      - separator "调整任务列表与详情宽度" [ref=e368]
+      - complementary "任务正文" [ref=e370]:
+        - generic [ref=e371]:
+          - strong [ref=e374]: 选择一个任务
+          - paragraph [ref=e375]: 任务正文会显示在这里。
