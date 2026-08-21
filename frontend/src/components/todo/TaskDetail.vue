@@ -9,8 +9,8 @@ import {
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
+import EditorBubbleMenu from '@/components/EditorBubbleMenu.vue'
 import InputDialog from '@/components/InputDialog.vue'
-import RichTextToolbar from '@/components/RichTextToolbar.vue'
 import AssigneePopover from '@/components/task/AssigneePopover.vue'
 import TaskRelationDialog from '@/components/task/TaskRelationDialog.vue'
 import { createWorkFollowEditorExtensions } from '@/modules/editor/tiptap'
@@ -142,8 +142,9 @@ function sanitizeEditorHtml(value: string) {
     'A', 'IMG', 'INPUT', 'PRE', 'CODE', 'MARK', 'TABLE', 'THEAD', 'TBODY', 'TR', 'TH', 'TD',
   ])
   const safeStyle = (valueToCheck: string | null) => valueToCheck?.split(';').map((part) => part.trim()).filter((part) => {
-    const match = part.match(/^(color|background-color)\s*:\s*(#[\da-f]{3,8}|rgba?\([^)]*\)|hsla?\([^)]*\)|[a-z]+)$/i)
-    return Boolean(match)
+    const color = part.match(/^(color|background-color)\s*:\s*(#[\da-f]{3,8}|rgba?\([^)]*\)|hsla?\([^)]*\)|[a-z]+)$/i)
+    const fontSize = part.match(/^font-size\s*:\s*(12|14|16|18|20|24)px$/i)
+    return Boolean(color || fontSize)
   }).join('; ') ?? ''
   for (const element of [...documentValue.body.querySelectorAll('*')]) {
     if (!allowed.has(element.tagName)) { element.replaceWith(...element.childNodes); continue }
@@ -637,17 +638,17 @@ onBeforeUnmount(() => {
         v-model="taskTitle"
         class="task-editor-title task-editor-spacer"
         rows="1"
-        wrap="off"
+        maxlength="200"
         :readonly="!canEdit"
         aria-label="任务标题"
         @input="onTitleInput"
         @blur="save(true)"
-        @keydown.enter.prevent
+        @keydown.enter.prevent="save(true)"
       />
     </header>
 
     <div class="task-editor-area" @click="closeEditorPanels">
-      <RichTextToolbar v-if="editor && canEdit" :editor="editor" attachment @link="openLinkDialog" @attachment="fileInput?.click()" />
+      <EditorBubbleMenu v-if="editor && canEdit" :editor="editor" attachment @link="openLinkDialog" @attachment="fileInput?.click()" />
       <EditorContent class="task-body-editor" :editor="editor" @click="closeEditorPanels" />
       <button v-if="saveState === 'error'" class="task-editor-save-state error" type="button" aria-live="polite" @click="retrySave">保存失败，点击重试</button>
       <span v-else-if="saveState !== 'idle'" class="task-editor-save-state" :class="saveState" aria-live="polite">{{ saveState === 'saving' ? '保存中…' : saveState === 'saved' ? '已保存' : '等待保存' }}</span>
@@ -708,5 +709,12 @@ onBeforeUnmount(() => {
     <InputDialog :open="linkDialogOpen" title="设置链接" label="链接地址" :initial-value="linkValue" placeholder="https://（留空可移除链接）" confirm-label="应用" :required="false" @close="linkDialogOpen = false" @submit="applyLink" />
     <TaskRelationDialog :open="relationDialogOpen" :current-task-id="todo.id" @close="relationDialogOpen = false" @select-task="relateTask" @select-note="relateNote" />
   </aside>
-  <aside v-else class="task-detail task-detail-empty" aria-label="任务正文"><div><IconChevronRight :size="24" :stroke-width="1.5" /><strong>选择一个任务</strong><p>任务正文会显示在这里。</p></div></aside>
+  <aside v-else class="task-detail task-detail-empty" aria-label="任务正文">
+    <div><IconChevronRight :size="24" :stroke-width="1.5" /><strong>选择一个任务</strong><p>任务正文会显示在这里。</p></div>
+    <div class="empty-hints" aria-label="快捷键">
+      <span><kbd>⌘</kbd><kbd>N</kbd> 新建任务</span>
+      <span><kbd>↑</kbd><kbd>↓</kbd> 切换任务</span>
+      <span><kbd>⌘</kbd><kbd>/</kbd> 查看全部</span>
+    </div>
+  </aside>
 </template>

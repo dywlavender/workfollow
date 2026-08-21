@@ -3,7 +3,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Response, status
 
 from app.core.dependencies import CurrentSettings, CurrentUser, DbSession
-from app.schemas.note import NoteRead
+from app.schemas.note import AttachmentRead, NoteRead
 from app.schemas.note_share import NoteShareCreate, NoteShareRead, SharedNoteRead
 from app.services import audit_service, note_service, note_share_service
 from app.models.notification import NotificationType
@@ -15,9 +15,14 @@ router = APIRouter(tags=["note-shares"])
 
 def _shared_note_read(note, share) -> SharedNoteRead:  # noqa: ANN001
     base = NoteRead.model_validate(note)
+    attachments = [
+        AttachmentRead.model_validate(item).model_copy(update={"url": f"/api/attachments/{item.id}"})
+        for item in note.attachments
+    ]
     return SharedNoteRead.model_validate(
         {
             **base.model_dump(),
+            "attachments": attachments,
             "shared_by_user_id": share.shared_by_user_id,
             "shared_by": share.shared_by,
             "permission": share.permission,

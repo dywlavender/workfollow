@@ -9,6 +9,7 @@ from sqlalchemy import String, delete, func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, aliased, joinedload
 
+from app.core.config import Settings
 from app.models.note import Attachment, Note
 from app.models.note_share import NoteShare, NoteShareStatus
 from app.models.team import Team, TeamMember, TeamMemberRole, TeamMemberStatus, TeamStatus
@@ -27,7 +28,7 @@ from app.models.team_note import (
 from app.models.todo import TaskFileAccess, Todo, local_now
 from app.schemas.note import AttachmentRead
 from app.schemas.team import TeamNoteCreate, TeamNoteSubmissionCreate, TeamNoteSubmissionReview, TeamNoteUpdate
-from app.services import note_permission_service, team_service
+from app.services import note_permission_service, note_service, team_service
 from app.services.note_service import content_to_plain_text, get_note_or_404
 from app.services.system_permission_service import user_is_root
 
@@ -186,6 +187,179 @@ def _snapshot_hash(title: str, content: dict[str, Any], attachment_ids: list[str
         separators=(",", ":"),
     )
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def team_note_version_info(db: Session, note: TeamNote) -> tuple[int, str]:
+    """Return the latest persisted version and its current content fingerprint."""
+
+    version_no = db.scalar(select(func.max(TeamNoteVersion.version_no)).where(
+        TeamNoteVersion.team_note_id == note.id
+    )) or 1
+    return version_no, _snapshot_hash(note.title, note.content_json, list(note.attachment_ids or []))
+
+
+def _latest_update_submission(
+    db: Session,
+    team_id: str,
+    applicant_id: str,
+    target_team_note_id: str,
+    source_note_id: str | None = None,
+) -> TeamNoteSubmission | None:
+    statement = select(TeamNoteSubmission).where(
+        TeamNoteSubmission.team_id == team_id,
+        TeamNoteSubmission.applicant_id == applicant_id,
+        TeamNoteSubmission.submission_type == TeamNoteSubmissionType.UPDATE,
+        TeamNoteSubmission.target_team_note_id == target_team_note_id,
+    )
+    if source_note_id is not None:
+        statement = statement.where(TeamNoteSubmission.source_note_id == source_note_id)
+    return db.scalar(statement.order_by(TeamNoteSubmission.updated_at.desc()))
+
+
+def update_state_for_team_note(db: Session, note: TeamNote, user_id: str) -> dict[str, Any]:
+    """Expose only the current user's update draft/submission state for a team note."""
+
+    submission = db.scalar(select(TeamNoteSubmission).where(
+        TeamNoteSubmission.team_id == note.team_id,
+        TeamNoteSubmission.applicant_id == user_id,
+        TeamNoteSubmission.submission_type == TeamNoteSubmissionType.UPDATE,
+        TeamNoteSubmission.target_team_note_id == note.id,
+        TeamNoteSubmission.status.in_(
+            (TeamNoteSubmissionStatus.PENDING, TeamNoteSubmissionStatus.NEEDS_REVISION)
+        ),
+    ).order_by(TeamNoteSubmission.updated_at.desc()))
+    draft_id = submission.source_note_id if submission is not None else db.scalar(
+        select(Note.id).where(
+            Note.owner_id == user_id,
+            Note.copied_from_team_note_id == note.id,
+            Note.is_knowledge_update_draft.is_(True),
+            Note.deleted_at.is_(None),
+        ).order_by(Note.updated_at.desc())
+    )
+    return {
+        "my_update_draft_note_id": draft_id,
+        "my_update_submission_id": submission.id if submission else None,
+        "my_update_submission_status": submission.status if submission else None,
+    }
+
+
+def copy_team_note_to_personal(
+    db: Session,
+    note: TeamNote,
+    owner_id: str,
+    settings: Settings,
+    *,
+    is_update_draft: bool = False,
+) -> Note:
+    """Copy a published team note and remember the exact version it came from."""
+
+    attachment_ids = list(note.attachment_ids or [])
+    attachments_by_id = {
+        item.id: item for item in db.scalars(select(Attachment).where(Attachment.id.in_(attachment_ids)))
+    } if attachment_ids else {}
+    if len(attachments_by_id) != len(set(attachment_ids)):
+        raise HTTPException(status_code=409, detail="知识附件记录不完整，无法复制")
+    version_no, snapshot_hash = team_note_version_info(db, note)
+    return note_service.copy_note_with_attachments(
+        db,
+        title=note.title,
+        content_json=note.content_json,
+        plain_text=note.plain_text,
+        source_attachments=[attachments_by_id[item] for item in attachment_ids if item in attachments_by_id],
+        owner_id=owner_id,
+        settings=settings,
+        copied_from_team_note_id=note.id,
+        is_knowledge_update_draft=is_update_draft,
+        copied_from_team_note_version_no=version_no,
+        copied_from_team_note_snapshot_hash=snapshot_hash,
+    )
+
+
+def get_or_create_update_draft(
+    db: Session,
+    note: TeamNote,
+    owner_id: str,
+    settings: Settings,
+) -> Note:
+    """Reuse one safe update draft per user/target, otherwise create one."""
+
+    current_version_no, current_hash = team_note_version_info(db, note)
+    active_submission = _latest_update_submission(db, note.team_id, owner_id, note.id)
+    if active_submission and active_submission.status in {
+        TeamNoteSubmissionStatus.PENDING,
+        TeamNoteSubmissionStatus.NEEDS_REVISION,
+    }:
+        source = db.get(Note, active_submission.source_note_id)
+        if source is None or source.owner_id != owner_id or source.deleted_at is not None:
+            raise HTTPException(status_code=409, detail="已有更新投稿，但原笔记已不可用")
+        return source
+
+    draft = db.scalar(select(Note).where(
+        Note.owner_id == owner_id,
+        Note.copied_from_team_note_id == note.id,
+        Note.is_knowledge_update_draft.is_(True),
+        Note.deleted_at.is_(None),
+    ).order_by(Note.updated_at.desc()))
+    if draft is not None:
+        latest = _latest_update_submission(db, note.team_id, owner_id, note.id, draft.id)
+        if latest is None and (
+            draft.copied_from_team_note_version_no == current_version_no
+            and draft.copied_from_team_note_snapshot_hash == current_hash
+        ):
+            return draft
+        if latest is not None and latest.status == TeamNoteSubmissionStatus.NEEDS_REVISION and (
+            latest.base_team_note_version_no == current_version_no
+            and latest.base_team_note_snapshot_hash == current_hash
+        ):
+            return draft
+        draft.is_knowledge_update_draft = False
+        db.flush()
+
+    # A manually copied note can become the update draft if it still represents
+    # the same team-note version and has not already been used for an update.
+    candidate = db.scalar(select(Note).where(
+        Note.owner_id == owner_id,
+        Note.copied_from_team_note_id == note.id,
+        Note.is_knowledge_update_draft.is_(False),
+        Note.deleted_at.is_(None),
+        ~select(TeamNoteSubmission.id).where(
+            TeamNoteSubmission.source_note_id == Note.id,
+            TeamNoteSubmission.submission_type == TeamNoteSubmissionType.UPDATE,
+            TeamNoteSubmission.target_team_note_id == note.id,
+        ).exists(),
+        Note.copied_from_team_note_version_no == current_version_no,
+        Note.copied_from_team_note_snapshot_hash == current_hash,
+    ).order_by(Note.updated_at.desc()))
+    if candidate is not None:
+        candidate.is_knowledge_update_draft = True
+        try:
+            db.commit()
+        except IntegrityError:
+            db.rollback()
+            draft = db.scalar(select(Note).where(
+                Note.owner_id == owner_id,
+                Note.copied_from_team_note_id == note.id,
+                Note.is_knowledge_update_draft.is_(True),
+                Note.deleted_at.is_(None),
+            ).order_by(Note.updated_at.desc()))
+            if draft is not None:
+                return draft
+            raise
+        return candidate
+
+    try:
+        return copy_team_note_to_personal(db, note, owner_id, settings, is_update_draft=True)
+    except IntegrityError:
+        db.rollback()
+        draft = db.scalar(select(Note).where(
+            Note.owner_id == owner_id,
+            Note.copied_from_team_note_id == note.id,
+            Note.is_knowledge_update_draft.is_(True),
+            Note.deleted_at.is_(None),
+        ).order_by(Note.updated_at.desc()))
+        if draft is not None:
+            return draft
+        raise
 
 
 def _validate_attachment_ids(
@@ -377,6 +551,17 @@ def _snapshot_submission(db: Session, submission: TeamNoteSubmission, source: No
         db.add(SubmissionFileAccess(submission_id=submission.id, attachment_id=attachment_id))
 
 
+def _assert_submission_target_current(db: Session, submission: TeamNoteSubmission, target: TeamNote) -> None:
+    if submission.base_team_note_version_no is None or not submission.base_team_note_snapshot_hash:
+        raise HTTPException(status_code=409, detail="更新投稿缺少目标版本，请重新基于最新知识创建草稿")
+    current_version_no, current_hash = team_note_version_info(db, target)
+    if (
+        submission.base_team_note_version_no != current_version_no
+        or submission.base_team_note_snapshot_hash != current_hash
+    ):
+        raise HTTPException(status_code=409, detail="团队知识已更新，请重新基于最新版本创建更新草稿")
+
+
 def submit_note(
     db: Session,
     team_id: str,
@@ -390,19 +575,35 @@ def submit_note(
         raise HTTPException(status_code=403, detail="没有投稿权限")
     _validate_category(db, team_id, payload.proposed_category_id)
     target: TeamNote | None = None
+    base_version_no: int | None = None
+    base_hash: str | None = None
     if payload.submission_type == TeamNoteSubmissionType.UPDATE:
         target = get_team_note_or_404(db, team_id, payload.target_team_note_id or "", include_archived=False)
-    existing = db.scalar(select(TeamNoteSubmission.id).where(
+        if source.is_knowledge_update_draft:
+            if source.copied_from_team_note_id != target.id:
+                raise HTTPException(status_code=409, detail="更新草稿的目标知识已改变")
+            base_version_no = source.copied_from_team_note_version_no
+            base_hash = source.copied_from_team_note_snapshot_hash
+            if base_version_no is None or not base_hash:
+                raise HTTPException(status_code=409, detail="更新草稿缺少目标版本，请重新创建更新草稿")
+        else:
+            base_version_no, base_hash = team_note_version_info(db, target)
+        current_version_no, current_hash = team_note_version_info(db, target)
+        if base_version_no != current_version_no or base_hash != current_hash:
+            raise HTTPException(status_code=409, detail="团队知识已更新，请重新基于最新版本创建更新草稿")
+    existing_statement = select(TeamNoteSubmission.id).where(
         TeamNoteSubmission.team_id == team_id,
         TeamNoteSubmission.applicant_id == applicant_id,
-        TeamNoteSubmission.source_note_id == source.id,
         TeamNoteSubmission.submission_type == payload.submission_type,
         TeamNoteSubmission.target_team_note_id == (target.id if target else None),
         TeamNoteSubmission.status.in_((
             TeamNoteSubmissionStatus.PENDING,
             TeamNoteSubmissionStatus.NEEDS_REVISION,
         )),
-    ))
+    )
+    if payload.submission_type == TeamNoteSubmissionType.CREATE:
+        existing_statement = existing_statement.where(TeamNoteSubmission.source_note_id == source.id)
+    existing = db.scalar(existing_statement)
     if existing is not None:
         raise HTTPException(status_code=409, detail="该笔记已有未完成投稿")
     submission = TeamNoteSubmission(
@@ -412,6 +613,8 @@ def submit_note(
         applicant_id=applicant_id,
         source_author_id=source.owner_id,
         target_team_note_id=target.id if target else None,
+        base_team_note_version_no=base_version_no,
+        base_team_note_snapshot_hash=base_hash,
         snapshot_title=source.title,
         snapshot_content_json=source.content_json,
         snapshot_plain_text=source.plain_text,
@@ -441,6 +644,13 @@ def resubmit_note(
     if submission.status != TeamNoteSubmissionStatus.NEEDS_REVISION:
         raise HTTPException(status_code=409, detail="只有需要修改的投稿可以重新提交")
     source = get_note_or_404(db, submission.source_note_id, applicant_id)
+    if submission.submission_type == TeamNoteSubmissionType.UPDATE:
+        target = get_team_note_or_404(
+            db, submission.team_id, submission.target_team_note_id or "", include_archived=False
+        )
+        _assert_submission_target_current(db, submission, target)
+        if source.is_knowledge_update_draft and source.copied_from_team_note_id != target.id:
+            raise HTTPException(status_code=409, detail="更新草稿的目标知识已改变")
     if payload is not None:
         submission.proposed_category_id = _validate_category(db, submission.team_id, payload.proposed_category_id)
         submission.proposed_tags_json = payload.proposed_tags_json
@@ -565,6 +775,12 @@ def approve_submission(
         review.category_id if "category_id" in review.model_fields_set else submission.proposed_category_id,
     )
     tags = review.tags if review.tags is not None else list(submission.proposed_tags_json or [])
+    target: TeamNote | None = None
+    if submission.submission_type == TeamNoteSubmissionType.UPDATE:
+        target = get_team_note_or_404(
+            db, submission.team_id, submission.target_team_note_id or "", include_archived=False
+        )
+        _assert_submission_target_current(db, submission, target)
     reviewed_at = local_now()
     claimed = db.execute(update(TeamNoteSubmission).where(
         TeamNoteSubmission.id == submission.id,
@@ -604,9 +820,8 @@ def approve_submission(
             db.flush()
             change_type = "SUBMISSION_CREATE"
         else:
-            note = get_team_note_or_404(
-                db, submission.team_id, submission.target_team_note_id or "", include_archived=False
-            )
+            note = target
+            assert note is not None
             old_ids = list(note.attachment_ids or [])
             note.title = title
             note.content_json = submission.snapshot_content_json
@@ -614,13 +829,20 @@ def approve_submission(
             note.attachment_ids = list(submission.snapshot_attachment_ids or [])
             note.category_id = category_id
             note.tags = tags
-            note.source_type = TeamNoteSourceType.MEMBER_SUBMISSION
-            note.source_note_id = submission.source_note_id
-            note.source_author_id = submission.source_author_id
-            note.source_submission_id = submission.id
+            # Keep the original personal-note association when this is an
+            # update to member-created knowledge. For admin-created knowledge,
+            # the first accepted member update becomes its source.
+            if note.source_note_id is None:
+                note.source_type = TeamNoteSourceType.MEMBER_SUBMISSION
+                note.source_note_id = submission.source_note_id
+                note.source_author_id = submission.source_author_id
+                note.source_submission_id = submission.id
             note.updated_by_id = reviewer_id
             _reconcile_file_access(db, note, old_ids, note.attachment_ids, reviewer_id)
             change_type = "SUBMISSION_UPDATE"
+        source_note = db.get(Note, submission.source_note_id)
+        if source_note is not None and source_note.is_knowledge_update_draft:
+            source_note.is_knowledge_update_draft = False
         _grant_file_access(db, note, list(submission.snapshot_attachment_ids or []), reviewer_id)
         _record_version(db, note, reviewer_id, change_type, submission.id)
         db.flush()

@@ -5,6 +5,8 @@ import {
   IconBookmark,
   IconDownload,
   IconFile,
+  IconMaximize,
+  IconMinimize,
   IconNotebook,
   IconPlus,
   IconShare,
@@ -13,7 +15,7 @@ import {
   IconTrash,
 } from '@tabler/icons-vue'
 import type { Editor as TiptapEditor, JSONContent } from '@tiptap/core'
-import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
 import {
   fetchTaskBriefs, postResourceRelation, postTodo,
@@ -23,6 +25,7 @@ import InputDialog from '@/components/InputDialog.vue'
 import RichTextToolbar from '@/components/RichTextToolbar.vue'
 import TaskSearchDialog from '@/components/notes/TaskSearchDialog.vue'
 import TodoDialog from '@/components/todo/TodoDialog.vue'
+import { filterStandaloneAttachments } from '@/modules/editor/attachmentReferences'
 import { createWorkFollowEditorExtensions } from '@/modules/editor/tiptap'
 import { workFollowSlashCommands, type WorkFollowSlashCommand } from '@/modules/editor/slashCommands'
 import { collectTaskIds } from '@/modules/editor/taskRelations'
@@ -34,14 +37,15 @@ const props = defineProps<{
   attachments: Attachment[]
   uploadFile: (file: File) => Promise<Attachment>
   collaboration?: boolean
-  knowledgeState?: 'none' | 'published'
+  knowledgeState?: 'none' | 'published' | 'update-draft' | 'update-pending' | 'update-needs-revision'
+  knowledgeTargetTitle?: string | null
   taskMembers?: TeamMember[]
   currentUserId?: string
   canAssignTasks?: boolean
   focusBlockId?: string | null
 }>()
 const emit = defineEmits<{
-  save: [payload: { noteId: string; title: string; folderId: string | null; contentJson: Record<string, unknown>; plainText: string }]
+  save: [payload: { noteId: string; title: string; folderId: string | null; contentJson?: Record<string, unknown>; plainText?: string }]
   deleteAttachment: [attachment: Attachment]
   openTask: [taskId: string]
   share: []
@@ -70,9 +74,22 @@ const taskInitialTitle = ref('')
 const taskActionMode = ref<'selection' | 'insert'>('selection')
 const pendingTaskContext = ref<{ from: number; to: number; position: number; blockId: string | null; excerpt: string } | null>(null)
 const taskFeedback = ref('')
+const immersiveOpen = ref(false)
+const immersiveClosing = ref(false)
+const immersiveTrigger = ref<HTMLButtonElement | null>(null)
+const attachmentPanelOpen = ref(false)
+const fileUploadMode = ref<'embedded' | 'standalone'>('embedded')
+const embeddedFileAccept = '.png,.jpg,.jpeg,.webp,.pdf,.docx,.xlsx,.md,.txt'
+const standaloneFileAccept = '.pdf,.docx,.xlsx,.md,.txt'
+const editorContent = ref<Record<string, unknown> | null>(props.note?.contentJson ?? null)
+const visibleAttachments = computed(() => filterStandaloneAttachments(
+  props.attachments,
+  editorContent.value ?? props.note?.contentJson,
+))
 let saveTimer: number | undefined
 let slashDetectTimer: number | undefined
 let taskHydrateTimer: number | undefined
+let contentDirty = false
 
 const bubbleMenuOptions = {
   duration: 120,
@@ -107,7 +124,10 @@ const editor = useEditor({
       event.preventDefault()
       for (const file of files) {
         void props.uploadFile(file).then((attachment) => {
-          editor.value?.chain().focus().setImage({ src: attachment.url, alt: attachment.originalName }).run()
+          editor.value?.chain().focus().insertContent({
+            type: 'image',
+            attrs: { src: attachment.url, alt: attachment.originalName, attachmentId: attachment.id },
+          }).run()
         })
       }
       return true
@@ -122,6 +142,8 @@ const editor = useEditor({
     },
   },
   onUpdate: ({ editor: currentEditor }) => {
+    contentDirty = true
+    editorContent.value = currentEditor.getJSON() as Record<string, unknown>
     scheduleSave()
     scheduleTaskHydration()
     window.clearTimeout(slashDetectTimer)
@@ -167,7 +189,7 @@ function insertSlashBlock(type: WorkFollowSlashCommand) {
     chain.run(); closeSlashMenu(); setLink(); return
   }
   if (type === 'attachment') {
-    chain.run(); closeSlashMenu(); fileInput.value?.click(); return
+    chain.run(); closeSlashMenu(); openFilePicker('embedded'); return
   }
   if (type === 'createTask' || type === 'linkTask') {
     chain.run()
@@ -202,6 +224,8 @@ watch(
     title.value = props.note?.title ?? ''
     folderId.value = props.note?.folderId ?? null
     saveState.value = 'idle'
+    attachmentPanelOpen.value = false
+    editorContent.value = props.note?.contentJson ?? null
     closeSlashMenu()
     if (props.note && editor.value) editor.value.commands.setContent(props.note.contentJson as JSONContent, false)
     scheduleTaskHydration()
@@ -251,17 +275,24 @@ function scheduleSave() {
     emitCurrentContent(props.note.id)
     saveTimer = undefined
     saveState.value = 'saved'
-  }, 700)
+  }, 1200)
 }
 
 function emitCurrentContent(noteId: string) {
   if (!editor.value) return
+  const dirty = contentDirty
+  contentDirty = false
+  // Only send the (potentially large) document JSON when the body actually
+  // changed. Title/folder edits then save a tiny payload instead of the full
+  // contentJson + plainText every time — less bandwidth and backend work.
   emit('save', {
     noteId,
     title: title.value.trim() || '未命名笔记',
     folderId: folderId.value || null,
-    contentJson: editor.value.getJSON() as Record<string, unknown>,
-    plainText: editor.value.getText({ blockSeparator: '\n' }),
+    ...(dirty ? {
+      contentJson: editor.value.getJSON() as Record<string, unknown>,
+      plainText: editor.value.getText({ blockSeparator: '\n' }),
+    } : {}),
   })
 }
 
@@ -274,6 +305,48 @@ function requestSaveAsTemplate() {
     contentJson: editor.value.getJSON() as Record<string, unknown>,
     plainText: editor.value.getText({ blockSeparator: '\n' }),
   })
+}
+
+function toggleImmersive() {
+  if (!props.note || immersiveClosing.value) return
+  moreOpen.value = false
+  immersiveOpen.value = !immersiveOpen.value
+}
+
+function finishImmersiveClose() {
+  if (!immersiveClosing.value) return
+  immersiveOpen.value = false
+  immersiveClosing.value = false
+  void nextTick(() => immersiveTrigger.value?.focus({ preventScroll: true }))
+}
+
+function handleImmersiveAnimationDone(event: AnimationEvent) {
+  if (event.target !== event.currentTarget || event.animationName !== 'note-editor-immersive-exit') return
+  finishImmersiveClose()
+}
+
+function closeImmersive() {
+  if (!immersiveOpen.value || immersiveClosing.value) return
+  immersiveClosing.value = true
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) void nextTick(finishImmersiveClose)
+}
+
+function handleImmersiveKeydown(event: KeyboardEvent) {
+  if (!immersiveOpen.value || event.key !== 'Escape') return
+
+  // Let the currently open editor popover consume Escape first. A second
+  // Escape exits immersive editing, so nested interactions are not dismissed
+  // unexpectedly.
+  if (linkDialogOpen.value || taskDialogOpen.value || taskSearchOpen.value) return
+  if (moreOpen.value) {
+    moreOpen.value = false
+    return
+  }
+  if (slashMenuOpen.value) {
+    closeSlashMenu()
+    return
+  }
+  closeImmersive()
 }
 
 function setLink() {
@@ -411,7 +484,7 @@ function showTaskFeedback(message: string) {
 
 function scheduleTaskHydration() {
   window.clearTimeout(taskHydrateTimer)
-  taskHydrateTimer = window.setTimeout(refreshTaskReferences, 60)
+  taskHydrateTimer = window.setTimeout(refreshTaskReferences, 250)
 }
 
 function briefMeta(brief: TaskBrief): string {
@@ -425,6 +498,10 @@ function briefMeta(brief: TaskBrief): string {
 async function refreshTaskReferences() {
   const currentEditor = editor.value
   if (!currentEditor) return
+  // Fast path: skip the full-document serialization (getJSON + recursive walk)
+  // when the note contains no task references at all. This runs on every input
+  // pause, so avoiding it keeps typing responsive on large documents.
+  if (!currentEditor.view.dom.querySelector('[data-task-link], [data-task-reference]')) return
   const ids = collectTaskIds(currentEditor.getJSON())
   if (!ids.length) return
   const briefs = new Map((await fetchTaskBriefs(ids)).map((item) => [item.id, item]))
@@ -457,11 +534,26 @@ async function copySelection() {
 
 async function handleFiles(files: FileList | null) {
   if (!files) return
+  let uploadedStandaloneFile = false
+  const insertImages = fileUploadMode.value === 'embedded'
   for (const file of Array.from(files)) {
     const attachment = await props.uploadFile(file)
-    if (file.type.startsWith('image/')) editor.value?.chain().focus().setImage({ src: attachment.url, alt: attachment.originalName }).run()
+    if (file.type.startsWith('image/') && insertImages) {
+      editor.value?.chain().focus().insertContent({
+        type: 'image',
+        attrs: { src: attachment.url, alt: attachment.originalName, attachmentId: attachment.id },
+      }).run()
+    } else {
+      uploadedStandaloneFile = true
+    }
   }
+  if (uploadedStandaloneFile) attachmentPanelOpen.value = true
   if (fileInput.value) fileInput.value.value = ''
+}
+
+function openFilePicker(mode: 'embedded' | 'standalone') {
+  fileUploadMode.value = mode
+  fileInput.value?.click()
 }
 
 function formatSize(size: number): string {
@@ -471,6 +563,7 @@ function formatSize(size: number): string {
 }
 
 onMounted(() => {
+  window.addEventListener('keydown', handleImmersiveKeydown)
   window.setTimeout(() => { void focusSourceBlock() }, 900)
 })
 
@@ -479,17 +572,46 @@ onBeforeUnmount(() => {
   window.clearTimeout(saveTimer)
   window.clearTimeout(slashDetectTimer)
   window.clearTimeout(taskHydrateTimer)
+  window.removeEventListener('keydown', handleImmersiveKeydown)
+  document.body.classList.remove('note-editor-immersive-open')
+})
+
+watch(immersiveOpen, (open) => {
+  document.body.classList.toggle('note-editor-immersive-open', open)
+  if (open) void nextTick(() => editor.value?.commands.focus())
 })
 </script>
 
 <template>
   <section class="notes-column editor-column">
+    <div
+      class="note-editor-surface"
+      :class="{ 'note-editor-immersive': immersiveOpen, 'is-closing': immersiveClosing }"
+      :role="immersiveOpen ? 'dialog' : undefined"
+      :aria-modal="immersiveOpen ? 'true' : undefined"
+      :aria-label="immersiveOpen ? '沉浸式笔记编辑器' : undefined"
+      @animationend="handleImmersiveAnimationDone"
+      @animationcancel="handleImmersiveAnimationDone"
+    >
     <div v-if="!note" class="editor-empty"><span><IconNotebook :size="28" /></span><strong>选择或创建一篇笔记</strong><p>正文、图片和附件会自动保存到本地。</p></div>
     <template v-else>
       <header class="editor-header">
         <div class="note-editor-title-row">
           <input v-model="title" class="note-title-input" aria-label="笔记标题" maxlength="500" @input="scheduleSave" />
           <div class="note-editor-actions">
+            <button
+              ref="immersiveTrigger"
+              type="button"
+              class="secondary-button note-immersive-toggle"
+              :aria-label="immersiveOpen ? '退出沉浸式编辑' : '进入沉浸式编辑'"
+              :aria-pressed="immersiveOpen"
+              :title="immersiveOpen ? '退出沉浸式编辑（Esc）' : '进入沉浸式编辑'"
+              @click="immersiveOpen ? closeImmersive() : toggleImmersive()"
+            >
+              <IconMinimize v-if="immersiveOpen" :size="15" />
+              <IconMaximize v-else :size="15" />
+              <span>{{ immersiveOpen ? '退出沉浸式' : '沉浸式编辑' }}</span>
+            </button>
             <button v-if="collaboration" type="button" class="secondary-button" @click="emit('share')"><IconShare :size="15" />分享</button>
             <div class="note-more-host">
               <button type="button" class="mini-action" aria-label="更多笔记操作" @click="moreOpen = !moreOpen"><IconDots :size="18" /></button>
@@ -498,7 +620,7 @@ onBeforeUnmount(() => {
                 <button type="button" @click="emit('duplicate', note); moreOpen = false"><IconCopy :size="15" />复制笔记</button>
                 <button type="button" @click="requestSaveAsTemplate(); moreOpen = false"><IconBookmark :size="15" />保存为模板</button>
                 <button type="button" @click="emit('export', note); moreOpen = false"><IconDownload :size="15" />导出 JSON</button>
-                <button v-if="collaboration" type="button" @click="emit('publish'); moreOpen = false">{{ knowledgeState === 'published' ? '申请更新团队版本' : '发布到团队知识库' }}</button>
+                <button v-if="collaboration" type="button" :disabled="knowledgeState === 'update-pending'" @click="emit('publish'); moreOpen = false">{{ knowledgeState === 'published' ? '申请更新团队版本' : knowledgeState === 'update-draft' ? '提交更新申请' : knowledgeState === 'update-needs-revision' ? '重新提交更新申请' : knowledgeState === 'update-pending' ? '更新审核中' : '发布到团队知识库' }}</button>
                 <span />
                 <button class="danger-text" type="button" @click="emit('remove'); moreOpen = false">删除</button>
               </section>
@@ -511,10 +633,11 @@ onBeforeUnmount(() => {
             <option v-for="folder in folders" :key="folder.id" :value="folder.id">{{ folder.name }}</option>
           </select>
           <span class="save-state" :class="saveState">{{ saveState === 'saving' ? '保存中…' : saveState === 'saved' ? '已自动保存' : '本地笔记' }}</span>
+          <span v-if="knowledgeState === 'update-draft' || knowledgeState === 'update-pending' || knowledgeState === 'update-needs-revision'" class="knowledge-update-target">更新目标：{{ knowledgeTargetTitle ?? '团队知识' }}</span>
         </div>
       </header>
-      <RichTextToolbar v-if="editor" :editor="editor" attachment @link="setLink" @attachment="fileInput?.click()" />
-      <input ref="fileInput" class="sr-only" type="file" multiple accept=".png,.jpg,.jpeg,.webp,.pdf,.docx,.xlsx,.md,.txt" @change="handleFiles(($event.target as HTMLInputElement).files)" />
+      <RichTextToolbar v-if="editor" :editor="editor" attachment @link="setLink" @attachment="openFilePicker('embedded')" />
+      <input ref="fileInput" class="sr-only" type="file" multiple :accept="fileUploadMode === 'embedded' ? embeddedFileAccept : standaloneFileAccept" @change="handleFiles(($event.target as HTMLInputElement).files)" />
       <div class="selection-menu-host">
         <BubbleMenu v-if="editor" :editor="editor" :tippy-options="bubbleMenuOptions" class="selection-menu">
           <button type="button" @mousedown.prevent @click="createTodoFromSelection">创建待办</button>
@@ -538,16 +661,23 @@ onBeforeUnmount(() => {
           ><span>{{ command.mark }}</span><strong>{{ command.label }}</strong></button>
         </section>
       </Teleport>
-      <section class="attachment-panel">
-        <header><strong>附件</strong><span>{{ attachments.length }}</span><button type="button" @click="fileInput?.click()"><IconPlus :size="15" /> 上传</button></header>
-        <div v-if="attachments.length" class="attachment-list">
-          <article v-for="attachment in attachments" :key="attachment.id">
-            <span class="attachment-icon"><IconFile :size="17" /></span>
-            <a :href="attachment.url" target="_blank" rel="noopener noreferrer"><strong>{{ attachment.originalName }}</strong><small>{{ formatSize(attachment.size) }}</small></a>
-            <button type="button" aria-label="删除附件" @click="emit('deleteAttachment', attachment)"><IconTrash :size="16" /></button>
-          </article>
+      <section class="attachment-panel" :class="{ 'is-expanded': attachmentPanelOpen }">
+        <header>
+          <button type="button" class="attachment-panel-toggle" :aria-expanded="attachmentPanelOpen" aria-controls="note-file-attachments" @click="attachmentPanelOpen = !attachmentPanelOpen">
+            <strong>文件附件</strong><span>{{ visibleAttachments.length }}</span>
+          </button>
+          <button type="button" @click="openFilePicker('standalone')"><IconPlus :size="15" /> 上传文件</button>
+        </header>
+        <div v-if="attachmentPanelOpen" id="note-file-attachments" class="attachment-panel-body">
+          <div v-if="visibleAttachments.length" class="attachment-list">
+            <article v-for="attachment in visibleAttachments" :key="attachment.id">
+              <span class="attachment-icon"><IconFile :size="17" /></span>
+              <a :href="attachment.url" target="_blank" rel="noopener noreferrer"><strong>{{ attachment.originalName }}</strong><small>{{ formatSize(attachment.size) }}</small></a>
+              <button type="button" aria-label="删除附件" @click="emit('deleteAttachment', attachment)"><IconTrash :size="16" /></button>
+            </article>
+          </div>
+          <p v-else>正文图片只在正文中展示；这里用于管理 PDF、DOCX、Markdown 和文本文件。</p>
         </div>
-        <p v-else>可上传图片、PDF、DOCX、XLSX、Markdown 和文本文件；也可直接粘贴截图。</p>
       </section>
       <InputDialog :open="linkDialogOpen" title="设置链接" label="链接地址" :initial-value="linkValue" placeholder="https://（留空可移除链接）" confirm-label="应用" :required="false" @close="linkDialogOpen = false" @submit="applyLink" />
       <TodoDialog
@@ -563,5 +693,6 @@ onBeforeUnmount(() => {
       />
       <TaskSearchDialog :open="taskSearchOpen" @close="taskSearchOpen = false" @select="linkExistingTask" />
     </template>
+    </div>
   </section>
 </template>

@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-# Build WorkFollow archives without modifying frontend/node_modules.
+# Build WorkFollow archives from the current source tree without modifying
+# frontend/node_modules or the working tree's frontend/dist.
 #
 # Usage:
 #   ./deploy/build-deployment-packages.sh
 #   ./deploy/build-deployment-packages.sh --version 0.1.1
-#   ./deploy/build-deployment-packages.sh --skip-frontend-build
 #
 # Optional offline dependencies:
 #   wheelhouse/linux/*.whl     Linux x86_64 Python 3.12 wheels
@@ -15,7 +15,6 @@ set -Eeuo pipefail
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 RELEASE_DIR="$ROOT_DIR/release"
 VERSION="${WORKFOLLOW_VERSION:-0.1.0}"
-SKIP_FRONTEND_BUILD="${SKIP_FRONTEND_BUILD:-0}"
 
 usage() {
   sed -n '3,12p' "$0"
@@ -37,10 +36,6 @@ while [ "$#" -gt 0 ]; do
       VERSION="$2"
       shift 2
       ;;
-    --skip-frontend-build)
-      SKIP_FRONTEND_BUILD=1
-      shift
-      ;;
     -h|--help)
       usage
       exit 0
@@ -57,10 +52,8 @@ esac
 
 require_command tar
 require_command zip
-if [ "$SKIP_FRONTEND_BUILD" != "1" ]; then
-  require_command npm
-  require_command node
-fi
+require_command npm
+require_command node
 
 mkdir -p "$RELEASE_DIR"
 BUILD_DIR="$(mktemp -d "$RELEASE_DIR/.package-build.XXXXXX")"
@@ -73,26 +66,20 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
-FRONTEND_DIST="$ROOT_DIR/frontend/dist"
-if [ "$SKIP_FRONTEND_BUILD" = "1" ]; then
-  [ -f "$FRONTEND_DIST/index.html" ] || fail "frontend/dist 不存在，不能跳过前端构建"
-  echo "[1/5] 使用现有 frontend/dist"
-else
-  echo "[1/5] 在隔离临时目录安装依赖并构建前端"
-  FRONTEND_BUILD_DIR="$BUILD_DIR/frontend-build"
-  mkdir -p "$FRONTEND_BUILD_DIR"
-  tar \
-    --exclude='./node_modules' \
-    --exclude='./dist' \
-    --exclude='./.playwright-cli' \
-    -C "$ROOT_DIR/frontend" -cf - . | tar -C "$FRONTEND_BUILD_DIR" -xf -
-  (
-    cd "$FRONTEND_BUILD_DIR"
-    npm ci --no-audit --no-fund
-    npm run build
-  )
-  FRONTEND_DIST="$FRONTEND_BUILD_DIR/dist"
-fi
+echo "[1/5] 在隔离临时目录安装依赖并使用当前源码构建前端"
+FRONTEND_BUILD_DIR="$BUILD_DIR/frontend-build"
+mkdir -p "$FRONTEND_BUILD_DIR"
+tar \
+  --exclude='./node_modules' \
+  --exclude='./dist' \
+  --exclude='./.playwright-cli' \
+  -C "$ROOT_DIR/frontend" -cf - . | tar -C "$FRONTEND_BUILD_DIR" -xf -
+(
+  cd "$FRONTEND_BUILD_DIR"
+  npm ci --no-audit --no-fund
+  npm run build
+)
+FRONTEND_DIST="$FRONTEND_BUILD_DIR/dist"
 
 [ -f "$FRONTEND_DIST/index.html" ] || fail "前端构建产物缺少 index.html"
 

@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     uploads_dir: Path = PROJECT_DIR / "data" / "uploads"
     files_dir: Path = PROJECT_DIR / "data" / "files"
     max_upload_bytes: int = 25 * 1024 * 1024
+    max_markdown_import_bytes: int = 5 * 1024 * 1024
     session_days: int = 30
     session_cookie_secure: bool = False
 

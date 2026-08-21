@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { IconCheck, IconEdit, IconEye, IconExternalLink, IconRotate, IconX } from '@tabler/icons-vue'
 import dayjs from 'dayjs'
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 
 import RichTextDocument from '@/components/RichTextDocument.vue'
+import ReadonlyAttachmentPanel from '@/components/notes/ReadonlyAttachmentPanel.vue'
+import { filterStandaloneAttachments } from '@/modules/editor/attachmentReferences'
 import type { KnowledgeCategory, SubmissionReviewPayload, TeamNote, TeamNoteSubmission } from '@/services/api'
 
 const props = defineProps<{
@@ -11,6 +13,7 @@ const props = defineProps<{
   submissions: TeamNoteSubmission[]
   selected: TeamNoteSubmission | null
   related?: TeamNote[]
+  knowledge?: TeamNote[]
   categories?: KnowledgeCategory[]
   busy?: boolean
 }>()
@@ -28,6 +31,13 @@ const comment = ref('')
 const approvedTitle = ref('')
 const approvedCategoryId = ref('')
 const approvedTags = ref('')
+const selectedTarget = computed(() => props.selected?.targetTeamNoteId
+  ? props.knowledge?.find((item) => item.id === props.selected?.targetTeamNoteId) ?? null
+  : null)
+const visibleAttachments = computed(() => filterStandaloneAttachments(
+  props.selected?.snapshotAttachments ?? [],
+  props.selected?.snapshotContentJson,
+))
 watch(() => props.selected?.id, () => {
   comment.value = ''
   approvedTitle.value = props.selected?.snapshotTitle ?? ''
@@ -62,15 +72,21 @@ const labels: Record<string, string> = {
     <section class="notes-column editor-column submission-detail">
       <div v-if="!selected" class="editor-empty"><IconEye :size="28" /><strong>选择一条投稿</strong></div>
       <template v-else>
-        <header class="editor-header submission-header"><div><span>{{ selected.submissionType === 'UPDATE' ? '更新投稿' : '新知识投稿' }} · {{ selected.applicant.nickname }}</span><h1>{{ selected.snapshotTitle }}</h1></div><span class="submission-status" :class="selected.status.toLowerCase()">{{ labels[selected.status] }}</span></header>
+        <header class="editor-header submission-header"><div><span>{{ selected.submissionType === 'UPDATE' ? '更新投稿' : '新知识投稿' }} · {{ selected.applicant.nickname }}<template v-if="selected.submissionType === 'UPDATE'"> · 目标：{{ selectedTarget?.title ?? selected.targetTeamNoteId }}</template></span><h1>{{ selected.snapshotTitle }}</h1></div><span class="submission-status" :class="selected.status.toLowerCase()">{{ labels[selected.status] }}</span></header>
         <div v-if="selected.submissionMessage" class="submission-message"><strong>投稿说明</strong><p>{{ selected.submissionMessage }}</p></div>
         <div v-if="selected.reviewComment" class="submission-review-comment"><strong>审核意见</strong><p>{{ selected.reviewComment }}</p></div>
+        <div v-if="selected.submissionType === 'UPDATE'" class="submission-target-context"><strong>更新目标</strong><button v-if="selectedTarget" type="button" @click="emit('openKnowledge', selectedTarget)">{{ selectedTarget.title }} · 当前 V{{ selectedTarget.versionNo }}</button><span v-else>{{ selected.targetTeamNoteId }}</span><small v-if="selected.baseTeamNoteVersionNo">提交基于团队知识 V{{ selected.baseTeamNoteVersionNo }}</small></div>
         <div v-if="mode === 'review' && selected.status === 'PENDING'" class="submission-review-metadata">
           <label><span>发布标题</span><input v-model="approvedTitle" /></label>
           <label><span>团队分类</span><select v-model="approvedCategoryId"><option value="">未分类</option><option v-for="category in categories" :key="category.id" :value="category.id">{{ category.name }}</option></select></label>
           <label><span>团队标签</span><input v-model="approvedTags" placeholder="空格或逗号分隔" /></label>
         </div>
-        <RichTextDocument class="collaboration-document" :model-value="selected.snapshotContentJson" :editable="false" />
+        <ReadonlyAttachmentPanel label="本次提交文件" :attachments="visibleAttachments" />
+        <section v-if="mode === 'review' && selected.submissionType === 'UPDATE' && selectedTarget" class="submission-comparison" aria-label="团队知识更新对比">
+          <article><header><strong>当前团队知识 V{{ selectedTarget.versionNo }}</strong><button type="button" @click="emit('openKnowledge', selectedTarget)">打开原知识</button></header><RichTextDocument class="collaboration-document" :model-value="selectedTarget.contentJson" :editable="false" /></article>
+          <article><header><strong>本次提交快照<span v-if="selected.baseTeamNoteVersionNo">（基于 V{{ selected.baseTeamNoteVersionNo }}）</span></strong></header><RichTextDocument class="collaboration-document" :model-value="selected.snapshotContentJson" :editable="false" /></article>
+        </section>
+        <RichTextDocument v-else class="collaboration-document" :model-value="selected.snapshotContentJson" :editable="false" />
         <section v-if="mode === 'review' && related?.length" class="related-knowledge"><strong>可能相关知识</strong><button v-for="item in related" :key="item.id" type="button" @click="emit('openKnowledge', item)">{{ item.title }} · {{ item.category?.name ?? '未分类' }}</button></section>
         <footer class="submission-actions-footer">
           <template v-if="mode === 'mine'">

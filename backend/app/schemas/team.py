@@ -296,6 +296,10 @@ class TeamNoteRead(ApiModel):
     updated_by_id: str | None
     created_at: datetime
     updated_at: datetime
+    version_no: int = 1
+    my_update_draft_note_id: str | None = None
+    my_update_submission_id: str | None = None
+    my_update_submission_status: TeamNoteSubmissionStatus | None = None
     permissions: TeamNotePermissions = Field(default_factory=TeamNotePermissions)
 
 
@@ -351,10 +355,13 @@ class TeamNoteSubmissionRead(ApiModel):
     applicant: UserRead
     submission_type: TeamNoteSubmissionType
     target_team_note_id: str | None
+    base_team_note_version_no: int | None
+    base_team_note_snapshot_hash: str | None
     snapshot_title: str
     snapshot_content_json: dict[str, Any]
     snapshot_plain_text: str
     snapshot_attachment_ids: list[str]
+    snapshot_attachments: list[AttachmentRead] = Field(default_factory=list)
     snapshot_hash: str
     proposed_category_id: str | None
     proposed_tags_json: list[str]

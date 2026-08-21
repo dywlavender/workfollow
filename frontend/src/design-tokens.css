@@ -82,10 +82,16 @@
 
   /* Dynamic primitive fallbacks. */
   --theme-bg-page: var(--neutral-50);
-  --theme-bg-sidebar: var(--neutral-100);
-  --theme-bg-panel: var(--neutral-0);
+  --theme-bg-rail: var(--neutral-100);
+  --theme-bg-navigation: var(--neutral-100);
+  --theme-bg-list: var(--neutral-0);
+  --theme-bg-detail: var(--neutral-0);
+  --theme-bg-input: #fafbfc;
+  --theme-bg-sidebar: var(--theme-bg-navigation);
+  --theme-bg-panel: var(--theme-bg-detail);
   --theme-bg-hover: var(--neutral-100);
   --theme-bg-muted: #fafbfc;
+  --theme-bg-selected: #eef2ff;
   --theme-text-primary: var(--neutral-900);
   --theme-text-secondary: var(--neutral-700);
   --theme-text-tertiary: var(--neutral-500);
@@ -95,12 +101,20 @@
   --palette-primary-hover: #4338ca;
   --palette-primary-active: #3730a3;
   --palette-primary-soft: #eef2ff;
+  --palette-primary-soft-hover: #e0e7ff;
+  --palette-focus-ring: rgb(79 70 229 / .2);
   --palette-on-primary: var(--neutral-0);
 
   /* Semantic tokens. */
   --color-bg-page: var(--theme-bg-page);
-  --color-bg-sidebar: var(--theme-bg-sidebar);
-  --color-bg-surface: var(--theme-bg-panel);
+  --color-bg-rail: var(--theme-bg-rail);
+  --color-bg-navigation: var(--theme-bg-navigation);
+  --color-bg-list: var(--theme-bg-list);
+  --color-bg-detail: var(--theme-bg-detail);
+  --color-bg-input: var(--theme-bg-input);
+  --color-bg-selected: var(--theme-bg-selected);
+  --color-bg-sidebar: var(--color-bg-navigation);
+  --color-bg-surface: var(--color-bg-detail);
   --color-bg-hover: var(--theme-bg-hover);
   --color-bg-subtle: var(--theme-bg-muted);
   --color-text-primary: var(--theme-text-primary);
@@ -112,7 +126,11 @@
   --color-accent-hover: var(--palette-primary-hover);
   --color-accent-active: var(--palette-primary-active);
   --color-accent-soft: var(--palette-primary-soft);
+  --color-accent-soft-hover: var(--palette-primary-soft-hover);
   --color-on-accent: var(--palette-on-primary);
+  --color-focus: var(--palette-focus-ring);
+  --color-selection: var(--palette-primary-soft);
+  --color-selection-fg: var(--palette-primary);
   --color-success: var(--status-success-600);
   --color-success-soft: var(--status-success-soft);
   --color-warning: var(--status-warning-600);
@@ -174,27 +192,37 @@
   --type-editor-body-size: var(--font-size-body);
   --type-editor-body-weight: var(--font-weight-regular);
   --type-editor-body-line-height: var(--line-height-editor);
-  --focus-ring: 0 0 0 3px color-mix(in srgb, var(--color-accent) 16%, transparent);
+  --focus-ring: 0 0 0 3px var(--color-focus);
 
   /* Component tokens. */
   --button-primary-bg: var(--color-accent);
   --button-primary-bg-hover: var(--color-accent-hover);
+  --button-primary-bg-active: var(--color-accent-active);
+  --button-primary-bg-focus: var(--color-accent);
   --button-primary-fg: var(--color-on-accent);
+  --button-primary-fg-hover: var(--color-on-accent);
+  --button-primary-fg-active: var(--color-on-accent);
+  --button-secondary-bg: var(--color-bg-surface);
+  --button-secondary-bg-hover: var(--color-bg-hover);
+  --button-secondary-fg: var(--color-text-secondary);
+  --button-secondary-fg-hover: var(--color-text-primary);
   --button-radius: var(--radius-md);
   --button-font-family: var(--type-family-ui);
   --button-font-size: var(--type-control-size);
   --button-font-weight: var(--type-control-weight);
   --button-line-height: var(--type-control-line-height);
-  --input-bg: var(--color-bg-surface);
+  --input-bg: var(--color-bg-input);
   --input-fg: var(--color-text-primary);
   --input-border: var(--color-border);
   --input-border-focus: var(--color-accent);
+  --input-border-hover: color-mix(in srgb, var(--color-accent) 40%, var(--color-border));
+  --input-focus-ring: var(--focus-ring);
   --input-radius: var(--radius-md);
   --input-font-family: var(--type-family-ui);
   --input-font-size: var(--type-body-size);
   --input-font-weight: var(--type-body-weight);
   --input-line-height: var(--type-body-line-height);
-  --card-bg: var(--color-bg-surface);
+  --card-bg: var(--color-bg-detail);
   --card-fg: var(--color-text-primary);
   --card-border: var(--color-border-subtle);
   --card-radius: var(--radius-lg);
@@ -242,6 +270,12 @@
   --dialog-description-font-size: var(--type-supporting-size);
   --dialog-description-font-weight: var(--type-supporting-weight);
   --dialog-description-line-height: var(--type-supporting-line-height);
+  --selection-bg: var(--color-selection);
+  --selection-fg: var(--color-selection-fg);
+  --selection-border: var(--color-accent);
+  --state-disabled-bg: var(--color-bg-subtle);
+  --state-disabled-fg: color-mix(in srgb, var(--color-text-tertiary) 72%, transparent);
+  --state-disabled-border: var(--color-border-subtle);
   --feedback-font-size: var(--type-supporting-size);
   --feedback-font-weight: var(--type-supporting-weight);
   --feedback-line-height: var(--type-supporting-line-height);
@@ -273,42 +307,57 @@
   --priority-medium: var(--color-warning);
   --notification-badge-bg: #d94652;
 
-  /* Task workspace reference palette. Kept semantic so the Figma-aligned
-     layout does not scatter literal colours through component CSS. */
-  --task-reference-accent: #4f7df7;
-  --task-reference-on-accent: #ffffff;
-  --task-reference-rail-muted: rgb(255 255 255 / .58);
-  --task-reference-rail-hover: rgb(255 255 255 / .12);
-  --task-reference-rail-avatar: rgb(255 255 255 / .18);
-  --task-reference-brand-shadow: 0 2px 8px rgb(20 52 140 / .14);
-  --task-reference-nav-bg: #f4f6ff;
-  --task-reference-nav-active: #e5eafb;
-  --task-reference-divider: #eceef4;
-  --task-reference-divider-strong: #e7eaf3;
-  --task-reference-text: #20242b;
-  --task-reference-text-soft: #22252c;
-  --task-reference-muted: #979daa;
-  --task-reference-muted-soft: #9aa0ae;
-  --task-reference-command-bg: #f5f5f6;
-  --task-reference-command-fg: #b9bbc2;
-  --task-reference-command-icon: #c7c9cf;
-  --task-reference-row-hover: #f6f7fa;
-  --task-reference-row-selected: #edf1ff;
-  --task-reference-detail-shadow: -18px 0 48px rgb(24 31 51 / .12);
-  --task-reference-drawer-shadow: 18px 0 46px rgb(24 31 51 / .14);
-
-  /* Application workspace language, shared by every authenticated route. */
+  /* Component: shared workspace surfaces. Every authenticated page consumes
+     these aliases, so a background preset changes the whole shell together. */
   --workspace-rail-width: 60px;
-  --workspace-rail-bg: var(--task-reference-accent);
-  --workspace-rail-fg: var(--task-reference-on-accent);
-  --workspace-rail-muted: var(--task-reference-rail-muted);
-  --workspace-panel-tint: var(--task-reference-nav-bg);
-  --workspace-selection: var(--task-reference-nav-active);
-  --workspace-divider: var(--task-reference-divider);
-  --workspace-divider-strong: var(--task-reference-divider-strong);
-  --workspace-canvas: var(--task-reference-on-accent);
-  --workspace-text: var(--task-reference-text);
-  --workspace-muted: var(--task-reference-muted);
+  --workspace-rail-bg: var(--color-bg-rail);
+  --workspace-rail-fg: var(--color-text-secondary);
+  --workspace-rail-muted: var(--color-text-tertiary);
+  --workspace-rail-hover: var(--color-bg-hover);
+  --workspace-rail-avatar: color-mix(in srgb, var(--color-text-primary) 12%, transparent);
+  --workspace-rail-active-bg: var(--color-bg-selected);
+  --workspace-rail-active-fg: var(--color-accent);
+  --workspace-panel-tint: var(--color-bg-navigation);
+  --workspace-panel: var(--color-bg-list);
+  --workspace-selection: var(--color-bg-selected);
+  --workspace-divider: var(--color-border-subtle);
+  --workspace-divider-strong: var(--color-border);
+  --workspace-canvas: var(--color-bg-page);
+  --workspace-text: var(--color-text-primary);
+  --workspace-muted: var(--color-text-tertiary);
+  --workspace-command-bg: var(--color-bg-input);
+  --workspace-command-fg: var(--color-text-tertiary);
+  --workspace-command-icon: var(--color-text-tertiary);
+  --workspace-row-hover: var(--color-bg-hover);
+  --workspace-row-selected: var(--color-accent-soft);
+  --workspace-brand-shadow: var(--shadow-sm);
+  --workspace-detail-shadow: var(--detail-shadow);
+  --workspace-drawer-shadow: 18px 0 46px color-mix(in srgb, var(--color-text-primary) 14%, transparent);
+
+  /* Component: task workspace. These names describe roles, not a reference
+     screenshot, and therefore remain valid for every palette/background. */
+  --task-workspace-bg: var(--workspace-canvas);
+  --task-nav-bg: var(--workspace-panel-tint);
+  --task-nav-active-bg: var(--workspace-selection);
+  --task-nav-divider: var(--workspace-divider);
+  --task-nav-divider-strong: var(--workspace-divider-strong);
+  --task-nav-text: var(--workspace-text);
+  --task-nav-muted: var(--workspace-muted);
+  --task-list-bg: var(--workspace-panel);
+  --task-list-text: var(--workspace-text);
+  --task-detail-bg: var(--color-bg-detail);
+  --task-command-bg: var(--workspace-command-bg);
+  --task-command-text: var(--workspace-text);
+  --task-command-placeholder: var(--workspace-command-fg);
+  --task-command-icon: var(--workspace-command-icon);
+  --task-accent: var(--color-accent);
+  --task-on-accent: var(--color-on-accent);
+  --task-row-hover: var(--workspace-row-hover);
+  --task-row-selected: var(--workspace-row-selected);
+  --task-divider: var(--workspace-divider);
+  --task-brand-shadow: var(--workspace-brand-shadow);
+  --task-detail-shadow: var(--workspace-detail-shadow);
+  --task-drawer-shadow: var(--workspace-drawer-shadow);
 
 }
 
@@ -325,6 +374,7 @@
   --shadow-dialog: 0 24px 64px rgb(0 0 0 / .4);
   --detail-shadow: -16px 0 44px rgb(0 0 0 / .3);
   --toast-shadow: 0 10px 28px rgb(0 0 0 / .28);
+  --color-overlay: rgb(0 0 0 / .52);
   --calendar-inbox-bg: #243b63;
   --calendar-inbox-fg: #bed5ff;
   --calendar-work-bg: #37315b;

@@ -401,6 +401,9 @@ export interface Note {
   isFavorite: boolean
   copiedFromNoteId: string | null
   copiedFromTeamNoteId: string | null
+  isKnowledgeUpdateDraft: boolean
+  copiedFromTeamNoteVersionNo: number | null
+  copiedFromTeamNoteSnapshotHash: string | null
   createdAt: string
   updatedAt: string
   deletedAt: string | null
@@ -461,6 +464,15 @@ export async function fetchNote(id: string): Promise<Note> {
 
 export async function postNote(payload: { folderId?: string | null; title?: string; contentJson?: Record<string, unknown>; plainText?: string }): Promise<Note> {
   const { data } = await api.post<Note>('/notes', payload)
+  return data
+}
+
+export async function importMarkdownNote(file: File, folderId?: string | null, title?: string): Promise<Note> {
+  const body = new FormData()
+  body.append('file', file)
+  if (folderId) body.append('folderId', folderId)
+  if (title?.trim()) body.append('title', title.trim())
+  const { data } = await api.post<Note>('/notes/import-markdown', body)
   return data
 }
 
@@ -637,6 +649,10 @@ export interface TeamNote {
   updatedById: string | null
   createdAt: string
   updatedAt: string
+  versionNo: number
+  myUpdateDraftNoteId: string | null
+  myUpdateSubmissionId: string | null
+  myUpdateSubmissionStatus: TeamNoteSubmissionStatus | null
   permissions: { canEdit: boolean; canCopy: boolean; canArchive: boolean }
 }
 
@@ -661,10 +677,13 @@ export interface TeamNoteSubmission {
   applicant: User
   submissionType: TeamNoteSubmissionType
   targetTeamNoteId: string | null
+  baseTeamNoteVersionNo: number | null
+  baseTeamNoteSnapshotHash: string | null
   snapshotTitle: string
   snapshotContentJson: Record<string, unknown>
   snapshotPlainText: string
   snapshotAttachmentIds: string[]
+  snapshotAttachments: Attachment[]
   snapshotHash: string
   proposedCategoryId: string | null
   proposedTagsJson: string[]
@@ -763,6 +782,11 @@ export async function restoreKnowledge(id: string, teamId?: string): Promise<Tea
 
 export async function copyKnowledge(id: string, teamId?: string): Promise<Note> {
   const { data } = await api.post<Note>(`/team/knowledge/${id}/copy`, undefined, { params: teamQuery(teamId) })
+  return data
+}
+
+export async function ensureKnowledgeUpdateDraft(id: string, teamId?: string): Promise<Note> {
+  const { data } = await api.post<Note>(`/team/knowledge/${id}/update-draft`, undefined, { params: teamQuery(teamId) })
   return data
 }
 
@@ -881,6 +905,7 @@ export interface NoteShare {
 }
 
 export interface SharedNote extends Note {
+  attachments: Attachment[]
   sharedByUserId: string
   sharedBy: User
   permission: NoteSharePermission

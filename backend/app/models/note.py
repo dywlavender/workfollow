@@ -34,6 +34,21 @@ class Note(Base):
         Index("ix_notes_folder_updated", "folder_id", "updated_at"),
         Index("ix_notes_deleted_at", "deleted_at"),
         Index("ix_notes_owner_updated_at", "owner_id", "updated_at"),
+        Index(
+            "ix_notes_owner_update_draft_target",
+            "owner_id",
+            "copied_from_team_note_id",
+            "is_knowledge_update_draft",
+            "deleted_at",
+        ),
+        Index(
+            "uq_notes_owner_active_update_draft_target",
+            "owner_id",
+            "copied_from_team_note_id",
+            unique=True,
+            sqlite_where=text("is_knowledge_update_draft = TRUE AND deleted_at IS NULL"),
+            postgresql_where=text("is_knowledge_update_draft = TRUE AND deleted_at IS NULL"),
+        ),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
@@ -45,6 +60,9 @@ class Note(Base):
     is_favorite: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     copied_from_note_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
     copied_from_team_note_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    is_knowledge_update_draft: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    copied_from_team_note_version_no: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    copied_from_team_note_snapshot_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=local_now, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=local_now, onupdate=local_now, nullable=False)
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

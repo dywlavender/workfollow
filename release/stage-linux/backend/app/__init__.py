@@ -1,2 +1,0 @@
-"""WorkFollow backend application."""
-

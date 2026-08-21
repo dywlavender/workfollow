@@ -64,9 +64,9 @@ const flatFolders = computed<FlatFolder[]>(() => {
       <div class="note-nav-divider" />
       <nav class="note-collab-nav" aria-label="笔记协作">
         <button :class="{ active: view === 'shared' }" @click="emit('view', 'shared')"><IconInbox :size="16" />分享给我的</button>
-        <button :class="{ active: view === 'knowledge' }" @click="emit('view', 'knowledge'); emit('category', null)"><IconBook :size="16" />团队知识库</button>
         <button :class="{ active: view === 'submissions' }" @click="emit('view', 'submissions')"><IconSend :size="16" />我的投稿</button>
         <button v-if="canReview" :class="{ active: view === 'review' }" @click="emit('view', 'review')"><IconShieldCheck :size="16" />知识审核</button>
+        <button :class="{ active: view === 'knowledge' }" @click="emit('view', 'knowledge'); emit('category', null)"><IconBook :size="16" />团队知识库</button>
       </nav>
       <div v-if="view === 'knowledge'" class="knowledge-category-nav">
         <span>知识分类 <button v-if="canReview" type="button" aria-label="新建知识分类" @click="emit('createCategory')"><IconPlus :size="12" /></button></span>

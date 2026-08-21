@@ -22,7 +22,11 @@ const route = useRoute()
 const isAuthenticatedPage = computed(() => Boolean(route.meta.requiresAuth))
 const resolvedMode = computed(() => resolveAppearanceMode(appStore.appearanceMode, appStore.systemDark))
 const naiveTheme = computed(() => resolvedMode.value === 'dark' ? darkTheme : null)
-const themeOverrides = computed(() => createNaiveThemeOverrides(appStore.appearancePalette, resolvedMode.value))
+const themeOverrides = computed(() => createNaiveThemeOverrides(
+  appStore.appearancePalette,
+  resolvedMode.value,
+  appStore.appearanceBackground,
+))
 </script>
 
 <template>

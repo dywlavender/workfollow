@@ -6,6 +6,7 @@ import {
   persistAppearance,
   resolveAppearanceMode,
   type AppearanceMode,
+  type AppearanceBackground,
   type AppearancePalette,
 } from '@/modules/theme'
 import { fetchHealth, type HealthResponse } from '@/services/api'
@@ -22,6 +23,7 @@ export const useAppStore = defineStore('app', {
     health: null as HealthResponse | null,
     appearancePalette: storedAppearance.palette as AppearancePalette,
     appearanceMode: storedAppearance.mode as AppearanceMode,
+    appearanceBackground: storedAppearance.background as AppearanceBackground,
     systemDark: false,
     completionToastVisible: false,
   }),
@@ -44,17 +46,23 @@ export const useAppStore = defineStore('app', {
       applyAppearance(
         this.appearancePalette,
         resolveAppearanceMode(this.appearanceMode, this.systemDark),
+        this.appearanceBackground,
       )
     },
     setAppearancePalette(palette: AppearancePalette) {
       this.appearancePalette = palette
       this.applyAppearance()
-      persistAppearance(this.appearancePalette, this.appearanceMode)
+      persistAppearance(this.appearancePalette, this.appearanceMode, this.appearanceBackground)
     },
     setAppearanceMode(mode: AppearanceMode) {
       this.appearanceMode = mode
       this.applyAppearance()
-      persistAppearance(this.appearancePalette, this.appearanceMode)
+      persistAppearance(this.appearancePalette, this.appearanceMode, this.appearanceBackground)
+    },
+    setAppearanceBackground(background: AppearanceBackground) {
+      this.appearanceBackground = background
+      this.applyAppearance()
+      persistAppearance(this.appearancePalette, this.appearanceMode, this.appearanceBackground)
     },
     showCompletionToast() {
       this.completionToastVisible = true

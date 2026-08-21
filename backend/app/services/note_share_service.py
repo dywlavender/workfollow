@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from fastapi import HTTPException
 from sqlalchemy import select
-from sqlalchemy.orm import Session, aliased, joinedload
+from sqlalchemy.orm import Session, aliased, joinedload, selectinload
 
 from app.models.auth import User, UserStatus
 from app.models.note import Note
@@ -119,6 +119,7 @@ def get_shared_note_or_404(db: Session, note_id: str, user_id: str) -> tuple[Not
     target_membership = aliased(TeamMember)
     row = db.execute(
         select(Note, NoteShare)
+        .options(selectinload(Note.attachments))
         .join(NoteShare, NoteShare.note_id == Note.id)
         .join(User, User.id == NoteShare.shared_with_user_id)
         .join(Team, Team.id == NoteShare.team_id)
@@ -152,7 +153,7 @@ def list_shared_notes(db: Session, user_id: str) -> list[tuple[Note, NoteShare]]
         .join(Team, Team.id == NoteShare.team_id)
         .join(target_membership, target_membership.team_id == NoteShare.team_id)
         .join(owner_membership, owner_membership.team_id == NoteShare.team_id)
-        .options(joinedload(NoteShare.shared_by))
+        .options(joinedload(NoteShare.shared_by), selectinload(Note.attachments))
         .where(
             NoteShare.shared_with_user_id == user_id,
             NoteShare.status == NoteShareStatus.ACTIVE,

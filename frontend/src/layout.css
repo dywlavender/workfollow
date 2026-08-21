@@ -24,6 +24,10 @@ body,
   overflow-x: clip;
 }
 
+html {
+  scrollbar-gutter: stable;
+}
+
 .app-shell.task-app-shell {
   width: 100%;
   height: 100dvh;
@@ -38,6 +42,7 @@ body,
   height: 100dvh;
   min-height: 0;
   overflow: auto;
+  scrollbar-gutter: stable;
 }
 
 /* Pages fill the shell, while their readable content keeps a useful line
@@ -71,6 +76,13 @@ body,
   flex-direction: column;
 }
 
+.notifications-page,
+.common-links-page {
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+}
+
 .notifications-page > .state-message {
   flex: 1 1 auto;
   min-height: 0;
@@ -85,6 +97,7 @@ body,
 .notifications-page > .notification-list {
   display: flex;
   flex-direction: column;
+  overflow: auto;
 }
 
 .notifications-page > .notification-list > .state-message,
@@ -93,9 +106,44 @@ body,
   min-height: 0;
 }
 
+/* The list card stretches to fill the viewport, but sparse content leaves a
+   visible dead zone. Pin a soft shortcut hint to the bottom so the card never
+   reads as "half-empty" — a CSS-only decoration, no template changes. */
+.notifications-page > .notification-list { position: relative; }
+.notifications-page > .notification-list::after {
+  content: '全部标为已读   ·   清空通知   ·   ⌘ N 新建任务';
+  position: sticky;
+  bottom: 0;
+  display: block;
+  margin: 0;
+  padding: 12px 16px;
+  text-align: center;
+  color: var(--color-text-tertiary);
+  font-size: var(--font-size-micro);
+  letter-spacing: 0.04em;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--color-bg-surface) 0%, transparent 100%) 0%, var(--color-bg-surface) 45%);
+  pointer-events: none;
+}
+.common-links-body { position: relative; }
+.common-links-body::after {
+  content: '⌘ N 添加网站   ·   / 搜索   ·   拖拽分组';
+  position: sticky;
+  bottom: 0;
+  display: block;
+  margin: 0 -24px -24px;
+  padding: 12px 24px;
+  text-align: center;
+  color: var(--color-text-tertiary);
+  font-size: var(--font-size-micro);
+  letter-spacing: 0.04em;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--color-bg-surface) 0%, transparent 100%) 0%, var(--color-bg-surface) 45%);
+  pointer-events: none;
+}
+
 .common-links-body {
   display: flex;
   flex-direction: column;
+  overflow: auto;
 }
 
 /* Team management and audit are sparse content pages: let the primary
@@ -105,11 +153,23 @@ body,
 .team-audit-page {
   display: flex;
   flex-direction: column;
+  height: 100dvh;
+  min-height: 0;
+  overflow: auto;
 }
 
 .team-page > .team-members-panel {
   flex: 1 1 auto;
   min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.team-page > .team-members-panel > .team-member-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
 }
 
 .team-audit-page > .state-message,
@@ -121,6 +181,7 @@ body,
 .team-audit-page > .audit-list {
   display: flex;
   flex-direction: column;
+  overflow: auto;
 }
 
 .team-audit-page > .audit-list > .state-message.empty {
@@ -196,20 +257,52 @@ body,
 }
 
 .calendar-page-shell {
-  display: grid;
-  place-items: stretch;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  height: 100%;
+  min-height: 0;
   padding: 0;
   overflow: hidden;
 }
 
 .calendar-month-page {
   position: relative;
+  width: 100%;
+  flex: 1 1 auto;
+  height: 100%;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   padding: 0;
   border: 0;
   border-radius: 0;
   box-shadow: none;
+}
+
+/* Keep the calendar height chain explicit. FullCalendar receives 100% of the
+   canvas, while the canvas itself owns the remaining height below the header.
+   This prevents an empty or loading calendar from collapsing to zero height. */
+.calendar-canvas {
+  width: 100%;
+  flex: 1 1 auto;
+  height: auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.calendar-canvas > .calendar-skeleton,
+.calendar-canvas > .fc {
+  width: 100%;
+  flex: 1 1 auto;
+  height: 100%;
+  min-height: 0;
+}
+
+.calendar-canvas > .fc .fc-view-harness {
+  height: 100%;
+  min-height: 0;
 }
 
 /* Keep the productive three-pane notes layout inside the available workspace.
@@ -281,8 +374,9 @@ body,
 
 .settings-page-header,
 .settings-layout {
-  width: min(100%, var(--app-settings-max));
-  margin-inline: auto;
+  width: 100%;
+  max-width: none;
+  margin-inline: 0;
 }
 
 .settings-layout {
@@ -291,8 +385,8 @@ body,
 
 .settings-content {
   width: 100%;
-  max-width: 1180px;
-  margin-inline: auto;
+  max-width: none;
+  margin-inline: 0;
 }
 
 .appearance-mode-grid {
@@ -434,6 +528,10 @@ body,
   .tasks-page,
   .tasks-workspace,
   .notes-page,
+  .notifications-page,
+  .common-links-page,
+  .team-page,
+  .team-audit-page,
   .calendar-page-shell,
   .calendar-month-page,
   .team-tasks-page,
@@ -583,5 +681,438 @@ body,
   .task-app-shell > .sidebar.is-task-shell .avatar {
     width: 31px;
     height: 31px;
+  }
+}
+
+/* Personal note editor: an in-app immersive mode. The editor is the only
+   feature that owns this state, so templates, team notes and task editors do
+   not inherit the behavior. The fixed layer covers the current app page while
+   preserving the browser window and the normal editor instance. */
+body.note-editor-immersive-open {
+  overflow: hidden;
+}
+
+body.note-editor-immersive-open .main-area {
+  overflow: hidden;
+}
+
+.note-editor-surface {
+  min-width: 0;
+  min-height: 0;
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--color-bg-surface);
+}
+
+.note-editor-immersive {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  width: 100vw;
+  height: 100dvh;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--workspace-canvas);
+  color: var(--workspace-text);
+  transform-origin: center;
+  animation: note-editor-immersive-enter 220ms cubic-bezier(.22, 1, .36, 1) both;
+}
+
+.note-editor-immersive.is-closing {
+  pointer-events: none;
+  animation: note-editor-immersive-exit 220ms cubic-bezier(.4, 0, 1, 1) both;
+}
+
+@keyframes note-editor-immersive-enter {
+  from {
+    opacity: .01;
+    transform: scale(.985) translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes note-editor-immersive-exit {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: .01;
+  }
+}
+
+.note-editor-immersive .editor-header {
+  flex: 0 0 auto;
+  padding: 16px clamp(18px, 4vw, 56px) 12px;
+  background: var(--workspace-canvas);
+}
+
+.note-editor-immersive .note-title-input {
+  font-size: var(--font-size-heading-lg);
+}
+
+.note-editor-immersive .editor-toolbar {
+  flex: 0 0 auto;
+  width: min(100%, 1120px);
+  margin-inline: auto;
+  padding-inline: clamp(18px, 4vw, 56px);
+}
+
+.note-editor-immersive .tiptap-editor {
+  width: 100%;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  scrollbar-gutter: stable;
+}
+
+.note-editor-immersive .tiptap-editor .tiptap {
+  width: min(100%, 1000px);
+  max-width: 1000px;
+  min-height: 100%;
+  margin-inline: auto;
+  padding: clamp(30px, 5vh, 64px) clamp(22px, 6vw, 76px) 96px;
+  font-size: var(--type-editor-body-size);
+  line-height: var(--type-editor-body-line-height);
+}
+
+.note-editor-immersive .attachment-panel {
+  flex: 0 1 auto;
+  width: min(100%, 1120px);
+  max-height: 180px;
+  margin-inline: auto;
+  padding-inline: clamp(18px, 4vw, 56px);
+  overflow: auto;
+}
+
+.note-immersive-toggle {
+  flex: 0 0 auto;
+}
+
+@media (max-width: 767px) {
+  .note-editor-immersive .editor-header {
+    padding: 12px 14px 10px;
+  }
+
+  .note-editor-immersive .editor-toolbar {
+    width: 100%;
+    padding-inline: 10px;
+  }
+
+  .note-editor-immersive .tiptap-editor .tiptap {
+    padding: 24px 18px 72px;
+  }
+
+  .note-editor-immersive .attachment-panel {
+    width: 100%;
+    padding-inline: 14px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .note-editor-immersive,
+  .note-editor-immersive.is-closing {
+    animation: none;
+  }
+}
+
+/* Read-only collaboration readers share one scroll contract: the page and
+   three-pane workspace stay bounded, while the document owns the remaining
+   vertical space. This covers shared notes and team knowledge alike. */
+.collaboration-reader {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.collaboration-reader > .editor-header,
+.collaboration-reader > .knowledge-metadata-edit,
+.collaboration-reader > .knowledge-provenance {
+  flex: 0 0 auto;
+}
+
+.collaboration-reader > .collaboration-document {
+  flex: 1 1 auto;
+  min-height: 0;
+  margin: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+}
+
+/* Read-only attachment lists sit between the metadata and the document. The
+   list has its own small scroll area, so a large file set never steals the
+   document's main reading viewport. */
+.readonly-attachment-panel {
+  flex: 0 0 auto;
+  min-height: 0;
+  max-height: 164px;
+  margin: 0 28px 12px;
+  padding-top: 9px;
+  border-top: 1px solid var(--color-border-subtle);
+}
+
+.readonly-attachment-panel > header {
+  min-height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-label);
+}
+
+.readonly-attachment-toggle {
+  min-width: 0;
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 30px;
+  padding: 4px 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.readonly-attachment-toggle:hover,
+.readonly-attachment-toggle:focus-visible {
+  color: var(--color-accent);
+  outline: none;
+}
+
+.readonly-attachment-toggle > span {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.readonly-attachment-toggle > span > span {
+  color: var(--color-text-tertiary);
+  font-size: var(--font-size-micro);
+}
+
+.readonly-attachment-toggle > svg {
+  flex: 0 0 auto;
+  color: var(--color-text-tertiary);
+  transition: transform 160ms ease;
+}
+
+.readonly-attachment-toggle[aria-expanded="true"] > svg {
+  transform: rotate(180deg);
+}
+
+.readonly-attachment-panel > header > small {
+  color: var(--color-text-tertiary);
+  font-size: var(--font-size-micro);
+}
+
+.readonly-attachment-list {
+  min-height: 0;
+  max-height: 112px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+}
+
+.readonly-attachment-item {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr) 15px;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 8px;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-xs);
+  background: var(--color-bg-subtle);
+  color: var(--color-text-primary);
+}
+
+.readonly-attachment-item:hover,
+.readonly-attachment-item:focus-visible {
+  border-color: var(--color-accent);
+  background: var(--color-accent-soft);
+  outline: none;
+}
+
+.readonly-attachment-icon {
+  display: grid;
+  place-items: center;
+  color: var(--color-accent);
+}
+
+.readonly-attachment-item > svg {
+  color: var(--color-text-tertiary);
+}
+
+.readonly-attachment-name {
+  min-width: 0;
+  display: grid;
+  gap: 1px;
+}
+
+.readonly-attachment-name strong,
+.readonly-attachment-name small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.readonly-attachment-name strong {
+  font-size: var(--font-size-caption);
+  font-weight: var(--font-weight-semibold);
+}
+
+.readonly-attachment-name small {
+  color: var(--color-text-tertiary);
+  font-size: var(--font-size-micro);
+}
+
+/* Personal note attachments are a collapsed file drawer. Embedded images are
+   filtered out by the component, while the drawer itself stays outside the
+   editor's scroll container and gets its own bounded list when opened. */
+.attachment-panel {
+  flex: 0 0 auto;
+  max-height: 58px;
+  overflow: hidden;
+}
+
+.attachment-panel.is-expanded {
+  max-height: 190px;
+}
+
+.attachment-panel header .attachment-panel-toggle {
+  min-width: 0;
+  margin-left: 0;
+  padding: 4px 0;
+  background: transparent;
+  color: inherit;
+  font-size: inherit;
+  font-weight: var(--font-weight-semibold);
+}
+
+.attachment-panel header .attachment-panel-toggle:hover,
+.attachment-panel header .attachment-panel-toggle:focus-visible {
+  background: transparent;
+  color: var(--color-accent);
+  outline: none;
+}
+
+.attachment-panel-body {
+  min-height: 0;
+  max-height: 132px;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+}
+
+.attachment-panel-body .attachment-list {
+  padding-bottom: 8px;
+}
+
+/* Submission/review is a nested two-pane workspace. Both tracks must be
+   allowed to shrink before their own list/detail scroll containers can work;
+   otherwise the inner grid's content raises the outer notes row and gets
+   clipped by .notes-workspace. */
+.submission-workspace {
+  min-height: 0;
+  grid-template-rows: minmax(0, 1fr);
+}
+
+.submission-workspace > .submission-index,
+.submission-workspace > .submission-detail {
+  min-height: 0;
+}
+
+.submission-workspace > .submission-index {
+  overflow: hidden;
+}
+
+.submission-workspace > .submission-index .note-list-items {
+  min-height: 0;
+  max-height: none;
+  flex: 1 1 auto;
+  overflow: auto;
+}
+
+.submission-workspace > .submission-detail {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.submission-workspace > .submission-detail > .editor-empty {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* The read-only document is the body of the submission detail. The previous
+   rule left the RichTextDocument root at overflow:hidden, so a long snapshot
+   was measured correctly but could not be reached by scrolling. */
+.submission-workspace > .submission-detail > .collaboration-document {
+  flex: 1 1 auto;
+  min-height: 0;
+  margin: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+}
+
+.submission-workspace > .submission-detail > .submission-comparison {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+}
+
+.submission-workspace > .submission-detail > .submission-comparison article {
+  min-height: 0;
+}
+
+.submission-workspace > .submission-detail > .submission-actions-footer {
+  flex: 0 0 auto;
+}
+
+@media (max-width: 767px) {
+  .attachment-panel.is-expanded {
+    max-height: 166px;
+  }
+
+  .attachment-panel-body {
+    max-height: 108px;
+  }
+
+  .readonly-attachment-panel {
+    max-height: 148px;
+    margin-inline: 14px;
+  }
+
+  .readonly-attachment-list {
+    grid-template-columns: 1fr;
+    max-height: 96px;
+  }
+
+  .submission-workspace {
+    grid-column: 1;
+    grid-row: 2 / -1;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .submission-workspace > .submission-index {
+    flex: 0 0 min(230px, 34%);
+    min-height: 140px;
+  }
+
+  .submission-workspace > .submission-detail {
+    flex: 1 1 auto;
+    min-height: 0;
   }
 }

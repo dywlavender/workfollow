@@ -14,7 +14,7 @@ from app.models.note import Attachment, Note
 from app.models.todo import TaskFileAccess
 from app.models.team_note import SubmissionFileAccess, TeamFileAccess
 from app.schemas.note import AttachmentRead
-from app.services.note_service import get_note_or_404
+from app.services.note_service import embedded_image_attachment_ids, get_note_or_404
 from app.services.note_share_service import can_read_shared_note
 from app.services.team_note_service import can_access_attachment
 from app.services import todo_service
@@ -165,7 +165,9 @@ def delete_attachment(attachment_id: str, db: DbSession, settings: AppSettings, 
         if task is not None:
             task.attachment_ids = [item for item in (task.attachment_ids or []) if item != attachment.id]
     else:
-        get_note_or_404(db, attachment.note_id, user.id)
+        note = get_note_or_404(db, attachment.note_id, user.id)
+        if attachment.id in embedded_image_attachment_ids(note.content_json):
+            raise HTTPException(status_code=409, detail="图片正在正文中使用，请先从正文移除图片")
         # A submission snapshot or published knowledge entry owns an independent
         # reference to the binary. Removing it from the personal note must not
         # destroy the team's copy of that resource.

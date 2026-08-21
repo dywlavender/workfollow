@@ -110,6 +110,8 @@ class TeamNoteSubmission(Base):
     target_team_note_id: Mapped[str | None] = mapped_column(
         ForeignKey("team_notes.id", ondelete="SET NULL"), nullable=True
     )
+    base_team_note_version_no: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    base_team_note_snapshot_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
     snapshot_title: Mapped[str] = mapped_column(String(500), nullable=False)
     snapshot_content_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
     snapshot_plain_text: Mapped[str] = mapped_column(Text, default="", nullable=False)

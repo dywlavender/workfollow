@@ -14,6 +14,7 @@ from fastapi import HTTPException
 
 from app.core.config import Settings
 from app.models.note import Attachment, Folder, Note
+from app.models.team_note import SubmissionFileAccess, TeamFileAccess
 from app.models.todo import local_now
 from app.schemas.note import FolderCreate, FolderUpdate, NoteCreate, NoteUpdate
 
@@ -177,6 +178,106 @@ def create_note(db: Session, payload: NoteCreate, owner_id: str, *, commit: bool
     return note
 
 
+def _attachment_id_from_url(value: object) -> str | None:
+    if not isinstance(value, str) or "/api/attachments/" not in value:
+        return None
+    candidate = value.rsplit("/api/attachments/", 1)[-1]
+    return candidate.split("/", 1)[0].split("?", 1)[0].split("#", 1)[0] or None
+
+
+def attachment_ids_in_document(content_json: Mapping[str, object] | None) -> set[str]:
+    """Return all attachment ids referenced by a note document."""
+
+    found: set[str] = set()
+
+    def visit(value: object) -> None:
+        if isinstance(value, Mapping):
+            attrs = value.get("attrs")
+            if isinstance(attrs, Mapping):
+                for key in ("attachmentId", "fileId", "attachment_id", "file_id"):
+                    candidate = attrs.get(key)
+                    if isinstance(candidate, str) and candidate:
+                        found.add(candidate)
+                candidate = _attachment_id_from_url(attrs.get("src"))
+                if candidate:
+                    found.add(candidate)
+            children = value.get("content")
+            if isinstance(children, list):
+                for child in children:
+                    visit(child)
+        elif isinstance(value, list):
+            for child in value:
+                visit(child)
+
+    visit(content_json)
+    return found
+
+
+def embedded_image_attachment_ids(content_json: Mapping[str, object] | None) -> set[str]:
+    """Return attachment ids used by image nodes, including legacy src-only nodes."""
+
+    found: set[str] = set()
+
+    def visit(value: object) -> None:
+        if not isinstance(value, Mapping):
+            if isinstance(value, list):
+                for child in value:
+                    visit(child)
+            return
+        if value.get("type") == "image":
+            attrs = value.get("attrs")
+            if isinstance(attrs, Mapping):
+                for key in ("attachmentId", "fileId", "attachment_id", "file_id"):
+                    candidate = attrs.get(key)
+                    if isinstance(candidate, str) and candidate:
+                        found.add(candidate)
+                        break
+                else:
+                    candidate = _attachment_id_from_url(attrs.get("src"))
+                    if candidate:
+                        found.add(candidate)
+        children = value.get("content")
+        if isinstance(children, list):
+            for child in children:
+                visit(child)
+
+    visit(content_json)
+    return found
+
+
+def _has_external_attachment_access(db: Session, attachment_id: str) -> bool:
+    return bool(
+        db.scalar(select(TeamFileAccess.id).where(
+            TeamFileAccess.attachment_id == attachment_id
+        ).limit(1))
+        or db.scalar(select(SubmissionFileAccess.id).where(
+            SubmissionFileAccess.attachment_id == attachment_id
+        ).limit(1))
+    )
+
+
+def _cleanup_removed_embedded_images(
+    db: Session,
+    note: Note,
+    next_content: Mapping[str, object] | None,
+    settings: Settings,
+) -> list[Path]:
+    referenced_ids = attachment_ids_in_document(next_content)
+    attachments = list(db.scalars(select(Attachment).where(Attachment.note_id == note.id)))
+    paths_to_remove: list[Path] = []
+    for attachment in attachments:
+        if not attachment.mime_type.lower().startswith("image/") or attachment.id in referenced_ids:
+            continue
+        if _has_external_attachment_access(db, attachment.id):
+            # The personal note no longer owns the binary, but an already
+            # submitted or published collaboration snapshot still does.
+            attachment.note_id = None
+            continue
+        paths_to_remove.append(settings.files_dir.parent.parent / attachment.file_path)
+        db.delete(attachment)
+    return paths_to_remove
+
+
 def _rewrite_attachment_references(value: Any, id_map: Mapping[str, str]) -> Any:
     """Return a detached TipTap document whose attachment references use cloned IDs."""
 
@@ -210,6 +311,9 @@ def copy_note_with_attachments(
     folder_id: str | None = None,
     copied_from_note_id: str | None = None,
     copied_from_team_note_id: str | None = None,
+    is_knowledge_update_draft: bool = False,
+    copied_from_team_note_version_no: int | None = None,
+    copied_from_team_note_snapshot_hash: str | None = None,
 ) -> Note:
     """Clone a note and its files so the new personal copy has an independent lifecycle."""
 
@@ -223,6 +327,9 @@ def copy_note_with_attachments(
             plain_text=plain_text,
             copied_from_note_id=copied_from_note_id,
             copied_from_team_note_id=copied_from_team_note_id,
+            is_knowledge_update_draft=is_knowledge_update_draft,
+            copied_from_team_note_version_no=copied_from_team_note_version_no,
+            copied_from_team_note_snapshot_hash=copied_from_team_note_snapshot_hash,
         )
         db.add(note)
         db.flush()
@@ -265,7 +372,7 @@ def copy_note_with_attachments(
         raise
 
 
-def update_note(db: Session, note: Note, payload: NoteUpdate) -> Note:
+def update_note(db: Session, note: Note, payload: NoteUpdate, settings: Settings) -> Note:
     changes = payload.model_dump(exclude_unset=True)
     if "folder_id" in changes and changes["folder_id"]:
         get_folder_or_404(db, changes["folder_id"], note.owner_id)
@@ -277,6 +384,12 @@ def update_note(db: Session, note: Note, payload: NoteUpdate) -> Note:
         changes["plain_text"] = content_to_plain_text(changes["content_json"])
     for field, value in changes.items():
         setattr(note, field, value)
+    paths_to_remove = _cleanup_removed_embedded_images(
+        db,
+        note,
+        changes.get("content_json"),
+        settings,
+    ) if "content_json" in changes else []
     if "content_json" in changes:
         from app.services import resource_relation_service
 
@@ -287,6 +400,8 @@ def update_note(db: Session, note: Note, payload: NoteUpdate) -> Note:
             resource_relation_service.task_ids_in_document(changes["content_json"]),
         )
     db.commit()
+    for path in paths_to_remove:
+        path.unlink(missing_ok=True)
     db.refresh(note)
     return note
 

@@ -12,6 +12,7 @@ const props = defineProps<{
   knowledge: TeamNote[]
   defaultType?: TeamNoteSubmissionType
   defaultTargetId?: string | null
+  targetLocked?: boolean
   saving?: boolean
 }>()
 const emit = defineEmits<{
@@ -49,14 +50,14 @@ function submit() {
   <Teleport to="body">
     <div v-if="open" class="dialog-backdrop" @mousedown.self="emit('close')">
       <section class="note-collab-dialog publish-dialog" role="dialog" aria-modal="true" aria-labelledby="publish-title">
-        <header><div><span class="eyebrow">SNAPSHOT</span><h2 id="publish-title">{{ type === 'UPDATE' ? '申请更新团队知识' : '发布到团队知识库' }}</h2></div><button type="button" aria-label="关闭" @click="emit('close')"><IconX :size="18" /></button></header>
+        <header><div><span class="eyebrow">SNAPSHOT</span><h2 id="publish-title">{{ type === 'UPDATE' ? '提交更新申请' : '发布到团队知识库' }}</h2></div><button type="button" aria-label="关闭" @click="emit('close')"><IconX :size="18" /></button></header>
         <div class="publish-note-summary"><small>笔记标题</small><strong>{{ note?.title }}</strong><p>当前内容将在提交时生成不可变审核快照，正文请回到个人笔记修改。</p></div>
         <div v-if="!defaultTargetId" class="publish-type-switch" role="group" aria-label="投稿类型">
           <button type="button" :class="{ active: type === 'CREATE' }" @click="type = 'CREATE'">发布为新知识</button>
           <button type="button" :class="{ active: type === 'UPDATE' }" @click="type = 'UPDATE'">更新已有知识</button>
         </div>
-        <p v-else class="publish-update-hint">这篇个人笔记已有关联知识，本次将申请更新原知识，不会创建重复条目。</p>
-        <label v-if="type === 'UPDATE'" class="dialog-field"><span>目标团队知识</span><select v-model="targetTeamNoteId" required><option value="">请选择</option><option v-for="item in knowledge" :key="item.id" :value="item.id">{{ item.title }}</option></select></label>
+        <p v-else class="publish-update-hint">更新目标已锁定为原团队知识，本次不会创建重复条目。</p>
+        <label v-if="type === 'UPDATE'" class="dialog-field"><span>目标团队知识</span><select v-model="targetTeamNoteId" :disabled="targetLocked" required><option value="">请选择</option><option v-for="item in knowledge" :key="item.id" :value="item.id">{{ item.title }}</option></select></label>
         <label class="dialog-field"><span>推荐分类</span><select v-model="categoryId"><option value="">未分类</option><option v-for="category in categories" :key="category.id" :value="category.id">{{ category.name }}</option></select></label>
         <label class="dialog-field"><span>推荐团队标签</span><input v-model="tags" placeholder="例如：Tiptap Vue" /></label>
         <label class="dialog-field"><span>发布说明（可选）</span><textarea v-model="message" rows="3" placeholder="总结本次贡献或更新内容" /></label>

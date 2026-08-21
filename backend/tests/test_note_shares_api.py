@@ -64,9 +64,13 @@ def test_note_share_is_live_read_only_and_revocable(client: TestClient, db) -> N
     assert client.post(f"/api/notes/{note_id}/shares", json={"identifier": target.username}).status_code == 409
 
     target_client = login_share_user(client.app, target.username)
-    assert target_client.get("/api/shared/notes").status_code == 200
-    assert target_client.get("/api/shared/notes").json()[0]["title"] == "实时标题 v1"
-    assert target_client.get(f"/api/shared/notes/{note_id}").json()["plainText"] == "实时内容 v1"
+    shared_list = target_client.get("/api/shared/notes")
+    assert shared_list.status_code == 200
+    assert shared_list.json()[0]["title"] == "实时标题 v1"
+    assert shared_list.json()[0]["attachments"][0]["id"] == attachment.id
+    shared_detail = target_client.get(f"/api/shared/notes/{note_id}")
+    assert shared_detail.json()["plainText"] == "实时内容 v1"
+    assert shared_detail.json()["attachments"][0]["originalName"] == "shared.txt"
     assert target_client.get(f"/api/attachments", params={"note_id": note_id}).status_code == 200
     assert target_client.get(f"/api/attachments/{attachment.id}").json()["detail"] == "Attachment file not found"
 

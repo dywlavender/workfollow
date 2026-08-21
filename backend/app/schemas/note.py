@@ -51,6 +51,9 @@ class NoteRead(ApiModel):
     is_favorite: bool
     copied_from_note_id: str | None
     copied_from_team_note_id: str | None
+    is_knowledge_update_draft: bool = False
+    copied_from_team_note_version_no: int | None = None
+    copied_from_team_note_snapshot_hash: str | None = None
     created_at: datetime
     updated_at: datetime
     deleted_at: datetime | None

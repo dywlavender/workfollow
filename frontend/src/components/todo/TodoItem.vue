@@ -4,13 +4,12 @@ import {
   IconBell, IconCalendar, IconCheck, IconChevronRight, IconClock, IconCopy,
   IconDots, IconFlag, IconLink, IconList, IconRepeat, IconTag, IconTrash, IconUsers, IconX,
 } from '@tabler/icons-vue'
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+import { nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import AssigneePopover from '@/components/task/AssigneePopover.vue'
 import TaskRow from '@/components/task/TaskRow.vue'
 import { isDateOnlyDue, isDueOverdue } from '@/modules/todo/dueDate'
-import { taskDescriptionText } from '@/modules/todo/taskDescription'
 import type { TeamMember, Todo, TodoPayload } from '@/services/api'
 
 const props = withDefaults(defineProps<{
@@ -41,7 +40,6 @@ const menuX = ref(0)
 const menuY = ref(0)
 const lists = ['收集箱', '工作', '个人', '学习']
 const executionDone = () => props.todo.myAssignment?.status === 'DONE' || (!props.todo.myAssignment && props.todo.status === 'DONE')
-const descriptionPreview = computed(() => taskDescriptionText(props.todo.description, props.todo.contentJson))
 
 function dueLabel(todo: Todo) {
   if (!todo.dueAt) return '无日期'
@@ -97,7 +95,6 @@ onBeforeUnmount(() => document.removeEventListener('click', closeContext))
     class="todo-row"
     :data-todo-id="todo.id"
     :title="todo.title"
-    :description="descriptionPreview"
     :completed="executionDone()"
     :terminal="executionDone() || todo.status === 'ABANDONED'"
     :disabled="!todo.permissions.completable"

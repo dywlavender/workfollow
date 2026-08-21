@@ -196,7 +196,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="rich-text-document" :class="{ readonly: !editable }">
+  <div v-bind="$attrs" class="rich-text-document" :class="{ readonly: !editable }">
     <RichTextToolbar v-if="editable && editor" :editor="editor" @link="setLink" />
     <EditorContent :editor="editor" />
     <InputDialog :open="linkDialogOpen" title="设置链接" label="链接地址" :initial-value="linkValue" placeholder="https://（留空可移除链接）" confirm-label="应用" :required="false" @close="linkDialogOpen = false" @submit="applyLink" />

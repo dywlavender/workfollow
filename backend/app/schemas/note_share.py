@@ -5,7 +5,7 @@ from pydantic import Field
 from app.models.note_share import NoteSharePermission, NoteShareStatus
 from app.schemas.auth import UserRead
 from app.schemas.base import ApiModel
-from app.schemas.note import NoteRead
+from app.schemas.note import AttachmentRead, NoteRead
 
 
 class NoteShareCreate(ApiModel):
@@ -32,6 +32,7 @@ class NoteShareRead(ApiModel):
 
 
 class SharedNoteRead(NoteRead):
+    attachments: list[AttachmentRead] = Field(default_factory=list)
     shared_by_user_id: str
     shared_by: UserRead
     permission: NoteSharePermission

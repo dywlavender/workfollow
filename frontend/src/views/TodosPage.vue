@@ -269,15 +269,14 @@ function selectTodo(todo: Todo) {
   selectedTodoId.value = todo.id
   selectedTodoDetail.value = null
   void fetchTodo(todo.id).then((detail) => { if (selectedTodoId.value === detail.id) selectedTodoDetail.value = detail })
-  void router.replace({ query: { ...route.query, todo: todo.id } })
+  // Selection is local state only. Writing ?todo= to the URL here would re-enter
+  // the route/load chain and reload the whole list (skeleton flash + refetch).
+  // The todo query param is reserved for deep links into a specific task.
 }
 
 function clearSelection() {
   selectedTodoId.value = null
   selectedTodoDetail.value = null
-  const query = { ...route.query }
-  delete query.todo
-  void router.replace({ query })
 }
 
 function closeTaskNavigation() {

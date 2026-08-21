@@ -78,6 +78,7 @@ def test_submission_is_snapshot_and_approval_creates_independent_team_note(clien
     assert submission["status"] == "PENDING"
     assert submission["snapshotTitle"] == "初始标题"
     assert submission["snapshotAttachmentIds"] == [attachment.id]
+    assert submission["snapshotAttachments"][0]["id"] == attachment.id
 
     # Personal edits after submission must not mutate the stored snapshot.
     assert member_client.put(
@@ -95,6 +96,7 @@ def test_submission_is_snapshot_and_approval_creates_independent_team_note(clien
     assert team_note["title"] == "初始标题"
     assert team_note["plainText"] == "快照内容 v1"
     assert team_note["attachmentIds"] == [attachment.id]
+    assert team_note["attachments"][0]["originalName"] == "snapshot.txt"
     assert team_note["sourceNoteId"] == source_id
     assert team_note["sourceAuthorId"] == member.id
     assert team_note["sourceSubmissionId"] == submission["id"]

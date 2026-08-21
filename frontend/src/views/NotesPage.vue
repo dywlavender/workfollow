@@ -8,6 +8,7 @@ import InputDialog from '@/components/InputDialog.vue'
 import CollaborativeNoteList from '@/components/notes/CollaborativeNoteList.vue'
 import FolderDialog from '@/components/notes/FolderDialog.vue'
 import KnowledgeDetail from '@/components/notes/KnowledgeDetail.vue'
+import MarkdownImportDialog from '@/components/notes/MarkdownImportDialog.vue'
 import NoteEditor from '@/components/notes/NoteEditor.vue'
 import NoteList from '@/components/notes/NoteList.vue'
 import NoteNavigation, { type NoteView } from '@/components/notes/NoteNavigation.vue'
@@ -24,10 +25,10 @@ import {
   approveSubmission, archiveKnowledge, copyKnowledge, copyNote, copySharedNote, deleteAttachment, deleteFolder, deleteKnowledgeCategory, deleteNote,
   fetchAttachments, fetchFolders, fetchKnowledge, fetchKnowledgeCategories, fetchKnowledgeVersions,
   deleteNoteTemplate, fetchMySubmissions, fetchNoteShares, fetchNotes, fetchNoteTemplates, fetchRelatedKnowledge,
-  fetchReviewSubmissions, fetchSharedNotes, fetchTeamMembers, postFolder, postKnowledge, postNote,
+  fetchReviewSubmissions, fetchSharedNotes, fetchTeamMembers, importMarkdownNote, postFolder, postKnowledge, postNote,
   postKnowledgeCategory,
   postNoteFromTemplate, postNoteTemplate, postNoteTemplateFromNote, putFolder, putKnowledge, putKnowledgeCategory, putNote, putNoteTemplate, rejectSubmission,
-  requestSubmissionRevision, resubmitSubmission, restoreKnowledge, submitNoteToKnowledge, syncNoteShares,
+  requestSubmissionRevision, resubmitSubmission, restoreKnowledge, submitNoteToKnowledge, syncNoteShares, ensureKnowledgeUpdateDraft,
   uploadAttachment, withdrawSubmission,
   type Attachment, type Folder, type KnowledgeCategory, type Note, type NoteShare,
   type NoteTemplate, type SharedNote, type SubmissionPayload, type SubmissionReviewPayload, type TeamMember, type TeamNote,
@@ -50,9 +51,11 @@ const folders = ref<Folder[]>([])
 const notes = ref<Note[]>([])
 const sharedNotes = ref<SharedNote[]>([])
 const knowledge = ref<TeamNote[]>([])
+const archivedKnowledge = ref<TeamNote[]>([])
 const categories = ref<KnowledgeCategory[]>([])
 const members = ref<TeamMember[]>([])
 const submissions = ref<TeamNoteSubmission[]>([])
+const mySubmissions = ref<TeamNoteSubmission[]>([])
 const relatedKnowledge = ref<TeamNote[]>([])
 const versions = ref<TeamNoteVersion[]>([])
 const selectedFolderId = ref<string | null>(null)
@@ -64,6 +67,7 @@ const selectedSubmission = ref<TeamNoteSubmission | null>(null)
 const attachments = ref<Attachment[]>([])
 const shares = ref<NoteShare[]>([])
 const search = ref('')
+const knowledgeStatusFilter = ref<'published' | 'archived'>('published')
 const pageError = ref<string | null>(null)
 const busy = ref(false)
 const validViews: NoteView[] = ['recent', 'all', 'favorites', 'shared', 'knowledge', 'submissions', 'review']
@@ -76,6 +80,7 @@ const currentView = computed<NoteView>(() => {
 })
 const onboarding = computed(() => route.query.onboarding === '1')
 const personalView = computed(() => ['recent', 'all', 'favorites'].includes(currentView.value))
+const visibleKnowledge = computed(() => knowledgeStatusFilter.value === 'archived' ? archivedKnowledge.value : knowledge.value)
 const visibleSharedNotes = computed(() => {
   const query = search.value.trim().toLocaleLowerCase()
   if (!query) return sharedNotes.value
@@ -85,6 +90,34 @@ const visibleSharedNotes = computed(() => {
 const selectedPublishedKnowledge = computed(() => selectedNote.value
   ? knowledge.value.find((item) => item.sourceNoteId === selectedNote.value?.id && item.status === 'PUBLISHED') ?? null
   : null)
+const selectedUpdateSubmission = computed(() => selectedNote.value
+  ? mySubmissions.value.find((item) => (
+    item.sourceNoteId === selectedNote.value?.id
+    && item.submissionType === 'UPDATE'
+    && (item.status === 'PENDING' || item.status === 'NEEDS_REVISION')
+  )) ?? null
+  : null)
+const selectedKnowledgeForNote = computed(() => {
+  const targetId = selectedNote.value?.isKnowledgeUpdateDraft
+    ? selectedNote.value.copiedFromTeamNoteId
+    : selectedUpdateSubmission.value?.targetTeamNoteId
+  return targetId
+    ? knowledge.value.find((item) => item.id === targetId) ?? null
+    : selectedPublishedKnowledge.value
+})
+const selectedKnowledgeState = computed<'none' | 'published' | 'update-draft' | 'update-pending' | 'update-needs-revision'>(() => {
+  if (selectedUpdateSubmission.value?.status === 'PENDING') return 'update-pending'
+  if (selectedUpdateSubmission.value?.status === 'NEEDS_REVISION') return 'update-needs-revision'
+  if (selectedNote.value?.isKnowledgeUpdateDraft) return 'update-draft'
+  if (selectedPublishedKnowledge.value) return 'published'
+  return 'none'
+})
+const selectedKnowledgeUpdateState = computed<'none' | 'draft' | 'pending' | 'needs-revision'>(() => {
+  if (selectedKnowledge.value?.myUpdateSubmissionStatus === 'PENDING') return 'pending'
+  if (selectedKnowledge.value?.myUpdateSubmissionStatus === 'NEEDS_REVISION') return 'needs-revision'
+  if (selectedKnowledge.value?.myUpdateDraftNoteId) return 'draft'
+  return 'none'
+})
 
 const templateDialogOpen = ref(false)
 const templateManagerOpen = ref(false)
@@ -94,10 +127,14 @@ const templates = ref<NoteTemplate[]>([])
 const templateEditorTarget = ref<NoteTemplate | null>(null)
 const templateDeleteTarget = ref<NoteTemplate | null>(null)
 const templateSaving = ref(false)
+const markdownImportOpen = ref(false)
+const markdownImportSaving = ref(false)
+const markdownImportError = ref<string | null>(null)
 const shareDialogOpen = ref(false)
 const publishDialogOpen = ref(false)
 const publishType = ref<'CREATE' | 'UPDATE'>('CREATE')
 const publishTargetId = ref<string | null>(null)
+const publishTargetLocked = ref(false)
 const versionsOpen = ref(false)
 useDialogEscape(() => versionsOpen.value, () => { versionsOpen.value = false })
 const categoryDialogOpen = ref(false)
@@ -116,6 +153,8 @@ const confirmDialogKind = ref<'note' | 'attachment' | 'category' | 'template' | 
 const confirmDialogNote = ref<Note | null>(null)
 const confirmDialogAttachment = ref<Attachment | null>(null)
 const confirmDialogCategory = ref<KnowledgeCategory | null>(null)
+const archiveConfirmOpen = ref(false)
+const archiveConfirmTarget = ref<TeamNote | null>(null)
 let searchTimer: number | undefined
 
 function notify(message: string) { pageError.value = message }
@@ -140,12 +179,15 @@ async function loadPersonal() {
 
 async function loadCollaboration() {
   if (!hasTeam.value) return
-  const [loadedKnowledge, loadedCategories] = await Promise.all([
-    fetchKnowledge({ q: currentView.value === 'knowledge' ? search.value.trim() || undefined : undefined, categoryId: selectedCategoryId.value ?? undefined, teamId: selectedTeamId.value }),
+  const [loadedKnowledge, loadedCategories, loadedMySubmissions] = await Promise.all([
+    fetchKnowledge({ q: currentView.value === 'knowledge' ? search.value.trim() || undefined : undefined, categoryId: selectedCategoryId.value ?? undefined, includeArchived: canReview.value ? true : undefined, teamId: selectedTeamId.value }),
     fetchKnowledgeCategories(selectedTeamId.value),
+    fetchMySubmissions(selectedTeamId.value),
   ])
-  knowledge.value = loadedKnowledge
+  knowledge.value = loadedKnowledge.filter((item) => item.status === 'PUBLISHED')
+  archivedKnowledge.value = loadedKnowledge.filter((item) => item.status === 'ARCHIVED')
   categories.value = loadedCategories
+  mySubmissions.value = loadedMySubmissions
   if (currentTeam.value) members.value = await fetchTeamMembers(currentTeam.value.id)
 }
 
@@ -159,7 +201,7 @@ async function loadView() {
     } else if (currentView.value === 'knowledge') {
       await loadCollaboration()
       const requested = typeof route.query.knowledge === 'string' ? route.query.knowledge : selectedKnowledge.value?.id
-      selectedKnowledge.value = knowledge.value.find((item) => item.id === requested) ?? knowledge.value[0] ?? null
+      selectedKnowledge.value = visibleKnowledge.value.find((item) => item.id === requested) ?? visibleKnowledge.value[0] ?? null
     } else {
       if (!hasTeam.value || !selectedTeamId.value) {
         submissions.value = []
@@ -199,7 +241,24 @@ async function selectSubmission(item: TeamNoteSubmission) {
 }
 
 async function createBlankNote() { const note = await postNote({ folderId: selectedFolderId.value }); await loadPersonal(); await selectPersonal(note) }
-async function saveNote(payload: { noteId: string; title: string; folderId: string | null; contentJson: Record<string, unknown>; plainText: string }) {
+function openMarkdownImport() { markdownImportError.value = null; markdownImportOpen.value = true }
+async function importMarkdown(payload: { file: File; title: string; folderId: string | null }) {
+  markdownImportSaving.value = true
+  markdownImportError.value = null
+  try {
+    const note = await importMarkdownNote(payload.file, payload.folderId, payload.title)
+    markdownImportOpen.value = false
+    selectedFolderId.value = note.folderId
+    search.value = ''
+    if (currentView.value !== 'all') await router.push({ path: '/notes', query: { view: 'all' } })
+    await loadPersonal()
+    await selectPersonal(note)
+    notify('Markdown 已导入为新笔记。')
+  } catch (cause: any) {
+    markdownImportError.value = cause?.response?.data?.detail ?? 'Markdown 导入失败。'
+  } finally { markdownImportSaving.value = false }
+}
+async function saveNote(payload: { noteId: string; title: string; folderId: string | null; contentJson?: Record<string, unknown>; plainText?: string }) {
   const { noteId, ...changes } = payload
   const updated = await putNote(noteId, changes)
   selectedNote.value = updated
@@ -271,14 +330,22 @@ async function saveShares(userIds: string[]) {
 }
 
 function openPublish(type?: 'CREATE' | 'UPDATE', targetId?: string | null) {
-  publishType.value = type ?? (selectedPublishedKnowledge.value ? 'UPDATE' : 'CREATE')
-  publishTargetId.value = targetId ?? selectedPublishedKnowledge.value?.id ?? null
+  const linkedTargetId = selectedKnowledgeForNote.value?.id ?? null
+  const resolvedTargetId = targetId ?? linkedTargetId
+  publishType.value = type ?? (resolvedTargetId ? 'UPDATE' : 'CREATE')
+  publishTargetId.value = resolvedTargetId
+  publishTargetLocked.value = Boolean(resolvedTargetId)
   publishDialogOpen.value = true
 }
 async function publish(payload: SubmissionPayload) {
   if (!selectedNote.value) return
   busy.value = true
-  try { await submitNoteToKnowledge(selectedNote.value.id, payload, selectedTeamId.value); publishDialogOpen.value = false; notify('已生成审核快照，可在“我的投稿”查看进度。') }
+  try {
+    await submitNoteToKnowledge(selectedNote.value.id, payload, selectedTeamId.value)
+    await loadCollaboration()
+    publishDialogOpen.value = false
+    notify('已生成审核快照，可在“我的投稿”查看进度。')
+  }
   catch (cause: any) { fail(cause, '提交审核失败。') }
   finally { busy.value = false }
 }
@@ -301,10 +368,28 @@ function exportPersonal(note: Note) {
   anchor.click()
   URL.revokeObjectURL(url)
 }
-async function requestKnowledgeUpdate(note: TeamNote) { const copied = await copyKnowledge(note.id, selectedTeamId.value); await activateView('all'); await loadPersonal(); await selectPersonal(copied); openPublish('UPDATE', note.id) }
+async function requestKnowledgeUpdate(note: TeamNote) {
+  busy.value = true
+  try {
+    const draft = await ensureKnowledgeUpdateDraft(note.id, selectedTeamId.value)
+    await activateView('all')
+    await loadPersonal()
+    await selectPersonal(draft)
+    await loadCollaboration()
+    if (note.myUpdateSubmissionStatus === 'PENDING') notify('这篇知识已有待审核更新，已打开对应笔记。')
+    else if (note.myUpdateSubmissionStatus === 'NEEDS_REVISION') notify('这篇知识的更新需要修改，已打开对应笔记。')
+    else notify('已打开更新草稿，修改完成后请提交更新申请。')
+  } catch (cause: any) { fail(cause, '更新草稿创建失败。') }
+  finally { busy.value = false }
+}
 
 async function createKnowledge(title: string) { const item = await postKnowledge({ title }, selectedTeamId.value); knowledgeCreateDialogOpen.value = false; await loadView(); selectedKnowledge.value = item }
 async function openKnowledge(note: TeamNote) { await router.push({ path: '/notes', query: { view: 'knowledge', knowledge: note.id } }); await loadView() }
+function selectKnowledgeStatus(value: 'published' | 'archived') {
+  knowledgeStatusFilter.value = value
+  const requested = typeof route.query.knowledge === 'string' ? route.query.knowledge : null
+  selectedKnowledge.value = visibleKnowledge.value.find((item) => item.id === requested) ?? visibleKnowledge.value[0] ?? null
+}
 function openCreateCategory() { categoryDialogMode.value = 'create'; categoryDialogTarget.value = null; categoryDialogName.value = ''; categoryDialogOpen.value = true }
 function openRenameCategory(category: KnowledgeCategory) { categoryDialogMode.value = 'rename'; categoryDialogTarget.value = category; categoryDialogName.value = category.name; categoryDialogOpen.value = true }
 async function saveCategory(name: string) {
@@ -314,7 +399,26 @@ async function saveCategory(name: string) {
   categories.value = await fetchKnowledgeCategories(selectedTeamId.value)
 }
 async function saveKnowledge(note: TeamNote, payload: { title: string; contentJson: Record<string, unknown>; plainText: string; categoryId: string | null; tags: string[] }) { selectedKnowledge.value = await putKnowledge(note.id, payload, selectedTeamId.value); await loadCollaboration() }
-async function setArchived(note: TeamNote, archived: boolean) { selectedKnowledge.value = archived ? await archiveKnowledge(note.id, selectedTeamId.value) : await restoreKnowledge(note.id, selectedTeamId.value); await loadView() }
+async function setArchived(note: TeamNote, archived: boolean) {
+  busy.value = true
+  try {
+    if (archived) await archiveKnowledge(note.id, selectedTeamId.value)
+    else await restoreKnowledge(note.id, selectedTeamId.value)
+    knowledgeStatusFilter.value = archived ? 'archived' : 'published'
+    await loadView()
+  } catch (cause: any) { fail(cause, archived ? '归档知识失败。' : '恢复知识失败。') }
+  finally { busy.value = false }
+}
+function requestArchiveKnowledge(note: TeamNote) {
+  archiveConfirmTarget.value = note
+  archiveConfirmOpen.value = true
+}
+async function confirmArchiveKnowledge() {
+  const target = archiveConfirmTarget.value
+  archiveConfirmOpen.value = false
+  archiveConfirmTarget.value = null
+  if (target) await setArchived(target, true)
+}
 async function showVersions(note: TeamNote) { versions.value = await fetchKnowledgeVersions(note.id, selectedTeamId.value); versionsOpen.value = true }
 
 async function withdraw(item: TeamNoteSubmission) { await withdrawSubmission(item.id); await loadView() }
@@ -440,14 +544,15 @@ onMounted(async () => {
     <div class="notes-workspace card">
       <NoteNavigation :view="currentView" :folders="folders" :selected-folder-id="selectedFolderId" :has-team="hasTeam" :can-review="canReview" :categories="categories" :selected-category-id="selectedCategoryId" @view="activateView" @folder="selectFolder" @category="selectCategory" @create-category="openCreateCategory" @rename-category="openRenameCategory" @remove-category="requestDeleteCategory" @create-folder="createFolder" @rename-folder="renameFolder" @remove-folder="removeFolder" />
       <template v-if="personalView">
-        <NoteList :notes="notes" :selected-id="selectedNote?.id ?? null" :search="search" @select="selectPersonal" @create="createBlankNote" @templates="openTemplates" @search="updateSearch" @remove="requestDeleteNote" />
+        <NoteList :notes="notes" :selected-id="selectedNote?.id ?? null" :search="search" @select="selectPersonal" @create="createBlankNote" @templates="openTemplates" @import="openMarkdownImport" @search="updateSearch" @remove="requestDeleteNote" />
         <NoteEditor
           :note="selectedNote"
           :folders="folders"
           :attachments="attachments"
           :upload-file="handleUpload"
           :collaboration="hasTeam"
-          :knowledge-state="selectedPublishedKnowledge ? 'published' : 'none'"
+          :knowledge-state="selectedKnowledgeState"
+          :knowledge-target-title="selectedKnowledgeForNote?.title ?? null"
           :task-members="members"
           :current-user-id="auth.user?.id"
           :can-assign-tasks="canReview"
@@ -469,22 +574,24 @@ onMounted(async () => {
         <SharedNoteDetail :note="selectedShared" :copying="busy" @copy="copyShared" />
       </template>
       <template v-else-if="currentView === 'knowledge'">
-        <CollaborativeNoteList title="团队知识库" :items="knowledge" :selected-id="selectedKnowledge?.id ?? null" :search="search" :can-create="canReview" @select="selectedKnowledge = $event as TeamNote" @search="updateSearch" @create="knowledgeCreateDialogOpen = true" />
-        <KnowledgeDetail :note="selectedKnowledge" :categories="categories" :saving="busy" @save="saveKnowledge" @copy="copyTeamKnowledge" @archive="setArchived($event, true)" @restore="setArchived($event, false)" @update-request="requestKnowledgeUpdate" @versions="showVersions" />
+        <CollaborativeNoteList title="团队知识库" :items="visibleKnowledge" :selected-id="selectedKnowledge?.id ?? null" :search="search" :can-create="canReview" :can-manage-archived="canReview" :status-filter="knowledgeStatusFilter" @select="selectedKnowledge = $event as TeamNote" @search="updateSearch" @create="knowledgeCreateDialogOpen = true" @status-filter="selectKnowledgeStatus" />
+        <KnowledgeDetail :note="selectedKnowledge" :categories="categories" :saving="busy" :update-state="selectedKnowledgeUpdateState" @save="saveKnowledge" @copy="copyTeamKnowledge" @archive="requestArchiveKnowledge" @restore="setArchived($event, false)" @update-request="requestKnowledgeUpdate" @versions="showVersions" />
       </template>
-      <SubmissionWorkspace v-else :mode="currentView === 'review' ? 'review' : 'mine'" :submissions="submissions" :selected="selectedSubmission" :related="relatedKnowledge" :categories="categories" :busy="busy" @select="selectSubmission" @withdraw="withdraw" @resubmit="resubmit" @open-source="openSource" @open-knowledge="openKnowledge" @approve="approve" @revision="revision" @reject="reject" />
+      <SubmissionWorkspace v-else :mode="currentView === 'review' ? 'review' : 'mine'" :submissions="submissions" :selected="selectedSubmission" :related="relatedKnowledge" :knowledge="knowledge" :categories="categories" :busy="busy" @select="selectSubmission" @withdraw="withdraw" @resubmit="resubmit" @open-source="openSource" @open-knowledge="openKnowledge" @approve="approve" @revision="revision" @reject="reject" />
     </div>
 
     <ShareNotePopover :open="shareDialogOpen" :members="members" :model-value="shares.map((item) => item.sharedWithUserId)" :current-user-id="auth.user?.id ?? ''" :saving="busy" @close="shareDialogOpen = false" @save="saveShares" />
-    <PublishToKnowledgeDialog :open="publishDialogOpen" :note="selectedNote" :categories="categories" :knowledge="knowledge" :default-type="publishType" :default-target-id="publishTargetId" :saving="busy" @close="publishDialogOpen = false" @submit="publish" />
+    <PublishToKnowledgeDialog :open="publishDialogOpen" :note="selectedNote" :categories="categories" :knowledge="knowledge" :default-type="publishType" :default-target-id="publishTargetId" :target-locked="publishTargetLocked" :saving="busy" @close="publishDialogOpen = false" @submit="publish" />
     <NoteTemplateDialog :open="templateDialogOpen" :templates="templates" @close="templateDialogOpen = false" @select="createFromTemplate" @create="openNewTemplate" @manage="openTemplateManager" @edit="openEditTemplate" @delete="requestDeleteTemplate" />
     <NoteTemplateManagerDialog :open="templateManagerOpen" :templates="templates" @close="templateManagerOpen = false" @edit="openEditTemplate" @delete="requestDeleteTemplate" @move="moveTemplate" />
     <NoteTemplateEditorDialog :open="templateEditorOpen" :template="templateEditorTarget" :saving="templateSaving" @close="templateEditorOpen = false" @save="saveTemplate" @delete="templateEditorTarget && requestDeleteTemplate(templateEditorTarget)" />
     <NoteTemplateSaveDialog :open="templateSaveDialogOpen" :saving="templateSaving" @close="templateSaveDialogOpen = false" @save="saveNoteAsTemplate" />
+    <MarkdownImportDialog :open="markdownImportOpen" :folders="folders" :initial-folder-id="selectedFolderId" :saving="markdownImportSaving" :error="markdownImportError" @close="markdownImportOpen = false" @clear-error="markdownImportError = null" @submit="importMarkdown" />
     <FolderDialog :open="folderDialogOpen" :mode="folderDialogMode" :initial-name="folderDialogName" :parent-name="folderDialogParentName" @close="folderDialogOpen = false" @submit="submitFolder" @confirm="confirmRemoveFolder" />
     <InputDialog :open="categoryDialogOpen" :title="categoryDialogMode === 'create' ? '新建知识分类' : '重命名知识分类'" label="分类名称" placeholder="例如：技术、流程、规范" :initial-value="categoryDialogName" :confirm-label="categoryDialogMode === 'create' ? '创建' : '保存'" @close="categoryDialogOpen = false" @submit="saveCategory" />
     <InputDialog :open="knowledgeCreateDialogOpen" title="新建团队知识" label="知识标题" placeholder="输入清晰、可检索的标题" confirm-label="创建并编辑" @close="knowledgeCreateDialogOpen = false" @submit="createKnowledge" />
+    <ConfirmDialog :open="archiveConfirmOpen" title="归档团队知识" :message="archiveConfirmTarget ? `确认归档“${archiveConfirmTarget.title}”吗？归档后团队成员将无法在知识库中查看，正文、附件和版本历史都会保留，可在“已归档”中恢复。` : ''" confirm-label="归档" :danger="true" @close="archiveConfirmOpen = false" @confirm="confirmArchiveKnowledge" />
     <ConfirmDialog :open="confirmDialogOpen" title="确认删除" :message="confirmDialogKind === 'template' ? '删除模板不会删除已经通过该模板创建的笔记。' : confirmDialogKind === 'category' ? '删除分类后，分类下的知识会保留并变为未分类。' : '删除后无法继续通过分享访问，已发布团队知识不受影响。'" :danger="true" confirm-label="删除" @close="confirmDialogOpen = false" @confirm="confirmDelete" />
-    <Teleport to="body"><div v-if="versionsOpen" class="dialog-backdrop" @mousedown.self="versionsOpen = false"><section class="note-collab-dialog version-dialog" role="dialog" aria-modal="true" aria-labelledby="version-dialog-title"><header><div><span class="eyebrow">HISTORY</span><h2 id="version-dialog-title">知识版本</h2></div><button type="button" aria-label="关闭知识版本" @click="versionsOpen = false"><IconX :size="18" /></button></header><div class="version-list"><article v-for="item in versions" :key="item.id"><strong>V{{ item.versionNo }} · {{ item.changeType }}</strong><span>{{ new Date(item.createdAt).toLocaleString('zh-CN') }}</span><p>{{ item.plainText || '空白内容' }}</p></article></div></section></div></Teleport>
+    <Teleport to="body"><div v-if="versionsOpen" class="dialog-backdrop" @mousedown.self="versionsOpen = false"><section class="note-collab-dialog version-dialog" role="dialog" aria-modal="true" aria-labelledby="version-dialog-title"><header><div><span class="eyebrow">HISTORY</span><h2 id="version-dialog-title">知识版本</h2></div><button type="button" aria-label="关闭知识版本" @click="versionsOpen = false"><IconX :size="18" /></button></header><div class="version-list"><article v-for="item in versions" :key="item.id"><strong>V{{ item.versionNo }} · {{ item.changeType }}</strong><span>{{ new Date(item.createdAt).toLocaleString('zh-CN') }}</span></article></div></section></div></Teleport>
   </div>
 </template>

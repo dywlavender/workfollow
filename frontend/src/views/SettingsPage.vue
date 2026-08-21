@@ -13,8 +13,11 @@ import {
 
 import {
   appearanceModes,
+  appearanceBackgrounds,
   appearancePalettes,
+  getAppearanceBackground,
   getAppearancePalette,
+  type AppearanceBackground,
   type AppearanceMode,
   type AppearancePalette,
 } from '@/modules/theme'
@@ -25,6 +28,7 @@ const appStore = useAppStore()
 const authStore = useAuthStore()
 const router = useRouter()
 const selectedPalette = computed(() => getAppearancePalette(appStore.appearancePalette))
+const selectedBackground = computed(() => getAppearanceBackground(appStore.appearanceBackground))
 const modeIcons = { system: IconDeviceDesktop, light: IconSun, dark: IconMoon }
 
 function selectPalette(palette: AppearancePalette) {
@@ -33,6 +37,17 @@ function selectPalette(palette: AppearancePalette) {
 
 function selectMode(mode: AppearanceMode) {
   appStore.setAppearanceMode(mode)
+}
+
+function selectBackground(background: AppearanceBackground) {
+  appStore.setAppearanceBackground(background)
+}
+
+function backgroundSwatch(background: AppearanceBackground) {
+  if (background === 'theme') {
+    return `linear-gradient(145deg, ${selectedPalette.value.light.rail}, ${selectedPalette.value.light.detail})`
+  }
+  return getAppearanceBackground(background).swatch
 }
 
 async function signOut() {
@@ -70,9 +85,9 @@ async function signOut() {
             <div>
               <span class="section-label">APPEARANCE</span>
               <h2 id="appearance-title">外观</h2>
-              <p>明暗模式与配色相互独立，现有配色均可继续扩展。</p>
+              <p>主色负责交互状态，背景基调负责区域层次，也可以让背景跟随主题配色。</p>
             </div>
-            <span class="settings-current-theme">当前：{{ selectedPalette.label }}</span>
+            <span class="settings-current-theme">当前：{{ selectedPalette.label }} · {{ selectedBackground.label }}</span>
           </header>
 
           <div class="appearance-section">
@@ -116,12 +131,37 @@ async function signOut() {
             </button>
             </div>
           </div>
+
+          <div class="appearance-section">
+            <h3>背景基调</h3>
+            <div class="appearance-background-grid" role="radiogroup" aria-label="背景基调">
+              <button
+                v-for="background in appearanceBackgrounds"
+                :key="background.id"
+                class="appearance-background-option"
+                :class="{ selected: appStore.appearanceBackground === background.id }"
+                type="button"
+                role="radio"
+                :aria-checked="appStore.appearanceBackground === background.id"
+                :aria-label="`${background.label}背景`"
+                @click="selectBackground(background.id)"
+              >
+                <span class="appearance-background-swatch" :style="{ background: backgroundSwatch(background.id) }">
+                  <IconCheck v-if="appStore.appearanceBackground === background.id" :size="19" :stroke-width="2.8" />
+                </span>
+                <span>
+                  <strong>{{ background.label }}</strong>
+                  <small>{{ background.description }}</small>
+                </span>
+              </button>
+            </div>
+          </div>
         </section>
 
         <section class="settings-info-row">
           <div>
-            <strong>主题颜色会自动保存</strong>
-            <p>下次打开 WorkFollow 时会继续使用当前主题。</p>
+            <strong>外观设置会自动保存</strong>
+            <p>主色、背景基调和明暗模式会在下次打开 WorkFollow 时继续保留。</p>
           </div>
           <span class="settings-saved-badge"><IconCheck :size="14" />已应用</span>
         </section>

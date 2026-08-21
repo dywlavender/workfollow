@@ -12,19 +12,61 @@ import TaskList from '@tiptap/extension-task-list'
 import TextStyle from '@tiptap/extension-text-style'
 import Underline from '@tiptap/extension-underline'
 import StarterKit from '@tiptap/starter-kit'
+import { VueNodeViewRenderer } from '@tiptap/vue-3'
+import ResizableImageNode from '@/components/editor/ResizableImageNode.vue'
+import { normalizeFontSize } from '@/modules/editor/fontSizing'
 import { TaskLinkMark, TaskReferenceNode, WorkFollowBlockId } from '@/modules/editor/taskRelations'
+import { normalizeImageWidth } from '@/modules/editor/imageSizing'
+import { TABLE_MIN_COLUMN_WIDTH } from '@/modules/editor/tableSizing'
 
 // Keep the shared color mark compatible with the installed Tiptap 2.27
 // package, which exposes TextStyle but not the newer Color helper.
 export const WorkFollowTextStyle = TextStyle.extend({
   addAttributes() {
     return {
+      ...this.parent?.(),
       color: {
         default: null,
         parseHTML: (element: HTMLElement) => element.style.color || null,
         renderHTML: (attributes: { color?: string | null }) => attributes.color ? { style: `color: ${attributes.color}` } : {},
       },
+      fontSize: {
+        default: null,
+        parseHTML: (element: HTMLElement) => normalizeFontSize(element.style.fontSize),
+        renderHTML: (attributes: { fontSize?: string | null }) => {
+          const fontSize = normalizeFontSize(attributes.fontSize)
+          return fontSize ? { style: `font-size: ${fontSize}` } : {}
+        },
+      },
     }
+  },
+})
+
+/** Keep the binary identity beside an image so attachment lifecycle cleanup
+ * does not have to infer ownership from a display URL alone. */
+export const WorkFollowImage = Image.extend({
+  addAttributes() {
+    return {
+      ...this.parent?.(),
+      attachmentId: {
+        default: null,
+        parseHTML: (element: HTMLElement) => element.getAttribute('data-attachment-id'),
+        renderHTML: (attributes: { attachmentId?: string | null }) => attributes.attachmentId
+          ? { 'data-attachment-id': attributes.attachmentId }
+          : {},
+      },
+      width: {
+        default: null,
+        parseHTML: (element: HTMLElement) => normalizeImageWidth(element.getAttribute('data-image-width')),
+        renderHTML: (attributes: { width?: number | null }) => {
+          const width = normalizeImageWidth(attributes.width)
+          return width === null ? {} : { 'data-image-width': String(width), style: `width: ${width}%` }
+        },
+      },
+    }
+  },
+  addNodeView() {
+    return VueNodeViewRenderer(ResizableImageNode)
   },
 })
 
@@ -64,11 +106,11 @@ export function createWorkFollowEditorExtensions(placeholder: string): Extension
     WorkFollowTextStyle,
     Highlight.configure({ multicolor: true }),
     Link.configure({ openOnClick: false }),
-    Image.configure({ inline: false }),
+    WorkFollowImage.configure({ inline: false }),
     Placeholder.configure({ placeholder }),
     TaskList,
     TaskItem.configure({ nested: true }),
-    Table.configure({ resizable: true }),
+    Table.configure({ resizable: true, cellMinWidth: TABLE_MIN_COLUMN_WIDTH }),
     TableRow,
     TableHeader,
     TableCell,

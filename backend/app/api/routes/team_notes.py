@@ -7,7 +7,6 @@ from sqlalchemy import select
 
 from app.core.dependencies import CurrentSettings, CurrentUser, DbSession
 from app.models.auth import User, UserStatus
-from app.models.note import Attachment
 from app.models.notification import NotificationType
 from app.models.team import TeamMember, TeamMemberRole, TeamMemberStatus
 from app.models.team_note import TeamNoteStatus, TeamNoteSubmission, TeamNoteSubmissionStatus
@@ -64,13 +63,24 @@ def _note_read(db, note, user_id: str, attachments_by_id=None) -> TeamNoteRead: 
         if attachments_by_id is not None else team_note_service.attachment_reads(db, list(note.attachment_ids or []))
     )
     editable = note_permission_service.can_edit_team_note(db, note, user_id)
+    version_no, _snapshot_hash = team_note_service.team_note_version_info(db, note)
+    update_state = team_note_service.update_state_for_team_note(db, note, user_id)
     return TeamNoteRead.model_validate(note).model_copy(update={
         "attachments": attachments,
+        "version_no": version_no,
+        **update_state,
         "permissions": TeamNotePermissions(
             can_edit=editable,
             can_copy=True,
             can_archive=editable,
         ),
+    })
+
+
+def _submission_read(db, submission) -> TeamNoteSubmissionRead:  # noqa: ANN001
+    attachments = team_note_service.attachment_reads(db, list(submission.snapshot_attachment_ids or []))
+    return TeamNoteSubmissionRead.model_validate(submission).model_copy(update={
+        "snapshot_attachments": attachments,
     })
 
 
@@ -86,7 +96,7 @@ def _submit(db, team_id: str, user_id: str, payload: TeamNoteSubmissionCreate) -
         }),
     )
     _notify_submission_reviewers(db, submission, user_id)
-    return submission
+    return _submission_read(db, submission)
 
 
 def _notify_submission_reviewers(db, submission, applicant_id: str) -> None:  # noqa: ANN001
@@ -278,22 +288,20 @@ def copy_knowledge(
 ) -> NoteRead:
     context = _current_team(db, user.id, team_id)
     source = team_note_service.get_team_note_or_404(db, context.team_id, note_id, include_archived=False)
-    attachment_ids = list(source.attachment_ids or [])
-    attachments_by_id = {
-        item.id: item for item in db.scalars(select(Attachment).where(Attachment.id.in_(attachment_ids)))
-    } if attachment_ids else {}
-    if len(attachments_by_id) != len(set(attachment_ids)):
-        raise HTTPException(status_code=409, detail="知识附件记录不完整，无法复制")
-    return note_service.copy_note_with_attachments(
-        db,
-        title=source.title,
-        content_json=source.content_json,
-        plain_text=source.plain_text,
-        source_attachments=[attachments_by_id[item] for item in attachment_ids if item in attachments_by_id],
-        owner_id=user.id,
-        settings=settings,
-        copied_from_team_note_id=source.id,
-    )
+    return team_note_service.copy_team_note_to_personal(db, source, user.id, settings)
+
+
+@router.post("/team/knowledge/{note_id}/update-draft", response_model=NoteRead)
+def update_knowledge_draft(
+    note_id: str,
+    db: DbSession,
+    settings: CurrentSettings,
+    user: CurrentUser,
+    team_id: str | None = Query(default=None, alias="teamId"),
+) -> NoteRead:
+    context = _current_team(db, user.id, team_id)
+    source = team_note_service.get_team_note_or_404(db, context.team_id, note_id, include_archived=False)
+    return team_note_service.get_or_create_update_draft(db, source, user.id, settings)
 
 
 @router.post("/notes/{note_id}/submissions", response_model=TeamNoteSubmissionRead, status_code=status.HTTP_201_CREATED)
@@ -322,7 +330,7 @@ def mine_submissions(
     team_id: str | None = Query(default=None, alias="teamId"),
 ) -> list[TeamNoteSubmissionRead]:
     context = _current_team(db, user.id, team_id)
-    return team_note_service.list_submissions(db, context.team_id, user.id)
+    return [_submission_read(db, item) for item in team_note_service.list_submissions(db, context.team_id, user.id)]
 
 
 @router.get("/note-submissions/review", response_model=list[TeamNoteSubmissionRead])
@@ -333,9 +341,11 @@ def review_submissions(
 ) -> list[TeamNoteSubmissionRead]:
     context = _current_team(db, user.id, team_id)
     team_service.require_role(db, context.team_id, user.id, TeamMemberRole.OWNER, TeamMemberRole.ADMIN)
-    return team_note_service.list_submissions(db, context.team_id, statuses=[
-        TeamNoteSubmissionStatus.PENDING, TeamNoteSubmissionStatus.NEEDS_REVISION
-    ])
+    return [_submission_read(db, item) for item in team_note_service.list_submissions(
+        db, context.team_id, statuses=[
+            TeamNoteSubmissionStatus.PENDING, TeamNoteSubmissionStatus.NEEDS_REVISION
+        ]
+    )]
 
 
 def _submission_for_user(db, submission_id: str, user_id: str):  # noqa: ANN001
@@ -351,7 +361,7 @@ def _submission_for_user(db, submission_id: str, user_id: str):  # noqa: ANN001
 @router.post("/note-submissions/{submission_id}/withdraw", response_model=TeamNoteSubmissionRead)
 def withdraw(submission_id: str, db: DbSession, user: CurrentUser) -> TeamNoteSubmissionRead:
     _member, submission = _submission_for_user(db, submission_id, user.id)
-    return team_note_service.withdraw_submission(db, submission, user.id)
+    return _submission_read(db, team_note_service.withdraw_submission(db, submission, user.id))
 
 
 @router.post("/note-submissions/{submission_id}/resubmit", response_model=TeamNoteSubmissionRead)
@@ -366,7 +376,7 @@ def resubmit(submission_id: str, payload: NoteSubmissionRequest, db: DbSession, 
         message=payload.submission_message,
     ))
     _notify_submission_reviewers(db, resubmitted, user.id)
-    return resubmitted
+    return _submission_read(db, resubmitted)
 
 
 def _require_reviewer(db, submission_id: str, user_id: str):  # noqa: ANN001
@@ -398,7 +408,7 @@ def request_revision(
         "知识投稿需要修改", payload.reason or "请根据审核意见修改后重新提交。", actor_user_id=user.id,
         data_json={"teamId": revised.team_id, "submissionId": revised.id},
     )
-    return revised
+    return _submission_read(db, revised)
 
 
 @router.post("/note-submissions/{submission_id}/reject", response_model=TeamNoteSubmissionRead)
@@ -410,7 +420,7 @@ def reject(submission_id: str, payload: TeamNoteSubmissionReview, db: DbSession,
         "知识投稿已拒绝", payload.reason or "投稿未通过审核。", actor_user_id=user.id,
         data_json={"teamId": rejected.team_id, "submissionId": rejected.id},
     )
-    return rejected
+    return _submission_read(db, rejected)
 
 
 @router.get("/note-submissions/{submission_id}/related", response_model=list[TeamNoteRead])
@@ -476,7 +486,7 @@ def legacy_submit_note(
 def legacy_list_submissions(team_id: str, db: DbSession, user: CurrentUser) -> list[TeamNoteSubmissionRead]:
     member = team_service.require_team_access(db, team_id, user.id)
     applicant_id = None if member is None or member.role in (TeamMemberRole.OWNER, TeamMemberRole.ADMIN) else user.id
-    return team_note_service.list_submissions(db, team_id, applicant_id)
+    return [_submission_read(db, item) for item in team_note_service.list_submissions(db, team_id, applicant_id)]
 
 
 @router.post("/teams/{team_id}/note-submissions/{submission_id}/approve", response_model=TeamNoteRead, include_in_schema=False)
@@ -507,4 +517,4 @@ def legacy_reject(
         "知识投稿已拒绝", payload.reason or "投稿未通过审核。", actor_user_id=user.id,
         data_json={"teamId": team_id, "submissionId": rejected.id},
     )
-    return rejected
+    return _submission_read(db, rejected)
