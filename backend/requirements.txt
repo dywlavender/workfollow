@@ -6,3 +6,4 @@ pydantic-settings>=2.10,<3
 pwdlib[argon2]>=0.3,<1
 python-multipart>=0.0.20,<1
 markdown-it-py>=3.0,<4
+tzdata>=2024.1,<2027

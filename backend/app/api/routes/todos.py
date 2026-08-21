@@ -1,12 +1,12 @@
 from datetime import date
+import logging
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.orm import Session
 
 from app.core.dependencies import CurrentUser, DbSession
-from app.models.notification import NotificationType
-from app.models.todo import Todo, TodoStatus
+from app.models.todo import Todo, TodoAssignmentStatus, TodoStatus
 from app.schemas.resource_relation import TaskBriefPermissions, TaskBriefRead
 from app.schemas.todo import (
     ReminderAcknowledge,
@@ -20,11 +20,11 @@ from app.schemas.todo import (
     TodoTransfer,
     TodoUpdate,
 )
-from app.services import audit_service, resource_relation_service, todo_service
-from app.services.notification_service import notify_user
+from app.services import audit_service, resource_relation_service, task_notification_service, todo_service
 
 
 router = APIRouter(tags=["tasks"])
+logger = logging.getLogger(__name__)
 
 
 def todo_read(db: Session, todo, user_id: str, *, include_sources: bool = False) -> TodoRead:  # noqa: ANN001
@@ -45,19 +45,6 @@ def todo_read(db: Session, todo, user_id: str, *, include_sources: bool = False)
         "sources": resource_relation_service.task_sources_for_user(db, todo.id, user_id)
         if include_sources else [],
     })
-
-
-def notify_new_assignees(db: Session, todo, actor_id: str, user_ids: set[str]) -> None:  # noqa: ANN001
-    for user_id in user_ids - {actor_id}:
-        notify_user(
-            db,
-            user_id,
-            NotificationType.TEAM_TASK_ASSIGNED,
-            "你有新的指派任务",
-            f"“{todo.title}”已分配给你。",
-            actor_user_id=actor_id,
-            data_json={"teamId": todo.team_id, "taskId": todo.id},
-        )
 
 
 @router.get("", response_model=list[TodoRead])
@@ -124,8 +111,14 @@ def get_todo(todo_id: str, db: DbSession, user: CurrentUser) -> TodoRead:
 
 @router.post("", response_model=TodoRead, status_code=status.HTTP_201_CREATED)
 def post_todo(payload: TodoCreate, db: DbSession, user: CurrentUser) -> TodoRead:
-    todo = todo_service.create_todo(db, payload, user.id)
-    notify_new_assignees(db, todo, user.id, {item.user_id for item in todo.assignments if item.active})
+    logger.info(
+        "【任务接口入口】创建任务 actor=%s assignee_count=%s title=%s",
+        user.username,
+        len(payload.assignee_ids or [user.id]),
+        payload.title,
+    )
+    todo = todo_service.create_todo(db, payload, user.id, commit=False)
+    task_notification_service.notify_task_created(db, todo, user.id, commit=False)
     if todo.team_id:
         audit_service.record_audit(
             db,
@@ -136,6 +129,8 @@ def post_todo(payload: TodoCreate, db: DbSession, user: CurrentUser) -> TodoRead
             team_id=todo.team_id,
             metadata_json={"assigneeIds": [item.user_id for item in todo.assignments if item.active]},
         )
+    else:
+        db.commit()
     return todo_read(db, todo, user.id, include_sources=True)
 
 
@@ -147,7 +142,17 @@ def put_todo(todo_id: str, payload: TodoUpdate, db: DbSession, user: CurrentUser
 
 @router.post("/{todo_id}/complete", response_model=TodoCompleteResult)
 def complete_todo(todo_id: str, db: DbSession, user: CurrentUser) -> TodoCompleteResult:
-    todo, next_todo = todo_service.complete_todo(db, todo_service.get_todo_or_404(db, todo_id, user.id), user.id)
+    logger.info("【任务接口入口】完成任务 actor=%s task_id=%s", user.username, todo_id)
+    current = todo_service.get_todo_or_404(db, todo_id, user.id)
+    assignment = todo_service.active_assignment(current, user.id)
+    was_done = assignment is None or assignment.status == TodoAssignmentStatus.DONE
+    todo, next_todo = todo_service.complete_todo(db, current, user.id, commit=False)
+    if not was_done:
+        if todo.status == TodoStatus.DONE:
+            task_notification_service.notify_task_completed(db, todo, user.id, commit=False)
+        else:
+            task_notification_service.notify_task_assignment_completed(db, todo, user.id, commit=False)
+    db.commit()
     return TodoCompleteResult(
         todo=todo_read(db, todo, user.id),
         next_todo=todo_read(db, next_todo, user.id) if next_todo else None,
@@ -162,26 +167,58 @@ def restore_todo(todo_id: str, db: DbSession, user: CurrentUser) -> TodoRead:
 
 @router.put("/{todo_id}/my-status", response_model=TodoRead)
 def put_my_status(todo_id: str, payload: TodoMyStatusUpdate, db: DbSession, user: CurrentUser) -> TodoRead:
-    todo, _ = todo_service.update_my_status(
-        db, todo_service.get_todo_or_404(db, todo_id, user.id), user.id, payload.status
+    logger.info(
+        "【任务接口入口】更新任务状态 actor=%s task_id=%s status=%s",
+        user.username,
+        todo_id,
+        payload.status.value,
     )
+    current = todo_service.get_todo_or_404(db, todo_id, user.id)
+    assignment = todo_service.active_assignment(current, user.id)
+    was_done = assignment is None or assignment.status == TodoAssignmentStatus.DONE
+    todo, _ = todo_service.update_my_status(
+        db, current, user.id, payload.status, commit=False
+    )
+    if payload.status == TodoAssignmentStatus.DONE and not was_done:
+        if todo.status == TodoStatus.DONE:
+            task_notification_service.notify_task_completed(db, todo, user.id, commit=False)
+        else:
+            task_notification_service.notify_task_assignment_completed(db, todo, user.id, commit=False)
+    db.commit()
     return todo_read(db, todo, user.id)
 
 
 @router.put("/{todo_id}/assignees", response_model=TodoRead)
 def put_assignees(todo_id: str, payload: TodoAssigneesUpdate, db: DbSession, user: CurrentUser) -> TodoRead:
+    logger.info(
+        "【任务接口入口】修改任务成员 actor=%s task_id=%s assignee_count=%s",
+        user.username,
+        todo_id,
+        len(payload.assignee_ids),
+    )
     current = todo_service.get_todo_or_404(db, todo_id, user.id)
     previous = {item.user_id for item in current.assignments if item.active}
-    todo = todo_service.update_assignees(db, current, user.id, payload.assignee_ids)
-    notify_new_assignees(db, todo, user.id, set(payload.assignee_ids) - previous)
+    todo = todo_service.update_assignees(db, current, user.id, payload.assignee_ids, commit=False)
+    current_ids = {item.user_id for item in todo.assignments if item.active}
+    task_notification_service.notify_assignees_changed(
+        db, todo, user.id, previous, current_ids, commit=False
+    )
+    db.commit()
     return todo_read(db, todo, user.id)
 
 
 @router.post("/{todo_id}/abandon", response_model=TodoRead)
 def abandon_todo(todo_id: str, db: DbSession, user: CurrentUser) -> TodoRead:
+    logger.info("【任务接口入口】取消任务 actor=%s task_id=%s", user.username, todo_id)
     todo = todo_service.get_todo_or_404(db, todo_id, user.id)
     todo_service.require_creator(todo, user.id)
-    return todo_read(db, todo_service.abandon_todo(db, todo), user.id)
+    participant_ids = {item.user_id for item in todo.assignments if item.active}
+    cancelled = todo_service.abandon_todo(db, todo, commit=False)
+    task_notification_service.notify_task_cancelled(
+        db, cancelled, user.id, participant_ids, commit=False
+    )
+    db.commit()
+    return todo_read(db, cancelled, user.id)
 
 
 @router.post("/{todo_id}/reminded", response_model=TodoRead)
@@ -204,26 +241,24 @@ def delete_todo(todo_id: str, db: DbSession, user: CurrentUser) -> Response:
 @router.post("/{todo_id}/transfer", response_model=TodoRead)
 def transfer_todo(todo_id: str, payload: TodoTransfer, db: DbSession, user: CurrentUser) -> TodoRead:
     """Compatibility endpoint: assignment now updates the same Task row."""
+    logger.info(
+        "【任务接口入口】移交任务 actor=%s task_id=%s assignee_count=%s",
+        user.username,
+        todo_id,
+        len(payload.assignee_ids),
+    )
     todo = todo_service.get_todo_or_404(db, todo_id, user.id)
     if todo.status != TodoStatus.TODO:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="只有进行中的待办可以移交团队")
     assignee_ids = payload.assignee_ids or [user.id]
-    task = todo_service.update_assignees(db, todo, user.id, assignee_ids)
+    previous = {item.user_id for item in todo.assignments if item.active}
+    task = todo_service.update_assignees(db, todo, user.id, assignee_ids, commit=False)
     if task.team_id != payload.team_id:
         raise HTTPException(status_code=422, detail="指派成员必须属于指定团队")
-    for assignment in task.assignments:
-        if not assignment.active:
-            continue
-        if assignment.user_id != user.id:
-            notify_user(
-                db,
-                assignment.user_id,
-                NotificationType.TEAM_TASK_ASSIGNED,
-                "你有新的团队任务",
-                f"“{task.title}”已分配给你。",
-                actor_user_id=user.id,
-                data_json={"teamId": payload.team_id, "taskId": task.id, "assignmentId": assignment.id},
-            )
+    current_ids = {item.user_id for item in task.assignments if item.active}
+    task_notification_service.notify_assignees_changed(
+        db, task, user.id, previous, current_ids, commit=False
+    )
     audit_service.record_audit(
         db, actor_user_id=user.id, action="TASK_ASSIGNED", resource_type="TASK", resource_id=task.id,
         team_id=payload.team_id,

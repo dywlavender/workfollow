@@ -249,3 +249,23 @@ py -3.12 -m pip download -r deploy\requirements-offline.txt -d wheelhouse
 ## 十一、安全提示
 
 默认使用 HTTP 并监听 `0.0.0.0`，只适合可信内网。跨公网部署时，应增加 HTTPS 反向代理并限制防火墙来源。`data` 和 `backups` 可能包含敏感业务信息，应严格控制目录权限。
+
+## 十二、外部任务通知配置
+
+WorkFollow 可以将任务分配、取消分配、完成和每日待办汇总发送到外部 HTTP 通知接口。接口由后端调用，默认使用 GET，并为每个用户单独发送：
+
+```text
+GET {配置的URL}?userIds={系统用户名}&msg={消息内容}
+```
+
+在项目根目录的 `.env` 中配置：
+
+```text
+WORKFOLLOW_NOTIFICATION_HTTP_URL=https://通知服务地址/notify
+WORKFOLLOW_NOTIFICATION_HTTP_TIMEOUT_SECONDS=5
+WORKFOLLOW_NOTIFICATION_HTTP_RETRY_COUNT=3
+WORKFOLLOW_NOTIFICATION_TIMEZONE=Asia/Shanghai
+WORKFOLLOW_NOTIFICATION_DAILY_DIGEST_TIME=08:30
+```
+
+配置后重启 WorkFollow，后台发送器会自动处理待发送通知。任务保存不会因为外部接口暂时不可用而失败，失败通知会自动重试。

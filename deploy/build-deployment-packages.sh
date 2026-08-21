@@ -103,6 +103,7 @@ copy_app() {
     -C "$ROOT_DIR/backend" -cf - alembic app alembic.ini | tar -C "$target/backend" -xf -
   cp -R "$FRONTEND_DIST" "$target/frontend/"
   cp "$ROOT_DIR/deploy/requirements-offline.txt" "$target/deploy/"
+  cp "$ROOT_DIR/.env.example" "$target/.env.example"
   cp "$ROOT_DIR/DEPLOYMENT_MANUAL.md" "$target/"
 }
 

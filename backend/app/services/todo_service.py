@@ -347,6 +347,8 @@ def create_todo(db: Session, payload: TodoCreate, owner_id: str, *, commit: bool
         resource_relation_service.create_task_source_relation(db, todo, source, owner_id)
     if commit:
         db.commit()
+    else:
+        db.flush()
     return get_todo_or_404(db, todo.id, owner_id)
 
 
@@ -393,7 +395,14 @@ def update_todo(db: Session, todo: Todo, payload: TodoUpdate, actor_id: str | No
     return todo
 
 
-def update_assignees(db: Session, todo: Todo, actor_id: str, assignee_ids: list[str]) -> Todo:
+def update_assignees(
+    db: Session,
+    todo: Todo,
+    actor_id: str,
+    assignee_ids: list[str],
+    *,
+    commit: bool = True,
+) -> Todo:
     actor = db.get(User, actor_id)
     if actor is not None and actor.system_role == SystemRole.ROOT and todo.team_id is not None:
         desired_ids = set(dict.fromkeys(assignee_ids))
@@ -409,7 +418,10 @@ def update_assignees(db: Session, todo: Todo, actor_id: str, assignee_ids: list[
         todo.team_id = _validated_assignment_team(db, actor_id, assignee_ids)
     sync_assignments(db, todo, assignee_ids, actor_id)
     recompute_task_status(todo)
-    db.commit()
+    if commit:
+        db.commit()
+    else:
+        db.flush()
     return get_todo_or_404(db, todo.id, actor_id)
 
 
@@ -446,7 +458,13 @@ def calculate_next_due(todo: Todo) -> datetime:
     raise ValueError("Todo is not recurring")
 
 
-def complete_todo(db: Session, todo: Todo, user_id: str) -> tuple[Todo, Todo | None]:
+def complete_todo(
+    db: Session,
+    todo: Todo,
+    user_id: str,
+    *,
+    commit: bool = True,
+) -> tuple[Todo, Todo | None]:
     # `generated_from_id` is unique, so treating it as an idempotency key prevents
     # retries (or two rapid clicks) from creating two next occurrences.
     existing = db.scalar(select(Todo).where(Todo.generated_from_id == todo.id))
@@ -501,7 +519,10 @@ def complete_todo(db: Session, todo: Todo, user_id: str) -> tuple[Todo, Todo | N
                     )
         todo.recurring_series_id = todo.recurring_series_id or todo.id
 
-    db.commit()
+    if commit:
+        db.commit()
+    else:
+        db.flush()
     db.refresh(todo)
     if next_todo:
         db.refresh(next_todo)
@@ -540,13 +561,16 @@ def restore_todo(db: Session, todo: Todo, user_id: str) -> Todo:
     return todo
 
 
-def abandon_todo(db: Session, todo: Todo) -> Todo:
+def abandon_todo(db: Session, todo: Todo, *, commit: bool = True) -> Todo:
     if todo.status == TodoStatus.ABANDONED:
         return todo
     todo.status = TodoStatus.ABANDONED
     todo.completed_at = None
     todo.reminded_at = None
-    db.commit()
+    if commit:
+        db.commit()
+    else:
+        db.flush()
     db.refresh(todo)
     return todo
 
@@ -556,9 +580,11 @@ def update_my_status(
     todo: Todo,
     user_id: str,
     new_status: TodoAssignmentStatus,
+    *,
+    commit: bool = True,
 ) -> tuple[Todo, Todo | None]:
     if new_status == TodoAssignmentStatus.DONE:
-        return complete_todo(db, todo, user_id)
+        return complete_todo(db, todo, user_id, commit=commit)
     if todo.status == TodoStatus.ABANDONED:
         raise HTTPException(status_code=409, detail="已取消的任务不能更新")
     assignment = active_assignment(todo, user_id)
@@ -567,7 +593,10 @@ def update_my_status(
     assignment.status = new_status
     assignment.completed_at = None
     recompute_task_status(todo)
-    db.commit()
+    if commit:
+        db.commit()
+    else:
+        db.flush()
     return get_todo_or_404(db, todo.id, user_id), None
 
 

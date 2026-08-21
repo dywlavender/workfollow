@@ -16,7 +16,12 @@ from app.models.team_note import (
     TeamNoteVersion,
 )
 from app.models.note_share import NoteShare, NoteSharePermission, NoteShareStatus
-from app.models.notification import Notification, NotificationType
+from app.models.notification import (
+    ExternalDeliveryStatus,
+    ExternalNotificationDelivery,
+    Notification,
+    NotificationType,
+)
 from app.models.audit import AuditLog
 from app.models.resource_relation import RelationType, ResourceRelation, ResourceType
 from app.models.todo import (
@@ -68,6 +73,8 @@ __all__ = [
     "NoteShareStatus",
     "Notification",
     "NotificationType",
+    "ExternalDeliveryStatus",
+    "ExternalNotificationDelivery",
     "AuditLog",
     "RelationType",
     "ResourceRelation",

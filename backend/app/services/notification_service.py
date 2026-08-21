@@ -8,6 +8,29 @@ from app.models.notification import Notification, NotificationType
 from app.models.todo import local_now
 
 
+def add_notification(
+    db: Session,
+    user_id: str,
+    notification_type: NotificationType,
+    title: str,
+    body: str,
+    *,
+    actor_user_id: str | None = None,
+    data_json: dict[str, object] | None = None,
+) -> Notification:
+    """Add an in-app notification to the current transaction without committing."""
+    notification = Notification(
+        user_id=user_id,
+        actor_user_id=actor_user_id,
+        type=notification_type,
+        title=title,
+        body=body,
+        data_json=data_json or {},
+    )
+    db.add(notification)
+    return notification
+
+
 def notify_user(
     db: Session,
     user_id: str,
@@ -18,15 +41,15 @@ def notify_user(
     actor_user_id: str | None = None,
     data_json: dict[str, object] | None = None,
 ) -> Notification:
-    notification = Notification(
-        user_id=user_id,
+    notification = add_notification(
+        db,
+        user_id,
+        notification_type,
+        title,
+        body,
         actor_user_id=actor_user_id,
-        type=notification_type,
-        title=title,
-        body=body,
-        data_json=data_json or {},
+        data_json=data_json,
     )
-    db.add(notification)
     db.commit()
     db.refresh(notification)
     return notification

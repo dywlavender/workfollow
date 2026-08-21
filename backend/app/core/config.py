@@ -20,6 +20,12 @@ class Settings(BaseSettings):
     max_markdown_import_bytes: int = 5 * 1024 * 1024
     session_days: int = 30
     session_cookie_secure: bool = False
+    notification_http_url: str = ""
+    notification_http_timeout_seconds: float = 5.0
+    notification_http_retry_count: int = 3
+    notification_worker_interval_seconds: float = 2.0
+    notification_timezone: str = "Asia/Shanghai"
+    notification_daily_digest_time: str = "08:30"
 
     model_config = SettingsConfigDict(
         env_file=(PROJECT_DIR / ".env", BACKEND_DIR / ".env"),

@@ -1,18 +1,49 @@
+import logging
+import sys
 from contextlib import asynccontextmanager
 from collections.abc import AsyncIterator
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.router import api_router
 from app.core.config import get_settings
 from app.db.session import SessionLocal
+from app.services.external_notification_service import NotificationWorker
 from app.services.template_service import seed_builtin_templates
 
 
 settings = get_settings()
+
+
+def _configure_application_logging() -> None:
+    """Write application logs to stderr; launch scripts persist the stream."""
+    app_logger = logging.getLogger("app")
+    app_logger.setLevel(logging.INFO)
+    app_logger.propagate = False
+    if any(getattr(handler, "_workfollow_stream_handler", False) for handler in app_logger.handlers):
+        return
+
+    stream_handler = logging.StreamHandler(sys.stderr)
+    stream_handler._workfollow_stream_handler = True  # type: ignore[attr-defined]
+    stream_handler.setFormatter(logging.Formatter(
+        "%(asctime)s %(levelname)s %(name)s %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    ))
+    app_logger.addHandler(stream_handler)
+
+
+_configure_application_logging()
+logger = logging.getLogger(__name__)
+
+
+def _is_task_mutation(request: Request) -> bool:
+    return (
+        request.method in {"POST", "PUT", "PATCH", "DELETE"}
+        and (request.url.path == "/api/todos" or request.url.path.startswith("/api/todos/"))
+    )
 
 
 @asynccontextmanager
@@ -21,10 +52,33 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     settings.files_dir.mkdir(parents=True, exist_ok=True)
     with SessionLocal() as db:
         seed_builtin_templates(db)
-    yield
+    notification_worker = NotificationWorker(settings)
+    notification_worker.start()
+    try:
+        yield
+    finally:
+        notification_worker.stop()
 
 
 app = FastAPI(title=settings.app_name, version=settings.app_version, lifespan=lifespan)
+
+
+@app.middleware("http")
+async def log_task_http_entry(request: Request, call_next):  # noqa: ANN001
+    if not _is_task_mutation(request):
+        return await call_next(request)
+
+    logger.info("【任务HTTP入口】%s %s", request.method, request.url.path)
+    response = await call_next(request)
+    logger.info(
+        "【任务HTTP出口】%s %s status=%s",
+        request.method,
+        request.url.path,
+        response.status_code,
+    )
+    return response
+
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,

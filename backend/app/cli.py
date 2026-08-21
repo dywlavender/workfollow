@@ -9,6 +9,11 @@ from sqlalchemy import select
 from app.db.session import SessionLocal
 from app.models.auth import SystemRole, User, UserStatus
 from app.services.auth_service import normalize_username, password_hash
+from app.services.external_notification_service import (
+    dispatch_pending,
+    enqueue_daily_task_digests,
+    notification_now,
+)
 from app.models.todo import local_now
 
 
@@ -38,6 +43,21 @@ def init_root(args: argparse.Namespace) -> int:
     return 0
 
 
+def dispatch_notifications(_: argparse.Namespace) -> int:
+    with SessionLocal() as db:
+        sent = dispatch_pending(db)
+    print(f"已发送外部通知：{sent} 条")
+    return 0
+
+
+def daily_task_digest(_: argparse.Namespace) -> int:
+    with SessionLocal() as db:
+        created = enqueue_daily_task_digests(db, now=notification_now())
+        sent = dispatch_pending(db)
+    print(f"已生成每日待办通知：{created} 条，已发送：{sent} 条")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="python -m app.cli")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -46,6 +66,10 @@ def build_parser() -> argparse.ArgumentParser:
     root.add_argument("--password", required=True)
     root.add_argument("--nickname", default="系统管理员")
     root.set_defaults(handler=init_root)
+    dispatch = subparsers.add_parser("dispatch-notifications", help="发送一次待发送的外部通知")
+    dispatch.set_defaults(handler=dispatch_notifications)
+    digest = subparsers.add_parser("daily-task-digest", help="生成并发送一次每日待办汇总通知")
+    digest.set_defaults(handler=daily_task_digest)
     return parser
 
 
