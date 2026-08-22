@@ -2,12 +2,13 @@ from __future__ import annotations
 
 import hashlib
 import json
+from pathlib import Path
 from typing import Any
 
 from fastapi import HTTPException
 from sqlalchemy import String, delete, func, or_, select, update
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session, aliased, joinedload
+from sqlalchemy.orm import Session, aliased, joinedload, load_only
 
 from app.core.config import Settings
 from app.models.note import Attachment, Note
@@ -29,6 +30,7 @@ from app.models.todo import TaskFileAccess, Todo, local_now
 from app.schemas.note import AttachmentRead
 from app.schemas.team import TeamNoteCreate, TeamNoteSubmissionCreate, TeamNoteSubmissionReview, TeamNoteUpdate
 from app.services import note_permission_service, note_service, team_service
+from app.services import search_index_service
 from app.services.note_service import content_to_plain_text, get_note_or_404
 from app.services.system_permission_service import user_is_root
 
@@ -60,10 +62,27 @@ def list_team_notes(
     q: str | None = None,
     category_id: str | None = None,
     include_archived: bool = False,
+    summary: bool = False,
 ) -> list[TeamNote]:
-    statement = select(TeamNote).options(
-        joinedload(TeamNote.category), joinedload(TeamNote.source_author)
-    ).where(TeamNote.team_id == team_id)
+    options = [joinedload(TeamNote.category), joinedload(TeamNote.source_author)]
+    if summary:
+        options.append(load_only(
+            TeamNote.id,
+            TeamNote.team_id,
+            TeamNote.title,
+            TeamNote.category_id,
+            TeamNote.tags,
+            TeamNote.source_type,
+            TeamNote.source_note_id,
+            TeamNote.source_author_id,
+            TeamNote.source_submission_id,
+            TeamNote.status,
+            TeamNote.published_at,
+            TeamNote.archived_at,
+            TeamNote.created_at,
+            TeamNote.updated_at,
+        ))
+    statement = select(TeamNote).options(*options).where(TeamNote.team_id == team_id)
     if not include_archived:
         statement = statement.where(TeamNote.status == TeamNoteStatus.PUBLISHED)
     if category_id:
@@ -121,10 +140,13 @@ def update_category(
         db.rollback()
         raise HTTPException(status_code=409, detail="知识分类名称已存在") from exc
     db.refresh(category)
+    search_index_service.sync_team_category(db, category.team_id, category.id)
+    db.commit()
     return category
 
 
 def delete_category(db: Session, category: TeamNoteCategory) -> None:
+    affected_notes = list(db.scalars(select(TeamNote).where(TeamNote.category_id == category.id)))
     db.execute(update(TeamNote).where(
         TeamNote.team_id == category.team_id,
         TeamNote.category_id == category.id,
@@ -134,6 +156,9 @@ def delete_category(db: Session, category: TeamNoteCategory) -> None:
         TeamNoteSubmission.proposed_category_id == category.id,
     ).values(proposed_category_id=None))
     db.delete(category)
+    for note in affected_notes:
+        note.category_id = None
+        search_index_service.upsert_team_note(db, note)
     db.commit()
 
 
@@ -243,6 +268,69 @@ def update_state_for_team_note(db: Session, note: TeamNote, user_id: str) -> dic
     }
 
 
+def team_note_version_numbers(db: Session, note_ids: list[str]) -> dict[str, int]:
+    unique_ids = list(dict.fromkeys(note_ids))
+    if not unique_ids:
+        return {}
+    rows = db.execute(
+        select(TeamNoteVersion.team_note_id, func.max(TeamNoteVersion.version_no))
+        .where(TeamNoteVersion.team_note_id.in_(unique_ids))
+        .group_by(TeamNoteVersion.team_note_id)
+    ).all()
+    return {note_id: int(version_no or 1) for note_id, version_no in rows}
+
+
+def update_states_for_team_notes(
+    db: Session, notes: list[TeamNote], user_id: str
+) -> dict[str, dict[str, Any]]:
+    """Read update workflow state for a list in two set-based queries."""
+
+    if not notes:
+        return {}
+    note_ids = [note.id for note in notes]
+    submissions = db.scalars(select(TeamNoteSubmission).where(
+        TeamNoteSubmission.team_id == notes[0].team_id,
+        TeamNoteSubmission.applicant_id == user_id,
+        TeamNoteSubmission.submission_type == TeamNoteSubmissionType.UPDATE,
+        TeamNoteSubmission.target_team_note_id.in_(note_ids),
+        TeamNoteSubmission.status.in_(
+            (TeamNoteSubmissionStatus.PENDING, TeamNoteSubmissionStatus.NEEDS_REVISION)
+        ),
+    )).all()
+    latest_submission: dict[str, TeamNoteSubmission] = {}
+    for submission in submissions:
+        target_id = submission.target_team_note_id
+        if target_id is None or (
+            target_id in latest_submission
+            and latest_submission[target_id].updated_at >= submission.updated_at
+        ):
+            continue
+        latest_submission[target_id] = submission
+
+    draft_rows = db.execute(select(Note.id, Note.copied_from_team_note_id).where(
+        Note.owner_id == user_id,
+        Note.copied_from_team_note_id.in_(note_ids),
+        Note.is_knowledge_update_draft.is_(True),
+        Note.deleted_at.is_(None),
+    ).order_by(Note.updated_at.desc())).all()
+    latest_draft: dict[str, str] = {}
+    for draft_id, target_id in draft_rows:
+        if target_id is not None and target_id not in latest_draft:
+            latest_draft[target_id] = draft_id
+
+    return {
+        note.id: {
+            "my_update_draft_note_id": latest_submission.get(note.id).source_note_id
+            if latest_submission.get(note.id) is not None else latest_draft.get(note.id),
+            "my_update_submission_id": latest_submission.get(note.id).id
+            if latest_submission.get(note.id) is not None else None,
+            "my_update_submission_status": latest_submission.get(note.id).status
+            if latest_submission.get(note.id) is not None else None,
+        }
+        for note in notes
+    }
+
+
 def copy_team_note_to_personal(
     db: Session,
     note: TeamNote,
@@ -265,6 +353,7 @@ def copy_team_note_to_personal(
         title=note.title,
         content_json=note.content_json,
         plain_text=note.plain_text,
+        tags=list(note.tags or []),
         source_attachments=[attachments_by_id[item] for item in attachment_ids if item in attachments_by_id],
         owner_id=owner_id,
         settings=settings,
@@ -507,6 +596,7 @@ def create_team_note(db: Session, team_id: str, actor_id: str, payload: TeamNote
     db.flush()
     _grant_file_access(db, note, attachment_ids, actor_id)
     _record_version(db, note, actor_id, "ADMIN_CREATE")
+    search_index_service.upsert_team_note(db, note)
     db.commit()
     return get_team_note_or_404(db, team_id, note.id)
 
@@ -526,6 +616,7 @@ def update_team_note(db: Session, note: TeamNote, actor_id: str, payload: TeamNo
         setattr(note, field, value)
     _reconcile_file_access(db, note, old_ids, validated_ids, actor_id)
     _record_version(db, note, actor_id, "ADMIN_EDIT")
+    search_index_service.upsert_team_note(db, note)
     db.commit()
     return get_team_note_or_404(db, note.team_id, note.id)
 
@@ -535,8 +626,92 @@ def set_team_note_archived(db: Session, note: TeamNote, actor_id: str, archived:
     note.archived_at = local_now() if archived else None
     note.updated_by_id = actor_id
     _record_version(db, note, actor_id, "ARCHIVE" if archived else "RESTORE")
+    search_index_service.upsert_team_note(db, note)
     db.commit()
     return get_team_note_or_404(db, note.team_id, note.id)
+
+
+def _attachment_is_referenced_after_team_note_delete(
+    db: Session, attachment_id: str, deleted_note_id: str
+) -> bool:
+    """Keep a binary if any remaining record can still reference it."""
+    if db.scalar(select(TeamFileAccess.id).where(TeamFileAccess.attachment_id == attachment_id).limit(1)):
+        return True
+    if db.scalar(select(SubmissionFileAccess.id).where(SubmissionFileAccess.attachment_id == attachment_id).limit(1)):
+        return True
+    if db.scalar(select(TaskFileAccess.id).where(TaskFileAccess.attachment_id == attachment_id).limit(1)):
+        return True
+    # JSON array containment is not consistent between SQLite and PostgreSQL;
+    # these deletes are rare, so scan the small reference collections in Python
+    # instead of risking an incomplete database-specific predicate.
+    if any(attachment_id in (item.attachment_ids or []) for item in db.scalars(
+        select(TeamNote).where(TeamNote.id != deleted_note_id)
+    )):
+        return True
+    if any(attachment_id in (item.attachment_ids or []) for item in db.scalars(
+        select(TeamNoteVersion).where(TeamNoteVersion.team_note_id != deleted_note_id)
+    )):
+        return True
+    if any(attachment_id in (item.snapshot_attachment_ids or []) for item in db.scalars(
+        select(TeamNoteSubmission)
+    )):
+        return True
+    if any(attachment_id in (item.attachment_ids or []) for item in db.scalars(select(Todo))):
+        return True
+    return False
+
+
+def delete_archived_team_note(db: Session, note: TeamNote, settings: Settings) -> None:
+    """Permanently remove an archived knowledge entry and its team-owned history."""
+    if note.status != TeamNoteStatus.ARCHIVED:
+        raise HTTPException(status_code=409, detail="只有已归档的团队知识可以彻底删除")
+    deleted_note_id = note.id
+
+    active_submission = db.scalar(select(TeamNoteSubmission.id).where(
+        TeamNoteSubmission.team_id == note.team_id,
+        TeamNoteSubmission.status.in_((
+            TeamNoteSubmissionStatus.PENDING,
+            TeamNoteSubmissionStatus.NEEDS_REVISION,
+        )),
+        or_(
+            TeamNoteSubmission.target_team_note_id == deleted_note_id,
+            TeamNoteSubmission.approved_team_note_id == deleted_note_id,
+        ),
+    ).limit(1))
+    if active_submission is not None:
+        raise HTTPException(status_code=409, detail="该知识还有待处理的更新申请，请先处理后再删除")
+
+    versions = list(db.scalars(select(TeamNoteVersion).where(TeamNoteVersion.team_note_id == deleted_note_id)))
+    attachment_ids = set(note.attachment_ids or []) | _extract_attachment_ids(note.content_json)
+    for version in versions:
+        attachment_ids.update(version.attachment_ids or [])
+        attachment_ids.update(_extract_attachment_ids(version.content_json))
+
+    # Keep historical submission records, but remove references to the deleted
+    # knowledge so the submission list cannot expose a dangling target.
+    db.execute(update(TeamNoteSubmission).where(or_(
+        TeamNoteSubmission.target_team_note_id == deleted_note_id,
+        TeamNoteSubmission.approved_team_note_id == deleted_note_id,
+    )).values(target_team_note_id=None, approved_team_note_id=None))
+    db.execute(delete(TeamFileAccess).where(TeamFileAccess.team_note_id == deleted_note_id))
+    db.execute(delete(TeamNoteVersion).where(TeamNoteVersion.team_note_id == deleted_note_id))
+    search_index_service.remove_source(db, search_index_service.TEAM_SOURCE, deleted_note_id)
+    db.delete(note)
+    db.flush()
+
+    paths_to_remove: list[Path] = []
+    for attachment_id in attachment_ids:
+        attachment = db.get(Attachment, attachment_id)
+        if attachment is None or attachment.note_id is not None:
+            continue
+        if _attachment_is_referenced_after_team_note_delete(db, attachment_id, deleted_note_id):
+            continue
+        paths_to_remove.append(settings.files_dir.parent.parent / attachment.file_path)
+        db.delete(attachment)
+
+    db.commit()
+    for path in paths_to_remove:
+        path.unlink(missing_ok=True)
 
 
 def _snapshot_submission(db: Session, submission: TeamNoteSubmission, source: Note) -> None:
@@ -845,6 +1020,7 @@ def approve_submission(
             source_note.is_knowledge_update_draft = False
         _grant_file_access(db, note, list(submission.snapshot_attachment_ids or []), reviewer_id)
         _record_version(db, note, reviewer_id, change_type, submission.id)
+        search_index_service.upsert_team_note(db, note)
         db.flush()
         db.execute(update(TeamNoteSubmission).where(
             TeamNoteSubmission.id == submission.id

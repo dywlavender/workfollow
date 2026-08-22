@@ -8,7 +8,19 @@ from app.core.config import get_settings
 
 settings = get_settings()
 connect_args = {"check_same_thread": False} if settings.database_url.startswith("sqlite") else {}
-engine = create_engine(settings.database_url, connect_args=connect_args)
+engine_options: dict[str, object] = {
+    "connect_args": connect_args,
+    "pool_pre_ping": settings.database_pool_pre_ping,
+}
+# SQLite has one writer, but a file-backed SQLite deployment still benefits
+# from separate reader connections under the LAN workload. In-memory SQLite
+# uses a special pool that does not accept QueuePool sizing.
+if ":memory:" not in settings.database_url:
+    engine_options.update(
+        pool_size=settings.database_pool_size,
+        max_overflow=settings.database_max_overflow,
+    )
+engine = create_engine(settings.database_url, **engine_options)
 
 
 if settings.database_url.startswith("sqlite"):

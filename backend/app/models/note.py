@@ -57,6 +57,7 @@ class Note(Base):
     title: Mapped[str] = mapped_column(String(500), nullable=False)
     content_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
     plain_text: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    tags: Mapped[list[str]] = mapped_column(JSON, default=list, nullable=False)
     is_favorite: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     copied_from_note_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
     copied_from_team_note_id: Mapped[str | None] = mapped_column(String(36), nullable=True)

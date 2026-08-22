@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from fastapi import HTTPException
-from sqlalchemy import select
+from sqlalchemy import Text as SqlText
+from sqlalchemy import cast, or_, select
 from sqlalchemy.orm import Session, aliased, joinedload, selectinload
 
 from app.models.auth import User, UserStatus
@@ -21,6 +22,7 @@ def get_share_or_404(db: Session, note_id: str, share_id: str, owner_id: str) ->
             (NoteShare.id == share_id) | (NoteShare.shared_with_user_id == share_id),
             NoteShare.note_id == note_id,
             NoteShare.shared_by_user_id == owner_id,
+            NoteShare.status == NoteShareStatus.ACTIVE,
         )
     )
     if share is None:
@@ -28,19 +30,20 @@ def get_share_or_404(db: Session, note_id: str, share_id: str, owner_id: str) ->
     return share
 
 
-def list_note_shares(db: Session, note_id: str, owner_id: str) -> list[NoteShare]:
-    return list(
-        db.scalars(
-            select(NoteShare)
-            .options(joinedload(NoteShare.shared_with))
-            .where(
-                NoteShare.note_id == note_id,
-                NoteShare.shared_by_user_id == owner_id,
-                NoteShare.status == NoteShareStatus.ACTIVE,
-            )
-            .order_by(NoteShare.created_at.desc())
+def list_note_shares(
+    db: Session, note_id: str, owner_id: str, *, include_revoked: bool = False
+) -> list[NoteShare]:
+    statement = (
+        select(NoteShare)
+        .options(joinedload(NoteShare.shared_with))
+        .where(
+            NoteShare.note_id == note_id,
+            NoteShare.shared_by_user_id == owner_id,
         )
     )
+    if not include_revoked:
+        statement = statement.where(NoteShare.status == NoteShareStatus.ACTIVE)
+    return list(db.scalars(statement.order_by(NoteShare.created_at.desc())))
 
 
 def create_note_share(db: Session, note: Note, owner_id: str, payload: NoteShareCreate) -> NoteShare:
@@ -143,10 +146,10 @@ def get_shared_note_or_404(db: Session, note_id: str, user_id: str) -> tuple[Not
     return row
 
 
-def list_shared_notes(db: Session, user_id: str) -> list[tuple[Note, NoteShare]]:
+def list_shared_notes(db: Session, user_id: str, q: str | None = None) -> list[tuple[Note, NoteShare]]:
     owner_membership = aliased(TeamMember)
     target_membership = aliased(TeamMember)
-    rows = db.execute(
+    statement = (
         select(Note, NoteShare)
         .join(NoteShare, NoteShare.note_id == Note.id)
         .join(User, User.id == NoteShare.shared_by_user_id)
@@ -165,9 +168,15 @@ def list_shared_notes(db: Session, user_id: str) -> list[tuple[Note, NoteShare]]
             User.status == UserStatus.ACTIVE,
             Note.deleted_at.is_(None),
         )
-        .order_by(Note.updated_at.desc())
     )
-    return list(rows)
+    if q and q.strip():
+        pattern = f"%{q.strip()}%"
+        statement = statement.where(or_(
+            Note.title.like(pattern),
+            Note.plain_text.like(pattern),
+            cast(Note.tags, SqlText).like(pattern),
+        ))
+    return list(db.execute(statement.order_by(Note.updated_at.desc())))
 
 
 def _common_active_team(db: Session, owner_id: str, target_id: str) -> str | None:

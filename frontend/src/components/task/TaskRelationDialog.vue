@@ -3,14 +3,14 @@ import { IconLink, IconSearch, IconX } from '@tabler/icons-vue'
 import { ref, watch } from 'vue'
 
 import { useDialogEscape } from '@/composables/useDialogEscape'
-import { fetchNotes, fetchTodos, type Note, type Todo } from '@/services/api'
+import { fetchNotes, fetchTodos, type NoteListItem, type Todo } from '@/services/api'
 
 const props = defineProps<{ open: boolean; currentTaskId: string }>()
-const emit = defineEmits<{ close: []; selectTask: [todo: Todo]; selectNote: [note: Note] }>()
+const emit = defineEmits<{ close: []; selectTask: [todo: Todo]; selectNote: [note: NoteListItem] }>()
 useDialogEscape(() => props.open, () => emit('close'))
 const query = ref('')
 const tasks = ref<Todo[]>([])
-const notes = ref<Note[]>([])
+const notes = ref<NoteListItem[]>([])
 const loading = ref(false)
 let timer: number | undefined
 
@@ -34,7 +34,7 @@ watch(query, () => { window.clearTimeout(timer); timer = window.setTimeout(load,
         <label class="task-relation-search"><IconSearch :size="17" /><input v-model="query" autofocus placeholder="搜索标题或正文" /></label>
         <div class="task-relation-results">
           <section><h3>任务</h3><button v-for="todo in tasks" :key="todo.id" type="button" @click="emit('selectTask', todo)"><IconLink :size="15" /><span><strong>{{ todo.title }}</strong><small>{{ todo.listName }}</small></span></button><p v-if="!loading && !tasks.length">没有匹配任务</p></section>
-          <section><h3>笔记</h3><button v-for="note in notes" :key="note.id" type="button" @click="emit('selectNote', note)"><IconLink :size="15" /><span><strong>{{ note.title || '无标题笔记' }}</strong><small>{{ note.plainText.slice(0, 48) || '暂无正文' }}</small></span></button><p v-if="!loading && !notes.length">没有匹配笔记</p></section>
+          <section><h3>笔记</h3><button v-for="note in notes" :key="note.id" type="button" @click="emit('selectNote', note)"><IconLink :size="15" /><span><strong>{{ note.title || '无标题笔记' }}</strong><small>{{ new Date(note.updatedAt).toLocaleDateString('zh-CN') }}</small></span></button><p v-if="!loading && !notes.length">没有匹配笔记</p></section>
         </div>
         <p v-if="loading" class="task-relation-loading">正在读取…</p>
       </section>

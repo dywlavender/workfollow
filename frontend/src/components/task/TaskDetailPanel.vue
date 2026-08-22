@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { IconChevronRight } from '@tabler/icons-vue'
-import { ref } from 'vue'
+import { defineAsyncComponent, ref } from 'vue'
 
-import PersonalTaskDetail from '@/components/todo/TaskDetail.vue'
 import type { TeamMember, Todo, TodoPayload } from '@/services/api'
+
+const PersonalTaskDetail = defineAsyncComponent(() => import('@/components/todo/TaskDetail.vue'))
 
 const props = defineProps<{
   todo?: Todo | null
@@ -47,10 +48,5 @@ defineExpose({ openDatePanel, openPriorityPanel })
 
   <aside v-else class="task-detail task-detail-empty" aria-label="任务详情">
     <div><IconChevronRight :size="24" /><strong>选择一个任务</strong><p>任务详情会显示在这里。</p></div>
-    <div class="empty-hints" aria-label="快捷键">
-      <span><kbd>⌘</kbd><kbd>N</kbd> 新建任务</span>
-      <span><kbd>↑</kbd><kbd>↓</kbd> 切换任务</span>
-      <span><kbd>⌘</kbd><kbd>/</kbd> 查看全部</span>
-    </div>
   </aside>
 </template>

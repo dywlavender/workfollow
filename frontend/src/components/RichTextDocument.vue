@@ -28,6 +28,9 @@ const slashActiveIndex = ref(0)
 const slashPosition = ref({ left: 8, top: 8 })
 const slashRange = ref<{ from: number; to: number } | null>(null)
 let slashDetectTimer: number | undefined
+let snapshotTimer: number | undefined
+let applyingExternalDocument = false
+let lastEmittedDocument: Record<string, unknown> | null = props.modelValue
 
 const slashCommands = computed(() => workFollowSlashCommands.filter((command) => {
   // 模板正文没有笔记附件和任务弹窗上下文，因此只提供可直接写入正文的命令。
@@ -68,14 +71,38 @@ const editor = useEditor({
     },
   },
   onUpdate: ({ editor: current }) => {
-    emit('update:modelValue', current.getJSON())
-    emit('update:plainText', current.getText())
+    if (applyingExternalDocument) return
+    scheduleSnapshot(current)
     if (props.slashMenu && props.editable) {
       if (slashDetectTimer !== undefined) window.clearTimeout(slashDetectTimer)
       slashDetectTimer = window.setTimeout(() => detectSlashCommand(current), 0)
     }
   },
 })
+
+function emitSnapshot(currentEditor: TiptapEditor | null = editor.value ?? null) {
+  if (!currentEditor) return
+  const snapshot = currentEditor.getJSON() as Record<string, unknown>
+  lastEmittedDocument = snapshot
+  emit('update:modelValue', snapshot)
+  emit('update:plainText', currentEditor.getText())
+}
+
+function scheduleSnapshot(currentEditor: TiptapEditor) {
+  if (snapshotTimer !== undefined) window.clearTimeout(snapshotTimer)
+  snapshotTimer = window.setTimeout(() => {
+    if (editor.value === currentEditor) emitSnapshot(currentEditor)
+    snapshotTimer = undefined
+  }, 250)
+}
+
+function flush() {
+  if (snapshotTimer !== undefined) window.clearTimeout(snapshotTimer)
+  snapshotTimer = undefined
+  emitSnapshot()
+}
+
+defineExpose({ flush })
 
 function closeSlashMenu() {
   slashMenuOpen.value = false
@@ -185,12 +212,17 @@ watch(() => props.slashMenu, (value) => {
 })
 watch(() => props.modelValue, (value) => {
   if (!editor.value) return
+  if (value === lastEmittedDocument) return
   const next = value ?? emptyDocument
-  if (JSON.stringify(editor.value.getJSON()) !== JSON.stringify(next)) editor.value.commands.setContent(next, false)
-}, { deep: true })
+  applyingExternalDocument = true
+  editor.value.commands.setContent(next, false)
+  lastEmittedDocument = next
+  applyingExternalDocument = false
+})
 
 onBeforeUnmount(() => {
   if (slashDetectTimer !== undefined) window.clearTimeout(slashDetectTimer)
+  if (snapshotTimer !== undefined) window.clearTimeout(snapshotTimer)
   editor.value?.destroy()
 })
 </script>

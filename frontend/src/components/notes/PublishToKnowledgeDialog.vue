@@ -3,13 +3,13 @@ import { IconSend, IconX } from '@tabler/icons-vue'
 import { ref, watch } from 'vue'
 
 import { useDialogEscape } from '@/composables/useDialogEscape'
-import type { KnowledgeCategory, Note, TeamNote, TeamNoteSubmissionType } from '@/services/api'
+import type { KnowledgeCategory, Note, TeamNoteListItem, TeamNoteSubmissionType } from '@/services/api'
 
 const props = defineProps<{
   open: boolean
   note: Note | null
   categories: KnowledgeCategory[]
-  knowledge: TeamNote[]
+  knowledge: TeamNoteListItem[]
   defaultType?: TeamNoteSubmissionType
   defaultTargetId?: string | null
   targetLocked?: boolean

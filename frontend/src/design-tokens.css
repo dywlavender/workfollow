@@ -69,16 +69,25 @@
   --space-6: 24px;
   --space-7: 28px;
   --space-8: 32px;
+  /* Five shared corner tiers. Shape aliases cover intentional flat/circle
+     controls without introducing one-off numeric radii. */
+  --radius-none: 0;
   --radius-xs: 4px;
   --radius-sm: 6px;
   --radius-md: 8px;
   --radius-lg: 12px;
   --radius-full: 999px;
+  --radius-circle: 50%;
   --shadow-xs: 0 1px 2px rgb(17 24 39 / .03);
   --shadow-sm: 0 6px 18px rgb(17 24 39 / .08);
   --shadow-dialog: 0 24px 64px rgb(17 24 39 / .16);
-  --duration-fast: 150ms;
-  --duration-normal: 200ms;
+  --motion-duration-instant: 80ms;
+  --motion-duration-fast: 160ms;
+  --motion-duration-normal: 240ms;
+  --motion-ease-standard: cubic-bezier(.2, 0, 0, 1);
+  /* Backwards-compatible primitive aliases. */
+  --duration-fast: var(--motion-duration-fast);
+  --duration-normal: var(--motion-duration-normal);
 
   /* Dynamic primitive fallbacks. */
   --theme-bg-page: var(--neutral-50);
@@ -150,6 +159,17 @@
   --color-editor-highlight: var(--theme-highlight);
   --color-editor-content: var(--color-text-primary);
   --color-editor-placeholder: var(--color-text-tertiary);
+
+  /* Semantic: performance feedback. */
+  --motion-pending-duration: var(--motion-duration-instant);
+  --motion-loading-duration: var(--motion-duration-fast);
+  --motion-transition-duration: var(--motion-duration-normal);
+  --motion-ease: var(--motion-ease-standard);
+  --loading-skeleton-from: var(--neutral-100);
+  --loading-skeleton-to: var(--neutral-200);
+  --loading-skeleton-duration: 1200ms;
+  --loading-skeleton-ease: var(--motion-ease);
+  --loading-pending-opacity: .55;
 
   /* Semantic: typography roles. Components consume these instead of rebuilding styles. */
   --type-family-ui: var(--font-family-sans);
@@ -305,11 +325,12 @@
   --review-revision-fg: #a84b17;
   --review-comment-bg: #fff8e8;
   --priority-medium: var(--color-warning);
-  --notification-badge-bg: #d94652;
+  --notification-badge-bg: var(--color-accent);
+  --notification-badge-fg: var(--color-on-accent);
 
   /* Component: shared workspace surfaces. Every authenticated page consumes
      these aliases, so a background preset changes the whole shell together. */
-  --workspace-rail-width: 60px;
+  --workspace-rail-width: 152px;
   --workspace-rail-bg: var(--color-bg-rail);
   --workspace-rail-fg: var(--color-text-secondary);
   --workspace-rail-muted: var(--color-text-tertiary);
@@ -332,7 +353,6 @@
   --workspace-row-selected: var(--color-accent-soft);
   --workspace-brand-shadow: var(--shadow-sm);
   --workspace-detail-shadow: var(--detail-shadow);
-  --workspace-drawer-shadow: 18px 0 46px color-mix(in srgb, var(--color-text-primary) 14%, transparent);
 
   /* Component: task workspace. These names describe roles, not a reference
      screenshot, and therefore remain valid for every palette/background. */
@@ -352,13 +372,25 @@
   --task-command-icon: var(--workspace-command-icon);
   --task-accent: var(--color-accent);
   --task-on-accent: var(--color-on-accent);
+  --task-schedule-marked-bg: color-mix(in srgb, var(--task-accent) 42%, var(--task-detail-bg));
+  --task-schedule-marked-fg: var(--color-accent-active);
+  --task-schedule-selected-bg: var(--task-accent);
+  --task-schedule-selected-fg: var(--task-on-accent);
   --task-row-hover: var(--workspace-row-hover);
   --task-row-selected: var(--workspace-row-selected);
   --task-divider: var(--workspace-divider);
   --task-brand-shadow: var(--workspace-brand-shadow);
   --task-detail-shadow: var(--workspace-detail-shadow);
-  --task-drawer-shadow: var(--workspace-drawer-shadow);
 
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --motion-duration-instant: 0ms;
+    --motion-duration-fast: 0ms;
+    --motion-duration-normal: 0ms;
+    --loading-skeleton-duration: 0ms;
+  }
 }
 
 :root[data-mode="dark"] {

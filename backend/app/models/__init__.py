@@ -16,6 +16,7 @@ from app.models.team_note import (
     TeamNoteVersion,
 )
 from app.models.note_share import NoteShare, NoteSharePermission, NoteShareStatus
+from app.models.search import SearchDocument
 from app.models.notification import (
     ExternalDeliveryStatus,
     ExternalNotificationDelivery,
@@ -71,6 +72,7 @@ __all__ = [
     "NoteShare",
     "NoteSharePermission",
     "NoteShareStatus",
+    "SearchDocument",
     "Notification",
     "NotificationType",
     "ExternalDeliveryStatus",

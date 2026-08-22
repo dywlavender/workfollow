@@ -26,6 +26,9 @@ class Settings(BaseSettings):
     notification_worker_interval_seconds: float = 2.0
     notification_timezone: str = "Asia/Shanghai"
     notification_daily_digest_time: str = "08:30"
+    database_pool_size: int = 15
+    database_max_overflow: int = 10
+    database_pool_pre_ping: bool = True
 
     model_config = SettingsConfigDict(
         env_file=(PROJECT_DIR / ".env", BACKEND_DIR / ".env"),

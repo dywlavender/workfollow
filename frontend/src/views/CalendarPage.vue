@@ -182,9 +182,11 @@ async function onEventDrop(arg: EventDropArg) {
   const dueEndAt = todo.dueEndAt ? dayjs(todo.dueEndAt).add(dayShift, 'day').format('YYYY-MM-DDTHH:mm:ss') : null
 
   try {
-    await putTodo(todo.id, { dueAt, dueEndAt })
+    const updated = await putTodo(todo.id, { dueAt, dueEndAt })
+    const merged = { ...updated, sources: updated.sources.length ? updated.sources : todo.sources }
+    allTodos.value = allTodos.value.map((item) => item.id === merged.id ? merged : item)
+    if (selectedTodo.value?.id === merged.id) selectedTodo.value = merged
     selectedDate.value = droppedDate.format('YYYY-MM-DD')
-    await loadCalendar()
   } catch {
     arg.revert()
     actionError.value = '改期失败，任务已恢复到原日期。'

@@ -6,7 +6,7 @@ from typing import Annotated
 from fastapi import APIRouter, File, Form, HTTPException, Query, Response, UploadFile, status
 
 from app.core.dependencies import CurrentSettings, CurrentUser, DbSession
-from app.schemas.note import NoteCreate, NoteRead, NoteUpdate
+from app.schemas.note import NoteCapture, NoteCounts, NoteCreate, NoteListItem, NoteRead, NoteUpdate
 from app.services import note_service
 from app.services.markdown_import_service import MarkdownImportError, parse_markdown
 from app.services.template_service import get_accessible_template_or_404, seed_builtin_templates
@@ -15,24 +15,50 @@ from app.services.template_service import get_accessible_template_or_404, seed_b
 router = APIRouter(tags=["notes"])
 
 
-@router.get("/notes", response_model=list[NoteRead])
+@router.get("/notes", response_model=list[NoteListItem])
 def get_notes(
     db: DbSession,
     user: CurrentUser,
     folder_id: str | None = Query(default=None, alias="folderId"),
     q: str | None = Query(default=None),
     favorite: bool | None = Query(default=None),
+    tags: list[str] = Query(default=[]),
+    unfiled: bool = Query(default=False),
     limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
-) -> list[NoteRead]:
-    return note_service.list_notes(
-        db, user.id, folder_id=folder_id, q=q, favorite=favorite, limit=limit, offset=offset
-    )
+) -> list[NoteListItem]:
+    return [NoteListItem.model_validate(note) for note in note_service.list_notes(
+        db,
+        user.id,
+        folder_id=folder_id,
+        q=q,
+        favorite=favorite,
+        tags=tags,
+        unfiled=unfiled,
+        limit=limit,
+        offset=offset,
+        summary=True,
+    )]
+
+
+@router.get("/notes/tags", response_model=list[str])
+def get_note_tags(db: DbSession, user: CurrentUser) -> list[str]:
+    return note_service.list_note_tags(db, user.id)
+
+
+@router.get("/notes/counts", response_model=NoteCounts)
+def get_note_counts(db: DbSession, user: CurrentUser) -> NoteCounts:
+    return NoteCounts(unfiled=note_service.count_unfiled_notes(db, user.id))
 
 
 @router.post("/notes", response_model=NoteRead, status_code=status.HTTP_201_CREATED)
 def post_note(payload: NoteCreate, db: DbSession, user: CurrentUser) -> NoteRead:
     return note_service.create_note(db, payload, user.id)
+
+
+@router.post("/notes/capture", response_model=NoteRead, status_code=status.HTTP_201_CREATED)
+def capture_note(payload: NoteCapture, db: DbSession, user: CurrentUser) -> NoteRead:
+    return note_service.capture_note(db, payload, user.id)
 
 
 @router.post("/notes/import-markdown", response_model=NoteRead, status_code=status.HTTP_201_CREATED)
@@ -92,6 +118,7 @@ def copy_note(note_id: str, db: DbSession, settings: CurrentSettings, user: Curr
         title=f"{source.title} 副本",
         content_json=source.content_json,
         plain_text=source.plain_text,
+        tags=source.tags,
         source_attachments=list(source.attachments),
         owner_id=user.id,
         settings=settings,
@@ -133,6 +160,7 @@ def create_from_template(
             title=template.name,
             content_json=deepcopy(template.content_json),
             plain_text=note_service.content_to_plain_text(template.content_json),
+            tags=[],
         ),
         user.id,
     )

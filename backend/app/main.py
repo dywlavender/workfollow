@@ -108,7 +108,11 @@ def serve_frontend(full_path: str) -> FileResponse:
 
     requested_file = (FRONTEND_DIST / full_path).resolve()
     if requested_file.is_relative_to(FRONTEND_DIST.resolve()) and requested_file.is_file():
-        headers = index_headers if requested_file == index_file.resolve() else None
+        # Vite emits content-addressed files below assets/. They can be kept
+        # forever by the browser; index.html remains the deployment switch.
+        headers = index_headers
+        if requested_file != index_file.resolve() and requested_file.parent.name == "assets":
+            headers = {"Cache-Control": "public, max-age=31536000, immutable"}
         return FileResponse(requested_file, headers=headers)
     # The SPA entry point is the one non-hashed asset. It must be revalidated
     # after a deployment, otherwise a browser can keep an old index.html and

@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 from fastapi import HTTPException
-from sqlalchemy import delete, select, update
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.orm import Session
 
 from app.models.notification import Notification, NotificationType
 from app.models.todo import local_now
+from app.services.event_stream import queue_notification_counts
 
 
 def add_notification(
@@ -50,6 +51,8 @@ def notify_user(
         actor_user_id=actor_user_id,
         data_json=data_json,
     )
+    db.flush()
+    queue_notification_counts(db, [user_id])
     db.commit()
     db.refresh(notification)
     return notification
@@ -64,6 +67,15 @@ def list_notifications(
     return list(db.scalars(statement.order_by(Notification.read_at.is_(None).desc(), Notification.created_at.desc()).limit(limit).offset(offset)))
 
 
+def count_unread(db: Session, user_id: str) -> int:
+    return int(db.scalar(
+        select(func.count(Notification.id)).where(
+            Notification.user_id == user_id,
+            Notification.read_at.is_(None),
+        )
+    ) or 0)
+
+
 def mark_read(db: Session, notification_id: str, user_id: str) -> Notification:
     notification = db.scalar(
         select(Notification).where(Notification.id == notification_id, Notification.user_id == user_id)
@@ -71,6 +83,8 @@ def mark_read(db: Session, notification_id: str, user_id: str) -> Notification:
     if notification is None:
         raise HTTPException(status_code=404, detail="Notification not found")
     notification.read_at = notification.read_at or local_now()
+    db.flush()
+    queue_notification_counts(db, [user_id])
     db.commit()
     db.refresh(notification)
     return notification
@@ -82,6 +96,7 @@ def mark_all_read(db: Session, user_id: str) -> int:
         .where(Notification.user_id == user_id, Notification.read_at.is_(None))
         .values(read_at=local_now())
     )
+    queue_notification_counts(db, [user_id])
     db.commit()
     return result.rowcount or 0
 
@@ -93,10 +108,13 @@ def delete_notification(db: Session, notification_id: str, user_id: str) -> None
     if notification is None:
         raise HTTPException(status_code=404, detail="Notification not found")
     db.delete(notification)
+    db.flush()
+    queue_notification_counts(db, [user_id])
     db.commit()
 
 
 def delete_all_notifications(db: Session, user_id: str) -> int:
     result = db.execute(delete(Notification).where(Notification.user_id == user_id))
+    queue_notification_counts(db, [user_id])
     db.commit()
     return result.rowcount or 0

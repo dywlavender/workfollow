@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Query, Response, status
 
 from app.core.dependencies import CurrentUser, DbSession
-from app.schemas.notification import NotificationRead, NotificationReadResult
+from app.schemas.notification import NotificationRead, NotificationReadResult, NotificationUnreadCount
 from app.services import notification_service
 
 
@@ -17,6 +17,11 @@ def get_notifications(
     offset: int = Query(default=0, ge=0),
 ) -> list[NotificationRead]:
     return notification_service.list_notifications(db, user.id, unread_only, limit, offset)
+
+
+@router.get("/unread/count", response_model=NotificationUnreadCount)
+def get_unread_count(db: DbSession, user: CurrentUser) -> NotificationUnreadCount:
+    return NotificationUnreadCount(count=notification_service.count_unread(db, user.id))
 
 
 @router.post("/{notification_id}/read", response_model=NotificationReadResult)

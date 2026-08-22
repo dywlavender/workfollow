@@ -54,9 +54,7 @@ const actionError = ref<string | null>(null)
 const actionNotice = ref<string | null>(null)
 const searchOpen = ref(Boolean(searchInput.value))
 const toolbarMenuOpen = ref(false)
-const taskNavigationOpen = ref(false)
 const taskNavigationCollapsed = ref(false)
-const taskNavigationDrawer = ref(false)
 const sortReverse = ref(false)
 const workspace = ref<HTMLElement | null>(null)
 const taskViewSidebar = ref<HTMLElement | null>(null)
@@ -65,16 +63,9 @@ const resizingList = ref(false)
 const teamMembers = ref<TeamMember[]>([])
 
 const workspaceStyle = computed(() => ({ '--task-list-width': `${taskListWidth.value}px` }))
-const taskNavigationButtonLabel = computed(() => taskNavigationDrawer.value
-  ? (taskNavigationOpen.value ? '关闭任务导航' : '打开任务导航')
-  : (taskNavigationCollapsed.value ? '展开任务导航' : '收起任务导航'))
-const taskNavigationExpanded = computed(() => taskNavigationDrawer.value
-  ? taskNavigationOpen.value
-  : !taskNavigationCollapsed.value)
-const taskNavigationButtonIcon = computed(() => taskNavigationDrawer.value || taskNavigationCollapsed.value
-  ? IconLayoutSidebarLeftExpand
-  : IconLayoutSidebarLeftCollapse)
-let taskNavigationMedia: MediaQueryList | null = null
+const taskNavigationButtonLabel = computed(() => taskNavigationCollapsed.value ? '展开任务导航' : '收起任务导航')
+const taskNavigationExpanded = computed(() => !taskNavigationCollapsed.value)
+const taskNavigationButtonIcon = computed(() => taskNavigationCollapsed.value ? IconLayoutSidebarLeftExpand : IconLayoutSidebarLeftCollapse)
 
 const baseViews = [
   { id: 'all' as TodoView, label: '所有', hint: '全部任务', icon: IconList },
@@ -206,22 +197,35 @@ function stopListResize() {
   localStorage.setItem('workfollow-task-list-width', String(taskListWidth.value))
 }
 
+function visibleTaskIds() {
+  return Array.from(workspace.value?.querySelectorAll<HTMLElement>('.todo-row[data-todo-id]') ?? [])
+    .map((row) => row.dataset.todoId)
+    .filter((id): id is string => Boolean(id))
+}
+
 function handleWorkspaceKeydown(event: KeyboardEvent) {
   if (event.key === 'Escape') {
-    if (taskNavigationOpen.value) closeTaskNavigation()
-    else if (selectedTodoId.value) clearSelection()
+    if (selectedTodoId.value) clearSelection()
     return
   }
-  if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return
+  if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return
   const target = event.target as HTMLElement | null
   if (target?.closest('input, textarea, select, [contenteditable="true"], [role="dialog"]')) return
-  if (!todoStore.todos.length) return
-  const currentIndex = selectedTodoId.value ? todoStore.todos.findIndex((todo) => todo.id === selectedTodoId.value) : -1
-  const nextIndex = event.key === 'ArrowDown'
-    ? Math.min(todoStore.todos.length - 1, currentIndex + 1)
-    : Math.max(0, currentIndex < 0 ? todoStore.todos.length - 1 : currentIndex - 1)
+  if (!workspace.value?.contains(target)) return
+  const ids = visibleTaskIds()
+  if (!ids.length) return
+  const currentIndex = selectedTodoId.value ? ids.indexOf(selectedTodoId.value) : -1
+  const nextIndex = event.key === 'Home'
+    ? 0
+    : event.key === 'End'
+      ? ids.length - 1
+      : event.key === 'ArrowDown'
+        ? Math.min(ids.length - 1, currentIndex + 1)
+        : Math.max(0, currentIndex < 0 ? ids.length - 1 : currentIndex - 1)
+  const nextTodo = todoStore.todos.find((todo) => todo.id === ids[nextIndex])
+  if (!nextTodo) return
   event.preventDefault()
-  selectTodo(todoStore.todos[nextIndex])
+  selectTodo(nextTodo, true)
 }
 
 function startListResize(event: PointerEvent) {
@@ -244,9 +248,6 @@ onMounted(async () => {
   const storedWidth = Number(localStorage.getItem('workfollow-task-list-width'))
   if (Number.isFinite(storedWidth) && storedWidth > 0) applyListWidth(storedWidth)
   taskNavigationCollapsed.value = localStorage.getItem('workfollow-task-navigation-collapsed') === '1'
-  taskNavigationMedia = window.matchMedia('(max-width: 1023px)')
-  syncTaskNavigationMode()
-  taskNavigationMedia.addEventListener('change', syncTaskNavigationMode)
   window.addEventListener('pointermove', moveListDivider)
   window.addEventListener('pointerup', stopListResize)
   window.addEventListener('keydown', handleWorkspaceKeydown)
@@ -256,7 +257,6 @@ onMounted(async () => {
 })
 
 onBeforeUnmount(() => {
-  taskNavigationMedia?.removeEventListener('change', syncTaskNavigationMode)
   window.removeEventListener('pointermove', moveListDivider)
   window.removeEventListener('pointerup', stopListResize)
   window.removeEventListener('keydown', handleWorkspaceKeydown)
@@ -265,9 +265,14 @@ onBeforeUnmount(() => {
 
 watch(() => [route.query.view, route.query.list, route.query.q] as const, () => { void loadView() })
 
-function selectTodo(todo: Todo) {
+function selectTodo(todo: Todo, focus = false) {
   selectedTodoId.value = todo.id
   selectedTodoDetail.value = null
+  if (focus) {
+    void nextTick(() => Array.from(workspace.value?.querySelectorAll<HTMLElement>('.todo-row[data-todo-id]') ?? [])
+      .find((row) => row.dataset.todoId === todo.id)
+      ?.focus())
+  }
   void fetchTodo(todo.id).then((detail) => { if (selectedTodoId.value === detail.id) selectedTodoDetail.value = detail })
   // Selection is local state only. Writing ?todo= to the URL here would re-enter
   // the route/load chain and reload the whole list (skeleton flash + refetch).
@@ -279,20 +284,7 @@ function clearSelection() {
   selectedTodoDetail.value = null
 }
 
-function closeTaskNavigation() {
-  taskNavigationOpen.value = false
-}
-
-function syncTaskNavigationMode(event?: MediaQueryListEvent) {
-  taskNavigationDrawer.value = event?.matches ?? taskNavigationMedia?.matches ?? false
-  if (!taskNavigationDrawer.value) taskNavigationOpen.value = false
-}
-
 function toggleTaskNavigation() {
-  if (taskNavigationDrawer.value) {
-    taskNavigationOpen.value = !taskNavigationOpen.value
-    return
-  }
   taskNavigationCollapsed.value = !taskNavigationCollapsed.value
   localStorage.setItem('workfollow-task-navigation-collapsed', taskNavigationCollapsed.value ? '1' : '0')
 }
@@ -469,16 +461,12 @@ async function assign(todo: Todo, assigneeIds: string[]) {
 
 <template>
   <div class="page-content tasks-page">
-    <div ref="workspace" class="tasks-workspace" :class="{ 'has-selection': Boolean(selectedTodo), resizing: resizingList, 'navigation-open': taskNavigationOpen, 'navigation-collapsed': taskNavigationCollapsed }" :style="workspaceStyle" @click="toolbarMenuOpen = false">
-      <button v-if="taskNavigationOpen" class="task-navigation-scrim" type="button" aria-label="关闭任务导航" @click="closeTaskNavigation" />
+    <div ref="workspace" class="tasks-workspace" :class="{ 'has-selection': Boolean(selectedTodo), resizing: resizingList, 'navigation-collapsed': taskNavigationCollapsed }" :style="workspaceStyle" @click="toolbarMenuOpen = false">
       <aside
         ref="taskViewSidebar"
         class="task-view-sidebar"
         aria-label="任务视图"
-        :aria-hidden="!taskNavigationDrawer && taskNavigationCollapsed"
-        :inert="!taskNavigationDrawer && taskNavigationCollapsed"
       >
-        <div class="task-side-head"><span>任务</span><button type="button" aria-label="关闭任务导航" @click="closeTaskNavigation"><IconX :size="17" /></button></div>
         <div v-for="group in taskViewGroups" :key="group.label" class="task-view-group">
           <h2>{{ group.label }}</h2>
           <nav class="task-view-nav" :aria-label="group.label">
@@ -489,7 +477,7 @@ async function assign(todo: Todo, assigneeIds: string[]) {
               :class="{ active: !currentListName && currentView.id === view.id }"
               :to="{ path: '/todos', query: { view: view.id } }"
               :aria-current="!currentListName && currentView.id === view.id ? 'page' : undefined"
-              @click.prevent="activateView(view.id); closeTaskNavigation()"
+              @click.prevent="activateView(view.id)"
             >
               <component :is="view.icon" :size="17" :stroke-width="1.8" aria-hidden="true" />
               <span class="task-view-copy"><strong>{{ view.label }}</strong><small>{{ view.hint }}</small></span>
@@ -507,7 +495,7 @@ async function assign(todo: Todo, assigneeIds: string[]) {
               :class="{ active: currentListName === list.name }"
               :to="{ path: '/todos', query: { list: list.name } }"
               :aria-current="currentListName === list.name ? 'page' : undefined"
-              @click.prevent="activateList(list.name); closeTaskNavigation()"
+              @click.prevent="activateList(list.name)"
             >
               <IconList :size="17" :stroke-width="1.8" aria-hidden="true" />
               <span class="task-view-copy"><strong>{{ list.name }}</strong><small>任务清单</small></span>

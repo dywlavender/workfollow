@@ -352,7 +352,14 @@ def create_todo(db: Session, payload: TodoCreate, owner_id: str, *, commit: bool
     return get_todo_or_404(db, todo.id, owner_id)
 
 
-def update_todo(db: Session, todo: Todo, payload: TodoUpdate, actor_id: str | None = None) -> Todo:
+def update_todo(
+    db: Session,
+    todo: Todo,
+    payload: TodoUpdate,
+    actor_id: str | None = None,
+    *,
+    commit: bool = True,
+) -> Todo:
     if actor_id is not None:
         require_editor(db, todo, actor_id)
     changes = payload.model_dump(exclude_unset=True)
@@ -390,7 +397,10 @@ def update_todo(db: Session, todo: Todo, payload: TodoUpdate, actor_id: str | No
 
     for field, value in changes.items():
         setattr(todo, field, value)
-    db.commit()
+    if commit:
+        db.commit()
+    else:
+        db.flush()
     db.refresh(todo)
     return todo
 
@@ -529,7 +539,7 @@ def complete_todo(
     return todo, next_todo
 
 
-def restore_todo(db: Session, todo: Todo, user_id: str) -> Todo:
+def restore_todo(db: Session, todo: Todo, user_id: str, *, commit: bool = True) -> Todo:
     # Restoring an occurrence means its automatically-created future branch is
     # no longer valid. Remove active descendants, but keep already-completed
     # history as detached records so restoring does not erase the audit trail.
@@ -556,7 +566,10 @@ def restore_todo(db: Session, todo: Todo, user_id: str) -> Todo:
     todo.status = TodoStatus.TODO
     recompute_task_status(todo)
     todo.reminded_at = None
-    db.commit()
+    if commit:
+        db.commit()
+    else:
+        db.flush()
     db.refresh(todo)
     return todo
 
@@ -600,9 +613,18 @@ def update_my_status(
     return get_todo_or_404(db, todo.id, user_id), None
 
 
-def acknowledge_reminder(db: Session, todo: Todo, reminded_at: datetime | None = None) -> Todo:
+def acknowledge_reminder(
+    db: Session,
+    todo: Todo,
+    reminded_at: datetime | None = None,
+    *,
+    commit: bool = True,
+) -> Todo:
     todo.reminded_at = reminded_at or local_now()
-    db.commit()
+    if commit:
+        db.commit()
+    else:
+        db.flush()
     db.refresh(todo)
     return todo
 

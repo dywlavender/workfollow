@@ -1,0 +1,748 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>WorkFollow · 四季主题效果图 v2</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; overflow: hidden; }
+  body {
+    font-family: Inter, "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+    font-size: 14px;
+    color: #1f232b;
+    -webkit-font-smoothing: antialiased;
+    background: #f7f8fa;
+  }
+  button { font-family: inherit; border: 0; cursor: pointer; background: none; }
+
+  /* ============ 第 1 层：氛围底（浓渐变） ============ */
+  .atmosphere { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
+  body.atmo-off .atmosphere, body.atmo-off .overlay { opacity: 0; transition: opacity .4s ease; }
+
+  /* 春 */
+  body[data-season="spring"] { background: #ffd9e8; }
+  body[data-season="spring"][data-mode="light"] .atmosphere {
+    background:
+      radial-gradient(820px 500px at 10% -6%, rgba(255,255,255,.85), transparent 58%),
+      radial-gradient(900px 560px at 94% 108%, rgba(236,72,153,.38), transparent 60%),
+      radial-gradient(520px 380px at 80% 18%, rgba(251,146,180,.30), transparent 62%),
+      linear-gradient(158deg, #fff0f6 0%, #ffdcE9 38%, #ffc9de 68%, #ffb6d3 100%);
+  }
+  body[data-season="spring"][data-mode="dark"] { background: #1c0f16; }
+  body[data-season="spring"][data-mode="dark"] .atmosphere {
+    background:
+      radial-gradient(1100px 440px at 72% -16%, rgba(236,72,153,.34), transparent 56%),
+      radial-gradient(760px 420px at 14% 114%, rgba(168,55,120,.32), transparent 58%),
+      radial-gradient(340px 240px at 86% 30%, rgba(249,168,212,.13), transparent 68%),
+      linear-gradient(160deg, #22121b 0%, #1a0d15 52%, #140810 100%);
+  }
+  /* 夏 */
+  body[data-season="summer"] { background: #aee9fb; }
+  body[data-season="summer"][data-mode="light"] .atmosphere {
+    background:
+      linear-gradient(118deg, rgba(255,255,255,.6) 0%, transparent 36%),
+      radial-gradient(900px 560px at 106% -12%, rgba(103,232,249,.65), transparent 58%),
+      radial-gradient(700px 460px at -8% 112%, rgba(14,165,233,.42), transparent 60%),
+      linear-gradient(178deg, #cff3fd 0%, #a8e7fa 48%, #84d8f6 100%);
+  }
+  body[data-season="summer"][data-mode="dark"] { background: #071624; }
+  body[data-season="summer"][data-mode="dark"] .atmosphere {
+    background:
+      radial-gradient(560px 340px at 82% 10%, rgba(186,230,253,.20), transparent 60%),
+      radial-gradient(860px 500px at 10% 118%, rgba(8,145,178,.45), transparent 58%),
+      linear-gradient(176deg, #0c2032 0%, #091826 52%, #061220 100%);
+  }
+  /* 秋 */
+  body[data-season="autumn"] { background: #fbe0b8; }
+  body[data-season="autumn"][data-mode="light"] .atmosphere {
+    background:
+      radial-gradient(860px 540px at 92% 108%, rgba(234,88,12,.35), transparent 58%),
+      radial-gradient(600px 400px at 6% -8%, rgba(250,204,21,.5), transparent 60%),
+      linear-gradient(152deg, #fdf4e0 0%, #fbe6bd 44%, #f8d69c 78%, #f4c47f 100%);
+  }
+  body[data-season="autumn"][data-mode="dark"] { background: #1f1207; }
+  body[data-season="autumn"][data-mode="dark"] .atmosphere {
+    background:
+      radial-gradient(780px 480px at 90% 110%, rgba(217,72,15,.42), transparent 58%),
+      radial-gradient(460px 300px at 74% 74%, rgba(245,158,11,.16), transparent 62%),
+      linear-gradient(154deg, #26170b 0%, #1c1008 54%, #150b05 100%);
+  }
+  /* 冬 */
+  body[data-season="winter"] { background: #cfe4f7; }
+  body[data-season="winter"][data-mode="light"] .atmosphere {
+    background:
+      radial-gradient(800px 480px at 98% -10%, rgba(255,255,255,.95), transparent 60%),
+      radial-gradient(620px 420px at -6% 110%, rgba(96,165,250,.35), transparent 60%),
+      linear-gradient(168deg, #eaf4fd 0%, #d5e8f9 46%, #bcdcf5 82%, #a9d1f1 100%);
+  }
+  body[data-season="winter"][data-mode="dark"] { background: #0a101c; }
+  body[data-season="winter"][data-mode="dark"] .atmosphere {
+    background:
+      radial-gradient(1.6px 1.6px at 12% 18%, rgba(255,255,255,.95), transparent 100%),
+      radial-gradient(1.4px 1.4px at 28% 8%, rgba(255,255,255,.75), transparent 100%),
+      radial-gradient(1.8px 1.8px at 44% 24%, rgba(255,255,255,.9), transparent 100%),
+      radial-gradient(1.3px 1.3px at 63% 12%, rgba(255,255,255,.7), transparent 100%),
+      radial-gradient(1.7px 1.7px at 81% 20%, rgba(255,255,255,.9), transparent 100%),
+      radial-gradient(1.2px 1.2px at 91% 34%, rgba(255,255,255,.65), transparent 100%),
+      radial-gradient(1.5px 1.5px at 18% 40%, rgba(255,255,255,.55), transparent 100%),
+      radial-gradient(1.4px 1.4px at 72% 42%, rgba(255,255,255,.6), transparent 100%),
+      radial-gradient(1.6px 1.6px at 36% 33%, rgba(255,255,255,.7), transparent 100%),
+      radial-gradient(1.2px 1.2px at 55% 36%, rgba(255,255,255,.5), transparent 100%),
+      radial-gradient(700px 420px at 86% 116%, rgba(37,99,235,.30), transparent 60%),
+      linear-gradient(172deg, #0d1628 0%, #0a1120 54%, #070c17 100%);
+  }
+  .grain {
+    position: absolute; inset: 0; opacity: 0;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='.5'/%3E%3C/svg%3E");
+  }
+  body[data-season="autumn"] .grain { opacity: .06; mix-blend-mode: multiply; }
+  body[data-season="autumn"][data-mode="dark"] .grain { opacity: .08; mix-blend-mode: overlay; }
+  .aurora {
+    position: absolute; filter: blur(56px); opacity: 0; border-radius: 50%;
+  }
+  body[data-season="spring"][data-mode="dark"] .aurora.a1,
+  body[data-season="winter"][data-mode="dark"] .aurora.a1 {
+    opacity: .75; width: 720px; height: 170px; top: 5%; left: 24%;
+    transform: rotate(-9deg);
+    background: linear-gradient(90deg, transparent, rgba(244,114,182,.5), rgba(103,232,249,.38), transparent);
+    animation: aurora-drift 15s ease-in-out infinite alternate;
+  }
+  @keyframes aurora-drift {
+    from { transform: rotate(-9deg) translateX(-50px) scaleY(1); opacity: .5; }
+    to   { transform: rotate(-6deg) translateX(60px) scaleY(1.3); opacity: .85; }
+  }
+
+  /* ============ 第 2 层：应用（玻璃面板） ============ */
+  .app {
+    position: relative; z-index: 1;
+    display: grid; grid-template-columns: 152px minmax(0, 1fr);
+    height: 100dvh;
+    color: var(--text-1);
+  }
+  .rail {
+    display: flex; flex-direction: column;
+    padding: 20px 12px 14px;
+    background: var(--rail-bg);
+    backdrop-filter: blur(16px) saturate(1.3);
+    -webkit-backdrop-filter: blur(16px) saturate(1.3);
+    border-right: 1px solid var(--border-glass);
+  }
+  .brand { display: flex; align-items: center; justify-content: center; gap: 9px; margin-bottom: 6px; }
+  .brand-mark {
+    display: grid; place-items: center; width: 32px; height: 32px; flex-basis: 32px;
+    border-radius: 8px; color: #fff; font-weight: 700; font-size: 14px;
+    background: linear-gradient(145deg, var(--accent-glow), var(--accent));
+    box-shadow: 0 6px 18px var(--accent-shadow);
+  }
+  .brand-name { font-weight: 600; font-size: 14px; letter-spacing: -.02em; }
+  .rail-nav { display: flex; flex-direction: column; gap: 6px; margin-top: 28px; }
+  .rail-item {
+    position: relative;
+    display: flex; align-items: center; gap: 10px;
+    height: 40px; padding-inline: 11px;
+    border-radius: 8px; font-size: 13px; font-weight: 600;
+    color: var(--text-3); transition: background .15s ease, color .15s ease;
+  }
+  .rail-item:hover { background: var(--hover-bg); color: var(--text-1); }
+  .rail-item.active { background: var(--accent-soft); color: var(--accent-strong); }
+  .rail-item svg { flex-shrink: 0; }
+  .rail-badge {
+    position: absolute; top: 4px; right: 8px;
+    min-width: 16px; height: 16px; padding-inline: 4px;
+    display: grid; place-items: center;
+    border-radius: 999px; font-size: 10px; font-weight: 600; color: #fff;
+    background: var(--accent);
+  }
+  .rail-bottom { margin-top: auto; display: flex; flex-direction: column; gap: 4px; }
+  .user-card {
+    display: flex; align-items: center; gap: 9px;
+    min-height: 42px; padding: 6px 8px; margin-top: 6px;
+    border-radius: 8px;
+  }
+  .avatar {
+    display: grid; place-items: center; width: 29px; height: 29px; flex-basis: 29px;
+    border-radius: 50%; color: var(--text-2);
+    background: var(--hover-bg);
+  }
+  .user-meta strong { display: block; font-size: 12px; font-weight: 600; }
+  .user-meta small { display: block; font-size: 10px; color: var(--text-4); }
+
+  .workspace {
+    display: grid;
+    grid-template-columns: 216px minmax(360px, 420px) 1px minmax(0, 1fr);
+    height: 100dvh; min-height: 0;
+  }
+  .pane {
+    min-height: 0; overflow-y: auto;
+    background: var(--panel-bg);
+    backdrop-filter: blur(20px) saturate(1.25);
+    -webkit-backdrop-filter: blur(20px) saturate(1.25);
+    box-shadow: inset 0 1px 0 var(--glass-highlight);
+  }
+  .pane::-webkit-scrollbar { width: 8px; }
+  .pane::-webkit-scrollbar-thumb { background: var(--scroll-thumb); border-radius: 999px; border: 2px solid transparent; background-clip: content-box; }
+  .divider { background: var(--border-faint); }
+
+  .pane-head {
+    position: sticky; top: 0; z-index: 2;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 16px 18px 10px;
+    background: inherit;
+  }
+  .pane-title { font-size: 15px; font-weight: 600; letter-spacing: -.01em; }
+  .pane-sub { margin-top: 2px; font-size: 11px; color: var(--text-4); }
+
+  .view-group-label { padding: 10px 18px 6px; font-size: 10px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--text-4); }
+  .view-item {
+    display: flex; align-items: center; gap: 9px;
+    margin: 0 10px; padding: 7px 10px;
+    border-radius: 7px; font-size: 13px; font-weight: 500;
+    color: var(--text-2);
+  }
+  .view-item:hover { background: var(--hover-bg); }
+  .view-item.active { background: var(--accent-soft); color: var(--accent-strong); font-weight: 600; }
+  .view-count { margin-left: auto; font-size: 10px; font-weight: 600; color: var(--text-4); background: var(--chip-bg); padding: 1px 7px; border-radius: 999px; }
+  .view-item.active .view-count { color: inherit; background: rgb(255 255 255 / .35); }
+  body[data-mode="dark"] .view-item.active .view-count { background: rgb(0 0 0 / .22); }
+
+  .task-row {
+    display: flex; gap: 11px; align-items: flex-start;
+    padding: 12px 18px;
+    border-bottom: 1px solid var(--border-faint);
+    cursor: default; transition: background .12s ease;
+  }
+  .task-row:hover { background: var(--row-hover); }
+  .task-row.selected { background: var(--accent-soft); box-shadow: inset 3px 0 0 var(--accent); }
+  .check-ring {
+    flex-shrink: 0; width: 17px; height: 17px; margin-top: 1px;
+    border-radius: 50%; border: 1.6px solid var(--check-border);
+  }
+  .task-row.done .check-ring { border-color: var(--text-4); background: var(--chip-bg); }
+  .task-body { min-width: 0; flex: 1; }
+  .task-title { font-size: 13px; font-weight: 500; line-height: 1.4; }
+  .task-row.done .task-title { color: var(--text-4); text-decoration: line-through; }
+  .task-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+  .tag {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-size: 10px; font-weight: 600;
+    padding: 2px 8px; border-radius: 999px;
+  }
+  .due { font-size: 10px; color: var(--text-4); }
+  .due.soon { color: var(--warn); font-weight: 600; }
+  .prio-dot { width: 6px; height: 6px; border-radius: 50%; }
+  .prio-high { background: #ef4444; } .prio-mid { background: #f59e0b; }
+
+  .detail { padding: 22px 26px 32px; }
+  .detail-kicker { display: flex; align-items: center; gap: 8px; font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--text-4); }
+  .detail-title { margin-top: 8px; font-size: 19px; font-weight: 600; letter-spacing: -.02em; line-height: 1.3; }
+  .detail-tags { display: flex; gap: 6px; margin-top: 10px; }
+  .btn-primary {
+    display: inline-flex; align-items: center; gap: 7px;
+    margin-top: 18px; padding: 8px 15px;
+    border-radius: 8px; font-size: 12px; font-weight: 600; color: #fff;
+    background: var(--accent);
+    box-shadow: 0 6px 18px var(--accent-shadow);
+  }
+  .btn-ghost {
+    display: inline-flex; align-items: center; gap: 7px;
+    margin-top: 18px; margin-left: 8px; padding: 8px 15px;
+    border-radius: 8px; font-size: 12px; font-weight: 600;
+    color: var(--text-2); background: var(--hover-bg);
+  }
+  .detail-section { margin-top: 26px; }
+  .section-label { font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--text-4); }
+  .prose { margin-top: 10px; font-size: 13px; line-height: 1.85; color: var(--text-2); max-width: 620px; }
+  .prose em { font-style: normal; background: linear-gradient(transparent 62%, var(--mark-bg) 0); padding-inline: 1px; }
+  .subtask {
+    display: flex; align-items: center; gap: 10px;
+    padding: 9px 12px; margin-top: 8px;
+    border: 1px solid var(--border-faint); border-radius: 8px;
+    font-size: 12.5px; max-width: 480px;
+    background: var(--card-soft);
+  }
+  .subtask.done { color: var(--text-4); text-decoration: line-through; }
+  .sub-check { width: 15px; height: 15px; border-radius: 5px; border: 1.5px solid var(--check-border); }
+  .subtask.done .sub-check { background: var(--accent); border-color: var(--accent); }
+  .schedule-day {
+    display: grid; place-items: center; width: 34px; height: 34px;
+    border-radius: 8px; font-size: 12px; font-weight: 600;
+    color: var(--accent-strong); background: var(--accent-soft);
+  }
+  .comment { display: flex; gap: 10px; margin-top: 12px; max-width: 560px; }
+  .comment-avatar { width: 27px; height: 27px; flex-basis: 27px; border-radius: 50%; display: grid; place-items: center; font-size: 11px; font-weight: 700; color: #fff; }
+  .comment-bubble { flex: 1; padding: 9px 12px; border-radius: 4px 10px 10px 10px; background: var(--hover-bg); font-size: 12.5px; line-height: 1.6; color: var(--text-2); }
+  .comment-bubble b { display: block; font-size: 11px; color: var(--text-1); margin-bottom: 2px; }
+
+  /* ============ 第 3 层：上层装饰（花瓣/雪花/角落插画，浮在 UI 上） ============ */
+  .overlay {
+    position: fixed; inset: 0; z-index: 50;
+    pointer-events: none; overflow: hidden;
+  }
+  .fall-item { position: absolute; top: -50px; will-change: transform; }
+  .petal { width: 19px; height: 19px; opacity: .85; filter: drop-shadow(0 2px 3px rgb(190 24 93 / .18)); }
+  .leaf  { width: 25px; height: 25px; opacity: .85; filter: drop-shadow(0 2px 3px rgb(154 52 18 / .22)); }
+  .flake { width: 16px; height: 16px; opacity: .9; }
+  body[data-season="spring"] .petal { animation: petal-fall var(--dur, 17s) linear infinite; animation-delay: var(--delay, 0s); }
+  body[data-season="autumn"] .leaf  { animation: leaf-fall  var(--dur, 19s) linear infinite; animation-delay: var(--delay, 0s); }
+  body[data-season="winter"] .flake { animation: flake-fall var(--dur, 21s) linear infinite; animation-delay: var(--delay, 0s); }
+  @keyframes petal-fall {
+    0%   { transform: translate(0, -5vh) rotate(0deg); opacity: 0; }
+    6%   { opacity: .9; }
+    25%  { transform: translate(5vw, 24vh) rotate(95deg); }
+    50%  { transform: translate(-3vw, 50vh) rotate(190deg); }
+    75%  { transform: translate(4vw, 76vh) rotate(280deg); }
+    94%  { opacity: .9; }
+    100% { transform: translate(-2vw, 110vh) rotate(370deg); opacity: 0; }
+  }
+  @keyframes leaf-fall {
+    0%   { transform: translate(0, -5vh) rotate(0deg); opacity: 0; }
+    6%   { opacity: .88; }
+    22%  { transform: translate(4vw, 22vh) rotate(120deg); }
+    50%  { transform: translate(-4vw, 52vh) rotate(230deg); }
+    78%  { transform: translate(3vw, 80vh) rotate(330deg); }
+    100% { transform: translate(-2vw, 110vh) rotate(430deg); opacity: 0; }
+  }
+  @keyframes flake-fall {
+    0%   { transform: translate(0, -5vh); opacity: 0; }
+    8%   { opacity: .9; }
+    50%  { transform: translate(2vw, 52vh) rotate(160deg); }
+    92%  { opacity: .9; }
+    100% { transform: translate(-1vw, 110vh) rotate(320deg); opacity: 0; }
+  }
+  .corner-art { position: absolute; color: var(--art); opacity: var(--art-opacity); }
+  .corner-tr { top: -26px; right: -20px; width: 330px; height: auto; transform: rotate(4deg); }
+  .corner-tl { top: -24px; left: -18px; width: 300px; height: auto; transform: rotate(-3deg); }
+  .cloud {
+    position: absolute; top: 7%; left: 12%;
+    width: 210px; height: 64px; border-radius: 999px;
+    background: rgb(255 255 255 / .85); filter: blur(14px);
+    opacity: 0;
+  }
+  .cloud.c2 { top: 15%; left: 46%; width: 150px; height: 46px; opacity: 0; }
+  body[data-season="summer"][data-mode="light"] .cloud { opacity: .8; animation: cloud-drift 34s ease-in-out infinite alternate; }
+  body[data-season="summer"][data-mode="light"] .cloud.c2 { animation-duration: 46s; animation-delay: -12s; }
+  @keyframes cloud-drift { from { transform: translateX(-30px); } to { transform: translateX(70px); } }
+
+  /* ============ 变量：文字 / 玻璃 / 强调色 ============ */
+  body {
+    --text-1: #22262e; --text-2: #49525d; --text-3: #565f6c; --text-4: #7e8794;
+    --border-faint: rgb(17 24 39 / .07); --border-glass: rgb(255 255 255 / .5);
+    --glass-highlight: rgb(255 255 255 / .55);
+    --scroll-thumb: rgb(17 24 39 / .16);
+    --warn: #a15c08; --mark-bg: rgba(254,240,138,.95);
+    --check-border: #aab3bf; --chip-bg: rgb(17 24 39 / .06);
+    --row-hover: rgb(255 255 255 / .38); --card-soft: rgb(255 255 255 / .42);
+  }
+  body[data-mode="dark"] {
+    --text-1: #f3f5f9; --text-2: #cdd4de; --text-3: #bcc5d0; --text-4: #828c99;
+    --border-faint: rgb(255 255 255 / .08); --border-glass: rgb(255 255 255 / .12);
+    --glass-highlight: rgb(255 255 255 / .07);
+    --scroll-thumb: rgb(255 255 255 / .18);
+    --warn: #f2bd66; --mark-bg: rgba(161,124,34,.9);
+    --check-border: #4d5665; --chip-bg: rgb(255 255 255 / .09);
+    --row-hover: rgb(255 255 255 / .06); --card-soft: rgb(255 255 255 / .05);
+  }
+
+  /* 春 */
+  body[data-season="spring"][data-mode="light"] {
+    --rail-bg: rgb(255 235 243 / .5);
+    --panel-bg: rgb(255 244 249 / .55);
+    --hover-bg: rgb(214 51 122 / .10);
+    --accent: #db3f83; --accent-glow: #fda4ca; --accent-shadow: rgb(219 63 131 / .4);
+    --accent-strong: #c22568;
+    --accent-soft: rgb(219 63 131 / .14);
+    --art: #e0448c; --art-opacity: .5;
+  }
+  body[data-season="spring"][data-mode="dark"] {
+    --rail-bg: rgb(36 20 29 / .55);
+    --panel-bg: rgb(31 17 25 / .6);
+    --hover-bg: rgb(251 164 201 / .11);
+    --accent: #fb9ec6; --accent-glow: #db3f83; --accent-shadow: rgb(251 158 198 / .25);
+    --accent-strong: #fdc6dd;
+    --accent-soft: rgb(251 158 201 / .14);
+    --art: #f7a8cb; --art-opacity: .2;
+  }
+  /* 夏 */
+  body[data-season="summer"][data-mode="light"] {
+    --rail-bg: rgb(228 249 254 / .46);
+    --panel-bg: rgb(240 252 255 / .52);
+    --hover-bg: rgb(2 132 199 / .09);
+    --accent: #028fc4; --accent-glow: #67e8f9; --accent-shadow: rgb(2 143 196 / .4);
+    --accent-strong: #036e96;
+    --accent-soft: rgb(2 143 196 / .12);
+    --art: #0e7490; --art-opacity: .42;
+  }
+  body[data-season="summer"][data-mode="dark"] {
+    --rail-bg: rgb(11 30 45 / .52);
+    --panel-bg: rgb(10 26 40 / .58);
+    --hover-bg: rgb(103 232 249 / .10);
+    --accent: #67e8f9; --accent-glow: #0891b2; --accent-shadow: rgb(103 232 249 / .2);
+    --accent-strong: #a5f3fc;
+    --accent-soft: rgb(103 232 249 / .12);
+    --art: #7dd3fc; --art-opacity: .16;
+  }
+  /* 秋 */
+  body[data-season="autumn"][data-mode="light"] {
+    --rail-bg: rgb(252 240 216 / .5);
+    --panel-bg: rgb(255 249 238 / .56);
+    --hover-bg: rgb(194 65 12 / .10);
+    --accent: #c6520f; --accent-glow: #fdba74; --accent-shadow: rgb(198 82 15 / .4);
+    --accent-strong: #9a3d08;
+    --accent-soft: rgb(198 82 15 / .13);
+    --art: #c2410c; --art-opacity: .48;
+  }
+  body[data-season="autumn"][data-mode="dark"] {
+    --rail-bg: rgb(37 23 12 / .55);
+    --panel-bg: rgb(31 19 11 / .6);
+    --hover-bg: rgb(251 146 60 / .11);
+    --accent: #fbb36a; --accent-glow: #c6520f; --accent-shadow: rgb(251 179 106 / .22);
+    --accent-strong: #fdcaa0;
+    --accent-soft: rgb(251 146 60 / .13);
+    --art: #ea8b3f; --art-opacity: .2;
+  }
+  /* 冬 */
+  body[data-season="winter"][data-mode="light"] {
+    --rail-bg: rgb(232 243 253 / .46);
+    --panel-bg: rgb(245 251 255 / .54);
+    --hover-bg: rgb(43 90 148 / .09);
+    --accent: #3567a8; --accent-glow: #93c5fd; --accent-shadow: rgb(53 103 168 / .38);
+    --accent-strong: #274f86;
+    --accent-soft: rgb(43 90 148 / .11);
+    --art: #638bb5; --art-opacity: .45;
+  }
+  body[data-season="winter"][data-mode="dark"] {
+    --rail-bg: rgb(14 22 39 / .52);
+    --panel-bg: rgb(12 19 34 / .58);
+    --hover-bg: rgb(147 197 253 / .10);
+    --accent: #93c5fd; --accent-glow: #3567a8; --accent-shadow: rgb(147 197 253 / .2);
+    --accent-strong: #bfdcfe;
+    --accent-soft: rgb(147 197 253 / .12);
+    --art: #a5cdfa; --art-opacity: .16;
+  }
+  body[data-season="summer"][data-mode="dark"] .brand-mark,
+  body[data-season="summer"][data-mode="dark"] .rail-badge { color: #062a33; }
+
+  /* 分类标签色（身份色，跨主题稳定） */
+  .tag-inbox  { background: #e5efff; color: #285ea8; }
+  .tag-work   { background: #ebe8ff; color: #584b9b; }
+  .tag-personal { background: #e2f3ed; color: #276d5b; }
+  .tag-study  { background: #fff0d5; color: #815719; }
+  body[data-mode="dark"] .tag-inbox  { background: #243b63; color: #bed5ff; }
+  body[data-mode="dark"] .tag-work   { background: #37315b; color: #d2c8ff; }
+  body[data-mode="dark"] .tag-personal { background: #203d36; color: #9bd2c1; }
+  body[data-mode="dark"] .tag-study  { background: #493820; color: #f0ca8e; }
+
+  /* ============ 切换器 ============ */
+  .switcher {
+    position: fixed; z-index: 100; bottom: 22px; left: 50%; transform: translateX(-50%);
+    display: flex; align-items: center; gap: 4px;
+    padding: 6px; border-radius: 999px;
+    background: rgb(15 18 24 / .85);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+    box-shadow: 0 12px 40px rgb(0 0 0 / .4), inset 0 1px 0 rgb(255 255 255 / .1);
+  }
+  .sw-btn {
+    display: flex; align-items: center; gap: 7px;
+    height: 34px; padding-inline: 13px;
+    border-radius: 999px; font-size: 12.5px; font-weight: 600;
+    color: rgb(255 255 255 / .75);
+    transition: background .15s ease, color .15s ease;
+  }
+  .sw-btn:hover { color: #fff; background: rgb(255 255 255 / .09); }
+  .sw-btn.on { color: #fff; background: rgb(255 255 255 / .17); }
+  .sw-dot { width: 13px; height: 13px; border-radius: 50%; box-shadow: inset 0 0 0 1px rgb(255 255 255 / .3); }
+  .dot-spring { background: linear-gradient(135deg, #fda4ca, #db3f83); }
+  .dot-summer { background: linear-gradient(135deg, #67e8f9, #0284c7); }
+  .dot-autumn { background: linear-gradient(135deg, #fdba74, #c2410c); }
+  .dot-winter { background: linear-gradient(135deg, #bfdbfe, #3567a8); }
+  .sw-sep { width: 1px; height: 20px; margin-inline: 5px; background: rgb(255 255 255 / .15); }
+  .sw-hint {
+    position: fixed; z-index: 100; bottom: 74px; left: 50%; transform: translateX(-50%);
+    font-size: 11px; letter-spacing: .02em; color: #fff;
+    padding: 5px 14px; border-radius: 999px;
+    background: rgb(15 18 24 / .75); backdrop-filter: blur(10px);
+    pointer-events: none; transition: opacity .5s ease;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .petal, .leaf, .flake, .aurora, .cloud { animation: none !important; }
+  }
+</style>
+</head>
+<body data-season="spring" data-mode="light">
+
+<!-- 第 1 层：氛围底 -->
+<div class="atmosphere" aria-hidden="true">
+  <div class="aurora a1"></div>
+  <div class="grain"></div>
+</div>
+
+<!-- 第 2 层：应用 -->
+<div class="app">
+  <aside class="rail">
+    <div class="brand"><span class="brand-mark">W</span><span class="brand-name">WorkFollow</span></div>
+    <nav class="rail-nav">
+      <button class="rail-item"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/></svg><span>首页</span></button>
+      <button class="rail-item active"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="m8.5 12.5 2.5 2.5 4.5-5"/><path d="M8 2v4M16 2v4"/></svg><span>任务</span></button>
+      <button class="rail-item"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M8 3v4M16 3v4M3 10h18"/></svg><span>日历</span></button>
+      <button class="rail-item"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></svg><span>笔记</span></button>
+      <button class="rail-item"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10 14a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1.5 1.5"/><path d="M14 10a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7L12.5 19"/></svg><span>常用</span></button>
+      <button class="rail-item"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 8 3 8H3s3-1 3-8"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg><span>通知</span><span class="rail-badge">3</span></button>
+    </nav>
+    <div class="rail-bottom">
+      <button class="rail-item"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="9" cy="8" r="3.2"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><circle cx="17" cy="9" r="2.6"/><path d="M15.5 14.6A5.2 5.2 0 0 1 21.5 19"/></svg><span>团队</span></button>
+      <button class="rail-item"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1 1.55V21a2 2 0 1 1-4 0v-.09a1.7 1.7 0 0 0-1-1.55 1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.7 1.7 0 0 0 .34-1.87 1.7 1.7 0 0 0-1.55-1H3a2 2 0 1 1 0-4h.09a1.7 1.7 0 0 0 1.55-1 1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.7 1.7 0 0 0 1.87.34h.01a1.7 1.7 0 0 0 1-1.55V3a2 2 0 1 1 4 0v.09a1.7 1.7 0 0 0 1 1.55 1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.7 1.7 0 0 0-.34 1.87v.01a1.7 1.7 0 0 0 1.55 1H21a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.55 1z"/></svg><span>设置</span></button>
+      <div class="user-card">
+        <span class="avatar"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg></span>
+        <span class="user-meta"><strong>杨伟的个人空间</strong><small>dongyangwei</small></span>
+      </div>
+    </div>
+  </aside>
+
+  <main class="workspace">
+    <!-- 视图导航 -->
+    <section class="pane">
+      <div class="pane-head">
+        <div><div class="pane-title">任务</div><div class="pane-sub">4 个视图 · 共 51 条</div></div>
+      </div>
+      <div class="view-group-label">视图</div>
+      <button class="view-item active"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg><span>今天</span><span class="view-count">12</span></button>
+      <button class="view-item"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M8 3v4M16 3v4M3 10h18"/></svg><span>本周</span><span class="view-count">34</span></button>
+      <button class="view-item"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.5 5.1 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.5-6.9A2 2 0 0 0 16.8 4H7.2a2 2 0 0 0-1.7 1.1z"/></svg><span>收件箱</span><span class="view-count">5</span></button>
+      <button class="view-item"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M9 20V9"/></svg><span>按月</span><span class="view-count">51</span></button>
+      <div class="view-group-label">归档</div>
+      <button class="view-item"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8v13H3V8M1 3h22v5H1zM10 12h4"/></svg><span>已完成</span><span class="view-count">128</span></button>
+    </section>
+
+    <!-- 任务列表 -->
+    <section class="pane">
+      <div class="pane-head">
+        <div><div class="pane-title">今天</div><div class="pane-sub">8 月 22 日 星期五 · 12 条待办</div></div>
+        <button class="btn-primary" style="margin-top:0;padding:6px 12px;font-size:11px">+ 新建</button>
+      </div>
+      <div class="task-row selected">
+        <span class="check-ring"></span>
+        <div class="task-body">
+          <div class="task-title">准备季度产品评审演示文稿</div>
+          <div class="task-meta">
+            <span class="tag tag-work">工作</span><span class="prio-dot prio-high"></span><span class="due soon">14:00 截止</span>
+          </div>
+        </div>
+      </div>
+      <div class="task-row">
+        <span class="check-ring"></span>
+        <div class="task-body">
+          <div class="task-title">整理用户反馈：移动端适配问题清单</div>
+          <div class="task-meta"><span class="tag tag-work">工作</span><span class="prio-dot prio-mid"></span><span class="due">今天 18:00</span></div>
+        </div>
+      </div>
+      <div class="task-row done">
+        <span class="check-ring"></span>
+        <div class="task-body">
+          <div class="task-title">晨间复盘：昨日迭代回顾会议纪要</div>
+          <div class="task-meta"><span class="tag tag-personal">个人</span><span class="due">已完成 09:42</span></div>
+        </div>
+      </div>
+      <div class="task-row">
+        <span class="check-ring"></span>
+        <div class="task-body">
+          <div class="task-title">回复合作方邮件，确认下周联调时间</div>
+          <div class="task-meta"><span class="tag tag-inbox">收件箱</span><span class="due soon">16:30 截止</span></div>
+        </div>
+      </div>
+      <div class="task-row">
+        <span class="check-ring"></span>
+        <div class="task-body">
+          <div class="task-title">阅读《设计心理学》第 4 章并做摘录</div>
+          <div class="task-meta"><span class="tag tag-study">学习</span><span class="due">睡前</span></div>
+        </div>
+      </div>
+      <div class="task-row done">
+        <span class="check-ring"></span>
+        <div class="task-body">
+          <div class="task-title">给绿萝浇水、擦叶子</div>
+          <div class="task-meta"><span class="tag tag-personal">个人</span><span class="due">已完成 08:15</span></div>
+        </div>
+      </div>
+      <div class="task-row">
+        <span class="check-ring"></span>
+        <div class="task-body">
+          <div class="task-title">核对报销单据并提交财务系统</div>
+          <div class="task-meta"><span class="tag tag-work">工作</span><span class="prio-dot prio-mid"></span><span class="due">17:00 截止</span></div>
+        </div>
+      </div>
+    </section>
+
+    <div class="divider"></div>
+
+    <!-- 详情面板 -->
+    <section class="pane detail">
+      <div class="detail-kicker">工作 · 今天 14:00 截止</div>
+      <h1 class="detail-title">准备季度产品评审演示文稿</h1>
+      <div class="detail-tags">
+        <span class="tag tag-work">工作</span><span class="tag tag-inbox">Q3 复盘</span>
+      </div>
+      <div><button class="btn-primary"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M5 12l5 5L20 7"/></svg>标记完成</button><button class="btn-ghost">安排到日历</button></div>
+
+      <div class="detail-section">
+        <div class="section-label">描述</div>
+        <p class="prose">汇总三个产品线的季度数据，重点讲清<em>留存率变化的原因分析</em>。评审顺序：先过增长大盘，再逐条讲实验结论，最后留 10 分钟讨论下季度优先级。</p>
+      </div>
+
+      <div class="detail-section">
+        <div class="section-label">子任务 · 2/3</div>
+        <div class="subtask done"><span class="sub-check"></span><span>导出各产品线核心指标数据</span></div>
+        <div class="subtask done"><span class="sub-check"></span><span>完成增长章节图表制作</span></div>
+        <div class="subtask"><span class="sub-check"></span><span>排练一遍讲述节奏（目标 25 分钟）</span></div>
+      </div>
+
+      <div class="detail-section">
+        <div class="section-label">日程</div>
+        <div style="display:flex;align-items:center;gap:12px;margin-top:10px">
+          <span class="schedule-day">22</span>
+          <div style="font-size:12.5px;color:var(--text-2)"><b style="display:block;color:var(--text-1)">8 月 22 日 · 下午</b>评审会议室 A · 14:00 – 15:30</div>
+        </div>
+      </div>
+
+      <div class="detail-section">
+        <div class="section-label">评论 · 2</div>
+        <div class="comment">
+          <span class="comment-avatar" style="background:#584b9b">倩</span>
+          <div class="comment-bubble"><b>林倩 · 上午 10:21</b>数据部分我补充了 7 月的渠道拆分，你直接用共享盘里最新那版就行。</div>
+        </div>
+        <div class="comment">
+          <span class="comment-avatar" style="background:#276d5b">远</span>
+          <div class="comment-bubble"><b>周远 · 上午 11:03</b>讨论环节记得把上次没拍板的「移动端优先级」再抛出来一次。</div>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<!-- 第 3 层：飘落物 + 角落插画（浮在 UI 上层） -->
+<div class="overlay" aria-hidden="true">
+  <!-- 樱花枝（春·右上） -->
+  <svg class="corner-art corner-tr" viewBox="0 0 330 200" fill="none">
+    <path d="M330 18 C 270 30, 224 44, 186 78 C 160 100, 142 128, 134 156" stroke="currentColor" stroke-width="5" stroke-linecap="round"/>
+    <path d="M244 40 C 230 58, 224 76, 226 96" stroke="currentColor" stroke-width="3.4" stroke-linecap="round"/>
+    <g id="sakura-bloom" fill="currentColor">
+      <g transform="translate(186,78)"><ellipse rx="7" ry="11" cx="0" cy="-9"/><ellipse rx="7" ry="11" cx="9" cy="-3" transform="rotate(72)"/><ellipse rx="7" ry="11" cx="6" cy="8" transform="rotate(144)"/><ellipse rx="7" ry="11" cx="-6" cy="8" transform="rotate(216)"/><ellipse rx="7" ry="11" cx="-9" cy="-3" transform="rotate(288)"/><circle r="3.4" fill="#fff" opacity=".85"/></g>
+    </g>
+    <use href="#sakura-bloom" transform="translate(58,-14) scale(.82)"/>
+    <use href="#sakura-bloom" transform="translate(40,18) scale(.66)"/>
+    <use href="#sakura-bloom" transform="translate(226,96) scale(.74)"/>
+    <use href="#sakura-bloom" transform="translate(134,156) scale(.6)"/>
+    <use href="#sakura-bloom" transform="translate(96,52) scale(.52)"/>
+  </svg>
+
+  <!-- 枫叶枝（秋·左上） -->
+  <svg class="corner-art corner-tl" viewBox="0 0 300 190" fill="none">
+    <path d="M-6 20 C 60 26, 120 44, 168 84 C 192 104, 208 130, 214 156" stroke="currentColor" stroke-width="5" stroke-linecap="round"/>
+    <path d="M120 48 C 138 60, 148 78, 150 98" stroke="currentColor" stroke-width="3.4" stroke-linecap="round"/>
+    <g id="maple-leaf" fill="currentColor">
+      <path transform="translate(168,84)" d="M0 -16 L4.5 -8.5 L12.5 -12.5 L11 -3.5 L19.5 -.5 L13 6 L16 14.5 L7 13.5 L4 22 L0 14 L-4 22 L-7 13.5 L-16 14.5 L-13 6 L-19.5 -.5 L-11 -3.5 L-12.5 -12.5 L-4.5 -8.5 Z"/>
+    </g>
+    <use href="#maple-leaf" transform="translate(-52,26) scale(.8) rotate(30)"/>
+    <use href="#maple-leaf" transform="translate(-30,60) scale(.62) rotate(-20)"/>
+    <use href="#maple-leaf" transform="translate(46,98) scale(.7) rotate(15)"/>
+    <use href="#maple-leaf" transform="translate(214,156) scale(.55) rotate(40)"/>
+  </svg>
+
+  <!-- 雪松枝（冬·右上） -->
+  <svg class="corner-art corner-tr" viewBox="0 0 330 200" fill="none">
+    <path d="M330 14 C 268 24, 218 40, 178 72 C 152 92, 136 118, 128 148" stroke="currentColor" stroke-width="5" stroke-linecap="round"/>
+    <g stroke="currentColor" stroke-width="2.6" stroke-linecap="round">
+      <path d="M258 32 l-16 20 M258 32 l6 24 M258 32 l22 12"/>
+      <path d="M206 58 l-14 22 M206 58 l4 25 M206 58 l23 10"/>
+      <path d="M166 92 l-13 21 M166 92 l3 24 M166 92 l21 11"/>
+    </g>
+    <g fill="#fff" opacity=".9">
+      <ellipse cx="252" cy="58" rx="9" ry="3.6" transform="rotate(-18 252 58)"/>
+      <ellipse cx="202" cy="84" rx="8" ry="3.2" transform="rotate(-16 202 84)"/>
+      <ellipse cx="162" cy="117" rx="7" ry="2.8" transform="rotate(-14 162 117)"/>
+      <circle cx="276" cy="26" r="4.6"/><circle cx="188" cy="66" r="3.8"/>
+    </g>
+  </svg>
+
+  <!-- 云（夏） -->
+  <div class="cloud c1"></div>
+  <div class="cloud c2"></div>
+
+  <!-- 花瓣（春） -->
+  <svg class="fall-item petal" style="--dur:15s;--delay:0s;left:7%" viewBox="0 0 24 24"><path d="M12 1 C18 5 20 12 12 23 C4 12 6 5 12 1Z" fill="#f472a8"/></svg>
+  <svg class="fall-item petal" style="--dur:20s;--delay:-6s;left:19%" viewBox="0 0 24 24"><path d="M12 1 C18 5 20 12 12 23 C4 12 6 5 12 1Z" fill="#ec5f97"/></svg>
+  <svg class="fall-item petal" style="--dur:17s;--delay:-11s;left:41%" viewBox="0 0 24 24"><path d="M12 1 C18 5 20 12 12 23 C4 12 6 5 12 1Z" fill="#f9a8c9"/></svg>
+  <svg class="fall-item petal" style="--dur:23s;--delay:-3s;left:58%" viewBox="0 0 24 24"><path d="M12 1 C18 5 20 12 12 23 C4 12 6 5 12 1Z" fill="#f472a8"/></svg>
+  <svg class="fall-item petal" style="--dur:18s;--delay:-14s;left:74%" viewBox="0 0 24 24"><path d="M12 1 C18 5 20 12 12 23 C4 12 6 5 12 1Z" fill="#ee5f9a"/></svg>
+  <svg class="fall-item petal" style="--dur:22s;--delay:-9s;left:88%" viewBox="0 0 24 24"><path d="M12 1 C18 5 20 12 12 23 C4 12 6 5 12 1Z" fill="#fbc0d8"/></svg>
+  <svg class="fall-item petal" style="--dur:25s;--delay:-17s;left:30%" viewBox="0 0 24 24"><path d="M12 1 C18 5 20 12 12 23 C4 12 6 5 12 1Z" fill="#f9a8c9"/></svg>
+  <svg class="fall-item petal" style="--dur:19s;--delay:-20s;left:64%" viewBox="0 0 24 24"><path d="M12 1 C18 5 20 12 12 23 C4 12 6 5 12 1Z" fill="#f472a8"/></svg>
+
+  <!-- 枫叶（秋） -->
+  <svg class="fall-item leaf" style="--dur:16s;--delay:0s;left:8%" viewBox="0 0 24 24"><path d="M12 2l2.2 3.6 3.8-1.2-.9 3.9 3.9.9-2.6 3 2.6 3-3.9.9.9 3.9-3.8-1.2L12 22l-2.2-3.2-3.8 1.2.9-3.9-3.9-.9 2.6-3-2.6-3 3.9-.9-.9-3.9 3.8 1.2z" fill="#d96a2a"/></svg>
+  <svg class="fall-item leaf" style="--dur:21s;--delay:-8s;left:26%" viewBox="0 0 24 24"><path d="M12 2l2.2 3.6 3.8-1.2-.9 3.9 3.9.9-2.6 3 2.6 3-3.9.9.9 3.9-3.8-1.2L12 22l-2.2-3.2-3.8 1.2.9-3.9-3.9-.9 2.6-3-2.6-3 3.9-.9-.9-3.9 3.8 1.2z" fill="#c2410c"/></svg>
+  <svg class="fall-item leaf" style="--dur:18s;--delay:-13s;left:52%" viewBox="0 0 24 24"><path d="M12 2l2.2 3.6 3.8-1.2-.9 3.9 3.9.9-2.6 3 2.6 3-3.9.9.9 3.9-3.8-1.2L12 22l-2.2-3.2-3.8 1.2.9-3.9-3.9-.9 2.6-3-2.6-3 3.9-.9-.9-3.9 3.8 1.2z" fill="#e0913f"/></svg>
+  <svg class="fall-item leaf" style="--dur:24s;--delay:-4s;left:71%" viewBox="0 0 24 24"><path d="M12 2l2.2 3.6 3.8-1.2-.9 3.9 3.9.9-2.6 3 2.6 3-3.9.9.9 3.9-3.8-1.2L12 22l-2.2-3.2-3.8 1.2.9-3.9-3.9-.9 2.6-3-2.6-3 3.9-.9-.9-3.9 3.8 1.2z" fill="#b8431f"/></svg>
+  <svg class="fall-item leaf" style="--dur:20s;--delay:-16s;left:87%" viewBox="0 0 24 24"><path d="M12 2l2.2 3.6 3.8-1.2-.9 3.9 3.9.9-2.6 3 2.6 3-3.9.9.9 3.9-3.8-1.2L12 22l-2.2-3.2-3.8 1.2.9-3.9-3.9-.9 2.6-3-2.6-3 3.9-.9-.9-3.9 3.8 1.2z" fill="#d96a2a"/></svg>
+  <svg class="fall-item leaf" style="--dur:26s;--delay:-11s;left:40%" viewBox="0 0 24 24"><path d="M12 2l2.2 3.6 3.8-1.2-.9 3.9 3.9.9-2.6 3 2.6 3-3.9.9.9 3.9-3.8-1.2L12 22l-2.2-3.2-3.8 1.2.9-3.9-3.9-.9 2.6-3-2.6-3 3.9-.9-.9-3.9 3.8 1.2z" fill="#e0913f"/></svg>
+
+  <!-- 雪花（冬） -->
+  <svg class="fall-item flake" style="--dur:18s;--delay:0s;left:6%" viewBox="0 0 24 24" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round"><path d="M12 2v20M4 6l16 12M20 6L4 18" fill="none" opacity=".95"/></svg>
+  <svg class="fall-item flake" style="--dur:23s;--delay:-9s;left:22%" viewBox="0 0 24 24" stroke="#dbeafe" stroke-width="1.8" stroke-linecap="round"><path d="M12 2v20M4 6l16 12M20 6L4 18" fill="none"/></svg>
+  <svg class="fall-item flake" style="--dur:20s;--delay:-15s;left:45%" viewBox="0 0 24 24" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round"><path d="M12 2v20M4 6l16 12M20 6L4 18" fill="none" opacity=".9"/></svg>
+  <svg class="fall-item flake" style="--dur:25s;--delay:-5s;left:63%" viewBox="0 0 24 24" stroke="#eff6ff" stroke-width="1.8" stroke-linecap="round"><path d="M12 2v20M4 6l16 12M20 6L4 18" fill="none"/></svg>
+  <svg class="fall-item flake" style="--dur:21s;--delay:-18s;left:81%" viewBox="0 0 24 24" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round"><path d="M12 2v20M4 6l16 12M20 6L4 18" fill="none" opacity=".92"/></svg>
+  <svg class="fall-item flake" style="--dur:27s;--delay:-12s;left:93%" viewBox="0 0 24 24" stroke="#dbeafe" stroke-width="1.8" stroke-linecap="round"><path d="M12 2v20M4 6l16 12M20 6L4 18" fill="none"/></svg>
+  <svg class="fall-item flake" style="--dur:24s;--delay:-21s;left:34%" viewBox="0 0 24 24" stroke="#eff6ff" stroke-width="1.8" stroke-linecap="round"><path d="M12 2v20M4 6l16 12M20 6L4 18" fill="none"/></svg>
+</div>
+
+<!-- 切换器 -->
+<div class="sw-hint" id="hint">底部切换季节与明暗 · 「氛围」按钮可开关装饰层对比效果</div>
+<div class="switcher">
+  <button class="sw-btn on" data-season="spring"><span class="sw-dot dot-spring"></span>春 · 樱语</button>
+  <button class="sw-btn" data-season="summer"><span class="sw-dot dot-summer"></span>夏 · 青屿</button>
+  <button class="sw-btn" data-season="autumn"><span class="sw-dot dot-autumn"></span>秋 · 柿染</button>
+  <button class="sw-btn" data-season="winter"><span class="sw-dot dot-winter"></span>冬 · 霜松</button>
+  <span class="sw-sep"></span>
+  <button class="sw-btn" id="modeBtn">☀︎ 浅色</button>
+  <button class="sw-btn" id="atmoBtn">✦ 氛围 开</button>
+</div>
+
+<script>
+  const seasonBtns = document.querySelectorAll('.sw-btn[data-season]');
+  const modeBtn = document.getElementById('modeBtn');
+  const atmoBtn = document.getElementById('atmoBtn');
+  const hint = document.getElementById('hint');
+
+  seasonBtns.forEach(b => b.addEventListener('click', () => {
+    document.body.dataset.season = b.dataset.season;
+    seasonBtns.forEach(x => x.classList.toggle('on', x === b));
+    flashHint();
+  }));
+
+  let dark = false;
+  modeBtn.addEventListener('click', () => {
+    dark = !dark;
+    document.body.dataset.mode = dark ? 'dark' : 'light';
+    modeBtn.textContent = dark ? '☾ 深色' : '☀︎ 浅色';
+    flashHint();
+  });
+
+  let atmoOn = true;
+  atmoBtn.addEventListener('click', () => {
+    atmoOn = !atmoOn;
+    document.body.classList.toggle('atmo-off', !atmoOn);
+    atmoBtn.textContent = atmoOn ? '✦ 氛围 开' : '○ 氛围 关';
+  });
+
+  let hintTimer;
+  function flashHint() {
+    hint.style.opacity = '1';
+    clearTimeout(hintTimer);
+    hintTimer = setTimeout(() => { hint.style.opacity = '0'; }, 2600);
+  }
+  setTimeout(() => { hint.style.opacity = '0'; }, 4500);
+</script>
+</body>
+</html>

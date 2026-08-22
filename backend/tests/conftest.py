@@ -24,8 +24,16 @@ TestingSession = sessionmaker(bind=engine, autoflush=False, expire_on_commit=Fal
 TEST_USER_ID = "20000000-0000-0000-0000-000000000001"
 
 
+def drop_note_search() -> None:
+    with engine.begin() as connection:
+        for trigger in ("search_documents_au", "search_documents_ad", "search_documents_ai"):
+            connection.exec_driver_sql(f"DROP TRIGGER IF EXISTS {trigger}")
+        connection.exec_driver_sql("DROP TABLE IF EXISTS note_search")
+
+
 @pytest.fixture(autouse=True)
 def reset_database() -> Generator[None, None, None]:
+    drop_note_search()
     Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
     with TestingSession() as session:
@@ -41,6 +49,7 @@ def reset_database() -> Generator[None, None, None]:
         )
         seed_builtin_templates(session)
     yield
+    drop_note_search()
     Base.metadata.drop_all(bind=engine)
 
 

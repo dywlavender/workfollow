@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onMounted } from 'vue'
 import {
   IconBell,
   IconCalendar,
@@ -14,37 +14,16 @@ import {
 import { useRoute } from 'vue-router'
 
 import { useAuthStore } from '@/stores/auth'
+import { useRealtimeStore } from '@/stores/realtime'
 import { useWorkspaceStore } from '@/stores/workspace'
-import { fetchNotifications } from '@/services/api'
 
 const route = useRoute()
 const auth = useAuthStore()
 const workspace = useWorkspaceStore()
-const unreadCount = ref(0)
-let unreadTimer: number | undefined
+const realtime = useRealtimeStore()
+const unreadCount = computed(() => realtime.unreadCount)
 
-async function refreshUnread() {
-  if (!auth.user) {
-    unreadCount.value = 0
-    return
-  }
-  try {
-    unreadCount.value = (await fetchNotifications(true)).length
-  } catch {
-    // Keep the last known count when the request fails; the badge is advisory.
-  }
-}
-
-onMounted(() => {
-  void refreshUnread()
-  unreadTimer = window.setInterval(refreshUnread, 60_000)
-})
-
-onBeforeUnmount(() => {
-  if (unreadTimer) window.clearInterval(unreadTimer)
-})
-
-watch(() => route.fullPath, () => { void refreshUnread() })
+onMounted(() => { void realtime.refreshUnreadCount() })
 
 const currentTeam = computed(() => workspace.currentTeam ?? workspace.teams[0] ?? null)
 interface RailItem {
@@ -97,7 +76,6 @@ function isActive(target: string | { path: string; query?: Record<string, string
         :class="{ active: isActive(item.to) }"
         :to="item.to"
         :aria-label="item.badge === 'unread' && unreadCount ? `${item.label}，${unreadCount} 条未读` : item.label"
-        :title="item.label"
       >
         <component :is="item.icon" :size="19" :stroke-width="1.8" aria-hidden="true" />
         <span class="rail-label" aria-hidden="true">{{ item.shortLabel }}</span>
@@ -106,10 +84,10 @@ function isActive(target: string | { path: string; query?: Record<string, string
     </nav>
 
     <div class="sidebar-bottom">
-      <RouterLink class="sidebar-settings-link" :to="currentTeam ? `/team/${currentTeam.id}` : '/teams'" :class="{ active: route.path === '/teams' || route.path.startsWith('/team/') }" aria-label="团队管理" title="团队管理">
+      <RouterLink class="sidebar-settings-link" :to="currentTeam ? `/team/${currentTeam.id}` : '/teams'" :class="{ active: route.path === '/teams' || route.path.startsWith('/team/') }" aria-label="团队管理">
         <IconUsers :size="19" :stroke-width="1.8" aria-hidden="true" /><span>团队</span>
       </RouterLink>
-      <RouterLink class="sidebar-settings-link" to="/settings" :class="{ active: route.path === '/settings' }" aria-label="设置" title="设置">
+      <RouterLink class="sidebar-settings-link" to="/settings" :class="{ active: route.path === '/settings' }" aria-label="设置">
         <IconSettings :size="19" :stroke-width="1.8" aria-hidden="true" />
         <span>设置</span>
       </RouterLink>

@@ -19,3 +19,7 @@ class NotificationRead(ApiModel):
 class NotificationReadResult(ApiModel):
     id: str
     read_at: datetime
+
+
+class NotificationUnreadCount(ApiModel):
+    count: int

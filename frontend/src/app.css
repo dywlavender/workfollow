@@ -1,0 +1,12 @@
+/*
+ * Canonical application cascade.
+ *
+ * The source files stay grouped by responsibility so a change can be found
+ * without scanning one very large file: base primitives and legacy feature
+ * contracts first, the visual refresh second, and the shell/layout contract
+ * last. Keeping the order in one entry point removes import-order drift from
+ * main.ts and makes the precedence intentional.
+ */
+@import './styles.css';
+@import './redesign.css';
+@import './layout.css';

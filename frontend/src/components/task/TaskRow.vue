@@ -29,6 +29,7 @@ const emit = defineEmits<{
     class="task-row"
     :class="{ selected, terminal, cancelled }"
     tabindex="0"
+    :aria-selected="selected ? 'true' : 'false'"
     @click="emit('select')"
     @keydown.enter="emit('select')"
     @contextmenu.prevent.stop="emit('context', $event)"

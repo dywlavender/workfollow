@@ -59,7 +59,6 @@ async function submit() {
       </aside>
 
       <section class="auth-panel">
-        <div class="auth-mobile-brand"><span>W</span><strong>WorkFollow</strong></div>
         <header class="auth-heading">
           <span class="auth-mode-label">{{ isRegister ? '创建账号' : '欢迎回来' }}</span>
           <h1>{{ isRegister ? '开始你的工作空间' : '登录 WorkFollow' }}</h1>

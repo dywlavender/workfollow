@@ -24,7 +24,7 @@ import {
   fetchNotifications,
   fetchReviewSubmissions,
   fetchTodos,
-  type Note,
+  type NoteListItem,
   type Todo,
   type TodoView,
 } from '@/services/api'
@@ -39,7 +39,7 @@ const router = useRouter()
 const allTodayTodos = ref<Todo[]>([])
 const calendarTodos = ref<Todo[]>([])
 const assignedTodos = ref<Todo[]>([])
-const recentNotes = ref<Note[]>([])
+const recentNotes = ref<NoteListItem[]>([])
 const pendingCounts = ref({ assigned: 0, shared: 0, revision: 0, review: 0 })
 const loading = ref(true)
 const error = ref<string | null>(null)
@@ -227,7 +227,7 @@ function overdueLabel(todo: Todo) {
   return due.format('M月D日')
 }
 
-function noteTime(note: Note) {
+function noteTime(note: NoteListItem) {
   const updated = dayjs(note.updatedAt)
   if (updated.isSame(dayjs(), 'minute')) return '刚刚'
   if (updated.isSame(dayjs(), 'day')) return updated.format('HH:mm')

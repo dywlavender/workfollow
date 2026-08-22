@@ -20,7 +20,7 @@ from app.schemas.todo import (
     TodoTransfer,
     TodoUpdate,
 )
-from app.services import audit_service, resource_relation_service, task_notification_service, todo_service
+from app.services import audit_service, event_stream, resource_relation_service, task_notification_service, todo_service
 
 
 router = APIRouter(tags=["tasks"])
@@ -129,15 +129,18 @@ def post_todo(payload: TodoCreate, db: DbSession, user: CurrentUser) -> TodoRead
             team_id=todo.team_id,
             metadata_json={"assigneeIds": [item.user_id for item in todo.assignments if item.active]},
         )
-    else:
-        db.commit()
+    event_stream.queue_task_changed(db, todo)
+    db.commit()
     return todo_read(db, todo, user.id, include_sources=True)
 
 
 @router.put("/{todo_id}", response_model=TodoRead)
 def put_todo(todo_id: str, payload: TodoUpdate, db: DbSession, user: CurrentUser) -> TodoRead:
     todo = todo_service.get_todo_or_404(db, todo_id, user.id)
-    return todo_read(db, todo_service.update_todo(db, todo, payload, user.id), user.id)
+    updated = todo_service.update_todo(db, todo, payload, user.id, commit=False)
+    event_stream.queue_task_changed(db, updated)
+    db.commit()
+    return todo_read(db, updated, user.id)
 
 
 @router.post("/{todo_id}/complete", response_model=TodoCompleteResult)
@@ -152,6 +155,9 @@ def complete_todo(todo_id: str, db: DbSession, user: CurrentUser) -> TodoComplet
             task_notification_service.notify_task_completed(db, todo, user.id, commit=False)
         else:
             task_notification_service.notify_task_assignment_completed(db, todo, user.id, commit=False)
+    event_stream.queue_task_changed(db, todo)
+    if next_todo:
+        event_stream.queue_task_changed(db, next_todo)
     db.commit()
     return TodoCompleteResult(
         todo=todo_read(db, todo, user.id),
@@ -161,7 +167,14 @@ def complete_todo(todo_id: str, db: DbSession, user: CurrentUser) -> TodoComplet
 
 @router.post("/{todo_id}/restore", response_model=TodoRead)
 def restore_todo(todo_id: str, db: DbSession, user: CurrentUser) -> TodoRead:
-    todo = todo_service.restore_todo(db, todo_service.get_todo_or_404(db, todo_id, user.id), user.id)
+    todo = todo_service.restore_todo(
+        db,
+        todo_service.get_todo_or_404(db, todo_id, user.id),
+        user.id,
+        commit=False,
+    )
+    event_stream.queue_task_changed(db, todo)
+    db.commit()
     return todo_read(db, todo, user.id)
 
 
@@ -176,7 +189,7 @@ def put_my_status(todo_id: str, payload: TodoMyStatusUpdate, db: DbSession, user
     current = todo_service.get_todo_or_404(db, todo_id, user.id)
     assignment = todo_service.active_assignment(current, user.id)
     was_done = assignment is None or assignment.status == TodoAssignmentStatus.DONE
-    todo, _ = todo_service.update_my_status(
+    todo, next_todo = todo_service.update_my_status(
         db, current, user.id, payload.status, commit=False
     )
     if payload.status == TodoAssignmentStatus.DONE and not was_done:
@@ -184,6 +197,9 @@ def put_my_status(todo_id: str, payload: TodoMyStatusUpdate, db: DbSession, user
             task_notification_service.notify_task_completed(db, todo, user.id, commit=False)
         else:
             task_notification_service.notify_task_assignment_completed(db, todo, user.id, commit=False)
+    event_stream.queue_task_changed(db, todo)
+    if next_todo:
+        event_stream.queue_task_changed(db, next_todo)
     db.commit()
     return todo_read(db, todo, user.id)
 
@@ -203,6 +219,7 @@ def put_assignees(todo_id: str, payload: TodoAssigneesUpdate, db: DbSession, use
     task_notification_service.notify_assignees_changed(
         db, todo, user.id, previous, current_ids, commit=False
     )
+    event_stream.queue_task_changed(db, todo)
     db.commit()
     return todo_read(db, todo, user.id)
 
@@ -217,6 +234,7 @@ def abandon_todo(todo_id: str, db: DbSession, user: CurrentUser) -> TodoRead:
     task_notification_service.notify_task_cancelled(
         db, cancelled, user.id, participant_ids, commit=False
     )
+    event_stream.queue_task_changed(db, cancelled)
     db.commit()
     return todo_read(db, cancelled, user.id)
 
@@ -224,8 +242,13 @@ def abandon_todo(todo_id: str, db: DbSession, user: CurrentUser) -> TodoRead:
 @router.post("/{todo_id}/reminded", response_model=TodoRead)
 def mark_reminded(todo_id: str, payload: ReminderAcknowledge, db: DbSession, user: CurrentUser) -> TodoRead:
     todo = todo_service.acknowledge_reminder(
-        db, todo_service.get_todo_or_404(db, todo_id, user.id), payload.reminded_at
+        db,
+        todo_service.get_todo_or_404(db, todo_id, user.id),
+        payload.reminded_at,
+        commit=False,
     )
+    event_stream.queue_task_changed(db, todo)
+    db.commit()
     return todo_read(db, todo, user.id)
 
 
@@ -233,6 +256,7 @@ def mark_reminded(todo_id: str, payload: ReminderAcknowledge, db: DbSession, use
 def delete_todo(todo_id: str, db: DbSession, user: CurrentUser) -> Response:
     todo = todo_service.get_todo_or_404(db, todo_id, user.id)
     todo_service.require_creator(todo, user.id)
+    event_stream.queue_task_changed(db, todo, deleted=True)
     db.delete(todo)
     db.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
@@ -259,6 +283,7 @@ def transfer_todo(todo_id: str, payload: TodoTransfer, db: DbSession, user: Curr
     task_notification_service.notify_assignees_changed(
         db, task, user.id, previous, current_ids, commit=False
     )
+    event_stream.queue_task_changed(db, task)
     audit_service.record_audit(
         db, actor_user_id=user.id, action="TASK_ASSIGNED", resource_type="TASK", resource_id=task.id,
         team_id=payload.team_id,
@@ -266,4 +291,5 @@ def transfer_todo(todo_id: str, payload: TodoTransfer, db: DbSession, user: Curr
             "assigneeIds": [assignment.user_id for assignment in task.assignments],
         },
     )
+    db.commit()
     return todo_read(db, task, user.id)

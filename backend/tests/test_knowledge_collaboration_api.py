@@ -307,6 +307,60 @@ def test_withdraw_archive_and_backend_permissions(client: TestClient, db) -> Non
     assert outsider.id != member.id
 
 
+def test_archived_team_knowledge_can_be_permanently_deleted_by_manager_only(client: TestClient, db) -> None:
+    _team_id, _member, _outsider, member_client, _outsider_client = setup_team(client, db)
+    knowledge = client.post("/api/team/knowledge", json={"title": "可删除知识"}).json()
+    knowledge_id = knowledge["id"]
+
+    copied = member_client.post(f"/api/team/knowledge/{knowledge_id}/copy")
+    assert copied.status_code == 201, copied.text
+    copied_note_id = copied.json()["id"]
+
+    assert member_client.delete(f"/api/team/knowledge/{knowledge_id}").status_code == 403
+    assert client.delete(f"/api/team/knowledge/{knowledge_id}").status_code == 409
+    archived = client.post(f"/api/team/knowledge/{knowledge_id}/archive")
+    assert archived.status_code == 200, archived.text
+    assert archived.json()["permissions"]["canDelete"] is True
+
+    deleted = client.delete(f"/api/team/knowledge/{knowledge_id}")
+    assert deleted.status_code == 204, deleted.text
+    assert client.get(f"/api/team/knowledge/{knowledge_id}").status_code == 404
+    assert member_client.get(f"/api/notes/{copied_note_id}").status_code == 200
+    assert db.scalar(select(func.count(TeamNote.id)).where(TeamNote.id == knowledge_id)) == 0
+    assert db.scalar(select(func.count(TeamNoteVersion.id)).where(
+        TeamNoteVersion.team_note_id == knowledge_id
+    )) == 0
+
+
+def test_archived_team_knowledge_delete_waits_for_pending_update_submission(client: TestClient, db) -> None:
+    _team_id, _member, _outsider, member_client, _outsider_client = setup_team(client, db)
+    knowledge = client.post("/api/team/knowledge", json={"title": "有更新申请的知识"}).json()
+    draft = member_client.post(f"/api/team/knowledge/{knowledge['id']}/update-draft")
+    assert draft.status_code == 200, draft.text
+    assert member_client.put(
+        f"/api/notes/{draft.json()['id']}", json={"plainText": "申请更新后的正文"}
+    ).status_code == 200
+    submission = member_client.post(
+        f"/api/notes/{draft.json()['id']}/submissions",
+        json={"type": "UPDATE", "targetTeamNoteId": knowledge["id"]},
+    )
+    assert submission.status_code == 201, submission.text
+
+    assert client.post(f"/api/team/knowledge/{knowledge['id']}/archive").status_code == 200
+    blocked = client.delete(f"/api/team/knowledge/{knowledge['id']}")
+    assert blocked.status_code == 409, blocked.text
+    assert "待处理的更新申请" in blocked.json()["detail"]
+
+    assert member_client.post(
+        f"/api/note-submissions/{submission.json()['id']}/withdraw"
+    ).status_code == 200
+    assert client.delete(f"/api/team/knowledge/{knowledge['id']}").status_code == 204
+    historical = db.get(TeamNoteSubmission, submission.json()["id"])
+    assert historical is not None
+    assert historical.target_team_note_id is None
+    assert historical.approved_team_note_id is None
+
+
 def test_submission_rejects_forged_private_file_reference(client: TestClient, db) -> None:
     _team_id, _member, outsider, member_client, _outsider_client = setup_team(client, db)
     private = Note(

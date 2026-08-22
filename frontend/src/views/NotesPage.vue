@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { IconX } from '@tabler/icons-vue'
-import { computed, onMounted, ref, watch } from 'vue'
+import { IconSearch, IconX } from '@tabler/icons-vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
@@ -12,6 +12,7 @@ import MarkdownImportDialog from '@/components/notes/MarkdownImportDialog.vue'
 import NoteEditor from '@/components/notes/NoteEditor.vue'
 import NoteList from '@/components/notes/NoteList.vue'
 import NoteNavigation, { type NoteView } from '@/components/notes/NoteNavigation.vue'
+import SearchResults from '@/components/notes/SearchResults.vue'
 import NoteTemplateDialog from '@/components/notes/NoteTemplateDialog.vue'
 import NoteTemplateEditorDialog from '@/components/notes/NoteTemplateEditorDialog.vue'
 import NoteTemplateManagerDialog from '@/components/notes/NoteTemplateManagerDialog.vue'
@@ -22,24 +23,26 @@ import SharedNoteDetail from '@/components/notes/SharedNoteDetail.vue'
 import SubmissionWorkspace from '@/components/notes/SubmissionWorkspace.vue'
 import { useDialogEscape } from '@/composables/useDialogEscape'
 import {
-  approveSubmission, archiveKnowledge, copyKnowledge, copyNote, copySharedNote, deleteAttachment, deleteFolder, deleteKnowledgeCategory, deleteNote,
-  fetchAttachments, fetchFolders, fetchKnowledge, fetchKnowledgeCategories, fetchKnowledgeVersions,
-  deleteNoteTemplate, fetchMySubmissions, fetchNoteShares, fetchNotes, fetchNoteTemplates, fetchRelatedKnowledge,
-  fetchReviewSubmissions, fetchSharedNotes, fetchTeamMembers, importMarkdownNote, postFolder, postKnowledge, postNote,
+  approveSubmission, archiveKnowledge, copyKnowledge, copyNote, copySharedNote, deleteAttachment, deleteFolder, deleteKnowledge, deleteKnowledgeCategory, deleteNote,
+  fetchAttachments, fetchFolders, fetchKnowledge, fetchKnowledgeCategories, fetchKnowledgeNote, fetchKnowledgeVersions, fetchNote,
+  deleteNoteTemplate, fetchMySubmissions, fetchNoteCounts, fetchNoteShares, fetchNoteTags, fetchNotes, fetchNoteTemplates, fetchRelatedKnowledge,
+  fetchReviewSubmissions, fetchSearch, fetchSharedNotes, fetchTeamMembers, importMarkdownNote, postFolder, postKnowledge, postNote,
   postKnowledgeCategory,
   postNoteFromTemplate, postNoteTemplate, postNoteTemplateFromNote, putFolder, putKnowledge, putKnowledgeCategory, putNote, putNoteTemplate, rejectSubmission,
   requestSubmissionRevision, resubmitSubmission, restoreKnowledge, submitNoteToKnowledge, syncNoteShares, ensureKnowledgeUpdateDraft,
   uploadAttachment, withdrawSubmission,
-  type Attachment, type Folder, type KnowledgeCategory, type Note, type NoteShare,
+  type Attachment, type Folder, type KnowledgeCategory, type Note, type NoteListItem, type NoteShare, type SearchItem,
   type NoteTemplate, type SharedNote, type SubmissionPayload, type SubmissionReviewPayload, type TeamMember, type TeamNote,
-  type TeamNoteSubmission, type TeamNoteVersion,
+  type TeamNoteListItem, type TeamNoteSubmission, type TeamNoteVersion,
 } from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
+import { useRealtimeStore } from '@/stores/realtime'
 import { useWorkspaceStore } from '@/stores/workspace'
 
 const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
+const realtime = useRealtimeStore()
 const workspace = useWorkspaceStore()
 const currentTeam = computed(() => workspace.currentTeam ?? workspace.teams[0] ?? null)
 const selectedTeamId = computed(() => currentTeam.value?.id)
@@ -48,10 +51,11 @@ const isRoot = computed(() => auth.user?.systemRole === 'ROOT')
 const canReview = computed(() => isRoot.value || currentTeam.value?.role === 'OWNER' || currentTeam.value?.role === 'ADMIN')
 
 const folders = ref<Folder[]>([])
-const notes = ref<Note[]>([])
+const notes = ref<NoteListItem[]>([])
 const sharedNotes = ref<SharedNote[]>([])
-const knowledge = ref<TeamNote[]>([])
-const archivedKnowledge = ref<TeamNote[]>([])
+const knowledge = ref<TeamNoteListItem[]>([])
+const archivedKnowledge = ref<TeamNoteListItem[]>([])
+const knowledgeDetails = ref<TeamNote[]>([])
 const categories = ref<KnowledgeCategory[]>([])
 const members = ref<TeamMember[]>([])
 const submissions = ref<TeamNoteSubmission[]>([])
@@ -67,10 +71,19 @@ const selectedSubmission = ref<TeamNoteSubmission | null>(null)
 const attachments = ref<Attachment[]>([])
 const shares = ref<NoteShare[]>([])
 const search = ref('')
+const availableTags = ref<string[]>([])
+const selectedTag = ref<string | null>(null)
+const unfiledCount = ref(0)
+const globalSearchQuery = ref('')
+const globalSearchItems = ref<SearchItem[]>([])
+const globalSearchLoading = ref(false)
+const globalSearchError = ref<string | null>(null)
+const globalSearchOpen = ref(false)
+const globalSearchInput = ref<HTMLInputElement | null>(null)
 const knowledgeStatusFilter = ref<'published' | 'archived'>('published')
 const pageError = ref<string | null>(null)
 const busy = ref(false)
-const validViews: NoteView[] = ['recent', 'all', 'favorites', 'shared', 'knowledge', 'submissions', 'review']
+const validViews: NoteView[] = ['recent', 'all', 'inbox', 'favorites', 'shared', 'knowledge', 'submissions', 'review']
 const currentView = computed<NoteView>(() => {
   const requested = typeof route.query.view === 'string' ? route.query.view as NoteView : 'all'
   if (!validViews.includes(requested)) return 'all'
@@ -79,14 +92,9 @@ const currentView = computed<NoteView>(() => {
   return requested
 })
 const onboarding = computed(() => route.query.onboarding === '1')
-const personalView = computed(() => ['recent', 'all', 'favorites'].includes(currentView.value))
+const personalView = computed(() => ['recent', 'all', 'inbox', 'favorites'].includes(currentView.value))
 const visibleKnowledge = computed(() => knowledgeStatusFilter.value === 'archived' ? archivedKnowledge.value : knowledge.value)
-const visibleSharedNotes = computed(() => {
-  const query = search.value.trim().toLocaleLowerCase()
-  if (!query) return sharedNotes.value
-  return sharedNotes.value.filter((item) => [item.title, item.plainText, item.sharedBy.nickname, item.sharedBy.username]
-    .some((value) => value.toLocaleLowerCase().includes(query)))
-})
+const visibleSharedNotes = computed(() => sharedNotes.value)
 const selectedPublishedKnowledge = computed(() => selectedNote.value
   ? knowledge.value.find((item) => item.sourceNoteId === selectedNote.value?.id && item.status === 'PUBLISHED') ?? null
   : null)
@@ -150,31 +158,211 @@ const folderDialogParentName = ref<string | null>(null)
 const folderDialogTarget = ref<Folder | null>(null)
 const confirmDialogOpen = ref(false)
 const confirmDialogKind = ref<'note' | 'attachment' | 'category' | 'template' | null>(null)
-const confirmDialogNote = ref<Note | null>(null)
+const confirmDialogNote = ref<NoteListItem | Note | null>(null)
 const confirmDialogAttachment = ref<Attachment | null>(null)
 const confirmDialogCategory = ref<KnowledgeCategory | null>(null)
 const archiveConfirmOpen = ref(false)
 const archiveConfirmTarget = ref<TeamNote | null>(null)
+const knowledgeDeleteConfirmOpen = ref(false)
+const knowledgeDeleteTarget = ref<TeamNote | null>(null)
 let searchTimer: number | undefined
+let globalSearchTimer: number | undefined
+let globalSearchRequest = 0
+let activeViewLoad: Promise<void> | null = null
+let viewLoadQueued = false
 
 function notify(message: string) { pageError.value = message }
 function fail(cause: any, fallback: string) { pageError.value = cause?.response?.data?.detail ?? fallback }
+
+function toNoteListItem(note: Note): NoteListItem {
+  return {
+    id: note.id,
+    folderId: note.folderId,
+    title: note.title,
+    tags: note.tags,
+    isFavorite: note.isFavorite,
+    copiedFromNoteId: note.copiedFromNoteId,
+    copiedFromTeamNoteId: note.copiedFromTeamNoteId,
+    isKnowledgeUpdateDraft: note.isKnowledgeUpdateDraft,
+    copiedFromTeamNoteVersionNo: note.copiedFromTeamNoteVersionNo,
+    copiedFromTeamNoteSnapshotHash: note.copiedFromTeamNoteSnapshotHash,
+    createdAt: note.createdAt,
+    updatedAt: note.updatedAt,
+    deletedAt: note.deletedAt,
+  }
+}
+
+function toTeamNoteListItem(note: TeamNote): TeamNoteListItem {
+  return {
+    id: note.id,
+    teamId: note.teamId,
+    title: note.title,
+    categoryId: note.categoryId,
+    category: note.category,
+    tags: note.tags,
+    sourceType: note.sourceType,
+    sourceNoteId: note.sourceNoteId,
+    sourceAuthorId: note.sourceAuthorId,
+    sourceAuthor: note.sourceAuthor,
+    sourceSubmissionId: note.sourceSubmissionId,
+    status: note.status,
+    publishedAt: note.publishedAt,
+    archivedAt: note.archivedAt,
+    createdAt: note.createdAt,
+    updatedAt: note.updatedAt,
+    permissions: note.permissions,
+  }
+}
+
+function upsertNoteListItem(note: Note) {
+  const summary = toNoteListItem(note)
+  const index = notes.value.findIndex((item) => item.id === note.id)
+  if (index >= 0) notes.value[index] = summary
+  else notes.value.unshift(summary)
+}
+
+function upsertKnowledgeListItem(note: TeamNote) {
+  const summary = toTeamNoteListItem(note)
+  const target = note.status === 'ARCHIVED' ? archivedKnowledge : knowledge
+  const other = note.status === 'ARCHIVED' ? knowledge : archivedKnowledge
+  const index = target.value.findIndex((item) => item.id === note.id)
+  if (index >= 0) target.value[index] = summary
+  else target.value.unshift(summary)
+  const otherIndex = other.value.findIndex((item) => item.id === note.id)
+  if (otherIndex >= 0) other.value.splice(otherIndex, 1)
+}
+
+function upsertKnowledgeDetail(note: TeamNote) {
+  const index = knowledgeDetails.value.findIndex((item) => item.id === note.id)
+  if (index >= 0) knowledgeDetails.value[index] = note
+  else knowledgeDetails.value.push(note)
+}
+
+function removeNoteListItem(noteId: string) {
+  const index = notes.value.findIndex((item) => item.id === noteId)
+  if (index >= 0) notes.value.splice(index, 1)
+}
+
+function removeKnowledgeListItem(noteId: string) {
+  for (const list of [knowledge, archivedKnowledge]) {
+    const index = list.value.findIndex((item) => item.id === noteId)
+    if (index >= 0) list.value.splice(index, 1)
+  }
+  const detailIndex = knowledgeDetails.value.findIndex((item) => item.id === noteId)
+  if (detailIndex >= 0) knowledgeDetails.value.splice(detailIndex, 1)
+}
+
+function replaceSubmission(item: TeamNoteSubmission) {
+  for (const list of [submissions, mySubmissions]) {
+    const index = list.value.findIndex((current) => current.id === item.id)
+    if (index >= 0) list.value[index] = item
+  }
+  if (selectedSubmission.value?.id === item.id) selectedSubmission.value = item
+}
+
+function removeSubmission(itemId: string) {
+  for (const list of [submissions, mySubmissions]) {
+    const index = list.value.findIndex((item) => item.id === itemId)
+    if (index >= 0) list.value.splice(index, 1)
+  }
+  if (selectedSubmission.value?.id === itemId) {
+    selectedSubmission.value = submissions.value[0] ?? mySubmissions.value[0] ?? null
+    relatedKnowledge.value = []
+  }
+}
+
+async function refreshNoteMeta() {
+  const [tags, counts] = await Promise.all([fetchNoteTags(), fetchNoteCounts()])
+  availableTags.value = tags
+  unfiledCount.value = counts.unfiled
+}
+
+function updateGlobalSearch(value: string) {
+  globalSearchQuery.value = value
+  const requestId = ++globalSearchRequest
+  window.clearTimeout(globalSearchTimer)
+  if (!value.trim()) {
+    globalSearchItems.value = []
+    globalSearchLoading.value = false
+    globalSearchError.value = null
+    return
+  }
+  globalSearchError.value = null
+  globalSearchLoading.value = true
+  globalSearchTimer = window.setTimeout(async () => {
+    try {
+      const result = await fetchSearch({ q: value.trim() })
+      if (requestId !== globalSearchRequest) return
+      globalSearchItems.value = result.items
+    } catch (cause: any) {
+      if (requestId !== globalSearchRequest) return
+      const message = cause?.response?.data?.detail ?? '统一搜索失败，请确认后端已更新并重新启动。'
+      globalSearchError.value = message
+      fail(cause, message)
+      globalSearchItems.value = []
+    } finally {
+      if (requestId === globalSearchRequest) globalSearchLoading.value = false
+    }
+  }, 280)
+}
+
+async function openGlobalSearch() {
+  globalSearchOpen.value = true
+  await nextTick()
+  globalSearchInput.value?.focus()
+}
+
+function closeGlobalSearch() {
+  globalSearchOpen.value = false
+  globalSearchQuery.value = ''
+  globalSearchItems.value = []
+  globalSearchLoading.value = false
+  globalSearchError.value = null
+  globalSearchRequest += 1
+  window.clearTimeout(globalSearchTimer)
+}
+
+async function selectSearchResult(item: SearchItem) {
+  closeGlobalSearch()
+  search.value = ''
+  try {
+    if (item.source === 'personal') {
+      selectedFolderId.value = null
+      selectedTag.value = null
+      await router.push({ path: '/notes', query: { view: 'all', note: item.id } })
+    } else if (item.source === 'shared') {
+      await router.push({ path: '/notes', query: { view: 'shared', shared: item.id } })
+    } else {
+      if (item.teamId && item.teamId !== selectedTeamId.value) workspace.selectTeam(item.teamId)
+      await router.push({ path: '/notes', query: { view: 'knowledge', knowledge: item.id } })
+    }
+  } catch (cause: any) {
+    fail(cause, '打开搜索结果失败，请稍后重试。')
+  }
+}
 
 async function loadPersonal() {
   notes.value = await fetchNotes({
     folderId: currentView.value === 'all' ? selectedFolderId.value ?? undefined : undefined,
     q: search.value.trim() || undefined,
     favorite: currentView.value === 'favorites' ? true : undefined,
+    tags: selectedTag.value ? [selectedTag.value] : undefined,
+    unfiled: currentView.value === 'inbox',
     limit: currentView.value === 'recent' ? 30 : undefined,
   })
   const requestedNoteId = typeof route.query.note === 'string' ? route.query.note : null
-  if (requestedNoteId) {
-    selectedNote.value = notes.value.find((item) => item.id === requestedNoteId) ?? selectedNote.value
+  const selectedId = requestedNoteId && notes.value.some((item) => item.id === requestedNoteId)
+    ? requestedNoteId
+    : selectedNote.value && notes.value.some((item) => item.id === selectedNote.value?.id)
+      ? selectedNote.value.id
+      : notes.value[0]?.id ?? null
+  const summary = selectedId ? notes.value.find((item) => item.id === selectedId) ?? null : null
+  if (summary) await selectPersonal(summary)
+  else {
+    selectedNote.value = null
+    attachments.value = []
+    shares.value = []
   }
-  if (!selectedNote.value || !notes.value.some((item) => item.id === selectedNote.value?.id)) {
-    selectedNote.value = notes.value[0] ?? null
-  }
-  if (selectedNote.value) await selectPersonal(selectedNote.value)
 }
 
 async function loadCollaboration() {
@@ -186,22 +374,25 @@ async function loadCollaboration() {
   ])
   knowledge.value = loadedKnowledge.filter((item) => item.status === 'PUBLISHED')
   archivedKnowledge.value = loadedKnowledge.filter((item) => item.status === 'ARCHIVED')
+  knowledgeDetails.value = knowledgeDetails.value.filter((item) => loadedKnowledge.some((summary) => summary.id === item.id))
   categories.value = loadedCategories
   mySubmissions.value = loadedMySubmissions
   if (currentTeam.value) members.value = await fetchTeamMembers(currentTeam.value.id)
 }
 
-async function loadView() {
+async function performLoadView() {
   busy.value = true
   try {
     if (personalView.value) await loadPersonal()
     else if (currentView.value === 'shared') {
-      sharedNotes.value = await fetchSharedNotes()
-      selectedShared.value = visibleSharedNotes.value.find((item) => item.id === selectedShared.value?.id) ?? visibleSharedNotes.value[0] ?? null
+      sharedNotes.value = await fetchSharedNotes(search.value.trim() || undefined)
+      const requested = typeof route.query.shared === 'string' ? route.query.shared : selectedShared.value?.id
+      selectedShared.value = visibleSharedNotes.value.find((item) => item.id === requested) ?? visibleSharedNotes.value[0] ?? null
     } else if (currentView.value === 'knowledge') {
       await loadCollaboration()
       const requested = typeof route.query.knowledge === 'string' ? route.query.knowledge : selectedKnowledge.value?.id
-      selectedKnowledge.value = visibleKnowledge.value.find((item) => item.id === requested) ?? visibleKnowledge.value[0] ?? null
+      const summary = visibleKnowledge.value.find((item) => item.id === requested) ?? visibleKnowledge.value[0] ?? null
+      selectedKnowledge.value = summary ? await selectKnowledge(summary) : null
     } else {
       if (!hasTeam.value || !selectedTeamId.value) {
         submissions.value = []
@@ -212,11 +403,29 @@ async function loadView() {
       submissions.value = currentView.value === 'review' ? await fetchReviewSubmissions(selectedTeamId.value) : await fetchMySubmissions(selectedTeamId.value)
       const requestedSubmission = typeof route.query.submission === 'string' ? route.query.submission : selectedSubmission.value?.id
       selectedSubmission.value = submissions.value.find((item) => item.id === requestedSubmission) ?? submissions.value[0] ?? null
+      if (selectedSubmission.value) await ensureSubmissionTarget(selectedSubmission.value)
       if (currentView.value === 'review' && selectedSubmission.value) relatedKnowledge.value = await fetchRelatedKnowledge(selectedSubmission.value.id)
     }
   } catch (cause: any) {
     fail(cause, '笔记服务读取失败。')
   } finally { busy.value = false }
+}
+
+async function loadView() {
+  if (activeViewLoad) {
+    viewLoadQueued = true
+    return activeViewLoad
+  }
+  do {
+    viewLoadQueued = false
+    const request = performLoadView()
+    activeViewLoad = request
+    try {
+      await request
+    } finally {
+      if (activeViewLoad === request) activeViewLoad = null
+    }
+  } while (viewLoadQueued)
 }
 
 async function activateView(view: NoteView) {
@@ -227,20 +436,112 @@ async function activateView(view: NoteView) {
 async function selectFolder(id: string | null) {
   selectedFolderId.value = id
   if (currentView.value !== 'all') await router.push({ path: '/notes', query: { view: 'all' } })
-  else await loadPersonal()
+  else await loadView()
+}
+async function selectTag(value: string) {
+  selectedTag.value = value || null
+  if (!personalView.value) await router.push({ path: '/notes', query: { view: 'all' } })
+  else await loadView()
 }
 async function selectCategory(id: string | null) { selectedCategoryId.value = id; if (currentView.value === 'knowledge') await loadView() }
 
-async function selectPersonal(note: Note) {
+async function selectPersonal(item: NoteListItem | Note) {
+  const note = 'contentJson' in item ? item : await fetchNote(item.id)
   selectedNote.value = note
-  ;[attachments.value, shares.value] = await Promise.all([fetchAttachments(note.id), fetchNoteShares(note.id)])
+  attachments.value = await fetchAttachments(note.id)
+  shares.value = shareDialogOpen.value ? await fetchNoteShares(note.id) : []
+}
+
+async function selectKnowledge(item: TeamNoteListItem | TeamNote): Promise<TeamNote> {
+  const cached = knowledgeDetails.value.find((detail) => detail.id === item.id)
+  const note = 'contentJson' in item ? item : cached ?? await fetchKnowledgeNote(item.id, selectedTeamId.value)
+  selectedKnowledge.value = note
+  upsertKnowledgeDetail(note)
+  return note
+}
+
+async function selectCollaborationItem(item: SharedNote | TeamNoteListItem) {
+  if ('sharedBy' in item) selectedShared.value = item
+  else await selectKnowledge(item)
+}
+
+async function refreshKnowledgeDetail(noteId: string) {
+  if (!selectedTeamId.value) return
+  try {
+    const updated = await fetchKnowledgeNote(noteId, selectedTeamId.value)
+    upsertKnowledgeDetail(updated)
+    if (selectedKnowledge.value?.id === noteId) selectedKnowledge.value = updated
+  } catch {
+    // Access can disappear between the event and the targeted read.
+  }
+}
+
+function applyTeamNoteChange(change: NonNullable<typeof realtime.lastTeamNoteChange>) {
+  if (change.teamId !== selectedTeamId.value) return
+  if (change.status === 'DELETED') {
+    removeKnowledgeListItem(change.noteId)
+    if (selectedKnowledge.value?.id === change.noteId) {
+      selectedKnowledge.value = null
+      const next = visibleKnowledge.value[0]
+      if (next) void selectKnowledge(next)
+    }
+    return
+  }
+  const source = [...knowledge.value, ...archivedKnowledge.value].find((item) => item.id === change.noteId)
+  if (!source) {
+    if (currentView.value === 'knowledge') void loadView()
+    return
+  }
+  const updated: TeamNoteListItem = {
+    ...source,
+    title: change.title,
+    categoryId: change.categoryId,
+    status: change.status,
+    archivedAt: change.status === 'ARCHIVED' ? source.archivedAt ?? change.updatedAt : null,
+    updatedAt: change.updatedAt ?? source.updatedAt,
+  }
+  const target = change.status === 'ARCHIVED' ? archivedKnowledge : knowledge
+  const other = change.status === 'ARCHIVED' ? knowledge : archivedKnowledge
+  const index = target.value.findIndex((item) => item.id === updated.id)
+  if (index >= 0) target.value[index] = updated
+  else target.value.unshift(updated)
+  const otherIndex = other.value.findIndex((item) => item.id === updated.id)
+  if (otherIndex >= 0) other.value.splice(otherIndex, 1)
+  if (selectedKnowledge.value?.id === change.noteId) void refreshKnowledgeDetail(change.noteId)
+}
+
+async function ensureSubmissionTarget(item: TeamNoteSubmission) {
+  if (!item.targetTeamNoteId || !selectedTeamId.value) return
+  if (knowledgeDetails.value.some((note) => note.id === item.targetTeamNoteId)) return
+  try {
+    upsertKnowledgeDetail(await fetchKnowledgeNote(item.targetTeamNoteId, selectedTeamId.value))
+  } catch {
+    // The target may have been archived or removed after the submission was made.
+  }
+}
+
+async function openShareDialog() {
+  if (!selectedNote.value) return
+  shareDialogOpen.value = true
+  try {
+    shares.value = await fetchNoteShares(selectedNote.value.id)
+  } catch (cause: any) {
+    shareDialogOpen.value = false
+    fail(cause, '分享权限读取失败。')
+  }
 }
 async function selectSubmission(item: TeamNoteSubmission) {
   selectedSubmission.value = item
+  await ensureSubmissionTarget(item)
   relatedKnowledge.value = currentView.value === 'review' ? await fetchRelatedKnowledge(item.id) : []
 }
 
-async function createBlankNote() { const note = await postNote({ folderId: selectedFolderId.value }); await loadPersonal(); await selectPersonal(note) }
+async function createBlankNote() {
+  const note = await postNote({ folderId: currentView.value === 'all' ? selectedFolderId.value : null })
+  upsertNoteListItem(note)
+  await refreshNoteMeta()
+  await selectPersonal(note)
+}
 function openMarkdownImport() { markdownImportError.value = null; markdownImportOpen.value = true }
 async function importMarkdown(payload: { file: File; title: string; folderId: string | null }) {
   markdownImportSaving.value = true
@@ -251,19 +552,25 @@ async function importMarkdown(payload: { file: File; title: string; folderId: st
     selectedFolderId.value = note.folderId
     search.value = ''
     if (currentView.value !== 'all') await router.push({ path: '/notes', query: { view: 'all' } })
-    await loadPersonal()
+    await refreshNoteMeta()
+    upsertNoteListItem(note)
     await selectPersonal(note)
     notify('Markdown 已导入为新笔记。')
   } catch (cause: any) {
     markdownImportError.value = cause?.response?.data?.detail ?? 'Markdown 导入失败。'
   } finally { markdownImportSaving.value = false }
 }
-async function saveNote(payload: { noteId: string; title: string; folderId: string | null; contentJson?: Record<string, unknown>; plainText?: string }) {
+async function saveNote(payload: { noteId: string; title: string; folderId: string | null; tags: string[]; contentJson?: Record<string, unknown>; plainText?: string }) {
   const { noteId, ...changes } = payload
   const updated = await putNote(noteId, changes)
+  const previous = notes.value.find((item) => item.id === noteId)
   selectedNote.value = updated
-  const index = notes.value.findIndex((item) => item.id === noteId)
-  if (index >= 0) notes.value[index] = updated
+  upsertNoteListItem(updated)
+  if (previous && previous.folderId !== updated.folderId) {
+    if (previous.folderId === null && updated.folderId !== null) unfiledCount.value = Math.max(0, unfiledCount.value - 1)
+    if (previous.folderId !== null && updated.folderId === null) unfiledCount.value += 1
+  }
+  if (previous && JSON.stringify(previous.tags) !== JSON.stringify(updated.tags)) availableTags.value = await fetchNoteTags()
 }
 async function prepareSaveAsTemplate(payload: { note: Note; title: string; folderId: string | null; contentJson: Record<string, unknown>; plainText: string }) {
   try {
@@ -274,15 +581,15 @@ async function prepareSaveAsTemplate(payload: { note: Note; title: string; folde
       plainText: payload.plainText,
     })
     selectedNote.value = updated
-    const index = notes.value.findIndex((item) => item.id === updated.id)
-    if (index >= 0) notes.value[index] = updated
+    upsertNoteListItem(updated)
     templateSaveDialogOpen.value = true
   } catch (cause: any) { fail(cause, '保存当前笔记失败。') }
 }
 async function toggleFavorite(value: boolean) {
   if (!selectedNote.value) return
   selectedNote.value = await putNote(selectedNote.value.id, { isFavorite: value })
-  if (currentView.value === 'favorites' && !value) await loadPersonal()
+  if (currentView.value === 'favorites' && !value) removeNoteListItem(selectedNote.value.id)
+  else upsertNoteListItem(selectedNote.value)
 }
 
 async function handleUpload(file: File) {
@@ -292,7 +599,7 @@ async function handleUpload(file: File) {
   return attachment
 }
 
-function requestDeleteNote(note: Note) { confirmDialogKind.value = 'note'; confirmDialogNote.value = note; confirmDialogOpen.value = true }
+function requestDeleteNote(note: NoteListItem | Note) { confirmDialogKind.value = 'note'; confirmDialogNote.value = note; confirmDialogOpen.value = true }
 function requestDeleteAttachment(item: Attachment) { confirmDialogKind.value = 'attachment'; confirmDialogAttachment.value = item; confirmDialogOpen.value = true }
 function requestDeleteCategory(item: KnowledgeCategory) { confirmDialogKind.value = 'category'; confirmDialogCategory.value = item; confirmDialogOpen.value = true }
 async function confirmDelete() {
@@ -303,7 +610,16 @@ async function confirmDelete() {
     if (kind === 'category' && confirmDialogCategory.value && selectedTeamId.value) await deleteKnowledgeCategory(confirmDialogCategory.value.id, selectedTeamId.value)
     if (kind === 'template' && templateDeleteTarget.value) await deleteNoteTemplate(templateDeleteTarget.value.id)
     confirmDialogOpen.value = false
-    if (kind === 'note') { selectedNote.value = null; await loadPersonal() }
+    if (kind === 'note') {
+      const deletedId = confirmDialogNote.value?.id
+      if (deletedId) removeNoteListItem(deletedId)
+      if (selectedNote.value?.id === deletedId) {
+        selectedNote.value = null
+        attachments.value = []
+        shares.value = []
+      }
+      await refreshNoteMeta()
+    }
     else if (kind === 'attachment' && selectedNote.value) attachments.value = await fetchAttachments(selectedNote.value.id)
     if (kind === 'template') {
       if (templateEditorTarget.value?.id === templateDeleteTarget.value?.id) {
@@ -341,8 +657,8 @@ async function publish(payload: SubmissionPayload) {
   if (!selectedNote.value) return
   busy.value = true
   try {
-    await submitNoteToKnowledge(selectedNote.value.id, payload, selectedTeamId.value)
-    await loadCollaboration()
+    const submission = await submitNoteToKnowledge(selectedNote.value.id, payload, selectedTeamId.value)
+    mySubmissions.value.unshift(submission)
     publishDialogOpen.value = false
     notify('已生成审核快照，可在“我的投稿”查看进度。')
   }
@@ -350,9 +666,26 @@ async function publish(payload: SubmissionPayload) {
   finally { busy.value = false }
 }
 
-async function copyShared(note: SharedNote) { const copied = await copySharedNote(note.id); await activateView('all'); await loadPersonal(); await selectPersonal(copied) }
-async function copyTeamKnowledge(note: TeamNote) { const copied = await copyKnowledge(note.id, selectedTeamId.value); await activateView('all'); await loadPersonal(); await selectPersonal(copied) }
-async function duplicatePersonal(note: Note) { const copied = await copyNote(note.id); await loadPersonal(); await selectPersonal(copied) }
+async function copyShared(note: SharedNote) {
+  const copied = await copySharedNote(note.id)
+  await activateView('all')
+  upsertNoteListItem(copied)
+  await refreshNoteMeta()
+  await selectPersonal(copied)
+}
+async function copyTeamKnowledge(note: TeamNote) {
+  const copied = await copyKnowledge(note.id, selectedTeamId.value)
+  await activateView('all')
+  upsertNoteListItem(copied)
+  await refreshNoteMeta()
+  await selectPersonal(copied)
+}
+async function duplicatePersonal(note: Note) {
+  const copied = await copyNote(note.id)
+  upsertNoteListItem(copied)
+  await refreshNoteMeta()
+  await selectPersonal(copied)
+}
 function exportPersonal(note: Note) {
   const payload = JSON.stringify({
     title: note.title,
@@ -373,9 +706,9 @@ async function requestKnowledgeUpdate(note: TeamNote) {
   try {
     const draft = await ensureKnowledgeUpdateDraft(note.id, selectedTeamId.value)
     await activateView('all')
-    await loadPersonal()
+    await refreshNoteMeta()
+    upsertNoteListItem(draft)
     await selectPersonal(draft)
-    await loadCollaboration()
     if (note.myUpdateSubmissionStatus === 'PENDING') notify('这篇知识已有待审核更新，已打开对应笔记。')
     else if (note.myUpdateSubmissionStatus === 'NEEDS_REVISION') notify('这篇知识的更新需要修改，已打开对应笔记。')
     else notify('已打开更新草稿，修改完成后请提交更新申请。')
@@ -383,12 +716,22 @@ async function requestKnowledgeUpdate(note: TeamNote) {
   finally { busy.value = false }
 }
 
-async function createKnowledge(title: string) { const item = await postKnowledge({ title }, selectedTeamId.value); knowledgeCreateDialogOpen.value = false; await loadView(); selectedKnowledge.value = item }
-async function openKnowledge(note: TeamNote) { await router.push({ path: '/notes', query: { view: 'knowledge', knowledge: note.id } }); await loadView() }
+async function createKnowledge(title: string) {
+  const item = await postKnowledge({ title }, selectedTeamId.value)
+  knowledgeCreateDialogOpen.value = false
+  upsertKnowledgeListItem(item)
+  upsertKnowledgeDetail(item)
+  selectedKnowledge.value = item
+}
+async function openKnowledge(note: TeamNote | TeamNoteListItem) {
+  await router.push({ path: '/notes', query: { view: 'knowledge', knowledge: note.id } })
+}
 function selectKnowledgeStatus(value: 'published' | 'archived') {
   knowledgeStatusFilter.value = value
   const requested = typeof route.query.knowledge === 'string' ? route.query.knowledge : null
-  selectedKnowledge.value = visibleKnowledge.value.find((item) => item.id === requested) ?? visibleKnowledge.value[0] ?? null
+  const summary = visibleKnowledge.value.find((item) => item.id === requested) ?? visibleKnowledge.value[0] ?? null
+  if (summary) void selectKnowledge(summary)
+  else selectedKnowledge.value = null
 }
 function openCreateCategory() { categoryDialogMode.value = 'create'; categoryDialogTarget.value = null; categoryDialogName.value = ''; categoryDialogOpen.value = true }
 function openRenameCategory(category: KnowledgeCategory) { categoryDialogMode.value = 'rename'; categoryDialogTarget.value = category; categoryDialogName.value = category.name; categoryDialogOpen.value = true }
@@ -398,14 +741,22 @@ async function saveCategory(name: string) {
   categoryDialogOpen.value = false
   categories.value = await fetchKnowledgeCategories(selectedTeamId.value)
 }
-async function saveKnowledge(note: TeamNote, payload: { title: string; contentJson: Record<string, unknown>; plainText: string; categoryId: string | null; tags: string[] }) { selectedKnowledge.value = await putKnowledge(note.id, payload, selectedTeamId.value); await loadCollaboration() }
+async function saveKnowledge(note: TeamNote, payload: { title: string; contentJson: Record<string, unknown>; plainText: string; categoryId: string | null; tags: string[] }) {
+  const updated = await putKnowledge(note.id, payload, selectedTeamId.value)
+  selectedKnowledge.value = updated
+  upsertKnowledgeDetail(updated)
+  upsertKnowledgeListItem(updated)
+}
 async function setArchived(note: TeamNote, archived: boolean) {
   busy.value = true
   try {
-    if (archived) await archiveKnowledge(note.id, selectedTeamId.value)
-    else await restoreKnowledge(note.id, selectedTeamId.value)
+    const updated = archived
+      ? await archiveKnowledge(note.id, selectedTeamId.value)
+      : await restoreKnowledge(note.id, selectedTeamId.value)
+    upsertKnowledgeDetail(updated)
+    upsertKnowledgeListItem(updated)
+    selectedKnowledge.value = updated
     knowledgeStatusFilter.value = archived ? 'archived' : 'published'
-    await loadView()
   } catch (cause: any) { fail(cause, archived ? '归档知识失败。' : '恢复知识失败。') }
   finally { busy.value = false }
 }
@@ -419,14 +770,45 @@ async function confirmArchiveKnowledge() {
   archiveConfirmTarget.value = null
   if (target) await setArchived(target, true)
 }
+function requestDeleteKnowledge(note: TeamNote) {
+  knowledgeDeleteTarget.value = note
+  knowledgeDeleteConfirmOpen.value = true
+}
+async function confirmDeleteKnowledge() {
+  const target = knowledgeDeleteTarget.value
+  knowledgeDeleteConfirmOpen.value = false
+  knowledgeDeleteTarget.value = null
+  if (!target || !selectedTeamId.value) return
+  busy.value = true
+  try {
+    await deleteKnowledge(target.id, selectedTeamId.value)
+    selectedKnowledge.value = null
+    removeKnowledgeListItem(target.id)
+    selectedKnowledge.value = visibleKnowledge.value[0] ? await selectKnowledge(visibleKnowledge.value[0]) : null
+    notify('团队知识已彻底删除。')
+  } catch (cause: any) {
+    fail(cause, '彻底删除团队知识失败。')
+  } finally {
+    busy.value = false
+  }
+}
 async function showVersions(note: TeamNote) { versions.value = await fetchKnowledgeVersions(note.id, selectedTeamId.value); versionsOpen.value = true }
 
-async function withdraw(item: TeamNoteSubmission) { await withdrawSubmission(item.id); await loadView() }
-async function resubmit(item: TeamNoteSubmission) { await resubmitSubmission(item.id, { type: item.submissionType, targetTeamNoteId: item.targetTeamNoteId, categoryId: item.proposedCategoryId, tags: item.proposedTagsJson, message: item.submissionMessage }); await loadView() }
-async function approve(item: TeamNoteSubmission, payload: SubmissionReviewPayload) { await approveSubmission(item.id, payload); await loadView() }
-async function revision(item: TeamNoteSubmission, reason: string) { await requestSubmissionRevision(item.id, reason); await loadView() }
-async function reject(item: TeamNoteSubmission, reason: string) { await rejectSubmission(item.id, reason); await loadView() }
-async function openSource(noteId: string) { await activateView('all'); await loadPersonal(); const note = notes.value.find((item) => item.id === noteId); if (note) await selectPersonal(note) }
+async function withdraw(item: TeamNoteSubmission) { replaceSubmission(await withdrawSubmission(item.id)) }
+async function resubmit(item: TeamNoteSubmission) {
+  replaceSubmission(await resubmitSubmission(item.id, { type: item.submissionType, targetTeamNoteId: item.targetTeamNoteId, categoryId: item.proposedCategoryId, tags: item.proposedTagsJson, message: item.submissionMessage }))
+}
+async function approve(item: TeamNoteSubmission, payload: SubmissionReviewPayload) {
+  const approved = await approveSubmission(item.id, payload)
+  upsertKnowledgeDetail(approved)
+  upsertKnowledgeListItem(approved)
+  removeSubmission(item.id)
+}
+async function revision(item: TeamNoteSubmission, reason: string) { replaceSubmission(await requestSubmissionRevision(item.id, reason)) }
+async function reject(item: TeamNoteSubmission, reason: string) { replaceSubmission(await rejectSubmission(item.id, reason)) }
+async function openSource(noteId: string) {
+  await router.push({ path: '/notes', query: { view: 'all', note: noteId } })
+}
 
 function updateSearch(value: string) { search.value = value; window.clearTimeout(searchTimer); searchTimer = window.setTimeout(loadView, 300) }
 async function refreshTemplates() { templates.value = await fetchNoteTemplates() }
@@ -440,7 +822,8 @@ async function createFromTemplate(template: NoteTemplate) {
   try {
     const note = await postNoteFromTemplate(template.id, selectedFolderId.value)
     templateDialogOpen.value = false
-    await loadPersonal()
+    await refreshNoteMeta()
+    upsertNoteListItem(note)
     await selectPersonal(note)
   } catch (cause: any) { fail(cause, '从模板创建笔记失败。') }
 }
@@ -510,8 +893,28 @@ async function moveTemplate(template: NoteTemplate, direction: 'up' | 'down') {
 function createFolder(parentId: string | null) { folderDialogMode.value = 'create'; folderDialogName.value = ''; folderDialogParentId.value = parentId; folderDialogParentName.value = folders.value.find((item) => item.id === parentId)?.name ?? null; folderDialogTarget.value = null; folderDialogOpen.value = true }
 function renameFolder(folder: Folder) { folderDialogMode.value = 'rename'; folderDialogName.value = folder.name; folderDialogTarget.value = folder; folderDialogOpen.value = true }
 function removeFolder(folder: Folder) { folderDialogMode.value = 'delete'; folderDialogName.value = folder.name; folderDialogTarget.value = folder; folderDialogOpen.value = true }
-async function submitFolder(name: string) { if (folderDialogMode.value === 'create') await postFolder({ name, parentId: folderDialogParentId.value }); else if (folderDialogTarget.value) await putFolder(folderDialogTarget.value.id, { name }); folderDialogOpen.value = false; folders.value = await fetchFolders() }
-async function confirmRemoveFolder() { if (folderDialogTarget.value) await deleteFolder(folderDialogTarget.value.id); folderDialogOpen.value = false; folders.value = await fetchFolders(); await loadPersonal() }
+async function submitFolder(name: string) {
+  if (folderDialogMode.value === 'create') {
+    folders.value.push(await postFolder({ name, parentId: folderDialogParentId.value }))
+  } else if (folderDialogTarget.value) {
+    const updated = await putFolder(folderDialogTarget.value.id, { name })
+    const index = folders.value.findIndex((item) => item.id === updated.id)
+    if (index >= 0) folders.value[index] = updated
+  }
+  folderDialogOpen.value = false
+}
+async function confirmRemoveFolder() {
+  const target = folderDialogTarget.value
+  if (target) {
+    await deleteFolder(target.id)
+    folders.value = folders.value.filter((item) => item.id !== target.id)
+    if (selectedFolderId.value === target.id) {
+      selectedFolderId.value = null
+      await router.push({ path: '/notes', query: { view: 'all' } })
+    }
+  }
+  folderDialogOpen.value = false
+}
 
 async function openTask(taskId: string) {
   await router.push({ path: '/todos', query: { view: 'all', todo: taskId } })
@@ -521,15 +924,19 @@ async function finishOnboarding() {
   await router.replace('/')
 }
 
-watch(() => [route.query.view, route.query.note, route.query.submission, workspace.currentTeamId] as const, () => { void loadView() })
+watch(() => [route.query.view, route.query.note, route.query.shared, route.query.submission, route.query.knowledge, workspace.currentTeamId] as const, () => {
+  void loadView()
+})
+
+watch(() => realtime.lastTeamNoteChange, (change) => {
+  if (change) applyTeamNoteChange(change)
+})
 
 onMounted(async () => {
   try {
     folders.value = await fetchFolders()
-    if (hasTeam.value) await loadCollaboration()
+    await refreshNoteMeta()
     await loadView()
-    const requested = typeof route.query.note === 'string' ? route.query.note : null
-    if (requested && personalView.value) { const note = notes.value.find((item) => item.id === requested); if (note) await selectPersonal(note) }
   } catch (cause: any) { fail(cause, '笔记服务连接失败，请确认后端已启动。') }
 })
 </script>
@@ -542,9 +949,9 @@ onMounted(async () => {
       <button class="primary-button" type="button" @click="finishOnboarding">开始使用</button>
     </section>
     <div class="notes-workspace card">
-      <NoteNavigation :view="currentView" :folders="folders" :selected-folder-id="selectedFolderId" :has-team="hasTeam" :can-review="canReview" :categories="categories" :selected-category-id="selectedCategoryId" @view="activateView" @folder="selectFolder" @category="selectCategory" @create-category="openCreateCategory" @rename-category="openRenameCategory" @remove-category="requestDeleteCategory" @create-folder="createFolder" @rename-folder="renameFolder" @remove-folder="removeFolder" />
+      <NoteNavigation :view="currentView" :folders="folders" :selected-folder-id="selectedFolderId" :unfiled-count="unfiledCount" :has-team="hasTeam" :can-review="canReview" :categories="categories" :selected-category-id="selectedCategoryId" @view="activateView" @folder="selectFolder" @category="selectCategory" @create-category="openCreateCategory" @rename-category="openRenameCategory" @remove-category="requestDeleteCategory" @create-folder="createFolder" @rename-folder="renameFolder" @remove-folder="removeFolder" @open-search="openGlobalSearch" />
       <template v-if="personalView">
-        <NoteList :notes="notes" :selected-id="selectedNote?.id ?? null" :search="search" @select="selectPersonal" @create="createBlankNote" @templates="openTemplates" @import="openMarkdownImport" @search="updateSearch" @remove="requestDeleteNote" />
+        <NoteList :notes="notes" :selected-id="selectedNote?.id ?? null" :search="search" :available-tags="availableTags" :selected-tag="selectedTag" @select="selectPersonal" @create="createBlankNote" @templates="openTemplates" @import="openMarkdownImport" @search="updateSearch" @tag-filter="selectTag" @remove="requestDeleteNote" />
         <NoteEditor
           :note="selectedNote"
           :folders="folders"
@@ -556,11 +963,12 @@ onMounted(async () => {
           :task-members="members"
           :current-user-id="auth.user?.id"
           :can-assign-tasks="canReview"
+          :available-tags="availableTags"
           :focus-block-id="typeof route.query.block === 'string' ? route.query.block : null"
           @save="saveNote"
           @delete-attachment="requestDeleteAttachment"
           @open-task="openTask"
-          @share="shareDialogOpen = true"
+          @share="openShareDialog"
           @publish="openPublish()"
           @favorite="toggleFavorite"
           @duplicate="duplicatePersonal"
@@ -574,10 +982,10 @@ onMounted(async () => {
         <SharedNoteDetail :note="selectedShared" :copying="busy" @copy="copyShared" />
       </template>
       <template v-else-if="currentView === 'knowledge'">
-        <CollaborativeNoteList title="团队知识库" :items="visibleKnowledge" :selected-id="selectedKnowledge?.id ?? null" :search="search" :can-create="canReview" :can-manage-archived="canReview" :status-filter="knowledgeStatusFilter" @select="selectedKnowledge = $event as TeamNote" @search="updateSearch" @create="knowledgeCreateDialogOpen = true" @status-filter="selectKnowledgeStatus" />
-        <KnowledgeDetail :note="selectedKnowledge" :categories="categories" :saving="busy" :update-state="selectedKnowledgeUpdateState" @save="saveKnowledge" @copy="copyTeamKnowledge" @archive="requestArchiveKnowledge" @restore="setArchived($event, false)" @update-request="requestKnowledgeUpdate" @versions="showVersions" />
+        <CollaborativeNoteList title="团队知识库" :items="visibleKnowledge" :selected-id="selectedKnowledge?.id ?? null" :search="search" :can-create="canReview" :can-manage-archived="canReview" :status-filter="knowledgeStatusFilter" @select="selectCollaborationItem" @search="updateSearch" @create="knowledgeCreateDialogOpen = true" @status-filter="selectKnowledgeStatus" />
+        <KnowledgeDetail :note="selectedKnowledge" :categories="categories" :saving="busy" :update-state="selectedKnowledgeUpdateState" @save="saveKnowledge" @copy="copyTeamKnowledge" @archive="requestArchiveKnowledge" @restore="setArchived($event, false)" @delete="requestDeleteKnowledge" @update-request="requestKnowledgeUpdate" @versions="showVersions" />
       </template>
-      <SubmissionWorkspace v-else :mode="currentView === 'review' ? 'review' : 'mine'" :submissions="submissions" :selected="selectedSubmission" :related="relatedKnowledge" :knowledge="knowledge" :categories="categories" :busy="busy" @select="selectSubmission" @withdraw="withdraw" @resubmit="resubmit" @open-source="openSource" @open-knowledge="openKnowledge" @approve="approve" @revision="revision" @reject="reject" />
+      <SubmissionWorkspace v-else :mode="currentView === 'review' ? 'review' : 'mine'" :submissions="submissions" :selected="selectedSubmission" :related="relatedKnowledge" :knowledge="knowledgeDetails" :categories="categories" :busy="busy" @select="selectSubmission" @withdraw="withdraw" @resubmit="resubmit" @open-source="openSource" @open-knowledge="openKnowledge" @approve="approve" @revision="revision" @reject="reject" />
     </div>
 
     <ShareNotePopover :open="shareDialogOpen" :members="members" :model-value="shares.map((item) => item.sharedWithUserId)" :current-user-id="auth.user?.id ?? ''" :saving="busy" @close="shareDialogOpen = false" @save="saveShares" />
@@ -591,7 +999,9 @@ onMounted(async () => {
     <InputDialog :open="categoryDialogOpen" :title="categoryDialogMode === 'create' ? '新建知识分类' : '重命名知识分类'" label="分类名称" placeholder="例如：技术、流程、规范" :initial-value="categoryDialogName" :confirm-label="categoryDialogMode === 'create' ? '创建' : '保存'" @close="categoryDialogOpen = false" @submit="saveCategory" />
     <InputDialog :open="knowledgeCreateDialogOpen" title="新建团队知识" label="知识标题" placeholder="输入清晰、可检索的标题" confirm-label="创建并编辑" @close="knowledgeCreateDialogOpen = false" @submit="createKnowledge" />
     <ConfirmDialog :open="archiveConfirmOpen" title="归档团队知识" :message="archiveConfirmTarget ? `确认归档“${archiveConfirmTarget.title}”吗？归档后团队成员将无法在知识库中查看，正文、附件和版本历史都会保留，可在“已归档”中恢复。` : ''" confirm-label="归档" :danger="true" @close="archiveConfirmOpen = false" @confirm="confirmArchiveKnowledge" />
+    <ConfirmDialog :open="knowledgeDeleteConfirmOpen" title="彻底删除团队知识" :message="knowledgeDeleteTarget ? `确认彻底删除“${knowledgeDeleteTarget.title}”吗？正文、版本历史和团队附件授权将永久移除，已经复制到个人笔记的副本不受影响。仍有待处理的更新申请时无法删除。` : ''" confirm-label="彻底删除" :danger="true" @close="knowledgeDeleteConfirmOpen = false" @confirm="confirmDeleteKnowledge" />
     <ConfirmDialog :open="confirmDialogOpen" title="确认删除" :message="confirmDialogKind === 'template' ? '删除模板不会删除已经通过该模板创建的笔记。' : confirmDialogKind === 'category' ? '删除分类后，分类下的知识会保留并变为未分类。' : '删除后无法继续通过分享访问，已发布团队知识不受影响。'" :danger="true" confirm-label="删除" @close="confirmDialogOpen = false" @confirm="confirmDelete" />
+    <Teleport to="body"><div v-if="globalSearchOpen" class="dialog-backdrop global-search-backdrop" @mousedown.self="closeGlobalSearch"><section class="global-search-dialog" role="dialog" aria-modal="true" aria-labelledby="global-search-title" @keydown.esc="closeGlobalSearch"><header><div><span class="eyebrow">SEARCH</span><h2 id="global-search-title">全局搜索</h2><p>搜索个人笔记、分享内容和团队知识</p></div><button type="button" aria-label="关闭全局搜索" @click="closeGlobalSearch"><IconX :size="18" /></button></header><label class="notes-global-search global-search-input"><IconSearch :size="17" aria-hidden="true" /><input ref="globalSearchInput" :value="globalSearchQuery" autofocus placeholder="输入标题、正文或标签…" @input="updateGlobalSearch(($event.target as HTMLInputElement).value)" /><button v-if="globalSearchQuery" type="button" aria-label="清空搜索" @click="updateGlobalSearch('')"><IconX :size="15" /></button></label><p v-if="globalSearchError" class="global-search-error" role="alert">{{ globalSearchError }}</p><SearchResults :items="globalSearchItems" :query="globalSearchQuery" :loading="globalSearchLoading" @select="selectSearchResult" /></section></div></Teleport>
     <Teleport to="body"><div v-if="versionsOpen" class="dialog-backdrop" @mousedown.self="versionsOpen = false"><section class="note-collab-dialog version-dialog" role="dialog" aria-modal="true" aria-labelledby="version-dialog-title"><header><div><span class="eyebrow">HISTORY</span><h2 id="version-dialog-title">知识版本</h2></div><button type="button" aria-label="关闭知识版本" @click="versionsOpen = false"><IconX :size="18" /></button></header><div class="version-list"><article v-for="item in versions" :key="item.id"><strong>V{{ item.versionNo }} · {{ item.changeType }}</strong><span>{{ new Date(item.createdAt).toLocaleString('zh-CN') }}</span></article></div></section></div></Teleport>
   </div>
 </template>

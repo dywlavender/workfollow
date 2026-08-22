@@ -237,6 +237,7 @@ class TeamNotePermissions(ApiModel):
     can_edit: bool = False
     can_copy: bool = True
     can_archive: bool = False
+    can_delete: bool = False
 
 
 class TeamNoteCategoryCreate(ApiModel):
@@ -300,6 +301,28 @@ class TeamNoteRead(ApiModel):
     my_update_draft_note_id: str | None = None
     my_update_submission_id: str | None = None
     my_update_submission_status: TeamNoteSubmissionStatus | None = None
+    permissions: TeamNotePermissions = Field(default_factory=TeamNotePermissions)
+
+
+class TeamNoteListItem(ApiModel):
+    """Knowledge list projection;正文、附件和个人更新状态按详情读取。"""
+
+    id: str
+    team_id: str
+    title: str
+    category_id: str | None
+    category: TeamNoteCategoryRead | None = None
+    tags: list[str]
+    source_type: TeamNoteSourceType
+    source_note_id: str | None
+    source_author_id: str | None
+    source_author: UserRead | None = None
+    source_submission_id: str | None
+    status: TeamNoteStatus
+    published_at: datetime
+    archived_at: datetime | None
+    created_at: datetime
+    updated_at: datetime
     permissions: TeamNotePermissions = Field(default_factory=TeamNotePermissions)
 
 

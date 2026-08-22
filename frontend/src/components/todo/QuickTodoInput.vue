@@ -8,6 +8,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
 import ActionFeedback from '@/components/ActionFeedback.vue'
 import { parseTaskText } from '@/modules/todo/parser/taskTextParser'
+import { getScheduleMarkers } from '@/modules/todo/scheduleMarkers'
 import { useTodoStore } from '@/stores/todos'
 import AssigneePopover from '@/components/task/AssigneePopover.vue'
 import type { TeamMember, Todo, TodoPayload, TodoPriority, TodoRecurrenceType } from '@/services/api'
@@ -91,24 +92,15 @@ const scheduleTime = computed({
 const existingTodoDates = computed(() => new Set(props.calendarTodos
   .filter((todo) => todo.dueAt && todo.status === 'TODO')
   .map((todo) => dayjs(todo.dueAt).format('YYYY-MM-DD'))))
-const previewDates = computed(() => {
-  const dates = new Set<string>()
-  if (!selectedScheduleDate.value) return dates
-  const start = dayjs(selectedScheduleDate.value)
-  for (const day of calendarDays.value) {
-    if (day.isBefore(start, 'day')) continue
-    if (recurrenceType.value === 'DAILY'
-      || (recurrenceType.value === 'WEEKLY' && day.day() === start.day())
-      || (recurrenceType.value === 'MONTHLY' && day.date() === start.date())
-      || (recurrenceType.value === 'NONE' && day.isSame(start, 'day'))) {
-      dates.add(day.format('YYYY-MM-DD'))
-    }
-  }
-  return dates
-})
+const previewMarkers = computed(() => getScheduleMarkers({
+  startDate: selectedScheduleDate.value,
+  recurrenceType: effectiveRecurrence.value,
+  recurrenceConfig: effectiveDueAt.value ? recurrenceConfig(effectiveDueAt.value) : null,
+  visibleDays: calendarDays.value,
+}))
 function dayMarkerClass(day: dayjs.Dayjs) {
   const key = day.format('YYYY-MM-DD')
-  return { 'has-todo': existingTodoDates.value.has(key), preview: previewDates.value.has(key) }
+  return { 'has-todo': existingTodoDates.value.has(key), preview: previewMarkers.value.scheduled.has(key) }
 }
 
 watch(() => props.defaultListName, (value) => { if (!editing.value || !input.value) listName.value = value })

@@ -22,6 +22,7 @@ const emit = defineEmits<{
 const name = ref('')
 const description = ref('')
 const contentJson = ref<Record<string, unknown>>(cloneDocument(EMPTY_DOCUMENT))
+const documentRef = ref<{ flush: () => void } | null>(null)
 
 useDialogEscape(() => props.open, () => emit('close'))
 
@@ -43,6 +44,7 @@ watch(
 function submit() {
   const trimmedName = name.value.trim()
   if (!trimmedName || props.saving) return
+  documentRef.value?.flush()
   emit('save', {
     name: trimmedName,
     description: description.value.trim() || null,
@@ -62,7 +64,7 @@ function submit() {
         <form class="template-editor-form" @submit.prevent="submit">
           <label><span>模板名称</span><input v-model="name" maxlength="200" placeholder="例如：项目周报" autofocus /></label>
           <label><span>模板说明 <small>可选</small></span><textarea v-model="description" maxlength="2000" rows="2" placeholder="说明这个模板适合什么场景" /></label>
-          <div class="template-editor-body"><span>模板正文</span><RichTextDocument v-model="contentJson" :editable="true" :slash-menu="true" placeholder="输入模板正文…" /></div>
+          <div class="template-editor-body"><span>模板正文</span><RichTextDocument ref="documentRef" v-model="contentJson" :editable="true" :slash-menu="true" placeholder="输入模板正文…" /></div>
           <footer class="dialog-actions">
             <button v-if="template" class="danger-button" type="button" @click="emit('delete')"><IconTrash :size="15" />删除模板</button>
             <span />

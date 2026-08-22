@@ -17,6 +17,7 @@ from app.schemas.team import (
     TeamNoteCategoryRead,
     TeamNoteCategoryUpdate,
     TeamNoteCreate,
+    TeamNoteListItem,
     TeamNotePermissions,
     TeamNoteRead,
     TeamNoteSubmissionCreate,
@@ -57,24 +58,68 @@ def _current_team(db, user_id: str, requested_team_id: str | None = None) -> _Te
     return _TeamContext(member.team_id, member)
 
 
-def _note_read(db, note, user_id: str, attachments_by_id=None) -> TeamNoteRead:  # noqa: ANN001
+def _team_note_list_read(note, can_edit: bool) -> TeamNoteListItem:  # noqa: ANN001
+    return TeamNoteListItem.model_validate(note).model_copy(update={
+        "permissions": TeamNotePermissions(
+            can_edit=can_edit,
+            can_copy=True,
+            can_archive=can_edit,
+            can_delete=can_edit and note.status == TeamNoteStatus.ARCHIVED,
+        )
+    })
+
+
+def _note_read(
+    db,
+    note,
+    user_id: str,
+    attachments_by_id=None,
+    *,
+    version_no: int | None = None,
+    update_state: dict | None = None,
+    editable: bool | None = None,
+) -> TeamNoteRead:  # noqa: ANN001
     attachments = (
         [attachments_by_id[item] for item in (note.attachment_ids or []) if item in attachments_by_id]
         if attachments_by_id is not None else team_note_service.attachment_reads(db, list(note.attachment_ids or []))
     )
-    editable = note_permission_service.can_edit_team_note(db, note, user_id)
-    version_no, _snapshot_hash = team_note_service.team_note_version_info(db, note)
-    update_state = team_note_service.update_state_for_team_note(db, note, user_id)
+    editable = note_permission_service.can_edit_team_note(db, note, user_id) if editable is None else editable
+    resolved_version_no = version_no
+    if resolved_version_no is None:
+        resolved_version_no, _snapshot_hash = team_note_service.team_note_version_info(db, note)
+    resolved_update_state = update_state or team_note_service.update_state_for_team_note(db, note, user_id)
     return TeamNoteRead.model_validate(note).model_copy(update={
         "attachments": attachments,
-        "version_no": version_no,
-        **update_state,
+        "version_no": resolved_version_no,
+        **resolved_update_state,
         "permissions": TeamNotePermissions(
             can_edit=editable,
             can_copy=True,
             can_archive=editable,
+            can_delete=editable and note.status == TeamNoteStatus.ARCHIVED,
         ),
     })
+
+
+def _note_reads(db, notes, user_id: str, *, can_edit: bool | None = None) -> list[TeamNoteRead]:  # noqa: ANN001
+    if not notes:
+        return []
+    attachment_ids = [attachment_id for note in notes for attachment_id in (note.attachment_ids or [])]
+    attachments_by_id = team_note_service.attachment_read_map(db, attachment_ids)
+    version_numbers = team_note_service.team_note_version_numbers(db, [note.id for note in notes])
+    update_states = team_note_service.update_states_for_team_notes(db, notes, user_id)
+    return [
+        _note_read(
+            db,
+            note,
+            user_id,
+            attachments_by_id,
+            version_no=version_numbers.get(note.id, 1),
+            update_state=update_states.get(note.id, {}),
+            editable=can_edit,
+        )
+        for note in notes
+    ]
 
 
 def _submission_read(db, submission) -> TeamNoteSubmissionRead:  # noqa: ANN001
@@ -131,7 +176,7 @@ def _notify_submission_reviewers(db, submission, applicant_id: str) -> None:  # 
 
 # Canonical knowledge APIs -------------------------------------------------
 
-@router.get("/team/knowledge", response_model=list[TeamNoteRead])
+@router.get("/team/knowledge", response_model=list[TeamNoteListItem])
 def list_knowledge(
     db: DbSession,
     user: CurrentUser,
@@ -139,17 +184,27 @@ def list_knowledge(
     category_id: str | None = Query(default=None, alias="categoryId"),
     include_archived: bool = Query(default=False, alias="includeArchived"),
     team_id: str | None = Query(default=None, alias="teamId"),
-) -> list[TeamNoteRead]:
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+) -> list[TeamNoteListItem]:
     context = _current_team(db, user.id, team_id)
     if include_archived and context.member is not None and context.member.role == TeamMemberRole.MEMBER:
         include_archived = False
     notes = team_note_service.list_team_notes(
-        db, context.team_id, q=q, category_id=category_id, include_archived=include_archived
+        db,
+        context.team_id,
+        q=q,
+        category_id=category_id,
+        include_archived=include_archived,
+        limit=limit,
+        offset=offset,
+        summary=True,
     )
-    attachment_map = team_note_service.attachment_read_map(
-        db, [item for note in notes for item in (note.attachment_ids or [])]
+    can_edit = user_is_root(db, user.id) or (
+        context.member is not None
+        and context.member.role in (TeamMemberRole.OWNER, TeamMemberRole.ADMIN)
     )
-    return [_note_read(db, note, user.id, attachment_map) for note in notes]
+    return [_team_note_list_read(note, can_edit) for note in notes]
 
 
 @router.get("/team/knowledge/categories", response_model=list[TeamNoteCategoryRead])
@@ -264,6 +319,31 @@ def restore_knowledge(
     team_service.require_role(db, context.team_id, user.id, TeamMemberRole.OWNER, TeamMemberRole.ADMIN)
     note = team_note_service.get_team_note_or_404(db, context.team_id, note_id)
     return _note_read(db, team_note_service.set_team_note_archived(db, note, user.id, False), user.id)
+
+
+@router.delete("/team/knowledge/{note_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_archived_knowledge(
+    note_id: str,
+    db: DbSession,
+    settings: CurrentSettings,
+    user: CurrentUser,
+    team_id: str | None = Query(default=None, alias="teamId"),
+) -> Response:
+    context = _current_team(db, user.id, team_id)
+    team_service.require_role(db, context.team_id, user.id, TeamMemberRole.OWNER, TeamMemberRole.ADMIN)
+    note = team_note_service.get_team_note_or_404(db, context.team_id, note_id)
+    note_title = note.title
+    team_note_service.delete_archived_team_note(db, note, settings)
+    audit_service.record_audit(
+        db,
+        actor_user_id=user.id,
+        action="TEAM_NOTE_DELETED",
+        resource_type="TEAM_NOTE",
+        resource_id=note_id,
+        team_id=context.team_id,
+        metadata_json={"title": note_title, "status": TeamNoteStatus.ARCHIVED.value},
+    )
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.get("/team/knowledge/{note_id}/versions", response_model=list[TeamNoteVersionRead])
@@ -425,16 +505,21 @@ def reject(submission_id: str, payload: TeamNoteSubmissionReview, db: DbSession,
 
 @router.get("/note-submissions/{submission_id}/related", response_model=list[TeamNoteRead])
 def related(submission_id: str, db: DbSession, user: CurrentUser) -> list[TeamNoteRead]:
-    _member, submission = _require_reviewer(db, submission_id, user.id)
-    return [_note_read(db, note, user.id) for note in team_note_service.related_knowledge(db, submission)]
+    _team_id, submission = _require_reviewer(db, submission_id, user.id)
+    notes = team_note_service.related_knowledge(db, submission)
+    return _note_reads(db, notes, user.id, can_edit=True)
 
 
 # Legacy team-scoped aliases -----------------------------------------------
 
 @router.get("/teams/{team_id}/notes", response_model=list[TeamNoteRead], include_in_schema=False)
 def legacy_list_notes(team_id: str, db: DbSession, user: CurrentUser) -> list[TeamNoteRead]:
-    team_service.require_team_access(db, team_id, user.id)
-    return [_note_read(db, note, user.id) for note in team_note_service.list_team_notes(db, team_id)]
+    member = team_service.require_team_access(db, team_id, user.id)
+    notes = team_note_service.list_team_notes(db, team_id)
+    can_edit = user_is_root(db, user.id) or (
+        member is not None and member.role in (TeamMemberRole.OWNER, TeamMemberRole.ADMIN)
+    )
+    return _note_reads(db, notes, user.id, can_edit=can_edit)
 
 
 @router.post("/teams/{team_id}/notes", response_model=TeamNoteRead, status_code=status.HTTP_201_CREATED, include_in_schema=False)

@@ -9,10 +9,11 @@
   --app-header-height: 76px;
   --app-page-gutter: clamp(16px, 2vw, 24px);
   --app-page-bottom-space: 48px;
-  --app-mobile-nav-height: calc(58px + env(safe-area-inset-bottom));
   --app-content-max: 1280px;
   --app-reading-max: 1040px;
   --app-settings-max: 1440px;
+  --task-view-width: 260px;
+  --detail-width: clamp(390px, 30vw, 560px);
 }
 
 html,
@@ -34,6 +35,15 @@ html {
   min-height: 100dvh;
   grid-template-columns: var(--workspace-rail-width) minmax(0, 1fr);
   color: var(--color-text-primary);
+}
+
+/* Desktop-only compact shell. The product has no mobile layout; the 1024px
+   floor is intentional and keeps narrow desktop windows usable. */
+@media (min-width: 1024px) and (max-width: 1279px) {
+  :root {
+    --task-view-width: 224px;
+    --detail-width: 360px;
+  }
 }
 
 .main-area {
@@ -104,40 +114,6 @@ html {
 .common-links-body > .common-links-empty {
   flex: 1 1 auto;
   min-height: 0;
-}
-
-/* The list card stretches to fill the viewport, but sparse content leaves a
-   visible dead zone. Pin a soft shortcut hint to the bottom so the card never
-   reads as "half-empty" — a CSS-only decoration, no template changes. */
-.notifications-page > .notification-list { position: relative; }
-.notifications-page > .notification-list::after {
-  content: '全部标为已读   ·   清空通知   ·   ⌘ N 新建任务';
-  position: sticky;
-  bottom: 0;
-  display: block;
-  margin: 0;
-  padding: 12px 16px;
-  text-align: center;
-  color: var(--color-text-tertiary);
-  font-size: var(--font-size-micro);
-  letter-spacing: 0.04em;
-  background: linear-gradient(180deg, color-mix(in srgb, var(--color-bg-surface) 0%, transparent 100%) 0%, var(--color-bg-surface) 45%);
-  pointer-events: none;
-}
-.common-links-body { position: relative; }
-.common-links-body::after {
-  content: '⌘ N 添加网站   ·   / 搜索   ·   拖拽分组';
-  position: sticky;
-  bottom: 0;
-  display: block;
-  margin: 0 -24px -24px;
-  padding: 12px 24px;
-  text-align: center;
-  color: var(--color-text-tertiary);
-  font-size: var(--font-size-micro);
-  letter-spacing: 0.04em;
-  background: linear-gradient(180deg, color-mix(in srgb, var(--color-bg-surface) 0%, transparent 100%) 0%, var(--color-bg-surface) 45%);
-  pointer-events: none;
 }
 
 .common-links-body {
@@ -276,7 +252,7 @@ html {
   flex-direction: column;
   padding: 0;
   border: 0;
-  border-radius: 0;
+  border-radius: var(--radius-none);
   box-shadow: none;
 }
 
@@ -483,122 +459,6 @@ html {
   }
 }
 
-@media (max-width: 1023px) {
-  :root { --app-page-gutter: 18px; }
-
-  .settings-layout { grid-template-columns: 180px minmax(0, 1fr); }
-  .home-dashboard-panel { grid-column: span 6; min-height: 0; }
-  .notes-workspace { grid-template-columns: 190px 270px minmax(0, 1fr); }
-}
-
-@media (max-width: 767px) {
-  :root {
-    --app-header-height: 66px;
-    --app-page-gutter: 14px;
-    --app-page-bottom-space: 32px;
-  }
-
-  .app-shell.task-app-shell {
-    display: block;
-    height: auto;
-    min-height: 100dvh;
-  }
-
-  .main-area {
-    height: auto;
-    min-height: calc(100dvh - var(--app-mobile-nav-height));
-    overflow: visible;
-    padding-bottom: var(--app-mobile-nav-height);
-  }
-
-  .page-content:not(.tasks-page):not(.calendar-month-page),
-  .home-dashboard,
-  .settings-page,
-  .unified-page,
-  .common-links-page {
-    min-height: calc(100dvh - var(--app-mobile-nav-height));
-  }
-
-  .page-content:not(.tasks-page):not(.calendar-month-page) {
-    padding: 0 var(--app-page-gutter) var(--app-page-bottom-space);
-  }
-
-  .home-dashboard { padding: 0 var(--app-page-gutter) 30px; }
-
-  .tasks-page,
-  .tasks-workspace,
-  .notes-page,
-  .notifications-page,
-  .common-links-page,
-  .team-page,
-  .team-audit-page,
-  .calendar-page-shell,
-  .calendar-month-page,
-  .team-tasks-page,
-  .team-tasks-workspace {
-    height: calc(100dvh - var(--app-mobile-nav-height));
-  }
-
-  /* The three desktop note panes become bounded vertical regions on phones.
-     Without explicit rows, the editor's legacy minimum height collapses the
-     first two grid tracks and their contents overlap the editor. */
-  .notes-workspace {
-    grid-template-columns: 1fr;
-    grid-template-rows: minmax(110px, .75fr) minmax(164px, 1fr) minmax(280px, 2fr);
-  }
-
-  .folder-column,
-  .note-list-column,
-  .editor-column {
-    min-height: 0;
-    overflow: hidden;
-  }
-
-  .folder-column,
-  .note-list-column {
-    display: flex;
-    flex-direction: column;
-  }
-
-  .folder-tree,
-  .note-list-items {
-    min-height: 0;
-    max-height: none;
-    flex: 1;
-  }
-
-  .team-page > .workspace-heading {
-    height: auto;
-    align-items: flex-start;
-    flex-direction: column;
-  }
-
-  .team-header-actions {
-    width: 100%;
-    min-width: 0;
-    flex-wrap: wrap;
-  }
-
-  .knowledge-metadata-edit {
-    flex-wrap: wrap;
-    padding-inline: var(--app-page-gutter);
-  }
-
-  .knowledge-metadata-edit select,
-  .knowledge-metadata-edit input {
-    min-width: 0;
-    flex: 1 1 140px;
-  }
-
-  .home-dashboard-grid { grid-template-columns: 1fr; }
-  .home-dashboard-panel { grid-column: 1; }
-  .settings-layout { display: block; }
-}
-
-@media (max-width: 479px) {
-  :root { --app-page-gutter: 12px; }
-}
-
 /* Large displays (2K/4K, ≥1600px effective width): step the whole token
    ladder up so type, spacing and the rail grow together. Derived tokens
    (type-page-title, card-title, dialog, input, …) all reference these base
@@ -631,41 +491,48 @@ html {
     --space-7: 30px;
     --space-8: 34px;
 
-    --workspace-rail-width: 66px;
+    --workspace-rail-width: 160px;
   }
 
   .task-app-shell > .sidebar.is-task-shell {
-    padding: 20px 8px 14px;
+    padding: 20px 12px 14px;
   }
 
   .task-app-shell > .sidebar.is-task-shell .brand {
-    width: 44px;
-    height: 44px;
+    width: 100%;
+    min-height: 72px;
+    height: auto;
+    justify-content: center;
+    padding: 4px 4px 0;
   }
 
   .task-app-shell > .sidebar.is-task-shell .brand-mark {
     width: 36px;
     height: 36px;
     flex-basis: 36px;
-    border-radius: 9px;
+    border-radius: var(--radius-md);
     font-size: var(--font-size-body-sm);
   }
 
   .task-app-shell > .sidebar.is-task-shell .rail-navigation {
     gap: 9px;
+    align-items: stretch;
     margin-top: 30px;
   }
 
   .task-app-shell > .sidebar.is-task-shell .rail-item,
   .task-app-shell > .sidebar.is-task-shell .sidebar-settings-link {
-    width: 44px;
+    width: 100%;
     min-height: 44px;
     height: 44px;
-    border-radius: 10px;
+    justify-content: flex-start;
+    padding-inline: 12px;
+    border-radius: var(--radius-md);
   }
 
   .task-app-shell > .sidebar.is-task-shell .rail-item svg,
   .task-app-shell > .sidebar.is-task-shell .sidebar-settings-link svg {
+    flex-basis: 21px;
     width: 21px;
     height: 21px;
   }
@@ -681,6 +548,7 @@ html {
   .task-app-shell > .sidebar.is-task-shell .avatar {
     width: 31px;
     height: 31px;
+    flex-basis: 31px;
   }
 }
 
@@ -793,26 +661,6 @@ body.note-editor-immersive-open .main-area {
 
 .note-immersive-toggle {
   flex: 0 0 auto;
-}
-
-@media (max-width: 767px) {
-  .note-editor-immersive .editor-header {
-    padding: 12px 14px 10px;
-  }
-
-  .note-editor-immersive .editor-toolbar {
-    width: 100%;
-    padding-inline: 10px;
-  }
-
-  .note-editor-immersive .tiptap-editor .tiptap {
-    padding: 24px 18px 72px;
-  }
-
-  .note-editor-immersive .attachment-panel {
-    width: 100%;
-    padding-inline: 14px;
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1078,41 +926,4 @@ body.note-editor-immersive-open .main-area {
 
 .submission-workspace > .submission-detail > .submission-actions-footer {
   flex: 0 0 auto;
-}
-
-@media (max-width: 767px) {
-  .attachment-panel.is-expanded {
-    max-height: 166px;
-  }
-
-  .attachment-panel-body {
-    max-height: 108px;
-  }
-
-  .readonly-attachment-panel {
-    max-height: 148px;
-    margin-inline: 14px;
-  }
-
-  .readonly-attachment-list {
-    grid-template-columns: 1fr;
-    max-height: 96px;
-  }
-
-  .submission-workspace {
-    grid-column: 1;
-    grid-row: 2 / -1;
-    display: flex;
-    flex-direction: column;
-  }
-
-  .submission-workspace > .submission-index {
-    flex: 0 0 min(230px, 34%);
-    min-height: 140px;
-  }
-
-  .submission-workspace > .submission-detail {
-    flex: 1 1 auto;
-    min-height: 0;
-  }
 }

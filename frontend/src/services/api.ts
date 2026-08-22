@@ -1,4 +1,4 @@
-import axios from 'axios'
+import axios, { type AxiosRequestConfig, type AxiosResponse } from 'axios'
 
 export const api = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL ?? '/api',
@@ -6,6 +6,56 @@ export const api = axios.create({
   timeout: 10_000,
   withCredentials: true,
 })
+
+type RawGet = <T = unknown>(url: string, config?: AxiosRequestConfig) => Promise<AxiosResponse<T>>
+const rawGet = api.get.bind(api) as RawGet
+const inFlightGets = new Map<string, Promise<AxiosResponse<unknown>>>()
+const dictionaryCache = new Map<string, { expiresAt: number; response: AxiosResponse<unknown> }>()
+const DICTIONARY_TTL_MS = 45_000
+
+function paramsKey(params: AxiosRequestConfig['params']): string {
+  if (!params) return ''
+  if (params instanceof URLSearchParams) return params.toString()
+  return JSON.stringify(params, Object.keys(params).sort())
+}
+
+function isDictionaryRequest(url: string): boolean {
+  return url === '/teams'
+    || /^\/teams\/[^/]+\/members$/.test(url)
+    || url === '/team/knowledge/categories'
+}
+
+function getKey(url: string, config?: AxiosRequestConfig): string {
+  return `${url}?${paramsKey(config?.params)}`
+}
+
+api.interceptors.request.use((config) => {
+  if (config.method?.toLowerCase() !== 'get') dictionaryCache.clear()
+  return config
+})
+
+// All GET callers share an in-flight promise. Only stable dictionaries are
+// retained after completion; mutable list/detail responses are never cached.
+api.get = ((url: string, config?: AxiosRequestConfig) => {
+  const key = getKey(url, config)
+  const now = Date.now()
+  const cached = isDictionaryRequest(url) ? dictionaryCache.get(key) : undefined
+  if (cached && cached.expiresAt > now) return Promise.resolve(cached.response) as ReturnType<typeof api.get>
+  if (cached) dictionaryCache.delete(key)
+
+  const pending = inFlightGets.get(key)
+  if (pending) return pending as ReturnType<typeof api.get>
+
+  const request = rawGet(url, config)
+  const shared = request.finally(() => inFlightGets.delete(key))
+  inFlightGets.set(key, shared as Promise<AxiosResponse<unknown>>)
+  if (isDictionaryRequest(url)) {
+    void request.then((response) => {
+      dictionaryCache.set(key, { expiresAt: Date.now() + DICTIONARY_TTL_MS, response })
+    })
+  }
+  return shared as ReturnType<typeof api.get>
+}) as typeof api.get
 
 export interface User {
   id: string
@@ -398,6 +448,7 @@ export interface Note {
   title: string
   contentJson: Record<string, unknown>
   plainText: string
+  tags: string[]
   isFavorite: boolean
   copiedFromNoteId: string | null
   copiedFromTeamNoteId: string | null
@@ -408,6 +459,24 @@ export interface Note {
   updatedAt: string
   deletedAt: string | null
 }
+
+export interface NoteListItem {
+  id: string
+  folderId: string | null
+  title: string
+  tags: string[]
+  isFavorite: boolean
+  copiedFromNoteId: string | null
+  copiedFromTeamNoteId: string | null
+  isKnowledgeUpdateDraft: boolean
+  copiedFromTeamNoteVersionNo: number | null
+  copiedFromTeamNoteSnapshotHash: string | null
+  createdAt: string
+  updatedAt: string
+  deletedAt: string | null
+}
+
+export interface NoteCounts { unfiled: number }
 
 export interface NoteTemplate {
   id: string
@@ -452,8 +521,18 @@ export async function deleteFolder(id: string): Promise<void> {
   await api.delete(`/folders/${id}`)
 }
 
-export async function fetchNotes(params?: { folderId?: string; q?: string; favorite?: boolean; limit?: number }): Promise<Note[]> {
-  const { data } = await api.get<Note[]>('/notes', { params })
+export async function fetchNotes(params?: { folderId?: string; q?: string; favorite?: boolean; tags?: string[]; unfiled?: boolean; limit?: number; offset?: number }): Promise<NoteListItem[]> {
+  const { data } = await api.get<NoteListItem[]>('/notes', { params })
+  return data
+}
+
+export async function fetchNoteTags(): Promise<string[]> {
+  const { data } = await api.get<string[]>('/notes/tags')
+  return data
+}
+
+export async function fetchNoteCounts(): Promise<NoteCounts> {
+  const { data } = await api.get<NoteCounts>('/notes/counts')
   return data
 }
 
@@ -462,8 +541,13 @@ export async function fetchNote(id: string): Promise<Note> {
   return data
 }
 
-export async function postNote(payload: { folderId?: string | null; title?: string; contentJson?: Record<string, unknown>; plainText?: string }): Promise<Note> {
+export async function postNote(payload: { folderId?: string | null; title?: string; contentJson?: Record<string, unknown>; plainText?: string; tags?: string[] }): Promise<Note> {
   const { data } = await api.post<Note>('/notes', payload)
+  return data
+}
+
+export async function captureNote(payload: { text: string; title?: string; tags?: string[] }): Promise<Note> {
+  const { data } = await api.post<Note>('/notes/capture', payload)
   return data
 }
 
@@ -476,7 +560,7 @@ export async function importMarkdownNote(file: File, folderId?: string | null, t
   return data
 }
 
-export async function putNote(id: string, payload: Partial<{ folderId: string | null; title: string; contentJson: Record<string, unknown>; plainText: string; isFavorite: boolean }>): Promise<Note> {
+export async function putNote(id: string, payload: Partial<{ folderId: string | null; title: string; contentJson: Record<string, unknown>; plainText: string; tags: string[]; isFavorite: boolean }>): Promise<Note> {
   const { data } = await api.put<Note>(`/notes/${id}`, payload)
   return data
 }
@@ -487,6 +571,24 @@ export async function deleteNote(id: string): Promise<void> {
 
 export async function copyNote(id: string): Promise<Note> {
   const { data } = await api.post<Note>(`/notes/${id}/copy`)
+  return data
+}
+
+export type SearchScope = 'all' | 'personal' | 'shared' | 'knowledge'
+export interface SearchExcerptPart { text: string; matched: boolean }
+export interface SearchItem {
+  source: 'personal' | 'shared' | 'knowledge'
+  id: string
+  title: string
+  excerpt: SearchExcerptPart[]
+  folderId: string | null
+  teamId: string | null
+  updatedAt: string
+}
+export interface SearchResponse { query: string; items: SearchItem[]; total: number; hasMore: boolean }
+
+export async function fetchSearch(params: { q: string; scope?: SearchScope; teamId?: string; limit?: number; offset?: number }): Promise<SearchResponse> {
+  const { data } = await api.get<SearchResponse>('/search', { params })
   return data
 }
 
@@ -653,7 +755,27 @@ export interface TeamNote {
   myUpdateDraftNoteId: string | null
   myUpdateSubmissionId: string | null
   myUpdateSubmissionStatus: TeamNoteSubmissionStatus | null
-  permissions: { canEdit: boolean; canCopy: boolean; canArchive: boolean }
+  permissions: { canEdit: boolean; canCopy: boolean; canArchive: boolean; canDelete: boolean }
+}
+
+export interface TeamNoteListItem {
+  id: string
+  teamId: string
+  title: string
+  categoryId: string | null
+  category: KnowledgeCategory | null
+  tags: string[]
+  sourceType: 'ADMIN_CREATED' | 'MEMBER_SUBMISSION'
+  sourceNoteId: string | null
+  sourceAuthorId: string | null
+  sourceAuthor: User | null
+  sourceSubmissionId: string | null
+  status: 'PUBLISHED' | 'ARCHIVED'
+  publishedAt: string
+  archivedAt: string | null
+  createdAt: string
+  updatedAt: string
+  permissions: { canEdit: boolean; canCopy: boolean; canArchive: boolean; canDelete: boolean }
 }
 
 export interface KnowledgeCategory {
@@ -736,8 +858,13 @@ function teamQuery(teamId?: string) {
   return teamId ? { teamId } : undefined
 }
 
-export async function fetchKnowledge(params?: { q?: string; categoryId?: string; includeArchived?: boolean; teamId?: string }): Promise<TeamNote[]> {
-  const { data } = await api.get<TeamNote[]>('/team/knowledge', { params })
+export async function fetchKnowledge(params?: { q?: string; categoryId?: string; includeArchived?: boolean; teamId?: string; limit?: number; offset?: number }): Promise<TeamNoteListItem[]> {
+  const { data } = await api.get<TeamNoteListItem[]>('/team/knowledge', { params })
+  return data
+}
+
+export async function fetchKnowledgeNote(id: string, teamId?: string): Promise<TeamNote> {
+  const { data } = await api.get<TeamNote>(`/team/knowledge/${id}`, { params: teamQuery(teamId) })
   return data
 }
 
@@ -778,6 +905,10 @@ export async function archiveKnowledge(id: string, teamId?: string): Promise<Tea
 export async function restoreKnowledge(id: string, teamId?: string): Promise<TeamNote> {
   const { data } = await api.post<TeamNote>(`/team/knowledge/${id}/restore`, undefined, { params: teamQuery(teamId) })
   return data
+}
+
+export async function deleteKnowledge(id: string, teamId?: string): Promise<void> {
+  await api.delete(`/team/knowledge/${id}`, { params: teamQuery(teamId) })
 }
 
 export async function copyKnowledge(id: string, teamId?: string): Promise<Note> {
@@ -930,8 +1061,8 @@ export async function deleteNoteShare(noteId: string, shareId: string): Promise<
   await api.delete(`/notes/${noteId}/shares/${shareId}`)
 }
 
-export async function fetchSharedNotes(): Promise<SharedNote[]> {
-  const { data } = await api.get<SharedNote[]>('/shared/notes')
+export async function fetchSharedNotes(q?: string): Promise<SharedNote[]> {
+  const { data } = await api.get<SharedNote[]>('/shared/notes', { params: q?.trim() ? { q: q.trim() } : undefined })
   return data
 }
 
@@ -945,7 +1076,7 @@ export async function copySharedNote(noteId: string): Promise<Note> {
   return data
 }
 
-export type NotificationType = 'TEAM_MEMBER_ADDED' | 'TEAM_TASK_ASSIGNED' | 'TEAM_TASK_UPDATED' | 'TEAM_TASK_CANCELLED' | 'TEAM_NOTE_SUBMITTED' | 'TEAM_NOTE_REVIEWED' | 'TEAM_NOTE_APPROVED' | 'TEAM_NOTE_REJECTED' | 'NOTE_SHARED'
+export type NotificationType = 'TEAM_MEMBER_ADDED' | 'TEAM_TASK_ASSIGNED' | 'TEAM_TASK_UPDATED' | 'TEAM_TASK_CANCELLED' | 'TEAM_NOTE_SUBMITTED' | 'TEAM_NOTE_REVIEWED' | 'TEAM_NOTE_APPROVED' | 'TEAM_NOTE_REJECTED' | 'NOTE_SHARED' | 'NOTE_SHARE_REVOKED'
 
 export interface Notification {
   id: string
@@ -958,9 +1089,16 @@ export interface Notification {
   createdAt: string
 }
 
+export interface NotificationUnreadCount { count: number }
+
 export async function fetchNotifications(unreadOnly = false): Promise<Notification[]> {
   const { data } = await api.get<Notification[]>('/notifications', { params: unreadOnly ? { unreadOnly: true } : undefined })
   return data
+}
+
+export async function fetchUnreadNotificationCount(): Promise<number> {
+  const { data } = await api.get<NotificationUnreadCount>('/notifications/unread/count')
+  return data.count
 }
 
 export async function markNotificationRead(id: string): Promise<void> {

@@ -16,8 +16,9 @@ import TaskRelationDialog from '@/components/task/TaskRelationDialog.vue'
 import { createWorkFollowEditorExtensions } from '@/modules/editor/tiptap'
 import { workFollowSlashCommands, type WorkFollowSlashCommand } from '@/modules/editor/slashCommands'
 import { isDateOnlyDue } from '@/modules/todo/dueDate'
+import { getScheduleMarkers } from '@/modules/todo/scheduleMarkers'
 import { TaskSaveQueue, type TaskSaveStatus } from '@/modules/todo/taskSaveQueue'
-import { postResourceRelation, uploadTaskAttachment, type Attachment, type Note, type TeamMember, type Todo, type TodoPayload, type TodoPriority, type TodoRecurrenceType } from '@/services/api'
+import { postResourceRelation, uploadTaskAttachment, type Attachment, type NoteListItem, type TeamMember, type Todo, type TodoPayload, type TodoPriority, type TodoRecurrenceType } from '@/services/api'
 
 const props = withDefaults(defineProps<{
   todo: Todo | null
@@ -207,6 +208,7 @@ function buildRecurrenceConfig(): Record<string, number | string> | null {
   if (!dueAt.value || recurrenceType.value === 'NONE') return null
   if (recurrenceType.value === 'WEEKLY') return { weekday: (dayjs(dueAt.value).day() + 6) % 7 }
   if (recurrenceType.value === 'MONTHLY') return { day: dayjs(dueAt.value).date() }
+  if (recurrenceType.value === 'CUSTOM') return props.todo?.recurrenceConfig ?? { frequency: 'WEEKLY', interval: 1 }
   return {}
 }
 const formInvalid = computed(() => (recurrenceType.value !== 'NONE' || reminderPreset.value !== 'NONE') && !dueAt.value)
@@ -384,9 +386,22 @@ function chooseDay(day: Dayjs) {
     choosingRangeEnd.value = false
   }
 }
-function isInRange(day: Dayjs) {
-  if (!selectedDate.value || !selectedEndDate.value) return false
-  return !day.isBefore(dayjs(selectedDate.value), 'day') && !day.isAfter(dayjs(selectedEndDate.value), 'day')
+const scheduleMarkers = computed(() => getScheduleMarkers({
+  startDate: selectedDate.value,
+  endDate: selectedEndDate.value || null,
+  recurrenceType: recurrenceType.value,
+  // Only CUSTOM carries an interval/frequency in the persisted config. Do
+  // not reuse an old custom interval after the user switches to DAILY/WEEKLY.
+  recurrenceConfig: recurrenceType.value === 'CUSTOM' ? props.todo?.recurrenceConfig ?? null : null,
+  visibleDays: calendarDays.value,
+}))
+function calendarDayClasses(day: Dayjs) {
+  const key = day.format('YYYY-MM-DD')
+  return {
+    'task-schedule-marked': scheduleMarkers.value.scheduled.has(key),
+    'task-schedule-range': scheduleMarkers.value.range.has(key),
+    'task-schedule-recurring': scheduleMarkers.value.recurring.has(key),
+  }
 }
 function applySchedule() {
   if (!selectedDate.value) return
@@ -512,7 +527,7 @@ async function relateTask(todo: Todo) {
     showNotice('已关联任务')
   } catch { showNotice('关联失败，请确认访问权限') }
 }
-async function relateNote(note: Note) {
+async function relateNote(note: NoteListItem) {
   if (!props.todo) return
   try {
     await postResourceRelation({ sourceType: 'TASK', sourceId: props.todo.id, targetType: 'PERSONAL_NOTE', targetId: note.id })
@@ -604,7 +619,7 @@ onBeforeUnmount(() => {
             <div class="task-calendar-head"><button type="button" aria-label="上个月" @click="calendarMonth = calendarMonth.subtract(1, 'month')"><IconChevronLeft :size="16" /></button><strong>{{ calendarMonth.format('YYYY年M月') }}</strong><button type="button" aria-label="下个月" @click="calendarMonth = calendarMonth.add(1, 'month')"><IconChevronRight :size="16" /></button></div>
             <div class="task-calendar-grid weekdays"><span v-for="name in weekNames" :key="name">{{ name }}</span></div>
             <div class="task-calendar-grid" role="grid">
-              <button v-for="day in calendarDays" :key="day.format('YYYY-MM-DD')" type="button" :class="{ muted: !day.isSame(calendarMonth, 'month'), today: day.isSame(dayjs(), 'day'), selected: day.format('YYYY-MM-DD') === selectedDate || day.format('YYYY-MM-DD') === selectedEndDate, range: isInRange(day) }" :aria-label="day.format('YYYY年M月D日')" @click="chooseDay(day)">{{ day.date() }}</button>
+              <button v-for="day in calendarDays" :key="day.format('YYYY-MM-DD')" type="button" :class="[calendarDayClasses(day), { muted: !day.isSame(calendarMonth, 'month'), today: day.isSame(dayjs(), 'day'), selected: day.format('YYYY-MM-DD') === selectedDate || day.format('YYYY-MM-DD') === selectedEndDate }]" :aria-label="day.format('YYYY年M月D日')" @click="chooseDay(day)">{{ day.date() }}</button>
             </div>
             <div class="task-schedule-fields">
               <label><span><IconClock :size="15" />时间</span><input v-model="timeValue" type="time" /></label>
@@ -711,10 +726,5 @@ onBeforeUnmount(() => {
   </aside>
   <aside v-else class="task-detail task-detail-empty" aria-label="任务正文">
     <div><IconChevronRight :size="24" :stroke-width="1.5" /><strong>选择一个任务</strong><p>任务正文会显示在这里。</p></div>
-    <div class="empty-hints" aria-label="快捷键">
-      <span><kbd>⌘</kbd><kbd>N</kbd> 新建任务</span>
-      <span><kbd>↑</kbd><kbd>↓</kbd> 切换任务</span>
-      <span><kbd>⌘</kbd><kbd>/</kbd> 查看全部</span>
-    </div>
   </aside>
 </template>

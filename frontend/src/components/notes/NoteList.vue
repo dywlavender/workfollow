@@ -2,20 +2,37 @@
 import { IconFilePlus, IconLayoutGrid, IconSearch, IconTrash, IconUpload } from '@tabler/icons-vue'
 import dayjs from 'dayjs'
 
-import type { Note } from '@/services/api'
+import type { NoteListItem } from '@/services/api'
 
 
-defineProps<{ notes: Note[]; selectedId: string | null; search: string }>()
-const emit = defineEmits<{ select: [note: Note]; create: []; templates: []; import: []; search: [value: string]; remove: [note: Note] }>()
+defineProps<{
+  notes: NoteListItem[]
+  selectedId: string | null
+  search: string
+  availableTags?: string[]
+  selectedTag?: string | null
+}>()
+const emit = defineEmits<{
+  select: [note: NoteListItem]
+  create: []
+  templates: []
+  import: []
+  search: [value: string]
+  tagFilter: [value: string]
+  remove: [note: NoteListItem]
+}>()
 </script>
 
 <template>
   <aside class="notes-column note-list-column">
     <header class="notes-column-header">
       <div><span class="eyebrow">内容</span><h2>笔记</h2></div>
-      <button class="mini-action" type="button" aria-label="新建笔记" @click="emit('create')"><IconFilePlus :size="17" :stroke-width="1.8" /></button>
+      <div class="notes-column-actions">
+        <button class="mini-action" type="button" aria-label="新建笔记" title="新建笔记" @click="emit('create')"><IconFilePlus :size="17" :stroke-width="1.8" /></button>
+      </div>
     </header>
-    <label class="note-search"><IconSearch :size="16" :stroke-width="1.8" aria-hidden="true" /><input :value="search" placeholder="搜索笔记" @input="emit('search', ($event.target as HTMLInputElement).value)" /></label>
+    <label class="note-search"><IconSearch :size="16" :stroke-width="1.8" aria-hidden="true" /><input :value="search" placeholder="筛选当前列表" @input="emit('search', ($event.target as HTMLInputElement).value)" /></label>
+    <select v-if="availableTags?.length" class="notes-tag-filter note-list-tag-filter" :value="selectedTag ?? ''" aria-label="按标签筛选" @change="emit('tagFilter', ($event.target as HTMLSelectElement).value)"><option value="">全部标签</option><option v-for="tag in availableTags" :key="tag" :value="tag">#{{ tag }}</option></select>
     <button class="template-entry" type="button" @click="emit('templates')"><IconLayoutGrid :size="16" :stroke-width="1.8" /><span>从模板创建</span></button>
     <button class="note-import-entry" type="button" @click="emit('import')"><IconUpload :size="16" :stroke-width="1.8" /><span>导入 Markdown</span></button>
     <div class="note-list-items">

@@ -8,7 +8,17 @@ const oldTokens = /var\(--(?:bg-page|bg-sidebar|bg-panel|bg-hover|bg-muted|bg-se
 const rawColor = /#[0-9a-fA-F]{3,8}\b|rgba?\([^;})]+\)/g
 const rawType = /font-size:\s*(?:[0-9.]+(?:px|rem|em)|clamp\()|font-weight:\s*[0-9]+/g
 const rawFontFamily = /font-family:(?!\s*(?:var\(|inherit\b))\s*[^;}\n]+/g
+const rawRadius = /border-radius:\s*(?:0|[0-9.]+(?:px|rem|em|%)|var\([^)]*,\s*[0-9.]+(?:px|rem|em|%)\))/g
 const failures = []
+const requiredTokens = [
+  '--motion-duration-instant',
+  '--motion-duration-fast',
+  '--motion-duration-normal',
+  '--motion-ease-standard',
+  '--loading-skeleton-from',
+  '--loading-skeleton-to',
+  '--loading-pending-opacity',
+]
 
 async function walk(directory) {
   const entries = await readdir(directory, { withFileTypes: true })
@@ -21,6 +31,11 @@ async function walk(directory) {
   return files
 }
 
+const tokenContent = await readFile(join(sourceRoot, tokenFile), 'utf8')
+for (const token of requiredTokens) {
+  if (!tokenContent.includes(`${token}:`)) failures.push(`${tokenFile}: missing required performance token ${token}`)
+}
+
 for (const file of await walk(sourceRoot)) {
   if (file.endsWith(tokenFile)) continue
   const content = await readFile(file, 'utf8')
@@ -29,6 +44,7 @@ for (const file of await walk(sourceRoot)) {
     ['raw color', rawColor],
     ['raw typography', rawType],
     ['raw font family', rawFontFamily],
+    ['raw radius', rawRadius],
   ]) {
     for (const match of content.matchAll(pattern)) {
       const line = content.slice(0, match.index).split('\n').length

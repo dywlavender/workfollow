@@ -28,7 +28,7 @@ import TodoDialog from '@/components/todo/TodoDialog.vue'
 import { filterStandaloneAttachments } from '@/modules/editor/attachmentReferences'
 import { createWorkFollowEditorExtensions } from '@/modules/editor/tiptap'
 import { workFollowSlashCommands, type WorkFollowSlashCommand } from '@/modules/editor/slashCommands'
-import { collectTaskIds } from '@/modules/editor/taskRelations'
+import { useRealtimeStore } from '@/stores/realtime'
 
 
 const props = defineProps<{
@@ -43,9 +43,11 @@ const props = defineProps<{
   currentUserId?: string
   canAssignTasks?: boolean
   focusBlockId?: string | null
+  availableTags?: string[]
 }>()
+const realtime = useRealtimeStore()
 const emit = defineEmits<{
-  save: [payload: { noteId: string; title: string; folderId: string | null; contentJson?: Record<string, unknown>; plainText?: string }]
+  save: [payload: { noteId: string; title: string; folderId: string | null; tags: string[]; contentJson?: Record<string, unknown>; plainText?: string }]
   deleteAttachment: [attachment: Attachment]
   openTask: [taskId: string]
   share: []
@@ -59,6 +61,8 @@ const emit = defineEmits<{
 
 const title = ref('')
 const folderId = ref<string | null>(null)
+const tags = ref<string[]>([])
+const tagDraft = ref('')
 const saveState = ref<'idle' | 'saving' | 'saved'>('idle')
 const fileInput = ref<HTMLInputElement | null>(null)
 const linkDialogOpen = ref(false)
@@ -87,9 +91,13 @@ const visibleAttachments = computed(() => filterStandaloneAttachments(
   editorContent.value ?? props.note?.contentJson,
 ))
 let saveTimer: number | undefined
+let contentSnapshotTimer: number | undefined
 let slashDetectTimer: number | undefined
 let taskHydrateTimer: number | undefined
 let contentDirty = false
+let taskHydrateRequest = 0
+let taskIdsKey = ''
+let taskBriefCache = new Map<string, TaskBrief>()
 
 const bubbleMenuOptions = {
   duration: 120,
@@ -143,8 +151,8 @@ const editor = useEditor({
   },
   onUpdate: ({ editor: currentEditor }) => {
     contentDirty = true
-    editorContent.value = currentEditor.getJSON() as Record<string, unknown>
     scheduleSave()
+    scheduleContentSnapshot(currentEditor)
     scheduleTaskHydration()
     window.clearTimeout(slashDetectTimer)
     slashDetectTimer = window.setTimeout(() => detectSlashCommand(currentEditor), 0)
@@ -220,18 +228,33 @@ watch(
   (_newId, oldId) => {
     if (oldId && saveTimer) emitCurrentContent(oldId)
     window.clearTimeout(saveTimer)
+    window.clearTimeout(contentSnapshotTimer)
     saveTimer = undefined
+    contentSnapshotTimer = undefined
     title.value = props.note?.title ?? ''
     folderId.value = props.note?.folderId ?? null
+    tags.value = [...(props.note?.tags ?? [])]
+    tagDraft.value = ''
     saveState.value = 'idle'
     attachmentPanelOpen.value = false
     editorContent.value = props.note?.contentJson ?? null
+    taskIdsKey = ''
+    taskBriefCache = new Map()
     closeSlashMenu()
     if (props.note && editor.value) editor.value.commands.setContent(props.note.contentJson as JSONContent, false)
     scheduleTaskHydration()
     void focusSourceBlock()
   },
   { immediate: true },
+)
+
+watch(
+  () => props.note?.tags,
+  (nextTags) => {
+    const normalized = [...(nextTags ?? [])]
+    if (JSON.stringify(normalized) !== JSON.stringify(tags.value)) tags.value = normalized
+  },
+  { deep: true },
 )
 
 watch(
@@ -278,22 +301,54 @@ function scheduleSave() {
   }, 1200)
 }
 
+function scheduleContentSnapshot(currentEditor: TiptapEditor | null = editor.value ?? null) {
+  if (!currentEditor) return
+  window.clearTimeout(contentSnapshotTimer)
+  contentSnapshotTimer = window.setTimeout(() => {
+    if (editor.value !== currentEditor) return
+    editorContent.value = currentEditor.getJSON() as Record<string, unknown>
+    contentSnapshotTimer = undefined
+  }, 250)
+}
+
 function emitCurrentContent(noteId: string) {
   if (!editor.value) return
   const dirty = contentDirty
   contentDirty = false
+  if (dirty && contentSnapshotTimer !== undefined) {
+    window.clearTimeout(contentSnapshotTimer)
+    contentSnapshotTimer = undefined
+    editorContent.value = editor.value.getJSON() as Record<string, unknown>
+  }
   // Only send the (potentially large) document JSON when the body actually
   // changed. Title/folder edits then save a tiny payload instead of the full
   // contentJson + plainText every time — less bandwidth and backend work.
+  const contentJson = dirty
+    ? (editorContent.value ?? editor.value.getJSON() as Record<string, unknown>)
+    : undefined
   emit('save', {
     noteId,
     title: title.value.trim() || '未命名笔记',
     folderId: folderId.value || null,
-    ...(dirty ? {
-      contentJson: editor.value.getJSON() as Record<string, unknown>,
+    tags: [...tags.value],
+    ...(contentJson ? {
+      contentJson,
       plainText: editor.value.getText({ blockSeparator: '\n' }),
     } : {}),
   })
+}
+
+function addTag() {
+  const next = tagDraft.value.trim().replace(/\s+/g, ' ')
+  if (!next || tags.value.includes(next) || tags.value.length >= 20 || next.length > 40) return
+  tags.value.push(next)
+  tagDraft.value = ''
+  scheduleSave()
+}
+
+function removeTag(tag: string) {
+  tags.value = tags.value.filter((item) => item !== tag)
+  scheduleSave()
 }
 
 function requestSaveAsTemplate() {
@@ -498,13 +553,30 @@ function briefMeta(brief: TaskBrief): string {
 async function refreshTaskReferences() {
   const currentEditor = editor.value
   if (!currentEditor) return
-  // Fast path: skip the full-document serialization (getJSON + recursive walk)
-  // when the note contains no task references at all. This runs on every input
-  // pause, so avoiding it keeps typing responsive on large documents.
-  if (!currentEditor.view.dom.querySelector('[data-task-link], [data-task-reference]')) return
-  const ids = collectTaskIds(currentEditor.getJSON())
-  if (!ids.length) return
+  const ids = [...new Set(
+    [...currentEditor.view.dom.querySelectorAll<HTMLElement>('[data-task-link], [data-task-reference]')]
+      .map((element) => element.dataset.taskId)
+      .filter((id): id is string => Boolean(id)),
+  )].sort()
+  const nextKey = ids.join('\u0000')
+  if (!ids.length) {
+    taskIdsKey = ''
+    taskBriefCache = new Map()
+    return
+  }
+  if (nextKey === taskIdsKey && taskBriefCache.size === ids.length) {
+    await renderTaskBriefs(currentEditor, taskBriefCache)
+    return
+  }
+  taskIdsKey = nextKey
+  const requestId = ++taskHydrateRequest
   const briefs = new Map((await fetchTaskBriefs(ids)).map((item) => [item.id, item]))
+  if (requestId !== taskHydrateRequest) return
+  taskBriefCache = briefs
+  await renderTaskBriefs(currentEditor, briefs)
+}
+
+async function renderTaskBriefs(currentEditor: TiptapEditor, briefs: Map<string, TaskBrief>) {
   await nextTick()
   for (const element of currentEditor.view.dom.querySelectorAll<HTMLElement>('[data-task-link], [data-task-reference]')) {
     const taskId = element.dataset.taskId
@@ -526,6 +598,37 @@ async function refreshTaskReferences() {
     element.querySelector<HTMLElement>('[data-task-reference-meta]')?.replaceChildren(briefMeta(brief))
   }
 }
+
+function applyRealtimeTaskChange(change: NonNullable<typeof realtime.lastTaskChange>) {
+  const currentEditor = editor.value
+  if (!currentEditor) return
+  const brief = change.brief
+  for (const element of currentEditor.view.dom.querySelectorAll<HTMLElement>('[data-task-link], [data-task-reference]')) {
+    if (element.dataset.taskId !== change.taskId) continue
+    if (brief.deleted) {
+      element.dataset.taskState = 'deleted'
+      element.title = '该待办已删除'
+      element.querySelector<HTMLElement>('[data-task-reference-title]')?.replaceChildren('该待办已删除')
+      element.querySelector<HTMLElement>('[data-task-reference-status]')?.replaceChildren('—')
+      element.querySelector<HTMLElement>('[data-task-reference-meta]')?.replaceChildren('')
+      continue
+    }
+    const done = brief.status === 'DONE'
+    element.dataset.taskState = done ? 'done' : 'todo'
+    element.title = brief.title
+    element.querySelector<HTMLElement>('[data-task-reference-title]')?.replaceChildren(brief.title)
+    element.querySelector<HTMLElement>('[data-task-reference-status]')?.replaceChildren(done ? '✓' : '○')
+  }
+}
+
+watch(() => realtime.lastTaskChange, (change) => {
+  if (change) applyRealtimeTaskChange(change)
+})
+
+watch(() => realtime.reconnectGeneration, () => {
+  taskIdsKey = ''
+  void refreshTaskReferences()
+})
 
 async function copySelection() {
   const text = selectedText()
@@ -570,6 +673,7 @@ onMounted(() => {
 onBeforeUnmount(() => {
   if (saveTimer && props.note) emitCurrentContent(props.note.id)
   window.clearTimeout(saveTimer)
+  window.clearTimeout(contentSnapshotTimer)
   window.clearTimeout(slashDetectTimer)
   window.clearTimeout(taskHydrateTimer)
   window.removeEventListener('keydown', handleImmersiveKeydown)
@@ -634,6 +738,19 @@ watch(immersiveOpen, (open) => {
           </select>
           <span class="save-state" :class="saveState">{{ saveState === 'saving' ? '保存中…' : saveState === 'saved' ? '已自动保存' : '本地笔记' }}</span>
           <span v-if="knowledgeState === 'update-draft' || knowledgeState === 'update-pending' || knowledgeState === 'update-needs-revision'" class="knowledge-update-target">更新目标：{{ knowledgeTargetTitle ?? '团队知识' }}</span>
+        </div>
+        <div class="note-tags-row" aria-label="笔记标签">
+          <span v-for="tag in tags" :key="tag" class="note-tag-chip">{{ tag }}<button type="button" :aria-label="`移除标签 ${tag}`" @click="removeTag(tag)">×</button></span>
+          <input
+            v-model="tagDraft"
+            class="note-tag-input"
+            list="note-tag-options"
+            maxlength="40"
+            placeholder="添加标签…"
+            aria-label="添加笔记标签"
+            @keydown.enter.prevent="addTag"
+          />
+          <datalist id="note-tag-options"><option v-for="tag in availableTags" :key="tag" :value="tag" /></datalist>
         </div>
       </header>
       <RichTextToolbar v-if="editor" :editor="editor" attachment @link="setLink" @attachment="openFilePicker('embedded')" />

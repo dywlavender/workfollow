@@ -56,7 +56,7 @@ defineEmits<{
   gap: 2px;
   padding: 5px;
   border: 1px solid var(--color-border-subtle);
-  border-radius: 11px;
+  border-radius: var(--radius-lg);
   background: var(--color-bg-surface);
   box-shadow: var(--dialog-shadow);
 }
@@ -68,7 +68,7 @@ defineEmits<{
   place-items: center;
   padding: 0 6px;
   border: 0;
-  border-radius: 7px;
+  border-radius: var(--radius-sm);
   background: transparent;
   color: var(--color-text-secondary);
   font-size: var(--font-size-caption);
@@ -97,7 +97,7 @@ defineEmits<{
 .tippy-box[data-theme~='transparent'] {
   background: transparent;
   border: 0;
-  border-radius: 0;
+  border-radius: var(--radius-none);
   box-shadow: none;
   padding: 0;
 }

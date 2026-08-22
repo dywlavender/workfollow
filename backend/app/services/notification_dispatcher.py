@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from app.core.config import Settings
 from app.models.notification import Notification, NotificationType
 from app.services import external_notification_service, notification_service
+from app.services.event_stream import queue_notification_counts
 
 
 logger = logging.getLogger(__name__)
@@ -103,6 +104,12 @@ def dispatch_event(
         in_app_count=in_app_count,
         external_count=external_count,
     )
+    if result.in_app_count:
+        # Session autoflush is disabled in this application. Flush the newly
+        # inserted notifications before calculating the count sent to SSE, so
+        # the badge reflects the same transaction that created the event.
+        db.flush()
+        queue_notification_counts(db, recipients)
     if result.changed and commit:
         db.commit()
     logger.info(

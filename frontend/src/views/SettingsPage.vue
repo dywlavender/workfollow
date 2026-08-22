@@ -9,7 +9,9 @@ import {
   IconPalette,
   IconSettings,
   IconSun,
+  IconUserCircle,
 } from '@tabler/icons-vue'
+import { ref } from 'vue'
 
 import {
   appearanceModes,
@@ -30,6 +32,7 @@ const router = useRouter()
 const selectedPalette = computed(() => getAppearancePalette(appStore.appearancePalette))
 const selectedBackground = computed(() => getAppearanceBackground(appStore.appearanceBackground))
 const modeIcons = { system: IconDeviceDesktop, light: IconSun, dark: IconMoon }
+const activeSection = ref<'appearance' | 'account'>('appearance')
 
 function selectPalette(palette: AppearancePalette) {
   appStore.setAppearancePalette(palette)
@@ -73,13 +76,18 @@ async function signOut() {
     <div class="settings-layout">
       <aside class="settings-navigation" aria-label="设置分类">
         <div class="settings-navigation-title"><IconSettings :size="18" />设置</div>
-        <button class="settings-navigation-item active" type="button" aria-current="page">
+        <button class="settings-navigation-item" :class="{ active: activeSection === 'appearance' }" type="button" :aria-current="activeSection === 'appearance' ? 'page' : undefined" @click="activeSection = 'appearance'">
           <IconPalette :size="18" />
           <span>外观</span>
+        </button>
+        <button class="settings-navigation-item" :class="{ active: activeSection === 'account' }" type="button" :aria-current="activeSection === 'account' ? 'page' : undefined" @click="activeSection = 'account'">
+          <IconUserCircle :size="18" />
+          <span>账号</span>
         </button>
       </aside>
 
       <main class="settings-content">
+        <template v-if="activeSection === 'appearance'">
         <section class="settings-panel" aria-labelledby="appearance-title">
           <header class="settings-panel-header">
             <div>
@@ -165,13 +173,24 @@ async function signOut() {
           </div>
           <span class="settings-saved-badge"><IconCheck :size="14" />已应用</span>
         </section>
+        </template>
 
-        <section class="settings-info-row">
-          <div>
-            <strong>{{ authStore.user?.nickname }}</strong>
-            <p>@{{ authStore.user?.username }}</p>
-          </div>
-          <button class="secondary-button" type="button" @click="signOut">退出登录</button>
+        <section v-else class="settings-panel account-settings-panel" aria-labelledby="account-title">
+          <header class="settings-panel-header">
+            <div>
+              <span class="section-label">ACCOUNT</span>
+              <h2 id="account-title">账号</h2>
+              <p>查看当前登录信息，退出登录也集中放在这里。</p>
+            </div>
+          </header>
+          <dl class="account-details">
+            <div><dt>昵称</dt><dd>{{ authStore.user?.nickname || '未设置' }}</dd></div>
+            <div><dt>用户名</dt><dd>@{{ authStore.user?.username || '—' }}</dd></div>
+          </dl>
+          <footer class="account-actions">
+            <span>需要切换账号时，可以安全退出当前会话。</span>
+            <button class="secondary-button" type="button" @click="signOut">退出登录</button>
+          </footer>
         </section>
       </main>
     </div>

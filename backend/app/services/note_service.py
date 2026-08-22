@@ -7,8 +7,8 @@ from typing import Any
 from uuid import uuid4
 
 from sqlalchemy import Text as SqlText
-from sqlalchemy import cast, or_, select
-from sqlalchemy.orm import Session
+from sqlalchemy import cast, func, or_, select
+from sqlalchemy.orm import Session, load_only
 
 from fastapi import HTTPException
 
@@ -16,7 +16,8 @@ from app.core.config import Settings
 from app.models.note import Attachment, Folder, Note
 from app.models.team_note import SubmissionFileAccess, TeamFileAccess
 from app.models.todo import local_now
-from app.schemas.note import FolderCreate, FolderUpdate, NoteCreate, NoteUpdate
+from app.schemas.note import FolderCreate, FolderUpdate, NoteCapture, NoteCreate, NoteUpdate
+from app.services import search_index_service
 
 
 def content_to_plain_text(content_json: Mapping[str, object] | None) -> str:
@@ -140,14 +141,41 @@ def list_notes(
     folder_id: str | None = None,
     q: str | None = None,
     favorite: bool | None = None,
+    tags: list[str] | None = None,
+    unfiled: bool = False,
     limit: int = 100,
     offset: int = 0,
+    summary: bool = False,
 ) -> list[Note]:
     statement = select(Note).where(Note.owner_id == owner_id, Note.deleted_at.is_(None))
+    if summary:
+        statement = statement.options(load_only(
+            Note.id,
+            Note.folder_id,
+            Note.title,
+            Note.tags,
+            Note.is_favorite,
+            Note.copied_from_note_id,
+            Note.copied_from_team_note_id,
+            Note.is_knowledge_update_draft,
+            Note.copied_from_team_note_version_no,
+            Note.copied_from_team_note_snapshot_hash,
+            Note.created_at,
+            Note.updated_at,
+            Note.deleted_at,
+        ))
     if folder_id:
         statement = statement.where(Note.folder_id == folder_id)
     if favorite is not None:
         statement = statement.where(Note.is_favorite.is_(favorite))
+    if unfiled:
+        statement = statement.where(Note.folder_id.is_(None))
+    normalized_tags = [tag.strip() for tag in (tags or []) if tag.strip()]
+    for tag in normalized_tags:
+        tag_values = func.json_each(Note.tags).table_valued("value").alias("note_tag")
+        statement = statement.where(
+            select(tag_values.c.value).where(tag_values.c.value == tag).correlate(Note).exists()
+        )
     if q and q.strip():
         pattern = f"%{q.strip()}%"
         # The JSON fallback keeps notes created by older versions searchable
@@ -162,6 +190,24 @@ def list_notes(
     return list(db.scalars(statement.order_by(Note.updated_at.desc()).limit(limit).offset(offset)))
 
 
+def list_note_tags(db: Session, owner_id: str) -> list[str]:
+    values = db.scalars(
+        select(Note.tags).where(Note.owner_id == owner_id, Note.deleted_at.is_(None))
+    ).all()
+    tags = {tag.strip() for row in values if isinstance(row, list) for tag in row if isinstance(tag, str) and tag.strip()}
+    return sorted(tags, key=lambda item: (item.casefold(), item))
+
+
+def count_unfiled_notes(db: Session, owner_id: str) -> int:
+    return int(db.scalar(
+        select(func.count(Note.id)).where(
+            Note.owner_id == owner_id,
+            Note.deleted_at.is_(None),
+            Note.folder_id.is_(None),
+        )
+    ) or 0)
+
+
 def create_note(db: Session, payload: NoteCreate, owner_id: str, *, commit: bool = True) -> Note:
     if payload.folder_id:
         get_folder_or_404(db, payload.folder_id, owner_id)
@@ -172,10 +218,37 @@ def create_note(db: Session, payload: NoteCreate, owner_id: str, *, commit: bool
     note = Note(**data, owner_id=owner_id)
     db.add(note)
     db.flush()
+    search_index_service.upsert_personal_note(db, note)
     if commit:
         db.commit()
         db.refresh(note)
     return note
+
+
+def _plain_text_to_document(value: str) -> dict[str, Any]:
+    paragraphs = []
+    for line in value.splitlines() or [""]:
+        paragraph: dict[str, Any] = {"type": "paragraph"}
+        if line:
+            paragraph["content"] = [{"type": "text", "text": line}]
+        paragraphs.append(paragraph)
+    return {"type": "doc", "content": paragraphs}
+
+
+def capture_note(db: Session, payload: NoteCapture, owner_id: str) -> Note:
+    first_line = next((line.strip() for line in payload.text.splitlines() if line.strip()), "")
+    title = (payload.title or first_line or "未命名笔记").strip()[:500]
+    return create_note(
+        db,
+        NoteCreate(
+            folder_id=None,
+            title=title,
+            content_json=_plain_text_to_document(payload.text),
+            plain_text=payload.text,
+            tags=payload.tags,
+        ),
+        owner_id,
+    )
 
 
 def _attachment_id_from_url(value: object) -> str | None:
@@ -305,6 +378,7 @@ def copy_note_with_attachments(
     title: str,
     content_json: dict[str, Any],
     plain_text: str,
+    tags: list[str] | None = None,
     source_attachments: Sequence[Attachment],
     owner_id: str,
     settings: Settings,
@@ -325,6 +399,7 @@ def copy_note_with_attachments(
             title=title.strip(),
             content_json=deepcopy(content_json),
             plain_text=plain_text,
+            tags=list(tags or []),
             copied_from_note_id=copied_from_note_id,
             copied_from_team_note_id=copied_from_team_note_id,
             is_knowledge_update_draft=is_knowledge_update_draft,
@@ -362,6 +437,7 @@ def copy_note_with_attachments(
             id_map[source.id] = cloned.id
 
         note.content_json = _rewrite_attachment_references(content_json, id_map)
+        search_index_service.upsert_personal_note(db, note)
         db.commit()
         db.refresh(note)
         return note
@@ -384,21 +460,40 @@ def update_note(db: Session, note: Note, payload: NoteUpdate, settings: Settings
         changes["plain_text"] = content_to_plain_text(changes["content_json"])
     for field, value in changes.items():
         setattr(note, field, value)
-    paths_to_remove = _cleanup_removed_embedded_images(
-        db,
-        note,
-        changes.get("content_json"),
-        settings,
-    ) if "content_json" in changes else []
+    paths_to_remove: list[Path] = []
     if "content_json" in changes:
         from app.services import resource_relation_service
+        from app.models.resource_relation import ResourceRelation, ResourceType
 
-        resource_relation_service.sync_personal_note_relations(
-            db,
-            note.id,
-            note.owner_id,
-            resource_relation_service.task_ids_in_document(changes["content_json"]),
-        )
+        referenced_attachment_ids = attachment_ids_in_document(changes["content_json"])
+        has_old_images = db.scalar(select(Attachment.id).where(
+            Attachment.note_id == note.id,
+            Attachment.mime_type.ilike("image/%"),
+        ).limit(1)) is not None
+        if referenced_attachment_ids or has_old_images:
+            paths_to_remove = _cleanup_removed_embedded_images(
+                db,
+                note,
+                changes["content_json"],
+                settings,
+            )
+
+        retained_task_ids = resource_relation_service.task_ids_in_document(changes["content_json"])
+        has_old_task_relations = db.scalar(select(ResourceRelation.id).where(
+            ResourceRelation.source_type == ResourceType.PERSONAL_NOTE,
+            ResourceRelation.source_id == note.id,
+            ResourceRelation.target_type == ResourceType.TASK,
+            ResourceRelation.created_by_id == note.owner_id,
+            ResourceRelation.deleted_at.is_(None),
+        ).limit(1)) is not None
+        if retained_task_ids or has_old_task_relations:
+            resource_relation_service.sync_personal_note_relations(
+                db,
+                note.id,
+                note.owner_id,
+                retained_task_ids,
+            )
+    search_index_service.upsert_personal_note(db, note)
     db.commit()
     for path in paths_to_remove:
         path.unlink(missing_ok=True)
@@ -408,4 +503,5 @@ def update_note(db: Session, note: Note, payload: NoteUpdate, settings: Settings
 
 def soft_delete_note(db: Session, note: Note) -> None:
     note.deleted_at = local_now()
+    search_index_service.remove_source(db, search_index_service.PERSONAL_SOURCE, note.id)
     db.commit()
