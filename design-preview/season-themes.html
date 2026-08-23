@@ -335,42 +335,42 @@
 
   /* ============ 场景配色（每季 × 明暗独立设计） ============ */
   body[data-season="spring"][data-mode="light"] {
-    --sc-back:#c98fb4; --sc-hillA:#b2dca6; --sc-hillB:#93c98e; --sc-trunk:#7a5546;
+    --sc-hillA:#b2dca6; --sc-hillB:#93c98e; --sc-trunk:#7a5546;
     --sc-bl1:#ffb0d2; --sc-bl2:#f787ba; --sc-bl3:#ffd1e3;
-    --sc-wall:#fff6ee; --sc-roof:#c97b8a; --sc-bird:#8a5a72;
+    --sc-bird:#8a5a72;
   }
   body[data-season="spring"][data-mode="dark"] {
-    --sc-back:#4a2c48; --sc-hillA:#2e3d3a; --sc-hillB:#243230; --sc-trunk:#503a4a;
+    --sc-hillA:#2e3d3a; --sc-hillB:#243230; --sc-trunk:#503a4a;
     --sc-bl1:#c76a9d; --sc-bl2:#a84d80; --sc-bl3:#e39cc2;
-    --sc-wall:#3a2c3a; --sc-roof:#7a4a5e; --sc-bird:#b08aa0;
+    --sc-bird:#b08aa0;
   }
   body[data-season="summer"][data-mode="light"] {
     --sc-seaT:#5fc2e8; --sc-seaB:#2f9fd8; --sc-foam:rgb(255 255 255 / .8); --sc-island:#4db3d6;
-    --sc-sail:#ffffff; --sc-hull:#e8734a; --sc-cloud:#ffffff; --sc-gull:#3a7a99;
-    --sc-sun:#fffbe8; --sc-sunring:rgb(255 255 255 / .6);
+    --sc-sail:#ffffff; --sc-hull:#e8734a;
+    --sc-sunring:rgb(255 255 255 / .6);
   }
   body[data-season="summer"][data-mode="dark"] {
     --sc-seaT:#0d2c44; --sc-seaB:#081e30; --sc-foam:rgb(125 211 252 / .3); --sc-island:#123248;
-    --sc-sail:#d8e8f2; --sc-hull:#7a4a3a; --sc-cloud:#22405c; --sc-gull:#7aa8c4;
-    --sc-sun:#eef4fb; --sc-sunring:rgb(191 219 254 / .25);
+    --sc-sail:#d8e8f2; --sc-hull:#7a4a3a;
+    --sc-sunring:rgb(191 219 254 / .25);
   }
   body[data-season="autumn"][data-mode="light"] {
-    --sc-sun:#fff3c4; --sc-backH:#d19a6a; --sc-midH:#b0713a;
+    --sc-backH:#d19a6a; --sc-midH:#b0713a;
     --sc-field:#e0b06a; --sc-row:#c08c47;
-    --sc-t1:#d96b2a; --sc-t2:#c2410c; --sc-t3:#e0913f; --sc-trunk:#6b4423; --sc-goose:#7a4a2e;
+    --sc-t1:#d96b2a; --sc-t2:#c2410c; --sc-t3:#e0913f; --sc-trunk:#6b4423;
   }
   body[data-season="autumn"][data-mode="dark"] {
-    --sc-sun:#fcd34d; --sc-backH:#4a2c1c; --sc-midH:#38200f;
+    --sc-backH:#4a2c1c; --sc-midH:#38200f;
     --sc-field:#59331b; --sc-row:#462612;
-    --sc-t1:#b45309; --sc-t2:#92400e; --sc-t3:#c2711c; --sc-trunk:#3a2513; --sc-goose:#c9a189;
+    --sc-t1:#b45309; --sc-t2:#92400e; --sc-t3:#c2711c; --sc-trunk:#3a2513;
   }
   body[data-season="winter"][data-mode="light"] {
-    --sc-backM:#a9c4e2; --sc-cap:#f4faff; --sc-midM:#7fa8d0; --sc-mist:rgb(255 255 255 / .55);
+    --sc-backM:#a9c4e2; --sc-cap:#f4faff; --sc-midM:#7fa8d0;
     --sc-snowF:#eaf3fc; --sc-shade:#c2d9ef; --sc-pine:#3e6b63; --sc-pinecap:#ffffff; --sc-trunkW:#4a3a30;
     --sc-moon-op:0; --sc-stars-op:0; --sc-moonFill:#f1f5f9; --sc-moonHalo:rgb(191 219 254 / .18);
   }
   body[data-season="winter"][data-mode="dark"] {
-    --sc-backM:#22334d; --sc-cap:#9db8d8; --sc-midM:#182741; --sc-mist:rgb(147 197 253 / .12);
+    --sc-backM:#22334d; --sc-cap:#9db8d8; --sc-midM:#182741;
     --sc-snowF:#0f1c30; --sc-shade:#16273f; --sc-pine:#16302e; --sc-pinecap:#9db8d8; --sc-trunkW:#0c1a20;
     --sc-moon-op:1; --sc-stars-op:1; --sc-moonFill:#f1f5f9; --sc-moonHalo:rgb(191 219 254 / .18);
   }
@@ -485,6 +485,51 @@
       <circle cx="12" cy="-20" r="32" fill="var(--sc-t1)"/>
       <circle cx="40" cy="6" r="22" fill="var(--sc-t3)"/>
       <circle cx="2" cy="14" r="24" fill="var(--sc-t1)"/>
+    </g>
+  </svg>
+  <svg class="sc sc-winter" viewBox="0 0 1440 320" preserveAspectRatio="xMidYMax slice">
+    <!-- 星星（仅深色可见） -->
+    <g fill="var(--sc-moonFill)" style="opacity:var(--sc-stars-op)">
+      <circle cx="180" cy="60" r="2"/><circle cx="300" cy="34" r="1.6"/>
+      <circle cx="420" cy="76" r="1.4"/><circle cx="520" cy="30" r="2"/>
+      <circle cx="700" cy="58" r="1.5"/><circle cx="860" cy="36" r="1.8"/>
+      <circle cx="1010" cy="70" r="1.4"/><circle cx="1330" cy="44" r="1.8"/>
+    </g>
+    <!-- 月亮 + 光环（仅深色可见） -->
+    <g style="opacity:var(--sc-moon-op)">
+      <circle cx="1210" cy="62" r="46" fill="var(--sc-moonHalo)"/>
+      <circle cx="1210" cy="62" r="26" fill="var(--sc-moonFill)"/>
+    </g>
+    <!-- 雪山两层：backM 山体 + cap 积雪 -->
+    <path fill="var(--sc-backM)" d="M0 190 L210 84 L420 190 Z M420 190 L560 108 L760 190 Z M760 190 L940 96 L1160 190 Z M1160 190 L1310 122 L1440 190 Z"/>
+    <g fill="var(--sc-cap)">
+      <path d="M210 84 L164 108 L184 104 L204 118 L226 102 L248 110 Z"/>
+      <path d="M560 108 L524 128 L542 124 L560 136 L580 124 L600 130 Z"/>
+      <path d="M940 96 L898 120 L918 116 L938 130 L962 112 L982 122 Z"/>
+      <path d="M1310 122 L1278 140 L1296 136 L1312 146 L1330 136 L1346 142 Z"/>
+    </g>
+    <!-- 近处山影 -->
+    <path fill="var(--sc-midM)" d="M0 236 L150 178 L300 230 L470 186 L640 238 L820 196 L1000 240 L1200 200 L1380 238 L1440 226 V320 H0 Z"/>
+    <!-- 雪原 + 阴影起伏 -->
+    <rect y="258" width="1440" height="62" fill="var(--sc-snowF)"/>
+    <path fill="var(--sc-shade)" d="M0 282 Q300 266 640 282 T1440 278 V320 H0 Z"/>
+    <!-- 松林小簇（点睛）：trunkW 树干，pine 树身三层，pinecap 积雪尖 -->
+    <g transform="translate(300 196)">
+      <g>
+        <rect x="-3" y="58" width="6" height="14" fill="var(--sc-trunkW)"/>
+        <path fill="var(--sc-pine)" d="M0 -6 L15 22 H-15 Z M0 12 L19 42 H-19 Z M0 30 L23 62 H-23 Z"/>
+        <path fill="var(--sc-pinecap)" d="M0 -6 L9 11 L4 9 L0 13 L-4 9 L-9 11 Z"/>
+      </g>
+      <g transform="translate(64 22) scale(.72)">
+        <rect x="-3" y="58" width="6" height="14" fill="var(--sc-trunkW)"/>
+        <path fill="var(--sc-pine)" d="M0 -6 L15 22 H-15 Z M0 12 L19 42 H-19 Z M0 30 L23 62 H-23 Z"/>
+        <path fill="var(--sc-pinecap)" d="M0 -6 L9 11 L4 9 L0 13 L-4 9 L-9 11 Z"/>
+      </g>
+      <g transform="translate(-58 34) scale(.55)">
+        <rect x="-3" y="58" width="6" height="14" fill="var(--sc-trunkW)"/>
+        <path fill="var(--sc-pine)" d="M0 -6 L15 22 H-15 Z M0 12 L19 42 H-19 Z M0 30 L23 62 H-23 Z"/>
+        <path fill="var(--sc-pinecap)" d="M0 -6 L9 11 L4 9 L0 13 L-4 9 L-9 11 Z"/>
+      </g>
     </g>
   </svg>
 </div>
@@ -658,7 +703,7 @@
 </div>
 
 <!-- 切换器 -->
-<div class="sw-hint" id="hint">底部切换季节与明暗 · 「背景」按钮可对比纯色与实景背景图</div>
+<div class="sw-hint" id="hint">底部切换季节与明暗 · 「背景」按钮切换天空与插画场景</div>
 <div class="switcher">
   <button class="sw-btn on" data-season="spring"><span class="sw-dot dot-spring"></span>春 · 樱语</button>
   <button class="sw-btn" data-season="summer"><span class="sw-dot dot-summer"></span>夏 · 青屿</button>
