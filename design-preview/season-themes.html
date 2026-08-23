@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>WorkFollow · 四季主题效果图 v4 · 实景摄影</title>
+<title>WorkFollow · 四季主题效果图 v5 · 扁平插画</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   html, body { width: 100%; height: 100%; overflow: hidden; }
@@ -17,7 +17,7 @@
 
   /* ============ 天空（每季独立配色，CSS 渐变） ============ */
   .sky { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
-  body.atmo-off .sky, body.atmo-off .photo, body.atmo-off .overlay { opacity: 0; }
+  body.atmo-off .sky, body.atmo-off .scene, body.atmo-off .overlay { opacity: 0; }
 
   /* 春 · 晨雾樱粉天 */
   body[data-season="spring"] { background: #ffd9e8; }
@@ -93,25 +93,16 @@
   body[data-season="autumn"] .grain { opacity: .05; mix-blend-mode: multiply; }
   body[data-season="autumn"][data-mode="dark"] .grain { opacity: .07; mix-blend-mode: overlay; }
 
-  /* ============ 实景摄影背景层（每季一张，深色同图压暗调色） ============ */
-  .photo {
-    position: fixed; inset: 0; z-index: 1; pointer-events: none;
-    background-size: cover; background-position: center;
+  /* ============ 扁平插画场景层（每季一幅内联 SVG，填色走 --sc-* 变量） ============ */
+  .scene {
+    position: fixed; left: 0; right: 0; bottom: 0;
+    height: 32vh; z-index: 1; pointer-events: none;
   }
-  body[data-season="spring"] .photo { background-image: url("assets/spring.jpg"); }
-  body[data-season="summer"] .photo { background-image: url("assets/summer.jpg"); }
-  body[data-season="autumn"] .photo { background-image: url("assets/autumn.jpg"); }
-  body[data-season="winter"] .photo { background-image: url("assets/winter.jpg"); }
-  .photo::after { content: ""; position: absolute; inset: 0; }
-  body[data-mode="light"] .photo::after {
-    background: linear-gradient(180deg, rgb(255 255 255 / .08), transparent 34%, rgb(15 18 24 / .10));
-  }
-  body[data-mode="dark"] .photo {
-    filter: brightness(.46) saturate(.88) contrast(1.05);
-  }
-  body[data-mode="dark"] .photo::after {
-    background: linear-gradient(180deg, rgb(8 10 20 / .42), rgb(8 10 20 / .30) 42%, rgb(8 10 20 / .55));
-  }
+  .scene svg { display: none; width: 100%; height: 100%; }
+  body[data-season="spring"] .sc-spring,
+  body[data-season="summer"] .sc-summer,
+  body[data-season="autumn"] .sc-autumn,
+  body[data-season="winter"] .sc-winter { display: block; }
 
   /* ============ 应用外壳（玻璃面板） ============ */
   .app {
@@ -434,8 +425,30 @@
 <div class="aurora a1" aria-hidden="true"></div>
 <div class="grain" aria-hidden="true"></div>
 
-<!-- 实景摄影背景层 -->
-<div class="photo" aria-hidden="true"></div>
+<!-- 扁平插画场景层 -->
+<div class="scene" aria-hidden="true">
+  <svg class="sc sc-spring" viewBox="0 0 1440 320" preserveAspectRatio="xMidYMax slice">
+    <!-- 小鸟点缀 -->
+    <g stroke="var(--sc-bird)" stroke-width="3" fill="none" stroke-linecap="round">
+      <path d="M600 96 q9 -9 18 0 q9 -9 18 0"/>
+      <path d="M668 74 q7 -7 14 0 q7 -7 14 0"/>
+      <path d="M560 66 q6 -6 12 0 q6 -6 12 0"/>
+    </g>
+    <!-- 远丘 -->
+    <path fill="var(--sc-hillA)" d="M0 208 Q180 150 360 186 T720 176 Q900 148 1080 184 T1440 170 V320 H0 Z"/>
+    <!-- 近丘 -->
+    <path fill="var(--sc-hillB)" d="M0 262 Q240 214 480 246 T960 238 Q1200 216 1440 250 V320 H0 Z"/>
+    <!-- 樱树（点睛） -->
+    <g transform="translate(300 118)">
+      <path fill="var(--sc-trunk)" d="M-7 130 C-5 84 -9 52 -16 22 L-4 30 C-2 60 2 92 7 130 Z"/>
+      <circle cx="-38" cy="10" r="34" fill="var(--sc-bl2)"/>
+      <circle cx="14" cy="-18" r="42" fill="var(--sc-bl1)"/>
+      <circle cx="58" cy="18" r="30" fill="var(--sc-bl2)"/>
+      <circle cx="-8" cy="26" r="40" fill="var(--sc-bl3)"/>
+      <circle cx="36" cy="44" r="24" fill="var(--sc-bl1)"/>
+    </g>
+  </svg>
+</div>
 
 <!-- 应用界面 -->
 <div class="app">
