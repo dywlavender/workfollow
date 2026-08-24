@@ -1,36 +1,67 @@
 import { createRouter, createWebHistory } from 'vue-router'
 
+import { useAppStore, type RouteLoadingKind } from '@/stores/app'
 import { useAuthStore } from '@/stores/auth'
 import { useWorkspaceStore } from '@/stores/workspace'
+
+const routeLoaders = {
+  auth: () => import('@/views/AuthPage.vue'),
+  home: () => import('@/views/HomePage.vue'),
+  todos: () => import('@/views/TodosPage.vue'),
+  calendar: () => import('@/views/CalendarPage.vue'),
+  notes: () => import('@/views/NotesPage.vue'),
+  common: () => import('@/views/CommonLinksPage.vue'),
+  notifications: () => import('@/views/NotificationsPage.vue'),
+  settings: () => import('@/views/SettingsPage.vue'),
+  adminUsers: () => import('@/views/AdminUsersPage.vue'),
+  team: () => import('@/views/TeamPage.vue'),
+  teamAudit: () => import('@/views/TeamAuditPage.vue'),
+}
+const preloadedRoutes = new Set<string>()
+
+export function preloadRoute(name: string) {
+  if (preloadedRoutes.has(name)) return
+  const loader = routeLoaders[name as keyof typeof routeLoaders]
+  if (!loader) return
+  preloadedRoutes.add(name)
+  void loader().catch(() => { preloadedRoutes.delete(name) })
+}
+
+function routeLoadingKind(to: { meta: Record<string, unknown> }): RouteLoadingKind {
+  const kind = to.meta.loadingKind
+  return kind === 'dashboard' || kind === 'workspace' || kind === 'list' ? kind : 'workspace'
+}
 
 const router = createRouter({
   history: createWebHistory(),
   routes: [
-    { path: '/login', name: 'login', component: () => import('@/views/AuthPage.vue'), props: { mode: 'login' }, meta: { guest: true } },
-    { path: '/register', name: 'register', component: () => import('@/views/AuthPage.vue'), props: { mode: 'register' }, meta: { guest: true } },
-    { path: '/', name: 'home', component: () => import('@/views/HomePage.vue'), meta: { requiresAuth: true } },
-    { path: '/todos', name: 'todos', component: () => import('@/views/TodosPage.vue'), meta: { requiresAuth: true } },
-    { path: '/calendar', name: 'calendar', component: () => import('@/views/CalendarPage.vue'), meta: { requiresAuth: true } },
-    { path: '/notes', name: 'notes', component: () => import('@/views/NotesPage.vue'), meta: { requiresAuth: true } },
-    { path: '/common', name: 'common', component: () => import('@/views/CommonLinksPage.vue'), meta: { requiresAuth: true } },
+    { path: '/login', name: 'login', component: routeLoaders.auth, props: { mode: 'login' }, meta: { guest: true } },
+    { path: '/register', name: 'register', component: routeLoaders.auth, props: { mode: 'register' }, meta: { guest: true } },
+    { path: '/', name: 'home', component: routeLoaders.home, meta: { requiresAuth: true, loadingKind: 'dashboard' } },
+    { path: '/todos', name: 'todos', component: routeLoaders.todos, meta: { requiresAuth: true, loadingKind: 'workspace' } },
+    { path: '/calendar', name: 'calendar', component: routeLoaders.calendar, meta: { requiresAuth: true, loadingKind: 'workspace' } },
+    { path: '/notes', name: 'notes', component: routeLoaders.notes, meta: { requiresAuth: true, loadingKind: 'workspace' } },
+    { path: '/common', name: 'common', component: routeLoaders.common, meta: { requiresAuth: true, loadingKind: 'list' } },
     { path: '/shared-notes', redirect: { path: '/notes', query: { view: 'shared' } } },
     { path: '/knowledge/:knowledgeId', redirect: (to) => ({ path: '/notes', query: { view: 'knowledge', knowledge: String(to.params.knowledgeId) } }) },
-    { path: '/notifications', name: 'notifications', component: () => import('@/views/NotificationsPage.vue'), meta: { requiresAuth: true } },
-    { path: '/settings', name: 'settings', component: () => import('@/views/SettingsPage.vue'), meta: { requiresAuth: true } },
-    { path: '/admin/users', name: 'admin-users', component: () => import('@/views/AdminUsersPage.vue'), meta: { requiresAuth: true, requiresRoot: true } },
-    { path: '/teams', name: 'teams', component: () => import('@/views/TeamPage.vue'), meta: { requiresAuth: true } },
-    { path: '/team/:teamId', name: 'team', component: () => import('@/views/TeamPage.vue'), meta: { requiresAuth: true } },
+    { path: '/notifications', name: 'notifications', component: routeLoaders.notifications, meta: { requiresAuth: true, loadingKind: 'list' } },
+    { path: '/settings', name: 'settings', component: routeLoaders.settings, meta: { requiresAuth: true, loadingKind: 'list' } },
+    { path: '/admin/users', name: 'admin-users', component: routeLoaders.adminUsers, meta: { requiresAuth: true, requiresRoot: true, loadingKind: 'list' } },
+    { path: '/teams', name: 'teams', component: routeLoaders.team, meta: { requiresAuth: true, loadingKind: 'list' } },
+    { path: '/team/:teamId', name: 'team', component: routeLoaders.team, meta: { requiresAuth: true, loadingKind: 'list' } },
     { path: '/team/:teamId/tasks', redirect: { path: '/todos', query: { view: 'assigned-by-me' } } },
     { path: '/team/:teamId/calendar', redirect: '/calendar' },
     { path: '/team/:teamId/notes', redirect: { path: '/notes', query: { view: 'knowledge' } } },
-    { path: '/team/:teamId/audit', name: 'team-audit', component: () => import('@/views/TeamAuditPage.vue'), meta: { requiresAuth: true } },
+    { path: '/team/:teamId/audit', name: 'team-audit', component: routeLoaders.teamAudit, meta: { requiresAuth: true, loadingKind: 'list' } },
   ],
   scrollBehavior: () => ({ top: 0 }),
 })
 
-router.beforeEach(async (to) => {
+router.beforeEach(async (to, from) => {
+  const appStore = useAppStore()
   const auth = useAuthStore()
   const workspace = useWorkspaceStore()
+  if (to.name !== from.name && to.meta.requiresAuth) appStore.beginRouteLoading(routeLoadingKind(to))
   await auth.initialize()
   if (to.meta.requiresAuth && !auth.user) {
     workspace.reset()
@@ -45,5 +76,8 @@ router.beforeEach(async (to) => {
   }
   return true
 })
+
+router.afterEach(() => useAppStore().endRouteLoading())
+router.onError(() => useAppStore().endRouteLoading())
 
 export default router

@@ -55,6 +55,13 @@ html {
   scrollbar-gutter: stable;
 }
 
+.route-content-frame {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+}
+
 /* Pages fill the shell, while their readable content keeps a useful line
    length on large displays. Full-width treatment is reserved for workspaces. */
 .page-content:not(.tasks-page):not(.calendar-month-page),
@@ -374,6 +381,137 @@ html {
   justify-content: start;
 }
 
+/* Seasonal atmosphere surfaces
+ *
+ * The scene lives behind the authenticated shell. Keep the shell and page
+ * canvases open, then add translucency only at the boundaries that need to
+ * separate navigation, lists and reading surfaces. Text-heavy controls (the
+ * editor document, inputs, dialogs and popovers) keep their normal opaque
+ * tokens so the atmosphere never competes with content.
+ */
+html[data-atmosphere="on"] .app-shell.task-app-shell,
+html[data-atmosphere="on"] .app-shell.task-app-shell > .main-area,
+html[data-atmosphere="on"] .page-content,
+html[data-atmosphere="on"] .home-dashboard,
+html[data-atmosphere="on"] .tasks-page,
+html[data-atmosphere="on"] .tasks-workspace,
+html[data-atmosphere="on"] .calendar-page-shell,
+html[data-atmosphere="on"] .calendar-month-page,
+html[data-atmosphere="on"] .notes-page,
+html[data-atmosphere="on"] .notes-workspace,
+html[data-atmosphere="on"] .notifications-page,
+html[data-atmosphere="on"] .settings-page,
+html[data-atmosphere="on"] .unified-page,
+html[data-atmosphere="on"] .common-links-page,
+html[data-atmosphere="on"] .team-page,
+html[data-atmosphere="on"] .team-audit-page,
+html[data-atmosphere="on"] .team-tasks-page,
+html[data-atmosphere="on"] .team-tasks-workspace {
+  background: var(--workspace-glass-canvas);
+}
+
+html[data-atmosphere="on"] .task-app-shell > .sidebar.is-task-shell {
+  background: var(--workspace-glass-rail);
+  -webkit-backdrop-filter: blur(var(--glass-blur-rail)) saturate(var(--glass-saturation-rail));
+  backdrop-filter: blur(var(--glass-blur-rail)) saturate(var(--glass-saturation-rail));
+}
+
+html[data-atmosphere="on"] .home-dashboard-panel,
+html[data-atmosphere="on"] .settings-panel,
+html[data-atmosphere="on"] .team-summary-card,
+html[data-atmosphere="on"] .team-members-panel,
+html[data-atmosphere="on"] .team-danger-zone,
+html[data-atmosphere="on"] .team-note-reader,
+html[data-atmosphere="on"] .team-submissions-panel,
+html[data-atmosphere="on"] .shared-note-reader,
+html[data-atmosphere="on"] .admin-users-panel,
+html[data-atmosphere="on"] .audit-list {
+  background: var(--workspace-glass-detail);
+  -webkit-backdrop-filter: blur(var(--glass-blur-detail)) saturate(var(--glass-saturation-detail));
+  backdrop-filter: blur(var(--glass-blur-detail)) saturate(var(--glass-saturation-detail));
+}
+
+html[data-atmosphere="on"] .tasks-page .tasks-workspace > .task-view-sidebar,
+html[data-atmosphere="on"] .settings-navigation,
+html[data-atmosphere="on"] .calendar-sidebar,
+html[data-atmosphere="on"] .notes-workspace > .note-navigation,
+html[data-atmosphere="on"] .notes-workspace > .folder-column,
+html[data-atmosphere="on"] .team-task-view-sidebar {
+  background: var(--workspace-glass-navigation);
+  -webkit-backdrop-filter: blur(var(--glass-blur-navigation)) saturate(var(--glass-saturation-navigation));
+  backdrop-filter: blur(var(--glass-blur-navigation)) saturate(var(--glass-saturation-navigation));
+}
+
+html[data-atmosphere="on"] .tasks-page .task-list-panel,
+html[data-atmosphere="on"] .notes-workspace > .note-list-column,
+html[data-atmosphere="on"] .submission-workspace > .submission-index,
+html[data-atmosphere="on"] .team-note-index,
+html[data-atmosphere="on"] .shared-note-index,
+html[data-atmosphere="on"] .team-task-list-panel {
+  background: var(--workspace-glass-panel);
+  -webkit-backdrop-filter: blur(var(--glass-blur-panel)) saturate(var(--glass-saturation-panel));
+  backdrop-filter: blur(var(--glass-blur-panel)) saturate(var(--glass-saturation-panel));
+}
+
+html[data-atmosphere="on"] .tasks-page .task-detail,
+html[data-atmosphere="on"] .notes-workspace > .editor-column,
+html[data-atmosphere="on"] .submission-workspace > .submission-detail,
+html[data-atmosphere="on"] .team-task-detail-panel,
+html[data-atmosphere="on"] .team-task-detail {
+  background: var(--workspace-glass-detail);
+  -webkit-backdrop-filter: blur(var(--glass-blur-detail)) saturate(var(--glass-saturation-detail));
+  backdrop-filter: blur(var(--glass-blur-detail)) saturate(var(--glass-saturation-detail));
+}
+
+/* Empty task detail used to paint a fully opaque vertical gradient over the
+   scene. Retain a gentle reading surface, but let its lower edge dissolve
+   back into the canvas. */
+html[data-atmosphere="on"] .tasks-page .task-detail-empty {
+  background: linear-gradient(
+    180deg,
+    var(--workspace-glass-detail) 0%,
+    color-mix(in srgb, var(--workspace-glass-detail) 82%, transparent) 66%,
+    transparent 100%
+  );
+}
+
+/* Calendar cells are repeated surfaces; translucency is enough here and
+   avoids putting a blur layer on every individual day. */
+html[data-atmosphere="on"] .calendar-topbar,
+html[data-atmosphere="on"] .calendar-canvas,
+html[data-atmosphere="on"] .calendar-canvas .fc .fc-col-header-cell,
+html[data-atmosphere="on"] .calendar-canvas .fc .fc-daygrid-day {
+  background: var(--workspace-glass-detail);
+}
+
+html[data-atmosphere="on"] .calendar-canvas,
+html[data-atmosphere="on"] .calendar-canvas .fc .fc-scrollgrid {
+  background: transparent;
+}
+
+html[data-atmosphere="on"] .workspace-heading,
+html[data-atmosphere="on"] .settings-page-header,
+html[data-atmosphere="on"] .app-page-header,
+html[data-atmosphere="on"] .notifications-page > .notification-list,
+html[data-atmosphere="on"] .common-links-page > .common-links-body {
+  background: var(--workspace-glass-detail);
+  -webkit-backdrop-filter: blur(var(--glass-blur-detail)) saturate(var(--glass-saturation-detail));
+  backdrop-filter: blur(var(--glass-blur-detail)) saturate(var(--glass-saturation-detail));
+}
+
+html[data-atmosphere="on"] .common-links-page > .common-links-body {
+  background: transparent;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+html[data-atmosphere="on"] .common-link-card,
+html[data-atmosphere="on"] .common-manager-panel {
+  background: var(--workspace-glass-detail);
+  -webkit-backdrop-filter: blur(var(--glass-blur-panel)) saturate(var(--glass-saturation-panel));
+  backdrop-filter: blur(var(--glass-blur-panel)) saturate(var(--glass-saturation-panel));
+}
+
 /* The detail pane is part of the desktop task workspace. Keep it visible at
    common Windows effective widths (125%/150% display scaling included). */
 @media (min-width: 1120px) {
@@ -560,8 +698,13 @@ body.note-editor-immersive-open {
   overflow: hidden;
 }
 
-body.note-editor-immersive-open .main-area {
+body.note-editor-immersive-open .app-shell.task-app-shell > .main-area {
   overflow: hidden;
+  /* The rail is a fixed sibling at z-index 20. Raise the page stack while
+     immersive mode is open so the fixed editor can cover the whole desktop
+     viewport, including the rail. */
+  position: relative;
+  z-index: 90;
 }
 
 .note-editor-surface {
@@ -926,4 +1069,164 @@ body.note-editor-immersive-open .main-area {
 
 .submission-workspace > .submission-detail > .submission-actions-footer {
   flex: 0 0 auto;
+}
+
+/* Seasonal inner surfaces
+ *
+ * The outer panes already use the layered glass roles above. These rules
+ * extend the same treatment to the editor document, form controls, dialogs
+ * and menus, while keeping the document/control alpha high enough for text
+ * and focus states to remain crisp.
+ */
+html[data-atmosphere="on"] .tiptap-editor,
+html[data-atmosphere="on"] .collaboration-document,
+html[data-atmosphere="on"] .rich-text-document:not(.readonly),
+html[data-atmosphere="on"] .note-editor-surface {
+  background: var(--workspace-glass-editor);
+  -webkit-backdrop-filter: blur(var(--glass-blur-editor)) saturate(var(--glass-saturation-editor));
+  backdrop-filter: blur(var(--glass-blur-editor)) saturate(var(--glass-saturation-editor));
+}
+
+/* The note surface owns the glass layer. Its scroll container should remain
+   transparent; painting the same tint on both elements made the document
+   effectively opaque and hid the seasonal scene. */
+html[data-atmosphere="on"] .note-editor-surface > .tiptap-editor {
+  background: transparent;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+/* Task editing follows the same layer contract as notes. The detail pane is
+   the editor's base glass layer; the title/footer remain denser controls,
+   while the prose scroll container stays transparent to avoid a second white
+   sheet over the body. */
+html[data-atmosphere="on"] .tasks-page .tasks-workspace > .task-detail.task-editor-detail {
+  position: relative;
+  isolation: isolate;
+  background: var(--workspace-glass-editor);
+  -webkit-backdrop-filter: blur(var(--glass-blur-editor)) saturate(var(--glass-saturation-editor));
+  backdrop-filter: blur(var(--glass-blur-editor)) saturate(var(--glass-saturation-editor));
+}
+
+html[data-atmosphere="on"] .task-editor-detail .task-editor-top,
+html[data-atmosphere="on"] .task-editor-detail .task-editor-footer {
+  position: relative;
+  z-index: 3;
+  background: var(--workspace-glass-detail);
+  -webkit-backdrop-filter: blur(var(--glass-blur-panel)) saturate(var(--glass-saturation-panel));
+  backdrop-filter: blur(var(--glass-blur-panel)) saturate(var(--glass-saturation-panel));
+}
+
+/* The prose area is a scroll container, not a glass owner. Giving it a
+   backdrop-filter creates a later stacking context that can paint over date
+   and priority popovers opened from the editor header. */
+html[data-atmosphere="on"] .task-editor-detail .task-editor-area {
+  position: relative;
+  z-index: 1;
+  background: transparent;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+html[data-atmosphere="on"] .task-editor-detail .task-body-editor {
+  background: transparent;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+html[data-atmosphere="on"] .note-editor-immersive {
+  background: var(--workspace-glass-editor);
+}
+
+html[data-atmosphere="on"] .note-editor-immersive .editor-header,
+html[data-atmosphere="on"] .note-editor-immersive .editor-toolbar,
+html[data-atmosphere="on"] .note-editor-immersive .attachment-panel {
+  position: relative;
+  z-index: 3;
+  background: var(--workspace-glass-detail);
+  -webkit-backdrop-filter: blur(var(--glass-blur-panel)) saturate(var(--glass-saturation-panel));
+  backdrop-filter: blur(var(--glass-blur-panel)) saturate(var(--glass-saturation-panel));
+}
+
+html[data-atmosphere="on"] input:not([type="checkbox"]):not([type="radio"]):not(.note-title-input),
+html[data-atmosphere="on"] textarea:not(.task-editor-title),
+html[data-atmosphere="on"] select {
+  background: var(--workspace-glass-input);
+  -webkit-backdrop-filter: blur(var(--glass-blur-control)) saturate(var(--glass-saturation-control));
+  backdrop-filter: blur(var(--glass-blur-control)) saturate(var(--glass-saturation-control));
+}
+
+html[data-atmosphere="on"] input:not([type="checkbox"]):not([type="radio"]):not(.note-title-input):focus,
+html[data-atmosphere="on"] textarea:not(.task-editor-title):focus,
+html[data-atmosphere="on"] select:focus,
+html[data-atmosphere="on"] input:not([type="checkbox"]):not([type="radio"]):not(.note-title-input):focus-visible,
+html[data-atmosphere="on"] textarea:not(.task-editor-title):focus-visible,
+html[data-atmosphere="on"] select:focus-visible {
+  background: var(--workspace-glass-input);
+}
+
+html[data-atmosphere="on"] .dialog-card,
+html[data-atmosphere="on"] .naive-dialog-card,
+html[data-atmosphere="on"] .global-search-dialog,
+html[data-atmosphere="on"] .capture-dialog,
+html[data-atmosphere="on"] .task-relation-dialog,
+html[data-atmosphere="on"] .note-collab-dialog,
+html[data-atmosphere="on"] .knowledge-settings-menu,
+html[data-atmosphere="on"] .task-inline-property-panel {
+  background: var(--workspace-glass-dialog);
+  -webkit-backdrop-filter: blur(var(--glass-blur-dialog)) saturate(var(--glass-saturation-dialog));
+  backdrop-filter: blur(var(--glass-blur-dialog)) saturate(var(--glass-saturation-dialog));
+}
+
+html[data-atmosphere="on"] .notes-create-menu,
+html[data-atmosphere="on"] .note-more-menu,
+html[data-atmosphere="on"] .calendar-more-menu,
+html[data-atmosphere="on"] .task-toolbar-menu,
+html[data-atmosphere="on"] .task-row-context-menu,
+html[data-atmosphere="on"] .task-editor-selection-menu,
+html[data-atmosphere="on"] .task-schedule-popover,
+html[data-atmosphere="on"] .task-priority-popover,
+html[data-atmosphere="on"] .task-slash-menu,
+html[data-atmosphere="on"] .task-editor-more-menu,
+html[data-atmosphere="on"] .assignee-popover,
+html[data-atmosphere="on"] .composer-popover,
+html[data-atmosphere="on"] .search-results-panel,
+html[data-atmosphere="on"] .template-card-menu,
+html[data-atmosphere="on"] .knowledge-category-menu,
+html[data-atmosphere="on"] .selection-menu,
+html[data-atmosphere="on"] .editor-bubble-menu {
+  background: var(--workspace-glass-menu);
+  -webkit-backdrop-filter: blur(var(--glass-blur-menu)) saturate(var(--glass-saturation-menu));
+  backdrop-filter: blur(var(--glass-blur-menu)) saturate(var(--glass-saturation-menu));
+}
+
+/* A backdrop-filter on the editor-column itself becomes the containing block
+   for the fixed immersive editor. Keep the column's glass effect on a
+   pseudo-layer so the immersive surface can still cover the viewport. */
+html[data-atmosphere="on"] .notes-workspace > .editor-column {
+  position: relative;
+  background: transparent;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+html[data-atmosphere="on"] .notes-workspace > .editor-column::before {
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  background: var(--workspace-glass-editor);
+  -webkit-backdrop-filter: blur(var(--glass-blur-editor)) saturate(var(--glass-saturation-detail));
+  backdrop-filter: blur(var(--glass-blur-editor)) saturate(var(--glass-saturation-detail));
+  content: "";
+  pointer-events: none;
+}
+
+html[data-atmosphere="on"] .notes-workspace > .editor-column > *:not(.note-editor-immersive) {
+  position: relative;
+  z-index: 1;
+}
+
+html[data-atmosphere="on"] .notes-workspace > .editor-column > .note-editor-immersive {
+  position: fixed;
+  z-index: 80;
 }

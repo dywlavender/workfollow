@@ -86,7 +86,7 @@ function endDrag(event: PointerEvent) {
   if (state.moved) savePosition()
 }
 
-function openCapture() {
+async function openCapture() {
   if (suppressClick.value) {
     suppressClick.value = false
     return
@@ -95,7 +95,7 @@ function openCapture() {
   open.value = true
 }
 
-async function capture(payload: { text: string; title?: string; tags?: string[] }) {
+async function capture(payload: { text: string; title?: string }) {
   if (saving.value) return
   saving.value = true
   error.value = null

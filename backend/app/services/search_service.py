@@ -98,11 +98,10 @@ def _search_sql(source: SearchSource, use_fts: bool) -> str:
                   AND share_owner.status = 'ACTIVE'
             )
         """
-        match = "note_search MATCH :match_query" if use_fts else """
+        match = "note_search MATCH :personal_match_query" if use_fts else """
             (
                 sd.title LIKE :pattern
                 OR sd.body LIKE :pattern
-                OR sd.tags_text LIKE :pattern
             )
         """
         select_rank = (
@@ -116,10 +115,6 @@ def _search_sql(source: SearchSource, use_fts: bool) -> str:
             "CASE "
             "WHEN instr(highlight(note_search, 0, :mark_open, :mark_close), :mark_open) > 0 "
             "THEN highlight(note_search, 0, :mark_open, :mark_close) "
-            "WHEN instr(highlight(note_search, 2, :mark_open, :mark_close), :mark_open) > 0 "
-            "THEN highlight(note_search, 2, :mark_open, :mark_close) "
-            "WHEN instr(highlight(note_search, 3, :mark_open, :mark_close), :mark_open) > 0 "
-            "THEN highlight(note_search, 3, :mark_open, :mark_close) "
             "ELSE snippet(note_search, 1, :mark_open, :mark_close, '…', 18) END"
             if use_fts else "''"
         )
@@ -214,6 +209,7 @@ def _query_source(
         "pattern": f"%{query}%",
         "prefix_pattern": f"{query}%",
         "match_query": _literal_match_query(query),
+        "personal_match_query": f"{{title body}} : {_literal_match_query(query)}",
         "mark_open": _MARK_OPEN,
         "mark_close": _MARK_CLOSE,
     }

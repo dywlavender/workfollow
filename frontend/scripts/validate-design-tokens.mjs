@@ -18,6 +18,11 @@ const requiredTokens = [
   '--loading-skeleton-from',
   '--loading-skeleton-to',
   '--loading-pending-opacity',
+  '--glass-blur-editor',
+  '--glass-blur-menu',
+  '--workspace-glass-editor',
+  '--layer-popover',
+  '--layer-dialog',
 ]
 
 async function walk(directory) {

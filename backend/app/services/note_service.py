@@ -141,7 +141,6 @@ def list_notes(
     folder_id: str | None = None,
     q: str | None = None,
     favorite: bool | None = None,
-    tags: list[str] | None = None,
     unfiled: bool = False,
     limit: int = 100,
     offset: int = 0,
@@ -153,7 +152,6 @@ def list_notes(
             Note.id,
             Note.folder_id,
             Note.title,
-            Note.tags,
             Note.is_favorite,
             Note.copied_from_note_id,
             Note.copied_from_team_note_id,
@@ -170,12 +168,6 @@ def list_notes(
         statement = statement.where(Note.is_favorite.is_(favorite))
     if unfiled:
         statement = statement.where(Note.folder_id.is_(None))
-    normalized_tags = [tag.strip() for tag in (tags or []) if tag.strip()]
-    for tag in normalized_tags:
-        tag_values = func.json_each(Note.tags).table_valued("value").alias("note_tag")
-        statement = statement.where(
-            select(tag_values.c.value).where(tag_values.c.value == tag).correlate(Note).exists()
-        )
     if q and q.strip():
         pattern = f"%{q.strip()}%"
         # The JSON fallback keeps notes created by older versions searchable
@@ -190,14 +182,6 @@ def list_notes(
     return list(db.scalars(statement.order_by(Note.updated_at.desc()).limit(limit).offset(offset)))
 
 
-def list_note_tags(db: Session, owner_id: str) -> list[str]:
-    values = db.scalars(
-        select(Note.tags).where(Note.owner_id == owner_id, Note.deleted_at.is_(None))
-    ).all()
-    tags = {tag.strip() for row in values if isinstance(row, list) for tag in row if isinstance(tag, str) and tag.strip()}
-    return sorted(tags, key=lambda item: (item.casefold(), item))
-
-
 def count_unfiled_notes(db: Session, owner_id: str) -> int:
     return int(db.scalar(
         select(func.count(Note.id)).where(
@@ -206,6 +190,22 @@ def count_unfiled_notes(db: Session, owner_id: str) -> int:
             Note.folder_id.is_(None),
         )
     ) or 0)
+
+
+def navigation_counts(db: Session, owner_id: str) -> dict[str, object]:
+    """Return the personal counts needed by the notes navigation."""
+
+    active_notes = [Note.owner_id == owner_id, Note.deleted_at.is_(None)]
+    total = int(db.scalar(select(func.count(Note.id)).where(*active_notes)) or 0)
+    unfiled = int(db.scalar(select(func.count(Note.id)).where(*active_notes, Note.folder_id.is_(None))) or 0)
+    favorites = int(db.scalar(select(func.count(Note.id)).where(*active_notes, Note.is_favorite.is_(True))) or 0)
+    folder_rows = db.execute(
+        select(Note.folder_id, func.count(Note.id))
+        .where(*active_notes, Note.folder_id.is_not(None))
+        .group_by(Note.folder_id)
+    ).all()
+    folders = {folder_id: int(count) for folder_id, count in folder_rows if folder_id is not None}
+    return {"all": total, "unfiled": unfiled, "favorites": favorites, "folders": folders}
 
 
 def create_note(db: Session, payload: NoteCreate, owner_id: str, *, commit: bool = True) -> Note:
@@ -245,7 +245,6 @@ def capture_note(db: Session, payload: NoteCapture, owner_id: str) -> Note:
             title=title,
             content_json=_plain_text_to_document(payload.text),
             plain_text=payload.text,
-            tags=payload.tags,
         ),
         owner_id,
     )
@@ -378,7 +377,6 @@ def copy_note_with_attachments(
     title: str,
     content_json: dict[str, Any],
     plain_text: str,
-    tags: list[str] | None = None,
     source_attachments: Sequence[Attachment],
     owner_id: str,
     settings: Settings,
@@ -399,7 +397,6 @@ def copy_note_with_attachments(
             title=title.strip(),
             content_json=deepcopy(content_json),
             plain_text=plain_text,
-            tags=list(tags or []),
             copied_from_note_id=copied_from_note_id,
             copied_from_team_note_id=copied_from_team_note_id,
             is_knowledge_update_draft=is_knowledge_update_draft,

@@ -1,22 +1,25 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { IconLogout, IconPlus, IconShield, IconTrash, IconUsers } from '@tabler/icons-vue'
+import { IconLogout, IconPlus, IconSearch, IconShield, IconTrash, IconUsers } from '@tabler/icons-vue'
 
 import ActionFeedback from '@/components/ActionFeedback.vue'
 import SystemPermissionsDialog from '@/components/SystemPermissionsDialog.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
+import { useClickOutside } from '@/composables/useClickOutside'
 
 import {
   deleteTeamMember,
   deleteTeam,
   fetchTeam,
+  fetchTeamMemberCandidates,
   fetchTeamMembers,
   leaveTeam,
   postTeam,
   postTeamMember,
   postTeamMemberResetPassword,
   type Team,
+  type TeamMemberCandidate,
   type TeamMember,
   type TeamRole,
 } from '@/services/api'
@@ -29,7 +32,13 @@ const workspace = useWorkspaceStore()
 const auth = useAuthStore()
 const team = ref<Team | null>(null)
 const members = ref<TeamMember[]>([])
-const identifier = ref('')
+const candidateQuery = ref('')
+const candidates = ref<TeamMemberCandidate[]>([])
+const selectedCandidate = ref<TeamMemberCandidate | null>(null)
+const candidateLoading = ref(false)
+const candidateError = ref('')
+const candidateOpen = ref(false)
+const candidateHost = ref<HTMLElement | null>(null)
 const role = ref<TeamRole>('MEMBER')
 const loading = ref(false)
 const loadError = ref('')
@@ -39,6 +48,10 @@ const permissionsOpen = ref(false)
 const resetTarget = ref<TeamMember | null>(null)
 const resettingUserId = ref<string | null>(null)
 const addingMember = ref(false)
+let candidateTimer: number | undefined
+let candidateRequest = 0
+
+useClickOutside(candidateHost, candidateOpen, () => { candidateOpen.value = false })
 
 const teamId = computed(() => String(route.params.teamId ?? ''))
 const isSystemAdmin = computed(() => auth.user?.systemRole === 'ROOT')
@@ -51,15 +64,57 @@ async function load() {
   loading.value = true
   loadError.value = ''
   try {
-    team.value = await fetchTeam(teamId.value)
+    const [loadedTeam, loadedMembers] = await Promise.all([
+      fetchTeam(teamId.value),
+      fetchTeamMembers(teamId.value),
+    ])
+    team.value = loadedTeam
     workspace.selectTeam(teamId.value)
-    members.value = await fetchTeamMembers(teamId.value)
+    members.value = loadedMembers
     if (team.value.role === 'ADMIN') role.value = 'MEMBER'
   } catch {
     loadError.value = '无法读取团队，可能已退出该团队。'
   } finally {
     loading.value = false
   }
+}
+
+async function searchCandidates() {
+  if (!teamId.value || !canManage.value) return
+  const requestId = ++candidateRequest
+  candidateLoading.value = true
+  candidateError.value = ''
+  try {
+    const result = await fetchTeamMemberCandidates(teamId.value, candidateQuery.value)
+    if (requestId === candidateRequest) candidates.value = result
+  } catch (cause: any) {
+    if (requestId === candidateRequest) {
+      candidates.value = []
+      candidateError.value = cause?.response?.status === 404
+        ? '成员搜索接口尚未加载，请重启后端服务后重试。'
+        : cause?.response?.data?.detail ?? '成员搜索失败。'
+    }
+  } finally {
+    if (requestId === candidateRequest) candidateLoading.value = false
+  }
+}
+
+function openCandidatePicker() {
+  candidateOpen.value = true
+  if (!candidates.value.length && !candidateLoading.value) void searchCandidates()
+}
+
+function handleCandidateInput() {
+  selectedCandidate.value = null
+  candidateOpen.value = true
+  window.clearTimeout(candidateTimer)
+  candidateTimer = window.setTimeout(() => { void searchCandidates() }, 180)
+}
+
+function selectCandidate(candidate: TeamMemberCandidate) {
+  selectedCandidate.value = candidate
+  candidateQuery.value = candidate.username
+  candidateOpen.value = false
 }
 
 async function createTeam() {
@@ -118,13 +173,16 @@ async function dissolveTeam() {
 }
 
 async function addMember() {
-  if (!identifier.value.trim() || addingMember.value) return
+  if (!selectedCandidate.value || addingMember.value) return
   notice.value = ''
   actionError.value = ''
   addingMember.value = true
   try {
-    await postTeamMember(teamId.value, { identifier: identifier.value.trim(), role: role.value })
-    identifier.value = ''
+    await postTeamMember(teamId.value, { identifier: selectedCandidate.value.username, role: role.value })
+    candidateQuery.value = ''
+    selectedCandidate.value = null
+    candidates.value = []
+    candidateOpen.value = false
     await load()
     notice.value = '成员已加入团队。'
   } catch (cause: any) {
@@ -176,7 +234,15 @@ async function confirmResetPassword() {
 }
 
 onMounted(load)
-watch(teamId, load)
+watch(teamId, () => {
+  candidateRequest += 1
+  candidateQuery.value = ''
+  selectedCandidate.value = null
+  candidates.value = []
+  candidateOpen.value = false
+  void load()
+})
+onBeforeUnmount(() => window.clearTimeout(candidateTimer))
 </script>
 
 <template>
@@ -223,12 +289,48 @@ watch(teamId, load)
         </header>
 
         <form v-if="canManage" class="team-invite-form" @submit.prevent="addMember">
-          <input v-model="identifier" required placeholder="输入用户名" aria-label="用户名" autocomplete="off" />
+          <div ref="candidateHost" class="team-member-picker">
+            <label class="team-member-search-field" :class="{ selected: selectedCandidate }">
+              <IconSearch :size="15" aria-hidden="true" />
+              <input
+                v-model="candidateQuery"
+                placeholder="搜索昵称或用户名"
+                aria-label="搜索待添加成员"
+                aria-autocomplete="list"
+                aria-controls="team-member-candidates"
+                :aria-expanded="candidateOpen"
+                autocomplete="off"
+                role="combobox"
+                @focus="openCandidatePicker"
+                @input="handleCandidateInput"
+                @keydown.esc="candidateOpen = false"
+              />
+            </label>
+            <section v-if="candidateOpen" id="team-member-candidates" class="team-member-candidates" role="listbox" aria-label="可添加成员">
+              <p v-if="candidateLoading">正在搜索…</p>
+              <p v-else-if="candidateError" class="error">{{ candidateError }}</p>
+              <template v-else>
+                <button
+                  v-for="candidate in candidates"
+                  :key="candidate.id"
+                  type="button"
+                  role="option"
+                  :aria-selected="selectedCandidate?.id === candidate.id"
+                  @mousedown.prevent
+                  @click="selectCandidate(candidate)"
+                >
+                  <span class="avatar"><img v-if="candidate.avatarUrl" :src="candidate.avatarUrl" alt="" /><IconUsers v-else :size="15" /></span>
+                  <span><strong>{{ candidate.nickname }}</strong><small>@{{ candidate.username }}</small></span>
+                </button>
+              </template>
+              <p v-if="!candidateLoading && !candidateError && !candidates.length">{{ candidateQuery.trim() ? '没有匹配的可添加成员' : '没有可添加的成员' }}</p>
+            </section>
+          </div>
           <select v-model="role" aria-label="成员角色">
             <option value="MEMBER">成员</option>
             <option v-if="isSystemAdmin || team.role === 'OWNER'" value="ADMIN">管理员</option>
           </select>
-          <button class="primary-button" type="submit" :disabled="addingMember || !identifier.trim()"><IconPlus :size="15" />{{ addingMember ? '添加中…' : '添加' }}</button>
+          <button class="primary-button" type="submit" :disabled="addingMember || !selectedCandidate"><IconPlus :size="15" />{{ addingMember ? '添加中…' : '添加' }}</button>
         </form>
 
         <div class="team-member-list">

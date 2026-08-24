@@ -96,6 +96,11 @@ export async function fetchCurrentUser(): Promise<User> {
   return data
 }
 
+export async function updateCurrentUser(payload: { nickname: string }): Promise<User> {
+  const { data } = await api.patch<User>('/auth/me', payload)
+  return data
+}
+
 export async function fetchAdminUsers(): Promise<User[]> {
   const { data } = await api.get<User[]>('/admin/users')
   return data
@@ -103,6 +108,11 @@ export async function fetchAdminUsers(): Promise<User[]> {
 
 export async function putAdminUserPermissions(userId: string, payload: { canCreateTeam: boolean }): Promise<User> {
   const { data } = await api.patch<User>(`/admin/users/${userId}/permissions`, payload)
+  return data
+}
+
+export async function putAdminUserSystemRole(userId: string, systemRole: User['systemRole']): Promise<User> {
+  const { data } = await api.patch<User>(`/admin/users/${userId}/system-role`, { systemRole })
   return data
 }
 
@@ -448,7 +458,6 @@ export interface Note {
   title: string
   contentJson: Record<string, unknown>
   plainText: string
-  tags: string[]
   isFavorite: boolean
   copiedFromNoteId: string | null
   copiedFromTeamNoteId: string | null
@@ -464,7 +473,6 @@ export interface NoteListItem {
   id: string
   folderId: string | null
   title: string
-  tags: string[]
   isFavorite: boolean
   copiedFromNoteId: string | null
   copiedFromTeamNoteId: string | null
@@ -477,6 +485,15 @@ export interface NoteListItem {
 }
 
 export interface NoteCounts { unfiled: number }
+
+export interface NoteNavigationCounts {
+  all: number
+  unfiled: number
+  favorites: number
+  folders: Record<string, number>
+  submissionsPending: number
+  reviewPending: number
+}
 
 export interface NoteTemplate {
   id: string
@@ -521,13 +538,15 @@ export async function deleteFolder(id: string): Promise<void> {
   await api.delete(`/folders/${id}`)
 }
 
-export async function fetchNotes(params?: { folderId?: string; q?: string; favorite?: boolean; tags?: string[]; unfiled?: boolean; limit?: number; offset?: number }): Promise<NoteListItem[]> {
-  const { data } = await api.get<NoteListItem[]>('/notes', { params })
-  return data
-}
-
-export async function fetchNoteTags(): Promise<string[]> {
-  const { data } = await api.get<string[]>('/notes/tags')
+export async function fetchNotes(params?: { folderId?: string; q?: string; favorite?: boolean; unfiled?: boolean; limit?: number; offset?: number }): Promise<NoteListItem[]> {
+  const query = new URLSearchParams()
+  if (params?.folderId) query.set('folderId', params.folderId)
+  if (params?.q) query.set('q', params.q)
+  if (params?.favorite !== undefined) query.set('favorite', String(params.favorite))
+  if (params?.unfiled !== undefined) query.set('unfiled', String(params.unfiled))
+  if (params?.limit !== undefined) query.set('limit', String(params.limit))
+  if (params?.offset !== undefined) query.set('offset', String(params.offset))
+  const { data } = await api.get<NoteListItem[]>('/notes', { params: query })
   return data
 }
 
@@ -536,17 +555,22 @@ export async function fetchNoteCounts(): Promise<NoteCounts> {
   return data
 }
 
+export async function fetchNoteNavigationCounts(teamId?: string): Promise<NoteNavigationCounts> {
+  const { data } = await api.get<NoteNavigationCounts>('/notes/navigation-counts', { params: teamId ? { teamId } : undefined })
+  return data
+}
+
 export async function fetchNote(id: string): Promise<Note> {
   const { data } = await api.get<Note>(`/notes/${id}`)
   return data
 }
 
-export async function postNote(payload: { folderId?: string | null; title?: string; contentJson?: Record<string, unknown>; plainText?: string; tags?: string[] }): Promise<Note> {
+export async function postNote(payload: { folderId?: string | null; title?: string; contentJson?: Record<string, unknown>; plainText?: string }): Promise<Note> {
   const { data } = await api.post<Note>('/notes', payload)
   return data
 }
 
-export async function captureNote(payload: { text: string; title?: string; tags?: string[] }): Promise<Note> {
+export async function captureNote(payload: { text: string; title?: string }): Promise<Note> {
   const { data } = await api.post<Note>('/notes/capture', payload)
   return data
 }
@@ -560,7 +584,7 @@ export async function importMarkdownNote(file: File, folderId?: string | null, t
   return data
 }
 
-export async function putNote(id: string, payload: Partial<{ folderId: string | null; title: string; contentJson: Record<string, unknown>; plainText: string; tags: string[]; isFavorite: boolean }>): Promise<Note> {
+export async function putNote(id: string, payload: Partial<{ folderId: string | null; title: string; contentJson: Record<string, unknown>; plainText: string; isFavorite: boolean }>): Promise<Note> {
   const { data } = await api.put<Note>(`/notes/${id}`, payload)
   return data
 }
@@ -676,6 +700,13 @@ export interface TeamMember {
   user: User
 }
 
+export interface TeamMemberCandidate {
+  id: string
+  username: string
+  nickname: string
+  avatarUrl: string | null
+}
+
 export async function fetchTeams(): Promise<Team[]> {
   const { data } = await api.get<Team[]>('/teams')
   return data
@@ -706,6 +737,13 @@ export async function leaveTeam(id: string): Promise<void> {
 
 export async function fetchTeamMembers(teamId: string): Promise<TeamMember[]> {
   const { data } = await api.get<TeamMember[]>(`/teams/${teamId}/members`)
+  return data
+}
+
+export async function fetchTeamMemberCandidates(teamId: string, query = ''): Promise<TeamMemberCandidate[]> {
+  const { data } = await api.get<TeamMemberCandidate[]>(`/teams/${teamId}/member-candidates`, {
+    params: query.trim() ? { q: query.trim() } : undefined,
+  })
   return data
 }
 

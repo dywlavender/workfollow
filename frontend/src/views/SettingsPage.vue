@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   IconArrowLeft,
@@ -11,8 +11,8 @@ import {
   IconSun,
   IconUserCircle,
 } from '@tabler/icons-vue'
-import { ref } from 'vue'
 
+import ActionFeedback from '@/components/ActionFeedback.vue'
 import {
   appearanceModes,
   appearanceBackgrounds,
@@ -33,6 +33,31 @@ const selectedPalette = computed(() => getAppearancePalette(appStore.appearanceP
 const selectedBackground = computed(() => getAppearanceBackground(appStore.appearanceBackground))
 const modeIcons = { system: IconDeviceDesktop, light: IconSun, dark: IconMoon }
 const activeSection = ref<'appearance' | 'account'>('appearance')
+const nicknameDraft = ref('')
+const profileSaving = ref(false)
+const profileError = ref('')
+const profileNotice = ref('')
+const profileDirty = computed(() => nicknameDraft.value.trim() !== (authStore.user?.nickname ?? ''))
+const paletteGroups = computed(() => [
+  {
+    label: '经典配色',
+    hint: '',
+    items: appearancePalettes.filter((palette) => palette.group !== 'season'),
+  },
+  {
+    label: '四季主题',
+    hint: '自带氛围背景，随明暗模式自动切换',
+    items: appearancePalettes.filter((palette) => palette.group === 'season'),
+  },
+])
+
+watch(() => authStore.user?.nickname, (nickname) => {
+  if (!profileSaving.value) nicknameDraft.value = nickname ?? ''
+}, { immediate: true })
+
+function paletteSwatch(palette: (typeof appearancePalettes)[number]) {
+  return palette.atmosphere?.light ?? palette.swatch
+}
 
 function selectPalette(palette: AppearancePalette) {
   appStore.setAppearancePalette(palette)
@@ -56,6 +81,27 @@ function backgroundSwatch(background: AppearanceBackground) {
 async function signOut() {
   await authStore.signOut()
   await router.replace({ name: 'login' })
+}
+
+async function saveProfile() {
+  const nickname = nicknameDraft.value.trim()
+  profileError.value = ''
+  profileNotice.value = ''
+  if (!nickname) {
+    profileError.value = '昵称不能为空。'
+    return
+  }
+  if (!profileDirty.value) return
+  profileSaving.value = true
+  try {
+    await authStore.updateProfile({ nickname })
+    nicknameDraft.value = nickname
+    profileNotice.value = '昵称已保存。'
+  } catch (cause: any) {
+    profileError.value = cause?.response?.data?.detail ?? '保存昵称失败，请稍后重试。'
+  } finally {
+    profileSaving.value = false
+  }
 }
 </script>
 
@@ -120,23 +166,29 @@ async function signOut() {
 
           <div class="appearance-section">
             <h3>主题配色</h3>
-            <div class="appearance-theme-grid" role="radiogroup" aria-label="颜色主题">
-            <button
-              v-for="theme in appearancePalettes"
-              :key="theme.id"
-              class="appearance-theme-option"
-              :class="{ selected: appStore.appearancePalette === theme.id }"
-              type="button"
-              role="radio"
-              :aria-checked="appStore.appearancePalette === theme.id"
-              :aria-label="`${theme.label}主题`"
-              @click="selectPalette(theme.id)"
-            >
-              <span class="appearance-theme-swatch" :style="{ background: theme.swatch }">
-                <IconCheck v-if="appStore.appearancePalette === theme.id" :size="21" :stroke-width="2.8" />
-              </span>
-              <span>{{ theme.label }}</span>
-            </button>
+            <div v-for="group in paletteGroups" :key="group.label" class="appearance-theme-group">
+              <div class="appearance-theme-group-label">
+                {{ group.label }}
+                <small v-if="group.hint">{{ group.hint }}</small>
+              </div>
+              <div class="appearance-theme-grid" role="radiogroup" :aria-label="`${group.label}颜色主题`">
+                <button
+                  v-for="theme in group.items"
+                  :key="theme.id"
+                  class="appearance-theme-option"
+                  :class="{ selected: appStore.appearancePalette === theme.id }"
+                  type="button"
+                  role="radio"
+                  :aria-checked="appStore.appearancePalette === theme.id"
+                  :aria-label="`${theme.label}主题`"
+                  @click="selectPalette(theme.id)"
+                >
+                  <span class="appearance-theme-swatch" :style="{ background: paletteSwatch(theme) }">
+                    <IconCheck v-if="appStore.appearancePalette === theme.id" :size="21" :stroke-width="2.8" />
+                  </span>
+                  <span>{{ theme.label }}</span>
+                </button>
+              </div>
             </div>
           </div>
 
@@ -180,11 +232,25 @@ async function signOut() {
             <div>
               <span class="section-label">ACCOUNT</span>
               <h2 id="account-title">账号</h2>
-              <p>查看当前登录信息，退出登录也集中放在这里。</p>
+              <p>修改显示昵称；用户名用于登录，保持只读。</p>
             </div>
           </header>
+          <ActionFeedback :message="profileError" @dismiss="profileError = ''" />
+          <ActionFeedback :message="profileNotice" tone="success" @dismiss="profileNotice = ''" />
+          <form class="account-profile-form" @submit.prevent="saveProfile">
+            <label for="account-nickname">
+              <span>昵称</span>
+              <input id="account-nickname" v-model="nicknameDraft" type="text" maxlength="120" autocomplete="nickname" />
+              <small>这个名称会显示在侧边栏和团队协作成员列表中。</small>
+            </label>
+            <footer>
+              <span>用户名不可修改。</span>
+              <button class="primary-button" type="submit" :disabled="profileSaving || !profileDirty">
+                {{ profileSaving ? '保存中…' : '保存昵称' }}
+              </button>
+            </footer>
+          </form>
           <dl class="account-details">
-            <div><dt>昵称</dt><dd>{{ authStore.user?.nickname || '未设置' }}</dd></div>
             <div><dt>用户名</dt><dd>@{{ authStore.user?.username || '—' }}</dd></div>
           </dl>
           <footer class="account-actions">

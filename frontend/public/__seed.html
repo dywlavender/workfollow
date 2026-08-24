@@ -1,0 +1,18 @@
+<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body><script>
+const q = new URLSearchParams(location.search)
+async function run() {
+  try {
+    await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ identifier: '__theme_preview', password: 'theme-preview-2026' }),
+    })
+  } catch (e) {}
+  localStorage.setItem('workfollow-appearance-v2-palette', q.get('p') || 'spring')
+  localStorage.setItem('workfollow-appearance-v2-mode', q.get('m') || 'light')
+  localStorage.setItem('workfollow-appearance-v2-background', 'theme')
+  location.replace(q.get('path') || '/todos')
+}
+run()
+</script></body></html>

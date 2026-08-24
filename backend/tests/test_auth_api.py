@@ -32,6 +32,21 @@ def test_register_login_me_and_logout(client: TestClient) -> None:
     assert logged_in.status_code == 200
 
 
+def test_update_current_user_nickname(client: TestClient, db) -> None:
+    updated = client.patch("/api/auth/me", json={"nickname": "系统管理员"})
+
+    assert updated.status_code == 200
+    assert updated.json()["nickname"] == "系统管理员"
+    assert client.get("/api/auth/me").json()["nickname"] == "系统管理员"
+    assert db.scalar(select(User).where(User.username == "tester")).nickname == "系统管理员"
+
+
+def test_update_current_user_rejects_blank_nickname(client: TestClient) -> None:
+    response = client.patch("/api/auth/me", json={"nickname": "   "})
+
+    assert response.status_code == 422
+
+
 def test_protected_personal_api_requires_login(unauthed_client: TestClient) -> None:
     assert unauthed_client.get("/api/todos").status_code == 401
     assert unauthed_client.get("/api/notes").status_code == 401

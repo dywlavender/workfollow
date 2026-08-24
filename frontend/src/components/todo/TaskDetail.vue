@@ -41,6 +41,8 @@ type DateMode = 'date' | 'range'
 type EditorSelection = { from: number; to: number }
 
 const root = ref<HTMLElement | null>(null)
+const dateTrigger = ref<HTMLButtonElement | null>(null)
+const priorityTrigger = ref<HTMLButtonElement | null>(null)
 const currentTaskId = ref<string | null>(null)
 const taskTitle = ref('')
 const titleInput = ref<HTMLTextAreaElement | null>(null)
@@ -56,6 +58,7 @@ const saveState = ref<SaveState>('idle')
 const datePanelOpen = ref(false)
 const datePanelAnchorStyle = ref<Record<string, string> | null>(null)
 const priorityPanelOpen = ref(false)
+const priorityPanelStyle = ref<Record<string, string> | null>(null)
 const slashMenuOpen = ref(false)
 const slashActiveIndex = ref(0)
 const moreMenuOpen = ref(false)
@@ -290,6 +293,11 @@ async function sync(todo: Todo | null) {
   window.clearTimeout(saveTimer)
   window.clearTimeout(titleSaveTimer)
   currentTaskId.value = todo?.id ?? null
+  datePanelOpen.value = false
+  datePanelAnchorStyle.value = null
+  priorityPanelOpen.value = false
+  priorityPanelStyle.value = null
+  moreMenuOpen.value = false
   currentTaskEditable.value = Boolean(todo?.permissions.editable)
   taskTitle.value = todo?.title ?? ''
   dueAt.value = asInput(todo?.dueAt ?? null)
@@ -344,29 +352,52 @@ function hydrateDatePanel() {
   choosingRangeEnd.value = false
   calendarMonth.value = (dueAt.value ? dayjs(dueAt.value) : dayjs()).startOf('month')
 }
+function datePanelStyle(anchor?: Pick<DOMRect, 'left' | 'bottom'>) {
+  const triggerRect = dateTrigger.value?.getBoundingClientRect()
+  const leftAnchor = anchor?.left ?? triggerRect?.left ?? 8
+  const bottomAnchor = anchor?.bottom ?? triggerRect?.bottom ?? 8
+  const width = 340
+  const edge = 8
+  const top = Math.max(edge, Math.min(Math.round(bottomAnchor + 6), window.innerHeight - 240 - edge))
+  const left = Math.round(Math.max(edge, Math.min(leftAnchor, window.innerWidth - width - edge)))
+  return {
+    position: 'fixed',
+    top: `${top}px`,
+    right: 'auto',
+    left: `${left}px`,
+    width: `${width}px`,
+    maxHeight: `calc(100dvh - ${top + edge}px)`,
+  }
+}
+function priorityPanelPosition() {
+  const rect = priorityTrigger.value?.getBoundingClientRect()
+  const edge = 8
+  const width = 175
+  const top = Math.max(edge, Math.min(Math.round((rect?.bottom ?? 8) + 6), window.innerHeight - 190 - edge))
+  const right = Math.max(edge, window.innerWidth - (rect?.right ?? window.innerWidth - edge))
+  return {
+    position: 'fixed',
+    top: `${top}px`,
+    right: `${right}px`,
+    left: 'auto',
+    width: `${width}px`,
+  }
+}
 function openDatePanel(anchor?: Pick<DOMRect, 'left' | 'bottom'>) {
   if (!canEdit.value) return
   hydrateDatePanel()
-  if (anchor) {
-    const width = 340
-    const edge = 8
-    const top = Math.round(anchor.bottom + 6)
-    const left = Math.round(Math.max(edge, Math.min(anchor.left, window.innerWidth - width - edge)))
-    datePanelAnchorStyle.value = {
-      position: 'fixed',
-      top: `${top}px`,
-      right: 'auto',
-      left: `${left}px`,
-      width: `${width}px`,
-      maxHeight: `calc(100dvh - ${top + edge}px)`,
-    }
-  } else {
-    datePanelAnchorStyle.value = null
-  }
+  datePanelAnchorStyle.value = datePanelStyle(anchor)
   datePanelOpen.value = true
   priorityPanelOpen.value = false
+  priorityPanelStyle.value = null
 }
-function openPriorityPanel() { if (!canEdit.value) return; priorityPanelOpen.value = true; datePanelOpen.value = false }
+function openPriorityPanel() {
+  if (!canEdit.value) return
+  priorityPanelStyle.value = priorityPanelPosition()
+  priorityPanelOpen.value = true
+  datePanelOpen.value = false
+  datePanelAnchorStyle.value = null
+}
 function setShortcut(offset: number, hour?: number) {
   const date = dayjs().add(offset, 'day')
   selectedDate.value = date.format('YYYY-MM-DD')
@@ -566,11 +597,15 @@ function showNotice(message: string) { inlineNotice.value = message; window.setT
 function closeFloatingPanels(event: MouseEvent) {
   const target = event.target as Element | null
   if (target?.closest('.task-schedule-popover, .task-priority-popover, .task-slash-menu, .task-editor-more-menu')) return
-  datePanelOpen.value = false; priorityPanelOpen.value = false; slashMenuOpen.value = false; moreMenuOpen.value = false
+  datePanelOpen.value = false; datePanelAnchorStyle.value = null
+  priorityPanelOpen.value = false; priorityPanelStyle.value = null
+  slashMenuOpen.value = false; moreMenuOpen.value = false
 }
 function closeEditorPanels() {
   datePanelOpen.value = false
+  datePanelAnchorStyle.value = null
   priorityPanelOpen.value = false
+  priorityPanelStyle.value = null
   moreMenuOpen.value = false
 }
 
@@ -601,11 +636,11 @@ onBeforeUnmount(() => {
         </button>
         <span class="task-editor-divider" aria-hidden="true" />
         <div class="task-editor-popover-host task-editor-date-host">
-          <button class="task-editor-date" type="button" :disabled="!canEdit" @click.stop="openDatePanel()"><IconCalendar :size="18" /><span>{{ dateLabel }}</span></button>
+          <button ref="dateTrigger" class="task-editor-date" type="button" :disabled="!canEdit" @click.stop="openDatePanel()"><IconCalendar :size="18" /><span>{{ dateLabel }}</span></button>
+          <Teleport to="body">
           <section
             v-if="datePanelOpen"
-            class="task-schedule-popover"
-            :class="{ 'task-schedule-popover-external': datePanelAnchorStyle }"
+            class="task-schedule-popover task-schedule-popover-external"
             :style="datePanelAnchorStyle ?? undefined"
             role="dialog"
             aria-label="设置任务日期"
@@ -629,6 +664,7 @@ onBeforeUnmount(() => {
             <p v-if="dateMode === 'range' && selectedDate && !selectedEndDate" class="task-popover-hint">请选择结束日期</p>
             <footer><button class="secondary-button" type="button" @click="clearSchedule"><IconCalendarOff :size="14" />清除</button><button class="primary-button" type="button" :disabled="!selectedDate || (dateMode === 'range' && !selectedEndDate)" @click="applySchedule">确定</button></footer>
           </section>
+          </Teleport>
         </div>
         <span v-if="todo.teamId && todo.creatorId !== currentUserId" class="task-assigned-source">{{ todo.creator.nickname }}分配</span>
         <span class="task-editor-meta-spacer" />
@@ -641,8 +677,10 @@ onBeforeUnmount(() => {
           @change="emit('assign', todo, $event)"
         />
         <div class="task-editor-popover-host">
-          <button class="task-editor-flag" :class="priority.toLowerCase()" type="button" :disabled="!canEdit" :title="priorityLabels[priority]" @click.stop="openPriorityPanel"><IconFlag :size="18" /></button>
-          <section v-if="priorityPanelOpen" class="task-priority-popover" aria-label="设置优先级" @click.stop><button v-for="value in (['HIGH', 'MEDIUM', 'LOW', 'NONE'] as TodoPriority[])" :key="value" type="button" :class="value.toLowerCase()" @click="selectPriority(value)"><IconFlag :size="16" /><span>{{ priorityLabels[value] }}</span><IconCheck v-if="priority === value" :size="14" /></button></section>
+          <button ref="priorityTrigger" class="task-editor-flag" :class="priority.toLowerCase()" type="button" :disabled="!canEdit" :title="priorityLabels[priority]" @click.stop="openPriorityPanel"><IconFlag :size="18" /></button>
+          <Teleport to="body">
+            <section v-if="priorityPanelOpen" class="task-priority-popover task-priority-popover-fixed" :style="priorityPanelStyle ?? undefined" aria-label="设置优先级" @click.stop><button v-for="value in (['HIGH', 'MEDIUM', 'LOW', 'NONE'] as TodoPriority[])" :key="value" type="button" :class="value.toLowerCase()" @click="selectPriority(value)"><IconFlag :size="16" /><span>{{ priorityLabels[value] }}</span><IconCheck v-if="priority === value" :size="14" /></button></section>
+          </Teleport>
         </div>
         <button class="task-editor-close" type="button" aria-label="关闭详情" @click="requestClose"><IconX :size="17" /></button>
       </div>

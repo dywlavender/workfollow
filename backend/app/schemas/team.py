@@ -60,6 +60,13 @@ class TeamMemberRead(ApiModel):
     user: UserRead
 
 
+class TeamMemberCandidateRead(ApiModel):
+    id: str
+    username: str
+    nickname: str
+    avatar_url: str | None
+
+
 class TeamTaskCreate(ApiModel):
     title: str = Field(min_length=1, max_length=500)
     description: str | None = None

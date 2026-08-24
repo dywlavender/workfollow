@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 
-import { fetchCurrentUser, login, logout, register, type User } from '@/services/api'
+import { fetchCurrentUser, login, logout, register, updateCurrentUser, type User } from '@/services/api'
 import { useTodoStore } from '@/stores/todos'
 import { useWorkspaceStore } from '@/stores/workspace'
 
@@ -50,6 +50,11 @@ export const useAuthStore = defineStore('auth', {
       } finally {
         this.loading = false
       }
+    },
+    async updateProfile(payload: { nickname: string }) {
+      const updated = await updateCurrentUser(payload)
+      this.user = updated
+      return updated
     },
     async signOut() {
       try {

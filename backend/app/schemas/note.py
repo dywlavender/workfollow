@@ -1,6 +1,5 @@
 from datetime import datetime
 from typing import Any
-
 from pydantic import Field, field_validator
 
 from app.schemas.base import ApiModel
@@ -32,18 +31,11 @@ class NoteCreate(ApiModel):
     title: str = Field(default="未命名笔记", min_length=1, max_length=500)
     content_json: dict[str, Any] = Field(default_factory=lambda: {"type": "doc", "content": [{"type": "paragraph"}]})
     plain_text: str = ""
-    tags: list[str] = Field(default_factory=list)
-
-    @field_validator("tags", mode="before")
-    @classmethod
-    def normalize_tags(cls, value: object) -> list[str]:
-        return _normalize_tags(value)
 
 
 class NoteCapture(ApiModel):
     text: str = Field(min_length=1, max_length=50000)
     title: str | None = Field(default=None, max_length=500)
-    tags: list[str] = Field(default_factory=list)
 
     @field_validator("text")
     @classmethod
@@ -61,24 +53,12 @@ class NoteCapture(ApiModel):
         value = value.strip()
         return value or None
 
-    @field_validator("tags", mode="before")
-    @classmethod
-    def normalize_capture_tags(cls, value: object) -> list[str]:
-        return _normalize_tags(value)
-
-
 class NoteUpdate(ApiModel):
     folder_id: str | None = None
     title: str | None = Field(default=None, min_length=1, max_length=500)
     content_json: dict[str, Any] | None = None
     plain_text: str | None = None
-    tags: list[str] | None = None
     is_favorite: bool | None = None
-
-    @field_validator("tags", mode="before")
-    @classmethod
-    def normalize_tags(cls, value: object) -> list[str] | None:
-        return None if value is None else _normalize_tags(value)
 
 
 class NoteRead(ApiModel):
@@ -87,7 +67,6 @@ class NoteRead(ApiModel):
     title: str
     content_json: dict[str, Any]
     plain_text: str
-    tags: list[str]
     is_favorite: bool
     copied_from_note_id: str | None
     copied_from_team_note_id: str | None
@@ -105,7 +84,6 @@ class NoteListItem(ApiModel):
     id: str
     folder_id: str | None
     title: str
-    tags: list[str]
     is_favorite: bool
     copied_from_note_id: str | None
     copied_from_team_note_id: str | None
@@ -121,29 +99,15 @@ class NoteCounts(ApiModel):
     unfiled: int
 
 
-def _normalize_tags(value: object) -> list[str]:
-    if value is None:
-        return []
-    if isinstance(value, str):
-        values = value.split(",")
-    elif isinstance(value, list):
-        values = value
-    else:
-        raise ValueError("标签必须是字符串列表")
-    normalized: list[str] = []
-    for item in values:
-        if not isinstance(item, str):
-            raise ValueError("标签必须是字符串")
-        tag = " ".join(item.strip().split())
-        if not tag:
-            continue
-        if len(tag) > 40:
-            raise ValueError("单个标签不能超过 40 个字符")
-        if tag not in normalized:
-            normalized.append(tag)
-    if len(normalized) > 20:
-        raise ValueError("每篇笔记最多保留 20 个标签")
-    return normalized
+class NoteNavigationCounts(ApiModel):
+    """Counts used by the notes navigation badges."""
+
+    all: int
+    unfiled: int
+    favorites: int
+    folders: dict[str, int] = Field(default_factory=dict)
+    submissions_pending: int = 0
+    review_pending: int = 0
 
 
 class NoteTemplateRead(ApiModel):

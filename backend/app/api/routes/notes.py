@@ -6,8 +6,10 @@ from typing import Annotated
 from fastapi import APIRouter, File, Form, HTTPException, Query, Response, UploadFile, status
 
 from app.core.dependencies import CurrentSettings, CurrentUser, DbSession
-from app.schemas.note import NoteCapture, NoteCounts, NoteCreate, NoteListItem, NoteRead, NoteUpdate
-from app.services import note_service
+from app.models.team_note import TeamNoteSubmissionStatus
+from app.schemas.note import NoteCapture, NoteCounts, NoteCreate, NoteListItem, NoteNavigationCounts, NoteRead, NoteUpdate
+from app.services import note_permission_service, note_service, team_note_service
+from app.services.system_permission_service import user_is_root
 from app.services.markdown_import_service import MarkdownImportError, parse_markdown
 from app.services.template_service import get_accessible_template_or_404, seed_builtin_templates
 
@@ -22,7 +24,6 @@ def get_notes(
     folder_id: str | None = Query(default=None, alias="folderId"),
     q: str | None = Query(default=None),
     favorite: bool | None = Query(default=None),
-    tags: list[str] = Query(default=[]),
     unfiled: bool = Query(default=False),
     limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
@@ -33,7 +34,6 @@ def get_notes(
         folder_id=folder_id,
         q=q,
         favorite=favorite,
-        tags=tags,
         unfiled=unfiled,
         limit=limit,
         offset=offset,
@@ -41,14 +41,37 @@ def get_notes(
     )]
 
 
-@router.get("/notes/tags", response_model=list[str])
-def get_note_tags(db: DbSession, user: CurrentUser) -> list[str]:
-    return note_service.list_note_tags(db, user.id)
-
-
 @router.get("/notes/counts", response_model=NoteCounts)
 def get_note_counts(db: DbSession, user: CurrentUser) -> NoteCounts:
     return NoteCounts(unfiled=note_service.count_unfiled_notes(db, user.id))
+
+
+@router.get("/notes/navigation-counts", response_model=NoteNavigationCounts)
+def get_navigation_counts(
+    db: DbSession,
+    user: CurrentUser,
+    team_id: str | None = Query(default=None, alias="teamId"),
+) -> NoteNavigationCounts:
+    counts = note_service.navigation_counts(db, user.id)
+    submissions_pending = 0
+    review_pending = 0
+    if team_id:
+        can_access_team = user_is_root(db, user.id) or note_permission_service.membership(db, user.id, team_id) is not None
+        if not can_access_team:
+            raise HTTPException(status_code=404, detail="Team not found")
+        pending_statuses = [TeamNoteSubmissionStatus.PENDING, TeamNoteSubmissionStatus.NEEDS_REVISION]
+        submissions_pending = team_note_service.count_submissions(
+            db, team_id, applicant_id=user.id, statuses=pending_statuses
+        )
+        if note_permission_service.can_review_submission(db, user.id, team_id):
+            review_pending = team_note_service.count_submissions(
+                db, team_id, statuses=[TeamNoteSubmissionStatus.PENDING]
+            )
+    return NoteNavigationCounts(
+        **counts,
+        submissions_pending=submissions_pending,
+        review_pending=review_pending,
+    )
 
 
 @router.post("/notes", response_model=NoteRead, status_code=status.HTTP_201_CREATED)
@@ -118,7 +141,6 @@ def copy_note(note_id: str, db: DbSession, settings: CurrentSettings, user: Curr
         title=f"{source.title} 副本",
         content_json=source.content_json,
         plain_text=source.plain_text,
-        tags=source.tags,
         source_attachments=list(source.attachments),
         owner_id=user.id,
         settings=settings,
@@ -160,7 +182,6 @@ def create_from_template(
             title=template.name,
             content_json=deepcopy(template.content_json),
             plain_text=note_service.content_to_plain_text(template.content_json),
-            tags=[],
         ),
         user.id,
     )

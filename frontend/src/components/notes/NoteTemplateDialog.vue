@@ -48,7 +48,7 @@ function selectTemplate(template: NoteTemplate) {
 <template>
   <Teleport to="body">
     <div v-if="open" class="dialog-backdrop" @mousedown.self="emit('close')">
-      <section class="dialog-card template-dialog" role="dialog" aria-modal="true" aria-labelledby="template-title">
+      <section class="dialog-card template-dialog" role="dialog" aria-modal="true" aria-labelledby="template-title" @click="closeMenu">
         <header class="dialog-header">
           <div><span class="section-label">模板库</span><h2 id="template-title">选择笔记模板</h2></div>
           <button class="icon-action" type="button" aria-label="关闭" @click="emit('close')"><IconX :size="18" /></button>

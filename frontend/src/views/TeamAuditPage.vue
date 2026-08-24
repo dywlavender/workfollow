@@ -17,8 +17,12 @@ function formatTime(value: string) {
 
 async function load() {
   try {
-    team.value = await fetchTeam(teamId())
-    logs.value = await fetchTeamAuditLogs(teamId())
+    const [loadedTeam, loadedLogs] = await Promise.all([
+      fetchTeam(teamId()),
+      fetchTeamAuditLogs(teamId()),
+    ])
+    team.value = loadedTeam
+    logs.value = loadedLogs
   } catch (cause: any) {
     error.value = cause?.response?.data?.detail ?? '无法读取审计日志。'
   }

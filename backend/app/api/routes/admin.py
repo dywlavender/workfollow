@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException
-from sqlalchemy import select
+from fastapi import APIRouter, HTTPException, status
+from sqlalchemy import func, select
 
 from app.core.dependencies import CurrentUser, DbSession
 from app.models.auth import SystemRole, User
-from app.schemas.auth import AdminUserPermissionsUpdate, PasswordResetRead, UserRead
+from app.schemas.auth import AdminUserPermissionsUpdate, AdminUserSystemRoleUpdate, PasswordResetRead, UserRead
 from app.services import audit_service, password_reset_service
 from app.services.system_permission_service import audit_metadata, require_root
 
@@ -51,6 +51,53 @@ def update_user_permissions(
         metadata_json=audit_metadata(
             user,
             {"userId": target.id, "canCreateTeam": target.can_create_team},
+        ),
+    )
+    return UserRead.model_validate(target)
+
+
+@router.patch("/users/{user_id}/system-role", response_model=UserRead)
+def update_user_system_role(
+    user_id: str,
+    payload: AdminUserSystemRoleUpdate,
+    db: DbSession,
+    user: CurrentUser,
+) -> UserRead:
+    require_root(user)
+    target = db.get(User, user_id)
+    if target is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    if target.id == user.id and payload.system_role != SystemRole.ROOT:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="不能撤销当前登录账户的系统管理员权限")
+    if target.system_role == payload.system_role:
+        return UserRead.model_validate(target)
+    if target.system_role == SystemRole.ROOT and payload.system_role != SystemRole.ROOT:
+        root_count = db.scalar(
+            select(func.count(User.id)).where(User.system_role == SystemRole.ROOT)
+        ) or 0
+        if root_count <= 1:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="至少保留一个系统管理员")
+
+    previous_role = target.system_role
+    target.system_role = payload.system_role
+    # ROOT has this capability by definition. Demoting a ROOT must not leave
+    # an implicit elevated capability behind.
+    target.can_create_team = payload.system_role == SystemRole.ROOT
+    db.commit()
+    db.refresh(target)
+    audit_service.record_audit(
+        db,
+        actor_user_id=user.id,
+        action="USER_SYSTEM_ROLE_CHANGED",
+        resource_type="USER",
+        resource_id=target.id,
+        metadata_json=audit_metadata(
+            user,
+            {
+                "userId": target.id,
+                "previousSystemRole": previous_role.value,
+                "systemRole": target.system_role.value,
+            },
         ),
     )
     return UserRead.model_validate(target)

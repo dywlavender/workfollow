@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { BubbleMenu, EditorContent, useEditor } from '@tiptap/vue-3'
 import {
+  IconBook,
   IconCopy,
   IconBookmark,
   IconDownload,
@@ -28,6 +29,7 @@ import TodoDialog from '@/components/todo/TodoDialog.vue'
 import { filterStandaloneAttachments } from '@/modules/editor/attachmentReferences'
 import { createWorkFollowEditorExtensions } from '@/modules/editor/tiptap'
 import { workFollowSlashCommands, type WorkFollowSlashCommand } from '@/modules/editor/slashCommands'
+import { useClickOutside } from '@/composables/useClickOutside'
 import { useRealtimeStore } from '@/stores/realtime'
 
 
@@ -43,11 +45,10 @@ const props = defineProps<{
   currentUserId?: string
   canAssignTasks?: boolean
   focusBlockId?: string | null
-  availableTags?: string[]
 }>()
 const realtime = useRealtimeStore()
 const emit = defineEmits<{
-  save: [payload: { noteId: string; title: string; folderId: string | null; tags: string[]; contentJson?: Record<string, unknown>; plainText?: string }]
+  save: [payload: { noteId: string; title: string; folderId: string | null; contentJson?: Record<string, unknown>; plainText?: string }]
   deleteAttachment: [attachment: Attachment]
   openTask: [taskId: string]
   share: []
@@ -61,8 +62,6 @@ const emit = defineEmits<{
 
 const title = ref('')
 const folderId = ref<string | null>(null)
-const tags = ref<string[]>([])
-const tagDraft = ref('')
 const saveState = ref<'idle' | 'saving' | 'saved'>('idle')
 const fileInput = ref<HTMLInputElement | null>(null)
 const linkDialogOpen = ref(false)
@@ -72,6 +71,8 @@ const slashActiveIndex = ref(0)
 const slashPosition = ref({ left: 0, top: 0 })
 const slashRange = ref<{ from: number; to: number } | null>(null)
 const moreOpen = ref(false)
+const moreHost = ref<HTMLElement | null>(null)
+useClickOutside(moreHost, moreOpen, () => { moreOpen.value = false })
 const taskDialogOpen = ref(false)
 const taskSearchOpen = ref(false)
 const taskInitialTitle = ref('')
@@ -233,8 +234,6 @@ watch(
     contentSnapshotTimer = undefined
     title.value = props.note?.title ?? ''
     folderId.value = props.note?.folderId ?? null
-    tags.value = [...(props.note?.tags ?? [])]
-    tagDraft.value = ''
     saveState.value = 'idle'
     attachmentPanelOpen.value = false
     editorContent.value = props.note?.contentJson ?? null
@@ -246,15 +245,6 @@ watch(
     void focusSourceBlock()
   },
   { immediate: true },
-)
-
-watch(
-  () => props.note?.tags,
-  (nextTags) => {
-    const normalized = [...(nextTags ?? [])]
-    if (JSON.stringify(normalized) !== JSON.stringify(tags.value)) tags.value = normalized
-  },
-  { deep: true },
 )
 
 watch(
@@ -330,25 +320,11 @@ function emitCurrentContent(noteId: string) {
     noteId,
     title: title.value.trim() || '未命名笔记',
     folderId: folderId.value || null,
-    tags: [...tags.value],
     ...(contentJson ? {
       contentJson,
       plainText: editor.value.getText({ blockSeparator: '\n' }),
     } : {}),
   })
-}
-
-function addTag() {
-  const next = tagDraft.value.trim().replace(/\s+/g, ' ')
-  if (!next || tags.value.includes(next) || tags.value.length >= 20 || next.length > 40) return
-  tags.value.push(next)
-  tagDraft.value = ''
-  scheduleSave()
-}
-
-function removeTag(tag: string) {
-  tags.value = tags.value.filter((item) => item !== tag)
-  scheduleSave()
 }
 
 function requestSaveAsTemplate() {
@@ -716,15 +692,15 @@ watch(immersiveOpen, (open) => {
               <IconMaximize v-else :size="15" />
               <span>{{ immersiveOpen ? '退出沉浸式' : '沉浸式编辑' }}</span>
             </button>
-            <button v-if="collaboration" type="button" class="secondary-button" @click="emit('share')"><IconShare :size="15" />分享</button>
-            <div class="note-more-host">
+            <div ref="moreHost" class="note-more-host">
               <button type="button" class="mini-action" aria-label="更多笔记操作" @click="moreOpen = !moreOpen"><IconDots :size="18" /></button>
               <section v-if="moreOpen" class="note-more-menu">
+                <button v-if="collaboration" type="button" @click="emit('share'); moreOpen = false"><IconShare :size="15" />分享</button>
                 <button type="button" @click="emit('favorite', !note?.isFavorite); moreOpen = false"><IconStar :size="15" />{{ note?.isFavorite ? '取消收藏' : '收藏' }}</button>
                 <button type="button" @click="emit('duplicate', note); moreOpen = false"><IconCopy :size="15" />复制笔记</button>
                 <button type="button" @click="requestSaveAsTemplate(); moreOpen = false"><IconBookmark :size="15" />保存为模板</button>
-                <button type="button" @click="emit('export', note); moreOpen = false"><IconDownload :size="15" />导出 JSON</button>
-                <button v-if="collaboration" type="button" :disabled="knowledgeState === 'update-pending'" @click="emit('publish'); moreOpen = false">{{ knowledgeState === 'published' ? '申请更新团队版本' : knowledgeState === 'update-draft' ? '提交更新申请' : knowledgeState === 'update-needs-revision' ? '重新提交更新申请' : knowledgeState === 'update-pending' ? '更新审核中' : '发布到团队知识库' }}</button>
+                <button type="button" @click="emit('export', note); moreOpen = false"><IconDownload :size="15" />导出 Markdown</button>
+                <button v-if="collaboration" type="button" :disabled="knowledgeState === 'update-pending'" @click="emit('publish'); moreOpen = false"><IconBook :size="15" />{{ knowledgeState === 'published' ? '申请更新团队版本' : knowledgeState === 'update-draft' ? '提交更新申请' : knowledgeState === 'update-needs-revision' ? '重新提交更新申请' : knowledgeState === 'update-pending' ? '更新审核中' : '发布到团队知识库' }}</button>
                 <span />
                 <button class="danger-text" type="button" @click="emit('remove'); moreOpen = false">删除</button>
               </section>
@@ -738,19 +714,6 @@ watch(immersiveOpen, (open) => {
           </select>
           <span class="save-state" :class="saveState">{{ saveState === 'saving' ? '保存中…' : saveState === 'saved' ? '已自动保存' : '本地笔记' }}</span>
           <span v-if="knowledgeState === 'update-draft' || knowledgeState === 'update-pending' || knowledgeState === 'update-needs-revision'" class="knowledge-update-target">更新目标：{{ knowledgeTargetTitle ?? '团队知识' }}</span>
-        </div>
-        <div class="note-tags-row" aria-label="笔记标签">
-          <span v-for="tag in tags" :key="tag" class="note-tag-chip">{{ tag }}<button type="button" :aria-label="`移除标签 ${tag}`" @click="removeTag(tag)">×</button></span>
-          <input
-            v-model="tagDraft"
-            class="note-tag-input"
-            list="note-tag-options"
-            maxlength="40"
-            placeholder="添加标签…"
-            aria-label="添加笔记标签"
-            @keydown.enter.prevent="addTag"
-          />
-          <datalist id="note-tag-options"><option v-for="tag in availableTags" :key="tag" :value="tag" /></datalist>
         </div>
       </header>
       <RichTextToolbar v-if="editor" :editor="editor" attachment @link="setLink" @attachment="openFilePicker('embedded')" />

@@ -9,6 +9,8 @@ WorkFollow 是一个本地优先的工作工具，在同一个工作空间内统
 - 信息架构参考：仓库上级目录的 HTML 原型（不作为最终视觉约束）
 - 最终视觉：统一 Card Layout；深紫用于导航与主要操作，青绿用于核心数据，背景与容器采用灰白和中性色
 
+主题开发规范：[`docs/theme-development-guide.md`](docs/theme-development-guide.md)
+
 ## 统一任务与团队协作
 
 - **单一事实源**：个人任务和协作任务都存放在 `todos`；创建者、团队来源和执行成员分别由 `creator_id`、`team_id`、`task_assignments` 表达，不复制任务正文。

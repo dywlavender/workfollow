@@ -21,7 +21,7 @@ from app.schemas.team import (
     TeamTaskUpdate,
 )
 from app.schemas.todo import TodoCreate, TodoUpdate
-from app.services import event_stream, team_service, todo_service
+from app.services import event_stream, task_notification_service, team_service, todo_service
 from app.services.team_note_service import attachment_reads
 
 
@@ -127,6 +127,7 @@ def create_task(team_id: str, payload: TeamTaskCreate, db: DbSession, user: Curr
     ), user.id, commit=False)
     if task.team_id not in (None, team_id):
         raise HTTPException(status_code=422, detail="指派成员必须属于指定团队")
+    task_notification_service.notify_task_created(db, task, user.id, commit=False)
     event_stream.queue_task_changed(db, task)
     db.commit()
     return task_read(db, task)
@@ -147,16 +148,29 @@ def update_task(
 ) -> TeamTaskRead:
     task = _team_task(db, team_id, task_id, user.id)
     todo_service.require_creator(task, user.id)
+    before = task_notification_service.task_change_snapshot(task)
     changes = payload.model_dump(exclude_unset=True)
     assignee_ids = changes.pop("assignee_ids", None)
     requested_status = changes.pop("status", None)
     changes.pop("client_request_id", None)
     if changes:
         task = todo_service.update_todo(db, task, TodoUpdate(**changes), user.id, commit=False)
+        task_notification_service.notify_task_updated(
+            db, task, user.id, before, commit=False
+        )
     if assignee_ids is not None:
+        previous_ids = {item.user_id for item in task.assignments if item.active}
         task = todo_service.update_assignees(db, task, user.id, assignee_ids, commit=False)
+        current_ids = {item.user_id for item in task.assignments if item.active}
+        task_notification_service.notify_assignees_changed(
+            db, task, user.id, previous_ids, current_ids, commit=False
+        )
     if requested_status is not None and requested_status.value == "CANCELLED":
+        participant_ids = {item.user_id for item in task.assignments if item.active}
         task = todo_service.abandon_todo(db, task, commit=False)
+        task_notification_service.notify_task_cancelled(
+            db, task, user.id, participant_ids, commit=False
+        )
     event_stream.queue_task_changed(db, task)
     db.commit()
     return task_read(db, task)
@@ -166,7 +180,11 @@ def update_task(
 def delete_task(team_id: str, task_id: str, db: DbSession, user: CurrentUser) -> Response:
     task = _team_task(db, team_id, task_id, user.id)
     todo_service.require_creator(task, user.id)
+    participant_ids = {item.user_id for item in task.assignments if item.active}
     cancelled = todo_service.abandon_todo(db, task, commit=False)
+    task_notification_service.notify_task_cancelled(
+        db, cancelled, user.id, participant_ids, commit=False
+    )
     event_stream.queue_task_changed(db, cancelled)
     db.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
@@ -186,6 +204,7 @@ def update_assignment_status(
         raise HTTPException(status_code=404, detail="Task assignment not found")
     if assignment.user_id != user.id:
         raise HTTPException(status_code=403, detail="成员只能修改自己的任务分配状态")
+    was_done = assignment.status == TodoAssignmentStatus.DONE
     updated_task, next_task = todo_service.update_my_status(
         db,
         todo_service.get_todo_or_404(db, assignment.task_id, user.id),
@@ -193,6 +212,11 @@ def update_assignment_status(
         TodoAssignmentStatus.DONE if payload.status.value == "DONE" else TodoAssignmentStatus.TODO,
         commit=False,
     )
+    if payload.status.value == "DONE" and not was_done:
+        if updated_task.status == TodoStatus.DONE:
+            task_notification_service.notify_task_completed(db, updated_task, user.id, commit=False)
+        else:
+            task_notification_service.notify_task_assignment_completed(db, updated_task, user.id, commit=False)
     event_stream.queue_task_changed(db, updated_task)
     if next_task:
         event_stream.queue_task_changed(db, next_task)

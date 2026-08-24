@@ -133,10 +133,14 @@ async function loadView(view = viewFromRoute()) {
   if (todoStore.currentView !== view || todoStore.currentListName !== listName) sortReverse.value = false
   try {
     await todoStore.load(listName ? 'all' : view, query, listName)
-    await todoStore.loadCounts().catch(() => undefined)
   } catch {
     return
   }
+
+  // Counts are sidebar metadata. Do not hold the selected task or the list
+  // behind the nine background list requests used to calculate them.
+  void todoStore.loadCounts().catch(() => undefined)
+
   const requested = typeof route.query.todo === 'string' ? route.query.todo : null
   if (requested && todoStore.todos.some((todo) => todo.id === requested)) {
     selectedTodoId.value = requested
@@ -252,8 +256,13 @@ onMounted(async () => {
   window.addEventListener('pointerup', stopListResize)
   window.addEventListener('keydown', handleWorkspaceKeydown)
   notificationState.value = 'Notification' in window ? Notification.permission : 'unsupported'
-  if (currentTeam.value) teamMembers.value = await fetchTeamMembers(currentTeam.value.id).catch(() => [])
-  await loadView()
+  const membersRequest = currentTeam.value
+    ? fetchTeamMembers(currentTeam.value.id).catch(() => [])
+    : Promise.resolve([] as TeamMember[])
+  await Promise.all([
+    membersRequest.then((members) => { teamMembers.value = members }),
+    loadView(),
+  ])
 })
 
 onBeforeUnmount(() => {
@@ -548,8 +557,8 @@ async function assign(todo: Todo, assigneeIds: string[]) {
           <p>{{ todoStore.error }}</p>
           <button class="secondary-button" type="button" :disabled="todoStore.loading" @click="loadView()">{{ todoStore.loading ? '正在重试…' : '重新加载' }}</button>
         </div>
-        <div v-else-if="todoStore.loading" class="task-list-skeleton" aria-label="正在读取待办" aria-busy="true"><span v-for="index in 7" :key="index"><i /><b /><em /></span></div>
-        <div v-else-if="hasVisibleTasks" class="todo-list">
+        <div v-else-if="todoStore.loading && !hasVisibleTasks" class="task-list-skeleton" aria-label="正在读取待办" aria-busy="true"><span v-for="index in 7" :key="index"><i /><b /><em /></span></div>
+        <div v-else-if="hasVisibleTasks" class="todo-list" :class="{ 'is-refreshing': todoStore.loading }" :aria-busy="todoStore.loading">
           <TaskListGrouped :items="todoStore.todos" :reverse="sortReverse" :sort-mode="currentView.id === 'all' && !currentListName ? 'due-desc' : 'grouped'" :assignment-status="currentView.id !== 'assigned-by-me'" terminal-label="已完成和已放弃">
             <template #item="{ item: todo }">
             <TodoItem

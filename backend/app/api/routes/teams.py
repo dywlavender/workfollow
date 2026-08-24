@@ -1,15 +1,16 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, Response, status
-from sqlalchemy import select, update
+from fastapi import APIRouter, HTTPException, Query, Response, status
+from sqlalchemy import or_, select, update
 from sqlalchemy.orm import Session, joinedload
 
 from app.core.dependencies import CurrentUser, DbSession
-from app.models.auth import SystemRole, User
+from app.models.auth import SystemRole, User, UserStatus
 from app.models.team import Team, TeamMember, TeamMemberRole, TeamMemberStatus, TeamStatus
 from app.models.todo import Todo, TodoAssignment, local_now
 from app.schemas.team import (
     TeamCreate,
+    TeamMemberCandidateRead,
     TeamMemberCreate,
     TeamMemberRead,
     TeamMemberRoleUpdate,
@@ -126,6 +127,31 @@ def list_members(team_id: str, db: DbSession, user: CurrentUser) -> list[TeamMem
         .order_by(TeamMember.role, TeamMember.joined_at)
     ).unique().all()
     return [_member_read(member) for member in members]
+
+
+@router.get("/{team_id}/member-candidates", response_model=list[TeamMemberCandidateRead])
+def list_member_candidates(
+    team_id: str,
+    db: DbSession,
+    user: CurrentUser,
+    q: str = Query(default="", max_length=120),
+) -> list[TeamMemberCandidateRead]:
+    team_service.require_role(db, team_id, user.id, TeamMemberRole.OWNER, TeamMemberRole.ADMIN)
+    active_member_ids = select(TeamMember.user_id).where(
+        TeamMember.team_id == team_id,
+        TeamMember.status == TeamMemberStatus.ACTIVE,
+    )
+    statement = select(User).where(
+        User.status == UserStatus.ACTIVE,
+        User.id != user.id,
+        User.id.not_in(active_member_ids),
+    )
+    query = q.strip()
+    if query:
+        pattern = f"%{query}%"
+        statement = statement.where(or_(User.username.ilike(pattern), User.nickname.ilike(pattern)))
+    candidates = db.scalars(statement.order_by(User.nickname, User.username).limit(20)).all()
+    return [TeamMemberCandidateRead.model_validate(candidate) for candidate in candidates]
 
 
 @router.post("/{team_id}/members/{user_id}/reset-password", response_model=PasswordResetRead)

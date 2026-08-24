@@ -3,6 +3,7 @@ import { IconSend, IconX } from '@tabler/icons-vue'
 import { ref, watch } from 'vue'
 
 import { useDialogEscape } from '@/composables/useDialogEscape'
+import { parseTagInput } from '@/modules/notes/tagInput'
 import type { KnowledgeCategory, Note, TeamNoteListItem, TeamNoteSubmissionType } from '@/services/api'
 
 const props = defineProps<{
@@ -40,7 +41,7 @@ function submit() {
     type: type.value,
     targetTeamNoteId: type.value === 'UPDATE' ? targetTeamNoteId.value : null,
     categoryId: categoryId.value || null,
-    tags: tags.value.split(/[,，\s]+/).map((tag) => tag.trim()).filter(Boolean),
+    tags: parseTagInput(tags.value),
     message: message.value.trim() || null,
   })
 }
@@ -59,7 +60,7 @@ function submit() {
         <p v-else class="publish-update-hint">更新目标已锁定为原团队知识，本次不会创建重复条目。</p>
         <label v-if="type === 'UPDATE'" class="dialog-field"><span>目标团队知识</span><select v-model="targetTeamNoteId" :disabled="targetLocked" required><option value="">请选择</option><option v-for="item in knowledge" :key="item.id" :value="item.id">{{ item.title }}</option></select></label>
         <label class="dialog-field"><span>推荐分类</span><select v-model="categoryId"><option value="">未分类</option><option v-for="category in categories" :key="category.id" :value="category.id">{{ category.name }}</option></select></label>
-        <label class="dialog-field"><span>推荐团队标签</span><input v-model="tags" placeholder="例如：Tiptap Vue" /></label>
+        <label class="dialog-field"><span>推荐团队标签</span><input v-model="tags" placeholder="例如：性能 优化, 会议记录" /><small>多个标签用逗号分隔，标签内部可以包含空格</small></label>
         <label class="dialog-field"><span>发布说明（可选）</span><textarea v-model="message" rows="3" placeholder="总结本次贡献或更新内容" /></label>
         <footer><span>管理员审核的是本次 Snapshot</span><div><button class="secondary-button" type="button" @click="emit('close')">取消</button><button class="primary-button" type="button" :disabled="saving || (type === 'UPDATE' && !targetTeamNoteId)" @click="submit"><IconSend :size="15" />提交审核</button></div></footer>
       </section>

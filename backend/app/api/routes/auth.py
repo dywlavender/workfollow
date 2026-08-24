@@ -8,7 +8,7 @@ from app.core.config import Settings, get_settings
 from app.core.dependencies import CurrentUser, DbSession
 from app.models.auth import User, UserStatus
 from app.models.todo import local_now
-from app.schemas.auth import AuthResponse, LoginRequest, UserCreate, UserRead
+from app.schemas.auth import AuthResponse, LoginRequest, UserCreate, UserProfileUpdate, UserRead
 from app.services.auth_service import (
     SESSION_COOKIE_NAME,
     create_session,
@@ -96,4 +96,12 @@ def logout(response: Response, db: DbSession, request: Request, settings: Settin
 
 @router.get("/me", response_model=UserRead)
 def me(user: CurrentUser) -> UserRead:
+    return to_user_read(user)
+
+
+@router.patch("/me", response_model=UserRead)
+def update_me(payload: UserProfileUpdate, db: DbSession, user: CurrentUser) -> UserRead:
+    user.nickname = payload.nickname
+    db.commit()
+    db.refresh(user)
     return to_user_read(user)

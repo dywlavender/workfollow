@@ -9,12 +9,13 @@ import {
   IconDots, IconEye, IconEyeOff, IconListCheck, IconPlus,
 } from '@tabler/icons-vue'
 import dayjs from 'dayjs'
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import TodoDialog from '@/components/todo/TodoDialog.vue'
 import { isDateOnlyDue } from '@/modules/todo/dueDate'
 import { fetchTodos, putTodo, type Todo, type TodoPayload } from '@/services/api'
+import { consumePrefetchedCalendarTodos } from '@/services/prefetch'
 import { useAppStore } from '@/stores/app'
 import { cloneTodo, optimisticCompletedTodo, optimisticRestoredTodo, useTodoStore } from '@/stores/todos'
 
@@ -30,8 +31,9 @@ const requestedDate = typeof route.query.date === 'string' && /^\d{4}-\d{2}-\d{2
   : dayjs().format('YYYY-MM-DD')
 const selectedDate = ref(requestedDate)
 const currentView = ref('dayGridMonth')
-const currentTitle = ref(dayjs().format('YYYY年M月'))
-const loading = ref(true)
+const currentTitle = ref(dayjs(requestedDate).format('YYYY年M月'))
+const initialLoading = ref(true)
+const refreshing = ref(false)
 const actionError = ref<string | null>(null)
 const createOpen = ref(false)
 const selectedTodo = ref<Todo | null>(null)
@@ -95,22 +97,24 @@ function renderEvent(arg: EventContentArg) {
   return { domNodes: [row] }
 }
 
-const calendarOptions = computed<CalendarOptions>(() => ({
+const calendarOptions: CalendarOptions = {
   plugins: [dayGridPlugin, interactionPlugin],
   initialView: currentView.value,
-  initialDate: selectedDate.value,
+  initialDate: requestedDate,
   locale: zhCnLocale,
   firstDay: 0,
   height: '100%',
   expandRows: true,
-  fixedWeekCount: currentView.value === 'dayGridMonth',
+  fixedWeekCount: true,
   dayMaxEvents: 4,
   moreLinkContent: (arg) => `+${arg.num}`,
   editable: true,
   eventStartEditable: true,
   headerToolbar: false,
   displayEventTime: false,
-  events: calendarEvents.value,
+  // Keep the FullCalendar instance mounted. Events are synchronized through
+  // the calendar API so loading never replaces the whole calendar surface.
+  events: [],
   dateClick: onDateClick,
   eventClick: onEventClick,
   eventDrop: onEventDrop,
@@ -121,17 +125,32 @@ const calendarOptions = computed<CalendarOptions>(() => ({
     const date = dayjs(arg.date)
     return date.date() === 1 ? `${date.month() + 1}月1日` : String(date.date())
   },
-}))
+}
+
+function syncCalendarEvents() {
+  const api = calendarRef.value?.getApi()
+  if (!api) return
+
+  api.removeAllEvents()
+  for (const event of calendarEvents.value) api.addEvent(event)
+}
+
+watch(calendarEvents, syncCalendarEvents, { deep: true })
 
 async function loadCalendar() {
-  loading.value = true
+  const isInitialLoad = initialLoading.value
+  if (isInitialLoad) initialLoading.value = true
+  else refreshing.value = true
   actionError.value = null
   try {
-    allTodos.value = await fetchTodos()
+    allTodos.value = isInitialLoad
+      ? await consumePrefetchedCalendarTodos()
+      : await fetchTodos()
   } catch {
     actionError.value = '无法读取日历，请确认本地服务已启动。'
   } finally {
-    loading.value = false
+    if (isInitialLoad) initialLoading.value = false
+    else refreshing.value = false
   }
 }
 
@@ -257,7 +276,11 @@ function closeFloating(event: MouseEvent) {
   if (!root.value?.contains(event.target as Node)) moreOpen.value = false
 }
 
-onMounted(() => { document.addEventListener('click', closeFloating); void loadCalendar() })
+onMounted(() => {
+  document.addEventListener('click', closeFloating)
+  syncCalendarEvents()
+  void loadCalendar()
+})
 onBeforeUnmount(() => document.removeEventListener('click', closeFloating))
 </script>
 
@@ -285,9 +308,17 @@ onBeforeUnmount(() => document.removeEventListener('click', closeFloating))
     </header>
 
     <p v-if="actionError" class="calendar-error calendar-floating-error" role="alert">{{ actionError }}<button type="button" aria-label="关闭错误" @click="actionError = null">×</button></p>
-    <main class="calendar-canvas" aria-label="任务日历">
-      <div v-if="loading" class="calendar-skeleton" aria-label="正在读取日历"><span v-for="index in 35" :key="index" /></div>
-      <FullCalendar v-else ref="calendarRef" :options="calendarOptions" />
+    <main class="calendar-canvas" :aria-busy="initialLoading || refreshing" aria-label="任务日历">
+      <FullCalendar ref="calendarRef" :options="calendarOptions" />
+      <div
+        v-if="initialLoading || refreshing"
+        class="calendar-loading-indicator"
+        role="status"
+        aria-live="polite"
+      >
+        <span class="calendar-loading-spinner" aria-hidden="true" />
+        <span>{{ initialLoading ? '正在读取日历' : '正在更新' }}</span>
+      </div>
     </main>
 
     <TodoDialog

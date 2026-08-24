@@ -93,6 +93,35 @@ def test_root_can_grant_and_revoke_only_team_creation_capability(client: TestCli
     assert target_client.post("/api/teams", json={"name": "撤销后不应创建"}).status_code == 403
 
 
+def test_root_can_promote_another_user_and_cannot_remove_own_root(client: TestClient, db) -> None:
+    root = add_user(
+        db,
+        "21000000-0000-0000-0000-000000000030",
+        "role-root",
+        role=SystemRole.ROOT,
+    )
+    target = add_user(db, "21000000-0000-0000-0000-000000000031", "role-target")
+    root_client = login(client.app, root.username)
+
+    promoted = root_client.patch(
+        f"/api/admin/users/{target.id}/system-role", json={"systemRole": "ROOT"}
+    )
+    assert promoted.status_code == 200, promoted.text
+    assert promoted.json()["systemRole"] == "ROOT"
+    assert promoted.json()["canCreateTeam"] is True
+
+    demoted = root_client.patch(
+        f"/api/admin/users/{target.id}/system-role", json={"systemRole": "NORMAL"}
+    )
+    assert demoted.status_code == 200, demoted.text
+    assert demoted.json()["systemRole"] == "NORMAL"
+    assert demoted.json()["canCreateTeam"] is False
+
+    blocked = root_client.patch(
+        f"/api/admin/users/{root.id}/system-role", json={"systemRole": "NORMAL"}
+    )
+    assert blocked.status_code == 400
+
 def test_root_can_reset_any_user_password_and_revoke_existing_sessions(client: TestClient, db) -> None:
     root = add_user(
         db,

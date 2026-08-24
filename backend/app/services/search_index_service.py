@@ -39,7 +39,7 @@ def upsert_personal_note(db: Session, note: Note) -> None:
     document.team_id = None
     document.title = note.title or ""
     document.body = note.plain_text or ""
-    document.tags_text = tags_to_text(note.tags)
+    document.tags_text = ""
     document.category_name = ""
 
 

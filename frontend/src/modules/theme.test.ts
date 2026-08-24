@@ -9,9 +9,36 @@ import {
 } from './theme'
 
 describe('appearance theme matrix', () => {
-  it('exposes five curated palettes', () => {
-    expect(appearancePalettes).toHaveLength(5)
-    expect(appearancePalettes.map((palette) => palette.id)).toEqual(['default', 'sky', 'teal', 'amber', 'purple'])
+  it('exposes nine curated palettes across classic and season groups', () => {
+    expect(appearancePalettes).toHaveLength(9)
+    expect(appearancePalettes.map((palette) => palette.id)).toEqual([
+      'default', 'sky', 'teal', 'amber', 'purple', 'spring', 'summer', 'autumn', 'winter',
+    ])
+  })
+
+  it('ships four seasonal palettes with a built-in atmosphere and translucent page surfaces', () => {
+    const seasonal = appearancePalettes.filter((palette) => palette.group === 'season')
+    expect(seasonal.map((palette) => palette.id)).toEqual(['spring', 'summer', 'autumn', 'winter'])
+    for (const palette of seasonal) {
+      expect(palette.atmosphere?.light).toBeTruthy()
+      expect(palette.atmosphere?.dark).toBeTruthy()
+      expect(palette.light.page.startsWith('rgb')).toBe(true)
+      expect(palette.light.page).toContain('/ .')
+      expect(palette.dark.page).toContain('/ .')
+    }
+    const classic = appearancePalettes.filter((palette) => palette.group !== 'season')
+    expect(classic).toHaveLength(5)
+    for (const palette of classic) {
+      expect(palette.atmosphere).toBeUndefined()
+    }
+  })
+
+  it('ships light and dark scene tokens for every seasonal palette', () => {
+    const seasonal = appearancePalettes.filter((palette) => palette.group === 'season')
+    for (const palette of seasonal) {
+      expect(Object.keys(palette.scene?.light ?? {})).not.toHaveLength(0)
+      expect(Object.keys(palette.scene?.dark ?? {})).not.toHaveLength(0)
+    }
   })
 
   it('keeps every background preset aligned with the light and dark surface tokens', () => {

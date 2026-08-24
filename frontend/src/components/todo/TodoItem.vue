@@ -129,6 +129,7 @@ onBeforeUnmount(() => document.removeEventListener('click', closeContext))
     </template>
   </TaskRow>
 
+  <Teleport to="body">
   <section v-if="contextOpen" class="task-row-context-menu" :style="{ left: `${menuX}px`, top: `${menuY}px` }" role="menu" aria-label="任务操作" @click.stop>
       <button v-if="todo.permissions.editable" type="button" @click="emit('editDate', todo); closeContext()"><IconCalendar :size="16" />设置日期</button>
       <button v-if="todo.permissions.editable" type="button" @click="emit('editDate', todo); closeContext()"><IconBell :size="16" />设置提醒</button>
@@ -152,5 +153,6 @@ onBeforeUnmount(() => document.removeEventListener('click', closeContext))
       <button type="button" @click="emit('copyLink', todo); closeContext()"><IconLink :size="16" />复制任务链接</button>
       <button v-if="todo.permissions.deletable" class="danger" type="button" @click="removeDialogOpen = true; closeContext()"><IconTrash :size="16" />删除任务</button>
   </section>
+  </Teleport>
   <ConfirmDialog :open="removeDialogOpen" title="删除待办" :message="`确定删除“${todo.title}”吗？`" confirm-label="删除" :danger="true" @close="removeDialogOpen = false" @confirm="confirmRemove" />
 </template>

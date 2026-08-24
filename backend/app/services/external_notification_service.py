@@ -291,12 +291,27 @@ def dispatch_pending(
     return sent_count
 
 
-def _daily_message(overdue: list[tuple[str, str]], today: list[tuple[str, str]]) -> str:
+def _daily_due_label(due_at: datetime) -> str:
+    result = due_at.strftime("%m月%d日")
+    if due_at.time() != time.min:
+        result += due_at.strftime(" %H:%M")
+    return result
+
+
+def _daily_message(
+    overdue: list[tuple[str, str, datetime]],
+    today: list[tuple[str, str, datetime]],
+) -> str:
+    def labels(rows: list[tuple[str, str, datetime]]) -> str:
+        return "、".join(f"{title}（{_daily_due_label(due_at)}）" for _, title, due_at in rows[:5])
+
     parts: list[str] = []
     if overdue:
-        parts.append(f"逾期 {len(overdue)} 项：" + "、".join(title for _, title in overdue[:5]))
+        suffix = "" if len(overdue) <= 5 else f"；另有 {len(overdue) - 5} 项未展开"
+        parts.append(f"逾期 {len(overdue)} 项：{labels(overdue)}{suffix}")
     if today:
-        parts.append(f"今日 {len(today)} 项：" + "、".join(title for _, title in today[:5]))
+        suffix = "" if len(today) <= 5 else f"；另有 {len(today) - 5} 项未展开"
+        parts.append(f"今日 {len(today)} 项：{labels(today)}{suffix}")
     return "【每日待办】" + "；".join(parts) + "。"
 
 
@@ -330,8 +345,8 @@ def enqueue_daily_task_digests(
             )
             .order_by(Todo.due_at.asc(), Todo.created_at.asc())
         ).all()
-        overdue = [(task_id, title) for task_id, title, due_at in rows if due_at < start]
-        today = [(task_id, title) for task_id, title, due_at in rows if start <= due_at < end]
+        overdue = [(task_id, title, due_at) for task_id, title, due_at in rows if due_at < start]
+        today = [(task_id, title, due_at) for task_id, title, due_at in rows if start <= due_at < end]
         if not overdue and not today:
             continue
         event_key = f"daily-task-digest:{current.date().isoformat()}"
@@ -358,8 +373,16 @@ def enqueue_daily_task_digests(
             external_message=message,
             data_json={
                 "date": current.date().isoformat(),
-                "overdueTaskIds": [task_id for task_id, _ in overdue],
-                "todayTaskIds": [task_id for task_id, _ in today],
+                "overdueTaskIds": [task_id for task_id, _, _ in overdue],
+                "todayTaskIds": [task_id for task_id, _, _ in today],
+                "overdueTasks": [
+                    {"id": task_id, "title": title, "dueAt": due_at.isoformat()}
+                    for task_id, title, due_at in overdue
+                ],
+                "todayTasks": [
+                    {"id": task_id, "title": title, "dueAt": due_at.isoformat()}
+                    for task_id, title, due_at in today
+                ],
                 "eventKey": event_key,
             },
             event_key=event_key,

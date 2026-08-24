@@ -1,6 +1,6 @@
 import { Extension, Mark, Node, mergeAttributes, type JSONContent } from '@tiptap/core'
 import { Node as ProseMirrorNode } from '@tiptap/pm/model'
-import { Plugin, PluginKey } from '@tiptap/pm/state'
+import { Plugin, PluginKey, type Transaction } from '@tiptap/pm/state'
 
 const blockTypes = ['paragraph', 'heading', 'blockquote', 'listItem', 'taskItem']
 
@@ -54,12 +54,14 @@ export const WorkFollowBlockId = Extension.create({
           }
           const increment = (id: string) => next.set(id, (next.get(id) ?? 0) + 1)
           for (const range of positions) {
-            oldState.doc.nodesBetween(range.oldFrom, range.oldTo, (node) => {
+            const oldRange = clampDocumentRange(oldState.doc, range.oldFrom, range.oldTo)
+            const newRange = clampDocumentRange(newState.doc, range.newFrom, range.newTo)
+            oldState.doc.nodesBetween(oldRange.from, oldRange.to, (node) => {
               if (blockTypes.includes(node.type.name) && typeof node.attrs.blockId === 'string') {
                 decrement(node.attrs.blockId)
               }
             })
-            newState.doc.nodesBetween(range.newFrom, range.newTo, (node) => {
+            newState.doc.nodesBetween(newRange.from, newRange.to, (node) => {
               if (blockTypes.includes(node.type.name) && typeof node.attrs.blockId === 'string') {
                 increment(node.attrs.blockId)
               }
@@ -72,18 +74,23 @@ export const WorkFollowBlockId = Extension.create({
         if (!transactions.some((transaction) => transaction.docChanged)) return null
         const fullScan = transactions.some((transaction) => transaction.getMeta('uiEvent') === 'paste')
         const positions: number[] = []
-        for (const transaction of transactions) {
+        for (let transactionIndex = 0; transactionIndex < transactions.length; transactionIndex += 1) {
+          const transaction = transactions[transactionIndex]
           if (!transaction.docChanged) continue
           transaction.mapping.maps.forEach((map) => {
             map.forEach((_oldFrom, _oldTo, newFrom, newTo) => {
-              positions.push(newFrom, newTo)
+              positions.push(
+                mapPositionToFinalDocument(newFrom, transactionIndex, transactions, -1),
+                mapPositionToFinalDocument(newTo, transactionIndex, transactions, 1),
+              )
             })
           })
         }
         if (!positions.length) positions.push(newState.selection.from, newState.selection.to)
-        const scanRange = fullScan
+        const rawScanRange = fullScan
           ? { from: 0, to: newState.doc.content.size }
           : changedBlockRange(newState.doc, Math.min(...positions), Math.max(...positions))
+        const scanRange = clampDocumentRange(newState.doc, rawScanRange.from, rawScanRange.to)
         const transaction = newState.tr
         let changed = false
         const seen = new Set<string>()
@@ -107,9 +114,19 @@ export const WorkFollowBlockId = Extension.create({
   },
 })
 
-function changedBlockRange(doc: ProseMirrorNode, from: number, to: number): { from: number; to: number } {
+export function clampDocumentRange(doc: ProseMirrorNode, from: number, to: number): { from: number; to: number } {
+  const size = doc.content.size
+  const safeFrom = Number.isFinite(from) ? from : 0
+  const safeTo = Number.isFinite(to) ? to : safeFrom
+  const start = Math.max(0, Math.min(Math.min(safeFrom, safeTo), size))
+  const end = Math.max(start, Math.min(Math.max(safeFrom, safeTo), size))
+  return { from: start, to: end }
+}
+
+export function changedBlockRange(doc: ProseMirrorNode, from: number, to: number): { from: number; to: number } {
+  const inputRange = clampDocumentRange(doc, from, to)
   const ranges: Array<{ from: number; to: number }> = []
-  for (const position of [from, to]) {
+  for (const position of [inputRange.from, inputRange.to]) {
     const resolved = doc.resolve(Math.max(0, Math.min(position, doc.content.size)))
     for (let depth = resolved.depth; depth > 0; depth -= 1) {
       if (!blockTypes.includes(resolved.node(depth).type.name)) continue
@@ -118,11 +135,25 @@ function changedBlockRange(doc: ProseMirrorNode, from: number, to: number): { fr
       break
     }
   }
-  if (!ranges.length) return { from: Math.max(0, from - 1), to: Math.max(from, to + 1) }
-  return {
-    from: Math.min(...ranges.map((range) => range.from)),
-    to: Math.max(...ranges.map((range) => range.to)),
+  if (!ranges.length) return clampDocumentRange(doc, inputRange.from - 1, inputRange.to + 1)
+  return clampDocumentRange(
+    doc,
+    Math.min(...ranges.map((range) => range.from)),
+    Math.max(...ranges.map((range) => range.to)),
+  )
+}
+
+function mapPositionToFinalDocument(
+  position: number,
+  transactionIndex: number,
+  transactions: readonly Transaction[],
+  assoc: -1 | 1,
+): number {
+  let mapped = position
+  for (let index = transactionIndex + 1; index < transactions.length; index += 1) {
+    mapped = transactions[index].mapping.map(mapped, assoc)
   }
+  return mapped
 }
 
 /** Inline source text keeps its text; this mark adds only the Task identity. */

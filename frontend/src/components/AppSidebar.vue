@@ -13,6 +13,8 @@ import {
 } from '@tabler/icons-vue'
 import { useRoute } from 'vue-router'
 
+import { preloadRoute } from '@/router'
+import { prefetchCalendarTodos, prefetchNotesList } from '@/services/prefetch'
 import { useAuthStore } from '@/stores/auth'
 import { useRealtimeStore } from '@/stores/realtime'
 import { useWorkspaceStore } from '@/stores/workspace'
@@ -60,6 +62,21 @@ function isActive(target: string | { path: string; query?: Record<string, string
   if (!entries.length) return Object.keys(route.query).length === 0
   return entries.every(([key, value]) => route.query[key] === value)
 }
+
+function preloadTarget(target: string | { path: string; query?: Record<string, string | undefined> }) {
+  const path = typeof target === 'string' ? target : target.path
+  if (path === route.path) return
+  const routeName = path === '/' ? 'home'
+    : path === '/todos' ? 'todos'
+    : path === '/calendar' ? 'calendar'
+    : path === '/notes' ? 'notes'
+    : path === '/common' ? 'common'
+    : path === '/notifications' ? 'notifications'
+    : null
+  if (routeName) preloadRoute(routeName)
+  if (routeName === 'calendar') prefetchCalendarTodos()
+  if (routeName === 'notes') prefetchNotesList()
+}
 </script>
 
 <template>
@@ -76,6 +93,8 @@ function isActive(target: string | { path: string; query?: Record<string, string
         :class="{ active: isActive(item.to) }"
         :to="item.to"
         :aria-label="item.badge === 'unread' && unreadCount ? `${item.label}，${unreadCount} 条未读` : item.label"
+        @pointerenter="preloadTarget(item.to)"
+        @focus="preloadTarget(item.to)"
       >
         <component :is="item.icon" :size="19" :stroke-width="1.8" aria-hidden="true" />
         <span class="rail-label" aria-hidden="true">{{ item.shortLabel }}</span>
@@ -84,10 +103,10 @@ function isActive(target: string | { path: string; query?: Record<string, string
     </nav>
 
     <div class="sidebar-bottom">
-      <RouterLink class="sidebar-settings-link" :to="currentTeam ? `/team/${currentTeam.id}` : '/teams'" :class="{ active: route.path === '/teams' || route.path.startsWith('/team/') }" aria-label="团队管理">
+      <RouterLink class="sidebar-settings-link" :to="currentTeam ? `/team/${currentTeam.id}` : '/teams'" :class="{ active: route.path === '/teams' || route.path.startsWith('/team/') }" aria-label="团队管理" @pointerenter="preloadRoute('team')" @focus="preloadRoute('team')">
         <IconUsers :size="19" :stroke-width="1.8" aria-hidden="true" /><span>团队</span>
       </RouterLink>
-      <RouterLink class="sidebar-settings-link" to="/settings" :class="{ active: route.path === '/settings' }" aria-label="设置">
+      <RouterLink class="sidebar-settings-link" to="/settings" :class="{ active: route.path === '/settings' }" aria-label="设置" @pointerenter="preloadRoute('settings')" @focus="preloadRoute('settings')">
         <IconSettings :size="19" :stroke-width="1.8" aria-hidden="true" />
         <span>设置</span>
       </RouterLink>

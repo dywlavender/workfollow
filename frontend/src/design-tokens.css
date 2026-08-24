@@ -113,6 +113,7 @@
   --palette-primary-soft-hover: #e0e7ff;
   --palette-focus-ring: rgb(79 70 229 / .2);
   --palette-on-primary: var(--neutral-0);
+  --theme-atmosphere: none;
 
   /* Semantic tokens. */
   --color-bg-page: var(--theme-bg-page);
@@ -354,6 +355,49 @@
   --workspace-brand-shadow: var(--shadow-sm);
   --workspace-detail-shadow: var(--detail-shadow);
 
+  /* Component: atmosphere glass layers. These are semantic material roles,
+     not page-specific styling. A surface may own one glass role; descendants
+     that need to escape the surface belong to the overlay layer instead. */
+  --glass-blur-rail: 14px;
+  --glass-blur-navigation: 11px;
+  --glass-blur-panel: 10px;
+  --glass-blur-detail: 12px;
+  --glass-blur-editor: 12px;
+  --glass-blur-control: 8px;
+  --glass-blur-dialog: 16px;
+  --glass-blur-menu: 14px;
+  --glass-saturation-rail: 1.08;
+  --glass-saturation-navigation: 1.06;
+  --glass-saturation-panel: 1.04;
+  --glass-saturation-detail: 1.06;
+  --glass-saturation-editor: 1.05;
+  --glass-saturation-control: 1.03;
+  --glass-saturation-dialog: 1.08;
+  --glass-saturation-menu: 1.08;
+  --glass-border: var(--color-border-subtle);
+  --glass-shadow: var(--shadow-sm);
+  --layer-atmosphere: 0;
+  --layer-shell: 10;
+  --layer-rail: 20;
+  --layer-local-overlay: 60;
+  --layer-popover: 90;
+  --layer-dialog: 100;
+  --layer-search: 110;
+  --layer-toast: 220;
+
+  /* Classic themes keep their existing solid surfaces. Seasonal themes opt
+     into lower-alpha roles so the scene remains visible without making
+     text-heavy controls unreadable. */
+  --workspace-glass-canvas: transparent;
+  --workspace-glass-rail: var(--workspace-rail-bg);
+  --workspace-glass-navigation: var(--workspace-panel-tint);
+  --workspace-glass-panel: var(--workspace-panel);
+  --workspace-glass-detail: var(--color-bg-detail);
+  --workspace-glass-editor: var(--color-bg-detail);
+  --workspace-glass-input: var(--color-bg-input);
+  --workspace-glass-dialog: var(--color-bg-detail);
+  --workspace-glass-menu: var(--color-bg-detail);
+
   /* Component: task workspace. These names describe roles, not a reference
      screenshot, and therefore remain valid for every palette/background. */
   --task-workspace-bg: var(--workspace-canvas);
@@ -382,6 +426,20 @@
   --task-brand-shadow: var(--workspace-brand-shadow);
   --task-detail-shadow: var(--workspace-detail-shadow);
 
+}
+
+html[data-atmosphere="on"] {
+  --workspace-glass-canvas: transparent;
+  --workspace-glass-rail: color-mix(in srgb, var(--workspace-rail-bg) 86%, transparent);
+  --workspace-glass-navigation: color-mix(in srgb, var(--workspace-panel-tint) 82%, transparent);
+  --workspace-glass-panel: color-mix(in srgb, var(--workspace-panel) 78%, transparent);
+  --workspace-glass-detail: color-mix(in srgb, var(--color-bg-detail) 84%, transparent);
+  /* The editor is a large surface. Keep one readable tint, rather than
+     stacking an almost-opaque document over an already translucent pane. */
+  --workspace-glass-editor: color-mix(in srgb, var(--color-bg-detail) 64%, transparent);
+  --workspace-glass-input: color-mix(in srgb, var(--color-bg-input) 86%, transparent);
+  --workspace-glass-dialog: color-mix(in srgb, var(--color-bg-detail) 90%, transparent);
+  --workspace-glass-menu: color-mix(in srgb, var(--color-bg-detail) 84%, transparent);
 }
 
 @media (prefers-reduced-motion: reduce) {

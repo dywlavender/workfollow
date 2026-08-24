@@ -41,6 +41,7 @@ const calendarTodos = ref<Todo[]>([])
 const assignedTodos = ref<Todo[]>([])
 const recentNotes = ref<NoteListItem[]>([])
 const pendingCounts = ref({ assigned: 0, shared: 0, revision: 0, review: 0 })
+const pendingCountsReady = ref(false)
 const loading = ref(true)
 const error = ref<string | null>(null)
 const actionError = ref<string | null>(null)
@@ -106,27 +107,32 @@ const pendingItems = computed(() => [
 ])
 
 async function loadOptionalHomeData() {
+  pendingCountsReady.value = false
   const teamId = workspace.currentTeam?.id ?? workspace.teams[0]?.id
   let notificationsResult: PromiseSettledResult<Awaited<ReturnType<typeof fetchNotifications>>>
   let mineResult: PromiseSettledResult<Awaited<ReturnType<typeof fetchMySubmissions>>> | null = null
   let reviewResult: PromiseSettledResult<Awaited<ReturnType<typeof fetchReviewSubmissions>>> | null = null
-  if (teamId) {
-    [notificationsResult, mineResult, reviewResult] = await Promise.allSettled([
-      fetchNotifications(true),
-      fetchMySubmissions(teamId),
-      fetchReviewSubmissions(teamId),
-    ])
-  } else {
-    [notificationsResult] = await Promise.allSettled([fetchNotifications(true)])
-  }
-  const notifications = notificationsResult.status === 'fulfilled' ? notificationsResult.value : []
-  const mine = mineResult?.status === 'fulfilled' ? mineResult.value : []
-  const review = reviewResult?.status === 'fulfilled' ? reviewResult.value : []
-  pendingCounts.value = {
-    assigned: notifications.filter((item) => item.type === 'TEAM_TASK_ASSIGNED').length,
-    shared: notifications.filter((item) => item.type === 'NOTE_SHARED').length,
-    revision: mine.filter((item) => item.status === 'NEEDS_REVISION').length,
-    review: review.filter((item) => item.status === 'PENDING').length,
+  try {
+    if (teamId) {
+      [notificationsResult, mineResult, reviewResult] = await Promise.allSettled([
+        fetchNotifications(true),
+        fetchMySubmissions(teamId),
+        fetchReviewSubmissions(teamId),
+      ])
+    } else {
+      [notificationsResult] = await Promise.allSettled([fetchNotifications(true)])
+    }
+    const notifications = notificationsResult.status === 'fulfilled' ? notificationsResult.value : []
+    const mine = mineResult?.status === 'fulfilled' ? mineResult.value : []
+    const review = reviewResult?.status === 'fulfilled' ? reviewResult.value : []
+    pendingCounts.value = {
+      assigned: notifications.filter((item) => item.type === 'TEAM_TASK_ASSIGNED').length,
+      shared: notifications.filter((item) => item.type === 'NOTE_SHARED').length,
+      revision: mine.filter((item) => item.status === 'NEEDS_REVISION').length,
+      review: review.filter((item) => item.status === 'PENDING').length,
+    }
+  } finally {
+    pendingCountsReady.value = true
   }
 }
 
@@ -144,12 +150,15 @@ async function loadHome() {
     calendarTodos.value = all
     assignedTodos.value = assigned
     recentNotes.value = notes.slice(0, 5)
-    await loadOptionalHomeData()
   } catch {
     error.value = '工作台读取失败，请确认本地服务已启动。'
   } finally {
     loading.value = false
   }
+  // These badges are useful, but they are not part of the dashboard's
+  // critical path. Let the primary cards paint first and fill the badges in
+  // the background.
+  void loadOptionalHomeData()
 }
 
 onMounted(() => void loadHome())
@@ -352,9 +361,9 @@ function noteTime(note: NoteListItem) {
 
       <section class="home-dashboard-panel home-pending-panel">
         <header class="home-panel-header"><RouterLink to="/notifications"><h2>待处理</h2></RouterLink></header>
-        <nav class="home-pending-list" aria-label="待处理事项">
-          <RouterLink v-for="item in pendingItems" :key="item.label" :to="item.to" :class="{ empty: item.count === 0 }">
-            <component :is="item.icon" :size="15" aria-hidden="true" /><span>{{ item.label }}</span><strong>{{ item.count }}</strong>
+        <nav class="home-pending-list" aria-label="待处理事项" :aria-busy="!pendingCountsReady">
+          <RouterLink v-for="item in pendingItems" :key="item.label" :to="item.to" :class="{ empty: pendingCountsReady && item.count === 0 }">
+            <component :is="item.icon" :size="15" aria-hidden="true" /><span>{{ item.label }}</span><strong>{{ pendingCountsReady ? item.count : '—' }}</strong>
           </RouterLink>
         </nav>
       </section>

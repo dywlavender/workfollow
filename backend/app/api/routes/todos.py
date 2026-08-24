@@ -137,7 +137,11 @@ def post_todo(payload: TodoCreate, db: DbSession, user: CurrentUser) -> TodoRead
 @router.put("/{todo_id}", response_model=TodoRead)
 def put_todo(todo_id: str, payload: TodoUpdate, db: DbSession, user: CurrentUser) -> TodoRead:
     todo = todo_service.get_todo_or_404(db, todo_id, user.id)
+    before = task_notification_service.task_change_snapshot(todo)
     updated = todo_service.update_todo(db, todo, payload, user.id, commit=False)
+    task_notification_service.notify_task_updated(
+        db, updated, user.id, before, commit=False
+    )
     event_stream.queue_task_changed(db, updated)
     db.commit()
     return todo_read(db, updated, user.id)
@@ -167,11 +171,13 @@ def complete_todo(todo_id: str, db: DbSession, user: CurrentUser) -> TodoComplet
 
 @router.post("/{todo_id}/restore", response_model=TodoRead)
 def restore_todo(todo_id: str, db: DbSession, user: CurrentUser) -> TodoRead:
+    current = todo_service.get_todo_or_404(db, todo_id, user.id)
+    before = task_notification_service.task_change_snapshot(current)
     todo = todo_service.restore_todo(
-        db,
-        todo_service.get_todo_or_404(db, todo_id, user.id),
-        user.id,
-        commit=False,
+        db, current, user.id, commit=False
+    )
+    task_notification_service.notify_task_updated(
+        db, todo, user.id, before, commit=False
     )
     event_stream.queue_task_changed(db, todo)
     db.commit()

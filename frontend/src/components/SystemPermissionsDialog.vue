@@ -4,7 +4,7 @@ import { IconShield, IconUsers, IconX } from '@tabler/icons-vue'
 
 import ActionFeedback from '@/components/ActionFeedback.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
-import { fetchAdminUsers, postAdminResetPassword, putAdminUserPermissions, type User } from '@/services/api'
+import { fetchAdminUsers, postAdminResetPassword, putAdminUserPermissions, putAdminUserSystemRole, type User } from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
 
 const props = defineProps<{ open: boolean }>()
@@ -49,6 +49,24 @@ async function update(user: User, value: boolean) {
   }
 }
 
+async function updateSystemRole(user: User, systemRole: User['systemRole']) {
+  const previousRole = user.systemRole
+  const previousCanCreateTeam = user.canCreateTeam
+  user.systemRole = systemRole
+  if (systemRole === 'ROOT') user.canCreateTeam = true
+  saving.value = user.id
+  actionError.value = ''
+  try {
+    Object.assign(user, await putAdminUserSystemRole(user.id, systemRole))
+  } catch (cause: any) {
+    user.systemRole = previousRole
+    user.canCreateTeam = previousCanCreateTeam
+    actionError.value = cause?.response?.data?.detail ?? '保存系统角色失败。'
+  } finally {
+    saving.value = null
+  }
+}
+
 async function confirmResetPassword() {
   const target = resetTarget.value
   resetTarget.value = null
@@ -74,6 +92,12 @@ async function confirmResetPassword() {
 function onPermissionChange(user: User, event: Event) {
   const input = event.target as HTMLInputElement | null
   if (input) void update(user, input.checked)
+}
+
+function onSystemRoleChange(user: User, event: Event) {
+  const select = event.target as HTMLSelectElement | null
+  const systemRole = select?.value as User['systemRole'] | undefined
+  if (systemRole && systemRole !== user.systemRole) void updateSystemRole(user, systemRole)
 }
 
 function close() {
@@ -109,7 +133,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown))
           <div>
             <span class="eyebrow">SYSTEM ADMINISTRATION</span>
             <h2 id="system-permissions-title">用户权限管理</h2>
-            <p>授权普通用户创建团队，不改变其系统角色和团队角色。</p>
+            <p>管理系统管理员角色，并授予普通用户创建团队的单项权限。</p>
           </div>
           <button ref="closeButton" class="icon-action" type="button" aria-label="关闭权限管理" @click="close"><IconX :size="18" /></button>
         </header>
@@ -122,7 +146,13 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown))
           <div class="admin-users-table-head"><span>用户</span><span>系统角色</span><span>创建团队</span></div>
           <article v-for="user in users" :key="user.id" class="admin-user-row">
             <div class="admin-user-copy"><span class="avatar"><IconUsers :size="16" /></span><span><strong>{{ user.nickname }}</strong><small>{{ user.username }}</small></span></div>
-            <span class="admin-role-badge" :class="{ root: user.systemRole === 'ROOT' }"><IconShield :size="13" />{{ user.systemRole === 'ROOT' ? 'ROOT' : 'NORMAL' }}</span>
+            <label class="admin-role-control" :class="{ root: user.systemRole === 'ROOT' }">
+              <IconShield :size="13" />
+              <select :value="user.systemRole" :disabled="saving === user.id || (user.id === auth.user?.id && user.systemRole === 'ROOT')" aria-label="设置系统角色" @change="onSystemRoleChange(user, $event)">
+                <option value="NORMAL">普通用户</option>
+                <option value="ROOT">系统管理员</option>
+              </select>
+            </label>
             <div class="team-header-actions">
               <label class="admin-permission-toggle"><input type="checkbox" :checked="user.canCreateTeam" :disabled="user.systemRole === 'ROOT' || saving === user.id" @change="onPermissionChange(user, $event)" /><span>{{ user.systemRole === 'ROOT' ? '自动拥有' : user.canCreateTeam ? '已授权' : '未授权' }}</span></label>
               <button class="quiet-button" type="button" :disabled="resetting === user.id" @click="resetTarget = user">重置密码</button>

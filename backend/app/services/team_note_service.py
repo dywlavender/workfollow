@@ -353,7 +353,6 @@ def copy_team_note_to_personal(
         title=note.title,
         content_json=note.content_json,
         plain_text=note.plain_text,
-        tags=list(note.tags or []),
         source_attachments=[attachments_by_id[item] for item in attachment_ids if item in attachments_by_id],
         owner_id=owner_id,
         settings=settings,
@@ -869,6 +868,20 @@ def list_submissions(
     if statuses:
         statement = statement.where(TeamNoteSubmission.status.in_(statuses))
     return list(db.scalars(statement.order_by(TeamNoteSubmission.created_at.desc()).limit(limit).offset(offset)))
+
+
+def count_submissions(
+    db: Session,
+    team_id: str,
+    applicant_id: str | None = None,
+    statuses: list[TeamNoteSubmissionStatus] | None = None,
+) -> int:
+    statement = select(func.count(TeamNoteSubmission.id)).where(TeamNoteSubmission.team_id == team_id)
+    if applicant_id is not None:
+        statement = statement.where(TeamNoteSubmission.applicant_id == applicant_id)
+    if statuses:
+        statement = statement.where(TeamNoteSubmission.status.in_(statuses))
+    return int(db.scalar(statement) or 0)
 
 
 def withdraw_submission(db: Session, submission: TeamNoteSubmission, applicant_id: str) -> TeamNoteSubmission:

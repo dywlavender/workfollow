@@ -1,8 +1,7 @@
 from __future__ import annotations
 
 from fastapi import HTTPException
-from sqlalchemy import Text as SqlText
-from sqlalchemy import cast, or_, select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session, aliased, joinedload, selectinload
 
 from app.models.auth import User, UserStatus
@@ -174,7 +173,6 @@ def list_shared_notes(db: Session, user_id: str, q: str | None = None) -> list[t
         statement = statement.where(or_(
             Note.title.like(pattern),
             Note.plain_text.like(pattern),
-            cast(Note.tags, SqlText).like(pattern),
         ))
     return list(db.execute(statement.order_by(Note.updated_at.desc())))
 

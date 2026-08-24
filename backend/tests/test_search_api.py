@@ -25,25 +25,29 @@ def login_search_user(app, username: str) -> TestClient:
     return result
 
 
-def test_personal_search_supports_tags_capture_and_inbox(client: TestClient) -> None:
+def test_personal_search_supports_capture_and_inbox(client: TestClient) -> None:
     captured = client.post(
         "/api/notes/capture",
-        json={"text": "会议记录\n确认搜索方案", "tags": ["工作", "工作"]},
+        json={"text": "会议记录\n确认搜索方案"},
     )
     assert captured.status_code == 201, captured.text
     note = captured.json()
     assert note["title"] == "会议记录"
-    assert note["tags"] == ["工作"]
 
     assert client.get("/api/notes", params={"unfiled": True}).json()[0]["id"] == note["id"]
-    assert client.get("/api/notes/tags").json() == ["工作"]
     assert client.get("/api/notes/counts").json() == {"unfiled": 1}
     assert client.get("/api/search", params={"q": "搜索方案"}).json()["items"][0]["id"] == note["id"]
 
-    updated = client.put(f"/api/notes/{note['id']}", json={"tags": ["项目"]})
-    assert updated.status_code == 200
-    assert client.get("/api/notes", params={"tags": "项目"}).json()[0]["id"] == note["id"]
-    assert client.get("/api/search", params={"q": "项目"}).json()["items"][0]["id"] == note["id"]
+
+def test_personal_note_tags_are_not_exposed_or_searchable(client: TestClient) -> None:
+    created = client.post(
+        "/api/notes",
+        json={"title": "普通笔记", "plainText": "只搜索正文", "tags": ["不应生效"]},
+    )
+    assert created.status_code == 201, created.text
+    assert "tags" not in created.json()
+    assert client.get("/api/notes/tags").status_code == 404
+    assert client.get("/api/search", params={"q": "不应生效"}).json()["items"] == []
 
 
 def test_search_does_not_leak_private_notes_or_revoked_shares(client: TestClient, db) -> None:

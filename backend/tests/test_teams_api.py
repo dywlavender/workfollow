@@ -34,12 +34,22 @@ def test_create_team_add_member_and_role_permissions(client: TestClient, db, use
     assert members.status_code == 200
     assert [item["userId"] for item in members.json()] == [user_id]
 
+    candidates = client.get(f"/api/teams/{team['id']}/member-candidates", params={"q": "mem"})
+    assert candidates.status_code == 200
+    assert candidates.json() == [{
+        "id": other.id,
+        "username": "member",
+        "nickname": "Member",
+        "avatarUrl": None,
+    }]
+
     added = client.post(
         f"/api/teams/{team['id']}/members",
         json={"identifier": other.username, "role": "MEMBER"},
     )
     assert added.status_code == 201, added.text
     assert added.json()["user"]["username"] == "member"
+    assert client.get(f"/api/teams/{team['id']}/member-candidates", params={"q": "member"}).json() == []
     assert client.post(
         f"/api/teams/{team['id']}/members",
         json={"identifier": other.username, "role": "MEMBER"},
@@ -71,6 +81,7 @@ def test_team_is_not_visible_to_non_member(client: TestClient, db) -> None:
     assert login.status_code == 200
     assert outsider.get(f"/api/teams/{team_id}").status_code == 404
     assert outsider.get(f"/api/teams/{team_id}/members").status_code == 404
+    assert outsider.get(f"/api/teams/{team_id}/member-candidates").status_code == 404
 
 
 def test_multiple_teams_member_leave_and_owner_dissolve(client: TestClient, db) -> None:

@@ -186,7 +186,6 @@ def copy_shared_note(note_id: str, db: DbSession, settings: CurrentSettings, use
         title=source.title,
         content_json=source.content_json,
         plain_text=source.plain_text,
-        tags=source.tags,
         source_attachments=list(source.attachments),
         owner_id=user.id,
         settings=settings,

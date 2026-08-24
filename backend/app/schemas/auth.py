@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import Field
+from pydantic import Field, field_validator
 
 from app.models.auth import SystemRole, UserStatus
 from app.schemas.base import ApiModel
@@ -15,6 +15,18 @@ class UserCreate(ApiModel):
 class LoginRequest(ApiModel):
     identifier: str = Field(min_length=1, max_length=320)
     password: str = Field(min_length=1, max_length=128)
+
+
+class UserProfileUpdate(ApiModel):
+    nickname: str = Field(min_length=1, max_length=120)
+
+    @field_validator("nickname")
+    @classmethod
+    def normalize_nickname(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("昵称不能为空")
+        return normalized
 
 
 class UserRead(ApiModel):
@@ -39,6 +51,10 @@ class AuthResponse(ApiModel):
 
 class AdminUserPermissionsUpdate(ApiModel):
     can_create_team: bool
+
+
+class AdminUserSystemRoleUpdate(ApiModel):
+    system_role: SystemRole
 
 
 class PasswordResetRead(ApiModel):
