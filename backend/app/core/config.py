@@ -21,6 +21,11 @@ class Settings(BaseSettings):
     session_days: int = 30
     session_cookie_secure: bool = False
     notification_http_url: str = ""
+    # The browser-facing WorkFollow address used in deep links.  It is a
+    # server-level setting because links are also useful to future channels.
+    server_url: str = ""
+    # Kept for existing local configuration; server_url is the canonical name.
+    notification_public_url: str = ""
     notification_http_timeout_seconds: float = 5.0
     notification_http_retry_count: int = 3
     notification_worker_interval_seconds: float = 2.0

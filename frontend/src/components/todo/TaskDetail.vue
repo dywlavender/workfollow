@@ -4,7 +4,7 @@ import type { Editor as TiptapEditor } from '@tiptap/core'
 import dayjs, { type Dayjs } from 'dayjs'
 import {
   IconBell, IconCalendar, IconCalendarOff, IconCheck, IconChevronLeft, IconChevronRight, IconClock,
-  IconDots, IconFile, IconFlag, IconInbox, IconLink, IconRepeat, IconTag, IconTrash, IconX,
+  IconDots, IconFile, IconFlag, IconLink, IconRepeat, IconTag, IconTrash, IconX,
 } from '@tabler/icons-vue'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
@@ -16,9 +16,10 @@ import TaskRelationDialog from '@/components/task/TaskRelationDialog.vue'
 import { createWorkFollowEditorExtensions } from '@/modules/editor/tiptap'
 import { workFollowSlashCommands, type WorkFollowSlashCommand } from '@/modules/editor/slashCommands'
 import { isDateOnlyDue } from '@/modules/todo/dueDate'
+import { formatLastSavedAt } from '@/modules/editor/saveStatus'
 import { getScheduleMarkers } from '@/modules/todo/scheduleMarkers'
 import { TaskSaveQueue, type TaskSaveStatus } from '@/modules/todo/taskSaveQueue'
-import { postResourceRelation, uploadTaskAttachment, type Attachment, type NoteListItem, type TeamMember, type Todo, type TodoPayload, type TodoPriority, type TodoRecurrenceType } from '@/services/api'
+import { postResourceRelation, uploadTaskAttachment, type Attachment, type NoteListItem, type TeamMember, type Todo, type TodoAssignmentStatus, type TodoPayload, type TodoPriority, type TodoRecurrenceType } from '@/services/api'
 
 const props = withDefaults(defineProps<{
   todo: Todo | null
@@ -30,13 +31,13 @@ const emit = defineEmits<{
   close: []
   toggle: [todo: Todo]
   remove: [todo: Todo]
-  update: [todoId: string, payload: Partial<TodoPayload>, quiet?: boolean, settled?: (ok: boolean) => void]
+  update: [todoId: string, payload: Partial<TodoPayload>, quiet?: boolean, settled?: (ok: boolean, savedAt?: string) => void]
   assign: [todo: Todo, userIds: string[]]
   openSource: [noteId: string, blockId?: string | null]
 }>()
 
 type ReminderPreset = 'NONE' | 'AT_DUE' | 'MINUS_10' | 'MINUS_60' | 'MINUS_1440'
-type SaveState = 'idle' | 'dirty' | 'saving' | 'saved' | 'error'
+type SaveState = 'idle' | 'saving' | 'saved' | 'error'
 type DateMode = 'date' | 'range'
 type EditorSelection = { from: number; to: number }
 
@@ -52,9 +53,11 @@ const priority = ref<TodoPriority>('NONE')
 const recurrenceType = ref<TodoRecurrenceType>('NONE')
 const reminderPreset = ref<ReminderPreset>('NONE')
 const currentTaskEditable = ref(false)
+const currentTaskContentEditable = ref(false)
 const dirty = ref(false)
 const titleDirty = ref(false)
 const saveState = ref<SaveState>('idle')
+const lastSavedAt = ref<string | null>(props.todo?.updatedAt ?? props.todo?.createdAt ?? null)
 const datePanelOpen = ref(false)
 const datePanelAnchorStyle = ref<Record<string, string> | null>(null)
 const priorityPanelOpen = ref(false)
@@ -84,11 +87,27 @@ const relationDialogOpen = ref(false)
 let saveTimer: number | undefined
 let titleSaveTimer: number | undefined
 let slashDetectTimer: number | undefined
-let savedStateTimer: number | undefined
 let hydratingEditor = false
+let editorReady = false
+const saveSettledAt = new Map<string, string>()
+
+function assignmentStatusLabel(status: TodoAssignmentStatus): string {
+  if (status === 'DONE') return '已完成'
+  if (status === 'IN_PROGRESS') return '进行中'
+  return '待处理'
+}
 
 const saveQueue = new TaskSaveQueue<TodoPayload>(
-  (request) => new Promise<boolean>((resolve) => emit('update', request.todoId, request.data, request.quiet, resolve)),
+  (request) => new Promise<boolean>((resolve) => emit(
+    'update',
+    request.todoId,
+    request.data,
+    request.quiet,
+    (ok, savedAt) => {
+      if (ok && savedAt) saveSettledAt.set(request.todoId, savedAt)
+      resolve(ok)
+    },
+  )),
   (todoId, status) => reflectSaveStatus(todoId, status),
 )
 
@@ -117,7 +136,10 @@ const editor = useEditor({
       if (!slashMenuOpen.value) return false
       if (event.key === 'ArrowDown') moveSlashSelection(1)
       else if (event.key === 'ArrowUp') moveSlashSelection(-1)
-      else if (event.key === 'Enter') insertBlock(commands[slashActiveIndex.value].type)
+      else if (event.key === 'Enter') {
+        const command = availableCommands.value[slashActiveIndex.value]
+        if (command) insertBlock(command.type)
+      }
       else if (event.key === 'Escape') closeSlashMenu()
       else return false
       event.preventDefault()
@@ -125,7 +147,7 @@ const editor = useEditor({
     },
   },
   onUpdate: ({ editor: currentEditor }) => {
-    if (hydratingEditor) return
+    if (hydratingEditor || !editorReady) return
     scheduleSave()
     window.clearTimeout(slashDetectTimer)
     slashDetectTimer = window.setTimeout(() => detectSlashCommand(currentEditor), 0)
@@ -216,6 +238,9 @@ function buildRecurrenceConfig(): Record<string, number | string> | null {
 }
 const formInvalid = computed(() => (recurrenceType.value !== 'NONE' || reminderPreset.value !== 'NONE') && !dueAt.value)
 const canEdit = computed(() => Boolean(props.todo?.permissions.editable))
+const canEditContent = computed(() => Boolean(props.todo?.permissions.contentEditable ?? props.todo?.permissions.editable))
+const contentOnlyCommandTypes = new Set<WorkFollowSlashCommand>(['attachment', 'tag', 'relation'])
+const availableCommands = computed(() => commands.filter((command) => canEdit.value || !contentOnlyCommandTypes.has(command.type)))
 const executionDone = computed(() => props.todo?.myAssignment?.status === 'DONE' || (!props.todo?.myAssignment && props.todo?.status === 'DONE'))
 
 function payload(): TodoPayload {
@@ -229,10 +254,16 @@ function payload(): TodoPayload {
     reminderAt: buildReminderAt(), recurrenceType: recurrenceType.value, recurrenceConfig: buildRecurrenceConfig(),
   }
 }
+function contentPayload(): Partial<TodoPayload> {
+  return {
+    contentJson: (editor.value?.getJSON() ?? props.todo?.contentJson ?? { type: 'doc', content: [{ type: 'paragraph' }] }) as Record<string, unknown>,
+    description: editor.value?.getText({ blockSeparator: '\n' }).trim() || null,
+  }
+}
 function save(quiet = true) {
   window.clearTimeout(saveTimer)
   window.clearTimeout(titleSaveTimer)
-  if (!currentTaskEditable.value || !currentTaskId.value || (!dirty.value && !titleDirty.value) || formInvalid.value) return
+  if ((!currentTaskEditable.value && !currentTaskContentEditable.value) || !currentTaskId.value || (!dirty.value && !titleDirty.value) || formInvalid.value) return
   if (titleDirty.value && !taskTitle.value.trim()) {
     taskTitle.value = props.todo?.title ?? ''
     titleDirty.value = false
@@ -242,28 +273,34 @@ function save(quiet = true) {
     return
   }
   const todoId = currentTaskId.value
-  const data: Partial<TodoPayload> = dirty.value ? payload() : { title: taskTitle.value.trim() }
+  const data: Partial<TodoPayload> = dirty.value
+    ? (currentTaskEditable.value ? payload() : contentPayload())
+    : { title: taskTitle.value.trim() }
   dirty.value = false
   titleDirty.value = false
   saveQueue.enqueue(todoId, data, quiet)
 }
 function reflectSaveStatus(todoId: string, status: TaskSaveStatus) {
-  if (currentTaskId.value !== todoId) return
-  window.clearTimeout(savedStateTimer)
+  const settledAt = saveSettledAt.get(todoId)
+  if (currentTaskId.value !== todoId) {
+    if (status === 'saved' || status === 'error') saveSettledAt.delete(todoId)
+    return
+  }
   saveState.value = status
   if (status === 'error') showNotice('保存失败，内容仍保留，可点击重试')
-  if (status === 'saved') savedStateTimer = window.setTimeout(() => {
-    if (currentTaskId.value === todoId && saveState.value === 'saved') saveState.value = 'idle'
-  }, 1000)
+  if (status === 'saved') {
+    lastSavedAt.value = settledAt ?? props.todo?.updatedAt ?? props.todo?.createdAt ?? null
+    saveSettledAt.delete(todoId)
+  }
 }
 function retrySave() {
   if (!currentTaskId.value) return
   saveQueue.retry(currentTaskId.value)
 }
 function scheduleSave() {
-  if (!canEdit.value || !props.todo || !editor.value) return
+  if (!editorReady || hydratingEditor || !canEditContent.value || !props.todo || !editor.value) return
   dirty.value = true
-  saveState.value = 'dirty'
+  if (saveState.value !== 'saving') saveState.value = 'idle'
   window.clearTimeout(saveTimer)
   saveTimer = window.setTimeout(() => save(true), 750)
 }
@@ -276,16 +313,21 @@ function onTitleInput() {
   const normalized = taskTitle.value.replace(/[\r\n]+/g, ' ')
   if (normalized !== taskTitle.value) taskTitle.value = normalized
   resizeTitleInput()
-  if (!canEdit.value || !props.todo || !currentTaskId.value) return
+  if (!editorReady || hydratingEditor || !canEdit.value || !props.todo || !currentTaskId.value) return
   titleDirty.value = true
-  saveState.value = 'dirty'
+  if (saveState.value !== 'saving') saveState.value = 'idle'
   window.clearTimeout(titleSaveTimer)
   titleSaveTimer = window.setTimeout(() => save(true), 500)
 }
 
 async function sync(todo: Todo | null) {
+  editorReady = false
   const previousTaskId = currentTaskId.value
   if (previousTaskId && previousTaskId !== todo?.id) {
+    // Do not carry the previous task's in-flight status into the newly
+    // selected task while the old request is being drained.
+    saveState.value = 'idle'
+    lastSavedAt.value = todo?.updatedAt ?? todo?.createdAt ?? null
     if (dirty.value || titleDirty.value) save(true)
     await saveQueue.waitFor(previousTaskId)
     if (props.todo?.id !== todo?.id) return
@@ -299,6 +341,7 @@ async function sync(todo: Todo | null) {
   priorityPanelStyle.value = null
   moreMenuOpen.value = false
   currentTaskEditable.value = Boolean(todo?.permissions.editable)
+  currentTaskContentEditable.value = Boolean(todo?.permissions.contentEditable ?? todo?.permissions.editable)
   taskTitle.value = todo?.title ?? ''
   dueAt.value = asInput(todo?.dueAt ?? null)
   dueEndAt.value = asInput(todo?.dueEndAt ?? null)
@@ -307,23 +350,28 @@ async function sync(todo: Todo | null) {
   reminderPreset.value = todo ? detectReminder(todo) : 'NONE'
   dirty.value = false
   titleDirty.value = false
+  lastSavedAt.value = todo?.updatedAt ?? todo?.createdAt ?? null
   saveState.value = todo ? saveQueue.status(todo.id) : 'idle'
   slashMenuOpen.value = false
   slashRange.value = null
   savedSelection.value = null
   await nextTick()
   if (editor.value) {
-    editor.value.setEditable(Boolean(todo?.permissions.editable))
+    editor.value.setEditable(Boolean(todo?.permissions.contentEditable ?? todo?.permissions.editable))
     hydratingEditor = true
     editor.value.commands.setContent(todo?.contentJson ?? sanitizeEditorHtml(todo?.description ?? ''), false)
     hydratingEditor = false
     dirty.value = false
   }
+  editorReady = Boolean(todo)
   attachmentItems.value = []
   resizeTitleInput()
 }
 
 watch(() => props.todo?.id, () => { void sync(props.todo) }, { immediate: true })
+watch(() => props.todo?.updatedAt, (updatedAt) => {
+  if (updatedAt && props.todo?.id === currentTaskId.value) lastSavedAt.value = updatedAt
+})
 watch(() => props.todo?.title, (title) => {
   if (!titleDirty.value && title !== undefined && title !== taskTitle.value) {
     taskTitle.value = title
@@ -480,10 +528,10 @@ function closeSlashMenu() {
   slashRange.value = null
 }
 function scrollActiveSlashCommand() {
-  void nextTick(() => document.getElementById(`task-slash-command-${commands[slashActiveIndex.value].type}`)?.scrollIntoView({ block: 'nearest' }))
+  void nextTick(() => document.getElementById(`task-slash-command-${availableCommands.value[slashActiveIndex.value]?.type}`)?.scrollIntoView({ block: 'nearest' }))
 }
 function moveSlashSelection(direction: number) {
-  slashActiveIndex.value = (slashActiveIndex.value + direction + commands.length) % commands.length
+  slashActiveIndex.value = (slashActiveIndex.value + direction + availableCommands.value.length) % availableCommands.value.length
   scrollActiveSlashCommand()
 }
 function beginCommand(currentEditor: TiptapEditor, withSlash: boolean) {
@@ -518,9 +566,18 @@ function insertBlock(type: WorkFollowSlashCommand) {
   else if (type === 'hr') chain.setHorizontalRule()
   else if (type === 'table') chain.insertTable({ rows: 3, cols: 3, withHeaderRow: true })
   else if (type === 'subtask') chain.toggleTaskList().insertContent('子任务')
-  else if (type === 'attachment') { chain.run(); closeSlashMenu(); fileInput.value?.click(); return }
-  else if (type === 'tag') { chain.run(); closeSlashMenu(); tagPanelOpen.value = true; return }
-  else if (type === 'relation') { chain.run(); closeSlashMenu(); relationDialogOpen.value = true; return }
+  else if (type === 'attachment') {
+    if (!canEdit.value) return
+    chain.run(); closeSlashMenu(); fileInput.value?.click(); return
+  }
+  else if (type === 'tag') {
+    if (!canEdit.value) return
+    chain.run(); closeSlashMenu(); tagPanelOpen.value = true; return
+  }
+  else if (type === 'relation') {
+    if (!canEdit.value) return
+    chain.run(); closeSlashMenu(); relationDialogOpen.value = true; return
+  }
   chain.run()
   slashMenuOpen.value = false
   slashRange.value = null
@@ -616,18 +673,18 @@ onMounted(() => {
   void sync(props.todo)
 })
 onBeforeUnmount(() => {
+  editorReady = false
   save(true)
   window.clearTimeout(saveTimer)
   window.clearTimeout(titleSaveTimer)
   window.clearTimeout(slashDetectTimer)
-  window.clearTimeout(savedStateTimer)
   document.removeEventListener('click', closeFloatingPanels)
   window.removeEventListener('beforeunload', protectUnsavedBeforeUnload)
 })
 </script>
 
 <template>
-  <aside v-if="todo" ref="root" class="task-detail task-editor-detail" :class="{ terminal: executionDone || todo.status === 'ABANDONED', abandoned: todo.status === 'ABANDONED', readonly: !canEdit }" aria-label="任务正文">
+  <aside v-if="todo" ref="root" class="task-detail task-editor-detail" :class="{ terminal: executionDone || todo.status === 'ABANDONED', abandoned: todo.status === 'ABANDONED', readonly: !canEditContent }" aria-label="任务正文">
     <header class="task-editor-top">
       <div class="task-editor-meta-row">
         <button class="task-editor-check" :class="{ done: executionDone, abandoned: todo.status === 'ABANDONED' }" type="button" :disabled="!todo.permissions.completable" :aria-label="executionDone ? '恢复任务' : '完成任务'" @click="emit('toggle', todo)">
@@ -668,6 +725,8 @@ onBeforeUnmount(() => {
         </div>
         <span v-if="todo.teamId && todo.creatorId !== currentUserId" class="task-assigned-source">{{ todo.creator.nickname }}分配</span>
         <span class="task-editor-meta-spacer" />
+        <button v-if="saveState === 'error'" class="task-editor-save-state error" type="button" aria-live="polite" @click="retrySave">保存失败，点击重试</button>
+        <span v-else class="task-editor-save-state" :class="saveState" aria-live="polite">{{ saveState === 'saving' ? '保存中…' : formatLastSavedAt(lastSavedAt) }}</span>
         <AssigneePopover
           v-if="todo.permissions.assignable && currentUserId"
           :members="members"
@@ -681,6 +740,13 @@ onBeforeUnmount(() => {
           <Teleport to="body">
             <section v-if="priorityPanelOpen" class="task-priority-popover task-priority-popover-fixed" :style="priorityPanelStyle ?? undefined" aria-label="设置优先级" @click.stop><button v-for="value in (['HIGH', 'MEDIUM', 'LOW', 'NONE'] as TodoPriority[])" :key="value" type="button" :class="value.toLowerCase()" @click="selectPriority(value)"><IconFlag :size="16" /><span>{{ priorityLabels[value] }}</span><IconCheck v-if="priority === value" :size="14" /></button></section>
           </Teleport>
+        </div>
+        <div v-if="todo.permissions.deletable || todo.sourceNoteId" class="task-editor-popover-host">
+          <button class="task-editor-more-button" type="button" title="更多" aria-label="更多正文操作" @click.stop="moreMenuOpen = !moreMenuOpen"><IconDots :size="18" /></button>
+          <section v-if="moreMenuOpen" class="task-editor-more-menu" @click.stop>
+            <button v-if="todo.sourceNoteId" type="button" @click="emit('openSource', todo.sourceNoteId); moreMenuOpen = false"><IconLink :size="16" />打开来源笔记</button>
+            <button v-if="todo.permissions.deletable" class="danger" type="button" @click="removeDialogOpen = true; moreMenuOpen = false"><IconTrash :size="16" />删除任务</button>
+          </section>
         </div>
         <button class="task-editor-close" type="button" aria-label="关闭详情" @click="requestClose"><IconX :size="17" /></button>
       </div>
@@ -701,10 +767,8 @@ onBeforeUnmount(() => {
     </header>
 
     <div class="task-editor-area" @click="closeEditorPanels">
-      <EditorBubbleMenu v-if="editor && canEdit" :editor="editor" attachment @link="openLinkDialog" @attachment="fileInput?.click()" />
+      <EditorBubbleMenu v-if="editor && canEditContent" :editor="editor" :attachment="canEdit" @link="openLinkDialog" @attachment="fileInput?.click()" />
       <EditorContent class="task-body-editor" :editor="editor" @click="closeEditorPanels" />
-      <button v-if="saveState === 'error'" class="task-editor-save-state error" type="button" aria-live="polite" @click="retrySave">保存失败，点击重试</button>
-      <span v-else-if="saveState !== 'idle'" class="task-editor-save-state" :class="saveState" aria-live="polite">{{ saveState === 'saving' ? '保存中…' : saveState === 'saved' ? '已保存' : '等待保存' }}</span>
       <span v-if="inlineNotice" class="task-editor-inline-notice" role="status">{{ inlineNotice }}</span>
       <input ref="fileInput" class="sr-only" type="file" accept=".png,.jpg,.jpeg,.webp,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.md,.txt,.mp4,.mov,.m4v,.webm" @change="uploadAttachmentFile" />
       <section v-if="tagPanelOpen" class="task-inline-property-panel" role="dialog" aria-label="添加任务标签" @click.stop><form @submit.prevent="addTaskTag"><IconTag :size="16" /><input v-model="tagValue" autofocus placeholder="输入标签" maxlength="24" /><button class="primary-button" type="submit">添加</button><button type="button" aria-label="关闭" @click="tagPanelOpen = false"><IconX :size="15" /></button></form></section>
@@ -725,28 +789,16 @@ onBeforeUnmount(() => {
     </section>
 
     <section v-if="todo.teamId" class="task-assignment-summary" aria-label="任务指派进度">
-      <span class="task-assignment-avatars"><span v-for="assignment in todo.assignments" :key="assignment.id" :class="{ done: assignment.status === 'DONE' }" :title="`${assignment.user.nickname} · ${assignment.status === 'DONE' ? '已完成' : assignment.status === 'IN_PROGRESS' ? '进行中' : '待处理'}`">{{ assignment.user.nickname.slice(0, 1).toUpperCase() }}</span></span>
+      <span class="task-assignment-avatars" aria-label="任务成员"><span v-for="assignment in todo.assignments" :key="assignment.id" :class="{ done: assignment.status === 'DONE' }" :title="`${assignment.user.nickname || assignment.user.username} · ${assignmentStatusLabel(assignment.status)}`"><strong>{{ assignment.user.nickname || assignment.user.username }}</strong><small>{{ assignmentStatusLabel(assignment.status) }}</small></span></span>
       <strong>{{ todo.completedAssignments }} / {{ todo.totalAssignments }}</strong>
-      <small v-if="!canEdit">公共正文只读，你只能更新自己的完成状态</small>
+      <small v-if="!canEditContent">公共正文只读，你只能更新自己的完成状态</small>
+      <small v-else-if="!canEdit">你可以编辑任务正文，但不能修改任务属性</small>
     </section>
-
-    <footer class="task-editor-footer">
-      <span class="task-editor-list"><IconInbox :size="16" /><span>{{ todo.listName }}</span></span>
-      <div class="task-editor-footer-actions">
-        <div v-if="canEdit" class="task-editor-popover-host">
-          <button class="task-editor-footer-button" type="button" title="更多" aria-label="更多正文操作" @click.stop="moreMenuOpen = !moreMenuOpen"><IconDots :size="18" /></button>
-          <section v-if="moreMenuOpen" class="task-editor-more-menu" @click.stop>
-            <button v-if="todo.sourceNoteId && !todo.sources.length" type="button" @click="emit('openSource', todo.sourceNoteId); moreMenuOpen = false"><IconLink :size="16" />打开来源笔记</button>
-            <button v-if="todo.permissions.deletable" class="danger" type="button" @click="removeDialogOpen = true; moreMenuOpen = false"><IconTrash :size="16" />删除任务</button>
-          </section>
-        </div>
-      </div>
-    </footer>
 
     <Teleport to="body">
       <section v-if="slashMenuOpen" class="task-slash-menu" :style="{ left: `${slashPosition.left}px`, top: `${slashPosition.top}px` }" role="menu" aria-label="插入格式" @mousedown.prevent.stop @click.stop>
         <button
-          v-for="(command, index) in commands"
+          v-for="(command, index) in availableCommands"
           :id="`task-slash-command-${command.type}`"
           :key="command.type"
           type="button"

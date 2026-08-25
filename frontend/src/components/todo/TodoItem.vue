@@ -4,7 +4,7 @@ import {
   IconBell, IconCalendar, IconCheck, IconChevronRight, IconClock, IconCopy,
   IconDots, IconFlag, IconLink, IconList, IconRepeat, IconTag, IconTrash, IconUsers, IconX,
 } from '@tabler/icons-vue'
-import { nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import AssigneePopover from '@/components/task/AssigneePopover.vue'
@@ -17,7 +17,8 @@ const props = withDefaults(defineProps<{
   selected?: boolean
   members?: TeamMember[]
   currentUserId?: string
-}>(), { members: () => [], currentUserId: '' })
+  availableLists?: string[]
+}>(), { members: () => [], currentUserId: '', availableLists: () => [] })
 const emit = defineEmits<{
   toggle: [todo: Todo]
   edit: [todo: Todo]
@@ -38,7 +39,8 @@ const tagInput = ref<HTMLInputElement | null>(null)
 const newTag = ref('')
 const menuX = ref(0)
 const menuY = ref(0)
-const lists = ['收集箱', '工作', '个人', '学习']
+const fallbackLists = ['收集箱', '工作', '个人', '学习']
+const lists = computed(() => Array.from(new Set([...fallbackLists, ...props.availableLists])))
 const executionDone = () => props.todo.myAssignment?.status === 'DONE' || (!props.todo.myAssignment && props.todo.status === 'DONE')
 
 function dueLabel(todo: Todo) {

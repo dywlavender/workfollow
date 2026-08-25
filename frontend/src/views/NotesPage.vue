@@ -592,15 +592,28 @@ async function importMarkdown(payload: { file: File; title: string; folderId: st
     markdownImportError.value = cause?.response?.data?.detail ?? 'Markdown 导入失败。'
   } finally { markdownImportSaving.value = false }
 }
-async function saveNote(payload: { noteId: string; title: string; folderId: string | null; contentJson?: Record<string, unknown>; plainText?: string }) {
+async function saveNote(
+  payload: { noteId: string; title: string; folderId: string | null; contentJson?: Record<string, unknown>; plainText?: string },
+  settled?: (savedAt: string | null) => void,
+) {
   const { noteId, ...changes } = payload
-  const updated = await putNote(noteId, changes)
-  const previous = notes.value.find((item) => item.id === noteId)
-    ?? (selectedNote.value?.id === noteId ? selectedNote.value : null)
-  selectedNote.value = updated
-  upsertNoteListItem(updated)
-  if (previous && previous.folderId !== updated.folderId) {
-    await refreshNoteMeta()
+  try {
+    const updated = await putNote(noteId, changes)
+    const previous = notes.value.find((item) => item.id === noteId)
+      ?? (selectedNote.value?.id === noteId ? selectedNote.value : null)
+    selectedNote.value = updated
+    upsertNoteListItem(updated)
+    settled?.(updated.updatedAt)
+    if (previous && previous.folderId !== updated.folderId) {
+      try {
+        await refreshNoteMeta()
+      } catch (cause: any) {
+        fail(cause, '笔记已保存，但列表信息刷新失败。')
+      }
+    }
+  } catch (cause: any) {
+    fail(cause, '笔记保存失败，请稍后重试。')
+    settled?.(null)
   }
 }
 async function prepareSaveAsTemplate(payload: { note: Note; title: string; folderId: string | null; contentJson: Record<string, unknown>; plainText: string }) {
@@ -1006,6 +1019,7 @@ onMounted(async () => {
           :knowledge-state="selectedKnowledgeState"
           :knowledge-target-title="selectedKnowledgeForNote?.title ?? null"
           :task-members="members"
+          :task-team-id="selectedTeamId ?? null"
           :current-user-id="auth.user?.id"
           :can-assign-tasks="canReview"
           :focus-block-id="typeof route.query.block === 'string' ? route.query.block : null"

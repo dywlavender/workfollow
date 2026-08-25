@@ -1,5 +1,7 @@
 # 四季场景接入实现计划
 
+> **状态:已作废(2026-08-24)。** 本计划未执行;四季场景已由 `c24ca55 新增四季主题` 以另一套架构实现——`frontend/src/components/SeasonalAtmosphere.vue`(Vue 响应式驱动,含天空/极光/颗粒/场景层)而非本计划的纯 CSS `SeasonScene.vue` + `season-scene.css` 方案。保留本文档仅作设计过程记录,请勿按此执行。
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 将效果图验收过的四季插画场景 + 飘落物接入 `workfollow/frontend`,纯 CSS 驱动,零 JS 逻辑改动。

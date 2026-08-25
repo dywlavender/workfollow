@@ -389,6 +389,23 @@ html {
  * editor document, inputs, dialogs and popovers) keep their normal opaque
  * tokens so the atmosphere never competes with content.
  */
+
+/* Layer stack: the atmosphere canvas renders at z 0; every app layer above
+ * owns its stacking position here, and each layer carries its own glass
+ * setting in the rules that follow (canvas / rail / detail).
+ */
+.app-shell.task-app-shell,
+.guest-shell {
+  position: relative;
+  z-index: 10;
+  isolation: isolate;
+}
+
+.app-shell.task-app-shell > .main-area {
+  position: relative;
+  z-index: 1;
+}
+
 html[data-atmosphere="on"] .app-shell.task-app-shell,
 html[data-atmosphere="on"] .app-shell.task-app-shell > .main-area,
 html[data-atmosphere="on"] .page-content,

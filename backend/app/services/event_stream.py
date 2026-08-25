@@ -26,6 +26,7 @@ from app.models.notification import Notification
 from app.models.resource_relation import ResourceRelation, ResourceType
 from app.models.team import TeamMember, TeamMemberStatus
 from app.models.team_note import TeamNote
+from app.models.auth import User, UserStatus
 from app.models.todo import Todo
 
 
@@ -172,6 +173,21 @@ def queue_task_changed(db: Session, todo: Todo, *, deleted: bool = False) -> Non
         },
     }
     _queue(db, task_viewer_ids(db, todo), "task.changed", payload)
+
+
+def queue_todo_list_changed(
+    db: Session,
+    *,
+    action: str,
+    name: str,
+    previous_name: str | None = None,
+) -> None:
+    audience = set(db.scalars(select(User.id).where(User.status == UserStatus.ACTIVE)).all())
+    _queue(db, audience, "todo_list.changed", {
+        "action": action,
+        "name": name,
+        "previousName": previous_name,
+    })
 
 
 def _queue_team_note_change(db: Session, note: TeamNote, *, deleted: bool = False) -> None:

@@ -45,7 +45,7 @@ export const useAppStore = defineStore('app', {
           appearanceMedia.addEventListener('change', appearanceListener)
         }
       }
-      if (getAppearancePalette(this.appearancePalette).group === 'season') this.appearanceBackground = 'theme'
+      if (getAppearancePalette(this.appearancePalette).atmosphere) this.appearanceBackground = 'theme'
       this.applyAppearance()
     },
     applyAppearance() {
@@ -57,7 +57,7 @@ export const useAppStore = defineStore('app', {
     },
     setAppearancePalette(palette: AppearancePalette) {
       this.appearancePalette = palette
-      if (getAppearancePalette(palette).group === 'season') this.appearanceBackground = 'theme'
+      if (getAppearancePalette(palette).atmosphere) this.appearanceBackground = 'theme'
       this.applyAppearance()
       persistAppearance(this.appearancePalette, this.appearanceMode, this.appearanceBackground)
     },

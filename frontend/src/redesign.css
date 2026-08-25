@@ -107,6 +107,9 @@ select:focus-visible {
 .global-capture-launcher { cursor: grab; touch-action: none; }
 .global-capture-host.dragging .global-capture-launcher { cursor: grabbing; }
 .global-capture-launcher:hover, .global-capture-launcher:focus-visible { background: var(--color-accent-hover); outline: none; box-shadow: var(--shadow-dialog); }
+/* 四季主题下强调色底上的文字固定为白色(浅色 accent 时对比色算法会给深字) */
+html[data-atmosphere="on"] .global-capture-launcher,
+html[data-atmosphere="on"] .task-app-shell > .sidebar.is-task-shell .rail-badge { color: var(--neutral-0); }
 .global-capture-error { max-width: 280px; margin: 0; padding: 7px 9px; border: 1px solid color-mix(in srgb, var(--color-danger) 26%, transparent); border-radius: var(--radius-sm); background: var(--color-danger-soft); color: var(--color-danger); font-size: var(--font-size-micro); }
 .search-results-panel { margin-bottom: 12px; border: 1px solid var(--color-border-subtle); border-radius: var(--radius-md); background: var(--color-bg-surface); box-shadow: var(--shadow-sm); overflow: hidden; }
 .search-results-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 11px 14px; border-bottom: 1px solid var(--color-border-subtle); color: var(--color-text-secondary); font-size: var(--font-size-caption); }
@@ -260,6 +263,8 @@ select:focus-visible {
 .appearance-background-option:hover,
 .appearance-background-option:focus-visible { border-color: color-mix(in srgb, var(--color-accent) 40%, var(--color-border)); outline: none; }
 .appearance-background-option.selected { border-color: var(--color-accent); background: var(--color-accent-soft); color: var(--color-accent); }
+.appearance-background-option:disabled { opacity: .45; cursor: not-allowed; }
+.appearance-background-option:disabled:hover { border-color: var(--color-border); }
 .appearance-background-swatch { position: relative; width: 48px; height: 48px; display: grid; place-items: center; border: 1px solid var(--color-border-subtle); border-radius: var(--radius-md); color: var(--color-on-accent); box-shadow: var(--shadow-xs); }
 .appearance-background-swatch svg { width: 24px; height: 24px; padding: 4px; border-radius: var(--radius-circle); background: var(--color-accent); color: var(--color-on-accent); box-shadow: var(--shadow-xs); }
 .appearance-background-option > span:last-child { min-width: 0; display: grid; gap: 3px; }

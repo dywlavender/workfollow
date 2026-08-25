@@ -35,6 +35,7 @@ from app.models.todo import (
     TodoSourceType,
     TodoStatus,
 )
+from app.models.todo_list import TodoList
 
 __all__ = [
     "AuthSession",
@@ -52,6 +53,7 @@ __all__ = [
     "TodoPriority",
     "TodoSourceType",
     "TodoStatus",
+    "TodoList",
     "Team",
     "TeamMember",
     "TeamMemberRole",

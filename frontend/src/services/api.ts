@@ -170,6 +170,7 @@ export interface TodoAssignment {
 
 export interface TodoPermissions {
   editable: boolean
+  contentEditable: boolean
   deletable: boolean
   assignable: boolean
   completable: boolean
@@ -210,6 +211,19 @@ export interface Todo {
   updatedAt: string
 }
 
+export interface TodoList {
+  id: string | null
+  name: string
+  sortOrder: number
+  protected: boolean
+}
+
+export interface TodoListDeleteResult {
+  name: string
+  fallbackListName: string
+  movedTaskCount: number
+}
+
 export interface TodoPayload {
   title: string
   description?: string | null
@@ -232,6 +246,7 @@ export interface TodoPayload {
     blockId?: string | null
     excerpt?: string | null
   } | null
+  teamId?: string | null
   assigneeIds?: string[]
 }
 
@@ -259,6 +274,26 @@ export async function fetchTodos(view?: TodoView | 'linkable', q?: string, listN
     if (data.length < pageSize) return todos
     offset += pageSize
   }
+}
+
+export async function fetchTodoLists(): Promise<TodoList[]> {
+  const { data } = await api.get<TodoList[]>('/tasks/lists')
+  return data
+}
+
+export async function postTodoList(name: string): Promise<TodoList> {
+  const { data } = await api.post<TodoList>('/tasks/lists', { name })
+  return data
+}
+
+export async function putTodoList(id: string, name: string): Promise<TodoList> {
+  const { data } = await api.put<TodoList>(`/tasks/lists/${id}`, { name })
+  return data
+}
+
+export async function deleteTodoList(id: string): Promise<TodoListDeleteResult> {
+  const { data } = await api.delete<TodoListDeleteResult>(`/tasks/lists/${id}`)
+  return data
 }
 
 export async function fetchTodosByDate(date: string): Promise<Todo[]> {

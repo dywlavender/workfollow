@@ -1,6 +1,6 @@
 # 四季插画场景接入真实应用 — 设计
 
-日期:2026-08-24 · 状态:已确认(用户批准,含飘落物)
+日期:2026-08-24 · 状态:已作废——未按本方案实施;实际由 `SeasonalAtmosphere.vue`(Vue 响应式 + appStore 驱动)实现并随 `c24ca55` 提交,验收截图见 `output/playwright/season-acceptance/`
 前置:`2026-08-23-season-scene-design.md`(效果图中已验收的场景设计)
 
 ## 目标

@@ -123,6 +123,7 @@ def create_task(team_id: str, payload: TeamTaskCreate, db: DbSession, user: Curr
         recurrence_config=payload.recurrence_config,
         list_name=payload.list_name,
         tags=payload.tags,
+        team_id=team_id,
         assignee_ids=assignee_ids,
     ), user.id, commit=False)
     if task.team_id not in (None, team_id):

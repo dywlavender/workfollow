@@ -13,6 +13,7 @@ import {
 } from '@tabler/icons-vue'
 
 import ActionFeedback from '@/components/ActionFeedback.vue'
+import SeasonSwatch from '@/components/SeasonSwatch.vue'
 import {
   appearanceModes,
   appearanceBackgrounds,
@@ -31,6 +32,7 @@ const authStore = useAuthStore()
 const router = useRouter()
 const selectedPalette = computed(() => getAppearancePalette(appStore.appearancePalette))
 const selectedBackground = computed(() => getAppearanceBackground(appStore.appearanceBackground))
+const scenePaletteActive = computed(() => !!selectedPalette.value.atmosphere)
 const modeIcons = { system: IconDeviceDesktop, light: IconSun, dark: IconMoon }
 const activeSection = ref<'appearance' | 'account'>('appearance')
 const nicknameDraft = ref('')
@@ -42,12 +44,17 @@ const paletteGroups = computed(() => [
   {
     label: '经典配色',
     hint: '',
-    items: appearancePalettes.filter((palette) => palette.group !== 'season'),
+    items: appearancePalettes.filter((palette) => palette.group === 'classic' || !palette.group),
   },
   {
     label: '四季主题',
     hint: '自带氛围背景，随明暗模式自动切换',
     items: appearancePalettes.filter((palette) => palette.group === 'season'),
+  },
+  {
+    label: '山水系列',
+    hint: '山水场景主题，随明暗模式自动切换',
+    items: appearancePalettes.filter((palette) => palette.group === 'scenic'),
   },
 ])
 
@@ -184,6 +191,7 @@ async function saveProfile() {
                   @click="selectPalette(theme.id)"
                 >
                   <span class="appearance-theme-swatch" :style="{ background: paletteSwatch(theme) }">
+                    <SeasonSwatch v-if="!!theme.scene" :season="theme.id" class="season-swatch-scene" />
                     <IconCheck v-if="appStore.appearancePalette === theme.id" :size="21" :stroke-width="2.8" />
                   </span>
                   <span>{{ theme.label }}</span>
@@ -204,6 +212,7 @@ async function saveProfile() {
                 role="radio"
                 :aria-checked="appStore.appearanceBackground === background.id"
                 :aria-label="`${background.label}背景`"
+                :disabled="scenePaletteActive && background.id !== 'theme'"
                 @click="selectBackground(background.id)"
               >
                 <span class="appearance-background-swatch" :style="{ background: backgroundSwatch(background.id) }">

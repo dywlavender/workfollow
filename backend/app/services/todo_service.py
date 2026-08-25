@@ -9,7 +9,7 @@ from sqlalchemy import Select, and_, case, exists, func, or_, select
 from sqlalchemy.orm import Session, joinedload
 
 from app.models.auth import SystemRole, User
-from app.models.team import TeamMember, TeamMemberRole, TeamMemberStatus
+from app.models.team import Team, TeamMember, TeamMemberRole, TeamMemberStatus, TeamStatus
 from app.models.todo import (
     RecurrenceType,
     Todo,
@@ -28,6 +28,7 @@ VALID_VIEWS = {
     "collaboration", "assigned-to-me", "assigned-by-me",
     "linkable",
 }
+CONTENT_EDITABLE_FIELDS = frozenset({"content_json", "description"})
 
 
 def _task_statement() -> Select[tuple[Todo]]:
@@ -77,6 +78,19 @@ def can_edit(db: Session, todo: Todo, user_id: str) -> bool:
         return True
     membership = active_membership(db, user_id, todo.team_id) if todo.team_id else None
     return membership is not None and membership.role in (TeamMemberRole.OWNER, TeamMemberRole.ADMIN)
+
+
+def can_edit_content(db: Session, todo: Todo, user_id: str) -> bool:
+    """Return whether the actor may edit the task document without its metadata."""
+    if todo.creator_id == user_id:
+        return True
+    user = db.get(User, user_id)
+    if user is not None and user.system_role == SystemRole.ROOT and todo.team_id is not None:
+        return True
+    membership = active_membership(db, user_id, todo.team_id) if todo.team_id else None
+    if membership is not None and membership.role in (TeamMemberRole.OWNER, TeamMemberRole.ADMIN):
+        return True
+    return active_assignment(todo, user_id) is not None and (todo.team_id is None or membership is not None)
 
 
 def can_assign(db: Session, todo: Todo, user_id: str) -> bool:
@@ -257,20 +271,59 @@ def list_todos(
     return list(result.unique().scalars())
 
 
-def _validated_assignment_team(db: Session, creator_id: str, assignee_ids: list[str]) -> str | None:
+def _validated_assignment_team(
+    db: Session,
+    creator_id: str,
+    assignee_ids: list[str],
+    requested_team_id: str | None = None,
+) -> str | None:
     unique_ids = list(dict.fromkeys(assignee_ids))
     if not unique_ids:
         raise HTTPException(status_code=422, detail="任务至少需要一名执行成员")
-    if set(unique_ids) == {creator_id}:
+
+    desired_ids = set(unique_ids)
+    actor = db.get(User, creator_id)
+    if requested_team_id is not None:
+        team = db.scalar(select(Team).where(
+            Team.id == requested_team_id,
+            Team.status == TeamStatus.ACTIVE,
+        ))
+        if team is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Team not found")
+
+        actor_membership = db.scalar(select(TeamMember).where(
+            TeamMember.team_id == requested_team_id,
+            TeamMember.user_id == creator_id,
+            TeamMember.status == TeamMemberStatus.ACTIVE,
+        ))
+        is_root = actor is not None and actor.system_role == SystemRole.ROOT
+        if not is_root and (
+            actor_membership is None
+            or actor_membership.role not in (TeamMemberRole.OWNER, TeamMemberRole.ADMIN)
+        ):
+            raise HTTPException(status_code=403, detail="只有团队 OWNER / ADMIN 或系统管理员可以指派其他成员")
+
+        active_member_ids = set(db.scalars(select(TeamMember.user_id).where(
+            TeamMember.team_id == requested_team_id,
+            TeamMember.user_id.in_(unique_ids),
+            TeamMember.status == TeamMemberStatus.ACTIVE,
+        )))
+        if active_member_ids != desired_ids:
+            raise HTTPException(status_code=422, detail="只能把任务分配给指定团队的当前成员")
+        return requested_team_id
+
+    if desired_ids == {creator_id}:
         return None
+
     memberships = db.scalars(select(TeamMember).where(
         TeamMember.user_id == creator_id,
         TeamMember.status == TeamMemberStatus.ACTIVE,
         TeamMember.role.in_((TeamMemberRole.OWNER, TeamMemberRole.ADMIN)),
     ).order_by(TeamMember.joined_at.desc())).all()
     if not memberships:
+        if actor is not None and actor.system_role == SystemRole.ROOT:
+            raise HTTPException(status_code=422, detail="系统管理员创建团队任务时必须指定 teamId")
         raise HTTPException(status_code=403, detail="只有团队 OWNER / ADMIN 可以指派其他成员")
-    desired_ids = set(unique_ids)
     for membership in memberships:
         active_ids = set(db.scalars(select(TeamMember.user_id).where(
             TeamMember.team_id == membership.team_id,
@@ -317,7 +370,7 @@ def recompute_task_status(todo: Todo) -> None:
 
 def create_todo(db: Session, payload: TodoCreate, owner_id: str, *, commit: bool = True) -> Todo:
     assignee_ids = payload.assignee_ids if payload.assignee_ids is not None else [owner_id]
-    team_id = _validated_assignment_team(db, owner_id, assignee_ids)
+    team_id = _validated_assignment_team(db, owner_id, assignee_ids, payload.team_id)
     source = payload.source
     if source is None and payload.source_type == TodoSourceType.NOTE and payload.source_note_id:
         from app.models.resource_relation import ResourceType
@@ -328,7 +381,7 @@ def create_todo(db: Session, payload: TodoCreate, owner_id: str, *, commit: bool
             resource_id=payload.source_note_id,
             excerpt=payload.source_excerpt,
         )
-    values = payload.model_dump(exclude={"assignee_ids", "source"})
+    values = payload.model_dump(exclude={"assignee_ids", "source", "team_id"})
     if source is not None:
         # ResourceRelation is authoritative. These columns are kept populated
         # only so old clients can still recognize a note-backed task.
@@ -338,6 +391,9 @@ def create_todo(db: Session, payload: TodoCreate, owner_id: str, *, commit: bool
     todo = Todo(**values, owner_id=owner_id, creator_id=owner_id, team_id=team_id)
     db.add(todo)
     db.flush()
+    from app.services.todo_list_service import ensure_list
+
+    ensure_list(db, todo.list_name, owner_id)
     sync_assignments(db, todo, assignee_ids, owner_id)
     if source is not None:
         # Lazy import avoids a service cycle because relation permissions reuse
@@ -360,9 +416,12 @@ def update_todo(
     *,
     commit: bool = True,
 ) -> Todo:
-    if actor_id is not None:
-        require_editor(db, todo, actor_id)
     changes = payload.model_dump(exclude_unset=True)
+    if actor_id is not None and not can_edit(db, todo, actor_id):
+        if not can_edit_content(db, todo, actor_id):
+            raise HTTPException(status_code=403, detail="没有修改该任务正文的权限")
+        if set(changes) - CONTENT_EDITABLE_FIELDS:
+            raise HTTPException(status_code=403, detail="被指派人只能编辑任务正文")
     if "title" in changes:
         title = (changes["title"] or "").strip()
         if not title:
@@ -387,6 +446,9 @@ def update_todo(
         changes["reminded_at"] = None
     if "list_name" in changes:
         changes["list_name"] = (changes["list_name"] or "").strip() or "收集箱"
+        from app.services.todo_list_service import ensure_list
+
+        ensure_list(db, changes["list_name"], actor_id)
     if "tags" in changes:
         changes["tags"] = list(dict.fromkeys(tag.strip() for tag in (changes["tags"] or []) if tag.strip()))
     if "content_json" in changes:

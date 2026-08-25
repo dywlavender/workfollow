@@ -25,7 +25,7 @@ const task = {
   sourceNoteId: null, sourceExcerpt: null, sources: [], recurringSeriesId: null, generatedFromId: null,
   creatorId: 'user-1', teamId: null, creator: {} as Todo['creator'], assignments: [],
   myAssignment: null, completedAssignments: 0, totalAssignments: 1,
-  permissions: { editable: true, deletable: true, assignable: false, completable: true },
+  permissions: { editable: true, contentEditable: true, deletable: true, assignable: false, completable: true },
   completedAt: null, createdAt: '2026-08-10T00:00:00', updatedAt: '2026-08-10T00:00:00',
 } satisfies Todo
 

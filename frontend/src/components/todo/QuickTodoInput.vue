@@ -21,6 +21,7 @@ const props = withDefaults(defineProps<{
   members?: TeamMember[]
   currentUserId?: string
   canAssign?: boolean
+  teamId?: string | null
   defaultListName?: string
   defaultDueAt?: string
   availableLists?: string[]
@@ -109,7 +110,23 @@ watch(() => props.defaultDueAt, (value) => {
   manualSchedule.value = false
   scheduleValue.value = value ? dayjs(value).format('YYYY-MM-DDTHH:mm') : ''
   explicitTime.value = Boolean(value && (dayjs(value).hour() || dayjs(value).minute()))
+  calendarMonth.value = (value ? dayjs(value) : dayjs()).startOf('month')
 })
+
+function normalizeAssigneeIds() {
+  if (!props.canAssign || !props.teamId) return
+  const memberIds = new Set((props.members ?? []).map((member) => member.userId))
+  const filtered = assigneeIds.value.filter((id) => memberIds.has(id))
+  assigneeIds.value = filtered.length || !props.currentUserId || !memberIds.has(props.currentUserId)
+    ? filtered
+    : [props.currentUserId]
+}
+
+watch(
+  () => [props.teamId, props.canAssign, props.currentUserId, props.members] as const,
+  normalizeAssigneeIds,
+  { deep: true, immediate: true },
+)
 
 async function begin() {
   editing.value = true
@@ -131,6 +148,7 @@ function resetDraft(_close = false) {
   tags.value = []
   tagQuery.value = ''
   assigneeIds.value = props.currentUserId ? [props.currentUserId] : []
+  normalizeAssigneeIds()
   editing.value = true
 }
 function closeOrGoBack() {
@@ -198,7 +216,7 @@ function recurrenceConfig(dueAt: string | null): Record<string, number | string>
 }
 function buildPayload(): TodoPayload {
   const dueAt = effectiveDueAt.value
-  return {
+  const payload: TodoPayload = {
     title: parsed.value.title,
     dueAt,
     reminderAt: reminderAt(dueAt),
@@ -209,9 +227,16 @@ function buildPayload(): TodoPayload {
     tags: [...tags.value],
     assigneeIds: props.canAssign && assigneeIds.value.length ? assigneeIds.value : undefined,
   }
+  if (props.canAssign && props.teamId) payload.teamId = props.teamId
+  return payload
 }
 async function submit() {
   if (!input.value.trim() || submitting.value) return
+  if (props.canAssign && props.teamId && !assigneeIds.value.length) {
+    error.value = '请先选择至少一名团队成员。'
+    activePanel.value = 'more'
+    return
+  }
   submitting.value = true
   error.value = null
   try {

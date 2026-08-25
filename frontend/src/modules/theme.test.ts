@@ -9,10 +9,11 @@ import {
 } from './theme'
 
 describe('appearance theme matrix', () => {
-  it('exposes nine curated palettes across classic and season groups', () => {
-    expect(appearancePalettes).toHaveLength(9)
+  it('exposes thirteen curated palettes across classic, season, and scenic groups', () => {
+    expect(appearancePalettes).toHaveLength(13)
     expect(appearancePalettes.map((palette) => palette.id)).toEqual([
       'default', 'sky', 'teal', 'amber', 'purple', 'spring', 'summer', 'autumn', 'winter',
+      'qianshan', 'jiangnan', 'damo', 'pinghu',
     ])
   })
 
@@ -26,16 +27,25 @@ describe('appearance theme matrix', () => {
       expect(palette.light.page).toContain('/ .')
       expect(palette.dark.page).toContain('/ .')
     }
-    const classic = appearancePalettes.filter((palette) => palette.group !== 'season')
+    const classic = appearancePalettes.filter((palette) => palette.group === 'classic')
     expect(classic).toHaveLength(5)
     for (const palette of classic) {
       expect(palette.atmosphere).toBeUndefined()
     }
+    const scenic = appearancePalettes.filter((palette) => palette.group === 'scenic')
+    expect(scenic.map((palette) => palette.id)).toEqual(['qianshan', 'jiangnan', 'damo', 'pinghu'])
+    for (const palette of scenic) {
+      expect(palette.atmosphere?.light).toBeTruthy()
+      expect(palette.atmosphere?.dark).toBeTruthy()
+      expect(palette.light.page.startsWith('rgb')).toBe(true)
+      expect(palette.light.page).toContain('/ .')
+      expect(palette.dark.page).toContain('/ .')
+    }
   })
 
-  it('ships light and dark scene tokens for every seasonal palette', () => {
-    const seasonal = appearancePalettes.filter((palette) => palette.group === 'season')
-    for (const palette of seasonal) {
+  it('ships light and dark scene tokens for every seasonal and scenic palette', () => {
+    const scenePalettes = appearancePalettes.filter((palette) => palette.group === 'season' || palette.group === 'scenic')
+    for (const palette of scenePalettes) {
       expect(Object.keys(palette.scene?.light ?? {})).not.toHaveLength(0)
       expect(Object.keys(palette.scene?.dark ?? {})).not.toHaveLength(0)
     }

@@ -114,11 +114,17 @@ def _assignee_names(todo: Todo, user_ids: set[str]) -> str:
     return "、".join(str(name) for name in names) or "无"
 
 
+def _task_url(todo: Todo) -> str:
+    return external_notification_service.task_public_url(todo.id)
+
+
 def task_snapshot(todo: Todo) -> dict[str, object]:
     """Return the concise, JSON-safe task snapshot shared by notifications."""
     active = _active_assignments(todo)
+    url = _task_url(todo)
     return {
         "id": todo.id,
+        "url": url,
         "title": todo.title,
         "descriptionExcerpt": _excerpt(todo.description),
         "teamId": todo.team_id,
@@ -193,6 +199,11 @@ def _task_context(todo: Todo) -> str:
     return "；".join(parts)
 
 
+def _external_task_context(todo: Todo) -> str:
+    """Append a stable deep link without putting URL punctuation after it."""
+    return f"{_task_context(todo)}；查看任务：{_task_url(todo)}"
+
+
 def _change_text(after: dict[str, object], changes: dict[str, dict[str, object]]) -> str:
     parts: list[str] = []
     if "dueAt" in changes or "dueEndAt" in changes:
@@ -230,13 +241,16 @@ def _change_text(after: dict[str, object], changes: dict[str, dict[str, object]]
 
 
 def _task_data(todo: Todo, event: str, **extra: object) -> dict[str, object]:
+    snapshot = task_snapshot(todo)
     payload: dict[str, object] = {
         "taskId": todo.id,
         "teamId": todo.team_id,
         "taskTitle": todo.title,
         "event": event,
         "eventType": event,
-        "task": task_snapshot(todo),
+        "task": snapshot,
+        "url": snapshot["url"],
+        "taskUrl": snapshot["url"],
         **extra,
     }
     if payload.get("actorId"):
@@ -276,6 +290,7 @@ def notify_task_created(db: Session, todo: Todo, actor_id: str, *, commit: bool 
         eventKey=event_key,
     )
     context = _task_context(todo)
+    external_context = _external_task_context(todo)
     logger.info(
         "【通知触发入口】任务创建 task_id=%s title=%s participants=%s recipients=%s external_enabled=%s",
         todo.id,
@@ -293,7 +308,7 @@ def notify_task_created(db: Session, todo: Todo, actor_id: str, *, commit: bool 
         external_type=NotificationType.TASK_ASSIGNEE_ADDED,
         title="你有新的指派任务",
         body=f"{actor_name}将任务“{todo.title}”分配给你；{context}。",
-        external_message=f"【任务分配】{actor_name}将任务“{todo.title}”分配给你；{context}。",
+        external_message=f"【任务分配】{actor_name}将任务“{todo.title}”分配给你；{external_context}",
         data_json=data,
         event_key=event_key,
         commit=commit,
@@ -341,6 +356,7 @@ def notify_assignees_changed(
     total_external = 0
 
     context = _task_context(todo)
+    external_context = _external_task_context(todo)
     member_change = (
         f"新增：{_assignee_names(todo, added_ids)}；移除：{_assignee_names(todo, removed_ids)}"
     )
@@ -353,7 +369,7 @@ def notify_assignees_changed(
             "TASK_ASSIGNEE_ADDED",
             "你有新的指派任务",
             f"{actor_name}将任务“{todo.title}”分配给你；{context}。",
-            f"【任务分配】{actor_name}将任务“{todo.title}”分配给你；{context}。",
+            f"【任务分配】{actor_name}将任务“{todo.title}”分配给你；{external_context}",
         ),
         (
             "removed",
@@ -363,7 +379,7 @@ def notify_assignees_changed(
             "TASK_ASSIGNEE_REMOVED",
             "任务分配已取消",
             f"{actor_name}取消了你在任务“{todo.title}”中的分配；{context}。",
-            f"【任务分配取消】{actor_name}取消了你在“{todo.title}”中的分配；{context}。",
+            f"【任务分配取消】{actor_name}取消了你在“{todo.title}”中的分配；{external_context}",
         ),
         (
             "updated",
@@ -373,7 +389,7 @@ def notify_assignees_changed(
             "TASK_ASSIGNMENT_CHANGED",
             "任务成员已调整",
             f"{actor_name}调整了任务“{todo.title}”的分配成员（{member_change}）；{context}。",
-            f"【任务成员调整】{actor_name}调整了“{todo.title}”的分配成员（{member_change}）；{context}。",
+            f"【任务成员调整】{actor_name}调整了“{todo.title}”的分配成员（{member_change}）；{external_context}",
         ),
     )
     for (
@@ -446,6 +462,7 @@ def notify_task_assignment_completed(
         eventKey=event_key,
     )
     context = _task_context(todo)
+    external_context = _external_task_context(todo)
     active = _active_assignments(todo)
     progress = f"{sum(item.status.value == 'DONE' for item in active)}/{len(active)}"
     logger.info(
@@ -465,7 +482,7 @@ def notify_task_assignment_completed(
         external_type=NotificationType.TASK_ASSIGNMENT_COMPLETED,
         title="成员已完成任务",
         body=f"{actor_name}已完成任务“{todo.title}”；当前进度：{progress}；{context}。",
-        external_message=f"【任务进度】{actor_name}已完成任务“{todo.title}”；当前进度：{progress}；{context}。",
+        external_message=f"【任务进度】{actor_name}已完成任务“{todo.title}”；当前进度：{progress}；{external_context}",
         data_json=data,
         event_key=event_key,
         commit=commit,
@@ -486,6 +503,7 @@ def notify_task_completed(db: Session, todo: Todo, actor_id: str, *, commit: boo
         eventKey=event_key,
     )
     context = _task_context(todo)
+    external_context = _external_task_context(todo)
     completed_at = _format_datetime(todo.completed_at)
     logger.info(
         "【通知触发入口】任务全部完成 task_id=%s title=%s participants=%s recipients=%s external_enabled=%s",
@@ -504,7 +522,7 @@ def notify_task_completed(db: Session, todo: Todo, actor_id: str, *, commit: boo
         external_type=NotificationType.TASK_COMPLETED,
         title="任务已全部完成",
         body=f"{actor_name}完成了任务“{todo.title}”；完成时间：{completed_at}；{context}。",
-        external_message=f"【任务完成】{actor_name}完成了任务“{todo.title}”；完成时间：{completed_at}；{context}。",
+        external_message=f"【任务完成】{actor_name}完成了任务“{todo.title}”；完成时间：{completed_at}；{external_context}",
         data_json=data,
         event_key=event_key,
         commit=commit,
@@ -530,6 +548,7 @@ def notify_task_cancelled(
         eventKey=event_key,
     )
     context = _task_context(todo)
+    external_context = _external_task_context(todo)
     cancelled_at = _format_datetime(todo.updated_at)
     logger.info(
         "【通知触发入口】任务取消 task_id=%s title=%s participants=%s recipients=%s external_enabled=%s",
@@ -548,7 +567,7 @@ def notify_task_cancelled(
         external_type=NotificationType.TASK_CANCELLED,
         title="任务已取消",
         body=f"{actor_name}取消了任务“{todo.title}”；取消时间：{cancelled_at}；{context}。",
-        external_message=f"【任务取消】{actor_name}取消了任务“{todo.title}”；取消时间：{cancelled_at}；{context}。",
+        external_message=f"【任务取消】{actor_name}取消了任务“{todo.title}”；取消时间：{cancelled_at}；{external_context}",
         data_json=data,
         event_key=event_key,
         commit=commit,
@@ -575,6 +594,7 @@ def notify_task_updated(
     event_key = f"task-updated:{todo.id}:{new_uuid()}"
     change_text = _change_text(after, changes)
     context = _task_context(todo)
+    external_context = _external_task_context(todo)
     data = _task_data(
         todo,
         "TASK_UPDATED",
@@ -594,7 +614,7 @@ def notify_task_updated(
         external_type=NotificationType.TASK_UPDATED,
         title="任务信息已更新",
         body=f"{actor_name}更新了任务“{todo.title}”：{change_text}；{context}。",
-        external_message=f"【任务更新】{actor_name}更新了“{todo.title}”：{change_text}；{context}。",
+        external_message=f"【任务更新】{actor_name}更新了“{todo.title}”：{change_text}；{external_context}",
         data_json=data,
         event_key=event_key,
         commit=commit,

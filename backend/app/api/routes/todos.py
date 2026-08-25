@@ -14,22 +14,66 @@ from app.schemas.todo import (
     TodoAssignmentRead,
     TodoCompleteResult,
     TodoCreate,
+    TodoListCreate,
+    TodoListDeleteResult,
+    TodoListRead,
+    TodoListUpdate,
     TodoMyStatusUpdate,
     TodoPermissions,
     TodoRead,
     TodoTransfer,
     TodoUpdate,
 )
-from app.services import audit_service, event_stream, resource_relation_service, task_notification_service, todo_service
+from app.services import audit_service, event_stream, resource_relation_service, task_notification_service, todo_list_service, todo_service
 
 
 router = APIRouter(tags=["tasks"])
 logger = logging.getLogger(__name__)
 
 
+def todo_list_read(item) -> TodoListRead:  # noqa: ANN001
+    return TodoListRead(
+        id=item.id,
+        name=item.name,
+        sort_order=item.sort_order,
+        protected=todo_list_service.is_protected_name(item.name),
+    )
+
+
+@router.get("/lists", response_model=list[TodoListRead])
+def get_todo_lists(db: DbSession, user: CurrentUser) -> list[TodoListRead]:
+    items = todo_list_service.list_catalog(db)
+    db.commit()
+    return [todo_list_read(item) for item in items]
+
+
+@router.post("/lists", response_model=TodoListRead, status_code=status.HTTP_201_CREATED)
+def post_todo_list(payload: TodoListCreate, db: DbSession, user: CurrentUser) -> TodoListRead:
+    return todo_list_read(todo_list_service.create(db, payload.name, user.id))
+
+
+@router.put("/lists/{list_id}", response_model=TodoListRead)
+def put_todo_list(list_id: str, payload: TodoListUpdate, db: DbSession, user: CurrentUser) -> TodoListRead:
+    item, _moved_count = todo_list_service.rename(db, list_id, payload.name)
+    return todo_list_read(item)
+
+
+@router.delete("/lists/{list_id}", response_model=TodoListDeleteResult)
+def delete_todo_list(list_id: str, db: DbSession, user: CurrentUser) -> TodoListDeleteResult:
+    item = todo_list_service.get_or_404(db, list_id)
+    deleted_name = item.name
+    moved_count = todo_list_service.delete(db, list_id)
+    return TodoListDeleteResult(
+        name=deleted_name,
+        fallback_list_name=todo_list_service.FALLBACK_TODO_LIST_NAME,
+        moved_task_count=moved_count,
+    )
+
+
 def todo_read(db: Session, todo, user_id: str, *, include_sources: bool = False) -> TodoRead:  # noqa: ANN001
     active = [assignment for assignment in todo.assignments if assignment.active]
     mine = next((assignment for assignment in active if assignment.user_id == user_id), None)
+    editable = todo_service.can_edit(db, todo, user_id)
     result = TodoRead.model_validate(todo)
     return result.model_copy(update={
         "assignments": [TodoAssignmentRead.model_validate(item) for item in active],
@@ -37,7 +81,8 @@ def todo_read(db: Session, todo, user_id: str, *, include_sources: bool = False)
         "completed_assignments": sum(item.status.value == "DONE" for item in active),
         "total_assignments": len(active),
         "permissions": TodoPermissions(
-            editable=todo_service.can_edit(db, todo, user_id),
+            editable=editable,
+            content_editable=editable or todo_service.can_edit_content(db, todo, user_id),
             deletable=todo.creator_id == user_id,
             assignable=todo_service.can_assign(db, todo, user_id),
             completable=mine is not None and todo.status != TodoStatus.ABANDONED,

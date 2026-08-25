@@ -27,6 +27,7 @@ import RichTextToolbar from '@/components/RichTextToolbar.vue'
 import TaskSearchDialog from '@/components/notes/TaskSearchDialog.vue'
 import TodoDialog from '@/components/todo/TodoDialog.vue'
 import { filterStandaloneAttachments } from '@/modules/editor/attachmentReferences'
+import { formatLastSavedAt } from '@/modules/editor/saveStatus'
 import { createWorkFollowEditorExtensions } from '@/modules/editor/tiptap'
 import { workFollowSlashCommands, type WorkFollowSlashCommand } from '@/modules/editor/slashCommands'
 import { useClickOutside } from '@/composables/useClickOutside'
@@ -42,13 +43,17 @@ const props = defineProps<{
   knowledgeState?: 'none' | 'published' | 'update-draft' | 'update-pending' | 'update-needs-revision'
   knowledgeTargetTitle?: string | null
   taskMembers?: TeamMember[]
+  taskTeamId?: string | null
   currentUserId?: string
   canAssignTasks?: boolean
   focusBlockId?: string | null
 }>()
 const realtime = useRealtimeStore()
 const emit = defineEmits<{
-  save: [payload: { noteId: string; title: string; folderId: string | null; contentJson?: Record<string, unknown>; plainText?: string }]
+  save: [
+    payload: { noteId: string; title: string; folderId: string | null; contentJson?: Record<string, unknown>; plainText?: string },
+    settled?: (savedAt: string | null) => void,
+  ]
   deleteAttachment: [attachment: Attachment]
   openTask: [taskId: string]
   share: []
@@ -62,7 +67,8 @@ const emit = defineEmits<{
 
 const title = ref('')
 const folderId = ref<string | null>(null)
-const saveState = ref<'idle' | 'saving' | 'saved'>('idle')
+const saveState = ref<'idle' | 'saving' | 'saved' | 'error'>('idle')
+const lastSavedAt = ref<string | null>(props.note?.updatedAt ?? props.note?.createdAt ?? null)
 const fileInput = ref<HTMLInputElement | null>(null)
 const linkDialogOpen = ref(false)
 const linkValue = ref('')
@@ -91,11 +97,19 @@ const visibleAttachments = computed(() => filterStandaloneAttachments(
   props.attachments,
   editorContent.value ?? props.note?.contentJson,
 ))
+const saveStateLabel = computed(() => {
+  if (saveState.value === 'saving') return '保存中…'
+  if (saveState.value === 'error') return '保存失败'
+  return formatLastSavedAt(lastSavedAt.value)
+})
 let saveTimer: number | undefined
 let contentSnapshotTimer: number | undefined
 let slashDetectTimer: number | undefined
 let taskHydrateTimer: number | undefined
 let contentDirty = false
+let saveRequestId = 0
+const activeSaveRequests = new Map<number, string>()
+let disposed = false
 let taskHydrateRequest = 0
 let taskIdsKey = ''
 let taskBriefCache = new Map<string, TaskBrief>()
@@ -232,9 +246,11 @@ watch(
     window.clearTimeout(contentSnapshotTimer)
     saveTimer = undefined
     contentSnapshotTimer = undefined
+    saveRequestId += 1
     title.value = props.note?.title ?? ''
     folderId.value = props.note?.folderId ?? null
     saveState.value = 'idle'
+    lastSavedAt.value = props.note?.updatedAt ?? props.note?.createdAt ?? null
     attachmentPanelOpen.value = false
     editorContent.value = props.note?.contentJson ?? null
     taskIdsKey = ''
@@ -254,6 +270,10 @@ watch(
   },
   { immediate: true },
 )
+
+watch(() => props.note?.updatedAt, (updatedAt) => {
+  if (updatedAt && props.note?.id) lastSavedAt.value = updatedAt
+})
 
 async function focusSourceBlock(attempt = 0) {
   const requestedBlockId = props.focusBlockId ?? new URLSearchParams(window.location.search).get('block')
@@ -281,14 +301,19 @@ watch(editor, () => { void focusSourceBlock() })
 
 function scheduleSave() {
   if (!props.note) return
-  saveState.value = 'saving'
+  if (saveState.value !== 'saving' || !hasActiveSave(props.note.id)) saveState.value = 'idle'
+  const requestId = ++saveRequestId
   window.clearTimeout(saveTimer)
   saveTimer = window.setTimeout(() => {
-    if (!props.note) return
-    emitCurrentContent(props.note.id)
+    if (!props.note || requestId !== saveRequestId) return
+    saveState.value = 'saving'
+    emitCurrentContent(props.note.id, requestId)
     saveTimer = undefined
-    saveState.value = 'saved'
   }, 1200)
+}
+
+function hasActiveSave(noteId: string): boolean {
+  return [...activeSaveRequests.values()].some((activeNoteId) => activeNoteId === noteId)
 }
 
 function scheduleContentSnapshot(currentEditor: TiptapEditor | null = editor.value ?? null) {
@@ -301,8 +326,9 @@ function scheduleContentSnapshot(currentEditor: TiptapEditor | null = editor.val
   }, 250)
 }
 
-function emitCurrentContent(noteId: string) {
+function emitCurrentContent(noteId: string, requestId = ++saveRequestId) {
   if (!editor.value) return
+  activeSaveRequests.set(requestId, noteId)
   const dirty = contentDirty
   contentDirty = false
   if (dirty && contentSnapshotTimer !== undefined) {
@@ -324,6 +350,19 @@ function emitCurrentContent(noteId: string) {
       contentJson,
       plainText: editor.value.getText({ blockSeparator: '\n' }),
     } : {}),
+  }, (savedAt) => {
+    activeSaveRequests.delete(requestId)
+    if (disposed || props.note?.id !== noteId) return
+    if (requestId !== saveRequestId) {
+      if (!hasActiveSave(noteId) && saveTimer === undefined) saveState.value = 'idle'
+      return
+    }
+    if (savedAt) {
+      lastSavedAt.value = savedAt
+      saveState.value = hasActiveSave(noteId) ? 'saving' : 'saved'
+    } else {
+      saveState.value = hasActiveSave(noteId) ? 'saving' : 'error'
+    }
   })
 }
 
@@ -647,6 +686,7 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  disposed = true
   if (saveTimer && props.note) emitCurrentContent(props.note.id)
   window.clearTimeout(saveTimer)
   window.clearTimeout(contentSnapshotTimer)
@@ -712,8 +752,8 @@ watch(immersiveOpen, (open) => {
             <option :value="null">未分类</option>
             <option v-for="folder in folders" :key="folder.id" :value="folder.id">{{ folder.name }}</option>
           </select>
-          <span class="save-state" :class="saveState">{{ saveState === 'saving' ? '保存中…' : saveState === 'saved' ? '已自动保存' : '本地笔记' }}</span>
           <span v-if="knowledgeState === 'update-draft' || knowledgeState === 'update-pending' || knowledgeState === 'update-needs-revision'" class="knowledge-update-target">更新目标：{{ knowledgeTargetTitle ?? '团队知识' }}</span>
+          <span class="save-state" :class="saveState" aria-live="polite">{{ saveStateLabel }}</span>
         </div>
       </header>
       <RichTextToolbar v-if="editor" :editor="editor" attachment @link="setLink" @attachment="openFilePicker('embedded')" />
@@ -764,6 +804,7 @@ watch(immersiveOpen, (open) => {
         :open="taskDialogOpen"
         :initial-title="taskInitialTitle"
         :members="taskMembers ?? []"
+        :team-id="taskTeamId"
         :current-user-id="currentUserId"
         :can-assign="canAssignTasks"
         :initial-due-at="null"

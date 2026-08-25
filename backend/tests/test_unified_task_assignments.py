@@ -3,17 +3,19 @@ from datetime import date, datetime
 from fastapi.testclient import TestClient
 from sqlalchemy import func, inspect, select
 
-from app.models.auth import User, UserStatus
+from app.models.auth import SystemRole, User, UserStatus
 from app.models.todo import Todo, TodoAssignment
 from app.services.auth_service import password_hash
 
 
-def add_user(db, suffix: str) -> User:
+def add_user(db, suffix: str, role: SystemRole = SystemRole.NORMAL) -> User:
     user = User(
         id=f"50000000-0000-0000-0000-{suffix:0>12}",
         username=f"unified-{suffix}",
         password_hash=password_hash.hash("member-password"),
         nickname=f"成员{suffix}",
+        system_role=role,
+        can_create_team=role == SystemRole.ROOT,
         status=UserStatus.ACTIVE,
     )
     db.add(user)
@@ -63,7 +65,20 @@ def test_task_is_single_fact_source_with_multiple_assignments(client: TestClient
     assert [item["id"] for item in client.get("/api/tasks?view=collaboration").json()] == [task["id"]]
     assert observer_client.get(f"/api/tasks/{task['id']}").status_code == 404
 
+    first_task = first_client.get(f"/api/tasks/{task['id']}")
+    assert first_task.status_code == 200
+    assert first_task.json()["permissions"]["editable"] is False
+    assert first_task.json()["permissions"]["contentEditable"] is True
+
     assert first_client.put(f"/api/tasks/{task['id']}", json={"title": "越权修改"}).status_code == 403
+    document = {"type": "doc", "content": [{"type": "paragraph", "content": [{"type": "text", "text": "执行说明"}]}]}
+    content_update = first_client.put(f"/api/tasks/{task['id']}", json={"contentJson": document})
+    assert content_update.status_code == 200, content_update.text
+    assert content_update.json()["contentJson"] == document
+    assert content_update.json()["description"] == "执行说明"
+    assert first_client.put(
+        f"/api/tasks/{task['id']}", json={"contentJson": document, "dueAt": due_at.isoformat()}
+    ).status_code == 403
     assert first_client.put(
         f"/api/tasks/{task['id']}/assignees", json={"assigneeIds": [first.id]}
     ).status_code == 403
@@ -103,3 +118,46 @@ def test_assignment_is_limited_to_team_admins_and_current_members(client: TestCl
     assert personal.status_code == 201
     assert personal.json()["teamId"] is None
     assert [item["userId"] for item in personal.json()["assignments"]] == [member.id]
+
+
+def test_root_can_create_and_update_team_assignments_without_membership(client: TestClient, db) -> None:
+    root = add_user(db, "21", role=SystemRole.ROOT)
+    first = add_user(db, "22")
+    second = add_user(db, "23")
+    external = add_user(db, "24")
+    team_id = client.post("/api/teams", json={"name": "系统管理员指派团队"}).json()["id"]
+    for member in (first, second):
+        assert client.post(
+            f"/api/teams/{team_id}/members", json={"identifier": member.username, "role": "MEMBER"}
+        ).status_code == 201
+
+    root_client = login_as(client.app, root.username)
+    created = root_client.post("/api/tasks", json={
+        "title": "ROOT 创建的团队任务",
+        "teamId": team_id,
+        "assigneeIds": [first.id],
+    })
+    assert created.status_code == 201, created.text
+    task = created.json()
+    assert task["teamId"] == team_id
+    assert [item["userId"] for item in task["assignments"]] == [first.id]
+    assert task["permissions"]["assignable"] is True
+
+    updated = root_client.put(
+        f"/api/tasks/{task['id']}/assignees", json={"assigneeIds": [second.id]}
+    )
+    assert updated.status_code == 200, updated.text
+    assert [item["userId"] for item in updated.json()["assignments"]] == [second.id]
+
+    outside = root_client.post("/api/tasks", json={
+        "title": "ROOT 不得指派团队外成员",
+        "teamId": team_id,
+        "assigneeIds": [external.id],
+    })
+    assert outside.status_code == 422
+
+    inferred = root_client.post("/api/tasks", json={
+        "title": "ROOT 必须指定团队",
+        "assigneeIds": [first.id],
+    })
+    assert inferred.status_code == 422

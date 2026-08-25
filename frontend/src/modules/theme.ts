@@ -10,6 +10,10 @@ export type AppearancePalette =
   | 'summer'
   | 'autumn'
   | 'winter'
+  | 'qianshan'
+  | 'jiangnan'
+  | 'damo'
+  | 'pinghu'
 
 export type AppearanceMode = 'system' | 'light' | 'dark'
 export type ResolvedAppearanceMode = Exclude<AppearanceMode, 'system'>
@@ -42,7 +46,7 @@ export interface AppearancePaletteOption {
   id: AppearancePalette
   label: string
   swatch: string
-  group?: 'classic' | 'season'
+  group?: 'classic' | 'season' | 'scenic'
   atmosphere?: AppearanceAtmosphere
   scene?: AppearanceScene
   primary: string
@@ -80,7 +84,7 @@ const palette = (
   darkPrimaryPressed: string,
   light: AppearanceSurfaceSet,
   dark: AppearanceSurfaceSet,
-  extra?: { group?: 'classic' | 'season'; atmosphere?: AppearanceAtmosphere; scene?: AppearanceScene },
+  extra?: { group?: 'classic' | 'season' | 'scenic'; atmosphere?: AppearanceAtmosphere; scene?: AppearanceScene },
 ): AppearancePaletteOption => ({
   id,
   label,
@@ -327,6 +331,170 @@ export const appearancePalettes: readonly AppearancePaletteOption[] = [
         {
           backMountain: '#22334d', cap: '#9db8d8', midMountain: '#182741', snowField: '#0f1c30', shade: '#16273f', pine: '#16302e', pineCap: '#9db8d8', trunk: '#0c1a20', moonOpacity: '1', starsOpacity: '1', moonFill: '#f1f5f9', moonHalo: 'rgb(191 219 254 / .18)',
           particle1: '#ffffff', particle2: '#dbeafe', particle3: '#eff6ff', auroraA: '#f472b6', auroraB: '#67e8f9',
+        },
+      ),
+    },
+  ),
+  palette(
+    'qianshan',
+    '青绿·千山',
+    'linear-gradient(145deg, #A8CFC0, #3A7D5D)',
+    '#3A7D5D', '#2F6A4E', '#265740', '#E7F2EC', '#1B3328', '#7FC8A4', '#A3D8BC', '#5FAF8A',
+    surfaces(
+      'rgb(238 246 242 / .66)', 'rgb(228 240 234 / .55)', 'rgb(232 243 237 / .6)',
+      'rgb(248 252 250 / .86)', 'rgb(251 253 252 / .9)', 'rgb(243 249 246 / .85)',
+      'rgb(58 125 93 / .08)', 'rgb(240 248 244 / .8)', 'rgb(58 125 93 / .13)', 'rgb(58 125 93 / .2)',
+    ),
+    surfaces(
+      'rgb(8 16 13 / .72)', 'rgb(11 21 17 / .6)', 'rgb(10 19 15 / .64)',
+      'rgb(13 24 19 / .88)', 'rgb(15 27 22 / .92)', 'rgb(17 30 25 / .88)',
+      'rgb(127 200 164 / .1)', 'rgb(14 26 21 / .85)', 'rgb(127 200 164 / .11)', 'rgb(127 200 164 / .18)',
+    ),
+    {
+      group: 'scenic',
+      atmosphere: {
+        light: [
+          'radial-gradient(1000px 640px at 88% -8%, rgb(255 255 255 / .9), transparent 58%)',
+          'radial-gradient(900px 600px at 6% 106%, rgb(168 207 192 / .5), transparent 62%)',
+          'linear-gradient(172deg, #DDEBE4 0%, #C8DED3 52%, #B2D0C2 100%)',
+        ].join(', '),
+        dark: [
+          'radial-gradient(760px 520px at 76% 16%, rgb(168 207 192 / .14), transparent 60%)',
+          'radial-gradient(1000px 640px at 10% 108%, rgb(58 125 93 / .38), transparent 62%)',
+          'linear-gradient(172deg, #0C1A15 0%, #0A1410 52%, #060D0A 100%)',
+        ].join(', '),
+      },
+      scene: scene(
+        {
+          farMountain: '#8fb8a8', midMountain: '#5f9b80', nearMountain: '#3a7d5d', frontHill: '#2c6249', mist: 'rgb(240 248 244 / .7)', bird: '#3b5548', pine: '#24503c',
+          particle1: 'rgb(255 255 255 / .5)', particle2: 'rgb(236 246 241 / .55)', particle3: 'rgb(214 233 224 / .6)', auroraA: '#7fc8a4', auroraB: '#67c2c8',
+        },
+        {
+          farMountain: '#24443a', midMountain: '#1a3329', nearMountain: '#12251d', frontHill: '#0c1a14', mist: 'rgb(127 200 164 / .12)', bird: '#9dc4b0', pine: '#0e211a',
+          particle1: 'rgb(168 207 192 / .35)', particle2: 'rgb(127 200 164 / .3)', particle3: 'rgb(214 233 224 / .25)', auroraA: '#7fc8a4', auroraB: '#67c2c8',
+        },
+      ),
+    },
+  ),
+  palette(
+    'jiangnan',
+    '烟雨·江南',
+    'linear-gradient(145deg, #C3D4DC, #5B7A8C)',
+    '#5B7A8C', '#4C6878', '#3E5765', '#E9F0F4', '#22323C', '#9FC2D4', '#BDD7E4', '#7FA9C0',
+    surfaces(
+      'rgb(238 243 246 / .66)', 'rgb(229 237 241 / .55)', 'rgb(233 240 244 / .6)',
+      'rgb(248 251 253 / .86)', 'rgb(252 253 254 / .9)', 'rgb(243 248 250 / .85)',
+      'rgb(91 122 140 / .08)', 'rgb(241 246 249 / .8)', 'rgb(91 122 140 / .13)', 'rgb(91 122 140 / .2)',
+    ),
+    surfaces(
+      'rgb(10 15 20 / .72)', 'rgb(13 19 25 / .6)', 'rgb(12 18 23 / .64)',
+      'rgb(15 22 29 / .88)', 'rgb(17 25 33 / .92)', 'rgb(19 28 36 / .88)',
+      'rgb(159 194 212 / .1)', 'rgb(16 23 30 / .85)', 'rgb(159 194 212 / .11)', 'rgb(159 194 212 / .18)',
+    ),
+    {
+      group: 'scenic',
+      atmosphere: {
+        light: [
+          'radial-gradient(1000px 640px at 90% -6%, rgb(255 255 255 / .85), transparent 60%)',
+          'radial-gradient(880px 600px at 8% 104%, rgb(195 212 220 / .55), transparent 62%)',
+          'linear-gradient(172deg, #E3EAEE 0%, #D2DDE3 52%, #C1D0D8 100%)',
+        ].join(', '),
+        dark: [
+          'radial-gradient(720px 500px at 80% 14%, rgb(159 194 212 / .13), transparent 60%)',
+          'radial-gradient(1000px 640px at 12% 108%, rgb(91 122 140 / .36), transparent 62%)',
+          'linear-gradient(172deg, #101820 0%, #0C1218 52%, #070B10 100%)',
+        ].join(', '),
+      },
+      scene: scene(
+        {
+          wallFace: '#f2f4f5', wallShade: '#d8e0e4', roofTile: '#3e4a54', roofCap: '#2c363e', bridge: '#5f707c', water: '#a8bfcb', waterShade: '#93aebd', ripple: 'rgb(255 255 255 / .55)', windowLight: '#d9a441', rain: 'rgb(120 150 165 / .4)',
+          particle1: 'rgb(140 168 182 / .5)', particle2: 'rgb(120 150 165 / .45)', particle3: 'rgb(160 186 198 / .5)', auroraA: '#9fc2d4', auroraB: '#7fa8c0',
+        },
+        {
+          wallFace: '#1b242c', wallShade: '#141c23', roofTile: '#0d141a', roofCap: '#0a0f14', bridge: '#23303a', water: '#14212b', waterShade: '#101a23', ripple: 'rgb(157 194 212 / .3)', windowLight: '#e8b04b', rain: 'rgb(159 194 212 / .35)',
+          particle1: 'rgb(159 194 212 / .4)', particle2: 'rgb(140 168 182 / .35)', particle3: 'rgb(120 150 165 / .3)', auroraA: '#9fc2d4', auroraB: '#7fa8c0',
+        },
+      ),
+    },
+  ),
+  palette(
+    'damo',
+    '大漠·孤烟',
+    'linear-gradient(145deg, #E8C9A8, #C2703D)',
+    '#C2703D', '#A85F32', '#8D4F29', '#F8EDE4', '#3A2417', '#E8A87C', '#F0C2A0', '#D68A56',
+    surfaces(
+      'rgb(248 242 235 / .66)', 'rgb(243 234 224 / .55)', 'rgb(246 238 229 / .6)',
+      'rgb(253 250 246 / .86)', 'rgb(254 252 250 / .9)', 'rgb(250 245 239 / .85)',
+      'rgb(194 112 61 / .08)', 'rgb(249 243 236 / .8)', 'rgb(194 112 61 / .13)', 'rgb(194 112 61 / .2)',
+    ),
+    surfaces(
+      'rgb(19 12 8 / .72)', 'rgb(24 16 11 / .6)', 'rgb(22 15 10 / .64)',
+      'rgb(28 19 13 / .88)', 'rgb(32 22 15 / .92)', 'rgb(35 24 17 / .88)',
+      'rgb(232 168 124 / .1)', 'rgb(30 20 14 / .85)', 'rgb(232 168 124 / .11)', 'rgb(232 168 124 / .18)',
+    ),
+    {
+      group: 'scenic',
+      atmosphere: {
+        light: [
+          'radial-gradient(1000px 640px at 88% -6%, rgb(255 251 244 / .9), transparent 58%)',
+          'radial-gradient(900px 600px at 8% 104%, rgb(232 201 168 / .5), transparent 62%)',
+          'linear-gradient(172deg, #F2E4D3 0%, #E9D4BC 52%, #DEC4A6 100%)',
+        ].join(', '),
+        dark: [
+          'radial-gradient(760px 520px at 78% 20%, rgb(232 168 124 / .18), transparent 60%)',
+          'radial-gradient(1000px 640px at 12% 108%, rgb(194 112 61 / .4), transparent 62%)',
+          'linear-gradient(172deg, #1E1410 0%, #170F0B 52%, #0E0906 100%)',
+        ].join(', '),
+      },
+      scene: scene(
+        {
+          sun: '#f6d8a8', sunHalo: 'rgb(246 216 168 / .5)', duneBack: '#e3bc8e', duneMid: '#d6a469', duneFront: '#c4904f', smoke: 'rgb(110 100 90 / .5)', camel: '#4a3626', poplar: '#8a8f3a', ember: 'rgb(232 138 74 / 0)',
+          particle1: 'rgb(214 164 105 / .55)', particle2: 'rgb(194 144 84 / .5)', particle3: 'rgb(232 201 168 / .6)', auroraA: '#e8a87c', auroraB: '#d97b4a',
+        },
+        {
+          sun: '#e8a87c', sunHalo: 'rgb(232 138 74 / .3)', duneBack: '#43301f', duneMid: '#352517', duneFront: '#271b10', smoke: 'rgb(200 180 160 / .25)', camel: '#0e0a06', poplar: '#1c150c', ember: 'rgb(232 138 74 / .45)',
+          particle1: 'rgb(232 168 124 / .3)', particle2: 'rgb(214 164 105 / .28)', particle3: 'rgb(194 144 84 / .25)', auroraA: '#e8a87c', auroraB: '#d97b4a',
+        },
+      ),
+    },
+  ),
+  palette(
+    'pinghu',
+    '平湖·秋月',
+    'linear-gradient(145deg, #B8C4E0, #4A5FA5)',
+    '#4A5FA5', '#3E5090', '#334278', '#EAEEF7', '#1F2540', '#9DB2E0', '#BCCBEA', '#7B93C9',
+    surfaces(
+      'rgb(238 241 248 / .66)', 'rgb(228 233 243 / .55)', 'rgb(233 237 245 / .6)',
+      'rgb(249 250 253 / .86)', 'rgb(252 253 255 / .9)', 'rgb(243 246 250 / .85)',
+      'rgb(74 95 165 / .08)', 'rgb(241 244 249 / .8)', 'rgb(74 95 165 / .13)', 'rgb(74 95 165 / .2)',
+    ),
+    surfaces(
+      'rgb(9 12 22 / .72)', 'rgb(12 16 28 / .6)', 'rgb(11 15 26 / .64)',
+      'rgb(14 19 33 / .88)', 'rgb(16 22 38 / .92)', 'rgb(18 25 42 / .88)',
+      'rgb(157 178 224 / .1)', 'rgb(15 20 34 / .85)', 'rgb(157 178 224 / .11)', 'rgb(157 178 224 / .18)',
+    ),
+    {
+      group: 'scenic',
+      atmosphere: {
+        light: [
+          'radial-gradient(1000px 640px at 90% -8%, rgb(255 255 255 / .9), transparent 58%)',
+          'radial-gradient(900px 600px at 8% 104%, rgb(184 196 224 / .5), transparent 62%)',
+          'linear-gradient(172deg, #E1E6F2 0%, #D0D8EA 52%, #BFCADF 100%)',
+        ].join(', '),
+        dark: [
+          'radial-gradient(720px 500px at 74% 14%, rgb(157 178 224 / .16), transparent 60%)',
+          'radial-gradient(1000px 640px at 12% 108%, rgb(74 95 165 / .4), transparent 62%)',
+          'linear-gradient(172deg, #0E1428 0%, #0A0F1E 52%, #060912 100%)',
+        ].join(', '),
+      },
+      scene: scene(
+        {
+          farHill: '#8fa3c6', nearHill: '#6479ac', lake: '#9fb4d8', lakeShade: '#8aa3cc', ripple: 'rgb(255 255 255 / .55)', reed: '#7a8a5a', boat: '#5a4632', moonFill: '#eef3fb', moonHalo: 'rgb(157 178 224 / .2)', moonOpacity: '0', starsOpacity: '0', moonPath: 'rgb(238 243 251 / 0)',
+          particle1: 'rgb(255 255 255 / .6)', particle2: 'rgb(220 230 250 / .6)', particle3: 'rgb(184 196 224 / .55)', auroraA: '#9db2e0', auroraB: '#7fd0e8',
+        },
+        {
+          farHill: '#1b2440', nearHill: '#131a30', lake: '#0f1830', lakeShade: '#0c1326', ripple: 'rgb(157 178 224 / .3)', reed: '#0e1420', boat: '#060a14', moonFill: '#eef3fb', moonHalo: 'rgb(157 178 224 / .2)', moonOpacity: '1', starsOpacity: '1', moonPath: 'rgb(238 243 251 / .35)',
+          particle1: 'rgb(238 243 251 / .5)', particle2: 'rgb(157 178 224 / .45)', particle3: 'rgb(220 230 250 / .4)', auroraA: '#9db2e0', auroraB: '#7fd0e8',
         },
       ),
     },

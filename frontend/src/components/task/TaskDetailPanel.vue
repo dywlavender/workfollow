@@ -17,7 +17,7 @@ const emit = defineEmits<{
   close: []
   togglePersonal: [todo: Todo]
   removePersonal: [todo: Todo]
-  updatePersonal: [todoId: string, payload: Partial<TodoPayload>, quiet?: boolean, settled?: (ok: boolean) => void]
+  updatePersonal: [todoId: string, payload: Partial<TodoPayload>, quiet?: boolean, settled?: (ok: boolean, savedAt?: string) => void]
   assignPersonal: [todo: Todo, userIds: string[]]
   openSource: [noteId: string, blockId?: string | null]
 }>()

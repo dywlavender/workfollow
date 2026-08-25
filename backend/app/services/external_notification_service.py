@@ -65,6 +65,53 @@ def external_notifications_enabled(settings: Settings | None = None) -> bool:
     return bool((settings or get_settings()).notification_http_url.strip())
 
 
+def public_route_url(path: str, settings: Settings | None = None) -> str:
+    """Build a browser URL for a route in the WorkFollow SPA.
+
+    The public origin is deployment-specific, so it is never inferred from
+    the notification receiver URL.  With no origin configured we retain a
+    relative URL, which is useful for same-origin consumers and makes the
+    missing deployment setting visible in the payload instead of silently
+    linking to the wrong host.
+    """
+    normalized_path = path if path.startswith("/") else f"/{path}"
+    current_settings = settings or get_settings()
+    configured_base = (
+        current_settings.server_url.strip()
+        or current_settings.notification_public_url.strip()
+    )
+    base = configured_base.rstrip("/")
+    return f"{base}{normalized_path}" if base else normalized_path
+
+
+def task_public_url(task_id: str, settings: Settings | None = None) -> str:
+    return public_route_url(
+        f"/todos?{urlencode({'view': 'all', 'todo': task_id})}",
+        settings,
+    )
+
+
+def _delivery_url(data_json: dict[str, object] | None, settings: Settings | None = None) -> str | None:
+    """Read the canonical browser URL from a queued delivery payload."""
+    if not isinstance(data_json, dict):
+        return None
+    direct = data_json.get("url") or data_json.get("taskUrl")
+    if isinstance(direct, str) and direct.strip():
+        return direct.strip()
+    task = data_json.get("task")
+    if isinstance(task, dict):
+        nested = task.get("url") or task.get("taskUrl")
+        if isinstance(nested, str) and nested.strip():
+            return nested.strip()
+        task_id = task.get("id")
+        if isinstance(task_id, str) and task_id.strip():
+            return task_public_url(task_id.strip(), settings)
+    task_id = data_json.get("taskId")
+    if isinstance(task_id, str) and task_id.strip():
+        return task_public_url(task_id.strip(), settings)
+    return None
+
+
 def add_external_notification(
     db: Session,
     user_id: str,
@@ -140,20 +187,28 @@ def add_external_notifications(
     return added
 
 
-def _external_url(base_url: str, username: str, message: str) -> str:
+def _external_url(base_url: str, username: str, message: str, url: str | None = None) -> str:
     parsed = urlsplit(base_url)
     query = parse_qsl(parsed.query, keep_blank_values=True)
     query.extend([("userIds", username), ("msg", message)])
+    if url:
+        query.append(("url", url))
     return urlunsplit((parsed.scheme, parsed.netloc, parsed.path, urlencode(query), parsed.fragment))
 
 
-def send_external_notification(username: str, message: str, settings: Settings | None = None) -> int:
+def send_external_notification(
+    username: str,
+    message: str,
+    settings: Settings | None = None,
+    *,
+    url: str | None = None,
+) -> int:
     current_settings = settings or get_settings()
     base_url = current_settings.notification_http_url.strip()
     if not base_url:
         return 0
     request = Request(
-        _external_url(base_url, username, message),
+        _external_url(base_url, username, message, url),
         method="GET",
         headers={"Accept": "*/*", "User-Agent": "WorkFollow-Notification/1.0"},
     )
@@ -256,7 +311,12 @@ def dispatch_pending(
         error: Exception | None = None
         http_status: int | None = None
         try:
-            http_status = send_external_notification(delivery.username, delivery.message, current_settings)
+            http_status = send_external_notification(
+                delivery.username,
+                delivery.message,
+                current_settings,
+                url=_delivery_url(delivery.data_json, current_settings),
+            )
         except Exception as exc:  # delivery state must be persisted for every network failure
             error = exc
         _finish_delivery(db, delivery, current, error, current_settings)
@@ -301,6 +361,7 @@ def _daily_due_label(due_at: datetime) -> str:
 def _daily_message(
     overdue: list[tuple[str, str, datetime]],
     today: list[tuple[str, str, datetime]],
+    url: str,
 ) -> str:
     def labels(rows: list[tuple[str, str, datetime]]) -> str:
         return "、".join(f"{title}（{_daily_due_label(due_at)}）" for _, title, due_at in rows[:5])
@@ -312,7 +373,7 @@ def _daily_message(
     if today:
         suffix = "" if len(today) <= 5 else f"；另有 {len(today) - 5} 项未展开"
         parts.append(f"今日 {len(today)} 项：{labels(today)}{suffix}")
-    return "【每日待办】" + "；".join(parts) + "。"
+    return "【每日待办】" + "；".join(parts) + f"；查看今日待办：{url}"
 
 
 def enqueue_daily_task_digests(
@@ -360,7 +421,8 @@ def enqueue_daily_task_digests(
             continue
         from app.services import notification_dispatcher
 
-        message = _daily_message(overdue, today)
+        digest_url = public_route_url("/todos?view=today", current_settings)
+        message = _daily_message(overdue, today, digest_url)
         result = notification_dispatcher.dispatch_event(
             db,
             event="DAILY_TASK_DIGEST",
@@ -376,13 +438,24 @@ def enqueue_daily_task_digests(
                 "overdueTaskIds": [task_id for task_id, _, _ in overdue],
                 "todayTaskIds": [task_id for task_id, _, _ in today],
                 "overdueTasks": [
-                    {"id": task_id, "title": title, "dueAt": due_at.isoformat()}
+                    {
+                        "id": task_id,
+                        "title": title,
+                        "dueAt": due_at.isoformat(),
+                        "url": task_public_url(task_id, current_settings),
+                    }
                     for task_id, title, due_at in overdue
                 ],
                 "todayTasks": [
-                    {"id": task_id, "title": title, "dueAt": due_at.isoformat()}
+                    {
+                        "id": task_id,
+                        "title": title,
+                        "dueAt": due_at.isoformat(),
+                        "url": task_public_url(task_id, current_settings),
+                    }
                     for task_id, title, due_at in today
                 ],
+                "url": digest_url,
                 "eventKey": event_key,
             },
             event_key=event_key,

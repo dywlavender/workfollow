@@ -47,7 +47,10 @@ def test_task_event_is_sent_to_external_get_endpoint(client, db, monkeypatch) ->
         f"/api/teams/{team['id']}/members", json={"identifier": target.username, "role": "MEMBER"}
     ).status_code == 201
 
-    settings = Settings(notification_http_url="http://notify.example.test/send")
+    settings = Settings(
+        notification_http_url="http://notify.example.test/send",
+        server_url="https://workfollow.example.test",
+    )
     monkeypatch.setattr(external_notification_service, "get_settings", lambda: settings)
 
     captured: list[tuple[str, float]] = []
@@ -83,8 +86,12 @@ def test_task_event_is_sent_to_external_get_endpoint(client, db, monkeypatch) ->
     assert len(captured) == 1
     query = parse_qs(urlsplit(captured[0][0]).query)
     assert query["userIds"] == [target.username]
+    assert query["url"] == [
+        f"https://workfollow.example.test/todos?view=all&todo={task.json()['id']}"
+    ]
     assert query["msg"] == [
-        "【任务分配】测试用户将任务“外部通知任务”分配给你；截止：未设置；团队：外部通知团队。"
+        "【任务分配】测试用户将任务“外部通知任务”分配给你；截止：未设置；团队：外部通知团队；"
+        f"查看任务：https://workfollow.example.test/todos?view=all&todo={task.json()['id']}"
     ]
     assert captured[0][1] == settings.notification_http_timeout_seconds
     assert db.get(ExternalNotificationDelivery, deliveries[0].id).status == ExternalDeliveryStatus.SENT
@@ -98,7 +105,10 @@ def test_assignment_cancellation_notifies_before_and_after_participants(client, 
         assert client.post(
             f"/api/teams/{team['id']}/members", json={"identifier": target.username, "role": "MEMBER"}
         ).status_code == 201
-    settings = Settings(notification_http_url="http://notify.example.test/send")
+    settings = Settings(
+        notification_http_url="http://notify.example.test/send",
+        server_url="https://workfollow.example.test",
+    )
     monkeypatch.setattr(external_notification_service, "get_settings", lambda: settings)
 
     task = client.post(
@@ -120,11 +130,13 @@ def test_assignment_cancellation_notifies_before_and_after_participants(client, 
     messages = {item.username: item.message for item in deliveries}
     assert messages[first.username] == (
         "【任务分配取消】测试用户取消了你在“调整成员任务”中的分配；"
-        "截止：未设置；团队：分配变更通知。"
+        "截止：未设置；团队：分配变更通知；"
+        f"查看任务：https://workfollow.example.test/todos?view=all&todo={task['id']}"
     )
     assert messages[second.username] == (
         "【任务成员调整】测试用户调整了“调整成员任务”的分配成员（新增：无；移除：External-First）；"
-        "截止：未设置；团队：分配变更通知。"
+        "截止：未设置；团队：分配变更通知；"
+        f"查看任务：https://workfollow.example.test/todos?view=all&todo={task['id']}"
     )
 
 
@@ -134,7 +146,10 @@ def test_task_assignment_notification_contains_task_context(client, db, monkeypa
     assert client.post(
         f"/api/teams/{team['id']}/members", json={"identifier": target.username, "role": "MEMBER"}
     ).status_code == 201
-    settings = Settings(notification_http_url="http://notify.example.test/send")
+    settings = Settings(
+        notification_http_url="http://notify.example.test/send",
+        server_url="https://workfollow.example.test",
+    )
     monkeypatch.setattr(external_notification_service, "get_settings", lambda: settings)
 
     response = client.post(
@@ -158,6 +173,10 @@ def test_task_assignment_notification_contains_task_context(client, db, monkeypa
     assert task_data["dueAt"] == "2026-08-30T18:00:00"
     assert task_data["priority"] == "HIGH"
     assert task_data["descriptionExcerpt"] == "这是一段任务说明"
+    assert task_data["url"] == (
+        f"https://workfollow.example.test/todos?view=all&todo={delivery.data_json['taskId']}"
+    )
+    assert delivery.data_json["url"] == task_data["url"]
 
 
 def test_task_detail_update_notifies_active_assignees(client, db, monkeypatch) -> None:
@@ -168,7 +187,10 @@ def test_task_detail_update_notifies_active_assignees(client, db, monkeypatch) -
         assert client.post(
             f"/api/teams/{team['id']}/members", json={"identifier": target.username, "role": "MEMBER"}
         ).status_code == 201
-    settings = Settings(notification_http_url="http://notify.example.test/send")
+    settings = Settings(
+        notification_http_url="http://notify.example.test/send",
+        server_url="https://workfollow.example.test",
+    )
     monkeypatch.setattr(external_notification_service, "get_settings", lambda: settings)
 
     task = client.post(
@@ -210,7 +232,10 @@ def test_completion_notifies_assignment_and_whole_task(client, db, monkeypatch) 
         assert client.post(
             f"/api/teams/{team['id']}/members", json={"identifier": user.username, "role": "MEMBER"}
         ).status_code == 201
-    settings = Settings(notification_http_url="http://notify.example.test/send")
+    settings = Settings(
+        notification_http_url="http://notify.example.test/send",
+        server_url="https://workfollow.example.test",
+    )
     monkeypatch.setattr(external_notification_service, "get_settings", lambda: settings)
 
     task = client.post(
@@ -252,7 +277,10 @@ def test_completion_notifies_assignment_and_whole_task(client, db, monkeypatch) 
 
 
 def test_daily_digest_is_one_per_user_and_contains_overdue_and_today(db) -> None:
-    settings = Settings(notification_http_url="http://notify.example.test/send")
+    settings = Settings(
+        notification_http_url="http://notify.example.test/send",
+        server_url="https://workfollow.example.test",
+    )
     user_id = "20000000-0000-0000-0000-000000000001"
     overdue = Todo(
         owner_id=user_id,
@@ -293,6 +321,11 @@ def test_daily_digest_is_one_per_user_and_contains_overdue_and_today(db) -> None
     assert delivery is not None
     assert "逾期 1 项：逾期任务" in delivery.message
     assert "今日 1 项：今日任务" in delivery.message
+    assert delivery.message.endswith("查看今日待办：https://workfollow.example.test/todos?view=today")
+    assert delivery.data_json["url"] == "https://workfollow.example.test/todos?view=today"
+    assert delivery.data_json["overdueTasks"][0]["url"].endswith(
+        f"todo={overdue.id}"
+    )
     page_digest = db.scalar(
         select(Notification).where(
             Notification.user_id == user_id,

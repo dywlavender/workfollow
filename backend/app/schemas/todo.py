@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Any
 
-from pydantic import Field, model_validator
+from pydantic import Field, field_validator, model_validator
 
 from app.models.todo import RecurrenceType, TodoAssignmentStatus, TodoPriority, TodoSourceType, TodoStatus
 from app.schemas.base import ApiModel
@@ -11,9 +11,39 @@ from app.schemas.resource_relation import TaskSourceCreate, TaskSourceRead
 
 class TodoPermissions(ApiModel):
     editable: bool = False
+    content_editable: bool = False
     deletable: bool = False
     assignable: bool = False
     completable: bool = False
+
+
+class TodoListCreate(ApiModel):
+    name: str = Field(min_length=1, max_length=120)
+
+    @field_validator("name")
+    @classmethod
+    def normalize_name(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("清单名称不能为空")
+        return value
+
+
+class TodoListUpdate(TodoListCreate):
+    pass
+
+
+class TodoListRead(ApiModel):
+    id: str | None
+    name: str
+    sort_order: int
+    protected: bool = False
+
+
+class TodoListDeleteResult(ApiModel):
+    name: str
+    fallback_list_name: str
+    moved_task_count: int
 
 
 class TodoAssignmentRead(ApiModel):
@@ -45,6 +75,7 @@ class TodoCreate(ApiModel):
     source_note_id: str | None = None
     source_excerpt: str | None = None
     source: TaskSourceCreate | None = None
+    team_id: str | None = Field(default=None, min_length=1, max_length=36)
     assignee_ids: list[str] | None = Field(default=None, max_length=100)
 
     @model_validator(mode="after")

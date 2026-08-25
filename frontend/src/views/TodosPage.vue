@@ -7,6 +7,7 @@ import {
   IconCalendarMonth,
   IconCalendarWeek,
   IconCircleCheck,
+  IconEdit,
   IconInbox,
   IconList,
   IconDots,
@@ -15,6 +16,7 @@ import {
   IconPlus,
   IconSearch,
   IconSend,
+  IconTrash,
   IconUsers,
   IconX,
 } from '@tabler/icons-vue'
@@ -22,15 +24,18 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import ActionFeedback from '@/components/ActionFeedback.vue'
+import ConfirmDialog from '@/components/ConfirmDialog.vue'
+import InputDialog from '@/components/InputDialog.vue'
 import QuickTodoInput from '@/components/todo/QuickTodoInput.vue'
 import TaskDetailPanel from '@/components/task/TaskDetailPanel.vue'
 import TaskListGrouped from '@/components/task/TaskListGrouped.vue'
 import TodoDialog from '@/components/todo/TodoDialog.vue'
 import TodoItem from '@/components/todo/TodoItem.vue'
 import { taskCountLabel } from '@/modules/todo/taskCounts'
-import { fetchTeamMembers, fetchTodo, type TeamMember, type Todo, type TodoPayload, type TodoView } from '@/services/api'
+import { fetchTeamMembers, fetchTodo, type TeamMember, type Todo, type TodoList, type TodoPayload, type TodoView } from '@/services/api'
 import { useAppStore } from '@/stores/app'
 import { useAuthStore } from '@/stores/auth'
+import { useRealtimeStore } from '@/stores/realtime'
 import { optimisticCompletedTodo, optimisticRestoredTodo, useTodoStore } from '@/stores/todos'
 import { useWorkspaceStore } from '@/stores/workspace'
 
@@ -38,6 +43,7 @@ const todoStore = useTodoStore()
 const appStore = useAppStore()
 const auth = useAuthStore()
 const workspaceStore = useWorkspaceStore()
+const realtime = useRealtimeStore()
 const route = useRoute()
 const router = useRouter()
 const selectedTodoId = ref<string | null>(null)
@@ -61,6 +67,11 @@ const taskViewSidebar = ref<HTMLElement | null>(null)
 const taskListWidth = ref(420)
 const resizingList = ref(false)
 const teamMembers = ref<TeamMember[]>([])
+const listDialogOpen = ref(false)
+const listDialogMode = ref<'create' | 'rename'>('create')
+const listDialogName = ref('')
+const listDialogTarget = ref<TodoList | null>(null)
+const deleteListTarget = ref<TodoList | null>(null)
 
 const workspaceStyle = computed(() => ({ '--task-list-width': `${taskListWidth.value}px` }))
 const taskNavigationButtonLabel = computed(() => taskNavigationCollapsed.value ? '展开任务导航' : '收起任务导航')
@@ -84,7 +95,11 @@ const collaborationViews = [
 ]
 const currentTeam = computed(() => workspaceStore.currentTeam ?? workspaceStore.teams[0] ?? null)
 const hasTeam = computed(() => Boolean(currentTeam.value))
-const canAssign = computed(() => currentTeam.value?.role === 'OWNER' || currentTeam.value?.role === 'ADMIN')
+const isSystemAdmin = computed(() => auth.user?.systemRole === 'ROOT')
+const canAssign = computed(() => Boolean(currentTeam.value) && (
+  isSystemAdmin.value || currentTeam.value?.role === 'OWNER' || currentTeam.value?.role === 'ADMIN'
+))
+const taskTeamId = computed(() => canAssign.value ? currentTeam.value?.id ?? null : null)
 const views = computed(() => hasTeam.value ? [...taskViews, ...collaborationViews, ...recordViews] : baseViews)
 
 const taskViewGroups = computed(() => [
@@ -96,17 +111,19 @@ const taskViewGroups = computed(() => [
 const currentView = computed(() => views.value.find((view) => view.id === todoStore.currentView) ?? baseViews[1])
 const currentListName = computed(() => typeof route.query.list === 'string' ? route.query.list.trim() : '')
 const currentHeading = computed(() => currentListName.value || currentView.value.label)
+const todayKey = ref(dayjs().format('YYYY-MM-DD'))
+let dayRefreshTimer: number | undefined
 const quickDefaultDueAt = computed(() => !currentListName.value && currentView.value.id === 'today'
-  ? dayjs().startOf('day').format('YYYY-MM-DDTHH:mm:ss')
+  ? dayjs(todayKey.value).startOf('day').format('YYYY-MM-DDTHH:mm:ss')
   : '')
 const standardListNames = ['收集箱', '工作', '个人', '学习']
 const listRank = (name: string) => {
   const index = standardListNames.indexOf(name)
   return index === -1 ? standardListNames.length : index
 }
-const listViews = computed(() => Object.entries(todoStore.listCounts)
-  .sort(([first], [second]) => listRank(first) - listRank(second) || first.localeCompare(second, 'zh-CN'))
-  .map(([name, count]) => ({ name, count })))
+const listViews = computed(() => todoStore.lists
+  .map((list) => ({ ...list, count: todoStore.listCounts[list.name] ?? 0 }))
+  .sort((first, second) => listRank(first.name) - listRank(second.name) || first.sortOrder - second.sortOrder || first.name.localeCompare(second.name, 'zh-CN')))
 const availableTaskLists = computed(() => listViews.value.map((list) => list.name))
 const availableTaskTags = computed(() => Array.from(new Set(todoStore.todos.flatMap((todo) => todo.tags))).sort((first, second) => first.localeCompare(second, 'zh-CN')))
 const selectedTodo = computed(() => {
@@ -119,7 +136,21 @@ const weekdayNames = ['周日', '周一', '周二', '周三', '周四', '周五'
 
 const hasVisibleTasks = computed(() => todoStore.todos.length > 0)
 
-const currentDateLabel = computed(() => `${dayjs().format('YYYY年M月D日')} · ${weekdayNames[dayjs().day()]}`)
+const currentDateLabel = computed(() => {
+  const today = dayjs(todayKey.value)
+  return `${today.format('YYYY年M月D日')} · ${weekdayNames[today.day()]}`
+})
+
+function scheduleDayRefresh() {
+  if (dayRefreshTimer !== undefined) window.clearTimeout(dayRefreshTimer)
+  const now = dayjs()
+  const nextLocalMidnight = now.add(1, 'day').startOf('day')
+  const delay = Math.max(1000, nextLocalMidnight.diff(now) + 50)
+  dayRefreshTimer = window.setTimeout(() => {
+    todayKey.value = dayjs().format('YYYY-MM-DD')
+    scheduleDayRefresh()
+  }, delay)
+}
 
 function viewFromRoute(): TodoView {
   const candidate = route.query.view
@@ -174,6 +205,61 @@ async function activateList(listName: string) {
   const routeWillChange = route.query.list !== listName || Object.keys(route.query).some((key) => key !== 'list')
   await router.push({ path: '/todos', query: { list: listName } })
   if (!routeWillChange) await loadView('all')
+}
+
+function openCreateList() {
+  listDialogMode.value = 'create'
+  listDialogName.value = ''
+  listDialogTarget.value = null
+  listDialogOpen.value = true
+}
+
+function openRenameList(list: TodoList) {
+  if (!list.id || list.protected) return
+  listDialogMode.value = 'rename'
+  listDialogName.value = list.name
+  listDialogTarget.value = list
+  listDialogOpen.value = true
+}
+
+function openDeleteList(list: TodoList) {
+  if (!list.id || list.protected) return
+  deleteListTarget.value = list
+}
+
+async function saveList(name: string) {
+  const target = listDialogTarget.value
+  try {
+    if (listDialogMode.value === 'create') {
+      await todoStore.createList(name)
+      notify(`清单“${name}”已创建。`)
+    } else if (target?.id) {
+      const result = await todoStore.renameList(target.id, name)
+      if (currentListName.value === result.previousName) {
+        await router.replace({ path: '/todos', query: { list: result.list.name } })
+      }
+      notify(`清单已重命名为“${result.list.name}”。`)
+    }
+    listDialogOpen.value = false
+    listDialogTarget.value = null
+  } catch {
+    reportActionError('清单名称已存在或保存失败，请换一个名称重试。')
+  }
+}
+
+async function confirmDeleteList() {
+  const target = deleteListTarget.value
+  if (!target?.id) return
+  try {
+    const result = await todoStore.deleteList(target.id)
+    deleteListTarget.value = null
+    if (currentListName.value === target.name) {
+      await router.replace({ path: '/todos', query: { list: result.fallbackListName } })
+    }
+    notify(result.movedTaskCount ? `清单已删除，${result.movedTaskCount} 个任务已移入${result.fallbackListName}。` : '清单已删除。')
+  } catch {
+    reportActionError('清单删除失败，请稍后重试。')
+  }
 }
 
 function listWidthBounds() {
@@ -249,6 +335,7 @@ function resizeListWithKeyboard(event: KeyboardEvent) {
 }
 
 onMounted(async () => {
+  scheduleDayRefresh()
   const storedWidth = Number(localStorage.getItem('workfollow-task-list-width'))
   if (Number.isFinite(storedWidth) && storedWidth > 0) applyListWidth(storedWidth)
   taskNavigationCollapsed.value = localStorage.getItem('workfollow-task-navigation-collapsed') === '1'
@@ -261,11 +348,13 @@ onMounted(async () => {
     : Promise.resolve([] as TeamMember[])
   await Promise.all([
     membersRequest.then((members) => { teamMembers.value = members }),
+    todoStore.loadLists(),
     loadView(),
   ])
 })
 
 onBeforeUnmount(() => {
+  if (dayRefreshTimer !== undefined) window.clearTimeout(dayRefreshTimer)
   window.removeEventListener('pointermove', moveListDivider)
   window.removeEventListener('pointerup', stopListResize)
   window.removeEventListener('keydown', handleWorkspaceKeydown)
@@ -273,6 +362,17 @@ onBeforeUnmount(() => {
 })
 
 watch(() => [route.query.view, route.query.list, route.query.q] as const, () => { void loadView() })
+watch(() => realtime.lastTodoListChange, (change) => {
+  if (!change) return
+  void todoStore.loadLists()
+  if (change.action === 'RENAMED' && currentListName.value === change.previousName) {
+    void router.replace({ path: '/todos', query: { list: change.name } })
+  } else if (change.action === 'DELETED' && currentListName.value === change.previousName) {
+    void router.replace({ path: '/todos', query: { list: change.name } })
+  } else if (change.action === 'RENAMED' || change.action === 'DELETED') {
+    void loadView()
+  }
+})
 
 function selectTodo(todo: Todo, focus = false) {
   selectedTodoId.value = todo.id
@@ -324,16 +424,26 @@ async function save(payload: TodoPayload) {
   }
 }
 
-async function updateTodo(todoId: string, payload: Partial<TodoPayload>, quiet = false): Promise<boolean> {
+async function updateTodo(todoId: string, payload: Partial<TodoPayload>, quiet = false): Promise<{ ok: boolean; savedAt?: string }> {
   try {
-    await todoStore.update(todoId, payload)
+    const updated = await todoStore.update(todoId, payload)
     if (todoStore.query && selectedTodoId.value === todoId && !todoStore.todos.some((todo) => todo.id === todoId)) clearSelection()
     if (!quiet) notify('任务已保存。')
-    return true
+    return { ok: true, savedAt: updated.updatedAt }
   } catch {
     reportActionError('保存失败，请检查日期、提醒和重复设置。')
-    return false
+    return { ok: false }
   }
+}
+
+async function updatePersonalFromDetail(
+  todoId: string,
+  payload: Partial<TodoPayload>,
+  quiet = false,
+  settled?: (ok: boolean, savedAt?: string) => void,
+) {
+  const result = await updateTodo(todoId, payload, quiet)
+  settled?.(result.ok, result.savedAt)
 }
 
 async function updateFromRow(todo: Todo, payload: Partial<TodoPayload>) {
@@ -494,22 +604,34 @@ async function assign(todo: Todo, assigneeIds: string[]) {
             </RouterLink>
           </nav>
         </div>
-        <div class="task-view-group">
-          <h2>清单</h2>
+        <div class="task-view-group task-list-view-group">
+          <div class="task-list-group-heading">
+            <h2>清单</h2>
+            <button class="task-list-add-button" type="button" title="新建清单" aria-label="新建清单" @click.stop="openCreateList"><IconPlus :size="15" /></button>
+          </div>
           <nav class="task-view-nav" aria-label="清单">
-            <RouterLink
+            <div
               v-for="list in listViews"
               :key="list.name"
-              class="task-view-item"
-              :class="{ active: currentListName === list.name }"
-              :to="{ path: '/todos', query: { list: list.name } }"
-              :aria-current="currentListName === list.name ? 'page' : undefined"
-              @click.prevent="activateList(list.name)"
+              class="task-list-nav-item"
+              :class="{ 'has-actions': !list.protected && Boolean(list.id) }"
             >
-              <IconList :size="17" :stroke-width="1.8" aria-hidden="true" />
-              <span class="task-view-copy"><strong>{{ list.name }}</strong><small>任务清单</small></span>
-              <span class="task-view-count" :class="{ pending: !todoStore.hasLoadedCounts }">{{ taskCountLabel(todoStore.hasLoadedCounts, list.count) }}</span>
-            </RouterLink>
+              <RouterLink
+                class="task-view-item"
+                :class="{ active: currentListName === list.name }"
+                :to="{ path: '/todos', query: { list: list.name } }"
+                :aria-current="currentListName === list.name ? 'page' : undefined"
+                @click.prevent="activateList(list.name)"
+              >
+                <IconList :size="17" :stroke-width="1.8" aria-hidden="true" />
+                <span class="task-view-copy"><strong>{{ list.name }}</strong><small>任务清单</small></span>
+                <span class="task-view-count" :class="{ pending: !todoStore.hasLoadedCounts }">{{ taskCountLabel(todoStore.hasLoadedCounts, list.count) }}</span>
+              </RouterLink>
+              <div v-if="!list.protected && list.id" class="task-list-item-actions" aria-label="清单操作">
+                <button type="button" title="重命名" aria-label="重命名清单" @click.stop="openRenameList(list)"><IconEdit :size="14" /></button>
+                <button type="button" title="删除" aria-label="删除清单" @click.stop="openDeleteList(list)"><IconTrash :size="14" /></button>
+              </div>
+            </div>
           </nav>
         </div>
       </aside>
@@ -542,6 +664,7 @@ async function assign(todo: Todo, assigneeIds: string[]) {
             :members="teamMembers"
             :current-user-id="auth.user?.id"
             :can-assign="canAssign"
+            :team-id="taskTeamId"
             :default-list-name="currentListName || '收集箱'"
             :default-due-at="quickDefaultDueAt"
             :available-lists="availableTaskLists"
@@ -567,6 +690,7 @@ async function assign(todo: Todo, assigneeIds: string[]) {
               :selected="selectedTodoId === todo.id"
               :members="teamMembers"
               :current-user-id="auth.user?.id"
+              :available-lists="availableTaskLists"
               @toggle="toggle"
               @edit="selectTodo"
               @edit-date="editDate"
@@ -613,7 +737,7 @@ async function assign(todo: Todo, assigneeIds: string[]) {
         @close="clearSelection"
         @toggle-personal="toggle"
         @remove-personal="remove"
-        @update-personal="async (id, payload, quiet, settled) => settled?.(await updateTodo(id, payload, quiet))"
+        @update-personal="updatePersonalFromDetail"
         @assign-personal="assign"
         @open-source="openSource"
       />
@@ -624,10 +748,30 @@ async function assign(todo: Todo, assigneeIds: string[]) {
       :members="teamMembers"
       :current-user-id="auth.user?.id"
       :can-assign="canAssign"
+      :team-id="taskTeamId"
       :initial-list-name="currentListName || '收集箱'"
       @close="dialogOpen = false"
       @save="save"
       @open-source="openSource"
+    />
+    <InputDialog
+      :open="listDialogOpen"
+      :title="listDialogMode === 'create' ? '新建清单' : '重命名清单'"
+      label="清单名称"
+      :initial-value="listDialogName"
+      placeholder="例如：项目、阅读、生活"
+      :confirm-label="listDialogMode === 'create' ? '创建' : '保存'"
+      @close="listDialogOpen = false"
+      @submit="saveList"
+    />
+    <ConfirmDialog
+      :open="Boolean(deleteListTarget)"
+      title="删除清单"
+      :message="deleteListTarget ? `删除“${deleteListTarget.name}”后，其中的任务会移入“收集箱”。确定继续吗？` : ''"
+      confirm-label="删除"
+      :danger="true"
+      @close="deleteListTarget = null"
+      @confirm="confirmDeleteList"
     />
   </div>
 </template>

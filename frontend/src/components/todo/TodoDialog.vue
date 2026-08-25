@@ -23,11 +23,16 @@ const props = defineProps<{
   members?: TeamMember[]
   currentUserId?: string
   canAssign?: boolean
+  teamId?: string | null
 }>()
 const emit = defineEmits<{ close: []; save: [payload: TodoPayload]; openSource: [noteId: string] }>()
 useDialogEscape(() => props.open, () => emit('close'))
 const sourceTitle = ref<string | null>(null)
 const assigneeIds = ref<string[]>([])
+const assignmentTeamId = computed(() => props.todo ? props.todo.teamId : (props.teamId ?? null))
+const assignmentInvalid = computed(() => Boolean(
+  props.canAssign && assignmentTeamId.value && !assigneeIds.value.length,
+))
 
 interface FormState {
   title: string
@@ -51,7 +56,10 @@ const reminderInvalid = computed(() => {
   if (!form.customReminderAt) return true
   return dayjs(form.customReminderAt).isAfter(dayjs(form.dueAt))
 })
-const canSubmit = computed(() => form.title.trim() && (form.recurrenceType === 'NONE' || form.dueAt) && !reminderInvalid.value)
+const canSubmit = computed(() => form.title.trim()
+  && (form.recurrenceType === 'NONE' || form.dueAt)
+  && !reminderInvalid.value
+  && !assignmentInvalid.value)
 const dueDate = computed({
   get: () => form.dueAt ? dayjs(form.dueAt).format('YYYY-MM-DD') : '',
   set: (value: string) => { form.dueAt = value ? `${value}T${dueTime.value || '00:00'}` : '' },
@@ -67,6 +75,19 @@ function asInput(value: string | null): string {
 
 function defaultNewTodoDueAt(): string {
   return dateOnlyDueAt()
+}
+
+function normalizeAssigneeIds() {
+  if (!props.canAssign || !assignmentTeamId.value) return
+  if (!props.members?.length) {
+    if (!props.todo) assigneeIds.value = []
+    return
+  }
+  const memberIds = new Set(props.members.map((member) => member.userId))
+  const filtered = assigneeIds.value.filter((id) => memberIds.has(id))
+  assigneeIds.value = filtered.length || !props.currentUserId || !memberIds.has(props.currentUserId)
+    ? filtered
+    : [props.currentUserId]
 }
 
 function detectReminder(todo: Todo): { preset: string; custom: string } {
@@ -99,8 +120,15 @@ watch(
     form.customInterval = Number(todo?.recurrenceConfig?.interval ?? 2)
     assigneeIds.value = todo?.assignments.map((item) => item.userId)
       ?? (props.currentUserId ? [props.currentUserId] : [])
+    normalizeAssigneeIds()
   },
   { immediate: true },
+)
+
+watch(
+  () => [props.teamId, props.todo?.teamId, props.canAssign, props.currentUserId, props.members] as const,
+  normalizeAssigneeIds,
+  { deep: true },
 )
 
 watch(
@@ -160,6 +188,7 @@ function submit() {
     }
   }
   if (props.canAssign && assigneeIds.value.length) payload.assigneeIds = assigneeIds.value
+  if (props.canAssign && assignmentTeamId.value) payload.teamId = assignmentTeamId.value
   emit('save', payload)
 }
 </script>
@@ -222,6 +251,7 @@ function submit() {
             <span>指派成员</span>
             <AssigneePopover :members="members ?? []" :model-value="assigneeIds" :current-user-id="currentUserId" @change="assigneeIds = $event" />
           </div>
+          <p v-if="assignmentInvalid" class="inline-error">团队任务至少选择一名当前团队成员。</p>
           <footer class="dialog-actions">
             <button class="secondary-button" type="button" @click="emit('close')">取消</button>
             <button class="primary-button" type="submit" :disabled="!canSubmit">保存</button>

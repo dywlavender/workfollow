@@ -5,12 +5,18 @@ import {
   completeTodo,
   deleteTodo,
   fetchTodos,
+  fetchTodoLists,
   postTodo,
+  postTodoList,
   putTaskAssignees,
   putTaskMyStatus,
+  putTodoList,
   putTodo,
+  deleteTodoList,
   restoreTodo,
   type Todo,
+  type TodoList,
+  type TodoListDeleteResult,
   type TodoPayload,
   type TodoView,
 } from '@/services/api'
@@ -21,6 +27,9 @@ const emptyCounts = (): Record<TodoView, number> => ({
   collaboration: 0, 'assigned-to-me': 0, 'assigned-by-me': 0,
 })
 const defaultLists = ['收集箱', '工作', '个人', '学习']
+const defaultListCatalog = (): TodoList[] => defaultLists.map((name, sortOrder) => ({
+  id: null, name, sortOrder, protected: true,
+}))
 const emptyListCounts = (): Record<string, number> => Object.fromEntries(defaultLists.map((name) => [name, 0]))
 
 export function cloneTodo(todo: Todo): Todo {
@@ -146,6 +155,7 @@ export const useTodoStore = defineStore('todos', {
     currentView: 'today' as TodoView,
     currentListName: '',
     query: '',
+    lists: defaultListCatalog(),
     counts: emptyCounts(),
     listCounts: emptyListCounts(),
     loading: true,
@@ -161,6 +171,7 @@ export const useTodoStore = defineStore('todos', {
       this.currentView = 'today'
       this.currentListName = ''
       this.query = ''
+      this.lists = defaultListCatalog()
       this.counts = emptyCounts()
       this.listCounts = emptyListCounts()
       this.loading = true
@@ -189,6 +200,13 @@ export const useTodoStore = defineStore('todos', {
         this.hasLoaded = true
       }
     },
+    async loadLists() {
+      try {
+        this.lists = await fetchTodoLists()
+      } catch {
+        // Keep the built-in fallback visible if an older backend is still running.
+      }
+    },
     async loadCounts() {
       this.countsLoading = true
       try {
@@ -207,6 +225,13 @@ export const useTodoStore = defineStore('todos', {
           counts[todo.listName] = (counts[todo.listName] ?? 0) + 1
           return counts
         }, emptyListCounts())
+        const known = new Set(this.lists.map((item) => item.name))
+        for (const todo of allTodos) {
+          if (!known.has(todo.listName)) {
+            this.lists.push({ id: null, name: todo.listName, sortOrder: this.lists.length, protected: false })
+            known.add(todo.listName)
+          }
+        }
         this.hasLoadedCounts = true
       } finally {
         this.countsLoading = false
@@ -228,6 +253,44 @@ export const useTodoStore = defineStore('todos', {
       } finally {
         this.mutating = false
       }
+    },
+    async createList(name: string) {
+      const list = await postTodoList(name)
+      if (!this.lists.some((item) => item.id === list.id || item.name === list.name)) this.lists.push(list)
+      if (this.listCounts[list.name] === undefined) this.listCounts[list.name] = 0
+      return list
+    },
+    async renameList(id: string, name: string): Promise<{ list: TodoList; previousName: string }> {
+      const previous = this.lists.find((item) => item.id === id)
+      const list = await putTodoList(id, name)
+      const previousName = previous?.name ?? ''
+      this.lists = this.lists.map((item) => item.id === id ? list : item)
+      if (previousName && previousName !== list.name) {
+        const nextCounts = { ...this.listCounts }
+        nextCounts[list.name] = nextCounts[previousName] ?? 0
+        delete nextCounts[previousName]
+        this.listCounts = nextCounts
+        this.todos.forEach((todo) => {
+          if (todo.listName === previousName) todo.listName = list.name
+        })
+        if (this.currentListName === previousName) this.currentListName = list.name
+      }
+      return { list, previousName }
+    },
+    async deleteList(id: string): Promise<TodoListDeleteResult & { previousName: string }> {
+      const previousName = this.lists.find((item) => item.id === id)?.name ?? ''
+      const result = await deleteTodoList(id)
+      this.lists = this.lists.filter((item) => item.id !== id)
+      const nextCounts = { ...this.listCounts }
+      const movedCount = nextCounts[previousName] ?? result.movedTaskCount
+      delete nextCounts[previousName]
+      nextCounts[result.fallbackListName] = (nextCounts[result.fallbackListName] ?? 0) + movedCount
+      this.listCounts = nextCounts
+      this.todos.forEach((todo) => {
+        if (todo.listName === previousName) todo.listName = result.fallbackListName
+      })
+      if (this.currentListName === previousName) this.currentListName = result.fallbackListName
+      return { ...result, previousName }
     },
     async update(id: string, payload: Partial<TodoPayload>) {
       this.mutating = true

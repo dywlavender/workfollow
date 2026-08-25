@@ -58,6 +58,12 @@ npm run dev
 
 前端默认地址：<http://127.0.0.1:5173>
 
+外部 HTTP 任务通知会携带 `url` 参数，并在正文中附上同一个任务深链。部署时请将
+`WORKFOLLOW_SERVER_URL` 设置为用户实际打开 WorkFollow 的地址（例如
+`https://workfollow.example.com`）；使用 `start.command` 本地启动时会自动使用前端端口。
+未配置时仍会生成 `/todos?view=all&todo=任务ID` 相对地址，仅适合与 WorkFollow 同源的通知接收端。
+访问深链时如果没有登录，前端会先进入登录页，登录成功后自动回到原任务地址。
+
 ## 验证
 
 ```bash

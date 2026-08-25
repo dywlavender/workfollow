@@ -358,14 +358,14 @@
   /* Component: atmosphere glass layers. These are semantic material roles,
      not page-specific styling. A surface may own one glass role; descendants
      that need to escape the surface belong to the overlay layer instead. */
-  --glass-blur-rail: 14px;
-  --glass-blur-navigation: 11px;
-  --glass-blur-panel: 10px;
-  --glass-blur-detail: 12px;
-  --glass-blur-editor: 12px;
-  --glass-blur-control: 8px;
-  --glass-blur-dialog: 16px;
-  --glass-blur-menu: 14px;
+  --glass-blur-rail: 8px;
+  --glass-blur-navigation: 7px;
+  --glass-blur-panel: 7px;
+  --glass-blur-detail: 8px;
+  --glass-blur-editor: 8px;
+  --glass-blur-control: 6px;
+  --glass-blur-dialog: 12px;
+  --glass-blur-menu: 10px;
   --glass-saturation-rail: 1.08;
   --glass-saturation-navigation: 1.06;
   --glass-saturation-panel: 1.04;
@@ -379,6 +379,7 @@
   --layer-atmosphere: 0;
   --layer-shell: 10;
   --layer-rail: 20;
+  --layer-season-fall: 30;
   --layer-local-overlay: 60;
   --layer-popover: 90;
   --layer-dialog: 100;
@@ -430,16 +431,16 @@
 
 html[data-atmosphere="on"] {
   --workspace-glass-canvas: transparent;
-  --workspace-glass-rail: color-mix(in srgb, var(--workspace-rail-bg) 86%, transparent);
-  --workspace-glass-navigation: color-mix(in srgb, var(--workspace-panel-tint) 82%, transparent);
-  --workspace-glass-panel: color-mix(in srgb, var(--workspace-panel) 78%, transparent);
-  --workspace-glass-detail: color-mix(in srgb, var(--color-bg-detail) 84%, transparent);
+  --workspace-glass-rail: color-mix(in srgb, var(--workspace-rail-bg) 72%, transparent);
+  --workspace-glass-navigation: color-mix(in srgb, var(--workspace-panel-tint) 68%, transparent);
+  --workspace-glass-panel: color-mix(in srgb, var(--workspace-panel) 64%, transparent);
+  --workspace-glass-detail: color-mix(in srgb, var(--color-bg-detail) 74%, transparent);
   /* The editor is a large surface. Keep one readable tint, rather than
      stacking an almost-opaque document over an already translucent pane. */
-  --workspace-glass-editor: color-mix(in srgb, var(--color-bg-detail) 64%, transparent);
-  --workspace-glass-input: color-mix(in srgb, var(--color-bg-input) 86%, transparent);
-  --workspace-glass-dialog: color-mix(in srgb, var(--color-bg-detail) 90%, transparent);
-  --workspace-glass-menu: color-mix(in srgb, var(--color-bg-detail) 84%, transparent);
+  --workspace-glass-editor: color-mix(in srgb, var(--color-bg-detail) 58%, transparent);
+  --workspace-glass-input: color-mix(in srgb, var(--color-bg-input) 80%, transparent);
+  --workspace-glass-dialog: color-mix(in srgb, var(--color-bg-detail) 84%, transparent);
+  --workspace-glass-menu: color-mix(in srgb, var(--color-bg-detail) 76%, transparent);
 }
 
 @media (prefers-reduced-motion: reduce) {
