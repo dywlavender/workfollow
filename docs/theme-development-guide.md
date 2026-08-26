@@ -145,6 +145,23 @@ data-atmosphere on/off
 
 经典主题必须保持原有稳定表面；只在 `html[data-atmosphere="on"]` 下启用透明度和模糊规则。这样新增场景主题（四季/山水）不会误伤默认、经典或纯色背景。
 
+### 操作反馈统一走全局反馈服务
+
+操作结果提示（成功/失败）和任务完成提示由 `frontend/src/stores/feedback.ts` 统一管理，`FeedbackHost.vue` 在 `App.vue` 挂载一次，渲染在 `--layer-toast` 层：
+
+| API | 展示位置 | 时长 | 用途 |
+| --- | --- | --- | --- |
+| `feedback.success(text)` | 右上角堆叠 | 2600ms | 操作成功（创建、保存、删除完成等） |
+| `feedback.error(text)` | 右上角堆叠 | 6000ms | 操作失败，保留后端 `detail` 时优先展示 |
+| `feedback.completed(text?)` | 底部居中 | 2200ms | 任务完成的“仪式感”提示 |
+
+约定：
+
+- 业务代码只调用 feedback store，不要再新建页面级 `actionError`/`notice` 横幅、`ActionFeedback` 实例或手写 `setTimeout` 提示。
+- 页面级**加载失败**（首次读不到数据，整页空白的场景）仍用页面内的 `state-message`/`loadError` 呈现，不挤占右上角反馈；操作类失败一律走 `feedback.error`。
+- 表单字段的即时校验错误留在表单附近展示，不进全局反馈。
+- 破坏性操作（删除、退出、解散、清空）的确认用 `ConfirmDialog`，不要用 `window.confirm`；`ConfirmDialog` 打开时会自动聚焦确认按钮。
+
 ## 5. 视觉验收清单
 
 每新增一个主题，至少检查以下矩阵：
@@ -191,6 +208,17 @@ git diff --check
 - 旧的主题偏好不会污染新主题默认值。
 
 自动测试通过后仍要做实际浏览器截图。透明度、模糊、stacking context 和固定层覆盖关系，单靠 TypeScript 或单元测试无法证明。
+
+主题矩阵的截图可以一键生成（依赖全局 playwright 和系统 Chrome，需要 dev server 与后端在本地运行）：
+
+```bash
+cd frontend
+npm run visual:check                       # 全部主题 × 明暗的工作台 + 设置页
+SUFFIX=after npm run visual:check          # 改动后再跑一轮,文件名带 after 便于对比
+PALETTES=winter,damo SUFFIX=spot node scripts/visual-check.mjs   # 抽查部分主题
+```
+
+输出在仓库根 `output/playwright/theme-baseline/`（该目录已被 gitignore，基线仅保留在本地）。建议流程：改动前跑 `npm run visual:check` 作为基线，改完用 `SUFFIX=after` 再跑一轮，同名文件肉眼对比。
 
 ## 7. 常见错误
 

@@ -16,8 +16,6 @@ import dayjs from 'dayjs'
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
-import ActionFeedback from '@/components/ActionFeedback.vue'
-
 import {
   fetchMySubmissions,
   fetchNotes,
@@ -28,12 +26,12 @@ import {
   type Todo,
   type TodoView,
 } from '@/services/api'
-import { useAppStore } from '@/stores/app'
 import { cloneTodo, optimisticCompletedTodo, optimisticRestoredTodo, useTodoStore } from '@/stores/todos'
+import { useFeedbackStore } from '@/stores/feedback'
 import { useWorkspaceStore } from '@/stores/workspace'
 
 const todoStore = useTodoStore()
-const appStore = useAppStore()
+const feedback = useFeedbackStore()
 const workspace = useWorkspaceStore()
 const router = useRouter()
 const allTodayTodos = ref<Todo[]>([])
@@ -44,7 +42,6 @@ const pendingCounts = ref({ assigned: 0, shared: 0, revision: 0, review: 0 })
 const pendingCountsReady = ref(false)
 const loading = ref(true)
 const error = ref<string | null>(null)
-const actionError = ref<string | null>(null)
 const calendarMonth = ref(dayjs().startOf('month'))
 
 const weekdayLabels = ['周日', '周一', '周二', '周三', '周四', '周五', '周六']
@@ -197,7 +194,6 @@ async function toggle(todo: Todo) {
     calendarTodos.value = updateList(calendarTodos.value, updated)
     assignedTodos.value = updateList(assignedTodos.value, updated)
   }
-  actionError.value = null
   try {
     if (isExecutionDone(todo)) {
       replace(optimisticRestoredTodo(todo))
@@ -215,13 +211,13 @@ async function toggle(todo: Todo) {
         calendarTodos.value = updateList(calendarTodos.value, result.nextTodo, true)
         assignedTodos.value = updateList(assignedTodos.value, result.nextTodo, wasAssignedByMe)
       }
-      appStore.showCompletionToast()
+      feedback.completed()
     }
   } catch {
     allTodayTodos.value = snapshot.today
     calendarTodos.value = snapshot.calendar
     assignedTodos.value = snapshot.assigned
-    actionError.value = '任务状态更新失败，已恢复原状态。'
+    feedback.error('任务状态更新失败，已恢复原状态。')
   }
 }
 
@@ -267,7 +263,6 @@ function noteTime(note: NoteListItem) {
     </div>
 
     <main v-else class="home-dashboard-grid">
-      <ActionFeedback :message="actionError" @dismiss="actionError = null" />
       <section class="home-dashboard-panel home-today-panel">
         <header class="home-panel-header">
           <RouterLink :to="{ path: '/todos', query: { view: 'today' } }"><h2>今天</h2></RouterLink>

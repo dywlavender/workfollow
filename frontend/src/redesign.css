@@ -107,9 +107,6 @@ select:focus-visible {
 .global-capture-launcher { cursor: grab; touch-action: none; }
 .global-capture-host.dragging .global-capture-launcher { cursor: grabbing; }
 .global-capture-launcher:hover, .global-capture-launcher:focus-visible { background: var(--color-accent-hover); outline: none; box-shadow: var(--shadow-dialog); }
-/* 四季主题下强调色底上的文字固定为白色(浅色 accent 时对比色算法会给深字) */
-html[data-atmosphere="on"] .global-capture-launcher,
-html[data-atmosphere="on"] .task-app-shell > .sidebar.is-task-shell .rail-badge { color: var(--neutral-0); }
 .global-capture-error { max-width: 280px; margin: 0; padding: 7px 9px; border: 1px solid color-mix(in srgb, var(--color-danger) 26%, transparent); border-radius: var(--radius-sm); background: var(--color-danger-soft); color: var(--color-danger); font-size: var(--font-size-micro); }
 .search-results-panel { margin-bottom: 12px; border: 1px solid var(--color-border-subtle); border-radius: var(--radius-md); background: var(--color-bg-surface); box-shadow: var(--shadow-sm); overflow: hidden; }
 .search-results-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 11px 14px; border-bottom: 1px solid var(--color-border-subtle); color: var(--color-text-secondary); font-size: var(--font-size-caption); }
@@ -929,8 +926,7 @@ html[data-atmosphere="on"] .task-app-shell > .sidebar.is-task-shell .rail-badge 
 .settings-page { background: var(--workspace-canvas); }
 
 /* Consistent page chrome: compact title bars, dark text and one-pixel rules. */
-.workspace-heading,
-.settings-page-header {
+.workspace-heading {
   width: 100%;
   max-width: none;
   min-height: 76px;
@@ -942,10 +938,8 @@ html[data-atmosphere="on"] .task-app-shell > .sidebar.is-task-shell .rail-badge 
 }
 
 .workspace-heading h1,
-.settings-page-header h1,
 .app-page-header h1 { color: var(--workspace-text); font-size: var(--type-page-title-size); line-height: var(--type-page-title-line-height); font-weight: var(--type-page-title-weight); letter-spacing: var(--type-page-title-tracking); }
-.workspace-heading p,
-.settings-page-header p { color: var(--workspace-muted); font-size: var(--font-size-caption); }
+.workspace-heading p { color: var(--workspace-muted); font-size: var(--font-size-caption); }
 .app-page-header { min-height: 76px; align-items: center; padding: 14px 24px; border-bottom-color: var(--workspace-divider); }
 .app-page-header .eyebrow { color: var(--workspace-muted); }
 
@@ -965,9 +959,8 @@ html[data-atmosphere="on"] .task-app-shell > .sidebar.is-task-shell .rail-badge 
 .note-list-items article.active { background: var(--workspace-selection); box-shadow: none; }
 
 /* Content and administration pages use flat split surfaces rather than detached cards. */
-.settings-page-header { padding-inline: 24px; }
 .settings-layout { width: min(100%, 1440px); grid-template-columns: 220px minmax(0, 1fr); gap: 0; margin: 0 auto; }
-.settings-navigation { min-height: calc(100dvh - 76px); padding: 20px 12px; border-right: 1px solid var(--workspace-divider); background: var(--workspace-panel-tint); }
+.settings-navigation { min-height: 100dvh; padding: 20px 12px; border-right: 1px solid var(--workspace-divider); background: var(--workspace-panel-tint); }
 .settings-content { padding: 20px 24px 48px; }
 .settings-panel,
 .team-summary-card,

@@ -22,6 +22,7 @@ from app.models.notification import (
     ExternalNotificationDelivery,
     Notification,
     NotificationType,
+    PendingTaskUpdateNotification,
 )
 from app.models.audit import AuditLog
 from app.models.resource_relation import RelationType, ResourceRelation, ResourceType
@@ -79,6 +80,7 @@ __all__ = [
     "NotificationType",
     "ExternalDeliveryStatus",
     "ExternalNotificationDelivery",
+    "PendingTaskUpdateNotification",
     "AuditLog",
     "RelationType",
     "ResourceRelation",

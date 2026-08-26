@@ -2,22 +2,21 @@
 import { nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { IconShield, IconUsers, IconX } from '@tabler/icons-vue'
 
-import ActionFeedback from '@/components/ActionFeedback.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import { fetchAdminUsers, postAdminResetPassword, putAdminUserPermissions, putAdminUserSystemRole, type User } from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
+import { useFeedbackStore } from '@/stores/feedback'
 
 const props = defineProps<{ open: boolean }>()
 const emit = defineEmits<{ close: [] }>()
 const auth = useAuthStore()
+const feedback = useFeedbackStore()
 const users = ref<User[]>([])
 const loading = ref(false)
 const loadError = ref('')
-const actionError = ref('')
 const saving = ref<string | null>(null)
 const resetting = ref<string | null>(null)
 const resetTarget = ref<User | null>(null)
-const notice = ref('')
 const closeButton = ref<HTMLButtonElement | null>(null)
 let previousFocus: HTMLElement | null = null
 
@@ -38,12 +37,11 @@ async function update(user: User, value: boolean) {
   const previous = user.canCreateTeam
   user.canCreateTeam = value
   saving.value = user.id
-  actionError.value = ''
   try {
     Object.assign(user, await putAdminUserPermissions(user.id, { canCreateTeam: value }))
   } catch (cause: any) {
     user.canCreateTeam = previous
-    actionError.value = cause?.response?.data?.detail ?? '保存权限失败。'
+    feedback.error(cause?.response?.data?.detail ?? '保存权限失败。')
   } finally {
     saving.value = null
   }
@@ -55,13 +53,12 @@ async function updateSystemRole(user: User, systemRole: User['systemRole']) {
   user.systemRole = systemRole
   if (systemRole === 'ROOT') user.canCreateTeam = true
   saving.value = user.id
-  actionError.value = ''
   try {
     Object.assign(user, await putAdminUserSystemRole(user.id, systemRole))
   } catch (cause: any) {
     user.systemRole = previousRole
     user.canCreateTeam = previousCanCreateTeam
-    actionError.value = cause?.response?.data?.detail ?? '保存系统角色失败。'
+    feedback.error(cause?.response?.data?.detail ?? '保存系统角色失败。')
   } finally {
     saving.value = null
   }
@@ -72,8 +69,6 @@ async function confirmResetPassword() {
   resetTarget.value = null
   if (!target) return
   resetting.value = target.id
-  actionError.value = ''
-  notice.value = ''
   try {
     const result = await postAdminResetPassword(target.id)
     if (target.id === auth.user?.id) {
@@ -81,9 +76,9 @@ async function confirmResetPassword() {
       window.location.assign('/login')
       return
     }
-    notice.value = `${target.nickname} 的密码已重置为 ${result.initialPassword}`
+    feedback.success(`${target.nickname} 的密码已重置为 ${result.initialPassword}`)
   } catch (cause: any) {
-    actionError.value = cause?.response?.data?.detail ?? '重置密码失败。'
+    feedback.error(cause?.response?.data?.detail ?? '重置密码失败。')
   } finally {
     resetting.value = null
   }
@@ -138,8 +133,6 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown))
           <button ref="closeButton" class="icon-action" type="button" aria-label="关闭权限管理" @click="close"><IconX :size="18" /></button>
         </header>
 
-        <ActionFeedback :message="actionError" @dismiss="actionError = ''" />
-        <ActionFeedback :message="notice" tone="success" @dismiss="notice = ''" />
         <p v-if="loadError" class="state-message error" role="alert">{{ loadError }}</p>
         <p v-else-if="loading" class="state-message">正在加载用户…</p>
         <div v-else class="system-permissions-list">

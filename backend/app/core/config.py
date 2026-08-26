@@ -10,7 +10,7 @@ PROJECT_DIR = BACKEND_DIR.parent
 
 
 class Settings(BaseSettings):
-    app_name: str = "WorkFollow API"
+    app_name: str = "打勾 API"
     app_version: str = "0.1.0"
     database_url: str = f"sqlite:///{(PROJECT_DIR / 'data' / 'workfollow.db').as_posix()}"
     cors_origins: list[str] = ["http://localhost:5173", "http://127.0.0.1:5173"]
@@ -29,6 +29,9 @@ class Settings(BaseSettings):
     notification_http_timeout_seconds: float = 5.0
     notification_http_retry_count: int = 3
     notification_worker_interval_seconds: float = 2.0
+    # Consecutive title/description autosaves are merged during this idle
+    # window; explicit task actions continue to notify immediately.
+    notification_task_edit_quiet_seconds: float = 3.0
     notification_timezone: str = "Asia/Shanghai"
     notification_daily_digest_time: str = "08:30"
     database_pool_size: int = 15

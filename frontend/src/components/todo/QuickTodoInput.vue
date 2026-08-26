@@ -6,9 +6,9 @@ import {
 } from '@tabler/icons-vue'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
-import ActionFeedback from '@/components/ActionFeedback.vue'
 import { parseTaskText } from '@/modules/todo/parser/taskTextParser'
 import { getScheduleMarkers } from '@/modules/todo/scheduleMarkers'
+import { useFeedbackStore } from '@/stores/feedback'
 import { useTodoStore } from '@/stores/todos'
 import AssigneePopover from '@/components/task/AssigneePopover.vue'
 import type { TeamMember, Todo, TodoPayload, TodoPriority, TodoRecurrenceType } from '@/services/api'
@@ -33,6 +33,7 @@ const props = withDefaults(defineProps<{
 })
 const emit = defineEmits<{ created: [] }>()
 const todoStore = useTodoStore()
+const feedback = useFeedbackStore()
 const composerElement = ref<HTMLElement | null>(null)
 const input = ref('')
 const inputElement = ref<HTMLInputElement | null>(null)
@@ -41,7 +42,6 @@ const inputElement = ref<HTMLInputElement | null>(null)
 const editing = ref(true)
 const disabledTokens = ref<Set<string>>(new Set())
 const submitting = ref(false)
-const error = ref<string | null>(null)
 const assigneeIds = ref<string[]>(props.currentUserId ? [props.currentUserId] : [])
 const activePanel = ref<ComposerPanel>(null)
 const manualSchedule = ref(false)
@@ -136,7 +136,6 @@ async function begin() {
 function resetDraft(_close = false) {
   input.value = ''
   disabledTokens.value = new Set()
-  error.value = null
   activePanel.value = null
   manualSchedule.value = false
   scheduleValue.value = props.defaultDueAt ? dayjs(props.defaultDueAt).format('YYYY-MM-DDTHH:mm') : ''
@@ -159,7 +158,7 @@ function closeOrGoBack() {
 function onDocumentPointerDown(event: PointerEvent) {
   if (!composerElement.value?.contains(event.target as Node)) activePanel.value = null
 }
-function onInput() { disabledTokens.value = new Set(); error.value = null }
+function onInput() { disabledTokens.value = new Set() }
 function cancelRecognition(token: { kind: string; text: string }) {
   const next = new Set(disabledTokens.value)
   next.add(`${token.kind}:${token.text}`)
@@ -233,12 +232,11 @@ function buildPayload(): TodoPayload {
 async function submit() {
   if (!input.value.trim() || submitting.value) return
   if (props.canAssign && props.teamId && !assigneeIds.value.length) {
-    error.value = '请先选择至少一名团队成员。'
+    feedback.error('请先选择至少一名团队成员。')
     activePanel.value = 'more'
     return
   }
   submitting.value = true
-  error.value = null
   try {
     await todoStore.create(buildPayload())
     resetDraft(false)
@@ -246,7 +244,7 @@ async function submit() {
     await nextTick()
     inputElement.value?.focus()
   } catch {
-    error.value = '创建失败，任务草稿已保留，请重试。'
+    feedback.error('创建失败，任务草稿已保留，请重试。')
   } finally { submitting.value = false }
 }
 defineExpose({ begin, buildPayload })
@@ -298,6 +296,5 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', onDocumentPoin
         </section>
     </div>
     <div v-if="visibleTokens.length && editing" class="recognition-row" aria-label="已识别内容"><span>已识别</span><button v-for="token in visibleTokens" :key="`${token.kind}-${token.text}`" class="recognition-chip" type="button" @click="cancelRecognition(token)">{{ token.label }} <span aria-hidden="true">×</span></button><span class="recognized-title">标题“{{ parsed.title }}”</span></div>
-    <ActionFeedback :message="error" @dismiss="error = null" />
   </div>
 </template>

@@ -14,7 +14,6 @@ import { fetchHealth, type HealthResponse } from '@/services/api'
 
 type ApiState = 'idle' | 'loading' | 'ready' | 'error'
 export type RouteLoadingKind = 'dashboard' | 'workspace' | 'list'
-let completionToastTimer: number | undefined
 let routeLoadingTimer: number | undefined
 let appearanceMedia: MediaQueryList | undefined
 let appearanceListener: ((event: MediaQueryListEvent) => void) | undefined
@@ -28,7 +27,6 @@ export const useAppStore = defineStore('app', {
     appearanceMode: storedAppearance.mode as AppearanceMode,
     appearanceBackground: storedAppearance.background as AppearanceBackground,
     systemDark: false,
-    completionToastVisible: false,
     routeLoadingVisible: false,
     routeLoadingKind: 'workspace' as RouteLoadingKind,
   }),
@@ -70,13 +68,6 @@ export const useAppStore = defineStore('app', {
       this.appearanceBackground = background
       this.applyAppearance()
       persistAppearance(this.appearancePalette, this.appearanceMode, this.appearanceBackground)
-    },
-    showCompletionToast() {
-      this.completionToastVisible = true
-      window.clearTimeout(completionToastTimer)
-      completionToastTimer = window.setTimeout(() => {
-        this.completionToastVisible = false
-      }, 2200)
     },
     beginRouteLoading(kind: RouteLoadingKind = 'workspace') {
       this.routeLoadingKind = kind

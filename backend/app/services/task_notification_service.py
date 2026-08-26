@@ -1,13 +1,17 @@
 from __future__ import annotations
 
-from datetime import datetime, time
+from datetime import datetime, time, timedelta
 import logging
 
-from app.models.auth import User
-from app.models.notification import NotificationType
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from app.core.config import Settings
+from app.models.auth import SystemRole, User, UserStatus
+from app.models.notification import NotificationType, PendingTaskUpdateNotification
+from app.models.team import TeamMember, TeamMemberRole, TeamMemberStatus
 from app.models.todo import Todo, TodoAssignment, TodoPriority, new_uuid
 from app.services import external_notification_service, notification_dispatcher
-from sqlalchemy.orm import Session
 
 
 logger = logging.getLogger(__name__)
@@ -31,6 +35,7 @@ _CHANGE_LABELS = {
     "status": "状态",
 }
 _MAX_DESCRIPTION_EXCERPT = 180
+_TEXT_EDIT_FIELDS = frozenset({"title", "description"})
 
 
 def _iso(value: datetime | None) -> str | None:
@@ -93,6 +98,26 @@ def _priority_label(value: object) -> str:
 
 def _active_assignments(todo: Todo) -> list[TodoAssignment]:
     return [item for item in todo.assignments if item.active]
+
+
+def _is_task_admin(db: Session, todo: Todo, actor_id: str) -> bool:
+    """Return whether the actor is allowed to broadcast task content edits."""
+    actor = db.get(User, actor_id)
+    if actor is not None and actor.system_role == SystemRole.ROOT:
+        return True
+    # Personal tasks have no team role.  They normally have no other
+    # recipients, but retain the creator-as-owner behavior for legacy/shared
+    # records without a team id.
+    if todo.team_id is None:
+        return todo.creator_id == actor_id
+    role = db.scalar(
+        select(TeamMember.role).where(
+            TeamMember.team_id == todo.team_id,
+            TeamMember.user_id == actor_id,
+            TeamMember.status == TeamMemberStatus.ACTIVE,
+        )
+    )
+    return role in (TeamMemberRole.OWNER, TeamMemberRole.ADMIN)
 
 
 def _assignee_views(todo: Todo, user_ids: set[str] | None = None) -> list[dict[str, object]]:
@@ -274,6 +299,155 @@ def _log_external_queue(todo: Todo, event: str, result: notification_dispatcher.
             event,
             result.external_count,
         )
+
+
+def _queue_task_update_notification(
+    db: Session,
+    todo: Todo,
+    actor_id: str,
+    before: dict[str, object],
+    after: dict[str, object],
+    *,
+    settings: Settings | None = None,
+    commit: bool = True,
+) -> int:
+    """Persist one coalesced text-edit notification per active recipient."""
+    current_settings = settings or external_notification_service.get_settings()
+    now = external_notification_service.notification_now(current_settings)
+    quiet_seconds = max(
+        float(getattr(current_settings, "notification_task_edit_quiet_seconds", 3.0)),
+        0.5,
+    )
+    next_attempt_at = now + timedelta(seconds=quiet_seconds)
+    recipients = notification_dispatcher.recipient_ids(
+        [item.user_id for item in _active_assignments(todo)],
+        actor_id,
+    )
+    if not recipients:
+        return 0
+
+    queued = 0
+    for recipient_id in recipients:
+        pending = db.scalar(
+            select(PendingTaskUpdateNotification).where(
+                PendingTaskUpdateNotification.task_id == todo.id,
+                PendingTaskUpdateNotification.recipient_id == recipient_id,
+            )
+        )
+        if pending is None:
+            pending = PendingTaskUpdateNotification(
+                task_id=todo.id,
+                recipient_id=recipient_id,
+                actor_user_id=actor_id,
+                before_json=before,
+                after_json=after,
+                next_attempt_at=next_attempt_at,
+                updated_at=now,
+            )
+            db.add(pending)
+        else:
+            # Preserve the first snapshot and only move the final snapshot
+            # forward.  This turns many autosave requests into one diff.
+            pending.after_json = after
+            pending.actor_user_id = actor_id
+            pending.next_attempt_at = next_attempt_at
+            pending.updated_at = now
+        queued += 1
+
+    if commit:
+        db.commit()
+    logger.info(
+        "任务文本编辑通知已合并 task_id=%s recipients=%s quiet_seconds=%s",
+        todo.id,
+        queued,
+        quiet_seconds,
+    )
+    return queued
+
+
+def dispatch_pending_task_update_notifications(
+    db: Session,
+    *,
+    settings: Settings | None = None,
+    now: datetime | None = None,
+    max_items: int = 100,
+) -> int:
+    """Flush text-edit notifications whose idle window has elapsed."""
+    current_settings = settings or external_notification_service.get_settings()
+    current = now or external_notification_service.notification_now(current_settings)
+    pending_rows = db.scalars(
+        select(PendingTaskUpdateNotification)
+        .where(PendingTaskUpdateNotification.next_attempt_at <= current)
+        .order_by(PendingTaskUpdateNotification.next_attempt_at.asc())
+        .limit(max_items)
+    ).all()
+    dispatched = 0
+
+    for pending in pending_rows:
+        try:
+            todo = db.get(Todo, pending.task_id)
+            recipient = db.get(User, pending.recipient_id)
+            if todo is None or recipient is None or recipient.status != UserStatus.ACTIVE:
+                db.delete(pending)
+                db.commit()
+                continue
+
+            before = dict(pending.before_json or {})
+            after = dict(pending.after_json or {})
+            changes = task_changes(before, after)
+            if not changes:
+                db.delete(pending)
+                db.commit()
+                continue
+
+            actor_id = pending.actor_user_id
+            actor_name = _actor_name(db, actor_id) if actor_id else "用户"
+            event_key = f"task-updated-edit:{todo.id}:{pending.id}"
+            change_text = _change_text(after, changes)
+            context = _task_context(todo)
+            external_context = _external_task_context(todo)
+            data = _task_data(
+                todo,
+                "TASK_UPDATED",
+                actorId=actor_id,
+                actorName=actor_name,
+                changedFields=list(changes),
+                changes=changes,
+                previousTask=_public_change_snapshot(before),
+                eventKey=event_key,
+            )
+            result = notification_dispatcher.dispatch_event(
+                db,
+                event="TASK_UPDATED",
+                # The pending row already represents the recipient.  Do not
+                # re-apply actor filtering if a later edit was made by the
+                # same user after an assignment changed.
+                participant_ids=[pending.recipient_id],
+                actor_user_id=None,
+                in_app_type=NotificationType.TEAM_TASK_UPDATED,
+                external_type=NotificationType.TASK_UPDATED,
+                title="任务信息已更新",
+                body=f"{actor_name}更新了任务“{todo.title}”：{change_text}；{context}。",
+                external_message=f"【任务更新】{actor_name}更新了“{todo.title}”：{change_text}；{external_context}",
+                data_json=data,
+                event_key=event_key,
+                settings=current_settings,
+                commit=False,
+            )
+            db.delete(pending)
+            db.commit()
+            dispatched += int(result.changed)
+        except Exception:
+            db.rollback()
+            logger.exception(
+                "任务文本编辑通知发送失败 task_id=%s pending_id=%s",
+                pending.task_id,
+                pending.id,
+            )
+
+    if dispatched:
+        logger.info("任务文本编辑通知已发送 count=%s", dispatched)
+    return dispatched
 
 
 def notify_task_created(db: Session, todo: Todo, actor_id: str, *, commit: bool = True) -> None:
@@ -587,6 +761,27 @@ def notify_task_updated(
     after = task_change_snapshot(todo)
     changes = task_changes(before, after)
     if not changes:
+        return
+
+    # The editor persists title/description while the user is typing.  Those
+    # requests are intentionally merged; explicit task actions (deadline,
+    # priority, assignment, status, etc.) still use the immediate path below.
+    if set(changes).issubset(_TEXT_EDIT_FIELDS):
+        if not _is_task_admin(db, todo, actor_id):
+            logger.info(
+                "成员编辑任务内容不发送更新通知 task_id=%s actor_id=%s",
+                todo.id,
+                actor_id,
+            )
+            return
+        _queue_task_update_notification(
+            db,
+            todo,
+            actor_id,
+            before,
+            after,
+            commit=commit,
+        )
         return
 
     actor_name = _actor_name(db, actor_id)

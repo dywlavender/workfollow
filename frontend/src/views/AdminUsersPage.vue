@@ -2,15 +2,15 @@
 import { onMounted, ref } from 'vue'
 import { IconArrowLeft, IconShield, IconUsers } from '@tabler/icons-vue'
 
-import ActionFeedback from '@/components/ActionFeedback.vue'
 import { fetchAdminUsers, putAdminUserPermissions, putAdminUserSystemRole, type User } from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
+import { useFeedbackStore } from '@/stores/feedback'
 
 const auth = useAuthStore()
+const feedback = useFeedbackStore()
 const users = ref<User[]>([])
 const loading = ref(false)
 const loadError = ref('')
-const actionError = ref('')
 const saving = ref<string | null>(null)
 
 async function load() {
@@ -30,13 +30,12 @@ async function update(user: User, value: boolean) {
   const previous = user.canCreateTeam
   user.canCreateTeam = value
   saving.value = user.id
-  actionError.value = ''
   try {
     const updated = await putAdminUserPermissions(user.id, { canCreateTeam: value })
     Object.assign(user, updated)
   } catch (cause: any) {
     user.canCreateTeam = previous
-    actionError.value = cause?.response?.data?.detail ?? '保存权限失败。'
+    feedback.error(cause?.response?.data?.detail ?? '保存权限失败。')
   } finally {
     saving.value = null
   }
@@ -48,13 +47,12 @@ async function updateSystemRole(user: User, systemRole: User['systemRole']) {
   user.systemRole = systemRole
   if (systemRole === 'ROOT') user.canCreateTeam = true
   saving.value = user.id
-  actionError.value = ''
   try {
     Object.assign(user, await putAdminUserSystemRole(user.id, systemRole))
   } catch (cause: any) {
     user.systemRole = previousRole
     user.canCreateTeam = previousCanCreateTeam
-    actionError.value = cause?.response?.data?.detail ?? '保存系统角色失败。'
+    feedback.error(cause?.response?.data?.detail ?? '保存系统角色失败。')
   } finally {
     saving.value = null
   }
@@ -85,7 +83,6 @@ onMounted(load)
       <RouterLink class="secondary-button" to="/"><IconArrowLeft :size="15" />返回工作台</RouterLink>
     </header>
 
-    <ActionFeedback :message="actionError" @dismiss="actionError = ''" />
     <p v-if="loadError" class="state-message error" role="alert">{{ loadError }}</p>
     <p v-else-if="loading" class="state-message">正在加载用户…</p>
     <section v-else class="admin-users-panel card">

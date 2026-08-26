@@ -9,7 +9,6 @@ import {
   IconLink,
   IconSettings,
   IconUser,
-  IconUsers,
 } from '@tabler/icons-vue'
 import { useRoute } from 'vue-router'
 
@@ -17,17 +16,14 @@ import { preloadRoute } from '@/router'
 import { prefetchCalendarTodos, prefetchNotesList } from '@/services/prefetch'
 import { useAuthStore } from '@/stores/auth'
 import { useRealtimeStore } from '@/stores/realtime'
-import { useWorkspaceStore } from '@/stores/workspace'
 
 const route = useRoute()
 const auth = useAuthStore()
-const workspace = useWorkspaceStore()
 const realtime = useRealtimeStore()
 const unreadCount = computed(() => realtime.unreadCount)
 
 onMounted(() => { void realtime.refreshUnreadCount() })
 
-const currentTeam = computed(() => workspace.currentTeam ?? workspace.teams[0] ?? null)
 interface RailItem {
   label: string
   shortLabel: string
@@ -81,9 +77,11 @@ function preloadTarget(target: string | { path: string; query?: Record<string, s
 
 <template>
   <aside class="sidebar is-task-shell">
-    <RouterLink class="brand" to="/" aria-label="WorkFollow 首页">
-      <span class="brand-mark">W</span>
-      <span class="brand-name">WorkFollow</span>
+    <RouterLink class="brand" to="/" aria-label="打勾 首页">
+      <span class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 12.6 L9.6 17.5 L19.5 6.8" /></svg>
+      </span>
+      <span class="brand-name">打勾</span>
     </RouterLink>
     <nav class="navigation rail-navigation" aria-label="全局导航">
       <RouterLink
@@ -103,9 +101,6 @@ function preloadTarget(target: string | { path: string; query?: Record<string, s
     </nav>
 
     <div class="sidebar-bottom">
-      <RouterLink class="sidebar-settings-link" :to="currentTeam ? `/team/${currentTeam.id}` : '/teams'" :class="{ active: route.path === '/teams' || route.path.startsWith('/team/') }" aria-label="团队管理" @pointerenter="preloadRoute('team')" @focus="preloadRoute('team')">
-        <IconUsers :size="19" :stroke-width="1.8" aria-hidden="true" /><span>团队</span>
-      </RouterLink>
       <RouterLink class="sidebar-settings-link" to="/settings" :class="{ active: route.path === '/settings' }" aria-label="设置" @pointerenter="preloadRoute('settings')" @focus="preloadRoute('settings')">
         <IconSettings :size="19" :stroke-width="1.8" aria-hidden="true" />
         <span>设置</span>

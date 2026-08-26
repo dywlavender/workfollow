@@ -23,7 +23,7 @@ import {
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
-import ActionFeedback from '@/components/ActionFeedback.vue'
+import { useFeedbackStore } from '@/stores/feedback'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import InputDialog from '@/components/InputDialog.vue'
 import QuickTodoInput from '@/components/todo/QuickTodoInput.vue'
@@ -33,14 +33,13 @@ import TodoDialog from '@/components/todo/TodoDialog.vue'
 import TodoItem from '@/components/todo/TodoItem.vue'
 import { taskCountLabel } from '@/modules/todo/taskCounts'
 import { fetchTeamMembers, fetchTodo, type TeamMember, type Todo, type TodoList, type TodoPayload, type TodoView } from '@/services/api'
-import { useAppStore } from '@/stores/app'
 import { useAuthStore } from '@/stores/auth'
 import { useRealtimeStore } from '@/stores/realtime'
 import { optimisticCompletedTodo, optimisticRestoredTodo, useTodoStore } from '@/stores/todos'
 import { useWorkspaceStore } from '@/stores/workspace'
 
 const todoStore = useTodoStore()
-const appStore = useAppStore()
+const feedback = useFeedbackStore()
 const auth = useAuthStore()
 const workspaceStore = useWorkspaceStore()
 const realtime = useRealtimeStore()
@@ -56,8 +55,6 @@ const taskDetail = ref<{
   openPriorityPanel: () => void
 } | null>(null)
 const searchInput = ref(typeof route.query.q === 'string' ? route.query.q : '')
-const actionError = ref<string | null>(null)
-const actionNotice = ref<string | null>(null)
 const searchOpen = ref(Boolean(searchInput.value))
 const toolbarMenuOpen = ref(false)
 const taskNavigationCollapsed = ref(false)
@@ -232,18 +229,18 @@ async function saveList(name: string) {
   try {
     if (listDialogMode.value === 'create') {
       await todoStore.createList(name)
-      notify(`清单“${name}”已创建。`)
+      feedback.success(`清单“${name}”已创建。`)
     } else if (target?.id) {
       const result = await todoStore.renameList(target.id, name)
       if (currentListName.value === result.previousName) {
         await router.replace({ path: '/todos', query: { list: result.list.name } })
       }
-      notify(`清单已重命名为“${result.list.name}”。`)
+      feedback.success(`清单已重命名为“${result.list.name}”。`)
     }
     listDialogOpen.value = false
     listDialogTarget.value = null
   } catch {
-    reportActionError('清单名称已存在或保存失败，请换一个名称重试。')
+    feedback.error('清单名称已存在或保存失败，请换一个名称重试。')
   }
 }
 
@@ -256,9 +253,9 @@ async function confirmDeleteList() {
     if (currentListName.value === target.name) {
       await router.replace({ path: '/todos', query: { list: result.fallbackListName } })
     }
-    notify(result.movedTaskCount ? `清单已删除，${result.movedTaskCount} 个任务已移入${result.fallbackListName}。` : '清单已删除。')
+    feedback.success(result.movedTaskCount ? `清单已删除，${result.movedTaskCount} 个任务已移入${result.fallbackListName}。` : '清单已删除。')
   } catch {
-    reportActionError('清单删除失败，请稍后重试。')
+    feedback.error('清单删除失败，请稍后重试。')
   }
 }
 
@@ -402,25 +399,15 @@ function openCreate() {
   dialogOpen.value = true
 }
 
-function notify(message: string) {
-  actionError.value = null
-  actionNotice.value = message
-  window.setTimeout(() => { if (actionNotice.value === message) actionNotice.value = null }, 2600)
-}
-
-function reportActionError(message: string) {
-  actionNotice.value = null
-  actionError.value = message
-}
 
 async function save(payload: TodoPayload) {
   try {
     const created = await todoStore.create(payload)
     dialogOpen.value = false
     if (todoStore.todos.some((todo) => todo.id === created.id)) selectTodo(created)
-    notify(created.dueAt ? '任务已创建。' : '任务已创建并放入收集箱。')
+    feedback.success(created.dueAt ? '任务已创建。' : '任务已创建并放入收集箱。')
   } catch {
-    reportActionError('创建失败，请检查填写内容后重试。')
+    feedback.error('创建失败，请检查填写内容后重试。')
   }
 }
 
@@ -428,10 +415,10 @@ async function updateTodo(todoId: string, payload: Partial<TodoPayload>, quiet =
   try {
     const updated = await todoStore.update(todoId, payload)
     if (todoStore.query && selectedTodoId.value === todoId && !todoStore.todos.some((todo) => todo.id === todoId)) clearSelection()
-    if (!quiet) notify('任务已保存。')
+    if (!quiet) feedback.success('任务已保存。')
     return { ok: true, savedAt: updated.updatedAt }
   } catch {
-    reportActionError('保存失败，请检查日期、提醒和重复设置。')
+    feedback.error('保存失败，请检查日期、提醒和重复设置。')
     return { ok: false }
   }
 }
@@ -460,9 +447,9 @@ async function duplicate(todo: Todo) {
       sourceNoteId: todo.sourceNoteId, sourceExcerpt: todo.sourceExcerpt,
     })
     if (todoStore.todos.some((item) => item.id === created.id)) selectTodo(created)
-    notify('任务副本已创建。')
+    feedback.success('任务副本已创建。')
   } catch {
-    reportActionError('复制任务失败。')
+    feedback.error('复制任务失败。')
   }
 }
 
@@ -470,9 +457,9 @@ async function copyTaskLink(todo: Todo) {
   const link = `${window.location.origin}${router.resolve({ path: '/todos', query: { view: todoStore.currentView, todo: todo.id } }).href}`
   try {
     await navigator.clipboard.writeText(link)
-    notify('任务链接已复制。')
+    feedback.success('任务链接已复制。')
   } catch {
-    reportActionError('浏览器未允许写入剪贴板。')
+    feedback.error('浏览器未允许写入剪贴板。')
   }
 }
 
@@ -505,7 +492,7 @@ async function toggle(todo: Todo) {
       if (selectedTodoId.value === todo.id && selectedTodoDetail.value) {
         selectedTodoDetail.value = { ...selectedTodoDetail.value, ...restored, sources: selectedTodoDetail.value.sources }
       }
-      notify('任务已恢复。')
+      feedback.success('任务已恢复。')
     } else {
       const optimistic = optimisticCompletedTodo(todo)
       if (selectedTodoId.value === todo.id && selectedTodoDetail.value) {
@@ -515,21 +502,20 @@ async function toggle(todo: Todo) {
       if (selectedTodoId.value === todo.id && selectedTodoDetail.value) {
         selectedTodoDetail.value = { ...selectedTodoDetail.value, ...result.todo, sources: selectedTodoDetail.value.sources }
       }
-      appStore.showCompletionToast()
-      notify(result.nextTodo ? '任务已完成，下一次任务已生成。' : '任务已完成。')
+      feedback.completed(result.nextTodo ? '任务已完成，下一次任务已生成' : '任务已完成')
     }
   } catch {
     if (selectedTodoId.value === todo.id) selectedTodoDetail.value = previousDetail
-    reportActionError('操作失败，任务状态没有改变。')
+    feedback.error('操作失败，任务状态没有改变。')
   }
 }
 
 async function abandon(todo: Todo) {
   try {
     await todoStore.abandon(todo.id)
-    notify('任务已放弃，可随时恢复。')
+    feedback.success('任务已放弃，可随时恢复。')
   } catch {
-    reportActionError('操作失败，任务状态没有改变。')
+    feedback.error('操作失败，任务状态没有改变。')
   }
 }
 
@@ -537,9 +523,9 @@ async function remove(todo: Todo) {
   try {
     await todoStore.remove(todo.id)
     if (selectedTodoId.value === todo.id) clearSelection()
-    notify('任务已删除。')
+    feedback.success('任务已删除。')
   } catch {
-    reportActionError('删除失败，请稍后重试。')
+    feedback.error('删除失败，请稍后重试。')
   }
 }
 
@@ -571,9 +557,9 @@ function openSource(noteId: string, blockId?: string | null) {
 async function assign(todo: Todo, assigneeIds: string[]) {
   try {
     await todoStore.updateAssignees(todo.id, assigneeIds)
-    notify('指派成员已更新。')
+    feedback.success('指派成员已更新。')
   } catch {
-    reportActionError('指派失败，只能选择当前团队成员。')
+    feedback.error('指派失败，只能选择当前团队成员。')
   }
 }
 </script>
@@ -670,11 +656,9 @@ async function assign(todo: Todo, assigneeIds: string[]) {
             :available-lists="availableTaskLists"
             :available-tags="availableTaskTags"
             :calendar-todos="todoStore.todos"
-            @created="notify('任务已创建。')"
+            @created="feedback.success('任务已创建。')"
           /></div>
         </div>
-        <ActionFeedback :message="actionError" @dismiss="actionError = null" />
-        <ActionFeedback :message="actionNotice" tone="success" @dismiss="actionNotice = null" />
         <div v-if="todoStore.error" class="state-message error" role="alert">
           <strong>任务读取失败</strong>
           <p>{{ todoStore.error }}</p>

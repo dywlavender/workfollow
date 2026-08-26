@@ -14,7 +14,6 @@ const routeLoaders = {
   notifications: () => import('@/views/NotificationsPage.vue'),
   settings: () => import('@/views/SettingsPage.vue'),
   adminUsers: () => import('@/views/AdminUsersPage.vue'),
-  team: () => import('@/views/TeamPage.vue'),
   teamAudit: () => import('@/views/TeamAuditPage.vue'),
 }
 const preloadedRoutes = new Set<string>()
@@ -47,8 +46,8 @@ const router = createRouter({
     { path: '/notifications', name: 'notifications', component: routeLoaders.notifications, meta: { requiresAuth: true, loadingKind: 'list' } },
     { path: '/settings', name: 'settings', component: routeLoaders.settings, meta: { requiresAuth: true, loadingKind: 'list' } },
     { path: '/admin/users', name: 'admin-users', component: routeLoaders.adminUsers, meta: { requiresAuth: true, requiresRoot: true, loadingKind: 'list' } },
-    { path: '/teams', name: 'teams', component: routeLoaders.team, meta: { requiresAuth: true, loadingKind: 'list' } },
-    { path: '/team/:teamId', name: 'team', component: routeLoaders.team, meta: { requiresAuth: true, loadingKind: 'list' } },
+    { path: '/teams', redirect: { path: '/settings', query: { section: 'teams' } } },
+    { path: '/team/:teamId', redirect: (to) => ({ path: '/settings', query: { section: 'teams', team: String(to.params.teamId) } }) },
     { path: '/team/:teamId/tasks', redirect: { path: '/todos', query: { view: 'assigned-by-me' } } },
     { path: '/team/:teamId/calendar', redirect: '/calendar' },
     { path: '/team/:teamId/notes', redirect: { path: '/notes', query: { view: 'knowledge' } } },

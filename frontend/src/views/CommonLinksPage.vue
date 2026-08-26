@@ -2,8 +2,8 @@
 import { IconArrowDown, IconArrowUp, IconEdit, IconExternalLink, IconFolder, IconLink, IconPlus, IconSearch, IconTrash, IconX } from '@tabler/icons-vue'
 import { computed, onMounted, reactive, ref } from 'vue'
 
-import ActionFeedback from '@/components/ActionFeedback.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
+import InputDialog from '@/components/InputDialog.vue'
 import { useDialogEscape } from '@/composables/useDialogEscape'
 import {
   deleteSystemQuickLink,
@@ -15,18 +15,26 @@ import {
   type QuickLinkPayload,
 } from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
+import { useFeedbackStore } from '@/stores/feedback'
 
 const auth = useAuthStore()
+const feedback = useFeedbackStore()
 const links = ref<QuickLink[]>([])
 const search = ref('')
 const loading = ref(true)
 const busy = ref(false)
+// 分组输入可从已有分组中选择（datalist），也可直接输入新名称。
+const knownGroupNames = computed(() => Array.from(new Set(links.value
+  .map((link) => link.groupName?.trim())
+  .filter((name): name is string => Boolean(name)))))
 const loadError = ref<string | null>(null)
-const actionError = ref<string | null>(null)
 const managerOpen = ref(false)
 const editingId = ref<string | null>(null)
 const removeTarget = ref<QuickLink | null>(null)
 const removeGroupTarget = ref<string | null>(null)
+const groupDialogOpen = ref(false)
+const groupDialogMode = ref<'create' | 'rename'>('create')
+const groupRenameSource = ref('')
 const draggingId = ref<string | null>(null)
 const form = reactive({
   name: '',
@@ -117,7 +125,7 @@ function payloadFor(link?: QuickLink): QuickLinkPayload {
 
 async function saveLink() {
   if (!form.name.trim() || !form.url.trim()) {
-    actionError.value = '请填写网站名称和网址。'
+    feedback.error('请填写网站名称和网址。')
     return
   }
   busy.value = true
@@ -132,9 +140,8 @@ async function saveLink() {
     }
     links.value = sortLinks(links.value)
     resetForm()
-    actionError.value = null
   } catch (cause: any) {
-    actionError.value = cause?.response?.data?.detail ?? '保存失败，请检查网址是否为 http 或 https。'
+    feedback.error(cause?.response?.data?.detail ?? '保存失败，请检查网址是否为 http 或 https。')
   } finally {
     busy.value = false
   }
@@ -150,7 +157,7 @@ async function confirmRemove() {
     links.value = links.value.filter((item) => item.id !== target.id)
     if (editingId.value === target.id) resetForm()
   } catch (cause: any) {
-    actionError.value = cause?.response?.data?.detail ?? '删除失败，请稍后重试。'
+    feedback.error(cause?.response?.data?.detail ?? '删除失败，请稍后重试。')
   } finally {
     busy.value = false
   }
@@ -164,7 +171,7 @@ async function persistOrder(next: QuickLink[]) {
     links.value = sortLinks(await reorderSystemQuickLinks(next.map((item) => item.id)))
   } catch (cause: any) {
     links.value = previous
-    actionError.value = cause?.response?.data?.detail ?? '排序保存失败，请稍后重试。'
+    feedback.error(cause?.response?.data?.detail ?? '排序保存失败，请稍后重试。')
   } finally {
     busy.value = false
   }
@@ -195,14 +202,24 @@ function dropLink(target: QuickLink) {
 }
 
 function prepareGroup() {
-  const name = window.prompt('新分组名称')?.trim()
-  if (name) form.groupName = name
+  groupDialogMode.value = 'create'
+  groupDialogOpen.value = true
 }
 
-async function renameGroup(groupName: string) {
-  const nextName = window.prompt('重命名分组', groupName)?.trim()
-  if (!nextName || nextName === groupName) return
-  const targets = links.value.filter((item) => item.groupName === groupName)
+function openRenameGroup(groupName: string) {
+  groupDialogMode.value = 'rename'
+  groupRenameSource.value = groupName
+  groupDialogOpen.value = true
+}
+
+async function confirmGroupDialog(nextName: string) {
+  groupDialogOpen.value = false
+  if (groupDialogMode.value === 'create') {
+    form.groupName = nextName
+    return
+  }
+  if (nextName === groupRenameSource.value) return
+  const targets = links.value.filter((item) => item.groupName === groupRenameSource.value)
   busy.value = true
   try {
     const updated = await Promise.all(targets.map((item) => putSystemQuickLink(item.id, { groupName: nextName })))
@@ -211,7 +228,7 @@ async function renameGroup(groupName: string) {
       if (index >= 0) links.value[index] = link
     }
   } catch (cause: any) {
-    actionError.value = cause?.response?.data?.detail ?? '分组重命名失败。'
+    feedback.error(cause?.response?.data?.detail ?? '分组重命名失败。')
     await load()
   } finally {
     busy.value = false
@@ -231,7 +248,7 @@ async function confirmRemoveGroup() {
       if (index >= 0) links.value[index] = link
     }
   } catch (cause: any) {
-    actionError.value = cause?.response?.data?.detail ?? '删除分组失败。'
+    feedback.error(cause?.response?.data?.detail ?? '删除分组失败。')
     await load()
   } finally {
     busy.value = false
@@ -258,7 +275,6 @@ async function confirmRemoveGroup() {
     </header>
 
     <section class="common-links-body">
-      <ActionFeedback :message="actionError" @dismiss="actionError = null" />
       <div v-if="loading" class="common-links-empty">正在加载常用网站…</div>
       <div v-else-if="loadError" class="common-links-empty" role="alert">{{ loadError }}</div>
       <div v-else-if="!filteredGroups.length" class="common-links-empty">
@@ -271,7 +287,7 @@ async function confirmRemoveGroup() {
           <header>
             <div><IconFolder :size="17" aria-hidden="true" /><h2>{{ group.name }}</h2><span>{{ group.items.length }}</span></div>
             <div v-if="isRoot && group.name !== '未分组'" class="common-group-actions">
-              <button type="button" @click="renameGroup(group.name)">重命名</button>
+              <button type="button" @click="openRenameGroup(group.name)">重命名</button>
               <button type="button" @click="removeGroupTarget = group.name">删除分组</button>
             </div>
           </header>
@@ -300,7 +316,7 @@ async function confirmRemoveGroup() {
               <label>简短说明<textarea v-model="form.description" maxlength="500" rows="3" placeholder="可选，用一句话说明用途" /></label>
               <div class="form-grid">
                 <label>图标文字<input v-model="form.icon" maxlength="32" placeholder="留空自动生成" /></label>
-                <label>分组<input v-model="form.groupName" maxlength="120" placeholder="例如：开发工具" /></label>
+                <label>分组<input v-model="form.groupName" maxlength="120" placeholder="例如：开发工具" list="known-group-names" /><datalist id="known-group-names"><option v-for="name in knownGroupNames" :key="name" :value="name" /></datalist></label>
               </div>
               <div class="common-form-actions">
                 <button class="secondary-button" type="button" @click="prepareGroup">新建分组</button>
@@ -328,5 +344,14 @@ async function confirmRemoveGroup() {
 
     <ConfirmDialog :open="Boolean(removeTarget)" title="删除常用网站" :message="`确定删除“${removeTarget?.name ?? ''}”吗？`" :danger="true" confirm-label="删除" @close="removeTarget = null" @confirm="confirmRemove" />
     <ConfirmDialog :open="Boolean(removeGroupTarget)" title="删除分组" :message="`删除“${removeGroupTarget ?? ''}”分组后，网站会保留并移到未分组。`" :danger="true" confirm-label="删除分组" @close="removeGroupTarget = null" @confirm="confirmRemoveGroup" />
+    <InputDialog
+      :open="groupDialogOpen"
+      :title="groupDialogMode === 'create' ? '新建分组' : '重命名分组'"
+      :label="groupDialogMode === 'create' ? '分组名称' : '新名称'"
+      :initial-value="groupDialogMode === 'rename' ? groupRenameSource : ''"
+      placeholder="例如：开发工具"
+      @close="groupDialogOpen = false"
+      @submit="confirmGroupDialog"
+    />
   </main>
 </template>

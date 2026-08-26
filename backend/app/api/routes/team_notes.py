@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 from typing import NamedTuple
+from urllib.parse import urlencode
 
 from fastapi import APIRouter, HTTPException, Query, Response, status
 from sqlalchemy import select
 
+from app.core.config import Settings
 from app.core.dependencies import CurrentSettings, CurrentUser, DbSession
 from app.models.auth import User, UserStatus
 from app.models.notification import NotificationType
@@ -26,8 +28,15 @@ from app.schemas.team import (
     TeamNoteUpdate,
     TeamNoteVersionRead,
 )
-from app.services import audit_service, note_permission_service, note_service, team_note_service, team_service
-from app.services.notification_service import notify_user
+from app.services import (
+    audit_service,
+    external_notification_service,
+    note_permission_service,
+    note_service,
+    notification_dispatcher,
+    team_note_service,
+    team_service,
+)
 from app.services.system_permission_service import audit_metadata, user_is_root
 
 
@@ -129,7 +138,64 @@ def _submission_read(db, submission) -> TeamNoteSubmissionRead:  # noqa: ANN001
     })
 
 
-def _submit(db, team_id: str, user_id: str, payload: TeamNoteSubmissionCreate) -> TeamNoteSubmissionRead:  # noqa: ANN001
+def _submission_url(
+    submission_id: str,
+    *,
+    review: bool = False,
+    settings: Settings | None = None,
+) -> str:
+    view = "review" if review else "submissions"
+    return external_notification_service.public_route_url(
+        f"/notes?{urlencode({'view': view, 'submission': submission_id})}",
+        settings,
+    )
+
+
+def _knowledge_url(note_id: str, settings: Settings | None = None) -> str:
+    return external_notification_service.public_route_url(
+        f"/notes?{urlencode({'view': 'knowledge', 'knowledge': note_id})}",
+        settings,
+    )
+
+
+def _dispatch_submission_notification(
+    db,
+    *,
+    event: str,
+    participant_ids: list[str] | set[str],
+    actor_user_id: str,
+    notification_type: NotificationType,
+    title: str,
+    body: str,
+    external_message: str,
+    data_json: dict[str, object],
+    event_key: str,
+    settings: Settings | None = None,
+) -> None:  # noqa: ANN001
+    data = {**data_json, "eventKey": event_key}
+    notification_dispatcher.dispatch_event(
+        db,
+        event=event,
+        participant_ids=participant_ids,
+        actor_user_id=actor_user_id,
+        in_app_type=notification_type,
+        external_type=notification_type,
+        title=title,
+        body=body,
+        external_message=external_message,
+        data_json=data,
+        event_key=event_key,
+        settings=settings,
+    )
+
+
+def _submit(
+    db,
+    team_id: str,
+    user_id: str,
+    payload: TeamNoteSubmissionCreate,
+    settings: Settings | None = None,
+) -> TeamNoteSubmissionRead:  # noqa: ANN001
     submission = team_note_service.submit_note(db, team_id, user_id, payload)
     audit_service.record_audit(
         db, actor_user_id=user_id, action="KNOWLEDGE_SUBMITTED",
@@ -140,11 +206,17 @@ def _submit(db, team_id: str, user_id: str, payload: TeamNoteSubmissionCreate) -
             "targetTeamNoteId": submission.target_team_note_id,
         }),
     )
-    _notify_submission_reviewers(db, submission, user_id)
+    _notify_submission_reviewers(db, submission, user_id, settings=settings)
     return _submission_read(db, submission)
 
 
-def _notify_submission_reviewers(db, submission, applicant_id: str) -> None:  # noqa: ANN001
+def _notify_submission_reviewers(
+    db,
+    submission,
+    applicant_id: str,
+    *,
+    settings: Settings | None = None,
+) -> None:  # noqa: ANN001
     reviewer_ids = db.scalars(
         select(TeamMember.user_id)
         .join(User, User.id == TeamMember.user_id)
@@ -157,21 +229,32 @@ def _notify_submission_reviewers(db, submission, applicant_id: str) -> None:  # 
     ).all()
     applicant_name = submission.applicant.nickname if submission.applicant else "成员"
     title = submission.snapshot_title
-    for reviewer_id in set(reviewer_ids) - {applicant_id}:
-        notify_user(
-            db,
-            reviewer_id,
-            NotificationType.TEAM_NOTE_SUBMITTED,
-            "有新的团队笔记投稿",
-            f"{applicant_name} 投稿了“{title}”，请及时审核。",
-            actor_user_id=applicant_id,
-            data_json={
-                "teamId": submission.team_id,
-                "submissionId": submission.id,
-                "applicantId": applicant_id,
-                "title": title,
-            },
-        )
+    review_url = _submission_url(submission.id, review=True, settings=settings)
+    event_key = f"team-note-submitted:{submission.id}:revision-{submission.revision_no}"
+    _dispatch_submission_notification(
+        db,
+        event="TEAM_NOTE_SUBMITTED",
+        participant_ids=set(reviewer_ids),
+        actor_user_id=applicant_id,
+        notification_type=NotificationType.TEAM_NOTE_SUBMITTED,
+        title="有新的团队笔记投稿",
+        body=f"{applicant_name} 投稿了“{title}”，请及时审核。",
+        external_message=(
+            f"【知识审核待处理】{applicant_name} 投稿了“{title}”，请及时审核；"
+            f"查看审核：{review_url}"
+        ),
+        data_json={
+            "eventType": "TEAM_NOTE_SUBMITTED",
+            "teamId": submission.team_id,
+            "submissionId": submission.id,
+            "applicantId": applicant_id,
+            "title": title,
+            "url": review_url,
+            "submissionUrl": review_url,
+        },
+        event_key=event_key,
+        settings=settings,
+    )
 
 
 # Canonical knowledge APIs -------------------------------------------------
@@ -389,6 +472,7 @@ def create_submission(
     note_id: str,
     payload: NoteSubmissionRequest,
     db: DbSession,
+    settings: CurrentSettings,
     user: CurrentUser,
     team_id: str | None = Query(default=None, alias="teamId"),
 ) -> TeamNoteSubmissionRead:
@@ -400,7 +484,7 @@ def create_submission(
         categoryId=payload.proposed_category_id,
         tags=payload.proposed_tags_json,
         message=payload.submission_message,
-    ))
+    ), settings)
 
 
 @router.get("/note-submissions/mine", response_model=list[TeamNoteSubmissionRead])
@@ -445,7 +529,13 @@ def withdraw(submission_id: str, db: DbSession, user: CurrentUser) -> TeamNoteSu
 
 
 @router.post("/note-submissions/{submission_id}/resubmit", response_model=TeamNoteSubmissionRead)
-def resubmit(submission_id: str, payload: NoteSubmissionRequest, db: DbSession, user: CurrentUser) -> TeamNoteSubmissionRead:
+def resubmit(
+    submission_id: str,
+    payload: NoteSubmissionRequest,
+    db: DbSession,
+    settings: CurrentSettings,
+    user: CurrentUser,
+) -> TeamNoteSubmissionRead:
     _member, submission = _submission_for_user(db, submission_id, user.id)
     resubmitted = team_note_service.resubmit_note(db, submission, user.id, TeamNoteSubmissionCreate(
         source_note_id=submission.source_note_id,
@@ -455,7 +545,7 @@ def resubmit(submission_id: str, payload: NoteSubmissionRequest, db: DbSession, 
         tags=payload.proposed_tags_json,
         message=payload.submission_message,
     ))
-    _notify_submission_reviewers(db, resubmitted, user.id)
+    _notify_submission_reviewers(db, resubmitted, user.id, settings=settings)
     return _submission_read(db, resubmitted)
 
 
@@ -466,39 +556,112 @@ def _require_reviewer(db, submission_id: str, user_id: str):  # noqa: ANN001
 
 
 @router.post("/note-submissions/{submission_id}/approve", response_model=TeamNoteRead)
-def approve(submission_id: str, payload: TeamNoteSubmissionReview, db: DbSession, user: CurrentUser) -> TeamNoteRead:
+def approve(
+    submission_id: str,
+    payload: TeamNoteSubmissionReview,
+    db: DbSession,
+    settings: CurrentSettings,
+    user: CurrentUser,
+) -> TeamNoteRead:
     team_id, submission = _require_reviewer(db, submission_id, user.id)
     note = team_note_service.approve_submission(db, submission, user.id, payload)
-    notify_user(
-        db, submission.applicant_id, NotificationType.TEAM_NOTE_APPROVED,
-        "知识投稿已通过", f"“{note.title}”已发布到团队知识库。", actor_user_id=user.id,
-        data_json={"teamId": team_id, "submissionId": submission.id, "teamNoteId": note.id},
+    result_url = _submission_url(submission.id, settings=settings)
+    knowledge_url = _knowledge_url(note.id, settings)
+    _dispatch_submission_notification(
+        db,
+        event="TEAM_NOTE_APPROVED",
+        participant_ids=[submission.applicant_id],
+        actor_user_id=user.id,
+        notification_type=NotificationType.TEAM_NOTE_APPROVED,
+        title="知识投稿已通过",
+        body=f"“{note.title}”已发布到团队知识库。",
+        external_message=(
+            f"【知识审核结果】“{note.title}”已通过并发布到团队知识库；"
+            f"查看知识：{knowledge_url}；查看投稿结果：{result_url}"
+        ),
+        data_json={
+            "eventType": "TEAM_NOTE_APPROVED",
+            "teamId": team_id,
+            "submissionId": submission.id,
+            "teamNoteId": note.id,
+            "url": knowledge_url,
+            "knowledgeUrl": knowledge_url,
+            "submissionUrl": result_url,
+        },
+        event_key=f"team-note-approved:{submission.id}:revision-{submission.revision_no}",
+        settings=settings,
     )
     return _note_read(db, note, user.id)
 
 
 @router.post("/note-submissions/{submission_id}/request-revision", response_model=TeamNoteSubmissionRead)
 def request_revision(
-    submission_id: str, payload: TeamNoteSubmissionReview, db: DbSession, user: CurrentUser
+    submission_id: str,
+    payload: TeamNoteSubmissionReview,
+    db: DbSession,
+    settings: CurrentSettings,
+    user: CurrentUser,
 ) -> TeamNoteSubmissionRead:
     _member, submission = _require_reviewer(db, submission_id, user.id)
     revised = team_note_service.request_revision(db, submission, user.id, payload)
-    notify_user(
-        db, revised.applicant_id, NotificationType.TEAM_NOTE_REVIEWED,
-        "知识投稿需要修改", payload.reason or "请根据审核意见修改后重新提交。", actor_user_id=user.id,
-        data_json={"teamId": revised.team_id, "submissionId": revised.id},
+    result_url = _submission_url(revised.id, settings=settings)
+    reason = payload.reason or "请根据审核意见修改后重新提交。"
+    _dispatch_submission_notification(
+        db,
+        event="TEAM_NOTE_REVIEWED",
+        participant_ids=[revised.applicant_id],
+        actor_user_id=user.id,
+        notification_type=NotificationType.TEAM_NOTE_REVIEWED,
+        title="知识投稿需要修改",
+        body=reason,
+        external_message=f"【知识审核结果】“{revised.snapshot_title}”需要修改：{reason}；查看投稿：{result_url}",
+        data_json={
+            "eventType": "TEAM_NOTE_REVIEWED",
+            "teamId": revised.team_id,
+            "submissionId": revised.id,
+            "title": revised.snapshot_title,
+            "reason": reason,
+            "url": result_url,
+            "submissionUrl": result_url,
+        },
+        event_key=f"team-note-reviewed:{revised.id}:revision-{revised.revision_no}",
+        settings=settings,
     )
     return _submission_read(db, revised)
 
 
 @router.post("/note-submissions/{submission_id}/reject", response_model=TeamNoteSubmissionRead)
-def reject(submission_id: str, payload: TeamNoteSubmissionReview, db: DbSession, user: CurrentUser) -> TeamNoteSubmissionRead:
+def reject(
+    submission_id: str,
+    payload: TeamNoteSubmissionReview,
+    db: DbSession,
+    settings: CurrentSettings,
+    user: CurrentUser,
+) -> TeamNoteSubmissionRead:
     _member, submission = _require_reviewer(db, submission_id, user.id)
     rejected = team_note_service.reject_submission(db, submission, user.id, review=payload)
-    notify_user(
-        db, rejected.applicant_id, NotificationType.TEAM_NOTE_REJECTED,
-        "知识投稿已拒绝", payload.reason or "投稿未通过审核。", actor_user_id=user.id,
-        data_json={"teamId": rejected.team_id, "submissionId": rejected.id},
+    result_url = _submission_url(rejected.id, settings=settings)
+    reason = payload.reason or "投稿未通过审核。"
+    _dispatch_submission_notification(
+        db,
+        event="TEAM_NOTE_REJECTED",
+        participant_ids=[rejected.applicant_id],
+        actor_user_id=user.id,
+        notification_type=NotificationType.TEAM_NOTE_REJECTED,
+        title="知识投稿已拒绝",
+        body=reason,
+        external_message=f"【知识审核结果】“{rejected.snapshot_title}”已拒绝：{reason}；查看投稿：{result_url}",
+        data_json={
+            "eventType": "TEAM_NOTE_REJECTED",
+            "teamId": rejected.team_id,
+            "submissionId": rejected.id,
+            "title": rejected.snapshot_title,
+            "reason": reason,
+            "url": result_url,
+            "submissionUrl": result_url,
+        },
+        event_key=f"team-note-rejected:{rejected.id}:revision-{rejected.revision_no}",
+        settings=settings,
     )
     return _submission_read(db, rejected)
 
@@ -562,9 +725,13 @@ def legacy_delete_note(team_id: str, note_id: str, db: DbSession, user: CurrentU
 
 @router.post("/teams/{team_id}/note-submissions", response_model=TeamNoteSubmissionRead, status_code=status.HTTP_201_CREATED, include_in_schema=False)
 def legacy_submit_note(
-    team_id: str, payload: TeamNoteSubmissionCreate, db: DbSession, user: CurrentUser
+    team_id: str,
+    payload: TeamNoteSubmissionCreate,
+    db: DbSession,
+    settings: CurrentSettings,
+    user: CurrentUser,
 ) -> TeamNoteSubmissionRead:
-    return _submit(db, team_id, user.id, payload)
+    return _submit(db, team_id, user.id, payload, settings)
 
 
 @router.get("/teams/{team_id}/note-submissions", response_model=list[TeamNoteSubmissionRead], include_in_schema=False)
@@ -575,31 +742,81 @@ def legacy_list_submissions(team_id: str, db: DbSession, user: CurrentUser) -> l
 
 
 @router.post("/teams/{team_id}/note-submissions/{submission_id}/approve", response_model=TeamNoteRead, include_in_schema=False)
-def legacy_approve(team_id: str, submission_id: str, db: DbSession, user: CurrentUser) -> TeamNoteRead:
+def legacy_approve(
+    team_id: str,
+    submission_id: str,
+    db: DbSession,
+    settings: CurrentSettings,
+    user: CurrentUser,
+) -> TeamNoteRead:
     team_service.require_role(db, team_id, user.id, TeamMemberRole.OWNER, TeamMemberRole.ADMIN)
     note = team_note_service.approve_submission(
         db, team_note_service.get_submission_or_404(db, team_id, submission_id), user.id
     )
     submission = team_note_service.get_submission_or_404(db, team_id, submission_id)
-    notify_user(
-        db, submission.applicant_id, NotificationType.TEAM_NOTE_APPROVED,
-        "知识投稿已通过", f"“{note.title}”已发布到团队知识库。", actor_user_id=user.id,
-        data_json={"teamId": team_id, "submissionId": submission.id, "teamNoteId": note.id},
+    result_url = _submission_url(submission.id, settings=settings)
+    knowledge_url = _knowledge_url(note.id, settings)
+    _dispatch_submission_notification(
+        db,
+        event="TEAM_NOTE_APPROVED",
+        participant_ids=[submission.applicant_id],
+        actor_user_id=user.id,
+        notification_type=NotificationType.TEAM_NOTE_APPROVED,
+        title="知识投稿已通过",
+        body=f"“{note.title}”已发布到团队知识库。",
+        external_message=(
+            f"【知识审核结果】“{note.title}”已通过并发布到团队知识库；"
+            f"查看知识：{knowledge_url}；查看投稿结果：{result_url}"
+        ),
+        data_json={
+            "eventType": "TEAM_NOTE_APPROVED",
+            "teamId": team_id,
+            "submissionId": submission.id,
+            "teamNoteId": note.id,
+            "url": knowledge_url,
+            "knowledgeUrl": knowledge_url,
+            "submissionUrl": result_url,
+        },
+        event_key=f"team-note-approved:{submission.id}:revision-{submission.revision_no}",
+        settings=settings,
     )
     return _note_read(db, note, user.id)
 
 
 @router.post("/teams/{team_id}/note-submissions/{submission_id}/reject", response_model=TeamNoteSubmissionRead, include_in_schema=False)
 def legacy_reject(
-    team_id: str, submission_id: str, payload: TeamNoteSubmissionReview, db: DbSession, user: CurrentUser
+    team_id: str,
+    submission_id: str,
+    payload: TeamNoteSubmissionReview,
+    db: DbSession,
+    settings: CurrentSettings,
+    user: CurrentUser,
 ) -> TeamNoteSubmissionRead:
     team_service.require_role(db, team_id, user.id, TeamMemberRole.OWNER, TeamMemberRole.ADMIN)
     rejected = team_note_service.reject_submission(
         db, team_note_service.get_submission_or_404(db, team_id, submission_id), user.id, review=payload
     )
-    notify_user(
-        db, rejected.applicant_id, NotificationType.TEAM_NOTE_REJECTED,
-        "知识投稿已拒绝", payload.reason or "投稿未通过审核。", actor_user_id=user.id,
-        data_json={"teamId": team_id, "submissionId": rejected.id},
+    result_url = _submission_url(rejected.id, settings=settings)
+    reason = payload.reason or "投稿未通过审核。"
+    _dispatch_submission_notification(
+        db,
+        event="TEAM_NOTE_REJECTED",
+        participant_ids=[rejected.applicant_id],
+        actor_user_id=user.id,
+        notification_type=NotificationType.TEAM_NOTE_REJECTED,
+        title="知识投稿已拒绝",
+        body=reason,
+        external_message=f"【知识审核结果】“{rejected.snapshot_title}”已拒绝：{reason}；查看投稿：{result_url}",
+        data_json={
+            "eventType": "TEAM_NOTE_REJECTED",
+            "teamId": team_id,
+            "submissionId": rejected.id,
+            "title": rejected.snapshot_title,
+            "reason": reason,
+            "url": result_url,
+            "submissionUrl": result_url,
+        },
+        event_key=f"team-note-rejected:{rejected.id}:revision-{rejected.revision_no}",
+        settings=settings,
     )
     return _submission_read(db, rejected)

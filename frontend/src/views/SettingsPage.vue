@@ -1,8 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import {
-  IconArrowLeft,
   IconCheck,
   IconDeviceDesktop,
   IconMoon,
@@ -10,10 +9,11 @@ import {
   IconSettings,
   IconSun,
   IconUserCircle,
+  IconUsers,
 } from '@tabler/icons-vue'
 
-import ActionFeedback from '@/components/ActionFeedback.vue'
 import SeasonSwatch from '@/components/SeasonSwatch.vue'
+import TeamManagePanel from '@/components/settings/TeamManagePanel.vue'
 import {
   appearanceModes,
   appearanceBackgrounds,
@@ -26,19 +26,55 @@ import {
 } from '@/modules/theme'
 import { useAppStore } from '@/stores/app'
 import { useAuthStore } from '@/stores/auth'
+import { useFeedbackStore } from '@/stores/feedback'
 
 const appStore = useAppStore()
 const authStore = useAuthStore()
+const feedback = useFeedbackStore()
 const router = useRouter()
+const route = useRoute()
 const selectedPalette = computed(() => getAppearancePalette(appStore.appearancePalette))
 const selectedBackground = computed(() => getAppearanceBackground(appStore.appearanceBackground))
 const scenePaletteActive = computed(() => !!selectedPalette.value.atmosphere)
 const modeIcons = { system: IconDeviceDesktop, light: IconSun, dark: IconMoon }
-const activeSection = ref<'appearance' | 'account'>('appearance')
+// 分区支持 ?section=teams&team=<id> 直达（侧边栏、旧 /team 链接重定向都落到这里）。
+const validSections = ['appearance', 'account', 'teams'] as const
+type SettingsSection = typeof validSections[number]
+function sectionFromQuery(): SettingsSection {
+  return typeof route.query.section === 'string' && validSections.includes(route.query.section as SettingsSection)
+    ? route.query.section as SettingsSection
+    : 'appearance'
+}
+const activeSection = ref<SettingsSection>(sectionFromQuery())
+const panelTeamId = ref(typeof route.query.team === 'string' ? route.query.team : '')
+watch(() => [route.query.section, route.query.team] as const, ([section, teamId]) => {
+  if (typeof section === 'string' && validSections.includes(section as SettingsSection)) activeSection.value = section as SettingsSection
+  if (typeof teamId === 'string' && teamId) panelTeamId.value = teamId
+})
+
+function onPanelSwitch(teamId: string) {
+  panelTeamId.value = teamId
+  void router.replace({ query: { ...route.query, section: 'teams', team: teamId } })
+}
+
+// 点击导航时把分区写回 URL，保证刷新/分享后落在同一分区。
+function selectSection(section: SettingsSection) {
+  activeSection.value = section
+  const query: Record<string, string> = {}
+  for (const [key, value] of Object.entries(route.query)) {
+    if (typeof value === 'string') query[key] = value
+  }
+  if (section === 'teams') {
+    query.section = 'teams'
+    if (panelTeamId.value) query.team = panelTeamId.value
+  } else {
+    delete query.section
+    delete query.team
+  }
+  void router.replace({ query })
+}
 const nicknameDraft = ref('')
 const profileSaving = ref(false)
-const profileError = ref('')
-const profileNotice = ref('')
 const profileDirty = computed(() => nicknameDraft.value.trim() !== (authStore.user?.nickname ?? ''))
 const paletteGroups = computed(() => [
   {
@@ -92,10 +128,8 @@ async function signOut() {
 
 async function saveProfile() {
   const nickname = nicknameDraft.value.trim()
-  profileError.value = ''
-  profileNotice.value = ''
   if (!nickname) {
-    profileError.value = '昵称不能为空。'
+    feedback.error('昵称不能为空。')
     return
   }
   if (!profileDirty.value) return
@@ -103,9 +137,9 @@ async function saveProfile() {
   try {
     await authStore.updateProfile({ nickname })
     nicknameDraft.value = nickname
-    profileNotice.value = '昵称已保存。'
+    feedback.success('昵称已保存。')
   } catch (cause: any) {
-    profileError.value = cause?.response?.data?.detail ?? '保存昵称失败，请稍后重试。'
+    feedback.error(cause?.response?.data?.detail ?? '保存昵称失败，请稍后重试。')
   } finally {
     profileSaving.value = false
   }
@@ -114,28 +148,20 @@ async function saveProfile() {
 
 <template>
   <div class="settings-page">
-    <header class="settings-page-header">
-      <div>
-        <span class="eyebrow">WORKFOLLOW</span>
-        <h1>设置</h1>
-        <p>调整应用的外观与使用偏好。</p>
-      </div>
-      <RouterLink class="secondary-button" to="/">
-        <IconArrowLeft :size="15" />
-        返回工作台
-      </RouterLink>
-    </header>
-
     <div class="settings-layout">
       <aside class="settings-navigation" aria-label="设置分类">
         <div class="settings-navigation-title"><IconSettings :size="18" />设置</div>
-        <button class="settings-navigation-item" :class="{ active: activeSection === 'appearance' }" type="button" :aria-current="activeSection === 'appearance' ? 'page' : undefined" @click="activeSection = 'appearance'">
+        <button class="settings-navigation-item" :class="{ active: activeSection === 'appearance' }" type="button" :aria-current="activeSection === 'appearance' ? 'page' : undefined" @click="selectSection('appearance')">
           <IconPalette :size="18" />
           <span>外观</span>
         </button>
-        <button class="settings-navigation-item" :class="{ active: activeSection === 'account' }" type="button" :aria-current="activeSection === 'account' ? 'page' : undefined" @click="activeSection = 'account'">
+        <button class="settings-navigation-item" :class="{ active: activeSection === 'account' }" type="button" :aria-current="activeSection === 'account' ? 'page' : undefined" @click="selectSection('account')">
           <IconUserCircle :size="18" />
           <span>账号</span>
+        </button>
+        <button class="settings-navigation-item" :class="{ active: activeSection === 'teams' }" type="button" :aria-current="activeSection === 'teams' ? 'page' : undefined" @click="selectSection('teams')">
+          <IconUsers :size="18" />
+          <span>团队</span>
         </button>
       </aside>
 
@@ -230,13 +256,13 @@ async function saveProfile() {
         <section class="settings-info-row">
           <div>
             <strong>外观设置会自动保存</strong>
-            <p>主色、背景基调和明暗模式会在下次打开 WorkFollow 时继续保留。</p>
+            <p>主色、背景基调和明暗模式会在下次打开打勾时继续保留。</p>
           </div>
           <span class="settings-saved-badge"><IconCheck :size="14" />已应用</span>
         </section>
         </template>
 
-        <section v-else class="settings-panel account-settings-panel" aria-labelledby="account-title">
+        <section v-else-if="activeSection === 'account'" class="settings-panel account-settings-panel" aria-labelledby="account-title">
           <header class="settings-panel-header">
             <div>
               <span class="section-label">ACCOUNT</span>
@@ -244,8 +270,6 @@ async function saveProfile() {
               <p>修改显示昵称；用户名用于登录，保持只读。</p>
             </div>
           </header>
-          <ActionFeedback :message="profileError" @dismiss="profileError = ''" />
-          <ActionFeedback :message="profileNotice" tone="success" @dismiss="profileNotice = ''" />
           <form class="account-profile-form" @submit.prevent="saveProfile">
             <label for="account-nickname">
               <span>昵称</span>
@@ -267,6 +291,10 @@ async function saveProfile() {
             <button class="secondary-button" type="button" @click="signOut">退出登录</button>
           </footer>
         </section>
+
+        <template v-else>
+          <TeamManagePanel :team-id="panelTeamId" @switch="onPanelSwitch" />
+        </template>
       </main>
     </div>
   </div>

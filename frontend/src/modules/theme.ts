@@ -172,8 +172,8 @@ export const appearancePalettes: readonly AppearancePaletteOption[] = [
   palette(
     'spring',
     '春 · 樱语',
-    'linear-gradient(145deg, #FDA4CA, #DB3F83)',
-    '#DB3F83', '#C23377', '#A82A66', '#FCE7F1', '#4A2038', '#FB9EC6', '#FDC6DD', '#F472B6',
+    'linear-gradient(145deg, #FDA4CA, #C23377)',
+    '#C23377', '#A82A66', '#8F2455', '#FCE7F1', '#4A2038', '#FB9EC6', '#FDC6DD', '#F472B6',
     surfaces(
       'rgb(255 241 247 / .68)', 'rgb(255 236 244 / .55)', 'rgb(255 238 246 / .6)',
       'rgb(255 250 252 / .86)', 'rgb(255 252 253 / .9)', 'rgb(255 247 250 / .85)',
@@ -215,8 +215,8 @@ export const appearancePalettes: readonly AppearancePaletteOption[] = [
   palette(
     'summer',
     '夏 · 青屿',
-    'linear-gradient(145deg, #67E8F9, #0284C7)',
-    '#0288C0', '#0273A3', '#025E85', '#E0F2FE', '#123B4F', '#67E8F9', '#A5F3FC', '#22D3EE',
+    'linear-gradient(145deg, #67E8F9, #0273A3)',
+    '#0273A3', '#025E85', '#024967', '#E0F2FE', '#123B4F', '#67E8F9', '#A5F3FC', '#22D3EE',
     surfaces(
       'rgb(238 249 253 / .66)', 'rgb(230 246 252 / .55)', 'rgb(234 248 253 / .6)',
       'rgb(250 253 255 / .86)', 'rgb(252 254 255 / .9)', 'rgb(245 251 254 / .85)',
@@ -420,8 +420,8 @@ export const appearancePalettes: readonly AppearancePaletteOption[] = [
   palette(
     'damo',
     '大漠·孤烟',
-    'linear-gradient(145deg, #E8C9A8, #C2703D)',
-    '#C2703D', '#A85F32', '#8D4F29', '#F8EDE4', '#3A2417', '#E8A87C', '#F0C2A0', '#D68A56',
+    'linear-gradient(145deg, #E8C9A8, #A85F32)',
+    '#A85F32', '#8D4F29', '#744222', '#F8EDE4', '#3A2417', '#E8A87C', '#F0C2A0', '#D68A56',
     surfaces(
       'rgb(248 242 235 / .66)', 'rgb(243 234 224 / .55)', 'rgb(246 238 229 / .6)',
       'rgb(253 250 246 / .86)', 'rgb(254 252 250 / .9)', 'rgb(250 245 239 / .85)',

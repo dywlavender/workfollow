@@ -4,7 +4,17 @@ from datetime import datetime
 from enum import Enum
 from typing import Any
 
-from sqlalchemy import JSON, DateTime, Enum as SqlEnum, ForeignKey, Index, Integer, String, Text
+from sqlalchemy import (
+    JSON,
+    DateTime,
+    Enum as SqlEnum,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -94,3 +104,46 @@ class ExternalNotificationDelivery(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=local_now, nullable=False)
 
     user: Mapped["User"] = relationship(foreign_keys=[user_id])
+
+
+class PendingTaskUpdateNotification(Base):
+    """Coalesce title/description autosaves until the edit session is idle.
+
+    One row represents one task and one recipient.  ``before_json`` is kept
+    from the first edit in the session while ``after_json`` is replaced by the
+    latest autosave, so the eventual notification describes the whole edit in
+    one event.
+    """
+
+    __tablename__ = "pending_task_update_notifications"
+    __table_args__ = (
+        UniqueConstraint(
+            "task_id",
+            "recipient_id",
+            name="uq_pending_task_update_task_recipient",
+        ),
+        Index(
+            "ix_pending_task_update_next_attempt",
+            "next_attempt_at",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    task_id: Mapped[str] = mapped_column(
+        ForeignKey("todos.id", ondelete="CASCADE"), nullable=False
+    )
+    recipient_id: Mapped[str] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    actor_user_id: Mapped[str | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    before_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    after_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    next_attempt_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=local_now, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=local_now, onupdate=local_now, nullable=False)
+
+    task: Mapped["Todo"] = relationship(foreign_keys=[task_id])
+    recipient: Mapped["User"] = relationship(foreign_keys=[recipient_id])
+    actor_user: Mapped["User | None"] = relationship(foreign_keys=[actor_user_id])

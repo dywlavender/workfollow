@@ -484,14 +484,12 @@ class NotificationWorker:
     def start(self) -> None:
         if self._thread is not None:
             return
-        if not external_notifications_enabled(self.settings):
-            logger.info("外部 HTTP 通知未启用：notification_http_url 为空")
-            return
         self._thread = threading.Thread(target=self._run, name="workfollow-notifications", daemon=True)
         self._thread.start()
         logger.info(
-            "外部通知后台发送器已启动 interval_seconds=%s",
+            "通知后台发送器已启动 interval_seconds=%s external_enabled=%s",
             self.settings.notification_worker_interval_seconds,
+            external_notifications_enabled(self.settings),
         )
 
     def stop(self) -> None:
@@ -499,12 +497,19 @@ class NotificationWorker:
         if self._thread is not None:
             self._thread.join(timeout=max(self.settings.notification_worker_interval_seconds + 1, 3))
             self._thread = None
-            logger.info("外部通知后台发送器已停止")
+            logger.info("通知后台发送器已停止")
 
     def _run(self) -> None:
+        # Import lazily because task_notification_service itself uses this
+        # module for URL construction and external delivery helpers.
+        from app.services.task_notification_service import (
+            dispatch_pending_task_update_notifications,
+        )
+
         while not self._stop.is_set():
             try:
                 with SessionLocal() as db:
+                    dispatch_pending_task_update_notifications(db, settings=self.settings)
                     enqueue_daily_task_digests(db, settings=self.settings)
                     dispatch_pending(db, settings=self.settings)
             except Exception:

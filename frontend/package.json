@@ -8,6 +8,7 @@
     "build": "npm run tokens:check && vue-tsc -b && vite build",
     "type-check": "vue-tsc -b --pretty false",
     "tokens:check": "node scripts/validate-design-tokens.mjs",
+    "visual:check": "node scripts/visual-check.mjs",
     "test": "vitest run",
     "preview": "vite preview"
   },

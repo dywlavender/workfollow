@@ -16,13 +16,13 @@ import TodoDialog from '@/components/todo/TodoDialog.vue'
 import { isDateOnlyDue } from '@/modules/todo/dueDate'
 import { fetchTodos, putTodo, type Todo, type TodoPayload } from '@/services/api'
 import { consumePrefetchedCalendarTodos } from '@/services/prefetch'
-import { useAppStore } from '@/stores/app'
+import { useFeedbackStore } from '@/stores/feedback'
 import { cloneTodo, optimisticCompletedTodo, optimisticRestoredTodo, useTodoStore } from '@/stores/todos'
 
 const router = useRouter()
 const route = useRoute()
 const todoStore = useTodoStore()
-const appStore = useAppStore()
+const feedback = useFeedbackStore()
 const root = ref<HTMLElement | null>(null)
 const calendarRef = ref<InstanceType<typeof FullCalendar> | null>(null)
 const allTodos = ref<Todo[]>([])
@@ -34,7 +34,7 @@ const currentView = ref('dayGridMonth')
 const currentTitle = ref(dayjs(requestedDate).format('YYYY年M月'))
 const initialLoading = ref(true)
 const refreshing = ref(false)
-const actionError = ref<string | null>(null)
+const loadError = ref<string | null>(null)
 const createOpen = ref(false)
 const selectedTodo = ref<Todo | null>(null)
 const moreOpen = ref(false)
@@ -141,13 +141,13 @@ async function loadCalendar() {
   const isInitialLoad = initialLoading.value
   if (isInitialLoad) initialLoading.value = true
   else refreshing.value = true
-  actionError.value = null
+  loadError.value = null
   try {
     allTodos.value = isInitialLoad
       ? await consumePrefetchedCalendarTodos()
       : await fetchTodos()
   } catch {
-    actionError.value = '无法读取日历，请确认本地服务已启动。'
+    loadError.value = '无法读取日历，请确认本地服务已启动。'
   } finally {
     if (isInitialLoad) initialLoading.value = false
     else refreshing.value = false
@@ -190,7 +190,6 @@ function onEventClick(arg: EventClickArg) {
 }
 
 async function onEventDrop(arg: EventDropArg) {
-  actionError.value = null
   const todo = allTodos.value.find((item) => item.id === arg.event.id)
   if (!todo?.dueAt || todo.status !== 'TODO' || !arg.event.start) { arg.revert(); return }
 
@@ -208,7 +207,7 @@ async function onEventDrop(arg: EventDropArg) {
     selectedDate.value = droppedDate.format('YYYY-MM-DD')
   } catch {
     arg.revert()
-    actionError.value = '改期失败，任务已恢复到原日期。'
+    feedback.error('改期失败，任务已恢复到原日期。')
   }
 }
 
@@ -237,12 +236,12 @@ async function toggle(todo: Todo) {
       const result = await todoStore.complete(todo.id)
       replace(result.todo)
       if (result.nextTodo) upsert(result.nextTodo)
-      appStore.showCompletionToast()
+      feedback.completed()
     }
   } catch {
     allTodos.value = snapshot
     if (selectedTodo.value?.id === todo.id) selectedTodo.value = snapshot.find((item) => item.id === todo.id) ?? null
-    actionError.value = '任务状态更新失败，请稍后重试。'
+    feedback.error('任务状态更新失败，请稍后重试。')
   }
 }
 
@@ -258,7 +257,7 @@ async function saveTodo(payload: TodoPayload) {
     closeDialog()
     await loadCalendar()
   } catch {
-    actionError.value = selectedTodo.value ? '更新任务失败，请稍后重试。' : '创建任务失败，请检查任务设置。'
+    feedback.error(selectedTodo.value ? '更新任务失败，请稍后重试。' : '创建任务失败，请检查任务设置。')
   }
 }
 
@@ -307,7 +306,7 @@ onBeforeUnmount(() => document.removeEventListener('click', closeFloating))
       </div>
     </header>
 
-    <p v-if="actionError" class="calendar-error calendar-floating-error" role="alert">{{ actionError }}<button type="button" aria-label="关闭错误" @click="actionError = null">×</button></p>
+    <p v-if="loadError" class="calendar-error calendar-floating-error" role="alert">{{ loadError }}<button type="button" aria-label="关闭错误" @click="loadError = null">×</button></p>
     <main class="calendar-canvas" :aria-busy="initialLoading || refreshing" aria-label="任务日历">
       <FullCalendar ref="calendarRef" :options="calendarOptions" />
       <div

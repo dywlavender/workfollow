@@ -41,8 +41,13 @@ async function submit() {
     <div class="auth-orb auth-orb-two" aria-hidden="true" />
 
     <section class="auth-layout">
-      <aside class="auth-story" aria-label="WorkFollow 产品介绍">
-        <div class="auth-story-brand"><span>W</span><strong>WorkFollow</strong></div>
+      <aside class="auth-story" aria-label="打勾 产品介绍">
+        <div class="auth-story-brand">
+          <span aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 12.6 L9.6 17.5 L19.5 6.8" /></svg>
+          </span>
+          <strong>打勾</strong>
+        </div>
         <div class="auth-story-copy">
           <span class="auth-kicker">FOCUS · ORGANIZE · DELIVER</span>
           <h2>把今天要做的事，<br />安静地推进。</h2>
@@ -61,7 +66,7 @@ async function submit() {
       <section class="auth-panel">
         <header class="auth-heading">
           <span class="auth-mode-label">{{ isRegister ? '创建账号' : '欢迎回来' }}</span>
-          <h1>{{ isRegister ? '开始你的工作空间' : '登录 WorkFollow' }}</h1>
+          <h1>{{ isRegister ? '开始你的工作空间' : '登录打勾' }}</h1>
           <p>{{ isRegister ? '只需要用户名和密码，十秒内即可开始。' : '输入账号信息，继续今天的工作。' }}</p>
         </header>
 
@@ -133,7 +138,7 @@ async function submit() {
         </form>
 
         <p class="auth-switch-copy">
-          {{ isRegister ? '已经有账号？' : '第一次使用 WorkFollow？' }}
+          {{ isRegister ? '已经有账号？' : '第一次使用打勾？' }}
           <RouterLink v-if="isRegister" :to="{ name: 'login', query: route.query }">直接登录</RouterLink>
           <RouterLink v-else :to="{ name: 'register', query: route.query }">创建账号</RouterLink>
         </p>

@@ -60,7 +60,8 @@ function positionPopover() {
     top = triggerRect.top - popoverRect.height - gap
   }
   top = Math.max(viewportMargin, Math.min(top, window.innerHeight - popoverRect.height - viewportMargin))
-  popoverStyle.value = { left: `${left}px`, top: `${top}px` }
+  // 定位完成后才显形(基础态 visibility:hidden),中间态不会闪现在视口左上角。
+  popoverStyle.value = { left: `${left}px`, top: `${top}px`, visibility: 'visible' }
 }
 
 async function show() {

@@ -36,6 +36,7 @@ import {
   type TeamNoteListItem, type TeamNoteSubmission, type TeamNoteVersion,
 } from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
+import { useFeedbackStore } from '@/stores/feedback'
 import { useRealtimeStore } from '@/stores/realtime'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { noteToMarkdown } from '@/modules/editor/markdownExport'
@@ -46,6 +47,7 @@ const router = useRouter()
 const auth = useAuthStore()
 const realtime = useRealtimeStore()
 const workspace = useWorkspaceStore()
+const feedback = useFeedbackStore()
 const currentTeam = computed(() => workspace.currentTeam ?? workspace.teams[0] ?? null)
 const selectedTeamId = computed(() => currentTeam.value?.id)
 const hasTeam = computed(() => Boolean(currentTeam.value))
@@ -88,7 +90,6 @@ const globalSearchError = ref<string | null>(null)
 const globalSearchOpen = ref(false)
 const globalSearchInput = ref<HTMLInputElement | null>(null)
 const knowledgeStatusFilter = ref<'published' | 'archived'>('published')
-const pageError = ref<string | null>(null)
 const busy = ref(false)
 const viewLoading = ref(false)
 const validViews: NoteView[] = ['recent', 'all', 'inbox', 'favorites', 'shared', 'knowledge', 'submissions', 'review']
@@ -188,8 +189,9 @@ let globalSearchRequest = 0
 let activeViewLoad: Promise<void> | null = null
 let viewLoadQueued = false
 
-function notify(message: string) { pageError.value = message }
-function fail(cause: any, fallback: string) { pageError.value = cause?.response?.data?.detail ?? fallback }
+// 操作反馈统一走全局 feedback 服务;fail 保留后端 detail 提取。
+function notify(message: string) { feedback.success(message) }
+function fail(cause: any, fallback: string) { feedback.error(cause?.response?.data?.detail ?? fallback) }
 
 function toNoteListItem(note: Note): NoteListItem {
   return {
@@ -1001,9 +1003,8 @@ onMounted(async () => {
 
 <template>
   <div class="notes-page unified-notes-page">
-    <p v-if="pageError" class="notes-page-error" role="status">{{ pageError }}<button type="button" aria-label="关闭提示" @click="pageError = null"><IconX :size="16" /></button></p>
     <section v-if="onboarding" class="onboarding-banner" aria-label="新手指引">
-      <div><span class="eyebrow">FIRST RUN</span><strong>欢迎来到 WorkFollow</strong><p>先阅读这份使用指南，再开始安排你的工作。</p></div>
+      <div><span class="eyebrow">FIRST RUN</span><strong>欢迎来到打勾</strong><p>先阅读这份使用指南，再开始安排你的工作。</p></div>
       <button class="primary-button" type="button" @click="finishOnboarding">开始使用</button>
     </section>
     <div class="notes-workspace card" :aria-busy="viewLoading">

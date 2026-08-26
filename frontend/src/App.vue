@@ -11,7 +11,7 @@ import {
   zhCN,
 } from 'naive-ui'
 import AppSidebar from '@/components/AppSidebar.vue'
-import CompletionToast from '@/components/CompletionToast.vue'
+import FeedbackHost from '@/components/FeedbackHost.vue'
 import GlobalCapture from '@/components/GlobalCapture.vue'
 import RouteLoadingFrame from '@/components/RouteLoadingFrame.vue'
 import SeasonalAtmosphere from '@/components/SeasonalAtmosphere.vue'
@@ -62,7 +62,6 @@ onMounted(() => {
   const preloadSecondaryRoutes = () => {
     preloadRoute('common')
     preloadRoute('settings')
-    preloadRoute('team')
   }
   if (idleWindow.requestIdleCallback) {
     deferredPreloadTimer = idleWindow.requestIdleCallback(preloadSecondaryRoutes, { timeout: 4500 })
@@ -90,7 +89,7 @@ onBeforeUnmount(() => {
             <ReminderScheduler />
             <AppSidebar />
             <GlobalCapture />
-            <CompletionToast />
+            <FeedbackHost />
             <main class="main-area">
               <div class="route-content-frame">
                 <RouterView v-slot="{ Component }">

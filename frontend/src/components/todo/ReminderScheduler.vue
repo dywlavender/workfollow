@@ -11,7 +11,7 @@ async function pollReminders() {
   try {
     const todos = await fetchDueReminders()
     for (const todo of todos) {
-      new Notification(todo.title, { body: todo.description ?? 'WorkFollow 待办提醒', tag: todo.id })
+      new Notification(todo.title, { body: todo.description ?? '打勾 · 待办提醒', tag: todo.id })
       await acknowledgeReminder(todo.id)
     }
   } catch {

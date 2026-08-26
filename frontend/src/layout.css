@@ -129,28 +129,12 @@ html {
   overflow: auto;
 }
 
-/* Team management and audit are sparse content pages: let the primary
-   surface absorb the remaining viewport height so a small team list or an
-   empty audit log still covers the body instead of hovering at the top. */
-.team-page,
+/* The audit page is sparse content: let the primary surface absorb the
+   remaining viewport height so an empty log still covers the body. */
 .team-audit-page {
   display: flex;
   flex-direction: column;
   height: 100dvh;
-  min-height: 0;
-  overflow: auto;
-}
-
-.team-page > .team-members-panel {
-  flex: 1 1 auto;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
-.team-page > .team-members-panel > .team-member-list {
-  flex: 1 1 auto;
   min-height: 0;
   overflow: auto;
 }
@@ -223,8 +207,7 @@ html {
   overflow: hidden;
 }
 
-.notes-page > .onboarding-banner,
-.notes-page > .notes-page-error {
+.notes-page > .onboarding-banner {
   flex: 0 0 auto;
 }
 
@@ -355,7 +338,6 @@ html {
   margin-inline: auto;
 }
 
-.settings-page-header,
 .settings-layout {
   width: 100%;
   max-width: none;
@@ -420,7 +402,6 @@ html[data-atmosphere="on"] .notifications-page,
 html[data-atmosphere="on"] .settings-page,
 html[data-atmosphere="on"] .unified-page,
 html[data-atmosphere="on"] .common-links-page,
-html[data-atmosphere="on"] .team-page,
 html[data-atmosphere="on"] .team-audit-page,
 html[data-atmosphere="on"] .team-tasks-page,
 html[data-atmosphere="on"] .team-tasks-workspace {
@@ -507,7 +488,6 @@ html[data-atmosphere="on"] .calendar-canvas .fc .fc-scrollgrid {
 }
 
 html[data-atmosphere="on"] .workspace-heading,
-html[data-atmosphere="on"] .settings-page-header,
 html[data-atmosphere="on"] .app-page-header,
 html[data-atmosphere="on"] .notifications-page > .notification-list,
 html[data-atmosphere="on"] .common-links-page > .common-links-body {

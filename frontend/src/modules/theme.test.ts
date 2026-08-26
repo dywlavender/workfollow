@@ -27,7 +27,7 @@ describe('appearance theme matrix', () => {
       expect(palette.light.page).toContain('/ .')
       expect(palette.dark.page).toContain('/ .')
     }
-    const classic = appearancePalettes.filter((palette) => palette.group === 'classic')
+    const classic = appearancePalettes.filter((palette) => !palette.group || palette.group === 'classic')
     expect(classic).toHaveLength(5)
     for (const palette of classic) {
       expect(palette.atmosphere).toBeUndefined()
