@@ -4,6 +4,7 @@ from app.core.config import Settings, get_settings
 from app.models.auth import User, UserStatus
 from app.models.note import Attachment
 from app.services.auth_service import password_hash
+from tests.collaboration_helpers import project_note
 
 
 def add_share_user(db, user_id: str, username: str) -> User:
@@ -75,11 +76,14 @@ def test_note_share_is_live_read_only_and_revocable(client: TestClient, db) -> N
     assert target_client.get(f"/api/attachments/{attachment.id}").json()["detail"] == "Attachment file not found"
 
     # The shared endpoint reads the same PersonalNote row; it does not copy it.
-    assert client.put(
-        f"/api/notes/{note_id}", json={"title": "实时标题 v2", "plainText": "实时内容 v2"}
-    ).status_code == 200
+    assert project_note(
+        client,
+        note_id,
+        title="实时标题 v2",
+        content_json={"type": "doc", "content": [{"type": "paragraph", "content": [{"type": "text", "text": "实时内容 v2"}]}]},
+    ).status_code == 204
     assert target_client.get(f"/api/shared/notes/{note_id}").json()["title"] == "实时标题 v2"
-    assert target_client.put(f"/api/notes/{note_id}", json={"title": "越权修改"}).status_code == 404
+    assert target_client.put(f"/api/notes/{note_id}/favorite", json={"isFavorite": True}).status_code == 404
     assert target_client.put(f"/api/shared/notes/{note_id}", json={"title": "越权修改"}).status_code == 405
 
     assert client.delete(f"/api/notes/{note_id}/shares/{share_id}").status_code == 204

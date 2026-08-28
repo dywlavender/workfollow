@@ -4,8 +4,10 @@ from sqlalchemy import func, select
 from app.core.config import Settings, get_settings
 from app.models.auth import SystemRole, User, UserStatus
 from app.models.note import Attachment, Note
+from app.models.resource_relation import ResourceRelation, ResourceType
 from app.models.team_note import TeamNote, TeamNoteSubmission, TeamNoteVersion
 from app.services.auth_service import password_hash
+from tests.collaboration_helpers import project_note
 
 
 def add_user(db, suffix: str) -> User:  # noqa: ANN001
@@ -73,7 +75,7 @@ def test_root_can_manage_nonmember_team_knowledge_and_team_attachments(client: T
     assert listed.json()[0]["permissions"]["canEdit"] is True
     assert root_client.get(f"/api/attachments/{attachment_id}").content == b"root team binary"
     updated = root_client.put(
-        f"/api/team/knowledge/{note_id}",
+        f"/api/team/knowledge/{note_id}/commit",
         params={"teamId": team_id},
         json={"title": "root 已修改"},
     )
@@ -129,10 +131,12 @@ def test_revision_approval_keeps_snapshot_provenance_and_independent_lifecycle(c
     )
 
     # The reviewer sees the immutable V1 snapshot even after the personal source changes.
-    assert member_client.put(f"/api/notes/{source['id']}", json={
-        "title": "接口规范 V2", "plainText": "V2 正文",
-        "contentJson": {"type": "doc", "content": [{"type": "paragraph", "content": [{"type": "text", "text": "V2 正文"}]}]},
-    }).status_code == 200
+    assert project_note(
+        member_client,
+        source["id"],
+        title="接口规范 V2",
+        content_json={"type": "doc", "content": [{"type": "paragraph", "content": [{"type": "text", "text": "V2 正文"}]}]},
+    ).status_code == 204
     review_list = client.get("/api/note-submissions/review").json()
     assert review_list[0]["snapshotPlainText"] == "V1 正文"
 
@@ -184,10 +188,12 @@ def test_update_submission_preserves_team_note_id_and_creates_version(client: Te
     assert copied.status_code == 201, copied.text
     personal = copied.json()
     assert personal["copiedFromTeamNoteId"] == knowledge_id
-    assert member_client.put(f"/api/notes/{personal['id']}", json={
-        "title": "上线规范", "plainText": "V2",
-        "contentJson": {"type": "doc", "content": [{"type": "paragraph", "content": [{"type": "text", "text": "V2"}]}]},
-    }).status_code == 200
+    assert project_note(
+        member_client,
+        personal["id"],
+        title="上线规范",
+        content_json={"type": "doc", "content": [{"type": "paragraph", "content": [{"type": "text", "text": "V2"}]}]},
+    ).status_code == 204
     submission = member_client.post(f"/api/notes/{personal['id']}/submissions", json={
         "type": "UPDATE", "targetTeamNoteId": knowledge_id, "message": "补充新版流程",
     })
@@ -203,6 +209,70 @@ def test_update_submission_preserves_team_note_id_and_creates_version(client: Te
     assert versions.status_code == 200
     assert [item["versionNo"] for item in versions.json()] == [2, 1]
     assert db.scalar(select(func.count(TeamNote.id)).where(TeamNote.id == knowledge_id)) == 1
+
+
+def test_admin_commit_uses_document_version_and_reconciles_body_attachments(client: TestClient) -> None:
+    team_id = client.post("/api/teams", json={"name": "知识协同团队"}).json()["id"]
+    source = client.post("/api/notes", json={"title": "团队附件来源"}).json()
+    uploaded = client.post(
+        "/api/attachments",
+        data={"noteId": source["id"]},
+        files={"file": ("knowledge.txt", b"knowledge attachment", "text/plain")},
+    ).json()
+    standalone = client.post(
+        "/api/attachments",
+        data={"noteId": source["id"]},
+        files={"file": ("standalone.txt", b"standalone attachment", "text/plain")},
+    ).json()
+    knowledge_response = client.post("/api/team/knowledge", params={"teamId": team_id}, json={
+        "title": "带附件的知识",
+        "contentJson": {"type": "doc", "content": [{
+            "type": "file", "attrs": {"fileId": uploaded["id"], "src": uploaded["url"]},
+        }]},
+        "attachmentIds": [uploaded["id"], standalone["id"]],
+    })
+    assert knowledge_response.status_code == 201, knowledge_response.text
+    knowledge = knowledge_response.json()
+    note_id = knowledge["id"]
+    access = client.get(f"/api/team/knowledge/{note_id}/collaboration-access")
+    assert access.status_code == 200, access.text
+    assert access.json()["versionNo"] == 1
+
+    # A freshly mounted collaborative editor may send the same document with
+    # only editor-owned block ids/null attributes.  It must not create a new
+    # published version or advance the CAS base version.
+    before_versions = client.get(f"/api/team/knowledge/{note_id}/versions").json()
+    no_op = client.put(f"/api/team/knowledge/{note_id}/commit", params={"teamId": team_id}, json={
+        "contentJson": {"type": "doc", "content": [{
+            "type": "file",
+            "attrs": {
+                "fileId": uploaded["id"],
+                "src": uploaded["url"],
+                "blockId": "editor-only-block-id",
+                "alt": None,
+            },
+        }]},
+        "baseVersion": access.json()["versionNo"],
+    })
+    assert no_op.status_code == 200, no_op.text
+    assert no_op.json()["versionNo"] == access.json()["versionNo"]
+    assert client.get(f"/api/team/knowledge/{note_id}/versions").json() == before_versions
+
+    committed = client.put(f"/api/team/knowledge/{note_id}/commit", params={"teamId": team_id}, json={
+        "title": "移除附件后的知识",
+        "contentJson": {"type": "doc", "content": [{"type": "paragraph"}]},
+        "baseVersion": access.json()["versionNo"],
+    })
+    assert committed.status_code == 200, committed.text
+    # Editing the body removes the embedded file, but must not silently drop
+    # a standalone downloadable attachment that has no document node.
+    assert committed.json()["attachmentIds"] == [standalone["id"]]
+
+    stale = client.put(f"/api/team/knowledge/{note_id}/commit", params={"teamId": team_id}, json={
+        "title": "旧草稿",
+        "baseVersion": access.json()["versionNo"],
+    })
+    assert stale.status_code == 409, stale.text
 
 
 def test_update_draft_reuses_an_existing_team_copy(client: TestClient, db) -> None:
@@ -231,7 +301,11 @@ def test_update_draft_cannot_switch_to_another_target(client: TestClient, db) ->
     first = client.post("/api/team/knowledge", json={"title": "目标 A", "plainText": "A"}).json()
     second = client.post("/api/team/knowledge", json={"title": "目标 B", "plainText": "B"}).json()
     draft = member_client.post(f"/api/team/knowledge/{first['id']}/update-draft").json()
-    assert member_client.put(f"/api/notes/{draft['id']}", json={"plainText": "A 的修改"}).status_code == 200
+    assert project_note(
+        member_client,
+        draft["id"],
+        content_json={"type": "doc", "content": [{"type": "paragraph", "content": [{"type": "text", "text": "A 的修改"}]}]},
+    ).status_code == 204
 
     response = member_client.post(f"/api/notes/{draft['id']}/submissions", json={
         "type": "UPDATE", "targetTeamNoteId": second["id"],
@@ -244,13 +318,17 @@ def test_update_approval_rejects_a_stale_target_snapshot(client: TestClient, db)
     _team_id, _member, _outsider, member_client, _outsider_client = setup_team(client, db)
     knowledge = client.post("/api/team/knowledge", json={"title": "版本保护", "plainText": "V1"}).json()
     draft = member_client.post(f"/api/team/knowledge/{knowledge['id']}/update-draft").json()
-    assert member_client.put(f"/api/notes/{draft['id']}", json={"plainText": "成员修改"}).status_code == 200
+    assert project_note(
+        member_client,
+        draft["id"],
+        content_json={"type": "doc", "content": [{"type": "paragraph", "content": [{"type": "text", "text": "成员修改"}]}]},
+    ).status_code == 204
     submission = member_client.post(f"/api/notes/{draft['id']}/submissions", json={
         "type": "UPDATE", "targetTeamNoteId": knowledge["id"],
     })
     assert submission.status_code == 201, submission.text
 
-    changed = client.put(f"/api/team/knowledge/{knowledge['id']}", json={"plainText": "管理员先更新"})
+    changed = client.put(f"/api/team/knowledge/{knowledge['id']}/commit", json={"plainText": "管理员先更新"})
     assert changed.status_code == 200, changed.text
     approved = client.post(f"/api/note-submissions/{submission.json()['id']}/approve", json={})
     assert approved.status_code == 409, approved.text
@@ -270,7 +348,11 @@ def test_update_keeps_the_original_personal_source_link(client: TestClient, db) 
     copied = member_client.post(f"/api/team/knowledge/{knowledge['id']}/copy").json()
     draft = member_client.post(f"/api/team/knowledge/{knowledge['id']}/update-draft").json()
     assert draft["id"] == copied["id"]
-    assert member_client.put(f"/api/notes/{draft['id']}", json={"plainText": "V2"}).status_code == 200
+    assert project_note(
+        member_client,
+        draft["id"],
+        content_json={"type": "doc", "content": [{"type": "paragraph", "content": [{"type": "text", "text": "V2"}]}]},
+    ).status_code == 204
     update = member_client.post(f"/api/notes/{draft['id']}/submissions", json={
         "type": "UPDATE", "targetTeamNoteId": knowledge["id"],
     })
@@ -290,7 +372,7 @@ def test_withdraw_archive_and_backend_permissions(client: TestClient, db) -> Non
     assert client.post(f"/api/note-submissions/{submission['id']}/approve", json={}).status_code == 409
 
     knowledge = client.post("/api/team/knowledge", json={"title": "归档知识"}).json()
-    assert member_client.put(f"/api/team/knowledge/{knowledge['id']}", json={"title": "越权"}).status_code == 403
+    assert member_client.put(f"/api/team/knowledge/{knowledge['id']}/commit", json={"title": "越权"}).status_code == 403
     assert member_client.post(f"/api/team/knowledge/{knowledge['id']}/archive").status_code == 403
     assert outsider_client.get(f"/api/team/knowledge/{knowledge['id']}").status_code == 404
     assert client.post(f"/api/team/knowledge/{knowledge['id']}/archive").json()["status"] == "ARCHIVED"
@@ -332,14 +414,46 @@ def test_archived_team_knowledge_can_be_permanently_deleted_by_manager_only(clie
     )) == 0
 
 
+def test_archived_team_knowledge_delete_retires_document_relations(client: TestClient, db) -> None:
+    team_id, _member, _outsider, _member_client, _outsider_client = setup_team(client, db)
+    task = client.post("/api/tasks", json={"title": "知识引用的任务"})
+    assert task.status_code == 201, task.text
+    task_id = task.json()["id"]
+    knowledge = client.post("/api/team/knowledge", params={"teamId": team_id}, json={
+        "title": "待删除的引用知识",
+        "contentJson": {"type": "doc", "content": [{
+            "type": "taskReference", "attrs": {"taskId": task_id, "blockId": "knowledge-task"},
+        }]},
+    })
+    assert knowledge.status_code == 201, knowledge.text
+    knowledge_id = knowledge.json()["id"]
+
+    relation = db.scalar(select(ResourceRelation).where(
+        ResourceRelation.source_type == ResourceType.TEAM_NOTE,
+        ResourceRelation.source_id == knowledge_id,
+        ResourceRelation.target_type == ResourceType.TASK,
+        ResourceRelation.target_id == task_id,
+        ResourceRelation.deleted_at.is_(None),
+    ))
+    assert relation is not None
+
+    assert client.post(f"/api/team/knowledge/{knowledge_id}/archive").status_code == 200
+    assert client.delete(f"/api/team/knowledge/{knowledge_id}").status_code == 204
+
+    db.expire_all()
+    assert db.get(ResourceRelation, relation.id).deleted_at is not None
+
+
 def test_archived_team_knowledge_delete_waits_for_pending_update_submission(client: TestClient, db) -> None:
     _team_id, _member, _outsider, member_client, _outsider_client = setup_team(client, db)
     knowledge = client.post("/api/team/knowledge", json={"title": "有更新申请的知识"}).json()
     draft = member_client.post(f"/api/team/knowledge/{knowledge['id']}/update-draft")
     assert draft.status_code == 200, draft.text
-    assert member_client.put(
-        f"/api/notes/{draft.json()['id']}", json={"plainText": "申请更新后的正文"}
-    ).status_code == 200
+    assert project_note(
+        member_client,
+        draft.json()["id"],
+        content_json={"type": "doc", "content": [{"type": "paragraph", "content": [{"type": "text", "text": "申请更新后的正文"}]}]},
+    ).status_code == 204
     submission = member_client.post(
         f"/api/notes/{draft.json()['id']}/submissions",
         json={"type": "UPDATE", "targetTeamNoteId": knowledge["id"]},
@@ -427,10 +541,11 @@ def test_knowledge_attachment_survives_personal_detach_and_copy_is_independent(
 
     # Removing the image from the personal source only detaches it; the
     # published team resource keeps its own reference and access grant.
-    assert client.put(
-        f"/api/notes/{source['id']}",
-        json={"contentJson": {"type": "doc", "content": [{"type": "paragraph"}]}},
-    ).status_code == 200
+    assert project_note(
+        client,
+        source["id"],
+        content_json={"type": "doc", "content": [{"type": "paragraph"}]},
+    ).status_code == 204
     assert member_client.get(f"/api/attachments/{attachment_id}").content == b"knowledge binary"
 
     copied_response = member_client.post(f"/api/team/knowledge/{knowledge['id']}/copy")

@@ -11,7 +11,7 @@ import {
   putTaskAssignees,
   putTaskMyStatus,
   putTodoList,
-  putTodo,
+  moveTodoToList,
   deleteTodoList,
   restoreTodo,
   type Todo,
@@ -204,7 +204,7 @@ export const useTodoStore = defineStore('todos', {
       try {
         this.lists = await fetchTodoLists()
       } catch {
-        // Keep the built-in fallback visible if an older backend is still running.
+        // Keep the built-in lists visible when the catalog request is unavailable.
       }
     },
     async loadCounts() {
@@ -292,12 +292,12 @@ export const useTodoStore = defineStore('todos', {
       if (this.currentListName === previousName) this.currentListName = result.fallbackListName
       return { ...result, previousName }
     },
-    async update(id: string, payload: Partial<TodoPayload>) {
+    async moveToList(id: string, listName: string) {
       this.mutating = true
       try {
         const index = this.todos.findIndex((item) => item.id === id)
         const previous = index >= 0 ? this.todos[index] : null
-        const todo = await putTodo(id, payload)
+        const todo = await moveTodoToList(id, listName)
         const belongs = belongsToCurrentCollection(todo, this.currentView, this.query, this.currentListName)
         if (index >= 0 && belongs) this.todos[index] = todo
         else if (index >= 0) this.todos.splice(index, 1)

@@ -25,6 +25,7 @@ const emit = defineEmits<{
   editDate: [todo: Todo, anchor?: Pick<DOMRect, 'left' | 'bottom'>]
   editPriority: [todo: Todo]
   update: [todo: Todo, payload: Partial<TodoPayload>]
+  tagChange: [todo: Todo, operation: { action: 'add' | 'remove'; tag: string }]
   duplicate: [todo: Todo]
   copyLink: [todo: Todo]
   assign: [todo: Todo, userIds: string[]]
@@ -77,11 +78,11 @@ function setList(listName: string) { emit('update', props.todo, { listName }); c
 function addTag() {
   const value = newTag.value.trim().replace(/^#/, '')
   if (!value || props.todo.tags.includes(value)) return
-  emit('update', props.todo, { tags: [...props.todo.tags, value] })
+  emit('tagChange', props.todo, { action: 'add', tag: value })
   newTag.value = ''
   closeContext()
 }
-function removeTag(value: string) { emit('update', props.todo, { tags: props.todo.tags.filter((tag) => tag !== value) }); closeContext() }
+function removeTag(value: string) { emit('tagChange', props.todo, { action: 'remove', tag: value }); closeContext() }
 function confirmRemove() { removeDialogOpen.value = false; emit('remove', props.todo) }
 function requestDateEdit(event: MouseEvent) {
   const anchor = (event.currentTarget as HTMLElement).getBoundingClientRect()

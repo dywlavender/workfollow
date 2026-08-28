@@ -11,13 +11,14 @@ from app.core.dependencies import CurrentSettings, CurrentUser, DbSession
 from app.models.auth import User, UserStatus
 from app.models.notification import NotificationType
 from app.models.team import TeamMember, TeamMemberRole, TeamMemberStatus
-from app.models.team_note import TeamNoteStatus, TeamNoteSubmission, TeamNoteSubmissionStatus
+from app.models.team_note import TeamNote, TeamNoteStatus, TeamNoteSubmission, TeamNoteSubmissionStatus
 from app.schemas.note import NoteRead
 from app.schemas.team import (
     NoteSubmissionRequest,
     TeamNoteCategoryCreate,
     TeamNoteCategoryRead,
     TeamNoteCategoryUpdate,
+    TeamNoteCollaborationAccess,
     TeamNoteCreate,
     TeamNoteListItem,
     TeamNotePermissions,
@@ -350,6 +351,19 @@ def post_knowledge(
     return _note_read(db, team_note_service.create_team_note(db, context.team_id, user.id, payload), user.id)
 
 
+@router.get("/team/knowledge/{note_id}/collaboration-access", response_model=TeamNoteCollaborationAccess, include_in_schema=False)
+def get_knowledge_collaboration_access(note_id: str, db: DbSession, user: CurrentUser) -> TeamNoteCollaborationAccess:
+    note = db.get(TeamNote, note_id)
+    if note is None or not note_permission_service.can_view_team_note(db, note, user.id):
+        raise HTTPException(status_code=404, detail="Team knowledge not found")
+    return TeamNoteCollaborationAccess(
+        can_view=True,
+        can_edit=note_permission_service.can_edit_team_note(db, note, user.id),
+        team_id=note.team_id,
+        version_no=team_note_service.team_note_version_info(db, note)[0],
+    )
+
+
 @router.get("/team/knowledge/{note_id}", response_model=TeamNoteRead)
 def get_knowledge(
     note_id: str,
@@ -364,8 +378,8 @@ def get_knowledge(
     return _note_read(db, note, user.id)
 
 
-@router.put("/team/knowledge/{note_id}", response_model=TeamNoteRead)
-def put_knowledge(
+@router.put("/team/knowledge/{note_id}/commit", response_model=TeamNoteRead)
+def commit_knowledge(
     note_id: str,
     payload: TeamNoteUpdate,
     db: DbSession,
@@ -703,14 +717,6 @@ def legacy_get_note(team_id: str, note_id: str, db: DbSession, user: CurrentUser
     if note.status == TeamNoteStatus.ARCHIVED and member is not None and member.role == TeamMemberRole.MEMBER:
         raise HTTPException(status_code=404, detail="Team knowledge not found")
     return _note_read(db, note, user.id)
-
-
-@router.put("/teams/{team_id}/notes/{note_id}", response_model=TeamNoteRead, include_in_schema=False)
-def legacy_update_note(team_id: str, note_id: str, payload: TeamNoteUpdate, db: DbSession, user: CurrentUser) -> TeamNoteRead:
-    team_service.require_role(db, team_id, user.id, TeamMemberRole.OWNER, TeamMemberRole.ADMIN)
-    return _note_read(db, team_note_service.update_team_note(
-        db, team_note_service.get_team_note_or_404(db, team_id, note_id), user.id, payload
-    ), user.id)
 
 
 @router.delete("/teams/{team_id}/notes/{note_id}", status_code=status.HTTP_204_NO_CONTENT, include_in_schema=False)

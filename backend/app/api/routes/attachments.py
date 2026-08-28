@@ -101,7 +101,8 @@ async def upload_team_task_attachment(
     if task.team_id is None:
         todo_service.require_creator(task, user.id)
     else:
-        todo_service.require_editor(db, task, user.id)
+        if not todo_service.can_edit_content(db, task, user.id):
+            raise HTTPException(status_code=403, detail="没有修改该任务正文的权限")
     if team_id is not None and task.team_id not in (None, team_id):
         raise HTTPException(status_code=404, detail="Task not found")
     original_name = Path(file.filename or "attachment").name
@@ -161,7 +162,13 @@ def delete_attachment(attachment_id: str, db: DbSession, settings: AppSettings, 
         if task.team_id is None:
             todo_service.require_creator(task, user.id)
         else:
-            todo_service.require_editor(db, task, user.id)
+            # Members may edit the shared body and upload a file into it, but
+            # deleting a binary is a task-level metadata/destructive action.
+            # Keep that operation with the creator/team administrators; this
+            # also prevents one assignee from removing a file another assignee
+            # is still using.
+            if not todo_service.can_edit(db, task, user.id):
+                raise HTTPException(status_code=403, detail="没有删除该任务附件的权限")
         if task is not None:
             task.attachment_ids = [item for item in (task.attachment_ids or []) if item != attachment.id]
     else:

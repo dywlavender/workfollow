@@ -14,15 +14,18 @@ import { useRoute, useRouter } from 'vue-router'
 
 import TodoDialog from '@/components/todo/TodoDialog.vue'
 import { isDateOnlyDue } from '@/modules/todo/dueDate'
-import { fetchTodos, putTodo, type Todo, type TodoPayload } from '@/services/api'
+import { updateTaskMetadataCollaboratively } from '@/modules/editor/taskMetadataCollaboration'
+import { fetchTodos, type Todo, type TodoPayload } from '@/services/api'
 import { consumePrefetchedCalendarTodos } from '@/services/prefetch'
 import { useFeedbackStore } from '@/stores/feedback'
+import { useRealtimeStore } from '@/stores/realtime'
 import { cloneTodo, optimisticCompletedTodo, optimisticRestoredTodo, useTodoStore } from '@/stores/todos'
 
 const router = useRouter()
 const route = useRoute()
 const todoStore = useTodoStore()
 const feedback = useFeedbackStore()
+const realtime = useRealtimeStore()
 const root = ref<HTMLElement | null>(null)
 const calendarRef = ref<InstanceType<typeof FullCalendar> | null>(null)
 const allTodos = ref<Todo[]>([])
@@ -39,6 +42,7 @@ const createOpen = ref(false)
 const selectedTodo = ref<Todo | null>(null)
 const moreOpen = ref(false)
 const showCompleted = ref(true)
+let taskChangeRefreshTimer: number | undefined
 
 const dialogOpen = computed(() => createOpen.value || selectedTodo.value !== null)
 const isExecutionDone = (todo: Todo) => todo.myAssignment?.status === 'DONE' || (!todo.myAssignment && todo.status === 'DONE')
@@ -61,7 +65,7 @@ const calendarEvents = computed(() => allTodos.value
     title: todo.title,
     start: todo.dueAt!,
     end: todo.dueEndAt || undefined,
-    editable: todo.status === 'TODO' && todo.permissions.completable && !isExecutionDone(todo),
+    editable: todo.status === 'TODO' && todo.permissions.editable && !isExecutionDone(todo),
     classNames: eventClass(todo),
     extendedProps: { todo },
   })))
@@ -137,6 +141,19 @@ function syncCalendarEvents() {
 
 watch(calendarEvents, syncCalendarEvents, { deep: true })
 
+watch(() => realtime.lastTaskChange, (change) => {
+  if (!change) return
+  if (change.brief.deleted && selectedTodo.value?.id === change.taskId) selectedTodo.value = null
+  if (taskChangeRefreshTimer !== undefined) window.clearTimeout(taskChangeRefreshTimer)
+  taskChangeRefreshTimer = window.setTimeout(() => {
+    taskChangeRefreshTimer = undefined
+    void loadCalendar().then(() => {
+      if (!selectedTodo.value || selectedTodo.value.id !== change.taskId) return
+      selectedTodo.value = allTodos.value.find((todo) => todo.id === change.taskId) ?? selectedTodo.value
+    })
+  }, 240)
+})
+
 async function loadCalendar() {
   const isInitialLoad = initialLoading.value
   if (isInitialLoad) initialLoading.value = true
@@ -200,11 +217,19 @@ async function onEventDrop(arg: EventDropArg) {
   const dueEndAt = todo.dueEndAt ? dayjs(todo.dueEndAt).add(dayShift, 'day').format('YYYY-MM-DDTHH:mm:ss') : null
 
   try {
-    const updated = await putTodo(todo.id, { dueAt, dueEndAt })
-    const merged = { ...updated, sources: updated.sources.length ? updated.sources : todo.sources }
-    allTodos.value = allTodos.value.map((item) => item.id === merged.id ? merged : item)
-    if (selectedTodo.value?.id === merged.id) selectedTodo.value = merged
-    selectedDate.value = droppedDate.format('YYYY-MM-DD')
+    const collaborationResult = await updateTaskMetadataCollaboratively(todo, { dueAt, dueEndAt })
+    if (collaborationResult === 'updated') {
+      const merged = { ...todo, dueAt, dueEndAt }
+      allTodos.value = allTodos.value.map((item) => item.id === merged.id ? merged : item)
+      if (selectedTodo.value?.id === merged.id) selectedTodo.value = merged
+      selectedDate.value = droppedDate.format('YYYY-MM-DD')
+      return
+    }
+    if (collaborationResult === 'unavailable') {
+      arg.revert()
+      feedback.error('协同服务暂时不可用，未修改截止日期，请稍后重试。')
+      return
+    }
   } catch {
     arg.revert()
     feedback.error('改期失败，任务已恢复到原日期。')
@@ -252,8 +277,26 @@ function closeDialog() {
 
 async function saveTodo(payload: TodoPayload) {
   try {
-    if (selectedTodo.value) await todoStore.update(selectedTodo.value.id, payload)
-    else await todoStore.create(payload)
+    if (selectedTodo.value) {
+      // Calendar editing is metadata-only. The task detail editor owns the
+      // collaborative body, so this dialog must not write description over an
+      // open Yjs document.
+      const bodyChanged = payload.description !== undefined && payload.description !== selectedTodo.value.description
+      if (bodyChanged) throw new Error('calendar-body-edit-disabled')
+      const metadataPayload = { ...payload }
+      delete metadataPayload.description
+      delete metadataPayload.listName
+      if (!Object.keys(metadataPayload).length) {
+        closeDialog()
+        return
+      }
+      const collaborationResult = await updateTaskMetadataCollaboratively(selectedTodo.value, metadataPayload)
+      if (collaborationResult === 'unavailable') throw new Error('collaboration-unavailable')
+      if (collaborationResult === 'updated') {
+        allTodos.value = allTodos.value.map((todo) => todo.id === selectedTodo.value?.id ? { ...todo, ...payload } : todo)
+        selectedTodo.value = { ...selectedTodo.value, ...payload }
+      }
+    } else await todoStore.create(payload)
     closeDialog()
     await loadCalendar()
   } catch {
@@ -280,7 +323,10 @@ onMounted(() => {
   syncCalendarEvents()
   void loadCalendar()
 })
-onBeforeUnmount(() => document.removeEventListener('click', closeFloating))
+onBeforeUnmount(() => {
+  if (taskChangeRefreshTimer !== undefined) window.clearTimeout(taskChangeRefreshTimer)
+  document.removeEventListener('click', closeFloating)
+})
 </script>
 
 <template>
@@ -324,6 +370,8 @@ onBeforeUnmount(() => document.removeEventListener('click', closeFloating))
       :open="dialogOpen"
       :todo="selectedTodo"
       :initial-due-at="selectedTodo ? null : `${selectedDate}T00:00:00`"
+      :metadata-editable="selectedTodo ? selectedTodo.permissions.editable : true"
+      :content-editable="false"
       @close="closeDialog"
       @save="saveTodo"
       @open-source="openSource"

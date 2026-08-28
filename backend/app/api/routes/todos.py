@@ -2,10 +2,12 @@ from datetime import date
 import logging
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+import secrets
+
+from fastapi import APIRouter, Header, HTTPException, Query, Response, status
 from sqlalchemy.orm import Session
 
-from app.core.dependencies import CurrentUser, DbSession
+from app.core.dependencies import CurrentSettings, CurrentUser, DbSession
 from app.models.todo import Todo, TodoAssignmentStatus, TodoStatus
 from app.schemas.resource_relation import TaskBriefPermissions, TaskBriefRead
 from app.schemas.todo import (
@@ -13,18 +15,22 @@ from app.schemas.todo import (
     TodoAssigneesUpdate,
     TodoAssignmentRead,
     TodoCompleteResult,
+    TodoCollaborationMetadata,
+    TodoCollaborationSnapshot,
     TodoCreate,
     TodoListCreate,
     TodoListDeleteResult,
+    TodoListMove,
     TodoListRead,
     TodoListUpdate,
     TodoMyStatusUpdate,
     TodoPermissions,
     TodoRead,
     TodoTransfer,
-    TodoUpdate,
+    TodoProjectionUpdate,
 )
 from app.services import audit_service, event_stream, resource_relation_service, task_notification_service, todo_list_service, todo_service
+from app.services.content_projection import content_json_semantically_equal
 
 
 router = APIRouter(tags=["tasks"])
@@ -154,6 +160,174 @@ def get_todo(todo_id: str, db: DbSession, user: CurrentUser) -> TodoRead:
     )
 
 
+@router.put("/{todo_id}/collaboration-snapshot", status_code=status.HTTP_204_NO_CONTENT, include_in_schema=False)
+def put_collaboration_snapshot(
+    todo_id: str,
+    payload: TodoCollaborationSnapshot,
+    db: DbSession,
+    settings: CurrentSettings,
+    internal_token: str | None = Header(default=None, alias="X-WorkFollow-Collaboration-Token"),
+) -> Response:
+    """Persist the merged Yjs document as the normal task projection.
+
+    This endpoint is intentionally not a browser API.  Hocuspocus runs beside
+    FastAPI and authenticates every WebSocket connection through the normal
+    session cookie before it can produce a snapshot.  Keeping the bridge
+    internal prevents a client from bypassing task permissions while still
+    letting the existing search/list/read APIs consume the latest body.
+    """
+    configured = settings.collaboration_internal_token
+    if not configured or not internal_token or not secrets.compare_digest(internal_token, configured):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="协同服务未授权")
+
+    todo = db.get(Todo, todo_id)
+    if todo is None:
+        # The collaboration document can outlive a deleted task briefly.  A
+        # no-op keeps the provider from retrying a snapshot forever.
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+    actors = set(payload.actor_ids)
+    if payload.actor_id:
+        actors.add(payload.actor_id)
+    if any(not todo_service.can_edit_content(db, todo, actor_id) for actor_id in actors):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="没有修改该任务正文的权限")
+
+    # Links/references are part of the collaborative body, not a second HTTP
+    # side channel. Reconcile their backlink rows in the same transaction as
+    # the body projection so a failed projection cannot leave a dangling edge.
+    # Do this even for a semantically identical snapshot: block ids are editor
+    # metadata ignored by the no-op check, but they still identify the exact
+    # paragraph a backlink should open.
+    relation_actor = payload.actor_id or next(iter(payload.actor_ids), None) or todo.creator_id
+    resource_relation_service.sync_task_relations(
+        db,
+        todo.id,
+        relation_actor,
+        resource_relation_service.resource_references_in_document(payload.content_json),
+    )
+    # A Yjs provider may replay the current document when a tab opens or
+    # switches away. Treat an identical projection as a true no-op before
+    # touching the ORM object; otherwise SQLAlchemy's ``onupdate`` timestamp
+    # and search index make a read-only open look like a task edit. The
+    # relation reconciliation above is committed separately so a block-only
+    # move can still update the backlink anchor without notifying the task.
+    if content_json_semantically_equal(payload.content_json, todo.content_json):
+        db.commit()
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+    before = task_notification_service.task_change_snapshot(todo)
+    updated = todo_service.update_todo(
+        db,
+        todo,
+        TodoProjectionUpdate(content_json=payload.content_json),
+        payload.actor_id,
+        commit=False,
+    )
+    if not task_notification_service.task_changes(
+        before,
+        task_notification_service.task_change_snapshot(updated),
+    ):
+        # A collaboration handshake or an editor initialization can submit
+        # the same projection without any user edit. Do not fan that no-op out
+        # as a task-change event.
+        db.commit()
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
+    notification_actor = task_notification_service.preferred_task_notification_actor(
+        db, updated, payload.actor_ids, payload.actor_id,
+    )
+    if notification_actor:
+        task_notification_service.notify_task_updated(
+            db, updated, notification_actor, before, commit=False
+        )
+    event_stream.queue_task_changed(db, updated)
+    db.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.put("/{todo_id}/collaboration-metadata", status_code=status.HTTP_204_NO_CONTENT, include_in_schema=False)
+def put_collaboration_metadata(
+    todo_id: str,
+    payload: TodoCollaborationMetadata,
+    db: DbSession,
+    settings: CurrentSettings,
+    internal_token: str | None = Header(default=None, alias="X-WorkFollow-Collaboration-Token"),
+) -> Response:
+    """Persist the shared Yjs metadata projection.
+
+    The collaboration service authenticates the WebSocket before it can write
+    here. ``actor_id`` is still passed through the normal task update service so
+    metadata remains restricted to creators, owners, admins, and root users.
+    """
+    configured = settings.collaboration_internal_token
+    if not configured or not internal_token or not secrets.compare_digest(internal_token, configured):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="协同服务未授权")
+
+    todo = db.get(Todo, todo_id)
+    if todo is None:
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+    actors = set(payload.actor_ids)
+    if payload.actor_id:
+        actors.add(payload.actor_id)
+    if any(not todo_service.can_edit(db, todo, actor_id) for actor_id in actors):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="没有修改该任务属性的权限")
+
+    before = task_notification_service.task_change_snapshot(todo)
+    values = payload.model_dump(exclude={"actor_id", "actor_ids"})
+    if values.get("list_name") is None:
+        values.pop("list_name", None)
+    # A title field may be empty briefly while the shared Y.Text is being
+    # edited. Keep the last valid SQL title until a non-empty value arrives.
+    if not values["title"]:
+        values["title"] = todo.title
+
+    current_values = {
+        "title": todo.title,
+        "due_at": todo.due_at,
+        "due_end_at": todo.due_end_at,
+        "priority": todo.priority,
+        "reminder_at": todo.reminder_at,
+        "recurrence_type": todo.recurrence_type,
+        "recurrence_config": todo.recurrence_config,
+        "tags": list(todo.tags or []),
+    }
+    comparable_values = {
+        key: value for key, value in values.items()
+        if key in current_values
+    }
+    if "recurrence_type" in comparable_values and getattr(comparable_values["recurrence_type"], "value", comparable_values["recurrence_type"]) == "NONE":
+        comparable_values["recurrence_config"] = None
+    if "tags" in comparable_values:
+        comparable_values["tags"] = list(dict.fromkeys(comparable_values["tags"] or []))
+    if comparable_values and all(current_values[key] == value for key, value in comparable_values.items()):
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
+    updated = todo_service.update_todo(
+        db,
+        todo,
+        TodoProjectionUpdate(**values),
+        payload.actor_id,
+        commit=False,
+    )
+    if not task_notification_service.task_changes(
+        before,
+        task_notification_service.task_change_snapshot(updated),
+    ):
+        # Metadata can be projected again when a task detail view is opened;
+        # identical values are not an update and must not emit notifications.
+        db.commit()
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
+    notification_actor = task_notification_service.preferred_task_notification_actor(
+        db, updated, payload.actor_ids, payload.actor_id,
+    )
+    if notification_actor:
+        task_notification_service.notify_task_updated(
+            db, updated, notification_actor, before, commit=False
+        )
+    event_stream.queue_task_changed(db, updated)
+    db.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
 @router.post("", response_model=TodoRead, status_code=status.HTTP_201_CREATED)
 def post_todo(payload: TodoCreate, db: DbSession, user: CurrentUser) -> TodoRead:
     logger.info(
@@ -179,11 +353,14 @@ def post_todo(payload: TodoCreate, db: DbSession, user: CurrentUser) -> TodoRead
     return todo_read(db, todo, user.id, include_sources=True)
 
 
-@router.put("/{todo_id}", response_model=TodoRead)
-def put_todo(todo_id: str, payload: TodoUpdate, db: DbSession, user: CurrentUser) -> TodoRead:
+@router.put("/{todo_id}/list", response_model=TodoRead)
+def put_todo_list_location(todo_id: str, payload: TodoListMove, db: DbSession, user: CurrentUser) -> TodoRead:
+    """Move a task as a named transaction; task fields are Yjs-owned."""
     todo = todo_service.get_todo_or_404(db, todo_id, user.id)
     before = task_notification_service.task_change_snapshot(todo)
-    updated = todo_service.update_todo(db, todo, payload, user.id, commit=False)
+    updated = todo_service.update_todo(
+        db, todo, TodoProjectionUpdate(list_name=payload.list_name), user.id, commit=False
+    )
     task_notification_service.notify_task_updated(
         db, updated, user.id, before, commit=False
     )

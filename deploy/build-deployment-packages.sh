@@ -66,7 +66,7 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
-echo "[1/5] 在隔离临时目录安装依赖并使用当前源码构建前端"
+echo "[1/5] 在隔离临时目录安装依赖并使用当前源码构建前端和协同服务"
 FRONTEND_BUILD_DIR="$BUILD_DIR/frontend-build"
 mkdir -p "$FRONTEND_BUILD_DIR"
 tar \
@@ -77,11 +77,26 @@ tar \
 (
   cd "$FRONTEND_BUILD_DIR"
   npm ci --no-audit --no-fund
-  npm run build
+  VITE_COLLABORATION_PORT="${WORKFOLLOW_COLLABORATION_PORT:-8124}" npm run build
 )
 FRONTEND_DIST="$FRONTEND_BUILD_DIR/dist"
 
 [ -f "$FRONTEND_DIST/index.html" ] || fail "前端构建产物缺少 index.html"
+
+# The target host may be completely offline. Build the small, production-only
+# collaboration dependency tree into the release staging area so the install
+# scripts do not need to contact npm on the target host.
+COLLABORATION_BUILD_DIR="$BUILD_DIR/collaboration-build"
+mkdir -p "$COLLABORATION_BUILD_DIR"
+tar \
+  -C "$ROOT_DIR/collaboration" -cf - package.json package-lock.json server.mjs | tar -C "$COLLABORATION_BUILD_DIR" -xf -
+(
+  cd "$COLLABORATION_BUILD_DIR"
+  npm ci --omit=dev --no-audit --no-fund
+)
+[ -f "$COLLABORATION_BUILD_DIR/node_modules/@hocuspocus/server/package.json" ] || fail "协同服务依赖安装不完整"
+[ -f "$COLLABORATION_BUILD_DIR/node_modules/@hocuspocus/transformer/package.json" ] || fail "协同服务依赖安装不完整"
+[ -f "$COLLABORATION_BUILD_DIR/node_modules/yjs/package.json" ] || fail "协同服务依赖安装不完整"
 
 LINUX_STAGE="$BUILD_DIR/stage-linux"
 WINDOWS_STAGE="$BUILD_DIR/stage-windows"
@@ -91,6 +106,7 @@ copy_app() {
   mkdir -p \
     "$target/backend" \
     "$target/frontend" \
+    "$target/collaboration" \
     "$target/deploy" \
     "$target/data/files" \
     "$target/data/uploads"
@@ -102,6 +118,7 @@ copy_app() {
     --exclude='tests' \
     -C "$ROOT_DIR/backend" -cf - alembic app alembic.ini | tar -C "$target/backend" -xf -
   cp -R "$FRONTEND_DIST" "$target/frontend/"
+  cp -R "$COLLABORATION_BUILD_DIR"/. "$target/collaboration/"
   cp "$ROOT_DIR/deploy/requirements-offline.txt" "$target/deploy/"
   cp "$ROOT_DIR/.env.example" "$target/.env.example"
   cp "$ROOT_DIR/DEPLOYMENT_MANUAL.md" "$target/"

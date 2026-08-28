@@ -6,13 +6,14 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import HTTPException
-from sqlalchemy import String, delete, func, or_, select, update
+from sqlalchemy import String, and_, delete, func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, aliased, joinedload, load_only
 
 from app.core.config import Settings
 from app.models.note import Attachment, Note
 from app.models.note_share import NoteShare, NoteShareStatus
+from app.models.resource_relation import ResourceRelation, ResourceType
 from app.models.team import Team, TeamMember, TeamMemberRole, TeamMemberStatus, TeamStatus
 from app.models.team_note import (
     SubmissionFileAccess,
@@ -29,8 +30,9 @@ from app.models.team_note import (
 from app.models.todo import TaskFileAccess, Todo, local_now
 from app.schemas.note import AttachmentRead
 from app.schemas.team import TeamNoteCreate, TeamNoteSubmissionCreate, TeamNoteSubmissionReview, TeamNoteUpdate
-from app.services import note_permission_service, note_service, team_service
+from app.services import note_permission_service, note_service, resource_relation_service, team_service
 from app.services import search_index_service
+from app.services.content_projection import content_json_semantically_equal
 from app.services.note_service import content_to_plain_text, get_note_or_404
 from app.services.system_permission_service import user_is_root
 
@@ -594,6 +596,12 @@ def create_team_note(db: Session, team_id: str, actor_id: str, payload: TeamNote
     db.add(note)
     db.flush()
     _grant_file_access(db, note, attachment_ids, actor_id)
+    resource_relation_service.sync_team_note_relations(
+        db,
+        note.id,
+        actor_id,
+        resource_relation_service.resource_references_in_document(note.content_json),
+    )
     _record_version(db, note, actor_id, "ADMIN_CREATE")
     search_index_service.upsert_team_note(db, note)
     db.commit()
@@ -602,18 +610,77 @@ def create_team_note(db: Session, team_id: str, actor_id: str, payload: TeamNote
 
 def update_team_note(db: Session, note: TeamNote, actor_id: str, payload: TeamNoteUpdate) -> TeamNote:
     changes = payload.model_dump(exclude_unset=True)
+    expected_version = changes.pop("base_version_no", None)
+    if expected_version is not None:
+        current_version, _ = team_note_version_info(db, note)
+        if expected_version != current_version:
+            raise HTTPException(status_code=409, detail="团队知识已被其他管理员更新，请刷新后重试")
     old_ids = list(note.attachment_ids or [])
+    content_provided = "content_json" in changes
+    explicit_attachment_ids = "attachment_ids" in changes
     new_ids = changes.pop("attachment_ids", old_ids)
+    validated_ids = old_ids
+    if not explicit_attachment_ids and content_provided:
+        # The collaborative document is authoritative for embedded file
+        # references. Keep the SQL access projection in lockstep when an
+        # administrator removes or inserts a file node before committing,
+        # while preserving standalone attachments that have no node in the
+        # editor document. ``attachment_ids`` is an aggregate-level list, so
+        # treating it as exactly equal to the document references would drop
+        # ordinary downloadable files every time the body is edited.
+        referenced_ids = _extract_attachment_ids(changes["content_json"])
+        previous_content_ids = _extract_attachment_ids(note.content_json)
+        old_id_set = set(old_ids)
+        new_ids = [
+            item for item in old_ids
+            if item not in previous_content_ids or item in referenced_ids
+        ]
+        new_ids.extend(sorted(referenced_ids - old_id_set))
     if "category_id" in changes:
         changes["category_id"] = _validate_category(db, note.team_id, changes["category_id"])
     if "content_json" in changes and not (changes.get("plain_text") or "").strip():
         changes["plain_text"] = content_to_plain_text(changes["content_json"])
-    validated_ids = _validate_attachment_ids(db, new_ids, actor_id, note.id, team_id=note.team_id)
-    changes["attachment_ids"] = validated_ids
+    if explicit_attachment_ids or content_provided:
+        validated_ids = _validate_attachment_ids(db, new_ids, actor_id, note.id, team_id=note.team_id)
+        changes["attachment_ids"] = validated_ids
+
+    # The body carries the relation identity. Reconcile it before the no-op
+    # decision as well: an editor-only block-id change is intentionally ignored
+    # for version/notification purposes, but the backlink anchor still needs
+    # to follow the current collaborative document.
+    projected_content = changes.get("content_json", note.content_json)
+    resource_relation_service.sync_team_note_relations(
+        db,
+        note.id,
+        actor_id,
+        resource_relation_service.resource_references_in_document(projected_content),
+    )
+
+    # A collaborative editor can emit a document snapshot while it is
+    # mounting, adding only editor-owned noise such as block ids or null
+    # attributes.  Treat that snapshot as a no-op after all derived values
+    # (plain text, attachment access and category validation) are resolved.
+    # This keeps the version history, updated timestamp, search index and
+    # notifications tied to actual administrator changes.
+    comparable_changes: dict[str, object] = {}
+    for field, value in changes.items():
+        current = getattr(note, field)
+        equal = (
+            content_json_semantically_equal(value, current)
+            if field == "content_json" and isinstance(value, dict)
+            else value == current
+        )
+        if not equal:
+            comparable_changes[field] = value
+    if not comparable_changes:
+        db.commit()
+        return get_team_note_or_404(db, note.team_id, note.id)
+    changes = comparable_changes
     changes["updated_by_id"] = actor_id
     for field, value in changes.items():
         setattr(note, field, value)
     _reconcile_file_access(db, note, old_ids, validated_ids, actor_id)
+    # Relation rows were reconciled against the same projected body above.
     _record_version(db, note, actor_id, "ADMIN_EDIT")
     search_index_service.upsert_team_note(db, note)
     db.commit()
@@ -679,6 +746,24 @@ def delete_archived_team_note(db: Session, note: TeamNote, settings: Settings) -
     ).limit(1))
     if active_submission is not None:
         raise HTTPException(status_code=409, detail="该知识还有待处理的更新申请，请先处理后再删除")
+
+    # Team knowledge is physically removed below. Retire every graph edge in
+    # the same transaction first so references from tasks/notes cannot survive
+    # as dangling backlinks after the target row is gone.
+    deleted_at = local_now()
+    db.execute(update(ResourceRelation).where(
+        ResourceRelation.deleted_at.is_(None),
+        or_(
+            and_(
+                ResourceRelation.source_type == ResourceType.TEAM_NOTE,
+                ResourceRelation.source_id == deleted_note_id,
+            ),
+            and_(
+                ResourceRelation.target_type == ResourceType.TEAM_NOTE,
+                ResourceRelation.target_id == deleted_note_id,
+            ),
+        ),
+    ).values(deleted_at=deleted_at))
 
     versions = list(db.scalars(select(TeamNoteVersion).where(TeamNoteVersion.team_note_id == deleted_note_id)))
     attachment_ids = set(note.attachment_ids or []) | _extract_attachment_ids(note.content_json)
@@ -1032,6 +1117,12 @@ def approve_submission(
         if source_note is not None and source_note.is_knowledge_update_draft:
             source_note.is_knowledge_update_draft = False
         _grant_file_access(db, note, list(submission.snapshot_attachment_ids or []), reviewer_id)
+        resource_relation_service.sync_team_note_relations(
+            db,
+            note.id,
+            reviewer_id,
+            resource_relation_service.resource_references_in_document(note.content_json),
+        )
         _record_version(db, note, reviewer_id, change_type, submission.id)
         search_index_service.upsert_team_note(db, note)
         db.flush()

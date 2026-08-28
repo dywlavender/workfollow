@@ -15,7 +15,7 @@ import StarterKit from '@tiptap/starter-kit'
 import { VueNodeViewRenderer } from '@tiptap/vue-3'
 import ResizableImageNode from '@/components/editor/ResizableImageNode.vue'
 import { normalizeFontSize } from '@/modules/editor/fontSizing'
-import { TaskLinkMark, TaskReferenceNode, WorkFollowBlockId } from '@/modules/editor/taskRelations'
+import { NoteLinkMark, TaskLinkMark, TaskReferenceNode, WorkFollowBlockId } from '@/modules/editor/taskRelations'
 import { normalizeImageWidth } from '@/modules/editor/imageSizing'
 import { TABLE_MIN_COLUMN_WIDTH } from '@/modules/editor/tableSizing'
 
@@ -96,11 +96,20 @@ export const workFollowHighlightColors = [
  * The single document schema used by task and note editors.
  * Domain-specific menus and persistence adapters stay in their own components.
  */
-export function createWorkFollowEditorExtensions(placeholder: string): Extensions {
+export function createWorkFollowEditorExtensions(
+  placeholder: string,
+  options: { collaboration?: boolean } = {},
+): Extensions {
+  const starterKitOptions: Parameters<typeof StarterKit.configure>[0] = {
+    heading: { levels: [1, 2, 3, 4, 5, 6] },
+  }
+  if (options.collaboration) starterKitOptions.history = false
+
   return [
-    StarterKit.configure({ heading: { levels: [1, 2, 3, 4, 5, 6] } }),
+    StarterKit.configure(starterKitOptions),
     WorkFollowBlockId,
     TaskLinkMark,
+    NoteLinkMark,
     TaskReferenceNode,
     Underline,
     WorkFollowTextStyle,

@@ -2,6 +2,7 @@ from fastapi.testclient import TestClient
 
 from app.core.config import Settings, get_settings
 from app.api.routes.notes import router as notes_router
+from tests.collaboration_helpers import project_note
 
 
 def test_static_markdown_import_route_precedes_note_id_route() -> None:
@@ -27,13 +28,31 @@ def test_note_create_update_search_and_folder_delete_protection(client: TestClie
     assert client.delete(f"/api/folders/{folder['id']}").status_code == 409
     assert [item["id"] for item in client.get("/api/notes?q=历史数据").json()] == [note_id]
 
-    updated = client.put(f"/api/notes/{note_id}", json={"title": "接口治理方案 v2", "folderId": None})
-    assert updated.json()["title"] == "接口治理方案 v2"
-    assert updated.json()["folderId"] is None
+    updated = project_note(
+        client,
+        note_id,
+        title="接口治理方案 v2",
+        content_json={"type": "doc", "content": [{"type": "paragraph"}]},
+    )
+    assert updated.status_code == 204
+    moved = client.put(f"/api/notes/{note_id}/folder", json={"folderId": None})
+    assert moved.json()["title"] == "接口治理方案 v2"
+    assert moved.json()["folderId"] is None
 
     assert client.delete(f"/api/folders/{folder['id']}").status_code == 204
     assert client.delete(f"/api/notes/{note_id}").status_code == 204
     assert client.get(f"/api/notes/{note_id}").status_code == 404
+
+
+def test_collaboration_block_id_normalization_is_not_a_note_edit(client: TestClient) -> None:
+    note = client.post("/api/notes", json={
+        "title": "仅补块标识",
+        "contentJson": {"type": "doc", "content": [{"type": "paragraph"}]},
+    }).json()
+    normalized = {"type": "doc", "content": [{"type": "paragraph", "attrs": {"blockId": "mount-only"}}]}
+
+    assert project_note(client, note["id"], content_json=normalized).status_code == 204
+    assert client.get(f"/api/notes/{note['id']}").json()["contentJson"] == note["contentJson"]
 
 
 def test_create_note_from_builtin_template(client: TestClient) -> None:
@@ -166,7 +185,7 @@ def test_removed_embedded_image_is_cleaned_but_standalone_file_remains(
             "src": image["url"], "alt": "pasted.png", "attachmentId": image["id"],
         }}],
     }
-    assert client.put(f"/api/notes/{note['id']}", json={"contentJson": document}).status_code == 200
+    assert project_note(client, note["id"], content_json=document).status_code == 204
 
     standalone = client.post(
         "/api/attachments",
@@ -176,9 +195,7 @@ def test_removed_embedded_image_is_cleaned_but_standalone_file_remains(
     assert client.delete(f"/api/attachments/{image['id']}").status_code == 409
 
     empty_document = {"type": "doc", "content": [{"type": "paragraph"}]}
-    assert client.put(
-        f"/api/notes/{note['id']}", json={"contentJson": empty_document}
-    ).status_code == 200
+    assert project_note(client, note["id"], content_json=empty_document).status_code == 204
 
     remaining = client.get("/api/attachments", params={"note_id": note["id"]}).json()
     assert [item["id"] for item in remaining] == [standalone["id"]]
@@ -200,13 +217,12 @@ def test_legacy_src_only_embedded_image_is_cleaned(client: TestClient, tmp_path)
         "type": "doc",
         "content": [{"type": "image", "attrs": {"src": image["url"]}}],
     }
-    assert client.put(
-        f"/api/notes/{note['id']}", json={"contentJson": legacy_document}
-    ).status_code == 200
-    assert client.put(
-        f"/api/notes/{note['id']}",
-        json={"contentJson": {"type": "doc", "content": [{"type": "paragraph"}]}},
-    ).status_code == 200
+    assert project_note(client, note["id"], content_json=legacy_document).status_code == 204
+    assert project_note(
+        client,
+        note["id"],
+        content_json={"type": "doc", "content": [{"type": "paragraph"}]},
+    ).status_code == 204
     assert client.get(image["url"]).status_code == 404
 
 
@@ -235,7 +251,7 @@ def test_personal_note_copy_clones_attachment_and_keeps_folder(client: TestClien
             "fileId": uploaded["id"], "src": uploaded["url"],
         },
     }]}
-    assert client.put(f"/api/notes/{source['id']}", json={"contentJson": content}).status_code == 200
+    assert project_note(client, source["id"], content_json=content).status_code == 204
 
     copied_response = client.post(f"/api/notes/{source['id']}/copy")
     assert copied_response.status_code == 201, copied_response.text

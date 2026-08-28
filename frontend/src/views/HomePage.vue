@@ -310,9 +310,10 @@ function noteTime(note: NoteListItem) {
         <div v-if="upcomingGroups.length" class="home-upcoming-groups">
           <div v-for="group in upcomingGroups" :key="group.key" class="home-upcoming-group">
             <h3>{{ group.label }}</h3>
-            <button v-for="todo in group.items" :key="todo.id" class="home-mini-task" type="button" @click="openTodo(todo, 'month')">
-              <span class="home-mini-check" aria-hidden="true" /><strong>{{ todo.title }}</strong><time>{{ dueTime(todo) }}</time>
-            </button>
+            <div v-for="todo in group.items" :key="todo.id" class="home-mini-task">
+              <button class="home-mini-check" type="button" :disabled="!todo.permissions.completable" :aria-label="`完成${todo.title}`" @click.stop="toggle(todo)"><IconCheck :size="12" /></button>
+              <button class="home-mini-task-main" type="button" @click="openTodo(todo, 'month')"><strong>{{ todo.title }}</strong><time>{{ dueTime(todo) }}</time></button>
+            </div>
           </div>
         </div>
         <div v-else class="home-panel-empty"><IconClock :size="17" /><span>近期没有任务</span></div>

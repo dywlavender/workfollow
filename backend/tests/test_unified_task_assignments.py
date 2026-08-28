@@ -6,6 +6,7 @@ from sqlalchemy import func, inspect, select
 from app.models.auth import SystemRole, User, UserStatus
 from app.models.todo import Todo, TodoAssignment
 from app.services.auth_service import password_hash
+from tests.collaboration_helpers import enable_collaboration_bridge, project_body, project_metadata
 
 
 def add_user(db, suffix: str, role: SystemRole = SystemRole.NORMAL) -> User:
@@ -70,14 +71,16 @@ def test_task_is_single_fact_source_with_multiple_assignments(client: TestClient
     assert first_task.json()["permissions"]["editable"] is False
     assert first_task.json()["permissions"]["contentEditable"] is True
 
-    assert first_client.put(f"/api/tasks/{task['id']}", json={"title": "越权修改"}).status_code == 403
+    enable_collaboration_bridge(first_client)
+    assert project_metadata(first_client, task, actor_id=first.id, title="越权修改").status_code == 403
     document = {"type": "doc", "content": [{"type": "paragraph", "content": [{"type": "text", "text": "执行说明"}]}]}
-    content_update = first_client.put(f"/api/tasks/{task['id']}", json={"contentJson": document})
-    assert content_update.status_code == 200, content_update.text
-    assert content_update.json()["contentJson"] == document
-    assert content_update.json()["description"] == "执行说明"
-    assert first_client.put(
-        f"/api/tasks/{task['id']}", json={"contentJson": document, "dueAt": due_at.isoformat()}
+    content_update = project_body(first_client, task["id"], document, actor_id=first.id)
+    assert content_update.status_code == 204, content_update.text
+    refreshed = client.get(f"/api/tasks/{task['id']}").json()
+    assert refreshed["contentJson"] == document
+    assert refreshed["description"] == "执行说明"
+    assert project_metadata(
+        first_client, task, actor_id=first.id, dueAt=due_at.isoformat()
     ).status_code == 403
     assert first_client.put(
         f"/api/tasks/{task['id']}/assignees", json={"assigneeIds": [first.id]}

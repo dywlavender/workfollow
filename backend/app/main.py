@@ -12,6 +12,7 @@ from app.api.router import api_router
 from app.core.config import get_settings
 from app.db.session import SessionLocal
 from app.services.external_notification_service import NotificationWorker
+from app.services.search_index_service import repair_fts_index
 from app.services.template_service import seed_builtin_templates
 
 
@@ -42,7 +43,10 @@ logger = logging.getLogger(__name__)
 def _is_task_mutation(request: Request) -> bool:
     return (
         request.method in {"POST", "PUT", "PATCH", "DELETE"}
-        and (request.url.path == "/api/todos" or request.url.path.startswith("/api/todos/"))
+        and any(
+            request.url.path == prefix or request.url.path.startswith(f"{prefix}/")
+            for prefix in ("/api/tasks", "/api/todos")
+        )
     )
 
 
@@ -52,6 +56,7 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     settings.files_dir.mkdir(parents=True, exist_ok=True)
     with SessionLocal() as db:
         seed_builtin_templates(db)
+        repair_fts_index(db)
     notification_worker = NotificationWorker(settings)
     notification_worker.start()
     try:

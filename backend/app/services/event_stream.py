@@ -100,6 +100,7 @@ class EventHub:
 hub = EventHub()
 PENDING_EVENTS_KEY = "workfollow_pending_stream_events"
 PENDING_TEAM_NOTES_KEY = "workfollow_pending_team_note_events"
+PENDING_NOTES_KEY = "workfollow_pending_note_events"
 
 
 def _queue(db: Session, audience: set[str] | frozenset[str], name: str, data: dict[str, Any]) -> None:
@@ -175,6 +176,27 @@ def queue_task_changed(db: Session, todo: Todo, *, deleted: bool = False) -> Non
     _queue(db, task_viewer_ids(db, todo), "task.changed", payload)
 
 
+def note_viewer_ids(db: Session, note: Note) -> set[str]:
+    audience = {note.owner_id}
+    audience.update(db.scalars(select(NoteShare.shared_with_user_id).where(
+        NoteShare.note_id == note.id,
+        NoteShare.status == NoteShareStatus.ACTIVE,
+    )).all())
+    return audience
+
+
+def queue_note_changed(db: Session, note: Note, *, deleted: bool = False) -> None:
+    updated_at = note.updated_at.isoformat() if isinstance(note.updated_at, datetime) else None
+    _queue(db, note_viewer_ids(db, note), "note.changed", {
+        "noteId": note.id,
+        "title": note.title,
+        "folderId": note.folder_id,
+        "isFavorite": bool(note.is_favorite),
+        "updatedAt": updated_at,
+        "deleted": deleted,
+    })
+
+
 def queue_todo_list_changed(
     db: Session,
     *,
@@ -223,10 +245,30 @@ def _capture_team_note_changes(session: Session, _flush_context: object) -> None
         _queue_team_note_change(session, item, deleted=deleted)
 
 
+@event.listens_for(Session, "after_flush")
+def _capture_note_changes(session: Session, _flush_context: object) -> None:
+    seen = session.info.setdefault(PENDING_NOTES_KEY, set())
+    changes: dict[str, tuple[Note, bool]] = {}
+    for item in (*session.new, *session.dirty):
+        if isinstance(item, Note):
+            if item not in session.new and not session.is_modified(item, include_collections=False):
+                continue
+            changes[item.id] = (item, bool(item.deleted_at))
+    for item in session.deleted:
+        if isinstance(item, Note):
+            changes[item.id] = (item, True)
+    for note_id, (item, deleted) in changes.items():
+        if note_id in seen:
+            continue
+        seen.add(note_id)
+        queue_note_changed(session, item, deleted=deleted)
+
+
 @event.listens_for(Session, "after_commit")
 def _publish_after_commit(session: Session) -> None:
     pending = session.info.pop(PENDING_EVENTS_KEY, [])
     session.info.pop(PENDING_TEAM_NOTES_KEY, None)
+    session.info.pop(PENDING_NOTES_KEY, None)
     for audience, name, data in pending:
         hub.publish(audience, name, data)
 
@@ -235,6 +277,7 @@ def _publish_after_commit(session: Session) -> None:
 def _discard_after_rollback(session: Session) -> None:
     session.info.pop(PENDING_EVENTS_KEY, None)
     session.info.pop(PENDING_TEAM_NOTES_KEY, None)
+    session.info.pop(PENDING_NOTES_KEY, None)
 
 
 def parse_last_event_id(value: str | None) -> int | None:

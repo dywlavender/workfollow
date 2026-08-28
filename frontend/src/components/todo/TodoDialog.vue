@@ -24,12 +24,17 @@ const props = defineProps<{
   currentUserId?: string
   canAssign?: boolean
   teamId?: string | null
+  metadataEditable?: boolean
+  contentEditable?: boolean
 }>()
 const emit = defineEmits<{ close: []; save: [payload: TodoPayload]; openSource: [noteId: string] }>()
 useDialogEscape(() => props.open, () => emit('close'))
 const sourceTitle = ref<string | null>(null)
 const assigneeIds = ref<string[]>([])
 const assignmentTeamId = computed(() => props.todo ? props.todo.teamId : (props.teamId ?? null))
+const metadataEditable = computed(() => props.todo ? props.metadataEditable ?? props.todo.permissions.editable : true)
+const contentEditable = computed(() => props.todo ? props.contentEditable ?? props.todo.permissions.contentEditable : true)
+const existingTaskReadOnly = computed(() => Boolean(props.todo) && !metadataEditable.value && !contentEditable.value)
 const assignmentInvalid = computed(() => Boolean(
   props.canAssign && assignmentTeamId.value && !assigneeIds.value.length,
 ))
@@ -50,6 +55,14 @@ const form = reactive<FormState>({
   title: '', description: '', priority: 'NONE', dueAt: '', reminderPreset: 'NONE',
   customReminderAt: '', recurrenceType: 'NONE', customFrequency: 'WEEKLY', customInterval: 2,
 })
+let initialEditSnapshot: {
+  title: string
+  priority: TodoPriority
+  dueAt: string | null
+  reminderAt: string | null
+  recurrenceType: TodoRecurrenceType
+  recurrenceConfig: Record<string, number | string> | null
+} | null = null
 
 const reminderInvalid = computed(() => {
   if (form.reminderPreset !== 'CUSTOM' || !form.dueAt) return false
@@ -59,7 +72,8 @@ const reminderInvalid = computed(() => {
 const canSubmit = computed(() => form.title.trim()
   && (form.recurrenceType === 'NONE' || form.dueAt)
   && !reminderInvalid.value
-  && !assignmentInvalid.value)
+  && !assignmentInvalid.value
+  && !existingTaskReadOnly.value)
 const dueDate = computed({
   get: () => form.dueAt ? dayjs(form.dueAt).format('YYYY-MM-DD') : '',
   set: (value: string) => { form.dueAt = value ? `${value}T${dueTime.value || '00:00'}` : '' },
@@ -121,6 +135,14 @@ watch(
     assigneeIds.value = todo?.assignments.map((item) => item.userId)
       ?? (props.currentUserId ? [props.currentUserId] : [])
     normalizeAssigneeIds()
+    initialEditSnapshot = todo ? {
+      title: form.title.trim(),
+      priority: form.priority,
+      dueAt: form.dueAt ? dayjs(form.dueAt).format('YYYY-MM-DDTHH:mm:ss') : null,
+      reminderAt: buildReminderAt(),
+      recurrenceType: form.recurrenceType,
+      recurrenceConfig: buildRecurrenceConfig(),
+    } : null
   },
   { immediate: true },
 )
@@ -164,15 +186,36 @@ function buildRecurrenceConfig(): Record<string, number | string> | null {
 
 function submit() {
   if (!canSubmit.value) return
-  const payload: TodoPayload = {
-    title: form.title.trim(),
-    description: form.description.trim() || null,
-    priority: form.priority,
-    dueAt: form.dueAt ? dayjs(form.dueAt).format('YYYY-MM-DDTHH:mm:ss') : null,
-    reminderAt: buildReminderAt(),
-    recurrenceType: form.recurrenceType,
-    recurrenceConfig: buildRecurrenceConfig(),
-    listName: props.todo?.listName ?? props.initialListName ?? '收集箱',
+  const dueAt = form.dueAt ? dayjs(form.dueAt).format('YYYY-MM-DDTHH:mm:ss') : null
+  const reminderAt = buildReminderAt()
+  const recurrenceConfig = buildRecurrenceConfig()
+  let payload: Partial<TodoPayload>
+  if (props.todo && initialEditSnapshot) {
+    // An edit dialog is a form over a snapshot. Send only fields the user
+    // actually changed; sending every stale form value would overwrite a
+    // concurrent Yjs edit made after the dialog opened.
+    payload = { title: form.title.trim() }
+    if (payload.title === initialEditSnapshot.title) delete payload.title
+    if (form.priority !== initialEditSnapshot.priority) payload.priority = form.priority
+    if (dueAt !== initialEditSnapshot.dueAt) payload.dueAt = dueAt
+    if (reminderAt !== initialEditSnapshot.reminderAt) payload.reminderAt = reminderAt
+    if (form.recurrenceType !== initialEditSnapshot.recurrenceType) {
+      payload.recurrenceType = form.recurrenceType
+      payload.recurrenceConfig = recurrenceConfig
+    } else if (JSON.stringify(recurrenceConfig) !== JSON.stringify(initialEditSnapshot.recurrenceConfig)) {
+      payload.recurrenceConfig = recurrenceConfig
+    }
+  } else {
+    payload = {
+      title: form.title.trim(),
+      description: form.description.trim() || null,
+      priority: form.priority,
+      dueAt,
+      reminderAt,
+      recurrenceType: form.recurrenceType,
+      recurrenceConfig,
+      listName: props.todo?.listName ?? props.initialListName ?? '收集箱',
+    }
   }
   const sourceNoteId = props.todo?.sourceNoteId ?? props.sourceNoteId
   const sourceExcerpt = props.todo?.sourceExcerpt ?? props.sourceExcerpt
@@ -189,7 +232,7 @@ function submit() {
   }
   if (props.canAssign && assigneeIds.value.length) payload.assigneeIds = assigneeIds.value
   if (props.canAssign && assignmentTeamId.value) payload.teamId = assignmentTeamId.value
-  emit('save', payload)
+  emit('save', payload as TodoPayload)
 }
 </script>
 
@@ -205,26 +248,26 @@ function submit() {
           <button class="icon-action" type="button" aria-label="关闭" @click="emit('close')"><IconX :size="18" /></button>
         </header>
         <form class="todo-form" @submit.prevent="submit">
-          <label>标题<input v-model="form.title" required maxlength="500" autofocus /></label>
-          <label>描述<textarea v-model="form.description" rows="3" /></label>
+          <label>标题<input v-model="form.title" required maxlength="500" autofocus :readonly="Boolean(todo) && !metadataEditable" /></label>
+          <label>描述<textarea v-model="form.description" rows="3" :readonly="Boolean(todo) && !contentEditable" /></label>
           <div v-if="todo?.sourceNoteId || sourceNoteId" class="todo-source-card">
             <span>来源笔记</span>
             <button type="button" @click="emit('openSource', (todo?.sourceNoteId ?? sourceNoteId)!)">{{ sourceTitle ?? '正在读取…' }} <IconChevronRight :size="16" aria-hidden="true" /></button>
             <p v-if="todo?.sourceExcerpt || sourceExcerpt">“{{ todo?.sourceExcerpt ?? sourceExcerpt }}”</p>
           </div>
           <div class="form-grid">
-            <label>截止日期<input v-model="dueDate" type="date" /></label>
-            <label>时间（可选）<input v-model="dueTime" type="time" :disabled="!dueDate" /></label>
+            <label>截止日期<input v-model="dueDate" type="date" :disabled="Boolean(todo) && !metadataEditable" /></label>
+            <label>时间（可选）<input v-model="dueTime" type="time" :disabled="(Boolean(todo) && !metadataEditable) || !dueDate" /></label>
           </div>
           <div class="form-grid">
             <label>优先级
-              <select v-model="form.priority">
+              <select v-model="form.priority" :disabled="Boolean(todo) && !metadataEditable">
                 <option value="NONE">无</option><option value="LOW">低</option>
                 <option value="MEDIUM">中</option><option value="HIGH">高</option>
               </select>
             </label>
             <label>提醒
-              <select v-model="form.reminderPreset" :disabled="!form.dueAt">
+              <select v-model="form.reminderPreset" :disabled="(Boolean(todo) && !metadataEditable) || !form.dueAt">
                 <option value="NONE">不提醒</option><option value="AT_DUE">到期时</option>
                 <option value="MINUS_10">提前10分钟</option><option value="MINUS_60">提前1小时</option>
                 <option value="MINUS_1440">提前1天</option><option value="CUSTOM">自定义</option>
@@ -232,19 +275,20 @@ function submit() {
             </label>
           </div>
           <label>重复
-              <select v-model="form.recurrenceType">
+              <select v-model="form.recurrenceType" :disabled="Boolean(todo) && !metadataEditable">
                 <option value="NONE">不重复</option><option value="DAILY">每天</option>
                 <option value="WEEKLY">每周</option><option value="MONTHLY">每月</option>
                 <option value="CUSTOM">自定义</option>
               </select>
           </label>
           <label v-if="form.reminderPreset === 'CUSTOM'">自定义提醒时间
-            <input v-model="form.customReminderAt" type="datetime-local" />
+            <input v-model="form.customReminderAt" type="datetime-local" :disabled="Boolean(todo) && !metadataEditable" />
           </label>
+          <p v-if="todo && !contentEditable && metadataEditable" class="dialog-hint">日历窗口只修改任务属性，正文请在任务详情中编辑。</p>
           <p v-if="reminderInvalid" class="inline-error">提醒时间不能晚于截止时间。</p>
           <div v-if="form.recurrenceType === 'CUSTOM'" class="form-grid">
-            <label>频率<select v-model="form.customFrequency"><option value="DAILY">天</option><option value="WEEKLY">周</option><option value="MONTHLY">月</option></select></label>
-            <label>间隔<input v-model.number="form.customInterval" min="1" max="99" type="number" /></label>
+            <label>频率<select v-model="form.customFrequency" :disabled="Boolean(todo) && !metadataEditable"><option value="DAILY">天</option><option value="WEEKLY">周</option><option value="MONTHLY">月</option></select></label>
+            <label>间隔<input v-model.number="form.customInterval" min="1" max="99" type="number" :disabled="Boolean(todo) && !metadataEditable" /></label>
           </div>
           <p v-if="form.recurrenceType !== 'NONE' && !form.dueAt" class="inline-error">重复待办必须设置首次执行时间。</p>
           <div v-if="canAssign && currentUserId" class="todo-assignee-field">
@@ -252,6 +296,7 @@ function submit() {
             <AssigneePopover :members="members ?? []" :model-value="assigneeIds" :current-user-id="currentUserId" @change="assigneeIds = $event" />
           </div>
           <p v-if="assignmentInvalid" class="inline-error">团队任务至少选择一名当前团队成员。</p>
+          <p v-if="existingTaskReadOnly" class="dialog-hint">当前任务没有编辑权限，请在任务详情中查看可执行的操作。</p>
           <footer class="dialog-actions">
             <button class="secondary-button" type="button" @click="emit('close')">取消</button>
             <button class="primary-button" type="submit" :disabled="!canSubmit">保存</button>

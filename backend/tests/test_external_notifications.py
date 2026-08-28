@@ -24,6 +24,7 @@ from app.models.todo import (
 from app.services import external_notification_service, task_notification_service
 from app.services.auth_service import password_hash
 from app.services.external_notification_service import dispatch_pending, enqueue_daily_task_digests
+from tests.collaboration_helpers import enable_collaboration_bridge, project_body, project_metadata
 
 
 def add_external_user(db, user_id: str, username: str) -> User:
@@ -213,11 +214,16 @@ def test_task_detail_update_notifies_active_assignees(client, db, monkeypatch) -
     db.execute(delete(ExternalNotificationDelivery))
     db.commit()
 
-    response = client.put(
-        f"/api/tasks/{task['id']}",
-        json={"title": "已更新任务", "priority": "HIGH", "dueAt": "2026-09-02T20:00:00"},
+    enable_collaboration_bridge(client)
+    response = project_metadata(
+        client,
+        task,
+        actor_id=task["creatorId"],
+        title="已更新任务",
+        priority="HIGH",
+        dueAt="2026-09-02T20:00:00",
     )
-    assert response.status_code == 200
+    assert response.status_code == 204
     deliveries = db.scalars(select(ExternalNotificationDelivery)).all()
     assert {item.username for item in deliveries} == {first.username, second.username}
     assert {item.notification_type for item in deliveries} == {NotificationType.TASK_UPDATED}
@@ -232,7 +238,7 @@ def test_task_detail_update_notifies_active_assignees(client, db, monkeypatch) -
         }
 
 
-def test_text_autosaves_are_coalesced_until_idle(db, user_id, monkeypatch) -> None:
+def test_collaboration_text_updates_are_coalesced_until_idle(db, user_id, monkeypatch) -> None:
     target = add_external_user(db, "70000000-0000-0000-0000-000000000009", "external-text-edit")
     todo = Todo(
         owner_id=user_id,
@@ -304,30 +310,31 @@ def test_member_content_edit_does_not_notify_but_admin_edit_does(client, db) -> 
     db.commit()
 
     member_client = login_external_user(client.app, member.username)
-    member_update = member_client.put(
-        f"/api/tasks/{task['id']}",
-        json={
-            "contentJson": {
-                "type": "doc",
-                "content": [{"type": "paragraph", "content": [{"type": "text", "text": "成员说明"}]}],
-            }
+    enable_collaboration_bridge(member_client)
+    member_update = project_body(
+        member_client,
+        task["id"],
+        {
+            "type": "doc",
+            "content": [{"type": "paragraph", "content": [{"type": "text", "text": "成员说明"}]}],
         },
+        actor_id=member.id,
     )
-    assert member_update.status_code == 200, member_update.text
+    assert member_update.status_code == 204, member_update.text
     assert db.scalars(select(Notification)).all() == []
     assert db.scalars(select(ExternalNotificationDelivery)).all() == []
     assert db.scalars(select(PendingTaskUpdateNotification)).all() == []
 
-    admin_update = client.put(
-        f"/api/tasks/{task['id']}",
-        json={
-            "contentJson": {
-                "type": "doc",
-                "content": [{"type": "paragraph", "content": [{"type": "text", "text": "管理员说明"}]}],
-            }
+    admin_update = project_body(
+        client,
+        task["id"],
+        {
+            "type": "doc",
+            "content": [{"type": "paragraph", "content": [{"type": "text", "text": "管理员说明"}]}],
         },
+        actor_id=task["creatorId"],
     )
-    assert admin_update.status_code == 200, admin_update.text
+    assert admin_update.status_code == 204, admin_update.text
     assert db.scalar(select(PendingTaskUpdateNotification)) is not None
 
 

@@ -2,6 +2,8 @@ from datetime import date, datetime, timedelta
 
 from fastapi.testclient import TestClient
 
+from tests.collaboration_helpers import enable_collaboration_bridge, project_body, project_metadata
+
 
 def test_todo_crud_and_smart_views(client: TestClient) -> None:
     today = date.today()
@@ -19,7 +21,13 @@ def test_todo_crud_and_smart_views(client: TestClient) -> None:
     assert {todo["title"] for todo in client.get("/api/todos?view=inbox").json()} == {"研究执行计划"}
 
     todo_id = scheduled.json()["id"]
-    updated = client.put(f"/api/todos/{todo_id}", json={"description": "接口说明", "priority": "MEDIUM"})
+    enable_collaboration_bridge(client)
+    project_body(client, todo_id, {
+        "type": "doc",
+        "content": [{"type": "paragraph", "content": [{"type": "text", "text": "接口说明"}]}],
+    })
+    project_metadata(client, scheduled.json(), priority="MEDIUM")
+    updated = client.get(f"/api/todos/{todo_id}")
     assert updated.json()["description"] == "接口说明"
     assert updated.json()["priority"] == "MEDIUM"
 
@@ -37,8 +45,9 @@ def test_todo_search_is_scoped_to_current_view(client: TestClient) -> None:
     client.post("/api/todos", json={"title": "整理季度报告", "dueAt": today.isoformat()})
     reading = client.post("/api/todos", json={"title": "整理阅读清单"}).json()
     checkup = client.post("/api/todos", json={"title": "预约体检", "description": "整理检查材料"}).json()
-    client.put(f"/api/todos/{reading['id']}", json={"dueAt": None})
-    client.put(f"/api/todos/{checkup['id']}", json={"dueAt": None})
+    enable_collaboration_bridge(client)
+    project_metadata(client, reading, dueAt=None)
+    project_metadata(client, checkup, dueAt=None)
 
     today_results = client.get("/api/todos", params={"view": "today", "q": "整理"}).json()
     inbox_results = client.get("/api/todos", params={"view": "inbox", "q": "整理"}).json()
@@ -54,12 +63,110 @@ def test_task_content_json_is_authoritative_and_searchable(client: TestClient) -
         "content": [{"type": "paragraph", "content": [{"type": "text", "text": "校验清单内容"}]}],
     }
 
-    updated = client.put(f"/api/todos/{created['id']}", json={"contentJson": content, "description": "过期 HTML"})
+    enable_collaboration_bridge(client)
+    updated = project_body(client, created["id"], content)
 
-    assert updated.status_code == 200
-    assert updated.json()["contentJson"] == content
-    assert updated.json()["description"] == "校验清单内容"
+    assert updated.status_code == 204
+    fetched = client.get(f"/api/todos/{created['id']}").json()
+    assert fetched["contentJson"] == content
+    assert fetched["description"] == "校验清单内容"
     assert [item["id"] for item in client.get("/api/todos", params={"view": "inbox", "q": "校验清单"}).json()] == [created["id"]]
+
+
+def test_collaboration_block_id_normalization_is_not_a_task_edit(client: TestClient) -> None:
+    created = client.post("/api/todos", json={
+        "title": "仅补块标识",
+        "contentJson": {"type": "doc", "content": [{"type": "paragraph"}]},
+    }).json()
+    enable_collaboration_bridge(client)
+    normalized = {"type": "doc", "content": [{"type": "paragraph", "attrs": {"blockId": "mount-only"}}]}
+
+    assert project_body(client, created["id"], normalized).status_code == 204
+    # The Yjs document may keep the generated id in its durable snapshot, but
+    # SQL and notifications remain untouched until a real body edit occurs.
+    assert client.get(f"/api/todos/{created['id']}").json()["contentJson"] == created["contentJson"]
+
+
+def test_collaboration_snapshot_requires_bridge_token_and_updates_projection(client: TestClient) -> None:
+    created = client.post("/api/todos", json={"title": "协同正文"}).json()
+    content = {
+        "type": "doc",
+        "content": [{"type": "paragraph", "content": [{"type": "text", "text": "双端合并"}]}],
+    }
+    enable_collaboration_bridge(client)
+
+    endpoint = f"/api/todos/{created['id']}/collaboration-snapshot"
+    payload = {"contentJson": content}
+    assert client.put(endpoint, json=payload).status_code == 401
+
+    saved = client.put(
+        endpoint,
+        json=payload,
+        headers={"X-WorkFollow-Collaboration-Token": "local-test-token"},
+    )
+    assert saved.status_code == 204
+
+    fetched = client.get(f"/api/todos/{created['id']}").json()
+    assert fetched["contentJson"] == content
+    assert fetched["description"] == "双端合并"
+
+
+def test_generic_task_http_update_route_is_removed(client: TestClient) -> None:
+    created = client.post("/api/tasks", json={"title": "禁止旧接口"}).json()
+    for prefix in ("tasks", "todos"):
+        response = client.put(
+            f"/api/{prefix}/{created['id']}",
+            json={"title": "不应通过旧接口写入"},
+        )
+        assert response.status_code == 405
+
+
+def test_collaboration_metadata_requires_bridge_token_and_updates_projection(client: TestClient) -> None:
+    created = client.post(
+        "/api/todos",
+        json={"title": "协同元数据", "dueAt": "2026-08-27T09:00:00"},
+    ).json()
+    enable_collaboration_bridge(client)
+
+    endpoint = f"/api/todos/{created['id']}/collaboration-metadata"
+    payload = {
+        "title": "协同标题",
+        "dueAt": "2026-08-28T10:00:00",
+        "dueEndAt": "2026-08-28T11:00:00",
+        "priority": "HIGH",
+        "reminderAt": "2026-08-28T09:00:00",
+        "recurrenceType": "NONE",
+        "recurrenceConfig": None,
+        "listName": "工作",
+        "tags": ["协同", "协同", "  元数据  "],
+    }
+    assert client.put(endpoint, json=payload).status_code == 401
+
+    saved = client.put(
+        endpoint,
+        json=payload,
+        headers={"X-WorkFollow-Collaboration-Token": "local-test-token"},
+    )
+    assert saved.status_code == 204
+
+    fetched = client.get(f"/api/todos/{created['id']}").json()
+    assert fetched["title"] == "协同标题"
+    assert fetched["dueAt"] == "2026-08-28T10:00:00"
+    assert fetched["dueEndAt"] == "2026-08-28T11:00:00"
+    assert fetched["priority"] == "HIGH"
+    assert fetched["reminderAt"] == "2026-08-28T09:00:00"
+    assert fetched["listName"] == "工作"
+    assert fetched["tags"] == ["协同", "元数据"]
+
+    # The metadata document does not own list placement. A later metadata
+    # projection without listName must leave the task in the existing list.
+    second = client.put(
+        endpoint,
+        json={**payload, "title": "协同标题二", "listName": None},
+        headers={"X-WorkFollow-Collaboration-Token": "local-test-token"},
+    )
+    assert second.status_code == 204
+    assert client.get(f"/api/todos/{created['id']}").json()["listName"] == "工作"
 
 
 def test_all_view_orders_every_todo_by_due_at_descending(client: TestClient) -> None:
@@ -72,7 +179,6 @@ def test_all_view_orders_every_todo_by_due_at_descending(client: TestClient) -> 
         json={"title": "较晚到期", "dueAt": "2026-08-12T18:00:00"},
     )
     unscheduled = client.post("/api/todos", json={"title": "没有日期"}).json()
-    client.put(f"/api/todos/{unscheduled['id']}", json={"dueAt": None})
     client.post(f"/api/todos/{early['id']}/complete")
 
     results = client.get("/api/todos", params={"view": "all"})
@@ -141,10 +247,8 @@ def test_reminder_cannot_be_later_than_due_at(client: TestClient) -> None:
         "/api/todos",
         json={"title": "可更新提醒", "dueAt": "2026-08-08T10:00:00"},
     ).json()
-    updated = client.put(
-        f"/api/todos/{todo['id']}",
-        json={"reminderAt": "2026-08-08T11:00:00"},
-    )
+    enable_collaboration_bridge(client)
+    updated = project_metadata(client, todo, reminderAt="2026-08-08T11:00:00")
     assert updated.status_code == 422
 
 
@@ -167,15 +271,16 @@ def test_task_range_list_and_tags_share_one_persisted_state(client: TestClient) 
     assert [item["id"] for item in client.get("/api/todos", params={"list": "工作"}).json()] == [task["id"]]
     assert client.get("/api/todos", params={"list": "个人"}).json() == []
 
-    updated = client.put(
-        f"/api/todos/{task['id']}",
-        json={"dueAt": None, "dueEndAt": None, "listName": "个人", "tags": ["生活"]},
-    )
-    assert updated.status_code == 200
-    assert updated.json()["dueAt"] is None
-    assert updated.json()["dueEndAt"] is None
-    assert updated.json()["listName"] == "个人"
-    assert updated.json()["tags"] == ["生活"]
+    enable_collaboration_bridge(client)
+    updated = project_metadata(client, task, dueAt=None, dueEndAt=None, tags=["生活"])
+    assert updated.status_code == 204
+    moved = client.put(f"/api/todos/{task['id']}/list", json={"listName": "个人"})
+    assert moved.status_code == 200
+    refreshed = client.get(f"/api/todos/{task['id']}").json()
+    assert refreshed["dueAt"] is None
+    assert refreshed["dueEndAt"] is None
+    assert refreshed["listName"] == "个人"
+    assert refreshed["tags"] == ["生活"]
     assert [item["id"] for item in client.get("/api/todos", params={"list": "个人"}).json()] == [task["id"]]
 
     invalid = client.post(

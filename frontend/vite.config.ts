@@ -5,6 +5,7 @@ import { defineConfig } from 'vite'
 
 export default defineConfig(() => {
   const backendPort = process.env.WORKFOLLOW_BACKEND_PORT ?? '8123'
+  const collaborationPort = process.env.WORKFOLLOW_COLLABORATION_PORT ?? '8124'
 
   return {
     plugins: [vue()],
@@ -37,6 +38,10 @@ export default defineConfig(() => {
       port: 5173,
       proxy: {
         '/api': `http://127.0.0.1:${backendPort}`,
+        '/collaboration': {
+          target: `ws://127.0.0.1:${collaborationPort}`,
+          ws: true,
+        },
       },
     },
   }

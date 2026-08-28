@@ -120,6 +120,26 @@ def _is_task_admin(db: Session, todo: Todo, actor_id: str) -> bool:
     return role in (TeamMemberRole.OWNER, TeamMemberRole.ADMIN)
 
 
+def preferred_task_notification_actor(
+    db: Session,
+    todo: Todo,
+    actor_ids: list[str] | None,
+    fallback: str | None,
+) -> str | None:
+    """Choose an administrator when one coalesced Yjs write has many actors.
+
+    Hocuspocus stores several keystrokes as one projection. The last update's
+    actor is not enough to decide whether an administrator edited the task, so
+    the collaboration bridge supplies all actors observed in that debounce
+    window. Member-only edits still resolve to the member and remain silent.
+    """
+    candidates = list(dict.fromkeys((actor_ids or []) + ([fallback] if fallback else [])))
+    for actor_id in candidates:
+        if _is_task_admin(db, todo, actor_id):
+            return actor_id
+    return fallback
+
+
 def _assignee_views(todo: Todo, user_ids: set[str] | None = None) -> list[dict[str, object]]:
     result: list[dict[str, object]] = []
     for assignment in todo.assignments:
@@ -347,7 +367,7 @@ def _queue_task_update_notification(
             db.add(pending)
         else:
             # Preserve the first snapshot and only move the final snapshot
-            # forward.  This turns many autosave requests into one diff.
+            # forward. This turns many collaboration projections into one diff.
             pending.after_json = after
             pending.actor_user_id = actor_id
             pending.next_attempt_at = next_attempt_at

@@ -1,7 +1,7 @@
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { fetchTodos, putTodo, type Todo } from '@/services/api'
+import { fetchTodos, moveTodoToList, type Todo } from '@/services/api'
 import { taskCountLabel } from '@/modules/todo/taskCounts'
 import { isCompletedForCurrentUser, useTodoStore } from '@/stores/todos'
 
@@ -13,7 +13,7 @@ vi.mock('@/services/api', () => ({
   postTodo: vi.fn(),
   putTaskAssignees: vi.fn(),
   putTaskMyStatus: vi.fn(),
-  putTodo: vi.fn(),
+  moveTodoToList: vi.fn(),
   restoreTodo: vi.fn(),
 }))
 
@@ -29,33 +29,33 @@ const task = {
   completedAt: null, createdAt: '2026-08-10T00:00:00', updatedAt: '2026-08-10T00:00:00',
 } satisfies Todo
 
-describe('todo store update strategy', () => {
+describe('todo store list transaction', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     vi.clearAllMocks()
   })
 
-  it('patches正文 locally without refreshing the task collection', async () => {
+  it('moves a task to another list without refreshing the task collection', async () => {
     const store = useTodoStore()
     store.todos = [{ ...task }]
-    vi.mocked(putTodo).mockResolvedValue({ ...task, description: '<p>新正文</p>' })
+    vi.mocked(moveTodoToList).mockResolvedValue({ ...task, listName: '工作' })
     const refresh = vi.spyOn(store, 'refresh').mockResolvedValue()
 
-    await store.update(task.id, { description: '<p>新正文</p>' })
+    await store.moveToList(task.id, '工作')
 
     expect(refresh).not.toHaveBeenCalled()
-    expect(store.todos[0].description).toBe('<p>新正文</p>')
+    expect(store.todos[0].listName).toBe('工作')
   })
 
-  it('moves a rescheduled task locally without refreshing the collection', async () => {
+  it('removes a moved task from a list-scoped collection', async () => {
     const store = useTodoStore()
-    store.currentView = 'inbox'
+    store.currentListName = '收集箱'
     store.todos = [{ ...task }]
-    vi.mocked(putTodo).mockResolvedValue({ ...task, dueAt: '2026-08-11T00:00:00' })
+    vi.mocked(moveTodoToList).mockResolvedValue({ ...task, listName: '工作' })
     const refresh = vi.spyOn(store, 'refresh').mockResolvedValue()
     vi.spyOn(store, 'loadCounts').mockResolvedValue()
 
-    await store.update(task.id, { dueAt: '2026-08-11T00:00:00' })
+    await store.moveToList(task.id, '工作')
 
     expect(refresh).not.toHaveBeenCalled()
     expect(store.todos).toEqual([])

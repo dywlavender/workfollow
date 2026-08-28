@@ -18,9 +18,8 @@ from app.schemas.team import (
     TeamTaskAssignmentStatusUpdate,
     TeamTaskCreate,
     TeamTaskRead,
-    TeamTaskUpdate,
 )
-from app.schemas.todo import TodoCreate, TodoUpdate
+from app.schemas.todo import TodoCreate
 from app.services import event_stream, task_notification_service, team_service, todo_service
 from app.services.team_note_service import attachment_reads
 
@@ -137,44 +136,6 @@ def create_task(team_id: str, payload: TeamTaskCreate, db: DbSession, user: Curr
 @router.get("/teams/{team_id}/tasks/{task_id}", response_model=TeamTaskRead)
 def get_task(team_id: str, task_id: str, db: DbSession, user: CurrentUser) -> TeamTaskRead:
     return task_read(db, _team_task(db, team_id, task_id, user.id))
-
-
-@router.put("/teams/{team_id}/tasks/{task_id}", response_model=TeamTaskRead)
-def update_task(
-    team_id: str,
-    task_id: str,
-    payload: TeamTaskUpdate,
-    db: DbSession,
-    user: CurrentUser,
-) -> TeamTaskRead:
-    task = _team_task(db, team_id, task_id, user.id)
-    todo_service.require_creator(task, user.id)
-    before = task_notification_service.task_change_snapshot(task)
-    changes = payload.model_dump(exclude_unset=True)
-    assignee_ids = changes.pop("assignee_ids", None)
-    requested_status = changes.pop("status", None)
-    changes.pop("client_request_id", None)
-    if changes:
-        task = todo_service.update_todo(db, task, TodoUpdate(**changes), user.id, commit=False)
-        task_notification_service.notify_task_updated(
-            db, task, user.id, before, commit=False
-        )
-    if assignee_ids is not None:
-        previous_ids = {item.user_id for item in task.assignments if item.active}
-        task = todo_service.update_assignees(db, task, user.id, assignee_ids, commit=False)
-        current_ids = {item.user_id for item in task.assignments if item.active}
-        task_notification_service.notify_assignees_changed(
-            db, task, user.id, previous_ids, current_ids, commit=False
-        )
-    if requested_status is not None and requested_status.value == "CANCELLED":
-        participant_ids = {item.user_id for item in task.assignments if item.active}
-        task = todo_service.abandon_todo(db, task, commit=False)
-        task_notification_service.notify_task_cancelled(
-            db, task, user.id, participant_ids, commit=False
-        )
-    event_stream.queue_task_changed(db, task)
-    db.commit()
-    return task_read(db, task)
 
 
 @router.delete("/teams/{team_id}/tasks/{task_id}", status_code=status.HTTP_204_NO_CONTENT)

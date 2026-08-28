@@ -103,41 +103,6 @@ class TeamTaskCreate(ApiModel):
         return self
 
 
-class TeamTaskUpdate(ApiModel):
-    title: str | None = Field(default=None, min_length=1, max_length=500)
-    description: str | None = None
-    content_json: dict[str, Any] | None = None
-    priority: TodoPriority | None = None
-    due_at: datetime | None = None
-    due_end_at: datetime | None = None
-    reminder_at: datetime | None = None
-    recurrence_type: RecurrenceType | None = None
-    recurrence_config: dict[str, Any] | None = None
-    attachment_ids: list[str] | None = Field(default=None, max_length=100)
-    list_name: str | None = Field(default=None, min_length=1, max_length=120)
-    tags: list[str] | None = Field(default=None, max_length=20)
-    status: TeamTaskStatus | None = None
-    assignee_ids: list[str] | None = Field(default=None, max_length=100)
-
-    @model_validator(mode="after")
-    def validate_task(self) -> "TeamTaskUpdate":
-        if self.title is not None:
-            self.title = self.title.strip()
-            if not self.title:
-                raise ValueError("团队任务标题不能为空")
-        if self.assignee_ids is not None:
-            self.assignee_ids = list(dict.fromkeys(self.assignee_ids))
-        if self.attachment_ids is not None:
-            self.attachment_ids = list(dict.fromkeys(self.attachment_ids))
-        if self.due_end_at is not None and (self.due_at is None or self.due_end_at < self.due_at):
-            raise ValueError("结束时间不能早于开始时间")
-        if self.list_name is not None:
-            self.list_name = self.list_name.strip() or "收集箱"
-        if self.tags is not None:
-            self.tags = list(dict.fromkeys(tag.strip() for tag in self.tags if tag.strip()))
-        return self
-
-
 class TeamTaskAssignmentRead(ApiModel):
     id: str
     team_task_id: str
@@ -226,6 +191,7 @@ class TeamNoteUpdate(ApiModel):
     attachment_ids: list[str] | None = Field(default=None, max_length=100)
     category_id: str | None = None
     tags: list[str] | None = Field(default=None, max_length=20)
+    base_version_no: int | None = Field(default=None, ge=1, alias="baseVersion")
 
     @model_validator(mode="after")
     def validate_note(self) -> "TeamNoteUpdate":
@@ -238,6 +204,16 @@ class TeamNoteUpdate(ApiModel):
         if self.tags is not None:
             self.tags = list(dict.fromkeys(tag.strip() for tag in self.tags if tag.strip()))
         return self
+
+
+class TeamNoteCollaborationAccess(ApiModel):
+    can_view: bool
+    can_edit: bool
+    # The collaboration bridge needs the team context when the authenticated
+    # user is ROOT.  ROOT is deliberately not an implicit team member, so the
+    # normal ``GET /team/knowledge/{id}`` route requires this query parameter.
+    team_id: str | None = None
+    version_no: int = 1
 
 
 class TeamNotePermissions(ApiModel):

@@ -48,11 +48,11 @@ def test_personal_resources_are_isolated_between_users(client: TestClient, db) -
 
     other_client = login_security_user(client.app, other.username)
     assert other_client.get(f"/api/tasks/{todo['id']}").status_code == 404
-    assert other_client.put(f"/api/tasks/{todo['id']}", json={"title": "越权"}).status_code == 404
+    assert other_client.put(f"/api/tasks/{todo['id']}", json={"title": "越权"}).status_code == 405
     assert other_client.delete(f"/api/tasks/{todo['id']}").status_code == 404
     assert other_client.get(f"/api/notes/{note['id']}").status_code == 404
     assert other_client.post(f"/api/notes/{note['id']}/copy").status_code == 404
-    assert other_client.put(f"/api/notes/{note['id']}", json={"title": "越权"}).status_code == 404
+    assert other_client.put(f"/api/notes/{note['id']}/favorite", json={"isFavorite": True}).status_code == 404
     assert other_client.delete(f"/api/notes/{note['id']}").status_code == 404
     assert other_client.get(f"/api/attachments/{attachment.id}").json()["detail"] == "Attachment not found"
     assert other_client.get("/api/notes").json() == []
@@ -67,7 +67,7 @@ def test_non_member_cannot_cross_team_read_or_update_tasks(client: TestClient, d
     outsider = login_security_user(client.app, other.username)
     assert outsider.get(f"/api/teams/{first['id']}/tasks").status_code == 404
     assert outsider.get(f"/api/tasks/{task['id']}").status_code == 404
-    assert outsider.put(f"/api/tasks/{task['id']}", json={"title": "越权"}).status_code == 404
+    assert outsider.put(f"/api/tasks/{task['id']}", json={"title": "越权"}).status_code == 405
 
 
 def test_team_a_member_cannot_resolve_team_b_task_id(client: TestClient, db) -> None:

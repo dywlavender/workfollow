@@ -21,7 +21,7 @@ import {
   IconX,
 } from '@tabler/icons-vue'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute, useRouter } from 'vue-router'
 
 import { useFeedbackStore } from '@/stores/feedback'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
@@ -30,6 +30,7 @@ import QuickTodoInput from '@/components/todo/QuickTodoInput.vue'
 import TaskDetailPanel from '@/components/task/TaskDetailPanel.vue'
 import TaskListGrouped from '@/components/task/TaskListGrouped.vue'
 import TodoDialog from '@/components/todo/TodoDialog.vue'
+import { updateTaskMetadataCollaboratively, updateTaskTagCollaboratively } from '@/modules/editor/taskMetadataCollaboration'
 import TodoItem from '@/components/todo/TodoItem.vue'
 import { taskCountLabel } from '@/modules/todo/taskCounts'
 import { fetchTeamMembers, fetchTodo, type TeamMember, type Todo, type TodoList, type TodoPayload, type TodoView } from '@/services/api'
@@ -53,6 +54,7 @@ const quickTodoInput = ref<{ begin: () => Promise<void> } | null>(null)
 const taskDetail = ref<{
   openDatePanel: (anchor?: Pick<DOMRect, 'left' | 'bottom'>) => void
   openPriorityPanel: () => void
+  flushAndWaitForProjection: (timeoutMs?: number) => Promise<Todo> | undefined
 } | null>(null)
 const searchInput = ref(typeof route.query.q === 'string' ? route.query.q : '')
 const searchOpen = ref(Boolean(searchInput.value))
@@ -69,6 +71,7 @@ const listDialogMode = ref<'create' | 'rename'>('create')
 const listDialogName = ref('')
 const listDialogTarget = ref<TodoList | null>(null)
 const deleteListTarget = ref<TodoList | null>(null)
+let selectionRequest = 0
 
 const workspaceStyle = computed(() => ({ '--task-list-width': `${taskListWidth.value}px` }))
 const taskNavigationButtonLabel = computed(() => taskNavigationCollapsed.value ? '展开任务导航' : '收起任务导航')
@@ -110,6 +113,7 @@ const currentListName = computed(() => typeof route.query.list === 'string' ? ro
 const currentHeading = computed(() => currentListName.value || currentView.value.label)
 const todayKey = ref(dayjs().format('YYYY-MM-DD'))
 let dayRefreshTimer: number | undefined
+let taskChangeRefreshTimer: number | undefined
 const quickDefaultDueAt = computed(() => !currentListName.value && currentView.value.id === 'today'
   ? dayjs(todayKey.value).startOf('day').format('YYYY-MM-DDTHH:mm:ss')
   : '')
@@ -291,13 +295,16 @@ function visibleTaskIds() {
 }
 
 function handleWorkspaceKeydown(event: KeyboardEvent) {
+  const target = event.target as HTMLElement | null
+  // Escape from a title input, the rich-text editor, or an open dialog belongs
+  // to that control. Clearing the selected task here would unmount TaskDetail
+  // while its Yjs projection is still being flushed.
+  if (target?.closest('input, textarea, select, [contenteditable="true"], [role="dialog"]')) return
   if (event.key === 'Escape') {
     if (selectedTodoId.value) clearSelection()
     return
   }
   if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return
-  const target = event.target as HTMLElement | null
-  if (target?.closest('input, textarea, select, [contenteditable="true"], [role="dialog"]')) return
   if (!workspace.value?.contains(target)) return
   const ids = visibleTaskIds()
   if (!ids.length) return
@@ -352,6 +359,7 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   if (dayRefreshTimer !== undefined) window.clearTimeout(dayRefreshTimer)
+  if (taskChangeRefreshTimer !== undefined) window.clearTimeout(taskChangeRefreshTimer)
   window.removeEventListener('pointermove', moveListDivider)
   window.removeEventListener('pointerup', stopListResize)
   window.removeEventListener('keydown', handleWorkspaceKeydown)
@@ -359,6 +367,26 @@ onBeforeUnmount(() => {
 })
 
 watch(() => [route.query.view, route.query.list, route.query.q] as const, () => { void loadView() })
+watch(() => realtime.lastTaskChange, (change) => {
+  if (!change) return
+  if (change.brief.deleted && selectedTodoId.value === change.taskId) {
+    selectedTodoId.value = null
+    selectedTodoDetail.value = null
+  }
+  if (taskChangeRefreshTimer !== undefined) window.clearTimeout(taskChangeRefreshTimer)
+  taskChangeRefreshTimer = window.setTimeout(() => {
+    taskChangeRefreshTimer = undefined
+    void todoStore.refresh().then(() => {
+      if (!selectedTodoId.value || change.brief.deleted) return
+      void fetchTodo(selectedTodoId.value).then((detail) => {
+        if (selectedTodoId.value === detail.id) selectedTodoDetail.value = detail
+      }).catch(() => {
+        selectedTodoId.value = null
+        selectedTodoDetail.value = null
+      })
+    }).catch(() => undefined)
+  }, 240)
+})
 watch(() => realtime.lastTodoListChange, (change) => {
   if (!change) return
   void todoStore.loadLists()
@@ -371,7 +399,17 @@ watch(() => realtime.lastTodoListChange, (change) => {
   }
 })
 
-function selectTodo(todo: Todo, focus = false) {
+async function selectTodo(todo: Todo, focus = false) {
+  const request = ++selectionRequest
+  if (selectedTodoId.value && selectedTodoId.value !== todo.id && taskDetail.value?.flushAndWaitForProjection) {
+    try {
+      await taskDetail.value.flushAndWaitForProjection(6000)
+    } catch {
+      feedback.error('任务内容尚未同步完成，请稍后重试。')
+      return
+    }
+  }
+  if (request !== selectionRequest) return
   selectedTodoId.value = todo.id
   selectedTodoDetail.value = null
   if (focus) {
@@ -379,7 +417,9 @@ function selectTodo(todo: Todo, focus = false) {
       .find((row) => row.dataset.todoId === todo.id)
       ?.focus())
   }
-  void fetchTodo(todo.id).then((detail) => { if (selectedTodoId.value === detail.id) selectedTodoDetail.value = detail })
+  void fetchTodo(todo.id).then((detail) => {
+    if (request === selectionRequest && selectedTodoId.value === detail.id) selectedTodoDetail.value = detail
+  })
   // Selection is local state only. Writing ?todo= to the URL here would re-enter
   // the route/load chain and reload the whole list (skeleton flash + refetch).
   // The todo query param is reserved for deep links into a specific task.
@@ -411,40 +451,71 @@ async function save(payload: TodoPayload) {
   }
 }
 
-async function updateTodo(todoId: string, payload: Partial<TodoPayload>, quiet = false): Promise<{ ok: boolean; savedAt?: string }> {
-  try {
-    const updated = await todoStore.update(todoId, payload)
-    if (todoStore.query && selectedTodoId.value === todoId && !todoStore.todos.some((todo) => todo.id === todoId)) clearSelection()
-    if (!quiet) feedback.success('任务已保存。')
-    return { ok: true, savedAt: updated.updatedAt }
-  } catch {
-    feedback.error('保存失败，请检查日期、提醒和重复设置。')
-    return { ok: false }
+async function updateFromRow(todo: Todo, payload: Partial<TodoPayload>) {
+  // Moving a task between lists is a transaction over the list aggregate, not
+  // an editable field in the shared task metadata document.
+  if (Object.keys(payload).length === 1 && payload.listName) {
+    try {
+      await todoStore.moveToList(todo.id, payload.listName)
+    } catch {
+      feedback.error('移动清单失败，请稍后重试。')
+    }
+    return
+  }
+  const collaborationResult = await updateTaskMetadataCollaboratively(todo, payload)
+  if (collaborationResult === 'updated') {
+    await todoStore.refresh().catch(() => undefined)
+    return
+  }
+  if (collaborationResult === 'unavailable') {
+    feedback.error('协同服务暂时不可用，未修改任务属性，请稍后重试。')
   }
 }
 
-async function updatePersonalFromDetail(
-  todoId: string,
-  payload: Partial<TodoPayload>,
-  quiet = false,
-  settled?: (ok: boolean, savedAt?: string) => void,
-) {
-  const result = await updateTodo(todoId, payload, quiet)
-  settled?.(result.ok, result.savedAt)
+async function updateTagFromRow(todo: Todo, operation: { action: 'add' | 'remove'; tag: string }) {
+  const result = await updateTaskTagCollaboratively(todo, operation)
+  if (result === 'updated') await todoStore.refresh().catch(() => undefined)
+  else feedback.error('协同服务暂时不可用，未修改任务标签，请稍后重试。')
 }
 
-async function updateFromRow(todo: Todo, payload: Partial<TodoPayload>) {
-  await updateTodo(todo.id, payload)
+async function flushSelectedTaskForAction(todo: Todo): Promise<boolean> {
+  if (selectedTodoId.value !== todo.id || !taskDetail.value?.flushAndWaitForProjection) return true
+  try {
+    await taskDetail.value.flushAndWaitForProjection(6000)
+    return true
+  } catch {
+    feedback.error('任务内容尚未同步完成，请稍后重试。')
+    return false
+  }
+}
+
+// Route changes can unmount the detail panel without going through a row
+// click (browser Back/Forward, a deep link, or another page). Keep the same
+// projection barrier for those paths so an in-memory Yjs edit is never lost
+// merely because the user navigated away.
+async function flushCurrentTaskForNavigation(): Promise<boolean> {
+  if (!selectedTodoId.value || !taskDetail.value?.flushAndWaitForProjection) return true
+  try {
+    await taskDetail.value.flushAndWaitForProjection(6000)
+    return true
+  } catch {
+    feedback.error('任务内容尚未同步完成，请稍后重试。')
+    return false
+  }
 }
 
 async function duplicate(todo: Todo) {
+  if (!(await flushSelectedTaskForAction(todo))) return
+  const source = selectedTodoId.value === todo.id
+    ? await fetchTodo(todo.id).catch(() => todo)
+    : todo
   try {
     const created = await todoStore.create({
-      title: `${todo.title} 副本`, description: todo.description, priority: todo.priority,
-      dueAt: todo.dueAt, dueEndAt: todo.dueEndAt, reminderAt: todo.reminderAt,
-      recurrenceType: todo.recurrenceType, recurrenceConfig: todo.recurrenceConfig,
-      listName: todo.listName, tags: [...todo.tags], sourceType: todo.sourceType,
-      sourceNoteId: todo.sourceNoteId, sourceExcerpt: todo.sourceExcerpt,
+      title: `${source.title} 副本`, description: source.description, contentJson: source.contentJson,
+      priority: source.priority, dueAt: source.dueAt, dueEndAt: source.dueEndAt, reminderAt: source.reminderAt,
+      recurrenceType: source.recurrenceType, recurrenceConfig: source.recurrenceConfig,
+      listName: source.listName, tags: [...source.tags], sourceType: source.sourceType,
+      sourceNoteId: source.sourceNoteId, sourceExcerpt: source.sourceExcerpt,
     })
     if (todoStore.todos.some((item) => item.id === created.id)) selectTodo(created)
     feedback.success('任务副本已创建。')
@@ -464,7 +535,7 @@ async function copyTaskLink(todo: Todo) {
 }
 
 async function editDate(todo: Todo, clickedAnchor?: Pick<DOMRect, 'left' | 'bottom'>) {
-  selectTodo(todo)
+  await selectTodo(todo)
   await nextTick()
   await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()))
   const row = document.querySelector<HTMLElement>(`[data-todo-id="${CSS.escape(todo.id)}"]`)
@@ -473,13 +544,14 @@ async function editDate(todo: Todo, clickedAnchor?: Pick<DOMRect, 'left' | 'bott
 }
 
 async function editPriority(todo: Todo) {
-  selectTodo(todo)
+  await selectTodo(todo)
   await nextTick()
   taskDetail.value?.openPriorityPanel()
 }
 
 async function toggle(todo: Todo) {
   if (!todo.permissions.completable) return
+  if (!(await flushSelectedTaskForAction(todo))) return
   const previousDetail = selectedTodoDetail.value
   try {
     const executionDone = todo.myAssignment?.status === 'DONE'
@@ -511,6 +583,7 @@ async function toggle(todo: Todo) {
 }
 
 async function abandon(todo: Todo) {
+  if (!(await flushSelectedTaskForAction(todo))) return
   try {
     await todoStore.abandon(todo.id)
     feedback.success('任务已放弃，可随时恢复。')
@@ -520,6 +593,7 @@ async function abandon(todo: Todo) {
 }
 
 async function remove(todo: Todo) {
+  if (!(await flushSelectedTaskForAction(todo))) return
   try {
     await todoStore.remove(todo.id)
     if (selectedTodoId.value === todo.id) clearSelection()
@@ -554,6 +628,16 @@ function openSource(noteId: string, blockId?: string | null) {
   void router.push({ name: 'notes', query: { note: noteId, ...(blockId ? { block: blockId } : {}) } })
 }
 
+async function openTask(taskId: string) {
+  const listed = todoStore.todos.find((todo) => todo.id === taskId)
+  const target = listed ?? await fetchTodo(taskId).catch(() => null)
+  if (!target) {
+    feedback.error('该任务不可访问或已删除。')
+    return
+  }
+  await selectTodo(target)
+}
+
 async function assign(todo: Todo, assigneeIds: string[]) {
   try {
     await todoStore.updateAssignees(todo.id, assigneeIds)
@@ -562,6 +646,9 @@ async function assign(todo: Todo, assigneeIds: string[]) {
     feedback.error('指派失败，只能选择当前团队成员。')
   }
 }
+
+onBeforeRouteUpdate(async () => (await flushCurrentTaskForNavigation()) || false)
+onBeforeRouteLeave(async () => (await flushCurrentTaskForNavigation()) || false)
 </script>
 
 <template>
@@ -680,6 +767,7 @@ async function assign(todo: Todo, assigneeIds: string[]) {
               @edit-date="editDate"
               @edit-priority="editPriority"
               @update="updateFromRow"
+              @tag-change="updateTagFromRow"
               @duplicate="duplicate"
               @copy-link="copyTaskLink"
               @assign="assign"
@@ -721,9 +809,9 @@ async function assign(todo: Todo, assigneeIds: string[]) {
         @close="clearSelection"
         @toggle-personal="toggle"
         @remove-personal="remove"
-        @update-personal="updatePersonalFromDetail"
         @assign-personal="assign"
         @open-source="openSource"
+        @open-task="openTask"
       />
     </div>
 

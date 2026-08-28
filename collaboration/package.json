@@ -1,0 +1,15 @@
+{
+  "name": "workfollow-collaboration",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "start": "node server.mjs",
+    "dev": "node --watch server.mjs"
+  },
+  "dependencies": {
+    "@hocuspocus/server": "^4.6.0",
+    "@hocuspocus/transformer": "^4.6.0",
+    "yjs": "^13.6.32"
+  }
+}

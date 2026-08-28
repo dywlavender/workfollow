@@ -177,6 +177,27 @@ export const TaskLinkMark = Mark.create({
   },
 })
 
+/** Inline personal-note references use the same Yjs body as task links. */
+export const NoteLinkMark = Mark.create({
+  name: 'noteLink',
+  inclusive: false,
+  addAttributes() {
+    return {
+      noteId: {
+        default: null,
+        parseHTML: (element: HTMLElement) => element.getAttribute('data-note-id'),
+        renderHTML: (attributes: { noteId?: string | null }) => attributes.noteId
+          ? { 'data-note-id': attributes.noteId }
+          : {},
+      },
+    }
+  },
+  parseHTML() { return [{ tag: 'span[data-note-link]' }] },
+  renderHTML({ HTMLAttributes }) {
+    return ['span', mergeAttributes(HTMLAttributes, { 'data-note-link': '', class: 'note-link-mark' }), 0]
+  },
+})
+
 /** Block references are intentionally atom nodes with taskId as their only fact. */
 export const TaskReferenceNode = Node.create({
   name: 'taskReference',

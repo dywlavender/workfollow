@@ -11,6 +11,8 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 import pytest
 
+from tests.collaboration_helpers import project_note
+
 
 def add_note_user(db, user_id: str, username: str) -> User:
     user = User(
@@ -81,14 +83,12 @@ def test_submission_is_snapshot_and_approval_creates_independent_team_note(clien
     assert submission["snapshotAttachments"][0]["id"] == attachment.id
 
     # Personal edits after submission must not mutate the stored snapshot.
-    assert member_client.put(
-        f"/api/notes/{source_id}",
-        json={
-            "title": "后来修改",
-            "contentJson": {"type": "doc", "content": [{"type": "paragraph", "content": [{"type": "text", "text": "个人笔记 v2"}]}]},
-            "plainText": "个人笔记 v2",
-        },
-    ).status_code == 200
+    assert project_note(
+        member_client,
+        source_id,
+        title="后来修改",
+        content_json={"type": "doc", "content": [{"type": "paragraph", "content": [{"type": "text", "text": "个人笔记 v2"}]}]},
+    ).status_code == 204
 
     approved = client.post(f"/api/teams/{team_id}/note-submissions/{submission['id']}/approve")
     assert approved.status_code == 200, approved.text
@@ -107,7 +107,7 @@ def test_submission_is_snapshot_and_approval_creates_independent_team_note(clien
     assert visible.status_code == 200
     assert visible.json()["contentJson"] == submission["snapshotContentJson"]
     assert viewer_client.put(
-        f"/api/teams/{team_id}/notes/{team_note['id']}", json={"title": "成员不能改"}
+        f"/api/team/knowledge/{team_note['id']}/commit", json={"title": "成员不能改"}
     ).status_code == 403
 
     # The file is absent on disk, but the first request reaches the file layer;
@@ -138,7 +138,7 @@ def test_team_note_admin_crud_and_member_submission_visibility(client: TestClien
     member_client = login_note_user(client.app, member.username)
     assert member_client.get(f"/api/teams/{team_id}/notes").status_code == 200
     assert member_client.delete(f"/api/teams/{team_id}/notes/{note_id}").status_code == 403
-    assert client.put(f"/api/teams/{team_id}/notes/{note_id}", json={"title": "团队公告 v2"}).status_code == 200
+    assert client.put(f"/api/team/knowledge/{note_id}/commit", json={"title": "团队公告 v2"}).status_code == 200
 
 
 def test_stale_concurrent_approval_creates_only_one_team_note(client: TestClient, db) -> None:

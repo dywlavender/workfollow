@@ -30,6 +30,15 @@ export interface TeamNoteChangedEvent {
   updatedAt: string | null
 }
 
+export interface NoteChangedEvent {
+  noteId: string
+  title: string
+  folderId?: string | null
+  isFavorite?: boolean
+  updatedAt: string | null
+  deleted: boolean
+}
+
 export interface TodoListChangedEvent {
   action: 'CREATED' | 'RENAMED' | 'DELETED'
   name: string
@@ -50,6 +59,7 @@ export const useRealtimeStore = defineStore('realtime', {
     unreadCount: 0,
     reconnectGeneration: 0,
     lastTaskChange: null as TaskChangedEvent | null,
+    lastNoteChange: null as NoteChangedEvent | null,
     lastTeamNoteChange: null as TeamNoteChangedEvent | null,
     lastTodoListChange: null as TodoListChangedEvent | null,
   }),
@@ -83,6 +93,9 @@ export const useRealtimeStore = defineStore('realtime', {
       source.addEventListener('task.changed', (event) => {
         this.lastTaskChange = JSON.parse((event as MessageEvent<string>).data) as TaskChangedEvent
       })
+      source.addEventListener('note.changed', (event) => {
+        this.lastNoteChange = JSON.parse((event as MessageEvent<string>).data) as NoteChangedEvent
+      })
       source.addEventListener('team_note.changed', (event) => {
         this.lastTeamNoteChange = JSON.parse((event as MessageEvent<string>).data) as TeamNoteChangedEvent
       })
@@ -96,6 +109,7 @@ export const useRealtimeStore = defineStore('realtime', {
       connectedUserId = null
       this.status = 'idle'
       this.lastTaskChange = null
+      this.lastNoteChange = null
       this.lastTeamNoteChange = null
       this.lastTodoListChange = null
     },

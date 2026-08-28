@@ -29,11 +29,15 @@ class Settings(BaseSettings):
     notification_http_timeout_seconds: float = 5.0
     notification_http_retry_count: int = 3
     notification_worker_interval_seconds: float = 2.0
-    # Consecutive title/description autosaves are merged during this idle
-    # window; explicit task actions continue to notify immediately.
+    # Consecutive title/description collaboration projections are merged during
+    # this idle window; explicit task actions continue to notify immediately.
     notification_task_edit_quiet_seconds: float = 3.0
     notification_timezone: str = "Asia/Shanghai"
     notification_daily_digest_time: str = "08:30"
+    # Shared only between the local Hocuspocus process and FastAPI.  The
+    # collaboration server uses it when writing the merged Yjs projection
+    # back to the task table; it is never exposed to the browser.
+    collaboration_internal_token: str = ""
     database_pool_size: int = 15
     database_max_overflow: int = 10
     database_pool_pre_ping: bool = True

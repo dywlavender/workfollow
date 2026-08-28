@@ -107,12 +107,12 @@ class ExternalNotificationDelivery(Base):
 
 
 class PendingTaskUpdateNotification(Base):
-    """Coalesce title/description autosaves until the edit session is idle.
+    """Coalesce title/description collaboration updates until idle.
 
     One row represents one task and one recipient.  ``before_json`` is kept
     from the first edit in the session while ``after_json`` is replaced by the
-    latest autosave, so the eventual notification describes the whole edit in
-    one event.
+    latest projection, so the eventual notification describes the whole edit
+    in one event.
     """
 
     __tablename__ = "pending_task_update_notifications"

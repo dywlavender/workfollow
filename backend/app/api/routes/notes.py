@@ -1,14 +1,29 @@
 from copy import deepcopy
+import secrets
 
 from pathlib import Path
 from typing import Annotated
 
-from fastapi import APIRouter, File, Form, HTTPException, Query, Response, UploadFile, status
+from fastapi import APIRouter, File, Form, Header, HTTPException, Query, Response, UploadFile, status
 
 from app.core.dependencies import CurrentSettings, CurrentUser, DbSession
+from app.models.note import Note
 from app.models.team_note import TeamNoteSubmissionStatus
-from app.schemas.note import NoteCapture, NoteCounts, NoteCreate, NoteListItem, NoteNavigationCounts, NoteRead, NoteUpdate
+from app.schemas.note import (
+    NoteCapture,
+    NoteCollaborationAccess,
+    NoteCollaborationSnapshot,
+    NoteCounts,
+    NoteCreate,
+    NoteFavoriteUpdate,
+    NoteFolderMove,
+    NoteListItem,
+    NoteNavigationCounts,
+    NoteRead,
+    NoteUpdate,
+)
 from app.services import note_permission_service, note_service, team_note_service
+from app.services.content_projection import content_json_semantically_equal
 from app.services.system_permission_service import user_is_root
 from app.services.markdown_import_service import MarkdownImportError, parse_markdown
 from app.services.template_service import get_accessible_template_or_404, seed_builtin_templates
@@ -125,6 +140,100 @@ async def import_markdown(
     return note
 
 
+# Keep these named collaboration and business-action routes before the dynamic
+# note route. Older Starlette versions match the first path with the same
+# shape, so their order is part of the API contract.
+@router.get("/notes/{note_id}/collaboration-access", response_model=NoteCollaborationAccess, include_in_schema=False)
+def get_note_collaboration_access(note_id: str, db: DbSession, user: CurrentUser) -> NoteCollaborationAccess:
+    note = db.get(Note, note_id)
+    if note is None or not note_permission_service.can_view_personal_note(db, note, user.id):
+        raise HTTPException(status_code=404, detail="Note not found")
+    return NoteCollaborationAccess(
+        can_view=True,
+        can_edit=note_permission_service.can_edit_personal_note(note, user.id),
+    )
+
+
+@router.put("/notes/{note_id}/collaboration-snapshot", status_code=status.HTTP_204_NO_CONTENT, include_in_schema=False)
+def put_note_collaboration_snapshot(
+    note_id: str,
+    payload: NoteCollaborationSnapshot,
+    db: DbSession,
+    settings: CurrentSettings,
+    internal_token: str | None = Header(default=None, alias="X-WorkFollow-Collaboration-Token"),
+) -> Response:
+    configured = settings.collaboration_internal_token
+    if not configured or not internal_token or not secrets.compare_digest(internal_token, configured):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="协同服务未授权")
+
+    note = db.get(Note, note_id)
+    if note is None or note.deleted_at is not None:
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
+    actors = set(payload.actor_ids)
+    if payload.actor_id:
+        actors.add(payload.actor_id)
+    if any(actor_id != note.owner_id for actor_id in actors):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="没有修改笔记的权限")
+
+    # Opening or switching a collaborative note can replay the current Y.Doc
+    # snapshot. Do not run the normal update service for an identical payload:
+    # it would still advance ``updated_at`` and fan out a misleading event.
+    title = payload.title.strip()
+    if title == note.title and content_json_semantically_equal(payload.content_json, note.content_json):
+        # Relation anchors may legitimately change while the canonical
+        # document remains identical (for example, an editor assigns a new
+        # block id during hydration). Reconcile those edges in the true no-op
+        # branch; the normal update service performs the same reconciliation
+        # for an actual body/title change, so doing it before that call would
+        # add pending relation rows twice in one SQLAlchemy session.
+        from app.services import resource_relation_service
+
+        resource_relation_service.sync_personal_note_relations(
+            db,
+            note.id,
+            note.owner_id,
+            retained_task_ids=(),
+            references=resource_relation_service.resource_references_in_document(payload.content_json),
+        )
+        db.commit()
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+    # The WebSocket permission check is authoritative for browser writes. The
+    # bridge still validates the actor when one is supplied, so a stale or
+    # misconfigured collaboration connection cannot project a shared user's edit.
+    note_service.update_note(
+        db,
+        note,
+        NoteUpdate(title=title, content_json=payload.content_json),
+        settings,
+    )
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.put("/notes/{note_id}/folder", response_model=NoteRead)
+def move_note_folder(
+    note_id: str,
+    payload: NoteFolderMove,
+    db: DbSession,
+    settings: CurrentSettings,
+    user: CurrentUser,
+) -> NoteRead:
+    note = note_service.get_note_or_404(db, note_id, user.id)
+    return note_service.update_note(db, note, NoteUpdate(folder_id=payload.folder_id), settings)
+
+
+@router.put("/notes/{note_id}/favorite", response_model=NoteRead)
+def set_note_favorite(
+    note_id: str,
+    payload: NoteFavoriteUpdate,
+    db: DbSession,
+    settings: CurrentSettings,
+    user: CurrentUser,
+) -> NoteRead:
+    note = note_service.get_note_or_404(db, note_id, user.id)
+    return note_service.update_note(db, note, NoteUpdate(is_favorite=payload.is_favorite), settings)
+
+
 # Keep this dynamic route after the static Markdown import route above.
 # Older Starlette versions match the first path with the same shape and would
 # otherwise return 405 for POST /notes/import-markdown.
@@ -147,17 +256,6 @@ def copy_note(note_id: str, db: DbSession, settings: CurrentSettings, user: Curr
         folder_id=source.folder_id,
         copied_from_note_id=source.id,
     )
-
-
-@router.put("/notes/{note_id}", response_model=NoteRead)
-def put_note(
-    note_id: str,
-    payload: NoteUpdate,
-    db: DbSession,
-    settings: CurrentSettings,
-    user: CurrentUser,
-) -> NoteRead:
-    return note_service.update_note(db, note_service.get_note_or_404(db, note_id, user.id), payload, settings)
 
 
 @router.delete("/notes/{note_id}", status_code=status.HTTP_204_NO_CONTENT)

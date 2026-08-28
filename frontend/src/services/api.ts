@@ -357,8 +357,8 @@ export async function postTodo(payload: TodoPayload): Promise<Todo> {
   return data
 }
 
-export async function putTodo(id: string, payload: Partial<TodoPayload>): Promise<Todo> {
-  const { data } = await api.put<Todo>(`/tasks/${id}`, payload)
+export async function moveTodoToList(id: string, listName: string): Promise<Todo> {
+  const { data } = await api.put<Todo>(`/tasks/${id}/list`, { listName })
   return data
 }
 
@@ -619,8 +619,13 @@ export async function importMarkdownNote(file: File, folderId?: string | null, t
   return data
 }
 
-export async function putNote(id: string, payload: Partial<{ folderId: string | null; title: string; contentJson: Record<string, unknown>; plainText: string; isFavorite: boolean }>): Promise<Note> {
-  const { data } = await api.put<Note>(`/notes/${id}`, payload)
+export async function moveNoteToFolder(id: string, folderId: string | null): Promise<Note> {
+  const { data } = await api.put<Note>(`/notes/${id}/folder`, { folderId })
+  return data
+}
+
+export async function setNoteFavorite(id: string, isFavorite: boolean): Promise<Note> {
+  const { data } = await api.put<Note>(`/notes/${id}/favorite`, { isFavorite })
   return data
 }
 
@@ -965,8 +970,8 @@ export async function postKnowledge(payload: { title: string; contentJson?: Reco
   return data
 }
 
-export async function putKnowledge(id: string, payload: Partial<{ title: string; contentJson: Record<string, unknown>; plainText: string; categoryId: string | null; tags: string[] }>, teamId?: string): Promise<TeamNote> {
-  const { data } = await api.put<TeamNote>(`/team/knowledge/${id}`, payload, { params: teamQuery(teamId) })
+export async function commitKnowledge(id: string, payload: { title: string; contentJson: Record<string, unknown>; plainText: string; categoryId: string | null; tags: string[]; baseVersion: number }, teamId?: string): Promise<TeamNote> {
+  const { data } = await api.put<TeamNote>(`/team/knowledge/${id}/commit`, payload, { params: teamQuery(teamId) })
   return data
 }
 
@@ -1056,16 +1061,6 @@ export async function postTeamNote(teamId: string, payload: {
   attachmentIds?: string[]
 }): Promise<TeamNote> {
   const { data } = await api.post<TeamNote>(`/teams/${teamId}/notes`, payload)
-  return data
-}
-
-export async function putTeamNote(teamId: string, noteId: string, payload: Partial<{
-  title: string
-  contentJson: Record<string, unknown>
-  plainText: string
-  attachmentIds: string[]
-}>): Promise<TeamNote> {
-  const { data } = await api.put<TeamNote>(`/teams/${teamId}/notes/${noteId}`, payload)
   return data
 }
 

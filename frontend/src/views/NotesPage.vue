@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { IconSearch, IconX } from '@tabler/icons-vue'
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute, useRouter } from 'vue-router'
 
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import InputDialog from '@/components/InputDialog.vue'
@@ -28,7 +28,7 @@ import {
   deleteNoteTemplate, fetchMySubmissions, fetchNoteNavigationCounts, fetchNoteShares, fetchNotes, fetchNoteTemplates, fetchRelatedKnowledge,
   fetchReviewSubmissions, fetchSearch, fetchSharedNotes, fetchTeamMembers, importMarkdownNote, postFolder, postKnowledge, postNote,
   postKnowledgeCategory,
-  postNoteFromTemplate, postNoteTemplate, postNoteTemplateFromNote, putFolder, putKnowledge, putKnowledgeCategory, putNote, putNoteTemplate, rejectSubmission,
+  commitKnowledge, moveNoteToFolder, postNoteFromTemplate, postNoteTemplate, putFolder, putKnowledgeCategory, putNoteTemplate, rejectSubmission, setNoteFavorite,
   requestSubmissionRevision, resubmitSubmission, restoreKnowledge, submitNoteToKnowledge, syncNoteShares, ensureKnowledgeUpdateDraft,
   uploadAttachment, withdrawSubmission,
   type Attachment, type Folder, type KnowledgeCategory, type Note, type NoteListItem, type NoteNavigationCounts, type NoteShare, type SearchItem,
@@ -69,6 +69,14 @@ const versions = ref<TeamNoteVersion[]>([])
 const selectedFolderId = ref<string | null>(null)
 const selectedCategoryId = ref<string | null>(null)
 const selectedNote = ref<Note | null>(null)
+type NoteEditorActionSnapshot = {
+  note: Note
+  title: string
+  contentJson: Record<string, unknown>
+  plainText: string
+}
+const noteEditor = ref<{ flushCollaboration: () => void; flushAndWaitForProjection: (timeoutMs?: number) => Promise<NoteEditorActionSnapshot> } | null>(null)
+const knowledgeDetail = ref<{ flushCollaboration: () => void; flushAndWaitForProjection: (timeoutMs?: number) => Promise<void> } | null>(null)
 const selectedShared = ref<SharedNote | null>(null)
 const selectedKnowledge = ref<TeamNote | null>(null)
 const selectedSubmission = ref<TeamNoteSubmission | null>(null)
@@ -153,6 +161,7 @@ const templates = ref<NoteTemplate[]>([])
 const templateEditorTarget = ref<NoteTemplate | null>(null)
 const templateDeleteTarget = ref<NoteTemplate | null>(null)
 const templateSaving = ref(false)
+const templateSource = ref<{ noteId: string; contentJson: Record<string, unknown>; plainText: string } | null>(null)
 const markdownImportOpen = ref(false)
 const markdownImportSaving = ref(false)
 const markdownImportError = ref<string | null>(null)
@@ -188,6 +197,8 @@ let globalSearchTimer: number | undefined
 let globalSearchRequest = 0
 let activeViewLoad: Promise<void> | null = null
 let viewLoadQueued = false
+let personalSelectionRequest = 0
+let knowledgeSelectionRequest = 0
 
 // 操作反馈统一走全局 feedback 服务;fail 保留后端 detail 提取。
 function notify(message: string) { feedback.success(message) }
@@ -237,6 +248,78 @@ function upsertNoteListItem(note: Note) {
   const index = notes.value.findIndex((item) => item.id === note.id)
   if (index >= 0) notes.value[index] = summary
   else notes.value.unshift(summary)
+}
+
+function applyCollaborativeNoteChange(payload: { title: string; contentJson: Record<string, unknown>; plainText: string }) {
+  if (!selectedNote.value) return
+  const updated: Note = {
+    ...selectedNote.value,
+    title: payload.title,
+    contentJson: payload.contentJson,
+    plainText: payload.plainText,
+    // The SQL projection owns the timestamp. A local Yjs observer must not
+    // make opening a note look like a fresh save.
+    updatedAt: selectedNote.value.updatedAt,
+  }
+  selectedNote.value = updated
+  upsertNoteListItem(updated)
+}
+
+function applyNoteChange(change: NonNullable<typeof realtime.lastNoteChange>) {
+  const existing = notes.value.find((item) => item.id === change.noteId)
+  if (change.deleted) {
+    removeNoteListItem(change.noteId)
+    if (selectedNote.value?.id === change.noteId) {
+      selectedNote.value = null
+      attachments.value = []
+      shares.value = []
+    }
+    return
+  }
+  if (!existing) {
+    if (personalView.value) void loadView()
+    return
+  }
+  const updated: NoteListItem = {
+    ...existing,
+    title: change.title,
+    // ``null`` and ``false`` are meaningful event values.  Nullish fallback
+    // would keep stale list state when a note is moved to the inbox or
+    // un-favorited in another tab.
+    folderId: change.folderId !== undefined ? change.folderId : existing.folderId,
+    isFavorite: change.isFavorite !== undefined ? change.isFavorite : existing.isFavorite,
+    updatedAt: change.updatedAt ?? existing.updatedAt,
+  }
+  const index = notes.value.findIndex((item) => item.id === change.noteId)
+  if (index >= 0) notes.value[index] = updated
+  if (selectedNote.value?.id === change.noteId) {
+    selectedNote.value = {
+      ...selectedNote.value,
+      title: change.title,
+      folderId: updated.folderId,
+      isFavorite: updated.isFavorite,
+      updatedAt: updated.updatedAt,
+    }
+  }
+}
+
+async function syncSelectedNoteForAction(noteId = selectedNote.value?.id): Promise<NoteEditorActionSnapshot | null> {
+  if (!selectedNote.value || selectedNote.value.id !== noteId) return null
+  if (!noteEditor.value) return {
+    note: selectedNote.value,
+    title: selectedNote.value.title,
+    contentJson: selectedNote.value.contentJson,
+    plainText: selectedNote.value.plainText,
+  }
+  try {
+    const snapshot = await noteEditor.value.flushAndWaitForProjection()
+    selectedNote.value = snapshot.note
+    upsertNoteListItem(snapshot.note)
+    return snapshot
+  } catch (cause: any) {
+    fail(cause, '笔记内容尚未同步完成，请稍后重试。')
+    return null
+  }
 }
 
 function upsertKnowledgeListItem(note: TeamNote) {
@@ -469,22 +552,75 @@ async function selectFolder(id: string | null) {
 async function selectCategory(id: string | null) { selectedCategoryId.value = id; if (currentView.value === 'knowledge') await loadView() }
 
 async function selectPersonal(item: NoteListItem | Note) {
+  const request = ++personalSelectionRequest
+  const switchingNote = Boolean(selectedNote.value && selectedNote.value.id !== item.id)
   const noteRequest = 'contentJson' in item ? Promise.resolve(item) : fetchNote(item.id)
+  // Navigation must not wait for the previous note's SQL projection: flushing
+  // here plus the collaboration teardown is enough for the server to project
+  // the old note in the background, and the resulting note.changed event
+  // refreshes the list entry. Only content-reading actions need the strict
+  // barrier inside syncSelectedNoteForAction.
   // The note id is already present in both list and detail DTOs, so the
-  // attachment request does not need to wait for the full note payload.
+  // attachment request does not need to wait for the full note payload and
+  // runs in parallel with it.
   const attachmentsRequest = fetchAttachments(item.id).catch(() => [])
-  const [note, loadedAttachments] = await Promise.all([noteRequest, attachmentsRequest])
+  if (switchingNote) noteEditor.value?.flushCollaboration()
+  const note = await noteRequest
+  if (request !== personalSelectionRequest) return
+
+  // Commit the note as soon as its detail is ready. Attachments and sharing
+  // metadata are secondary data and must not hold the editor replacement
+  // behind another network request.
   selectedNote.value = note
-  attachments.value = loadedAttachments
-  shares.value = shareDialogOpen.value ? await fetchNoteShares(note.id) : []
+  attachments.value = []
+  shares.value = []
+  void attachmentsRequest.then((loadedAttachments) => {
+    if (request === personalSelectionRequest && selectedNote.value?.id === note.id) {
+      attachments.value = loadedAttachments
+    }
+  })
+  if (shareDialogOpen.value) {
+    void fetchNoteShares(note.id)
+      .then((loadedShares) => {
+        if (request === personalSelectionRequest && selectedNote.value?.id === note.id) shares.value = loadedShares
+      })
+      .catch(() => undefined)
+  }
 }
 
 async function selectKnowledge(item: TeamNoteListItem | TeamNote): Promise<TeamNote> {
+  const request = ++knowledgeSelectionRequest
+  if (
+    selectedKnowledge.value?.permissions.canEdit
+    && selectedKnowledge.value.id !== item.id
+    && knowledgeDetail.value
+  ) {
+    try {
+      await knowledgeDetail.value.flushAndWaitForProjection()
+    } catch (cause: any) {
+      fail(cause, '知识内容尚未同步完成，请稍后重试。')
+      return selectedKnowledge.value ?? ('contentJson' in item ? item : await fetchKnowledgeNote(item.id, selectedTeamId.value))
+    }
+  }
   const cached = knowledgeDetails.value.find((detail) => detail.id === item.id)
   const note = 'contentJson' in item ? item : cached ?? await fetchKnowledgeNote(item.id, selectedTeamId.value)
+  if (request !== knowledgeSelectionRequest) return note
   selectedKnowledge.value = note
   upsertKnowledgeDetail(note)
   return note
+}
+
+// The selected editor is conditionally rendered by the current route. A
+// navigation that bypasses the list click handlers (Back/Forward, a deep
+// link, or opening a task from a note) must still wait for the latest Yjs
+// projection before Vue tears that editor down.
+function flushEditorsForNavigation(): boolean {
+  // Route changes must not block on the SQL projection barrier either. Flush
+  // pending collaboration updates and let the server project in the
+  // background, exactly like a note-to-note switch.
+  noteEditor.value?.flushCollaboration()
+  knowledgeDetail.value?.flushCollaboration()
+  return true
 }
 
 async function selectCollaborationItem(item: SharedNote | TeamNoteListItem) {
@@ -594,49 +730,28 @@ async function importMarkdown(payload: { file: File; title: string; folderId: st
     markdownImportError.value = cause?.response?.data?.detail ?? 'Markdown 导入失败。'
   } finally { markdownImportSaving.value = false }
 }
-async function saveNote(
-  payload: { noteId: string; title: string; folderId: string | null; contentJson?: Record<string, unknown>; plainText?: string },
-  settled?: (savedAt: string | null) => void,
-) {
-  const { noteId, ...changes } = payload
+async function moveSelectedNote(folderId: string | null) {
+  if (!selectedNote.value) return
+  const noteId = selectedNote.value.id
   try {
-    const updated = await putNote(noteId, changes)
-    const previous = notes.value.find((item) => item.id === noteId)
-      ?? (selectedNote.value?.id === noteId ? selectedNote.value : null)
+    const updated = await moveNoteToFolder(noteId, folderId)
     selectedNote.value = updated
     upsertNoteListItem(updated)
-    settled?.(updated.updatedAt)
-    if (previous && previous.folderId !== updated.folderId) {
-      try {
-        await refreshNoteMeta()
-      } catch (cause: any) {
-        fail(cause, '笔记已保存，但列表信息刷新失败。')
-      }
-    }
-  } catch (cause: any) {
-    fail(cause, '笔记保存失败，请稍后重试。')
-    settled?.(null)
-  }
+    await refreshNoteMeta()
+  } catch (cause: any) { fail(cause, '移动笔记失败，请稍后重试。') }
 }
 async function prepareSaveAsTemplate(payload: { note: Note; title: string; folderId: string | null; contentJson: Record<string, unknown>; plainText: string }) {
-  try {
-    const updated = await putNote(payload.note.id, {
-      title: payload.title,
-      folderId: payload.folderId,
-      contentJson: payload.contentJson,
-      plainText: payload.plainText,
-    })
-    selectedNote.value = updated
-    upsertNoteListItem(updated)
-    templateSaveDialogOpen.value = true
-  } catch (cause: any) { fail(cause, '保存当前笔记失败。') }
+  templateSource.value = { noteId: payload.note.id, contentJson: payload.contentJson, plainText: payload.plainText }
+  templateSaveDialogOpen.value = true
 }
 async function toggleFavorite(value: boolean) {
   if (!selectedNote.value) return
-  selectedNote.value = await putNote(selectedNote.value.id, { isFavorite: value })
-  if (currentView.value === 'favorites' && !value) removeNoteListItem(selectedNote.value.id)
-  else upsertNoteListItem(selectedNote.value)
-  await refreshNoteMeta()
+  try {
+    selectedNote.value = await setNoteFavorite(selectedNote.value.id, value)
+    if (currentView.value === 'favorites' && !value) removeNoteListItem(selectedNote.value.id)
+    else upsertNoteListItem(selectedNote.value)
+    await refreshNoteMeta()
+  } catch (cause: any) { fail(cause, '更新收藏状态失败，请稍后重试。') }
 }
 
 async function handleUpload(file: File) {
@@ -653,7 +768,17 @@ async function confirmDelete() {
   const kind = confirmDialogKind.value
   try {
     if (kind === 'note' && confirmDialogNote.value) await deleteNote(confirmDialogNote.value.id)
-    if (kind === 'attachment' && confirmDialogAttachment.value) await deleteAttachment(confirmDialogAttachment.value.id)
+    if (kind === 'attachment' && confirmDialogAttachment.value) {
+      // The current Yjs body is authoritative for embedded image references.
+      // Flush it before deleting the binary, otherwise a just-inserted image
+      // that has not reached SQL yet could be deleted successfully and leave
+      // a broken reference in the collaborative document.
+      const attachment = confirmDialogAttachment.value
+      if (attachment.noteId && selectedNote.value?.id === attachment.noteId) {
+        if (!await syncSelectedNoteForAction(attachment.noteId)) return
+      }
+      await deleteAttachment(attachment.id)
+    }
     if (kind === 'category' && confirmDialogCategory.value && selectedTeamId.value) await deleteKnowledgeCategory(confirmDialogCategory.value.id, selectedTeamId.value)
     if (kind === 'template' && templateDeleteTarget.value) await deleteNoteTemplate(templateDeleteTarget.value.id)
     confirmDialogOpen.value = false
@@ -692,7 +817,8 @@ async function saveShares(userIds: string[]) {
   finally { busy.value = false }
 }
 
-function openPublish(type?: 'CREATE' | 'UPDATE', targetId?: string | null) {
+async function openPublish(type?: 'CREATE' | 'UPDATE', targetId?: string | null) {
+  if (!(await syncSelectedNoteForAction())) return
   const linkedTargetId = selectedKnowledgeForNote.value?.id ?? null
   const resolvedTargetId = targetId ?? linkedTargetId
   publishType.value = type ?? (resolvedTargetId ? 'UPDATE' : 'CREATE')
@@ -701,10 +827,11 @@ function openPublish(type?: 'CREATE' | 'UPDATE', targetId?: string | null) {
   publishDialogOpen.value = true
 }
 async function publish(payload: SubmissionPayload) {
-  if (!selectedNote.value) return
+  const snapshot = await syncSelectedNoteForAction()
+  if (!snapshot) return
   busy.value = true
   try {
-    const submission = await submitNoteToKnowledge(selectedNote.value.id, payload, selectedTeamId.value)
+    const submission = await submitNoteToKnowledge(snapshot.note.id, payload, selectedTeamId.value)
     mySubmissions.value.unshift(submission)
     publishDialogOpen.value = false
     await refreshNoteMeta()
@@ -729,17 +856,22 @@ async function copyTeamKnowledge(note: TeamNote) {
   await selectPersonal(copied)
 }
 async function duplicatePersonal(note: Note) {
-  const copied = await copyNote(note.id)
+  const snapshot = note.id === selectedNote.value?.id ? await syncSelectedNoteForAction(note.id) : null
+  const copied = await copyNote(snapshot?.note.id ?? note.id)
   upsertNoteListItem(copied)
   await refreshNoteMeta()
   await selectPersonal(copied)
 }
-function exportPersonal(note: Note) {
-  const payload = noteToMarkdown(note, attachments.value)
+async function exportPersonal(note: Note) {
+  const snapshot = note.id === selectedNote.value?.id ? await syncSelectedNoteForAction(note.id) : null
+  const source = snapshot?.note ?? note
+  const payload = snapshot
+    ? noteToMarkdown({ ...source, title: snapshot.title, contentJson: snapshot.contentJson }, attachments.value)
+    : noteToMarkdown(source, attachments.value)
   const url = URL.createObjectURL(new Blob([payload], { type: 'text/markdown;charset=utf-8' }))
   const anchor = document.createElement('a')
   anchor.href = url
-  anchor.download = `${note.title.replace(/[\\/:*?"<>|]/g, '_') || '笔记'}.md`
+  anchor.download = `${source.title.replace(/[\\/:*?"<>|]/g, '_') || '笔记'}.md`
   anchor.click()
   URL.revokeObjectURL(url)
 }
@@ -783,11 +915,20 @@ async function saveCategory(name: string) {
   categoryDialogOpen.value = false
   categories.value = await fetchKnowledgeCategories(selectedTeamId.value)
 }
-async function saveKnowledge(note: TeamNote, payload: { title: string; contentJson: Record<string, unknown>; plainText: string; categoryId: string | null; tags: string[] }) {
-  const updated = await putKnowledge(note.id, payload, selectedTeamId.value)
-  selectedKnowledge.value = updated
-  upsertKnowledgeDetail(updated)
-  upsertKnowledgeListItem(updated)
+async function saveKnowledge(
+  note: TeamNote,
+  payload: { title: string; contentJson: Record<string, unknown>; plainText: string; categoryId: string | null; tags: string[]; baseVersion: number },
+  settled?: (versionNo: number) => void,
+) {
+  busy.value = true
+  try {
+    const updated = await commitKnowledge(note.id, payload, selectedTeamId.value)
+    selectedKnowledge.value = updated
+    upsertKnowledgeDetail(updated)
+    upsertKnowledgeListItem(updated)
+    settled?.(updated.versionNo)
+  } catch (cause: any) { fail(cause, '保存团队知识失败，请稍后重试。') }
+  finally { busy.value = false }
 }
 async function setArchived(note: TeamNote, archived: boolean) {
   busy.value = true
@@ -900,12 +1041,14 @@ async function saveTemplate(payload: { name: string; description: string | null;
   finally { templateSaving.value = false }
 }
 async function saveNoteAsTemplate(payload: { name: string; description: string | null }) {
-  if (!selectedNote.value) return
+  const source = templateSource.value
+  if (!source) return
   templateSaving.value = true
   try {
-    await postNoteTemplateFromNote(selectedNote.value.id, payload)
+    await postNoteTemplate({ ...payload, contentJson: source.contentJson, sortOrder: nextTemplateSortOrder() })
     await refreshTemplates()
     templateSaveDialogOpen.value = false
+    templateSource.value = null
   } catch (cause: any) { fail(cause, '保存为模板失败。') }
   finally { templateSaving.value = false }
 }
@@ -985,6 +1128,10 @@ watch(() => realtime.lastTeamNoteChange, (change) => {
   if (change) applyTeamNoteChange(change)
 })
 
+watch(() => realtime.lastNoteChange, (change) => {
+  if (change) applyNoteChange(change)
+})
+
 onMounted(async () => {
   const metadataRequests = [
     fetchFolders()
@@ -999,6 +1146,9 @@ onMounted(async () => {
   ]
   await Promise.all([loadView(), ...metadataRequests])
 })
+
+onBeforeRouteUpdate(() => flushEditorsForNavigation())
+onBeforeRouteLeave(() => flushEditorsForNavigation())
 </script>
 
 <template>
@@ -1012,6 +1162,8 @@ onMounted(async () => {
       <template v-if="personalView">
         <NoteList :notes="notes" :selected-id="selectedNote?.id ?? null" :search="search" :heading="noteListHeading" :loading="viewLoading" @select="selectPersonal" @create="createBlankNote" @templates="openTemplates" @import="openMarkdownImport" @search="updateSearch" @remove="requestDeleteNote" />
         <NoteEditor
+          ref="noteEditor"
+          :key="selectedNote?.id ?? 'empty-note'"
           :note="selectedNote"
           :folders="folders"
           :attachments="attachments"
@@ -1024,7 +1176,7 @@ onMounted(async () => {
           :current-user-id="auth.user?.id"
           :can-assign-tasks="canReview"
           :focus-block-id="typeof route.query.block === 'string' ? route.query.block : null"
-          @save="saveNote"
+          @move-folder="moveSelectedNote"
           @delete-attachment="requestDeleteAttachment"
           @open-task="openTask"
           @share="openShareDialog"
@@ -1032,6 +1184,7 @@ onMounted(async () => {
           @favorite="toggleFavorite"
           @duplicate="duplicatePersonal"
           @export="exportPersonal"
+          @change="applyCollaborativeNoteChange"
           @save-as-template="prepareSaveAsTemplate"
           @remove="selectedNote && requestDeleteNote(selectedNote)"
         />
@@ -1042,7 +1195,7 @@ onMounted(async () => {
       </template>
       <template v-else-if="currentView === 'knowledge'">
         <CollaborativeNoteList title="团队知识库" :items="visibleKnowledge" :selected-id="selectedKnowledge?.id ?? null" :search="search" :loading="viewLoading" :can-create="canReview" :can-manage-archived="canReview" :status-filter="knowledgeStatusFilter" @select="selectCollaborationItem" @search="updateSearch" @create="knowledgeCreateDialogOpen = true" @status-filter="selectKnowledgeStatus" />
-        <KnowledgeDetail :note="selectedKnowledge" :categories="categories" :saving="busy" :update-state="selectedKnowledgeUpdateState" @save="saveKnowledge" @copy="copyTeamKnowledge" @archive="requestArchiveKnowledge" @restore="setArchived($event, false)" @delete="requestDeleteKnowledge" @update-request="requestKnowledgeUpdate" @versions="showVersions" />
+        <KnowledgeDetail ref="knowledgeDetail" :note="selectedKnowledge" :categories="categories" :saving="busy" :update-state="selectedKnowledgeUpdateState" @commit="saveKnowledge" @copy="copyTeamKnowledge" @archive="requestArchiveKnowledge" @restore="setArchived($event, false)" @delete="requestDeleteKnowledge" @update-request="requestKnowledgeUpdate" @versions="showVersions" />
       </template>
       <SubmissionWorkspace v-else :mode="currentView === 'review' ? 'review' : 'mine'" :submissions="submissions" :selected="selectedSubmission" :related="relatedKnowledge" :knowledge="knowledgeDetails" :categories="categories" :busy="busy" @select="selectSubmission" @withdraw="withdraw" @resubmit="resubmit" @open-source="openSource" @open-knowledge="openKnowledge" @approve="approve" @revision="revision" @reject="reject" />
     </div>

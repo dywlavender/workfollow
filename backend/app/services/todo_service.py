@@ -19,7 +19,7 @@ from app.models.todo import (
     TodoStatus,
     local_now,
 )
-from app.schemas.todo import TodoCreate, TodoUpdate
+from app.schemas.todo import TodoCreate, TodoProjectionUpdate
 from app.services.note_service import content_to_plain_text
 
 
@@ -401,6 +401,18 @@ def create_todo(db: Session, payload: TodoCreate, owner_id: str, *, commit: bool
         from app.services import resource_relation_service
 
         resource_relation_service.create_task_source_relation(db, todo, source, owner_id)
+    # The collaborative body is the source of truth for inline task/note
+    # references.  A task can still be created by an import or a legacy
+    # compatibility client with a complete Tiptap document, so register those
+    # edges at creation time instead of waiting for the first Yjs edit.
+    from app.services import resource_relation_service
+
+    resource_relation_service.sync_task_relations(
+        db,
+        todo.id,
+        owner_id,
+        resource_relation_service.resource_references_in_document(todo.content_json),
+    )
     if commit:
         db.commit()
     else:
@@ -411,7 +423,7 @@ def create_todo(db: Session, payload: TodoCreate, owner_id: str, *, commit: bool
 def update_todo(
     db: Session,
     todo: Todo,
-    payload: TodoUpdate,
+    payload: TodoProjectionUpdate,
     actor_id: str | None = None,
     *,
     commit: bool = True,
@@ -589,6 +601,14 @@ def complete_todo(
                     next_todo.assignments.append(
                         TodoAssignment(user_id=source.user_id, assigned_by_id=todo.creator_id)
                     )
+            from app.services import resource_relation_service
+
+            resource_relation_service.sync_task_relations(
+                db,
+                next_todo.id,
+                todo.creator_id,
+                resource_relation_service.resource_references_in_document(next_todo.content_json),
+            )
         todo.recurring_series_id = todo.recurring_series_id or todo.id
 
     if commit:

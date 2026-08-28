@@ -5,9 +5,11 @@ from datetime import datetime
 from typing import Literal
 
 from sqlalchemy import text
+from sqlalchemy.exc import DatabaseError
 from sqlalchemy.orm import Session
 
 from app.models.auth import User
+from app.services import search_index_service
 from app.services.search_index_service import fts_available
 from app.services.system_permission_service import is_root
 
@@ -213,7 +215,15 @@ def _query_source(
         "mark_open": _MARK_OPEN,
         "mark_close": _MARK_CLOSE,
     }
-    rows = db.execute(text(_search_sql(source, use_fts)), params).mappings().all()
+    try:
+        rows = db.execute(text(_search_sql(source, use_fts)), params).mappings().all()
+    except DatabaseError as error:
+        # FTS5 is a derived accelerator. If its segment pages are damaged,
+        # repair/disable that accelerator and answer this request from the
+        # relational projection instead of turning search into a 500.
+        if not use_fts or not search_index_service.recover_fts_after_error(db, error):
+            raise
+        rows = db.execute(text(_search_sql(source, False)), params).mappings().all()
     # FTS5 can be present while an older/local database still has an empty or
     # stale index (for example after an interrupted migration). Keep the
     # relational projection as a correctness fallback instead of showing a

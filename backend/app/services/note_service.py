@@ -7,13 +7,15 @@ from typing import Any
 from uuid import uuid4
 
 from sqlalchemy import Text as SqlText
-from sqlalchemy import cast, func, or_, select
+from sqlalchemy import and_, cast, func, or_, select, update
+from sqlalchemy.exc import DatabaseError
 from sqlalchemy.orm import Session, load_only
 
 from fastapi import HTTPException
 
 from app.core.config import Settings
 from app.models.note import Attachment, Folder, Note
+from app.models.resource_relation import ResourceRelation, ResourceType
 from app.models.team_note import SubmissionFileAccess, TeamFileAccess
 from app.models.todo import local_now
 from app.schemas.note import FolderCreate, FolderUpdate, NoteCapture, NoteCreate, NoteUpdate
@@ -218,6 +220,19 @@ def create_note(db: Session, payload: NoteCreate, owner_id: str, *, commit: bool
     note = Note(**data, owner_id=owner_id)
     db.add(note)
     db.flush()
+    # A note can be created from a template/import payload that already
+    # contains task or note references. Register those edges immediately so
+    # the relation graph does not depend on a later edit to trigger the first
+    # Yjs projection.
+    from app.services import resource_relation_service
+
+    resource_relation_service.sync_personal_note_relations(
+        db,
+        note.id,
+        owner_id,
+        retained_task_ids=(),
+        references=resource_relation_service.resource_references_in_document(note.content_json),
+    )
     search_index_service.upsert_personal_note(db, note)
     if commit:
         db.commit()
@@ -434,6 +449,15 @@ def copy_note_with_attachments(
             id_map[source.id] = cloned.id
 
         note.content_json = _rewrite_attachment_references(content_json, id_map)
+        from app.services import resource_relation_service
+
+        resource_relation_service.sync_personal_note_relations(
+            db,
+            note.id,
+            owner_id,
+            retained_task_ids=(),
+            references=resource_relation_service.resource_references_in_document(note.content_json),
+        )
         search_index_service.upsert_personal_note(db, note)
         db.commit()
         db.refresh(note)
@@ -445,7 +469,14 @@ def copy_note_with_attachments(
         raise
 
 
-def update_note(db: Session, note: Note, payload: NoteUpdate, settings: Settings) -> Note:
+def update_note(
+    db: Session,
+    note: Note,
+    payload: NoteUpdate,
+    settings: Settings,
+    *,
+    _fts_recovery_attempted: bool = False,
+) -> Note:
     changes = payload.model_dump(exclude_unset=True)
     if "folder_id" in changes and changes["folder_id"]:
         get_folder_or_404(db, changes["folder_id"], note.owner_id)
@@ -460,7 +491,7 @@ def update_note(db: Session, note: Note, payload: NoteUpdate, settings: Settings
     paths_to_remove: list[Path] = []
     if "content_json" in changes:
         from app.services import resource_relation_service
-        from app.models.resource_relation import ResourceRelation, ResourceType
+        from app.models.resource_relation import ResourceType
 
         referenced_attachment_ids = attachment_ids_in_document(changes["content_json"])
         has_old_images = db.scalar(select(Attachment.id).where(
@@ -475,23 +506,43 @@ def update_note(db: Session, note: Note, payload: NoteUpdate, settings: Settings
                 settings,
             )
 
-        retained_task_ids = resource_relation_service.task_ids_in_document(changes["content_json"])
-        has_old_task_relations = db.scalar(select(ResourceRelation.id).where(
-            ResourceRelation.source_type == ResourceType.PERSONAL_NOTE,
-            ResourceRelation.source_id == note.id,
-            ResourceRelation.target_type == ResourceType.TASK,
-            ResourceRelation.created_by_id == note.owner_id,
-            ResourceRelation.deleted_at.is_(None),
-        ).limit(1)) is not None
-        if retained_task_ids or has_old_task_relations:
-            resource_relation_service.sync_personal_note_relations(
-                db,
-                note.id,
-                note.owner_id,
-                retained_task_ids,
-            )
+        document_references = resource_relation_service.resource_references_in_document(
+            changes["content_json"]
+        )
+        retained_task_ids = {
+            target_id
+            for target_type, target_id, _block_id in document_references
+            if target_type == ResourceType.TASK
+        }
+        # Always reconcile when the document changes. A note can contain only
+        # note-to-note references; gating this call on task relations would
+        # leave those outgoing edges alive after the user removes the link.
+        resource_relation_service.sync_personal_note_relations(
+            db,
+            note.id,
+            note.owner_id,
+            retained_task_ids,
+            document_references,
+        )
     search_index_service.upsert_personal_note(db, note)
-    db.commit()
+    try:
+        db.commit()
+    except DatabaseError as error:
+        if _fts_recovery_attempted or not search_index_service.recover_fts_after_error(db, error):
+            raise
+        refreshed = db.get(Note, note.id)
+        if refreshed is None:
+            raise
+        # The failed transaction was rolled back in the recovery helper. Run
+        # the complete projection again so attachment/relation bookkeeping is
+        # not accidentally skipped while only the FTS trigger is repaired.
+        return update_note(
+            db,
+            refreshed,
+            payload,
+            settings,
+            _fts_recovery_attempted=True,
+        )
     for path in paths_to_remove:
         path.unlink(missing_ok=True)
     db.refresh(note)
@@ -499,6 +550,24 @@ def update_note(db: Session, note: Note, payload: NoteUpdate, settings: Settings
 
 
 def soft_delete_note(db: Session, note: Note) -> None:
-    note.deleted_at = local_now()
+    deleted_at = local_now()
+    note.deleted_at = deleted_at
+    # A deleted note is no longer a valid source or target in the resource
+    # graph.  Keep the relation rows for audit/history, but retire them in the
+    # same transaction so task source lists and backlinks cannot retain a
+    # dangling edge after the note disappears from the user's view.
+    db.execute(update(ResourceRelation).where(
+        ResourceRelation.deleted_at.is_(None),
+        or_(
+            and_(
+                ResourceRelation.source_type == ResourceType.PERSONAL_NOTE,
+                ResourceRelation.source_id == note.id,
+            ),
+            and_(
+                ResourceRelation.target_type == ResourceType.PERSONAL_NOTE,
+                ResourceRelation.target_id == note.id,
+            ),
+        ),
+    ).values(deleted_at=deleted_at))
     search_index_service.remove_source(db, search_index_service.PERSONAL_SOURCE, note.id)
     db.commit()

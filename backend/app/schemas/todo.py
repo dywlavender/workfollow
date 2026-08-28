@@ -33,6 +33,20 @@ class TodoListUpdate(TodoListCreate):
     pass
 
 
+class TodoListMove(ApiModel):
+    """Move a task without exposing the old generic task update contract."""
+
+    list_name: str = Field(min_length=1, max_length=120)
+
+    @field_validator("list_name")
+    @classmethod
+    def normalize_list_name(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("清单名称不能为空")
+        return value
+
+
 class TodoListRead(ApiModel):
     id: str | None
     name: str
@@ -101,7 +115,9 @@ class TodoCreate(ApiModel):
         return self
 
 
-class TodoUpdate(ApiModel):
+class TodoProjectionUpdate(ApiModel):
+    """Internal projection payload used by the collaboration bridge."""
+
     title: str | None = Field(default=None, min_length=1, max_length=500)
     description: str | None = None
     content_json: dict[str, Any] | None = None
@@ -114,6 +130,46 @@ class TodoUpdate(ApiModel):
     recurrence_config: dict[str, Any] | None = None
     list_name: str | None = Field(default=None, min_length=1, max_length=120)
     tags: list[str] | None = Field(default=None, max_length=20)
+
+
+class TodoCollaborationSnapshot(ApiModel):
+    """Merged正文投影 written by the trusted local collaboration service."""
+
+    content_json: dict[str, Any]
+    actor_id: str | None = Field(default=None, min_length=1, max_length=36)
+    actor_ids: list[str] = Field(default_factory=list, max_length=20)
+
+
+class TodoCollaborationMetadata(ApiModel):
+    """Shared task metadata projected by the trusted collaboration service."""
+
+    # Title is allowed to be temporarily empty while a user is typing. The
+    # projection route falls back to the last valid database title until the
+    # next non-empty Y.Text value arrives.
+    title: str = Field(default="", max_length=500)
+    due_at: datetime | None = None
+    due_end_at: datetime | None = None
+    priority: TodoPriority = TodoPriority.NONE
+    reminder_at: datetime | None = None
+    recurrence_type: RecurrenceType = RecurrenceType.NONE
+    recurrence_config: dict[str, Any] | None = None
+    # A task's list is a location/transaction concern. It intentionally stays
+    # on the normal task API so bulk list rename/delete operations cannot be
+    # overwritten by a stale metadata collaboration document.
+    list_name: str | None = Field(default=None, min_length=1, max_length=120)
+    tags: list[str] = Field(default_factory=list, max_length=20)
+    actor_id: str | None = Field(default=None, min_length=1, max_length=36)
+    actor_ids: list[str] = Field(default_factory=list, max_length=20)
+
+    @model_validator(mode="after")
+    def normalize_metadata(self) -> "TodoCollaborationMetadata":
+        self.title = self.title.strip()
+        if self.list_name is not None:
+            self.list_name = self.list_name.strip() or "收集箱"
+        self.tags = list(dict.fromkeys(tag.strip() for tag in self.tags if tag.strip()))
+        if self.recurrence_type == RecurrenceType.NONE:
+            self.recurrence_config = None
+        return self
 
 
 class TodoAssigneesUpdate(ApiModel):

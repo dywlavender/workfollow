@@ -1,4 +1,4 @@
-"""Queue autosave notifications until the task edit becomes idle."""
+"""Queue consecutive task-edit notifications until collaboration becomes idle."""
 
 from typing import Sequence
 

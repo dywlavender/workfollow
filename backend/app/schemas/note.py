@@ -61,6 +61,28 @@ class NoteUpdate(ApiModel):
     is_favorite: bool | None = None
 
 
+class NoteFolderMove(ApiModel):
+    folder_id: str | None = None
+
+
+class NoteFavoriteUpdate(ApiModel):
+    is_favorite: bool
+
+
+class NoteCollaborationAccess(ApiModel):
+    can_view: bool
+    can_edit: bool
+
+
+class NoteCollaborationSnapshot(ApiModel):
+    """Internal projection written by the collaboration service."""
+
+    title: str = Field(min_length=1, max_length=500)
+    content_json: dict[str, Any]
+    actor_id: str | None = None
+    actor_ids: list[str] = Field(default_factory=list, max_length=20)
+
+
 class NoteRead(ApiModel):
     id: str
     folder_id: str | None

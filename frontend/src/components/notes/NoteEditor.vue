@@ -1,5 +1,7 @@
 <script setup lang="ts">
-import { BubbleMenu, EditorContent, useEditor } from '@tiptap/vue-3'
+import { BubbleMenu, Editor as TiptapEditor, EditorContent } from '@tiptap/vue-3'
+import Collaboration, { isChangeOrigin } from '@tiptap/extension-collaboration'
+import type { Editor as CoreEditor } from '@tiptap/core'
 import {
   IconBook,
   IconCopy,
@@ -15,11 +17,11 @@ import {
   IconStar,
   IconTrash,
 } from '@tabler/icons-vue'
-import type { Editor as TiptapEditor, JSONContent } from '@tiptap/core'
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import * as Y from 'yjs'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 
 import {
-  fetchTaskBriefs, postResourceRelation, postTodo,
+  fetchNote, fetchTaskBriefs, postTodo,
   type Attachment, type Folder, type Note, type TaskBrief, type TeamMember, type Todo, type TodoPayload,
 } from '@/services/api'
 import InputDialog from '@/components/InputDialog.vue'
@@ -28,7 +30,10 @@ import TaskSearchDialog from '@/components/notes/TaskSearchDialog.vue'
 import TodoDialog from '@/components/todo/TodoDialog.vue'
 import { filterStandaloneAttachments } from '@/modules/editor/attachmentReferences'
 import { formatLastSavedAt } from '@/modules/editor/saveStatus'
+import { createNoteCollaboration, type DocumentCollaborationSession, type DocumentCollaborationStatus } from '@/modules/editor/documentCollaboration'
+import { CollaborationInitializationError, initializeCollaborativeField } from '@/modules/editor/collaborationInitialization'
 import { createWorkFollowEditorExtensions } from '@/modules/editor/tiptap'
+import { contentJsonSemanticallyEqual } from '@/modules/editor/contentProjection'
 import { workFollowSlashCommands, type WorkFollowSlashCommand } from '@/modules/editor/slashCommands'
 import { useClickOutside } from '@/composables/useClickOutside'
 import { useRealtimeStore } from '@/stores/realtime'
@@ -50,10 +55,7 @@ const props = defineProps<{
 }>()
 const realtime = useRealtimeStore()
 const emit = defineEmits<{
-  save: [
-    payload: { noteId: string; title: string; folderId: string | null; contentJson?: Record<string, unknown>; plainText?: string },
-    settled?: (savedAt: string | null) => void,
-  ]
+  moveFolder: [folderId: string | null]
   deleteAttachment: [attachment: Attachment]
   openTask: [taskId: string]
   share: []
@@ -61,13 +63,13 @@ const emit = defineEmits<{
   favorite: [value: boolean]
   duplicate: [note: Note]
   export: [note: Note]
+  change: [payload: { title: string; contentJson: Record<string, unknown>; plainText: string }]
   saveAsTemplate: [payload: { note: Note; title: string; folderId: string | null; contentJson: Record<string, unknown>; plainText: string }]
   remove: []
 }>()
 
 const title = ref('')
 const folderId = ref<string | null>(null)
-const saveState = ref<'idle' | 'saving' | 'saved' | 'error'>('idle')
 const lastSavedAt = ref<string | null>(props.note?.updatedAt ?? props.note?.createdAt ?? null)
 const fileInput = ref<HTMLInputElement | null>(null)
 const linkDialogOpen = ref(false)
@@ -93,26 +95,50 @@ const fileUploadMode = ref<'embedded' | 'standalone'>('embedded')
 const embeddedFileAccept = '.png,.jpg,.jpeg,.webp,.pdf,.docx,.xlsx,.md,.txt'
 const standaloneFileAccept = '.pdf,.docx,.xlsx,.md,.txt'
 const editorContent = ref<Record<string, unknown> | null>(props.note?.contentJson ?? null)
+const collaborationSession = shallowRef<DocumentCollaborationSession | null>(null)
+const collaborationStatus = ref<DocumentCollaborationStatus>('connecting')
+const collaborationPendingChanges = ref(0)
+type NoteEditorActionSnapshot = {
+  note: Note
+  title: string
+  contentJson: Record<string, unknown>
+  plainText: string
+}
+let collaborationSeedTimer: number | undefined
+let collaborationConnectTimer: number | undefined
+let hydratingEditor = false
+let collaborationInitializationAuthFailed = false
+let projectionConfirmTimer: number | undefined
+let titleHydrationComplete = false
+let collaborationContentReady = false
+// A provider having no queued WebSocket updates is not the same thing as the
+// SQL projection having caught up. Track edits made by this editor so opening
+// an untouched note can stay responsive while a real local edit still gets a
+// projection barrier before navigation/actions.
+let localEditGeneration = 0
+let projectedEditGeneration = 0
+let projectionLifecycle = 0
+let projectionFlushPromise: Promise<NoteEditorActionSnapshot> | null = null
 const visibleAttachments = computed(() => filterStandaloneAttachments(
   props.attachments,
   editorContent.value ?? props.note?.contentJson,
 ))
-const saveStateLabel = computed(() => {
-  if (saveState.value === 'saving') return '保存中…'
-  if (saveState.value === 'error') return '保存失败'
-  return formatLastSavedAt(lastSavedAt.value)
+const collaborationStatusLabel = computed(() => {
+  if (!collaborationSession.value) return ''
+  if (collaborationStatus.value === 'error') return '协同认证失败'
+  if (collaborationStatus.value === 'disconnected') return '协同离线，正在重连…'
+  if (collaborationStatus.value === 'connecting') return '连接协同…'
+  if (collaborationPendingChanges.value > 0) return '协同保存中…'
+  return '协同已连接'
 })
-let saveTimer: number | undefined
 let contentSnapshotTimer: number | undefined
 let slashDetectTimer: number | undefined
 let taskHydrateTimer: number | undefined
-let contentDirty = false
-let saveRequestId = 0
-const activeSaveRequests = new Map<number, string>()
-let disposed = false
 let taskHydrateRequest = 0
+const OFFLINE_SEED_DELAY_MS = 10000
 let taskIdsKey = ''
 let taskBriefCache = new Map<string, TaskBrief>()
+let titleObserverCleanup: (() => void) | undefined
 
 const bubbleMenuOptions = {
   duration: 120,
@@ -122,59 +148,321 @@ const bubbleMenuOptions = {
   appendTo: 'parent' as const,
 }
 
-const editor = useEditor({
-  extensions: createWorkFollowEditorExtensions('输入内容，或输入 / 插入格式'),
-  content: { type: 'doc', content: [{ type: 'paragraph' }] },
-  editorProps: {
-    attributes: {
-      role: 'textbox',
-      'aria-label': '笔记正文',
-      'aria-multiline': 'true',
-    },
-    handleKeyDown: (_view, event) => {
-      if (!slashMenuOpen.value) return false
-      if (event.key === 'ArrowDown') moveSlashSelection(1)
-      else if (event.key === 'ArrowUp') moveSlashSelection(-1)
-      else if (event.key === 'Enter') insertSlashBlock(workFollowSlashCommands[slashActiveIndex.value].type)
-      else if (event.key === 'Escape') closeSlashMenu()
-      else return false
-      event.preventDefault()
-      return true
-    },
-    handlePaste: (_view, event) => {
-      const files = Array.from(event.clipboardData?.files ?? []).filter((file) => file.type.startsWith('image/'))
-      if (!files.length) return false
-      event.preventDefault()
-      for (const file of files) {
-        void props.uploadFile(file).then((attachment) => {
-          editor.value?.chain().focus().insertContent({
-            type: 'image',
-            attrs: { src: attachment.url, alt: attachment.originalName, attachmentId: attachment.id },
-          }).run()
-        })
-      }
-      return true
-    },
-    handleClick: (_view, _position, event) => {
-      const target = event.target as HTMLElement | null
-      const relation = target?.closest<HTMLElement>('[data-task-link], [data-task-reference]')
-      const taskId = relation?.dataset.taskId
-      if (!taskId) return false
-      emit('openTask', taskId)
-      return true
-    },
-  },
-  onUpdate: ({ editor: currentEditor }) => {
-    contentDirty = true
-    scheduleSave()
-    scheduleContentSnapshot(currentEditor)
-    scheduleTaskHydration()
-    window.clearTimeout(slashDetectTimer)
-    slashDetectTimer = window.setTimeout(() => detectSlashCommand(currentEditor), 0)
-  },
-})
+const editor = shallowRef<TiptapEditor | null>(null)
 
-function placeSlashMenuAtCaret(currentEditor: TiptapEditor) {
+function createNoteEditor(document: Y.Doc) {
+  const instance = new TiptapEditor({
+    extensions: [
+      ...createWorkFollowEditorExtensions('输入内容，或输入 / 插入格式', { collaboration: true }),
+      Collaboration.configure({ document, field: 'default' }),
+    ],
+    editorProps: {
+      attributes: { role: 'textbox', 'aria-label': '笔记正文', 'aria-multiline': 'true' },
+      handleKeyDown: (_view, event) => {
+        if (!slashMenuOpen.value) return false
+        if (event.key === 'ArrowDown') moveSlashSelection(1)
+        else if (event.key === 'ArrowUp') moveSlashSelection(-1)
+        else if (event.key === 'Enter') insertSlashBlock(workFollowSlashCommands[slashActiveIndex.value].type)
+        else if (event.key === 'Escape') closeSlashMenu()
+        else return false
+        event.preventDefault()
+        return true
+      },
+      handlePaste: (_view, event) => {
+        if (!collaborationContentReady) return false
+        const files = Array.from(event.clipboardData?.files ?? []).filter((file) => file.type.startsWith('image/'))
+        if (!files.length) return false
+        event.preventDefault()
+        for (const file of files) {
+          void props.uploadFile(file).then((attachment) => {
+            editor.value?.chain().focus().insertContent({
+              type: 'image',
+              attrs: { src: attachment.url, alt: attachment.originalName, attachmentId: attachment.id },
+            }).run()
+          })
+        }
+        return true
+      },
+      handleClick: (_view, _position, event) => {
+        const target = event.target as HTMLElement | null
+        const relation = target?.closest<HTMLElement>('[data-task-link], [data-task-reference]')
+        const taskId = relation?.dataset.taskId
+        if (!taskId) return false
+        emit('openTask', taskId)
+        return true
+      },
+    },
+    onUpdate: ({ editor: currentEditor, transaction }) => {
+      if (hydratingEditor) return
+      // Collaboration-originated transactions are remote/Yjs render updates.
+      // Only a transaction initiated by this editor should make navigation
+      // wait for the SQL projection.
+      const userEdit = transaction.docChanged && (currentEditor.isFocused || transaction.getMeta('uiEvent') != null)
+      if (collaborationContentReady && userEdit && !isChangeOrigin(transaction)) markLocalEdit()
+      scheduleContentSnapshot(currentEditor)
+      scheduleTaskHydration()
+      window.clearTimeout(slashDetectTimer)
+      slashDetectTimer = window.setTimeout(() => detectSlashCommand(currentEditor), 0)
+    },
+  })
+  instance.setEditable(collaborationContentReady)
+  editor.value = instance
+}
+
+function replaceCollaborativeTitle(value: string) {
+  const session = collaborationSession.value
+  if (!session) return
+  const target = session.document.getText('title')
+  const current = target.toString()
+  if (current === value) return
+  let start = 0
+  while (start < current.length && start < value.length && current[start] === value[start]) start += 1
+  let currentEnd = current.length
+  let nextEnd = value.length
+  while (currentEnd > start && nextEnd > start && current[currentEnd - 1] === value[nextEnd - 1]) {
+    currentEnd -= 1
+    nextEnd -= 1
+  }
+  session.document.transact(() => {
+    if (currentEnd > start) target.delete(start, currentEnd - start)
+    if (nextEnd > start) target.insert(start, value.slice(start, nextEnd))
+  }, 'workfollow-note-title')
+  markLocalEdit()
+}
+
+function bindNoteTitle(document: Y.Doc) {
+  titleObserverCleanup?.()
+  const target = document.getText('title')
+  const apply = () => {
+    if (document !== collaborationSession.value?.document) return
+    const nextTitle = target.toString()
+    if (nextTitle || collaborationContentReady) {
+      title.value = nextTitle
+      if (titleHydrationComplete) emitCurrentNoteChange()
+    }
+  }
+  target.observe(apply)
+  titleObserverCleanup = () => {
+    target.unobserve(apply)
+    titleObserverCleanup = undefined
+  }
+  apply()
+}
+
+function seedNoteDocument(note: Note, document: Y.Doc, initial?: Partial<Note>) {
+  const config = document.getMap('config')
+  const titleText = document.getText('title')
+  const fragment = document.getXmlFragment('default')
+  if (config.get('bodyInitialized') === true || config.get('initialContentLoaded') === true || fragment.length > 0) return
+  const source = initial && typeof initial === 'object' ? { ...note, ...initial } : note
+  if (!titleText.length && source.title) titleText.insert(0, source.title)
+  const currentEditor = editor.value
+  if (!currentEditor || fragment.length > 0) return
+  hydratingEditor = true
+  try {
+    currentEditor.commands.setContent(source.contentJson ?? note.contentJson, false)
+    // Set the markers only after the editor accepted the SQL snapshot. If a
+    // malformed legacy document is rejected, a later initialization attempt
+    // must still be allowed to retry instead of treating an empty fragment as
+    // successfully seeded.
+    config.set('initialContentLoaded', true)
+    config.set('bodyInitialized', true)
+  }
+  finally { hydratingEditor = false }
+}
+
+async function initializeNoteBody(note: Note, session: DocumentCollaborationSession): Promise<boolean> {
+  const config = session.document.getMap('config')
+  const fragment = session.document.getXmlFragment('default')
+  if (config.get('bodyInitialized') === true || config.get('initialContentLoaded') === true || fragment.length > 0) return true
+  if (collaborationInitializationAuthFailed) return false
+  try {
+    await initializeCollaborativeField(
+      `note:${note.id}`,
+      'body',
+      (initial) => seedNoteDocument(note, session.document, initial as Partial<Note> | undefined),
+    )
+    return true
+  } catch (error) {
+    if (error instanceof CollaborationInitializationError && error.kind === 'auth') collaborationInitializationAuthFailed = true
+    if (props.note?.id === note.id) {
+      collaborationStatus.value = 'error'
+      taskFeedback.value = error instanceof Error ? error.message : '协同初始化失败'
+    }
+    return false
+  }
+}
+
+function scheduleOfflineNoteSeed(note: Note) {
+  window.clearTimeout(collaborationSeedTimer)
+  collaborationSeedTimer = window.setTimeout(() => {
+    const session = collaborationSession.value
+    if (
+      props.note?.id === note.id
+      && session
+      && !session.provider.isSynced
+      && (collaborationStatus.value === 'disconnected' || collaborationStatus.value === 'error')
+    ) {
+      void initializeNoteBody(note, session).then((ready) => {
+        if (ready && props.note?.id === note.id) {
+          titleHydrationComplete = true
+          collaborationContentReady = true
+          editor.value?.setEditable(true)
+        }
+      })
+    }
+  }, OFFLINE_SEED_DELAY_MS)
+}
+
+function scheduleCollaborationConnectWatchdog(note: Note) {
+  window.clearTimeout(collaborationConnectTimer)
+  collaborationConnectTimer = window.setTimeout(() => {
+    if (props.note?.id !== note.id || collaborationStatus.value !== 'connecting') return
+    const session = collaborationSession.value
+    if (session?.provider.isSynced) {
+      collaborationStatus.value = 'connected'
+      void initializeNoteBody(note, session).then((ready) => {
+        if (ready && props.note?.id === note.id) {
+          titleHydrationComplete = true
+          collaborationContentReady = true
+          editor.value?.setEditable(true)
+        }
+      })
+      return
+    }
+    collaborationStatus.value = 'error'
+    scheduleOfflineNoteSeed(note)
+  // createNoteCollaboration deliberately waits for IndexedDB hydration (up
+  // to 15s) before attaching the websocket. Do not report a connection error
+  // before that barrier can finish on a cold browser profile.
+  }, 18000)
+}
+
+function startNoteCollaboration(note: Note) {
+  collaborationStatus.value = 'connecting'
+  collaborationPendingChanges.value = 0
+  localEditGeneration = 0
+  projectedEditGeneration = 0
+  projectionFlushPromise = null
+  collaborationInitializationAuthFailed = false
+  titleHydrationComplete = false
+  collaborationContentReady = false
+  let session: DocumentCollaborationSession | null = null
+  session = createNoteCollaboration(note.id, null, {
+    onStatus: (status) => {
+      if (props.note?.id !== note.id) return
+      collaborationStatus.value = status
+      if (status === 'connected') {
+        window.clearTimeout(collaborationConnectTimer)
+        window.clearTimeout(collaborationSeedTimer)
+      }
+      else if (status === 'disconnected' || (status === 'error' && !collaborationInitializationAuthFailed)) {
+        window.clearTimeout(collaborationConnectTimer)
+        scheduleOfflineNoteSeed(note)
+      }
+    },
+    onSynced: () => {
+      if (props.note?.id !== note.id || !session) return
+      window.clearTimeout(collaborationConnectTimer)
+      collaborationStatus.value = 'connected'
+      window.clearTimeout(collaborationSeedTimer)
+      void initializeNoteBody(note, session).then((ready) => {
+        if (props.note?.id !== note.id || !ready) return
+        titleHydrationComplete = true
+        collaborationContentReady = true
+        editor.value?.setEditable(true)
+      })
+    },
+    onError: (message) => {
+      collaborationInitializationAuthFailed = /认证|权限|登录|unauthor/i.test(message)
+      if (collaborationInitializationAuthFailed) collaborationStatus.value = 'error'
+    },
+    onUnsyncedChanges: (count) => {
+      if (props.note?.id !== note.id) return
+      collaborationPendingChanges.value = count
+      if (count === 0) scheduleProjectionConfirmation()
+    },
+  })
+  collaborationSession.value = session
+  bindNoteTitle(session.document)
+  createNoteEditor(session.document)
+  scheduleCollaborationConnectWatchdog(note)
+}
+
+function disposeNoteCollaboration() {
+  // Invalidate any projection poll that was started by the previous note.
+  // Its already-running HTTP request may still settle, but it must not keep
+  // polling or update state after this editor is torn down.
+  projectionLifecycle += 1
+  projectionFlushPromise = null
+  window.clearTimeout(collaborationConnectTimer)
+  collaborationConnectTimer = undefined
+  window.clearTimeout(collaborationSeedTimer)
+  collaborationSeedTimer = undefined
+  window.clearTimeout(projectionConfirmTimer)
+  projectionConfirmTimer = undefined
+  titleObserverCleanup?.()
+  editor.value?.destroy()
+  collaborationSession.value?.destroy()
+  editor.value = null
+  collaborationSession.value = null
+  collaborationContentReady = false
+  titleHydrationComplete = false
+  collaborationPendingChanges.value = 0
+  localEditGeneration = 0
+  projectedEditGeneration = 0
+  collaborationStatus.value = 'connecting'
+}
+
+async function syncNoteCollaboration(note: Note | null) {
+  disposeNoteCollaboration()
+  if (!note) return
+  await nextTick()
+  if (props.note?.id === note.id) startNoteCollaboration(note)
+}
+
+function onTitleInput() {
+  title.value = title.value.replace(/[\r\n]+/g, ' ')
+  if (collaborationContentReady && title.value.trim()) replaceCollaborativeTitle(title.value)
+}
+
+function commitCollaborativeTitle() {
+  if (!collaborationContentReady) return
+  if (!title.value.trim()) {
+    title.value = collaborationSession.value?.document.getText('title').toString() || props.note?.title || '未命名笔记'
+  }
+  replaceCollaborativeTitle(title.value.trim() || '未命名笔记')
+}
+
+function moveFolder() {
+  emit('moveFolder', folderId.value || null)
+}
+
+function flushCollaboration() {
+  collaborationSession.value?.provider.flushPendingUpdates()
+}
+
+function markLocalEdit() {
+  if (!props.note || !collaborationContentReady) return
+  localEditGeneration += 1
+  scheduleProjectionConfirmation()
+}
+
+function scheduleProjectionConfirmation() {
+  window.clearTimeout(projectionConfirmTimer)
+  projectionConfirmTimer = window.setTimeout(() => {
+    projectionConfirmTimer = undefined
+    if (
+      !props.note
+      || collaborationPendingChanges.value > 0
+      || !collaborationContentReady
+      || localEditGeneration <= projectedEditGeneration
+    ) return
+    void flushAndWaitForProjection().catch(() => undefined)
+  }, 260)
+}
+
+function placeSlashMenuAtCaret(currentEditor: CoreEditor) {
   const rect = currentEditor.view.coordsAtPos(currentEditor.state.selection.from)
   slashPosition.value = {
     left: Math.max(8, Math.min(window.innerWidth - 276, rect.left)),
@@ -182,7 +470,7 @@ function placeSlashMenuAtCaret(currentEditor: TiptapEditor) {
   }
 }
 
-function detectSlashCommand(currentEditor: TiptapEditor) {
+function detectSlashCommand(currentEditor: CoreEditor) {
   const { selection } = currentEditor.state
   if (!selection.empty) return
   const textBeforeCursor = selection.$from.parent.textBetween(0, selection.$from.parentOffset, '\n', '\n')
@@ -205,7 +493,7 @@ function moveSlashSelection(direction: number) {
 
 function insertSlashBlock(type: WorkFollowSlashCommand) {
   const currentEditor = editor.value
-  if (!currentEditor) return
+  if (!currentEditor || !collaborationContentReady) return
   const chain = currentEditor.chain().focus()
   if (slashRange.value) chain.deleteRange({ from: slashRange.value.from, to: currentEditor.state.selection.from })
   if (type === 'link') {
@@ -241,24 +529,17 @@ function insertSlashBlock(type: WorkFollowSlashCommand) {
 watch(
   () => props.note?.id,
   (_newId, oldId) => {
-    if (oldId && saveTimer) emitCurrentContent(oldId)
-    window.clearTimeout(saveTimer)
     window.clearTimeout(contentSnapshotTimer)
-    saveTimer = undefined
     contentSnapshotTimer = undefined
-    saveRequestId += 1
     title.value = props.note?.title ?? ''
     folderId.value = props.note?.folderId ?? null
-    saveState.value = 'idle'
     lastSavedAt.value = props.note?.updatedAt ?? props.note?.createdAt ?? null
     attachmentPanelOpen.value = false
     editorContent.value = props.note?.contentJson ?? null
     taskIdsKey = ''
     taskBriefCache = new Map()
     closeSlashMenu()
-    if (props.note && editor.value) editor.value.commands.setContent(props.note.contentJson as JSONContent, false)
-    scheduleTaskHydration()
-    void focusSourceBlock()
+    if (oldId !== props.note?.id) void syncNoteCollaboration(props.note)
   },
   { immediate: true },
 )
@@ -299,72 +580,133 @@ async function focusSourceBlock(attempt = 0) {
 
 watch(editor, () => { void focusSourceBlock() })
 
-function scheduleSave() {
-  if (!props.note) return
-  if (saveState.value !== 'saving' || !hasActiveSave(props.note.id)) saveState.value = 'idle'
-  const requestId = ++saveRequestId
-  window.clearTimeout(saveTimer)
-  saveTimer = window.setTimeout(() => {
-    if (!props.note || requestId !== saveRequestId) return
-    saveState.value = 'saving'
-    emitCurrentContent(props.note.id, requestId)
-    saveTimer = undefined
-  }, 1200)
-}
-
-function hasActiveSave(noteId: string): boolean {
-  return [...activeSaveRequests.values()].some((activeNoteId) => activeNoteId === noteId)
-}
-
-function scheduleContentSnapshot(currentEditor: TiptapEditor | null = editor.value ?? null) {
+function scheduleContentSnapshot(currentEditor: CoreEditor | null = editor.value ?? null) {
   if (!currentEditor) return
   window.clearTimeout(contentSnapshotTimer)
   contentSnapshotTimer = window.setTimeout(() => {
     if (editor.value !== currentEditor) return
     editorContent.value = currentEditor.getJSON() as Record<string, unknown>
+    emitCurrentNoteChange(currentEditor)
     contentSnapshotTimer = undefined
   }, 250)
 }
 
-function emitCurrentContent(noteId: string, requestId = ++saveRequestId) {
-  if (!editor.value) return
-  activeSaveRequests.set(requestId, noteId)
-  const dirty = contentDirty
-  contentDirty = false
-  if (dirty && contentSnapshotTimer !== undefined) {
-    window.clearTimeout(contentSnapshotTimer)
-    contentSnapshotTimer = undefined
-    editorContent.value = editor.value.getJSON() as Record<string, unknown>
-  }
-  // Only send the (potentially large) document JSON when the body actually
-  // changed. Title/folder edits then save a tiny payload instead of the full
-  // contentJson + plainText every time — less bandwidth and backend work.
-  const contentJson = dirty
-    ? (editorContent.value ?? editor.value.getJSON() as Record<string, unknown>)
-    : undefined
-  emit('save', {
-    noteId,
+function currentNoteSnapshot(currentEditor: CoreEditor | null = editor.value ?? null) {
+  return {
     title: title.value.trim() || '未命名笔记',
-    folderId: folderId.value || null,
-    ...(contentJson ? {
-      contentJson,
-      plainText: editor.value.getText({ blockSeparator: '\n' }),
-    } : {}),
-  }, (savedAt) => {
-    activeSaveRequests.delete(requestId)
-    if (disposed || props.note?.id !== noteId) return
-    if (requestId !== saveRequestId) {
-      if (!hasActiveSave(noteId) && saveTimer === undefined) saveState.value = 'idle'
-      return
-    }
-    if (savedAt) {
-      lastSavedAt.value = savedAt
-      saveState.value = hasActiveSave(noteId) ? 'saving' : 'saved'
-    } else {
-      saveState.value = hasActiveSave(noteId) ? 'saving' : 'error'
-    }
-  })
+    contentJson: (currentEditor?.getJSON() ?? editorContent.value ?? props.note?.contentJson ?? {
+      type: 'doc',
+      content: [{ type: 'paragraph' }],
+    }) as Record<string, unknown>,
+    plainText: currentEditor?.getText({ blockSeparator: '\n' }) ?? '',
+  }
 }
+
+function emitCurrentNoteChange(currentEditor: CoreEditor | null = editor.value ?? null) {
+  if (!props.note || !collaborationContentReady) return
+  emit('change', currentNoteSnapshot(currentEditor))
+}
+
+async function runProjectionBarrier(timeoutMs: number, lifecycle: number): Promise<NoteEditorActionSnapshot> {
+  const note = props.note
+  const currentEditor = editor.value
+  if (!note || !currentEditor || !collaborationContentReady || collaborationStatus.value === 'error') {
+    throw new Error('笔记协同尚未就绪，无法读取最新内容。')
+  }
+
+  const noteId = note.id
+  flushCollaboration()
+  const deadline = Date.now() + timeoutMs
+  let latest = await fetchNote(noteId)
+  // Re-read the current Yjs document on every poll. A remote edit may arrive
+  // after the first snapshot was captured; waiting for that obsolete snapshot
+  // would report a false timeout even though the merged document is being
+  // projected correctly. The returned snapshot is the same latest state that
+  // the caller is about to navigate/copy/export.
+  let snapshot = currentNoteSnapshot(currentEditor)
+  let snapshotGeneration = localEditGeneration
+  while (true) {
+    if (
+      lifecycle !== projectionLifecycle
+      || props.note?.id !== noteId
+      || editor.value !== currentEditor
+    ) {
+      throw new Error('笔记已切换，取消旧内容同步确认。')
+    }
+    // A keystroke can arrive while the GET is in flight. Do not acknowledge
+    // the older generation just because the SQL response happened to match
+    // the snapshot captured before that keystroke.
+    if (
+      localEditGeneration === snapshotGeneration
+      && latest.title === snapshot.title
+      && contentJsonSemanticallyEqual(latest.contentJson, snapshot.contentJson)
+    ) break
+    if (Date.now() >= deadline) throw new Error('笔记内容尚未同步完成，请稍后重试。')
+    await new Promise((resolve) => window.setTimeout(resolve, 180))
+    snapshot = currentNoteSnapshot(currentEditor)
+    snapshotGeneration = localEditGeneration
+    latest = await fetchNote(noteId)
+  }
+  if (
+    lifecycle !== projectionLifecycle
+    || props.note?.id !== noteId
+    || editor.value !== currentEditor
+  ) {
+    throw new Error('笔记已切换，取消旧内容同步确认。')
+  }
+  projectedEditGeneration = Math.max(projectedEditGeneration, snapshotGeneration)
+  // The projection response is the authoritative save acknowledgement. Do
+  // not wait for the optional SSE event before updating the local indicator;
+  // otherwise a healthy save can keep showing the previous timestamp when
+  // the event stream is reconnecting.
+  lastSavedAt.value = latest.updatedAt ?? lastSavedAt.value
+  return { note: latest, ...snapshot }
+}
+
+async function flushAndWaitForProjection(timeoutMs = 6000): Promise<NoteEditorActionSnapshot> {
+  // No local edit has happened since the last projection barrier. Returning
+  // the current Yjs snapshot avoids a GET + polling round trip on every
+  // action and still gives actions (copy/export/publish) the current content.
+  if (localEditGeneration <= projectedEditGeneration) {
+    if (!props.note) throw new Error('没有可用的笔记。')
+    // While the collaboration document is still connecting, the editor is
+    // disabled and cannot contain a user edit. Use the SQL detail directly so
+    // switching away is not blocked by a cold WebSocket/IndexedDB startup.
+    if (!editor.value || !collaborationContentReady) {
+      return {
+        note: props.note,
+        title: props.note.title,
+        contentJson: props.note.contentJson,
+        plainText: props.note.plainText,
+      }
+    }
+    const snapshot = currentNoteSnapshot()
+    return {
+      note: {
+        ...props.note,
+        title: snapshot.title,
+        contentJson: snapshot.contentJson,
+        plainText: snapshot.plainText,
+      },
+      ...snapshot,
+    }
+  }
+
+  if (!props.note || !editor.value || !collaborationContentReady || collaborationStatus.value === 'error') {
+    throw new Error('笔记协同尚未就绪，无法读取最新内容。')
+  }
+
+  if (projectionFlushPromise) return projectionFlushPromise
+  const lifecycle = projectionLifecycle
+  const request = runProjectionBarrier(timeoutMs, lifecycle)
+  projectionFlushPromise = request
+  void request.finally(() => {
+    if (projectionFlushPromise === request) projectionFlushPromise = null
+  }).catch(() => undefined)
+  return request
+}
+
+defineExpose({ flushCollaboration, flushAndWaitForProjection })
 
 function requestSaveAsTemplate() {
   if (!props.note || !editor.value) return
@@ -420,6 +762,7 @@ function handleImmersiveKeydown(event: KeyboardEvent) {
 }
 
 function setLink() {
+  if (!collaborationContentReady) return
   const previous = editor.value?.getAttributes('link').href as string | undefined
   linkValue.value = previous ?? 'https://'
   linkDialogOpen.value = true
@@ -438,7 +781,7 @@ function selectedText(): string {
   return editor.value.state.doc.textBetween(from, to, ' ').trim()
 }
 
-function activeBlockId(currentEditor: TiptapEditor): string | null {
+function activeBlockId(currentEditor: CoreEditor): string | null {
   const resolved = currentEditor.state.selection.$from
   for (let depth = resolved.depth; depth > 0; depth -= 1) {
     const blockId = resolved.node(depth).attrs.blockId
@@ -471,7 +814,7 @@ function activeBlockId(currentEditor: TiptapEditor): string | null {
 function createTodoFromSelection() {
   const text = selectedText()
   const currentEditor = editor.value
-  if (!text || !currentEditor) return
+  if (!text || !currentEditor || !collaborationContentReady) return
   const { from, to } = currentEditor.state.selection
   pendingTaskContext.value = {
     from, to, position: to, blockId: activeBlockId(currentEditor), excerpt: text,
@@ -483,7 +826,7 @@ function createTodoFromSelection() {
 
 function openTaskCreateAtCursor() {
   const currentEditor = editor.value
-  if (!currentEditor) return
+  if (!currentEditor || !collaborationContentReady) return
   const position = currentEditor.state.selection.from
   pendingTaskContext.value = {
     from: position, to: position, position, blockId: activeBlockId(currentEditor), excerpt: '',
@@ -495,7 +838,7 @@ function openTaskCreateAtCursor() {
 
 function openTaskSearchAtCursor() {
   const currentEditor = editor.value
-  if (!currentEditor) return
+  if (!currentEditor || !collaborationContentReady) return
   const position = currentEditor.state.selection.from
   pendingTaskContext.value = {
     from: position, to: position, position, blockId: activeBlockId(currentEditor), excerpt: '',
@@ -504,7 +847,7 @@ function openTaskSearchAtCursor() {
 }
 
 async function saveLinkedTask(payload: TodoPayload) {
-  if (!props.note || !pendingTaskContext.value || !editor.value) return
+  if (!props.note || !pendingTaskContext.value || !editor.value || !collaborationContentReady) return
   const context = pendingTaskContext.value
   const created = await postTodo({
     ...payload,
@@ -529,16 +872,11 @@ async function saveLinkedTask(payload: TodoPayload) {
 }
 
 async function linkExistingTask(todo: Todo) {
-  if (!props.note || !pendingTaskContext.value || !editor.value) return
+  if (!props.note || !pendingTaskContext.value || !editor.value || !collaborationContentReady) return
   const context = pendingTaskContext.value
-  await postResourceRelation({
-    sourceType: 'PERSONAL_NOTE',
-    sourceId: props.note.id,
-    sourceBlockId: context.blockId,
-    targetType: 'TASK',
-    targetId: todo.id,
-    relationType: 'REFERENCES',
-  })
+  // The taskReference node is the source of truth. The collaboration
+  // snapshot reconciles its REFERENCES backlink in the same transaction as
+  // the note body, so removing the node cannot leave a stale relation behind.
   editor.value.chain().focus().insertContentAt(context.position, {
     type: 'taskReference', attrs: { taskId: todo.id },
   }).run()
@@ -591,7 +929,7 @@ async function refreshTaskReferences() {
   await renderTaskBriefs(currentEditor, briefs)
 }
 
-async function renderTaskBriefs(currentEditor: TiptapEditor, briefs: Map<string, TaskBrief>) {
+async function renderTaskBriefs(currentEditor: CoreEditor, briefs: Map<string, TaskBrief>) {
   await nextTick()
   for (const element of currentEditor.view.dom.querySelectorAll<HTMLElement>('[data-task-link], [data-task-reference]')) {
     const taskId = element.dataset.taskId
@@ -651,7 +989,7 @@ async function copySelection() {
 }
 
 async function handleFiles(files: FileList | null) {
-  if (!files) return
+  if (!files || !collaborationContentReady) return
   let uploadedStandaloneFile = false
   const insertImages = fileUploadMode.value === 'embedded'
   for (const file of Array.from(files)) {
@@ -670,6 +1008,7 @@ async function handleFiles(files: FileList | null) {
 }
 
 function openFilePicker(mode: 'embedded' | 'standalone') {
+  if (!collaborationContentReady) return
   fileUploadMode.value = mode
   fileInput.value?.click()
 }
@@ -686,14 +1025,14 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
-  disposed = true
-  if (saveTimer && props.note) emitCurrentContent(props.note.id)
-  window.clearTimeout(saveTimer)
+  window.clearTimeout(collaborationConnectTimer)
   window.clearTimeout(contentSnapshotTimer)
   window.clearTimeout(slashDetectTimer)
   window.clearTimeout(taskHydrateTimer)
   window.removeEventListener('keydown', handleImmersiveKeydown)
   document.body.classList.remove('note-editor-immersive-open')
+  flushCollaboration()
+  disposeNoteCollaboration()
 })
 
 watch(immersiveOpen, (open) => {
@@ -717,7 +1056,7 @@ watch(immersiveOpen, (open) => {
     <template v-else>
       <header class="editor-header">
         <div class="note-editor-title-row">
-          <input v-model="title" class="note-title-input" aria-label="笔记标题" maxlength="500" @input="scheduleSave" />
+          <input v-model="title" class="note-title-input" aria-label="笔记标题" maxlength="500" :disabled="!collaborationContentReady" @input="onTitleInput" @blur="commitCollaborativeTitle" />
           <div class="note-editor-actions">
             <button
               ref="immersiveTrigger"
@@ -748,12 +1087,14 @@ watch(immersiveOpen, (open) => {
           </div>
         </div>
         <div class="editor-meta-row">
-          <select v-model="folderId" aria-label="移动到文件夹" @change="scheduleSave">
+          <select v-model="folderId" aria-label="移动到文件夹" @change="moveFolder">
             <option :value="null">未分类</option>
             <option v-for="folder in folders" :key="folder.id" :value="folder.id">{{ folder.name }}</option>
           </select>
           <span v-if="knowledgeState === 'update-draft' || knowledgeState === 'update-pending' || knowledgeState === 'update-needs-revision'" class="knowledge-update-target">更新目标：{{ knowledgeTargetTitle ?? '团队知识' }}</span>
-          <span class="save-state" :class="saveState" aria-live="polite">{{ saveStateLabel }}</span>
+          <span class="task-editor-meta-spacer" aria-hidden="true" />
+          <span v-if="collaborationSession" class="task-collaboration-state" :class="collaborationStatus" role="status" :title="collaborationStatusLabel">{{ collaborationStatusLabel }}</span>
+          <span class="task-editor-save-state" aria-live="polite">{{ formatLastSavedAt(lastSavedAt) }}</span>
         </div>
       </header>
       <RichTextToolbar v-if="editor" :editor="editor" attachment @link="setLink" @attachment="openFilePicker('embedded')" />
@@ -764,7 +1105,7 @@ watch(immersiveOpen, (open) => {
           <button type="button" @mousedown.prevent @click="copySelection">复制</button>
         </BubbleMenu>
       </div>
-      <EditorContent class="tiptap-editor" :editor="editor" />
+      <EditorContent class="tiptap-editor" :editor="editor ?? undefined" />
       <span v-if="taskFeedback" class="note-task-feedback" role="status">{{ taskFeedback }}</span>
       <Teleport to="body">
         <section v-if="slashMenuOpen" class="task-slash-menu" :style="{ left: `${slashPosition.left}px`, top: `${slashPosition.top}px` }" role="menu" aria-label="插入格式" @mousedown.prevent.stop @click.stop>

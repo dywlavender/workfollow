@@ -9,8 +9,9 @@
 - 64 位 x86_64 Linux
 - Python 3.12
 - Python venv 和 pip
-- 安装依赖时可以访问互联网或内部 PyPI 镜像
-- 8123 端口未被其他程序占用
+- Node.js 22+（用于运行任务正文及元数据协同服务；npm 仅在依赖缺失时需要）
+- 发布包已内置协同服务的 Node 依赖；只有从源码部署且依赖缺失时才需要 npm 网络或内部镜像
+- 8123、8124 端口未被其他程序占用
 
 检查命令：
 
@@ -19,6 +20,8 @@ uname -m
 python3 --version
 python3 -m pip --version
 python3 -m venv --help
+node --version
+npm --version
 ```
 
 `uname -m` 应输出 `x86_64`，Python 应为 3.12。Debian/Ubuntu 如果缺少 venv，需安装对应的 `python3.12-venv` 系统包。
@@ -29,15 +32,18 @@ Linux 安装包适用于常见的 glibc 发行版，不适用于 ARM64、32 位�
 
 - 64 位 Windows 10/11 或 Windows Server
 - Python 3.12 x64
+- Node.js 22+（用于运行任务正文及元数据协同服务；npm 仅在依赖缺失时需要）
 - 安装 Python 时启用 `py launcher`，建议同时勾选“Add Python to PATH”
-- 安装依赖时可以访问互联网或内部 PyPI 镜像
-- 8123 端口未被其他程序占用
+- 发布包已内置协同服务的 Node 依赖；只有从源码部署且依赖缺失时才需要 npm 网络或内部镜像
+- 8123、8124 端口未被其他程序占用
 
 在命令提示符中检查：
 
 ```bat
 py -3.12 --version
 py -3.12 -c "import platform; print(platform.architecture())"
+node --version
+npm --version
 ```
 
 输出应显示 Python 3.12 和 64bit。
@@ -66,7 +72,7 @@ cd /d C:\WorkFollow
 
 ## 三、安装项目依赖
 
-前端已经构建完成，不需要安装 Node.js，也不需要执行 npm 命令。
+前端已经构建完成，不需要在目标机重新构建前端；但目标机仍需安装 Node.js 22+，用于启动任务、个人笔记和管理员团队知识草稿的 Yjs/Hocuspocus 协同服务。
 
 ### Linux
 
@@ -75,7 +81,7 @@ cd /opt/workfollow
 ./deploy/linux/install.sh
 ```
 
-脚本会检查 Python 3.12、创建 `.venv` 虚拟环境、下载 Python 依赖、创建数据目录，并初始化或升级 SQLite 数据库。
+脚本会检查 Python 3.12、创建 `.venv` 虚拟环境、安装 Python 依赖、创建数据目录，并初始化或升级 SQLite 数据库。发布包已包含协同服务的生产依赖，检测到依赖完整时不会访问 npm。
 
 ### Windows
 
@@ -84,7 +90,7 @@ cd /d C:\WorkFollow
 deploy\windows\install.bat
 ```
 
-如果使用内部 PyPI 镜像，先设置镜像地址：
+如果使用内部 PyPI 镜像，先设置镜像地址（仅 Python 依赖需要）：
 
 ```bat
 set PIP_INDEX_URL=https://你的内网PyPI镜像/simple
@@ -124,6 +130,8 @@ set PYTHONPATH=backend
 
 ## 五、启动项目
 
+后端和协同服务共用根目录 `.env` 中的 `WORKFOLLOW_COLLABORATION_INTERNAL_TOKEN`。只需配置一次，协同服务启动时会自动读取，不需要再单独传入同一个令牌；使用启动脚本时如果没有配置，脚本会自动生成并复用本次启动的令牌。
+
 ### Linux
 
 ```bash
@@ -156,7 +164,7 @@ cd /d C:\WorkFollow
 deploy\windows\start.bat
 ```
 
-本机访问 `http://localhost:8123`。其他电脑访问时使用 `http://Windows部署机IP:8123`，并在 Windows Defender 防火墙中对可信内网放行 TCP 8123。
+本机访问 `http://localhost:8123`。其他电脑访问时使用 `http://Windows部署机IP:8123`，并在 Windows Defender 防火墙中对可信内网放行 TCP 8123 和 8124（8124 是任务、个人笔记和团队知识草稿协同服务端口）。
 
 ## 六、验证项目
 
@@ -220,7 +228,7 @@ deploy\windows\backup.bat
 
 ## 九、可选：完全离线安装依赖
 
-如果目标机完全不能联网，需要先在相同系统、CPU 架构和 Python 3.12 环境中下载依赖。
+如果目标机完全不能联网，发布包中的协同服务依赖无需另行下载；只需为 Python 依赖准备 wheelhouse。
 
 Linux 联网机：
 
@@ -236,19 +244,20 @@ mkdir wheelhouse
 py -3.12 -m pip download -r deploy\requirements-offline.txt -d wheelhouse
 ```
 
-将 `wheelhouse` 连同整个项目复制到目标机，再运行对应安装脚本。脚本检测到 wheel 文件后会自动使用本地依赖，不访问网络。Linux 和 Windows 的依赖包不能混用。
+将 `wheelhouse` 连同整个项目复制到目标机，再运行对应安装脚本。脚本检测到 wheel 文件后会自动使用本地依赖，不访问网络；发布包检测到 `collaboration/node_modules` 后也不会运行 npm。Linux 和 Windows 的 Python 依赖包不能混用。
 
 ## 十、常见问题
 
 - Python 版本错误：安装 Python 3.12 x64，不要使用 3.11、3.13 或 32 位 Python。
 - 依赖下载失败：检查网络、代理或 `PIP_INDEX_URL`。
 - 页面无法访问：检查服务状态、8123 端口、防火墙和日志。
+- 多人正文或任务属性没有实时同步：检查协同服务日志、8124 端口和防火墙；浏览器必须能访问与业务页面同一主机的 8124 端口，并确认所有客户端使用同一版本。个人笔记使用 `note:<id>`，管理员团队知识草稿使用 `knowledge-draft:<id>`；团队知识点击“保存修改”后才更新已发布版本。
 - 页面显示 404：确认 `frontend/dist/index.html` 存在。
 - 数据库启动失败：先备份 `data`，再重新执行安装脚本。
 
 ## 十一、安全提示
 
-默认使用 HTTP 并监听 `0.0.0.0`，只适合可信内网。跨公网部署时，应增加 HTTPS 反向代理并限制防火墙来源。`data` 和 `backups` 可能包含敏感业务信息，应严格控制目录权限。
+默认使用 HTTP 并监听 `0.0.0.0`，只适合可信内网。跨公网部署时，应为 8123 和 8124 同时增加 HTTPS/WSS 反向代理并限制防火墙来源。`data` 和 `backups` 可能包含敏感业务信息，应严格控制目录权限。
 
 ## 十二、外部 HTTP 通知配置
 
@@ -272,4 +281,4 @@ WORKFOLLOW_NOTIFICATION_TIMEZONE=Asia/Shanghai
 WORKFOLLOW_NOTIFICATION_DAILY_DIGEST_TIME=08:30
 ```
 
-`WORKFOLLOW_NOTIFICATION_TASK_EDIT_QUIET_SECONDS` 控制标题和正文自动保存的合并等待时间，默认 3 秒；截止时间、优先级、成员、完成等明确动作仍会立即通知。配置后重启 WorkFollow，后台发送器会自动处理待发送通知。任务或知识审核操作不会因为外部接口暂时不可用而失败，失败通知会自动重试。接口中台只需按现有 GET 规范读取 `userIds`、`msg`，并将 `url` 渲染为可点击链接即可。
+`WORKFOLLOW_NOTIFICATION_TASK_EDIT_QUIET_SECONDS` 控制标题和正文协同投影通知的合并等待时间，默认 3 秒；截止时间、优先级、成员、完成等明确动作仍会立即通知。配置后重启 WorkFollow，后台发送器会自动处理待发送通知。任务或知识审核操作不会因为外部接口暂时不可用而失败，失败通知会自动重试。接口中台只需按现有 GET 规范读取 `userIds`、`msg`，并将 `url` 渲染为可点击链接即可。

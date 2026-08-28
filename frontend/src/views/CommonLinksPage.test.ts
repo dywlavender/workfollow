@@ -29,6 +29,10 @@ vi.mock('@/stores/auth', () => ({
   useAuthStore: () => ({ user: { systemRole: 'NORMAL' } }),
 }))
 
+vi.mock('@/stores/feedback', () => ({
+  useFeedbackStore: () => ({}),
+}))
+
 let CommonLinksPage: typeof import('./CommonLinksPage.vue').default
 let fetchSystemQuickLinks: typeof import('@/services/api').fetchSystemQuickLinks
 
