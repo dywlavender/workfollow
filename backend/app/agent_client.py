@@ -50,6 +50,17 @@ class WorkFollowAgentClient:
             return None
         return response.json()
 
+    @staticmethod
+    def _task_summary(task: dict[str, Any]) -> dict[str, Any]:
+        return {
+            key: task.get(key)
+            for key in (
+                "id", "title", "status", "priority", "dueAt", "dueEndAt",
+                "listName", "tags", "teamId", "bodyVersion", "metadataVersion",
+            )
+            if key in task
+        }
+
     def list_notes(self, *, limit: int = 50, offset: int = 0) -> list[dict[str, Any]]:
         return self._request("GET", "/notes", params={"limit": limit, "offset": offset})
 
@@ -59,7 +70,27 @@ class WorkFollowAgentClient:
         )
 
     def get_note(self, note_id: str) -> dict[str, Any]:
-        return self._request("GET", f"/notes/{note_id}")
+        return self._request("GET", f"/agent/notes/{note_id}")
+
+    def append_note(self, note_id: str, markdown: str, *, expected_version: str) -> dict[str, Any]:
+        return self._request(
+            "POST",
+            f"/agent/notes/{note_id}/append",
+            json={"markdown": markdown, "expectedVersion": expected_version},
+        )
+
+    def replace_note(
+        self,
+        note_id: str,
+        markdown: str,
+        *,
+        expected_version: str,
+        title: str | None = None,
+    ) -> dict[str, Any]:
+        payload: dict[str, str] = {"markdown": markdown, "expectedVersion": expected_version}
+        if title is not None:
+            payload["title"] = title
+        return self._request("PUT", f"/agent/notes/{note_id}", json=payload)
 
     def capture_note(self, text: str, *, title: str | None = None) -> dict[str, Any]:
         payload: dict[str, str] = {"text": text}
@@ -85,3 +116,55 @@ class WorkFollowAgentClient:
             data=data,
             files={"file": ("agent-note.md", markdown.encode("utf-8"), "text/markdown")},
         )
+
+    def list_tasks(
+        self,
+        *,
+        q: str | None = None,
+        list_name: str | None = None,
+        due_on: str | None = None,
+        completed: bool | None = None,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> list[dict[str, Any]]:
+        params: dict[str, Any] = {"limit": limit, "offset": offset}
+        if q:
+            params["q"] = q
+        if list_name:
+            params["list"] = list_name
+        if due_on:
+            params["dueOn"] = due_on
+        if completed is not None:
+            params["completed"] = completed
+        return self._request("GET", "/agent/tasks", params=params)
+
+    def get_task(self, task_id: str) -> dict[str, Any]:
+        return self._request("GET", f"/agent/tasks/{task_id}")
+
+    def create_task(self, title: str, **fields: Any) -> dict[str, Any]:
+        result = self._request("POST", "/agent/tasks", json={"title": title, **fields})
+        return self._task_summary(result)
+
+    def replace_task_body(
+        self, task_id: str, markdown: str, *, expected_version: str,
+    ) -> dict[str, Any]:
+        return self._request(
+            "PUT",
+            f"/agent/tasks/{task_id}/body",
+            json={"markdown": markdown, "expectedVersion": expected_version},
+        )
+
+    def update_task_metadata(
+        self, task_id: str, *, expected_version: str, fields: dict[str, Any],
+    ) -> dict[str, Any]:
+        return self._request(
+            "PATCH",
+            f"/agent/tasks/{task_id}/metadata",
+            json={"expectedVersion": expected_version, **fields},
+        )
+
+    def set_task_completed(self, task_id: str, *, completed: bool) -> dict[str, Any]:
+        action = "complete" if completed else "restore"
+        result = self._request("POST", f"/tasks/{task_id}/{action}")
+        task = result.get("todo", result)
+        return self._task_summary(task)

@@ -11,6 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.router import api_router
 from app.core.config import get_settings
 from app.db.session import SessionLocal
+from app.models.agent_action import AgentActionLog
 from app.services.external_notification_service import NotificationWorker
 from app.services.search_index_service import repair_fts_index
 from app.services.template_service import seed_builtin_templates
@@ -66,6 +67,42 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
 
 
 app = FastAPI(title=settings.app_name, version=settings.app_version, lifespan=lifespan)
+
+
+def _agent_resource(path: str) -> tuple[str | None, str | None]:
+    parts = [part for part in path.split("/") if part]
+    if len(parts) >= 3 and parts[:2] == ["api", "agent"] and parts[2] in {"notes", "tasks"}:
+        return parts[2][:-1].upper(), parts[3] if len(parts) > 3 else None
+    if len(parts) >= 3 and parts[:2] == ["api", "notes"]:
+        resource_id = parts[2] if parts[2] not in {"capture", "import-markdown"} else None
+        return "NOTE", resource_id
+    if len(parts) >= 3 and parts[:2] in (["api", "tasks"], ["api", "todos"]):
+        return "TASK", parts[2]
+    return "API", None
+
+
+@app.middleware("http")
+async def audit_agent_writes(request: Request, call_next):  # noqa: ANN001
+    response = await call_next(request)
+    if (
+        request.method in {"POST", "PUT", "PATCH", "DELETE"}
+        and getattr(request.state, "auth_method", None) == "agent"
+    ):
+        resource_type, resource_id = _agent_resource(request.url.path)
+        try:
+            with SessionLocal() as db:
+                db.add(AgentActionLog(
+                    user_id=getattr(request.state, "auth_user_id", None),
+                    method=request.method,
+                    path=request.url.path,
+                    status_code=response.status_code,
+                    resource_type=resource_type,
+                    resource_id=resource_id,
+                ))
+                db.commit()
+        except Exception:
+            logger.exception("记录 Agent 写操作失败 path=%s", request.url.path)
+    return response
 
 
 @app.middleware("http")

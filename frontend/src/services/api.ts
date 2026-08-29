@@ -125,6 +125,21 @@ export async function disableAgentToken(): Promise<AgentTokenStatus> {
   return data
 }
 
+export interface AgentAction {
+  id: string
+  method: string
+  path: string
+  statusCode: number
+  resourceType: string | null
+  resourceId: string | null
+  createdAt: string
+}
+
+export async function fetchAgentActions(): Promise<AgentAction[]> {
+  const { data } = await api.get<AgentAction[]>('/auth/agent-actions')
+  return data
+}
+
 export async function fetchAdminUsers(): Promise<User[]> {
   const { data } = await api.get<User[]>('/admin/users')
   return data

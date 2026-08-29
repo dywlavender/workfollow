@@ -1,4 +1,5 @@
 from app.models.auth import AgentToken, AuthSession, SystemRole, User, UserStatus
+from app.models.agent_action import AgentActionLog
 from app.models.note import Attachment, Folder, Note, NoteTemplate
 from app.models.quick_link import QuickLink
 from app.models.team import Team, TeamMember, TeamMemberRole, TeamMemberStatus, TeamStatus
@@ -41,6 +42,7 @@ from app.models.todo_list import TodoList
 __all__ = [
     "AuthSession",
     "AgentToken",
+    "AgentActionLog",
     "SystemRole",
     "RecurrenceType",
     "TaskFileAccess",

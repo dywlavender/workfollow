@@ -38,6 +38,9 @@ class Settings(BaseSettings):
     # collaboration server uses it when writing the merged Yjs projection
     # back to the task table; it is never exposed to the browser.
     collaboration_internal_token: str = ""
+    # Internal HTTP endpoint exposed by the local Hocuspocus process. Agent
+    # writes use it so they join the same Yjs document as browser edits.
+    collaboration_http_url: str = "http://127.0.0.1:8124"
     database_pool_size: int = 15
     database_max_overflow: int = 10
     database_pool_pre_ping: bool = True

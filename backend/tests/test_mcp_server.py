@@ -26,4 +26,12 @@ def test_stdio_server_exposes_expected_tools() -> None:
         "get_note",
         "capture_note",
         "create_note",
+        "append_note",
+        "replace_note",
+        "list_tasks",
+        "get_task",
+        "create_task",
+        "replace_task_body",
+        "update_task_metadata",
+        "set_task_completed",
     }

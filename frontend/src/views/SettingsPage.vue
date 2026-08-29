@@ -33,8 +33,10 @@ import { useAuthStore } from '@/stores/auth'
 import { useFeedbackStore } from '@/stores/feedback'
 import {
   disableAgentToken,
+  fetchAgentActions,
   fetchAgentTokenStatus,
   generateAgentToken,
+  type AgentAction,
   type AgentTokenStatus,
 } from '@/services/api'
 
@@ -89,6 +91,7 @@ const profileDirty = computed(() => nicknameDraft.value.trim() !== (authStore.us
 const agentTokenStatus = ref<AgentTokenStatus | null>(null)
 const agentTokenLoading = ref(false)
 const revealedAgentToken = ref('')
+const agentActions = ref<AgentAction[]>([])
 const paletteGroups = computed(() => [
   {
     label: '经典配色',
@@ -118,7 +121,9 @@ watch(activeSection, (section) => {
 async function loadAgentTokenStatus() {
   agentTokenLoading.value = true
   try {
-    agentTokenStatus.value = await fetchAgentTokenStatus()
+    const [status, actions] = await Promise.all([fetchAgentTokenStatus(), fetchAgentActions()])
+    agentTokenStatus.value = status
+    agentActions.value = actions
   } catch (cause: any) {
     feedback.error(cause?.response?.data?.detail ?? '加载 Agent Token 状态失败。')
   } finally {
@@ -391,6 +396,15 @@ async function saveProfile() {
                 <button v-if="agentTokenStatus?.enabled" class="danger-outline-button" type="button" :disabled="agentTokenLoading" @click="stopAgentToken"><IconBan :size="15" />停用</button>
               </div>
             </footer>
+            <div v-if="agentActions.length" class="agent-action-list">
+              <strong>最近写操作</strong>
+              <ul>
+                <li v-for="action in agentActions" :key="action.id">
+                  <span>{{ action.method }} {{ action.resourceType || 'API' }}{{ action.resourceId ? ` · ${action.resourceId}` : '' }}</span>
+                  <small :class="{ failed: action.statusCode >= 400 }">{{ action.statusCode }} · {{ formatAccountTime(action.createdAt) }}</small>
+                </li>
+              </ul>
+            </div>
           </section>
           <footer class="account-actions">
             <span>需要切换账号时，可以安全退出当前会话。</span>

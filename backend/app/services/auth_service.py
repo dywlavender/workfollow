@@ -105,6 +105,8 @@ def get_current_user(request: Request, db: Session, settings: Settings) -> User:
         if separator and scheme.lower() == "bearer" and token.startswith(AGENT_TOKEN_PREFIX):
             user = _user_from_agent_token(db, token)
             if user is not None and user.status == UserStatus.ACTIVE:
+                request.state.auth_method = "agent"
+                request.state.auth_user_id = user.id
                 return user
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Agent Token 无效或已停用")
 
@@ -123,4 +125,6 @@ def get_current_user(request: Request, db: Session, settings: Settings) -> User:
     user = db.get(User, session.user_id)
     if user is None or user.status != UserStatus.ACTIVE:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="用户不可用")
+    request.state.auth_method = "session"
+    request.state.auth_user_id = user.id
     return user
