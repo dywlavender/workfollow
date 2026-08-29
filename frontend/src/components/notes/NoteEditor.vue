@@ -24,7 +24,8 @@ import {
   fetchNote, fetchTaskBriefs, postTodo,
   type Attachment, type Folder, type Note, type TaskBrief, type TeamMember, type Todo, type TodoPayload,
 } from '@/services/api'
-import InputDialog from '@/components/InputDialog.vue'
+import EditorLinkDialog from '@/components/editor/EditorLinkDialog.vue'
+import EditorSlashMenu from '@/components/editor/EditorSlashMenu.vue'
 import RichTextToolbar from '@/components/RichTextToolbar.vue'
 import TaskSearchDialog from '@/components/notes/TaskSearchDialog.vue'
 import TodoDialog from '@/components/todo/TodoDialog.vue'
@@ -35,6 +36,7 @@ import { CollaborationInitializationError, initializeCollaborativeField } from '
 import { createWorkFollowEditorExtensions } from '@/modules/editor/tiptap'
 import { contentJsonSemanticallyEqual } from '@/modules/editor/contentProjection'
 import { workFollowSlashCommands, type WorkFollowSlashCommand } from '@/modules/editor/slashCommands'
+import { useSlashMenu } from '@/modules/editor/slashMenu'
 import { useClickOutside } from '@/composables/useClickOutside'
 import { useRealtimeStore } from '@/stores/realtime'
 
@@ -72,12 +74,11 @@ const title = ref('')
 const folderId = ref<string | null>(null)
 const lastSavedAt = ref<string | null>(props.note?.updatedAt ?? props.note?.createdAt ?? null)
 const fileInput = ref<HTMLInputElement | null>(null)
-const linkDialogOpen = ref(false)
-const linkValue = ref('')
-const slashMenuOpen = ref(false)
-const slashActiveIndex = ref(0)
-const slashPosition = ref({ left: 0, top: 0 })
-const slashRange = ref<{ from: number; to: number } | null>(null)
+const linkDialog = ref<InstanceType<typeof EditorLinkDialog> | null>(null)
+const slash = useSlashMenu({
+  commands: () => workFollowSlashCommands,
+  idPrefix: 'note-slash-command',
+})
 const moreOpen = ref(false)
 const moreHost = ref<HTMLElement | null>(null)
 useClickOutside(moreHost, moreOpen, () => { moreOpen.value = false })
@@ -159,11 +160,11 @@ function createNoteEditor(document: Y.Doc) {
     editorProps: {
       attributes: { role: 'textbox', 'aria-label': '笔记正文', 'aria-multiline': 'true' },
       handleKeyDown: (_view, event) => {
-        if (!slashMenuOpen.value) return false
-        if (event.key === 'ArrowDown') moveSlashSelection(1)
-        else if (event.key === 'ArrowUp') moveSlashSelection(-1)
-        else if (event.key === 'Enter') insertSlashBlock(workFollowSlashCommands[slashActiveIndex.value].type)
-        else if (event.key === 'Escape') closeSlashMenu()
+        if (!slash.open.value) return false
+        if (event.key === 'ArrowDown') slash.moveSelection(1)
+        else if (event.key === 'ArrowUp') slash.moveSelection(-1)
+        else if (event.key === 'Enter') insertSlashBlock(workFollowSlashCommands[slash.activeIndex.value].type)
+        else if (event.key === 'Escape') slash.close()
         else return false
         event.preventDefault()
         return true
@@ -202,7 +203,7 @@ function createNoteEditor(document: Y.Doc) {
       scheduleContentSnapshot(currentEditor)
       scheduleTaskHydration()
       window.clearTimeout(slashDetectTimer)
-      slashDetectTimer = window.setTimeout(() => detectSlashCommand(currentEditor), 0)
+      slashDetectTimer = window.setTimeout(() => slash.detect(currentEditor), 0)
     },
   })
   instance.setEditable(collaborationContentReady)
@@ -462,49 +463,20 @@ function scheduleProjectionConfirmation() {
   }, 260)
 }
 
-function placeSlashMenuAtCaret(currentEditor: CoreEditor) {
-  const rect = currentEditor.view.coordsAtPos(currentEditor.state.selection.from)
-  slashPosition.value = {
-    left: Math.max(8, Math.min(window.innerWidth - 276, rect.left)),
-    top: Math.max(8, Math.min(window.innerHeight - 430, rect.bottom + 8)),
-  }
-}
-
-function detectSlashCommand(currentEditor: CoreEditor) {
-  const { selection } = currentEditor.state
-  if (!selection.empty) return
-  const textBeforeCursor = selection.$from.parent.textBetween(0, selection.$from.parentOffset, '\n', '\n')
-  if (!textBeforeCursor.endsWith('/')) return
-  slashRange.value = { from: Math.max(0, selection.from - 1), to: selection.from }
-  placeSlashMenuAtCaret(currentEditor)
-  slashActiveIndex.value = 0
-  slashMenuOpen.value = true
-}
-
-function closeSlashMenu() {
-  slashMenuOpen.value = false
-  slashRange.value = null
-}
-
-function moveSlashSelection(direction: number) {
-  slashActiveIndex.value = (slashActiveIndex.value + direction + workFollowSlashCommands.length) % workFollowSlashCommands.length
-  void nextTick(() => document.getElementById(`note-slash-command-${workFollowSlashCommands[slashActiveIndex.value].type}`)?.scrollIntoView({ block: 'nearest' }))
-}
-
 function insertSlashBlock(type: WorkFollowSlashCommand) {
   const currentEditor = editor.value
   if (!currentEditor || !collaborationContentReady) return
   const chain = currentEditor.chain().focus()
-  if (slashRange.value) chain.deleteRange({ from: slashRange.value.from, to: currentEditor.state.selection.from })
+  slash.deleteRange(chain, currentEditor.state.selection.from)
   if (type === 'link') {
-    chain.run(); closeSlashMenu(); setLink(); return
+    chain.run(); slash.close(); setLink(); return
   }
   if (type === 'attachment') {
-    chain.run(); closeSlashMenu(); openFilePicker('embedded'); return
+    chain.run(); slash.close(); openFilePicker('embedded'); return
   }
   if (type === 'createTask' || type === 'linkTask') {
     chain.run()
-    closeSlashMenu()
+    slash.close()
     if (type === 'createTask') openTaskCreateAtCursor()
     else openTaskSearchAtCursor()
     return
@@ -523,7 +495,7 @@ function insertSlashBlock(type: WorkFollowSlashCommand) {
   else if (type === 'tag') chain.insertContent('#标签')
   else chain.insertContent('关联任务 / 笔记')
   chain.run()
-  closeSlashMenu()
+  slash.close()
 }
 
 watch(
@@ -538,7 +510,7 @@ watch(
     editorContent.value = props.note?.contentJson ?? null
     taskIdsKey = ''
     taskBriefCache = new Map()
-    closeSlashMenu()
+    slash.close()
     if (oldId !== props.note?.id) void syncNoteCollaboration(props.note)
   },
   { immediate: true },
@@ -749,13 +721,13 @@ function handleImmersiveKeydown(event: KeyboardEvent) {
   // Let the currently open editor popover consume Escape first. A second
   // Escape exits immersive editing, so nested interactions are not dismissed
   // unexpectedly.
-  if (linkDialogOpen.value || taskDialogOpen.value || taskSearchOpen.value) return
+  if (linkDialog.value || taskDialogOpen.value || taskSearchOpen.value) return
   if (moreOpen.value) {
     moreOpen.value = false
     return
   }
-  if (slashMenuOpen.value) {
-    closeSlashMenu()
+  if (slash.open.value) {
+    slash.close()
     return
   }
   closeImmersive()
@@ -763,16 +735,7 @@ function handleImmersiveKeydown(event: KeyboardEvent) {
 
 function setLink() {
   if (!collaborationContentReady) return
-  const previous = editor.value?.getAttributes('link').href as string | undefined
-  linkValue.value = previous ?? 'https://'
-  linkDialogOpen.value = true
-}
-
-function applyLink(url: string) {
-  linkDialogOpen.value = false
-  if (!editor.value) return
-  if (!url.trim()) editor.value.chain().focus().extendMarkRange('link').unsetLink().run()
-  else editor.value.chain().focus().extendMarkRange('link').setLink({ href: url.trim() }).run()
+  linkDialog.value?.open()
 }
 
 function selectedText(): string {
@@ -1107,21 +1070,7 @@ watch(immersiveOpen, (open) => {
       </div>
       <EditorContent class="tiptap-editor" :editor="editor ?? undefined" />
       <span v-if="taskFeedback" class="note-task-feedback" role="status">{{ taskFeedback }}</span>
-      <Teleport to="body">
-        <section v-if="slashMenuOpen" class="task-slash-menu" :style="{ left: `${slashPosition.left}px`, top: `${slashPosition.top}px` }" role="menu" aria-label="插入格式" @mousedown.prevent.stop @click.stop>
-          <button
-            v-for="(command, index) in workFollowSlashCommands"
-            :id="`note-slash-command-${command.type}`"
-            :key="command.type"
-            type="button"
-            role="menuitem"
-            :class="{ active: slashActiveIndex === index }"
-            :aria-current="slashActiveIndex === index ? 'true' : undefined"
-            @mousemove="slashActiveIndex = index"
-            @click="insertSlashBlock(command.type)"
-          ><span>{{ command.mark }}</span><strong>{{ command.label }}</strong></button>
-        </section>
-      </Teleport>
+      <EditorSlashMenu :commands="workFollowSlashCommands" :active-index="slash.activeIndex.value" :position="slash.position.value" :open="slash.open.value" id-prefix="note-slash-command" @select="insertSlashBlock" @hover="slash.activeIndex.value = $event" />
       <section class="attachment-panel" :class="{ 'is-expanded': attachmentPanelOpen }">
         <header>
           <button type="button" class="attachment-panel-toggle" :aria-expanded="attachmentPanelOpen" aria-controls="note-file-attachments" @click="attachmentPanelOpen = !attachmentPanelOpen">
@@ -1140,7 +1089,7 @@ watch(immersiveOpen, (open) => {
           <p v-else>正文图片只在正文中展示；这里用于管理 PDF、DOCX、Markdown 和文本文件。</p>
         </div>
       </section>
-      <InputDialog :open="linkDialogOpen" title="设置链接" label="链接地址" :initial-value="linkValue" placeholder="https://（留空可移除链接）" confirm-label="应用" :required="false" @close="linkDialogOpen = false" @submit="applyLink" />
+      <EditorLinkDialog ref="linkDialog" :editor="() => editor" />
       <TodoDialog
         :open="taskDialogOpen"
         :initial-title="taskInitialTitle"

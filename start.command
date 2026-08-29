@@ -138,6 +138,30 @@ if [ ! -d "$COLLABORATION_DIR/node_modules" ]; then
   (cd "$COLLABORATION_DIR" && npm ci --no-audit --no-fund)
 fi
 
+# The backend serves frontend/dist at the backend port, so a stale dist shows
+# outdated UI on that port even though the 5173 dev server is current. Rebuild
+# only when some frontend source is newer than the last build output; a build
+# failure must not block the launcher (the dev port keeps working).
+build_frontend_if_stale() {
+  local dist_index="$FRONTEND_DIR/dist/index.html"
+  local changed
+  if [ ! -f "$dist_index" ]; then
+    info "首次运行：构建前端产物（backend 端口访问使用）..."
+    if ! (cd "$FRONTEND_DIR" && npm run build); then
+      info "警告：前端构建失败，backend 端口暂时没有可用页面；5173 开发端口不受影响。"
+    fi
+    return 0
+  fi
+  changed="$(find "$FRONTEND_DIR/src" "$FRONTEND_DIR/index.html" "$FRONTEND_DIR/vite.config.ts" "$FRONTEND_DIR/package.json" -newer "$dist_index" -print 2>/dev/null | head -n 1)"
+  if [ -n "$changed" ]; then
+    info "检测到前端源码比构建产物新，正在重新构建 dist..."
+    if ! (cd "$FRONTEND_DIR" && npm run build); then
+      info "警告：前端构建失败，backend 端口将继续使用上一次的构建产物；5173 开发端口不受影响。"
+    fi
+  fi
+}
+build_frontend_if_stale
+
 info "更新本地数据库结构..."
 (cd "$BACKEND_DIR" && .venv/bin/alembic upgrade head)
 
@@ -216,7 +240,8 @@ if [ "${WORKFOLLOW_NO_OPEN:-0}" != "1" ] && command -v open >/dev/null 2>&1; the
   open "http://127.0.0.1:$FRONTEND_PORT"
 fi
 
-printf '\nWorkFollow 正在运行。关闭此窗口或按 Control+C 即可停止服务。\n\n'
+printf '\nWorkFollow 正在运行。关闭此窗口或按 Control+C 即可停止服务。\n'
+printf '%s\n' '提示：5173 为实时开发版（改代码立即生效）；backend 端口 8123 访问的是构建版 dist（每次启动自动按需更新）。'
 
 while kill -0 "$BACKEND_PID" 2>/dev/null && kill -0 "$COLLABORATION_PID" 2>/dev/null && kill -0 "$FRONTEND_PID" 2>/dev/null; do
   sleep 1

@@ -2,6 +2,7 @@ from datetime import datetime
 from typing import Any
 from pydantic import Field, field_validator
 
+from app.schemas.auth import UserRead
 from app.schemas.base import ApiModel
 
 
@@ -117,6 +118,12 @@ class NoteListItem(ApiModel):
     deleted_at: datetime | None
 
 
+class SharedByMeNoteRead(NoteListItem):
+    """A note of mine that still has at least one active share, with whom."""
+
+    shared_with: list[UserRead] = Field(default_factory=list)
+
+
 class NoteCounts(ApiModel):
     unfiled: int
 
@@ -128,6 +135,9 @@ class NoteNavigationCounts(ApiModel):
     unfiled: int
     favorites: int
     folders: dict[str, int] = Field(default_factory=dict)
+    shared: int = 0
+    shared_by_me: int = 0
+    knowledge: int = 0
     submissions_pending: int = 0
     review_pending: int = 0
 

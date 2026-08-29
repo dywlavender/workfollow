@@ -253,6 +253,7 @@ class TeamNoteCategoryRead(ApiModel):
     team_id: str
     name: str
     sort_order: int
+    note_count: int = 0
     created_at: datetime
     updated_at: datetime
 

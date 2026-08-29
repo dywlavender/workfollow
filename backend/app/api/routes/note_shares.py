@@ -3,14 +3,20 @@ from __future__ import annotations
 from fastapi import APIRouter, Query, Response, status
 
 from app.core.dependencies import CurrentSettings, CurrentUser, DbSession
-from app.models.note_share import NoteShareStatus
+from app.models.note_share import NoteSharePermission, NoteShareStatus
 from app.models.notification import NotificationType
 from app.schemas.note import AttachmentRead, NoteRead
-from app.schemas.note_share import NoteShareCreate, NoteShareRead, SharedNoteRead
-from app.services import audit_service, note_service, note_share_service, notification_dispatcher
+from app.schemas.note_share import NoteShareCreate, NoteSharePermissionUpdate, NoteShareRead, SharedNoteRead
+from app.services import audit_service, event_stream, note_service, note_share_service, notification_dispatcher
 
 
 router = APIRouter(tags=["note-shares"])
+
+
+PERMISSION_LABELS = {
+    NoteSharePermission.READ_ONLY: "只读",
+    NoteSharePermission.EDITABLE: "可协作编辑",
+}
 
 
 def _dispatch_share_notification(
@@ -22,21 +28,30 @@ def _dispatch_share_notification(
     actor_name: str,
     share_id: str,
     revoked: bool = False,
+    permission: NoteSharePermission | None = None,
+    updated: bool = False,
     event_key: str | None = None,
 ) -> None:  # noqa: ANN001
-    notification_type = NotificationType.NOTE_SHARE_REVOKED if revoked else NotificationType.NOTE_SHARED
-    title = "共享权限已取消" if revoked else "你收到一篇共享笔记"
-    body = (
-        f"用户 {actor_name} 已取消与你共享“{note.title}”。"
-        if revoked
-        else f"用户 {actor_name} 向你共享了“{note.title}”（只读）。"
-    )
+    if revoked:
+        notification_type = NotificationType.NOTE_SHARE_REVOKED
+        title = "共享权限已取消"
+        body = f"用户 {actor_name} 已取消与你共享“{note.title}”。"
+    elif updated:
+        level = PERMISSION_LABELS.get(permission if permission is not None else NoteSharePermission.READ_ONLY, "只读")
+        notification_type = NotificationType.NOTE_SHARE_UPDATED
+        title = "共享权限已更新"
+        body = f"用户 {actor_name} 将“{note.title}”的共享权限调整为{level}。"
+    else:
+        level = PERMISSION_LABELS.get(permission if permission is not None else NoteSharePermission.READ_ONLY, "只读")
+        notification_type = NotificationType.NOTE_SHARED
+        title = "你收到一篇共享笔记"
+        body = f"用户 {actor_name} 向你共享了“{note.title}”（{level}）。"
     data_json = {"noteId": note.id, "shareId": share_id}
     if event_key:
         data_json["eventKey"] = event_key
     notification_dispatcher.dispatch_event(
         db,
-        event="note_share_revoked" if revoked else "note_shared",
+        event="note_share_revoked" if revoked else "note_share_updated" if updated else "note_shared",
         participant_ids=[recipient_id],
         actor_user_id=actor_id,
         in_app_type=notification_type,
@@ -76,7 +91,7 @@ def create_share(note_id: str, payload: NoteShareCreate, db: DbSession, user: Cu
             for item in previous_shares
             if item.status == NoteShareStatus.ACTIVE
         }
-        shares = note_share_service.sync_note_shares(db, note, user.id, payload.user_ids)
+        shares = note_share_service.sync_note_shares(db, note, user.id, payload.user_ids, payload.permission)
         current_ids = {item.shared_with_user_id for item in shares}
         for share in shares:
             if share.shared_with_user_id not in previous_ids:
@@ -88,6 +103,7 @@ def create_share(note_id: str, payload: NoteShareCreate, db: DbSession, user: Cu
                     actor_id=user.id,
                     actor_name=user.nickname,
                     share_id=share.id,
+                    permission=share.permission,
                     event_key=(
                         f"note-share-granted:{share.id}:"
                         f"{previous.revoked_at.isoformat() if previous and previous.revoked_at else 'initial'}"
@@ -124,6 +140,7 @@ def create_share(note_id: str, payload: NoteShareCreate, db: DbSession, user: Cu
         actor_id=user.id,
         actor_name=user.nickname,
         share_id=share.id,
+        permission=share.permission,
     )
     audit_service.record_audit(
         db, actor_user_id=user.id, action="NOTE_SHARE_CREATED", resource_type="NOTE_SHARE", resource_id=share.id,
@@ -161,6 +178,43 @@ def revoke_share(note_id: str, share_id: str, db: DbSession, user: CurrentUser) 
         metadata_json={"noteId": note_id, "sharedWithUserId": share.shared_with_user_id},
     )
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.patch("/notes/{note_id}/shares/{share_id}", response_model=NoteShareRead)
+def change_share_permission(
+    note_id: str,
+    share_id: str,
+    payload: NoteSharePermissionUpdate,
+    db: DbSession,
+    user: CurrentUser,
+) -> NoteShareRead:
+    note = note_service.get_note_or_404(db, note_id, user.id)
+    share = note_share_service.get_share_or_404(db, note_id, share_id, user.id)
+    if share.permission == payload.permission:
+        return share
+    share = note_share_service.update_share_permission(db, share, payload.permission)
+    # Fan the change out as a note event so an open editor on the recipient's
+    # side refetches and adapts (gains or loses its editing session) live.
+    event_stream.queue_note_changed(db, note)
+    _dispatch_share_notification(
+        db,
+        note=note,
+        recipient_id=share.shared_with_user_id,
+        actor_id=user.id,
+        actor_name=user.nickname,
+        share_id=share.id,
+        permission=share.permission,
+        updated=True,
+    )
+    audit_service.record_audit(
+        db, actor_user_id=user.id, action="NOTE_SHARE_PERMISSION_UPDATED", resource_type="NOTE_SHARE", resource_id=share.id,
+        metadata_json={
+            "noteId": note_id,
+            "sharedWithUserId": share.shared_with_user_id,
+            "permission": share.permission.value if hasattr(share.permission, "value") else str(share.permission),
+        },
+    )
+    return share
 
 
 @router.get("/shared/notes", response_model=list[SharedNoteRead])

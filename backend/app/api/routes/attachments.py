@@ -14,6 +14,7 @@ from app.models.note import Attachment, Note
 from app.models.todo import TaskFileAccess
 from app.models.team_note import SubmissionFileAccess, TeamFileAccess
 from app.schemas.note import AttachmentRead
+from app.services.note_permission_service import has_editable_share
 from app.services.note_service import embedded_image_attachment_ids, get_note_or_404
 from app.services.note_share_service import can_read_shared_note
 from app.services.team_note_service import can_access_attachment
@@ -56,7 +57,13 @@ async def upload_attachment(
     note_id: Annotated[str, Form(alias="noteId")],
     file: Annotated[UploadFile, File()],
 ) -> AttachmentRead:
-    get_note_or_404(db, note_id, user.id)
+    note = db.get(Note, note_id)
+    # The owner and EDITABLE share holders may add binaries (pasted images,
+    # standalone files). Read-only share holders cannot.
+    if note is None or note.deleted_at is not None or (
+        note.owner_id != user.id and not has_editable_share(db, note_id, user.id)
+    ):
+        raise HTTPException(status_code=404, detail="Note not found")
     original_name = Path(file.filename or "attachment").name
     suffix = Path(original_name).suffix.lower().lstrip(".")
     if suffix not in ALLOWED_SUFFIXES:

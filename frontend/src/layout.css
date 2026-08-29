@@ -417,6 +417,7 @@ html[data-atmosphere="on"] .task-app-shell > .sidebar.is-task-shell {
 html[data-atmosphere="on"] .home-dashboard-panel,
 html[data-atmosphere="on"] .settings-panel,
 html[data-atmosphere="on"] .team-summary-card,
+html[data-atmosphere="on"] .team-empty-state,
 html[data-atmosphere="on"] .team-members-panel,
 html[data-atmosphere="on"] .team-danger-zone,
 html[data-atmosphere="on"] .team-note-reader,
@@ -1135,11 +1136,20 @@ html[data-atmosphere="on"] .note-editor-immersive {
   background: var(--workspace-glass-editor);
 }
 
-html[data-atmosphere="on"] .note-editor-immersive .editor-header,
 html[data-atmosphere="on"] .note-editor-immersive .editor-toolbar,
 html[data-atmosphere="on"] .note-editor-immersive .attachment-panel {
   position: relative;
   z-index: 3;
+  background: var(--workspace-glass-detail);
+  -webkit-backdrop-filter: blur(var(--glass-blur-panel)) saturate(var(--glass-saturation-panel));
+  backdrop-filter: blur(var(--glass-blur-panel)) saturate(var(--glass-saturation-panel));
+}
+
+/* 玻璃层让 header 与 toolbar 各自成为层叠上下文；同级同 z-index 时按 DOM 顺序
+   绘制，靠后的 toolbar 会盖住 header 里下弹的 note-more-menu。header 需要高一级。 */
+html[data-atmosphere="on"] .note-editor-immersive .editor-header {
+  position: relative;
+  z-index: 4;
   background: var(--workspace-glass-detail);
   -webkit-backdrop-filter: blur(var(--glass-blur-panel)) saturate(var(--glass-saturation-panel));
   backdrop-filter: blur(var(--glass-blur-panel)) saturate(var(--glass-saturation-panel));

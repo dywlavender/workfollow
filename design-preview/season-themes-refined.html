@@ -1,0 +1,710 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>WorkFollow · 四季主题效果图 v6 · 低饱和雾感方案</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; overflow: hidden; }
+  body {
+    font-family: Inter, "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+    font-size: 14px; color: #1f232b;
+    -webkit-font-smoothing: antialiased;
+    background: #f7f8fa;
+  }
+  button { font-family: inherit; border: 0; cursor: pointer; background: none; }
+
+  /* ============ 天空（每季独立配色，CSS 渐变）· 低饱和雾感 ============ */
+  .sky { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
+  body.atmo-off .sky, body.atmo-off .scene, body.atmo-off .overlay { opacity: 0; }
+
+  /* 春 · 雾樱（灰粉暮雾） */
+  body[data-season="spring"] { background: #e8d2db; }
+  body[data-season="spring"][data-mode="light"] .sky {
+    background:
+      radial-gradient(900px 520px at 14% -6%, rgb(255 255 255 / .85), transparent 58%),
+      radial-gradient(760px 480px at 86% 30%, rgb(217 167 184 / .22), transparent 62%),
+      linear-gradient(180deg, #f6edf0 0%, #efdde4 46%, #e8d2db 100%);
+  }
+  body[data-season="spring"][data-mode="dark"] { background: #100b0e; }
+  body[data-season="spring"][data-mode="dark"] .sky {
+    background:
+      radial-gradient(1000px 460px at 70% -14%, rgb(176 82 122 / .24), transparent 56%),
+      radial-gradient(700px 420px at 16% 60%, rgb(96 56 74 / .28), transparent 60%),
+      linear-gradient(180deg, #1f151b 0%, #170f14 55%, #110b0f 100%);
+  }
+  /* 夏 · 烟青（雾面海青） */
+  body[data-season="summer"] { background: #d3e1e7; }
+  body[data-season="summer"][data-mode="light"] .sky {
+    background:
+      radial-gradient(720px 720px at 21% 20%, rgb(255 255 255 / .8), rgb(210 224 230 / .25) 42%, transparent 68%),
+      linear-gradient(180deg, #edf3f5 0%, #dfe9ed 52%, #d3e1e7 100%);
+  }
+  body[data-season="summer"][data-mode="dark"] { background: #081320; }
+  body[data-season="summer"][data-mode="dark"] .sky {
+    background:
+      radial-gradient(680px 680px at 21% 20%, rgb(143 185 206 / .14), transparent 62%),
+      radial-gradient(900px 500px at 84% 108%, rgb(58 110 136 / .32), transparent 60%),
+      linear-gradient(180deg, #0e1c28 0%, #0a1622 55%, #071019 100%);
+  }
+  /* 秋 · 陶杏（陶土暖杏） */
+  body[data-season="autumn"] { background: #e4d2b4; }
+  body[data-season="autumn"][data-mode="light"] .sky {
+    background:
+      radial-gradient(760px 560px at 82% 44%, rgb(210 168 127 / .4), rgb(162 107 71 / .16) 46%, transparent 70%),
+      linear-gradient(180deg, #f3ecdd 0%, #ecdfc7 48%, #e4d2b4 100%);
+  }
+  body[data-season="autumn"][data-mode="dark"] { background: #120c07; }
+  body[data-season="autumn"][data-mode="dark"] .sky {
+    background:
+      radial-gradient(700px 520px at 82% 46%, rgb(150 96 52 / .3), transparent 62%),
+      linear-gradient(180deg, #1d150d 0%, #150f09 55%, #0f0a06 100%);
+  }
+  /* 冬 · 霜青（青灰雪色） */
+  body[data-season="winter"] { background: #cdd9e4; }
+  body[data-season="winter"][data-mode="light"] .sky {
+    background:
+      radial-gradient(800px 460px at 96% -8%, rgb(255 255 255 / .95), transparent 60%),
+      radial-gradient(700px 420px at 10% 90%, rgb(157 184 216 / .3), transparent 62%),
+      linear-gradient(180deg, #e8edf2 0%, #dbe3eb 50%, #cdd9e4 100%);
+  }
+  body[data-season="winter"][data-mode="dark"] { background: #070b14; }
+  body[data-season="winter"][data-mode="dark"] .sky {
+    background:
+      radial-gradient(560px 560px at 79% 22%, rgb(157 184 216 / .14), transparent 60%),
+      radial-gradient(900px 500px at 14% 108%, rgb(70 100 140 / .32), transparent 60%),
+      linear-gradient(180deg, #0d1526 0%, #0a1020 55%, #060a13 100%);
+  }
+  .aurora { position: fixed; filter: blur(56px); opacity: 0; border-radius: 50%; z-index: 2; pointer-events: none; }
+  body[data-season="spring"][data-mode="dark"] .aurora.a1,
+  body[data-season="winter"][data-mode="dark"] .aurora.a1 {
+    opacity: .55; width: 720px; height: 160px; top: 5%; left: 26%;
+    transform: rotate(-9deg);
+    background: linear-gradient(90deg, transparent, rgb(217 167 184 / .32), rgb(143 185 206 / .26), transparent);
+    animation: aurora-drift 15s ease-in-out infinite alternate;
+  }
+  @keyframes aurora-drift {
+    from { transform: rotate(-9deg) translateX(-50px) scaleY(1); opacity: .38; }
+    to   { transform: rotate(-6deg) translateX(60px) scaleY(1.3); opacity: .6; }
+  }
+  .grain {
+    position: fixed; inset: 0; z-index: 2; pointer-events: none; opacity: 0;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='.5'/%3E%3C/svg%3E");
+  }
+  body[data-season="autumn"] .grain { opacity: .05; mix-blend-mode: multiply; }
+  body[data-season="autumn"][data-mode="dark"] .grain { opacity: .07; mix-blend-mode: overlay; }
+
+  /* ============ 扁平插画场景层 ============ */
+  .scene {
+    position: fixed; left: 0; right: 0; bottom: 0;
+    height: 32vh; z-index: 1; pointer-events: none;
+  }
+  .scene svg { display: none; width: 100%; height: 100%; }
+  body[data-season="spring"] .sc-spring,
+  body[data-season="summer"] .sc-summer,
+  body[data-season="autumn"] .sc-autumn,
+  body[data-season="winter"] .sc-winter { display: block; }
+
+  /* ============ 应用外壳（玻璃面板） ============ */
+  .app {
+    position: relative; z-index: 10;
+    display: grid; grid-template-columns: 152px minmax(0, 1fr);
+    height: 100dvh; color: var(--text-1);
+  }
+  .rail {
+    display: flex; flex-direction: column; padding: 20px 12px 14px;
+    background: var(--rail-bg);
+    backdrop-filter: blur(4px) saturate(1.15);
+    -webkit-backdrop-filter: blur(4px) saturate(1.15);
+    border-right: 1px solid var(--border-glass);
+  }
+  .brand { display: flex; align-items: center; justify-content: center; gap: 9px; margin-bottom: 6px; }
+  .brand-mark {
+    display: grid; place-items: center; width: 32px; height: 32px; flex-basis: 32px;
+    border-radius: 8px; color: var(--on-accent); font-weight: 700; font-size: 14px;
+    background: linear-gradient(145deg, var(--accent-glow), var(--accent));
+    box-shadow: 0 6px 18px var(--accent-shadow);
+  }
+  .brand-name { font-weight: 600; font-size: 14px; letter-spacing: -.02em; }
+  .rail-nav { display: flex; flex-direction: column; gap: 6px; margin-top: 28px; }
+  .rail-item {
+    position: relative; display: flex; align-items: center; gap: 10px;
+    height: 40px; padding-inline: 11px; border-radius: 8px;
+    font-size: 13px; font-weight: 600; color: var(--text-3);
+    transition: background .15s ease, color .15s ease;
+  }
+  .rail-item:hover { background: var(--hover-bg); color: var(--text-1); }
+  .rail-item.active { background: var(--accent-soft); color: var(--accent-strong); }
+  .rail-item svg { flex-shrink: 0; }
+  .rail-badge {
+    position: absolute; top: 4px; right: 8px; min-width: 16px; height: 16px;
+    padding-inline: 4px; display: grid; place-items: center;
+    border-radius: 999px; font-size: 10px; font-weight: 600;
+    color: var(--on-accent); background: var(--accent);
+  }
+  .rail-bottom { margin-top: auto; display: flex; flex-direction: column; gap: 4px; }
+  .user-card { display: flex; align-items: center; gap: 9px; min-height: 42px; padding: 6px 8px; margin-top: 6px; border-radius: 8px; }
+  .avatar { display: grid; place-items: center; width: 29px; height: 29px; flex-basis: 29px; border-radius: 50%; color: var(--text-2); background: var(--hover-bg); }
+  .user-meta strong { display: block; font-size: 12px; font-weight: 600; }
+  .user-meta small { display: block; font-size: 10px; color: var(--text-4); }
+
+  .workspace {
+    display: grid;
+    grid-template-columns: 216px minmax(360px, 420px) 1px minmax(0, 1fr);
+    height: 100dvh; min-height: 0;
+  }
+  .pane {
+    min-height: 0; overflow-y: auto;
+    background: var(--panel-bg);
+    backdrop-filter: blur(5px) saturate(1.12);
+    -webkit-backdrop-filter: blur(5px) saturate(1.12);
+    box-shadow: inset 0 1px 0 var(--glass-highlight);
+  }
+  .pane::-webkit-scrollbar { width: 8px; }
+  .pane::-webkit-scrollbar-thumb { background: var(--scroll-thumb); border-radius: 999px; border: 2px solid transparent; background-clip: content-box; }
+  .divider { background: var(--border-faint); }
+
+  .pane-head {
+    position: sticky; top: 0; z-index: 2;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 16px 18px 10px; background: inherit;
+  }
+  .pane-title { font-size: 15px; font-weight: 600; letter-spacing: -.01em; }
+  .pane-sub { margin-top: 2px; font-size: 11px; color: var(--text-4); }
+  .view-group-label { padding: 10px 18px 6px; font-size: 10px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--text-4); }
+  .view-item {
+    display: flex; align-items: center; gap: 9px;
+    margin: 0 10px; padding: 7px 10px; border-radius: 7px;
+    font-size: 13px; font-weight: 500; color: var(--text-2);
+  }
+  .view-item:hover { background: var(--hover-bg); }
+  .view-item.active { background: var(--accent-soft); color: var(--accent-strong); font-weight: 600; }
+  .view-count { margin-left: auto; font-size: 10px; font-weight: 600; color: var(--text-4); background: var(--chip-bg); padding: 1px 7px; border-radius: 999px; }
+  .view-item.active .view-count { color: inherit; background: rgb(255 255 255 / .4); }
+  body[data-mode="dark"] .view-item.active .view-count { background: rgb(0 0 0 / .25); }
+
+  .task-row {
+    display: flex; gap: 11px; align-items: flex-start;
+    padding: 12px 18px; border-bottom: 1px solid var(--border-faint);
+    cursor: default; transition: background .12s ease;
+  }
+  .task-row:hover { background: var(--row-hover); }
+  .task-row.selected { background: var(--accent-soft); box-shadow: inset 3px 0 0 var(--accent); }
+  .check-ring { flex-shrink: 0; width: 17px; height: 17px; margin-top: 1px; border-radius: 50%; border: 1.6px solid var(--check-border); }
+  .task-row.done .check-ring { border-color: var(--text-4); background: var(--chip-bg); }
+  .task-body { min-width: 0; flex: 1; }
+  .task-title { font-size: 13px; font-weight: 500; line-height: 1.4; }
+  .task-row.done .task-title { color: var(--text-4); text-decoration: line-through; }
+  .task-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+  .tag { display: inline-flex; align-items: center; gap: 4px; font-size: 10px; font-weight: 600; padding: 2px 8px; border-radius: 999px; }
+  .due { font-size: 10px; color: var(--text-4); }
+  .due.soon { color: var(--warn); font-weight: 600; }
+  .prio-dot { width: 6px; height: 6px; border-radius: 50%; }
+  .prio-high { background: #c25b52; } .prio-mid { background: #bf9052; }
+
+  .detail { padding: 22px 26px 32px; }
+  .detail-kicker { display: flex; align-items: center; gap: 8px; font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--text-4); }
+  .detail-title { margin-top: 8px; font-size: 19px; font-weight: 600; letter-spacing: -.02em; line-height: 1.3; }
+  .detail-tags { display: flex; gap: 6px; margin-top: 10px; }
+  .btn-primary {
+    display: inline-flex; align-items: center; gap: 7px;
+    margin-top: 18px; padding: 8px 15px; border-radius: 8px;
+    font-size: 12px; font-weight: 600; color: var(--on-accent);
+    background: var(--accent); box-shadow: 0 6px 18px var(--accent-shadow);
+  }
+  .btn-ghost {
+    display: inline-flex; align-items: center; gap: 7px;
+    margin-top: 18px; margin-left: 8px; padding: 8px 15px;
+    border-radius: 8px; font-size: 12px; font-weight: 600;
+    color: var(--text-2); background: var(--hover-bg);
+  }
+  .detail-section { margin-top: 26px; }
+  .section-label { font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--text-4); }
+  .prose { margin-top: 10px; font-size: 13px; line-height: 1.85; color: var(--text-2); max-width: 620px; }
+  .prose em { font-style: normal; background: linear-gradient(transparent 62%, var(--mark-bg) 0); padding-inline: 1px; }
+  .subtask {
+    display: flex; align-items: center; gap: 10px;
+    padding: 9px 12px; margin-top: 8px;
+    border: 1px solid var(--border-faint); border-radius: 8px;
+    font-size: 12.5px; max-width: 480px; background: var(--card-soft);
+  }
+  .subtask.done { color: var(--text-4); text-decoration: line-through; }
+  .sub-check { width: 15px; height: 15px; border-radius: 5px; border: 1.5px solid var(--check-border); }
+  .subtask.done .sub-check { background: var(--accent); border-color: var(--accent); }
+  .schedule-day { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 8px; font-size: 12px; font-weight: 600; color: var(--accent-strong); background: var(--accent-soft); }
+  .comment { display: flex; gap: 10px; margin-top: 12px; max-width: 560px; }
+  .comment-avatar { width: 27px; height: 27px; flex-basis: 27px; border-radius: 50%; display: grid; place-items: center; font-size: 11px; font-weight: 700; color: #fff; }
+  .comment-bubble { flex: 1; padding: 9px 12px; border-radius: 4px 10px 10px 10px; background: var(--hover-bg); font-size: 12.5px; line-height: 1.6; color: var(--text-2); }
+  .comment-bubble b { display: block; font-size: 11px; color: var(--text-1); margin-bottom: 2px; }
+
+  /* ============ 上层飘落物 ============ */
+  .overlay { position: fixed; inset: 0; z-index: 50; pointer-events: none; overflow: hidden; }
+  .fall-item { position: absolute; top: -50px; will-change: transform; }
+  .petal { width: 19px; height: 19px; opacity: .8; }
+  .leaf  { width: 25px; height: 25px; opacity: .8; }
+  .flake { width: 16px; height: 16px; opacity: .85; }
+  body[data-season="spring"] .petal { animation: petal-fall var(--dur, 17s) linear infinite; animation-delay: var(--delay, 0s); }
+  body[data-season="autumn"] .leaf  { animation: leaf-fall  var(--dur, 19s) linear infinite; animation-delay: var(--delay, 0s); }
+  body[data-season="winter"] .flake { animation: flake-fall var(--dur, 21s) linear infinite; animation-delay: var(--delay, 0s); }
+  @keyframes petal-fall {
+    0% { transform: translate(0,-5vh) rotate(0deg); opacity: 0; } 6% { opacity: .85; }
+    25% { transform: translate(5vw,24vh) rotate(95deg); } 50% { transform: translate(-3vw,50vh) rotate(190deg); }
+    75% { transform: translate(4vw,76vh) rotate(280deg); } 94% { opacity: .85; }
+    100% { transform: translate(-2vw,110vh) rotate(370deg); opacity: 0; }
+  }
+  @keyframes leaf-fall {
+    0% { transform: translate(0,-5vh) rotate(0deg); opacity: 0; } 6% { opacity: .82; }
+    22% { transform: translate(4vw,22vh) rotate(120deg); } 50% { transform: translate(-4vw,52vh) rotate(230deg); }
+    78% { transform: translate(3vw,80vh) rotate(330deg); }
+    100% { transform: translate(-2vw,110vh) rotate(430deg); opacity: 0; }
+  }
+  @keyframes flake-fall {
+    0% { transform: translate(0,-5vh); opacity: 0; } 8% { opacity: .88; }
+    50% { transform: translate(2vw,52vh) rotate(160deg); } 92% { opacity: .88; }
+    100% { transform: translate(-1vw,110vh) rotate(320deg); opacity: 0; }
+  }
+
+  /* ============ 变量：文字 / 玻璃 / 强调色 · 低饱和 ============ */
+  body {
+    --text-1: #22262e; --text-2: #49525d; --text-3: #565f6c; --text-4: #7e8794;
+    --border-faint: rgb(17 24 39 / .07); --border-glass: rgb(255 255 255 / .5);
+    --glass-highlight: rgb(255 255 255 / .55);
+    --scroll-thumb: rgb(17 24 39 / .16);
+    --warn: #8f5a26; --mark-bg: rgb(233 219 175 / .9);
+    --check-border: #aab3bf; --chip-bg: rgb(17 24 39 / .06);
+    --row-hover: rgb(255 255 255 / .38); --card-soft: rgb(255 255 255 / .42);
+    --on-accent: #ffffff;
+  }
+  body[data-mode="dark"] {
+    --text-1: #f3f5f9; --text-2: #cdd4de; --text-3: #bcc5d0; --text-4: #828c99;
+    --border-faint: rgb(255 255 255 / .08); --border-glass: rgb(255 255 255 / .12);
+    --glass-highlight: rgb(255 255 255 / .07);
+    --scroll-thumb: rgb(255 255 255 / .18);
+    --warn: #d8ab6e; --mark-bg: rgb(146 122 68 / .9);
+    --check-border: #4d5665; --chip-bg: rgb(255 255 255 / .09);
+    --row-hover: rgb(255 255 255 / .06); --card-soft: rgb(255 255 255 / .05);
+  }
+  body[data-season="spring"][data-mode="light"] {
+    --rail-bg: rgb(247 236 241 / .44); --panel-bg: rgb(250 244 247 / .5);
+    --hover-bg: rgb(176 82 122 / .09);
+    --accent: #b0527a; --accent-glow: #d9a7b8; --accent-shadow: rgb(176 82 122 / .26);
+    --accent-strong: #994567; --accent-soft: rgb(176 82 122 / .12);
+  }
+  body[data-season="spring"][data-mode="dark"] {
+    --rail-bg: rgb(30 20 26 / .5); --panel-bg: rgb(25 16 21 / .55);
+    --hover-bg: rgb(217 167 184 / .1);
+    --accent: #d9a7b8; --accent-glow: #b0527a; --accent-shadow: rgb(217 167 184 / .2);
+    --accent-strong: #e8c2cf; --accent-soft: rgb(217 167 184 / .12);
+  }
+  body[data-season="summer"][data-mode="light"] {
+    --rail-bg: rgb(240 246 248 / .4); --panel-bg: rgb(248 252 253 / .46);
+    --hover-bg: rgb(74 122 150 / .09);
+    --accent: #4a7a96; --accent-glow: #9cbfce; --accent-shadow: rgb(74 122 150 / .28);
+    --accent-strong: #3d687f; --accent-soft: rgb(74 122 150 / .12);
+  }
+  body[data-season="summer"][data-mode="dark"] {
+    --rail-bg: rgb(15 24 32 / .48); --panel-bg: rgb(12 20 27 / .54);
+    --hover-bg: rgb(143 185 206 / .1);
+    --accent: #8fb9ce; --accent-glow: #4a7a96; --accent-shadow: rgb(143 185 206 / .16);
+    --accent-strong: #b3d0de; --accent-soft: rgb(143 185 206 / .12);
+    --on-accent: #0d2530;
+  }
+  body[data-season="autumn"][data-mode="light"] {
+    --rail-bg: rgb(245 238 226 / .44); --panel-bg: rgb(250 246 238 / .5);
+    --hover-bg: rgb(162 107 71 / .09);
+    --accent: #a26b47; --accent-glow: #d2a87f; --accent-shadow: rgb(162 107 71 / .28);
+    --accent-strong: #8a5a3b; --accent-soft: rgb(162 107 71 / .12);
+  }
+  body[data-season="autumn"][data-mode="dark"] {
+    --rail-bg: rgb(30 22 14 / .5); --panel-bg: rgb(25 18 12 / .55);
+    --hover-bg: rgb(210 168 127 / .1);
+    --accent: #d2a87f; --accent-glow: #a26b47; --accent-shadow: rgb(210 168 127 / .18);
+    --accent-strong: #e2c4a0; --accent-soft: rgb(210 168 127 / .12);
+  }
+  body[data-season="winter"][data-mode="light"] {
+    --rail-bg: rgb(240 245 249 / .4); --panel-bg: rgb(248 251 253 / .47);
+    --hover-bg: rgb(70 100 140 / .09);
+    --accent: #46648c; --accent-glow: #9db8d8; --accent-shadow: rgb(70 100 140 / .26);
+    --accent-strong: #3b5679; --accent-soft: rgb(70 100 140 / .11);
+  }
+  body[data-season="winter"][data-mode="dark"] {
+    --rail-bg: rgb(15 21 32 / .48); --panel-bg: rgb(12 17 27 / .54);
+    --hover-bg: rgb(157 184 216 / .1);
+    --accent: #9db8d8; --accent-glow: #46648c; --accent-shadow: rgb(157 184 216 / .16);
+    --accent-strong: #bccfe8; --accent-soft: rgb(157 184 216 / .12);
+  }
+
+  /* ============ 场景配色（低饱和版） ============ */
+  body[data-season="spring"][data-mode="light"] {
+    --sc-hillA:#c2d3bb; --sc-hillB:#abc1a3; --sc-trunk:#75564b;
+    --sc-bl1:#e7b7c7; --sc-bl2:#d493ab; --sc-bl3:#f1cfda;
+    --sc-bird:#8a6b77;
+  }
+  body[data-season="spring"][data-mode="dark"] {
+    --sc-hillA:#2c3631; --sc-hillB:#232c28; --sc-trunk:#483a43;
+    --sc-bl1:#b5819a; --sc-bl2:#97657e; --sc-bl3:#cfa2b6;
+    --sc-bird:#a58b96;
+  }
+  body[data-season="summer"][data-mode="light"] {
+    --sc-seaT:#93b8c9; --sc-seaB:#719cb0; --sc-foam:rgb(255 255 255 / .8); --sc-island:#83aabc;
+    --sc-sail:#ffffff; --sc-hull:#c07a58;
+    --sc-sunring:rgb(255 255 255 / .6);
+  }
+  body[data-season="summer"][data-mode="dark"] {
+    --sc-seaT:#122b3c; --sc-seaB:#0b1e2c; --sc-foam:rgb(143 185 206 / .3); --sc-island:#15334a;
+    --sc-sail:#d5e3ea; --sc-hull:#6f4c3c;
+    --sc-sunring:rgb(191 219 254 / .22);
+  }
+  body[data-season="autumn"][data-mode="light"] {
+    --sc-backH:#c6a378; --sc-midH:#a8834f;
+    --sc-field:#d5b57e; --sc-row:#b4935d;
+    --sc-t1:#ba7c40; --sc-t2:#996234; --sc-t3:#cf9c57; --sc-trunk:#6b4a30;
+  }
+  body[data-season="autumn"][data-mode="dark"] {
+    --sc-backH:#46341f; --sc-midH:#362713;
+    --sc-field:#52402a; --sc-row:#402f1a;
+    --sc-t1:#97682e; --sc-t2:#7b5224; --sc-t3:#a97d3c; --sc-trunk:#352614;
+  }
+  body[data-season="winter"][data-mode="light"] {
+    --sc-backM:#a1b4c8; --sc-cap:#f6f9fb; --sc-midM:#7e94ab;
+    --sc-snowF:#e9eff5; --sc-shade:#c9d7e2; --sc-pine:#4b625c; --sc-pinecap:#ffffff; --sc-trunkW:#453b33;
+    --sc-moon-op:0; --sc-stars-op:0; --sc-moonFill:#f1f5f9; --sc-moonHalo:rgb(191 219 254 / .18);
+  }
+  body[data-season="winter"][data-mode="dark"] {
+    --sc-backM:#253448; --sc-cap:#9db8d8; --sc-midM:#1b2a41;
+    --sc-snowF:#101b2d; --sc-shade:#16243a; --sc-pine:#1b3330; --sc-pinecap:#9db8d8; --sc-trunkW:#0d1a20;
+    --sc-moon-op:1; --sc-stars-op:1; --sc-moonFill:#f1f5f9; --sc-moonHalo:rgb(191 219 254 / .18);
+  }
+
+  .tag-inbox { background: #e3e9f2; color: #44608a; }
+  .tag-work { background: #e6e4ef; color: #55527e; }
+  .tag-personal { background: #e0ebe5; color: #42705f; }
+  .tag-study { background: #f0e8d5; color: #77602f; }
+  body[data-mode="dark"] .tag-inbox { background: #2a3a52; color: #b6c8de; }
+  body[data-mode="dark"] .tag-work { background: #34304a; color: #c5c0dd; }
+  body[data-mode="dark"] .tag-personal { background: #24382f; color: #9cc4b3; }
+  body[data-mode="dark"] .tag-study { background: #443823; color: #d9c193; }
+
+  /* ============ 切换器 ============ */
+  .switcher {
+    position: fixed; z-index: 100; bottom: 22px; left: 50%; transform: translateX(-50%);
+    display: flex; align-items: center; gap: 4px;
+    padding: 6px; border-radius: 999px;
+    background: rgb(15 18 24 / .85);
+    backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
+    box-shadow: 0 12px 40px rgb(0 0 0 / .4), inset 0 1px 0 rgb(255 255 255 / .1);
+  }
+  .sw-btn {
+    display: flex; align-items: center; gap: 7px;
+    height: 34px; padding-inline: 13px; border-radius: 999px;
+    font-size: 12.5px; font-weight: 600; color: rgb(255 255 255 / .75);
+    transition: background .15s ease, color .15s ease;
+  }
+  .sw-btn:hover { color: #fff; background: rgb(255 255 255 / .09); }
+  .sw-btn.on { color: #fff; background: rgb(255 255 255 / .17); }
+  .sw-dot { width: 13px; height: 13px; border-radius: 50%; box-shadow: inset 0 0 0 1px rgb(255 255 255 / .3); }
+  .dot-spring { background: linear-gradient(135deg, #d9a7b8, #b0527a); }
+  .dot-summer { background: linear-gradient(135deg, #9cbfce, #4a7a96); }
+  .dot-autumn { background: linear-gradient(135deg, #d2a87f, #a26b47); }
+  .dot-winter { background: linear-gradient(135deg, #9db8d8, #46648c); }
+  .sw-sep { width: 1px; height: 20px; margin-inline: 5px; background: rgb(255 255 255 / .15); }
+  @media (prefers-reduced-motion: reduce) {
+    .petal, .leaf, .flake, .aurora { animation: none !important; }
+  }
+</style>
+</head>
+<body data-season="spring" data-mode="light">
+
+<div class="sky" aria-hidden="true"></div>
+<div class="aurora a1" aria-hidden="true"></div>
+<div class="grain" aria-hidden="true"></div>
+
+<!-- 扁平插画场景层 -->
+<div class="scene" aria-hidden="true">
+  <svg class="sc sc-spring" viewBox="0 0 1440 320" preserveAspectRatio="xMidYMax slice">
+    <g stroke="var(--sc-bird)" stroke-width="3" fill="none" stroke-linecap="round">
+      <path d="M600 96 q9 -9 18 0 q9 -9 18 0"/>
+      <path d="M668 74 q7 -7 14 0 q7 -7 14 0"/>
+      <path d="M560 66 q6 -6 12 0 q6 -6 12 0"/>
+    </g>
+    <path fill="var(--sc-hillA)" d="M0 208 Q180 150 360 186 T720 176 Q900 148 1080 184 T1440 170 V320 H0 Z"/>
+    <path fill="var(--sc-hillB)" d="M0 262 Q240 214 480 246 T960 238 Q1200 216 1440 250 V320 H0 Z"/>
+    <g transform="translate(300 118)">
+      <path fill="var(--sc-trunk)" d="M-7 130 C-5 84 -9 52 -16 22 L-4 30 C-2 60 2 92 7 130 Z"/>
+      <circle cx="-38" cy="10" r="34" fill="var(--sc-bl2)"/>
+      <circle cx="14" cy="-18" r="42" fill="var(--sc-bl1)"/>
+      <circle cx="58" cy="18" r="30" fill="var(--sc-bl2)"/>
+      <circle cx="-8" cy="26" r="40" fill="var(--sc-bl3)"/>
+      <circle cx="36" cy="44" r="24" fill="var(--sc-bl1)"/>
+    </g>
+  </svg>
+  <svg class="sc sc-summer" viewBox="0 0 1440 320" preserveAspectRatio="xMidYMax slice">
+    <circle cx="1140" cy="86" r="58" fill="var(--sc-sunring)" opacity=".55"/>
+    <rect y="124" width="1440" height="196" fill="var(--sc-seaT)"/>
+    <path fill="var(--sc-seaB)" d="M0 196 Q200 182 420 194 T880 192 T1340 198 L1440 194 V320 H0 Z"/>
+    <path fill="var(--sc-island)" d="M150 126 C186 88 232 78 268 96 C288 104 306 118 318 126 Z"/>
+    <g stroke="var(--sc-foam)" stroke-width="4" fill="none" stroke-linecap="round">
+      <path d="M120 252 h56"/><path d="M260 276 h44"/><path d="M520 246 h60"/>
+      <path d="M700 282 h48"/><path d="M1020 250 h56"/><path d="M1240 278 h44"/>
+    </g>
+    <g transform="translate(430 138)">
+      <path fill="var(--sc-sail)" d="M0 -44 L0 6 L-30 6 Z"/>
+      <path fill="var(--sc-sail)" d="M6 -34 L6 6 L30 6 Z" opacity=".82"/>
+      <path fill="var(--sc-hull)" d="M-36 10 L36 10 L24 26 L-24 26 Z"/>
+    </g>
+  </svg>
+  <svg class="sc sc-autumn" viewBox="0 0 1440 320" preserveAspectRatio="xMidYMax slice">
+    <path fill="var(--sc-backH)" d="M0 168 Q200 116 400 152 T820 142 Q1040 110 1240 150 T1440 140 V320 H0 Z"/>
+    <path fill="var(--sc-midH)" d="M0 214 Q260 168 520 200 T1060 192 Q1250 172 1440 202 V320 H0 Z"/>
+    <rect y="238" width="1440" height="82" fill="var(--sc-field)"/>
+    <g stroke="var(--sc-row)" stroke-width="7" stroke-linecap="round">
+      <path d="M-20 322 L340 240"/><path d="M220 322 L500 244"/><path d="M470 322 L672 246"/>
+      <path d="M740 322 L868 248"/><path d="M1010 322 L1076 250"/><path d="M1270 322 L1292 252"/>
+    </g>
+    <g transform="translate(300 150)">
+      <path fill="var(--sc-trunk)" d="M-6 90 C-4 58 -8 34 -13 14 L-3 20 C0 46 3 68 6 90 Z"/>
+      <circle cx="-26" cy="-2" r="26" fill="var(--sc-t2)"/>
+      <circle cx="12" cy="-20" r="32" fill="var(--sc-t1)"/>
+      <circle cx="40" cy="6" r="22" fill="var(--sc-t3)"/>
+      <circle cx="2" cy="14" r="24" fill="var(--sc-t1)"/>
+    </g>
+  </svg>
+  <svg class="sc sc-winter" viewBox="0 0 1440 320" preserveAspectRatio="xMidYMax slice">
+    <g fill="var(--sc-moonFill)" style="opacity:var(--sc-stars-op)">
+      <circle cx="180" cy="60" r="2"/><circle cx="300" cy="34" r="1.6"/>
+      <circle cx="420" cy="76" r="1.4"/><circle cx="520" cy="30" r="2"/>
+      <circle cx="700" cy="58" r="1.5"/><circle cx="860" cy="36" r="1.8"/>
+      <circle cx="1010" cy="70" r="1.4"/><circle cx="1330" cy="44" r="1.8"/>
+    </g>
+    <g style="opacity:var(--sc-moon-op)">
+      <circle cx="1210" cy="62" r="46" fill="var(--sc-moonHalo)"/>
+      <circle cx="1210" cy="62" r="26" fill="var(--sc-moonFill)"/>
+    </g>
+    <path fill="var(--sc-backM)" d="M0 190 L210 84 L420 190 Z M420 190 L560 108 L760 190 Z M760 190 L940 96 L1160 190 Z M1160 190 L1310 122 L1440 190 Z"/>
+    <g fill="var(--sc-cap)">
+      <path d="M210 84 L164 108 L184 104 L204 118 L226 102 L248 110 Z"/>
+      <path d="M560 108 L524 128 L542 124 L560 136 L580 124 L600 130 Z"/>
+      <path d="M940 96 L898 120 L918 116 L938 130 L962 112 L982 122 Z"/>
+      <path d="M1310 122 L1278 140 L1296 136 L1312 146 L1330 136 L1346 142 Z"/>
+    </g>
+    <path fill="var(--sc-midM)" d="M0 236 L150 178 L300 230 L470 186 L640 238 L820 196 L1000 240 L1200 200 L1380 238 L1440 226 V320 H0 Z"/>
+    <rect y="258" width="1440" height="62" fill="var(--sc-snowF)"/>
+    <path fill="var(--sc-shade)" d="M0 282 Q300 266 640 282 T1440 278 V320 H0 Z"/>
+    <g transform="translate(300 196)">
+      <g>
+        <rect x="-3" y="58" width="6" height="14" fill="var(--sc-trunkW)"/>
+        <path fill="var(--sc-pine)" d="M0 -6 L15 22 H-15 Z M0 12 L19 42 H-19 Z M0 30 L23 62 H-23 Z"/>
+        <path fill="var(--sc-pinecap)" d="M0 -6 L9 11 L4 9 L0 13 L-4 9 L-9 11 Z"/>
+      </g>
+      <g transform="translate(64 22) scale(.72)">
+        <rect x="-3" y="58" width="6" height="14" fill="var(--sc-trunkW)"/>
+        <path fill="var(--sc-pine)" d="M0 -6 L15 22 H-15 Z M0 12 L19 42 H-19 Z M0 30 L23 62 H-23 Z"/>
+        <path fill="var(--sc-pinecap)" d="M0 -6 L9 11 L4 9 L0 13 L-4 9 L-9 11 Z"/>
+      </g>
+      <g transform="translate(-58 34) scale(.55)">
+        <rect x="-3" y="58" width="6" height="14" fill="var(--sc-trunkW)"/>
+        <path fill="var(--sc-pine)" d="M0 -6 L15 22 H-15 Z M0 12 L19 42 H-19 Z M0 30 L23 62 H-23 Z"/>
+        <path fill="var(--sc-pinecap)" d="M0 -6 L9 11 L4 9 L0 13 L-4 9 L-9 11 Z"/>
+      </g>
+    </g>
+  </svg>
+</div>
+
+<!-- 应用界面 -->
+<div class="app">
+  <aside class="rail">
+    <div class="brand"><span class="brand-mark">W</span><span class="brand-name">WorkFollow</span></div>
+    <nav class="rail-nav">
+      <button class="rail-item"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/></svg><span>首页</span></button>
+      <button class="rail-item active"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="m8.5 12.5 2.5 2.5 4.5-5"/><path d="M8 2v4M16 2v4"/></svg><span>任务</span></button>
+      <button class="rail-item"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M8 3v4M16 3v4M3 10h18"/></svg><span>日历</span></button>
+      <button class="rail-item"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></svg><span>笔记</span></button>
+      <button class="rail-item"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10 14a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1.5 1.5"/><path d="M14 10a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7L12.5 19"/></svg><span>常用</span></button>
+      <button class="rail-item"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 8 3 8H3s3-1 3-8"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg><span>通知</span><span class="rail-badge">3</span></button>
+    </nav>
+    <div class="rail-bottom">
+      <button class="rail-item"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="9" cy="8" r="3.2"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><circle cx="17" cy="9" r="2.6"/><path d="M15.5 14.6A5.2 5.2 0 0 1 21.5 19"/></svg><span>团队</span></button>
+      <button class="rail-item"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1 1.55V21a2 2 0 1 1-4 0v-.09a1.7 1.7 0 0 0-1-1.55 1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.7 1.7 0 0 0 .34-1.87 1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.7 1.7 0 0 0 1.87.34h.01a1.7 1.7 0 0 0 1-1.55V3a2 2 0 1 1 4 0v.09a1.7 1.7 0 0 0 1 1.55 1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.7 1.7 0 0 0-.34 1.87v.01a1.7 1.7 0 0 0 1.55 1H21a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.55 1z"/></svg><span>设置</span></button>
+      <div class="user-card">
+        <span class="avatar"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg></span>
+        <span class="user-meta"><strong>杨伟的个人空间</strong><small>dongyangwei</small></span>
+      </div>
+    </div>
+  </aside>
+
+  <main class="workspace">
+    <section class="pane">
+      <div class="pane-head">
+        <div><div class="pane-title">任务</div><div class="pane-sub">4 个视图 · 共 51 条</div></div>
+      </div>
+      <div class="view-group-label">视图</div>
+      <button class="view-item active"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg><span>今天</span><span class="view-count">12</span></button>
+      <button class="view-item"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M8 3v4M16 3v4M3 10h18"/></svg><span>本周</span><span class="view-count">34</span></button>
+      <button class="view-item"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.5 5.1 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.5-6.9A2 2 0 0 0 16.8 4H7.2a2 2 0 0 0-1.7 1.1z"/></svg><span>收件箱</span><span class="view-count">5</span></button>
+      <button class="view-item"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M9 20V9"/></svg><span>按月</span><span class="view-count">51</span></button>
+      <div class="view-group-label">归档</div>
+      <button class="view-item"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8v13H3V8M1 3h22v5H1zM10 12h4"/></svg><span>已完成</span><span class="view-count">128</span></button>
+    </section>
+
+    <section class="pane">
+      <div class="pane-head">
+        <div><div class="pane-title">今天</div><div class="pane-sub">8 月 22 日 星期五 · 12 条待办</div></div>
+        <button class="btn-primary" style="margin-top:0;padding:6px 12px;font-size:11px">+ 新建</button>
+      </div>
+      <div class="task-row selected">
+        <span class="check-ring"></span>
+        <div class="task-body">
+          <div class="task-title">准备季度产品评审演示文稿</div>
+          <div class="task-meta">
+            <span class="tag tag-work">工作</span><span class="prio-dot prio-high"></span><span class="due soon">14:00 截止</span>
+          </div>
+        </div>
+      </div>
+      <div class="task-row">
+        <span class="check-ring"></span>
+        <div class="task-body">
+          <div class="task-title">整理用户反馈：移动端适配问题清单</div>
+          <div class="task-meta"><span class="tag tag-work">工作</span><span class="prio-dot prio-mid"></span><span class="due">今天 18:00</span></div>
+        </div>
+      </div>
+      <div class="task-row done">
+        <span class="check-ring"></span>
+        <div class="task-body">
+          <div class="task-title">晨间复盘：昨日迭代回顾会议纪要</div>
+          <div class="task-meta"><span class="tag tag-personal">个人</span><span class="due">已完成 09:42</span></div>
+        </div>
+      </div>
+      <div class="task-row">
+        <span class="check-ring"></span>
+        <div class="task-body">
+          <div class="task-title">回复合作方邮件，确认下周联调时间</div>
+          <div class="task-meta"><span class="tag tag-inbox">收件箱</span><span class="due soon">16:30 截止</span></div>
+        </div>
+      </div>
+      <div class="task-row">
+        <span class="check-ring"></span>
+        <div class="task-body">
+          <div class="task-title">阅读《设计心理学》第 4 章并做摘录</div>
+          <div class="task-meta"><span class="tag tag-study">学习</span><span class="due">睡前</span></div>
+        </div>
+      </div>
+      <div class="task-row done">
+        <span class="check-ring"></span>
+        <div class="task-body">
+          <div class="task-title">给绿萝浇水、擦叶子</div>
+          <div class="task-meta"><span class="tag tag-personal">个人</span><span class="due">已完成 08:15</span></div>
+        </div>
+      </div>
+      <div class="task-row">
+        <span class="check-ring"></span>
+        <div class="task-body">
+          <div class="task-title">核对报销单据并提交财务系统</div>
+          <div class="task-meta"><span class="tag tag-work">工作</span><span class="prio-dot prio-mid"></span><span class="due">17:00 截止</span></div>
+        </div>
+      </div>
+    </section>
+
+    <div class="divider"></div>
+
+    <section class="pane detail">
+      <div class="detail-kicker">工作 · 今天 14:00 截止</div>
+      <h1 class="detail-title">准备季度产品评审演示文稿</h1>
+      <div class="detail-tags">
+        <span class="tag tag-work">工作</span><span class="tag tag-inbox">Q3 复盘</span>
+      </div>
+      <div><button class="btn-primary"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M5 12l5 5L20 7"/></svg>标记完成</button><button class="btn-ghost">安排到日历</button></div>
+
+      <div class="detail-section">
+        <div class="section-label">描述</div>
+        <p class="prose">汇总三个产品线的季度数据，重点讲清<em>留存率变化的原因分析</em>。评审顺序：先过增长大盘，再逐条讲实验结论，最后留 10 分钟讨论下季度优先级。</p>
+      </div>
+
+      <div class="detail-section">
+        <div class="section-label">子任务 · 2/3</div>
+        <div class="subtask done"><span class="sub-check"></span><span>导出各产品线核心指标数据</span></div>
+        <div class="subtask done"><span class="sub-check"></span><span>完成增长章节图表制作</span></div>
+        <div class="subtask"><span class="sub-check"></span><span>排练一遍讲述节奏（目标 25 分钟）</span></div>
+      </div>
+
+      <div class="detail-section">
+        <div class="section-label">日程</div>
+        <div style="display:flex;align-items:center;gap:12px;margin-top:10px">
+          <span class="schedule-day">22</span>
+          <div style="font-size:12.5px;color:var(--text-2)"><b style="display:block;color:var(--text-1)">8 月 22 日 · 下午</b>评审会议室 A · 14:00 – 15:30</div>
+        </div>
+      </div>
+
+      <div class="detail-section">
+        <div class="section-label">评论 · 2</div>
+        <div class="comment">
+          <span class="comment-avatar" style="background:#55527e">倩</span>
+          <div class="comment-bubble"><b>林倩 · 上午 10:21</b>数据部分我补充了 7 月的渠道拆分，你直接用共享盘里最新那版就行。</div>
+        </div>
+        <div class="comment">
+          <span class="comment-avatar" style="background:#42705f">远</span>
+          <div class="comment-bubble"><b>周远 · 上午 11:03</b>讨论环节记得把上次没拍板的「移动端优先级」再抛出来一次。</div>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<!-- 上层飘落物 -->
+<div class="overlay">
+  <svg class="fall-item petal" style="--dur:15s;--delay:0s;left:7%" viewBox="0 0 24 24"><path d="M12 1 C18 5 20 12 12 23 C4 12 6 5 12 1Z" fill="#d98fac"/></svg>
+  <svg class="fall-item petal" style="--dur:20s;--delay:-6s;left:19%" viewBox="0 0 24 24"><path d="M12 1 C18 5 20 12 12 23 C4 12 6 5 12 1Z" fill="#c97e9c"/></svg>
+  <svg class="fall-item petal" style="--dur:17s;--delay:-11s;left:41%" viewBox="0 0 24 24"><path d="M12 1 C18 5 20 12 12 23 C4 12 6 5 12 1Z" fill="#e6b8cc"/></svg>
+  <svg class="fall-item petal" style="--dur:23s;--delay:-3s;left:58%" viewBox="0 0 24 24"><path d="M12 1 C18 5 20 12 12 23 C4 12 6 5 12 1Z" fill="#d98fac"/></svg>
+  <svg class="fall-item petal" style="--dur:18s;--delay:-14s;left:74%" viewBox="0 0 24 24"><path d="M12 1 C18 5 20 12 12 23 C4 12 6 5 12 1Z" fill="#c4789a"/></svg>
+  <svg class="fall-item petal" style="--dur:22s;--delay:-9s;left:88%" viewBox="0 0 24 24"><path d="M12 1 C18 5 20 12 12 23 C4 12 6 5 12 1Z" fill="#eecbd9"/></svg>
+
+  <svg class="fall-item leaf" style="--dur:16s;--delay:0s;left:8%" viewBox="0 0 24 24"><path d="M12 2l2.2 3.6 3.8-1.2-.9 3.9 3.9.9-2.6 3 2.6 3-3.9.9.9 3.9-3.8-1.2L12 22l-2.2-3.2-3.8 1.2.9-3.9-3.9-.9 2.6-3-2.6-3 3.9-.9-.9-3.9 3.8 1.2z" fill="#b97a3e"/></svg>
+  <svg class="fall-item leaf" style="--dur:21s;--delay:-8s;left:26%" viewBox="0 0 24 24"><path d="M12 2l2.2 3.6 3.8-1.2-.9 3.9 3.9.9-2.6 3 2.6 3-3.9.9.9 3.9-3.8-1.2L12 22l-2.2-3.2-3.8 1.2.9-3.9-3.9-.9 2.6-3-2.6-3 3.9-.9-.9-3.9 3.8 1.2z" fill="#996234"/></svg>
+  <svg class="fall-item leaf" style="--dur:18s;--delay:-13s;left:52%" viewBox="0 0 24 24"><path d="M12 2l2.2 3.6 3.8-1.2-.9 3.9 3.9.9-2.6 3 2.6 3-3.9.9.9 3.9-3.8-1.2L12 22l-2.2-3.2-3.8 1.2.9-3.9-3.9-.9 2.6-3-2.6-3 3.9-.9-.9-3.9 3.8 1.2z" fill="#cf9c57"/></svg>
+  <svg class="fall-item leaf" style="--dur:24s;--delay:-4s;left:71%" viewBox="0 0 24 24"><path d="M12 2l2.2 3.6 3.8-1.2-.9 3.9 3.9.9-2.6 3 2.6 3-3.9.9.9 3.9-3.8-1.2L12 22l-2.2-3.2-3.8 1.2.9-3.9-3.9-.9 2.6-3-2.6-3 3.9-.9-.9-3.9 3.8 1.2z" fill="#8f5a2e"/></svg>
+  <svg class="fall-item leaf" style="--dur:20s;--delay:-16s;left:87%" viewBox="0 0 24 24"><path d="M12 2l2.2 3.6 3.8-1.2-.9 3.9 3.9.9-2.6 3 2.6 3-3.9.9.9 3.9-3.8-1.2L12 22l-2.2-3.2-3.8 1.2.9-3.9-3.9-.9 2.6-3-2.6-3 3.9-.9-.9-3.9 3.8 1.2z" fill="#b97a3e"/></svg>
+
+  <svg class="fall-item flake" style="--dur:18s;--delay:0s;left:6%" viewBox="0 0 24 24" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round"><path d="M12 2v20M4 6l16 12M20 6L4 18" fill="none" opacity=".95"/></svg>
+  <svg class="fall-item flake" style="--dur:23s;--delay:-9s;left:22%" viewBox="0 0 24 24" stroke="#dfe9f2" stroke-width="1.8" stroke-linecap="round"><path d="M12 2v20M4 6l16 12M20 6L4 18" fill="none"/></svg>
+  <svg class="fall-item flake" style="--dur:20s;--delay:-15s;left:45%" viewBox="0 0 24 24" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round"><path d="M12 2v20M4 6l16 12M20 6L4 18" fill="none" opacity=".9"/></svg>
+  <svg class="fall-item flake" style="--dur:25s;--delay:-5s;left:63%" viewBox="0 0 24 24" stroke="#eef3f8" stroke-width="1.8" stroke-linecap="round"><path d="M12 2v20M4 6l16 12M20 6L4 18" fill="none"/></svg>
+  <svg class="fall-item flake" style="--dur:21s;--delay:-18s;left:81%" viewBox="0 0 24 24" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round"><path d="M12 2v20M4 6l16 12M20 6L4 18" fill="none" opacity=".92"/></svg>
+  <svg class="fall-item flake" style="--dur:27s;--delay:-12s;left:93%" viewBox="0 0 24 24" stroke="#dfe9f2" stroke-width="1.8" stroke-linecap="round"><path d="M12 2v20M4 6l16 12M20 6L4 18" fill="none"/></svg>
+</div>
+
+<!-- 切换器 -->
+<div class="switcher">
+  <button class="sw-btn on" data-season="spring"><span class="sw-dot dot-spring"></span>春 · 雾樱</button>
+  <button class="sw-btn" data-season="summer"><span class="sw-dot dot-summer"></span>夏 · 烟青</button>
+  <button class="sw-btn" data-season="autumn"><span class="sw-dot dot-autumn"></span>秋 · 陶杏</button>
+  <button class="sw-btn" data-season="winter"><span class="sw-dot dot-winter"></span>冬 · 霜青</button>
+  <span class="sw-sep"></span>
+  <button class="sw-btn" id="modeBtn">☀︎ 浅色</button>
+</div>
+
+<script>
+  const seasonBtns = document.querySelectorAll('.sw-btn[data-season]');
+  const modeBtn = document.getElementById('modeBtn');
+
+  seasonBtns.forEach(b => b.addEventListener('click', () => {
+    document.body.dataset.season = b.dataset.season;
+    seasonBtns.forEach(x => x.classList.toggle('on', x === b));
+  }));
+
+  let dark = false;
+  modeBtn.addEventListener('click', () => {
+    dark = !dark;
+    document.body.dataset.mode = dark ? 'dark' : 'light';
+    modeBtn.textContent = dark ? '☾ 深色' : '☀︎ 浅色';
+  });
+
+  const q = new URLSearchParams(location.search);
+  if (q.get('season')) {
+    document.body.dataset.season = q.get('season');
+    seasonBtns.forEach(x => x.classList.toggle('on', x.dataset.season === q.get('season')));
+  }
+  if (q.get('mode') === 'dark') { dark = true; document.body.dataset.mode = 'dark'; modeBtn.textContent = '☾ 深色'; }
+</script>
+</body>
+</html>

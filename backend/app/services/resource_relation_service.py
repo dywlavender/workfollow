@@ -39,7 +39,7 @@ def can_view_resource(db: Session, resource_type: ResourceType, resource_id: str
 def can_edit_resource(db: Session, resource_type: ResourceType, resource_id: str, user_id: str) -> bool:
     if resource_type == ResourceType.PERSONAL_NOTE:
         note = _personal_note(db, resource_id)
-        return note is not None and note_permission_service.can_edit_personal_note(note, user_id)
+        return note is not None and note_permission_service.can_edit_personal_note(db, note, user_id)
     if resource_type == ResourceType.TEAM_NOTE:
         note = _team_note(db, resource_id)
         return note is not None and note_permission_service.can_edit_team_note(db, note, user_id)

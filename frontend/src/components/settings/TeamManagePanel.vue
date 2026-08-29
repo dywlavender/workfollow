@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onActivated, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, onActivated, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { IconLogout, IconPlus, IconSearch, IconShield, IconTrash, IconUsers } from '@tabler/icons-vue'
 
@@ -70,7 +70,13 @@ const canManage = computed(() => isSystemAdmin.value || team.value?.role === 'OW
 const canDissolve = computed(() => isSystemAdmin.value || team.value?.role === 'OWNER')
 
 async function load() {
-  if (!activeTeamId.value) return
+  if (!activeTeamId.value) {
+    team.value = null
+    members.value = []
+    loadError.value = ''
+    loading.value = false
+    return
+  }
   loading.value = true
   loadError.value = ''
   try {
@@ -256,8 +262,12 @@ async function confirmResetPassword() {
   }
 }
 
-// 面板位于 KeepAlive 缓存的设置页内：首次插入与每次回到设置页都会触发 activated。
-onActivated(load)
+// SettingsPage 本身位于 KeepAlive 中，但首次插入时不能只依赖子组件的
+// activated 生命周期；显式挂载加载，回到设置页时再刷新一次。
+onMounted(load)
+onActivated(() => {
+  if (!loading.value) void load()
+})
 
 watch(activeTeamId, () => {
   candidateRequest += 1
@@ -383,6 +393,14 @@ onBeforeUnmount(() => window.clearTimeout(candidateTimer))
       <button v-else class="danger-button" type="button" @click="requestExitTeam"><IconLogout :size="15" />退出团队</button>
     </section>
   </template>
+  <section v-else class="team-empty-state card" aria-live="polite">
+    <span class="team-empty-icon"><IconUsers :size="26" /></span>
+    <div>
+      <h2>{{ isSystemAdmin ? '还没有可管理的团队' : '还没有加入团队' }}</h2>
+      <p>{{ isSystemAdmin ? '创建第一个团队，或稍后刷新以读取已有团队。' : '加入团队后，可以在这里管理成员和协作权限。' }}</p>
+    </div>
+    <button v-if="canCreateTeam" class="primary-button" type="button" @click="createTeamDialogOpen = true"><IconPlus :size="15" />新建团队</button>
+  </section>
   <SystemPermissionsDialog :open="permissionsOpen" @close="permissionsOpen = false" />
   <ConfirmDialog
     :open="Boolean(resetTarget)"

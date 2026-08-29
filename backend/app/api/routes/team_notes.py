@@ -296,7 +296,10 @@ def get_categories(
     db: DbSession, user: CurrentUser, team_id: str | None = Query(default=None, alias="teamId")
 ) -> list[TeamNoteCategoryRead]:
     context = _current_team(db, user.id, team_id)
-    return team_note_service.list_categories(db, context.team_id)
+    return [
+        TeamNoteCategoryRead.model_validate(category).model_copy(update={"note_count": note_count})
+        for category, note_count in team_note_service.list_categories_with_counts(db, context.team_id)
+    ]
 
 
 @router.post("/team/knowledge/categories", response_model=TeamNoteCategoryRead, status_code=status.HTTP_201_CREATED)

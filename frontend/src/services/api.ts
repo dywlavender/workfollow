@@ -22,7 +22,6 @@ function paramsKey(params: AxiosRequestConfig['params']): string {
 function isDictionaryRequest(url: string): boolean {
   return url === '/teams'
     || /^\/teams\/[^/]+\/members$/.test(url)
-    || url === '/team/knowledge/categories'
 }
 
 function getKey(url: string, config?: AxiosRequestConfig): string {
@@ -551,8 +550,15 @@ export interface NoteNavigationCounts {
   unfiled: number
   favorites: number
   folders: Record<string, number>
+  shared: number
+  sharedByMe: number
+  knowledge: number
   submissionsPending: number
   reviewPending: number
+}
+
+export interface SharedByMeNote extends NoteListItem {
+  sharedWith: User[]
 }
 
 export interface NoteTemplate {
@@ -886,6 +892,7 @@ export interface KnowledgeCategory {
   teamId: string
   name: string
   sortOrder: number
+  noteCount: number
   createdAt: string
   updatedAt: string
 }
@@ -1114,7 +1121,7 @@ export async function rejectTeamNoteSubmission(teamId: string, submissionId: str
 }
 
 export type NoteShareStatus = 'ACTIVE' | 'REVOKED'
-export type NoteSharePermission = 'READ_ONLY'
+export type NoteSharePermission = 'READ_ONLY' | 'EDITABLE'
 
 export interface NoteShare {
   id: string
@@ -1140,8 +1147,12 @@ export async function postNoteShare(noteId: string, identifier: string): Promise
   return data
 }
 
-export async function syncNoteShares(noteId: string, userIds: string[]): Promise<NoteShare[]> {
-  const { data } = await api.post<NoteShare[]>(`/notes/${noteId}/shares`, { userIds })
+export async function syncNoteShares(
+  noteId: string,
+  userIds: string[],
+  permission: NoteSharePermission = 'READ_ONLY',
+): Promise<NoteShare[]> {
+  const { data } = await api.post<NoteShare[]>(`/notes/${noteId}/shares`, { userIds, permission })
   return data
 }
 
@@ -1150,8 +1161,22 @@ export async function fetchNoteShares(noteId: string): Promise<NoteShare[]> {
   return data
 }
 
+export async function updateNoteSharePermission(
+  noteId: string,
+  shareId: string,
+  permission: NoteSharePermission,
+): Promise<NoteShare> {
+  const { data } = await api.patch<NoteShare>(`/notes/${noteId}/shares/${shareId}`, { permission })
+  return data
+}
+
 export async function deleteNoteShare(noteId: string, shareId: string): Promise<void> {
   await api.delete(`/notes/${noteId}/shares/${shareId}`)
+}
+
+export async function fetchNotesSharedByMe(): Promise<SharedByMeNote[]> {
+  const { data } = await api.get<SharedByMeNote[]>('/notes/shared-by-me')
+  return data
 }
 
 export async function fetchSharedNotes(q?: string): Promise<SharedNote[]> {
@@ -1169,7 +1194,7 @@ export async function copySharedNote(noteId: string): Promise<Note> {
   return data
 }
 
-export type NotificationType = 'TEAM_MEMBER_ADDED' | 'TEAM_TASK_ASSIGNED' | 'TEAM_TASK_UPDATED' | 'TEAM_TASK_CANCELLED' | 'TEAM_NOTE_SUBMITTED' | 'TEAM_NOTE_REVIEWED' | 'TEAM_NOTE_APPROVED' | 'TEAM_NOTE_REJECTED' | 'NOTE_SHARED' | 'NOTE_SHARE_REVOKED'
+export type NotificationType = 'TEAM_MEMBER_ADDED' | 'TEAM_TASK_ASSIGNED' | 'TEAM_TASK_UPDATED' | 'TEAM_TASK_CANCELLED' | 'TEAM_NOTE_SUBMITTED' | 'TEAM_NOTE_REVIEWED' | 'TEAM_NOTE_APPROVED' | 'TEAM_NOTE_REJECTED' | 'NOTE_SHARED' | 'NOTE_SHARE_UPDATED' | 'NOTE_SHARE_REVOKED'
 
 export interface Notification {
   id: string

@@ -21,8 +21,10 @@ from app.schemas.note import (
     NoteNavigationCounts,
     NoteRead,
     NoteUpdate,
+    SharedByMeNoteRead,
 )
-from app.services import note_permission_service, note_service, team_note_service
+from app.schemas.auth import UserRead
+from app.services import note_permission_service, note_service, note_share_service, team_note_service
 from app.services.content_projection import content_json_semantically_equal
 from app.services.system_permission_service import user_is_root
 from app.services.markdown_import_service import MarkdownImportError, parse_markdown
@@ -68,12 +70,16 @@ def get_navigation_counts(
     team_id: str | None = Query(default=None, alias="teamId"),
 ) -> NoteNavigationCounts:
     counts = note_service.navigation_counts(db, user.id)
+    shared_count = note_share_service.count_shared_notes(db, user.id)
+    shared_by_me_count = note_share_service.count_notes_shared_by_me(db, user.id)
+    knowledge_count = 0
     submissions_pending = 0
     review_pending = 0
     if team_id:
         can_access_team = user_is_root(db, user.id) or note_permission_service.membership(db, user.id, team_id) is not None
         if not can_access_team:
             raise HTTPException(status_code=404, detail="Team not found")
+        knowledge_count = team_note_service.count_published_notes(db, team_id)
         pending_statuses = [TeamNoteSubmissionStatus.PENDING, TeamNoteSubmissionStatus.NEEDS_REVISION]
         submissions_pending = team_note_service.count_submissions(
             db, team_id, applicant_id=user.id, statuses=pending_statuses
@@ -84,6 +90,9 @@ def get_navigation_counts(
             )
     return NoteNavigationCounts(
         **counts,
+        shared=shared_count,
+        shared_by_me=shared_by_me_count,
+        knowledge=knowledge_count,
         submissions_pending=submissions_pending,
         review_pending=review_pending,
     )
@@ -143,6 +152,18 @@ async def import_markdown(
 # Keep these named collaboration and business-action routes before the dynamic
 # note route. Older Starlette versions match the first path with the same
 # shape, so their order is part of the API contract.
+@router.get("/notes/shared-by-me", response_model=list[SharedByMeNoteRead])
+def list_notes_shared_by_me(db: DbSession, user: CurrentUser) -> list[SharedByMeNoteRead]:
+    """Notes I own that still have at least one active share, with holders."""
+    return [
+        SharedByMeNoteRead.model_validate({
+            **NoteListItem.model_validate(note).model_dump(),
+            "shared_with": [UserRead.model_validate(holder) for holder in users],
+        })
+        for note, users in note_share_service.list_notes_shared_by_me(db, user.id)
+    ]
+
+
 @router.get("/notes/{note_id}/collaboration-access", response_model=NoteCollaborationAccess, include_in_schema=False)
 def get_note_collaboration_access(note_id: str, db: DbSession, user: CurrentUser) -> NoteCollaborationAccess:
     note = db.get(Note, note_id)
@@ -150,7 +171,7 @@ def get_note_collaboration_access(note_id: str, db: DbSession, user: CurrentUser
         raise HTTPException(status_code=404, detail="Note not found")
     return NoteCollaborationAccess(
         can_view=True,
-        can_edit=note_permission_service.can_edit_personal_note(note, user.id),
+        can_edit=note_permission_service.can_edit_personal_note(db, note, user.id),
     )
 
 
@@ -172,7 +193,12 @@ def put_note_collaboration_snapshot(
     actors = set(payload.actor_ids)
     if payload.actor_id:
         actors.add(payload.actor_id)
-    if any(actor_id != note.owner_id for actor_id in actors):
+    # The WebSocket authorize check is the front gate; this is the back gate.
+    # Editable share holders may drive the projection like the owner, everyone
+    # else (including revoked or downgraded share holders) is rejected so a
+    # stale collaboration connection cannot keep writing after its grant ends.
+    allowed_actors = {note.owner_id} | note_share_service.editable_share_user_ids(db, note.id)
+    if any(actor_id not in allowed_actors for actor_id in actors):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="没有修改笔记的权限")
 
     # Opening or switching a collaborative note can replay the current Y.Doc

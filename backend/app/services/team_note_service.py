@@ -102,10 +102,33 @@ def list_team_notes(
     ).unique())
 
 
-def list_categories(db: Session, team_id: str) -> list[TeamNoteCategory]:
-    return list(db.scalars(select(TeamNoteCategory).where(
-        TeamNoteCategory.team_id == team_id
-    ).order_by(TeamNoteCategory.sort_order, TeamNoteCategory.name)))
+def count_published_notes(db: Session, team_id: str) -> int:
+    """Return the active knowledge count used by the notes navigation."""
+
+    return int(db.scalar(
+        select(func.count(TeamNote.id)).where(
+            TeamNote.team_id == team_id,
+            TeamNote.status == TeamNoteStatus.PUBLISHED,
+        )
+    ) or 0)
+
+
+def list_categories_with_counts(db: Session, team_id: str) -> list[tuple[TeamNoteCategory, int]]:
+    rows = db.execute(
+        select(TeamNoteCategory, func.count(TeamNote.id))
+        .outerjoin(
+            TeamNote,
+            and_(
+                TeamNote.category_id == TeamNoteCategory.id,
+                TeamNote.team_id == team_id,
+                TeamNote.status == TeamNoteStatus.PUBLISHED,
+            ),
+        )
+        .where(TeamNoteCategory.team_id == team_id)
+        .group_by(TeamNoteCategory.id)
+        .order_by(TeamNoteCategory.sort_order, TeamNoteCategory.name)
+    ).all()
+    return [(category, int(note_count)) for category, note_count in rows]
 
 
 def create_category(db: Session, team_id: str, name: str, sort_order: int) -> TeamNoteCategory:

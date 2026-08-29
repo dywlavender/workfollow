@@ -4,7 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.note import Note
-from app.models.note_share import NoteShare, NoteShareStatus
+from app.models.note_share import NoteShare, NoteSharePermission, NoteShareStatus
 from app.models.team import Team, TeamMember, TeamMemberRole, TeamMemberStatus, TeamStatus
 from app.models.team_note import TeamNote
 from app.services.system_permission_service import user_is_root
@@ -40,12 +40,35 @@ def can_view_personal_note(db: Session, note: Note, user_id: str) -> bool:
     return membership(db, user_id, share.team_id) is not None
 
 
-def can_edit_personal_note(note: Note, user_id: str) -> bool:
-    return note.deleted_at is None and note.owner_id == user_id
+def has_editable_share(db: Session, note_id: str, user_id: str) -> bool:
+    """Whether ``user_id`` holds an active EDITABLE share on the note.
+
+    Mirrors the share conditions of ``can_view_personal_note`` so an editable
+    grant decays the same way the read grant does: revocation, team exit or a
+    disabled account all remove the write permission immediately.
+    """
+
+    share = db.scalar(select(NoteShare).where(
+        NoteShare.note_id == note_id,
+        NoteShare.shared_with_user_id == user_id,
+        NoteShare.status == NoteShareStatus.ACTIVE,
+        NoteShare.permission == NoteSharePermission.EDITABLE,
+    ))
+    if share is None or share.team_id is None:
+        return False
+    return membership(db, user_id, share.team_id) is not None
 
 
-def can_share_personal_note(note: Note, user_id: str) -> bool:
-    return can_edit_personal_note(note, user_id)
+def can_edit_personal_note(db: Session, note: Note, user_id: str) -> bool:
+    if note.deleted_at is not None:
+        return False
+    if note.owner_id == user_id:
+        return True
+    return has_editable_share(db, note.id, user_id)
+
+
+def can_share_personal_note(db: Session, note: Note, user_id: str) -> bool:
+    return can_edit_personal_note(db, note, user_id)
 
 
 def can_view_shared_note(db: Session, note_id: str, user_id: str) -> bool:
@@ -54,7 +77,7 @@ def can_view_shared_note(db: Session, note_id: str, user_id: str) -> bool:
 
 
 def can_submit_to_knowledge(db: Session, note: Note, user_id: str, team_id: str) -> bool:
-    return can_edit_personal_note(note, user_id) and (
+    return can_edit_personal_note(db, note, user_id) and (
         (user_is_root(db, user_id) and _active_team_exists(db, team_id))
         or membership(db, user_id, team_id) is not None
     )

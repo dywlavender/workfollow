@@ -13,11 +13,13 @@ import * as Y from 'yjs'
 
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import EditorBubbleMenu from '@/components/EditorBubbleMenu.vue'
-import InputDialog from '@/components/InputDialog.vue'
+import EditorLinkDialog from '@/components/editor/EditorLinkDialog.vue'
+import EditorSlashMenu from '@/components/editor/EditorSlashMenu.vue'
 import AssigneePopover from '@/components/task/AssigneePopover.vue'
 import TaskRelationDialog from '@/components/task/TaskRelationDialog.vue'
 import { createWorkFollowEditorExtensions } from '@/modules/editor/tiptap'
 import { workFollowSlashCommands, type WorkFollowSlashCommand } from '@/modules/editor/slashCommands'
+import { useSlashMenu } from '@/modules/editor/slashMenu'
 import { isDateOnlyDue } from '@/modules/todo/dueDate'
 import { formatLastSavedAt } from '@/modules/editor/saveStatus'
 import { getScheduleMarkers } from '@/modules/todo/scheduleMarkers'
@@ -68,8 +70,6 @@ const datePanelOpen = ref(false)
 const datePanelAnchorStyle = ref<Record<string, string> | null>(null)
 const priorityPanelOpen = ref(false)
 const priorityPanelStyle = ref<Record<string, string> | null>(null)
-const slashMenuOpen = ref(false)
-const slashActiveIndex = ref(0)
 const moreMenuOpen = ref(false)
 const removeDialogOpen = ref(false)
 const inlineNotice = ref('')
@@ -79,11 +79,12 @@ const selectedEndDate = ref('')
 const choosingRangeEnd = ref(false)
 const timeValue = ref('')
 const calendarMonth = ref(dayjs().startOf('month'))
-const slashPosition = ref({ left: 0, top: 0 })
 const savedSelection = ref<EditorSelection | null>(null)
-const slashRange = ref<EditorSelection | null>(null)
-const linkDialogOpen = ref(false)
-const linkValue = ref('')
+const linkDialog = ref<InstanceType<typeof EditorLinkDialog> | null>(null)
+const slash = useSlashMenu({
+  commands: () => availableCommands.value,
+  idPrefix: 'task-slash-command',
+})
 const fileInput = ref<HTMLInputElement | null>(null)
 const attachmentItems = ref<Attachment[]>([])
 const attachmentUploading = ref(false)
@@ -150,14 +151,14 @@ function createTaskEditor(document: TaskCollaborationSession['document']) {
         'aria-multiline': 'true',
       },
       handleKeyDown: (_view, event) => {
-        if (!slashMenuOpen.value) return false
-        if (event.key === 'ArrowDown') moveSlashSelection(1)
-        else if (event.key === 'ArrowUp') moveSlashSelection(-1)
+        if (!slash.open.value) return false
+        if (event.key === 'ArrowDown') slash.moveSelection(1)
+        else if (event.key === 'ArrowUp') slash.moveSelection(-1)
         else if (event.key === 'Enter') {
-          const command = availableCommands.value[slashActiveIndex.value]
+          const command = availableCommands.value[slash.activeIndex.value]
           if (command) insertBlock(command.type)
         }
-        else if (event.key === 'Escape') closeSlashMenu()
+        else if (event.key === 'Escape') slash.close()
         else return false
         event.preventDefault()
         return true
@@ -182,7 +183,7 @@ function createTaskEditor(document: TaskCollaborationSession['document']) {
     onUpdate: ({ editor: currentEditor }) => {
       if (hydratingEditor || !editorReady) return
       window.clearTimeout(slashDetectTimer)
-      slashDetectTimer = window.setTimeout(() => detectSlashCommand(currentEditor), 0)
+      slashDetectTimer = window.setTimeout(() => slash.detect(currentEditor), 0)
     },
     onSelectionUpdate: ({ editor: currentEditor }) => rememberSelection(currentEditor),
   })
@@ -822,8 +823,7 @@ async function sync(todo: Todo | null) {
   recurrenceType.value = todo?.recurrenceType ?? 'NONE'
   reminderPreset.value = todo ? detectReminder(todo) : 'NONE'
   lastSavedAt.value = todo?.updatedAt ?? todo?.createdAt ?? null
-  slashMenuOpen.value = false
-  slashRange.value = null
+  slash.close()
   savedSelection.value = null
   await nextTick()
   // A task can be selected again before this async turn resumes. Never start
@@ -992,40 +992,10 @@ function rememberSelection(currentEditor: CoreEditor | undefined = editor.value 
   const { from, to } = currentEditor.state.selection
   savedSelection.value = { from, to }
 }
-function placeMenuAtCaret(currentEditor: CoreEditor | undefined = editor.value ?? undefined) {
-  if (!currentEditor) return
-  const rect = currentEditor.view.coordsAtPos(currentEditor.state.selection.from)
-  slashPosition.value = {
-    left: Math.max(8, Math.min(window.innerWidth - 276, rect.left)),
-    top: Math.max(8, Math.min(window.innerHeight - 430, rect.bottom + 8)),
-  }
-}
-function detectSlashCommand(currentEditor: CoreEditor) {
-  const { selection } = currentEditor.state
-  if (!selection.empty) return
-  const textBeforeCursor = selection.$from.parent.textBetween(0, selection.$from.parentOffset, '\n', '\n')
-  if (!textBeforeCursor.endsWith('/')) return
-  const from = Math.max(0, selection.from - 1)
-  slashRange.value = { from, to: selection.from }
-  placeMenuAtCaret(currentEditor)
-  slashActiveIndex.value = 0
-  slashMenuOpen.value = true
-}
-function closeSlashMenu() {
-  slashMenuOpen.value = false
-  slashRange.value = null
-}
-function scrollActiveSlashCommand() {
-  void nextTick(() => document.getElementById(`task-slash-command-${availableCommands.value[slashActiveIndex.value]?.type}`)?.scrollIntoView({ block: 'nearest' }))
-}
-function moveSlashSelection(direction: number) {
-  slashActiveIndex.value = (slashActiveIndex.value + direction + availableCommands.value.length) % availableCommands.value.length
-  scrollActiveSlashCommand()
-}
 function beginCommand(currentEditor: CoreEditor, withSlash: boolean) {
   const chain = currentEditor.chain().focus()
-  if (withSlash && slashRange.value) {
-    chain.deleteRange({ from: slashRange.value.from, to: currentEditor.state.selection.from })
+  if (withSlash && slash.range.value) {
+    chain.deleteRange({ from: slash.range.value.from, to: currentEditor.state.selection.from })
   } else if (savedSelection.value) {
     chain.setTextSelection(savedSelection.value)
   }
@@ -1034,12 +1004,11 @@ function beginCommand(currentEditor: CoreEditor, withSlash: boolean) {
 function insertBlock(type: WorkFollowSlashCommand) {
   const currentEditor = editor.value
   if (!currentEditor || !collaborationContentReady) return
-  const withSlash = Boolean(slashRange.value)
+  const withSlash = Boolean(slash.range.value)
   const chain = beginCommand(currentEditor, withSlash)
   if (type === 'link') {
     chain.run()
-    slashMenuOpen.value = false
-    slashRange.value = null
+    slash.close()
     openLinkDialog()
     return
   }
@@ -1056,19 +1025,18 @@ function insertBlock(type: WorkFollowSlashCommand) {
   else if (type === 'subtask') chain.toggleTaskList().insertContent('子任务')
   else if (type === 'attachment') {
     if (!canEditContent.value) return
-    chain.run(); closeSlashMenu(); fileInput.value?.click(); return
+    chain.run(); slash.close(); fileInput.value?.click(); return
   }
   else if (type === 'tag') {
     if (!canEditMetadata.value) return
-    chain.run(); closeSlashMenu(); tagPanelOpen.value = true; return
+    chain.run(); slash.close(); tagPanelOpen.value = true; return
   }
   else if (type === 'relation') {
     if (!canEditContent.value) return
-    chain.run(); closeSlashMenu(); relationDialogOpen.value = true; return
+    chain.run(); slash.close(); relationDialogOpen.value = true; return
   }
   chain.run()
-  slashMenuOpen.value = false
-  slashRange.value = null
+  slash.close()
   savedSelection.value = null
 }
 async function uploadAttachmentFile(event: Event) {
@@ -1135,16 +1103,7 @@ async function relateNote(note: NoteListItem) {
   } catch { showNotice('关联失败，请确认访问权限') }
 }
 function openLinkDialog() {
-  if (!editor.value) return
-  linkValue.value = (editor.value.getAttributes('link').href as string | undefined) ?? 'https://'
-  linkDialogOpen.value = true
-}
-function applyLink(value: string) {
-  linkDialogOpen.value = false
-  if (!editor.value) return
-  const url = value.trim()
-  if (!url) editor.value.chain().focus().extendMarkRange('link').unsetLink().run()
-  else editor.value.chain().focus().extendMarkRange('link').setLink({ href: url }).run()
+  linkDialog.value?.open()
 }
 
 async function requestClose() {
@@ -1165,7 +1124,7 @@ function closeFloatingPanels(event: MouseEvent) {
   if (target?.closest('.task-schedule-popover, .task-priority-popover, .task-slash-menu, .task-editor-more-menu')) return
   datePanelOpen.value = false; datePanelAnchorStyle.value = null
   priorityPanelOpen.value = false; priorityPanelStyle.value = null
-  slashMenuOpen.value = false; moreMenuOpen.value = false
+  slash.close(); moreMenuOpen.value = false
 }
 function closeEditorPanels() {
   datePanelOpen.value = false
@@ -1304,23 +1263,9 @@ onBeforeUnmount(() => {
       <small v-else-if="!canEditMetadata">任务属性协同尚未就绪，暂时不能修改标题、日期和标签</small>
     </section>
 
-    <Teleport to="body">
-      <section v-if="slashMenuOpen" class="task-slash-menu" :style="{ left: `${slashPosition.left}px`, top: `${slashPosition.top}px` }" role="menu" aria-label="插入格式" @mousedown.prevent.stop @click.stop>
-        <button
-          v-for="(command, index) in availableCommands"
-          :id="`task-slash-command-${command.type}`"
-          :key="command.type"
-          type="button"
-          role="menuitem"
-          :class="{ active: slashActiveIndex === index }"
-          :aria-current="slashActiveIndex === index ? 'true' : undefined"
-          @mousemove="slashActiveIndex = index"
-          @click="insertBlock(command.type)"
-        ><span>{{ command.mark }}</span><strong>{{ command.label }}</strong></button>
-      </section>
-    </Teleport>
+    <EditorSlashMenu :commands="availableCommands" :active-index="slash.activeIndex.value" :position="slash.position.value" :open="slash.open.value" id-prefix="task-slash-command" @select="insertBlock" @hover="slash.activeIndex.value = $event" />
     <ConfirmDialog :open="removeDialogOpen" title="删除任务" :message="`确定删除“${todo.title}”吗？删除后无法恢复。`" confirm-label="删除" :danger="true" @close="removeDialogOpen = false" @confirm="confirmRemove" />
-    <InputDialog :open="linkDialogOpen" title="设置链接" label="链接地址" :initial-value="linkValue" placeholder="https://（留空可移除链接）" confirm-label="应用" :required="false" @close="linkDialogOpen = false" @submit="applyLink" />
+    <EditorLinkDialog ref="linkDialog" :editor="() => editor" />
     <TaskRelationDialog :open="relationDialogOpen" :current-task-id="todo.id" @close="relationDialogOpen = false" @select-task="relateTask" @select-note="relateNote" />
   </aside>
   <aside v-else class="task-detail task-detail-empty" aria-label="任务正文">

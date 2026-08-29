@@ -16,6 +16,13 @@ class NoteShareCreate(ApiModel):
 
 class NoteSharesSync(ApiModel):
     user_ids: list[str] = Field(default_factory=list, max_length=100)
+    # Only applied to members this sync newly grants or re-grants; existing
+    # shares keep their individually set level (see sync_note_shares).
+    permission: NoteSharePermission = NoteSharePermission.READ_ONLY
+
+
+class NoteSharePermissionUpdate(ApiModel):
+    permission: NoteSharePermission
 
 
 class NoteShareRead(ApiModel):

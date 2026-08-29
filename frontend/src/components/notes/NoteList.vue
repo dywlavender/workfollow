@@ -14,6 +14,8 @@ const props = defineProps<{
   search: string
   heading: string
   loading?: boolean
+  /** 覆盖默认空态文案；actions=false 时同时隐藏头部新建菜单（在该视图新建的笔记不会出现在列表里）。 */
+  emptyState?: { title: string; description: string; actions?: boolean } | null
 }>()
 const emit = defineEmits<{
   select: [note: NoteListItem]
@@ -43,7 +45,7 @@ function chooseCreateAction(action: CreateAction) {
   <aside class="notes-column note-list-column" @click="createMenuOpen = false">
     <header class="notes-column-header">
       <div><h2>{{ heading }}</h2></div>
-      <div class="notes-column-actions">
+      <div v-if="props.emptyState?.actions !== false" class="notes-column-actions">
         <div ref="createMenuHost" class="notes-create-menu-host" @click.stop>
           <button class="mini-action" type="button" aria-label="新建笔记" title="新建笔记" aria-haspopup="menu" :aria-expanded="createMenuOpen" @click="createMenuOpen = !createMenuOpen"><IconPlus :size="18" :stroke-width="1.8" /></button>
           <div v-if="createMenuOpen" class="notes-create-menu" role="menu" aria-label="新建笔记方式">
@@ -59,11 +61,11 @@ function chooseCreateAction(action: CreateAction) {
         <span v-for="index in 5" :key="index"><i /><b /><em /></span>
       </div>
       <template v-else>
-        <section v-if="!notes.length && !search.trim()" class="notes-empty-guide" aria-label="开始创建笔记">
+        <section v-if="!notes.length && !search.trim()" class="notes-empty-guide" aria-label="列表为空">
           <span class="notes-empty-guide-icon"><IconFileText :size="22" /></span>
-          <strong>从一条笔记开始</strong>
-          <p>把想法、会议记录和临时信息先保存下来，之后再慢慢整理。</p>
-          <div class="notes-empty-guide-actions">
+          <strong>{{ props.emptyState?.title ?? '从一条笔记开始' }}</strong>
+          <p>{{ props.emptyState?.description ?? '把想法、会议记录和临时信息先保存下来，之后再慢慢整理。' }}</p>
+          <div v-if="props.emptyState?.actions !== false" class="notes-empty-guide-actions">
             <button class="primary-button" type="button" @click="chooseCreateAction('blank')"><IconFilePlus :size="15" />新建空白笔记</button>
             <button class="secondary-button" type="button" @click="chooseCreateAction('template')"><IconLayoutGrid :size="15" />从模板创建</button>
             <button class="secondary-button" type="button" @click="chooseCreateAction('import')"><IconUpload :size="15" />导入 Markdown</button>

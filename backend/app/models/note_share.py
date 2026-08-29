@@ -17,6 +17,7 @@ class NoteShareStatus(str, Enum):
 
 class NoteSharePermission(str, Enum):
     READ_ONLY = "READ_ONLY"
+    EDITABLE = "EDITABLE"
 
 
 class NoteShare(Base):

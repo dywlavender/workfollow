@@ -271,7 +271,14 @@ async function handleInitializationRequest({ request, response, instance }) {
   }
 
   const key = initializationKey(documentName, field)
-  if (documentFieldInitialized(document, field)) {
+  // 团队知识草稿始终有已发布版本兜底：一个"只有初始化标记、没有任何内容"
+  // 的草稿（历史上产生过这类坏快照）会让管理员永远看到空白页。这种草稿
+  // 一律视为未初始化，重新走 SQL 种子流程自愈；个人笔记和任务的空正文
+  // 则可能是用户刻意清空的结果，维持原判定。
+  const knowledgeDraftNeedsSeed = info.resource === 'knowledge'
+    && field === 'body'
+    && document.getXmlFragment('default').length === 0
+  if (documentFieldInitialized(document, field) && !knowledgeDraftNeedsSeed) {
     initializationClaims.delete(key)
     response.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' })
     response.end(JSON.stringify({ status: 'initialized' }))
@@ -825,9 +832,12 @@ server = new Server({
       // a later client could mistake it for an initialized blank resource.
       // Once the marker exists, an intentionally empty body is a valid result
       // for both tasks and notes; the durable marker tells those cases apart
-      // without relying on a timing guess.
+      // without relying on a timing guess. Knowledge drafts are the
+      // exception: they always fall back to the published version, so a
+      // marker-only snapshot would poison the draft into a permanent blank
+      // page — never persist one.
       const initialized = data.document.getMap('config').get('bodyInitialized') === true
-      if (!initialized) {
+      if (!initialized || info.resource === 'knowledge') {
         pendingActors.delete(data.documentName)
         return
       }

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import {
   IconBook, IconClock, IconDots, IconEdit, IconFileText,
-  IconFolder, IconFolderPlus, IconInbox, IconPlus, IconSearch, IconSend, IconShieldCheck,
+  IconFolder, IconFolderPlus, IconInbox, IconPlus, IconSearch, IconSend, IconShare, IconShieldCheck,
   IconStar, IconTrash,
 } from '@tabler/icons-vue'
 import { computed, ref, watch } from 'vue'
@@ -9,7 +9,7 @@ import { computed, ref, watch } from 'vue'
 import { useClickOutside } from '@/composables/useClickOutside'
 import type { Folder, KnowledgeCategory } from '@/services/api'
 
-export type NoteView = 'recent' | 'all' | 'inbox' | 'favorites' | 'shared' | 'knowledge' | 'submissions' | 'review'
+export type NoteView = 'recent' | 'all' | 'inbox' | 'favorites' | 'shared' | 'sharedByMe' | 'knowledge' | 'submissions' | 'review'
 
 const props = defineProps<{
   view: NoteView
@@ -23,6 +23,9 @@ const props = defineProps<{
   unfiledCount?: number
   favoriteCount?: number
   folderCounts?: Record<string, number>
+  sharedCount?: number
+  sharedByMeCount?: number
+  knowledgeCount?: number
   submissionsPendingCount?: number
   reviewPendingCount?: number
 }>()
@@ -118,20 +121,21 @@ watch(() => props.view, (view) => {
     <template v-if="hasTeam">
       <div class="note-nav-divider" />
       <nav class="note-collab-nav" aria-label="笔记协作">
-        <button :class="{ active: view === 'shared' }" @click="emit('view', 'shared')"><IconInbox :size="16" />分享给我的</button>
-        <button :class="{ active: view === 'submissions' }" @click="emit('view', 'submissions')"><IconSend :size="16" />我的投稿<em v-if="submissionsPendingCount">{{ submissionsPendingCount > 99 ? '99+' : submissionsPendingCount }}</em></button>
+        <button :class="{ active: view === 'shared' }" @click="emit('view', 'shared')"><IconInbox :size="16" />分享给我的<em v-if="sharedCount">{{ sharedCount > 99 ? '99+' : sharedCount }}</em></button>
+        <button :class="{ active: view === 'sharedByMe' }" @click="emit('view', 'sharedByMe')"><IconShare :size="16" />我分享的<em v-if="sharedByMeCount">{{ sharedByMeCount > 99 ? '99+' : sharedByMeCount }}</em></button>
+        <button :class="{ active: view === 'submissions' }" @click="emit('view', 'submissions')"><IconSend :size="16" />我的投稿<em v-if="submissionsPendingCount !== undefined">{{ submissionsPendingCount > 99 ? '99+' : submissionsPendingCount }}</em></button>
         <button v-if="canReview" :class="{ active: view === 'review' }" @click="emit('view', 'review')"><IconShieldCheck :size="16" />知识审核<em v-if="reviewPendingCount">{{ reviewPendingCount > 99 ? '99+' : reviewPendingCount }}</em></button>
         <div class="knowledge-nav-entry" :class="{ active: view === 'knowledge' }">
-          <button class="knowledge-nav-main" :class="{ active: view === 'knowledge' }" type="button" aria-controls="knowledge-category-list" :aria-expanded="view === 'knowledge' && categoryNavOpen" @click="toggleKnowledgeNav"><IconBook :size="16" />团队知识库</button>
+          <button class="knowledge-nav-main" :class="{ active: view === 'knowledge' }" type="button" aria-controls="knowledge-category-list" :aria-expanded="view === 'knowledge' && categoryNavOpen" @click="toggleKnowledgeNav"><IconBook :size="16" />团队知识库<em v-if="knowledgeCount">{{ knowledgeCount > 99 ? '99+' : knowledgeCount }}</em></button>
           <button v-if="canReview" class="knowledge-category-add" type="button" aria-label="新建知识分类" title="新建分类" @click.stop="openCategoryActionsId = null; emit('createCategory')"><IconPlus :size="14" /></button>
         </div>
       </nav>
       <div v-if="view === 'knowledge'" ref="categoryNav" class="knowledge-category-nav" @click="openCategoryActionsId = null" @keydown.esc="openCategoryActionsId = null">
         <div v-show="categoryNavOpen" id="knowledge-category-list" class="knowledge-category-list">
-          <button class="knowledge-category-item knowledge-category-all" :class="{ active: selectedCategoryId === null }" @click="selectCategory(null)"><IconBook :size="15" /><span>全部知识</span></button>
+          <button class="knowledge-category-item knowledge-category-all" :class="{ active: selectedCategoryId === null }" @click="selectCategory(null)"><IconBook :size="15" /><span>全部知识</span><em v-if="knowledgeCount !== undefined">{{ knowledgeCount > 99 ? '99+' : knowledgeCount }}</em></button>
           <p v-if="categories.length === 0" class="knowledge-category-empty">暂无自定义分类</p>
           <div v-for="category in categories" :key="category.id" class="knowledge-category-row" :class="{ 'is-menu-open': openCategoryActionsId === category.id, 'is-selected': selectedCategoryId === category.id }">
-            <button class="knowledge-category-item" :class="{ active: selectedCategoryId === category.id }" :title="category.name" @click="selectCategory(category.id)"><IconFolder :size="15" /><span>{{ category.name }}</span></button>
+            <button class="knowledge-category-item" :class="{ active: selectedCategoryId === category.id }" :title="category.name" @click="selectCategory(category.id)"><IconFolder :size="15" /><span>{{ category.name }}</span><em v-if="category.noteCount !== undefined">{{ category.noteCount > 99 ? '99+' : category.noteCount }}</em></button>
             <div v-if="canReview" class="knowledge-category-actions">
               <button class="knowledge-category-more" type="button" :aria-label="`${category.name}设置`" aria-haspopup="menu" :aria-expanded="openCategoryActionsId === category.id" @click.stop="toggleCategoryActions(category.id)"><IconDots :size="16" /></button>
             </div>

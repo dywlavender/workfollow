@@ -26,13 +26,13 @@ import {
   approveSubmission, archiveKnowledge, copyKnowledge, copyNote, copySharedNote, deleteAttachment, deleteFolder, deleteKnowledge, deleteKnowledgeCategory, deleteNote,
   fetchAttachments, fetchFolders, fetchKnowledge, fetchKnowledgeCategories, fetchKnowledgeNote, fetchKnowledgeVersions, fetchNote,
   deleteNoteTemplate, fetchMySubmissions, fetchNoteNavigationCounts, fetchNoteShares, fetchNotes, fetchNoteTemplates, fetchRelatedKnowledge,
-  fetchReviewSubmissions, fetchSearch, fetchSharedNotes, fetchTeamMembers, importMarkdownNote, postFolder, postKnowledge, postNote,
+  fetchReviewSubmissions, fetchSearch, fetchSharedNote, fetchSharedNotes, fetchNotesSharedByMe, fetchTeamMembers, importMarkdownNote, postFolder, postKnowledge, postNote,
   postKnowledgeCategory,
   commitKnowledge, moveNoteToFolder, postNoteFromTemplate, postNoteTemplate, putFolder, putKnowledgeCategory, putNoteTemplate, rejectSubmission, setNoteFavorite,
-  requestSubmissionRevision, resubmitSubmission, restoreKnowledge, submitNoteToKnowledge, syncNoteShares, ensureKnowledgeUpdateDraft,
+  requestSubmissionRevision, resubmitSubmission, restoreKnowledge, submitNoteToKnowledge, syncNoteShares, updateNoteSharePermission, ensureKnowledgeUpdateDraft,
   uploadAttachment, withdrawSubmission,
-  type Attachment, type Folder, type KnowledgeCategory, type Note, type NoteListItem, type NoteNavigationCounts, type NoteShare, type SearchItem,
-  type NoteTemplate, type SharedNote, type SubmissionPayload, type SubmissionReviewPayload, type TeamMember, type TeamNote,
+  type Attachment, type Folder, type KnowledgeCategory, type Note, type NoteListItem, type NoteNavigationCounts, type NoteShare, type NoteSharePermission, type SearchItem,
+  type NoteTemplate, type SharedByMeNote, type SharedNote, type SubmissionPayload, type SubmissionReviewPayload, type TeamMember, type TeamNote,
   type TeamNoteListItem, type TeamNoteSubmission, type TeamNoteVersion,
 } from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
@@ -57,11 +57,13 @@ const canReview = computed(() => isRoot.value || currentTeam.value?.role === 'OW
 const folders = ref<Folder[]>([])
 const notes = ref<NoteListItem[]>([])
 const sharedNotes = ref<SharedNote[]>([])
+const sharedByMeNotes = ref<SharedByMeNote[]>([])
 const knowledge = ref<TeamNoteListItem[]>([])
 const archivedKnowledge = ref<TeamNoteListItem[]>([])
 const knowledgeDetails = ref<TeamNote[]>([])
 const categories = ref<KnowledgeCategory[]>([])
 const members = ref<TeamMember[]>([])
+const shareMembers = ref<TeamMember[]>([])
 const submissions = ref<TeamNoteSubmission[]>([])
 const mySubmissions = ref<TeamNoteSubmission[]>([])
 const relatedKnowledge = ref<TeamNote[]>([])
@@ -88,6 +90,9 @@ const navigationCounts = ref<NoteNavigationCounts>({
   unfiled: 0,
   favorites: 0,
   folders: {},
+  shared: 0,
+  sharedByMe: 0,
+  knowledge: 0,
   submissionsPending: 0,
   reviewPending: 0,
 })
@@ -100,11 +105,11 @@ const globalSearchInput = ref<HTMLInputElement | null>(null)
 const knowledgeStatusFilter = ref<'published' | 'archived'>('published')
 const busy = ref(false)
 const viewLoading = ref(false)
-const validViews: NoteView[] = ['recent', 'all', 'inbox', 'favorites', 'shared', 'knowledge', 'submissions', 'review']
+const validViews: NoteView[] = ['recent', 'all', 'inbox', 'favorites', 'shared', 'sharedByMe', 'knowledge', 'submissions', 'review']
 const currentView = computed<NoteView>(() => {
   const requested = typeof route.query.view === 'string' ? route.query.view as NoteView : 'all'
   if (!validViews.includes(requested)) return 'all'
-  if (!hasTeam.value && ['shared', 'knowledge', 'submissions', 'review'].includes(requested)) return 'all'
+  if (!hasTeam.value && ['shared', 'sharedByMe', 'knowledge', 'submissions', 'review'].includes(requested)) return 'all'
   if (requested === 'review' && !canReview.value) return 'submissions'
   return requested
 })
@@ -367,13 +372,19 @@ function removeSubmission(itemId: string) {
     if (index >= 0) list.value.splice(index, 1)
   }
   if (selectedSubmission.value?.id === itemId) {
-    selectedSubmission.value = submissions.value[0] ?? mySubmissions.value[0] ?? null
+    selectedSubmission.value = null
     relatedKnowledge.value = []
   }
 }
 
 async function refreshNoteMeta() {
   navigationCounts.value = await fetchNoteNavigationCounts(selectedTeamId.value)
+}
+
+async function refreshKnowledgeCategories() {
+  categories.value = selectedTeamId.value
+    ? await fetchKnowledgeCategories(selectedTeamId.value)
+    : []
 }
 
 function updateGlobalSearch(value: string) {
@@ -451,14 +462,16 @@ async function loadPersonal() {
       limit: currentView.value === 'recent' ? 30 : undefined,
     })
   const requestedNoteId = typeof route.query.note === 'string' ? route.query.note : null
+  // 与待办视图一致：进入列表不自动打开第一条。只有深链指定的笔记、或已选中
+  // 且仍在本视图列表内的笔记保持打开，其余展示空态，省去进页时的详情/附件请求。
   const selectedId = requestedNoteId && notes.value.some((item) => item.id === requestedNoteId)
     ? requestedNoteId
     : selectedNote.value && notes.value.some((item) => item.id === selectedNote.value?.id)
       ? selectedNote.value.id
-      : notes.value[0]?.id ?? null
+      : null
   const summary = selectedId ? notes.value.find((item) => item.id === selectedId) ?? null : null
-  if (summary) await selectPersonal(summary)
-  else {
+  if (summary && summary.id !== selectedNote.value?.id) await selectPersonal(summary)
+  else if (!summary) {
     selectedNote.value = null
     attachments.value = []
     shares.value = []
@@ -491,12 +504,24 @@ async function performLoadView() {
     else if (currentView.value === 'shared') {
       sharedNotes.value = await fetchSharedNotes(search.value.trim() || undefined)
       const requested = typeof route.query.shared === 'string' ? route.query.shared : selectedShared.value?.id
-      selectedShared.value = visibleSharedNotes.value.find((item) => item.id === requested) ?? visibleSharedNotes.value[0] ?? null
+      // 深链或已有选中才打开，否则空态（同待办视图）。
+      selectedShared.value = visibleSharedNotes.value.find((item) => item.id === requested) ?? null
+    } else if (currentView.value === 'sharedByMe') {
+      sharedByMeNotes.value = await fetchNotesSharedByMe()
+      const requested = typeof route.query.note === 'string' ? route.query.note : selectedNote.value?.id
+      const summary = sharedByMeNotes.value.find((item) => item.id === requested) ?? null
+      if (summary && summary.id !== selectedNote.value?.id) await selectPersonal(summary)
+      else if (!summary) {
+        selectedNote.value = null
+        attachments.value = []
+        shares.value = []
+      }
     } else if (currentView.value === 'knowledge') {
       await loadCollaboration()
       const requested = typeof route.query.knowledge === 'string' ? route.query.knowledge : selectedKnowledge.value?.id
-      const summary = visibleKnowledge.value.find((item) => item.id === requested) ?? visibleKnowledge.value[0] ?? null
-      selectedKnowledge.value = summary ? await selectKnowledge(summary) : null
+      const summary = visibleKnowledge.value.find((item) => item.id === requested) ?? null
+      if (summary && summary.id !== selectedKnowledge.value?.id) await selectKnowledge(summary)
+      else if (!summary) selectedKnowledge.value = null
     } else {
       if (!hasTeam.value || !selectedTeamId.value) {
         submissions.value = []
@@ -506,13 +531,15 @@ async function performLoadView() {
       }
       submissions.value = currentView.value === 'review' ? await fetchReviewSubmissions(selectedTeamId.value) : await fetchMySubmissions(selectedTeamId.value)
       const requestedSubmission = typeof route.query.submission === 'string' ? route.query.submission : selectedSubmission.value?.id
-      selectedSubmission.value = submissions.value.find((item) => item.id === requestedSubmission) ?? submissions.value[0] ?? null
-      if (selectedSubmission.value) {
+      const nextSubmission = submissions.value.find((item) => item.id === requestedSubmission) ?? null
+      const submissionChanged = nextSubmission?.id !== selectedSubmission.value?.id
+      selectedSubmission.value = nextSubmission
+      if (nextSubmission && (submissionChanged || currentView.value === 'review')) {
         const relatedRequest = currentView.value === 'review'
-          ? fetchRelatedKnowledge(selectedSubmission.value.id)
+          ? fetchRelatedKnowledge(nextSubmission.id)
           : Promise.resolve([] as TeamNote[])
         await Promise.all([
-          ensureSubmissionTarget(selectedSubmission.value),
+          ensureSubmissionTarget(nextSubmission),
           relatedRequest.then((loadedRelated) => { relatedKnowledge.value = loadedRelated }),
         ])
       }
@@ -642,19 +669,23 @@ async function refreshKnowledgeDetail(noteId: string) {
 function applyTeamNoteChange(change: NonNullable<typeof realtime.lastTeamNoteChange>) {
   if (change.teamId !== selectedTeamId.value) return
   if (change.status === 'DELETED') {
+    void refreshNoteMeta()
+    void refreshKnowledgeCategories()
     removeKnowledgeListItem(change.noteId)
     if (selectedKnowledge.value?.id === change.noteId) {
       selectedKnowledge.value = null
-      const next = visibleKnowledge.value[0]
-      if (next) void selectKnowledge(next)
     }
     return
   }
   const source = [...knowledge.value, ...archivedKnowledge.value].find((item) => item.id === change.noteId)
   if (!source) {
+    void refreshNoteMeta()
+    void refreshKnowledgeCategories()
     if (currentView.value === 'knowledge') void loadView()
     return
   }
+  if (source.status !== change.status) void refreshNoteMeta()
+  if (source.status !== change.status || source.categoryId !== change.categoryId) void refreshKnowledgeCategories()
   const updated: TeamNoteListItem = {
     ...source,
     title: change.title,
@@ -685,11 +716,25 @@ async function ensureSubmissionTarget(item: TeamNoteSubmission) {
 
 async function openShareDialog() {
   if (!selectedNote.value) return
-  shareDialogOpen.value = true
   try {
+    // 先取已分享列表再开弹窗：否则弹窗以空列表渲染，勾选框初始化后不会
+    // 随后到的数据补勾（表现为“看不到已分享的人”）。
     shares.value = await fetchNoteShares(selectedNote.value.id)
+    // 成员列表合并“我在的所有团队”：分享可以授予任何与我存在共同团队的
+    // 成员，只看当前选中团队会漏掉其他团队里的已分享者（多团队管理员场景）。
+    const teamIds = workspace.teams.map((team) => team.id)
+    const memberLists = await Promise.all(teamIds.map((id) => fetchTeamMembers(id).catch(() => [] as TeamMember[])))
+    const byUser = new Map<string, TeamMember>()
+    for (const list of memberLists) {
+      for (const member of list) {
+        if (member.status !== 'ACTIVE') continue
+        const existing = byUser.get(member.userId)
+        if (!existing || member.role === 'OWNER') byUser.set(member.userId, member)
+      }
+    }
+    shareMembers.value = [...byUser.values()]
+    shareDialogOpen.value = true
   } catch (cause: any) {
-    shareDialogOpen.value = false
     fail(cause, '分享权限读取失败。')
   }
 }
@@ -809,12 +854,54 @@ async function confirmDelete() {
   } catch (cause: any) { fail(cause, '删除失败。') }
 }
 
-async function saveShares(userIds: string[]) {
+async function saveShares(userIds: string[], permission: NoteSharePermission) {
   if (!selectedNote.value) return
   busy.value = true
-  try { shares.value = await syncNoteShares(selectedNote.value.id, userIds); shareDialogOpen.value = false; notify('分享权限已更新。') }
-  catch (cause: any) { fail(cause, '分享失败。') }
+  try {
+    shares.value = await syncNoteShares(selectedNote.value.id, userIds, permission)
+    shareDialogOpen.value = false
+    notify('分享权限已更新。')
+    void refreshNoteMeta()
+    if (currentView.value === 'sharedByMe') sharedByMeNotes.value = await fetchNotesSharedByMe()
+  } catch (cause: any) { fail(cause, '分享失败。') }
   finally { busy.value = false }
+}
+
+async function changeSharePermission(shareId: string, permission: NoteSharePermission) {
+  if (!selectedNote.value) return
+  try {
+    const updated = await updateNoteSharePermission(selectedNote.value.id, shareId, permission)
+    shares.value = shares.value.map((item) => (item.id === updated.id ? updated : item))
+    notify(updated.permission === 'EDITABLE' ? '已允许对方协作编辑。' : '已调整为只读共享。')
+    if (currentView.value === 'sharedByMe') sharedByMeNotes.value = await fetchNotesSharedByMe()
+  } catch (cause: any) { fail(cause, '权限调整失败。') }
+}
+
+// note.changed 在每次投影后都会到达（包括自己打字触发的），防抖避免请求风暴；
+// 内容与权限都没变时不要用新对象替换 selectedShared，防止子组件无谓刷新。
+let sharedRefreshTimer: number | undefined
+function refreshSelectedShared() {
+  if (sharedRefreshTimer !== undefined) window.clearTimeout(sharedRefreshTimer)
+  sharedRefreshTimer = window.setTimeout(() => { void refreshSelectedSharedNow() }, 400)
+}
+
+async function refreshSelectedSharedNow() {
+  const noteId = selectedShared.value?.id
+  if (!noteId) return
+  try {
+    const fresh = await fetchSharedNote(noteId)
+    const current = selectedShared.value
+    const unchanged = current
+      && current.updatedAt === fresh.updatedAt
+      && current.permission === fresh.permission
+      && current.title === fresh.title
+    if (current?.id === noteId && !unchanged) selectedShared.value = fresh
+    sharedNotes.value = await fetchSharedNotes(search.value.trim() || undefined)
+  } catch {
+    // 权限已被收回：详情与列表条目一并移除，避免继续展示拿不到的内容。
+    if (selectedShared.value?.id === noteId) selectedShared.value = null
+    sharedNotes.value = sharedNotes.value.filter((item) => item.id !== noteId)
+  }
 }
 
 async function openPublish(type?: 'CREATE' | 'UPDATE', targetId?: string | null) {
@@ -896,16 +983,18 @@ async function createKnowledge(title: string) {
   upsertKnowledgeListItem(item)
   upsertKnowledgeDetail(item)
   selectedKnowledge.value = item
+  await refreshNoteMeta()
+  await refreshKnowledgeCategories()
 }
 async function openKnowledge(note: TeamNote | TeamNoteListItem) {
   await router.push({ path: '/notes', query: { view: 'knowledge', knowledge: note.id } })
 }
 function selectKnowledgeStatus(value: 'published' | 'archived') {
   knowledgeStatusFilter.value = value
-  const requested = typeof route.query.knowledge === 'string' ? route.query.knowledge : null
-  const summary = visibleKnowledge.value.find((item) => item.id === requested) ?? visibleKnowledge.value[0] ?? null
-  if (summary) void selectKnowledge(summary)
-  else selectedKnowledge.value = null
+  const requested = typeof route.query.knowledge === 'string' ? route.query.knowledge : selectedKnowledge.value?.id
+  const summary = visibleKnowledge.value.find((item) => item.id === requested) ?? null
+  if (summary && summary.id !== selectedKnowledge.value?.id) void selectKnowledge(summary)
+  else if (!summary) selectedKnowledge.value = null
 }
 function openCreateCategory() { categoryDialogMode.value = 'create'; categoryDialogTarget.value = null; categoryDialogName.value = ''; categoryDialogOpen.value = true }
 function openRenameCategory(category: KnowledgeCategory) { categoryDialogMode.value = 'rename'; categoryDialogTarget.value = category; categoryDialogName.value = category.name; categoryDialogOpen.value = true }
@@ -927,6 +1016,7 @@ async function saveKnowledge(
     upsertKnowledgeDetail(updated)
     upsertKnowledgeListItem(updated)
     settled?.(updated.versionNo)
+    if (note.categoryId !== updated.categoryId) await refreshKnowledgeCategories()
   } catch (cause: any) { fail(cause, '保存团队知识失败，请稍后重试。') }
   finally { busy.value = false }
 }
@@ -940,6 +1030,8 @@ async function setArchived(note: TeamNote, archived: boolean) {
     upsertKnowledgeListItem(updated)
     selectedKnowledge.value = updated
     knowledgeStatusFilter.value = archived ? 'archived' : 'published'
+    await refreshNoteMeta()
+    await refreshKnowledgeCategories()
   } catch (cause: any) { fail(cause, archived ? '归档知识失败。' : '恢复知识失败。') }
   finally { busy.value = false }
 }
@@ -967,7 +1059,8 @@ async function confirmDeleteKnowledge() {
     await deleteKnowledge(target.id, selectedTeamId.value)
     selectedKnowledge.value = null
     removeKnowledgeListItem(target.id)
-    selectedKnowledge.value = visibleKnowledge.value[0] ? await selectKnowledge(visibleKnowledge.value[0]) : null
+    await refreshNoteMeta()
+    await refreshKnowledgeCategories()
     notify('团队知识已彻底删除。')
   } catch (cause: any) {
     fail(cause, '彻底删除团队知识失败。')
@@ -988,6 +1081,7 @@ async function approve(item: TeamNoteSubmission, payload: SubmissionReviewPayloa
   upsertKnowledgeListItem(approved)
   removeSubmission(item.id)
   await refreshNoteMeta()
+  await refreshKnowledgeCategories()
 }
 async function revision(item: TeamNoteSubmission, reason: string) { replaceSubmission(await requestSubmissionRevision(item.id, reason)); await refreshNoteMeta() }
 async function reject(item: TeamNoteSubmission, reason: string) { replaceSubmission(await rejectSubmission(item.id, reason)); await refreshNoteMeta() }
@@ -1129,7 +1223,12 @@ watch(() => realtime.lastTeamNoteChange, (change) => {
 })
 
 watch(() => realtime.lastNoteChange, (change) => {
-  if (change) applyNoteChange(change)
+  if (!change) return
+  applyNoteChange(change)
+  // 共享视图的详情不在 applyNoteChange 的个人列表里：权限升级/降级、
+  // 撤权都会以 note.changed 到达，选中的共享笔记需要即时重取。
+  if (selectedShared.value?.id === change.noteId) refreshSelectedShared()
+  if (currentView.value === 'sharedByMe') void loadView()
 })
 
 onMounted(async () => {
@@ -1158,9 +1257,9 @@ onBeforeRouteLeave(() => flushEditorsForNavigation())
       <button class="primary-button" type="button" @click="finishOnboarding">开始使用</button>
     </section>
     <div class="notes-workspace card" :aria-busy="viewLoading">
-      <NoteNavigation :view="currentView" :folders="folders" :selected-folder-id="selectedFolderId" :all-count="navigationCounts.all" :unfiled-count="navigationCounts.unfiled" :favorite-count="navigationCounts.favorites" :folder-counts="navigationCounts.folders" :submissions-pending-count="navigationCounts.submissionsPending" :review-pending-count="navigationCounts.reviewPending" :has-team="hasTeam" :can-review="canReview" :categories="categories" :selected-category-id="selectedCategoryId" @view="activateView" @folder="selectFolder" @category="selectCategory" @create-category="openCreateCategory" @rename-category="openRenameCategory" @remove-category="requestDeleteCategory" @create-folder="createFolder" @rename-folder="renameFolder" @remove-folder="removeFolder" @open-search="openGlobalSearch" />
-      <template v-if="personalView">
-        <NoteList :notes="notes" :selected-id="selectedNote?.id ?? null" :search="search" :heading="noteListHeading" :loading="viewLoading" @select="selectPersonal" @create="createBlankNote" @templates="openTemplates" @import="openMarkdownImport" @search="updateSearch" @remove="requestDeleteNote" />
+      <NoteNavigation :view="currentView" :folders="folders" :selected-folder-id="selectedFolderId" :all-count="navigationCounts.all" :unfiled-count="navigationCounts.unfiled" :favorite-count="navigationCounts.favorites" :folder-counts="navigationCounts.folders" :shared-count="navigationCounts.shared" :shared-by-me-count="navigationCounts.sharedByMe" :knowledge-count="navigationCounts.knowledge" :submissions-pending-count="navigationCounts.submissionsPending" :review-pending-count="navigationCounts.reviewPending" :has-team="hasTeam" :can-review="canReview" :categories="categories" :selected-category-id="selectedCategoryId" @view="activateView" @folder="selectFolder" @category="selectCategory" @create-category="openCreateCategory" @rename-category="openRenameCategory" @remove-category="requestDeleteCategory" @create-folder="createFolder" @rename-folder="renameFolder" @remove-folder="removeFolder" @open-search="openGlobalSearch" />
+      <template v-if="personalView || currentView === 'sharedByMe'">
+        <NoteList :notes="currentView === 'sharedByMe' ? sharedByMeNotes : notes" :selected-id="selectedNote?.id ?? null" :search="search" :heading="currentView === 'sharedByMe' ? '我分享的' : noteListHeading" :loading="viewLoading" :empty-state="currentView === 'sharedByMe' ? { title: '还没有分享出去的笔记', description: '打开一篇笔记，点右上角 ⋯ → 分享，勾选团队成员即可；取消分享也在同一个弹窗里。', actions: false } : null" @select="selectPersonal" @create="createBlankNote" @templates="openTemplates" @import="openMarkdownImport" @search="updateSearch" @remove="requestDeleteNote" />
         <NoteEditor
           ref="noteEditor"
           :key="selectedNote?.id ?? 'empty-note'"
@@ -1191,7 +1290,8 @@ onBeforeRouteLeave(() => flushEditorsForNavigation())
       </template>
       <template v-else-if="currentView === 'shared'">
         <CollaborativeNoteList title="分享给我的" :items="visibleSharedNotes" :selected-id="selectedShared?.id ?? null" :search="search" :loading="viewLoading" @select="selectedShared = $event as SharedNote" @search="updateSearch" />
-        <SharedNoteDetail :note="selectedShared" :copying="busy" @copy="copyShared" />
+
+        <SharedNoteDetail :note="selectedShared" :copying="busy" @copy="copyShared" @refresh="refreshSelectedShared" />
       </template>
       <template v-else-if="currentView === 'knowledge'">
         <CollaborativeNoteList title="团队知识库" :items="visibleKnowledge" :selected-id="selectedKnowledge?.id ?? null" :search="search" :loading="viewLoading" :can-create="canReview" :can-manage-archived="canReview" :status-filter="knowledgeStatusFilter" @select="selectCollaborationItem" @search="updateSearch" @create="knowledgeCreateDialogOpen = true" @status-filter="selectKnowledgeStatus" />
@@ -1200,7 +1300,7 @@ onBeforeRouteLeave(() => flushEditorsForNavigation())
       <SubmissionWorkspace v-else :mode="currentView === 'review' ? 'review' : 'mine'" :submissions="submissions" :selected="selectedSubmission" :related="relatedKnowledge" :knowledge="knowledgeDetails" :categories="categories" :busy="busy" @select="selectSubmission" @withdraw="withdraw" @resubmit="resubmit" @open-source="openSource" @open-knowledge="openKnowledge" @approve="approve" @revision="revision" @reject="reject" />
     </div>
 
-    <ShareNotePopover :open="shareDialogOpen" :members="members" :model-value="shares.map((item) => item.sharedWithUserId)" :current-user-id="auth.user?.id ?? ''" :saving="busy" @close="shareDialogOpen = false" @save="saveShares" />
+    <ShareNotePopover :open="shareDialogOpen" :members="shareMembers.length ? shareMembers : members" :shares="shares" :model-value="shares.map((item) => item.sharedWithUserId)" :current-user-id="auth.user?.id ?? ''" :saving="busy" @close="shareDialogOpen = false" @save="saveShares" @change-permission="changeSharePermission" />
     <PublishToKnowledgeDialog :open="publishDialogOpen" :note="selectedNote" :categories="categories" :knowledge="knowledge" :default-type="publishType" :default-target-id="publishTargetId" :target-locked="publishTargetLocked" :saving="busy" @close="publishDialogOpen = false" @submit="publish" />
     <NoteTemplateDialog :open="templateDialogOpen" :templates="templates" @close="templateDialogOpen = false" @select="createFromTemplate" @create="openNewTemplate" @manage="openTemplateManager" @edit="openEditTemplate" @delete="requestDeleteTemplate" />
     <NoteTemplateManagerDialog :open="templateManagerOpen" :templates="templates" @close="templateManagerOpen = false" @edit="openEditTemplate" @delete="requestDeleteTemplate" @move="moveTemplate" />
