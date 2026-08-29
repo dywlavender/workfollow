@@ -49,6 +49,16 @@ class AuthResponse(ApiModel):
     starter_task_id: str | None = None
 
 
+class AgentTokenStatus(ApiModel):
+    enabled: bool
+    created_at: datetime | None = None
+    last_used_at: datetime | None = None
+
+
+class AgentTokenCreated(AgentTokenStatus):
+    token: str
+
+
 class AdminUserPermissionsUpdate(ApiModel):
     can_create_team: bool
 

@@ -8,13 +8,24 @@ from app.core.config import Settings, get_settings
 from app.core.dependencies import CurrentUser, DbSession
 from app.models.auth import User, UserStatus
 from app.models.todo import local_now
-from app.schemas.auth import AuthResponse, LoginRequest, UserCreate, UserProfileUpdate, UserRead
+from app.schemas.auth import (
+    AgentTokenCreated,
+    AgentTokenStatus,
+    AuthResponse,
+    LoginRequest,
+    UserCreate,
+    UserProfileUpdate,
+    UserRead,
+)
 from app.services.auth_service import (
     SESSION_COOKIE_NAME,
     create_session,
+    get_agent_token,
     get_user_by_identifier,
     normalize_username,
     password_hash,
+    reset_agent_token,
+    revoke_agent_token,
     revoke_session,
 )
 from app.services.onboarding_service import ensure_onboarding
@@ -105,3 +116,30 @@ def update_me(payload: UserProfileUpdate, db: DbSession, user: CurrentUser) -> U
     db.commit()
     db.refresh(user)
     return to_user_read(user)
+
+
+def to_agent_token_status(credential) -> AgentTokenStatus:  # noqa: ANN001
+    return AgentTokenStatus(
+        enabled=credential is not None and credential.revoked_at is None,
+        created_at=credential.created_at if credential is not None else None,
+        last_used_at=credential.last_used_at if credential is not None else None,
+    )
+
+
+@router.get("/agent-token", response_model=AgentTokenStatus)
+def agent_token_status(db: DbSession, user: CurrentUser) -> AgentTokenStatus:
+    return to_agent_token_status(get_agent_token(db, user.id))
+
+
+@router.post("/agent-token", response_model=AgentTokenCreated)
+def generate_agent_token(db: DbSession, user: CurrentUser) -> AgentTokenCreated:
+    credential, token = reset_agent_token(db, user)
+    return AgentTokenCreated(
+        **to_agent_token_status(credential).model_dump(),
+        token=token,
+    )
+
+
+@router.delete("/agent-token", response_model=AgentTokenStatus)
+def disable_agent_token(db: DbSession, user: CurrentUser) -> AgentTokenStatus:
+    return to_agent_token_status(revoke_agent_token(db, user.id))

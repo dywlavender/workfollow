@@ -43,6 +43,9 @@ class User(Base):
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     sessions: Mapped[list[AuthSession]] = relationship(back_populates="user", cascade="all, delete-orphan")
+    agent_token: Mapped[AgentToken | None] = relationship(
+        back_populates="user", cascade="all, delete-orphan", uselist=False
+    )
     todos: Mapped[list["Todo"]] = relationship(back_populates="owner", foreign_keys="Todo.owner_id")
     folders: Mapped[list["Folder"]] = relationship(back_populates="owner")
     notes: Mapped[list["Note"]] = relationship(back_populates="owner")
@@ -66,3 +69,20 @@ class AuthSession(Base):
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     user: Mapped[User] = relationship(back_populates="sessions")
+
+
+class AgentToken(Base):
+    """The single external-agent credential owned by an account."""
+
+    __tablename__ = "agent_tokens"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    user_id: Mapped[str] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False, unique=True
+    )
+    token: Mapped[str] = mapped_column(String(128), nullable=False, unique=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=local_now, nullable=False)
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    user: Mapped[User] = relationship(back_populates="agent_token")
