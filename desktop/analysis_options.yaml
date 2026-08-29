@@ -1,0 +1,5 @@
+# The first desktop slice intentionally has no third-party dependencies.
+# Flutter's built-in analyzer is enough until a shared lint package is added.
+analyzer:
+  exclude:
+    - build/**
