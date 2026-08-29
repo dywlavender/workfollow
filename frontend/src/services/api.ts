@@ -101,6 +101,31 @@ export async function updateCurrentUser(payload: { nickname: string }): Promise<
   return data
 }
 
+export interface AgentTokenStatus {
+  enabled: boolean
+  createdAt: string | null
+  lastUsedAt: string | null
+}
+
+export interface AgentTokenCreated extends AgentTokenStatus {
+  token: string
+}
+
+export async function fetchAgentTokenStatus(): Promise<AgentTokenStatus> {
+  const { data } = await api.get<AgentTokenStatus>('/auth/agent-token')
+  return data
+}
+
+export async function generateAgentToken(): Promise<AgentTokenCreated> {
+  const { data } = await api.post<AgentTokenCreated>('/auth/agent-token')
+  return data
+}
+
+export async function disableAgentToken(): Promise<AgentTokenStatus> {
+  const { data } = await api.delete<AgentTokenStatus>('/auth/agent-token')
+  return data
+}
+
 export async function fetchAdminUsers(): Promise<User[]> {
   const { data } = await api.get<User[]>('/admin/users')
   return data

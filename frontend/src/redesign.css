@@ -213,6 +213,27 @@ select:focus-visible {
 .account-profile-form input:focus { border-color: color-mix(in srgb, var(--color-accent) 50%, var(--color-border)); box-shadow: var(--focus-ring); }
 .account-profile-form label small, .account-profile-form footer span { color: var(--color-text-tertiary); font-size: var(--font-size-micro); font-weight: var(--font-weight-regular); }
 .account-profile-form footer { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.agent-token-panel { display: grid; gap: 16px; margin-top: 20px; padding: 18px; border: 1px solid var(--color-border-subtle); border-radius: var(--radius-md); background: var(--color-bg-subtle); }
+.agent-token-panel > header { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: start; gap: 12px; }
+.agent-token-panel h3 { margin: 0; color: var(--color-text-primary); font-size: var(--font-size-body); }
+.agent-token-panel p { margin: 4px 0 0; color: var(--color-text-secondary); font-size: var(--font-size-caption); line-height: 1.6; }
+.agent-token-icon { display: grid; place-items: center; width: 34px; height: 34px; border-radius: var(--radius-sm); background: color-mix(in srgb, var(--color-accent) 12%, transparent); color: var(--color-accent); }
+.agent-token-status { padding: 4px 9px; border-radius: var(--radius-full); background: var(--color-bg-surface); color: var(--color-text-tertiary); font-size: var(--font-size-micro); }
+.agent-token-status.enabled { background: color-mix(in srgb, var(--color-success) 14%, transparent); color: var(--color-success); }
+.agent-token-details { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 0; }
+.agent-token-details div { padding: 10px 12px; border-radius: var(--radius-sm); background: var(--color-bg-surface); }
+.agent-token-details dt { color: var(--color-text-tertiary); font-size: var(--font-size-micro); }
+.agent-token-details dd { margin: 3px 0 0; color: var(--color-text-primary); font-size: var(--font-size-caption); }
+.agent-token-reveal { display: grid; gap: 10px; padding: 14px; border: 1px solid color-mix(in srgb, var(--color-accent) 28%, var(--color-border)); border-radius: var(--radius-sm); background: var(--color-bg-surface); }
+.agent-token-reveal > div { display: grid; gap: 2px; }
+.agent-token-reveal small { color: var(--color-text-tertiary); }
+.agent-token-reveal code { overflow-x: auto; padding: 10px 12px; border-radius: var(--radius-sm); background: var(--color-bg-muted); color: var(--color-text-primary); font-size: var(--font-size-caption); white-space: nowrap; user-select: all; }
+.agent-token-reveal .secondary-button { justify-self: start; }
+.agent-token-panel > footer { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
+.agent-token-panel > footer > span { color: var(--color-text-tertiary); font-size: var(--font-size-micro); }
+.agent-token-panel > footer > div { display: flex; gap: 8px; }
+.danger-outline-button { display: inline-flex; align-items: center; gap: 6px; min-height: 36px; padding: 0 12px; border: 1px solid color-mix(in srgb, var(--color-danger) 45%, var(--color-border)); border-radius: var(--radius-sm); background: transparent; color: var(--color-danger); }
+@media (max-width: 720px) { .agent-token-panel > header { grid-template-columns: auto minmax(0, 1fr); } .agent-token-status { grid-column: 2; justify-self: start; } .agent-token-details { grid-template-columns: 1fr; } .agent-token-panel > footer { align-items: stretch; flex-direction: column; } .agent-token-panel > footer > div { flex-wrap: wrap; } }
 .account-details { display: grid; gap: 0; margin: 0; border: 1px solid var(--color-border-subtle); border-radius: var(--radius-md); overflow: hidden; }
 .account-details > div { display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: 16px; align-items: center; min-height: 54px; padding: 0 16px; border-bottom: 1px solid var(--color-border-subtle); }
 .account-details > div:last-child { border-bottom: 0; }

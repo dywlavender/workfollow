@@ -48,6 +48,10 @@ python3 -m venv .venv
 
 后端健康检查：<http://127.0.0.1:8123/api/health>
 
+## Agent / MCP 接入
+
+打勾可以通过本地 MCP Server 向 Codex、Claude Code 和 Tencent WorkBuddy 提供个人笔记的搜索、读取、速记和新建能力。在“设置 → 账号 → Agent 接入”生成唯一 Token，然后参考 [`docs/mcp-integration.md`](docs/mcp-integration.md) 配置所需客户端。
+
 ## 启动前端
 
 ```bash

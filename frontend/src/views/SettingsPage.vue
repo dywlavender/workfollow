@@ -3,9 +3,13 @@ import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   IconCheck,
+  IconBan,
+  IconCopy,
   IconDeviceDesktop,
   IconMoon,
   IconPalette,
+  IconKey,
+  IconRefresh,
   IconSettings,
   IconSun,
   IconUserCircle,
@@ -27,6 +31,12 @@ import {
 import { useAppStore } from '@/stores/app'
 import { useAuthStore } from '@/stores/auth'
 import { useFeedbackStore } from '@/stores/feedback'
+import {
+  disableAgentToken,
+  fetchAgentTokenStatus,
+  generateAgentToken,
+  type AgentTokenStatus,
+} from '@/services/api'
 
 const appStore = useAppStore()
 const authStore = useAuthStore()
@@ -76,6 +86,9 @@ function selectSection(section: SettingsSection) {
 const nicknameDraft = ref('')
 const profileSaving = ref(false)
 const profileDirty = computed(() => nicknameDraft.value.trim() !== (authStore.user?.nickname ?? ''))
+const agentTokenStatus = ref<AgentTokenStatus | null>(null)
+const agentTokenLoading = ref(false)
+const revealedAgentToken = ref('')
 const paletteGroups = computed(() => [
   {
     label: '经典配色',
@@ -97,6 +110,65 @@ const paletteGroups = computed(() => [
 watch(() => authStore.user?.nickname, (nickname) => {
   if (!profileSaving.value) nicknameDraft.value = nickname ?? ''
 }, { immediate: true })
+
+watch(activeSection, (section) => {
+  if (section === 'account' && agentTokenStatus.value === null) void loadAgentTokenStatus()
+}, { immediate: true })
+
+async function loadAgentTokenStatus() {
+  agentTokenLoading.value = true
+  try {
+    agentTokenStatus.value = await fetchAgentTokenStatus()
+  } catch (cause: any) {
+    feedback.error(cause?.response?.data?.detail ?? '加载 Agent Token 状态失败。')
+  } finally {
+    agentTokenLoading.value = false
+  }
+}
+
+function formatAccountTime(value: string | null | undefined) {
+  return value ? new Date(value).toLocaleString('zh-CN') : '—'
+}
+
+async function resetAgentToken() {
+  const wasEnabled = agentTokenStatus.value?.enabled === true
+  if (wasEnabled && !window.confirm('重置后，已配置在 Codex、Claude Code 和 WorkBuddy 中的旧 Token 会立即失效。继续吗？')) return
+  agentTokenLoading.value = true
+  try {
+    const result = await generateAgentToken()
+    agentTokenStatus.value = result
+    revealedAgentToken.value = result.token
+    feedback.success(wasEnabled ? 'Agent Token 已重置。' : 'Agent Token 已生成。')
+  } catch (cause: any) {
+    feedback.error(cause?.response?.data?.detail ?? '生成 Agent Token 失败。')
+  } finally {
+    agentTokenLoading.value = false
+  }
+}
+
+async function stopAgentToken() {
+  if (!window.confirm('停用后，所有已配置该 Token 的 Agent 都将立即无法访问打勾。继续吗？')) return
+  agentTokenLoading.value = true
+  try {
+    agentTokenStatus.value = await disableAgentToken()
+    revealedAgentToken.value = ''
+    feedback.success('Agent Token 已停用。')
+  } catch (cause: any) {
+    feedback.error(cause?.response?.data?.detail ?? '停用 Agent Token 失败。')
+  } finally {
+    agentTokenLoading.value = false
+  }
+}
+
+async function copyAgentToken() {
+  if (!revealedAgentToken.value) return
+  try {
+    await navigator.clipboard.writeText(revealedAgentToken.value)
+    feedback.success('Agent Token 已复制。')
+  } catch {
+    feedback.error('复制失败，请手动选中 Token。')
+  }
+}
 
 function paletteSwatch(palette: (typeof appearancePalettes)[number]) {
   return palette.atmosphere?.light ?? palette.swatch
@@ -286,6 +358,40 @@ async function saveProfile() {
           <dl class="account-details">
             <div><dt>用户名</dt><dd>@{{ authStore.user?.username || '—' }}</dd></div>
           </dl>
+          <section class="agent-token-panel" aria-labelledby="agent-token-title">
+            <header>
+              <span class="agent-token-icon"><IconKey :size="19" /></span>
+              <div>
+                <h3 id="agent-token-title">Agent 接入</h3>
+                <p>使 Codex、Claude Code 和 WorkBuddy 能以你的身份访问打勾。每个账号同时只有一个 Token。</p>
+              </div>
+              <span class="agent-token-status" :class="{ enabled: agentTokenStatus?.enabled }">
+                {{ agentTokenLoading && !agentTokenStatus ? '加载中' : agentTokenStatus?.enabled ? '已启用' : '未启用' }}
+              </span>
+            </header>
+            <dl v-if="agentTokenStatus" class="agent-token-details">
+              <div><dt>生成时间</dt><dd>{{ formatAccountTime(agentTokenStatus.createdAt) }}</dd></div>
+              <div><dt>最后使用</dt><dd>{{ formatAccountTime(agentTokenStatus.lastUsedAt) }}</dd></div>
+            </dl>
+            <div v-if="revealedAgentToken" class="agent-token-reveal" role="status">
+              <div>
+                <strong>请现在复制 Token</strong>
+                <small>离开页面后将不再完整显示。</small>
+              </div>
+              <code>{{ revealedAgentToken }}</code>
+              <button class="secondary-button" type="button" @click="copyAgentToken"><IconCopy :size="15" />复制 Token</button>
+            </div>
+            <footer>
+              <span>这是打勾的访问凭证，不是大模型 API Key。</span>
+              <div>
+                <button class="secondary-button" type="button" :disabled="agentTokenLoading" @click="resetAgentToken">
+                  <IconRefresh v-if="agentTokenStatus?.enabled" :size="15" /><IconKey v-else :size="15" />
+                  {{ agentTokenStatus?.enabled ? '重置 Token' : '生成 Token' }}
+                </button>
+                <button v-if="agentTokenStatus?.enabled" class="danger-outline-button" type="button" :disabled="agentTokenLoading" @click="stopAgentToken"><IconBan :size="15" />停用</button>
+              </div>
+            </footer>
+          </section>
           <footer class="account-actions">
             <span>需要切换账号时，可以安全退出当前会话。</span>
             <button class="secondary-button" type="button" @click="signOut">退出登录</button>
