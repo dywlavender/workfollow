@@ -11,6 +11,10 @@
 
 主题开发规范：[`docs/theme-development-guide.md`](docs/theme-development-guide.md)
 
+## macOS 个人版桌面端
+
+仓库同时提供一套不依赖网页容器的 Flutter macOS 个人版原型，定位为单用户、本地优先的任务与笔记工作台，不包含团队协同、账号和实时在线能力。设计基线见 [`docs/macos-personal-app-design.md`](docs/macos-personal-app-design.md)，代码与运行说明见 [`desktop/README.md`](desktop/README.md)。
+
 ## 统一任务与团队协作
 
 - **单一事实源**：个人任务和协作任务都存放在 `todos`；创建者、团队来源和执行成员分别由 `creator_id`、`team_id`、`task_assignments` 表达，不复制任务正文。
