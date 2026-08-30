@@ -1,0 +1,323 @@
+import 'dart:convert';
+
+const personalMigrationFormat = 'workfollow-personal-migration';
+const localSnapshotFormat = 'workfollow-local-snapshot';
+const migrationSchemaVersion = 1;
+
+class MigrationFormatException implements Exception {
+  const MigrationFormatException(this.message);
+
+  final String message;
+
+  @override
+  String toString() => message;
+}
+
+class MigrationListRecord {
+  const MigrationListRecord({
+    required this.id,
+    required this.name,
+    required this.sortOrder,
+    required this.protectedList,
+  });
+
+  final String? id;
+  final String name;
+  final int sortOrder;
+  final bool protectedList;
+
+  factory MigrationListRecord.fromJson(Map<String, dynamic> json) {
+    return MigrationListRecord(
+      id: _nullableString(json['id']),
+      name: _requiredString(json, 'name'),
+      sortOrder: _intValue(json['sortOrder']),
+      protectedList: _boolValue(json['protected']),
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'name': name,
+        'sortOrder': sortOrder,
+        'protected': protectedList,
+      };
+}
+
+class MigrationFolderRecord {
+  const MigrationFolderRecord({
+    required this.id,
+    required this.parentId,
+    required this.name,
+    required this.sortOrder,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+
+  final String id;
+  final String? parentId;
+  final String name;
+  final int sortOrder;
+  final String? createdAt;
+  final String? updatedAt;
+
+  factory MigrationFolderRecord.fromJson(Map<String, dynamic> json) {
+    return MigrationFolderRecord(
+      id: _requiredString(json, 'id'),
+      parentId: _nullableString(json['parentId']),
+      name: _requiredString(json, 'name'),
+      sortOrder: _intValue(json['sortOrder']),
+      createdAt: _nullableString(json['createdAt']),
+      updatedAt: _nullableString(json['updatedAt']),
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'parentId': parentId,
+        'name': name,
+        'sortOrder': sortOrder,
+        'createdAt': createdAt,
+        'updatedAt': updatedAt,
+      };
+}
+
+class MigrationTaskRecord {
+  const MigrationTaskRecord({
+    required this.id,
+    required this.title,
+    required this.description,
+    required this.contentJson,
+    required this.status,
+    required this.priority,
+    required this.dueAt,
+    required this.dueEndAt,
+    required this.reminderAt,
+    required this.recurrenceType,
+    required this.recurrenceConfig,
+    required this.listName,
+    required this.tags,
+    required this.createdAt,
+    required this.updatedAt,
+    required this.completedAt,
+  });
+
+  final String id;
+  final String title;
+  final String? description;
+  final Map<String, dynamic>? contentJson;
+  final String status;
+  final String priority;
+  final String? dueAt;
+  final String? dueEndAt;
+  final String? reminderAt;
+  final String recurrenceType;
+  final Map<String, dynamic>? recurrenceConfig;
+  final String listName;
+  final List<String> tags;
+  final String? createdAt;
+  final String? updatedAt;
+  final String? completedAt;
+
+  factory MigrationTaskRecord.fromJson(Map<String, dynamic> json) {
+    return MigrationTaskRecord(
+      id: _requiredString(json, 'id'),
+      title: _requiredString(json, 'title'),
+      description: _nullableString(json['description']),
+      contentJson: _mapValue(json['contentJson']),
+      status: _stringValue(json['status'], fallback: 'TODO'),
+      priority: _stringValue(json['priority'], fallback: 'NONE'),
+      dueAt: _nullableString(json['dueAt']),
+      dueEndAt: _nullableString(json['dueEndAt']),
+      reminderAt: _nullableString(json['reminderAt']),
+      recurrenceType: _stringValue(json['recurrenceType'], fallback: 'NONE'),
+      recurrenceConfig: _mapValue(json['recurrenceConfig']),
+      listName: _stringValue(json['listName'], fallback: '收集箱'),
+      tags: _stringList(json['tags']),
+      createdAt: _nullableString(json['createdAt']),
+      updatedAt: _nullableString(json['updatedAt']),
+      completedAt: _nullableString(json['completedAt']),
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'title': title,
+        'description': description,
+        'contentJson': contentJson,
+        'status': status,
+        'priority': priority,
+        'dueAt': dueAt,
+        'dueEndAt': dueEndAt,
+        'reminderAt': reminderAt,
+        'recurrenceType': recurrenceType,
+        'recurrenceConfig': recurrenceConfig,
+        'listName': listName,
+        'tags': tags,
+        'createdAt': createdAt,
+        'updatedAt': updatedAt,
+        'completedAt': completedAt,
+      };
+}
+
+class MigrationNoteRecord {
+  const MigrationNoteRecord({
+    required this.id,
+    required this.folderId,
+    required this.title,
+    required this.contentJson,
+    required this.plainText,
+    required this.isFavorite,
+    required this.createdAt,
+    required this.updatedAt,
+    required this.deletedAt,
+  });
+
+  final String id;
+  final String? folderId;
+  final String title;
+  final Map<String, dynamic> contentJson;
+  final String plainText;
+  final bool isFavorite;
+  final String? createdAt;
+  final String? updatedAt;
+  final String? deletedAt;
+
+  factory MigrationNoteRecord.fromJson(Map<String, dynamic> json) {
+    return MigrationNoteRecord(
+      id: _requiredString(json, 'id'),
+      folderId: _nullableString(json['folderId']),
+      title: _requiredString(json, 'title'),
+      contentJson: _mapValue(json['contentJson']) ?? <String, dynamic>{},
+      plainText: _stringValue(json['plainText']),
+      isFavorite: _boolValue(json['isFavorite']),
+      createdAt: _nullableString(json['createdAt']),
+      updatedAt: _nullableString(json['updatedAt']),
+      deletedAt: _nullableString(json['deletedAt']),
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'folderId': folderId,
+        'title': title,
+        'contentJson': contentJson,
+        'plainText': plainText,
+        'isFavorite': isFavorite,
+        'createdAt': createdAt,
+        'updatedAt': updatedAt,
+        'deletedAt': deletedAt,
+      };
+}
+
+class MigrationBundle {
+  const MigrationBundle({
+    required this.format,
+    required this.schemaVersion,
+    required this.exportedAt,
+    required this.lists,
+    required this.folders,
+    required this.tasks,
+    required this.notes,
+  });
+
+  final String format;
+  final int schemaVersion;
+  final String? exportedAt;
+  final List<MigrationListRecord> lists;
+  final List<MigrationFolderRecord> folders;
+  final List<MigrationTaskRecord> tasks;
+  final List<MigrationNoteRecord> notes;
+
+  bool get isLocalSnapshot => format == localSnapshotFormat;
+
+  factory MigrationBundle.fromJsonString(String raw) {
+    final decoded = jsonDecode(raw);
+    if (decoded is! Map) {
+      throw const MigrationFormatException('导入文件必须是 JSON 对象。');
+    }
+    return MigrationBundle.fromJson(Map<String, dynamic>.from(decoded));
+  }
+
+  factory MigrationBundle.fromJson(Map<String, dynamic> json) {
+    final format = _stringValue(json['format']);
+    if (format != personalMigrationFormat && format != localSnapshotFormat) {
+      throw const MigrationFormatException('这不是打勾个人版的数据文件。');
+    }
+    final schemaVersion = _intValue(json['schemaVersion']);
+    if (schemaVersion != migrationSchemaVersion) {
+      throw MigrationFormatException('暂不支持数据文件版本 $schemaVersion，请先升级 macOS 版。');
+    }
+
+    return MigrationBundle(
+      format: format,
+      schemaVersion: schemaVersion,
+      exportedAt: _nullableString(json['exportedAt']),
+      lists: _records(json['lists'], MigrationListRecord.fromJson),
+      folders: _records(json['folders'], MigrationFolderRecord.fromJson),
+      tasks: _records(json['tasks'], MigrationTaskRecord.fromJson),
+      notes: _records(json['notes'], MigrationNoteRecord.fromJson),
+    );
+  }
+
+  Map<String, dynamic> toJson({String? outputFormat}) => {
+        'format': outputFormat ?? format,
+        'schemaVersion': schemaVersion,
+        'exportedAt': exportedAt,
+        'lists': lists.map((item) => item.toJson()).toList(),
+        'folders': folders.map((item) => item.toJson()).toList(),
+        'tasks': tasks.map((item) => item.toJson()).toList(),
+        'notes': notes.map((item) => item.toJson()).toList(),
+      };
+}
+
+List<T> _records<T>(Object? raw, T Function(Map<String, dynamic>) factory) {
+  if (raw == null) return <T>[];
+  if (raw is! List) {
+    throw const MigrationFormatException('数据文件中的集合字段格式不正确。');
+  }
+  return raw.map((item) {
+    if (item is! Map) {
+      throw const MigrationFormatException('数据文件中的记录格式不正确。');
+    }
+    return factory(Map<String, dynamic>.from(item));
+  }).toList();
+}
+
+String _requiredString(Map<String, dynamic> json, String key) {
+  final value = _nullableString(json[key]);
+  if (value == null || value.trim().isEmpty) {
+    throw MigrationFormatException('数据文件缺少有效的 $key。');
+  }
+  return value;
+}
+
+String? _nullableString(Object? value) {
+  if (value == null) return null;
+  if (value is String) return value;
+  return value.toString();
+}
+
+String _stringValue(Object? value, {String fallback = ''}) =>
+    _nullableString(value) ?? fallback;
+
+int _intValue(Object? value) {
+  if (value is int) return value;
+  if (value is num) return value.toInt();
+  return int.tryParse(_stringValue(value)) ?? 0;
+}
+
+bool _boolValue(Object? value) {
+  if (value is bool) return value;
+  if (value is num) return value != 0;
+  return _stringValue(value).toLowerCase() == 'true';
+}
+
+Map<String, dynamic>? _mapValue(Object? value) {
+  if (value is! Map) return null;
+  return Map<String, dynamic>.from(value);
+}
+
+List<String> _stringList(Object? value) {
+  if (value is! List) return <String>[];
+  return value.whereType<Object>().map((item) => item.toString()).toList();
+}

@@ -1,6 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 
+import '../models/migration.dart';
 import '../models/task.dart';
+import '../services/local_workspace_store.dart';
 
 enum WorkspaceView {
   home,
@@ -16,9 +20,82 @@ enum WorkspaceView {
   personal,
 }
 
+List<MigrationListRecord> _defaultLists() => const [
+      MigrationListRecord(
+        id: null,
+        name: '收集箱',
+        sortOrder: 0,
+        protectedList: true,
+      ),
+      MigrationListRecord(
+        id: null,
+        name: '工作',
+        sortOrder: 1,
+        protectedList: true,
+      ),
+      MigrationListRecord(
+        id: null,
+        name: '个人',
+        sortOrder: 2,
+        protectedList: true,
+      ),
+      MigrationListRecord(
+        id: null,
+        name: '学习',
+        sortOrder: 3,
+        protectedList: true,
+      ),
+    ];
+
+List<MigrationFolderRecord> _defaultFolders() => const [
+      MigrationFolderRecord(
+        id: 'folder-work',
+        parentId: null,
+        name: '工作笔记',
+        sortOrder: 0,
+        createdAt: null,
+        updatedAt: null,
+      ),
+      MigrationFolderRecord(
+        id: 'folder-ideas',
+        parentId: null,
+        name: '灵感',
+        sortOrder: 1,
+        createdAt: null,
+        updatedAt: null,
+      ),
+      MigrationFolderRecord(
+        id: 'folder-study',
+        parentId: null,
+        name: '学习',
+        sortOrder: 2,
+        createdAt: null,
+        updatedAt: null,
+      ),
+    ];
+
+class MigrationImportSummary {
+  const MigrationImportSummary({
+    required this.importedTasks,
+    required this.skippedTasks,
+    required this.importedNotes,
+    required this.skippedNotes,
+    required this.importedLists,
+    required this.importedFolders,
+  });
+
+  final int importedTasks;
+  final int skippedTasks;
+  final int importedNotes;
+  final int skippedNotes;
+  final int importedLists;
+  final int importedFolders;
+}
+
 class WorkspaceController extends ChangeNotifier {
-  WorkspaceController()
-      : _tasks = [
+  WorkspaceController({LocalWorkspaceStore? store})
+      : _store = store ?? LocalWorkspaceStore(),
+        _tasks = [
           const TaskItem(
             id: 'task-01',
             title: '准备季度产品评审演示文稿',
@@ -79,7 +156,7 @@ class WorkspaceController extends ChangeNotifier {
             timeLabel: '已完成 09:42',
           ),
         ],
-        _notes = const [
+        _notes = [
           NoteItem(
             id: 'note-01',
             title: '季度评审 · 叙事结构',
@@ -104,11 +181,17 @@ class WorkspaceController extends ChangeNotifier {
             folder: '学习',
             accent: ColorValue(0xFF0F766E),
           ),
-        ];
+        ],
+        _lists = _defaultLists(),
+        _folders = _defaultFolders();
 
+  final LocalWorkspaceStore _store;
   List<TaskItem> _tasks;
-  final List<NoteItem> _notes;
+  List<NoteItem> _notes;
+  List<MigrationListRecord> _lists;
+  List<MigrationFolderRecord> _folders;
   WorkspaceView _view = WorkspaceView.home;
+  String? _selectedListName;
   String? _selectedTaskId = 'task-01';
   String? _lastCompletedTaskId;
   TaskItem? _lastRemovedTask;
@@ -118,6 +201,7 @@ class WorkspaceController extends ChangeNotifier {
   String _lastActionMessage = '';
   String _lastActionKind = '';
   int _taskSequence = 8;
+  bool _restoredFromDisk = false;
 
   WorkspaceView get view => _view;
   bool get isTaskView => switch (_view) {
@@ -139,8 +223,93 @@ class WorkspaceController extends ChangeNotifier {
   int get completionVersion => _completionVersion;
   int get actionVersion => _actionVersion;
   String get lastActionMessage => _lastActionMessage;
+  String? get selectedListName => _selectedListName;
+  String get viewTitle =>
+      _selectedListName ??
+      switch (_view) {
+        WorkspaceView.home => '首页',
+        WorkspaceView.today => '今天',
+        WorkspaceView.inbox => '收集箱',
+        WorkspaceView.plan => '计划',
+        WorkspaceView.all => '全部任务',
+        WorkspaceView.completed => '已完成',
+        WorkspaceView.work => '工作',
+        WorkspaceView.study => '学习',
+        WorkspaceView.personal => '个人',
+        WorkspaceView.calendar => '日历',
+        WorkspaceView.notes => '笔记',
+      };
   List<TaskItem> get tasks => List.unmodifiable(_tasks);
   List<NoteItem> get notes => List.unmodifiable(_notes);
+  List<MigrationListRecord> get lists => List.unmodifiable(_lists);
+  List<MigrationFolderRecord> get folders => List.unmodifiable(_folders);
+  bool get restoredFromDisk => _restoredFromDisk;
+
+  Future<void> restoreFromDisk() async {
+    final snapshot = await _store.load();
+    if (snapshot == null) return;
+    _applyBundle(snapshot);
+    _restoredFromDisk = true;
+    notifyListeners();
+  }
+
+  Future<MigrationImportSummary> importMigration(MigrationBundle bundle) async {
+    _folders = _mergeFolders(bundle.folders, _folders);
+    _lists = _mergeLists(bundle.lists, _lists);
+    final taskIds = _tasks.map((task) => task.id).toSet();
+    final noteIds = _notes.map((note) => note.id).toSet();
+    final importedTasks = <TaskItem>[];
+    final importedNotes = <NoteItem>[];
+
+    for (final record in bundle.tasks) {
+      if (taskIds.add(record.id)) {
+        importedTasks.add(TaskItem.fromMigration(record));
+      }
+    }
+    for (final record in bundle.notes) {
+      if (noteIds.add(record.id)) {
+        importedNotes.add(NoteItem.fromMigration(
+          record,
+          _folderNameForImport(record.folderId, bundle.folders),
+          _accentFor(importedNotes.length),
+          folderIdOverride: _folderIdForImport(record.folderId, bundle.folders),
+        ));
+      }
+    }
+
+    _tasks = [...importedTasks, ..._tasks];
+    _notes = [...importedNotes, ..._notes];
+    for (final task in importedTasks) {
+      if (_lists.every((list) => list.name != task.listName)) {
+        _lists = [
+          ..._lists,
+          MigrationListRecord(
+            id: null,
+            name: task.listName,
+            sortOrder: _lists.length,
+            protectedList: false,
+          ),
+        ];
+      }
+    }
+    _taskSequence = _nextTaskSequence();
+    _restoredFromDisk = true;
+    if ((_selectedTaskId == null ||
+            _tasks.every((task) => task.id != _selectedTaskId)) &&
+        _tasks.isNotEmpty) {
+      _selectedTaskId = _tasks.first.id;
+    }
+    await _store.save(_snapshot());
+    notifyListeners();
+    return MigrationImportSummary(
+      importedTasks: importedTasks.length,
+      skippedTasks: bundle.tasks.length - importedTasks.length,
+      importedNotes: importedNotes.length,
+      skippedNotes: bundle.notes.length - importedNotes.length,
+      importedLists: bundle.lists.length,
+      importedFolders: bundle.folders.length,
+    );
+  }
 
   TaskItem? get selectedTask {
     for (final task in _tasks) {
@@ -150,6 +319,10 @@ class WorkspaceController extends ChangeNotifier {
   }
 
   List<TaskItem> get visibleTasks {
+    if (_selectedListName != null && _view == WorkspaceView.all) {
+      return List.unmodifiable(
+          _tasks.where((task) => task.listName == _selectedListName));
+    }
     final filtered = switch (_view) {
       WorkspaceView.home => _tasks,
       WorkspaceView.today =>
@@ -193,14 +366,33 @@ class WorkspaceController extends ChangeNotifier {
     };
   }
 
+  int countForList(String listName) => _tasks
+      .where((task) => task.listName == listName && !task.completed)
+      .length;
+
+  bool isListSelected(String listName) =>
+      _view == WorkspaceView.all && _selectedListName == listName;
+
   void selectView(WorkspaceView destination) {
-    if (_view == destination) return;
+    if (_view == destination && _selectedListName == null) return;
     _view = destination;
+    _selectedListName = null;
     final available = visibleTasks;
     if (available.isNotEmpty &&
         !available.any((task) => task.id == _selectedTaskId)) {
       _selectedTaskId = available.first.id;
     }
+    notifyListeners();
+  }
+
+  void selectList(String listName) {
+    final name = listName.trim();
+    if (name.isEmpty) return;
+    if (_view == WorkspaceView.all && _selectedListName == name) return;
+    _view = WorkspaceView.all;
+    _selectedListName = name;
+    final available = visibleTasks;
+    if (available.isNotEmpty) _selectedTaskId = available.first.id;
     notifyListeners();
   }
 
@@ -221,6 +413,7 @@ class WorkspaceController extends ChangeNotifier {
     );
     _view = WorkspaceView.today;
     _selectedTaskId = id;
+    _schedulePersist();
     notifyListeners();
   }
 
@@ -240,6 +433,7 @@ class WorkspaceController extends ChangeNotifier {
       _lastActionMessage = '任务已完成';
     }
     _lastCompletedTaskId = completing ? id : null;
+    _schedulePersist();
     notifyListeners();
   }
 
@@ -253,6 +447,7 @@ class WorkspaceController extends ChangeNotifier {
     _lastCompletedTaskId = null;
     _lastActionKind = '';
     _selectedTaskId = id;
+    _schedulePersist();
     notifyListeners();
     return true;
   }
@@ -271,6 +466,7 @@ class WorkspaceController extends ChangeNotifier {
           ? null
           : _tasks[index.clamp(0, _tasks.length - 1).toInt()].id;
     }
+    _schedulePersist();
     notifyListeners();
   }
 
@@ -285,6 +481,7 @@ class WorkspaceController extends ChangeNotifier {
     _lastRemovedTask = null;
     _lastRemovedIndex = null;
     _lastActionKind = '';
+    _schedulePersist();
     notifyListeners();
     return true;
   }
@@ -303,6 +500,7 @@ class WorkspaceController extends ChangeNotifier {
     _taskSequence += 1;
     _tasks = [task, ..._tasks];
     _selectedTaskId = task.id;
+    _schedulePersist();
     notifyListeners();
     return true;
   }
@@ -313,6 +511,7 @@ class WorkspaceController extends ChangeNotifier {
     final index = _tasks.indexWhere((task) => task.id == id);
     if (index < 0) return;
     _tasks[index] = _tasks[index].copyWith(title: title.trim());
+    _schedulePersist();
     notifyListeners();
   }
 
@@ -325,6 +524,117 @@ class WorkspaceController extends ChangeNotifier {
     final adjustedTo = from < to ? to - 1 : to;
     _tasks.insert(adjustedTo.clamp(0, _tasks.length).toInt(), item);
     _selectedTaskId = draggedId;
+    _schedulePersist();
     notifyListeners();
+  }
+
+  void _applyBundle(MigrationBundle bundle) {
+    _lists = List<MigrationListRecord>.from(bundle.lists);
+    _folders = List<MigrationFolderRecord>.from(bundle.folders);
+    _tasks = bundle.tasks.map(TaskItem.fromMigration).toList();
+    _notes = bundle.notes
+        .asMap()
+        .entries
+        .map((entry) => NoteItem.fromMigration(
+              entry.value,
+              _folderName(entry.value.folderId),
+              _accentFor(entry.key),
+            ))
+        .toList();
+    _taskSequence = _nextTaskSequence();
+    _selectedTaskId = _tasks.isEmpty ? null : _tasks.first.id;
+    _selectedListName = null;
+    _lastCompletedTaskId = null;
+    _lastRemovedTask = null;
+    _lastRemovedIndex = null;
+    _lastActionKind = '';
+    _lastActionMessage = '';
+  }
+
+  MigrationBundle _snapshot() {
+    return MigrationBundle(
+      format: localSnapshotFormat,
+      schemaVersion: migrationSchemaVersion,
+      exportedAt: DateTime.now().toIso8601String(),
+      lists: List.unmodifiable(_lists),
+      folders: List.unmodifiable(_folders),
+      tasks: _tasks.map((task) => task.toMigrationRecord()).toList(),
+      notes: _notes.map((note) => note.toMigrationRecord()).toList(),
+    );
+  }
+
+  void _schedulePersist() {
+    unawaited(_store.save(_snapshot()));
+  }
+
+  String _folderName(String? folderId) {
+    if (folderId == null) return '未归档';
+    for (final folder in _folders) {
+      if (folder.id == folderId) return folder.name;
+    }
+    return '未归档';
+  }
+
+  String _folderNameForImport(
+      String? folderId, List<MigrationFolderRecord> incoming) {
+    final incomingFolder = incoming.cast<MigrationFolderRecord?>().firstWhere(
+          (folder) => folder?.id == folderId,
+          orElse: () => null,
+        );
+    if (incomingFolder != null) return incomingFolder.name;
+    return _folderName(folderId);
+  }
+
+  String? _folderIdForImport(
+      String? folderId, List<MigrationFolderRecord> incoming) {
+    final incomingFolder = incoming.cast<MigrationFolderRecord?>().firstWhere(
+          (folder) => folder?.id == folderId,
+          orElse: () => null,
+        );
+    if (incomingFolder == null) return folderId;
+    for (final folder in _folders) {
+      if (folder.name == incomingFolder.name) return folder.id;
+    }
+    return incomingFolder.id;
+  }
+
+  ColorValue _accentFor(int index) {
+    const values = [0xFFC23377, 0xFF4F46E5, 0xFF0F766E, 0xFFB45309];
+    return ColorValue(values[index % values.length]);
+  }
+
+  List<MigrationListRecord> _mergeLists(
+      List<MigrationListRecord> incoming, List<MigrationListRecord> existing) {
+    final merged = List<MigrationListRecord>.from(existing);
+    final names = merged.map((list) => list.name).toSet();
+    for (final list in incoming) {
+      if (list.name.trim().isEmpty || !names.add(list.name)) continue;
+      merged.add(list);
+    }
+    return merged;
+  }
+
+  List<MigrationFolderRecord> _mergeFolders(
+      List<MigrationFolderRecord> incoming,
+      List<MigrationFolderRecord> existing) {
+    final merged = List<MigrationFolderRecord>.from(existing);
+    final ids = merged.map((folder) => folder.id).toSet();
+    final names = merged.map((folder) => folder.name).toSet();
+    for (final folder in incoming) {
+      if (!ids.add(folder.id) || !names.add(folder.name)) continue;
+      merged.add(folder);
+    }
+    return merged;
+  }
+
+  int _nextTaskSequence() {
+    var highest = 0;
+    final pattern = RegExp(r'task-(\d+)$');
+    for (final task in _tasks) {
+      final match = pattern.firstMatch(task.id);
+      final value = match == null ? 0 : int.tryParse(match.group(1)!) ?? 0;
+      if (value > highest) highest = value;
+    }
+    return highest + 1;
   }
 }

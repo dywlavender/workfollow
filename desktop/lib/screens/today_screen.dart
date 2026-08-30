@@ -57,7 +57,7 @@ class TaskWorkspaceScreen extends StatelessWidget {
 
   void _showListNotice(BuildContext context) {
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('自定义清单将在本地数据层接入后启用。')),
+      const SnackBar(content: Text('新建清单操作将在下一轮接入；已迁移的自定义清单可以直接使用。')),
     );
   }
 }
@@ -78,7 +78,7 @@ class TodayScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final tokens = WorkFollowTheme.of(context);
     final tasks = controller.visibleTasks;
-    final title = _titleForView(controller.view);
+    final title = controller.viewTitle;
     return LayoutBuilder(
       builder: (context, constraints) {
         final showInspector =
@@ -119,21 +119,6 @@ class TodayScreen extends StatelessWidget {
       },
     );
   }
-
-  String _titleForView(WorkspaceView view) {
-    return switch (view) {
-      WorkspaceView.home => '',
-      WorkspaceView.today => '今天',
-      WorkspaceView.inbox => '收集箱',
-      WorkspaceView.plan => '计划',
-      WorkspaceView.all => '全部任务',
-      WorkspaceView.completed => '已完成',
-      WorkspaceView.work => '工作',
-      WorkspaceView.study => '学习',
-      WorkspaceView.personal => '个人',
-      WorkspaceView.calendar || WorkspaceView.notes => '',
-    };
-  }
 }
 
 class _ListHeader extends StatelessWidget {
@@ -154,7 +139,9 @@ class _ListHeader extends StatelessWidget {
     final tokens = WorkFollowTheme.of(context);
     final now = DateTime.now();
     final weekday = ['一', '二', '三', '四', '五', '六', '日'][now.weekday - 1];
-    final openCount = controller.countFor(controller.view);
+    final openCount = controller.selectedListName == null
+        ? controller.countFor(controller.view)
+        : controller.countForList(controller.selectedListName!);
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 22, 18, 17),
       child: Row(

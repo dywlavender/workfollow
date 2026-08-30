@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -58,6 +60,7 @@ class _WorkFollowShellState extends State<WorkFollowShell> {
     super.initState();
     controller = WorkspaceController();
     controller.addListener(_observeAction);
+    unawaited(controller.restoreFromDisk());
   }
 
   void _observeAction() {
@@ -96,20 +99,8 @@ class _WorkFollowShellState extends State<WorkFollowShell> {
   }
 
   String get _viewTitle {
-    return switch (controller.view) {
-      WorkspaceView.home => '首页',
-      WorkspaceView.today ||
-      WorkspaceView.inbox ||
-      WorkspaceView.plan ||
-      WorkspaceView.all ||
-      WorkspaceView.completed ||
-      WorkspaceView.work ||
-      WorkspaceView.study ||
-      WorkspaceView.personal =>
-        '任务',
-      WorkspaceView.calendar => '日历',
-      WorkspaceView.notes => '笔记',
-    };
+    if (controller.isTaskView) return '任务';
+    return controller.viewTitle;
   }
 
   @override
@@ -191,6 +182,7 @@ class _WorkFollowShellState extends State<WorkFollowShell> {
                             onToggleTheme: widget.onToggleTheme,
                             onOpenSettings: () => showSettingsPanel(
                                 context: context,
+                                controller: controller,
                                 onToggleTheme: widget.onToggleTheme),
                           ),
                         ),

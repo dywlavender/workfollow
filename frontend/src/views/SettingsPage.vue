@@ -6,6 +6,7 @@ import {
   IconBan,
   IconCopy,
   IconDeviceDesktop,
+  IconDownload,
   IconMoon,
   IconPalette,
   IconKey,
@@ -37,6 +38,10 @@ import {
   generateAgentToken,
   type AgentTokenStatus,
 } from '@/services/api'
+import {
+  buildPersonalMigrationBundle,
+  downloadPersonalMigrationBundle,
+} from '@/services/migration'
 
 const appStore = useAppStore()
 const authStore = useAuthStore()
@@ -47,8 +52,8 @@ const selectedPalette = computed(() => getAppearancePalette(appStore.appearanceP
 const selectedBackground = computed(() => getAppearanceBackground(appStore.appearanceBackground))
 const scenePaletteActive = computed(() => !!selectedPalette.value.atmosphere)
 const modeIcons = { system: IconDeviceDesktop, light: IconSun, dark: IconMoon }
-// 分区支持 ?section=teams&team=<id> 直达（侧边栏、旧 /team 链接重定向都落到这里）。
-const validSections = ['appearance', 'account', 'teams'] as const
+// 分区支持 ?section=data 或 ?section=teams&team=<id> 直达。
+const validSections = ['appearance', 'account', 'data', 'teams'] as const
 type SettingsSection = typeof validSections[number]
 function sectionFromQuery(): SettingsSection {
   return typeof route.query.section === 'string' && validSections.includes(route.query.section as SettingsSection)
@@ -77,6 +82,9 @@ function selectSection(section: SettingsSection) {
   if (section === 'teams') {
     query.section = 'teams'
     if (panelTeamId.value) query.team = panelTeamId.value
+  } else if (section === 'data') {
+    query.section = 'data'
+    delete query.team
   } else {
     delete query.section
     delete query.team
@@ -89,6 +97,7 @@ const profileDirty = computed(() => nicknameDraft.value.trim() !== (authStore.us
 const agentTokenStatus = ref<AgentTokenStatus | null>(null)
 const agentTokenLoading = ref(false)
 const revealedAgentToken = ref('')
+const dataExporting = ref(false)
 const paletteGroups = computed(() => [
   {
     label: '经典配色',
@@ -216,6 +225,19 @@ async function saveProfile() {
     profileSaving.value = false
   }
 }
+
+async function exportPersonalData() {
+  dataExporting.value = true
+  try {
+    const bundle = await buildPersonalMigrationBundle()
+    downloadPersonalMigrationBundle(bundle)
+    feedback.success(`已导出 ${bundle.tasks.length} 个任务、${bundle.notes.length} 条笔记。`)
+  } catch (cause: any) {
+    feedback.error(cause?.response?.data?.detail ?? '导出个人数据失败，请确认 Web 服务可用。')
+  } finally {
+    dataExporting.value = false
+  }
+}
 </script>
 
 <template>
@@ -230,6 +252,10 @@ async function saveProfile() {
         <button class="settings-navigation-item" :class="{ active: activeSection === 'account' }" type="button" :aria-current="activeSection === 'account' ? 'page' : undefined" @click="selectSection('account')">
           <IconUserCircle :size="18" />
           <span>账号</span>
+        </button>
+        <button class="settings-navigation-item" :class="{ active: activeSection === 'data' }" type="button" :aria-current="activeSection === 'data' ? 'page' : undefined" @click="selectSection('data')">
+          <IconDownload :size="18" />
+          <span>数据迁移</span>
         </button>
         <button class="settings-navigation-item" :class="{ active: activeSection === 'teams' }" type="button" :aria-current="activeSection === 'teams' ? 'page' : undefined" @click="selectSection('teams')">
           <IconUsers :size="18" />
@@ -396,6 +422,35 @@ async function saveProfile() {
             <span>需要切换账号时，可以安全退出当前会话。</span>
             <button class="secondary-button" type="button" @click="signOut">退出登录</button>
           </footer>
+        </section>
+
+        <section v-else-if="activeSection === 'data'" class="settings-panel data-migration-panel" aria-labelledby="data-migration-title">
+          <header class="settings-panel-header">
+            <div>
+              <span class="section-label">DATA MIGRATION</span>
+              <h2 id="data-migration-title">数据迁移</h2>
+              <p>把当前 Web 端的个人数据带到 macOS 本地版，导出后可在桌面端导入。</p>
+            </div>
+          </header>
+          <div class="data-migration-card">
+            <div class="data-migration-icon"><IconDownload :size="22" /></div>
+            <div class="data-migration-copy">
+              <strong>导出个人数据</strong>
+              <p>包含个人任务、清单、笔记和文件夹。团队任务、协作关系与附件不会写入导出文件。</p>
+              <small>文件格式：.workfollow.json · 导出后 macOS 版可离线导入</small>
+            </div>
+            <button class="primary-button" type="button" :disabled="dataExporting" @click="exportPersonalData">
+              <IconDownload :size="16" />
+              {{ dataExporting ? '整理数据…' : '导出文件' }}
+            </button>
+          </div>
+          <div class="settings-info-row data-migration-info">
+            <div>
+              <strong>导出不会修改 Web 数据</strong>
+              <p>你可以重复导出；macOS 端导入时会先显示数量并让你确认合并。</p>
+            </div>
+            <span class="settings-saved-badge"><IconCheck :size="14" />个人范围</span>
+          </div>
         </section>
 
         <template v-else>

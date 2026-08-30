@@ -267,7 +267,13 @@ class _HomeTaskList extends StatelessWidget {
             task: task,
             overdue: overdue,
             onOpen: () {
-              controller.selectView(_viewForTask(task));
+              final view = _viewForTask(task);
+              if (view == WorkspaceView.all &&
+                  task.listName.trim().isNotEmpty) {
+                controller.selectList(task.listName);
+              } else {
+                controller.selectView(view);
+              }
               controller.selectTask(task.id);
             },
             onToggle: () => controller.toggleTask(task.id),
@@ -281,6 +287,7 @@ class _HomeTaskList extends StatelessWidget {
     if (task.listName == '工作') return WorkspaceView.work;
     if (task.listName == '学习') return WorkspaceView.study;
     if (task.listName == '个人') return WorkspaceView.personal;
+    if (task.listName.trim().isNotEmpty) return WorkspaceView.all;
     if (task.bucket == TaskBucket.later) return WorkspaceView.plan;
     return WorkspaceView.today;
   }

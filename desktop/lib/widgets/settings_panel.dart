@@ -2,25 +2,126 @@ import 'dart:ui';
 
 import 'package:flutter/material.dart';
 
+import '../models/migration.dart';
+import '../services/local_workspace_store.dart';
+import '../state/workspace_controller.dart';
 import '../theme/workfollow_theme.dart';
 import 'app_icon_button.dart';
 
-Future<void> showSettingsPanel({required BuildContext context, required VoidCallback onToggleTheme}) {
+Future<void> showSettingsPanel({
+  required BuildContext context,
+  required WorkspaceController controller,
+  required VoidCallback onToggleTheme,
+}) {
   return showGeneralDialog<void>(
     context: context,
     barrierDismissible: true,
     barrierLabel: '设置',
     barrierColor: Colors.black.withOpacity(.24),
     transitionDuration: const Duration(milliseconds: 180),
-    pageBuilder: (context, animation, secondaryAnimation) => _SettingsPanel(onToggleTheme: onToggleTheme),
-    transitionBuilder: (context, animation, secondaryAnimation, child) => BackdropFilter(filter: ImageFilter.blur(sigmaX: animation.value * 7, sigmaY: animation.value * 7), child: FadeTransition(opacity: animation, child: child)),
+    pageBuilder: (context, animation, secondaryAnimation) => _SettingsPanel(
+      controller: controller,
+      onToggleTheme: onToggleTheme,
+    ),
+    transitionBuilder: (context, animation, secondaryAnimation, child) =>
+        BackdropFilter(
+            filter: ImageFilter.blur(
+                sigmaX: animation.value * 7, sigmaY: animation.value * 7),
+            child: FadeTransition(opacity: animation, child: child)),
   );
 }
 
-class _SettingsPanel extends StatelessWidget {
-  const _SettingsPanel({required this.onToggleTheme});
+class _SettingsPanel extends StatefulWidget {
+  const _SettingsPanel({
+    required this.controller,
+    required this.onToggleTheme,
+  });
 
+  final WorkspaceController controller;
   final VoidCallback onToggleTheme;
+
+  @override
+  State<_SettingsPanel> createState() => _SettingsPanelState();
+}
+
+class _SettingsPanelState extends State<_SettingsPanel> {
+  bool importing = false;
+  String? importMessage;
+  String? importError;
+
+  Future<void> _importData() async {
+    setState(() {
+      importing = true;
+      importMessage = null;
+      importError = null;
+    });
+    try {
+      final bundle = await LocalWorkspaceStore().pickAndReadMigration();
+      if (!mounted || bundle == null) return;
+      final confirmed = await _showImportPreview(bundle);
+      if (!mounted || confirmed != true) return;
+      final summary = await widget.controller.importMigration(bundle);
+      if (!mounted) return;
+      setState(() {
+        importMessage =
+            '已导入 ${summary.importedTasks} 个任务、${summary.importedNotes} 条笔记。${summary.skippedTasks + summary.skippedNotes > 0 ? '重复记录已保留本地版本。' : ''}';
+      });
+    } on MigrationFormatException catch (error) {
+      if (mounted) setState(() => importError = error.message);
+    } on MigrationFileException catch (error) {
+      if (mounted) setState(() => importError = error.message);
+    } on Object {
+      if (mounted) setState(() => importError = '导入失败，请重新导出后再试。');
+    } finally {
+      if (mounted) setState(() => importing = false);
+    }
+  }
+
+  Future<bool?> _showImportPreview(MigrationBundle bundle) {
+    return showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        final tokens = WorkFollowTheme.of(dialogContext);
+        return AlertDialog(
+          title: const Text('导入个人数据'),
+          content: SizedBox(
+            width: 360,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '文件来自 Web 端个人空间，确认后会合并到本机。',
+                  style: TextStyle(color: tokens.textSecondary, fontSize: 12),
+                ),
+                const SizedBox(height: 17),
+                _ImportCountRow(label: '任务', count: bundle.tasks.length),
+                _ImportCountRow(label: '笔记', count: bundle.notes.length),
+                _ImportCountRow(label: '清单', count: bundle.lists.length),
+                _ImportCountRow(label: '文件夹', count: bundle.folders.length),
+                const SizedBox(height: 14),
+                Text(
+                  '团队数据、协作关系和附件不在本次迁移范围内。已有相同 ID 的本地记录会保留。',
+                  style: TextStyle(
+                      color: tokens.textTertiary, fontSize: 11, height: 1.45),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('确认合并'),
+            ),
+          ],
+        );
+      },
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -33,7 +134,7 @@ class _SettingsPanel extends StatelessWidget {
         borderRadius: BorderRadius.circular(15),
         child: Container(
           width: 650,
-          height: 470,
+          height: 500,
           clipBehavior: Clip.antiAlias,
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(15),
@@ -83,7 +184,7 @@ class _SettingsPanel extends StatelessWidget {
                             description: '调整工作台的明暗显示',
                             trailing: _ModeSegment(
                               dark: dark,
-                              onToggleTheme: onToggleTheme,
+                              onToggleTheme: widget.onToggleTheme,
                             ),
                           ),
                           _SettingRow(
@@ -102,8 +203,25 @@ class _SettingsPanel extends StatelessWidget {
                         label: '数据',
                         children: [
                           _SettingRow(
+                            label: '从 Web 导入',
+                            description: '选择 .workfollow.json 文件，导入个人任务和笔记',
+                            trailing: FilledButton.tonalIcon(
+                              onPressed: importing ? null : _importData,
+                              icon: importing
+                                  ? const SizedBox(
+                                      width: 14,
+                                      height: 14,
+                                      child: CircularProgressIndicator(
+                                          strokeWidth: 2),
+                                    )
+                                  : const Icon(Icons.file_open_outlined,
+                                      size: 15),
+                              label: Text(importing ? '读取中' : '选择文件'),
+                            ),
+                          ),
+                          _SettingRow(
                             label: '本地数据',
-                            description: '数据保存在本机，不需要网络连接',
+                            description: '导入后数据保存在本机，重启应用仍会保留',
                             trailing: SoftPill(
                               label: '本地模式',
                               color: tokens.accentFaint,
@@ -113,9 +231,11 @@ class _SettingsPanel extends StatelessWidget {
                           ),
                           _SettingRow(
                             label: '最近备份',
-                            description: '接入本地数据库后可在这里恢复',
+                            description: '迁移文件会自动保存为本机快照',
                             trailing: Text(
-                              '尚未备份',
+                              widget.controller.restoredFromDisk
+                                  ? '已保存'
+                                  : '等待导入',
                               style: TextStyle(
                                 color: tokens.textTertiary,
                                 fontSize: 11,
@@ -124,9 +244,22 @@ class _SettingsPanel extends StatelessWidget {
                           ),
                         ],
                       ),
+                      if (importMessage != null || importError != null) ...[
+                        const SizedBox(height: 10),
+                        Text(
+                          importError ?? importMessage!,
+                          style: TextStyle(
+                            color: importError == null
+                                ? tokens.success
+                                : tokens.danger,
+                            fontSize: 11,
+                            height: 1.4,
+                          ),
+                        ),
+                      ],
                       const Spacer(),
                       Text(
-                        '当前为第一轮交互原型，数据库、系统通知和全局快捷键将在下一阶段接入。',
+                        '迁移范围先覆盖个人任务、清单、笔记和文件夹；附件与团队数据暂不导入。',
                         style: TextStyle(
                           color: tokens.textTertiary,
                           fontSize: 10.5,
@@ -205,7 +338,8 @@ class _SettingsNavigation extends StatelessWidget {
 }
 
 class _SettingsNavItem extends StatelessWidget {
-  const _SettingsNavItem({required this.icon, required this.label, this.selected = false});
+  const _SettingsNavItem(
+      {required this.icon, required this.label, this.selected = false});
 
   final IconData icon;
   final String label;
@@ -281,7 +415,8 @@ class _SettingGroup extends StatelessWidget {
 }
 
 class _SettingRow extends StatelessWidget {
-  const _SettingRow({required this.label, required this.description, required this.trailing});
+  const _SettingRow(
+      {required this.label, required this.description, required this.trailing});
 
   final String label;
   final String description;
@@ -319,6 +454,37 @@ class _SettingRow extends StatelessWidget {
             ),
           ),
           trailing,
+        ],
+      ),
+    );
+  }
+}
+
+class _ImportCountRow extends StatelessWidget {
+  const _ImportCountRow({required this.label, required this.count});
+
+  final String label;
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = WorkFollowTheme.of(context);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(label,
+                style: TextStyle(color: tokens.textSecondary, fontSize: 12)),
+          ),
+          Text(
+            '$count',
+            style: TextStyle(
+              color: tokens.textPrimary,
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
         ],
       ),
     );

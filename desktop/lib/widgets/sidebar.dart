@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../models/migration.dart';
 import '../state/workspace_controller.dart';
 import '../theme/workfollow_theme.dart';
 import 'app_icon_button.dart';
@@ -442,7 +443,91 @@ class TaskViewSidebar extends StatelessWidget {
                 label: '个人',
                 hint: '任务清单',
                 icon: Icons.list_alt_outlined),
+            ...controller.lists
+                .where((list) => !_defaultListNames.contains(list.name))
+                .map((list) => _TaskListItem(
+                      controller: controller,
+                      list: list,
+                    )),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+const _defaultListNames = {'收集箱', '工作', '学习', '个人'};
+
+class _TaskListItem extends StatefulWidget {
+  const _TaskListItem({required this.controller, required this.list});
+
+  final WorkspaceController controller;
+  final MigrationListRecord list;
+
+  @override
+  State<_TaskListItem> createState() => _TaskListItemState();
+}
+
+class _TaskListItemState extends State<_TaskListItem> {
+  bool hovering = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = WorkFollowTheme.of(context);
+    final selected = widget.controller.isListSelected(widget.list.name);
+    final count = widget.controller.countForList(widget.list.name);
+    return MouseRegion(
+      onEnter: (_) => setState(() => hovering = true),
+      onExit: (_) => setState(() => hovering = false),
+      child: GestureDetector(
+        onTap: () => widget.controller.selectList(widget.list.name),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          curve: Curves.easeOut,
+          margin: const EdgeInsets.symmetric(vertical: 2),
+          padding: const EdgeInsets.fromLTRB(9, 8, 8, 8),
+          decoration: BoxDecoration(
+            color: selected
+                ? tokens.accentSoft
+                : (hovering
+                    ? tokens.content.withOpacity(.7)
+                    : Colors.transparent),
+            borderRadius: BorderRadius.circular(7),
+          ),
+          child: Row(
+            children: [
+              Icon(Icons.list_alt_outlined,
+                  size: 17,
+                  color: selected ? tokens.accent : tokens.textSecondary),
+              const SizedBox(width: 9),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(widget.list.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                            color:
+                                selected ? tokens.accent : tokens.textPrimary,
+                            fontSize: 12,
+                            fontWeight:
+                                selected ? FontWeight.w700 : FontWeight.w600)),
+                    const SizedBox(height: 2),
+                    Text('任务清单',
+                        style: TextStyle(
+                            color: tokens.textTertiary, fontSize: 9.5)),
+                  ],
+                ),
+              ),
+              if (count > 0)
+                Text('$count',
+                    style: TextStyle(
+                        color: selected ? tokens.accent : tokens.textTertiary,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700)),
+            ],
+          ),
         ),
       ),
     );

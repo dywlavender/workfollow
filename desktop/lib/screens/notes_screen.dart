@@ -21,8 +21,10 @@ class _NotesScreenState extends State<NotesScreen> {
   Widget build(BuildContext context) {
     final tokens = WorkFollowTheme.of(context);
     final notes = widget.controller.notes;
-    final selected = notes.firstWhere((note) => note.id == selectedId,
-        orElse: () => notes.first);
+    final selected = notes.isEmpty
+        ? null
+        : notes.firstWhere((note) => note.id == selectedId,
+            orElse: () => notes.first);
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -30,7 +32,7 @@ class _NotesScreenState extends State<NotesScreen> {
         final listWidth = constraints.maxWidth >= 980 ? 300.0 : 260.0;
         return Row(
           children: [
-            _FolderColumn(width: folderWidth),
+            _FolderColumn(width: folderWidth, controller: widget.controller),
             VerticalDivider(width: 1, thickness: 1, color: tokens.border),
             SizedBox(
               width: listWidth,
@@ -41,7 +43,11 @@ class _NotesScreenState extends State<NotesScreen> {
               ),
             ),
             VerticalDivider(width: 1, thickness: 1, color: tokens.border),
-            Expanded(child: _NoteEditor(note: selected)),
+            Expanded(
+              child: selected == null
+                  ? _EmptyNoteEditor(tokens: tokens)
+                  : _NoteEditor(note: selected),
+            ),
           ],
         );
       },
@@ -49,10 +55,29 @@ class _NotesScreenState extends State<NotesScreen> {
   }
 }
 
+class _EmptyNoteEditor extends StatelessWidget {
+  const _EmptyNoteEditor({required this.tokens});
+
+  final WorkFollowTheme tokens;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: tokens.inspector,
+      alignment: Alignment.center,
+      child: Text(
+        '还没有笔记，从左上角开始记录。',
+        style: TextStyle(color: tokens.textTertiary, fontSize: 13),
+      ),
+    );
+  }
+}
+
 class _FolderColumn extends StatelessWidget {
-  const _FolderColumn({required this.width});
+  const _FolderColumn({required this.width, required this.controller});
 
   final double width;
+  final WorkspaceController controller;
 
   @override
   Widget build(BuildContext context) {
@@ -84,14 +109,21 @@ class _FolderColumn extends StatelessWidget {
           const SizedBox(height: 22),
           _NoteGroupHeading(label: '视图'),
           const SizedBox(height: 6),
-          const _FolderItem(
+          _FolderItem(
               label: '全部笔记',
-              count: 3,
+              count: controller.notes.length,
               icon: Icons.notes_outlined,
               selected: true),
-          const _FolderItem(
-              label: '收藏', count: 0, icon: Icons.star_border_rounded),
-          const _FolderItem(label: '未归档', count: 0, icon: Icons.inbox_outlined),
+          _FolderItem(
+              label: '收藏',
+              count: controller.notes.where((note) => note.isFavorite).length,
+              icon: Icons.star_border_rounded),
+          _FolderItem(
+              label: '未归档',
+              count: controller.notes
+                  .where((note) => note.folderId == null)
+                  .length,
+              icon: Icons.inbox_outlined),
           const SizedBox(height: 23),
           Row(
             children: [
@@ -105,10 +137,15 @@ class _FolderColumn extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 6),
-          const _FolderItem(
-              label: '工作笔记', count: 1, icon: Icons.folder_outlined),
-          const _FolderItem(label: '灵感', count: 1, icon: Icons.folder_outlined),
-          const _FolderItem(label: '学习', count: 1, icon: Icons.folder_outlined),
+          ...controller.folders.map((folder) => _FolderItem(
+                label: folder.name,
+                count: controller.notes
+                    .where((note) =>
+                        note.folderId == folder.id ||
+                        note.folder == folder.name)
+                    .length,
+                icon: Icons.folder_outlined,
+              )),
           const Spacer(),
           Text('本地笔记空间',
               style: TextStyle(color: tokens.textTertiary, fontSize: 10)),
