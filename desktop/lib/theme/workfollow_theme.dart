@@ -45,28 +45,28 @@ class WorkFollowTheme extends ThemeExtension<WorkFollowTheme> {
   final LinearGradient seasonalSky;
 
   static const light = WorkFollowTheme(
-    canvas: Color(0xFFF7F6F8),
-    sidebar: Color(0xFFF0EEF3),
-    content: Color(0xFFFCFBFD),
-    inspector: Color(0xFFF8F7FA),
+    canvas: Color(0xFFF7F8FA),
+    sidebar: Color(0xFFF1F3F6),
+    content: Color(0xFFFFFFFF),
+    inspector: Color(0xFFFAFBFC),
     overlay: Color(0xFFFFFFFF),
-    textPrimary: Color(0xFF28262D),
-    textSecondary: Color(0xFF696570),
-    textTertiary: Color(0xFF96919B),
-    border: Color(0xFFE6E3E9),
-    borderStrong: Color(0xFFD9D5DF),
-    accent: Color(0xFF6257B8),
-    accentHover: Color(0xFF51479E),
-    accentSoft: Color(0xFFECEAF8),
-    accentFaint: Color(0xFFF5F3FC),
-    success: Color(0xFF278A65),
-    warning: Color(0xFFA36310),
-    danger: Color(0xFFB7485C),
-    shadow: Color(0x1A2D2639),
+    textPrimary: Color(0xFF171A21),
+    textSecondary: Color(0xFF5F6672),
+    textTertiary: Color(0xFF6B7280),
+    border: Color(0xFFEAECEF),
+    borderStrong: Color(0xFFDDE1E7),
+    accent: Color(0xFF4F46E5),
+    accentHover: Color(0xFF4338CA),
+    accentSoft: Color(0xFFEEF2FF),
+    accentFaint: Color(0xFFF5F6FF),
+    success: Color(0xFF237A57),
+    warning: Color(0xFFA15C08),
+    danger: Color(0xFFB13F50),
+    shadow: Color(0x14111827),
     seasonalSky: LinearGradient(
       begin: Alignment.topLeft,
       end: Alignment.bottomRight,
-      colors: [Color(0xFFF8ECF2), Color(0xFFF0EEF8)],
+      colors: [Color(0xFFF2F4FF), Color(0xFFF7F8FA)],
     ),
   );
 
@@ -81,10 +81,10 @@ class WorkFollowTheme extends ThemeExtension<WorkFollowTheme> {
     textTertiary: Color(0xFF817B88),
     border: Color(0xFF302D38),
     borderStrong: Color(0xFF403B49),
-    accent: Color(0xFFA79CF2),
-    accentHover: Color(0xFFC1B9FF),
-    accentSoft: Color(0xFF302C4B),
-    accentFaint: Color(0xFF242137),
+    accent: Color(0xFFA5B4FC),
+    accentHover: Color(0xFFC7D2FE),
+    accentSoft: Color(0xFF292B55),
+    accentFaint: Color(0xFF20223F),
     success: Color(0xFF65C69B),
     warning: Color(0xFFF0B763),
     danger: Color(0xFFF28A9D),
@@ -97,7 +97,8 @@ class WorkFollowTheme extends ThemeExtension<WorkFollowTheme> {
   );
 
   static WorkFollowTheme of(BuildContext context) {
-    return Theme.of(context).extension<WorkFollowTheme>() ?? WorkFollowTheme.light;
+    return Theme.of(context).extension<WorkFollowTheme>() ??
+        WorkFollowTheme.light;
   }
 
   @override
@@ -183,9 +184,13 @@ class WorkFollowThemeData {
     final colorScheme = ColorScheme(
       brightness: brightness,
       primary: tokens.accent,
-      onPrimary: brightness == Brightness.light ? Colors.white : const Color(0xFF1C1731),
+      onPrimary: brightness == Brightness.light
+          ? Colors.white
+          : const Color(0xFF1C1731),
       secondary: tokens.accent,
-      onSecondary: brightness == Brightness.light ? Colors.white : const Color(0xFF1C1731),
+      onSecondary: brightness == Brightness.light
+          ? Colors.white
+          : const Color(0xFF1C1731),
       error: tokens.danger,
       onError: Colors.white,
       surface: tokens.content,
@@ -204,18 +209,42 @@ class WorkFollowThemeData {
       focusColor: tokens.accent.withOpacity(.22),
       dividerColor: tokens.border,
       textTheme: TextTheme(
-        bodyLarge: TextStyle(color: tokens.textPrimary, fontSize: 14, height: 1.45),
-        bodyMedium: TextStyle(color: tokens.textSecondary, fontSize: 13, height: 1.4),
-        bodySmall: TextStyle(color: tokens.textTertiary, fontSize: 11, height: 1.35),
-        titleLarge: TextStyle(color: tokens.textPrimary, fontSize: 22, fontWeight: FontWeight.w700, letterSpacing: -.45),
-        titleMedium: TextStyle(color: tokens.textPrimary, fontSize: 15, fontWeight: FontWeight.w600, letterSpacing: -.1),
-        titleSmall: TextStyle(color: tokens.textSecondary, fontSize: 12, fontWeight: FontWeight.w600),
-        labelLarge: TextStyle(color: tokens.textPrimary, fontSize: 13, fontWeight: FontWeight.w600),
-        labelMedium: TextStyle(color: tokens.textSecondary, fontSize: 12, fontWeight: FontWeight.w600),
-        labelSmall: TextStyle(color: tokens.textTertiary, fontSize: 10, fontWeight: FontWeight.w600),
+        bodyLarge:
+            TextStyle(color: tokens.textPrimary, fontSize: 14, height: 1.45),
+        bodyMedium:
+            TextStyle(color: tokens.textSecondary, fontSize: 13, height: 1.4),
+        bodySmall:
+            TextStyle(color: tokens.textTertiary, fontSize: 11, height: 1.35),
+        titleLarge: TextStyle(
+            color: tokens.textPrimary,
+            fontSize: 22,
+            fontWeight: FontWeight.w700,
+            letterSpacing: -.45),
+        titleMedium: TextStyle(
+            color: tokens.textPrimary,
+            fontSize: 15,
+            fontWeight: FontWeight.w600,
+            letterSpacing: -.1),
+        titleSmall: TextStyle(
+            color: tokens.textSecondary,
+            fontSize: 12,
+            fontWeight: FontWeight.w600),
+        labelLarge: TextStyle(
+            color: tokens.textPrimary,
+            fontSize: 13,
+            fontWeight: FontWeight.w600),
+        labelMedium: TextStyle(
+            color: tokens.textSecondary,
+            fontSize: 12,
+            fontWeight: FontWeight.w600),
+        labelSmall: TextStyle(
+            color: tokens.textTertiary,
+            fontSize: 10,
+            fontWeight: FontWeight.w600),
       ),
       iconTheme: IconThemeData(color: tokens.textSecondary, size: 18),
-      dividerTheme: DividerThemeData(color: tokens.border, thickness: 1, space: 1),
+      dividerTheme:
+          DividerThemeData(color: tokens.border, thickness: 1, space: 1),
     );
   }
 }

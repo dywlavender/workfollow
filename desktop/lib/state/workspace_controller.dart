@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import '../models/task.dart';
 
 enum WorkspaceView {
+  home,
   today,
   inbox,
   plan,
@@ -11,6 +12,7 @@ enum WorkspaceView {
   calendar,
   notes,
   work,
+  study,
   personal,
 }
 
@@ -106,7 +108,7 @@ class WorkspaceController extends ChangeNotifier {
 
   List<TaskItem> _tasks;
   final List<NoteItem> _notes;
-  WorkspaceView _view = WorkspaceView.today;
+  WorkspaceView _view = WorkspaceView.home;
   String? _selectedTaskId = 'task-01';
   String? _lastCompletedTaskId;
   TaskItem? _lastRemovedTask;
@@ -118,6 +120,21 @@ class WorkspaceController extends ChangeNotifier {
   int _taskSequence = 8;
 
   WorkspaceView get view => _view;
+  bool get isTaskView => switch (_view) {
+        WorkspaceView.today ||
+        WorkspaceView.inbox ||
+        WorkspaceView.plan ||
+        WorkspaceView.all ||
+        WorkspaceView.completed ||
+        WorkspaceView.work ||
+        WorkspaceView.study ||
+        WorkspaceView.personal =>
+          true,
+        WorkspaceView.home ||
+        WorkspaceView.calendar ||
+        WorkspaceView.notes =>
+          false,
+      };
   String? get selectedTaskId => _selectedTaskId;
   int get completionVersion => _completionVersion;
   int get actionVersion => _actionVersion;
@@ -134,12 +151,16 @@ class WorkspaceController extends ChangeNotifier {
 
   List<TaskItem> get visibleTasks {
     final filtered = switch (_view) {
-      WorkspaceView.today => _tasks.where((task) => task.bucket != TaskBucket.later),
+      WorkspaceView.home => _tasks,
+      WorkspaceView.today =>
+        _tasks.where((task) => task.bucket != TaskBucket.later),
       WorkspaceView.inbox => _tasks.where((task) => task.listName == '收集箱'),
-      WorkspaceView.plan => _tasks.where((task) => task.bucket == TaskBucket.later),
+      WorkspaceView.plan =>
+        _tasks.where((task) => task.bucket == TaskBucket.later),
       WorkspaceView.all => _tasks,
       WorkspaceView.completed => _tasks.where((task) => task.completed),
       WorkspaceView.work => _tasks.where((task) => task.listName == '工作'),
+      WorkspaceView.study => _tasks.where((task) => task.listName == '学习'),
       WorkspaceView.personal => _tasks.where((task) => task.listName == '个人'),
       WorkspaceView.calendar || WorkspaceView.notes => const <TaskItem>[],
     };
@@ -148,13 +169,26 @@ class WorkspaceController extends ChangeNotifier {
 
   int countFor(WorkspaceView destination) {
     return switch (destination) {
-      WorkspaceView.today => _tasks.where((task) => !task.completed && task.bucket != TaskBucket.later).length,
-      WorkspaceView.inbox => _tasks.where((task) => task.listName == '收集箱' && !task.completed).length,
-      WorkspaceView.plan => _tasks.where((task) => task.bucket == TaskBucket.later && !task.completed).length,
+      WorkspaceView.home => _tasks
+          .where((task) => !task.completed && task.bucket != TaskBucket.later)
+          .length,
+      WorkspaceView.today => _tasks
+          .where((task) => !task.completed && task.bucket != TaskBucket.later)
+          .length,
+      WorkspaceView.inbox => _tasks
+          .where((task) => task.listName == '收集箱' && !task.completed)
+          .length,
+      WorkspaceView.plan => _tasks
+          .where((task) => task.bucket == TaskBucket.later && !task.completed)
+          .length,
       WorkspaceView.all => _tasks.where((task) => !task.completed).length,
       WorkspaceView.completed => _tasks.where((task) => task.completed).length,
-      WorkspaceView.work => _tasks.where((task) => task.listName == '工作' && !task.completed).length,
-      WorkspaceView.personal => _tasks.where((task) => task.listName == '个人' && !task.completed).length,
+      WorkspaceView.work =>
+        _tasks.where((task) => task.listName == '工作' && !task.completed).length,
+      WorkspaceView.study =>
+        _tasks.where((task) => task.listName == '学习' && !task.completed).length,
+      WorkspaceView.personal =>
+        _tasks.where((task) => task.listName == '个人' && !task.completed).length,
       WorkspaceView.calendar || WorkspaceView.notes => 0,
     };
   }
@@ -163,7 +197,8 @@ class WorkspaceController extends ChangeNotifier {
     if (_view == destination) return;
     _view = destination;
     final available = visibleTasks;
-    if (available.isNotEmpty && !available.any((task) => task.id == _selectedTaskId)) {
+    if (available.isNotEmpty &&
+        !available.any((task) => task.id == _selectedTaskId)) {
       _selectedTaskId = available.first.id;
     }
     notifyListeners();
@@ -232,14 +267,18 @@ class WorkspaceController extends ChangeNotifier {
     _lastActionKind = 'removal';
     _lastActionMessage = '任务已移到废纸篓';
     if (_selectedTaskId == id) {
-      _selectedTaskId = _tasks.isEmpty ? null : _tasks[index.clamp(0, _tasks.length - 1).toInt()].id;
+      _selectedTaskId = _tasks.isEmpty
+          ? null
+          : _tasks[index.clamp(0, _tasks.length - 1).toInt()].id;
     }
     notifyListeners();
   }
 
   bool undoLastAction() {
     if (_lastActionKind == 'completion') return undoLastCompletion();
-    if (_lastActionKind != 'removal' || _lastRemovedTask == null || _lastRemovedIndex == null) return false;
+    if (_lastActionKind != 'removal' ||
+        _lastRemovedTask == null ||
+        _lastRemovedIndex == null) return false;
     final index = _lastRemovedIndex!.clamp(0, _tasks.length).toInt();
     _tasks.insert(index, _lastRemovedTask!);
     _selectedTaskId = _lastRemovedTask!.id;
@@ -250,7 +289,8 @@ class WorkspaceController extends ChangeNotifier {
     return true;
   }
 
-  bool addTask(String rawTitle, {TaskBucket bucket = TaskBucket.today, String listName = '收集箱'}) {
+  bool addTask(String rawTitle,
+      {TaskBucket bucket = TaskBucket.today, String listName = '收集箱'}) {
     final title = rawTitle.trim();
     if (title.isEmpty) return false;
     final task = TaskItem(
