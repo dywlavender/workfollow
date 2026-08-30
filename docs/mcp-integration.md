@@ -4,6 +4,8 @@
 
 ## 前置条件
 
+本文同时适用于源码环境和正式离线发布包。两者的虚拟环境位置不同：源码按 README 安装时通常使用 `backend/.venv`；离线发布包由安装脚本创建根目录 `.venv`。
+
 1. 安装最新后端依赖并执行数据库迁移：
 
    ```bash
@@ -55,6 +57,15 @@ env = { WORKFOLLOW_AGENT_TOKEN = "wf_请替换", WORKFOLLOW_API_URL = "http://12
 default_tools_approval_mode = "writes"
 ```
 
+上例是源码环境。离线发布包只需把 `command` 改为发布目录根虚拟环境中的 Python，`cwd` 仍指向 `backend`。例如 Linux 默认安装目录为：
+
+```toml
+command = "/opt/workfollow/.venv/bin/python"
+cwd = "/opt/workfollow/backend"
+```
+
+Windows 离线发布包通常使用 `C:\\WorkFollow\\.venv\\Scripts\\python.exe`，工作目录为 `C:\\WorkFollow\\backend`。
+
 `writes` 表示读取可直接执行，新增和修改前由 Codex 请求确认。这里没有设置 `required = true`，因为打勾是本地服务：未启动打勾时，不应阻止 Codex 本身启动。
 
 保存后重启 Codex，在对话中输入 `/mcp`，确认 `workfollow` 已连接。随后可以直接使用自然语言，例如：
@@ -91,6 +102,8 @@ claude mcp add workfollow --scope user \
 ```
 
 `PYTHONPATH` 用于保证从任意工作目录启动 Claude Code 时都能导入后端的 `app` 模块。如果希望随项目分享，可改为项目级 `.mcp.json`；不要将真实 Token 提交进仓库。
+
+离线发布包中的 Python 路径同样位于发布目录根 `.venv`，不是 `backend/.venv`。
 
 ## Tencent WorkBuddy
 

@@ -2,7 +2,7 @@
 setlocal
 cd /d "%~dp0\..\.."
 
-py -3 -c "import sys; assert sys.maxsize > 2**32" >nul 2>&1
+py -3.12 -c "import sys; assert sys.maxsize > 2**32" >nul 2>&1
 if errorlevel 1 (
   echo Error: Python 3.12 x64 is required. Install it offline first.
   exit /b 1
@@ -29,7 +29,7 @@ if exist collaboration\node_modules\@hocuspocus\server\package.json if exist col
   if errorlevel 1 exit /b 1
 )
 
-py -3 -m venv .venv
+py -3.12 -m venv .venv
 if errorlevel 1 exit /b 1
 if exist wheelhouse\*.whl (
   echo Local wheelhouse found. Installing without network.
@@ -39,6 +39,11 @@ if exist wheelhouse\*.whl (
   .venv\Scripts\python.exe -m pip install -r deploy\requirements-offline.txt
 )
 if errorlevel 1 exit /b 1
+.venv\Scripts\python.exe -c "import fastapi, httpx, mcp, sqlalchemy"
+if errorlevel 1 (
+  echo Error: Python dependency verification failed. Check that wheelhouse contains all Windows x64 Python 3.12 wheels.
+  exit /b 1
+)
 if not exist data\files mkdir data\files
 if not exist data\uploads mkdir data\uploads
 if not exist logs mkdir logs

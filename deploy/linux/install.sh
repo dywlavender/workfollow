@@ -32,6 +32,10 @@ else
   echo "未检测到 wheelhouse，在线下载 Python 依赖。"
   .venv/bin/python -m pip install -r deploy/requirements-offline.txt
 fi
+.venv/bin/python -c "import fastapi, httpx, mcp, sqlalchemy" || {
+  echo "错误：Python 依赖自检失败；请确认 wheelhouse 包含当前平台的完整依赖。" >&2
+  exit 1
+}
 mkdir -p data/files data/uploads logs run
 if [ -f collaboration/node_modules/@hocuspocus/server/package.json ] \
   && [ -f collaboration/node_modules/@hocuspocus/transformer/package.json ] \

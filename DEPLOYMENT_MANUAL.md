@@ -9,8 +9,9 @@
 - 64 位 x86_64 Linux
 - Python 3.12
 - Python venv 和 pip
-- Node.js 22+（用于运行任务正文及元数据协同服务；npm 仅在依赖缺失时需要）
+- Node.js 22+（用于运行任务、笔记和 Agent 写入共用的协同服务）
 - 发布包已内置协同服务的 Node 依赖；只有从源码部署且依赖缺失时才需要 npm 网络或内部镜像
+- `curl`（启动脚本和验收检查使用）
 - 8123、8124 端口未被其他程序占用
 
 检查命令：
@@ -21,7 +22,7 @@ python3 --version
 python3 -m pip --version
 python3 -m venv --help
 node --version
-npm --version
+curl --version
 ```
 
 `uname -m` 应输出 `x86_64`，Python 应为 3.12。Debian/Ubuntu 如果缺少 venv，需安装对应的 `python3.12-venv` 系统包。
@@ -32,9 +33,10 @@ Linux 安装包适用于常见的 glibc 发行版，不适用于 ARM64、32 位�
 
 - 64 位 Windows 10/11 或 Windows Server
 - Python 3.12 x64
-- Node.js 22+（用于运行任务正文及元数据协同服务；npm 仅在依赖缺失时需要）
+- Node.js 22+（用于运行任务、笔记和 Agent 写入共用的协同服务）
 - 安装 Python 时启用 `py launcher`，建议同时勾选“Add Python to PATH”
 - 发布包已内置协同服务的 Node 依赖；只有从源码部署且依赖缺失时才需要 npm 网络或内部镜像
+- `curl.exe`（启动脚本和验收检查使用）
 - 8123、8124 端口未被其他程序占用
 
 在命令提示符中检查：
@@ -43,7 +45,7 @@ Linux 安装包适用于常见的 glibc 发行版，不适用于 ARM64、32 位�
 py -3.12 --version
 py -3.12 -c "import platform; print(platform.architecture())"
 node --version
-npm --version
+curl.exe --version
 ```
 
 输出应显示 Python 3.12 和 64bit。
@@ -74,6 +76,15 @@ cd /d C:\WorkFollow
 
 前端已经构建完成，不需要在目标机重新构建前端；但目标机仍需安装 Node.js 22+，用于启动任务、个人笔记和管理员团队知识草稿的 Yjs/Hocuspocus 协同服务。
 
+正式发布包应包含以下离线内容：
+
+- `frontend/dist/`：已经构建的前端；
+- `collaboration/node_modules/`：协同服务生产依赖；
+- `wheelhouse/`：与目标操作系统及 Python 3.12 匹配的 Python wheel；
+- `docs/mcp-integration.md`：Codex、Claude Code 和 WorkBuddy 接入说明。
+
+如果发布包缺少 `wheelhouse`，安装脚本会尝试在线安装 Python 依赖，因此不能再视为完全离线包。目标机运行发布包时不需要 npm；只有协同依赖缺失时，安装脚本才会尝试调用 npm。
+
 ### Linux
 
 ```bash
@@ -81,7 +92,7 @@ cd /opt/workfollow
 ./deploy/linux/install.sh
 ```
 
-脚本会检查 Python 3.12、创建 `.venv` 虚拟环境、安装 Python 依赖、创建数据目录，并初始化或升级 SQLite 数据库。发布包已包含协同服务的生产依赖，检测到依赖完整时不会访问 npm。
+脚本会检查 Python 3.12、创建 `.venv` 虚拟环境、从 `wheelhouse` 安装 Python 依赖、创建数据目录，并初始化或升级 SQLite 数据库。发布包已包含协同服务的生产依赖，检测到依赖完整时不会访问 npm。
 
 ### Windows
 
@@ -157,6 +168,12 @@ WORKFOLLOW_HOST=127.0.0.1 ./deploy/linux/start.sh
 WORKFOLLOW_PORT=9000 ./deploy/linux/start.sh
 ```
 
+如果修改协同端口，启动脚本会同步设置后端内部使用的协同 HTTP 地址：
+
+```bash
+WORKFOLLOW_COLLABORATION_PORT=9124 ./deploy/linux/start.sh
+```
+
 ### Windows
 
 ```bat
@@ -166,9 +183,11 @@ deploy\windows\start.bat
 
 本机访问 `http://localhost:8123`。其他电脑访问时使用 `http://Windows部署机IP:8123`，并在 Windows Defender 防火墙中对可信内网放行 TCP 8123 和 8124（8124 是任务、个人笔记和团队知识草稿协同服务端口）。
 
+生产脚本会把 FastAPI 使用的 `WORKFOLLOW_COLLABORATION_HTTP_URL` 固定到本机协同端口。8124 对浏览器提供 WebSocket，同时供本机后端执行 Agent 文档操作；不要把内部协同接口单独暴露到不可信网络。
+
 ## 六、验证项目
 
-在浏览器中打开首页，首次使用时注册账号。
+在浏览器中打开首页，使用第四节创建的系统管理员账号登录。
 
 健康检查地址：
 
@@ -180,6 +199,24 @@ http://服务器IP:8123/api/health
 
 ```json
 {"status":"ok","database":"ok","version":"0.1.0"}
+```
+
+协同服务检查：
+
+```text
+http://服务器IP:8124/health
+```
+
+Linux 还可以执行以下依赖自检，确认 Agent/MCP 所需模块已经离线安装：
+
+```bash
+.venv/bin/python -c "import fastapi, httpx, mcp; print('Python dependencies OK')"
+```
+
+Windows：
+
+```bat
+.venv\Scripts\python.exe -c "import fastapi, httpx, mcp; print('Python dependencies OK')"
 ```
 
 ## 七、停止和查看日志
@@ -212,6 +249,8 @@ deploy\windows\stop.bat
 4. 再次执行新环境的安装脚本，升级数据库。
 5. 启动并执行健康检查。
 
+升级当前版本时必须运行数据库迁移；Agent 写操作记录使用的新表会在迁移到 `0034` 时创建。不要只替换前端文件而跳过安装脚本。
+
 Linux 备份：
 
 ```bash
@@ -228,30 +267,57 @@ deploy\windows\backup.bat
 
 ## 九、可选：完全离线安装依赖
 
-如果目标机完全不能联网，发布包中的协同服务依赖无需另行下载；只需为 Python 依赖准备 wheelhouse。
+如果目标机完全不能联网，需要先在可联网且与目标机同操作系统、同 CPU 架构、同 Python 版本的机器上准备 wheelhouse。Linux 和 Windows 的 Python 包不能混用。
 
 Linux 联网机：
 
 ```bash
-mkdir -p wheelhouse
-python3.12 -m pip download -r deploy/requirements-offline.txt -d wheelhouse
+mkdir -p wheelhouse/linux
+python3.12 -m pip download --only-binary=:all: \
+  -r deploy/requirements-offline.txt \
+  -d wheelhouse/linux
 ```
 
 Windows 联网机：
 
 ```bat
-mkdir wheelhouse
-py -3.12 -m pip download -r deploy\requirements-offline.txt -d wheelhouse
+mkdir wheelhouse\windows
+py -3.12 -m pip download --only-binary=:all: ^
+  -r deploy\requirements-offline.txt ^
+  -d wheelhouse\windows
 ```
 
-将 `wheelhouse` 连同整个项目复制到目标机，再运行对应安装脚本。脚本检测到 wheel 文件后会自动使用本地依赖，不访问网络；发布包检测到 `collaboration/node_modules` 后也不会运行 npm。Linux 和 Windows 的 Python 依赖包不能混用。
+把两个目录收集到打包机的 `wheelhouse/linux` 和 `wheelhouse/windows`，然后在仓库根目录运行：
+
+```bash
+./deploy/build-deployment-packages.sh --version 0.1.0 --require-offline
+```
+
+打包机需要联网安装前端和协同服务依赖；目标机不需要联网。脚本会在隔离临时目录构建前端、打包协同服务生产依赖，并分别把对应 wheelhouse 放进 Linux 和 Windows 发布包。`--require-offline` 会在任一平台缺少 wheel 时直接停止，避免误把需要联网安装的普通包当成离线包交付。
+
+交付前应解压到临时目录检查以下文件存在：
+
+```text
+frontend/dist/index.html
+collaboration/node_modules/@hocuspocus/server/package.json
+collaboration/node_modules/@hocuspocus/transformer/package.json
+collaboration/node_modules/yjs/package.json
+wheelhouse/*.whl
+deploy/requirements-offline.txt
+docs/mcp-integration.md
+```
+
+随后在一台断网验收机上实际运行安装脚本。仅看到压缩包生成成功，不能证明依赖完整。
 
 ## 十、常见问题
 
 - Python 版本错误：安装 Python 3.12 x64，不要使用 3.11、3.13 或 32 位 Python。
-- 依赖下载失败：检查网络、代理或 `PIP_INDEX_URL`。
+- 离线安装仍尝试联网：发布包没有包含对应平台的 `wheelhouse`，重新制作完整发布包。
+- `No matching distribution found`：wheelhouse 与目标操作系统、CPU 架构或 Python 3.12 不匹配。
+- MCP Server 提示缺少模块：确认 `deploy/requirements-offline.txt` 包含并已安装 `httpx` 和 `mcp`，再执行第六节依赖自检。
 - 页面无法访问：检查服务状态、8123 端口、防火墙和日志。
 - 多人正文或任务属性没有实时同步：检查协同服务日志、8124 端口和防火墙；浏览器必须能访问与业务页面同一主机的 8124 端口，并确认所有客户端使用同一版本。个人笔记使用 `note:<id>`，管理员团队知识草稿使用 `knowledge-draft:<id>`；团队知识点击“保存修改”后才更新已发布版本。
+- Agent 能查询但不能修改笔记或任务：确认 8124 服务健康，并确认 `WORKFOLLOW_COLLABORATION_HTTP_URL` 指向部署机本地的协同端口。
 - 页面显示 404：确认 `frontend/dist/index.html` 存在。
 - 数据库启动失败：先备份 `data`，再重新执行安装脚本。
 
@@ -259,7 +325,26 @@ py -3.12 -m pip download -r deploy\requirements-offline.txt -d wheelhouse
 
 默认使用 HTTP 并监听 `0.0.0.0`，只适合可信内网。跨公网部署时，应为 8123 和 8124 同时增加 HTTPS/WSS 反向代理并限制防火墙来源。`data` 和 `backups` 可能包含敏感业务信息，应严格控制目录权限。
 
-## 十二、外部 HTTP 通知配置
+## 十二、可选：离线环境接入 Agent / MCP
+
+部署完成后，在 WorkFollow 的“设置 → 账号 → Agent 接入”生成账号唯一 Token，再按发布包中的 `docs/mcp-integration.md` 配置客户端。
+
+当前接入方式是本地 STDIO MCP：MCP 进程运行在哪台电脑，配置中的 Python 路径就必须存在于哪台电脑。因此，在 WorkFollow 部署机上运行 Codex 时可以直接使用 `/opt/workfollow/.venv/bin/python`；如果 Codex 在另一台电脑上，不能引用服务器文件路径，需要在客户端电脑部署同一 MCP 适配器及 Python 依赖，并把 `WORKFOLLOW_API_URL` 指向服务器地址。
+
+Linux 同机部署示例：
+
+```toml
+[mcp_servers.workfollow]
+command = "/opt/workfollow/.venv/bin/python"
+args = ["-m", "app.mcp_server"]
+cwd = "/opt/workfollow/backend"
+env = { WORKFOLLOW_AGENT_TOKEN = "wf_请替换", WORKFOLLOW_API_URL = "http://127.0.0.1:8123/api" }
+default_tools_approval_mode = "writes"
+```
+
+保存后重启客户端并查看 MCP 连接状态。重置 WorkFollow Token 后，所有客户端中的旧 Token 都会失效。
+
+## 十三、外部 HTTP 通知配置
 
 WorkFollow 可以将任务分配、取消分配、完成、每日待办汇总，以及团队知识投稿的待审核和审核结果发送到外部 HTTP 通知接口。接口由后端调用，默认使用 GET，并为每个用户单独发送：
 

@@ -7,6 +7,7 @@ set -Eeuo pipefail
 # Usage:
 #   ./deploy/build-deployment-packages.sh
 #   ./deploy/build-deployment-packages.sh --version 0.1.1
+#   ./deploy/build-deployment-packages.sh --version 0.1.1 --require-offline
 #
 # Optional offline dependencies:
 #   wheelhouse/linux/*.whl     Linux x86_64 Python 3.12 wheels
@@ -15,9 +16,10 @@ set -Eeuo pipefail
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 RELEASE_DIR="$ROOT_DIR/release"
 VERSION="${WORKFOLLOW_VERSION:-0.1.0}"
+REQUIRE_OFFLINE=0
 
 usage() {
-  sed -n '3,12p' "$0"
+  sed -n '4,14p' "$0"
 }
 
 fail() {
@@ -35,6 +37,10 @@ while [ "$#" -gt 0 ]; do
       [ "$#" -ge 2 ] || fail "--version 后必须提供版本号"
       VERSION="$2"
       shift 2
+      ;;
+    --require-offline)
+      REQUIRE_OFFLINE=1
+      shift
       ;;
     -h|--help)
       usage
@@ -55,6 +61,17 @@ require_command zip
 require_command npm
 require_command node
 
+has_wheels() {
+  find "$1" -maxdepth 1 -type f -name '*.whl' -print -quit 2>/dev/null | grep -q .
+}
+
+if [ "$REQUIRE_OFFLINE" -eq 1 ]; then
+  has_wheels "$ROOT_DIR/wheelhouse/linux" \
+    || fail "缺少 wheelhouse/linux，不能生成完整 Linux 离线包"
+  has_wheels "$ROOT_DIR/wheelhouse/windows" \
+    || fail "缺少 wheelhouse/windows，不能生成完整 Windows 离线包"
+fi
+
 mkdir -p "$RELEASE_DIR"
 BUILD_DIR="$(mktemp -d "$RELEASE_DIR/.package-build.XXXXXX")"
 
@@ -66,7 +83,7 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
-echo "[1/5] 在隔离临时目录安装依赖并使用当前源码构建前端和协同服务"
+echo "[1/4] 在隔离临时目录安装依赖并使用当前源码构建前端和协同服务"
 FRONTEND_BUILD_DIR="$BUILD_DIR/frontend-build"
 mkdir -p "$FRONTEND_BUILD_DIR"
 tar \
@@ -108,6 +125,7 @@ copy_app() {
     "$target/frontend" \
     "$target/collaboration" \
     "$target/deploy" \
+    "$target/docs" \
     "$target/data/files" \
     "$target/data/uploads"
 
@@ -122,24 +140,25 @@ copy_app() {
   cp "$ROOT_DIR/deploy/requirements-offline.txt" "$target/deploy/"
   cp "$ROOT_DIR/.env.example" "$target/.env.example"
   cp "$ROOT_DIR/DEPLOYMENT_MANUAL.md" "$target/"
+  cp "$ROOT_DIR/docs/mcp-integration.md" "$target/docs/"
 }
 
 copy_wheelhouse() {
   local source="$1"
   local target="$2"
-  if find "$source" -maxdepth 1 -type f -name '*.whl' -print -quit 2>/dev/null | grep -q .; then
+  if has_wheels "$source"; then
     mkdir -p "$target/wheelhouse"
     cp "$source"/*.whl "$target/wheelhouse/"
   fi
 }
 
-echo "[2/5] 组装 Linux 安装目录"
+echo "[2/4] 组装 Linux 安装目录"
 copy_app "$LINUX_STAGE"
 cp -R "$ROOT_DIR/deploy/linux" "$LINUX_STAGE/deploy/"
 chmod +x "$LINUX_STAGE/deploy/linux/"*.sh
 copy_wheelhouse "$ROOT_DIR/wheelhouse/linux" "$LINUX_STAGE"
 
-echo "[3/5] 组装 Windows 安装目录"
+echo "[3/4] 组装 Windows 安装目录"
 copy_app "$WINDOWS_STAGE"
 cp -R "$ROOT_DIR/deploy/windows" "$WINDOWS_STAGE/deploy/"
 copy_wheelhouse "$ROOT_DIR/wheelhouse/windows" "$WINDOWS_STAGE"
@@ -149,36 +168,18 @@ WINDOWS_NAME="WorkFollow-$VERSION-windows-x64.zip"
 LINUX_TEMP="$BUILD_DIR/$LINUX_NAME"
 WINDOWS_TEMP="$BUILD_DIR/$WINDOWS_NAME"
 
-echo "[4/5] 生成压缩包"
+echo "[4/4] 生成压缩包"
 tar -czf "$LINUX_TEMP" -C "$LINUX_STAGE" .
 (
   cd "$WINDOWS_STAGE"
   zip -qr "$WINDOWS_TEMP" .
 )
 
-echo "[5/5] 生成 SHA-256 校验文件"
-CHECKSUM_TEMP="$BUILD_DIR/SHA256SUMS.txt"
-if command -v sha256sum >/dev/null 2>&1; then
-  (
-    cd "$BUILD_DIR"
-    sha256sum "$LINUX_NAME" "$WINDOWS_NAME" > "$CHECKSUM_TEMP"
-  )
-elif command -v shasum >/dev/null 2>&1; then
-  (
-    cd "$BUILD_DIR"
-    shasum -a 256 "$LINUX_NAME" "$WINDOWS_NAME" > "$CHECKSUM_TEMP"
-  )
-else
-  fail "缺少 sha256sum 或 shasum"
-fi
-
 # Publish only after every build step succeeds.
 mv "$LINUX_TEMP" "$RELEASE_DIR/$LINUX_NAME"
 mv "$WINDOWS_TEMP" "$RELEASE_DIR/$WINDOWS_NAME"
-mv "$CHECKSUM_TEMP" "$RELEASE_DIR/SHA256SUMS.txt"
 
 echo
 echo "打包完成："
 echo "  $RELEASE_DIR/$LINUX_NAME"
 echo "  $RELEASE_DIR/$WINDOWS_NAME"
-echo "  $RELEASE_DIR/SHA256SUMS.txt"
