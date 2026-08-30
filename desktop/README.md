@@ -14,7 +14,7 @@
 
 ## 当前阶段边界
 
-该原型暂时使用内存演示数据，尚未接入 SQLite、系统通知、菜单栏常驻、全局快捷键和正式 macOS Runner。这样做是为了先冻结窗口结构、视觉令牌和核心交互；下一阶段再接入本地数据层和 macOS 能力。
+该原型暂时使用内存演示数据，尚未接入 SQLite、系统通知、菜单栏常驻和真正的全局快捷键；macOS Runner 已生成，可以直接编译运行。这样做是为了先冻结窗口结构、视觉令牌和核心交互；下一阶段再接入本地数据层和 macOS 能力。
 
 ## 运行
 
@@ -23,11 +23,20 @@
 ```bash
 cd desktop
 flutter pub get
-flutter create --platforms=macos .
 flutter run -d macos
 ```
 
-`flutter create` 只用于生成缺失的 macOS Runner 文件；它不会覆盖 `lib/` 或 `pubspec.yaml` 中的本原型代码。
+如果在全新工作副本中发现 `macos/` 目录缺失，再执行 `flutter create --platforms=macos .` 生成 Runner 文件；正常情况下无需重复执行。
+
+## 自动验证
+
+```bash
+flutter analyze
+flutter test
+flutter build macos --release
+```
+
+当前原型的测试数据在内存中，重启应用后会恢复为演示数据。
 
 ## 验收重点
 
