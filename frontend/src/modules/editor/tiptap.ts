@@ -1,4 +1,5 @@
 import type { Extensions } from '@tiptap/core'
+import type { Editor as CoreEditor } from '@tiptap/core'
 import Highlight from '@tiptap/extension-highlight'
 import Image from '@tiptap/extension-image'
 import Link from '@tiptap/extension-link'
@@ -91,6 +92,24 @@ export const workFollowHighlightColors = [
   { label: '蓝色背景', value: '#e1eaff', swatch: '#e1eaff' },
   { label: '紫色背景', value: '#eee5ff', swatch: '#eee5ff' },
 ] as const
+
+/**
+ * 协同文档刚建立时，编辑器默认空段与同步链路写入的初始段可能各存一份，
+ * 合并成多个空段落——首行吞掉占位符、正文顶部多出空行。整篇只由空段落
+ * 组成时不含任何用户内容，收敛为一个段落是零损失的自愈。
+ */
+export function collapseAllEmptyParagraphs(editor: CoreEditor): boolean {
+  const doc = editor.state.doc
+  if (doc.childCount <= 1) return false
+  const allEmpty = Array.from(doc.children).every(
+    (node) => node.type.name === 'paragraph' && node.content.size === 0,
+  )
+  if (!allEmpty) return false
+  const tr = editor.state.tr
+  tr.delete(doc.firstChild!.nodeSize, doc.content.size)
+  editor.view.dispatch(tr)
+  return true
+}
 
 /**
  * The single document schema used by task and note editors.

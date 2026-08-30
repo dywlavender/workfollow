@@ -26,6 +26,7 @@ const props = defineProps<{
   sharedCount?: number
   sharedByMeCount?: number
   knowledgeCount?: number
+  submissionsCount?: number
   submissionsPendingCount?: number
   reviewPendingCount?: number
 }>()
@@ -123,7 +124,7 @@ watch(() => props.view, (view) => {
       <nav class="note-collab-nav" aria-label="笔记协作">
         <button :class="{ active: view === 'shared' }" @click="emit('view', 'shared')"><IconInbox :size="16" />分享给我的<em v-if="sharedCount">{{ sharedCount > 99 ? '99+' : sharedCount }}</em></button>
         <button :class="{ active: view === 'sharedByMe' }" @click="emit('view', 'sharedByMe')"><IconShare :size="16" />我分享的<em v-if="sharedByMeCount">{{ sharedByMeCount > 99 ? '99+' : sharedByMeCount }}</em></button>
-        <button :class="{ active: view === 'submissions' }" @click="emit('view', 'submissions')"><IconSend :size="16" />我的投稿<em v-if="submissionsPendingCount !== undefined">{{ submissionsPendingCount > 99 ? '99+' : submissionsPendingCount }}</em></button>
+        <button :class="{ active: view === 'submissions' }" @click="emit('view', 'submissions')"><IconSend :size="16" />我的投稿<em v-if="submissionsCount !== undefined" :title="submissionsPendingCount ? `${submissionsPendingCount} 条待处理` : '暂无待处理投稿'">{{ submissionsCount > 99 ? '99+' : submissionsCount }}</em></button>
         <button v-if="canReview" :class="{ active: view === 'review' }" @click="emit('view', 'review')"><IconShieldCheck :size="16" />知识审核<em v-if="reviewPendingCount">{{ reviewPendingCount > 99 ? '99+' : reviewPendingCount }}</em></button>
         <div class="knowledge-nav-entry" :class="{ active: view === 'knowledge' }">
           <button class="knowledge-nav-main" :class="{ active: view === 'knowledge' }" type="button" aria-controls="knowledge-category-list" :aria-expanded="view === 'knowledge' && categoryNavOpen" @click="toggleKnowledgeNav"><IconBook :size="16" />团队知识库<em v-if="knowledgeCount">{{ knowledgeCount > 99 ? '99+' : knowledgeCount }}</em></button>

@@ -11,7 +11,7 @@ import RichTextToolbar from '@/components/RichTextToolbar.vue'
 import { workFollowSlashCommands, type WorkFollowSlashCommand } from '@/modules/editor/slashCommands'
 import { useSlashMenu } from '@/modules/editor/slashMenu'
 import { CollaborationInitializationError, initializeCollaborativeField } from '@/modules/editor/collaborationInitialization'
-import { createWorkFollowEditorExtensions } from '@/modules/editor/tiptap'
+import { createWorkFollowEditorExtensions, collapseAllEmptyParagraphs } from '@/modules/editor/tiptap'
 
 const props = withDefaults(defineProps<{
   /** 传入 Y.Doc 即协作模式（正文以协同文档为准）；不传则为纯 JSON v-model 模式。 */
@@ -135,11 +135,16 @@ function seedInitialContent(instance: TiptapEditor, document: Y.Doc, initial?: R
   if (!props.seedReady || !props.seedDocument || fieldInitialized(document)) return
   const fragment = document.getXmlFragment('default')
   const config = document.getMap('config')
+  // 与 NoteEditor 同因：编辑器挂载写入的默认空段落要先清掉再写种子，
+  // 否则合并出两个空段落，占位符永远渲染不出来。
+  const doc = instance.state.doc
+  const onlyEmptyParagraphs = doc.childCount > 0
+    && Array.from(doc.children).every((node) => node.type.name === 'paragraph' && node.content.size === 0)
   if (fragment.length > 0) {
-    // An existing collaborative fragment is authoritative. Do not write a
-    // marker merely by opening the document: that would create a needless
-    // snapshot/notification before anyone edits the content.
-    return
+    // An existing collaborative fragment is authoritative when it holds real
+    // content; only the editor's own default empty paragraph may be replaced.
+    if (!onlyEmptyParagraphs) return
+    fragment.delete(0, fragment.length)
   }
   const initialContent = initial?.contentJson && typeof initial.contentJson === 'object'
     ? initial.contentJson as Record<string, unknown>
@@ -187,6 +192,7 @@ async function initializeDocument(instance: TiptapEditor, document: Y.Doc, gener
   if (generation !== initializationGeneration) return false
   instance.setEditable(Boolean(props.editable && bodyReady.value))
   if (bodyReady.value) {
+    collapseAllEmptyParagraphs(instance)
     emit('ready')
     emitSnapshot(instance)
   }

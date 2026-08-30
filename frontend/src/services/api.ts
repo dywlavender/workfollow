@@ -568,6 +568,7 @@ export interface NoteNavigationCounts {
   shared: number
   sharedByMe: number
   knowledge: number
+  submissionsTotal: number
   submissionsPending: number
   reviewPending: number
 }

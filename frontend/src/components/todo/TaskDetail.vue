@@ -17,7 +17,7 @@ import EditorLinkDialog from '@/components/editor/EditorLinkDialog.vue'
 import EditorSlashMenu from '@/components/editor/EditorSlashMenu.vue'
 import AssigneePopover from '@/components/task/AssigneePopover.vue'
 import TaskRelationDialog from '@/components/task/TaskRelationDialog.vue'
-import { createWorkFollowEditorExtensions } from '@/modules/editor/tiptap'
+import { createWorkFollowEditorExtensions, collapseAllEmptyParagraphs } from '@/modules/editor/tiptap'
 import { workFollowSlashCommands, type WorkFollowSlashCommand } from '@/modules/editor/slashCommands'
 import { useSlashMenu } from '@/modules/editor/slashMenu'
 import { isDateOnlyDue } from '@/modules/todo/dueDate'
@@ -459,10 +459,17 @@ function seedTaskBodyDocument(
 
   const config = document.getMap('config')
   if (config.get('bodyInitialized') === true || config.get('initialContentLoaded') === true) return
-  if (document.getXmlFragment('default').length > 0) return
+  // 与 NoteEditor 同因：编辑器挂载写入的默认空段落要先清掉再写种子，
+  // 否则合并出两个空段落，占位符漂到第二行且永远渲染不出来。
+  const fragment = document.getXmlFragment('default')
+  const doc = currentEditor.state.doc
+  const onlyEmptyParagraphs = doc.childCount > 0
+    && Array.from(doc.children).every((node) => node.type.name === 'paragraph' && node.content.size === 0)
+  if (fragment.length > 0 && !onlyEmptyParagraphs) return
   const source = initial && typeof initial === 'object' ? initial : task
   hydratingEditor = true
   try {
+    if (fragment.length > 0) fragment.delete(0, fragment.length)
     currentEditor.commands.setContent(
       source.contentJson ?? task.contentJson ?? sanitizeEditorHtml(source.description ?? task.description ?? ''),
       false,
@@ -595,6 +602,7 @@ function startTaskCollaboration(task: Todo) {
         if (currentTaskId.value !== task.id) return
         const ready = await initializeTaskBody(task)
         if (currentTaskId.value !== task.id) return
+        if (ready && editor.value) collapseAllEmptyParagraphs(editor.value)
         collaborationContentReady = ready
         editor.value?.setEditable(currentTaskContentEditable.value && ready)
       })

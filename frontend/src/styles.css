@@ -142,6 +142,7 @@
 .knowledge-provenance { display: flex; flex-wrap: wrap; gap: 12px; margin: 0 28px 22px; padding-top: 12px; border-top: 1px solid var(--color-border-subtle); color: var(--color-text-tertiary); font-size: var(--font-size-micro); }
 .submission-workspace { grid-column: 2 / 4; min-width: 0; display: grid; grid-template-columns: 300px minmax(480px, 1fr); overflow: hidden; }
 .submission-index { border-left: 0; }
+.submission-pending-summary { display: block; margin-top: 2px; color: var(--color-accent); font-size: var(--font-size-micro); font-weight: var(--font-weight-regular); }
 .submission-detail { overflow-y: auto; }
 .submission-header { display: flex; align-items: flex-start; justify-content: space-between; }
 .submission-header h1 { margin: 3px 0 0; font-size: var(--font-size-heading-sm); }
@@ -755,7 +756,7 @@ textarea { resize: vertical; }
 .selection-menu button:hover, .selection-menu button:focus-visible { background: var(--color-accent-soft); color: var(--color-accent); outline: none; }
 .tiptap-editor { min-height: 0; flex: 1; overflow: auto; scrollbar-gutter: stable; }
 .tiptap-editor .tiptap { max-width: 840px; min-height: 320px; margin: 0 auto; padding: 24px 34px 56px; color: var(--color-text-primary); font-size: var(--font-size-body); line-height: 1.75; outline: none; }
-.tiptap-editor .tiptap p.is-editor-empty:first-child::before { float: left; height: 0; color: var(--color-text-tertiary); content: attr(data-placeholder); pointer-events: none; }
+.tiptap-editor .tiptap p.is-editor-empty::before, .task-body-editor .tiptap p.is-editor-empty::before, .rich-text-document .tiptap p.is-editor-empty::before { float: left; height: 0; color: var(--color-text-tertiary); content: attr(data-placeholder); pointer-events: none; }
 .tiptap-editor .resizable-image-node, .rich-text-document .resizable-image-node { display: block; max-width: 100%; margin: 14px 0; line-height: 0; }
 .resizable-image-stage { position: relative; display: block; width: fit-content; max-width: 100%; }
 .resizable-image-node.is-resizing .resizable-image-stage { will-change: width; }
@@ -1029,7 +1030,6 @@ body.task-list-resizing { cursor: col-resize; user-select: none; }
 .task-body-editor { width: 100%; min-height: 100%; flex: 1; border: 0; outline: 0; color: var(--color-text-primary); caret-color: var(--color-accent); word-break: break-word; }
 .task-body-editor .tiptap { min-height: 100%; outline: 0; color: inherit; font-size: var(--task-editor-body-font-size); line-height: var(--task-editor-body-line-height); font-weight: var(--task-editor-body-font-weight); }
 .task-body-editor .tiptap p { margin: 0 0 8px; }
-.task-body-editor .tiptap p.is-editor-empty:first-child::before { float: left; height: 0; color: var(--color-text-tertiary); content: attr(data-placeholder); pointer-events: none; }
 .task-body-editor .tiptap h1 { margin: 10px 0 12px; font-size: var(--font-size-heading-lg); line-height: 1.35; }
 .task-body-editor .tiptap h2 { margin: 10px 0; font-size: var(--font-size-heading-sm); line-height: 1.4; }
 .task-body-editor .tiptap h3 { margin: 9px 0 8px; font-size: var(--font-size-title); line-height: 1.45; }

@@ -93,6 +93,7 @@ const navigationCounts = ref<NoteNavigationCounts>({
   shared: 0,
   sharedByMe: 0,
   knowledge: 0,
+  submissionsTotal: 0,
   submissionsPending: 0,
   reviewPending: 0,
 })
@@ -1257,7 +1258,7 @@ onBeforeRouteLeave(() => flushEditorsForNavigation())
       <button class="primary-button" type="button" @click="finishOnboarding">开始使用</button>
     </section>
     <div class="notes-workspace card" :aria-busy="viewLoading">
-      <NoteNavigation :view="currentView" :folders="folders" :selected-folder-id="selectedFolderId" :all-count="navigationCounts.all" :unfiled-count="navigationCounts.unfiled" :favorite-count="navigationCounts.favorites" :folder-counts="navigationCounts.folders" :shared-count="navigationCounts.shared" :shared-by-me-count="navigationCounts.sharedByMe" :knowledge-count="navigationCounts.knowledge" :submissions-pending-count="navigationCounts.submissionsPending" :review-pending-count="navigationCounts.reviewPending" :has-team="hasTeam" :can-review="canReview" :categories="categories" :selected-category-id="selectedCategoryId" @view="activateView" @folder="selectFolder" @category="selectCategory" @create-category="openCreateCategory" @rename-category="openRenameCategory" @remove-category="requestDeleteCategory" @create-folder="createFolder" @rename-folder="renameFolder" @remove-folder="removeFolder" @open-search="openGlobalSearch" />
+      <NoteNavigation :view="currentView" :folders="folders" :selected-folder-id="selectedFolderId" :all-count="navigationCounts.all" :unfiled-count="navigationCounts.unfiled" :favorite-count="navigationCounts.favorites" :folder-counts="navigationCounts.folders" :shared-count="navigationCounts.shared" :shared-by-me-count="navigationCounts.sharedByMe" :knowledge-count="navigationCounts.knowledge" :submissions-count="navigationCounts.submissionsTotal" :submissions-pending-count="navigationCounts.submissionsPending" :review-pending-count="navigationCounts.reviewPending" :has-team="hasTeam" :can-review="canReview" :categories="categories" :selected-category-id="selectedCategoryId" @view="activateView" @folder="selectFolder" @category="selectCategory" @create-category="openCreateCategory" @rename-category="openRenameCategory" @remove-category="requestDeleteCategory" @create-folder="createFolder" @rename-folder="renameFolder" @remove-folder="removeFolder" @open-search="openGlobalSearch" />
       <template v-if="personalView || currentView === 'sharedByMe'">
         <NoteList :notes="currentView === 'sharedByMe' ? sharedByMeNotes : notes" :selected-id="selectedNote?.id ?? null" :search="search" :heading="currentView === 'sharedByMe' ? '我分享的' : noteListHeading" :loading="viewLoading" :empty-state="currentView === 'sharedByMe' ? { title: '还没有分享出去的笔记', description: '打开一篇笔记，点右上角 ⋯ → 分享，勾选团队成员即可；取消分享也在同一个弹窗里。', actions: false } : null" @select="selectPersonal" @create="createBlankNote" @templates="openTemplates" @import="openMarkdownImport" @search="updateSearch" @remove="requestDeleteNote" />
         <NoteEditor

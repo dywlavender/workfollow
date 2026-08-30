@@ -33,7 +33,7 @@ import { filterStandaloneAttachments } from '@/modules/editor/attachmentReferenc
 import { formatLastSavedAt } from '@/modules/editor/saveStatus'
 import { createNoteCollaboration, type DocumentCollaborationSession, type DocumentCollaborationStatus } from '@/modules/editor/documentCollaboration'
 import { CollaborationInitializationError, initializeCollaborativeField } from '@/modules/editor/collaborationInitialization'
-import { createWorkFollowEditorExtensions } from '@/modules/editor/tiptap'
+import { createWorkFollowEditorExtensions, collapseAllEmptyParagraphs } from '@/modules/editor/tiptap'
 import { contentJsonSemanticallyEqual } from '@/modules/editor/contentProjection'
 import { workFollowSlashCommands, type WorkFollowSlashCommand } from '@/modules/editor/slashCommands'
 import { useSlashMenu } from '@/modules/editor/slashMenu'
@@ -254,13 +254,21 @@ function seedNoteDocument(note: Note, document: Y.Doc, initial?: Partial<Note>) 
   const config = document.getMap('config')
   const titleText = document.getText('title')
   const fragment = document.getXmlFragment('default')
-  if (config.get('bodyInitialized') === true || config.get('initialContentLoaded') === true || fragment.length > 0) return
+  const currentEditor = editor.value
+  if (!currentEditor) return
+  if (config.get('bodyInitialized') === true || config.get('initialContentLoaded') === true) return
+  // 编辑器挂载即向空协同文档写入一个默认空段落；若不清理，它会与种子内容
+  // 合并成两个空段落——首行吞掉占位符、投影出多余空行。种子必须以 SQL 快照
+  // 为准：只含空段落时整段清掉再写；已有真实内容则仍然短路。
+  const doc = currentEditor.state.doc
+  const onlyEmptyParagraphs = doc.childCount > 0
+    && Array.from(doc.children).every((node) => node.type.name === 'paragraph' && node.content.size === 0)
+  if (fragment.length > 0 && !onlyEmptyParagraphs) return
   const source = initial && typeof initial === 'object' ? { ...note, ...initial } : note
   if (!titleText.length && source.title) titleText.insert(0, source.title)
-  const currentEditor = editor.value
-  if (!currentEditor || fragment.length > 0) return
   hydratingEditor = true
   try {
+    if (fragment.length > 0) fragment.delete(0, fragment.length)
     currentEditor.commands.setContent(source.contentJson ?? note.contentJson, false)
     // Set the markers only after the editor accepted the SQL snapshot. If a
     // malformed legacy document is rejected, a later initialization attempt
@@ -324,6 +332,7 @@ function scheduleCollaborationConnectWatchdog(note: Note) {
       collaborationStatus.value = 'connected'
       void initializeNoteBody(note, session).then((ready) => {
         if (ready && props.note?.id === note.id) {
+          if (editor.value) collapseAllEmptyParagraphs(editor.value)
           titleHydrationComplete = true
           collaborationContentReady = true
           editor.value?.setEditable(true)
@@ -369,6 +378,7 @@ function startNoteCollaboration(note: Note) {
       window.clearTimeout(collaborationSeedTimer)
       void initializeNoteBody(note, session).then((ready) => {
         if (props.note?.id !== note.id || !ready) return
+        if (editor.value) collapseAllEmptyParagraphs(editor.value)
         titleHydrationComplete = true
         collaborationContentReady = true
         editor.value?.setEditable(true)
