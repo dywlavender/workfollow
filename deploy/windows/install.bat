@@ -1,5 +1,5 @@
 @echo off
-setlocal
+setlocal EnableExtensions EnableDelayedExpansion
 cd /d "%~dp0\..\.."
 
 py -3.12 -c "import sys; assert sys.maxsize > 2**32" >nul 2>&1
@@ -7,26 +7,26 @@ if errorlevel 1 (
   echo Error: Python 3.12 x64 is required. Install it offline first.
   exit /b 1
 )
-node -p "process.versions.node" >nul 2>&1
-if errorlevel 1 (
-  echo Error: Node.js 22+ is required for the collaboration service.
+set "NODE_EXE=runtime\node\node.exe"
+if not exist "%NODE_EXE%" (
+  echo Error: bundled Node.js runtime is missing: runtime\node\node.exe. Get the complete release package.
   exit /b 1
 )
-for /f "tokens=1 delims=." %%v in ('node -p "process.versions.node"') do set NODE_MAJOR=%%v
-if %NODE_MAJOR% LSS 22 (
-  echo Error: Node.js 22+ is required for the collaboration service.
+set "NODE_MAJOR="
+for /f "tokens=1 delims=." %%v in ('%NODE_EXE% -p "process.versions.node"') do set NODE_MAJOR=%%v
+if not defined NODE_MAJOR (
+  echo Error: bundled Node.js runtime could not be executed.
+  exit /b 1
+)
+if !NODE_MAJOR! LSS 22 (
+  echo Error: bundled Node.js 22+ is required for the collaboration service.
   exit /b 1
 )
 if exist collaboration\node_modules\@hocuspocus\server\package.json if exist collaboration\node_modules\@hocuspocus\transformer\package.json if exist collaboration\node_modules\yjs\package.json (
-  echo Prepackaged collaboration dependencies found; skipping npm install.
+  echo Prepackaged collaboration dependencies found.
 ) else (
-  where npm >nul 2>&1
-  if errorlevel 1 (
-    echo Error: collaboration dependencies are missing and npm was not found. Use a release package with bundled dependencies.
-    exit /b 1
-  )
-  npm --prefix collaboration ci --omit=dev --no-audit --no-fund
-  if errorlevel 1 exit /b 1
+  echo Error: bundled collaboration dependencies are incomplete. The target does not need npm; get the complete release package.
+  exit /b 1
 )
 
 py -3.12 -m venv .venv

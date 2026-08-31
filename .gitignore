@@ -54,6 +54,7 @@ output/
 
 # Generated release packages
 release/
+.runtime-cache/
 
 # Local tools and IDE
 .workbuddy/

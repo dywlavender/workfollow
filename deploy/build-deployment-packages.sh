@@ -12,14 +12,17 @@ set -Eeuo pipefail
 # Optional offline dependencies:
 #   wheelhouse/linux/*.whl     Linux x86_64 Python 3.12 wheels
 #   wheelhouse/windows/*.whl   Windows x64 Python 3.12 wheels
+#   .runtime-cache/node/        Download cache for bundled Node runtimes
 
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 RELEASE_DIR="$ROOT_DIR/release"
 VERSION="${WORKFOLLOW_VERSION:-0.1.0}"
 REQUIRE_OFFLINE=0
+NODE_RUNTIME_VERSION="${WORKFOLLOW_NODE_RUNTIME_VERSION:-22.23.2}"
+NODE_RUNTIME_CACHE_DIR="${WORKFOLLOW_NODE_RUNTIME_CACHE_DIR:-$ROOT_DIR/.runtime-cache/node}"
 
 usage() {
-  sed -n '4,14p' "$0"
+  sed -n '4,15p' "$0"
 }
 
 fail() {
@@ -58,6 +61,7 @@ esac
 
 require_command tar
 require_command zip
+require_command unzip
 require_command npm
 require_command node
 
@@ -83,7 +87,7 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
-echo "[1/4] 在隔离临时目录安装依赖并使用当前源码构建前端和协同服务"
+echo "[1/5] 在隔离临时目录安装依赖并使用当前源码构建前端和协同服务"
 FRONTEND_BUILD_DIR="$BUILD_DIR/frontend-build"
 mkdir -p "$FRONTEND_BUILD_DIR"
 tar \
@@ -114,6 +118,38 @@ tar \
 [ -f "$COLLABORATION_BUILD_DIR/node_modules/@hocuspocus/server/package.json" ] || fail "协同服务依赖安装不完整"
 [ -f "$COLLABORATION_BUILD_DIR/node_modules/@hocuspocus/transformer/package.json" ] || fail "协同服务依赖安装不完整"
 [ -f "$COLLABORATION_BUILD_DIR/node_modules/yjs/package.json" ] || fail "协同服务依赖安装不完整"
+
+download_runtime() {
+  local filename="$1"
+  local target="$NODE_RUNTIME_CACHE_DIR/$filename"
+  local temporary="$target.partial"
+  if [ ! -f "$target" ]; then
+    require_command curl
+    mkdir -p "$NODE_RUNTIME_CACHE_DIR"
+    echo "下载 Node.js $NODE_RUNTIME_VERSION 运行时：$filename" >&2
+    curl -fL --retry 3 --connect-timeout 20 \
+      "https://nodejs.org/dist/v$NODE_RUNTIME_VERSION/$filename" \
+      -o "$temporary" \
+      || fail "Node.js 运行时下载失败：$filename"
+    mv "$temporary" "$target"
+  fi
+  printf '%s\n' "$target"
+}
+
+echo "[2/5] 准备发布包内置 Node.js $NODE_RUNTIME_VERSION 运行时"
+LINUX_NODE_ARCHIVE="$(download_runtime "node-v$NODE_RUNTIME_VERSION-linux-x64.tar.xz")"
+WINDOWS_NODE_ARCHIVE="$(download_runtime "node-v$NODE_RUNTIME_VERSION-win-x64.zip")"
+LINUX_NODE_EXTRACT="$BUILD_DIR/node-linux"
+WINDOWS_NODE_EXTRACT="$BUILD_DIR/node-windows"
+mkdir -p "$LINUX_NODE_EXTRACT" "$WINDOWS_NODE_EXTRACT"
+tar -xJf "$LINUX_NODE_ARCHIVE" -C "$LINUX_NODE_EXTRACT"
+unzip -q "$WINDOWS_NODE_ARCHIVE" -d "$WINDOWS_NODE_EXTRACT"
+LINUX_NODE_SOURCE="$LINUX_NODE_EXTRACT/node-v$NODE_RUNTIME_VERSION-linux-x64"
+WINDOWS_NODE_SOURCE="$WINDOWS_NODE_EXTRACT/node-v$NODE_RUNTIME_VERSION-win-x64"
+[ -x "$LINUX_NODE_SOURCE/bin/node" ] || fail "Linux Node.js 运行时内容不完整"
+[ -f "$WINDOWS_NODE_SOURCE/node.exe" ] || fail "Windows Node.js 运行时内容不完整"
+[ -f "$LINUX_NODE_SOURCE/LICENSE" ] || fail "Linux Node.js 运行时缺少 LICENSE"
+[ -f "$WINDOWS_NODE_SOURCE/LICENSE" ] || fail "Windows Node.js 运行时缺少 LICENSE"
 
 LINUX_STAGE="$BUILD_DIR/stage-linux"
 WINDOWS_STAGE="$BUILD_DIR/stage-windows"
@@ -152,23 +188,30 @@ copy_wheelhouse() {
   fi
 }
 
-echo "[2/4] 组装 Linux 安装目录"
+echo "[3/5] 组装 Linux 安装目录"
 copy_app "$LINUX_STAGE"
 cp -R "$ROOT_DIR/deploy/linux" "$LINUX_STAGE/deploy/"
 chmod +x "$LINUX_STAGE/deploy/linux/"*.sh
 copy_wheelhouse "$ROOT_DIR/wheelhouse/linux" "$LINUX_STAGE"
+mkdir -p "$LINUX_STAGE/runtime/node/bin"
+cp "$LINUX_NODE_SOURCE/bin/node" "$LINUX_STAGE/runtime/node/bin/node"
+cp "$LINUX_NODE_SOURCE/LICENSE" "$LINUX_STAGE/runtime/node/LICENSE"
+chmod +x "$LINUX_STAGE/runtime/node/bin/node"
 
-echo "[3/4] 组装 Windows 安装目录"
+echo "[4/5] 组装 Windows 安装目录"
 copy_app "$WINDOWS_STAGE"
 cp -R "$ROOT_DIR/deploy/windows" "$WINDOWS_STAGE/deploy/"
 copy_wheelhouse "$ROOT_DIR/wheelhouse/windows" "$WINDOWS_STAGE"
+mkdir -p "$WINDOWS_STAGE/runtime/node"
+cp "$WINDOWS_NODE_SOURCE/node.exe" "$WINDOWS_STAGE/runtime/node/node.exe"
+cp "$WINDOWS_NODE_SOURCE/LICENSE" "$WINDOWS_STAGE/runtime/node/LICENSE"
 
 LINUX_NAME="WorkFollow-$VERSION-linux-x86_64.tar.gz"
 WINDOWS_NAME="WorkFollow-$VERSION-windows-x64.zip"
 LINUX_TEMP="$BUILD_DIR/$LINUX_NAME"
 WINDOWS_TEMP="$BUILD_DIR/$WINDOWS_NAME"
 
-echo "[4/4] 生成压缩包"
+echo "[5/5] 生成压缩包"
 tar -czf "$LINUX_TEMP" -C "$LINUX_STAGE" .
 (
   cd "$WINDOWS_STAGE"

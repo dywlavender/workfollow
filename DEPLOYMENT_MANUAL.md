@@ -9,8 +9,7 @@
 - 64 位 x86_64 Linux
 - Python 3.12
 - Python venv 和 pip
-- Node.js 22+（用于运行任务、笔记和 Agent 写入共用的协同服务）
-- 发布包已内置协同服务的 Node 依赖；只有从源码部署且依赖缺失时才需要 npm 网络或内部镜像
+- 不需要安装 Node.js 或 npm；发布包内置 Node.js 运行时和协同服务依赖
 - `curl`（启动脚本和验收检查使用）
 - 8123、8124 端口未被其他程序占用
 
@@ -21,7 +20,6 @@ uname -m
 python3 --version
 python3 -m pip --version
 python3 -m venv --help
-node --version
 curl --version
 ```
 
@@ -33,9 +31,8 @@ Linux 安装包适用于常见的 glibc 发行版，不适用于 ARM64、32 位�
 
 - 64 位 Windows 10/11 或 Windows Server
 - Python 3.12 x64
-- Node.js 22+（用于运行任务、笔记和 Agent 写入共用的协同服务）
+- 不需要安装 Node.js 或 npm；发布包内置 Node.js 运行时和协同服务依赖
 - 安装 Python 时启用 `py launcher`，建议同时勾选“Add Python to PATH”
-- 发布包已内置协同服务的 Node 依赖；只有从源码部署且依赖缺失时才需要 npm 网络或内部镜像
 - `curl.exe`（启动脚本和验收检查使用）
 - 8123、8124 端口未被其他程序占用
 
@@ -44,7 +41,6 @@ Linux 安装包适用于常见的 glibc 发行版，不适用于 ARM64、32 位�
 ```bat
 py -3.12 --version
 py -3.12 -c "import platform; print(platform.architecture())"
-node --version
 curl.exe --version
 ```
 
@@ -74,16 +70,17 @@ cd /d C:\WorkFollow
 
 ## 三、安装项目依赖
 
-前端已经构建完成，不需要在目标机重新构建前端；但目标机仍需安装 Node.js 22+，用于启动任务、个人笔记和管理员团队知识草稿的 Yjs/Hocuspocus 协同服务。
+前端已经构建完成，协同服务也使用发布包内置的 Node.js 运行时启动。目标机不需要安装 Node.js、npm，也不需要重新构建前端。
 
 正式发布包应包含以下离线内容：
 
 - `frontend/dist/`：已经构建的前端；
 - `collaboration/node_modules/`：协同服务生产依赖；
+- Linux 包的 `runtime/node/bin/node` 或 Windows 包的 `runtime/node/node.exe`：协同服务运行时；
 - `wheelhouse/`：与目标操作系统及 Python 3.12 匹配的 Python wheel；
 - `docs/mcp-integration.md`：Codex、Claude Code 和 WorkBuddy 接入说明。
 
-如果发布包缺少 `wheelhouse`，安装脚本会尝试在线安装 Python 依赖，因此不能再视为完全离线包。目标机运行发布包时不需要 npm；只有协同依赖缺失时，安装脚本才会尝试调用 npm。
+如果发布包缺少 `wheelhouse`，安装脚本会尝试在线安装 Python 依赖，因此不能再视为完全离线包。内置 Node.js 运行时或协同依赖缺失时，安装脚本会直接停止；目标机不会调用 npm 补装。
 
 ### Linux
 
@@ -92,7 +89,7 @@ cd /opt/workfollow
 ./deploy/linux/install.sh
 ```
 
-脚本会检查 Python 3.12、创建 `.venv` 虚拟环境、从 `wheelhouse` 安装 Python 依赖、创建数据目录，并初始化或升级 SQLite 数据库。发布包已包含协同服务的生产依赖，检测到依赖完整时不会访问 npm。
+脚本会检查 Python 3.12 和包内 Node.js 运行时、创建 `.venv` 虚拟环境、从 `wheelhouse` 安装 Python 依赖、创建数据目录，并初始化或升级 SQLite 数据库。安装过程不会访问 npm。
 
 ### Windows
 
@@ -211,12 +208,14 @@ Linux 还可以执行以下依赖自检，确认 Agent/MCP 所需模块已经离
 
 ```bash
 .venv/bin/python -c "import fastapi, httpx, mcp; print('Python dependencies OK')"
+runtime/node/bin/node --version
 ```
 
 Windows：
 
 ```bat
 .venv\Scripts\python.exe -c "import fastapi, httpx, mcp; print('Python dependencies OK')"
+runtime\node\node.exe --version
 ```
 
 ## 七、停止和查看日志
@@ -293,7 +292,16 @@ py -3.12 -m pip download --only-binary=:all: ^
 ./deploy/build-deployment-packages.sh --version 0.1.0 --require-offline
 ```
 
-打包机需要联网安装前端和协同服务依赖；目标机不需要联网。脚本会在隔离临时目录构建前端、打包协同服务生产依赖，并分别把对应 wheelhouse 放进 Linux 和 Windows 发布包。`--require-offline` 会在任一平台缺少 wheel 时直接停止，避免误把需要联网安装的普通包当成离线包交付。
+打包机需要 Node.js、npm、`curl`、`tar`、`zip` 和 `unzip`，并通常需要联网安装前端与协同服务依赖。目标机不需要 Node.js、npm 或网络。脚本会在隔离临时目录构建前端、打包协同服务生产依赖，下载并缓存 Linux/Windows 便携版 Node.js，然后分别把对应 wheelhouse 放进发布包。`--require-offline` 会在任一平台缺少 wheel 时直接停止，避免误把需要联网安装的普通包当成离线包交付。
+
+Node.js 运行时默认缓存在仓库根目录的 `.runtime-cache/node`。如果打包机本身也不能联网，可先在联网环境准备以下官方归档，再复制到该目录：
+
+```text
+.runtime-cache/node/node-v22.23.2-linux-x64.tar.xz
+.runtime-cache/node/node-v22.23.2-win-x64.zip
+```
+
+要切换内置运行时版本，可在打包时设置 `WORKFOLLOW_NODE_RUNTIME_VERSION`；对应文件名也必须使用同一版本。该变量只影响发布包内置运行时，不改变构建机自身执行 `npm` 所用的 Node.js。
 
 交付前应解压到临时目录检查以下文件存在：
 
@@ -302,6 +310,8 @@ frontend/dist/index.html
 collaboration/node_modules/@hocuspocus/server/package.json
 collaboration/node_modules/@hocuspocus/transformer/package.json
 collaboration/node_modules/yjs/package.json
+runtime/node/bin/node                  # Linux 包
+runtime/node/node.exe                  # Windows 包
 wheelhouse/*.whl
 deploy/requirements-offline.txt
 docs/mcp-integration.md
@@ -314,6 +324,7 @@ docs/mcp-integration.md
 - Python 版本错误：安装 Python 3.12 x64，不要使用 3.11、3.13 或 32 位 Python。
 - 离线安装仍尝试联网：发布包没有包含对应平台的 `wheelhouse`，重新制作完整发布包。
 - `No matching distribution found`：wheelhouse 与目标操作系统、CPU 架构或 Python 3.12 不匹配。
+- 提示内置 Node.js 缺失：发布包制作或解压不完整；重新生成并完整解压发布包，不需要在目标机安装 Node.js。
 - MCP Server 提示缺少模块：确认 `deploy/requirements-offline.txt` 包含并已安装 `httpx` 和 `mcp`，再执行第六节依赖自检。
 - 页面无法访问：检查服务状态、8123 端口、防火墙和日志。
 - 多人正文或任务属性没有实时同步：检查协同服务日志、8124 端口和防火墙；浏览器必须能访问与业务页面同一主机的 8124 端口，并确认所有客户端使用同一版本。个人笔记使用 `note:<id>`，管理员团队知识草稿使用 `knowledge-draft:<id>`；团队知识点击“保存修改”后才更新已发布版本。

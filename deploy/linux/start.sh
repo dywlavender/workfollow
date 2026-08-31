@@ -19,15 +19,16 @@ if [ "$BACKEND_RUNNING" -eq 1 ] && [ "$COLLABORATION_RUNNING" -eq 1 ]; then
   exit 0
 fi
 
-command -v node >/dev/null 2>&1 || { echo "缺少 Node.js 22+。" >&2; exit 1; }
 command -v curl >/dev/null 2>&1 || { echo "缺少 curl，无法执行健康检查。" >&2; exit 1; }
 [ -x .venv/bin/uvicorn ] || { echo "缺少后端虚拟环境，请先运行 deploy/linux/install.sh。" >&2; exit 1; }
+NODE_BIN="$ROOT_DIR/runtime/node/bin/node"
+[ -x "$NODE_BIN" ] || { echo "发布包缺少内置 Node.js 运行时，请重新获取完整发布包。" >&2; exit 1; }
 [ -f collaboration/node_modules/@hocuspocus/server/package.json ] || {
   echo "协同服务依赖不完整，请重新安装完整离线发布包。" >&2
   exit 1
 }
-NODE_MAJOR="$(node -p 'process.versions.node.split(".")[0]')"
-[ "$NODE_MAJOR" -ge 22 ] || { echo "需要 Node.js 22+，当前为 $(node --version)。" >&2; exit 1; }
+NODE_MAJOR="$("$NODE_BIN" -p 'process.versions.node.split(".")[0]')"
+[ "$NODE_MAJOR" -ge 22 ] || { echo "包内 Node.js 版本过低，当前为 $("$NODE_BIN" --version)。" >&2; exit 1; }
 
 HOST="${WORKFOLLOW_HOST:-0.0.0.0}"
 PORT="${WORKFOLLOW_PORT:-8123}"
@@ -74,7 +75,7 @@ if [ "$BACKEND_RUNNING" -eq 0 ]; then
 fi
 
 if [ "$COLLABORATION_RUNNING" -eq 0 ]; then
-  nohup node collaboration/server.mjs \
+  nohup "$NODE_BIN" collaboration/server.mjs \
     >>logs/workfollow-collaboration.log 2>&1 &
   echo $! > run/workfollow-collaboration.pid
   NEW_COLLABORATION=1

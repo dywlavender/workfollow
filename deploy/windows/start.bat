@@ -1,14 +1,19 @@
 @echo off
 setlocal EnableExtensions EnableDelayedExpansion
 cd /d "%~dp0\..\.."
-where node >nul 2>&1
-if errorlevel 1 (
-  echo Error: Node.js 22+ is required.
+set "NODE_EXE=runtime\node\node.exe"
+if not exist "%NODE_EXE%" (
+  echo Error: bundled Node.js runtime is missing. Get the complete release package.
   exit /b 1
 )
-for /f "tokens=1 delims=." %%v in ('node -p "process.versions.node"') do set NODE_MAJOR=%%v
+set "NODE_MAJOR="
+for /f "tokens=1 delims=." %%v in ('%NODE_EXE% -p "process.versions.node"') do set NODE_MAJOR=%%v
+if not defined NODE_MAJOR (
+  echo Error: bundled Node.js runtime could not be executed.
+  exit /b 1
+)
 if !NODE_MAJOR! LSS 22 (
-  echo Error: Node.js 22+ is required.
+  echo Error: bundled Node.js 22+ is required.
   exit /b 1
 )
 where curl.exe >nul 2>&1
@@ -55,7 +60,7 @@ if "%BACKEND_OK%"=="0" (
   if errorlevel 1 exit /b 1
 )
 if "%BACKEND_OK%"=="0" start "WorkFollow" /min cmd /c ".venv\Scripts\uvicorn.exe app.main:app --app-dir backend --host %WORKFOLLOW_HOST% --port %WORKFOLLOW_PORT% >> logs\workfollow-http.log 2>&1"
-if "%COLLABORATION_OK%"=="0" start "WorkFollow Collaboration" /min cmd /c "cd /d collaboration && node server.mjs >> ..\logs\workfollow-collaboration.log 2>&1"
+if "%COLLABORATION_OK%"=="0" start "WorkFollow Collaboration" /min cmd /c "%NODE_EXE% collaboration\server.mjs >> logs\workfollow-collaboration.log 2>&1"
 timeout /t 2 /nobreak >nul
 curl.exe -fsS "http://127.0.0.1:%WORKFOLLOW_PORT%/api/health" >nul 2>&1
 if errorlevel 1 (
