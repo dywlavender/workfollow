@@ -223,7 +223,7 @@ export const TaskReferenceNode = Node.create({
       contenteditable: 'false',
     }),
     ['span', { 'data-task-reference-status': '' }, '○'],
-    ['span', { 'data-task-reference-title': '' }, '正在读取待办…'],
+    ['span', { 'data-task-reference-title': '' }, '正在读取代办…'],
     ['span', { 'data-task-reference-meta': '' }, '']]
   },
 })

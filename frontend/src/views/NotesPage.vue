@@ -256,6 +256,56 @@ function upsertNoteListItem(note: Note) {
   else notes.value.unshift(summary)
 }
 
+function insertByUpdatedAt<T extends { id: string; updatedAt: string }>(items: T[], item: T) {
+  const currentIndex = items.findIndex((entry) => entry.id === item.id)
+  if (currentIndex >= 0) items.splice(currentIndex, 1)
+  const updatedAt = Date.parse(item.updatedAt)
+  const insertIndex = items.findIndex((entry) => Date.parse(entry.updatedAt) < updatedAt)
+  if (insertIndex < 0) items.push(item)
+  else items.splice(insertIndex, 0, item)
+}
+
+function sharedNoteMatchesSearch(note: SharedNote, value = search.value) {
+  const query = value.trim().toLocaleLowerCase()
+  return !query || `${note.title}\n${note.plainText}`.toLocaleLowerCase().includes(query)
+}
+
+function removeSharedNoteListItem(noteId: string) {
+  const index = sharedNotes.value.findIndex((item) => item.id === noteId)
+  if (index >= 0) sharedNotes.value.splice(index, 1)
+}
+
+function upsertSharedNoteListItem(note: SharedNote): boolean {
+  if (!sharedNoteMatchesSearch(note)) {
+    removeSharedNoteListItem(note.id)
+    return false
+  }
+  insertByUpdatedAt(sharedNotes.value, note)
+  return true
+}
+
+function applySharedByMeChange(change: NonNullable<typeof realtime.lastNoteChange>) {
+  if (change.deleted) {
+    const index = sharedByMeNotes.value.findIndex((item) => item.id === change.noteId)
+    if (index >= 0) sharedByMeNotes.value.splice(index, 1)
+    return
+  }
+  const existing = sharedByMeNotes.value.find((item) => item.id === change.noteId)
+  if (!existing) {
+    // A newly shared note is not represented in the current list. Keep this
+    // rare discovery path as a full load; edits to an existing note stay local.
+    void loadView()
+    return
+  }
+  insertByUpdatedAt(sharedByMeNotes.value, {
+    ...existing,
+    title: change.title,
+    folderId: change.folderId !== undefined ? change.folderId : existing.folderId,
+    isFavorite: change.isFavorite !== undefined ? change.isFavorite : existing.isFavorite,
+    updatedAt: change.updatedAt ?? existing.updatedAt,
+  })
+}
+
 function applyCollaborativeNoteChange(payload: { title: string; contentJson: Record<string, unknown>; plainText: string }) {
   if (!selectedNote.value) return
   const updated: Note = {
@@ -656,6 +706,14 @@ async function selectCollaborationItem(item: SharedNote | TeamNoteListItem) {
   else await selectKnowledge(item)
 }
 
+function selectShared(item: SharedNote | TeamNoteListItem) {
+  if (!('sharedBy' in item)) return
+  selectedShared.value = item
+  // A list row may carry an older permission after the owner changes sharing
+  // settings. Refresh only the selected note instead of reloading the list.
+  void refreshSharedNoteById(item.id)
+}
+
 async function refreshKnowledgeDetail(noteId: string) {
   if (!selectedTeamId.value) return
   try {
@@ -879,29 +937,59 @@ async function changeSharePermission(shareId: string, permission: NoteSharePermi
 }
 
 // note.changed 在每次投影后都会到达（包括自己打字触发的），防抖避免请求风暴；
-// 内容与权限都没变时不要用新对象替换 selectedShared，防止子组件无谓刷新。
+// 选中的分享笔记只重取自身详情，不再重取整个分享列表。
 let sharedRefreshTimer: number | undefined
 function refreshSelectedShared() {
   if (sharedRefreshTimer !== undefined) window.clearTimeout(sharedRefreshTimer)
   sharedRefreshTimer = window.setTimeout(() => { void refreshSelectedSharedNow() }, 400)
 }
 
+async function refreshSharedNoteById(noteId: string) {
+  try {
+    const fresh = await fetchSharedNote(noteId)
+    const visible = upsertSharedNoteListItem(fresh)
+    if (selectedShared.value?.id !== noteId) return
+    if (visible) selectedShared.value = fresh
+    else selectedShared.value = null
+  } catch {
+    // 权限已被收回：详情与对应列表条目一并移除，避免继续展示拿不到的内容。
+    removeSharedNoteListItem(noteId)
+    if (selectedShared.value?.id === noteId) selectedShared.value = null
+  }
+}
+
 async function refreshSelectedSharedNow() {
   const noteId = selectedShared.value?.id
   if (!noteId) return
-  try {
-    const fresh = await fetchSharedNote(noteId)
-    const current = selectedShared.value
-    const unchanged = current
-      && current.updatedAt === fresh.updatedAt
-      && current.permission === fresh.permission
-      && current.title === fresh.title
-    if (current?.id === noteId && !unchanged) selectedShared.value = fresh
-    sharedNotes.value = await fetchSharedNotes(search.value.trim() || undefined)
-  } catch {
-    // 权限已被收回：详情与列表条目一并移除，避免继续展示拿不到的内容。
-    if (selectedShared.value?.id === noteId) selectedShared.value = null
-    sharedNotes.value = sharedNotes.value.filter((item) => item.id !== noteId)
+  await refreshSharedNoteById(noteId)
+}
+
+function applySharedNoteChange(change: NonNullable<typeof realtime.lastNoteChange>) {
+  if (change.deleted) {
+    removeSharedNoteListItem(change.noteId)
+    if (selectedShared.value?.id === change.noteId) selectedShared.value = null
+    return
+  }
+  const existing = sharedNotes.value.find((item) => item.id === change.noteId)
+  if (!existing) {
+    void refreshSharedNoteById(change.noteId)
+    return
+  }
+  const updated: SharedNote = {
+    ...existing,
+    title: change.title,
+    folderId: change.folderId !== undefined ? change.folderId : existing.folderId,
+    isFavorite: change.isFavorite !== undefined ? change.isFavorite : existing.isFavorite,
+    updatedAt: change.updatedAt ?? existing.updatedAt,
+  }
+  upsertSharedNoteListItem(updated)
+  if (selectedShared.value?.id === change.noteId) {
+    selectedShared.value = { ...selectedShared.value, ...updated }
+    refreshSelectedShared()
+  } else if (search.value.trim()) {
+    // The event does not carry plainText, so a filtered list needs one
+    // targeted read to confirm that a body edit still matches the query.
+    void refreshSharedNoteById(change.noteId)
   }
 }
 
@@ -1226,10 +1314,8 @@ watch(() => realtime.lastTeamNoteChange, (change) => {
 watch(() => realtime.lastNoteChange, (change) => {
   if (!change) return
   applyNoteChange(change)
-  // 共享视图的详情不在 applyNoteChange 的个人列表里：权限升级/降级、
-  // 撤权都会以 note.changed 到达，选中的共享笔记需要即时重取。
-  if (selectedShared.value?.id === change.noteId) refreshSelectedShared()
-  if (currentView.value === 'sharedByMe') void loadView()
+  if (currentView.value === 'sharedByMe') applySharedByMeChange(change)
+  if (currentView.value === 'shared') applySharedNoteChange(change)
 })
 
 onMounted(async () => {
@@ -1254,7 +1340,7 @@ onBeforeRouteLeave(() => flushEditorsForNavigation())
 <template>
   <div class="notes-page unified-notes-page">
     <section v-if="onboarding" class="onboarding-banner" aria-label="新手指引">
-      <div><span class="eyebrow">FIRST RUN</span><strong>欢迎来到打勾</strong><p>先阅读这份使用指南，再开始安排你的工作。</p></div>
+      <div><span class="eyebrow">FIRST RUN</span><strong>欢迎来到备忘录</strong><p>先阅读这份使用指南，再开始安排你的工作。</p></div>
       <button class="primary-button" type="button" @click="finishOnboarding">开始使用</button>
     </section>
     <div class="notes-workspace card" :aria-busy="viewLoading">
@@ -1290,7 +1376,7 @@ onBeforeRouteLeave(() => flushEditorsForNavigation())
         />
       </template>
       <template v-else-if="currentView === 'shared'">
-        <CollaborativeNoteList title="分享给我的" :items="visibleSharedNotes" :selected-id="selectedShared?.id ?? null" :search="search" :loading="viewLoading" @select="selectedShared = $event as SharedNote" @search="updateSearch" />
+        <CollaborativeNoteList title="分享给我的" :items="visibleSharedNotes" :selected-id="selectedShared?.id ?? null" :search="search" :loading="viewLoading" @select="selectShared" @search="updateSearch" />
 
         <SharedNoteDetail :note="selectedShared" :copying="busy" @copy="copyShared" @refresh="refreshSelectedShared" />
       </template>

@@ -22,7 +22,7 @@ class WorkFollowAgentClient:
         resolved_token = token or os.environ.get("WORKFOLLOW_AGENT_TOKEN", "").strip()
         if not resolved_token:
             raise RuntimeError(
-                "未配置 WORKFOLLOW_AGENT_TOKEN。请在打勾的“设置 → 账号 → Agent 接入”中生成。"
+                "未配置 WORKFOLLOW_AGENT_TOKEN。请在备忘录的“设置 → 账号 → Agent 接入”中生成。"
             )
         self._client = httpx.Client(
             base_url=(base_url or os.environ.get("WORKFOLLOW_API_URL") or DEFAULT_API_URL).rstrip("/"),
@@ -43,9 +43,9 @@ class WorkFollowAgentClient:
                 detail = exc.response.json().get("detail")
             except (ValueError, AttributeError):
                 detail = None
-            raise RuntimeError(detail or f"打勾 API 返回 {exc.response.status_code}") from exc
+            raise RuntimeError(detail or f"备忘录 API 返回 {exc.response.status_code}") from exc
         except httpx.HTTPError as exc:
-            raise RuntimeError(f"无法连接打勾 API：{exc}") from exc
+            raise RuntimeError(f"无法连接备忘录 API：{exc}") from exc
         if response.status_code == 204:
             return None
         return response.json()

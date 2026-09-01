@@ -11,7 +11,7 @@ async function pollReminders() {
   try {
     const todos = await fetchDueReminders()
     for (const todo of todos) {
-      new Notification(todo.title, { body: todo.description ?? '打勾 · 待办提醒', tag: todo.id })
+      new Notification(todo.title, { body: todo.description ?? '备忘录 · 待办提醒', tag: todo.id })
       await acknowledgeReminder(todo.id)
     }
   } catch {
@@ -27,4 +27,3 @@ onBeforeUnmount(() => window.clearInterval(timer))
 </script>
 
 <template><span hidden aria-hidden="true" /></template>
-

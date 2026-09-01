@@ -97,7 +97,7 @@ const calendarTaskStates = computed(() => {
 })
 
 const pendingItems = computed(() => [
-  { label: '新分配任务', count: pendingCounts.value.assigned, icon: IconChecklist, to: { path: '/todos', query: { view: 'assigned-to-me' } } },
+  { label: '新分配代办', count: pendingCounts.value.assigned, icon: IconChecklist, to: { path: '/todos', query: { view: 'assigned-to-me' } } },
   { label: '分享给我的笔记', count: pendingCounts.value.shared, icon: IconShare, to: { path: '/notes', query: { view: 'shared' } } },
   { label: '投稿需要修改', count: pendingCounts.value.revision, icon: IconPencil, to: { path: '/notes', query: { view: 'submissions' } } },
   { label: '知识待审核', count: pendingCounts.value.review, icon: IconBook2, to: { path: '/notes', query: { view: 'review' } } },
@@ -217,7 +217,7 @@ async function toggle(todo: Todo) {
     allTodayTodos.value = snapshot.today
     calendarTodos.value = snapshot.calendar
     assignedTodos.value = snapshot.assigned
-    feedback.error('任务状态更新失败，已恢复原状态。')
+    feedback.error('代办状态更新失败，已恢复原状态。')
   }
 }
 
@@ -277,8 +277,8 @@ function noteTime(note: NoteListItem) {
             </button>
           </div>
         </div>
-        <div v-else class="home-panel-empty"><IconCheck :size="17" /><span>今天的任务已处理完</span></div>
-        <RouterLink class="home-inline-add" :to="{ path: '/todos', query: { view: 'today', add: '1' } }"><IconPlus :size="14" />添加任务</RouterLink>
+        <div v-else class="home-panel-empty"><IconCheck :size="17" /><span>今天的代办已处理完</span></div>
+        <RouterLink class="home-inline-add" :to="{ path: '/todos', query: { view: 'today', add: '1' } }"><IconPlus :size="14" />添加代办</RouterLink>
       </section>
 
       <section class="home-dashboard-panel home-calendar-panel" aria-labelledby="home-calendar-title">
@@ -299,7 +299,7 @@ function noteTime(note: NoteListItem) {
               'has-pending': calendarTaskStates.get(date.format('YYYY-MM-DD'))?.pending,
               'has-completed': !calendarTaskStates.get(date.format('YYYY-MM-DD'))?.pending && calendarTaskStates.get(date.format('YYYY-MM-DD'))?.completed,
             }"
-            :aria-label="`${date.format('YYYY年M月D日')}，${calendarTaskStates.get(date.format('YYYY-MM-DD'))?.pending ?? 0}项待办`"
+            :aria-label="`${date.format('YYYY年M月D日')}，${calendarTaskStates.get(date.format('YYYY-MM-DD'))?.pending ?? 0}项代办`"
             @click="openCalendarDate(date)"
           >{{ date.date() }}</button>
         </div>
@@ -316,7 +316,7 @@ function noteTime(note: NoteListItem) {
             </div>
           </div>
         </div>
-        <div v-else class="home-panel-empty"><IconClock :size="17" /><span>近期没有任务</span></div>
+        <div v-else class="home-panel-empty"><IconClock :size="17" /><span>近期没有代办</span></div>
       </section>
 
       <section class="home-dashboard-panel home-overdue-panel">
@@ -330,7 +330,7 @@ function noteTime(note: NoteListItem) {
             </button>
           </div>
         </div>
-        <div v-else class="home-panel-empty compact"><IconCheck :size="17" /><span>没有逾期任务</span></div>
+        <div v-else class="home-panel-empty compact"><IconCheck :size="17" /><span>没有逾期代办</span></div>
       </section>
 
       <section class="home-dashboard-panel home-assigned-panel">
@@ -338,7 +338,7 @@ function noteTime(note: NoteListItem) {
         <div v-if="assignedOpen.length" class="home-assigned-list">
           <button v-for="todo in assignedOpen.slice(0, 4)" :key="todo.id" class="home-assigned-row" type="button" @click="openTodo(todo, 'assigned-by-me')">
             <strong>{{ todo.title }}</strong>
-            <span class="home-assignees" aria-label="任务成员"><span v-for="assignment in todo.assignments.slice(0, 3)" :key="assignment.id" :title="assignment.user.nickname">{{ assignment.user.nickname.slice(0, 1) }}</span></span>
+            <span class="home-assignees" aria-label="代办成员"><span v-for="assignment in todo.assignments.slice(0, 3)" :key="assignment.id" :title="assignment.user.nickname">{{ assignment.user.nickname.slice(0, 1) }}</span></span>
             <span class="home-assignment-progress">{{ todo.completedAssignments }}/{{ todo.totalAssignments }}</span>
           </button>
         </div>

@@ -71,17 +71,19 @@ const listDialogMode = ref<'create' | 'rename'>('create')
 const listDialogName = ref('')
 const listDialogTarget = ref<TodoList | null>(null)
 const deleteListTarget = ref<TodoList | null>(null)
+type RealtimeTaskChange = NonNullable<typeof realtime.lastTaskChange>
+const pendingTaskChanges = new Map<string, RealtimeTaskChange>()
 let selectionRequest = 0
 
 const workspaceStyle = computed(() => ({ '--task-list-width': `${taskListWidth.value}px` }))
-const taskNavigationButtonLabel = computed(() => taskNavigationCollapsed.value ? '展开任务导航' : '收起任务导航')
+const taskNavigationButtonLabel = computed(() => taskNavigationCollapsed.value ? '展开代办导航' : '收起代办导航')
 const taskNavigationExpanded = computed(() => !taskNavigationCollapsed.value)
 const taskNavigationButtonIcon = computed(() => taskNavigationCollapsed.value ? IconLayoutSidebarLeftExpand : IconLayoutSidebarLeftCollapse)
 
 const baseViews = [
-  { id: 'all' as TodoView, label: '所有', hint: '全部任务', icon: IconList },
+  { id: 'all' as TodoView, label: '所有', hint: '全部代办', icon: IconList },
   { id: 'today' as TodoView, label: '今天', hint: '今天截止', icon: IconCalendar },
-  { id: 'week' as TodoView, label: '本周', hint: '周内任务', icon: IconCalendarWeek },
+  { id: 'week' as TodoView, label: '本周', hint: '周内代办', icon: IconCalendarWeek },
   { id: 'inbox' as TodoView, label: '无日期', hint: '尚未安排', icon: IconInbox },
   { id: 'month' as TodoView, label: '本月', hint: '本月计划', icon: IconCalendarMonth },
   { id: 'completed' as TodoView, label: '已完成', hint: '完成记录', icon: IconCircleCheck },
@@ -89,7 +91,7 @@ const baseViews = [
 const taskViews = baseViews.slice(0, 5)
 const recordViews = baseViews.slice(5)
 const collaborationViews = [
-  { id: 'collaboration' as TodoView, label: '协作任务', hint: '全部团队任务', icon: IconUsers },
+  { id: 'collaboration' as TodoView, label: '协作代办', hint: '全部团队代办', icon: IconUsers },
   { id: 'assigned-to-me' as TodoView, label: '分配给我的', hint: '别人指派', icon: IconUsers },
   { id: 'assigned-by-me' as TodoView, label: '我分配的', hint: '跟踪进度', icon: IconSend },
 ]
@@ -103,7 +105,7 @@ const taskTeamId = computed(() => canAssign.value ? currentTeam.value?.id ?? nul
 const views = computed(() => hasTeam.value ? [...taskViews, ...collaborationViews, ...recordViews] : baseViews)
 
 const taskViewGroups = computed(() => [
-  { label: '任务视图', items: taskViews },
+  { label: '代办视图', items: taskViews },
   ...(hasTeam.value ? [{ label: '协作', items: collaborationViews }] : []),
   { label: '记录', items: recordViews },
 ])
@@ -257,7 +259,7 @@ async function confirmDeleteList() {
     if (currentListName.value === target.name) {
       await router.replace({ path: '/todos', query: { list: result.fallbackListName } })
     }
-    feedback.success(result.movedTaskCount ? `清单已删除，${result.movedTaskCount} 个任务已移入${result.fallbackListName}。` : '清单已删除。')
+    feedback.success(result.movedTaskCount ? `清单已删除，${result.movedTaskCount} 个代办已移入${result.fallbackListName}。` : '清单已删除。')
   } catch {
     feedback.error('清单删除失败，请稍后重试。')
   }
@@ -360,6 +362,7 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   if (dayRefreshTimer !== undefined) window.clearTimeout(dayRefreshTimer)
   if (taskChangeRefreshTimer !== undefined) window.clearTimeout(taskChangeRefreshTimer)
+  pendingTaskChanges.clear()
   window.removeEventListener('pointermove', moveListDivider)
   window.removeEventListener('pointerup', stopListResize)
   window.removeEventListener('keydown', handleWorkspaceKeydown)
@@ -367,23 +370,55 @@ onBeforeUnmount(() => {
 })
 
 watch(() => [route.query.view, route.query.list, route.query.q] as const, () => { void loadView() })
+
+function activeAssignmentIds(todo: Todo): string[] {
+  return todo.assignments.filter((assignment) => assignment.active).map((assignment) => assignment.userId).sort()
+}
+
+function taskChangeNeedsCountRefresh(previous: Todo | null, next: Todo): boolean {
+  if (!previous) return true
+  return previous.status !== next.status
+    || previous.dueAt !== next.dueAt
+    || previous.dueEndAt !== next.dueEndAt
+    || previous.listName !== next.listName
+    || previous.teamId !== next.teamId
+    || previous.myAssignment?.status !== next.myAssignment?.status
+    || JSON.stringify(activeAssignmentIds(previous)) !== JSON.stringify(activeAssignmentIds(next))
+}
+
+async function reconcileTaskById(taskId: string): Promise<boolean> {
+  // The collaboration projection event carries only a compact brief. Fetch
+  // the changed item once, then reconcile that item in place. This keeps the
+  // current list mounted instead of toggling its global loading state.
+  const updated = await fetchTodo(taskId).catch(() => null)
+  if (!updated) return false
+  const previous = todoStore.reconcile(updated)
+  if (selectedTodoId.value === updated.id) selectedTodoDetail.value = updated
+  return taskChangeNeedsCountRefresh(previous, updated)
+}
+
+async function reconcileTaskChange(change: RealtimeTaskChange): Promise<boolean> {
+  if (change.brief.deleted) {
+    todoStore.removeFromCollection(change.taskId)
+    return true
+  }
+  return reconcileTaskById(change.taskId)
+}
+
 watch(() => realtime.lastTaskChange, (change) => {
   if (!change) return
   if (change.brief.deleted && selectedTodoId.value === change.taskId) {
     selectedTodoId.value = null
     selectedTodoDetail.value = null
   }
+  pendingTaskChanges.set(change.taskId, change)
   if (taskChangeRefreshTimer !== undefined) window.clearTimeout(taskChangeRefreshTimer)
   taskChangeRefreshTimer = window.setTimeout(() => {
     taskChangeRefreshTimer = undefined
-    void todoStore.refresh().then(() => {
-      if (!selectedTodoId.value || change.brief.deleted) return
-      void fetchTodo(selectedTodoId.value).then((detail) => {
-        if (selectedTodoId.value === detail.id) selectedTodoDetail.value = detail
-      }).catch(() => {
-        selectedTodoId.value = null
-        selectedTodoDetail.value = null
-      })
+    const changes = [...pendingTaskChanges.values()]
+    pendingTaskChanges.clear()
+    void Promise.all(changes.map((item) => reconcileTaskChange(item))).then((needsCountRefresh) => {
+      if (needsCountRefresh.some(Boolean)) void todoStore.loadCounts().catch(() => undefined)
     }).catch(() => undefined)
   }, 240)
 })
@@ -405,7 +440,7 @@ async function selectTodo(todo: Todo, focus = false) {
     try {
       await taskDetail.value.flushAndWaitForProjection(6000)
     } catch {
-      feedback.error('任务内容尚未同步完成，请稍后重试。')
+      feedback.error('代办内容尚未同步完成，请稍后重试。')
       return
     }
   }
@@ -445,7 +480,7 @@ async function save(payload: TodoPayload) {
     const created = await todoStore.create(payload)
     dialogOpen.value = false
     if (todoStore.todos.some((todo) => todo.id === created.id)) selectTodo(created)
-    feedback.success(created.dueAt ? '任务已创建。' : '任务已创建并放入收集箱。')
+    feedback.success(created.dueAt ? '代办已创建。' : '代办已创建并放入收集箱。')
   } catch {
     feedback.error('创建失败，请检查填写内容后重试。')
   }
@@ -464,18 +499,21 @@ async function updateFromRow(todo: Todo, payload: Partial<TodoPayload>) {
   }
   const collaborationResult = await updateTaskMetadataCollaboratively(todo, payload)
   if (collaborationResult === 'updated') {
-    await todoStore.refresh().catch(() => undefined)
+    const needsCountRefresh = await reconcileTaskById(todo.id)
+    if (needsCountRefresh) void todoStore.loadCounts().catch(() => undefined)
     return
   }
   if (collaborationResult === 'unavailable') {
-    feedback.error('协同服务暂时不可用，未修改任务属性，请稍后重试。')
+    feedback.error('协同服务暂时不可用，未修改代办属性，请稍后重试。')
   }
 }
 
 async function updateTagFromRow(todo: Todo, operation: { action: 'add' | 'remove'; tag: string }) {
   const result = await updateTaskTagCollaboratively(todo, operation)
-  if (result === 'updated') await todoStore.refresh().catch(() => undefined)
-  else feedback.error('协同服务暂时不可用，未修改任务标签，请稍后重试。')
+  if (result === 'updated') {
+    const needsCountRefresh = await reconcileTaskById(todo.id)
+    if (needsCountRefresh) void todoStore.loadCounts().catch(() => undefined)
+  } else feedback.error('协同服务暂时不可用，未修改代办标签，请稍后重试。')
 }
 
 async function flushSelectedTaskForAction(todo: Todo): Promise<boolean> {
@@ -484,7 +522,7 @@ async function flushSelectedTaskForAction(todo: Todo): Promise<boolean> {
     await taskDetail.value.flushAndWaitForProjection(6000)
     return true
   } catch {
-    feedback.error('任务内容尚未同步完成，请稍后重试。')
+    feedback.error('代办内容尚未同步完成，请稍后重试。')
     return false
   }
 }
@@ -499,7 +537,7 @@ async function flushCurrentTaskForNavigation(): Promise<boolean> {
     await taskDetail.value.flushAndWaitForProjection(6000)
     return true
   } catch {
-    feedback.error('任务内容尚未同步完成，请稍后重试。')
+    feedback.error('代办内容尚未同步完成，请稍后重试。')
     return false
   }
 }
@@ -518,9 +556,9 @@ async function duplicate(todo: Todo) {
       sourceNoteId: source.sourceNoteId, sourceExcerpt: source.sourceExcerpt,
     })
     if (todoStore.todos.some((item) => item.id === created.id)) selectTodo(created)
-    feedback.success('任务副本已创建。')
+    feedback.success('代办副本已创建。')
   } catch {
-    feedback.error('复制任务失败。')
+    feedback.error('复制代办失败。')
   }
 }
 
@@ -528,7 +566,7 @@ async function copyTaskLink(todo: Todo) {
   const link = `${window.location.origin}${router.resolve({ path: '/todos', query: { view: todoStore.currentView, todo: todo.id } }).href}`
   try {
     await navigator.clipboard.writeText(link)
-    feedback.success('任务链接已复制。')
+    feedback.success('代办链接已复制。')
   } catch {
     feedback.error('浏览器未允许写入剪贴板。')
   }
@@ -564,7 +602,7 @@ async function toggle(todo: Todo) {
       if (selectedTodoId.value === todo.id && selectedTodoDetail.value) {
         selectedTodoDetail.value = { ...selectedTodoDetail.value, ...restored, sources: selectedTodoDetail.value.sources }
       }
-      feedback.success('任务已恢复。')
+      feedback.success('代办已恢复。')
     } else {
       const optimistic = optimisticCompletedTodo(todo)
       if (selectedTodoId.value === todo.id && selectedTodoDetail.value) {
@@ -574,11 +612,11 @@ async function toggle(todo: Todo) {
       if (selectedTodoId.value === todo.id && selectedTodoDetail.value) {
         selectedTodoDetail.value = { ...selectedTodoDetail.value, ...result.todo, sources: selectedTodoDetail.value.sources }
       }
-      feedback.completed(result.nextTodo ? '任务已完成，下一次任务已生成' : '任务已完成')
+      feedback.completed(result.nextTodo ? '代办已完成，下一次代办已生成' : '代办已完成')
     }
   } catch {
     if (selectedTodoId.value === todo.id) selectedTodoDetail.value = previousDetail
-    feedback.error('操作失败，任务状态没有改变。')
+    feedback.error('操作失败，代办状态没有改变。')
   }
 }
 
@@ -586,9 +624,9 @@ async function abandon(todo: Todo) {
   if (!(await flushSelectedTaskForAction(todo))) return
   try {
     await todoStore.abandon(todo.id)
-    feedback.success('任务已放弃，可随时恢复。')
+    feedback.success('代办已放弃，可随时恢复。')
   } catch {
-    feedback.error('操作失败，任务状态没有改变。')
+    feedback.error('操作失败，代办状态没有改变。')
   }
 }
 
@@ -597,7 +635,7 @@ async function remove(todo: Todo) {
   try {
     await todoStore.remove(todo.id)
     if (selectedTodoId.value === todo.id) clearSelection()
-    feedback.success('任务已删除。')
+    feedback.success('代办已删除。')
   } catch {
     feedback.error('删除失败，请稍后重试。')
   }
@@ -632,7 +670,7 @@ async function openTask(taskId: string) {
   const listed = todoStore.todos.find((todo) => todo.id === taskId)
   const target = listed ?? await fetchTodo(taskId).catch(() => null)
   if (!target) {
-    feedback.error('该任务不可访问或已删除。')
+    feedback.error('该代办不可访问或已删除。')
     return
   }
   await selectTodo(target)
@@ -657,7 +695,7 @@ onBeforeRouteLeave(async () => (await flushCurrentTaskForNavigation()) || false)
       <aside
         ref="taskViewSidebar"
         class="task-view-sidebar"
-        aria-label="任务视图"
+        aria-label="代办视图"
       >
         <div v-for="group in taskViewGroups" :key="group.label" class="task-view-group">
           <h2>{{ group.label }}</h2>
@@ -697,7 +735,7 @@ onBeforeRouteLeave(async () => (await flushCurrentTaskForNavigation()) || false)
                 @click.prevent="activateList(list.name)"
               >
                 <IconList :size="17" :stroke-width="1.8" aria-hidden="true" />
-                <span class="task-view-copy"><strong>{{ list.name }}</strong><small>任务清单</small></span>
+                <span class="task-view-copy"><strong>{{ list.name }}</strong><small>代办清单</small></span>
                 <span class="task-view-count" :class="{ pending: !todoStore.hasLoadedCounts }">{{ taskCountLabel(todoStore.hasLoadedCounts, list.count) }}</span>
               </RouterLink>
               <div v-if="!list.protected && list.id" class="task-list-item-actions" aria-label="清单操作">
@@ -709,22 +747,22 @@ onBeforeRouteLeave(async () => (await flushCurrentTaskForNavigation()) || false)
         </div>
       </aside>
 
-      <section class="task-list-panel" aria-label="待办列表">
+      <section class="task-list-panel" aria-label="代办列表">
         <header class="list-panel-header">
           <button class="task-navigation-trigger" type="button" :aria-label="taskNavigationButtonLabel" :title="taskNavigationButtonLabel" :aria-expanded="taskNavigationExpanded" @click="toggleTaskNavigation"><component :is="taskNavigationButtonIcon" :size="19" /></button>
           <div class="list-panel-heading-copy"><span>{{ currentDateLabel }}</span><h2>{{ currentHeading }}</h2></div>
           <div class="list-panel-actions">
             <form v-if="searchOpen" class="task-search" role="search" @submit.prevent="submitSearch">
               <label class="sr-only" for="todo-search">搜索当前列表</label>
-              <input id="todo-search" v-model="searchInput" placeholder="搜索任务" autocomplete="off" @keydown.enter.prevent="submitSearch" />
+              <input id="todo-search" v-model="searchInput" placeholder="搜索代办" autocomplete="off" @keydown.enter.prevent="submitSearch" />
               <button v-if="searchInput" type="button" aria-label="清除搜索" @click="clearSearch"><IconX :size="15" /></button>
               <button class="task-search-submit" type="submit" aria-label="搜索"><IconSearch :size="16" /></button>
             </form>
-            <button v-if="currentView.id !== 'all' || currentListName" class="task-header-icon" type="button" :title="sortReverse ? '恢复正序' : '倒序排列'" aria-label="切换任务排序" @click="sortReverse = !sortReverse"><IconArrowsSort :size="17" /></button>
+            <button v-if="currentView.id !== 'all' || currentListName" class="task-header-icon" type="button" :title="sortReverse ? '恢复正序' : '倒序排列'" aria-label="切换代办排序" @click="sortReverse = !sortReverse"><IconArrowsSort :size="17" /></button>
             <div class="task-toolbar-menu-host">
               <button class="task-header-icon" type="button" title="更多" aria-label="更多列表操作" @click.stop="toolbarMenuOpen = !toolbarMenuOpen"><IconDots :size="18" /></button>
               <section v-if="toolbarMenuOpen" class="task-toolbar-menu" @click.stop>
-                <button type="button" @click="openCreate(); toolbarMenuOpen = false"><IconPlus :size="16" />新建详细任务</button>
+                <button type="button" @click="openCreate(); toolbarMenuOpen = false"><IconPlus :size="16" />新建详细代办</button>
                 <button v-if="notificationState === 'default'" type="button" @click="requestNotifications(); toolbarMenuOpen = false"><IconBell :size="16" />启用提醒</button>
                 <span v-else>{{ notificationState === 'granted' ? '提醒已启用' : notificationState === 'denied' ? '提醒权限已拒绝' : '浏览器不支持提醒' }}</span>
               </section>
@@ -743,15 +781,15 @@ onBeforeRouteLeave(async () => (await flushCurrentTaskForNavigation()) || false)
             :available-lists="availableTaskLists"
             :available-tags="availableTaskTags"
             :calendar-todos="todoStore.todos"
-            @created="feedback.success('任务已创建。')"
+            @created="feedback.success('代办已创建。')"
           /></div>
         </div>
         <div v-if="todoStore.error" class="state-message error" role="alert">
-          <strong>任务读取失败</strong>
+          <strong>代办读取失败</strong>
           <p>{{ todoStore.error }}</p>
           <button class="secondary-button" type="button" :disabled="todoStore.loading" @click="loadView()">{{ todoStore.loading ? '正在重试…' : '重新加载' }}</button>
         </div>
-        <div v-else-if="todoStore.loading && !hasVisibleTasks" class="task-list-skeleton" aria-label="正在读取待办" aria-busy="true"><span v-for="index in 7" :key="index"><i /><b /><em /></span></div>
+        <div v-else-if="todoStore.loading && !hasVisibleTasks" class="task-list-skeleton" aria-label="正在读取代办" aria-busy="true"><span v-for="index in 7" :key="index"><i /><b /><em /></span></div>
         <div v-else-if="hasVisibleTasks" class="todo-list" :class="{ 'is-refreshing': todoStore.loading }" :aria-busy="todoStore.loading">
           <TaskListGrouped :items="todoStore.todos" :reverse="sortReverse" :sort-mode="currentView.id === 'all' && !currentListName ? 'due-desc' : 'grouped'" :assignment-status="currentView.id !== 'assigned-by-me'" terminal-label="已完成和已放弃">
             <template #item="{ item: todo }">
@@ -779,10 +817,10 @@ onBeforeRouteLeave(async () => (await flushCurrentTaskForNavigation()) || false)
         </div>
         <div v-else class="state-message empty">
           <IconCircleCheck :size="24" :stroke-width="1.5" aria-hidden="true" />
-          <strong>这里还没有待办</strong>
-          <p>{{ todoStore.query ? '没有找到匹配的任务。' : todoStore.currentView === 'inbox' ? '先写下来，稍后再安排时间。' : '当前视图没有符合条件的待办。' }}</p>
+          <strong>这里还没有代办</strong>
+          <p>{{ todoStore.query ? '没有找到匹配的代办。' : todoStore.currentView === 'inbox' ? '先写下来，稍后再安排时间。' : '当前视图没有符合条件的代办。' }}</p>
           <button v-if="todoStore.query" class="secondary-button" type="button" @click="clearSearch">清除搜索</button>
-          <button v-else class="secondary-button" type="button" @click="quickTodoInput?.begin()">添加任务</button>
+          <button v-else class="secondary-button" type="button" @click="quickTodoInput?.begin()">添加代办</button>
         </div>
       </section>
 
@@ -790,7 +828,7 @@ onBeforeRouteLeave(async () => (await flushCurrentTaskForNavigation()) || false)
         class="task-list-resizer"
         :class="{ active: resizingList }"
         role="separator"
-        aria-label="调整任务列表与详情宽度"
+        aria-label="调整代办列表与详情宽度"
         aria-orientation="vertical"
         :aria-valuemin="listWidthBounds().min"
         :aria-valuemax="listWidthBounds().max"
@@ -839,7 +877,7 @@ onBeforeRouteLeave(async () => (await flushCurrentTaskForNavigation()) || false)
     <ConfirmDialog
       :open="Boolean(deleteListTarget)"
       title="删除清单"
-      :message="deleteListTarget ? `删除“${deleteListTarget.name}”后，其中的任务会移入“收集箱”。确定继续吗？` : ''"
+      :message="deleteListTarget ? `删除“${deleteListTarget.name}”后，其中的代办会移入“收集箱”。确定继续吗？` : ''"
       confirm-label="删除"
       :danger="true"
       @close="deleteListTarget = null"

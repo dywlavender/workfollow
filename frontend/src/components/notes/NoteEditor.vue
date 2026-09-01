@@ -501,9 +501,9 @@ function insertSlashBlock(type: WorkFollowSlashCommand) {
   else if (type === 'check') chain.toggleTaskList()
   else if (type === 'hr') chain.setHorizontalRule()
   else if (type === 'table') chain.insertTable({ rows: 3, cols: 3, withHeaderRow: true })
-  else if (type === 'subtask') chain.toggleTaskList().insertContent('子任务')
+  else if (type === 'subtask') chain.toggleTaskList().insertContent('子代办')
   else if (type === 'tag') chain.insertContent('#标签')
-  else chain.insertContent('关联任务 / 笔记')
+  else chain.insertContent('关联代办 / 笔记')
   chain.run()
   slash.close()
 }
@@ -840,7 +840,7 @@ async function saveLinkedTask(payload: TodoPayload) {
     }).run()
   }
   taskDialogOpen.value = false
-  showTaskFeedback('✓ 已创建待办')
+  showTaskFeedback('✓ 已创建代办')
   scheduleTaskHydration()
 }
 
@@ -854,7 +854,7 @@ async function linkExistingTask(todo: Todo) {
     type: 'taskReference', attrs: { taskId: todo.id },
   }).run()
   taskSearchOpen.value = false
-  showTaskFeedback('✓ 已关联待办')
+  showTaskFeedback('✓ 已关联代办')
   scheduleTaskHydration()
 }
 
@@ -908,7 +908,7 @@ async function renderTaskBriefs(currentEditor: CoreEditor, briefs: Map<string, T
     const taskId = element.dataset.taskId
     const brief = taskId ? briefs.get(taskId) : undefined
     if (!brief || !brief.accessible) {
-      const label = brief?.deleted ? '该待办已删除' : '该待办不可访问'
+      const label = brief?.deleted ? '该代办已删除' : '该代办不可访问'
       element.dataset.taskState = brief?.deleted ? 'deleted' : 'forbidden'
       element.title = label
       element.querySelector<HTMLElement>('[data-task-reference-title]')?.replaceChildren(label)
@@ -933,8 +933,8 @@ function applyRealtimeTaskChange(change: NonNullable<typeof realtime.lastTaskCha
     if (element.dataset.taskId !== change.taskId) continue
     if (brief.deleted) {
       element.dataset.taskState = 'deleted'
-      element.title = '该待办已删除'
-      element.querySelector<HTMLElement>('[data-task-reference-title]')?.replaceChildren('该待办已删除')
+      element.title = '该代办已删除'
+      element.querySelector<HTMLElement>('[data-task-reference-title]')?.replaceChildren('该代办已删除')
       element.querySelector<HTMLElement>('[data-task-reference-status]')?.replaceChildren('—')
       element.querySelector<HTMLElement>('[data-task-reference-meta]')?.replaceChildren('')
       continue
@@ -1074,7 +1074,7 @@ watch(immersiveOpen, (open) => {
       <input ref="fileInput" class="sr-only" type="file" multiple :accept="fileUploadMode === 'embedded' ? embeddedFileAccept : standaloneFileAccept" @change="handleFiles(($event.target as HTMLInputElement).files)" />
       <div class="selection-menu-host">
         <BubbleMenu v-if="editor" :editor="editor" :tippy-options="bubbleMenuOptions" class="selection-menu">
-          <button type="button" @mousedown.prevent @click="createTodoFromSelection">创建待办</button>
+          <button type="button" @mousedown.prevent @click="createTodoFromSelection">创建代办</button>
           <button type="button" @mousedown.prevent @click="copySelection">复制</button>
         </BubbleMenu>
       </div>

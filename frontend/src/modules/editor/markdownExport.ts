@@ -64,7 +64,7 @@ function renderInline(node: MarkdownNode): string {
   }
   if (node.type === 'taskReference') {
     const taskAttrs = attrsOf(node)
-    const taskId = typeof taskAttrs.taskId === 'string' ? taskAttrs.taskId : '任务'
+    const taskId = typeof taskAttrs.taskId === 'string' ? taskAttrs.taskId : '代办'
     return `[[${escapeText(taskId)}]]`
   }
   return childrenOf(node).map(renderInline).join('')

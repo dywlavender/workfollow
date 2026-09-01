@@ -62,7 +62,7 @@ let initializationPromise: Promise<boolean> = Promise.resolve(bodyReady.value)
 let initializationGeneration = 0
 
 const slashCommands = computed(() => workFollowSlashCommands.filter((command) => {
-  // 模板正文没有笔记附件和任务弹窗上下文，因此只提供可直接写入正文的命令。
+  // 模板正文没有笔记附件和代办弹窗上下文，因此只提供可直接写入正文的命令。
   return !command.noteOnly && command.type !== 'attachment'
 }))
 
@@ -117,9 +117,9 @@ function insertSlashBlock(type: WorkFollowSlashCommand) {
   else if (type === 'code') chain.toggleCodeBlock()
   else if (type === 'hr') chain.setHorizontalRule()
   else if (type === 'table') chain.insertTable({ rows: 3, cols: 3, withHeaderRow: true })
-  else if (type === 'subtask') chain.toggleTaskList().insertContent('子任务')
+  else if (type === 'subtask') chain.toggleTaskList().insertContent('子代办')
   else if (type === 'tag') chain.insertContent('#标签')
-  else if (type === 'relation') chain.insertContent('关联任务 / 笔记')
+  else if (type === 'relation') chain.insertContent('关联代办 / 笔记')
 
   chain.run()
   slash.close()

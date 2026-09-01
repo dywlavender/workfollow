@@ -10,7 +10,7 @@ PROJECT_DIR = BACKEND_DIR.parent
 
 
 class Settings(BaseSettings):
-    app_name: str = "打勾 API"
+    app_name: str = "备忘录 API"
     app_version: str = "0.1.0"
     database_url: str = f"sqlite:///{(PROJECT_DIR / 'data' / 'workfollow.db').as_posix()}"
     cors_origins: list[str] = ["http://localhost:5173", "http://127.0.0.1:5173"]

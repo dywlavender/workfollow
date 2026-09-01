@@ -45,7 +45,7 @@ const groups = computed<TaskGroup[]>(() => {
       const dueDifference = dayjs(b.dueAt).valueOf() - dayjs(a.dueAt).valueOf()
       return dueDifference || dayjs(b.updatedAt).valueOf() - dayjs(a.updatedAt).valueOf()
     })
-    return [{ key: 'all', label: '所有任务', tone: 'normal', items: props.reverse ? items.reverse() : items }]
+    return [{ key: 'all', label: '所有代办', tone: 'normal', items: props.reverse ? items.reverse() : items }]
   }
   const itemStatus = (item: T) => props.assignmentStatus && item.myAssignment
     ? (item.myAssignment.status === 'DONE' ? 'DONE' : 'TODO')

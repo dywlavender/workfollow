@@ -244,7 +244,7 @@ async function submit() {
     await nextTick()
     inputElement.value?.focus()
   } catch {
-    feedback.error('创建失败，任务草稿已保留，请重试。')
+    feedback.error('创建失败，代办草稿已保留，请重试。')
   } finally { submitting.value = false }
 }
 defineExpose({ begin, buildPayload })
@@ -255,14 +255,14 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', onDocumentPoin
 <template>
   <div ref="composerElement" class="task-composer" @keydown.esc.stop.prevent="closeOrGoBack">
     <form class="quick-add reference-quick-add" @click="focusInput" @submit.prevent="submit">
-      <label class="sr-only" for="quick-todo">快速添加待办</label>
-      <input ref="inputElement" id="quick-todo" v-model="input" autocomplete="off" placeholder="添加任务" aria-describedby="quick-todo-hint" @input="onInput" @keydown.enter.exact.prevent="submit" />
-      <span id="quick-todo-hint" class="sr-only">输入任务后按回车创建</span>
+      <label class="sr-only" for="quick-todo">快速添加代办</label>
+      <input ref="inputElement" id="quick-todo" v-model="input" autocomplete="off" placeholder="添加代办" aria-describedby="quick-todo-hint" @input="onInput" @keydown.enter.exact.prevent="submit" />
+      <span id="quick-todo-hint" class="sr-only">输入代办后按回车创建</span>
       <button class="composer-inline-date" type="button" :class="{ active: Boolean(effectiveDueAt) }" :aria-expanded="activePanel === 'schedule'" @click="togglePanel('schedule')"><IconCalendar :size="18" />{{ scheduleLabel }}</button>
-      <button class="composer-more-trigger" type="button" aria-label="更多任务设置" :aria-expanded="activePanel === 'more'" @click="togglePanel('more')"><IconChevronDown :size="20" /></button>
+      <button class="composer-more-trigger" type="button" aria-label="更多代办设置" :aria-expanded="activePanel === 'more'" @click="togglePanel('more')"><IconChevronDown :size="20" /></button>
     </form>
 
-    <div class="composer-layer-host" aria-label="任务属性">
+    <div class="composer-layer-host" aria-label="代办属性">
         <section v-if="activePanel === 'schedule'" class="composer-popover composer-schedule composer-popover-right" role="dialog" aria-label="设置日期和提醒">
           <div class="composer-shortcuts"><button type="button" @click="useScheduleShortcut(0)">今天</button><button type="button" @click="useScheduleShortcut(1)">明天</button><button type="button" @click="useScheduleShortcut(7)">下周</button><button type="button" @click="useScheduleShortcut(0, 20)">今晚</button></div>
           <div class="composer-calendar-head"><button type="button" aria-label="上个月" @click="calendarMonth = calendarMonth.subtract(1, 'month')"><IconChevronLeft :size="16" /></button><strong>{{ calendarMonth.format('YYYY年M月') }}</strong><button type="button" aria-label="下个月" @click="calendarMonth = calendarMonth.add(1, 'month')"><IconChevronRight :size="16" /></button></div>
@@ -275,7 +275,7 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', onDocumentPoin
           <label><span><IconRepeat :size="15" />重复</span><select v-model="recurrenceType" :disabled="!effectiveDueAt" @change="manualSchedule = true"><option value="NONE">不重复</option><option value="DAILY">每天</option><option value="WEEKLY">每周</option><option value="MONTHLY">每月</option></select></label>
           <footer><button type="button" @click="clearSchedule">清除</button><button class="primary-button" type="button" @click="activePanel = null">完成</button></footer>
         </section>
-        <section v-if="activePanel === 'more'" class="composer-popover composer-reference-menu composer-popover-right" aria-label="更多任务设置">
+        <section v-if="activePanel === 'more'" class="composer-popover composer-reference-menu composer-popover-right" aria-label="更多代办设置">
           <header>优先级</header>
           <div class="composer-priority-flags">
             <button v-for="value in (['HIGH', 'MEDIUM', 'LOW', 'NONE'] as TodoPriority[])" :key="value" type="button" :class="[value.toLowerCase(), { selected: priority === value }]" :aria-label="({ HIGH: '高优先级', MEDIUM: '中优先级', LOW: '低优先级', NONE: '无优先级' })[value]" @click="selectPriority(value)"><IconFlag :size="27" :fill="value === 'NONE' ? 'none' : 'currentColor'" /></button>

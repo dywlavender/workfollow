@@ -112,7 +112,7 @@ onBeforeUnmount(() => document.removeEventListener('click', closeContext))
         <span>{{ todo.listName }}</span>
         <span v-for="tag in todo.tags" :key="tag">#{{ tag }}</span>
         <span v-if="todo.priority !== 'NONE'" class="meta-chip" :class="`priority-${todo.priority.toLowerCase()}`" :title="`${todo.priority} 优先级`"><IconFlag :size="12" /></span>
-        <span v-if="todo.recurrenceType !== 'NONE'" class="meta-chip" title="重复任务"><IconRepeat :size="12" /></span>
+        <span v-if="todo.recurrenceType !== 'NONE'" class="meta-chip" title="重复代办"><IconRepeat :size="12" /></span>
         <span v-if="todo.reminderAt" class="meta-chip" title="已设置提醒"><IconBell :size="12" /></span>
         <span v-if="todo.teamId && todo.creatorId !== currentUserId" class="team-source-label"><IconUsers :size="12" />{{ todo.creator.nickname }}分配</span>
         <span v-else-if="todo.teamId && todo.totalAssignments" class="team-source-label"><IconUsers :size="12" />{{ todo.completedAssignments }}/{{ todo.totalAssignments }}</span>
@@ -128,12 +128,12 @@ onBeforeUnmount(() => document.removeEventListener('click', closeContext))
         compact
         @change="emit('assign', todo, $event)"
       />
-      <button type="button" aria-label="更多任务操作" title="更多" @click.stop="openMore"><IconDots :size="17" /></button>
+      <button type="button" aria-label="更多代办操作" title="更多" @click.stop="openMore"><IconDots :size="17" /></button>
     </template>
   </TaskRow>
 
   <Teleport to="body">
-  <section v-if="contextOpen" class="task-row-context-menu" :style="{ left: `${menuX}px`, top: `${menuY}px` }" role="menu" aria-label="任务操作" @click.stop>
+  <section v-if="contextOpen" class="task-row-context-menu" :style="{ left: `${menuX}px`, top: `${menuY}px` }" role="menu" aria-label="代办操作" @click.stop>
       <button v-if="todo.permissions.editable" type="button" @click="emit('editDate', todo); closeContext()"><IconCalendar :size="16" />设置日期</button>
       <button v-if="todo.permissions.editable" type="button" @click="emit('editDate', todo); closeContext()"><IconBell :size="16" />设置提醒</button>
       <button v-if="todo.permissions.editable" type="button" @click="emit('editDate', todo); closeContext()"><IconRepeat :size="16" />设置重复</button>
@@ -149,13 +149,13 @@ onBeforeUnmount(() => document.removeEventListener('click', closeContext))
       </div>
       <span />
       <button v-if="todo.permissions.completable" type="button" @click="emit('toggle', todo); closeContext()">
-        <IconCheck :size="16" />{{ executionDone() ? '恢复任务' : '标记完成' }}
+        <IconCheck :size="16" />{{ executionDone() ? '恢复代办' : '标记完成' }}
       </button>
-      <button v-if="todo.permissions.deletable && todo.status === 'TODO'" type="button" @click="emit('abandon', todo); closeContext()"><IconX :size="16" />放弃任务</button>
-      <button type="button" @click="emit('duplicate', todo); closeContext()"><IconCopy :size="16" />复制任务</button>
-      <button type="button" @click="emit('copyLink', todo); closeContext()"><IconLink :size="16" />复制任务链接</button>
-      <button v-if="todo.permissions.deletable" class="danger" type="button" @click="removeDialogOpen = true; closeContext()"><IconTrash :size="16" />删除任务</button>
+      <button v-if="todo.permissions.deletable && todo.status === 'TODO'" type="button" @click="emit('abandon', todo); closeContext()"><IconX :size="16" />放弃代办</button>
+      <button type="button" @click="emit('duplicate', todo); closeContext()"><IconCopy :size="16" />复制代办</button>
+      <button type="button" @click="emit('copyLink', todo); closeContext()"><IconLink :size="16" />复制代办链接</button>
+      <button v-if="todo.permissions.deletable" class="danger" type="button" @click="removeDialogOpen = true; closeContext()"><IconTrash :size="16" />删除代办</button>
   </section>
   </Teleport>
-  <ConfirmDialog :open="removeDialogOpen" title="删除待办" :message="`确定删除“${todo.title}”吗？`" confirm-label="删除" :danger="true" @close="removeDialogOpen = false" @confirm="confirmRemove" />
+  <ConfirmDialog :open="removeDialogOpen" title="删除代办" :message="`确定删除“${todo.title}”吗？`" confirm-label="删除" :danger="true" @close="removeDialogOpen = false" @confirm="confirmRemove" />
 </template>

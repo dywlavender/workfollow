@@ -120,7 +120,7 @@ onBeforeUnmount(() => {
     <button type="button" :class="{ active: editor.isActive('underline') }" title="下划线" aria-label="下划线" @mousedown.prevent @click="editor.chain().focus().toggleUnderline().run()"><u>U</u></button>
     <button type="button" title="无序列表" aria-label="无序列表" :class="{ active: editor.isActive('bulletList') }" @mousedown.prevent @click="editor.chain().focus().toggleBulletList().run()"><IconList :size="16" /></button>
     <button type="button" title="有序列表" aria-label="有序列表" :class="{ active: editor.isActive('orderedList') }" @mousedown.prevent @click="editor.chain().focus().toggleOrderedList().run()"><IconListNumbers :size="16" /></button>
-    <button type="button" title="任务列表" aria-label="任务列表" :class="{ active: editor.isActive('taskList') }" @mousedown.prevent @click="editor.chain().focus().toggleTaskList().run()"><IconListCheck :size="16" /></button>
+    <button type="button" title="代办列表" aria-label="代办列表" :class="{ active: editor.isActive('taskList') }" @mousedown.prevent @click="editor.chain().focus().toggleTaskList().run()"><IconListCheck :size="16" /></button>
     <div class="note-color-host" @click.stop>
       <button type="button" class="note-color-trigger" title="文字颜色" aria-label="文字颜色" @mousedown.prevent @click="colorMenuOpen = colorMenuOpen === 'text' ? null : 'text'"><strong>A</strong></button>
       <section v-if="colorMenuOpen === 'text'" class="note-color-palette" aria-label="选择文字颜色">

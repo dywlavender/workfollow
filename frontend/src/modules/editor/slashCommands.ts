@@ -21,9 +21,9 @@ export const workFollowSlashCommands: WorkFollowSlashCommandItem[] = [
   { type: 'table', label: '表格', mark: '▦' },
   { type: 'link', label: '链接', mark: '↗' },
   { type: 'attachment', label: '附件', mark: '↥' },
-  { type: 'subtask', label: '子任务', mark: '↳' },
+  { type: 'subtask', label: '子代办', mark: '↳' },
   { type: 'tag', label: '标签', mark: '#' },
-  { type: 'relation', label: '关联任务 / 笔记', mark: '↗' },
-  { type: 'createTask', label: '创建待办', mark: '✓', noteOnly: true },
-  { type: 'linkTask', label: '关联已有待办', mark: '↗', noteOnly: true },
+  { type: 'relation', label: '关联代办 / 笔记', mark: '↗' },
+  { type: 'createTask', label: '创建代办', mark: '✓', noteOnly: true },
+  { type: 'linkTask', label: '关联已有代办', mark: '↗', noteOnly: true },
 ]

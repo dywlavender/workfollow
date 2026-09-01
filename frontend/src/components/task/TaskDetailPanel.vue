@@ -48,7 +48,7 @@ defineExpose({ openDatePanel, openPriorityPanel, flushAndWaitForProjection })
     @open-task="forwardOpenTask"
   />
 
-  <aside v-else class="task-detail task-detail-empty" aria-label="任务详情">
-    <div><IconChevronRight :size="24" /><strong>选择一个任务</strong><p>任务详情会显示在这里。</p></div>
+  <aside v-else class="task-detail task-detail-empty" aria-label="代办详情">
+    <div><IconChevronRight :size="24" /><strong>选择一个代办</strong><p>代办详情会显示在这里。</p></div>
   </aside>
 </template>

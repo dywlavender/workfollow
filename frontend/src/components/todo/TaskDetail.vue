@@ -147,7 +147,7 @@ function createTaskEditor(document: TaskCollaborationSession['document']) {
       attributes: {
         class: 'task-body-editor-content',
         role: 'textbox',
-        'aria-label': '任务正文',
+        'aria-label': '代办正文',
         'aria-multiline': 'true',
       },
       handleKeyDown: (_view, event) => {
@@ -528,7 +528,7 @@ async function initializeTaskMetadata(
     return true
   } catch (error) {
     if (error instanceof CollaborationInitializationError && error.kind === 'auth') metadataInitializationAuthFailed = true
-    if (currentTaskId.value === task.id) showNotice(`任务属性初始化失败：${error instanceof Error ? error.message : '请稍后重试'}`)
+    if (currentTaskId.value === task.id) showNotice(`代办属性初始化失败：${error instanceof Error ? error.message : '请稍后重试'}`)
     return false
   }
 }
@@ -718,7 +718,7 @@ function hasPendingCollaborativeChanges() {
 }
 
 async function flushAndWaitForProjection(timeoutMs = 6000, task = activeTaskSnapshot): Promise<Todo> {
-  if (!task) throw new Error('任务协同尚未就绪，无法读取最新内容。')
+  if (!task) throw new Error('代办协同尚未就绪，无法读取最新内容。')
   flushCollaboration()
   // Opening a task can establish a clean Y.Doc whose SQL projection is already
   // current. Do not make ordinary selection/navigation wait for the server's
@@ -749,7 +749,7 @@ async function flushAndWaitForProjection(timeoutMs = 6000, task = activeTaskSnap
   }
   let expected = currentExpected()
   while (!taskProjectionMatches(latest, expected)) {
-    if (Date.now() >= deadline) throw new Error('任务内容尚未同步完成，请稍后重试。')
+    if (Date.now() >= deadline) throw new Error('代办内容尚未同步完成，请稍后重试。')
     await new Promise((resolve) => window.setTimeout(resolve, 180))
     expected = currentExpected()
     latest = await fetchTodo(task.id)
@@ -805,7 +805,7 @@ async function sync(todo: Todo | null) {
     if (previousTask) {
       try { await flushAndWaitForProjection(6000, previousTask) }
       catch (error) {
-        showNotice(error instanceof Error ? error.message : '任务内容尚未同步完成，请稍后重试')
+        showNotice(error instanceof Error ? error.message : '代办内容尚未同步完成，请稍后重试')
         // Keep the old Y.Doc alive when the SQL projection has not confirmed
         // it. Disposing here would make the unsaved in-memory document
         // unreachable while the parent has already moved to another row.
@@ -1030,7 +1030,7 @@ function insertBlock(type: WorkFollowSlashCommand) {
   else if (type === 'check') chain.toggleTaskList()
   else if (type === 'hr') chain.setHorizontalRule()
   else if (type === 'table') chain.insertTable({ rows: 3, cols: 3, withHeaderRow: true })
-  else if (type === 'subtask') chain.toggleTaskList().insertContent('子任务')
+  else if (type === 'subtask') chain.toggleTaskList().insertContent('子代办')
   else if (type === 'attachment') {
     if (!canEditContent.value) return
     chain.run(); slash.close(); fileInput.value?.click(); return
@@ -1068,7 +1068,7 @@ async function uploadAttachmentFile(event: Event) {
 }
 function addTaskTag() {
   if (!canEditMetadata.value) {
-    showNotice('你没有修改任务标签的权限')
+    showNotice('你没有修改代办标签的权限')
     return
   }
   const value = tagValue.value.trim().replace(/^#/, '')
@@ -1091,11 +1091,11 @@ async function relateTask(todo: Todo) {
     // after the user removes the link.
     editor.value.chain().focus().insertContent({
       type: 'text',
-      text: todo.title || '无标题任务',
+      text: todo.title || '无标题代办',
       marks: [{ type: 'taskLink', attrs: { taskId: todo.id } }],
     }).run()
     relationDialogOpen.value = false
-    showNotice('已关联任务')
+    showNotice('已关联代办')
   } catch { showNotice('关联失败，请确认访问权限') }
 }
 async function relateNote(note: NoteListItem) {
@@ -1119,7 +1119,7 @@ async function requestClose() {
     try {
       await flushAndWaitForProjection()
     } catch (error) {
-      showNotice(error instanceof Error ? error.message : '任务内容尚未同步完成，请稍后重试')
+      showNotice(error instanceof Error ? error.message : '代办内容尚未同步完成，请稍后重试')
       return
     }
   } else flushCollaboration()
@@ -1159,10 +1159,10 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <aside v-if="todo" ref="root" class="task-detail task-editor-detail" :class="{ terminal: executionDone || todo.status === 'ABANDONED', abandoned: todo.status === 'ABANDONED', readonly: !canEditContent }" aria-label="任务正文">
+  <aside v-if="todo" ref="root" class="task-detail task-editor-detail" :class="{ terminal: executionDone || todo.status === 'ABANDONED', abandoned: todo.status === 'ABANDONED', readonly: !canEditContent }" aria-label="代办正文">
     <header class="task-editor-top">
       <div class="task-editor-meta-row">
-        <button class="task-editor-check" :class="{ done: executionDone, abandoned: todo.status === 'ABANDONED' }" type="button" :disabled="!todo.permissions.completable" :aria-label="executionDone ? '恢复任务' : '完成任务'" @click="emit('toggle', todo)">
+        <button class="task-editor-check" :class="{ done: executionDone, abandoned: todo.status === 'ABANDONED' }" type="button" :disabled="!todo.permissions.completable" :aria-label="executionDone ? '恢复代办' : '完成代办'" @click="emit('toggle', todo)">
           <IconCheck v-if="todo.status !== 'ABANDONED'" :size="14" :stroke-width="2.3" />
           <IconX v-else :size="14" :stroke-width="2.3" />
         </button>
@@ -1175,7 +1175,7 @@ onBeforeUnmount(() => {
             class="task-schedule-popover task-schedule-popover-external"
             :style="datePanelAnchorStyle ?? undefined"
             role="dialog"
-            aria-label="设置任务日期"
+            aria-label="设置代办日期"
             @click.stop
           >
             <div class="task-date-tabs" role="tablist">
@@ -1220,12 +1220,12 @@ onBeforeUnmount(() => {
           <button class="task-editor-more-button" type="button" title="更多" aria-label="更多正文操作" @click.stop="moreMenuOpen = !moreMenuOpen"><IconDots :size="18" /></button>
           <section v-if="moreMenuOpen" class="task-editor-more-menu" @click.stop>
             <button v-if="todo.sourceNoteId" type="button" @click="emit('openSource', todo.sourceNoteId); moreMenuOpen = false"><IconLink :size="16" />打开来源笔记</button>
-            <button v-if="todo.permissions.deletable" class="danger" type="button" @click="removeDialogOpen = true; moreMenuOpen = false"><IconTrash :size="16" />删除任务</button>
+            <button v-if="todo.permissions.deletable" class="danger" type="button" @click="removeDialogOpen = true; moreMenuOpen = false"><IconTrash :size="16" />删除代办</button>
           </section>
         </div>
         <button class="task-editor-close" type="button" aria-label="关闭详情" @click="requestClose"><IconX :size="17" /></button>
       </div>
-      <label class="sr-only" for="task-editor-title">任务标题</label>
+      <label class="sr-only" for="task-editor-title">代办标题</label>
       <textarea
         id="task-editor-title"
         ref="titleInput"
@@ -1234,7 +1234,7 @@ onBeforeUnmount(() => {
         rows="1"
         maxlength="200"
         :readonly="!canEditMetadata"
-        aria-label="任务标题"
+        aria-label="代办标题"
         @input="onTitleInput"
         @blur="commitCollaborativeTitle"
         @keydown.enter.prevent="commitCollaborativeTitle"
@@ -1246,11 +1246,11 @@ onBeforeUnmount(() => {
       <EditorContent class="task-body-editor" :editor="editor || undefined" @click="closeEditorPanels" />
       <span v-if="inlineNotice" class="task-editor-inline-notice" role="status">{{ inlineNotice }}</span>
       <input ref="fileInput" class="sr-only" type="file" accept=".png,.jpg,.jpeg,.webp,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.md,.txt,.mp4,.mov,.m4v,.webm" @change="uploadAttachmentFile" />
-      <section v-if="tagPanelOpen && canEditMetadata" class="task-inline-property-panel" role="dialog" aria-label="添加任务标签" @click.stop><form @submit.prevent="addTaskTag"><IconTag :size="16" /><input v-model="tagValue" autofocus placeholder="输入标签" maxlength="24" /><button class="primary-button" type="submit">添加</button><button type="button" aria-label="关闭" @click="tagPanelOpen = false"><IconX :size="15" /></button></form></section>
+      <section v-if="tagPanelOpen && canEditMetadata" class="task-inline-property-panel" role="dialog" aria-label="添加代办标签" @click.stop><form @submit.prevent="addTaskTag"><IconTag :size="16" /><input v-model="tagValue" autofocus placeholder="输入标签" maxlength="24" /><button class="primary-button" type="submit">添加</button><button type="button" aria-label="关闭" @click="tagPanelOpen = false"><IconX :size="15" /></button></form></section>
       <section v-if="attachmentUploading || attachmentItems.length" class="task-attachment-summary" aria-label="本次上传的附件"><span v-if="attachmentUploading">正在上传附件…</span><a v-for="attachment in attachmentItems" :key="attachment.id" :href="attachment.url" target="_blank" rel="noopener noreferrer"><IconFile :size="15" />{{ attachment.originalName }}</a></section>
     </div>
 
-    <section v-if="todo.sources.length" class="task-source-section" aria-label="任务来源">
+    <section v-if="todo.sources.length" class="task-source-section" aria-label="代办来源">
       <strong>来源</strong>
       <article v-for="source in todo.sources" :key="source.relationId" :class="{ inaccessible: !source.accessible }">
         <template v-if="source.accessible && source.resourceId">
@@ -1263,20 +1263,20 @@ onBeforeUnmount(() => {
       </article>
     </section>
 
-    <section v-if="todo.teamId" class="task-assignment-summary" aria-label="任务指派进度">
-      <span class="task-assignment-avatars" aria-label="任务成员"><span v-for="assignment in todo.assignments" :key="assignment.id" :class="{ done: assignment.status === 'DONE' }" :title="`${assignment.user.nickname || assignment.user.username} · ${assignmentStatusLabel(assignment.status)}`"><strong>{{ assignment.user.nickname || assignment.user.username }}</strong><small>{{ assignmentStatusLabel(assignment.status) }}</small></span></span>
+    <section v-if="todo.teamId" class="task-assignment-summary" aria-label="代办指派进度">
+      <span class="task-assignment-avatars" aria-label="代办成员"><span v-for="assignment in todo.assignments" :key="assignment.id" :class="{ done: assignment.status === 'DONE' }" :title="`${assignment.user.nickname || assignment.user.username} · ${assignmentStatusLabel(assignment.status)}`"><strong>{{ assignment.user.nickname || assignment.user.username }}</strong><small>{{ assignmentStatusLabel(assignment.status) }}</small></span></span>
       <strong>{{ todo.completedAssignments }} / {{ todo.totalAssignments }}</strong>
       <small v-if="!canEditContent">公共正文只读，你只能更新自己的完成状态</small>
-      <small v-else-if="!canEdit">你可以编辑任务正文，但不能修改任务属性</small>
-      <small v-else-if="!canEditMetadata">任务属性协同尚未就绪，暂时不能修改标题、日期和标签</small>
+      <small v-else-if="!canEdit">你可以编辑代办正文，但不能修改代办属性</small>
+      <small v-else-if="!canEditMetadata">代办属性协同尚未就绪，暂时不能修改标题、日期和标签</small>
     </section>
 
     <EditorSlashMenu :commands="availableCommands" :active-index="slash.activeIndex.value" :position="slash.position.value" :open="slash.open.value" id-prefix="task-slash-command" @select="insertBlock" @hover="slash.activeIndex.value = $event" />
-    <ConfirmDialog :open="removeDialogOpen" title="删除任务" :message="`确定删除“${todo.title}”吗？删除后无法恢复。`" confirm-label="删除" :danger="true" @close="removeDialogOpen = false" @confirm="confirmRemove" />
+    <ConfirmDialog :open="removeDialogOpen" title="删除代办" :message="`确定删除“${todo.title}”吗？删除后无法恢复。`" confirm-label="删除" :danger="true" @close="removeDialogOpen = false" @confirm="confirmRemove" />
     <EditorLinkDialog ref="linkDialog" :editor="() => editor" />
     <TaskRelationDialog :open="relationDialogOpen" :current-task-id="todo.id" @close="relationDialogOpen = false" @select-task="relateTask" @select-note="relateNote" />
   </aside>
-  <aside v-else class="task-detail task-detail-empty" aria-label="任务正文">
-    <div><IconChevronRight :size="24" :stroke-width="1.5" /><strong>选择一个任务</strong><p>任务正文会显示在这里。</p></div>
+  <aside v-else class="task-detail task-detail-empty" aria-label="代办正文">
+    <div><IconChevronRight :size="24" :stroke-width="1.5" /><strong>选择一个代办</strong><p>代办正文会显示在这里。</p></div>
   </aside>
 </template>

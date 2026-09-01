@@ -242,8 +242,8 @@ function submit() {
       <section class="dialog-card" role="dialog" aria-modal="true" aria-labelledby="todo-dialog-title">
         <header class="dialog-header">
           <div>
-            <span class="eyebrow">待办详情</span>
-            <h2 id="todo-dialog-title">{{ todo ? '编辑待办' : '新建待办' }}</h2>
+            <span class="eyebrow">代办详情</span>
+            <h2 id="todo-dialog-title">{{ todo ? '编辑代办' : '新建代办' }}</h2>
           </div>
           <button class="icon-action" type="button" aria-label="关闭" @click="emit('close')"><IconX :size="18" /></button>
         </header>
@@ -284,19 +284,19 @@ function submit() {
           <label v-if="form.reminderPreset === 'CUSTOM'">自定义提醒时间
             <input v-model="form.customReminderAt" type="datetime-local" :disabled="Boolean(todo) && !metadataEditable" />
           </label>
-          <p v-if="todo && !contentEditable && metadataEditable" class="dialog-hint">日历窗口只修改任务属性，正文请在任务详情中编辑。</p>
+          <p v-if="todo && !contentEditable && metadataEditable" class="dialog-hint">日历窗口只修改代办属性，正文请在代办详情中编辑。</p>
           <p v-if="reminderInvalid" class="inline-error">提醒时间不能晚于截止时间。</p>
           <div v-if="form.recurrenceType === 'CUSTOM'" class="form-grid">
             <label>频率<select v-model="form.customFrequency" :disabled="Boolean(todo) && !metadataEditable"><option value="DAILY">天</option><option value="WEEKLY">周</option><option value="MONTHLY">月</option></select></label>
             <label>间隔<input v-model.number="form.customInterval" min="1" max="99" type="number" :disabled="Boolean(todo) && !metadataEditable" /></label>
           </div>
-          <p v-if="form.recurrenceType !== 'NONE' && !form.dueAt" class="inline-error">重复待办必须设置首次执行时间。</p>
+          <p v-if="form.recurrenceType !== 'NONE' && !form.dueAt" class="inline-error">重复代办必须设置首次执行时间。</p>
           <div v-if="canAssign && currentUserId" class="todo-assignee-field">
             <span>指派成员</span>
             <AssigneePopover :members="members ?? []" :model-value="assigneeIds" :current-user-id="currentUserId" @change="assigneeIds = $event" />
           </div>
-          <p v-if="assignmentInvalid" class="inline-error">团队任务至少选择一名当前团队成员。</p>
-          <p v-if="existingTaskReadOnly" class="dialog-hint">当前任务没有编辑权限，请在任务详情中查看可执行的操作。</p>
+          <p v-if="assignmentInvalid" class="inline-error">团队代办至少选择一名当前团队成员。</p>
+          <p v-if="existingTaskReadOnly" class="dialog-hint">当前代办没有编辑权限，请在代办详情中查看可执行的操作。</p>
           <footer class="dialog-actions">
             <button class="secondary-button" type="button" @click="emit('close')">取消</button>
             <button class="primary-button" type="submit" :disabled="!canSubmit">保存</button>

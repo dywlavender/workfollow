@@ -61,6 +61,30 @@ describe('todo store list transaction', () => {
     expect(store.todos).toEqual([])
   })
 
+  it('reconciles one server update without entering the list loading state', () => {
+    const store = useTodoStore()
+    store.currentView = 'all'
+    store.loading = false
+    const current = { ...task }
+    store.todos = [current]
+    const updated = { ...task, description: '<p>新正文</p>', updatedAt: '2026-08-10T00:01:00' }
+
+    expect(store.reconcile(updated)?.id).toBe(task.id)
+    expect(store.todos[0].description).toBe('<p>新正文</p>')
+    expect(store.loading).toBe(false)
+  })
+
+  it('removes a reconciled task when it no longer belongs to the active view', () => {
+    const store = useTodoStore()
+    store.currentView = 'today'
+    store.todos = [{ ...task }]
+    const completed = { ...task, status: 'DONE' as const }
+
+    store.reconcile(completed)
+
+    expect(store.todos).toEqual([])
+  })
+
   it('counts a shared task as completed when only my assignment is done', () => {
     const sharedTask = {
       ...task,
@@ -116,7 +140,7 @@ describe('todo store initial load states', () => {
 
     expect(store.loading).toBe(false)
     expect(store.hasLoaded).toBe(true)
-    expect(store.error).toContain('无法读取待办')
+    expect(store.error).toContain('无法读取代办')
   })
 })
 

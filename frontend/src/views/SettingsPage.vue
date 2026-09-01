@@ -152,7 +152,7 @@ async function resetAgentToken() {
 }
 
 async function stopAgentToken() {
-  if (!window.confirm('停用后，所有已配置该 Token 的 Agent 都将立即无法访问打勾。继续吗？')) return
+  if (!window.confirm('停用后，所有已配置该 Token 的 Agent 都将立即无法访问备忘录。继续吗？')) return
   agentTokenLoading.value = true
   try {
     agentTokenStatus.value = await disableAgentToken()
@@ -333,7 +333,7 @@ async function saveProfile() {
         <section class="settings-info-row">
           <div>
             <strong>外观设置会自动保存</strong>
-            <p>主色、背景基调和明暗模式会在下次打开打勾时继续保留。</p>
+            <p>主色、背景基调和明暗模式会在下次打开备忘录时继续保留。</p>
           </div>
           <span class="settings-saved-badge"><IconCheck :size="14" />已应用</span>
         </section>
@@ -368,7 +368,7 @@ async function saveProfile() {
               <span class="agent-token-icon"><IconKey :size="19" /></span>
               <div>
                 <h3 id="agent-token-title">Agent 接入</h3>
-                <p>使 Codex、Claude Code 和 WorkBuddy 能以你的身份访问打勾。每个账号同时只有一个 Token。</p>
+                <p>使 Codex、Claude Code 和 WorkBuddy 能以你的身份访问备忘录。每个账号同时只有一个 Token。</p>
               </div>
               <span class="agent-token-status" :class="{ enabled: agentTokenStatus?.enabled }">
                 {{ agentTokenLoading && !agentTokenStatus ? '加载中' : agentTokenStatus?.enabled ? '已启用' : '未启用' }}
@@ -387,7 +387,7 @@ async function saveProfile() {
               <button class="secondary-button" type="button" @click="copyAgentToken"><IconCopy :size="15" />复制 Token</button>
             </div>
             <footer>
-              <span>这是打勾的访问凭证，不是大模型 API Key。</span>
+              <span>这是备忘录的访问凭证，不是大模型 API Key。</span>
               <div>
                 <button class="secondary-button" type="button" :disabled="agentTokenLoading" @click="resetAgentToken">
                   <IconRefresh v-if="agentTokenStatus?.enabled" :size="15" /><IconKey v-else :size="15" />
