@@ -12,7 +12,6 @@ import {
 } from 'naive-ui'
 import AppSidebar from '@/components/AppSidebar.vue'
 import FeedbackHost from '@/components/FeedbackHost.vue'
-import GlobalCapture from '@/components/GlobalCapture.vue'
 import RouteLoadingFrame from '@/components/RouteLoadingFrame.vue'
 import SeasonalAtmosphere from '@/components/SeasonalAtmosphere.vue'
 import ReminderScheduler from '@/components/todo/ReminderScheduler.vue'
@@ -88,7 +87,6 @@ onBeforeUnmount(() => {
           <div v-if="isAuthenticatedPage" class="app-shell task-app-shell">
             <ReminderScheduler />
             <AppSidebar />
-            <GlobalCapture />
             <FeedbackHost />
             <main class="main-area">
               <div class="route-content-frame">

@@ -31,7 +31,7 @@ const sourceLabel: Record<SearchItem['source'], string> = {
         </span>
       </button>
     </div>
-    <p v-else-if="!loading && query.trim()" class="search-results-empty">没有找到“{{ query }}”，可以换一个关键词，或先用“随手记”保存想法。</p>
+    <p v-else-if="!loading && query.trim()" class="search-results-empty">没有找到“{{ query }}”，可以换一个关键词。</p>
     <p v-else-if="!loading" class="search-results-empty">输入标题、正文或标签开始搜索。</p>
   </section>
 </template>

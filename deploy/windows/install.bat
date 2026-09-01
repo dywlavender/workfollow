@@ -2,7 +2,7 @@
 setlocal EnableExtensions EnableDelayedExpansion
 cd /d "%~dp0\..\.."
 
-py -3.12 -c "import sys; assert sys.maxsize > 2**32" >nul 2>&1
+py -3 -c "import sys; assert sys.maxsize > 2**32" >nul 2>&1
 if errorlevel 1 (
   echo Error: Python 3.12 x64 is required. Install it offline first.
   exit /b 1
