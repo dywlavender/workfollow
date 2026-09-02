@@ -364,7 +364,15 @@ def _daily_message(
     url: str,
 ) -> str:
     def labels(rows: list[tuple[str, str, datetime]]) -> str:
-        return "、".join(f"{title}（{_daily_due_label(due_at)}）" for _, title, due_at in rows[:5])
+        def label(row: tuple[str, str, datetime]) -> str:
+            _task_id, title, due_at = row
+            # A collaborative title can be momentarily empty while a document
+            # is being projected. Keep the HTTP notification actionable even
+            # in that brief window instead of emitting a nameless item.
+            display_title = " ".join((title or "").split()) or "未命名代办"
+            return f"{display_title}（{_daily_due_label(due_at)}）"
+
+        return "、".join(label(row) for row in rows[:5])
 
     parts: list[str] = []
     if overdue:
@@ -392,6 +400,7 @@ def enqueue_daily_task_digests(
     end = start + timedelta(days=1)
     users = db.scalars(select(User).where(User.status == UserStatus.ACTIVE)).all()
     added = 0
+    refreshed = 0
     for user in users:
         rows = db.execute(
             select(Todo.id, Todo.title, Todo.due_at)
@@ -413,16 +422,52 @@ def enqueue_daily_task_digests(
         event_key = f"daily-task-digest:{current.date().isoformat()}"
         delivery_key = f"{event_key}:{user.id}"
         legacy_delivery_key = f"daily-task-digest:{user.id}:{current.date().isoformat()}"
-        if db.scalar(
-            select(ExternalNotificationDelivery.id).where(
-                ExternalNotificationDelivery.delivery_key.in_((delivery_key, legacy_delivery_key))
-            )
-        ) is not None:
-            continue
         from app.services import notification_dispatcher
 
         digest_url = public_route_url("/todos?view=today", current_settings)
         message = _daily_message(overdue, today, digest_url)
+        digest_data = {
+            "date": current.date().isoformat(),
+            "overdueTaskIds": [task_id for task_id, _, _ in overdue],
+            "todayTaskIds": [task_id for task_id, _, _ in today],
+            "overdueTasks": [
+                {
+                    "id": task_id,
+                    "title": title,
+                    "dueAt": due_at.isoformat(),
+                    "url": task_public_url(task_id, current_settings),
+                }
+                for task_id, title, due_at in overdue
+            ],
+            "todayTasks": [
+                {
+                    "id": task_id,
+                    "title": title,
+                    "dueAt": due_at.isoformat(),
+                    "url": task_public_url(task_id, current_settings),
+                }
+                for task_id, title, due_at in today
+            ],
+            "url": digest_url,
+            "eventKey": event_key,
+        }
+        existing = db.scalar(
+            select(ExternalNotificationDelivery)
+            .where(ExternalNotificationDelivery.delivery_key.in_((delivery_key, legacy_delivery_key)))
+            .limit(1)
+        )
+        if existing is not None:
+            # A digest can have been queued by an older server version before
+            # its task title or deep link was available. Refresh only an
+            # unsent row; already delivered notifications must remain immutable
+            # and must not be sent a second time.
+            if existing.status == ExternalDeliveryStatus.PENDING and (
+                existing.message != message or existing.data_json != digest_data
+            ):
+                existing.message = message
+                existing.data_json = digest_data
+                refreshed += 1
+            continue
         result = notification_dispatcher.dispatch_event(
             db,
             event="DAILY_TASK_DIGEST",
@@ -433,42 +478,19 @@ def enqueue_daily_task_digests(
             title="每日待办提醒",
             body=message,
             external_message=message,
-            data_json={
-                "date": current.date().isoformat(),
-                "overdueTaskIds": [task_id for task_id, _, _ in overdue],
-                "todayTaskIds": [task_id for task_id, _, _ in today],
-                "overdueTasks": [
-                    {
-                        "id": task_id,
-                        "title": title,
-                        "dueAt": due_at.isoformat(),
-                        "url": task_public_url(task_id, current_settings),
-                    }
-                    for task_id, title, due_at in overdue
-                ],
-                "todayTasks": [
-                    {
-                        "id": task_id,
-                        "title": title,
-                        "dueAt": due_at.isoformat(),
-                        "url": task_public_url(task_id, current_settings),
-                    }
-                    for task_id, title, due_at in today
-                ],
-                "url": digest_url,
-                "eventKey": event_key,
-            },
+            data_json=digest_data,
             event_key=event_key,
             settings=current_settings,
             commit=False,
         )
         added += result.changed
-    if added:
+    if added or refreshed:
         db.commit()
         logger.info(
-            "每日待办统一通知已分发 date=%s count=%s",
+            "每日待办统一通知已分发 date=%s count=%s refreshed=%s",
             current.date().isoformat(),
             added,
+            refreshed,
         )
     return added
 
