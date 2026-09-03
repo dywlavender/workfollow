@@ -96,17 +96,34 @@ export const workFollowHighlightColors = [
 /**
  * 协同文档刚建立时，编辑器默认空段与同步链路写入的初始段可能各存一份，
  * 合并成多个空段落——首行吞掉占位符、正文顶部多出空行。整篇只由空段落
- * 组成时不含任何用户内容，收敛为一个段落是零损失的自愈。
+ * 组成时收敛为一个段落；混合正文时只移除正文前的连续空段，不影响段间
+ * 或正文末尾可能有意保留的空行。
  */
 export function collapseAllEmptyParagraphs(editor: CoreEditor): boolean {
   const doc = editor.state.doc
   if (doc.childCount <= 1) return false
-  const allEmpty = Array.from(doc.children).every(
-    (node) => node.type.name === 'paragraph' && node.content.size === 0,
+  const children = Array.from(doc.children)
+  const isEmptyParagraph = (node: (typeof children)[number]) => (
+    node.type.name === 'paragraph' && node.content.size === 0
   )
-  if (!allEmpty) return false
+  const allEmpty = children.every(isEmptyParagraph)
   const tr = editor.state.tr
-  tr.delete(doc.firstChild!.nodeSize, doc.content.size)
+  if (allEmpty) {
+    tr.delete(doc.firstChild!.nodeSize, doc.content.size)
+    editor.view.dispatch(tr)
+    return true
+  }
+
+  // A previous cold-mount race can leave one or more empty paragraphs before
+  // the real SQL/Yjs content. Remove only that leading run; blank paragraphs
+  // between blocks and at the end remain user-editable content.
+  let leadingEmptySize = 0
+  for (const child of children) {
+    if (!isEmptyParagraph(child)) break
+    leadingEmptySize += child.nodeSize
+  }
+  if (leadingEmptySize === 0) return false
+  tr.delete(0, leadingEmptySize)
   editor.view.dispatch(tr)
   return true
 }

@@ -17,6 +17,8 @@ export interface DocumentCollaborationSession {
   document: Y.Doc
   provider: HocuspocusProvider
   persistence: IndexeddbPersistence | null
+  /** Resolves after IndexedDB has hydrated the Y.Doc (not after the server sync). */
+  localReady: Promise<void>
   destroy: () => void
 }
 
@@ -60,6 +62,14 @@ export function createDocumentCollaboration(
   let persistence: IndexeddbPersistence | null = null
   if (typeof indexedDB !== 'undefined') persistence = new IndexeddbPersistence(persistenceName, document)
 
+  // Keep local hydration as an explicit lifecycle barrier. A newly-created
+  // Y.Doc is intentionally empty; mounting a Tiptap collaboration editor
+  // before this promise settles can write its schema's default paragraph into
+  // the document and race the server snapshot.
+  const localReady = persistence
+    ? persistence.whenSynced.then(() => undefined).catch(() => undefined)
+    : Promise.resolve()
+
   // Hydrate the local document before opening the socket. Otherwise a stale
   // local seed can race the server snapshot and become a second Yjs insert.
   const websocketProvider = new HocuspocusProviderWebsocket({
@@ -93,7 +103,7 @@ export function createDocumentCollaboration(
     void websocketProvider.connect().catch(() => undefined)
   }
   if (persistence) {
-    void persistence.whenSynced.then(startConnection).catch(startConnection)
+    void localReady.then(startConnection)
     persistenceWaitTimer = setTimeout(startConnection, PERSISTENCE_WAIT_TIMEOUT_MS)
   } else {
     startConnection()
@@ -107,6 +117,7 @@ export function createDocumentCollaboration(
     document,
     provider,
     persistence,
+    localReady,
     destroy: () => {
       destroyed = true
       if (persistenceWaitTimer) clearTimeout(persistenceWaitTimer)

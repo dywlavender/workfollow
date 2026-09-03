@@ -12,7 +12,7 @@ import { uploadAttachment, type SharedNote } from '@/services/api'
 const props = defineProps<{ note: SharedNote | null; copying?: boolean }>()
 const emit = defineEmits<{ copy: [note: SharedNote]; refresh: [] }>()
 const collaborationSession = shallowRef<DocumentCollaborationSession | null>(null)
-const collaborationLive = ref(false)
+const collaborationReady = ref(false)
 const collaborationStatus = ref<DocumentCollaborationStatus>('connecting')
 const collaborationError = ref('')
 const liveTitle = ref('')
@@ -22,19 +22,22 @@ const visibleAttachments = computed(() => filterStandaloneAttachments(
   props.note?.attachments ?? [],
   props.note?.contentJson,
 ))
-const statusLabel = computed(() => ({
-  connecting: '协同连接中',
-  connected: '协同已连接',
-  disconnected: '协同离线',
-  error: collaborationError.value || '协同连接失败',
-}[collaborationStatus.value]))
+const statusLabel = computed(() => {
+  if (collaborationStatus.value === 'error') return collaborationError.value || '协同连接失败'
+  if (collaborationStatus.value === 'connected' && !collaborationReady.value) return '正文同步中…'
+  return {
+    connecting: '协同连接中',
+    connected: '协同已连接',
+    disconnected: '协同离线',
+  }[collaborationStatus.value]
+})
 
 function disposeCollaboration() {
   documentObserverCleanup?.()
   documentObserverCleanup = undefined
   collaborationSession.value?.destroy()
   collaborationSession.value = null
-  collaborationLive.value = false
+  collaborationReady.value = false
   collaborationStatus.value = 'connecting'
   liveTitle.value = ''
 }
@@ -62,7 +65,10 @@ function startCollaboration(note: SharedNote) {
     },
     onSynced: () => {
       if (props.note?.id !== note.id || !session) return
-      collaborationLive.value = session.document.getXmlFragment('default').length > 0
+      // The provider has merged the server snapshot. Only now is it safe to
+      // mount the collaborative editor; mounting against a cold Y.Doc would
+      // create Tiptap's default empty paragraph and persist it as real data.
+      collaborationReady.value = true
       liveTitle.value = session.document.getText('title').toString()
     },
     onError: (message) => handleCollaborationError(note, message),
@@ -71,7 +77,6 @@ function startCollaboration(note: SharedNote) {
   const title = session.document.getText('title')
   const applyLiveState = () => {
     if (props.note?.id !== note.id) return
-    if (fragment.length > 0) collaborationLive.value = true
     liveTitle.value = title.toString()
   }
   fragment.observeDeep(applyLiveState)
@@ -82,6 +87,16 @@ function startCollaboration(note: SharedNote) {
     documentObserverCleanup = undefined
   }
   collaborationSession.value = session
+  // A previously initialized local body is safe to display while an offline
+  // provider reconnects. Empty/unmarked local documents deliberately remain
+  // on the SQL fallback until the server sync callback above fires.
+  void session.localReady.then(() => {
+    if (props.note?.id !== note.id || collaborationSession.value !== session) return
+    const config = session.document.getMap('config')
+    const initialized = config.get('bodyInitialized') === true
+      || config.get('initialContentLoaded') === true
+    if (initialized && session.document.getXmlFragment('default').length > 0) collaborationReady.value = true
+  })
 }
 
 // 与 NoteEditor.replaceCollaborativeTitle 相同的差量写法：只替换变化区间，
@@ -115,8 +130,11 @@ function uploadImage(file: File) {
 
 // 逐项比较 id/permission：父级刷新共享列表会用新对象替换同一笔记，数组型
 // getter 会因引用不同误判变化，导致协同会话反复重建（编辑器不停抖动重挂载）。
-watch([() => props.note?.id, () => props.note?.permission], ([noteId]) => {
-  if (noteId && props.note) startCollaboration(props.note)
+watch([() => props.note?.id, () => props.note?.permission], ([noteId, permission]) => {
+  // Read-only shares use the SQL projection directly. They do not need a
+  // websocket/Y.Doc session, and therefore cannot introduce local default
+  // paragraphs while merely opening a shared note.
+  if (noteId && props.note && permission === 'EDITABLE') startCollaboration(props.note)
   else disposeCollaboration()
 }, { immediate: true })
 
@@ -130,7 +148,7 @@ onBeforeUnmount(disposeCollaboration)
       <header class="editor-header readonly-note-header">
         <div>
           <span>{{ note.sharedBy.nickname }} 分享给你</span>
-          <input v-if="canEdit" v-model="liveTitle" class="note-title-input" aria-label="笔记标题" maxlength="500" :disabled="collaborationStatus === 'error'" @input="replaceTitle" @blur="replaceTitle" />
+          <input v-if="canEdit" v-model="liveTitle" class="note-title-input" aria-label="笔记标题" maxlength="500" :disabled="!collaborationReady || collaborationStatus === 'connecting' || collaborationStatus === 'error'" @input="replaceTitle" @blur="replaceTitle" />
           <h1 v-else>{{ liveTitle || note.title }}</h1>
         </div>
         <div>
@@ -142,22 +160,14 @@ onBeforeUnmount(disposeCollaboration)
       </header>
       <ReadonlyAttachmentPanel label="文件附件" :attachments="visibleAttachments" />
       <RichTextDocument
-        v-if="canEdit && collaborationSession"
+        v-if="canEdit && collaborationSession && collaborationReady"
         class="collaboration-document"
         :document="collaborationSession.document"
-        :editable="collaborationStatus !== 'error'"
+        :editable="collaborationStatus !== 'connecting' && collaborationStatus !== 'error'"
         :seed-ready="true"
         :seed-document="false"
         slash-menu
         :upload-image="uploadImage"
-      />
-      <RichTextDocument
-        v-else-if="collaborationLive && collaborationSession"
-        class="collaboration-document"
-        :document="collaborationSession.document"
-        :editable="false"
-        :seed-ready="true"
-        :seed-document="false"
       />
       <RichTextDocument v-else class="collaboration-document" :model-value="note.contentJson" :editable="false" />
     </template>

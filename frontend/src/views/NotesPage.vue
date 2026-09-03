@@ -993,8 +993,32 @@ function applySharedNoteChange(change: NonNullable<typeof realtime.lastNoteChang
   }
 }
 
+async function loadPublishOptions() {
+  const teamId = selectedTeamId.value
+  if (!teamId) throw new Error('当前没有可用的团队。')
+  // Personal-note views do not run loadCollaboration(), so the publish
+  // dialog cannot assume that categories or update targets are already in
+  // memory. Load the options at the point where the dialog is requested and
+  // keep the same permission-aware filters as the team knowledge view.
+  const [loadedKnowledge, loadedCategories, loadedSubmissions] = await Promise.all([
+    fetchKnowledge({ teamId, includeArchived: canReview.value ? true : undefined }),
+    fetchKnowledgeCategories(teamId),
+    fetchMySubmissions(teamId),
+  ])
+  knowledge.value = loadedKnowledge.filter((item) => item.status === 'PUBLISHED')
+  archivedKnowledge.value = loadedKnowledge.filter((item) => item.status === 'ARCHIVED')
+  categories.value = loadedCategories
+  mySubmissions.value = loadedSubmissions
+}
+
 async function openPublish(type?: 'CREATE' | 'UPDATE', targetId?: string | null) {
   if (!(await syncSelectedNoteForAction())) return
+  try {
+    await loadPublishOptions()
+  } catch (cause: any) {
+    fail(cause, '团队知识分类读取失败，请稍后重试。')
+    return
+  }
   const linkedTargetId = selectedKnowledgeForNote.value?.id ?? null
   const resolvedTargetId = targetId ?? linkedTargetId
   publishType.value = type ?? (resolvedTargetId ? 'UPDATE' : 'CREATE')

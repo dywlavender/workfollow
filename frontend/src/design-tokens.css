@@ -358,14 +358,18 @@
   /* Component: atmosphere glass layers. These are semantic material roles,
      not page-specific styling. A surface may own one glass role; descendants
      that need to escape the surface belong to the overlay layer instead. */
-  --glass-blur-rail: 8px;
-  --glass-blur-navigation: 7px;
-  --glass-blur-panel: 7px;
-  --glass-blur-detail: 8px;
-  --glass-blur-editor: 8px;
-  --glass-blur-control: 6px;
-  --glass-blur-dialog: 12px;
-  --glass-blur-menu: 10px;
+  /* Keep the same layered-glass character as the design preview without
+     making every large pane pay for a high-radius backdrop repaint. */
+  --glass-blur-rail: 4px;
+  --glass-blur-navigation: 4px;
+  --glass-blur-panel: 5px;
+  --glass-blur-detail: 5px;
+  --glass-blur-editor: 5px;
+  --glass-blur-control: 4px;
+  --glass-blur-dialog: 8px;
+  --glass-blur-menu: 7px;
+  --atmosphere-aurora-blur: 40px;
+  --atmosphere-wisp-blur: 5px;
   --glass-saturation-rail: 1.08;
   --glass-saturation-navigation: 1.06;
   --glass-saturation-panel: 1.04;

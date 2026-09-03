@@ -69,6 +69,14 @@ defineProps<{
   animation: route-loading-shimmer var(--loading-skeleton-duration) var(--loading-skeleton-ease) infinite;
 }
 
+/* Route transitions already compete with the page being mounted. In an
+   atmosphere theme use a static skeleton instead of repeatedly repainting
+   large background gradients; the loading structure remains visible. */
+html[data-atmosphere="on"] .route-loading-block {
+  animation: none;
+  background: var(--loading-skeleton-from);
+}
+
 .route-loading-title { width: min(240px, 42%); height: 28px; }
 .route-loading-action { width: 104px; height: 36px; }
 

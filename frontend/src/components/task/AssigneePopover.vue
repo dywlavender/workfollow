@@ -26,6 +26,14 @@ const visibleMembers = computed(() => {
   if (!needle) return props.members
   return props.members.filter(({ user }) => `${user.nickname} ${user.username}`.toLowerCase().includes(needle))
 })
+const visibleMemberIds = computed(() => visibleMembers.value.map((member) => member.userId))
+const selectedVisibleCount = computed(() => visibleMemberIds.value.filter((userId) => draft.value.includes(userId)).length)
+const allVisibleSelected = computed(() => (
+  visibleMemberIds.value.length > 0 && selectedVisibleCount.value === visibleMemberIds.value.length
+))
+const someVisibleSelected = computed(() => (
+  selectedVisibleCount.value > 0 && !allVisibleSelected.value
+))
 const selectedMembers = computed(() => props.members.filter((member) => props.modelValue.includes(member.userId)))
 const buttonLabel = computed(() => {
   if (!selectedMembers.value.length) return '指派给'
@@ -77,6 +85,14 @@ function toggle(userId: string) {
     ? draft.value.filter((item) => item !== userId)
     : [...draft.value, userId]
 }
+function toggleVisible() {
+  const visibleIds = new Set(visibleMemberIds.value)
+  if (allVisibleSelected.value) {
+    draft.value = draft.value.filter((userId) => !visibleIds.has(userId))
+    return
+  }
+  draft.value = Array.from(new Set([...draft.value, ...visibleMemberIds.value]))
+}
 function apply() {
   if (!draft.value.length) return
   emit('change', [...draft.value])
@@ -122,6 +138,11 @@ onBeforeUnmount(() => {
     <section v-if="open" ref="popover" class="assignee-popover" :style="popoverStyle" role="dialog" aria-label="指派团队成员" @click.stop>
       <header><strong>指派给</strong><button type="button" aria-label="关闭" @click="close"><IconX :size="15" /></button></header>
       <label class="assignee-search"><IconSearch :size="15" /><input v-model="query" placeholder="搜索团队成员" autofocus /></label>
+      <label class="member-select-all assignee-select-all" :class="{ disabled: !visibleMembers.length }">
+        <input type="checkbox" :checked="allVisibleSelected" :indeterminate="someVisibleSelected" :disabled="!visibleMembers.length" @change="toggleVisible" />
+        <span>{{ query.trim() ? '全选搜索结果' : '全选全部成员' }}</span>
+        <small>{{ selectedVisibleCount }}/{{ visibleMembers.length }}</small>
+      </label>
       <div class="assignee-options" role="group" aria-label="团队成员">
         <button
           v-for="member in visibleMembers"

@@ -26,6 +26,7 @@ import {
 } from '@/services/api'
 import EditorLinkDialog from '@/components/editor/EditorLinkDialog.vue'
 import EditorSlashMenu from '@/components/editor/EditorSlashMenu.vue'
+import RichTextDocument from '@/components/RichTextDocument.vue'
 import RichTextToolbar from '@/components/RichTextToolbar.vue'
 import TaskSearchDialog from '@/components/notes/TaskSearchDialog.vue'
 import TodoDialog from '@/components/todo/TodoDialog.vue'
@@ -111,7 +112,7 @@ let hydratingEditor = false
 let collaborationInitializationAuthFailed = false
 let projectionConfirmTimer: number | undefined
 let titleHydrationComplete = false
-let collaborationContentReady = false
+const collaborationContentReady = ref(false)
 // A provider having no queued WebSocket updates is not the same thing as the
 // SQL projection having caught up. Track edits made by this editor so opening
 // an untouched note can stay responsive while a real local edit still gets a
@@ -129,6 +130,7 @@ const collaborationStatusLabel = computed(() => {
   if (collaborationStatus.value === 'error') return '协同认证失败'
   if (collaborationStatus.value === 'disconnected') return '协同离线，正在重连…'
   if (collaborationStatus.value === 'connecting') return '连接协同…'
+  if (!collaborationContentReady.value) return '正文同步中…'
   if (collaborationPendingChanges.value > 0) return '协同保存中…'
   return '协同已连接'
 })
@@ -152,6 +154,7 @@ const bubbleMenuOptions = {
 const editor = shallowRef<TiptapEditor | null>(null)
 
 function createNoteEditor(document: Y.Doc) {
+  if (editor.value || document !== collaborationSession.value?.document) return
   const instance = new TiptapEditor({
     extensions: [
       ...createWorkFollowEditorExtensions('输入内容，或输入 / 插入格式', { collaboration: true }),
@@ -170,7 +173,7 @@ function createNoteEditor(document: Y.Doc) {
         return true
       },
       handlePaste: (_view, event) => {
-        if (!collaborationContentReady) return false
+        if (!collaborationContentReady.value) return false
         const files = Array.from(event.clipboardData?.files ?? []).filter((file) => file.type.startsWith('image/'))
         if (!files.length) return false
         event.preventDefault()
@@ -199,15 +202,32 @@ function createNoteEditor(document: Y.Doc) {
       // Only a transaction initiated by this editor should make navigation
       // wait for the SQL projection.
       const userEdit = transaction.docChanged && (currentEditor.isFocused || transaction.getMeta('uiEvent') != null)
-      if (collaborationContentReady && userEdit && !isChangeOrigin(transaction)) markLocalEdit()
+      if (collaborationContentReady.value && userEdit && !isChangeOrigin(transaction)) markLocalEdit()
       scheduleContentSnapshot(currentEditor)
       scheduleTaskHydration()
       window.clearTimeout(slashDetectTimer)
       slashDetectTimer = window.setTimeout(() => slash.detect(currentEditor), 0)
     },
   })
-  instance.setEditable(collaborationContentReady)
+  instance.setEditable(collaborationContentReady.value)
   editor.value = instance
+}
+
+function hasReliableLocalBody(document: Y.Doc): boolean {
+  const config = document.getMap('config')
+  const initialized = config.get('bodyInitialized') === true
+    || config.get('initialContentLoaded') === true
+  // An initialized empty body is valid, but it must still wait for the server
+  // snapshot before mounting. A non-empty, marked document is safe to render
+  // from IndexedDB while the provider reconnects because mounting it cannot
+  // create the first default paragraph.
+  return initialized && document.getXmlFragment('default').length > 0
+}
+
+function mountNoteEditor(document: Y.Doc): boolean {
+  if (document !== collaborationSession.value?.document) return false
+  if (!editor.value) createNoteEditor(document)
+  return editor.value != null
 }
 
 function replaceCollaborativeTitle(value: string) {
@@ -237,7 +257,7 @@ function bindNoteTitle(document: Y.Doc) {
   const apply = () => {
     if (document !== collaborationSession.value?.document) return
     const nextTitle = target.toString()
-    if (nextTitle || collaborationContentReady) {
+    if (nextTitle || collaborationContentReady.value) {
       title.value = nextTitle
       if (titleHydrationComplete) emitCurrentNoteChange()
     }
@@ -285,12 +305,26 @@ async function initializeNoteBody(note: Note, session: DocumentCollaborationSess
   const fragment = session.document.getXmlFragment('default')
   if (config.get('bodyInitialized') === true || config.get('initialContentLoaded') === true || fragment.length > 0) return true
   if (collaborationInitializationAuthFailed) return false
+  let claimedInitialization = false
+  let claimedInitial: Record<string, unknown> | undefined
   try {
     await initializeCollaborativeField(
       `note:${note.id}`,
       'body',
-      (initial) => seedNoteDocument(note, session.document, initial as Partial<Note> | undefined),
+      (initial) => {
+        // Do not seed from the initialization callback until the Y.Doc has a
+        // Tiptap editor. The callback can run before the editor is mounted;
+        // queue the authoritative SQL snapshot and mount only after the
+        // provider has finished its initial sync.
+        claimedInitialization = true
+        claimedInitial = initial
+      },
     )
+    if (claimedInitialization) {
+      if (props.note?.id !== note.id || collaborationSession.value !== session) return false
+      if (!mountNoteEditor(session.document)) return false
+      seedNoteDocument(note, session.document, claimedInitial as Partial<Note> | undefined)
+    }
     return true
   } catch (error) {
     if (error instanceof CollaborationInitializationError && error.kind === 'auth') collaborationInitializationAuthFailed = true
@@ -314,8 +348,10 @@ function scheduleOfflineNoteSeed(note: Note) {
     ) {
       void initializeNoteBody(note, session).then((ready) => {
         if (ready && props.note?.id === note.id) {
+          mountNoteEditor(session.document)
+          if (editor.value) collapseAllEmptyParagraphs(editor.value)
           titleHydrationComplete = true
-          collaborationContentReady = true
+          collaborationContentReady.value = true
           editor.value?.setEditable(true)
         }
       })
@@ -332,9 +368,10 @@ function scheduleCollaborationConnectWatchdog(note: Note) {
       collaborationStatus.value = 'connected'
       void initializeNoteBody(note, session).then((ready) => {
         if (ready && props.note?.id === note.id) {
+          mountNoteEditor(session.document)
           if (editor.value) collapseAllEmptyParagraphs(editor.value)
           titleHydrationComplete = true
-          collaborationContentReady = true
+          collaborationContentReady.value = true
           editor.value?.setEditable(true)
         }
       })
@@ -356,7 +393,7 @@ function startNoteCollaboration(note: Note) {
   projectionFlushPromise = null
   collaborationInitializationAuthFailed = false
   titleHydrationComplete = false
-  collaborationContentReady = false
+  collaborationContentReady.value = false
   let session: DocumentCollaborationSession | null = null
   session = createNoteCollaboration(note.id, null, {
     onStatus: (status) => {
@@ -376,11 +413,13 @@ function startNoteCollaboration(note: Note) {
       window.clearTimeout(collaborationConnectTimer)
       collaborationStatus.value = 'connected'
       window.clearTimeout(collaborationSeedTimer)
-      void initializeNoteBody(note, session).then((ready) => {
+      const currentSession = session
+      void initializeNoteBody(note, currentSession).then((ready) => {
         if (props.note?.id !== note.id || !ready) return
+        mountNoteEditor(currentSession.document)
         if (editor.value) collapseAllEmptyParagraphs(editor.value)
         titleHydrationComplete = true
-        collaborationContentReady = true
+        collaborationContentReady.value = true
         editor.value?.setEditable(true)
       })
     },
@@ -396,7 +435,13 @@ function startNoteCollaboration(note: Note) {
   })
   collaborationSession.value = session
   bindNoteTitle(session.document)
-  createNoteEditor(session.document)
+  // A cold Y.Doc has no content yet. Keep the SQL projection visible while
+  // IndexedDB and the provider hydrate it; only a marked local document may
+  // mount early, because it already contains a complete collaborative body.
+  void session.localReady.then(() => {
+    if (props.note?.id !== note.id || collaborationSession.value !== session) return
+    if (hasReliableLocalBody(session.document)) mountNoteEditor(session.document)
+  })
   scheduleCollaborationConnectWatchdog(note)
 }
 
@@ -417,7 +462,7 @@ function disposeNoteCollaboration() {
   collaborationSession.value?.destroy()
   editor.value = null
   collaborationSession.value = null
-  collaborationContentReady = false
+  collaborationContentReady.value = false
   titleHydrationComplete = false
   collaborationPendingChanges.value = 0
   localEditGeneration = 0
@@ -434,11 +479,11 @@ async function syncNoteCollaboration(note: Note | null) {
 
 function onTitleInput() {
   title.value = title.value.replace(/[\r\n]+/g, ' ')
-  if (collaborationContentReady && title.value.trim()) replaceCollaborativeTitle(title.value)
+  if (collaborationContentReady.value && title.value.trim()) replaceCollaborativeTitle(title.value)
 }
 
 function commitCollaborativeTitle() {
-  if (!collaborationContentReady) return
+  if (!collaborationContentReady.value) return
   if (!title.value.trim()) {
     title.value = collaborationSession.value?.document.getText('title').toString() || props.note?.title || '未命名笔记'
   }
@@ -454,7 +499,7 @@ function flushCollaboration() {
 }
 
 function markLocalEdit() {
-  if (!props.note || !collaborationContentReady) return
+  if (!props.note || !collaborationContentReady.value) return
   localEditGeneration += 1
   scheduleProjectionConfirmation()
 }
@@ -466,7 +511,7 @@ function scheduleProjectionConfirmation() {
     if (
       !props.note
       || collaborationPendingChanges.value > 0
-      || !collaborationContentReady
+      || !collaborationContentReady.value
       || localEditGeneration <= projectedEditGeneration
     ) return
     void flushAndWaitForProjection().catch(() => undefined)
@@ -475,7 +520,7 @@ function scheduleProjectionConfirmation() {
 
 function insertSlashBlock(type: WorkFollowSlashCommand) {
   const currentEditor = editor.value
-  if (!currentEditor || !collaborationContentReady) return
+  if (!currentEditor || !collaborationContentReady.value) return
   const chain = currentEditor.chain().focus()
   slash.deleteRange(chain, currentEditor.state.selection.from)
   if (type === 'link') {
@@ -580,19 +625,19 @@ function currentNoteSnapshot(currentEditor: CoreEditor | null = editor.value ?? 
       type: 'doc',
       content: [{ type: 'paragraph' }],
     }) as Record<string, unknown>,
-    plainText: currentEditor?.getText({ blockSeparator: '\n' }) ?? '',
+    plainText: currentEditor?.getText({ blockSeparator: '\n' }) ?? props.note?.plainText ?? '',
   }
 }
 
 function emitCurrentNoteChange(currentEditor: CoreEditor | null = editor.value ?? null) {
-  if (!props.note || !collaborationContentReady) return
+  if (!props.note || !collaborationContentReady.value) return
   emit('change', currentNoteSnapshot(currentEditor))
 }
 
 async function runProjectionBarrier(timeoutMs: number, lifecycle: number): Promise<NoteEditorActionSnapshot> {
   const note = props.note
   const currentEditor = editor.value
-  if (!note || !currentEditor || !collaborationContentReady || collaborationStatus.value === 'error') {
+  if (!note || !currentEditor || !collaborationContentReady.value || collaborationStatus.value === 'error') {
     throw new Error('笔记协同尚未就绪，无法读取最新内容。')
   }
 
@@ -654,7 +699,7 @@ async function flushAndWaitForProjection(timeoutMs = 6000): Promise<NoteEditorAc
     // While the collaboration document is still connecting, the editor is
     // disabled and cannot contain a user edit. Use the SQL detail directly so
     // switching away is not blocked by a cold WebSocket/IndexedDB startup.
-    if (!editor.value || !collaborationContentReady) {
+    if (!editor.value || !collaborationContentReady.value) {
       return {
         note: props.note,
         title: props.note.title,
@@ -674,7 +719,7 @@ async function flushAndWaitForProjection(timeoutMs = 6000): Promise<NoteEditorAc
     }
   }
 
-  if (!props.note || !editor.value || !collaborationContentReady || collaborationStatus.value === 'error') {
+  if (!props.note || !editor.value || !collaborationContentReady.value || collaborationStatus.value === 'error') {
     throw new Error('笔记协同尚未就绪，无法读取最新内容。')
   }
 
@@ -691,13 +736,14 @@ async function flushAndWaitForProjection(timeoutMs = 6000): Promise<NoteEditorAc
 defineExpose({ flushCollaboration, flushAndWaitForProjection })
 
 function requestSaveAsTemplate() {
-  if (!props.note || !editor.value) return
+  if (!props.note) return
+  const snapshot = currentNoteSnapshot()
   emit('saveAsTemplate', {
     note: props.note,
-    title: title.value.trim() || '未命名笔记',
+    title: snapshot.title,
     folderId: folderId.value || null,
-    contentJson: editor.value.getJSON() as Record<string, unknown>,
-    plainText: editor.value.getText({ blockSeparator: '\n' }),
+    contentJson: snapshot.contentJson,
+    plainText: snapshot.plainText,
   })
 }
 
@@ -744,7 +790,7 @@ function handleImmersiveKeydown(event: KeyboardEvent) {
 }
 
 function setLink() {
-  if (!collaborationContentReady) return
+  if (!collaborationContentReady.value) return
   linkDialog.value?.open()
 }
 
@@ -787,7 +833,7 @@ function activeBlockId(currentEditor: CoreEditor): string | null {
 function createTodoFromSelection() {
   const text = selectedText()
   const currentEditor = editor.value
-  if (!text || !currentEditor || !collaborationContentReady) return
+  if (!text || !currentEditor || !collaborationContentReady.value) return
   const { from, to } = currentEditor.state.selection
   pendingTaskContext.value = {
     from, to, position: to, blockId: activeBlockId(currentEditor), excerpt: text,
@@ -799,7 +845,7 @@ function createTodoFromSelection() {
 
 function openTaskCreateAtCursor() {
   const currentEditor = editor.value
-  if (!currentEditor || !collaborationContentReady) return
+  if (!currentEditor || !collaborationContentReady.value) return
   const position = currentEditor.state.selection.from
   pendingTaskContext.value = {
     from: position, to: position, position, blockId: activeBlockId(currentEditor), excerpt: '',
@@ -811,7 +857,7 @@ function openTaskCreateAtCursor() {
 
 function openTaskSearchAtCursor() {
   const currentEditor = editor.value
-  if (!currentEditor || !collaborationContentReady) return
+  if (!currentEditor || !collaborationContentReady.value) return
   const position = currentEditor.state.selection.from
   pendingTaskContext.value = {
     from: position, to: position, position, blockId: activeBlockId(currentEditor), excerpt: '',
@@ -820,7 +866,7 @@ function openTaskSearchAtCursor() {
 }
 
 async function saveLinkedTask(payload: TodoPayload) {
-  if (!props.note || !pendingTaskContext.value || !editor.value || !collaborationContentReady) return
+  if (!props.note || !pendingTaskContext.value || !editor.value || !collaborationContentReady.value) return
   const context = pendingTaskContext.value
   const created = await postTodo({
     ...payload,
@@ -845,7 +891,7 @@ async function saveLinkedTask(payload: TodoPayload) {
 }
 
 async function linkExistingTask(todo: Todo) {
-  if (!props.note || !pendingTaskContext.value || !editor.value || !collaborationContentReady) return
+  if (!props.note || !pendingTaskContext.value || !editor.value || !collaborationContentReady.value) return
   const context = pendingTaskContext.value
   // The taskReference node is the source of truth. The collaboration
   // snapshot reconciles its REFERENCES backlink in the same transaction as
@@ -962,7 +1008,7 @@ async function copySelection() {
 }
 
 async function handleFiles(files: FileList | null) {
-  if (!files || !collaborationContentReady) return
+  if (!files || !collaborationContentReady.value) return
   let uploadedStandaloneFile = false
   const insertImages = fileUploadMode.value === 'embedded'
   for (const file of Array.from(files)) {
@@ -981,7 +1027,7 @@ async function handleFiles(files: FileList | null) {
 }
 
 function openFilePicker(mode: 'embedded' | 'standalone') {
-  if (!collaborationContentReady) return
+  if (!collaborationContentReady.value) return
   fileUploadMode.value = mode
   fileInput.value?.click()
 }
@@ -1070,7 +1116,7 @@ watch(immersiveOpen, (open) => {
           <span class="task-editor-save-state" aria-live="polite">{{ formatLastSavedAt(lastSavedAt) }}</span>
         </div>
       </header>
-      <RichTextToolbar v-if="editor" :editor="editor" attachment @link="setLink" @attachment="openFilePicker('embedded')" />
+      <RichTextToolbar v-if="editor && collaborationContentReady" :editor="editor" attachment @link="setLink" @attachment="openFilePicker('embedded')" />
       <input ref="fileInput" class="sr-only" type="file" multiple :accept="fileUploadMode === 'embedded' ? embeddedFileAccept : standaloneFileAccept" @change="handleFiles(($event.target as HTMLInputElement).files)" />
       <div class="selection-menu-host">
         <BubbleMenu v-if="editor" :editor="editor" :tippy-options="bubbleMenuOptions" class="selection-menu">
@@ -1078,7 +1124,13 @@ watch(immersiveOpen, (open) => {
           <button type="button" @mousedown.prevent @click="copySelection">复制</button>
         </BubbleMenu>
       </div>
-      <EditorContent class="tiptap-editor" :editor="editor ?? undefined" />
+      <RichTextDocument
+        v-if="!editor"
+        class="note-editor-collaboration-fallback"
+        :model-value="editorContent ?? note.contentJson"
+        :editable="false"
+      />
+      <EditorContent v-else class="tiptap-editor" :editor="editor" />
       <span v-if="taskFeedback" class="note-task-feedback" role="status">{{ taskFeedback }}</span>
       <EditorSlashMenu :commands="workFollowSlashCommands" :active-index="slash.activeIndex.value" :position="slash.position.value" :open="slash.open.value" id-prefix="note-slash-command" @select="insertSlashBlock" @hover="slash.activeIndex.value = $event" />
       <section class="attachment-panel" :class="{ 'is-expanded': attachmentPanelOpen }">

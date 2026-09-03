@@ -250,6 +250,38 @@ deploy\windows\stop.bat
 
 升级当前版本时必须运行数据库迁移；Agent 写操作记录使用的新表会在迁移到 `0034` 时创建。不要只替换前端文件而跳过安装脚本。
 
+### 代码更新包（复用已有离线环境）
+
+如果目标机已经安装过完整发布包，并且本次只更新业务代码，可以生成不重复携带 Node.js 环境的代码更新包：
+
+```bash
+./deploy/build-deployment-packages.sh --version 0.1.1 --code-only
+```
+
+代码更新包包含后端代码、前端构建产物、协同服务源码和部署脚本，但不包含以下已有环境：
+
+- `runtime/node/`；
+- `collaboration/node_modules/`；
+- `.venv/`、`wheelhouse/` 和业务数据。
+
+打包机仍需要 Node.js 和 npm，因为前端构建仍在打包机上执行；“代码更新包”只表示不把 Node.js 运行时和协同服务依赖再次交付到目标机。
+
+此模式只适用于以下内容都没有变化的更新：`collaboration/package.json`、`collaboration/package-lock.json`、内置 Node.js 大版本，以及 `deploy/requirements-offline.txt`。如果协同服务增加或升级了依赖、Node.js 运行时变更，或 Python 依赖变更，应重新生成完整发布包。
+
+Linux 更新步骤（以 `/opt/workfollow` 为例）：
+
+```bash
+cd /opt/workfollow
+./deploy/linux/backup.sh
+./deploy/linux/stop.sh
+tar -xzf /path/to/WorkFollow-0.1.1-linux-x86_64-update.tar.gz -C /opt/workfollow
+./deploy/linux/start.sh
+```
+
+Windows 更新步骤：先执行 `deploy\\windows\\backup.bat` 和 `deploy\\windows\\stop.bat`，再将 `WorkFollow-0.1.1-windows-x64-update.zip` 解压并覆盖到原安装目录，最后执行 `deploy\\windows\\start.bat`。解压时不要删除原目录中的 `runtime`、`collaboration\\node_modules`、`.venv`、`data` 和 `run`；更新包本身不会覆盖这些目录。
+
+`start` 脚本会在后端未运行时执行数据库迁移，因此代码更新包不应执行 `install` 脚本；后者用于首次安装完整包，并要求包内带有 Node.js 运行时和离线依赖。
+
 Linux 备份：
 
 ```bash
