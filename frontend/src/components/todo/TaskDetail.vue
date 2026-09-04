@@ -6,7 +6,7 @@ import { EditorContent } from '@tiptap/vue-3'
 import dayjs, { type Dayjs } from 'dayjs'
 import {
   IconBell, IconCalendar, IconCalendarOff, IconCheck, IconChevronLeft, IconChevronRight, IconClock,
-  IconDots, IconFile, IconFlag, IconLink, IconRepeat, IconTag, IconTrash, IconX,
+  IconDots, IconFlag, IconLink, IconRepeat, IconTag, IconTrash, IconX,
 } from '@tabler/icons-vue'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import * as Y from 'yjs'
@@ -24,7 +24,7 @@ import { isDateOnlyDue } from '@/modules/todo/dueDate'
 import { formatLastSavedAt } from '@/modules/editor/saveStatus'
 import { getScheduleMarkers } from '@/modules/todo/scheduleMarkers'
 import { createTaskCollaboration, type TaskCollaborationSession, type TaskCollaborationStatus } from '@/modules/editor/taskCollaboration'
-import { fetchTodo, uploadTaskAttachment, type Attachment, type NoteListItem, type TeamMember, type Todo, type TodoAssignmentStatus, type TodoPayload, type TodoPriority, type TodoRecurrenceType } from '@/services/api'
+import { fetchTodo, uploadTaskAttachment, type NoteListItem, type TeamMember, type Todo, type TodoAssignmentStatus, type TodoPayload, type TodoPriority, type TodoRecurrenceType } from '@/services/api'
 import { initializeCollaborativeField, CollaborationInitializationError } from '@/modules/editor/collaborationInitialization'
 import { contentJsonSemanticallyEqual } from '@/modules/editor/contentProjection'
 
@@ -86,8 +86,6 @@ const slash = useSlashMenu({
   idPrefix: 'task-slash-command',
 })
 const fileInput = ref<HTMLInputElement | null>(null)
-const attachmentItems = ref<Attachment[]>([])
-const attachmentUploading = ref(false)
 const tagPanelOpen = ref(false)
 const tagValue = ref('')
 const relationDialogOpen = ref(false)
@@ -161,6 +159,14 @@ function createTaskEditor(document: TaskCollaborationSession['document']) {
         else if (event.key === 'Escape') slash.close()
         else return false
         event.preventDefault()
+        return true
+      },
+      handlePaste: (_view, event) => {
+        if (!canEditContent.value || !collaborationContentReady) return false
+        const images = Array.from(event.clipboardData?.files ?? []).filter((file) => file.type.startsWith('image/'))
+        if (!images.length) return false
+        event.preventDefault()
+        void uploadFilesIntoBody(images)
         return true
       },
       handleClick: (_view, _position, event) => {
@@ -844,7 +850,6 @@ async function sync(todo: Todo | null) {
   } else {
     editorReady = false
   }
-  attachmentItems.value = []
   resizeTitleInput()
 }
 
@@ -1048,23 +1053,45 @@ function insertBlock(type: WorkFollowSlashCommand) {
   savedSelection.value = null
 }
 async function uploadAttachmentFile(event: Event) {
-  const file = (event.target as HTMLInputElement).files?.[0]
-  if (!file || !props.todo || !canEditContent.value || !collaborationContentReady) return
-  attachmentUploading.value = true
+  const input = event.target as HTMLInputElement
+  const files = Array.from(input.files ?? [])
+  input.value = ''
+  await uploadFilesIntoBody(files)
+}
+
+async function uploadFilesIntoBody(files: File[]) {
+  const taskId = props.todo?.id
+  const targetEditor = editor.value
+  if (!files.length || !taskId || !targetEditor || !targetEditor.isEditable || !canEditContent.value || !collaborationContentReady) return
+  const isCurrentEditor = () => props.todo?.id === taskId
+    && editor.value === targetEditor && !targetEditor.isDestroyed && targetEditor.isEditable
+  showNotice(files.every((file) => file.type.startsWith('image/')) ? '正在上传图片…' : '正在上传文件…')
   try {
-    const attachment = await uploadTaskAttachment(props.todo.id, file)
-    attachmentItems.value = [...attachmentItems.value, attachment]
-    const chain = editor.value?.chain().focus()
-    if (file.type.startsWith('image/')) {
-      // The installed Tiptap command typings do not know about our extended
-      // attachmentId attribute, but the runtime node schema does.
-      chain?.setImage({ src: attachment.url, alt: attachment.originalName, attachmentId: attachment.id } as { src: string; alt?: string; title?: string }).run()
+    // Upload sequentially to preserve clipboard order. Bind the result to the
+    // initiating editor, never to whichever task is selected after the request.
+    for (const file of files) {
+      if (!isCurrentEditor()) return
+      const attachment = await uploadTaskAttachment(taskId, file)
+      if (!isCurrentEditor()) return
+      const chain = targetEditor.chain().focus()
+      if (file.type.startsWith('image/')) {
+        chain.insertContent({
+          type: 'image',
+          attrs: { src: attachment.url, alt: attachment.originalName, attachmentId: attachment.id },
+        }).run()
+      } else {
+        chain.insertContent({
+          type: 'text',
+          text: attachment.originalName,
+          marks: [{ type: 'link', attrs: { href: attachment.url } }],
+        }).run()
+      }
+      flushCollaboration()
     }
-    else chain?.setLink({ href: attachment.url }).insertContent(attachment.originalName).unsetLink().run()
-    flushCollaboration()
-    showNotice('附件已上传')
-  } catch { showNotice('附件上传失败，请重试') }
-  finally { attachmentUploading.value = false; (event.target as HTMLInputElement).value = '' }
+    showNotice('已插入正文')
+  } catch {
+    if (isCurrentEditor()) showNotice('上传失败，请重试')
+  }
 }
 function addTaskTag() {
   if (!canEditMetadata.value) {
@@ -1247,7 +1274,6 @@ onBeforeUnmount(() => {
       <span v-if="inlineNotice" class="task-editor-inline-notice" role="status">{{ inlineNotice }}</span>
       <input ref="fileInput" class="sr-only" type="file" accept=".png,.jpg,.jpeg,.webp,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.md,.txt,.mp4,.mov,.m4v,.webm" @change="uploadAttachmentFile" />
       <section v-if="tagPanelOpen && canEditMetadata" class="task-inline-property-panel" role="dialog" aria-label="添加代办标签" @click.stop><form @submit.prevent="addTaskTag"><IconTag :size="16" /><input v-model="tagValue" autofocus placeholder="输入标签" maxlength="24" /><button class="primary-button" type="submit">添加</button><button type="button" aria-label="关闭" @click="tagPanelOpen = false"><IconX :size="15" /></button></form></section>
-      <section v-if="attachmentUploading || attachmentItems.length" class="task-attachment-summary" aria-label="本次上传的附件"><span v-if="attachmentUploading">正在上传附件…</span><a v-for="attachment in attachmentItems" :key="attachment.id" :href="attachment.url" target="_blank" rel="noopener noreferrer"><IconFile :size="15" />{{ attachment.originalName }}</a></section>
     </div>
 
     <section v-if="todo.sources.length" class="task-source-section" aria-label="代办来源">
