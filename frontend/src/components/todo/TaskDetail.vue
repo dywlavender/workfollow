@@ -14,9 +14,19 @@ import * as Y from 'yjs'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import EditorBubbleMenu from '@/components/EditorBubbleMenu.vue'
 import EditorLinkDialog from '@/components/editor/EditorLinkDialog.vue'
+import EditorSheetPickerDialog from '@/components/editor/EditorSheetPickerDialog.vue'
 import EditorSlashMenu from '@/components/editor/EditorSlashMenu.vue'
+import RichTextToolbar from '@/components/RichTextToolbar.vue'
 import AssigneePopover from '@/components/task/AssigneePopover.vue'
 import TaskRelationDialog from '@/components/task/TaskRelationDialog.vue'
+import {
+  isSpreadsheetFile,
+  readSpreadsheet,
+  spreadsheetTable,
+  type SpreadsheetData,
+  type SpreadsheetSheetMeta,
+} from '@/modules/editor/excelImport'
+import { importedTableTruncated, tableFromHtml, tableFromTsv, type ImportedTable } from '@/modules/editor/tablePaste'
 import { createWorkFollowEditorExtensions, collapseAllEmptyParagraphs } from '@/modules/editor/tiptap'
 import { workFollowSlashCommands, type WorkFollowSlashCommand } from '@/modules/editor/slashCommands'
 import { useSlashMenu } from '@/modules/editor/slashMenu'
@@ -86,6 +96,10 @@ const slash = useSlashMenu({
   idPrefix: 'task-slash-command',
 })
 const fileInput = ref<HTMLInputElement | null>(null)
+const excelInput = ref<HTMLInputElement | null>(null)
+const sheetPickerOpen = ref(false)
+const sheetPickerSheets = ref<SpreadsheetSheetMeta[]>([])
+let sheetPickerResolve: ((sheetName: string | null) => void) | null = null
 const tagPanelOpen = ref(false)
 const tagValue = ref('')
 const relationDialogOpen = ref(false)
@@ -163,10 +177,42 @@ function createTaskEditor(document: TaskCollaborationSession['document']) {
       },
       handlePaste: (_view, event) => {
         if (!canEditContent.value || !collaborationContentReady) return false
-        const images = Array.from(event.clipboardData?.files ?? []).filter((file) => file.type.startsWith('image/'))
-        if (!images.length) return false
+        const clipboard = event.clipboardData
+        if (!clipboard) return false
+        const files = Array.from(clipboard.files ?? [])
+        const images = files.filter((file) => file.type.startsWith('image/'))
+        const spreadsheets = files.filter((file) => isSpreadsheetFile(file))
+        if (images.length || spreadsheets.length) {
+          event.preventDefault()
+          if (images.length) void uploadFilesIntoBody(images)
+          for (const file of spreadsheets) importSpreadsheetIntoTask(file)
+          return true
+        }
+        // Excel / Numbers / WPS 复制的表格：首行提升为表头；混排网页片段
+        // 仍走 Tiptap 默认解析。纯文本 TSV（复制区域为文本）同样转表。
+        const html = clipboard.getData('text/html')
+        if (html) {
+          const table = tableFromHtml(html)
+          if (!table) return false
+          event.preventDefault()
+          insertPastedTable(table)
+          return true
+        }
+        const textTable = tableFromTsv(clipboard.getData('text/plain'))
+        if (!textTable) return false
         event.preventDefault()
-        void uploadFilesIntoBody(images)
+        insertPastedTable(textTable)
+        return true
+      },
+      handleDrop: (_view, event, _slice, moved) => {
+        if (moved || !canEditContent.value || !collaborationContentReady) return false
+        const files = Array.from(event.dataTransfer?.files ?? [])
+        const images = files.filter((file) => file.type.startsWith('image/'))
+        const spreadsheets = files.filter((file) => isSpreadsheetFile(file))
+        if (!images.length && !spreadsheets.length) return false
+        event.preventDefault()
+        if (images.length) void uploadFilesIntoBody(images)
+        for (const file of spreadsheets) importSpreadsheetIntoTask(file)
         return true
       },
       handleClick: (_view, _position, event) => {
@@ -286,7 +332,7 @@ function buildRecurrenceConfig(): Record<string, number | string> | null {
 const canEdit = computed(() => Boolean(props.todo?.permissions.editable))
 const canEditContent = computed(() => Boolean(props.todo?.permissions.contentEditable ?? props.todo?.permissions.editable))
 const canEditMetadata = computed(() => canEdit.value && metadataCollaborationReady.value)
-const contentOnlyCommandTypes = new Set<WorkFollowSlashCommand>(['attachment', 'relation'])
+const contentOnlyCommandTypes = new Set<WorkFollowSlashCommand>(['attachment', 'relation', 'importExcel'])
 const metadataOnlyCommandTypes = new Set<WorkFollowSlashCommand>(['tag'])
 const availableCommands = computed(() => commands.filter((command) => {
   if (metadataOnlyCommandTypes.has(command.type)) return canEditMetadata.value
@@ -1040,6 +1086,10 @@ function insertBlock(type: WorkFollowSlashCommand) {
     if (!canEditContent.value) return
     chain.run(); slash.close(); fileInput.value?.click(); return
   }
+  else if (type === 'importExcel') {
+    if (!canEditContent.value) return
+    chain.run(); slash.close(); excelInput.value?.click(); return
+  }
   else if (type === 'tag') {
     if (!canEditMetadata.value) return
     chain.run(); slash.close(); tagPanelOpen.value = true; return
@@ -1093,6 +1143,89 @@ async function uploadFilesIntoBody(files: File[]) {
     if (isCurrentEditor()) showNotice('上传失败，请重试')
   }
 }
+
+/** 表格落点在文档末尾时补一个空段落，否则光标没有逃出表格的落点。
+ * 光标已经在表格内时，新表格插到当前表格之后（表格不能嵌套）。 */
+function insertImportedTable(table: ImportedTable): boolean {
+  const targetEditor = editor.value
+  if (!targetEditor || !targetEditor.isEditable) return false
+  const { selection } = targetEditor.state
+  const $from = selection.$from
+  let tableDepth = -1
+  for (let depth = $from.depth; depth > 0; depth -= 1) {
+    if ($from.node(depth).type.name === 'table') { tableDepth = depth; break }
+  }
+  const chain = targetEditor.chain().focus()
+  let insertEnd = selection.to
+  if (tableDepth > 0) {
+    insertEnd = $from.after(tableDepth)
+    chain.insertContentAt(insertEnd, table.json)
+  } else {
+    chain.insertContent(table.json)
+  }
+  if (insertEnd >= targetEditor.state.doc.content.size - 1) chain.insertContent({ type: 'paragraph' })
+  chain.run()
+  return true
+}
+
+function insertPastedTable(table: ImportedTable) {
+  if (!insertImportedTable(table)) return
+  if (importedTableTruncated(table.meta)) {
+    showNotice(`表格较大，已截断为 ${table.meta.rows} 行 × ${table.meta.cols} 列`)
+  }
+}
+
+function chooseSheet(data: SpreadsheetData): Promise<string | null> {
+  if (data.sheets.length === 1) return Promise.resolve(data.sheets[0]?.name ?? null)
+  if (!data.sheets.length) return Promise.resolve(null)
+  sheetPickerSheets.value = data.sheets
+  sheetPickerOpen.value = true
+  return new Promise((resolve) => { sheetPickerResolve = resolve })
+}
+
+function resolveSheetPicker(sheetName: string | null) {
+  sheetPickerOpen.value = false
+  sheetPickerResolve?.(sheetName)
+  sheetPickerResolve = null
+}
+
+async function importSpreadsheetIntoBody(load: () => Promise<SpreadsheetData>) {
+  const targetEditor = editor.value
+  if (!targetEditor || !targetEditor.isEditable || !canEditContent.value || !collaborationContentReady) return
+  showNotice('正在读取表格…')
+  try {
+    const data = await load()
+    const sheetName = await chooseSheet(data)
+    if (!sheetName) return
+    const table = spreadsheetTable(data, sheetName)
+    if (!table) {
+      showNotice('表格内容为空，未插入')
+      return
+    }
+    insertImportedTable(table)
+    const size = `${table.meta.rows} 行 × ${table.meta.cols} 列`
+    showNotice(importedTableTruncated(table.meta)
+      ? `已导入「${sheetName}」：${size}（超出上限已截断，原表 ${table.meta.originalRows} 行 × ${table.meta.originalCols} 列）`
+      : `已导入「${sheetName}」：${size}`)
+  } catch (error) {
+    showNotice(error instanceof Error ? error.message : '读取表格失败，请重试')
+  }
+}
+
+/** 二进制原件照常作为代办附件上传（原文以附件为准）；上传失败不阻塞表格插入。 */
+function importSpreadsheetIntoTask(file: File) {
+  const taskId = props.todo?.id
+  if (taskId) void uploadTaskAttachment(taskId, file).catch(() => undefined)
+  void importSpreadsheetIntoBody(() => readSpreadsheet(file))
+}
+
+async function importExcelFiles(event: Event) {
+  const input = event.target as HTMLInputElement
+  const files = Array.from(input.files ?? [])
+  input.value = ''
+  for (const file of files) importSpreadsheetIntoTask(file)
+}
+
 function addTaskTag() {
   if (!canEditMetadata.value) {
     showNotice('你没有修改代办标签的权限')
@@ -1269,10 +1402,12 @@ onBeforeUnmount(() => {
     </header>
 
     <div class="task-editor-area" @click="closeEditorPanels">
+      <RichTextToolbar v-if="editor && canEditContent" :editor="editor" :attachment="canEditContent" @link="openLinkDialog" @attachment="fileInput?.click()" />
       <EditorBubbleMenu v-if="editor && canEditContent" :editor="editor || undefined" :attachment="canEditContent" @link="openLinkDialog" @attachment="fileInput?.click()" />
       <EditorContent class="task-body-editor" :editor="editor || undefined" @click="closeEditorPanels" />
       <span v-if="inlineNotice" class="task-editor-inline-notice" role="status">{{ inlineNotice }}</span>
       <input ref="fileInput" class="sr-only" type="file" accept=".png,.jpg,.jpeg,.webp,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.md,.txt,.mp4,.mov,.m4v,.webm" @change="uploadAttachmentFile" />
+      <input ref="excelInput" class="sr-only" type="file" accept=".xlsx,.xls,.csv" @change="importExcelFiles" />
       <section v-if="tagPanelOpen && canEditMetadata" class="task-inline-property-panel" role="dialog" aria-label="添加代办标签" @click.stop><form @submit.prevent="addTaskTag"><IconTag :size="16" /><input v-model="tagValue" autofocus placeholder="输入标签" maxlength="24" /><button class="primary-button" type="submit">添加</button><button type="button" aria-label="关闭" @click="tagPanelOpen = false"><IconX :size="15" /></button></form></section>
     </div>
 
@@ -1300,6 +1435,7 @@ onBeforeUnmount(() => {
     <EditorSlashMenu :commands="availableCommands" :active-index="slash.activeIndex.value" :position="slash.position.value" :open="slash.open.value" id-prefix="task-slash-command" @select="insertBlock" @hover="slash.activeIndex.value = $event" />
     <ConfirmDialog :open="removeDialogOpen" title="删除代办" :message="`确定删除“${todo.title}”吗？删除后无法恢复。`" confirm-label="删除" :danger="true" @close="removeDialogOpen = false" @confirm="confirmRemove" />
     <EditorLinkDialog ref="linkDialog" :editor="() => editor" />
+    <EditorSheetPickerDialog :open="sheetPickerOpen" :sheets="sheetPickerSheets" @select="resolveSheetPicker($event)" @close="resolveSheetPicker(null)" />
     <TaskRelationDialog :open="relationDialogOpen" :current-task-id="todo.id" @close="relationDialogOpen = false" @select-task="relateTask" @select-note="relateNote" />
   </aside>
   <aside v-else class="task-detail task-detail-empty" aria-label="代办正文">

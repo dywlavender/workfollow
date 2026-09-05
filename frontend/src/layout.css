@@ -318,11 +318,12 @@ html {
 }
 
 /* The task editor's prose caps its measure like the note editor does; a wide
-   detail pane must not stretch the body into an unreadable river. */
+   detail pane must not stretch the body into an unreadable river. 960px keeps
+   ~60 CJK characters per line at body size — readable on a 24" display. */
 .task-editor-area > .editor-toolbar,
 .task-editor-area > .task-body-editor {
   width: 100%;
-  max-width: 760px;
+  max-width: 960px;
   margin-inline: auto;
 }
 

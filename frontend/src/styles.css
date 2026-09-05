@@ -270,7 +270,7 @@ textarea { resize: vertical; }
 .rich-text-toolbar { display: flex; gap: 3px; padding: 6px; border-bottom: 1px solid var(--color-border-subtle); background: var(--color-bg-subtle); }
 .rich-text-toolbar button { min-width: 28px; height: 26px; padding: 0 6px; border: 0; border-radius: var(--radius-xs); background: transparent; color: var(--color-text-secondary); font-size: var(--font-size-caption); }
 .rich-text-toolbar button:hover, .rich-text-toolbar button.active { background: var(--color-accent-soft); color: var(--color-accent); }
-.rich-text-document .tiptap { width: 100%; max-width: 760px; min-height: 90px; margin-inline: auto; padding: 12px; outline: none; color: var(--color-text-secondary); font-size: var(--font-size-body-sm); line-height: 1.7; }
+.rich-text-document .tiptap { width: 100%; max-width: 960px; min-height: 90px; margin-inline: auto; padding: 12px; outline: none; color: var(--color-text-secondary); font-size: var(--font-size-body-sm); line-height: 1.7; }
 .rich-text-document.readonly .tiptap { padding: 0 34px; }
 .rich-text-document.collaboration-document .tiptap,
 .rich-text-document.team-note-document .tiptap { padding-inline: 34px; }
@@ -760,7 +760,7 @@ textarea { resize: vertical; }
 .selection-menu button { min-height: 28px; padding: 0 8px; border: 0; border-radius: var(--radius-xs); background: transparent; color: var(--color-text-secondary); font-size: var(--font-size-caption); }
 .selection-menu button:hover, .selection-menu button:focus-visible { background: var(--color-accent-soft); color: var(--color-accent); outline: none; }
 .tiptap-editor { min-height: 0; flex: 1; overflow: auto; scrollbar-gutter: stable; }
-.tiptap-editor .tiptap { max-width: 840px; min-height: 320px; margin: 0 auto; padding: 24px 34px 56px; color: var(--color-text-primary); font-size: var(--font-size-body); line-height: 1.75; outline: none; }
+.tiptap-editor .tiptap { max-width: 960px; min-height: 320px; margin: 0 auto; padding: 24px 34px 56px; color: var(--color-text-primary); font-size: var(--font-size-body); line-height: 1.75; outline: none; }
 .note-editor-collaboration-fallback {
   flex: 1 1 auto;
   min-height: 0;
@@ -772,7 +772,7 @@ textarea { resize: vertical; }
   scrollbar-gutter: stable;
 }
 .note-editor-collaboration-fallback.readonly .tiptap {
-  max-width: 840px;
+  max-width: 960px;
   min-height: 320px;
   margin: 0 auto;
   padding: 24px 34px 56px;
@@ -825,7 +825,7 @@ textarea { resize: vertical; }
 .attachment-panel header button:hover, .attachment-panel header button:focus-visible { background: var(--color-accent-soft); outline: none; }
 .attachment-panel p { margin: 0 0 10px; color: var(--color-text-tertiary); font-size: var(--font-size-caption); }
 .attachment-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px; padding-bottom: 8px; }
-.attachment-list article { min-width: 0; display: grid; grid-template-columns: 24px minmax(0, 1fr) 24px; align-items: center; gap: 7px; padding: 6px; border-radius: var(--radius-xs); background: var(--color-bg-subtle); }
+.attachment-list article { min-width: 0; display: grid; grid-template-columns: 24px minmax(0, 1fr) auto auto; align-items: center; gap: 7px; padding: 6px; border-radius: var(--radius-xs); background: var(--color-bg-subtle); }
 .attachment-icon { color: var(--color-accent); }
 .attachment-list article a { min-width: 0; display: grid; gap: 1px; }
 .attachment-list article a strong, .attachment-list article a small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -833,6 +833,15 @@ textarea { resize: vertical; }
 .attachment-list article a small { color: var(--color-text-tertiary); font-size: var(--font-size-micro); }
 .attachment-list article > button { width: 24px; height: 24px; display: grid; place-items: center; border: 0; border-radius: var(--radius-xs); background: transparent; color: var(--color-text-tertiary); }
 .attachment-list article > button:hover, .attachment-list article > button:focus-visible { background: var(--color-danger-soft); color: var(--color-danger); outline: none; }
+.attachment-import-button { height: 24px; display: inline-flex; align-items: center; padding: 0 8px; border: 0; border-radius: var(--radius-xs); background: transparent; color: var(--color-accent); font-size: var(--font-size-micro); font-weight: var(--font-weight-semibold); white-space: nowrap; }
+.attachment-import-button:hover, .attachment-import-button:focus-visible { background: var(--color-accent-soft); outline: none; }
+.sheet-picker-card { width: min(420px, 100%); }
+.sheet-picker-hint { margin: 0 0 12px; color: var(--color-text-tertiary); font-size: var(--font-size-caption); }
+.sheet-picker-list { display: grid; gap: 6px; max-height: min(320px, 40dvh); overflow: auto; outline: none; }
+.sheet-picker-item { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 12px; border: 1px solid var(--color-border-subtle); border-radius: var(--radius-sm); background: var(--color-bg-subtle); cursor: pointer; text-align: left; }
+.sheet-picker-item strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--font-size-label); color: var(--color-text-primary); }
+.sheet-picker-item span { flex: 0 0 auto; color: var(--color-text-tertiary); font-size: var(--font-size-micro); white-space: nowrap; }
+.sheet-picker-item.active, .sheet-picker-item:hover { border-color: var(--color-accent); background: var(--color-accent-soft); }
 /* Dialogs and legacy secondary surfaces */
 .dialog-backdrop { position: fixed; inset: 0; z-index: var(--layer-dialog); display: grid; place-items: center; padding: 20px; background: var(--color-overlay); backdrop-filter: blur(2px); }
 .dialog-card { width: min(620px, 100%); max-height: calc(100dvh - 40px); overflow: auto; border: 1px solid var(--color-border); border-radius: var(--radius-lg); background: var(--color-bg-surface); box-shadow: var(--dialog-shadow); }
@@ -1046,6 +1055,8 @@ body.task-list-resizing { cursor: col-resize; user-select: none; }
 .task-editor-flag.low { color: var(--color-accent); }
 .task-editor-close { display: none; }
 .task-editor-area { position: relative; z-index: 1; min-height: 0; flex: 1; display: flex; flex-direction: column; overflow: auto; padding: 26px 30px 76px; }
+/* 工具栏在 flex column 里默认会被压缩到一行高，第二行按钮被裁掉；锁定自然高度。 */
+.task-editor-area .editor-toolbar { flex: 0 0 auto; }
 .task-editor-outline { position: absolute; top: 28px; right: 22px; width: 32px; height: 32px; display: grid; place-items: center; border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--color-text-tertiary); }
 .task-editor-outline:hover { background: var(--color-bg-hover); color: var(--color-text-secondary); }
 .task-editor-title-area { width: 100%; flex: 0 0 auto; margin-bottom: 18px; }
