@@ -4,9 +4,26 @@ import FlutterMacOS
 class MainFlutterWindow: NSWindow {
   override func awakeFromNib() {
     let flutterViewController = FlutterViewController()
-    let windowFrame = self.frame
     self.contentViewController = flutterViewController
-    self.setFrame(windowFrame, display: true)
+
+    // The workspace is intentionally composed of an app rail, an optional
+    // task navigation pane, a list pane, and a detail inspector. The old
+    // 800x600 nib frame hid two of those panes on first launch. Keep a
+    // comfortable default while fitting smaller MacBook displays.
+    self.minSize = NSSize(width: 1120, height: 720)
+    let defaultSize = NSSize(width: 1280, height: 820)
+    let visibleFrame = NSScreen.main?.visibleFrame
+    let fittedSize = NSSize(
+      width: min(defaultSize.width, (visibleFrame?.width ?? defaultSize.width) * 0.9),
+      height: min(defaultSize.height, (visibleFrame?.height ?? defaultSize.height) * 0.9)
+    )
+    let isStarterFrame =
+      (self.frame.width <= 800 && self.frame.height <= 600) ||
+      (self.frame.width == defaultSize.width && self.frame.height == defaultSize.height)
+    if isStarterFrame {
+      self.setContentSize(fittedSize)
+      self.center()
+    }
 
     let platformChannel = FlutterMethodChannel(
       name: "workfollow/platform",
