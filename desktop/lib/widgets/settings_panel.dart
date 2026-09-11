@@ -46,6 +46,7 @@ class _SettingsPanel extends StatefulWidget {
 
 class _SettingsPanelState extends State<_SettingsPanel> {
   bool importing = false;
+  bool seasonalMood = true;
   String? importMessage;
   String? importError;
 
@@ -191,8 +192,9 @@ class _SettingsPanelState extends State<_SettingsPanel> {
                             label: '季节氛围',
                             description: '在侧栏和空状态显示低强度插画',
                             trailing: Switch(
-                              value: true,
-                              onChanged: (_) {},
+                              value: seasonalMood,
+                              onChanged: (value) =>
+                                  setState(() => seasonalMood = value),
                               activeColor: tokens.accent,
                             ),
                           ),

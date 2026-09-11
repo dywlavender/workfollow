@@ -114,4 +114,44 @@ void main() {
     expect(controller.tasks.where((task) => task.id == 'web-task-1'),
         hasLength(1));
   });
+
+  test('edits personal tasks and notes through the local controller', () {
+    final controller = WorkspaceController();
+
+    controller.updateTaskTitle('task-01', '新的评审标题');
+    controller.updateTaskDescription('task-01', '新的任务描述');
+    controller.updateTaskPriority('task-01', TaskPriority.medium);
+    controller.updateTaskDue('task-01', DateTime(2099, 8, 30, 9, 30));
+    controller.updateTaskReminder('task-01', DateTime(2099, 8, 29));
+    controller.updateTaskRecurrence('task-01', 'WEEKLY');
+    controller.updateTaskTags('task-01', const ['项目', '项目', '验收']);
+    controller.moveTaskToList('task-01', '项目');
+
+    final task = controller.tasks.firstWhere((item) => item.id == 'task-01');
+    expect(task.title, '新的评审标题');
+    expect(task.description, '新的任务描述');
+    expect(task.priority, TaskPriority.medium);
+    expect(task.dueAt, isNotNull);
+    expect(task.reminderAt, isNotNull);
+    expect(task.recurrenceType, 'WEEKLY');
+    expect(task.tags, const ['项目', '验收']);
+    expect(task.listName, '项目');
+    expect(controller.lists.any((list) => list.name == '项目'), isTrue);
+
+    final folder = controller.addFolder('个人想法');
+    expect(folder, isNotNull);
+    final noteId = controller.addNote(folderId: folder!.id);
+    controller.updateNoteTitle(noteId, '新的笔记标题');
+    controller.updateNoteBody(noteId, '新的笔记正文');
+    controller.toggleNoteFavorite(noteId);
+
+    final note = controller.notes.firstWhere((item) => item.id == noteId);
+    expect(note.title, '新的笔记标题');
+    expect(note.plainText, '新的笔记正文');
+    expect(note.preview, '新的笔记正文');
+    expect(note.isFavorite, isTrue);
+    expect(note.folderId, folder.id);
+    expect(controller.removeNote(noteId), isTrue);
+    expect(controller.notes.where((item) => item.id == noteId), isEmpty);
+  });
 }

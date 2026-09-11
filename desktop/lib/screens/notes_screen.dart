@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
+import '../models/migration.dart';
 import '../models/task.dart';
 import '../state/workspace_controller.dart';
 import '../theme/workfollow_theme.dart';
@@ -16,11 +18,15 @@ class NotesScreen extends StatefulWidget {
 
 class _NotesScreenState extends State<NotesScreen> {
   String selectedId = 'note-01';
+  String? selectedFolderId;
+  bool favoritesOnly = false;
+  bool unfiledOnly = false;
+  bool newestFirst = true;
 
   @override
   Widget build(BuildContext context) {
     final tokens = WorkFollowTheme.of(context);
-    final notes = widget.controller.notes;
+    final notes = _visibleNotes();
     final selected = notes.isEmpty
         ? null
         : notes.firstWhere((note) => note.id == selectedId,
@@ -32,13 +38,43 @@ class _NotesScreenState extends State<NotesScreen> {
         final listWidth = constraints.maxWidth >= 980 ? 300.0 : 260.0;
         return Row(
           children: [
-            _FolderColumn(width: folderWidth, controller: widget.controller),
+            _FolderColumn(
+              width: folderWidth,
+              controller: widget.controller,
+              selectedFolderId: selectedFolderId,
+              favoritesOnly: favoritesOnly,
+              unfiledOnly: unfiledOnly,
+              onCreateNote: _createNote,
+              onCreateFolder: _createFolder,
+              onShowAll: () => setState(() {
+                selectedFolderId = null;
+                favoritesOnly = false;
+                unfiledOnly = false;
+              }),
+              onShowFavorites: () => setState(() {
+                selectedFolderId = null;
+                favoritesOnly = true;
+                unfiledOnly = false;
+              }),
+              onShowUnfiled: () => setState(() {
+                selectedFolderId = null;
+                favoritesOnly = false;
+                unfiledOnly = true;
+              }),
+              onSelectFolder: (folder) => setState(() {
+                selectedFolderId = folder.id;
+                favoritesOnly = false;
+                unfiledOnly = false;
+              }),
+            ),
             VerticalDivider(width: 1, thickness: 1, color: tokens.border),
             SizedBox(
               width: listWidth,
               child: _NoteListColumn(
                 notes: notes,
-                selectedId: selectedId,
+                selectedId: selected?.id ?? selectedId,
+                newestFirst: newestFirst,
+                onSort: () => setState(() => newestFirst = !newestFirst),
                 onSelect: (id) => setState(() => selectedId = id),
               ),
             ),
@@ -46,12 +82,113 @@ class _NotesScreenState extends State<NotesScreen> {
             Expanded(
               child: selected == null
                   ? _EmptyNoteEditor(tokens: tokens)
-                  : _NoteEditor(note: selected),
+                  : _NoteEditor(
+                      note: selected,
+                      controller: widget.controller,
+                      folders: widget.controller.folders,
+                      onDelete: () => _deleteNote(selected.id),
+                    ),
             ),
           ],
         );
       },
     );
+  }
+
+  List<NoteItem> _visibleNotes() {
+    final notes = widget.controller.notes.where((note) {
+      if (favoritesOnly) return note.isFavorite;
+      if (unfiledOnly) return note.folderId == null;
+      if (selectedFolderId == null) return true;
+      MigrationFolderRecord? folder;
+      for (final item in widget.controller.folders) {
+        if (item.id == selectedFolderId) {
+          folder = item;
+          break;
+        }
+      }
+      return note.folderId == selectedFolderId ||
+          (folder != null && note.folder == folder.name);
+    }).toList();
+    notes.sort((a, b) {
+      final aDate = DateTime.tryParse(a.updatedAt ?? a.createdAt ?? '') ??
+          DateTime.fromMillisecondsSinceEpoch(0);
+      final bDate = DateTime.tryParse(b.updatedAt ?? b.createdAt ?? '') ??
+          DateTime.fromMillisecondsSinceEpoch(0);
+      return newestFirst ? bDate.compareTo(aDate) : aDate.compareTo(bDate);
+    });
+    return notes;
+  }
+
+  Future<void> _createNote() async {
+    final id = widget.controller.addNote(folderId: selectedFolderId);
+    if (!mounted) return;
+    setState(() {
+      selectedId = id;
+      favoritesOnly = false;
+      unfiledOnly = false;
+    });
+  }
+
+  Future<void> _createFolder() async {
+    final nameController = TextEditingController();
+    final name = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('新建文件夹'),
+        content: TextField(
+          controller: nameController,
+          autofocus: true,
+          maxLength: 40,
+          decoration: const InputDecoration(hintText: '例如：旅行灵感'),
+          onSubmitted: (value) => Navigator.of(dialogContext).pop(value),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('取消')),
+          FilledButton(
+              onPressed: () =>
+                  Navigator.of(dialogContext).pop(nameController.text),
+              child: const Text('创建')),
+        ],
+      ),
+    );
+    nameController.dispose();
+    if (!mounted || name == null) return;
+    final folder = widget.controller.addFolder(name);
+    if (folder == null) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('文件夹名称为空，或已经存在。')));
+      return;
+    }
+    setState(() {
+      selectedFolderId = folder.id;
+      favoritesOnly = false;
+      unfiledOnly = false;
+    });
+  }
+
+  Future<void> _deleteNote(String id) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('删除笔记？'),
+        content: const Text('删除后这条笔记会从本机空间移除。'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('取消')),
+          FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('删除')),
+        ],
+      ),
+    );
+    if (!mounted || confirmed != true) return;
+    widget.controller.removeNote(id);
+    final remaining = _visibleNotes();
+    setState(() => selectedId = remaining.isEmpty ? '' : remaining.first.id);
   }
 }
 
@@ -65,19 +202,38 @@ class _EmptyNoteEditor extends StatelessWidget {
     return Container(
       color: tokens.inspector,
       alignment: Alignment.center,
-      child: Text(
-        '还没有笔记，从左上角开始记录。',
-        style: TextStyle(color: tokens.textTertiary, fontSize: 13),
-      ),
+      child: Text('还没有笔记，从左上角开始记录。',
+          style: TextStyle(color: tokens.textTertiary, fontSize: 13)),
     );
   }
 }
 
 class _FolderColumn extends StatelessWidget {
-  const _FolderColumn({required this.width, required this.controller});
+  const _FolderColumn({
+    required this.width,
+    required this.controller,
+    required this.selectedFolderId,
+    required this.favoritesOnly,
+    required this.unfiledOnly,
+    required this.onCreateNote,
+    required this.onCreateFolder,
+    required this.onShowAll,
+    required this.onShowFavorites,
+    required this.onShowUnfiled,
+    required this.onSelectFolder,
+  });
 
   final double width;
   final WorkspaceController controller;
+  final String? selectedFolderId;
+  final bool favoritesOnly;
+  final bool unfiledOnly;
+  final VoidCallback onCreateNote;
+  final VoidCallback onCreateFolder;
+  final VoidCallback onShowAll;
+  final VoidCallback onShowFavorites;
+  final VoidCallback onShowUnfiled;
+  final ValueChanged<MigrationFolderRecord> onSelectFolder;
 
   @override
   Widget build(BuildContext context) {
@@ -103,7 +259,7 @@ class _FolderColumn extends StatelessWidget {
                   tooltip: '新建笔记',
                   size: 28,
                   iconSize: 17,
-                  onPressed: () {}),
+                  onPressed: onCreateNote),
             ],
           ),
           const SizedBox(height: 22),
@@ -113,17 +269,23 @@ class _FolderColumn extends StatelessWidget {
               label: '全部笔记',
               count: controller.notes.length,
               icon: Icons.notes_outlined,
-              selected: true),
+              selected:
+                  !favoritesOnly && !unfiledOnly && selectedFolderId == null,
+              onTap: onShowAll),
           _FolderItem(
               label: '收藏',
               count: controller.notes.where((note) => note.isFavorite).length,
-              icon: Icons.star_border_rounded),
+              icon: Icons.star_border_rounded,
+              selected: favoritesOnly,
+              onTap: onShowFavorites),
           _FolderItem(
               label: '未归档',
               count: controller.notes
                   .where((note) => note.folderId == null)
                   .length,
-              icon: Icons.inbox_outlined),
+              icon: Icons.inbox_outlined,
+              selected: unfiledOnly,
+              onTap: onShowUnfiled),
           const SizedBox(height: 23),
           Row(
             children: [
@@ -133,7 +295,7 @@ class _FolderColumn extends StatelessWidget {
                   tooltip: '新建文件夹',
                   size: 26,
                   iconSize: 15,
-                  onPressed: () {}),
+                  onPressed: onCreateFolder),
             ],
           ),
           const SizedBox(height: 6),
@@ -145,6 +307,10 @@ class _FolderColumn extends StatelessWidget {
                         note.folder == folder.name)
                     .length,
                 icon: Icons.folder_outlined,
+                selected: !favoritesOnly &&
+                    !unfiledOnly &&
+                    selectedFolderId == folder.id,
+                onTap: () => onSelectFolder(folder),
               )),
           const Spacer(),
           Text('本地笔记空间',
@@ -156,11 +322,18 @@ class _FolderColumn extends StatelessWidget {
 }
 
 class _NoteListColumn extends StatelessWidget {
-  const _NoteListColumn(
-      {required this.notes, required this.selectedId, required this.onSelect});
+  const _NoteListColumn({
+    required this.notes,
+    required this.selectedId,
+    required this.newestFirst,
+    required this.onSort,
+    required this.onSelect,
+  });
 
   final List<NoteItem> notes;
   final String selectedId;
+  final bool newestFirst;
+  final VoidCallback onSort;
   final ValueChanged<String> onSelect;
 
   @override
@@ -175,17 +348,17 @@ class _NoteListColumn extends StatelessWidget {
           Row(
             children: [
               Expanded(
-                  child: Text('最近编辑',
+                  child: Text(newestFirst ? '最近编辑' : '最早编辑',
                       style: TextStyle(
                           color: tokens.textPrimary,
                           fontSize: 15,
                           fontWeight: FontWeight.w700))),
               AppIconButton(
-                  icon: Icons.sort_rounded,
-                  tooltip: '排序',
+                  icon: newestFirst ? Icons.south_rounded : Icons.north_rounded,
+                  tooltip: '切换排序',
                   size: 28,
                   iconSize: 16,
-                  onPressed: () {}),
+                  onPressed: onSort),
             ],
           ),
           const SizedBox(height: 4),
@@ -210,14 +383,58 @@ class _NoteListColumn extends StatelessWidget {
   }
 }
 
-class _NoteEditor extends StatelessWidget {
-  const _NoteEditor({required this.note});
+class _NoteEditor extends StatefulWidget {
+  const _NoteEditor({
+    required this.note,
+    required this.controller,
+    required this.folders,
+    required this.onDelete,
+  });
 
   final NoteItem note;
+  final WorkspaceController controller;
+  final List<MigrationFolderRecord> folders;
+  final VoidCallback onDelete;
+
+  @override
+  State<_NoteEditor> createState() => _NoteEditorState();
+}
+
+class _NoteEditorState extends State<_NoteEditor> {
+  late final TextEditingController titleController;
+  late final TextEditingController bodyController;
+  late final FocusNode titleFocusNode;
+  late final FocusNode bodyFocusNode;
+
+  @override
+  void initState() {
+    super.initState();
+    titleController = TextEditingController(text: widget.note.title);
+    bodyController = TextEditingController(text: _bodyFor(widget.note));
+    titleFocusNode = FocusNode();
+    bodyFocusNode = FocusNode();
+  }
+
+  @override
+  void didUpdateWidget(covariant _NoteEditor oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _sync(titleController, widget.note.title, titleFocusNode);
+    _sync(bodyController, _bodyFor(widget.note), bodyFocusNode);
+  }
+
+  @override
+  void dispose() {
+    titleFocusNode.dispose();
+    bodyFocusNode.dispose();
+    titleController.dispose();
+    bodyController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     final tokens = WorkFollowTheme.of(context);
+    final note = widget.note;
     return Container(
       color: tokens.inspector,
       child: Column(
@@ -227,27 +444,45 @@ class _NoteEditor extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(25, 20, 20, 13),
             child: Row(
               children: [
-                Icon(Icons.folder_outlined,
-                    size: 14, color: tokens.textTertiary),
-                const SizedBox(width: 6),
-                Expanded(
-                    child: Text(note.folder,
-                        style: TextStyle(
-                            color: tokens.textTertiary,
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600))),
+                InkWell(
+                  borderRadius: BorderRadius.circular(6),
+                  onTap: _chooseFolder,
+                  child: Padding(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 3, vertical: 4),
+                    child: Row(
+                      children: [
+                        Icon(Icons.folder_outlined,
+                            size: 14, color: tokens.textTertiary),
+                        const SizedBox(width: 6),
+                        Text(note.folder,
+                            style: TextStyle(
+                                color: tokens.textTertiary,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600)),
+                        const SizedBox(width: 2),
+                        Icon(Icons.expand_more_rounded,
+                            size: 14, color: tokens.textTertiary),
+                      ],
+                    ),
+                  ),
+                ),
+                const Spacer(),
                 AppIconButton(
-                    icon: Icons.push_pin_outlined,
-                    tooltip: '收藏笔记',
+                    icon: note.isFavorite
+                        ? Icons.push_pin
+                        : Icons.push_pin_outlined,
+                    tooltip: note.isFavorite ? '取消收藏' : '收藏笔记',
                     size: 28,
                     iconSize: 16,
-                    onPressed: () {}),
+                    onPressed: () =>
+                        widget.controller.toggleNoteFavorite(note.id)),
                 AppIconButton(
                     icon: Icons.more_horiz_rounded,
                     tooltip: '更多操作',
                     size: 28,
                     iconSize: 17,
-                    onPressed: () {}),
+                    onPressed: _showMore),
               ],
             ),
           ),
@@ -260,22 +495,51 @@ class _NoteEditor extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(note.title,
-                        style: TextStyle(
-                            color: tokens.textPrimary,
-                            fontSize: 28,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: -.65)),
+                    TextField(
+                      key: const ValueKey('note-title-editor'),
+                      controller: titleController,
+                      focusNode: titleFocusNode,
+                      onChanged: (value) =>
+                          widget.controller.updateNoteTitle(note.id, value),
+                      style: TextStyle(
+                          color: tokens.textPrimary,
+                          fontSize: 28,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: -.65),
+                      decoration: const InputDecoration(
+                          border: InputBorder.none,
+                          isDense: true,
+                          contentPadding: EdgeInsets.zero),
+                    ),
                     const SizedBox(height: 9),
                     Text('最近编辑于 ${note.updatedLabel}',
                         style: TextStyle(
                             color: tokens.textTertiary, fontSize: 11)),
                     const SizedBox(height: 31),
-                    Text(note.preview,
-                        style: TextStyle(
-                            color: tokens.textSecondary,
+                    TextField(
+                      key: const ValueKey('note-body-editor'),
+                      controller: bodyController,
+                      focusNode: bodyFocusNode,
+                      onChanged: (value) =>
+                          widget.controller.updateNoteBody(note.id, value),
+                      minLines: 8,
+                      maxLines: null,
+                      keyboardType: TextInputType.multiline,
+                      style: TextStyle(
+                          color: tokens.textSecondary,
+                          fontSize: 15,
+                          height: 1.8),
+                      decoration: InputDecoration(
+                        hintText: '写下你的想法、会议记录或下一步行动…',
+                        hintStyle: TextStyle(
+                            color: tokens.textTertiary,
                             fontSize: 15,
-                            height: 1.8)),
+                            height: 1.8),
+                        border: InputBorder.none,
+                        isDense: true,
+                        contentPadding: EdgeInsets.zero,
+                      ),
+                    ),
                     const SizedBox(height: 26),
                     Container(height: 1, color: tokens.border),
                     const SizedBox(height: 24),
@@ -295,11 +559,11 @@ class _NoteEditor extends StatelessWidget {
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Icon(Icons.link_rounded,
+                          Icon(Icons.storage_outlined,
                               size: 16, color: tokens.accent),
                           const SizedBox(width: 9),
                           Expanded(
-                              child: Text('关联任务 · 准备季度产品评审演示文稿',
+                              child: Text('这条笔记保存在本机，编辑内容会自动写入本地快照。',
                                   style: TextStyle(
                                       color: tokens.accent,
                                       fontSize: 12,
@@ -327,7 +591,7 @@ class _NoteEditor extends StatelessWidget {
                         fontSize: 11,
                         fontWeight: FontWeight.w500)),
                 const Spacer(),
-                Text('刚刚',
+                Text(noteUpdatedLabelFor(note.updatedAt),
                     style: TextStyle(color: tokens.textTertiary, fontSize: 10)),
               ],
             ),
@@ -335,6 +599,95 @@ class _NoteEditor extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  String _bodyFor(NoteItem note) => note.plainText ?? note.preview;
+
+  void _sync(
+      TextEditingController controller, String value, FocusNode focusNode) {
+    if (focusNode.hasFocus || controller.text == value) return;
+    controller.value = controller.value.copyWith(
+      text: value,
+      selection: TextSelection.collapsed(offset: value.length),
+      composing: TextRange.empty,
+    );
+  }
+
+  Future<void> _chooseFolder() async {
+    final tokens = WorkFollowTheme.of(context);
+    final folderId = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: tokens.overlay,
+      builder: (sheetContext) => SafeArea(
+        child: ListView(
+          shrinkWrap: true,
+          children: [
+            Padding(
+                padding: const EdgeInsets.fromLTRB(20, 18, 20, 8),
+                child: Text('移动到文件夹',
+                    style: TextStyle(
+                        color: tokens.textPrimary,
+                        fontWeight: FontWeight.w700))),
+            ListTile(
+                title: const Text('未归档'),
+                trailing: widget.note.folderId == null
+                    ? const Icon(Icons.check)
+                    : null,
+                onTap: () => Navigator.of(sheetContext).pop('__unfiled__')),
+            ...widget.folders.map((folder) => ListTile(
+                title: Text(folder.name),
+                trailing: widget.note.folderId == folder.id
+                    ? const Icon(Icons.check)
+                    : null,
+                onTap: () => Navigator.of(sheetContext).pop(folder.id))),
+          ],
+        ),
+      ),
+    );
+    if (folderId == '__unfiled__' && widget.note.folderId != null) {
+      widget.controller.moveNoteToFolder(widget.note.id, null);
+    } else if (folderId != null && folderId != '__unfiled__') {
+      widget.controller.moveNoteToFolder(widget.note.id, folderId);
+    }
+  }
+
+  Future<void> _showMore() async {
+    final action = await showModalBottomSheet<String>(
+      context: context,
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+                leading: const Icon(Icons.copy_outlined),
+                title: const Text('复制笔记正文'),
+                onTap: () => Navigator.of(sheetContext).pop('copy')),
+            ListTile(
+                leading: const Icon(Icons.delete_outline),
+                title: const Text('删除笔记'),
+                onTap: () => Navigator.of(sheetContext).pop('delete')),
+          ],
+        ),
+      ),
+    );
+    if (!mounted) return;
+    if (action == 'copy') {
+      // Keeping the editor focused is more useful than showing a second menu;
+      // the platform clipboard action is handled by the text field itself.
+      await ClipboardHelper.copy(_bodyFor(widget.note));
+      if (mounted)
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('笔记正文已复制')));
+    } else if (action == 'delete') {
+      widget.onDelete();
+    }
+  }
+}
+
+class ClipboardHelper {
+  static Future<void> copy(String value) async {
+    // Imported lazily to keep this file's widget code easy to scan.
+    await Clipboard.setData(ClipboardData(text: value));
   }
 }
 
@@ -363,41 +716,52 @@ class _FolderItem extends StatelessWidget {
       {required this.label,
       required this.count,
       required this.icon,
-      this.selected = false});
+      this.selected = false,
+      this.onTap});
 
   final String label;
   final int count;
   final IconData icon;
   final bool selected;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
     final tokens = WorkFollowTheme.of(context);
-    return Container(
-      margin: const EdgeInsets.only(bottom: 2),
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 8),
-      decoration: BoxDecoration(
-          color: selected ? tokens.accentSoft : Colors.transparent,
-          borderRadius: BorderRadius.circular(7)),
-      child: Row(
-        children: [
-          Icon(icon,
-              size: 16, color: selected ? tokens.accent : tokens.textSecondary),
-          const SizedBox(width: 9),
-          Expanded(
-              child: Text(label,
-                  style: TextStyle(
-                      color: selected ? tokens.accent : tokens.textSecondary,
-                      fontSize: 12,
-                      fontWeight:
-                          selected ? FontWeight.w700 : FontWeight.w500))),
-          if (count > 0)
-            Text('$count',
-                style: TextStyle(
-                    color: tokens.textTertiary,
-                    fontSize: 10,
-                    fontWeight: FontWeight.w600)),
-        ],
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(7),
+        child: Container(
+          margin: const EdgeInsets.only(bottom: 2),
+          padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 8),
+          decoration: BoxDecoration(
+              color: selected ? tokens.accentSoft : Colors.transparent,
+              borderRadius: BorderRadius.circular(7)),
+          child: Row(
+            children: [
+              Icon(icon,
+                  size: 16,
+                  color: selected ? tokens.accent : tokens.textSecondary),
+              const SizedBox(width: 9),
+              Expanded(
+                  child: Text(label,
+                      style: TextStyle(
+                          color:
+                              selected ? tokens.accent : tokens.textSecondary,
+                          fontSize: 12,
+                          fontWeight:
+                              selected ? FontWeight.w700 : FontWeight.w500))),
+              if (count > 0)
+                Text('$count',
+                    style: TextStyle(
+                        color: tokens.textTertiary,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600)),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -439,14 +803,21 @@ class _NoteItem extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(note.title,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                          color: tokens.textPrimary,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          height: 1.25)),
+                  Row(
+                    children: [
+                      Expanded(
+                          child: Text(note.title,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                  color: tokens.textPrimary,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  height: 1.25))),
+                      if (note.isFavorite)
+                        Icon(Icons.push_pin, size: 12, color: tokens.accent),
+                    ],
+                  ),
                   const SizedBox(height: 5),
                   Text(note.preview,
                       maxLines: 3,

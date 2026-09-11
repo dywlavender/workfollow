@@ -61,17 +61,25 @@ class TaskItem {
     TaskBucket? bucket,
     String? timeLabel,
     String? note,
+    bool clearNote = false,
     String? description,
+    bool clearDescription = false,
     Map<String, dynamic>? contentJson,
+    bool clearContentJson = false,
     String? dueAt,
+    bool clearDueAt = false,
     String? dueEndAt,
+    bool clearDueEndAt = false,
     String? reminderAt,
+    bool clearReminderAt = false,
     String? recurrenceType,
     Map<String, dynamic>? recurrenceConfig,
+    bool clearRecurrenceConfig = false,
     List<String>? tags,
     String? createdAt,
     String? updatedAt,
     String? completedAt,
+    bool clearCompletedAt = false,
     TaskPriority? priority,
     bool? completed,
     bool? hasAttachment,
@@ -84,18 +92,23 @@ class TaskItem {
       listName: listName ?? this.listName,
       bucket: bucket ?? this.bucket,
       timeLabel: timeLabel ?? this.timeLabel,
-      note: note ?? this.note,
-      description: description ?? this.description,
-      contentJson: contentJson ?? this.contentJson,
-      dueAt: dueAt ?? this.dueAt,
-      dueEndAt: dueEndAt ?? this.dueEndAt,
-      reminderAt: reminderAt ?? this.reminderAt,
+      note: clearNote ? note : note ?? this.note,
+      description:
+          clearDescription ? description : description ?? this.description,
+      contentJson:
+          clearContentJson ? contentJson : contentJson ?? this.contentJson,
+      dueAt: clearDueAt ? dueAt : dueAt ?? this.dueAt,
+      dueEndAt: clearDueEndAt ? dueEndAt : dueEndAt ?? this.dueEndAt,
+      reminderAt: clearReminderAt ? reminderAt : reminderAt ?? this.reminderAt,
       recurrenceType: recurrenceType ?? this.recurrenceType,
-      recurrenceConfig: recurrenceConfig ?? this.recurrenceConfig,
+      recurrenceConfig: clearRecurrenceConfig
+          ? recurrenceConfig
+          : recurrenceConfig ?? this.recurrenceConfig,
       tags: tags ?? this.tags,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
-      completedAt: completedAt ?? this.completedAt,
+      completedAt:
+          clearCompletedAt ? completedAt : completedAt ?? this.completedAt,
       priority: priority ?? this.priority,
       completed: completed ?? this.completed,
       hasAttachment: hasAttachment ?? this.hasAttachment,
@@ -106,21 +119,13 @@ class TaskItem {
 
   factory TaskItem.fromMigration(MigrationTaskRecord record) {
     final due = record.dueAt == null ? null : DateTime.tryParse(record.dueAt!);
-    final now = DateTime.now();
-    final startOfToday = DateTime(now.year, now.month, now.day);
-    final dueDay = due == null ? null : DateTime(due.year, due.month, due.day);
-    final bucket = dueDay != null && dueDay.isBefore(startOfToday)
-        ? TaskBucket.overdue
-        : dueDay == null || !dueDay.isAfter(startOfToday)
-            ? TaskBucket.today
-            : TaskBucket.later;
     final completed = record.status == 'DONE' || record.status == 'ABANDONED';
     return TaskItem(
       id: record.id,
       title: record.title,
       listName: record.listName,
-      bucket: bucket,
-      timeLabel: _timeLabel(due, completed),
+      bucket: taskBucketForDate(due, completed: completed),
+      timeLabel: taskTimeLabelFor(due, completed: completed),
       note: record.description,
       description: record.description,
       contentJson: record.contentJson,
@@ -163,7 +168,18 @@ class TaskItem {
   }
 }
 
-String? _timeLabel(DateTime? due, bool completed) {
+TaskBucket taskBucketForDate(DateTime? due,
+    {bool completed = false, DateTime? now}) {
+  if (due == null) return TaskBucket.today;
+  final reference = now ?? DateTime.now();
+  final startOfToday = DateTime(reference.year, reference.month, reference.day);
+  final dueDay = DateTime(due.year, due.month, due.day);
+  if (dueDay.isBefore(startOfToday)) return TaskBucket.overdue;
+  if (!dueDay.isAfter(startOfToday)) return TaskBucket.today;
+  return TaskBucket.later;
+}
+
+String? taskTimeLabelFor(DateTime? due, {bool completed = false}) {
   if (completed) return '已完成';
   if (due == null) return null;
   final hour = due.hour.toString().padLeft(2, '0');
@@ -218,6 +234,38 @@ class NoteItem {
   final String? updatedAt;
   final String? deletedAt;
 
+  NoteItem copyWith({
+    String? title,
+    String? preview,
+    String? updatedLabel,
+    String? folder,
+    ColorValue? accent,
+    String? folderId,
+    bool clearFolderId = false,
+    Map<String, dynamic>? contentJson,
+    String? plainText,
+    bool? isFavorite,
+    String? createdAt,
+    String? updatedAt,
+    String? deletedAt,
+  }) {
+    return NoteItem(
+      id: id,
+      title: title ?? this.title,
+      preview: preview ?? this.preview,
+      updatedLabel: updatedLabel ?? this.updatedLabel,
+      folder: folder ?? this.folder,
+      accent: accent ?? this.accent,
+      folderId: clearFolderId ? folderId : folderId ?? this.folderId,
+      contentJson: contentJson ?? this.contentJson,
+      plainText: plainText ?? this.plainText,
+      isFavorite: isFavorite ?? this.isFavorite,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      deletedAt: deletedAt ?? this.deletedAt,
+    );
+  }
+
   factory NoteItem.fromMigration(
     MigrationNoteRecord record,
     String folderName,
@@ -227,8 +275,8 @@ class NoteItem {
     return NoteItem(
       id: record.id,
       title: record.title,
-      preview: _previewText(record.plainText),
-      updatedLabel: _noteUpdatedLabel(record.updatedAt),
+      preview: notePreviewFromText(record.plainText),
+      updatedLabel: noteUpdatedLabelFor(record.updatedAt),
       folder: folderName,
       accent: accent,
       folderId: folderIdOverride ?? record.folderId,
@@ -256,12 +304,12 @@ class NoteItem {
   }
 }
 
-String _previewText(String value) {
+String notePreviewFromText(String value) {
   final compact = value.trim().replaceAll(RegExp(r'\s+'), ' ');
   return compact.length <= 110 ? compact : '${compact.substring(0, 107)}…';
 }
 
-String _noteUpdatedLabel(String? value) {
+String noteUpdatedLabelFor(String? value) {
   if (value == null) return '刚刚';
   final date = DateTime.tryParse(value);
   if (date == null) return '刚刚';

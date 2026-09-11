@@ -201,6 +201,8 @@ class WorkspaceController extends ChangeNotifier {
   String _lastActionMessage = '';
   String _lastActionKind = '';
   int _taskSequence = 8;
+  int _noteSequence = 4;
+  int _folderSequence = 4;
   bool _restoredFromDisk = false;
 
   WorkspaceView get view => _view;
@@ -293,6 +295,8 @@ class WorkspaceController extends ChangeNotifier {
       }
     }
     _taskSequence = _nextTaskSequence();
+    _noteSequence = _nextNoteSequence();
+    _folderSequence = _nextFolderSequence();
     _restoredFromDisk = true;
     if ((_selectedTaskId == null ||
             _tasks.every((task) => task.id != _selectedTaskId)) &&
@@ -407,9 +411,21 @@ class WorkspaceController extends ChangeNotifier {
     final index = _tasks.indexWhere((task) => task.id == id);
     if (index < 0) return;
     final task = _tasks[index];
+    final now = DateTime.now();
+    final previousDue =
+        task.dueAt == null ? null : DateTime.tryParse(task.dueAt!);
+    final due = DateTime(
+      now.year,
+      now.month,
+      now.day,
+      previousDue?.hour ?? 0,
+      previousDue?.minute ?? 0,
+    );
     _tasks[index] = task.copyWith(
       bucket: TaskBucket.today,
-      timeLabel: task.completed ? task.timeLabel : '今天',
+      dueAt: due.toIso8601String(),
+      updatedAt: now.toIso8601String(),
+      timeLabel: task.completed ? '已完成' : taskTimeLabelFor(due),
     );
     _view = WorkspaceView.today;
     _selectedTaskId = id;
@@ -422,9 +438,14 @@ class WorkspaceController extends ChangeNotifier {
     if (index < 0) return;
     final task = _tasks[index];
     final completing = !task.completed;
+    final now = DateTime.now().toIso8601String();
+    final due = task.dueAt == null ? null : DateTime.tryParse(task.dueAt!);
     _tasks[index] = task.copyWith(
       completed: completing,
-      timeLabel: completing ? '已完成 · 刚刚' : task.timeLabel,
+      completedAt: completing ? now : null,
+      clearCompletedAt: !completing,
+      updatedAt: now,
+      timeLabel: completing ? '已完成 · 刚刚' : (taskTimeLabelFor(due) ?? '未安排'),
     );
     if (completing) {
       _completionVersion += 1;
@@ -443,7 +464,13 @@ class WorkspaceController extends ChangeNotifier {
     final index = _tasks.indexWhere((task) => task.id == id);
     if (index < 0) return false;
     final task = _tasks[index];
-    _tasks[index] = task.copyWith(completed: false, timeLabel: '今天');
+    final due = task.dueAt == null ? null : DateTime.tryParse(task.dueAt!);
+    _tasks[index] = task.copyWith(
+      completed: false,
+      clearCompletedAt: true,
+      updatedAt: DateTime.now().toIso8601String(),
+      timeLabel: taskTimeLabelFor(due) ?? '未安排',
+    );
     _lastCompletedTaskId = null;
     _lastActionKind = '';
     _selectedTaskId = id;
@@ -490,6 +517,7 @@ class WorkspaceController extends ChangeNotifier {
       {TaskBucket bucket = TaskBucket.today, String listName = '收集箱'}) {
     final title = rawTitle.trim();
     if (title.isEmpty) return false;
+    if (_lists.every((list) => list.name != listName)) addList(listName);
     final task = TaskItem(
       id: 'task-${_taskSequence.toString().padLeft(2, '0')}',
       title: title,
@@ -507,12 +535,251 @@ class WorkspaceController extends ChangeNotifier {
 
   void updateSelectedTitle(String title) {
     final id = _selectedTaskId;
-    if (id == null || title.trim().isEmpty) return;
-    final index = _tasks.indexWhere((task) => task.id == id);
-    if (index < 0) return;
-    _tasks[index] = _tasks[index].copyWith(title: title.trim());
+    if (id == null) return;
+    updateTaskTitle(id, title);
+  }
+
+  void updateTaskTitle(String id, String rawTitle) {
+    final title = rawTitle.trim();
+    if (title.isEmpty) return;
+    _replaceTask(
+        id,
+        (task) => task.copyWith(
+              title: title,
+              updatedAt: DateTime.now().toIso8601String(),
+            ));
+  }
+
+  void updateTaskDescription(String id, String rawDescription) {
+    final description = rawDescription.trim();
+    _replaceTask(
+      id,
+      (task) => description.isEmpty
+          ? task.copyWith(
+              note: null,
+              clearNote: true,
+              description: null,
+              clearDescription: true,
+              updatedAt: DateTime.now().toIso8601String(),
+            )
+          : task.copyWith(
+              note: description,
+              description: description,
+              updatedAt: DateTime.now().toIso8601String(),
+            ),
+    );
+  }
+
+  void updateTaskPriority(String id, TaskPriority priority) {
+    _replaceTask(
+        id,
+        (task) => task.copyWith(
+              priority: priority,
+              updatedAt: DateTime.now().toIso8601String(),
+            ));
+  }
+
+  void updateTaskDue(String id, DateTime? due) {
+    final normalized = due == null
+        ? null
+        : DateTime(due.year, due.month, due.day, due.hour, due.minute);
+    _replaceTask(
+      id,
+      (task) => task.copyWith(
+        dueAt: normalized?.toIso8601String(),
+        clearDueAt: normalized == null,
+        bucket: taskBucketForDate(normalized, completed: task.completed),
+        timeLabel: normalized == null
+            ? (task.completed ? '已完成' : '未安排')
+            : taskTimeLabelFor(normalized, completed: task.completed),
+        updatedAt: DateTime.now().toIso8601String(),
+      ),
+    );
+  }
+
+  void updateTaskReminder(String id, DateTime? reminder) {
+    final normalized = reminder == null
+        ? null
+        : DateTime(reminder.year, reminder.month, reminder.day, reminder.hour,
+            reminder.minute);
+    _replaceTask(
+      id,
+      (task) => task.copyWith(
+        reminderAt: normalized?.toIso8601String(),
+        clearReminderAt: normalized == null,
+        updatedAt: DateTime.now().toIso8601String(),
+      ),
+    );
+  }
+
+  void updateTaskRecurrence(String id, String type,
+      {Map<String, dynamic>? config}) {
+    final normalized = type.trim().toUpperCase();
+    final recurrenceType =
+        const {'NONE', 'DAILY', 'WEEKLY', 'MONTHLY'}.contains(normalized)
+            ? normalized
+            : 'NONE';
+    _replaceTask(
+      id,
+      (task) => task.copyWith(
+        recurrenceType: recurrenceType,
+        recurrenceConfig: config,
+        clearRecurrenceConfig: config == null,
+        updatedAt: DateTime.now().toIso8601String(),
+      ),
+    );
+  }
+
+  void updateTaskTags(String id, List<String> rawTags) {
+    final tags = <String>[];
+    for (final rawTag in rawTags) {
+      final tag = rawTag.trim();
+      if (tag.isNotEmpty && !tags.contains(tag)) tags.add(tag);
+    }
+    _replaceTask(
+        id,
+        (task) => task.copyWith(
+              tags: List.unmodifiable(tags),
+              updatedAt: DateTime.now().toIso8601String(),
+            ));
+  }
+
+  bool moveTaskToList(String id, String rawListName) {
+    final listName = rawListName.trim();
+    if (listName.isEmpty || _tasks.every((task) => task.id != id)) return false;
+    if (_lists.every((list) => list.name != listName)) {
+      addList(listName);
+    }
+    _replaceTask(
+        id,
+        (task) => task.copyWith(
+              listName: listName,
+              updatedAt: DateTime.now().toIso8601String(),
+            ));
+    return true;
+  }
+
+  bool addList(String rawName) {
+    final name = rawName.trim();
+    if (name.isEmpty || _lists.any((list) => list.name == name)) return false;
+    _lists = [
+      ..._lists,
+      MigrationListRecord(
+        id: 'list-local-${_lists.length + 1}',
+        name: name,
+        sortOrder: _lists.length,
+        protectedList: false,
+      ),
+    ];
     _schedulePersist();
     notifyListeners();
+    return true;
+  }
+
+  MigrationFolderRecord? addFolder(String rawName) {
+    final name = rawName.trim();
+    if (name.isEmpty || _folders.any((folder) => folder.name == name)) {
+      return null;
+    }
+    final now = DateTime.now().toIso8601String();
+    final folder = MigrationFolderRecord(
+      id: 'folder-local-${_folderSequence.toString().padLeft(2, '0')}',
+      parentId: null,
+      name: name,
+      sortOrder: _folders.length,
+      createdAt: now,
+      updatedAt: now,
+    );
+    _folderSequence += 1;
+    _folders = [..._folders, folder];
+    _schedulePersist();
+    notifyListeners();
+    return folder;
+  }
+
+  String addNote({String? folderId, String title = '未命名笔记'}) {
+    final now = DateTime.now().toIso8601String();
+    final note = NoteItem(
+      id: 'note-${_noteSequence.toString().padLeft(2, '0')}',
+      title: title.trim().isEmpty ? '未命名笔记' : title.trim(),
+      preview: '',
+      updatedLabel: '刚刚',
+      folder: _folderName(folderId),
+      folderId: folderId,
+      accent: _accentFor(_notes.length),
+      plainText: '',
+      contentJson: const <String, dynamic>{},
+      createdAt: now,
+      updatedAt: now,
+    );
+    _noteSequence += 1;
+    _notes = [note, ..._notes];
+    _schedulePersist();
+    notifyListeners();
+    return note.id;
+  }
+
+  void updateNoteTitle(String id, String rawTitle) {
+    final title = rawTitle.trim();
+    if (title.isEmpty) return;
+    final now = DateTime.now().toIso8601String();
+    _replaceNote(
+        id,
+        (note) => note.copyWith(
+              title: title,
+              updatedLabel: noteUpdatedLabelFor(now),
+              updatedAt: now,
+            ));
+  }
+
+  void updateNoteBody(String id, String body) {
+    final now = DateTime.now().toIso8601String();
+    _replaceNote(
+        id,
+        (note) => note.copyWith(
+              preview: notePreviewFromText(body),
+              plainText: body,
+              updatedLabel: noteUpdatedLabelFor(now),
+              updatedAt: now,
+            ));
+  }
+
+  void toggleNoteFavorite(String id) {
+    final now = DateTime.now().toIso8601String();
+    _replaceNote(
+        id,
+        (note) => note.copyWith(
+              isFavorite: !note.isFavorite,
+              updatedLabel: noteUpdatedLabelFor(now),
+              updatedAt: now,
+            ));
+  }
+
+  bool moveNoteToFolder(String id, String? folderId) {
+    if (folderId != null && _folders.every((folder) => folder.id != folderId)) {
+      return false;
+    }
+    final now = DateTime.now().toIso8601String();
+    _replaceNote(
+      id,
+      (note) => note.copyWith(
+        folder: _folderName(folderId),
+        folderId: folderId,
+        clearFolderId: folderId == null,
+        updatedLabel: noteUpdatedLabelFor(now),
+        updatedAt: now,
+      ),
+    );
+    return true;
+  }
+
+  bool removeNote(String id) {
+    final index = _notes.indexWhere((note) => note.id == id);
+    if (index < 0) return false;
+    _notes = [..._notes]..removeAt(index);
+    _schedulePersist();
+    notifyListeners();
+    return true;
   }
 
   void moveTaskBefore(String draggedId, String targetId) {
@@ -542,6 +809,8 @@ class WorkspaceController extends ChangeNotifier {
             ))
         .toList();
     _taskSequence = _nextTaskSequence();
+    _noteSequence = _nextNoteSequence();
+    _folderSequence = _nextFolderSequence();
     _selectedTaskId = _tasks.isEmpty ? null : _tasks.first.id;
     _selectedListName = null;
     _lastCompletedTaskId = null;
@@ -636,5 +905,43 @@ class WorkspaceController extends ChangeNotifier {
       if (value > highest) highest = value;
     }
     return highest + 1;
+  }
+
+  int _nextNoteSequence() {
+    var highest = 0;
+    final pattern = RegExp(r'note-(\d+)$');
+    for (final note in _notes) {
+      final match = pattern.firstMatch(note.id);
+      final value = match == null ? 0 : int.tryParse(match.group(1)!) ?? 0;
+      if (value > highest) highest = value;
+    }
+    return highest + 1;
+  }
+
+  int _nextFolderSequence() {
+    var highest = 0;
+    final pattern = RegExp(r'folder-(?:local-)?(\d+)$');
+    for (final folder in _folders) {
+      final match = pattern.firstMatch(folder.id);
+      final value = match == null ? 0 : int.tryParse(match.group(1)!) ?? 0;
+      if (value > highest) highest = value;
+    }
+    return highest + 1;
+  }
+
+  void _replaceTask(String id, TaskItem Function(TaskItem task) update) {
+    final index = _tasks.indexWhere((task) => task.id == id);
+    if (index < 0) return;
+    _tasks[index] = update(_tasks[index]);
+    _schedulePersist();
+    notifyListeners();
+  }
+
+  void _replaceNote(String id, NoteItem Function(NoteItem note) update) {
+    final index = _notes.indexWhere((note) => note.id == id);
+    if (index < 0) return;
+    _notes[index] = update(_notes[index]);
+    _schedulePersist();
+    notifyListeners();
   }
 }

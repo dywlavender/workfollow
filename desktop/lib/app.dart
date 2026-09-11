@@ -88,6 +88,50 @@ class _WorkFollowShellState extends State<WorkFollowShell> {
     _openCommandPalette();
   }
 
+  Future<void> _openFilters() async {
+    final tokens = WorkFollowTheme.of(context);
+    final destination = await showModalBottomSheet<WorkspaceView>(
+      context: context,
+      backgroundColor: tokens.overlay,
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 18, 20, 8),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text('切换任务视图',
+                    style: TextStyle(
+                        color: tokens.textPrimary,
+                        fontWeight: FontWeight.w700)),
+              ),
+            ),
+            for (final option in const <(WorkspaceView, String)>[
+              (WorkspaceView.today, '今天'),
+              (WorkspaceView.inbox, '收集箱'),
+              (WorkspaceView.plan, '计划'),
+              (WorkspaceView.all, '全部任务'),
+              (WorkspaceView.completed, '已完成'),
+            ])
+              ListTile(
+                leading: Icon(
+                    option.$1 == controller.view
+                        ? Icons.radio_button_checked
+                        : Icons.radio_button_off,
+                    color: option.$1 == controller.view
+                        ? tokens.accent
+                        : tokens.textTertiary),
+                title: Text(option.$2),
+                onTap: () => Navigator.of(sheetContext).pop(option.$1),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (destination != null) controller.selectView(destination);
+  }
+
   void _showUndo(String message) {
     setState(() {
       undoMessage = message;
@@ -196,6 +240,7 @@ class _WorkFollowShellState extends State<WorkFollowShell> {
                                 onToggleSidebar: () => setState(
                                     () => sidebarCollapsed = !sidebarCollapsed),
                                 onSearch: _openCommandPalette,
+                                onOpenFilters: _openFilters,
                                 onNewTask: _newTask),
                             Expanded(
                               child: _WorkspaceContent(
@@ -241,12 +286,14 @@ class _AppToolbar extends StatelessWidget {
       required this.sidebarCollapsed,
       required this.onToggleSidebar,
       required this.onSearch,
+      required this.onOpenFilters,
       required this.onNewTask});
 
   final String title;
   final bool sidebarCollapsed;
   final VoidCallback onToggleSidebar;
   final VoidCallback onSearch;
+  final VoidCallback onOpenFilters;
   final VoidCallback onNewTask;
 
   @override
@@ -280,7 +327,7 @@ class _AppToolbar extends StatelessWidget {
           AppIconButton(
               icon: Icons.tune_rounded,
               tooltip: '筛选与视图',
-              onPressed: () {},
+              onPressed: onOpenFilters,
               size: 32,
               iconSize: 17),
           const SizedBox(width: 7),

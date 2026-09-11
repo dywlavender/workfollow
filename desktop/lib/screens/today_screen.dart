@@ -55,10 +55,39 @@ class TaskWorkspaceScreen extends StatelessWidget {
     );
   }
 
-  void _showListNotice(BuildContext context) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('新建清单操作将在下一轮接入；已迁移的自定义清单可以直接使用。')),
+  Future<void> _showListNotice(BuildContext context) async {
+    final nameController = TextEditingController();
+    final name = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('新建清单'),
+        content: TextField(
+          controller: nameController,
+          autofocus: true,
+          maxLength: 40,
+          decoration: const InputDecoration(hintText: '例如：旅行准备'),
+          onSubmitted: (value) => Navigator.of(dialogContext).pop(value),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () =>
+                Navigator.of(dialogContext).pop(nameController.text),
+            child: const Text('创建'),
+          ),
+        ],
+      ),
     );
+    nameController.dispose();
+    if (!context.mounted || name == null) return;
+    if (!controller.addList(name)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('清单名称为空，或已经存在。')),
+      );
+    }
   }
 }
 
