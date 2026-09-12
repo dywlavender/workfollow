@@ -14,6 +14,8 @@ Future<void> showSettingsPanel({
   required BuildContext context,
   required WorkspaceController controller,
   required VoidCallback onToggleTheme,
+  required ValueChanged<ThemeMode> onSetThemeMode,
+  required ThemeMode themeMode,
 }) {
   return showGeneralDialog<void>(
     context: context,
@@ -24,6 +26,8 @@ Future<void> showSettingsPanel({
     pageBuilder: (context, animation, secondaryAnimation) => _SettingsPanel(
       controller: controller,
       onToggleTheme: onToggleTheme,
+      onSetThemeMode: onSetThemeMode,
+      themeMode: themeMode,
     ),
     transitionBuilder: (context, animation, secondaryAnimation, child) =>
         BackdropFilter(
@@ -37,10 +41,14 @@ class _SettingsPanel extends StatefulWidget {
   const _SettingsPanel({
     required this.controller,
     required this.onToggleTheme,
+    required this.onSetThemeMode,
+    required this.themeMode,
   });
 
   final WorkspaceController controller;
   final VoidCallback onToggleTheme;
+  final ValueChanged<ThemeMode> onSetThemeMode;
+  final ThemeMode themeMode;
 
   @override
   State<_SettingsPanel> createState() => _SettingsPanelState();
@@ -48,7 +56,6 @@ class _SettingsPanel extends StatefulWidget {
 
 class _SettingsPanelState extends State<_SettingsPanel> {
   bool importing = false;
-  bool seasonalMood = true;
   String? importMessage;
   String? importError;
 
@@ -154,7 +161,6 @@ class _SettingsPanelState extends State<_SettingsPanel> {
   @override
   Widget build(BuildContext context) {
     final tokens = WorkFollowTheme.of(context);
-    final dark = Theme.of(context).brightness == Brightness.dark;
 
     return Center(
       child: Material(
@@ -209,20 +215,10 @@ class _SettingsPanelState extends State<_SettingsPanel> {
                         children: [
                           _SettingRow(
                             label: '界面模式',
-                            description: '调整工作台的明暗显示',
+                            description: '跟随系统、浅色或深色，重启后保留',
                             trailing: _ModeSegment(
-                              dark: dark,
-                              onToggleTheme: widget.onToggleTheme,
-                            ),
-                          ),
-                          _SettingRow(
-                            label: '季节氛围',
-                            description: '在侧栏和空状态显示低强度插画',
-                            trailing: Switch(
-                              value: seasonalMood,
-                              onChanged: (value) =>
-                                  setState(() => seasonalMood = value),
-                              activeColor: tokens.accent,
+                              current: widget.themeMode,
+                              onSelect: widget.onSetThemeMode,
                             ),
                           ),
                         ],
@@ -555,43 +551,62 @@ class _ImportCountRow extends StatelessWidget {
 }
 
 class _ModeSegment extends StatelessWidget {
-  const _ModeSegment({required this.dark, required this.onToggleTheme});
+  const _ModeSegment({required this.current, required this.onSelect});
 
-  final bool dark;
-  final VoidCallback onToggleTheme;
+  final ThemeMode current;
+  final ValueChanged<ThemeMode> onSelect;
 
   @override
   Widget build(BuildContext context) {
     final tokens = WorkFollowTheme.of(context);
-
-    return GestureDetector(
-      onTap: onToggleTheme,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-        decoration: BoxDecoration(
-          color: tokens.content,
-          borderRadius: BorderRadius.circular(6),
-          border: Border.all(color: tokens.border),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              dark ? Icons.dark_mode_outlined : Icons.light_mode_outlined,
-              size: 13,
-              color: tokens.accent,
-            ),
-            const SizedBox(width: 5),
-            Text(
-              dark ? '深色' : '浅色',
-              style: TextStyle(
-                color: tokens.textSecondary,
-                fontSize: 10.5,
-                fontWeight: FontWeight.w600,
+    return Container(
+      padding: const EdgeInsets.all(2),
+      decoration: BoxDecoration(
+        color: tokens.content,
+        borderRadius: BorderRadius.circular(7),
+        border: Border.all(color: tokens.border),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (final mode in const [
+            (ThemeMode.system, '跟随系统', Icons.computer_outlined),
+            (ThemeMode.light, '浅色', Icons.light_mode_outlined),
+            (ThemeMode.dark, '深色', Icons.dark_mode_outlined),
+          ])
+            InkWell(
+              onTap: () => onSelect(mode.$1),
+              borderRadius: BorderRadius.circular(5),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: current == mode.$1
+                      ? tokens.accentSoft
+                      : Colors.transparent,
+                  borderRadius: BorderRadius.circular(5),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(mode.$3,
+                        size: 12,
+                        color: current == mode.$1
+                            ? tokens.accent
+                            : tokens.textTertiary),
+                    const SizedBox(width: 4),
+                    Text(mode.$2,
+                        style: TextStyle(
+                          color: current == mode.$1
+                              ? tokens.accent
+                              : tokens.textSecondary,
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.w600,
+                        )),
+                  ],
+                ),
               ),
             ),
-          ],
-        ),
+        ],
       ),
     );
   }

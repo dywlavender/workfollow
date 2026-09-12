@@ -8,6 +8,7 @@ import 'screens/home_screen.dart';
 import 'screens/notes_screen.dart';
 import 'screens/today_screen.dart';
 import 'screens/trash_screen.dart';
+import 'services/preferences_store.dart';
 import 'state/workspace_controller.dart';
 import 'theme/workfollow_theme.dart';
 import 'widgets/app_icon_button.dart';
@@ -16,14 +17,45 @@ import 'widgets/sidebar.dart';
 import 'widgets/settings_panel.dart';
 
 class WorkFollowApp extends StatefulWidget {
-  const WorkFollowApp({super.key});
+  const WorkFollowApp({super.key, this.preferencesStore});
+
+  /// Injectable so tests can point persistence at a temp directory.
+  final WorkspacePreferencesStore? preferencesStore;
 
   @override
   State<WorkFollowApp> createState() => _WorkFollowAppState();
 }
 
 class _WorkFollowAppState extends State<WorkFollowApp> {
-  bool darkMode = false;
+  ThemeMode _themeMode = ThemeMode.system;
+  late final WorkspacePreferencesStore _preferencesStore;
+
+  @override
+  void initState() {
+    super.initState();
+    _preferencesStore = widget.preferencesStore ?? WorkspacePreferencesStore();
+    unawaited(_restoreThemeMode());
+  }
+
+  Future<void> _restoreThemeMode() async {
+    final preferences = await _preferencesStore.load();
+    final saved = preferences['themeMode'];
+    if (!mounted || saved is! String) return;
+    final mode =
+        ThemeMode.values.where((value) => value.name == saved).firstOrNull;
+    if (mode != null) setState(() => _themeMode = mode);
+  }
+
+  void _setThemeMode(ThemeMode mode) {
+    setState(() => _themeMode = mode);
+    unawaited(_preferencesStore.save({'themeMode': mode.name}));
+  }
+
+  void _toggleTheme() {
+    // Quick light/dark flip; 跟随系统 stays available in Settings.
+    _setThemeMode(
+        _themeMode == ThemeMode.dark ? ThemeMode.light : ThemeMode.dark);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -32,21 +64,35 @@ class _WorkFollowAppState extends State<WorkFollowApp> {
       debugShowCheckedModeBanner: false,
       theme: WorkFollowThemeData.light(),
       darkTheme: WorkFollowThemeData.dark(),
-      themeMode: darkMode ? ThemeMode.dark : ThemeMode.light,
+      themeMode: _themeMode,
       home: WorkFollowShell(
-          onToggleTheme: () => setState(() => darkMode = !darkMode)),
+        onToggleTheme: _toggleTheme,
+        onSetThemeMode: _setThemeMode,
+        themeMode: _themeMode,
+      ),
     );
   }
 }
 
 class WorkFollowShell extends StatefulWidget {
-  const WorkFollowShell({super.key, required this.onToggleTheme});
+  const WorkFollowShell({
+    super.key,
+    required this.onToggleTheme,
+    required this.onSetThemeMode,
+    required this.themeMode,
+  });
 
   final VoidCallback onToggleTheme;
+  final ValueChanged<ThemeMode> onSetThemeMode;
+  final ThemeMode themeMode;
 
   @override
   State<WorkFollowShell> createState() => _WorkFollowShellState();
 }
+
+/// Command names sent by the native menu bar over `workfollow/menu`. They map
+/// to the same handlers as the in-app keyboard shortcuts.
+const _menuChannel = MethodChannel('workfollow/menu');
 
 class _WorkFollowShellState extends State<WorkFollowShell> {
   late final WorkspaceController controller;
@@ -61,6 +107,38 @@ class _WorkFollowShellState extends State<WorkFollowShell> {
     controller = WorkspaceController();
     controller.addListener(_observeAction);
     unawaited(controller.restoreFromDisk());
+    // The native menu bar routes its command items here.
+    _menuChannel.setMethodCallHandler((call) async {
+      if (call.method == 'command') {
+        _handleMenuCommand(call.arguments as String?);
+      }
+      return null;
+    });
+  }
+
+  void _handleMenuCommand(String? name) {
+    switch (name) {
+      case 'newTask':
+        _newTask();
+      case 'newNote':
+        _newNote();
+      case 'search':
+        _openCommandPalette();
+      case 'settings':
+        _openSettings();
+      case 'toggleSidebar':
+        setState(() => sidebarCollapsed = !sidebarCollapsed);
+      case 'goToday':
+        controller.selectView(WorkspaceView.today);
+      case 'goInbox':
+        controller.selectView(WorkspaceView.inbox);
+      case 'goPlan':
+        controller.selectView(WorkspaceView.plan);
+      case 'goCalendar':
+        controller.selectView(WorkspaceView.calendar);
+      case 'goNotes':
+        controller.selectView(WorkspaceView.notes);
+    }
   }
 
   void _observeAction() {
@@ -109,7 +187,9 @@ class _WorkFollowShellState extends State<WorkFollowShell> {
     await showSettingsPanel(
         context: context,
         controller: controller,
-        onToggleTheme: widget.onToggleTheme);
+        onToggleTheme: widget.onToggleTheme,
+        onSetThemeMode: widget.onSetThemeMode,
+        themeMode: widget.themeMode);
   }
 
   Future<void> _openFilters() async {
@@ -257,7 +337,9 @@ class _WorkFollowShellState extends State<WorkFollowShell> {
                             onOpenSettings: () => showSettingsPanel(
                                 context: context,
                                 controller: controller,
-                                onToggleTheme: widget.onToggleTheme),
+                                onToggleTheme: widget.onToggleTheme,
+                                onSetThemeMode: widget.onSetThemeMode,
+                                themeMode: widget.themeMode),
                           ),
                         ),
                       ),

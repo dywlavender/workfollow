@@ -7,6 +7,7 @@ import 'package:workfollow_personal/app.dart';
 import 'package:workfollow_personal/models/migration.dart';
 import 'package:workfollow_personal/models/task.dart';
 import 'package:workfollow_personal/services/local_workspace_store.dart';
+import 'package:workfollow_personal/services/preferences_store.dart';
 import 'package:workfollow_personal/state/workspace_controller.dart';
 
 /// Records saves without touching the filesystem; can simulate failures and
@@ -495,6 +496,49 @@ void main() {
 
     controller.selectAllVisibleTasks();
     expect(controller.multiSelectCount, visibleIds.length);
+  });
+
+  test('preferences round-trip the theme mode and survive damaged files',
+      () async {
+    final directory =
+        await Directory.systemTemp.createTemp('workfollow-prefs-test');
+    addTearDown(() => directory.delete(recursive: true));
+    final store = WorkspacePreferencesStore(directoryOverride: directory.path);
+
+    expect((await store.load())['themeMode'], isNull);
+    await store.save({'themeMode': 'dark'});
+    expect((await store.load())['themeMode'], 'dark');
+
+    // A damaged file behaves like no preferences instead of crashing.
+    final file = File('${directory.path}/preferences.json');
+    await file.writeAsString('{not json');
+    expect(await store.load(), isEmpty);
+  });
+
+  testWidgets('theme toggle persists the appearance preference',
+      (tester) async {
+    // Synchronous temp-dir setup: real async I/O inside testWidgets'
+    // fake-async zone deadlocks unless wrapped in tester.runAsync.
+    final directory =
+        Directory.systemTemp.createTempSync('workfollow-theme-test');
+    addTearDown(() => directory.deleteSync(recursive: true));
+    final store = WorkspacePreferencesStore(directoryOverride: directory.path);
+
+    await tester.pumpWidget(WorkFollowApp(preferencesStore: store));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('切换深色'));
+    // The MaterialApp animates theme switches; let the 200ms finish.
+    await tester.pumpAndSettle();
+
+    final persisted = await tester.runAsync(() => store.load());
+    expect(persisted?['themeMode'], ThemeMode.dark.name);
+
+    // A UniqueKey forces a remount, so initState restores from the file.
+    await tester.pumpWidget(
+        WorkFollowApp(key: UniqueKey(), preferencesStore: store));
+    await tester.pumpAndSettle();
+    expect(find.byTooltip('切换浅色'), findsOneWidget);
   });
 
   testWidgets('command palette opens, searches and creates tasks',
