@@ -231,6 +231,9 @@ class WorkspaceController extends ChangeNotifier {
   String? _lastRecurrenceSpawnId;
   String? _lastCompletedRecurrenceType;
   Map<String, dynamic>? _lastCompletedRecurrenceConfig;
+  Set<String> _multiSelectedTaskIds = {};
+  String? _multiSelectAnchorId;
+  _BulkTaskUndo? _lastBulkUndo;
   int _completionVersion = 0;
   int _actionVersion = 0;
   String _lastActionMessage = '';
@@ -622,6 +625,8 @@ class WorkspaceController extends ChangeNotifier {
     if (_view == destination && _selectedListName == null) return;
     _view = destination;
     _selectedListName = null;
+    _multiSelectedTaskIds = {};
+    _multiSelectAnchorId = null;
     final available = visibleTasks;
     if (available.isNotEmpty &&
         !available.any((task) => task.id == _selectedTaskId)) {
@@ -636,6 +641,8 @@ class WorkspaceController extends ChangeNotifier {
     if (_view == WorkspaceView.all && _selectedListName == name) return;
     _view = WorkspaceView.all;
     _selectedListName = name;
+    _multiSelectedTaskIds = {};
+    _multiSelectAnchorId = null;
     final available = visibleTasks;
     if (available.isNotEmpty) _selectedTaskId = available.first.id;
     _notify();
@@ -941,7 +948,278 @@ class WorkspaceController extends ChangeNotifier {
     return visible[removedIndex.clamp(0, visible.length - 1).toInt()].id;
   }
 
+  // ---------------------------------------------------------------------------
+  // Multi-select and bulk operations. Cmd-click toggles membership, Shift-click
+  // extends a range; the bulk bar offers complete / reschedule / move / delete,
+  // all revertible through the undo toast.
+  // ---------------------------------------------------------------------------
+
+  Set<String> get multiSelectedTaskIds =>
+      Set.unmodifiable(_multiSelectedTaskIds);
+  int get multiSelectCount => _multiSelectedTaskIds.length;
+  bool isTaskMultiSelected(String id) => _multiSelectedTaskIds.contains(id);
+
+  void toggleMultiSelect(String id) {
+    if (!_multiSelectedTaskIds.add(id)) {
+      _multiSelectedTaskIds.remove(id);
+    }
+    _multiSelectAnchorId = id;
+    _notify();
+  }
+
+  void extendMultiSelectTo(String id) {
+    final visible = visibleTasks;
+    final anchorIndex =
+        visible.indexWhere((task) => task.id == _multiSelectAnchorId);
+    final targetIndex = visible.indexWhere((task) => task.id == id);
+    if (anchorIndex < 0 || targetIndex < 0) {
+      _multiSelectedTaskIds.add(id);
+    } else {
+      final start = anchorIndex < targetIndex ? anchorIndex : targetIndex;
+      final end = anchorIndex < targetIndex ? targetIndex : anchorIndex;
+      for (var i = start; i <= end; i++) {
+        _multiSelectedTaskIds.add(visible[i].id);
+      }
+    }
+    _notify();
+  }
+
+  void selectAllVisibleTasks() {
+    _multiSelectedTaskIds = visibleTasks.map((task) => task.id).toSet();
+    _notify();
+  }
+
+  void clearMultiSelect() {
+    if (_multiSelectedTaskIds.isEmpty) return;
+    _multiSelectedTaskIds = {};
+    _multiSelectAnchorId = null;
+    _notify();
+  }
+
+  void bulkCompleteSelected() {
+    if (_multiSelectedTaskIds.isEmpty) return;
+    final now = DateTime.now();
+    final nowLabel = now.toIso8601String();
+    final completedIds = <String>[];
+    final spawnedIds = <String>[];
+    final spawned = <TaskItem>[];
+    final rules = <String, (String, Map<String, dynamic>?)>{};
+    for (final id in _multiSelectedTaskIds) {
+      final index = _tasks.indexWhere((task) => task.id == id);
+      if (index < 0) continue;
+      final task = _tasks[index];
+      if (task.completed || task.deletedAt != null) continue;
+      final next = _spawnNextRecurrence(task, completedAt: now);
+      var updated = task.copyWith(
+        completed: true,
+        completedAt: nowLabel,
+        updatedAt: nowLabel,
+        timeLabel: '已完成 · 刚刚',
+      );
+      if (next != null) {
+        _taskSequence += 1;
+        spawned.add(next);
+        spawnedIds.add(next.id);
+        rules[id] = (task.recurrenceType, task.recurrenceConfig);
+        updated = updated.copyWith(
+          recurrenceType: 'NONE',
+          clearRecurrenceConfig: true,
+        );
+      }
+      _tasks[index] = updated;
+      completedIds.add(id);
+    }
+    if (completedIds.isEmpty) return;
+    if (spawned.isNotEmpty) _tasks = [...spawned, ..._tasks];
+    _completionVersion += 1;
+    _lastBulkUndo = _BulkTaskUndo(
+      completedIds: completedIds,
+      spawnedIds: spawnedIds,
+      recurrenceRules: rules,
+    );
+    _lastActionKind = 'bulk';
+    _lastActionMessage = '已完成 ${completedIds.length} 个任务';
+    _actionVersion += 1;
+    _endBulkSelection();
+    _schedulePersist();
+    _notify();
+  }
+
+  /// Reschedules every selected task to [day] (keeping each task's clock
+  /// time), or clears dates when [day] is null.
+  void bulkRescheduleSelected(DateTime? day) {
+    if (_multiSelectedTaskIds.isEmpty) return;
+    final previous = <String, String?>{};
+    final now = DateTime.now().toIso8601String();
+    var touched = 0;
+    for (final id in _multiSelectedTaskIds) {
+      final index = _tasks.indexWhere((task) => task.id == id);
+      if (index < 0) continue;
+      final task = _tasks[index];
+      if (task.deletedAt != null) continue;
+      previous[id] = task.dueAt;
+      DateTime? due;
+      if (day != null) {
+        final existing =
+            task.dueAt == null ? null : DateTime.tryParse(task.dueAt!);
+        due = DateTime(day.year, day.month, day.day, existing?.hour ?? 0,
+            existing?.minute ?? 0);
+      }
+      _tasks[index] = task.copyWith(
+        dueAt: due?.toIso8601String(),
+        clearDueAt: due == null,
+        bucket: taskBucketForDate(due, completed: task.completed),
+        timeLabel: due == null
+            ? (task.completed ? '已完成' : '未安排')
+            : taskTimeLabelFor(due, completed: task.completed),
+        updatedAt: now,
+      );
+      touched += 1;
+    }
+    if (touched == 0) return;
+    _lastBulkUndo = _BulkTaskUndo(previousDueAts: previous);
+    _lastActionKind = 'bulk';
+    _lastActionMessage = '已更新 $touched 个任务的日期';
+    _actionVersion += 1;
+    _endBulkSelection();
+    _schedulePersist();
+    _notify();
+  }
+
+  void bulkMoveSelectedToList(String rawListName) {
+    final listName = rawListName.trim();
+    if (listName.isEmpty || _multiSelectedTaskIds.isEmpty) return;
+    if (_lists.every((list) => list.name != listName)) addList(listName);
+    final previous = <String, String>{};
+    final now = DateTime.now().toIso8601String();
+    var touched = 0;
+    for (final id in _multiSelectedTaskIds) {
+      final index = _tasks.indexWhere((task) => task.id == id);
+      if (index < 0) continue;
+      final task = _tasks[index];
+      if (task.deletedAt != null || task.listName == listName) continue;
+      previous[id] = task.listName;
+      _tasks[index] = task.copyWith(
+        listName: listName,
+        updatedAt: now,
+      );
+      touched += 1;
+    }
+    if (touched == 0) return;
+    _lastBulkUndo = _BulkTaskUndo(previousListNames: previous);
+    _lastActionKind = 'bulk';
+    _lastActionMessage = '已移动 $touched 个任务到「$listName」';
+    _actionVersion += 1;
+    _endBulkSelection();
+    _schedulePersist();
+    _notify();
+  }
+
+  void bulkDeleteSelected() {
+    if (_multiSelectedTaskIds.isEmpty) return;
+    final removedIds = <String>[];
+    final now = DateTime.now().toIso8601String();
+    for (final id in _multiSelectedTaskIds) {
+      final index = _tasks.indexWhere((task) => task.id == id);
+      if (index < 0) continue;
+      if (_tasks[index].deletedAt != null) continue;
+      _tasks[index] = _tasks[index].copyWith(deletedAt: now, updatedAt: now);
+      removedIds.add(id);
+    }
+    if (removedIds.isEmpty) return;
+    _lastBulkUndo = _BulkTaskUndo(removedIds: removedIds);
+    _lastActionKind = 'bulk';
+    _lastActionMessage = '${removedIds.length} 个任务已移到废纸篓';
+    _actionVersion += 1;
+    _lastCompletedTaskId = null;
+    if (_selectedTaskId != null && removedIds.contains(_selectedTaskId)) {
+      _selectedTaskId = null;
+    }
+    _endBulkSelection();
+    _schedulePersist();
+    _notify();
+  }
+
+  void _endBulkSelection() {
+    _multiSelectedTaskIds = {};
+    _multiSelectAnchorId = null;
+  }
+
+  void _revertBulkUndo(_BulkTaskUndo bulk) {
+    final now = DateTime.now().toIso8601String();
+    for (final id in bulk.completedIds) {
+      final index = _tasks.indexWhere((task) => task.id == id);
+      if (index < 0) continue;
+      final task = _tasks[index];
+      final due = task.dueAt == null ? null : DateTime.tryParse(task.dueAt!);
+      final rule = bulk.recurrenceRules[id];
+      _tasks[index] = task.copyWith(
+        completed: false,
+        clearCompletedAt: true,
+        updatedAt: now,
+        timeLabel: taskTimeLabelFor(due) ?? '未安排',
+        recurrenceType: rule?.$1 ?? task.recurrenceType,
+        recurrenceConfig: rule?.$2,
+        clearRecurrenceConfig: rule != null && rule.$2 == null,
+      );
+    }
+    final spawnIds = bulk.spawnedIds.toSet();
+    if (spawnIds.isNotEmpty) {
+      _tasks.removeWhere((task) => spawnIds.contains(task.id));
+    }
+    for (final id in bulk.removedIds) {
+      final index = _tasks.indexWhere((task) => task.id == id);
+      if (index < 0) continue;
+      _tasks[index] =
+          _tasks[index].copyWith(clearDeletedAt: true, updatedAt: now);
+    }
+    bulk.previousDueAts.forEach((id, value) {
+      final index = _tasks.indexWhere((task) => task.id == id);
+      if (index < 0) return;
+      final task = _tasks[index];
+      final due = value == null ? null : DateTime.tryParse(value);
+      _tasks[index] = task.copyWith(
+        dueAt: value,
+        clearDueAt: value == null,
+        bucket: taskBucketForDate(due, completed: task.completed),
+        timeLabel: due == null
+            ? (task.completed ? '已完成' : '未安排')
+            : taskTimeLabelFor(due, completed: task.completed),
+        updatedAt: now,
+      );
+    });
+    bulk.previousListNames.forEach((id, value) {
+      final index = _tasks.indexWhere((task) => task.id == id);
+      if (index < 0) return;
+      _tasks[index] = _tasks[index].copyWith(listName: value, updatedAt: now);
+    });
+    _lastBulkUndo = null;
+    _lastActionKind = '';
+    _endBulkSelection();
+    _schedulePersist();
+    _notify();
+  }
+
+  /// Moves a task to [day] from a calendar drag, keeping its clock time.
+  void rescheduleTask(String id, DateTime day) {
+    final index =
+        _tasks.indexWhere((task) => task.id == id && task.deletedAt == null);
+    if (index < 0) return;
+    final task = _tasks[index];
+    final existing = task.dueAt == null ? null : DateTime.tryParse(task.dueAt!);
+    updateTaskDue(
+      id,
+      DateTime(day.year, day.month, day.day, existing?.hour ?? 0,
+          existing?.minute ?? 0),
+    );
+  }
+
   bool undoLastAction() {
+    final bulk = _lastBulkUndo;
+    if (bulk != null) {
+      _revertBulkUndo(bulk);
+      return true;
+    }
     if (_lastActionKind == 'completion') return undoLastCompletion();
     if (_lastActionKind == 'removal' && _lastRemovedTaskId != null) {
       final index = _tasks.indexWhere((task) => task.id == _lastRemovedTaskId);
@@ -1610,4 +1888,24 @@ class WorkspaceController extends ChangeNotifier {
     _schedulePersist();
     _notify();
   }
+}
+
+/// Everything needed to revert one bulk operation. Only the parts the
+/// operation touched are populated; the rest stays empty.
+class _BulkTaskUndo {
+  const _BulkTaskUndo({
+    this.completedIds = const [],
+    this.spawnedIds = const [],
+    this.recurrenceRules = const {},
+    this.removedIds = const [],
+    this.previousDueAts = const {},
+    this.previousListNames = const {},
+  });
+
+  final List<String> completedIds;
+  final List<String> spawnedIds;
+  final Map<String, (String, Map<String, dynamic>?)> recurrenceRules;
+  final List<String> removedIds;
+  final Map<String, String?> previousDueAts;
+  final Map<String, String> previousListNames;
 }

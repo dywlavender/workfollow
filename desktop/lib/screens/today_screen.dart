@@ -132,6 +132,8 @@ class TodayScreen extends StatelessWidget {
                         child: QuickAddField(controller: controller)),
                     Expanded(
                         child: _TaskList(tasks: tasks, controller: controller)),
+                    if (controller.multiSelectCount > 0)
+                      _BulkActionBar(controller: controller),
                   ],
                 ),
               ),
@@ -247,7 +249,8 @@ class _TaskList extends StatelessWidget {
         itemBuilder: (context, index) => TaskRow(
             task: tasks[index],
             controller: controller,
-            selected: tasks[index].id == controller.selectedTaskId),
+            selected: tasks[index].id == controller.selectedTaskId,
+            multiSelected: controller.isTaskMultiSelected(tasks[index].id)),
       );
     }
     final overdue = tasks
@@ -319,15 +322,150 @@ class _TaskList extends StatelessWidget {
                 child: TaskRow(
                     task: task,
                     controller: controller,
-                    selected: task.id == controller.selectedTaskId)),
+                    selected: task.id == controller.selectedTaskId,
+                    multiSelected: controller.isTaskMultiSelected(task.id))),
             child: TaskRow(
                 key: ValueKey(task.id),
                 task: task,
                 controller: controller,
-                selected: task.id == controller.selectedTaskId),
+                selected: task.id == controller.selectedTaskId,
+                multiSelected: controller.isTaskMultiSelected(task.id)),
           ),
         );
       },
+    );
+  }
+}
+
+/// Actions for the current multi-selection. Every action is revertible
+/// through the undo toast (bulk complete / delete / reschedule / move).
+class _BulkActionBar extends StatelessWidget {
+  const _BulkActionBar({required this.controller});
+
+  final WorkspaceController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = WorkFollowTheme.of(context);
+    return Container(
+      decoration: BoxDecoration(
+          color: tokens.inspector,
+          border: Border(top: BorderSide(color: tokens.border))),
+      padding: const EdgeInsets.fromLTRB(14, 8, 14, 8),
+      child: Row(
+        children: [
+          Text('已选 ${controller.multiSelectCount} 项',
+              style: TextStyle(
+                  color: tokens.textPrimary,
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w700)),
+          const SizedBox(width: 10),
+          _BulkAction(
+              label: '完成',
+              icon: Icons.check_rounded,
+              color: tokens.success,
+              onPressed: controller.bulkCompleteSelected),
+          _BulkAction(
+              label: '今天',
+              icon: Icons.today_outlined,
+              onPressed: () =>
+                  controller.bulkRescheduleSelected(DateTime.now())),
+          _BulkAction(
+              label: '明天',
+              icon: Icons.event_outlined,
+              onPressed: () {
+                final now = DateTime.now();
+                controller.bulkRescheduleSelected(
+                    DateTime(now.year, now.month, now.day + 1));
+              }),
+          _BulkAction(
+              label: '移到清单…',
+              icon: Icons.drive_file_move_outline,
+              onPressed: () => _pickList(context)),
+          _BulkAction(
+              label: '删除',
+              icon: Icons.delete_outline_rounded,
+              color: tokens.danger,
+              onPressed: controller.bulkDeleteSelected),
+          const Spacer(),
+          TextButton(
+              onPressed: controller.clearMultiSelect,
+              style: TextButton.styleFrom(
+                  foregroundColor: tokens.textTertiary,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap),
+              child: const Text('取消选择',
+                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600))),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _pickList(BuildContext context) async {
+    final tokens = WorkFollowTheme.of(context);
+    final listName = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: tokens.overlay,
+      builder: (sheetContext) => SafeArea(
+        child: ListView(
+          shrinkWrap: true,
+          children: [
+            const Padding(
+                padding: EdgeInsets.fromLTRB(20, 18, 20, 8),
+                child: Text('移动到清单',
+                    style: TextStyle(fontWeight: FontWeight.w700))),
+            for (final list in controller.lists)
+              ListTile(
+                  title: Text(list.name),
+                  onTap: () => Navigator.of(sheetContext).pop(list.name)),
+          ],
+        ),
+      ),
+    );
+    if (listName != null) controller.bulkMoveSelectedToList(listName);
+  }
+}
+
+class _BulkAction extends StatelessWidget {
+  const _BulkAction({
+    required this.label,
+    required this.icon,
+    required this.onPressed,
+    this.color,
+  });
+
+  final String label;
+  final IconData icon;
+  final VoidCallback onPressed;
+  final Color? color;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = WorkFollowTheme.of(context);
+    final foreground = color ?? tokens.textSecondary;
+    return Padding(
+      padding: const EdgeInsets.only(left: 4),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onPressed,
+          borderRadius: BorderRadius.circular(7),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 5),
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              Icon(icon, size: 14, color: foreground),
+              const SizedBox(width: 4),
+              Text(label,
+                  style: TextStyle(
+                      color: foreground,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600)),
+            ]),
+          ),
+        ),
+      ),
     );
   }
 }

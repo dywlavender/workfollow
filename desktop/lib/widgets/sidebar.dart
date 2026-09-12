@@ -467,66 +467,83 @@ class _TaskListItemState extends State<_TaskListItem> {
     return MouseRegion(
       onEnter: (_) => setState(() => hovering = true),
       onExit: (_) => setState(() => hovering = false),
-      child: GestureDetector(
-        onTap: () => widget.controller.selectList(widget.list.name),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 150),
-          curve: Curves.easeOut,
-          margin: const EdgeInsets.symmetric(vertical: 2),
-          padding: const EdgeInsets.fromLTRB(9, 8, 8, 8),
-          decoration: BoxDecoration(
-            color: selected
-                ? tokens.accentSoft
-                : (hovering
-                    ? tokens.content.withOpacity(.7)
-                    : Colors.transparent),
-            borderRadius: BorderRadius.circular(7),
-          ),
-          child: Row(
-            children: [
-              Icon(Icons.list_alt_outlined,
-                  size: 17,
-                  color: selected ? tokens.accent : tokens.textSecondary),
-              const SizedBox(width: 9),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(widget.list.name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+      // Dropping a dragged task row here moves it into this list.
+      child: DragTarget<String>(
+        onWillAccept: (data) => data != null,
+        onAccept: (taskId) =>
+            widget.controller.moveTaskToList(taskId, widget.list.name),
+        builder: (context, candidateData, rejectedData) {
+          final dragActive = candidateData.isNotEmpty;
+          return GestureDetector(
+            onTap: () => widget.controller.selectList(widget.list.name),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 150),
+              curve: Curves.easeOut,
+              margin: const EdgeInsets.symmetric(vertical: 2),
+              padding: const EdgeInsets.fromLTRB(9, 8, 8, 8),
+              decoration: BoxDecoration(
+                color: dragActive
+                    ? tokens.accentSoft
+                    : (selected
+                        ? tokens.accentSoft
+                        : (hovering
+                            ? tokens.content.withOpacity(.7)
+                            : Colors.transparent)),
+                borderRadius: BorderRadius.circular(7),
+                border: dragActive
+                    ? Border.all(color: tokens.accent.withOpacity(.5))
+                    : null,
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.list_alt_outlined,
+                      size: 17,
+                      color: selected ? tokens.accent : tokens.textSecondary),
+                  const SizedBox(width: 9),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(widget.list.name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                                color: selected
+                                    ? tokens.accent
+                                    : tokens.textPrimary,
+                                fontSize: 12,
+                                fontWeight: selected
+                                    ? FontWeight.w700
+                                    : FontWeight.w600)),
+                        const SizedBox(height: 2),
+                        Text('任务清单',
+                            style: TextStyle(
+                                color: tokens.textTertiary, fontSize: 9.5)),
+                      ],
+                    ),
+                  ),
+                  if (count > 0)
+                    Text('$count',
                         style: TextStyle(
                             color:
-                                selected ? tokens.accent : tokens.textPrimary,
-                            fontSize: 12,
-                            fontWeight:
-                                selected ? FontWeight.w700 : FontWeight.w600)),
-                    const SizedBox(height: 2),
-                    Text('任务清单',
-                        style: TextStyle(
-                            color: tokens.textTertiary, fontSize: 9.5)),
-                  ],
-                ),
+                                selected ? tokens.accent : tokens.textTertiary,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w700)),
+                  AnimatedOpacity(
+                    duration: const Duration(milliseconds: 120),
+                    opacity: hovering ? 1 : 0,
+                    child: AppIconButton(
+                        icon: Icons.more_horiz_rounded,
+                        tooltip: '清单操作',
+                        size: 24,
+                        iconSize: 14,
+                        onPressed: () => _showListMenu(context)),
+                  ),
+                ],
               ),
-              if (count > 0)
-                Text('$count',
-                    style: TextStyle(
-                        color: selected ? tokens.accent : tokens.textTertiary,
-                        fontSize: 10,
-                        fontWeight: FontWeight.w700)),
-              AnimatedOpacity(
-                duration: const Duration(milliseconds: 120),
-                opacity: hovering ? 1 : 0,
-                child: AppIconButton(
-                    icon: Icons.more_horiz_rounded,
-                    tooltip: '清单操作',
-                    size: 24,
-                    iconSize: 14,
-                    onPressed: () => _showListMenu(context)),
-              ),
-            ],
-          ),
-        ),
+            ),
+          );
+        },
       ),
     );
   }

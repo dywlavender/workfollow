@@ -390,6 +390,113 @@ void main() {
     expect(moved.listName, '收集箱');
   });
 
+  test('rescheduleTask moves the day but keeps the clock time', () {
+    final controller = WorkspaceController();
+    controller.updateTaskDue('task-01', DateTime(2099, 5, 10, 14, 30));
+
+    controller.rescheduleTask('task-01', DateTime(2099, 5, 20));
+
+    final task = controller.tasks.firstWhere((task) => task.id == 'task-01');
+    expect(DateTime.parse(task.dueAt!), DateTime(2099, 5, 20, 14, 30));
+  });
+
+  test('bulk complete and bulk delete revert through one undo', () {
+    final controller = WorkspaceController();
+    controller.updateTaskDue('task-01', DateTime(2099, 1, 15));
+    controller.updateTaskRecurrence('task-01', 'DAILY');
+    controller.selectList('工作');
+    controller.toggleMultiSelect('task-01');
+    controller.toggleMultiSelect('task-02');
+    expect(controller.multiSelectCount, 2);
+
+    controller.bulkCompleteSelected();
+    expect(controller.multiSelectCount, 0);
+    final completed = controller.tasks
+        .where((task) => task.id == 'task-01' || task.id == 'task-02');
+    expect(completed.every((task) => task.completed), isTrue);
+    // The recurring task spawned its next occurrence.
+    final spawn = controller.tasks
+        .firstWhere((task) => task.recurrenceType == 'DAILY' && !task.completed);
+
+    expect(controller.undoLastAction(), isTrue);
+    expect(
+        controller.tasks.firstWhere((task) => task.id == 'task-01').completed,
+        isFalse);
+    // Undo removes the spawn and restores the rule on the original record.
+    expect(controller.tasks.where((task) => task.id == spawn.id), isEmpty);
+    expect(
+        controller.tasks
+            .firstWhere((task) => task.id == 'task-01')
+            .recurrenceType,
+        'DAILY');
+
+    // Bulk delete lands in the trash and comes back on undo.
+    controller.toggleMultiSelect('task-01');
+    controller.toggleMultiSelect('task-02');
+    controller.bulkDeleteSelected();
+    expect(
+        controller.activeTasks
+            .where((task) => task.id == 'task-01' || task.id == 'task-02'),
+        isEmpty);
+    expect(controller.undoLastAction(), isTrue);
+    expect(
+        controller.activeTasks
+            .where((task) => task.id == 'task-01' || task.id == 'task-02'),
+        hasLength(2));
+  });
+
+  test('bulk move and bulk reschedule revert their previous values', () {
+    final controller = WorkspaceController();
+    controller.updateTaskDue('task-05', DateTime(2099, 6, 1, 9, 0));
+
+    controller.toggleMultiSelect('task-05');
+    controller.toggleMultiSelect('task-06');
+    controller.bulkMoveSelectedToList('项目X');
+    expect(
+        controller.tasks
+            .where((task) => task.id == 'task-05' || task.id == 'task-06')
+            .every((task) => task.listName == '项目X'),
+        isTrue);
+
+    controller.toggleMultiSelect('task-05');
+    controller.bulkRescheduleSelected(DateTime(2099, 6, 10));
+    expect(
+        DateTime.parse(
+            controller.tasks.firstWhere((task) => task.id == 'task-05').dueAt!),
+        DateTime(2099, 6, 10, 9, 0));
+
+    expect(controller.undoLastAction(), isTrue);
+    expect(
+        DateTime.parse(
+            controller.tasks.firstWhere((task) => task.id == 'task-05').dueAt!),
+        DateTime(2099, 6, 1, 9, 0));
+    // One undo only reverted the latest bulk step (the reschedule).
+    expect(controller.tasks.firstWhere((task) => task.id == 'task-05').listName,
+        '项目X');
+
+    // Bulk undo is single-level, consistent with single-task undo.
+    expect(controller.undoLastAction(), isFalse);
+    expect(controller.tasks.firstWhere((task) => task.id == 'task-05').listName,
+        '项目X');
+  });
+
+  test('multi-select range extends over the visible order and clears', () {
+    final controller = WorkspaceController();
+    controller.selectList('工作');
+    final visibleIds = controller.visibleTasks.map((task) => task.id).toList();
+    expect(visibleIds.length, greaterThanOrEqualTo(2));
+
+    controller.toggleMultiSelect(visibleIds.first);
+    controller.extendMultiSelectTo(visibleIds.last);
+    expect(controller.multiSelectCount, visibleIds.length);
+
+    controller.clearMultiSelect();
+    expect(controller.multiSelectCount, 0);
+
+    controller.selectAllVisibleTasks();
+    expect(controller.multiSelectCount, visibleIds.length);
+  });
+
   testWidgets('command palette opens, searches and creates tasks',
       (tester) async {
     await tester.pumpWidget(const WorkFollowApp());

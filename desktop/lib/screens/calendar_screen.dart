@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../models/task.dart';
 import '../state/workspace_controller.dart';
 import '../theme/workfollow_theme.dart';
 import '../widgets/app_icon_button.dart';
@@ -134,62 +135,75 @@ class _CalendarScreenState extends State<CalendarScreen> {
                     selectedDay != null && _sameDay(date, selectedDay!);
                 // Counts come from the real task dates, not the current view.
                 final count = widget.controller.tasksForDay(date).length;
-                return GestureDetector(
-                  onTap: () => setState(() => selectedDay = date),
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 140),
-                    padding: const EdgeInsets.fromLTRB(9, 8, 8, 7),
-                    decoration: BoxDecoration(
-                        color:
-                            isSelected ? tokens.accentSoft : tokens.inspector,
-                        borderRadius: BorderRadius.circular(9),
-                        border: Border.all(
-                            color: isSelected
-                                ? tokens.accent.withOpacity(.28)
-                                : tokens.border)),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
+                return DragTarget<String>(
+                  // Dropping an agenda row (or a dragged task id) here
+                  // reschedules it to this day, keeping its clock time.
+                  onWillAccept: (data) => data != null,
+                  onAccept: (taskId) =>
+                      widget.controller.rescheduleTask(taskId, date),
+                  builder: (context, candidateData, rejectedData) {
+                    final dragActive = candidateData.isNotEmpty;
+                    return GestureDetector(
+                      onTap: () => setState(() => selectedDay = date),
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 140),
+                        padding: const EdgeInsets.fromLTRB(9, 8, 8, 7),
+                        decoration: BoxDecoration(
+                            color: dragActive
+                                ? tokens.accentSoft
+                                : (isSelected
+                                    ? tokens.accentSoft
+                                    : tokens.inspector),
+                            borderRadius: BorderRadius.circular(9),
+                            border: Border.all(
+                                color: isSelected || dragActive
+                                    ? tokens.accent.withOpacity(.45)
+                                    : tokens.border)),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Container(
-                                width: 23,
-                                height: 23,
-                                alignment: Alignment.center,
-                                decoration: BoxDecoration(
-                                    color: isToday
-                                        ? tokens.accent
-                                        : Colors.transparent,
-                                    shape: BoxShape.circle),
-                                child: Text('$dayNumber',
-                                    style: TextStyle(
+                            Row(
+                              children: [
+                                Container(
+                                    width: 23,
+                                    height: 23,
+                                    alignment: Alignment.center,
+                                    decoration: BoxDecoration(
                                         color: isToday
-                                            ? Colors.white
-                                            : (isSelected
-                                                ? tokens.accent
-                                                : tokens.textSecondary),
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w700))),
+                                            ? tokens.accent
+                                            : Colors.transparent,
+                                        shape: BoxShape.circle),
+                                    child: Text('$dayNumber',
+                                        style: TextStyle(
+                                            color: isToday
+                                                ? Colors.white
+                                                : (isSelected
+                                                    ? tokens.accent
+                                                    : tokens.textSecondary),
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w700))),
+                                const Spacer(),
+                                if (count > 0)
+                                  Container(
+                                      width: 5,
+                                      height: 5,
+                                      decoration: BoxDecoration(
+                                          color: tokens.accent,
+                                          shape: BoxShape.circle)),
+                              ],
+                            ),
                             const Spacer(),
                             if (count > 0)
-                              Container(
-                                  width: 5,
-                                  height: 5,
-                                  decoration: BoxDecoration(
-                                      color: tokens.accent,
-                                      shape: BoxShape.circle)),
+                              Text('$count 件任务',
+                                  style: TextStyle(
+                                      color: tokens.textTertiary,
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w500)),
                           ],
                         ),
-                        const Spacer(),
-                        if (count > 0)
-                          Text('$count 件任务',
-                              style: TextStyle(
-                                  color: tokens.textTertiary,
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.w500)),
-                      ],
-                    ),
-                  ),
+                      ),
+                    );
+                  },
                 );
               },
             ),
@@ -207,6 +221,53 @@ class _CalendarScreenState extends State<CalendarScreen> {
 
   bool _sameDay(DateTime a, DateTime b) =>
       a.year == b.year && a.month == b.month && a.day == b.day;
+}
+
+Widget _agendaRow(BuildContext context, TaskItem task, WorkFollowTheme tokens,
+    VoidCallback onOpen) {
+  return Material(
+    color: Colors.transparent,
+    child: InkWell(
+      borderRadius: BorderRadius.circular(7),
+      onTap: onOpen,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+        child: Row(
+          children: [
+            Icon(
+              task.completed
+                  ? Icons.check_circle_outline_rounded
+                  : Icons.radio_button_unchecked_rounded,
+              size: 15,
+              color: task.completed ? tokens.success : tokens.accent,
+            ),
+            const SizedBox(width: 9),
+            Expanded(
+              child: Text(
+                task.title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color:
+                      task.completed ? tokens.textTertiary : tokens.textPrimary,
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w500,
+                  decoration: task.completed
+                      ? TextDecoration.lineThrough
+                      : TextDecoration.none,
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Text(
+              '${task.listName} · ${task.timeLabel ?? '全天'}',
+              style: TextStyle(color: tokens.textTertiary, fontSize: 10.5),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
 }
 
 class _SelectedDayAgenda extends StatelessWidget {
@@ -247,54 +308,31 @@ class _SelectedDayAgenda extends StatelessWidget {
                       final task = tasks[index];
                       return Padding(
                         padding: const EdgeInsets.only(bottom: 4),
-                        child: Material(
-                          color: Colors.transparent,
-                          child: InkWell(
-                            borderRadius: BorderRadius.circular(7),
-                            onTap: () => controller.openTask(task.id),
-                            child: Padding(
+                        // Dragging an agenda row onto a day cell reschedules
+                        // the task to that day.
+                        child: Draggable<String>(
+                          data: task.id,
+                          feedback: Material(
+                            color: Colors.transparent,
+                            child: Container(
                               padding: const EdgeInsets.symmetric(
-                                  horizontal: 8, vertical: 6),
-                              child: Row(
-                                children: [
-                                  Icon(
-                                    task.completed
-                                        ? Icons.check_circle_outline_rounded
-                                        : Icons.radio_button_unchecked_rounded,
-                                    size: 15,
-                                    color: task.completed
-                                        ? tokens.success
-                                        : tokens.accent,
-                                  ),
-                                  const SizedBox(width: 9),
-                                  Expanded(
-                                    child: Text(
-                                      task.title,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(
-                                        color: task.completed
-                                            ? tokens.textTertiary
-                                            : tokens.textPrimary,
-                                        fontSize: 12.5,
-                                        fontWeight: FontWeight.w500,
-                                        decoration: task.completed
-                                            ? TextDecoration.lineThrough
-                                            : TextDecoration.none,
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 10),
-                                  Text(
-                                    '${task.listName} · ${task.timeLabel ?? '全天'}',
-                                    style: TextStyle(
-                                        color: tokens.textTertiary,
-                                        fontSize: 10.5),
-                                  ),
-                                ],
-                              ),
+                                  horizontal: 10, vertical: 6),
+                              decoration: BoxDecoration(
+                                  color: tokens.overlay,
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(
+                                      color: tokens.accent.withOpacity(.5))),
+                              child: Text(task.title,
+                                  style: TextStyle(
+                                      color: tokens.textPrimary, fontSize: 12)),
                             ),
                           ),
+                          childWhenDragging: Opacity(
+                              opacity: .35,
+                              child: _agendaRow(context, task, tokens,
+                                  () => controller.openTask(task.id))),
+                          child: _agendaRow(context, task, tokens,
+                              () => controller.openTask(task.id)),
                         ),
                       );
                     },

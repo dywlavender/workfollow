@@ -17,11 +17,13 @@ class TaskRow extends StatefulWidget {
     required this.task,
     required this.controller,
     required this.selected,
+    this.multiSelected = false,
   });
 
   final TaskItem task;
   final WorkspaceController controller;
   final bool selected;
+  final bool multiSelected;
 
   @override
   State<TaskRow> createState() => _TaskRowState();
@@ -31,13 +33,35 @@ class _TaskRowState extends State<TaskRow> {
   bool hovering = false;
   bool focusVisible = false;
 
+  void _handleTap() {
+    // Cmd-click toggles membership, Shift-click extends a range; a plain
+    // click keeps the single-selection behavior.
+    final keyboard = HardwareKeyboard.instance;
+    if (keyboard.isMetaPressed || keyboard.isControlPressed) {
+      widget.controller.toggleMultiSelect(widget.task.id);
+      return;
+    }
+    if (keyboard.isShiftPressed) {
+      widget.controller.extendMultiSelectTo(widget.task.id);
+      return;
+    }
+    if (widget.controller.multiSelectCount > 0) {
+      widget.controller.clearMultiSelect();
+    }
+    widget.controller.selectTask(widget.task.id);
+  }
+
   @override
   Widget build(BuildContext context) {
     final tokens = WorkFollowTheme.of(context);
     final task = widget.task;
-    final rowColor = widget.selected
+    final rowColor = widget.multiSelected
         ? tokens.accentSoft
-        : (hovering ? tokens.overlay.withOpacity(.62) : Colors.transparent);
+        : (widget.selected
+            ? tokens.accentSoft
+            : (hovering
+                ? tokens.overlay.withOpacity(.62)
+                : Colors.transparent));
     final titleColor =
         task.completed ? tokens.textTertiary : tokens.textPrimary;
     final titleStyle = TextStyle(
@@ -75,10 +99,10 @@ class _TaskRowState extends State<TaskRow> {
         },
         child: Semantics(
           button: true,
-          selected: widget.selected,
+          selected: widget.selected || widget.multiSelected,
           label: '${task.title}${task.completed ? '，已完成' : ''}',
           child: GestureDetector(
-            onTap: () => widget.controller.selectTask(task.id),
+            onTap: _handleTap,
             onSecondaryTapDown: (details) =>
                 _showContextMenu(context, details.globalPosition),
             child: AnimatedContainer(
@@ -89,19 +113,47 @@ class _TaskRowState extends State<TaskRow> {
               decoration: BoxDecoration(
                 color: rowColor,
                 borderRadius: BorderRadius.circular(9),
-                border: focusVisible
-                    ? Border.all(color: tokens.accent.withOpacity(.42))
+                border: (focusVisible || widget.multiSelected)
+                    ? Border.all(
+                        color:
+                            tokens.accent.withOpacity(focusVisible ? .42 : .34))
                     : null,
               ),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  _TaskCompletionButton(
-                    completed: task.completed,
-                    accent: tokens.accent,
-                    success: tokens.success,
-                    onPressed: () => widget.controller.toggleTask(task.id),
-                  ),
+                  widget.multiSelected
+                      ? GestureDetector(
+                          onTap: () =>
+                              widget.controller.toggleMultiSelect(task.id),
+                          child: Semantics(
+                            button: true,
+                            checked: true,
+                            label: '取消选择',
+                            child: Container(
+                              width: 28,
+                              height: 28,
+                              alignment: Alignment.center,
+                              child: Container(
+                                width: 19,
+                                height: 19,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: tokens.accent,
+                                ),
+                                child: const Icon(Icons.check_rounded,
+                                    size: 13, color: Colors.white),
+                              ),
+                            ),
+                          ),
+                        )
+                      : _TaskCompletionButton(
+                          completed: task.completed,
+                          accent: tokens.accent,
+                          success: tokens.success,
+                          onPressed: () =>
+                              widget.controller.toggleTask(task.id),
+                        ),
                   const SizedBox(width: 11),
                   Expanded(
                     child: Column(
