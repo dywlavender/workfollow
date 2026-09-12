@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 
@@ -178,7 +179,6 @@ class WorkspaceController extends ChangeNotifier {
         bucket: TaskBucket.later,
         dueAt: at(3, 0, 0).toIso8601String(),
         timeLabel: taskTimeLabelFor(at(3, 0, 0)),
-        hasAttachment: true,
       ),
       TaskItem(
         id: 'task-07',
@@ -1490,6 +1490,109 @@ class WorkspaceController extends ChangeNotifier {
               updatedAt: DateTime.now().toIso8601String(),
             ));
     return true;
+  }
+
+  static const _attachmentsFolderName = 'attachments';
+
+  /// Picks a file, copies it into the sandbox container's attachments folder
+  /// and records the relative name on the task.
+  Future<void> attachFileToTask(String taskId) async {
+    final picked = await _store.platform.pickAttachmentFile();
+    if (picked == null || picked.trim().isEmpty) return;
+    final copied = await _copyIntoAttachments(picked);
+    if (copied == null) return;
+    _replaceTask(
+      taskId,
+      (task) => task.copyWith(
+        attachments: [...task.attachments, copied],
+        updatedAt: DateTime.now().toIso8601String(),
+      ),
+    );
+  }
+
+  Future<String?> _copyIntoAttachments(String sourcePath) async {
+    try {
+      final base = await _store.platform.applicationSupportDirectory();
+      if (base == null || base.trim().isEmpty) return null;
+      final directory = Directory('$base/$_attachmentsFolderName');
+      await directory.create(recursive: true);
+      final source = File(sourcePath);
+      if (!await source.exists()) return null;
+      final name =
+          '${DateTime.now().microsecondsSinceEpoch}-${source.uri.pathSegments.last}';
+      await source.copy('${directory.path}/$name');
+      return name;
+    } on Object {
+      // The picker was dismissed or the copy failed; nothing to record.
+      return null;
+    }
+  }
+
+  void removeAttachment(String taskId, String fileName) {
+    _replaceTask(
+      taskId,
+      (task) => task.copyWith(
+        attachments:
+            task.attachments.where((name) => name != fileName).toList(),
+        updatedAt: DateTime.now().toIso8601String(),
+      ),
+    );
+  }
+
+  Future<void> revealAttachment(String taskId, String fileName) async {
+    final base = await _store.platform.applicationSupportDirectory();
+    if (base == null || base.trim().isEmpty) return;
+    await _store.platform
+        .revealInFinder('$base/$_attachmentsFolderName/$fileName');
+  }
+
+  /// Creates a task from a note selection ("会议记录 → 行动项"): the task
+  /// lands in the inbox unscheduled and keeps a link back to its source note,
+  /// so the loop can close with "执行后回到记录". The note text is untouched.
+  String addTaskFromNote(String noteId, String rawTitle) {
+    final title = rawTitle.trim();
+    final note = _notes
+        .cast<NoteItem?>()
+        .firstWhere((note) => note?.id == noteId, orElse: () => null);
+    final taskTitle = title.isEmpty ? '来自笔记的行动项' : title;
+    final now = DateTime.now().toIso8601String();
+    final task = TaskItem(
+      id: 'task-${_taskSequence.toString().padLeft(2, '0')}',
+      title: taskTitle,
+      listName: '收集箱',
+      bucket: TaskBucket.unscheduled,
+      note: note == null ? null : '来自笔记「${note.title}」',
+      sourceNoteId: noteId,
+      createdAt: now,
+      updatedAt: now,
+    );
+    _taskSequence += 1;
+    _tasks = [task, ..._tasks];
+    _selectedTaskId = task.id;
+    _schedulePersist();
+    _notify();
+    return task.id;
+  }
+
+  /// The source note of a task, for the inspector's 相关笔记 row.
+  NoteItem? sourceNoteFor(String taskId) {
+    final task = _tasks.cast<TaskItem?>().firstWhere(
+          (task) => task?.id == taskId,
+          orElse: () => null,
+        );
+    final noteId = task?.sourceNoteId;
+    if (noteId == null) return null;
+    for (final note in _notes) {
+      if (note.id == noteId && note.deletedAt == null) return note;
+    }
+    return null;
+  }
+
+  /// Tasks generated from (or linked to) a note, with their live completion
+  /// status for the note editor's 关联任务 section.
+  List<TaskItem> tasksLinkedToNote(String noteId) {
+    return List.unmodifiable(
+        activeTasks.where((task) => task.sourceNoteId == noteId));
   }
 
   bool addSubtask(String taskId, String rawTitle) {

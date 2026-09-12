@@ -720,6 +720,52 @@ void main() {
     expect(reminders.scheduled.keys, ['web-1']);
   });
 
+  test('a task generated from a note keeps the link both ways and round-trips',
+      () {
+    final controller = WorkspaceController();
+    final noteId = 'note-01';
+
+    final taskId = controller.addTaskFromNote(noteId, '把结论同步给设计组');
+
+    final task = controller.tasks.firstWhere((task) => task.id == taskId);
+    expect(task.title, '把结论同步给设计组');
+    expect(task.sourceNoteId, noteId);
+    expect(task.listName, '收集箱');
+    expect(task.bucket, TaskBucket.unscheduled);
+    // 原文不动：笔记正文保持原样。
+    expect(
+        controller.notes.firstWhere((note) => note.id == noteId).plainText ??
+            '',
+        isNot(contains('把结论同步给设计组')));
+
+    // 反向查询：笔记侧显示关联任务。
+    final linked = controller.tasksLinkedToNote(noteId);
+    expect(linked.map((task) => task.id), contains(taskId));
+    // 任务侧回到记录。
+    expect(controller.sourceNoteFor(taskId)?.id, noteId);
+
+    final roundTripped = TaskItem.fromMigration(task.toMigrationRecord());
+    expect(roundTripped.sourceNoteId, noteId);
+  });
+
+  test('attachment bookkeeping round-trips through the snapshot format', () {
+    final controller = WorkspaceController();
+    final task = controller.tasks.firstWhere((task) => task.id == 'task-06');
+    expect(task.hasAttachment, isFalse);
+
+    final withFile = task.copyWith(attachments: const ['167-file.pdf']);
+    expect(withFile.hasAttachment, isTrue);
+
+    final roundTripped = TaskItem.fromMigration(withFile.toMigrationRecord());
+    expect(roundTripped.attachments, ['167-file.pdf']);
+
+    controller.removeAttachment('task-06', 'whatever.pdf');
+    // Removing an unknown name is a safe no-op.
+    expect(
+        controller.tasks.firstWhere((task) => task.id == 'task-06').attachments,
+        isEmpty);
+  });
+
   testWidgets('command palette opens, searches and creates tasks',
       (tester) async {
     await tester.pumpWidget(const WorkFollowApp());

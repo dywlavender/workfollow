@@ -121,6 +121,8 @@ class MigrationTaskRecord {
     required this.listName,
     required this.tags,
     this.subtasks = const [],
+    this.sourceNoteId,
+    this.attachments = const [],
     required this.createdAt,
     required this.updatedAt,
     required this.completedAt,
@@ -141,6 +143,8 @@ class MigrationTaskRecord {
   final String listName;
   final List<String> tags;
   final List<MigrationSubtaskRecord> subtasks;
+  final String? sourceNoteId;
+  final List<String> attachments;
   final String? createdAt;
   final String? updatedAt;
   final String? completedAt;
@@ -162,6 +166,8 @@ class MigrationTaskRecord {
       listName: _stringValue(json['listName'], fallback: '收集箱'),
       tags: _stringList(json['tags']),
       subtasks: _records(json['subtasks'], MigrationSubtaskRecord.fromJson),
+      sourceNoteId: _nullableString(json['sourceNoteId']),
+      attachments: _stringList(json['attachments']),
       createdAt: _nullableString(json['createdAt']),
       updatedAt: _nullableString(json['updatedAt']),
       completedAt: _nullableString(json['completedAt']),
@@ -184,6 +190,8 @@ class MigrationTaskRecord {
         'listName': listName,
         'tags': tags,
         'subtasks': subtasks.map((item) => item.toJson()).toList(),
+        'sourceNoteId': sourceNoteId,
+        'attachments': attachments,
         'createdAt': createdAt,
         'updatedAt': updatedAt,
         'completedAt': completedAt,

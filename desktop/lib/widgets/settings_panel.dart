@@ -233,6 +233,16 @@ class _SettingsPanelState extends State<_SettingsPanel> {
                             description: '任务到点由系统投递提醒，点击通知打开对应任务',
                             trailing: const _NotificationStatus(),
                           ),
+                          _SettingRow(
+                            label: '全局快速录入',
+                            description: '在任何应用里按 ⇧⌘Space 呼出录入条，Return 保存到收集箱',
+                            trailing: SoftPill(
+                              label: '⇧⌘Space',
+                              color: tokens.accentFaint,
+                              textColor: tokens.accent,
+                              icon: Icons.keyboard_command_key_rounded,
+                            ),
+                          ),
                         ],
                       ),
                       const SizedBox(height: 21),

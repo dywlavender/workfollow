@@ -54,13 +54,14 @@ class TaskItem {
     this.recurrenceConfig,
     this.tags = const [],
     this.subtasks = const [],
+    this.sourceNoteId,
     this.createdAt,
     this.updatedAt,
     this.completedAt,
     this.deletedAt,
+    this.attachments = const [],
     this.priority = TaskPriority.none,
     this.completed = false,
-    this.hasAttachment = false,
   });
 
   final String id;
@@ -78,13 +79,21 @@ class TaskItem {
   final Map<String, dynamic>? recurrenceConfig;
   final List<String> tags;
   final List<TaskSubtask> subtasks;
+
+  /// The note this task was generated from (the "回到记录" link).
+  final String? sourceNoteId;
   final String? createdAt;
   final String? updatedAt;
   final String? completedAt;
   final String? deletedAt;
   final TaskPriority priority;
   final bool completed;
-  final bool hasAttachment;
+
+  /// File names inside the app's attachments folder (relative, so the
+  /// workspace stays movable).
+  final List<String> attachments;
+
+  bool get hasAttachment => attachments.isNotEmpty;
 
   int get subtaskTotal => subtasks.length;
   int get subtaskCompleted =>
@@ -112,6 +121,8 @@ class TaskItem {
     bool clearRecurrenceConfig = false,
     List<String>? tags,
     List<TaskSubtask>? subtasks,
+    String? sourceNoteId,
+    bool clearSourceNoteId = false,
     String? createdAt,
     String? updatedAt,
     String? completedAt,
@@ -120,7 +131,7 @@ class TaskItem {
     bool clearDeletedAt = false,
     TaskPriority? priority,
     bool? completed,
-    bool? hasAttachment,
+    List<String>? attachments,
   }) {
     return TaskItem(
       id: id,
@@ -142,6 +153,8 @@ class TaskItem {
           : recurrenceConfig ?? this.recurrenceConfig,
       tags: tags ?? this.tags,
       subtasks: subtasks ?? this.subtasks,
+      sourceNoteId:
+          clearSourceNoteId ? sourceNoteId : sourceNoteId ?? this.sourceNoteId,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       completedAt:
@@ -149,7 +162,7 @@ class TaskItem {
       deletedAt: clearDeletedAt ? deletedAt : deletedAt ?? this.deletedAt,
       priority: priority ?? this.priority,
       completed: completed ?? this.completed,
-      hasAttachment: hasAttachment ?? this.hasAttachment,
+      attachments: attachments ?? this.attachments,
     );
   }
 
@@ -178,10 +191,12 @@ class TaskItem {
                 completed: subtask.completed,
               ))
           .toList(),
+      sourceNoteId: record.sourceNoteId,
       createdAt: record.createdAt,
       updatedAt: record.updatedAt,
       completedAt: record.completedAt,
       deletedAt: record.deletedAt,
+      attachments: List.unmodifiable(record.attachments),
       priority: TaskPriority.values.firstWhere(
         (value) => value.name.toUpperCase() == record.priority,
         orElse: () => TaskPriority.none,
@@ -211,10 +226,12 @@ class TaskItem {
                 title: subtask.title,
                 completed: subtask.completed,
               ))),
+      sourceNoteId: sourceNoteId,
       createdAt: createdAt,
       updatedAt: updatedAt,
       completedAt: completedAt,
       deletedAt: deletedAt,
+      attachments: List.unmodifiable(attachments),
     );
   }
 }

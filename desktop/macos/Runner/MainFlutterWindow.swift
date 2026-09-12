@@ -1,6 +1,7 @@
 import Cocoa
 import FlutterMacOS
 import UserNotifications
+import Carbon.HIToolbox
 
 class MainFlutterWindow: NSWindow {
   private static let savedFrameKey = "WorkFollowWindowFrame"
@@ -48,6 +49,23 @@ class MainFlutterWindow: NSWindow {
             details: error.localizedDescription
           ))
         }
+      case "pickAttachmentFile":
+        // The powerbox grant lets the sandboxed app read the picked file so
+        // Dart can copy it into the container's attachments folder.
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = false
+        panel.allowsMultipleSelection = false
+        panel.title = "选择要附加的文件"
+        result(panel.runModal() == .OK ? panel.url?.path : nil)
+      case "revealInFinder":
+        guard let args = call.arguments as? [String: Any],
+              let path = args["path"] as? String else {
+          result(false)
+          return
+        }
+        NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path)])
+        result(true)
       default:
         result(FlutterMethodNotImplemented)
       }
@@ -66,9 +84,59 @@ class MainFlutterWindow: NSWindow {
     objc_setAssociatedObject(self, &NotificationManager.associatedKey,
                              notificationManager, .OBJC_ASSOCIATION_RETAIN)
 
+    // Menu bar quick capture: status item + a global hotkey that opens a
+    // non-activating panel, so the previous app keeps focus.
+    let captureChannel = FlutterMethodChannel(
+      name: "workfollow/capture",
+      binaryMessenger: flutterViewController.engine.binaryMessenger
+    )
+    let captureController = CapturePanelController(channel: captureChannel)
+    captureController.registerGlobalHotkey()
+    GlobalCapture.shared.panelController = captureController
+    GlobalCapture.shared.mainWindow = self
+    objc_setAssociatedObject(self, &CapturePanelController.associatedKey,
+                             captureController, .OBJC_ASSOCIATION_RETAIN)
+    installStatusItem(captureController: captureController)
+
     RegisterGeneratedPlugins(registry: flutterViewController)
 
     super.awakeFromNib()
+  }
+
+  // MARK: - Menu bar status item
+
+  private var statusItem: NSStatusItem?
+
+  private func installStatusItem(captureController: CapturePanelController) {
+    let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
+    if #available(macOS 11.0, *) {
+      item.button?.image = NSImage(systemSymbolName: "checkmark.circle",
+                                   accessibilityDescription: "打勾菜单栏")
+    } else {
+      item.button?.title = "勾"
+    }
+    let menu = NSMenu()
+    let captureEntry = NSMenuItem(title: "快速录入",
+                                  action: #selector(CapturePanelController.togglePanel),
+                                  keyEquivalent: "")
+    captureEntry.target = captureController
+    menu.addItem(captureEntry)
+    let openEntry = NSMenuItem(title: "显示打勾",
+                               action: #selector(MainFlutterWindow.showMainWindow),
+                               keyEquivalent: "")
+    openEntry.target = self
+    menu.addItem(openEntry)
+    menu.addItem(.separator())
+    menu.addItem(withTitle: "退出打勾",
+                 action: #selector(NSApplication.terminate(_:)),
+                 keyEquivalent: "")
+    item.menu = menu
+    statusItem = item
+  }
+
+  @objc func showMainWindow() {
+    NSApp.activate(ignoringOtherApps: true)
+    makeKeyAndOrderFront(nil)
   }
 
   // MARK: - Window frame persistence
@@ -346,5 +414,134 @@ class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
       channel.invokeMethod("notificationClicked", arguments: taskId)
     }
     completionHandler()
+  }
+}
+
+/// Application-wide handles the Carbon hotkey callback can reach (C function
+/// pointers cannot capture context).
+final class GlobalCapture {
+  static let shared = GlobalCapture()
+  weak var panelController: CapturePanelController?
+  weak var mainWindow: MainFlutterWindow?
+}
+
+/// The lightweight quick-capture panel. Non-activating by design: it takes
+/// key focus without stealing the previous app's active status, and closes
+/// on Return (saving) or Escape (cancelling).
+final class CapturePanelController: NSObject, NSTextFieldDelegate {
+  nonisolated(unsafe) static var associatedKey = "capture_panel_controller"
+
+  private let channel: FlutterMethodChannel
+  private var panel: NSPanel?
+  private var hotKeyRef: EventHotKeyRef?
+
+  init(channel: FlutterMethodChannel) {
+    self.channel = channel
+  }
+
+  /// ⇧⌘Space. RegisterEventHotKey works inside the sandbox and does not ask
+  /// for Input Monitoring permission.
+  func registerGlobalHotkey() {
+    var hotKeyID = EventHotKeyID(signature: OSType(0x44434B47) /* 'DCKG' */, id: 1)
+    var eventType = EventTypeSpec(eventClass: OSType(kEventClassKeyboard),
+                                  eventKind: UInt32(kEventHotKeyPressed))
+    let selfPtr = Unmanaged.passUnretained(self).toOpaque()
+    InstallEventHandler(GetApplicationEventTarget(), { _, _, userData -> OSStatus in
+      guard let controller = Unmanaged<CapturePanelController>
+              .fromOpaque(userData!).takeUnretainedValue() as CapturePanelController? else {
+        return OSStatus(eventNotHandledErr)
+      }
+      controller.togglePanel()
+      return noErr
+    }, 1, &eventType, selfPtr, nil)
+    // kVK_ANSI_Space = 49; shiftKey = 0x0200, cmdKey = 0x0100.
+    let status = RegisterEventHotKey(UInt32(49),
+                                     UInt32(0x0300),
+                                     hotKeyID,
+                                     GetApplicationEventTarget(),
+                                     0,
+                                     &hotKeyRef)
+    if status != noErr {
+      NSLog("quick capture hotkey registration failed: \(status)")
+    }
+    hotKeyID.id = 1 // keep the value alive for the ref above
+  }
+
+  @objc func togglePanel() {
+    if panel?.isVisible == true {
+      hidePanel()
+    } else {
+      showPanel()
+    }
+  }
+
+  private func showPanel() {
+    let target = panel ?? makePanel()
+    panel = target
+    if let screen = NSScreen.main {
+      let frame = target.frame
+      let origin = NSPoint(
+        x: screen.visibleFrame.midX - frame.width / 2,
+        y: screen.visibleFrame.maxY - frame.height - 140)
+      target.setFrameOrigin(origin)
+    }
+    target.makeKeyAndOrderFront(nil)
+    (target.contentView as? NSTextField)?.becomeFirstResponder()
+  }
+
+  private func hidePanel() {
+    panel?.orderOut(nil)
+  }
+
+  private func makePanel() -> NSPanel {
+    let panel = NSPanel(
+      contentRect: NSRect(x: 0, y: 0, width: 540, height: 52),
+      styleMask: [.titled, .nonactivatingPanel, .utilityWindow],
+      backing: .buffered,
+      defer: false)
+    panel.titleVisibility = .hidden
+    panel.titlebarAppearsTransparent = true
+    panel.isMovableByWindowBackground = false
+    panel.level = .floating
+    panel.isFloatingPanel = true
+    panel.hidesOnDeactivate = false
+    panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+
+    let field = NSTextField(frame: NSRect(x: 14, y: 15, width: 512, height: 22))
+    field.placeholderString = "记下下一件事，Return 保存到收集箱，Esc 取消"
+    field.font = NSFont.systemFont(ofSize: 15)
+    field.isBordered = false
+    field.isBezeled = false
+    field.drawsBackground = false
+    field.focusRingType = .none
+    field.delegate = self
+    panel.contentView?.addSubview(field)
+    self.panel = panel
+    return panel
+  }
+
+  func control(_ control: NSControl, textView: NSTextView,
+               doCommandBy commandSelector: Selector) -> Bool {
+    switch commandSelector {
+    case #selector(NSResponder.insertNewline(_:)):
+      submit()
+      return true
+    case #selector(NSResponder.cancelOperation(_:)):
+      hidePanel()
+      return true
+    default:
+      return false
+    }
+  }
+
+  private func submit() {
+    guard let field = panel?.contentView as? NSTextField else { return }
+    let text = field.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+    if !text.isEmpty {
+      // Dart saves to the inbox (capture semantics: no list ceremony).
+      channel.invokeMethod("quickCapture", arguments: text)
+    }
+    field.stringValue = ""
+    hidePanel()
   }
 }

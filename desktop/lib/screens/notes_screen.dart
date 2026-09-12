@@ -217,6 +217,7 @@ class _NoteEditorState extends State<_NoteEditor> {
   late final TextEditingController bodyController;
   late final FocusNode titleFocusNode;
   late final FocusNode bodyFocusNode;
+  bool _hasBodySelection = false;
 
   @override
   void initState() {
@@ -225,6 +226,32 @@ class _NoteEditorState extends State<_NoteEditor> {
     bodyController = TextEditingController(text: _bodyFor(widget.note));
     titleFocusNode = FocusNode();
     bodyFocusNode = FocusNode();
+    bodyController.addListener(_updateSelectionState);
+  }
+
+  void _updateSelectionState() {
+    final hasSelection = _selectedBodyText().isNotEmpty;
+    if (hasSelection != _hasBodySelection && mounted) {
+      setState(() => _hasBodySelection = hasSelection);
+    }
+  }
+
+  String _selectedBodyText() {
+    final selection = bodyController.selection;
+    if (!selection.isValid || selection.isCollapsed) return '';
+    return bodyController.text.substring(selection.start, selection.end).trim();
+  }
+
+  void _generateTaskFromSelection() {
+    final text = _selectedBodyText();
+    if (text.isEmpty) return;
+    // 行动项取选区首行；原文保持不动，任务带回源笔记链接。
+    widget.controller
+        .addTaskFromNote(widget.note.id, text.split('\n').first.trim());
+    if (mounted) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('已创建任务，可从下方关联任务列表进入')));
+    }
   }
 
   @override
@@ -236,6 +263,7 @@ class _NoteEditorState extends State<_NoteEditor> {
 
   @override
   void dispose() {
+    bodyController.removeListener(_updateSelectionState);
     titleFocusNode.dispose();
     bodyFocusNode.dispose();
     titleController.dispose();
@@ -327,7 +355,40 @@ class _NoteEditorState extends State<_NoteEditor> {
                     Text('最近编辑于 ${note.updatedLabel}',
                         style: TextStyle(
                             color: tokens.textTertiary, fontSize: 11)),
-                    const SizedBox(height: 31),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        TextButton.icon(
+                          key: const ValueKey('generate-task-from-selection'),
+                          onPressed: _hasBodySelection
+                              ? _generateTaskFromSelection
+                              : null,
+                          icon: Icon(Icons.playlist_add_check_rounded,
+                              size: 15,
+                              color: _hasBodySelection
+                                  ? tokens.accent
+                                  : tokens.textTertiary),
+                          label: Text('从选中生成任务',
+                              style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                  color: _hasBodySelection
+                                      ? tokens.accent
+                                      : tokens.textTertiary)),
+                          style: TextButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 3),
+                            minimumSize: Size.zero,
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ),
+                        ),
+                        if (!_hasBodySelection)
+                          Text('先选中一段行动项',
+                              style: TextStyle(
+                                  color: tokens.textTertiary, fontSize: 10.5)),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
                     TextField(
                       key: const ValueKey('note-body-editor'),
                       controller: bodyController,
@@ -353,6 +414,8 @@ class _NoteEditorState extends State<_NoteEditor> {
                       ),
                     ),
                     const SizedBox(height: 26),
+                    _LinkedTasksSection(
+                        controller: widget.controller, noteId: note.id),
                   ],
                 ),
               ),
@@ -526,6 +589,95 @@ class _NoteItem extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// The "执行后回到记录" half of the loop: tasks generated from this note,
+/// with live completion status.
+class _LinkedTasksSection extends StatelessWidget {
+  const _LinkedTasksSection({required this.controller, required this.noteId});
+
+  final WorkspaceController controller;
+  final String noteId;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = WorkFollowTheme.of(context);
+    final tasks = controller.tasksLinkedToNote(noteId);
+    if (tasks.isEmpty) return const SizedBox.shrink();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(height: 1, color: tokens.border),
+        const SizedBox(height: 18),
+        Text(
+            '关联任务 · ${tasks.where((task) => task.completed).length}/${tasks.length} 完成',
+            style: TextStyle(
+                color: tokens.textPrimary,
+                fontSize: 13,
+                fontWeight: FontWeight.w700)),
+        const SizedBox(height: 8),
+        for (final task in tasks)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 4),
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                borderRadius: BorderRadius.circular(7),
+                onTap: () => controller.openTask(task.id),
+                child: Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 6, vertical: 5),
+                  child: Row(
+                    children: [
+                      GestureDetector(
+                        onTap: () => controller.toggleTask(task.id),
+                        child: Container(
+                            width: 17,
+                            height: 17,
+                            decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: task.completed
+                                    ? tokens.success
+                                    : Colors.transparent,
+                                border: Border.all(
+                                    color: task.completed
+                                        ? tokens.success
+                                        : tokens.borderStrong,
+                                    width: 1.4)),
+                            child: task.completed
+                                ? const Icon(Icons.check_rounded,
+                                    size: 11, color: Colors.white)
+                                : null),
+                      ),
+                      const SizedBox(width: 9),
+                      Expanded(
+                        child: Text(
+                          task.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                              color: task.completed
+                                  ? tokens.textTertiary
+                                  : tokens.textPrimary,
+                              fontSize: 12.5,
+                              decoration: task.completed
+                                  ? TextDecoration.lineThrough
+                                  : TextDecoration.none),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(task.timeLabel ?? '未安排',
+                          style: TextStyle(
+                              color: tokens.textTertiary, fontSize: 10)),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+      ],
     );
   }
 }

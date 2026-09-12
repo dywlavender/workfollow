@@ -275,6 +275,63 @@ class _TaskInspectorState extends State<TaskInspector> {
                     child: _AddSubtaskField(
                         controller: widget.controller, taskId: task.id),
                   ),
+                  ...[
+                    const SizedBox(height: 23),
+                    _InspectorSection(
+                      label: '附件',
+                      child: Wrap(
+                        spacing: 7,
+                        runSpacing: 7,
+                        children: [
+                          for (final fileName in task.attachments)
+                            InputChip(
+                              label: ConstrainedBox(
+                                constraints:
+                                    const BoxConstraints(maxWidth: 190),
+                                child: Text(fileName,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                        color: tokens.textSecondary,
+                                        fontSize: 11)),
+                              ),
+                              avatar: Icon(Icons.insert_drive_file_outlined,
+                                  size: 14, color: tokens.textTertiary),
+                              onDeleted: () => widget.controller
+                                  .removeAttachment(task.id, fileName),
+                              deleteIconColor: tokens.textTertiary,
+                              backgroundColor: tokens.content,
+                              side: BorderSide(color: tokens.border),
+                              visualDensity: VisualDensity.compact,
+                              onPressed: () => widget.controller
+                                  .revealAttachment(task.id, fileName),
+                            ),
+                          ActionChip(
+                            label: const Text('添加附件'),
+                            avatar:
+                                const Icon(Icons.attach_file_rounded, size: 14),
+                            onPressed: () =>
+                                widget.controller.attachFileToTask(task.id),
+                            labelStyle: TextStyle(
+                                color: tokens.accent,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600),
+                            backgroundColor: tokens.accentFaint,
+                            side: BorderSide(
+                                color: tokens.accent.withOpacity(.18)),
+                            visualDensity: VisualDensity.compact,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                  ...[
+                    const SizedBox(height: 23),
+                    _InspectorSection(
+                      label: '相关笔记',
+                      child: _SourceNoteRow(
+                          controller: widget.controller, taskId: task.id),
+                    ),
+                  ],
                   const SizedBox(height: 23),
                   _InspectorSection(
                     label: '标签',
@@ -945,6 +1002,58 @@ class _AddSubtaskFieldState extends State<_AddSubtaskField> {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// The "回到记录" entry: the note this task was generated from.
+class _SourceNoteRow extends StatelessWidget {
+  const _SourceNoteRow({required this.controller, required this.taskId});
+
+  final WorkspaceController controller;
+  final String taskId;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = WorkFollowTheme.of(context);
+    final note = controller.sourceNoteFor(taskId);
+    if (note == null) {
+      return Text('尚未关联笔记。在笔记里选中文字即可生成带来源的任务。',
+          style: TextStyle(color: tokens.textTertiary, fontSize: 11));
+    }
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(7),
+        onTap: () => controller.openNote(note.id),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+          decoration: BoxDecoration(
+              color: tokens.content,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: tokens.border)),
+          child: Row(
+            children: [
+              Icon(Icons.note_alt_outlined, size: 15, color: tokens.accent),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(note.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                        color: tokens.textPrimary,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600)),
+              ),
+              Text(note.folder,
+                  style: TextStyle(color: tokens.textTertiary, fontSize: 10)),
+              const SizedBox(width: 4),
+              Icon(Icons.open_in_new_rounded,
+                  size: 13, color: tokens.textTertiary),
+            ],
+          ),
+        ),
       ),
     );
   }

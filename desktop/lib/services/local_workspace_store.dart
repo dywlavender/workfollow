@@ -21,6 +21,22 @@ class PlatformFileService {
     return channel.invokeMethod<String>('pickMigrationFile');
   }
 
+  Future<String?> pickAttachmentFile() async {
+    return channel.invokeMethod<String>('pickAttachmentFile');
+  }
+
+  Future<bool> revealInFinder(String path) async {
+    try {
+      return await channel
+              .invokeMethod<bool>('revealInFinder', <String, dynamic>{
+            'path': path,
+          }) ??
+          false;
+    } on Object {
+      return false;
+    }
+  }
+
   Future<String?> applicationSupportDirectory() async {
     return channel.invokeMethod<String>('applicationSupportDirectory');
   }
@@ -52,6 +68,8 @@ class WorkspaceBackupInfo {
 class LocalWorkspaceStore {
   LocalWorkspaceStore({PlatformFileService? platform})
       : _platform = platform ?? PlatformFileService();
+
+  PlatformFileService get platform => _platform;
 
   static const snapshotFileName = 'workspace.json';
   static const backupFolderName = 'backups';

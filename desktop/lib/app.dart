@@ -94,6 +94,9 @@ class WorkFollowShell extends StatefulWidget {
 /// to the same handlers as the in-app keyboard shortcuts.
 const _menuChannel = MethodChannel('workfollow/menu');
 
+/// Quick-capture text from the menu bar panel / global hotkey.
+const _captureChannel = MethodChannel('workfollow/capture');
+
 class _WorkFollowShellState extends State<WorkFollowShell> {
   late final WorkspaceController controller;
   bool sidebarCollapsed = false;
@@ -111,6 +114,14 @@ class _WorkFollowShellState extends State<WorkFollowShell> {
     _menuChannel.setMethodCallHandler((call) async {
       if (call.method == 'command') {
         _handleMenuCommand(call.arguments as String?);
+      }
+      return null;
+    });
+    // Menu bar quick capture always saves to the inbox, regardless of the
+    // view the app happens to be showing.
+    _captureChannel.setMethodCallHandler((call) async {
+      if (call.method == 'quickCapture' && call.arguments is String) {
+        controller.addTask(call.arguments as String, listName: '收集箱');
       }
       return null;
     });
