@@ -38,14 +38,46 @@ class WorkspaceSnapshotLoad {
   bool get failed => error != null;
 }
 
+/// Snapshot backup overview for the settings page.
+class WorkspaceBackupInfo {
+  const WorkspaceBackupInfo({this.count = 0, this.latestAt, this.file});
+
+  final int count;
+  final DateTime? latestAt;
+  final File? file;
+
+  bool get exists => count > 0;
+}
+
 class LocalWorkspaceStore {
   LocalWorkspaceStore({PlatformFileService? platform})
       : _platform = platform ?? PlatformFileService();
 
   static const snapshotFileName = 'workspace.json';
+  static const backupFolderName = 'backups';
+
+  /// Keep one backup per day for the last week (see [_maintainDailyBackup]).
+  static const backupRetentionDays = 7;
 
   final PlatformFileService _platform;
   Future<void> _pendingSave = Future<void>.value();
+
+  /// Latest successful snapshot backup, plus how many exist.
+  Future<WorkspaceBackupInfo> backupInfo() async {
+    final backups = await _listBackups();
+    if (backups.isEmpty) return const WorkspaceBackupInfo();
+    final latest = backups.last;
+    final date = DateTime.tryParse(_backupDateStamp(latest) ?? '');
+    return WorkspaceBackupInfo(
+        count: backups.length, latestAt: date, file: latest);
+  }
+
+  /// Forces a backup copy right now ("立即备份" entry point).
+  Future<void> backupNow() async {
+    final file = await _snapshotFile();
+    if (file == null || !await file.exists()) return;
+    await _copyToBackup(file, DateTime.now());
+  }
 
   Future<WorkspaceSnapshotLoad> load() async {
     final file = await _snapshotFile();
@@ -83,6 +115,72 @@ class LocalWorkspaceStore {
     );
     if (await file.exists()) await file.delete();
     await temporary.rename(file.path);
+    // The first successful write of each day leaves a restore point. Backup
+    // problems must never break saving, so failures are swallowed here.
+    await _maintainDailyBackup(file);
+  }
+
+  /// Copies the snapshot to `backups/workspace-<date>.json` once per day and
+  /// prunes older copies beyond [backupRetentionDays].
+  Future<void> _maintainDailyBackup(File snapshot) async {
+    try {
+      final now = DateTime.now();
+      final backups = await _listBackups();
+      final stamp = _stampFor(now);
+      final todayAlreadyBackedUp =
+          backups.any((file) => _backupDateStamp(file) == stamp);
+      if (!todayAlreadyBackedUp) {
+        await _copyToBackup(snapshot, now);
+      }
+      final all = await _listBackups();
+      final removable = all.length > backupRetentionDays
+          ? all.take(all.length - backupRetentionDays).toList()
+          : const <File>[];
+      for (final file in removable) {
+        try {
+          await file.delete();
+        } on Object {
+          // A stuck backup file is not worth failing a save over.
+        }
+      }
+    } on Object {
+      // Never let backup bookkeeping break the actual save.
+    }
+  }
+
+  Future<void> _copyToBackup(File snapshot, DateTime now) async {
+    final directory = Directory('${snapshot.parent.path}/$backupFolderName');
+    await directory.create(recursive: true);
+    final target = File('${directory.path}/workspace-${_stampFor(now)}.json');
+    await snapshot.copy(target.path);
+  }
+
+  Future<List<File>> _listBackups() async {
+    final file = await _snapshotFile();
+    if (file == null) return const [];
+    final directory = Directory('${file.parent.path}/$backupFolderName');
+    if (!await directory.exists()) return const [];
+    final files = <File>[];
+    await for (final entity in directory.list()) {
+      if (entity is File &&
+          entity.path.endsWith('.json') &&
+          _backupDateStamp(entity) != null) {
+        files.add(entity);
+      }
+    }
+    files.sort((a, b) => a.path.compareTo(b.path));
+    return files;
+  }
+
+  String _stampFor(DateTime time) => '${time.year.toString().padLeft(4, '0')}-'
+      '${time.month.toString().padLeft(2, '0')}-'
+      '${time.day.toString().padLeft(2, '0')}';
+
+  String? _backupDateStamp(File file) {
+    final name = file.uri.pathSegments.last;
+    final match =
+        RegExp(r'^workspace-(\d{4}-\d{2}-\d{2})\.json$').firstMatch(name);
+    return match?.group(1);
   }
 
   Future<MigrationBundle?> pickAndReadMigration() async {

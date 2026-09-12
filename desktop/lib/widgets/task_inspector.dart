@@ -23,6 +23,7 @@ class _TaskInspectorState extends State<TaskInspector> {
   late final TextEditingController descriptionController;
   late final FocusNode titleFocusNode;
   late final FocusNode descriptionFocusNode;
+  late int _seenTitleFocusVersion;
 
   @override
   void initState() {
@@ -32,6 +33,8 @@ class _TaskInspectorState extends State<TaskInspector> {
         TextEditingController(text: _descriptionFor(widget.task));
     titleFocusNode = FocusNode();
     descriptionFocusNode = FocusNode();
+    _seenTitleFocusVersion = widget.controller.inspectorTitleFocusVersion;
+    widget.controller.addListener(_handleControllerChange);
   }
 
   @override
@@ -44,11 +47,19 @@ class _TaskInspectorState extends State<TaskInspector> {
 
   @override
   void dispose() {
+    widget.controller.removeListener(_handleControllerChange);
     titleFocusNode.dispose();
     descriptionFocusNode.dispose();
     titleController.dispose();
     descriptionController.dispose();
     super.dispose();
+  }
+
+  void _handleControllerChange() {
+    final version = widget.controller.inspectorTitleFocusVersion;
+    if (!mounted || version == _seenTitleFocusVersion) return;
+    _seenTitleFocusVersion = version;
+    titleFocusNode.requestFocus();
   }
 
   @override

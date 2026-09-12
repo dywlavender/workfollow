@@ -85,8 +85,32 @@ class _WorkFollowShellState extends State<WorkFollowShell> {
   }
 
   void _newTask() {
-    controller.selectView(WorkspaceView.today);
-    _openCommandPalette();
+    // Cmd-N creates in the current context: notes get a note in the shown
+    // folder, task views focus their quick add field, and views without an
+    // inline field fall back to Today.
+    if (controller.view == WorkspaceView.notes) {
+      controller.addNoteInCurrentFolder();
+      return;
+    }
+    if (!controller.isTaskView && controller.view != WorkspaceView.home) {
+      controller.selectView(WorkspaceView.today);
+    }
+    controller.requestQuickAddFocus();
+  }
+
+  void _newNote() {
+    // Cmd-Shift-N always creates a note, wherever the user is.
+    if (controller.view != WorkspaceView.notes) {
+      controller.selectView(WorkspaceView.notes);
+    }
+    controller.addNoteInCurrentFolder();
+  }
+
+  Future<void> _openSettings() async {
+    await showSettingsPanel(
+        context: context,
+        controller: controller,
+        onToggleTheme: widget.onToggleTheme);
   }
 
   Future<void> _openFilters() async {
@@ -158,10 +182,12 @@ class _WorkFollowShellState extends State<WorkFollowShell> {
           shortcuts: const <ShortcutActivator, Intent>{
             SingleActivator(LogicalKeyboardKey.keyN, meta: true):
                 NewTaskIntent(),
+            SingleActivator(LogicalKeyboardKey.keyN, meta: true, shift: true):
+                NewNoteIntent(),
             SingleActivator(LogicalKeyboardKey.keyK, meta: true):
                 SearchIntent(),
             SingleActivator(LogicalKeyboardKey.comma, meta: true):
-                ToggleThemeIntent(),
+                SettingsIntent(),
             SingleActivator(LogicalKeyboardKey.digit1, meta: true):
                 TodayIntent(),
             SingleActivator(LogicalKeyboardKey.digit2, meta: true):
@@ -179,12 +205,16 @@ class _WorkFollowShellState extends State<WorkFollowShell> {
                 _newTask();
                 return null;
               }),
+              NewNoteIntent: CallbackAction<Intent>(onInvoke: (_) {
+                _newNote();
+                return null;
+              }),
               SearchIntent: CallbackAction<Intent>(onInvoke: (_) {
                 _openCommandPalette();
                 return null;
               }),
-              ToggleThemeIntent: CallbackAction<Intent>(onInvoke: (_) {
-                widget.onToggleTheme();
+              SettingsIntent: CallbackAction<Intent>(onInvoke: (_) {
+                _openSettings();
                 return null;
               }),
               TodayIntent: CallbackAction<Intent>(onInvoke: (_) {
@@ -492,12 +522,16 @@ class NewTaskIntent extends Intent {
   const NewTaskIntent();
 }
 
+class NewNoteIntent extends Intent {
+  const NewNoteIntent();
+}
+
 class SearchIntent extends Intent {
   const SearchIntent();
 }
 
-class ToggleThemeIntent extends Intent {
-  const ToggleThemeIntent();
+class SettingsIntent extends Intent {
+  const SettingsIntent();
 }
 
 class TodayIntent extends Intent {

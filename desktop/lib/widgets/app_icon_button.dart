@@ -41,14 +41,19 @@ class AppIconButton extends StatelessWidget {
             child: Icon(
               icon,
               size: iconSize,
-              color: onPressed == null ? tokens.textTertiary : (active ? tokens.accent : tokens.textSecondary),
+              color: onPressed == null
+                  ? tokens.textTertiary
+                  : (active ? tokens.accent : tokens.textSecondary),
             ),
           ),
         ),
       ),
     );
     if (tooltip == null || onPressed == null) return child;
-    return Tooltip(message: tooltip!, waitDuration: const Duration(milliseconds: 450), child: child);
+    return Tooltip(
+        message: tooltip!,
+        waitDuration: const Duration(milliseconds: 450),
+        child: child);
   }
 }
 

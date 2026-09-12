@@ -8,6 +8,8 @@ import '../state/workspace_controller.dart';
 import '../theme/workfollow_theme.dart';
 import 'app_icon_button.dart';
 
+enum _ImportMode { merge, replace }
+
 Future<void> showSettingsPanel({
   required BuildContext context,
   required WorkspaceController controller,
@@ -59,13 +61,16 @@ class _SettingsPanelState extends State<_SettingsPanel> {
     try {
       final bundle = await LocalWorkspaceStore().pickAndReadMigration();
       if (!mounted || bundle == null) return;
-      final confirmed = await _showImportPreview(bundle);
-      if (!mounted || confirmed != true) return;
-      final summary = await widget.controller.importMigration(bundle);
+      final mode = await _showImportPreview(bundle);
+      if (!mounted || mode == null) return;
+      final summary = mode == _ImportMode.replace
+          ? await widget.controller.replaceWithMigration(bundle)
+          : await widget.controller.importMigration(bundle);
       if (!mounted) return;
       setState(() {
-        importMessage =
-            '已导入 ${summary.importedTasks} 个任务、${summary.importedNotes} 条笔记。${summary.skippedTasks + summary.skippedNotes > 0 ? '重复记录已保留本地版本。' : ''}';
+        importMessage = mode == _ImportMode.replace
+            ? '已清空本机并导入 ${summary.importedTasks} 个任务、${summary.importedNotes} 条笔记。'
+            : '已导入 ${summary.importedTasks} 个任务、${summary.importedNotes} 条笔记。${summary.skippedTasks + summary.skippedNotes > 0 ? '重复记录已保留本地版本。' : ''}';
       });
     } on MigrationFormatException catch (error) {
       if (mounted) setState(() => importError = error.message);
@@ -78,48 +83,70 @@ class _SettingsPanelState extends State<_SettingsPanel> {
     }
   }
 
-  Future<bool?> _showImportPreview(MigrationBundle bundle) {
-    return showDialog<bool>(
+  Future<_ImportMode?> _showImportPreview(MigrationBundle bundle) {
+    _ImportMode mode = _ImportMode.merge;
+    return showDialog<_ImportMode>(
       context: context,
       builder: (dialogContext) {
         final tokens = WorkFollowTheme.of(dialogContext);
-        return AlertDialog(
-          title: const Text('导入个人数据'),
-          content: SizedBox(
-            width: 360,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '文件来自 Web 端个人空间，确认后会合并到本机。',
-                  style: TextStyle(color: tokens.textSecondary, fontSize: 12),
-                ),
-                const SizedBox(height: 17),
-                _ImportCountRow(label: '任务', count: bundle.tasks.length),
-                _ImportCountRow(label: '笔记', count: bundle.notes.length),
-                _ImportCountRow(label: '清单', count: bundle.lists.length),
-                _ImportCountRow(label: '文件夹', count: bundle.folders.length),
-                const SizedBox(height: 14),
-                Text(
-                  '团队数据、协作关系和附件不在本次迁移范围内。已有相同 ID 的本地记录会保留。',
-                  style: TextStyle(
-                      color: tokens.textTertiary, fontSize: 11, height: 1.45),
-                ),
-              ],
+        return StatefulBuilder(builder: (dialogContext, setDialogState) {
+          return AlertDialog(
+            title: const Text('导入个人数据'),
+            content: SizedBox(
+              width: 380,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '文件来自 Web 端个人空间。',
+                    style: TextStyle(color: tokens.textSecondary, fontSize: 12),
+                  ),
+                  const SizedBox(height: 17),
+                  _ImportCountRow(label: '任务', count: bundle.tasks.length),
+                  _ImportCountRow(label: '笔记', count: bundle.notes.length),
+                  _ImportCountRow(label: '清单', count: bundle.lists.length),
+                  _ImportCountRow(label: '文件夹', count: bundle.folders.length),
+                  const SizedBox(height: 14),
+                  RadioListTile<_ImportMode>(
+                    value: _ImportMode.merge,
+                    groupValue: mode,
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    activeColor: tokens.accent,
+                    title:
+                        const Text('合并到本机', style: TextStyle(fontSize: 12.5)),
+                    subtitle: const Text('保留本地已有内容，相同 ID 的记录跳过',
+                        style: TextStyle(fontSize: 10.5)),
+                    onChanged: (value) => setDialogState(() => mode = value!),
+                  ),
+                  RadioListTile<_ImportMode>(
+                    value: _ImportMode.replace,
+                    groupValue: mode,
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    activeColor: tokens.accent,
+                    title:
+                        const Text('清空本机后导入', style: TextStyle(fontSize: 12.5)),
+                    subtitle: const Text('以文件内容为准，本机当前任务和笔记会被清空',
+                        style: TextStyle(fontSize: 10.5)),
+                    onChanged: (value) => setDialogState(() => mode = value!),
+                  ),
+                ],
+              ),
             ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(false),
-              child: const Text('取消'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(dialogContext).pop(true),
-              child: const Text('确认合并'),
-            ),
-          ],
-        );
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: const Text('取消'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(dialogContext).pop(mode),
+                child: Text(mode == _ImportMode.replace ? '清空并导入' : '确认合并'),
+              ),
+            ],
+          );
+        });
       },
     );
   }
@@ -232,16 +259,50 @@ class _SettingsPanelState extends State<_SettingsPanel> {
                             ),
                           ),
                           _SettingRow(
-                            label: '最近备份',
-                            description: '迁移文件会自动保存为本机快照',
-                            trailing: Text(
-                              widget.controller.restoredFromDisk
-                                  ? '已保存'
-                                  : '等待导入',
-                              style: TextStyle(
-                                color: tokens.textTertiary,
-                                fontSize: 11,
-                              ),
+                            label: '自动备份',
+                            description: '每天首次修改后生成快照副本，保留最近 7 份',
+                            trailing: FutureBuilder<WorkspaceBackupInfo>(
+                              future: LocalWorkspaceStore().backupInfo(),
+                              builder: (context, snapshot) {
+                                final info = snapshot.data;
+                                final label = info == null || !info.exists
+                                    ? '暂无备份'
+                                    : '最近 ${info.latestAt!.month} 月 ${info.latestAt!.day} 日';
+                                return Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Text(label,
+                                          style: TextStyle(
+                                            color: tokens.textTertiary,
+                                            fontSize: 11,
+                                          )),
+                                      const SizedBox(width: 8),
+                                      TextButton(
+                                        onPressed: () async {
+                                          await LocalWorkspaceStore()
+                                              .backupNow();
+                                          if (context.mounted) {
+                                            ScaffoldMessenger.of(context)
+                                                .showSnackBar(const SnackBar(
+                                                    content:
+                                                        Text('已创建本机备份副本')));
+                                          }
+                                        },
+                                        style: TextButton.styleFrom(
+                                          foregroundColor: tokens.accent,
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 6, vertical: 3),
+                                          minimumSize: Size.zero,
+                                          tapTargetSize:
+                                              MaterialTapTargetSize.shrinkWrap,
+                                        ),
+                                        child: const Text('立即备份',
+                                            style: TextStyle(
+                                                fontSize: 10.5,
+                                                fontWeight: FontWeight.w700)),
+                                      ),
+                                    ]);
+                              },
                             ),
                           ),
                         ],

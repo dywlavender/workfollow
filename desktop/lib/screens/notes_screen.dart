@@ -18,18 +18,21 @@ class NotesScreen extends StatefulWidget {
 }
 
 class _NotesScreenState extends State<NotesScreen> {
-  String? selectedFolderId;
-  bool favoritesOnly = false;
-  bool unfiledOnly = false;
+  // Folder/favorites/unfiled filters live in the controller so shortcuts
+  // (Cmd-N "new note in the current folder") share the same state.
   bool newestFirst = true;
 
   @override
   Widget build(BuildContext context) {
     final tokens = WorkFollowTheme.of(context);
+    final controller = widget.controller;
+    final selectedFolderId = controller.notesFolderFilter;
+    final favoritesOnly = controller.notesFavoritesOnly;
+    final unfiledOnly = controller.notesUnfiledOnly;
     final notes = _visibleNotes();
     // The selected note lives in the controller so search results (openNote)
     // and this screen always agree on which note the editor is showing.
-    final controllerSelectedId = widget.controller.selectedNoteId;
+    final controllerSelectedId = controller.selectedNoteId;
     final selected = notes.isEmpty
         ? null
         : (controllerSelectedId != null &&
@@ -45,32 +48,17 @@ class _NotesScreenState extends State<NotesScreen> {
           children: [
             _FolderColumn(
               width: folderWidth,
-              controller: widget.controller,
+              controller: controller,
               selectedFolderId: selectedFolderId,
               favoritesOnly: favoritesOnly,
               unfiledOnly: unfiledOnly,
               onCreateNote: _createNote,
               onCreateFolder: _createFolder,
-              onShowAll: () => setState(() {
-                selectedFolderId = null;
-                favoritesOnly = false;
-                unfiledOnly = false;
-              }),
-              onShowFavorites: () => setState(() {
-                selectedFolderId = null;
-                favoritesOnly = true;
-                unfiledOnly = false;
-              }),
-              onShowUnfiled: () => setState(() {
-                selectedFolderId = null;
-                favoritesOnly = false;
-                unfiledOnly = true;
-              }),
-              onSelectFolder: (folder) => setState(() {
-                selectedFolderId = folder.id;
-                favoritesOnly = false;
-                unfiledOnly = false;
-              }),
+              onShowAll: controller.clearNotesFilters,
+              onShowFavorites: () => controller.setNotesFavoritesOnly(true),
+              onShowUnfiled: () => controller.setNotesUnfiledOnly(true),
+              onSelectFolder: (folder) =>
+                  controller.setNotesFolderFilter(folder.id),
             ),
             VerticalDivider(width: 1, thickness: 1, color: tokens.border),
             SizedBox(
@@ -80,7 +68,7 @@ class _NotesScreenState extends State<NotesScreen> {
                 selectedId: selected?.id,
                 newestFirst: newestFirst,
                 onSort: () => setState(() => newestFirst = !newestFirst),
-                onSelect: (id) => widget.controller.selectNote(id),
+                onSelect: (id) => controller.selectNote(id),
               ),
             ),
             VerticalDivider(width: 1, thickness: 1, color: tokens.border),
@@ -89,8 +77,8 @@ class _NotesScreenState extends State<NotesScreen> {
                   ? _EmptyNoteEditor(tokens: tokens)
                   : _NoteEditor(
                       note: selected,
-                      controller: widget.controller,
-                      folders: widget.controller.folders,
+                      controller: controller,
+                      folders: controller.folders,
                       onDelete: () => _deleteNote(selected.id),
                     ),
             ),
@@ -101,12 +89,14 @@ class _NotesScreenState extends State<NotesScreen> {
   }
 
   List<NoteItem> _visibleNotes() {
-    final notes = widget.controller.activeNotes.where((note) {
-      if (favoritesOnly) return note.isFavorite;
-      if (unfiledOnly) return note.folderId == null;
+    final controller = widget.controller;
+    final selectedFolderId = controller.notesFolderFilter;
+    final notes = controller.activeNotes.where((note) {
+      if (controller.notesFavoritesOnly) return note.isFavorite;
+      if (controller.notesUnfiledOnly) return note.folderId == null;
       if (selectedFolderId == null) return true;
       MigrationFolderRecord? folder;
-      for (final item in widget.controller.folders) {
+      for (final item in controller.folders) {
         if (item.id == selectedFolderId) {
           folder = item;
           break;
@@ -126,14 +116,8 @@ class _NotesScreenState extends State<NotesScreen> {
   }
 
   Future<void> _createNote() async {
-    final id = widget.controller.addNote(folderId: selectedFolderId);
-    if (!mounted) return;
-    // Select through the controller so the editor pane follows immediately.
-    widget.controller.selectNote(id);
-    setState(() {
-      favoritesOnly = false;
-      unfiledOnly = false;
-    });
+    // Creates in the folder the view currently shows and selects it.
+    widget.controller.addNoteInCurrentFolder();
   }
 
   Future<void> _createFolder() async {
@@ -168,11 +152,7 @@ class _NotesScreenState extends State<NotesScreen> {
           .showSnackBar(const SnackBar(content: Text('文件夹名称为空，或已经存在。')));
       return;
     }
-    setState(() {
-      selectedFolderId = folder.id;
-      favoritesOnly = false;
-      unfiledOnly = false;
-    });
+    widget.controller.setNotesFolderFilter(folder.id);
   }
 
   Future<void> _deleteNote(String id) async {

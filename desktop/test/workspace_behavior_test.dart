@@ -208,6 +208,81 @@ void main() {
     expect(controller.saveStatus, SaveStatus.failed);
   });
 
+  test('replacing the workspace clears starter content before import',
+      () async {
+    final store = _FakeStore();
+    final controller = WorkspaceController(store: store);
+    expect(controller.activeTasks, isNotEmpty);
+
+    final bundle = MigrationBundle(
+      format: personalMigrationFormat,
+      schemaVersion: migrationSchemaVersion,
+      exportedAt: null,
+      lists: const [
+        MigrationListRecord(
+            id: 'list-web', name: '项目', sortOrder: 0, protectedList: false),
+      ],
+      folders: const [],
+      tasks: const [
+        MigrationTaskRecord(
+          id: 'task-01',
+          title: '来自 Web 的同名任务',
+          description: null,
+          contentJson: null,
+          status: 'TODO',
+          priority: 'NONE',
+          dueAt: null,
+          dueEndAt: null,
+          reminderAt: null,
+          recurrenceType: 'NONE',
+          recurrenceConfig: null,
+          listName: '项目',
+          tags: [],
+          createdAt: null,
+          updatedAt: null,
+          completedAt: null,
+        ),
+      ],
+      notes: const [],
+    );
+
+    final summary = await controller.replaceWithMigration(bundle);
+    // Replace mode never silently merges starter records into real data.
+    expect(summary.importedTasks, 1);
+    expect(controller.tasks, hasLength(1));
+    expect(controller.tasks.single.title, '来自 Web 的同名任务');
+    expect(controller.lists.map((list) => list.name), contains('项目'));
+  });
+
+  test('notes filters live in the controller and new notes follow them', () {
+    final controller = WorkspaceController();
+    expect(controller.notesFolderFilter, isNull);
+
+    controller.setNotesFavoritesOnly(true);
+    expect(controller.notesFavoritesOnly, isTrue);
+
+    controller.setNotesFolderFilter('folder-work');
+    expect(controller.notesFavoritesOnly, isFalse);
+    expect(controller.notesFolderFilter, 'folder-work');
+
+    final id = controller.addNoteInCurrentFolder();
+    final note = controller.notes.firstWhere((note) => note.id == id);
+    expect(note.folderId, 'folder-work');
+    expect(controller.view, WorkspaceView.notes);
+    expect(controller.selectedNoteId, id);
+  });
+
+  test('quick add focus requests are pending until consumed once', () {
+    final controller = WorkspaceController();
+    expect(controller.quickAddFocusPending, isFalse);
+
+    controller.requestQuickAddFocus();
+    expect(controller.quickAddFocusPending, isTrue);
+
+    controller.consumeQuickAddFocus();
+    expect(controller.quickAddFocusPending, isFalse);
+  });
+
   testWidgets('command palette opens, searches and creates tasks',
       (tester) async {
     await tester.pumpWidget(const WorkFollowApp());
@@ -218,7 +293,8 @@ void main() {
     // The palette must build without a "No Material widget found" crash.
     expect(find.text('搜索任务、笔记或命令…'), findsOneWidget);
 
-    await tester.enterText(find.byKey(const ValueKey('command-palette-query')), '季度');
+    await tester.enterText(
+        find.byKey(const ValueKey('command-palette-query')), '季度');
     await tester.pump();
     expect(find.text('新建任务「季度」'), findsOneWidget);
     // The existing seed task matches the query too (its home panel copy stays

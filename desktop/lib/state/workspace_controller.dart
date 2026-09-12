@@ -236,6 +236,15 @@ class WorkspaceController extends ChangeNotifier {
   DateTime? _lastSavedAt;
   String? _loadError;
   bool _disposed = false;
+  // Notes view filters live here so menus and shortcuts (Cmd-N "new note in
+  // the current folder") agree with what the screen shows.
+  String? _notesFolderFilter;
+  bool _notesFavoritesOnly = false;
+  bool _notesUnfiledOnly = false;
+  // Cross-widget focus requests: a menu or keyboard command can ask the quick
+  // add field or the inspector title editor to take focus.
+  bool _quickAddFocusPending = false;
+  int _inspectorTitleFocusVersion = 0;
 
   WorkspaceView get view => _view;
   bool get isTaskView => switch (_view) {
@@ -296,6 +305,69 @@ class WorkspaceController extends ChangeNotifier {
   String? get saveError => _saveError;
   DateTime? get lastSavedAt => _lastSavedAt;
   String? get loadError => _loadError;
+  String? get notesFolderFilter => _notesFolderFilter;
+  bool get notesFavoritesOnly => _notesFavoritesOnly;
+  bool get notesUnfiledOnly => _notesUnfiledOnly;
+  bool get quickAddFocusPending => _quickAddFocusPending;
+  int get inspectorTitleFocusVersion => _inspectorTitleFocusVersion;
+
+  void setNotesFolderFilter(String? folderId) {
+    if (_notesFolderFilter == folderId) return;
+    _notesFolderFilter = folderId;
+    _notesFavoritesOnly = false;
+    _notesUnfiledOnly = false;
+    _notify();
+  }
+
+  void setNotesFavoritesOnly(bool value) {
+    _notesFavoritesOnly = value;
+    if (value) _notesUnfiledOnly = false;
+    _notesFolderFilter = null;
+    _notify();
+  }
+
+  void setNotesUnfiledOnly(bool value) {
+    _notesUnfiledOnly = value;
+    if (value) _notesFavoritesOnly = false;
+    _notesFolderFilter = null;
+    _notify();
+  }
+
+  void clearNotesFilters() {
+    _notesFolderFilter = null;
+    _notesFavoritesOnly = false;
+    _notesUnfiledOnly = false;
+    _notify();
+  }
+
+  /// Asks whichever quick add field is on screen to take focus (Cmd-N on task
+  /// views). The pending flag also covers fields that are built afterwards,
+  /// e.g. after switching from Calendar to Today.
+  void requestQuickAddFocus() {
+    _quickAddFocusPending = true;
+    _notify();
+  }
+
+  void consumeQuickAddFocus() {
+    _quickAddFocusPending = false;
+  }
+
+  /// Asks the task inspector to focus its title editor (Return on a task row).
+  void requestInspectorTitleFocus() {
+    _inspectorTitleFocusVersion += 1;
+    _notify();
+  }
+
+  /// Creates a note in the folder the notes view currently shows, so Cmd-N
+  /// behaves like the button in the sidebar.
+  String addNoteInCurrentFolder() {
+    final folderId = _notesUnfiledOnly ? null : _notesFolderFilter;
+    final id = addNote(folderId: folderId);
+    _selectedNoteId = id;
+    _view = WorkspaceView.notes;
+    _notify();
+    return id;
+  }
 
   @override
   void dispose() {
@@ -385,6 +457,64 @@ class WorkspaceController extends ChangeNotifier {
       skippedTasks: bundle.tasks.length - importedTasks.length,
       importedNotes: importedNotes.length,
       skippedNotes: bundle.notes.length - importedNotes.length,
+      importedLists: bundle.lists.length,
+      importedFolders: bundle.folders.length,
+    );
+  }
+
+  /// Replaces the whole workspace with the bundle: the escape hatch for a
+  /// first import (so starter content never mixes with real data) and for
+  /// restoring a snapshot whose IDs collide with local records.
+  Future<MigrationImportSummary> replaceWithMigration(
+      MigrationBundle bundle) async {
+    _loadError = null;
+    _saveError = null;
+    _lists = bundle.lists.isEmpty
+        ? List.from(_defaultLists())
+        : List.from(bundle.lists);
+    _folders = List.from(bundle.folders);
+    _tasks = bundle.tasks.map(TaskItem.fromMigration).toList();
+    for (final task in _tasks) {
+      if (_lists.every((list) => list.name != task.listName)) {
+        _lists = [
+          ..._lists,
+          MigrationListRecord(
+            id: null,
+            name: task.listName,
+            sortOrder: _lists.length,
+            protectedList: false,
+          ),
+        ];
+      }
+    }
+    _notes = bundle.notes
+        .asMap()
+        .entries
+        .map((entry) => NoteItem.fromMigration(
+              entry.value,
+              _folderName(entry.value.folderId),
+              _accentFor(entry.key),
+            ))
+        .toList();
+    _taskSequence = _nextTaskSequence();
+    _noteSequence = _nextNoteSequence();
+    _folderSequence = _nextFolderSequence();
+    _restoredFromDisk = true;
+    _selectedTaskId = _tasks.isEmpty ? null : _tasks.first.id;
+    _selectedListName = null;
+    _selectedNoteId = _notes.isEmpty ? null : _notes.first.id;
+    _lastCompletedTaskId = null;
+    _lastRemovedTaskId = null;
+    _lastRemovedNoteId = null;
+    _lastActionKind = '';
+    _lastActionMessage = '';
+    await _store.save(_snapshot());
+    _notify();
+    return MigrationImportSummary(
+      importedTasks: _tasks.length,
+      skippedTasks: 0,
+      importedNotes: _notes.length,
+      skippedNotes: 0,
       importedLists: bundle.lists.length,
       importedFolders: bundle.folders.length,
     );
