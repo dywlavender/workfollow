@@ -181,7 +181,7 @@ class _TaskInspectorState extends State<TaskInspector> {
                         _InspectorProperty(
                             icon: Icons.repeat_rounded,
                             label: '重复',
-                            value: _recurrenceLabel(task.recurrenceType),
+                            value: _recurrenceLabel(task),
                             onTap: () => _chooseRecurrence(context, task)),
                         _InspectorProperty(
                             icon: Icons.flag_outlined,
@@ -235,22 +235,27 @@ class _TaskInspectorState extends State<TaskInspector> {
                           '子任务  ${task.subtaskCompleted}/${task.subtaskTotal}',
                       child: Column(
                         children: [
-                          _SubtaskRow(
-                              label: '整理核心指标数据',
-                              completed: true,
-                              tokens: tokens),
-                          _SubtaskRow(
-                              label: '完成增长章节图表',
-                              completed: true,
-                              tokens: tokens),
-                          _SubtaskRow(
-                              label: '排练一遍讲述节奏',
-                              completed: false,
-                              tokens: tokens),
+                          for (final subtask in task.subtasks)
+                            _SubtaskRow(
+                              key: ValueKey(subtask.id),
+                              label: subtask.title,
+                              completed: subtask.completed,
+                              tokens: tokens,
+                              onToggle: () => widget.controller
+                                  .toggleSubtask(task.id, subtask.id),
+                              onRemove: () => widget.controller
+                                  .removeSubtask(task.id, subtask.id),
+                            ),
                         ],
                       ),
                     ),
                   ],
+                  const SizedBox(height: 23),
+                  _InspectorSection(
+                    label: '添加子任务',
+                    child: _AddSubtaskField(
+                        controller: widget.controller, taskId: task.id),
+                  ),
                   const SizedBox(height: 23),
                   _InspectorSection(
                     label: '标签',
@@ -327,12 +332,24 @@ class _TaskInspectorState extends State<TaskInspector> {
     return '${reminder.month} 月 ${reminder.day} 日 ${reminder.hour.toString().padLeft(2, '0')}:${reminder.minute.toString().padLeft(2, '0')}';
   }
 
-  String _recurrenceLabel(String type) => switch (type.toUpperCase()) {
-        'DAILY' => '每天',
-        'WEEKLY' => '每周',
-        'MONTHLY' => '每月',
-        _ => '不重复',
-      };
+  String _recurrenceLabel(TaskItem task) {
+    final type = task.recurrenceType.toUpperCase();
+    switch (type) {
+      case 'DAILY':
+        return '每天';
+      case 'WEEKLY':
+        final weekday = (task.recurrenceConfig?['weekday'] as num?)?.toInt();
+        const weekdays = ['一', '二', '三', '四', '五', '六', '日'];
+        return weekday != null && weekday >= 1 && weekday <= 7
+            ? '每周 · 周${weekdays[weekday - 1]}'
+            : '每周';
+      case 'MONTHLY':
+        final day = (task.recurrenceConfig?['dayOfMonth'] as num?)?.toInt();
+        return day != null ? '每月 · $day 号' : '每月';
+      default:
+        return '不重复';
+    }
+  }
 
   Future<void> _copyTask(BuildContext context, TaskItem task) async {
     final description = _descriptionFor(task);
@@ -487,8 +504,8 @@ class _TaskInspectorState extends State<TaskInspector> {
             for (final option in const {
               'NONE': '不重复',
               'DAILY': '每天',
-              'WEEKLY': '每周',
-              'MONTHLY': '每月'
+              'WEEKLY': '每周…',
+              'MONTHLY': '每月…'
             }.entries)
               ListTile(
                   title: Text(option.value),
@@ -500,8 +517,122 @@ class _TaskInspectorState extends State<TaskInspector> {
         ),
       ),
     );
-    if (selected != null)
+    if (selected == null) return;
+    if (selected != 'WEEKLY' && selected != 'MONTHLY') {
       widget.controller.updateTaskRecurrence(task.id, selected);
+      return;
+    }
+    // 每周指定星期、每月指定日期；月末没有的日期自动落到当月最后一天。
+    final config = await _pickRecurrenceConfig(context, selected, task);
+    if (config == null) return;
+    widget.controller.updateTaskRecurrence(task.id, selected, config: config);
+  }
+
+  Future<Map<String, dynamic>?> _pickRecurrenceConfig(
+      BuildContext context, String type, TaskItem task) async {
+    final tokens = WorkFollowTheme.of(context);
+    final due = task.dueAt == null ? null : DateTime.tryParse(task.dueAt!);
+    if (type == 'WEEKLY') {
+      final weekdays = const ['一', '二', '三', '四', '五', '六', '日'];
+      var weekday = (task.recurrenceConfig?['weekday'] as num?)?.toInt() ??
+          (due?.weekday ?? DateTime.now().weekday);
+      return showModalBottomSheet<Map<String, dynamic>>(
+        context: context,
+        builder: (sheetContext) => SafeArea(
+          child: StatefulBuilder(builder: (sheetContext, setSheetState) {
+            return Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Padding(
+                    padding: EdgeInsets.all(14), child: Text('每周的哪一天？')),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(14, 0, 14, 8),
+                  child: Wrap(
+                    spacing: 7,
+                    runSpacing: 7,
+                    children: [
+                      for (var value = 1; value <= 7; value++)
+                        ChoiceChip(
+                          label: Text('周${weekdays[value - 1]}'),
+                          selected: weekday == value,
+                          selectedColor: tokens.accentSoft,
+                          labelStyle: TextStyle(
+                              color: weekday == value
+                                  ? tokens.accent
+                                  : tokens.textSecondary,
+                              fontSize: 11.5),
+                          onSelected: (_) =>
+                              setSheetState(() => weekday = value),
+                        ),
+                    ],
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.all(14),
+                  child: FilledButton(
+                    onPressed: () =>
+                        Navigator.of(sheetContext).pop({'weekday': weekday}),
+                    child: const Text('保存'),
+                  ),
+                ),
+              ],
+            );
+          }),
+        ),
+      );
+    }
+    var dayOfMonth = (task.recurrenceConfig?['dayOfMonth'] as num?)?.toInt() ??
+        (due?.day ?? DateTime.now().day);
+    return showModalBottomSheet<Map<String, dynamic>>(
+      context: context,
+      builder: (sheetContext) => SafeArea(
+        child: StatefulBuilder(builder: (sheetContext, setSheetState) {
+          return Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Padding(padding: EdgeInsets.all(14), child: Text('每月的几号？')),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+                child: Text('当月没有这一天时，会安排到当月最后一天。',
+                    style: TextStyle(color: tokens.textTertiary, fontSize: 11)),
+              ),
+              Flexible(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(14),
+                  child: Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: [
+                      for (var value = 1; value <= 31; value++)
+                        ChoiceChip(
+                          label: Text('$value'),
+                          selected: dayOfMonth == value,
+                          selectedColor: tokens.accentSoft,
+                          labelStyle: TextStyle(
+                              color: dayOfMonth == value
+                                  ? tokens.accent
+                                  : tokens.textSecondary,
+                              fontSize: 11.5),
+                          onSelected: (_) =>
+                              setSheetState(() => dayOfMonth = value),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.all(14),
+                child: FilledButton(
+                  onPressed: () => Navigator.of(sheetContext)
+                      .pop({'dayOfMonth': dayOfMonth}),
+                  child: const Text('保存'),
+                ),
+              ),
+            ],
+          );
+        }),
+      ),
+    );
   }
 
   Future<void> _choosePriority(BuildContext context, TaskItem task) async {
@@ -675,30 +806,46 @@ class _InspectorProperty extends StatelessWidget {
 }
 
 class _SubtaskRow extends StatelessWidget {
-  const _SubtaskRow(
-      {required this.label, required this.completed, required this.tokens});
+  const _SubtaskRow({
+    super.key,
+    required this.label,
+    required this.completed,
+    required this.tokens,
+    required this.onToggle,
+    required this.onRemove,
+  });
 
   final String label;
   final bool completed;
   final WorkFollowTheme tokens;
+  final VoidCallback onToggle;
+  final VoidCallback onRemove;
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
+      padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(children: [
-        Container(
-            width: 17,
-            height: 17,
-            decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: completed ? tokens.success : Colors.transparent,
-                border: Border.all(
-                    color: completed ? tokens.success : tokens.borderStrong,
-                    width: 1.4)),
-            child: completed
-                ? const Icon(Icons.check_rounded, size: 11, color: Colors.white)
-                : null),
+        InkWell(
+          onTap: onToggle,
+          borderRadius: BorderRadius.circular(9),
+          child: Padding(
+            padding: const EdgeInsets.all(2),
+            child: Container(
+                width: 17,
+                height: 17,
+                decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: completed ? tokens.success : Colors.transparent,
+                    border: Border.all(
+                        color: completed ? tokens.success : tokens.borderStrong,
+                        width: 1.4)),
+                child: completed
+                    ? const Icon(Icons.check_rounded,
+                        size: 11, color: Colors.white)
+                    : null),
+          ),
+        ),
         const SizedBox(width: 9),
         Expanded(
             child: Text(label,
@@ -708,7 +855,78 @@ class _SubtaskRow extends StatelessWidget {
                     fontSize: 12,
                     decoration:
                         completed ? TextDecoration.lineThrough : null))),
+        AppIconButton(
+            icon: Icons.close_rounded,
+            tooltip: '删除子任务',
+            size: 22,
+            iconSize: 13,
+            onPressed: onRemove),
       ]),
+    );
+  }
+}
+
+class _AddSubtaskField extends StatefulWidget {
+  const _AddSubtaskField({required this.controller, required this.taskId});
+
+  final WorkspaceController controller;
+  final String taskId;
+
+  @override
+  State<_AddSubtaskField> createState() => _AddSubtaskFieldState();
+}
+
+class _AddSubtaskFieldState extends State<_AddSubtaskField> {
+  final TextEditingController textController = TextEditingController();
+  final FocusNode focusNode = FocusNode();
+
+  @override
+  void dispose() {
+    textController.dispose();
+    focusNode.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    if (widget.controller.addSubtask(widget.taskId, textController.text)) {
+      textController.clear();
+      focusNode.requestFocus();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = WorkFollowTheme.of(context);
+    return Container(
+      padding: const EdgeInsets.fromLTRB(13, 5, 13, 5),
+      decoration: BoxDecoration(
+          color: tokens.content,
+          borderRadius: BorderRadius.circular(9),
+          border: Border.all(color: tokens.border)),
+      child: Row(
+        children: [
+          const SizedBox(width: 2),
+          Icon(Icons.add_rounded, size: 15, color: tokens.textTertiary),
+          const SizedBox(width: 7),
+          Expanded(
+            child: TextField(
+              controller: textController,
+              focusNode: focusNode,
+              textInputAction: TextInputAction.done,
+              onSubmitted: (_) => _submit(),
+              cursorColor: tokens.accent,
+              style: TextStyle(color: tokens.textSecondary, fontSize: 12),
+              decoration: InputDecoration(
+                hintText: '输入子任务，按 Return 添加…',
+                hintStyle: TextStyle(color: tokens.textTertiary, fontSize: 12),
+                border: InputBorder.none,
+                isDense: true,
+                contentPadding: const EdgeInsets.symmetric(vertical: 7),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

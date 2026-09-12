@@ -10,6 +10,33 @@ enum TaskBucket {
   unscheduled,
 }
 
+class TaskSubtask {
+  const TaskSubtask({
+    required this.id,
+    required this.title,
+    this.completed = false,
+  });
+
+  final String id;
+  final String title;
+  final bool completed;
+
+  TaskSubtask copyWith({String? title, bool? completed}) => TaskSubtask(
+        id: id,
+        title: title ?? this.title,
+        completed: completed ?? this.completed,
+      );
+
+  static TaskSubtask fromJson(Map<String, dynamic> json) => TaskSubtask(
+        id: json['id']?.toString() ?? '',
+        title: json['title']?.toString() ?? '',
+        completed: json['completed'] == true,
+      );
+
+  Map<String, dynamic> toJson() =>
+      {'id': id, 'title': title, 'completed': completed};
+}
+
 class TaskItem {
   const TaskItem({
     required this.id,
@@ -26,6 +53,7 @@ class TaskItem {
     this.recurrenceType = 'NONE',
     this.recurrenceConfig,
     this.tags = const [],
+    this.subtasks = const [],
     this.createdAt,
     this.updatedAt,
     this.completedAt,
@@ -33,8 +61,6 @@ class TaskItem {
     this.priority = TaskPriority.none,
     this.completed = false,
     this.hasAttachment = false,
-    this.subtaskTotal = 0,
-    this.subtaskCompleted = 0,
   });
 
   final String id;
@@ -51,6 +77,7 @@ class TaskItem {
   final String recurrenceType;
   final Map<String, dynamic>? recurrenceConfig;
   final List<String> tags;
+  final List<TaskSubtask> subtasks;
   final String? createdAt;
   final String? updatedAt;
   final String? completedAt;
@@ -58,8 +85,10 @@ class TaskItem {
   final TaskPriority priority;
   final bool completed;
   final bool hasAttachment;
-  final int subtaskTotal;
-  final int subtaskCompleted;
+
+  int get subtaskTotal => subtasks.length;
+  int get subtaskCompleted =>
+      subtasks.where((subtask) => subtask.completed).length;
 
   TaskItem copyWith({
     String? title,
@@ -82,6 +111,7 @@ class TaskItem {
     Map<String, dynamic>? recurrenceConfig,
     bool clearRecurrenceConfig = false,
     List<String>? tags,
+    List<TaskSubtask>? subtasks,
     String? createdAt,
     String? updatedAt,
     String? completedAt,
@@ -91,8 +121,6 @@ class TaskItem {
     TaskPriority? priority,
     bool? completed,
     bool? hasAttachment,
-    int? subtaskTotal,
-    int? subtaskCompleted,
   }) {
     return TaskItem(
       id: id,
@@ -113,6 +141,7 @@ class TaskItem {
           ? recurrenceConfig
           : recurrenceConfig ?? this.recurrenceConfig,
       tags: tags ?? this.tags,
+      subtasks: subtasks ?? this.subtasks,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       completedAt:
@@ -121,8 +150,6 @@ class TaskItem {
       priority: priority ?? this.priority,
       completed: completed ?? this.completed,
       hasAttachment: hasAttachment ?? this.hasAttachment,
-      subtaskTotal: subtaskTotal ?? this.subtaskTotal,
-      subtaskCompleted: subtaskCompleted ?? this.subtaskCompleted,
     );
   }
 
@@ -144,6 +171,13 @@ class TaskItem {
       recurrenceType: record.recurrenceType,
       recurrenceConfig: record.recurrenceConfig,
       tags: List.unmodifiable(record.tags),
+      subtasks: record.subtasks
+          .map((subtask) => TaskSubtask(
+                id: subtask.id,
+                title: subtask.title,
+                completed: subtask.completed,
+              ))
+          .toList(),
       createdAt: record.createdAt,
       updatedAt: record.updatedAt,
       completedAt: record.completedAt,
@@ -171,6 +205,12 @@ class TaskItem {
       recurrenceConfig: recurrenceConfig,
       listName: listName,
       tags: List.unmodifiable(tags),
+      subtasks:
+          List.unmodifiable(subtasks.map((subtask) => MigrationSubtaskRecord(
+                id: subtask.id,
+                title: subtask.title,
+                completed: subtask.completed,
+              ))),
       createdAt: createdAt,
       updatedAt: updatedAt,
       completedAt: completedAt,

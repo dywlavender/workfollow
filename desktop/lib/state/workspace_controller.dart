@@ -121,8 +121,13 @@ class WorkspaceController extends ChangeNotifier {
         timeLabel: '今天 14:00',
         note: '把核心指标、用户反馈和下季度优先级整理成一份清晰的演示。',
         priority: TaskPriority.high,
-        subtaskTotal: 3,
-        subtaskCompleted: 2,
+        subtasks: [
+          const TaskSubtask(
+              id: 'sub-seed-1', title: '整理核心指标数据', completed: true),
+          const TaskSubtask(
+              id: 'sub-seed-2', title: '完成增长章节图表', completed: true),
+          const TaskSubtask(id: 'sub-seed-3', title: '排练一遍讲述节奏'),
+        ],
       ),
       TaskItem(
         id: 'task-02',
@@ -223,6 +228,9 @@ class WorkspaceController extends ChangeNotifier {
   String? _lastCompletedTaskId;
   String? _lastRemovedTaskId;
   String? _lastRemovedNoteId;
+  String? _lastRecurrenceSpawnId;
+  String? _lastCompletedRecurrenceType;
+  Map<String, dynamic>? _lastCompletedRecurrenceConfig;
   int _completionVersion = 0;
   int _actionVersion = 0;
   String _lastActionMessage = '';
@@ -718,24 +726,129 @@ class WorkspaceController extends ChangeNotifier {
     if (index < 0) return;
     final task = _tasks[index];
     final completing = !task.completed;
-    final now = DateTime.now().toIso8601String();
+    final now = DateTime.now();
+    final nowLabel = now.toIso8601String();
     final due = task.dueAt == null ? null : DateTime.tryParse(task.dueAt!);
-    _tasks[index] = task.copyWith(
+    var updated = task.copyWith(
       completed: completing,
-      completedAt: completing ? now : null,
+      completedAt: completing ? nowLabel : null,
       clearCompletedAt: !completing,
-      updatedAt: now,
+      updatedAt: nowLabel,
       timeLabel: completing ? '已完成 · 刚刚' : (taskTimeLabelFor(due) ?? '未安排'),
     );
+    TaskItem? spawn;
     if (completing) {
       _completionVersion += 1;
       _actionVersion += 1;
       _lastActionKind = 'completion';
       _lastActionMessage = '任务已完成';
+      spawn = _spawnNextRecurrence(updated, completedAt: now);
+      if (spawn != null) {
+        _taskSequence += 1;
+        // The historical record stops recurring so a later manual un-complete
+        // never spawns a duplicate chain.
+        updated = updated.copyWith(
+          recurrenceType: 'NONE',
+          clearRecurrenceConfig: true,
+        );
+        _selectedTaskId = spawn.id;
+      }
+    }
+    // Assign the original slot first; prepending the spawn shifts every
+    // following index and must not race this write.
+    _tasks[index] = updated;
+    if (spawn != null) {
+      _tasks = [spawn, ..._tasks];
     }
     _lastCompletedTaskId = completing ? id : null;
+    _lastRecurrenceSpawnId = spawn?.id;
+    _lastCompletedRecurrenceType = spawn != null ? task.recurrenceType : null;
+    _lastCompletedRecurrenceConfig =
+        spawn != null ? task.recurrenceConfig : null;
     _schedulePersist();
     _notify();
+  }
+
+  /// Creates the next occurrence when a recurring task completes. The chain
+  /// keeps its fixed schedule: due + interval, or the completion date when the
+  /// task had no date.
+  TaskItem? _spawnNextRecurrence(TaskItem task,
+      {required DateTime completedAt}) {
+    final type = task.recurrenceType.toUpperCase();
+    if (type == 'NONE') return null;
+    final due = task.dueAt == null ? null : DateTime.tryParse(task.dueAt!);
+    final nextDue =
+        _nextRecurrenceDate(type, task.recurrenceConfig, due, completedAt);
+    if (nextDue == null) return null;
+
+    DateTime? shiftedReminder;
+    if (task.reminderAt != null && due != null) {
+      final reminder = DateTime.tryParse(task.reminderAt!);
+      if (reminder != null) {
+        final delta = nextDue.difference(due);
+        shiftedReminder = reminder.add(delta);
+      }
+    }
+    final now = DateTime.now().toIso8601String();
+    return TaskItem(
+      id: 'task-${_taskSequence.toString().padLeft(2, '0')}',
+      title: task.title,
+      listName: task.listName,
+      bucket: taskBucketForDate(nextDue),
+      timeLabel: taskTimeLabelFor(nextDue),
+      dueAt: nextDue.toIso8601String(),
+      note: task.note,
+      description: task.description,
+      contentJson: task.contentJson,
+      reminderAt: shiftedReminder?.toIso8601String(),
+      recurrenceType: task.recurrenceType,
+      recurrenceConfig: task.recurrenceConfig,
+      tags: task.tags,
+      subtasks: task.subtasks
+          .map((subtask) => TaskSubtask(
+              id: subtask.id, title: subtask.title, completed: false))
+          .toList(),
+      priority: task.priority,
+      createdAt: now,
+      updatedAt: now,
+    );
+  }
+
+  DateTime? _nextRecurrenceDate(String type, Map<String, dynamic>? config,
+      DateTime? due, DateTime completedAt) {
+    final base =
+        due ?? DateTime(completedAt.year, completedAt.month, completedAt.day);
+    switch (type) {
+      case 'DAILY':
+        return base.add(const Duration(days: 1));
+      case 'WEEKLY':
+        final weekday = (config?['weekday'] as num?)?.toInt();
+        if (weekday != null && weekday >= 1 && weekday <= 7) {
+          var next = base.add(const Duration(days: 1));
+          while (next.weekday != weekday) {
+            next = next.add(const Duration(days: 1));
+          }
+          return next;
+        }
+        return base.add(const Duration(days: 7));
+      case 'MONTHLY':
+        final day = (config?['dayOfMonth'] as num?)?.toInt();
+        final targetDay =
+            (day != null && day >= 1 && day <= 31) ? day : base.day;
+        var year = base.year;
+        var month = base.month + 1;
+        if (month > 12) {
+          month = 1;
+          year += 1;
+        }
+        final lastDay = DateTime(year, month + 1, 0).day;
+        // Months without that day (e.g. the 31st in February) land on the
+        // last day of the month.
+        final clamped = targetDay > lastDay ? lastDay : targetDay;
+        return DateTime(year, month, clamped, base.hour, base.minute);
+      default:
+        return null;
+    }
   }
 
   bool undoLastCompletion() {
@@ -745,15 +858,36 @@ class WorkspaceController extends ChangeNotifier {
     if (index < 0) return false;
     final task = _tasks[index];
     final due = task.dueAt == null ? null : DateTime.tryParse(task.dueAt!);
-    _tasks[index] = task.copyWith(
+    var updated = task.copyWith(
       completed: false,
       clearCompletedAt: true,
       updatedAt: DateTime.now().toIso8601String(),
       timeLabel: taskTimeLabelFor(due) ?? '未安排',
     );
+    // Undo also reverts the recurrence: the generated next occurrence is
+    // removed and the completed record carries its rule again.
+    final spawnId = _lastRecurrenceSpawnId;
+    if (spawnId != null && _lastCompletedRecurrenceType != null) {
+      updated = updated.copyWith(
+        recurrenceType: _lastCompletedRecurrenceType!,
+        recurrenceConfig: _lastCompletedRecurrenceConfig,
+        clearRecurrenceConfig: _lastCompletedRecurrenceConfig == null,
+      );
+      _tasks.removeWhere((item) => item.id == spawnId);
+    }
+    // removeWhere may have shifted positions; re-locate before writing.
+    final writeIndex = _tasks.indexWhere((item) => item.id == id);
+    if (writeIndex >= 0) {
+      _tasks[writeIndex] = updated;
+    }
     _lastCompletedTaskId = null;
+    _lastRecurrenceSpawnId = null;
+    _lastCompletedRecurrenceType = null;
+    _lastCompletedRecurrenceConfig = null;
     _lastActionKind = '';
-    _selectedTaskId = id;
+    if (_tasks.any((item) => item.id == id)) {
+      _selectedTaskId = id;
+    }
     _schedulePersist();
     _notify();
     return true;
@@ -1021,6 +1155,123 @@ class WorkspaceController extends ChangeNotifier {
     return true;
   }
 
+  bool addSubtask(String taskId, String rawTitle) {
+    final title = rawTitle.trim();
+    if (title.isEmpty) return false;
+    final subtask = TaskSubtask(
+      id: 'sub-${DateTime.now().microsecondsSinceEpoch}',
+      title: title,
+    );
+    return _replaceTask(
+      taskId,
+      (task) => task.copyWith(
+        subtasks: [...task.subtasks, subtask],
+        updatedAt: DateTime.now().toIso8601String(),
+      ),
+    );
+  }
+
+  bool toggleSubtask(String taskId, String subtaskId) {
+    return _replaceTask(
+      taskId,
+      (task) => task.copyWith(
+        subtasks: task.subtasks
+            .map((subtask) => subtask.id == subtaskId
+                ? subtask.copyWith(completed: !subtask.completed)
+                : subtask)
+            .toList(),
+        updatedAt: DateTime.now().toIso8601String(),
+      ),
+    );
+  }
+
+  bool renameSubtask(String taskId, String subtaskId, String rawTitle) {
+    final title = rawTitle.trim();
+    if (title.isEmpty) return false;
+    return _replaceTask(
+      taskId,
+      (task) => task.copyWith(
+        subtasks: task.subtasks
+            .map((subtask) => subtask.id == subtaskId
+                ? subtask.copyWith(title: title)
+                : subtask)
+            .toList(),
+        updatedAt: DateTime.now().toIso8601String(),
+      ),
+    );
+  }
+
+  bool removeSubtask(String taskId, String subtaskId) {
+    return _replaceTask(
+      taskId,
+      (task) => task.copyWith(
+        subtasks:
+            task.subtasks.where((subtask) => subtask.id != subtaskId).toList(),
+        updatedAt: DateTime.now().toIso8601String(),
+      ),
+    );
+  }
+
+  /// Renames a list and every task that belongs to it.
+  bool renameList(String rawOldName, String rawNewName) {
+    final oldName = rawOldName.trim();
+    final newName = rawNewName.trim();
+    if (oldName.isEmpty ||
+        newName.isEmpty ||
+        oldName == '收集箱' ||
+        newName == '收集箱') {
+      return false;
+    }
+    if (_lists.every((list) => list.name != oldName)) return false;
+    if (_lists.any((list) => list.name == newName)) return false;
+    _lists = _lists
+        .map((list) => list.name == oldName
+            ? MigrationListRecord(
+                id: list.id,
+                name: newName,
+                sortOrder: list.sortOrder,
+                protectedList: list.protectedList,
+              )
+            : list)
+        .toList();
+    _tasks = _tasks
+        .map((task) => task.listName == oldName
+            ? task.copyWith(
+                listName: newName,
+                updatedAt: DateTime.now().toIso8601String(),
+              )
+            : task)
+        .toList();
+    if (_selectedListName == oldName) _selectedListName = newName;
+    _schedulePersist();
+    _notify();
+    return true;
+  }
+
+  /// Deletes a list and moves its tasks back to the inbox, so no task is
+  /// lost by removing the container.
+  bool deleteList(String rawName) {
+    final name = rawName.trim();
+    if (name.isEmpty || name == '收集箱') return false;
+    if (_lists.every((list) => list.name != name)) return false;
+    _lists = _lists.where((list) => list.name != name).toList();
+    _tasks = _tasks
+        .map((task) => task.listName == name
+            ? task.copyWith(
+                listName: '收集箱',
+                updatedAt: DateTime.now().toIso8601String(),
+              )
+            : task)
+        .toList();
+    if (_selectedListName == name) {
+      _view = WorkspaceView.inbox;
+      _selectedListName = null;
+    }
+    _schedulePersist();
+    _notify();
+    return true;
+  }
+
   bool addList(String rawName) {
     final name = rawName.trim();
     if (name.isEmpty || _lists.any((list) => list.name == name)) return false;
@@ -1209,6 +1460,9 @@ class WorkspaceController extends ChangeNotifier {
     _lastCompletedTaskId = null;
     _lastRemovedTaskId = null;
     _lastRemovedNoteId = null;
+    _lastRecurrenceSpawnId = null;
+    _lastCompletedRecurrenceType = null;
+    _lastCompletedRecurrenceConfig = null;
     _lastActionKind = '';
     _lastActionMessage = '';
   }
@@ -1340,12 +1594,13 @@ class WorkspaceController extends ChangeNotifier {
     return highest + 1;
   }
 
-  void _replaceTask(String id, TaskItem Function(TaskItem task) update) {
+  bool _replaceTask(String id, TaskItem Function(TaskItem task) update) {
     final index = _tasks.indexWhere((task) => task.id == id);
-    if (index < 0) return;
+    if (index < 0) return false;
     _tasks[index] = update(_tasks[index]);
     _schedulePersist();
     _notify();
+    return true;
   }
 
   void _replaceNote(String id, NoteItem Function(NoteItem note) update) {

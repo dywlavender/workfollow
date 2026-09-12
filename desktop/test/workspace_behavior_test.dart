@@ -283,6 +283,113 @@ void main() {
     expect(controller.quickAddFocusPending, isFalse);
   });
 
+  test('completing a daily recurring task creates the next occurrence', () {
+    final controller = WorkspaceController();
+    controller.updateTaskDue('task-01', DateTime(2099, 1, 15, 14, 0));
+    controller.updateTaskRecurrence('task-01', 'DAILY');
+
+    controller.toggleTask('task-01');
+
+    final completed =
+        controller.tasks.firstWhere((task) => task.id == 'task-01');
+    expect(completed.completed, isTrue);
+    // The next occurrence keeps the title, list and rule, scheduled +1 day.
+    final spawned = controller.tasks.firstWhere(
+        (task) => task.id != 'task-01' && task.title == completed.title);
+    expect(spawned.completed, isFalse);
+    expect(spawned.recurrenceType, 'DAILY');
+    expect(spawned.listName, completed.listName);
+    expect(DateTime.parse(spawned.dueAt!), DateTime(2099, 1, 16, 14, 0));
+
+    // Undo removes the generated task and restores the rule on the original.
+    expect(controller.undoLastCompletion(), isTrue);
+    expect(controller.tasks.where((task) => task.id == spawned.id), isEmpty);
+    final restored =
+        controller.tasks.firstWhere((task) => task.id == 'task-01');
+    expect(restored.completed, isFalse);
+    expect(restored.recurrenceType, 'DAILY');
+  });
+
+  test('weekly recurrence honors the configured weekday', () {
+    final controller = WorkspaceController();
+    final due = DateTime(2099, 3, 4);
+    controller.updateTaskDue('task-02', due);
+    final targetWeekday = due.weekday == 7 ? 1 : due.weekday + 1;
+    controller.updateTaskRecurrence('task-02', 'WEEKLY',
+        config: {'weekday': targetWeekday});
+
+    controller.toggleTask('task-02');
+
+    var expected = due.add(const Duration(days: 1));
+    while (expected.weekday != targetWeekday) {
+      expected = expected.add(const Duration(days: 1));
+    }
+    final spawned = controller.tasks.firstWhere((task) =>
+        task.id != 'task-02' &&
+        task.completed == false &&
+        task.recurrenceType == 'WEEKLY');
+    expect(DateTime.parse(spawned.dueAt!),
+        DateTime(expected.year, expected.month, expected.day));
+  });
+
+  test('monthly recurrence clamps to the end of shorter months', () {
+    final controller = WorkspaceController();
+    controller.updateTaskDue('task-03', DateTime(2099, 1, 31));
+    controller.updateTaskRecurrence('task-03', 'MONTHLY');
+
+    controller.toggleTask('task-03');
+
+    final spawned = controller.tasks.firstWhere(
+        (task) => task.id != 'task-03' && task.recurrenceType == 'MONTHLY');
+    // 2099 is not a leap year: the 31st lands on Feb 28.
+    expect(DateTime.parse(spawned.dueAt!), DateTime(2099, 2, 28));
+  });
+
+  test('subtasks can be added, toggled and removed, and survive a round trip',
+      () {
+    final controller = WorkspaceController();
+
+    expect(controller.addSubtask('task-02', '第一步'), isTrue);
+    final task = controller.tasks.firstWhere((task) => task.id == 'task-02');
+    final subtask = task.subtasks.single;
+    expect(task.subtaskTotal, 1);
+    expect(task.subtaskCompleted, 0);
+
+    expect(controller.toggleSubtask('task-02', subtask.id), isTrue);
+    expect(
+        controller.tasks
+            .firstWhere((task) => task.id == 'task-02')
+            .subtaskCompleted,
+        1);
+
+    final roundTripped = TaskItem.fromMigration(task.toMigrationRecord());
+    expect(roundTripped.subtasks, hasLength(1));
+    expect(roundTripped.subtasks.single.title, '第一步');
+
+    expect(controller.removeSubtask('task-02', subtask.id), isTrue);
+    expect(controller.tasks.firstWhere((task) => task.id == 'task-02').subtasks,
+        isEmpty);
+  });
+
+  test(
+      'renaming a list moves its tasks; deleting a list returns them to the inbox',
+      () {
+    final controller = WorkspaceController();
+
+    expect(controller.renameList('工作', '项目A'), isTrue);
+    expect(controller.tasks.where((task) => task.listName == '工作'), isEmpty);
+    expect(controller.lists.map((list) => list.name), contains('项目A'));
+    // Guard rails: the inbox keeps its name, duplicates are rejected.
+    expect(controller.renameList('收集箱', '别的'), isFalse);
+    expect(controller.renameList('项目A', '项目A'), isFalse);
+
+    expect(controller.deleteList('项目A'), isTrue);
+    expect(controller.lists.any((list) => list.name == '项目A'), isFalse);
+    final moved =
+        controller.tasks.firstWhere((task) => task.title == '准备季度产品评审演示文稿');
+    expect(moved.listName, '收集箱');
+  });
+
   testWidgets('command palette opens, searches and creates tasks',
       (tester) async {
     await tester.pumpWidget(const WorkFollowApp());

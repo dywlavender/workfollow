@@ -431,26 +431,10 @@ class TaskViewSidebar extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 5),
-            _TaskViewItem(
-                controller: controller,
-                view: WorkspaceView.work,
-                label: '工作',
-                hint: '任务清单',
-                icon: Icons.list_alt_outlined),
-            _TaskViewItem(
-                controller: controller,
-                view: WorkspaceView.study,
-                label: '学习',
-                hint: '任务清单',
-                icon: Icons.list_alt_outlined),
-            _TaskViewItem(
-                controller: controller,
-                view: WorkspaceView.personal,
-                label: '个人',
-                hint: '任务清单',
-                icon: Icons.list_alt_outlined),
+            // Every list except the inbox is rendered dynamically, so renamed
+            // or newly created lists appear without special cases.
             ...controller.lists
-                .where((list) => !_defaultListNames.contains(list.name))
+                .where((list) => list.name != '收集箱')
                 .map((list) => _TaskListItem(
                       controller: controller,
                       list: list,
@@ -461,8 +445,6 @@ class TaskViewSidebar extends StatelessWidget {
     );
   }
 }
-
-const _defaultListNames = {'收集箱', '工作', '学习', '个人'};
 
 class _TaskListItem extends StatefulWidget {
   const _TaskListItem({required this.controller, required this.list});
@@ -532,11 +514,102 @@ class _TaskListItemState extends State<_TaskListItem> {
                         color: selected ? tokens.accent : tokens.textTertiary,
                         fontSize: 10,
                         fontWeight: FontWeight.w700)),
+              AnimatedOpacity(
+                duration: const Duration(milliseconds: 120),
+                opacity: hovering ? 1 : 0,
+                child: AppIconButton(
+                    icon: Icons.more_horiz_rounded,
+                    tooltip: '清单操作',
+                    size: 24,
+                    iconSize: 14,
+                    onPressed: () => _showListMenu(context)),
+              ),
             ],
           ),
         ),
       ),
     );
+  }
+
+  Future<void> _showListMenu(BuildContext context) async {
+    final tokens = WorkFollowTheme.of(context);
+    final box = context.findRenderObject() as RenderBox?;
+    final anchor = box == null
+        ? const Offset(200, 200)
+        : box.localToGlobal(Offset(box.size.width - 8, box.size.height - 6));
+    final choice = await showMenu<String>(
+      context: context,
+      color: tokens.overlay,
+      position: RelativeRect.fromLTRB(
+          anchor.dx, anchor.dy, anchor.dx + 1, anchor.dy + 1),
+      items: const [
+        PopupMenuItem(value: 'rename', child: Text('重命名')),
+        PopupMenuItem(
+            value: 'delete',
+            child: Text('删除清单', style: TextStyle(color: Colors.redAccent))),
+      ],
+    );
+    if (!context.mounted) return;
+    if (choice == 'rename') {
+      await _renameList(context);
+    } else if (choice == 'delete') {
+      await _confirmDelete(context);
+    }
+  }
+
+  Future<void> _renameList(BuildContext context) async {
+    final nameController = TextEditingController(text: widget.list.name);
+    final name = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('重命名清单'),
+        content: TextField(
+          controller: nameController,
+          autofocus: true,
+          maxLength: 40,
+          onSubmitted: (value) => Navigator.of(dialogContext).pop(value),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('取消')),
+          FilledButton(
+              onPressed: () =>
+                  Navigator.of(dialogContext).pop(nameController.text),
+              child: const Text('保存')),
+        ],
+      ),
+    );
+    nameController.dispose();
+    if (name == null ||
+        name.trim().isEmpty ||
+        name.trim() == widget.list.name) {
+      return;
+    }
+    if (!widget.controller.renameList(widget.list.name, name)) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('名称为空或已存在。')));
+    }
+  }
+
+  Future<void> _confirmDelete(BuildContext context) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('删除清单？'),
+        content: Text('「${widget.list.name}」里的任务会移回收集箱，不会被删除。'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('取消')),
+          FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('删除')),
+        ],
+      ),
+    );
+    if (confirmed == true) widget.controller.deleteList(widget.list.name);
   }
 }
 

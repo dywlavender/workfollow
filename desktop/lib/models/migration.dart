@@ -81,6 +81,30 @@ class MigrationFolderRecord {
       };
 }
 
+/// One checklist entry under a task. Absent in older files, optional since.
+class MigrationSubtaskRecord {
+  const MigrationSubtaskRecord({
+    required this.id,
+    required this.title,
+    required this.completed,
+  });
+
+  final String id;
+  final String title;
+  final bool completed;
+
+  factory MigrationSubtaskRecord.fromJson(Map<String, dynamic> json) {
+    return MigrationSubtaskRecord(
+      id: _stringValue(json['id']),
+      title: _stringValue(json['title']),
+      completed: _boolValue(json['completed']),
+    );
+  }
+
+  Map<String, dynamic> toJson() =>
+      {'id': id, 'title': title, 'completed': completed};
+}
+
 class MigrationTaskRecord {
   const MigrationTaskRecord({
     required this.id,
@@ -96,6 +120,7 @@ class MigrationTaskRecord {
     required this.recurrenceConfig,
     required this.listName,
     required this.tags,
+    this.subtasks = const [],
     required this.createdAt,
     required this.updatedAt,
     required this.completedAt,
@@ -115,6 +140,7 @@ class MigrationTaskRecord {
   final Map<String, dynamic>? recurrenceConfig;
   final String listName;
   final List<String> tags;
+  final List<MigrationSubtaskRecord> subtasks;
   final String? createdAt;
   final String? updatedAt;
   final String? completedAt;
@@ -135,6 +161,7 @@ class MigrationTaskRecord {
       recurrenceConfig: _mapValue(json['recurrenceConfig']),
       listName: _stringValue(json['listName'], fallback: '收集箱'),
       tags: _stringList(json['tags']),
+      subtasks: _records(json['subtasks'], MigrationSubtaskRecord.fromJson),
       createdAt: _nullableString(json['createdAt']),
       updatedAt: _nullableString(json['updatedAt']),
       completedAt: _nullableString(json['completedAt']),
@@ -156,6 +183,7 @@ class MigrationTaskRecord {
         'recurrenceConfig': recurrenceConfig,
         'listName': listName,
         'tags': tags,
+        'subtasks': subtasks.map((item) => item.toJson()).toList(),
         'createdAt': createdAt,
         'updatedAt': updatedAt,
         'completedAt': completedAt,
