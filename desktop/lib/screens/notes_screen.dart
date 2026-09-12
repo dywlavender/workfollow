@@ -6,6 +6,7 @@ import '../models/task.dart';
 import '../state/workspace_controller.dart';
 import '../theme/workfollow_theme.dart';
 import '../widgets/app_icon_button.dart';
+import '../widgets/save_status_footer.dart';
 
 class NotesScreen extends StatefulWidget {
   const NotesScreen({super.key, required this.controller});
@@ -17,7 +18,6 @@ class NotesScreen extends StatefulWidget {
 }
 
 class _NotesScreenState extends State<NotesScreen> {
-  String selectedId = 'note-01';
   String? selectedFolderId;
   bool favoritesOnly = false;
   bool unfiledOnly = false;
@@ -27,10 +27,15 @@ class _NotesScreenState extends State<NotesScreen> {
   Widget build(BuildContext context) {
     final tokens = WorkFollowTheme.of(context);
     final notes = _visibleNotes();
+    // The selected note lives in the controller so search results (openNote)
+    // and this screen always agree on which note the editor is showing.
+    final controllerSelectedId = widget.controller.selectedNoteId;
     final selected = notes.isEmpty
         ? null
-        : notes.firstWhere((note) => note.id == selectedId,
-            orElse: () => notes.first);
+        : (controllerSelectedId != null &&
+                notes.any((note) => note.id == controllerSelectedId)
+            ? notes.firstWhere((note) => note.id == controllerSelectedId)
+            : notes.first);
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -72,10 +77,10 @@ class _NotesScreenState extends State<NotesScreen> {
               width: listWidth,
               child: _NoteListColumn(
                 notes: notes,
-                selectedId: selected?.id ?? selectedId,
+                selectedId: selected?.id,
                 newestFirst: newestFirst,
                 onSort: () => setState(() => newestFirst = !newestFirst),
-                onSelect: (id) => setState(() => selectedId = id),
+                onSelect: (id) => widget.controller.selectNote(id),
               ),
             ),
             VerticalDivider(width: 1, thickness: 1, color: tokens.border),
@@ -96,7 +101,7 @@ class _NotesScreenState extends State<NotesScreen> {
   }
 
   List<NoteItem> _visibleNotes() {
-    final notes = widget.controller.notes.where((note) {
+    final notes = widget.controller.activeNotes.where((note) {
       if (favoritesOnly) return note.isFavorite;
       if (unfiledOnly) return note.folderId == null;
       if (selectedFolderId == null) return true;
@@ -123,8 +128,9 @@ class _NotesScreenState extends State<NotesScreen> {
   Future<void> _createNote() async {
     final id = widget.controller.addNote(folderId: selectedFolderId);
     if (!mounted) return;
+    // Select through the controller so the editor pane follows immediately.
+    widget.controller.selectNote(id);
     setState(() {
-      selectedId = id;
       favoritesOnly = false;
       unfiledOnly = false;
     });
@@ -187,8 +193,6 @@ class _NotesScreenState extends State<NotesScreen> {
     );
     if (!mounted || confirmed != true) return;
     widget.controller.removeNote(id);
-    final remaining = _visibleNotes();
-    setState(() => selectedId = remaining.isEmpty ? '' : remaining.first.id);
   }
 }
 
@@ -267,20 +271,22 @@ class _FolderColumn extends StatelessWidget {
           const SizedBox(height: 6),
           _FolderItem(
               label: '全部笔记',
-              count: controller.notes.length,
+              count: controller.activeNotes.length,
               icon: Icons.notes_outlined,
               selected:
                   !favoritesOnly && !unfiledOnly && selectedFolderId == null,
               onTap: onShowAll),
           _FolderItem(
               label: '收藏',
-              count: controller.notes.where((note) => note.isFavorite).length,
+              count: controller.activeNotes
+                  .where((note) => note.isFavorite)
+                  .length,
               icon: Icons.star_border_rounded,
               selected: favoritesOnly,
               onTap: onShowFavorites),
           _FolderItem(
               label: '未归档',
-              count: controller.notes
+              count: controller.activeNotes
                   .where((note) => note.folderId == null)
                   .length,
               icon: Icons.inbox_outlined,
@@ -301,7 +307,7 @@ class _FolderColumn extends StatelessWidget {
           const SizedBox(height: 6),
           ...controller.folders.map((folder) => _FolderItem(
                 label: folder.name,
-                count: controller.notes
+                count: controller.activeNotes
                     .where((note) =>
                         note.folderId == folder.id ||
                         note.folder == folder.name)
@@ -331,7 +337,7 @@ class _NoteListColumn extends StatelessWidget {
   });
 
   final List<NoteItem> notes;
-  final String selectedId;
+  final String? selectedId;
   final bool newestFirst;
   final VoidCallback onSort;
   final ValueChanged<String> onSelect;
@@ -541,60 +547,14 @@ class _NoteEditorState extends State<_NoteEditor> {
                       ),
                     ),
                     const SizedBox(height: 26),
-                    Container(height: 1, color: tokens.border),
-                    const SizedBox(height: 24),
-                    Text('把想法写下来，任务就有了可以回来的地方。',
-                        style: TextStyle(
-                            color: tokens.textSecondary,
-                            fontSize: 14,
-                            height: 1.8)),
-                    const SizedBox(height: 27),
-                    Container(
-                      padding: const EdgeInsets.all(15),
-                      decoration: BoxDecoration(
-                          color: tokens.accentFaint,
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(
-                              color: tokens.accent.withOpacity(.12))),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Icon(Icons.storage_outlined,
-                              size: 16, color: tokens.accent),
-                          const SizedBox(width: 9),
-                          Expanded(
-                              child: Text('这条笔记保存在本机，编辑内容会自动写入本地快照。',
-                                  style: TextStyle(
-                                      color: tokens.accent,
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w600))),
-                        ],
-                      ),
-                    ),
                   ],
                 ),
               ),
             ),
           ),
-          Container(
-            padding: const EdgeInsets.fromLTRB(25, 10, 20, 12),
-            decoration: BoxDecoration(
-                border: Border(top: BorderSide(color: tokens.border))),
-            child: Row(
-              children: [
-                Icon(Icons.cloud_done_outlined,
-                    size: 14, color: tokens.success),
-                const SizedBox(width: 7),
-                Text('已自动保存',
-                    style: TextStyle(
-                        color: tokens.textTertiary,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w500)),
-                const Spacer(),
-                Text(noteUpdatedLabelFor(note.updatedAt),
-                    style: TextStyle(color: tokens.textTertiary, fontSize: 10)),
-              ],
-            ),
+          SaveStatusFooter(
+            controller: widget.controller,
+            trailing: noteUpdatedLabelFor(note.updatedAt),
           ),
         ],
       ),

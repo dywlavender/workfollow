@@ -99,6 +99,7 @@ class MigrationTaskRecord {
     required this.createdAt,
     required this.updatedAt,
     required this.completedAt,
+    this.deletedAt,
   });
 
   final String id;
@@ -117,6 +118,7 @@ class MigrationTaskRecord {
   final String? createdAt;
   final String? updatedAt;
   final String? completedAt;
+  final String? deletedAt;
 
   factory MigrationTaskRecord.fromJson(Map<String, dynamic> json) {
     return MigrationTaskRecord(
@@ -136,6 +138,7 @@ class MigrationTaskRecord {
       createdAt: _nullableString(json['createdAt']),
       updatedAt: _nullableString(json['updatedAt']),
       completedAt: _nullableString(json['completedAt']),
+      deletedAt: _nullableString(json['deletedAt']),
     );
   }
 
@@ -156,6 +159,7 @@ class MigrationTaskRecord {
         'createdAt': createdAt,
         'updatedAt': updatedAt,
         'completedAt': completedAt,
+        'deletedAt': deletedAt,
       };
 }
 

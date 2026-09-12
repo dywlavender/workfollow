@@ -5,6 +5,7 @@ import '../models/task.dart';
 import '../state/workspace_controller.dart';
 import '../theme/workfollow_theme.dart';
 import 'app_icon_button.dart';
+import 'save_status_footer.dart';
 
 class TaskInspector extends StatefulWidget {
   const TaskInspector(
@@ -280,25 +281,9 @@ class _TaskInspectorState extends State<TaskInspector> {
               ),
             ),
           ),
-          Container(
-            padding: const EdgeInsets.fromLTRB(22, 10, 22, 12),
-            decoration: BoxDecoration(
-                border: Border(top: BorderSide(color: tokens.border))),
-            child: Row(
-              children: [
-                Icon(Icons.cloud_done_outlined,
-                    size: 14, color: tokens.success),
-                const SizedBox(width: 7),
-                Text('已自动保存',
-                    style: TextStyle(
-                        color: tokens.textTertiary,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w500)),
-                const Spacer(),
-                Text(updatedLabel,
-                    style: TextStyle(color: tokens.textTertiary, fontSize: 10)),
-              ],
-            ),
+          SaveStatusFooter(
+            controller: widget.controller,
+            trailing: updatedLabel,
           ),
         ],
       ),
@@ -321,6 +306,7 @@ class _TaskInspectorState extends State<TaskInspector> {
         TaskBucket.overdue => '逾期',
         TaskBucket.today => '今天',
         TaskBucket.later => '稍后',
+        TaskBucket.unscheduled => '未安排',
       };
 
   String _reminderLabel(TaskItem task) {

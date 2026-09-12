@@ -152,6 +152,8 @@ void main() {
     expect(note.isFavorite, isTrue);
     expect(note.folderId, folder.id);
     expect(controller.removeNote(noteId), isTrue);
-    expect(controller.notes.where((item) => item.id == noteId), isEmpty);
+    // Notes go to the trash now: hidden from active lists, still recoverable.
+    expect(controller.activeNotes.where((item) => item.id == noteId), isEmpty);
+    expect(controller.deletedNotes.map((item) => item.id), contains(noteId));
   });
 }

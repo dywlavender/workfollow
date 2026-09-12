@@ -67,6 +67,12 @@ class AppRail extends StatelessWidget {
                     selected: controller.view == WorkspaceView.notes,
                     onTap: () => controller.selectView(WorkspaceView.notes),
                   ),
+                  _RailItem(
+                    label: '废纸篓',
+                    icon: Icons.delete_outline_rounded,
+                    selected: controller.view == WorkspaceView.trash,
+                    onTap: () => controller.selectView(WorkspaceView.trash),
+                  ),
                 ],
               ),
             ),

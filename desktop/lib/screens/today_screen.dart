@@ -250,8 +250,9 @@ class _TaskList extends StatelessWidget {
             selected: tasks[index].id == controller.selectedTaskId),
       );
     }
-    final overdue =
-        tasks.where((task) => task.bucket == TaskBucket.overdue).toList();
+    final overdue = tasks
+        .where((task) => task.bucket == TaskBucket.overdue && !task.completed)
+        .toList();
     final today = tasks
         .where((task) => task.bucket == TaskBucket.today && !task.completed)
         .toList();

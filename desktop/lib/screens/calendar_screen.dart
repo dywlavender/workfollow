@@ -45,15 +45,36 @@ class _CalendarScreenState extends State<CalendarScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('日历', style: TextStyle(color: tokens.textPrimary, fontSize: 22, fontWeight: FontWeight.w700, letterSpacing: -.45)),
+                    Text('日历',
+                        style: TextStyle(
+                            color: tokens.textPrimary,
+                            fontSize: 22,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: -.45)),
                     const SizedBox(height: 5),
-                    Text('把任务放回时间里。', style: TextStyle(color: tokens.textTertiary, fontSize: 11.5)),
+                    Text('把任务放回时间里。',
+                        style: TextStyle(
+                            color: tokens.textTertiary, fontSize: 11.5)),
                   ],
                 ),
               ),
-              AppIconButton(icon: Icons.chevron_left_rounded, tooltip: '上个月', onPressed: () => setState(() => month = DateTime(month.year, month.month - 1))),
-              Padding(padding: const EdgeInsets.symmetric(horizontal: 5), child: Text('${month.year} 年 ${month.month} 月', style: TextStyle(color: tokens.textPrimary, fontSize: 13, fontWeight: FontWeight.w700))),
-              AppIconButton(icon: Icons.chevron_right_rounded, tooltip: '下个月', onPressed: () => setState(() => month = DateTime(month.year, month.month + 1))),
+              AppIconButton(
+                  icon: Icons.chevron_left_rounded,
+                  tooltip: '上个月',
+                  onPressed: () => setState(
+                      () => month = DateTime(month.year, month.month - 1))),
+              Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 5),
+                  child: Text('${month.year} 年 ${month.month} 月',
+                      style: TextStyle(
+                          color: tokens.textPrimary,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700))),
+              AppIconButton(
+                  icon: Icons.chevron_right_rounded,
+                  tooltip: '下个月',
+                  onPressed: () => setState(
+                      () => month = DateTime(month.year, month.month + 1))),
               const SizedBox(width: 8),
               Material(
                 color: tokens.accentFaint,
@@ -64,12 +85,19 @@ class _CalendarScreenState extends State<CalendarScreen> {
                     selectedDay = DateTime(today.year, today.month, today.day);
                   }),
                   borderRadius: BorderRadius.circular(7),
-                  child: Padding(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7), child: Text('回到今天', style: TextStyle(color: tokens.accent, fontSize: 11, fontWeight: FontWeight.w700))),
+                  child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 7),
+                      child: Text('回到今天',
+                          style: TextStyle(
+                              color: tokens.accent,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700))),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 27),
+          const SizedBox(height: 20),
           Row(
             children: ['一', '二', '三', '四', '五', '六', '日']
                 .map(
@@ -90,9 +118,11 @@ class _CalendarScreenState extends State<CalendarScreen> {
           ),
           const SizedBox(height: 9),
           Expanded(
+            flex: 4,
             child: GridView.builder(
               physics: const NeverScrollableScrollPhysics(),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 7, mainAxisSpacing: 7, crossAxisSpacing: 7),
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 7, mainAxisSpacing: 7, crossAxisSpacing: 7),
               itemCount: cellCount,
               itemBuilder: (context, index) {
                 final dayNumber = index - leading + 1;
@@ -100,26 +130,63 @@ class _CalendarScreenState extends State<CalendarScreen> {
                 if (!inMonth) return const SizedBox.shrink();
                 final date = DateTime(month.year, month.month, dayNumber);
                 final isToday = _sameDay(date, today);
-                final isSelected = selectedDay != null && _sameDay(date, selectedDay!);
-                final count = _taskCountFor(dayNumber);
+                final isSelected =
+                    selectedDay != null && _sameDay(date, selectedDay!);
+                // Counts come from the real task dates, not the current view.
+                final count = widget.controller.tasksForDay(date).length;
                 return GestureDetector(
                   onTap: () => setState(() => selectedDay = date),
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 140),
                     padding: const EdgeInsets.fromLTRB(9, 8, 8, 7),
-                    decoration: BoxDecoration(color: isSelected ? tokens.accentSoft : tokens.inspector, borderRadius: BorderRadius.circular(9), border: Border.all(color: isSelected ? tokens.accent.withOpacity(.28) : tokens.border)),
+                    decoration: BoxDecoration(
+                        color:
+                            isSelected ? tokens.accentSoft : tokens.inspector,
+                        borderRadius: BorderRadius.circular(9),
+                        border: Border.all(
+                            color: isSelected
+                                ? tokens.accent.withOpacity(.28)
+                                : tokens.border)),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Row(
                           children: [
-                            Container(width: 23, height: 23, alignment: Alignment.center, decoration: BoxDecoration(color: isToday ? tokens.accent : Colors.transparent, shape: BoxShape.circle), child: Text('$dayNumber', style: TextStyle(color: isToday ? Colors.white : (isSelected ? tokens.accent : tokens.textSecondary), fontSize: 12, fontWeight: FontWeight.w700))),
+                            Container(
+                                width: 23,
+                                height: 23,
+                                alignment: Alignment.center,
+                                decoration: BoxDecoration(
+                                    color: isToday
+                                        ? tokens.accent
+                                        : Colors.transparent,
+                                    shape: BoxShape.circle),
+                                child: Text('$dayNumber',
+                                    style: TextStyle(
+                                        color: isToday
+                                            ? Colors.white
+                                            : (isSelected
+                                                ? tokens.accent
+                                                : tokens.textSecondary),
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w700))),
                             const Spacer(),
-                            if (count > 0) Container(width: 5, height: 5, decoration: BoxDecoration(color: tokens.accent, shape: BoxShape.circle)),
+                            if (count > 0)
+                              Container(
+                                  width: 5,
+                                  height: 5,
+                                  decoration: BoxDecoration(
+                                      color: tokens.accent,
+                                      shape: BoxShape.circle)),
                           ],
                         ),
                         const Spacer(),
-                        if (count > 0) Text('$count 件任务', style: TextStyle(color: tokens.textTertiary, fontSize: 10, fontWeight: FontWeight.w500)),
+                        if (count > 0)
+                          Text('$count 件任务',
+                              style: TextStyle(
+                                  color: tokens.textTertiary,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w500)),
                       ],
                     ),
                   ),
@@ -127,18 +194,114 @@ class _CalendarScreenState extends State<CalendarScreen> {
               },
             ),
           ),
+          if (selectedDay != null) ...[
+            Container(height: 1, color: tokens.border),
+            const SizedBox(height: 12),
+            _SelectedDayAgenda(
+                controller: widget.controller, day: selectedDay!),
+          ],
         ],
       ),
     );
   }
 
-  int _taskCountFor(int day) {
-    final count = widget.controller.visibleTasks.length;
-    if (count == 0) return 0;
-    if (day == DateTime.now().day) return count.clamp(1, 4).toInt();
-    if (day == 3 || day == 12 || day == 18) return 2;
-    return 0;
-  }
+  bool _sameDay(DateTime a, DateTime b) =>
+      a.year == b.year && a.month == b.month && a.day == b.day;
+}
 
-  bool _sameDay(DateTime a, DateTime b) => a.year == b.year && a.month == b.month && a.day == b.day;
+class _SelectedDayAgenda extends StatelessWidget {
+  const _SelectedDayAgenda({required this.controller, required this.day});
+
+  final WorkspaceController controller;
+  final DateTime day;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = WorkFollowTheme.of(context);
+    final tasks = controller.tasksForDay(day);
+    final weekday = ['一', '二', '三', '四', '五', '六', '日'][day.weekday - 1];
+    return SizedBox(
+      height: 168,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '${day.month} 月 ${day.day} 日 · 星期$weekday · ${tasks.length} 件任务',
+            style: TextStyle(
+                color: tokens.textPrimary,
+                fontSize: 13,
+                fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 8),
+          Expanded(
+            child: tasks.isEmpty
+                ? Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    child: Text('这一天没有安排任务。',
+                        style: TextStyle(
+                            color: tokens.textTertiary, fontSize: 12)),
+                  )
+                : ListView.builder(
+                    itemCount: tasks.length,
+                    itemBuilder: (context, index) {
+                      final task = tasks[index];
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 4),
+                        child: Material(
+                          color: Colors.transparent,
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(7),
+                            onTap: () => controller.openTask(task.id),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 6),
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    task.completed
+                                        ? Icons.check_circle_outline_rounded
+                                        : Icons.radio_button_unchecked_rounded,
+                                    size: 15,
+                                    color: task.completed
+                                        ? tokens.success
+                                        : tokens.accent,
+                                  ),
+                                  const SizedBox(width: 9),
+                                  Expanded(
+                                    child: Text(
+                                      task.title,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        color: task.completed
+                                            ? tokens.textTertiary
+                                            : tokens.textPrimary,
+                                        fontSize: 12.5,
+                                        fontWeight: FontWeight.w500,
+                                        decoration: task.completed
+                                            ? TextDecoration.lineThrough
+                                            : TextDecoration.none,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Text(
+                                    '${task.listName} · ${task.timeLabel ?? '全天'}',
+                                    style: TextStyle(
+                                        color: tokens.textTertiary,
+                                        fontSize: 10.5),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
 }

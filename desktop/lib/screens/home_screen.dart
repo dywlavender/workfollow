@@ -16,16 +16,28 @@ class HomeScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final tokens = WorkFollowTheme.of(context);
     final now = DateTime.now();
-    final todayTasks = controller.tasks
-        .where((task) => !task.completed && task.bucket != TaskBucket.later)
+    final tasks = controller.activeTasks;
+    final dueTodayOrOverdue = (TaskItem task) =>
+        task.bucket == TaskBucket.today || task.bucket == TaskBucket.overdue;
+    final todayTasks = tasks
+        .where((task) => !task.completed && dueTodayOrOverdue(task))
         .toList();
-    final overdueTasks = controller.tasks
+    final overdueTasks = tasks
         .where((task) => !task.completed && task.bucket == TaskBucket.overdue)
         .toList();
-    final upcomingTasks = controller.tasks
+    final upcomingTasks = tasks
         .where((task) => !task.completed && task.bucket == TaskBucket.later)
         .toList();
-    final doneToday = controller.tasks.where((task) => task.completed).length;
+    // "Done today" only counts completions recorded today, not every task
+    // that happens to be completed.
+    final doneToday = tasks.where((task) {
+      if (!task.completed) return false;
+      final completedAt = DateTime.tryParse(task.completedAt ?? '');
+      if (completedAt == null) return false;
+      return completedAt.year == now.year &&
+          completedAt.month == now.month &&
+          completedAt.day == now.day;
+    }).length;
 
     return Container(
       color: tokens.canvas,
@@ -132,7 +144,7 @@ class HomeScreen extends StatelessWidget {
                       height: 250,
                       child: _HomePanel(
                         title: '最近笔记',
-                        subtitle: '${controller.notes.length} 条个人笔记',
+                        subtitle: '${controller.activeNotes.length} 条个人笔记',
                         action: '查看全部',
                         onAction: () =>
                             controller.selectView(WorkspaceView.notes),
@@ -266,30 +278,11 @@ class _HomeTaskList extends StatelessWidget {
           _HomeTaskRow(
             task: task,
             overdue: overdue,
-            onOpen: () {
-              final view = _viewForTask(task);
-              if (view == WorkspaceView.all &&
-                  task.listName.trim().isNotEmpty) {
-                controller.selectList(task.listName);
-              } else {
-                controller.selectView(view);
-              }
-              controller.selectTask(task.id);
-            },
+            onOpen: () => controller.openTask(task.id),
             onToggle: () => controller.toggleTask(task.id),
           ),
       ],
     );
-  }
-
-  WorkspaceView _viewForTask(TaskItem task) {
-    if (task.listName == '收集箱') return WorkspaceView.inbox;
-    if (task.listName == '工作') return WorkspaceView.work;
-    if (task.listName == '学习') return WorkspaceView.study;
-    if (task.listName == '个人') return WorkspaceView.personal;
-    if (task.listName.trim().isNotEmpty) return WorkspaceView.all;
-    if (task.bucket == TaskBucket.later) return WorkspaceView.plan;
-    return WorkspaceView.today;
   }
 }
 
@@ -377,15 +370,15 @@ class _HomeNoteList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tokens = WorkFollowTheme.of(context);
-    if (controller.notes.isEmpty) {
+    if (controller.activeNotes.isEmpty) {
       return _PanelEmpty(
           icon: Icons.note_alt_outlined, label: '还没有笔记。', tokens: tokens);
     }
     return Column(
       children: [
-        for (final note in controller.notes.take(4))
+        for (final note in controller.activeNotes.take(4))
           GestureDetector(
-            onTap: () => controller.selectView(WorkspaceView.notes),
+            onTap: () => controller.openNote(note.id),
             child: Padding(
               padding: const EdgeInsets.symmetric(vertical: 5),
               child: Row(

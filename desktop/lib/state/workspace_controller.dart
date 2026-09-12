@@ -15,10 +15,14 @@ enum WorkspaceView {
   completed,
   calendar,
   notes,
+  trash,
   work,
   study,
   personal,
 }
+
+/// Reflects the real persistence state, never a fixed label.
+enum SaveStatus { saved, saving, failed }
 
 List<MigrationListRecord> _defaultLists() => const [
       MigrationListRecord(
@@ -95,95 +99,117 @@ class MigrationImportSummary {
 class WorkspaceController extends ChangeNotifier {
   WorkspaceController({LocalWorkspaceStore? store})
       : _store = store ?? LocalWorkspaceStore(),
-        _tasks = [
-          const TaskItem(
-            id: 'task-01',
-            title: '准备季度产品评审演示文稿',
-            listName: '工作',
-            bucket: TaskBucket.today,
-            timeLabel: '今天 14:00',
-            note: '把核心指标、用户反馈和下季度优先级整理成一份清晰的演示。',
-            priority: TaskPriority.high,
-            subtaskTotal: 3,
-            subtaskCompleted: 2,
-          ),
-          const TaskItem(
-            id: 'task-02',
-            title: '整理用户反馈：移动端适配问题清单',
-            listName: '工作',
-            bucket: TaskBucket.today,
-            timeLabel: '今天 18:00',
-            priority: TaskPriority.medium,
-          ),
-          const TaskItem(
-            id: 'task-03',
-            title: '给设计顾问发一封确认邮件',
-            listName: '收集箱',
-            bucket: TaskBucket.today,
-            timeLabel: '今天',
-            priority: TaskPriority.low,
-          ),
-          const TaskItem(
-            id: 'task-04',
-            title: '核对报销单据并提交财务系统',
-            listName: '工作',
-            bucket: TaskBucket.overdue,
-            timeLabel: '昨天',
-            priority: TaskPriority.high,
-          ),
-          const TaskItem(
-            id: 'task-05',
-            title: '阅读《设计心理学》第 4 章并做摘录',
-            listName: '学习',
-            bucket: TaskBucket.later,
-            timeLabel: '周日',
-            note: '记录三个可以应用到任务列表的交互细节。',
-          ),
-          const TaskItem(
-            id: 'task-06',
-            title: '为周末徒步准备一份轻量清单',
-            listName: '个人',
-            bucket: TaskBucket.later,
-            timeLabel: '周六',
-            hasAttachment: true,
-          ),
-          const TaskItem(
-            id: 'task-07',
-            title: '整理五月份的项目复盘资料',
-            listName: '工作',
-            bucket: TaskBucket.today,
-            completed: true,
-            timeLabel: '已完成 09:42',
-          ),
-        ],
-        _notes = [
-          NoteItem(
-            id: 'note-01',
-            title: '季度评审 · 叙事结构',
-            preview: '先讲变化，再解释原因，最后把决策留给下一步。',
-            updatedLabel: '刚刚',
-            folder: '工作笔记',
-            accent: ColorValue(0xFFC23377),
-          ),
-          NoteItem(
-            id: 'note-02',
-            title: '灵感收集 · 好的空状态',
-            preview: '空白不是结束，它应该告诉用户下一步可以做什么。',
-            updatedLabel: '昨天',
-            folder: '灵感',
-            accent: ColorValue(0xFF4F46E5),
-          ),
-          NoteItem(
-            id: 'note-03',
-            title: '读书摘录 · 设计心理学',
-            preview: '熟悉感来自稳定的反馈，而不是重复的装饰。',
-            updatedLabel: '8 月 24 日',
-            folder: '学习',
-            accent: ColorValue(0xFF0F766E),
-          ),
-        ],
+        _tasks = _seedTasks(),
+        _notes = _seedNotes(),
         _lists = _defaultLists(),
         _folders = _defaultFolders();
+
+  /// Starter tasks shown before any local snapshot exists. They carry real
+  /// dates so derived buckets stay consistent across a save/load round trip.
+  static List<TaskItem> _seedTasks() {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    DateTime at(int dayOffset, int hour, int minute) =>
+        DateTime(today.year, today.month, today.day + dayOffset, hour, minute);
+    return [
+      TaskItem(
+        id: 'task-01',
+        title: '准备季度产品评审演示文稿',
+        listName: '工作',
+        bucket: TaskBucket.today,
+        dueAt: at(0, 14, 0).toIso8601String(),
+        timeLabel: '今天 14:00',
+        note: '把核心指标、用户反馈和下季度优先级整理成一份清晰的演示。',
+        priority: TaskPriority.high,
+        subtaskTotal: 3,
+        subtaskCompleted: 2,
+      ),
+      TaskItem(
+        id: 'task-02',
+        title: '整理用户反馈：移动端适配问题清单',
+        listName: '工作',
+        bucket: TaskBucket.today,
+        dueAt: at(0, 18, 0).toIso8601String(),
+        timeLabel: '今天 18:00',
+        priority: TaskPriority.medium,
+      ),
+      TaskItem(
+        id: 'task-03',
+        title: '给设计顾问发一封确认邮件',
+        listName: '收集箱',
+        bucket: TaskBucket.today,
+        dueAt: at(0, 0, 0).toIso8601String(),
+        timeLabel: '今天',
+        priority: TaskPriority.low,
+      ),
+      TaskItem(
+        id: 'task-04',
+        title: '核对报销单据并提交财务系统',
+        listName: '工作',
+        bucket: TaskBucket.overdue,
+        dueAt: at(-1, 9, 0).toIso8601String(),
+        timeLabel: '昨天 09:00',
+        priority: TaskPriority.high,
+      ),
+      TaskItem(
+        id: 'task-05',
+        title: '阅读《设计心理学》第 4 章并做摘录',
+        listName: '学习',
+        bucket: TaskBucket.later,
+        dueAt: at(2, 0, 0).toIso8601String(),
+        timeLabel: '后天',
+        note: '记录三个可以应用到任务列表的交互细节。',
+      ),
+      TaskItem(
+        id: 'task-06',
+        title: '为周末徒步准备一份轻量清单',
+        listName: '个人',
+        bucket: TaskBucket.later,
+        dueAt: at(3, 0, 0).toIso8601String(),
+        timeLabel: taskTimeLabelFor(at(3, 0, 0)),
+        hasAttachment: true,
+      ),
+      TaskItem(
+        id: 'task-07',
+        title: '整理五月份的项目复盘资料',
+        listName: '工作',
+        bucket: TaskBucket.today,
+        completed: true,
+        dueAt: at(0, 9, 42).toIso8601String(),
+        timeLabel: '已完成',
+      ),
+    ];
+  }
+
+  static List<NoteItem> _seedNotes() => [
+        NoteItem(
+          id: 'note-01',
+          title: '季度评审 · 叙事结构',
+          preview: '先讲变化，再解释原因，最后把决策留给下一步。',
+          updatedLabel: '刚刚',
+          folder: '工作笔记',
+          folderId: 'folder-work',
+          accent: ColorValue(0xFFC23377),
+        ),
+        NoteItem(
+          id: 'note-02',
+          title: '灵感收集 · 好的空状态',
+          preview: '空白不是结束，它应该告诉用户下一步可以做什么。',
+          updatedLabel: '昨天',
+          folder: '灵感',
+          folderId: 'folder-ideas',
+          accent: ColorValue(0xFF4F46E5),
+        ),
+        NoteItem(
+          id: 'note-03',
+          title: '读书摘录 · 设计心理学',
+          preview: '熟悉感来自稳定的反馈，而不是重复的装饰。',
+          updatedLabel: '8 月 24 日',
+          folder: '学习',
+          folderId: 'folder-study',
+          accent: ColorValue(0xFF0F766E),
+        ),
+      ];
 
   final LocalWorkspaceStore _store;
   List<TaskItem> _tasks;
@@ -193,9 +219,10 @@ class WorkspaceController extends ChangeNotifier {
   WorkspaceView _view = WorkspaceView.home;
   String? _selectedListName;
   String? _selectedTaskId = 'task-01';
+  String? _selectedNoteId;
   String? _lastCompletedTaskId;
-  TaskItem? _lastRemovedTask;
-  int? _lastRemovedIndex;
+  String? _lastRemovedTaskId;
+  String? _lastRemovedNoteId;
   int _completionVersion = 0;
   int _actionVersion = 0;
   String _lastActionMessage = '';
@@ -204,6 +231,11 @@ class WorkspaceController extends ChangeNotifier {
   int _noteSequence = 4;
   int _folderSequence = 4;
   bool _restoredFromDisk = false;
+  SaveStatus _saveStatus = SaveStatus.saved;
+  String? _saveError;
+  DateTime? _lastSavedAt;
+  String? _loadError;
+  bool _disposed = false;
 
   WorkspaceView get view => _view;
   bool get isTaskView => switch (_view) {
@@ -218,10 +250,12 @@ class WorkspaceController extends ChangeNotifier {
           true,
         WorkspaceView.home ||
         WorkspaceView.calendar ||
-        WorkspaceView.notes =>
+        WorkspaceView.notes ||
+        WorkspaceView.trash =>
           false,
       };
   String? get selectedTaskId => _selectedTaskId;
+  String? get selectedNoteId => _selectedNoteId;
   int get completionVersion => _completionVersion;
   int get actionVersion => _actionVersion;
   String get lastActionMessage => _lastActionMessage;
@@ -240,22 +274,63 @@ class WorkspaceController extends ChangeNotifier {
         WorkspaceView.personal => '个人',
         WorkspaceView.calendar => '日历',
         WorkspaceView.notes => '笔记',
+        WorkspaceView.trash => '废纸篓',
       };
   List<TaskItem> get tasks => List.unmodifiable(_tasks);
   List<NoteItem> get notes => List.unmodifiable(_notes);
+
+  /// Tasks and notes that are not in the trash.
+  List<TaskItem> get activeTasks =>
+      List.unmodifiable(_tasks.where((task) => task.deletedAt == null));
+  List<NoteItem> get activeNotes =>
+      List.unmodifiable(_notes.where((note) => note.deletedAt == null));
+  List<TaskItem> get deletedTasks =>
+      List.unmodifiable(_tasks.where((task) => task.deletedAt != null));
+  List<NoteItem> get deletedNotes =>
+      List.unmodifiable(_notes.where((note) => note.deletedAt != null));
+
   List<MigrationListRecord> get lists => List.unmodifiable(_lists);
   List<MigrationFolderRecord> get folders => List.unmodifiable(_folders);
   bool get restoredFromDisk => _restoredFromDisk;
+  SaveStatus get saveStatus => _saveStatus;
+  String? get saveError => _saveError;
+  DateTime? get lastSavedAt => _lastSavedAt;
+  String? get loadError => _loadError;
 
-  Future<void> restoreFromDisk() async {
-    final snapshot = await _store.load();
-    if (snapshot == null) return;
-    _applyBundle(snapshot);
-    _restoredFromDisk = true;
+  @override
+  void dispose() {
+    _disposed = true;
+    super.dispose();
+  }
+
+  void _notify() {
+    if (_disposed) return;
     notifyListeners();
   }
 
+  Future<void> restoreFromDisk() async {
+    final result = await _store.load();
+    if (result.failed) {
+      // The snapshot exists but cannot be parsed. Keep the file untouched and
+      // pause auto-save instead of overwriting it with starter data.
+      _loadError = '本地快照无法解析，自动保存已暂停；原文件已保留，可通过导入数据覆盖。';
+      _saveError = result.error.toString();
+      _saveStatus = SaveStatus.failed;
+      _notify();
+      return;
+    }
+    if (result.bundle == null) return;
+    _applyBundle(result.bundle!);
+    _restoredFromDisk = true;
+    _saveStatus = SaveStatus.saved;
+    _notify();
+  }
+
   Future<MigrationImportSummary> importMigration(MigrationBundle bundle) async {
+    // Importing is a deliberate replacement, so it also lifts the auto-save
+    // pause that a damaged snapshot triggered.
+    _loadError = null;
+    _saveError = null;
     _folders = _mergeFolders(bundle.folders, _folders);
     _lists = _mergeLists(bundle.lists, _lists);
     final taskIds = _tasks.map((task) => task.id).toSet();
@@ -304,7 +379,7 @@ class WorkspaceController extends ChangeNotifier {
       _selectedTaskId = _tasks.first.id;
     }
     await _store.save(_snapshot());
-    notifyListeners();
+    _notify();
     return MigrationImportSummary(
       importedTasks: importedTasks.length,
       skippedTasks: bundle.tasks.length - importedTasks.length,
@@ -323,55 +398,83 @@ class WorkspaceController extends ChangeNotifier {
   }
 
   List<TaskItem> get visibleTasks {
+    if (_view == WorkspaceView.trash) {
+      return List.unmodifiable(_tasks.where((task) => task.deletedAt != null));
+    }
+    final active = _tasks.where((task) => task.deletedAt == null);
     if (_selectedListName != null && _view == WorkspaceView.all) {
       return List.unmodifiable(
-          _tasks.where((task) => task.listName == _selectedListName));
+          active.where((task) => task.listName == _selectedListName));
     }
     final filtered = switch (_view) {
-      WorkspaceView.home => _tasks,
-      WorkspaceView.today =>
-        _tasks.where((task) => task.bucket != TaskBucket.later),
-      WorkspaceView.inbox => _tasks.where((task) => task.listName == '收集箱'),
+      WorkspaceView.home => active,
+      WorkspaceView.today => active.where((task) =>
+          task.bucket == TaskBucket.today || task.bucket == TaskBucket.overdue),
+      WorkspaceView.inbox => active.where((task) => task.listName == '收集箱'),
       WorkspaceView.plan =>
-        _tasks.where((task) => task.bucket == TaskBucket.later),
-      WorkspaceView.all => _tasks,
-      WorkspaceView.completed => _tasks.where((task) => task.completed),
-      WorkspaceView.work => _tasks.where((task) => task.listName == '工作'),
-      WorkspaceView.study => _tasks.where((task) => task.listName == '学习'),
-      WorkspaceView.personal => _tasks.where((task) => task.listName == '个人'),
-      WorkspaceView.calendar || WorkspaceView.notes => const <TaskItem>[],
+        active.where((task) => task.bucket == TaskBucket.later),
+      WorkspaceView.all => active,
+      WorkspaceView.completed => active.where((task) => task.completed),
+      WorkspaceView.work => active.where((task) => task.listName == '工作'),
+      WorkspaceView.study => active.where((task) => task.listName == '学习'),
+      WorkspaceView.personal => active.where((task) => task.listName == '个人'),
+      WorkspaceView.calendar ||
+      WorkspaceView.notes ||
+      WorkspaceView.trash =>
+        const <TaskItem>[],
     };
     return List.unmodifiable(filtered);
   }
 
+  /// Tasks whose scheduled date falls on [day], independent of the current
+  /// navigation filters, so the calendar never borrows another view's list.
+  List<TaskItem> tasksForDay(DateTime day) {
+    return List.unmodifiable(activeTasks.where((task) {
+      if (task.dueAt == null) return false;
+      final due = DateTime.tryParse(task.dueAt!);
+      return due != null &&
+          due.year == day.year &&
+          due.month == day.month &&
+          due.day == day.day;
+    }));
+  }
+
   int countFor(WorkspaceView destination) {
+    final active = _tasks.where((task) => task.deletedAt == null);
+    final dueTodayOrOverdue = (TaskItem task) =>
+        task.bucket == TaskBucket.today || task.bucket == TaskBucket.overdue;
     return switch (destination) {
-      WorkspaceView.home => _tasks
-          .where((task) => !task.completed && task.bucket != TaskBucket.later)
+      WorkspaceView.home => active
+          .where((task) => !task.completed && dueTodayOrOverdue(task))
           .length,
-      WorkspaceView.today => _tasks
-          .where((task) => !task.completed && task.bucket != TaskBucket.later)
+      WorkspaceView.today => active
+          .where((task) => !task.completed && dueTodayOrOverdue(task))
           .length,
-      WorkspaceView.inbox => _tasks
+      WorkspaceView.inbox => active
           .where((task) => task.listName == '收集箱' && !task.completed)
           .length,
-      WorkspaceView.plan => _tasks
+      WorkspaceView.plan => active
           .where((task) => task.bucket == TaskBucket.later && !task.completed)
           .length,
-      WorkspaceView.all => _tasks.where((task) => !task.completed).length,
-      WorkspaceView.completed => _tasks.where((task) => task.completed).length,
+      WorkspaceView.all => active.where((task) => !task.completed).length,
+      WorkspaceView.completed => active.where((task) => task.completed).length,
       WorkspaceView.work =>
-        _tasks.where((task) => task.listName == '工作' && !task.completed).length,
+        active.where((task) => task.listName == '工作' && !task.completed).length,
       WorkspaceView.study =>
-        _tasks.where((task) => task.listName == '学习' && !task.completed).length,
+        active.where((task) => task.listName == '学习' && !task.completed).length,
       WorkspaceView.personal =>
-        _tasks.where((task) => task.listName == '个人' && !task.completed).length,
+        active.where((task) => task.listName == '个人' && !task.completed).length,
       WorkspaceView.calendar || WorkspaceView.notes => 0,
+      WorkspaceView.trash =>
+        _tasks.where((task) => task.deletedAt != null).length,
     };
   }
 
   int countForList(String listName) => _tasks
-      .where((task) => task.listName == listName && !task.completed)
+      .where((task) =>
+          task.listName == listName &&
+          !task.completed &&
+          task.deletedAt == null)
       .length;
 
   bool isListSelected(String listName) =>
@@ -386,7 +489,7 @@ class WorkspaceController extends ChangeNotifier {
         !available.any((task) => task.id == _selectedTaskId)) {
       _selectedTaskId = available.first.id;
     }
-    notifyListeners();
+    _notify();
   }
 
   void selectList(String listName) {
@@ -397,18 +500,65 @@ class WorkspaceController extends ChangeNotifier {
     _selectedListName = name;
     final available = visibleTasks;
     if (available.isNotEmpty) _selectedTaskId = available.first.id;
-    notifyListeners();
+    _notify();
   }
 
   void selectTask(String id) {
     if (_selectedTaskId == id) return;
     if (_tasks.every((task) => task.id != id)) return;
     _selectedTaskId = id;
-    notifyListeners();
+    _notify();
+  }
+
+  void selectNote(String id) {
+    if (_notes.every((note) => note.id != id || note.deletedAt != null)) return;
+    if (_selectedNoteId == id) return;
+    _selectedNoteId = id;
+    _notify();
+  }
+
+  /// Opens a task from search or links: lands on the view that owns it and
+  /// selects it, so the inspector always shows the requested task.
+  void openTask(String id) {
+    TaskItem? task;
+    for (final candidate in _tasks) {
+      if (candidate.id == id && candidate.deletedAt == null) {
+        task = candidate;
+        break;
+      }
+    }
+    if (task == null) return;
+    final name = task.listName.trim();
+    if (name == '收集箱') {
+      _view = WorkspaceView.inbox;
+      _selectedListName = null;
+    } else if (name.isNotEmpty) {
+      _view = WorkspaceView.all;
+      _selectedListName = name;
+    } else {
+      _view = task.bucket == TaskBucket.later
+          ? WorkspaceView.plan
+          : WorkspaceView.today;
+      _selectedListName = null;
+    }
+    _selectedTaskId = id;
+    _notify();
+  }
+
+  /// Opens a note from search: switches to Notes and selects the exact note,
+  /// so editing the second result edits that note and not the first one.
+  void openNote(String id) {
+    if (_notes.every((note) => note.id != id || note.deletedAt != null)) {
+      return;
+    }
+    _selectedNoteId = id;
+    _view = WorkspaceView.notes;
+    _notify();
   }
 
   void moveTaskToToday(String id) {
-    final index = _tasks.indexWhere((task) => task.id == id);
+    final index =
+        _tasks.indexWhere((task) => task.id == id && task.deletedAt == null);
     if (index < 0) return;
     final task = _tasks[index];
     final now = DateTime.now();
@@ -422,15 +572,15 @@ class WorkspaceController extends ChangeNotifier {
       previousDue?.minute ?? 0,
     );
     _tasks[index] = task.copyWith(
-      bucket: TaskBucket.today,
       dueAt: due.toIso8601String(),
+      bucket: taskBucketForDate(due, completed: task.completed),
+      timeLabel: taskTimeLabelFor(due, completed: task.completed),
       updatedAt: now.toIso8601String(),
-      timeLabel: task.completed ? '已完成' : taskTimeLabelFor(due),
     );
     _view = WorkspaceView.today;
     _selectedTaskId = id;
     _schedulePersist();
-    notifyListeners();
+    _notify();
   }
 
   void toggleTask(String id) {
@@ -455,7 +605,7 @@ class WorkspaceController extends ChangeNotifier {
     }
     _lastCompletedTaskId = completing ? id : null;
     _schedulePersist();
-    notifyListeners();
+    _notify();
   }
 
   bool undoLastCompletion() {
@@ -475,62 +625,144 @@ class WorkspaceController extends ChangeNotifier {
     _lastActionKind = '';
     _selectedTaskId = id;
     _schedulePersist();
-    notifyListeners();
+    _notify();
     return true;
   }
 
+  /// Soft-deletes a task: it stays in the workspace with a `deletedAt` mark,
+  /// so the trash is persistent and the promise in the undo toast is real.
   void removeTask(String id) {
     final index = _tasks.indexWhere((task) => task.id == id);
-    if (index < 0) return;
-    _lastRemovedTask = _tasks.removeAt(index);
-    _lastRemovedIndex = index;
+    if (index < 0 || _tasks[index].deletedAt != null) return;
+    final now = DateTime.now().toIso8601String();
+    _tasks[index] = _tasks[index].copyWith(deletedAt: now, updatedAt: now);
     _lastCompletedTaskId = null;
+    _lastRemovedTaskId = id;
+    _lastRemovedNoteId = null;
     _actionVersion += 1;
     _lastActionKind = 'removal';
     _lastActionMessage = '任务已移到废纸篓';
     if (_selectedTaskId == id) {
-      _selectedTaskId = _tasks.isEmpty
-          ? null
-          : _tasks[index.clamp(0, _tasks.length - 1).toInt()].id;
+      _selectedTaskId = _nextSelectableTaskId(index);
     }
     _schedulePersist();
-    notifyListeners();
+    _notify();
+  }
+
+  void restoreTask(String id) {
+    final index = _tasks.indexWhere((task) => task.id == id);
+    if (index < 0) return;
+    _tasks[index] = _tasks[index].copyWith(
+      clearDeletedAt: true,
+      updatedAt: DateTime.now().toIso8601String(),
+    );
+    _schedulePersist();
+    _notify();
+  }
+
+  void purgeTask(String id) {
+    final index = _tasks.indexWhere((task) => task.id == id);
+    if (index < 0) return;
+    _tasks.removeAt(index);
+    if (_selectedTaskId == id) _selectedTaskId = null;
+    _schedulePersist();
+    _notify();
+  }
+
+  /// Picks the task that should take the selection after [removedIndex] is
+  /// filtered out of the current view.
+  String? _nextSelectableTaskId(int removedIndex) {
+    final visible = visibleTasks;
+    if (visible.isEmpty) return null;
+    return visible[removedIndex.clamp(0, visible.length - 1).toInt()].id;
   }
 
   bool undoLastAction() {
     if (_lastActionKind == 'completion') return undoLastCompletion();
-    if (_lastActionKind != 'removal' ||
-        _lastRemovedTask == null ||
-        _lastRemovedIndex == null) return false;
-    final index = _lastRemovedIndex!.clamp(0, _tasks.length).toInt();
-    _tasks.insert(index, _lastRemovedTask!);
-    _selectedTaskId = _lastRemovedTask!.id;
-    _lastRemovedTask = null;
-    _lastRemovedIndex = null;
-    _lastActionKind = '';
-    _schedulePersist();
-    notifyListeners();
-    return true;
+    if (_lastActionKind == 'removal' && _lastRemovedTaskId != null) {
+      final index = _tasks.indexWhere((task) => task.id == _lastRemovedTaskId);
+      if (index < 0) return false;
+      _tasks[index] = _tasks[index].copyWith(
+        clearDeletedAt: true,
+        updatedAt: DateTime.now().toIso8601String(),
+      );
+      _selectedTaskId = _lastRemovedTaskId;
+      _lastRemovedTaskId = null;
+      _lastActionKind = '';
+      _schedulePersist();
+      _notify();
+      return true;
+    }
+    if (_lastActionKind == 'note-removal' && _lastRemovedNoteId != null) {
+      final index = _notes.indexWhere((note) => note.id == _lastRemovedNoteId);
+      if (index < 0) return false;
+      _notes[index] = _notes[index].copyWith(
+        clearDeletedAt: true,
+        updatedAt: DateTime.now().toIso8601String(),
+      );
+      _selectedNoteId = _lastRemovedNoteId;
+      _lastRemovedNoteId = null;
+      _lastActionKind = '';
+      _schedulePersist();
+      _notify();
+      return true;
+    }
+    return false;
   }
 
-  bool addTask(String rawTitle,
-      {TaskBucket bucket = TaskBucket.today, String listName = '收集箱'}) {
+  /// Creates a task in the current context. When no explicit list/date is
+  /// given, the active view decides: a list view keeps its list, Today
+  /// schedules for today, and capture elsewhere lands in the inbox unscheduled.
+  bool addTask(String rawTitle, {String? listName, DateTime? dueAt}) {
     final title = rawTitle.trim();
     if (title.isEmpty) return false;
-    if (_lists.every((list) => list.name != listName)) addList(listName);
+    final targetList = (listName ?? _creationListName()).trim();
+    if (targetList.isEmpty) return false;
+    final effectiveDue = dueAt ?? _creationDueDate();
+    if (_lists.every((list) => list.name != targetList)) addList(targetList);
+    final now = DateTime.now().toIso8601String();
     final task = TaskItem(
       id: 'task-${_taskSequence.toString().padLeft(2, '0')}',
       title: title,
-      listName: listName,
-      bucket: bucket,
-      timeLabel: bucket == TaskBucket.today ? '今天' : '稍后',
+      listName: targetList,
+      bucket: taskBucketForDate(effectiveDue),
+      timeLabel: taskTimeLabelFor(effectiveDue),
+      dueAt: effectiveDue?.toIso8601String(),
+      createdAt: now,
+      updatedAt: now,
     );
     _taskSequence += 1;
     _tasks = [task, ..._tasks];
     _selectedTaskId = task.id;
     _schedulePersist();
-    notifyListeners();
+    _notify();
     return true;
+  }
+
+  String _creationListName() {
+    if (_selectedListName != null) return _selectedListName!;
+    return switch (_view) {
+      WorkspaceView.inbox => '收集箱',
+      WorkspaceView.work => '工作',
+      WorkspaceView.study => '学习',
+      WorkspaceView.personal => '个人',
+      _ => '收集箱',
+    };
+  }
+
+  DateTime? _creationDueDate() {
+    // Quick capture inside Today schedules for today; everywhere else a new
+    // task stays unscheduled so capture and planning remain separate.
+    if (_view != WorkspaceView.today) return null;
+    final now = DateTime.now();
+    return DateTime(now.year, now.month, now.day);
+  }
+
+  /// Human-readable target for command palettes and menus.
+  String get creationTargetLabel {
+    final listName = _creationListName();
+    if (_creationDueDate() != null) return '$listName · 安排到今天';
+    return listName;
   }
 
   void updateSelectedTitle(String title) {
@@ -672,7 +904,7 @@ class WorkspaceController extends ChangeNotifier {
       ),
     ];
     _schedulePersist();
-    notifyListeners();
+    _notify();
     return true;
   }
 
@@ -693,7 +925,7 @@ class WorkspaceController extends ChangeNotifier {
     _folderSequence += 1;
     _folders = [..._folders, folder];
     _schedulePersist();
-    notifyListeners();
+    _notify();
     return folder;
   }
 
@@ -715,7 +947,7 @@ class WorkspaceController extends ChangeNotifier {
     _noteSequence += 1;
     _notes = [note, ..._notes];
     _schedulePersist();
-    notifyListeners();
+    _notify();
     return note.id;
   }
 
@@ -739,6 +971,9 @@ class WorkspaceController extends ChangeNotifier {
         (note) => note.copyWith(
               preview: notePreviewFromText(body),
               plainText: body,
+              // Regenerate the structured body from the edited plain text so
+              // the two fields never describe different versions.
+              contentJson: noteContentJsonFromPlainText(body),
               updatedLabel: noteUpdatedLabelFor(now),
               updatedAt: now,
             ));
@@ -773,13 +1008,40 @@ class WorkspaceController extends ChangeNotifier {
     return true;
   }
 
+  /// Soft-deletes a note into the persistent trash; the toast can undo it.
   bool removeNote(String id) {
     final index = _notes.indexWhere((note) => note.id == id);
-    if (index < 0) return false;
-    _notes = [..._notes]..removeAt(index);
+    if (index < 0 || _notes[index].deletedAt != null) return false;
+    final now = DateTime.now().toIso8601String();
+    _notes[index] = _notes[index].copyWith(deletedAt: now, updatedAt: now);
+    _lastRemovedNoteId = id;
+    _lastRemovedTaskId = null;
+    _actionVersion += 1;
+    _lastActionKind = 'note-removal';
+    _lastActionMessage = '笔记已移到废纸篓';
     _schedulePersist();
-    notifyListeners();
+    _notify();
     return true;
+  }
+
+  void restoreNote(String id) {
+    final index = _notes.indexWhere((note) => note.id == id);
+    if (index < 0) return;
+    _notes[index] = _notes[index].copyWith(
+      clearDeletedAt: true,
+      updatedAt: DateTime.now().toIso8601String(),
+    );
+    _schedulePersist();
+    _notify();
+  }
+
+  void purgeNote(String id) {
+    final index = _notes.indexWhere((note) => note.id == id);
+    if (index < 0) return;
+    _notes.removeAt(index);
+    if (_selectedNoteId == id) _selectedNoteId = null;
+    _schedulePersist();
+    _notify();
   }
 
   void moveTaskBefore(String draggedId, String targetId) {
@@ -792,7 +1054,7 @@ class WorkspaceController extends ChangeNotifier {
     _tasks.insert(adjustedTo.clamp(0, _tasks.length).toInt(), item);
     _selectedTaskId = draggedId;
     _schedulePersist();
-    notifyListeners();
+    _notify();
   }
 
   void _applyBundle(MigrationBundle bundle) {
@@ -813,9 +1075,10 @@ class WorkspaceController extends ChangeNotifier {
     _folderSequence = _nextFolderSequence();
     _selectedTaskId = _tasks.isEmpty ? null : _tasks.first.id;
     _selectedListName = null;
+    _selectedNoteId = _notes.isEmpty ? null : _notes.first.id;
     _lastCompletedTaskId = null;
-    _lastRemovedTask = null;
-    _lastRemovedIndex = null;
+    _lastRemovedTaskId = null;
+    _lastRemovedNoteId = null;
     _lastActionKind = '';
     _lastActionMessage = '';
   }
@@ -833,7 +1096,25 @@ class WorkspaceController extends ChangeNotifier {
   }
 
   void _schedulePersist() {
-    unawaited(_store.save(_snapshot()));
+    // A damaged snapshot pauses persistence: writing starter data over a file
+    // we failed to parse could destroy recoverable content. Importing lifts
+    // the pause because it is an explicit replacement.
+    if (_loadError != null) return;
+    _saveStatus = SaveStatus.saving;
+    _saveError = null;
+    unawaited(() async {
+      try {
+        final bundle = _snapshot();
+        await _store.save(bundle);
+        _lastSavedAt = DateTime.now();
+        _saveError = null;
+        _saveStatus = SaveStatus.saved;
+      } on Object catch (error) {
+        _saveError = error.toString();
+        _saveStatus = SaveStatus.failed;
+      }
+      _notify();
+    }());
   }
 
   String _folderName(String? folderId) {
@@ -934,7 +1215,7 @@ class WorkspaceController extends ChangeNotifier {
     if (index < 0) return;
     _tasks[index] = update(_tasks[index]);
     _schedulePersist();
-    notifyListeners();
+    _notify();
   }
 
   void _replaceNote(String id, NoteItem Function(NoteItem note) update) {
@@ -942,6 +1223,6 @@ class WorkspaceController extends ChangeNotifier {
     if (index < 0) return;
     _notes[index] = update(_notes[index]);
     _schedulePersist();
-    notifyListeners();
+    _notify();
   }
 }

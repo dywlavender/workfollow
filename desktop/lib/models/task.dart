@@ -4,6 +4,10 @@ enum TaskBucket {
   overdue,
   today,
   later,
+
+  /// A task without a date. It must never be grouped into Today: capture and
+  /// scheduling are separate decisions.
+  unscheduled,
 }
 
 class TaskItem {
@@ -25,6 +29,7 @@ class TaskItem {
     this.createdAt,
     this.updatedAt,
     this.completedAt,
+    this.deletedAt,
     this.priority = TaskPriority.none,
     this.completed = false,
     this.hasAttachment = false,
@@ -49,6 +54,7 @@ class TaskItem {
   final String? createdAt;
   final String? updatedAt;
   final String? completedAt;
+  final String? deletedAt;
   final TaskPriority priority;
   final bool completed;
   final bool hasAttachment;
@@ -80,6 +86,8 @@ class TaskItem {
     String? updatedAt,
     String? completedAt,
     bool clearCompletedAt = false,
+    String? deletedAt,
+    bool clearDeletedAt = false,
     TaskPriority? priority,
     bool? completed,
     bool? hasAttachment,
@@ -109,6 +117,7 @@ class TaskItem {
       updatedAt: updatedAt ?? this.updatedAt,
       completedAt:
           clearCompletedAt ? completedAt : completedAt ?? this.completedAt,
+      deletedAt: clearDeletedAt ? deletedAt : deletedAt ?? this.deletedAt,
       priority: priority ?? this.priority,
       completed: completed ?? this.completed,
       hasAttachment: hasAttachment ?? this.hasAttachment,
@@ -138,6 +147,7 @@ class TaskItem {
       createdAt: record.createdAt,
       updatedAt: record.updatedAt,
       completedAt: record.completedAt,
+      deletedAt: record.deletedAt,
       priority: TaskPriority.values.firstWhere(
         (value) => value.name.toUpperCase() == record.priority,
         orElse: () => TaskPriority.none,
@@ -164,13 +174,14 @@ class TaskItem {
       createdAt: createdAt,
       updatedAt: updatedAt,
       completedAt: completedAt,
+      deletedAt: deletedAt,
     );
   }
 }
 
 TaskBucket taskBucketForDate(DateTime? due,
     {bool completed = false, DateTime? now}) {
-  if (due == null) return TaskBucket.today;
+  if (due == null) return TaskBucket.unscheduled;
   final reference = now ?? DateTime.now();
   final startOfToday = DateTime(reference.year, reference.month, reference.day);
   final dueDay = DateTime(due.year, due.month, due.day);
@@ -182,9 +193,19 @@ TaskBucket taskBucketForDate(DateTime? due,
 String? taskTimeLabelFor(DateTime? due, {bool completed = false}) {
   if (completed) return '已完成';
   if (due == null) return null;
-  final hour = due.hour.toString().padLeft(2, '0');
-  final minute = due.minute.toString().padLeft(2, '0');
-  return '${due.month} 月 ${due.day} 日 $hour:$minute';
+  final now = DateTime.now();
+  final startOfToday = DateTime(now.year, now.month, now.day);
+  final dueDay = DateTime(due.year, due.month, due.day);
+  // A midnight timestamp means an all-day date, not a fake 00:00 deadline.
+  final hasClockTime = due.hour != 0 || due.minute != 0;
+  final clock = hasClockTime
+      ? ' ${due.hour.toString().padLeft(2, '0')}:${due.minute.toString().padLeft(2, '0')}'
+      : '';
+  final dayOffset = dueDay.difference(startOfToday).inDays;
+  if (dayOffset == 0) return '今天$clock';
+  if (dayOffset == -1) return '昨天$clock';
+  if (dayOffset == 1) return '明天$clock';
+  return '${due.month} 月 ${due.day} 日$clock';
 }
 
 enum TaskPriority {
@@ -248,6 +269,7 @@ class NoteItem {
     String? createdAt,
     String? updatedAt,
     String? deletedAt,
+    bool clearDeletedAt = false,
   }) {
     return NoteItem(
       id: id,
@@ -262,7 +284,7 @@ class NoteItem {
       isFavorite: isFavorite ?? this.isFavorite,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
-      deletedAt: deletedAt ?? this.deletedAt,
+      deletedAt: clearDeletedAt ? deletedAt : deletedAt ?? this.deletedAt,
     );
   }
 
@@ -307,6 +329,27 @@ class NoteItem {
 String notePreviewFromText(String value) {
   final compact = value.trim().replaceAll(RegExp(r'\s+'), ' ');
   return compact.length <= 110 ? compact : '${compact.substring(0, 107)}…';
+}
+
+/// The desktop editor writes plain text. Whenever the body changes, the
+/// structured content is regenerated from it so `plainText` and `contentJson`
+/// always describe the same version; imported rich content is replaced only
+/// when the user actually edits the note body.
+Map<String, dynamic> noteContentJsonFromPlainText(String body) {
+  final paragraphs = body.isEmpty
+      ? const <Map<String, dynamic>>[]
+      : body
+          .split('\n')
+          .map((line) => <String, dynamic>{
+                'type': 'paragraph',
+                'content': line.isEmpty
+                    ? <Map<String, dynamic>>[]
+                    : <Map<String, dynamic>>[
+                        {'type': 'text', 'text': line},
+                      ],
+              })
+          .toList();
+  return {'type': 'doc', 'content': paragraphs};
 }
 
 String noteUpdatedLabelFor(String? value) {

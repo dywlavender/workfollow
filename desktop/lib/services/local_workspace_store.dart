@@ -26,6 +26,18 @@ class PlatformFileService {
   }
 }
 
+/// Distinguishes "no snapshot yet" from "the snapshot exists but is damaged".
+class WorkspaceSnapshotLoad {
+  const WorkspaceSnapshotLoad({this.bundle, this.error});
+
+  final MigrationBundle? bundle;
+
+  /// The parse failure, when the snapshot file exists but cannot be read.
+  final Object? error;
+
+  bool get failed => error != null;
+}
+
 class LocalWorkspaceStore {
   LocalWorkspaceStore({PlatformFileService? platform})
       : _platform = platform ?? PlatformFileService();
@@ -35,23 +47,29 @@ class LocalWorkspaceStore {
   final PlatformFileService _platform;
   Future<void> _pendingSave = Future<void>.value();
 
-  Future<MigrationBundle?> load() async {
+  Future<WorkspaceSnapshotLoad> load() async {
     final file = await _snapshotFile();
-    if (file == null || !await file.exists()) return null;
+    if (file == null || !await file.exists()) {
+      return const WorkspaceSnapshotLoad();
+    }
     try {
-      return MigrationBundle.fromJsonString(await file.readAsString());
-    } on Object {
-      // A damaged local snapshot should not prevent the app from opening with
-      // its safe starter state. The next successful import replaces it.
-      return null;
+      return WorkspaceSnapshotLoad(
+          bundle: MigrationBundle.fromJsonString(await file.readAsString()));
+    } on Object catch (error) {
+      // The original file stays untouched; the caller must pause auto-save
+      // instead of overwriting possibly recoverable data with starter state.
+      return WorkspaceSnapshotLoad(error: error);
     }
   }
 
-  Future<void> save(MigrationBundle bundle) async {
+  Future<void> save(MigrationBundle bundle) {
     // Task interactions can emit several saves in one event loop. Serialize
     // the writes so a newer snapshot never races an older temporary file.
-    _pendingSave = _pendingSave.then((_) => _writeSnapshot(bundle));
-    await _pendingSave;
+    final result = _pendingSave.then((_) => _writeSnapshot(bundle));
+    // A failed write must not poison the queue: the caller below still sees
+    // the error, but later saves keep running.
+    _pendingSave = result.then<void>((_) {}, onError: (Object _) {});
+    return result;
   }
 
   Future<void> _writeSnapshot(MigrationBundle bundle) async {

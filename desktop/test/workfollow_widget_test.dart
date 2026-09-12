@@ -22,7 +22,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('季度评审 · 叙事结构'), findsWidgets);
-    expect(find.text('把想法写下来，任务就有了可以回来的地方。'), findsOneWidget);
+    expect(find.text('写下你的想法、会议记录或下一步行动…'), findsOneWidget);
   });
 
   testWidgets('keeps the web-aligned task navigation as a separate pane',

@@ -7,6 +7,7 @@ import 'screens/calendar_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/notes_screen.dart';
 import 'screens/today_screen.dart';
+import 'screens/trash_screen.dart';
 import 'state/workspace_controller.dart';
 import 'theme/workfollow_theme.dart';
 import 'widgets/app_icon_button.dart';
@@ -434,6 +435,8 @@ class _WorkspaceContent extends StatelessWidget {
             key: const ValueKey('calendar'), controller: controller),
         WorkspaceView.notes =>
           NotesScreen(key: const ValueKey('notes'), controller: controller),
+        WorkspaceView.trash =>
+          TrashScreen(key: const ValueKey('trash'), controller: controller),
         _ => TaskWorkspaceScreen(
             key: ValueKey(controller.view),
             controller: controller,
