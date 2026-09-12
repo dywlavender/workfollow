@@ -32,7 +32,7 @@ class HomeScreen extends StatelessWidget {
     // that happens to be completed.
     final doneToday = tasks.where((task) {
       if (!task.completed) return false;
-      final completedAt = DateTime.tryParse(task.completedAt ?? '');
+      final completedAt = localDateTimeFromStorage(task.completedAt);
       if (completedAt == null) return false;
       return completedAt.year == now.year &&
           completedAt.month == now.month &&
@@ -43,9 +43,13 @@ class HomeScreen extends StatelessWidget {
       color: tokens.canvas,
       child: LayoutBuilder(
         builder: (context, constraints) {
-          final panelWidth = constraints.maxWidth >= 1060
-              ? (constraints.maxWidth - 14) / 2
-              : constraints.maxWidth;
+          // The Wrap lives inside 28pt horizontal padding on each side. Use
+          // its actual content width; otherwise two half-width cards are
+          // always 56pt too wide and Flutter falls back to one column.
+          final contentWidth = (constraints.maxWidth - 56).clamp(0.0, double.infinity);
+          final panelWidth = contentWidth >= 1060
+              ? (contentWidth - 14) / 2
+              : contentWidth;
           return SingleChildScrollView(
             padding: const EdgeInsets.fromLTRB(28, 26, 28, 32),
             child: Column(

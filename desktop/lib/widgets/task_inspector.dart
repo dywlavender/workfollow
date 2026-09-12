@@ -402,8 +402,7 @@ class _TaskInspectorState extends State<TaskInspector> {
       };
 
   String _reminderLabel(TaskItem task) {
-    final reminder =
-        task.reminderAt == null ? null : DateTime.tryParse(task.reminderAt!);
+    final reminder = localDateTimeFromStorage(task.reminderAt);
     if (reminder == null) return '不提醒';
     return '${reminder.month} 月 ${reminder.day} 日 ${reminder.hour.toString().padLeft(2, '0')}:${reminder.minute.toString().padLeft(2, '0')}';
   }
@@ -511,7 +510,7 @@ class _TaskInspectorState extends State<TaskInspector> {
     if (action != 'pick') return;
     final current = task.dueAt == null
         ? DateTime.now()
-        : DateTime.tryParse(task.dueAt!) ?? DateTime.now();
+        : localDateTimeFromStorage(task.dueAt) ?? DateTime.now();
     final picked = await showDatePicker(
       context: context,
       initialDate: current,
@@ -519,7 +518,53 @@ class _TaskInspectorState extends State<TaskInspector> {
       lastDate: DateTime(2100),
       helpText: '选择任务日期',
     );
-    if (picked != null) widget.controller.updateTaskDue(task.id, picked);
+    if (picked == null || !context.mounted) return;
+
+    final existing = task.dueAt == null
+        ? null
+        : localDateTimeFromStorage(task.dueAt);
+    final mode = await showModalBottomSheet<String>(
+      context: context,
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.wb_sunny_outlined),
+              title: const Text('全天'),
+              subtitle: const Text('不设置具体时刻'),
+              onTap: () => Navigator.of(sheetContext).pop('allDay'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.schedule_outlined),
+              title: const Text('设置时间'),
+              subtitle: const Text('保留日期并指定时刻'),
+              onTap: () => Navigator.of(sheetContext).pop('time'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (!context.mounted || mode == null) return;
+    if (mode == 'allDay') {
+      widget.controller
+          .updateTaskDue(task.id, DateTime(picked.year, picked.month, picked.day));
+      return;
+    }
+    final initialTime = existing == null
+        ? TimeOfDay.now()
+        : TimeOfDay.fromDateTime(existing);
+    final pickedTime = await showTimePicker(
+      context: context,
+      initialTime: initialTime,
+      helpText: '选择任务时间',
+    );
+    if (pickedTime == null || !context.mounted) return;
+    widget.controller.updateTaskDue(
+      task.id,
+      DateTime(picked.year, picked.month, picked.day, pickedTime.hour,
+          pickedTime.minute),
+    );
   }
 
   Future<void> _pickReminder(BuildContext context, TaskItem task) async {
@@ -533,15 +578,43 @@ class _TaskInspectorState extends State<TaskInspector> {
     if (action != 'pick') return;
     final current = task.reminderAt == null
         ? DateTime.now()
-        : DateTime.tryParse(task.reminderAt!) ?? DateTime.now();
+        : localDateTimeFromStorage(task.reminderAt) ?? DateTime.now();
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final initialDate = DateTime(
+      current.year,
+      current.month,
+      current.day,
+    ).isBefore(today)
+        ? today
+        : DateTime(current.year, current.month, current.day);
     final picked = await showDatePicker(
       context: context,
-      initialDate: current,
-      firstDate: DateTime(2000),
+      initialDate: initialDate,
+      firstDate: today,
       lastDate: DateTime(2100),
       helpText: '选择提醒日期',
     );
-    if (picked != null) widget.controller.updateTaskReminder(task.id, picked);
+    if (picked == null || !context.mounted) return;
+    var initialTime = TimeOfDay.fromDateTime(current);
+    if (DateUtils.isSameDay(picked, today) &&
+        !current.isAfter(now)) {
+      initialTime = TimeOfDay.fromDateTime(now.add(const Duration(minutes: 5)));
+    }
+    final pickedTime = await showTimePicker(
+      context: context,
+      initialTime: initialTime,
+      helpText: '选择提醒时间',
+    );
+    if (pickedTime == null || !context.mounted) return;
+    final combined = DateTime(picked.year, picked.month, picked.day,
+        pickedTime.hour, pickedTime.minute);
+    if (!combined.isAfter(DateTime.now())) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('提醒时间必须晚于当前时间')));
+      return;
+    }
+    widget.controller.updateTaskReminder(task.id, combined);
   }
 
   Future<String?> _dateAction(BuildContext context, bool canClear,
@@ -607,7 +680,7 @@ class _TaskInspectorState extends State<TaskInspector> {
   Future<Map<String, dynamic>?> _pickRecurrenceConfig(
       BuildContext context, String type, TaskItem task) async {
     final tokens = WorkFollowTheme.of(context);
-    final due = task.dueAt == null ? null : DateTime.tryParse(task.dueAt!);
+    final due = localDateTimeFromStorage(task.dueAt);
     if (type == 'WEEKLY') {
       final weekdays = const ['一', '二', '三', '四', '五', '六', '日'];
       var weekday = (task.recurrenceConfig?['weekday'] as num?)?.toInt() ??

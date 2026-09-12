@@ -433,6 +433,7 @@ final class CapturePanelController: NSObject, NSTextFieldDelegate {
 
   private let channel: FlutterMethodChannel
   private var panel: NSPanel?
+  private weak var inputField: NSTextField?
   private var hotKeyRef: EventHotKeyRef?
 
   init(channel: FlutterMethodChannel) {
@@ -486,7 +487,7 @@ final class CapturePanelController: NSObject, NSTextFieldDelegate {
       target.setFrameOrigin(origin)
     }
     target.makeKeyAndOrderFront(nil)
-    (target.contentView as? NSTextField)?.becomeFirstResponder()
+    inputField?.becomeFirstResponder()
   }
 
   private func hidePanel() {
@@ -517,6 +518,7 @@ final class CapturePanelController: NSObject, NSTextFieldDelegate {
     field.delegate = self
     panel.contentView?.addSubview(field)
     self.panel = panel
+    self.inputField = field
     return panel
   }
 
@@ -535,13 +537,30 @@ final class CapturePanelController: NSObject, NSTextFieldDelegate {
   }
 
   private func submit() {
-    guard let field = panel?.contentView as? NSTextField else { return }
+    guard let field = inputField else { return }
     let text = field.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
-    if !text.isEmpty {
-      // Dart saves to the inbox (capture semantics: no list ceremony).
-      channel.invokeMethod("quickCapture", arguments: text)
+    guard !text.isEmpty else {
+      hidePanel()
+      return
     }
-    field.stringValue = ""
-    hidePanel()
+
+    // Let Dart confirm the write before clearing the field. If persistence or
+    // the platform channel fails, the panel stays open and the user's text is
+    // still available for another attempt.
+    channel.invokeMethod("quickCapture", arguments: text) { [weak self] response in
+      DispatchQueue.main.async {
+        guard let self, let field = self.inputField else { return }
+        if let error = response as? FlutterError {
+          NSLog("quick capture failed: \(error.message ?? error.code)")
+          return
+        }
+        guard (response as? Bool) == true else {
+          NSSound.beep()
+          return
+        }
+        field.stringValue = ""
+        self.hidePanel()
+      }
+    }
   }
 }

@@ -121,7 +121,10 @@ class _WorkFollowShellState extends State<WorkFollowShell> {
     // view the app happens to be showing.
     _captureChannel.setMethodCallHandler((call) async {
       if (call.method == 'quickCapture' && call.arguments is String) {
-        controller.addTask(call.arguments as String, listName: '收集箱');
+        // Native quick capture is deliberately independent of the main
+        // window's current page and returns an explicit acknowledgement so
+        // the native panel only clears text after a successful write request.
+        return controller.addTaskToInboxUnscheduled(call.arguments as String);
       }
       return null;
     });

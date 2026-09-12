@@ -210,6 +210,7 @@ class MigrationNoteRecord {
     required this.createdAt,
     required this.updatedAt,
     required this.deletedAt,
+    this.originalContentJson,
   });
 
   final String id;
@@ -222,6 +223,11 @@ class MigrationNoteRecord {
   final String? updatedAt;
   final String? deletedAt;
 
+  /// When the desktop editor is still in protected rich-content mode, this
+  /// keeps the imported source alongside the plain-text projection. Older
+  /// migration files simply omit the field.
+  final Map<String, dynamic>? originalContentJson;
+
   factory MigrationNoteRecord.fromJson(Map<String, dynamic> json) {
     return MigrationNoteRecord(
       id: _requiredString(json, 'id'),
@@ -233,6 +239,7 @@ class MigrationNoteRecord {
       createdAt: _nullableString(json['createdAt']),
       updatedAt: _nullableString(json['updatedAt']),
       deletedAt: _nullableString(json['deletedAt']),
+      originalContentJson: _mapValue(json['originalContentJson']),
     );
   }
 
@@ -246,6 +253,8 @@ class MigrationNoteRecord {
         'createdAt': createdAt,
         'updatedAt': updatedAt,
         'deletedAt': deletedAt,
+        if (originalContentJson != null)
+          'originalContentJson': originalContentJson,
       };
 }
 

@@ -167,7 +167,9 @@ class TaskItem {
   }
 
   factory TaskItem.fromMigration(MigrationTaskRecord record) {
-    final due = record.dueAt == null ? null : DateTime.tryParse(record.dueAt!);
+    final due = localDateTimeFromStorage(record.dueAt);
+    final dueEnd = localDateTimeFromStorage(record.dueEndAt);
+    final reminder = localDateTimeFromStorage(record.reminderAt);
     final completed = record.status == 'DONE' || record.status == 'ABANDONED';
     return TaskItem(
       id: record.id,
@@ -178,9 +180,9 @@ class TaskItem {
       note: record.description,
       description: record.description,
       contentJson: record.contentJson,
-      dueAt: record.dueAt,
-      dueEndAt: record.dueEndAt,
-      reminderAt: record.reminderAt,
+      dueAt: due?.toIso8601String(),
+      dueEndAt: dueEnd?.toIso8601String(),
+      reminderAt: reminder?.toIso8601String(),
       recurrenceType: record.recurrenceType,
       recurrenceConfig: record.recurrenceConfig,
       tags: List.unmodifiable(record.tags),
@@ -192,10 +194,10 @@ class TaskItem {
               ))
           .toList(),
       sourceNoteId: record.sourceNoteId,
-      createdAt: record.createdAt,
-      updatedAt: record.updatedAt,
-      completedAt: record.completedAt,
-      deletedAt: record.deletedAt,
+      createdAt: normalizeStoredDateTime(record.createdAt),
+      updatedAt: normalizeStoredDateTime(record.updatedAt),
+      completedAt: normalizeStoredDateTime(record.completedAt),
+      deletedAt: normalizeStoredDateTime(record.deletedAt),
       attachments: List.unmodifiable(record.attachments),
       priority: TaskPriority.values.firstWhere(
         (value) => value.name.toUpperCase() == record.priority,
@@ -291,6 +293,7 @@ class NoteItem {
     this.accent = const ColorValue(0xFF7566D9),
     this.folderId,
     this.contentJson,
+    this.originalContentJson,
     this.plainText,
     this.isFavorite = false,
     this.createdAt,
@@ -306,6 +309,7 @@ class NoteItem {
   final ColorValue accent;
   final String? folderId;
   final Map<String, dynamic>? contentJson;
+  final Map<String, dynamic>? originalContentJson;
   final String? plainText;
   final bool isFavorite;
   final String? createdAt;
@@ -321,6 +325,8 @@ class NoteItem {
     String? folderId,
     bool clearFolderId = false,
     Map<String, dynamic>? contentJson,
+    Map<String, dynamic>? originalContentJson,
+    bool clearOriginalContentJson = false,
     String? plainText,
     bool? isFavorite,
     String? createdAt,
@@ -337,6 +343,9 @@ class NoteItem {
       accent: accent ?? this.accent,
       folderId: clearFolderId ? folderId : folderId ?? this.folderId,
       contentJson: contentJson ?? this.contentJson,
+      originalContentJson: clearOriginalContentJson
+          ? originalContentJson
+          : originalContentJson ?? this.originalContentJson,
       plainText: plainText ?? this.plainText,
       isFavorite: isFavorite ?? this.isFavorite,
       createdAt: createdAt ?? this.createdAt,
@@ -345,12 +354,19 @@ class NoteItem {
     );
   }
 
+  /// Imported rich documents are kept as the source of truth until the user
+  /// explicitly converts the note to a plain-text copy.
+  bool get hasPreservedRichContent => originalContentJson != null;
+
   factory NoteItem.fromMigration(
     MigrationNoteRecord record,
     String folderName,
     ColorValue accent, {
     String? folderIdOverride,
   }) {
+    final content = record.contentJson;
+    final preserved = record.originalContentJson ??
+        (noteContentJsonHasRichStructure(content) ? content : null);
     return NoteItem(
       id: record.id,
       title: record.title,
@@ -359,12 +375,13 @@ class NoteItem {
       folder: folderName,
       accent: accent,
       folderId: folderIdOverride ?? record.folderId,
-      contentJson: record.contentJson,
+      contentJson: content,
+      originalContentJson: preserved,
       plainText: record.plainText,
       isFavorite: record.isFavorite,
-      createdAt: record.createdAt,
-      updatedAt: record.updatedAt,
-      deletedAt: record.deletedAt,
+      createdAt: normalizeStoredDateTime(record.createdAt),
+      updatedAt: normalizeStoredDateTime(record.updatedAt),
+      deletedAt: normalizeStoredDateTime(record.deletedAt),
     );
   }
 
@@ -379,6 +396,7 @@ class NoteItem {
       createdAt: createdAt,
       updatedAt: updatedAt,
       deletedAt: deletedAt,
+      originalContentJson: originalContentJson,
     );
   }
 }
@@ -388,10 +406,9 @@ String notePreviewFromText(String value) {
   return compact.length <= 110 ? compact : '${compact.substring(0, 107)}…';
 }
 
-/// The desktop editor writes plain text. Whenever the body changes, the
-/// structured content is regenerated from it so `plainText` and `contentJson`
-/// always describe the same version; imported rich content is replaced only
-/// when the user actually edits the note body.
+/// The desktop editor writes plain text for local notes. Imported rich content
+/// is protected until the user explicitly converts it, so links, lists and
+/// other unsupported nodes cannot disappear during an ordinary edit.
 Map<String, dynamic> noteContentJsonFromPlainText(String body) {
   final paragraphs = body.isEmpty
       ? const <Map<String, dynamic>>[]
@@ -409,9 +426,111 @@ Map<String, dynamic> noteContentJsonFromPlainText(String body) {
   return {'type': 'doc', 'content': paragraphs};
 }
 
+/// Converts an ISO timestamp from a migration file to the user's local time.
+/// Dart parses a `Z`/offset timestamp as UTC; comparing its raw date fields to
+/// local calendar days would put late-night UTC work on the wrong day.
+DateTime? localDateTimeFromStorage(String? value) {
+  if (value == null || value.trim().isEmpty) return null;
+  final parsed = DateTime.tryParse(value);
+  if (parsed == null) return null;
+  return parsed.isUtc ? parsed.toLocal() : parsed;
+}
+
+String? normalizeStoredDateTime(String? value) =>
+    localDateTimeFromStorage(value)?.toIso8601String();
+
+/// Returns the text projection used by the Web editor for a ProseMirror-like
+/// JSON document. Block nodes contribute a newline, while inline marks and
+/// attributes stay attached to their original nodes.
+String notePlainTextFromContentJson(Object? value) {
+  if (value is! Map) return '';
+  final type = value['type']?.toString();
+  if (type == 'text') return value['text']?.toString() ?? '';
+  if (type == 'hardBreak') return '\n';
+  final children = value['content'];
+  final text = children is List
+      ? children.map(notePlainTextFromContentJson).join()
+      : '';
+  if (const {
+    'paragraph',
+    'heading',
+    'listItem',
+    'taskItem',
+    'blockquote',
+    'codeBlock',
+  }.contains(type)) {
+    return '$text\n';
+  }
+  return text;
+}
+
+/// Plain paragraphs are the only structure produced by the local editor.
+/// Marks, lists, headings, images and other node types therefore identify a
+/// document whose source must be protected from a plain-text edit.
+bool noteContentJsonHasRichStructure(Map<String, dynamic> document) {
+  var rich = false;
+  void visit(Object? value) {
+    if (rich || value is! Map) return;
+    final type = value['type']?.toString();
+    if (type != null &&
+        !const {'doc', 'paragraph', 'text'}.contains(type)) {
+      rich = true;
+      return;
+    }
+    final marks = value['marks'];
+    if (marks is List && marks.isNotEmpty) {
+      rich = true;
+      return;
+    }
+    final children = value['content'];
+    if (children is List) {
+      for (final child in children) {
+        visit(child);
+        if (rich) return;
+      }
+    }
+  }
+
+  visit(document);
+  return rich;
+}
+
+/// Appends a new line to an imported rich document without rebuilding any of
+/// its existing nodes. Returns null for edits that touch the protected source;
+/// those edits remain a plain-text draft until explicit conversion.
+Map<String, dynamic>? appendToRichContent(
+    Map<String, dynamic> document, String newBody) {
+  final baseline = notePlainTextFromContentJson(document).trimRight();
+  final normalized = newBody;
+  if (normalized == baseline) return document;
+  if (!normalized.startsWith('$baseline\n')) return null;
+  final suffix = normalized.substring(baseline.length + 1);
+  if (suffix.isEmpty) return document;
+  final root = Map<String, dynamic>.from(document);
+  final rawChildren = root['content'];
+  final children = rawChildren is List
+      ? rawChildren
+          .whereType<Map>()
+          .map((child) => Map<String, dynamic>.from(child))
+          .toList()
+      : <Map<String, dynamic>>[];
+  for (final line in suffix.split('\n')) {
+    children.add({
+      'type': 'paragraph',
+      'content': line.isEmpty
+          ? <Map<String, dynamic>>[]
+          : <Map<String, dynamic>>[
+              {'type': 'text', 'text': line},
+            ],
+    });
+  }
+  root['content'] = children;
+  return root;
+}
+
 String noteUpdatedLabelFor(String? value) {
   if (value == null) return '刚刚';
-  final date = DateTime.tryParse(value);
+  final date = localDateTimeFromStorage(value);
   if (date == null) return '刚刚';
   final now = DateTime.now();
   final days = DateTime(now.year, now.month, now.day)

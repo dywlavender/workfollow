@@ -254,6 +254,8 @@ class WorkspaceController extends ChangeNotifier {
   DateTime? _lastSavedAt;
   String? _loadError;
   bool _disposed = false;
+  Future<void> _pendingPersist = Future<void>.value();
+  int _persistVersion = 0;
   // Notes view filters live here so menus and shortcuts (Cmd-N "new note in
   // the current folder") agree with what the screen shows.
   String? _notesFolderFilter;
@@ -582,7 +584,7 @@ class WorkspaceController extends ChangeNotifier {
   List<TaskItem> tasksForDay(DateTime day) {
     return List.unmodifiable(activeTasks.where((task) {
       if (task.dueAt == null) return false;
-      final due = DateTime.tryParse(task.dueAt!);
+      final due = localDateTimeFromStorage(task.dueAt);
       return due != null &&
           due.year == day.year &&
           due.month == day.month &&
@@ -717,8 +719,7 @@ class WorkspaceController extends ChangeNotifier {
     if (index < 0) return;
     final task = _tasks[index];
     final now = DateTime.now();
-    final previousDue =
-        task.dueAt == null ? null : DateTime.tryParse(task.dueAt!);
+    final previousDue = localDateTimeFromStorage(task.dueAt);
     final due = DateTime(
       now.year,
       now.month,
@@ -745,7 +746,7 @@ class WorkspaceController extends ChangeNotifier {
     final completing = !task.completed;
     final now = DateTime.now();
     final nowLabel = now.toIso8601String();
-    final due = task.dueAt == null ? null : DateTime.tryParse(task.dueAt!);
+    final due = localDateTimeFromStorage(task.dueAt);
     var updated = task.copyWith(
       completed: completing,
       completedAt: completing ? nowLabel : null,
@@ -776,6 +777,10 @@ class WorkspaceController extends ChangeNotifier {
     _tasks[index] = updated;
     if (spawn != null) {
       _tasks = [spawn, ..._tasks];
+      // The generated occurrence has its own identifier and reminder. Keep
+      // it in the system scheduler immediately instead of waiting for the
+      // next application launch to reconcile all tasks.
+      _syncReminderFor(spawn);
     }
     _lastCompletedTaskId = completing ? id : null;
     _lastRecurrenceSpawnId = spawn?.id;
@@ -794,14 +799,14 @@ class WorkspaceController extends ChangeNotifier {
       {required DateTime completedAt}) {
     final type = task.recurrenceType.toUpperCase();
     if (type == 'NONE') return null;
-    final due = task.dueAt == null ? null : DateTime.tryParse(task.dueAt!);
+    final due = localDateTimeFromStorage(task.dueAt);
     final nextDue =
         _nextRecurrenceDate(type, task.recurrenceConfig, due, completedAt);
     if (nextDue == null) return null;
 
     DateTime? shiftedReminder;
     if (task.reminderAt != null && due != null) {
-      final reminder = DateTime.tryParse(task.reminderAt!);
+      final reminder = localDateTimeFromStorage(task.reminderAt);
       if (reminder != null) {
         final delta = nextDue.difference(due);
         shiftedReminder = reminder.add(delta);
@@ -875,7 +880,7 @@ class WorkspaceController extends ChangeNotifier {
     final index = _tasks.indexWhere((task) => task.id == id);
     if (index < 0) return false;
     final task = _tasks[index];
-    final due = task.dueAt == null ? null : DateTime.tryParse(task.dueAt!);
+    final due = localDateTimeFromStorage(task.dueAt);
     var updated = task.copyWith(
       completed: false,
       clearCompletedAt: true,
@@ -892,6 +897,7 @@ class WorkspaceController extends ChangeNotifier {
         clearRecurrenceConfig: _lastCompletedRecurrenceConfig == null,
       );
       _tasks.removeWhere((item) => item.id == spawnId);
+      unawaited(_reminders.cancel(spawnId));
     }
     // removeWhere may have shifted positions; re-locate before writing.
     final writeIndex = _tasks.indexWhere((item) => item.id == id);
@@ -1044,6 +1050,7 @@ class WorkspaceController extends ChangeNotifier {
       _tasks[index] = updated;
       completedIds.add(id);
       _syncReminderFor(updated);
+      if (next != null) _syncReminderFor(next);
     }
     if (completedIds.isEmpty) return;
     if (spawned.isNotEmpty) _tasks = [...spawned, ..._tasks];
@@ -1076,8 +1083,7 @@ class WorkspaceController extends ChangeNotifier {
       previous[id] = task.dueAt;
       DateTime? due;
       if (day != null) {
-        final existing =
-            task.dueAt == null ? null : DateTime.tryParse(task.dueAt!);
+        final existing = localDateTimeFromStorage(task.dueAt);
         due = DateTime(day.year, day.month, day.day, existing?.hour ?? 0,
             existing?.minute ?? 0);
       }
@@ -1168,7 +1174,7 @@ class WorkspaceController extends ChangeNotifier {
       final index = _tasks.indexWhere((task) => task.id == id);
       if (index < 0) continue;
       final task = _tasks[index];
-      final due = task.dueAt == null ? null : DateTime.tryParse(task.dueAt!);
+      final due = localDateTimeFromStorage(task.dueAt);
       final rule = bulk.recurrenceRules[id];
       _tasks[index] = task.copyWith(
         completed: false,
@@ -1182,6 +1188,9 @@ class WorkspaceController extends ChangeNotifier {
     }
     final spawnIds = bulk.spawnedIds.toSet();
     if (spawnIds.isNotEmpty) {
+      for (final id in spawnIds) {
+        unawaited(_reminders.cancel(id));
+      }
       _tasks.removeWhere((task) => spawnIds.contains(task.id));
     }
     for (final id in bulk.removedIds) {
@@ -1194,7 +1203,7 @@ class WorkspaceController extends ChangeNotifier {
       final index = _tasks.indexWhere((task) => task.id == id);
       if (index < 0) return;
       final task = _tasks[index];
-      final due = value == null ? null : DateTime.tryParse(value);
+      final due = localDateTimeFromStorage(value);
       _tasks[index] = task.copyWith(
         dueAt: value,
         clearDueAt: value == null,
@@ -1227,7 +1236,7 @@ class WorkspaceController extends ChangeNotifier {
         _tasks.indexWhere((task) => task.id == id && task.deletedAt == null);
     if (index < 0) return;
     final task = _tasks[index];
-    final existing = task.dueAt == null ? null : DateTime.tryParse(task.dueAt!);
+    final existing = localDateTimeFromStorage(task.dueAt);
     updateTaskDue(
       id,
       DateTime(day.year, day.month, day.day, existing?.hour ?? 0,
@@ -1277,12 +1286,13 @@ class WorkspaceController extends ChangeNotifier {
   /// Creates a task in the current context. When no explicit list/date is
   /// given, the active view decides: a list view keeps its list, Today
   /// schedules for today, and capture elsewhere lands in the inbox unscheduled.
-  bool addTask(String rawTitle, {String? listName, DateTime? dueAt}) {
+  bool addTask(String rawTitle,
+      {String? listName, DateTime? dueAt, bool forceUnscheduled = false}) {
     final title = rawTitle.trim();
     if (title.isEmpty) return false;
     final targetList = (listName ?? _creationListName()).trim();
     if (targetList.isEmpty) return false;
-    final effectiveDue = dueAt ?? _creationDueDate();
+    final effectiveDue = forceUnscheduled ? null : dueAt ?? _creationDueDate();
     if (_lists.every((list) => list.name != targetList)) addList(targetList);
     final now = DateTime.now().toIso8601String();
     final task = TaskItem(
@@ -1302,6 +1312,14 @@ class WorkspaceController extends ChangeNotifier {
     _notify();
     return true;
   }
+
+  /// Global/menu-bar capture always means "remember this for later". It must
+  /// not inherit the page currently visible in the main window.
+  bool addTaskToInboxUnscheduled(String rawTitle) => addTask(
+        rawTitle,
+        listName: '收集箱',
+        forceUnscheduled: true,
+      );
 
   String _creationListName() {
     if (_selectedListName != null) return _selectedListName!;
@@ -1397,8 +1415,7 @@ class WorkspaceController extends ChangeNotifier {
   /// so what the user sees in the inspector matches what the system will
   /// deliver. Completing, deleting or clearing the reminder withdraws it.
   void _syncReminderFor(TaskItem task) {
-    final reminder =
-        task.reminderAt == null ? null : DateTime.tryParse(task.reminderAt!);
+    final reminder = localDateTimeFromStorage(task.reminderAt);
     final active = !task.completed &&
         task.deletedAt == null &&
         reminder != null &&
@@ -1787,17 +1804,53 @@ class WorkspaceController extends ChangeNotifier {
 
   void updateNoteBody(String id, String body) {
     final now = DateTime.now().toIso8601String();
+    final current = _notes.cast<NoteItem?>().firstWhere(
+          (note) => note?.id == id,
+          orElse: () => null,
+        );
+    if (current == null) return;
+    // For imported rich notes, preserve the original JSON. A newline-only
+    // append can be represented without touching existing links/lists; an
+    // edit to protected content stays a visible plain-text draft until the
+    // user explicitly chooses conversion in the editor.
+    final richContent = current.hasPreservedRichContent
+        ? appendToRichContent(
+            current.contentJson ?? <String, dynamic>{}, body)
+        : null;
+    final nextContent = current.hasPreservedRichContent
+        ? richContent ?? current.contentJson
+        : noteContentJsonFromPlainText(body);
     _replaceNote(
         id,
         (note) => note.copyWith(
               preview: notePreviewFromText(body),
               plainText: body,
-              // Regenerate the structured body from the edited plain text so
-              // the two fields never describe different versions.
-              contentJson: noteContentJsonFromPlainText(body),
+              contentJson: nextContent,
               updatedLabel: noteUpdatedLabelFor(now),
               updatedAt: now,
             ));
+  }
+
+  /// Explicitly discards rich formatting only after the user has chosen the
+  /// conversion action. The current plain-text draft becomes the new source.
+  bool convertNoteToPlainText(String id) {
+    final current = _notes.cast<NoteItem?>().firstWhere(
+          (note) => note?.id == id,
+          orElse: () => null,
+        );
+    if (current == null || !current.hasPreservedRichContent) return false;
+    final body = current.plainText ?? current.preview;
+    final now = DateTime.now().toIso8601String();
+    _replaceNote(
+      id,
+      (note) => note.copyWith(
+        contentJson: noteContentJsonFromPlainText(body),
+        clearOriginalContentJson: true,
+        updatedLabel: noteUpdatedLabelFor(now),
+        updatedAt: now,
+      ),
+    );
+    return true;
   }
 
   void toggleNoteFavorite(String id) {
@@ -1919,6 +1972,27 @@ class WorkspaceController extends ChangeNotifier {
     );
   }
 
+  /// Completes after all writes requested so far have finished. The app can
+  /// use this before an explicit quit without making every keystroke await IO.
+  Future<void> waitForPendingSaves() => _pendingPersist;
+
+  Future<void> _persistBundle(MigrationBundle bundle, int version) async {
+    try {
+      await _store.save(bundle);
+      // An older write can finish while a newer edit is still queued. It
+      // must not make the UI claim that the latest edit is already saved.
+      if (version != _persistVersion) return;
+      _lastSavedAt = DateTime.now();
+      _saveError = null;
+      _saveStatus = SaveStatus.saved;
+    } on Object catch (error) {
+      if (version != _persistVersion) return;
+      _saveError = error.toString();
+      _saveStatus = SaveStatus.failed;
+    }
+    _notify();
+  }
+
   void _schedulePersist() {
     // A damaged snapshot pauses persistence: writing starter data over a file
     // we failed to parse could destroy recoverable content. Importing lifts
@@ -1926,19 +2000,17 @@ class WorkspaceController extends ChangeNotifier {
     if (_loadError != null) return;
     _saveStatus = SaveStatus.saving;
     _saveError = null;
-    unawaited(() async {
-      try {
-        final bundle = _snapshot();
-        await _store.save(bundle);
-        _lastSavedAt = DateTime.now();
-        _saveError = null;
-        _saveStatus = SaveStatus.saved;
-      } on Object catch (error) {
-        _saveError = error.toString();
-        _saveStatus = SaveStatus.failed;
-      }
-      _notify();
-    }());
+    final version = ++_persistVersion;
+    final bundle = _snapshot();
+    // Keep writes ordered even for custom stores that do not serialize them
+    // internally. The error handler starts the next write rather than
+    // poisoning the chain after a failed disk operation.
+    final operation = _pendingPersist.then<void>(
+      (_) => _persistBundle(bundle, version),
+      onError: (_) => _persistBundle(bundle, version),
+    );
+    _pendingPersist = operation.then<void>((_) {}, onError: (_) {});
+    _notify();
   }
 
   String _folderName(String? folderId) {

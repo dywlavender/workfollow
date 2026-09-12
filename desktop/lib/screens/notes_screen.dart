@@ -87,9 +87,9 @@ class _NotesScreenState extends State<NotesScreen> {
           (folder != null && note.folder == folder.name);
     }).toList();
     notes.sort((a, b) {
-      final aDate = DateTime.tryParse(a.updatedAt ?? a.createdAt ?? '') ??
+      final aDate = localDateTimeFromStorage(a.updatedAt ?? a.createdAt) ??
           DateTime.fromMillisecondsSinceEpoch(0);
-      final bDate = DateTime.tryParse(b.updatedAt ?? b.createdAt ?? '') ??
+      final bDate = localDateTimeFromStorage(b.updatedAt ?? b.createdAt) ??
           DateTime.fromMillisecondsSinceEpoch(0);
       return newestFirst ? bDate.compareTo(aDate) : aDate.compareTo(bDate);
     });
@@ -355,6 +355,48 @@ class _NoteEditorState extends State<_NoteEditor> {
                     Text('最近编辑于 ${note.updatedLabel}',
                         style: TextStyle(
                             color: tokens.textTertiary, fontSize: 11)),
+                    if (note.hasPreservedRichContent) ...[
+                      const SizedBox(height: 12),
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+                        decoration: BoxDecoration(
+                          color: tokens.accentFaint,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                              color: tokens.accent.withOpacity(.16)),
+                        ),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Icon(Icons.lock_outline_rounded,
+                                size: 15, color: tokens.accent),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                '这条笔记含链接或列表等富文本。追加新行会保留原结构；如需自由改写，请先转换为纯文本副本。',
+                                style: TextStyle(
+                                    color: tokens.textSecondary,
+                                    fontSize: 11,
+                                    height: 1.4),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            TextButton(
+                              onPressed: _convertRichToPlainText,
+                              style: TextButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 7, vertical: 4),
+                                minimumSize: Size.zero,
+                                tapTargetSize:
+                                    MaterialTapTargetSize.shrinkWrap,
+                              ),
+                              child: const Text('转换'),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: 12),
                     Row(
                       children: [
@@ -491,6 +533,11 @@ class _NoteEditorState extends State<_NoteEditor> {
                 leading: const Icon(Icons.copy_outlined),
                 title: const Text('复制笔记正文'),
                 onTap: () => Navigator.of(sheetContext).pop('copy')),
+            if (widget.note.hasPreservedRichContent)
+              ListTile(
+                  leading: const Icon(Icons.text_fields_rounded),
+                  title: const Text('转换为纯文本副本'),
+                  onTap: () => Navigator.of(sheetContext).pop('convert')),
             ListTile(
                 leading: const Icon(Icons.delete_outline),
                 title: const Text('删除笔记'),
@@ -507,9 +554,31 @@ class _NoteEditorState extends State<_NoteEditor> {
       if (mounted)
         ScaffoldMessenger.of(context)
             .showSnackBar(const SnackBar(content: Text('笔记正文已复制')));
+    } else if (action == 'convert') {
+      await _convertRichToPlainText();
     } else if (action == 'delete') {
       widget.onDelete();
     }
+  }
+
+  Future<void> _convertRichToPlainText() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('转换为纯文本副本？'),
+        content: const Text('转换会移除链接、列表和其他富文本格式，但当前显示的正文会保留。原导入文件仍可从 Web 端重新导出。'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('取消')),
+          FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('转换')),
+        ],
+      ),
+    );
+    if (!mounted || confirmed != true) return;
+    widget.controller.convertNoteToPlainText(widget.note.id);
   }
 }
 
