@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../models/migration.dart';
 import '../services/local_workspace_store.dart';
+import '../services/notification_service.dart';
 import '../state/workspace_controller.dart';
 import '../theme/workfollow_theme.dart';
 import 'app_icon_button.dart';
@@ -220,6 +221,17 @@ class _SettingsPanelState extends State<_SettingsPanel> {
                               current: widget.themeMode,
                               onSelect: widget.onSetThemeMode,
                             ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 21),
+                      _SettingGroup(
+                        label: '提醒',
+                        children: [
+                          _SettingRow(
+                            label: '系统通知',
+                            description: '任务到点由系统投递提醒，点击通知打开对应任务',
+                            trailing: const _NotificationStatus(),
                           ),
                         ],
                       ),
@@ -609,5 +621,71 @@ class _ModeSegment extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+/// Shows the live notification authorization status with a one-click enable.
+class _NotificationStatus extends StatefulWidget {
+  const _NotificationStatus();
+
+  @override
+  State<_NotificationStatus> createState() => _NotificationStatusState();
+}
+
+class _NotificationStatusState extends State<_NotificationStatus> {
+  final NotificationService _notifications = NotificationService();
+  String? _status;
+  bool _requesting = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _refresh();
+  }
+
+  Future<void> _refresh() async {
+    final status = await _notifications.authorizationStatus();
+    if (mounted) setState(() => _status = status);
+  }
+
+  Future<void> _request() async {
+    setState(() => _requesting = true);
+    await _notifications.requestPermission();
+    await _refresh();
+    if (mounted) setState(() => _requesting = false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = WorkFollowTheme.of(context);
+    final label = switch (_status) {
+      'authorized' => '已授权',
+      'denied' => '已在系统设置中关闭',
+      'notDetermined' => '尚未授权',
+      _ => '检查中…',
+    };
+    return Row(mainAxisSize: MainAxisSize.min, children: [
+      Text(label,
+          style: TextStyle(
+            color:
+                _status == 'authorized' ? tokens.success : tokens.textTertiary,
+            fontSize: 11,
+          )),
+      if (_status == 'notDetermined' || _status == 'denied') ...[
+        const SizedBox(width: 8),
+        TextButton(
+          onPressed:
+              _status == 'denied' ? null : (_requesting ? null : _request),
+          style: TextButton.styleFrom(
+            foregroundColor: tokens.accent,
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+            minimumSize: Size.zero,
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          ),
+          child: Text(_status == 'denied' ? '需到系统设置' : '开启通知',
+              style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700)),
+        ),
+      ],
+    ]);
   }
 }

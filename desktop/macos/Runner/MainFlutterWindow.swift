@@ -1,5 +1,6 @@
 import Cocoa
 import FlutterMacOS
+import UserNotifications
 
 class MainFlutterWindow: NSWindow {
   private static let savedFrameKey = "WorkFollowWindowFrame"
@@ -51,6 +52,19 @@ class MainFlutterWindow: NSWindow {
         result(FlutterMethodNotImplemented)
       }
     }
+
+    let notificationChannel = FlutterMethodChannel(
+      name: "workfollow/notifications",
+      binaryMessenger: flutterViewController.engine.binaryMessenger
+    )
+    let notificationManager = NotificationManager(channel: notificationChannel)
+    notificationChannel.setMethodCallHandler { [weak notificationManager] call, result in
+      notificationManager?.handle(call, result: result)
+    }
+    // UNUserNotificationCenter.delegate is weak; the association keeps the
+    // manager alive for the window's lifetime.
+    objc_setAssociatedObject(self, &NotificationManager.associatedKey,
+                             notificationManager, .OBJC_ASSOCIATION_RETAIN)
 
     RegisterGeneratedPlugins(registry: flutterViewController)
 
@@ -219,5 +233,118 @@ private extension NSMenu {
     item.target = target
     item.representedObject = command
     addItem(item)
+  }
+}
+
+/// Schedules task reminders as system notifications and reports clicks back
+/// to Dart. Identifiers are derived from task ids so rescheduling replaces
+/// the pending request instead of duplicating it.
+class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
+  nonisolated(unsafe) static var associatedKey = "notification_manager"
+
+  private let channel: FlutterMethodChannel
+
+  init(channel: FlutterMethodChannel) {
+    self.channel = channel
+    super.init()
+    UNUserNotificationCenter.current().delegate = self
+  }
+
+  static func identifier(for taskId: String) -> String {
+    return "reminder-\(taskId)"
+  }
+
+  func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+    switch call.method {
+    case "requestPermission":
+      let center = UNUserNotificationCenter.current()
+      center.requestAuthorization(options: [.alert, .sound]) { granted, _ in
+        result(granted)
+      }
+    case "authorizationStatus":
+      let center = UNUserNotificationCenter.current()
+      center.getNotificationSettings { settings in
+        switch settings.authorizationStatus {
+        case .authorized, .provisional, .ephemeral:
+          result("authorized")
+        case .denied:
+          result("denied")
+        default:
+          result("notDetermined")
+        }
+      }
+    case "schedule":
+      guard
+        let args = call.arguments as? [String: Any],
+        let taskId = args["taskId"] as? String,
+        let title = args["title"] as? String,
+        let fireAtMillis = (args["fireAtMillis"] as? NSNumber)?.intValue
+      else {
+        result(FlutterError(code: "bad_arguments",
+                            message: "schedule 需要 taskId/title/fireAtMillis",
+                            details: nil))
+        return
+      }
+      let content = UNMutableNotificationContent()
+      content.title = title
+      if let body = args["body"] as? String, !body.isEmpty {
+        content.body = body
+      }
+      content.sound = .default
+      content.userInfo = ["taskId": taskId]
+      let fireDate = Date(timeIntervalSince1970: Double(fireAtMillis) / 1000.0)
+      let components = Calendar.current.dateComponents(
+        [.year, .month, .day, .hour, .minute], from: fireDate)
+      let trigger = UNCalendarNotificationTrigger(dateMatching: components,
+                                                  repeats: false)
+      let request = UNNotificationRequest(
+        identifier: NotificationManager.identifier(for: taskId),
+        content: content,
+        trigger: trigger)
+      UNUserNotificationCenter.current().add(request) { error in
+        result(error == nil)
+      }
+    case "cancel":
+      guard
+        let args = call.arguments as? [String: Any],
+        let taskId = args["taskId"] as? String
+      else {
+        result(false)
+        return
+      }
+      UNUserNotificationCenter.current().removePendingNotificationRequests(
+        withIdentifiers: [NotificationManager.identifier(for: taskId)])
+      result(true)
+    case "cancelAll":
+      UNUserNotificationCenter.current().removeAllPendingNotificationRequests()
+      result(true)
+    default:
+      result(FlutterMethodNotImplemented)
+    }
+  }
+
+  func userNotificationCenter(
+    _ center: UNUserNotificationCenter,
+    willPresent notification: UNNotification,
+    withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
+  ) {
+    // Show the banner even while the app is in the foreground.
+    if #available(macOS 12.0, *) {
+      completionHandler([.banner, .sound])
+    } else {
+      completionHandler([.alert, .sound])
+    }
+  }
+
+  func userNotificationCenter(
+    _ center: UNUserNotificationCenter,
+    didReceive response: UNNotificationResponse,
+    withCompletionHandler completionHandler: @escaping () -> Void
+  ) {
+    if let taskId = response.notification.request.content.userInfo["taskId"]
+      as? String {
+      channel.invokeMethod("notificationClicked", arguments: taskId)
+    }
+    completionHandler()
   }
 }

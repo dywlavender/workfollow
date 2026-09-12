@@ -7,6 +7,7 @@ import 'package:workfollow_personal/app.dart';
 import 'package:workfollow_personal/models/migration.dart';
 import 'package:workfollow_personal/models/task.dart';
 import 'package:workfollow_personal/services/local_workspace_store.dart';
+import 'package:workfollow_personal/services/notification_service.dart';
 import 'package:workfollow_personal/services/preferences_store.dart';
 import 'package:workfollow_personal/state/workspace_controller.dart';
 
@@ -16,6 +17,7 @@ class _FakeStore extends LocalWorkspaceStore {
   final List<MigrationBundle> saved = [];
   Object? failNextSave;
   Object? loadError;
+  MigrationBundle? loadBundle;
 
   @override
   Future<void> save(MigrationBundle bundle) async {
@@ -34,8 +36,49 @@ class _FakeStore extends LocalWorkspaceStore {
       loadError = null;
       return WorkspaceSnapshotLoad(error: error);
     }
+    if (loadBundle != null) return WorkspaceSnapshotLoad(bundle: loadBundle);
     return const WorkspaceSnapshotLoad();
   }
+}
+
+/// Records reminder scheduling so tests can assert the controller keeps
+/// system notifications in sync with task state.
+class _RecordingReminders implements ReminderScheduler {
+  final Map<String, DateTime> scheduled = {};
+  final List<String> canceled = [];
+  int cancelAllCount = 0;
+
+  @override
+  Future<bool> requestPermission() async => true;
+
+  @override
+  Future<String?> authorizationStatus() async => 'authorized';
+
+  @override
+  Future<void> schedule({
+    required String taskId,
+    required String title,
+    String? body,
+    required DateTime at,
+  }) async {
+    canceled.remove(taskId);
+    scheduled[taskId] = at;
+  }
+
+  @override
+  Future<void> cancel(String taskId) async {
+    scheduled.remove(taskId);
+    canceled.add(taskId);
+  }
+
+  @override
+  Future<void> cancelAll() async {
+    scheduled.clear();
+    cancelAllCount += 1;
+  }
+
+  @override
+  set onNotificationClicked(void Function(String taskId)? handler) {}
 }
 
 Future<void> _settleSaves(WorkspaceController controller) async {
@@ -535,10 +578,146 @@ void main() {
     expect(persisted?['themeMode'], ThemeMode.dark.name);
 
     // A UniqueKey forces a remount, so initState restores from the file.
-    await tester.pumpWidget(
-        WorkFollowApp(key: UniqueKey(), preferencesStore: store));
+    await tester
+        .pumpWidget(WorkFollowApp(key: UniqueKey(), preferencesStore: store));
     await tester.pumpAndSettle();
     expect(find.byTooltip('切换浅色'), findsOneWidget);
+  });
+
+  test(
+      'setting a future reminder registers a notification; clearing withdraws it',
+      () async {
+    final reminders = _RecordingReminders();
+    final controller = WorkspaceController(reminderScheduler: reminders);
+
+    controller.updateTaskReminder(
+        'task-01', DateTime.now().add(const Duration(days: 30)));
+    await _settleSaves(controller);
+    expect(reminders.scheduled.keys, contains('task-01'));
+
+    controller.updateTaskReminder('task-01', null);
+    await _settleSaves(controller);
+    expect(reminders.scheduled.containsKey('task-01'), isFalse);
+    expect(reminders.canceled, contains('task-01'));
+  });
+
+  test('completing withdraws the reminder; undo re-registers it', () async {
+    final reminders = _RecordingReminders();
+    final controller = WorkspaceController(reminderScheduler: reminders);
+    controller.updateTaskReminder(
+        'task-01', DateTime.now().add(const Duration(days: 30)));
+    await _settleSaves(controller);
+    reminders.scheduled.clear();
+    reminders.canceled.clear();
+
+    controller.toggleTask('task-01');
+    await _settleSaves(controller);
+    expect(reminders.scheduled, isEmpty);
+    expect(reminders.canceled, contains('task-01'));
+
+    expect(controller.undoLastCompletion(), isTrue);
+    await _settleSaves(controller);
+    expect(reminders.scheduled.keys, contains('task-01'));
+  });
+
+  test('moving a task to the trash withdraws; restoring re-registers',
+      () async {
+    final reminders = _RecordingReminders();
+    final controller = WorkspaceController(reminderScheduler: reminders);
+    controller.updateTaskReminder(
+        'task-01', DateTime.now().add(const Duration(days: 30)));
+    await _settleSaves(controller);
+    reminders.scheduled.clear();
+    reminders.canceled.clear();
+
+    controller.removeTask('task-01');
+    await _settleSaves(controller);
+    expect(reminders.scheduled, isEmpty);
+
+    controller.undoLastAction();
+    await _settleSaves(controller);
+    expect(reminders.scheduled.keys, contains('task-01'));
+  });
+
+  test('startup reconciles reminders: only active future ones stay registered',
+      () async {
+    final reminders = _RecordingReminders();
+    final store = _FakeStore();
+    final futureReminder = DateTime.now().add(const Duration(days: 7));
+    store.loadBundle = MigrationBundle(
+      format: localSnapshotFormat,
+      schemaVersion: migrationSchemaVersion,
+      exportedAt: null,
+      lists: const [],
+      folders: const [],
+      tasks: [
+        MigrationTaskRecord(
+          id: 'web-1',
+          title: '未来提醒',
+          description: null,
+          contentJson: null,
+          status: 'TODO',
+          priority: 'NONE',
+          dueAt: null,
+          dueEndAt: null,
+          reminderAt: futureReminder.toIso8601String(),
+          recurrenceType: 'NONE',
+          recurrenceConfig: null,
+          listName: '收集箱',
+          tags: [],
+          createdAt: null,
+          updatedAt: null,
+          completedAt: null,
+        ),
+        MigrationTaskRecord(
+          id: 'web-2',
+          title: '已完成带提醒',
+          description: null,
+          contentJson: null,
+          status: 'DONE',
+          priority: 'NONE',
+          dueAt: null,
+          dueEndAt: null,
+          reminderAt: futureReminder.toIso8601String(),
+          recurrenceType: 'NONE',
+          recurrenceConfig: null,
+          listName: '收集箱',
+          tags: [],
+          createdAt: null,
+          updatedAt: null,
+          completedAt: null,
+        ),
+        MigrationTaskRecord(
+          id: 'web-3',
+          title: '过期提醒',
+          description: null,
+          contentJson: null,
+          status: 'TODO',
+          priority: 'NONE',
+          dueAt: null,
+          dueEndAt: null,
+          reminderAt: DateTime.now()
+              .subtract(const Duration(days: 1))
+              .toIso8601String(),
+          recurrenceType: 'NONE',
+          recurrenceConfig: null,
+          listName: '收集箱',
+          tags: [],
+          createdAt: null,
+          updatedAt: null,
+          completedAt: null,
+        ),
+      ],
+      notes: const [],
+    );
+    final controller =
+        WorkspaceController(store: store, reminderScheduler: reminders);
+
+    await controller.restoreFromDisk();
+    await _settleSaves(controller);
+
+    expect(reminders.cancelAllCount, 1);
+    expect(reminders.scheduled.keys, ['web-1']);
   });
 
   testWidgets('command palette opens, searches and creates tasks',

@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import '../models/migration.dart';
 import '../models/task.dart';
 import '../services/local_workspace_store.dart';
+import '../services/notification_service.dart';
 
 enum WorkspaceView {
   home,
@@ -97,12 +98,17 @@ class MigrationImportSummary {
 }
 
 class WorkspaceController extends ChangeNotifier {
-  WorkspaceController({LocalWorkspaceStore? store})
+  WorkspaceController(
+      {LocalWorkspaceStore? store, ReminderScheduler? reminderScheduler})
       : _store = store ?? LocalWorkspaceStore(),
+        _reminders = reminderScheduler ?? NotificationService(),
         _tasks = _seedTasks(),
         _notes = _seedNotes(),
         _lists = _defaultLists(),
-        _folders = _defaultFolders();
+        _folders = _defaultFolders() {
+    // Clicking a delivered reminder opens the task.
+    _reminders.onNotificationClicked = openTask;
+  }
 
   /// Starter tasks shown before any local snapshot exists. They carry real
   /// dates so derived buckets stay consistent across a save/load round trip.
@@ -217,6 +223,7 @@ class WorkspaceController extends ChangeNotifier {
       ];
 
   final LocalWorkspaceStore _store;
+  final ReminderScheduler _reminders;
   List<TaskItem> _tasks;
   List<NoteItem> _notes;
   List<MigrationListRecord> _lists;
@@ -406,6 +413,7 @@ class WorkspaceController extends ChangeNotifier {
     _applyBundle(result.bundle!);
     _restoredFromDisk = true;
     _saveStatus = SaveStatus.saved;
+    await _syncAllReminders();
     _notify();
   }
 
@@ -462,6 +470,7 @@ class WorkspaceController extends ChangeNotifier {
       _selectedTaskId = _tasks.first.id;
     }
     await _store.save(_snapshot());
+    await _syncAllReminders();
     _notify();
     return MigrationImportSummary(
       importedTasks: importedTasks.length,
@@ -520,6 +529,7 @@ class WorkspaceController extends ChangeNotifier {
     _lastActionKind = '';
     _lastActionMessage = '';
     await _store.save(_snapshot());
+    await _syncAllReminders();
     _notify();
     return MigrationImportSummary(
       importedTasks: _tasks.length,
@@ -772,6 +782,7 @@ class WorkspaceController extends ChangeNotifier {
     _lastCompletedRecurrenceType = spawn != null ? task.recurrenceType : null;
     _lastCompletedRecurrenceConfig =
         spawn != null ? task.recurrenceConfig : null;
+    _syncReminderFor(updated);
     _schedulePersist();
     _notify();
   }
@@ -895,6 +906,7 @@ class WorkspaceController extends ChangeNotifier {
     if (_tasks.any((item) => item.id == id)) {
       _selectedTaskId = id;
     }
+    _syncReminderFor(updated);
     _schedulePersist();
     _notify();
     return true;
@@ -907,6 +919,7 @@ class WorkspaceController extends ChangeNotifier {
     if (index < 0 || _tasks[index].deletedAt != null) return;
     final now = DateTime.now().toIso8601String();
     _tasks[index] = _tasks[index].copyWith(deletedAt: now, updatedAt: now);
+    _syncReminderFor(_tasks[index]);
     _lastCompletedTaskId = null;
     _lastRemovedTaskId = id;
     _lastRemovedNoteId = null;
@@ -927,6 +940,7 @@ class WorkspaceController extends ChangeNotifier {
       clearDeletedAt: true,
       updatedAt: DateTime.now().toIso8601String(),
     );
+    _syncReminderFor(_tasks[index]);
     _schedulePersist();
     _notify();
   }
@@ -934,6 +948,7 @@ class WorkspaceController extends ChangeNotifier {
   void purgeTask(String id) {
     final index = _tasks.indexWhere((task) => task.id == id);
     if (index < 0) return;
+    unawaited(_reminders.cancel(id));
     _tasks.removeAt(index);
     if (_selectedTaskId == id) _selectedTaskId = null;
     _schedulePersist();
@@ -1028,6 +1043,7 @@ class WorkspaceController extends ChangeNotifier {
       }
       _tasks[index] = updated;
       completedIds.add(id);
+      _syncReminderFor(updated);
     }
     if (completedIds.isEmpty) return;
     if (spawned.isNotEmpty) _tasks = [...spawned, ..._tasks];
@@ -1124,6 +1140,7 @@ class WorkspaceController extends ChangeNotifier {
       if (index < 0) continue;
       if (_tasks[index].deletedAt != null) continue;
       _tasks[index] = _tasks[index].copyWith(deletedAt: now, updatedAt: now);
+      _syncReminderFor(_tasks[index]);
       removedIds.add(id);
     }
     if (removedIds.isEmpty) return;
@@ -1193,6 +1210,10 @@ class WorkspaceController extends ChangeNotifier {
       if (index < 0) return;
       _tasks[index] = _tasks[index].copyWith(listName: value, updatedAt: now);
     });
+    for (final id in [...bulk.completedIds, ...bulk.removedIds]) {
+      final index = _tasks.indexWhere((task) => task.id == id);
+      if (index >= 0) _syncReminderFor(_tasks[index]);
+    }
     _lastBulkUndo = null;
     _lastActionKind = '';
     _endBulkSelection();
@@ -1228,6 +1249,7 @@ class WorkspaceController extends ChangeNotifier {
         clearDeletedAt: true,
         updatedAt: DateTime.now().toIso8601String(),
       );
+      _syncReminderFor(_tasks[index]);
       _selectedTaskId = _lastRemovedTaskId;
       _lastRemovedTaskId = null;
       _lastActionKind = '';
@@ -1371,6 +1393,41 @@ class WorkspaceController extends ChangeNotifier {
     );
   }
 
+  /// Registers or withdraws the system notification for one task's reminder,
+  /// so what the user sees in the inspector matches what the system will
+  /// deliver. Completing, deleting or clearing the reminder withdraws it.
+  void _syncReminderFor(TaskItem task) {
+    final reminder =
+        task.reminderAt == null ? null : DateTime.tryParse(task.reminderAt!);
+    final active = !task.completed &&
+        task.deletedAt == null &&
+        reminder != null &&
+        reminder.isAfter(DateTime.now());
+    if (!active) {
+      unawaited(_reminders.cancel(task.id));
+      return;
+    }
+    unawaited(() async {
+      // requestAuthorization returns immediately once already determined.
+      await _reminders.requestPermission();
+      await _reminders.schedule(
+        taskId: task.id,
+        title: task.title,
+        body: '打勾 · ${task.listName}',
+        at: reminder,
+      );
+    }());
+  }
+
+  Future<void> _syncAllReminders() async {
+    // Reconcile from scratch on startup and wholesale imports: cheaper and
+    // more reliable than diffing against system state.
+    await _reminders.cancelAll();
+    for (final task in activeTasks) {
+      _syncReminderFor(task);
+    }
+  }
+
   void updateTaskReminder(String id, DateTime? reminder) {
     final normalized = reminder == null
         ? null
@@ -1384,6 +1441,8 @@ class WorkspaceController extends ChangeNotifier {
         updatedAt: DateTime.now().toIso8601String(),
       ),
     );
+    final updated = _tasks.where((task) => task.id == id).firstOrNull;
+    if (updated != null) _syncReminderFor(updated);
   }
 
   void updateTaskRecurrence(String id, String type,
