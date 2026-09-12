@@ -51,7 +51,6 @@ class WorkFollowShell extends StatefulWidget {
 class _WorkFollowShellState extends State<WorkFollowShell> {
   late final WorkspaceController controller;
   bool sidebarCollapsed = false;
-  bool taskNavigationCollapsed = false;
   bool showUndo = false;
   String undoMessage = '';
   int lastSeenActionVersion = 0;
@@ -274,14 +273,7 @@ class _WorkFollowShellState extends State<WorkFollowShell> {
                                 onOpenFilters: _openFilters,
                                 onNewTask: _newTask),
                             Expanded(
-                              child: _WorkspaceContent(
-                                controller: controller,
-                                taskNavigationCollapsed:
-                                    taskNavigationCollapsed,
-                                onToggleTaskNavigation: () => setState(() =>
-                                    taskNavigationCollapsed =
-                                        !taskNavigationCollapsed),
-                              ),
+                              child: _WorkspaceContent(controller: controller),
                             ),
                           ],
                         ),
@@ -438,15 +430,9 @@ class _ToolbarSearchState extends State<_ToolbarSearch> {
 }
 
 class _WorkspaceContent extends StatelessWidget {
-  const _WorkspaceContent({
-    required this.controller,
-    required this.taskNavigationCollapsed,
-    required this.onToggleTaskNavigation,
-  });
+  const _WorkspaceContent({required this.controller});
 
   final WorkspaceController controller;
-  final bool taskNavigationCollapsed;
-  final VoidCallback onToggleTaskNavigation;
 
   @override
   Widget build(BuildContext context) {
@@ -467,11 +453,9 @@ class _WorkspaceContent extends StatelessWidget {
           NotesScreen(key: const ValueKey('notes'), controller: controller),
         WorkspaceView.trash =>
           TrashScreen(key: const ValueKey('trash'), controller: controller),
-        _ => TaskWorkspaceScreen(
+        _ => TodayScreen(
             key: ValueKey(controller.view),
             controller: controller,
-            navigationCollapsed: taskNavigationCollapsed,
-            onToggleNavigation: onToggleTaskNavigation,
           ),
       },
     );

@@ -26,9 +26,6 @@ class _NotesScreenState extends State<NotesScreen> {
   Widget build(BuildContext context) {
     final tokens = WorkFollowTheme.of(context);
     final controller = widget.controller;
-    final selectedFolderId = controller.notesFolderFilter;
-    final favoritesOnly = controller.notesFavoritesOnly;
-    final unfiledOnly = controller.notesUnfiledOnly;
     final notes = _visibleNotes();
     // The selected note lives in the controller so search results (openNote)
     // and this screen always agree on which note the editor is showing.
@@ -42,25 +39,9 @@ class _NotesScreenState extends State<NotesScreen> {
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final folderWidth = constraints.maxWidth >= 980 ? 218.0 : 190.0;
         final listWidth = constraints.maxWidth >= 980 ? 300.0 : 260.0;
         return Row(
           children: [
-            _FolderColumn(
-              width: folderWidth,
-              controller: controller,
-              selectedFolderId: selectedFolderId,
-              favoritesOnly: favoritesOnly,
-              unfiledOnly: unfiledOnly,
-              onCreateNote: _createNote,
-              onCreateFolder: _createFolder,
-              onShowAll: controller.clearNotesFilters,
-              onShowFavorites: () => controller.setNotesFavoritesOnly(true),
-              onShowUnfiled: () => controller.setNotesUnfiledOnly(true),
-              onSelectFolder: (folder) =>
-                  controller.setNotesFolderFilter(folder.id),
-            ),
-            VerticalDivider(width: 1, thickness: 1, color: tokens.border),
             SizedBox(
               width: listWidth,
               child: _NoteListColumn(
@@ -115,46 +96,6 @@ class _NotesScreenState extends State<NotesScreen> {
     return notes;
   }
 
-  Future<void> _createNote() async {
-    // Creates in the folder the view currently shows and selects it.
-    widget.controller.addNoteInCurrentFolder();
-  }
-
-  Future<void> _createFolder() async {
-    final nameController = TextEditingController();
-    final name = await showDialog<String>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('新建文件夹'),
-        content: TextField(
-          controller: nameController,
-          autofocus: true,
-          maxLength: 40,
-          decoration: const InputDecoration(hintText: '例如：旅行灵感'),
-          onSubmitted: (value) => Navigator.of(dialogContext).pop(value),
-        ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(),
-              child: const Text('取消')),
-          FilledButton(
-              onPressed: () =>
-                  Navigator.of(dialogContext).pop(nameController.text),
-              child: const Text('创建')),
-        ],
-      ),
-    );
-    nameController.dispose();
-    if (!mounted || name == null) return;
-    final folder = widget.controller.addFolder(name);
-    if (folder == null) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('文件夹名称为空，或已经存在。')));
-      return;
-    }
-    widget.controller.setNotesFolderFilter(folder.id);
-  }
-
   Future<void> _deleteNote(String id) async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -188,121 +129,6 @@ class _EmptyNoteEditor extends StatelessWidget {
       alignment: Alignment.center,
       child: Text('还没有笔记，从左上角开始记录。',
           style: TextStyle(color: tokens.textTertiary, fontSize: 13)),
-    );
-  }
-}
-
-class _FolderColumn extends StatelessWidget {
-  const _FolderColumn({
-    required this.width,
-    required this.controller,
-    required this.selectedFolderId,
-    required this.favoritesOnly,
-    required this.unfiledOnly,
-    required this.onCreateNote,
-    required this.onCreateFolder,
-    required this.onShowAll,
-    required this.onShowFavorites,
-    required this.onShowUnfiled,
-    required this.onSelectFolder,
-  });
-
-  final double width;
-  final WorkspaceController controller;
-  final String? selectedFolderId;
-  final bool favoritesOnly;
-  final bool unfiledOnly;
-  final VoidCallback onCreateNote;
-  final VoidCallback onCreateFolder;
-  final VoidCallback onShowAll;
-  final VoidCallback onShowFavorites;
-  final VoidCallback onShowUnfiled;
-  final ValueChanged<MigrationFolderRecord> onSelectFolder;
-
-  @override
-  Widget build(BuildContext context) {
-    final tokens = WorkFollowTheme.of(context);
-    return Container(
-      width: width,
-      color: tokens.sidebar,
-      padding: const EdgeInsets.fromLTRB(16, 20, 12, 18),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                  child: Text('笔记',
-                      style: TextStyle(
-                          color: tokens.textPrimary,
-                          fontSize: 19,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: -.35))),
-              AppIconButton(
-                  icon: Icons.add,
-                  tooltip: '新建笔记',
-                  size: 28,
-                  iconSize: 17,
-                  onPressed: onCreateNote),
-            ],
-          ),
-          const SizedBox(height: 22),
-          _NoteGroupHeading(label: '视图'),
-          const SizedBox(height: 6),
-          _FolderItem(
-              label: '全部笔记',
-              count: controller.activeNotes.length,
-              icon: Icons.notes_outlined,
-              selected:
-                  !favoritesOnly && !unfiledOnly && selectedFolderId == null,
-              onTap: onShowAll),
-          _FolderItem(
-              label: '收藏',
-              count: controller.activeNotes
-                  .where((note) => note.isFavorite)
-                  .length,
-              icon: Icons.star_border_rounded,
-              selected: favoritesOnly,
-              onTap: onShowFavorites),
-          _FolderItem(
-              label: '未归档',
-              count: controller.activeNotes
-                  .where((note) => note.folderId == null)
-                  .length,
-              icon: Icons.inbox_outlined,
-              selected: unfiledOnly,
-              onTap: onShowUnfiled),
-          const SizedBox(height: 23),
-          Row(
-            children: [
-              Expanded(child: _NoteGroupHeading(label: '文件夹')),
-              AppIconButton(
-                  icon: Icons.create_new_folder_outlined,
-                  tooltip: '新建文件夹',
-                  size: 26,
-                  iconSize: 15,
-                  onPressed: onCreateFolder),
-            ],
-          ),
-          const SizedBox(height: 6),
-          ...controller.folders.map((folder) => _FolderItem(
-                label: folder.name,
-                count: controller.activeNotes
-                    .where((note) =>
-                        note.folderId == folder.id ||
-                        note.folder == folder.name)
-                    .length,
-                icon: Icons.folder_outlined,
-                selected: !favoritesOnly &&
-                    !unfiledOnly &&
-                    selectedFolderId == folder.id,
-                onTap: () => onSelectFolder(folder),
-              )),
-          const Spacer(),
-          Text('本地笔记空间',
-              style: TextStyle(color: tokens.textTertiary, fontSize: 10)),
-        ],
-      ),
     );
   }
 }
@@ -628,82 +454,6 @@ class ClipboardHelper {
   static Future<void> copy(String value) async {
     // Imported lazily to keep this file's widget code easy to scan.
     await Clipboard.setData(ClipboardData(text: value));
-  }
-}
-
-class _NoteGroupHeading extends StatelessWidget {
-  const _NoteGroupHeading({required this.label});
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    final tokens = WorkFollowTheme.of(context);
-    return Padding(
-      padding: const EdgeInsets.only(left: 8),
-      child: Text(label,
-          style: TextStyle(
-              color: tokens.textTertiary,
-              fontSize: 10,
-              fontWeight: FontWeight.w700,
-              letterSpacing: .45)),
-    );
-  }
-}
-
-class _FolderItem extends StatelessWidget {
-  const _FolderItem(
-      {required this.label,
-      required this.count,
-      required this.icon,
-      this.selected = false,
-      this.onTap});
-
-  final String label;
-  final int count;
-  final IconData icon;
-  final bool selected;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final tokens = WorkFollowTheme.of(context);
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(7),
-        child: Container(
-          margin: const EdgeInsets.only(bottom: 2),
-          padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 8),
-          decoration: BoxDecoration(
-              color: selected ? tokens.accentSoft : Colors.transparent,
-              borderRadius: BorderRadius.circular(7)),
-          child: Row(
-            children: [
-              Icon(icon,
-                  size: 16,
-                  color: selected ? tokens.accent : tokens.textSecondary),
-              const SizedBox(width: 9),
-              Expanded(
-                  child: Text(label,
-                      style: TextStyle(
-                          color:
-                              selected ? tokens.accent : tokens.textSecondary,
-                          fontSize: 12,
-                          fontWeight:
-                              selected ? FontWeight.w700 : FontWeight.w500))),
-              if (count > 0)
-                Text('$count',
-                    style: TextStyle(
-                        color: tokens.textTertiary,
-                        fontSize: 10,
-                        fontWeight: FontWeight.w600)),
-            ],
-          ),
-        ),
-      ),
-    );
   }
 }
 

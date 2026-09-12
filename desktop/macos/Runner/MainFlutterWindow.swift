@@ -6,11 +6,10 @@ class MainFlutterWindow: NSWindow {
     let flutterViewController = FlutterViewController()
     self.contentViewController = flutterViewController
 
-    // The workspace is intentionally composed of an app rail, an optional
-    // task navigation pane, a list pane, and a detail inspector. The old
-    // 800x600 nib frame hid two of those panes on first launch. Keep a
-    // comfortable default while fitting smaller MacBook displays.
-    self.minSize = NSSize(width: 1120, height: 720)
+    // The unified rail plus list/detail panes stay usable down to the
+    // smallest validated layout (880x600); below that the detail falls back
+    // to a single pane with a back path.
+    self.minSize = NSSize(width: 880, height: 600)
     let defaultSize = NSSize(width: 1280, height: 820)
     let visibleFrame = NSScreen.main?.visibleFrame
     let fittedSize = NSSize(

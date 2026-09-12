@@ -8,11 +8,21 @@ import 'app_icon_button.dart';
 import 'save_status_footer.dart';
 
 class TaskInspector extends StatefulWidget {
-  const TaskInspector(
-      {super.key, required this.task, required this.controller});
+  const TaskInspector({
+    super.key,
+    required this.task,
+    required this.controller,
+    this.showBack = false,
+    this.onBack,
+  });
 
   final TaskItem task;
   final WorkspaceController controller;
+
+  /// Narrow-window layout: the inspector fills the pane alone and offers a
+  /// back path to the list.
+  final bool showBack;
+  final VoidCallback? onBack;
 
   @override
   State<TaskInspector> createState() => _TaskInspectorState();
@@ -75,6 +85,15 @@ class _TaskInspectorState extends State<TaskInspector> {
             padding: const EdgeInsets.fromLTRB(22, 18, 16, 13),
             child: Row(
               children: [
+                if (widget.showBack) ...[
+                  AppIconButton(
+                      icon: Icons.arrow_back_ios_new_rounded,
+                      tooltip: '返回列表',
+                      size: 28,
+                      iconSize: 15,
+                      onPressed: widget.onBack),
+                  const SizedBox(width: 8),
+                ],
                 Expanded(
                   child: Row(
                     children: [

@@ -415,8 +415,8 @@ void main() {
         .where((task) => task.id == 'task-01' || task.id == 'task-02');
     expect(completed.every((task) => task.completed), isTrue);
     // The recurring task spawned its next occurrence.
-    final spawn = controller.tasks
-        .firstWhere((task) => task.recurrenceType == 'DAILY' && !task.completed);
+    final spawn = controller.tasks.firstWhere(
+        (task) => task.recurrenceType == 'DAILY' && !task.completed);
 
     expect(controller.undoLastAction(), isTrue);
     expect(

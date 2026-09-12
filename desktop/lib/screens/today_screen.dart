@@ -3,147 +3,90 @@ import 'package:flutter/material.dart';
 import '../models/task.dart';
 import '../state/workspace_controller.dart';
 import '../theme/workfollow_theme.dart';
-import '../widgets/app_icon_button.dart';
 import '../widgets/quick_add.dart';
 import '../widgets/section_label.dart';
-import '../widgets/sidebar.dart';
 import '../widgets/task_inspector.dart';
 import '../widgets/task_row.dart';
 
-class TaskWorkspaceScreen extends StatelessWidget {
-  const TaskWorkspaceScreen({
-    super.key,
-    required this.controller,
-    required this.navigationCollapsed,
-    required this.onToggleNavigation,
-  });
+class TodayScreen extends StatefulWidget {
+  const TodayScreen({super.key, required this.controller});
 
   final WorkspaceController controller;
-  final bool navigationCollapsed;
-  final VoidCallback onToggleNavigation;
 
   @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        // Keep the four-zone composition at comfortable widths. As space gets
-        // tight, the task navigation yields before list/detail readability.
-        final showNavigation =
-            !navigationCollapsed && constraints.maxWidth >= 960;
-        return Row(
-          children: [
-            if (showNavigation) ...[
-              TaskViewSidebar(
-                controller: controller,
-                onAddList: () => _showListNotice(context),
-              ),
-              VerticalDivider(
-                  width: 1,
-                  thickness: 1,
-                  color: WorkFollowTheme.of(context).border),
-            ],
-            Expanded(
-              child: TodayScreen(
-                controller: controller,
-                navigationCollapsed: !showNavigation,
-                onToggleNavigation: onToggleNavigation,
-              ),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  Future<void> _showListNotice(BuildContext context) async {
-    final nameController = TextEditingController();
-    final name = await showDialog<String>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('新建清单'),
-        content: TextField(
-          controller: nameController,
-          autofocus: true,
-          maxLength: 40,
-          decoration: const InputDecoration(hintText: '例如：旅行准备'),
-          onSubmitted: (value) => Navigator.of(dialogContext).pop(value),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            onPressed: () =>
-                Navigator.of(dialogContext).pop(nameController.text),
-            child: const Text('创建'),
-          ),
-        ],
-      ),
-    );
-    nameController.dispose();
-    if (!context.mounted || name == null) return;
-    if (!controller.addList(name)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('清单名称为空，或已经存在。')),
-      );
-    }
-  }
+  State<TodayScreen> createState() => _TodayScreenState();
 }
 
-class TodayScreen extends StatelessWidget {
-  const TodayScreen({
-    super.key,
-    required this.controller,
-    this.navigationCollapsed = false,
-    this.onToggleNavigation,
-  });
+class _TodayScreenState extends State<TodayScreen> {
+  // Below 700pt the inspector does not fit; activating a row swaps the pane
+  // to a detail view with a back path that restores the list (kept offstage
+  // so scroll position and selection survive the round trip).
+  bool _detailOnly = false;
 
-  final WorkspaceController controller;
-  final bool navigationCollapsed;
-  final VoidCallback? onToggleNavigation;
+  void _handleActivate() {
+    if (_listWidth != null && _listWidth! < 700) {
+      setState(() => _detailOnly = true);
+    }
+  }
+
+  double? _listWidth;
 
   @override
   Widget build(BuildContext context) {
-    final tokens = WorkFollowTheme.of(context);
+    final controller = widget.controller;
     final tasks = controller.visibleTasks;
     final title = controller.viewTitle;
     return LayoutBuilder(
       builder: (context, constraints) {
-        final showInspector =
-            constraints.maxWidth >= 700 && controller.selectedTask != null;
+        final narrow = constraints.maxWidth < 700;
+        _listWidth = constraints.maxWidth;
+        final selected = controller.selectedTask;
+        final showInspector = !narrow && selected != null;
+        final narrowDetail = narrow && _detailOnly && selected != null;
+        final listPane = Container(
+          color: WorkFollowTheme.of(context).content,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _ListHeader(title: title, controller: controller),
+              Padding(
+                  padding: const EdgeInsets.fromLTRB(14, 0, 14, 3),
+                  child: QuickAddField(controller: controller)),
+              Expanded(
+                  child: Offstage(
+                offstage: narrowDetail,
+                child: _TaskList(
+                  tasks: tasks,
+                  controller: controller,
+                  onActivate: _handleActivate,
+                ),
+              )),
+              if (controller.multiSelectCount > 0)
+                _BulkActionBar(controller: controller),
+            ],
+          ),
+        );
+        if (narrowDetail) {
+          return TaskInspector(
+              task: selected,
+              controller: controller,
+              showBack: true,
+              onBack: () => setState(() => _detailOnly = false));
+        }
         return Row(
           children: [
             Expanded(
               flex: showInspector ? 6 : 1,
-              child: Container(
-                color: tokens.content,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _ListHeader(
-                      title: title,
-                      controller: controller,
-                      navigationCollapsed: navigationCollapsed,
-                      onToggleNavigation: onToggleNavigation,
-                    ),
-                    Padding(
-                        padding: const EdgeInsets.fromLTRB(14, 0, 14, 3),
-                        child: QuickAddField(controller: controller)),
-                    Expanded(
-                        child: _TaskList(tasks: tasks, controller: controller)),
-                    if (controller.multiSelectCount > 0)
-                      _BulkActionBar(controller: controller),
-                  ],
-                ),
-              ),
+              child: listPane,
             ),
             if (showInspector) ...[
-              VerticalDivider(width: 1, thickness: 1, color: tokens.border),
+              VerticalDivider(
+                  width: 1,
+                  thickness: 1,
+                  color: WorkFollowTheme.of(context).border),
               Expanded(
                   flex: 5,
-                  child: TaskInspector(
-                      task: controller.selectedTask!, controller: controller)),
+                  child: TaskInspector(task: selected, controller: controller)),
             ],
           ],
         );
@@ -156,14 +99,10 @@ class _ListHeader extends StatelessWidget {
   const _ListHeader({
     required this.title,
     required this.controller,
-    required this.navigationCollapsed,
-    required this.onToggleNavigation,
   });
 
   final String title;
   final WorkspaceController controller;
-  final bool navigationCollapsed;
-  final VoidCallback? onToggleNavigation;
 
   @override
   Widget build(BuildContext context) {
@@ -178,18 +117,6 @@ class _ListHeader extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
-          if (onToggleNavigation != null) ...[
-            AppIconButton(
-              icon: navigationCollapsed
-                  ? Icons.view_sidebar_outlined
-                  : Icons.view_sidebar_rounded,
-              tooltip: navigationCollapsed ? '展开任务导航' : '收起任务导航',
-              onPressed: onToggleNavigation,
-              size: 30,
-              iconSize: 17,
-            ),
-            const SizedBox(width: 6),
-          ],
           Expanded(
             child:
                 Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -233,10 +160,15 @@ class _ListHeader extends StatelessWidget {
 }
 
 class _TaskList extends StatelessWidget {
-  const _TaskList({required this.tasks, required this.controller});
+  const _TaskList({
+    required this.tasks,
+    required this.controller,
+    this.onActivate,
+  });
 
   final List<TaskItem> tasks;
   final WorkspaceController controller;
+  final VoidCallback? onActivate;
 
   @override
   Widget build(BuildContext context) {
@@ -250,7 +182,8 @@ class _TaskList extends StatelessWidget {
             task: tasks[index],
             controller: controller,
             selected: tasks[index].id == controller.selectedTaskId,
-            multiSelected: controller.isTaskMultiSelected(tasks[index].id)),
+            multiSelected: controller.isTaskMultiSelected(tasks[index].id),
+            onActivate: onActivate),
       );
     }
     final overdue = tasks
@@ -329,7 +262,8 @@ class _TaskList extends StatelessWidget {
                 task: task,
                 controller: controller,
                 selected: task.id == controller.selectedTaskId,
-                multiSelected: controller.isTaskMultiSelected(task.id)),
+                multiSelected: controller.isTaskMultiSelected(task.id),
+                onActivate: onActivate),
           ),
         );
       },
@@ -359,7 +293,12 @@ class _BulkActionBar extends StatelessWidget {
                   color: tokens.textPrimary,
                   fontSize: 11.5,
                   fontWeight: FontWeight.w700)),
-          const SizedBox(width: 10),
+          const SizedBox(width: 4),
+          _BulkAction(
+              label: '全选',
+              icon: Icons.select_all_rounded,
+              onPressed: controller.selectAllVisibleTasks),
+          const SizedBox(width: 6),
           _BulkAction(
               label: '完成',
               icon: Icons.check_rounded,

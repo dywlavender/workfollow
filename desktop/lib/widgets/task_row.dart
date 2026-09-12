@@ -18,12 +18,17 @@ class TaskRow extends StatefulWidget {
     required this.controller,
     required this.selected,
     this.multiSelected = false,
+    this.onActivate,
   });
 
   final TaskItem task;
   final WorkspaceController controller;
   final bool selected;
   final bool multiSelected;
+
+  /// Called on a plain click and on Return, after the selection is updated.
+  /// The narrow-window layout uses it to push the detail pane.
+  final VoidCallback? onActivate;
 
   @override
   State<TaskRow> createState() => _TaskRowState();
@@ -49,6 +54,7 @@ class _TaskRowState extends State<TaskRow> {
       widget.controller.clearMultiSelect();
     }
     widget.controller.selectTask(widget.task.id);
+    widget.onActivate?.call();
   }
 
   @override
@@ -94,6 +100,7 @@ class _TaskRowState extends State<TaskRow> {
           _OpenTaskIntent: CallbackAction<Intent>(onInvoke: (_) {
             widget.controller.selectTask(task.id);
             widget.controller.requestInspectorTitleFocus();
+            widget.onActivate?.call();
             return null;
           }),
         },
