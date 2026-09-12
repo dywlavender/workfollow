@@ -1,4 +1,4 @@
-export type WorkFollowSlashCommand = 'h1' | 'h2' | 'h3' | 'ul' | 'ol' | 'check' | 'quote' | 'code' | 'hr' | 'table' | 'link' | 'attachment' | 'importExcel' | 'subtask' | 'tag' | 'relation' | 'createTask' | 'linkTask'
+export type WorkFollowSlashCommand = 'h1' | 'h2' | 'h3' | 'ul' | 'ol' | 'check' | 'quote' | 'code' | 'hr' | 'table' | 'diagram' | 'link' | 'attachment' | 'importExcel' | 'subtask' | 'tag' | 'relation' | 'createTask' | 'linkTask'
 
 export interface WorkFollowSlashCommandItem {
   type: WorkFollowSlashCommand
@@ -19,6 +19,7 @@ export const workFollowSlashCommands: WorkFollowSlashCommandItem[] = [
   { type: 'code', label: '代码块', mark: '</>' },
   { type: 'hr', label: '水平分割线', mark: '—' },
   { type: 'table', label: '表格', mark: '▦' },
+  { type: 'diagram', label: '流程图（drawio）', mark: '◇' },
   { type: 'importExcel', label: '导入 Excel / CSV', mark: '⤓' },
   { type: 'link', label: '链接', mark: '↗' },
   { type: 'attachment', label: '附件', mark: '↥' },

@@ -84,6 +84,9 @@ class Attachment(Base):
     storage_name: Mapped[str] = mapped_column(String(100), nullable=False, unique=True)
     mime_type: Mapped[str] = mapped_column(String(200), nullable=False)
     size: Mapped[int] = mapped_column(Integer, nullable=False)
+    # 流程图等"可覆盖"附件的乐观锁计数：条件更新 WHERE revision = expected，
+    # 同时作为预览 URL 的缓存失效参数，成功保存后写入正文节点触发协同刷新。
+    revision: Mapped[int] = mapped_column(Integer, default=1, nullable=False, server_default="1")
     file_path: Mapped[str] = mapped_column(String(1000), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=local_now, nullable=False)
 

@@ -220,6 +220,40 @@ async function knowledgeStateMatchesCurrentVersion(info, state, cookie) {
   }
 }
 
+/**
+ * 知识草稿版本过期时，不能直接用已发布内容重新引导文档：浏览器端
+ * （IndexedDB 恢复或仍连接的旧会话）还持有旧草稿，新引导的插入会与旧内容
+ * 叠加成双份。这里在旧草稿 state 上构造"删光旧 title/正文 → 写入已发布
+ * 内容"的重置更新，所有客户端应用后都收敛到单份。
+ */
+async function resetKnowledgeDraftToPublished(storedState, info, cookie) {
+  const note = await initialSeed(info, cookie)
+  const published = bootstrapDocument(note.contentJson, {
+    title: note.title,
+    metadata: {
+      categoryId: note.categoryId ?? null,
+      tags: Array.isArray(note.tags) ? note.tags : [],
+      baseVersion: note.versionNo,
+    },
+  })
+  const draft = new Y.Doc()
+  try {
+    Y.applyUpdate(draft, storedState)
+    draft.transact(() => {
+      const title = draft.getText('title')
+      if (title.length > 0) title.delete(0, title.length)
+      const fragment = draft.getXmlFragment('default')
+      if (fragment.length > 0) fragment.delete(0, fragment.length)
+    })
+    Y.applyUpdate(draft, Y.encodeStateAsUpdate(published))
+    const reset = Y.encodeStateAsUpdate(draft)
+    return reset
+  } finally {
+    draft.destroy()
+    published.destroy()
+  }
+}
+
 async function readRequestBody(request, maxBytes = 16 * 1024) {
   const chunks = []
   let length = 0
@@ -647,7 +681,8 @@ function legacyDescriptionToContentJson(description) {
 function contentJsonHasText(contentJson) {
   if (!contentJson || typeof contentJson !== 'object') return false
   if (contentJson.type === 'text' && typeof contentJson.text === 'string' && contentJson.text.length > 0) return true
-  if (contentJson.type === 'image' || contentJson.type === 'taskReference') return true
+  // diagramBlock（流程图）与 image/taskReference 一样属于非文字正文内容
+  if (contentJson.type === 'image' || contentJson.type === 'taskReference' || contentJson.type === 'diagramBlock') return true
   return Array.isArray(contentJson.content) && contentJson.content.some(contentJsonHasText)
 }
 
@@ -690,6 +725,7 @@ async function loadState(documentName, requestHeaders) {
       probe.destroy()
       const cookie = requestHeaders.get('cookie') ?? ''
       if (await knowledgeStateMatchesCurrentVersion(info, pendingState, cookie)) return pendingState
+      return await resetKnowledgeDraftToPublished(pendingState, info, cookie)
     } catch (error) {
       console.error(`协同待处理快照无效 document=${documentName}`, error?.message ?? error)
     }
@@ -736,7 +772,9 @@ async function loadState(documentName, requestHeaders) {
     // a working document based on an older published version.
     const cookie = requestHeaders.get('cookie') ?? ''
     if (await knowledgeStateMatchesCurrentVersion(info, stored, cookie)) return stored
-    return undefined
+    // 版本过期：重置草稿为已发布内容（先删旧再插新），避免与客户端本地
+    // 恢复的旧草稿叠加成双份。
+    return await resetKnowledgeDraftToPublished(stored, info, cookie)
   }
   const cookie = requestHeaders.get('cookie') ?? ''
   // Direct Agent connections are authenticated and permission-checked by

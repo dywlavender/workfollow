@@ -168,6 +168,8 @@ onBeforeUnmount(disposeCollaboration)
         :seed-document="false"
         slash-menu
         :upload-image="uploadImage"
+        :upload-file="uploadImage"
+        :diagram-awareness="collaborationSession?.provider.awareness ?? null"
       />
       <RichTextDocument v-else class="collaboration-document" :model-value="note.contentJson" :editable="false" />
     </template>

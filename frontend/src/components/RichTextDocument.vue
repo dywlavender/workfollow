@@ -3,13 +3,17 @@ import Collaboration from '@tiptap/extension-collaboration'
 import { Editor as TiptapEditor, EditorContent } from '@tiptap/vue-3'
 import type { Editor as CoreEditor } from '@tiptap/core'
 import * as Y from 'yjs'
-import { computed, onBeforeUnmount, ref, shallowRef, watch } from 'vue'
+import { computed, onBeforeUnmount, reactive, ref, shallowRef, watch } from 'vue'
 
 import EditorLinkDialog from '@/components/editor/EditorLinkDialog.vue'
 import EditorSlashMenu from '@/components/editor/EditorSlashMenu.vue'
+import DiagramConflictConfirm from '@/components/editor/DiagramConflictConfirm.vue'
+import DrawioEditorModal from '@/components/editor/DrawioEditorModal.vue'
 import RichTextToolbar from '@/components/RichTextToolbar.vue'
 import { workFollowSlashCommands, type WorkFollowSlashCommand } from '@/modules/editor/slashCommands'
 import { useSlashMenu } from '@/modules/editor/slashMenu'
+import { createDiagramEditorHandler } from '@/modules/editor/diagramEditor'
+import { createDiagramPresenceBridge, type AwarenessLike, type DiagramPresenceBridge } from '@/modules/editor/diagramPresence'
 import { CollaborationInitializationError, initializeCollaborativeField } from '@/modules/editor/collaborationInitialization'
 import { createWorkFollowEditorExtensions, collapseAllEmptyParagraphs } from '@/modules/editor/tiptap'
 
@@ -27,6 +31,10 @@ const props = withDefaults(defineProps<{
   collaborationDocumentName?: string | null
   /** 粘贴/拖入图片时的上传钩子；未提供则不拦截图片粘贴。 */
   uploadImage?: ((file: File) => Promise<{ url: string; originalName: string; id: string }>) | null
+  /** 流程图新建上传钩子（可编辑分享传入）；未提供时只能编辑已有图、不能新建。 */
+  uploadFile?: ((file: File) => Promise<{ id: string }>) | null
+  /** 协同服务的 awareness（可编辑分享传入）；用于流程图编辑存在感。 */
+  diagramAwareness?: AwarenessLike | null
 }>(), {
   document: null,
   modelValue: null,
@@ -38,6 +46,8 @@ const props = withDefaults(defineProps<{
   seedDocument: true,
   collaborationDocumentName: null,
   uploadImage: null,
+  uploadFile: null,
+  diagramAwareness: null,
 })
 
 const emit = defineEmits<{
@@ -63,7 +73,10 @@ let initializationGeneration = 0
 
 const slashCommands = computed(() => workFollowSlashCommands.filter((command) => {
   // 模板正文没有笔记附件和代办弹窗上下文，因此只提供可直接写入正文的命令。
-  return !command.noteOnly && command.type !== 'attachment'
+  if (command.noteOnly || command.type === 'attachment') return false
+  // 流程图新建需要上传通道；无通道的视图不再列出，避免插入后无法成对保存。
+  if (command.type === 'diagram' && !props.uploadFile && !props.uploadImage) return false
+  return true
 }))
 
 const slash = useSlashMenu({
@@ -73,6 +86,34 @@ const slash = useSlashMenu({
 })
 
 const linkDialog = ref<InstanceType<typeof EditorLinkDialog> | null>(null)
+const drawioModal = ref<InstanceType<typeof DrawioEditorModal> | null>(null)
+const diagramConflict = ref<InstanceType<typeof DiagramConflictConfirm> | null>(null)
+const diagramEditingPresence = reactive<Record<string, { userName: string }>>({})
+const diagramPresenceBridge = shallowRef<DiagramPresenceBridge | null>(null)
+const diagramNotice = ref('')
+let diagramNoticeTimer: number | undefined
+
+function showDiagramNotice(message: string) {
+  diagramNotice.value = message
+  if (diagramNoticeTimer !== undefined) window.clearTimeout(diagramNoticeTimer)
+  diagramNoticeTimer = window.setTimeout(() => { if (diagramNotice.value === message) diagramNotice.value = '' }, 1800)
+}
+
+function openDiagramEditor(attrs: Record<string, unknown>, applyUpdate: (next: Record<string, unknown>) => void) {
+  void createDiagramEditorHandler({
+    uploadFile: (file) => {
+      const upload = props.uploadFile ?? props.uploadImage
+      if (!upload) return Promise.reject(new Error('当前视图不支持新建流程图'))
+      return upload(file)
+    },
+    openModal: (options) => drawioModal.value?.open(options, { onSave: options.onSave }) ?? Promise.resolve(null),
+    feedback: showDiagramNotice,
+    confirm: (message, options) => diagramConflict.value?.ask(message, options) ?? Promise.resolve(false),
+    onEditingChange: (sourceId) => diagramPresenceBridge.value?.setLocalEditing(sourceId),
+    editingPeer: (sourceId) => diagramEditingPresence[sourceId] ?? null,
+  })(attrs, applyUpdate)
+}
+
 function setLink() {
   linkDialog.value?.open()
 }
@@ -104,6 +145,15 @@ function insertSlashBlock(type: WorkFollowSlashCommand) {
     chain.run()
     slash.close()
     setLink()
+    return
+  }
+
+  if (type === 'diagram') {
+    chain.run()
+    slash.close()
+    openDiagramEditor({}, (payload) => {
+      currentEditor.chain().focus().insertContent(payload).run()
+    })
     return
   }
 
@@ -285,6 +335,8 @@ function createEditor() {
     },
   })
   editor.value = instance
+  instance.storage.diagramBlock.openEditor = openDiagramEditor
+  instance.storage.diagramBlock.editingPresence = diagramEditingPresence
 
   if (document) {
     initializationGeneration += 1
@@ -315,6 +367,11 @@ defineExpose({ flush, waitUntilReady })
 
 watch(() => props.document, () => {
   recreateEditor()
+}, { immediate: true })
+
+watch(() => props.diagramAwareness, (awareness) => {
+  diagramPresenceBridge.value?.destroy()
+  diagramPresenceBridge.value = awareness ? createDiagramPresenceBridge(awareness, diagramEditingPresence) : null
 }, { immediate: true })
 
 watch(() => props.editable, (value) => {
@@ -350,6 +407,9 @@ watch(() => props.modelValue, (value) => {
 onBeforeUnmount(() => {
   if (slashDetectTimer !== undefined) window.clearTimeout(slashDetectTimer)
   if (snapshotTimer !== undefined) window.clearTimeout(snapshotTimer)
+  if (diagramNoticeTimer !== undefined) window.clearTimeout(diagramNoticeTimer)
+  diagramPresenceBridge.value?.destroy()
+  diagramPresenceBridge.value = null
   initializationGeneration += 1
   editor.value?.destroy()
 })
@@ -357,9 +417,12 @@ onBeforeUnmount(() => {
 
 <template>
   <div v-bind="$attrs" class="rich-text-document" :class="{ readonly: !editable }">
-    <RichTextToolbar v-if="editable && editor" :editor="editor" @link="setLink" />
+    <RichTextToolbar v-if="editable && editor" :editor="editor" :diagram="Boolean(uploadFile || uploadImage)" @link="setLink" @diagram="openDiagramEditor({}, (payload) => { editor?.chain().focus().insertContent(payload).run() })" />
     <EditorContent :editor="editor ?? undefined" />
+    <span v-if="diagramNotice" class="rich-text-diagram-notice" role="status">{{ diagramNotice }}</span>
     <EditorLinkDialog ref="linkDialog" :editor="() => editor" />
+    <DrawioEditorModal ref="drawioModal" />
+    <DiagramConflictConfirm ref="diagramConflict" />
   </div>
 
   <EditorSlashMenu :commands="slashCommands" :active-index="slash.activeIndex.value" :position="slash.position.value" :open="slash.open.value" id-prefix="rich-text-slash-command" @select="insertSlashBlock" @hover="slash.activeIndex.value = $event" />

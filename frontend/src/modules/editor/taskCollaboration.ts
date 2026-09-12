@@ -3,6 +3,7 @@ import * as Y from 'yjs'
 import { IndexeddbPersistence } from 'y-indexeddb'
 
 import type { User } from '@/services/api'
+import { useAuthStore } from '@/stores/auth'
 
 export type TaskCollaborationStatus = 'connecting' | 'connected' | 'disconnected' | 'error'
 export type TaskCollaborationDocumentKind = 'body' | 'metadata'

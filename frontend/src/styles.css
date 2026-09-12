@@ -810,6 +810,19 @@ textarea { resize: vertical; }
 .tiptap pre { overflow: auto; padding: 10px 12px; border-radius: var(--radius-sm); background: var(--color-editor-code-bg); color: var(--color-editor-code-fg); font-size: var(--font-size-label); }
 .tiptap mark { padding: 1px 2px; background: var(--color-editor-highlight); }
 .tiptap .tableWrapper { width: 100%; max-width: 100%; margin: 14px 0; overflow-x: auto; border-radius: var(--radius-sm); scrollbar-width: thin; }
+/* 流程图块：预览图 + 悬浮编辑按钮；双击同样进入 drawio 弹窗。 */
+.diagram-block-node { margin: 14px 0; }
+.diagram-block { position: relative; min-height: 64px; display: grid; place-items: center; padding: 10px; border: 1px solid var(--color-border-subtle); border-radius: var(--radius-md); background: var(--color-bg-surface); }
+.diagram-block-node.is-selected .diagram-block { border-color: var(--color-accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-accent) 24%, transparent); }
+.diagram-block img { display: block; width: 100%; height: auto; }
+.diagram-block-empty { display: grid; gap: 4px; justify-items: center; padding: 18px 10px; color: var(--color-text-tertiary); }
+.diagram-block-empty strong { color: var(--color-text-secondary); font-size: var(--font-size-label); }
+.diagram-block-empty small { font-size: var(--font-size-micro); }
+.diagram-block-edit { position: absolute; top: 8px; right: 8px; display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border: 1px solid var(--color-border-subtle); border-radius: var(--radius-xs); background: var(--color-bg-surface); color: var(--color-text-secondary); font-size: var(--font-size-micro); opacity: 0; transition: opacity .12s ease; }
+.diagram-block:hover .diagram-block-edit, .diagram-block-edit:focus-visible { opacity: 1; }
+.diagram-block-edit:hover { background: var(--color-accent-soft); color: var(--color-accent); outline: none; }
+.diagram-block-presence { position: absolute; top: 8px; left: 8px; display: inline-flex; align-items: center; padding: 3px 8px; border-radius: var(--radius-xs); background: color-mix(in srgb, var(--color-accent) 14%, var(--color-bg-surface)); color: var(--color-accent); font-size: var(--font-size-micro); font-weight: var(--font-weight-semibold); pointer-events: none; }
+.rich-text-diagram-notice { display: block; padding: 4px 24px 0; color: var(--color-text-tertiary); font-size: var(--font-size-micro); }
 .tiptap table { width: 100%; min-width: max-content; margin: 0; border: 1px solid var(--color-border); border-collapse: separate; border-spacing: 0; border-radius: var(--radius-sm); table-layout: fixed; overflow: hidden; }
 .tiptap th, .tiptap td { position: relative; min-width: 72px; padding: 7px 9px; border-right: 1px solid var(--color-border); border-bottom: 1px solid var(--color-border); vertical-align: top; text-align: left; }
 .tiptap .column-resize-handle { position: absolute; top: 0; right: -2px; bottom: 0; z-index: 4; width: 4px; background: var(--color-accent); pointer-events: none; }

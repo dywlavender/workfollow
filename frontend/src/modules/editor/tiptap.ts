@@ -1,5 +1,6 @@
 import type { Extensions } from '@tiptap/core'
 import type { Editor as CoreEditor } from '@tiptap/core'
+import { Node } from '@tiptap/core'
 import Highlight from '@tiptap/extension-highlight'
 import Image from '@tiptap/extension-image'
 import Link from '@tiptap/extension-link'
@@ -14,6 +15,7 @@ import TextStyle from '@tiptap/extension-text-style'
 import Underline from '@tiptap/extension-underline'
 import StarterKit from '@tiptap/starter-kit'
 import { VueNodeViewRenderer } from '@tiptap/vue-3'
+import DiagramBlockNode from '@/components/editor/DiagramBlockNode.vue'
 import ResizableImageNode from '@/components/editor/ResizableImageNode.vue'
 import { normalizeFontSize } from '@/modules/editor/fontSizing'
 import { NoteLinkMark, TaskLinkMark, TaskReferenceNode, WorkFollowBlockId } from '@/modules/editor/taskRelations'
@@ -68,6 +70,91 @@ export const WorkFollowImage = Image.extend({
   },
   addNodeView() {
     return VueNodeViewRenderer(ResizableImageNode)
+  },
+})
+
+/**
+ * 流程图块：图源 .drawio 与预览 PNG 各存一个附件，revision 同时承担
+ * 乐观锁校验和预览 URL 缓存失效。渲染只是 <img>；编辑入口通过 storage
+ * 上的 openEditor 回调交给宿主组件（NodeView 里双击/按钮触发）。
+ */
+export const DiagramBlock = Node.create({
+  name: 'diagramBlock',
+  group: 'block',
+  atom: true,
+  draggable: true,
+
+  addAttributes() {
+    return {
+      sourceAttachmentId: {
+        default: null,
+        parseHTML: (element: HTMLElement) => element.getAttribute('data-source-id'),
+        renderHTML: (attributes: { sourceAttachmentId?: string | null }) => attributes.sourceAttachmentId
+          ? { 'data-source-id': attributes.sourceAttachmentId }
+          : {},
+      },
+      previewAttachmentId: {
+        default: null,
+        parseHTML: (element: HTMLElement) => element.getAttribute('data-preview-id'),
+        renderHTML: (attributes: { previewAttachmentId?: string | null }) => attributes.previewAttachmentId
+          ? { 'data-preview-id': attributes.previewAttachmentId }
+          : {},
+      },
+      revision: {
+        default: 1,
+        parseHTML: (element: HTMLElement) => Number(element.getAttribute('data-revision')) || 1,
+        renderHTML: (attributes: { revision?: number | null }) => ({ 'data-revision': String(attributes.revision ?? 1) }),
+      },
+      width: {
+        default: null,
+        parseHTML: (element: HTMLElement) => normalizeImageWidth(element.getAttribute('data-diagram-width')),
+        renderHTML: (attributes: { width?: number | null }) => {
+          const width = normalizeImageWidth(attributes.width)
+          return width === null ? {} : { 'data-diagram-width': String(width), style: `width: ${width}%` }
+        },
+      },
+      title: {
+        default: '流程图',
+        parseHTML: (element: HTMLElement) => element.getAttribute('data-title') || '流程图',
+        renderHTML: (attributes: { title?: string | null }) => ({ 'data-title': attributes.title || '流程图' }),
+      },
+    }
+  },
+
+  parseHTML() {
+    return [{ tag: 'figure[data-diagram-block]' }]
+  },
+
+  renderHTML({ node }) {
+    const attrs = node.attrs as {
+      sourceAttachmentId?: string | null
+      previewAttachmentId?: string | null
+      revision?: number | null
+      title?: string | null
+    }
+    const previewSrc = attrs.previewAttachmentId
+      ? `/api/attachments/${attrs.previewAttachmentId}?v=${attrs.revision ?? 1}`
+      : ''
+    return [
+      'figure',
+      { 'data-diagram-block': '' },
+      previewSrc
+        ? ['img', { src: previewSrc, alt: attrs.title || '流程图' }]
+        : ['span', { class: 'diagram-block-placeholder' }, attrs.title || '流程图'],
+    ]
+  },
+
+  addNodeView() {
+    return VueNodeViewRenderer(DiagramBlockNode)
+  },
+
+  addStorage() {
+    return {
+      /** 宿主组件在创建编辑器后注入：打开 drawio 弹窗并回写 attrs。 */
+      openEditor: null as null | ((attrs: Record<string, unknown>, applyUpdate: (next: Record<string, unknown>) => void) => void),
+      /** 宿主注入的响应式对象：sourceId → 正在编辑这张图的人（他人）。 */
+      editingPresence: null as Record<string, { userName: string }> | null,
+    }
   },
 })
 
@@ -152,6 +239,7 @@ export function createWorkFollowEditorExtensions(
     Highlight.configure({ multicolor: true }),
     Link.configure({ openOnClick: false }),
     WorkFollowImage.configure({ inline: false }),
+    DiagramBlock,
     Placeholder.configure({ placeholder }),
     TaskList,
     TaskItem.configure({ nested: true }),

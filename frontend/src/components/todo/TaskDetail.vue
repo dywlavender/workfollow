@@ -8,17 +8,21 @@ import {
   IconBell, IconCalendar, IconCalendarOff, IconCheck, IconChevronLeft, IconChevronRight, IconClock,
   IconDots, IconFlag, IconLink, IconRepeat, IconTag, IconTrash, IconX,
 } from '@tabler/icons-vue'
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, shallowRef, watch } from 'vue'
 import * as Y from 'yjs'
 
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import EditorBubbleMenu from '@/components/EditorBubbleMenu.vue'
 import EditorLinkDialog from '@/components/editor/EditorLinkDialog.vue'
 import EditorSheetPickerDialog from '@/components/editor/EditorSheetPickerDialog.vue'
+import DiagramConflictConfirm from '@/components/editor/DiagramConflictConfirm.vue'
+import DrawioEditorModal from '@/components/editor/DrawioEditorModal.vue'
 import EditorSlashMenu from '@/components/editor/EditorSlashMenu.vue'
 import RichTextToolbar from '@/components/RichTextToolbar.vue'
 import AssigneePopover from '@/components/task/AssigneePopover.vue'
 import TaskRelationDialog from '@/components/task/TaskRelationDialog.vue'
+import { createDiagramEditorHandler } from '@/modules/editor/diagramEditor'
+import { createDiagramPresenceBridge, type DiagramPresenceBridge } from '@/modules/editor/diagramPresence'
 import {
   isSpreadsheetFile,
   readSpreadsheet,
@@ -97,6 +101,10 @@ const slash = useSlashMenu({
 })
 const fileInput = ref<HTMLInputElement | null>(null)
 const excelInput = ref<HTMLInputElement | null>(null)
+const drawioModal = ref<InstanceType<typeof DrawioEditorModal> | null>(null)
+const diagramConflict = ref<InstanceType<typeof DiagramConflictConfirm> | null>(null)
+const diagramEditingPresence = reactive<Record<string, { userName: string }>>({})
+const diagramPresenceBridge = shallowRef<DiagramPresenceBridge | null>(null)
 const sheetPickerOpen = ref(false)
 const sheetPickerSheets = ref<SpreadsheetSheetMeta[]>([])
 let sheetPickerResolve: ((sheetName: string | null) => void) | null = null
@@ -240,6 +248,8 @@ function createTaskEditor(document: TaskCollaborationSession['document']) {
     onSelectionUpdate: ({ editor: currentEditor }) => rememberSelection(currentEditor),
   })
   instance.setEditable(currentTaskContentEditable.value && collaborationContentReady)
+  instance.storage.diagramBlock.openEditor = openDiagramEditor
+  instance.storage.diagramBlock.editingPresence = diagramEditingPresence
   editor.value = instance
 }
 
@@ -332,7 +342,7 @@ function buildRecurrenceConfig(): Record<string, number | string> | null {
 const canEdit = computed(() => Boolean(props.todo?.permissions.editable))
 const canEditContent = computed(() => Boolean(props.todo?.permissions.contentEditable ?? props.todo?.permissions.editable))
 const canEditMetadata = computed(() => canEdit.value && metadataCollaborationReady.value)
-const contentOnlyCommandTypes = new Set<WorkFollowSlashCommand>(['attachment', 'relation', 'importExcel'])
+const contentOnlyCommandTypes = new Set<WorkFollowSlashCommand>(['attachment', 'relation', 'importExcel', 'diagram'])
 const metadataOnlyCommandTypes = new Set<WorkFollowSlashCommand>(['tag'])
 const availableCommands = computed(() => commands.filter((command) => {
   if (metadataOnlyCommandTypes.has(command.type)) return canEditMetadata.value
@@ -703,6 +713,8 @@ function startTaskCollaboration(task: Todo) {
   }, 'metadata')
   collaborationSession.value = bodySession
   metadataCollaborationSession.value = metadataSession
+  diagramPresenceBridge.value?.destroy()
+  diagramPresenceBridge.value = createDiagramPresenceBridge(bodySession.provider.awareness, diagramEditingPresence)
   createTaskEditor(bodySession.document)
 }
 
@@ -723,6 +735,8 @@ function disposeTaskEditor() {
   currentSession?.destroy()
   metadataObserverCleanup?.()
   currentMetadataSession?.destroy()
+  diagramPresenceBridge.value?.destroy()
+  diagramPresenceBridge.value = null
   editor.value = null
   collaborationSession.value = null
   metadataCollaborationSession.value = null
@@ -1090,6 +1104,15 @@ function insertBlock(type: WorkFollowSlashCommand) {
     if (!canEditContent.value) return
     chain.run(); slash.close(); excelInput.value?.click(); return
   }
+  else if (type === 'diagram') {
+    if (!canEditContent.value) return
+    chain.run()
+    slash.close()
+    void openDiagramEditor({}, (payload) => {
+      currentEditor.chain().focus().insertContent(payload).run()
+    })
+    return
+  }
   else if (type === 'tag') {
     if (!canEditMetadata.value) return
     chain.run(); slash.close(); tagPanelOpen.value = true; return
@@ -1224,6 +1247,20 @@ async function importExcelFiles(event: Event) {
   const files = Array.from(input.files ?? [])
   input.value = ''
   for (const file of files) importSpreadsheetIntoTask(file)
+}
+
+// 流程图（drawio）：编辑宿主逻辑在 modules/editor/diagramEditor.ts，上传走代办附件端点。
+function openDiagramEditor(attrs: Record<string, unknown>, applyUpdate: (next: Record<string, unknown>) => void) {
+  const taskId = props.todo?.id
+  if (!taskId || !canEditContent.value || !collaborationContentReady) return
+  void createDiagramEditorHandler({
+    uploadFile: async (file) => ({ id: (await uploadTaskAttachment(taskId, file)).id, name: file.name }),
+    openModal: (options) => drawioModal.value?.open(options, { onSave: options.onSave }) ?? Promise.resolve(null),
+    feedback: showNotice,
+    confirm: (message, options) => diagramConflict.value?.ask(message, options) ?? Promise.resolve(false),
+    onEditingChange: (sourceId) => diagramPresenceBridge.value?.setLocalEditing(sourceId),
+    editingPeer: (sourceId) => diagramEditingPresence[sourceId] ?? null,
+  })(attrs, applyUpdate)
 }
 
 function addTaskTag() {
@@ -1402,7 +1439,7 @@ onBeforeUnmount(() => {
     </header>
 
     <div class="task-editor-area" @click="closeEditorPanels">
-      <RichTextToolbar v-if="editor && canEditContent" :editor="editor" :attachment="canEditContent" @link="openLinkDialog" @attachment="fileInput?.click()" />
+      <RichTextToolbar v-if="editor && canEditContent" :editor="editor" :attachment="canEditContent" :diagram="canEditContent" @link="openLinkDialog" @attachment="fileInput?.click()" @diagram="openDiagramEditor({}, (payload) => { editor?.chain().focus().insertContent(payload).run() })" />
       <EditorBubbleMenu v-if="editor && canEditContent" :editor="editor || undefined" :attachment="canEditContent" @link="openLinkDialog" @attachment="fileInput?.click()" />
       <EditorContent class="task-body-editor" :editor="editor || undefined" @click="closeEditorPanels" />
       <span v-if="inlineNotice" class="task-editor-inline-notice" role="status">{{ inlineNotice }}</span>
@@ -1436,6 +1473,8 @@ onBeforeUnmount(() => {
     <ConfirmDialog :open="removeDialogOpen" title="删除代办" :message="`确定删除“${todo.title}”吗？删除后无法恢复。`" confirm-label="删除" :danger="true" @close="removeDialogOpen = false" @confirm="confirmRemove" />
     <EditorLinkDialog ref="linkDialog" :editor="() => editor" />
     <EditorSheetPickerDialog :open="sheetPickerOpen" :sheets="sheetPickerSheets" @select="resolveSheetPicker($event)" @close="resolveSheetPicker(null)" />
+    <DrawioEditorModal ref="drawioModal" />
+    <DiagramConflictConfirm ref="diagramConflict" />
     <TaskRelationDialog :open="relationDialogOpen" :current-task-id="todo.id" @close="relationDialogOpen = false" @select-task="relateTask" @select-note="relateNote" />
   </aside>
   <aside v-else class="task-detail task-detail-empty" aria-label="代办正文">

@@ -22,7 +22,17 @@ function attachmentIdFromImage(node: Record<string, unknown>): string | null {
   return attachmentIdFromUrl(attrs.src)
 }
 
-/** Collect attachment ids used by image nodes, including old src-only notes. */
+function attachmentIdsFromDiagram(node: Record<string, unknown>): string[] {
+  const attrs = isRecord(node.attrs) ? node.attrs : {}
+  const ids: string[] = []
+  for (const key of ['sourceAttachmentId', 'previewAttachmentId']) {
+    const id = typeof attrs[key] === 'string' && attrs[key].trim() ? attrs[key].trim() : null
+    if (id) ids.push(id)
+  }
+  return ids
+}
+
+/** Collect attachment ids used by embedded content: images and diagram blocks. */
 export function collectEmbeddedImageAttachmentIds(document: unknown): Set<string> {
   const ids = new Set<string>()
 
@@ -31,6 +41,9 @@ export function collectEmbeddedImageAttachmentIds(document: unknown): Set<string
     if (node.type === 'image') {
       const id = attachmentIdFromImage(node)
       if (id) ids.add(id)
+    }
+    if (node.type === 'diagramBlock') {
+      attachmentIdsFromDiagram(node).forEach((id) => ids.add(id))
     }
     if (Array.isArray(node.content)) {
       node.content.forEach(visit)

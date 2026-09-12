@@ -272,6 +272,10 @@ def _attachment_id_from_url(value: object) -> str | None:
     return candidate.split("/", 1)[0].split("?", 1)[0].split("#", 1)[0] or None
 
 
+ATTACHMENT_ATTR_KEYS = ("attachmentId", "fileId", "attachment_id", "file_id", "sourceAttachmentId", "previewAttachmentId")
+DIAGRAM_SOURCE_SUFFIXES = (".drawio",)
+
+
 def attachment_ids_in_document(content_json: Mapping[str, object] | None) -> set[str]:
     """Return all attachment ids referenced by a note document."""
 
@@ -281,7 +285,7 @@ def attachment_ids_in_document(content_json: Mapping[str, object] | None) -> set
         if isinstance(value, Mapping):
             attrs = value.get("attrs")
             if isinstance(attrs, Mapping):
-                for key in ("attachmentId", "fileId", "attachment_id", "file_id"):
+                for key in ATTACHMENT_ATTR_KEYS:
                     candidate = attrs.get(key)
                     if isinstance(candidate, str) and candidate:
                         found.add(candidate)
@@ -300,32 +304,32 @@ def attachment_ids_in_document(content_json: Mapping[str, object] | None) -> set
     return found
 
 
-def embedded_image_attachment_ids(content_json: Mapping[str, object] | None) -> set[str]:
-    """Return attachment ids used by image nodes, including legacy src-only nodes."""
+def embedded_rendered_attachment_ids(content_json: Mapping[str, object] | None) -> set[str]:
+    """正文里会渲染内容的节点（图片、流程图）引用的附件 id。
+
+    删除保护只覆盖这类节点：file 节点等历史形态按产品语义允许在引用中删除。
+    """
 
     found: set[str] = set()
 
     def visit(value: object) -> None:
-        if not isinstance(value, Mapping):
-            if isinstance(value, list):
-                for child in value:
-                    visit(child)
-            return
-        if value.get("type") == "image":
-            attrs = value.get("attrs")
-            if isinstance(attrs, Mapping):
-                for key in ("attachmentId", "fileId", "attachment_id", "file_id"):
-                    candidate = attrs.get(key)
-                    if isinstance(candidate, str) and candidate:
-                        found.add(candidate)
-                        break
-                else:
+        if isinstance(value, Mapping):
+            if value.get("type") in {"image", "diagramBlock"}:
+                attrs = value.get("attrs")
+                if isinstance(attrs, Mapping):
+                    for key in ATTACHMENT_ATTR_KEYS:
+                        candidate = attrs.get(key)
+                        if isinstance(candidate, str) and candidate:
+                            found.add(candidate)
                     candidate = _attachment_id_from_url(attrs.get("src"))
                     if candidate:
                         found.add(candidate)
-        children = value.get("content")
-        if isinstance(children, list):
-            for child in children:
+            children = value.get("content")
+            if isinstance(children, list):
+                for child in children:
+                    visit(child)
+        elif isinstance(value, list):
+            for child in value:
                 visit(child)
 
     visit(content_json)
@@ -349,11 +353,17 @@ def _cleanup_removed_embedded_images(
     next_content: Mapping[str, object] | None,
     settings: Settings,
 ) -> list[Path]:
+    def is_cleanable(attachment: Attachment) -> bool:
+        # 流程图附件成对存在：预览是图片，图源是 .drawio；两者都跟随正文引用。
+        return attachment.mime_type.lower().startswith("image/") or (
+            attachment.original_name.lower().endswith(DIAGRAM_SOURCE_SUFFIXES)
+        )
+
     referenced_ids = attachment_ids_in_document(next_content)
     attachments = list(db.scalars(select(Attachment).where(Attachment.note_id == note.id)))
     paths_to_remove: list[Path] = []
     for attachment in attachments:
-        if not attachment.mime_type.lower().startswith("image/") or attachment.id in referenced_ids:
+        if not is_cleanable(attachment) or attachment.id in referenced_ids:
             continue
         if _has_external_attachment_access(db, attachment.id):
             # The personal note no longer owns the binary, but an already
@@ -371,7 +381,7 @@ def _rewrite_attachment_references(value: Any, id_map: Mapping[str, str]) -> Any
     if isinstance(value, dict):
         rewritten: dict[str, Any] = {}
         for key, child in value.items():
-            if key in {"fileId", "attachmentId", "file_id", "attachment_id"} and isinstance(child, str):
+            if key in ATTACHMENT_ATTR_KEYS and isinstance(child, str):
                 rewritten[key] = id_map.get(child, child)
             elif key == "src" and isinstance(child, str) and "/api/attachments/" in child:
                 updated = child
@@ -494,11 +504,12 @@ def update_note(
         from app.models.resource_relation import ResourceType
 
         referenced_attachment_ids = attachment_ids_in_document(changes["content_json"])
-        has_old_images = db.scalar(select(Attachment.id).where(
+        has_cleanable_attachments = db.scalar(select(Attachment.id).where(
             Attachment.note_id == note.id,
-            Attachment.mime_type.ilike("image/%"),
+            Attachment.mime_type.ilike("image/%")
+            | Attachment.original_name.ilike("%" + DIAGRAM_SOURCE_SUFFIXES[0]),
         ).limit(1)) is not None
-        if referenced_attachment_ids or has_old_images:
+        if referenced_attachment_ids or has_cleanable_attachments:
             paths_to_remove = _cleanup_removed_embedded_images(
                 db,
                 note,

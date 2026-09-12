@@ -3,6 +3,7 @@ import * as Y from 'yjs'
 import { IndexeddbPersistence } from 'y-indexeddb'
 
 import type { User } from '@/services/api'
+import { useAuthStore } from '@/stores/auth'
 
 export type DocumentCollaborationStatus = 'connecting' | 'connected' | 'disconnected' | 'error'
 
@@ -109,8 +110,10 @@ export function createDocumentCollaboration(
     startConnection()
   }
 
-  if (user) {
-    provider.setAwarenessField('user', { id: user.id, name: user.nickname || user.username })
+  // 未显式传 user 时兜底到登录用户，保证 awareness 里有可显示的名字。
+  const authUser = user ?? useAuthStore().user ?? null
+  if (authUser) {
+    provider.setAwarenessField('user', { id: authUser.id, name: authUser.nickname || authUser.username })
   }
 
   return {

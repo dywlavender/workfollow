@@ -11,6 +11,7 @@ import {
   IconPaperclip,
   IconPlus,
   IconQuote,
+  IconSitemap,
   IconTable,
   IconTableColumn,
   IconTableRow,
@@ -25,11 +26,13 @@ import { tableColumnLimit } from '@/modules/editor/tableSizing'
 const props = withDefaults(defineProps<{
   editor: Editor
   attachment?: boolean
-}>(), { attachment: false })
+  diagram?: boolean
+}>(), { attachment: false, diagram: false })
 
 const emit = defineEmits<{
   link: []
   attachment: []
+  diagram: []
 }>()
 
 const colorMenuOpen = ref<'text' | 'highlight' | null>(null)
@@ -165,5 +168,6 @@ onBeforeUnmount(() => {
       <button class="table-delete-button" type="button" title="删除整个表格" aria-label="删除整个表格" @mousedown.prevent @click="runTableCommand('deleteTable')"><IconTrash :size="15" /></button>
     </div>
     <button v-if="attachment" type="button" title="图片或附件" aria-label="图片或附件" @mousedown.prevent @click="emit('attachment')"><IconPaperclip :size="16" /></button>
+    <button v-if="diagram" type="button" title="流程图（drawio）" aria-label="插入流程图" @mousedown.prevent @click="emit('diagram')"><IconSitemap :size="16" /></button>
   </div>
 </template>

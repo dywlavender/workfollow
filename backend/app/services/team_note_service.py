@@ -203,7 +203,7 @@ def _extract_attachment_ids(value: Any) -> set[str]:
     if isinstance(value, dict):
         attrs = value.get("attrs")
         if isinstance(attrs, dict):
-            for key in ("fileId", "attachmentId", "file_id", "attachment_id"):
+            for key in ("fileId", "attachmentId", "file_id", "attachment_id", "sourceAttachmentId", "previewAttachmentId"):
                 candidate = attrs.get(key)
                 if isinstance(candidate, str) and candidate:
                     found.add(candidate)

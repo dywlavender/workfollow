@@ -18,7 +18,7 @@ import {
   IconTrash,
 } from '@tabler/icons-vue'
 import * as Y from 'yjs'
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, shallowRef, watch } from 'vue'
 
 import {
   fetchNote, fetchTaskBriefs, postTodo,
@@ -26,11 +26,15 @@ import {
 } from '@/services/api'
 import EditorLinkDialog from '@/components/editor/EditorLinkDialog.vue'
 import EditorSheetPickerDialog from '@/components/editor/EditorSheetPickerDialog.vue'
+import DiagramConflictConfirm from '@/components/editor/DiagramConflictConfirm.vue'
+import DrawioEditorModal from '@/components/editor/DrawioEditorModal.vue'
 import EditorSlashMenu from '@/components/editor/EditorSlashMenu.vue'
 import RichTextDocument from '@/components/RichTextDocument.vue'
 import RichTextToolbar from '@/components/RichTextToolbar.vue'
 import TaskSearchDialog from '@/components/notes/TaskSearchDialog.vue'
 import TodoDialog from '@/components/todo/TodoDialog.vue'
+import { createDiagramEditorHandler } from '@/modules/editor/diagramEditor'
+import { createDiagramPresenceBridge, type DiagramPresenceBridge } from '@/modules/editor/diagramPresence'
 import {
   isSpreadsheetFile,
   isSpreadsheetName,
@@ -87,6 +91,11 @@ const folderId = ref<string | null>(null)
 const lastSavedAt = ref<string | null>(props.note?.updatedAt ?? props.note?.createdAt ?? null)
 const fileInput = ref<HTMLInputElement | null>(null)
 const linkDialog = ref<InstanceType<typeof EditorLinkDialog> | null>(null)
+const drawioModal = ref<InstanceType<typeof DrawioEditorModal> | null>(null)
+const diagramConflict = ref<InstanceType<typeof DiagramConflictConfirm> | null>(null)
+// 流程图编辑存在感：bridge 写入这个响应式对象，NodeView 经 storage 读取。
+const diagramEditingPresence = reactive<Record<string, { userName: string }>>({})
+const diagramPresenceBridge = shallowRef<DiagramPresenceBridge | null>(null)
 const slash = useSlashMenu({
   commands: () => workFollowSlashCommands,
   idPrefix: 'note-slash-command',
@@ -254,6 +263,8 @@ function createNoteEditor(document: Y.Doc) {
     },
   })
   instance.setEditable(collaborationContentReady.value)
+  instance.storage.diagramBlock.openEditor = openDiagramEditor
+  instance.storage.diagramBlock.editingPresence = diagramEditingPresence
   editor.value = instance
 }
 
@@ -479,6 +490,8 @@ function startNoteCollaboration(note: Note) {
   })
   collaborationSession.value = session
   bindNoteTitle(session.document)
+  diagramPresenceBridge.value?.destroy()
+  diagramPresenceBridge.value = createDiagramPresenceBridge(session.provider.awareness, diagramEditingPresence)
   // A cold Y.Doc has no content yet. Keep the SQL projection visible while
   // IndexedDB and the provider hydrate it; only a marked local document may
   // mount early, because it already contains a complete collaborative body.
@@ -504,6 +517,8 @@ function disposeNoteCollaboration() {
   titleObserverCleanup?.()
   editor.value?.destroy()
   collaborationSession.value?.destroy()
+  diagramPresenceBridge.value?.destroy()
+  diagramPresenceBridge.value = null
   editor.value = null
   collaborationSession.value = null
   collaborationContentReady.value = false
@@ -581,6 +596,14 @@ function insertSlashBlock(type: WorkFollowSlashCommand) {
     slash.close()
     if (type === 'createTask') openTaskCreateAtCursor()
     else openTaskSearchAtCursor()
+    return
+  }
+  if (type === 'diagram') {
+    chain.run()
+    slash.close()
+    void openDiagramEditor(null, (payload) => {
+      currentEditor.chain().focus().insertContent(payload).run()
+    })
     return
   }
   if (type === 'h1') chain.toggleHeading({ level: 1 })
@@ -956,6 +979,25 @@ function showTaskFeedback(message: string) {
   window.setTimeout(() => { if (taskFeedback.value === message) taskFeedback.value = '' }, 1400)
 }
 
+// 流程图（drawio）：编辑宿主逻辑在 modules/editor/diagramEditor.ts，这里只接通道。
+function openDiagramEditor(
+  attrs: Record<string, unknown> | null,
+  applyUpdate: (payload: Record<string, unknown>) => void,
+) {
+  if (!collaborationContentReady.value) return
+  void createDiagramEditorHandler({
+    uploadFile: async (file) => {
+      const attachment = await props.uploadFile(file)
+      return { id: attachment.id, name: attachment.originalName }
+    },
+    openModal: (options) => drawioModal.value?.open(options, { onSave: options.onSave }) ?? Promise.resolve(null),
+    feedback: showTaskFeedback,
+    confirm: (message, options) => diagramConflict.value?.ask(message, options) ?? Promise.resolve(false),
+    onEditingChange: (sourceId) => diagramPresenceBridge.value?.setLocalEditing(sourceId),
+    editingPeer: (sourceId) => diagramEditingPresence[sourceId] ?? null,
+  })(attrs, applyUpdate)
+}
+
 function scheduleTaskHydration() {
   window.clearTimeout(taskHydrateTimer)
   taskHydrateTimer = window.setTimeout(refreshTaskReferences, 250)
@@ -1259,7 +1301,7 @@ watch(immersiveOpen, (open) => {
           <span class="task-editor-save-state" aria-live="polite">{{ formatLastSavedAt(lastSavedAt) }}</span>
         </div>
       </header>
-      <RichTextToolbar v-if="editor && collaborationContentReady" :editor="editor" attachment @link="setLink" @attachment="openFilePicker('embedded')" />
+      <RichTextToolbar v-if="editor && collaborationContentReady" :editor="editor" attachment diagram @link="setLink" @attachment="openFilePicker('embedded')" @diagram="openDiagramEditor(null, (payload) => { editor?.chain().focus().insertContent(payload).run() })" />
       <input ref="fileInput" class="sr-only" type="file" multiple :accept="fileAccept" @change="handleFiles(($event.target as HTMLInputElement).files)" />
       <div class="selection-menu-host">
         <BubbleMenu v-if="editor" :editor="editor" :tippy-options="bubbleMenuOptions" class="selection-menu">
@@ -1297,6 +1339,8 @@ watch(immersiveOpen, (open) => {
       </section>
       <EditorLinkDialog ref="linkDialog" :editor="() => editor" />
       <EditorSheetPickerDialog :open="sheetPickerOpen" :sheets="sheetPickerSheets" @select="resolveSheetPicker($event)" @close="resolveSheetPicker(null)" />
+      <DrawioEditorModal ref="drawioModal" />
+      <DiagramConflictConfirm ref="diagramConflict" />
       <TodoDialog
         :open="taskDialogOpen"
         :initial-title="taskInitialTitle"
