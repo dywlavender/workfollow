@@ -88,6 +88,12 @@ class HomeScreen extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: 20),
+                if (controller.shouldShowWeeklyReview) ...[
+                  _WeeklyReviewCard(
+                      summary: controller.weeklyReview,
+                      onOpen: () => controller.selectView(WorkspaceView.completed)),
+                  const SizedBox(height: 14),
+                ],
                 Row(
                   children: [
                     Expanded(
@@ -250,6 +256,59 @@ class HomeScreen extends StatelessWidget {
       const ['一', '二', '三', '四', '五', '六', '日'][value - 1];
 }
 
+class _WeeklyReviewCard extends StatelessWidget {
+  const _WeeklyReviewCard({required this.summary, required this.onOpen});
+
+  final WeeklyReviewSummary summary;
+  final VoidCallback onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = WorkFollowTheme.of(context);
+    final message = summary.completed == 0
+        ? '上周还没有完成记录，先完成一件事。'
+        : '上周完成 ${summary.completed} 件 · ${summary.weekdayLabel}'
+            '${summary.overdue > 0 ? ' · 还有 ${summary.overdue} 件逾期未清' : ''}';
+    return AppCard(
+      padding: const EdgeInsets.fromLTRB(18, 13, 12, 13),
+      color: tokens.accentFaint,
+      borderColor: tokens.accent.withValues(alpha: .16),
+      child: Row(children: [
+        Container(
+            width: 32,
+            height: 32,
+            decoration: BoxDecoration(
+                color: tokens.accent.withValues(alpha: .12),
+                borderRadius: BorderRadius.circular(9)),
+            child: Icon(Icons.auto_awesome_outlined,
+                size: 17, color: tokens.accent)),
+        const SizedBox(width: 11),
+        Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text('上周回顾',
+              style: TextStyle(
+                  color: tokens.textPrimary,
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w800)),
+          const SizedBox(height: 3),
+          Text(message,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(color: tokens.textSecondary, fontSize: 11)),
+        ])),
+        TextButton(
+            onPressed: onOpen,
+            style: TextButton.styleFrom(
+                foregroundColor: tokens.accent,
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                minimumSize: Size.zero,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap),
+            child: const Text('看完成', style: TextStyle(fontSize: 10.5))),
+      ]),
+    );
+  }
+}
+
 class _HomePanel extends StatelessWidget {
   const _HomePanel({
     required this.title,
@@ -344,6 +403,7 @@ class _HomeTaskList extends StatelessWidget {
         for (final task in tasks)
           _HomeTaskRow(
             task: task,
+            controller: controller,
             overdue: overdue,
             onOpen: () => controller.openTask(task.id),
             onToggle: () => controller.toggleTask(task.id),
@@ -356,11 +416,13 @@ class _HomeTaskList extends StatelessWidget {
 class _HomeTaskRow extends StatelessWidget {
   const _HomeTaskRow(
       {required this.task,
+      required this.controller,
       required this.onOpen,
       required this.onToggle,
       required this.overdue});
 
   final TaskItem task;
+  final WorkspaceController controller;
   final VoidCallback onOpen;
   final VoidCallback onToggle;
   final bool overdue;
@@ -368,10 +430,17 @@ class _HomeTaskRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tokens = WorkFollowTheme.of(context);
+    final listColor = Color(controller.colorValueForList(task.listName));
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 5),
       child: Row(
         children: [
+          Container(
+              width: 4,
+              height: 22,
+              decoration: BoxDecoration(
+                  color: listColor, borderRadius: BorderRadius.circular(2))),
+          const SizedBox(width: 5),
           GestureDetector(
             onTap: onToggle,
             child: Semantics(

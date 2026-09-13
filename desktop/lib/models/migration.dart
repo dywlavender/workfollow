@@ -19,6 +19,7 @@ class MigrationListRecord {
     required this.name,
     required this.sortOrder,
     required this.protectedList,
+    this.color,
   });
 
   final String? id;
@@ -26,12 +27,18 @@ class MigrationListRecord {
   final int sortOrder;
   final bool protectedList;
 
+  /// Optional ARGB/hex colour chosen by the user. Older migration files do
+  /// not contain this field; the desktop client derives a stable palette
+  /// colour from the list name when it is absent.
+  final String? color;
+
   factory MigrationListRecord.fromJson(Map<String, dynamic> json) {
     return MigrationListRecord(
       id: _nullableString(json['id']),
       name: _requiredString(json, 'name'),
       sortOrder: _intValue(json['sortOrder']),
       protectedList: _boolValue(json['protected']),
+      color: _nullableString(json['color']),
     );
   }
 
@@ -40,6 +47,7 @@ class MigrationListRecord {
         'name': name,
         'sortOrder': sortOrder,
         'protected': protectedList,
+        if (color != null && color!.trim().isNotEmpty) 'color': color,
       };
 }
 

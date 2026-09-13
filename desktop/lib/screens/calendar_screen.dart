@@ -134,7 +134,12 @@ class _CalendarScreenState extends State<CalendarScreen> {
                 final isSelected =
                     selectedDay != null && _sameDay(date, selectedDay!);
                 // Counts come from the real task dates, not the current view.
-                final count = widget.controller.tasksForDay(date).length;
+                final dayTasks = widget.controller.tasksForDay(date);
+                final count = dayTasks.length;
+                final dayColor = dayTasks.isEmpty
+                    ? tokens.accent
+                    : Color(widget.controller
+                        .colorValueForList(dayTasks.first.listName));
                 return DragTarget<String>(
                   // Dropping an agenda row (or a dragged task id) here
                   // reschedules it to this day, keeping its clock time.
@@ -188,7 +193,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
                                       width: 5,
                                       height: 5,
                                       decoration: BoxDecoration(
-                                          color: tokens.accent,
+                                          color: dayColor,
                                           shape: BoxShape.circle)),
                               ],
                             ),
@@ -223,8 +228,9 @@ class _CalendarScreenState extends State<CalendarScreen> {
       a.year == b.year && a.month == b.month && a.day == b.day;
 }
 
-Widget _agendaRow(BuildContext context, TaskItem task, WorkFollowTheme tokens,
-    VoidCallback onOpen) {
+Widget _agendaRow(BuildContext context, TaskItem task,
+    WorkspaceController controller, WorkFollowTheme tokens, VoidCallback onOpen) {
+  final listColor = Color(controller.colorValueForList(task.listName));
   return Material(
     color: Colors.transparent,
     child: InkWell(
@@ -239,7 +245,7 @@ Widget _agendaRow(BuildContext context, TaskItem task, WorkFollowTheme tokens,
                   ? Icons.check_circle_outline_rounded
                   : Icons.radio_button_unchecked_rounded,
               size: 15,
-              color: task.completed ? tokens.success : tokens.accent,
+              color: task.completed ? tokens.success : listColor,
             ),
             const SizedBox(width: 9),
             Expanded(
@@ -329,9 +335,9 @@ class _SelectedDayAgenda extends StatelessWidget {
                           ),
                           childWhenDragging: Opacity(
                               opacity: .35,
-                              child: _agendaRow(context, task, tokens,
-                                  () => controller.openTask(task.id))),
-                          child: _agendaRow(context, task, tokens,
+                              child: _agendaRow(context, task, controller,
+                                  tokens, () => controller.openTask(task.id))),
+                          child: _agendaRow(context, task, controller, tokens,
                               () => controller.openTask(task.id)),
                         ),
                       );

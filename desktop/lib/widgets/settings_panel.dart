@@ -17,6 +17,8 @@ Future<void> showSettingsPanel({
   required VoidCallback onToggleTheme,
   required ValueChanged<ThemeMode> onSetThemeMode,
   required ThemeMode themeMode,
+  bool compactDensity = false,
+  ValueChanged<bool>? onSetDensity,
 }) {
   return showGeneralDialog<void>(
     context: context,
@@ -29,6 +31,8 @@ Future<void> showSettingsPanel({
       onToggleTheme: onToggleTheme,
       onSetThemeMode: onSetThemeMode,
       themeMode: themeMode,
+      compactDensity: compactDensity,
+      onSetDensity: onSetDensity,
     ),
     transitionBuilder: (context, animation, secondaryAnimation, child) =>
         BackdropFilter(
@@ -44,12 +48,16 @@ class _SettingsPanel extends StatefulWidget {
     required this.onToggleTheme,
     required this.onSetThemeMode,
     required this.themeMode,
+    this.compactDensity = false,
+    this.onSetDensity,
   });
 
   final WorkspaceController controller;
   final VoidCallback onToggleTheme;
   final ValueChanged<ThemeMode> onSetThemeMode;
   final ThemeMode themeMode;
+  final bool compactDensity;
+  final ValueChanged<bool>? onSetDensity;
 
   @override
   State<_SettingsPanel> createState() => _SettingsPanelState();
@@ -59,6 +67,7 @@ class _SettingsPanelState extends State<_SettingsPanel> {
   bool importing = false;
   int page = 0;
   late ThemeMode appearance = widget.themeMode;
+  late bool densityCompact = widget.compactDensity;
   String? importMessage;
   String? importError;
 
@@ -340,6 +349,23 @@ class _SettingsPanelState extends State<_SettingsPanel> {
                                             widget.onSetThemeMode(value);
                                           })),
                                   const SizedBox(height: 32),
+                                  const Text('列表密度',
+                                      style: TextStyle(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w600)),
+                                  const SizedBox(height: 8),
+                                  Text('紧凑模式适合长清单；舒适模式保留更多呼吸感。',
+                                      style: TextStyle(
+                                          fontSize: 12,
+                                          color: tokens.textSecondary)),
+                                  const SizedBox(height: 12),
+                                  _DensitySegment(
+                                      compact: densityCompact,
+                                      onSelect: (value) {
+                                        setState(() => densityCompact = value);
+                                        widget.onSetDensity?.call(value);
+                                      }),
+                                  const SizedBox(height: 28),
                                   const Text('个人工作空间',
                                       style: TextStyle(
                                           fontSize: 14,
@@ -350,6 +376,12 @@ class _SettingsPanelState extends State<_SettingsPanel> {
                                           fontSize: 13,
                                           height: 1.6,
                                           color: tokens.textSecondary)),
+                                  const SizedBox(height: 12),
+                                  Text('清单颜色可在侧栏清单的 ⋯ 菜单中选择，并会同步到任务行、日历和统计。',
+                                      style: TextStyle(
+                                          fontSize: 12,
+                                          height: 1.6,
+                                          color: tokens.textTertiary)),
                                 ],
                                 if (page == 1) ...[
                                   const Text('系统通知',
@@ -432,7 +464,7 @@ class _SettingsPanelState extends State<_SettingsPanel> {
                                     '搜索任务和笔记': '⌘K',
                                     '设置': '⌘,',
                                     '今天 / 收集箱 / 计划': '⌘1 / ⌘2 / ⌘3',
-                                    '日历 / 笔记': '⌘4 / ⌘5',
+                                    '日历 / 笔记 / 四象限': '⌘4 / ⌘5 / ⌘6',
                                     '全局快速录入': '⇧⌘Space',
                                     '收起编辑 / 取消弹窗': 'Esc'
                                   }.entries)
@@ -557,6 +589,46 @@ class _ModeSegment extends StatelessWidget {
             ),
         ],
       ),
+    );
+  }
+}
+
+class _DensitySegment extends StatelessWidget {
+  const _DensitySegment({required this.compact, required this.onSelect});
+
+  final bool compact;
+  final ValueChanged<bool> onSelect;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = WorkFollowTheme.of(context);
+    return Container(
+      padding: const EdgeInsets.all(2),
+      decoration: BoxDecoration(
+          color: tokens.content,
+          borderRadius: BorderRadius.circular(7),
+          border: Border.all(color: tokens.border)),
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        for (final option in const [(false, '舒适'), (true, '紧凑')])
+          InkWell(
+            onTap: () => onSelect(option.$1),
+            borderRadius: BorderRadius.circular(5),
+            child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 13, vertical: 6),
+                decoration: BoxDecoration(
+                    color: compact == option.$1
+                        ? tokens.accentSoft
+                        : Colors.transparent,
+                    borderRadius: BorderRadius.circular(5)),
+                child: Text(option.$2,
+                    style: TextStyle(
+                        color: compact == option.$1
+                            ? tokens.accent
+                            : tokens.textSecondary,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600)))),
+      ]),
     );
   }
 }

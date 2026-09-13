@@ -16,8 +16,10 @@ import '../widgets/task_row.dart';
 /// status group becomes one card, rows expand into an inline editor in place,
 /// and the today view gets a progress ring in the header.
 class TodayScreen extends StatefulWidget {
-  const TodayScreen({super.key, required this.controller});
+  const TodayScreen(
+      {super.key, required this.controller, this.compactDensity = false});
   final WorkspaceController controller;
+  final bool compactDensity;
   @override
   State<TodayScreen> createState() => _TodayScreenState();
 }
@@ -68,7 +70,7 @@ class _TodayScreenState extends State<TodayScreen> {
     return LayoutBuilder(builder: (context, constraints) {
       final narrow = constraints.maxWidth < 700;
       // Short windows get a dense header so the first tasks stay on screen.
-      final compact = constraints.maxHeight < 680;
+      final compact = widget.compactDensity || constraints.maxHeight < 680;
       final selected = c.selectedTask;
       final detail = narrow && detailOnly && selected != null;
       final groups = <(String, List<TaskItem>, bool)>[];
@@ -266,6 +268,25 @@ class _TodayScreenState extends State<TodayScreen> {
       (String, List<TaskItem>, bool) group, bool narrow) {
     final tokens = WorkFollowTheme.of(context);
     final (label, tasks, danger) = group;
+    if (widget.compactDensity) {
+      final edge = danger ? tokens.warning : tokens.border;
+      return [
+        const SizedBox(height: 8),
+        if (label.isNotEmpty)
+          Padding(
+              padding: const EdgeInsets.fromLTRB(8, 4, 8, 6),
+              child: _groupHeaderRow(
+                  label: label,
+                  count: tasks.length,
+                  dotColor: edge,
+                  textColor: danger ? tokens.warning : tokens.textSecondary)),
+        for (var i = 0; i < tasks.length; i++) ...[
+          _task(tasks[i], narrow, compact: true),
+          if (i < tasks.length - 1)
+            Container(height: 1, margin: const EdgeInsets.only(left: 48), color: tokens.border),
+        ],
+      ];
+    }
     final edge = danger ? tokens.warning.withValues(alpha: .5) : tokens.border;
     return [
       const SizedBox(height: 12),
@@ -279,7 +300,7 @@ class _TodayScreenState extends State<TodayScreen> {
                   dotColor: danger ? tokens.warning : tokens.accent,
                   textColor: danger ? tokens.warning : tokens.textSecondary)),
       for (var i = 0; i < tasks.length; i++) ...[
-        _cardSide(_task(tasks[i], narrow), edge),
+          _cardSide(_task(tasks[i], narrow, compact: widget.compactDensity), edge),
         if (i < tasks.length - 1)
           _cardSide(
               Container(
@@ -294,6 +315,37 @@ class _TodayScreenState extends State<TodayScreen> {
 
   List<Widget> _completedSlivers(List<TaskItem> completed) {
     final tokens = WorkFollowTheme.of(context);
+    if (widget.compactDensity) {
+      return [
+        const SizedBox(height: 8),
+        Padding(
+            padding: const EdgeInsets.fromLTRB(8, 4, 8, 6),
+            child: GestureDetector(
+                onTap: () => setState(() => showCompleted = !showCompleted),
+                behavior: HitTestBehavior.opaque,
+                child: _groupHeaderRow(
+                    label: '已完成',
+                    count: completed.length,
+                    dotColor: tokens.success,
+                    textColor: tokens.textSecondary,
+                    trailing: Expanded(
+                        child: Row(children: [
+                      const Spacer(),
+                      Icon(
+                          showCompleted
+                              ? Icons.expand_less_rounded
+                              : Icons.expand_more_rounded,
+                          size: 18,
+                          color: tokens.textTertiary),
+                    ]))))),
+        if (showCompleted)
+          for (var i = 0; i < completed.length; i++) ...[
+            _task(completed[i], false, compact: true),
+            if (i < completed.length - 1)
+              Container(height: 1, margin: const EdgeInsets.only(left: 48), color: tokens.border),
+          ],
+      ];
+    }
     return [
       const SizedBox(height: 12),
       _cardTop(
@@ -321,7 +373,7 @@ class _TodayScreenState extends State<TodayScreen> {
                   ]))))),
       if (showCompleted)
         for (var i = 0; i < completed.length; i++) ...[
-          _cardSide(_task(completed[i], false), tokens.border),
+          _cardSide(_task(completed[i], false, compact: widget.compactDensity), tokens.border),
           if (i < completed.length - 1)
             _cardSide(
                 Container(
@@ -334,7 +386,7 @@ class _TodayScreenState extends State<TodayScreen> {
     ];
   }
 
-  Widget _task(TaskItem task, bool narrow) {
+  Widget _task(TaskItem task, bool narrow, {bool compact = false}) {
     final c = widget.controller, tokens = WorkFollowTheme.of(context);
     if (!narrow && c.selectedTaskId == task.id && c.multiSelectCount == 0) {
       return Container(
@@ -378,6 +430,7 @@ class _TodayScreenState extends State<TodayScreen> {
                       controller: c,
                       selected: c.selectedTaskId == task.id,
                       multiSelected: c.isTaskMultiSelected(task.id),
+                      compact: compact,
                       onActivate: () {
                         if (narrow) {
                           setState(() => detailOnly = true);

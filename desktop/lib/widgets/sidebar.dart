@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../models/list_color.dart';
 import '../models/migration.dart';
 import '../state/workspace_controller.dart';
 import '../theme/workfollow_theme.dart';
@@ -106,6 +107,18 @@ class AppRail extends StatelessWidget {
                             controller: controller,
                             list: list,
                           )),
+                  _RailSectionHeader(label: '标签'),
+                  if (controller.allTags().isEmpty)
+                    Padding(
+                        padding: const EdgeInsets.fromLTRB(11, 3, 8, 6),
+                        child: Text('在任务中输入 #标签',
+                            style: TextStyle(
+                                color: tokens.textTertiary, fontSize: 10.5))),
+                  ...controller.allTags().entries.map((entry) => _TagItem(
+                        controller: controller,
+                        name: entry.key,
+                        count: entry.value,
+                      )),
                   _RailSectionHeader(
                     label: '笔记',
                     trailing: Row(mainAxisSize: MainAxisSize.min, children: [
@@ -187,6 +200,18 @@ class AppRail extends StatelessWidget {
                     icon: Icons.calendar_month_outlined,
                     selected: controller.view == WorkspaceView.calendar,
                     onTap: () => controller.selectView(WorkspaceView.calendar),
+                  ),
+                  _RailItem(
+                    label: '四象限',
+                    icon: Icons.grid_view_rounded,
+                    selected: controller.view == WorkspaceView.matrix,
+                    onTap: () => controller.selectView(WorkspaceView.matrix),
+                  ),
+                  _RailItem(
+                    label: '统计',
+                    icon: Icons.insights_outlined,
+                    selected: controller.view == WorkspaceView.stats,
+                    onTap: () => controller.selectView(WorkspaceView.stats),
                   ),
                   _RailItem(
                     label: '废纸篓',
@@ -609,6 +634,7 @@ class _TaskListItemState extends State<_TaskListItem> {
     final tokens = WorkFollowTheme.of(context);
     final selected = widget.controller.isListSelected(widget.list.name);
     final count = widget.controller.countForList(widget.list.name);
+    final listColor = Color(widget.controller.colorValueForList(widget.list.name));
     return MouseRegion(
       onEnter: (_) => setState(() => hovering = true),
       onExit: (_) => setState(() => hovering = false),
@@ -630,7 +656,7 @@ class _TaskListItemState extends State<_TaskListItem> {
                 color: dragActive
                     ? tokens.accentSoft
                     : (selected
-                        ? tokens.accentSoft
+                        ? listColor.withValues(alpha: .12)
                         : (hovering
                             ? tokens.content.withOpacity(.7)
                             : Colors.transparent)),
@@ -641,9 +667,11 @@ class _TaskListItemState extends State<_TaskListItem> {
               ),
               child: Row(
                 children: [
-                  Icon(Icons.list_alt_outlined,
-                      size: 18,
-                      color: selected ? tokens.accent : tokens.textSecondary),
+                  Container(
+                      width: 9,
+                      height: 9,
+                      decoration: BoxDecoration(
+                          color: listColor, shape: BoxShape.circle)),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(widget.list.name,
@@ -651,7 +679,7 @@ class _TaskListItemState extends State<_TaskListItem> {
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                             color:
-                                selected ? tokens.accent : tokens.textSecondary,
+                                selected ? listColor : tokens.textSecondary,
                             fontSize: 12.5,
                             fontWeight:
                                 selected ? FontWeight.w700 : FontWeight.w500)),
@@ -660,7 +688,7 @@ class _TaskListItemState extends State<_TaskListItem> {
                     Text('$count',
                         style: TextStyle(
                             color:
-                                selected ? tokens.accent : tokens.textTertiary,
+                                selected ? listColor : tokens.textTertiary,
                             fontSize: 10,
                             fontWeight: FontWeight.w700)),
                   AnimatedOpacity(
@@ -695,6 +723,7 @@ class _TaskListItemState extends State<_TaskListItem> {
           anchor.dx, anchor.dy, anchor.dx + 1, anchor.dy + 1),
       items: const [
         PopupMenuItem(value: 'rename', child: Text('重命名')),
+        PopupMenuItem(value: 'color', child: Text('选择颜色')),
         PopupMenuItem(
             value: 'delete',
             child: Text('删除清单', style: TextStyle(color: Colors.redAccent))),
@@ -703,9 +732,47 @@ class _TaskListItemState extends State<_TaskListItem> {
     if (!context.mounted) return;
     if (choice == 'rename') {
       await _renameList(context);
+    } else if (choice == 'color') {
+      await _pickListColor(context);
     } else if (choice == 'delete') {
       await _confirmDelete(context);
     }
+  }
+
+  Future<void> _pickListColor(BuildContext context) async {
+    final selected = await showDialog<String>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+              title: const Text('选择清单颜色'),
+              content: SizedBox(
+                width: 270,
+                child: Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  children: [
+                    for (final value in listColorPalette)
+                      InkWell(
+                        borderRadius: BorderRadius.circular(99),
+                        onTap: () => Navigator.of(dialogContext)
+                            .pop(colorHexFromValue(value)),
+                        child: Container(
+                            width: 30,
+                            height: 30,
+                            decoration: BoxDecoration(
+                                color: Color(value), shape: BoxShape.circle),
+                            child: widget.controller.colorHexForList(
+                                        widget.list.name) ==
+                                    colorHexFromValue(value)
+                                ? const Icon(Icons.check,
+                                    size: 16, color: Colors.white)
+                                : null),
+                      ),
+                  ],
+                ),
+              ),
+            ));
+    if (!context.mounted || selected == null) return;
+    widget.controller.updateListColor(widget.list.name, selected);
   }
 
   Future<void> _renameList(BuildContext context) async {
@@ -761,6 +828,110 @@ class _TaskListItemState extends State<_TaskListItem> {
       ),
     );
     if (confirmed == true) widget.controller.deleteList(widget.list.name);
+  }
+}
+
+class _TagItem extends StatefulWidget {
+  const _TagItem({
+    required this.controller,
+    required this.name,
+    required this.count,
+  });
+
+  final WorkspaceController controller;
+  final String name;
+  final int count;
+
+  @override
+  State<_TagItem> createState() => _TagItemState();
+}
+
+class _TagItemState extends State<_TagItem> {
+  bool hovering = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = WorkFollowTheme.of(context);
+    final selected = widget.controller.selectedTagName == widget.name;
+    return MouseRegion(
+      onEnter: (_) => setState(() => hovering = true),
+      onExit: (_) => setState(() => hovering = false),
+      child: GestureDetector(
+        onTap: () => widget.controller.selectTag(widget.name),
+        onSecondaryTap: () => _showMenu(context),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 140),
+          margin: const EdgeInsets.symmetric(vertical: 2),
+          padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 8),
+          decoration: BoxDecoration(
+              color: selected
+                  ? tokens.accentSoft
+                  : (hovering
+                      ? tokens.content.withValues(alpha: .65)
+                      : Colors.transparent),
+              borderRadius: BorderRadius.circular(9)),
+          child: Row(children: [
+            Icon(Icons.tag_outlined,
+                size: 17,
+                color: selected ? tokens.accent : tokens.textSecondary),
+            const SizedBox(width: 10),
+            Expanded(
+                child: Text(widget.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                        color: selected ? tokens.accent : tokens.textSecondary,
+                        fontSize: 12.5,
+                        fontWeight:
+                            selected ? FontWeight.w700 : FontWeight.w500))),
+            Text('${widget.count}',
+                style: TextStyle(
+                    color: selected ? tokens.accent : tokens.textTertiary,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700)),
+          ]),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showMenu(BuildContext context) async {
+    final action = await showMenu<String>(
+        context: context,
+        position: const RelativeRect.fromLTRB(160, 240, 0, 0),
+        items: const [
+          PopupMenuItem(value: 'rename', child: Text('重命名标签')),
+          PopupMenuItem(value: 'delete', child: Text('删除标签')),
+        ]);
+    if (!context.mounted || action == null) return;
+    if (action == 'delete') {
+      widget.controller.deleteTag(widget.name);
+      return;
+    }
+    final input = TextEditingController(text: widget.name);
+    final name = await showDialog<String>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+              title: const Text('重命名标签'),
+              content: TextField(
+                  controller: input,
+                  autofocus: true,
+                  onSubmitted: (value) => Navigator.of(dialogContext).pop(value)),
+              actions: [
+                TextButton(
+                    onPressed: () => Navigator.of(dialogContext).pop(),
+                    child: const Text('取消')),
+                FilledButton(
+                    onPressed: () => Navigator.of(dialogContext).pop(input.text),
+                    child: const Text('保存')),
+              ],
+            ));
+    input.dispose();
+    if (!context.mounted || name == null) return;
+    if (!widget.controller.renameTag(widget.name, name)) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('标签名称为空或已存在。')));
+    }
   }
 }
 

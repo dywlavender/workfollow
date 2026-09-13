@@ -4,9 +4,11 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 
 import '../models/migration.dart';
+import '../models/list_color.dart';
 import '../models/task.dart';
 import '../services/local_workspace_store.dart';
 import '../services/notification_service.dart';
+import '../services/smart_date_parser.dart';
 
 enum WorkspaceView {
   home,
@@ -21,6 +23,15 @@ enum WorkspaceView {
   work,
   study,
   personal,
+  stats,
+  matrix,
+}
+
+enum MatrixQuadrant {
+  doNow,
+  schedule,
+  delegate,
+  later,
 }
 
 /// Reflects the real persistence state, never a fixed label.
@@ -96,6 +107,30 @@ class MigrationImportSummary {
   final int skippedNotes;
   final int importedLists;
   final int importedFolders;
+}
+
+class WeeklyReviewSummary {
+  const WeeklyReviewSummary({
+    required this.completed,
+    required this.overdue,
+    required this.mostProductiveWeekday,
+    required this.weekStart,
+    required this.weekEnd,
+  });
+
+  final int completed;
+  final int overdue;
+  final int? mostProductiveWeekday;
+  final DateTime weekStart;
+  final DateTime weekEnd;
+
+  bool get isEmpty => completed == 0 && overdue == 0;
+
+  String get weekdayLabel {
+    final weekday = mostProductiveWeekday;
+    if (weekday == null) return '还没有完成记录';
+    return '周${const ['一', '二', '三', '四', '五', '六', '日'][weekday - 1]}最高产';
+  }
 }
 
 class WorkspaceController extends ChangeNotifier {
@@ -232,6 +267,7 @@ class WorkspaceController extends ChangeNotifier {
   List<MigrationFolderRecord> _folders;
   WorkspaceView _view = WorkspaceView.home;
   String? _selectedListName;
+  String? _selectedTagName;
   String? _selectedTaskId;
   int taskOpenVersion = 0;
   int noteOpenVersion = 0;
@@ -283,6 +319,7 @@ class WorkspaceController extends ChangeNotifier {
         WorkspaceView.study ||
         WorkspaceView.personal =>
           true,
+        WorkspaceView.stats || WorkspaceView.matrix => false,
         WorkspaceView.home ||
         WorkspaceView.calendar ||
         WorkspaceView.notes ||
@@ -295,22 +332,70 @@ class WorkspaceController extends ChangeNotifier {
   int get actionVersion => _actionVersion;
   String get lastActionMessage => _lastActionMessage;
   String? get selectedListName => _selectedListName;
-  String get viewTitle =>
-      _selectedListName ??
-      switch (_view) {
-        WorkspaceView.home => '首页',
-        WorkspaceView.today => '今天',
-        WorkspaceView.inbox => '收集箱',
-        WorkspaceView.plan => '计划',
-        WorkspaceView.all => '全部任务',
-        WorkspaceView.completed => '已完成',
-        WorkspaceView.work => '工作',
-        WorkspaceView.study => '学习',
-        WorkspaceView.personal => '个人',
-        WorkspaceView.calendar => '日历',
-        WorkspaceView.notes => '笔记',
-        WorkspaceView.trash => '废纸篓',
-      };
+  String? get selectedTagName => _selectedTagName;
+  bool get shouldShowWeeklyReview => DateTime.now().weekday <= 3;
+
+  WeeklyReviewSummary get weeklyReview {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final thisMonday = today.subtract(Duration(days: today.weekday - 1));
+    final weekStart = thisMonday.subtract(const Duration(days: 7));
+    final weekEnd = thisMonday;
+    final completionByDay = <int, int>{};
+    var completed = 0;
+    for (final task in _tasks) {
+      if (task.deletedAt != null || !task.completed) continue;
+      final value = localDateTimeFromStorage(task.completedAt);
+      if (value == null || value.isBefore(weekStart) || !value.isBefore(weekEnd)) {
+        continue;
+      }
+      completed += 1;
+      completionByDay[value.weekday] = (completionByDay[value.weekday] ?? 0) + 1;
+    }
+    int? mostProductive;
+    for (final entry in completionByDay.entries) {
+      if (mostProductive == null ||
+          entry.value > (completionByDay[mostProductive] ?? 0) ||
+          (entry.value == (completionByDay[mostProductive] ?? 0) &&
+              entry.key < mostProductive)) {
+        mostProductive = entry.key;
+      }
+    }
+    final overdue = _tasks.where((task) {
+      if (task.deletedAt != null || task.completed) return false;
+      final due = localDateTimeFromStorage(task.dueAt);
+      if (due == null) return false;
+      final dueDay = DateTime(due.year, due.month, due.day);
+      return dueDay.isBefore(today);
+    }).length;
+    return WeeklyReviewSummary(
+      completed: completed,
+      overdue: overdue,
+      mostProductiveWeekday: mostProductive,
+      weekStart: weekStart,
+      weekEnd: weekEnd,
+    );
+  }
+  String get viewTitle {
+    if (_selectedTagName != null) return '标签：$_selectedTagName';
+    if (_selectedListName != null) return _selectedListName!;
+    return switch (_view) {
+      WorkspaceView.home => '首页',
+      WorkspaceView.today => '今天',
+      WorkspaceView.inbox => '收集箱',
+      WorkspaceView.plan => '计划',
+      WorkspaceView.all => '全部任务',
+      WorkspaceView.completed => '已完成',
+      WorkspaceView.work => '工作',
+      WorkspaceView.study => '学习',
+      WorkspaceView.personal => '个人',
+      WorkspaceView.calendar => '日历',
+      WorkspaceView.notes => '笔记',
+      WorkspaceView.trash => '废纸篓',
+      WorkspaceView.stats => '统计',
+      WorkspaceView.matrix => '四象限',
+    };
+  }
   LocalWorkspaceStore get workspaceStore => _store;
   MigrationBundle get snapshot => _snapshot();
 
@@ -329,6 +414,58 @@ class WorkspaceController extends ChangeNotifier {
 
   List<MigrationListRecord> get lists => List.unmodifiable(_lists);
   List<MigrationFolderRecord> get folders => List.unmodifiable(_folders);
+
+  /// Aggregates tags from real task records for the sidebar. Completed tasks
+  /// remain discoverable; deleted tasks do not keep stale tag entries alive.
+  Map<String, int> allTags() {
+    final counts = <String, int>{};
+    for (final task in _tasks) {
+      if (task.deletedAt != null) continue;
+      for (final raw in task.tags) {
+        final tag = raw.trim();
+        if (tag.isEmpty) continue;
+        counts[tag] = (counts[tag] ?? 0) + 1;
+      }
+    }
+    final entries = counts.entries.toList()
+      ..sort((a, b) {
+        final byCount = b.value.compareTo(a.value);
+        return byCount != 0 ? byCount : a.key.compareTo(b.key);
+      });
+    return Map<String, int>.fromEntries(entries);
+  }
+
+  int colorValueForList(String listName) {
+    final list = _lists.where((item) => item.name == listName).firstOrNull;
+    return listColorValueForName(listName, override: list?.color);
+  }
+
+  String colorHexForList(String listName) =>
+      colorHexFromValue(colorValueForList(listName));
+
+  bool updateListColor(String rawName, String? rawColor) {
+    final name = rawName.trim();
+    if (name.isEmpty || name == '收集箱') return false;
+    final index = _lists.indexWhere((list) => list.name == name);
+    if (index < 0) return false;
+    final value = colorValueFromHex(rawColor);
+    if (value == null) return false;
+    final normalized = colorHexFromValue(value);
+    final current = _lists[index];
+    if (current.color == normalized) return true;
+    final updatedLists = List<MigrationListRecord>.from(_lists);
+    updatedLists[index] = MigrationListRecord(
+      id: current.id,
+      name: current.name,
+      sortOrder: current.sortOrder,
+      protectedList: current.protectedList,
+      color: normalized,
+    );
+    _lists = updatedLists;
+    _schedulePersist();
+    _notify();
+    return true;
+  }
   bool get restoredFromDisk => _restoredFromDisk;
   SaveStatus get saveStatus => _saveStatus;
   String? get saveError => _saveError;
@@ -543,6 +680,7 @@ class WorkspaceController extends ChangeNotifier {
     _restoredFromDisk = true;
     _selectedTaskId = null;
     _selectedListName = null;
+    _selectedTagName = null;
     _selectedNoteId = _notes.isEmpty ? null : _notes.first.id;
     _lastCompletedTaskId = null;
     _lastRemovedTaskId = null;
@@ -578,26 +716,97 @@ class WorkspaceController extends ChangeNotifier {
         !deadline.isAfter(DateTime(now.year, now.month, now.day));
   }
 
+  bool matrixImportant(TaskItem task) =>
+      task.priority == TaskPriority.high || task.priority == TaskPriority.medium;
+
+  bool matrixUrgent(TaskItem task, {DateTime? now}) {
+    final due = localDateTimeFromStorage(task.dueAt);
+    if (due == null) return false;
+    final reference = now ?? DateTime.now();
+    final today = DateTime(reference.year, reference.month, reference.day);
+    final dueDay = DateTime(due.year, due.month, due.day);
+    final horizon = today.add(const Duration(days: 3));
+    return !dueDay.isAfter(horizon);
+  }
+
+  MatrixQuadrant matrixQuadrantFor(TaskItem task, {DateTime? now}) {
+    final important = matrixImportant(task);
+    final urgent = matrixUrgent(task, now: now);
+    if (important && urgent) return MatrixQuadrant.doNow;
+    if (important) return MatrixQuadrant.schedule;
+    if (urgent) return MatrixQuadrant.delegate;
+    return MatrixQuadrant.later;
+  }
+
+  List<TaskItem> matrixTasks({bool includeCompleted = false}) {
+    return List.unmodifiable(_tasks.where((task) =>
+        task.deletedAt == null && (includeCompleted || !task.completed)));
+  }
+
+  /// Applies the smallest predictable change when a task crosses a matrix
+  /// boundary. Entering “立即做” schedules today; entering an unimportant
+  /// quadrant lowers priority while preserving the task's existing date.
+  void moveTaskToMatrix(String id, MatrixQuadrant quadrant) {
+    final task = _tasks.where((item) => item.id == id).firstOrNull;
+    if (task == null || task.deletedAt != null) return;
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    switch (quadrant) {
+      case MatrixQuadrant.doNow:
+        final due = localDateTimeFromStorage(task.dueAt);
+        updateTaskDue(
+            id,
+            DateTime(today.year, today.month, today.day, due?.hour ?? 0,
+                due?.minute ?? 0),
+            hasTime: task.scheduledWithTime);
+      case MatrixQuadrant.schedule:
+        if (matrixUrgent(task, now: now)) {
+          final due = localDateTimeFromStorage(task.dueAt);
+          updateTaskDue(
+              id,
+              today.add(const Duration(days: 7)).add(Duration(
+                  hours: due?.hour ?? 0, minutes: due?.minute ?? 0)),
+              hasTime: task.scheduledWithTime);
+        }
+      case MatrixQuadrant.delegate:
+        if (matrixImportant(task)) updateTaskPriority(id, TaskPriority.low);
+      case MatrixQuadrant.later:
+        if (matrixImportant(task)) updateTaskPriority(id, TaskPriority.none);
+        if (matrixUrgent(task, now: now)) {
+          final due = localDateTimeFromStorage(task.dueAt);
+          updateTaskDue(
+              id,
+              today.add(const Duration(days: 7)).add(Duration(
+                  hours: due?.hour ?? 0, minutes: due?.minute ?? 0)),
+              hasTime: task.scheduledWithTime);
+        }
+    }
+  }
+
   List<TaskItem> get visibleTasks {
     if (_view == WorkspaceView.trash) {
       return List.unmodifiable(_tasks.where((task) => task.deletedAt != null));
     }
     final active = _tasks.where((task) => task.deletedAt == null);
+    final tagged = _selectedTagName == null
+        ? active
+        : active.where((task) => task.tags.contains(_selectedTagName));
     if (_selectedListName != null && _view == WorkspaceView.all) {
       return List.unmodifiable(
-          active.where((task) => task.listName == _selectedListName));
+          tagged.where((task) => task.listName == _selectedListName));
     }
     final filtered = switch (_view) {
-      WorkspaceView.home => active,
-      WorkspaceView.today => active.where(needsAttentionToday),
-      WorkspaceView.inbox => active.where((task) => task.listName == '收集箱'),
+      WorkspaceView.home => tagged,
+      WorkspaceView.today => tagged.where(needsAttentionToday),
+      WorkspaceView.inbox => tagged.where((task) => task.listName == '收集箱'),
       WorkspaceView.plan =>
-        active.where((task) => task.bucket == TaskBucket.later),
-      WorkspaceView.all => active,
-      WorkspaceView.completed => active.where((task) => task.completed),
-      WorkspaceView.work => active.where((task) => task.listName == '工作'),
-      WorkspaceView.study => active.where((task) => task.listName == '学习'),
-      WorkspaceView.personal => active.where((task) => task.listName == '个人'),
+        tagged.where((task) => task.bucket == TaskBucket.later),
+      WorkspaceView.all => tagged,
+      WorkspaceView.completed => tagged.where((task) => task.completed),
+      WorkspaceView.work => tagged.where((task) => task.listName == '工作'),
+      WorkspaceView.study => tagged.where((task) => task.listName == '学习'),
+      WorkspaceView.personal => tagged.where((task) => task.listName == '个人'),
+      WorkspaceView.stats || WorkspaceView.matrix => const <TaskItem>[],
       WorkspaceView.calendar ||
       WorkspaceView.notes ||
       WorkspaceView.trash =>
@@ -643,6 +852,7 @@ class WorkspaceController extends ChangeNotifier {
         active.where((task) => task.listName == '学习' && !task.completed).length,
       WorkspaceView.personal =>
         active.where((task) => task.listName == '个人' && !task.completed).length,
+      WorkspaceView.stats || WorkspaceView.matrix => 0,
       WorkspaceView.calendar || WorkspaceView.notes => 0,
       WorkspaceView.trash =>
         _tasks.where((task) => task.deletedAt != null).length,
@@ -660,9 +870,12 @@ class WorkspaceController extends ChangeNotifier {
       _view == WorkspaceView.all && _selectedListName == listName;
 
   void selectView(WorkspaceView destination) {
-    if (_view == destination && _selectedListName == null) return;
+    if (_view == destination &&
+        _selectedListName == null &&
+        _selectedTagName == null) return;
     _view = destination;
     _selectedListName = null;
+    _selectedTagName = null;
     _multiSelectedTaskIds = {};
     _multiSelectAnchorId = null;
     _selectedTaskId = null;
@@ -675,9 +888,29 @@ class WorkspaceController extends ChangeNotifier {
     if (_view == WorkspaceView.all && _selectedListName == name) return;
     _view = WorkspaceView.all;
     _selectedListName = name;
+    _selectedTagName = null;
     _multiSelectedTaskIds = {};
     _multiSelectAnchorId = null;
     _selectedTaskId = null;
+    _notify();
+  }
+
+  void selectTag(String rawName) {
+    final name = rawName.trim();
+    if (name.isEmpty || !allTags().containsKey(name)) return;
+    if (_view == WorkspaceView.all && _selectedTagName == name) return;
+    _view = WorkspaceView.all;
+    _selectedTagName = name;
+    _selectedListName = null;
+    _multiSelectedTaskIds = {};
+    _multiSelectAnchorId = null;
+    _selectedTaskId = null;
+    _notify();
+  }
+
+  void clearTagSelection() {
+    if (_selectedTagName == null) return;
+    _selectedTagName = null;
     _notify();
   }
 
@@ -779,6 +1012,7 @@ class WorkspaceController extends ChangeNotifier {
           : WorkspaceView.today;
       _selectedListName = null;
     }
+    _selectedTagName = null;
     _selectedTaskId = id;
     _notify();
   }
@@ -1423,6 +1657,48 @@ class WorkspaceController extends ChangeNotifier {
         forceUnscheduled: true,
       );
 
+  /// Shared pipeline for the native menu-bar capture and other one-line
+  /// entry points. It intentionally lives in the controller so every surface
+  /// applies the same date, recurrence, tag, list and priority semantics.
+  bool addTaskFromSmartInput(String rawInput,
+      {DateTime? now, bool preferInbox = false}) {
+    final input = rawInput.trim();
+    if (input.isEmpty) return false;
+    final result = const SmartDateParser().parse(input, now: now);
+    final parsedList = result.listName;
+    final existingList = parsedList != null &&
+            _lists.any((list) => list.name == parsedList)
+        ? parsedList
+        : null;
+    final targetList = preferInbox ? (existingList ?? '收集箱') : existingList;
+    final title = const SmartDateParser().titleFromSpans(
+        input,
+        result.spans.where((span) =>
+            span.kind != SmartTokenKind.list || existingList != null));
+    if (title.trim().isEmpty) return false;
+    final accepted = addTask(
+      title,
+      listName: targetList,
+      dueAt: result.dueAt,
+      forceUnscheduled: preferInbox && result.dueAt == null,
+    );
+    if (!accepted) return false;
+    final id = _tasks.first.id;
+    if (result.recurrenceType != 'NONE') {
+      updateTaskRecurrence(id, result.recurrenceType,
+          config: result.recurrenceConfig);
+    }
+    if (result.priority != TaskPriority.none) {
+      updateTaskPriority(id, result.priority);
+    }
+    if (result.tags.isNotEmpty) updateTaskTags(id, result.tags);
+    if (result.hasTime && result.reminderAt != null) {
+      updateTaskDue(id, result.dueAt, hasTime: true);
+      updateTaskReminder(id, result.reminderAt);
+    }
+    return true;
+  }
+
   String _creationListName() {
     if (_selectedListName != null) return _selectedListName!;
     return switch (_view) {
@@ -1604,6 +1880,48 @@ class WorkspaceController extends ChangeNotifier {
               tags: List.unmodifiable(tags),
               updatedAt: DateTime.now().toIso8601String(),
             ));
+  }
+
+  bool renameTag(String rawOldName, String rawNewName) {
+    final oldName = rawOldName.trim();
+    final newName = rawNewName.trim();
+    if (oldName.isEmpty || newName.isEmpty || oldName == newName) return false;
+    if (!allTags().containsKey(oldName) || allTags().containsKey(newName)) {
+      return false;
+    }
+    _tasks = _tasks
+        .map((task) => task.tags.contains(oldName)
+            ? task.copyWith(
+                tags: task.tags
+                    .map((tag) => tag == oldName ? newName : tag)
+                    .toSet()
+                    .toList(),
+                updatedAt: DateTime.now().toIso8601String())
+            : task)
+        .toList();
+    if (_selectedTagName == oldName) _selectedTagName = newName;
+    _schedulePersist();
+    _notify();
+    return true;
+  }
+
+  bool deleteTag(String rawName) {
+    final name = rawName.trim();
+    if (name.isEmpty || !allTags().containsKey(name)) return false;
+    _tasks = _tasks
+        .map((task) => task.tags.contains(name)
+            ? task.copyWith(
+                tags: task.tags.where((tag) => tag != name).toList(),
+                updatedAt: DateTime.now().toIso8601String())
+            : task)
+        .toList();
+    if (_selectedTagName == name) {
+      _selectedTagName = null;
+      _view = WorkspaceView.all;
+    }
+    _schedulePersist();
+    _notify();
+    return true;
   }
 
   bool moveTaskToList(String id, String rawListName) {
@@ -1812,6 +2130,7 @@ class WorkspaceController extends ChangeNotifier {
                 name: newName,
                 sortOrder: list.sortOrder,
                 protectedList: list.protectedList,
+                color: list.color,
               )
             : list)
         .toList();
@@ -2159,6 +2478,7 @@ class WorkspaceController extends ChangeNotifier {
     _folderSequence = _nextFolderSequence();
     _selectedTaskId = null;
     _selectedListName = null;
+    _selectedTagName = null;
     _selectedNoteId = _notes.isEmpty ? null : _notes.first.id;
     _lastCompletedTaskId = null;
     _lastRemovedTaskId = null;

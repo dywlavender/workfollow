@@ -257,6 +257,8 @@ class MainFlutterWindow: NSWindow {
     viewMenu.addCommand("计划", key: "3", command: "goPlan", target: commandTarget)
     viewMenu.addCommand("日历", key: "4", command: "goCalendar", target: commandTarget)
     viewMenu.addCommand("笔记", key: "5", command: "goNotes", target: commandTarget)
+    viewMenu.addCommand("四象限", key: "6", command: "goMatrix", target: commandTarget)
+    viewMenu.addCommand("统计", key: "", command: "goStats", target: commandTarget)
     viewMenu.addItem(.separator())
     viewMenu.addCommand("显示或隐藏侧栏", key: "\\", command: "toggleSidebar",
                         target: commandTarget)

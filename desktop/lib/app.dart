@@ -9,7 +9,9 @@ import 'package:flutter_quill/flutter_quill.dart'
 
 import 'screens/calendar_screen.dart';
 import 'screens/home_screen.dart';
+import 'screens/matrix_screen.dart';
 import 'screens/notes_screen.dart';
+import 'screens/stats_screen.dart';
 import 'screens/today_screen.dart';
 import 'screens/trash_screen.dart';
 import 'services/preferences_store.dart';
@@ -36,6 +38,7 @@ class WorkFollowApp extends StatefulWidget {
 
 class _WorkFollowAppState extends State<WorkFollowApp> {
   ThemeMode _themeMode = ThemeMode.system;
+  bool _compactDensity = false;
   late final WorkspacePreferencesStore _preferencesStore;
 
   @override
@@ -53,15 +56,33 @@ class _WorkFollowAppState extends State<WorkFollowApp> {
   Future<void> _restoreThemeMode() async {
     final preferences = await _preferencesStore.load();
     final saved = preferences['themeMode'];
-    if (!mounted || saved is! String) return;
-    final mode =
-        ThemeMode.values.where((value) => value.name == saved).firstOrNull;
-    if (mode != null) setState(() => _themeMode = mode);
+    if (!mounted) return;
+    final mode = saved is String
+        ? ThemeMode.values.where((value) => value.name == saved).firstOrNull
+        : null;
+    final density = preferences['density'];
+    if (mode != null || density is String) {
+      setState(() {
+        if (mode != null) _themeMode = mode;
+        if (density is String) _compactDensity = density == 'compact';
+      });
+    }
   }
 
   void _setThemeMode(ThemeMode mode) {
     setState(() => _themeMode = mode);
-    unawaited(_preferencesStore.save({'themeMode': mode.name}));
+    unawaited(_preferencesStore.save({
+      'themeMode': mode.name,
+      'density': _compactDensity ? 'compact' : 'comfortable',
+    }));
+  }
+
+  void _setDensity(bool compact) {
+    setState(() => _compactDensity = compact);
+    unawaited(_preferencesStore.save({
+      'themeMode': _themeMode.name,
+      'density': compact ? 'compact' : 'comfortable',
+    }));
   }
 
   void _toggleTheme() {
@@ -91,6 +112,8 @@ class _WorkFollowAppState extends State<WorkFollowApp> {
         onToggleTheme: _toggleTheme,
         onSetThemeMode: _setThemeMode,
         themeMode: _themeMode,
+        compactDensity: _compactDensity,
+        onSetDensity: _setDensity,
       ),
     );
   }
@@ -102,12 +125,16 @@ class WorkFollowShell extends StatefulWidget {
     required this.onToggleTheme,
     required this.onSetThemeMode,
     required this.themeMode,
+    this.compactDensity = false,
+    this.onSetDensity,
     this.demoMode = false,
   });
 
   final VoidCallback onToggleTheme;
   final ValueChanged<ThemeMode> onSetThemeMode;
   final ThemeMode themeMode;
+  final bool compactDensity;
+  final ValueChanged<bool>? onSetDensity;
   final bool demoMode;
 
   @override
@@ -154,15 +181,16 @@ class _WorkFollowShellState extends State<WorkFollowShell> {
       }
       return null;
     });
-    // Menu bar quick capture always saves to the inbox, regardless of the
-    // view the app happens to be showing.
+    // Menu bar quick capture is independent of the current page. Explicit
+    // smart-entry list markers still win; otherwise it lands in the inbox.
     _captureChannel.setMethodCallHandler((call) async {
       if (call.method == 'quickCapture' && call.arguments is String) {
         // Native quick capture is deliberately independent of the main
         // window's current page and returns an explicit acknowledgement so
         // the native panel only clears text after a successful write request.
-        final accepted =
-            controller.addTaskToInboxUnscheduled(call.arguments as String);
+        final accepted = controller.addTaskFromSmartInput(
+            call.arguments as String,
+            preferInbox: true);
         await controller.waitForPendingSaves();
         return accepted && controller.saveStatus == SaveStatus.saved;
       }
@@ -192,6 +220,10 @@ class _WorkFollowShellState extends State<WorkFollowShell> {
         controller.selectView(WorkspaceView.calendar);
       case 'goNotes':
         controller.selectView(WorkspaceView.notes);
+      case 'goStats':
+        controller.selectView(WorkspaceView.stats);
+      case 'goMatrix':
+        controller.selectView(WorkspaceView.matrix);
     }
   }
 
@@ -250,7 +282,9 @@ class _WorkFollowShellState extends State<WorkFollowShell> {
         controller: controller,
         onToggleTheme: widget.onToggleTheme,
         onSetThemeMode: widget.onSetThemeMode,
-        themeMode: widget.themeMode);
+        themeMode: widget.themeMode,
+        compactDensity: widget.compactDensity,
+        onSetDensity: widget.onSetDensity);
   }
 
   Future<void> _openFilters() async {
@@ -278,6 +312,8 @@ class _WorkFollowShellState extends State<WorkFollowShell> {
               (WorkspaceView.plan, '计划'),
               (WorkspaceView.all, '全部任务'),
               (WorkspaceView.completed, '已完成'),
+              (WorkspaceView.matrix, '四象限'),
+              (WorkspaceView.stats, '统计'),
             ])
               ListTile(
                 leading: Icon(
@@ -338,6 +374,8 @@ class _WorkFollowShellState extends State<WorkFollowShell> {
                 CalendarIntent(),
             SingleActivator(LogicalKeyboardKey.digit5, meta: true):
                 NotesIntent(),
+            SingleActivator(LogicalKeyboardKey.digit6, meta: true):
+                MatrixIntent(),
           },
           child: Actions(
             actions: <Type, Action<Intent>>{
@@ -377,6 +415,10 @@ class _WorkFollowShellState extends State<WorkFollowShell> {
                 controller.selectView(WorkspaceView.notes);
                 return null;
               }),
+              MatrixIntent: CallbackAction<Intent>(onInvoke: (_) {
+                controller.selectView(WorkspaceView.matrix);
+                return null;
+              }),
             },
             child: Scaffold(
               backgroundColor: tokens.canvas,
@@ -400,7 +442,9 @@ class _WorkFollowShellState extends State<WorkFollowShell> {
                                 controller: controller,
                                 onToggleTheme: widget.onToggleTheme,
                                 onSetThemeMode: widget.onSetThemeMode,
-                                themeMode: widget.themeMode),
+                                themeMode: widget.themeMode,
+                                compactDensity: widget.compactDensity,
+                                onSetDensity: widget.onSetDensity),
                           ),
                         ),
                       ),
@@ -419,7 +463,9 @@ class _WorkFollowShellState extends State<WorkFollowShell> {
                                         ? _newNote
                                         : _newTask),
                             Expanded(
-                              child: _WorkspaceContent(controller: controller),
+                              child: _WorkspaceContent(
+                                  controller: controller,
+                                  compactDensity: widget.compactDensity),
                             ),
                           ],
                         ),
@@ -569,9 +615,11 @@ class _ToolbarSearchState extends State<_ToolbarSearch> {
 }
 
 class _WorkspaceContent extends StatelessWidget {
-  const _WorkspaceContent({required this.controller});
+  const _WorkspaceContent(
+      {required this.controller, required this.compactDensity});
 
   final WorkspaceController controller;
+  final bool compactDensity;
 
   @override
   Widget build(BuildContext context) {
@@ -592,9 +640,14 @@ class _WorkspaceContent extends StatelessWidget {
           NotesScreen(key: const ValueKey('notes'), controller: controller),
         WorkspaceView.trash =>
           TrashScreen(key: const ValueKey('trash'), controller: controller),
+        WorkspaceView.stats =>
+          StatsScreen(key: const ValueKey('stats'), controller: controller),
+        WorkspaceView.matrix =>
+          MatrixScreen(key: const ValueKey('matrix'), controller: controller),
         _ => TodayScreen(
             key: ValueKey(controller.view),
             controller: controller,
+            compactDensity: compactDensity,
           ),
       },
     );
@@ -675,4 +728,8 @@ class CalendarIntent extends Intent {
 
 class NotesIntent extends Intent {
   const NotesIntent();
+}
+
+class MatrixIntent extends Intent {
+  const MatrixIntent();
 }

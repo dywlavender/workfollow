@@ -14,11 +14,13 @@ class TaskRow extends StatefulWidget {
       required this.controller,
       required this.selected,
       this.multiSelected = false,
+      this.compact = false,
       this.onActivate});
   final TaskItem task;
   final WorkspaceController controller;
   final bool selected;
   final bool multiSelected;
+  final bool compact;
   final VoidCallback? onActivate;
   @override
   State<TaskRow> createState() => _TaskRowState();
@@ -92,6 +94,7 @@ class _TaskRowState extends State<TaskRow> {
     final selected = widget.selected || widget.multiSelected;
     final due = localDateTimeFromStorage(task.dueAt);
     final deadline = localDateTimeFromStorage(task.deadlineAt);
+    final listColor = Color(widget.controller.colorValueForList(task.listName));
     final dateColor = task.bucket == TaskBucket.overdue && !task.completed
         ? tokens.warning
         : tokens.textTertiary;
@@ -115,10 +118,10 @@ class _TaskRowState extends State<TaskRow> {
                         onTap: open,
                         onSecondaryTap: () => menu(anchor),
                         behavior: HitTestBehavior.opaque,
-                        child: AnimatedContainer(
+                          child: AnimatedContainer(
                           duration: const Duration(milliseconds: 120),
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 10, vertical: 9),
+                          padding: EdgeInsets.symmetric(
+                              horizontal: 10, vertical: widget.compact ? 5 : 9),
                           decoration: BoxDecoration(
                               color: selected
                                   ? tokens.accentSoft
@@ -132,6 +135,13 @@ class _TaskRowState extends State<TaskRow> {
                                           tokens.accent.withValues(alpha: .35))
                                   : Border.all(color: Colors.transparent)),
                           child: Row(children: [
+                            Container(
+                                width: 4,
+                                height: 30,
+                                decoration: BoxDecoration(
+                                    color: listColor,
+                                    borderRadius: BorderRadius.circular(2))),
+                            const SizedBox(width: 7),
                             SizedBox(
                                 width: 26,
                                 height: 28,
@@ -165,7 +175,7 @@ class _TaskRowState extends State<TaskRow> {
                                       maxLines: 2,
                                       overflow: TextOverflow.ellipsis,
                                       style: TextStyle(
-                                          fontSize: 14,
+                                          fontSize: widget.compact ? 13.5 : 14,
                                           height: 1.4,
                                           fontWeight: FontWeight.w500,
                                           color: task.completed
