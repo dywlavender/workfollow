@@ -4,352 +4,266 @@ import 'package:flutter/services.dart';
 import '../models/task.dart';
 import '../state/workspace_controller.dart';
 import '../theme/workfollow_theme.dart';
-import 'app_icon_button.dart';
-
-/// Opens the task detail for the focused row (Return).
-class _OpenTaskIntent extends Intent {
-  const _OpenTaskIntent();
-}
+import 'desktop_popover.dart';
+import 'task_date_picker.dart';
 
 class TaskRow extends StatefulWidget {
-  const TaskRow({
-    super.key,
-    required this.task,
-    required this.controller,
-    required this.selected,
-    this.multiSelected = false,
-    this.onActivate,
-  });
-
+  const TaskRow(
+      {super.key,
+      required this.task,
+      required this.controller,
+      required this.selected,
+      this.multiSelected = false,
+      this.onActivate});
   final TaskItem task;
   final WorkspaceController controller;
   final bool selected;
   final bool multiSelected;
-
-  /// Called on a plain click and on Return, after the selection is updated.
-  /// The narrow-window layout uses it to push the detail pane.
   final VoidCallback? onActivate;
-
   @override
   State<TaskRow> createState() => _TaskRowState();
 }
 
 class _TaskRowState extends State<TaskRow> {
   bool hovering = false;
-  bool focusVisible = false;
-
-  void _handleTap() {
-    // Cmd-click toggles membership, Shift-click extends a range; a plain
-    // click keeps the single-selection behavior.
-    final keyboard = HardwareKeyboard.instance;
-    if (keyboard.isMetaPressed || keyboard.isControlPressed) {
+  void open() {
+    final keys = HardwareKeyboard.instance;
+    if (keys.isMetaPressed || keys.isControlPressed) {
       widget.controller.toggleMultiSelect(widget.task.id);
       return;
     }
-    if (keyboard.isShiftPressed) {
+    if (keys.isShiftPressed) {
       widget.controller.extendMultiSelectTo(widget.task.id);
       return;
     }
-    if (widget.controller.multiSelectCount > 0) {
-      widget.controller.clearMultiSelect();
-    }
+    widget.controller.clearMultiSelect();
     widget.controller.selectTask(widget.task.id);
     widget.onActivate?.call();
   }
 
+  Future<void> menu(BuildContext anchor) async {
+    final action = await showDesktopMenu<String>(anchor, entries: [
+      DesktopMenuEntry('complete', widget.task.completed ? '标记未完成' : '完成任务',
+          icon: Icons.check),
+      const DesktopMenuEntry('today', '安排到今天', icon: Icons.today_outlined),
+      const DesktopMenuEntry('date', '安排其他日期…',
+          icon: Icons.calendar_today_outlined),
+      const DesktopMenuEntry('duplicate', '创建副本',
+          icon: Icons.control_point_duplicate_outlined),
+      const DesktopMenuEntry('delete', '移到废纸篓',
+          icon: Icons.delete_outline, destructive: true),
+    ]);
+    if (!mounted) return;
+    switch (action) {
+      case 'complete':
+        widget.controller.toggleTask(widget.task.id);
+      case 'today':
+        widget.controller.moveTaskToToday(widget.task.id);
+      case 'duplicate':
+        widget.controller.duplicateTask(widget.task.id);
+      case 'delete':
+        widget.controller.removeTask(widget.task.id);
+      case 'date':
+        await date(anchor);
+    }
+  }
+
+  Future<void> date(BuildContext anchor) async {
+    if (!anchor.mounted) return;
+    final result = await showTaskDatePicker(anchor,
+        value: widget.task.dueAt, hasTime: widget.task.scheduledWithTime);
+    if (result != null && mounted) {
+      final c = widget.controller, id = widget.task.id;
+      c.updateTaskDue(id, result.date, hasTime: result.hasTime);
+      if (!c.visibleTasks.any((task) => task.id == id)) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(result.date == null
+                ? '已清除安排日期'
+                : '已安排到${calendarDateLabel(result.date, hasTime: result.hasTime)}'),
+            action: SnackBarAction(
+                label: '查看任务', onPressed: () => c.openTask(id))));
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final tokens = WorkFollowTheme.of(context);
-    final task = widget.task;
-    final rowColor = widget.multiSelected
-        ? tokens.accentSoft
-        : (widget.selected
-            ? tokens.accentSoft
-            : (hovering
-                ? tokens.overlay.withOpacity(.62)
-                : Colors.transparent));
-    final titleColor =
-        task.completed ? tokens.textTertiary : tokens.textPrimary;
-    final titleStyle = TextStyle(
-      color: titleColor,
-      fontSize: 13,
-      fontWeight: widget.selected ? FontWeight.w600 : FontWeight.w500,
-      height: 1.35,
-      decoration:
-          task.completed ? TextDecoration.lineThrough : TextDecoration.none,
-      decorationColor: tokens.textTertiary.withOpacity(.55),
-      decorationThickness: 1.2,
-    );
-
-    return MouseRegion(
-      onEnter: (_) => setState(() => hovering = true),
-      onExit: (_) => setState(() => hovering = false),
-      child: FocusableActionDetector(
-        onShowFocusHighlight: (value) => setState(() => focusVisible = value),
-        // Space completes the row; Return opens the detail pane and focuses
-        // its title editor, so editing never needs the mouse.
-        shortcuts: const <ShortcutActivator, Intent>{
-          SingleActivator(LogicalKeyboardKey.space): ActivateIntent(),
-          SingleActivator(LogicalKeyboardKey.enter): _OpenTaskIntent(),
+    final tokens = WorkFollowTheme.of(context), task = widget.task;
+    final selected = widget.selected || widget.multiSelected;
+    final due = localDateTimeFromStorage(task.dueAt);
+    final deadline = localDateTimeFromStorage(task.deadlineAt);
+    final dateColor = task.bucket == TaskBucket.overdue && !task.completed
+        ? tokens.warning
+        : tokens.textTertiary;
+    return CallbackShortcuts(
+        bindings: {
+          const SingleActivator(LogicalKeyboardKey.enter): open,
+          const SingleActivator(LogicalKeyboardKey.space): () =>
+              widget.controller.toggleTask(task.id),
         },
-        actions: <Type, Action<Intent>>{
-          ActivateIntent: CallbackAction<Intent>(onInvoke: (_) {
-            widget.controller.toggleTask(task.id);
-            return null;
-          }),
-          _OpenTaskIntent: CallbackAction<Intent>(onInvoke: (_) {
-            widget.controller.selectTask(task.id);
-            widget.controller.requestInspectorTitleFocus();
-            widget.onActivate?.call();
-            return null;
-          }),
-        },
-        child: Semantics(
-          button: true,
-          selected: widget.selected || widget.multiSelected,
-          label: '${task.title}${task.completed ? '，已完成' : ''}',
-          child: GestureDetector(
-            onTap: _handleTap,
-            onSecondaryTapDown: (details) =>
-                _showContextMenu(context, details.globalPosition),
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 150),
-              curve: Curves.easeOut,
-              margin: const EdgeInsets.only(bottom: 2),
-              padding: const EdgeInsets.fromLTRB(14, 10, 10, 10),
-              decoration: BoxDecoration(
-                color: rowColor,
-                borderRadius: BorderRadius.circular(9),
-                border: (focusVisible || widget.multiSelected)
-                    ? Border.all(
-                        color:
-                            tokens.accent.withOpacity(focusVisible ? .42 : .34))
-                    : null,
-              ),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  widget.multiSelected
-                      ? GestureDetector(
-                          onTap: () =>
-                              widget.controller.toggleMultiSelect(task.id),
-                          child: Semantics(
-                            button: true,
-                            checked: true,
-                            label: '取消选择',
-                            child: Container(
-                              width: 28,
-                              height: 28,
-                              alignment: Alignment.center,
-                              child: Container(
-                                width: 19,
-                                height: 19,
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  color: tokens.accent,
-                                ),
-                                child: const Icon(Icons.check_rounded,
-                                    size: 13, color: Colors.white),
-                              ),
-                            ),
-                          ),
-                        )
-                      : _TaskCompletionButton(
-                          completed: task.completed,
-                          accent: tokens.accent,
-                          success: tokens.success,
-                          onPressed: () =>
-                              widget.controller.toggleTask(task.id),
-                        ),
-                  const SizedBox(width: 11),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(task.title,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: titleStyle),
-                        const SizedBox(height: 6),
-                        Wrap(
-                          spacing: 6,
-                          runSpacing: 4,
-                          children: [
-                            if (task.timeLabel != null)
-                              _TaskMeta(
-                                icon: task.bucket == TaskBucket.overdue
-                                    ? Icons.warning_amber_rounded
-                                    : Icons.schedule_rounded,
-                                label: task.timeLabel!,
-                                color: task.bucket == TaskBucket.overdue
-                                    ? tokens.warning
-                                    : tokens.textTertiary,
-                              ),
-                            _TaskMeta(
-                                icon: Icons.circle,
-                                label: task.listName,
-                                color: _listColor(task.listName, tokens)),
+        child: Focus(
+          child: MouseRegion(
+            cursor: SystemMouseCursors.click,
+            onEnter: (_) => setState(() => hovering = true),
+            onExit: (_) => setState(() => hovering = false),
+            child: Builder(
+                builder: (anchor) => Semantics(
+                      selected: selected,
+                      button: true,
+                      label: task.title,
+                      child: GestureDetector(
+                        onTap: open,
+                        onSecondaryTap: () => menu(anchor),
+                        behavior: HitTestBehavior.opaque,
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 120),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 10, vertical: 9),
+                          decoration: BoxDecoration(
+                              color: selected
+                                  ? tokens.accentSoft
+                                  : hovering
+                                      ? tokens.accent.withValues(alpha: .05)
+                                      : Colors.transparent,
+                              borderRadius: BorderRadius.circular(9),
+                              border: selected
+                                  ? Border.all(
+                                      color:
+                                          tokens.accent.withValues(alpha: .35))
+                                  : Border.all(color: Colors.transparent)),
+                          child: Row(children: [
+                            SizedBox(
+                                width: 26,
+                                height: 28,
+                                child: Checkbox(
+                                    value:
+                                        widget.multiSelected || task.completed,
+                                    activeColor:
+                                        task.priority == TaskPriority.high
+                                            ? tokens.danger
+                                            : tokens.accent,
+                                    semanticLabel: widget.multiSelected
+                                        ? '取消选择'
+                                        : task.completed
+                                            ? '标记未完成'
+                                            : '完成任务',
+                                    shape: const CircleBorder(),
+                                    side: BorderSide(
+                                        color: tokens.borderStrong, width: 1.5),
+                                    onChanged: (_) => widget.multiSelected
+                                        ? widget.controller
+                                            .toggleMultiSelect(task.id)
+                                        : widget.controller
+                                            .toggleTask(task.id))),
+                            const SizedBox(width: 12),
+                            Expanded(
+                                child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                  Text(task.title,
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                          fontSize: 14,
+                                          height: 1.4,
+                                          fontWeight: FontWeight.w500,
+                                          color: task.completed
+                                              ? tokens.textTertiary
+                                              : tokens.textPrimary,
+                                          decoration: task.completed
+                                              ? TextDecoration.lineThrough
+                                              : null)),
+                                  if (widget.controller.selectedListName ==
+                                          null &&
+                                      task.listName != '收集箱') ...[
+                                    const SizedBox(height: 3),
+                                    Text(task.listName,
+                                        style: TextStyle(
+                                            fontSize: 11,
+                                            color: tokens.textTertiary)),
+                                  ],
+                                ])),
                             if (task.priority != TaskPriority.none)
-                              _TaskMeta(
-                                  icon: Icons.flag_rounded,
-                                  label: task.priority.label,
-                                  color: _priorityColor(task.priority, tokens)),
+                              Padding(
+                                  padding: const EdgeInsets.only(left: 8),
+                                  child: Icon(Icons.flag_rounded,
+                                      size: 14,
+                                      color: switch (task.priority) {
+                                        TaskPriority.high => tokens.danger,
+                                        TaskPriority.medium => tokens.warning,
+                                        _ => tokens.accent,
+                                      })),
                             if (task.subtaskTotal > 0)
-                              _TaskMeta(
-                                  icon: Icons.checklist_rounded,
-                                  label:
+                              Padding(
+                                  padding: const EdgeInsets.only(left: 8),
+                                  child: Text(
                                       '${task.subtaskCompleted}/${task.subtaskTotal}',
-                                  color: tokens.textTertiary),
+                                      style: TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w600,
+                                          color: tokens.textTertiary))),
+                            if (task.recurrenceType != 'NONE')
+                              Padding(
+                                  padding: const EdgeInsets.only(left: 8),
+                                  child: Icon(Icons.repeat,
+                                      size: 14, color: tokens.textTertiary)),
                             if (task.hasAttachment)
-                              Icon(Icons.attach_file_rounded,
-                                  size: 13, color: tokens.textTertiary),
-                          ],
+                              Padding(
+                                  padding: const EdgeInsets.only(left: 8),
+                                  child: Icon(Icons.attach_file,
+                                      size: 14, color: tokens.textTertiary)),
+                            const SizedBox(width: 12),
+                            if (deadline != null)
+                              Tooltip(
+                                  message: '截止日期',
+                                  child: Padding(
+                                      padding: const EdgeInsets.only(right: 6),
+                                      child: Text(
+                                          '⚑ ${calendarDateLabel(deadline)}截止',
+                                          style: TextStyle(
+                                              fontSize: 11,
+                                              color: !task.completed &&
+                                                      !deadline.isAfter(
+                                                          DateTime(
+                                                              DateTime.now()
+                                                                  .year,
+                                                              DateTime.now()
+                                                                  .month,
+                                                              DateTime.now()
+                                                                  .day))
+                                                  ? tokens.danger
+                                                  : tokens.textTertiary)))),
+                            if (due != null)
+                              Builder(
+                                  builder: (dateAnchor) => TextButton(
+                                      onPressed: () => date(dateAnchor),
+                                      style: TextButton.styleFrom(
+                                          foregroundColor: dateColor,
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 6),
+                                          minimumSize: const Size(0, 30)),
+                                      child: Text(
+                                          calendarDateLabel(due,
+                                              hasTime: task.scheduledWithTime),
+                                          style:
+                                              const TextStyle(fontSize: 11)))),
+                            SizedBox(
+                                width: 28,
+                                child: Opacity(
+                                    opacity: hovering || selected ? 1 : 0,
+                                    child: IconButton(
+                                        tooltip: '更多操作',
+                                        padding: EdgeInsets.zero,
+                                        iconSize: 18,
+                                        onPressed: () => menu(anchor),
+                                        icon: Icon(Icons.more_horiz,
+                                            color: tokens.textTertiary)))),
+                          ]),
                         ),
-                      ],
-                    ),
-                  ),
-                  AnimatedOpacity(
-                    duration: const Duration(milliseconds: 120),
-                    opacity: hovering || widget.selected ? 1 : 0,
-                    child: AppIconButton(
-                        icon: Icons.more_horiz_rounded,
-                        tooltip: '更多操作',
-                        size: 28,
-                        iconSize: 17,
-                        onPressed: () => _showContextMenu(context, null)),
-                  ),
-                ],
-              ),
-            ),
+                      ),
+                    )),
           ),
-        ),
-      ),
-    );
-  }
-
-  Future<void> _showContextMenu(BuildContext context, Offset? position) async {
-    final tokens = WorkFollowTheme.of(context);
-    final box = context.findRenderObject() as RenderBox?;
-    final fallback = box == null
-        ? const Offset(300, 260)
-        : box.localToGlobal(Offset(24, box.size.height - 4));
-    final anchor = position ?? fallback;
-    final selected = await showMenu<String>(
-      context: context,
-      color: tokens.overlay,
-      surfaceTintColor: Colors.transparent,
-      elevation: 10,
-      position: RelativeRect.fromLTRB(
-          anchor.dx, anchor.dy, anchor.dx + 1, anchor.dy + 1),
-      items: [
-        PopupMenuItem<String>(
-            value: 'toggle',
-            child: Text(widget.task.completed ? '标记未完成' : '标记完成')),
-        const PopupMenuItem<String>(value: 'today', child: Text('安排到今天')),
-        const PopupMenuDivider(),
-        PopupMenuItem<String>(
-            value: 'delete',
-            child: Text('移到废纸篓', style: TextStyle(color: tokens.danger))),
-      ],
-    );
-    if (!context.mounted) return;
-    if (selected == 'toggle') widget.controller.toggleTask(widget.task.id);
-    if (selected == 'today') widget.controller.moveTaskToToday(widget.task.id);
-    if (selected == 'delete') widget.controller.removeTask(widget.task.id);
-  }
-
-  Color _listColor(String listName, WorkFollowTheme tokens) {
-    return switch (listName) {
-      '工作' => tokens.accent,
-      '学习' => tokens.warning,
-      '个人' => tokens.success,
-      _ => tokens.textTertiary,
-    };
-  }
-
-  Color _priorityColor(TaskPriority priority, WorkFollowTheme tokens) {
-    return switch (priority) {
-      TaskPriority.high => tokens.danger,
-      TaskPriority.medium => tokens.warning,
-      TaskPriority.low => tokens.accent,
-      TaskPriority.none => tokens.textTertiary,
-    };
-  }
-}
-
-class _TaskCompletionButton extends StatelessWidget {
-  const _TaskCompletionButton({
-    required this.completed,
-    required this.accent,
-    required this.success,
-    required this.onPressed,
-  });
-
-  final bool completed;
-  final Color accent;
-  final Color success;
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    return Semantics(
-      button: true,
-      checked: completed,
-      label: completed ? '标记未完成' : '标记完成',
-      child: GestureDetector(
-        onTap: onPressed,
-        child: SizedBox(
-          width: 28,
-          height: 28,
-          child: Center(
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 160),
-              curve: Curves.easeOut,
-              width: 19,
-              height: 19,
-              decoration: BoxDecoration(
-                color: completed ? success : Colors.transparent,
-                shape: BoxShape.circle,
-                border: Border.all(
-                    color: completed ? success : accent.withOpacity(.42),
-                    width: 1.7),
-              ),
-              child: AnimatedScale(
-                duration: const Duration(milliseconds: 150),
-                scale: completed ? 1 : .4,
-                curve: Curves.easeOutBack,
-                child: Icon(Icons.check_rounded, color: Colors.white, size: 13),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _TaskMeta extends StatelessWidget {
-  const _TaskMeta(
-      {required this.icon, required this.label, required this.color});
-
-  final IconData icon;
-  final String label;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, size: icon == Icons.circle ? 6 : 12, color: color),
-        const SizedBox(width: 4),
-        Text(label,
-            style: TextStyle(
-                color: color,
-                fontSize: 10.5,
-                fontWeight: FontWeight.w600,
-                height: 1)),
-      ],
-    );
+        ));
   }
 }

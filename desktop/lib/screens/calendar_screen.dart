@@ -35,7 +35,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
     final cellCount = ((leading + daysInMonth) / 7).ceil() * 7;
     final today = DateTime.now();
     return Container(
-      color: tokens.content,
+      color: tokens.canvas,
       padding: const EdgeInsets.fromLTRB(26, 23, 26, 26),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -153,8 +153,8 @@ class _CalendarScreenState extends State<CalendarScreen> {
                                 ? tokens.accentSoft
                                 : (isSelected
                                     ? tokens.accentSoft
-                                    : tokens.inspector),
-                            borderRadius: BorderRadius.circular(9),
+                                    : tokens.content),
+                            borderRadius: BorderRadius.circular(10),
                             border: Border.all(
                                 color: isSelected || dragActive
                                     ? tokens.accent.withOpacity(.45)
@@ -260,7 +260,7 @@ Widget _agendaRow(BuildContext context, TaskItem task, WorkFollowTheme tokens,
             ),
             const SizedBox(width: 10),
             Text(
-              '${task.listName} · ${task.timeLabel ?? '全天'}',
+              '${task.listName} · ${task.displayTimeLabel ?? '全天'}',
               style: TextStyle(color: tokens.textTertiary, fontSize: 10.5),
             ),
           ],

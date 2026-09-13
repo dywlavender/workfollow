@@ -1,0 +1,313 @@
+import 'dart:math' as math;
+
+import 'package:flutter/material.dart';
+
+import '../theme/workfollow_theme.dart';
+
+/// Shared surfaces for the redesigned workspace pages: cards float on the
+/// canvas, page headers share one hero rhythm, and empty states get one
+/// friendly voice instead of per-screen improvisation.
+
+/// A rounded card that floats on the canvas background.
+class AppCard extends StatelessWidget {
+  const AppCard(
+      {super.key,
+      required this.child,
+      this.padding = const EdgeInsets.all(16),
+      this.radius = 14,
+      this.color,
+      this.borderColor,
+      this.elevated = false});
+
+  final Widget child;
+  final EdgeInsetsGeometry padding;
+  final double radius;
+  final Color? color;
+  final Color? borderColor;
+  final bool elevated;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = WorkFollowTheme.of(context);
+    return Container(
+      decoration: BoxDecoration(
+        color: color ?? tokens.content,
+        borderRadius: BorderRadius.circular(radius),
+        border: Border.all(color: borderColor ?? tokens.border),
+        boxShadow: elevated
+            ? [
+                BoxShadow(
+                    color: tokens.shadow,
+                    blurRadius: 10,
+                    offset: const Offset(0, 2))
+              ]
+            : null,
+      ),
+      child:
+          ClipRRect(borderRadius: BorderRadius.circular(radius), child: child),
+    );
+  }
+}
+
+/// Standard page header: an optional eyebrow pill, a large title and a
+/// subtitle, with room for trailing content (progress, quick stats).
+class PageHeader extends StatelessWidget {
+  const PageHeader(
+      {super.key,
+      required this.title,
+      this.subtitle,
+      this.eyebrow,
+      this.trailing,
+      this.eyebrowColor,
+      this.dense = false});
+
+  final String title;
+  final String? subtitle;
+  final String? eyebrow;
+  final Color? eyebrowColor;
+  final Widget? trailing;
+
+  /// Compact layout for short windows: drops the eyebrow, smaller title.
+  final bool dense;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = WorkFollowTheme.of(context);
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (eyebrow != null && !dense) ...[
+                Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                    decoration: BoxDecoration(
+                        color: (eyebrowColor ?? tokens.accent)
+                            .withValues(alpha: .10),
+                        borderRadius: BorderRadius.circular(999)),
+                    child: Text(eyebrow!,
+                        style: TextStyle(
+                            color: eyebrowColor ?? tokens.accent,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: .2))),
+                const SizedBox(height: 10),
+              ],
+              Text(title,
+                  style: TextStyle(
+                      color: tokens.textPrimary,
+                      fontSize: dense ? 21 : 26,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: dense ? -.4 : -.55,
+                      height: 1.15)),
+              if (subtitle != null) ...[
+                SizedBox(height: dense ? 4 : 7),
+                Text(subtitle!,
+                    style: TextStyle(
+                        color: tokens.textTertiary,
+                        fontSize: dense ? 11.5 : 12.5)),
+              ],
+            ],
+          ),
+        ),
+        if (trailing != null) ...[
+          const SizedBox(width: 16),
+          trailing!,
+        ],
+      ],
+    );
+  }
+}
+
+/// A thin circular progress indicator for "how far along is this view".
+class ProgressRing extends StatelessWidget {
+  const ProgressRing(
+      {super.key,
+      required this.value,
+      required this.done,
+      required this.total,
+      this.size = 54});
+
+  final double value;
+  final int done;
+  final int total;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = WorkFollowTheme.of(context);
+    return SizedBox(
+      width: size,
+      height: size,
+      child: CustomPaint(
+        painter: _RingPainter(
+            value: value.clamp(0.0, 1.0),
+            track: tokens.accent.withValues(alpha: .14),
+            color: tokens.accent),
+        child: Center(
+          child: Text(
+            total == 0 ? '—' : '$done',
+            style: TextStyle(
+                color: tokens.textPrimary,
+                fontSize: size >= 50 ? 16 : 13,
+                fontWeight: FontWeight.w800),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _RingPainter extends CustomPainter {
+  const _RingPainter(
+      {required this.value, required this.track, required this.color});
+
+  final double value;
+  final Color track;
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final stroke = math.min(5.0, size.shortestSide / 10);
+    final rect = Offset.zero & size;
+    final inset = rect.deflate(stroke / 2 + 1);
+    canvas.drawArc(
+        inset,
+        0,
+        math.pi * 2,
+        false,
+        Paint()
+          ..color = track
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = stroke);
+    if (value <= 0) return;
+    canvas.drawArc(
+        inset,
+        -math.pi / 2,
+        math.pi * 2 * value,
+        false,
+        Paint()
+          ..color = color
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = stroke
+          ..strokeCap = StrokeCap.round);
+  }
+
+  @override
+  bool shouldRepaint(_RingPainter oldDelegate) =>
+      oldDelegate.value != value || oldDelegate.color != color;
+}
+
+/// Shared empty state: soft icon disc, one reassuring line, one hint.
+class EmptyHint extends StatelessWidget {
+  const EmptyHint(
+      {super.key,
+      required this.icon,
+      required this.title,
+      required this.hint,
+      this.actionLabel,
+      this.onAction});
+
+  final IconData icon;
+  final String title;
+  final String hint;
+  final String? actionLabel;
+  final VoidCallback? onAction;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = WorkFollowTheme.of(context);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 44, horizontal: 20),
+      child: Column(
+        children: [
+          Container(
+              width: 56,
+              height: 56,
+              decoration: BoxDecoration(
+                  color: tokens.accent.withValues(alpha: .09),
+                  shape: BoxShape.circle),
+              child: Icon(icon, size: 26, color: tokens.accent)),
+          const SizedBox(height: 16),
+          Text(title,
+              style: TextStyle(
+                  color: tokens.textPrimary,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700)),
+          const SizedBox(height: 6),
+          Text(hint,
+              style: TextStyle(color: tokens.textTertiary, fontSize: 12)),
+          if (actionLabel != null && onAction != null) ...[
+            const SizedBox(height: 16),
+            FilledButton.tonal(onPressed: onAction, child: Text(actionLabel!)),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// Compact statistic card used on the home dashboard.
+class StatCard extends StatelessWidget {
+  const StatCard(
+      {super.key,
+      required this.label,
+      required this.value,
+      required this.icon,
+      required this.color,
+      this.onTap});
+
+  final String label;
+  final String value;
+  final IconData icon;
+  final Color color;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = WorkFollowTheme.of(context);
+    final body = Row(
+      children: [
+        Container(
+            width: 34,
+            height: 34,
+            decoration: BoxDecoration(
+                color: color.withValues(alpha: .12),
+                borderRadius: BorderRadius.circular(9)),
+            child: Icon(icon, size: 17, color: color)),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(value,
+                  style: TextStyle(
+                      color: tokens.textPrimary,
+                      fontSize: 19,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: -.4,
+                      height: 1.1)),
+              const SizedBox(height: 3),
+              Text(label,
+                  style: TextStyle(color: tokens.textTertiary, fontSize: 11)),
+            ],
+          ),
+        ),
+      ],
+    );
+    final card = AppCard(
+      padding: const EdgeInsets.fromLTRB(14, 13, 14, 12),
+      child: body,
+    );
+    if (onTap == null) return card;
+    return Material(
+        color: Colors.transparent,
+        child: InkWell(
+            borderRadius: BorderRadius.circular(14),
+            onTap: onTap,
+            child: card));
+  }
+}

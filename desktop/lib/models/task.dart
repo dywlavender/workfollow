@@ -49,6 +49,8 @@ class TaskItem {
     this.contentJson,
     this.dueAt,
     this.dueEndAt,
+    this.deadlineAt,
+    this.hasDueTime,
     this.reminderAt,
     this.recurrenceType = 'NONE',
     this.recurrenceConfig,
@@ -74,6 +76,18 @@ class TaskItem {
   final Map<String, dynamic>? contentJson;
   final String? dueAt;
   final String? dueEndAt;
+  final String? deadlineAt;
+  final bool? hasDueTime;
+
+  bool get scheduledWithTime {
+    final date = localDateTimeFromStorage(dueAt);
+    return hasDueTime ?? (date != null && (date.hour != 0 || date.minute != 0));
+  }
+
+  String? get displayTimeLabel =>
+      taskTimeLabelFor(localDateTimeFromStorage(dueAt),
+          completed: completed, hasTime: scheduledWithTime);
+
   final String? reminderAt;
   final String recurrenceType;
   final Map<String, dynamic>? recurrenceConfig;
@@ -114,6 +128,9 @@ class TaskItem {
     bool clearDueAt = false,
     String? dueEndAt,
     bool clearDueEndAt = false,
+    String? deadlineAt,
+    bool clearDeadlineAt = false,
+    bool? hasDueTime,
     String? reminderAt,
     bool clearReminderAt = false,
     String? recurrenceType,
@@ -146,6 +163,8 @@ class TaskItem {
           clearContentJson ? contentJson : contentJson ?? this.contentJson,
       dueAt: clearDueAt ? dueAt : dueAt ?? this.dueAt,
       dueEndAt: clearDueEndAt ? dueEndAt : dueEndAt ?? this.dueEndAt,
+      deadlineAt: clearDeadlineAt ? null : deadlineAt ?? this.deadlineAt,
+      hasDueTime: hasDueTime ?? this.hasDueTime,
       reminderAt: clearReminderAt ? reminderAt : reminderAt ?? this.reminderAt,
       recurrenceType: recurrenceType ?? this.recurrenceType,
       recurrenceConfig: clearRecurrenceConfig
@@ -182,6 +201,8 @@ class TaskItem {
       contentJson: record.contentJson,
       dueAt: due?.toIso8601String(),
       dueEndAt: dueEnd?.toIso8601String(),
+      deadlineAt: normalizeStoredDateTime(record.deadlineAt),
+      hasDueTime: record.hasDueTime,
       reminderAt: reminder?.toIso8601String(),
       recurrenceType: record.recurrenceType,
       recurrenceConfig: record.recurrenceConfig,
@@ -217,6 +238,8 @@ class TaskItem {
       priority: priority.name.toUpperCase(),
       dueAt: dueAt,
       dueEndAt: dueEndAt,
+      deadlineAt: deadlineAt,
+      hasDueTime: hasDueTime,
       reminderAt: reminderAt,
       recurrenceType: recurrenceType,
       recurrenceConfig: recurrenceConfig,
@@ -249,14 +272,15 @@ TaskBucket taskBucketForDate(DateTime? due,
   return TaskBucket.later;
 }
 
-String? taskTimeLabelFor(DateTime? due, {bool completed = false}) {
+String? taskTimeLabelFor(DateTime? due,
+    {bool completed = false, bool? hasTime}) {
   if (completed) return '已完成';
   if (due == null) return null;
   final now = DateTime.now();
   final startOfToday = DateTime(now.year, now.month, now.day);
   final dueDay = DateTime(due.year, due.month, due.day);
-  // A midnight timestamp means an all-day date, not a fake 00:00 deadline.
-  final hasClockTime = due.hour != 0 || due.minute != 0;
+  // Legacy data infers time from the clock; new data can explicitly use midnight.
+  final hasClockTime = hasTime ?? (due.hour != 0 || due.minute != 0);
   final clock = hasClockTime
       ? ' ${due.hour.toString().padLeft(2, '0')}:${due.minute.toString().padLeft(2, '0')}'
       : '';

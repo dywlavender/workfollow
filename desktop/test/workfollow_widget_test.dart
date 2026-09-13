@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_quill/flutter_quill.dart' as quill;
 
 import 'package:workfollow_personal/app.dart';
 import 'package:workfollow_personal/screens/today_screen.dart';
@@ -9,7 +10,7 @@ import 'package:workfollow_personal/widgets/task_row.dart';
 
 void main() {
   testWidgets('renders the personal home workspace', (tester) async {
-    await tester.pumpWidget(const WorkFollowApp());
+    await tester.pumpWidget(const WorkFollowApp(demoMode: true));
     await tester.pumpAndSettle();
 
     expect(find.text('首页'), findsWidgets);
@@ -27,7 +28,7 @@ void main() {
       tester.view.resetDevicePixelRatio();
     });
 
-    await tester.pumpWidget(const WorkFollowApp());
+    await tester.pumpWidget(const WorkFollowApp(demoMode: true));
     await tester.pumpAndSettle();
 
     final now = DateTime.now();
@@ -38,7 +39,7 @@ void main() {
   });
 
   testWidgets('opens the notes view from the sidebar', (tester) async {
-    await tester.pumpWidget(const WorkFollowApp());
+    await tester.pumpWidget(const WorkFollowApp(demoMode: true));
     await tester.pumpAndSettle();
 
     await tester.ensureVisible(find.text('全部笔记'));
@@ -46,7 +47,17 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('季度评审 · 叙事结构'), findsWidgets);
-    expect(find.text('写下你的想法、会议记录或下一步行动…'), findsOneWidget);
+    await tester.tap(find.text('季度评审 · 叙事结构').last);
+    await tester.pumpAndSettle();
+    expect(find.byType(quill.QuillEditor), findsOneWidget);
+    expect(
+        tester
+            .widget<quill.QuillEditor>(find.byType(quill.QuillEditor))
+            .controller
+            .document
+            .toPlainText()
+            .trim(),
+        isNotEmpty);
   });
 
   testWidgets('unified rail carries task views, lists and note folders',
@@ -58,7 +69,7 @@ void main() {
       tester.view.resetDevicePixelRatio();
     });
 
-    await tester.pumpWidget(const WorkFollowApp());
+    await tester.pumpWidget(const WorkFollowApp(demoMode: true));
     await tester.pumpAndSettle();
     await tester.tap(find.text('计划').first);
     await tester.pumpAndSettle();
@@ -77,7 +88,7 @@ void main() {
       tester.view.resetDevicePixelRatio();
     });
 
-    await tester.pumpWidget(const WorkFollowApp());
+    await tester.pumpWidget(const WorkFollowApp(demoMode: true));
     await tester.pumpAndSettle();
     await tester.ensureVisible(find.text('全部笔记'));
     await tester.tap(find.text('全部笔记'));
@@ -97,7 +108,7 @@ void main() {
       tester.view.resetDevicePixelRatio();
     });
 
-    await tester.pumpWidget(const WorkFollowApp());
+    await tester.pumpWidget(const WorkFollowApp(demoMode: true));
     await tester.pumpAndSettle();
     await tester.tap(find.text('今天').first);
     await tester.pumpAndSettle();
@@ -143,9 +154,17 @@ void main() {
     await tester.pumpAndSettle();
     final visibleRow = find.byType(TaskRow).last;
     await tester.ensureVisible(visibleRow);
+    // Let the scroll settle before resolving anything: the reveal schedules a
+    // new frame, and a finder evaluated before it would read the pre-scroll
+    // layout.
+    await tester.pumpAndSettle();
     final before = tester.state<ScrollableState>(list).position.pixels;
     expect(before, greaterThan(0));
-    await tester.tap(visibleRow);
+    // Tap by title: the lazy list builds more rows during the scroll, so a
+    // type-based ".last" finder would re-resolve to a different, off-screen
+    // row between ensureVisible and tap.
+    final rowTitle = tester.widget<TaskRow>(visibleRow).task.title;
+    await tester.tap(find.text(rowTitle).last);
     await tester.pumpAndSettle();
     expect(find.byTooltip('返回列表'), findsOneWidget);
     await tester.tap(find.byTooltip('返回列表'));
@@ -166,9 +185,12 @@ void main() {
       tester.view.resetDevicePixelRatio();
     });
 
-    await tester.pumpWidget(const WorkFollowApp());
+    await tester.pumpWidget(const WorkFollowApp(demoMode: true));
     await tester.pumpAndSettle();
     await tester.tap(find.text('今天').first);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('准备季度产品评审演示文稿').last);
     await tester.pumpAndSettle();
 
     final title = find.byKey(const ValueKey('task-title-editor'));
@@ -192,7 +214,7 @@ void main() {
       tester.view.resetDevicePixelRatio();
     });
 
-    await tester.pumpWidget(const WorkFollowApp());
+    await tester.pumpWidget(const WorkFollowApp(demoMode: true));
     await tester.pumpAndSettle();
     await tester.ensureVisible(find.text('全部笔记'));
     await tester.tap(find.text('全部笔记'));
@@ -203,11 +225,13 @@ void main() {
     expect(title, findsOneWidget);
     expect(body, findsOneWidget);
     await tester.enterText(title, '本地笔记标题');
-    await tester.enterText(body, '本地笔记正文');
+    final editor = tester.widget<quill.QuillEditor>(body).controller;
+    editor.replaceText(0, editor.document.length - 1, '本地笔记正文',
+        const TextSelection.collapsed(offset: 6));
     await tester.pump();
 
     expect(find.text('本地笔记标题'), findsWidgets);
-    expect(tester.widget<TextField>(body).controller?.text, '本地笔记正文');
+    expect(editor.document.toPlainText().trimRight(), '本地笔记正文');
     expect(find.byTooltip('收藏笔记'), findsOneWidget);
     await tester.tap(find.byTooltip('收藏笔记'));
     await tester.pump();

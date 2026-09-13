@@ -115,6 +115,8 @@ class MigrationTaskRecord {
     required this.priority,
     required this.dueAt,
     required this.dueEndAt,
+    this.deadlineAt,
+    this.hasDueTime,
     required this.reminderAt,
     required this.recurrenceType,
     required this.recurrenceConfig,
@@ -137,6 +139,8 @@ class MigrationTaskRecord {
   final String priority;
   final String? dueAt;
   final String? dueEndAt;
+  final String? deadlineAt;
+  final bool? hasDueTime;
   final String? reminderAt;
   final String recurrenceType;
   final Map<String, dynamic>? recurrenceConfig;
@@ -160,6 +164,9 @@ class MigrationTaskRecord {
       priority: _stringValue(json['priority'], fallback: 'NONE'),
       dueAt: _nullableString(json['dueAt']),
       dueEndAt: _nullableString(json['dueEndAt']),
+      deadlineAt: _nullableString(json['deadlineAt']),
+      hasDueTime:
+          json['hasDueTime'] is bool ? json['hasDueTime'] as bool : null,
       reminderAt: _nullableString(json['reminderAt']),
       recurrenceType: _stringValue(json['recurrenceType'], fallback: 'NONE'),
       recurrenceConfig: _mapValue(json['recurrenceConfig']),
@@ -184,6 +191,8 @@ class MigrationTaskRecord {
         'priority': priority,
         'dueAt': dueAt,
         'dueEndAt': dueEndAt,
+        'deadlineAt': deadlineAt,
+        'hasDueTime': hasDueTime,
         'reminderAt': reminderAt,
         'recurrenceType': recurrenceType,
         'recurrenceConfig': recurrenceConfig,
@@ -267,6 +276,7 @@ class MigrationBundle {
     required this.folders,
     required this.tasks,
     required this.notes,
+    this.embeddedFiles = const {},
   });
 
   final String format;
@@ -276,6 +286,7 @@ class MigrationBundle {
   final List<MigrationFolderRecord> folders;
   final List<MigrationTaskRecord> tasks;
   final List<MigrationNoteRecord> notes;
+  final Map<String, String> embeddedFiles;
 
   bool get isLocalSnapshot => format == localSnapshotFormat;
 
@@ -305,6 +316,10 @@ class MigrationBundle {
       folders: _records(json['folders'], MigrationFolderRecord.fromJson),
       tasks: _records(json['tasks'], MigrationTaskRecord.fromJson),
       notes: _records(json['notes'], MigrationNoteRecord.fromJson),
+      embeddedFiles: {
+        for (final entry in (_mapValue(json['attachmentFiles']) ?? {}).entries)
+          if (entry.value is String) entry.key: entry.value as String
+      },
     );
   }
 
@@ -316,6 +331,7 @@ class MigrationBundle {
         'folders': folders.map((item) => item.toJson()).toList(),
         'tasks': tasks.map((item) => item.toJson()).toList(),
         'notes': notes.map((item) => item.toJson()).toList(),
+        if (embeddedFiles.isNotEmpty) 'attachmentFiles': embeddedFiles,
       };
 }
 

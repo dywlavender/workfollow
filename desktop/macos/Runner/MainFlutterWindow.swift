@@ -26,6 +26,13 @@ class MainFlutterWindow: NSWindow {
     )
     platformChannel.setMethodCallHandler { call, result in
       switch call.method {
+      case "pickExportFile":
+        let panel = NSSavePanel()
+        panel.title = "导出打勾数据"
+        panel.nameFieldStringValue = "打勾备份.workfollow.json"
+        panel.allowedFileTypes = ["json"]
+        panel.canCreateDirectories = true
+        result(panel.runModal() == .OK ? panel.url?.path : nil)
       case "pickMigrationFile":
         let panel = NSOpenPanel()
         panel.canChooseFiles = true
@@ -101,6 +108,7 @@ class MainFlutterWindow: NSWindow {
     RegisterGeneratedPlugins(registry: flutterViewController)
 
     super.awakeFromNib()
+    self.title = "打勾"
   }
 
   // MARK: - Menu bar status item
@@ -275,7 +283,7 @@ class MainFlutterWindow: NSWindow {
 /// retained reference via objc_setAssociatedObject so the target outlives
 /// awakeFromNib.
 class MenuCommandTarget: NSObject {
-  nonisolated(unsafe) static var associatedKey = "menu_command_target"
+  nonisolated(unsafe) static var associatedKey: UInt8 = 0
 
   private let channel: FlutterMethodChannel
 
@@ -308,7 +316,7 @@ private extension NSMenu {
 /// to Dart. Identifiers are derived from task ids so rescheduling replaces
 /// the pending request instead of duplicating it.
 class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
-  nonisolated(unsafe) static var associatedKey = "notification_manager"
+  nonisolated(unsafe) static var associatedKey: UInt8 = 0
 
   private let channel: FlutterMethodChannel
 
@@ -429,7 +437,7 @@ final class GlobalCapture {
 /// key focus without stealing the previous app's active status, and closes
 /// on Return (saving) or Escape (cancelling).
 final class CapturePanelController: NSObject, NSTextFieldDelegate {
-  nonisolated(unsafe) static var associatedKey = "capture_panel_controller"
+  nonisolated(unsafe) static var associatedKey: UInt8 = 0
 
   private let channel: FlutterMethodChannel
   private var panel: NSPanel?

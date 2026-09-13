@@ -99,14 +99,14 @@ class _CommandPaletteState extends State<_CommandPalette> {
       ),
     ];
     final taskResults = widget.controller.activeTasks
-        .where((task) => '${task.title}${task.listName}${task.note ?? ''}'
+        .where((task) => '${task.title} ${task.listName} ${task.description ?? task.note ?? ''} ${task.tags.join(' ')}'
             .toLowerCase()
             .contains(query))
         .take(7)
         .map(
           (task) => _Command(
             task.title,
-            '${task.listName} · ${task.timeLabel ?? '未安排'}',
+            '${task.listName} · ${task.displayTimeLabel ?? '未安排'}',
             task.completed
                 ? Icons.check_circle_outline_rounded
                 : Icons.check_circle_outline,

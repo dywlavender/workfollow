@@ -3,10 +3,12 @@ import 'package:flutter/material.dart';
 import '../models/task.dart';
 import '../state/workspace_controller.dart';
 import '../theme/workfollow_theme.dart';
+import '../widgets/app_surfaces.dart';
 import '../widgets/quick_add.dart';
 
-/// A compact personal dashboard matching the web home workspace. It is made
-/// from native Flutter panels rather than embedding the web page.
+/// Personal dashboard. The redesigned home leads with a greeting, a stat
+/// strip (今天待办 / 今日完成 / 逾期 / 笔记), then the familiar panel grid:
+/// task lists stay real and tappable, the mini calendar keeps every date.
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key, required this.controller});
 
@@ -17,8 +19,7 @@ class HomeScreen extends StatelessWidget {
     final tokens = WorkFollowTheme.of(context);
     final now = DateTime.now();
     final tasks = controller.activeTasks;
-    final dueTodayOrOverdue = (TaskItem task) =>
-        task.bucket == TaskBucket.today || task.bucket == TaskBucket.overdue;
+    final dueTodayOrOverdue = controller.needsAttentionToday;
     final todayTasks = tasks
         .where((task) => !task.completed && dueTodayOrOverdue(task))
         .toList();
@@ -56,36 +57,81 @@ class HomeScreen extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
-                  crossAxisAlignment: CrossAxisAlignment.end,
+                  crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            '首页',
+                            _greeting(now),
                             style: TextStyle(
                               color: tokens.textPrimary,
-                              fontSize: 24,
-                              fontWeight: FontWeight.w700,
-                              letterSpacing: -.55,
+                              fontSize: 26,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: -.6,
                             ),
                           ),
                           const SizedBox(height: 6),
                           Text(
-                            '${now.month} 月 ${now.day} 日 · ${_weekday(now.weekday)} · 保持一点从容。',
+                            '${now.month} 月 ${now.day} 日 · 星期${_weekday(now.weekday)} · 把注意力留给要紧的事。',
                             style: TextStyle(
-                                color: tokens.textTertiary, fontSize: 12),
+                                color: tokens.textTertiary, fontSize: 12.5),
                           ),
                         ],
                       ),
                     ),
+                    const SizedBox(width: 18),
                     SizedBox(
                         width: 300,
                         child: QuickAddField(controller: controller)),
                   ],
                 ),
-                const SizedBox(height: 23),
+                const SizedBox(height: 20),
+                Row(
+                  children: [
+                    Expanded(
+                      child: StatCard(
+                          label: '今天待办',
+                          value: '${todayTasks.length}',
+                          icon: Icons.wb_sunny_outlined,
+                          color: tokens.accent,
+                          onTap: () =>
+                              controller.selectView(WorkspaceView.today)),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: StatCard(
+                          label: '今日完成',
+                          value: '$doneToday',
+                          icon: Icons.check_circle_outline_rounded,
+                          color: tokens.success,
+                          onTap: () =>
+                              controller.selectView(WorkspaceView.completed)),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: StatCard(
+                          label: '逾期',
+                          value: '${overdueTasks.length}',
+                          icon: Icons.error_outline_rounded,
+                          color: tokens.warning,
+                          onTap: () =>
+                              controller.selectView(WorkspaceView.today)),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: StatCard(
+                          label: '笔记',
+                          value: '${controller.activeNotes.length}',
+                          icon: Icons.notes_outlined,
+                          color: tokens.accent,
+                          onTap: () =>
+                              controller.selectView(WorkspaceView.notes)),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
                 Wrap(
                   spacing: 14,
                   runSpacing: 14,
@@ -94,6 +140,7 @@ class HomeScreen extends StatelessWidget {
                       width: panelWidth,
                       height: 250,
                       child: _HomePanel(
+                        icon: Icons.wb_sunny_outlined,
                         title: '今天',
                         subtitle:
                             '${todayTasks.length} 件待处理 · 已完成 $doneToday 件',
@@ -114,6 +161,7 @@ class HomeScreen extends StatelessWidget {
                       width: panelWidth,
                       height: 250,
                       child: _HomePanel(
+                        icon: Icons.calendar_month_outlined,
                         title: '日历',
                         subtitle: '${now.year} 年 ${now.month} 月',
                         action: '打开日历',
@@ -128,6 +176,7 @@ class HomeScreen extends StatelessWidget {
                       width: panelWidth,
                       height: 250,
                       child: _HomePanel(
+                        icon: Icons.upcoming_outlined,
                         title: '接下来',
                         subtitle: '未来安排',
                         action: '打开计划',
@@ -147,6 +196,7 @@ class HomeScreen extends StatelessWidget {
                       width: panelWidth,
                       height: 250,
                       child: _HomePanel(
+                        icon: Icons.notes_outlined,
                         title: '最近笔记',
                         subtitle: '${controller.activeNotes.length} 条个人笔记',
                         action: '查看全部',
@@ -159,6 +209,7 @@ class HomeScreen extends StatelessWidget {
                       width: panelWidth,
                       height: 250,
                       child: _HomePanel(
+                        icon: Icons.history_rounded,
                         title: '逾期',
                         subtitle: overdueTasks.isEmpty
                             ? '清爽的进度'
@@ -188,6 +239,13 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
+  String _greeting(DateTime now) {
+    if (now.hour >= 5 && now.hour < 11) return '早上好';
+    if (now.hour >= 11 && now.hour < 13) return '中午好';
+    if (now.hour >= 13 && now.hour < 18) return '下午好';
+    return '晚上好';
+  }
+
   String _weekday(int value) =>
       const ['一', '二', '三', '四', '五', '六', '日'][value - 1];
 }
@@ -197,6 +255,7 @@ class _HomePanel extends StatelessWidget {
     required this.title,
     required this.subtitle,
     required this.child,
+    required this.icon,
     this.action,
     this.onAction,
   });
@@ -206,24 +265,27 @@ class _HomePanel extends StatelessWidget {
   final String? action;
   final VoidCallback? onAction;
   final Widget child;
+  final IconData icon;
 
   @override
   Widget build(BuildContext context) {
     final tokens = WorkFollowTheme.of(context);
-    return Container(
-      constraints: const BoxConstraints(minHeight: 218),
+    return AppCard(
       padding: const EdgeInsets.fromLTRB(18, 16, 18, 15),
-      decoration: BoxDecoration(
-        color: tokens.content,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: tokens.border),
-      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              Container(
+                  width: 30,
+                  height: 30,
+                  decoration: BoxDecoration(
+                      color: tokens.accent.withValues(alpha: .1),
+                      borderRadius: BorderRadius.circular(8)),
+                  child: Icon(icon, size: 16, color: tokens.accent)),
+              const SizedBox(width: 10),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -231,9 +293,10 @@ class _HomePanel extends StatelessWidget {
                     Text(title,
                         style: TextStyle(
                             color: tokens.textPrimary,
-                            fontSize: 15,
-                            fontWeight: FontWeight.w700)),
-                    const SizedBox(height: 4),
+                            fontSize: 14.5,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: -.2)),
+                    const SizedBox(height: 3),
                     Text(subtitle,
                         style: TextStyle(
                             color: tokens.textTertiary, fontSize: 10.5)),
@@ -321,15 +384,17 @@ class _HomeTaskRow extends StatelessWidget {
                 alignment: Alignment.center,
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 150),
-                  width: 16,
-                  height: 16,
+                  width: 17,
+                  height: 17,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     color: task.completed ? tokens.success : Colors.transparent,
                     border: Border.all(
-                        color: overdue
-                            ? tokens.warning
-                            : tokens.accent.withOpacity(.5),
+                        color: task.completed
+                            ? tokens.success
+                            : overdue
+                                ? tokens.warning
+                                : tokens.borderStrong,
                         width: 1.5),
                   ),
                   child: task.completed
@@ -350,13 +415,13 @@ class _HomeTaskRow extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                     color: tokens.textPrimary,
-                    fontSize: 12,
+                    fontSize: 12.5,
                     fontWeight: FontWeight.w600),
               ),
             ),
           ),
           const SizedBox(width: 8),
-          Text(task.timeLabel ?? '未安排',
+          Text(task.displayTimeLabel ?? '未安排',
               style: TextStyle(
                   color: overdue ? tokens.warning : tokens.textTertiary,
                   fontSize: 10)),
@@ -403,7 +468,7 @@ class _HomeNoteList extends StatelessWidget {
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
                                 color: tokens.textPrimary,
-                                fontSize: 12,
+                                fontSize: 12.5,
                                 fontWeight: FontWeight.w600)),
                         const SizedBox(height: 2),
                         Text(note.folder,
@@ -496,19 +561,19 @@ class _MiniCalendar extends StatelessWidget {
                   return Container(
                     alignment: Alignment.center,
                     decoration: BoxDecoration(
-                        color: isToday ? tokens.accentSoft : Colors.transparent,
-                        borderRadius: BorderRadius.circular(5)),
+                        color: isToday ? tokens.accent : Colors.transparent,
+                        borderRadius: BorderRadius.circular(6)),
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Text('$day',
                             style: TextStyle(
                                 color: isToday
-                                    ? tokens.accent
+                                    ? Colors.white
                                     : tokens.textSecondary,
                                 fontSize: 10,
                                 fontWeight: isToday
-                                    ? FontWeight.w700
+                                    ? FontWeight.w800
                                     : FontWeight.w500)),
                         if (hasTasks) ...[
                           const SizedBox(height: 2),
@@ -516,7 +581,7 @@ class _MiniCalendar extends StatelessWidget {
                               width: 3,
                               height: 3,
                               decoration: BoxDecoration(
-                                  color: tokens.accent,
+                                  color: isToday ? Colors.white : tokens.accent,
                                   shape: BoxShape.circle)),
                         ],
                       ],
@@ -546,8 +611,14 @@ class _PanelEmpty extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 22, color: tokens.accent),
-          const SizedBox(height: 8),
+          Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                  color: tokens.accent.withValues(alpha: .08),
+                  shape: BoxShape.circle),
+              child: Icon(icon, size: 19, color: tokens.accent)),
+          const SizedBox(height: 10),
           Text(label,
               style: TextStyle(color: tokens.textTertiary, fontSize: 11.5)),
         ],

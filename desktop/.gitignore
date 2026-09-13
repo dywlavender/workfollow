@@ -8,3 +8,7 @@ macos/.symlinks/
 macos/Runner/GeneratedPluginRegistrant.*
 *.iml
 .idea/
+
+.flutter-plugins-dependencies
+
+dist/

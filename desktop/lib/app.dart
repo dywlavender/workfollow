@@ -3,6 +3,9 @@ import 'dart:ui' show AppExitResponse;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:flutter_quill/flutter_quill.dart'
+    show FlutterQuillLocalizations;
 
 import 'screens/calendar_screen.dart';
 import 'screens/home_screen.dart';
@@ -10,6 +13,7 @@ import 'screens/notes_screen.dart';
 import 'screens/today_screen.dart';
 import 'screens/trash_screen.dart';
 import 'services/preferences_store.dart';
+import 'services/local_workspace_store.dart';
 import 'state/workspace_controller.dart';
 import 'theme/workfollow_theme.dart';
 import 'widgets/app_icon_button.dart';
@@ -18,7 +22,10 @@ import 'widgets/sidebar.dart';
 import 'widgets/settings_panel.dart';
 
 class WorkFollowApp extends StatefulWidget {
-  const WorkFollowApp({super.key, this.preferencesStore});
+  const WorkFollowApp(
+      {super.key, this.preferencesStore, this.demoMode = false});
+
+  final bool demoMode;
 
   /// Injectable so tests can point persistence at a temp directory.
   final WorkspacePreferencesStore? preferencesStore;
@@ -34,7 +41,12 @@ class _WorkFollowAppState extends State<WorkFollowApp> {
   @override
   void initState() {
     super.initState();
-    _preferencesStore = widget.preferencesStore ?? WorkspacePreferencesStore();
+    _preferencesStore = widget.preferencesStore ??
+        WorkspacePreferencesStore(
+          platform:
+              LocalWorkspaceStore(namespace: widget.demoMode ? 'preview' : null)
+                  .platform,
+        );
     unawaited(_restoreThemeMode());
   }
 
@@ -62,11 +74,20 @@ class _WorkFollowAppState extends State<WorkFollowApp> {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: '打勾',
+      locale: const Locale('zh', 'CN'),
+      supportedLocales: const [Locale('zh', 'CN'), Locale('en', 'US')],
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+        FlutterQuillLocalizations.delegate
+      ],
       debugShowCheckedModeBanner: false,
       theme: WorkFollowThemeData.light(),
       darkTheme: WorkFollowThemeData.dark(),
       themeMode: _themeMode,
       home: WorkFollowShell(
+        demoMode: widget.demoMode,
         onToggleTheme: _toggleTheme,
         onSetThemeMode: _setThemeMode,
         themeMode: _themeMode,
@@ -81,11 +102,13 @@ class WorkFollowShell extends StatefulWidget {
     required this.onToggleTheme,
     required this.onSetThemeMode,
     required this.themeMode,
+    this.demoMode = false,
   });
 
   final VoidCallback onToggleTheme;
   final ValueChanged<ThemeMode> onSetThemeMode;
   final ThemeMode themeMode;
+  final bool demoMode;
 
   @override
   State<WorkFollowShell> createState() => _WorkFollowShellState();
@@ -101,6 +124,7 @@ const _captureChannel = MethodChannel('workfollow/capture');
 class _WorkFollowShellState extends State<WorkFollowShell> {
   late final WorkspaceController controller;
   late final AppLifecycleListener _lifecycleListener;
+  Timer? _dateRefresh;
   bool sidebarCollapsed = false;
   bool showUndo = false;
   String undoMessage = '';
@@ -109,10 +133,18 @@ class _WorkFollowShellState extends State<WorkFollowShell> {
   @override
   void initState() {
     super.initState();
-    controller = WorkspaceController();
+    controller = WorkspaceController(
+        seedData: widget.demoMode,
+        store:
+            LocalWorkspaceStore(namespace: widget.demoMode ? 'preview' : null));
+    if (!widget.demoMode) controller.selectView(WorkspaceView.today);
+    if (!widget.demoMode)
+      _dateRefresh = Timer.periodic(
+          const Duration(minutes: 1), (_) => controller.refreshDates());
     controller.addListener(_observeAction);
     _lifecycleListener = AppLifecycleListener(
       onExitRequested: _handleExitRequested,
+      onResume: controller.refreshDates,
     );
     unawaited(controller.restoreFromDisk());
     // The native menu bar routes its command items here.
@@ -129,7 +161,10 @@ class _WorkFollowShellState extends State<WorkFollowShell> {
         // Native quick capture is deliberately independent of the main
         // window's current page and returns an explicit acknowledgement so
         // the native panel only clears text after a successful write request.
-        return controller.addTaskToInboxUnscheduled(call.arguments as String);
+        final accepted =
+            controller.addTaskToInboxUnscheduled(call.arguments as String);
+        await controller.waitForPendingSaves();
+        return accepted && controller.saveStatus == SaveStatus.saved;
       }
       return null;
     });
@@ -173,6 +208,7 @@ class _WorkFollowShellState extends State<WorkFollowShell> {
 
   @override
   void dispose() {
+    _dateRefresh?.cancel();
     _lifecycleListener.dispose();
     controller.removeListener(_observeAction);
     controller.dispose();
@@ -378,7 +414,10 @@ class _WorkFollowShellState extends State<WorkFollowShell> {
                                     () => sidebarCollapsed = !sidebarCollapsed),
                                 onSearch: _openCommandPalette,
                                 onOpenFilters: _openFilters,
-                                onNewTask: _newTask),
+                                onNewTask:
+                                    controller.view == WorkspaceView.notes
+                                        ? _newNote
+                                        : _newTask),
                             Expanded(
                               child: _WorkspaceContent(controller: controller),
                             ),
@@ -430,10 +469,10 @@ class _AppToolbar extends StatelessWidget {
   Widget build(BuildContext context) {
     final tokens = WorkFollowTheme.of(context);
     return Container(
-      height: 62,
-      padding: const EdgeInsets.fromLTRB(11, 11, 16, 9),
+      height: 50,
+      padding: const EdgeInsets.fromLTRB(11, 7, 16, 7),
       decoration: BoxDecoration(
-          color: tokens.content,
+          color: tokens.canvas,
           border: Border(bottom: BorderSide(color: tokens.border))),
       child: Row(
         children: [
@@ -448,18 +487,11 @@ class _AppToolbar extends StatelessWidget {
           const SizedBox(width: 6),
           Text(title,
               style: TextStyle(
-                  color: tokens.textPrimary,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w700)),
+                  color: tokens.textSecondary,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600)),
           const Spacer(),
           _ToolbarSearch(onPressed: onSearch),
-          const SizedBox(width: 7),
-          AppIconButton(
-              icon: Icons.tune_rounded,
-              tooltip: '筛选与视图',
-              onPressed: onOpenFilters,
-              size: 32,
-              iconSize: 17),
           const SizedBox(width: 7),
           Material(
               color: tokens.accent,

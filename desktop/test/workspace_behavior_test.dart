@@ -665,7 +665,8 @@ void main() {
     addTearDown(() => directory.deleteSync(recursive: true));
     final store = WorkspacePreferencesStore(directoryOverride: directory.path);
 
-    await tester.pumpWidget(WorkFollowApp(preferencesStore: store));
+    await tester
+        .pumpWidget(WorkFollowApp(demoMode: true, preferencesStore: store));
     await tester.pumpAndSettle();
 
     await tester.tap(find.byTooltip('切换深色'));
@@ -1138,7 +1139,7 @@ void main() {
 
   testWidgets('command palette opens, searches and creates tasks',
       (tester) async {
-    await tester.pumpWidget(const WorkFollowApp());
+    await tester.pumpWidget(const WorkFollowApp(demoMode: true));
     await tester.pumpAndSettle();
 
     await tester.tap(find.text('搜索'));

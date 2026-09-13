@@ -45,16 +45,16 @@ class WorkFollowTheme extends ThemeExtension<WorkFollowTheme> {
   final LinearGradient seasonalSky;
 
   static const light = WorkFollowTheme(
-    canvas: Color(0xFFF7F8FA),
-    sidebar: Color(0xFFF1F3F6),
+    canvas: Color(0xFFF2F3F8),
+    sidebar: Color(0xFFECEEF4),
     content: Color(0xFFFFFFFF),
-    inspector: Color(0xFFFAFBFC),
+    inspector: Color(0xFFF8F9FC),
     overlay: Color(0xFFFFFFFF),
     textPrimary: Color(0xFF171A21),
     textSecondary: Color(0xFF5F6672),
     textTertiary: Color(0xFF6B7280),
-    border: Color(0xFFEAECEF),
-    borderStrong: Color(0xFFDDE1E7),
+    border: Color(0xFFE6E8EF),
+    borderStrong: Color(0xFFD7DBE4),
     accent: Color(0xFF4F46E5),
     accentHover: Color(0xFF4338CA),
     accentSoft: Color(0xFFEEF2FF),
@@ -71,16 +71,16 @@ class WorkFollowTheme extends ThemeExtension<WorkFollowTheme> {
   );
 
   static const dark = WorkFollowTheme(
-    canvas: Color(0xFF151419),
-    sidebar: Color(0xFF1B1921),
-    content: Color(0xFF1B1A20),
-    inspector: Color(0xFF19181E),
+    canvas: Color(0xFF121116),
+    sidebar: Color(0xFF17161D),
+    content: Color(0xFF1B1A22),
+    inspector: Color(0xFF18171F),
     overlay: Color(0xFF25232C),
     textPrimary: Color(0xFFF5F2F7),
     textSecondary: Color(0xFFB7B1BE),
     textTertiary: Color(0xFF817B88),
-    border: Color(0xFF302D38),
-    borderStrong: Color(0xFF403B49),
+    border: Color(0xFF2B2934),
+    borderStrong: Color(0xFF3B3847),
     accent: Color(0xFFA5B4FC),
     accentHover: Color(0xFFC7D2FE),
     accentSoft: Color(0xFF292B55),
@@ -217,9 +217,9 @@ class WorkFollowThemeData {
             TextStyle(color: tokens.textTertiary, fontSize: 11, height: 1.35),
         titleLarge: TextStyle(
             color: tokens.textPrimary,
-            fontSize: 22,
-            fontWeight: FontWeight.w700,
-            letterSpacing: -.45),
+            fontSize: 24,
+            fontWeight: FontWeight.w800,
+            letterSpacing: -.6),
         titleMedium: TextStyle(
             color: tokens.textPrimary,
             fontSize: 15,

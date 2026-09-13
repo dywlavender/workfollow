@@ -18,7 +18,7 @@ class TrashScreen extends StatelessWidget {
     final tasks = controller.deletedTasks;
     final notes = controller.deletedNotes;
     return Container(
-      color: tokens.content,
+      color: tokens.canvas,
       padding: const EdgeInsets.fromLTRB(26, 23, 26, 26),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -137,8 +137,8 @@ class _TrashRowBase extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.fromLTRB(12, 9, 8, 9),
         decoration: BoxDecoration(
-            color: tokens.inspector,
-            borderRadius: BorderRadius.circular(9),
+            color: tokens.content,
+            borderRadius: BorderRadius.circular(10),
             border: Border.all(color: tokens.border)),
         child: Row(
           children: [

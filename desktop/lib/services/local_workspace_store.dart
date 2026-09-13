@@ -17,6 +17,9 @@ class MigrationFileException implements Exception {
 class PlatformFileService {
   static const channel = MethodChannel('workfollow/platform');
 
+  Future<String?> pickExportFile() =>
+      channel.invokeMethod<String>('pickExportFile');
+
   Future<String?> pickMigrationFile() async {
     return channel.invokeMethod<String>('pickMigrationFile');
   }
@@ -65,9 +68,33 @@ class WorkspaceBackupInfo {
   bool get exists => count > 0;
 }
 
+class _WorkspacePlatform extends PlatformFileService {
+  _WorkspacePlatform(this.base, this.namespace);
+  final PlatformFileService base;
+  final String namespace;
+  @override
+  Future<String?> applicationSupportDirectory() async {
+    final root = await base.applicationSupportDirectory();
+    return root == null ? null : '$root/$namespace';
+  }
+
+  @override
+  Future<String?> pickMigrationFile() => base.pickMigrationFile();
+  @override
+  Future<String?> pickAttachmentFile() => base.pickAttachmentFile();
+  @override
+  Future<String?> pickExportFile() => base.pickExportFile();
+  @override
+  Future<bool> revealInFinder(String path) => base.revealInFinder(path);
+}
+
 class LocalWorkspaceStore {
-  LocalWorkspaceStore({PlatformFileService? platform})
-      : _platform = platform ?? PlatformFileService();
+  LocalWorkspaceStore({PlatformFileService? platform, this.namespace})
+      : _platform = namespace == null
+            ? platform ?? PlatformFileService()
+            : _WorkspacePlatform(platform ?? PlatformFileService(), namespace);
+
+  final String? namespace;
 
   PlatformFileService get platform => _platform;
 
@@ -79,6 +106,59 @@ class LocalWorkspaceStore {
 
   final PlatformFileService _platform;
   Future<void> _pendingSave = Future<void>.value();
+
+  Future<void> exportToPath(MigrationBundle bundle, String path) async {
+    final json = bundle.toJson(outputFormat: personalMigrationFormat);
+    final directory = await _platform.applicationSupportDirectory();
+    final embedded = <String, String>{};
+    if (directory != null) {
+      final attachments = Directory('$directory/attachments');
+      if (await attachments.exists()) {
+        await for (final file in attachments.list()) {
+          if (file is File)
+            embedded[file.uri.pathSegments.last] =
+                base64Encode(await file.readAsBytes());
+        }
+      }
+    }
+    json['attachmentFiles'] = embedded;
+    json['exportedAt'] = DateTime.now().toIso8601String();
+    await File(path).writeAsString(jsonEncode(json), flush: true);
+  }
+
+  Future<bool> exportWorkspace(MigrationBundle bundle) async {
+    final path = await _platform.pickExportFile();
+    if (path == null) return false;
+    await exportToPath(bundle, path);
+    return true;
+  }
+
+  Future<void> restoreEmbeddedFiles(Map<String, String> files) async {
+    if (files.isEmpty) return;
+    final path = await _platform.applicationSupportDirectory();
+    if (path == null) return;
+    final directory = Directory('$path/attachments');
+    await directory.create(recursive: true);
+    for (final entry in files.entries) {
+      if (entry.key.contains('/') ||
+          entry.key.contains('\\') ||
+          entry.key == '..') {
+        throw const MigrationFileException('附件名称无效');
+      }
+      final file = File('${directory.path}/${entry.key}');
+      if (!await file.exists())
+        await file.writeAsBytes(base64Decode(entry.value), flush: true);
+    }
+  }
+
+  Future<void> revealDataDirectory() async {
+    final file = await _snapshotFile();
+    if (file == null) return;
+    await file.parent.create(recursive: true);
+    await _platform.revealInFinder(file.parent.path);
+  }
+
+  Future<List<File>> listBackups() => _listBackups();
 
   /// Latest successful snapshot backup, plus how many exist.
   Future<WorkspaceBackupInfo> backupInfo() async {
@@ -94,7 +174,12 @@ class LocalWorkspaceStore {
   Future<void> backupNow() async {
     final file = await _snapshotFile();
     if (file == null || !await file.exists()) return;
-    await _copyToBackup(file, DateTime.now());
+    final now = DateTime.now();
+    final directory = Directory('${file.parent.path}/$backupFolderName');
+    await directory.create(recursive: true);
+    final time =
+        '${now.hour.toString().padLeft(2, '0')}${now.minute.toString().padLeft(2, '0')}${now.second.toString().padLeft(2, '0')}';
+    await file.copy('${directory.path}/workspace-${_stampFor(now)}-$time.json');
   }
 
   Future<WorkspaceSnapshotLoad> load() async {
@@ -196,8 +281,8 @@ class LocalWorkspaceStore {
 
   String? _backupDateStamp(File file) {
     final name = file.uri.pathSegments.last;
-    final match =
-        RegExp(r'^workspace-(\d{4}-\d{2}-\d{2})\.json$').firstMatch(name);
+    final match = RegExp(r'^workspace-(\d{4}-\d{2}-\d{2})(?:-\d{6})?\.json$')
+        .firstMatch(name);
     return match?.group(1);
   }
 

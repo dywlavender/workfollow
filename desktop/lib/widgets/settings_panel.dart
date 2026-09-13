@@ -1,4 +1,5 @@
 import 'dart:ui';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 
@@ -7,7 +8,6 @@ import '../services/local_workspace_store.dart';
 import '../services/notification_service.dart';
 import '../state/workspace_controller.dart';
 import '../theme/workfollow_theme.dart';
-import 'app_icon_button.dart';
 
 enum _ImportMode { merge, replace }
 
@@ -57,6 +57,8 @@ class _SettingsPanel extends StatefulWidget {
 
 class _SettingsPanelState extends State<_SettingsPanel> {
   bool importing = false;
+  int page = 0;
+  late ThemeMode appearance = widget.themeMode;
   String? importMessage;
   String? importError;
 
@@ -67,7 +69,8 @@ class _SettingsPanelState extends State<_SettingsPanel> {
       importError = null;
     });
     try {
-      final bundle = await LocalWorkspaceStore().pickAndReadMigration();
+      final bundle =
+          await widget.controller.workspaceStore.pickAndReadMigration();
       if (!mounted || bundle == null) return;
       final mode = await _showImportPreview(bundle);
       if (!mounted || mode == null) return;
@@ -159,385 +162,309 @@ class _SettingsPanelState extends State<_SettingsPanel> {
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final tokens = WorkFollowTheme.of(context);
-
-    return Center(
-      child: Material(
-        color: tokens.overlay,
-        borderRadius: BorderRadius.circular(15),
-        child: Container(
-          width: 650,
-          height: 500,
-          clipBehavior: Clip.antiAlias,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(15),
-            border: Border.all(color: tokens.borderStrong.withOpacity(.8)),
-            boxShadow: [
-              BoxShadow(
-                color: tokens.shadow,
-                blurRadius: 45,
-                offset: const Offset(0, 20),
-              ),
-            ],
-          ),
-          child: Row(
-            children: [
-              _SettingsNavigation(tokens: tokens),
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(27, 19, 25, 22),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              '通用',
-                              style: TextStyle(
-                                color: tokens.textPrimary,
-                                fontSize: 16,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          ),
-                          AppIconButton(
-                            icon: Icons.close_rounded,
-                            tooltip: '关闭',
-                            onPressed: () => Navigator.of(context).pop(),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 22),
-                      _SettingGroup(
-                        label: '外观',
-                        children: [
-                          _SettingRow(
-                            label: '界面模式',
-                            description: '跟随系统、浅色或深色，重启后保留',
-                            trailing: _ModeSegment(
-                              current: widget.themeMode,
-                              onSelect: widget.onSetThemeMode,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 21),
-                      _SettingGroup(
-                        label: '提醒',
-                        children: [
-                          _SettingRow(
-                            label: '系统通知',
-                            description: '任务到点由系统投递提醒，点击通知打开对应任务',
-                            trailing: const _NotificationStatus(),
-                          ),
-                          _SettingRow(
-                            label: '全局快速录入',
-                            description: '在任何应用里按 ⇧⌘Space 呼出录入条，Return 保存到收集箱',
-                            trailing: SoftPill(
-                              label: '⇧⌘Space',
-                              color: tokens.accentFaint,
-                              textColor: tokens.accent,
-                              icon: Icons.keyboard_command_key_rounded,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 21),
-                      _SettingGroup(
-                        label: '数据',
-                        children: [
-                          _SettingRow(
-                            label: '从 Web 导入',
-                            description: '选择 .workfollow.json 文件，导入个人任务和笔记',
-                            trailing: FilledButton.tonalIcon(
-                              onPressed: importing ? null : _importData,
-                              icon: importing
-                                  ? const SizedBox(
-                                      width: 14,
-                                      height: 14,
-                                      child: CircularProgressIndicator(
-                                          strokeWidth: 2),
-                                    )
-                                  : const Icon(Icons.file_open_outlined,
-                                      size: 15),
-                              label: Text(importing ? '读取中' : '选择文件'),
-                            ),
-                          ),
-                          _SettingRow(
-                            label: '本地数据',
-                            description: '导入后数据保存在本机，重启应用仍会保留',
-                            trailing: SoftPill(
-                              label: '本地模式',
-                              color: tokens.accentFaint,
-                              textColor: tokens.accent,
-                              icon: Icons.lock_outline_rounded,
-                            ),
-                          ),
-                          _SettingRow(
-                            label: '自动备份',
-                            description: '每天首次修改后生成快照副本，保留最近 7 份',
-                            trailing: FutureBuilder<WorkspaceBackupInfo>(
-                              future: LocalWorkspaceStore().backupInfo(),
-                              builder: (context, snapshot) {
-                                final info = snapshot.data;
-                                final label = info == null || !info.exists
-                                    ? '暂无备份'
-                                    : '最近 ${info.latestAt!.month} 月 ${info.latestAt!.day} 日';
-                                return Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Text(label,
-                                          style: TextStyle(
-                                            color: tokens.textTertiary,
-                                            fontSize: 11,
-                                          )),
-                                      const SizedBox(width: 8),
-                                      TextButton(
-                                        onPressed: () async {
-                                          await LocalWorkspaceStore()
-                                              .backupNow();
-                                          if (context.mounted) {
-                                            ScaffoldMessenger.of(context)
-                                                .showSnackBar(const SnackBar(
-                                                    content:
-                                                        Text('已创建本机备份副本')));
-                                          }
-                                        },
-                                        style: TextButton.styleFrom(
-                                          foregroundColor: tokens.accent,
-                                          padding: const EdgeInsets.symmetric(
-                                              horizontal: 6, vertical: 3),
-                                          minimumSize: Size.zero,
-                                          tapTargetSize:
-                                              MaterialTapTargetSize.shrinkWrap,
-                                        ),
-                                        child: const Text('立即备份',
-                                            style: TextStyle(
-                                                fontSize: 10.5,
-                                                fontWeight: FontWeight.w700)),
-                                      ),
-                                    ]);
-                              },
-                            ),
-                          ),
-                        ],
-                      ),
-                      if (importMessage != null || importError != null) ...[
-                        const SizedBox(height: 10),
-                        Text(
-                          importError ?? importMessage!,
-                          style: TextStyle(
-                            color: importError == null
-                                ? tokens.success
-                                : tokens.danger,
-                            fontSize: 11,
-                            height: 1.4,
-                          ),
-                        ),
-                      ],
-                      const Spacer(),
-                      Text(
-                        '迁移范围先覆盖个人任务、清单、笔记和文件夹；附件与团队数据暂不导入。',
-                        style: TextStyle(
-                          color: tokens.textTertiary,
-                          fontSize: 10.5,
-                          height: 1.45,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
+  Future<void> _export() async {
+    try {
+      await widget.controller.waitForPendingSaves();
+      final saved = await widget.controller.workspaceStore
+          .exportWorkspace(widget.controller.snapshot);
+      if (saved && mounted)
+        setState(() {
+          importMessage = '已导出任务、笔记和本地附件。';
+          importError = null;
+        });
+    } on Object {
+      if (mounted) setState(() => importError = '导出失败，请选择其他保存位置后重试。');
+    }
   }
-}
 
-class _SettingsNavigation extends StatelessWidget {
-  const _SettingsNavigation({required this.tokens});
-
-  final WorkFollowTheme tokens;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 175,
-      color: tokens.inspector,
-      padding: const EdgeInsets.fromLTRB(14, 19, 12, 18),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            '设置',
-            style: TextStyle(
-              color: tokens.textPrimary,
-              fontSize: 19,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 23),
-          const _SettingsNavItem(
-            icon: Icons.tune_rounded,
-            label: '通用',
-            selected: true,
-          ),
-          const _SettingsNavItem(
-            icon: Icons.palette_outlined,
-            label: '外观',
-          ),
-          const _SettingsNavItem(
-            icon: Icons.notifications_none_rounded,
-            label: '提醒',
-          ),
-          const _SettingsNavItem(
-            icon: Icons.storage_outlined,
-            label: '数据',
-          ),
-          const _SettingsNavItem(
-            icon: Icons.keyboard_command_key_rounded,
-            label: '快捷键',
-          ),
-          const Spacer(),
-          Text(
-            '打勾 个人版',
-            style: TextStyle(
-              color: tokens.textTertiary,
-              fontSize: 10,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
-      ),
-    );
+  Future<void> _backup() async {
+    await widget.controller.waitForPendingSaves();
+    await widget.controller.workspaceStore.save(widget.controller.snapshot);
+    await widget.controller.workspaceStore.backupNow();
+    if (mounted)
+      setState(() {
+        importMessage = '已创建备份。';
+        importError = null;
+      });
   }
-}
 
-class _SettingsNavItem extends StatelessWidget {
-  const _SettingsNavItem(
-      {required this.icon, required this.label, this.selected = false});
-
-  final IconData icon;
-  final String label;
-  final bool selected;
-
-  @override
-  Widget build(BuildContext context) {
-    final tokens = WorkFollowTheme.of(context);
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 3),
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 8),
-      decoration: BoxDecoration(
-        color: selected ? tokens.accentSoft : Colors.transparent,
-        borderRadius: BorderRadius.circular(7),
-      ),
-      child: Row(
-        children: [
-          Icon(
-            icon,
-            size: 15,
-            color: selected ? tokens.accent : tokens.textSecondary,
-          ),
-          const SizedBox(width: 9),
-          Text(
-            label,
-            style: TextStyle(
-              color: selected ? tokens.accent : tokens.textSecondary,
-              fontSize: 12,
-              fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _SettingGroup extends StatelessWidget {
-  const _SettingGroup({required this.label, required this.children});
-
-  final String label;
-  final List<Widget> children;
-
-  @override
-  Widget build(BuildContext context) {
-    final tokens = WorkFollowTheme.of(context);
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label.toUpperCase(),
-          style: TextStyle(
-            color: tokens.textTertiary,
-            fontSize: 10,
-            fontWeight: FontWeight.w700,
-            letterSpacing: .55,
-          ),
-        ),
-        const SizedBox(height: 8),
-        Container(
-          decoration: BoxDecoration(
-            color: tokens.inspector,
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: tokens.border),
-          ),
-          child: Column(children: children),
-        ),
-      ],
-    );
-  }
-}
-
-class _SettingRow extends StatelessWidget {
-  const _SettingRow(
-      {required this.label, required this.description, required this.trailing});
-
-  final String label;
-  final String description;
-  final Widget trailing;
-
-  @override
-  Widget build(BuildContext context) {
-    final tokens = WorkFollowTheme.of(context);
-
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(13, 11, 9, 11),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+  Future<void> _restore() async {
+    final backups = await widget.controller.workspaceStore.listBackups();
+    if (!mounted) return;
+    if (backups.isEmpty) {
+      setState(() => importMessage = '还没有可恢复的备份。');
+      return;
+    }
+    final file = await showDialog<File>(
+        context: context,
+        builder: (dialogContext) => SimpleDialog(
+              title: const Text('选择要恢复的备份'),
               children: [
-                Text(
-                  label,
-                  style: TextStyle(
-                    color: tokens.textPrimary,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  description,
-                  style: TextStyle(
-                    color: tokens.textTertiary,
-                    fontSize: 10.5,
-                  ),
-                ),
+                for (final file in backups.reversed)
+                  SimpleDialogOption(
+                    onPressed: () => Navigator.of(dialogContext).pop(file),
+                    child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        child: Text(file.uri.pathSegments.last)),
+                  )
               ],
-            ),
-          ),
-          trailing,
-        ],
-      ),
-    );
+            ));
+    if (file == null || !mounted) return;
+    final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+              title: const Text('恢复这份备份？'),
+              content: const Text('任务和笔记将恢复到备份时的状态。恢复前会先备份当前内容。'),
+              actions: [
+                TextButton(
+                    onPressed: () => Navigator.of(dialogContext).pop(false),
+                    child: const Text('取消')),
+                FilledButton(
+                    onPressed: () => Navigator.of(dialogContext).pop(true),
+                    child: const Text('恢复'))
+              ],
+            ));
+    if (confirmed != true || !mounted) return;
+    try {
+      final bundle = MigrationBundle.fromJsonString(await file.readAsString());
+      await widget.controller.replaceWithMigration(bundle);
+      if (mounted)
+        setState(() {
+          importMessage = '已恢复所选备份。';
+          importError = null;
+        });
+    } on Object {
+      if (mounted) setState(() => importError = '无法恢复这份备份，请检查文件后重试。');
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = WorkFollowTheme.of(context);
+    const pages = ['通用', '通知', '数据', '快捷键'];
+    return Center(
+        child: Material(
+      color: tokens.content,
+      borderRadius: BorderRadius.circular(14),
+      clipBehavior: Clip.antiAlias,
+      child: SizedBox(
+          width: 720,
+          height: 520,
+          child: Row(children: [
+            Material(
+                color: tokens.canvas,
+                child: Container(
+                    width: 165,
+                    padding: const EdgeInsets.fromLTRB(12, 22, 12, 14),
+                    child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Padding(
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 12),
+                              child: Text('设置',
+                                  style: TextStyle(
+                                      fontSize: 22,
+                                      fontWeight: FontWeight.w700,
+                                      color: tokens.textPrimary))),
+                          const SizedBox(height: 24),
+                          for (var i = 0; i < pages.length; i++)
+                            Padding(
+                                padding: const EdgeInsets.only(bottom: 4),
+                                child: ListTile(
+                                    dense: true,
+                                    selected: page == i,
+                                    selectedTileColor: tokens.accentSoft,
+                                    shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(7)),
+                                    leading: Icon(
+                                        [
+                                          Icons.tune,
+                                          Icons.notifications_none,
+                                          Icons.folder_outlined,
+                                          Icons.keyboard_outlined
+                                        ][i],
+                                        size: 18),
+                                    title: Text(pages[i],
+                                        style: const TextStyle(fontSize: 13)),
+                                    onTap: () => setState(() => page = i))),
+                          const Spacer(),
+                          Padding(
+                              padding: const EdgeInsets.only(left: 12),
+                              child: Text('打勾 · 个人版',
+                                  style: TextStyle(
+                                      fontSize: 11,
+                                      color: tokens.textTertiary))),
+                        ]))),
+            Expanded(
+                child: Padding(
+                    padding: const EdgeInsets.fromLTRB(28, 18, 24, 24),
+                    child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Row(children: [
+                            Expanded(
+                                child: Text(pages[page],
+                                    style: const TextStyle(
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.w600))),
+                            IconButton(
+                                tooltip: '关闭',
+                                onPressed: () => Navigator.of(context).pop(),
+                                icon: const Icon(Icons.close, size: 19))
+                          ]),
+                          const SizedBox(height: 22),
+                          Expanded(
+                              child: SingleChildScrollView(
+                                  child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.stretch,
+                                      children: [
+                                if (page == 0) ...[
+                                  const Text('界面模式',
+                                      style: TextStyle(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w600)),
+                                  const SizedBox(height: 8),
+                                  Text('选择你习惯的明暗外观。',
+                                      style: TextStyle(
+                                          fontSize: 12,
+                                          color: tokens.textSecondary)),
+                                  const SizedBox(height: 16),
+                                  Align(
+                                      alignment: Alignment.centerLeft,
+                                      child: _ModeSegment(
+                                          current: appearance,
+                                          onSelect: (value) {
+                                            setState(() => appearance = value);
+                                            widget.onSetThemeMode(value);
+                                          })),
+                                  const SizedBox(height: 32),
+                                  const Text('个人工作空间',
+                                      style: TextStyle(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w600)),
+                                  const SizedBox(height: 8),
+                                  Text('任务、笔记与附件保存在这台 Mac。首次使用从空白空间开始。',
+                                      style: TextStyle(
+                                          fontSize: 13,
+                                          height: 1.6,
+                                          color: tokens.textSecondary)),
+                                ],
+                                if (page == 1) ...[
+                                  const Text('系统通知',
+                                      style: TextStyle(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w600)),
+                                  const SizedBox(height: 8),
+                                  Text('设置任务提醒后，由 macOS 在指定时刻通知你。点击通知可回到任务。',
+                                      style: TextStyle(
+                                          fontSize: 13,
+                                          height: 1.6,
+                                          color: tokens.textSecondary)),
+                                  const SizedBox(height: 18),
+                                  const Align(
+                                      alignment: Alignment.centerLeft,
+                                      child: _NotificationStatus()),
+                                  const SizedBox(height: 28),
+                                  Text('提醒与安排日期是两回事：安排日期决定任务在哪一天显示，提醒决定何时通知。',
+                                      style: TextStyle(
+                                          fontSize: 12,
+                                          height: 1.6,
+                                          color: tokens.textTertiary)),
+                                ],
+                                if (page == 2) ...[
+                                  const Text('导入与导出',
+                                      style: TextStyle(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w600)),
+                                  const SizedBox(height: 10),
+                                  Wrap(spacing: 10, runSpacing: 8, children: [
+                                    OutlinedButton.icon(
+                                        onPressed:
+                                            importing ? null : _importData,
+                                        icon: const Icon(
+                                            Icons.file_open_outlined,
+                                            size: 17),
+                                        label:
+                                            Text(importing ? '读取中…' : '导入文件')),
+                                    OutlinedButton.icon(
+                                        onPressed: _export,
+                                        icon: const Icon(Icons.ios_share,
+                                            size: 17),
+                                        label: const Text('导出全部数据')),
+                                  ]),
+                                  const SizedBox(height: 8),
+                                  Text('导出文件包含任务、笔记和本地附件，可用于迁移到另一台 Mac。',
+                                      style: TextStyle(
+                                          fontSize: 12,
+                                          height: 1.6,
+                                          color: tokens.textSecondary)),
+                                  const SizedBox(height: 26),
+                                  const Text('备份与恢复',
+                                      style: TextStyle(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w600)),
+                                  const SizedBox(height: 8),
+                                  Text('每天自动保存一份快照。恢复前会保留当前内容。',
+                                      style: TextStyle(
+                                          fontSize: 12,
+                                          height: 1.6,
+                                          color: tokens.textSecondary)),
+                                  const SizedBox(height: 12),
+                                  Wrap(spacing: 10, runSpacing: 8, children: [
+                                    OutlinedButton(
+                                        onPressed: _backup,
+                                        child: const Text('立即备份')),
+                                    OutlinedButton(
+                                        onPressed: _restore,
+                                        child: const Text('恢复备份…')),
+                                    TextButton(
+                                        onPressed: widget.controller
+                                            .workspaceStore.revealDataDirectory,
+                                        child: const Text('打开数据文件夹')),
+                                  ]),
+                                ],
+                                if (page == 3) ...[
+                                  for (final entry in const {
+                                    '新建任务': '⌘N',
+                                    '新建笔记': '⇧⌘N',
+                                    '搜索任务和笔记': '⌘K',
+                                    '设置': '⌘,',
+                                    '今天 / 收集箱 / 计划': '⌘1 / ⌘2 / ⌘3',
+                                    '日历 / 笔记': '⌘4 / ⌘5',
+                                    '全局快速录入': '⇧⌘Space',
+                                    '收起编辑 / 取消弹窗': 'Esc'
+                                  }.entries)
+                                    Padding(
+                                        padding: const EdgeInsets.symmetric(
+                                            vertical: 10),
+                                        child: Row(children: [
+                                          Expanded(
+                                              child: Text(entry.key,
+                                                  style: const TextStyle(
+                                                      fontSize: 13))),
+                                          Text(entry.value,
+                                              style: TextStyle(
+                                                  fontSize: 12,
+                                                  color: tokens.textSecondary)),
+                                        ])),
+                                ],
+                                if (importMessage != null ||
+                                    importError != null)
+                                  Padding(
+                                      padding: const EdgeInsets.only(top: 20),
+                                      child: Text(importError ?? importMessage!,
+                                          style: TextStyle(
+                                              fontSize: 12,
+                                              height: 1.5,
+                                              color: importError == null
+                                                  ? tokens.success
+                                                  : tokens.danger))),
+                              ]))),
+                        ]))),
+          ])),
+    ));
   }
 }
 

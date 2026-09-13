@@ -100,11 +100,13 @@ class MigrationImportSummary {
 
 class WorkspaceController extends ChangeNotifier {
   WorkspaceController(
-      {LocalWorkspaceStore? store, ReminderScheduler? reminderScheduler})
+      {LocalWorkspaceStore? store,
+      ReminderScheduler? reminderScheduler,
+      bool seedData = true})
       : _store = store ?? LocalWorkspaceStore(),
         _reminders = reminderScheduler ?? NotificationService(),
-        _tasks = _seedTasks(),
-        _notes = _seedNotes(),
+        _tasks = seedData ? _seedTasks() : [],
+        _notes = seedData ? _seedNotes() : [],
         _lists = _defaultLists(),
         _folders = _defaultFolders() {
     // Clicking a delivered reminder opens the task.
@@ -230,7 +232,10 @@ class WorkspaceController extends ChangeNotifier {
   List<MigrationFolderRecord> _folders;
   WorkspaceView _view = WorkspaceView.home;
   String? _selectedListName;
-  String? _selectedTaskId = 'task-01';
+  String? _selectedTaskId;
+  int taskOpenVersion = 0;
+  int noteOpenVersion = 0;
+  DateTime _dateReference = DateTime.now();
   String? _selectedNoteId;
   String? _lastCompletedTaskId;
   String? _lastRemovedTaskId;
@@ -306,6 +311,9 @@ class WorkspaceController extends ChangeNotifier {
         WorkspaceView.notes => '笔记',
         WorkspaceView.trash => '废纸篓',
       };
+  LocalWorkspaceStore get workspaceStore => _store;
+  MigrationBundle get snapshot => _snapshot();
+
   List<TaskItem> get tasks => List.unmodifiable(_tasks);
   List<NoteItem> get notes => List.unmodifiable(_notes);
 
@@ -333,7 +341,9 @@ class WorkspaceController extends ChangeNotifier {
   int get inspectorTitleFocusVersion => _inspectorTitleFocusVersion;
 
   void setNotesFolderFilter(String? folderId) {
-    if (_notesFolderFilter == folderId) return;
+    if (_notesFolderFilter == folderId &&
+        !_notesFavoritesOnly &&
+        !_notesUnfiledOnly) return;
     _notesFolderFilter = folderId;
     _notesFavoritesOnly = false;
     _notesUnfiledOnly = false;
@@ -385,6 +395,8 @@ class WorkspaceController extends ChangeNotifier {
     final folderId = _notesUnfiledOnly ? null : _notesFolderFilter;
     final id = addNote(folderId: folderId);
     _selectedNoteId = id;
+    noteOpenVersion++;
+    _notesFavoritesOnly = false;
     _view = WorkspaceView.notes;
     _notify();
     return id;
@@ -421,6 +433,9 @@ class WorkspaceController extends ChangeNotifier {
   }
 
   Future<MigrationImportSummary> importMigration(MigrationBundle bundle) async {
+    await waitForPendingSaves();
+    await _store.backupNow();
+    await _store.restoreEmbeddedFiles(bundle.embeddedFiles);
     // Importing is a deliberate replacement, so it also lifts the auto-save
     // pause that a damaged snapshot triggered.
     _loadError = null;
@@ -490,6 +505,9 @@ class WorkspaceController extends ChangeNotifier {
   /// restoring a snapshot whose IDs collide with local records.
   Future<MigrationImportSummary> replaceWithMigration(
       MigrationBundle bundle) async {
+    await waitForPendingSaves();
+    await _store.backupNow();
+    await _store.restoreEmbeddedFiles(bundle.embeddedFiles);
     _loadError = null;
     _saveError = null;
     _lists = bundle.lists.isEmpty
@@ -523,7 +541,7 @@ class WorkspaceController extends ChangeNotifier {
     _noteSequence = _nextNoteSequence();
     _folderSequence = _nextFolderSequence();
     _restoredFromDisk = true;
-    _selectedTaskId = _tasks.isEmpty ? null : _tasks.first.id;
+    _selectedTaskId = null;
     _selectedListName = null;
     _selectedNoteId = _notes.isEmpty ? null : _notes.first.id;
     _lastCompletedTaskId = null;
@@ -551,6 +569,15 @@ class WorkspaceController extends ChangeNotifier {
     return null;
   }
 
+  bool needsAttentionToday(TaskItem task) {
+    if (task.bucket == TaskBucket.today || task.bucket == TaskBucket.overdue)
+      return true;
+    final deadline = localDateTimeFromStorage(task.deadlineAt);
+    final now = DateTime.now();
+    return deadline != null &&
+        !deadline.isAfter(DateTime(now.year, now.month, now.day));
+  }
+
   List<TaskItem> get visibleTasks {
     if (_view == WorkspaceView.trash) {
       return List.unmodifiable(_tasks.where((task) => task.deletedAt != null));
@@ -562,8 +589,7 @@ class WorkspaceController extends ChangeNotifier {
     }
     final filtered = switch (_view) {
       WorkspaceView.home => active,
-      WorkspaceView.today => active.where((task) =>
-          task.bucket == TaskBucket.today || task.bucket == TaskBucket.overdue),
+      WorkspaceView.today => active.where(needsAttentionToday),
       WorkspaceView.inbox => active.where((task) => task.listName == '收集箱'),
       WorkspaceView.plan =>
         active.where((task) => task.bucket == TaskBucket.later),
@@ -595,8 +621,7 @@ class WorkspaceController extends ChangeNotifier {
 
   int countFor(WorkspaceView destination) {
     final active = _tasks.where((task) => task.deletedAt == null);
-    final dueTodayOrOverdue = (TaskItem task) =>
-        task.bucket == TaskBucket.today || task.bucket == TaskBucket.overdue;
+    final dueTodayOrOverdue = needsAttentionToday;
     return switch (destination) {
       WorkspaceView.home => active
           .where((task) => !task.completed && dueTodayOrOverdue(task))
@@ -640,11 +665,7 @@ class WorkspaceController extends ChangeNotifier {
     _selectedListName = null;
     _multiSelectedTaskIds = {};
     _multiSelectAnchorId = null;
-    final available = visibleTasks;
-    if (available.isNotEmpty &&
-        !available.any((task) => task.id == _selectedTaskId)) {
-      _selectedTaskId = available.first.id;
-    }
+    _selectedTaskId = null;
     _notify();
   }
 
@@ -656,9 +677,67 @@ class WorkspaceController extends ChangeNotifier {
     _selectedListName = name;
     _multiSelectedTaskIds = {};
     _multiSelectAnchorId = null;
-    final available = visibleTasks;
-    if (available.isNotEmpty) _selectedTaskId = available.first.id;
+    _selectedTaskId = null;
     _notify();
+  }
+
+  void clearTaskSelection() {
+    if (_selectedTaskId == null) return;
+    _selectedTaskId = null;
+    _notify();
+  }
+
+  void refreshDates() {
+    final now = DateTime.now();
+    var changed = now.year != _dateReference.year ||
+        now.month != _dateReference.month ||
+        now.day != _dateReference.day;
+    _dateReference = now;
+    _tasks = _tasks.map((task) {
+      final due = localDateTimeFromStorage(task.dueAt);
+      final bucket = taskBucketForDate(due, completed: task.completed);
+      final label = taskTimeLabelFor(due, completed: task.completed);
+      if (bucket == task.bucket && label == task.timeLabel) return task;
+      changed = true;
+      return task.copyWith(bucket: bucket, timeLabel: label);
+    }).toList();
+    if (changed) _notify();
+  }
+
+  String? duplicateTask(String id) {
+    final source = _tasks.where((task) => task.id == id).firstOrNull;
+    if (source == null) return null;
+    final copyId = 'task-${_taskSequence.toString().padLeft(2, '0')}';
+    _taskSequence += 1;
+    final copy = TaskItem.fromMigration(MigrationTaskRecord.fromJson({
+      ...source.toMigrationRecord().toJson(),
+      'id': copyId,
+      'title': '${source.title}（副本）',
+      'status': 'TODO',
+      'completedAt': null,
+      'createdAt': DateTime.now().toIso8601String(),
+      'deletedAt': null,
+    }));
+    _tasks = [copy, ..._tasks];
+    _selectedTaskId = copyId;
+    _syncReminderFor(copy);
+    _schedulePersist();
+    _notify();
+    return copyId;
+  }
+
+  DateTime? get creationDate => _creationDueDate();
+
+  void updateTaskDeadline(String id, DateTime? date) {
+    _replaceTask(
+        id,
+        (task) => task.copyWith(
+              deadlineAt: date == null
+                  ? null
+                  : DateTime(date.year, date.month, date.day).toIso8601String(),
+              clearDeadlineAt: date == null,
+              updatedAt: DateTime.now().toIso8601String(),
+            ));
   }
 
   void selectTask(String id) {
@@ -686,6 +765,7 @@ class WorkspaceController extends ChangeNotifier {
       }
     }
     if (task == null) return;
+    taskOpenVersion++;
     final name = task.listName.trim();
     if (name == '收集箱') {
       _view = WorkspaceView.inbox;
@@ -710,6 +790,10 @@ class WorkspaceController extends ChangeNotifier {
       return;
     }
     _selectedNoteId = id;
+    noteOpenVersion++;
+    _notesFolderFilter = null;
+    _notesFavoritesOnly = false;
+    _notesUnfiledOnly = false;
     _view = WorkspaceView.notes;
     _notify();
   }
@@ -821,6 +905,14 @@ class WorkspaceController extends ChangeNotifier {
       bucket: taskBucketForDate(nextDue),
       timeLabel: taskTimeLabelFor(nextDue),
       dueAt: nextDue.toIso8601String(),
+      hasDueTime: task.hasDueTime,
+      deadlineAt: task.deadlineAt == null
+          ? null
+          : (localDateTimeFromStorage(task.deadlineAt)!
+                  .add(nextDue.difference(due ?? completedAt)))
+              .toIso8601String(),
+      sourceNoteId: task.sourceNoteId,
+      attachments: task.attachments,
       note: task.note,
       description: task.description,
       contentJson: task.contentJson,
@@ -1071,9 +1163,10 @@ class WorkspaceController extends ChangeNotifier {
 
   /// Reschedules every selected task to [day] (keeping each task's clock
   /// time), or clears dates when [day] is null.
-  void bulkRescheduleSelected(DateTime? day) {
+  void bulkRescheduleSelected(DateTime? day, {bool? hasTime}) {
     if (_multiSelectedTaskIds.isEmpty) return;
     final previous = <String, String?>{};
+    final previousTimes = <String, bool>{};
     final now = DateTime.now().toIso8601String();
     var touched = 0;
     for (final id in _multiSelectedTaskIds) {
@@ -1082,15 +1175,21 @@ class WorkspaceController extends ChangeNotifier {
       final task = _tasks[index];
       if (task.deletedAt != null) continue;
       previous[id] = task.dueAt;
+      previousTimes[id] = task.scheduledWithTime;
       DateTime? due;
       if (day != null) {
         final existing = localDateTimeFromStorage(task.dueAt);
-        due = DateTime(day.year, day.month, day.day, existing?.hour ?? 0,
-            existing?.minute ?? 0);
+        due = hasTime == null
+            ? DateTime(day.year, day.month, day.day, existing?.hour ?? 0,
+                existing?.minute ?? 0)
+            : hasTime
+                ? day
+                : DateTime(day.year, day.month, day.day);
       }
       _tasks[index] = task.copyWith(
         dueAt: due?.toIso8601String(),
         clearDueAt: due == null,
+        hasDueTime: due != null && (hasTime ?? task.scheduledWithTime),
         bucket: taskBucketForDate(due, completed: task.completed),
         timeLabel: due == null
             ? (task.completed ? '已完成' : '未安排')
@@ -1100,7 +1199,8 @@ class WorkspaceController extends ChangeNotifier {
       touched += 1;
     }
     if (touched == 0) return;
-    _lastBulkUndo = _BulkTaskUndo(previousDueAts: previous);
+    _lastBulkUndo = _BulkTaskUndo(
+        previousDueAts: previous, previousDueTimes: previousTimes);
     _lastActionKind = 'bulk';
     _lastActionMessage = '已更新 $touched 个任务的日期';
     _actionVersion += 1;
@@ -1208,6 +1308,7 @@ class WorkspaceController extends ChangeNotifier {
       _tasks[index] = task.copyWith(
         dueAt: value,
         clearDueAt: value == null,
+        hasDueTime: bulk.previousDueTimes[id],
         bucket: taskBucketForDate(due, completed: task.completed),
         timeLabel: due == null
             ? (task.completed ? '已完成' : '未安排')
@@ -1308,7 +1409,7 @@ class WorkspaceController extends ChangeNotifier {
     );
     _taskSequence += 1;
     _tasks = [task, ..._tasks];
-    _selectedTaskId = task.id;
+    _selectedTaskId = null;
     _schedulePersist();
     _notify();
     return true;
@@ -1394,7 +1495,7 @@ class WorkspaceController extends ChangeNotifier {
             ));
   }
 
-  void updateTaskDue(String id, DateTime? due) {
+  void updateTaskDue(String id, DateTime? due, {bool? hasTime}) {
     final normalized = due == null
         ? null
         : DateTime(due.year, due.month, due.day, due.hour, due.minute);
@@ -1403,6 +1504,9 @@ class WorkspaceController extends ChangeNotifier {
       (task) => task.copyWith(
         dueAt: normalized?.toIso8601String(),
         clearDueAt: normalized == null,
+        hasDueTime: hasTime ??
+            (normalized != null &&
+                (normalized.hour != 0 || normalized.minute != 0)),
         bucket: taskBucketForDate(normalized, completed: task.completed),
         timeLabel: normalized == null
             ? (task.completed ? '已完成' : '未安排')
@@ -1521,6 +1625,18 @@ class WorkspaceController extends ChangeNotifier {
 
   /// Picks a file, copies it into the sandbox container's attachments folder
   /// and records the relative name on the task.
+  Future<String?> pickNoteAttachment() async {
+    final path = await _store.platform.pickAttachmentFile();
+    if (path == null) return null;
+    return _copyIntoAttachments(path);
+  }
+
+  Future<void> revealWorkspaceAttachment(String filename) async {
+    final directory = await _store.platform.applicationSupportDirectory();
+    if (directory != null)
+      await _store.platform.revealInFinder('$directory/attachments/$filename');
+  }
+
   Future<void> attachFileToTask(String taskId) async {
     final picked = await _store.platform.pickAttachmentFile();
     if (picked == null || picked.trim().isEmpty) return;
@@ -1775,6 +1891,62 @@ class WorkspaceController extends ChangeNotifier {
     return folder;
   }
 
+  bool renameFolder(String id, String rawName) {
+    final name = rawName.trim();
+    final current = _folders.where((folder) => folder.id == id).firstOrNull;
+    if (current == null ||
+        name.isEmpty ||
+        _folders.any((folder) => folder.id != id && folder.name == name))
+      return false;
+    final now = DateTime.now().toIso8601String();
+    _folders = _folders
+        .map((folder) => folder.id == id
+            ? MigrationFolderRecord(
+                id: id,
+                parentId: folder.parentId,
+                name: name,
+                sortOrder: folder.sortOrder,
+                createdAt: folder.createdAt,
+                updatedAt: now)
+            : folder)
+        .toList();
+    _notes = _notes
+        .map((note) => note.folderId == id ? note.copyWith(folder: name) : note)
+        .toList();
+    _schedulePersist();
+    _notify();
+    return true;
+  }
+
+  bool removeFolder(String id) {
+    final folder = _folders.where((folder) => folder.id == id).firstOrNull;
+    if (folder == null) return false;
+    _folders = _folders
+        .where((item) => item.id != id)
+        .map((item) => item.parentId == id
+            ? MigrationFolderRecord(
+                id: item.id,
+                parentId: folder.parentId,
+                name: item.name,
+                sortOrder: item.sortOrder,
+                createdAt: item.createdAt,
+                updatedAt: item.updatedAt)
+            : item)
+        .toList();
+    _notes = _notes
+        .map((note) => note.folderId == id
+            ? note.copyWith(folder: '未归档', clearFolderId: true)
+            : note)
+        .toList();
+    if (_notesFolderFilter == id) {
+      _notesFolderFilter = null;
+      _notesUnfiledOnly = true;
+    }
+    _schedulePersist();
+    _notify();
+    return true;
+  }
+
   String addNote({String? folderId, String title = '未命名笔记'}) {
     final now = DateTime.now().toIso8601String();
     final note = NoteItem(
@@ -1807,6 +1979,20 @@ class WorkspaceController extends ChangeNotifier {
               title: title,
               updatedLabel: noteUpdatedLabelFor(now),
               updatedAt: now,
+            ));
+  }
+
+  void updateNoteRichContent(
+      String id, Map<String, dynamic> document, String plainText) {
+    final now = DateTime.now().toIso8601String();
+    _replaceNote(
+        id,
+        (note) => note.copyWith(
+              contentJson: document,
+              plainText: plainText,
+              preview: notePreviewFromText(plainText),
+              updatedAt: now,
+              updatedLabel: '刚刚',
             ));
   }
 
@@ -1971,7 +2157,7 @@ class WorkspaceController extends ChangeNotifier {
     _taskSequence = _nextTaskSequence();
     _noteSequence = _nextNoteSequence();
     _folderSequence = _nextFolderSequence();
-    _selectedTaskId = _tasks.isEmpty ? null : _tasks.first.id;
+    _selectedTaskId = null;
     _selectedListName = null;
     _selectedNoteId = _notes.isEmpty ? null : _notes.first.id;
     _lastCompletedTaskId = null;
@@ -2157,6 +2343,7 @@ class _BulkTaskUndo {
     this.recurrenceRules = const {},
     this.removedIds = const [],
     this.previousDueAts = const {},
+    this.previousDueTimes = const {},
     this.previousListNames = const {},
   });
 
@@ -2165,5 +2352,6 @@ class _BulkTaskUndo {
   final Map<String, (String, Map<String, dynamic>?)> recurrenceRules;
   final List<String> removedIds;
   final Map<String, String?> previousDueAts;
+  final Map<String, bool> previousDueTimes;
   final Map<String, String> previousListNames;
 }

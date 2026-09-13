@@ -48,20 +48,20 @@ class SaveStatusFooter extends StatelessWidget {
     }
     switch (controller.saveStatus) {
       case SaveStatus.saving:
-        return (Icons.cloud_upload_outlined, '保存中…', tokens.textTertiary);
+        return (Icons.more_horiz, '保存中…', tokens.textTertiary);
       case SaveStatus.failed:
         final label = controller.saveError == null
             ? '保存失败'
             : '保存失败：${controller.saveError}';
-        return (Icons.cloud_off_outlined, label, tokens.danger);
+        return (Icons.error_outline, label, tokens.danger);
       case SaveStatus.saved:
         final savedAt = controller.lastSavedAt;
         if (savedAt == null) {
-          return (Icons.cloud_done_outlined, '更改会自动保存到本机', tokens.success);
+          return (Icons.check_rounded, '更改会自动保存到本机', tokens.success);
         }
         final time =
             '${savedAt.hour.toString().padLeft(2, '0')}:${savedAt.minute.toString().padLeft(2, '0')}';
-        return (Icons.cloud_done_outlined, '已保存 · $time', tokens.success);
+        return (Icons.check_rounded, '已保存 · $time', tokens.success);
     }
   }
 }

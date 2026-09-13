@@ -4,6 +4,7 @@ import '../models/migration.dart';
 import '../state/workspace_controller.dart';
 import '../theme/workfollow_theme.dart';
 import 'app_icon_button.dart';
+import 'desktop_popover.dart';
 
 /// The persistent product-level navigation from the web app, adapted to a
 /// native macOS rail. Personal builds intentionally omit team and notification
@@ -162,21 +163,24 @@ class AppRail extends StatelessWidget {
                       controller.selectView(WorkspaceView.notes);
                     },
                   ),
-                  ...controller.folders.map((folder) => _RailItem(
-                        label: folder.name,
-                        icon: Icons.folder_outlined,
-                        count: controller.activeNotes
-                            .where((note) =>
-                                note.folderId == folder.id ||
-                                note.folder == folder.name)
-                            .length,
-                        selected: controller.view == WorkspaceView.notes &&
-                            controller.notesFolderFilter == folder.id,
-                        onTap: () {
-                          controller.setNotesFolderFilter(folder.id);
-                          controller.selectView(WorkspaceView.notes);
-                        },
-                      )),
+                  ...controller.folders.map((folder) => Builder(
+                      builder: (anchor) => _RailItem(
+                            label: folder.name,
+                            icon: Icons.folder_outlined,
+                            count: controller.activeNotes
+                                .where((note) =>
+                                    note.folderId == folder.id ||
+                                    note.folder == folder.name)
+                                .length,
+                            selected: controller.view == WorkspaceView.notes &&
+                                controller.notesFolderFilter == folder.id,
+                            onTap: () {
+                              controller.setNotesFolderFilter(folder.id);
+                              controller.selectView(WorkspaceView.notes);
+                            },
+                            onMenu: () =>
+                                _editFolder(anchor, controller, folder),
+                          ))),
                   _RailSectionHeader(label: '位置'),
                   _RailItem(
                     label: '日历',
@@ -314,53 +318,26 @@ class _RailSectionHeader extends StatelessWidget {
 
 class _RailBrand extends StatelessWidget {
   const _RailBrand();
-
   @override
   Widget build(BuildContext context) {
     final tokens = WorkFollowTheme.of(context);
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 16, 14, 10),
-      child: Column(
-        children: [
+        padding: const EdgeInsets.fromLTRB(22, 22, 18, 22),
+        child: Row(children: [
           Container(
-            width: 34,
-            height: 34,
-            decoration: BoxDecoration(
-              color: tokens.accent,
-              borderRadius: BorderRadius.circular(9),
-              boxShadow: [
-                BoxShadow(
-                  color: tokens.accent.withOpacity(.18),
-                  blurRadius: 12,
-                  offset: const Offset(0, 5),
-                ),
-              ],
-            ),
-            child: const Center(
-              child: Text(
-                '勾',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 18,
-                  fontWeight: FontWeight.w800,
-                  height: 1,
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            '打勾',
-            style: TextStyle(
-              color: tokens.textPrimary,
-              fontSize: 13,
-              fontWeight: FontWeight.w700,
-              letterSpacing: -.2,
-            ),
-          ),
-        ],
-      ),
-    );
+              width: 28,
+              height: 28,
+              decoration: BoxDecoration(
+                  color: tokens.accent, borderRadius: BorderRadius.circular(8)),
+              child: Icon(Icons.check_rounded,
+                  size: 21, color: Theme.of(context).colorScheme.onPrimary)),
+          const SizedBox(width: 10),
+          Text('打勾',
+              style: TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w700,
+                  color: tokens.textPrimary)),
+        ]));
   }
 }
 
@@ -371,6 +348,7 @@ class _RailItem extends StatefulWidget {
     required this.selected,
     required this.onTap,
     this.count,
+    this.onMenu,
   });
 
   final String label;
@@ -378,6 +356,7 @@ class _RailItem extends StatefulWidget {
   final bool selected;
   final VoidCallback onTap;
   final int? count;
+  final VoidCallback? onMenu;
 
   @override
   State<_RailItem> createState() => _RailItemState();
@@ -398,48 +377,71 @@ class _RailItemState extends State<_RailItem> {
         label: widget.label,
         child: GestureDetector(
           onTap: widget.onTap,
+          onSecondaryTap: widget.onMenu,
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 150),
             curve: Curves.easeOut,
-            margin: const EdgeInsets.symmetric(vertical: 3),
-            padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 10),
+            margin: const EdgeInsets.symmetric(vertical: 2),
+            padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 9),
             decoration: BoxDecoration(
               color: widget.selected
                   ? tokens.accentSoft
                   : (hovering
                       ? tokens.content.withOpacity(.65)
                       : Colors.transparent),
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(9),
             ),
             child: Row(
               children: [
                 Icon(
                   widget.icon,
-                  size: 19,
+                  size: 18,
                   color: widget.selected ? tokens.accent : tokens.textSecondary,
                 ),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
                     widget.label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       color: widget.selected
                           ? tokens.accent
                           : tokens.textSecondary,
-                      fontSize: 12,
+                      fontSize: 12.5,
                       fontWeight:
                           widget.selected ? FontWeight.w700 : FontWeight.w500,
                     ),
                   ),
                 ),
-                if (widget.count != null && widget.count! > 0)
-                  Text('${widget.count}',
-                      style: TextStyle(
-                          color: widget.selected
-                              ? tokens.accent
-                              : tokens.textTertiary,
-                          fontSize: 10,
-                          fontWeight: FontWeight.w700)),
+                if (hovering && widget.onMenu != null)
+                  SizedBox(
+                      width: 22,
+                      height: 20,
+                      child: IconButton(
+                          tooltip: '文件夹操作',
+                          padding: EdgeInsets.zero,
+                          iconSize: 16,
+                          onPressed: widget.onMenu,
+                          icon: const Icon(Icons.more_horiz)))
+                else if (widget.count != null && widget.count! > 0)
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: widget.selected
+                          ? tokens.content
+                          : tokens.content.withOpacity(.7),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Text('${widget.count}',
+                        style: TextStyle(
+                            color: widget.selected
+                                ? tokens.accent
+                                : tokens.textTertiary,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w700)),
+                  ),
               ],
             ),
           ),
@@ -623,7 +625,7 @@ class _TaskListItemState extends State<_TaskListItem> {
               duration: const Duration(milliseconds: 150),
               curve: Curves.easeOut,
               margin: const EdgeInsets.symmetric(vertical: 2),
-              padding: const EdgeInsets.fromLTRB(9, 8, 8, 8),
+              padding: const EdgeInsets.fromLTRB(11, 9, 8, 9),
               decoration: BoxDecoration(
                 color: dragActive
                     ? tokens.accentSoft
@@ -632,7 +634,7 @@ class _TaskListItemState extends State<_TaskListItem> {
                         : (hovering
                             ? tokens.content.withOpacity(.7)
                             : Colors.transparent)),
-                borderRadius: BorderRadius.circular(7),
+                borderRadius: BorderRadius.circular(9),
                 border: dragActive
                     ? Border.all(color: tokens.accent.withOpacity(.5))
                     : null,
@@ -640,30 +642,19 @@ class _TaskListItemState extends State<_TaskListItem> {
               child: Row(
                 children: [
                   Icon(Icons.list_alt_outlined,
-                      size: 17,
+                      size: 18,
                       color: selected ? tokens.accent : tokens.textSecondary),
-                  const SizedBox(width: 9),
+                  const SizedBox(width: 10),
                   Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(widget.list.name,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                                color: selected
-                                    ? tokens.accent
-                                    : tokens.textPrimary,
-                                fontSize: 12,
-                                fontWeight: selected
-                                    ? FontWeight.w700
-                                    : FontWeight.w600)),
-                        const SizedBox(height: 2),
-                        Text('任务清单',
-                            style: TextStyle(
-                                color: tokens.textTertiary, fontSize: 9.5)),
-                      ],
-                    ),
+                    child: Text(widget.list.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                            color:
+                                selected ? tokens.accent : tokens.textSecondary,
+                            fontSize: 12.5,
+                            fontWeight:
+                                selected ? FontWeight.w700 : FontWeight.w500)),
                   ),
                   if (count > 0)
                     Text('$count',
@@ -874,5 +865,59 @@ class _TaskViewItemState extends State<_TaskViewItem> {
         ),
       ),
     );
+  }
+}
+
+Future<void> _editFolder(BuildContext anchor, WorkspaceController controller,
+    MigrationFolderRecord folder) async {
+  final action = await showDesktopMenu<String>(anchor, entries: const [
+    DesktopMenuEntry('rename', '重命名', icon: Icons.edit_outlined),
+    DesktopMenuEntry('remove', '删除文件夹…',
+        icon: Icons.delete_outline, destructive: true),
+  ]);
+  if (!anchor.mounted || action == null) return;
+  if (action == 'remove') {
+    final confirmed = await showDialog<bool>(
+        context: anchor,
+        builder: (context) => AlertDialog(
+              title: Text('删除“${folder.name}”？'),
+              content: const Text('其中的笔记会保留，并移到“未归档”。'),
+              actions: [
+                TextButton(
+                    onPressed: () => Navigator.pop(context, false),
+                    child: const Text('取消')),
+                FilledButton(
+                    onPressed: () => Navigator.pop(context, true),
+                    child: const Text('删除文件夹'))
+              ],
+            ));
+    if (confirmed == true) controller.removeFolder(folder.id);
+    return;
+  }
+  var draft = folder.name;
+  final name = await showDialog<String>(
+      context: anchor,
+      builder: (context) => AlertDialog(
+            title: const Text('重命名文件夹'),
+            content: TextFormField(
+                initialValue: draft,
+                onChanged: (value) => draft = value,
+                autofocus: true,
+                decoration: const InputDecoration(labelText: '文件夹名称'),
+                onFieldSubmitted: (value) => Navigator.pop(context, value)),
+            actions: [
+              TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('取消')),
+              FilledButton(
+                  onPressed: () => Navigator.pop(context, draft),
+                  child: const Text('保存'))
+            ],
+          ));
+  if (name != null &&
+      !controller.renameFolder(folder.id, name) &&
+      anchor.mounted) {
+    ScaffoldMessenger.of(anchor)
+        .showSnackBar(const SnackBar(content: Text('请输入一个不重复的文件夹名称。')));
   }
 }
