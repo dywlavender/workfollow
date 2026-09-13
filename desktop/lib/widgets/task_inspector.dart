@@ -186,125 +186,43 @@ class _TaskInspectorState extends State<TaskInspector> {
       subtask.clear();
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final task = widget.task;
-    final tokens = WorkFollowTheme.of(context);
-    final source = widget.controller.sourceNoteFor(task.id);
-    final subtaskProgress = task.subtaskTotal == 0
-        ? null
-        : task.subtaskCompleted / task.subtaskTotal;
-    final body = Padding(
+  Widget _header(BuildContext context, TaskItem task, WorkFollowTheme tokens) {
+    return Container(
       padding: EdgeInsets.fromLTRB(
-          widget.inline ? 20 : 30, 14, widget.inline ? 20 : 30, 22),
-      child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(children: [
-              if (widget.showBack)
-                IconButton(
-                    tooltip: '返回列表',
-                    onPressed: close,
-                    icon: const Icon(Icons.arrow_back, size: 18)),
-              PropertyButton(
-                  icon: Icons.list_rounded,
-                  label: task.listName,
-                  onPressed: _list),
-              const Spacer(),
-              Builder(
-                  builder: (anchor) => IconButton(
-                      tooltip: '更多操作',
-                      visualDensity: VisualDensity.compact,
-                      onPressed: () => _more(anchor),
-                      icon: Icon(Icons.more_horiz,
-                          color: tokens.textTertiary, size: 20))),
-              if (!widget.showBack)
-                IconButton(
-                    tooltip: '收起任务',
-                    visualDensity: VisualDensity.compact,
-                    onPressed: close,
-                    icon: Icon(Icons.close,
-                        color: tokens.textTertiary, size: 18)),
-            ]),
-            const SizedBox(height: 14),
-            Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              SizedBox(
-                  width: 28,
-                  height: 34,
-                  child: Checkbox(
-                      value: task.completed,
-                      semanticLabel: task.completed ? '标记未完成' : '完成任务',
-                      shape: const CircleBorder(),
-                      side: BorderSide(color: tokens.borderStrong, width: 1.6),
-                      onChanged: (_) => widget.controller.toggleTask(task.id))),
-              const SizedBox(width: 12),
-              Expanded(
-                  child: TextField(
-                      key: const ValueKey('task-title-editor'),
-                      controller: title,
-                      focusNode: titleFocus,
-                      minLines: 1,
-                      maxLines: 4,
-                      style: TextStyle(
-                          fontSize: 21,
-                          fontWeight: FontWeight.w700,
-                          height: 1.4,
-                          letterSpacing: -.3,
-                          color: task.completed
-                              ? tokens.textTertiary
-                              : tokens.textPrimary,
-                          decoration: task.completed
-                              ? TextDecoration.lineThrough
-                              : null),
-                      decoration: const InputDecoration(
-                          hintText: '任务标题',
-                          border: InputBorder.none,
-                          isDense: true,
-                          contentPadding: EdgeInsets.zero),
-                      onChanged: (value) =>
-                          widget.controller.updateTaskTitle(task.id, value))),
-            ]),
-            const SizedBox(height: 12),
-            Padding(
-                padding: const EdgeInsets.only(left: 40),
-                child: TextField(
-                    key: const ValueKey('task-description-editor'),
-                    controller: description,
-                    focusNode: descriptionFocus,
-                    minLines: 2,
-                    maxLines: 8,
-                    style: TextStyle(
-                        fontSize: 13.5,
-                        height: 1.65,
-                        color: tokens.textSecondary),
-                    decoration: InputDecoration(
-                        hintText: '添加备注…',
-                        hintStyle: TextStyle(color: tokens.textTertiary),
-                        border: InputBorder.none,
-                        isDense: true,
-                        contentPadding: EdgeInsets.zero),
-                    onChanged: (value) => widget.controller
-                        .updateTaskDescription(task.id, value))),
-            const SizedBox(height: 18),
-            Wrap(spacing: 8, runSpacing: 8, children: [
-              PropertyButton(
+          widget.inline ? 20 : 26, 10, widget.inline ? 20 : 26, 8),
+      decoration: widget.inline
+          ? null
+          : BoxDecoration(
+              border: Border(bottom: BorderSide(color: tokens.border))),
+      child: Row(children: [
+        if (widget.showBack)
+          IconButton(
+              tooltip: '返回列表',
+              onPressed: close,
+              icon: const Icon(Icons.arrow_back, size: 18)),
+        Expanded(
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(children: [
+              _TopPropertyButton(
+                  key: const ValueKey('task-complete'),
+                  icon: task.completed
+                      ? Icons.check_box_rounded
+                      : Icons.check_box_outline_blank_rounded,
+                  label: task.completed ? '标记未完成' : '完成任务',
+                  active: task.completed,
+                  color: task.completed ? tokens.success : null,
+                  onPressed: (_) => widget.controller.toggleTask(task.id),
+                  iconOnly: true),
+              const SizedBox(width: 4),
+              _TopPropertyButton(
                   key: const ValueKey('task-schedule'),
                   icon: Icons.calendar_today_outlined,
                   label: calendarDateLabel(localDateTimeFromStorage(task.dueAt),
-                      hasTime: task.scheduledWithTime),
+                      hasTime: task.scheduledWithTime, empty: '安排日期'),
                   active: task.dueAt != null,
-                  tooltip: '安排日期：准备什么时候做',
                   onPressed: (anchor) => _date(anchor, 'schedule')),
-              PropertyButton(
-                  icon: Icons.flag_outlined,
-                  label: calendarDateLabel(
-                      localDateTimeFromStorage(task.deadlineAt),
-                      empty: '截止日期'),
-                  active: task.deadlineAt != null,
-                  tooltip: '截止日期：最晚什么时候完成',
-                  onPressed: (anchor) => _date(anchor, 'deadline')),
-              PropertyButton(
+              _TopPropertyButton(
                   key: const ValueKey('task-reminder'),
                   icon: Icons.notifications_none_rounded,
                   label: calendarDateLabel(
@@ -312,8 +230,10 @@ class _TaskInspectorState extends State<TaskInspector> {
                       hasTime: true,
                       empty: '提醒'),
                   active: task.reminderAt != null,
-                  onPressed: (anchor) => _date(anchor, 'reminder')),
-              PropertyButton(
+                  onPressed: (anchor) => _date(anchor, 'reminder'),
+                  iconOnly: true),
+              _TopPropertyButton(
+                  key: const ValueKey('task-repeat'),
                   icon: Icons.repeat_rounded,
                   label: switch (task.recurrenceType) {
                     'DAILY' => '每天',
@@ -322,14 +242,112 @@ class _TaskInspectorState extends State<TaskInspector> {
                     _ => '重复',
                   },
                   active: task.recurrenceType != 'NONE',
-                  onPressed: _repeat),
-              PropertyButton(
-                  icon: Icons.outlined_flag,
+                  onPressed: _repeat,
+                  iconOnly: true),
+              _TopPropertyButton(
+                  key: const ValueKey('task-priority'),
+                  icon: Icons.flag_outlined,
                   label: task.priority == TaskPriority.none
                       ? '优先级'
                       : task.priority.label,
                   active: task.priority != TaskPriority.none,
-                  onPressed: _priority),
+                  color: task.priority == TaskPriority.high
+                      ? tokens.danger
+                      : task.priority == TaskPriority.medium
+                          ? tokens.warning
+                          : null,
+                  onPressed: _priority,
+                  iconOnly: true),
+            ]),
+          ),
+        ),
+        Builder(
+            builder: (anchor) => IconButton(
+                tooltip: '更多操作',
+                visualDensity: VisualDensity.compact,
+                onPressed: () => _more(anchor),
+                icon: Icon(Icons.more_horiz,
+                    color: tokens.textTertiary, size: 20))),
+        if (!widget.showBack)
+          IconButton(
+              tooltip: '收起任务',
+              visualDensity: VisualDensity.compact,
+              onPressed: close,
+              icon: Icon(Icons.close, color: tokens.textTertiary, size: 18)),
+      ]),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final task = widget.task;
+    final tokens = WorkFollowTheme.of(context);
+    final source = widget.controller.sourceNoteFor(task.id);
+    final subtaskProgress = task.subtaskTotal == 0
+        ? null
+        : task.subtaskCompleted / task.subtaskTotal;
+    final editorBody = Padding(
+      padding: EdgeInsets.fromLTRB(
+          widget.inline ? 20 : 26, 14, widget.inline ? 20 : 26, 22),
+      child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            TextField(
+                key: const ValueKey('task-title-editor'),
+                controller: title,
+                focusNode: titleFocus,
+                minLines: 1,
+                maxLines: 4,
+                style: TextStyle(
+                    fontSize: 21,
+                    fontWeight: FontWeight.w700,
+                    height: 1.4,
+                    letterSpacing: -.3,
+                    color: task.completed
+                        ? tokens.textTertiary
+                        : tokens.textPrimary,
+                    decoration:
+                        task.completed ? TextDecoration.lineThrough : null),
+                decoration: const InputDecoration(
+                    hintText: '任务标题',
+                    border: InputBorder.none,
+                    isDense: true,
+                    contentPadding: EdgeInsets.zero),
+                onChanged: (value) =>
+                    widget.controller.updateTaskTitle(task.id, value)),
+            const SizedBox(height: 12),
+            TextField(
+                key: const ValueKey('task-description-editor'),
+                controller: description,
+                focusNode: descriptionFocus,
+                minLines: 2,
+                maxLines: 8,
+                style: TextStyle(
+                    fontSize: 13.5, height: 1.65, color: tokens.textSecondary),
+                decoration: InputDecoration(
+                    hintText: '添加备注…',
+                    hintStyle: TextStyle(color: tokens.textTertiary),
+                    border: InputBorder.none,
+                    isDense: true,
+                    contentPadding: EdgeInsets.zero),
+                onChanged: (value) =>
+                    widget.controller.updateTaskDescription(task.id, value)),
+            const SizedBox(height: 18),
+            Wrap(spacing: 8, runSpacing: 8, children: [
+              PropertyButton(
+                  icon: Icons.list_rounded,
+                  label: task.listName,
+                  active: true,
+                  onPressed: _list),
+              PropertyButton(
+                  icon: Icons.flag_outlined,
+                  label: calendarDateLabel(
+                      localDateTimeFromStorage(task.deadlineAt),
+                      empty: '截止日期'),
+                  active: task.deadlineAt != null,
+                  tooltip: '截止日期：最晚什么时候完成',
+                  onPressed: (anchor) => _date(anchor, 'deadline')),
               PropertyButton(
                   icon: Icons.tag_rounded,
                   label: task.tags.isEmpty ? '标签' : task.tags.join(' · '),
@@ -456,13 +474,15 @@ class _TaskInspectorState extends State<TaskInspector> {
             ],
           ]),
     );
+    final header = _header(context, task, tokens);
     final content = Column(
         mainAxisSize: widget.inline ? MainAxisSize.min : MainAxisSize.max,
         children: [
+          header,
           if (widget.inline)
-            body
+            editorBody
           else
-            Expanded(child: SingleChildScrollView(child: body)),
+            Expanded(child: SingleChildScrollView(child: editorBody)),
           SaveStatusFooter(controller: widget.controller),
         ]);
     return CallbackShortcuts(
@@ -470,6 +490,71 @@ class _TaskInspectorState extends State<TaskInspector> {
         child: Container(
             color: widget.inline ? Colors.transparent : tokens.content,
             child: content));
+  }
+}
+
+/// Compact property control used by the inspector's top strip. Most
+/// properties are icon-only to keep the strip usable in a 340px pane; the
+/// tooltip and semantic label still expose the full value to keyboard and
+/// assistive-technology users.
+class _TopPropertyButton extends StatelessWidget {
+  const _TopPropertyButton({
+    super.key,
+    required this.icon,
+    required this.label,
+    required this.onPressed,
+    this.active = false,
+    this.color,
+    this.iconOnly = false,
+  });
+
+  final IconData icon;
+  final String label;
+  final void Function(BuildContext anchor) onPressed;
+  final bool active;
+  final Color? color;
+  final bool iconOnly;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = WorkFollowTheme.of(context);
+    final foreground = color ?? (active ? tokens.accent : tokens.textSecondary);
+    return Builder(
+      builder: (anchor) => Tooltip(
+        message: label,
+        child: Semantics(
+          button: true,
+          label: label,
+          child: TextButton(
+            onPressed: () => onPressed(anchor),
+            style: TextButton.styleFrom(
+              foregroundColor: foreground,
+              backgroundColor: active ? tokens.accentFaint : Colors.transparent,
+              minimumSize: Size(iconOnly ? 32 : 0, 32),
+              padding: EdgeInsets.symmetric(horizontal: iconOnly ? 6 : 9),
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              visualDensity: VisualDensity.compact,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(7)),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(icon, size: 16),
+                if (!iconOnly) ...[
+                  const SizedBox(width: 6),
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 120),
+                    child: Text(label,
+                        maxLines: 1, overflow: TextOverflow.ellipsis),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
 

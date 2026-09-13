@@ -10,9 +10,16 @@ import 'task_date_picker.dart';
 
 class QuickAddField extends StatefulWidget {
   const QuickAddField(
-      {super.key, required this.controller, this.autofocus = false});
+      {super.key,
+      required this.controller,
+      this.autofocus = false,
+      this.listStyle = false});
   final WorkspaceController controller;
   final bool autofocus;
+
+  /// Uses the compact inline-row treatment from the macOS list view. Home
+  /// dashboard and other contexts keep the fuller card treatment.
+  final bool listStyle;
   @override
   State<QuickAddField> createState() => _QuickAddFieldState();
 }
@@ -80,8 +87,7 @@ class _QuickAddFieldState extends State<QuickAddField> {
     final kept = result.spans
         .where((span) => !dismissedSpans.contains(span.raw))
         .toList();
-    bool keptKind(SmartTokenKind kind) =>
-        kept.any((span) => span.kind == kind);
+    bool keptKind(SmartTokenKind kind) => kept.any((span) => span.kind == kind);
     setState(() => parse = SmartParseResult(
         title: parser.titleFromSpans(text.text, kept),
         dueAt: keptKind(SmartTokenKind.date) || keptKind(SmartTokenKind.time)
@@ -90,11 +96,10 @@ class _QuickAddFieldState extends State<QuickAddField> {
         hasTime:
             (keptKind(SmartTokenKind.date) || keptKind(SmartTokenKind.time)) &&
                 result.hasTime,
-        reminderAt:
-            keptKind(SmartTokenKind.time) ||
-                    (keptKind(SmartTokenKind.date) && result.hasTime)
-                ? result.reminderAt
-                : null,
+        reminderAt: keptKind(SmartTokenKind.time) ||
+                (keptKind(SmartTokenKind.date) && result.hasTime)
+            ? result.reminderAt
+            : null,
         recurrenceType: keptKind(SmartTokenKind.recurrence)
             ? result.recurrenceType
             : 'NONE',
@@ -105,8 +110,7 @@ class _QuickAddFieldState extends State<QuickAddField> {
             .where((span) => span.kind == SmartTokenKind.tag)
             .map((span) => span.label.substring(1))
             .toList(),
-        listName:
-            keptKind(SmartTokenKind.list) ? result.listName : null,
+        listName: keptKind(SmartTokenKind.list) ? result.listName : null,
         priority: keptKind(SmartTokenKind.priority)
             ? result.priority
             : TaskPriority.none,
@@ -139,22 +143,18 @@ class _QuickAddFieldState extends State<QuickAddField> {
     final smartDue = parsed.dueAt;
     final manualDue = customDate ? selectedDate : null;
     final effectiveDue = smartDue ?? manualDue;
-    final dismissedScheduling = parser
-        .parse(text.text)
-        .spans
-        .any((span) =>
-            (span.kind == SmartTokenKind.date ||
-                span.kind == SmartTokenKind.time) &&
-            dismissedSpans.contains(span.raw));
+    final dismissedScheduling = parser.parse(text.text).spans.any((span) =>
+        (span.kind == SmartTokenKind.date ||
+            span.kind == SmartTokenKind.time) &&
+        dismissedSpans.contains(span.raw));
     if (title.isEmpty) return;
     if (!widget.controller.addTask(title,
         listName: listName,
         dueAt: effectiveDue,
-        forceUnscheduled:
-            (customDate && manualDue == null && smartDue == null) ||
-                (dismissedScheduling &&
-                    manualDue == null &&
-                    smartDue == null))) {
+        forceUnscheduled: (customDate &&
+                manualDue == null &&
+                smartDue == null) ||
+            (dismissedScheduling && manualDue == null && smartDue == null))) {
       return;
     }
     final id = widget.controller.tasks.first.id;
@@ -174,8 +174,7 @@ class _QuickAddFieldState extends State<QuickAddField> {
     if (!c.visibleTasks.any((task) => task.id == id)) {
       final destination = effectiveDue == null
           ? '收集箱'
-          : calendarDateLabel(effectiveDue,
-              hasTime: parsed.hasTime || hasTime);
+          : calendarDateLabel(effectiveDue, hasTime: parsed.hasTime || hasTime);
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text('已添加到$destination'),
         action: SnackBarAction(
@@ -196,10 +195,8 @@ class _QuickAddFieldState extends State<QuickAddField> {
   @override
   Widget build(BuildContext context) {
     final tokens = WorkFollowTheme.of(context);
-    final expanded = focused ||
-        customDate ||
-        text.text.isNotEmpty ||
-        parse.spans.isNotEmpty;
+    final expanded =
+        focused || customDate || text.text.isNotEmpty || parse.spans.isNotEmpty;
     return CallbackShortcuts(
         bindings: {
           const SingleActivator(LogicalKeyboardKey.escape): () {
@@ -215,7 +212,7 @@ class _QuickAddFieldState extends State<QuickAddField> {
         child: Container(
           decoration: BoxDecoration(
               color: tokens.content,
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(widget.listStyle ? 9 : 12),
               border: Border.all(
                   color: expanded
                       ? tokens.accent.withValues(alpha: .55)
@@ -226,10 +223,13 @@ class _QuickAddFieldState extends State<QuickAddField> {
                     blurRadius: expanded ? 16 : 8,
                     offset: const Offset(0, 2))
               ]),
-          padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 7),
+          padding: EdgeInsets.symmetric(
+              horizontal: widget.listStyle ? 12 : 15,
+              vertical: widget.listStyle ? 5 : 7),
           child: Column(mainAxisSize: MainAxisSize.min, children: [
             Row(children: [
-              Icon(Icons.add, size: 19, color: tokens.accent),
+              Icon(Icons.add,
+                  size: widget.listStyle ? 18 : 19, color: tokens.accent),
               const SizedBox(width: 10),
               Expanded(
                   child: TextField(
@@ -242,7 +242,9 @@ class _QuickAddFieldState extends State<QuickAddField> {
                       textInputAction: TextInputAction.done,
                       style: TextStyle(fontSize: 14, color: tokens.textPrimary),
                       decoration: InputDecoration(
-                          hintText: '记下下一件事…',
+                          hintText: widget.listStyle
+                              ? '添加任务至“${widget.controller.creationTargetLabel.split(' · ').first}”'
+                              : '记下下一件事…',
                           hintStyle: TextStyle(color: tokens.textTertiary),
                           border: InputBorder.none,
                           isDense: true,
@@ -257,30 +259,26 @@ class _QuickAddFieldState extends State<QuickAddField> {
                   padding: const EdgeInsets.only(top: 4, bottom: 2),
                   child: SizedBox(
                       width: double.infinity,
-                      child: Wrap(
-                          spacing: 6,
-                          runSpacing: 6,
-                          children: [
-                            for (final span in parse.spans)
-                              InputChip(
-                                  key: ValueKey(
-                                      'smart-chip-${span.kind.name}-${span.raw}'),
-                                  label: Text(span.label,
-                                      style: TextStyle(
-                                          fontSize: 11,
-                                          fontWeight: FontWeight.w600,
-                                          color: _spanColor(span.kind, tokens))),
-                                  backgroundColor:
-                                      _spanColor(span.kind, tokens)
-                                          .withValues(alpha: .09),
-                                  side: BorderSide.none,
-                                  visualDensity: VisualDensity.compact,
-                                  materialTapTargetSize:
-                                      MaterialTapTargetSize.shrinkWrap,
-                                  deleteIconColor: _spanColor(span.kind, tokens),
-                                  deleteIcon: const Icon(Icons.close, size: 13),
-                                  onDeleted: () => _dismissSpan(span)),
-                          ]))),
+                      child: Wrap(spacing: 6, runSpacing: 6, children: [
+                        for (final span in parse.spans)
+                          InputChip(
+                              key: ValueKey(
+                                  'smart-chip-${span.kind.name}-${span.raw}'),
+                              label: Text(span.label,
+                                  style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w600,
+                                      color: _spanColor(span.kind, tokens))),
+                              backgroundColor: _spanColor(span.kind, tokens)
+                                  .withValues(alpha: .09),
+                              side: BorderSide.none,
+                              visualDensity: VisualDensity.compact,
+                              materialTapTargetSize:
+                                  MaterialTapTargetSize.shrinkWrap,
+                              deleteIconColor: _spanColor(span.kind, tokens),
+                              deleteIcon: const Icon(Icons.close, size: 13),
+                              onDeleted: () => _dismissSpan(span)),
+                      ]))),
             if (expanded && parse.hasStructure && _summary.isNotEmpty)
               Align(
                   alignment: Alignment.centerLeft,
@@ -321,14 +319,21 @@ class _QuickAddFieldState extends State<QuickAddField> {
                                 });
                             })),
                     const Spacer(),
-                    FilledButton(
-                        onPressed: text.text.trim().isEmpty ? null : submit,
-                        style: FilledButton.styleFrom(
-                            minimumSize: const Size(0, 30),
-                            padding:
-                                const EdgeInsets.symmetric(horizontal: 12)),
-                        child:
-                            const Text('添加任务', style: TextStyle(fontSize: 12))),
+                    if (widget.listStyle)
+                      Text('Return 添加',
+                          style: TextStyle(
+                              color: tokens.textTertiary,
+                              fontSize: 10.5,
+                              fontWeight: FontWeight.w500))
+                    else
+                      FilledButton(
+                          onPressed: text.text.trim().isEmpty ? null : submit,
+                          style: FilledButton.styleFrom(
+                              minimumSize: const Size(0, 30),
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 12)),
+                          child: const Text('添加任务',
+                              style: TextStyle(fontSize: 12))),
                   ])),
           ]),
         ));
@@ -356,7 +361,8 @@ class _QuickAddFieldState extends State<QuickAddField> {
         _ => '重复',
       });
     }
-    if (parse.tags.isNotEmpty) parts.add(parse.tags.map((tag) => '#$tag').join(' '));
+    if (parse.tags.isNotEmpty)
+      parts.add(parse.tags.map((tag) => '#$tag').join(' '));
     if (parse.listName != null) parts.add('@${parse.listName}');
     if (parse.priority != TaskPriority.none) parts.add(parse.priority.label);
     return parts.isEmpty ? '' : '→ ${parts.join(' · ')}';

@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 @immutable
@@ -71,28 +72,28 @@ class WorkFollowTheme extends ThemeExtension<WorkFollowTheme> {
   );
 
   static const dark = WorkFollowTheme(
-    canvas: Color(0xFF121116),
-    sidebar: Color(0xFF17161D),
-    content: Color(0xFF1B1A22),
-    inspector: Color(0xFF18171F),
-    overlay: Color(0xFF25232C),
-    textPrimary: Color(0xFFF5F2F7),
-    textSecondary: Color(0xFFB7B1BE),
-    textTertiary: Color(0xFF817B88),
-    border: Color(0xFF2B2934),
-    borderStrong: Color(0xFF3B3847),
-    accent: Color(0xFFA5B4FC),
-    accentHover: Color(0xFFC7D2FE),
-    accentSoft: Color(0xFF292B55),
-    accentFaint: Color(0xFF20223F),
-    success: Color(0xFF65C69B),
-    warning: Color(0xFFF0B763),
-    danger: Color(0xFFF28A9D),
-    shadow: Color(0x66000000),
+    canvas: Color(0xFF1B1C1E),
+    sidebar: Color(0xFF18191B),
+    content: Color(0xFF202124),
+    inspector: Color(0xFF1D1E20),
+    overlay: Color(0xFF2B2C2F),
+    textPrimary: Color(0xFFF4F4F5),
+    textSecondary: Color(0xFFB5B5B8),
+    textTertiary: Color(0xFF85858B),
+    border: Color(0xFF303135),
+    borderStrong: Color(0xFF48494E),
+    accent: Color(0xFF7192FF),
+    accentHover: Color(0xFF91AAFF),
+    accentSoft: Color(0xFF2D3A5C),
+    accentFaint: Color(0xFF252F4A),
+    success: Color(0xFF5ACB8A),
+    warning: Color(0xFFF2B84B),
+    danger: Color(0xFFFF5A5F),
+    shadow: Color(0x88000000),
     seasonalSky: LinearGradient(
       begin: Alignment.topLeft,
       end: Alignment.bottomRight,
-      colors: [Color(0xFF211821), Color(0xFF1B1C2B)],
+      colors: [Color(0xFF202124), Color(0xFF1B1C1E)],
     ),
   );
 
@@ -186,11 +187,11 @@ class WorkFollowThemeData {
       primary: tokens.accent,
       onPrimary: brightness == Brightness.light
           ? Colors.white
-          : const Color(0xFF1C1731),
+          : const Color(0xFF111216),
       secondary: tokens.accent,
       onSecondary: brightness == Brightness.light
           ? Colors.white
-          : const Color(0xFF1C1731),
+          : const Color(0xFF111216),
       error: tokens.danger,
       onError: Colors.white,
       surface: tokens.content,
@@ -200,13 +201,15 @@ class WorkFollowThemeData {
     return ThemeData(
       brightness: brightness,
       useMaterial3: true,
+      fontFamily:
+          defaultTargetPlatform == TargetPlatform.macOS ? '.SF Pro Text' : null,
       colorScheme: colorScheme,
       scaffoldBackgroundColor: tokens.canvas,
       canvasColor: tokens.canvas,
       extensions: <ThemeExtension<dynamic>>[tokens],
       splashFactory: NoSplash.splashFactory,
       hoverColor: tokens.accentSoft,
-      focusColor: tokens.accent.withOpacity(.22),
+      focusColor: tokens.accent.withValues(alpha: .22),
       dividerColor: tokens.border,
       textTheme: TextTheme(
         bodyLarge:

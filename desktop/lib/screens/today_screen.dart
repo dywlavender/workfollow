@@ -12,9 +12,9 @@ import '../widgets/task_inspector.dart';
 import '../widgets/task_row.dart';
 
 /// Task list pages (今天 / 计划 / 收集箱 / 全部 / 已完成 / individual lists).
-/// The redesigned layout floats grouped cards on the canvas: each date or
-/// status group becomes one card, rows expand into an inline editor in place,
-/// and the today view gets a progress ring in the header.
+/// Wide macOS windows use a TickTick-style list + inspector split. Smaller
+/// windows keep the existing list/detail fallback so the task editor never
+/// gets squeezed into an unusable column.
 class TodayScreen extends StatefulWidget {
   const TodayScreen(
       {super.key, required this.controller, this.compactDensity = false});
@@ -25,6 +25,10 @@ class TodayScreen extends StatefulWidget {
 }
 
 class _TodayScreenState extends State<TodayScreen> {
+  static const double _wideInspectorBreakpoint = 980;
+  static const double _minListPaneWidth = 380;
+  static const double _maxListPaneWidth = 500;
+
   bool detailOnly = false;
   bool showCompleted = false;
   late int openVersion;
@@ -69,6 +73,7 @@ class _TodayScreenState extends State<TodayScreen> {
     final completed = tasks.where((task) => task.completed).toList();
     return LayoutBuilder(builder: (context, constraints) {
       final narrow = constraints.maxWidth < 700;
+      final wideInspector = constraints.maxWidth >= _wideInspectorBreakpoint;
       // Short windows get a dense header so the first tasks stay on screen.
       final compact = widget.compactDensity || constraints.maxHeight < 680;
       final selected = c.selectedTask;
@@ -110,27 +115,30 @@ class _TodayScreenState extends State<TodayScreen> {
                       Padding(
                           padding: EdgeInsets.fromLTRB(
                               narrow ? 22 : 8,
-                              compact ? 14 : 26,
+                              compact || wideInspector ? 14 : 26,
                               narrow ? 22 : 8,
-                              compact ? 12 : 18),
+                              compact || wideInspector ? 12 : 18),
                           child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 PageHeader(
-                                    dense: compact,
+                                    dense: compact || wideInspector,
                                     eyebrow: c.view == WorkspaceView.today &&
                                             c.selectedListName == null
                                         ? _todayLabel()
                                         : null,
                                     title: c.viewTitle,
-                                    subtitle: completedView
-                                        ? '已经完成的事，都在这里。'
-                                        : c.view == WorkspaceView.inbox
-                                            ? '先记下来，稍后再安排。'
-                                            : c.view == WorkspaceView.plan
-                                                ? '按日期查看接下来的安排。'
-                                                : '${active.length} 件待办 · 已完成 ${completed.length} 件',
-                                    trailing: c.view == WorkspaceView.today &&
+                                    subtitle: wideInspector
+                                        ? null
+                                        : completedView
+                                            ? '已经完成的事，都在这里。'
+                                            : c.view == WorkspaceView.inbox
+                                                ? '先记下来，稍后再安排。'
+                                                : c.view == WorkspaceView.plan
+                                                    ? '按日期查看接下来的安排。'
+                                                    : '${active.length} 件待办 · 已完成 ${completed.length} 件',
+                                    trailing: !wideInspector &&
+                                            c.view == WorkspaceView.today &&
                                             c.selectedListName == null &&
                                             !completedView
                                         ? _ProgressSummary(
@@ -141,7 +149,8 @@ class _TodayScreenState extends State<TodayScreen> {
                                         : null),
                                 if (!completedView) ...[
                                   SizedBox(height: compact ? 12 : 20),
-                                  QuickAddField(controller: c)
+                                  QuickAddField(
+                                      controller: c, listStyle: wideInspector)
                                 ],
                               ])),
                       Expanded(
@@ -170,10 +179,13 @@ class _TodayScreenState extends State<TodayScreen> {
                                         : '在上方记下一件事，按 Return 添加。')),
                           for (final group in groups) ...[
                             if (group.$2.isNotEmpty)
-                              ..._groupSlivers(group, narrow),
+                              ..._groupSlivers(group, narrow,
+                                  compact: compact,
+                                  wideInspector: wideInspector),
                           ],
                           if (!completedView && completed.isNotEmpty)
-                            ..._completedSlivers(completed),
+                            ..._completedSlivers(completed,
+                                compact: compact, wideInspector: wideInspector),
                         ],
                       )),
                     ]),
@@ -186,6 +198,25 @@ class _TodayScreenState extends State<TodayScreen> {
                   bottom: 18,
                   child: Center(child: _BulkBar(controller: c))),
           ]));
+      if (wideInspector) {
+        final listWidth = (constraints.maxWidth * .42)
+            .clamp(_minListPaneWidth, _maxListPaneWidth);
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            SizedBox(width: listWidth, child: list),
+            VerticalDivider(width: 1, thickness: 1, color: tokens.border),
+            Expanded(
+              child: selected == null
+                  ? const _EmptyInspector()
+                  : TaskInspector(
+                      key: ValueKey('wide-detail-${selected.id}'),
+                      task: selected,
+                      controller: c),
+            ),
+          ],
+        );
+      }
       if (!narrow) return list;
       return Stack(fit: StackFit.expand, children: [
         Offstage(offstage: detail, child: list),
@@ -264,11 +295,11 @@ class _TodayScreenState extends State<TodayScreen> {
     ]);
   }
 
-  List<Widget> _groupSlivers(
-      (String, List<TaskItem>, bool) group, bool narrow) {
+  List<Widget> _groupSlivers((String, List<TaskItem>, bool) group, bool narrow,
+      {bool compact = false, bool wideInspector = false}) {
     final tokens = WorkFollowTheme.of(context);
     final (label, tasks, danger) = group;
-    if (widget.compactDensity) {
+    if (compact || wideInspector) {
       final edge = danger ? tokens.warning : tokens.border;
       return [
         const SizedBox(height: 8),
@@ -281,9 +312,12 @@ class _TodayScreenState extends State<TodayScreen> {
                   dotColor: edge,
                   textColor: danger ? tokens.warning : tokens.textSecondary)),
         for (var i = 0; i < tasks.length; i++) ...[
-          _task(tasks[i], narrow, compact: true),
+          _task(tasks[i], narrow, compact: true, wideInspector: wideInspector),
           if (i < tasks.length - 1)
-            Container(height: 1, margin: const EdgeInsets.only(left: 48), color: tokens.border),
+            Container(
+                height: 1,
+                margin: const EdgeInsets.only(left: 48),
+                color: tokens.border),
         ],
       ];
     }
@@ -300,7 +334,11 @@ class _TodayScreenState extends State<TodayScreen> {
                   dotColor: danger ? tokens.warning : tokens.accent,
                   textColor: danger ? tokens.warning : tokens.textSecondary)),
       for (var i = 0; i < tasks.length; i++) ...[
-          _cardSide(_task(tasks[i], narrow, compact: widget.compactDensity), edge),
+        _cardSide(
+            _task(tasks[i], narrow,
+                compact: compact || wideInspector,
+                wideInspector: wideInspector),
+            edge),
         if (i < tasks.length - 1)
           _cardSide(
               Container(
@@ -313,9 +351,10 @@ class _TodayScreenState extends State<TodayScreen> {
     ];
   }
 
-  List<Widget> _completedSlivers(List<TaskItem> completed) {
+  List<Widget> _completedSlivers(List<TaskItem> completed,
+      {bool compact = false, bool wideInspector = false}) {
     final tokens = WorkFollowTheme.of(context);
-    if (widget.compactDensity) {
+    if (compact || wideInspector) {
       return [
         const SizedBox(height: 8),
         Padding(
@@ -340,9 +379,13 @@ class _TodayScreenState extends State<TodayScreen> {
                     ]))))),
         if (showCompleted)
           for (var i = 0; i < completed.length; i++) ...[
-            _task(completed[i], false, compact: true),
+            _task(completed[i], false,
+                compact: true, wideInspector: wideInspector),
             if (i < completed.length - 1)
-              Container(height: 1, margin: const EdgeInsets.only(left: 48), color: tokens.border),
+              Container(
+                  height: 1,
+                  margin: const EdgeInsets.only(left: 48),
+                  color: tokens.border),
           ],
       ];
     }
@@ -373,7 +416,11 @@ class _TodayScreenState extends State<TodayScreen> {
                   ]))))),
       if (showCompleted)
         for (var i = 0; i < completed.length; i++) ...[
-          _cardSide(_task(completed[i], false, compact: widget.compactDensity), tokens.border),
+          _cardSide(
+              _task(completed[i], false,
+                  compact: compact || wideInspector,
+                  wideInspector: wideInspector),
+              tokens.border),
           if (i < completed.length - 1)
             _cardSide(
                 Container(
@@ -386,9 +433,13 @@ class _TodayScreenState extends State<TodayScreen> {
     ];
   }
 
-  Widget _task(TaskItem task, bool narrow, {bool compact = false}) {
+  Widget _task(TaskItem task, bool narrow,
+      {bool compact = false, bool wideInspector = false}) {
     final c = widget.controller, tokens = WorkFollowTheme.of(context);
-    if (!narrow && c.selectedTaskId == task.id && c.multiSelectCount == 0) {
+    if (!narrow &&
+        !wideInspector &&
+        c.selectedTaskId == task.id &&
+        c.multiSelectCount == 0) {
       return Container(
           key: expandedEditorKey,
           padding: const EdgeInsets.fromLTRB(8, 8, 8, 14),
@@ -446,6 +497,40 @@ class _TodayScreenState extends State<TodayScreen> {
   String _todayLabel() {
     final now = DateTime.now();
     return '${now.month} 月 ${now.day} 日 · 星期${'一二三四五六日'[now.weekday - 1]}';
+  }
+}
+
+/// Empty state for the persistent wide-window inspector. It keeps the right
+/// pane visually present, just like the reference app, while explaining the
+/// next action instead of leaving an unexplained blank region.
+class _EmptyInspector extends StatelessWidget {
+  const _EmptyInspector();
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = WorkFollowTheme.of(context);
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(36),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.touch_app_outlined,
+                size: 30, color: tokens.textTertiary),
+            const SizedBox(height: 12),
+            Text('选择一个任务开始编辑',
+                style: TextStyle(
+                    color: tokens.textSecondary,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600)),
+            const SizedBox(height: 6),
+            Text('标题、备注、日期和子任务都会在这里展开。',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: tokens.textTertiary, fontSize: 12)),
+          ],
+        ),
+      ),
+    );
   }
 }
 

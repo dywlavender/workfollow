@@ -7,6 +7,7 @@ import 'package:workfollow_personal/screens/today_screen.dart';
 import 'package:workfollow_personal/state/workspace_controller.dart';
 import 'package:workfollow_personal/theme/workfollow_theme.dart';
 import 'package:workfollow_personal/widgets/task_row.dart';
+import 'package:workfollow_personal/widgets/task_inspector.dart';
 
 void main() {
   testWidgets('renders the personal home workspace', (tester) async {
@@ -78,6 +79,31 @@ void main() {
     expect(find.text('所有任务'), findsOneWidget);
     expect(find.text('阅读《设计心理学》第 4 章并做摘录'), findsWidgets);
     expect(find.byType(Tooltip), findsWidgets);
+  });
+
+  testWidgets('wide task view keeps a persistent list and inspector pane',
+      (tester) async {
+    tester.view.physicalSize = const Size(1400, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    await tester.pumpWidget(const WorkFollowApp(demoMode: true));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('今天').first);
+    await tester.pumpAndSettle();
+
+    expect(find.byType(TaskInspector), findsNothing);
+    await tester.tap(find.text('准备季度产品评审演示文稿').last);
+    await tester.pumpAndSettle();
+
+    expect(find.byType(TaskInspector), findsOneWidget);
+    expect(find.byKey(const ValueKey('task-schedule')), findsOneWidget);
+    expect(find.byKey(const ValueKey('task-repeat')), findsOneWidget);
+    expect(find.byKey(const ValueKey('task-priority')), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('notes keep folder, note list and editor panes', (tester) async {
@@ -158,12 +184,14 @@ void main() {
     // new frame, and a finder evaluated before it would read the pre-scroll
     // layout.
     await tester.pumpAndSettle();
-    final before = tester.state<ScrollableState>(list).position.pixels;
-    expect(before, greaterThan(0));
     // Tap by title: the lazy list builds more rows during the scroll, so a
     // type-based ".last" finder would re-resolve to a different, off-screen
     // row between ensureVisible and tap.
     final rowTitle = tester.widget<TaskRow>(visibleRow).task.title;
+    await tester.ensureVisible(find.text(rowTitle).last);
+    await tester.pumpAndSettle();
+    final before = tester.state<ScrollableState>(list).position.pixels;
+    expect(before, greaterThan(0));
     await tester.tap(find.text(rowTitle).last);
     await tester.pumpAndSettle();
     expect(find.byTooltip('返回列表'), findsOneWidget);

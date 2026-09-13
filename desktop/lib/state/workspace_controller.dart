@@ -346,11 +346,14 @@ class WorkspaceController extends ChangeNotifier {
     for (final task in _tasks) {
       if (task.deletedAt != null || !task.completed) continue;
       final value = localDateTimeFromStorage(task.completedAt);
-      if (value == null || value.isBefore(weekStart) || !value.isBefore(weekEnd)) {
+      if (value == null ||
+          value.isBefore(weekStart) ||
+          !value.isBefore(weekEnd)) {
         continue;
       }
       completed += 1;
-      completionByDay[value.weekday] = (completionByDay[value.weekday] ?? 0) + 1;
+      completionByDay[value.weekday] =
+          (completionByDay[value.weekday] ?? 0) + 1;
     }
     int? mostProductive;
     for (final entry in completionByDay.entries) {
@@ -376,6 +379,7 @@ class WorkspaceController extends ChangeNotifier {
       weekEnd: weekEnd,
     );
   }
+
   String get viewTitle {
     if (_selectedTagName != null) return '标签：$_selectedTagName';
     if (_selectedListName != null) return _selectedListName!;
@@ -396,6 +400,7 @@ class WorkspaceController extends ChangeNotifier {
       WorkspaceView.matrix => '四象限',
     };
   }
+
   LocalWorkspaceStore get workspaceStore => _store;
   MigrationBundle get snapshot => _snapshot();
 
@@ -466,6 +471,7 @@ class WorkspaceController extends ChangeNotifier {
     _notify();
     return true;
   }
+
   bool get restoredFromDisk => _restoredFromDisk;
   SaveStatus get saveStatus => _saveStatus;
   String? get saveError => _saveError;
@@ -717,7 +723,8 @@ class WorkspaceController extends ChangeNotifier {
   }
 
   bool matrixImportant(TaskItem task) =>
-      task.priority == TaskPriority.high || task.priority == TaskPriority.medium;
+      task.priority == TaskPriority.high ||
+      task.priority == TaskPriority.medium;
 
   bool matrixUrgent(TaskItem task, {DateTime? now}) {
     final due = localDateTimeFromStorage(task.dueAt);
@@ -764,8 +771,8 @@ class WorkspaceController extends ChangeNotifier {
           final due = localDateTimeFromStorage(task.dueAt);
           updateTaskDue(
               id,
-              today.add(const Duration(days: 7)).add(Duration(
-                  hours: due?.hour ?? 0, minutes: due?.minute ?? 0)),
+              today.add(const Duration(days: 7)).add(
+                  Duration(hours: due?.hour ?? 0, minutes: due?.minute ?? 0)),
               hasTime: task.scheduledWithTime);
         }
       case MatrixQuadrant.delegate:
@@ -776,8 +783,8 @@ class WorkspaceController extends ChangeNotifier {
           final due = localDateTimeFromStorage(task.dueAt);
           updateTaskDue(
               id,
-              today.add(const Duration(days: 7)).add(Duration(
-                  hours: due?.hour ?? 0, minutes: due?.minute ?? 0)),
+              today.add(const Duration(days: 7)).add(
+                  Duration(hours: due?.hour ?? 0, minutes: due?.minute ?? 0)),
               hasTime: task.scheduledWithTime);
         }
     }
@@ -1666,10 +1673,10 @@ class WorkspaceController extends ChangeNotifier {
     if (input.isEmpty) return false;
     final result = const SmartDateParser().parse(input, now: now);
     final parsedList = result.listName;
-    final existingList = parsedList != null &&
-            _lists.any((list) => list.name == parsedList)
-        ? parsedList
-        : null;
+    final existingList =
+        parsedList != null && _lists.any((list) => list.name == parsedList)
+            ? parsedList
+            : null;
     final targetList = preferInbox ? (existingList ?? '收集箱') : existingList;
     final title = const SmartDateParser().titleFromSpans(
         input,
@@ -1790,6 +1797,16 @@ class WorkspaceController extends ChangeNotifier {
         updatedAt: DateTime.now().toIso8601String(),
       ),
     );
+    // A task that was being edited can leave the current smart view after a
+    // reschedule (for example, moving a Today task to next week). Do not
+    // leave a stale inspector open over a list that no longer contains it;
+    // the snackbar's “查看任务” action can explicitly reopen it.
+    if (_selectedTaskId == id &&
+        isTaskView &&
+        !visibleTasks.any((task) => task.id == id)) {
+      _selectedTaskId = null;
+      _notify();
+    }
   }
 
   /// Registers or withdraws the system notification for one task's reminder,
