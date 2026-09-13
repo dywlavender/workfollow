@@ -46,10 +46,10 @@ class HomeScreen extends StatelessWidget {
           // The Wrap lives inside 28pt horizontal padding on each side. Use
           // its actual content width; otherwise two half-width cards are
           // always 56pt too wide and Flutter falls back to one column.
-          final contentWidth = (constraints.maxWidth - 56).clamp(0.0, double.infinity);
-          final panelWidth = contentWidth >= 1060
-              ? (contentWidth - 14) / 2
-              : contentWidth;
+          final contentWidth =
+              (constraints.maxWidth - 56).clamp(0.0, double.infinity);
+          final panelWidth =
+              contentWidth >= 1060 ? (contentWidth - 14) / 2 : contentWidth;
           return SingleChildScrollView(
             padding: const EdgeInsets.fromLTRB(28, 26, 28, 32),
             child: Column(

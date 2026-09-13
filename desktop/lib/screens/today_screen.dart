@@ -66,12 +66,22 @@ class _TodayScreenState extends State<TodayScreen> {
             ],
           ),
         );
-        if (narrowDetail) {
-          return TaskInspector(
-              task: selected,
-              controller: controller,
-              showBack: true,
-              onBack: () => setState(() => _detailOnly = false));
+        if (narrow) {
+          // Keep the list mounted underneath the detail pane. Rebuilding the
+          // inspector as a replacement used to dispose the Scrollable and
+          // reset a long list to offset zero when the user went back.
+          return Stack(
+            fit: StackFit.expand,
+            children: [
+              Offstage(offstage: narrowDetail, child: listPane),
+              if (narrowDetail)
+                TaskInspector(
+                    task: selected,
+                    controller: controller,
+                    showBack: true,
+                    onBack: () => setState(() => _detailOnly = false)),
+            ],
+          );
         }
         return Row(
           children: [

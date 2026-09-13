@@ -256,6 +256,7 @@ class WorkspaceController extends ChangeNotifier {
   bool _disposed = false;
   Future<void> _pendingPersist = Future<void>.value();
   int _persistVersion = 0;
+  final Map<String, int> _reminderSyncVersions = {};
   // Notes view filters live here so menus and shortcuts (Cmd-N "new note in
   // the current folder") agree with what the screen shows.
   String? _notesFolderFilter;
@@ -1415,6 +1416,8 @@ class WorkspaceController extends ChangeNotifier {
   /// so what the user sees in the inspector matches what the system will
   /// deliver. Completing, deleting or clearing the reminder withdraws it.
   void _syncReminderFor(TaskItem task) {
+    final syncVersion = (_reminderSyncVersions[task.id] ?? 0) + 1;
+    _reminderSyncVersions[task.id] = syncVersion;
     final reminder = localDateTimeFromStorage(task.reminderAt);
     final active = !task.completed &&
         task.deletedAt == null &&
@@ -1427,6 +1430,10 @@ class WorkspaceController extends ChangeNotifier {
     unawaited(() async {
       // requestAuthorization returns immediately once already determined.
       await _reminders.requestPermission();
+      // A task may have been completed, deleted or edited while permission
+      // was being resolved. Do not let this older async request resurrect a
+      // notification that the latest task state has already cancelled.
+      if (_reminderSyncVersions[task.id] != syncVersion) return;
       await _reminders.schedule(
         taskId: task.id,
         title: task.title,
@@ -1446,6 +1453,7 @@ class WorkspaceController extends ChangeNotifier {
   }
 
   void updateTaskReminder(String id, DateTime? reminder) {
+    if (reminder != null && !reminder.isAfter(DateTime.now())) return;
     final normalized = reminder == null
         ? null
         : DateTime(reminder.year, reminder.month, reminder.day, reminder.hour,
@@ -1814,8 +1822,7 @@ class WorkspaceController extends ChangeNotifier {
     // edit to protected content stays a visible plain-text draft until the
     // user explicitly chooses conversion in the editor.
     final richContent = current.hasPreservedRichContent
-        ? appendToRichContent(
-            current.contentJson ?? <String, dynamic>{}, body)
+        ? appendToRichContent(current.contentJson ?? <String, dynamic>{}, body)
         : null;
     final nextContent = current.hasPreservedRichContent
         ? richContent ?? current.contentJson

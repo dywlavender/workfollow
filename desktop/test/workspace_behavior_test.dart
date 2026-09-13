@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -38,6 +40,19 @@ class _FakeStore extends LocalWorkspaceStore {
     }
     if (loadBundle != null) return WorkspaceSnapshotLoad(bundle: loadBundle);
     return const WorkspaceSnapshotLoad();
+  }
+}
+
+class _DeferredStore extends LocalWorkspaceStore {
+  final List<MigrationBundle> saved = [];
+  final List<Completer<void>> pending = [];
+
+  @override
+  Future<void> save(MigrationBundle bundle) {
+    saved.add(bundle);
+    final completer = Completer<void>();
+    pending.add(completer);
+    return completer.future;
   }
 }
 
@@ -88,6 +103,12 @@ Future<void> _settleSaves(WorkspaceController controller) async {
   }
 }
 
+Future<void> _settleAsync() async {
+  for (var i = 0; i < 6; i++) {
+    await Future<void>.delayed(Duration.zero);
+  }
+}
+
 void main() {
   test('a task created in a list keeps that list and stays unscheduled',
       () async {
@@ -117,6 +138,17 @@ void main() {
     final now = DateTime.now();
     expect(DateUtils.isSameDay(due, DateTime(now.year, now.month, now.day)),
         isTrue);
+  });
+
+  test('global capture always creates an unscheduled inbox task', () {
+    final controller = WorkspaceController();
+    controller.selectView(WorkspaceView.today);
+
+    expect(controller.addTaskToInboxUnscheduled('菜单栏速记'), isTrue);
+    final task = controller.tasks.firstWhere((task) => task.title == '菜单栏速记');
+    expect(task.listName, '收集箱');
+    expect(task.dueAt, isNull);
+    expect(task.bucket, TaskBucket.unscheduled);
   });
 
   test(
@@ -214,6 +246,47 @@ void main() {
     expect(controller.tasksForDay(DateTime(2099, 8, 31)), isEmpty);
   });
 
+  test('UTC migration timestamps are grouped by their local calendar day',
+      () async {
+    const raw = '2026-09-12T16:30:00Z';
+    final local = DateTime.parse(raw).toLocal();
+    final controller = WorkspaceController();
+    await controller.replaceWithMigration(MigrationBundle(
+      format: personalMigrationFormat,
+      schemaVersion: migrationSchemaVersion,
+      exportedAt: null,
+      lists: const [],
+      folders: const [],
+      tasks: const [
+        MigrationTaskRecord(
+          id: 'utc-task',
+          title: '本地午夜后的任务',
+          description: null,
+          contentJson: null,
+          status: 'TODO',
+          priority: 'NONE',
+          dueAt: raw,
+          dueEndAt: null,
+          reminderAt: null,
+          recurrenceType: 'NONE',
+          recurrenceConfig: null,
+          listName: '收集箱',
+          tags: [],
+          createdAt: null,
+          updatedAt: null,
+          completedAt: null,
+        ),
+      ],
+      notes: const [],
+    ));
+
+    final day = DateTime(local.year, local.month, local.day);
+    expect(controller.tasksForDay(day).map((task) => task.id), ['utc-task']);
+    final due = DateTime.parse(controller.tasks.single.dueAt!).toLocal();
+    expect(due.hour, local.hour);
+    expect(due.minute, local.minute);
+  });
+
   test('save status follows real write results', () async {
     final store = _FakeStore();
     final controller = WorkspaceController(store: store);
@@ -234,6 +307,31 @@ void main() {
     controller.updateTaskTitle('task-01', '恢复写入');
     await _settleSaves(controller);
     expect(controller.saveStatus, SaveStatus.saved);
+  });
+
+  test('save status stays saving until the newest queued write completes',
+      () async {
+    final store = _DeferredStore();
+    final controller = WorkspaceController(store: store);
+
+    controller.updateTaskTitle('task-01', '第一次编辑');
+    await Future<void>.delayed(Duration.zero);
+    expect(store.pending, hasLength(1));
+
+    controller.updateTaskTitle('task-01', '第二次编辑');
+    expect(controller.saveStatus, SaveStatus.saving);
+
+    store.pending.first.complete();
+    for (var i = 0; i < 4 && store.pending.length < 2; i++) {
+      await Future<void>.delayed(Duration.zero);
+    }
+    expect(store.pending, hasLength(2));
+    expect(controller.saveStatus, SaveStatus.saving);
+
+    store.pending[1].complete();
+    await controller.waitForPendingSaves();
+    expect(controller.saveStatus, SaveStatus.saved);
+    expect(store.saved.last.tasks.first.title, '第二次编辑');
   });
 
   test('a damaged snapshot pauses auto-save instead of overwriting it',
@@ -718,6 +816,130 @@ void main() {
 
     expect(reminders.cancelAllCount, 1);
     expect(reminders.scheduled.keys, ['web-1']);
+  });
+
+  test(
+      'completing a recurring task schedules the next reminder and undo cancels it',
+      () async {
+    final reminders = _RecordingReminders();
+    final controller = WorkspaceController(reminderScheduler: reminders);
+    final due = DateTime.now().add(const Duration(days: 2));
+    final reminder = due.subtract(const Duration(hours: 1));
+    expect(controller.addTask('每日提醒', listName: '工作', dueAt: due), isTrue);
+    final id = controller.tasks.firstWhere((task) => task.title == '每日提醒').id;
+    controller.updateTaskRecurrence(id, 'DAILY');
+    controller.updateTaskReminder(id, reminder);
+    await _settleAsync();
+    reminders.scheduled.clear();
+    reminders.canceled.clear();
+
+    controller.toggleTask(id);
+    await _settleAsync();
+    final next = controller.tasks
+        .firstWhere((task) => task.id != id && task.title == '每日提醒');
+    expect(reminders.scheduled.keys, contains(next.id));
+
+    expect(controller.undoLastCompletion(), isTrue);
+    await _settleAsync();
+    expect(reminders.scheduled.keys, contains(id));
+    expect(reminders.scheduled.keys, isNot(contains(next.id)));
+    expect(reminders.canceled, contains(next.id));
+  });
+
+  test('past reminder times are rejected instead of displaying a fake reminder',
+      () async {
+    final reminders = _RecordingReminders();
+    final controller = WorkspaceController(reminderScheduler: reminders);
+    controller.updateTaskReminder(
+        'task-01', DateTime.now().subtract(const Duration(minutes: 1)));
+    await _settleAsync();
+
+    final task = controller.tasks.firstWhere((item) => item.id == 'task-01');
+    expect(task.reminderAt, isNull);
+    expect(reminders.scheduled, isEmpty);
+  });
+
+  test('rich imported note keeps links and lists until explicit conversion',
+      () async {
+    final controller = WorkspaceController();
+    const link = 'https://example.com/workfollow';
+    final bundle = MigrationBundle(
+      format: personalMigrationFormat,
+      schemaVersion: migrationSchemaVersion,
+      exportedAt: null,
+      lists: const [],
+      folders: const [],
+      tasks: const [],
+      notes: [
+        MigrationNoteRecord(
+          id: 'rich-note',
+          folderId: null,
+          title: '带结构的记录',
+          contentJson: {
+            'type': 'doc',
+            'content': [
+              {
+                'type': 'paragraph',
+                'content': [
+                  {
+                    'type': 'text',
+                    'text': '原始链接',
+                    'marks': [
+                      {
+                        'type': 'link',
+                        'attrs': {'href': link},
+                      },
+                    ],
+                  },
+                ],
+              },
+              {
+                'type': 'bulletList',
+                'content': [
+                  {
+                    'type': 'listItem',
+                    'content': [
+                      {
+                        'type': 'paragraph',
+                        'content': [
+                          {'type': 'text', 'text': '列表项'},
+                        ],
+                      },
+                    ],
+                  },
+                ],
+              },
+            ],
+          },
+          plainText: '原始链接\n列表项',
+          isFavorite: false,
+          createdAt: null,
+          updatedAt: null,
+          deletedAt: null,
+        ),
+      ],
+    );
+    await controller.replaceWithMigration(bundle);
+    final before = controller.notes.single;
+    expect(before.hasPreservedRichContent, isTrue);
+
+    controller.updateNoteBody('rich-note', '原始链接\n列表项\n新增段落');
+    final appended = controller.notes.single;
+    final encoded = jsonEncode(appended.contentJson);
+    expect(encoded, contains(link));
+    expect(encoded, contains('bulletList'));
+    expect(encoded, contains('新增段落'));
+    expect(appended.toMigrationRecord().originalContentJson, isNotNull);
+
+    // Editing inside the protected source does not erase the imported JSON.
+    controller.updateNoteBody('rich-note', '改写后的链接\n列表项\n新增段落');
+    expect(jsonEncode(controller.notes.single.contentJson), contains(link));
+
+    expect(controller.convertNoteToPlainText('rich-note'), isTrue);
+    final converted = controller.notes.single;
+    expect(converted.hasPreservedRichContent, isFalse);
+    expect(jsonEncode(converted.contentJson), isNot(contains(link)));
+    expect(jsonEncode(converted.contentJson), isNot(contains('bulletList')));
   });
 
   test('a task generated from a note keeps the link both ways and round-trips',

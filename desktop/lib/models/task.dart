@@ -448,9 +448,8 @@ String notePlainTextFromContentJson(Object? value) {
   if (type == 'text') return value['text']?.toString() ?? '';
   if (type == 'hardBreak') return '\n';
   final children = value['content'];
-  final text = children is List
-      ? children.map(notePlainTextFromContentJson).join()
-      : '';
+  final text =
+      children is List ? children.map(notePlainTextFromContentJson).join() : '';
   if (const {
     'paragraph',
     'heading',
@@ -472,8 +471,7 @@ bool noteContentJsonHasRichStructure(Map<String, dynamic> document) {
   void visit(Object? value) {
     if (rich || value is! Map) return;
     final type = value['type']?.toString();
-    if (type != null &&
-        !const {'doc', 'paragraph', 'text'}.contains(type)) {
+    if (type != null && !const {'doc', 'paragraph', 'text'}.contains(type)) {
       rich = true;
       return;
     }

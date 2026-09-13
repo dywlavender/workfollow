@@ -363,8 +363,8 @@ class _NoteEditorState extends State<_NoteEditor> {
                         decoration: BoxDecoration(
                           color: tokens.accentFaint,
                           borderRadius: BorderRadius.circular(8),
-                          border: Border.all(
-                              color: tokens.accent.withOpacity(.16)),
+                          border:
+                              Border.all(color: tokens.accent.withOpacity(.16)),
                         ),
                         child: Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -388,8 +388,7 @@ class _NoteEditorState extends State<_NoteEditor> {
                                 padding: const EdgeInsets.symmetric(
                                     horizontal: 7, vertical: 4),
                                 minimumSize: Size.zero,
-                                tapTargetSize:
-                                    MaterialTapTargetSize.shrinkWrap,
+                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                               ),
                               child: const Text('转换'),
                             ),
@@ -566,7 +565,8 @@ class _NoteEditorState extends State<_NoteEditor> {
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: const Text('转换为纯文本副本？'),
-        content: const Text('转换会移除链接、列表和其他富文本格式，但当前显示的正文会保留。原导入文件仍可从 Web 端重新导出。'),
+        content:
+            const Text('转换会移除链接、列表和其他富文本格式，但当前显示的正文会保留。原导入文件仍可从 Web 端重新导出。'),
         actions: [
           TextButton(
               onPressed: () => Navigator.of(dialogContext).pop(false),

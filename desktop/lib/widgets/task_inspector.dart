@@ -520,9 +520,8 @@ class _TaskInspectorState extends State<TaskInspector> {
     );
     if (picked == null || !context.mounted) return;
 
-    final existing = task.dueAt == null
-        ? null
-        : localDateTimeFromStorage(task.dueAt);
+    final existing =
+        task.dueAt == null ? null : localDateTimeFromStorage(task.dueAt);
     final mode = await showModalBottomSheet<String>(
       context: context,
       builder: (sheetContext) => SafeArea(
@@ -547,13 +546,12 @@ class _TaskInspectorState extends State<TaskInspector> {
     );
     if (!context.mounted || mode == null) return;
     if (mode == 'allDay') {
-      widget.controller
-          .updateTaskDue(task.id, DateTime(picked.year, picked.month, picked.day));
+      widget.controller.updateTaskDue(
+          task.id, DateTime(picked.year, picked.month, picked.day));
       return;
     }
-    final initialTime = existing == null
-        ? TimeOfDay.now()
-        : TimeOfDay.fromDateTime(existing);
+    final initialTime =
+        existing == null ? TimeOfDay.now() : TimeOfDay.fromDateTime(existing);
     final pickedTime = await showTimePicker(
       context: context,
       initialTime: initialTime,
@@ -597,8 +595,7 @@ class _TaskInspectorState extends State<TaskInspector> {
     );
     if (picked == null || !context.mounted) return;
     var initialTime = TimeOfDay.fromDateTime(current);
-    if (DateUtils.isSameDay(picked, today) &&
-        !current.isAfter(now)) {
+    if (DateUtils.isSameDay(picked, today) && !current.isAfter(now)) {
       initialTime = TimeOfDay.fromDateTime(now.add(const Duration(minutes: 5)));
     }
     final pickedTime = await showTimePicker(
@@ -610,8 +607,8 @@ class _TaskInspectorState extends State<TaskInspector> {
     final combined = DateTime(picked.year, picked.month, picked.day,
         pickedTime.hour, pickedTime.minute);
     if (!combined.isAfter(DateTime.now())) {
-      ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('提醒时间必须晚于当前时间')));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('提醒时间必须晚于当前时间')));
       return;
     }
     widget.controller.updateTaskReminder(task.id, combined);

@@ -2,6 +2,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter/material.dart';
 
 import 'package:workfollow_personal/app.dart';
+import 'package:workfollow_personal/screens/today_screen.dart';
+import 'package:workfollow_personal/state/workspace_controller.dart';
+import 'package:workfollow_personal/theme/workfollow_theme.dart';
+import 'package:workfollow_personal/widgets/task_row.dart';
 
 void main() {
   testWidgets('renders the personal home workspace', (tester) async {
@@ -90,6 +94,49 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('给设计顾问发一封确认邮件'), findsOneWidget);
     expect(find.byTooltip('返回列表'), findsNothing);
+  });
+
+  testWidgets('narrow detail preserves the task list scroll position',
+      (tester) async {
+    tester.view.physicalSize = const Size(680, 600);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    final controller = WorkspaceController();
+    controller.selectView(WorkspaceView.today);
+    for (var index = 0; index < 80; index++) {
+      controller.addTask('长列表任务 $index');
+    }
+
+    await tester.pumpWidget(MaterialApp(
+      theme: WorkFollowThemeData.light(),
+      home: Scaffold(body: TodayScreen(controller: controller)),
+    ));
+    await tester.pumpAndSettle();
+
+    // TextFields have their own internal Scrollable; the task list is the
+    // last one in this small standalone tree.
+    final list = find.byType(Scrollable).last;
+    await tester.drag(list, const Offset(0, -1200));
+    await tester.pumpAndSettle();
+    final visibleRow = find.byType(TaskRow).last;
+    await tester.ensureVisible(visibleRow);
+    final before = tester.state<ScrollableState>(list).position.pixels;
+    expect(before, greaterThan(0));
+    await tester.tap(visibleRow);
+    await tester.pumpAndSettle();
+    expect(find.byTooltip('返回列表'), findsOneWidget);
+    await tester.tap(find.byTooltip('返回列表'));
+    await tester.pumpAndSettle();
+
+    final after = tester
+        .state<ScrollableState>(find.byType(Scrollable).last)
+        .position
+        .pixels;
+    expect(after, closeTo(before, 1));
   });
 
   testWidgets('edits a task from the detail inspector', (tester) async {

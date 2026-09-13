@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui' show AppExitResponse;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -99,6 +100,7 @@ const _captureChannel = MethodChannel('workfollow/capture');
 
 class _WorkFollowShellState extends State<WorkFollowShell> {
   late final WorkspaceController controller;
+  late final AppLifecycleListener _lifecycleListener;
   bool sidebarCollapsed = false;
   bool showUndo = false;
   String undoMessage = '';
@@ -109,6 +111,9 @@ class _WorkFollowShellState extends State<WorkFollowShell> {
     super.initState();
     controller = WorkspaceController();
     controller.addListener(_observeAction);
+    _lifecycleListener = AppLifecycleListener(
+      onExitRequested: _handleExitRequested,
+    );
     unawaited(controller.restoreFromDisk());
     // The native menu bar routes its command items here.
     _menuChannel.setMethodCallHandler((call) async {
@@ -161,8 +166,14 @@ class _WorkFollowShellState extends State<WorkFollowShell> {
     _showUndo(controller.lastActionMessage);
   }
 
+  Future<AppExitResponse> _handleExitRequested() async {
+    await controller.waitForPendingSaves();
+    return AppExitResponse.exit;
+  }
+
   @override
   void dispose() {
+    _lifecycleListener.dispose();
     controller.removeListener(_observeAction);
     controller.dispose();
     super.dispose();
