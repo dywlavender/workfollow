@@ -132,7 +132,8 @@ class _QuickAddFieldState extends State<QuickAddField> {
     // the title so a typo is never silently lost.
     final titleSpans = parsed.spans
         .where((span) =>
-            span.kind != SmartTokenKind.list || span.raw == '@$listName')
+            span.kind != SmartTokenKind.list ||
+            (listName != null && span.raw == '@$listName'))
         .toList();
     final title = parser.titleFromSpans(text.text, titleSpans);
     final smartDue = parsed.dueAt;

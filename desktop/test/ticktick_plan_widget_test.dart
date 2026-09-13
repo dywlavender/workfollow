@@ -51,4 +51,19 @@ void main() {
     expect(controller.tasks.single.dueAt, isNull);
     expect(controller.tasks.single.listName, '收集箱');
   });
+
+  testWidgets('unknown list chips stay in the quick-add title', (tester) async {
+    final controller = WorkspaceController(seedData: false);
+    addTearDown(controller.dispose);
+    await tester.pumpWidget(MaterialApp(
+        theme: WorkFollowThemeData.light(),
+        home: Scaffold(body: QuickAddField(controller: controller))));
+    await tester.enterText(
+        find.byKey(const ValueKey('quick-add-title')), '整理资料 @不存在清单');
+    await tester.pump();
+    await tester.tap(find.text('添加任务'));
+    await tester.pump();
+    expect(controller.tasks.single.title, '整理资料 @不存在清单');
+    expect(controller.lists, hasLength(4));
+  });
 }
