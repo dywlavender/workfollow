@@ -1818,11 +1818,14 @@ class WorkspaceController extends ChangeNotifier {
         );
     if (current == null) return;
     // For imported rich notes, preserve the original JSON. A newline-only
-    // append can be represented without touching existing links/lists; an
-    // edit to protected content stays a visible plain-text draft until the
-    // user explicitly chooses conversion in the editor.
+    // append can be represented without touching existing links/lists; use
+    // the immutable imported source as the baseline so every TextField
+    // onChanged callback can rewrite the complete appended suffix. An edit to
+    // protected content stays a visible plain-text draft until the user
+    // explicitly chooses conversion in the editor.
     final richContent = current.hasPreservedRichContent
-        ? appendToRichContent(current.contentJson ?? <String, dynamic>{}, body)
+        ? appendToRichContent(
+            current.originalContentJson ?? current.contentJson ?? {}, body)
         : null;
     final nextContent = current.hasPreservedRichContent
         ? richContent ?? current.contentJson
@@ -1838,25 +1841,39 @@ class WorkspaceController extends ChangeNotifier {
             ));
   }
 
-  /// Explicitly discards rich formatting only after the user has chosen the
-  /// conversion action. The current plain-text draft becomes the new source.
+  /// Creates an independently editable plain-text copy after the user has
+  /// explicitly chosen conversion. The imported note and its rich source stay
+  /// untouched; the new copy becomes selected in the Notes view.
   bool convertNoteToPlainText(String id) {
     final current = _notes.cast<NoteItem?>().firstWhere(
           (note) => note?.id == id,
           orElse: () => null,
         );
     if (current == null || !current.hasPreservedRichContent) return false;
-    final body = current.plainText ?? current.preview;
+    final body =
+        current.plainText ?? notePlainTextFromContentJson(current.contentJson);
     final now = DateTime.now().toIso8601String();
-    _replaceNote(
-      id,
-      (note) => note.copyWith(
-        contentJson: noteContentJsonFromPlainText(body),
-        clearOriginalContentJson: true,
-        updatedLabel: noteUpdatedLabelFor(now),
-        updatedAt: now,
-      ),
+    final copyId = 'note-${_noteSequence.toString().padLeft(2, '0')}';
+    _noteSequence += 1;
+    final copy = NoteItem(
+      id: copyId,
+      title: '${current.title}（纯文本副本）',
+      preview: notePreviewFromText(body),
+      updatedLabel: '刚刚',
+      folder: current.folder,
+      folderId: current.folderId,
+      accent: _accentFor(_notes.length),
+      contentJson: noteContentJsonFromPlainText(body),
+      plainText: body,
+      isFavorite: current.isFavorite,
+      createdAt: now,
+      updatedAt: now,
     );
+    _notes = [copy, ..._notes];
+    _selectedNoteId = copyId;
+    _view = WorkspaceView.notes;
+    _schedulePersist();
+    _notify();
     return true;
   }
 

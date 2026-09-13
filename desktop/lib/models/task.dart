@@ -493,18 +493,23 @@ bool noteContentJsonHasRichStructure(Map<String, dynamic> document) {
   return rich;
 }
 
-/// Appends a new line to an imported rich document without rebuilding any of
-/// its existing nodes. Returns null for edits that touch the protected source;
-/// those edits remain a plain-text draft until explicit conversion.
+/// Appends the complete user-added suffix to an imported rich document without
+/// rebuilding any of its existing nodes. The document passed here must be the
+/// immutable imported source, not the previously appended working copy. That
+/// fixed baseline lets a TextField update the same new line one character at a
+/// time without losing the characters typed in the previous callback.
+///
+/// Returns null for edits that touch the protected source; those edits remain
+/// a plain-text draft until explicit conversion.
 Map<String, dynamic>? appendToRichContent(
-    Map<String, dynamic> document, String newBody) {
-  final baseline = notePlainTextFromContentJson(document).trimRight();
-  final normalized = newBody;
-  if (normalized == baseline) return document;
-  if (!normalized.startsWith('$baseline\n')) return null;
-  final suffix = normalized.substring(baseline.length + 1);
-  if (suffix.isEmpty) return document;
-  final root = Map<String, dynamic>.from(document);
+    Map<String, dynamic> sourceDocument, String newBody) {
+  final baseline = notePlainTextFromContentJson(sourceDocument).trimRight();
+  if (newBody == baseline) return sourceDocument;
+  final prefix = baseline.isEmpty ? '' : '$baseline\n';
+  if (!newBody.startsWith(prefix)) return null;
+  final suffix = newBody.substring(prefix.length);
+  if (suffix.isEmpty) return sourceDocument;
+  final root = Map<String, dynamic>.from(sourceDocument);
   final rawChildren = root['content'];
   final children = rawChildren is List
       ? rawChildren

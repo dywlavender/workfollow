@@ -257,6 +257,22 @@ class _NoteEditorState extends State<_NoteEditor> {
   @override
   void didUpdateWidget(covariant _NoteEditor oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.note.id != widget.note.id) {
+      // Conversion selects a new plain-text copy while this editor may still
+      // have focus. Force the new record into both fields instead of letting
+      // the focus guard keep showing the old note's draft.
+      titleController.value = TextEditingValue(
+        text: widget.note.title,
+        selection: TextSelection.collapsed(offset: widget.note.title.length),
+      );
+      final body = _bodyFor(widget.note);
+      bodyController.value = TextEditingValue(
+        text: body,
+        selection: TextSelection.collapsed(offset: body.length),
+      );
+      _hasBodySelection = false;
+      return;
+    }
     _sync(titleController, widget.note.title, titleFocusNode);
     _sync(bodyController, _bodyFor(widget.note), bodyFocusNode);
   }
@@ -374,7 +390,7 @@ class _NoteEditorState extends State<_NoteEditor> {
                             const SizedBox(width: 8),
                             Expanded(
                               child: Text(
-                                '这条笔记含链接或列表等富文本。追加新行会保留原结构；如需自由改写，请先转换为纯文本副本。',
+                                '这条笔记含链接或列表等富文本。追加新行会保留原结构；如需自由改写，请先创建纯文本副本。',
                                 style: TextStyle(
                                     color: tokens.textSecondary,
                                     fontSize: 11,
@@ -390,7 +406,7 @@ class _NoteEditorState extends State<_NoteEditor> {
                                 minimumSize: Size.zero,
                                 tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                               ),
-                              child: const Text('转换'),
+                              child: const Text('创建副本'),
                             ),
                           ],
                         ),
@@ -535,7 +551,7 @@ class _NoteEditorState extends State<_NoteEditor> {
             if (widget.note.hasPreservedRichContent)
               ListTile(
                   leading: const Icon(Icons.text_fields_rounded),
-                  title: const Text('转换为纯文本副本'),
+                  title: const Text('创建纯文本副本'),
                   onTap: () => Navigator.of(sheetContext).pop('convert')),
             ListTile(
                 leading: const Icon(Icons.delete_outline),
@@ -564,21 +580,23 @@ class _NoteEditorState extends State<_NoteEditor> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('转换为纯文本副本？'),
-        content:
-            const Text('转换会移除链接、列表和其他富文本格式，但当前显示的正文会保留。原导入文件仍可从 Web 端重新导出。'),
+        title: const Text('创建纯文本副本？'),
+        content: const Text('会新建一条可独立编辑的纯文本笔记；当前笔记及其中的链接、列表和其他富文本结构都会保留。'),
         actions: [
           TextButton(
               onPressed: () => Navigator.of(dialogContext).pop(false),
               child: const Text('取消')),
           FilledButton(
               onPressed: () => Navigator.of(dialogContext).pop(true),
-              child: const Text('转换')),
+              child: const Text('创建副本')),
         ],
       ),
     );
     if (!mounted || confirmed != true) return;
-    widget.controller.convertNoteToPlainText(widget.note.id);
+    if (widget.controller.convertNoteToPlainText(widget.note.id) && mounted) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('已创建纯文本副本')));
+    }
   }
 }
 

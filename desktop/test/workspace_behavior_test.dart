@@ -936,10 +936,158 @@ void main() {
     expect(jsonEncode(controller.notes.single.contentJson), contains(link));
 
     expect(controller.convertNoteToPlainText('rich-note'), isTrue);
-    final converted = controller.notes.single;
+    expect(controller.notes, hasLength(2));
+    final original =
+        controller.notes.firstWhere((note) => note.id == 'rich-note');
+    final converted =
+        controller.notes.firstWhere((note) => note.id != 'rich-note');
     expect(converted.hasPreservedRichContent, isFalse);
+    expect(converted.title, contains('纯文本副本'));
     expect(jsonEncode(converted.contentJson), isNot(contains(link)));
     expect(jsonEncode(converted.contentJson), isNot(contains('bulletList')));
+    expect(original.hasPreservedRichContent, isTrue);
+    expect(jsonEncode(original.contentJson), contains(link));
+    expect(controller.selectedNoteId, converted.id);
+  });
+
+  test('rich note append keeps the complete suffix through each text change',
+      () async {
+    const link = 'https://example.com/资料';
+    final controller = WorkspaceController();
+    await controller.replaceWithMigration(MigrationBundle(
+      format: personalMigrationFormat,
+      schemaVersion: migrationSchemaVersion,
+      exportedAt: null,
+      lists: const [],
+      folders: const [],
+      tasks: const [],
+      notes: [
+        MigrationNoteRecord(
+          id: 'typed-rich-note',
+          folderId: null,
+          title: '逐字追加',
+          contentJson: {
+            'type': 'doc',
+            'content': [
+              {
+                'type': 'paragraph',
+                'content': [
+                  {
+                    'type': 'text',
+                    'text': '资料',
+                    'marks': [
+                      {
+                        'type': 'link',
+                        'attrs': {'href': link},
+                      },
+                    ],
+                  },
+                ],
+              },
+            ],
+          },
+          plainText: '资料',
+          isFavorite: false,
+          createdAt: null,
+          updatedAt: null,
+          deletedAt: null,
+        ),
+      ],
+    ));
+
+    // Match TextField.onChanged: the same new line grows one character at a
+    // time, so each call must rebuild from the fixed imported source.
+    controller.updateNoteBody('typed-rich-note', '资料\n');
+    controller.updateNoteBody('typed-rich-note', '资料\na');
+    controller.updateNoteBody('typed-rich-note', '资料\nab');
+
+    final note = controller.notes.single;
+    expect(note.plainText, '资料\nab');
+    expect(
+        notePlainTextFromContentJson(note.contentJson).trimRight(), '资料\nab');
+    final encoded = jsonEncode(note.contentJson);
+    expect(encoded, contains(link));
+    expect(encoded, contains('"text":"ab"'));
+
+    // Backspace is also an ordinary onChanged sequence, not a conversion.
+    controller.updateNoteBody('typed-rich-note', '资料\na');
+    expect(
+        notePlainTextFromContentJson(controller.notes.single.contentJson)
+            .trimRight(),
+        '资料\na');
+  });
+
+  test('creating a plain-text copy leaves the imported note untouched',
+      () async {
+    const link = 'https://example.com/original';
+    final controller = WorkspaceController();
+    await controller.replaceWithMigration(MigrationBundle(
+      format: personalMigrationFormat,
+      schemaVersion: migrationSchemaVersion,
+      exportedAt: null,
+      lists: const [],
+      folders: const [],
+      tasks: const [],
+      notes: [
+        MigrationNoteRecord(
+          id: 'copy-source',
+          folderId: null,
+          title: '原始记录',
+          contentJson: {
+            'type': 'doc',
+            'content': [
+              {
+                'type': 'paragraph',
+                'content': [
+                  {
+                    'type': 'text',
+                    'text': '原文',
+                    'marks': [
+                      {
+                        'type': 'link',
+                        'attrs': {'href': link},
+                      },
+                    ],
+                  },
+                ],
+              },
+            ],
+          },
+          plainText: '原文',
+          isFavorite: true,
+          createdAt: null,
+          updatedAt: null,
+          deletedAt: null,
+        ),
+      ],
+    ));
+    controller.updateNoteBody('copy-source', '原文\n补充');
+
+    expect(controller.convertNoteToPlainText('copy-source'), isTrue);
+    expect(controller.notes, hasLength(2));
+    final source =
+        controller.notes.firstWhere((note) => note.id == 'copy-source');
+    final copy =
+        controller.notes.firstWhere((note) => note.id != 'copy-source');
+    expect(source.hasPreservedRichContent, isTrue);
+    expect(jsonEncode(source.contentJson), contains(link));
+    expect(copy.hasPreservedRichContent, isFalse);
+    expect(copy.title, '原始记录（纯文本副本）');
+    expect(copy.plainText, '原文\n补充');
+    expect(copy.isFavorite, isTrue);
+    expect(controller.selectedNoteId, copy.id);
+
+    controller.updateNoteBody(copy.id, '副本可以独立编辑');
+    expect(controller.notes.firstWhere((note) => note.id == copy.id).plainText,
+        '副本可以独立编辑');
+    expect(
+        controller.notes.firstWhere((note) => note.id == source.id).plainText,
+        '原文\n补充');
+    expect(
+        jsonEncode(controller.notes
+            .firstWhere((note) => note.id == source.id)
+            .contentJson),
+        contains(link));
   });
 
   test('a task generated from a note keeps the link both ways and round-trips',

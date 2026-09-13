@@ -440,64 +440,94 @@ class _MiniCalendar extends StatelessWidget {
     final count = ((leading + days) / 7).ceil() * 7;
     final today = DateTime.now();
     final taskCount = controller.countFor(WorkspaceView.today);
-    return Column(
-      children: [
-        Row(
+    final rowCount = count ~/ 7;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // GridView's default delegate derives row height from cell width.
+        // That makes a wide two-column home card taller than its fixed panel
+        // and clips the later weeks. Derive an explicit row extent from the
+        // actual height left after the weekday header instead.
+        const weekdayHeight = 16.0;
+        const headerGap = 7.0;
+        const rowSpacing = 3.0;
+        final gridHeight = constraints.maxHeight.isFinite
+            ? (constraints.maxHeight - weekdayHeight - headerGap)
+                .clamp(1.0, double.infinity)
+                .toDouble()
+            : 1.0;
+        final rowExtent =
+            ((gridHeight - rowSpacing * (rowCount - 1)) / rowCount)
+                .clamp(1.0, double.infinity)
+                .toDouble();
+        return Column(
           children: [
-            for (final label in const ['一', '二', '三', '四', '五', '六', '日'])
-              Expanded(
-                  child: Center(
-                      child: Text(label,
-                          style: TextStyle(
-                              color: tokens.textTertiary,
-                              fontSize: 9.5,
-                              fontWeight: FontWeight.w700)))),
+            SizedBox(
+              height: weekdayHeight,
+              child: Row(
+                children: [
+                  for (final label in const ['一', '二', '三', '四', '五', '六', '日'])
+                    Expanded(
+                        child: Center(
+                            child: Text(label,
+                                style: TextStyle(
+                                    color: tokens.textTertiary,
+                                    fontSize: 9.5,
+                                    fontWeight: FontWeight.w700)))),
+                ],
+              ),
+            ),
+            const SizedBox(height: headerGap),
+            Expanded(
+              child: GridView.builder(
+                physics: const NeverScrollableScrollPhysics(),
+                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 7,
+                    mainAxisSpacing: rowSpacing,
+                    crossAxisSpacing: 3,
+                    mainAxisExtent: rowExtent),
+                itemCount: count,
+                itemBuilder: (context, index) {
+                  final day = index - leading + 1;
+                  if (day < 1 || day > days) return const SizedBox.shrink();
+                  final isToday = day == today.day &&
+                      month.month == today.month &&
+                      month.year == today.year;
+                  final hasTasks = isToday && taskCount > 0;
+                  return Container(
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                        color: isToday ? tokens.accentSoft : Colors.transparent,
+                        borderRadius: BorderRadius.circular(5)),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text('$day',
+                            style: TextStyle(
+                                color: isToday
+                                    ? tokens.accent
+                                    : tokens.textSecondary,
+                                fontSize: 10,
+                                fontWeight: isToday
+                                    ? FontWeight.w700
+                                    : FontWeight.w500)),
+                        if (hasTasks) ...[
+                          const SizedBox(height: 2),
+                          Container(
+                              width: 3,
+                              height: 3,
+                              decoration: BoxDecoration(
+                                  color: tokens.accent,
+                                  shape: BoxShape.circle)),
+                        ],
+                      ],
+                    ),
+                  );
+                },
+              ),
+            ),
           ],
-        ),
-        const SizedBox(height: 7),
-        Expanded(
-          child: GridView.builder(
-            physics: const NeverScrollableScrollPhysics(),
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 7, mainAxisSpacing: 3, crossAxisSpacing: 3),
-            itemCount: count,
-            itemBuilder: (context, index) {
-              final day = index - leading + 1;
-              if (day < 1 || day > days) return const SizedBox.shrink();
-              final isToday = day == today.day &&
-                  month.month == today.month &&
-                  month.year == today.year;
-              final hasTasks = isToday && taskCount > 0;
-              return Container(
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                    color: isToday ? tokens.accentSoft : Colors.transparent,
-                    borderRadius: BorderRadius.circular(5)),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text('$day',
-                        style: TextStyle(
-                            color:
-                                isToday ? tokens.accent : tokens.textSecondary,
-                            fontSize: 10,
-                            fontWeight:
-                                isToday ? FontWeight.w700 : FontWeight.w500)),
-                    if (hasTasks) ...[
-                      const SizedBox(height: 2),
-                      Container(
-                          width: 3,
-                          height: 3,
-                          decoration: BoxDecoration(
-                              color: tokens.accent, shape: BoxShape.circle)),
-                    ],
-                  ],
-                ),
-              );
-            },
-          ),
-        ),
-      ],
+        );
+      },
     );
   }
 }

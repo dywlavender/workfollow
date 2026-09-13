@@ -18,6 +18,25 @@ void main() {
     expect(find.text('记下下一件事…'), findsOneWidget);
   });
 
+  testWidgets('home mini calendar shows every date at the normal window size',
+      (tester) async {
+    tester.view.physicalSize = const Size(1280, 820);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    await tester.pumpWidget(const WorkFollowApp());
+    await tester.pumpAndSettle();
+
+    final now = DateTime.now();
+    final days = DateTime(now.year, now.month + 1, 0).day;
+    for (var day = 1; day <= days; day++) {
+      expect(find.text('$day'), findsWidgets, reason: '日历应在首页显示本月 $day 日');
+    }
+  });
+
   testWidgets('opens the notes view from the sidebar', (tester) async {
     await tester.pumpWidget(const WorkFollowApp());
     await tester.pumpAndSettle();
