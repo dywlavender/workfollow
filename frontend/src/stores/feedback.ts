@@ -35,7 +35,7 @@ export const useFeedbackStore = defineStore('feedback', {
       this.push('error', text)
     },
     // 完成类反馈:底部居中的仪式感提示,与右上角操作反馈分开。
-    completed(text = '任务已完成') {
+    completed(text = '代办已完成') {
       this.completionText = text
       window.clearTimeout(completionTimer)
       completionTimer = window.setTimeout(() => {

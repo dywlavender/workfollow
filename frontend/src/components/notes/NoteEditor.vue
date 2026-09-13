@@ -18,23 +18,39 @@ import {
   IconTrash,
 } from '@tabler/icons-vue'
 import * as Y from 'yjs'
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, shallowRef, watch } from 'vue'
 
 import {
   fetchNote, fetchTaskBriefs, postTodo,
   type Attachment, type Folder, type Note, type TaskBrief, type TeamMember, type Todo, type TodoPayload,
 } from '@/services/api'
 import EditorLinkDialog from '@/components/editor/EditorLinkDialog.vue'
+import EditorSheetPickerDialog from '@/components/editor/EditorSheetPickerDialog.vue'
+import DiagramConflictConfirm from '@/components/editor/DiagramConflictConfirm.vue'
+import DrawioEditorModal from '@/components/editor/DrawioEditorModal.vue'
 import EditorSlashMenu from '@/components/editor/EditorSlashMenu.vue'
+import RichTextDocument from '@/components/RichTextDocument.vue'
 import RichTextToolbar from '@/components/RichTextToolbar.vue'
 import TaskSearchDialog from '@/components/notes/TaskSearchDialog.vue'
 import TodoDialog from '@/components/todo/TodoDialog.vue'
+import { createDiagramEditorHandler } from '@/modules/editor/diagramEditor'
+import { createDiagramPresenceBridge, type DiagramPresenceBridge } from '@/modules/editor/diagramPresence'
+import {
+  isSpreadsheetFile,
+  isSpreadsheetName,
+  readSpreadsheet,
+  readSpreadsheetBuffer,
+  spreadsheetTable,
+  type SpreadsheetData,
+  type SpreadsheetSheetMeta,
+} from '@/modules/editor/excelImport'
 import { filterStandaloneAttachments } from '@/modules/editor/attachmentReferences'
 import { formatLastSavedAt } from '@/modules/editor/saveStatus'
 import { createNoteCollaboration, type DocumentCollaborationSession, type DocumentCollaborationStatus } from '@/modules/editor/documentCollaboration'
 import { CollaborationInitializationError, initializeCollaborativeField } from '@/modules/editor/collaborationInitialization'
-import { createWorkFollowEditorExtensions } from '@/modules/editor/tiptap'
+import { createWorkFollowEditorExtensions, collapseAllEmptyParagraphs } from '@/modules/editor/tiptap'
 import { contentJsonSemanticallyEqual } from '@/modules/editor/contentProjection'
+import { importedTableTruncated, tableFromHtml, tableFromTsv, type ImportedTable } from '@/modules/editor/tablePaste'
 import { workFollowSlashCommands, type WorkFollowSlashCommand } from '@/modules/editor/slashCommands'
 import { useSlashMenu } from '@/modules/editor/slashMenu'
 import { useClickOutside } from '@/composables/useClickOutside'
@@ -75,6 +91,11 @@ const folderId = ref<string | null>(null)
 const lastSavedAt = ref<string | null>(props.note?.updatedAt ?? props.note?.createdAt ?? null)
 const fileInput = ref<HTMLInputElement | null>(null)
 const linkDialog = ref<InstanceType<typeof EditorLinkDialog> | null>(null)
+const drawioModal = ref<InstanceType<typeof DrawioEditorModal> | null>(null)
+const diagramConflict = ref<InstanceType<typeof DiagramConflictConfirm> | null>(null)
+// 流程图编辑存在感：bridge 写入这个响应式对象，NodeView 经 storage 读取。
+const diagramEditingPresence = reactive<Record<string, { userName: string }>>({})
+const diagramPresenceBridge = shallowRef<DiagramPresenceBridge | null>(null)
 const slash = useSlashMenu({
   commands: () => workFollowSlashCommands,
   idPrefix: 'note-slash-command',
@@ -92,9 +113,17 @@ const immersiveOpen = ref(false)
 const immersiveClosing = ref(false)
 const immersiveTrigger = ref<HTMLButtonElement | null>(null)
 const attachmentPanelOpen = ref(false)
-const fileUploadMode = ref<'embedded' | 'standalone'>('embedded')
+const fileUploadMode = ref<'embedded' | 'standalone' | 'excel'>('embedded')
 const embeddedFileAccept = '.png,.jpg,.jpeg,.webp,.pdf,.docx,.xlsx,.md,.txt'
 const standaloneFileAccept = '.pdf,.docx,.xlsx,.md,.txt'
+const excelFileAccept = '.xlsx,.xls,.csv'
+const fileAccept = computed(() => {
+  if (fileUploadMode.value === 'excel') return excelFileAccept
+  return fileUploadMode.value === 'standalone' ? standaloneFileAccept : embeddedFileAccept
+})
+const sheetPickerOpen = ref(false)
+const sheetPickerSheets = ref<SpreadsheetSheetMeta[]>([])
+let sheetPickerResolve: ((sheetName: string | null) => void) | null = null
 const editorContent = ref<Record<string, unknown> | null>(props.note?.contentJson ?? null)
 const collaborationSession = shallowRef<DocumentCollaborationSession | null>(null)
 const collaborationStatus = ref<DocumentCollaborationStatus>('connecting')
@@ -111,7 +140,7 @@ let hydratingEditor = false
 let collaborationInitializationAuthFailed = false
 let projectionConfirmTimer: number | undefined
 let titleHydrationComplete = false
-let collaborationContentReady = false
+const collaborationContentReady = ref(false)
 // A provider having no queued WebSocket updates is not the same thing as the
 // SQL projection having caught up. Track edits made by this editor so opening
 // an untouched note can stay responsive while a real local edit still gets a
@@ -129,6 +158,7 @@ const collaborationStatusLabel = computed(() => {
   if (collaborationStatus.value === 'error') return '协同认证失败'
   if (collaborationStatus.value === 'disconnected') return '协同离线，正在重连…'
   if (collaborationStatus.value === 'connecting') return '连接协同…'
+  if (!collaborationContentReady.value) return '正文同步中…'
   if (collaborationPendingChanges.value > 0) return '协同保存中…'
   return '协同已连接'
 })
@@ -152,6 +182,7 @@ const bubbleMenuOptions = {
 const editor = shallowRef<TiptapEditor | null>(null)
 
 function createNoteEditor(document: Y.Doc) {
+  if (editor.value || document !== collaborationSession.value?.document) return
   const instance = new TiptapEditor({
     extensions: [
       ...createWorkFollowEditorExtensions('输入内容，或输入 / 插入格式', { collaboration: true }),
@@ -170,18 +201,43 @@ function createNoteEditor(document: Y.Doc) {
         return true
       },
       handlePaste: (_view, event) => {
-        if (!collaborationContentReady) return false
-        const files = Array.from(event.clipboardData?.files ?? []).filter((file) => file.type.startsWith('image/'))
-        if (!files.length) return false
-        event.preventDefault()
-        for (const file of files) {
-          void props.uploadFile(file).then((attachment) => {
-            editor.value?.chain().focus().insertContent({
-              type: 'image',
-              attrs: { src: attachment.url, alt: attachment.originalName, attachmentId: attachment.id },
-            }).run()
-          })
+        if (!collaborationContentReady.value) return false
+        const clipboard = event.clipboardData
+        if (!clipboard) return false
+        const files = Array.from(clipboard.files ?? [])
+        const images = files.filter((file) => file.type.startsWith('image/'))
+        const spreadsheets = files.filter((file) => isSpreadsheetFile(file))
+        if (images.length || spreadsheets.length) {
+          event.preventDefault()
+          for (const file of images) uploadAndInsertImage(file)
+          for (const file of spreadsheets) importSpreadsheetFile(file)
+          return true
         }
+        // Excel / Numbers / WPS 复制的表格：首行提升为表头；混排网页片段
+        // 仍走 Tiptap 默认解析。纯文本 TSV（复制区域为文本）同样转表。
+        const html = clipboard.getData('text/html')
+        if (html) {
+          const table = tableFromHtml(html)
+          if (!table) return false
+          event.preventDefault()
+          insertPastedTable(table)
+          return true
+        }
+        const textTable = tableFromTsv(clipboard.getData('text/plain'))
+        if (!textTable) return false
+        event.preventDefault()
+        insertPastedTable(textTable)
+        return true
+      },
+      handleDrop: (_view, event, _slice, moved) => {
+        if (moved || !collaborationContentReady.value) return false
+        const files = Array.from(event.dataTransfer?.files ?? [])
+        const images = files.filter((file) => file.type.startsWith('image/'))
+        const spreadsheets = files.filter((file) => isSpreadsheetFile(file))
+        if (!images.length && !spreadsheets.length) return false
+        event.preventDefault()
+        for (const file of images) uploadAndInsertImage(file)
+        for (const file of spreadsheets) importSpreadsheetFile(file)
         return true
       },
       handleClick: (_view, _position, event) => {
@@ -199,15 +255,34 @@ function createNoteEditor(document: Y.Doc) {
       // Only a transaction initiated by this editor should make navigation
       // wait for the SQL projection.
       const userEdit = transaction.docChanged && (currentEditor.isFocused || transaction.getMeta('uiEvent') != null)
-      if (collaborationContentReady && userEdit && !isChangeOrigin(transaction)) markLocalEdit()
+      if (collaborationContentReady.value && userEdit && !isChangeOrigin(transaction)) markLocalEdit()
       scheduleContentSnapshot(currentEditor)
       scheduleTaskHydration()
       window.clearTimeout(slashDetectTimer)
       slashDetectTimer = window.setTimeout(() => slash.detect(currentEditor), 0)
     },
   })
-  instance.setEditable(collaborationContentReady)
+  instance.setEditable(collaborationContentReady.value)
+  instance.storage.diagramBlock.openEditor = openDiagramEditor
+  instance.storage.diagramBlock.editingPresence = diagramEditingPresence
   editor.value = instance
+}
+
+function hasReliableLocalBody(document: Y.Doc): boolean {
+  const config = document.getMap('config')
+  const initialized = config.get('bodyInitialized') === true
+    || config.get('initialContentLoaded') === true
+  // An initialized empty body is valid, but it must still wait for the server
+  // snapshot before mounting. A non-empty, marked document is safe to render
+  // from IndexedDB while the provider reconnects because mounting it cannot
+  // create the first default paragraph.
+  return initialized && document.getXmlFragment('default').length > 0
+}
+
+function mountNoteEditor(document: Y.Doc): boolean {
+  if (document !== collaborationSession.value?.document) return false
+  if (!editor.value) createNoteEditor(document)
+  return editor.value != null
 }
 
 function replaceCollaborativeTitle(value: string) {
@@ -237,7 +312,7 @@ function bindNoteTitle(document: Y.Doc) {
   const apply = () => {
     if (document !== collaborationSession.value?.document) return
     const nextTitle = target.toString()
-    if (nextTitle || collaborationContentReady) {
+    if (nextTitle || collaborationContentReady.value) {
       title.value = nextTitle
       if (titleHydrationComplete) emitCurrentNoteChange()
     }
@@ -254,13 +329,21 @@ function seedNoteDocument(note: Note, document: Y.Doc, initial?: Partial<Note>) 
   const config = document.getMap('config')
   const titleText = document.getText('title')
   const fragment = document.getXmlFragment('default')
-  if (config.get('bodyInitialized') === true || config.get('initialContentLoaded') === true || fragment.length > 0) return
+  const currentEditor = editor.value
+  if (!currentEditor) return
+  if (config.get('bodyInitialized') === true || config.get('initialContentLoaded') === true) return
+  // 编辑器挂载即向空协同文档写入一个默认空段落；若不清理，它会与种子内容
+  // 合并成两个空段落——首行吞掉占位符、投影出多余空行。种子必须以 SQL 快照
+  // 为准：只含空段落时整段清掉再写；已有真实内容则仍然短路。
+  const doc = currentEditor.state.doc
+  const onlyEmptyParagraphs = doc.childCount > 0
+    && Array.from(doc.children).every((node) => node.type.name === 'paragraph' && node.content.size === 0)
+  if (fragment.length > 0 && !onlyEmptyParagraphs) return
   const source = initial && typeof initial === 'object' ? { ...note, ...initial } : note
   if (!titleText.length && source.title) titleText.insert(0, source.title)
-  const currentEditor = editor.value
-  if (!currentEditor || fragment.length > 0) return
   hydratingEditor = true
   try {
+    if (fragment.length > 0) fragment.delete(0, fragment.length)
     currentEditor.commands.setContent(source.contentJson ?? note.contentJson, false)
     // Set the markers only after the editor accepted the SQL snapshot. If a
     // malformed legacy document is rejected, a later initialization attempt
@@ -277,12 +360,26 @@ async function initializeNoteBody(note: Note, session: DocumentCollaborationSess
   const fragment = session.document.getXmlFragment('default')
   if (config.get('bodyInitialized') === true || config.get('initialContentLoaded') === true || fragment.length > 0) return true
   if (collaborationInitializationAuthFailed) return false
+  let claimedInitialization = false
+  let claimedInitial: Record<string, unknown> | undefined
   try {
     await initializeCollaborativeField(
       `note:${note.id}`,
       'body',
-      (initial) => seedNoteDocument(note, session.document, initial as Partial<Note> | undefined),
+      (initial) => {
+        // Do not seed from the initialization callback until the Y.Doc has a
+        // Tiptap editor. The callback can run before the editor is mounted;
+        // queue the authoritative SQL snapshot and mount only after the
+        // provider has finished its initial sync.
+        claimedInitialization = true
+        claimedInitial = initial
+      },
     )
+    if (claimedInitialization) {
+      if (props.note?.id !== note.id || collaborationSession.value !== session) return false
+      if (!mountNoteEditor(session.document)) return false
+      seedNoteDocument(note, session.document, claimedInitial as Partial<Note> | undefined)
+    }
     return true
   } catch (error) {
     if (error instanceof CollaborationInitializationError && error.kind === 'auth') collaborationInitializationAuthFailed = true
@@ -306,8 +403,10 @@ function scheduleOfflineNoteSeed(note: Note) {
     ) {
       void initializeNoteBody(note, session).then((ready) => {
         if (ready && props.note?.id === note.id) {
+          mountNoteEditor(session.document)
+          if (editor.value) collapseAllEmptyParagraphs(editor.value)
           titleHydrationComplete = true
-          collaborationContentReady = true
+          collaborationContentReady.value = true
           editor.value?.setEditable(true)
         }
       })
@@ -324,8 +423,10 @@ function scheduleCollaborationConnectWatchdog(note: Note) {
       collaborationStatus.value = 'connected'
       void initializeNoteBody(note, session).then((ready) => {
         if (ready && props.note?.id === note.id) {
+          mountNoteEditor(session.document)
+          if (editor.value) collapseAllEmptyParagraphs(editor.value)
           titleHydrationComplete = true
-          collaborationContentReady = true
+          collaborationContentReady.value = true
           editor.value?.setEditable(true)
         }
       })
@@ -347,7 +448,7 @@ function startNoteCollaboration(note: Note) {
   projectionFlushPromise = null
   collaborationInitializationAuthFailed = false
   titleHydrationComplete = false
-  collaborationContentReady = false
+  collaborationContentReady.value = false
   let session: DocumentCollaborationSession | null = null
   session = createNoteCollaboration(note.id, null, {
     onStatus: (status) => {
@@ -367,10 +468,13 @@ function startNoteCollaboration(note: Note) {
       window.clearTimeout(collaborationConnectTimer)
       collaborationStatus.value = 'connected'
       window.clearTimeout(collaborationSeedTimer)
-      void initializeNoteBody(note, session).then((ready) => {
+      const currentSession = session
+      void initializeNoteBody(note, currentSession).then((ready) => {
         if (props.note?.id !== note.id || !ready) return
+        mountNoteEditor(currentSession.document)
+        if (editor.value) collapseAllEmptyParagraphs(editor.value)
         titleHydrationComplete = true
-        collaborationContentReady = true
+        collaborationContentReady.value = true
         editor.value?.setEditable(true)
       })
     },
@@ -386,7 +490,15 @@ function startNoteCollaboration(note: Note) {
   })
   collaborationSession.value = session
   bindNoteTitle(session.document)
-  createNoteEditor(session.document)
+  diagramPresenceBridge.value?.destroy()
+  diagramPresenceBridge.value = createDiagramPresenceBridge(session.provider.awareness, diagramEditingPresence)
+  // A cold Y.Doc has no content yet. Keep the SQL projection visible while
+  // IndexedDB and the provider hydrate it; only a marked local document may
+  // mount early, because it already contains a complete collaborative body.
+  void session.localReady.then(() => {
+    if (props.note?.id !== note.id || collaborationSession.value !== session) return
+    if (hasReliableLocalBody(session.document)) mountNoteEditor(session.document)
+  })
   scheduleCollaborationConnectWatchdog(note)
 }
 
@@ -405,9 +517,11 @@ function disposeNoteCollaboration() {
   titleObserverCleanup?.()
   editor.value?.destroy()
   collaborationSession.value?.destroy()
+  diagramPresenceBridge.value?.destroy()
+  diagramPresenceBridge.value = null
   editor.value = null
   collaborationSession.value = null
-  collaborationContentReady = false
+  collaborationContentReady.value = false
   titleHydrationComplete = false
   collaborationPendingChanges.value = 0
   localEditGeneration = 0
@@ -424,11 +538,11 @@ async function syncNoteCollaboration(note: Note | null) {
 
 function onTitleInput() {
   title.value = title.value.replace(/[\r\n]+/g, ' ')
-  if (collaborationContentReady && title.value.trim()) replaceCollaborativeTitle(title.value)
+  if (collaborationContentReady.value && title.value.trim()) replaceCollaborativeTitle(title.value)
 }
 
 function commitCollaborativeTitle() {
-  if (!collaborationContentReady) return
+  if (!collaborationContentReady.value) return
   if (!title.value.trim()) {
     title.value = collaborationSession.value?.document.getText('title').toString() || props.note?.title || '未命名笔记'
   }
@@ -444,7 +558,7 @@ function flushCollaboration() {
 }
 
 function markLocalEdit() {
-  if (!props.note || !collaborationContentReady) return
+  if (!props.note || !collaborationContentReady.value) return
   localEditGeneration += 1
   scheduleProjectionConfirmation()
 }
@@ -456,7 +570,7 @@ function scheduleProjectionConfirmation() {
     if (
       !props.note
       || collaborationPendingChanges.value > 0
-      || !collaborationContentReady
+      || !collaborationContentReady.value
       || localEditGeneration <= projectedEditGeneration
     ) return
     void flushAndWaitForProjection().catch(() => undefined)
@@ -465,7 +579,7 @@ function scheduleProjectionConfirmation() {
 
 function insertSlashBlock(type: WorkFollowSlashCommand) {
   const currentEditor = editor.value
-  if (!currentEditor || !collaborationContentReady) return
+  if (!currentEditor || !collaborationContentReady.value) return
   const chain = currentEditor.chain().focus()
   slash.deleteRange(chain, currentEditor.state.selection.from)
   if (type === 'link') {
@@ -474,11 +588,22 @@ function insertSlashBlock(type: WorkFollowSlashCommand) {
   if (type === 'attachment') {
     chain.run(); slash.close(); openFilePicker('embedded'); return
   }
+  if (type === 'importExcel') {
+    chain.run(); slash.close(); openFilePicker('excel'); return
+  }
   if (type === 'createTask' || type === 'linkTask') {
     chain.run()
     slash.close()
     if (type === 'createTask') openTaskCreateAtCursor()
     else openTaskSearchAtCursor()
+    return
+  }
+  if (type === 'diagram') {
+    chain.run()
+    slash.close()
+    void openDiagramEditor(null, (payload) => {
+      currentEditor.chain().focus().insertContent(payload).run()
+    })
     return
   }
   if (type === 'h1') chain.toggleHeading({ level: 1 })
@@ -491,9 +616,9 @@ function insertSlashBlock(type: WorkFollowSlashCommand) {
   else if (type === 'check') chain.toggleTaskList()
   else if (type === 'hr') chain.setHorizontalRule()
   else if (type === 'table') chain.insertTable({ rows: 3, cols: 3, withHeaderRow: true })
-  else if (type === 'subtask') chain.toggleTaskList().insertContent('子任务')
+  else if (type === 'subtask') chain.toggleTaskList().insertContent('子代办')
   else if (type === 'tag') chain.insertContent('#标签')
-  else chain.insertContent('关联任务 / 笔记')
+  else chain.insertContent('关联代办 / 笔记')
   chain.run()
   slash.close()
 }
@@ -570,19 +695,19 @@ function currentNoteSnapshot(currentEditor: CoreEditor | null = editor.value ?? 
       type: 'doc',
       content: [{ type: 'paragraph' }],
     }) as Record<string, unknown>,
-    plainText: currentEditor?.getText({ blockSeparator: '\n' }) ?? '',
+    plainText: currentEditor?.getText({ blockSeparator: '\n' }) ?? props.note?.plainText ?? '',
   }
 }
 
 function emitCurrentNoteChange(currentEditor: CoreEditor | null = editor.value ?? null) {
-  if (!props.note || !collaborationContentReady) return
+  if (!props.note || !collaborationContentReady.value) return
   emit('change', currentNoteSnapshot(currentEditor))
 }
 
 async function runProjectionBarrier(timeoutMs: number, lifecycle: number): Promise<NoteEditorActionSnapshot> {
   const note = props.note
   const currentEditor = editor.value
-  if (!note || !currentEditor || !collaborationContentReady || collaborationStatus.value === 'error') {
+  if (!note || !currentEditor || !collaborationContentReady.value || collaborationStatus.value === 'error') {
     throw new Error('笔记协同尚未就绪，无法读取最新内容。')
   }
 
@@ -644,7 +769,7 @@ async function flushAndWaitForProjection(timeoutMs = 6000): Promise<NoteEditorAc
     // While the collaboration document is still connecting, the editor is
     // disabled and cannot contain a user edit. Use the SQL detail directly so
     // switching away is not blocked by a cold WebSocket/IndexedDB startup.
-    if (!editor.value || !collaborationContentReady) {
+    if (!editor.value || !collaborationContentReady.value) {
       return {
         note: props.note,
         title: props.note.title,
@@ -664,7 +789,7 @@ async function flushAndWaitForProjection(timeoutMs = 6000): Promise<NoteEditorAc
     }
   }
 
-  if (!props.note || !editor.value || !collaborationContentReady || collaborationStatus.value === 'error') {
+  if (!props.note || !editor.value || !collaborationContentReady.value || collaborationStatus.value === 'error') {
     throw new Error('笔记协同尚未就绪，无法读取最新内容。')
   }
 
@@ -681,13 +806,14 @@ async function flushAndWaitForProjection(timeoutMs = 6000): Promise<NoteEditorAc
 defineExpose({ flushCollaboration, flushAndWaitForProjection })
 
 function requestSaveAsTemplate() {
-  if (!props.note || !editor.value) return
+  if (!props.note) return
+  const snapshot = currentNoteSnapshot()
   emit('saveAsTemplate', {
     note: props.note,
-    title: title.value.trim() || '未命名笔记',
+    title: snapshot.title,
     folderId: folderId.value || null,
-    contentJson: editor.value.getJSON() as Record<string, unknown>,
-    plainText: editor.value.getText({ blockSeparator: '\n' }),
+    contentJson: snapshot.contentJson,
+    plainText: snapshot.plainText,
   })
 }
 
@@ -734,7 +860,7 @@ function handleImmersiveKeydown(event: KeyboardEvent) {
 }
 
 function setLink() {
-  if (!collaborationContentReady) return
+  if (!collaborationContentReady.value) return
   linkDialog.value?.open()
 }
 
@@ -777,7 +903,7 @@ function activeBlockId(currentEditor: CoreEditor): string | null {
 function createTodoFromSelection() {
   const text = selectedText()
   const currentEditor = editor.value
-  if (!text || !currentEditor || !collaborationContentReady) return
+  if (!text || !currentEditor || !collaborationContentReady.value) return
   const { from, to } = currentEditor.state.selection
   pendingTaskContext.value = {
     from, to, position: to, blockId: activeBlockId(currentEditor), excerpt: text,
@@ -789,7 +915,7 @@ function createTodoFromSelection() {
 
 function openTaskCreateAtCursor() {
   const currentEditor = editor.value
-  if (!currentEditor || !collaborationContentReady) return
+  if (!currentEditor || !collaborationContentReady.value) return
   const position = currentEditor.state.selection.from
   pendingTaskContext.value = {
     from: position, to: position, position, blockId: activeBlockId(currentEditor), excerpt: '',
@@ -801,7 +927,7 @@ function openTaskCreateAtCursor() {
 
 function openTaskSearchAtCursor() {
   const currentEditor = editor.value
-  if (!currentEditor || !collaborationContentReady) return
+  if (!currentEditor || !collaborationContentReady.value) return
   const position = currentEditor.state.selection.from
   pendingTaskContext.value = {
     from: position, to: position, position, blockId: activeBlockId(currentEditor), excerpt: '',
@@ -810,7 +936,7 @@ function openTaskSearchAtCursor() {
 }
 
 async function saveLinkedTask(payload: TodoPayload) {
-  if (!props.note || !pendingTaskContext.value || !editor.value || !collaborationContentReady) return
+  if (!props.note || !pendingTaskContext.value || !editor.value || !collaborationContentReady.value) return
   const context = pendingTaskContext.value
   const created = await postTodo({
     ...payload,
@@ -830,12 +956,12 @@ async function saveLinkedTask(payload: TodoPayload) {
     }).run()
   }
   taskDialogOpen.value = false
-  showTaskFeedback('✓ 已创建待办')
+  showTaskFeedback('✓ 已创建代办')
   scheduleTaskHydration()
 }
 
 async function linkExistingTask(todo: Todo) {
-  if (!props.note || !pendingTaskContext.value || !editor.value || !collaborationContentReady) return
+  if (!props.note || !pendingTaskContext.value || !editor.value || !collaborationContentReady.value) return
   const context = pendingTaskContext.value
   // The taskReference node is the source of truth. The collaboration
   // snapshot reconciles its REFERENCES backlink in the same transaction as
@@ -844,13 +970,32 @@ async function linkExistingTask(todo: Todo) {
     type: 'taskReference', attrs: { taskId: todo.id },
   }).run()
   taskSearchOpen.value = false
-  showTaskFeedback('✓ 已关联待办')
+  showTaskFeedback('✓ 已关联代办')
   scheduleTaskHydration()
 }
 
 function showTaskFeedback(message: string) {
   taskFeedback.value = message
   window.setTimeout(() => { if (taskFeedback.value === message) taskFeedback.value = '' }, 1400)
+}
+
+// 流程图（drawio）：编辑宿主逻辑在 modules/editor/diagramEditor.ts，这里只接通道。
+function openDiagramEditor(
+  attrs: Record<string, unknown> | null,
+  applyUpdate: (payload: Record<string, unknown>) => void,
+) {
+  if (!collaborationContentReady.value) return
+  void createDiagramEditorHandler({
+    uploadFile: async (file) => {
+      const attachment = await props.uploadFile(file)
+      return { id: attachment.id, name: attachment.originalName }
+    },
+    openModal: (options) => drawioModal.value?.open(options, { onSave: options.onSave }) ?? Promise.resolve(null),
+    feedback: showTaskFeedback,
+    confirm: (message, options) => diagramConflict.value?.ask(message, options) ?? Promise.resolve(false),
+    onEditingChange: (sourceId) => diagramPresenceBridge.value?.setLocalEditing(sourceId),
+    editingPeer: (sourceId) => diagramEditingPresence[sourceId] ?? null,
+  })(attrs, applyUpdate)
 }
 
 function scheduleTaskHydration() {
@@ -898,7 +1043,7 @@ async function renderTaskBriefs(currentEditor: CoreEditor, briefs: Map<string, T
     const taskId = element.dataset.taskId
     const brief = taskId ? briefs.get(taskId) : undefined
     if (!brief || !brief.accessible) {
-      const label = brief?.deleted ? '该待办已删除' : '该待办不可访问'
+      const label = brief?.deleted ? '该代办已删除' : '该代办不可访问'
       element.dataset.taskState = brief?.deleted ? 'deleted' : 'forbidden'
       element.title = label
       element.querySelector<HTMLElement>('[data-task-reference-title]')?.replaceChildren(label)
@@ -923,8 +1068,8 @@ function applyRealtimeTaskChange(change: NonNullable<typeof realtime.lastTaskCha
     if (element.dataset.taskId !== change.taskId) continue
     if (brief.deleted) {
       element.dataset.taskState = 'deleted'
-      element.title = '该待办已删除'
-      element.querySelector<HTMLElement>('[data-task-reference-title]')?.replaceChildren('该待办已删除')
+      element.title = '该代办已删除'
+      element.querySelector<HTMLElement>('[data-task-reference-title]')?.replaceChildren('该代办已删除')
       element.querySelector<HTMLElement>('[data-task-reference-status]')?.replaceChildren('—')
       element.querySelector<HTMLElement>('[data-task-reference-meta]')?.replaceChildren('')
       continue
@@ -951,11 +1096,107 @@ async function copySelection() {
   if (text) await navigator.clipboard.writeText(text)
 }
 
+function uploadAndInsertImage(file: File) {
+  void props.uploadFile(file).then((attachment) => {
+    editor.value?.chain().focus().insertContent({
+      type: 'image',
+      attrs: { src: attachment.url, alt: attachment.originalName, attachmentId: attachment.id },
+    }).run()
+  })
+}
+
+/** 表格落点在文档末尾时补一个空段落，否则光标没有逃出表格的落点。 */
+/** 表格落点在文档末尾时补一个空段落，否则光标没有逃出表格的落点。
+ * 光标已经在表格内时，新表格插到当前表格之后（表格不能嵌套）。 */
+function insertImportedTable(table: ImportedTable): boolean {
+  const currentEditor = editor.value
+  if (!currentEditor) return false
+  const { selection } = currentEditor.state
+  const $from = selection.$from
+  let tableDepth = -1
+  for (let depth = $from.depth; depth > 0; depth -= 1) {
+    if ($from.node(depth).type.name === 'table') { tableDepth = depth; break }
+  }
+  const chain = currentEditor.chain().focus()
+  let insertEnd = selection.to
+  if (tableDepth > 0) {
+    insertEnd = $from.after(tableDepth)
+    chain.insertContentAt(insertEnd, table.json)
+  } else {
+    chain.insertContent(table.json)
+  }
+  if (insertEnd >= currentEditor.state.doc.content.size - 1) chain.insertContent({ type: 'paragraph' })
+  chain.run()
+  return true
+}
+
+function insertPastedTable(table: ImportedTable) {
+  if (!insertImportedTable(table)) return
+  if (importedTableTruncated(table.meta)) {
+    showTaskFeedback(`表格较大，已截断为 ${table.meta.rows} 行 × ${table.meta.cols} 列`)
+  }
+}
+
+function chooseSheet(data: SpreadsheetData): Promise<string | null> {
+  if (data.sheets.length === 1) return Promise.resolve(data.sheets[0]?.name ?? null)
+  if (!data.sheets.length) return Promise.resolve(null)
+  sheetPickerSheets.value = data.sheets
+  sheetPickerOpen.value = true
+  return new Promise((resolve) => { sheetPickerResolve = resolve })
+}
+
+function resolveSheetPicker(sheetName: string | null) {
+  sheetPickerOpen.value = false
+  sheetPickerResolve?.(sheetName)
+  sheetPickerResolve = null
+}
+
+async function importSpreadsheetIntoBody(load: () => Promise<SpreadsheetData>) {
+  const currentEditor = editor.value
+  if (!currentEditor || !collaborationContentReady.value) return
+  showTaskFeedback('正在读取表格…')
+  try {
+    const data = await load()
+    const sheetName = await chooseSheet(data)
+    if (!sheetName) return
+    const table = spreadsheetTable(data, sheetName)
+    if (!table) {
+      showTaskFeedback('表格内容为空，未插入')
+      return
+    }
+    insertImportedTable(table)
+    const size = `${table.meta.rows} 行 × ${table.meta.cols} 列`
+    showTaskFeedback(importedTableTruncated(table.meta)
+      ? `已导入「${sheetName}」：${size}（超出上限已截断，原表 ${table.meta.originalRows} 行 × ${table.meta.originalCols} 列）`
+      : `已导入「${sheetName}」：${size}`)
+  } catch (error) {
+    showTaskFeedback(error instanceof Error ? error.message : '读取表格失败，请重试')
+  }
+}
+
+/** 二进制原件照常上传为附件（原文以附件为准），表格内容只是快照；上传失败不阻塞插入。 */
+function importSpreadsheetFile(file: File) {
+  void props.uploadFile(file).catch(() => undefined)
+  void importSpreadsheetIntoBody(() => readSpreadsheet(file))
+}
+
+async function importAttachmentAsTable(attachment: { url: string }) {
+  await importSpreadsheetIntoBody(async () => {
+    const response = await fetch(attachment.url)
+    if (!response.ok) throw new Error('附件读取失败，请重试')
+    return readSpreadsheetBuffer(await response.arrayBuffer())
+  })
+}
+
 async function handleFiles(files: FileList | null) {
-  if (!files || !collaborationContentReady) return
+  if (!files || !collaborationContentReady.value) return
   let uploadedStandaloneFile = false
   const insertImages = fileUploadMode.value === 'embedded'
   for (const file of Array.from(files)) {
+    if ((insertImages || fileUploadMode.value === 'excel') && isSpreadsheetFile(file)) {
+      importSpreadsheetFile(file)
+      continue
+    }
     const attachment = await props.uploadFile(file)
     if (file.type.startsWith('image/') && insertImages) {
       editor.value?.chain().focus().insertContent({
@@ -970,8 +1211,8 @@ async function handleFiles(files: FileList | null) {
   if (fileInput.value) fileInput.value.value = ''
 }
 
-function openFilePicker(mode: 'embedded' | 'standalone') {
-  if (!collaborationContentReady) return
+function openFilePicker(mode: 'embedded' | 'standalone' | 'excel') {
+  if (!collaborationContentReady.value) return
   fileUploadMode.value = mode
   fileInput.value?.click()
 }
@@ -1060,15 +1301,21 @@ watch(immersiveOpen, (open) => {
           <span class="task-editor-save-state" aria-live="polite">{{ formatLastSavedAt(lastSavedAt) }}</span>
         </div>
       </header>
-      <RichTextToolbar v-if="editor" :editor="editor" attachment @link="setLink" @attachment="openFilePicker('embedded')" />
-      <input ref="fileInput" class="sr-only" type="file" multiple :accept="fileUploadMode === 'embedded' ? embeddedFileAccept : standaloneFileAccept" @change="handleFiles(($event.target as HTMLInputElement).files)" />
+      <RichTextToolbar v-if="editor && collaborationContentReady" :editor="editor" attachment diagram @link="setLink" @attachment="openFilePicker('embedded')" @diagram="openDiagramEditor(null, (payload) => { editor?.chain().focus().insertContent(payload).run() })" />
+      <input ref="fileInput" class="sr-only" type="file" multiple :accept="fileAccept" @change="handleFiles(($event.target as HTMLInputElement).files)" />
       <div class="selection-menu-host">
         <BubbleMenu v-if="editor" :editor="editor" :tippy-options="bubbleMenuOptions" class="selection-menu">
-          <button type="button" @mousedown.prevent @click="createTodoFromSelection">创建待办</button>
+          <button type="button" @mousedown.prevent @click="createTodoFromSelection">创建代办</button>
           <button type="button" @mousedown.prevent @click="copySelection">复制</button>
         </BubbleMenu>
       </div>
-      <EditorContent class="tiptap-editor" :editor="editor ?? undefined" />
+      <RichTextDocument
+        v-if="!editor"
+        class="note-editor-collaboration-fallback"
+        :model-value="editorContent ?? note.contentJson"
+        :editable="false"
+      />
+      <EditorContent v-else class="tiptap-editor" :editor="editor" />
       <span v-if="taskFeedback" class="note-task-feedback" role="status">{{ taskFeedback }}</span>
       <EditorSlashMenu :commands="workFollowSlashCommands" :active-index="slash.activeIndex.value" :position="slash.position.value" :open="slash.open.value" id-prefix="note-slash-command" @select="insertSlashBlock" @hover="slash.activeIndex.value = $event" />
       <section class="attachment-panel" :class="{ 'is-expanded': attachmentPanelOpen }">
@@ -1083,6 +1330,7 @@ watch(immersiveOpen, (open) => {
             <article v-for="attachment in visibleAttachments" :key="attachment.id">
               <span class="attachment-icon"><IconFile :size="17" /></span>
               <a :href="attachment.url" target="_blank" rel="noopener noreferrer"><strong>{{ attachment.originalName }}</strong><small>{{ formatSize(attachment.size) }}</small></a>
+              <button v-if="isSpreadsheetName(attachment.originalName)" type="button" class="attachment-import-button" @click="importAttachmentAsTable(attachment)">插入为表格</button>
               <button type="button" aria-label="删除附件" @click="emit('deleteAttachment', attachment)"><IconTrash :size="16" /></button>
             </article>
           </div>
@@ -1090,6 +1338,9 @@ watch(immersiveOpen, (open) => {
         </div>
       </section>
       <EditorLinkDialog ref="linkDialog" :editor="() => editor" />
+      <EditorSheetPickerDialog :open="sheetPickerOpen" :sheets="sheetPickerSheets" @select="resolveSheetPicker($event)" @close="resolveSheetPicker(null)" />
+      <DrawioEditorModal ref="drawioModal" />
+      <DiagramConflictConfirm ref="diagramConflict" />
       <TodoDialog
         :open="taskDialogOpen"
         :initial-title="taskInitialTitle"

@@ -73,6 +73,7 @@ def get_navigation_counts(
     shared_count = note_share_service.count_shared_notes(db, user.id)
     shared_by_me_count = note_share_service.count_notes_shared_by_me(db, user.id)
     knowledge_count = 0
+    submissions_total = 0
     submissions_pending = 0
     review_pending = 0
     if team_id:
@@ -80,6 +81,7 @@ def get_navigation_counts(
         if not can_access_team:
             raise HTTPException(status_code=404, detail="Team not found")
         knowledge_count = team_note_service.count_published_notes(db, team_id)
+        submissions_total = team_note_service.count_submissions(db, team_id, applicant_id=user.id)
         pending_statuses = [TeamNoteSubmissionStatus.PENDING, TeamNoteSubmissionStatus.NEEDS_REVISION]
         submissions_pending = team_note_service.count_submissions(
             db, team_id, applicant_id=user.id, statuses=pending_statuses
@@ -93,6 +95,7 @@ def get_navigation_counts(
         shared=shared_count,
         shared_by_me=shared_by_me_count,
         knowledge=knowledge_count,
+        submissions_total=submissions_total,
         submissions_pending=submissions_pending,
         review_pending=review_pending,
     )

@@ -7,6 +7,7 @@ import {
   MIN_IMAGE_WIDTH_PERCENT,
   normalizeImageWidth,
 } from '@/modules/editor/imageSizing'
+import { useEditorEditable } from '@/modules/editor/editorEditable'
 
 const props = defineProps(nodeViewProps)
 
@@ -14,6 +15,7 @@ const rootElement = ref<HTMLElement | null>(null)
 const imageElement = ref<HTMLImageElement | null>(null)
 const dragging = ref(false)
 const previewWidth = ref<number | null>(normalizeImageWidth(props.node.attrs.width))
+const editable = useEditorEditable(props.editor)
 
 let pointerId: number | null = null
 let startX = 0
@@ -22,7 +24,7 @@ let resizeContentWidth = 1
 let latestClientX = 0
 let resizeFrame: number | undefined
 
-const canResize = computed(() => props.editor.isEditable && props.selected)
+const canResize = computed(() => editable.value && props.selected)
 const activeWidth = computed(() => (
   dragging.value ? previewWidth.value : normalizeImageWidth(props.node.attrs.width)
 ))

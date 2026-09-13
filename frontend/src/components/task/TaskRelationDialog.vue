@@ -30,10 +30,10 @@ watch(query, () => { window.clearTimeout(timer); timer = window.setTimeout(load,
   <Teleport to="body">
     <div v-if="open" class="dialog-backdrop task-relation-backdrop" @mousedown.self="emit('close')">
       <section class="task-relation-dialog" role="dialog" aria-modal="true" aria-labelledby="task-relation-title">
-        <header><div><h2 id="task-relation-title">关联任务或笔记</h2><p>只显示你有权访问的内容</p></div><button type="button" aria-label="关闭" @click="emit('close')"><IconX :size="18" /></button></header>
+        <header><div><h2 id="task-relation-title">关联代办或笔记</h2><p>只显示你有权访问的内容</p></div><button type="button" aria-label="关闭" @click="emit('close')"><IconX :size="18" /></button></header>
         <label class="task-relation-search"><IconSearch :size="17" /><input v-model="query" autofocus placeholder="搜索标题或正文" /></label>
         <div class="task-relation-results">
-          <section><h3>任务</h3><button v-for="todo in tasks" :key="todo.id" type="button" @click="emit('selectTask', todo)"><IconLink :size="15" /><span><strong>{{ todo.title }}</strong><small>{{ todo.listName }}</small></span></button><p v-if="!loading && !tasks.length">没有匹配任务</p></section>
+          <section><h3>代办</h3><button v-for="todo in tasks" :key="todo.id" type="button" @click="emit('selectTask', todo)"><IconLink :size="15" /><span><strong>{{ todo.title }}</strong><small>{{ todo.listName }}</small></span></button><p v-if="!loading && !tasks.length">没有匹配代办</p></section>
           <section><h3>笔记</h3><button v-for="note in notes" :key="note.id" type="button" @click="emit('selectNote', note)"><IconLink :size="15" /><span><strong>{{ note.title || '无标题笔记' }}</strong><small>{{ new Date(note.updatedAt).toLocaleDateString('zh-CN') }}</small></span></button><p v-if="!loading && !notes.length">没有匹配笔记</p></section>
         </div>
         <p v-if="loading" class="task-relation-loading">正在读取…</p>

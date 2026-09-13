@@ -338,6 +338,7 @@ const mode = computed(() => resolveAppearanceMode(appStore.appearanceMode, appSt
   z-index: var(--layer-atmosphere, 0);
   overflow: hidden;
   pointer-events: none;
+  contain: paint;
 }
 
 .seasonal-sky {
@@ -355,9 +356,10 @@ const mode = computed(() => resolveAppearanceMode(appStore.appearanceMode, appSt
   left: 26%;
   border-radius: var(--radius-full);
   background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--season-auroraA) 45%, transparent), color-mix(in srgb, var(--season-auroraB) 35%, transparent), transparent);
-  filter: blur(56px);
+  filter: blur(var(--atmosphere-aurora-blur));
   opacity: 0;
   transform: rotate(-9deg);
+  will-change: transform, opacity;
 }
 
 .seasonal-atmosphere[data-mode="dark"][data-scene="spring"] .seasonal-aurora,
@@ -411,6 +413,7 @@ const mode = computed(() => resolveAppearanceMode(appStore.appearanceMode, appSt
   z-index: var(--layer-season-fall);
   overflow: hidden;
   pointer-events: none;
+  contain: paint;
 }
 
 .seasonal-fall-item {
@@ -423,10 +426,23 @@ const mode = computed(() => resolveAppearanceMode(appStore.appearanceMode, appSt
 .seasonal-leaf { width: 25px; height: 25px; opacity: .8; animation: seasonal-leaf-fall var(--dur, 19s) linear infinite; animation-delay: var(--delay, 0s); }
 .seasonal-flake { width: 16px; height: 16px; opacity: .85; animation: seasonal-flake-fall var(--dur, 21s) linear infinite; animation-delay: var(--delay, 0s); }
 
-.seasonal-wisp { border-radius: var(--radius-full); filter: blur(7px); opacity: 0; animation: seasonal-wisp-drift var(--dur, 30s) linear infinite; animation-delay: var(--delay, 0s); }
+.seasonal-wisp { border-radius: var(--radius-full); filter: blur(var(--atmosphere-wisp-blur)); opacity: 0; animation: seasonal-wisp-drift var(--dur, 30s) linear infinite; animation-delay: var(--delay, 0s); }
 .seasonal-rain { width: 1.5px; height: 26px; background: linear-gradient(to bottom, transparent, var(--season-rain)); opacity: .9; animation: seasonal-rain-fall var(--dur, 1.1s) linear infinite; animation-delay: var(--delay, 0s); }
 .seasonal-sand { border-radius: var(--radius-full); opacity: 0; animation: seasonal-sand-blow var(--dur, 9s) linear infinite; animation-delay: var(--delay, 0s); }
 .seasonal-glint { border-radius: var(--radius-full); box-shadow: 0 0 9px var(--season-particle2); opacity: 0; animation: seasonal-glint-rise var(--dur, 14s) ease-in-out infinite; animation-delay: var(--delay, 0s); }
+
+/* Editing and hidden tabs should spend their frame budget on application
+   content. Keeping the current particle position avoids a visual jump when
+   the user leaves the editor, while pausing the full-screen layers removes
+   their recurring style/compositing work. */
+html[data-ambient-paused="true"] .seasonal-fall-item,
+html[data-ambient-paused="true"] .seasonal-aurora {
+  animation-play-state: paused;
+}
+
+html[data-ambient-paused="true"] .seasonal-grain {
+  visibility: hidden;
+}
 
 @keyframes seasonal-aurora-drift {
   from { transform: rotate(-9deg) translateX(-50px) scaleY(1); opacity: .45; }

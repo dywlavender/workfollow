@@ -26,6 +26,31 @@ class NotificationDispatchResult:
         return bool(self.in_app_count or self.external_count)
 
 
+def _notification_url(data_json: dict[str, object]) -> str | None:
+    """Return the canonical deep link carried by a notification payload."""
+    for key in ("url", "taskUrl", "knowledgeUrl", "submissionUrl", "noteUrl"):
+        value = data_json.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    task = data_json.get("task")
+    if isinstance(task, dict):
+        value = task.get("url") or task.get("taskUrl")
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return None
+
+
+def _append_notification_url(message: str, url: str | None) -> str:
+    """Keep notification text useful even for clients that ignore metadata."""
+    text = (message or "").strip() or "收到一条通知"
+    if not url or url in text:
+        return text
+    # The URL is deliberately the final part so external receivers can render
+    # the message as plain text without losing the actionable deep link.
+    text = text.rstrip("。！？")
+    return f"{text}；查看详情：{url}。"
+
+
 def recipient_ids(participant_ids: Iterable[str], actor_user_id: str | None = None) -> list[str]:
     """Return affected users once, excluding the user who performed the action."""
     return sorted({
@@ -66,9 +91,14 @@ def dispatch_event(
 ) -> NotificationDispatchResult:
     """Fan out one event to the in-app and external channels consistently."""
     recipients = recipient_ids(participant_ids, actor_user_id)
+    payload = dict(data_json or {})
+    url = _notification_url(payload)
     in_app_count = 0
     external_count = 0
-    message = external_message or body
+    # If a caller does not provide a channel-specific message, retain the
+    # notification heading as context instead of sending a body that may be
+    # indistinguishable from an unlabelled status update.
+    message = _append_notification_url(external_message or f"{title}：{body}", url)
 
     for user_id in recipients:
         if in_app_type is not None:
@@ -83,7 +113,7 @@ def dispatch_event(
                     title,
                     body,
                     actor_user_id=actor_user_id,
-                    data_json=data_json,
+                    data_json=payload,
                 )
                 in_app_count += 1
 
@@ -95,7 +125,7 @@ def dispatch_event(
                 external_type,
                 message,
                 delivery_key=delivery_key,
-                data_json=data_json,
+                data_json=payload,
                 settings=settings,
             )
             external_count += delivery is not None

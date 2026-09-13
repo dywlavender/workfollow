@@ -35,7 +35,7 @@ interface RailItem {
 const railNavigation = computed((): RailItem[] => {
   return [
     { label: '首页', shortLabel: '首页', icon: IconHome, to: '/' },
-    { label: '任务', shortLabel: '任务', icon: IconChecklist, to: '/todos' },
+    { label: '代办', shortLabel: '代办', icon: IconChecklist, to: '/todos' },
     { label: '日历', shortLabel: '日历', icon: IconCalendar, to: '/calendar' },
     { label: '全部笔记', shortLabel: '笔记', icon: IconFileText, to: '/notes' },
     { label: '常用', shortLabel: '常用', icon: IconLink, to: '/common' },
@@ -77,11 +77,11 @@ function preloadTarget(target: string | { path: string; query?: Record<string, s
 
 <template>
   <aside class="sidebar is-task-shell">
-    <RouterLink class="brand" to="/" aria-label="打勾 首页">
+    <RouterLink class="brand" to="/" aria-label="备忘录 首页">
       <span class="brand-mark" aria-hidden="true">
-        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 12.6 L9.6 17.5 L19.5 6.8" /></svg>
+        <svg viewBox="0 0 24 24" width="16" height="16"><path d="M5.5 4.2h7.8l3.4 3.4v10.4a1.9 1.9 0 0 1-1.9 1.9H5.5a1.9 1.9 0 0 1-1.9-1.9V6.1a1.9 1.9 0 0 1 1.9-1.9z" fill="currentColor" opacity=".14"/><path d="M13.3 4.2l3.4 3.4h-2.7a.7.7 0 0 1-.7-.7z" fill="currentColor" opacity=".4"/><path d="M6.6 8.3h3.4M6.6 11.2h2.6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" opacity=".45"/><path d="M5.9 14.5 L9.2 17.7 L17.4 8.5" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </span>
-      <span class="brand-name">打勾</span>
+      <span class="brand-name">备忘录</span>
     </RouterLink>
     <nav class="navigation rail-navigation" aria-label="全局导航">
       <RouterLink

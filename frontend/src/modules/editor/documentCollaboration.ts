@@ -3,6 +3,7 @@ import * as Y from 'yjs'
 import { IndexeddbPersistence } from 'y-indexeddb'
 
 import type { User } from '@/services/api'
+import { useAuthStore } from '@/stores/auth'
 
 export type DocumentCollaborationStatus = 'connecting' | 'connected' | 'disconnected' | 'error'
 
@@ -17,6 +18,8 @@ export interface DocumentCollaborationSession {
   document: Y.Doc
   provider: HocuspocusProvider
   persistence: IndexeddbPersistence | null
+  /** Resolves after IndexedDB has hydrated the Y.Doc (not after the server sync). */
+  localReady: Promise<void>
   destroy: () => void
 }
 
@@ -60,6 +63,14 @@ export function createDocumentCollaboration(
   let persistence: IndexeddbPersistence | null = null
   if (typeof indexedDB !== 'undefined') persistence = new IndexeddbPersistence(persistenceName, document)
 
+  // Keep local hydration as an explicit lifecycle barrier. A newly-created
+  // Y.Doc is intentionally empty; mounting a Tiptap collaboration editor
+  // before this promise settles can write its schema's default paragraph into
+  // the document and race the server snapshot.
+  const localReady = persistence
+    ? persistence.whenSynced.then(() => undefined).catch(() => undefined)
+    : Promise.resolve()
+
   // Hydrate the local document before opening the socket. Otherwise a stale
   // local seed can race the server snapshot and become a second Yjs insert.
   const websocketProvider = new HocuspocusProviderWebsocket({
@@ -93,20 +104,23 @@ export function createDocumentCollaboration(
     void websocketProvider.connect().catch(() => undefined)
   }
   if (persistence) {
-    void persistence.whenSynced.then(startConnection).catch(startConnection)
+    void localReady.then(startConnection)
     persistenceWaitTimer = setTimeout(startConnection, PERSISTENCE_WAIT_TIMEOUT_MS)
   } else {
     startConnection()
   }
 
-  if (user) {
-    provider.setAwarenessField('user', { id: user.id, name: user.nickname || user.username })
+  // 未显式传 user 时兜底到登录用户，保证 awareness 里有可显示的名字。
+  const authUser = user ?? useAuthStore().user ?? null
+  if (authUser) {
+    provider.setAwarenessField('user', { id: authUser.id, name: authUser.nickname || authUser.username })
   }
 
   return {
     document,
     provider,
     persistence,
+    localReady,
     destroy: () => {
       destroyed = true
       if (persistenceWaitTimer) clearTimeout(persistenceWaitTimer)

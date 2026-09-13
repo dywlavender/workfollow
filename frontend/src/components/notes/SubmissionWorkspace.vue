@@ -38,6 +38,9 @@ const visibleAttachments = computed(() => filterStandaloneAttachments(
   props.selected?.snapshotAttachments ?? [],
   props.selected?.snapshotContentJson,
 ))
+const pendingCount = computed(() => props.submissions.filter((item) => (
+  item.status === 'PENDING' || item.status === 'NEEDS_REVISION'
+)).length)
 watch(() => props.selected?.id, () => {
   comment.value = ''
   approvedTitle.value = props.selected?.snapshotTitle ?? ''
@@ -63,7 +66,7 @@ const labels: Record<string, string> = {
 <template>
   <section class="submission-workspace">
     <aside class="notes-column note-list-column submission-index">
-      <header class="notes-column-header"><div><h2>{{ mode === 'review' ? '知识审核' : '我的投稿' }}</h2></div><span>{{ submissions.length }}</span></header>
+      <header class="notes-column-header"><div><h2>{{ mode === 'review' ? '知识审核' : '我的投稿' }}</h2><small v-if="mode === 'mine' && pendingCount" class="submission-pending-summary">待处理 {{ pendingCount }} 条</small></div><span>{{ submissions.length }}</span></header>
       <div class="note-list-items">
         <article v-for="item in submissions" :key="item.id" :class="{ active: selected?.id === item.id }"><button type="button" @click="emit('select', item)"><strong>{{ item.snapshotTitle }}</strong><p><span class="submission-status" :class="item.status.toLowerCase()">{{ labels[item.status] }}</span> · 第 {{ item.revisionNo }} 版</p><small>{{ dayjs(item.updatedAt).format('M月D日 HH:mm') }}</small></button></article>
         <p v-if="!submissions.length" class="notes-empty">暂无投稿</p>

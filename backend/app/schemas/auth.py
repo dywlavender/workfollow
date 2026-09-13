@@ -59,6 +59,16 @@ class AgentTokenCreated(AgentTokenStatus):
     token: str
 
 
+class AgentActionRead(ApiModel):
+    id: str
+    method: str
+    path: str
+    status_code: int
+    resource_type: str | None
+    resource_id: str | None
+    created_at: datetime
+
+
 class AdminUserPermissionsUpdate(ApiModel):
     can_create_team: bool
 

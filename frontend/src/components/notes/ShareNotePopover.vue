@@ -33,11 +33,23 @@ watch(() => [props.open, props.modelValue] as const, ([open]) => {
   }
 })
 
-const available = computed(() => props.members.filter((member) => {
-  if (member.userId === props.currentUserId || member.status !== 'ACTIVE') return false
+const eligibleMembers = computed(() => props.members.filter((member) => (
+  member.userId !== props.currentUserId && member.status === 'ACTIVE'
+)))
+
+const available = computed(() => eligibleMembers.value.filter((member) => {
   const needle = query.value.trim().toLowerCase()
   return !needle || member.user.nickname.toLowerCase().includes(needle) || member.user.username.toLowerCase().includes(needle)
 }))
+
+const availableIds = computed(() => available.value.map((member) => member.userId))
+const selectedAvailableCount = computed(() => availableIds.value.filter((userId) => selected.value.includes(userId)).length)
+const allAvailableSelected = computed(() => (
+  availableIds.value.length > 0 && selectedAvailableCount.value === availableIds.value.length
+))
+const someAvailableSelected = computed(() => (
+  selectedAvailableCount.value > 0 && !allAvailableSelected.value
+))
 
 const activeShareByUser = computed(() => {
   const map = new Map<string, NoteShare>()
@@ -53,6 +65,15 @@ function toggle(userId: string) {
     : [...selected.value, userId]
 }
 
+function toggleAvailable() {
+  const visibleIds = new Set(availableIds.value)
+  if (allAvailableSelected.value) {
+    selected.value = selected.value.filter((userId) => !visibleIds.has(userId))
+    return
+  }
+  selected.value = Array.from(new Set([...selected.value, ...availableIds.value]))
+}
+
 function onPermissionChange(share: NoteShare, event: Event) {
   const value = (event.target as HTMLSelectElement).value as NoteSharePermission
   if (value !== share.permission) emit('changePermission', share.id, value)
@@ -65,6 +86,11 @@ function onPermissionChange(share: NoteShare, event: Event) {
       <section class="note-collab-dialog share-note-dialog" role="dialog" aria-modal="true" aria-labelledby="share-note-title">
         <header><div><span class="eyebrow">共享设置</span><h2 id="share-note-title">分享笔记</h2></div><button type="button" aria-label="关闭" @click="emit('close')"><IconX :size="18" /></button></header>
         <label class="note-member-search"><IconSearch :size="16" /><input v-model="query" placeholder="搜索团队成员" autofocus /></label>
+        <label class="member-select-all note-member-select-all" :class="{ disabled: !available.length }">
+          <input type="checkbox" :checked="allAvailableSelected" :indeterminate="someAvailableSelected" :disabled="!available.length" @change="toggleAvailable" />
+          <span>{{ query.trim() ? '全选搜索结果' : '全选全部成员' }}</span>
+          <small>{{ selectedAvailableCount }}/{{ available.length }}</small>
+        </label>
         <div class="share-permission-radio" role="radiogroup" aria-label="新成员权限">
           <span>新成员权限</span>
           <label><input v-model="newMemberPermission" type="radio" value="READ_ONLY" />只读</label>

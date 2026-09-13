@@ -19,11 +19,16 @@ if [ "$BACKEND_RUNNING" -eq 1 ] && [ "$COLLABORATION_RUNNING" -eq 1 ]; then
   exit 0
 fi
 
-command -v node >/dev/null 2>&1 || { echo "缺少 Node.js 22+。" >&2; exit 1; }
-command -v npm >/dev/null 2>&1 || { echo "缺少 npm。" >&2; exit 1; }
 command -v curl >/dev/null 2>&1 || { echo "缺少 curl，无法执行健康检查。" >&2; exit 1; }
-NODE_MAJOR="$(node -p 'process.versions.node.split(".")[0]')"
-[ "$NODE_MAJOR" -ge 22 ] || { echo "需要 Node.js 22+，当前为 $(node --version)。" >&2; exit 1; }
+[ -x .venv/bin/uvicorn ] || { echo "缺少后端虚拟环境，请先运行 deploy/linux/install.sh。" >&2; exit 1; }
+NODE_BIN="$ROOT_DIR/runtime/node/bin/node"
+[ -x "$NODE_BIN" ] || { echo "发布包缺少内置 Node.js 运行时，请重新获取完整发布包。" >&2; exit 1; }
+[ -f collaboration/node_modules/@hocuspocus/server/package.json ] || {
+  echo "协同服务依赖不完整，请重新安装完整离线发布包。" >&2
+  exit 1
+}
+NODE_MAJOR="$("$NODE_BIN" -p 'process.versions.node.split(".")[0]')"
+[ "$NODE_MAJOR" -ge 22 ] || { echo "包内 Node.js 版本过低，当前为 $("$NODE_BIN" --version)。" >&2; exit 1; }
 
 HOST="${WORKFOLLOW_HOST:-0.0.0.0}"
 PORT="${WORKFOLLOW_PORT:-8123}"
@@ -32,13 +37,14 @@ COLLABORATION_BIND="${WORKFOLLOW_COLLABORATION_BIND:-$HOST}"
 export WORKFOLLOW_BACKEND_URL="${WORKFOLLOW_BACKEND_URL:-http://127.0.0.1:$PORT}"
 export WORKFOLLOW_COLLABORATION_BIND="$COLLABORATION_BIND"
 export WORKFOLLOW_COLLABORATION_PORT="$COLLABORATION_PORT"
+export WORKFOLLOW_COLLABORATION_HTTP_URL="${WORKFOLLOW_COLLABORATION_HTTP_URL:-http://127.0.0.1:$COLLABORATION_PORT}"
 export WORKFOLLOW_COLLABORATION_DATA_DIR="${WORKFOLLOW_COLLABORATION_DATA_DIR:-$ROOT_DIR/data/collaboration}"
 if [ -z "${WORKFOLLOW_COLLABORATION_INTERNAL_TOKEN+x}" ] || [ -z "$WORKFOLLOW_COLLABORATION_INTERNAL_TOKEN" ]; then
   TOKEN_FILE="$ROOT_DIR/run/workfollow-collaboration-token"
   if [ -s "$TOKEN_FILE" ]; then
     export WORKFOLLOW_COLLABORATION_INTERNAL_TOKEN="$(cat "$TOKEN_FILE")"
   else
-    export WORKFOLLOW_COLLABORATION_INTERNAL_TOKEN="$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')"
+    export WORKFOLLOW_COLLABORATION_INTERNAL_TOKEN="$(.venv/bin/python -c 'import secrets; print(secrets.token_urlsafe(32))')"
     (umask 077 && printf '%s' "$WORKFOLLOW_COLLABORATION_INTERNAL_TOKEN" > "$TOKEN_FILE")
   fi
 fi
@@ -69,7 +75,7 @@ if [ "$BACKEND_RUNNING" -eq 0 ]; then
 fi
 
 if [ "$COLLABORATION_RUNNING" -eq 0 ]; then
-  nohup node collaboration/server.mjs \
+  nohup "$NODE_BIN" collaboration/server.mjs \
     >>logs/workfollow-collaboration.log 2>&1 &
   echo $! > run/workfollow-collaboration.pid
   NEW_COLLABORATION=1

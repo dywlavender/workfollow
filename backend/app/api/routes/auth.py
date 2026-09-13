@@ -7,10 +7,12 @@ from sqlalchemy.orm import Session
 from app.core.config import Settings, get_settings
 from app.core.dependencies import CurrentUser, DbSession
 from app.models.auth import User, UserStatus
+from app.models.agent_action import AgentActionLog
 from app.models.todo import local_now
 from app.schemas.auth import (
     AgentTokenCreated,
     AgentTokenStatus,
+    AgentActionRead,
     AuthResponse,
     LoginRequest,
     UserCreate,
@@ -143,3 +145,13 @@ def generate_agent_token(db: DbSession, user: CurrentUser) -> AgentTokenCreated:
 @router.delete("/agent-token", response_model=AgentTokenStatus)
 def disable_agent_token(db: DbSession, user: CurrentUser) -> AgentTokenStatus:
     return to_agent_token_status(revoke_agent_token(db, user.id))
+
+
+@router.get("/agent-actions", response_model=list[AgentActionRead])
+def recent_agent_actions(db: DbSession, user: CurrentUser) -> list[AgentActionLog]:
+    return list(db.scalars(
+        select(AgentActionLog)
+        .where(AgentActionLog.user_id == user.id)
+        .order_by(AgentActionLog.created_at.desc())
+        .limit(20)
+    ))

@@ -12,7 +12,6 @@ import {
 } from 'naive-ui'
 import AppSidebar from '@/components/AppSidebar.vue'
 import FeedbackHost from '@/components/FeedbackHost.vue'
-import GlobalCapture from '@/components/GlobalCapture.vue'
 import RouteLoadingFrame from '@/components/RouteLoadingFrame.vue'
 import SeasonalAtmosphere from '@/components/SeasonalAtmosphere.vue'
 import ReminderScheduler from '@/components/todo/ReminderScheduler.vue'
@@ -38,6 +37,28 @@ const themeOverrides = computed(() => createNaiveThemeOverrides(
 const cachedPageNames = ['HomePage', 'TodosPage', 'NotificationsPage', 'SettingsPage', 'CommonLinksPage']
 let frequentPreloadTimer: number | undefined
 let deferredPreloadTimer: number | undefined
+let ambientFocusTimer: number | undefined
+
+const ambientEditorSelector = '.tiptap[contenteditable="true"], .note-title-input, .task-editor-title, .knowledge-title-block input'
+
+function updateAmbientPlayback() {
+  const activeElement = document.activeElement
+  const editing = activeElement instanceof HTMLElement && activeElement.matches(ambientEditorSelector)
+  const paused = document.visibilityState === 'hidden'
+    || !document.hasFocus()
+    || editing
+    || appStore.routeLoadingVisible
+  if (paused) document.documentElement.dataset.ambientPaused = 'true'
+  else delete document.documentElement.dataset.ambientPaused
+}
+
+function scheduleAmbientPlaybackUpdate() {
+  window.clearTimeout(ambientFocusTimer)
+  ambientFocusTimer = window.setTimeout(() => {
+    ambientFocusTimer = undefined
+    updateAmbientPlayback()
+  }, 0)
+}
 
 type IdleWindow = Window & {
   requestIdleCallback?: (callback: () => void, options?: { timeout: number }) => number
@@ -49,7 +70,19 @@ watch(() => auth.user?.id, (userId) => {
   else realtime.disconnect()
 }, { immediate: true })
 
+watch(() => appStore.routeLoadingVisible, updateAmbientPlayback)
+
 onMounted(() => {
+  // Ambient particles and aurora are decorative. Pause them while the user
+  // edits or the tab/window is inactive, so the editor keeps the frame budget
+  // for ProseMirror/Yjs updates and background windows do not keep animating.
+  document.addEventListener('visibilitychange', updateAmbientPlayback)
+  document.addEventListener('focusin', updateAmbientPlayback)
+  document.addEventListener('focusout', scheduleAmbientPlaybackUpdate)
+  window.addEventListener('blur', updateAmbientPlayback)
+  window.addEventListener('focus', updateAmbientPlayback)
+  updateAmbientPlayback()
+
   // Warm up the high-frequency, lightweight routes after the first paint.
   // Heavy editor and calendar chunks remain demand-loaded.
   frequentPreloadTimer = window.setTimeout(() => {
@@ -71,6 +104,14 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  document.removeEventListener('visibilitychange', updateAmbientPlayback)
+  document.removeEventListener('focusin', updateAmbientPlayback)
+  document.removeEventListener('focusout', scheduleAmbientPlaybackUpdate)
+  window.removeEventListener('blur', updateAmbientPlayback)
+  window.removeEventListener('focus', updateAmbientPlayback)
+  window.clearTimeout(ambientFocusTimer)
+  ambientFocusTimer = undefined
+  delete document.documentElement.dataset.ambientPaused
   window.clearTimeout(frequentPreloadTimer)
   const idleWindow = window as IdleWindow
   if (idleWindow.cancelIdleCallback && deferredPreloadTimer !== undefined) idleWindow.cancelIdleCallback(deferredPreloadTimer)
@@ -88,7 +129,6 @@ onBeforeUnmount(() => {
           <div v-if="isAuthenticatedPage" class="app-shell task-app-shell">
             <ReminderScheduler />
             <AppSidebar />
-            <GlobalCapture />
             <FeedbackHost />
             <main class="main-area">
               <div class="route-content-frame">

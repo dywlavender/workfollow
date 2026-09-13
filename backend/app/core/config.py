@@ -10,7 +10,7 @@ PROJECT_DIR = BACKEND_DIR.parent
 
 
 class Settings(BaseSettings):
-    app_name: str = "打勾 API"
+    app_name: str = "备忘录 API"
     app_version: str = "0.1.0"
     database_url: str = f"sqlite:///{(PROJECT_DIR / 'data' / 'workfollow.db').as_posix()}"
     cors_origins: list[str] = ["http://localhost:5173", "http://127.0.0.1:5173"]
@@ -38,6 +38,9 @@ class Settings(BaseSettings):
     # collaboration server uses it when writing the merged Yjs projection
     # back to the task table; it is never exposed to the browser.
     collaboration_internal_token: str = ""
+    # Internal HTTP endpoint exposed by the local Hocuspocus process. Agent
+    # writes use it so they join the same Yjs document as browser edits.
+    collaboration_http_url: str = "http://127.0.0.1:8124"
     database_pool_size: int = 15
     database_max_overflow: int = 10
     database_pool_pre_ping: bool = True

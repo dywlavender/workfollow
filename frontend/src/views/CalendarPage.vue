@@ -232,7 +232,7 @@ async function onEventDrop(arg: EventDropArg) {
     }
   } catch {
     arg.revert()
-    feedback.error('改期失败，任务已恢复到原日期。')
+    feedback.error('改期失败，代办已恢复到原日期。')
   }
 }
 
@@ -266,7 +266,7 @@ async function toggle(todo: Todo) {
   } catch {
     allTodos.value = snapshot
     if (selectedTodo.value?.id === todo.id) selectedTodo.value = snapshot.find((item) => item.id === todo.id) ?? null
-    feedback.error('任务状态更新失败，请稍后重试。')
+    feedback.error('代办状态更新失败，请稍后重试。')
   }
 }
 
@@ -300,7 +300,7 @@ async function saveTodo(payload: TodoPayload) {
     closeDialog()
     await loadCalendar()
   } catch {
-    feedback.error(selectedTodo.value ? '更新任务失败，请稍后重试。' : '创建任务失败，请检查任务设置。')
+    feedback.error(selectedTodo.value ? '更新代办失败，请稍后重试。' : '创建代办失败，请检查代办设置。')
   }
 }
 
@@ -335,7 +335,7 @@ onBeforeUnmount(() => {
     <header class="calendar-topbar">
       <div class="calendar-title"><IconCalendarMonth :size="25" :stroke-width="1.8" aria-hidden="true" /><h1>{{ currentTitle }}</h1></div>
       <div class="calendar-toolbar" aria-label="日历工具栏">
-        <button class="calendar-tool-button calendar-add-button" type="button" aria-label="新建任务" title="新建任务" @click="beginCreate()"><IconPlus :size="20" /></button>
+        <button class="calendar-tool-button calendar-add-button" type="button" aria-label="新建代办" title="新建代办" @click="beginCreate()"><IconPlus :size="20" /></button>
         <label class="calendar-view-select"><span class="sr-only">日历视图</span><select :value="currentView" @change="changeView"><option value="dayGridMonth">月</option><option value="dayGridWeek">周</option><option value="dayGridDay">日</option></select><IconChevronDown :size="15" aria-hidden="true" /></label>
         <div class="calendar-period-nav">
           <button type="button" aria-label="上一周期" title="上一周期" @click="calendarAction('prev')"><IconChevronLeft :size="19" /></button>
@@ -346,14 +346,14 @@ onBeforeUnmount(() => {
           <button class="calendar-tool-button" type="button" aria-label="更多日历操作" title="更多" @click.stop="moreOpen = !moreOpen"><IconDots :size="21" /></button>
           <section v-if="moreOpen" class="calendar-more-menu" role="menu" aria-label="更多日历操作" @click.stop>
             <button type="button" role="menuitem" @click="toggleCompleted"><component :is="showCompleted ? IconEyeOff : IconEye" :size="16" />{{ showCompleted ? '隐藏已完成' : '显示已完成' }}</button>
-            <RouterLink role="menuitem" to="/todos"><IconListCheck :size="16" />打开任务列表</RouterLink>
+          <RouterLink role="menuitem" to="/todos"><IconListCheck :size="16" />打开代办列表</RouterLink>
           </section>
         </div>
       </div>
     </header>
 
     <p v-if="loadError" class="calendar-error calendar-floating-error" role="alert">{{ loadError }}<button type="button" aria-label="关闭错误" @click="loadError = null">×</button></p>
-    <main class="calendar-canvas" :aria-busy="initialLoading || refreshing" aria-label="任务日历">
+    <main class="calendar-canvas" :aria-busy="initialLoading || refreshing" aria-label="代办日历">
       <FullCalendar ref="calendarRef" :options="calendarOptions" />
       <div
         v-if="initialLoading || refreshing"

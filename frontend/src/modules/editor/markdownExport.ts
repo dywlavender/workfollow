@@ -64,7 +64,7 @@ function renderInline(node: MarkdownNode): string {
   }
   if (node.type === 'taskReference') {
     const taskAttrs = attrsOf(node)
-    const taskId = typeof taskAttrs.taskId === 'string' ? taskAttrs.taskId : '任务'
+    const taskId = typeof taskAttrs.taskId === 'string' ? taskAttrs.taskId : '代办'
     return `[[${escapeText(taskId)}]]`
   }
   return childrenOf(node).map(renderInline).join('')
@@ -128,6 +128,14 @@ function renderBlock(node: MarkdownNode, depth = 0): string {
   }
   if (node.type === 'horizontalRule') return `${'  '.repeat(depth)}---`
   if (node.type === 'table') return renderTable(node, depth)
+  if (node.type === 'diagramBlock') {
+    // v1 边界：预览图走附件 URL（与图片一致，需登录访问）；离线打包导出在 backlog。
+    const attrs = attrsOf(node)
+    const previewId = typeof attrs.previewAttachmentId === 'string' ? attrs.previewAttachmentId : ''
+    if (!previewId) return ''
+    const title = typeof attrs.title === 'string' && attrs.title ? attrs.title : '流程图'
+    return `${'  '.repeat(depth)}![${escapeText(title)}](/api/attachments/${previewId}?v=${Number(attrs.revision) || 1})`
+  }
   if (node.type === 'image' || node.type === 'taskReference') return `${'  '.repeat(depth)}${renderInline(node)}`
   if (node.type === 'doc') return renderBlocks(children, depth)
   return children.length ? renderBlocks(children, depth) : renderInline(node)

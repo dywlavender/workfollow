@@ -35,7 +35,7 @@ watch(() => route.params.teamId, load)
 <template>
   <div class="team-audit-page page-content">
     <header class="workspace-heading">
-      <div><span class="eyebrow">{{ team?.name ?? 'TEAM' }}</span><h1>审计日志</h1><p>记录团队权限、任务、笔记和审核动作。</p></div>
+      <div><span class="eyebrow">{{ team?.name ?? 'TEAM' }}</span><h1>审计日志</h1><p>记录团队权限、代办、笔记和审核动作。</p></div>
       <RouterLink class="secondary-button" :to="{ path: '/settings', query: { section: 'teams', team: teamId() } }"><IconArrowLeft :size="15" />返回团队</RouterLink>
     </header>
     <p v-if="error" class="state-message error">{{ error }}</p>

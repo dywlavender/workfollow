@@ -20,19 +20,21 @@
   body.atmo-off .sky, body.atmo-off .scene, body.atmo-off .overlay { opacity: 0; }
 
   /* 春 · 雾樱（灰粉暮雾） */
-  body[data-season="spring"] { background: #e8d2db; }
+  body[data-season="spring"] { background: #edd8db; }
   body[data-season="spring"][data-mode="light"] .sky {
     background:
-      radial-gradient(900px 520px at 14% -6%, rgb(255 255 255 / .85), transparent 58%),
-      radial-gradient(760px 480px at 86% 30%, rgb(217 167 184 / .22), transparent 62%),
-      linear-gradient(180deg, #f6edf0 0%, #efdde4 46%, #e8d2db 100%);
+      radial-gradient(1100px 720px at 12% -8%, rgb(255 251 250 / .9), transparent 60%),
+      radial-gradient(900px 640px at 88% 18%, rgb(234 200 213 / .4), transparent 62%),
+      radial-gradient(1000px 800px at 70% 108%, rgb(245 214 223 / .35), transparent 64%),
+      linear-gradient(168deg, #F6EDEA 0%, #F2E1E0 46%, #EDD8DB 100%);
   }
-  body[data-season="spring"][data-mode="dark"] { background: #100b0e; }
+  body[data-season="spring"][data-mode="dark"] { background: #171016; }
   body[data-season="spring"][data-mode="dark"] .sky {
     background:
-      radial-gradient(1000px 460px at 70% -14%, rgb(176 82 122 / .24), transparent 56%),
-      radial-gradient(700px 420px at 16% 60%, rgb(96 56 74 / .28), transparent 60%),
-      linear-gradient(180deg, #1f151b 0%, #170f14 55%, #110b0f 100%);
+      radial-gradient(1100px 720px at 14% -10%, rgb(160 90 115 / .32), transparent 60%),
+      radial-gradient(820px 560px at 86% 24%, rgb(192 105 123 / .18), transparent 62%),
+      radial-gradient(900px 700px at 24% 110%, rgb(110 60 80 / .35), transparent 64%),
+      linear-gradient(168deg, #211721 0%, #171016 52%, #110B0F 100%);
   }
   /* 夏 · 烟青（雾面海青） */
   body[data-season="summer"] { background: #d3e1e7; }
@@ -81,7 +83,7 @@
   body[data-season="winter"][data-mode="dark"] .aurora.a1 {
     opacity: .55; width: 720px; height: 160px; top: 5%; left: 26%;
     transform: rotate(-9deg);
-    background: linear-gradient(90deg, transparent, rgb(217 167 184 / .32), rgb(143 185 206 / .26), transparent);
+    background: linear-gradient(90deg, transparent, rgb(219 168 181 / .32), rgb(143 185 206 / .26), transparent);
     animation: aurora-drift 15s ease-in-out infinite alternate;
   }
   @keyframes aurora-drift {
@@ -286,16 +288,16 @@
     --row-hover: rgb(255 255 255 / .06); --card-soft: rgb(255 255 255 / .05);
   }
   body[data-season="spring"][data-mode="light"] {
-    --rail-bg: rgb(247 236 241 / .44); --panel-bg: rgb(250 244 247 / .5);
-    --hover-bg: rgb(176 82 122 / .09);
-    --accent: #b0527a; --accent-glow: #d9a7b8; --accent-shadow: rgb(176 82 122 / .26);
-    --accent-strong: #994567; --accent-soft: rgb(176 82 122 / .12);
+    --rail-bg: rgb(245 234 236 / .44); --panel-bg: rgb(252 249 249 / .5);
+    --hover-bg: rgb(192 105 123 / .09);
+    --accent: #C0697B; --accent-glow: #DBA8B5; --accent-shadow: rgb(192 105 123 / .26);
+    --accent-strong: #A8576A; --accent-soft: rgb(192 105 123 / .12);
   }
   body[data-season="spring"][data-mode="dark"] {
-    --rail-bg: rgb(30 20 26 / .5); --panel-bg: rgb(25 16 21 / .55);
-    --hover-bg: rgb(217 167 184 / .1);
-    --accent: #d9a7b8; --accent-glow: #b0527a; --accent-shadow: rgb(217 167 184 / .2);
-    --accent-strong: #e8c2cf; --accent-soft: rgb(217 167 184 / .12);
+    --rail-bg: rgb(27 18 22 / .5); --panel-bg: rgb(29 20 24 / .55);
+    --hover-bg: rgb(219 168 181 / .1);
+    --accent: #DBA8B5; --accent-glow: #C0697B; --accent-shadow: rgb(219 168 181 / .2);
+    --accent-strong: #E6BFC9; --accent-soft: rgb(219 168 181 / .12);
   }
   body[data-season="summer"][data-mode="light"] {
     --rail-bg: rgb(240 246 248 / .4); --panel-bg: rgb(248 252 253 / .46);
@@ -337,13 +339,13 @@
 
   /* ============ 场景配色（低饱和版） ============ */
   body[data-season="spring"][data-mode="light"] {
-    --sc-hillA:#c2d3bb; --sc-hillB:#abc1a3; --sc-trunk:#75564b;
-    --sc-bl1:#e7b7c7; --sc-bl2:#d493ab; --sc-bl3:#f1cfda;
+    --sc-hillA:#d7e7d7; --sc-hillB:#c8e3cd; --sc-trunk:#75564b;
+    --sc-bl1:#f5c6c3; --sc-bl2:#eac8df; --sc-bl3:#f5d7e3;
     --sc-bird:#8a6b77;
   }
   body[data-season="spring"][data-mode="dark"] {
     --sc-hillA:#2c3631; --sc-hillB:#232c28; --sc-trunk:#483a43;
-    --sc-bl1:#b5819a; --sc-bl2:#97657e; --sc-bl3:#cfa2b6;
+    --sc-bl1:#bd8fa0; --sc-bl2:#a3798f; --sc-bl3:#d4aebc;
     --sc-bird:#a58b96;
   }
   body[data-season="summer"][data-mode="light"] {
@@ -404,7 +406,7 @@
   .sw-btn:hover { color: #fff; background: rgb(255 255 255 / .09); }
   .sw-btn.on { color: #fff; background: rgb(255 255 255 / .17); }
   .sw-dot { width: 13px; height: 13px; border-radius: 50%; box-shadow: inset 0 0 0 1px rgb(255 255 255 / .3); }
-  .dot-spring { background: linear-gradient(135deg, #d9a7b8, #b0527a); }
+  .dot-spring { background: linear-gradient(135deg, #DBA8B5, #C0697B); }
   .dot-summer { background: linear-gradient(135deg, #9cbfce, #4a7a96); }
   .dot-autumn { background: linear-gradient(135deg, #d2a87f, #a26b47); }
   .dot-winter { background: linear-gradient(135deg, #9db8d8, #46648c); }
@@ -652,12 +654,12 @@
 
 <!-- 上层飘落物 -->
 <div class="overlay">
-  <svg class="fall-item petal" style="--dur:15s;--delay:0s;left:7%" viewBox="0 0 24 24"><path d="M12 1 C18 5 20 12 12 23 C4 12 6 5 12 1Z" fill="#d98fac"/></svg>
-  <svg class="fall-item petal" style="--dur:20s;--delay:-6s;left:19%" viewBox="0 0 24 24"><path d="M12 1 C18 5 20 12 12 23 C4 12 6 5 12 1Z" fill="#c97e9c"/></svg>
-  <svg class="fall-item petal" style="--dur:17s;--delay:-11s;left:41%" viewBox="0 0 24 24"><path d="M12 1 C18 5 20 12 12 23 C4 12 6 5 12 1Z" fill="#e6b8cc"/></svg>
-  <svg class="fall-item petal" style="--dur:23s;--delay:-3s;left:58%" viewBox="0 0 24 24"><path d="M12 1 C18 5 20 12 12 23 C4 12 6 5 12 1Z" fill="#d98fac"/></svg>
-  <svg class="fall-item petal" style="--dur:18s;--delay:-14s;left:74%" viewBox="0 0 24 24"><path d="M12 1 C18 5 20 12 12 23 C4 12 6 5 12 1Z" fill="#c4789a"/></svg>
-  <svg class="fall-item petal" style="--dur:22s;--delay:-9s;left:88%" viewBox="0 0 24 24"><path d="M12 1 C18 5 20 12 12 23 C4 12 6 5 12 1Z" fill="#eecbd9"/></svg>
+  <svg class="fall-item petal" style="--dur:15s;--delay:0s;left:7%" viewBox="0 0 24 24"><path d="M12 1 C18 5 20 12 12 23 C4 12 6 5 12 1Z" fill="#e8b8c4"/></svg>
+  <svg class="fall-item petal" style="--dur:20s;--delay:-6s;left:19%" viewBox="0 0 24 24"><path d="M12 1 C18 5 20 12 12 23 C4 12 6 5 12 1Z" fill="#d9a0b0"/></svg>
+  <svg class="fall-item petal" style="--dur:17s;--delay:-11s;left:41%" viewBox="0 0 24 24"><path d="M12 1 C18 5 20 12 12 23 C4 12 6 5 12 1Z" fill="#f2ccd6"/></svg>
+  <svg class="fall-item petal" style="--dur:23s;--delay:-3s;left:58%" viewBox="0 0 24 24"><path d="M12 1 C18 5 20 12 12 23 C4 12 6 5 12 1Z" fill="#e8b8c4"/></svg>
+  <svg class="fall-item petal" style="--dur:18s;--delay:-14s;left:74%" viewBox="0 0 24 24"><path d="M12 1 C18 5 20 12 12 23 C4 12 6 5 12 1Z" fill="#d9a0b0"/></svg>
+  <svg class="fall-item petal" style="--dur:22s;--delay:-9s;left:88%" viewBox="0 0 24 24"><path d="M12 1 C18 5 20 12 12 23 C4 12 6 5 12 1Z" fill="#f2ccd6"/></svg>
 
   <svg class="fall-item leaf" style="--dur:16s;--delay:0s;left:8%" viewBox="0 0 24 24"><path d="M12 2l2.2 3.6 3.8-1.2-.9 3.9 3.9.9-2.6 3 2.6 3-3.9.9.9 3.9-3.8-1.2L12 22l-2.2-3.2-3.8 1.2.9-3.9-3.9-.9 2.6-3-2.6-3 3.9-.9-.9-3.9 3.8 1.2z" fill="#b97a3e"/></svg>
   <svg class="fall-item leaf" style="--dur:21s;--delay:-8s;left:26%" viewBox="0 0 24 24"><path d="M12 2l2.2 3.6 3.8-1.2-.9 3.9 3.9.9-2.6 3 2.6 3-3.9.9.9 3.9-3.8-1.2L12 22l-2.2-3.2-3.8 1.2.9-3.9-3.9-.9 2.6-3-2.6-3 3.9-.9-.9-3.9 3.8 1.2z" fill="#996234"/></svg>

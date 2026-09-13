@@ -149,6 +149,22 @@ function belongsToCurrentCollection(todo: Todo, view: TodoView, query: string, l
   return shouldInsertGeneratedTodo(todo, view, '', '')
 }
 
+/**
+ * Reconcile one server update without putting the whole collection through the
+ * loading state. Realtime collaboration can emit a change for the current
+ * task while its body is being projected; replacing only that item keeps the
+ * list stable and still applies view/filter membership changes immediately.
+ */
+function reconcileTodoInCollection(todo: Todo, current: Todo[], view: TodoView, query: string, listName: string): Todo | null {
+  const index = current.findIndex((item) => item.id === todo.id)
+  const previous = index >= 0 ? current[index] : null
+  const belongs = belongsToCurrentCollection(todo, view, query, listName)
+  if (index >= 0 && belongs) current[index] = todo
+  else if (index >= 0) current.splice(index, 1)
+  else if (belongs) current.unshift(todo)
+  return previous
+}
+
 export const useTodoStore = defineStore('todos', {
   state: () => ({
     todos: [] as Todo[],
@@ -193,7 +209,7 @@ export const useTodoStore = defineStore('todos', {
       try {
         this.todos = await fetchTodos(targetView, targetQuery, targetListName)
       } catch (error) {
-        this.error = '无法读取待办，请确认本地服务已启动。'
+        this.error = '无法读取代办，请确认本地服务已启动。'
         throw error
       } finally {
         this.loading = false
@@ -240,6 +256,15 @@ export const useTodoStore = defineStore('todos', {
     async refresh() {
       await this.load()
       await this.loadCounts().catch(() => undefined)
+    },
+    reconcile(todo: Todo) {
+      return reconcileTodoInCollection(todo, this.todos, this.currentView, this.query, this.currentListName)
+    },
+    removeFromCollection(id: string) {
+      const index = this.todos.findIndex((item) => item.id === id)
+      if (index < 0) return null
+      const [removed] = this.todos.splice(index, 1)
+      return removed ?? null
     },
     async create(payload: TodoPayload) {
       this.mutating = true

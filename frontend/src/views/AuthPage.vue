@@ -41,20 +41,20 @@ async function submit() {
     <div class="auth-orb auth-orb-two" aria-hidden="true" />
 
     <section class="auth-layout">
-      <aside class="auth-story" aria-label="打勾 产品介绍">
+      <aside class="auth-story" aria-label="备忘录 产品介绍">
         <div class="auth-story-brand">
           <span aria-hidden="true">
-            <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 12.6 L9.6 17.5 L19.5 6.8" /></svg>
+            <svg viewBox="0 0 24 24" width="17" height="17"><path d="M5.5 4.2h7.8l3.4 3.4v10.4a1.9 1.9 0 0 1-1.9 1.9H5.5a1.9 1.9 0 0 1-1.9-1.9V6.1a1.9 1.9 0 0 1 1.9-1.9z" fill="currentColor" opacity=".14"/><path d="M13.3 4.2l3.4 3.4h-2.7a.7.7 0 0 1-.7-.7z" fill="currentColor" opacity=".4"/><path d="M6.6 8.3h3.4M6.6 11.2h2.6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" opacity=".45"/><path d="M5.9 14.5 L9.2 17.7 L17.4 8.5" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
           </span>
-          <strong>打勾</strong>
+          <strong>备忘录</strong>
         </div>
         <div class="auth-story-copy">
           <span class="auth-kicker">FOCUS · ORGANIZE · DELIVER</span>
           <h2>把今天要做的事，<br />安静地推进。</h2>
-          <p>任务、笔记与团队协作汇聚在一个清晰的工作空间里。</p>
+          <p>代办、笔记与团队协作汇聚在一个清晰的工作空间里。</p>
         </div>
         <ul class="auth-benefits">
-          <li><IconCheck :size="15" />个人任务与团队任务统一查看</li>
+          <li><IconCheck :size="15" />个人代办与团队代办统一查看</li>
           <li><IconCheck :size="15" />富文本笔记沉淀过程与结论</li>
           <li><IconCheck :size="15" />清晰权限让协作保持边界</li>
         </ul>
@@ -66,7 +66,7 @@ async function submit() {
       <section class="auth-panel">
         <header class="auth-heading">
           <span class="auth-mode-label">{{ isRegister ? '创建账号' : '欢迎回来' }}</span>
-          <h1>{{ isRegister ? '开始你的工作空间' : '登录打勾' }}</h1>
+          <h1>{{ isRegister ? '开始你的工作空间' : '登录备忘录' }}</h1>
           <p>{{ isRegister ? '只需要用户名和密码，十秒内即可开始。' : '输入账号信息，继续今天的工作。' }}</p>
         </header>
 
@@ -138,7 +138,7 @@ async function submit() {
         </form>
 
         <p class="auth-switch-copy">
-          {{ isRegister ? '已经有账号？' : '第一次使用打勾？' }}
+          {{ isRegister ? '已经有账号？' : '第一次使用备忘录？' }}
           <RouterLink v-if="isRegister" :to="{ name: 'login', query: route.query }">直接登录</RouterLink>
           <RouterLink v-else :to="{ name: 'register', query: route.query }">创建账号</RouterLink>
         </p>

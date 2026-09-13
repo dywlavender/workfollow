@@ -220,16 +220,206 @@ async function knowledgeStateMatchesCurrentVersion(info, state, cookie) {
   }
 }
 
-async function readRequestBody(request) {
+/**
+ * 知识草稿版本过期时，不能直接用已发布内容重新引导文档：浏览器端
+ * （IndexedDB 恢复或仍连接的旧会话）还持有旧草稿，新引导的插入会与旧内容
+ * 叠加成双份。这里在旧草稿 state 上构造"删光旧 title/正文 → 写入已发布
+ * 内容"的重置更新，所有客户端应用后都收敛到单份。
+ */
+async function resetKnowledgeDraftToPublished(storedState, info, cookie) {
+  const note = await initialSeed(info, cookie)
+  const published = bootstrapDocument(note.contentJson, {
+    title: note.title,
+    metadata: {
+      categoryId: note.categoryId ?? null,
+      tags: Array.isArray(note.tags) ? note.tags : [],
+      baseVersion: note.versionNo,
+    },
+  })
+  const draft = new Y.Doc()
+  try {
+    Y.applyUpdate(draft, storedState)
+    draft.transact(() => {
+      const title = draft.getText('title')
+      if (title.length > 0) title.delete(0, title.length)
+      const fragment = draft.getXmlFragment('default')
+      if (fragment.length > 0) fragment.delete(0, fragment.length)
+    })
+    Y.applyUpdate(draft, Y.encodeStateAsUpdate(published))
+    const reset = Y.encodeStateAsUpdate(draft)
+    return reset
+  } finally {
+    draft.destroy()
+    published.destroy()
+  }
+}
+
+async function readRequestBody(request, maxBytes = 16 * 1024) {
   const chunks = []
   let length = 0
   for await (const chunk of request) {
     length += chunk.length
-    if (length > 16 * 1024) throw new Error('协同初始化请求过大')
+    if (length > maxBytes) throw new Error('协同请求过大')
     chunks.push(chunk)
   }
   if (!chunks.length) return {}
   return JSON.parse(Buffer.concat(chunks).toString('utf8'))
+}
+
+function documentVersion(document) {
+  return Buffer.from(Y.encodeStateVector(document)).toString('base64')
+}
+
+function replaceDocumentBody(document, contentJson) {
+  const source = ProsemirrorTransformer.toYdoc(
+    contentJson,
+    'default',
+    bootstrapSchema(contentJson),
+  )
+  try {
+    const target = document.getXmlFragment('default')
+    if (target.length > 0) target.delete(0, target.length)
+    const children = source.getXmlFragment('default').toArray().map((child) => child.clone())
+    if (children.length > 0) target.insert(0, children)
+    document.getMap('config').set('bodyInitialized', true)
+  } finally {
+    source.destroy()
+  }
+}
+
+function seedAgentDocument(document, info, seed) {
+  if (info.kind === 'metadata') {
+    const metadata = document.getMap('metadata')
+    if (metadata.get('initialized') === true) return
+    const title = String(seed?.title ?? '').trim()
+    if (title) document.getText('title').insert(0, title)
+    for (const [key, value] of Object.entries({
+      dueAt: seed?.dueAt ?? null,
+      dueEndAt: seed?.dueEndAt ?? null,
+      priority: seed?.priority ?? 'NONE',
+      reminderAt: seed?.reminderAt ?? null,
+      recurrenceType: seed?.recurrenceType ?? 'NONE',
+      recurrenceConfig: seed?.recurrenceConfig ?? null,
+    })) metadata.set(key, value)
+    const tags = Array.isArray(seed?.tags) ? seed.tags.map(String).filter(Boolean) : []
+    if (tags.length > 0) document.getArray('tags').push(tags)
+    metadata.set('initialized', true)
+    document.getMap('config').set('metadataInitialized', true)
+    return
+  }
+  const fragment = document.getXmlFragment('default')
+  if (fragment.length > 0 || document.getMap('config').get('bodyInitialized') === true) return
+  const content = info.resource === 'task' && !contentJsonHasText(seed?.contentJson) && seed?.description
+    ? legacyDescriptionToContentJson(seed.description)
+    : (seed?.contentJson ?? emptyEditorDocument())
+  replaceDocumentBody(document, content)
+  if (info.resource === 'note') {
+    const title = String(seed?.title ?? '').trim()
+    if (title) document.getText('title').insert(0, title)
+  }
+}
+
+function agentDocumentSnapshot(document, info) {
+  if (info.kind === 'metadata') {
+    return { version: documentVersion(document), metadata: readMetadata(document) }
+  }
+  const fragment = document.getXmlFragment('default')
+  return {
+    version: documentVersion(document),
+    ...(info.resource === 'note'
+      ? { title: document.getText('title').toString().trim() || '未命名笔记' }
+      : {}),
+    contentJson: fragment.length > 0
+      ? TiptapTransformer.fromYdoc(document, 'default')
+      : emptyEditorDocument(),
+  }
+}
+
+async function handleAgentDocumentRequest({ request, response, instance }) {
+  if (request.method !== 'POST') {
+    response.writeHead(405, { allow: 'POST' })
+    response.end()
+    return
+  }
+  if (request.headers['x-workfollow-collaboration-token'] !== internalToken) {
+    response.writeHead(401, { 'content-type': 'application/json' })
+    response.end(JSON.stringify({ detail: '协同服务未授权' }))
+    return
+  }
+  const payload = await readRequestBody(request, 6 * 1024 * 1024)
+  const documentName = typeof payload.documentName === 'string' ? payload.documentName : ''
+  const actorId = typeof payload.actorId === 'string' ? payload.actorId : ''
+  if (!documentName || !actorId) throw new Error('Agent 协同参数无效')
+  const info = documentInfo(documentName)
+  if (info.resource === 'knowledge') throw new Error('Agent 暂不支持更新团队知识草稿')
+
+  const connection = await instance.openDirectConnection(documentName, {
+    userId: actorId,
+    userName: 'Agent',
+    canEdit: true,
+  })
+  try {
+    await connection.transact((document) => seedAgentDocument(document, info, payload.seed ?? {}))
+    const document = connection.document
+    if (!document) throw new Error('协同文档连接已关闭')
+    const operation = payload.operation ?? 'read'
+    if (operation !== 'read') {
+      if (typeof payload.expectedVersion !== 'string' || payload.expectedVersion !== documentVersion(document)) {
+        response.writeHead(409, { 'content-type': 'application/json', 'cache-control': 'no-store' })
+        response.end(JSON.stringify({ detail: '文档版本冲突' }))
+        return
+      }
+      if (operation === 'replace-body' || operation === 'append-body') {
+        if (!payload.contentJson || typeof payload.contentJson !== 'object') throw new Error('正文格式无效')
+        await connection.transact((target) => {
+          const nextContent = operation === 'append-body'
+            ? {
+                type: 'doc',
+                content: [
+                  ...(agentDocumentSnapshot(target, info).contentJson.content ?? []),
+                  ...(payload.contentJson.content ?? []),
+                ],
+              }
+            : payload.contentJson
+          replaceDocumentBody(target, nextContent)
+          if (info.resource === 'note' && typeof payload.title === 'string') {
+            const title = target.getText('title')
+            if (title.length > 0) title.delete(0, title.length)
+            title.insert(0, payload.title.trim() || '未命名笔记')
+          }
+        })
+      } else if (operation === 'update-metadata' && info.kind === 'metadata') {
+        await connection.transact((target) => {
+          const patch = payload.metadata && typeof payload.metadata === 'object' ? payload.metadata : {}
+          if (Object.hasOwn(patch, 'title')) {
+            const value = String(patch.title ?? '').trim()
+            if (!value) throw new Error('待办标题不能为空')
+            const title = target.getText('title')
+            if (title.length > 0) title.delete(0, title.length)
+            title.insert(0, value)
+          }
+          const metadata = target.getMap('metadata')
+          for (const key of ['dueAt', 'dueEndAt', 'priority', 'reminderAt', 'recurrenceType', 'recurrenceConfig']) {
+            if (Object.hasOwn(patch, key)) metadata.set(key, patch[key] ?? null)
+          }
+          if (Object.hasOwn(patch, 'tags')) {
+            const tags = target.getArray('tags')
+            if (tags.length > 0) tags.delete(0, tags.length)
+            const values = Array.isArray(patch.tags) ? [...new Set(patch.tags.map(String).filter(Boolean))] : []
+            if (values.length > 0) tags.push(values)
+          }
+        })
+      } else {
+        throw new Error('不支持的 Agent 协同操作')
+      }
+    }
+    const result = agentDocumentSnapshot(document, info)
+    await connection.disconnect({ unloadImmediately: true })
+    response.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' })
+    response.end(JSON.stringify(result))
+  } finally {
+    if (connection.document) await connection.disconnect({ unloadImmediately: true })
+  }
 }
 
 async function handleInitializationRequest({ request, response, instance }) {
@@ -491,7 +681,8 @@ function legacyDescriptionToContentJson(description) {
 function contentJsonHasText(contentJson) {
   if (!contentJson || typeof contentJson !== 'object') return false
   if (contentJson.type === 'text' && typeof contentJson.text === 'string' && contentJson.text.length > 0) return true
-  if (contentJson.type === 'image' || contentJson.type === 'taskReference') return true
+  // diagramBlock（流程图）与 image/taskReference 一样属于非文字正文内容
+  if (contentJson.type === 'image' || contentJson.type === 'taskReference' || contentJson.type === 'diagramBlock') return true
   return Array.isArray(contentJson.content) && contentJson.content.some(contentJsonHasText)
 }
 
@@ -534,6 +725,7 @@ async function loadState(documentName, requestHeaders) {
       probe.destroy()
       const cookie = requestHeaders.get('cookie') ?? ''
       if (await knowledgeStateMatchesCurrentVersion(info, pendingState, cookie)) return pendingState
+      return await resetKnowledgeDraftToPublished(pendingState, info, cookie)
     } catch (error) {
       console.error(`协同待处理快照无效 document=${documentName}`, error?.message ?? error)
     }
@@ -551,10 +743,12 @@ async function loadState(documentName, requestHeaders) {
         const storedContent = TiptapTransformer.fromYdoc(storedDocument, 'default')
         if (!contentJsonHasText(storedContent)) {
           const cookie = requestHeaders.get('cookie') ?? ''
-          const todo = await backendJson(`/api/tasks/${encodeURIComponent(info.taskId)}`, cookie)
-          if (!contentJsonHasText(todo.contentJson) && typeof todo.description === 'string' && todo.description.trim()) {
-            storedDocument.destroy()
-            return bootstrapDocument(legacyDescriptionToContentJson(todo.description), {})
+          if (cookie) {
+            const todo = await backendJson(`/api/tasks/${encodeURIComponent(info.taskId)}`, cookie)
+            if (!contentJsonHasText(todo.contentJson) && typeof todo.description === 'string' && todo.description.trim()) {
+              storedDocument.destroy()
+              return bootstrapDocument(legacyDescriptionToContentJson(todo.description), {})
+            }
           }
         }
         // Snapshots from before the authoritative bootstrap contract did not
@@ -578,9 +772,16 @@ async function loadState(documentName, requestHeaders) {
     // a working document based on an older published version.
     const cookie = requestHeaders.get('cookie') ?? ''
     if (await knowledgeStateMatchesCurrentVersion(info, stored, cookie)) return stored
-    return undefined
+    // 版本过期：重置草稿为已发布内容（先删旧再插新），避免与客户端本地
+    // 恢复的旧草稿叠加成双份。
+    return await resetKnowledgeDraftToPublished(stored, info, cookie)
   }
   const cookie = requestHeaders.get('cookie') ?? ''
+  // Direct Agent connections are authenticated and permission-checked by
+  // FastAPI, then supply their SQL seed to handleAgentDocumentRequest. Avoid
+  // making an unauthenticated browser API request while Hocuspocus creates
+  // that direct document.
+  if (!cookie) return undefined
   try {
     if (info.resource === 'task' && info.kind === 'body') {
       const todo = await backendJson(`/api/tasks/${encodeURIComponent(info.taskId)}`, cookie)
@@ -893,6 +1094,17 @@ server = new Server({
               writeCorsHeaders(request, response)
               response.writeHead(error?.message === '未登录' ? 401 : 400, { 'content-type': 'application/json' })
               response.end(JSON.stringify({ detail: error?.message || '协同初始化失败' }))
+            }
+          })
+          .finally(() => reject())
+        return
+      }
+      if (pathname === '/internal/agent-document') {
+        void handleAgentDocumentRequest({ request, response, instance })
+          .catch((error) => {
+            if (!response.headersSent) {
+              response.writeHead(400, { 'content-type': 'application/json' })
+              response.end(JSON.stringify({ detail: error?.message || 'Agent 协同操作失败' }))
             }
           })
           .finally(() => reject())

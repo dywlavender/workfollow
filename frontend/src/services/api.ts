@@ -125,6 +125,21 @@ export async function disableAgentToken(): Promise<AgentTokenStatus> {
   return data
 }
 
+export interface AgentAction {
+  id: string
+  method: string
+  path: string
+  statusCode: number
+  resourceType: string | null
+  resourceId: string | null
+  createdAt: string
+}
+
+export async function fetchAgentActions(): Promise<AgentAction[]> {
+  const { data } = await api.get<AgentAction[]>('/auth/agent-actions')
+  return data
+}
+
 export async function fetchAdminUsers(): Promise<User[]> {
   const { data } = await api.get<User[]>('/admin/users')
   return data
@@ -553,6 +568,7 @@ export interface NoteNavigationCounts {
   shared: number
   sharedByMe: number
   knowledge: number
+  submissionsTotal: number
   submissionsPending: number
   reviewPending: number
 }
@@ -741,6 +757,50 @@ export async function uploadAttachment(noteId: string, file: File): Promise<Atta
 
 export async function deleteAttachment(id: string): Promise<void> {
   await api.delete(`/attachments/${id}`)
+}
+
+export interface DiagramSaveResult {
+  sourceAttachmentId: string
+  previewAttachmentId: string
+  revision: number
+  copied: boolean
+}
+
+/** 409 时后端返回 {message, currentRevision}——转成类型化错误供覆盖确认使用。 */
+export class DiagramSaveConflictError extends Error {
+  currentRevision: number
+
+  constructor(currentRevision: number) {
+    super('流程图已被他人更新')
+    this.name = 'DiagramSaveConflictError'
+    this.currentRevision = currentRevision
+  }
+}
+
+export async function saveDiagramContent(payload: {
+  sourceAttachmentId: string
+  previewAttachmentId: string
+  expectedRevision: number
+  xmlFile: File
+  previewFile: File
+}): Promise<DiagramSaveResult> {
+  const body = new FormData()
+  body.append('sourceAttachmentId', payload.sourceAttachmentId)
+  body.append('previewAttachmentId', payload.previewAttachmentId)
+  body.append('expectedRevision', String(payload.expectedRevision))
+  body.append('file', payload.xmlFile)
+  body.append('preview', payload.previewFile)
+  try {
+    const { data } = await api.put<DiagramSaveResult>('/attachments/diagram-content', body)
+    return data
+  } catch (cause) {
+    const detail = (cause as { response?: { data?: { detail?: unknown } } }).response?.data?.detail
+    const currentRevision = (detail as { currentRevision?: unknown } | undefined)?.currentRevision
+    if (typeof currentRevision === 'number') {
+      throw new DiagramSaveConflictError(currentRevision)
+    }
+    throw cause
+  }
 }
 
 export type TeamRole = 'OWNER' | 'ADMIN' | 'MEMBER'

@@ -54,7 +54,7 @@ python3 -m venv .venv
 
 ## Agent / MCP 接入
 
-打勾可以通过本地 MCP Server 向 Codex、Claude Code 和 Tencent WorkBuddy 提供个人笔记的搜索、读取、速记和新建能力。在“设置 → 账号 → Agent 接入”生成唯一 Token，然后参考 [`docs/mcp-integration.md`](docs/mcp-integration.md) 配置所需客户端。
+打勾可以通过本地 MCP Server 向 Codex、Claude Code 和 Tencent WorkBuddy 提供个人笔记与待办的查询、新建和安全更新能力。在“设置 → 账号 → Agent 接入”生成唯一 Token，然后参考 [`docs/mcp-integration.md`](docs/mcp-integration.md) 完成数据库迁移、启动完整服务并配置客户端。修改已有笔记或任务依赖 Yjs 协同服务，接入 Agent 时推荐使用根目录 `start.command` 启动整套服务。
 
 ## 启动前端
 

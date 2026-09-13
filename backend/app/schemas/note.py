@@ -138,6 +138,7 @@ class NoteNavigationCounts(ApiModel):
     shared: int = 0
     shared_by_me: int = 0
     knowledge: int = 0
+    submissions_total: int = 0
     submissions_pending: int = 0
     review_pending: int = 0
 

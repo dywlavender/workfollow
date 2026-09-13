@@ -9,6 +9,11 @@ export default defineConfig(() => {
 
   return {
     plugins: [vue()],
+    // xlsx 只在 excelImport.worker 里使用；不预声明的话，dev 下首次创建
+    // Worker 会触发运行时依赖发现 → 重新预优化 → 整页刷新，丢失编辑状态。
+    optimizeDeps: {
+      include: ['xlsx'],
+    },
     build: {
       rollupOptions: {
         output: {

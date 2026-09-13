@@ -134,6 +134,7 @@ def build_todo_query(
     selected_date: date | None = None,
     q: str | None = None,
     list_name: str | None = None,
+    completed: bool | None = None,
 ) -> Select[tuple[Todo]]:
     mine = exists().where(
         TodoAssignment.task_id == Todo.id,
@@ -242,6 +243,18 @@ def build_todo_query(
         pattern = f"%{q.strip()}%"
         statement = statement.where(or_(Todo.title.like(pattern), Todo.description.like(pattern)))
 
+    if completed is not None:
+        my_done = exists().where(
+            TodoAssignment.task_id == Todo.id,
+            TodoAssignment.user_id == user_id,
+            TodoAssignment.active.is_(True),
+            TodoAssignment.status == TodoAssignmentStatus.DONE,
+        )
+        if completed:
+            statement = statement.where(or_(Todo.status == TodoStatus.DONE, my_done))
+        else:
+            statement = statement.where(Todo.status == TodoStatus.TODO, ~my_done)
+
     if view == "all":
         return statement.order_by(Todo.due_at.is_(None), Todo.due_at.desc(), Todo.created_at.desc(), Todo.id.desc())
     if view == "linkable":
@@ -260,12 +273,18 @@ def list_todos(
     selected_date: date | None = None,
     q: str | None = None,
     list_name: str | None = None,
+    completed: bool | None = None,
     limit: int = 100,
     offset: int = 0,
 ) -> list[Todo]:
     result = db.execute(
         build_todo_query(
-            owner_id, view=view, selected_date=selected_date, q=q, list_name=list_name
+            owner_id,
+            view=view,
+            selected_date=selected_date,
+            q=q,
+            list_name=list_name,
+            completed=completed,
         ).limit(limit).offset(offset)
     )
     return list(result.unique().scalars())

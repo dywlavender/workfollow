@@ -40,6 +40,33 @@ def setup_team(client: TestClient, db):  # noqa: ANN001
     return team_id, member, outsider, login(client.app, member.username), login(client.app, outsider.username)
 
 
+def test_navigation_counts_match_my_submission_history_and_pending_count(client: TestClient, db) -> None:
+    team_id, member, _outsider, member_client, _outsider_client = setup_team(client, db)
+
+    first_note = member_client.post("/api/notes", json={"title": "已发布投稿"}).json()
+    first = member_client.post(
+        f"/api/notes/{first_note['id']}/submissions", params={"teamId": team_id}, json={"type": "CREATE"}
+    )
+    assert first.status_code == 201, first.text
+    approved = client.post(f"/api/note-submissions/{first.json()['id']}/approve", json={})
+    assert approved.status_code == 200, approved.text
+
+    second_note = member_client.post("/api/notes", json={"title": "待处理投稿"}).json()
+    second = member_client.post(
+        f"/api/notes/{second_note['id']}/submissions", params={"teamId": team_id}, json={"type": "CREATE"}
+    )
+    assert second.status_code == 201, second.text
+
+    history = member_client.get("/api/note-submissions/mine", params={"teamId": team_id})
+    assert history.status_code == 200, history.text
+    assert len(history.json()) == 2
+
+    counts = member_client.get("/api/notes/navigation-counts", params={"teamId": team_id})
+    assert counts.status_code == 200, counts.text
+    assert counts.json()["submissionsTotal"] == len(history.json())
+    assert counts.json()["submissionsPending"] == 1
+
+
 def test_root_can_manage_nonmember_team_knowledge_and_team_attachments(client: TestClient, db, tmp_path) -> None:
     root = add_user(db, "root-access")
     root.system_role = SystemRole.ROOT

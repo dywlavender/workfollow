@@ -286,12 +286,12 @@ onBeforeUnmount(() => window.clearTimeout(candidateTimer))
     <div>
       <span class="section-label">TEAM</span>
       <h2 id="teams-title">{{ team?.name ?? '团队管理' }}</h2>
-      <p>{{ team?.description || '管理可协作的成员和权限；任务仍在统一任务页中处理。' }}</p>
+      <p>{{ team?.description || '管理可协作的成员和权限；代办仍在统一代办页中处理。' }}</p>
     </div>
     <div class="team-header-actions">
       <button v-if="isSystemAdmin" class="secondary-button" type="button" @click="permissionsOpen = true"><IconShield :size="15" />权限管理</button>
       <button v-if="canCreateTeam" class="secondary-button" type="button" @click="createTeamDialogOpen = true"><IconPlus :size="15" />新建团队</button>
-      <RouterLink class="secondary-button" :to="{ path: '/todos', query: { view: 'collaboration' } }">查看协作任务</RouterLink>
+      <RouterLink class="secondary-button" :to="{ path: '/todos', query: { view: 'collaboration' } }">查看协作代办</RouterLink>
     </div>
   </header>
 
@@ -387,7 +387,7 @@ onBeforeUnmount(() => window.clearTimeout(candidateTimer))
     <section class="team-danger-zone card">
       <div>
         <strong>{{ canDissolve ? '解散团队' : '退出团队' }}</strong>
-        <p>{{ canDissolve ? (isSystemAdmin ? '这是系统管理员介入操作，团队所有权仍归原所有者。' : '解散后所有成员立即失去访问权限，历史数据不会转成个人数据。') : '退出后你将无法访问该团队的任务、笔记与附件。' }}</p>
+        <p>{{ canDissolve ? (isSystemAdmin ? '这是系统管理员介入操作，团队所有权仍归原所有者。' : '解散后所有成员立即失去访问权限，历史数据不会转成个人数据。') : '退出后你将无法访问该团队的代办、笔记与附件。' }}</p>
       </div>
       <button v-if="canDissolve" class="danger-button" type="button" @click="requestDissolveTeam"><IconTrash :size="15" />{{ isSystemAdmin ? '系统管理员解散' : '解散团队' }}</button>
       <button v-else class="danger-button" type="button" @click="requestExitTeam"><IconLogout :size="15" />退出团队</button>
@@ -414,7 +414,7 @@ onBeforeUnmount(() => window.clearTimeout(candidateTimer))
   <ConfirmDialog
     :open="exitConfirmOpen"
     title="退出团队"
-    :message="`确定退出团队“${team?.name ?? ''}”吗？退出后将无法访问团队任务、笔记和附件。`"
+    :message="`确定退出团队“${team?.name ?? ''}”吗？退出后将无法访问团队代办、笔记和附件。`"
     confirm-label="退出团队"
     :danger="true"
     @close="exitConfirmOpen = false"
