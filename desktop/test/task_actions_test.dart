@@ -8,7 +8,8 @@ import 'package:workfollow_personal/models/task.dart';
 import 'package:workfollow_personal/state/workspace_controller.dart';
 
 void main() {
-  test('TaskCreator submits one complete draft', () {
+  test('ARCH-002 ARCH-003 QUICK-017 TaskCreator submits one complete draft',
+      () {
     final controller = WorkspaceController(seedData: false);
     final due = DateTime.now().add(const Duration(days: 2, hours: 3));
     final result = controller.createTask(TaskDraft(
@@ -36,7 +37,8 @@ void main() {
     controller.dispose();
   });
 
-  test('action result owns destination and undo instead of row projection logic', () async {
+  test('ARCH-006 DATE-012 UNDO-001 action result owns destination and undo',
+      () async {
     final controller = WorkspaceController(seedData: false);
     controller.selectView(WorkspaceView.today);
     controller.addTask('待完成');
@@ -51,7 +53,9 @@ void main() {
     controller.dispose();
   });
 
-  test('selection controller supports range and adjacent selection independently', () {
+  test(
+      'ARCH-005 ROW-004 ROW-005 ROW-006 selection controller supports range and adjacent selection',
+      () {
     final selection = TaskSelectionController();
     selection.select('b');
     selection.toggleMulti('b');
@@ -61,7 +65,9 @@ void main() {
     expect(selection.multiSelectedTaskIds, isEmpty);
   });
 
-  test('projection keeps smart-list rules in one pure object', () {
+  test(
+      'ARCH-004 DATE-013 LIST-004 TAG-003 projection keeps smart-list rules in one pure object',
+      () {
     final now = DateTime(2030, 1, 10, 9);
     final projection = TaskProjection(clock: () => now);
     TaskItem task(String id, DateTime? due) => TaskItem(
@@ -79,12 +85,14 @@ void main() {
     expect(
         projection.visible(tasks: tasks, view: 'recent').map((item) => item.id),
         ['overdue', 'today']);
-    expect(projection.visible(tasks: tasks, view: 'overdue').single.id,
-        'overdue');
+    expect(
+        projection.visible(tasks: tasks, view: 'overdue').single.id, 'overdue');
     expect(projection.count(tasks: tasks, view: 'today'), 2);
   });
 
-  test('schedule and recurrence drafts keep explicit time and valid rules', () {
+  test(
+      'ARCH-002 DATE-007 DATE-008 REPEAT-002 REPEAT-003 drafts keep explicit time and valid rules',
+      () {
     final clock = DateTime(2030, 1, 10, 9, 30);
     final schedule = TaskScheduleDraft.forDay(clock,
         preserveClock: DateTime(2029, 12, 1, 23, 45), hasTime: true);
@@ -102,7 +110,8 @@ void main() {
         {'dayOfMonth': 31});
   });
 
-  test('setter actions expose a snapshot undo and bulk actions report no-op',
+  test(
+      'ARCH-001 ARCH-007 UNDO-004 BULK-001 setter actions expose snapshot undo and bulk no-op',
       () async {
     final controller = WorkspaceController(seedData: false);
     controller.addTask('可编辑', listName: '收集箱');

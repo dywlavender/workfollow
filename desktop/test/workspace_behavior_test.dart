@@ -110,7 +110,8 @@ Future<void> _settleAsync() async {
 }
 
 void main() {
-  test('a task created in a list keeps that list and stays unscheduled',
+  test(
+      'QUICK-017 LIST-002 a task created in a list keeps that list and stays unscheduled',
       () async {
     final controller = WorkspaceController();
     controller.selectList('工作');
@@ -125,7 +126,8 @@ void main() {
     expect(controller.visibleTasks.any((task) => task.title == '写周报'), isTrue);
   });
 
-  test('a task created in Today is scheduled for today', () {
+  test('QUICK-017 QUICK-021 a task created in Today is scheduled for today',
+      () {
     final controller = WorkspaceController();
     controller.selectView(WorkspaceView.today);
 
@@ -140,7 +142,7 @@ void main() {
         isTrue);
   });
 
-  test('global capture always creates an unscheduled inbox task', () {
+  test('QUICK-021 global capture always creates an unscheduled inbox task', () {
     final controller = WorkspaceController();
     controller.selectView(WorkspaceView.today);
 
@@ -152,7 +154,7 @@ void main() {
   });
 
   test(
-      'unscheduled tasks never appear in Today, in memory or after a save/'
+      'ARCH-004 ARCH-007 unscheduled tasks never appear in Today, in memory or after a save/'
       'load round trip', () {
     final controller = WorkspaceController();
     controller.selectList('工作');
@@ -189,7 +191,8 @@ void main() {
     expect(record.plainText, '第一段\n第二段');
   });
 
-  test('removing a task moves it to a persistent trash and undo restores it',
+  test(
+      'MENU-008 UNDO-001 UNDO-004 removing a task moves it to persistent trash and undo restores it',
       () async {
     final store = _FakeStore();
     final controller = WorkspaceController(store: store);
@@ -235,7 +238,7 @@ void main() {
     expect(controller.isTaskView, isTrue);
   });
 
-  test('calendar day queries match real scheduled dates', () {
+  test('DATE-013 calendar day queries match real scheduled dates', () {
     final controller = WorkspaceController();
     controller.updateTaskDue('task-01', DateTime(2099, 8, 30, 9, 30));
     controller.updateTaskDue('task-02', DateTime(2099, 8, 30));
@@ -246,7 +249,8 @@ void main() {
     expect(controller.tasksForDay(DateTime(2099, 8, 31)), isEmpty);
   });
 
-  test('UTC migration timestamps are grouped by their local calendar day',
+  test(
+      'DATE-013 UTC migration timestamps are grouped by their local calendar day',
       () async {
     const raw = '2026-09-12T16:30:00Z';
     final local = DateTime.parse(raw).toLocal();
@@ -414,7 +418,8 @@ void main() {
     expect(controller.selectedNoteId, id);
   });
 
-  test('quick add focus requests are pending until consumed once', () {
+  test('QUICK-002 quick add focus requests are pending until consumed once',
+      () {
     final controller = WorkspaceController();
     expect(controller.quickAddFocusPending, isFalse);
 
@@ -425,7 +430,9 @@ void main() {
     expect(controller.quickAddFocusPending, isFalse);
   });
 
-  test('completing a daily recurring task creates the next occurrence', () {
+  test(
+      'ROW-012 ROW-013 REPEAT-005 completing a daily recurring task creates the next occurrence',
+      () {
     final controller = WorkspaceController();
     controller.updateTaskDue('task-01', DateTime(2099, 1, 15, 14, 0));
     controller.updateTaskRecurrence('task-01', 'DAILY');
@@ -452,7 +459,8 @@ void main() {
     expect(restored.recurrenceType, 'DAILY');
   });
 
-  test('weekly recurrence honors the configured weekday', () {
+  test('REPEAT-002 REPEAT-003 weekly recurrence honors the configured weekday',
+      () {
     final controller = WorkspaceController();
     final due = DateTime(2099, 3, 4);
     controller.updateTaskDue('task-02', due);
@@ -474,7 +482,9 @@ void main() {
         DateTime(expected.year, expected.month, expected.day));
   });
 
-  test('monthly recurrence clamps to the end of shorter months', () {
+  test(
+      'REPEAT-002 REPEAT-003 monthly recurrence clamps to the end of shorter months',
+      () {
     final controller = WorkspaceController();
     controller.updateTaskDue('task-03', DateTime(2099, 1, 31));
     controller.updateTaskRecurrence('task-03', 'MONTHLY');
@@ -532,7 +542,9 @@ void main() {
     expect(moved.listName, '收集箱');
   });
 
-  test('rescheduleTask moves the day but keeps the clock time', () {
+  test(
+      'DATE-001 DATE-002 DATE-007 rescheduleTask moves the day but keeps the clock time',
+      () {
     final controller = WorkspaceController();
     controller.updateTaskDue('task-01', DateTime(2099, 5, 10, 14, 30));
 
@@ -542,7 +554,9 @@ void main() {
     expect(DateTime.parse(task.dueAt!), DateTime(2099, 5, 20, 14, 30));
   });
 
-  test('bulk complete and bulk delete revert through one undo', () {
+  test(
+      'BULK-001 BULK-004 UNDO-002 UNDO-003 bulk complete and bulk delete revert through one undo',
+      () {
     final controller = WorkspaceController();
     controller.updateTaskDue('task-01', DateTime(2099, 1, 15));
     controller.updateTaskRecurrence('task-01', 'DAILY');
@@ -587,7 +601,9 @@ void main() {
         hasLength(2));
   });
 
-  test('bulk move and bulk reschedule revert their previous values', () {
+  test(
+      'BULK-002 BULK-003 UNDO-002 bulk move and bulk reschedule revert their previous values',
+      () {
     final controller = WorkspaceController();
     controller.updateTaskDue('task-05', DateTime(2099, 6, 1, 9, 0));
 
@@ -622,7 +638,9 @@ void main() {
         '项目X');
   });
 
-  test('multi-select range extends over the visible order and clears', () {
+  test(
+      'ROW-005 ROW-006 multi-select range extends over the visible order and clears',
+      () {
     final controller = WorkspaceController();
     controller.selectList('工作');
     final visibleIds = controller.visibleTasks.map((task) => task.id).toList();
@@ -736,7 +754,7 @@ void main() {
   });
 
   test(
-      'setting a future reminder registers a notification; clearing withdraws it',
+      'REM-003 REM-004 REM-005 setting a future reminder registers a notification; clearing withdraws it',
       () async {
     final reminders = _RecordingReminders();
     final controller = WorkspaceController(reminderScheduler: reminders);
@@ -752,7 +770,9 @@ void main() {
     expect(reminders.canceled, contains('task-01'));
   });
 
-  test('completing withdraws the reminder; undo re-registers it', () async {
+  test(
+      'REM-005 ROW-013 completing withdraws the reminder; undo re-registers it',
+      () async {
     final reminders = _RecordingReminders();
     final controller = WorkspaceController(reminderScheduler: reminders);
     controller.updateTaskReminder(
@@ -771,7 +791,8 @@ void main() {
     expect(reminders.scheduled.keys, contains('task-01'));
   });
 
-  test('moving a task to the trash withdraws; restoring re-registers',
+  test(
+      'REM-005 MENU-008 moving a task to the trash withdraws; restoring re-registers',
       () async {
     final reminders = _RecordingReminders();
     final controller = WorkspaceController(reminderScheduler: reminders);
@@ -790,7 +811,8 @@ void main() {
     expect(reminders.scheduled.keys, contains('task-01'));
   });
 
-  test('startup reconciles reminders: only active future ones stay registered',
+  test(
+      'REM-005 startup reconciles reminders: only active future ones stay registered',
       () async {
     final reminders = _RecordingReminders();
     final store = _FakeStore();
@@ -872,7 +894,7 @@ void main() {
   });
 
   test(
-      'completing a recurring task schedules the next reminder and undo cancels it',
+      'REM-005 REPEAT-005 ROW-013 completing a recurring task schedules the next reminder and undo cancels it',
       () async {
     final reminders = _RecordingReminders();
     final controller = WorkspaceController(reminderScheduler: reminders);
@@ -899,7 +921,8 @@ void main() {
     expect(reminders.canceled, contains(next.id));
   });
 
-  test('past reminder times are rejected instead of displaying a fake reminder',
+  test(
+      'REM-002 REM-003 past reminder times are rejected instead of displaying a fake reminder',
       () async {
     final reminders = _RecordingReminders();
     final controller = WorkspaceController(reminderScheduler: reminders);
@@ -912,7 +935,8 @@ void main() {
     expect(reminders.scheduled, isEmpty);
   });
 
-  test('rich imported note keeps links and lists until explicit conversion',
+  test(
+      'RICH rich imported note keeps links and lists until explicit conversion',
       () async {
     final controller = WorkspaceController();
     const link = 'https://example.com/workfollow';
@@ -1003,7 +1027,8 @@ void main() {
     expect(controller.selectedNoteId, converted.id);
   });
 
-  test('rich note append keeps the complete suffix through each text change',
+  test(
+      'RICH rich note append keeps the complete suffix through each text change',
       () async {
     const link = 'https://example.com/资料';
     final controller = WorkspaceController();
@@ -1070,7 +1095,7 @@ void main() {
         '资料\na');
   });
 
-  test('creating a plain-text copy leaves the imported note untouched',
+  test('RICH creating a plain-text copy leaves the imported note untouched',
       () async {
     const link = 'https://example.com/original';
     final controller = WorkspaceController();

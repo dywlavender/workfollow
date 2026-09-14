@@ -77,7 +77,7 @@ void main() {
   });
 
   test(
-      'new personal workspaces start empty and dates distinguish midnight from all-day',
+      'DATE-007 DATE-008 new personal workspaces start empty and dates distinguish midnight from all-day',
       () async {
     final c = WorkspaceController(seedData: false);
     expect(c.tasks, isEmpty);
@@ -101,7 +101,7 @@ void main() {
   });
 
   test(
-      'rich note edits retain link, list, table and current text through storage',
+      'RICH rich note edits retain link, list, table and current text through storage',
       () async {
     final source = <String, dynamic>{
       'type': 'doc',
@@ -191,7 +191,8 @@ void main() {
     editor.dispose();
   });
 
-  test('portable export restores task data and local attachments', () async {
+  test('RICH portable export restores task data and local attachments',
+      () async {
     final root = Directory.systemTemp.createTempSync('workfollow-export-');
     addTearDown(() => root.deleteSync(recursive: true));
     final source = Directory('${root.path}/source')..createSync();
@@ -219,7 +220,8 @@ void main() {
     restored.dispose();
   });
 
-  test('deadlines surface today and batch time changes undo correctly',
+  test(
+      'DEADLINE-001 DEADLINE-002 BULK-002 deadlines surface today and batch time changes undo correctly',
       () async {
     final c = WorkspaceController(seedData: false);
     c.addTaskToInboxUnscheduled('交付材料');
@@ -243,7 +245,8 @@ void main() {
     c.dispose();
   });
 
-  test('folder changes preserve notes and external note links escape filters',
+  test(
+      'RICH folder changes preserve notes and external note links escape filters',
       () async {
     final c = WorkspaceController(seedData: false);
     final folder = c.addFolder('会议')!;
@@ -262,7 +265,7 @@ void main() {
   });
 
   testWidgets(
-      'external links open the requested task and note on a narrow window',
+      'ROW-003 external links open the requested task and note on a narrow window',
       (tester) async {
     await start(tester, size: const Size(880, 600));
     await tester.tap(find.byTooltip('任务'));
@@ -288,7 +291,7 @@ void main() {
   });
 
   testWidgets(
-      'task list opens a deliberate inline editor and rescheduling has a clear destination',
+      'DATE-006 DATE-012 task list opens a deliberate inline editor and rescheduling has a clear destination',
       (tester) async {
     await start(tester);
     await tester.tap(find.byTooltip('任务'));
@@ -327,7 +330,7 @@ void main() {
   });
 
   testWidgets(
-      'date popup cancels edits and supports manual dates with explicit time',
+      'DATE-006 DATE-007 DATE-010 DATE-011 date popup cancels edits and supports manual dates with explicit time',
       (tester) async {
     await start(tester);
     await tester.tap(find.byTooltip('任务'));
@@ -366,7 +369,7 @@ void main() {
   });
 
   testWidgets(
-      'note editor formats, edits, switches notes and restores edited content',
+      'RICH note editor formats, edits, switches notes and restores edited content',
       (tester) async {
     await start(tester);
     await tester.tap(find.byTooltip('笔记'));
@@ -394,7 +397,7 @@ void main() {
   });
 
   testWidgets(
-      'settings navigation exposes working data actions without overflow',
+      'ARCH-008 settings navigation exposes working data actions without overflow',
       (tester) async {
     await start(tester, size: const Size(1000, 700));
     await tester.tap(find.text('设置').first);
@@ -407,7 +410,7 @@ void main() {
   });
 
   testWidgets(
-      'task and note layouts fit the minimum desktop window in dark mode',
+      'ARCH-008 task and note layouts fit the minimum desktop window in dark mode',
       (tester) async {
     await start(tester, size: const Size(880, 600));
     await tester.tap(find.byTooltip('切换深色'));

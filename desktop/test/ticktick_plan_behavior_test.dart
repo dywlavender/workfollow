@@ -5,7 +5,8 @@ import 'package:workfollow_personal/models/task.dart';
 import 'package:workfollow_personal/state/workspace_controller.dart';
 
 void main() {
-  test('smart capture applies title, date, list, tag and priority together',
+  test(
+      'QUICK-004 QUICK-005 QUICK-007 QUICK-008 QUICK-009 smart capture applies title, date, list, tag and priority together',
       () {
     final controller = WorkspaceController(seedData: false);
     final now = DateTime.now();
@@ -23,7 +24,9 @@ void main() {
     controller.dispose();
   });
 
-  test('tag filtering and list colors stay in the controller projection', () {
+  test(
+      'TAG-003 PRIORITY-004 tag filtering and list colors stay in the controller projection',
+      () {
     final controller = WorkspaceController(seedData: false);
     controller.addTask('写提案', listName: '工作');
     final firstId = controller.tasks.first.id;
@@ -44,7 +47,8 @@ void main() {
     controller.dispose();
   });
 
-  test('unknown smart-entry lists are kept in the title instead of created',
+  test(
+      'QUICK-008 unknown smart-entry lists are kept in the title instead of created',
       () {
     final controller = WorkspaceController(seedData: false);
     expect(controller.addTaskFromSmartInput('整理资料 @不存在清单'), isTrue);
@@ -53,7 +57,7 @@ void main() {
     controller.dispose();
   });
 
-  test('unknown-only smart-entry markers remain a usable title', () {
+  test('QUICK-008 unknown-only smart-entry markers remain a usable title', () {
     final controller = WorkspaceController(seedData: false);
     expect(controller.addTaskFromSmartInput('@稍后再分清单'), isTrue);
     expect(controller.tasks.single.title, '@稍后再分清单');
@@ -62,7 +66,7 @@ void main() {
   });
 
   test(
-      'matrix projection classifies urgency and preserves priority on today drop',
+      'PRIORITY-004 matrix projection classifies urgency and preserves priority on today drop',
       () {
     final controller = WorkspaceController(seedData: false);
     controller.addTask('季度计划', listName: '工作');
@@ -145,7 +149,9 @@ void main() {
     controller.dispose();
   });
 
-  test('quick task creation preserves an explicit clock time', () {
+  test(
+      'DATE-007 QUICK-017 quick task creation preserves an explicit clock time',
+      () {
     final controller = WorkspaceController(seedData: false);
     controller.addTask('预约',
         dueAt: DateTime(2099, 9, 15, 9, 30), hasTime: true);
@@ -154,7 +160,9 @@ void main() {
     controller.dispose();
   });
 
-  test('recent and overdue smart lists project real due dates', () {
+  test(
+      'ARCH-004 DATE-013 recent and overdue smart lists project real due dates',
+      () {
     final controller = WorkspaceController(seedData: false);
     final today = DateTime.now();
     final start = DateTime(today.year, today.month, today.day);
@@ -179,7 +187,8 @@ void main() {
     controller.dispose();
   });
 
-  test('task selection follows the visible list with arrow navigation', () {
+  test('ROW-004 task selection follows the visible list with arrow navigation',
+      () {
     final controller = WorkspaceController(seedData: false);
     controller.addTask('第一件');
     controller.addTask('第二件');

@@ -63,7 +63,8 @@ void main() {
     expect(find.textContaining('周日'), findsOneWidget);
   });
 
-  testWidgets('dismissing a date chip keeps it as title text and unscheduled',
+  testWidgets(
+      'QUICK-010 dismissing a date chip keeps it as title text and unscheduled',
       (tester) async {
     final controller = WorkspaceController(seedData: false);
     addTearDown(controller.dispose);
@@ -91,7 +92,8 @@ void main() {
     expect(controller.tasks.single.listName, '收集箱');
   });
 
-  testWidgets('unknown list chips stay in the quick-add title', (tester) async {
+  testWidgets('QUICK-008 unknown list chips stay in the quick-add title',
+      (tester) async {
     final controller = WorkspaceController(seedData: false);
     addTearDown(controller.dispose);
     await tester.pumpWidget(MaterialApp(
@@ -135,7 +137,8 @@ void main() {
     expect(tester.widget<TextField>(field).controller!.text, isEmpty);
   });
 
-  testWidgets('quick add in Today keeps the view default in its Draft',
+  testWidgets(
+      'QUICK-017 QUICK-021 quick add in Today keeps the view default in its Draft',
       (tester) async {
     final controller = WorkspaceController(seedData: false);
     addTearDown(controller.dispose);
@@ -155,7 +158,8 @@ void main() {
     expect(task.bucket, TaskBucket.today);
   });
 
-  testWidgets('task lists use the single-line add row and expose list actions',
+  testWidgets(
+      'LIST-002 LIST-003 task lists use the single-line add row and expose list actions',
       (tester) async {
     tester.view.physicalSize = const Size(1280, 820);
     tester.view.devicePixelRatio = 1;
@@ -181,7 +185,8 @@ void main() {
     expect(find.byTooltip('排序：日期'), findsOneWidget);
   });
 
-  testWidgets('wide task workspace keeps the inspector fixed by default',
+  testWidgets(
+      'ROW-001 wide task workspace keeps the inspector fixed by default',
       (tester) async {
     tester.view.physicalSize = const Size(1280, 820);
     tester.view.devicePixelRatio = 1;
@@ -224,7 +229,8 @@ void main() {
     expect(find.text('选择一个任务开始编辑'), findsOneWidget);
   });
 
-  testWidgets('task inspector keeps secondary properties behind a clean toggle',
+  testWidgets(
+      'ARCH-008 task inspector keeps secondary properties behind a clean toggle',
       (tester) async {
     tester.view.physicalSize = const Size(1280, 820);
     tester.view.devicePixelRatio = 1;
@@ -252,7 +258,8 @@ void main() {
     expect(find.text('附件与关联'), findsOneWidget);
   });
 
-  testWidgets('task workspace exposes stable controls for atomic acceptance',
+  testWidgets(
+      'DATE-001 DATE-002 MENU-001 task workspace exposes stable controls for atomic acceptance',
       (tester) async {
     tester.view.physicalSize = const Size(1280, 820);
     tester.view.devicePixelRatio = 1;
@@ -312,7 +319,8 @@ void main() {
     expect(find.text('附件与关联'), findsOneWidget);
   });
 
-  testWidgets('task property popovers expose their smallest option sets',
+  testWidgets(
+      'PRIORITY-001 LIST-001 TAG-001 REPEAT-001 task property popovers expose smallest option sets',
       (tester) async {
     tester.view.physicalSize = const Size(1280, 820);
     tester.view.devicePixelRatio = 1;
@@ -363,7 +371,8 @@ void main() {
     await tester.pumpAndSettle();
   });
 
-  testWidgets('recent and overdue smart lists are reachable from the rail',
+  testWidgets(
+      'ARCH-004 recent and overdue smart lists are reachable from the rail',
       (tester) async {
     await tester.pumpWidget(const WorkFollowApp(demoMode: true));
     await tester.pumpAndSettle();
@@ -377,7 +386,8 @@ void main() {
     expect(find.text('过期'), findsWidgets);
   });
 
-  testWidgets('task row context menu exposes shared property actions',
+  testWidgets(
+      'MENU-001 MENU-005 MENU-006 task row context menu exposes shared property actions',
       (tester) async {
     final controller = WorkspaceController(seedData: false);
     addTearDown(controller.dispose);
