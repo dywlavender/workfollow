@@ -217,4 +217,27 @@ void main() {
     expect(past.error?.code, 'past-reminder');
     expect(controller.tasks.single.reminderAt, before);
   });
+
+  test(
+      'QUICK-021 smart capture returns an ActionResult and global Undo restores properties',
+      () {
+    final controller = WorkspaceController(seedData: false);
+    addTearDown(controller.dispose);
+
+    final created = controller.createTaskFromSmartInput(
+      '明天 #工作 !!!准备评审',
+      now: DateTime(2030, 1, 10, 9),
+    );
+    expect(created.success, isTrue);
+    final id = created.taskId!;
+    expect(controller.tasks.single.title, '准备评审');
+    expect(controller.tasks.single.tags, ['工作']);
+    expect(controller.tasks.single.priority, TaskPriority.high);
+
+    final changed = controller.taskActions.setPriority(id, TaskPriority.low);
+    expect(changed.success, isTrue);
+    expect(controller.tasks.single.priority, TaskPriority.low);
+    expect(controller.taskActions.undo().success, isTrue);
+    expect(controller.tasks.single.priority, TaskPriority.high);
+  });
 }

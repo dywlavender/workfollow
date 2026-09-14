@@ -14,6 +14,7 @@ import '../features/tasks/application/task_actions.dart';
 import '../features/tasks/application/task_creator.dart';
 import '../features/tasks/application/task_projection.dart';
 import '../features/tasks/application/task_selection_controller.dart';
+import '../features/tasks/application/task_workspace_ui_state.dart';
 import '../features/tasks/domain/task_draft.dart';
 import '../features/tasks/domain/task_schedule.dart';
 
@@ -307,6 +308,9 @@ class WorkspaceController extends ChangeNotifier {
   final ReminderScheduler _reminders;
   final TaskProjection taskProjection = TaskProjection();
   final TaskSelectionController taskSelection = TaskSelectionController();
+
+  /// Ephemeral shell state is kept separate from the persisted task model.
+  final TaskWorkspaceUiState taskUiState = TaskWorkspaceUiState();
   late final TaskActions taskActions;
   late final TaskCreator taskCreator;
   List<TaskItem> _tasks;
@@ -318,8 +322,6 @@ class WorkspaceController extends ChangeNotifier {
   String? _selectedListName;
   String? _selectedTagName;
   String? _selectedTaskId;
-  int taskOpenVersion = 0;
-  int noteOpenVersion = 0;
   DateTime _dateReference = DateTime.now();
   String? _selectedNoteId;
   String? _lastCompletedTaskId;
@@ -331,6 +333,7 @@ class WorkspaceController extends ChangeNotifier {
   Set<String> _multiSelectedTaskIds = {};
   String? _multiSelectAnchorId;
   _BulkTaskUndo? _lastBulkUndo;
+  UndoCommand? _lastTaskUndoCommand;
   int _completionVersion = 0;
   int _actionVersion = 0;
   String _lastActionMessage = '';
@@ -355,8 +358,6 @@ class WorkspaceController extends ChangeNotifier {
   bool _notesUnfiledOnly = false;
   // Cross-widget focus requests: a menu or keyboard command can ask the quick
   // add field or the inspector title editor to take focus.
-  bool _quickAddFocusPending = false;
-  int _inspectorTitleFocusVersion = 0;
 
   WorkspaceView get view => _view;
   bool get isTaskView => switch (_view) {
@@ -382,6 +383,8 @@ class WorkspaceController extends ChangeNotifier {
       };
   String? get selectedTaskId => taskSelection.selectedTaskId;
   String? get selectedNoteId => _selectedNoteId;
+  int get taskOpenVersion => taskUiState.taskOpenVersion;
+  int get noteOpenVersion => taskUiState.noteOpenVersion;
   int get completionVersion => _completionVersion;
   int get actionVersion => _actionVersion;
   String get lastActionMessage => _lastActionMessage;
@@ -579,8 +582,8 @@ class WorkspaceController extends ChangeNotifier {
   String? get notesFolderFilter => _notesFolderFilter;
   bool get notesFavoritesOnly => _notesFavoritesOnly;
   bool get notesUnfiledOnly => _notesUnfiledOnly;
-  bool get quickAddFocusPending => _quickAddFocusPending;
-  int get inspectorTitleFocusVersion => _inspectorTitleFocusVersion;
+  bool get quickAddFocusPending => taskUiState.quickAddFocusPending;
+  int get inspectorTitleFocusVersion => taskUiState.inspectorTitleFocusVersion;
 
   void setNotesFolderFilter(String? folderId) {
     if (_notesFolderFilter == folderId &&
@@ -617,17 +620,17 @@ class WorkspaceController extends ChangeNotifier {
   /// views). The pending flag also covers fields that are built afterwards,
   /// e.g. after switching from Calendar to Today.
   void requestQuickAddFocus() {
-    _quickAddFocusPending = true;
+    taskUiState.requestQuickAddFocus();
     _notify();
   }
 
   void consumeQuickAddFocus() {
-    _quickAddFocusPending = false;
+    taskUiState.consumeQuickAddFocus();
   }
 
   /// Asks the task inspector to focus its title editor (Return on a task row).
   void requestInspectorTitleFocus() {
-    _inspectorTitleFocusVersion += 1;
+    taskUiState.requestInspectorTitleFocus();
     _notify();
   }
 
@@ -637,7 +640,7 @@ class WorkspaceController extends ChangeNotifier {
     final folderId = _notesUnfiledOnly ? null : _notesFolderFilter;
     final id = addNote(folderId: folderId);
     _selectedNoteId = id;
-    noteOpenVersion++;
+    taskUiState.markNoteOpened();
     _notesFavoritesOnly = false;
     _view = WorkspaceView.notes;
     _notify();
@@ -704,10 +707,22 @@ class WorkspaceController extends ChangeNotifier {
   }
 
   TaskActionResult _taskResult(String id,
-      {String? message, bool showFeedback = false, UndoCommand? undo}) {
+      {String? message,
+      bool showFeedback = false,
+      UndoCommand? undo,
+      bool rememberUndo = true}) {
     final task = _taskById(id);
     if (task == null) {
       return TaskActionResult.failure('missing-task', '任务不存在');
+    }
+    if (rememberUndo) {
+      // A new single-task action replaces an older bulk/snapshot command. The
+      // next global Undo must always describe the most recent mutation.
+      _lastBulkUndo = null;
+      _lastTaskUndoCommand = undo;
+      _lastActionKind = '';
+      _lastCompletedTaskId = null;
+      _lastRemovedTaskId = null;
     }
     return TaskActionResult.success(
       taskId: id,
@@ -778,10 +793,13 @@ class WorkspaceController extends ChangeNotifier {
         if (task.completed) {
           return TaskActionResult.failure('already-complete', '任务已经完成');
         }
+        _lastTaskUndoCommand = null;
+        _lastBulkUndo = null;
         toggleTask(id);
         return _taskResult(id,
             message: _lastActionMessage,
-            undo: UndoCommand(label: '撤销完成', execute: undoLastAction));
+            undo: UndoCommand(label: '撤销完成', execute: undoLastAction),
+            rememberUndo: false);
       case 'restore':
         final id = payload as String;
         final task = _taskById(id);
@@ -958,10 +976,13 @@ class WorkspaceController extends ChangeNotifier {
         final id = payload as String;
         if (_taskById(id) == null)
           return TaskActionResult.failure('missing-task', '任务不存在');
+        _lastTaskUndoCommand = null;
+        _lastBulkUndo = null;
         removeTask(id);
         return _taskResult(id,
             message: _lastActionMessage,
-            undo: UndoCommand(label: '撤销删除', execute: undoLastAction));
+            undo: UndoCommand(label: '撤销删除', execute: undoLastAction),
+            rememberUndo: false);
       case 'undo':
         return undoLastAction()
             ? const TaskActionResult.success(message: '已撤销')
@@ -1549,6 +1570,8 @@ class WorkspaceController extends ChangeNotifier {
   String? duplicateTask(String id) {
     final source = _tasks.where((task) => task.id == id).firstOrNull;
     if (source == null) return null;
+    _lastTaskUndoCommand = null;
+    _lastBulkUndo = null;
     final copyId = 'task-${_taskSequence.toString().padLeft(2, '0')}';
     _taskSequence += 1;
     final copy = TaskItem.fromMigration(MigrationTaskRecord.fromJson({
@@ -1621,7 +1644,7 @@ class WorkspaceController extends ChangeNotifier {
       }
     }
     if (task == null) return;
-    taskOpenVersion++;
+    taskUiState.markTaskOpened();
     final name = task.listName.trim();
     if (name == '收集箱') {
       _view = WorkspaceView.inbox;
@@ -1647,7 +1670,7 @@ class WorkspaceController extends ChangeNotifier {
       return;
     }
     _selectedNoteId = id;
-    noteOpenVersion++;
+    taskUiState.markNoteOpened();
     _notesFolderFilter = null;
     _notesFavoritesOnly = false;
     _notesUnfiledOnly = false;
@@ -1683,6 +1706,8 @@ class WorkspaceController extends ChangeNotifier {
   }
 
   void toggleTask(String id) {
+    _lastTaskUndoCommand = null;
+    _lastBulkUndo = null;
     final index = _tasks.indexWhere((task) => task.id == id);
     if (index < 0) return;
     final task = _tasks[index];
@@ -1828,6 +1853,7 @@ class WorkspaceController extends ChangeNotifier {
   }
 
   bool undoLastCompletion() {
+    _lastTaskUndoCommand = null;
     final id = _lastCompletedTaskId;
     if (id == null) return false;
     final index = _tasks.indexWhere((task) => task.id == id);
@@ -1875,6 +1901,8 @@ class WorkspaceController extends ChangeNotifier {
   /// Soft-deletes a task: it stays in the workspace with a `deletedAt` mark,
   /// so the trash is persistent and the promise in the undo toast is real.
   void removeTask(String id) {
+    _lastTaskUndoCommand = null;
+    _lastBulkUndo = null;
     final index = _tasks.indexWhere((task) => task.id == id);
     if (index < 0 || _tasks[index].deletedAt != null) return;
     final now = DateTime.now().toIso8601String();
@@ -1964,6 +1992,8 @@ class WorkspaceController extends ChangeNotifier {
 
   void bulkCompleteSelected() {
     if (_multiSelectedTaskIds.isEmpty) return;
+    _lastTaskUndoCommand = null;
+    _lastBulkUndo = null;
     final now = DateTime.now();
     final nowLabel = now.toIso8601String();
     final completedIds = <String>[];
@@ -2017,6 +2047,8 @@ class WorkspaceController extends ChangeNotifier {
   /// time), or clears dates when [day] is null.
   void bulkRescheduleSelected(DateTime? day, {bool? hasTime}) {
     if (_multiSelectedTaskIds.isEmpty) return;
+    _lastTaskUndoCommand = null;
+    _lastBulkUndo = null;
     final previous = <String, String?>{};
     final previousTimes = <String, bool>{};
     final now = DateTime.now().toIso8601String();
@@ -2066,6 +2098,8 @@ class WorkspaceController extends ChangeNotifier {
   void bulkMoveSelectedToList(String rawListName) {
     final listName = rawListName.trim();
     if (listName.isEmpty || _multiSelectedTaskIds.isEmpty) return;
+    _lastTaskUndoCommand = null;
+    _lastBulkUndo = null;
     _ensureList(listName);
     final previous = <String, String>{};
     final now = DateTime.now().toIso8601String();
@@ -2094,6 +2128,8 @@ class WorkspaceController extends ChangeNotifier {
 
   void bulkDeleteSelected() {
     if (_multiSelectedTaskIds.isEmpty) return;
+    _lastTaskUndoCommand = null;
+    _lastBulkUndo = null;
     final removedIds = <String>[];
     final now = DateTime.now().toIso8601String();
     for (final id in _multiSelectedTaskIds) {
@@ -2206,6 +2242,17 @@ class WorkspaceController extends ChangeNotifier {
   }
 
   bool undoLastAction() {
+    final taskUndo = _lastTaskUndoCommand;
+    if (taskUndo != null) {
+      _lastTaskUndoCommand = null;
+      final outcome = taskUndo.execute();
+      if (outcome is bool) return outcome;
+      // The current action boundary is synchronous even when a future
+      // persistence side effect is part of the command. The command has been
+      // consumed; its completion will still notify the controller.
+      unawaited(outcome);
+      return true;
+    }
     final bulk = _lastBulkUndo;
     if (bulk != null) {
       _revertBulkUndo(bulk);
@@ -2335,11 +2382,15 @@ class WorkspaceController extends ChangeNotifier {
 
   /// Shared pipeline for the native menu-bar capture and other one-line
   /// entry points. It intentionally lives in the controller so every surface
-  /// applies the same date, recurrence, tag, list and priority semantics.
-  bool addTaskFromSmartInput(String rawInput,
+  /// applies the same date, recurrence, tag, list and priority semantics. The
+  /// ActionResult is returned so callers can render the same destination and
+  /// error feedback as the in-window Quick Add field.
+  TaskActionResult createTaskFromSmartInput(String rawInput,
       {DateTime? now, bool preferInbox = false}) {
     final input = rawInput.trim();
-    if (input.isEmpty) return false;
+    if (input.isEmpty) {
+      return TaskActionResult.failure('empty-title', '请输入任务标题');
+    }
     final result = const SmartDateParser().parse(input, now: now);
     final parsedList = result.listName;
     final existingList =
@@ -2351,7 +2402,9 @@ class WorkspaceController extends ChangeNotifier {
         input,
         result.spans.where((span) =>
             span.kind != SmartTokenKind.list || existingList != null));
-    if (title.trim().isEmpty) return false;
+    if (title.trim().isEmpty) {
+      return TaskActionResult.failure('empty-title', '请输入任务标题');
+    }
     final draft = TaskDraft(
       title: title,
       listName: targetList,
@@ -2366,8 +2419,15 @@ class WorkspaceController extends ChangeNotifier {
       tags: result.tags,
       forceUnscheduled: preferInbox && result.dueAt == null,
     );
-    return _createTaskFromDraft(draft).success;
+    return taskCreator.create(draft);
   }
+
+  /// Compatibility facade for older native callers that only need an
+  /// acceptance bit. New surfaces should use [createTaskFromSmartInput].
+  bool addTaskFromSmartInput(String rawInput,
+          {DateTime? now, bool preferInbox = false}) =>
+      createTaskFromSmartInput(rawInput, now: now, preferInbox: preferInbox)
+          .success;
 
   String _creationListName() {
     if (_selectedListName != null) return _selectedListName!;

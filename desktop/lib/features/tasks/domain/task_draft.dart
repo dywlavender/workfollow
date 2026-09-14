@@ -42,7 +42,8 @@ class RecurrenceDraft {
     }
   }
 
-  RecurrenceDraft copyWith({String? type, Map<String, dynamic>? config, bool clear = false}) {
+  RecurrenceDraft copyWith(
+      {String? type, Map<String, dynamic>? config, bool clear = false}) {
     if (clear) return const RecurrenceDraft();
     return RecurrenceDraft(
       type: type ?? this.type,
@@ -81,23 +82,26 @@ class TaskDraft {
   TaskDraft copyWith({
     String? title,
     String? listName,
+    bool clearListName = false,
     TaskScheduleDraft? schedule,
     DateTime? reminderAt,
+    bool clearReminderAt = false,
     RecurrenceDraft? recurrence,
     TaskPriority? priority,
     List<String>? tags,
     String? description,
+    bool clearDescription = false,
     bool? forceUnscheduled,
   }) {
     return TaskDraft(
       title: title ?? this.title,
-      listName: listName ?? this.listName,
+      listName: clearListName ? null : listName ?? this.listName,
       schedule: schedule ?? this.schedule,
-      reminderAt: reminderAt ?? this.reminderAt,
+      reminderAt: clearReminderAt ? null : reminderAt ?? this.reminderAt,
       recurrence: recurrence ?? this.recurrence,
       priority: priority ?? this.priority,
       tags: tags ?? this.tags,
-      description: description ?? this.description,
+      description: clearDescription ? null : description ?? this.description,
       forceUnscheduled: forceUnscheduled ?? this.forceUnscheduled,
     );
   }
@@ -106,7 +110,8 @@ class TaskDraft {
     final normalizedTags = <String>[];
     for (final raw in tags) {
       final tag = raw.trim();
-      if (tag.isNotEmpty && !normalizedTags.contains(tag)) normalizedTags.add(tag);
+      if (tag.isNotEmpty && !normalizedTags.contains(tag))
+        normalizedTags.add(tag);
     }
     final normalizedRecurrence = recurrence.normalized();
     final schedule = forceUnscheduled
@@ -127,7 +132,8 @@ class TaskDraft {
       recurrence: normalizedRecurrence,
       priority: priority,
       tags: List.unmodifiable(normalizedTags),
-      description: description?.trim().isEmpty == true ? null : description?.trim(),
+      description:
+          description?.trim().isEmpty == true ? null : description?.trim(),
       forceUnscheduled: forceUnscheduled,
     );
   }

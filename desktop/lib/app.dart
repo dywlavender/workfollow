@@ -230,10 +230,11 @@ class _WorkFollowShellState extends State<WorkFollowShell> {
         // Native quick capture is deliberately independent of the main
         // window's current page and returns an explicit acknowledgement so
         // the native panel only clears text after a successful write request.
-        final accepted = controller
-            .addTaskFromSmartInput(call.arguments as String, preferInbox: true);
+        final result = controller.createTaskFromSmartInput(
+            call.arguments as String,
+            preferInbox: true);
         await controller.waitForPendingSaves();
-        return accepted && controller.saveStatus == SaveStatus.saved;
+        return result.success && controller.saveStatus == SaveStatus.saved;
       }
       return null;
     });
