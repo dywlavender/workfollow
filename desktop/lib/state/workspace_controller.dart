@@ -874,6 +874,8 @@ class WorkspaceController extends ChangeNotifier {
     }
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
+    final monday = today.subtract(Duration(days: today.weekday - 1));
+    final nextMonday = monday.add(const Duration(days: 7));
     final existing = localDateTimeFromStorage(task.dueAt);
     final clockHour = existing?.hour ?? 0;
     final clockMinute = existing?.minute ?? 0;
@@ -883,11 +885,11 @@ class WorkspaceController extends ChangeNotifier {
         target = DateTime(
             today.year, today.month, today.day, clockHour, clockMinute);
       case 'nextWeek':
-        target = today.add(const Duration(days: 7));
+        target = nextMonday;
         target = DateTime(
             target.year, target.month, target.day, clockHour, clockMinute);
       case 'later':
-        target = today.add(const Duration(days: 14));
+        target = nextMonday.add(const Duration(days: 7));
         target = DateTime(
             target.year, target.month, target.day, clockHour, clockMinute);
       default:
@@ -1900,7 +1902,10 @@ class WorkspaceController extends ChangeNotifier {
   /// given, the active view decides: a list view keeps its list, Today
   /// schedules for today, and capture elsewhere lands in the inbox unscheduled.
   bool addTask(String rawTitle,
-      {String? listName, DateTime? dueAt, bool forceUnscheduled = false}) {
+      {String? listName,
+      DateTime? dueAt,
+      bool forceUnscheduled = false,
+      bool? hasTime}) {
     final title = rawTitle.trim();
     if (title.isEmpty) return false;
     final targetList = (listName ?? _creationListName()).trim();
@@ -1915,6 +1920,8 @@ class WorkspaceController extends ChangeNotifier {
       bucket: taskBucketForDate(effectiveDue),
       timeLabel: taskTimeLabelFor(effectiveDue),
       dueAt: effectiveDue?.toIso8601String(),
+      hasDueTime: effectiveDue != null &&
+          (hasTime ?? (effectiveDue.hour != 0 || effectiveDue.minute != 0)),
       createdAt: now,
       updatedAt: now,
     );
@@ -1958,6 +1965,7 @@ class WorkspaceController extends ChangeNotifier {
       listName: targetList,
       dueAt: result.dueAt,
       forceUnscheduled: preferInbox && result.dueAt == null,
+      hasTime: result.hasTime,
     );
     if (!accepted) return false;
     final id = _tasks.first.id;

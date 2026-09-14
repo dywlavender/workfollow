@@ -90,7 +90,10 @@ void main() {
     expect(run('2小时后回访').dueAt, now.add(const Duration(hours: 2)));
     expect(run('半小时后取快递').dueAt, now.add(const Duration(minutes: 30)));
     expect(run('30分钟后休息').dueAt, now.add(const Duration(minutes: 30)));
-    expect(run('3天后出发').dueAt, today.add(const Duration(days: 3)));
+    final daysLater = run('3天后出发');
+    expect(daysLater.dueAt, today.add(const Duration(days: 3)));
+    expect(daysLater.hasTime, isFalse);
+    expect(daysLater.reminderAt, isNull);
   });
 
   test('recurrence rules', () {

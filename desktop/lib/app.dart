@@ -43,6 +43,10 @@ class WorkFollowApp extends StatefulWidget {
 class _WorkFollowAppState extends State<WorkFollowApp> {
   ThemeMode _themeMode = ThemeMode.system;
   bool _compactDensity = false;
+  // Keep the TickTick-style inspector opt-in. The list remains the primary
+  // surface until a task is selected, while power users can pin details on
+  // wide windows from Settings.
+  bool _persistentInspector = false;
   late final WorkspacePreferencesStore _preferencesStore;
 
   @override
@@ -65,10 +69,12 @@ class _WorkFollowAppState extends State<WorkFollowApp> {
         ? ThemeMode.values.where((value) => value.name == saved).firstOrNull
         : null;
     final density = preferences['density'];
-    if (mode != null || density is String) {
+    final inspector = preferences['inspector'];
+    if (mode != null || density is String || inspector is bool) {
       setState(() {
         if (mode != null) _themeMode = mode;
         if (density is String) _compactDensity = density == 'compact';
+        if (inspector is bool) _persistentInspector = inspector;
       });
     }
   }
@@ -78,6 +84,7 @@ class _WorkFollowAppState extends State<WorkFollowApp> {
     unawaited(_preferencesStore.save({
       'themeMode': mode.name,
       'density': _compactDensity ? 'compact' : 'comfortable',
+      'inspector': _persistentInspector,
     }));
   }
 
@@ -86,6 +93,16 @@ class _WorkFollowAppState extends State<WorkFollowApp> {
     unawaited(_preferencesStore.save({
       'themeMode': _themeMode.name,
       'density': compact ? 'compact' : 'comfortable',
+      'inspector': _persistentInspector,
+    }));
+  }
+
+  void _setPersistentInspector(bool enabled) {
+    setState(() => _persistentInspector = enabled);
+    unawaited(_preferencesStore.save({
+      'themeMode': _themeMode.name,
+      'density': _compactDensity ? 'compact' : 'comfortable',
+      'inspector': enabled,
     }));
   }
 
@@ -118,6 +135,8 @@ class _WorkFollowAppState extends State<WorkFollowApp> {
         themeMode: _themeMode,
         compactDensity: _compactDensity,
         onSetDensity: _setDensity,
+        persistentInspector: _persistentInspector,
+        onSetPersistentInspector: _setPersistentInspector,
       ),
     );
   }
@@ -131,6 +150,8 @@ class WorkFollowShell extends StatefulWidget {
     required this.themeMode,
     this.compactDensity = false,
     this.onSetDensity,
+    this.persistentInspector = false,
+    this.onSetPersistentInspector,
     this.demoMode = false,
   });
 
@@ -139,6 +160,8 @@ class WorkFollowShell extends StatefulWidget {
   final ThemeMode themeMode;
   final bool compactDensity;
   final ValueChanged<bool>? onSetDensity;
+  final bool persistentInspector;
+  final ValueChanged<bool>? onSetPersistentInspector;
   final bool demoMode;
 
   @override
@@ -306,7 +329,9 @@ class _WorkFollowShellState extends State<WorkFollowShell> {
         onSetThemeMode: widget.onSetThemeMode,
         themeMode: widget.themeMode,
         compactDensity: widget.compactDensity,
-        onSetDensity: widget.onSetDensity);
+        onSetDensity: widget.onSetDensity,
+        persistentInspector: widget.persistentInspector,
+        onSetPersistentInspector: widget.onSetPersistentInspector);
   }
 
   Future<void> _openFocusTimer() => showFocusTimerDialog(
@@ -486,7 +511,10 @@ class _WorkFollowShellState extends State<WorkFollowShell> {
                                 onSetThemeMode: widget.onSetThemeMode,
                                 themeMode: widget.themeMode,
                                 compactDensity: widget.compactDensity,
-                                onSetDensity: widget.onSetDensity),
+                                onSetDensity: widget.onSetDensity,
+                                persistentInspector: widget.persistentInspector,
+                                onSetPersistentInspector:
+                                    widget.onSetPersistentInspector),
                           ),
                         ),
                       ),
@@ -509,7 +537,9 @@ class _WorkFollowShellState extends State<WorkFollowShell> {
                             Expanded(
                               child: _WorkspaceContent(
                                   controller: controller,
-                                  compactDensity: widget.compactDensity),
+                                  compactDensity: widget.compactDensity,
+                                  persistentInspector:
+                                      widget.persistentInspector),
                             ),
                           ],
                         ),
@@ -666,10 +696,13 @@ class _ToolbarSearchState extends State<_ToolbarSearch> {
 
 class _WorkspaceContent extends StatelessWidget {
   const _WorkspaceContent(
-      {required this.controller, required this.compactDensity});
+      {required this.controller,
+      required this.compactDensity,
+      required this.persistentInspector});
 
   final WorkspaceController controller;
   final bool compactDensity;
+  final bool persistentInspector;
 
   @override
   Widget build(BuildContext context) {
@@ -702,6 +735,7 @@ class _WorkspaceContent extends StatelessWidget {
             key: ValueKey(controller.view),
             controller: controller,
             compactDensity: compactDensity,
+            persistentInspector: persistentInspector,
           ),
       },
     );

@@ -102,6 +102,12 @@ void main() {
     expect(
         controller.boardColumnFor(controller.tasks.single, BoardGroupBy.date),
         'unscheduled');
+    controller.moveTaskToBoardColumn(id, BoardGroupBy.date, 'nextWeek');
+    final nextWeek = localDateTimeFromStorage(controller.tasks.single.dueAt)!;
+    expect(nextWeek.weekday, DateTime.monday);
+    expect(
+        controller.boardColumnFor(controller.tasks.single, BoardGroupBy.date),
+        'nextWeek');
     controller.dispose();
   });
 
@@ -136,6 +142,15 @@ void main() {
     expect(controller.renameList('个人', '生活'), isTrue);
     expect(controller.orderedLists.first.name, '生活');
     expect(controller.orderedLists.first.pinned, isTrue);
+    controller.dispose();
+  });
+
+  test('quick task creation preserves an explicit clock time', () {
+    final controller = WorkspaceController(seedData: false);
+    controller.addTask('预约',
+        dueAt: DateTime(2099, 9, 15, 9, 30), hasTime: true);
+    expect(controller.tasks.single.scheduledWithTime, isTrue);
+    expect(controller.tasks.single.displayTimeLabel, contains('09:30'));
     controller.dispose();
   });
 }

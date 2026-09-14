@@ -3,8 +3,9 @@ import 'dart:io';
 
 import 'local_workspace_store.dart';
 
-/// Tiny JSON-backed preferences (currently the appearance mode). Stored next
-/// to the workspace snapshot so no extra plugin or entitlement is needed.
+/// Tiny JSON-backed preferences for appearance, list density and the optional
+/// wide-window inspector. Stored next to the workspace snapshot so no extra
+/// plugin or entitlement is needed.
 /// The file is a few dozen bytes and written rarely, so it uses synchronous
 /// IO (like NSUserDefaults) — that also keeps it testable inside the widget
 /// test binding's fake-async zone, where async file writes never land.

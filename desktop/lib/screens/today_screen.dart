@@ -17,9 +17,17 @@ import '../widgets/task_row.dart';
 /// gets squeezed into an unusable column.
 class TodayScreen extends StatefulWidget {
   const TodayScreen(
-      {super.key, required this.controller, this.compactDensity = false});
+      {super.key,
+      required this.controller,
+      this.compactDensity = false,
+      this.persistentInspector = false});
   final WorkspaceController controller;
   final bool compactDensity;
+
+  /// When enabled, a wide window keeps the right-hand inspector visible even
+  /// before a task is selected. The default stays list-first for a calmer
+  /// personal workspace; selecting a task always opens the inspector.
+  final bool persistentInspector;
   @override
   State<TodayScreen> createState() => _TodayScreenState();
 }
@@ -73,7 +81,8 @@ class _TodayScreenState extends State<TodayScreen> {
     final completed = tasks.where((task) => task.completed).toList();
     return LayoutBuilder(builder: (context, constraints) {
       final narrow = constraints.maxWidth < 700;
-      final wideInspector = constraints.maxWidth >= _wideInspectorBreakpoint;
+      final wideInspector = constraints.maxWidth >= _wideInspectorBreakpoint &&
+          (widget.persistentInspector || c.selectedTaskId != null);
       // Short windows get a dense header so the first tasks stay on screen.
       final compact = widget.compactDensity || constraints.maxHeight < 680;
       final selected = c.selectedTask;

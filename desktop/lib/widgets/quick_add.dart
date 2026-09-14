@@ -8,6 +8,76 @@ import '../theme/workfollow_theme.dart';
 import 'desktop_popover.dart';
 import 'task_date_picker.dart';
 
+/// Text controller that paints recognized smart-entry fragments in place.
+/// The removable chips below the field remain the explicit dismiss affordance;
+/// this span styling gives the user immediate, TickTick-like feedback without
+/// replacing a normal editable TextField or interfering with IME composition.
+class _SmartTextEditingController extends TextEditingController {
+  List<SmartSpan> _highlights = const [];
+  Set<String> _dismissed = const {};
+
+  void setHighlights(Iterable<SmartSpan> spans, Iterable<String> dismissed) {
+    _highlights = List.unmodifiable(spans);
+    _dismissed = Set.unmodifiable(dismissed);
+  }
+
+  @override
+  TextSpan buildTextSpan({
+    required BuildContext context,
+    TextStyle? style,
+    required bool withComposing,
+  }) {
+    // Let EditableText render an active IME composition in its native form;
+    // highlighting resumes as soon as the composition is committed.
+    if (text.isEmpty ||
+        _highlights.isEmpty ||
+        (withComposing &&
+            value.composing.isValid &&
+            !value.composing.isCollapsed)) {
+      return super.buildTextSpan(
+          context: context, style: style, withComposing: withComposing);
+    }
+    final spans = _highlights
+        .where((span) => !_dismissed.contains(span.raw))
+        .toList()
+      ..sort((a, b) => a.start.compareTo(b.start));
+    if (spans.isEmpty) {
+      return super.buildTextSpan(
+          context: context, style: style, withComposing: withComposing);
+    }
+    final children = <InlineSpan>[];
+    var cursor = 0;
+    for (final span in spans) {
+      if (span.start < cursor || span.start >= text.length) continue;
+      final end = span.end.clamp(span.start, text.length).toInt();
+      if (span.start > cursor) {
+        children.add(TextSpan(text: text.substring(cursor, span.start)));
+      }
+      final color = _colorFor(span.kind);
+      children.add(TextSpan(
+          text: text.substring(span.start, end),
+          style: (style ?? const TextStyle()).copyWith(
+              color: color,
+              backgroundColor: color.withValues(alpha: .14),
+              fontWeight: FontWeight.w600)));
+      cursor = end;
+    }
+    if (cursor < text.length) {
+      children.add(TextSpan(text: text.substring(cursor)));
+    }
+    return TextSpan(style: style, children: children);
+  }
+
+  Color _colorFor(SmartTokenKind kind) => switch (kind) {
+        SmartTokenKind.date => const Color(0xFF5B7CFA),
+        SmartTokenKind.time => const Color(0xFF2F9FB5),
+        SmartTokenKind.recurrence => const Color(0xFF9A63D3),
+        SmartTokenKind.tag => const Color(0xFF42A66A),
+        SmartTokenKind.list => const Color(0xFFE8793F),
+        SmartTokenKind.priority => const Color(0xFFE35D6A),
+      };
+}
+
 class QuickAddField extends StatefulWidget {
   const QuickAddField(
       {super.key,
@@ -25,7 +95,7 @@ class QuickAddField extends StatefulWidget {
 }
 
 class _QuickAddFieldState extends State<QuickAddField> {
-  final text = TextEditingController();
+  final text = _SmartTextEditingController();
   final focus = FocusNode();
   bool focused = false;
   bool customDate = false;
@@ -88,6 +158,7 @@ class _QuickAddFieldState extends State<QuickAddField> {
         .where((span) => !dismissedSpans.contains(span.raw))
         .toList();
     bool keptKind(SmartTokenKind kind) => kept.any((span) => span.kind == kind);
+    text.setHighlights(kept, dismissedSpans);
     setState(() => parse = SmartParseResult(
         title: parser.titleFromSpans(text.text, kept),
         dueAt: keptKind(SmartTokenKind.date) || keptKind(SmartTokenKind.time)
@@ -151,6 +222,7 @@ class _QuickAddFieldState extends State<QuickAddField> {
     if (!widget.controller.addTask(title,
         listName: listName,
         dueAt: effectiveDue,
+        hasTime: customDate ? hasTime : parsed.hasTime,
         forceUnscheduled: (customDate &&
                 manualDue == null &&
                 smartDue == null) ||
@@ -183,6 +255,7 @@ class _QuickAddFieldState extends State<QuickAddField> {
     }
     setState(() {
       text.clear();
+      text.setHighlights(const [], const {});
       customDate = false;
       selectedDate = null;
       hasTime = false;
@@ -202,6 +275,7 @@ class _QuickAddFieldState extends State<QuickAddField> {
           const SingleActivator(LogicalKeyboardKey.escape): () {
             setState(() {
               text.clear();
+              text.setHighlights(const [], const {});
               customDate = false;
               dismissedSpans.clear();
               parse = _emptyParse;

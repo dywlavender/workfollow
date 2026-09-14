@@ -647,8 +647,9 @@ void main() {
     final store = WorkspacePreferencesStore(directoryOverride: directory.path);
 
     expect((await store.load())['themeMode'], isNull);
-    await store.save({'themeMode': 'dark'});
+    await store.save({'themeMode': 'dark', 'inspector': true});
     expect((await store.load())['themeMode'], 'dark');
+    expect((await store.load())['inspector'], isTrue);
 
     // A damaged file behaves like no preferences instead of crashing.
     final file = File('${directory.path}/preferences.json');
@@ -681,6 +682,50 @@ void main() {
         .pumpWidget(WorkFollowApp(key: UniqueKey(), preferencesStore: store));
     await tester.pumpAndSettle();
     expect(find.byTooltip('切换浅色'), findsOneWidget);
+  });
+
+  testWidgets('wide inspector preference is exposed and persisted',
+      (tester) async {
+    tester.view.physicalSize = const Size(1400, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+    final directory =
+        Directory.systemTemp.createTempSync('workfollow-inspector-test');
+    addTearDown(() => directory.deleteSync(recursive: true));
+    final store = WorkspacePreferencesStore(directoryOverride: directory.path);
+
+    await tester
+        .pumpWidget(WorkFollowApp(demoMode: true, preferencesStore: store));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('设置'));
+    await tester.pumpAndSettle();
+
+    final switchFinder =
+        find.byKey(const ValueKey('persistent-inspector-switch'));
+    expect(switchFinder, findsOneWidget);
+    expect(tester.widget<SwitchListTile>(switchFinder).value, isFalse);
+    await tester.tap(switchFinder);
+    await tester.pumpAndSettle();
+    expect(tester.widget<SwitchListTile>(switchFinder).value, isTrue);
+    final persisted = await tester.runAsync(() => store.load());
+    expect(persisted?['inspector'], isTrue);
+
+    await tester.tap(find.byTooltip('关闭'));
+    await tester.pumpAndSettle();
+    await tester.pumpWidget(WorkFollowApp(
+        key: UniqueKey(), demoMode: true, preferencesStore: store));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('设置'));
+    await tester.pumpAndSettle();
+    expect(tester.widget<SwitchListTile>(switchFinder).value, isTrue);
+    await tester.tap(find.byTooltip('关闭'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('今天').first);
+    await tester.pumpAndSettle();
+    expect(find.text('选择一个任务开始编辑'), findsOneWidget);
   });
 
   test(

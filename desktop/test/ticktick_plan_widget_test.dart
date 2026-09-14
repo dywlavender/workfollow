@@ -76,6 +76,14 @@ void main() {
         find.byKey(const ValueKey('quick-add-title')), '周五理账');
     await tester.pump();
     expect(find.byType(InputChip), findsOneWidget);
+    final field = find.byKey(const ValueKey('quick-add-title'));
+    final rendered = tester.widget<TextField>(field).controller!.buildTextSpan(
+        context: tester.element(field),
+        style: const TextStyle(),
+        withComposing: false);
+    expect(rendered.children, isNotEmpty);
+    expect((rendered.children!.first as TextSpan).style?.backgroundColor,
+        isNotNull);
     await tester.tap(find.byIcon(Icons.close));
     await tester.pump();
     await tester.tap(find.text('添加任务'));

@@ -19,6 +19,8 @@ Future<void> showSettingsPanel({
   required ThemeMode themeMode,
   bool compactDensity = false,
   ValueChanged<bool>? onSetDensity,
+  bool persistentInspector = false,
+  ValueChanged<bool>? onSetPersistentInspector,
 }) {
   return showGeneralDialog<void>(
     context: context,
@@ -33,6 +35,8 @@ Future<void> showSettingsPanel({
       themeMode: themeMode,
       compactDensity: compactDensity,
       onSetDensity: onSetDensity,
+      persistentInspector: persistentInspector,
+      onSetPersistentInspector: onSetPersistentInspector,
     ),
     transitionBuilder: (context, animation, secondaryAnimation, child) =>
         BackdropFilter(
@@ -50,6 +54,8 @@ class _SettingsPanel extends StatefulWidget {
     required this.themeMode,
     this.compactDensity = false,
     this.onSetDensity,
+    this.persistentInspector = false,
+    this.onSetPersistentInspector,
   });
 
   final WorkspaceController controller;
@@ -58,6 +64,8 @@ class _SettingsPanel extends StatefulWidget {
   final ThemeMode themeMode;
   final bool compactDensity;
   final ValueChanged<bool>? onSetDensity;
+  final bool persistentInspector;
+  final ValueChanged<bool>? onSetPersistentInspector;
 
   @override
   State<_SettingsPanel> createState() => _SettingsPanelState();
@@ -68,6 +76,7 @@ class _SettingsPanelState extends State<_SettingsPanel> {
   int page = 0;
   late ThemeMode appearance = widget.themeMode;
   late bool densityCompact = widget.compactDensity;
+  late bool inspectorPersistent = widget.persistentInspector;
   String? importMessage;
   String? importError;
 
@@ -365,7 +374,36 @@ class _SettingsPanelState extends State<_SettingsPanel> {
                                         setState(() => densityCompact = value);
                                         widget.onSetDensity?.call(value);
                                       }),
-                                  const SizedBox(height: 28),
+                                  const SizedBox(height: 24),
+                                  const Text('详情面板',
+                                      style: TextStyle(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w600)),
+                                  const SizedBox(height: 8),
+                                  Text('宽窗口可在右侧常驻显示任务详情；关闭后，点击任务仍会打开详情。',
+                                      style: TextStyle(
+                                          fontSize: 12,
+                                          height: 1.5,
+                                          color: tokens.textSecondary)),
+                                  const SizedBox(height: 6),
+                                  SwitchListTile.adaptive(
+                                      key: const ValueKey(
+                                          'persistent-inspector-switch'),
+                                      contentPadding: EdgeInsets.zero,
+                                      dense: true,
+                                      title: const Text('宽窗常驻详情',
+                                          style: TextStyle(fontSize: 12.5)),
+                                      subtitle: const Text('仅在宽窗口生效',
+                                          style: TextStyle(fontSize: 10.5)),
+                                      value: inspectorPersistent,
+                                      activeThumbColor: tokens.accent,
+                                      onChanged: (value) {
+                                        setState(
+                                            () => inspectorPersistent = value);
+                                        widget.onSetPersistentInspector
+                                            ?.call(value);
+                                      }),
+                                  const SizedBox(height: 22),
                                   const Text('个人工作空间',
                                       style: TextStyle(
                                           fontSize: 14,

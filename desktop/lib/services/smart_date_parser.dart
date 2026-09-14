@@ -274,9 +274,11 @@ class SmartDateParser {
             start: m.start,
             end: m.end,
             raw: raw,
-            label: _dateLabel(due, true)),
+            label: _dateLabel(due, !isDays)),
         due: due,
-        hasTime: true);
+        // Relative day counts schedule a date only; hour/minute counts carry
+        // an exact moment and therefore also imply a reminder.
+        hasTime: !isDays);
   }
 
   _Candidate? _combinedDateTime(

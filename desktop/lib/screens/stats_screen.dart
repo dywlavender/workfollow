@@ -23,6 +23,8 @@ class _StatsScreenState extends State<StatsScreen> {
   Widget build(BuildContext context) {
     final tokens = WorkFollowTheme.of(context);
     final stats = StatsAggregator.aggregate(widget.controller.activeTasks,
+        // The weekly chart is week-to-date: Monday contributes one bar, and
+        // each following day adds one more bar through Sunday.
         trendDays: weeklyRange ? DateTime.now().weekday : 30);
     final total =
         stats.completedByList.values.fold<int>(0, (sum, value) => sum + value);
@@ -100,7 +102,7 @@ class _StatsScreenState extends State<StatsScreen> {
                         _CardTitle(
                             title: '完成趋势',
                             subtitle: weeklyRange
-                                ? '最近 7 天 · 每日完成数'
+                                ? '本周截至今日 · 每日完成数'
                                 : '最近 30 天 · 每日完成数'),
                         const SizedBox(height: 15),
                         Expanded(
