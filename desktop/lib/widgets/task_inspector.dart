@@ -200,9 +200,13 @@ class _TaskInspectorState extends State<TaskInspector> {
   void _showActionFeedback(TaskActionResult result) {
     if (!mounted || !result.success || result.message == null) return;
     final undo = result.undo;
-    final canUndo = undo != null && undo.label == '撤销修改';
+    final canUndo = undo != null &&
+        (undo.label == '撤销修改' || result.destination == TaskDestination.hidden);
     final id = result.taskId;
-    final moved = id != null && result.destination != TaskDestination.current;
+    final moved = id != null &&
+        result.destination != null &&
+        result.destination != TaskDestination.current &&
+        result.destination != TaskDestination.hidden;
     if (!moved && !canUndo) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
       behavior: SnackBarBehavior.floating,

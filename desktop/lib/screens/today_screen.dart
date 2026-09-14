@@ -171,6 +171,7 @@ class _TodayScreenState extends State<TodayScreen> {
                                             key: const ValueKey(
                                                 'list-view-title'),
                                             dense: compact || wideInspector,
+                                            icon: _viewIcon(c.view),
                                             eyebrow: c.view ==
                                                         WorkspaceView.today &&
                                                     c.selectedListName == null
@@ -539,6 +540,21 @@ class _TodayScreenState extends State<TodayScreen> {
     final now = DateTime.now();
     return '${now.month} 月 ${now.day} 日 · 星期${'一二三四五六日'[now.weekday - 1]}';
   }
+
+  IconData _viewIcon(WorkspaceView view) => switch (view) {
+        WorkspaceView.recent => Icons.date_range_outlined,
+        WorkspaceView.today => Icons.wb_sunny_outlined,
+        WorkspaceView.overdue => Icons.history_rounded,
+        WorkspaceView.inbox => Icons.inbox_outlined,
+        WorkspaceView.plan => Icons.upcoming_outlined,
+        WorkspaceView.all => Icons.list_alt_outlined,
+        WorkspaceView.completed => Icons.check_circle_outline_rounded,
+        WorkspaceView.work ||
+        WorkspaceView.study ||
+        WorkspaceView.personal =>
+          Icons.list_rounded,
+        _ => Icons.checklist_rounded,
+      };
 }
 
 /// Empty state for the persistent wide-window inspector. It keeps the right
@@ -630,7 +646,12 @@ class _BulkBar extends StatelessWidget {
               Builder(
                   builder: (anchor) => TextButton(
                       onPressed: () async {
-                        final result = await TaskSchedulePicker.show(anchor);
+                        // Bulk date changes start as an all-day draft; an
+                        // explicit time is opt-in, matching the single-task
+                        // schedule picker and avoiding an accidental "now"
+                        // time on every selected task.
+                        final result = await TaskSchedulePicker.show(anchor,
+                            hasTime: false);
                         if (result != null)
                           controller.taskActions.bulkSchedule(
                               controller.multiSelectedTaskIds,

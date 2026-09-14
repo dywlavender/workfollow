@@ -205,6 +205,31 @@ void main() {
     expect(find.byKey(const ValueKey('task-title-editor')), findsNothing);
   });
 
+  testWidgets(
+      'ROW-007 ROW-008 ROW-009 ROW-010 multi-selection keeps completion state separate',
+      (tester) async {
+    final controller = WorkspaceController(seedData: false);
+    addTearDown(controller.dispose);
+    controller.addTask('多选未完成');
+    final task = controller.tasks.single;
+
+    await tester.pumpWidget(MaterialApp(
+        theme: WorkFollowThemeData.light(),
+        home: Scaffold(
+            body: TaskRow(
+                task: task,
+                controller: controller,
+                selected: false,
+                multiSelected: true))));
+    await tester.pump();
+
+    final checkbox = find.byKey(ValueKey('task-row-checkbox-${task.id}'));
+    expect(tester.widget<Checkbox>(checkbox).value, isFalse);
+    await tester.tap(checkbox);
+    await tester.pump();
+    expect(controller.tasks.single.completed, isTrue);
+  });
+
   testWidgets('KEY-004 Escape unwinds the fixed inspector selection',
       (tester) async {
     tester.view.physicalSize = const Size(1280, 820);
@@ -275,6 +300,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const ValueKey('list-view-title')), findsOneWidget);
+    expect(find.byKey(const ValueKey('list-view-icon')), findsOneWidget);
     expect(find.byKey(const ValueKey('list-sort')), findsOneWidget);
     expect(find.byKey(const ValueKey('list-actions')), findsOneWidget);
     expect(find.byKey(const ValueKey('quick-add-title')), findsOneWidget);

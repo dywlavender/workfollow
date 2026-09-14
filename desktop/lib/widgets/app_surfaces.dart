@@ -59,7 +59,8 @@ class PageHeader extends StatelessWidget {
       this.eyebrow,
       this.trailing,
       this.eyebrowColor,
-      this.dense = false});
+      this.dense = false,
+      this.icon});
 
   final String title;
   final String? subtitle;
@@ -69,6 +70,9 @@ class PageHeader extends StatelessWidget {
 
   /// Compact layout for short windows: drops the eyebrow, smaller title.
   final bool dense;
+
+  /// Optional leading symbol used by task-list headers.
+  final IconData? icon;
 
   @override
   Widget build(BuildContext context) {
@@ -96,13 +100,33 @@ class PageHeader extends StatelessWidget {
                             letterSpacing: .2))),
                 const SizedBox(height: 10),
               ],
-              Text(title,
-                  style: TextStyle(
-                      color: tokens.textPrimary,
-                      fontSize: dense ? 21 : 26,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: dense ? -.4 : -.55,
-                      height: 1.15)),
+              if (icon == null)
+                Text(title,
+                    style: TextStyle(
+                        color: tokens.textPrimary,
+                        fontSize: dense ? 21 : 26,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: dense ? -.4 : -.55,
+                        height: 1.15))
+              else
+                Row(
+                  children: [
+                    Icon(icon,
+                        key: const ValueKey('list-view-icon'),
+                        size: dense ? 21 : 24,
+                        color: tokens.textSecondary),
+                    const SizedBox(width: 9),
+                    Expanded(
+                      child: Text(title,
+                          style: TextStyle(
+                              color: tokens.textPrimary,
+                              fontSize: dense ? 21 : 26,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: dense ? -.4 : -.55,
+                              height: 1.15)),
+                    ),
+                  ],
+                ),
               if (subtitle != null) ...[
                 SizedBox(height: dense ? 4 : 7),
                 Text(subtitle!,

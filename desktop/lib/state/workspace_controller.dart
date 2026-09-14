@@ -494,7 +494,8 @@ class WorkspaceController extends ChangeNotifier {
   }
 
   bool _isInRecentWindow(TaskItem task, {DateTime? now}) {
-    return taskProjection.isInRecentWindow(task, reference: now ?? _dateReference);
+    return taskProjection.isInRecentWindow(task,
+        reference: now ?? _dateReference);
   }
 
   List<MigrationListRecord> get lists => List.unmodifiable(_lists);
@@ -656,15 +657,21 @@ class WorkspaceController extends ChangeNotifier {
 
   void _setSelectedTaskId(String? id) {
     _selectedTaskId = id;
+    // A single selection and a Cmd/Shift multi-selection are mutually
+    // exclusive. Clearing this in the facade keeps external opens (search,
+    // reminders and calendar) from inheriting stale bulk state.
+    taskSelection.clearMulti();
     if (id == null) {
       taskSelection.clear();
     } else {
       taskSelection.select(id);
     }
+    _syncLegacySelection();
   }
 
   void _syncLegacySelection() {
-    _multiSelectedTaskIds = Set<String>.from(taskSelection.multiSelectedTaskIds);
+    _multiSelectedTaskIds =
+        Set<String>.from(taskSelection.multiSelectedTaskIds);
     _multiSelectAnchorId = taskSelection.anchorTaskId;
   }
 
@@ -696,7 +703,8 @@ class WorkspaceController extends ChangeNotifier {
     return TaskDestination.list;
   }
 
-  TaskActionResult _taskResult(String id, {String? message, UndoCommand? undo}) {
+  TaskActionResult _taskResult(String id,
+      {String? message, UndoCommand? undo}) {
     final task = _taskById(id);
     if (task == null) {
       return TaskActionResult.failure('missing-task', '任务不存在');
@@ -783,8 +791,7 @@ class WorkspaceController extends ChangeNotifier {
           return TaskActionResult.failure('already-active', '任务尚未完成');
         }
         toggleTask(id);
-        return _taskResult(id,
-            message: '任务已恢复', undo: _undoTaskSnapshot(task));
+        return _taskResult(id, message: '任务已恢复', undo: _undoTaskSnapshot(task));
       case 'setSchedule':
         final (id, value) = payload as (String, TaskScheduleDraft);
         final before = _taskById(id);
@@ -804,7 +811,8 @@ class WorkspaceController extends ChangeNotifier {
         if (task == null) {
           return TaskActionResult.failure('missing-task', '任务不存在');
         }
-        if (task.dueAt == null) return TaskActionResult.failure('unchanged', '任务没有安排日期');
+        if (task.dueAt == null)
+          return TaskActionResult.failure('unchanged', '任务没有安排日期');
         updateTaskDue(id, null);
         return _taskResult(id,
             message: '已清除安排日期', undo: _undoTaskSnapshot(task));
@@ -939,11 +947,13 @@ class WorkspaceController extends ChangeNotifier {
       case 'duplicate':
         final id = payload as String;
         final copyId = duplicateTask(id);
-        if (copyId == null) return TaskActionResult.failure('duplicate-failed', '无法创建副本');
+        if (copyId == null)
+          return TaskActionResult.failure('duplicate-failed', '无法创建副本');
         return _taskResult(copyId, message: '已创建任务副本');
       case 'delete':
         final id = payload as String;
-        if (_taskById(id) == null) return TaskActionResult.failure('missing-task', '任务不存在');
+        if (_taskById(id) == null)
+          return TaskActionResult.failure('missing-task', '任务不存在');
         removeTask(id);
         return _taskResult(id,
             message: _lastActionMessage,
@@ -1267,8 +1277,8 @@ class WorkspaceController extends ChangeNotifier {
       default:
         return;
     }
-    taskActions.setSchedule(id,
-        TaskScheduleDraft(dueAt: target, hasTime: task.scheduledWithTime));
+    taskActions.setSchedule(
+        id, TaskScheduleDraft(dueAt: target, hasTime: task.scheduledWithTime));
   }
 
   // -------------------------------------------------------------------------
@@ -1402,8 +1412,8 @@ class WorkspaceController extends ChangeNotifier {
           taskActions.setSchedule(
               id,
               TaskScheduleDraft(
-                  dueAt: today.add(const Duration(days: 7)).add(
-                      Duration(hours: due?.hour ?? 0, minutes: due?.minute ?? 0)),
+                  dueAt: today.add(const Duration(days: 7)).add(Duration(
+                      hours: due?.hour ?? 0, minutes: due?.minute ?? 0)),
                   hasTime: task.scheduledWithTime));
         }
       case MatrixQuadrant.delegate:
@@ -1417,8 +1427,8 @@ class WorkspaceController extends ChangeNotifier {
           taskActions.setSchedule(
               id,
               TaskScheduleDraft(
-                  dueAt: today.add(const Duration(days: 7)).add(
-                      Duration(hours: due?.hour ?? 0, minutes: due?.minute ?? 0)),
+                  dueAt: today.add(const Duration(days: 7)).add(Duration(
+                      hours: due?.hour ?? 0, minutes: due?.minute ?? 0)),
                   hasTime: task.scheduledWithTime));
         }
     }
@@ -1824,7 +1834,8 @@ class WorkspaceController extends ChangeNotifier {
       completed: false,
       clearCompletedAt: true,
       updatedAt: DateTime.now().toIso8601String(),
-      timeLabel: taskTimeLabelFor(due, hasTime: task.scheduledWithTime) ?? '未安排',
+      timeLabel:
+          taskTimeLabelFor(due, hasTime: task.scheduledWithTime) ?? '未安排',
     );
     // Undo also reverts the recurrence: the generated next occurrence is
     // removed and the completed record carries its rule again.
@@ -1934,7 +1945,8 @@ class WorkspaceController extends ChangeNotifier {
 
   void selectAllVisibleTasks() {
     taskSelection.clearMulti();
-    taskSelection.multiSelectedTaskIds.addAll(visibleTasks.map((task) => task.id));
+    taskSelection.multiSelectedTaskIds
+        .addAll(visibleTasks.map((task) => task.id));
     _syncLegacySelection();
     _notify();
   }
@@ -2119,7 +2131,8 @@ class WorkspaceController extends ChangeNotifier {
         completed: false,
         clearCompletedAt: true,
         updatedAt: now,
-        timeLabel: taskTimeLabelFor(due, hasTime: task.scheduledWithTime) ?? '未安排',
+        timeLabel:
+            taskTimeLabelFor(due, hasTime: task.scheduledWithTime) ?? '未安排',
         recurrenceType: rule?.$1 ?? task.recurrenceType,
         recurrenceConfig: rule?.$2,
         clearRecurrenceConfig: rule != null && rule.$2 == null,
@@ -2275,15 +2288,17 @@ class WorkspaceController extends ChangeNotifier {
     _notify();
     return _taskResult(task.id,
         message: '已添加到${task.listName}',
-        undo: UndoCommand(label: '撤销添加', execute: () async {
-          final index = _tasks.indexWhere((item) => item.id == task.id);
-          if (index < 0) return false;
-          unawaited(_reminders.cancel(task.id));
-          _tasks.removeAt(index);
-          _schedulePersist();
-          _notify();
-          return true;
-        }));
+        undo: UndoCommand(
+            label: '撤销添加',
+            execute: () async {
+              final index = _tasks.indexWhere((item) => item.id == task.id);
+              if (index < 0) return false;
+              unawaited(_reminders.cancel(task.id));
+              _tasks.removeAt(index);
+              _schedulePersist();
+              _notify();
+              return true;
+            }));
   }
 
   bool addTask(String rawTitle,
@@ -2510,8 +2525,7 @@ class WorkspaceController extends ChangeNotifier {
 
   void updateTaskRecurrence(String id, String type,
       {Map<String, dynamic>? config}) {
-    final recurrence =
-        RecurrenceDraft(type: type, config: config).normalized();
+    final recurrence = RecurrenceDraft(type: type, config: config).normalized();
     _replaceTask(
       id,
       (task) => task.copyWith(

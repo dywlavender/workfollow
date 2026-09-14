@@ -65,6 +65,22 @@ void main() {
     expect(selection.multiSelectedTaskIds, isEmpty);
   });
 
+  test('ARCH-009 ROW-001 opening a task clears stale bulk selection', () {
+    final controller = WorkspaceController(seedData: false);
+    addTearDown(controller.dispose);
+    controller.addTask('第一个任务');
+    controller.addTask('第二个任务');
+    final firstId = controller.tasks[0].id;
+    final secondId = controller.tasks[1].id;
+
+    controller.toggleMultiSelect(secondId);
+    expect(controller.multiSelectedTaskIds, {secondId});
+
+    controller.openTask(firstId);
+    expect(controller.selectedTaskId, firstId);
+    expect(controller.multiSelectedTaskIds, isEmpty);
+  });
+
   test(
       'ARCH-004 DATE-013 LIST-004 TAG-003 projection keeps smart-list rules in one pure object',
       () {

@@ -206,9 +206,13 @@ class _TaskRowState extends State<TaskRow> {
     final undo = result.undo;
     // Keep the destination affordance for rows that leave the current view;
     // inline property edits stay put and can expose their local snapshot undo.
-    final canUndo = undo != null && undo.label == '撤销修改';
+    final canUndo = undo != null &&
+        (undo.label == '撤销修改' || result.destination == TaskDestination.hidden);
     final id = result.taskId;
-    final moved = id != null && result.destination != TaskDestination.current;
+    final moved = id != null &&
+        result.destination != null &&
+        result.destination != TaskDestination.current &&
+        result.destination != TaskDestination.hidden;
     if (!moved && !canUndo) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
       behavior: SnackBarBehavior.floating,
@@ -316,25 +320,23 @@ class _TaskRowState extends State<TaskRow> {
                                   child: Checkbox(
                                       key: ValueKey(
                                           'task-row-checkbox-${task.id}'),
-                                      value: widget.multiSelected ||
-                                          task.completed,
+                                      // Multi-selection is a row state, not a
+                                      // completion state. A selected but
+                                      // unfinished task must keep an empty
+                                      // checkbox, otherwise Cmd-click makes
+                                      // it look completed.
+                                      value: task.completed,
                                       activeColor: task.completed
                                           ? tokens.success
                                           : priorityColor,
-                                      semanticLabel: widget.multiSelected
-                                          ? '取消选择'
-                                          : task.completed
-                                              ? '标记未完成'
-                                              : '完成任务',
+                                      semanticLabel:
+                                          task.completed ? '标记未完成' : '完成任务',
                                       shape: RoundedRectangleBorder(
                                           borderRadius:
                                               BorderRadius.circular(5)),
                                       side: BorderSide(
                                           color: priorityColor, width: 1.6),
-                                      onChanged: (_) => widget.multiSelected
-                                          ? widget.controller
-                                              .toggleMultiSelect(task.id)
-                                          : _complete())),
+                                      onChanged: (_) => _complete())),
                               const SizedBox(width: 9),
                               Expanded(
                                 child: Column(
@@ -384,6 +386,8 @@ class _TaskRowState extends State<TaskRow> {
                                     if (preview.isNotEmpty) ...[
                                       const SizedBox(height: 2),
                                       Text(preview,
+                                          key: ValueKey(
+                                              'task-row-preview-${task.id}'),
                                           maxLines: 1,
                                           overflow: TextOverflow.ellipsis,
                                           style: TextStyle(
