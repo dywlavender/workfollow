@@ -75,6 +75,8 @@ void main() {
 
     await tester.pumpWidget(const WorkFollowApp(demoMode: true));
     await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('任务'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('计划').first);
     await tester.pumpAndSettle();
 
@@ -83,6 +85,61 @@ void main() {
     expect(find.text('全部笔记'), findsNothing);
     expect(find.text('阅读《设计心理学》第 4 章并做摘录'), findsWidgets);
     expect(find.byType(Tooltip), findsWidgets);
+
+    await tester.tap(find.byTooltip('笔记'));
+    await tester.pumpAndSettle();
+    expect(find.text('全部笔记'), findsOneWidget);
+    expect(find.text('清单'), findsNothing);
+  });
+
+  testWidgets('first rail scopes the second column to its workspace',
+      (tester) async {
+    tester.view.physicalSize = const Size(1400, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    await tester.pumpWidget(const WorkFollowApp(demoMode: true));
+    await tester.pumpAndSettle();
+
+    // Home has dashboard actions only; task and note trees are not leaked.
+    expect(find.byKey(const ValueKey('rail-context-home')), findsOneWidget);
+    expect(find.text('清单'), findsNothing);
+    expect(find.text('全部笔记'), findsNothing);
+
+    await tester.tap(find.byTooltip('任务'));
+    await tester.pumpAndSettle();
+    expect(find.text('清单'), findsOneWidget);
+    expect(find.text('全部笔记'), findsNothing);
+    expect(find.text('日历'), findsNothing);
+
+    await tester.tap(find.byTooltip('日历'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('rail-context-calendar')), findsOneWidget);
+    expect(find.text('清单'), findsNothing);
+    expect(find.text('全部笔记'), findsNothing);
+
+    await tester.tap(find.byTooltip('四象限'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('rail-context-matrix')), findsOneWidget);
+    expect(find.text('清单'), findsNothing);
+
+    await tester.tap(find.byTooltip('看板'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('rail-context-board')), findsOneWidget);
+    expect(find.text('全部笔记'), findsNothing);
+
+    await tester.tap(find.byTooltip('习惯'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('rail-context-habits')), findsOneWidget);
+    expect(find.text('清单'), findsNothing);
+
+    await tester.tap(find.byTooltip('统计'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('rail-context-stats')), findsOneWidget);
+    expect(find.text('全部笔记'), findsNothing);
 
     await tester.tap(find.byTooltip('笔记'));
     await tester.pumpAndSettle();
@@ -100,6 +157,8 @@ void main() {
     });
 
     await tester.pumpWidget(const WorkFollowApp(demoMode: true));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('任务'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('今天').first);
     await tester.pumpAndSettle();
@@ -145,6 +204,8 @@ void main() {
     });
 
     await tester.pumpWidget(const WorkFollowApp(demoMode: true));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('任务'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('今天').first);
     await tester.pumpAndSettle();
@@ -224,6 +285,8 @@ void main() {
     });
 
     await tester.pumpWidget(const WorkFollowApp(demoMode: true));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('任务'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('今天').first);
     await tester.pumpAndSettle();

@@ -18,15 +18,13 @@ void main() {
     await tester.pumpWidget(const WorkFollowApp(demoMode: true));
     await tester.pumpAndSettle();
 
-    await tester.ensureVisible(find.text('统计'));
-    await tester.tap(find.text('统计').last);
+    await tester.tap(find.byTooltip('统计'));
     await tester.pumpAndSettle();
     expect(find.text('完成趋势'), findsOneWidget);
     expect(find.text('完成热力图'), findsOneWidget);
     expect(find.text('清单分布'), findsOneWidget);
 
-    await tester.ensureVisible(find.text('四象限'));
-    await tester.tap(find.text('四象限').last);
+    await tester.tap(find.byTooltip('四象限'));
     await tester.pumpAndSettle();
     expect(find.text('立即做'), findsOneWidget);
     expect(find.text('安排做'), findsOneWidget);
@@ -44,20 +42,17 @@ void main() {
     await tester.pumpWidget(const WorkFollowApp(demoMode: true));
     await tester.pumpAndSettle();
 
-    await tester.ensureVisible(find.text('看板'));
-    await tester.tap(find.text('看板').last);
+    await tester.tap(find.byTooltip('看板'));
     await tester.pumpAndSettle();
     expect(find.text('优先级'), findsOneWidget);
     expect(find.text('高优先级'), findsOneWidget);
 
-    await tester.ensureVisible(find.text('习惯'));
-    await tester.tap(find.text('习惯').last);
+    await tester.tap(find.byTooltip('习惯'));
     await tester.pumpAndSettle();
     expect(find.text('晨间拉伸'), findsOneWidget);
     expect(find.text('连续'), findsNWidgets(2));
 
-    await tester.ensureVisible(find.text('日历'));
-    await tester.tap(find.text('日历').last);
+    await tester.tap(find.byTooltip('日历'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('周'));
     await tester.pumpAndSettle();
@@ -118,6 +113,8 @@ void main() {
     });
     await tester.pumpWidget(const WorkFollowApp(demoMode: true));
     await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('任务'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('今天').first);
     await tester.pumpAndSettle();
 
@@ -142,6 +139,8 @@ void main() {
     });
     await tester.pumpWidget(const WorkFollowApp(demoMode: true));
     await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('任务'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('今天').first);
     await tester.pumpAndSettle();
 
@@ -158,6 +157,8 @@ void main() {
       tester.view.resetDevicePixelRatio();
     });
     await tester.pumpWidget(const WorkFollowApp(demoMode: true));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('任务'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('今天').first);
     await tester.pumpAndSettle();
@@ -184,6 +185,8 @@ void main() {
       tester.view.resetDevicePixelRatio();
     });
     await tester.pumpWidget(const WorkFollowApp(demoMode: true));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('任务'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('今天').first);
     await tester.pumpAndSettle();
@@ -243,6 +246,8 @@ void main() {
     });
     await tester.pumpWidget(const WorkFollowApp(demoMode: true));
     await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('任务'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('今天').first);
     await tester.pumpAndSettle();
     await tester.tap(find.text('准备季度产品评审演示文稿').last);
@@ -285,6 +290,8 @@ void main() {
   testWidgets('recent and overdue smart lists are reachable from the rail',
       (tester) async {
     await tester.pumpWidget(const WorkFollowApp(demoMode: true));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('任务'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('最近 7 天').first);
     await tester.pumpAndSettle();

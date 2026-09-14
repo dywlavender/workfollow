@@ -265,6 +265,8 @@ void main() {
       'external links open the requested task and note on a narrow window',
       (tester) async {
     await start(tester, size: const Size(880, 600));
+    await tester.tap(find.byTooltip('任务'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('今天').first);
     await tester.pumpAndSettle();
     final c = tester.widget<TodayScreen>(find.byType(TodayScreen)).controller;
@@ -289,6 +291,8 @@ void main() {
       'task list opens a deliberate inline editor and rescheduling has a clear destination',
       (tester) async {
     await start(tester);
+    await tester.tap(find.byTooltip('任务'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('今天').first);
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('task-title-editor')), findsNothing);
@@ -326,6 +330,8 @@ void main() {
       'date popup cancels edits and supports manual dates with explicit time',
       (tester) async {
     await start(tester);
+    await tester.tap(find.byTooltip('任务'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('今天').first);
     await tester.pumpAndSettle();
     await tester.tap(find.text('给设计顾问发一封确认邮件').last);
@@ -405,6 +411,8 @@ void main() {
       (tester) async {
     await start(tester, size: const Size(880, 600));
     await tester.tap(find.byTooltip('切换深色'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('任务'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('今天').first);
     await tester.pumpAndSettle();

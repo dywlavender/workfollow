@@ -728,6 +728,8 @@ void main() {
     expect(tester.widget<SwitchListTile>(switchFinder).value, isTrue);
     await tester.tap(find.byTooltip('关闭'));
     await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('任务'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('今天').first);
     await tester.pumpAndSettle();
     expect(find.text('选择一个任务开始编辑'), findsOneWidget);

@@ -54,9 +54,7 @@ class AppRail extends StatelessWidget {
                 Expanded(
                   child: SingleChildScrollView(
                     padding: const EdgeInsets.fromLTRB(9, 6, 9, 12),
-                    child: controller.view == WorkspaceView.notes
-                        ? _NotesNavigation(controller: controller)
-                        : _TaskNavigation(controller: controller),
+                    child: _ContextNavigation(controller: controller),
                   ),
                 ),
                 _RailFooter(
@@ -69,6 +67,175 @@ class AppRail extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// Maps every first-level rail destination to its own second-column grammar.
+///
+/// The old implementation only distinguished tasks from notes, which meant
+/// that calendar, matrix, board, habits and stats all rendered the complete
+/// task tree. TickTick keeps those modules quiet and contextual, so the
+/// second column must change as soon as the first rail changes.
+class _ContextNavigation extends StatelessWidget {
+  const _ContextNavigation({required this.controller});
+
+  final WorkspaceController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    return switch (controller.view) {
+      WorkspaceView.home => _HomeNavigation(controller: controller),
+      WorkspaceView.notes => _NotesNavigation(controller: controller),
+      WorkspaceView.calendar => _CalendarNavigation(controller: controller),
+      WorkspaceView.matrix => _MatrixNavigation(controller: controller),
+      WorkspaceView.board => _BoardNavigation(controller: controller),
+      WorkspaceView.habits => _HabitsNavigation(controller: controller),
+      WorkspaceView.stats => _StatsNavigation(controller: controller),
+      _ => _TaskNavigation(controller: controller),
+    };
+  }
+}
+
+/// Home is a dashboard rather than a task list. Keep only dashboard actions
+/// here; task filters remain in the task context after selecting the task rail.
+class _HomeNavigation extends StatelessWidget {
+  const _HomeNavigation({required this.controller});
+
+  final WorkspaceController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _RailSectionHeader(label: '概览'),
+        _RailItem(
+          key: const ValueKey('rail-context-home'),
+          label: '首页',
+          icon: Icons.check_rounded,
+          selected: controller.view == WorkspaceView.home,
+          onTap: () => controller.selectView(WorkspaceView.home),
+        ),
+        _RailItem(
+          key: const ValueKey('rail-context-home-quick-add'),
+          label: '快速录入',
+          icon: Icons.add_task_outlined,
+          selected: false,
+          onTap: controller.requestQuickAddFocus,
+        ),
+      ],
+    );
+  }
+}
+
+/// Calendar owns its month/week controls in the page header. The second
+/// column intentionally exposes only the calendar destination instead of
+/// duplicating task filters that belong to the task context.
+class _CalendarNavigation extends StatelessWidget {
+  const _CalendarNavigation({required this.controller});
+
+  final WorkspaceController controller;
+
+  @override
+  Widget build(BuildContext context) => _SingleContextNavigation(
+        controller: controller,
+        sectionLabel: '日历',
+        label: '日历',
+        icon: Icons.calendar_month_outlined,
+        view: WorkspaceView.calendar,
+      );
+}
+
+class _MatrixNavigation extends StatelessWidget {
+  const _MatrixNavigation({required this.controller});
+
+  final WorkspaceController controller;
+
+  @override
+  Widget build(BuildContext context) => _SingleContextNavigation(
+        controller: controller,
+        sectionLabel: '四象限',
+        label: '四象限',
+        icon: Icons.grid_view_rounded,
+        view: WorkspaceView.matrix,
+      );
+}
+
+class _BoardNavigation extends StatelessWidget {
+  const _BoardNavigation({required this.controller});
+
+  final WorkspaceController controller;
+
+  @override
+  Widget build(BuildContext context) => _SingleContextNavigation(
+        controller: controller,
+        sectionLabel: '看板',
+        label: '看板',
+        icon: Icons.view_column_outlined,
+        view: WorkspaceView.board,
+      );
+}
+
+class _HabitsNavigation extends StatelessWidget {
+  const _HabitsNavigation({required this.controller});
+
+  final WorkspaceController controller;
+
+  @override
+  Widget build(BuildContext context) => _SingleContextNavigation(
+        controller: controller,
+        sectionLabel: '习惯',
+        label: '习惯',
+        icon: Icons.repeat_rounded,
+        view: WorkspaceView.habits,
+      );
+}
+
+class _StatsNavigation extends StatelessWidget {
+  const _StatsNavigation({required this.controller});
+
+  final WorkspaceController controller;
+
+  @override
+  Widget build(BuildContext context) => _SingleContextNavigation(
+        controller: controller,
+        sectionLabel: '统计',
+        label: '统计',
+        icon: Icons.insights_outlined,
+        view: WorkspaceView.stats,
+      );
+}
+
+class _SingleContextNavigation extends StatelessWidget {
+  const _SingleContextNavigation({
+    required this.controller,
+    required this.sectionLabel,
+    required this.label,
+    required this.icon,
+    required this.view,
+  });
+
+  final WorkspaceController controller;
+  final String sectionLabel;
+  final String label;
+  final IconData icon;
+  final WorkspaceView view;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _RailSectionHeader(label: sectionLabel),
+        _RailItem(
+          key: ValueKey('rail-context-${view.name}'),
+          label: label,
+          icon: icon,
+          selected: controller.view == view,
+          onTap: () => controller.selectView(view),
+        ),
+      ],
     );
   }
 }
@@ -157,38 +324,6 @@ class _TaskNavigation extends StatelessWidget {
             .where((list) => list.name != '收集箱')
             .map((list) => _TaskListItem(controller: controller, list: list)),
         _TagSection(controller: controller),
-        _RailSectionHeader(label: '位置'),
-        _RailItem(
-          label: '日历',
-          icon: Icons.calendar_month_outlined,
-          selected: controller.view == WorkspaceView.calendar,
-          onTap: () => controller.selectView(WorkspaceView.calendar),
-        ),
-        _RailItem(
-          label: '四象限',
-          icon: Icons.grid_view_rounded,
-          selected: controller.view == WorkspaceView.matrix,
-          onTap: () => controller.selectView(WorkspaceView.matrix),
-        ),
-        _RailItem(
-          label: '看板',
-          icon: Icons.view_column_outlined,
-          count: controller.countFor(WorkspaceView.board),
-          selected: controller.view == WorkspaceView.board,
-          onTap: () => controller.selectView(WorkspaceView.board),
-        ),
-        _RailItem(
-          label: '习惯',
-          icon: Icons.repeat_rounded,
-          selected: controller.view == WorkspaceView.habits,
-          onTap: () => controller.selectView(WorkspaceView.habits),
-        ),
-        _RailItem(
-          label: '统计',
-          icon: Icons.insights_outlined,
-          selected: controller.view == WorkspaceView.stats,
-          onTap: () => controller.selectView(WorkspaceView.stats),
-        ),
         _RailItem(
           label: '废纸篓',
           icon: Icons.delete_outline_rounded,
@@ -298,6 +433,21 @@ class _IconRail extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tokens = WorkFollowTheme.of(context);
+    final taskRailSelected = switch (controller.view) {
+      WorkspaceView.recent ||
+      WorkspaceView.today ||
+      WorkspaceView.overdue ||
+      WorkspaceView.inbox ||
+      WorkspaceView.plan ||
+      WorkspaceView.all ||
+      WorkspaceView.completed ||
+      WorkspaceView.work ||
+      WorkspaceView.study ||
+      WorkspaceView.personal ||
+      WorkspaceView.trash =>
+        true,
+      _ => false,
+    };
     return SizedBox(
       width: 52,
       child: Column(
@@ -314,7 +464,7 @@ class _IconRail extends StatelessWidget {
           _IconRailButton(
             label: '任务',
             icon: Icons.checklist_rounded,
-            selected: controller.isTaskView,
+            selected: taskRailSelected,
             onPressed: () => controller.selectView(WorkspaceView.today),
           ),
           _IconRailButton(
@@ -615,6 +765,7 @@ class _RailBrand extends StatelessWidget {
 
 class _RailItem extends StatefulWidget {
   const _RailItem({
+    super.key,
     required this.label,
     required this.icon,
     required this.selected,
