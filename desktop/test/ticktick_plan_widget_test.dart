@@ -177,6 +177,32 @@ void main() {
     expect(controller.lists, hasLength(4));
   });
 
+  testWidgets('QUICK-013 explicit list override keeps later @markers in title',
+      (tester) async {
+    final controller = WorkspaceController(seedData: false);
+    addTearDown(controller.dispose);
+    await tester.pumpWidget(MaterialApp(
+        theme: WorkFollowThemeData.light(),
+        home: Scaffold(body: QuickAddField(controller: controller))));
+
+    final field = find.byKey(const ValueKey('quick-add-title'));
+    await tester.enterText(field, '整理 @工作');
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('quick-add-list')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('menu-option-工作')));
+    await tester.pumpAndSettle();
+
+    // The chosen list is authoritative, but a different marker typed later
+    // is ordinary title text and must not disappear from the created task.
+    await tester.enterText(field, '整理 @工作 @个人');
+    await tester.pump();
+    await tester.tap(find.text('添加任务'));
+    await tester.pump();
+    expect(controller.tasks.single.listName, '工作');
+    expect(controller.tasks.single.title, '整理 @个人');
+  });
+
   testWidgets('QUICK-020 Escape releases focus before clearing the draft',
       (tester) async {
     final controller = WorkspaceController(seedData: false);
@@ -334,8 +360,8 @@ void main() {
     await tester.pumpWidget(MaterialApp(
         theme: WorkFollowThemeData.light(),
         home: Scaffold(
-            body: TaskRow(
-                task: task, controller: controller, selected: false))));
+            body:
+                TaskRow(task: task, controller: controller, selected: false))));
     await tester.pump();
 
     await tester.tap(find.byType(TaskRow));

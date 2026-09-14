@@ -257,10 +257,14 @@ class _QuickAddFieldState extends State<QuickAddField> {
             widget.controller.lists.any((list) => list.name == value.listName)
         ? value.listName
         : null;
+    // Once the user chooses a list explicitly, only that chosen marker is a
+    // property token. A later, different @marker is ordinary title text;
+    // silently dropping it would make the input and the created task diverge.
+    final effectiveList = listOverridden ? currentDraft.listName : parsedList;
     final titleSpans = value.spans
         .where((span) =>
             span.kind != SmartTokenKind.list ||
-            (parsedList != null && span.raw == '@$parsedList'))
+            (effectiveList != null && span.raw == '@$effectiveList'))
         .toList(growable: false);
     return parser.titleFromSpans(text.text, titleSpans);
   }

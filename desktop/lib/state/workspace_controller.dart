@@ -743,10 +743,127 @@ class WorkspaceController extends ChangeNotifier {
     return true;
   }
 
-  UndoCommand _undoTaskSnapshot(TaskItem snapshot) => UndoCommand(
-        label: '撤销修改',
-        execute: () => _restoreTaskSnapshot(snapshot),
-      );
+  UndoCommand _undoTaskSnapshot(TaskItem snapshot) {
+    late final UndoCommand command;
+    command = UndoCommand(
+      label: '撤销修改',
+      execute: () {
+        // A row/inspector may invoke the result's command directly instead of
+        // going through the shell toast. Only consume the global slot when it
+        // still refers to this exact command; a newer edit must not be lost.
+        if (identical(_lastTaskUndoCommand, command)) {
+          _lastTaskUndoCommand = null;
+        }
+        return _restoreTaskSnapshot(snapshot);
+      },
+    );
+    return command;
+  }
+
+  /// Completion has side effects beyond the original record: a recurring
+  /// task can create a next occurrence and register a second reminder. Keep
+  /// the pre-completion snapshot and spawned id in the command so an old toast
+  /// can never undo a later property edit.
+  UndoCommand _undoCompletion(TaskItem before, String? spawnedId) {
+    late final UndoCommand command;
+    command = UndoCommand(
+      label: '撤销完成',
+      execute: () {
+        if (identical(_lastTaskUndoCommand, command)) {
+          _lastTaskUndoCommand = null;
+        }
+        return _restoreCompletionSnapshot(before, spawnedId);
+      },
+    );
+    return command;
+  }
+
+  bool _restoreCompletionSnapshot(TaskItem before, String? spawnedId) {
+    final currentIndex = _tasks.indexWhere((task) => task.id == before.id);
+    if (currentIndex < 0 || !_tasks[currentIndex].completed) return false;
+    if (spawnedId != null) {
+      _tasks.removeWhere((task) => task.id == spawnedId);
+      unawaited(_reminders.cancel(spawnedId));
+    }
+    final writeIndex = _tasks.indexWhere((task) => task.id == before.id);
+    if (writeIndex < 0) return false;
+    _tasks[writeIndex] = before;
+    _lastCompletedTaskId = null;
+    _lastRecurrenceSpawnId = null;
+    _lastCompletedRecurrenceType = null;
+    _lastCompletedRecurrenceConfig = null;
+    _lastRemovedTaskId = null;
+    _lastActionKind = '';
+    _setSelectedTaskId(before.id);
+    _syncReminderFor(before);
+    _schedulePersist();
+    _notify();
+    return true;
+  }
+
+  UndoCommand _undoDeletion(TaskItem before) {
+    late final UndoCommand command;
+    command = UndoCommand(
+      label: '撤销删除',
+      execute: () {
+        if (identical(_lastTaskUndoCommand, command)) {
+          _lastTaskUndoCommand = null;
+        }
+        return _restoreDeletedSnapshot(before);
+      },
+    );
+    return command;
+  }
+
+  bool _restoreDeletedSnapshot(TaskItem before) {
+    final index = _tasks.indexWhere((task) => task.id == before.id);
+    if (index < 0 || _tasks[index].deletedAt == null) return false;
+    _tasks[index] = before;
+    _lastRemovedTaskId = null;
+    _lastActionKind = '';
+    _setSelectedTaskId(before.id);
+    _syncReminderFor(before);
+    _schedulePersist();
+    _notify();
+    return true;
+  }
+
+  UndoCommand _undoCreation(String taskId) {
+    late final UndoCommand command;
+    command = UndoCommand(
+      label: '撤销添加',
+      execute: () {
+        if (identical(_lastTaskUndoCommand, command)) {
+          _lastTaskUndoCommand = null;
+        }
+        final index = _tasks.indexWhere((task) => task.id == taskId);
+        if (index < 0) return false;
+        unawaited(_reminders.cancel(taskId));
+        _tasks.removeAt(index);
+        if (_selectedTaskId == taskId) _setSelectedTaskId(null);
+        _lastActionKind = '';
+        _schedulePersist();
+        _notify();
+        return true;
+      },
+    );
+    return command;
+  }
+
+  UndoCommand _undoBulk(_BulkTaskUndo bulk, String label) {
+    late final UndoCommand command;
+    command = UndoCommand(
+      label: label,
+      execute: () {
+        if (identical(_lastTaskUndoCommand, command)) {
+          _lastTaskUndoCommand = null;
+        }
+        _revertBulkUndo(bulk);
+        return true;
+      },
+    );
+    return command;
+  }
 
   TaskActionResult _dispatchTaskAction(String action, Object? payload) {
     switch (action) {
@@ -793,13 +910,9 @@ class WorkspaceController extends ChangeNotifier {
         if (task.completed) {
           return TaskActionResult.failure('already-complete', '任务已经完成');
         }
-        _lastTaskUndoCommand = null;
-        _lastBulkUndo = null;
         toggleTask(id);
-        return _taskResult(id,
-            message: _lastActionMessage,
-            undo: UndoCommand(label: '撤销完成', execute: undoLastAction),
-            rememberUndo: false);
+        final undo = _undoCompletion(task, _lastRecurrenceSpawnId);
+        return _taskResult(id, message: _lastActionMessage, undo: undo);
       case 'restore':
         final id = payload as String;
         final task = _taskById(id);
@@ -974,15 +1087,12 @@ class WorkspaceController extends ChangeNotifier {
         return _taskResult(copyId, message: '已创建任务副本', showFeedback: true);
       case 'delete':
         final id = payload as String;
-        if (_taskById(id) == null)
+        final before = _taskById(id);
+        if (before == null)
           return TaskActionResult.failure('missing-task', '任务不存在');
-        _lastTaskUndoCommand = null;
-        _lastBulkUndo = null;
         removeTask(id);
         return _taskResult(id,
-            message: _lastActionMessage,
-            undo: UndoCommand(label: '撤销删除', execute: undoLastAction),
-            rememberUndo: false);
+            message: _lastActionMessage, undo: _undoDeletion(before));
       case 'undo':
         return undoLastAction()
             ? const TaskActionResult.success(message: '已撤销')
@@ -995,9 +1105,11 @@ class WorkspaceController extends ChangeNotifier {
         if (_actionVersion == version) {
           return TaskActionResult.failure('unchanged', '没有可完成的任务');
         }
+        final bulk = _lastBulkUndo;
+        final undo = bulk == null ? null : _undoBulk(bulk, '撤销批量完成');
+        if (undo != null) _lastTaskUndoCommand = undo;
         return TaskActionResult.success(
-            message: _lastActionMessage,
-            undo: UndoCommand(label: '撤销批量完成', execute: undoLastAction));
+            message: _lastActionMessage, undo: undo);
       case 'bulkSchedule':
         final (ids, value) = payload as (List<String>, TaskScheduleDraft);
         final version = _actionVersion;
@@ -1006,9 +1118,11 @@ class WorkspaceController extends ChangeNotifier {
         if (_actionVersion == version) {
           return TaskActionResult.failure('unchanged', '没有可更新日期的任务');
         }
+        final bulk = _lastBulkUndo;
+        final undo = bulk == null ? null : _undoBulk(bulk, '撤销批量日期');
+        if (undo != null) _lastTaskUndoCommand = undo;
         return TaskActionResult.success(
-            message: _lastActionMessage,
-            undo: UndoCommand(label: '撤销批量日期', execute: undoLastAction));
+            message: _lastActionMessage, undo: undo);
       case 'bulkMove':
         final (ids, listName) = payload as (List<String>, String);
         final version = _actionVersion;
@@ -1017,9 +1131,11 @@ class WorkspaceController extends ChangeNotifier {
         if (_actionVersion == version) {
           return TaskActionResult.failure('unchanged', '没有可移动的任务');
         }
+        final bulk = _lastBulkUndo;
+        final undo = bulk == null ? null : _undoBulk(bulk, '撤销批量移动');
+        if (undo != null) _lastTaskUndoCommand = undo;
         return TaskActionResult.success(
-            message: _lastActionMessage,
-            undo: UndoCommand(label: '撤销批量移动', execute: undoLastAction));
+            message: _lastActionMessage, undo: undo);
       case 'bulkDelete':
         final ids = (payload as List<String>);
         final version = _actionVersion;
@@ -1028,9 +1144,11 @@ class WorkspaceController extends ChangeNotifier {
         if (_actionVersion == version) {
           return TaskActionResult.failure('unchanged', '没有可删除的任务');
         }
+        final bulk = _lastBulkUndo;
+        final undo = bulk == null ? null : _undoBulk(bulk, '撤销批量删除');
+        if (undo != null) _lastTaskUndoCommand = undo;
         return TaskActionResult.success(
-            message: _lastActionMessage,
-            undo: UndoCommand(label: '撤销批量删除', execute: undoLastAction));
+            message: _lastActionMessage, undo: undo);
       default:
         return TaskActionResult.failure('unknown-action', '不支持的任务操作：$action');
     }
@@ -2334,22 +2452,17 @@ class WorkspaceController extends ChangeNotifier {
     _taskSequence += 1;
     _tasks = [task, ..._tasks];
     _setSelectedTaskId(null);
+    // Creation is an undoable action even when the task remains in the
+    // current projection. Bump the same action version used by completion and
+    // deletion so the shell can surface one global undo affordance instead of
+    // making the result's command unreachable from the keyboard/menu path.
+    _actionVersion += 1;
+    _lastActionMessage = '已添加到${task.listName}';
     _syncReminderFor(task);
     _schedulePersist();
     _notify();
     return _taskResult(task.id,
-        message: '已添加到${task.listName}',
-        undo: UndoCommand(
-            label: '撤销添加',
-            execute: () async {
-              final index = _tasks.indexWhere((item) => item.id == task.id);
-              if (index < 0) return false;
-              unawaited(_reminders.cancel(task.id));
-              _tasks.removeAt(index);
-              _schedulePersist();
-              _notify();
-              return true;
-            }));
+        message: '已添加到${task.listName}', undo: _undoCreation(task.id));
   }
 
   bool addTask(String rawTitle,

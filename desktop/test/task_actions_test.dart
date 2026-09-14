@@ -158,6 +158,18 @@ void main() {
     controller.dispose();
   });
 
+  test('UNDO-001 creating in the current projection exposes global undo', () {
+    final controller = WorkspaceController(seedData: false);
+    addTearDown(controller.dispose);
+    final created = controller.createTask(const TaskDraft(title: '可撤销新增'));
+
+    expect(created.success, isTrue);
+    expect(created.undo, isNotNull);
+    expect(controller.actionVersion, 1);
+    expect(controller.taskActions.undo().success, isTrue);
+    expect(controller.tasks, isEmpty);
+  });
+
   test('DATE-008 clearing an empty schedule never leaves a time-only task', () {
     final controller = WorkspaceController(seedData: false);
     controller.addTask('待安排', forceUnscheduled: true);
@@ -239,5 +251,41 @@ void main() {
     expect(controller.tasks.single.priority, TaskPriority.low);
     expect(controller.taskActions.undo().success, isTrue);
     expect(controller.tasks.single.priority, TaskPriority.high);
+  });
+
+  test('UNDO-001 completion undo keeps its own command after a later edit', () {
+    final controller = WorkspaceController(seedData: false);
+    addTearDown(controller.dispose);
+    controller.addTask('完成后继续编辑');
+    final id = controller.tasks.single.id;
+
+    final completed = controller.taskActions.complete(id);
+    expect(completed.success, isTrue);
+    expect(controller.tasks.single.completed, isTrue);
+
+    // The global undo slot now belongs to the later property action. The
+    // completion result itself remains a stable, action-scoped command.
+    controller.taskActions.setPriority(id, TaskPriority.high);
+    expect(controller.taskActions.undo().success, isTrue);
+    expect(controller.tasks.single.priority, TaskPriority.none);
+    expect(controller.tasks.single.completed, isTrue);
+
+    expect(completed.undo, isNotNull);
+    expect(completed.undo!.execute(), isTrue);
+    expect(controller.tasks.single.completed, isFalse);
+  });
+
+  test('UNDO-001 delete undo restores the deleted snapshot', () {
+    final controller = WorkspaceController(seedData: false);
+    addTearDown(controller.dispose);
+    controller.addTask('可撤销删除');
+    final id = controller.tasks.single.id;
+
+    final deleted = controller.taskActions.delete(id);
+    expect(deleted.success, isTrue);
+    expect(controller.tasks.single.deletedAt, isNotNull);
+    expect(controller.taskActions.undo().success, isTrue);
+    expect(controller.tasks.single.deletedAt, isNull);
+    expect(controller.selectedTaskId, id);
   });
 }
