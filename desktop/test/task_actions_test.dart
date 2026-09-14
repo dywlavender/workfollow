@@ -225,6 +225,15 @@ void main() {
     expect(controller.tasks.single.description, '带链接');
     expect(controller.tasks.single.note, '带链接');
     expect(result.undo, isNotNull);
+
+    // The local store serializes TaskItem through the migration record. Keep
+    // this round-trip assertion close to the editor action so a relaunch
+    // cannot silently discard the structured document.
+    final reopened = TaskItem.fromMigration(
+        controller.tasks.single.toMigrationRecord());
+    expect(reopened.description, '带链接');
+    expect(reopened.contentJson?['quillDelta'], isNotNull);
+    expect(reopened.contentJson?['content'], isA<List>());
   });
 
   test('DOCUMENT-002 source note relation is an action-scoped mutation', () {
