@@ -22,7 +22,7 @@ class TaskContextMenu {
       const DesktopMenuEntry('tomorrow', '安排到明天', icon: Icons.event_outlined),
       const DesktopMenuEntry('date', '安排其他日期…',
           icon: Icons.calendar_today_outlined),
-      if (task.dueAt != null)
+      if (task.dueAt != null || task.hasDueTime == true)
         const DesktopMenuEntry('clear-date', '清除日期',
             icon: Icons.event_busy_outlined),
       const DesktopMenuEntry('priority-high', '设置高优先级',

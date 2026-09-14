@@ -157,4 +157,18 @@ void main() {
     expect(controller.tasks.first.title, '可复制任务（副本）');
     controller.dispose();
   });
+
+  test('DATE-008 clearing an empty schedule never leaves a time-only task', () {
+    final controller = WorkspaceController(seedData: false);
+    controller.addTask('待安排', forceUnscheduled: true);
+    final id = controller.tasks.single.id;
+
+    final result = controller.taskActions
+        .setSchedule(id, const TaskScheduleDraft(dueAt: null, hasTime: true));
+
+    expect(result.success, isFalse);
+    expect(controller.tasks.single.dueAt, isNull);
+    expect(controller.tasks.single.hasDueTime, isFalse);
+    controller.dispose();
+  });
 }

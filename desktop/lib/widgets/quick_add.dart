@@ -17,6 +17,9 @@ import 'task_tag_picker.dart';
 import 'task_reminder_picker.dart';
 import 'task_repeat_picker.dart';
 
+String _smartSpanKey(SmartSpan span) =>
+    '${span.kind.name}:${span.start}:${span.end}:${span.raw}';
+
 /// Text controller that paints recognized smart-entry fragments in place.
 /// The removable chips below the field remain the explicit dismiss affordance;
 /// this span styling gives the user immediate, TickTick-like feedback without
@@ -47,7 +50,7 @@ class _SmartTextEditingController extends TextEditingController {
           context: context, style: style, withComposing: withComposing);
     }
     final spans = _highlights
-        .where((span) => !_dismissed.contains(span.raw))
+        .where((span) => !_dismissed.contains(_smartSpanKey(span)))
         .toList()
       ..sort((a, b) => a.start.compareTo(b.start));
     if (spans.isEmpty) {
@@ -188,7 +191,7 @@ class _QuickAddFieldState extends State<QuickAddField> {
     final result =
         activeInput == text.text ? rawResult : parser.parse(activeInput);
     final kept = result.spans
-        .where((span) => !dismissedSpans.contains(span.raw))
+        .where((span) => !dismissedSpans.contains(_smartSpanKey(span)))
         .toList();
     bool keptKind(SmartTokenKind kind) => kept.any((span) => span.kind == kind);
     text.setHighlights(kept, dismissedSpans);
@@ -227,7 +230,7 @@ class _QuickAddFieldState extends State<QuickAddField> {
 
   String _maskDismissedTokens(String input, Iterable<SmartSpan> spans) {
     final ranges = spans
-        .where((span) => dismissedSpans.contains(span.raw))
+        .where((span) => dismissedSpans.contains(_smartSpanKey(span)))
         .toList()
       ..sort((a, b) => a.start.compareTo(b.start));
     if (ranges.isEmpty) return input;
@@ -278,9 +281,10 @@ class _QuickAddFieldState extends State<QuickAddField> {
   }
 
   bool get _hasDismissedScheduling =>
-      dismissedSpans.any((raw) => parser.parse(raw).spans.any((span) =>
-          span.kind == SmartTokenKind.date ||
-          span.kind == SmartTokenKind.time));
+      parser.parse(text.text).spans.any((span) =>
+          dismissedSpans.contains(_smartSpanKey(span)) &&
+          (span.kind == SmartTokenKind.date ||
+              span.kind == SmartTokenKind.time));
 
   DateTime? get _effectiveDue => customDate
       ? selectedDate
@@ -290,7 +294,7 @@ class _QuickAddFieldState extends State<QuickAddField> {
   bool get _effectiveHasTime => customDate ? hasTime : parse.hasTime;
 
   void _dismissSpan(SmartSpan span) {
-    dismissedSpans.add(span.raw);
+    dismissedSpans.add(_smartSpanKey(span));
     _reparse();
   }
 
@@ -538,8 +542,14 @@ class _QuickAddFieldState extends State<QuickAddField> {
                       child: Wrap(spacing: 6, runSpacing: 6, children: [
                         for (final span in parse.spans)
                           InputChip(
-                              key: ValueKey(
-                                  'smart-chip-${span.kind.name}-${span.raw}'),
+                              key: ValueKey(parse.spans
+                                          .where((other) =>
+                                              other.kind == span.kind &&
+                                              other.raw == span.raw)
+                                          .length >
+                                      1
+                                  ? 'smart-chip-${_smartSpanKey(span)}'
+                                  : 'smart-chip-${span.kind.name}-${span.raw}'),
                               label: Text(span.label,
                                   style: TextStyle(
                                       fontSize: 11,

@@ -2454,9 +2454,11 @@ class WorkspaceController extends ChangeNotifier {
       (task) => task.copyWith(
         dueAt: normalized?.toIso8601String(),
         clearDueAt: normalized == null,
-        hasDueTime: hasTime ??
-            (normalized != null &&
-                (normalized.hour != 0 || normalized.minute != 0)),
+        // A missing date is always unscheduled. Never persist an orphaned
+        // `hasDueTime` flag from a malformed picker/action payload.
+        hasDueTime: normalized == null
+            ? false
+            : hasTime ?? (normalized.hour != 0 || normalized.minute != 0),
         bucket: taskBucketForDate(normalized, completed: task.completed),
         timeLabel: normalized == null
             ? (task.completed ? '已完成' : '未安排')

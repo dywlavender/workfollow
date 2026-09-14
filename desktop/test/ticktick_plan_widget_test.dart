@@ -134,6 +134,33 @@ void main() {
     expect(due.minute, 0);
   });
 
+  testWidgets(
+      'QUICK-010 dismissing one duplicate token keeps the other token active',
+      (tester) async {
+    final controller = WorkspaceController(seedData: false);
+    addTearDown(controller.dispose);
+    await tester.pumpWidget(MaterialApp(
+        theme: WorkFollowThemeData.light(),
+        home: Scaffold(body: QuickAddField(controller: controller))));
+
+    final field = find.byKey(const ValueKey('quick-add-title'));
+    await tester.enterText(field, '#工作 #工作 记录');
+    await tester.pump();
+    expect(find.byType(InputChip), findsNWidgets(2));
+
+    // Dismiss by position: the second identical marker must remain parsed as
+    // a tag and only the first marker should stay in the title.
+    await tester.tap(find.descendant(
+        of: find.byType(InputChip).first, matching: find.byIcon(Icons.close)));
+    await tester.pump();
+    await tester.tap(find.text('添加任务'));
+    await tester.pump();
+
+    final task = controller.tasks.single;
+    expect(task.title, '#工作 记录');
+    expect(task.tags, ['工作']);
+  });
+
   testWidgets('QUICK-008 unknown list chips stay in the quick-add title',
       (tester) async {
     final controller = WorkspaceController(seedData: false);
@@ -268,6 +295,31 @@ void main() {
     final checkbox = find.byKey(ValueKey('task-row-checkbox-${task.id}'));
     expect(tester.widget<Checkbox>(checkbox).value, isFalse);
     await tester.tap(checkbox);
+    await tester.pump();
+    expect(controller.tasks.single.completed, isTrue);
+  });
+
+  testWidgets('KEY-001 KEY-002 Enter selects and Space completes a task row',
+      (tester) async {
+    final controller = WorkspaceController(seedData: false);
+    addTearDown(controller.dispose);
+    controller.selectView(WorkspaceView.inbox);
+    controller.addTask('键盘任务');
+    final task = controller.tasks.single;
+
+    await tester.pumpWidget(MaterialApp(
+        theme: WorkFollowThemeData.light(),
+        home: Scaffold(
+            body:
+                TaskRow(task: task, controller: controller, selected: false))));
+    await tester.pump();
+
+    await tester.tap(find.byType(TaskRow));
+    await tester.pump();
+    expect(controller.selectedTaskId, task.id);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.sendKeyEvent(LogicalKeyboardKey.space);
     await tester.pump();
     expect(controller.tasks.single.completed, isTrue);
   });
