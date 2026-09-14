@@ -33,9 +33,11 @@ class TodayScreen extends StatefulWidget {
       {super.key,
       required this.controller,
       this.compactDensity = false,
-      this.persistentInspector = true});
+      this.persistentInspector = true,
+      this.onOpenFocusTimer});
   final WorkspaceController controller;
   final bool compactDensity;
+  final VoidCallback? onOpenFocusTimer;
 
   /// When enabled, a wide window keeps the right-hand inspector visible even
   /// before a task is selected. This is the macOS default to match TickTick;
@@ -281,7 +283,8 @@ class _TodayScreenState extends State<TodayScreen> {
                   : TaskInspector(
                       key: ValueKey('wide-detail-${selected.id}'),
                       task: selected,
-                      controller: c),
+                      controller: c,
+                      onOpenFocusTimer: widget.onOpenFocusTimer),
             ),
           ],
         );
@@ -294,6 +297,7 @@ class _TodayScreenState extends State<TodayScreen> {
               key: ValueKey('detail-${selected.id}'),
               task: selected,
               controller: c,
+              onOpenFocusTimer: widget.onOpenFocusTimer,
               showBack: true,
               onBack: () => setState(() => detailOnly = false)),
       ]);
@@ -489,6 +493,7 @@ class _TodayScreenState extends State<TodayScreen> {
               key: ValueKey('editor-${task.id}'),
               task: task,
               controller: c,
+              onOpenFocusTimer: widget.onOpenFocusTimer,
               inline: true));
     }
     return DragTarget<String>(

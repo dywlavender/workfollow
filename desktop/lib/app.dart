@@ -612,7 +612,8 @@ class _WorkFollowShellState extends State<WorkFollowShell> {
                                     controller: controller,
                                     compactDensity: widget.compactDensity,
                                     persistentInspector:
-                                        widget.persistentInspector),
+                                        widget.persistentInspector,
+                                    onOpenFocusTimer: _openFocusTimer),
                               ),
                             ],
                           ),
@@ -775,11 +776,13 @@ class _WorkspaceContent extends StatelessWidget {
   const _WorkspaceContent(
       {required this.controller,
       required this.compactDensity,
-      required this.persistentInspector});
+      required this.persistentInspector,
+      this.onOpenFocusTimer});
 
   final WorkspaceController controller;
   final bool compactDensity;
   final bool persistentInspector;
+  final VoidCallback? onOpenFocusTimer;
 
   @override
   Widget build(BuildContext context) {
@@ -813,6 +816,7 @@ class _WorkspaceContent extends StatelessWidget {
             controller: controller,
             compactDensity: compactDensity,
             persistentInspector: persistentInspector,
+            onOpenFocusTimer: onOpenFocusTimer,
           ),
       },
     );

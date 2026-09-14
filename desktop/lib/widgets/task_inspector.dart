@@ -32,6 +32,7 @@ class TaskInspector extends StatefulWidget {
     this.showBack = false,
     this.onBack,
     this.inline = false,
+    this.onOpenFocusTimer,
   });
 
   final TaskItem task;
@@ -39,6 +40,7 @@ class TaskInspector extends StatefulWidget {
   final bool showBack;
   final VoidCallback? onBack;
   final bool inline;
+  final VoidCallback? onOpenFocusTimer;
 
   @override
   State<TaskInspector> createState() => _TaskInspectorState();
@@ -187,9 +189,13 @@ class _TaskInspectorState extends State<TaskInspector> {
       case 'attachment':
         await documentKey.currentState?.attachFile();
       case 'focus':
-        final count = widget.task.focusCount;
-        ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(count == 0 ? '还没有专注记录' : '已专注 $count 个番茄')));
+        if (widget.onOpenFocusTimer != null) {
+          widget.onOpenFocusTimer!();
+        } else {
+          final count = widget.task.focusCount;
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+              content: Text(count == 0 ? '还没有专注记录' : '已专注 $count 个番茄')));
+        }
       case 'relation':
         await _relation(anchor);
       case 'open-source-note':

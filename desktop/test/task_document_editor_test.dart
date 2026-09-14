@@ -176,4 +176,29 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('task-subtasks-block')), findsOneWidget);
   });
+
+  testWidgets('inspector More menu opens the existing focus workflow',
+      (tester) async {
+    final controller = WorkspaceController(seedData: false);
+    addTearDown(controller.dispose);
+    controller.addTask('专注任务');
+    final task = controller.tasks.single;
+    var opened = false;
+    await tester.pumpWidget(MaterialApp(
+      theme: WorkFollowThemeData.light(),
+      home: Scaffold(
+        body: TaskInspector(
+          task: task,
+          controller: controller,
+          onOpenFocusTimer: () => opened = true,
+        ),
+      ),
+    ));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('task-more-actions')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('menu-option-focus')));
+    await tester.pump();
+    expect(opened, isTrue);
+  });
 }
