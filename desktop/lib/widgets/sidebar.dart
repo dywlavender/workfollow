@@ -54,226 +54,9 @@ class AppRail extends StatelessWidget {
                 Expanded(
                   child: SingleChildScrollView(
                     padding: const EdgeInsets.fromLTRB(9, 6, 9, 12),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        _RailItem(
-                          label: '首页',
-                          icon: Icons.home_outlined,
-                          selected: controller.view == WorkspaceView.home,
-                          onTap: () =>
-                              controller.selectView(WorkspaceView.home),
-                        ),
-                        _RailSectionHeader(label: '任务'),
-                        _RailItem(
-                          label: '最近 7 天',
-                          icon: Icons.date_range_outlined,
-                          count: controller.countFor(WorkspaceView.recent),
-                          selected: controller.view == WorkspaceView.recent,
-                          onTap: () =>
-                              controller.selectView(WorkspaceView.recent),
-                        ),
-                        _RailItem(
-                          label: '今天',
-                          icon: Icons.wb_sunny_outlined,
-                          count: controller.countFor(WorkspaceView.today),
-                          selected: controller.view == WorkspaceView.today &&
-                              controller.selectedListName == null,
-                          onTap: () =>
-                              controller.selectView(WorkspaceView.today),
-                        ),
-                        _RailItem(
-                          label: '过期',
-                          icon: Icons.history_rounded,
-                          count: controller.countFor(WorkspaceView.overdue),
-                          selected: controller.view == WorkspaceView.overdue,
-                          onTap: () =>
-                              controller.selectView(WorkspaceView.overdue),
-                        ),
-                        _RailItem(
-                          label: '计划',
-                          icon: Icons.upcoming_outlined,
-                          count: controller.countFor(WorkspaceView.plan),
-                          selected: controller.view == WorkspaceView.plan,
-                          onTap: () =>
-                              controller.selectView(WorkspaceView.plan),
-                        ),
-                        _RailItem(
-                          label: '收集箱',
-                          icon: Icons.inbox_outlined,
-                          count: controller.countFor(WorkspaceView.inbox),
-                          selected: controller.view == WorkspaceView.inbox,
-                          onTap: () =>
-                              controller.selectView(WorkspaceView.inbox),
-                        ),
-                        _RailItem(
-                          label: '摘要',
-                          icon: Icons.subject_outlined,
-                          // “首页” is the single active destination for the
-                          // summary workspace; keep this shortcut from
-                          // rendering a second selected row.
-                          selected: false,
-                          onTap: () =>
-                              controller.selectView(WorkspaceView.home),
-                        ),
-                        _RailItem(
-                          label: '所有任务',
-                          icon: Icons.list_alt_outlined,
-                          count: controller.countFor(WorkspaceView.all),
-                          selected: controller.view == WorkspaceView.all &&
-                              controller.selectedListName == null,
-                          onTap: () => controller.selectView(WorkspaceView.all),
-                        ),
-                        _RailItem(
-                          label: '已完成',
-                          icon: Icons.check_circle_outline_rounded,
-                          count: controller.countFor(WorkspaceView.completed),
-                          selected: controller.view == WorkspaceView.completed,
-                          onTap: () =>
-                              controller.selectView(WorkspaceView.completed),
-                        ),
-                        _RailSectionHeader(
-                          label: '清单',
-                          trailing: AppIconButton(
-                              icon: Icons.add,
-                              tooltip: '新建清单',
-                              size: 24,
-                              iconSize: 15,
-                              onPressed: () =>
-                                  _showAddListDialog(context, controller)),
-                        ),
-                        ...controller.orderedLists
-                            .where((list) => list.name != '收集箱')
-                            .map((list) => _TaskListItem(
-                                  controller: controller,
-                                  list: list,
-                                )),
-                        _TagSection(controller: controller),
-                        _RailSectionHeader(
-                          label: '笔记',
-                          trailing:
-                              Row(mainAxisSize: MainAxisSize.min, children: [
-                            AppIconButton(
-                                icon: Icons.add,
-                                tooltip: '新建笔记',
-                                size: 24,
-                                iconSize: 15,
-                                onPressed: () =>
-                                    controller.addNoteInCurrentFolder()),
-                            AppIconButton(
-                                icon: Icons.create_new_folder_outlined,
-                                tooltip: '新建文件夹',
-                                size: 24,
-                                iconSize: 15,
-                                onPressed: () =>
-                                    _showAddFolderDialog(context, controller)),
-                          ]),
-                        ),
-                        _RailItem(
-                          label: '全部笔记',
-                          icon: Icons.notes_outlined,
-                          count: controller.activeNotes.length,
-                          selected: controller.view == WorkspaceView.notes &&
-                              controller.notesFolderFilter == null &&
-                              !controller.notesFavoritesOnly &&
-                              !controller.notesUnfiledOnly,
-                          onTap: () {
-                            controller.clearNotesFilters();
-                            controller.selectView(WorkspaceView.notes);
-                          },
-                        ),
-                        _RailItem(
-                          label: '收藏',
-                          icon: Icons.star_border_rounded,
-                          count: controller.activeNotes
-                              .where((note) => note.isFavorite)
-                              .length,
-                          selected: controller.view == WorkspaceView.notes &&
-                              controller.notesFavoritesOnly,
-                          onTap: () {
-                            controller.setNotesFavoritesOnly(true);
-                            controller.selectView(WorkspaceView.notes);
-                          },
-                        ),
-                        _RailItem(
-                          label: '未归档',
-                          icon: Icons.inbox_outlined,
-                          count: controller.activeNotes
-                              .where((note) => note.folderId == null)
-                              .length,
-                          selected: controller.view == WorkspaceView.notes &&
-                              controller.notesUnfiledOnly,
-                          onTap: () {
-                            controller.setNotesUnfiledOnly(true);
-                            controller.selectView(WorkspaceView.notes);
-                          },
-                        ),
-                        ...controller.folders.map((folder) => Builder(
-                            builder: (anchor) => _RailItem(
-                                  label: folder.name,
-                                  icon: Icons.folder_outlined,
-                                  count: controller.activeNotes
-                                      .where((note) =>
-                                          note.folderId == folder.id ||
-                                          note.folder == folder.name)
-                                      .length,
-                                  selected: controller.view ==
-                                          WorkspaceView.notes &&
-                                      controller.notesFolderFilter == folder.id,
-                                  onTap: () {
-                                    controller.setNotesFolderFilter(folder.id);
-                                    controller.selectView(WorkspaceView.notes);
-                                  },
-                                  onMenu: () =>
-                                      _editFolder(anchor, controller, folder),
-                                ))),
-                        _RailSectionHeader(label: '位置'),
-                        _RailItem(
-                          label: '日历',
-                          icon: Icons.calendar_month_outlined,
-                          selected: controller.view == WorkspaceView.calendar,
-                          onTap: () =>
-                              controller.selectView(WorkspaceView.calendar),
-                        ),
-                        _RailItem(
-                          label: '四象限',
-                          icon: Icons.grid_view_rounded,
-                          selected: controller.view == WorkspaceView.matrix,
-                          onTap: () =>
-                              controller.selectView(WorkspaceView.matrix),
-                        ),
-                        _RailItem(
-                          label: '看板',
-                          icon: Icons.view_column_outlined,
-                          count: controller.countFor(WorkspaceView.board),
-                          selected: controller.view == WorkspaceView.board,
-                          onTap: () =>
-                              controller.selectView(WorkspaceView.board),
-                        ),
-                        _RailItem(
-                          label: '习惯',
-                          icon: Icons.repeat_rounded,
-                          selected: controller.view == WorkspaceView.habits,
-                          onTap: () =>
-                              controller.selectView(WorkspaceView.habits),
-                        ),
-                        _RailItem(
-                          label: '统计',
-                          icon: Icons.insights_outlined,
-                          selected: controller.view == WorkspaceView.stats,
-                          onTap: () =>
-                              controller.selectView(WorkspaceView.stats),
-                        ),
-                        _RailItem(
-                          label: '废纸篓',
-                          icon: Icons.delete_outline_rounded,
-                          count: controller.countFor(WorkspaceView.trash),
-                          selected: controller.view == WorkspaceView.trash,
-                          onTap: () =>
-                              controller.selectView(WorkspaceView.trash),
-                        ),
-                      ],
-                    ),
+                    child: controller.view == WorkspaceView.notes
+                        ? _NotesNavigation(controller: controller)
+                        : _TaskNavigation(controller: controller),
                   ),
                 ),
                 _RailFooter(
@@ -286,6 +69,220 @@ class AppRail extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// The second navigation column follows the selected first-level context.
+/// TickTick does not mix note folders into the task list navigation; keeping
+/// the two trees separate makes the current workspace immediately legible.
+class _TaskNavigation extends StatelessWidget {
+  const _TaskNavigation({required this.controller});
+
+  final WorkspaceController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _RailSectionHeader(label: '任务'),
+        _RailItem(
+          label: '最近 7 天',
+          icon: Icons.date_range_outlined,
+          count: controller.countFor(WorkspaceView.recent),
+          selected: controller.view == WorkspaceView.recent,
+          onTap: () => controller.selectView(WorkspaceView.recent),
+        ),
+        _RailItem(
+          label: '今天',
+          icon: Icons.wb_sunny_outlined,
+          count: controller.countFor(WorkspaceView.today),
+          selected: controller.view == WorkspaceView.today &&
+              controller.selectedListName == null,
+          onTap: () => controller.selectView(WorkspaceView.today),
+        ),
+        _RailItem(
+          label: '过期',
+          icon: Icons.history_rounded,
+          count: controller.countFor(WorkspaceView.overdue),
+          selected: controller.view == WorkspaceView.overdue,
+          onTap: () => controller.selectView(WorkspaceView.overdue),
+        ),
+        _RailItem(
+          label: '计划',
+          icon: Icons.upcoming_outlined,
+          count: controller.countFor(WorkspaceView.plan),
+          selected: controller.view == WorkspaceView.plan,
+          onTap: () => controller.selectView(WorkspaceView.plan),
+        ),
+        _RailItem(
+          label: '收集箱',
+          icon: Icons.inbox_outlined,
+          count: controller.countFor(WorkspaceView.inbox),
+          selected: controller.view == WorkspaceView.inbox,
+          onTap: () => controller.selectView(WorkspaceView.inbox),
+        ),
+        _RailItem(
+          label: '摘要',
+          icon: Icons.subject_outlined,
+          selected: false,
+          onTap: () => controller.selectView(WorkspaceView.home),
+        ),
+        _RailItem(
+          label: '所有任务',
+          icon: Icons.list_alt_outlined,
+          count: controller.countFor(WorkspaceView.all),
+          selected: controller.view == WorkspaceView.all &&
+              controller.selectedListName == null,
+          onTap: () => controller.selectView(WorkspaceView.all),
+        ),
+        _RailItem(
+          label: '已完成',
+          icon: Icons.check_circle_outline_rounded,
+          count: controller.countFor(WorkspaceView.completed),
+          selected: controller.view == WorkspaceView.completed,
+          onTap: () => controller.selectView(WorkspaceView.completed),
+        ),
+        _RailSectionHeader(
+          label: '清单',
+          trailing: AppIconButton(
+              icon: Icons.add,
+              tooltip: '新建清单',
+              size: 24,
+              iconSize: 15,
+              onPressed: () => _showAddListDialog(context, controller)),
+        ),
+        ...controller.orderedLists
+            .where((list) => list.name != '收集箱')
+            .map((list) => _TaskListItem(controller: controller, list: list)),
+        _TagSection(controller: controller),
+        _RailSectionHeader(label: '位置'),
+        _RailItem(
+          label: '日历',
+          icon: Icons.calendar_month_outlined,
+          selected: controller.view == WorkspaceView.calendar,
+          onTap: () => controller.selectView(WorkspaceView.calendar),
+        ),
+        _RailItem(
+          label: '四象限',
+          icon: Icons.grid_view_rounded,
+          selected: controller.view == WorkspaceView.matrix,
+          onTap: () => controller.selectView(WorkspaceView.matrix),
+        ),
+        _RailItem(
+          label: '看板',
+          icon: Icons.view_column_outlined,
+          count: controller.countFor(WorkspaceView.board),
+          selected: controller.view == WorkspaceView.board,
+          onTap: () => controller.selectView(WorkspaceView.board),
+        ),
+        _RailItem(
+          label: '习惯',
+          icon: Icons.repeat_rounded,
+          selected: controller.view == WorkspaceView.habits,
+          onTap: () => controller.selectView(WorkspaceView.habits),
+        ),
+        _RailItem(
+          label: '统计',
+          icon: Icons.insights_outlined,
+          selected: controller.view == WorkspaceView.stats,
+          onTap: () => controller.selectView(WorkspaceView.stats),
+        ),
+        _RailItem(
+          label: '废纸篓',
+          icon: Icons.delete_outline_rounded,
+          count: controller.countFor(WorkspaceView.trash),
+          selected: controller.view == WorkspaceView.trash,
+          onTap: () => controller.selectView(WorkspaceView.trash),
+        ),
+      ],
+    );
+  }
+}
+
+class _NotesNavigation extends StatelessWidget {
+  const _NotesNavigation({required this.controller});
+
+  final WorkspaceController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _RailSectionHeader(
+          label: '笔记',
+          trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+            AppIconButton(
+                icon: Icons.add,
+                tooltip: '新建笔记',
+                size: 24,
+                iconSize: 15,
+                onPressed: () => controller.addNoteInCurrentFolder()),
+            AppIconButton(
+                icon: Icons.create_new_folder_outlined,
+                tooltip: '新建文件夹',
+                size: 24,
+                iconSize: 15,
+                onPressed: () => _showAddFolderDialog(context, controller)),
+          ]),
+        ),
+        _RailItem(
+          label: '全部笔记',
+          icon: Icons.notes_outlined,
+          count: controller.activeNotes.length,
+          selected: controller.view == WorkspaceView.notes &&
+              controller.notesFolderFilter == null &&
+              !controller.notesFavoritesOnly &&
+              !controller.notesUnfiledOnly,
+          onTap: () {
+            controller.clearNotesFilters();
+            controller.selectView(WorkspaceView.notes);
+          },
+        ),
+        _RailItem(
+          label: '收藏',
+          icon: Icons.star_border_rounded,
+          count: controller.activeNotes.where((note) => note.isFavorite).length,
+          selected: controller.view == WorkspaceView.notes &&
+              controller.notesFavoritesOnly,
+          onTap: () {
+            controller.setNotesFavoritesOnly(true);
+            controller.selectView(WorkspaceView.notes);
+          },
+        ),
+        _RailItem(
+          label: '未归档',
+          icon: Icons.inbox_outlined,
+          count: controller.activeNotes
+              .where((note) => note.folderId == null)
+              .length,
+          selected: controller.view == WorkspaceView.notes &&
+              controller.notesUnfiledOnly,
+          onTap: () {
+            controller.setNotesUnfiledOnly(true);
+            controller.selectView(WorkspaceView.notes);
+          },
+        ),
+        ...controller.folders.map((folder) => Builder(
+            builder: (anchor) => _RailItem(
+                  label: folder.name,
+                  icon: Icons.folder_outlined,
+                  count: controller.activeNotes
+                      .where((note) =>
+                          note.folderId == folder.id ||
+                          note.folder == folder.name)
+                      .length,
+                  selected: controller.view == WorkspaceView.notes &&
+                      controller.notesFolderFilter == folder.id,
+                  onTap: () {
+                    controller.setNotesFolderFilter(folder.id);
+                    controller.selectView(WorkspaceView.notes);
+                  },
+                  onMenu: () => _editFolder(anchor, controller, folder),
+                ))),
+      ],
     );
   }
 }

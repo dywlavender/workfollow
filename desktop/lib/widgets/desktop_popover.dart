@@ -93,6 +93,7 @@ Future<T?> showDesktopMenu<T>(
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           for (final entry in entries)
             ListTile(
+              key: ValueKey('menu-option-${entry.value}'),
               dense: true,
               minTileHeight: 38,
               shape: RoundedRectangleBorder(

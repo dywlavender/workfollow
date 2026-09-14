@@ -166,6 +166,8 @@ class _TodayScreenState extends State<TodayScreen> {
                                           CrossAxisAlignment.start,
                                       children: [
                                         PageHeader(
+                                            key: const ValueKey(
+                                                'list-view-title'),
                                             dense: compact || wideInspector,
                                             eyebrow: c.view ==
                                                         WorkspaceView.today &&
@@ -330,6 +332,7 @@ class _TodayScreenState extends State<TodayScreen> {
           _ProgressSummary(compact: compact, done: done, total: total),
         Builder(
           builder: (anchor) => AppIconButton(
+            key: const ValueKey('list-sort'),
             icon: Icons.sort_rounded,
             tooltip: '排序：${sortMode.label}',
             size: 32,
@@ -339,6 +342,7 @@ class _TodayScreenState extends State<TodayScreen> {
         ),
         Builder(
           builder: (anchor) => AppIconButton(
+            key: const ValueKey('list-actions'),
             icon: Icons.more_horiz_rounded,
             tooltip: '列表操作',
             size: 32,

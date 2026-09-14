@@ -326,8 +326,12 @@ class _TaskInspectorState extends State<TaskInspector> {
     }
     return Tooltip(
         message: label,
-        child:
-            Semantics(label: label, child: Icon(icon, size: 15, color: color)));
+        child: Semantics(
+            label: label,
+            child: Icon(icon,
+                key: const ValueKey('save-status-indicator'),
+                size: 15,
+                color: color)));
   }
 
   Widget _footer(BuildContext context, TaskItem task, WorkFollowTheme tokens) {
@@ -439,6 +443,7 @@ class _TaskInspectorState extends State<TaskInspector> {
               const SizedBox(height: 18),
               Wrap(spacing: 8, runSpacing: 8, children: [
                 PropertyButton(
+                    key: const ValueKey('task-deadline'),
                     icon: Icons.flag_outlined,
                     label: calendarDateLabel(
                         localDateTimeFromStorage(task.deadlineAt),
@@ -447,6 +452,7 @@ class _TaskInspectorState extends State<TaskInspector> {
                     tooltip: '截止日期：最晚什么时候完成',
                     onPressed: (anchor) => _date(anchor, 'deadline')),
                 PropertyButton(
+                    key: const ValueKey('task-tags'),
                     icon: Icons.tag_rounded,
                     label: task.tags.isEmpty ? '标签' : task.tags.join(' · '),
                     active: task.tags.isNotEmpty,
@@ -454,7 +460,7 @@ class _TaskInspectorState extends State<TaskInspector> {
               ]),
               if (task.focusCount > 0) ...[
                 const SizedBox(height: 12),
-                Row(children: [
+                Row(key: const ValueKey('task-focus'), children: [
                   Icon(Icons.timer_outlined,
                       size: 16, color: tokens.textTertiary),
                   const SizedBox(width: 7),
@@ -558,6 +564,7 @@ class _TaskInspectorState extends State<TaskInspector> {
                     style:
                         TextStyle(fontSize: 11.5, color: tokens.textTertiary)),
               Wrap(
+                  key: const ValueKey('task-attachments'),
                   spacing: 8,
                   runSpacing: 8,
                   crossAxisAlignment: WrapCrossAlignment.center,

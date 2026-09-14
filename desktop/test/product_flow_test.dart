@@ -363,6 +363,8 @@ void main() {
       'note editor formats, edits, switches notes and restores edited content',
       (tester) async {
     await start(tester);
+    await tester.tap(find.byTooltip('笔记'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('全部笔记').first);
     await tester.pumpAndSettle();
     final editor = tester
@@ -412,7 +414,8 @@ void main() {
     await screenshot(tester, 'task-narrow-dark');
     await tester.tap(find.byTooltip('返回列表'));
     await tester.pumpAndSettle();
-    await tester.ensureVisible(find.text('全部笔记').first);
+    await tester.tap(find.byTooltip('笔记'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('全部笔记').first);
     await tester.pumpAndSettle();
     await tester.tap(find.text('季度评审 · 叙事结构').first);

@@ -175,6 +175,113 @@ void main() {
     expect(find.text('附件与关联'), findsOneWidget);
   });
 
+  testWidgets('task workspace exposes stable controls for atomic acceptance',
+      (tester) async {
+    tester.view.physicalSize = const Size(1280, 820);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+    await tester.pumpWidget(const WorkFollowApp(demoMode: true));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('今天').first);
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('list-view-title')), findsOneWidget);
+    expect(find.byKey(const ValueKey('list-sort')), findsOneWidget);
+    expect(find.byKey(const ValueKey('list-actions')), findsOneWidget);
+    expect(find.byKey(const ValueKey('quick-add-title')), findsOneWidget);
+
+    await tester.tap(find.text('准备季度产品评审演示文稿').last);
+    await tester.pumpAndSettle();
+    for (final key in const [
+      'task-complete',
+      'task-schedule',
+      'task-reminder',
+      'task-repeat',
+      'task-priority',
+      'task-list-footer',
+      'task-advanced-toggle',
+      'task-more-actions',
+      'save-status-indicator',
+    ]) {
+      expect(find.byKey(ValueKey(key)), findsOneWidget, reason: key);
+    }
+
+    await tester.tap(find.byKey(const ValueKey('task-schedule')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('date-input')), findsOneWidget);
+    expect(find.byKey(const ValueKey('date-shortcut-今天')), findsOneWidget);
+    expect(find.byKey(const ValueKey('date-shortcut-明天')), findsOneWidget);
+    expect(find.byKey(const ValueKey('date-prev-month')), findsOneWidget);
+    expect(find.byKey(const ValueKey('date-next-month')), findsOneWidget);
+    expect(find.byKey(const ValueKey('date-time-toggle')), findsOneWidget);
+    expect(find.byKey(const ValueKey('apply-date')), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('date-cancel')));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('task-more-actions')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('menu-option-toggle-details')),
+        findsOneWidget);
+    expect(find.byKey(const ValueKey('menu-option-copy')), findsOneWidget);
+    expect(find.byKey(const ValueKey('menu-option-duplicate')), findsOneWidget);
+    expect(find.byKey(const ValueKey('menu-option-delete')), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('menu-option-toggle-details')));
+    await tester.pumpAndSettle();
+    expect(find.text('附件与关联'), findsOneWidget);
+  });
+
+  testWidgets('task property popovers expose their smallest option sets',
+      (tester) async {
+    tester.view.physicalSize = const Size(1280, 820);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+    await tester.pumpWidget(const WorkFollowApp(demoMode: true));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('今天').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('准备季度产品评审演示文稿').last);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('task-priority')));
+    await tester.pumpAndSettle();
+    for (final label in ['无优先级', '低优先级', '中优先级', '高优先级']) {
+      expect(find.text(label), findsOneWidget, reason: label);
+    }
+    await tester
+        .tap(find.byKey(const ValueKey('menu-option-TaskPriority.none')));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('task-repeat')));
+    await tester.pumpAndSettle();
+    expect(find.text('重复任务'), findsOneWidget);
+    expect(find.text('频率'), findsOneWidget);
+    expect(find.text('完成本次任务后，会自动生成下一次。'), findsOneWidget);
+    await tester.tap(find.text('确定').last);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('task-advanced-toggle')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('task-tags')));
+    await tester.pumpAndSettle();
+    expect(find.text('标签').last, findsOneWidget);
+    expect(find.text('用逗号分隔，例如 工作，重要'), findsOneWidget);
+    await tester.tap(find.text('完成').last);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('task-list-footer')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('menu-option-收集箱')), findsOneWidget);
+    expect(find.byKey(const ValueKey('menu-option-工作')), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('menu-option-工作')));
+    await tester.pumpAndSettle();
+  });
+
   testWidgets('recent and overdue smart lists are reachable from the rail',
       (tester) async {
     await tester.pumpWidget(const WorkFollowApp(demoMode: true));

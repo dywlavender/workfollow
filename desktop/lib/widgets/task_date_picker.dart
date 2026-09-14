@@ -158,6 +158,7 @@ class _TaskDatePickerState extends State<TaskDatePicker> {
                       style: const TextStyle(
                           fontSize: 15, fontWeight: FontWeight.w600))),
               TextButton(
+                  key: const ValueKey('date-clear'),
                   onPressed: () =>
                       Navigator.of(context).pop(const TaskDateSelection(null)),
                   child: Text(widget.reminder ? '取消提醒' : '清除日期',
@@ -189,6 +190,7 @@ class _TaskDatePickerState extends State<TaskDatePicker> {
               ]) ...[
                 Expanded(
                     child: TextButton(
+                        key: ValueKey('date-shortcut-${shortcut.$1}'),
                         onPressed: () => choose(shortcut.$2),
                         style: TextButton.styleFrom(
                             backgroundColor: tokens.canvas,
@@ -207,12 +209,14 @@ class _TaskDatePickerState extends State<TaskDatePicker> {
                       style: const TextStyle(
                           fontSize: 13, fontWeight: FontWeight.w600))),
               IconButton(
+                  key: const ValueKey('date-prev-month'),
                   tooltip: '上个月',
                   visualDensity: VisualDensity.compact,
                   icon: const Icon(Icons.chevron_left, size: 19),
                   onPressed: () => setState(
                       () => month = DateTime(month.year, month.month - 1))),
               IconButton(
+                  key: const ValueKey('date-next-month'),
                   tooltip: '下个月',
                   visualDensity: VisualDensity.compact,
                   icon: const Icon(Icons.chevron_right, size: 19),
@@ -270,6 +274,7 @@ class _TaskDatePickerState extends State<TaskDatePicker> {
                       width: 26,
                       height: 28,
                       child: Checkbox(
+                          key: const ValueKey('date-time-toggle'),
                           value: timed,
                           onChanged: (value) =>
                               setState(() => timed = value!))),
@@ -296,6 +301,7 @@ class _TaskDatePickerState extends State<TaskDatePicker> {
             const SizedBox(height: 14),
             Row(mainAxisAlignment: MainAxisAlignment.end, children: [
               TextButton(
+                  key: const ValueKey('date-cancel'),
                   onPressed: () => Navigator.of(context).pop(),
                   child: const Text('取消')),
               const SizedBox(width: 8),

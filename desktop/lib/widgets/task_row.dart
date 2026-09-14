@@ -219,6 +219,8 @@ class _TaskRowState extends State<TaskRow> {
                                   width: 26,
                                   height: 28,
                                   child: Checkbox(
+                                      key: ValueKey(
+                                          'task-row-checkbox-${task.id}'),
                                       value: widget.multiSelected ||
                                           task.completed,
                                       activeColor: task.completed
@@ -316,6 +318,7 @@ class _TaskRowState extends State<TaskRow> {
             duration: const Duration(milliseconds: 120),
             opacity: visible ? 1 : 0,
             child: IconButton(
+                key: ValueKey('task-row-more-${widget.task.id}'),
                 tooltip: '更多操作',
                 padding: EdgeInsets.zero,
                 iconSize: 18,
@@ -375,6 +378,7 @@ class _TaskRowState extends State<TaskRow> {
                   tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   visualDensity: VisualDensity.compact),
               child: Text(
+                  key: ValueKey('task-row-date-${task.id}'),
                   calendarDateLabel(due, hasTime: task.scheduledWithTime),
                   style: TextStyle(fontSize: 11, color: dateColor)))));
     }

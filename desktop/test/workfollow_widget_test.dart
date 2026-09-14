@@ -43,7 +43,10 @@ void main() {
     await tester.pumpWidget(const WorkFollowApp(demoMode: true));
     await tester.pumpAndSettle();
 
-    await tester.ensureVisible(find.text('全部笔记'));
+    // Notes are a separate second-column context, selected from the native
+    // icon rail instead of being mixed into task navigation.
+    await tester.tap(find.byTooltip('笔记'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('全部笔记'));
     await tester.pumpAndSettle();
 
@@ -61,7 +64,7 @@ void main() {
         isNotEmpty);
   });
 
-  testWidgets('unified rail carries task views, lists and note folders',
+  testWidgets('contextual rail separates task views from note folders',
       (tester) async {
     tester.view.physicalSize = const Size(1400, 900);
     tester.view.devicePixelRatio = 1;
@@ -77,8 +80,14 @@ void main() {
 
     expect(find.text('清单'), findsOneWidget);
     expect(find.text('所有任务'), findsOneWidget);
+    expect(find.text('全部笔记'), findsNothing);
     expect(find.text('阅读《设计心理学》第 4 章并做摘录'), findsWidgets);
     expect(find.byType(Tooltip), findsWidgets);
+
+    await tester.tap(find.byTooltip('笔记'));
+    await tester.pumpAndSettle();
+    expect(find.text('全部笔记'), findsOneWidget);
+    expect(find.text('清单'), findsNothing);
   });
 
   testWidgets('wide task view keeps a persistent list and inspector pane',
@@ -116,7 +125,8 @@ void main() {
 
     await tester.pumpWidget(const WorkFollowApp(demoMode: true));
     await tester.pumpAndSettle();
-    await tester.ensureVisible(find.text('全部笔记'));
+    await tester.tap(find.byTooltip('笔记'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('全部笔记'));
     await tester.pumpAndSettle();
 
@@ -244,7 +254,8 @@ void main() {
 
     await tester.pumpWidget(const WorkFollowApp(demoMode: true));
     await tester.pumpAndSettle();
-    await tester.ensureVisible(find.text('全部笔记'));
+    await tester.tap(find.byTooltip('笔记'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('全部笔记'));
     await tester.pumpAndSettle();
 

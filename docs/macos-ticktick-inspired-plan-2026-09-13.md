@@ -261,7 +261,7 @@ completedAt 数据）；**渐进调整不重写**（上轮刚落地的分组卡�
 - “复制任务正文、创建副本、移到废纸篓”从顶部移到底部更多操作，减少固定操作条的拥挤。
 - 新增组件验收覆盖：默认隐藏高级内容，点击“显示更多属性”后内容完整出现并可再次收起。
 
-验证结果：`flutter test` 通过 106 项；`dart analyze` 无 error，只有 2 项已有
+验证结果：`flutter test` 通过 108 项；`dart analyze` 无 error，只有 2 项已有
 experimental warning 和 19 项 deprecated info；`flutter build macos --release` 成功。Release 原生截图复核需在
 Mac 解锁后补做，本轮不把锁屏状态下无法观察到的视觉结果记为实机通过。
 
