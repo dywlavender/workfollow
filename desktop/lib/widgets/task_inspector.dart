@@ -45,6 +45,14 @@ class _TaskInspectorState extends State<TaskInspector> {
         text: widget.task.description ?? widget.task.note ?? '');
     focusVersion = widget.controller.inspectorTitleFocusVersion;
     widget.controller.addListener(_focusRequested);
+    // TickTick lets a selected row continue straight into title editing. A
+    // post-frame request keeps the inspector mounted before taking focus and
+    // still leaves the full detail surface visible for click-to-inspect.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && widget.controller.selectedTaskId == widget.task.id) {
+        titleFocus.requestFocus();
+      }
+    });
   }
 
   void _focusRequested() {

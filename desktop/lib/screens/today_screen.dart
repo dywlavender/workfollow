@@ -11,7 +11,18 @@ import '../widgets/task_date_picker.dart';
 import '../widgets/task_inspector.dart';
 import '../widgets/task_row.dart';
 
-/// Task list pages (今天 / 计划 / 收集箱 / 全部 / 已完成 / individual lists).
+enum _TaskSort { manual, due, priority }
+
+extension on _TaskSort {
+  String get label => switch (this) {
+        _TaskSort.manual => '手动',
+        _TaskSort.due => '日期',
+        _TaskSort.priority => '优先级',
+      };
+}
+
+/// Task list pages (最近 7 天 / 今天 / 过期 / 计划 / 收集箱 / 全部 / 已完成 /
+/// individual lists).
 /// Wide macOS windows use a TickTick-style list + inspector split. Smaller
 /// windows keep the existing list/detail fallback so the task editor never
 /// gets squeezed into an unusable column.
@@ -20,13 +31,13 @@ class TodayScreen extends StatefulWidget {
       {super.key,
       required this.controller,
       this.compactDensity = false,
-      this.persistentInspector = false});
+      this.persistentInspector = true});
   final WorkspaceController controller;
   final bool compactDensity;
 
   /// When enabled, a wide window keeps the right-hand inspector visible even
-  /// before a task is selected. The default stays list-first for a calmer
-  /// personal workspace; selecting a task always opens the inspector.
+  /// before a task is selected. This is the macOS default to match TickTick;
+  /// when disabled, the selected task uses the list-first inline fallback.
   final bool persistentInspector;
   @override
   State<TodayScreen> createState() => _TodayScreenState();
@@ -34,11 +45,12 @@ class TodayScreen extends StatefulWidget {
 
 class _TodayScreenState extends State<TodayScreen> {
   static const double _wideInspectorBreakpoint = 980;
-  static const double _minListPaneWidth = 380;
-  static const double _maxListPaneWidth = 500;
+  static const double _minListPaneWidth = 320;
+  static const double _maxListPaneWidth = 420;
 
   bool detailOnly = false;
   bool showCompleted = false;
+  _TaskSort sortMode = _TaskSort.manual;
   late int openVersion;
   final expandedEditorKey = GlobalKey();
 
@@ -77,7 +89,7 @@ class _TodayScreenState extends State<TodayScreen> {
     final tokens = WorkFollowTheme.of(context);
     final tasks = c.visibleTasks;
     final completedView = c.view == WorkspaceView.completed;
-    final active = tasks.where((task) => !task.completed).toList();
+    final active = _ordered(tasks.where((task) => !task.completed).toList());
     final completed = tasks.where((task) => task.completed).toList();
     return LayoutBuilder(builder: (context, constraints) {
       final narrow = constraints.maxWidth < 700;
@@ -90,15 +102,36 @@ class _TodayScreenState extends State<TodayScreen> {
       final groups = <(String, List<TaskItem>, bool)>[];
       if (completedView) {
         groups.add(('', completed, false));
-      } else if (c.view == WorkspaceView.today && c.selectedListName == null) {
-        final overdue =
-            active.where((t) => t.bucket == TaskBucket.overdue).toList();
-        if (overdue.isNotEmpty) groups.add(('之前安排', overdue, true));
-        groups.add((
-          '今天',
-          active.where((t) => t.bucket != TaskBucket.overdue).toList(),
-          false
-        ));
+      } else if ((c.view == WorkspaceView.today ||
+              c.view == WorkspaceView.recent) &&
+          c.selectedListName == null) {
+        if (c.view == WorkspaceView.today) {
+          final overdue =
+              active.where((t) => t.bucket == TaskBucket.overdue).toList();
+          if (overdue.isNotEmpty) groups.add(('已过期', overdue, true));
+          groups.add((
+            '今天',
+            active.where((t) => t.bucket != TaskBucket.overdue).toList(),
+            false
+          ));
+        } else {
+          active.sort((a, b) => (a.dueAt ?? '').compareTo(b.dueAt ?? ''));
+          String? currentLabel;
+          for (final task in active) {
+            final due = localDateTimeFromStorage(task.dueAt);
+            final label = task.bucket == TaskBucket.overdue
+                ? '已过期'
+                : due == null
+                    ? '未安排'
+                    : calendarDateLabel(due);
+            final danger = task.bucket == TaskBucket.overdue;
+            if (groups.isEmpty || currentLabel != label) {
+              groups.add((label, [], danger));
+              currentLabel = label;
+            }
+            groups.last.$2.add(task);
+          }
+        }
       } else if (c.view == WorkspaceView.plan) {
         active.sort((a, b) => (a.dueAt ?? '').compareTo(b.dueAt ?? ''));
         for (final task in active) {
@@ -115,90 +148,112 @@ class _TodayScreenState extends State<TodayScreen> {
           child: Stack(children: [
             Column(children: [
               Expanded(
-                  child: Center(
+                  child: Align(
+                      alignment: Alignment.topLeft,
                       child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 860),
-                child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Padding(
-                          padding: EdgeInsets.fromLTRB(
-                              narrow ? 22 : 8,
-                              compact || wideInspector ? 14 : 26,
-                              narrow ? 22 : 8,
-                              compact || wideInspector ? 12 : 18),
-                          child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                PageHeader(
-                                    dense: compact || wideInspector,
-                                    eyebrow: c.view == WorkspaceView.today &&
-                                            c.selectedListName == null
-                                        ? _todayLabel()
-                                        : null,
-                                    title: c.viewTitle,
-                                    subtitle: wideInspector
-                                        ? null
-                                        : completedView
-                                            ? '已经完成的事，都在这里。'
-                                            : c.view == WorkspaceView.inbox
-                                                ? '先记下来，稍后再安排。'
-                                                : c.view == WorkspaceView.plan
-                                                    ? '按日期查看接下来的安排。'
-                                                    : '${active.length} 件待办 · 已完成 ${completed.length} 件',
-                                    trailing: !wideInspector &&
-                                            c.view == WorkspaceView.today &&
-                                            c.selectedListName == null &&
-                                            !completedView
-                                        ? _ProgressSummary(
-                                            compact: compact,
-                                            done: completed.length,
-                                            total: active.length +
-                                                completed.length)
-                                        : null),
-                                if (!completedView) ...[
-                                  SizedBox(height: compact ? 12 : 20),
-                                  QuickAddField(
-                                      controller: c, listStyle: wideInspector)
+                        constraints: const BoxConstraints(maxWidth: 860),
+                        child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              Padding(
+                                  padding: EdgeInsets.fromLTRB(
+                                      narrow ? 22 : 8,
+                                      compact || wideInspector ? 14 : 26,
+                                      narrow ? 22 : 8,
+                                      compact || wideInspector ? 12 : 18),
+                                  child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        PageHeader(
+                                            dense: compact || wideInspector,
+                                            eyebrow: c.view ==
+                                                        WorkspaceView.today &&
+                                                    c.selectedListName == null
+                                                ? _todayLabel()
+                                                : null,
+                                            title: c.viewTitle,
+                                            subtitle: wideInspector
+                                                ? null
+                                                : completedView
+                                                    ? '已经完成的事，都在这里。'
+                                                    : c.view ==
+                                                            WorkspaceView.inbox
+                                                        ? '先记下来，稍后再安排。'
+                                                        : c.view ==
+                                                                    WorkspaceView
+                                                                        .plan ||
+                                                                c.view ==
+                                                                    WorkspaceView
+                                                                        .recent
+                                                            ? '按日期查看接下来的安排。'
+                                                            : c.view ==
+                                                                    WorkspaceView
+                                                                        .overdue
+                                                                ? '把逾期任务重新安排好。'
+                                                                : '${active.length} 件待办 · 已完成 ${completed.length} 件',
+                                            trailing: _listHeaderActions(
+                                                compact: compact,
+                                                wideInspector: wideInspector,
+                                                completedView: completedView,
+                                                done: completed.length,
+                                                total: active.length +
+                                                    completed.length)),
+                                        if (!completedView) ...[
+                                          SizedBox(height: compact ? 12 : 20),
+                                          QuickAddField(
+                                              controller: c, listStyle: true)
+                                        ],
+                                      ])),
+                              Expanded(
+                                  child: ListView(
+                                key: PageStorageKey(
+                                    'tasks-${c.view.name}-${c.selectedListName}'),
+                                padding: EdgeInsets.fromLTRB(
+                                    narrow ? 12 : 0, 2, narrow ? 12 : 0, 56),
+                                children: [
+                                  if ((completedView ? completed : active)
+                                      .isEmpty)
+                                    AppCard(
+                                        padding: EdgeInsets.zero,
+                                        child: EmptyHint(
+                                            icon: completedView
+                                                ? Icons
+                                                    .check_circle_outline_rounded
+                                                : Icons.checklist_rounded,
+                                            title: completedView
+                                                ? '完成的任务会出现在这里'
+                                                : c.view == WorkspaceView.today
+                                                    ? '今天，留一点从容'
+                                                    : c.view ==
+                                                            WorkspaceView.recent
+                                                        ? '最近 7 天没有需要处理的任务'
+                                                        : c.view ==
+                                                                WorkspaceView
+                                                                    .overdue
+                                                            ? '没有逾期任务'
+                                                            : c.view ==
+                                                                    WorkspaceView
+                                                                        .plan
+                                                                ? '还没有未来的安排'
+                                                                : '这里还是空的',
+                                            hint: completedView
+                                                ? '每完成一件事，都是一点进展。'
+                                                : '在上方记下一件事，按 Return 添加。')),
+                                  for (final group in groups) ...[
+                                    if (group.$2.isNotEmpty)
+                                      ..._groupSlivers(group, narrow,
+                                          compact: compact,
+                                          wideInspector: wideInspector),
+                                  ],
+                                  if (!completedView && completed.isNotEmpty)
+                                    ..._completedSlivers(completed,
+                                        compact: compact,
+                                        wideInspector: wideInspector),
                                 ],
-                              ])),
-                      Expanded(
-                          child: ListView(
-                        key: PageStorageKey(
-                            'tasks-${c.view.name}-${c.selectedListName}'),
-                        padding: EdgeInsets.fromLTRB(
-                            narrow ? 12 : 0, 2, narrow ? 12 : 0, 56),
-                        children: [
-                          if ((completedView ? completed : active).isEmpty)
-                            AppCard(
-                                padding: EdgeInsets.zero,
-                                child: EmptyHint(
-                                    icon: completedView
-                                        ? Icons.check_circle_outline_rounded
-                                        : Icons.checklist_rounded,
-                                    title: completedView
-                                        ? '完成的任务会出现在这里'
-                                        : c.view == WorkspaceView.today
-                                            ? '今天，留一点从容'
-                                            : c.view == WorkspaceView.plan
-                                                ? '还没有未来的安排'
-                                                : '这里还是空的',
-                                    hint: completedView
-                                        ? '每完成一件事，都是一点进展。'
-                                        : '在上方记下一件事，按 Return 添加。')),
-                          for (final group in groups) ...[
-                            if (group.$2.isNotEmpty)
-                              ..._groupSlivers(group, narrow,
-                                  compact: compact,
-                                  wideInspector: wideInspector),
-                          ],
-                          if (!completedView && completed.isNotEmpty)
-                            ..._completedSlivers(completed,
-                                compact: compact, wideInspector: wideInspector),
-                        ],
-                      )),
-                    ]),
-              ))),
+                              )),
+                            ]),
+                      ))),
             ]),
             if (c.multiSelectCount > 0)
               Positioned(
@@ -208,7 +263,7 @@ class _TodayScreenState extends State<TodayScreen> {
                   child: Center(child: _BulkBar(controller: c))),
           ]));
       if (wideInspector) {
-        final listWidth = (constraints.maxWidth * .42)
+        final listWidth = (constraints.maxWidth * .32)
             .clamp(_minListPaneWidth, _maxListPaneWidth);
         return Row(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -240,45 +295,90 @@ class _TodayScreenState extends State<TodayScreen> {
     });
   }
 
-  /// Group cards are assembled from per-row slivers (top cap, row boxes with
-  /// side borders, hairline dividers, bottom cap) so every task row stays a
-  /// direct scroll child — `ensureVisible` and the in-place editor reveal
-  /// stay pixel-accurate even in very long groups.
-  Widget _cardSide(Widget child, Color edge) => DecoratedBox(
-      decoration: BoxDecoration(
-          color: WorkFollowTheme.of(context).content,
-          border: Border(
-              left: BorderSide(color: edge), right: BorderSide(color: edge))),
-      child: child);
-
-  Widget _cardTop({Widget? header, required Color edge, double height = 8}) {
-    final tokens = WorkFollowTheme.of(context);
-    return Container(
-        height: header == null ? height : null,
-        padding:
-            header == null ? null : const EdgeInsets.fromLTRB(16, 12, 12, 6),
-        decoration: BoxDecoration(
-            color: tokens.content,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(14)),
-            border: Border(
-                top: BorderSide(color: edge),
-                left: BorderSide(color: edge),
-                right: BorderSide(color: edge))),
-        child: header);
+  List<TaskItem> _ordered(List<TaskItem> tasks) {
+    if (sortMode == _TaskSort.manual) return tasks;
+    tasks.sort((a, b) {
+      if (sortMode == _TaskSort.priority) {
+        final byPriority = b.priority.index.compareTo(a.priority.index);
+        if (byPriority != 0) return byPriority;
+      }
+      final aDue = localDateTimeFromStorage(a.dueAt);
+      final bDue = localDateTimeFromStorage(b.dueAt);
+      if (aDue == null && bDue == null) return 0;
+      if (aDue == null) return 1;
+      if (bDue == null) return -1;
+      return aDue.compareTo(bDue);
+    });
+    return tasks;
   }
 
-  Widget _cardBottom(Color edge) {
-    final tokens = WorkFollowTheme.of(context);
-    return Container(
-        height: 10,
-        decoration: BoxDecoration(
-            color: tokens.content,
-            borderRadius:
-                const BorderRadius.vertical(bottom: Radius.circular(14)),
-            border: Border(
-                bottom: BorderSide(color: edge),
-                left: BorderSide(color: edge),
-                right: BorderSide(color: edge))));
+  Widget? _listHeaderActions({
+    required bool compact,
+    required bool wideInspector,
+    required bool completedView,
+    required int done,
+    required int total,
+  }) {
+    final c = widget.controller;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (!wideInspector &&
+            c.view == WorkspaceView.today &&
+            c.selectedListName == null &&
+            !completedView)
+          _ProgressSummary(compact: compact, done: done, total: total),
+        Builder(
+          builder: (anchor) => AppIconButton(
+            icon: Icons.sort_rounded,
+            tooltip: '排序：${sortMode.label}',
+            size: 32,
+            iconSize: 17,
+            onPressed: () => _showListMenu(anchor),
+          ),
+        ),
+        Builder(
+          builder: (anchor) => AppIconButton(
+            icon: Icons.more_horiz_rounded,
+            tooltip: '列表操作',
+            size: 32,
+            iconSize: 18,
+            onPressed: () => _showListMenu(anchor, showOnlyActions: true),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _showListMenu(BuildContext anchor,
+      {bool showOnlyActions = false}) async {
+    final entries = <DesktopMenuEntry<String>>[
+      if (!showOnlyActions) ...[
+        const DesktopMenuEntry('manual', '手动排序', icon: Icons.drag_handle),
+        const DesktopMenuEntry('due', '按日期排序', icon: Icons.schedule_outlined),
+        const DesktopMenuEntry('priority', '按优先级排序', icon: Icons.flag_outlined),
+      ],
+      const DesktopMenuEntry('toggle-completed', '展开/收起已完成',
+          icon: Icons.check_circle_outline_rounded),
+    ];
+    final action = await showDesktopMenu<String>(anchor,
+        entries: entries,
+        selected: switch (sortMode) {
+          _TaskSort.manual => 'manual',
+          _TaskSort.due => 'due',
+          _TaskSort.priority => 'priority',
+        });
+    if (!mounted || action == null) return;
+    switch (action) {
+      case 'manual':
+        setState(() => sortMode = _TaskSort.manual);
+      case 'due':
+        setState(() => sortMode = _TaskSort.due);
+      case 'priority':
+        setState(() => sortMode = _TaskSort.priority);
+      case 'toggle-completed':
+        setState(() => showCompleted = !showCompleted);
+    }
   }
 
   Widget _groupHeaderRow(
@@ -308,101 +408,36 @@ class _TodayScreenState extends State<TodayScreen> {
       {bool compact = false, bool wideInspector = false}) {
     final tokens = WorkFollowTheme.of(context);
     final (label, tasks, danger) = group;
-    if (compact || wideInspector) {
-      final edge = danger ? tokens.warning : tokens.border;
-      return [
-        const SizedBox(height: 8),
-        if (label.isNotEmpty)
-          Padding(
-              padding: const EdgeInsets.fromLTRB(8, 4, 8, 6),
-              child: _groupHeaderRow(
-                  label: label,
-                  count: tasks.length,
-                  dotColor: edge,
-                  textColor: danger ? tokens.warning : tokens.textSecondary)),
-        for (var i = 0; i < tasks.length; i++) ...[
-          _task(tasks[i], narrow, compact: true, wideInspector: wideInspector),
-          if (i < tasks.length - 1)
-            Container(
-                height: 1,
-                margin: const EdgeInsets.only(left: 48),
-                color: tokens.border),
-        ],
-      ];
-    }
-    final edge = danger ? tokens.warning.withValues(alpha: .5) : tokens.border;
+    final edge = danger ? tokens.warning : tokens.border;
     return [
-      const SizedBox(height: 12),
-      _cardTop(
-          edge: edge,
-          header: label.isEmpty
-              ? null
-              : _groupHeaderRow(
-                  label: label,
-                  count: tasks.length,
-                  dotColor: danger ? tokens.warning : tokens.accent,
-                  textColor: danger ? tokens.warning : tokens.textSecondary)),
+      const SizedBox(height: 8),
+      if (label.isNotEmpty)
+        Padding(
+            padding: const EdgeInsets.fromLTRB(8, 4, 8, 6),
+            child: _groupHeaderRow(
+                label: label,
+                count: tasks.length,
+                dotColor: edge,
+                textColor: danger ? tokens.warning : tokens.textSecondary)),
       for (var i = 0; i < tasks.length; i++) ...[
-        _cardSide(
-            _task(tasks[i], narrow,
-                compact: compact || wideInspector,
-                wideInspector: wideInspector),
-            edge),
+        _task(tasks[i], narrow, compact: true, wideInspector: wideInspector),
         if (i < tasks.length - 1)
-          _cardSide(
-              Container(
-                  height: 1,
-                  margin: const EdgeInsets.only(left: 48, right: 12),
-                  color: tokens.border),
-              edge),
+          Container(
+              height: 1,
+              margin: const EdgeInsets.only(left: 48),
+              color: tokens.border),
       ],
-      _cardBottom(edge),
     ];
   }
 
   List<Widget> _completedSlivers(List<TaskItem> completed,
       {bool compact = false, bool wideInspector = false}) {
     final tokens = WorkFollowTheme.of(context);
-    if (compact || wideInspector) {
-      return [
-        const SizedBox(height: 8),
-        Padding(
-            padding: const EdgeInsets.fromLTRB(8, 4, 8, 6),
-            child: GestureDetector(
-                onTap: () => setState(() => showCompleted = !showCompleted),
-                behavior: HitTestBehavior.opaque,
-                child: _groupHeaderRow(
-                    label: '已完成',
-                    count: completed.length,
-                    dotColor: tokens.success,
-                    textColor: tokens.textSecondary,
-                    trailing: Expanded(
-                        child: Row(children: [
-                      const Spacer(),
-                      Icon(
-                          showCompleted
-                              ? Icons.expand_less_rounded
-                              : Icons.expand_more_rounded,
-                          size: 18,
-                          color: tokens.textTertiary),
-                    ]))))),
-        if (showCompleted)
-          for (var i = 0; i < completed.length; i++) ...[
-            _task(completed[i], false,
-                compact: true, wideInspector: wideInspector),
-            if (i < completed.length - 1)
-              Container(
-                  height: 1,
-                  margin: const EdgeInsets.only(left: 48),
-                  color: tokens.border),
-          ],
-      ];
-    }
     return [
       const SizedBox(height: 12),
-      _cardTop(
-          edge: tokens.border,
-          header: GestureDetector(
+      Padding(
+          padding: const EdgeInsets.fromLTRB(8, 4, 8, 6),
+          child: GestureDetector(
               onTap: () => setState(() => showCompleted = !showCompleted),
               behavior: HitTestBehavior.opaque,
               child: _groupHeaderRow(
@@ -413,32 +448,23 @@ class _TodayScreenState extends State<TodayScreen> {
                   trailing: Expanded(
                       child: Row(children: [
                     const Spacer(),
-                    AppIconButton(
-                        icon: showCompleted
+                    Icon(
+                        showCompleted
                             ? Icons.expand_less_rounded
                             : Icons.expand_more_rounded,
-                        tooltip: showCompleted ? '收起已完成' : '展开已完成',
-                        size: 28,
-                        iconSize: 18,
-                        onPressed: () =>
-                            setState(() => showCompleted = !showCompleted)),
+                        size: 18,
+                        color: tokens.textTertiary),
                   ]))))),
       if (showCompleted)
         for (var i = 0; i < completed.length; i++) ...[
-          _cardSide(
-              _task(completed[i], false,
-                  compact: compact || wideInspector,
-                  wideInspector: wideInspector),
-              tokens.border),
+          _task(completed[i], false,
+              compact: true, wideInspector: wideInspector),
           if (i < completed.length - 1)
-            _cardSide(
-                Container(
-                    height: 1,
-                    margin: const EdgeInsets.only(left: 48, right: 12),
-                    color: tokens.border),
-                tokens.border),
+            Container(
+                height: 1,
+                margin: const EdgeInsets.only(left: 48),
+                color: tokens.border),
         ],
-      _cardBottom(tokens.border),
     ];
   }
 

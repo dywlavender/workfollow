@@ -706,12 +706,14 @@ void main() {
     final switchFinder =
         find.byKey(const ValueKey('persistent-inspector-switch'));
     expect(switchFinder, findsOneWidget);
-    expect(tester.widget<SwitchListTile>(switchFinder).value, isFalse);
+    // The macOS task workspace keeps the inspector visible by default, just
+    // like TickTick. The preference remains an explicit opt-out.
+    expect(tester.widget<SwitchListTile>(switchFinder).value, isTrue);
     await tester.tap(switchFinder);
     await tester.pumpAndSettle();
-    expect(tester.widget<SwitchListTile>(switchFinder).value, isTrue);
+    expect(tester.widget<SwitchListTile>(switchFinder).value, isFalse);
     final persisted = await tester.runAsync(() => store.load());
-    expect(persisted?['inspector'], isTrue);
+    expect(persisted?['inspector'], isFalse);
 
     await tester.tap(find.byTooltip('关闭'));
     await tester.pumpAndSettle();
@@ -719,6 +721,9 @@ void main() {
         key: UniqueKey(), demoMode: true, preferencesStore: store));
     await tester.pumpAndSettle();
     await tester.tap(find.text('设置'));
+    await tester.pumpAndSettle();
+    expect(tester.widget<SwitchListTile>(switchFinder).value, isFalse);
+    await tester.tap(switchFinder);
     await tester.pumpAndSettle();
     expect(tester.widget<SwitchListTile>(switchFinder).value, isTrue);
     await tester.tap(find.byTooltip('关闭'));

@@ -68,8 +68,12 @@ class _CommandPaletteState extends State<_CommandPalette> {
   }
 
   List<_Command> get commands => [
+        _Command('打开最近 7 天', '查看逾期与未来七天', Icons.date_range_outlined,
+            () => widget.controller.selectView(WorkspaceView.recent)),
         _Command('打开今天', '查看现在最重要的事', Icons.wb_sunny_outlined,
             () => widget.controller.selectView(WorkspaceView.today)),
+        _Command('打开过期', '重新安排尚未完成的逾期任务', Icons.history_rounded,
+            () => widget.controller.selectView(WorkspaceView.overdue)),
         _Command('打开收集箱', '稍后再安排', Icons.inbox_outlined,
             () => widget.controller.selectView(WorkspaceView.inbox)),
         _Command('打开计划', '安排未来几天', Icons.upcoming_outlined,

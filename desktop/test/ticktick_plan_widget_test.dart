@@ -107,4 +107,57 @@ void main() {
     expect(controller.tasks.single.title, '整理资料 @不存在清单');
     expect(controller.lists, hasLength(4));
   });
+
+  testWidgets('task lists use the single-line add row and expose list actions',
+      (tester) async {
+    tester.view.physicalSize = const Size(1280, 820);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+    await tester.pumpWidget(const WorkFollowApp(demoMode: true));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('今天').first);
+    await tester.pumpAndSettle();
+
+    final add = tester.widget<QuickAddField>(find.byType(QuickAddField).first);
+    expect(add.listStyle, isTrue);
+    expect(find.byTooltip('排序：手动'), findsOneWidget);
+    await tester.tap(find.byTooltip('排序：手动'));
+    await tester.pumpAndSettle();
+    expect(find.text('按日期排序'), findsOneWidget);
+    await tester.tap(find.text('按日期排序'));
+    await tester.pumpAndSettle();
+    expect(find.byTooltip('排序：日期'), findsOneWidget);
+  });
+
+  testWidgets('wide task workspace keeps the inspector fixed by default',
+      (tester) async {
+    tester.view.physicalSize = const Size(1280, 820);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+    await tester.pumpWidget(const WorkFollowApp(demoMode: true));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('今天').first);
+    await tester.pumpAndSettle();
+
+    expect(find.text('选择一个任务开始编辑'), findsOneWidget);
+    expect(find.byKey(const ValueKey('task-title-editor')), findsNothing);
+  });
+
+  testWidgets('recent and overdue smart lists are reachable from the rail',
+      (tester) async {
+    await tester.pumpWidget(const WorkFollowApp(demoMode: true));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('最近 7 天').first);
+    await tester.pumpAndSettle();
+    expect(find.text('最近 7 天'), findsWidgets);
+    await tester.tap(find.text('过期').first);
+    await tester.pumpAndSettle();
+    expect(find.text('过期'), findsWidgets);
+  });
 }

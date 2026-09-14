@@ -24,7 +24,10 @@ class AppRail extends StatelessWidget {
     required this.onOpenSettings,
   });
 
-  static const double width = 272;
+  // TickTick keeps the navigation readable but deliberately gives the task
+  // list most of the window. 52pt icon rail + 190pt label column lands close
+  // to the native macOS proportions at the default 1280pt window.
+  static const double width = 242;
 
   final WorkspaceController controller;
   final bool isDark;
@@ -50,7 +53,7 @@ class AppRail extends StatelessWidget {
                 const _RailBrand(),
                 Expanded(
                   child: SingleChildScrollView(
-                    padding: const EdgeInsets.fromLTRB(12, 6, 12, 12),
+                    padding: const EdgeInsets.fromLTRB(9, 6, 9, 12),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
@@ -63,6 +66,14 @@ class AppRail extends StatelessWidget {
                         ),
                         _RailSectionHeader(label: '任务'),
                         _RailItem(
+                          label: '最近 7 天',
+                          icon: Icons.date_range_outlined,
+                          count: controller.countFor(WorkspaceView.recent),
+                          selected: controller.view == WorkspaceView.recent,
+                          onTap: () =>
+                              controller.selectView(WorkspaceView.recent),
+                        ),
+                        _RailItem(
                           label: '今天',
                           icon: Icons.wb_sunny_outlined,
                           count: controller.countFor(WorkspaceView.today),
@@ -70,6 +81,14 @@ class AppRail extends StatelessWidget {
                               controller.selectedListName == null,
                           onTap: () =>
                               controller.selectView(WorkspaceView.today),
+                        ),
+                        _RailItem(
+                          label: '过期',
+                          icon: Icons.history_rounded,
+                          count: controller.countFor(WorkspaceView.overdue),
+                          selected: controller.view == WorkspaceView.overdue,
+                          onTap: () =>
+                              controller.selectView(WorkspaceView.overdue),
                         ),
                         _RailItem(
                           label: '计划',
@@ -86,6 +105,16 @@ class AppRail extends StatelessWidget {
                           selected: controller.view == WorkspaceView.inbox,
                           onTap: () =>
                               controller.selectView(WorkspaceView.inbox),
+                        ),
+                        _RailItem(
+                          label: '摘要',
+                          icon: Icons.subject_outlined,
+                          // “首页” is the single active destination for the
+                          // summary workspace; keep this shortcut from
+                          // rendering a second selected row.
+                          selected: false,
+                          onTap: () =>
+                              controller.selectView(WorkspaceView.home),
                         ),
                         _RailItem(
                           label: '所有任务',
@@ -119,19 +148,7 @@ class AppRail extends StatelessWidget {
                                   controller: controller,
                                   list: list,
                                 )),
-                        _RailSectionHeader(label: '标签'),
-                        if (controller.allTags().isEmpty)
-                          Padding(
-                              padding: const EdgeInsets.fromLTRB(11, 3, 8, 6),
-                              child: Text('在任务中输入 #标签',
-                                  style: TextStyle(
-                                      color: tokens.textTertiary,
-                                      fontSize: 10.5))),
-                        ...controller.allTags().entries.map((entry) => _TagItem(
-                              controller: controller,
-                              name: entry.key,
-                              count: entry.value,
-                            )),
+                        _TagSection(controller: controller),
                         _RailSectionHeader(
                           label: '笔记',
                           trailing:
@@ -285,7 +302,7 @@ class _IconRail extends StatelessWidget {
   Widget build(BuildContext context) {
     final tokens = WorkFollowTheme.of(context);
     return SizedBox(
-      width: 56,
+      width: 52,
       child: Column(
         children: [
           const SizedBox(height: 12),
@@ -523,13 +540,64 @@ class _RailSectionHeader extends StatelessWidget {
   }
 }
 
+/// Tags follow TickTick's collapsible section grammar. Keeping the section
+/// state local avoids changing the task model just to remember a navigation
+/// preference; the list stays expanded once the user opens it during a run.
+class _TagSection extends StatefulWidget {
+  const _TagSection({required this.controller});
+
+  final WorkspaceController controller;
+
+  @override
+  State<_TagSection> createState() => _TagSectionState();
+}
+
+class _TagSectionState extends State<_TagSection> {
+  bool expanded = true;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = WorkFollowTheme.of(context);
+    final tags = widget.controller.allTags();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _RailSectionHeader(
+          label: '标签',
+          trailing: AppIconButton(
+            icon: expanded
+                ? Icons.keyboard_arrow_up_rounded
+                : Icons.keyboard_arrow_down_rounded,
+            tooltip: expanded ? '收起标签' : '展开标签',
+            size: 24,
+            iconSize: 16,
+            onPressed: () => setState(() => expanded = !expanded),
+          ),
+        ),
+        if (expanded && tags.isEmpty)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(11, 3, 8, 6),
+            child: Text('在任务中输入 #标签',
+                style: TextStyle(color: tokens.textTertiary, fontSize: 10.5)),
+          ),
+        if (expanded)
+          ...tags.entries.map((entry) => _TagItem(
+                controller: widget.controller,
+                name: entry.key,
+                count: entry.value,
+              )),
+      ],
+    );
+  }
+}
+
 class _RailBrand extends StatelessWidget {
   const _RailBrand();
   @override
   Widget build(BuildContext context) {
     final tokens = WorkFollowTheme.of(context);
     return Padding(
-        padding: const EdgeInsets.fromLTRB(22, 22, 18, 22),
+        padding: const EdgeInsets.fromLTRB(18, 20, 14, 18),
         child: Row(children: [
           Container(
               width: 28,
@@ -824,8 +892,8 @@ class _TaskListItemState extends State<_TaskListItem> {
       // Dropping a dragged task row here moves it into this list.
       child: DragTarget<String>(
         onWillAcceptWithDetails: (details) => details.data.isNotEmpty,
-        onAcceptWithDetails: (details) => widget.controller
-            .moveTaskToList(details.data, widget.list.name),
+        onAcceptWithDetails: (details) =>
+            widget.controller.moveTaskToList(details.data, widget.list.name),
         builder: (context, candidateData, rejectedData) {
           final dragActive = candidateData.isNotEmpty;
           return GestureDetector(

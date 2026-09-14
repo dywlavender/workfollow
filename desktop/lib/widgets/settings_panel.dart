@@ -19,7 +19,7 @@ Future<void> showSettingsPanel({
   required ThemeMode themeMode,
   bool compactDensity = false,
   ValueChanged<bool>? onSetDensity,
-  bool persistentInspector = false,
+  bool persistentInspector = true,
   ValueChanged<bool>? onSetPersistentInspector,
 }) {
   return showGeneralDialog<void>(
@@ -54,7 +54,7 @@ class _SettingsPanel extends StatefulWidget {
     required this.themeMode,
     this.compactDensity = false,
     this.onSetDensity,
-    this.persistentInspector = false,
+    this.persistentInspector = true,
     this.onSetPersistentInspector,
   });
 

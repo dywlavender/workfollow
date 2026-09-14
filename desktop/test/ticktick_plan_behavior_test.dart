@@ -153,4 +153,44 @@ void main() {
     expect(controller.tasks.single.displayTimeLabel, contains('09:30'));
     controller.dispose();
   });
+
+  test('recent and overdue smart lists project real due dates', () {
+    final controller = WorkspaceController(seedData: false);
+    final today = DateTime.now();
+    final start = DateTime(today.year, today.month, today.day);
+    controller.addTask('已过期',
+        dueAt: start.subtract(const Duration(days: 20)), hasTime: false);
+    controller.addTask('今天', dueAt: start, hasTime: false);
+    controller.addTask('本周内',
+        dueAt: start.add(const Duration(days: 3)), hasTime: false);
+    controller.addTask('更远的未来',
+        dueAt: start.add(const Duration(days: 14)), hasTime: false);
+
+    controller.selectView(WorkspaceView.recent);
+    expect(controller.visibleTasks.map((task) => task.title),
+        containsAll(<String>['已过期', '今天', '本周内']));
+    expect(controller.visibleTasks.map((task) => task.title),
+        isNot(contains('更远的未来')));
+    expect(controller.countFor(WorkspaceView.recent), 3);
+
+    controller.selectView(WorkspaceView.overdue);
+    expect(controller.visibleTasks.map((task) => task.title), ['已过期']);
+    expect(controller.viewTitle, '过期');
+    controller.dispose();
+  });
+
+  test('task selection follows the visible list with arrow navigation', () {
+    final controller = WorkspaceController(seedData: false);
+    controller.addTask('第一件');
+    controller.addTask('第二件');
+    controller.addTask('第三件');
+    controller.selectView(WorkspaceView.inbox);
+    final first = controller.visibleTasks.first.id;
+    controller.selectTask(first);
+    controller.selectAdjacentTask(first, 1);
+    expect(controller.selectedTask?.title, '第二件');
+    controller.selectAdjacentTask(controller.selectedTask!.id, -1);
+    expect(controller.selectedTask?.title, '第三件');
+    controller.dispose();
+  });
 }

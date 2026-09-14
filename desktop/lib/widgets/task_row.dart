@@ -43,6 +43,16 @@ class _TaskRowState extends State<TaskRow> {
     super.dispose();
   }
 
+  @override
+  void didUpdateWidget(covariant TaskRow oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.selected && !oldWidget.selected) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) focus.requestFocus();
+      });
+    }
+  }
+
   void open() {
     final keys = HardwareKeyboard.instance;
     if (keys.isMetaPressed || keys.isControlPressed) {
@@ -53,6 +63,7 @@ class _TaskRowState extends State<TaskRow> {
       widget.controller.extendMultiSelectTo(widget.task.id);
       return;
     }
+    focus.requestFocus();
     widget.controller.clearMultiSelect();
     widget.controller.selectTask(widget.task.id);
     widget.onActivate?.call();
@@ -63,8 +74,20 @@ class _TaskRowState extends State<TaskRow> {
       DesktopMenuEntry('complete', widget.task.completed ? '标记未完成' : '完成任务',
           icon: Icons.check),
       const DesktopMenuEntry('today', '安排到今天', icon: Icons.today_outlined),
+      const DesktopMenuEntry('tomorrow', '安排到明天', icon: Icons.event_outlined),
       const DesktopMenuEntry('date', '安排其他日期…',
           icon: Icons.calendar_today_outlined),
+      if (widget.task.dueAt != null)
+        const DesktopMenuEntry('clear-date', '清除日期',
+            icon: Icons.event_busy_outlined),
+      const DesktopMenuEntry('priority-high', '设置高优先级',
+          icon: Icons.flag_outlined),
+      const DesktopMenuEntry('priority-medium', '设置中优先级',
+          icon: Icons.flag_outlined),
+      const DesktopMenuEntry('priority-low', '设置低优先级',
+          icon: Icons.flag_outlined),
+      const DesktopMenuEntry('priority-none', '取消优先级',
+          icon: Icons.flag_outlined),
       const DesktopMenuEntry('duplicate', '创建副本',
           icon: Icons.control_point_duplicate_outlined),
       const DesktopMenuEntry('delete', '移到废纸篓',
@@ -76,6 +99,24 @@ class _TaskRowState extends State<TaskRow> {
         widget.controller.toggleTask(widget.task.id);
       case 'today':
         widget.controller.moveTaskToToday(widget.task.id);
+      case 'tomorrow':
+        final now = DateTime.now();
+        final existing = localDateTimeFromStorage(widget.task.dueAt);
+        final target = DateTime(now.year, now.month, now.day + 1,
+            existing?.hour ?? 0, existing?.minute ?? 0);
+        widget.controller.updateTaskDue(widget.task.id, target,
+            hasTime: widget.task.scheduledWithTime);
+      case 'clear-date':
+        widget.controller.updateTaskDue(widget.task.id, null);
+      case 'priority-high':
+        widget.controller.updateTaskPriority(widget.task.id, TaskPriority.high);
+      case 'priority-medium':
+        widget.controller
+            .updateTaskPriority(widget.task.id, TaskPriority.medium);
+      case 'priority-low':
+        widget.controller.updateTaskPriority(widget.task.id, TaskPriority.low);
+      case 'priority-none':
+        widget.controller.updateTaskPriority(widget.task.id, TaskPriority.none);
       case 'duplicate':
         widget.controller.duplicateTask(widget.task.id);
       case 'delete':
@@ -122,6 +163,10 @@ class _TaskRowState extends State<TaskRow> {
           const SingleActivator(LogicalKeyboardKey.enter): open,
           const SingleActivator(LogicalKeyboardKey.space): () =>
               widget.controller.toggleTask(task.id),
+          const SingleActivator(LogicalKeyboardKey.arrowDown): () =>
+              widget.controller.selectAdjacentTask(task.id, 1),
+          const SingleActivator(LogicalKeyboardKey.arrowUp): () =>
+              widget.controller.selectAdjacentTask(task.id, -1),
         },
         child: Focus(
           focusNode: focus,
@@ -207,7 +252,7 @@ class _TaskRowState extends State<TaskRow> {
                                         Expanded(
                                           child: Text(
                                             task.title,
-                                            maxLines: 2,
+                                            maxLines: widget.compact ? 1 : 2,
                                             overflow: TextOverflow.ellipsis,
                                             style: TextStyle(
                                                 fontSize:
@@ -222,6 +267,20 @@ class _TaskRowState extends State<TaskRow> {
                                                     : null),
                                           ),
                                         ),
+                                        if (_metadata.isNotEmpty)
+                                          Flexible(
+                                            child: Align(
+                                              alignment: Alignment.topRight,
+                                              child: Wrap(
+                                                alignment: WrapAlignment.end,
+                                                spacing: 7,
+                                                runSpacing: 2,
+                                                crossAxisAlignment:
+                                                    WrapCrossAlignment.center,
+                                                children: _metadata,
+                                              ),
+                                            ),
+                                          ),
                                         _moreButton(anchor, tokens,
                                             hovering || selected),
                                       ],
@@ -235,16 +294,6 @@ class _TaskRowState extends State<TaskRow> {
                                               fontSize: 11.5,
                                               height: 1.25,
                                               color: tokens.textTertiary)),
-                                    ],
-                                    if (_metadata.isNotEmpty) ...[
-                                      const SizedBox(height: 3),
-                                      Wrap(
-                                        spacing: 7,
-                                        runSpacing: 2,
-                                        crossAxisAlignment:
-                                            WrapCrossAlignment.center,
-                                        children: _metadata,
-                                      ),
                                     ],
                                   ],
                                 ),

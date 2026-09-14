@@ -16,6 +16,7 @@ import 'screens/notes_screen.dart';
 import 'screens/stats_screen.dart';
 import 'screens/today_screen.dart';
 import 'screens/trash_screen.dart';
+import 'models/task.dart';
 import 'services/preferences_store.dart';
 import 'services/local_workspace_store.dart';
 import 'services/focus_timer.dart';
@@ -46,7 +47,9 @@ class _WorkFollowAppState extends State<WorkFollowApp> {
   // Keep the TickTick-style inspector opt-in. The list remains the primary
   // surface until a task is selected, while power users can pin details on
   // wide windows from Settings.
-  bool _persistentInspector = false;
+  // The task inspector is a fixed pane in the macOS task workspace, matching
+  // TickTick. Settings can still opt out for a list-only workflow.
+  bool _persistentInspector = true;
   late final WorkspacePreferencesStore _preferencesStore;
 
   @override
@@ -150,7 +153,7 @@ class WorkFollowShell extends StatefulWidget {
     required this.themeMode,
     this.compactDensity = false,
     this.onSetDensity,
-    this.persistentInspector = false,
+    this.persistentInspector = true,
     this.onSetPersistentInspector,
     this.demoMode = false,
   });
@@ -250,6 +253,14 @@ class _WorkFollowShellState extends State<WorkFollowShell> {
         setState(() => sidebarCollapsed = !sidebarCollapsed);
       case 'goToday':
         controller.selectView(WorkspaceView.today);
+      case 'goRecent':
+        controller.selectView(WorkspaceView.recent);
+      case 'goOverdue':
+        controller.selectView(WorkspaceView.overdue);
+      case 'goAll':
+        controller.selectView(WorkspaceView.all);
+      case 'goCompleted':
+        controller.selectView(WorkspaceView.completed);
       case 'goInbox':
         controller.selectView(WorkspaceView.inbox);
       case 'goPlan':
@@ -268,6 +279,24 @@ class _WorkFollowShellState extends State<WorkFollowShell> {
         controller.selectView(WorkspaceView.habits);
       case 'startPomodoro':
         _openFocusTimer();
+      case 'completeSelected':
+        final id = controller.selectedTaskId;
+        if (id != null) controller.toggleTask(id);
+      case 'clearSelectedDate':
+        final id = controller.selectedTaskId;
+        if (id != null) controller.updateTaskDue(id, null);
+      case 'priorityHigh':
+        final id = controller.selectedTaskId;
+        if (id != null) controller.updateTaskPriority(id, TaskPriority.high);
+      case 'priorityMedium':
+        final id = controller.selectedTaskId;
+        if (id != null) controller.updateTaskPriority(id, TaskPriority.medium);
+      case 'priorityLow':
+        final id = controller.selectedTaskId;
+        if (id != null) controller.updateTaskPriority(id, TaskPriority.low);
+      case 'priorityNone':
+        final id = controller.selectedTaskId;
+        if (id != null) controller.updateTaskPriority(id, TaskPriority.none);
     }
   }
 
@@ -360,7 +389,9 @@ class _WorkFollowShellState extends State<WorkFollowShell> {
               ),
             ),
             for (final option in const <(WorkspaceView, String)>[
+              (WorkspaceView.recent, '最近 7 天'),
               (WorkspaceView.today, '今天'),
+              (WorkspaceView.overdue, '过期'),
               (WorkspaceView.inbox, '收集箱'),
               (WorkspaceView.plan, '计划'),
               (WorkspaceView.all, '全部任务'),
@@ -399,7 +430,9 @@ class _WorkFollowShellState extends State<WorkFollowShell> {
   }
 
   String get _viewTitle {
-    if (controller.isTaskView) return '任务';
+    // The task list owns its own TickTick-style title row. Leaving this slot
+    // empty avoids rendering a redundant "任务" label above it.
+    if (controller.isTaskView) return '';
     return controller.viewTitle;
   }
 
@@ -421,6 +454,8 @@ class _WorkFollowShellState extends State<WorkFollowShell> {
                 SettingsIntent(),
             SingleActivator(LogicalKeyboardKey.digit1, meta: true):
                 TodayIntent(),
+            SingleActivator(LogicalKeyboardKey.digit9, meta: true):
+                RecentIntent(),
             SingleActivator(LogicalKeyboardKey.digit2, meta: true):
                 InboxIntent(),
             SingleActivator(LogicalKeyboardKey.digit3, meta: true):
@@ -456,6 +491,10 @@ class _WorkFollowShellState extends State<WorkFollowShell> {
               }),
               TodayIntent: CallbackAction<Intent>(onInvoke: (_) {
                 controller.selectView(WorkspaceView.today);
+                return null;
+              }),
+              RecentIntent: CallbackAction<Intent>(onInvoke: (_) {
+                controller.selectView(WorkspaceView.recent);
                 return null;
               }),
               InboxIntent: CallbackAction<Intent>(onInvoke: (_) {
@@ -609,11 +648,12 @@ class _AppToolbar extends StatelessWidget {
               size: 32,
               iconSize: 17),
           const SizedBox(width: 6),
-          Text(title,
-              style: TextStyle(
-                  color: tokens.textSecondary,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600)),
+          if (title.isNotEmpty)
+            Text(title,
+                style: TextStyle(
+                    color: tokens.textSecondary,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600)),
           const Spacer(),
           _ToolbarSearch(onPressed: onSearch),
           const SizedBox(width: 7),
@@ -800,6 +840,10 @@ class SettingsIntent extends Intent {
 
 class TodayIntent extends Intent {
   const TodayIntent();
+}
+
+class RecentIntent extends Intent {
+  const RecentIntent();
 }
 
 class InboxIntent extends Intent {

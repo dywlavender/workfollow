@@ -258,6 +258,36 @@ class MainFlutterWindow: NSWindow {
                      action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
     editMenuItem.submenu = editMenu
 
+    // TickTick exposes smart lists and task actions as first-class macOS
+    // menus. Keep these commands thin: Dart owns the current selection and
+    // applies the same controller mutations as the in-app menus.
+    let listMenuItem = NSMenuItem()
+    mainMenu.addItem(listMenuItem)
+    let listMenu = NSMenu(title: "清单")
+    // Navigation shortcuts live in Flutter so they also work when focus is
+    // inside a text editor. Native menu items stay keyless to avoid duplicate
+    // Cmd-1…9 equivalents competing with the View menu.
+    listMenu.addCommand("最近 7 天", key: "", command: "goRecent", target: commandTarget)
+    listMenu.addCommand("今天", key: "", command: "goToday", target: commandTarget)
+    listMenu.addCommand("过期", key: "", command: "goOverdue", target: commandTarget)
+    listMenu.addCommand("收集箱", key: "", command: "goInbox", target: commandTarget)
+    listMenu.addCommand("计划", key: "", command: "goPlan", target: commandTarget)
+    listMenu.addCommand("所有任务", key: "", command: "goAll", target: commandTarget)
+    listMenu.addCommand("已完成", key: "", command: "goCompleted", target: commandTarget)
+    listMenuItem.submenu = listMenu
+
+    let taskMenuItem = NSMenuItem()
+    mainMenu.addItem(taskMenuItem)
+    let taskMenu = NSMenu(title: "任务")
+    taskMenu.addCommand("新建任务", key: "", command: "newTask", target: commandTarget)
+    taskMenu.addCommand("完成当前任务", key: "", command: "completeSelected", target: commandTarget)
+    taskMenu.addCommand("清除当前日期", key: "", command: "clearSelectedDate", target: commandTarget)
+    taskMenu.addCommand("设为高优先级", key: "", command: "priorityHigh", target: commandTarget)
+    taskMenu.addCommand("设为中优先级", key: "", command: "priorityMedium", target: commandTarget)
+    taskMenu.addCommand("设为低优先级", key: "", command: "priorityLow", target: commandTarget)
+    taskMenu.addCommand("取消优先级", key: "", command: "priorityNone", target: commandTarget)
+    taskMenuItem.submenu = taskMenu
+
     // View menu: the destinations users reach with Cmd-1..8.
     let viewMenuItem = NSMenuItem()
     mainMenu.addItem(viewMenuItem)

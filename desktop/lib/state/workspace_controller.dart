@@ -13,7 +13,9 @@ import '../services/smart_date_parser.dart';
 
 enum WorkspaceView {
   home,
+  recent,
   today,
+  overdue,
   inbox,
   plan,
   all,
@@ -346,7 +348,9 @@ class WorkspaceController extends ChangeNotifier {
 
   WorkspaceView get view => _view;
   bool get isTaskView => switch (_view) {
+        WorkspaceView.recent ||
         WorkspaceView.today ||
+        WorkspaceView.overdue ||
         WorkspaceView.inbox ||
         WorkspaceView.plan ||
         WorkspaceView.all ||
@@ -427,7 +431,9 @@ class WorkspaceController extends ChangeNotifier {
     if (_selectedListName != null) return _selectedListName!;
     return switch (_view) {
       WorkspaceView.home => '首页',
+      WorkspaceView.recent => '最近 7 天',
       WorkspaceView.today => '今天',
+      WorkspaceView.overdue => '过期',
       WorkspaceView.inbox => '收集箱',
       WorkspaceView.plan => '计划',
       WorkspaceView.all => '全部任务',
@@ -460,6 +466,33 @@ class WorkspaceController extends ChangeNotifier {
       List.unmodifiable(_tasks.where((task) => task.deletedAt != null));
   List<NoteItem> get deletedNotes =>
       List.unmodifiable(_notes.where((note) => note.deletedAt != null));
+
+  /// TickTick's "最近 7 天" smart list keeps overdue work visible and shows
+  /// the next seven calendar days. Unscheduled tasks are intentionally left
+  /// out so this view remains a time-based list rather than a second inbox.
+  List<TaskItem> get recentTasks =>
+      List.unmodifiable(activeTasks.where((task) =>
+          !task.completed && _isInRecentWindow(task, now: _dateReference)));
+
+  List<TaskItem> get overdueTasks => List.unmodifiable(activeTasks.where(
+      (task) => !task.completed && _isOverdue(task, now: _dateReference)));
+
+  bool _isOverdue(TaskItem task, {DateTime? now}) {
+    final due = localDateTimeFromStorage(task.dueAt);
+    if (due == null) return false;
+    final reference = now ?? DateTime.now();
+    final today = DateTime(reference.year, reference.month, reference.day);
+    return DateTime(due.year, due.month, due.day).isBefore(today);
+  }
+
+  bool _isInRecentWindow(TaskItem task, {DateTime? now}) {
+    final due = localDateTimeFromStorage(task.dueAt);
+    if (due == null) return false;
+    final reference = now ?? DateTime.now();
+    final today = DateTime(reference.year, reference.month, reference.day);
+    final dueDay = DateTime(due.year, due.month, due.day);
+    return dueDay.isBefore(today.add(const Duration(days: 7)));
+  }
 
   List<MigrationListRecord> get lists => List.unmodifiable(_lists);
   List<MigrationFolderRecord> get folders => List.unmodifiable(_folders);
@@ -1060,7 +1093,11 @@ class WorkspaceController extends ChangeNotifier {
     }
     final filtered = switch (_view) {
       WorkspaceView.home => tagged,
+      WorkspaceView.recent =>
+        tagged.where((task) => !task.completed && _isInRecentWindow(task)),
       WorkspaceView.today => tagged.where(needsAttentionToday),
+      WorkspaceView.overdue =>
+        tagged.where((task) => !task.completed && _isOverdue(task)),
       WorkspaceView.inbox => tagged.where((task) => task.listName == '收集箱'),
       WorkspaceView.plan =>
         tagged.where((task) => task.bucket == TaskBucket.later),
@@ -1100,9 +1137,14 @@ class WorkspaceController extends ChangeNotifier {
       WorkspaceView.home => active
           .where((task) => !task.completed && dueTodayOrOverdue(task))
           .length,
+      WorkspaceView.recent => active
+          .where((task) => !task.completed && _isInRecentWindow(task))
+          .length,
       WorkspaceView.today => active
           .where((task) => !task.completed && dueTodayOrOverdue(task))
           .length,
+      WorkspaceView.overdue =>
+        active.where((task) => !task.completed && _isOverdue(task)).length,
       WorkspaceView.inbox => active
           .where((task) => task.listName == '收集箱' && !task.completed)
           .length,
@@ -1256,6 +1298,22 @@ class WorkspaceController extends ChangeNotifier {
     if (_selectedTaskId == id) return;
     if (_tasks.every((task) => task.id != id)) return;
     _selectedTaskId = id;
+    _notify();
+  }
+
+  /// Moves the selection through the currently visible task projection. This
+  /// mirrors the arrow-key workflow in desktop task clients while keeping the
+  /// controller as the single source of truth for the inspector selection.
+  void selectAdjacentTask(String id, int delta) {
+    if (delta == 0) return;
+    final visible = visibleTasks.toList();
+    final index = visible.indexWhere((task) => task.id == id);
+    if (index < 0) return;
+    final targetIndex = index + delta;
+    if (targetIndex < 0 || targetIndex >= visible.length) return;
+    _multiSelectedTaskIds = {};
+    _multiSelectAnchorId = null;
+    _selectedTaskId = visible[targetIndex].id;
     _notify();
   }
 
