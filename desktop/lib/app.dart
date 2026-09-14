@@ -302,7 +302,8 @@ class _WorkFollowShellState extends State<WorkFollowShell> {
           controller.taskActions.setPriority(id, TaskPriority.medium);
       case 'priorityLow':
         final id = controller.selectedTaskId;
-        if (id != null) controller.taskActions.setPriority(id, TaskPriority.low);
+        if (id != null)
+          controller.taskActions.setPriority(id, TaskPriority.low);
       case 'priorityNone':
         final id = controller.selectedTaskId;
         if (id != null)
@@ -439,6 +440,22 @@ class _WorkFollowShellState extends State<WorkFollowShell> {
     });
   }
 
+  void _handleGlobalEscape() {
+    // Nested editors and popovers receive Escape first. Once those surfaces
+    // are closed, the shell follows TickTick's predictable unwind order:
+    // clear multi-selection, then close the fixed inspector, then release any
+    // remaining focus.
+    if (controller.multiSelectCount > 0) {
+      controller.clearMultiSelect();
+      return;
+    }
+    if (controller.selectedTaskId != null) {
+      controller.clearTaskSelection();
+      return;
+    }
+    FocusManager.instance.primaryFocus?.unfocus();
+  }
+
   String get _viewTitle {
     // The task list owns its own TickTick-style title row. Leaving this slot
     // empty avoids rendering a redundant "任务" label above it.
@@ -536,79 +553,86 @@ class _WorkFollowShellState extends State<WorkFollowShell> {
                 return null;
               }),
             },
-            child: Scaffold(
-              backgroundColor: tokens.canvas,
-              body: Stack(
-                children: [
-                  Row(
-                    children: [
-                      ClipRect(
-                        child: AnimatedAlign(
-                          duration: const Duration(milliseconds: 220),
-                          curve: Curves.easeOutCubic,
-                          alignment: Alignment.centerLeft,
-                          widthFactor: sidebarCollapsed ? 0 : 1,
-                          child: AppRail(
-                            controller: controller,
-                            isDark:
-                                Theme.of(context).brightness == Brightness.dark,
-                            onToggleTheme: widget.onToggleTheme,
-                            onOpenSettings: () => showSettingsPanel(
-                                context: context,
-                                controller: controller,
-                                onToggleTheme: widget.onToggleTheme,
-                                onSetThemeMode: widget.onSetThemeMode,
-                                themeMode: widget.themeMode,
-                                compactDensity: widget.compactDensity,
-                                onSetDensity: widget.onSetDensity,
-                                persistentInspector: widget.persistentInspector,
-                                onSetPersistentInspector:
-                                    widget.onSetPersistentInspector),
+            child: CallbackShortcuts(
+              bindings: {
+                const SingleActivator(LogicalKeyboardKey.escape):
+                    _handleGlobalEscape,
+              },
+              child: Scaffold(
+                backgroundColor: tokens.canvas,
+                body: Stack(
+                  children: [
+                    Row(
+                      children: [
+                        ClipRect(
+                          child: AnimatedAlign(
+                            duration: const Duration(milliseconds: 220),
+                            curve: Curves.easeOutCubic,
+                            alignment: Alignment.centerLeft,
+                            widthFactor: sidebarCollapsed ? 0 : 1,
+                            child: AppRail(
+                              controller: controller,
+                              isDark: Theme.of(context).brightness ==
+                                  Brightness.dark,
+                              onToggleTheme: widget.onToggleTheme,
+                              onOpenSettings: () => showSettingsPanel(
+                                  context: context,
+                                  controller: controller,
+                                  onToggleTheme: widget.onToggleTheme,
+                                  onSetThemeMode: widget.onSetThemeMode,
+                                  themeMode: widget.themeMode,
+                                  compactDensity: widget.compactDensity,
+                                  onSetDensity: widget.onSetDensity,
+                                  persistentInspector:
+                                      widget.persistentInspector,
+                                  onSetPersistentInspector:
+                                      widget.onSetPersistentInspector),
+                            ),
                           ),
                         ),
-                      ),
-                      Expanded(
-                        child: Column(
-                          children: [
-                            _AppToolbar(
-                                title: _viewTitle,
-                                sidebarCollapsed: sidebarCollapsed,
-                                onToggleSidebar: () => setState(
-                                    () => sidebarCollapsed = !sidebarCollapsed),
-                                onSearch: _openCommandPalette,
-                                onOpenFilters: _openFilters,
-                                focusTimer: focusTimer,
-                                onOpenFocusTimer: _openFocusTimer,
-                                onNewTask:
-                                    controller.view == WorkspaceView.notes
-                                        ? _newNote
-                                        : _newTask),
-                            Expanded(
-                              child: _WorkspaceContent(
-                                  controller: controller,
-                                  compactDensity: widget.compactDensity,
-                                  persistentInspector:
-                                      widget.persistentInspector),
-                            ),
-                          ],
+                        Expanded(
+                          child: Column(
+                            children: [
+                              _AppToolbar(
+                                  title: _viewTitle,
+                                  sidebarCollapsed: sidebarCollapsed,
+                                  onToggleSidebar: () => setState(() =>
+                                      sidebarCollapsed = !sidebarCollapsed),
+                                  onSearch: _openCommandPalette,
+                                  onOpenFilters: _openFilters,
+                                  focusTimer: focusTimer,
+                                  onOpenFocusTimer: _openFocusTimer,
+                                  onNewTask:
+                                      controller.view == WorkspaceView.notes
+                                          ? _newNote
+                                          : _newTask),
+                              Expanded(
+                                child: _WorkspaceContent(
+                                    controller: controller,
+                                    compactDensity: widget.compactDensity,
+                                    persistentInspector:
+                                        widget.persistentInspector),
+                              ),
+                            ],
+                          ),
                         ),
-                      ),
-                    ],
-                  ),
-                  if (showUndo)
-                    Positioned(
-                      left: 0,
-                      right: 0,
-                      bottom: 22,
-                      child: Center(
-                          child: _UndoToast(
-                              message: undoMessage,
-                              onUndo: () {
-                                controller.undoLastAction();
-                                setState(() => showUndo = false);
-                              })),
+                      ],
                     ),
-                ],
+                    if (showUndo)
+                      Positioned(
+                        left: 0,
+                        right: 0,
+                        bottom: 22,
+                        child: Center(
+                            child: _UndoToast(
+                                message: undoMessage,
+                                onUndo: () {
+                                  controller.undoLastAction();
+                                  setState(() => showUndo = false);
+                                })),
+                      ),
+                  ],
+                ),
               ),
             ),
           ),

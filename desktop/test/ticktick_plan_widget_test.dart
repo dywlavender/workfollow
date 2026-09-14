@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:workfollow_personal/app.dart';
@@ -105,6 +106,35 @@ void main() {
     expect(controller.lists, hasLength(4));
   });
 
+  testWidgets('QUICK-020 Escape releases focus before clearing the draft',
+      (tester) async {
+    final controller = WorkspaceController(seedData: false);
+    addTearDown(controller.dispose);
+    await tester.pumpWidget(MaterialApp(
+        theme: WorkFollowThemeData.light(),
+        home: Scaffold(body: QuickAddField(controller: controller))));
+
+    final field = find.byKey(const ValueKey('quick-add-title'));
+    await tester.tap(field);
+    await tester.enterText(field, '保留这条草稿');
+    await tester.pump();
+    expect(tester.widget<TextField>(field).controller!.text, '保留这条草稿');
+
+    // Match TickTick: the first Escape only leaves the editor, keeping the
+    // draft available for a later resume.
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pump();
+    expect(tester.widget<TextField>(field).controller!.text, '保留这条草稿');
+    expect(tester.widget<TextField>(field).focusNode!.hasFocus, isFalse);
+
+    // Re-entering the field and pressing Escape again is the explicit clear
+    // gesture; it also verifies all smart-entry state is reset together.
+    await tester.tap(field);
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pump();
+    expect(tester.widget<TextField>(field).controller!.text, isEmpty);
+  });
+
   testWidgets('quick add in Today keeps the view default in its Draft',
       (tester) async {
     final controller = WorkspaceController(seedData: false);
@@ -168,6 +198,30 @@ void main() {
 
     expect(find.text('选择一个任务开始编辑'), findsOneWidget);
     expect(find.byKey(const ValueKey('task-title-editor')), findsNothing);
+  });
+
+  testWidgets('KEY-004 Escape unwinds the fixed inspector selection',
+      (tester) async {
+    tester.view.physicalSize = const Size(1280, 820);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+    await tester.pumpWidget(const WorkFollowApp(demoMode: true));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('任务'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('今天').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('准备季度产品评审演示文稿').last);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('task-title-editor')), findsOneWidget);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('task-title-editor')), findsNothing);
+    expect(find.text('选择一个任务开始编辑'), findsOneWidget);
   });
 
   testWidgets('task inspector keeps secondary properties behind a clean toggle',
@@ -332,10 +386,8 @@ void main() {
     await tester.pumpWidget(MaterialApp(
         theme: WorkFollowThemeData.light(),
         home: Scaffold(
-            body: TaskRow(
-                task: task,
-                controller: controller,
-                selected: true))));
+            body:
+                TaskRow(task: task, controller: controller, selected: true))));
 
     await tester.tap(find.byKey(ValueKey('task-row-more-${task.id}')));
     await tester.pumpAndSettle();

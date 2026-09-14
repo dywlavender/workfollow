@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -93,14 +95,16 @@ class _TaskRowState extends State<TaskRow> {
         _showActionFeedback(widget.controller.taskActions.setSchedule(
             widget.task.id,
             TaskScheduleDraft.forDay(now,
-                preserveClock: existing, hasTime: widget.task.scheduledWithTime)));
+                preserveClock: existing,
+                hasTime: widget.task.scheduledWithTime)));
       case 'tomorrow':
         final now = DateTime.now();
         final existing = localDateTimeFromStorage(widget.task.dueAt);
         _showActionFeedback(widget.controller.taskActions.setSchedule(
             widget.task.id,
             TaskScheduleDraft.forDay(now.add(const Duration(days: 1)),
-                preserveClock: existing, hasTime: widget.task.scheduledWithTime)));
+                preserveClock: existing,
+                hasTime: widget.task.scheduledWithTime)));
       case 'clear-date':
         _showActionFeedback(
             widget.controller.taskActions.clearSchedule(widget.task.id));
@@ -130,7 +134,8 @@ class _TaskRowState extends State<TaskRow> {
         _showActionFeedback(
             widget.controller.taskActions.duplicate(widget.task.id));
       case 'delete':
-        _showActionFeedback(widget.controller.taskActions.delete(widget.task.id));
+        _showActionFeedback(
+            widget.controller.taskActions.delete(widget.task.id));
       case 'date':
         await date(anchor);
     }
@@ -142,8 +147,8 @@ class _TaskRowState extends State<TaskRow> {
         value: widget.task.dueAt, hasTime: widget.task.scheduledWithTime);
     if (result != null && mounted) {
       final c = widget.controller, id = widget.task.id;
-      _showActionFeedback(c.taskActions.setSchedule(id,
-          TaskScheduleDraft(dueAt: result.date, hasTime: result.hasTime)));
+      _showActionFeedback(c.taskActions.setSchedule(
+          id, TaskScheduleDraft(dueAt: result.date, hasTime: result.hasTime)));
     }
   }
 
@@ -156,8 +161,8 @@ class _TaskRowState extends State<TaskRow> {
   }
 
   Future<void> _editTags(BuildContext anchor) async {
-    final value = await TaskTagPicker.show(anchor,
-        initial: widget.task.tags.join('，'));
+    final value =
+        await TaskTagPicker.show(anchor, initial: widget.task.tags.join('，'));
     if (!mounted || value == null) return;
     final tags = value
         .split(RegExp('[,，]'))
@@ -169,39 +174,60 @@ class _TaskRowState extends State<TaskRow> {
   }
 
   Future<void> _editReminder(BuildContext anchor) async {
-    final value = await TaskReminderPicker.show(anchor,
-        value: widget.task.reminderAt);
+    final value =
+        await TaskReminderPicker.show(anchor, value: widget.task.reminderAt);
     if (!mounted || value == null) return;
     _showActionFeedback(value.date == null
         ? widget.controller.taskActions.clearReminder(widget.task.id)
-        : widget.controller.taskActions.setReminder(widget.task.id, value.date));
+        : widget.controller.taskActions
+            .setReminder(widget.task.id, value.date));
   }
 
   Future<void> _editRepeat(BuildContext anchor) async {
     final value = await TaskRepeatPicker.show(anchor, task: widget.task);
     if (!mounted || value == null) return;
-    _showActionFeedback(widget.controller.taskActions
-        .setRecurrence(widget.task.id, value));
+    _showActionFeedback(
+        widget.controller.taskActions.setRecurrence(widget.task.id, value));
   }
 
   Future<void> _editDeadline(BuildContext anchor) async {
-    final value = await TaskDeadlinePicker.show(anchor,
-        value: widget.task.deadlineAt);
+    final value =
+        await TaskDeadlinePicker.show(anchor, value: widget.task.deadlineAt);
     if (!mounted || value == null) return;
-    _showActionFeedback(widget.controller.taskActions
-        .setDeadline(widget.task.id, value.date));
+    _showActionFeedback(
+        widget.controller.taskActions.setDeadline(widget.task.id, value.date));
   }
 
   void _showActionFeedback(TaskActionResult result) {
     if (!mounted || !result.success || result.message == null) return;
-    if (result.destination == TaskDestination.current) return;
+    // Property changes return a snapshot undo command. Keep that affordance
+    // visible even when the task remains in the current list; navigation-only
+    // actions continue to use the existing "查看任务" feedback.
+    final undo = result.undo;
+    // Keep the destination affordance for rows that leave the current view;
+    // inline property edits stay put and can expose their local snapshot undo.
+    final canUndo = undo != null &&
+        undo.label == '撤销修改' &&
+        result.destination == TaskDestination.current;
+    if (result.destination == TaskDestination.current && !canUndo) return;
     final id = result.taskId;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      behavior: SnackBarBehavior.floating,
+      // Keep the fixed inspector footer and its property controls clickable.
+      margin: const EdgeInsets.fromLTRB(16, 0, 16, 64),
       content: Text(result.message!),
-      action: id == null
-          ? null
-          : SnackBarAction(
-              label: '查看任务', onPressed: () => widget.controller.openTask(id)),
+      action: canUndo
+          ? SnackBarAction(
+              label: '撤销',
+              onPressed: () {
+                final outcome = undo.execute();
+                if (outcome is Future<bool>) unawaited(outcome);
+              })
+          : id == null
+              ? null
+              : SnackBarAction(
+                  label: '查看任务',
+                  onPressed: () => widget.controller.openTask(id)),
     ));
   }
 

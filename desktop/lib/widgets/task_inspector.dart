@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -112,8 +114,10 @@ class _TaskInspectorState extends State<TaskInspector> {
   Future<void> _date(BuildContext anchor, String kind) async {
     final task = widget.task;
     final value = switch (kind) {
-      'reminder' => await TaskReminderPicker.show(anchor, value: task.reminderAt),
-      'deadline' => await TaskDeadlinePicker.show(anchor, value: task.deadlineAt),
+      'reminder' =>
+        await TaskReminderPicker.show(anchor, value: task.reminderAt),
+      'deadline' =>
+        await TaskDeadlinePicker.show(anchor, value: task.deadlineAt),
       _ => await TaskSchedulePicker.show(anchor,
           value: task.dueAt, hasTime: task.scheduledWithTime),
     };
@@ -126,8 +130,7 @@ class _TaskInspectorState extends State<TaskInspector> {
       _showActionFeedback(
           widget.controller.taskActions.setDeadline(task.id, value.date));
     } else {
-      _showActionFeedback(widget.controller.taskActions.setSchedule(
-          task.id,
+      _showActionFeedback(widget.controller.taskActions.setSchedule(task.id,
           TaskScheduleDraft(dueAt: value.date, hasTime: value.hasTime)));
     }
   }
@@ -142,8 +145,8 @@ class _TaskInspectorState extends State<TaskInspector> {
   }
 
   Future<void> _priority(BuildContext anchor) async {
-    final value = await TaskPriorityPicker.show(anchor,
-        selected: widget.task.priority);
+    final value =
+        await TaskPriorityPicker.show(anchor, selected: widget.task.priority);
     if (value != null) {
       _showActionFeedback(
           widget.controller.taskActions.setPriority(widget.task.id, value));
@@ -151,8 +154,8 @@ class _TaskInspectorState extends State<TaskInspector> {
   }
 
   Future<void> _tags(BuildContext anchor) async {
-    final value = await TaskTagPicker.show(anchor,
-        initial: widget.task.tags.join('，'));
+    final value =
+        await TaskTagPicker.show(anchor, initial: widget.task.tags.join('，'));
     if (value != null) {
       _showActionFeedback(widget.controller.taskActions
           .setTags(widget.task.id, value.split(RegExp('[,，]'))));
@@ -162,8 +165,8 @@ class _TaskInspectorState extends State<TaskInspector> {
   Future<void> _repeat(BuildContext anchor) async {
     final result = await TaskRepeatPicker.show(anchor, task: widget.task);
     if (result != null) {
-      _showActionFeedback(widget.controller.taskActions.setRecurrence(
-          widget.task.id, result));
+      _showActionFeedback(
+          widget.controller.taskActions.setRecurrence(widget.task.id, result));
     }
   }
 
@@ -196,14 +199,28 @@ class _TaskInspectorState extends State<TaskInspector> {
 
   void _showActionFeedback(TaskActionResult result) {
     if (!mounted || !result.success || result.message == null) return;
-    if (result.destination == TaskDestination.current) return;
+    final undo = result.undo;
+    final canUndo = undo != null &&
+        undo.label == '撤销修改' &&
+        result.destination == TaskDestination.current;
+    if (result.destination == TaskDestination.current && !canUndo) return;
     final id = result.taskId;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      behavior: SnackBarBehavior.floating,
+      margin: const EdgeInsets.fromLTRB(16, 0, 16, 64),
       content: Text(result.message!),
-      action: id == null
-          ? null
-          : SnackBarAction(
-              label: '查看任务', onPressed: () => widget.controller.openTask(id)),
+      action: canUndo
+          ? SnackBarAction(
+              label: '撤销',
+              onPressed: () {
+                final outcome = undo.execute();
+                if (outcome is Future<bool>) unawaited(outcome);
+              })
+          : id == null
+              ? null
+              : SnackBarAction(
+                  label: '查看任务',
+                  onPressed: () => widget.controller.openTask(id)),
     ));
   }
 
@@ -447,9 +464,8 @@ class _TaskInspectorState extends State<TaskInspector> {
                     border: InputBorder.none,
                     isDense: true,
                     contentPadding: EdgeInsets.zero),
-                onChanged: (value) =>
-                    widget.controller.taskActions
-                        .setDescription(task.id, value)),
+                onChanged: (value) => widget.controller.taskActions
+                    .setDescription(task.id, value)),
             if (showAdvanced) ...[
               const SizedBox(height: 18),
               Wrap(spacing: 8, runSpacing: 8, children: [
