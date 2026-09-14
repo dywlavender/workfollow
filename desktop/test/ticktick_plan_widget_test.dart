@@ -149,6 +149,32 @@ void main() {
     expect(find.byKey(const ValueKey('task-title-editor')), findsNothing);
   });
 
+  testWidgets('task inspector keeps secondary properties behind a clean toggle',
+      (tester) async {
+    tester.view.physicalSize = const Size(1280, 820);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+    await tester.pumpWidget(const WorkFollowApp(demoMode: true));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('今天').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('准备季度产品评审演示文稿').last);
+    await tester.pumpAndSettle();
+
+    expect(find.byTooltip('显示更多属性'), findsOneWidget);
+    expect(find.text('子任务'), findsNothing);
+    expect(find.text('附件与关联'), findsNothing);
+
+    await tester.tap(find.byTooltip('显示更多属性'));
+    await tester.pumpAndSettle();
+    expect(find.byTooltip('收起更多属性'), findsOneWidget);
+    expect(find.text('子任务'), findsOneWidget);
+    expect(find.text('附件与关联'), findsOneWidget);
+  });
+
   testWidgets('recent and overdue smart lists are reachable from the rail',
       (tester) async {
     await tester.pumpWidget(const WorkFollowApp(demoMode: true));

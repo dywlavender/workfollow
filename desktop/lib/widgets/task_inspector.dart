@@ -4,13 +4,14 @@ import 'package:flutter/services.dart';
 import '../models/task.dart';
 import '../state/workspace_controller.dart';
 import '../theme/workfollow_theme.dart';
+import 'app_icon_button.dart';
 import 'desktop_popover.dart';
-import 'save_status_footer.dart';
 import 'task_date_picker.dart';
 
 /// Task detail surface, used both as the in-list inline editor and as the
 /// standalone narrow-window detail page. The redesign organises it into
-/// labelled sections: 标题与备注 → 属性 → 子任务 → 附件与关联.
+/// a clean title/body surface by default; secondary properties remain
+/// available through progressive disclosure.
 class TaskInspector extends StatefulWidget {
   const TaskInspector(
       {super.key,
@@ -36,6 +37,7 @@ class _TaskInspectorState extends State<TaskInspector> {
   final titleFocus = FocusNode();
   final descriptionFocus = FocusNode();
   late int focusVersion;
+  bool showAdvanced = false;
 
   @override
   void initState() {
@@ -174,14 +176,20 @@ class _TaskInspectorState extends State<TaskInspector> {
   }
 
   Future<void> _more(BuildContext anchor) async {
-    final action = await showDesktopMenu<String>(anchor, entries: const [
-      DesktopMenuEntry('copy', '复制任务正文', icon: Icons.copy_outlined),
-      DesktopMenuEntry('duplicate', '创建副本',
+    final action = await showDesktopMenu<String>(anchor, entries: [
+      DesktopMenuEntry('toggle-details', showAdvanced ? '收起更多属性' : '显示更多属性',
+          icon: showAdvanced ? Icons.expand_less : Icons.tune_outlined),
+      const DesktopMenuEntry('copy', '复制任务正文', icon: Icons.copy_outlined),
+      const DesktopMenuEntry('duplicate', '创建副本',
           icon: Icons.control_point_duplicate_outlined),
-      DesktopMenuEntry('delete', '移到废纸篓',
+      const DesktopMenuEntry('delete', '移到废纸篓',
           icon: Icons.delete_outline, destructive: true),
     ]);
     if (!mounted) return;
+    if (action == 'toggle-details') {
+      setState(() => showAdvanced = !showAdvanced);
+      return;
+    }
     if (action == 'copy')
       await Clipboard.setData(
           ClipboardData(text: '${title.text}\n${description.text}'.trim()));
@@ -269,19 +277,105 @@ class _TaskInspectorState extends State<TaskInspector> {
             ]),
           ),
         ),
-        Builder(
-            builder: (anchor) => IconButton(
-                tooltip: '更多操作',
-                visualDensity: VisualDensity.compact,
-                onPressed: () => _more(anchor),
-                icon: Icon(Icons.more_horiz,
-                    color: tokens.textTertiary, size: 20))),
-        if (!widget.showBack)
+        if (widget.inline)
+          Builder(
+              builder: (anchor) => IconButton(
+                  tooltip: '收起任务',
+                  visualDensity: VisualDensity.compact,
+                  onPressed: close,
+                  icon:
+                      Icon(Icons.close, color: tokens.textTertiary, size: 18))),
+        if (!widget.inline && !widget.showBack)
           IconButton(
-              tooltip: '收起任务',
+              tooltip: '关闭详情',
               visualDensity: VisualDensity.compact,
               onPressed: close,
               icon: Icon(Icons.close, color: tokens.textTertiary, size: 18)),
+      ]),
+    );
+  }
+
+  Widget _saveIndicator(WorkFollowTheme tokens) {
+    final IconData icon;
+    final String label;
+    final Color color;
+    if (widget.controller.loadError != null) {
+      icon = Icons.report_outlined;
+      label = widget.controller.loadError!;
+      color = tokens.danger;
+    } else {
+      switch (widget.controller.saveStatus) {
+        case SaveStatus.saving:
+          icon = Icons.sync_rounded;
+          label = '保存中…';
+          color = tokens.textTertiary;
+        case SaveStatus.failed:
+          icon = Icons.error_outline;
+          label = widget.controller.saveError == null
+              ? '保存失败'
+              : '保存失败：${widget.controller.saveError}';
+          color = tokens.danger;
+        case SaveStatus.saved:
+          icon = Icons.check_rounded;
+          final savedAt = widget.controller.lastSavedAt;
+          label = savedAt == null
+              ? '已保存'
+              : '已保存 · ${savedAt.hour.toString().padLeft(2, '0')}:${savedAt.minute.toString().padLeft(2, '0')}';
+          color = tokens.success;
+      }
+    }
+    return Tooltip(
+        message: label,
+        child:
+            Semantics(label: label, child: Icon(icon, size: 15, color: color)));
+  }
+
+  Widget _footer(BuildContext context, TaskItem task, WorkFollowTheme tokens) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(18, 8, 18, 9),
+      decoration:
+          BoxDecoration(border: Border(top: BorderSide(color: tokens.border))),
+      child: Row(children: [
+        Builder(
+            builder: (anchor) => TextButton.icon(
+                key: const ValueKey('task-list-footer'),
+                onPressed: () => _list(anchor),
+                icon: Icon(Icons.inbox_outlined,
+                    size: 15, color: tokens.textSecondary),
+                label: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 130),
+                    child: Text(task.listName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                            color: tokens.textSecondary,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600))),
+                style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 5),
+                    minimumSize: const Size(0, 30),
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    visualDensity: VisualDensity.compact))),
+        const Spacer(),
+        _saveIndicator(tokens),
+        const SizedBox(width: 8),
+        AppIconButton(
+            key: const ValueKey('task-advanced-toggle'),
+            icon:
+                showAdvanced ? Icons.expand_less_rounded : Icons.tune_outlined,
+            tooltip: showAdvanced ? '收起更多属性' : '显示更多属性',
+            active: showAdvanced,
+            onPressed: () => setState(() => showAdvanced = !showAdvanced),
+            size: 30,
+            iconSize: 16),
+        Builder(
+            builder: (anchor) => AppIconButton(
+                key: const ValueKey('task-more-actions'),
+                icon: Icons.more_horiz,
+                tooltip: '更多操作',
+                onPressed: () => _more(anchor),
+                size: 30,
+                iconSize: 18)),
       ]),
     );
   }
@@ -329,7 +423,7 @@ class _TaskInspectorState extends State<TaskInspector> {
                 key: const ValueKey('task-description-editor'),
                 controller: description,
                 focusNode: descriptionFocus,
-                minLines: 2,
+                minLines: 1,
                 maxLines: 8,
                 style: TextStyle(
                     fontSize: 13.5, height: 1.65, color: tokens.textSecondary),
@@ -341,154 +435,157 @@ class _TaskInspectorState extends State<TaskInspector> {
                     contentPadding: EdgeInsets.zero),
                 onChanged: (value) =>
                     widget.controller.updateTaskDescription(task.id, value)),
-            const SizedBox(height: 18),
-            Wrap(spacing: 8, runSpacing: 8, children: [
-              PropertyButton(
-                  icon: Icons.list_rounded,
-                  label: task.listName,
-                  active: true,
-                  onPressed: _list),
-              PropertyButton(
-                  icon: Icons.flag_outlined,
-                  label: calendarDateLabel(
-                      localDateTimeFromStorage(task.deadlineAt),
-                      empty: '截止日期'),
-                  active: task.deadlineAt != null,
-                  tooltip: '截止日期：最晚什么时候完成',
-                  onPressed: (anchor) => _date(anchor, 'deadline')),
-              PropertyButton(
-                  icon: Icons.tag_rounded,
-                  label: task.tags.isEmpty ? '标签' : task.tags.join(' · '),
-                  active: task.tags.isNotEmpty,
-                  onPressed: _tags),
-            ]),
-            const SizedBox(height: 12),
-            Row(children: [
-              Icon(Icons.timer_outlined, size: 16, color: tokens.textTertiary),
-              const SizedBox(width: 7),
-              Text(
-                  task.focusCount == 0
-                      ? '尚未记录专注时段'
-                      : '已专注 ${task.focusCount} 个番茄',
-                  style: TextStyle(color: tokens.textTertiary, fontSize: 11)),
-            ]),
-            const SizedBox(height: 22),
-            Row(children: [
-              Text('子任务',
+            if (showAdvanced) ...[
+              const SizedBox(height: 18),
+              Wrap(spacing: 8, runSpacing: 8, children: [
+                PropertyButton(
+                    icon: Icons.flag_outlined,
+                    label: calendarDateLabel(
+                        localDateTimeFromStorage(task.deadlineAt),
+                        empty: '截止日期'),
+                    active: task.deadlineAt != null,
+                    tooltip: '截止日期：最晚什么时候完成',
+                    onPressed: (anchor) => _date(anchor, 'deadline')),
+                PropertyButton(
+                    icon: Icons.tag_rounded,
+                    label: task.tags.isEmpty ? '标签' : task.tags.join(' · '),
+                    active: task.tags.isNotEmpty,
+                    onPressed: _tags),
+              ]),
+              if (task.focusCount > 0) ...[
+                const SizedBox(height: 12),
+                Row(children: [
+                  Icon(Icons.timer_outlined,
+                      size: 16, color: tokens.textTertiary),
+                  const SizedBox(width: 7),
+                  Text('已专注 ${task.focusCount} 个番茄',
+                      style:
+                          TextStyle(color: tokens.textTertiary, fontSize: 11)),
+                ]),
+              ],
+              const SizedBox(height: 22),
+              Row(children: [
+                Text('子任务',
+                    style: TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w700,
+                        color: tokens.textSecondary)),
+                if (task.subtaskTotal > 0) ...[
+                  const SizedBox(width: 10),
+                  Expanded(
+                      child: ClipRRect(
+                          borderRadius: BorderRadius.circular(2),
+                          child: LinearProgressIndicator(
+                              value: subtaskProgress,
+                              minHeight: 3.5,
+                              backgroundColor: tokens.border,
+                              color: subtaskProgress == 1
+                                  ? tokens.success
+                                  : tokens.accent))),
+                  const SizedBox(width: 10),
+                  Text('${task.subtaskCompleted}/${task.subtaskTotal}',
+                      style:
+                          TextStyle(fontSize: 11, color: tokens.textTertiary)),
+                ] else
+                  const Spacer(),
+              ]),
+              const SizedBox(height: 4),
+              for (final item in task.subtasks)
+                Row(key: ValueKey(item.id), children: [
+                  SizedBox(
+                      width: 30,
+                      height: 36,
+                      child: Checkbox(
+                          value: item.completed,
+                          shape: const CircleBorder(),
+                          side: BorderSide(
+                              color: tokens.borderStrong, width: 1.4),
+                          onChanged: (_) => widget.controller
+                              .toggleSubtask(task.id, item.id))),
+                  const SizedBox(width: 8),
+                  Expanded(
+                      child: TextFormField(
+                          initialValue: item.title,
+                          style: TextStyle(
+                              fontSize: 13,
+                              color: item.completed
+                                  ? tokens.textTertiary
+                                  : tokens.textPrimary,
+                              decoration: item.completed
+                                  ? TextDecoration.lineThrough
+                                  : null),
+                          decoration: const InputDecoration(
+                              border: InputBorder.none,
+                              isDense: true,
+                              contentPadding:
+                                  EdgeInsets.symmetric(vertical: 8)),
+                          onChanged: (value) => widget.controller
+                              .renameSubtask(task.id, item.id, value))),
+                  IconButton(
+                      tooltip: '删除子任务',
+                      visualDensity: VisualDensity.compact,
+                      icon: Icon(Icons.close,
+                          size: 14, color: tokens.textTertiary),
+                      onPressed: () =>
+                          widget.controller.removeSubtask(task.id, item.id)),
+                ]),
+              Row(children: [
+                const SizedBox(width: 7),
+                Icon(Icons.add, size: 17, color: tokens.textTertiary),
+                const SizedBox(width: 14),
+                Expanded(
+                    child: TextField(
+                        controller: subtask,
+                        key: const ValueKey('new-subtask'),
+                        style: const TextStyle(fontSize: 13),
+                        onSubmitted: (_) => _addSubtask(),
+                        decoration: const InputDecoration(
+                            hintText: '添加子任务，按 Return 确认',
+                            border: InputBorder.none,
+                            isDense: true,
+                            contentPadding:
+                                EdgeInsets.symmetric(vertical: 10)))),
+              ]),
+              const SizedBox(height: 16),
+              Text('附件与关联',
                   style: TextStyle(
                       fontSize: 12.5,
                       fontWeight: FontWeight.w700,
                       color: tokens.textSecondary)),
-              if (task.subtaskTotal > 0) ...[
-                const SizedBox(width: 10),
-                Expanded(
-                    child: ClipRRect(
-                        borderRadius: BorderRadius.circular(2),
-                        child: LinearProgressIndicator(
-                            value: subtaskProgress,
-                            minHeight: 3.5,
-                            backgroundColor: tokens.border,
-                            color: subtaskProgress == 1
-                                ? tokens.success
-                                : tokens.accent))),
-                const SizedBox(width: 10),
-                Text('${task.subtaskCompleted}/${task.subtaskTotal}',
-                    style: TextStyle(fontSize: 11, color: tokens.textTertiary)),
-              ] else
-                const Spacer(),
-            ]),
-            const SizedBox(height: 4),
-            for (final item in task.subtasks)
-              Row(key: ValueKey(item.id), children: [
-                SizedBox(
-                    width: 30,
-                    height: 36,
-                    child: Checkbox(
-                        value: item.completed,
-                        shape: const CircleBorder(),
-                        side:
-                            BorderSide(color: tokens.borderStrong, width: 1.4),
-                        onChanged: (_) =>
-                            widget.controller.toggleSubtask(task.id, item.id))),
-                const SizedBox(width: 8),
-                Expanded(
-                    child: TextFormField(
-                        initialValue: item.title,
-                        style: TextStyle(
-                            fontSize: 13,
-                            color: item.completed
-                                ? tokens.textTertiary
-                                : tokens.textPrimary,
-                            decoration: item.completed
-                                ? TextDecoration.lineThrough
-                                : null),
-                        decoration: const InputDecoration(
-                            border: InputBorder.none,
-                            isDense: true,
-                            contentPadding: EdgeInsets.symmetric(vertical: 8)),
-                        onChanged: (value) => widget.controller
-                            .renameSubtask(task.id, item.id, value))),
-                IconButton(
-                    tooltip: '删除子任务',
-                    visualDensity: VisualDensity.compact,
-                    icon:
-                        Icon(Icons.close, size: 14, color: tokens.textTertiary),
-                    onPressed: () =>
-                        widget.controller.removeSubtask(task.id, item.id)),
-              ]),
-            Row(children: [
-              const SizedBox(width: 7),
-              Icon(Icons.add, size: 17, color: tokens.textTertiary),
-              const SizedBox(width: 14),
-              Expanded(
-                  child: TextField(
-                      controller: subtask,
-                      key: const ValueKey('new-subtask'),
-                      style: const TextStyle(fontSize: 13),
-                      onSubmitted: (_) => _addSubtask(),
-                      decoration: const InputDecoration(
-                          hintText: '添加子任务，按 Return 确认',
-                          border: InputBorder.none,
-                          isDense: true,
-                          contentPadding: EdgeInsets.symmetric(vertical: 10)))),
-            ]),
-            const SizedBox(height: 16),
-            Text('附件与关联',
-                style: TextStyle(
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.w700,
-                    color: tokens.textSecondary)),
-            const SizedBox(height: 8),
-            if (task.attachments.isEmpty && source == null)
-              Text('还没有附件。从笔记生成的任务会在这里关联原文。',
-                  style: TextStyle(fontSize: 11.5, color: tokens.textTertiary)),
-            Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: [
-                  for (final file in task.attachments)
-                    InputChip(
-                        label: Text(file, style: const TextStyle(fontSize: 12)),
-                        avatar: const Icon(Icons.insert_drive_file_outlined,
-                            size: 15),
-                        onPressed: () =>
-                            widget.controller.revealAttachment(task.id, file),
-                        onDeleted: () =>
-                            widget.controller.removeAttachment(task.id, file)),
-                  TextButton.icon(
-                      onPressed: () =>
-                          widget.controller.attachFileToTask(task.id),
-                      icon: const Icon(Icons.attach_file, size: 16),
-                      label:
-                          const Text('添加附件', style: TextStyle(fontSize: 12))),
-                ]),
-            if (source != null) ...[
               const SizedBox(height: 8),
-              _SourceNoteCard(
-                  title: source.title,
-                  folder: source.folder,
-                  onTap: () => widget.controller.openNote(source.id)),
+              if (task.attachments.isEmpty && source == null)
+                Text('还没有附件。从笔记生成的任务会在这里关联原文。',
+                    style:
+                        TextStyle(fontSize: 11.5, color: tokens.textTertiary)),
+              Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    for (final file in task.attachments)
+                      InputChip(
+                          label:
+                              Text(file, style: const TextStyle(fontSize: 12)),
+                          avatar: const Icon(Icons.insert_drive_file_outlined,
+                              size: 15),
+                          onPressed: () =>
+                              widget.controller.revealAttachment(task.id, file),
+                          onDeleted: () => widget.controller
+                              .removeAttachment(task.id, file)),
+                    TextButton.icon(
+                        onPressed: () =>
+                            widget.controller.attachFileToTask(task.id),
+                        icon: const Icon(Icons.attach_file, size: 16),
+                        label:
+                            const Text('添加附件', style: TextStyle(fontSize: 12))),
+                  ]),
+              if (source != null) ...[
+                const SizedBox(height: 8),
+                _SourceNoteCard(
+                    title: source.title,
+                    folder: source.folder,
+                    onTap: () => widget.controller.openNote(source.id)),
+              ],
             ],
           ]),
     );
@@ -501,7 +598,7 @@ class _TaskInspectorState extends State<TaskInspector> {
             editorBody
           else
             Expanded(child: SingleChildScrollView(child: editorBody)),
-          SaveStatusFooter(controller: widget.controller),
+          _footer(context, task, tokens),
         ]);
     return CallbackShortcuts(
         bindings: {const SingleActivator(LogicalKeyboardKey.escape): close},
