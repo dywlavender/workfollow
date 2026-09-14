@@ -91,5 +91,5 @@
 - [x] 原生“清单 / 任务”菜单验收：入口与操作项已在 macOS 菜单栏显示
 - [ ] 系统通知实际投递和全局快捷键跨应用实机验收（需用户在本机授权后执行）
 
-本轮结果：`flutter test` 105 项全部通过；`dart analyze` 无 error/warning（保留 2 条现有实验 API 提示和 19 条弃用 API 信息）；
+本轮结果：`flutter test` 105 项全部通过；`dart analyze` 无 error，且没有本轮新增 warning（输出保留 2 条现有实验 API 提示和 19 条弃用 API 信息）；
 `flutter build macos --release` 成功。通知投递和跨应用热键仍需要在用户授权后进行真实设备验收，不能用组件测试替代。
