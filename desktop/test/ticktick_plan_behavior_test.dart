@@ -6,17 +6,19 @@ import 'package:workfollow_personal/state/workspace_controller.dart';
 
 void main() {
   test(
-      'QUICK-004 QUICK-005 QUICK-007 QUICK-008 QUICK-009 smart capture applies title, date, list, tag and priority together',
+      'QUICK-004 QUICK-005 QUICK-006 QUICK-007 QUICK-008 QUICK-009 REM-006 smart capture applies title, date, list, tag, priority and recurrence together',
       () {
     final controller = WorkspaceController(seedData: false);
     final now = DateTime.now();
-    expect(controller.addTaskFromSmartInput('明早9点 #工作 @个人 !!!准备评审', now: now),
+    expect(controller.addTaskFromSmartInput(
+        '每天 明早9点 #工作 @个人 !!!准备评审', now: now),
         isTrue);
     final task = controller.tasks.single;
     expect(task.title, '准备评审');
     expect(task.listName, '个人');
     expect(task.tags, ['工作']);
     expect(task.priority, TaskPriority.high);
+    expect(task.recurrenceType, 'DAILY');
     expect(task.scheduledWithTime, isTrue);
     expect(task.reminderAt, isNotNull);
     expect(localDateTimeFromStorage(task.dueAt)!.day,

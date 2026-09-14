@@ -156,7 +156,8 @@ void main() {
     expect(task.bucket, TaskBucket.unscheduled);
   });
 
-  test('P0 task chain keeps action, projection, undo and persistence aligned',
+  test(
+      'P0 ROW-011 DATE-012 DATE-013 UNDO-003 UNDO-004 task chain keeps action, projection, undo and persistence aligned',
       () async {
     final store = _FakeStore();
     final reminders = _RecordingReminders();
@@ -206,8 +207,11 @@ void main() {
     expect(returned.success, isTrue);
     expect(controller.visibleTasks.map((task) => task.id), contains(id));
 
+    controller.selectTask(id);
     final completed = controller.taskActions.complete(id);
     expect(completed.success, isTrue);
+    expect(controller.selectedTaskId, id);
+    expect(controller.selectedTask?.completed, isTrue);
     expect(controller.countFor(WorkspaceView.today), 0);
     controller.selectView(WorkspaceView.completed);
     expect(controller.visibleTasks.map((task) => task.id), contains(id));
@@ -692,7 +696,7 @@ void main() {
   });
 
   test(
-      'BULK-002 BULK-003 UNDO-002 bulk move and bulk reschedule revert their previous values',
+      'DATE-014 BULK-002 BULK-003 UNDO-002 bulk move and bulk reschedule revert their previous values',
       () {
     final controller = WorkspaceController();
     controller.updateTaskDue('task-05', DateTime(2099, 6, 1, 9, 0));

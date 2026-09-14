@@ -324,6 +324,33 @@ void main() {
     expect(controller.tasks.single.completed, isTrue);
   });
 
+  testWidgets('ROW-002 repeated task-row tap preserves the current selection',
+      (tester) async {
+    final controller = WorkspaceController(seedData: false);
+    addTearDown(controller.dispose);
+    controller.addTask('重复点击任务');
+    final task = controller.tasks.single;
+
+    await tester.pumpWidget(MaterialApp(
+        theme: WorkFollowThemeData.light(),
+        home: Scaffold(
+            body: TaskRow(
+                task: task, controller: controller, selected: false))));
+    await tester.pump();
+
+    await tester.tap(find.byType(TaskRow));
+    await tester.pump();
+    expect(controller.selectedTaskId, task.id);
+    expect(controller.multiSelectedTaskIds, isEmpty);
+    final openVersion = controller.taskOpenVersion;
+
+    await tester.tap(find.byType(TaskRow));
+    await tester.pump();
+    expect(controller.selectedTaskId, task.id);
+    expect(controller.multiSelectedTaskIds, isEmpty);
+    expect(controller.taskOpenVersion, openVersion);
+  });
+
   testWidgets('KEY-004 Escape unwinds the fixed inspector selection',
       (tester) async {
     tester.view.physicalSize = const Size(1280, 820);
@@ -440,7 +467,7 @@ void main() {
   });
 
   testWidgets(
-      'PRIORITY-001 LIST-001 TAG-001 REPEAT-001 task property popovers expose smallest option sets',
+      'PRIORITY-001 LIST-001 TAG-001 REM-001 REPEAT-001 task property popovers expose smallest option sets',
       (tester) async {
     tester.view.physicalSize = const Size(1280, 820);
     tester.view.devicePixelRatio = 1;
@@ -464,6 +491,13 @@ void main() {
     }
     await tester
         .tap(find.byKey(const ValueKey('menu-option-TaskPriority.none')));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('task-reminder')));
+    await tester.pumpAndSettle();
+    expect(find.text('提醒我'), findsOneWidget);
+    expect(find.byKey(const ValueKey('date-input')), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('date-cancel')));
     await tester.pumpAndSettle();
 
     await tester.tap(find.byKey(const ValueKey('task-repeat')));
@@ -539,7 +573,7 @@ void main() {
   });
 
   testWidgets(
-      'DATE-004 DATE-005 MENU-002 MENU-003 MENU-004 context menu routes date, completion and priority through Actions',
+      'DATE-004 DATE-005 MENU-002 MENU-003 MENU-004 PRIORITY-002 context menu routes date, completion and priority through Actions',
       (tester) async {
     final controller = WorkspaceController(seedData: false);
     addTearDown(controller.dispose);
@@ -587,7 +621,7 @@ void main() {
   });
 
   testWidgets(
-      'QUICK-001 QUICK-003 QUICK-011 QUICK-012 QUICK-013 QUICK-014 QUICK-015 QUICK-016 QUICK-018 QUICK-019 manual Draft properties commit once',
+      'DATE-003 QUICK-001 QUICK-003 QUICK-011 QUICK-012 QUICK-013 QUICK-014 QUICK-015 QUICK-016 QUICK-018 QUICK-019 PRIORITY-003 TAG-002 REM-006 REPEAT-006 manual Draft properties commit once',
       (tester) async {
     final controller = WorkspaceController(seedData: false);
     addTearDown(controller.dispose);

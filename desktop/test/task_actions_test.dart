@@ -54,7 +54,7 @@ void main() {
   });
 
   test(
-      'ARCH-005 ROW-004 ROW-005 ROW-006 selection controller supports range and adjacent selection',
+      'ARCH-005 KEY-003 ROW-004 ROW-005 ROW-006 selection controller supports range and adjacent selection',
       () {
     final selection = TaskSelectionController();
     selection.select('b');
