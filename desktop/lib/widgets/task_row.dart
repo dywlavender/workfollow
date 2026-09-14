@@ -147,8 +147,10 @@ class _TaskRowState extends State<TaskRow> {
         value: widget.task.dueAt, hasTime: widget.task.scheduledWithTime);
     if (result != null && mounted) {
       final c = widget.controller, id = widget.task.id;
-      _showActionFeedback(c.taskActions.setSchedule(
-          id, TaskScheduleDraft(dueAt: result.date, hasTime: result.hasTime)));
+      _showActionFeedback(result.date == null
+          ? c.taskActions.clearSchedule(id)
+          : c.taskActions.setSchedule(id,
+              TaskScheduleDraft(dueAt: result.date, hasTime: result.hasTime)));
     }
   }
 
@@ -186,16 +188,19 @@ class _TaskRowState extends State<TaskRow> {
   Future<void> _editRepeat(BuildContext anchor) async {
     final value = await TaskRepeatPicker.show(anchor, task: widget.task);
     if (!mounted || value == null) return;
-    _showActionFeedback(
-        widget.controller.taskActions.setRecurrence(widget.task.id, value));
+    _showActionFeedback(value.enabled
+        ? widget.controller.taskActions.setRecurrence(widget.task.id, value)
+        : widget.controller.taskActions.clearRecurrence(widget.task.id));
   }
 
   Future<void> _editDeadline(BuildContext anchor) async {
     final value =
         await TaskDeadlinePicker.show(anchor, value: widget.task.deadlineAt);
     if (!mounted || value == null) return;
-    _showActionFeedback(
-        widget.controller.taskActions.setDeadline(widget.task.id, value.date));
+    _showActionFeedback(value.date == null
+        ? widget.controller.taskActions.clearDeadline(widget.task.id)
+        : widget.controller.taskActions
+            .setDeadline(widget.task.id, value.date));
   }
 
   void _showActionFeedback(TaskActionResult result) {

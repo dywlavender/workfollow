@@ -127,11 +127,14 @@ class _TaskInspectorState extends State<TaskInspector> {
           ? widget.controller.taskActions.clearReminder(task.id)
           : widget.controller.taskActions.setReminder(task.id, value.date));
     } else if (kind == 'deadline') {
-      _showActionFeedback(
-          widget.controller.taskActions.setDeadline(task.id, value.date));
+      _showActionFeedback(value.date == null
+          ? widget.controller.taskActions.clearDeadline(task.id)
+          : widget.controller.taskActions.setDeadline(task.id, value.date));
     } else {
-      _showActionFeedback(widget.controller.taskActions.setSchedule(task.id,
-          TaskScheduleDraft(dueAt: value.date, hasTime: value.hasTime)));
+      _showActionFeedback(value.date == null
+          ? widget.controller.taskActions.clearSchedule(task.id)
+          : widget.controller.taskActions.setSchedule(task.id,
+              TaskScheduleDraft(dueAt: value.date, hasTime: value.hasTime)));
     }
   }
 
@@ -165,8 +168,9 @@ class _TaskInspectorState extends State<TaskInspector> {
   Future<void> _repeat(BuildContext anchor) async {
     final result = await TaskRepeatPicker.show(anchor, task: widget.task);
     if (result != null) {
-      _showActionFeedback(
-          widget.controller.taskActions.setRecurrence(widget.task.id, result));
+      _showActionFeedback(result.enabled
+          ? widget.controller.taskActions.setRecurrence(widget.task.id, result)
+          : widget.controller.taskActions.clearRecurrence(widget.task.id));
     }
   }
 

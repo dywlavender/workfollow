@@ -171,4 +171,29 @@ void main() {
     expect(controller.tasks.single.hasDueTime, isFalse);
     controller.dispose();
   });
+
+  test('DATE-009 DEADLINE-003 REPEAT-004 clear actions remove their property',
+      () {
+    final controller = WorkspaceController(seedData: false);
+    final due = DateTime.now().add(const Duration(days: 2));
+    controller.addTask('清理属性', dueAt: due, hasTime: true);
+    final id = controller.tasks.single.id;
+    final reminder = DateTime.now().add(const Duration(hours: 2));
+    controller.updateTaskReminder(id, reminder);
+    controller.updateTaskRecurrence(id, 'DAILY');
+    controller.updateTaskDeadline(id, due.add(const Duration(days: 1)));
+
+    expect(controller.taskActions.clearSchedule(id).success, isTrue);
+    expect(controller.taskActions.clearReminder(id).success, isTrue);
+    expect(controller.taskActions.clearRecurrence(id).success, isTrue);
+    expect(controller.taskActions.clearDeadline(id).success, isTrue);
+
+    final task = controller.tasks.single;
+    expect(task.dueAt, isNull);
+    expect(task.hasDueTime, isFalse);
+    expect(task.reminderAt, isNull);
+    expect(task.recurrenceType, 'NONE');
+    expect(task.deadlineAt, isNull);
+    controller.dispose();
+  });
 }
