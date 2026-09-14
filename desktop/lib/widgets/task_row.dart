@@ -83,6 +83,10 @@ class _TaskRowState extends State<TaskRow> {
     final action = await TaskContextMenu.show(anchor,
         task: widget.task, controller: widget.controller);
     if (!mounted) return;
+    // The row can rebuild when an action is selected (for example after
+    // moving a task out of the current projection). Re-anchor any follow-up
+    // picker to the row State rather than reusing a menu overlay context.
+    final pickerAnchor = context;
     switch (action) {
       case 'complete':
         final result = widget.task.completed
@@ -121,15 +125,15 @@ class _TaskRowState extends State<TaskRow> {
         _showActionFeedback(widget.controller.taskActions
             .setPriority(widget.task.id, TaskPriority.none));
       case 'list':
-        await _moveToList(anchor);
+        await _moveToList(pickerAnchor);
       case 'tags':
-        await _editTags(anchor);
+        await _editTags(pickerAnchor);
       case 'reminder':
-        await _editReminder(anchor);
+        await _editReminder(pickerAnchor);
       case 'repeat':
-        await _editRepeat(anchor);
+        await _editRepeat(pickerAnchor);
       case 'deadline':
-        await _editDeadline(anchor);
+        await _editDeadline(pickerAnchor);
       case 'duplicate':
         _showActionFeedback(
             widget.controller.taskActions.duplicate(widget.task.id));
@@ -137,7 +141,7 @@ class _TaskRowState extends State<TaskRow> {
         _showActionFeedback(
             widget.controller.taskActions.delete(widget.task.id));
       case 'date':
-        await date(anchor);
+        await date(pickerAnchor);
     }
   }
 

@@ -196,4 +196,25 @@ void main() {
     expect(task.deadlineAt, isNull);
     controller.dispose();
   });
+
+  test('QUICK-022 invalid creation keeps the draft boundary side-effect free',
+      () {
+    final controller = WorkspaceController(seedData: false);
+    addTearDown(controller.dispose);
+
+    final empty = controller.createTask(const TaskDraft(title: '   '));
+    expect(empty.success, isFalse);
+    expect(empty.error?.code, 'empty-title');
+    expect(controller.tasks, isEmpty);
+
+    final valid = controller.createTask(const TaskDraft(title: '保留原任务'));
+    expect(valid.success, isTrue);
+    final id = valid.taskId!;
+    final before = controller.tasks.single.reminderAt;
+    final past = controller.taskActions
+        .setReminder(id, DateTime.now().subtract(const Duration(minutes: 1)));
+    expect(past.success, isFalse);
+    expect(past.error?.code, 'past-reminder');
+    expect(controller.tasks.single.reminderAt, before);
+  });
 }

@@ -8,6 +8,7 @@ import '../theme/workfollow_theme.dart';
 import '../features/tasks/application/task_actions.dart';
 import '../features/tasks/domain/task_draft.dart';
 import '../features/tasks/domain/task_schedule.dart';
+import 'app_icon_button.dart';
 import 'desktop_popover.dart';
 import 'task_date_picker.dart';
 import 'task_schedule_picker.dart';
@@ -406,6 +407,55 @@ class _QuickAddFieldState extends State<QuickAddField> {
     });
   }
 
+  Future<void> _pickSchedule(BuildContext anchor) async {
+    final result = await TaskSchedulePicker.show(anchor,
+        value: _effectiveDue?.toIso8601String(), hasTime: _effectiveHasTime);
+    if (result != null && mounted) {
+      setState(() {
+        customDate = true;
+        selectedDate = result.date;
+        hasTime = result.hasTime;
+        _refreshDraft(parse);
+      });
+    }
+  }
+
+  /// Keep the task-list add row quiet by putting secondary properties behind
+  /// the same compact disclosure affordance used by TickTick. The richer
+  /// home-card variant still exposes its property buttons inline.
+  Future<void> _openProperties(BuildContext anchor) async {
+    final action = await showDesktopMenu<String>(anchor, entries: const [
+      DesktopMenuEntry('schedule', '安排日期…',
+          icon: Icons.calendar_today_outlined),
+      DesktopMenuEntry('priority', '优先级', icon: Icons.flag_outlined),
+      DesktopMenuEntry('list', '清单', icon: Icons.inbox_outlined),
+      DesktopMenuEntry('tags', '标签', icon: Icons.tag_rounded),
+      DesktopMenuEntry('reminder', '提醒',
+          icon: Icons.notifications_none_rounded),
+      DesktopMenuEntry('repeat', '重复', icon: Icons.repeat_rounded),
+    ]);
+    if (!mounted || action == null) return;
+    // Closing the first menu can rebuild the inline row (especially while the
+    // field is focused), which invalidates the menu button's Builder context.
+    // Re-anchor the second picker to this State's stable context instead of
+    // trying to reuse a defunct overlay element.
+    final pickerAnchor = context;
+    switch (action) {
+      case 'schedule':
+        await _pickSchedule(pickerAnchor);
+      case 'priority':
+        await _pickPriority(pickerAnchor);
+      case 'list':
+        await _pickList(pickerAnchor);
+      case 'tags':
+        await _pickTags(pickerAnchor);
+      case 'reminder':
+        await _pickReminder(pickerAnchor);
+      case 'repeat':
+        await _pickRecurrence(pickerAnchor);
+    }
+  }
+
   void submit() {
     final draft = text.text.trim();
     if (draft.isEmpty) return;
@@ -594,93 +644,85 @@ class _QuickAddFieldState extends State<QuickAddField> {
                                           (!_hasDismissedScheduling &&
                                               widget.controller.creationDate !=
                                                   null),
-                                  onPressed: (anchor) async {
-                                    final result =
-                                        await TaskSchedulePicker.show(anchor,
-                                            value: _effectiveDue
-                                                ?.toIso8601String(),
-                                            hasTime: _effectiveHasTime);
-                                    if (result != null && mounted)
-                                      setState(() {
-                                        customDate = true;
-                                        selectedDate = result.date;
-                                        hasTime = result.hasTime;
-                                        _refreshDraft(parse);
-                                      });
-                                  }),
-                              const SizedBox(width: 6),
-                              PropertyButton(
-                                  key: const ValueKey('quick-add-priority'),
-                                  icon: Icons.flag_outlined,
-                                  label: (manualPriority ?? parse.priority) ==
-                                          TaskPriority.none
-                                      ? '优先级'
-                                      : (manualPriority ?? parse.priority)
-                                          .label,
-                                  active: (manualPriority ?? parse.priority) !=
-                                      TaskPriority.none,
-                                  onPressed: _pickPriority),
-                              const SizedBox(width: 6),
-                              PropertyButton(
-                                  key: const ValueKey('quick-add-list'),
-                                  icon: Icons.inbox_outlined,
-                                  label: manualListName ??
-                                      parse.listName ??
-                                      widget.controller.creationTargetLabel
-                                          .split(' · ')
-                                          .first,
-                                  active:
-                                      listOverridden || parse.listName != null,
-                                  onPressed: _pickList),
-                              const SizedBox(width: 6),
-                              PropertyButton(
-                                  key: const ValueKey('quick-add-tags'),
-                                  icon: Icons.tag_rounded,
-                                  label: (manualTags ?? parse.tags).isEmpty
-                                      ? '标签'
-                                      : (manualTags ?? parse.tags)
-                                          .map((tag) => '#$tag')
-                                          .join(' '),
-                                  active: tagsOverridden
-                                      ? (manualTags?.isNotEmpty ?? false)
-                                      : parse.tags.isNotEmpty,
-                                  onPressed: _pickTags),
-                              const SizedBox(width: 6),
-                              PropertyButton(
-                                  key: const ValueKey('quick-add-reminder'),
-                                  icon: Icons.notifications_none_rounded,
-                                  label: reminderOverridden
-                                      ? (manualReminder == null
-                                          ? '提醒'
-                                          : calendarDateLabel(manualReminder,
-                                              hasTime: true))
-                                      : (parse.reminderAt == null
-                                          ? '提醒'
-                                          : calendarDateLabel(parse.reminderAt,
-                                              hasTime: true)),
-                                  active: reminderOverridden
-                                      ? manualReminder != null
-                                      : parse.reminderAt != null,
-                                  onPressed: _pickReminder),
-                              const SizedBox(width: 6),
-                              PropertyButton(
-                                  key: const ValueKey('quick-add-repeat'),
-                                  icon: Icons.repeat_rounded,
-                                  label: (manualRecurrence?.enabled ??
-                                          (parse.recurrenceType != 'NONE'))
-                                      ? '重复'
-                                      : '重复',
-                                  active: manualRecurrence?.enabled ??
-                                      parse.recurrenceType != 'NONE',
-                                  onPressed: _pickRecurrence),
+                                  onPressed: _pickSchedule),
+                              if (!widget.listStyle) ...[
+                                const SizedBox(width: 6),
+                                PropertyButton(
+                                    key: const ValueKey('quick-add-priority'),
+                                    icon: Icons.flag_outlined,
+                                    label: (manualPriority ?? parse.priority) ==
+                                            TaskPriority.none
+                                        ? '优先级'
+                                        : (manualPriority ?? parse.priority)
+                                            .label,
+                                    active:
+                                        (manualPriority ?? parse.priority) !=
+                                            TaskPriority.none,
+                                    onPressed: _pickPriority),
+                                const SizedBox(width: 6),
+                                PropertyButton(
+                                    key: const ValueKey('quick-add-list'),
+                                    icon: Icons.inbox_outlined,
+                                    label: manualListName ??
+                                        parse.listName ??
+                                        widget.controller.creationTargetLabel
+                                            .split(' · ')
+                                            .first,
+                                    active: listOverridden ||
+                                        parse.listName != null,
+                                    onPressed: _pickList),
+                                const SizedBox(width: 6),
+                                PropertyButton(
+                                    key: const ValueKey('quick-add-tags'),
+                                    icon: Icons.tag_rounded,
+                                    label: (manualTags ?? parse.tags).isEmpty
+                                        ? '标签'
+                                        : (manualTags ?? parse.tags)
+                                            .map((tag) => '#$tag')
+                                            .join(' '),
+                                    active: tagsOverridden
+                                        ? (manualTags?.isNotEmpty ?? false)
+                                        : parse.tags.isNotEmpty,
+                                    onPressed: _pickTags),
+                                const SizedBox(width: 6),
+                                PropertyButton(
+                                    key: const ValueKey('quick-add-reminder'),
+                                    icon: Icons.notifications_none_rounded,
+                                    label: reminderOverridden
+                                        ? (manualReminder == null
+                                            ? '提醒'
+                                            : calendarDateLabel(manualReminder,
+                                                hasTime: true))
+                                        : (parse.reminderAt == null
+                                            ? '提醒'
+                                            : calendarDateLabel(
+                                                parse.reminderAt,
+                                                hasTime: true)),
+                                    active: reminderOverridden
+                                        ? manualReminder != null
+                                        : parse.reminderAt != null,
+                                    onPressed: _pickReminder),
+                                const SizedBox(width: 6),
+                                PropertyButton(
+                                    key: const ValueKey('quick-add-repeat'),
+                                    icon: Icons.repeat_rounded,
+                                    label: '重复',
+                                    active: manualRecurrence?.enabled ??
+                                        parse.recurrenceType != 'NONE',
+                                    onPressed: _pickRecurrence),
+                              ],
                             ]))),
-                    if (widget.listStyle)
-                      Text('Return 添加',
-                          style: TextStyle(
-                              color: tokens.textTertiary,
-                              fontSize: 10.5,
-                              fontWeight: FontWeight.w500))
-                    else
+                    if (widget.listStyle) ...[
+                      const Spacer(),
+                      Builder(
+                          builder: (anchor) => AppIconButton(
+                              key: const ValueKey('quick-add-properties'),
+                              icon: Icons.expand_more_rounded,
+                              tooltip: '更多属性',
+                              onPressed: () => _openProperties(anchor),
+                              size: 30,
+                              iconSize: 18)),
+                    ] else
                       FilledButton(
                           onPressed: text.text.trim().isEmpty ? null : submit,
                           style: FilledButton.styleFrom(

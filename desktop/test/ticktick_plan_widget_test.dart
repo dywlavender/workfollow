@@ -537,4 +537,167 @@ void main() {
     await tester.pumpAndSettle();
     expect(controller.tasks.single.listName, '工作');
   });
+
+  testWidgets(
+      'DATE-004 DATE-005 MENU-002 MENU-003 MENU-004 context menu routes date, completion and priority through Actions',
+      (tester) async {
+    final controller = WorkspaceController(seedData: false);
+    addTearDown(controller.dispose);
+    final yesterday = DateTime.now().subtract(const Duration(days: 1));
+    controller.addTask('原子菜单任务', dueAt: yesterday, hasTime: false);
+
+    Future<void> pumpRow() async {
+      await tester.pumpWidget(MaterialApp(
+          theme: WorkFollowThemeData.light(),
+          home: Scaffold(
+              body: TaskRow(
+                  task: controller.tasks.single,
+                  controller: controller,
+                  selected: true))));
+      await tester.pumpAndSettle();
+    }
+
+    await pumpRow();
+    await tester.tap(
+        find.byKey(ValueKey('task-row-more-${controller.tasks.single.id}')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('menu-option-today')));
+    await tester.pumpAndSettle();
+    final today = DateTime.now();
+    final due = localDateTimeFromStorage(controller.tasks.single.dueAt);
+    expect(due, isNotNull);
+    expect(DateTime(due!.year, due.month, due.day),
+        DateTime(today.year, today.month, today.day));
+
+    await pumpRow();
+    await tester.tap(
+        find.byKey(ValueKey('task-row-more-${controller.tasks.single.id}')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('menu-option-priority-high')));
+    await tester.pumpAndSettle();
+    expect(controller.tasks.single.priority, TaskPriority.high);
+
+    await pumpRow();
+    await tester.tap(
+        find.byKey(ValueKey('task-row-more-${controller.tasks.single.id}')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('menu-option-complete')));
+    await tester.pumpAndSettle();
+    expect(controller.tasks.single.completed, isTrue);
+  });
+
+  testWidgets(
+      'QUICK-001 QUICK-003 QUICK-011 QUICK-012 QUICK-013 QUICK-014 QUICK-015 QUICK-016 QUICK-018 QUICK-019 manual Draft properties commit once',
+      (tester) async {
+    final controller = WorkspaceController(seedData: false);
+    addTearDown(controller.dispose);
+    await tester.pumpWidget(MaterialApp(
+        theme: WorkFollowThemeData.light(),
+        home: Scaffold(body: QuickAddField(controller: controller))));
+
+    final field = find.byKey(const ValueKey('quick-add-title'));
+    await tester.tap(field);
+    await tester.enterText(field, '一次完成的手动任务');
+    await tester.pump();
+
+    // Every property is changed in the Draft while the task list remains
+    // untouched until the single Return/submit boundary.
+    await tester.tap(find.byKey(const ValueKey('quick-add-schedule')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('date-shortcut-明天')));
+    await tester.tap(find.byKey(const ValueKey('apply-date')));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('quick-add-priority')));
+    await tester.pumpAndSettle();
+    await tester
+        .tap(find.byKey(const ValueKey('menu-option-TaskPriority.high')));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('quick-add-list')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('menu-option-工作')));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('quick-add-tags')));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField).last, '项目，重要');
+    await tester.tap(find.text('完成').last);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('quick-add-reminder')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('date-shortcut-明天')));
+    await tester.tap(find.byKey(const ValueKey('apply-date')));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('quick-add-repeat')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(DropdownButtonFormField<String>));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('每天').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('确定').last);
+    await tester.pumpAndSettle();
+
+    expect(controller.tasks, isEmpty);
+    await tester.tap(find.text('添加任务'));
+    await tester.pumpAndSettle();
+
+    expect(controller.tasks, hasLength(1));
+    final task = controller.tasks.single;
+    expect(task.title, '一次完成的手动任务');
+    expect(task.listName, '工作');
+    expect(task.priority, TaskPriority.high);
+    expect(task.tags, ['项目', '重要']);
+    expect(task.reminderAt, isNotNull);
+    expect(task.recurrenceType, 'DAILY');
+    final due = localDateTimeFromStorage(task.dueAt);
+    final tomorrow = DateTime.now().add(const Duration(days: 1));
+    expect(due, isNotNull);
+    expect(DateTime(due!.year, due.month, due.day),
+        DateTime(tomorrow.year, tomorrow.month, tomorrow.day));
+    expect(tester.widget<TextField>(field).controller!.text, isEmpty);
+    expect(tester.widget<TextField>(field).focusNode!.hasFocus, isTrue);
+  });
+
+  testWidgets(
+      'L-05 QUICK-012 QUICK-013 list QuickAdd keeps secondary properties behind one clean menu',
+      (tester) async {
+    tester.view.physicalSize = const Size(1280, 820);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+    await tester.pumpWidget(const WorkFollowApp(demoMode: true));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('任务'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('今天').first);
+    await tester.pumpAndSettle();
+
+    final field = find.byKey(const ValueKey('quick-add-title'));
+    await tester.tap(field);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('quick-add-properties')), findsOneWidget);
+    expect(find.byKey(const ValueKey('quick-add-priority')), findsNothing);
+    expect(find.byKey(const ValueKey('quick-add-list')), findsNothing);
+    expect(find.byKey(const ValueKey('quick-add-tags')), findsNothing);
+    expect(find.byKey(const ValueKey('quick-add-reminder')), findsNothing);
+    expect(find.byKey(const ValueKey('quick-add-repeat')), findsNothing);
+
+    await tester.tap(find.byKey(const ValueKey('quick-add-properties')));
+    await tester.pumpAndSettle();
+    for (final label in ['优先级', '清单', '标签', '提醒', '重复']) {
+      expect(find.text(label), findsWidgets, reason: label);
+    }
+    await tester.tap(find.byKey(const ValueKey('menu-option-priority')));
+    await tester.pumpAndSettle();
+    expect(find.text('高优先级'), findsOneWidget);
+    await tester
+        .tap(find.byKey(const ValueKey('menu-option-TaskPriority.high')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('quick-add-properties')), findsOneWidget);
+  });
 }
