@@ -92,6 +92,48 @@ void main() {
     expect(controller.tasks.single.listName, '收集箱');
   });
 
+  testWidgets(
+      'QUICK-010 dismissing one scheduling token preserves the other token',
+      (tester) async {
+    final controller = WorkspaceController(seedData: false);
+    addTearDown(controller.dispose);
+    await tester.pumpWidget(MaterialApp(
+        theme: WorkFollowThemeData.light(),
+        home: Scaffold(body: QuickAddField(controller: controller))));
+
+    final field = find.byKey(const ValueKey('quick-add-title'));
+    // The comma keeps the date and clock as two independent smart tokens,
+    // which lets this test exercise one-token dismissal rather than the
+    // parser's single combined “明天 下午3点” span.
+    await tester.enterText(field, '明天，下午3点 面试');
+    await tester.pump();
+    expect(find.byKey(const ValueKey('smart-chip-date-明天')), findsOneWidget);
+    expect(find.byKey(const ValueKey('smart-chip-time-下午3点')), findsOneWidget);
+
+    // Dismissing only the date must not make the remaining clock token
+    // unscheduled. The dismissed date stays ordinary title text.
+    await tester.tap(find.descendant(
+        of: find.byKey(const ValueKey('smart-chip-date-明天')),
+        matching: find.byIcon(Icons.close)));
+    await tester.pump();
+    await tester.tap(find.text('添加任务'));
+    await tester.pump();
+
+    final created = controller.tasks.single;
+    final now = DateTime.now();
+    final expectedDay = DateTime(now.year, now.month, now.day, 15).isAfter(now)
+        ? DateTime(now.year, now.month, now.day)
+        : DateTime(now.year, now.month, now.day + 1);
+    final due = localDateTimeFromStorage(created.dueAt);
+    expect(created.title, contains('明天'));
+    expect(created.title, contains('面试'));
+    expect(created.scheduledWithTime, isTrue);
+    expect(due, isNotNull);
+    expect(DateTime(due!.year, due.month, due.day), expectedDay);
+    expect(due.hour, 15);
+    expect(due.minute, 0);
+  });
+
   testWidgets('QUICK-008 unknown list chips stay in the quick-add title',
       (tester) async {
     final controller = WorkspaceController(seedData: false);

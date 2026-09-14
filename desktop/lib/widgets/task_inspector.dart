@@ -200,14 +200,16 @@ class _TaskInspectorState extends State<TaskInspector> {
   void _showActionFeedback(TaskActionResult result) {
     if (!mounted || !result.success || result.message == null) return;
     final undo = result.undo;
-    final canUndo = undo != null &&
-        (undo.label == '撤销修改' || result.destination == TaskDestination.hidden);
+    // Delete/complete actions already surface one global shell toast. The
+    // inspector keeps only the local snapshot undo for property edits so a
+    // destructive action never renders duplicate undo controls.
+    final canUndo = undo != null && undo.label == '撤销修改';
     final id = result.taskId;
     final moved = id != null &&
         result.destination != null &&
         result.destination != TaskDestination.current &&
         result.destination != TaskDestination.hidden;
-    if (!moved && !canUndo) return;
+    if (!moved && !canUndo && !result.showFeedback) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
       behavior: SnackBarBehavior.floating,
       margin: const EdgeInsets.fromLTRB(16, 0, 16, 64),

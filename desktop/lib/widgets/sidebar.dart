@@ -543,7 +543,10 @@ class _IconRailButtonState extends State<_IconRailButton> {
   @override
   Widget build(BuildContext context) {
     final tokens = WorkFollowTheme.of(context);
-    final active = widget.selected || widget.filled;
+    // `filled` only chooses the home glyph's stronger visual treatment.  It
+    // must not make Home look selected while the user is in Tasks/Notes/etc.;
+    // the first rail otherwise shows two active destinations at once.
+    final active = widget.selected;
     return Tooltip(
       message: widget.label,
       child: Semantics(
@@ -985,28 +988,33 @@ class _RailFooterActionState extends State<_RailFooterAction> {
     return MouseRegion(
       onEnter: (_) => setState(() => hovering = true),
       onExit: (_) => setState(() => hovering = false),
-      child: GestureDetector(
-        onTap: widget.onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 140),
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-          decoration: BoxDecoration(
-            color:
-                hovering ? tokens.content.withOpacity(.65) : Colors.transparent,
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Row(
-            children: [
-              Icon(widget.icon, size: 17, color: tokens.textSecondary),
-              const SizedBox(width: 10),
-              Text(
-                widget.label,
-                style: TextStyle(
-                    color: tokens.textSecondary,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w500),
-              ),
-            ],
+      child: Semantics(
+        button: true,
+        label: widget.label,
+        child: GestureDetector(
+          onTap: widget.onTap,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 140),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            decoration: BoxDecoration(
+              color: hovering
+                  ? tokens.content.withOpacity(.65)
+                  : Colors.transparent,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              children: [
+                Icon(widget.icon, size: 17, color: tokens.textSecondary),
+                const SizedBox(width: 10),
+                Text(
+                  widget.label,
+                  style: TextStyle(
+                      color: tokens.textSecondary,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -1044,61 +1052,71 @@ class _TaskListItemState extends State<_TaskListItem> {
             .moveToList(details.data, widget.list.name),
         builder: (context, candidateData, rejectedData) {
           final dragActive = candidateData.isNotEmpty;
-          return GestureDetector(
-            onTap: () => widget.controller.selectList(widget.list.name),
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 150),
-              curve: Curves.easeOut,
-              margin: const EdgeInsets.symmetric(vertical: 2),
-              padding: const EdgeInsets.fromLTRB(11, 9, 8, 9),
-              decoration: BoxDecoration(
-                color: dragActive
-                    ? tokens.accentSoft
-                    : (selected
-                        ? listColor.withValues(alpha: .12)
-                        : (hovering
-                            ? tokens.content.withOpacity(.7)
-                            : Colors.transparent)),
-                borderRadius: BorderRadius.circular(9),
-                border: dragActive
-                    ? Border.all(color: tokens.accent.withOpacity(.5))
-                    : null,
-              ),
-              child: Row(
-                children: [
-                  Container(
-                      width: 9,
-                      height: 9,
-                      decoration: BoxDecoration(
-                          color: listColor, shape: BoxShape.circle)),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(widget.list.name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                            color: selected ? listColor : tokens.textSecondary,
-                            fontSize: 12.5,
-                            fontWeight:
-                                selected ? FontWeight.w700 : FontWeight.w500)),
-                  ),
-                  if (count > 0)
-                    Text('$count',
-                        style: TextStyle(
-                            color: selected ? listColor : tokens.textTertiary,
-                            fontSize: 10,
-                            fontWeight: FontWeight.w700)),
-                  AnimatedOpacity(
-                    duration: const Duration(milliseconds: 120),
-                    opacity: hovering ? 1 : 0,
-                    child: AppIconButton(
-                        icon: Icons.more_horiz_rounded,
-                        tooltip: '清单操作',
-                        size: 24,
-                        iconSize: 14,
-                        onPressed: () => _showListMenu(context)),
-                  ),
-                ],
+          return Semantics(
+            button: true,
+            selected: selected,
+            label: '${widget.list.name}，$count 个未完成任务',
+            child: GestureDetector(
+              onTap: () => widget.controller.selectList(widget.list.name),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 150),
+                curve: Curves.easeOut,
+                margin: const EdgeInsets.symmetric(vertical: 2),
+                padding: const EdgeInsets.fromLTRB(11, 9, 8, 9),
+                decoration: BoxDecoration(
+                  color: dragActive
+                      ? tokens.accentSoft
+                      : (selected
+                          ? listColor.withValues(alpha: .12)
+                          : (hovering
+                              ? tokens.content.withOpacity(.7)
+                              : Colors.transparent)),
+                  borderRadius: BorderRadius.circular(9),
+                  border: dragActive
+                      ? Border.all(color: tokens.accent.withOpacity(.5))
+                      : null,
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                        width: 9,
+                        height: 9,
+                        decoration: BoxDecoration(
+                            color: listColor, shape: BoxShape.circle)),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(widget.list.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                              color:
+                                  selected ? listColor : tokens.textSecondary,
+                              fontSize: 12.5,
+                              fontWeight: selected
+                                  ? FontWeight.w700
+                                  : FontWeight.w500)),
+                    ),
+                    if (count > 0)
+                      Text('$count',
+                          style: TextStyle(
+                              color: selected ? listColor : tokens.textTertiary,
+                              fontSize: 10,
+                              fontWeight: FontWeight.w700)),
+                    ExcludeSemantics(
+                      excluding: !hovering,
+                      child: AnimatedOpacity(
+                        duration: const Duration(milliseconds: 120),
+                        opacity: hovering ? 1 : 0,
+                        child: AppIconButton(
+                            icon: Icons.more_horiz_rounded,
+                            tooltip: '清单操作',
+                            size: 24,
+                            iconSize: 14,
+                            onPressed: () => _showListMenu(context)),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           );
@@ -1263,37 +1281,43 @@ class _TagItemState extends State<_TagItem> {
       child: GestureDetector(
         onTap: () => widget.controller.selectTag(widget.name),
         onSecondaryTap: () => _showMenu(context),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 140),
-          margin: const EdgeInsets.symmetric(vertical: 2),
-          padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 8),
-          decoration: BoxDecoration(
-              color: selected
-                  ? tokens.accentSoft
-                  : (hovering
-                      ? tokens.content.withValues(alpha: .65)
-                      : Colors.transparent),
-              borderRadius: BorderRadius.circular(9)),
-          child: Row(children: [
-            Icon(Icons.tag_outlined,
-                size: 17,
-                color: selected ? tokens.accent : tokens.textSecondary),
-            const SizedBox(width: 10),
-            Expanded(
-                child: Text(widget.name,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                        color: selected ? tokens.accent : tokens.textSecondary,
-                        fontSize: 12.5,
-                        fontWeight:
-                            selected ? FontWeight.w700 : FontWeight.w500))),
-            Text('${widget.count}',
-                style: TextStyle(
-                    color: selected ? tokens.accent : tokens.textTertiary,
-                    fontSize: 10,
-                    fontWeight: FontWeight.w700)),
-          ]),
+        child: Semantics(
+          button: true,
+          selected: selected,
+          label: '#${widget.name}，${widget.count} 个任务',
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 140),
+            margin: const EdgeInsets.symmetric(vertical: 2),
+            padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 8),
+            decoration: BoxDecoration(
+                color: selected
+                    ? tokens.accentSoft
+                    : (hovering
+                        ? tokens.content.withValues(alpha: .65)
+                        : Colors.transparent),
+                borderRadius: BorderRadius.circular(9)),
+            child: Row(children: [
+              Icon(Icons.tag_outlined,
+                  size: 17,
+                  color: selected ? tokens.accent : tokens.textSecondary),
+              const SizedBox(width: 10),
+              Expanded(
+                  child: Text(widget.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                          color:
+                              selected ? tokens.accent : tokens.textSecondary,
+                          fontSize: 12.5,
+                          fontWeight:
+                              selected ? FontWeight.w700 : FontWeight.w500))),
+              Text('${widget.count}',
+                  style: TextStyle(
+                      color: selected ? tokens.accent : tokens.textTertiary,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700)),
+            ]),
+          ),
         ),
       ),
     );

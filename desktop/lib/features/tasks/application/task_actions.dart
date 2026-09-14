@@ -40,6 +40,7 @@ class TaskActionResult {
     this.taskId,
     this.destination,
     this.message,
+    this.showFeedback = false,
     this.undo,
     this.error,
   });
@@ -48,12 +49,14 @@ class TaskActionResult {
     String? taskId,
     TaskDestination? destination,
     String? message,
+    bool showFeedback = false,
     UndoCommand? undo,
   }) : this(
           success: true,
           taskId: taskId,
           destination: destination,
           message: message,
+          showFeedback: showFeedback,
           undo: undo,
         );
 
@@ -68,6 +71,11 @@ class TaskActionResult {
   final String? taskId;
   final TaskDestination? destination;
   final String? message;
+
+  /// Some successful actions (for example creating a duplicate) keep the
+  /// task in the current projection and have no undo command, but still need
+  /// one concise confirmation in the originating surface.
+  final bool showFeedback;
   final UndoCommand? undo;
   final TaskActionError? error;
 
@@ -192,8 +200,7 @@ class CallbackTaskActions implements TaskActions {
       dispatch('setDeadline', (id, deadline));
 
   @override
-  TaskActionResult clearDeadline(String id) =>
-      dispatch('clearDeadline', id);
+  TaskActionResult clearDeadline(String id) => dispatch('clearDeadline', id);
 
   @override
   TaskActionResult duplicate(String id) => dispatch('duplicate', id);

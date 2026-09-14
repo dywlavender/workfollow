@@ -142,4 +142,19 @@ void main() {
     expect(noOp.success, isFalse);
     controller.dispose();
   });
+
+  test('MENU-007 duplicate returns one concise originating-surface feedback',
+      () {
+    final controller = WorkspaceController(seedData: false);
+    controller.addTask('可复制任务');
+    final sourceId = controller.tasks.single.id;
+
+    final result = controller.taskActions.duplicate(sourceId);
+
+    expect(result.success, isTrue);
+    expect(result.showFeedback, isTrue);
+    expect(controller.tasks, hasLength(2));
+    expect(controller.tasks.first.title, '可复制任务（副本）');
+    controller.dispose();
+  });
 }

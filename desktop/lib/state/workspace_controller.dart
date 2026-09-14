@@ -704,7 +704,7 @@ class WorkspaceController extends ChangeNotifier {
   }
 
   TaskActionResult _taskResult(String id,
-      {String? message, UndoCommand? undo}) {
+      {String? message, bool showFeedback = false, UndoCommand? undo}) {
     final task = _taskById(id);
     if (task == null) {
       return TaskActionResult.failure('missing-task', '任务不存在');
@@ -713,6 +713,7 @@ class WorkspaceController extends ChangeNotifier {
       taskId: id,
       destination: _destinationForTask(task),
       message: message,
+      showFeedback: showFeedback,
       undo: undo,
     );
   }
@@ -811,7 +812,10 @@ class WorkspaceController extends ChangeNotifier {
         if (task == null) {
           return TaskActionResult.failure('missing-task', '任务不存在');
         }
-        if (task.dueAt == null)
+        // A damaged/legacy snapshot can carry `hasDueTime: true` without a
+        // due date. Clearing the schedule must repair that flag as well, so
+        // the all-day/unscheduled invariant is restored in one action.
+        if (task.dueAt == null && task.hasDueTime != true)
           return TaskActionResult.failure('unchanged', '任务没有安排日期');
         updateTaskDue(id, null);
         return _taskResult(id,
@@ -949,7 +953,7 @@ class WorkspaceController extends ChangeNotifier {
         final copyId = duplicateTask(id);
         if (copyId == null)
           return TaskActionResult.failure('duplicate-failed', '无法创建副本');
-        return _taskResult(copyId, message: '已创建任务副本');
+        return _taskResult(copyId, message: '已创建任务副本', showFeedback: true);
       case 'delete':
         final id = payload as String;
         if (_taskById(id) == null)

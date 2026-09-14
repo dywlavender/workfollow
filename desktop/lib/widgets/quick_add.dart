@@ -177,7 +177,16 @@ class _QuickAddFieldState extends State<QuickAddField> {
   }
 
   void _reparse() {
-    final result = parser.parse(text.text);
+    final rawResult = parser.parse(text.text);
+    // Re-run the parser against a length-preserving input with dismissed
+    // tokens masked out.  Parsing the original sentence and merely filtering
+    // spans leaves a coupled date/time expression (for example
+    // “明天 下午3点”) carrying the dismissed date into the remaining time
+    // token.  Masking keeps the other token's own semantics intact while
+    // retaining the original offsets for title/highlight rendering.
+    final activeInput = _maskDismissedTokens(text.text, rawResult.spans);
+    final result =
+        activeInput == text.text ? rawResult : parser.parse(activeInput);
     final kept = result.spans
         .where((span) => !dismissedSpans.contains(span.raw))
         .toList();
@@ -216,6 +225,25 @@ class _QuickAddFieldState extends State<QuickAddField> {
     });
   }
 
+  String _maskDismissedTokens(String input, Iterable<SmartSpan> spans) {
+    final ranges = spans
+        .where((span) => dismissedSpans.contains(span.raw))
+        .toList()
+      ..sort((a, b) => a.start.compareTo(b.start));
+    if (ranges.isEmpty) return input;
+    final output = StringBuffer();
+    var cursor = 0;
+    for (final span in ranges) {
+      if (span.start < cursor) continue;
+      if (span.start > cursor)
+        output.write(input.substring(cursor, span.start));
+      output.write(List.filled(span.end - span.start, ' ').join());
+      cursor = span.end;
+    }
+    if (cursor < input.length) output.write(input.substring(cursor));
+    return output.toString();
+  }
+
   void _refreshDraft(SmartParseResult value) {
     final parsedList = value.listName != null &&
             widget.controller.lists.any((list) => list.name == value.listName)
@@ -244,8 +272,8 @@ class _QuickAddFieldState extends State<QuickAddField> {
               type: value.recurrenceType, config: value.recurrenceConfig),
       priority: manualPriority ?? value.priority,
       tags: tagsOverridden ? (manualTags ?? const <String>[]) : value.tags,
-      forceUnscheduled:
-          (customDate && selectedDate == null) || dismissedScheduling,
+      forceUnscheduled: (customDate && selectedDate == null) ||
+          (!hasSchedulingToken && dismissedScheduling),
     );
   }
 

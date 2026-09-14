@@ -6,6 +6,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter/material.dart';
 
 import 'package:workfollow_personal/app.dart';
+import 'package:workfollow_personal/features/tasks/application/task_actions.dart';
+import 'package:workfollow_personal/features/tasks/domain/task_draft.dart';
+import 'package:workfollow_personal/features/tasks/domain/task_schedule.dart';
 import 'package:workfollow_personal/models/migration.dart';
 import 'package:workfollow_personal/models/task.dart';
 import 'package:workfollow_personal/services/local_workspace_store.dart';
@@ -151,6 +154,93 @@ void main() {
     expect(task.listName, '收集箱');
     expect(task.dueAt, isNull);
     expect(task.bucket, TaskBucket.unscheduled);
+  });
+
+  test('P0 task chain keeps action, projection, undo and persistence aligned',
+      () async {
+    final store = _FakeStore();
+    final reminders = _RecordingReminders();
+    final controller = WorkspaceController(
+        store: store, reminderScheduler: reminders, seedData: false);
+    addTearDown(controller.dispose);
+    controller.selectView(WorkspaceView.today);
+
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final dueToday = DateTime(today.year, today.month, today.day, 15, 0);
+    final create = controller.taskActions.create(TaskDraft(
+      title: 'P0 链路验收任务',
+      listName: '工作',
+      schedule: TaskScheduleDraft(dueAt: dueToday, hasTime: true),
+      reminderAt: now.add(const Duration(hours: 1)),
+      priority: TaskPriority.high,
+      tags: const ['验收'],
+    ));
+    expect(create.success, isTrue);
+    final id = create.taskId!;
+    expect(create.destination, TaskDestination.current);
+    expect(controller.visibleTasks.map((task) => task.id), contains(id));
+
+    controller.selectTask(id);
+    expect(controller.selectedTask?.id, id);
+    expect(controller.selectedTask?.priority, TaskPriority.high);
+    expect(controller.selectedTask?.tags, ['验收']);
+
+    final tomorrow = today.add(const Duration(days: 1));
+    final moved = controller.taskActions.setSchedule(
+        id,
+        TaskScheduleDraft.forDay(tomorrow,
+            preserveClock: dueToday, hasTime: true));
+    expect(moved.success, isTrue);
+    expect(moved.destination, TaskDestination.plan);
+    expect(controller.visibleTasks.map((task) => task.id), isNot(contains(id)));
+    expect(controller.countFor(WorkspaceView.today), 0);
+
+    controller.openTask(id);
+    expect(controller.selectedTask?.id, id);
+    controller.selectView(WorkspaceView.today);
+    final returned = controller.taskActions.setSchedule(
+        id,
+        TaskScheduleDraft.forDay(today,
+            preserveClock: dueToday, hasTime: true));
+    expect(returned.success, isTrue);
+    expect(controller.visibleTasks.map((task) => task.id), contains(id));
+
+    final completed = controller.taskActions.complete(id);
+    expect(completed.success, isTrue);
+    expect(controller.countFor(WorkspaceView.today), 0);
+    controller.selectView(WorkspaceView.completed);
+    expect(controller.visibleTasks.map((task) => task.id), contains(id));
+
+    final undone = controller.taskActions.undo();
+    expect(undone.success, isTrue);
+    controller.selectView(WorkspaceView.today);
+    expect(controller.visibleTasks.map((task) => task.id), contains(id));
+    controller.selectView(WorkspaceView.completed);
+    expect(controller.visibleTasks.map((task) => task.id), isNot(contains(id)));
+
+    await controller.waitForPendingSaves();
+    expect(store.saved, isNotEmpty);
+    final persisted =
+        store.saved.last.tasks.firstWhere((task) => task.id == id);
+    expect(persisted.priority, 'HIGH');
+    expect(persisted.tags, ['验收']);
+    expect(persisted.status, 'TODO');
+    expect(persisted.hasDueTime, isTrue);
+
+    final reloadStore = _FakeStore()..loadBundle = store.saved.last;
+    final reloaded = WorkspaceController(
+        store: reloadStore,
+        reminderScheduler: _RecordingReminders(),
+        seedData: false);
+    addTearDown(reloaded.dispose);
+    await reloaded.restoreFromDisk();
+    final restored = reloaded.tasks.firstWhere((task) => task.id == id);
+    expect(restored.title, 'P0 链路验收任务');
+    expect(restored.completed, isFalse);
+    expect(restored.priority, TaskPriority.high);
+    expect(restored.tags, ['验收']);
+    expect(restored.scheduledWithTime, isTrue);
   });
 
   test(

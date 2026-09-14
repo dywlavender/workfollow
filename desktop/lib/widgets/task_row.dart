@@ -204,16 +204,16 @@ class _TaskRowState extends State<TaskRow> {
     // visible even when the task remains in the current list; navigation-only
     // actions continue to use the existing "查看任务" feedback.
     final undo = result.undo;
-    // Keep the destination affordance for rows that leave the current view;
-    // inline property edits stay put and can expose their local snapshot undo.
-    final canUndo = undo != null &&
-        (undo.label == '撤销修改' || result.destination == TaskDestination.hidden);
+    // Deletions are surfaced by the shell's single global undo toast. Keeping
+    // a second row-local undo snackbar would duplicate the same affordance;
+    // inline property edits still expose their snapshot undo here.
+    final canUndo = undo != null && undo.label == '撤销修改';
     final id = result.taskId;
     final moved = id != null &&
         result.destination != null &&
         result.destination != TaskDestination.current &&
         result.destination != TaskDestination.hidden;
-    if (!moved && !canUndo) return;
+    if (!moved && !canUndo && !result.showFeedback) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
       behavior: SnackBarBehavior.floating,
       // Keep the fixed inspector footer and its property controls clickable.
@@ -412,16 +412,19 @@ class _TaskRowState extends State<TaskRow> {
     return SizedBox(
         width: 26,
         height: 24,
-        child: AnimatedOpacity(
-            duration: const Duration(milliseconds: 120),
-            opacity: visible ? 1 : 0,
-            child: IconButton(
-                key: ValueKey('task-row-more-${widget.task.id}'),
-                tooltip: '更多操作',
-                padding: EdgeInsets.zero,
-                iconSize: 18,
-                onPressed: visible ? () => menu(anchor) : null,
-                icon: Icon(Icons.more_horiz, color: tokens.textTertiary))));
+        child: ExcludeSemantics(
+            excluding: !visible,
+            child: AnimatedOpacity(
+                duration: const Duration(milliseconds: 120),
+                opacity: visible ? 1 : 0,
+                child: IconButton(
+                    key: ValueKey('task-row-more-${widget.task.id}'),
+                    tooltip: '更多操作',
+                    padding: EdgeInsets.zero,
+                    iconSize: 18,
+                    onPressed: visible ? () => menu(anchor) : null,
+                    icon:
+                        Icon(Icons.more_horiz, color: tokens.textTertiary)))));
   }
 
   void _complete() {
