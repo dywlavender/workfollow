@@ -4,9 +4,18 @@ import 'package:flutter/services.dart';
 import '../models/task.dart';
 import '../state/workspace_controller.dart';
 import '../theme/workfollow_theme.dart';
+import '../features/tasks/application/task_actions.dart';
+import '../features/tasks/domain/task_schedule.dart';
 import 'app_icon_button.dart';
 import 'desktop_popover.dart';
 import 'task_date_picker.dart';
+import 'task_schedule_picker.dart';
+import 'task_reminder_picker.dart';
+import 'task_deadline_picker.dart';
+import 'task_priority_picker.dart';
+import 'task_list_picker.dart';
+import 'task_tag_picker.dart';
+import 'task_repeat_picker.dart';
 
 /// Task detail surface, used both as the in-list inline editor and as the
 /// standalone narrow-window detail page. The redesign organises it into
@@ -93,86 +102,69 @@ class _TaskInspectorState extends State<TaskInspector> {
     }
   }
 
+  void _complete(TaskItem task) {
+    final result = task.completed
+        ? widget.controller.taskActions.restore(task.id)
+        : widget.controller.taskActions.complete(task.id);
+    _showActionFeedback(result);
+  }
+
   Future<void> _date(BuildContext anchor, String kind) async {
     final task = widget.task;
-    final value = await showTaskDatePicker(anchor,
-        value: kind == 'reminder'
-            ? task.reminderAt
-            : kind == 'deadline'
-                ? task.deadlineAt
-                : task.dueAt,
-        title: kind == 'reminder'
-            ? '提醒我'
-            : kind == 'deadline'
-                ? '截止日期'
-                : '安排日期',
-        hasTime: kind == 'schedule' ? task.scheduledWithTime : null,
-        reminder: kind == 'reminder',
-        allowTime: kind != 'deadline');
+    final value = switch (kind) {
+      'reminder' => await TaskReminderPicker.show(anchor, value: task.reminderAt),
+      'deadline' => await TaskDeadlinePicker.show(anchor, value: task.deadlineAt),
+      _ => await TaskSchedulePicker.show(anchor,
+          value: task.dueAt, hasTime: task.scheduledWithTime),
+    };
     if (value == null || !mounted) return;
     if (kind == 'reminder') {
-      widget.controller.updateTaskReminder(task.id, value.date);
+      _showActionFeedback(value.date == null
+          ? widget.controller.taskActions.clearReminder(task.id)
+          : widget.controller.taskActions.setReminder(task.id, value.date));
     } else if (kind == 'deadline') {
-      widget.controller.updateTaskDeadline(task.id, value.date);
+      _showActionFeedback(
+          widget.controller.taskActions.setDeadline(task.id, value.date));
     } else {
-      widget.controller
-          .updateTaskDue(task.id, value.date, hasTime: value.hasTime);
-      if (!widget.controller.visibleTasks.any((item) => item.id == task.id)) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(value.date == null
-              ? '已清除安排日期'
-              : '已安排到${calendarDateLabel(value.date, hasTime: value.hasTime)}'),
-          action: SnackBarAction(
-              label: '查看任务',
-              onPressed: () => widget.controller.openTask(task.id)),
-        ));
-      }
+      _showActionFeedback(widget.controller.taskActions.setSchedule(
+          task.id,
+          TaskScheduleDraft(dueAt: value.date, hasTime: value.hasTime)));
     }
   }
 
   Future<void> _list(BuildContext anchor) async {
-    final selected = await showDesktopMenu<String>(anchor,
-        selected: widget.task.listName,
-        entries: [
-          for (final list in widget.controller.lists)
-            DesktopMenuEntry(list.name, list.name, icon: Icons.list_rounded)
-        ]);
-    if (selected != null)
-      widget.controller.moveTaskToList(widget.task.id, selected);
+    final selected = await TaskListPicker.show(anchor,
+        controller: widget.controller, selected: widget.task.listName);
+    if (selected != null) {
+      _showActionFeedback(
+          widget.controller.taskActions.moveToList(widget.task.id, selected));
+    }
   }
 
   Future<void> _priority(BuildContext anchor) async {
-    final value = await showDesktopMenu<TaskPriority>(anchor,
-        selected: widget.task.priority,
-        entries: [
-          for (final priority in TaskPriority.values)
-            DesktopMenuEntry(priority,
-                priority == TaskPriority.none ? '无优先级' : priority.label,
-                icon: Icons.flag_outlined)
-        ]);
-    if (value != null)
-      widget.controller.updateTaskPriority(widget.task.id, value);
+    final value = await TaskPriorityPicker.show(anchor,
+        selected: widget.task.priority);
+    if (value != null) {
+      _showActionFeedback(
+          widget.controller.taskActions.setPriority(widget.task.id, value));
+    }
   }
 
   Future<void> _tags(BuildContext anchor) async {
-    final value = await showDesktopPopover<String>(anchor,
-        width: 300,
-        maxHeight: 220,
-        builder: (context) => _TagsEditor(initial: widget.task.tags.join('，')));
-    if (value != null)
-      widget.controller
-          .updateTaskTags(widget.task.id, value.split(RegExp('[,，]')));
+    final value = await TaskTagPicker.show(anchor,
+        initial: widget.task.tags.join('，'));
+    if (value != null) {
+      _showActionFeedback(widget.controller.taskActions
+          .setTags(widget.task.id, value.split(RegExp('[,，]'))));
+    }
   }
 
   Future<void> _repeat(BuildContext anchor) async {
-    final result = await showDesktopPopover<(String, Map<String, dynamic>?)>(
-        anchor,
-        width: 300,
-        maxHeight: 290,
-        builder: (_) => _RepeatEditor(task: widget.task));
-    if (result != null)
-      widget.controller
-          .updateTaskRecurrence(widget.task.id, result.$1, config: result.$2);
+    final result = await TaskRepeatPicker.show(anchor, task: widget.task);
+    if (result != null) {
+      _showActionFeedback(widget.controller.taskActions.setRecurrence(
+          widget.task.id, result));
+    }
   }
 
   Future<void> _more(BuildContext anchor) async {
@@ -193,8 +185,26 @@ class _TaskInspectorState extends State<TaskInspector> {
     if (action == 'copy')
       await Clipboard.setData(
           ClipboardData(text: '${title.text}\n${description.text}'.trim()));
-    if (action == 'duplicate') widget.controller.duplicateTask(widget.task.id);
-    if (action == 'delete') widget.controller.removeTask(widget.task.id);
+    if (action == 'duplicate') {
+      _showActionFeedback(
+          widget.controller.taskActions.duplicate(widget.task.id));
+    }
+    if (action == 'delete') {
+      _showActionFeedback(widget.controller.taskActions.delete(widget.task.id));
+    }
+  }
+
+  void _showActionFeedback(TaskActionResult result) {
+    if (!mounted || !result.success || result.message == null) return;
+    if (result.destination == TaskDestination.current) return;
+    final id = result.taskId;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(result.message!),
+      action: id == null
+          ? null
+          : SnackBarAction(
+              label: '查看任务', onPressed: () => widget.controller.openTask(id)),
+    ));
   }
 
   void _addSubtask() {
@@ -228,7 +238,7 @@ class _TaskInspectorState extends State<TaskInspector> {
                   label: task.completed ? '标记未完成' : '完成任务',
                   active: task.completed,
                   color: task.completed ? tokens.success : null,
-                  onPressed: (_) => widget.controller.toggleTask(task.id),
+                  onPressed: (_) => _complete(task),
                   iconOnly: true),
               const SizedBox(width: 4),
               _TopPropertyButton(
@@ -421,7 +431,7 @@ class _TaskInspectorState extends State<TaskInspector> {
                     isDense: true,
                     contentPadding: EdgeInsets.zero),
                 onChanged: (value) =>
-                    widget.controller.updateTaskTitle(task.id, value)),
+                    widget.controller.taskActions.setTitle(task.id, value)),
             const SizedBox(height: 12),
             TextField(
                 key: const ValueKey('task-description-editor'),
@@ -438,7 +448,8 @@ class _TaskInspectorState extends State<TaskInspector> {
                     isDense: true,
                     contentPadding: EdgeInsets.zero),
                 onChanged: (value) =>
-                    widget.controller.updateTaskDescription(task.id, value)),
+                    widget.controller.taskActions
+                        .setDescription(task.id, value)),
             if (showAdvanced) ...[
               const SizedBox(height: 18),
               Wrap(spacing: 8, runSpacing: 8, children: [
@@ -723,128 +734,4 @@ class _SourceNoteCard extends StatelessWidget {
                       size: 18, color: tokens.textTertiary),
                 ]))));
   }
-}
-
-class _TagsEditor extends StatefulWidget {
-  const _TagsEditor({required this.initial});
-  final String initial;
-  @override
-  State<_TagsEditor> createState() => _TagsEditorState();
-}
-
-class _TagsEditorState extends State<_TagsEditor> {
-  late final text = TextEditingController(text: widget.initial);
-  @override
-  void dispose() {
-    text.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) => Padding(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const Text('标签', style: TextStyle(fontWeight: FontWeight.w600)),
-            const SizedBox(height: 12),
-            TextField(
-                controller: text,
-                autofocus: true,
-                onSubmitted: (value) => Navigator.of(context).pop(value),
-                decoration: const InputDecoration(
-                    hintText: '用逗号分隔，例如 工作，重要',
-                    border: OutlineInputBorder(),
-                    isDense: true)),
-            const SizedBox(height: 12),
-            Align(
-                alignment: Alignment.centerRight,
-                child: FilledButton(
-                    onPressed: () => Navigator.of(context).pop(text.text),
-                    child: const Text('完成'))),
-          ]));
-}
-
-class _RepeatEditor extends StatefulWidget {
-  const _RepeatEditor({required this.task});
-  final TaskItem task;
-  @override
-  State<_RepeatEditor> createState() => _RepeatEditorState();
-}
-
-class _RepeatEditorState extends State<_RepeatEditor> {
-  late String type = widget.task.recurrenceType;
-  late int weekday = (widget.task.recurrenceConfig?['weekday'] as num?)
-          ?.toInt() ??
-      (localDateTimeFromStorage(widget.task.dueAt) ?? DateTime.now()).weekday;
-  late int day =
-      (widget.task.recurrenceConfig?['dayOfMonth'] as num?)?.toInt() ??
-          (localDateTimeFromStorage(widget.task.dueAt) ?? DateTime.now()).day;
-  @override
-  Widget build(BuildContext context) => Padding(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const Text('重复任务', style: TextStyle(fontWeight: FontWeight.w600)),
-            const SizedBox(height: 12),
-            DropdownButtonFormField<String>(
-                initialValue: type,
-                decoration: const InputDecoration(
-                    labelText: '频率',
-                    border: OutlineInputBorder(),
-                    isDense: true),
-                items: [
-                  for (final entry in {
-                    'NONE': '不重复',
-                    'DAILY': '每天',
-                    'WEEKLY': '每周',
-                    'MONTHLY': '每月'
-                  }.entries)
-                    DropdownMenuItem(value: entry.key, child: Text(entry.value))
-                ],
-                onChanged: (value) => setState(() => type = value!)),
-            if (type == 'WEEKLY' || type == 'MONTHLY') ...[
-              const SizedBox(height: 12),
-              DropdownButtonFormField<int>(
-                  key: ValueKey(type),
-                  initialValue: type == 'WEEKLY' ? weekday : day,
-                  decoration: InputDecoration(
-                      labelText: type == 'WEEKLY' ? '星期' : '每月日期',
-                      border: const OutlineInputBorder(),
-                      isDense: true),
-                  items: [
-                    for (var i = 1; i <= (type == 'WEEKLY' ? 7 : 31); i++)
-                      DropdownMenuItem(
-                          value: i,
-                          child: Text(type == 'WEEKLY'
-                              ? '星期${'一二三四五六日'[i - 1]}'
-                              : '$i 日'))
-                  ],
-                  onChanged: (value) => setState(() {
-                        if (type == 'WEEKLY') {
-                          weekday = value!;
-                        } else {
-                          day = value!;
-                        }
-                      })),
-            ],
-            const SizedBox(height: 12),
-            const Text('完成本次任务后，会自动生成下一次。', style: TextStyle(fontSize: 12)),
-            const SizedBox(height: 16),
-            Align(
-                alignment: Alignment.centerRight,
-                child: FilledButton(
-                    onPressed: () => Navigator.of(context).pop((
-                          type,
-                          type == 'WEEKLY'
-                              ? <String, dynamic>{'weekday': weekday}
-                              : type == 'MONTHLY'
-                                  ? <String, dynamic>{'dayOfMonth': day}
-                                  : null
-                        )),
-                    child: const Text('确定'))),
-          ]));
 }

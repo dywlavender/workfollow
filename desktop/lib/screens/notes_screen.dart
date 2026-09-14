@@ -483,8 +483,11 @@ class _NotePageState extends State<_NotePage> {
                               padding: const EdgeInsets.only(bottom: 6),
                               child: _LinkedTaskRow(
                                   task: task,
-                                  onToggle: () =>
-                                      widget.controller.toggleTask(task.id),
+                                  onToggle: () => task.completed
+                                      ? widget.controller.taskActions
+                                          .restore(task.id)
+                                      : widget.controller.taskActions
+                                          .complete(task.id),
                                   onOpen: () =>
                                       widget.controller.openTask(task.id))),
                       ],

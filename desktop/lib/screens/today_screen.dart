@@ -3,11 +3,13 @@ import 'package:flutter/material.dart';
 import '../models/task.dart';
 import '../state/workspace_controller.dart';
 import '../theme/workfollow_theme.dart';
+import '../features/tasks/domain/task_schedule.dart';
 import '../widgets/app_icon_button.dart';
 import '../widgets/app_surfaces.dart';
 import '../widgets/desktop_popover.dart';
 import '../widgets/quick_add.dart';
 import '../widgets/task_date_picker.dart';
+import '../widgets/task_schedule_picker.dart';
 import '../widgets/task_inspector.dart';
 import '../widgets/task_row.dart';
 
@@ -622,15 +624,18 @@ class _BulkBar extends StatelessWidget {
                           fontWeight: FontWeight.w600,
                           color: tokens.textPrimary))),
               TextButton(
-                  onPressed: controller.bulkCompleteSelected,
+                  onPressed: () => controller.taskActions
+                      .bulkComplete(controller.multiSelectedTaskIds),
                   child: const Text('完成')),
               Builder(
                   builder: (anchor) => TextButton(
                       onPressed: () async {
-                        final result = await showTaskDatePicker(anchor);
+                        final result = await TaskSchedulePicker.show(anchor);
                         if (result != null)
-                          controller.bulkRescheduleSelected(result.date,
-                              hasTime: result.hasTime);
+                          controller.taskActions.bulkSchedule(
+                              controller.multiSelectedTaskIds,
+                              TaskScheduleDraft(
+                                  dueAt: result.date, hasTime: result.hasTime));
                       },
                       child: const Text('安排日期'))),
               Builder(
@@ -642,11 +647,13 @@ class _BulkBar extends StatelessWidget {
                                 DesktopMenuEntry(list.name, list.name)
                             ]);
                         if (result != null)
-                          controller.bulkMoveSelectedToList(result);
+                          controller.taskActions.bulkMove(
+                              controller.multiSelectedTaskIds, result);
                       },
                       child: const Text('移动'))),
               TextButton(
-                  onPressed: controller.bulkDeleteSelected,
+                  onPressed: () => controller.taskActions
+                      .bulkDelete(controller.multiSelectedTaskIds),
                   child: const Text('删除')),
               TextButton(
                   onPressed: controller.clearMultiSelect,

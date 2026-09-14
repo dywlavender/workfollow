@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 
 import '../state/workspace_controller.dart';
 import '../theme/workfollow_theme.dart';
+import '../features/tasks/domain/task_draft.dart';
 
 Future<void> showCommandPalette({
   required BuildContext context,
@@ -103,7 +104,10 @@ class _CommandPaletteState extends State<_CommandPalette> {
         '新建任务「${queryController.text.trim()}」',
         '保存到${widget.controller.creationTargetLabel}',
         Icons.add_task_rounded,
-        () => widget.controller.addTask(queryController.text.trim()),
+        () => widget.controller.createTask(TaskDraft(
+              title: queryController.text.trim(),
+              listName: widget.controller.selectedListName,
+            )),
       ),
     ];
     final taskResults = widget.controller.activeTasks

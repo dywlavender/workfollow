@@ -4,8 +4,16 @@ import 'package:flutter/services.dart';
 import '../models/task.dart';
 import '../state/workspace_controller.dart';
 import '../theme/workfollow_theme.dart';
-import 'desktop_popover.dart';
+import '../features/tasks/application/task_actions.dart';
+import '../features/tasks/domain/task_schedule.dart';
 import 'task_date_picker.dart';
+import 'task_schedule_picker.dart';
+import 'task_context_menu.dart';
+import 'task_deadline_picker.dart';
+import 'task_list_picker.dart';
+import 'task_reminder_picker.dart';
+import 'task_repeat_picker.dart';
+import 'task_tag_picker.dart';
 
 class TaskRow extends StatefulWidget {
   const TaskRow(
@@ -70,57 +78,59 @@ class _TaskRowState extends State<TaskRow> {
   }
 
   Future<void> menu(BuildContext anchor) async {
-    final action = await showDesktopMenu<String>(anchor, entries: [
-      DesktopMenuEntry('complete', widget.task.completed ? '标记未完成' : '完成任务',
-          icon: Icons.check),
-      const DesktopMenuEntry('today', '安排到今天', icon: Icons.today_outlined),
-      const DesktopMenuEntry('tomorrow', '安排到明天', icon: Icons.event_outlined),
-      const DesktopMenuEntry('date', '安排其他日期…',
-          icon: Icons.calendar_today_outlined),
-      if (widget.task.dueAt != null)
-        const DesktopMenuEntry('clear-date', '清除日期',
-            icon: Icons.event_busy_outlined),
-      const DesktopMenuEntry('priority-high', '设置高优先级',
-          icon: Icons.flag_outlined),
-      const DesktopMenuEntry('priority-medium', '设置中优先级',
-          icon: Icons.flag_outlined),
-      const DesktopMenuEntry('priority-low', '设置低优先级',
-          icon: Icons.flag_outlined),
-      const DesktopMenuEntry('priority-none', '取消优先级',
-          icon: Icons.flag_outlined),
-      const DesktopMenuEntry('duplicate', '创建副本',
-          icon: Icons.control_point_duplicate_outlined),
-      const DesktopMenuEntry('delete', '移到废纸篓',
-          icon: Icons.delete_outline, destructive: true),
-    ]);
+    final action = await TaskContextMenu.show(anchor,
+        task: widget.task, controller: widget.controller);
     if (!mounted) return;
     switch (action) {
       case 'complete':
-        widget.controller.toggleTask(widget.task.id);
+        final result = widget.task.completed
+            ? widget.controller.taskActions.restore(widget.task.id)
+            : widget.controller.taskActions.complete(widget.task.id);
+        _showActionFeedback(result);
       case 'today':
-        widget.controller.moveTaskToToday(widget.task.id);
+        final now = DateTime.now();
+        final existing = localDateTimeFromStorage(widget.task.dueAt);
+        _showActionFeedback(widget.controller.taskActions.setSchedule(
+            widget.task.id,
+            TaskScheduleDraft.forDay(now,
+                preserveClock: existing, hasTime: widget.task.scheduledWithTime)));
       case 'tomorrow':
         final now = DateTime.now();
         final existing = localDateTimeFromStorage(widget.task.dueAt);
-        final target = DateTime(now.year, now.month, now.day + 1,
-            existing?.hour ?? 0, existing?.minute ?? 0);
-        widget.controller.updateTaskDue(widget.task.id, target,
-            hasTime: widget.task.scheduledWithTime);
+        _showActionFeedback(widget.controller.taskActions.setSchedule(
+            widget.task.id,
+            TaskScheduleDraft.forDay(now.add(const Duration(days: 1)),
+                preserveClock: existing, hasTime: widget.task.scheduledWithTime)));
       case 'clear-date':
-        widget.controller.updateTaskDue(widget.task.id, null);
+        _showActionFeedback(
+            widget.controller.taskActions.clearSchedule(widget.task.id));
       case 'priority-high':
-        widget.controller.updateTaskPriority(widget.task.id, TaskPriority.high);
+        _showActionFeedback(widget.controller.taskActions
+            .setPriority(widget.task.id, TaskPriority.high));
       case 'priority-medium':
-        widget.controller
-            .updateTaskPriority(widget.task.id, TaskPriority.medium);
+        _showActionFeedback(widget.controller.taskActions
+            .setPriority(widget.task.id, TaskPriority.medium));
       case 'priority-low':
-        widget.controller.updateTaskPriority(widget.task.id, TaskPriority.low);
+        _showActionFeedback(widget.controller.taskActions
+            .setPriority(widget.task.id, TaskPriority.low));
       case 'priority-none':
-        widget.controller.updateTaskPriority(widget.task.id, TaskPriority.none);
+        _showActionFeedback(widget.controller.taskActions
+            .setPriority(widget.task.id, TaskPriority.none));
+      case 'list':
+        await _moveToList(anchor);
+      case 'tags':
+        await _editTags(anchor);
+      case 'reminder':
+        await _editReminder(anchor);
+      case 'repeat':
+        await _editRepeat(anchor);
+      case 'deadline':
+        await _editDeadline(anchor);
       case 'duplicate':
-        widget.controller.duplicateTask(widget.task.id);
+        _showActionFeedback(
+            widget.controller.taskActions.duplicate(widget.task.id));
       case 'delete':
-        widget.controller.removeTask(widget.task.id);
+        _showActionFeedback(widget.controller.taskActions.delete(widget.task.id));
       case 'date':
         await date(anchor);
     }
@@ -128,20 +138,71 @@ class _TaskRowState extends State<TaskRow> {
 
   Future<void> date(BuildContext anchor) async {
     if (!anchor.mounted) return;
-    final result = await showTaskDatePicker(anchor,
+    final result = await TaskSchedulePicker.show(anchor,
         value: widget.task.dueAt, hasTime: widget.task.scheduledWithTime);
     if (result != null && mounted) {
       final c = widget.controller, id = widget.task.id;
-      c.updateTaskDue(id, result.date, hasTime: result.hasTime);
-      if (!c.visibleTasks.any((task) => task.id == id)) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text(result.date == null
-                ? '已清除安排日期'
-                : '已安排到${calendarDateLabel(result.date, hasTime: result.hasTime)}'),
-            action: SnackBarAction(
-                label: '查看任务', onPressed: () => c.openTask(id))));
-      }
+      _showActionFeedback(c.taskActions.setSchedule(id,
+          TaskScheduleDraft(dueAt: result.date, hasTime: result.hasTime)));
     }
+  }
+
+  Future<void> _moveToList(BuildContext anchor) async {
+    final selected = await TaskListPicker.show(anchor,
+        controller: widget.controller, selected: widget.task.listName);
+    if (!mounted || selected == null) return;
+    _showActionFeedback(
+        widget.controller.taskActions.moveToList(widget.task.id, selected));
+  }
+
+  Future<void> _editTags(BuildContext anchor) async {
+    final value = await TaskTagPicker.show(anchor,
+        initial: widget.task.tags.join('，'));
+    if (!mounted || value == null) return;
+    final tags = value
+        .split(RegExp('[,，]'))
+        .map((tag) => tag.trim())
+        .where((tag) => tag.isNotEmpty)
+        .toList(growable: false);
+    _showActionFeedback(
+        widget.controller.taskActions.setTags(widget.task.id, tags));
+  }
+
+  Future<void> _editReminder(BuildContext anchor) async {
+    final value = await TaskReminderPicker.show(anchor,
+        value: widget.task.reminderAt);
+    if (!mounted || value == null) return;
+    _showActionFeedback(value.date == null
+        ? widget.controller.taskActions.clearReminder(widget.task.id)
+        : widget.controller.taskActions.setReminder(widget.task.id, value.date));
+  }
+
+  Future<void> _editRepeat(BuildContext anchor) async {
+    final value = await TaskRepeatPicker.show(anchor, task: widget.task);
+    if (!mounted || value == null) return;
+    _showActionFeedback(widget.controller.taskActions
+        .setRecurrence(widget.task.id, value));
+  }
+
+  Future<void> _editDeadline(BuildContext anchor) async {
+    final value = await TaskDeadlinePicker.show(anchor,
+        value: widget.task.deadlineAt);
+    if (!mounted || value == null) return;
+    _showActionFeedback(widget.controller.taskActions
+        .setDeadline(widget.task.id, value.date));
+  }
+
+  void _showActionFeedback(TaskActionResult result) {
+    if (!mounted || !result.success || result.message == null) return;
+    if (result.destination == TaskDestination.current) return;
+    final id = result.taskId;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(result.message!),
+      action: id == null
+          ? null
+          : SnackBarAction(
+              label: '查看任务', onPressed: () => widget.controller.openTask(id)),
+    ));
   }
 
   @override
@@ -161,8 +222,7 @@ class _TaskRowState extends State<TaskRow> {
     return CallbackShortcuts(
         bindings: {
           const SingleActivator(LogicalKeyboardKey.enter): open,
-          const SingleActivator(LogicalKeyboardKey.space): () =>
-              widget.controller.toggleTask(task.id),
+          const SingleActivator(LogicalKeyboardKey.space): _complete,
           const SingleActivator(LogicalKeyboardKey.arrowDown): () =>
               widget.controller.selectAdjacentTask(task.id, 1),
           const SingleActivator(LogicalKeyboardKey.arrowUp): () =>
@@ -239,8 +299,7 @@ class _TaskRowState extends State<TaskRow> {
                                       onChanged: (_) => widget.multiSelected
                                           ? widget.controller
                                               .toggleMultiSelect(task.id)
-                                          : widget.controller
-                                              .toggleTask(task.id))),
+                                          : _complete())),
                               const SizedBox(width: 9),
                               Expanded(
                                 child: Column(
@@ -324,6 +383,13 @@ class _TaskRowState extends State<TaskRow> {
                 iconSize: 18,
                 onPressed: visible ? () => menu(anchor) : null,
                 icon: Icon(Icons.more_horiz, color: tokens.textTertiary))));
+  }
+
+  void _complete() {
+    final result = widget.task.completed
+        ? widget.controller.taskActions.restore(widget.task.id)
+        : widget.controller.taskActions.complete(widget.task.id);
+    _showActionFeedback(result);
   }
 
   List<Widget> get _metadata {

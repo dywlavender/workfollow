@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:workfollow_personal/app.dart';
+import 'package:workfollow_personal/models/task.dart';
 import 'package:workfollow_personal/state/workspace_controller.dart';
 import 'package:workfollow_personal/theme/workfollow_theme.dart';
 import 'package:workfollow_personal/widgets/quick_add.dart';
+import 'package:workfollow_personal/widgets/task_row.dart';
 
 void main() {
   testWidgets('stats and matrix views are reachable from the native rail',
@@ -101,6 +103,26 @@ void main() {
     await tester.pump();
     expect(controller.tasks.single.title, '整理资料 @不存在清单');
     expect(controller.lists, hasLength(4));
+  });
+
+  testWidgets('quick add in Today keeps the view default in its Draft',
+      (tester) async {
+    final controller = WorkspaceController(seedData: false);
+    addTearDown(controller.dispose);
+    controller.selectView(WorkspaceView.today);
+    await tester.pumpWidget(MaterialApp(
+        theme: WorkFollowThemeData.light(),
+        home: Scaffold(body: QuickAddField(controller: controller))));
+    await tester.enterText(
+        find.byKey(const ValueKey('quick-add-title')), '今天要做');
+    await tester.pump();
+    await tester.tap(find.text('添加任务'));
+    await tester.pump();
+    final task = controller.tasks.single;
+    final now = DateTime.now();
+    expect(localDateTimeFromStorage(task.dueAt),
+        DateTime(now.year, now.month, now.day));
+    expect(task.bucket, TaskBucket.today);
   });
 
   testWidgets('task lists use the single-line add row and expose list actions',
@@ -299,5 +321,38 @@ void main() {
     await tester.tap(find.text('过期').first);
     await tester.pumpAndSettle();
     expect(find.text('过期'), findsWidgets);
+  });
+
+  testWidgets('task row context menu exposes shared property actions',
+      (tester) async {
+    final controller = WorkspaceController(seedData: false);
+    addTearDown(controller.dispose);
+    controller.addTask('菜单任务', listName: '收集箱');
+    final task = controller.tasks.single;
+    await tester.pumpWidget(MaterialApp(
+        theme: WorkFollowThemeData.light(),
+        home: Scaffold(
+            body: TaskRow(
+                task: task,
+                controller: controller,
+                selected: true))));
+
+    await tester.tap(find.byKey(ValueKey('task-row-more-${task.id}')));
+    await tester.pumpAndSettle();
+    for (final label in [
+      '移动到清单…',
+      '编辑标签…',
+      '设置提醒…',
+      '设置重复…',
+      '设置截止日期…',
+    ]) {
+      expect(find.text(label), findsOneWidget, reason: label);
+    }
+
+    await tester.tap(find.byKey(const ValueKey('menu-option-list')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('menu-option-工作')));
+    await tester.pumpAndSettle();
+    expect(controller.tasks.single.listName, '工作');
   });
 }

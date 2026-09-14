@@ -5,8 +5,17 @@ import '../models/task.dart';
 import '../services/smart_date_parser.dart';
 import '../state/workspace_controller.dart';
 import '../theme/workfollow_theme.dart';
+import '../features/tasks/application/task_actions.dart';
+import '../features/tasks/domain/task_draft.dart';
+import '../features/tasks/domain/task_schedule.dart';
 import 'desktop_popover.dart';
 import 'task_date_picker.dart';
+import 'task_schedule_picker.dart';
+import 'task_priority_picker.dart';
+import 'task_list_picker.dart';
+import 'task_tag_picker.dart';
+import 'task_reminder_picker.dart';
+import 'task_repeat_picker.dart';
 
 /// Text controller that paints recognized smart-entry fragments in place.
 /// The removable chips below the field remain the explicit dismiss affordance;
@@ -107,7 +116,17 @@ class _QuickAddFieldState extends State<QuickAddField> {
   // chips fall back to plain-title behaviour for their aspect.
   static const parser = SmartDateParser();
   SmartParseResult parse = _emptyParse;
+  TaskDraft currentDraft = const TaskDraft(title: '');
   final Set<String> dismissedSpans = {};
+  TaskPriority? manualPriority;
+  String? manualListName;
+  List<String>? manualTags;
+  DateTime? manualReminder;
+  RecurrenceDraft? manualRecurrence;
+  bool listOverridden = false;
+  bool tagsOverridden = false;
+  bool reminderOverridden = false;
+  bool recurrenceOverridden = false;
 
   static const _emptyParse = SmartParseResult(
       title: '',
@@ -159,7 +178,7 @@ class _QuickAddFieldState extends State<QuickAddField> {
         .toList();
     bool keptKind(SmartTokenKind kind) => kept.any((span) => span.kind == kind);
     text.setHighlights(kept, dismissedSpans);
-    setState(() => parse = SmartParseResult(
+    final next = SmartParseResult(
         title: parser.titleFromSpans(text.text, kept),
         dueAt: keptKind(SmartTokenKind.date) || keptKind(SmartTokenKind.time)
             ? result.dueAt
@@ -185,12 +204,127 @@ class _QuickAddFieldState extends State<QuickAddField> {
         priority: keptKind(SmartTokenKind.priority)
             ? result.priority
             : TaskPriority.none,
-        spans: kept));
+        spans: kept);
+    setState(() {
+      parse = next;
+      _refreshDraft(next);
+    });
   }
+
+  void _refreshDraft(SmartParseResult value) {
+    final parsedList = value.listName != null &&
+            widget.controller.lists.any((list) => list.name == value.listName)
+        ? value.listName
+        : null;
+    final hasSchedulingToken = value.spans.any((span) =>
+        span.kind == SmartTokenKind.date || span.kind == SmartTokenKind.time);
+    final dismissedScheduling = _hasDismissedScheduling;
+    final defaultDue = !hasSchedulingToken && !dismissedScheduling && !customDate
+        ? widget.controller.creationDate
+        : null;
+    currentDraft = TaskDraft(
+      title: value.title,
+      listName: listOverridden ? manualListName : parsedList,
+      schedule: TaskScheduleDraft(
+        dueAt: customDate ? selectedDate : value.dueAt ?? defaultDue,
+        hasTime: customDate ? hasTime : value.hasTime,
+      ),
+      reminderAt: reminderOverridden
+          ? manualReminder
+          : (!customDate && value.hasTime ? value.reminderAt : null),
+      recurrence: recurrenceOverridden
+          ? (manualRecurrence ?? const RecurrenceDraft())
+          : RecurrenceDraft(type: value.recurrenceType, config: value.recurrenceConfig),
+      priority: manualPriority ?? value.priority,
+      tags: tagsOverridden ? (manualTags ?? const <String>[]) : value.tags,
+      forceUnscheduled: (customDate && selectedDate == null) ||
+          dismissedScheduling,
+    );
+  }
+
+  bool get _hasDismissedScheduling => dismissedSpans.any((raw) =>
+      parser.parse(raw).spans.any((span) =>
+          span.kind == SmartTokenKind.date || span.kind == SmartTokenKind.time));
+
+  DateTime? get _effectiveDue => customDate
+      ? selectedDate
+      : parse.dueAt ?? (_hasDismissedScheduling ? null : widget.controller.creationDate);
+
+  bool get _effectiveHasTime => customDate ? hasTime : parse.hasTime;
 
   void _dismissSpan(SmartSpan span) {
     dismissedSpans.add(span.raw);
     _reparse();
+  }
+
+  Future<void> _pickPriority(BuildContext anchor) async {
+    final value = await TaskPriorityPicker.show(anchor,
+        selected: manualPriority ?? parse.priority);
+    if (!mounted || value == null) return;
+    setState(() {
+      manualPriority = value;
+      _refreshDraft(parse);
+    });
+  }
+
+  Future<void> _pickList(BuildContext anchor) async {
+    final value = await TaskListPicker.show(anchor,
+        controller: widget.controller,
+        selected: manualListName ?? parse.listName);
+    if (!mounted || value == null) return;
+    setState(() {
+      manualListName = value;
+      listOverridden = true;
+      _refreshDraft(parse);
+    });
+  }
+
+  Future<void> _pickTags(BuildContext anchor) async {
+    final value = await TaskTagPicker.show(anchor,
+        initial: (manualTags ?? parse.tags).join('，'));
+    if (!mounted || value == null) return;
+    setState(() {
+      manualTags = value.split(RegExp('[,，]'))
+          .map((tag) => tag.trim())
+          .where((tag) => tag.isNotEmpty)
+          .toList(growable: false);
+      tagsOverridden = true;
+      _refreshDraft(parse);
+    });
+  }
+
+  Future<void> _pickReminder(BuildContext anchor) async {
+    final current = manualReminder ?? parse.reminderAt;
+    final value = await TaskReminderPicker.show(anchor,
+        value: current?.toIso8601String());
+    if (!mounted || value == null) return;
+    setState(() {
+      manualReminder = value.date;
+      reminderOverridden = true;
+      _refreshDraft(parse);
+    });
+  }
+
+  Future<void> _pickRecurrence(BuildContext anchor) async {
+    final recurrence = manualRecurrence ??
+        RecurrenceDraft(
+            type: parse.recurrenceType, config: parse.recurrenceConfig);
+    final task = TaskItem(
+      id: 'draft',
+      title: text.text.trim().isEmpty ? '新任务' : text.text.trim(),
+      listName: manualListName ?? parse.listName ?? '收集箱',
+      bucket: TaskBucket.unscheduled,
+      recurrenceType: recurrence.type,
+      recurrenceConfig: recurrence.config,
+      dueAt: (customDate ? selectedDate : parse.dueAt)?.toIso8601String(),
+    );
+    final value = await TaskRepeatPicker.show(anchor, task: task);
+    if (!mounted || value == null) return;
+    setState(() {
+      manualRecurrence = value;
+      recurrenceOverridden = true;
+      _refreshDraft(parse);
+    });
   }
 
   void submit() {
@@ -199,10 +333,11 @@ class _QuickAddFieldState extends State<QuickAddField> {
     final parsed = parse;
     // Only trust a list token that matches an existing list, so typos never
     // create lists implicitly.
-    final listName = parsed.listName != null &&
+    final parsedListName = parsed.listName != null &&
             widget.controller.lists.any((list) => list.name == parsed.listName)
         ? parsed.listName
         : null;
+    final listName = listOverridden ? manualListName : parsedListName;
     // An unknown @marker is not allowed to create a list, but it remains in
     // the title so a typo is never silently lost.
     final titleSpans = parsed.spans
@@ -213,42 +348,51 @@ class _QuickAddFieldState extends State<QuickAddField> {
     final title = parser.titleFromSpans(text.text, titleSpans);
     final smartDue = parsed.dueAt;
     final manualDue = customDate ? selectedDate : null;
-    final effectiveDue = smartDue ?? manualDue;
-    final dismissedScheduling = parser.parse(text.text).spans.any((span) =>
-        (span.kind == SmartTokenKind.date ||
-            span.kind == SmartTokenKind.time) &&
-        dismissedSpans.contains(span.raw));
+    final dismissedScheduling = _hasDismissedScheduling;
+    final effectiveDue = _effectiveDue;
     if (title.isEmpty) return;
-    if (!widget.controller.addTask(title,
-        listName: listName,
+    final finalPriority = manualPriority ?? parsed.priority;
+    final finalTags = tagsOverridden ? (manualTags ?? const <String>[]) : parsed.tags;
+    final finalRecurrence = recurrenceOverridden
+        ? (manualRecurrence ?? const RecurrenceDraft())
+        : RecurrenceDraft(
+            type: parsed.recurrenceType, config: parsed.recurrenceConfig);
+    final finalReminder = reminderOverridden
+        ? manualReminder
+        : (!customDate && parsed.hasTime
+            ? parsed.reminderAt ?? smartDue
+            : null);
+    currentDraft = TaskDraft(
+      title: title,
+      listName: listName,
+      schedule: TaskScheduleDraft(
         dueAt: effectiveDue,
-        hasTime: customDate ? hasTime : parsed.hasTime,
-        forceUnscheduled: (customDate &&
-                manualDue == null &&
-                smartDue == null) ||
-            (dismissedScheduling && manualDue == null && smartDue == null))) {
+        hasTime: _effectiveHasTime,
+      ),
+      reminderAt: finalReminder,
+      recurrence: finalRecurrence,
+      priority: finalPriority,
+      tags: finalTags,
+      forceUnscheduled: (customDate &&
+              manualDue == null &&
+              smartDue == null) ||
+          (dismissedScheduling && manualDue == null && smartDue == null),
+    );
+    final result = widget.controller.taskCreator.create(currentDraft);
+    if (!result.success) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(result.message ?? '无法创建任务')));
+      }
       return;
     }
-    final id = widget.controller.tasks.first.id;
-    final c = widget.controller;
-    if (parsed.recurrenceType != 'NONE') {
-      c.updateTaskRecurrence(id, parsed.recurrenceType,
-          config: parsed.recurrenceConfig);
-    }
-    if (parsed.priority != TaskPriority.none) {
-      c.updateTaskPriority(id, parsed.priority);
-    }
-    if (parsed.tags.isNotEmpty) c.updateTaskTags(id, parsed.tags);
-    if (parsed.hasTime && smartDue != null) {
-      c.updateTaskDue(id, smartDue, hasTime: true);
-      c.updateTaskReminder(id, parsed.reminderAt ?? smartDue);
-    }
-    if (!c.visibleTasks.any((task) => task.id == id)) {
+    final id = result.taskId;
+    if (id != null && result.destination != TaskDestination.current) {
       final destination = effectiveDue == null
           ? '收集箱'
           : calendarDateLabel(effectiveDue, hasTime: parsed.hasTime || hasTime);
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('已添加到$destination'),
+        content: Text(result.message ?? '已添加到$destination'),
         action: SnackBarAction(
             label: '查看任务', onPressed: () => widget.controller.openTask(id)),
       ));
@@ -259,8 +403,18 @@ class _QuickAddFieldState extends State<QuickAddField> {
       customDate = false;
       selectedDate = null;
       hasTime = false;
+      manualPriority = null;
+      manualListName = null;
+      manualTags = null;
+      manualReminder = null;
+      manualRecurrence = null;
+      listOverridden = false;
+      tagsOverridden = false;
+      reminderOverridden = false;
+      recurrenceOverridden = false;
       dismissedSpans.clear();
       parse = _emptyParse;
+      currentDraft = const TaskDraft(title: '');
     });
     focus.requestFocus();
   }
@@ -277,8 +431,18 @@ class _QuickAddFieldState extends State<QuickAddField> {
               text.clear();
               text.setHighlights(const [], const {});
               customDate = false;
-              dismissedSpans.clear();
-              parse = _emptyParse;
+              manualPriority = null;
+              manualListName = null;
+              manualTags = null;
+              manualReminder = null;
+              manualRecurrence = null;
+              listOverridden = false;
+              tagsOverridden = false;
+              reminderOverridden = false;
+      recurrenceOverridden = false;
+      dismissedSpans.clear();
+      parse = _emptyParse;
+      currentDraft = const TaskDraft(title: '');
             });
             focus.unfocus();
           }
@@ -367,32 +531,101 @@ class _QuickAddFieldState extends State<QuickAddField> {
               Padding(
                   padding: const EdgeInsets.only(top: 5, bottom: 4),
                   child: Row(children: [
-                    Flexible(
-                        child: PropertyButton(
-                            icon: Icons.calendar_today_outlined,
-                            label: calendarDateLabel(
-                                customDate
-                                    ? selectedDate
-                                    : widget.controller.creationDate,
-                                hasTime: hasTime),
-                            active: customDate
-                                ? selectedDate != null
-                                : widget.controller.creationDate != null,
-                            onPressed: (anchor) async {
-                              final result = await showTaskDatePicker(anchor,
-                                  value: (customDate
-                                          ? selectedDate
-                                          : widget.controller.creationDate)
-                                      ?.toIso8601String(),
-                                  hasTime: hasTime);
-                              if (result != null && mounted)
-                                setState(() {
-                                  customDate = true;
-                                  selectedDate = result.date;
-                                  hasTime = result.hasTime;
-                                });
-                            })),
-                    const Spacer(),
+                    Expanded(
+                        child: SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            child: Row(children: [
+                              PropertyButton(
+                                  key: const ValueKey('quick-add-schedule'),
+                                  icon: Icons.calendar_today_outlined,
+                                  label: calendarDateLabel(
+                                      _effectiveDue,
+                                      hasTime: _effectiveHasTime),
+                                  active: customDate
+                                      ? selectedDate != null
+                                      : parse.dueAt != null ||
+                                          (!_hasDismissedScheduling &&
+                                              widget.controller.creationDate !=
+                                                  null),
+                                  onPressed: (anchor) async {
+                                    final result =
+                                        await TaskSchedulePicker.show(anchor,
+                                            value: _effectiveDue
+                                                ?.toIso8601String(),
+                                            hasTime: _effectiveHasTime);
+                                    if (result != null && mounted)
+                                      setState(() {
+                                        customDate = true;
+                                        selectedDate = result.date;
+                                        hasTime = result.hasTime;
+                                        _refreshDraft(parse);
+                                      });
+                                  }),
+                              const SizedBox(width: 6),
+                              PropertyButton(
+                                  key: const ValueKey('quick-add-priority'),
+                                  icon: Icons.flag_outlined,
+                                  label: (manualPriority ?? parse.priority) ==
+                                          TaskPriority.none
+                                      ? '优先级'
+                                      : (manualPriority ?? parse.priority)
+                                          .label,
+                                  active: (manualPriority ?? parse.priority) !=
+                                      TaskPriority.none,
+                                  onPressed: _pickPriority),
+                              const SizedBox(width: 6),
+                              PropertyButton(
+                                  key: const ValueKey('quick-add-list'),
+                                  icon: Icons.inbox_outlined,
+                                  label: manualListName ??
+                                      parse.listName ??
+                                      widget.controller.creationTargetLabel
+                                          .split(' · ')
+                                          .first,
+                                  active: listOverridden || parse.listName != null,
+                                  onPressed: _pickList),
+                              const SizedBox(width: 6),
+                              PropertyButton(
+                                  key: const ValueKey('quick-add-tags'),
+                                  icon: Icons.tag_rounded,
+                                  label: (manualTags ?? parse.tags).isEmpty
+                                      ? '标签'
+                                      : (manualTags ?? parse.tags)
+                                          .map((tag) => '#$tag')
+                                          .join(' '),
+                                  active: tagsOverridden
+                                      ? (manualTags?.isNotEmpty ?? false)
+                                      : parse.tags.isNotEmpty,
+                                  onPressed: _pickTags),
+                              const SizedBox(width: 6),
+                              PropertyButton(
+                                  key: const ValueKey('quick-add-reminder'),
+                                  icon: Icons.notifications_none_rounded,
+                                  label: reminderOverridden
+                                      ? (manualReminder == null
+                                          ? '提醒'
+                                          : calendarDateLabel(manualReminder,
+                                              hasTime: true))
+                                      : (parse.reminderAt == null
+                                          ? '提醒'
+                                          : calendarDateLabel(parse.reminderAt,
+                                              hasTime: true)),
+                                  active: reminderOverridden
+                                      ? manualReminder != null
+                                      : parse.reminderAt != null,
+                                  onPressed: _pickReminder),
+                              const SizedBox(width: 6),
+                              PropertyButton(
+                                  key: const ValueKey('quick-add-repeat'),
+                                  icon: Icons.repeat_rounded,
+                                  label: (manualRecurrence?.enabled ??
+                                              (parse.recurrenceType != 'NONE'))
+                                      ? '重复'
+                                      : '重复',
+                                  active: manualRecurrence?.enabled ??
+                                      parse.recurrenceType != 'NONE',
+                                  onPressed: _pickRecurrence),
+                            ]))),
                     if (widget.listStyle)
                       Text('Return 添加',
                           style: TextStyle(
@@ -423,22 +656,29 @@ class _QuickAddFieldState extends State<QuickAddField> {
 
   String get _summary {
     final parts = <String>[];
-    if (parse.dueAt != null) {
-      parts.add(calendarDateLabel(parse.dueAt, hasTime: parse.hasTime));
+    final summaryDate = _effectiveDue;
+    final summaryHasTime = _effectiveHasTime;
+    if (summaryDate != null) {
+      parts.add(calendarDateLabel(summaryDate, hasTime: summaryHasTime));
     }
-    if (parse.reminderAt != null) parts.add('提醒');
-    if (parse.recurrenceType != 'NONE') {
-      parts.add(switch (parse.recurrenceType) {
+    final summaryReminder = reminderOverridden ? manualReminder : parse.reminderAt;
+    if (summaryReminder != null) parts.add('提醒');
+    final recurrence = manualRecurrence ??
+        RecurrenceDraft(type: parse.recurrenceType, config: parse.recurrenceConfig);
+    if (recurrence.enabled) {
+      parts.add(switch (recurrence.type) {
         'DAILY' => '每天',
         'WEEKLY' => '每周',
         'MONTHLY' => '每月',
         _ => '重复',
       });
     }
-    if (parse.tags.isNotEmpty)
-      parts.add(parse.tags.map((tag) => '#$tag').join(' '));
-    if (parse.listName != null) parts.add('@${parse.listName}');
-    if (parse.priority != TaskPriority.none) parts.add(parse.priority.label);
+    final summaryTags = tagsOverridden ? (manualTags ?? const <String>[]) : parse.tags;
+    if (summaryTags.isNotEmpty) parts.add(summaryTags.map((tag) => '#$tag').join(' '));
+    final summaryList = listOverridden ? manualListName : parse.listName;
+    if (summaryList != null) parts.add('@$summaryList');
+    final summaryPriority = manualPriority ?? parse.priority;
+    if (summaryPriority != TaskPriority.none) parts.add(summaryPriority.label);
     return parts.isEmpty ? '' : '→ ${parts.join(' · ')}';
   }
 }

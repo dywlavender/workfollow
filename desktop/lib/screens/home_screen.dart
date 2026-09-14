@@ -408,7 +408,9 @@ class _HomeTaskList extends StatelessWidget {
             controller: controller,
             overdue: overdue,
             onOpen: () => controller.openTask(task.id),
-            onToggle: () => controller.toggleTask(task.id),
+            onToggle: () => task.completed
+                ? controller.taskActions.restore(task.id)
+                : controller.taskActions.complete(task.id),
           ),
       ],
     );

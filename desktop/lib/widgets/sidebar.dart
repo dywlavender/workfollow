@@ -1040,8 +1040,8 @@ class _TaskListItemState extends State<_TaskListItem> {
       // Dropping a dragged task row here moves it into this list.
       child: DragTarget<String>(
         onWillAcceptWithDetails: (details) => details.data.isNotEmpty,
-        onAcceptWithDetails: (details) =>
-            widget.controller.moveTaskToList(details.data, widget.list.name),
+        onAcceptWithDetails: (details) => widget.controller.taskActions
+            .moveToList(details.data, widget.list.name),
         builder: (context, candidateData, rejectedData) {
           final dragActive = candidateData.isNotEmpty;
           return GestureDetector(

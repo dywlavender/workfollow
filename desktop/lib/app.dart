@@ -281,22 +281,32 @@ class _WorkFollowShellState extends State<WorkFollowShell> {
         _openFocusTimer();
       case 'completeSelected':
         final id = controller.selectedTaskId;
-        if (id != null) controller.toggleTask(id);
+        if (id != null) {
+          final task = controller.selectedTask;
+          if (task != null) {
+            task.completed
+                ? controller.taskActions.restore(id)
+                : controller.taskActions.complete(id);
+          }
+        }
       case 'clearSelectedDate':
         final id = controller.selectedTaskId;
-        if (id != null) controller.updateTaskDue(id, null);
+        if (id != null) controller.taskActions.clearSchedule(id);
       case 'priorityHigh':
         final id = controller.selectedTaskId;
-        if (id != null) controller.updateTaskPriority(id, TaskPriority.high);
+        if (id != null)
+          controller.taskActions.setPriority(id, TaskPriority.high);
       case 'priorityMedium':
         final id = controller.selectedTaskId;
-        if (id != null) controller.updateTaskPriority(id, TaskPriority.medium);
+        if (id != null)
+          controller.taskActions.setPriority(id, TaskPriority.medium);
       case 'priorityLow':
         final id = controller.selectedTaskId;
-        if (id != null) controller.updateTaskPriority(id, TaskPriority.low);
+        if (id != null) controller.taskActions.setPriority(id, TaskPriority.low);
       case 'priorityNone':
         final id = controller.selectedTaskId;
-        if (id != null) controller.updateTaskPriority(id, TaskPriority.none);
+        if (id != null)
+          controller.taskActions.setPriority(id, TaskPriority.none);
     }
   }
 

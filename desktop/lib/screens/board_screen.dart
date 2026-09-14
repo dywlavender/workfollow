@@ -320,7 +320,9 @@ class _BoardTaskCard extends StatelessWidget {
           height: 24,
           child: Checkbox(
               value: task.completed,
-              onChanged: (_) => controller.toggleTask(task.id),
+              onChanged: (_) => task.completed
+                  ? controller.taskActions.restore(task.id)
+                  : controller.taskActions.complete(task.id),
               activeColor: tokens.success,
               side: BorderSide(color: accent, width: 1.4),
               shape: RoundedRectangleBorder(
