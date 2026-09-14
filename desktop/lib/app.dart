@@ -627,7 +627,9 @@ class _WorkFollowShellState extends State<WorkFollowShell> {
                             child: _UndoToast(
                                 message: undoMessage,
                                 onUndo: () {
-                                  controller.undoLastAction();
+                                  // Keep the global toast on the same action
+                                  // boundary as rows, inspectors and menus.
+                                  controller.taskActions.undo();
                                   setState(() => showUndo = false);
                                 })),
                       ),
