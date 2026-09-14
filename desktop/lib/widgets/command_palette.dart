@@ -76,6 +76,10 @@ class _CommandPaletteState extends State<_CommandPalette> {
             () => widget.controller.selectView(WorkspaceView.plan)),
         _Command('打开日历', '按日期查看任务', Icons.calendar_month_outlined,
             () => widget.controller.selectView(WorkspaceView.calendar)),
+        _Command('打开看板', '按优先级或日期推进任务', Icons.view_kanban_outlined,
+            () => widget.controller.selectView(WorkspaceView.board)),
+        _Command('打开习惯', '记录连续完成与 28 天轨迹', Icons.track_changes_outlined,
+            () => widget.controller.selectView(WorkspaceView.habits)),
         _Command('打开笔记', '继续写下刚才的想法', Icons.note_alt_outlined,
             () => widget.controller.selectView(WorkspaceView.notes)),
         _Command('打开废纸篓', '恢复或彻底删除已移除的内容', Icons.delete_outline_rounded,
@@ -99,9 +103,10 @@ class _CommandPaletteState extends State<_CommandPalette> {
       ),
     ];
     final taskResults = widget.controller.activeTasks
-        .where((task) => '${task.title} ${task.listName} ${task.description ?? task.note ?? ''} ${task.tags.join(' ')}'
-            .toLowerCase()
-            .contains(query))
+        .where((task) =>
+            '${task.title} ${task.listName} ${task.description ?? task.note ?? ''} ${task.tags.join(' ')}'
+                .toLowerCase()
+                .contains(query))
         .take(7)
         .map(
           (task) => _Command(

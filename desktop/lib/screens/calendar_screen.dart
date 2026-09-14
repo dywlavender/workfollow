@@ -17,6 +17,7 @@ class CalendarScreen extends StatefulWidget {
 class _CalendarScreenState extends State<CalendarScreen> {
   late DateTime month;
   DateTime? selectedDay;
+  bool weekView = false;
 
   @override
   void initState() {
@@ -96,129 +97,151 @@ class _CalendarScreenState extends State<CalendarScreen> {
                               fontWeight: FontWeight.w700))),
                 ),
               ),
+              const SizedBox(width: 8),
+              _CalendarModeSegment(
+                  week: weekView,
+                  onChanged: (value) => setState(() => weekView = value)),
             ],
           ),
           const SizedBox(height: 20),
-          Row(
-            children: ['一', '二', '三', '四', '五', '六', '日']
-                .map(
-                  (day) => Expanded(
-                    child: Center(
-                      child: Text(
-                        day,
-                        style: TextStyle(
-                          color: tokens.textTertiary,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
+          if (!weekView) ...[
+            Row(
+              children: ['一', '二', '三', '四', '五', '六', '日']
+                  .map(
+                    (day) => Expanded(
+                      child: Center(
+                        child: Text(
+                          day,
+                          style: TextStyle(
+                            color: tokens.textTertiary,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                )
-                .toList(),
-          ),
-          const SizedBox(height: 9),
-          Expanded(
-            flex: 4,
-            child: GridView.builder(
-              physics: const NeverScrollableScrollPhysics(),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 7, mainAxisSpacing: 7, crossAxisSpacing: 7),
-              itemCount: cellCount,
-              itemBuilder: (context, index) {
-                final dayNumber = index - leading + 1;
-                final inMonth = dayNumber > 0 && dayNumber <= daysInMonth;
-                if (!inMonth) return const SizedBox.shrink();
-                final date = DateTime(month.year, month.month, dayNumber);
-                final isToday = _sameDay(date, today);
-                final isSelected =
-                    selectedDay != null && _sameDay(date, selectedDay!);
-                // Counts come from the real task dates, not the current view.
-                final dayTasks = widget.controller.tasksForDay(date);
-                final count = dayTasks.length;
-                final dayColor = dayTasks.isEmpty
-                    ? tokens.accent
-                    : Color(widget.controller
-                        .colorValueForList(dayTasks.first.listName));
-                return DragTarget<String>(
-                  // Dropping an agenda row (or a dragged task id) here
-                  // reschedules it to this day, keeping its clock time.
-                  onWillAccept: (data) => data != null,
-                  onAccept: (taskId) =>
-                      widget.controller.rescheduleTask(taskId, date),
-                  builder: (context, candidateData, rejectedData) {
-                    final dragActive = candidateData.isNotEmpty;
-                    return GestureDetector(
-                      onTap: () => setState(() => selectedDay = date),
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 140),
-                        padding: const EdgeInsets.fromLTRB(9, 8, 8, 7),
-                        decoration: BoxDecoration(
-                            color: dragActive
-                                ? tokens.accentSoft
-                                : (isSelected
+                  )
+                  .toList(),
+            ),
+            const SizedBox(height: 9),
+            Expanded(
+              flex: 4,
+              child: LayoutBuilder(builder: (context, constraints) {
+                final rows = cellCount ~/ 7;
+                final available = constraints.maxHeight - 7 * (rows - 1);
+                final rowHeight = (available / rows).clamp(1.0, 240.0);
+                return GridView.builder(
+                  physics: const NeverScrollableScrollPhysics(),
+                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: 7,
+                      mainAxisExtent: rowHeight,
+                      mainAxisSpacing: 7,
+                      crossAxisSpacing: 7),
+                  itemCount: cellCount,
+                  itemBuilder: (context, index) {
+                    final dayNumber = index - leading + 1;
+                    final inMonth = dayNumber > 0 && dayNumber <= daysInMonth;
+                    if (!inMonth) return const SizedBox.shrink();
+                    final date = DateTime(month.year, month.month, dayNumber);
+                    final isToday = _sameDay(date, today);
+                    final isSelected =
+                        selectedDay != null && _sameDay(date, selectedDay!);
+                    // Counts come from the real task dates, not the current view.
+                    final dayTasks = widget.controller.tasksForDay(date);
+                    final count = dayTasks.length;
+                    final dayColor = dayTasks.isEmpty
+                        ? tokens.accent
+                        : Color(widget.controller
+                            .colorValueForList(dayTasks.first.listName));
+                    return DragTarget<String>(
+                      // Dropping an agenda row (or a dragged task id) here
+                      // reschedules it to this day, keeping its clock time.
+                      onWillAcceptWithDetails: (details) =>
+                          details.data.isNotEmpty,
+                      onAcceptWithDetails: (details) =>
+                          widget.controller.rescheduleTask(details.data, date),
+                      builder: (context, candidateData, rejectedData) {
+                        final dragActive = candidateData.isNotEmpty;
+                        return GestureDetector(
+                          onTap: () => setState(() => selectedDay = date),
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 140),
+                            padding: const EdgeInsets.fromLTRB(9, 8, 8, 7),
+                            decoration: BoxDecoration(
+                                color: dragActive
                                     ? tokens.accentSoft
-                                    : tokens.content),
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(
-                                color: isSelected || dragActive
-                                    ? tokens.accent.withOpacity(.45)
-                                    : tokens.border)),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
+                                    : (isSelected
+                                        ? tokens.accentSoft
+                                        : tokens.content),
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(
+                                    color: isSelected || dragActive
+                                        ? tokens.accent.withOpacity(.45)
+                                        : tokens.border)),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Container(
-                                    width: 23,
-                                    height: 23,
-                                    alignment: Alignment.center,
-                                    decoration: BoxDecoration(
-                                        color: isToday
-                                            ? tokens.accent
-                                            : Colors.transparent,
-                                        shape: BoxShape.circle),
-                                    child: Text('$dayNumber',
-                                        style: TextStyle(
+                                Row(
+                                  children: [
+                                    Container(
+                                        width: 23,
+                                        height: 23,
+                                        alignment: Alignment.center,
+                                        decoration: BoxDecoration(
                                             color: isToday
-                                                ? Colors.white
-                                                : (isSelected
-                                                    ? tokens.accent
-                                                    : tokens.textSecondary),
-                                            fontSize: 12,
-                                            fontWeight: FontWeight.w700))),
+                                                ? tokens.accent
+                                                : Colors.transparent,
+                                            shape: BoxShape.circle),
+                                        child: Text('$dayNumber',
+                                            style: TextStyle(
+                                                color: isToday
+                                                    ? Colors.white
+                                                    : (isSelected
+                                                        ? tokens.accent
+                                                        : tokens.textSecondary),
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.w700))),
+                                    const Spacer(),
+                                    if (count > 0)
+                                      Container(
+                                          width: 5,
+                                          height: 5,
+                                          decoration: BoxDecoration(
+                                              color: dayColor,
+                                              shape: BoxShape.circle)),
+                                  ],
+                                ),
                                 const Spacer(),
                                 if (count > 0)
-                                  Container(
-                                      width: 5,
-                                      height: 5,
-                                      decoration: BoxDecoration(
-                                          color: dayColor,
-                                          shape: BoxShape.circle)),
+                                  Text('$count 件任务',
+                                      style: TextStyle(
+                                          color: tokens.textTertiary,
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.w500)),
                               ],
                             ),
-                            const Spacer(),
-                            if (count > 0)
-                              Text('$count 件任务',
-                                  style: TextStyle(
-                                      color: tokens.textTertiary,
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.w500)),
-                          ],
-                        ),
-                      ),
+                          ),
+                        );
+                      },
                     );
                   },
                 );
-              },
+              }),
             ),
-          ),
-          if (selectedDay != null) ...[
-            Container(height: 1, color: tokens.border),
-            const SizedBox(height: 12),
-            _SelectedDayAgenda(
-                controller: widget.controller, day: selectedDay!),
-          ],
+            if (selectedDay != null) ...[
+              Container(height: 1, color: tokens.border),
+              const SizedBox(height: 12),
+              _SelectedDayAgenda(
+                  controller: widget.controller, day: selectedDay!),
+            ],
+          ] else
+            Expanded(
+              child: _WeekCalendar(
+                controller: widget.controller,
+                anchor: selectedDay ?? DateTime.now(),
+                onSelectDay: (day) => setState(() => selectedDay = day),
+              ),
+            ),
         ],
       ),
     );
@@ -228,8 +251,223 @@ class _CalendarScreenState extends State<CalendarScreen> {
       a.year == b.year && a.month == b.month && a.day == b.day;
 }
 
-Widget _agendaRow(BuildContext context, TaskItem task,
-    WorkspaceController controller, WorkFollowTheme tokens, VoidCallback onOpen) {
+class _CalendarModeSegment extends StatelessWidget {
+  const _CalendarModeSegment({required this.week, required this.onChanged});
+
+  final bool week;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = WorkFollowTheme.of(context);
+    return Container(
+      padding: const EdgeInsets.all(2),
+      decoration: BoxDecoration(
+          color: tokens.content,
+          borderRadius: BorderRadius.circular(7),
+          border: Border.all(color: tokens.border)),
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        for (final option in const [(false, '月'), (true, '周')])
+          InkWell(
+            onTap: () => onChanged(option.$1),
+            borderRadius: BorderRadius.circular(5),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+              decoration: BoxDecoration(
+                  color: week == option.$1
+                      ? tokens.accentSoft
+                      : Colors.transparent,
+                  borderRadius: BorderRadius.circular(5)),
+              child: Text(option.$2,
+                  style: TextStyle(
+                      color: week == option.$1
+                          ? tokens.accent
+                          : tokens.textSecondary,
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w700)),
+            ),
+          ),
+      ]),
+    );
+  }
+}
+
+class _WeekCalendar extends StatelessWidget {
+  const _WeekCalendar(
+      {required this.controller,
+      required this.anchor,
+      required this.onSelectDay});
+
+  final WorkspaceController controller;
+  final DateTime anchor;
+  final ValueChanged<DateTime> onSelectDay;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = WorkFollowTheme.of(context);
+    final normalized = DateTime(anchor.year, anchor.month, anchor.day);
+    final start = normalized.subtract(Duration(days: normalized.weekday - 1));
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (var index = 0; index < 7; index++)
+          Expanded(
+            child: _WeekDayColumn(
+              controller: controller,
+              day: start.add(Duration(days: index)),
+              accent: tokens.accent,
+              onSelectDay: onSelectDay,
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _WeekDayColumn extends StatelessWidget {
+  const _WeekDayColumn(
+      {required this.controller,
+      required this.day,
+      required this.accent,
+      required this.onSelectDay});
+
+  final WorkspaceController controller;
+  final DateTime day;
+  final Color accent;
+  final ValueChanged<DateTime> onSelectDay;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = WorkFollowTheme.of(context);
+    final today = DateTime.now();
+    final isToday = day.year == today.year &&
+        day.month == today.month &&
+        day.day == today.day;
+    final tasks = controller.tasksForDay(day);
+    return DragTarget<String>(
+      onWillAcceptWithDetails: (details) => details.data.isNotEmpty,
+      onAcceptWithDetails: (details) =>
+          controller.rescheduleTask(details.data, day),
+      builder: (context, candidateData, rejectedData) {
+        final active = candidateData.isNotEmpty;
+        return GestureDetector(
+          onTap: () => onSelectDay(day),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 140),
+            margin: const EdgeInsets.only(right: 8),
+            padding: const EdgeInsets.fromLTRB(9, 9, 9, 8),
+            decoration: BoxDecoration(
+                color: active ? tokens.accentSoft : tokens.content,
+                borderRadius: BorderRadius.circular(11),
+                border: Border.all(
+                    color: active
+                        ? tokens.accent.withValues(alpha: .6)
+                        : tokens.border)),
+            child:
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Row(children: [
+                Expanded(
+                    child: Text(
+                        '周${_weekday(day.weekday)} ${day.month}/${day.day}',
+                        style: TextStyle(
+                            color: isToday ? accent : tokens.textPrimary,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w800))),
+                if (tasks.isNotEmpty)
+                  Text('${tasks.length}',
+                      style: TextStyle(color: accent, fontSize: 10.5)),
+              ]),
+              const SizedBox(height: 8),
+              Expanded(
+                child: tasks.isEmpty
+                    ? Center(
+                        child: Text('没有安排',
+                            style: TextStyle(
+                                color: tokens.textTertiary, fontSize: 10.5)))
+                    : ListView.separated(
+                        itemCount: tasks.length,
+                        separatorBuilder: (_, __) => const SizedBox(height: 5),
+                        itemBuilder: (context, index) {
+                          final task = tasks[index];
+                          final listColor = Color(
+                              controller.colorValueForList(task.listName));
+                          return Draggable<String>(
+                            data: task.id,
+                            feedback: Material(
+                              color: Colors.transparent,
+                              child: _WeekTaskPill(
+                                  task: task, color: listColor, tokens: tokens),
+                            ),
+                            childWhenDragging: Opacity(
+                                opacity: .3,
+                                child: _WeekTaskPill(
+                                    task: task,
+                                    color: listColor,
+                                    tokens: tokens)),
+                            child: _WeekTaskPill(
+                                task: task,
+                                color: listColor,
+                                tokens: tokens,
+                                onTap: () => controller.openTask(task.id)),
+                          );
+                        },
+                      ),
+              ),
+            ]),
+          ),
+        );
+      },
+    );
+  }
+
+  static String _weekday(int value) =>
+      const ['一', '二', '三', '四', '五', '六', '日'][value - 1];
+}
+
+class _WeekTaskPill extends StatelessWidget {
+  const _WeekTaskPill(
+      {required this.task,
+      required this.color,
+      required this.tokens,
+      this.onTap});
+
+  final TaskItem task;
+  final Color color;
+  final WorkFollowTheme tokens;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(7),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 6),
+        decoration: BoxDecoration(
+            color: color.withValues(alpha: .12),
+            borderRadius: BorderRadius.circular(7),
+            border: Border.all(color: color.withValues(alpha: .34))),
+        child: Text(task.title,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+                color:
+                    task.completed ? tokens.textTertiary : tokens.textPrimary,
+                fontSize: 10.5,
+                height: 1.25,
+                decoration:
+                    task.completed ? TextDecoration.lineThrough : null)),
+      ),
+    );
+  }
+}
+
+Widget _agendaRow(
+    BuildContext context,
+    TaskItem task,
+    WorkspaceController controller,
+    WorkFollowTheme tokens,
+    VoidCallback onOpen) {
   final listColor = Color(controller.colorValueForList(task.listName));
   return Material(
     color: Colors.transparent,

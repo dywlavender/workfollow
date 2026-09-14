@@ -611,23 +611,23 @@ class _DensitySegment extends StatelessWidget {
       child: Row(mainAxisSize: MainAxisSize.min, children: [
         for (final option in const [(false, '舒适'), (true, '紧凑')])
           InkWell(
-            onTap: () => onSelect(option.$1),
-            borderRadius: BorderRadius.circular(5),
-            child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 13, vertical: 6),
-                decoration: BoxDecoration(
-                    color: compact == option.$1
-                        ? tokens.accentSoft
-                        : Colors.transparent,
-                    borderRadius: BorderRadius.circular(5)),
-                child: Text(option.$2,
-                    style: TextStyle(
-                        color: compact == option.$1
-                            ? tokens.accent
-                            : tokens.textSecondary,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600)))),
+              onTap: () => onSelect(option.$1),
+              borderRadius: BorderRadius.circular(5),
+              child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 13, vertical: 6),
+                  decoration: BoxDecoration(
+                      color: compact == option.$1
+                          ? tokens.accentSoft
+                          : Colors.transparent,
+                      borderRadius: BorderRadius.circular(5)),
+                  child: Text(option.$2,
+                      style: TextStyle(
+                          color: compact == option.$1
+                              ? tokens.accent
+                              : tokens.textSecondary,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600)))),
       ]),
     );
   }

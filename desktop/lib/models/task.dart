@@ -62,6 +62,7 @@ class TaskItem {
     this.completedAt,
     this.deletedAt,
     this.attachments = const [],
+    this.focusCount = 0,
     this.priority = TaskPriority.none,
     this.completed = false,
   });
@@ -107,6 +108,10 @@ class TaskItem {
   /// workspace stays movable).
   final List<String> attachments;
 
+  /// Number of completed focus sessions attached to this task. It is an
+  /// optional local metric, so older snapshots naturally read as zero.
+  final int focusCount;
+
   bool get hasAttachment => attachments.isNotEmpty;
 
   int get subtaskTotal => subtasks.length;
@@ -149,6 +154,7 @@ class TaskItem {
     TaskPriority? priority,
     bool? completed,
     List<String>? attachments,
+    int? focusCount,
   }) {
     return TaskItem(
       id: id,
@@ -182,6 +188,7 @@ class TaskItem {
       priority: priority ?? this.priority,
       completed: completed ?? this.completed,
       attachments: attachments ?? this.attachments,
+      focusCount: focusCount ?? this.focusCount,
     );
   }
 
@@ -220,6 +227,7 @@ class TaskItem {
       completedAt: normalizeStoredDateTime(record.completedAt),
       deletedAt: normalizeStoredDateTime(record.deletedAt),
       attachments: List.unmodifiable(record.attachments),
+      focusCount: record.focusCount,
       priority: TaskPriority.values.firstWhere(
         (value) => value.name.toUpperCase() == record.priority,
         orElse: () => TaskPriority.none,
@@ -257,6 +265,7 @@ class TaskItem {
       completedAt: completedAt,
       deletedAt: deletedAt,
       attachments: List.unmodifiable(attachments),
+      focusCount: focusCount,
     );
   }
 }

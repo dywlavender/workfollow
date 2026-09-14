@@ -218,7 +218,8 @@ class SmartDateParser {
     var index = 0;
     for (final range in ranges) {
       if (range.start < index) continue;
-      if (range.start > index) buffer.write(input.substring(index, range.start));
+      if (range.start > index)
+        buffer.write(input.substring(index, range.start));
       index = range.end;
     }
     if (index < input.length) buffer.write(input.substring(index));

@@ -354,6 +354,16 @@ class _TaskInspectorState extends State<TaskInspector> {
                   active: task.tags.isNotEmpty,
                   onPressed: _tags),
             ]),
+            const SizedBox(height: 12),
+            Row(children: [
+              Icon(Icons.timer_outlined, size: 16, color: tokens.textTertiary),
+              const SizedBox(width: 7),
+              Text(
+                  task.focusCount == 0
+                      ? '尚未记录专注时段'
+                      : '已专注 ${task.focusCount} 个番茄',
+                  style: TextStyle(color: tokens.textTertiary, fontSize: 11)),
+            ]),
             const SizedBox(height: 22),
             Row(children: [
               Text('子任务',

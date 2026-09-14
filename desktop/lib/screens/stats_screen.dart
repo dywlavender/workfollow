@@ -24,7 +24,8 @@ class _StatsScreenState extends State<StatsScreen> {
     final tokens = WorkFollowTheme.of(context);
     final stats = StatsAggregator.aggregate(widget.controller.activeTasks,
         trendDays: weeklyRange ? DateTime.now().weekday : 30);
-    final total = stats.completedByList.values.fold<int>(0, (sum, value) => sum + value);
+    final total =
+        stats.completedByList.values.fold<int>(0, (sum, value) => sum + value);
     return Container(
       color: tokens.canvas,
       child: LayoutBuilder(builder: (context, constraints) {
@@ -43,7 +44,8 @@ class _StatsScreenState extends State<StatsScreen> {
                       : '完成第一件事后，这里会开始长出你的节奏。',
                   trailing: _RangeSegment(
                       weekly: weeklyRange,
-                      onChanged: (value) => setState(() => weeklyRange = value)),
+                      onChanged: (value) =>
+                          setState(() => weeklyRange = value)),
                 ),
                 const SizedBox(height: 18),
                 Wrap(
@@ -78,6 +80,13 @@ class _StatsScreenState extends State<StatsScreen> {
                             value: '${stats.active}',
                             icon: Icons.radio_button_unchecked_rounded,
                             color: tokens.accent)),
+                    SizedBox(
+                        width: narrow ? double.infinity : 190,
+                        child: StatCard(
+                            label: '专注番茄',
+                            value: '${stats.focusSessions}',
+                            icon: Icons.timer_outlined,
+                            color: tokens.accentHover)),
                   ],
                 ),
                 const SizedBox(height: 14),
@@ -90,8 +99,9 @@ class _StatsScreenState extends State<StatsScreen> {
                       children: [
                         _CardTitle(
                             title: '完成趋势',
-                            subtitle:
-                                weeklyRange ? '最近 7 天 · 每日完成数' : '最近 30 天 · 每日完成数'),
+                            subtitle: weeklyRange
+                                ? '最近 7 天 · 每日完成数'
+                                : '最近 30 天 · 每日完成数'),
                         const SizedBox(height: 15),
                         Expanded(
                             child: CustomPaint(
@@ -112,7 +122,8 @@ class _StatsScreenState extends State<StatsScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        _CardTitle(title: '完成热力图', subtitle: '近 16 周 · 每个格子代表一天'),
+                        _CardTitle(
+                            title: '完成热力图', subtitle: '近 16 周 · 每个格子代表一天'),
                         const SizedBox(height: 12),
                         Expanded(
                             child: CustomPaint(
@@ -120,7 +131,8 @@ class _StatsScreenState extends State<StatsScreen> {
                                     counts: stats.completionByDay,
                                     startDate: stats.heatmapStartDate,
                                     color: tokens.accent,
-                                    empty: tokens.border.withValues(alpha: .45)),
+                                    empty:
+                                        tokens.border.withValues(alpha: .45)),
                                 child: const SizedBox.expand())),
                       ],
                     ),
@@ -218,7 +230,8 @@ class _RangeSegment extends StatelessWidget {
 }
 
 class _TrendPainter extends CustomPainter {
-  const _TrendPainter({required this.values, required this.color, required this.grid});
+  const _TrendPainter(
+      {required this.values, required this.color, required this.grid});
 
   final List<int> values;
   final Color color;
@@ -231,7 +244,8 @@ class _TrendPainter extends CustomPainter {
     final gap = values.isEmpty ? 0.0 : 3.0;
     final barWidth = values.isEmpty
         ? 0.0
-        : math.max(1.0, (size.width - gap * (values.length - 1)) / values.length);
+        : math.max(
+            1.0, (size.width - gap * (values.length - 1)) / values.length);
     final line = Paint()
       ..color = grid
       ..strokeWidth = 1;
@@ -242,15 +256,16 @@ class _TrendPainter extends CustomPainter {
       final height = amount == 0 ? 2.0 : (size.height - 10) * amount / maxValue;
       final left = i * (barWidth + gap);
       final rect = Rect.fromLTWH(left, baseline - height, barWidth, height);
-      canvas.drawRRect(
-          RRect.fromRectAndRadius(rect, const Radius.circular(3)),
+      canvas.drawRRect(RRect.fromRectAndRadius(rect, const Radius.circular(3)),
           Paint()..color = color.withValues(alpha: amount == 0 ? .10 : .82));
     }
   }
 
   @override
   bool shouldRepaint(covariant _TrendPainter oldDelegate) =>
-      oldDelegate.values != values || oldDelegate.color != color || oldDelegate.grid != grid;
+      oldDelegate.values != values ||
+      oldDelegate.color != color ||
+      oldDelegate.grid != grid;
 }
 
 class _HeatmapPainter extends CustomPainter {
@@ -285,21 +300,26 @@ class _HeatmapPainter extends CustomPainter {
         final day = first.add(Duration(days: column * 7 + row));
         final count = counts[DateTime(day.year, day.month, day.day)] ?? 0;
         final opacity = maxCount == 0 ? .08 : .13 + .82 * count / maxCount;
-        final rect = Rect.fromLTWH(offsetX + column * (cell + gap),
-            row * (cell + gap), cell, cell);
-        canvas.drawRRect(RRect.fromRectAndRadius(rect, const Radius.circular(3)),
-            Paint()..color = count == 0 ? empty : color.withValues(alpha: opacity));
+        final rect = Rect.fromLTWH(
+            offsetX + column * (cell + gap), row * (cell + gap), cell, cell);
+        canvas.drawRRect(
+            RRect.fromRectAndRadius(rect, const Radius.circular(3)),
+            Paint()
+              ..color = count == 0 ? empty : color.withValues(alpha: opacity));
       }
     }
   }
 
   @override
   bool shouldRepaint(covariant _HeatmapPainter oldDelegate) =>
-      oldDelegate.counts != counts || oldDelegate.startDate != startDate || oldDelegate.color != color;
+      oldDelegate.counts != counts ||
+      oldDelegate.startDate != startDate ||
+      oldDelegate.color != color;
 }
 
 class _Distribution extends StatelessWidget {
-  const _Distribution({required this.controller, required this.values, required this.total});
+  const _Distribution(
+      {required this.controller, required this.values, required this.total});
 
   final WorkspaceController controller;
   final Map<String, int> values;
@@ -322,29 +342,30 @@ class _Distribution extends StatelessWidget {
                   track: tokens.border))),
       const SizedBox(width: 22),
       Expanded(
-          child: Wrap(
-              spacing: 18,
-              runSpacing: 10,
-              children: [
-            for (final entry in ordered)
-              Row(mainAxisSize: MainAxisSize.min, children: [
-                Container(
-                    width: 8,
-                    height: 8,
-                    decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: Color(controller.colorValueForList(entry.key)))),
-                const SizedBox(width: 6),
-                Text('${entry.key}  ${((entry.value / total) * 100).round()}%',
-                    style: TextStyle(color: tokens.textSecondary, fontSize: 11)),
-              ]),
-          ])),
+          child: Wrap(spacing: 18, runSpacing: 10, children: [
+        for (final entry in ordered)
+          Row(mainAxisSize: MainAxisSize.min, children: [
+            Container(
+                width: 8,
+                height: 8,
+                decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Color(controller.colorValueForList(entry.key)))),
+            const SizedBox(width: 6),
+            Text('${entry.key}  ${((entry.value / total) * 100).round()}%',
+                style: TextStyle(color: tokens.textSecondary, fontSize: 11)),
+          ]),
+      ])),
     ]);
   }
 }
 
 class _DonutPainter extends CustomPainter {
-  const _DonutPainter({required this.entries, required this.total, required this.colorFor, required this.track});
+  const _DonutPainter(
+      {required this.entries,
+      required this.total,
+      required this.colorFor,
+      required this.track});
 
   final List<MapEntry<String, int>> entries;
   final int total;
@@ -356,17 +377,33 @@ class _DonutPainter extends CustomPainter {
     final stroke = math.min(13.0, size.shortestSide / 5);
     final rect = Offset.zero & size;
     final inset = rect.deflate(stroke / 2);
-    canvas.drawArc(inset, -math.pi / 2, math.pi * 2, false,
-        Paint()..color = track..style = PaintingStyle.stroke..strokeWidth = stroke);
+    canvas.drawArc(
+        inset,
+        -math.pi / 2,
+        math.pi * 2,
+        false,
+        Paint()
+          ..color = track
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = stroke);
     var start = -math.pi / 2;
     for (final entry in entries) {
       final sweep = math.pi * 2 * entry.value / total;
-      canvas.drawArc(inset, start, sweep, false,
-          Paint()..color = colorFor(entry.key)..style = PaintingStyle.stroke..strokeWidth = stroke..strokeCap = StrokeCap.butt);
+      canvas.drawArc(
+          inset,
+          start,
+          sweep,
+          false,
+          Paint()
+            ..color = colorFor(entry.key)
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = stroke
+            ..strokeCap = StrokeCap.butt);
       start += sweep;
     }
   }
 
   @override
-  bool shouldRepaint(covariant _DonutPainter oldDelegate) => oldDelegate.entries != entries || oldDelegate.total != total;
+  bool shouldRepaint(covariant _DonutPainter oldDelegate) =>
+      oldDelegate.entries != entries || oldDelegate.total != total;
 }

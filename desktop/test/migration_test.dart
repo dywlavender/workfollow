@@ -57,6 +57,91 @@ void main() {
         TaskItem.fromMigration(bundle.tasks.single).bucket, TaskBucket.later);
   });
 
+  test('keeps version 1 snapshots readable after the local schema grows', () {
+    final bundle = MigrationBundle.fromJson({
+      'format': localSnapshotFormat,
+      'schemaVersion': 1,
+      'lists': [
+        {'id': null, 'name': '收集箱', 'sortOrder': 0, 'protected': true},
+      ],
+      'folders': [],
+      'tasks': [
+        {
+          'id': 'old-task',
+          'title': '旧快照任务',
+          'status': 'TODO',
+          'priority': 'NONE',
+          'listName': '收集箱',
+          'tags': [],
+        },
+      ],
+      'notes': [],
+    });
+
+    expect(bundle.schemaVersion, 1);
+    expect(bundle.habits, isEmpty);
+    expect(TaskItem.fromMigration(bundle.tasks.single).focusCount, 0);
+    expect(bundle.lists.single.pinned, isFalse);
+  });
+
+  test('round trips habits, list pinning and focus counts', () {
+    final bundle = MigrationBundle(
+      format: localSnapshotFormat,
+      schemaVersion: migrationSchemaVersion,
+      exportedAt: null,
+      lists: const [
+        MigrationListRecord(
+          id: 'list-work',
+          name: '工作',
+          sortOrder: 0,
+          protectedList: false,
+          color: '#22AA66',
+          pinned: true,
+        ),
+      ],
+      folders: const [],
+      tasks: const [
+        MigrationTaskRecord(
+          id: 'focus-task',
+          title: '专注任务',
+          description: null,
+          contentJson: null,
+          status: 'TODO',
+          priority: 'HIGH',
+          dueAt: null,
+          dueEndAt: null,
+          reminderAt: null,
+          recurrenceType: 'NONE',
+          recurrenceConfig: null,
+          listName: '工作',
+          tags: const [],
+          focusCount: 3,
+          createdAt: null,
+          updatedAt: null,
+          completedAt: null,
+        ),
+      ],
+      notes: const [],
+      habits: const [
+        MigrationHabitRecord(
+          id: 'habit-01',
+          name: '阅读',
+          icon: 'book',
+          color: '#5865C8',
+          schedule: [1, 3, 5],
+          records: ['2026-09-11'],
+        ),
+      ],
+    );
+
+    final restored = MigrationBundle.fromJson(bundle.toJson());
+    expect(restored.lists.single.pinned, isTrue);
+    expect(restored.lists.single.color, '#22AA66');
+    expect(restored.tasks.single.focusCount, 3);
+    expect(restored.habits.single.schedule, [1, 3, 5]);
+    expect(restored.habits.single.records, ['2026-09-11']);
+  });
+
   test('rejects an unknown format or schema version', () {
     expect(
       () => MigrationBundle.fromJson({

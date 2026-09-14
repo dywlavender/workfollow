@@ -16,6 +16,7 @@ class StatsSnapshot {
     required this.overdue,
     required this.active,
     required this.totalCompleted,
+    required this.focusSessions,
   });
 
   final DateTime startDate;
@@ -29,6 +30,7 @@ class StatsSnapshot {
   final int overdue;
   final int active;
   final int totalCompleted;
+  final int focusSessions;
 
   bool get hasCompletion => totalCompleted > 0;
 }
@@ -51,13 +53,17 @@ class StatsAggregator {
     final completionByDay = <DateTime, int>{};
     final completedByList = <String, int>{};
     var totalCompleted = 0;
+    var focusSessions = 0;
 
     for (final task in tasks) {
-      if (task.deletedAt != null || !task.completed) continue;
+      if (task.deletedAt != null) continue;
+      focusSessions += task.focusCount;
+      if (!task.completed) continue;
       final completedAt = localDateTimeFromStorage(task.completedAt);
       if (completedAt == null) continue;
       totalCompleted += 1;
-      final day = DateTime(completedAt.year, completedAt.month, completedAt.day);
+      final day =
+          DateTime(completedAt.year, completedAt.month, completedAt.day);
       if (!day.isBefore(heatmapStart) && day.isBefore(trendEnd)) {
         completionByDay[day] = (completionByDay[day] ?? 0) + 1;
       }
@@ -65,14 +71,17 @@ class StatsAggregator {
         final index = day.difference(trendStart).inDays;
         if (index >= 0 && index < daily.length) daily[index] += 1;
       }
-      completedByList[task.listName] = (completedByList[task.listName] ?? 0) + 1;
+      completedByList[task.listName] =
+          (completedByList[task.listName] ?? 0) + 1;
     }
 
     final weekStart = today.subtract(Duration(days: today.weekday - 1));
     final weekCompleted = tasks.where((task) {
       if (task.deletedAt != null || !task.completed) return false;
       final value = localDateTimeFromStorage(task.completedAt);
-      return value != null && !value.isBefore(weekStart) && value.isBefore(trendEnd);
+      return value != null &&
+          !value.isBefore(weekStart) &&
+          value.isBefore(trendEnd);
     }).length;
     final overdue = tasks.where((task) {
       if (task.deletedAt != null || task.completed) return false;
@@ -80,7 +89,8 @@ class StatsAggregator {
       if (due == null) return false;
       return DateTime(due.year, due.month, due.day).isBefore(today);
     }).length;
-    final active = tasks.where((task) => task.deletedAt == null && !task.completed).length;
+    final active =
+        tasks.where((task) => task.deletedAt == null && !task.completed).length;
     final todayCompleted = completionByDay[today] ?? 0;
 
     return StatsSnapshot(
@@ -95,6 +105,7 @@ class StatsAggregator {
       overdue: overdue,
       active: active,
       totalCompleted: totalCompleted,
+      focusSessions: focusSessions,
     );
   }
 }

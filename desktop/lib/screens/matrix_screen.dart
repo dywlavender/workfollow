@@ -20,7 +20,8 @@ class _MatrixScreenState extends State<MatrixScreen> {
   @override
   Widget build(BuildContext context) {
     final tokens = WorkFollowTheme.of(context);
-    final tasks = widget.controller.matrixTasks(includeCompleted: showCompleted);
+    final tasks =
+        widget.controller.matrixTasks(includeCompleted: showCompleted);
     final groups = <MatrixQuadrant, List<TaskItem>>{
       for (final quadrant in MatrixQuadrant.values) quadrant: [],
     };
@@ -44,7 +45,8 @@ class _MatrixScreenState extends State<MatrixScreen> {
                   trailing: FilterChip(
                     label: const Text('仅看未完成'),
                     selected: !showCompleted,
-                    onSelected: (value) => setState(() => showCompleted = !value),
+                    onSelected: (value) =>
+                        setState(() => showCompleted = !value),
                     visualDensity: VisualDensity.compact,
                   ),
                 ),
@@ -91,29 +93,37 @@ class _QuadrantCard extends StatelessWidget {
   final MatrixQuadrant quadrant;
   final List<TaskItem> tasks;
 
-  ({String title, String subtitle, IconData icon, Color Function(WorkFollowTheme) color})
-      get _meta => switch (quadrant) {
-            MatrixQuadrant.doNow => (
-                title: '立即做',
-                subtitle: '重要 · 紧急',
-                icon: Icons.priority_high_rounded,
-                color: (t) => t.danger),
-            MatrixQuadrant.schedule => (
-                title: '安排做',
-                subtitle: '重要 · 不紧急',
-                icon: Icons.event_available_outlined,
-                color: (t) => t.accent),
-            MatrixQuadrant.delegate => (
-                title: '委托看',
-                subtitle: '紧急 · 不重要',
-                icon: Icons.forward_to_inbox_outlined,
-                color: (t) => t.warning),
-            MatrixQuadrant.later => (
-                title: '缓一缓',
-                subtitle: '不重要 · 不紧急',
-                icon: Icons.snooze_outlined,
-                color: (t) => t.textTertiary),
-          };
+  ({
+    String title,
+    String subtitle,
+    IconData icon,
+    Color Function(WorkFollowTheme) color
+  }) get _meta => switch (quadrant) {
+        MatrixQuadrant.doNow => (
+            title: '立即做',
+            subtitle: '重要 · 紧急',
+            icon: Icons.priority_high_rounded,
+            color: (t) => t.danger
+          ),
+        MatrixQuadrant.schedule => (
+            title: '安排做',
+            subtitle: '重要 · 不紧急',
+            icon: Icons.event_available_outlined,
+            color: (t) => t.accent
+          ),
+        MatrixQuadrant.delegate => (
+            title: '委托看',
+            subtitle: '紧急 · 不重要',
+            icon: Icons.forward_to_inbox_outlined,
+            color: (t) => t.warning
+          ),
+        MatrixQuadrant.later => (
+            title: '缓一缓',
+            subtitle: '不重要 · 不紧急',
+            icon: Icons.snooze_outlined,
+            color: (t) => t.textTertiary
+          ),
+      };
 
   @override
   Widget build(BuildContext context) {
@@ -129,12 +139,16 @@ class _QuadrantCard extends StatelessWidget {
         return AnimatedContainer(
           duration: const Duration(milliseconds: 140),
           decoration: BoxDecoration(
-              color: highlighted ? color.withValues(alpha: .08) : tokens.content,
+              color:
+                  highlighted ? color.withValues(alpha: .08) : tokens.content,
               borderRadius: BorderRadius.circular(14),
               border: Border.all(
-                  color: highlighted ? color.withValues(alpha: .55) : tokens.border)),
+                  color: highlighted
+                      ? color.withValues(alpha: .55)
+                      : tokens.border)),
           padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          child:
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Row(children: [
               Container(
                   width: 29,
@@ -145,16 +159,19 @@ class _QuadrantCard extends StatelessWidget {
                   child: Icon(meta.icon, size: 16, color: color)),
               const SizedBox(width: 9),
               Expanded(
-                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(meta.title,
-                    style: TextStyle(
-                        color: tokens.textPrimary,
-                        fontSize: 13.5,
-                        fontWeight: FontWeight.w800)),
-                const SizedBox(height: 2),
-                Text(meta.subtitle,
-                    style: TextStyle(color: tokens.textTertiary, fontSize: 10.5)),
-              ])),
+                  child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                    Text(meta.title,
+                        style: TextStyle(
+                            color: tokens.textPrimary,
+                            fontSize: 13.5,
+                            fontWeight: FontWeight.w800)),
+                    const SizedBox(height: 2),
+                    Text(meta.subtitle,
+                        style: TextStyle(
+                            color: tokens.textTertiary, fontSize: 10.5)),
+                  ])),
               Text('${tasks.length}',
                   style: TextStyle(
                       color: color, fontSize: 12, fontWeight: FontWeight.w800)),
@@ -164,14 +181,16 @@ class _QuadrantCard extends StatelessWidget {
               Expanded(
                   child: Center(
                       child: Text('把任务拖到这里',
-                          style: TextStyle(color: tokens.textTertiary, fontSize: 11))))
+                          style: TextStyle(
+                              color: tokens.textTertiary, fontSize: 11))))
             else
               Expanded(
                   child: ListView.separated(
                       physics: const ClampingScrollPhysics(),
                       itemCount: tasks.length,
                       separatorBuilder: (_, __) => Divider(
-                          height: 1, color: tokens.border.withValues(alpha: .7)),
+                          height: 1,
+                          color: tokens.border.withValues(alpha: .7)),
                       itemBuilder: (context, index) => _MatrixTaskRow(
                           task: tasks[index], controller: controller))),
           ]),
@@ -205,7 +224,8 @@ class _MatrixTaskRow extends StatelessWidget {
               child: Text(task.title,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(color: tokens.textPrimary, fontSize: 11.5)))),
+                  style:
+                      TextStyle(color: tokens.textPrimary, fontSize: 11.5)))),
       childWhenDragging: Opacity(opacity: .3, child: _body(tokens, listColor)),
       child: _body(tokens, listColor),
     );
@@ -228,10 +248,14 @@ class _MatrixTaskRow extends StatelessWidget {
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                        color: task.completed ? tokens.textTertiary : tokens.textPrimary,
+                        color: task.completed
+                            ? tokens.textTertiary
+                            : tokens.textPrimary,
                         fontSize: 11.5,
                         fontWeight: FontWeight.w500,
-                        decoration: task.completed ? TextDecoration.lineThrough : null))),
+                        decoration: task.completed
+                            ? TextDecoration.lineThrough
+                            : null))),
             if (task.priority != TaskPriority.none)
               Icon(Icons.flag_rounded,
                   size: 13,

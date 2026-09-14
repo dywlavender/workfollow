@@ -1,14 +1,15 @@
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:workfollow_personal/models/habit.dart';
 import 'package:workfollow_personal/models/task.dart';
 import 'package:workfollow_personal/state/workspace_controller.dart';
 
 void main() {
-  test('smart capture applies title, date, list, tag and priority together', () {
+  test('smart capture applies title, date, list, tag and priority together',
+      () {
     final controller = WorkspaceController(seedData: false);
     final now = DateTime.now();
-    expect(
-        controller.addTaskFromSmartInput('明早9点 #工作 @个人 !!!准备评审', now: now),
+    expect(controller.addTaskFromSmartInput('明早9点 #工作 @个人 !!!准备评审', now: now),
         isTrue);
     final task = controller.tasks.single;
     expect(task.title, '准备评审');
@@ -37,13 +38,14 @@ void main() {
     final before = controller.colorValueForList('工作');
     expect(controller.updateListColor('工作', '#22AA66'), isTrue);
     expect(controller.colorValueForList('工作'), isNot(before));
-    expect(controller.snapshot.lists
-        .firstWhere((list) => list.name == '工作')
-        .color, '#22AA66');
+    expect(
+        controller.snapshot.lists.firstWhere((list) => list.name == '工作').color,
+        '#22AA66');
     controller.dispose();
   });
 
-  test('unknown smart-entry lists are kept in the title instead of created', () {
+  test('unknown smart-entry lists are kept in the title instead of created',
+      () {
     final controller = WorkspaceController(seedData: false);
     expect(controller.addTaskFromSmartInput('整理资料 @不存在清单'), isTrue);
     expect(controller.tasks.single.title, '整理资料 @不存在清单');
@@ -59,18 +61,81 @@ void main() {
     controller.dispose();
   });
 
-  test('matrix projection classifies urgency and preserves priority on today drop', () {
+  test(
+      'matrix projection classifies urgency and preserves priority on today drop',
+      () {
     final controller = WorkspaceController(seedData: false);
     controller.addTask('季度计划', listName: '工作');
     final id = controller.tasks.single.id;
     controller.updateTaskPriority(id, TaskPriority.high);
     final later = DateTime.now().add(const Duration(days: 12));
     controller.updateTaskDue(id, later, hasTime: false);
-    expect(controller.matrixQuadrantFor(controller.tasks.single), MatrixQuadrant.schedule);
+    expect(controller.matrixQuadrantFor(controller.tasks.single),
+        MatrixQuadrant.schedule);
     controller.moveTaskToMatrix(id, MatrixQuadrant.doNow);
     final task = controller.tasks.single;
     expect(task.priority, TaskPriority.high);
     expect(localDateTimeFromStorage(task.dueAt)!.day, DateTime.now().day);
+    controller.dispose();
+  });
+
+  test('board grouping and drops project back to task fields', () {
+    final controller = WorkspaceController(seedData: false);
+    controller.addTask('准备评审', listName: '工作');
+    final id = controller.tasks.single.id;
+    controller.updateTaskPriority(id, TaskPriority.high);
+    expect(
+        controller.boardColumnFor(
+            controller.tasks.single, BoardGroupBy.priority),
+        'high');
+
+    controller.selectBoard(listName: '工作');
+    expect(controller.view, WorkspaceView.board);
+    expect(controller.viewTitle, '看板 · 工作');
+    expect(controller.boardTasks(), hasLength(1));
+
+    controller.moveTaskToBoardColumn(id, BoardGroupBy.priority, 'medium');
+    expect(controller.tasks.single.priority, TaskPriority.medium);
+
+    controller.moveTaskToBoardColumn(id, BoardGroupBy.date, 'unscheduled');
+    expect(controller.tasks.single.dueAt, isNull);
+    expect(
+        controller.boardColumnFor(controller.tasks.single, BoardGroupBy.date),
+        'unscheduled');
+    controller.dispose();
+  });
+
+  test('habits keep local date records, streaks and focus counts', () {
+    final controller = WorkspaceController(seedData: false);
+    final habitId = controller.addHabit('晨跑',
+        icon: 'activity',
+        color: '#22AA66',
+        schedule: const {1, 2, 3, 4, 5, 6, 7})!;
+    expect(habitId, 'habit-01');
+    final today = DateTime.now();
+    expect(controller.toggleHabit(habitId, day: today), isTrue);
+    expect(controller.isHabitComplete(habitId, today), isTrue);
+    expect(controller.habitStreak(habitId, from: today), 1);
+    expect(controller.snapshot.habits.single.records,
+        contains(habitDateKey(today)));
+
+    controller.addTask('专注写作');
+    final taskId = controller.tasks.single.id;
+    controller.recordFocusSession(taskId);
+    expect(controller.tasks.single.focusCount, 1);
+    expect(controller.snapshot.tasks.single.focusCount, 1);
+    controller.dispose();
+  });
+
+  test('pinned lists stay ordered and survive renaming', () {
+    final controller = WorkspaceController(seedData: false);
+    controller.toggleListPinned('个人');
+    controller.updateListColor('个人', '#22AA66');
+    expect(controller.orderedLists.first.name, '个人');
+    expect(controller.orderedLists.first.color, '#22AA66');
+    expect(controller.renameList('个人', '生活'), isTrue);
+    expect(controller.orderedLists.first.name, '生活');
+    expect(controller.orderedLists.first.pinned, isTrue);
     controller.dispose();
   });
 }

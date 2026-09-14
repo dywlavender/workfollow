@@ -91,7 +91,8 @@ class HomeScreen extends StatelessWidget {
                 if (controller.shouldShowWeeklyReview) ...[
                   _WeeklyReviewCard(
                       summary: controller.weeklyReview,
-                      onOpen: () => controller.selectView(WorkspaceView.completed)),
+                      onOpen: () =>
+                          controller.selectView(WorkspaceView.completed)),
                   const SizedBox(height: 14),
                 ],
                 Row(
@@ -284,7 +285,8 @@ class _WeeklyReviewCard extends StatelessWidget {
                 size: 17, color: tokens.accent)),
         const SizedBox(width: 11),
         Expanded(
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            child:
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text('上周回顾',
               style: TextStyle(
                   color: tokens.textPrimary,

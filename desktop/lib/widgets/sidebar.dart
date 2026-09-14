@@ -113,7 +113,7 @@ class AppRail extends StatelessWidget {
                               onPressed: () =>
                                   _showAddListDialog(context, controller)),
                         ),
-                        ...controller.lists
+                        ...controller.orderedLists
                             .where((list) => list.name != '收集箱')
                             .map((list) => _TaskListItem(
                                   controller: controller,
@@ -226,6 +226,21 @@ class AppRail extends StatelessWidget {
                               controller.selectView(WorkspaceView.matrix),
                         ),
                         _RailItem(
+                          label: '看板',
+                          icon: Icons.view_column_outlined,
+                          count: controller.countFor(WorkspaceView.board),
+                          selected: controller.view == WorkspaceView.board,
+                          onTap: () =>
+                              controller.selectView(WorkspaceView.board),
+                        ),
+                        _RailItem(
+                          label: '习惯',
+                          icon: Icons.repeat_rounded,
+                          selected: controller.view == WorkspaceView.habits,
+                          onTap: () =>
+                              controller.selectView(WorkspaceView.habits),
+                        ),
+                        _RailItem(
                           label: '统计',
                           icon: Icons.insights_outlined,
                           selected: controller.view == WorkspaceView.stats,
@@ -305,6 +320,18 @@ class _IconRail extends StatelessWidget {
             icon: Icons.grid_view_rounded,
             selected: controller.view == WorkspaceView.matrix,
             onPressed: () => controller.selectView(WorkspaceView.matrix),
+          ),
+          _IconRailButton(
+            label: '看板',
+            icon: Icons.view_column_outlined,
+            selected: controller.view == WorkspaceView.board,
+            onPressed: () => controller.selectView(WorkspaceView.board),
+          ),
+          _IconRailButton(
+            label: '习惯',
+            icon: Icons.repeat_rounded,
+            selected: controller.view == WorkspaceView.habits,
+            onPressed: () => controller.selectView(WorkspaceView.habits),
           ),
           _IconRailButton(
             label: '统计',
@@ -796,9 +823,9 @@ class _TaskListItemState extends State<_TaskListItem> {
       onExit: (_) => setState(() => hovering = false),
       // Dropping a dragged task row here moves it into this list.
       child: DragTarget<String>(
-        onWillAccept: (data) => data != null,
-        onAccept: (taskId) =>
-            widget.controller.moveTaskToList(taskId, widget.list.name),
+        onWillAcceptWithDetails: (details) => details.data.isNotEmpty,
+        onAcceptWithDetails: (details) => widget.controller
+            .moveTaskToList(details.data, widget.list.name),
         builder: (context, candidateData, rejectedData) {
           final dragActive = candidateData.isNotEmpty;
           return GestureDetector(
@@ -875,19 +902,26 @@ class _TaskListItemState extends State<_TaskListItem> {
       color: tokens.overlay,
       position: RelativeRect.fromLTRB(
           anchor.dx, anchor.dy, anchor.dx + 1, anchor.dy + 1),
-      items: const [
-        PopupMenuItem(value: 'rename', child: Text('重命名')),
-        PopupMenuItem(value: 'color', child: Text('选择颜色')),
+      items: [
         PopupMenuItem(
+            value: 'pin', child: Text(widget.list.pinned ? '取消置顶' : '置顶清单')),
+        const PopupMenuItem(value: 'rename', child: Text('重命名')),
+        const PopupMenuItem(value: 'color', child: Text('选择颜色')),
+        const PopupMenuItem(value: 'board', child: Text('在看板中打开')),
+        const PopupMenuItem(
             value: 'delete',
             child: Text('删除清单', style: TextStyle(color: Colors.redAccent))),
       ],
     );
     if (!context.mounted) return;
-    if (choice == 'rename') {
+    if (choice == 'pin') {
+      widget.controller.toggleListPinned(widget.list.name);
+    } else if (choice == 'rename') {
       await _renameList(context);
     } else if (choice == 'color') {
       await _pickListColor(context);
+    } else if (choice == 'board') {
+      widget.controller.selectBoard(listName: widget.list.name);
     } else if (choice == 'delete') {
       await _confirmDelete(context);
     }

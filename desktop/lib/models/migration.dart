@@ -2,7 +2,12 @@ import 'dart:convert';
 
 const personalMigrationFormat = 'workfollow-personal-migration';
 const localSnapshotFormat = 'workfollow-local-snapshot';
-const migrationSchemaVersion = 1;
+
+/// Version 2 adds optional list pinning, habits and task focus counts. The
+/// reader below still accepts version 1 so snapshots exported by an older
+/// desktop build remain importable.
+const migrationSchemaVersion = 2;
+const supportedMigrationSchemaVersions = <int>{1, migrationSchemaVersion};
 
 class MigrationFormatException implements Exception {
   const MigrationFormatException(this.message);
@@ -20,6 +25,7 @@ class MigrationListRecord {
     required this.sortOrder,
     required this.protectedList,
     this.color,
+    this.pinned = false,
   });
 
   final String? id;
@@ -31,6 +37,7 @@ class MigrationListRecord {
   /// not contain this field; the desktop client derives a stable palette
   /// colour from the list name when it is absent.
   final String? color;
+  final bool pinned;
 
   factory MigrationListRecord.fromJson(Map<String, dynamic> json) {
     return MigrationListRecord(
@@ -39,6 +46,7 @@ class MigrationListRecord {
       sortOrder: _intValue(json['sortOrder']),
       protectedList: _boolValue(json['protected']),
       color: _nullableString(json['color']),
+      pinned: _boolValue(json['pinned']),
     );
   }
 
@@ -48,6 +56,7 @@ class MigrationListRecord {
         'sortOrder': sortOrder,
         'protected': protectedList,
         if (color != null && color!.trim().isNotEmpty) 'color': color,
+        if (pinned) 'pinned': true,
       };
 }
 
@@ -133,6 +142,7 @@ class MigrationTaskRecord {
     this.subtasks = const [],
     this.sourceNoteId,
     this.attachments = const [],
+    this.focusCount = 0,
     required this.createdAt,
     required this.updatedAt,
     required this.completedAt,
@@ -157,6 +167,7 @@ class MigrationTaskRecord {
   final List<MigrationSubtaskRecord> subtasks;
   final String? sourceNoteId;
   final List<String> attachments;
+  final int focusCount;
   final String? createdAt;
   final String? updatedAt;
   final String? completedAt;
@@ -183,6 +194,7 @@ class MigrationTaskRecord {
       subtasks: _records(json['subtasks'], MigrationSubtaskRecord.fromJson),
       sourceNoteId: _nullableString(json['sourceNoteId']),
       attachments: _stringList(json['attachments']),
+      focusCount: _intValue(json['focusCount']),
       createdAt: _nullableString(json['createdAt']),
       updatedAt: _nullableString(json['updatedAt']),
       completedAt: _nullableString(json['completedAt']),
@@ -209,10 +221,60 @@ class MigrationTaskRecord {
         'subtasks': subtasks.map((item) => item.toJson()).toList(),
         'sourceNoteId': sourceNoteId,
         'attachments': attachments,
+        if (focusCount > 0) 'focusCount': focusCount,
         'createdAt': createdAt,
         'updatedAt': updatedAt,
         'completedAt': completedAt,
         'deletedAt': deletedAt,
+      };
+}
+
+/// A small, local-only habit record. Dates in [records] use the user's local
+/// calendar (`yyyy-MM-dd`) rather than UTC instants, so a check-in never moves
+/// to the previous day around midnight.
+class MigrationHabitRecord {
+  const MigrationHabitRecord({
+    required this.id,
+    required this.name,
+    required this.icon,
+    this.color,
+    required this.schedule,
+    required this.records,
+    this.createdAt,
+    this.updatedAt,
+  });
+
+  final String id;
+  final String name;
+  final String icon;
+  final String? color;
+  final List<int> schedule;
+  final List<String> records;
+  final String? createdAt;
+  final String? updatedAt;
+
+  factory MigrationHabitRecord.fromJson(Map<String, dynamic> json) {
+    return MigrationHabitRecord(
+      id: _requiredString(json, 'id'),
+      name: _requiredString(json, 'name'),
+      icon: _stringValue(json['icon'], fallback: 'check'),
+      color: _nullableString(json['color']),
+      schedule: _intList(json['schedule']),
+      records: _stringList(json['records']),
+      createdAt: _nullableString(json['createdAt']),
+      updatedAt: _nullableString(json['updatedAt']),
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'name': name,
+        'icon': icon,
+        if (color != null && color!.trim().isNotEmpty) 'color': color,
+        'schedule': schedule,
+        'records': records,
+        'createdAt': createdAt,
+        'updatedAt': updatedAt,
       };
 }
 
@@ -285,6 +347,7 @@ class MigrationBundle {
     required this.tasks,
     required this.notes,
     this.embeddedFiles = const {},
+    this.habits = const [],
   });
 
   final String format;
@@ -295,6 +358,7 @@ class MigrationBundle {
   final List<MigrationTaskRecord> tasks;
   final List<MigrationNoteRecord> notes;
   final Map<String, String> embeddedFiles;
+  final List<MigrationHabitRecord> habits;
 
   bool get isLocalSnapshot => format == localSnapshotFormat;
 
@@ -312,7 +376,7 @@ class MigrationBundle {
       throw const MigrationFormatException('这不是打勾个人版的数据文件。');
     }
     final schemaVersion = _intValue(json['schemaVersion']);
-    if (schemaVersion != migrationSchemaVersion) {
+    if (!supportedMigrationSchemaVersions.contains(schemaVersion)) {
       throw MigrationFormatException('暂不支持数据文件版本 $schemaVersion，请先升级 macOS 版。');
     }
 
@@ -324,6 +388,7 @@ class MigrationBundle {
       folders: _records(json['folders'], MigrationFolderRecord.fromJson),
       tasks: _records(json['tasks'], MigrationTaskRecord.fromJson),
       notes: _records(json['notes'], MigrationNoteRecord.fromJson),
+      habits: _records(json['habits'], MigrationHabitRecord.fromJson),
       embeddedFiles: {
         for (final entry in (_mapValue(json['attachmentFiles']) ?? {}).entries)
           if (entry.value is String) entry.key: entry.value as String
@@ -339,6 +404,8 @@ class MigrationBundle {
         'folders': folders.map((item) => item.toJson()).toList(),
         'tasks': tasks.map((item) => item.toJson()).toList(),
         'notes': notes.map((item) => item.toJson()).toList(),
+        if (habits.isNotEmpty)
+          'habits': habits.map((item) => item.toJson()).toList(),
         if (embeddedFiles.isNotEmpty) 'attachmentFiles': embeddedFiles,
       };
 }
@@ -393,4 +460,13 @@ Map<String, dynamic>? _mapValue(Object? value) {
 List<String> _stringList(Object? value) {
   if (value is! List) return <String>[];
   return value.whereType<Object>().map((item) => item.toString()).toList();
+}
+
+List<int> _intList(Object? value) {
+  if (value is! List) return <int>[];
+  return value
+      .whereType<Object>()
+      .map((item) => item is num ? item.toInt() : int.tryParse(item.toString()))
+      .whereType<int>()
+      .toList();
 }

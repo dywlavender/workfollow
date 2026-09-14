@@ -8,6 +8,8 @@ import 'package:flutter_quill/flutter_quill.dart'
     show FlutterQuillLocalizations;
 
 import 'screens/calendar_screen.dart';
+import 'screens/board_screen.dart';
+import 'screens/habits_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/matrix_screen.dart';
 import 'screens/notes_screen.dart';
@@ -16,12 +18,14 @@ import 'screens/today_screen.dart';
 import 'screens/trash_screen.dart';
 import 'services/preferences_store.dart';
 import 'services/local_workspace_store.dart';
+import 'services/focus_timer.dart';
 import 'state/workspace_controller.dart';
 import 'theme/workfollow_theme.dart';
 import 'widgets/app_icon_button.dart';
 import 'widgets/command_palette.dart';
 import 'widgets/sidebar.dart';
 import 'widgets/settings_panel.dart';
+import 'widgets/focus_timer_dialog.dart';
 
 class WorkFollowApp extends StatefulWidget {
   const WorkFollowApp(
@@ -150,6 +154,7 @@ const _captureChannel = MethodChannel('workfollow/capture');
 
 class _WorkFollowShellState extends State<WorkFollowShell> {
   late final WorkspaceController controller;
+  late final FocusTimerController focusTimer;
   late final AppLifecycleListener _lifecycleListener;
   Timer? _dateRefresh;
   bool sidebarCollapsed = false;
@@ -164,6 +169,17 @@ class _WorkFollowShellState extends State<WorkFollowShell> {
         seedData: widget.demoMode,
         store:
             LocalWorkspaceStore(namespace: widget.demoMode ? 'preview' : null));
+    focusTimer = FocusTimerController(
+      scheduleNotification: controller.scheduleFocusNotification,
+      cancelNotification: controller.cancelFocusNotification,
+      onCompleted: (taskId) {
+        controller.recordFocusSession(taskId);
+        if (mounted) {
+          ScaffoldMessenger.of(context)
+              .showSnackBar(const SnackBar(content: Text('这一轮专注完成了，休息一下吧。')));
+        }
+      },
+    );
     if (!widget.demoMode) controller.selectView(WorkspaceView.today);
     if (!widget.demoMode)
       _dateRefresh = Timer.periodic(
@@ -188,9 +204,8 @@ class _WorkFollowShellState extends State<WorkFollowShell> {
         // Native quick capture is deliberately independent of the main
         // window's current page and returns an explicit acknowledgement so
         // the native panel only clears text after a successful write request.
-        final accepted = controller.addTaskFromSmartInput(
-            call.arguments as String,
-            preferInbox: true);
+        final accepted = controller
+            .addTaskFromSmartInput(call.arguments as String, preferInbox: true);
         await controller.waitForPendingSaves();
         return accepted && controller.saveStatus == SaveStatus.saved;
       }
@@ -224,6 +239,12 @@ class _WorkFollowShellState extends State<WorkFollowShell> {
         controller.selectView(WorkspaceView.stats);
       case 'goMatrix':
         controller.selectView(WorkspaceView.matrix);
+      case 'goBoard':
+        controller.selectView(WorkspaceView.board);
+      case 'goHabits':
+        controller.selectView(WorkspaceView.habits);
+      case 'startPomodoro':
+        _openFocusTimer();
     }
   }
 
@@ -243,6 +264,7 @@ class _WorkFollowShellState extends State<WorkFollowShell> {
     _dateRefresh?.cancel();
     _lifecycleListener.dispose();
     controller.removeListener(_observeAction);
+    focusTimer.dispose();
     controller.dispose();
     super.dispose();
   }
@@ -287,6 +309,12 @@ class _WorkFollowShellState extends State<WorkFollowShell> {
         onSetDensity: widget.onSetDensity);
   }
 
+  Future<void> _openFocusTimer() => showFocusTimerDialog(
+        context: context,
+        timer: focusTimer,
+        controller: controller,
+      );
+
   Future<void> _openFilters() async {
     final tokens = WorkFollowTheme.of(context);
     final destination = await showModalBottomSheet<WorkspaceView>(
@@ -313,6 +341,8 @@ class _WorkFollowShellState extends State<WorkFollowShell> {
               (WorkspaceView.all, '全部任务'),
               (WorkspaceView.completed, '已完成'),
               (WorkspaceView.matrix, '四象限'),
+              (WorkspaceView.board, '看板'),
+              (WorkspaceView.habits, '习惯'),
               (WorkspaceView.stats, '统计'),
             ])
               ListTile(
@@ -376,6 +406,10 @@ class _WorkFollowShellState extends State<WorkFollowShell> {
                 NotesIntent(),
             SingleActivator(LogicalKeyboardKey.digit6, meta: true):
                 MatrixIntent(),
+            SingleActivator(LogicalKeyboardKey.digit7, meta: true):
+                BoardIntent(),
+            SingleActivator(LogicalKeyboardKey.digit8, meta: true):
+                HabitsIntent(),
           },
           child: Actions(
             actions: <Type, Action<Intent>>{
@@ -419,6 +453,14 @@ class _WorkFollowShellState extends State<WorkFollowShell> {
                 controller.selectView(WorkspaceView.matrix);
                 return null;
               }),
+              BoardIntent: CallbackAction<Intent>(onInvoke: (_) {
+                controller.selectView(WorkspaceView.board);
+                return null;
+              }),
+              HabitsIntent: CallbackAction<Intent>(onInvoke: (_) {
+                controller.selectView(WorkspaceView.habits);
+                return null;
+              }),
             },
             child: Scaffold(
               backgroundColor: tokens.canvas,
@@ -458,6 +500,8 @@ class _WorkFollowShellState extends State<WorkFollowShell> {
                                     () => sidebarCollapsed = !sidebarCollapsed),
                                 onSearch: _openCommandPalette,
                                 onOpenFilters: _openFilters,
+                                focusTimer: focusTimer,
+                                onOpenFocusTimer: _openFocusTimer,
                                 onNewTask:
                                     controller.view == WorkspaceView.notes
                                         ? _newNote
@@ -502,6 +546,8 @@ class _AppToolbar extends StatelessWidget {
       required this.onToggleSidebar,
       required this.onSearch,
       required this.onOpenFilters,
+      required this.focusTimer,
+      required this.onOpenFocusTimer,
       required this.onNewTask});
 
   final String title;
@@ -509,6 +555,8 @@ class _AppToolbar extends StatelessWidget {
   final VoidCallback onToggleSidebar;
   final VoidCallback onSearch;
   final VoidCallback onOpenFilters;
+  final FocusTimerController focusTimer;
+  final VoidCallback onOpenFocusTimer;
   final VoidCallback onNewTask;
 
   @override
@@ -539,6 +587,8 @@ class _AppToolbar extends StatelessWidget {
           const Spacer(),
           _ToolbarSearch(onPressed: onSearch),
           const SizedBox(width: 7),
+          FocusTimerButton(timer: focusTimer, onTap: onOpenFocusTimer),
+          const SizedBox(width: 6),
           Material(
               color: tokens.accent,
               borderRadius: BorderRadius.circular(8),
@@ -644,6 +694,10 @@ class _WorkspaceContent extends StatelessWidget {
           StatsScreen(key: const ValueKey('stats'), controller: controller),
         WorkspaceView.matrix =>
           MatrixScreen(key: const ValueKey('matrix'), controller: controller),
+        WorkspaceView.board =>
+          BoardScreen(key: const ValueKey('board'), controller: controller),
+        WorkspaceView.habits =>
+          HabitsScreen(key: const ValueKey('habits'), controller: controller),
         _ => TodayScreen(
             key: ValueKey(controller.view),
             controller: controller,
@@ -732,4 +786,12 @@ class NotesIntent extends Intent {
 
 class MatrixIntent extends Intent {
   const MatrixIntent();
+}
+
+class BoardIntent extends Intent {
+  const BoardIntent();
+}
+
+class HabitsIntent extends Intent {
+  const HabitsIntent();
 }

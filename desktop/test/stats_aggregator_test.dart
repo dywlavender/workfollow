@@ -3,12 +3,15 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:workfollow_personal/models/task.dart';
 import 'package:workfollow_personal/services/stats_aggregator.dart';
 
-TaskItem task(String id, {
+TaskItem task(
+  String id, {
   bool completed = false,
   String? completedAt,
   String listName = '工作',
   String? dueAt,
-}) => TaskItem(
+  int focusCount = 0,
+}) =>
+    TaskItem(
       id: id,
       title: id,
       listName: listName,
@@ -16,16 +19,19 @@ TaskItem task(String id, {
       completed: completed,
       completedAt: completedAt,
       dueAt: dueAt,
+      focusCount: focusCount,
     );
 
 void main() {
   test('aggregates real completion timestamps by day and list', () {
     final now = DateTime(2026, 9, 13, 16);
     final snapshot = StatsAggregator.aggregate([
-      task('a', completed: true, completedAt: '2026-09-13T08:00:00'),
-      task('b', completed: true, completedAt: '2026-09-12T08:00:00', listName: '个人'),
+      task('a',
+          completed: true, completedAt: '2026-09-13T08:00:00', focusCount: 2),
+      task('b',
+          completed: true, completedAt: '2026-09-12T08:00:00', listName: '个人'),
       task('c', completed: true),
-      task('d', dueAt: '2026-09-10T09:00:00'),
+      task('d', dueAt: '2026-09-10T09:00:00', focusCount: 1),
     ], now: now);
 
     expect(snapshot.todayCompleted, 1);
@@ -34,14 +40,15 @@ void main() {
     expect(snapshot.overdue, 1);
     expect(snapshot.active, 1);
     expect(snapshot.totalCompleted, 2);
+    expect(snapshot.focusSessions, 3);
     expect(snapshot.dailyCompletionCounts.last, 1);
   });
 
   test('empty data produces an explicit empty trend', () {
-    final snapshot = StatsAggregator.aggregate(const [], now: DateTime(2026, 9, 13));
+    final snapshot =
+        StatsAggregator.aggregate(const [], now: DateTime(2026, 9, 13));
     expect(snapshot.hasCompletion, isFalse);
     expect(snapshot.dailyCompletionCounts, everyElement(0));
     expect(snapshot.completionByDay, isEmpty);
   });
 }
-

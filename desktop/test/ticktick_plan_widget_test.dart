@@ -33,6 +33,38 @@ void main() {
     expect(find.text('缓一缓'), findsOneWidget);
   });
 
+  testWidgets('board, habits and week calendar views are reachable',
+      (tester) async {
+    tester.view.physicalSize = const Size(1280, 820);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+    await tester.pumpWidget(const WorkFollowApp(demoMode: true));
+    await tester.pumpAndSettle();
+
+    await tester.ensureVisible(find.text('看板'));
+    await tester.tap(find.text('看板').last);
+    await tester.pumpAndSettle();
+    expect(find.text('优先级'), findsOneWidget);
+    expect(find.text('高优先级'), findsOneWidget);
+
+    await tester.ensureVisible(find.text('习惯'));
+    await tester.tap(find.text('习惯').last);
+    await tester.pumpAndSettle();
+    expect(find.text('晨间拉伸'), findsOneWidget);
+    expect(find.text('连续'), findsNWidgets(2));
+
+    await tester.ensureVisible(find.text('日历'));
+    await tester.tap(find.text('日历').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('周'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('周一'), findsOneWidget);
+    expect(find.textContaining('周日'), findsOneWidget);
+  });
+
   testWidgets('dismissing a date chip keeps it as title text and unscheduled',
       (tester) async {
     final controller = WorkspaceController(seedData: false);
@@ -40,7 +72,8 @@ void main() {
     await tester.pumpWidget(MaterialApp(
         theme: WorkFollowThemeData.light(),
         home: Scaffold(body: QuickAddField(controller: controller))));
-    await tester.enterText(find.byKey(const ValueKey('quick-add-title')), '周五理账');
+    await tester.enterText(
+        find.byKey(const ValueKey('quick-add-title')), '周五理账');
     await tester.pump();
     expect(find.byType(InputChip), findsOneWidget);
     await tester.tap(find.byIcon(Icons.close));

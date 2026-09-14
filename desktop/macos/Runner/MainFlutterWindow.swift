@@ -114,6 +114,7 @@ class MainFlutterWindow: NSWindow {
   // MARK: - Menu bar status item
 
   private var statusItem: NSStatusItem?
+  private var menuCommandTarget: MenuCommandTarget?
 
   private func installStatusItem(captureController: CapturePanelController) {
     let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
@@ -129,6 +130,14 @@ class MainFlutterWindow: NSWindow {
                                   keyEquivalent: "")
     captureEntry.target = captureController
     menu.addItem(captureEntry)
+    if let commandTarget = menuCommandTarget {
+      let focusEntry = NSMenuItem(title: "开始专注",
+                                   action: #selector(MenuCommandTarget.sendCommand(_:)),
+                                   keyEquivalent: "")
+      focusEntry.target = commandTarget
+      focusEntry.representedObject = "startPomodoro"
+      menu.addItem(focusEntry)
+    }
     let openEntry = NSMenuItem(title: "显示打勾",
                                action: #selector(MainFlutterWindow.showMainWindow),
                                keyEquivalent: "")
@@ -203,6 +212,7 @@ class MainFlutterWindow: NSWindow {
   private func installMainMenu(channelName: String, messenger: FlutterBinaryMessenger) {
     let channel = FlutterMethodChannel(name: channelName, binaryMessenger: messenger)
     let commandTarget = MenuCommandTarget(channel: channel)
+    self.menuCommandTarget = commandTarget
     objc_setAssociatedObject(self, &MenuCommandTarget.associatedKey, commandTarget,
                              .OBJC_ASSOCIATION_RETAIN)
 
@@ -248,7 +258,7 @@ class MainFlutterWindow: NSWindow {
                      action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
     editMenuItem.submenu = editMenu
 
-    // View menu: the destinations users reach with Cmd-1..5.
+    // View menu: the destinations users reach with Cmd-1..8.
     let viewMenuItem = NSMenuItem()
     mainMenu.addItem(viewMenuItem)
     let viewMenu = NSMenu(title: "视图")
@@ -258,7 +268,10 @@ class MainFlutterWindow: NSWindow {
     viewMenu.addCommand("日历", key: "4", command: "goCalendar", target: commandTarget)
     viewMenu.addCommand("笔记", key: "5", command: "goNotes", target: commandTarget)
     viewMenu.addCommand("四象限", key: "6", command: "goMatrix", target: commandTarget)
+    viewMenu.addCommand("看板", key: "7", command: "goBoard", target: commandTarget)
+    viewMenu.addCommand("习惯", key: "8", command: "goHabits", target: commandTarget)
     viewMenu.addCommand("统计", key: "", command: "goStats", target: commandTarget)
+    viewMenu.addCommand("开始专注", key: "", command: "startPomodoro", target: commandTarget)
     viewMenu.addItem(.separator())
     viewMenu.addCommand("显示或隐藏侧栏", key: "\\", command: "toggleSidebar",
                         target: commandTarget)

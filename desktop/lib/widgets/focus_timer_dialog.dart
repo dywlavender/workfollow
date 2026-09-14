@@ -1,0 +1,234 @@
+import 'package:flutter/material.dart';
+
+import '../services/focus_timer.dart';
+import '../state/workspace_controller.dart';
+import '../theme/workfollow_theme.dart';
+
+Future<void> showFocusTimerDialog({
+  required BuildContext context,
+  required FocusTimerController timer,
+  required WorkspaceController controller,
+}) {
+  return showDialog<void>(
+    context: context,
+    builder: (_) => _FocusTimerDialog(timer: timer, controller: controller),
+  );
+}
+
+class _FocusTimerDialog extends StatefulWidget {
+  const _FocusTimerDialog({required this.timer, required this.controller});
+
+  final FocusTimerController timer;
+  final WorkspaceController controller;
+
+  @override
+  State<_FocusTimerDialog> createState() => _FocusTimerDialogState();
+}
+
+class _FocusTimerDialogState extends State<_FocusTimerDialog> {
+  @override
+  void initState() {
+    super.initState();
+    widget.timer.addListener(_changed);
+    if (!widget.timer.hasStarted) {
+      widget.timer.setTask(widget.controller.selectedTaskId);
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.timer.removeListener(_changed);
+    super.dispose();
+  }
+
+  void _changed() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = WorkFollowTheme.of(context);
+    final timer = widget.timer;
+    final activeTasks =
+        widget.controller.activeTasks.where((task) => !task.completed).toList();
+    final selectedTaskId =
+        activeTasks.any((task) => task.id == timer.taskId) ? timer.taskId : '';
+    return AlertDialog(
+      title: Row(children: [
+        Icon(Icons.timer_outlined, size: 20, color: tokens.accent),
+        const SizedBox(width: 8),
+        const Text('专注'),
+        const Spacer(),
+        if (timer.isRunning)
+          Text('进行中',
+              style: TextStyle(
+                  color: tokens.success,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700)),
+      ]),
+      content: SizedBox(
+        width: 390,
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(vertical: 24),
+            decoration: BoxDecoration(
+                color: tokens.accentFaint,
+                borderRadius: BorderRadius.circular(14)),
+            child: Column(children: [
+              Text(timer.display,
+                  style: TextStyle(
+                      color: tokens.textPrimary,
+                      fontSize: 42,
+                      fontWeight: FontWeight.w300,
+                      letterSpacing: 1.2)),
+              const SizedBox(height: 5),
+              Text(timer.isRunning ? '专注中，保持这个节奏' : '选择时长，开始一轮专注',
+                  style: TextStyle(color: tokens.textTertiary, fontSize: 11)),
+            ]),
+          ),
+          const SizedBox(height: 15),
+          Align(
+              alignment: Alignment.centerLeft,
+              child: Text('时长',
+                  style: TextStyle(
+                      color: tokens.textSecondary,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700))),
+          const SizedBox(height: 7),
+          Row(children: [
+            for (final minutes in const [15, 25, 45])
+              Expanded(
+                child: Padding(
+                  padding: EdgeInsets.only(right: minutes == 45 ? 0 : 7),
+                  child: OutlinedButton(
+                    onPressed: timer.isRunning
+                        ? null
+                        : () => timer.setDuration(minutes),
+                    style: OutlinedButton.styleFrom(
+                      backgroundColor: timer.durationMinutes == minutes
+                          ? tokens.accentSoft
+                          : Colors.transparent,
+                      side: BorderSide(
+                          color: timer.durationMinutes == minutes
+                              ? tokens.accent
+                              : tokens.border),
+                      foregroundColor: timer.durationMinutes == minutes
+                          ? tokens.accent
+                          : tokens.textSecondary,
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                    ),
+                    child: Text('$minutes 分',
+                        style: const TextStyle(
+                            fontSize: 11, fontWeight: FontWeight.w700)),
+                  ),
+                ),
+              ),
+          ]),
+          const SizedBox(height: 15),
+          Align(
+              alignment: Alignment.centerLeft,
+              child: Text('关联任务（可选）',
+                  style: TextStyle(
+                      color: tokens.textSecondary,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700))),
+          const SizedBox(height: 4),
+          DropdownButtonFormField<String>(
+            initialValue: selectedTaskId,
+            isExpanded: true,
+            decoration: InputDecoration(
+                isDense: true,
+                filled: true,
+                fillColor: tokens.overlay,
+                border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: BorderSide(color: tokens.border))),
+            items: [
+              const DropdownMenuItem<String>(value: '', child: Text('不关联任务')),
+              for (final task in activeTasks)
+                DropdownMenuItem<String>(
+                    value: task.id,
+                    child: Text(task.title,
+                        maxLines: 1, overflow: TextOverflow.ellipsis)),
+            ],
+            onChanged: timer.isRunning
+                ? null
+                : (value) =>
+                    timer.setTask(value?.isEmpty == true ? null : value),
+          ),
+          const SizedBox(height: 14),
+          if (timer.hasStarted &&
+              !timer.isRunning &&
+              timer.remaining > Duration.zero)
+            Align(
+                alignment: Alignment.centerLeft,
+                child: Text('暂停后可以继续这一轮，重置会清除当前进度。',
+                    style:
+                        TextStyle(color: tokens.textTertiary, fontSize: 10.5))),
+        ]),
+      ),
+      actions: [
+        if (timer.hasStarted)
+          TextButton(
+              onPressed: timer.reset,
+              child: Text('重置', style: TextStyle(color: tokens.textTertiary))),
+        if (timer.isRunning)
+          FilledButton.tonal(onPressed: timer.pause, child: const Text('暂停'))
+        else
+          FilledButton.icon(
+              onPressed: timer.start,
+              icon: const Icon(Icons.play_arrow_rounded, size: 17),
+              label: Text(timer.hasStarted ? '继续' : '开始')),
+        TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('关闭')),
+      ],
+    );
+  }
+}
+
+/// Small toolbar affordance; the label changes while a focus session runs so
+/// the timer remains discoverable without opening the dialog.
+class FocusTimerButton extends StatelessWidget {
+  const FocusTimerButton({super.key, required this.timer, required this.onTap});
+
+  final FocusTimerController timer;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = WorkFollowTheme.of(context);
+    return AnimatedBuilder(
+      animation: timer,
+      builder: (context, _) => Tooltip(
+        message: '专注计时器',
+        child: Material(
+          color: timer.isRunning ? tokens.accentSoft : Colors.transparent,
+          borderRadius: BorderRadius.circular(8),
+          child: InkWell(
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(8),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                Icon(Icons.timer_outlined,
+                    size: 16,
+                    color:
+                        timer.isRunning ? tokens.accent : tokens.textTertiary),
+                if (timer.isRunning) ...[
+                  const SizedBox(width: 5),
+                  Text(timer.display,
+                      style: TextStyle(
+                          color: tokens.accent,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w800)),
+                ],
+              ]),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
