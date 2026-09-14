@@ -184,6 +184,65 @@ void main() {
     controller.dispose();
   });
 
+  test(
+      'DOCUMENT-001 setContent keeps a structured document and plain projection',
+      () {
+    final controller = WorkspaceController(seedData: false);
+    addTearDown(controller.dispose);
+    controller.addTask('文档任务');
+    final id = controller.tasks.single.id;
+    final content = {
+      'type': 'doc',
+      'content': [
+        {
+          'type': 'paragraph',
+          'content': [
+            {
+              'type': 'text',
+              'text': '带链接',
+              'marks': [
+                {
+                  'type': 'link',
+                  'attrs': {'href': 'https://example.com'}
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      'quillDelta': [
+        {
+          'insert': '带链接',
+          'attributes': {'link': 'https://example.com'}
+        },
+        {'insert': '\n'}
+      ],
+    };
+
+    final result = controller.taskActions.setContent(id, content, '带链接');
+    expect(result.success, isTrue);
+    expect(controller.tasks.single.contentJson?['quillDelta'], isNotNull);
+    expect(controller.tasks.single.description, '带链接');
+    expect(controller.tasks.single.note, '带链接');
+    expect(result.undo, isNotNull);
+  });
+
+  test('DOCUMENT-002 source note relation is an action-scoped mutation', () {
+    final controller = WorkspaceController(seedData: false);
+    addTearDown(controller.dispose);
+    controller.addTask('关联任务');
+    final id = controller.tasks.single.id;
+    final noteId = controller.addNote(title: '关联原文');
+
+    final linked = controller.taskActions.setSourceNote(id, noteId);
+    expect(linked.success, isTrue);
+    expect(controller.tasks.single.sourceNoteId, noteId);
+    expect(controller.sourceNoteFor(id)?.id, noteId);
+
+    expect(controller.taskActions.undo().success, isTrue);
+    expect(controller.tasks.single.sourceNoteId, isNull);
+  });
+
   test('DATE-009 DEADLINE-003 REPEAT-004 clear actions remove their property',
       () {
     final controller = WorkspaceController(seedData: false);

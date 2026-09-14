@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
@@ -901,6 +902,40 @@ class WorkspaceController extends ChangeNotifier {
           return TaskActionResult.failure('unchanged', '备注没有变化');
         }
         return _taskResult(id, undo: _undoTaskSnapshot(before));
+      case 'setContent':
+        final (id, document, plainText) =
+            payload as (String, Map<String, dynamic>, String);
+        final before = _taskById(id);
+        if (before == null) {
+          return TaskActionResult.failure('missing-task', '任务不存在');
+        }
+        updateTaskRichContent(id, document, plainText);
+        final after = _taskById(id);
+        if (after == before ||
+            jsonEncode(after?.contentJson) == jsonEncode(before.contentJson) &&
+                (after?.description ?? after?.note ?? '') ==
+                    (before.description ?? before.note ?? '')) {
+          return TaskActionResult.failure('unchanged', '正文没有变化');
+        }
+        return _taskResult(id, undo: _undoTaskSnapshot(before));
+      case 'setSourceNote':
+        final (id, noteId) = payload as (String, String?);
+        final before = _taskById(id);
+        if (before == null) {
+          return TaskActionResult.failure('missing-task', '任务不存在');
+        }
+        if (noteId != null &&
+            _notes
+                .every((note) => note.id != noteId || note.deletedAt != null)) {
+          return TaskActionResult.failure('missing-note', '关联笔记不存在');
+        }
+        if (before.sourceNoteId == noteId) {
+          return TaskActionResult.failure('unchanged', '关联笔记没有变化');
+        }
+        updateTaskSourceNote(id, noteId);
+        return _taskResult(id,
+            message: noteId == null ? '已取消关联笔记' : '已关联笔记',
+            undo: _undoTaskSnapshot(before));
       case 'complete':
         final id = payload as String;
         final task = _taskById(id);
@@ -2609,6 +2644,52 @@ class WorkspaceController extends ChangeNotifier {
     );
   }
 
+  /// Persists the Quill document and its plain-text projection together. The
+  /// old description mutator remains for compatibility with imported data and
+  /// older callers, but the task editor uses this method exclusively.
+  void updateTaskRichContent(
+      String id, Map<String, dynamic> document, String rawPlainText) {
+    final plainText = rawPlainText.trimRight();
+    _replaceTask(
+      id,
+      (task) => plainText.trim().isEmpty
+          ? task.copyWith(
+              contentJson: document,
+              note: null,
+              clearNote: true,
+              description: null,
+              clearDescription: true,
+              updatedAt: DateTime.now().toIso8601String(),
+            )
+          : task.copyWith(
+              contentJson: document,
+              note: plainText,
+              description: plainText,
+              updatedAt: DateTime.now().toIso8601String(),
+            ),
+    );
+  }
+
+  bool updateTaskSourceNote(String id, String? noteId) {
+    if (noteId != null &&
+        _notes.every((note) => note.id != noteId || note.deletedAt != null)) {
+      return false;
+    }
+    return _replaceTask(
+      id,
+      (task) => noteId == null
+          ? task.copyWith(
+              sourceNoteId: null,
+              clearSourceNoteId: true,
+              updatedAt: DateTime.now().toIso8601String(),
+            )
+          : task.copyWith(
+              sourceNoteId: noteId,
+              updatedAt: DateTime.now().toIso8601String(),
+            ),
+    );
+  }
+
   void updateTaskPriority(String id, TaskPriority priority) {
     _replaceTask(
         id,
@@ -2813,10 +2894,16 @@ class WorkspaceController extends ChangeNotifier {
   }
 
   Future<void> attachFileToTask(String taskId) async {
+    await pickTaskAttachment(taskId);
+  }
+
+  /// Picks and copies an attachment for a task, returning the workspace-local
+  /// filename so a document editor can insert a matching attachment block.
+  Future<String?> pickTaskAttachment(String taskId) async {
     final picked = await _store.platform.pickAttachmentFile();
-    if (picked == null || picked.trim().isEmpty) return;
+    if (picked == null || picked.trim().isEmpty) return null;
     final copied = await _copyIntoAttachments(picked);
-    if (copied == null) return;
+    if (copied == null) return null;
     _replaceTask(
       taskId,
       (task) => task.copyWith(
@@ -2824,6 +2911,7 @@ class WorkspaceController extends ChangeNotifier {
         updatedAt: DateTime.now().toIso8601String(),
       ),
     );
+    return copied;
   }
 
   Future<String?> _copyIntoAttachments(String sourcePath) async {

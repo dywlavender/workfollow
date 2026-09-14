@@ -402,7 +402,7 @@ void main() {
   });
 
   testWidgets(
-      'ARCH-008 task inspector keeps secondary properties behind a clean toggle',
+      'ARCH-008 task inspector keeps task capabilities in the document workbench',
       (tester) async {
     tester.view.physicalSize = const Size(1280, 820);
     tester.view.devicePixelRatio = 1;
@@ -419,15 +419,11 @@ void main() {
     await tester.tap(find.text('准备季度产品评审演示文稿').last);
     await tester.pumpAndSettle();
 
-    expect(find.byTooltip('显示更多属性'), findsOneWidget);
-    expect(find.text('子任务'), findsNothing);
-    expect(find.text('附件与关联'), findsNothing);
-
-    await tester.tap(find.byTooltip('显示更多属性'));
-    await tester.pumpAndSettle();
-    expect(find.byTooltip('收起更多属性'), findsOneWidget);
+    expect(find.byKey(const ValueKey('task-advanced-toggle')), findsNothing);
+    expect(find.text('显示更多属性'), findsNothing);
+    expect(find.byKey(const ValueKey('task-document-editor')), findsOneWidget);
     expect(find.text('子任务'), findsOneWidget);
-    expect(find.text('附件与关联'), findsOneWidget);
+    expect(find.byKey(const ValueKey('task-deadline')), findsOneWidget);
   });
 
   testWidgets(
@@ -460,8 +456,9 @@ void main() {
       'task-reminder',
       'task-repeat',
       'task-priority',
+      'task-deadline',
       'task-list-footer',
-      'task-advanced-toggle',
+      'task-format-toggle',
       'task-more-actions',
       'save-status-indicator',
     ]) {
@@ -482,14 +479,15 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('task-more-actions')));
     await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('menu-option-toggle-details')),
-        findsOneWidget);
+    expect(
+        find.byKey(const ValueKey('menu-option-add-subtask')), findsOneWidget);
+    expect(find.byKey(const ValueKey('menu-option-tags')), findsOneWidget);
+    expect(
+        find.byKey(const ValueKey('menu-option-attachment')), findsOneWidget);
+    expect(find.byKey(const ValueKey('menu-option-relation')), findsOneWidget);
     expect(find.byKey(const ValueKey('menu-option-copy')), findsOneWidget);
     expect(find.byKey(const ValueKey('menu-option-duplicate')), findsOneWidget);
     expect(find.byKey(const ValueKey('menu-option-delete')), findsOneWidget);
-    await tester.tap(find.byKey(const ValueKey('menu-option-toggle-details')));
-    await tester.pumpAndSettle();
-    expect(find.text('附件与关联'), findsOneWidget);
   });
 
   testWidgets(
@@ -534,9 +532,9 @@ void main() {
     await tester.tap(find.text('确定').last);
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(const ValueKey('task-advanced-toggle')));
+    await tester.tap(find.byKey(const ValueKey('task-more-actions')));
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('task-tags')));
+    await tester.tap(find.byKey(const ValueKey('menu-option-tags')));
     await tester.pumpAndSettle();
     expect(find.text('标签').last, findsOneWidget);
     expect(find.text('用逗号分隔，例如 工作，重要'), findsOneWidget);

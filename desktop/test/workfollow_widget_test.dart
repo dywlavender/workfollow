@@ -295,16 +295,18 @@ void main() {
     await tester.pumpAndSettle();
 
     final title = find.byKey(const ValueKey('task-title-editor'));
-    final description = find.byKey(const ValueKey('task-description-editor'));
+    final document = find.byKey(const ValueKey('task-document-editor'));
     expect(title, findsOneWidget);
-    expect(description, findsOneWidget);
+    expect(document, findsOneWidget);
 
     await tester.enterText(title, '本地编辑后的任务');
-    await tester.enterText(description, '本地编辑后的描述');
+    final editor = tester.widget<quill.QuillEditor>(document).controller;
+    editor.replaceText(0, editor.document.length - 1, '本地编辑后的描述',
+        const TextSelection.collapsed(offset: 8));
     await tester.pump();
 
     expect(find.text('本地编辑后的任务'), findsWidgets);
-    expect(tester.widget<TextField>(description).controller?.text, '本地编辑后的描述');
+    expect(editor.document.toPlainText().trimRight(), '本地编辑后的描述');
   });
 
   testWidgets('edits and favorites a note', (tester) async {

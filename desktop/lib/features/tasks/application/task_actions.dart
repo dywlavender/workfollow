@@ -92,6 +92,14 @@ abstract class TaskActions {
 
   TaskActionResult setDescription(String id, String description);
 
+  /// Replaces the task's structured document and its plain-text projection in
+  /// one action. The projection keeps list/search/legacy exports compatible
+  /// while `contentJson` remains the editor's source of truth.
+  TaskActionResult setContent(
+      String id, Map<String, dynamic> contentJson, String plainText);
+
+  TaskActionResult setSourceNote(String id, String? noteId);
+
   TaskActionResult complete(String id);
 
   TaskActionResult restore(String id);
@@ -154,6 +162,15 @@ class CallbackTaskActions implements TaskActions {
   @override
   TaskActionResult setDescription(String id, String description) =>
       dispatch('setDescription', (id, description));
+
+  @override
+  TaskActionResult setContent(
+          String id, Map<String, dynamic> contentJson, String plainText) =>
+      dispatch('setContent', (id, contentJson, plainText));
+
+  @override
+  TaskActionResult setSourceNote(String id, String? noteId) =>
+      dispatch('setSourceNote', (id, noteId));
 
   @override
   TaskActionResult complete(String id) => dispatch('complete', id);
