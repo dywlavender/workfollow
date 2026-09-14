@@ -3,9 +3,9 @@ import 'package:flutter_quill/flutter_quill.dart' as quill;
 
 import '../theme/workfollow_theme.dart';
 
-/// Compact task-document formatting strip. It intentionally exposes only the
-/// high-frequency actions that fit a desktop task editor; the full Notes
-/// toolbar remains independent.
+/// Compact document formatting strip shared by task and note editors. It
+/// intentionally exposes only the high-frequency actions that fit a desktop
+/// workbench; document-specific actions stay in the surrounding surface.
 class TaskEditorToolbar extends StatelessWidget {
   const TaskEditorToolbar({
     super.key,

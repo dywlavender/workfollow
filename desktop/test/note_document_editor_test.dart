@@ -1,0 +1,163 @@
+import 'dart:convert';
+
+import 'package:flutter/material.dart';
+import 'package:flutter_quill/flutter_quill.dart' as quill;
+import 'package:flutter_test/flutter_test.dart';
+
+import 'package:workfollow_personal/state/workspace_controller.dart';
+import 'package:workfollow_personal/theme/workfollow_theme.dart';
+import 'package:workfollow_personal/widgets/note_document_editor.dart';
+
+Widget _surface(WorkspaceController controller) {
+  final note = controller.notes.single;
+  return MaterialApp(
+    theme: WorkFollowThemeData.light(),
+    home: Scaffold(
+      body: NoteDocumentEditor(note: note, controller: controller),
+    ),
+  );
+}
+
+void main() {
+  testWidgets('note editor starts clean and reveals the shared compact toolbar',
+      (tester) async {
+    final controller = WorkspaceController(seedData: false);
+    addTearDown(controller.dispose);
+    controller.addNote(title: '编辑笔记');
+
+    await tester.pumpWidget(_surface(controller));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('note-body-editor')), findsOneWidget);
+    expect(find.byKey(const ValueKey('note-format-toggle')), findsOneWidget);
+    expect(find.byType(quill.QuillSimpleToolbar), findsNothing);
+    expect(find.byKey(const ValueKey('task-editor-toolbar')), findsNothing);
+
+    await tester.tap(find.byKey(const ValueKey('note-body-editor')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('task-editor-toolbar')), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('note-format-toggle')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('task-editor-toolbar')), findsNothing);
+  });
+
+  testWidgets('note slash menu only exposes note-safe document actions',
+      (tester) async {
+    final controller = WorkspaceController(seedData: false);
+    addTearDown(controller.dispose);
+    controller.addNote(title: '斜杠笔记');
+
+    await tester.pumpWidget(_surface(controller));
+    await tester.pumpAndSettle();
+    final editor = tester
+        .widget<quill.QuillEditor>(
+            find.byKey(const ValueKey('note-body-editor')))
+        .controller;
+    await tester.tap(find.byKey(const ValueKey('note-body-editor')));
+    editor.replaceText(0, editor.document.length - 1, '/',
+        const TextSelection.collapsed(offset: 1));
+    await tester.pump();
+
+    expect(find.byKey(const ValueKey('task-slash-menu')), findsOneWidget);
+    expect(find.byKey(const ValueKey('task-slash-option-heading-1')),
+        findsOneWidget);
+    expect(find.byKey(const ValueKey('task-slash-option-checklist')),
+        findsOneWidget);
+    expect(find.byKey(const ValueKey('task-slash-option-attachment')),
+        findsOneWidget);
+    expect(
+        find.byKey(const ValueKey('task-slash-option-subtask')), findsNothing);
+    expect(
+        find.byKey(const ValueKey('task-slash-option-relation')), findsNothing);
+
+    await tester.tap(find.byKey(const ValueKey('task-slash-option-heading-1')));
+    await tester.pump();
+    final delta = editor.document.toDelta().toJson();
+    expect(
+        delta.any(
+            (op) => op['attributes'] is Map && op['attributes']['header'] == 1),
+        isTrue);
+    expect(controller.notes.single.contentJson?['quillDelta'], isNotNull);
+  });
+
+  testWidgets('shared note toolbar formats text and inserts links',
+      (tester) async {
+    final controller = WorkspaceController(seedData: false);
+    addTearDown(controller.dispose);
+    controller.addNote(title: '格式笔记');
+
+    await tester.pumpWidget(_surface(controller));
+    await tester.pumpAndSettle();
+    final editor = tester
+        .widget<quill.QuillEditor>(
+            find.byKey(const ValueKey('note-body-editor')))
+        .controller;
+    editor.replaceText(0, editor.document.length - 1, '加粗文字',
+        const TextSelection.collapsed(offset: 4));
+    editor.updateSelection(const TextSelection(baseOffset: 0, extentOffset: 4),
+        quill.ChangeSource.local);
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('note-format-toggle')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('task-editor-toolbar')), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('task-format-bold')));
+    await tester.pump();
+    expect(
+        editor.document.toDelta().toJson().any((op) =>
+            op['attributes'] is Map && op['attributes']['bold'] == true),
+        isTrue);
+
+    await tester.tap(find.byKey(const ValueKey('task-format-link')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('note-link-input')), findsOneWidget);
+    await tester.enterText(
+        find.byKey(const ValueKey('note-link-input')), 'https://example.com');
+    await tester.tap(find.byKey(const ValueKey('note-link-apply')));
+    await tester.pumpAndSettle();
+    expect(
+        editor.document.toDelta().toJson().any((op) =>
+            op['attributes'] is Map &&
+            op['attributes']['link'] == 'https://example.com'),
+        isTrue);
+  });
+
+  testWidgets('note document blocks and selected text task creation persist',
+      (tester) async {
+    final controller = WorkspaceController(seedData: false);
+    addTearDown(controller.dispose);
+    controller.addNote(title: '行动笔记');
+
+    await tester.pumpWidget(_surface(controller));
+    await tester.pumpAndSettle();
+    final editor = tester
+        .widget<quill.QuillEditor>(
+            find.byKey(const ValueKey('note-body-editor')))
+        .controller;
+    editor.replaceText(
+      0,
+      editor.document.length - 1,
+      quill.BlockEmbed(
+          'workfollow-block',
+          jsonEncode({
+            'type': 'attachment',
+            'attrs': {'name': '设计稿.pdf', 'localFile': '设计稿.pdf'},
+          })),
+      const TextSelection.collapsed(offset: 1),
+    );
+    await tester.pump();
+    expect(
+        find.byKey(const ValueKey('note-attachment-设计稿.pdf')), findsOneWidget);
+    expect(controller.notes.single.contentJson?['quillDelta'], isNotNull);
+
+    editor.replaceText(0, editor.document.length - 1, '整理会议纪要',
+        const TextSelection.collapsed(offset: 6));
+    editor.updateSelection(const TextSelection(baseOffset: 0, extentOffset: 6),
+        quill.ChangeSource.local);
+    await tester.pump();
+    await tester
+        .tap(find.byKey(const ValueKey('generate-task-from-selection')));
+    await tester.pump();
+    expect(controller.tasks.single.title, '整理会议纪要');
+    expect(controller.tasks.single.sourceNoteId, controller.notes.single.id);
+  });
+}

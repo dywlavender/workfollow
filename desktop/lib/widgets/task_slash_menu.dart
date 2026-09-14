@@ -66,9 +66,13 @@ extension TaskSlashActionLabel on TaskSlashAction {
 
 /// Small command palette shown when a task document line contains `/`.
 class TaskSlashMenu extends StatelessWidget {
-  const TaskSlashMenu({super.key, required this.onSelected});
+  const TaskSlashMenu({super.key, required this.onSelected, this.actions});
 
   final ValueChanged<TaskSlashAction> onSelected;
+
+  /// Optional subset used by other document surfaces such as Notes. The task
+  /// editor keeps the full menu when this is omitted.
+  final List<TaskSlashAction>? actions;
 
   static const _text = <TaskSlashAction>[
     TaskSlashAction.heading1,
@@ -91,6 +95,13 @@ class TaskSlashMenu extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tokens = WorkFollowTheme.of(context);
+    final visible = actions;
+    final textActions = visible == null
+        ? _text
+        : visible.where(_text.contains).toList(growable: false);
+    final taskActions = visible == null
+        ? _task
+        : visible.where(_task.contains).toList(growable: false);
     return Material(
       key: const ValueKey('task-slash-menu'),
       elevation: 10,
@@ -109,10 +120,14 @@ class TaskSlashMenu extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              _sectionLabel('文本结构', tokens),
-              for (final action in _text) _item(action, tokens),
-              _sectionLabel('任务能力', tokens),
-              for (final action in _task) _item(action, tokens),
+              if (textActions.isNotEmpty) ...[
+                _sectionLabel('文本结构', tokens),
+                for (final action in textActions) _item(action, tokens),
+              ],
+              if (taskActions.isNotEmpty) ...[
+                _sectionLabel(visible == null ? '任务能力' : '内容', tokens),
+                for (final action in taskActions) _item(action, tokens),
+              ],
             ],
           ),
         ),

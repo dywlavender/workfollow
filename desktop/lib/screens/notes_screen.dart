@@ -414,6 +414,7 @@ class _NotePageState extends State<_NotePage> {
                         size: 20)),
                 Builder(
                     builder: (anchor) => IconButton(
+                        key: const ValueKey('note-more-actions'),
                         tooltip: '笔记操作',
                         onPressed: () => more(anchor),
                         icon: Icon(Icons.more_horiz,
