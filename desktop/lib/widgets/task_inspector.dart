@@ -200,28 +200,37 @@ class _TaskInspectorState extends State<TaskInspector> {
   void _showActionFeedback(TaskActionResult result) {
     if (!mounted || !result.success || result.message == null) return;
     final undo = result.undo;
-    final canUndo = undo != null &&
-        undo.label == '撤销修改' &&
-        result.destination == TaskDestination.current;
-    if (result.destination == TaskDestination.current && !canUndo) return;
+    final canUndo = undo != null && undo.label == '撤销修改';
     final id = result.taskId;
+    final moved = id != null && result.destination != TaskDestination.current;
+    if (!moved && !canUndo) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
       behavior: SnackBarBehavior.floating,
       margin: const EdgeInsets.fromLTRB(16, 0, 16, 64),
-      content: Text(result.message!),
-      action: canUndo
+      content: Row(children: [
+        Expanded(child: Text(result.message!)),
+        if (canUndo)
+          TextButton(
+              onPressed: () => _runUndo(undo),
+              style: TextButton.styleFrom(
+                  foregroundColor: Colors.white,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap),
+              child: const Text('撤销')),
+      ]),
+      action: moved
           ? SnackBarAction(
-              label: '撤销',
-              onPressed: () {
-                final outcome = undo.execute();
-                if (outcome is Future<bool>) unawaited(outcome);
-              })
-          : id == null
-              ? null
-              : SnackBarAction(
-                  label: '查看任务',
-                  onPressed: () => widget.controller.openTask(id)),
+              label: '查看任务', onPressed: () => widget.controller.openTask(id))
+          : null,
     ));
+  }
+
+  void _runUndo(UndoCommand undo) {
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    final outcome = undo.execute();
+    if (outcome is Future<bool>) unawaited(outcome);
   }
 
   void _addSubtask() {
