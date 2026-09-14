@@ -39,6 +39,7 @@ class TaskDocumentEditorState extends State<TaskDocumentEditor> {
   late final quill.QuillController editor;
   late final FocusNode focus;
   late final ScrollController scroll;
+  final renderEditorKey = GlobalKey<quill.EditorState>();
   OverlayEntry? _slashOverlay;
   Offset _slashOffset = Offset.zero;
   late String serialized;
@@ -184,14 +185,30 @@ class TaskDocumentEditorState extends State<TaskDocumentEditor> {
     }
     final overlay = Overlay.maybeOf(context, rootOverlay: true);
     if (overlay == null) return;
+    final screen = MediaQuery.sizeOf(context);
+    final menuHeight = math.min(390.0, math.max(220.0, screen.height - 24));
+    Offset? caretOrigin;
+    double caretHeight = 20;
+    final renderEditor = renderEditorKey.currentState?.renderEditor;
+    if (renderEditor != null && editor.selection.isValid) {
+      try {
+        final caret = renderEditor.getLocalRectForCaret(
+            TextPosition(offset: editor.selection.extentOffset));
+        caretOrigin = renderEditor.localToGlobal(caret.topLeft);
+        caretHeight = caret.height;
+      } on Object {
+        // Layout can be between frames while the editor is first gaining
+        // focus. The editor surface fallback below still keeps the menu
+        // visible and clamped instead of dropping the command palette.
+      }
+    }
     final box = context.findRenderObject() as RenderBox?;
-    if (box != null) {
-      final origin = box.localToGlobal(Offset.zero);
-      final screen = MediaQuery.sizeOf(context);
-      final menuHeight = math.min(390.0, math.max(220.0, screen.height - 24));
-      final availableBelow = screen.height - (origin.dy + box.size.height);
+    final fallbackOrigin = box?.localToGlobal(Offset.zero);
+    final origin = caretOrigin ?? fallbackOrigin;
+    if (origin != null) {
+      final availableBelow = screen.height - (origin.dy + caretHeight);
       final rawTop = availableBelow >= menuHeight + 6
-          ? origin.dy + box.size.height + 6
+          ? origin.dy + caretHeight + 6
           : origin.dy - menuHeight - 6;
       _slashOffset = Offset(
         origin.dx.clamp(12.0, math.max(12.0, screen.width - 282.0)),
@@ -340,6 +357,7 @@ class TaskDocumentEditorState extends State<TaskDocumentEditor> {
           focusNode: focus,
           scrollController: scroll,
           config: quill.QuillEditorConfig(
+            editorKey: renderEditorKey,
             scrollable: false,
             minHeight: 235,
             padding: const EdgeInsets.only(bottom: 20),
@@ -384,6 +402,10 @@ class TaskDocumentEditorState extends State<TaskDocumentEditor> {
                         '/',
                         TextSelection.collapsed(
                             offset: editor.selection.baseOffset + 1));
+                    focus.requestFocus();
+                  },
+                  onInsertDivider: () {
+                    _insertBlock({'type': 'horizontalRule'});
                     focus.requestFocus();
                   },
                 )

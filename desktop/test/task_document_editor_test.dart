@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_quill/flutter_quill.dart' as quill;
 import 'package:flutter_test/flutter_test.dart';
@@ -71,6 +73,35 @@ void main() {
     expect(controller.tasks.single.contentJson, isNotNull);
   });
 
+  testWidgets('slash checklist is stored as document structure',
+      (tester) async {
+    final controller = WorkspaceController(seedData: false);
+    addTearDown(controller.dispose);
+    controller.addTask('检查项文档');
+    final task = controller.tasks.single;
+    await tester.pumpWidget(MaterialApp(
+      theme: WorkFollowThemeData.light(),
+      home: Scaffold(body: TaskInspector(task: task, controller: controller)),
+    ));
+    await tester.pumpAndSettle();
+    final editor = tester
+        .widget<quill.QuillEditor>(
+            find.byKey(const ValueKey('task-document-editor')))
+        .controller;
+    await tester.tap(find.byKey(const ValueKey('task-document-editor')));
+    editor.replaceText(0, editor.document.length - 1, '/',
+        const TextSelection.collapsed(offset: 1));
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('task-slash-option-checklist')));
+    await tester.pump();
+    final delta = editor.document.toDelta().toJson();
+    expect(
+        delta.any((op) =>
+            op['attributes'] is Map && op['attributes']['list'] == 'checked'),
+        isTrue);
+    expect(controller.tasks.single.contentJson?['quillDelta'], isNotNull);
+  });
+
   testWidgets('format toolbar applies inline formatting to selected text',
       (tester) async {
     final controller = WorkspaceController(seedData: false);
@@ -95,12 +126,43 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('task-format-toggle')));
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('task-editor-toolbar')), findsOneWidget);
+    expect(find.byKey(const ValueKey('task-format-divider')), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('task-format-bold')));
     await tester.pump();
     expect(
         editor.document.toDelta().toJson().any((op) =>
             op['attributes'] is Map && op['attributes']['bold'] == true),
         isTrue);
+  });
+
+  testWidgets('attachment document block is rendered from the persisted delta',
+      (tester) async {
+    final controller = WorkspaceController(seedData: false);
+    addTearDown(controller.dispose);
+    controller.addTask('附件文档');
+    final task = controller.tasks.single;
+    await tester.pumpWidget(MaterialApp(
+      theme: WorkFollowThemeData.light(),
+      home: Scaffold(body: TaskInspector(task: task, controller: controller)),
+    ));
+    await tester.pumpAndSettle();
+    final editor = tester
+        .widget<quill.QuillEditor>(
+            find.byKey(const ValueKey('task-document-editor')))
+        .controller;
+    editor.replaceText(
+      0,
+      editor.document.length - 1,
+      quill.BlockEmbed('workfollow-block', jsonEncode({
+        'type': 'attachment',
+        'attrs': {'name': '设计稿.pdf', 'localFile': '设计稿.pdf'},
+      })),
+      const TextSelection.collapsed(offset: 1),
+    );
+    await tester.pump();
+    expect(find.byKey(const ValueKey('task-attachment-设计稿.pdf')),
+        findsOneWidget);
+    expect(controller.tasks.single.contentJson?['quillDelta'], isNotNull);
   });
 
   testWidgets('slash subtask block writes real TaskSubtask records',

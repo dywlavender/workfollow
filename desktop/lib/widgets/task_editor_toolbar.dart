@@ -12,12 +12,14 @@ class TaskEditorToolbar extends StatelessWidget {
     required this.controller,
     required this.onAttach,
     required this.onInsertSlash,
+    required this.onInsertDivider,
     required this.onLink,
   });
 
   final quill.QuillController controller;
   final VoidCallback onAttach;
   final VoidCallback onInsertSlash;
+  final VoidCallback onInsertDivider;
   final VoidCallback onLink;
 
   void _format(quill.Attribute attribute) =>
@@ -115,6 +117,12 @@ class TaskEditorToolbar extends StatelessWidget {
               icon: Icons.code_rounded,
               tooltip: '代码',
               onPressed: () => _format(quill.Attribute.inlineCode),
+            ),
+            _ToolButton(
+              key: const ValueKey('task-format-divider'),
+              icon: Icons.horizontal_rule_rounded,
+              tooltip: '分割线',
+              onPressed: onInsertDivider,
             ),
             _divider(tokens),
             _ToolButton(
