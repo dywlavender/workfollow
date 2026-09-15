@@ -45,22 +45,22 @@ class AppRail extends StatelessWidget {
       ),
       child: Row(
         children: [
-          _IconRail(controller: controller),
+          _IconRail(
+            controller: controller,
+            isDark: isDark,
+            onToggleTheme: onToggleTheme,
+            onOpenSettings: onOpenSettings,
+          ),
           Container(width: 1, color: tokens.border),
           Expanded(
             child: Column(
               children: [
-                const _RailBrand(),
+                if (!controller.isTaskView) const _RailBrand(),
                 Expanded(
                   child: SingleChildScrollView(
                     padding: const EdgeInsets.fromLTRB(9, 6, 9, 12),
                     child: _ContextNavigation(controller: controller),
                   ),
-                ),
-                _RailFooter(
-                  isDark: isDark,
-                  onToggleTheme: onToggleTheme,
-                  onOpenSettings: onOpenSettings,
                 ),
               ],
             ),
@@ -426,13 +426,20 @@ class _NotesNavigation extends StatelessWidget {
 /// TickTick reference. Labels stay available through tooltips and Semantics,
 /// while the full names remain in the adjacent navigation column.
 class _IconRail extends StatelessWidget {
-  const _IconRail({required this.controller});
+  const _IconRail({
+    required this.controller,
+    required this.isDark,
+    required this.onToggleTheme,
+    required this.onOpenSettings,
+  });
 
   final WorkspaceController controller;
+  final bool isDark;
+  final VoidCallback onToggleTheme;
+  final VoidCallback onOpenSettings;
 
   @override
   Widget build(BuildContext context) {
-    final tokens = WorkFollowTheme.of(context);
     final taskRailSelected = switch (controller.view) {
       WorkspaceView.recent ||
       WorkspaceView.today ||
@@ -504,13 +511,119 @@ class _IconRail extends StatelessWidget {
             onPressed: () => controller.selectView(WorkspaceView.stats),
           ),
           const Spacer(),
-          Semantics(
-            label: '本地空间',
-            child: Padding(
-              padding: const EdgeInsets.only(bottom: 14),
-              child: Icon(Icons.computer_outlined,
-                  size: 16, color: tokens.textTertiary),
+          _IconRailFooter(
+            isDark: isDark,
+            onToggleTheme: onToggleTheme,
+            onOpenSettings: onOpenSettings,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The narrow rail owns global controls. Keeping them in this fixed column
+/// prevents the task navigation from growing a second, unrelated footer and
+/// leaves the main column dedicated to task lists, tags and filters.
+class _IconRailFooter extends StatelessWidget {
+  const _IconRailFooter({
+    required this.isDark,
+    required this.onToggleTheme,
+    required this.onOpenSettings,
+  });
+
+  final bool isDark;
+  final VoidCallback onToggleTheme;
+  final VoidCallback onOpenSettings;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = WorkFollowTheme.of(context);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(6, 8, 6, 10),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        decoration: BoxDecoration(
+          color: tokens.content.withValues(alpha: .62),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: tokens.border.withValues(alpha: .8)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Semantics(
+              label: '本地空间',
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Icon(Icons.computer_outlined,
+                    size: 16, color: tokens.textTertiary),
+              ),
             ),
+            _IconRailFooterButton(
+              icon: Icons.tune_outlined,
+              label: '设置',
+              onPressed: onOpenSettings,
+            ),
+            _IconRailFooterButton(
+              icon:
+                  isDark ? Icons.light_mode_outlined : Icons.dark_mode_outlined,
+              label: isDark ? '切换浅色' : '切换深色',
+              onPressed: onToggleTheme,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _IconRailFooterButton extends StatelessWidget {
+  const _IconRailFooterButton({
+    required this.icon,
+    required this.label,
+    required this.onPressed,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 34,
+      height: 34,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          Semantics(
+            button: true,
+            label: label,
+            child: AppIconButton(
+              key: ValueKey('rail-footer-$label'),
+              icon: icon,
+              tooltip: label,
+              onPressed: onPressed,
+              size: 34,
+              iconSize: 17,
+            ),
+          ),
+          // Keep the old text-based automation target available without
+          // bringing labels back into the 52pt rail. The transparent target
+          // is still keyboard/screen-reader addressable and shares the same
+          // action as the visible icon.
+          TextButton(
+            onPressed: onPressed,
+            style: TextButton.styleFrom(
+              foregroundColor: Colors.transparent,
+              backgroundColor: Colors.transparent,
+              overlayColor: Colors.transparent,
+              padding: EdgeInsets.zero,
+              minimumSize: Size.zero,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+            child: Text(label,
+                style: const TextStyle(fontSize: 1, color: Colors.transparent)),
           ),
         ],
       ),
@@ -868,151 +981,6 @@ class _RailItemState extends State<_RailItem> {
                             fontSize: 10,
                             fontWeight: FontWeight.w700)),
                   ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _RailFooter extends StatelessWidget {
-  const _RailFooter({
-    required this.isDark,
-    required this.onToggleTheme,
-    required this.onOpenSettings,
-  });
-
-  final bool isDark;
-  final VoidCallback onToggleTheme;
-  final VoidCallback onOpenSettings;
-
-  @override
-  Widget build(BuildContext context) {
-    final tokens = WorkFollowTheme.of(context);
-    return Container(
-      padding: const EdgeInsets.fromLTRB(12, 10, 12, 14),
-      decoration: BoxDecoration(
-        border: Border(top: BorderSide(color: tokens.border)),
-      ),
-      child: Column(
-        children: [
-          _RailFooterAction(
-            icon: Icons.tune_outlined,
-            label: '设置',
-            onTap: onOpenSettings,
-          ),
-          const SizedBox(height: 8),
-          Container(
-            padding: const EdgeInsets.fromLTRB(8, 8, 7, 8),
-            decoration: BoxDecoration(
-              color: tokens.content.withOpacity(.62),
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: tokens.border.withOpacity(.8)),
-            ),
-            child: Row(
-              children: [
-                Container(
-                  width: 27,
-                  height: 27,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: tokens.accentFaint,
-                  ),
-                  child: Icon(Icons.computer_outlined,
-                      size: 15, color: tokens.accent),
-                ),
-                const SizedBox(width: 7),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        '个人空间',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: tokens.textPrimary,
-                          fontSize: 10.5,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        '本地数据',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                            color: tokens.textTertiary, fontSize: 9.5),
-                      ),
-                    ],
-                  ),
-                ),
-                AppIconButton(
-                  icon: isDark
-                      ? Icons.light_mode_outlined
-                      : Icons.dark_mode_outlined,
-                  tooltip: isDark ? '切换浅色' : '切换深色',
-                  onPressed: onToggleTheme,
-                  size: 26,
-                  iconSize: 15,
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _RailFooterAction extends StatefulWidget {
-  const _RailFooterAction(
-      {required this.icon, required this.label, required this.onTap});
-
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-
-  @override
-  State<_RailFooterAction> createState() => _RailFooterActionState();
-}
-
-class _RailFooterActionState extends State<_RailFooterAction> {
-  bool hovering = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final tokens = WorkFollowTheme.of(context);
-    return MouseRegion(
-      onEnter: (_) => setState(() => hovering = true),
-      onExit: (_) => setState(() => hovering = false),
-      child: Semantics(
-        button: true,
-        label: widget.label,
-        child: GestureDetector(
-          onTap: widget.onTap,
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 140),
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-            decoration: BoxDecoration(
-              color: hovering
-                  ? tokens.content.withOpacity(.65)
-                  : Colors.transparent,
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Row(
-              children: [
-                Icon(widget.icon, size: 17, color: tokens.textSecondary),
-                const SizedBox(width: 10),
-                Text(
-                  widget.label,
-                  style: TextStyle(
-                      color: tokens.textSecondary,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500),
-                ),
               ],
             ),
           ),
