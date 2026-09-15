@@ -259,8 +259,8 @@ class _TaskInspectorState extends State<TaskInspector> {
 
   Widget _header(BuildContext context, TaskItem task, WorkFollowTheme tokens) {
     return Container(
-      padding: EdgeInsets.fromLTRB(
-          widget.inline ? 20 : 26, 10, widget.inline ? 20 : 26, 8),
+      constraints: widget.inline ? null : const BoxConstraints(minHeight: 58),
+      padding: const EdgeInsets.fromLTRB(20, 10, 20, 8),
       decoration: widget.inline
           ? null
           : BoxDecoration(
@@ -429,8 +429,9 @@ class _TaskInspectorState extends State<TaskInspector> {
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                             color: tokens.textSecondary,
-                            fontSize: WorkFollowTypography.field,
-                            fontWeight: FontWeight.w600))),
+                            fontSize: WorkFollowTypography.webSupportingSize,
+                            height: WorkFollowTypography.webLineHeightNormal,
+                            fontWeight: FontWeight.w500))),
                 style: TextButton.styleFrom(
                     padding: const EdgeInsets.symmetric(horizontal: 6),
                     minimumSize:
@@ -473,10 +474,10 @@ class _TaskInspectorState extends State<TaskInspector> {
         .map((tag) => '#$tag')
         .join('  ');
     return Padding(
-      padding: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.only(bottom: WorkFollowSpacing.space4),
       child: Wrap(
-        spacing: 7,
-        runSpacing: 6,
+        spacing: WorkFollowSpacing.space2,
+        runSpacing: WorkFollowSpacing.space2,
         children: [
           _InspectorPropertyChip(
             key: const ValueKey('task-list-summary'),
@@ -515,7 +516,10 @@ class _TaskInspectorState extends State<TaskInspector> {
         constraints: const BoxConstraints(maxWidth: 820),
         child: Padding(
           padding: EdgeInsets.fromLTRB(
-              widget.inline ? 20 : 30, 20, widget.inline ? 20 : 30, 30),
+              widget.inline ? 20 : 42,
+              WorkFollowSpacing.space4,
+              widget.inline ? 20 : 42,
+              WorkFollowSpacing.space6),
           child:
               Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
             TextField(
@@ -525,10 +529,9 @@ class _TaskInspectorState extends State<TaskInspector> {
                 minLines: 1,
                 maxLines: 2,
                 style: TextStyle(
-                    fontSize: WorkFollowTypography.pageTitle,
-                    fontWeight: FontWeight.w700,
-                    height: 1.24,
-                    letterSpacing: -.45,
+                    fontSize: WorkFollowTypography.webEditorTitleSize,
+                    fontWeight: FontWeight.w600,
+                    height: WorkFollowTypography.webLineHeightSnug,
                     color: task.completed
                         ? tokens.textTertiary
                         : tokens.textPrimary,
@@ -610,10 +613,11 @@ class _TopPropertyButton extends StatelessWidget {
               foregroundColor: foreground,
               backgroundColor: active ? tokens.accentFaint : Colors.transparent,
               textStyle: const TextStyle(
-                  fontSize: WorkFollowTypography.button,
+                  fontSize: WorkFollowTypography.webControlSize,
+                  height: WorkFollowTypography.webLineHeightNormal,
                   fontWeight: FontWeight.w600),
               minimumSize: Size(iconOnly ? WorkFollowMetrics.iconHitTarget : 0,
-                  WorkFollowMetrics.compactButtonHeight),
+                  WorkFollowMetrics.iconHitTarget),
               padding: EdgeInsets.symmetric(horizontal: iconOnly ? 6 : 9),
               tapTargetSize: MaterialTapTargetSize.shrinkWrap,
               visualDensity: VisualDensity.compact,
@@ -624,7 +628,7 @@ class _TopPropertyButton extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 AppIcon(icon,
-                    size: WorkFollowMetrics.fieldIcon, color: foreground),
+                    size: WorkFollowMetrics.toolbarIcon, color: foreground),
                 if (!iconOnly) ...[
                   const SizedBox(width: 6),
                   ConstrainedBox(
@@ -683,8 +687,9 @@ class _InspectorPropertyChip extends StatelessWidget {
               foregroundColor: foreground,
               backgroundColor: active ? tokens.accentFaint : tokens.canvas,
               textStyle: const TextStyle(
-                  fontSize: WorkFollowTypography.field,
-                  fontWeight: FontWeight.w500),
+                  fontSize: WorkFollowTypography.webControlSize,
+                  height: WorkFollowTypography.webLineHeightNormal,
+                  fontWeight: FontWeight.w600),
               minimumSize: const Size(0, WorkFollowMetrics.chipHeight),
               padding: const EdgeInsets.symmetric(horizontal: 10),
               tapTargetSize: MaterialTapTargetSize.shrinkWrap,
@@ -772,10 +777,15 @@ class _RelationPickerState extends State<_RelationPicker> {
             title: Text(note.title,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: WorkFollowTypography.field)),
+                style: const TextStyle(
+                    fontSize: WorkFollowTypography.webListTitleSize,
+                    height: WorkFollowTypography.webLineHeightNormal,
+                    fontWeight: FontWeight.w500)),
             subtitle: Text(note.folder,
                 style: TextStyle(
-                    fontSize: WorkFollowTypography.caption,
+                    fontSize: WorkFollowTypography.webSupportingCompactSize,
+                    height: WorkFollowTypography.webLineHeightNormal,
+                    fontWeight: FontWeight.w400,
                     color: tokens.textTertiary)),
             trailing: widget.selected == note.id
                 ? AppIcon(WorkFollowIcons.check,
@@ -788,7 +798,9 @@ class _RelationPickerState extends State<_RelationPicker> {
               padding: const EdgeInsets.symmetric(vertical: 16),
               child: Text('没有匹配的笔记',
                   style: TextStyle(
-                      fontSize: WorkFollowTypography.field,
+                      fontSize: WorkFollowTypography.webSupportingCompactSize,
+                      height: WorkFollowTypography.webLineHeightNormal,
+                      fontWeight: FontWeight.w400,
                       color: tokens.textTertiary))),
       ]),
     );

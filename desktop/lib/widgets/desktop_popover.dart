@@ -467,7 +467,10 @@ class _AnchoredPopoverPageState extends State<_AnchoredPopoverPage>
     final positioned = switch (geometry.side) {
       PopoverSide.top => Positioned(
           left: geometry.rect.left,
-          bottom: screen.height - geometry.rect.bottom,
+          // Material's 1px surface border is included in the child bounds;
+          // lift top-anchored surfaces by that pixel so the last menu row
+          // never overlaps its trigger after rounding.
+          bottom: screen.height - geometry.rect.bottom + 1,
           width: geometry.rect.width,
           child: surface,
         ),

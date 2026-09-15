@@ -25,10 +25,12 @@ class AppRail extends StatelessWidget {
     required this.onOpenSettings,
   });
 
-  // TickTick keeps the navigation readable but deliberately gives the task
-  // list most of the window. 52pt icon rail + 190pt label column lands close
-  // to the native macOS proportions at the default 1280pt window.
-  static const double width = 242;
+  // This native shell intentionally merges the Web client's global rail and
+  // task-view sidebar into one surface. Keep the icon rail compact while
+  // reserving the Web task-navigation width for the readable column.
+  static const double width =
+      _iconRailWidth + 1 + WorkFollowLayout.taskNavigationWidth;
+  static const double _iconRailWidth = 52;
 
   final WorkspaceController controller;
   final bool isDark;
@@ -69,7 +71,8 @@ class AppRail extends StatelessWidget {
                   const _RailBrand(),
                 Expanded(
                   child: SingleChildScrollView(
-                    padding: const EdgeInsets.fromLTRB(9, 6, 9, 12),
+                    padding: const EdgeInsets.fromLTRB(
+                        9, 6, 9, WorkFollowSpacing.space3),
                     child: _ContextNavigation(controller: controller),
                   ),
                 ),
@@ -461,7 +464,7 @@ class _IconRail extends StatelessWidget {
       _ => false,
     };
     return SizedBox(
-      width: 52,
+      width: AppRail._iconRailWidth,
       child: Column(
         children: [
           const SizedBox(height: 12),

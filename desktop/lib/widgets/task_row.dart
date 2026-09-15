@@ -303,9 +303,12 @@ class _TaskRowState extends State<TaskRow> {
                         behavior: HitTestBehavior.opaque,
                         child: AnimatedContainer(
                           duration: const Duration(milliseconds: 120),
+                          constraints: const BoxConstraints(
+                              minHeight:
+                                  WorkFollowMetrics.taskRowComfortableHeight),
                           padding: EdgeInsets.symmetric(
-                              horizontal: widget.compact ? 8 : 10,
-                              vertical: widget.compact ? 5 : 8),
+                              horizontal: WorkFollowSpacing.space2,
+                              vertical: widget.compact ? 5 : 6),
                           decoration: BoxDecoration(
                               color: selected
                                   ? tokens.accentSoft.withValues(alpha: .82)
@@ -370,14 +373,11 @@ class _TaskRowState extends State<TaskRow> {
                                             maxLines: widget.compact ? 1 : 2,
                                             overflow: TextOverflow.ellipsis,
                                             style: TextStyle(
-                                                fontSize: widget.compact
-                                                    ? WorkFollowTypography
-                                                        .taskTitle
-                                                    : WorkFollowTypography
-                                                            .taskTitle +
-                                                        .5,
-                                                height: 1.35,
-                                                fontWeight: FontWeight.w600,
+                                                fontSize: WorkFollowTypography
+                                                    .webListTitleSize,
+                                                height: WorkFollowTypography
+                                                    .webLineHeightNormal,
+                                                fontWeight: FontWeight.w500,
                                                 color: task.completed
                                                     ? tokens.textTertiary
                                                     : tokens.textPrimary,
@@ -412,10 +412,12 @@ class _TaskRowState extends State<TaskRow> {
                                           maxLines: 1,
                                           overflow: TextOverflow.ellipsis,
                                           style: TextStyle(
-                                              fontSize:
-                                                  WorkFollowTypography.body - 1,
-                                              height: 1.25,
-                                              color: tokens.textTertiary)),
+                                              fontSize: WorkFollowTypography
+                                                  .webSupportingCompactSize,
+                                              height: WorkFollowTypography
+                                                  .webLineHeightNormal,
+                                              fontWeight: FontWeight.w400,
+                                              color: tokens.textSecondary)),
                                     ],
                                   ],
                                 ),
@@ -514,7 +516,9 @@ class _TaskRowState extends State<TaskRow> {
                   key: ValueKey('task-row-date-${task.id}'),
                   calendarDateLabel(due, hasTime: task.scheduledWithTime),
                   style: TextStyle(
-                      fontSize: WorkFollowTypography.metadata - .5,
+                      fontSize: WorkFollowTypography.webMetaSize,
+                      height: WorkFollowTypography.webLineHeightNormal,
+                      fontWeight: FontWeight.w400,
                       color: dateColor)))));
     }
     return result;
@@ -523,7 +527,11 @@ class _TaskRowState extends State<TaskRow> {
   Widget _metaText(String value, Color color) => Text(value,
       maxLines: 1,
       overflow: TextOverflow.ellipsis,
-      style: TextStyle(fontSize: WorkFollowTypography.caption, color: color));
+      style: TextStyle(
+          fontSize: WorkFollowTypography.webMetaSize,
+          height: WorkFollowTypography.webLineHeightNormal,
+          fontWeight: FontWeight.w400,
+          color: color));
 
   Widget _metaIcon(IconData icon, Color color,
           {required String semanticLabel}) =>

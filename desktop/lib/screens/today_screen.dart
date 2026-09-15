@@ -49,9 +49,16 @@ class TodayScreen extends StatefulWidget {
 }
 
 class _TodayScreenState extends State<TodayScreen> {
-  static const double _wideInspectorBreakpoint = 980;
-  static const double _minListPaneWidth = 320;
-  static const double _maxListPaneWidth = 420;
+  // TodayScreen receives the width left after AppRail. The Web workspace
+  // enters its 1024/1120 layouts based on the full window, so the native
+  // equivalent uses the same usable-width threshold after the merged rail.
+  static const double _wideInspectorBreakpoint = 760;
+  static const double _minListPaneWidth = WorkFollowLayout.taskListMinWidth;
+  static const double _maxListPaneWidth = WorkFollowLayout.taskListWidth;
+  static const double _detailMinWidth = WorkFollowLayout.taskDetailMinWidth;
+  static const double _listDividerWidth = WorkFollowLayout.taskListDividerWidth;
+  static const double _taskRowHeight =
+      WorkFollowLayout.taskRowComfortableHeight;
 
   bool detailOnly = false;
   bool showCompleted = false;
@@ -155,17 +162,30 @@ class _TodayScreenState extends State<TodayScreen> {
               Expanded(
                   child: Align(
                       alignment: Alignment.topLeft,
-                      child: ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 860),
+                      child: SizedBox(
+                        // Align passes loose vertical constraints to its
+                        // child. Give the list column the finite height from
+                        // the surrounding Expanded so its inner ListView can
+                        // own scrolling instead of overflowing.
+                        width: constraints.maxWidth.clamp(0, 860).toDouble(),
+                        height: double.infinity,
                         child: Column(
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
                               Padding(
                                   padding: EdgeInsets.fromLTRB(
-                                      narrow ? 22 : 8,
-                                      compact || wideInspector ? 14 : 26,
-                                      narrow ? 22 : 8,
-                                      compact || wideInspector ? 12 : 18),
+                                      narrow
+                                          ? 22
+                                          : WorkFollowLayout
+                                                  .taskDetailEmptyPadding -
+                                              14,
+                                      14,
+                                      narrow
+                                          ? 22
+                                          : WorkFollowLayout
+                                                  .taskDetailEmptyPadding -
+                                              14,
+                                      12),
                                   child: Column(
                                       crossAxisAlignment:
                                           CrossAxisAlignment.start,
@@ -208,7 +228,7 @@ class _TodayScreenState extends State<TodayScreen> {
                                                 total: active.length +
                                                     completed.length)),
                                         if (!completedView) ...[
-                                          SizedBox(height: compact ? 12 : 20),
+                                          const SizedBox(height: 0),
                                           QuickAddField(
                                               controller: c, listStyle: true)
                                         ],
@@ -218,7 +238,14 @@ class _TodayScreenState extends State<TodayScreen> {
                                 key: PageStorageKey(
                                     'tasks-${c.view.name}-${c.selectedListName}'),
                                 padding: EdgeInsets.fromLTRB(
-                                    narrow ? 12 : 0, 2, narrow ? 12 : 0, 56),
+                                    narrow
+                                        ? WorkFollowSpacing.space3
+                                        : WorkFollowSpacing.space4,
+                                    2,
+                                    narrow
+                                        ? WorkFollowSpacing.space3
+                                        : WorkFollowSpacing.space4,
+                                    WorkFollowSpacing.space7),
                                 children: [
                                   if ((completedView ? completed : active)
                                       .isEmpty)
@@ -270,21 +297,34 @@ class _TodayScreenState extends State<TodayScreen> {
                   child: Center(child: _BulkBar(controller: c))),
           ]));
       if (wideInspector) {
-        final listWidth = (constraints.maxWidth * .32)
-            .clamp(_minListPaneWidth, _maxListPaneWidth);
+        final listWidth =
+            (constraints.maxWidth - _detailMinWidth - _listDividerWidth)
+                .clamp(_minListPaneWidth, _maxListPaneWidth)
+                .toDouble();
         return Row(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            SizedBox(width: listWidth, child: list),
-            VerticalDivider(width: 1, thickness: 1, color: tokens.border),
+            SizedBox(
+              key: const ValueKey('web-task-list-pane'),
+              width: listWidth,
+              child: list,
+            ),
+            VerticalDivider(
+                width: _listDividerWidth,
+                thickness: _listDividerWidth,
+                color: tokens.border),
             Expanded(
-              child: selected == null
-                  ? const _EmptyInspector()
-                  : TaskInspector(
-                      key: ValueKey('wide-detail-${selected.id}'),
-                      task: selected,
-                      controller: c,
-                      onOpenFocusTimer: widget.onOpenFocusTimer),
+              child: ConstrainedBox(
+                key: const ValueKey('web-task-detail-pane'),
+                constraints: const BoxConstraints(minWidth: _detailMinWidth),
+                child: selected == null
+                    ? const _EmptyInspector()
+                    : TaskInspector(
+                        key: ValueKey('wide-detail-${selected.id}'),
+                        task: selected,
+                        controller: c,
+                        onOpenFocusTimer: widget.onOpenFocusTimer),
+              ),
             ),
           ],
         );
@@ -440,7 +480,7 @@ class _TodayScreenState extends State<TodayScreen> {
         if (i < tasks.length - 1)
           Container(
               height: 1,
-              margin: const EdgeInsets.only(left: 48),
+              margin: const EdgeInsets.only(left: 41),
               color: tokens.border),
       ],
     ];
@@ -478,7 +518,7 @@ class _TodayScreenState extends State<TodayScreen> {
           if (i < completed.length - 1)
             Container(
                 height: 1,
-                margin: const EdgeInsets.only(left: 48),
+                margin: const EdgeInsets.only(left: 41),
                 color: tokens.border),
         ],
     ];
@@ -527,20 +567,24 @@ class _TodayScreenState extends State<TodayScreen> {
                               child: Text(task.title,
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis)))),
-                  child: TaskRow(
-                      key: ValueKey(task.id),
-                      task: task,
-                      controller: c,
-                      selected: c.selectedTaskId == task.id,
-                      multiSelected: c.isTaskMultiSelected(task.id),
-                      compact: compact,
-                      onActivate: () {
-                        if (narrow) {
-                          setState(() => detailOnly = true);
-                        } else {
-                          _revealEditor();
-                        }
-                      }),
+                  child: ConstrainedBox(
+                    constraints:
+                        const BoxConstraints(minHeight: _taskRowHeight),
+                    child: TaskRow(
+                        key: ValueKey(task.id),
+                        task: task,
+                        controller: c,
+                        selected: c.selectedTaskId == task.id,
+                        multiSelected: c.isTaskMultiSelected(task.id),
+                        compact: compact,
+                        onActivate: () {
+                          if (narrow) {
+                            setState(() => detailOnly = true);
+                          } else {
+                            _revealEditor();
+                          }
+                        }),
+                  ),
                 ),
               ],
             ));

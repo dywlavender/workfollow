@@ -378,8 +378,9 @@ class TaskDocumentEditorState extends State<TaskDocumentEditor>
   Widget build(BuildContext context) {
     final tokens = WorkFollowTheme.of(context);
     final textStyle = Theme.of(context).textTheme.bodyLarge!.copyWith(
-          fontSize: WorkFollowTypography.editorBody,
-          height: 1.65,
+          fontSize: WorkFollowTypography.webEditorBodySize,
+          height: WorkFollowTypography.webLineHeightEditor,
+          fontWeight: FontWeight.w400,
           color: tokens.textPrimary,
         );
     final hasSubtaskBlock = _hasBlock(widget.task, 'taskSubtasks');
@@ -547,14 +548,17 @@ class _TaskSubtasksPanelState extends State<TaskSubtasksPanel> {
               Row(children: [
                 Text('子任务',
                     style: TextStyle(
-                        fontSize: WorkFollowTypography.body,
-                        fontWeight: FontWeight.w700,
+                        fontSize: WorkFollowTypography.webPanelTitleSize,
+                        height: WorkFollowTypography.webLineHeightSnug,
+                        fontWeight: FontWeight.w600,
                         color: tokens.textPrimary)),
                 const Spacer(),
                 if (task.subtaskTotal > 0)
                   Text('${task.subtaskCompleted}/${task.subtaskTotal}',
                       style: TextStyle(
-                          fontSize: WorkFollowTypography.caption,
+                          fontSize: WorkFollowTypography.webMetaSize,
+                          height: WorkFollowTypography.webLineHeightNormal,
+                          fontWeight: FontWeight.w400,
                           color: tokens.textTertiary)),
               ]),
               if (task.subtaskTotal > 0) ...[
@@ -585,7 +589,9 @@ class _TaskSubtasksPanelState extends State<TaskSubtasksPanel> {
                       decoration: const InputDecoration(
                           border: InputBorder.none, isDense: true),
                       style: TextStyle(
-                          fontSize: WorkFollowTypography.field,
+                          fontSize: WorkFollowTypography.webListTitleSize,
+                          height: WorkFollowTypography.webLineHeightNormal,
+                          fontWeight: FontWeight.w500,
                           color: item.completed
                               ? tokens.textTertiary
                               : tokens.textPrimary,
@@ -621,7 +627,9 @@ class _TaskSubtasksPanelState extends State<TaskSubtasksPanel> {
                           border: InputBorder.none,
                           isDense: true),
                       style: TextStyle(
-                          fontSize: WorkFollowTypography.field,
+                          fontSize: WorkFollowTypography.webBodySmall,
+                          height: WorkFollowTypography.webLineHeightNormal,
+                          fontWeight: FontWeight.w400,
                           color: tokens.textPrimary),
                     ),
                   ),
@@ -654,8 +662,9 @@ class TaskAttachmentsPanel extends StatelessWidget {
         children: [
           Text('附件与关联',
               style: TextStyle(
-                  fontSize: WorkFollowTypography.sectionTitle,
-                  fontWeight: FontWeight.w700,
+                  fontSize: WorkFollowTypography.webSectionTitleSize,
+                  height: WorkFollowTypography.webLineHeightTight,
+                  fontWeight: FontWeight.w600,
                   color: tokens.textPrimary)),
           const SizedBox(height: 7),
           Wrap(
@@ -667,7 +676,9 @@ class TaskAttachmentsPanel extends StatelessWidget {
                 InputChip(
                   label: Text(file,
                       style: const TextStyle(
-                          fontSize: WorkFollowTypography.metadata)),
+                          fontSize: WorkFollowTypography.webSupportingSize,
+                          height: WorkFollowTypography.webLineHeightNormal,
+                          fontWeight: FontWeight.w400)),
                   avatar: const AppIcon(WorkFollowIcons.file,
                       size: WorkFollowMetrics.metadataIcon),
                   onPressed: () => controller.revealAttachment(task.id, file),
@@ -681,8 +692,10 @@ class TaskAttachmentsPanel extends StatelessWidget {
                       size: WorkFollowMetrics.compactFieldIcon,
                       color: tokens.accent),
                   label: const Text('添加附件',
-                      style:
-                          TextStyle(fontSize: WorkFollowTypography.metadata))),
+                      style: TextStyle(
+                          fontSize: WorkFollowTypography.webControlSize,
+                          height: WorkFollowTypography.webLineHeightNormal,
+                          fontWeight: FontWeight.w600))),
             ],
           ),
         ],
@@ -726,12 +739,16 @@ class TaskSourceNotePanel extends StatelessWidget {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
-                              fontSize: WorkFollowTypography.field,
-                              fontWeight: FontWeight.w600,
+                              fontSize: WorkFollowTypography.webListTitleSize,
+                              height: WorkFollowTypography.webLineHeightNormal,
+                              fontWeight: FontWeight.w500,
                               color: tokens.textPrimary)),
                       Text('来自笔记 · ${source.folder}',
                           style: TextStyle(
-                              fontSize: WorkFollowTypography.caption,
+                              fontSize:
+                                  WorkFollowTypography.webSupportingCompactSize,
+                              height: WorkFollowTypography.webLineHeightNormal,
+                              fontWeight: FontWeight.w400,
                               color: tokens.textTertiary)),
                     ]),
               ),
@@ -771,7 +788,11 @@ class _TaskAttachmentBlock extends StatelessWidget {
             : () => controller.revealAttachment(task.id, filename),
         icon: AppIcon(WorkFollowIcons.file,
             size: WorkFollowMetrics.navigationIcon, color: tokens.accent),
-        label: Text(attrs['name']?.toString() ?? '附件'),
+        label: Text(attrs['name']?.toString() ?? '附件',
+            style: const TextStyle(
+                fontSize: WorkFollowTypography.webSupportingSize,
+                height: WorkFollowTypography.webLineHeightNormal,
+                fontWeight: FontWeight.w400)),
       ),
     );
   }

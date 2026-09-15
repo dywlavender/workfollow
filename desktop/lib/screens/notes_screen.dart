@@ -20,6 +20,16 @@ class NotesScreen extends StatefulWidget {
 }
 
 class _NotesScreenState extends State<NotesScreen> {
+  // Web notes use a 300pt note index on the wide desktop and 270pt in the
+  // compact desktop media query. NotesScreen receives the width remaining
+  // after the native merged rail, hence the local breakpoint below.
+  static const double _wideNotesBreakpoint = 1100;
+  static const double _notesListWidth = 300;
+  static const double _compactNotesListWidth = 270;
+  static const double _notesHeaderHeight = 66;
+  static const double _notesSearchHeight = 38;
+  static const double _editorContentMaxWidth = 960;
+
   String query = '';
   bool newestFirst = true;
   bool detailOnly = false;
@@ -86,53 +96,68 @@ class _NotesScreenState extends State<NotesScreen> {
     return LayoutBuilder(builder: (context, constraints) {
       final narrow = constraints.maxWidth < 760;
       final list = Container(
-          color: tokens.canvas,
-          padding: const EdgeInsets.fromLTRB(16, 22, 16, 16),
+          color: tokens.content,
+          padding: const EdgeInsets.fromLTRB(10, 0, 10, 18),
           child:
               Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-            Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Expanded(
-                  child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                    Text(c.notesFavoritesOnly ? '收藏笔记' : '笔记',
-                        style: TextStyle(
-                            fontSize: WorkFollowTypography.sectionTitle + 6,
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: -.4,
-                            color: tokens.textPrimary)),
-                    const SizedBox(height: 4),
-                    Text('${notes.length} 条笔记',
-                        style: TextStyle(
-                            fontSize: 12, color: tokens.textTertiary)),
-                  ])),
-              _NewNoteButton(onCreate: create),
-            ]),
-            const SizedBox(height: 14),
-            TextField(
-                controller: search,
-                onChanged: (value) => setState(() => query = value),
-                style: const TextStyle(fontSize: 13),
-                decoration: InputDecoration(
-                    hintText: '搜索笔记',
-                    prefixIcon: const AppIcon(WorkFollowIcons.search,
-                        size: WorkFollowMetrics.navigationIcon),
-                    isDense: true,
-                    filled: true,
-                    fillColor: tokens.content,
-                    contentPadding: const EdgeInsets.symmetric(vertical: 10),
-                    border: OutlineInputBorder(
-                        borderRadius:
-                            BorderRadius.circular(WorkFollowRadii.control),
-                        borderSide: BorderSide.none))),
-            const SizedBox(height: 10),
-            Row(children: [
-              const Spacer(),
-              TextButton(
-                  onPressed: () => setState(() => newestFirst = !newestFirst),
-                  child: Text(newestFirst ? '最近编辑' : '按标题',
-                      style: const TextStyle(fontSize: 12))),
-            ]),
+            ConstrainedBox(
+              constraints: const BoxConstraints(minHeight: _notesHeaderHeight),
+              child:
+                  Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
+                Expanded(
+                    child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                      Text(c.notesFavoritesOnly ? '收藏笔记' : '笔记',
+                          style: TextStyle(
+                              fontSize: WorkFollowTypography.webBody,
+                              fontWeight: FontWeight.w600,
+                              color: tokens.textPrimary)),
+                      const SizedBox(height: 2),
+                      Text('${notes.length} 条笔记',
+                          style: TextStyle(
+                              fontSize: WorkFollowTypography.webCaption,
+                              color: tokens.textTertiary)),
+                    ])),
+                _NewNoteButton(onCreate: create),
+              ]),
+            ),
+            SizedBox(
+              height: _notesSearchHeight,
+              child: TextField(
+                  controller: search,
+                  onChanged: (value) => setState(() => query = value),
+                  style:
+                      const TextStyle(fontSize: WorkFollowTypography.webBody),
+                  decoration: InputDecoration(
+                      hintText: '搜索笔记',
+                      prefixIcon: const AppIcon(WorkFollowIcons.search,
+                          size: WorkFollowMetrics.toolbarIcon),
+                      isDense: true,
+                      filled: true,
+                      fillColor: tokens.canvas,
+                      contentPadding: const EdgeInsets.symmetric(vertical: 8),
+                      border: OutlineInputBorder(
+                          borderRadius:
+                              BorderRadius.circular(WorkFollowRadii.md),
+                          borderSide: BorderSide.none))),
+            ),
+            const SizedBox(height: 6),
+            SizedBox(
+              height: 32,
+              child: Row(children: [
+                const Spacer(),
+                TextButton(
+                    onPressed: () => setState(() => newestFirst = !newestFirst),
+                    style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 6),
+                        minimumSize: Size.zero,
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap),
+                    child: Text(newestFirst ? '最近编辑' : '按标题',
+                        style: const TextStyle(
+                            fontSize: WorkFollowTypography.webCaption))),
+              ]),
+            ),
             Expanded(
                 child: notes.isEmpty
                     ? Center(
@@ -169,10 +194,18 @@ class _NotesScreenState extends State<NotesScreen> {
           Offstage(offstage: detailOnly && selected != null, child: list),
           if (detailOnly && selected != null) page,
         ]);
+      final listWidth = constraints.maxWidth >= _wideNotesBreakpoint
+          ? _notesListWidth
+          : _compactNotesListWidth;
       return Row(children: [
-        SizedBox(width: 286, child: list),
+        SizedBox(
+            key: const ValueKey('web-note-list-pane'),
+            width: listWidth,
+            child: list),
         VerticalDivider(width: 1, color: tokens.border),
-        Expanded(child: page)
+        Expanded(
+            child: KeyedSubtree(
+                key: const ValueKey('web-note-editor-pane'), child: page))
       ]);
     });
   }
@@ -227,25 +260,23 @@ class _NoteCardState extends State<_NoteCard> {
         child: GestureDetector(
             onTap: widget.onTap,
             child: AnimatedContainer(
-                duration: const Duration(milliseconds: 120),
-                padding: const EdgeInsets.all(13),
+                duration: WorkFollowMotion.instant,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
                 decoration: BoxDecoration(
-                    color: tokens.content,
-                    borderRadius: BorderRadius.circular(WorkFollowRadii.card),
-                    border: Border.all(
-                        color: widget.selected
-                            ? tokens.accent.withValues(alpha: .5)
-                            : hovering
-                                ? tokens.borderStrong
-                                : tokens.border),
-                    boxShadow: widget.selected
-                        ? [
-                            BoxShadow(
-                                color: tokens.shadow,
-                                blurRadius: 10,
-                                offset: const Offset(0, 2))
-                          ]
-                        : null),
+                    // Web note rows are flat. Use a quiet selected surface
+                    // instead of a card border and shadow so the editor stays
+                    // the visual focus.
+                    color: widget.selected
+                        ? tokens.accentSoft
+                        : hovering
+                            ? tokens.canvas
+                            : Colors.transparent,
+                    borderRadius:
+                        BorderRadius.circular(WorkFollowRadii.control),
+                    border: Border(
+                        bottom: BorderSide(
+                            color: tokens.border.withValues(alpha: .72)))),
                 child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -261,28 +292,29 @@ class _NoteCardState extends State<_NoteCard> {
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: TextStyle(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w700,
+                                    fontSize: WorkFollowTypography.webLabel,
+                                    fontWeight: FontWeight.w600,
                                     color: tokens.textPrimary))),
                       ]),
-                      const SizedBox(height: 6),
+                      const SizedBox(height: 4),
                       Text(note.preview.isEmpty ? '还没有内容' : note.preview,
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
-                              fontSize: 13,
-                              height: 1.5,
+                              fontSize: WorkFollowTypography.webMicro,
+                              height: WorkFollowTypography.webLineHeightNormal,
                               color: tokens.textSecondary)),
-                      const SizedBox(height: 9),
+                      const SizedBox(height: 5),
                       Row(children: [
                         Text(noteUpdatedLabelFor(note.updatedAt),
                             style: TextStyle(
-                                fontSize: 11, color: tokens.textTertiary)),
+                                fontSize: WorkFollowTypography.webMicro,
+                                color: tokens.textTertiary)),
                         const Spacer(),
                         Flexible(
                             child: Container(
                                 padding: const EdgeInsets.symmetric(
-                                    horizontal: 7, vertical: 2.5),
+                                    horizontal: 5, vertical: 1),
                                 decoration: BoxDecoration(
                                     color: tokens.accent.withValues(alpha: .08),
                                     borderRadius: BorderRadius.circular(
@@ -291,7 +323,7 @@ class _NoteCardState extends State<_NoteCard> {
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                     style: TextStyle(
-                                        fontSize: 11,
+                                        fontSize: WorkFollowTypography.webMicro,
                                         fontWeight: FontWeight.w600,
                                         color: tokens.textSecondary)))),
                       ]),
@@ -395,7 +427,7 @@ class _NotePageState extends State<_NotePage> {
         color: tokens.content,
         child: Column(children: [
           Padding(
-              padding: const EdgeInsets.fromLTRB(18, 12, 18, 8),
+              padding: const EdgeInsets.fromLTRB(18, 14, 18, 10),
               child: Row(children: [
                 if (widget.onBack != null)
                   IconButton(
@@ -433,9 +465,10 @@ class _NotePageState extends State<_NotePage> {
               child: SingleChildScrollView(
                   child: Center(
                       child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 780),
+            constraints: const BoxConstraints(
+                maxWidth: _NotesScreenState._editorContentMaxWidth),
             child: Padding(
-                padding: const EdgeInsets.fromLTRB(36, 26, 36, 44),
+                padding: const EdgeInsets.fromLTRB(28, 14, 28, 44),
                 child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
@@ -447,10 +480,11 @@ class _NotePageState extends State<_NotePage> {
                           minLines: 1,
                           maxLines: 3,
                           style: TextStyle(
-                              fontSize: WorkFollowTypography.pageTitle + 4,
-                              height: 1.3,
-                              fontWeight: FontWeight.w800,
-                              letterSpacing: -.5,
+                              fontSize: WorkFollowTypography.webEditorTitleSize,
+                              height: WorkFollowTypography.webLineHeightSnug,
+                              fontWeight: FontWeight.w600,
+                              letterSpacing:
+                                  WorkFollowTypography.webTrackingTight,
                               color: tokens.textPrimary),
                           decoration: const InputDecoration(
                               hintText: '笔记标题',
