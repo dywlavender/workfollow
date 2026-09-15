@@ -32,7 +32,12 @@ Future<T?> showDesktopPopover<T>(
       // Prefer the side with the most room. A bottom toolbar therefore opens
       // upward instead of being clamped to a fictitious max-height box far
       // above its trigger.
-      final openBelow = spaceBelow >= 180 || spaceBelow >= spaceAbove;
+      final desiredHeight = math.min(maxHeight, screen.height - 32);
+      final openBelow = spaceBelow >= desiredHeight ||
+          spaceBelow >= spaceAbove ||
+          // A trigger close to the top should still open downward even when
+          // its picker is taller than the remaining space.
+          spaceAbove < 160;
       // When opening below, keep the full viewport allowance and clamp the
       // top edge. This lets a tall date picker start at the window edge rather
       // than laying out its action row below the visible viewport. For an

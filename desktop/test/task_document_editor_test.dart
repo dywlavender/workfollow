@@ -10,6 +10,112 @@ import 'package:workfollow_personal/widgets/task_inspector.dart';
 import 'package:workfollow_personal/widgets/task_list_picker.dart';
 
 void main() {
+  testWidgets('task inspector More menu stays next to the footer trigger',
+      (tester) async {
+    tester.view.physicalSize = const Size(800, 600);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    final controller = WorkspaceController(seedData: false);
+    addTearDown(controller.dispose);
+    controller.addTask('底部菜单任务');
+    await tester.pumpWidget(MaterialApp(
+      theme: WorkFollowThemeData.light(),
+      home: Scaffold(
+        body: TaskInspector(
+          task: controller.tasks.single,
+          controller: controller,
+        ),
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    final trigger = find.byKey(const ValueKey('task-more-actions'));
+    await tester.tap(trigger);
+    await tester.pumpAndSettle();
+
+    final triggerRect = tester.getRect(trigger);
+    final deleteRect =
+        tester.getRect(find.byKey(const ValueKey('menu-option-delete')));
+    expect(deleteRect.bottom, lessThanOrEqualTo(triggerRect.top));
+    expect(triggerRect.top - deleteRect.bottom, lessThan(20));
+  });
+
+  testWidgets('task inspector More menu remains anchored on a Retina window',
+      (tester) async {
+    tester.view.physicalSize = const Size(1704, 1556);
+    tester.view.devicePixelRatio = 2;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    final controller = WorkspaceController(seedData: false);
+    addTearDown(controller.dispose);
+    controller.addTask('Retina 菜单任务');
+    await tester.pumpWidget(MaterialApp(
+      theme: WorkFollowThemeData.dark(),
+      home: Scaffold(
+        body: TaskInspector(
+          task: controller.tasks.single,
+          controller: controller,
+        ),
+      ),
+    ));
+    await tester.pumpAndSettle();
+    final trigger = find.byKey(const ValueKey('task-more-actions'));
+    await tester.tap(trigger);
+    await tester.pumpAndSettle();
+
+    final triggerRect = tester.getRect(trigger);
+    final deleteRect =
+        tester.getRect(find.byKey(const ValueKey('menu-option-delete')));
+    expect(deleteRect.bottom, lessThanOrEqualTo(triggerRect.top));
+    expect(triggerRect.top - deleteRect.bottom, lessThan(20));
+  });
+
+  testWidgets('inline task inspector More menu stays with its trigger',
+      (tester) async {
+    tester.view.physicalSize = const Size(900, 700);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    final controller = WorkspaceController(seedData: false);
+    addTearDown(controller.dispose);
+    controller.addTask('内嵌菜单任务');
+    await tester.pumpWidget(MaterialApp(
+      theme: WorkFollowThemeData.dark(),
+      home: Scaffold(
+        body: ListView(
+          children: [
+            TaskInspector(
+              task: controller.tasks.single,
+              controller: controller,
+              inline: true,
+            ),
+          ],
+        ),
+      ),
+    ));
+    await tester.pumpAndSettle();
+    final trigger = find.byKey(const ValueKey('task-more-actions'));
+    await tester.ensureVisible(trigger);
+    await tester.tap(trigger);
+    await tester.pumpAndSettle();
+
+    final triggerRect = tester.getRect(trigger);
+    final deleteRect =
+        tester.getRect(find.byKey(const ValueKey('menu-option-delete')));
+    expect(deleteRect.bottom, lessThanOrEqualTo(triggerRect.top));
+    expect(triggerRect.top - deleteRect.bottom, lessThan(20));
+  });
+
   testWidgets(
       'task inspector uses a document editor without an advanced toggle',
       (tester) async {
@@ -153,15 +259,17 @@ void main() {
     editor.replaceText(
       0,
       editor.document.length - 1,
-      quill.BlockEmbed('workfollow-block', jsonEncode({
-        'type': 'attachment',
-        'attrs': {'name': '设计稿.pdf', 'localFile': '设计稿.pdf'},
-      })),
+      quill.BlockEmbed(
+          'workfollow-block',
+          jsonEncode({
+            'type': 'attachment',
+            'attrs': {'name': '设计稿.pdf', 'localFile': '设计稿.pdf'},
+          })),
       const TextSelection.collapsed(offset: 1),
     );
     await tester.pump();
-    expect(find.byKey(const ValueKey('task-attachment-设计稿.pdf')),
-        findsOneWidget);
+    expect(
+        find.byKey(const ValueKey('task-attachment-设计稿.pdf')), findsOneWidget);
     expect(controller.tasks.single.contentJson?['quillDelta'], isNotNull);
   });
 
