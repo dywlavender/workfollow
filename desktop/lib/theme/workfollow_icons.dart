@@ -25,6 +25,7 @@ class WorkFollowIcons {
   static const historyToggle = Icons.history_toggle_off_rounded;
   static const priorityHigh = Icons.priority_high_rounded;
   static const forward = Icons.forward_to_inbox_outlined;
+  static const skip = Icons.skip_next_outlined;
   static const snooze = Icons.snooze_outlined;
 
   static const recent = Icons.date_range_outlined;

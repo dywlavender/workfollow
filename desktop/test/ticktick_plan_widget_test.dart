@@ -579,15 +579,14 @@ void main() {
 
     await tester.tap(find.byKey(ValueKey('task-row-more-${task.id}')));
     await tester.pumpAndSettle();
-    for (final label in [
-      '移动到清单…',
-      '编辑标签…',
-      '设置提醒…',
-      '设置重复…',
-      '设置截止日期…',
-    ]) {
+    expect(
+        find.byKey(const ValueKey('task-context-menu-panel')), findsOneWidget);
+    for (final label in ['移动到', '标签', '创建副本', '复制链接', '删除']) {
       expect(find.text(label), findsOneWidget, reason: label);
     }
+    expect(find.text('设置提醒…'), findsNothing);
+    expect(find.text('设置重复…'), findsNothing);
+    expect(find.text('设置截止日期…'), findsNothing);
 
     await tester.tap(find.byKey(const ValueKey('menu-option-list')));
     await tester.pumpAndSettle();
@@ -639,8 +638,8 @@ void main() {
     await tester.tap(
         find.byKey(ValueKey('task-row-more-${controller.tasks.single.id}')));
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('menu-option-complete')));
-    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('menu-option-complete')), findsNothing);
+    controller.taskActions.complete(controller.tasks.single.id);
     expect(controller.tasks.single.completed, isTrue);
   });
 

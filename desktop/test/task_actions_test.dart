@@ -4,6 +4,7 @@ import 'package:workfollow_personal/features/tasks/application/task_projection.d
 import 'package:workfollow_personal/features/tasks/application/task_selection_controller.dart';
 import 'package:workfollow_personal/features/tasks/domain/task_draft.dart';
 import 'package:workfollow_personal/features/tasks/domain/task_schedule.dart';
+import 'package:workfollow_personal/features/tasks/domain/recurrence_engine.dart';
 import 'package:workfollow_personal/models/task.dart';
 import 'package:workfollow_personal/state/workspace_controller.dart';
 
@@ -184,6 +185,88 @@ void main() {
     controller.dispose();
   });
 
+  test('TASK-CTX skip occurrence creates a next task without completing it',
+      () async {
+    final controller = WorkspaceController(seedData: false);
+    addTearDown(controller.dispose);
+    final due = DateTime.now().add(const Duration(days: 1));
+    final created = controller.taskActions.create(TaskDraft(
+      title: '每天复盘',
+      listName: '工作',
+      schedule: TaskScheduleDraft(dueAt: due, hasTime: true),
+      recurrence: const RecurrenceDraft(type: 'DAILY'),
+      priority: TaskPriority.high,
+      tags: const ['复盘'],
+      description: '保留正文',
+    ));
+    expect(created.success, isTrue);
+    final id = created.taskId!;
+    final deadline = due.add(const Duration(days: 2));
+    expect(controller.taskActions.setDeadline(id, deadline).success, isTrue);
+
+    final result = controller.taskActions.skipOccurrence(id);
+    expect(result.success, isTrue);
+    expect(result.message, '已跳过本周期');
+    expect(result.undo, isNotNull);
+
+    final skipped = controller.tasks.firstWhere((task) => task.id == id);
+    final next = controller.tasks.firstWhere((task) => task.id != id);
+    expect(skipped.completed, isFalse);
+    expect(skipped.deletedAt, isNull);
+    expect(skipped.isSkipped, isTrue);
+    expect(controller.activeTasks.any((task) => task.id == id), isFalse);
+    expect(controller.deletedTasks.any((task) => task.id == id), isFalse);
+    expect(next.completed, isFalse);
+    expect(next.isSkipped, isFalse);
+    expect(next.recurrenceType, 'DAILY');
+    expect(next.title, skipped.title);
+    expect(next.listName, skipped.listName);
+    expect(next.tags, skipped.tags);
+    expect(next.priority, skipped.priority);
+    expect(next.description, skipped.description);
+    expect(next.deadlineAt, isNotNull);
+    final nextDue = localDateTimeFromStorage(next.dueAt)!;
+    expect(DateTime(nextDue.year, nextDue.month, nextDue.day),
+        DateTime(due.year, due.month, due.day).add(const Duration(days: 1)));
+
+    expect(await result.undo!.execute(), isTrue);
+    expect(controller.tasks.where((task) => task.id == id), hasLength(1));
+    final restored = controller.tasks.single;
+    expect(restored.id, id);
+    expect(restored.isSkipped, isFalse);
+    expect(restored.completed, isFalse);
+    expect(restored.recurrenceType, 'DAILY');
+    expect(controller.activeTasks.single.id, id);
+  });
+
+  test('TASK-CTX recurrence engine keeps weekly and monthly calendar rules',
+      () {
+    final monday = DateTime(2030, 1, 7, 9, 30);
+    final weekly = TaskItem(
+      id: 'weekly',
+      title: 'weekly',
+      listName: '工作',
+      bucket: TaskBucket.later,
+      dueAt: monday.toIso8601String(),
+      recurrenceType: 'WEEKLY',
+      recurrenceConfig: const {'weekday': DateTime.friday},
+    );
+    expect(
+        RecurrenceEngine.nextOccurrence(weekly), DateTime(2030, 1, 11, 9, 30));
+
+    final january31 = TaskItem(
+      id: 'monthly',
+      title: 'monthly',
+      listName: '工作',
+      bucket: TaskBucket.later,
+      dueAt: DateTime(2030, 1, 31, 8).toIso8601String(),
+      recurrenceType: 'MONTHLY',
+      recurrenceConfig: const {'dayOfMonth': 31},
+    );
+    expect(
+        RecurrenceEngine.nextOccurrence(january31), DateTime(2030, 2, 28, 8));
+  });
+
   test(
       'DOCUMENT-001 setContent keeps a structured document and plain projection',
       () {
@@ -229,8 +312,8 @@ void main() {
     // The local store serializes TaskItem through the migration record. Keep
     // this round-trip assertion close to the editor action so a relaunch
     // cannot silently discard the structured document.
-    final reopened = TaskItem.fromMigration(
-        controller.tasks.single.toMigrationRecord());
+    final reopened =
+        TaskItem.fromMigration(controller.tasks.single.toMigrationRecord());
     expect(reopened.description, '带链接');
     expect(reopened.contentJson?['quillDelta'], isNotNull);
     expect(reopened.contentJson?['content'], isA<List>());

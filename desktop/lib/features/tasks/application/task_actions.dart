@@ -102,6 +102,11 @@ abstract class TaskActions {
 
   TaskActionResult complete(String id);
 
+  /// Skips only the current occurrence of a recurring task. This is not a
+  /// completion and must create the next occurrence through the recurrence
+  /// engine before removing the current instance from active projections.
+  TaskActionResult skipOccurrence(String id);
+
   TaskActionResult restore(String id);
 
   TaskActionResult setSchedule(String id, TaskScheduleDraft value);
@@ -174,6 +179,9 @@ class CallbackTaskActions implements TaskActions {
 
   @override
   TaskActionResult complete(String id) => dispatch('complete', id);
+
+  @override
+  TaskActionResult skipOccurrence(String id) => dispatch('skipOccurrence', id);
 
   @override
   TaskActionResult restore(String id) => dispatch('restore', id);

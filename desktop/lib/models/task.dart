@@ -61,6 +61,7 @@ class TaskItem {
     this.updatedAt,
     this.completedAt,
     this.deletedAt,
+    this.skippedAt,
     this.attachments = const [],
     this.focusCount = 0,
     this.priority = TaskPriority.none,
@@ -101,6 +102,11 @@ class TaskItem {
   final String? updatedAt;
   final String? completedAt;
   final String? deletedAt;
+
+  /// Timestamp of a recurring occurrence skipped without completing it.
+  /// Skipped records stay out of active projections but are not completed or
+  /// moved to the trash.
+  final String? skippedAt;
   final TaskPriority priority;
   final bool completed;
 
@@ -113,6 +119,8 @@ class TaskItem {
   final int focusCount;
 
   bool get hasAttachment => attachments.isNotEmpty;
+
+  bool get isSkipped => skippedAt != null;
 
   int get subtaskTotal => subtasks.length;
   int get subtaskCompleted =>
@@ -151,6 +159,8 @@ class TaskItem {
     bool clearCompletedAt = false,
     String? deletedAt,
     bool clearDeletedAt = false,
+    String? skippedAt,
+    bool clearSkippedAt = false,
     TaskPriority? priority,
     bool? completed,
     List<String>? attachments,
@@ -185,6 +195,7 @@ class TaskItem {
       completedAt:
           clearCompletedAt ? completedAt : completedAt ?? this.completedAt,
       deletedAt: clearDeletedAt ? deletedAt : deletedAt ?? this.deletedAt,
+      skippedAt: clearSkippedAt ? skippedAt : skippedAt ?? this.skippedAt,
       priority: priority ?? this.priority,
       completed: completed ?? this.completed,
       attachments: attachments ?? this.attachments,
@@ -196,7 +207,15 @@ class TaskItem {
     final due = localDateTimeFromStorage(record.dueAt);
     final dueEnd = localDateTimeFromStorage(record.dueEndAt);
     final reminder = localDateTimeFromStorage(record.reminderAt);
-    final completed = record.status == 'DONE' || record.status == 'ABANDONED';
+    final skipped =
+        record.status.toUpperCase() == 'SKIPPED' || record.skippedAt != null;
+    final completed =
+        !skipped && (record.status == 'DONE' || record.status == 'ABANDONED');
+    final skippedAt = normalizeStoredDateTime(record.skippedAt) ??
+        (record.status.toUpperCase() == 'SKIPPED'
+            ? normalizeStoredDateTime(record.updatedAt) ??
+                DateTime.now().toIso8601String()
+            : null);
     return TaskItem(
       id: record.id,
       title: record.title,
@@ -227,6 +246,7 @@ class TaskItem {
       updatedAt: normalizeStoredDateTime(record.updatedAt),
       completedAt: normalizeStoredDateTime(record.completedAt),
       deletedAt: normalizeStoredDateTime(record.deletedAt),
+      skippedAt: skippedAt,
       attachments: List.unmodifiable(record.attachments),
       focusCount: record.focusCount,
       priority: TaskPriority.values.firstWhere(
@@ -243,7 +263,7 @@ class TaskItem {
       title: title,
       description: description ?? note,
       contentJson: contentJson,
-      status: completed ? 'DONE' : 'TODO',
+      status: skippedAt != null ? 'SKIPPED' : (completed ? 'DONE' : 'TODO'),
       priority: priority.name.toUpperCase(),
       dueAt: dueAt,
       dueEndAt: dueEndAt,
@@ -265,6 +285,7 @@ class TaskItem {
       updatedAt: updatedAt,
       completedAt: completedAt,
       deletedAt: deletedAt,
+      skippedAt: skippedAt,
       attachments: List.unmodifiable(attachments),
       focusCount: focusCount,
     );

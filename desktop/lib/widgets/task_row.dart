@@ -113,6 +113,17 @@ class _TaskRowState extends State<TaskRow> {
             TaskScheduleDraft.forDay(now.add(const Duration(days: 1)),
                 preserveClock: existing,
                 hasTime: widget.task.scheduledWithTime)));
+      case 'next-7':
+        final now = DateTime.now().add(const Duration(days: 7));
+        final existing = localDateTimeFromStorage(widget.task.dueAt);
+        _showActionFeedback(widget.controller.taskActions.setSchedule(
+            widget.task.id,
+            TaskScheduleDraft.forDay(now,
+                preserveClock: existing,
+                hasTime: widget.task.scheduledWithTime)));
+      case 'skip-occurrence':
+        _showActionFeedback(
+            widget.controller.taskActions.skipOccurrence(widget.task.id));
       case 'clear-date':
         _showActionFeedback(
             widget.controller.taskActions.clearSchedule(widget.task.id));
@@ -132,6 +143,26 @@ class _TaskRowState extends State<TaskRow> {
         await _moveToList(pickerAnchor);
       case 'tags':
         await _editTags(pickerAnchor);
+      case 'add-subtask':
+        widget.controller.selectTask(widget.task.id);
+        widget.controller.requestInspectorTitleFocus();
+      case 'copy-link':
+        await Clipboard.setData(
+            ClipboardData(text: 'workfollow://task/${widget.task.id}'));
+        _showActionFeedback(const TaskActionResult.success(
+            message: '任务链接已复制', showFeedback: true));
+      case 'open-note':
+        final noteId = widget.task.sourceNoteId;
+        if (noteId != null) widget.controller.openNote(noteId);
+      case 'pin':
+        _showActionFeedback(const TaskActionResult.success(
+            message: '置顶功能即将支持', showFeedback: true));
+      case 'abandon':
+        _showActionFeedback(const TaskActionResult.success(
+            message: '放弃功能即将支持', showFeedback: true));
+      case 'convert-note':
+        _showActionFeedback(const TaskActionResult.success(
+            message: '转换为笔记功能即将支持', showFeedback: true));
       case 'reminder':
         await _editReminder(pickerAnchor);
       case 'repeat':
@@ -220,7 +251,8 @@ class _TaskRowState extends State<TaskRow> {
     // Deletions are surfaced by the shell's single global undo toast. Keeping
     // a second row-local undo snackbar would duplicate the same affordance;
     // inline property edits still expose their snapshot undo here.
-    final canUndo = undo != null && undo.label == '撤销修改';
+    final canUndo =
+        undo != null && (undo.label == '撤销修改' || undo.label == '撤销跳过本周期');
     final id = result.taskId;
     final moved = id != null &&
         result.destination != null &&

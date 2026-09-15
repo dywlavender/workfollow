@@ -147,6 +147,7 @@ class MigrationTaskRecord {
     required this.updatedAt,
     required this.completedAt,
     this.deletedAt,
+    this.skippedAt,
   });
 
   final String id;
@@ -172,6 +173,10 @@ class MigrationTaskRecord {
   final String? updatedAt;
   final String? completedAt;
   final String? deletedAt;
+
+  /// Optional timestamp for a recurring occurrence that was skipped. Older
+  /// snapshots omit this field and continue to deserialize unchanged.
+  final String? skippedAt;
 
   factory MigrationTaskRecord.fromJson(Map<String, dynamic> json) {
     return MigrationTaskRecord(
@@ -199,6 +204,7 @@ class MigrationTaskRecord {
       updatedAt: _nullableString(json['updatedAt']),
       completedAt: _nullableString(json['completedAt']),
       deletedAt: _nullableString(json['deletedAt']),
+      skippedAt: _nullableString(json['skippedAt']),
     );
   }
 
@@ -226,6 +232,7 @@ class MigrationTaskRecord {
         'updatedAt': updatedAt,
         'completedAt': completedAt,
         'deletedAt': deletedAt,
+        'skippedAt': skippedAt,
       };
 }
 
