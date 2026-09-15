@@ -594,19 +594,26 @@ class _WorkFollowShellState extends State<WorkFollowShell> {
                         Expanded(
                           child: Column(
                             children: [
-                              _AppToolbar(
-                                  title: _viewTitle,
-                                  sidebarCollapsed: sidebarCollapsed,
-                                  onToggleSidebar: () => setState(() =>
-                                      sidebarCollapsed = !sidebarCollapsed),
-                                  onSearch: _openCommandPalette,
-                                  onOpenFilters: _openFilters,
-                                  focusTimer: focusTimer,
-                                  onOpenFocusTimer: _openFocusTimer,
-                                  onNewTask:
-                                      controller.view == WorkspaceView.notes
-                                          ? _newNote
-                                          : _newTask),
+                              // Task views own their list header and fixed
+                              // inspector. Removing the duplicate global
+                              // toolbar gives the workspace the uninterrupted
+                              // TickTick-style canvas requested for todos;
+                              // search, quick add and Cmd-N remain available
+                              // through the task surface and shortcuts.
+                              if (!controller.isTaskView)
+                                _AppToolbar(
+                                    title: _viewTitle,
+                                    sidebarCollapsed: sidebarCollapsed,
+                                    onToggleSidebar: () => setState(() =>
+                                        sidebarCollapsed = !sidebarCollapsed),
+                                    onSearch: _openCommandPalette,
+                                    onOpenFilters: _openFilters,
+                                    focusTimer: focusTimer,
+                                    onOpenFocusTimer: _openFocusTimer,
+                                    onNewTask:
+                                        controller.view == WorkspaceView.notes
+                                            ? _newNote
+                                            : _newTask),
                               Expanded(
                                 child: _WorkspaceContent(
                                     controller: controller,
