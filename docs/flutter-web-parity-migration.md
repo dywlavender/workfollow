@@ -43,7 +43,7 @@ Web 支持 13 个配色、3 个明暗模式选项和 4 个背景预设。截图�
 | --- | --- | --- |
 | Web 审计 | 新增本规范，记录最终 CSS cascade、尺寸、角色、断点和未迁移范围 | 文档审查 |
 | Flutter 主题 | `WorkFollowTheme` 增加 Web 字体、颜色、间距、圆角、动效、层级和布局契约 | `web_theme_parity_test.dart` 7 项通过 |
-| Flutter 布局 | 任务固定列表/详情列、218/430/1px/320 几何、笔记 300/270 列表、上下文第二栏 | `web_layout_parity_test.dart` 3 项通过 |
+| Flutter 布局 | Web 218/430/1px/320 几何契约、macOS 紧凑 196/380/1px/320 工作区、笔记 300/270 列表、上下文第二栏 | `web_layout_parity_test.dart` 3 项通过 |
 
 本轮完成的是 Phase 1、Phase 2 的令牌和上下文导航基础，以及 Phase 3/5 的首批几何迁移；统一 Popover 基础设施、列表拖拽持久化、全量 raw 字号清理和实机逐项交互验收仍按下方 Phase 4–6 继续。代码已通过完整 Flutter 测试和 Release 构建，但这不等同于“所有范围项已经完成”。
 
@@ -142,6 +142,8 @@ Web 最终规则（`layout.css` 最后加载）如下，Flutter 的 `TaskWorkspa
 * 第一栏宽度固定为 218px，内部内容可滚动；清单/视图项目默认填满第二栏，不额外设置脱离 Web 契约的 `172px` 最大宽度。若要复刻 TickTick 的窄分类视觉，应另建明确的视觉 profile 并单独验收。
 * 任务列表、详情正文各自滚动；父级工作区不因正文高度被撑开。
 
+macOS 本地版在保留上述 Web 值作为迁移基准的前提下，采用紧凑工作区 profile：任务第二栏宽 196px，任务列表列为 `minmax(320px, 380px)`，详情仍保持最小 320px。这个取舍用于适配本地窗口的高信息密度，不应回写到 Web 契约；对应 token 为 `compactTaskNavigationWidth`、`compactTaskListMinWidth` 和 `compactTaskListWidth`。
+
 ### 2.2 应用一级栏和任务第二栏
 
 Web 的一级栏由 `--workspace-rail-width` 控制：基础 152px，≥1600px 为 160px。当前 macOS 个人版可以保留“窄图标 rail + 可读上下文栏”的原生适配，但必须保证：
@@ -150,6 +152,8 @@ Web 的一级栏由 `--workspace-rail-width` 控制：基础 152px，≥1600px �
 * 点击一级入口后，第二栏由 `ContextNavigation` 按模块切换；任务栏只展示任务视图、清单、标签，笔记栏只展示笔记视图/文件夹，日历/四象限/看板/习惯/统计只展示本模块的最小导航。
 * 第二栏标题和未选中项目使用 `textPrimary`；分组标签、数量和辅助描述才使用次级色。
 * personal 版不要出现 Web 的团队协作入口、团队知识库、通知 badge 和成员分配按钮。
+
+macOS 紧凑 profile 将任务导航、清单和标签的行高统一为 34px（上下 1px 外边距），分组标题上下间距收敛为 14px/2px；按钮 hit target 采用 28px。任务列表正文行仍遵循 Web 的 48px 可读高度，避免把导航密度误套到任务内容上。
 
 ### 2.3 笔记工作区
 

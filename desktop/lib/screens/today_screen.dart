@@ -53,8 +53,12 @@ class _TodayScreenState extends State<TodayScreen> {
   // enters its 1024/1120 layouts based on the full window, so the native
   // equivalent uses the same usable-width threshold after the merged rail.
   static const double _wideInspectorBreakpoint = 760;
-  static const double _minListPaneWidth = WorkFollowLayout.taskListMinWidth;
-  static const double _maxListPaneWidth = WorkFollowLayout.taskListWidth;
+  // Keep the Web contract in WorkFollowLayout, but use the deliberately
+  // compact native profile for the macOS list pane. This leaves more room for
+  // the fixed inspector without making the task rows feel cramped.
+  static const double _minListPaneWidth =
+      WorkFollowLayout.compactTaskListMinWidth;
+  static const double _maxListPaneWidth = WorkFollowLayout.compactTaskListWidth;
   static const double _detailMinWidth = WorkFollowLayout.taskDetailMinWidth;
   static const double _listDividerWidth = WorkFollowLayout.taskListDividerWidth;
   static const double _taskRowHeight =

@@ -26,10 +26,11 @@ class AppRail extends StatelessWidget {
   });
 
   // This native shell intentionally merges the Web client's global rail and
-  // task-view sidebar into one surface. Keep the icon rail compact while
-  // reserving the Web task-navigation width for the readable column.
+  // task-view sidebar into one surface. The Web width remains the migration
+  // contract, while the local shell uses the compact profile so the second
+  // column does not dominate the macOS window.
   static const double width =
-      _iconRailWidth + 1 + WorkFollowLayout.taskNavigationWidth;
+      _iconRailWidth + 1 + WorkFollowLayout.compactTaskNavigationWidth;
   static const double _iconRailWidth = 52;
 
   final WorkspaceController controller;
@@ -324,7 +325,7 @@ class _TaskNavigation extends StatelessWidget {
           trailing: AppIconButton(
               icon: WorkFollowIcons.add,
               tooltip: '新建清单',
-              size: WorkFollowMetrics.iconHitTarget,
+              size: WorkFollowMetrics.compactNavigationIconHitTarget,
               iconSize: WorkFollowMetrics.toolbarIcon,
               onPressed: () => _showAddListDialog(context, controller)),
         ),
@@ -360,13 +361,13 @@ class _NotesNavigation extends StatelessWidget {
             AppIconButton(
                 icon: WorkFollowIcons.add,
                 tooltip: '新建笔记',
-                size: WorkFollowMetrics.iconHitTarget,
+                size: WorkFollowMetrics.compactNavigationIconHitTarget,
                 iconSize: WorkFollowMetrics.toolbarIcon,
                 onPressed: () => controller.addNoteInCurrentFolder()),
             AppIconButton(
                 icon: WorkFollowIcons.newFolder,
                 tooltip: '新建文件夹',
-                size: WorkFollowMetrics.iconHitTarget,
+                size: WorkFollowMetrics.compactNavigationIconHitTarget,
                 iconSize: WorkFollowMetrics.toolbarIcon,
                 onPressed: () => _showAddFolderDialog(context, controller)),
           ]),
@@ -800,7 +801,8 @@ class _RailSectionHeader extends StatelessWidget {
     final tokens = WorkFollowTheme.of(context);
     return Padding(
       padding: const EdgeInsets.only(
-          top: WorkFollowSpacing.lg, bottom: WorkFollowSpacing.xxs),
+          top: WorkFollowMetrics.compactNavigationSectionTop,
+          bottom: WorkFollowMetrics.compactNavigationSectionBottom),
       child: Row(
         children: [
           Expanded(
@@ -850,7 +852,7 @@ class _TagSectionState extends State<_TagSection> {
                 ? WorkFollowIcons.expandLess
                 : WorkFollowIcons.expandMore,
             tooltip: expanded ? '收起标签' : '展开标签',
-            size: WorkFollowMetrics.iconHitTarget,
+            size: WorkFollowMetrics.compactNavigationIconHitTarget,
             iconSize: WorkFollowMetrics.toolbarIcon,
             onPressed: () => setState(() => expanded = !expanded),
           ),
@@ -940,11 +942,12 @@ class _RailItemState extends State<_RailItem> {
           onTap: widget.onTap,
           onSecondaryTap: widget.onMenu,
           child: AnimatedContainer(
+            key: ValueKey('rail-navigation-item-${widget.label}'),
             duration: const Duration(milliseconds: 150),
             curve: Curves.easeOut,
-            margin: const EdgeInsets.symmetric(vertical: 2),
-            padding: const EdgeInsets.symmetric(
-                horizontal: 11, vertical: WorkFollowSpacing.sm - 2),
+            height: WorkFollowMetrics.compactNavigationRowHeight,
+            margin: const EdgeInsets.symmetric(vertical: 1),
+            padding: const EdgeInsets.symmetric(horizontal: 10),
             decoration: BoxDecoration(
               color: widget.selected
                   ? tokens.accentSoft
@@ -1054,11 +1057,12 @@ class _TaskListItemState extends State<_TaskListItem> {
                 child: GestureDetector(
                   onTap: () => widget.controller.selectList(widget.list.name),
                   child: AnimatedContainer(
+                    key: ValueKey('rail-list-item-${widget.list.name}'),
                     duration: const Duration(milliseconds: 150),
                     curve: Curves.easeOut,
-                    margin: const EdgeInsets.symmetric(vertical: 2),
-                    padding: const EdgeInsets.fromLTRB(11,
-                        WorkFollowSpacing.sm - 2, 8, WorkFollowSpacing.sm - 2),
+                    height: WorkFollowMetrics.compactNavigationRowHeight,
+                    margin: const EdgeInsets.symmetric(vertical: 1),
+                    padding: const EdgeInsets.symmetric(horizontal: 10),
                     decoration: BoxDecoration(
                       color: dragActive
                           ? tokens.accentSoft
@@ -1077,11 +1081,11 @@ class _TaskListItemState extends State<_TaskListItem> {
                     child: Row(
                       children: [
                         Container(
-                            width: 9,
-                            height: 9,
+                            width: 8,
+                            height: 8,
                             decoration: BoxDecoration(
                                 color: listColor, shape: BoxShape.circle)),
-                        const SizedBox(width: 10),
+                        const SizedBox(width: 8),
                         Expanded(
                           child: Text(widget.list.name,
                               maxLines: 1,
@@ -1110,7 +1114,8 @@ class _TaskListItemState extends State<_TaskListItem> {
                             child: AppIconButton(
                                 icon: WorkFollowIcons.more,
                                 tooltip: '清单操作',
-                                size: WorkFollowMetrics.iconHitTarget,
+                                size: WorkFollowMetrics
+                                    .compactNavigationIconHitTarget,
                                 iconSize: WorkFollowMetrics.metadataIcon,
                                 onPressed: () => _showListMenu(context)),
                           ),
@@ -1290,9 +1295,11 @@ class _TagItemState extends State<_TagItem> {
           selected: selected,
           label: '#${widget.name}，${widget.count} 个任务',
           child: AnimatedContainer(
+            key: ValueKey('rail-tag-item-${widget.name}'),
             duration: const Duration(milliseconds: 140),
-            margin: const EdgeInsets.symmetric(vertical: 2),
-            padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 8),
+            height: WorkFollowMetrics.compactNavigationRowHeight,
+            margin: const EdgeInsets.symmetric(vertical: 1),
+            padding: const EdgeInsets.symmetric(horizontal: 10),
             decoration: BoxDecoration(
                 color: selected
                     ? tokens.accentSoft

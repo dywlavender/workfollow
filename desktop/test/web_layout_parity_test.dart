@@ -8,17 +8,22 @@ import 'package:workfollow_personal/theme/workfollow_theme.dart';
 import 'package:workfollow_personal/widgets/sidebar.dart';
 
 void main() {
-  test('native workspace columns expose the Web layout contract', () {
-    expect(AppRail.width, 52 + 1 + WorkFollowLayout.taskNavigationWidth);
+  test('native workspace keeps the Web contract and compact macOS profile', () {
+    expect(AppRail.width, 52 + 1 + WorkFollowLayout.compactTaskNavigationWidth);
     expect(WorkFollowLayout.taskNavigationWidth, 218);
     expect(WorkFollowLayout.taskListMinWidth, 360);
     expect(WorkFollowLayout.taskListWidth, 430);
+    expect(WorkFollowLayout.compactTaskNavigationWidth, 196);
+    expect(WorkFollowLayout.compactTaskListMinWidth, 320);
+    expect(WorkFollowLayout.compactTaskListWidth, 380);
+    expect(WorkFollowMetrics.compactNavigationRowHeight, 34);
+    expect(WorkFollowMetrics.compactNavigationSectionTop, 14);
     expect(WorkFollowLayout.taskListDividerWidth, 1);
     expect(WorkFollowLayout.taskDetailMinWidth, 320);
     expect(WorkFollowLayout.taskRowComfortableHeight, 48);
   });
 
-  testWidgets('task workspace keeps the Web list and detail columns readable',
+  testWidgets('task workspace uses a compact list and readable detail column',
       (tester) async {
     tester.view.physicalSize = const Size(1000, 700);
     tester.view.devicePixelRatio = 1;
@@ -41,14 +46,52 @@ void main() {
     expect(find.byKey(const ValueKey('web-task-detail-pane')), findsOneWidget);
     expect(
         tester.getSize(find.byKey(const ValueKey('web-task-list-pane'))).width,
-        WorkFollowLayout.taskListWidth);
+        WorkFollowLayout.compactTaskListWidth);
     expect(
         tester
             .getSize(find.byKey(const ValueKey('web-task-detail-pane')))
             .width,
         1000 -
-            WorkFollowLayout.taskListWidth -
+            WorkFollowLayout.compactTaskListWidth -
             WorkFollowLayout.taskListDividerWidth);
+  });
+
+  testWidgets('task navigation and list rows use the compact native rhythm',
+      (tester) async {
+    final controller = WorkspaceController(seedData: true);
+    addTearDown(controller.dispose);
+    controller.selectView(WorkspaceView.today);
+    await tester.pumpWidget(MaterialApp(
+      theme: WorkFollowThemeData.light(),
+      home: Scaffold(
+        body: SizedBox(
+          width: AppRail.width,
+          height: 720,
+          child: AppRail(
+            controller: controller,
+            isDark: false,
+            onToggleTheme: () {},
+            onOpenSettings: () {},
+          ),
+        ),
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    expect(
+      tester
+          .getSize(find.byKey(const ValueKey('rail-navigation-item-今天')))
+          .height,
+      WorkFollowMetrics.compactNavigationRowHeight + 2,
+    );
+    expect(
+      tester.getSize(find.byKey(const ValueKey('rail-list-item-工作'))).height,
+      WorkFollowMetrics.compactNavigationRowHeight + 2,
+    );
+    expect(
+      tester.getSize(find.byKey(const ValueKey('rail-list-item-工作'))).width,
+      WorkFollowMetrics.listItemMaxWidth,
+    );
   });
 
   testWidgets('notes index follows the Web 300/270 desktop widths',

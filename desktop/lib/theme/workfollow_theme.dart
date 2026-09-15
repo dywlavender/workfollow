@@ -17,6 +17,13 @@ class WorkFollowMetrics {
   static const double compactFieldIcon = 17;
   static const double metadataIcon = 15;
   static const double iconHitTarget = 32;
+  // macOS task navigation uses a denser rhythm than the Web reference while
+  // keeping the same icon and text roles. The hit target remains large enough
+  // for pointer use, but the surrounding row no longer wastes vertical space.
+  static const double compactNavigationRowHeight = 34;
+  static const double compactNavigationIconHitTarget = 28;
+  static const double compactNavigationSectionTop = 14;
+  static const double compactNavigationSectionBottom = 2;
   static const double primaryButtonHeight = 36;
   static const double compactButtonHeight = 34;
   static const double chipHeight = 30;
@@ -194,6 +201,11 @@ class WorkFollowLayout {
   static const double taskNavigationWidth = 218;
   static const double taskListWidth = 430;
   static const double taskListMinWidth = 360;
+  // Native macOS compact profile. The Web values above remain the migration
+  // contract; these values are the deliberate local-shell density choice.
+  static const double compactTaskNavigationWidth = 196;
+  static const double compactTaskListWidth = 380;
+  static const double compactTaskListMinWidth = 320;
   static const double taskListDividerWidth = 1;
   static const double taskDetailMinWidth = 320;
   static const double narrowTaskListMinWidth = 300;
