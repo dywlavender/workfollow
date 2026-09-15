@@ -97,7 +97,7 @@ class _NotesScreenState extends State<NotesScreen> {
                       children: [
                     Text(c.notesFavoritesOnly ? '收藏笔记' : '笔记',
                         style: TextStyle(
-                            fontSize: 22,
+                            fontSize: WorkFollowTypography.sectionTitle + 6,
                             fontWeight: FontWeight.w800,
                             letterSpacing: -.4,
                             color: tokens.textPrimary)),
@@ -447,7 +447,7 @@ class _NotePageState extends State<_NotePage> {
                           minLines: 1,
                           maxLines: 3,
                           style: TextStyle(
-                              fontSize: 28,
+                              fontSize: WorkFollowTypography.pageTitle + 4,
                               height: 1.3,
                               fontWeight: FontWeight.w800,
                               letterSpacing: -.5,
@@ -463,7 +463,8 @@ class _NotePageState extends State<_NotePage> {
                       Row(children: [
                         Text('最近编辑于 ${noteUpdatedLabelFor(note.updatedAt)}',
                             style: TextStyle(
-                                fontSize: 11, color: tokens.textTertiary)),
+                                fontSize: WorkFollowTypography.caption,
+                                color: tokens.textTertiary)),
                         const Spacer(),
                         SoftPill(
                             label:
@@ -479,13 +480,14 @@ class _NotePageState extends State<_NotePage> {
                         Row(children: [
                           Text('关联任务',
                               style: TextStyle(
-                                  fontSize: 13,
+                                  fontSize: WorkFollowTypography.field,
                                   fontWeight: FontWeight.w700,
                                   color: tokens.textSecondary)),
                           const SizedBox(width: 6),
                           Text('${linked.length}',
                               style: TextStyle(
-                                  fontSize: 11, color: tokens.textTertiary)),
+                                  fontSize: WorkFollowTypography.caption,
+                                  color: tokens.textTertiary)),
                         ]),
                         const SizedBox(height: 8),
                         for (final task in linked)
@@ -546,7 +548,7 @@ class _LinkedTaskRow extends StatelessWidget {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
-                              fontSize: 13,
+                              fontSize: WorkFollowTypography.field,
                               fontWeight: FontWeight.w500,
                               color: task.completed
                                   ? tokens.textTertiary

@@ -408,10 +408,14 @@ class _TodayScreenState extends State<TodayScreen> {
       const SizedBox(width: 8),
       Text(label,
           style: TextStyle(
-              fontSize: 13, fontWeight: FontWeight.w700, color: textColor)),
+              fontSize: WorkFollowTypography.field,
+              fontWeight: FontWeight.w700,
+              color: textColor)),
       const SizedBox(width: 6),
       Text('$count',
-          style: TextStyle(fontSize: 11, color: tokens.textTertiary)),
+          style: TextStyle(
+              fontSize: WorkFollowTypography.caption,
+              color: tokens.textTertiary)),
       if (trailing != null) trailing,
     ]);
   }
@@ -584,12 +588,14 @@ class _EmptyInspector extends StatelessWidget {
             Text('选择一个任务开始编辑',
                 style: TextStyle(
                     color: tokens.textSecondary,
-                    fontSize: 14,
+                    fontSize: WorkFollowTypography.body,
                     fontWeight: FontWeight.w600)),
             const SizedBox(height: 6),
             Text('标题、备注、日期和子任务都会在这里展开。',
                 textAlign: TextAlign.center,
-                style: TextStyle(color: tokens.textTertiary, fontSize: 13)),
+                style: TextStyle(
+                    color: tokens.textTertiary,
+                    fontSize: WorkFollowTypography.field)),
           ],
         ),
       ),
@@ -618,7 +624,10 @@ class _ProgressSummary extends StatelessWidget {
       SizedBox(height: compact ? 3 : 5),
       Text(total == 0 ? '还没有安排' : '已完成 $done/$total',
           style: TextStyle(
-              fontSize: compact ? 10 : 10.5, color: tokens.textTertiary)),
+              fontSize: compact
+                  ? WorkFollowTypography.caption - 1
+                  : WorkFollowTypography.caption,
+              color: tokens.textTertiary)),
     ]);
   }
 }
@@ -642,7 +651,7 @@ class _BulkBar extends StatelessWidget {
                   padding: const EdgeInsets.only(right: 6),
                   child: Text('已选择 ${controller.multiSelectCount} 项',
                       style: TextStyle(
-                          fontSize: 12,
+                          fontSize: WorkFollowTypography.metadata,
                           fontWeight: FontWeight.w600,
                           color: tokens.textPrimary))),
               TextButton(

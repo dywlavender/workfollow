@@ -699,7 +699,7 @@ class _AppToolbar extends StatelessWidget {
             Text(title,
                 style: TextStyle(
                     color: tokens.textSecondary,
-                    fontSize: 13,
+                    fontSize: WorkFollowTypography.navigation,
                     fontWeight: FontWeight.w600)),
           const Spacer(),
           _ToolbarSearch(onPressed: onSearch),
@@ -723,7 +723,7 @@ class _AppToolbar extends StatelessWidget {
                         const Text('新建',
                             style: TextStyle(
                                 color: Colors.white,
-                                fontSize: 12,
+                                fontSize: WorkFollowTypography.button,
                                 fontWeight: FontWeight.w700))
                       ])))),
         ],
@@ -765,8 +765,9 @@ class _ToolbarSearchState extends State<_ToolbarSearch> {
             const SizedBox(width: 7),
             Expanded(
                 child: Text('搜索',
-                    style:
-                        TextStyle(color: tokens.textTertiary, fontSize: 12))),
+                    style: TextStyle(
+                        color: tokens.textTertiary,
+                        fontSize: WorkFollowTypography.field))),
             Container(
                 padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 3),
                 decoration: BoxDecoration(
@@ -776,7 +777,7 @@ class _ToolbarSearchState extends State<_ToolbarSearch> {
                 child: Text('⌘K',
                     style: TextStyle(
                         color: tokens.textTertiary,
-                        fontSize: 9,
+                        fontSize: WorkFollowTypography.caption - 1,
                         fontWeight: FontWeight.w700)))
           ]),
         ),
@@ -859,7 +860,7 @@ class _UndoToast extends StatelessWidget {
               Text(message,
                   style: TextStyle(
                       color: tokens.textPrimary,
-                      fontSize: 12,
+                      fontSize: WorkFollowTypography.field,
                       fontWeight: FontWeight.w600)),
               const SizedBox(width: 14),
               TextButton(
@@ -871,8 +872,9 @@ class _UndoToast extends StatelessWidget {
                       minimumSize: Size.zero,
                       tapTargetSize: MaterialTapTargetSize.shrinkWrap),
                   child: const Text('撤销',
-                      style:
-                          TextStyle(fontSize: 11, fontWeight: FontWeight.w700)))
+                      style: TextStyle(
+                          fontSize: WorkFollowTypography.caption,
+                          fontWeight: FontWeight.w700)))
             ])));
   }
 }

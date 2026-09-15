@@ -378,7 +378,7 @@ class TaskDocumentEditorState extends State<TaskDocumentEditor>
   Widget build(BuildContext context) {
     final tokens = WorkFollowTheme.of(context);
     final textStyle = Theme.of(context).textTheme.bodyLarge!.copyWith(
-          fontSize: 15,
+          fontSize: WorkFollowTypography.editorBody,
           height: 1.65,
           color: tokens.textPrimary,
         );
@@ -547,14 +547,15 @@ class _TaskSubtasksPanelState extends State<TaskSubtasksPanel> {
               Row(children: [
                 Text('子任务',
                     style: TextStyle(
-                        fontSize: 14,
+                        fontSize: WorkFollowTypography.body,
                         fontWeight: FontWeight.w700,
                         color: tokens.textPrimary)),
                 const Spacer(),
                 if (task.subtaskTotal > 0)
                   Text('${task.subtaskCompleted}/${task.subtaskTotal}',
-                      style:
-                          TextStyle(fontSize: 11, color: tokens.textTertiary)),
+                      style: TextStyle(
+                          fontSize: WorkFollowTypography.caption,
+                          color: tokens.textTertiary)),
               ]),
               if (task.subtaskTotal > 0) ...[
                 const SizedBox(height: 7),
@@ -584,7 +585,7 @@ class _TaskSubtasksPanelState extends State<TaskSubtasksPanel> {
                       decoration: const InputDecoration(
                           border: InputBorder.none, isDense: true),
                       style: TextStyle(
-                          fontSize: 13,
+                          fontSize: WorkFollowTypography.field,
                           color: item.completed
                               ? tokens.textTertiary
                               : tokens.textPrimary,
@@ -619,7 +620,9 @@ class _TaskSubtasksPanelState extends State<TaskSubtasksPanel> {
                           hintText: '添加子任务，按 Return 确认',
                           border: InputBorder.none,
                           isDense: true),
-                      style: TextStyle(fontSize: 13, color: tokens.textPrimary),
+                      style: TextStyle(
+                          fontSize: WorkFollowTypography.field,
+                          color: tokens.textPrimary),
                     ),
                   ),
                 ]),
@@ -651,7 +654,7 @@ class TaskAttachmentsPanel extends StatelessWidget {
         children: [
           Text('附件与关联',
               style: TextStyle(
-                  fontSize: 14,
+                  fontSize: WorkFollowTypography.sectionTitle,
                   fontWeight: FontWeight.w700,
                   color: tokens.textPrimary)),
           const SizedBox(height: 7),
@@ -662,7 +665,9 @@ class TaskAttachmentsPanel extends StatelessWidget {
             children: [
               for (final file in task.attachments)
                 InputChip(
-                  label: Text(file, style: const TextStyle(fontSize: 12)),
+                  label: Text(file,
+                      style: const TextStyle(
+                          fontSize: WorkFollowTypography.metadata)),
                   avatar: const AppIcon(WorkFollowIcons.file,
                       size: WorkFollowMetrics.metadataIcon),
                   onPressed: () => controller.revealAttachment(task.id, file),
@@ -675,7 +680,9 @@ class TaskAttachmentsPanel extends StatelessWidget {
                   icon: AppIcon(WorkFollowIcons.attachment,
                       size: WorkFollowMetrics.compactFieldIcon,
                       color: tokens.accent),
-                  label: const Text('添加附件', style: TextStyle(fontSize: 12))),
+                  label: const Text('添加附件',
+                      style:
+                          TextStyle(fontSize: WorkFollowTypography.metadata))),
             ],
           ),
         ],
@@ -719,12 +726,13 @@ class TaskSourceNotePanel extends StatelessWidget {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
-                              fontSize: 13,
+                              fontSize: WorkFollowTypography.field,
                               fontWeight: FontWeight.w600,
                               color: tokens.textPrimary)),
                       Text('来自笔记 · ${source.folder}',
                           style: TextStyle(
-                              fontSize: 11, color: tokens.textTertiary)),
+                              fontSize: WorkFollowTypography.caption,
+                              color: tokens.textTertiary)),
                     ]),
               ),
               AppIcon(WorkFollowIcons.chevronNext,

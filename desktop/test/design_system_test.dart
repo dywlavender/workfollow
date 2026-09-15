@@ -13,9 +13,13 @@ void main() {
     final theme = WorkFollowThemeData.light();
 
     expect(WorkFollowMetrics.iconHitTarget, 32);
-    expect(WorkFollowMetrics.toolbarIcon, 16);
+    expect(WorkFollowMetrics.railIcon, 22);
+    expect(WorkFollowMetrics.navigationIcon, 20);
+    expect(WorkFollowMetrics.toolbarIcon, 18);
+    expect(WorkFollowMetrics.fieldIcon, 20);
+    expect(WorkFollowMetrics.compactFieldIcon, 17);
     expect(WorkFollowMetrics.menuRowHeight, 40);
-    expect(WorkFollowMetrics.editorToolbarHeight, 40);
+    expect(WorkFollowMetrics.editorToolbarHeight, 42);
     expect(theme.textTheme.displaySmall?.fontSize, 26);
     expect(theme.textTheme.bodyLarge?.fontSize, 14);
     expect(theme.textTheme.bodyMedium?.fontSize, 13);
@@ -38,7 +42,8 @@ void main() {
     ));
 
     expect(tester.getSize(find.byType(AppIconButton)), const Size(32, 32));
-    expect(tester.widget<Icon>(find.byIcon(Icons.more_horiz)).size, 16);
+    expect(tester.widget<Icon>(find.byIcon(Icons.more_horiz)).size,
+        WorkFollowMetrics.toolbarIcon);
   });
 
   testWidgets('document formatting strip keeps a 40 point toolbar height',

@@ -166,7 +166,7 @@ class TaskSlashMenu extends StatelessWidget {
             color: tokens.textSecondary),
         title: Text(action.label,
             style: TextStyle(
-                fontSize: 13,
+                fontSize: WorkFollowTypography.field,
                 fontWeight: FontWeight.w500,
                 color: tokens.textPrimary)),
         onTap: () => onSelected(action),

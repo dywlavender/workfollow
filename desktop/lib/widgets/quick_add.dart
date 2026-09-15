@@ -559,7 +559,9 @@ class _QuickAddFieldState extends State<QuickAddField> {
                       onSubmitted: (_) => submit(),
                       onChanged: (_) => _reparse(),
                       textInputAction: TextInputAction.done,
-                      style: TextStyle(fontSize: 14, color: tokens.textPrimary),
+                      style: TextStyle(
+                          fontSize: WorkFollowTypography.body + 1,
+                          color: tokens.textPrimary),
                       decoration: InputDecoration(
                           hintText: widget.listStyle
                               ? '添加任务至“${widget.controller.creationTargetLabel.split(' · ').first}”'
@@ -571,7 +573,9 @@ class _QuickAddFieldState extends State<QuickAddField> {
                               const EdgeInsets.symmetric(vertical: 9)))),
               if (!expanded)
                 Text('⌘N',
-                    style: TextStyle(fontSize: 10, color: tokens.textTertiary)),
+                    style: TextStyle(
+                        fontSize: WorkFollowTypography.caption - 1,
+                        color: tokens.textTertiary)),
             ]),
             if (parse.spans.isNotEmpty)
               Padding(
@@ -591,7 +595,7 @@ class _QuickAddFieldState extends State<QuickAddField> {
                                   : 'smart-chip-${span.kind.name}-${span.raw}'),
                               label: Text(span.label,
                                   style: TextStyle(
-                                      fontSize: 11,
+                                      fontSize: WorkFollowTypography.metadata,
                                       fontWeight: FontWeight.w600,
                                       color: _spanColor(span.kind, tokens))),
                               backgroundColor: _spanColor(span.kind, tokens)
@@ -613,7 +617,7 @@ class _QuickAddFieldState extends State<QuickAddField> {
                       child: Text(_summary,
                           style: TextStyle(
                               color: tokens.textTertiary,
-                              fontSize: 10.5,
+                              fontSize: WorkFollowTypography.caption,
                               fontWeight: FontWeight.w500)))),
             if (expanded)
               Padding(
@@ -707,7 +711,8 @@ class _QuickAddFieldState extends State<QuickAddField> {
                               padding:
                                   const EdgeInsets.symmetric(horizontal: 12)),
                           child: const Text('添加任务',
-                              style: TextStyle(fontSize: 12))),
+                              style: TextStyle(
+                                  fontSize: WorkFollowTypography.button))),
                   ])),
           ]),
         ));

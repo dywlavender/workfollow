@@ -6,23 +6,25 @@ import 'package:flutter/material.dart';
 class WorkFollowMetrics {
   const WorkFollowMetrics._();
 
-  static const double railIcon = 20;
-  static const double navigationIcon = 18;
-  static const double headerIcon = 18;
-  static const double toolbarIcon = 16;
+  static const double railIcon = 22;
+  static const double navigationIcon = 20;
+  static const double headerIcon = 20;
+  static const double toolbarIcon = 18;
   // Property controls are deliberately a little larger than metadata. This
   // keeps date/list/tag fields legible at a glance, matching the dedicated
   // field affordances in TickTick's detail pane.
-  static const double fieldIcon = 18;
-  static const double compactFieldIcon = 16;
-  static const double metadataIcon = 14;
+  static const double fieldIcon = 20;
+  static const double compactFieldIcon = 17;
+  static const double metadataIcon = 15;
   static const double iconHitTarget = 32;
   static const double primaryButtonHeight = 36;
-  static const double compactButtonHeight = 32;
-  static const double chipHeight = 28;
+  static const double compactButtonHeight = 34;
+  static const double chipHeight = 30;
+  // Keep menu rows at the compact macOS rhythm; the larger field icons do not
+  // need an oversized menu and this preserves the trigger-to-popover gap.
   static const double menuRowHeight = 40;
   static const double taskRowMinHeight = 44;
-  static const double editorToolbarHeight = 40;
+  static const double editorToolbarHeight = 42;
 }
 
 class WorkFollowSpacing {
@@ -35,6 +37,25 @@ class WorkFollowSpacing {
   static const double lg = 20;
   static const double xl = 24;
   static const double xxl = 32;
+}
+
+/// Text roles used by the shell and document workbench. Keeping these roles
+/// explicit prevents a local TextStyle from silently drifting away from the
+/// rest of the macOS UI.
+class WorkFollowTypography {
+  const WorkFollowTypography._();
+
+  static const double pageTitle = 26;
+  static const double sectionTitle = 16;
+  static const double sectionLabel = 12;
+  static const double navigation = 14;
+  static const double taskTitle = 15;
+  static const double body = 14;
+  static const double editorBody = 16;
+  static const double field = 13;
+  static const double metadata = 12;
+  static const double caption = 11;
+  static const double button = 13;
 }
 
 class WorkFollowRadii {
@@ -92,20 +113,20 @@ class WorkFollowTheme extends ThemeExtension<WorkFollowTheme> {
   final LinearGradient seasonalSky;
 
   static const light = WorkFollowTheme(
-    canvas: Color(0xFFF5F6FB),
-    sidebar: Color(0xFFEEF0F7),
+    canvas: Color(0xFFF3F5FA),
+    sidebar: Color(0xFFEDF0F7),
     content: Color(0xFFFFFFFF),
     inspector: Color(0xFFFFFFFF),
     overlay: Color(0xFFFFFFFF),
-    textPrimary: Color(0xFF1F2430),
-    textSecondary: Color(0xFF687285),
-    textTertiary: Color(0xFF98A1B2),
-    border: Color(0xFFE3E6EE),
-    borderStrong: Color(0xFFD1D6E0),
-    accent: Color(0xFF5B5CE2),
-    accentHover: Color(0xFF4C4FCF),
-    accentSoft: Color(0xFFEEF2FF),
-    accentFaint: Color(0xFFF7F8FF),
+    textPrimary: Color(0xFF222630),
+    textSecondary: Color(0xFF5D6678),
+    textTertiary: Color(0xFF8D97A8),
+    border: Color(0xFFDEE2EB),
+    borderStrong: Color(0xFFC8CEDA),
+    accent: Color(0xFF5B5CEB),
+    accentHover: Color(0xFF494BCB),
+    accentSoft: Color(0xFFECEEFF),
+    accentFaint: Color(0xFFF5F5FF),
     success: Color(0xFF2EAB78),
     warning: Color(0xFFC67912),
     danger: Color(0xFFE45454),
@@ -265,7 +286,7 @@ class WorkFollowThemeData {
       textTheme: TextTheme(
         displaySmall: TextStyle(
             color: tokens.textPrimary,
-            fontSize: 26,
+            fontSize: WorkFollowTypography.pageTitle,
             height: 1.18,
             fontWeight: FontWeight.w700,
             letterSpacing: -.45),
@@ -283,7 +304,7 @@ class WorkFollowThemeData {
             letterSpacing: -.25),
         titleMedium: TextStyle(
             color: tokens.textPrimary,
-            fontSize: 16,
+            fontSize: WorkFollowTypography.sectionTitle,
             height: 1.25,
             fontWeight: FontWeight.w600),
         titleSmall: TextStyle(
@@ -291,25 +312,29 @@ class WorkFollowThemeData {
             fontSize: 14,
             height: 1.3,
             fontWeight: FontWeight.w600),
-        bodyLarge:
-            TextStyle(color: tokens.textPrimary, fontSize: 14, height: 1.45),
+        bodyLarge: TextStyle(
+            color: tokens.textPrimary,
+            fontSize: WorkFollowTypography.body,
+            height: 1.45),
         bodyMedium:
             TextStyle(color: tokens.textSecondary, fontSize: 13, height: 1.4),
-        bodySmall:
-            TextStyle(color: tokens.textTertiary, fontSize: 11, height: 1.35),
+        bodySmall: TextStyle(
+            color: tokens.textTertiary,
+            fontSize: WorkFollowTypography.caption,
+            height: 1.35),
         labelLarge: TextStyle(
             color: tokens.textPrimary,
-            fontSize: 13,
+            fontSize: WorkFollowTypography.button,
             height: 1.3,
             fontWeight: FontWeight.w600),
         labelMedium: TextStyle(
             color: tokens.textSecondary,
-            fontSize: 12,
+            fontSize: WorkFollowTypography.metadata,
             height: 1.3,
             fontWeight: FontWeight.w600),
         labelSmall: TextStyle(
             color: tokens.textTertiary,
-            fontSize: 10,
+            fontSize: WorkFollowTypography.caption,
             height: 1.2,
             fontWeight: FontWeight.w500),
       ),

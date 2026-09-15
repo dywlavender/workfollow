@@ -688,7 +688,7 @@ class _DesktopMenuSurfaceState<T> extends State<_DesktopMenuSurface<T>> {
                 size: WorkFollowMetrics.toolbarIcon, color: foreground),
         title: Text(entry.label,
             style: TextStyle(
-                fontSize: 13,
+                fontSize: WorkFollowTypography.field,
                 color: entry.destructive ? tokens.danger : tokens.textPrimary)),
         trailing: widget.selected == entry.value
             ? AppIcon(WorkFollowIcons.check,
@@ -733,10 +733,9 @@ class PropertyButton extends StatelessWidget {
                 style: TextButton.styleFrom(
                   foregroundColor: foreground,
                   backgroundColor: active ? tokens.accentFaint : tokens.canvas,
-                  textStyle: Theme.of(context)
-                      .textTheme
-                      .bodyMedium
-                      ?.copyWith(fontSize: 12, fontWeight: FontWeight.w500),
+                  textStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      fontSize: WorkFollowTypography.field,
+                      fontWeight: FontWeight.w500),
                   minimumSize: const Size(0, WorkFollowMetrics.chipHeight),
                   padding:
                       const EdgeInsets.symmetric(horizontal: 10, vertical: 7),

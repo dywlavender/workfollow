@@ -795,7 +795,7 @@ class _RailSectionHeader extends StatelessWidget {
               label,
               style: TextStyle(
                 color: tokens.textTertiary,
-                fontSize: 11,
+                fontSize: WorkFollowTypography.sectionLabel,
                 fontWeight: FontWeight.w700,
                 letterSpacing: .5,
               ),
@@ -846,7 +846,9 @@ class _TagSectionState extends State<_TagSection> {
           Padding(
             padding: const EdgeInsets.fromLTRB(11, 3, 8, WorkFollowSpacing.xs),
             child: Text('在任务中输入 #标签',
-                style: TextStyle(color: tokens.textTertiary, fontSize: 11)),
+                style: TextStyle(
+                    color: tokens.textTertiary,
+                    fontSize: WorkFollowTypography.sectionLabel)),
           ),
         if (expanded)
           ...tags.entries.map((entry) => _TagItem(
@@ -879,7 +881,7 @@ class _RailBrand extends StatelessWidget {
           const SizedBox(width: WorkFollowSpacing.sm),
           Text('打勾',
               style: TextStyle(
-                  fontSize: 16,
+                  fontSize: 18,
                   fontWeight: FontWeight.w700,
                   color: tokens.textPrimary)),
         ]));
@@ -955,7 +957,7 @@ class _RailItemState extends State<_RailItem> {
                       color: widget.selected
                           ? tokens.accent
                           : tokens.textSecondary,
-                      fontSize: 13,
+                      fontSize: WorkFollowTypography.navigation,
                       fontWeight:
                           widget.selected ? FontWeight.w700 : FontWeight.w500,
                     ),
@@ -986,7 +988,7 @@ class _RailItemState extends State<_RailItem> {
                             color: widget.selected
                                 ? tokens.accent
                                 : tokens.textTertiary,
-                            fontSize: 11,
+                            fontSize: WorkFollowTypography.metadata,
                             fontWeight: FontWeight.w700)),
                   ),
               ],
@@ -1068,7 +1070,7 @@ class _TaskListItemState extends State<_TaskListItem> {
                           style: TextStyle(
                               color:
                                   selected ? listColor : tokens.textSecondary,
-                              fontSize: 13,
+                              fontSize: WorkFollowTypography.navigation,
                               fontWeight: selected
                                   ? FontWeight.w700
                                   : FontWeight.w500)),
@@ -1077,7 +1079,7 @@ class _TaskListItemState extends State<_TaskListItem> {
                       Text('$count',
                           style: TextStyle(
                               color: selected ? listColor : tokens.textTertiary,
-                              fontSize: 11,
+                              fontSize: WorkFollowTypography.metadata,
                               fontWeight: FontWeight.w700)),
                     ExcludeSemantics(
                       excluding: !hovering,
@@ -1287,13 +1289,13 @@ class _TagItemState extends State<_TagItem> {
                       style: TextStyle(
                           color:
                               selected ? tokens.accent : tokens.textSecondary,
-                          fontSize: 13,
+                          fontSize: WorkFollowTypography.navigation,
                           fontWeight:
                               selected ? FontWeight.w700 : FontWeight.w500))),
               Text('${widget.count}',
                   style: TextStyle(
                       color: selected ? tokens.accent : tokens.textTertiary,
-                      fontSize: 11,
+                      fontSize: WorkFollowTypography.metadata,
                       fontWeight: FontWeight.w700)),
             ]),
           ),
@@ -1410,7 +1412,7 @@ class _TaskViewItemState extends State<_TaskViewItem> {
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           color: selected ? tokens.accent : tokens.textPrimary,
-                          fontSize: 13,
+                          fontSize: WorkFollowTypography.navigation,
                           fontWeight:
                               selected ? FontWeight.w700 : FontWeight.w600,
                         ),
@@ -1422,7 +1424,7 @@ class _TaskViewItemState extends State<_TaskViewItem> {
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                             color: tokens.textTertiary,
-                            fontSize: 11,
+                            fontSize: WorkFollowTypography.metadata,
                             height: 1.1),
                       ),
                     ],
@@ -1435,7 +1437,7 @@ class _TaskViewItemState extends State<_TaskViewItem> {
                       '$count',
                       style: TextStyle(
                         color: selected ? tokens.accent : tokens.textTertiary,
-                        fontSize: 11,
+                        fontSize: WorkFollowTypography.metadata,
                         fontWeight: FontWeight.w700,
                       ),
                     ),

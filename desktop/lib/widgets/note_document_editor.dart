@@ -349,10 +349,10 @@ class _NoteDocumentEditorState extends State<NoteDocumentEditor>
   @override
   Widget build(BuildContext context) {
     final tokens = WorkFollowTheme.of(context);
-    final textStyle = Theme.of(context)
-        .textTheme
-        .bodyLarge!
-        .copyWith(fontSize: 15, height: 1.65, color: tokens.textPrimary);
+    final textStyle = Theme.of(context).textTheme.bodyLarge!.copyWith(
+        fontSize: WorkFollowTypography.editorBody,
+        height: 1.65,
+        color: tokens.textPrimary);
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       quill.QuillEditor(
           controller: editor,
@@ -391,7 +391,8 @@ class _NoteDocumentEditorState extends State<NoteDocumentEditor>
             icon: AppIcon(WorkFollowIcons.playlistAdd,
                 size: WorkFollowMetrics.compactFieldIcon,
                 color: selectionPresent ? tokens.accent : tokens.textTertiary),
-            label: const Text('选中文字生成任务', style: TextStyle(fontSize: 13))),
+            label: const Text('选中文字生成任务',
+                style: TextStyle(fontSize: WorkFollowTypography.button))),
         const Spacer(),
         Builder(
           builder: (anchor) => Tooltip(
@@ -544,7 +545,7 @@ class NoteBlockBuilder extends quill.EmbedBuilder {
                                             .trimRight()
                                         : '',
                                     style: TextStyle(
-                                        fontSize: 13,
+                                        fontSize: WorkFollowTypography.field,
                                         color: tokens.textPrimary))),
                         ]),
                     ])));
@@ -559,6 +560,8 @@ class NoteBlockBuilder extends quill.EmbedBuilder {
             notePlainTextFromContentJson(node).trim().isEmpty
                 ? '导入的内容块'
                 : notePlainTextFromContentJson(node).trim(),
-            style: TextStyle(fontSize: 13, color: tokens.textSecondary)));
+            style: TextStyle(
+                fontSize: WorkFollowTypography.field,
+                color: tokens.textSecondary)));
   }
 }

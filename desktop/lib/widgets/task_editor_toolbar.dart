@@ -199,7 +199,7 @@ class _ToolButton extends StatelessWidget {
           icon: label != null
               ? Text(label!,
                   style: TextStyle(
-                      fontSize: 12,
+                      fontSize: WorkFollowTypography.button,
                       fontWeight: FontWeight.w700,
                       color: tokens.textSecondary))
               : AppIcon(icon!,

@@ -429,7 +429,7 @@ class _TaskInspectorState extends State<TaskInspector> {
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                             color: tokens.textSecondary,
-                            fontSize: 13,
+                            fontSize: WorkFollowTypography.field,
                             fontWeight: FontWeight.w600))),
                 style: TextButton.styleFrom(
                     padding: const EdgeInsets.symmetric(horizontal: 6),
@@ -525,7 +525,7 @@ class _TaskInspectorState extends State<TaskInspector> {
                 minLines: 1,
                 maxLines: 2,
                 style: TextStyle(
-                    fontSize: 24,
+                    fontSize: WorkFollowTypography.pageTitle,
                     fontWeight: FontWeight.w700,
                     height: 1.24,
                     letterSpacing: -.45,
@@ -609,8 +609,9 @@ class _TopPropertyButton extends StatelessWidget {
             style: TextButton.styleFrom(
               foregroundColor: foreground,
               backgroundColor: active ? tokens.accentFaint : Colors.transparent,
-              textStyle:
-                  const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+              textStyle: const TextStyle(
+                  fontSize: WorkFollowTypography.button,
+                  fontWeight: FontWeight.w600),
               minimumSize: Size(iconOnly ? WorkFollowMetrics.iconHitTarget : 0,
                   WorkFollowMetrics.compactButtonHeight),
               padding: EdgeInsets.symmetric(horizontal: iconOnly ? 6 : 9),
@@ -681,8 +682,9 @@ class _InspectorPropertyChip extends StatelessWidget {
             style: TextButton.styleFrom(
               foregroundColor: foreground,
               backgroundColor: active ? tokens.accentFaint : tokens.canvas,
-              textStyle:
-                  const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
+              textStyle: const TextStyle(
+                  fontSize: WorkFollowTypography.field,
+                  fontWeight: FontWeight.w500),
               minimumSize: const Size(0, WorkFollowMetrics.chipHeight),
               padding: const EdgeInsets.symmetric(horizontal: 10),
               tapTargetSize: MaterialTapTargetSize.shrinkWrap,
@@ -770,9 +772,11 @@ class _RelationPickerState extends State<_RelationPicker> {
             title: Text(note.title,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: 13)),
+                style: const TextStyle(fontSize: WorkFollowTypography.field)),
             subtitle: Text(note.folder,
-                style: TextStyle(fontSize: 11, color: tokens.textTertiary)),
+                style: TextStyle(
+                    fontSize: WorkFollowTypography.caption,
+                    color: tokens.textTertiary)),
             trailing: widget.selected == note.id
                 ? AppIcon(WorkFollowIcons.check,
                     size: WorkFollowMetrics.toolbarIcon, color: tokens.accent)
@@ -783,7 +787,9 @@ class _RelationPickerState extends State<_RelationPicker> {
           Padding(
               padding: const EdgeInsets.symmetric(vertical: 16),
               child: Text('没有匹配的笔记',
-                  style: TextStyle(fontSize: 13, color: tokens.textTertiary))),
+                  style: TextStyle(
+                      fontSize: WorkFollowTypography.field,
+                      color: tokens.textTertiary))),
       ]),
     );
   }
