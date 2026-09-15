@@ -26,11 +26,26 @@ Future<T?> showDesktopPopover<T>(
     pageBuilder: (context, _, __) {
       final screen = MediaQuery.sizeOf(context);
       final panelWidth = math.min(width, screen.width - 24);
-      final panelHeight = math.min(maxHeight, screen.height - 32);
+      final anchorBottom = position.dy + anchorHeight;
+      final spaceBelow = math.max(0.0, screen.height - anchorBottom - 22);
+      final spaceAbove = math.max(0.0, position.dy - 22);
+      // Prefer the side with the most room. A bottom toolbar therefore opens
+      // upward instead of being clamped to a fictitious max-height box far
+      // above its trigger.
+      final openBelow = spaceBelow >= 180 || spaceBelow >= spaceAbove;
+      // When opening below, keep the full viewport allowance and clamp the
+      // top edge. This lets a tall date picker start at the window edge rather
+      // than laying out its action row below the visible viewport. For an
+      // upward menu, limit the viewport to the actual room above the trigger.
+      final panelHeight = openBelow
+          ? math.min(maxHeight, screen.height - 32)
+          : math.min(maxHeight,
+              math.max(80.0, math.min(spaceAbove, screen.height - 32)));
       final left =
           position.dx.clamp(12.0, math.max(12, screen.width - panelWidth - 12));
-      final top = (position.dy + anchorHeight + 6)
-          .clamp(16.0, math.max(16, screen.height - panelHeight - 16));
+      final top = (anchorBottom + 6)
+          .clamp(16.0, math.max(16.0, screen.height - panelHeight - 16));
+      final bottom = math.max(16.0, screen.height - position.dy + 6);
       return Theme(
         data: theme,
         child: CallbackShortcuts(
@@ -41,7 +56,8 @@ Future<T?> showDesktopPopover<T>(
           child: Stack(children: [
             Positioned(
               left: left.toDouble(),
-              top: top.toDouble(),
+              top: openBelow ? top.toDouble() : null,
+              bottom: openBelow ? null : bottom.toDouble(),
               width: panelWidth,
               child: Focus(
                 autofocus: true,
