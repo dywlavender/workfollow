@@ -420,7 +420,7 @@ class _TaskInspectorState extends State<TaskInspector> {
                 key: const ValueKey('task-list-footer'),
                 onPressed: () => _list(anchor),
                 icon: AppIcon(WorkFollowIcons.inbox,
-                    size: WorkFollowMetrics.metadataIcon,
+                    size: WorkFollowMetrics.compactFieldIcon,
                     color: tokens.textSecondary),
                 label: ConstrainedBox(
                     constraints: const BoxConstraints(maxWidth: 130),
@@ -622,7 +622,8 @@ class _TopPropertyButton extends StatelessWidget {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                AppIcon(icon, size: WorkFollowMetrics.toolbarIcon),
+                AppIcon(icon,
+                    size: WorkFollowMetrics.fieldIcon, color: foreground),
                 if (!iconOnly) ...[
                   const SizedBox(width: 6),
                   ConstrainedBox(
@@ -671,7 +672,8 @@ class _InspectorPropertyChip extends StatelessWidget {
           label: label,
           child: TextButton.icon(
             onPressed: () => onPressed(anchor),
-            icon: AppIcon(icon, size: WorkFollowMetrics.metadataIcon),
+            icon: AppIcon(icon,
+                size: WorkFollowMetrics.compactFieldIcon, color: foreground),
             label: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 150),
               child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),

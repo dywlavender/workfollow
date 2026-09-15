@@ -725,7 +725,9 @@ class PropertyButton extends StatelessWidget {
               message: tooltip ?? label,
               child: TextButton.icon(
                 onPressed: () => onPressed(anchor),
-                icon: AppIcon(icon, size: WorkFollowMetrics.metadataIcon),
+                icon: AppIcon(icon,
+                    size: WorkFollowMetrics.compactFieldIcon,
+                    color: foreground),
                 label:
                     Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
                 style: TextButton.styleFrom(

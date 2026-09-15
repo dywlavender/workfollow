@@ -388,8 +388,9 @@ class _NoteDocumentEditorState extends State<NoteDocumentEditor>
         TextButton.icon(
             key: const ValueKey('generate-task-from-selection'),
             onPressed: selectionPresent ? _taskFromSelection : null,
-            icon: const AppIcon(WorkFollowIcons.playlistAdd,
-                size: WorkFollowMetrics.toolbarIcon),
+            icon: AppIcon(WorkFollowIcons.playlistAdd,
+                size: WorkFollowMetrics.compactFieldIcon,
+                color: selectionPresent ? tokens.accent : tokens.textTertiary),
             label: const Text('选中文字生成任务', style: TextStyle(fontSize: 13))),
         const Spacer(),
         Builder(
@@ -403,7 +404,8 @@ class _NoteDocumentEditorState extends State<NoteDocumentEditor>
                 toolbarVisible
                     ? WorkFollowIcons.expandLess
                     : WorkFollowIcons.format,
-                size: WorkFollowMetrics.toolbarIcon,
+                size: WorkFollowMetrics.fieldIcon,
+                color: toolbarVisible ? tokens.accent : tokens.textSecondary,
               ),
             ),
           ),

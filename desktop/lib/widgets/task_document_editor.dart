@@ -672,8 +672,9 @@ class TaskAttachmentsPanel extends StatelessWidget {
                   key: const ValueKey('task-attach-file'),
                   onPressed:
                       onAttach ?? () => controller.attachFileToTask(task.id),
-                  icon: const AppIcon(WorkFollowIcons.attachment,
-                      size: WorkFollowMetrics.metadataIcon),
+                  icon: AppIcon(WorkFollowIcons.attachment,
+                      size: WorkFollowMetrics.compactFieldIcon,
+                      color: tokens.accent),
                   label: const Text('添加附件', style: TextStyle(fontSize: 12))),
             ],
           ),

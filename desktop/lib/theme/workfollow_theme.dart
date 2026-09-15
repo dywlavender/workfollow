@@ -10,6 +10,11 @@ class WorkFollowMetrics {
   static const double navigationIcon = 18;
   static const double headerIcon = 18;
   static const double toolbarIcon = 16;
+  // Property controls are deliberately a little larger than metadata. This
+  // keeps date/list/tag fields legible at a glance, matching the dedicated
+  // field affordances in TickTick's detail pane.
+  static const double fieldIcon = 18;
+  static const double compactFieldIcon = 16;
   static const double metadataIcon = 14;
   static const double iconHitTarget = 32;
   static const double primaryButtonHeight = 36;
