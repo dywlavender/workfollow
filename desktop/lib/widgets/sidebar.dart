@@ -955,7 +955,7 @@ class _RailItemState extends State<_RailItem> {
                 AppIcon(
                   widget.icon,
                   size: WorkFollowMetrics.navigationIcon,
-                  color: widget.selected ? tokens.accent : tokens.textSecondary,
+                  color: widget.selected ? tokens.accent : tokens.textPrimary,
                 ),
                 const SizedBox(width: WorkFollowSpacing.sm - 2),
                 Expanded(
@@ -964,9 +964,8 @@ class _RailItemState extends State<_RailItem> {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      color: widget.selected
-                          ? tokens.accent
-                          : tokens.textSecondary,
+                      color:
+                          widget.selected ? tokens.accent : tokens.textPrimary,
                       fontSize: WorkFollowTypography.navigation,
                       fontWeight:
                           widget.selected ? FontWeight.w700 : FontWeight.w500,
@@ -1078,8 +1077,7 @@ class _TaskListItemState extends State<_TaskListItem> {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
-                              color:
-                                  selected ? listColor : tokens.textSecondary,
+                              color: selected ? listColor : tokens.textPrimary,
                               fontSize: WorkFollowTypography.navigation,
                               fontWeight: selected
                                   ? FontWeight.w700
@@ -1290,15 +1288,14 @@ class _TagItemState extends State<_TagItem> {
             child: Row(children: [
               AppIcon(WorkFollowIcons.tag,
                   size: WorkFollowMetrics.navigationIcon,
-                  color: selected ? tokens.accent : tokens.textSecondary),
+                  color: selected ? tokens.accent : tokens.textPrimary),
               const SizedBox(width: WorkFollowSpacing.sm - 2),
               Expanded(
                   child: Text(widget.name,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
-                          color:
-                              selected ? tokens.accent : tokens.textSecondary,
+                          color: selected ? tokens.accent : tokens.textPrimary,
                           fontSize: WorkFollowTypography.navigation,
                           fontWeight:
                               selected ? FontWeight.w700 : FontWeight.w500))),
@@ -1410,7 +1407,7 @@ class _TaskViewItemState extends State<_TaskViewItem> {
               children: [
                 AppIcon(widget.icon,
                     size: WorkFollowMetrics.navigationIcon,
-                    color: selected ? tokens.accent : tokens.textSecondary),
+                    color: selected ? tokens.accent : tokens.textPrimary),
                 const SizedBox(width: 9),
                 Expanded(
                   child: Column(
