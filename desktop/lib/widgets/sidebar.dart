@@ -41,16 +41,20 @@ class AppRail extends StatelessWidget {
     return Container(
       width: width,
       decoration: BoxDecoration(
-        color: tokens.sidebar,
+        gradient: tokens.sidebarGradient,
         border: Border(right: BorderSide(color: tokens.border, width: 1)),
       ),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _IconRail(
-            controller: controller,
-            isDark: isDark,
-            onToggleTheme: onToggleTheme,
-            onOpenSettings: onOpenSettings,
+          ColoredBox(
+            color: tokens.rail,
+            child: _IconRail(
+              controller: controller,
+              isDark: isDark,
+              onToggleTheme: onToggleTheme,
+              onOpenSettings: onOpenSettings,
+            ),
           ),
           Container(width: 1, color: tokens.border),
           Expanded(
@@ -545,9 +549,9 @@ class _IconRailFooter extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 4),
         decoration: BoxDecoration(
-          color: tokens.content.withValues(alpha: .62),
+          color: tokens.railSurface,
           borderRadius: BorderRadius.circular(WorkFollowRadii.surface),
-          border: Border.all(color: tokens.border.withValues(alpha: .8)),
+          border: Border.all(color: tokens.railBorder),
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -558,7 +562,7 @@ class _IconRailFooter extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(vertical: 4),
                 child: AppIcon(WorkFollowIcons.system,
                     size: WorkFollowMetrics.toolbarIcon,
-                    color: tokens.textTertiary),
+                    color: tokens.railForegroundMuted),
               ),
             ),
             _IconRailFooterButton(
@@ -592,6 +596,7 @@ class _IconRailFooterButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final tokens = WorkFollowTheme.of(context);
     return SizedBox(
       width: 34,
       height: 34,
@@ -608,6 +613,7 @@ class _IconRailFooterButton extends StatelessWidget {
               onPressed: onPressed,
               size: 34,
               iconSize: 17,
+              iconColor: tokens.railForeground,
             ),
           ),
           // Keep the old text-based automation target available without
@@ -680,9 +686,9 @@ class _IconRailButtonState extends State<_IconRailButton> {
               margin: const EdgeInsets.symmetric(vertical: 3),
               decoration: BoxDecoration(
                 color: active
-                    ? tokens.accent.withValues(alpha: .16)
+                    ? tokens.railActive
                     : hovering
-                        ? tokens.content.withValues(alpha: .65)
+                        ? tokens.railForeground.withValues(alpha: .12)
                         : Colors.transparent,
                 borderRadius: BorderRadius.circular(WorkFollowRadii.surface),
               ),
@@ -691,7 +697,11 @@ class _IconRailButtonState extends State<_IconRailButton> {
                 size: widget.filled
                     ? WorkFollowMetrics.railIcon + 1
                     : WorkFollowMetrics.railIcon,
-                color: active ? tokens.accent : tokens.textSecondary,
+                color: active
+                    ? tokens.accent
+                    : (hovering
+                        ? tokens.railForeground
+                        : tokens.railForegroundMuted),
               ),
             ),
           ),

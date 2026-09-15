@@ -20,6 +20,13 @@ void main() {
     expect(WorkFollowMetrics.compactFieldIcon, 17);
     expect(WorkFollowMetrics.menuRowHeight, 40);
     expect(WorkFollowMetrics.editorToolbarHeight, 42);
+    // The light workspace follows the reference's four-plane hierarchy:
+    // turquoise rail, mint navigation, cool-gray list canvas and white detail.
+    expect(WorkFollowTheme.light.rail, const Color(0xFF42C8A8));
+    expect(WorkFollowTheme.light.railActive, Colors.white);
+    expect(WorkFollowTheme.light.sidebarGradient.colors.first,
+        const Color(0xFFDDF5EE));
+    expect(WorkFollowTheme.light.accent, const Color(0xFF2FAF95));
     expect(theme.textTheme.displaySmall?.fontSize, 26);
     expect(theme.textTheme.bodyLarge?.fontSize, 14);
     expect(theme.textTheme.bodyMedium?.fontSize, 13);

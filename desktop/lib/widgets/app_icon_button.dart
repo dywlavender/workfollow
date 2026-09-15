@@ -11,6 +11,7 @@ class AppIconButton extends StatelessWidget {
     this.active = false,
     this.size = WorkFollowMetrics.iconHitTarget,
     this.iconSize = WorkFollowMetrics.toolbarIcon,
+    this.iconColor,
     this.semanticLabel,
   });
 
@@ -20,6 +21,10 @@ class AppIconButton extends StatelessWidget {
   final bool active;
   final double size;
   final double iconSize;
+
+  /// Optional override for icon-only surfaces such as the colored app rail.
+  /// Ordinary controls continue to derive their color from the shared theme.
+  final Color? iconColor;
   final String? semanticLabel;
 
   @override
@@ -41,9 +46,10 @@ class AppIconButton extends StatelessWidget {
             child: AppIcon(
               icon,
               size: iconSize,
-              color: onPressed == null
-                  ? tokens.textTertiary
-                  : (active ? tokens.accent : tokens.textSecondary),
+              color: iconColor ??
+                  (onPressed == null
+                      ? tokens.textTertiary
+                      : (active ? tokens.accent : tokens.textSecondary)),
             ),
           ),
         ),

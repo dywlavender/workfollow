@@ -73,6 +73,13 @@ class WorkFollowTheme extends ThemeExtension<WorkFollowTheme> {
   const WorkFollowTheme({
     required this.canvas,
     required this.sidebar,
+    required this.sidebarGradient,
+    required this.rail,
+    required this.railActive,
+    required this.railForeground,
+    required this.railForegroundMuted,
+    required this.railSurface,
+    required this.railBorder,
     required this.content,
     required this.inspector,
     required this.overlay,
@@ -94,6 +101,18 @@ class WorkFollowTheme extends ThemeExtension<WorkFollowTheme> {
 
   final Color canvas;
   final Color sidebar;
+
+  /// Gradient used by the readable second navigation column.
+  final LinearGradient sidebarGradient;
+
+  /// Solid first-level rail color. TickTick treats this as a separate visual
+  /// plane rather than another gray sidebar.
+  final Color rail;
+  final Color railActive;
+  final Color railForeground;
+  final Color railForegroundMuted;
+  final Color railSurface;
+  final Color railBorder;
   final Color content;
   final Color inspector;
   final Color overlay;
@@ -113,20 +132,31 @@ class WorkFollowTheme extends ThemeExtension<WorkFollowTheme> {
   final LinearGradient seasonalSky;
 
   static const light = WorkFollowTheme(
-    canvas: Color(0xFFF3F5FA),
-    sidebar: Color(0xFFEDF0F7),
+    canvas: Color(0xFFF2F4F8),
+    sidebar: Color(0xFFEAF7F3),
+    sidebarGradient: LinearGradient(
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+      colors: [Color(0xFFDDF5EE), Color(0xFFF2FAF8)],
+    ),
+    rail: Color(0xFF42C8A8),
+    railActive: Color(0xFFFFFFFF),
+    railForeground: Color(0xFFFFFFFF),
+    railForegroundMuted: Color(0xC8FFFFFF),
+    railSurface: Color(0x24FFFFFF),
+    railBorder: Color(0x35FFFFFF),
     content: Color(0xFFFFFFFF),
     inspector: Color(0xFFFFFFFF),
     overlay: Color(0xFFFFFFFF),
-    textPrimary: Color(0xFF222630),
-    textSecondary: Color(0xFF5D6678),
-    textTertiary: Color(0xFF8D97A8),
-    border: Color(0xFFDEE2EB),
-    borderStrong: Color(0xFFC8CEDA),
-    accent: Color(0xFF5B5CEB),
-    accentHover: Color(0xFF494BCB),
-    accentSoft: Color(0xFFECEEFF),
-    accentFaint: Color(0xFFF5F5FF),
+    textPrimary: Color(0xFF20272C),
+    textSecondary: Color(0xFF5D6B75),
+    textTertiary: Color(0xFF94A3A7),
+    border: Color(0xFFDCE6E4),
+    borderStrong: Color(0xFFC5D6D2),
+    accent: Color(0xFF2FAF95),
+    accentHover: Color(0xFF238E79),
+    accentSoft: Color(0xFFD8F2EB),
+    accentFaint: Color(0xFFEFFAF7),
     success: Color(0xFF2EAB78),
     warning: Color(0xFFC67912),
     danger: Color(0xFFE45454),
@@ -141,6 +171,17 @@ class WorkFollowTheme extends ThemeExtension<WorkFollowTheme> {
   static const dark = WorkFollowTheme(
     canvas: Color(0xFF1B1D22),
     sidebar: Color(0xFF191B20),
+    sidebarGradient: LinearGradient(
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+      colors: [Color(0xFF202925), Color(0xFF191B20)],
+    ),
+    rail: Color(0xFF24433D),
+    railActive: Color(0xFFE8FFF8),
+    railForeground: Color(0xFFE8FFF8),
+    railForegroundMuted: Color(0xB8E8FFF8),
+    railSurface: Color(0x1FE8FFF8),
+    railBorder: Color(0x32E8FFF8),
     content: Color(0xFF202329),
     inspector: Color(0xFF202329),
     overlay: Color(0xFF2A2D34),
@@ -173,6 +214,13 @@ class WorkFollowTheme extends ThemeExtension<WorkFollowTheme> {
   WorkFollowTheme copyWith({
     Color? canvas,
     Color? sidebar,
+    LinearGradient? sidebarGradient,
+    Color? rail,
+    Color? railActive,
+    Color? railForeground,
+    Color? railForegroundMuted,
+    Color? railSurface,
+    Color? railBorder,
     Color? content,
     Color? inspector,
     Color? overlay,
@@ -194,6 +242,13 @@ class WorkFollowTheme extends ThemeExtension<WorkFollowTheme> {
     return WorkFollowTheme(
       canvas: canvas ?? this.canvas,
       sidebar: sidebar ?? this.sidebar,
+      sidebarGradient: sidebarGradient ?? this.sidebarGradient,
+      rail: rail ?? this.rail,
+      railActive: railActive ?? this.railActive,
+      railForeground: railForeground ?? this.railForeground,
+      railForegroundMuted: railForegroundMuted ?? this.railForegroundMuted,
+      railSurface: railSurface ?? this.railSurface,
+      railBorder: railBorder ?? this.railBorder,
       content: content ?? this.content,
       inspector: inspector ?? this.inspector,
       overlay: overlay ?? this.overlay,
@@ -220,6 +275,14 @@ class WorkFollowTheme extends ThemeExtension<WorkFollowTheme> {
     return WorkFollowTheme(
       canvas: Color.lerp(canvas, other.canvas, t)!,
       sidebar: Color.lerp(sidebar, other.sidebar, t)!,
+      sidebarGradient: t < .5 ? sidebarGradient : other.sidebarGradient,
+      rail: Color.lerp(rail, other.rail, t)!,
+      railActive: Color.lerp(railActive, other.railActive, t)!,
+      railForeground: Color.lerp(railForeground, other.railForeground, t)!,
+      railForegroundMuted:
+          Color.lerp(railForegroundMuted, other.railForegroundMuted, t)!,
+      railSurface: Color.lerp(railSurface, other.railSurface, t)!,
+      railBorder: Color.lerp(railBorder, other.railBorder, t)!,
       content: Color.lerp(content, other.content, t)!,
       inspector: Color.lerp(inspector, other.inspector, t)!,
       overlay: Color.lerp(overlay, other.overlay, t)!,
