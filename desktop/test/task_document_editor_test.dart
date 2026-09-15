@@ -42,6 +42,7 @@ void main() {
         tester.getRect(find.byKey(const ValueKey('menu-option-delete')));
     expect(deleteRect.bottom, lessThanOrEqualTo(triggerRect.top));
     expect(triggerRect.top - deleteRect.bottom, lessThan(20));
+    expect((triggerRect.right - deleteRect.right).abs(), lessThan(20));
   });
 
   testWidgets('task inspector More menu remains anchored on a Retina window',

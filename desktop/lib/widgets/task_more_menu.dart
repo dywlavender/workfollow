@@ -27,44 +27,12 @@ class TaskMoreMenu {
       const DesktopMenuEntry('delete', '移到废纸篓',
           icon: Icons.delete_outline, destructive: true),
     ];
-    return showDesktopPopover<String>(
+    return showDesktopMenu<String>(
       anchor,
       width: 270,
       maxHeight: 480,
-      builder: (context) {
-        final tokens = Theme.of(context);
-        return Padding(
-          padding: const EdgeInsets.all(6),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              for (final entry in entries)
-                ListTile(
-                  key: ValueKey('menu-option-${entry.value}'),
-                  dense: true,
-                  minTileHeight: 38,
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(7)),
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 10),
-                  leading: entry.icon == null
-                      ? null
-                      : Icon(entry.icon,
-                          size: 17,
-                          color: entry.destructive
-                              ? tokens.colorScheme.error
-                              : tokens.colorScheme.onSurfaceVariant),
-                  title: Text(entry.label,
-                      style: TextStyle(
-                          fontSize: 13,
-                          color: entry.destructive
-                              ? tokens.colorScheme.error
-                              : tokens.colorScheme.onSurface)),
-                  onTap: () => Navigator.of(context).pop(entry.value),
-                ),
-            ],
-          ),
-        );
-      },
+      placement: PopoverPlacement.topEnd,
+      entries: entries,
     );
   }
 }

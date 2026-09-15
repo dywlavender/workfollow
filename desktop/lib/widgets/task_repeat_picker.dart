@@ -12,6 +12,8 @@ class TaskRepeatPicker {
     return showDesktopPopover<RecurrenceDraft>(anchor,
         width: 300,
         maxHeight: 290,
+        placement: PopoverPlacement.bottomStart,
+        focusPolicy: PopoverFocusPolicy.firstItem,
         builder: (_) => _TaskRepeatEditor(task: task));
   }
 }
@@ -59,6 +61,7 @@ class _TaskRepeatEditorState extends State<_TaskRepeatEditor> {
             const SizedBox(height: 12),
             DropdownButtonFormField<String>(
                 initialValue: type,
+                autofocus: true,
                 decoration: const InputDecoration(
                     labelText: '频率',
                     border: OutlineInputBorder(),

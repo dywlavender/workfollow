@@ -11,6 +11,7 @@ import '../models/task.dart';
 import '../state/workspace_controller.dart';
 import '../theme/workfollow_theme.dart';
 import 'task_editor_toolbar.dart';
+import 'desktop_popover.dart';
 import 'task_slash_menu.dart';
 
 const _noteSlashActions = <TaskSlashAction>[
@@ -34,7 +35,8 @@ class NoteDocumentEditor extends StatefulWidget {
   State<NoteDocumentEditor> createState() => _NoteDocumentEditorState();
 }
 
-class _NoteDocumentEditorState extends State<NoteDocumentEditor> {
+class _NoteDocumentEditorState extends State<NoteDocumentEditor>
+    with WidgetsBindingObserver {
   late final quill.QuillController editor;
   final focus = FocusNode();
   final scroll = ScrollController();
@@ -45,12 +47,14 @@ class _NoteDocumentEditorState extends State<NoteDocumentEditor> {
   bool selectionPresent = false;
   bool slashVisible = false;
   bool toolbarVisible = false;
+  ScrollPosition? _ancestorScrollPosition;
 
   String get plainText => editor.document.toPlainText().trimRight();
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     focus.addListener(_focusChanged);
     editor = quill.QuillController(
         document: quill.Document.fromJson(noteDocumentDelta(widget.note)),
@@ -100,6 +104,21 @@ class _NoteDocumentEditorState extends State<NoteDocumentEditor> {
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final next = Scrollable.maybeOf(context)?.position;
+    if (identical(next, _ancestorScrollPosition)) return;
+    _ancestorScrollPosition?.removeListener(_syncSlashOverlay);
+    _ancestorScrollPosition = next;
+    _ancestorScrollPosition?.addListener(_syncSlashOverlay);
+  }
+
+  @override
+  void didChangeMetrics() {
+    _syncSlashOverlay();
+  }
+
+  @override
   void didUpdateWidget(covariant NoteDocumentEditor oldWidget) {
     super.didUpdateWidget(oldWidget);
     final incoming = jsonEncode(noteDocumentDelta(widget.note));
@@ -112,6 +131,8 @@ class _NoteDocumentEditorState extends State<NoteDocumentEditor> {
   void dispose() {
     slashOverlay?.remove();
     slashOverlay = null;
+    _ancestorScrollPosition?.removeListener(_syncSlashOverlay);
+    WidgetsBinding.instance.removeObserver(this);
     editor.removeListener(_changed);
     editor.dispose();
     focus
@@ -169,14 +190,14 @@ class _NoteDocumentEditorState extends State<NoteDocumentEditor> {
     final fallbackOrigin = box?.localToGlobal(Offset.zero);
     final origin = caretOrigin ?? fallbackOrigin;
     if (origin != null) {
-      final availableBelow = screen.height - (origin.dy + caretHeight);
-      final rawTop = availableBelow >= menuHeight + 6
-          ? origin.dy + caretHeight + 6
-          : origin.dy - menuHeight - 6;
-      slashOffset = Offset(
-        origin.dx.clamp(12.0, math.max(12.0, screen.width - 282.0)),
-        rawTop.clamp(12.0, math.max(12.0, screen.height - menuHeight - 12)),
+      final geometry = calculatePopoverGeometry(
+        anchor: Rect.fromLTWH(origin.dx, origin.dy, 1, caretHeight),
+        viewport: screen,
+        desiredSize: Size(270, menuHeight),
+        placement: PopoverPlacement.bottomStart,
+        safeArea: const EdgeInsets.all(12),
       );
+      slashOffset = geometry.rect.topLeft;
     }
     if (slashOverlay != null) {
       slashOverlay!.markNeedsBuild();

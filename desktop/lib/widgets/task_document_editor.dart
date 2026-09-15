@@ -10,6 +10,7 @@ import '../models/task.dart';
 import '../state/workspace_controller.dart';
 import '../theme/workfollow_theme.dart';
 import 'task_editor_toolbar.dart';
+import 'desktop_popover.dart';
 import 'task_slash_menu.dart';
 
 /// A document-first editor for a task. Title editing remains a normal field;
@@ -35,7 +36,8 @@ class TaskDocumentEditor extends StatefulWidget {
   TaskDocumentEditorState createState() => TaskDocumentEditorState();
 }
 
-class TaskDocumentEditorState extends State<TaskDocumentEditor> {
+class TaskDocumentEditorState extends State<TaskDocumentEditor>
+    with WidgetsBindingObserver {
   late final quill.QuillController editor;
   late final FocusNode focus;
   late final ScrollController scroll;
@@ -46,12 +48,14 @@ class TaskDocumentEditorState extends State<TaskDocumentEditor> {
   bool selectionPresent = false;
   bool slashVisible = false;
   bool toolbarVisible = false;
+  ScrollPosition? _ancestorScrollPosition;
 
   String get plainText => editor.document.toPlainText().trimRight();
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     focus = FocusNode()..addListener(_focusChanged);
     scroll = ScrollController();
     editor = quill.QuillController(
@@ -122,6 +126,21 @@ class TaskDocumentEditorState extends State<TaskDocumentEditor> {
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final next = Scrollable.maybeOf(context)?.position;
+    if (identical(next, _ancestorScrollPosition)) return;
+    _ancestorScrollPosition?.removeListener(_syncSlashOverlay);
+    _ancestorScrollPosition = next;
+    _ancestorScrollPosition?.addListener(_syncSlashOverlay);
+  }
+
+  @override
+  void didChangeMetrics() {
+    _syncSlashOverlay();
+  }
+
+  @override
   void didUpdateWidget(covariant TaskDocumentEditor oldWidget) {
     super.didUpdateWidget(oldWidget);
     final incoming = jsonEncode(taskDocumentDelta(widget.task));
@@ -134,6 +153,8 @@ class TaskDocumentEditorState extends State<TaskDocumentEditor> {
   void dispose() {
     _slashOverlay?.remove();
     _slashOverlay = null;
+    _ancestorScrollPosition?.removeListener(_syncSlashOverlay);
+    WidgetsBinding.instance.removeObserver(this);
     editor.removeListener(_changed);
     editor.dispose();
     focus
@@ -206,14 +227,14 @@ class TaskDocumentEditorState extends State<TaskDocumentEditor> {
     final fallbackOrigin = box?.localToGlobal(Offset.zero);
     final origin = caretOrigin ?? fallbackOrigin;
     if (origin != null) {
-      final availableBelow = screen.height - (origin.dy + caretHeight);
-      final rawTop = availableBelow >= menuHeight + 6
-          ? origin.dy + caretHeight + 6
-          : origin.dy - menuHeight - 6;
-      _slashOffset = Offset(
-        origin.dx.clamp(12.0, math.max(12.0, screen.width - 282.0)),
-        rawTop.clamp(12.0, math.max(12.0, screen.height - menuHeight - 12)),
+      final geometry = calculatePopoverGeometry(
+        anchor: Rect.fromLTWH(origin.dx, origin.dy, 1, caretHeight),
+        viewport: screen,
+        desiredSize: Size(270, menuHeight),
+        placement: PopoverPlacement.bottomStart,
+        safeArea: const EdgeInsets.all(12),
       );
+      _slashOffset = geometry.rect.topLeft;
     }
     if (_slashOverlay != null) {
       _slashOverlay!.markNeedsBuild();

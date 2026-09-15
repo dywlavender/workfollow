@@ -79,9 +79,11 @@ class _TaskRowState extends State<TaskRow> {
     widget.onActivate?.call();
   }
 
-  Future<void> menu(BuildContext anchor) async {
+  Future<void> menu(BuildContext anchor, {Offset? globalPosition}) async {
     final action = await TaskContextMenu.show(anchor,
-        task: widget.task, controller: widget.controller);
+        task: widget.task,
+        controller: widget.controller,
+        globalPosition: globalPosition);
     if (!mounted) return;
     // The row can rebuild when an action is selected (for example after
     // moving a task out of the current projection). Re-anchor any follow-up
@@ -292,7 +294,10 @@ class _TaskRowState extends State<TaskRow> {
                       label: task.title,
                       child: GestureDetector(
                         onTap: open,
-                        onSecondaryTap: () => menu(anchor),
+                        onSecondaryTapDown: (details) =>
+                            _contextMenuPosition = details.globalPosition,
+                        onSecondaryTap: () =>
+                            menu(anchor, globalPosition: _contextMenuPosition),
                         behavior: HitTestBehavior.opaque,
                         child: AnimatedContainer(
                           duration: const Duration(milliseconds: 120),
@@ -388,8 +393,8 @@ class _TaskRowState extends State<TaskRow> {
                                               ),
                                             ),
                                           ),
-                                        _moreButton(anchor, tokens,
-                                            hovering || selected),
+                                        _moreButton(
+                                            tokens, hovering || selected),
                                       ],
                                     ),
                                     if (preview.isNotEmpty) ...[
@@ -416,24 +421,26 @@ class _TaskRowState extends State<TaskRow> {
         ));
   }
 
-  Widget _moreButton(
-      BuildContext anchor, WorkFollowTheme tokens, bool visible) {
+  Offset? _contextMenuPosition;
+
+  Widget _moreButton(WorkFollowTheme tokens, bool visible) {
     return SizedBox(
         width: 26,
         height: 24,
-        child: ExcludeSemantics(
-            excluding: !visible,
-            child: AnimatedOpacity(
-                duration: const Duration(milliseconds: 120),
-                opacity: visible ? 1 : 0,
-                child: IconButton(
-                    key: ValueKey('task-row-more-${widget.task.id}'),
-                    tooltip: '更多操作',
-                    padding: EdgeInsets.zero,
-                    iconSize: 18,
-                    onPressed: visible ? () => menu(anchor) : null,
-                    icon:
-                        Icon(Icons.more_horiz, color: tokens.textTertiary)))));
+        child: Builder(
+            builder: (moreAnchor) => ExcludeSemantics(
+                excluding: !visible,
+                child: AnimatedOpacity(
+                    duration: const Duration(milliseconds: 120),
+                    opacity: visible ? 1 : 0,
+                    child: IconButton(
+                        key: ValueKey('task-row-more-${widget.task.id}'),
+                        tooltip: '更多操作',
+                        padding: EdgeInsets.zero,
+                        iconSize: 18,
+                        onPressed: visible ? () => menu(moreAnchor) : null,
+                        icon: Icon(Icons.more_horiz,
+                            color: tokens.textTertiary))))));
   }
 
   void _complete() {

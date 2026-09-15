@@ -41,6 +41,9 @@ Future<TaskDateSelection?> showTaskDatePicker(
     showDesktopPopover<TaskDateSelection>(anchor,
         width: 328,
         maxHeight: 590,
+        placement: PopoverPlacement.bottomStart,
+        focusPolicy: PopoverFocusPolicy.firstItem,
+        scrollable: true,
         builder: (_) => TaskDatePicker(
               initialDate: localDateTimeFromStorage(value),
               title: title,
@@ -168,6 +171,7 @@ class _TaskDatePickerState extends State<TaskDatePicker> {
             TextField(
                 key: const ValueKey('date-input'),
                 controller: dateText,
+                autofocus: true,
                 style: const TextStyle(fontSize: 13),
                 onSubmitted: (_) => apply(),
                 decoration: const InputDecoration(

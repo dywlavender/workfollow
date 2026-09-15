@@ -166,6 +166,9 @@ class _TaskInspectorState extends State<TaskInspector> {
     final noteId = await showDesktopPopover<String>(anchor,
         width: 330,
         maxHeight: 420,
+        placement: PopoverPlacement.bottomStart,
+        focusPolicy: PopoverFocusPolicy.searchField,
+        scrollable: true,
         builder: (context) => _RelationPicker(
               controller: widget.controller,
               selected: widget.task.sourceNoteId,

@@ -448,16 +448,18 @@ class _QuickAddFieldState extends State<QuickAddField> {
   /// the same compact disclosure affordance used by TickTick. The richer
   /// home-card variant still exposes its property buttons inline.
   Future<void> _openProperties(BuildContext anchor) async {
-    final action = await showDesktopMenu<String>(anchor, entries: const [
-      DesktopMenuEntry('schedule', '安排日期…',
-          icon: Icons.calendar_today_outlined),
-      DesktopMenuEntry('priority', '优先级', icon: Icons.flag_outlined),
-      DesktopMenuEntry('list', '清单', icon: Icons.inbox_outlined),
-      DesktopMenuEntry('tags', '标签', icon: Icons.tag_rounded),
-      DesktopMenuEntry('reminder', '提醒',
-          icon: Icons.notifications_none_rounded),
-      DesktopMenuEntry('repeat', '重复', icon: Icons.repeat_rounded),
-    ]);
+    final action = await showDesktopMenu<String>(anchor,
+        placement: PopoverPlacement.topEnd,
+        entries: const [
+          DesktopMenuEntry('schedule', '安排日期…',
+              icon: Icons.calendar_today_outlined),
+          DesktopMenuEntry('priority', '优先级', icon: Icons.flag_outlined),
+          DesktopMenuEntry('list', '清单', icon: Icons.inbox_outlined),
+          DesktopMenuEntry('tags', '标签', icon: Icons.tag_rounded),
+          DesktopMenuEntry('reminder', '提醒',
+              icon: Icons.notifications_none_rounded),
+          DesktopMenuEntry('repeat', '重复', icon: Icons.repeat_rounded),
+        ]);
     if (!mounted || action == null) return;
     // Closing the first menu can rebuild the inline row (especially while the
     // field is focused), which invalidates the menu button's Builder context.

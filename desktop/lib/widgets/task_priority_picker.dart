@@ -10,6 +10,7 @@ class TaskPriorityPicker {
       {TaskPriority? selected}) {
     return showDesktopMenu<TaskPriority>(anchor,
         selected: selected,
+        placement: PopoverPlacement.bottomStart,
         entries: [
           for (final priority in TaskPriority.values)
             DesktopMenuEntry(
