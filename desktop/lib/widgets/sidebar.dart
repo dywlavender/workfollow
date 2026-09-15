@@ -1039,70 +1039,82 @@ class _TaskListItemState extends State<_TaskListItem> {
             .moveToList(details.data, widget.list.name),
         builder: (context, candidateData, rejectedData) {
           final dragActive = candidateData.isNotEmpty;
-          return Semantics(
-            button: true,
-            selected: selected,
-            label: '${widget.list.name}，$count 个未完成任务',
-            child: GestureDetector(
-              onTap: () => widget.controller.selectList(widget.list.name),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 150),
-                curve: Curves.easeOut,
-                margin: const EdgeInsets.symmetric(vertical: 2),
-                padding: const EdgeInsets.fromLTRB(
-                    11, WorkFollowSpacing.sm - 2, 8, WorkFollowSpacing.sm - 2),
-                decoration: BoxDecoration(
-                  color: dragActive
-                      ? tokens.accentSoft
-                      : (selected
-                          ? listColor.withValues(alpha: .12)
-                          : (hovering
-                              ? tokens.content.withValues(alpha: .7)
-                              : Colors.transparent)),
-                  borderRadius: BorderRadius.circular(WorkFollowRadii.control),
-                  border: dragActive
-                      ? Border.all(color: tokens.accent.withValues(alpha: .5))
-                      : null,
-                ),
-                child: Row(
-                  children: [
-                    Container(
-                        width: 9,
-                        height: 9,
-                        decoration: BoxDecoration(
-                            color: listColor, shape: BoxShape.circle)),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(widget.list.name,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                              color: selected ? listColor : tokens.textPrimary,
-                              fontSize: WorkFollowTypography.navigation,
-                              fontWeight: selected
-                                  ? FontWeight.w700
-                                  : FontWeight.w500)),
+          return Align(
+            alignment: Alignment.centerLeft,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(
+                  maxWidth: WorkFollowMetrics.listItemMaxWidth),
+              child: Semantics(
+                button: true,
+                selected: selected,
+                label: '${widget.list.name}，$count 个未完成任务',
+                child: GestureDetector(
+                  onTap: () => widget.controller.selectList(widget.list.name),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 150),
+                    curve: Curves.easeOut,
+                    margin: const EdgeInsets.symmetric(vertical: 2),
+                    padding: const EdgeInsets.fromLTRB(11,
+                        WorkFollowSpacing.sm - 2, 8, WorkFollowSpacing.sm - 2),
+                    decoration: BoxDecoration(
+                      color: dragActive
+                          ? tokens.accentSoft
+                          : (selected
+                              ? listColor.withValues(alpha: .12)
+                              : (hovering
+                                  ? tokens.content.withValues(alpha: .7)
+                                  : Colors.transparent)),
+                      borderRadius:
+                          BorderRadius.circular(WorkFollowRadii.control),
+                      border: dragActive
+                          ? Border.all(
+                              color: tokens.accent.withValues(alpha: .5))
+                          : null,
                     ),
-                    if (count > 0)
-                      Text('$count',
-                          style: TextStyle(
-                              color: selected ? listColor : tokens.textTertiary,
-                              fontSize: WorkFollowTypography.metadata,
-                              fontWeight: FontWeight.w700)),
-                    ExcludeSemantics(
-                      excluding: !hovering,
-                      child: AnimatedOpacity(
-                        duration: const Duration(milliseconds: 120),
-                        opacity: hovering ? 1 : 0,
-                        child: AppIconButton(
-                            icon: WorkFollowIcons.more,
-                            tooltip: '清单操作',
-                            size: WorkFollowMetrics.iconHitTarget,
-                            iconSize: WorkFollowMetrics.metadataIcon,
-                            onPressed: () => _showListMenu(context)),
-                      ),
+                    child: Row(
+                      children: [
+                        Container(
+                            width: 9,
+                            height: 9,
+                            decoration: BoxDecoration(
+                                color: listColor, shape: BoxShape.circle)),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(widget.list.name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                  color:
+                                      selected ? listColor : tokens.textPrimary,
+                                  fontSize: WorkFollowTypography.navigation,
+                                  fontWeight: selected
+                                      ? FontWeight.w700
+                                      : FontWeight.w500)),
+                        ),
+                        if (count > 0)
+                          Text('$count',
+                              style: TextStyle(
+                                  color: selected
+                                      ? listColor
+                                      : tokens.textTertiary,
+                                  fontSize: WorkFollowTypography.metadata,
+                                  fontWeight: FontWeight.w700)),
+                        ExcludeSemantics(
+                          excluding: !hovering,
+                          child: AnimatedOpacity(
+                            duration: const Duration(milliseconds: 120),
+                            opacity: hovering ? 1 : 0,
+                            child: AppIconButton(
+                                icon: WorkFollowIcons.more,
+                                tooltip: '清单操作',
+                                size: WorkFollowMetrics.iconHitTarget,
+                                iconSize: WorkFollowMetrics.metadataIcon,
+                                onPressed: () => _showListMenu(context)),
+                          ),
+                        ),
+                      ],
                     ),
-                  ],
+                  ),
                 ),
               ),
             ),

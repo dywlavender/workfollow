@@ -20,6 +20,7 @@ void main() {
     expect(WorkFollowMetrics.compactFieldIcon, 17);
     expect(WorkFollowMetrics.menuRowHeight, 40);
     expect(WorkFollowMetrics.editorToolbarHeight, 42);
+    expect(WorkFollowMetrics.listItemMaxWidth, 172);
     // The light workspace follows the reference's four-plane hierarchy:
     // turquoise rail, mint navigation, cool-gray list canvas and white detail.
     expect(WorkFollowTheme.light.rail, const Color(0xFF42C8A8));

@@ -25,6 +25,9 @@ class WorkFollowMetrics {
   static const double menuRowHeight = 40;
   static const double taskRowMinHeight = 44;
   static const double editorToolbarHeight = 42;
+  // List/category rows are intentionally narrower than the full navigation
+  // column, leaving the right edge quiet like the TickTick reference.
+  static const double listItemMaxWidth = 172;
 }
 
 class WorkFollowSpacing {
