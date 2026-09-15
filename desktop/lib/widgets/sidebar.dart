@@ -55,7 +55,13 @@ class AppRail extends StatelessWidget {
           Expanded(
             child: Column(
               children: [
-                if (!controller.isTaskView) const _RailBrand(),
+                // Trash has its own content screen, but it remains inside
+                // the task navigation grammar. Keep its second column
+                // aligned with Plan/Today and do not show the product brand
+                // above the task destinations.
+                if (!controller.isTaskView &&
+                    controller.view != WorkspaceView.trash)
+                  const _RailBrand(),
                 Expanded(
                   child: SingleChildScrollView(
                     padding: const EdgeInsets.fromLTRB(9, 6, 9, 12),
@@ -289,12 +295,6 @@ class _TaskNavigation extends StatelessWidget {
           count: controller.countFor(WorkspaceView.inbox),
           selected: controller.view == WorkspaceView.inbox,
           onTap: () => controller.selectView(WorkspaceView.inbox),
-        ),
-        _RailItem(
-          label: '摘要',
-          icon: Icons.subject_outlined,
-          selected: false,
-          onTap: () => controller.selectView(WorkspaceView.home),
         ),
         _RailItem(
           label: '所有任务',

@@ -758,4 +758,27 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('quick-add-properties')), findsOneWidget);
   });
+
+  testWidgets('task navigation omits summary and trash keeps the task grammar',
+      (tester) async {
+    tester.view.physicalSize = const Size(1280, 820);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+    await tester.pumpWidget(const WorkFollowApp(demoMode: true));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('任务'));
+    await tester.pumpAndSettle();
+    expect(find.text('摘要'), findsNothing);
+
+    await tester.tap(find.text('废纸篓').first);
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('trash')), findsOneWidget);
+    expect(find.text('打勾'), findsNothing);
+    expect(find.text('摘要'), findsNothing);
+  });
 }
