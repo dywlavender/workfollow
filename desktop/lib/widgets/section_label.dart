@@ -14,7 +14,8 @@ class SectionLabel extends StatelessWidget {
   Widget build(BuildContext context) {
     final tokens = WorkFollowTheme.of(context);
     return Padding(
-      padding: const EdgeInsets.fromLTRB(14, 20, 14, 7),
+      padding: const EdgeInsets.fromLTRB(WorkFollowSpacing.md - 2,
+          WorkFollowSpacing.lg, WorkFollowSpacing.md - 2, 7),
       child: Row(
         children: [
           Container(
@@ -22,11 +23,11 @@ class SectionLabel extends StatelessWidget {
               height: 6,
               decoration: BoxDecoration(
                   color: color ?? tokens.textTertiary, shape: BoxShape.circle)),
-          const SizedBox(width: 8),
+          const SizedBox(width: WorkFollowSpacing.xs),
           Text(label,
               style: TextStyle(
                   color: tokens.textSecondary,
-                  fontSize: 11,
+                  fontSize: 11.5,
                   fontWeight: FontWeight.w700,
                   letterSpacing: .3)),
           const SizedBox(width: 6),

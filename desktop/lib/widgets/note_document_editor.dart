@@ -9,7 +9,9 @@ import 'package:flutter_quill/flutter_quill.dart' as quill;
 import '../models/note_document.dart';
 import '../models/task.dart';
 import '../state/workspace_controller.dart';
+import '../theme/workfollow_icons.dart';
 import '../theme/workfollow_theme.dart';
+import 'app_icon_button.dart';
 import 'task_editor_toolbar.dart';
 import 'desktop_popover.dart';
 import 'task_slash_menu.dart';
@@ -350,7 +352,7 @@ class _NoteDocumentEditorState extends State<NoteDocumentEditor>
     final textStyle = Theme.of(context)
         .textTheme
         .bodyLarge!
-        .copyWith(fontSize: 15, height: 1.7, color: tokens.textPrimary);
+        .copyWith(fontSize: 15, height: 1.65, color: tokens.textPrimary);
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       quill.QuillEditor(
           controller: editor,
@@ -386,8 +388,9 @@ class _NoteDocumentEditorState extends State<NoteDocumentEditor>
         TextButton.icon(
             key: const ValueKey('generate-task-from-selection'),
             onPressed: selectionPresent ? _taskFromSelection : null,
-            icon: const Icon(Icons.playlist_add, size: 17),
-            label: const Text('选中文字生成任务', style: TextStyle(fontSize: 12))),
+            icon: const AppIcon(WorkFollowIcons.playlistAdd,
+                size: WorkFollowMetrics.toolbarIcon),
+            label: const Text('选中文字生成任务', style: TextStyle(fontSize: 13))),
         const Spacer(),
         Builder(
           builder: (anchor) => Tooltip(
@@ -396,11 +399,11 @@ class _NoteDocumentEditorState extends State<NoteDocumentEditor>
               key: const ValueKey('note-format-toggle'),
               visualDensity: VisualDensity.compact,
               onPressed: () => unawaited(_toggleToolbar(anchor)),
-              icon: Icon(
+              icon: AppIcon(
                 toolbarVisible
-                    ? Icons.keyboard_arrow_up_rounded
-                    : Icons.text_format_rounded,
-                size: 18,
+                    ? WorkFollowIcons.expandLess
+                    : WorkFollowIcons.format,
+                size: WorkFollowMetrics.toolbarIcon,
               ),
             ),
           ),
@@ -422,8 +425,9 @@ class NoteImageBuilder extends quill.EmbedBuilder {
             padding: const EdgeInsets.all(18),
             color: WorkFollowTheme.of(context).canvas,
             child: const Row(children: [
-              Icon(Icons.broken_image_outlined, size: 20),
-              SizedBox(width: 8),
+              AppIcon(WorkFollowIcons.brokenImage,
+                  size: WorkFollowMetrics.navigationIcon),
+              SizedBox(width: WorkFollowSpacing.xs),
               Text('图片暂时无法显示')
             ]));
     final image = source.startsWith('http://') || source.startsWith('https://')
@@ -504,7 +508,8 @@ class NoteBlockBuilder extends quill.EmbedBuilder {
           alignment: Alignment.centerLeft,
           child: OutlinedButton.icon(
               key: ValueKey('note-attachment-${filename ?? 'file'}'),
-              icon: const Icon(Icons.insert_drive_file_outlined, size: 18),
+              icon: const AppIcon(WorkFollowIcons.file,
+                  size: WorkFollowMetrics.navigationIcon),
               label: Text(attrs['name']?.toString() ?? '附件'),
               onPressed: filename == null
                   ? null
@@ -547,7 +552,7 @@ class NoteBlockBuilder extends quill.EmbedBuilder {
         decoration: BoxDecoration(
             color: tokens.canvas,
             border: Border.all(color: tokens.border),
-            borderRadius: BorderRadius.circular(8)),
+            borderRadius: BorderRadius.circular(WorkFollowRadii.surface)),
         child: SelectableText(
             notePlainTextFromContentJson(node).trim().isEmpty
                 ? '导入的内容块'

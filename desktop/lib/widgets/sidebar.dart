@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/list_color.dart';
 import '../models/migration.dart';
 import '../state/workspace_controller.dart';
+import '../theme/workfollow_icons.dart';
 import '../theme/workfollow_theme.dart';
 import 'app_icon_button.dart';
 import 'desktop_popover.dart';
@@ -119,14 +120,14 @@ class _HomeNavigation extends StatelessWidget {
         _RailItem(
           key: const ValueKey('rail-context-home'),
           label: '首页',
-          icon: Icons.check_rounded,
+          icon: WorkFollowIcons.brand,
           selected: controller.view == WorkspaceView.home,
           onTap: () => controller.selectView(WorkspaceView.home),
         ),
         _RailItem(
           key: const ValueKey('rail-context-home-quick-add'),
           label: '快速录入',
-          icon: Icons.add_task_outlined,
+          icon: WorkFollowIcons.quickAdd,
           selected: false,
           onTap: controller.requestQuickAddFocus,
         ),
@@ -148,7 +149,7 @@ class _CalendarNavigation extends StatelessWidget {
         controller: controller,
         sectionLabel: '日历',
         label: '日历',
-        icon: Icons.calendar_month_outlined,
+        icon: WorkFollowIcons.calendar,
         view: WorkspaceView.calendar,
       );
 }
@@ -163,7 +164,7 @@ class _MatrixNavigation extends StatelessWidget {
         controller: controller,
         sectionLabel: '四象限',
         label: '四象限',
-        icon: Icons.grid_view_rounded,
+        icon: WorkFollowIcons.matrix,
         view: WorkspaceView.matrix,
       );
 }
@@ -178,7 +179,7 @@ class _BoardNavigation extends StatelessWidget {
         controller: controller,
         sectionLabel: '看板',
         label: '看板',
-        icon: Icons.view_column_outlined,
+        icon: WorkFollowIcons.board,
         view: WorkspaceView.board,
       );
 }
@@ -193,7 +194,7 @@ class _HabitsNavigation extends StatelessWidget {
         controller: controller,
         sectionLabel: '习惯',
         label: '习惯',
-        icon: Icons.repeat_rounded,
+        icon: WorkFollowIcons.habits,
         view: WorkspaceView.habits,
       );
 }
@@ -208,7 +209,7 @@ class _StatsNavigation extends StatelessWidget {
         controller: controller,
         sectionLabel: '统计',
         label: '统计',
-        icon: Icons.insights_outlined,
+        icon: WorkFollowIcons.stats,
         view: WorkspaceView.stats,
       );
 }
@@ -262,14 +263,14 @@ class _TaskNavigation extends StatelessWidget {
         _RailSectionHeader(label: '任务'),
         _RailItem(
           label: '最近 7 天',
-          icon: Icons.date_range_outlined,
+          icon: WorkFollowIcons.recent,
           count: controller.countFor(WorkspaceView.recent),
           selected: controller.view == WorkspaceView.recent,
           onTap: () => controller.selectView(WorkspaceView.recent),
         ),
         _RailItem(
           label: '今天',
-          icon: Icons.wb_sunny_outlined,
+          icon: WorkFollowIcons.today,
           count: controller.countFor(WorkspaceView.today),
           selected: controller.view == WorkspaceView.today &&
               controller.selectedListName == null,
@@ -277,28 +278,28 @@ class _TaskNavigation extends StatelessWidget {
         ),
         _RailItem(
           label: '过期',
-          icon: Icons.history_rounded,
+          icon: WorkFollowIcons.overdue,
           count: controller.countFor(WorkspaceView.overdue),
           selected: controller.view == WorkspaceView.overdue,
           onTap: () => controller.selectView(WorkspaceView.overdue),
         ),
         _RailItem(
           label: '计划',
-          icon: Icons.upcoming_outlined,
+          icon: WorkFollowIcons.plan,
           count: controller.countFor(WorkspaceView.plan),
           selected: controller.view == WorkspaceView.plan,
           onTap: () => controller.selectView(WorkspaceView.plan),
         ),
         _RailItem(
           label: '收集箱',
-          icon: Icons.inbox_outlined,
+          icon: WorkFollowIcons.inbox,
           count: controller.countFor(WorkspaceView.inbox),
           selected: controller.view == WorkspaceView.inbox,
           onTap: () => controller.selectView(WorkspaceView.inbox),
         ),
         _RailItem(
           label: '所有任务',
-          icon: Icons.list_alt_outlined,
+          icon: WorkFollowIcons.allTasks,
           count: controller.countFor(WorkspaceView.all),
           selected: controller.view == WorkspaceView.all &&
               controller.selectedListName == null,
@@ -306,7 +307,7 @@ class _TaskNavigation extends StatelessWidget {
         ),
         _RailItem(
           label: '已完成',
-          icon: Icons.check_circle_outline_rounded,
+          icon: WorkFollowIcons.completed,
           count: controller.countFor(WorkspaceView.completed),
           selected: controller.view == WorkspaceView.completed,
           onTap: () => controller.selectView(WorkspaceView.completed),
@@ -314,10 +315,10 @@ class _TaskNavigation extends StatelessWidget {
         _RailSectionHeader(
           label: '清单',
           trailing: AppIconButton(
-              icon: Icons.add,
+              icon: WorkFollowIcons.add,
               tooltip: '新建清单',
-              size: 24,
-              iconSize: 15,
+              size: WorkFollowMetrics.iconHitTarget,
+              iconSize: WorkFollowMetrics.toolbarIcon,
               onPressed: () => _showAddListDialog(context, controller)),
         ),
         ...controller.orderedLists
@@ -326,7 +327,7 @@ class _TaskNavigation extends StatelessWidget {
         _TagSection(controller: controller),
         _RailItem(
           label: '废纸篓',
-          icon: Icons.delete_outline_rounded,
+          icon: WorkFollowIcons.trash,
           count: controller.countFor(WorkspaceView.trash),
           selected: controller.view == WorkspaceView.trash,
           onTap: () => controller.selectView(WorkspaceView.trash),
@@ -350,22 +351,22 @@ class _NotesNavigation extends StatelessWidget {
           label: '笔记',
           trailing: Row(mainAxisSize: MainAxisSize.min, children: [
             AppIconButton(
-                icon: Icons.add,
+                icon: WorkFollowIcons.add,
                 tooltip: '新建笔记',
-                size: 24,
-                iconSize: 15,
+                size: WorkFollowMetrics.iconHitTarget,
+                iconSize: WorkFollowMetrics.toolbarIcon,
                 onPressed: () => controller.addNoteInCurrentFolder()),
             AppIconButton(
-                icon: Icons.create_new_folder_outlined,
+                icon: WorkFollowIcons.newFolder,
                 tooltip: '新建文件夹',
-                size: 24,
-                iconSize: 15,
+                size: WorkFollowMetrics.iconHitTarget,
+                iconSize: WorkFollowMetrics.toolbarIcon,
                 onPressed: () => _showAddFolderDialog(context, controller)),
           ]),
         ),
         _RailItem(
           label: '全部笔记',
-          icon: Icons.notes_outlined,
+          icon: WorkFollowIcons.notes,
           count: controller.activeNotes.length,
           selected: controller.view == WorkspaceView.notes &&
               controller.notesFolderFilter == null &&
@@ -378,7 +379,7 @@ class _NotesNavigation extends StatelessWidget {
         ),
         _RailItem(
           label: '收藏',
-          icon: Icons.star_border_rounded,
+          icon: WorkFollowIcons.favoriteOutline,
           count: controller.activeNotes.where((note) => note.isFavorite).length,
           selected: controller.view == WorkspaceView.notes &&
               controller.notesFavoritesOnly,
@@ -389,7 +390,7 @@ class _NotesNavigation extends StatelessWidget {
         ),
         _RailItem(
           label: '未归档',
-          icon: Icons.inbox_outlined,
+          icon: WorkFollowIcons.inbox,
           count: controller.activeNotes
               .where((note) => note.folderId == null)
               .length,
@@ -403,7 +404,7 @@ class _NotesNavigation extends StatelessWidget {
         ...controller.folders.map((folder) => Builder(
             builder: (anchor) => _RailItem(
                   label: folder.name,
-                  icon: Icons.folder_outlined,
+                  icon: WorkFollowIcons.folder,
                   count: controller.activeNotes
                       .where((note) =>
                           note.folderId == folder.id ||
@@ -462,7 +463,7 @@ class _IconRail extends StatelessWidget {
           const SizedBox(height: 12),
           _IconRailButton(
             label: '首页',
-            icon: Icons.check_rounded,
+            icon: WorkFollowIcons.brand,
             selected: controller.view == WorkspaceView.home,
             onPressed: () => controller.selectView(WorkspaceView.home),
             filled: true,
@@ -470,43 +471,43 @@ class _IconRail extends StatelessWidget {
           const SizedBox(height: 10),
           _IconRailButton(
             label: '任务',
-            icon: Icons.checklist_rounded,
+            icon: WorkFollowIcons.tasks,
             selected: taskRailSelected,
             onPressed: () => controller.selectView(WorkspaceView.today),
           ),
           _IconRailButton(
             label: '笔记',
-            icon: Icons.notes_outlined,
+            icon: WorkFollowIcons.notes,
             selected: controller.view == WorkspaceView.notes,
             onPressed: () => controller.selectView(WorkspaceView.notes),
           ),
           _IconRailButton(
             label: '日历',
-            icon: Icons.calendar_month_outlined,
+            icon: WorkFollowIcons.calendar,
             selected: controller.view == WorkspaceView.calendar,
             onPressed: () => controller.selectView(WorkspaceView.calendar),
           ),
           _IconRailButton(
             label: '四象限',
-            icon: Icons.grid_view_rounded,
+            icon: WorkFollowIcons.matrix,
             selected: controller.view == WorkspaceView.matrix,
             onPressed: () => controller.selectView(WorkspaceView.matrix),
           ),
           _IconRailButton(
             label: '看板',
-            icon: Icons.view_column_outlined,
+            icon: WorkFollowIcons.board,
             selected: controller.view == WorkspaceView.board,
             onPressed: () => controller.selectView(WorkspaceView.board),
           ),
           _IconRailButton(
             label: '习惯',
-            icon: Icons.repeat_rounded,
+            icon: WorkFollowIcons.habits,
             selected: controller.view == WorkspaceView.habits,
             onPressed: () => controller.selectView(WorkspaceView.habits),
           ),
           _IconRailButton(
             label: '统计',
-            icon: Icons.insights_outlined,
+            icon: WorkFollowIcons.stats,
             selected: controller.view == WorkspaceView.stats,
             onPressed: () => controller.selectView(WorkspaceView.stats),
           ),
@@ -545,7 +546,7 @@ class _IconRailFooter extends StatelessWidget {
         padding: const EdgeInsets.symmetric(vertical: 4),
         decoration: BoxDecoration(
           color: tokens.content.withValues(alpha: .62),
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(WorkFollowRadii.surface),
           border: Border.all(color: tokens.border.withValues(alpha: .8)),
         ),
         child: Column(
@@ -555,18 +556,19 @@ class _IconRailFooter extends StatelessWidget {
               label: '本地空间',
               child: Padding(
                 padding: const EdgeInsets.symmetric(vertical: 4),
-                child: Icon(Icons.computer_outlined,
-                    size: 16, color: tokens.textTertiary),
+                child: AppIcon(WorkFollowIcons.system,
+                    size: WorkFollowMetrics.toolbarIcon,
+                    color: tokens.textTertiary),
               ),
             ),
             _IconRailFooterButton(
-              icon: Icons.tune_outlined,
+              icon: WorkFollowIcons.settings,
               label: '设置',
               onPressed: onOpenSettings,
             ),
             _IconRailFooterButton(
               icon:
-                  isDark ? Icons.light_mode_outlined : Icons.dark_mode_outlined,
+                  isDark ? WorkFollowIcons.lightMode : WorkFollowIcons.darkMode,
               label: isDark ? '切换浅色' : '切换深色',
               onPressed: onToggleTheme,
             ),
@@ -682,11 +684,13 @@ class _IconRailButtonState extends State<_IconRailButton> {
                     : hovering
                         ? tokens.content.withValues(alpha: .65)
                         : Colors.transparent,
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(WorkFollowRadii.surface),
               ),
-              child: Icon(
+              child: AppIcon(
                 widget.icon,
-                size: widget.filled ? 21 : 19,
+                size: widget.filled
+                    ? WorkFollowMetrics.railIcon + 1
+                    : WorkFollowMetrics.railIcon,
                 color: active ? tokens.accent : tokens.textSecondary,
               ),
             ),
@@ -782,7 +786,8 @@ class _RailSectionHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final tokens = WorkFollowTheme.of(context);
     return Padding(
-      padding: const EdgeInsets.only(top: 14, bottom: 3),
+      padding: const EdgeInsets.only(
+          top: WorkFollowSpacing.lg, bottom: WorkFollowSpacing.xxs),
       child: Row(
         children: [
           Expanded(
@@ -790,7 +795,7 @@ class _RailSectionHeader extends StatelessWidget {
               label,
               style: TextStyle(
                 color: tokens.textTertiary,
-                fontSize: 10,
+                fontSize: 11,
                 fontWeight: FontWeight.w700,
                 letterSpacing: .5,
               ),
@@ -829,19 +834,19 @@ class _TagSectionState extends State<_TagSection> {
           label: '标签',
           trailing: AppIconButton(
             icon: expanded
-                ? Icons.keyboard_arrow_up_rounded
-                : Icons.keyboard_arrow_down_rounded,
+                ? WorkFollowIcons.expandLess
+                : WorkFollowIcons.expandMore,
             tooltip: expanded ? '收起标签' : '展开标签',
-            size: 24,
-            iconSize: 16,
+            size: WorkFollowMetrics.iconHitTarget,
+            iconSize: WorkFollowMetrics.toolbarIcon,
             onPressed: () => setState(() => expanded = !expanded),
           ),
         ),
         if (expanded && tags.isEmpty)
           Padding(
-            padding: const EdgeInsets.fromLTRB(11, 3, 8, 6),
+            padding: const EdgeInsets.fromLTRB(11, 3, 8, WorkFollowSpacing.xs),
             child: Text('在任务中输入 #标签',
-                style: TextStyle(color: tokens.textTertiary, fontSize: 10.5)),
+                style: TextStyle(color: tokens.textTertiary, fontSize: 11)),
           ),
         if (expanded)
           ...tags.entries.map((entry) => _TagItem(
@@ -866,13 +871,15 @@ class _RailBrand extends StatelessWidget {
               width: 28,
               height: 28,
               decoration: BoxDecoration(
-                  color: tokens.accent, borderRadius: BorderRadius.circular(8)),
-              child: Icon(Icons.check_rounded,
-                  size: 21, color: Theme.of(context).colorScheme.onPrimary)),
-          const SizedBox(width: 10),
+                  color: tokens.accent,
+                  borderRadius: BorderRadius.circular(WorkFollowRadii.control)),
+              child: AppIcon(WorkFollowIcons.brand,
+                  size: WorkFollowMetrics.railIcon + 1,
+                  color: Theme.of(context).colorScheme.onPrimary)),
+          const SizedBox(width: WorkFollowSpacing.sm),
           Text('打勾',
               style: TextStyle(
-                  fontSize: 17,
+                  fontSize: 16,
                   fontWeight: FontWeight.w700,
                   color: tokens.textPrimary)),
         ]));
@@ -921,23 +928,24 @@ class _RailItemState extends State<_RailItem> {
             duration: const Duration(milliseconds: 150),
             curve: Curves.easeOut,
             margin: const EdgeInsets.symmetric(vertical: 2),
-            padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 9),
+            padding: const EdgeInsets.symmetric(
+                horizontal: 11, vertical: WorkFollowSpacing.sm - 2),
             decoration: BoxDecoration(
               color: widget.selected
                   ? tokens.accentSoft
                   : (hovering
-                      ? tokens.content.withOpacity(.65)
+                      ? tokens.content.withValues(alpha: .65)
                       : Colors.transparent),
-              borderRadius: BorderRadius.circular(9),
+              borderRadius: BorderRadius.circular(WorkFollowRadii.control),
             ),
             child: Row(
               children: [
-                Icon(
+                AppIcon(
                   widget.icon,
-                  size: 18,
+                  size: WorkFollowMetrics.navigationIcon,
                   color: widget.selected ? tokens.accent : tokens.textSecondary,
                 ),
-                const SizedBox(width: 10),
+                const SizedBox(width: WorkFollowSpacing.sm - 2),
                 Expanded(
                   child: Text(
                     widget.label,
@@ -947,7 +955,7 @@ class _RailItemState extends State<_RailItem> {
                       color: widget.selected
                           ? tokens.accent
                           : tokens.textSecondary,
-                      fontSize: 12.5,
+                      fontSize: 13,
                       fontWeight:
                           widget.selected ? FontWeight.w700 : FontWeight.w500,
                     ),
@@ -962,7 +970,7 @@ class _RailItemState extends State<_RailItem> {
                           padding: EdgeInsets.zero,
                           iconSize: 16,
                           onPressed: widget.onMenu,
-                          icon: const Icon(Icons.more_horiz)))
+                          icon: const AppIcon(WorkFollowIcons.more)))
                 else if (widget.count != null && widget.count! > 0)
                   Container(
                     padding:
@@ -970,15 +978,15 @@ class _RailItemState extends State<_RailItem> {
                     decoration: BoxDecoration(
                       color: widget.selected
                           ? tokens.content
-                          : tokens.content.withOpacity(.7),
-                      borderRadius: BorderRadius.circular(999),
+                          : tokens.content.withValues(alpha: .7),
+                      borderRadius: BorderRadius.circular(WorkFollowRadii.pill),
                     ),
                     child: Text('${widget.count}',
                         style: TextStyle(
                             color: widget.selected
                                 ? tokens.accent
                                 : tokens.textTertiary,
-                            fontSize: 10,
+                            fontSize: 11,
                             fontWeight: FontWeight.w700)),
                   ),
               ],
@@ -1030,18 +1038,19 @@ class _TaskListItemState extends State<_TaskListItem> {
                 duration: const Duration(milliseconds: 150),
                 curve: Curves.easeOut,
                 margin: const EdgeInsets.symmetric(vertical: 2),
-                padding: const EdgeInsets.fromLTRB(11, 9, 8, 9),
+                padding: const EdgeInsets.fromLTRB(
+                    11, WorkFollowSpacing.sm - 2, 8, WorkFollowSpacing.sm - 2),
                 decoration: BoxDecoration(
                   color: dragActive
                       ? tokens.accentSoft
                       : (selected
                           ? listColor.withValues(alpha: .12)
                           : (hovering
-                              ? tokens.content.withOpacity(.7)
+                              ? tokens.content.withValues(alpha: .7)
                               : Colors.transparent)),
-                  borderRadius: BorderRadius.circular(9),
+                  borderRadius: BorderRadius.circular(WorkFollowRadii.control),
                   border: dragActive
-                      ? Border.all(color: tokens.accent.withOpacity(.5))
+                      ? Border.all(color: tokens.accent.withValues(alpha: .5))
                       : null,
                 ),
                 child: Row(
@@ -1059,7 +1068,7 @@ class _TaskListItemState extends State<_TaskListItem> {
                           style: TextStyle(
                               color:
                                   selected ? listColor : tokens.textSecondary,
-                              fontSize: 12.5,
+                              fontSize: 13,
                               fontWeight: selected
                                   ? FontWeight.w700
                                   : FontWeight.w500)),
@@ -1068,7 +1077,7 @@ class _TaskListItemState extends State<_TaskListItem> {
                       Text('$count',
                           style: TextStyle(
                               color: selected ? listColor : tokens.textTertiary,
-                              fontSize: 10,
+                              fontSize: 11,
                               fontWeight: FontWeight.w700)),
                     ExcludeSemantics(
                       excluding: !hovering,
@@ -1076,10 +1085,10 @@ class _TaskListItemState extends State<_TaskListItem> {
                         duration: const Duration(milliseconds: 120),
                         opacity: hovering ? 1 : 0,
                         child: AppIconButton(
-                            icon: Icons.more_horiz_rounded,
+                            icon: WorkFollowIcons.more,
                             tooltip: '清单操作',
-                            size: 24,
-                            iconSize: 14,
+                            size: WorkFollowMetrics.iconHitTarget,
+                            iconSize: WorkFollowMetrics.metadataIcon,
                             onPressed: () => _showListMenu(context)),
                       ),
                     ),
@@ -1142,7 +1151,8 @@ class _TaskListItemState extends State<_TaskListItem> {
                   children: [
                     for (final value in listColorPalette)
                       InkWell(
-                        borderRadius: BorderRadius.circular(99),
+                        borderRadius:
+                            BorderRadius.circular(WorkFollowRadii.pill),
                         onTap: () => Navigator.of(dialogContext)
                             .pop(colorHexFromValue(value)),
                         child: Container(
@@ -1153,8 +1163,9 @@ class _TaskListItemState extends State<_TaskListItem> {
                             child: widget.controller
                                         .colorHexForList(widget.list.name) ==
                                     colorHexFromValue(value)
-                                ? const Icon(Icons.check,
-                                    size: 16, color: Colors.white)
+                                ? const AppIcon(WorkFollowIcons.check,
+                                    size: WorkFollowMetrics.toolbarIcon,
+                                    color: Colors.white)
                                 : null),
                       ),
                   ],
@@ -1263,12 +1274,12 @@ class _TagItemState extends State<_TagItem> {
                     : (hovering
                         ? tokens.content.withValues(alpha: .65)
                         : Colors.transparent),
-                borderRadius: BorderRadius.circular(9)),
+                borderRadius: BorderRadius.circular(WorkFollowRadii.control)),
             child: Row(children: [
-              Icon(Icons.tag_outlined,
-                  size: 17,
+              AppIcon(WorkFollowIcons.tag,
+                  size: WorkFollowMetrics.navigationIcon,
                   color: selected ? tokens.accent : tokens.textSecondary),
-              const SizedBox(width: 10),
+              const SizedBox(width: WorkFollowSpacing.sm - 2),
               Expanded(
                   child: Text(widget.name,
                       maxLines: 1,
@@ -1276,13 +1287,13 @@ class _TagItemState extends State<_TagItem> {
                       style: TextStyle(
                           color:
                               selected ? tokens.accent : tokens.textSecondary,
-                          fontSize: 12.5,
+                          fontSize: 13,
                           fontWeight:
                               selected ? FontWeight.w700 : FontWeight.w500))),
               Text('${widget.count}',
                   style: TextStyle(
                       color: selected ? tokens.accent : tokens.textTertiary,
-                      fontSize: 10,
+                      fontSize: 11,
                       fontWeight: FontWeight.w700)),
             ]),
           ),
@@ -1373,19 +1384,20 @@ class _TaskViewItemState extends State<_TaskViewItem> {
             duration: const Duration(milliseconds: 150),
             curve: Curves.easeOut,
             margin: const EdgeInsets.symmetric(vertical: 2),
-            padding: const EdgeInsets.fromLTRB(9, 8, 8, 8),
+            padding: const EdgeInsets.fromLTRB(
+                9, WorkFollowSpacing.xs, 8, WorkFollowSpacing.xs),
             decoration: BoxDecoration(
               color: selected
                   ? tokens.accentSoft
                   : (hovering
-                      ? tokens.content.withOpacity(.7)
+                      ? tokens.content.withValues(alpha: .7)
                       : Colors.transparent),
-              borderRadius: BorderRadius.circular(7),
+              borderRadius: BorderRadius.circular(WorkFollowRadii.control),
             ),
             child: Row(
               children: [
-                Icon(widget.icon,
-                    size: 17,
+                AppIcon(widget.icon,
+                    size: WorkFollowMetrics.navigationIcon,
                     color: selected ? tokens.accent : tokens.textSecondary),
                 const SizedBox(width: 9),
                 Expanded(
@@ -1398,7 +1410,7 @@ class _TaskViewItemState extends State<_TaskViewItem> {
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           color: selected ? tokens.accent : tokens.textPrimary,
-                          fontSize: 12,
+                          fontSize: 13,
                           fontWeight:
                               selected ? FontWeight.w700 : FontWeight.w600,
                         ),
@@ -1410,7 +1422,7 @@ class _TaskViewItemState extends State<_TaskViewItem> {
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                             color: tokens.textTertiary,
-                            fontSize: 9.5,
+                            fontSize: 11,
                             height: 1.1),
                       ),
                     ],
@@ -1423,7 +1435,7 @@ class _TaskViewItemState extends State<_TaskViewItem> {
                       '$count',
                       style: TextStyle(
                         color: selected ? tokens.accent : tokens.textTertiary,
-                        fontSize: 10,
+                        fontSize: 11,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
@@ -1440,9 +1452,9 @@ class _TaskViewItemState extends State<_TaskViewItem> {
 Future<void> _editFolder(BuildContext anchor, WorkspaceController controller,
     MigrationFolderRecord folder) async {
   final action = await showDesktopMenu<String>(anchor, entries: const [
-    DesktopMenuEntry('rename', '重命名', icon: Icons.edit_outlined),
+    DesktopMenuEntry('rename', '重命名', icon: WorkFollowIcons.edit),
     DesktopMenuEntry('remove', '删除文件夹…',
-        icon: Icons.delete_outline, destructive: true),
+        icon: WorkFollowIcons.delete, destructive: true),
   ]);
   if (!anchor.mounted || action == null) return;
   if (action == 'remove') {

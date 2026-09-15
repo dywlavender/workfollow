@@ -9,8 +9,8 @@ class AppIconButton extends StatelessWidget {
     this.onPressed,
     this.tooltip,
     this.active = false,
-    this.size = 30,
-    this.iconSize = 17,
+    this.size = WorkFollowMetrics.iconHitTarget,
+    this.iconSize = WorkFollowMetrics.toolbarIcon,
     this.semanticLabel,
   });
 
@@ -31,14 +31,14 @@ class AppIconButton extends StatelessWidget {
       label: semanticLabel ?? tooltip,
       child: Material(
         color: active ? tokens.accentSoft : Colors.transparent,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(WorkFollowRadii.control),
         child: InkWell(
           onTap: onPressed,
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(WorkFollowRadii.control),
           child: SizedBox(
             width: size,
             height: size,
-            child: Icon(
+            child: AppIcon(
               icon,
               size: iconSize,
               color: onPressed == null
@@ -75,23 +75,27 @@ class SoftPill extends StatelessWidget {
   Widget build(BuildContext context) {
     final tokens = WorkFollowTheme.of(context);
     return Container(
+      constraints:
+          const BoxConstraints(minHeight: WorkFollowMetrics.chipHeight),
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
         color: color ?? tokens.accentFaint,
-        borderRadius: BorderRadius.circular(6),
+        borderRadius: BorderRadius.circular(WorkFollowRadii.control),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           if (icon != null) ...[
-            Icon(icon, size: 12, color: textColor ?? tokens.textSecondary),
+            AppIcon(icon!,
+                size: WorkFollowMetrics.metadataIcon,
+                color: textColor ?? tokens.textSecondary),
             const SizedBox(width: 4),
           ],
           Text(
             label,
             style: TextStyle(
               color: textColor ?? tokens.textSecondary,
-              fontSize: 11,
+              fontSize: 12,
               fontWeight: FontWeight.w600,
               height: 1,
             ),
@@ -100,4 +104,28 @@ class SoftPill extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Small semantic wrapper used when an icon is not interactive.
+class AppIcon extends StatelessWidget {
+  const AppIcon(
+    this.icon, {
+    super.key,
+    this.size = WorkFollowMetrics.navigationIcon,
+    this.color,
+    this.semanticLabel,
+  });
+
+  final IconData icon;
+  final double size;
+  final Color? color;
+  final String? semanticLabel;
+
+  @override
+  Widget build(BuildContext context) => Icon(
+        icon,
+        size: size,
+        color: color,
+        semanticLabel: semanticLabel,
+      );
 }

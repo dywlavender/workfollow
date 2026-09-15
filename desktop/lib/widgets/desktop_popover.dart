@@ -4,7 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 
+import '../theme/workfollow_icons.dart';
 import '../theme/workfollow_theme.dart';
+import 'app_icon_button.dart';
 
 /// The edge of the anchor a popover prefers to use.
 enum PopoverSide { top, bottom, left, right }
@@ -453,10 +455,10 @@ class _AnchoredPopoverPageState extends State<_AnchoredPopoverPage>
     final surface = Material(
       elevation: 12,
       shadowColor: Colors.black.withValues(alpha: .18),
-      color: tokens.content,
+      color: tokens.overlay,
       surfaceTintColor: Colors.transparent,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(WorkFollowRadii.popover),
         side: BorderSide(color: tokens.border),
       ),
       clipBehavior: Clip.antiAlias,
@@ -675,19 +677,22 @@ class _DesktopMenuSurfaceState<T> extends State<_DesktopMenuSurface<T>> {
       child: ListTile(
         key: ValueKey('menu-option-${entry.value}'),
         dense: true,
-        minTileHeight: 38,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+        minTileHeight: WorkFollowMetrics.menuRowHeight,
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(WorkFollowRadii.control)),
         tileColor: focused ? tokens.accentFaint : null,
         contentPadding: const EdgeInsets.symmetric(horizontal: 10),
         leading: entry.icon == null
             ? null
-            : Icon(entry.icon, size: 17, color: foreground),
+            : AppIcon(entry.icon!,
+                size: WorkFollowMetrics.toolbarIcon, color: foreground),
         title: Text(entry.label,
             style: TextStyle(
                 fontSize: 13,
                 color: entry.destructive ? tokens.danger : tokens.textPrimary)),
         trailing: widget.selected == entry.value
-            ? Icon(Icons.check, size: 16, color: tokens.accent)
+            ? AppIcon(WorkFollowIcons.check,
+                size: WorkFollowMetrics.toolbarIcon, color: tokens.accent)
             : null,
         onTap: () => Navigator.of(context).pop(entry.value),
       ),
@@ -720,7 +725,7 @@ class PropertyButton extends StatelessWidget {
               message: tooltip ?? label,
               child: TextButton.icon(
                 onPressed: () => onPressed(anchor),
-                icon: Icon(icon, size: 15),
+                icon: AppIcon(icon, size: WorkFollowMetrics.metadataIcon),
                 label:
                     Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
                 style: TextButton.styleFrom(
@@ -730,11 +735,12 @@ class PropertyButton extends StatelessWidget {
                       .textTheme
                       .bodyMedium
                       ?.copyWith(fontSize: 12, fontWeight: FontWeight.w500),
-                  minimumSize: const Size(0, 32),
+                  minimumSize: const Size(0, WorkFollowMetrics.chipHeight),
                   padding:
                       const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
                   shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(7)),
+                      borderRadius:
+                          BorderRadius.circular(WorkFollowRadii.control)),
                 ),
               ),
             ));

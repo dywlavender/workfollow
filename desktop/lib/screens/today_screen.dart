@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../models/task.dart';
 import '../state/workspace_controller.dart';
+import '../theme/workfollow_icons.dart';
 import '../theme/workfollow_theme.dart';
 import '../features/tasks/domain/task_schedule.dart';
 import '../widgets/app_icon_button.dart';
@@ -225,9 +226,8 @@ class _TodayScreenState extends State<TodayScreen> {
                                         padding: EdgeInsets.zero,
                                         child: EmptyHint(
                                             icon: completedView
-                                                ? Icons
-                                                    .check_circle_outline_rounded
-                                                : Icons.checklist_rounded,
+                                                ? WorkFollowIcons.completed
+                                                : WorkFollowIcons.tasks,
                                             title: completedView
                                                 ? '完成的任务会出现在这里'
                                                 : c.view == WorkspaceView.today
@@ -340,20 +340,20 @@ class _TodayScreenState extends State<TodayScreen> {
         Builder(
           builder: (anchor) => AppIconButton(
             key: const ValueKey('list-sort'),
-            icon: Icons.sort_rounded,
+            icon: WorkFollowIcons.sort,
             tooltip: '排序：${sortMode.label}',
-            size: 32,
-            iconSize: 17,
+            size: WorkFollowMetrics.iconHitTarget,
+            iconSize: WorkFollowMetrics.toolbarIcon,
             onPressed: () => _showListMenu(anchor),
           ),
         ),
         Builder(
           builder: (anchor) => AppIconButton(
             key: const ValueKey('list-actions'),
-            icon: Icons.more_horiz_rounded,
+            icon: WorkFollowIcons.more,
             tooltip: '列表操作',
-            size: 32,
-            iconSize: 18,
+            size: WorkFollowMetrics.iconHitTarget,
+            iconSize: WorkFollowMetrics.toolbarIcon,
             onPressed: () => _showListMenu(anchor, showOnlyActions: true),
           ),
         ),
@@ -365,12 +365,13 @@ class _TodayScreenState extends State<TodayScreen> {
       {bool showOnlyActions = false}) async {
     final entries = <DesktopMenuEntry<String>>[
       if (!showOnlyActions) ...[
-        const DesktopMenuEntry('manual', '手动排序', icon: Icons.drag_handle),
-        const DesktopMenuEntry('due', '按日期排序', icon: Icons.schedule_outlined),
-        const DesktopMenuEntry('priority', '按优先级排序', icon: Icons.flag_outlined),
+        const DesktopMenuEntry('manual', '手动排序', icon: WorkFollowIcons.drag),
+        const DesktopMenuEntry('due', '按日期排序', icon: WorkFollowIcons.schedule),
+        const DesktopMenuEntry('priority', '按优先级排序',
+            icon: WorkFollowIcons.flag),
       ],
       const DesktopMenuEntry('toggle-completed', '展开/收起已完成',
-          icon: Icons.check_circle_outline_rounded),
+          icon: WorkFollowIcons.completed),
     ];
     final action = await showDesktopMenu<String>(anchor,
         entries: entries,
@@ -407,7 +408,7 @@ class _TodayScreenState extends State<TodayScreen> {
       const SizedBox(width: 8),
       Text(label,
           style: TextStyle(
-              fontSize: 12.5, fontWeight: FontWeight.w700, color: textColor)),
+              fontSize: 13, fontWeight: FontWeight.w700, color: textColor)),
       const SizedBox(width: 6),
       Text('$count',
           style: TextStyle(fontSize: 11, color: tokens.textTertiary)),
@@ -459,11 +460,11 @@ class _TodayScreenState extends State<TodayScreen> {
                   trailing: Expanded(
                       child: Row(children: [
                     const Spacer(),
-                    Icon(
+                    AppIcon(
                         showCompleted
-                            ? Icons.expand_less_rounded
-                            : Icons.expand_more_rounded,
-                        size: 18,
+                            ? WorkFollowIcons.expandLess
+                            : WorkFollowIcons.expandMore,
+                        size: WorkFollowMetrics.navigationIcon,
                         color: tokens.textTertiary),
                   ]))))),
       if (showCompleted)
@@ -547,18 +548,18 @@ class _TodayScreenState extends State<TodayScreen> {
   }
 
   IconData _viewIcon(WorkspaceView view) => switch (view) {
-        WorkspaceView.recent => Icons.date_range_outlined,
-        WorkspaceView.today => Icons.wb_sunny_outlined,
-        WorkspaceView.overdue => Icons.history_rounded,
-        WorkspaceView.inbox => Icons.inbox_outlined,
-        WorkspaceView.plan => Icons.upcoming_outlined,
-        WorkspaceView.all => Icons.list_alt_outlined,
-        WorkspaceView.completed => Icons.check_circle_outline_rounded,
+        WorkspaceView.recent => WorkFollowIcons.recent,
+        WorkspaceView.today => WorkFollowIcons.today,
+        WorkspaceView.overdue => WorkFollowIcons.overdue,
+        WorkspaceView.inbox => WorkFollowIcons.inbox,
+        WorkspaceView.plan => WorkFollowIcons.plan,
+        WorkspaceView.all => WorkFollowIcons.allTasks,
+        WorkspaceView.completed => WorkFollowIcons.completed,
         WorkspaceView.work ||
         WorkspaceView.study ||
         WorkspaceView.personal =>
-          Icons.list_rounded,
-        _ => Icons.checklist_rounded,
+          WorkFollowIcons.list,
+        _ => WorkFollowIcons.tasks,
       };
 }
 
@@ -577,8 +578,8 @@ class _EmptyInspector extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.touch_app_outlined,
-                size: 30, color: tokens.textTertiary),
+            AppIcon(WorkFollowIcons.touch,
+                size: WorkFollowMetrics.headerIcon, color: tokens.textTertiary),
             const SizedBox(height: 12),
             Text('选择一个任务开始编辑',
                 style: TextStyle(
@@ -588,7 +589,7 @@ class _EmptyInspector extends StatelessWidget {
             const SizedBox(height: 6),
             Text('标题、备注、日期和子任务都会在这里展开。',
                 textAlign: TextAlign.center,
-                style: TextStyle(color: tokens.textTertiary, fontSize: 12)),
+                style: TextStyle(color: tokens.textTertiary, fontSize: 13)),
           ],
         ),
       ),
@@ -630,7 +631,7 @@ class _BulkBar extends StatelessWidget {
     final tokens = WorkFollowTheme.of(context);
     return AppCard(
         elevated: true,
-        radius: 12,
+        radius: WorkFollowRadii.card,
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
         child: Wrap(
             spacing: 2,

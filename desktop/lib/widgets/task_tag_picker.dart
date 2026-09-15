@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'desktop_popover.dart';
+import '../theme/workfollow_theme.dart';
 
 class TaskTagPicker {
   const TaskTagPicker._();
@@ -34,7 +35,7 @@ class _TaskTagEditorState extends State<_TaskTagEditor> {
 
   @override
   Widget build(BuildContext context) => Padding(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(WorkFollowSpacing.md),
       child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,

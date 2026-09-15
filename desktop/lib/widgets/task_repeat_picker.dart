@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../features/tasks/domain/task_draft.dart';
 import '../models/task.dart';
+import '../theme/workfollow_theme.dart';
 import 'desktop_popover.dart';
 
 class TaskRepeatPicker {
@@ -52,7 +53,7 @@ class _TaskRepeatEditorState extends State<_TaskRepeatEditor> {
 
   @override
   Widget build(BuildContext context) => Padding(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(WorkFollowSpacing.md),
       child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -102,7 +103,7 @@ class _TaskRepeatEditorState extends State<_TaskRepeatEditor> {
                       })),
             ],
             const SizedBox(height: 12),
-            const Text('完成本次任务后，会自动生成下一次。', style: TextStyle(fontSize: 12)),
+            const Text('完成本次任务后，会自动生成下一次。', style: TextStyle(fontSize: 13)),
             const SizedBox(height: 16),
             Align(
                 alignment: Alignment.centerRight,

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../theme/workfollow_icons.dart';
 import '../theme/workfollow_theme.dart';
+import 'app_icon_button.dart';
 
 enum TaskSlashAction {
   heading1,
@@ -49,18 +51,18 @@ extension TaskSlashActionLabel on TaskSlashAction {
       };
 
   IconData get icon => switch (this) {
-        TaskSlashAction.heading1 => Icons.title_rounded,
-        TaskSlashAction.heading2 => Icons.text_fields_rounded,
-        TaskSlashAction.heading3 => Icons.short_text_rounded,
-        TaskSlashAction.bullet => Icons.format_list_bulleted_rounded,
-        TaskSlashAction.ordered => Icons.format_list_numbered_rounded,
-        TaskSlashAction.checklist => Icons.check_box_outlined,
-        TaskSlashAction.quote => Icons.format_quote_rounded,
-        TaskSlashAction.divider => Icons.horizontal_rule_rounded,
-        TaskSlashAction.subtask => Icons.playlist_add_rounded,
-        TaskSlashAction.tag => Icons.tag_rounded,
-        TaskSlashAction.relation => Icons.link_rounded,
-        TaskSlashAction.attachment => Icons.attach_file_rounded,
+        TaskSlashAction.heading1 => WorkFollowIcons.heading1,
+        TaskSlashAction.heading2 => WorkFollowIcons.heading2,
+        TaskSlashAction.heading3 => WorkFollowIcons.heading3,
+        TaskSlashAction.bullet => WorkFollowIcons.bullet,
+        TaskSlashAction.ordered => WorkFollowIcons.ordered,
+        TaskSlashAction.checklist => WorkFollowIcons.checklist,
+        TaskSlashAction.quote => WorkFollowIcons.quote,
+        TaskSlashAction.divider => WorkFollowIcons.divider,
+        TaskSlashAction.subtask => WorkFollowIcons.subtask,
+        TaskSlashAction.tag => WorkFollowIcons.tag,
+        TaskSlashAction.relation => WorkFollowIcons.link,
+        TaskSlashAction.attachment => WorkFollowIcons.attachment,
       };
 }
 
@@ -110,10 +112,10 @@ class TaskSlashMenu extends StatelessWidget {
       key: const ValueKey('task-slash-menu'),
       elevation: 8,
       shadowColor: tokens.shadow,
-      color: tokens.content,
+      color: tokens.overlay,
       surfaceTintColor: Colors.transparent,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(WorkFollowRadii.popover),
         side: BorderSide(color: tokens.border),
       ),
       clipBehavior: Clip.antiAlias,
@@ -154,15 +156,17 @@ class TaskSlashMenu extends StatelessWidget {
   Widget _item(TaskSlashAction action, WorkFollowTheme tokens) => ListTile(
         key: ValueKey('task-slash-option-${action.keyName}'),
         dense: true,
-        minTileHeight: 40,
+        minTileHeight: WorkFollowMetrics.menuRowHeight,
         horizontalTitleGap: 12,
         contentPadding: const EdgeInsets.symmetric(horizontal: 13),
         hoverColor: tokens.accentFaint,
         splashColor: Colors.transparent,
-        leading: Icon(action.icon, size: 18, color: tokens.textSecondary),
+        leading: AppIcon(action.icon,
+            size: WorkFollowMetrics.navigationIcon,
+            color: tokens.textSecondary),
         title: Text(action.label,
             style: TextStyle(
-                fontSize: 13.5,
+                fontSize: 13,
                 fontWeight: FontWeight.w500,
                 color: tokens.textPrimary)),
         onTap: () => onSelected(action),

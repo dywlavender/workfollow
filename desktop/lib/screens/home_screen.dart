@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 
 import '../models/task.dart';
 import '../state/workspace_controller.dart';
+import '../theme/workfollow_icons.dart';
 import '../theme/workfollow_theme.dart';
+import '../widgets/app_icon_button.dart';
 import '../widgets/app_surfaces.dart';
 import '../widgets/quick_add.dart';
 
@@ -76,7 +78,7 @@ class HomeScreen extends StatelessWidget {
                           Text(
                             '${now.month} 月 ${now.day} 日 · 星期${_weekday(now.weekday)} · 把注意力留给要紧的事。',
                             style: TextStyle(
-                                color: tokens.textTertiary, fontSize: 12.5),
+                                color: tokens.textTertiary, fontSize: 13),
                           ),
                         ],
                       ),
@@ -101,7 +103,7 @@ class HomeScreen extends StatelessWidget {
                       child: StatCard(
                           label: '今天待办',
                           value: '${todayTasks.length}',
-                          icon: Icons.wb_sunny_outlined,
+                          icon: WorkFollowIcons.today,
                           color: tokens.accent,
                           onTap: () =>
                               controller.selectView(WorkspaceView.today)),
@@ -111,7 +113,7 @@ class HomeScreen extends StatelessWidget {
                       child: StatCard(
                           label: '今日完成',
                           value: '$doneToday',
-                          icon: Icons.check_circle_outline_rounded,
+                          icon: WorkFollowIcons.completed,
                           color: tokens.success,
                           onTap: () =>
                               controller.selectView(WorkspaceView.completed)),
@@ -121,7 +123,7 @@ class HomeScreen extends StatelessWidget {
                       child: StatCard(
                           label: '逾期',
                           value: '${overdueTasks.length}',
-                          icon: Icons.error_outline_rounded,
+                          icon: WorkFollowIcons.warning,
                           color: tokens.warning,
                           onTap: () =>
                               controller.selectView(WorkspaceView.today)),
@@ -131,7 +133,7 @@ class HomeScreen extends StatelessWidget {
                       child: StatCard(
                           label: '笔记',
                           value: '${controller.activeNotes.length}',
-                          icon: Icons.notes_outlined,
+                          icon: WorkFollowIcons.notes,
                           color: tokens.accent,
                           onTap: () =>
                               controller.selectView(WorkspaceView.notes)),
@@ -147,7 +149,7 @@ class HomeScreen extends StatelessWidget {
                       width: panelWidth,
                       height: 250,
                       child: _HomePanel(
-                        icon: Icons.wb_sunny_outlined,
+                        icon: WorkFollowIcons.today,
                         title: '今天',
                         subtitle:
                             '${todayTasks.length} 件待处理 · 已完成 $doneToday 件',
@@ -156,7 +158,7 @@ class HomeScreen extends StatelessWidget {
                             controller.selectView(WorkspaceView.today),
                         child: todayTasks.isEmpty
                             ? _PanelEmpty(
-                                icon: Icons.check_circle_outline_rounded,
+                                icon: WorkFollowIcons.completed,
                                 label: '今天的任务已经处理完了。',
                                 tokens: tokens)
                             : _HomeTaskList(
@@ -168,7 +170,7 @@ class HomeScreen extends StatelessWidget {
                       width: panelWidth,
                       height: 250,
                       child: _HomePanel(
-                        icon: Icons.calendar_month_outlined,
+                        icon: WorkFollowIcons.calendar,
                         title: '日历',
                         subtitle: '${now.year} 年 ${now.month} 月',
                         action: '打开日历',
@@ -183,7 +185,7 @@ class HomeScreen extends StatelessWidget {
                       width: panelWidth,
                       height: 250,
                       child: _HomePanel(
-                        icon: Icons.upcoming_outlined,
+                        icon: WorkFollowIcons.plan,
                         title: '接下来',
                         subtitle: '未来安排',
                         action: '打开计划',
@@ -191,7 +193,7 @@ class HomeScreen extends StatelessWidget {
                             controller.selectView(WorkspaceView.plan),
                         child: upcomingTasks.isEmpty
                             ? _PanelEmpty(
-                                icon: Icons.schedule_outlined,
+                                icon: WorkFollowIcons.deadline,
                                 label: '近期没有安排好的任务。',
                                 tokens: tokens)
                             : _HomeTaskList(
@@ -203,7 +205,7 @@ class HomeScreen extends StatelessWidget {
                       width: panelWidth,
                       height: 250,
                       child: _HomePanel(
-                        icon: Icons.notes_outlined,
+                        icon: WorkFollowIcons.notes,
                         title: '最近笔记',
                         subtitle: '${controller.activeNotes.length} 条个人笔记',
                         action: '查看全部',
@@ -216,7 +218,7 @@ class HomeScreen extends StatelessWidget {
                       width: panelWidth,
                       height: 250,
                       child: _HomePanel(
-                        icon: Icons.history_rounded,
+                        icon: WorkFollowIcons.overdue,
                         title: '逾期',
                         subtitle: overdueTasks.isEmpty
                             ? '清爽的进度'
@@ -227,7 +229,7 @@ class HomeScreen extends StatelessWidget {
                             : () => controller.selectView(WorkspaceView.today),
                         child: overdueTasks.isEmpty
                             ? _PanelEmpty(
-                                icon: Icons.wb_sunny_outlined,
+                                icon: WorkFollowIcons.today,
                                 label: '没有逾期任务。',
                                 tokens: tokens)
                             : _HomeTaskList(
@@ -280,9 +282,9 @@ class _WeeklyReviewCard extends StatelessWidget {
             height: 32,
             decoration: BoxDecoration(
                 color: tokens.accent.withValues(alpha: .12),
-                borderRadius: BorderRadius.circular(9)),
-            child: Icon(Icons.auto_awesome_outlined,
-                size: 17, color: tokens.accent)),
+                borderRadius: BorderRadius.circular(WorkFollowRadii.control)),
+            child: AppIcon(WorkFollowIcons.autoAwesome,
+                size: WorkFollowMetrics.toolbarIcon, color: tokens.accent)),
         const SizedBox(width: 11),
         Expanded(
             child:
@@ -290,13 +292,13 @@ class _WeeklyReviewCard extends StatelessWidget {
           Text('上周回顾',
               style: TextStyle(
                   color: tokens.textPrimary,
-                  fontSize: 12.5,
+                  fontSize: 13,
                   fontWeight: FontWeight.w800)),
           const SizedBox(height: 3),
           Text(message,
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
-              style: TextStyle(color: tokens.textSecondary, fontSize: 11)),
+              style: TextStyle(color: tokens.textSecondary, fontSize: 12)),
         ])),
         TextButton(
             onPressed: onOpen,
@@ -305,7 +307,7 @@ class _WeeklyReviewCard extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
                 minimumSize: Size.zero,
                 tapTargetSize: MaterialTapTargetSize.shrinkWrap),
-            child: const Text('看完成', style: TextStyle(fontSize: 10.5))),
+            child: const Text('看完成', style: TextStyle(fontSize: 12))),
       ]),
     );
   }
@@ -344,8 +346,11 @@ class _HomePanel extends StatelessWidget {
                   height: 30,
                   decoration: BoxDecoration(
                       color: tokens.accent.withValues(alpha: .1),
-                      borderRadius: BorderRadius.circular(8)),
-                  child: Icon(icon, size: 16, color: tokens.accent)),
+                      borderRadius:
+                          BorderRadius.circular(WorkFollowRadii.control)),
+                  child: AppIcon(icon,
+                      size: WorkFollowMetrics.toolbarIcon,
+                      color: tokens.accent)),
               const SizedBox(width: 10),
               Expanded(
                 child: Column(
@@ -354,13 +359,13 @@ class _HomePanel extends StatelessWidget {
                     Text(title,
                         style: TextStyle(
                             color: tokens.textPrimary,
-                            fontSize: 14.5,
+                            fontSize: 15,
                             fontWeight: FontWeight.w800,
                             letterSpacing: -.2)),
                     const SizedBox(height: 3),
                     Text(subtitle,
                         style: TextStyle(
-                            color: tokens.textTertiary, fontSize: 10.5)),
+                            color: tokens.textTertiary, fontSize: 11)),
                   ],
                 ),
               ),
@@ -377,7 +382,7 @@ class _HomePanel extends StatelessWidget {
                   child: Text(action!,
                       style: TextStyle(
                           color: tokens.accent,
-                          fontSize: 10.5,
+                          fontSize: 12,
                           fontWeight: FontWeight.w700)),
                 ),
             ],
@@ -457,7 +462,7 @@ class _HomeTaskRow extends StatelessWidget {
                 alignment: Alignment.center,
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 150),
-                  width: 17,
+                  width: 18,
                   height: 17,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
@@ -471,8 +476,9 @@ class _HomeTaskRow extends StatelessWidget {
                         width: 1.5),
                   ),
                   child: task.completed
-                      ? const Icon(Icons.check_rounded,
-                          size: 11, color: Colors.white)
+                      ? const AppIcon(WorkFollowIcons.check,
+                          size: WorkFollowMetrics.metadataIcon - 3,
+                          color: Colors.white)
                       : null,
                 ),
               ),
@@ -488,7 +494,7 @@ class _HomeTaskRow extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                     color: tokens.textPrimary,
-                    fontSize: 12.5,
+                    fontSize: 13,
                     fontWeight: FontWeight.w600),
               ),
             ),
@@ -497,7 +503,7 @@ class _HomeTaskRow extends StatelessWidget {
           Text(task.displayTimeLabel ?? '未安排',
               style: TextStyle(
                   color: overdue ? tokens.warning : tokens.textTertiary,
-                  fontSize: 10)),
+                  fontSize: 11)),
         ],
       ),
     );
@@ -514,7 +520,7 @@ class _HomeNoteList extends StatelessWidget {
     final tokens = WorkFollowTheme.of(context);
     if (controller.activeNotes.isEmpty) {
       return _PanelEmpty(
-          icon: Icons.note_alt_outlined, label: '还没有笔记。', tokens: tokens);
+          icon: WorkFollowIcons.noteAlt, label: '还没有笔记。', tokens: tokens);
     }
     return Column(
       children: [
@@ -541,19 +547,19 @@ class _HomeNoteList extends StatelessWidget {
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
                                 color: tokens.textPrimary,
-                                fontSize: 12.5,
+                                fontSize: 13,
                                 fontWeight: FontWeight.w600)),
                         const SizedBox(height: 2),
                         Text(note.folder,
                             style: TextStyle(
-                                color: tokens.textTertiary, fontSize: 10)),
+                                color: tokens.textTertiary, fontSize: 11)),
                       ],
                     ),
                   ),
                   const SizedBox(width: 8),
                   Text(note.updatedLabel,
                       style:
-                          TextStyle(color: tokens.textTertiary, fontSize: 10)),
+                          TextStyle(color: tokens.textTertiary, fontSize: 11)),
                 ],
               ),
             ),
@@ -609,7 +615,7 @@ class _MiniCalendar extends StatelessWidget {
                             child: Text(label,
                                 style: TextStyle(
                                     color: tokens.textTertiary,
-                                    fontSize: 9.5,
+                                    fontSize: 10,
                                     fontWeight: FontWeight.w700)))),
                 ],
               ),
@@ -690,10 +696,12 @@ class _PanelEmpty extends StatelessWidget {
               decoration: BoxDecoration(
                   color: tokens.accent.withValues(alpha: .08),
                   shape: BoxShape.circle),
-              child: Icon(icon, size: 19, color: tokens.accent)),
+              child: AppIcon(icon,
+                  size: WorkFollowMetrics.navigationIcon,
+                  color: tokens.accent)),
           const SizedBox(height: 10),
           Text(label,
-              style: TextStyle(color: tokens.textTertiary, fontSize: 11.5)),
+              style: TextStyle(color: tokens.textTertiary, fontSize: 12)),
         ],
       ),
     );

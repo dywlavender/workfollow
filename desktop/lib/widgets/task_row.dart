@@ -5,10 +5,12 @@ import 'package:flutter/services.dart';
 
 import '../models/task.dart';
 import '../state/workspace_controller.dart';
+import '../theme/workfollow_icons.dart';
 import '../theme/workfollow_theme.dart';
 import '../features/tasks/application/task_actions.dart';
 import '../features/tasks/domain/task_schedule.dart';
 import 'task_date_picker.dart';
+import 'app_icon_button.dart';
 import 'task_schedule_picker.dart';
 import 'task_context_menu.dart';
 import 'task_deadline_picker.dart';
@@ -310,7 +312,8 @@ class _TaskRowState extends State<TaskRow> {
                                   : hovering
                                       ? tokens.accent.withValues(alpha: .06)
                                       : Colors.transparent,
-                              borderRadius: BorderRadius.circular(8),
+                              borderRadius: BorderRadius.circular(
+                                  WorkFollowRadii.control),
                               border: Border.all(
                                   color: focused
                                       ? tokens.accent.withValues(alpha: .65)
@@ -329,8 +332,8 @@ class _TaskRowState extends State<TaskRow> {
                                       borderRadius: BorderRadius.circular(2))),
                               const SizedBox(width: 8),
                               SizedBox(
-                                  width: 26,
-                                  height: 28,
+                                  width: WorkFollowMetrics.iconHitTarget - 8,
+                                  height: WorkFollowMetrics.iconHitTarget - 4,
                                   child: Checkbox(
                                       key: ValueKey(
                                           'task-row-checkbox-${task.id}'),
@@ -368,7 +371,7 @@ class _TaskRowState extends State<TaskRow> {
                                             overflow: TextOverflow.ellipsis,
                                             style: TextStyle(
                                                 fontSize:
-                                                    widget.compact ? 13.5 : 14,
+                                                    widget.compact ? 14 : 14.5,
                                                 height: 1.35,
                                                 fontWeight: FontWeight.w600,
                                                 color: task.completed
@@ -405,7 +408,7 @@ class _TaskRowState extends State<TaskRow> {
                                           maxLines: 1,
                                           overflow: TextOverflow.ellipsis,
                                           style: TextStyle(
-                                              fontSize: 11.5,
+                                              fontSize: 12,
                                               height: 1.25,
                                               color: tokens.textTertiary)),
                                     ],
@@ -425,8 +428,8 @@ class _TaskRowState extends State<TaskRow> {
 
   Widget _moreButton(WorkFollowTheme tokens, bool visible) {
     return SizedBox(
-        width: 26,
-        height: 24,
+        width: WorkFollowMetrics.iconHitTarget,
+        height: WorkFollowMetrics.iconHitTarget,
         child: Builder(
             builder: (moreAnchor) => ExcludeSemantics(
                 excluding: !visible,
@@ -437,9 +440,10 @@ class _TaskRowState extends State<TaskRow> {
                         key: ValueKey('task-row-more-${widget.task.id}'),
                         tooltip: '更多操作',
                         padding: EdgeInsets.zero,
-                        iconSize: 18,
+                        iconSize: WorkFollowMetrics.toolbarIcon,
                         onPressed: visible ? () => menu(moreAnchor) : null,
-                        icon: Icon(Icons.more_horiz,
+                        icon: AppIcon(WorkFollowIcons.more,
+                            size: WorkFollowMetrics.toolbarIcon,
                             color: tokens.textTertiary))))));
   }
 
@@ -461,7 +465,7 @@ class _TaskRowState extends State<TaskRow> {
     }
     if (task.priority != TaskPriority.none) {
       result.add(_metaIcon(
-          Icons.flag_outlined,
+          WorkFollowIcons.flag,
           switch (task.priority) {
             TaskPriority.high => tokens.danger,
             TaskPriority.medium => tokens.warning,
@@ -474,11 +478,11 @@ class _TaskRowState extends State<TaskRow> {
           tokens.textTertiary));
     }
     if (task.recurrenceType != 'NONE') {
-      result.add(_metaIcon(Icons.repeat_rounded, tokens.textTertiary,
+      result.add(_metaIcon(WorkFollowIcons.repeat, tokens.textTertiary,
           semanticLabel: '重复任务'));
     }
     if (task.hasAttachment) {
-      result.add(_metaIcon(Icons.attach_file_rounded, tokens.textTertiary,
+      result.add(_metaIcon(WorkFollowIcons.attachment, tokens.textTertiary,
           semanticLabel: '有附件'));
     }
     if (deadline != null) {
@@ -504,7 +508,7 @@ class _TaskRowState extends State<TaskRow> {
               child: Text(
                   key: ValueKey('task-row-date-${task.id}'),
                   calendarDateLabel(due, hasTime: task.scheduledWithTime),
-                  style: TextStyle(fontSize: 11, color: dateColor)))));
+                  style: TextStyle(fontSize: 11.5, color: dateColor)))));
     }
     return result;
   }
@@ -512,10 +516,12 @@ class _TaskRowState extends State<TaskRow> {
   Widget _metaText(String value, Color color) => Text(value,
       maxLines: 1,
       overflow: TextOverflow.ellipsis,
-      style: TextStyle(fontSize: 10.5, color: color));
+      style: TextStyle(fontSize: 11, color: color));
 
   Widget _metaIcon(IconData icon, Color color,
           {required String semanticLabel}) =>
       Semantics(
-          label: semanticLabel, child: Icon(icon, size: 14, color: color));
+          label: semanticLabel,
+          child: AppIcon(icon,
+              size: WorkFollowMetrics.metadataIcon, color: color));
 }

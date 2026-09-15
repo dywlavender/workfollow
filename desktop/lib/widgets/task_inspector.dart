@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 
 import '../models/task.dart';
 import '../state/workspace_controller.dart';
+import '../theme/workfollow_icons.dart';
 import '../theme/workfollow_theme.dart';
 import '../features/tasks/application/task_actions.dart';
 import '../features/tasks/domain/task_schedule.dart';
@@ -269,7 +270,8 @@ class _TaskInspectorState extends State<TaskInspector> {
           IconButton(
               tooltip: '返回列表',
               onPressed: close,
-              icon: const Icon(Icons.arrow_back, size: 18)),
+              icon: const AppIcon(WorkFollowIcons.back,
+                  size: WorkFollowMetrics.headerIcon)),
         Expanded(
           child: SingleChildScrollView(
             scrollDirection: Axis.horizontal,
@@ -277,8 +279,8 @@ class _TaskInspectorState extends State<TaskInspector> {
               _TopPropertyButton(
                   key: const ValueKey('task-complete'),
                   icon: task.completed
-                      ? Icons.check_box_rounded
-                      : Icons.check_box_outline_blank_rounded,
+                      ? WorkFollowIcons.completeBox
+                      : WorkFollowIcons.incompleteBox,
                   label: task.completed ? '标记未完成' : '完成任务',
                   active: task.completed,
                   color: task.completed ? tokens.success : null,
@@ -287,14 +289,14 @@ class _TaskInspectorState extends State<TaskInspector> {
               _headerDivider(tokens),
               _TopPropertyButton(
                   key: const ValueKey('task-schedule'),
-                  icon: Icons.calendar_today_outlined,
+                  icon: WorkFollowIcons.calendar,
                   label: calendarDateLabel(localDateTimeFromStorage(task.dueAt),
                       hasTime: task.scheduledWithTime, empty: '安排日期'),
                   active: task.dueAt != null,
                   onPressed: (anchor) => _date(anchor, 'schedule')),
               _TopPropertyButton(
                   key: const ValueKey('task-reminder'),
-                  icon: Icons.notifications_none_rounded,
+                  icon: WorkFollowIcons.reminder,
                   label: calendarDateLabel(
                       localDateTimeFromStorage(task.reminderAt),
                       hasTime: true,
@@ -304,7 +306,7 @@ class _TaskInspectorState extends State<TaskInspector> {
                   iconOnly: true),
               _TopPropertyButton(
                   key: const ValueKey('task-repeat'),
-                  icon: Icons.repeat_rounded,
+                  icon: WorkFollowIcons.repeat,
                   label: switch (task.recurrenceType) {
                     'DAILY' => '每天',
                     'WEEKLY' => '每周',
@@ -316,7 +318,7 @@ class _TaskInspectorState extends State<TaskInspector> {
                   iconOnly: true),
               _TopPropertyButton(
                   key: const ValueKey('task-deadline'),
-                  icon: Icons.event_available_outlined,
+                  icon: WorkFollowIcons.deadline,
                   label: calendarDateLabel(
                       localDateTimeFromStorage(task.deadlineAt),
                       empty: '截止日期'),
@@ -326,7 +328,7 @@ class _TaskInspectorState extends State<TaskInspector> {
                   iconOnly: true),
               _TopPropertyButton(
                   key: const ValueKey('task-priority'),
-                  icon: Icons.flag_outlined,
+                  icon: WorkFollowIcons.flag,
                   label: task.priority == TaskPriority.none
                       ? '优先级'
                       : task.priority.label,
@@ -346,13 +348,17 @@ class _TaskInspectorState extends State<TaskInspector> {
               tooltip: '收起任务',
               visualDensity: VisualDensity.compact,
               onPressed: close,
-              icon: Icon(Icons.close, color: tokens.textTertiary, size: 18)),
+              icon: AppIcon(WorkFollowIcons.close,
+                  color: tokens.textTertiary,
+                  size: WorkFollowMetrics.headerIcon)),
         if (!widget.inline && !widget.showBack)
           IconButton(
               tooltip: '关闭详情',
               visualDensity: VisualDensity.compact,
               onPressed: close,
-              icon: Icon(Icons.close, color: tokens.textTertiary, size: 18)),
+              icon: AppIcon(WorkFollowIcons.close,
+                  color: tokens.textTertiary,
+                  size: WorkFollowMetrics.headerIcon)),
       ]),
     );
   }
@@ -369,23 +375,23 @@ class _TaskInspectorState extends State<TaskInspector> {
     final String label;
     final Color color;
     if (widget.controller.loadError != null) {
-      icon = Icons.report_outlined;
+      icon = WorkFollowIcons.report;
       label = widget.controller.loadError!;
       color = tokens.danger;
     } else {
       switch (widget.controller.saveStatus) {
         case SaveStatus.saving:
-          icon = Icons.sync_rounded;
+          icon = WorkFollowIcons.sync;
           label = '保存中…';
           color = tokens.textTertiary;
         case SaveStatus.failed:
-          icon = Icons.error_outline;
+          icon = WorkFollowIcons.error;
           label = widget.controller.saveError == null
               ? '保存失败'
               : '保存失败：${widget.controller.saveError}';
           color = tokens.danger;
         case SaveStatus.saved:
-          icon = Icons.check_rounded;
+          icon = WorkFollowIcons.check;
           final savedAt = widget.controller.lastSavedAt;
           label = savedAt == null
               ? '已保存'
@@ -397,9 +403,9 @@ class _TaskInspectorState extends State<TaskInspector> {
         message: label,
         child: Semantics(
             label: label,
-            child: Icon(icon,
+            child: AppIcon(icon,
                 key: const ValueKey('save-status-indicator'),
-                size: 15,
+                size: WorkFollowMetrics.metadataIcon,
                 color: color)));
   }
 
@@ -413,8 +419,9 @@ class _TaskInspectorState extends State<TaskInspector> {
             builder: (anchor) => TextButton.icon(
                 key: const ValueKey('task-list-footer'),
                 onPressed: () => _list(anchor),
-                icon: Icon(Icons.inbox_outlined,
-                    size: 15, color: tokens.textSecondary),
+                icon: AppIcon(WorkFollowIcons.inbox,
+                    size: WorkFollowMetrics.metadataIcon,
+                    color: tokens.textSecondary),
                 label: ConstrainedBox(
                     constraints: const BoxConstraints(maxWidth: 130),
                     child: Text(task.listName,
@@ -422,11 +429,12 @@ class _TaskInspectorState extends State<TaskInspector> {
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                             color: tokens.textSecondary,
-                            fontSize: 12,
+                            fontSize: 13,
                             fontWeight: FontWeight.w600))),
                 style: TextButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 5),
-                    minimumSize: const Size(0, 30),
+                    padding: const EdgeInsets.symmetric(horizontal: 6),
+                    minimumSize:
+                        const Size(0, WorkFollowMetrics.compactButtonHeight),
                     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                     visualDensity: VisualDensity.compact))),
         const Spacer(),
@@ -435,22 +443,22 @@ class _TaskInspectorState extends State<TaskInspector> {
         Builder(
             builder: (anchor) => AppIconButton(
                 key: const ValueKey('task-format-toggle'),
-                icon: Icons.text_format_rounded,
+                icon: WorkFollowIcons.format,
                 tooltip: '显示格式工具',
                 active: documentKey.currentState?.toolbarVisible ?? false,
                 onPressed: () {
                   unawaited(documentKey.currentState?.toggleToolbar(anchor));
                 },
-                size: 30,
-                iconSize: 17)),
+                size: WorkFollowMetrics.iconHitTarget,
+                iconSize: WorkFollowMetrics.toolbarIcon)),
         Builder(
             builder: (anchor) => AppIconButton(
                 key: const ValueKey('task-more-actions'),
-                icon: Icons.more_horiz,
+                icon: WorkFollowIcons.more,
                 tooltip: '更多操作',
                 onPressed: () => _more(anchor),
-                size: 30,
-                iconSize: 18)),
+                size: WorkFollowMetrics.iconHitTarget,
+                iconSize: WorkFollowMetrics.toolbarIcon)),
       ]),
     );
   }
@@ -472,14 +480,14 @@ class _TaskInspectorState extends State<TaskInspector> {
         children: [
           _InspectorPropertyChip(
             key: const ValueKey('task-list-summary'),
-            icon: Icons.inbox_outlined,
+            icon: WorkFollowIcons.inbox,
             label: task.listName,
             active: true,
             onPressed: (anchor) => _list(anchor),
           ),
           _InspectorPropertyChip(
             key: const ValueKey('task-deadline-summary'),
-            icon: Icons.event_available_outlined,
+            icon: WorkFollowIcons.deadline,
             label: deadline == null ? '截止日期' : calendarDateLabel(deadline),
             active: deadline != null,
             color: deadline == null ? null : tokens.danger,
@@ -487,7 +495,7 @@ class _TaskInspectorState extends State<TaskInspector> {
           ),
           _InspectorPropertyChip(
             key: const ValueKey('task-tags-summary'),
-            icon: Icons.tag_rounded,
+            icon: WorkFollowIcons.tag,
             label: tags.isEmpty ? '标签' : tags,
             active: tags.isNotEmpty,
             onPressed: (anchor) => _tags(anchor),
@@ -517,7 +525,7 @@ class _TaskInspectorState extends State<TaskInspector> {
                 minLines: 1,
                 maxLines: 2,
                 style: TextStyle(
-                    fontSize: 25,
+                    fontSize: 24,
                     fontWeight: FontWeight.w700,
                     height: 1.24,
                     letterSpacing: -.45,
@@ -603,17 +611,18 @@ class _TopPropertyButton extends StatelessWidget {
               backgroundColor: active ? tokens.accentFaint : Colors.transparent,
               textStyle:
                   const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-              minimumSize: Size(iconOnly ? 32 : 0, 32),
+              minimumSize: Size(iconOnly ? WorkFollowMetrics.iconHitTarget : 0,
+                  WorkFollowMetrics.compactButtonHeight),
               padding: EdgeInsets.symmetric(horizontal: iconOnly ? 6 : 9),
               tapTargetSize: MaterialTapTargetSize.shrinkWrap,
               visualDensity: VisualDensity.compact,
               shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(7)),
+                  borderRadius: BorderRadius.circular(WorkFollowRadii.control)),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(icon, size: 16),
+                AppIcon(icon, size: WorkFollowMetrics.toolbarIcon),
                 if (!iconOnly) ...[
                   const SizedBox(width: 6),
                   ConstrainedBox(
@@ -662,7 +671,7 @@ class _InspectorPropertyChip extends StatelessWidget {
           label: label,
           child: TextButton.icon(
             onPressed: () => onPressed(anchor),
-            icon: Icon(icon, size: 15),
+            icon: AppIcon(icon, size: WorkFollowMetrics.metadataIcon),
             label: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 150),
               child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
@@ -671,13 +680,13 @@ class _InspectorPropertyChip extends StatelessWidget {
               foregroundColor: foreground,
               backgroundColor: active ? tokens.accentFaint : tokens.canvas,
               textStyle:
-                  const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w500),
-              minimumSize: const Size(0, 32),
+                  const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
+              minimumSize: const Size(0, WorkFollowMetrics.chipHeight),
               padding: const EdgeInsets.symmetric(horizontal: 10),
               tapTargetSize: MaterialTapTargetSize.shrinkWrap,
               visualDensity: VisualDensity.compact,
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(WorkFollowRadii.control),
                 side: BorderSide(
                   color: active
                       ? tokens.accent.withValues(alpha: .16)
@@ -738,13 +747,14 @@ class _RelationPickerState extends State<_RelationPicker> {
           controller: search,
           autofocus: true,
           decoration: InputDecoration(
-              prefixIcon: const Icon(Icons.search_rounded, size: 17),
+              prefixIcon: const AppIcon(WorkFollowIcons.search,
+                  size: WorkFollowMetrics.toolbarIcon),
               hintText: '搜索笔记',
               isDense: true,
               filled: true,
               fillColor: tokens.canvas,
               border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: BorderRadius.circular(WorkFollowRadii.control),
                   borderSide: BorderSide.none)),
         ),
         const SizedBox(height: 7),
@@ -753,15 +763,17 @@ class _RelationPickerState extends State<_RelationPicker> {
             key: ValueKey('relation-note-${note.id}'),
             dense: true,
             minTileHeight: 42,
-            leading: const Icon(Icons.article_outlined, size: 17),
+            leading: const AppIcon(WorkFollowIcons.article,
+                size: WorkFollowMetrics.navigationIcon),
             title: Text(note.title,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: 12.5)),
+                style: const TextStyle(fontSize: 13)),
             subtitle: Text(note.folder,
-                style: TextStyle(fontSize: 10.5, color: tokens.textTertiary)),
+                style: TextStyle(fontSize: 11, color: tokens.textTertiary)),
             trailing: widget.selected == note.id
-                ? Icon(Icons.check_rounded, size: 16, color: tokens.accent)
+                ? AppIcon(WorkFollowIcons.check,
+                    size: WorkFollowMetrics.toolbarIcon, color: tokens.accent)
                 : null,
             onTap: () => Navigator.of(context).pop(note.id),
           ),
@@ -769,7 +781,7 @@ class _RelationPickerState extends State<_RelationPicker> {
           Padding(
               padding: const EdgeInsets.symmetric(vertical: 16),
               child: Text('没有匹配的笔记',
-                  style: TextStyle(fontSize: 12, color: tokens.textTertiary))),
+                  style: TextStyle(fontSize: 13, color: tokens.textTertiary))),
       ]),
     );
   }

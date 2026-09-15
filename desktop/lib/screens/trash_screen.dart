@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../models/task.dart';
 import '../state/workspace_controller.dart';
+import '../theme/workfollow_icons.dart';
 import '../theme/workfollow_theme.dart';
 import '../widgets/app_icon_button.dart';
 
@@ -31,7 +32,7 @@ class TrashScreen extends StatelessWidget {
                   letterSpacing: -.45)),
           const SizedBox(height: 5),
           Text('已删除的任务和笔记会保留在这里，直到你永久删除。',
-              style: TextStyle(color: tokens.textTertiary, fontSize: 11.5)),
+              style: TextStyle(color: tokens.textTertiary, fontSize: 12)),
           const SizedBox(height: 18),
           Expanded(
             child: tasks.isEmpty && notes.isEmpty
@@ -76,8 +77,9 @@ class _EmptyTrash extends StatelessWidget {
               height: 52,
               decoration: BoxDecoration(
                   color: tokens.accentFaint, shape: BoxShape.circle),
-              child: Icon(Icons.delete_outline_rounded,
-                  color: tokens.accent, size: 25)),
+              child: AppIcon(WorkFollowIcons.trash,
+                  color: tokens.accent,
+                  size: WorkFollowMetrics.navigationIcon + 6)),
           const SizedBox(height: 15),
           Text('废纸篓是空的',
               style: TextStyle(
@@ -107,7 +109,7 @@ class _TrashSectionLabel extends StatelessWidget {
       child: Text('$label · $count',
           style: TextStyle(
               color: tokens.textTertiary,
-              fontSize: 10.5,
+              fontSize: 11,
               fontWeight: FontWeight.w700,
               letterSpacing: .45)),
     );
@@ -138,7 +140,7 @@ class _TrashRowBase extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(12, 9, 8, 9),
         decoration: BoxDecoration(
             color: tokens.content,
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(WorkFollowRadii.surface),
             border: Border.all(color: tokens.border)),
         child: Row(
           children: [
@@ -155,25 +157,25 @@ class _TrashRowBase extends StatelessWidget {
                           fontWeight: FontWeight.w600,
                           decoration: TextDecoration.lineThrough,
                           decorationColor:
-                              tokens.textTertiary.withOpacity(.55))),
+                              tokens.textTertiary.withValues(alpha: .55))),
                   const SizedBox(height: 3),
                   Text('$subtitle · 删除于 $deletedLabel',
-                      style: TextStyle(
-                          color: tokens.textTertiary, fontSize: 10.5)),
+                      style:
+                          TextStyle(color: tokens.textTertiary, fontSize: 11)),
                 ],
               ),
             ),
             AppIconButton(
-                icon: Icons.restore_rounded,
+                icon: WorkFollowIcons.restore,
                 tooltip: '恢复',
-                size: 30,
-                iconSize: 16,
+                size: WorkFollowMetrics.iconHitTarget,
+                iconSize: WorkFollowMetrics.toolbarIcon,
                 onPressed: onRestore),
             AppIconButton(
-                icon: Icons.delete_forever_outlined,
+                icon: WorkFollowIcons.deleteForever,
                 tooltip: '永久删除',
-                size: 30,
-                iconSize: 16,
+                size: WorkFollowMetrics.iconHitTarget,
+                iconSize: WorkFollowMetrics.toolbarIcon,
                 onPressed: onPurge),
           ],
         ),

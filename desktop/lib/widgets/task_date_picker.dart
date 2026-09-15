@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../models/task.dart';
+import '../theme/workfollow_icons.dart';
 import '../theme/workfollow_theme.dart';
+import 'app_icon_button.dart';
 import 'desktop_popover.dart';
 
 class TaskDateSelection {
@@ -150,7 +152,7 @@ class _TaskDatePickerState extends State<TaskDatePicker> {
     final days = DateTime(month.year, month.month + 1, 0).day;
     final count = ((leading + days) / 7).ceil() * 7;
     return Padding(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(WorkFollowSpacing.md),
       child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -159,20 +161,20 @@ class _TaskDatePickerState extends State<TaskDatePicker> {
               Expanded(
                   child: Text(widget.title,
                       style: const TextStyle(
-                          fontSize: 15, fontWeight: FontWeight.w600))),
+                          fontSize: 16, fontWeight: FontWeight.w600))),
               TextButton(
                   key: const ValueKey('date-clear'),
                   onPressed: () =>
                       Navigator.of(context).pop(const TaskDateSelection(null)),
                   child: Text(widget.reminder ? '取消提醒' : '清除日期',
-                      style: const TextStyle(fontSize: 12))),
+                      style: const TextStyle(fontSize: 13))),
             ]),
             const SizedBox(height: 8),
             TextField(
                 key: const ValueKey('date-input'),
                 controller: dateText,
                 autofocus: true,
-                style: const TextStyle(fontSize: 13),
+                style: const TextStyle(fontSize: 14),
                 onSubmitted: (_) => apply(),
                 decoration: const InputDecoration(
                     labelText: '日期',
@@ -200,9 +202,10 @@ class _TaskDatePickerState extends State<TaskDatePicker> {
                             backgroundColor: tokens.canvas,
                             foregroundColor: tokens.textSecondary,
                             padding: const EdgeInsets.symmetric(vertical: 8),
-                            minimumSize: const Size(0, 32)),
+                            minimumSize: const Size(
+                                0, WorkFollowMetrics.compactButtonHeight)),
                         child: Text(shortcut.$1,
-                            style: const TextStyle(fontSize: 12)))),
+                            style: const TextStyle(fontSize: 13)))),
                 if (shortcut.$1 != '下周一') const SizedBox(width: 6),
               ],
             ]),
@@ -216,14 +219,16 @@ class _TaskDatePickerState extends State<TaskDatePicker> {
                   key: const ValueKey('date-prev-month'),
                   tooltip: '上个月',
                   visualDensity: VisualDensity.compact,
-                  icon: const Icon(Icons.chevron_left, size: 19),
+                  icon: const AppIcon(WorkFollowIcons.collapse,
+                      size: WorkFollowMetrics.headerIcon),
                   onPressed: () => setState(
                       () => month = DateTime(month.year, month.month - 1))),
               IconButton(
                   key: const ValueKey('date-next-month'),
                   tooltip: '下个月',
                   visualDensity: VisualDensity.compact,
-                  icon: const Icon(Icons.chevron_right, size: 19),
+                  icon: const AppIcon(WorkFollowIcons.chevronNext,
+                      size: WorkFollowMetrics.headerIcon),
                   onPressed: () => setState(
                       () => month = DateTime(month.year, month.month + 1))),
             ]),
@@ -233,7 +238,7 @@ class _TaskDatePickerState extends State<TaskDatePicker> {
                     child: Center(
                         child: Text(day,
                             style: TextStyle(
-                                fontSize: 11, color: tokens.textTertiary))))
+                                fontSize: 12, color: tokens.textTertiary))))
             ]),
             const SizedBox(height: 6),
             GridView.builder(
@@ -264,9 +269,10 @@ class _TaskDatePickerState extends State<TaskDatePicker> {
                                   ? tokens.accent
                                   : tokens.textPrimary,
                           shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(6))),
+                              borderRadius: BorderRadius.circular(
+                                  WorkFollowRadii.control))),
                       child:
-                          Text('$day', style: const TextStyle(fontSize: 12)));
+                          Text('$day', style: const TextStyle(fontSize: 13)));
                 }),
             const SizedBox(height: 10),
             const Divider(height: 1),
@@ -285,23 +291,23 @@ class _TaskDatePickerState extends State<TaskDatePicker> {
                 const SizedBox(width: 5),
                 Expanded(
                     child: Text(widget.reminder ? '提醒时间' : '指定时间',
-                        style: const TextStyle(fontSize: 12))),
+                        style: const TextStyle(fontSize: 13))),
                 if (timed) ...[
                   _timeField(hour, '小时'),
                   const Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 4),
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
                       child: Text(':')),
                   _timeField(minute, '分钟'),
                 ] else
                   Text('全天',
                       style:
-                          TextStyle(fontSize: 12, color: tokens.textTertiary)),
+                          TextStyle(fontSize: 13, color: tokens.textTertiary)),
               ]),
             if (error != null)
               Padding(
                   padding: const EdgeInsets.only(top: 10),
                   child: Text(error!,
-                      style: TextStyle(fontSize: 12, color: tokens.danger))),
+                      style: TextStyle(fontSize: 13, color: tokens.danger))),
             const SizedBox(height: 14),
             Row(mainAxisAlignment: MainAxisAlignment.end, children: [
               TextButton(

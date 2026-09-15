@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../services/stats_aggregator.dart';
 import '../state/workspace_controller.dart';
+import '../theme/workfollow_icons.dart';
 import '../theme/workfollow_theme.dart';
 import '../widgets/app_surfaces.dart';
 
@@ -59,35 +60,35 @@ class _StatsScreenState extends State<StatsScreen> {
                         child: StatCard(
                             label: '今日完成',
                             value: '${stats.todayCompleted}',
-                            icon: Icons.today_outlined,
+                            icon: WorkFollowIcons.statToday,
                             color: tokens.accent)),
                     SizedBox(
                         width: narrow ? double.infinity : 190,
                         child: StatCard(
                             label: '本周完成',
                             value: '${stats.weekCompleted}',
-                            icon: Icons.trending_up_rounded,
+                            icon: WorkFollowIcons.trend,
                             color: tokens.success)),
                     SizedBox(
                         width: narrow ? double.infinity : 190,
                         child: StatCard(
                             label: '逾期',
                             value: '${stats.overdue}',
-                            icon: Icons.history_toggle_off_rounded,
+                            icon: WorkFollowIcons.historyToggle,
                             color: tokens.warning)),
                     SizedBox(
                         width: narrow ? double.infinity : 190,
                         child: StatCard(
                             label: '进行中',
                             value: '${stats.active}',
-                            icon: Icons.radio_button_unchecked_rounded,
+                            icon: WorkFollowIcons.unchecked,
                             color: tokens.accent)),
                     SizedBox(
                         width: narrow ? double.infinity : 190,
                         child: StatCard(
                             label: '专注番茄',
                             value: '${stats.focusSessions}',
-                            icon: Icons.timer_outlined,
+                            icon: WorkFollowIcons.focus,
                             color: tokens.accentHover)),
                   ],
                 ),
@@ -186,7 +187,7 @@ class _CardTitle extends StatelessWidget {
               fontWeight: FontWeight.w800)),
       const SizedBox(width: 8),
       Text(subtitle,
-          style: TextStyle(color: tokens.textTertiary, fontSize: 10.5)),
+          style: TextStyle(color: tokens.textTertiary, fontSize: 11)),
     ]);
   }
 }
@@ -204,13 +205,13 @@ class _RangeSegment extends StatelessWidget {
       padding: const EdgeInsets.all(2),
       decoration: BoxDecoration(
           color: tokens.content,
-          borderRadius: BorderRadius.circular(7),
+          borderRadius: BorderRadius.circular(WorkFollowRadii.control),
           border: Border.all(color: tokens.border)),
       child: Row(mainAxisSize: MainAxisSize.min, children: [
         for (final option in const [(false, '近30天'), (true, '本周')])
           InkWell(
               onTap: () => onChanged(option.$1),
-              borderRadius: BorderRadius.circular(5),
+              borderRadius: BorderRadius.circular(WorkFollowRadii.control),
               child: Container(
                   padding:
                       const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
@@ -218,13 +219,14 @@ class _RangeSegment extends StatelessWidget {
                       color: weekly == option.$1
                           ? tokens.accentSoft
                           : Colors.transparent,
-                      borderRadius: BorderRadius.circular(5)),
+                      borderRadius:
+                          BorderRadius.circular(WorkFollowRadii.control)),
                   child: Text(option.$2,
                       style: TextStyle(
                           color: weekly == option.$1
                               ? tokens.accent
                               : tokens.textSecondary,
-                          fontSize: 10.5,
+                          fontSize: 12,
                           fontWeight: FontWeight.w600)))),
       ]),
     );
@@ -355,7 +357,7 @@ class _Distribution extends StatelessWidget {
                     color: Color(controller.colorValueForList(entry.key)))),
             const SizedBox(width: 6),
             Text('${entry.key}  ${((entry.value / total) * 100).round()}%',
-                style: TextStyle(color: tokens.textSecondary, fontSize: 11)),
+                style: TextStyle(color: tokens.textSecondary, fontSize: 12)),
           ]),
       ])),
     ]);

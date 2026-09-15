@@ -8,7 +8,9 @@ import 'package:flutter_quill/flutter_quill.dart' as quill;
 import '../models/rich_document.dart';
 import '../models/task.dart';
 import '../state/workspace_controller.dart';
+import '../theme/workfollow_icons.dart';
 import '../theme/workfollow_theme.dart';
+import 'app_icon_button.dart';
 import 'task_editor_toolbar.dart';
 import 'desktop_popover.dart';
 import 'task_slash_menu.dart';
@@ -582,7 +584,7 @@ class _TaskSubtasksPanelState extends State<TaskSubtasksPanel> {
                       decoration: const InputDecoration(
                           border: InputBorder.none, isDense: true),
                       style: TextStyle(
-                          fontSize: 12.5,
+                          fontSize: 13,
                           color: item.completed
                               ? tokens.textTertiary
                               : tokens.textPrimary,
@@ -594,8 +596,9 @@ class _TaskSubtasksPanelState extends State<TaskSubtasksPanel> {
                   IconButton(
                     tooltip: '删除子任务',
                     visualDensity: VisualDensity.compact,
-                    icon:
-                        Icon(Icons.close, size: 14, color: tokens.textTertiary),
+                    icon: AppIcon(WorkFollowIcons.close,
+                        size: WorkFollowMetrics.metadataIcon,
+                        color: tokens.textTertiary),
                     onPressed: () =>
                         widget.controller.removeSubtask(task.id, item.id),
                   ),
@@ -603,7 +606,9 @@ class _TaskSubtasksPanelState extends State<TaskSubtasksPanel> {
               Padding(
                 padding: const EdgeInsets.only(top: 3),
                 child: Row(children: [
-                  Icon(Icons.add_rounded, size: 16, color: tokens.textTertiary),
+                  AppIcon(WorkFollowIcons.add,
+                      size: WorkFollowMetrics.toolbarIcon,
+                      color: tokens.textTertiary),
                   const SizedBox(width: 5),
                   Expanded(
                     child: TextField(
@@ -614,8 +619,7 @@ class _TaskSubtasksPanelState extends State<TaskSubtasksPanel> {
                           hintText: '添加子任务，按 Return 确认',
                           border: InputBorder.none,
                           isDense: true),
-                      style:
-                          TextStyle(fontSize: 12.5, color: tokens.textPrimary),
+                      style: TextStyle(fontSize: 13, color: tokens.textPrimary),
                     ),
                   ),
                 ]),
@@ -658,9 +662,9 @@ class TaskAttachmentsPanel extends StatelessWidget {
             children: [
               for (final file in task.attachments)
                 InputChip(
-                  label: Text(file, style: const TextStyle(fontSize: 11.5)),
-                  avatar:
-                      const Icon(Icons.insert_drive_file_outlined, size: 15),
+                  label: Text(file, style: const TextStyle(fontSize: 12)),
+                  avatar: const AppIcon(WorkFollowIcons.file,
+                      size: WorkFollowMetrics.metadataIcon),
                   onPressed: () => controller.revealAttachment(task.id, file),
                   onDeleted: () => controller.removeAttachment(task.id, file),
                 ),
@@ -668,8 +672,9 @@ class TaskAttachmentsPanel extends StatelessWidget {
                   key: const ValueKey('task-attach-file'),
                   onPressed:
                       onAttach ?? () => controller.attachFileToTask(task.id),
-                  icon: const Icon(Icons.attach_file_rounded, size: 15),
-                  label: const Text('添加附件', style: TextStyle(fontSize: 11.5))),
+                  icon: const AppIcon(WorkFollowIcons.attachment,
+                      size: WorkFollowMetrics.metadataIcon),
+                  label: const Text('添加附件', style: TextStyle(fontSize: 12))),
             ],
           ),
         ],
@@ -695,14 +700,15 @@ class TaskSourceNotePanel extends StatelessWidget {
       padding: const EdgeInsets.only(top: 18),
       child: Material(
         color: tokens.accent.withValues(alpha: .06),
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(WorkFollowRadii.surface),
         child: InkWell(
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(WorkFollowRadii.surface),
           onTap: () => controller.openNote(source.id),
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
             child: Row(children: [
-              Icon(Icons.article_outlined, size: 17, color: tokens.accent),
+              AppIcon(WorkFollowIcons.article,
+                  size: WorkFollowMetrics.navigationIcon, color: tokens.accent),
               const SizedBox(width: 8),
               Expanded(
                 child: Column(
@@ -712,16 +718,17 @@ class TaskSourceNotePanel extends StatelessWidget {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
-                              fontSize: 12.5,
+                              fontSize: 13,
                               fontWeight: FontWeight.w600,
                               color: tokens.textPrimary)),
                       Text('来自笔记 · ${source.folder}',
                           style: TextStyle(
-                              fontSize: 10.5, color: tokens.textTertiary)),
+                              fontSize: 11, color: tokens.textTertiary)),
                     ]),
               ),
-              Icon(Icons.chevron_right_rounded,
-                  size: 18, color: tokens.textTertiary),
+              AppIcon(WorkFollowIcons.chevronNext,
+                  size: WorkFollowMetrics.navigationIcon,
+                  color: tokens.textTertiary),
             ]),
           ),
         ),
@@ -753,8 +760,8 @@ class _TaskAttachmentBlock extends StatelessWidget {
         onPressed: filename == null
             ? null
             : () => controller.revealAttachment(task.id, filename),
-        icon: Icon(Icons.insert_drive_file_outlined,
-            size: 17, color: tokens.accent),
+        icon: AppIcon(WorkFollowIcons.file,
+            size: WorkFollowMetrics.navigationIcon, color: tokens.accent),
         label: Text(attrs['name']?.toString() ?? '附件'),
       ),
     );

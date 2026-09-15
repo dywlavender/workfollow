@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 
 import '../models/task.dart';
 import '../state/workspace_controller.dart';
+import '../theme/workfollow_icons.dart';
 import '../theme/workfollow_theme.dart';
 import '../widgets/app_icon_button.dart';
 import '../widgets/desktop_popover.dart';
@@ -103,7 +104,7 @@ class _NotesScreenState extends State<NotesScreen> {
                     const SizedBox(height: 4),
                     Text('${notes.length} 条笔记',
                         style: TextStyle(
-                            fontSize: 11.5, color: tokens.textTertiary)),
+                            fontSize: 12, color: tokens.textTertiary)),
                   ])),
               _NewNoteButton(onCreate: create),
             ]),
@@ -114,13 +115,15 @@ class _NotesScreenState extends State<NotesScreen> {
                 style: const TextStyle(fontSize: 13),
                 decoration: InputDecoration(
                     hintText: '搜索笔记',
-                    prefixIcon: const Icon(Icons.search, size: 18),
+                    prefixIcon: const AppIcon(WorkFollowIcons.search,
+                        size: WorkFollowMetrics.navigationIcon),
                     isDense: true,
                     filled: true,
                     fillColor: tokens.content,
                     contentPadding: const EdgeInsets.symmetric(vertical: 10),
                     border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
+                        borderRadius:
+                            BorderRadius.circular(WorkFollowRadii.control),
                         borderSide: BorderSide.none))),
             const SizedBox(height: 10),
             Row(children: [
@@ -128,7 +131,7 @@ class _NotesScreenState extends State<NotesScreen> {
               TextButton(
                   onPressed: () => setState(() => newestFirst = !newestFirst),
                   child: Text(newestFirst ? '最近编辑' : '按标题',
-                      style: const TextStyle(fontSize: 11))),
+                      style: const TextStyle(fontSize: 12))),
             ]),
             Expanded(
                 child: notes.isEmpty
@@ -186,15 +189,16 @@ class _NewNoteButton extends StatelessWidget {
         message: '新建笔记',
         child: Material(
             color: tokens.accent,
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(WorkFollowRadii.control),
             child: InkWell(
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(WorkFollowRadii.control),
                 onTap: onCreate,
                 child: const SizedBox(
                     width: 32,
                     height: 32,
-                    child: Icon(Icons.add_rounded,
-                        size: 19, color: Colors.white)))));
+                    child: AppIcon(WorkFollowIcons.add,
+                        size: WorkFollowMetrics.toolbarIcon,
+                        color: Colors.white)))));
   }
 }
 
@@ -227,7 +231,7 @@ class _NoteCardState extends State<_NoteCard> {
                 padding: const EdgeInsets.all(13),
                 decoration: BoxDecoration(
                     color: tokens.content,
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(WorkFollowRadii.card),
                     border: Border.all(
                         color: widget.selected
                             ? tokens.accent.withValues(alpha: .5)
@@ -247,8 +251,9 @@ class _NoteCardState extends State<_NoteCard> {
                     children: [
                       Row(children: [
                         if (note.isFavorite) ...[
-                          Icon(Icons.star_rounded,
-                              size: 15, color: tokens.warning),
+                          AppIcon(WorkFollowIcons.favorite,
+                              size: WorkFollowMetrics.metadataIcon,
+                              color: tokens.warning),
                           const SizedBox(width: 5)
                         ],
                         Expanded(
@@ -256,7 +261,7 @@ class _NoteCardState extends State<_NoteCard> {
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: TextStyle(
-                                    fontSize: 13.5,
+                                    fontSize: 14,
                                     fontWeight: FontWeight.w700,
                                     color: tokens.textPrimary))),
                       ]),
@@ -265,14 +270,14 @@ class _NoteCardState extends State<_NoteCard> {
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
-                              fontSize: 12,
+                              fontSize: 13,
                               height: 1.5,
                               color: tokens.textSecondary)),
                       const SizedBox(height: 9),
                       Row(children: [
                         Text(noteUpdatedLabelFor(note.updatedAt),
                             style: TextStyle(
-                                fontSize: 10, color: tokens.textTertiary)),
+                                fontSize: 11, color: tokens.textTertiary)),
                         const Spacer(),
                         Flexible(
                             child: Container(
@@ -280,12 +285,13 @@ class _NoteCardState extends State<_NoteCard> {
                                     horizontal: 7, vertical: 2.5),
                                 decoration: BoxDecoration(
                                     color: tokens.accent.withValues(alpha: .08),
-                                    borderRadius: BorderRadius.circular(999)),
+                                    borderRadius: BorderRadius.circular(
+                                        WorkFollowRadii.pill)),
                                 child: Text(note.folder,
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                     style: TextStyle(
-                                        fontSize: 10,
+                                        fontSize: 11,
                                         fontWeight: FontWeight.w600,
                                         color: tokens.textSecondary)))),
                       ]),
@@ -309,8 +315,8 @@ class _EmptyNote extends StatelessWidget {
               decoration: BoxDecoration(
                   color: tokens.accent.withValues(alpha: .09),
                   shape: BoxShape.circle),
-              child: Icon(Icons.edit_note_rounded,
-                  size: 30, color: tokens.accent)),
+              child: AppIcon(WorkFollowIcons.editNote,
+                  size: WorkFollowMetrics.railIcon + 8, color: tokens.accent)),
           const SizedBox(height: 18),
           Text('给想法一个安静的地方',
               style: TextStyle(
@@ -323,7 +329,8 @@ class _EmptyNote extends StatelessWidget {
           const SizedBox(height: 22),
           FilledButton.icon(
               onPressed: onCreate,
-              icon: const Icon(Icons.add, size: 18),
+              icon: const AppIcon(WorkFollowIcons.add,
+                  size: WorkFollowMetrics.toolbarIcon),
               label: const Text('新建笔记')),
         ]));
   }
@@ -354,10 +361,10 @@ class _NotePageState extends State<_NotePage> {
     final choice = await showDesktopMenu<String>(anchor,
         selected: widget.note.folderId ?? '',
         entries: [
-          const DesktopMenuEntry('', '未归档', icon: Icons.folder_outlined),
+          const DesktopMenuEntry('', '未归档', icon: WorkFollowIcons.folder),
           for (final folder in widget.controller.folders)
             DesktopMenuEntry(folder.id, folder.name,
-                icon: Icons.folder_outlined),
+                icon: WorkFollowIcons.folder),
         ]);
     if (choice != null)
       widget.controller
@@ -366,11 +373,11 @@ class _NotePageState extends State<_NotePage> {
 
   Future<void> more(BuildContext anchor) async {
     final action = await showDesktopMenu<String>(anchor, entries: [
-      const DesktopMenuEntry('copy', '复制笔记正文', icon: Icons.copy_outlined),
+      const DesktopMenuEntry('copy', '复制笔记正文', icon: WorkFollowIcons.copy),
       if (widget.note.hasPreservedRichContent)
-        const DesktopMenuEntry('plain', '创建纯文本副本', icon: Icons.text_fields),
+        const DesktopMenuEntry('plain', '创建纯文本副本', icon: WorkFollowIcons.text),
       const DesktopMenuEntry('delete', '移到废纸篓',
-          icon: Icons.delete_outline, destructive: true),
+          icon: WorkFollowIcons.delete, destructive: true),
     ]);
     if (action == 'copy')
       await Clipboard.setData(
@@ -394,9 +401,10 @@ class _NotePageState extends State<_NotePage> {
                   IconButton(
                       tooltip: '返回笔记列表',
                       onPressed: widget.onBack,
-                      icon: const Icon(Icons.arrow_back, size: 18)),
+                      icon: const AppIcon(WorkFollowIcons.back,
+                          size: WorkFollowMetrics.headerIcon)),
                 PropertyButton(
-                    icon: Icons.folder_outlined,
+                    icon: WorkFollowIcons.folder,
                     label: note.folder,
                     onPressed: move),
                 const Spacer(),
@@ -404,21 +412,22 @@ class _NotePageState extends State<_NotePage> {
                     tooltip: note.isFavorite ? '取消收藏' : '收藏笔记',
                     onPressed: () =>
                         widget.controller.toggleNoteFavorite(note.id),
-                    icon: Icon(
+                    icon: AppIcon(
                         note.isFavorite
-                            ? Icons.star_rounded
-                            : Icons.star_border_rounded,
+                            ? WorkFollowIcons.favorite
+                            : WorkFollowIcons.favoriteOutline,
                         color: note.isFavorite
                             ? tokens.warning
                             : tokens.textTertiary,
-                        size: 20)),
+                        size: WorkFollowMetrics.navigationIcon)),
                 Builder(
                     builder: (anchor) => IconButton(
                         key: const ValueKey('note-more-actions'),
                         tooltip: '笔记操作',
                         onPressed: () => more(anchor),
-                        icon: Icon(Icons.more_horiz,
-                            size: 21, color: tokens.textTertiary))),
+                        icon: AppIcon(WorkFollowIcons.more,
+                            size: WorkFollowMetrics.headerIcon,
+                            color: tokens.textTertiary))),
               ])),
           Expanded(
               child: SingleChildScrollView(
@@ -470,7 +479,7 @@ class _NotePageState extends State<_NotePage> {
                         Row(children: [
                           Text('关联任务',
                               style: TextStyle(
-                                  fontSize: 12.5,
+                                  fontSize: 13,
                                   fontWeight: FontWeight.w700,
                                   color: tokens.textSecondary)),
                           const SizedBox(width: 6),
@@ -515,7 +524,7 @@ class _LinkedTaskRow extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(10, 5, 10, 5),
         decoration: BoxDecoration(
             color: tokens.accent.withValues(alpha: .06),
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(WorkFollowRadii.surface),
             border: Border.all(color: tokens.border)),
         child: Row(children: [
           SizedBox(
@@ -529,7 +538,7 @@ class _LinkedTaskRow extends StatelessWidget {
           const SizedBox(width: 8),
           Expanded(
               child: InkWell(
-                  borderRadius: BorderRadius.circular(6),
+                  borderRadius: BorderRadius.circular(WorkFollowRadii.control),
                   onTap: onOpen,
                   child: Padding(
                       padding: const EdgeInsets.symmetric(vertical: 5),
@@ -545,8 +554,9 @@ class _LinkedTaskRow extends StatelessWidget {
                               decoration: task.completed
                                   ? TextDecoration.lineThrough
                                   : null))))),
-          Icon(Icons.chevron_right_rounded,
-              size: 17, color: tokens.textTertiary),
+          AppIcon(WorkFollowIcons.next,
+              size: WorkFollowMetrics.navigationIcon,
+              color: tokens.textTertiary),
         ]));
   }
 }

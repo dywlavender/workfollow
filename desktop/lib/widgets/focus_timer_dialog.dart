@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 
 import '../services/focus_timer.dart';
 import '../state/workspace_controller.dart';
+import '../theme/workfollow_icons.dart';
 import '../theme/workfollow_theme.dart';
+import 'app_icon_button.dart';
 
 Future<void> showFocusTimerDialog({
   required BuildContext context,
@@ -55,7 +57,8 @@ class _FocusTimerDialogState extends State<_FocusTimerDialog> {
         activeTasks.any((task) => task.id == timer.taskId) ? timer.taskId : '';
     return AlertDialog(
       title: Row(children: [
-        Icon(Icons.timer_outlined, size: 20, color: tokens.accent),
+        AppIcon(WorkFollowIcons.focus,
+            size: WorkFollowMetrics.headerIcon + 2, color: tokens.accent),
         const SizedBox(width: 8),
         const Text('专注'),
         const Spacer(),
@@ -74,7 +77,7 @@ class _FocusTimerDialogState extends State<_FocusTimerDialog> {
             padding: const EdgeInsets.symmetric(vertical: 24),
             decoration: BoxDecoration(
                 color: tokens.accentFaint,
-                borderRadius: BorderRadius.circular(14)),
+                borderRadius: BorderRadius.circular(WorkFollowRadii.card)),
             child: Column(children: [
               Text(timer.display,
                   style: TextStyle(
@@ -142,7 +145,8 @@ class _FocusTimerDialogState extends State<_FocusTimerDialog> {
                 filled: true,
                 fillColor: tokens.overlay,
                 border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
+                    borderRadius:
+                        BorderRadius.circular(WorkFollowRadii.control),
                     borderSide: BorderSide(color: tokens.border))),
             items: [
               const DropdownMenuItem<String>(value: '', child: Text('不关联任务')),
@@ -178,7 +182,8 @@ class _FocusTimerDialogState extends State<_FocusTimerDialog> {
         else
           FilledButton.icon(
               onPressed: timer.start,
-              icon: const Icon(Icons.play_arrow_rounded, size: 17),
+              icon: const AppIcon(WorkFollowIcons.play,
+                  size: WorkFollowMetrics.toolbarIcon),
               label: Text(timer.hasStarted ? '继续' : '开始')),
         TextButton(
             onPressed: () => Navigator.of(context).pop(),
@@ -205,15 +210,15 @@ class FocusTimerButton extends StatelessWidget {
         message: '专注计时器',
         child: Material(
           color: timer.isRunning ? tokens.accentSoft : Colors.transparent,
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(WorkFollowRadii.control),
           child: InkWell(
             onTap: onTap,
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(WorkFollowRadii.control),
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
               child: Row(mainAxisSize: MainAxisSize.min, children: [
-                Icon(Icons.timer_outlined,
-                    size: 16,
+                AppIcon(WorkFollowIcons.focus,
+                    size: WorkFollowMetrics.toolbarIcon,
                     color:
                         timer.isRunning ? tokens.accent : tokens.textTertiary),
                 if (timer.isRunning) ...[

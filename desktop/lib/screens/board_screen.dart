@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../models/task.dart';
 import '../state/workspace_controller.dart';
+import '../theme/workfollow_icons.dart';
 import '../theme/workfollow_theme.dart';
 import '../widgets/app_icon_button.dart';
 import '../widgets/app_surfaces.dart';
@@ -55,7 +56,7 @@ class _BoardScreenState extends State<BoardScreen> {
                   labelStyle: TextStyle(
                       color:
                           showCompleted ? tokens.accent : tokens.textSecondary,
-                      fontSize: 11),
+                      fontSize: 12),
                 ),
               ],
             ),
@@ -130,7 +131,7 @@ class _GroupingSegment extends StatelessWidget {
       padding: const EdgeInsets.all(2),
       decoration: BoxDecoration(
           color: tokens.content,
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(WorkFollowRadii.control),
           border: Border.all(color: tokens.border)),
       child: Row(mainAxisSize: MainAxisSize.min, children: [
         for (final option in const <(BoardGroupBy, String)>[
@@ -139,7 +140,7 @@ class _GroupingSegment extends StatelessWidget {
         ])
           InkWell(
             onTap: () => onChanged(option.$1),
-            borderRadius: BorderRadius.circular(6),
+            borderRadius: BorderRadius.circular(WorkFollowRadii.control),
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 140),
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
@@ -147,13 +148,13 @@ class _GroupingSegment extends StatelessWidget {
                   color: grouping == option.$1
                       ? tokens.accentSoft
                       : Colors.transparent,
-                  borderRadius: BorderRadius.circular(6)),
+                  borderRadius: BorderRadius.circular(WorkFollowRadii.control)),
               child: Text(option.$2,
                   style: TextStyle(
                       color: grouping == option.$1
                           ? tokens.accent
                           : tokens.textSecondary,
-                      fontSize: 10.5,
+                      fontSize: 12,
                       fontWeight: FontWeight.w700)),
             ),
           ),
@@ -210,7 +211,7 @@ class _BoardColumn extends StatelessWidget {
             color: active
                 ? meta.color.withValues(alpha: .08)
                 : tokens.content.withValues(alpha: .72),
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(WorkFollowRadii.card),
             border: Border.all(
                 color:
                     active ? meta.color.withValues(alpha: .65) : tokens.border),
@@ -245,7 +246,7 @@ class _BoardColumn extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style:
-                          TextStyle(color: tokens.textTertiary, fontSize: 10))),
+                          TextStyle(color: tokens.textTertiary, fontSize: 11))),
               const SizedBox(height: 10),
               Expanded(
                 child: tasks.isEmpty
@@ -340,7 +341,7 @@ class _BoardTaskCard extends StatelessWidget {
                     color: task.completed
                         ? tokens.textTertiary
                         : tokens.textPrimary,
-                    fontSize: 12.5,
+                    fontSize: 13,
                     height: 1.35,
                     fontWeight: FontWeight.w600,
                     decoration:
@@ -348,21 +349,21 @@ class _BoardTaskCard extends StatelessWidget {
             const SizedBox(height: 6),
             Wrap(spacing: 6, runSpacing: 3, children: [
               Text(task.listName,
-                  style: TextStyle(color: listColor, fontSize: 10)),
+                  style: TextStyle(color: listColor, fontSize: 11)),
               if (task.displayTimeLabel != null)
                 Text(task.displayTimeLabel!,
-                    style: TextStyle(color: tokens.textTertiary, fontSize: 10)),
+                    style: TextStyle(color: tokens.textTertiary, fontSize: 11)),
               if (task.focusCount > 0)
                 Text('专注 ${task.focusCount}',
-                    style: TextStyle(color: tokens.accent, fontSize: 10)),
+                    style: TextStyle(color: tokens.accent, fontSize: 11)),
             ]),
           ]),
         ),
         AppIconButton(
-            icon: Icons.open_in_new_rounded,
+            icon: WorkFollowIcons.open,
             tooltip: '打开任务',
-            size: 24,
-            iconSize: 14,
+            size: WorkFollowMetrics.iconHitTarget,
+            iconSize: WorkFollowMetrics.metadataIcon,
             onPressed: () => controller.openTask(task.id)),
       ]),
     );
@@ -378,7 +379,7 @@ class _BoardTaskCard extends StatelessWidget {
           label: '${task.title}，${task.listName}',
           child: InkWell(
               onTap: () => controller.openTask(task.id),
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(WorkFollowRadii.surface),
               child: content)),
     );
   }

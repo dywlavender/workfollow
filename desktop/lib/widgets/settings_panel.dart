@@ -7,7 +7,9 @@ import '../models/migration.dart';
 import '../services/local_workspace_store.dart';
 import '../services/notification_service.dart';
 import '../state/workspace_controller.dart';
+import '../theme/workfollow_icons.dart';
 import '../theme/workfollow_theme.dart';
+import 'app_icon_button.dart';
 
 enum _ImportMode { merge, replace }
 
@@ -26,7 +28,7 @@ Future<void> showSettingsPanel({
     context: context,
     barrierDismissible: true,
     barrierLabel: '设置',
-    barrierColor: Colors.black.withOpacity(.24),
+    barrierColor: Colors.black.withValues(alpha: .24),
     transitionDuration: const Duration(milliseconds: 180),
     pageBuilder: (context, animation, secondaryAnimation) => _SettingsPanel(
       controller: controller,
@@ -263,7 +265,7 @@ class _SettingsPanelState extends State<_SettingsPanel> {
     return Center(
         child: Material(
       color: tokens.content,
-      borderRadius: BorderRadius.circular(14),
+      borderRadius: BorderRadius.circular(WorkFollowRadii.popover),
       clipBehavior: Clip.antiAlias,
       child: SizedBox(
           width: 720,
@@ -294,15 +296,16 @@ class _SettingsPanelState extends State<_SettingsPanel> {
                                     selected: page == i,
                                     selectedTileColor: tokens.accentSoft,
                                     shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(7)),
-                                    leading: Icon(
+                                        borderRadius: BorderRadius.circular(
+                                            WorkFollowRadii.control)),
+                                    leading: AppIcon(
                                         [
-                                          Icons.tune,
-                                          Icons.notifications_none,
-                                          Icons.folder_outlined,
-                                          Icons.keyboard_outlined
+                                          WorkFollowIcons.settings,
+                                          WorkFollowIcons.notification,
+                                          WorkFollowIcons.folder,
+                                          WorkFollowIcons.keyboard
                                         ][i],
-                                        size: 18),
+                                        size: WorkFollowMetrics.navigationIcon),
                                     title: Text(pages[i],
                                         style: const TextStyle(fontSize: 13)),
                                     onTap: () => setState(() => page = i))),
@@ -329,7 +332,8 @@ class _SettingsPanelState extends State<_SettingsPanel> {
                             IconButton(
                                 tooltip: '关闭',
                                 onPressed: () => Navigator.of(context).pop(),
-                                icon: const Icon(Icons.close, size: 19))
+                                icon: const AppIcon(WorkFollowIcons.close,
+                                    size: WorkFollowMetrics.headerIcon))
                           ]),
                           const SizedBox(height: 22),
                           Expanded(
@@ -346,7 +350,7 @@ class _SettingsPanelState extends State<_SettingsPanel> {
                                   const SizedBox(height: 8),
                                   Text('选择你习惯的明暗外观。',
                                       style: TextStyle(
-                                          fontSize: 12,
+                                          fontSize: 13,
                                           color: tokens.textSecondary)),
                                   const SizedBox(height: 16),
                                   Align(
@@ -365,7 +369,7 @@ class _SettingsPanelState extends State<_SettingsPanel> {
                                   const SizedBox(height: 8),
                                   Text('紧凑模式适合长清单；舒适模式保留更多呼吸感。',
                                       style: TextStyle(
-                                          fontSize: 12,
+                                          fontSize: 13,
                                           color: tokens.textSecondary)),
                                   const SizedBox(height: 12),
                                   _DensitySegment(
@@ -382,7 +386,7 @@ class _SettingsPanelState extends State<_SettingsPanel> {
                                   const SizedBox(height: 8),
                                   Text('宽窗口可在右侧常驻显示任务详情；关闭后，点击任务仍会打开详情。',
                                       style: TextStyle(
-                                          fontSize: 12,
+                                          fontSize: 13,
                                           height: 1.5,
                                           color: tokens.textSecondary)),
                                   const SizedBox(height: 6),
@@ -417,7 +421,7 @@ class _SettingsPanelState extends State<_SettingsPanel> {
                                   const SizedBox(height: 12),
                                   Text('清单颜色可在侧栏清单的 ⋯ 菜单中选择，并会同步到任务行、日历和统计。',
                                       style: TextStyle(
-                                          fontSize: 12,
+                                          fontSize: 13,
                                           height: 1.6,
                                           color: tokens.textTertiary)),
                                 ],
@@ -439,7 +443,7 @@ class _SettingsPanelState extends State<_SettingsPanel> {
                                   const SizedBox(height: 28),
                                   Text('提醒与安排日期是两回事：安排日期决定任务在哪一天显示，提醒决定何时通知。',
                                       style: TextStyle(
-                                          fontSize: 12,
+                                          fontSize: 13,
                                           height: 1.6,
                                           color: tokens.textTertiary)),
                                 ],
@@ -453,21 +457,24 @@ class _SettingsPanelState extends State<_SettingsPanel> {
                                     OutlinedButton.icon(
                                         onPressed:
                                             importing ? null : _importData,
-                                        icon: const Icon(
-                                            Icons.file_open_outlined,
-                                            size: 17),
+                                        icon: const AppIcon(
+                                            WorkFollowIcons.fileOpen,
+                                            size:
+                                                WorkFollowMetrics.toolbarIcon),
                                         label:
                                             Text(importing ? '读取中…' : '导入文件')),
                                     OutlinedButton.icon(
                                         onPressed: _export,
-                                        icon: const Icon(Icons.ios_share,
-                                            size: 17),
+                                        icon: const AppIcon(
+                                            WorkFollowIcons.export,
+                                            size:
+                                                WorkFollowMetrics.toolbarIcon),
                                         label: const Text('导出全部数据')),
                                   ]),
                                   const SizedBox(height: 8),
                                   Text('导出文件包含任务、笔记和本地附件，可用于迁移到另一台 Mac。',
                                       style: TextStyle(
-                                          fontSize: 12,
+                                          fontSize: 13,
                                           height: 1.6,
                                           color: tokens.textSecondary)),
                                   const SizedBox(height: 26),
@@ -478,7 +485,7 @@ class _SettingsPanelState extends State<_SettingsPanel> {
                                   const SizedBox(height: 8),
                                   Text('每天自动保存一份快照。恢复前会保留当前内容。',
                                       style: TextStyle(
-                                          fontSize: 12,
+                                          fontSize: 13,
                                           height: 1.6,
                                           color: tokens.textSecondary)),
                                   const SizedBox(height: 12),
@@ -516,7 +523,7 @@ class _SettingsPanelState extends State<_SettingsPanel> {
                                                       fontSize: 13))),
                                           Text(entry.value,
                                               style: TextStyle(
-                                                  fontSize: 12,
+                                                  fontSize: 13,
                                                   color: tokens.textSecondary)),
                                         ])),
                                 ],
@@ -526,7 +533,7 @@ class _SettingsPanelState extends State<_SettingsPanel> {
                                       padding: const EdgeInsets.only(top: 20),
                                       child: Text(importError ?? importMessage!,
                                           style: TextStyle(
-                                              fontSize: 12,
+                                              fontSize: 13,
                                               height: 1.5,
                                               color: importError == null
                                                   ? tokens.success
@@ -582,33 +589,33 @@ class _ModeSegment extends StatelessWidget {
       padding: const EdgeInsets.all(2),
       decoration: BoxDecoration(
         color: tokens.content,
-        borderRadius: BorderRadius.circular(7),
+        borderRadius: BorderRadius.circular(WorkFollowRadii.control),
         border: Border.all(color: tokens.border),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           for (final mode in const [
-            (ThemeMode.system, '跟随系统', Icons.computer_outlined),
-            (ThemeMode.light, '浅色', Icons.light_mode_outlined),
-            (ThemeMode.dark, '深色', Icons.dark_mode_outlined),
+            (ThemeMode.system, '跟随系统', WorkFollowIcons.system),
+            (ThemeMode.light, '浅色', WorkFollowIcons.lightMode),
+            (ThemeMode.dark, '深色', WorkFollowIcons.darkMode),
           ])
             InkWell(
               onTap: () => onSelect(mode.$1),
-              borderRadius: BorderRadius.circular(5),
+              borderRadius: BorderRadius.circular(WorkFollowRadii.control),
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
                   color: current == mode.$1
                       ? tokens.accentSoft
                       : Colors.transparent,
-                  borderRadius: BorderRadius.circular(5),
+                  borderRadius: BorderRadius.circular(WorkFollowRadii.control),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(mode.$3,
-                        size: 12,
+                    AppIcon(mode.$3,
+                        size: WorkFollowMetrics.metadataIcon,
                         color: current == mode.$1
                             ? tokens.accent
                             : tokens.textTertiary),
@@ -618,7 +625,7 @@ class _ModeSegment extends StatelessWidget {
                           color: current == mode.$1
                               ? tokens.accent
                               : tokens.textSecondary,
-                          fontSize: 10.5,
+                          fontSize: 12,
                           fontWeight: FontWeight.w600,
                         )),
                   ],
@@ -644,13 +651,13 @@ class _DensitySegment extends StatelessWidget {
       padding: const EdgeInsets.all(2),
       decoration: BoxDecoration(
           color: tokens.content,
-          borderRadius: BorderRadius.circular(7),
+          borderRadius: BorderRadius.circular(WorkFollowRadii.control),
           border: Border.all(color: tokens.border)),
       child: Row(mainAxisSize: MainAxisSize.min, children: [
         for (final option in const [(false, '舒适'), (true, '紧凑')])
           InkWell(
               onTap: () => onSelect(option.$1),
-              borderRadius: BorderRadius.circular(5),
+              borderRadius: BorderRadius.circular(WorkFollowRadii.control),
               child: Container(
                   padding:
                       const EdgeInsets.symmetric(horizontal: 13, vertical: 6),
@@ -658,13 +665,14 @@ class _DensitySegment extends StatelessWidget {
                       color: compact == option.$1
                           ? tokens.accentSoft
                           : Colors.transparent,
-                      borderRadius: BorderRadius.circular(5)),
+                      borderRadius:
+                          BorderRadius.circular(WorkFollowRadii.control)),
                   child: Text(option.$2,
                       style: TextStyle(
                           color: compact == option.$1
                               ? tokens.accent
                               : tokens.textSecondary,
-                          fontSize: 11,
+                          fontSize: 12,
                           fontWeight: FontWeight.w600)))),
       ]),
     );

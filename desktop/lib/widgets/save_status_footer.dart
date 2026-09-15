@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../state/workspace_controller.dart';
+import '../theme/workfollow_icons.dart';
 import '../theme/workfollow_theme.dart';
+import 'app_icon_button.dart';
 
 /// The editor footer that reports the real persistence state: saving, saved
 /// (with the time of the last completed write), failed, or paused because the
@@ -22,7 +24,7 @@ class SaveStatusFooter extends StatelessWidget {
           BoxDecoration(border: Border(top: BorderSide(color: tokens.border))),
       child: Row(
         children: [
-          Icon(icon, size: 14, color: color),
+          AppIcon(icon, size: WorkFollowMetrics.metadataIcon, color: color),
           const SizedBox(width: 7),
           Flexible(
             child: Text(
@@ -44,24 +46,24 @@ class SaveStatusFooter extends StatelessWidget {
   (IconData, String, Color) _statusFor(
       WorkspaceController controller, WorkFollowTheme tokens) {
     if (controller.loadError != null) {
-      return (Icons.report_outlined, controller.loadError!, tokens.danger);
+      return (WorkFollowIcons.report, controller.loadError!, tokens.danger);
     }
     switch (controller.saveStatus) {
       case SaveStatus.saving:
-        return (Icons.more_horiz, '保存中…', tokens.textTertiary);
+        return (WorkFollowIcons.more, '保存中…', tokens.textTertiary);
       case SaveStatus.failed:
         final label = controller.saveError == null
             ? '保存失败'
             : '保存失败：${controller.saveError}';
-        return (Icons.error_outline, label, tokens.danger);
+        return (WorkFollowIcons.error, label, tokens.danger);
       case SaveStatus.saved:
         final savedAt = controller.lastSavedAt;
         if (savedAt == null) {
-          return (Icons.check_rounded, '更改会自动保存到本机', tokens.success);
+          return (WorkFollowIcons.check, '更改会自动保存到本机', tokens.success);
         }
         final time =
             '${savedAt.hour.toString().padLeft(2, '0')}:${savedAt.minute.toString().padLeft(2, '0')}';
-        return (Icons.check_rounded, '已保存 · $time', tokens.success);
+        return (WorkFollowIcons.check, '已保存 · $time', tokens.success);
     }
   }
 }

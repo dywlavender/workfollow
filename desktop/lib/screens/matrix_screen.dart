@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 
 import '../models/task.dart';
 import '../state/workspace_controller.dart';
+import '../theme/workfollow_icons.dart';
 import '../theme/workfollow_theme.dart';
+import '../widgets/app_icon_button.dart';
 import '../widgets/app_surfaces.dart';
 
 class MatrixScreen extends StatefulWidget {
@@ -54,7 +56,7 @@ class _MatrixScreenState extends State<MatrixScreen> {
                 if (tasks.isEmpty)
                   AppCard(
                       child: EmptyHint(
-                          icon: Icons.grid_view_rounded,
+                          icon: WorkFollowIcons.matrix,
                           title: '还没有可以放入象限的任务',
                           hint: '在列表中设置优先级或日期，任务会自动出现在这里。'))
                 else
@@ -102,25 +104,25 @@ class _QuadrantCard extends StatelessWidget {
         MatrixQuadrant.doNow => (
             title: '立即做',
             subtitle: '重要 · 紧急',
-            icon: Icons.priority_high_rounded,
+            icon: WorkFollowIcons.priorityHigh,
             color: (t) => t.danger
           ),
         MatrixQuadrant.schedule => (
             title: '安排做',
             subtitle: '重要 · 不紧急',
-            icon: Icons.event_available_outlined,
+            icon: WorkFollowIcons.deadline,
             color: (t) => t.accent
           ),
         MatrixQuadrant.delegate => (
             title: '委托看',
             subtitle: '紧急 · 不重要',
-            icon: Icons.forward_to_inbox_outlined,
+            icon: WorkFollowIcons.forward,
             color: (t) => t.warning
           ),
         MatrixQuadrant.later => (
             title: '缓一缓',
             subtitle: '不重要 · 不紧急',
-            icon: Icons.snooze_outlined,
+            icon: WorkFollowIcons.snooze,
             color: (t) => t.textTertiary
           ),
       };
@@ -141,7 +143,7 @@ class _QuadrantCard extends StatelessWidget {
           decoration: BoxDecoration(
               color:
                   highlighted ? color.withValues(alpha: .08) : tokens.content,
-              borderRadius: BorderRadius.circular(14),
+              borderRadius: BorderRadius.circular(WorkFollowRadii.card),
               border: Border.all(
                   color: highlighted
                       ? color.withValues(alpha: .55)
@@ -155,8 +157,10 @@ class _QuadrantCard extends StatelessWidget {
                   height: 29,
                   decoration: BoxDecoration(
                       color: color.withValues(alpha: .12),
-                      borderRadius: BorderRadius.circular(8)),
-                  child: Icon(meta.icon, size: 16, color: color)),
+                      borderRadius:
+                          BorderRadius.circular(WorkFollowRadii.control)),
+                  child: AppIcon(meta.icon,
+                      size: WorkFollowMetrics.toolbarIcon, color: color)),
               const SizedBox(width: 9),
               Expanded(
                   child: Column(
@@ -165,12 +169,12 @@ class _QuadrantCard extends StatelessWidget {
                     Text(meta.title,
                         style: TextStyle(
                             color: tokens.textPrimary,
-                            fontSize: 13.5,
+                            fontSize: 14,
                             fontWeight: FontWeight.w800)),
                     const SizedBox(height: 2),
                     Text(meta.subtitle,
                         style: TextStyle(
-                            color: tokens.textTertiary, fontSize: 10.5)),
+                            color: tokens.textTertiary, fontSize: 11)),
                   ])),
               Text('${tasks.length}',
                   style: TextStyle(
@@ -224,8 +228,7 @@ class _MatrixTaskRow extends StatelessWidget {
               child: Text(task.title,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style:
-                      TextStyle(color: tokens.textPrimary, fontSize: 11.5)))),
+                  style: TextStyle(color: tokens.textPrimary, fontSize: 12)))),
       childWhenDragging: Opacity(opacity: .3, child: _body(tokens, listColor)),
       child: _body(tokens, listColor),
     );
@@ -233,7 +236,7 @@ class _MatrixTaskRow extends StatelessWidget {
 
   Widget _body(WorkFollowTheme tokens, Color listColor) => InkWell(
         onTap: () => controller.openTask(task.id),
-        borderRadius: BorderRadius.circular(7),
+        borderRadius: BorderRadius.circular(WorkFollowRadii.control),
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 7),
           child: Row(children: [
@@ -251,14 +254,14 @@ class _MatrixTaskRow extends StatelessWidget {
                         color: task.completed
                             ? tokens.textTertiary
                             : tokens.textPrimary,
-                        fontSize: 11.5,
+                        fontSize: 12,
                         fontWeight: FontWeight.w500,
                         decoration: task.completed
                             ? TextDecoration.lineThrough
                             : null))),
             if (task.priority != TaskPriority.none)
-              Icon(Icons.flag_rounded,
-                  size: 13,
+              AppIcon(WorkFollowIcons.flag,
+                  size: WorkFollowMetrics.metadataIcon,
                   color: task.priority == TaskPriority.high
                       ? tokens.danger
                       : tokens.warning),

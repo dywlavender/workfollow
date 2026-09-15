@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import '../models/task.dart';
 import '../services/smart_date_parser.dart';
 import '../state/workspace_controller.dart';
+import '../theme/workfollow_icons.dart';
 import '../theme/workfollow_theme.dart';
 import '../features/tasks/application/task_actions.dart';
 import '../features/tasks/domain/task_draft.dart';
@@ -451,14 +452,12 @@ class _QuickAddFieldState extends State<QuickAddField> {
     final action = await showDesktopMenu<String>(anchor,
         placement: PopoverPlacement.topEnd,
         entries: const [
-          DesktopMenuEntry('schedule', '安排日期…',
-              icon: Icons.calendar_today_outlined),
-          DesktopMenuEntry('priority', '优先级', icon: Icons.flag_outlined),
-          DesktopMenuEntry('list', '清单', icon: Icons.inbox_outlined),
-          DesktopMenuEntry('tags', '标签', icon: Icons.tag_rounded),
-          DesktopMenuEntry('reminder', '提醒',
-              icon: Icons.notifications_none_rounded),
-          DesktopMenuEntry('repeat', '重复', icon: Icons.repeat_rounded),
+          DesktopMenuEntry('schedule', '安排日期…', icon: WorkFollowIcons.calendar),
+          DesktopMenuEntry('priority', '优先级', icon: WorkFollowIcons.flag),
+          DesktopMenuEntry('list', '清单', icon: WorkFollowIcons.inbox),
+          DesktopMenuEntry('tags', '标签', icon: WorkFollowIcons.tag),
+          DesktopMenuEntry('reminder', '提醒', icon: WorkFollowIcons.reminder),
+          DesktopMenuEntry('repeat', '重复', icon: WorkFollowIcons.repeat),
         ]);
     if (!mounted || action == null) return;
     // Closing the first menu can rebuild the inline row (especially while the
@@ -527,7 +526,9 @@ class _QuickAddFieldState extends State<QuickAddField> {
         child: Container(
           decoration: BoxDecoration(
               color: tokens.content,
-              borderRadius: BorderRadius.circular(widget.listStyle ? 9 : 12),
+              borderRadius: BorderRadius.circular(widget.listStyle
+                  ? WorkFollowRadii.control
+                  : WorkFollowRadii.card),
               border: Border.all(
                   color: expanded
                       ? tokens.accent.withValues(alpha: .55)
@@ -543,8 +544,11 @@ class _QuickAddFieldState extends State<QuickAddField> {
               vertical: widget.listStyle ? 5 : 7),
           child: Column(mainAxisSize: MainAxisSize.min, children: [
             Row(children: [
-              Icon(Icons.add,
-                  size: widget.listStyle ? 18 : 19, color: tokens.accent),
+              AppIcon(WorkFollowIcons.add,
+                  size: widget.listStyle
+                      ? WorkFollowMetrics.navigationIcon
+                      : WorkFollowMetrics.headerIcon,
+                  color: tokens.accent),
               const SizedBox(width: 10),
               Expanded(
                   child: TextField(
@@ -597,7 +601,8 @@ class _QuickAddFieldState extends State<QuickAddField> {
                               materialTapTargetSize:
                                   MaterialTapTargetSize.shrinkWrap,
                               deleteIconColor: _spanColor(span.kind, tokens),
-                              deleteIcon: const Icon(Icons.close, size: 13),
+                              deleteIcon: const AppIcon(WorkFollowIcons.close,
+                                  size: WorkFollowMetrics.metadataIcon),
                               onDeleted: () => _dismissSpan(span)),
                       ]))),
             if (expanded && parse.hasStructure && _summary.isNotEmpty)
@@ -620,7 +625,7 @@ class _QuickAddFieldState extends State<QuickAddField> {
                             child: Row(children: [
                               PropertyButton(
                                   key: const ValueKey('quick-add-schedule'),
-                                  icon: Icons.calendar_today_outlined,
+                                  icon: WorkFollowIcons.calendar,
                                   label: calendarDateLabel(_effectiveDue,
                                       hasTime: _effectiveHasTime),
                                   active: customDate
@@ -634,7 +639,7 @@ class _QuickAddFieldState extends State<QuickAddField> {
                                 const SizedBox(width: 6),
                                 PropertyButton(
                                     key: const ValueKey('quick-add-priority'),
-                                    icon: Icons.flag_outlined,
+                                    icon: WorkFollowIcons.flag,
                                     label: currentDraft.priority ==
                                             TaskPriority.none
                                         ? '优先级'
@@ -645,7 +650,7 @@ class _QuickAddFieldState extends State<QuickAddField> {
                                 const SizedBox(width: 6),
                                 PropertyButton(
                                     key: const ValueKey('quick-add-list'),
-                                    icon: Icons.inbox_outlined,
+                                    icon: WorkFollowIcons.inbox,
                                     label: currentDraft.listName ??
                                         widget.controller.creationTargetLabel
                                             .split(' · ')
@@ -655,7 +660,7 @@ class _QuickAddFieldState extends State<QuickAddField> {
                                 const SizedBox(width: 6),
                                 PropertyButton(
                                     key: const ValueKey('quick-add-tags'),
-                                    icon: Icons.tag_rounded,
+                                    icon: WorkFollowIcons.tag,
                                     label: currentDraft.tags.isEmpty
                                         ? '标签'
                                         : currentDraft.tags
@@ -666,7 +671,7 @@ class _QuickAddFieldState extends State<QuickAddField> {
                                 const SizedBox(width: 6),
                                 PropertyButton(
                                     key: const ValueKey('quick-add-reminder'),
-                                    icon: Icons.notifications_none_rounded,
+                                    icon: WorkFollowIcons.reminder,
                                     label: currentDraft.reminderAt == null
                                         ? '提醒'
                                         : calendarDateLabel(
@@ -677,7 +682,7 @@ class _QuickAddFieldState extends State<QuickAddField> {
                                 const SizedBox(width: 6),
                                 PropertyButton(
                                     key: const ValueKey('quick-add-repeat'),
-                                    icon: Icons.repeat_rounded,
+                                    icon: WorkFollowIcons.repeat,
                                     label: '重复',
                                     active: currentDraft.recurrence.enabled,
                                     onPressed: _pickRecurrence),
@@ -688,16 +693,17 @@ class _QuickAddFieldState extends State<QuickAddField> {
                       Builder(
                           builder: (anchor) => AppIconButton(
                               key: const ValueKey('quick-add-properties'),
-                              icon: Icons.expand_more_rounded,
+                              icon: WorkFollowIcons.expandMore,
                               tooltip: '更多属性',
                               onPressed: () => _openProperties(anchor),
-                              size: 30,
-                              iconSize: 18)),
+                              size: WorkFollowMetrics.iconHitTarget,
+                              iconSize: WorkFollowMetrics.toolbarIcon)),
                     ] else
                       FilledButton(
                           onPressed: text.text.trim().isEmpty ? null : submit,
                           style: FilledButton.styleFrom(
-                              minimumSize: const Size(0, 30),
+                              minimumSize: const Size(
+                                  0, WorkFollowMetrics.compactButtonHeight),
                               padding:
                                   const EdgeInsets.symmetric(horizontal: 12)),
                           child: const Text('添加任务',

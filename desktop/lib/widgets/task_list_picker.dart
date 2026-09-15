@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../state/workspace_controller.dart';
+import '../theme/workfollow_icons.dart';
 import '../theme/workfollow_theme.dart';
+import 'app_icon_button.dart';
 import 'desktop_popover.dart';
 
 /// Searchable list chooser used by the task footer and quick add. It keeps the
@@ -116,7 +118,7 @@ class _TaskListPickerBodyState extends State<_TaskListPickerBody> {
     return Focus(
       onKeyEvent: _onKey,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(10, 10, 10, 8),
+        padding: const EdgeInsets.fromLTRB(10, 10, 10, WorkFollowSpacing.xs),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -135,12 +137,14 @@ class _TaskListPickerBodyState extends State<_TaskListPickerBody> {
                 }
               },
               decoration: InputDecoration(
-                prefixIcon: const Icon(Icons.search_rounded, size: 17),
+                prefixIcon: const AppIcon(WorkFollowIcons.search,
+                    size: WorkFollowMetrics.toolbarIcon),
                 suffixIcon: search.text.isEmpty
                     ? null
                     : IconButton(
                         tooltip: '清除搜索',
-                        icon: const Icon(Icons.close, size: 16),
+                        icon: const AppIcon(WorkFollowIcons.close,
+                            size: WorkFollowMetrics.toolbarIcon),
                         onPressed: search.clear,
                       ),
                 hintText: '搜索清单',
@@ -149,7 +153,7 @@ class _TaskListPickerBodyState extends State<_TaskListPickerBody> {
                 fillColor: tokens.canvas,
                 isDense: true,
                 border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: BorderRadius.circular(WorkFollowRadii.control),
                   borderSide: BorderSide.none,
                 ),
                 contentPadding:
@@ -175,25 +179,27 @@ class _TaskListPickerBodyState extends State<_TaskListPickerBody> {
                   child: ListTile(
                     key: ValueKey('menu-option-${lists[index].name}'),
                     dense: true,
-                    minTileHeight: 38,
+                    minTileHeight: WorkFollowMetrics.menuRowHeight,
                     shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(7)),
+                        borderRadius:
+                            BorderRadius.circular(WorkFollowRadii.control)),
                     tileColor:
                         focusedIndex == index ? tokens.accentFaint : null,
                     contentPadding: const EdgeInsets.symmetric(horizontal: 8),
-                    leading: Icon(
+                    leading: AppIcon(
                       lists[index].name == '收集箱'
-                          ? Icons.inbox_outlined
-                          : Icons.list_rounded,
-                      size: 17,
+                          ? WorkFollowIcons.inbox
+                          : WorkFollowIcons.list,
+                      size: WorkFollowMetrics.toolbarIcon,
                       color: tokens.textSecondary,
                     ),
                     title: Text(lists[index].name,
                         style:
                             TextStyle(fontSize: 13, color: tokens.textPrimary)),
                     trailing: widget.selected == lists[index].name
-                        ? Icon(Icons.check_rounded,
-                            size: 16, color: tokens.accent)
+                        ? AppIcon(WorkFollowIcons.check,
+                            size: WorkFollowMetrics.toolbarIcon,
+                            color: tokens.accent)
                         : null,
                     onTap: () => Navigator.of(context).pop(lists[index].name),
                   ),

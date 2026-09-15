@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../theme/workfollow_theme.dart';
+import 'app_icon_button.dart';
 
 /// Shared surfaces for the redesigned workspace pages: cards float on the
 /// canvas, page headers share one hero rhythm, and empty states get one
@@ -14,7 +15,7 @@ class AppCard extends StatelessWidget {
       {super.key,
       required this.child,
       this.padding = const EdgeInsets.all(16),
-      this.radius = 14,
+      this.radius = WorkFollowRadii.card,
       this.color,
       this.borderColor,
       this.elevated = false});
@@ -77,6 +78,7 @@ class PageHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tokens = WorkFollowTheme.of(context);
+    final iconData = icon;
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -91,7 +93,8 @@ class PageHeader extends StatelessWidget {
                     decoration: BoxDecoration(
                         color: (eyebrowColor ?? tokens.accent)
                             .withValues(alpha: .10),
-                        borderRadius: BorderRadius.circular(999)),
+                        borderRadius:
+                            BorderRadius.circular(WorkFollowRadii.pill)),
                     child: Text(eyebrow!,
                         style: TextStyle(
                             color: eyebrowColor ?? tokens.accent,
@@ -100,7 +103,7 @@ class PageHeader extends StatelessWidget {
                             letterSpacing: .2))),
                 const SizedBox(height: 10),
               ],
-              if (icon == null)
+              if (iconData == null)
                 Text(title,
                     style: TextStyle(
                         color: tokens.textPrimary,
@@ -111,9 +114,11 @@ class PageHeader extends StatelessWidget {
               else
                 Row(
                   children: [
-                    Icon(icon,
+                    AppIcon(iconData,
                         key: const ValueKey('list-view-icon'),
-                        size: dense ? 21 : 24,
+                        size: dense
+                            ? WorkFollowMetrics.navigationIcon
+                            : WorkFollowMetrics.headerIcon + 4,
                         color: tokens.textSecondary),
                     const SizedBox(width: 9),
                     Expanded(
@@ -245,7 +250,9 @@ class EmptyHint extends StatelessWidget {
   Widget build(BuildContext context) {
     final tokens = WorkFollowTheme.of(context);
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 44, horizontal: 20),
+      padding: const EdgeInsets.symmetric(
+          vertical: WorkFollowSpacing.xxl + 12,
+          horizontal: WorkFollowSpacing.lg),
       child: Column(
         children: [
           Container(
@@ -254,7 +261,9 @@ class EmptyHint extends StatelessWidget {
               decoration: BoxDecoration(
                   color: tokens.accent.withValues(alpha: .09),
                   shape: BoxShape.circle),
-              child: Icon(icon, size: 26, color: tokens.accent)),
+              child: AppIcon(icon,
+                  size: WorkFollowMetrics.headerIcon + 8,
+                  color: tokens.accent)),
           const SizedBox(height: 16),
           Text(title,
               style: TextStyle(
@@ -300,8 +309,9 @@ class StatCard extends StatelessWidget {
             height: 34,
             decoration: BoxDecoration(
                 color: color.withValues(alpha: .12),
-                borderRadius: BorderRadius.circular(9)),
-            child: Icon(icon, size: 17, color: color)),
+                borderRadius: BorderRadius.circular(WorkFollowRadii.surface)),
+            child: AppIcon(icon,
+                size: WorkFollowMetrics.toolbarIcon + 1, color: color)),
         const SizedBox(width: 10),
         Expanded(
           child: Column(
@@ -330,7 +340,7 @@ class StatCard extends StatelessWidget {
     return Material(
         color: Colors.transparent,
         child: InkWell(
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(WorkFollowRadii.card),
             onTap: onTap,
             child: card));
   }

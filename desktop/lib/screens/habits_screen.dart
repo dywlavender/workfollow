@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/habit.dart';
 import '../models/list_color.dart';
 import '../state/workspace_controller.dart';
+import '../theme/workfollow_icons.dart';
 import '../theme/workfollow_theme.dart';
 import '../widgets/app_icon_button.dart';
 import '../widgets/app_surfaces.dart';
@@ -31,13 +32,14 @@ class HabitsScreen extends StatelessWidget {
             subtitle: '${today.month} 月 ${today.day} 日 · 把重复的小事变成稳定的节奏。',
             trailing: FilledButton.icon(
               onPressed: () => _showHabitDialog(context, controller),
-              icon: const Icon(Icons.add_rounded, size: 16),
+              icon: const AppIcon(WorkFollowIcons.add,
+                  size: WorkFollowMetrics.toolbarIcon),
               label: const Text('新建习惯'),
               style: FilledButton.styleFrom(
                   padding:
                       const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
                   textStyle: const TextStyle(
-                      fontSize: 11, fontWeight: FontWeight.w700)),
+                      fontSize: 13, fontWeight: FontWeight.w700)),
             ),
           ),
           const SizedBox(height: 18),
@@ -45,7 +47,7 @@ class HabitsScreen extends StatelessWidget {
             Expanded(
               child: Center(
                 child: EmptyHint(
-                  icon: Icons.repeat_rounded,
+                  icon: WorkFollowIcons.habits,
                   title: '从一个小习惯开始',
                   hint: '每天一次、每周几次都可以，记录只保存在这台 Mac 上。',
                   actionLabel: '新建习惯',
@@ -118,7 +120,7 @@ class HabitsScreen extends StatelessWidget {
                     child: Text('重复日',
                         style: TextStyle(
                             color: tokens.textSecondary,
-                            fontSize: 11,
+                            fontSize: 12,
                             fontWeight: FontWeight.w700))),
                 const SizedBox(height: 7),
                 Wrap(
@@ -142,7 +144,7 @@ class HabitsScreen extends StatelessWidget {
                             color: schedule.contains(day)
                                 ? tokens.accent
                                 : tokens.textTertiary,
-                            fontSize: 11),
+                            fontSize: 12),
                       ),
                   ],
                 ),
@@ -152,13 +154,13 @@ class HabitsScreen extends StatelessWidget {
                     child: Text('颜色',
                         style: TextStyle(
                             color: tokens.textSecondary,
-                            fontSize: 11,
+                            fontSize: 12,
                             fontWeight: FontWeight.w700))),
                 const SizedBox(height: 7),
                 Row(children: [
                   for (final value in listColorPalette.take(8))
                     InkWell(
-                      borderRadius: BorderRadius.circular(99),
+                      borderRadius: BorderRadius.circular(WorkFollowRadii.pill),
                       onTap: () =>
                           setState(() => color = colorHexFromValue(value)),
                       child: Container(
@@ -181,7 +183,7 @@ class HabitsScreen extends StatelessWidget {
                     child: Text('图标',
                         style: TextStyle(
                             color: tokens.textSecondary,
-                            fontSize: 11,
+                            fontSize: 12,
                             fontWeight: FontWeight.w700))),
                 const SizedBox(height: 7),
                 Row(children: [
@@ -189,7 +191,8 @@ class HabitsScreen extends StatelessWidget {
                     IconButton(
                       tooltip: _iconLabel(candidate),
                       onPressed: () => setState(() => icon = candidate),
-                      icon: Icon(_habitIcon(candidate),
+                      icon: AppIcon(_habitIcon(candidate),
+                          size: WorkFollowMetrics.navigationIcon,
                           color: icon == candidate
                               ? tokens.accent
                               : tokens.textTertiary),
@@ -259,10 +262,10 @@ class HabitsScreen extends StatelessWidget {
       };
 
   static IconData _habitIcon(String value) => switch (value) {
-        'sun' => Icons.wb_sunny_outlined,
-        'book' => Icons.menu_book_outlined,
-        'run' => Icons.directions_run_outlined,
-        _ => Icons.check_rounded,
+        'sun' => WorkFollowIcons.habitSun,
+        'book' => WorkFollowIcons.habitBook,
+        'run' => WorkFollowIcons.habitRun,
+        _ => WorkFollowIcons.check,
       };
 }
 
@@ -308,9 +311,9 @@ class _HabitCard extends StatelessWidget {
               height: 38,
               decoration: BoxDecoration(
                   color: accent.withValues(alpha: .12),
-                  borderRadius: BorderRadius.circular(11)),
-              child: Icon(HabitsScreen._habitIcon(habit.icon),
-                  size: 19, color: accent)),
+                  borderRadius: BorderRadius.circular(WorkFollowRadii.surface)),
+              child: AppIcon(HabitsScreen._habitIcon(habit.icon),
+                  size: WorkFollowMetrics.navigationIcon, color: accent)),
           const SizedBox(width: 11),
           Expanded(
             child:
@@ -324,14 +327,14 @@ class _HabitCard extends StatelessWidget {
                       fontWeight: FontWeight.w800)),
               const SizedBox(height: 3),
               Text(_scheduleLabel(habit.schedule),
-                  style: TextStyle(color: tokens.textTertiary, fontSize: 10.5)),
+                  style: TextStyle(color: tokens.textTertiary, fontSize: 11)),
             ]),
           ),
           AppIconButton(
-              icon: Icons.more_horiz_rounded,
+              icon: WorkFollowIcons.more,
               tooltip: '习惯操作',
-              size: 28,
-              iconSize: 17,
+              size: WorkFollowMetrics.iconHitTarget,
+              iconSize: WorkFollowMetrics.toolbarIcon,
               onPressed: () => _showMenu(context)),
         ]),
         const SizedBox(height: 13),
@@ -339,22 +342,23 @@ class _HabitCard extends StatelessWidget {
           Expanded(
             child: InkWell(
               onTap: scheduled ? () => controller.toggleHabit(habit.id) : null,
-              borderRadius: BorderRadius.circular(9),
+              borderRadius: BorderRadius.circular(WorkFollowRadii.control),
               child: Container(
                 padding:
                     const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
                 decoration: BoxDecoration(
                     color:
                         done ? accent.withValues(alpha: .14) : tokens.overlay,
-                    borderRadius: BorderRadius.circular(9),
+                    borderRadius:
+                        BorderRadius.circular(WorkFollowRadii.control),
                     border: Border.all(
                         color: done
                             ? accent.withValues(alpha: .45)
                             : tokens.border)),
                 child: Row(children: [
-                  Icon(
-                      done ? Icons.check_circle_rounded : Icons.circle_outlined,
-                      size: 19,
+                  AppIcon(
+                      done ? WorkFollowIcons.success : WorkFollowIcons.circle,
+                      size: WorkFollowMetrics.navigationIcon,
                       color: scheduled ? accent : tokens.textTertiary),
                   const SizedBox(width: 8),
                   Text(
@@ -365,7 +369,7 @@ class _HabitCard extends StatelessWidget {
                               : '今天不安排',
                       style: TextStyle(
                           color: done ? accent : tokens.textSecondary,
-                          fontSize: 11,
+                          fontSize: 13,
                           fontWeight: FontWeight.w700)),
                 ]),
               ),
@@ -376,7 +380,7 @@ class _HabitCard extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 8),
               decoration: BoxDecoration(
                   color: tokens.accentFaint,
-                  borderRadius: BorderRadius.circular(9)),
+                  borderRadius: BorderRadius.circular(WorkFollowRadii.control)),
               child:
                   Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
                 Text('${habit.streak()} 天',
@@ -385,15 +389,14 @@ class _HabitCard extends StatelessWidget {
                         fontSize: 14,
                         fontWeight: FontWeight.w800)),
                 Text('连续',
-                    style:
-                        TextStyle(color: tokens.textTertiary, fontSize: 9.5)),
+                    style: TextStyle(color: tokens.textTertiary, fontSize: 11)),
               ])),
         ]),
         const SizedBox(height: 14),
         Text('最近 28 天',
             style: TextStyle(
                 color: tokens.textSecondary,
-                fontSize: 10.5,
+                fontSize: 12,
                 fontWeight: FontWeight.w700)),
         const SizedBox(height: 8),
         _HabitDots(habit: habit, accent: accent),

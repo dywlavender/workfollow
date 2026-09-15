@@ -21,6 +21,7 @@ import 'services/preferences_store.dart';
 import 'services/local_workspace_store.dart';
 import 'services/focus_timer.dart';
 import 'state/workspace_controller.dart';
+import 'theme/workfollow_icons.dart';
 import 'theme/workfollow_theme.dart';
 import 'widgets/app_icon_button.dart';
 import 'widgets/command_palette.dart';
@@ -414,10 +415,11 @@ class _WorkFollowShellState extends State<WorkFollowShell> {
               (WorkspaceView.stats, '统计'),
             ])
               ListTile(
-                leading: Icon(
+                leading: AppIcon(
                     option.$1 == controller.view
-                        ? Icons.radio_button_checked
-                        : Icons.radio_button_off,
+                        ? WorkFollowIcons.radioOn
+                        : WorkFollowIcons.radioOff,
+                    size: WorkFollowMetrics.navigationIcon,
                     color: option.$1 == controller.view
                         ? tokens.accent
                         : tokens.textTertiary),
@@ -686,12 +688,12 @@ class _AppToolbar extends StatelessWidget {
         children: [
           AppIconButton(
               icon: sidebarCollapsed
-                  ? Icons.keyboard_double_arrow_right_rounded
-                  : Icons.keyboard_double_arrow_left_rounded,
+                  ? WorkFollowIcons.sidebarShow
+                  : WorkFollowIcons.sidebarHide,
               tooltip: sidebarCollapsed ? '显示侧栏' : '隐藏侧栏',
               onPressed: onToggleSidebar,
-              size: 32,
-              iconSize: 17),
+              size: WorkFollowMetrics.iconHitTarget,
+              iconSize: WorkFollowMetrics.toolbarIcon),
           const SizedBox(width: 6),
           if (title.isNotEmpty)
             Text(title,
@@ -706,16 +708,17 @@ class _AppToolbar extends StatelessWidget {
           const SizedBox(width: 6),
           Material(
               color: tokens.accent,
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(WorkFollowRadii.control),
               child: InkWell(
                   onTap: onNewTask,
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: BorderRadius.circular(WorkFollowRadii.control),
                   child: Padding(
                       padding: const EdgeInsets.symmetric(
                           horizontal: 12, vertical: 8),
                       child: Row(children: [
-                        const Icon(Icons.add_rounded,
-                            size: 16, color: Colors.white),
+                        const AppIcon(WorkFollowIcons.add,
+                            size: WorkFollowMetrics.toolbarIcon,
+                            color: Colors.white),
                         const SizedBox(width: 5),
                         const Text('新建',
                             style: TextStyle(
@@ -754,9 +757,11 @@ class _ToolbarSearchState extends State<_ToolbarSearch> {
           decoration: BoxDecoration(
               color: hovering ? tokens.accentFaint : tokens.inspector,
               border: Border.all(color: tokens.border),
-              borderRadius: BorderRadius.circular(8)),
+              borderRadius: BorderRadius.circular(WorkFollowRadii.control)),
           child: Row(children: [
-            Icon(Icons.search_rounded, size: 16, color: tokens.textTertiary),
+            AppIcon(WorkFollowIcons.search,
+                size: WorkFollowMetrics.toolbarIcon,
+                color: tokens.textTertiary),
             const SizedBox(width: 7),
             Expanded(
                 child: Text('搜索',
@@ -766,7 +771,8 @@ class _ToolbarSearchState extends State<_ToolbarSearch> {
                 padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 3),
                 decoration: BoxDecoration(
                     color: tokens.content,
-                    borderRadius: BorderRadius.circular(4)),
+                    borderRadius:
+                        BorderRadius.circular(WorkFollowRadii.control)),
                 child: Text('⌘K',
                     style: TextStyle(
                         color: tokens.textTertiary,
@@ -839,15 +845,16 @@ class _UndoToast extends StatelessWidget {
     final tokens = WorkFollowTheme.of(context);
     return Material(
         color: tokens.overlay,
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(WorkFollowRadii.card),
         elevation: 8,
         child: Container(
             padding: const EdgeInsets.fromLTRB(14, 10, 9, 10),
             decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(WorkFollowRadii.card),
                 border: Border.all(color: tokens.borderStrong)),
             child: Row(mainAxisSize: MainAxisSize.min, children: [
-              Icon(Icons.check_circle_rounded, size: 16, color: tokens.success),
+              AppIcon(WorkFollowIcons.success,
+                  size: WorkFollowMetrics.toolbarIcon, color: tokens.success),
               const SizedBox(width: 8),
               Text(message,
                   style: TextStyle(

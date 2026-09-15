@@ -4,7 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../state/workspace_controller.dart';
+import '../theme/workfollow_icons.dart';
 import '../theme/workfollow_theme.dart';
+import 'app_icon_button.dart';
 import '../features/tasks/domain/task_draft.dart';
 
 Future<void> showCommandPalette({
@@ -16,7 +18,7 @@ Future<void> showCommandPalette({
     context: context,
     barrierLabel: '搜索与命令',
     barrierDismissible: true,
-    barrierColor: Colors.black.withOpacity(.28),
+    barrierColor: Colors.black.withValues(alpha: .28),
     transitionDuration: const Duration(milliseconds: 180),
     pageBuilder: (context, animation, secondaryAnimation) =>
         _CommandPalette(controller: controller, onToggleTheme: onToggleTheme),
@@ -69,27 +71,27 @@ class _CommandPaletteState extends State<_CommandPalette> {
   }
 
   List<_Command> get commands => [
-        _Command('打开最近 7 天', '查看逾期与未来七天', Icons.date_range_outlined,
+        _Command('打开最近 7 天', '查看逾期与未来七天', WorkFollowIcons.recent,
             () => widget.controller.selectView(WorkspaceView.recent)),
-        _Command('打开今天', '查看现在最重要的事', Icons.wb_sunny_outlined,
+        _Command('打开今天', '查看现在最重要的事', WorkFollowIcons.today,
             () => widget.controller.selectView(WorkspaceView.today)),
-        _Command('打开过期', '重新安排尚未完成的逾期任务', Icons.history_rounded,
+        _Command('打开过期', '重新安排尚未完成的逾期任务', WorkFollowIcons.overdue,
             () => widget.controller.selectView(WorkspaceView.overdue)),
-        _Command('打开收集箱', '稍后再安排', Icons.inbox_outlined,
+        _Command('打开收集箱', '稍后再安排', WorkFollowIcons.inbox,
             () => widget.controller.selectView(WorkspaceView.inbox)),
-        _Command('打开计划', '安排未来几天', Icons.upcoming_outlined,
+        _Command('打开计划', '安排未来几天', WorkFollowIcons.plan,
             () => widget.controller.selectView(WorkspaceView.plan)),
-        _Command('打开日历', '按日期查看任务', Icons.calendar_month_outlined,
+        _Command('打开日历', '按日期查看任务', WorkFollowIcons.calendar,
             () => widget.controller.selectView(WorkspaceView.calendar)),
-        _Command('打开看板', '按优先级或日期推进任务', Icons.view_kanban_outlined,
+        _Command('打开看板', '按优先级或日期推进任务', WorkFollowIcons.board,
             () => widget.controller.selectView(WorkspaceView.board)),
-        _Command('打开习惯', '记录连续完成与 28 天轨迹', Icons.track_changes_outlined,
+        _Command('打开习惯', '记录连续完成与 28 天轨迹', WorkFollowIcons.habits,
             () => widget.controller.selectView(WorkspaceView.habits)),
-        _Command('打开笔记', '继续写下刚才的想法', Icons.note_alt_outlined,
+        _Command('打开笔记', '继续写下刚才的想法', WorkFollowIcons.notes,
             () => widget.controller.selectView(WorkspaceView.notes)),
-        _Command('打开废纸篓', '恢复或彻底删除已移除的内容', Icons.delete_outline_rounded,
+        _Command('打开废纸篓', '恢复或彻底删除已移除的内容', WorkFollowIcons.trash,
             () => widget.controller.selectView(WorkspaceView.trash)),
-        _Command('切换外观', '在浅色和深色之间切换', Icons.brightness_6_outlined,
+        _Command('切换外观', '在浅色和深色之间切换', WorkFollowIcons.darkMode,
             widget.onToggleTheme),
       ];
 
@@ -103,11 +105,11 @@ class _CommandPaletteState extends State<_CommandPalette> {
       _Command(
         '新建任务「${queryController.text.trim()}」',
         '保存到${widget.controller.creationTargetLabel}',
-        Icons.add_task_rounded,
+        WorkFollowIcons.add,
         () => widget.controller.createTask(TaskDraft(
-              title: queryController.text.trim(),
-              listName: widget.controller.selectedListName,
-            )),
+          title: queryController.text.trim(),
+          listName: widget.controller.selectedListName,
+        )),
       ),
     ];
     final taskResults = widget.controller.activeTasks
@@ -120,9 +122,7 @@ class _CommandPaletteState extends State<_CommandPalette> {
           (task) => _Command(
             task.title,
             '${task.listName} · ${task.displayTimeLabel ?? '未安排'}',
-            task.completed
-                ? Icons.check_circle_outline_rounded
-                : Icons.check_circle_outline,
+            task.completed ? WorkFollowIcons.completed : WorkFollowIcons.check,
             () => widget.controller.openTask(task.id),
           ),
         );
@@ -136,7 +136,7 @@ class _CommandPaletteState extends State<_CommandPalette> {
           (note) => _Command(
             note.title,
             '笔记 · ${note.folder}',
-            Icons.note_alt_outlined,
+            WorkFollowIcons.notes,
             () => widget.controller.openNote(note.id),
           ),
         );
@@ -194,8 +194,9 @@ class _CommandPaletteState extends State<_CommandPalette> {
             margin: const EdgeInsets.symmetric(horizontal: 24),
             decoration: BoxDecoration(
               color: tokens.overlay,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: tokens.borderStrong.withOpacity(.72)),
+              borderRadius: BorderRadius.circular(WorkFollowRadii.popover),
+              border:
+                  Border.all(color: tokens.borderStrong.withValues(alpha: .72)),
               boxShadow: [
                 BoxShadow(
                     color: tokens.shadow,
@@ -211,8 +212,9 @@ class _CommandPaletteState extends State<_CommandPalette> {
                   padding: const EdgeInsets.fromLTRB(19, 16, 15, 13),
                   child: Row(
                     children: [
-                      Icon(Icons.search_rounded,
-                          size: 20, color: tokens.accent),
+                      AppIcon(WorkFollowIcons.search,
+                          size: WorkFollowMetrics.headerIcon,
+                          color: tokens.accent),
                       const SizedBox(width: 10),
                       Expanded(
                         child: TextField(
@@ -241,7 +243,8 @@ class _CommandPaletteState extends State<_CommandPalette> {
                               horizontal: 6, vertical: 4),
                           decoration: BoxDecoration(
                               color: tokens.accentFaint,
-                              borderRadius: BorderRadius.circular(5)),
+                              borderRadius: BorderRadius.circular(
+                                  WorkFollowRadii.control)),
                           child: Text('esc',
                               style: TextStyle(
                                   color: tokens.textTertiary,
@@ -278,7 +281,8 @@ class _CommandPaletteState extends State<_CommandPalette> {
                                 color: selected
                                     ? tokens.accentSoft
                                     : Colors.transparent,
-                                borderRadius: BorderRadius.circular(9)),
+                                borderRadius: BorderRadius.circular(
+                                    WorkFollowRadii.control)),
                             child: Row(
                               children: [
                                 Container(
@@ -288,9 +292,10 @@ class _CommandPaletteState extends State<_CommandPalette> {
                                         color: selected
                                             ? tokens.overlay
                                             : tokens.accentFaint,
-                                        borderRadius: BorderRadius.circular(8)),
-                                    child: Icon(command.icon,
-                                        size: 16,
+                                        borderRadius: BorderRadius.circular(
+                                            WorkFollowRadii.control)),
+                                    child: AppIcon(command.icon,
+                                        size: WorkFollowMetrics.toolbarIcon,
                                         color: selected
                                             ? tokens.accent
                                             : tokens.textSecondary)),
@@ -312,8 +317,9 @@ class _CommandPaletteState extends State<_CommandPalette> {
                                               fontSize: 11))
                                     ])),
                                 if (selected)
-                                  Icon(Icons.arrow_forward_rounded,
-                                      size: 15, color: tokens.accent),
+                                  AppIcon(WorkFollowIcons.next,
+                                      size: WorkFollowMetrics.metadataIcon,
+                                      color: tokens.accent),
                               ],
                             ),
                           ),
@@ -324,20 +330,23 @@ class _CommandPaletteState extends State<_CommandPalette> {
                 Container(
                   padding: const EdgeInsets.fromLTRB(17, 10, 17, 11),
                   decoration: BoxDecoration(
-                      color: tokens.accentFaint.withOpacity(.55),
+                      color: tokens.accentFaint.withValues(alpha: .55),
                       border: Border(top: BorderSide(color: tokens.border))),
                   child: Row(children: [
-                    Icon(Icons.keyboard_return_rounded,
-                        size: 14, color: tokens.textTertiary),
+                    AppIcon(WorkFollowIcons.keyboardReturn,
+                        size: WorkFollowMetrics.metadataIcon,
+                        color: tokens.textTertiary),
                     const SizedBox(width: 5),
                     Text('选择',
                         style: TextStyle(
                             color: tokens.textTertiary, fontSize: 10)),
                     const SizedBox(width: 16),
-                    Icon(Icons.keyboard_arrow_up_rounded,
-                        size: 14, color: tokens.textTertiary),
-                    Icon(Icons.keyboard_arrow_down_rounded,
-                        size: 14, color: tokens.textTertiary),
+                    AppIcon(WorkFollowIcons.keyboardUp,
+                        size: WorkFollowMetrics.metadataIcon,
+                        color: tokens.textTertiary),
+                    AppIcon(WorkFollowIcons.keyboardDown,
+                        size: WorkFollowMetrics.metadataIcon,
+                        color: tokens.textTertiary),
                     const SizedBox(width: 5),
                     Text('移动',
                         style: TextStyle(
