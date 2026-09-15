@@ -167,7 +167,7 @@ class TaskDocumentEditorState extends State<TaskDocumentEditor>
     await showAnchoredPopover<void>(
       anchor,
       width: 740,
-      maxHeight: 58,
+      maxHeight: 52,
       placement: PopoverPlacement.topEnd,
       focusPolicy: PopoverFocusPolicy.preserveEditor,
       builder: (_) => TaskEditorToolbar(
@@ -244,7 +244,7 @@ class TaskDocumentEditorState extends State<TaskDocumentEditor>
       final geometry = calculatePopoverGeometry(
         anchor: Rect.fromLTWH(origin.dx, origin.dy, 1, caretHeight),
         viewport: screen,
-        desiredSize: Size(270, menuHeight),
+        desiredSize: Size(276, menuHeight),
         placement: PopoverPlacement.bottomStart,
         safeArea: const EdgeInsets.all(12),
       );
@@ -376,8 +376,8 @@ class TaskDocumentEditorState extends State<TaskDocumentEditor>
   Widget build(BuildContext context) {
     final tokens = WorkFollowTheme.of(context);
     final textStyle = Theme.of(context).textTheme.bodyLarge!.copyWith(
-          fontSize: 14.5,
-          height: 1.7,
+          fontSize: 15,
+          height: 1.65,
           color: tokens.textPrimary,
         );
     final hasSubtaskBlock = _hasBlock(widget.task, 'taskSubtasks');
@@ -394,22 +394,25 @@ class TaskDocumentEditorState extends State<TaskDocumentEditor>
           config: quill.QuillEditorConfig(
             editorKey: renderEditorKey,
             scrollable: false,
-            minHeight: 235,
+            // Keep an empty task quiet. A large fixed editor viewport makes
+            // the inspector look like a blank form instead of a document;
+            // the content grows naturally once the user starts writing.
+            minHeight: 150,
             padding: const EdgeInsets.only(bottom: 20),
-            placeholder: '输入内容，或使用 / 快速插入',
+            placeholder: '添加描述，输入 / 插入内容',
             textCapitalization: TextCapitalization.sentences,
             customStyles: quill.DefaultStyles(
               paragraph: quill.DefaultTextBlockStyle(
                 textStyle,
                 const quill.HorizontalSpacing(0, 0),
-                const quill.VerticalSpacing(0, 7),
+                const quill.VerticalSpacing(0, 6),
                 const quill.VerticalSpacing(0, 0),
                 null,
               ),
               placeHolder: quill.DefaultTextBlockStyle(
                 textStyle.copyWith(color: tokens.textTertiary),
                 const quill.HorizontalSpacing(0, 0),
-                const quill.VerticalSpacing(0, 7),
+                const quill.VerticalSpacing(0, 6),
                 const quill.VerticalSpacing(0, 0),
                 null,
               ),
@@ -533,26 +536,18 @@ class _TaskSubtasksPanelState extends State<TaskSubtasksPanel> {
         final progress = task.subtaskTotal == 0
             ? 0.0
             : task.subtaskCompleted / task.subtaskTotal;
-        return Container(
+        return Padding(
           key: const ValueKey('task-subtasks-panel'),
-          margin: const EdgeInsets.only(top: 12),
-          padding: const EdgeInsets.fromLTRB(12, 10, 12, 6),
-          decoration: BoxDecoration(
-              color: tokens.canvas,
-              borderRadius: BorderRadius.circular(9),
-              border: Border.all(color: tokens.border)),
+          padding: const EdgeInsets.only(top: 22),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Row(children: [
-                Icon(Icons.playlist_add_check_rounded,
-                    size: 16, color: tokens.textSecondary),
-                const SizedBox(width: 7),
                 Text('子任务',
                     style: TextStyle(
-                        fontSize: 12.5,
+                        fontSize: 14,
                         fontWeight: FontWeight.w700,
-                        color: tokens.textSecondary)),
+                        color: tokens.textPrimary)),
                 const Spacer(),
                 if (task.subtaskTotal > 0)
                   Text('${task.subtaskCompleted}/${task.subtaskTotal}',
@@ -565,7 +560,7 @@ class _TaskSubtasksPanelState extends State<TaskSubtasksPanel> {
                   borderRadius: BorderRadius.circular(2),
                   child: LinearProgressIndicator(
                       value: progress,
-                      minHeight: 3,
+                      minHeight: 4,
                       backgroundColor: tokens.border,
                       color: progress == 1 ? tokens.success : tokens.accent),
                 ),
@@ -605,22 +600,26 @@ class _TaskSubtasksPanelState extends State<TaskSubtasksPanel> {
                         widget.controller.removeSubtask(task.id, item.id),
                   ),
                 ]),
-              Row(children: [
-                Icon(Icons.add_rounded, size: 16, color: tokens.textTertiary),
-                const SizedBox(width: 5),
-                Expanded(
-                  child: TextField(
-                    key: const ValueKey('task-subtask-input'),
-                    controller: input,
-                    onSubmitted: (_) => _add(),
-                    decoration: const InputDecoration(
-                        hintText: '添加子任务，按 Return 确认',
-                        border: InputBorder.none,
-                        isDense: true),
-                    style: TextStyle(fontSize: 12.5, color: tokens.textPrimary),
+              Padding(
+                padding: const EdgeInsets.only(top: 3),
+                child: Row(children: [
+                  Icon(Icons.add_rounded, size: 16, color: tokens.textTertiary),
+                  const SizedBox(width: 5),
+                  Expanded(
+                    child: TextField(
+                      key: const ValueKey('task-subtask-input'),
+                      controller: input,
+                      onSubmitted: (_) => _add(),
+                      decoration: const InputDecoration(
+                          hintText: '添加子任务，按 Return 确认',
+                          border: InputBorder.none,
+                          isDense: true),
+                      style:
+                          TextStyle(fontSize: 12.5, color: tokens.textPrimary),
+                    ),
                   ),
-                ),
-              ]),
+                ]),
+              ),
             ],
           ),
         );
@@ -640,31 +639,39 @@ class TaskAttachmentsPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tokens = WorkFollowTheme.of(context);
-    return Container(
+    return Padding(
       key: const ValueKey('task-attachments-block'),
-      margin: const EdgeInsets.only(top: 12),
-      padding: const EdgeInsets.fromLTRB(12, 9, 12, 5),
-      decoration: BoxDecoration(
-          color: tokens.canvas,
-          borderRadius: BorderRadius.circular(9),
-          border: Border.all(color: tokens.border)),
-      child: Wrap(
-        spacing: 7,
-        runSpacing: 4,
-        crossAxisAlignment: WrapCrossAlignment.center,
+      padding: const EdgeInsets.only(top: 22),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          for (final file in task.attachments)
-            InputChip(
-              label: Text(file, style: const TextStyle(fontSize: 11.5)),
-              avatar: const Icon(Icons.insert_drive_file_outlined, size: 15),
-              onPressed: () => controller.revealAttachment(task.id, file),
-              onDeleted: () => controller.removeAttachment(task.id, file),
-            ),
-          TextButton.icon(
-              key: const ValueKey('task-attach-file'),
-              onPressed: onAttach ?? () => controller.attachFileToTask(task.id),
-              icon: const Icon(Icons.attach_file_rounded, size: 15),
-              label: const Text('添加附件', style: TextStyle(fontSize: 11.5))),
+          Text('附件与关联',
+              style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: tokens.textPrimary)),
+          const SizedBox(height: 7),
+          Wrap(
+            spacing: 7,
+            runSpacing: 4,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              for (final file in task.attachments)
+                InputChip(
+                  label: Text(file, style: const TextStyle(fontSize: 11.5)),
+                  avatar:
+                      const Icon(Icons.insert_drive_file_outlined, size: 15),
+                  onPressed: () => controller.revealAttachment(task.id, file),
+                  onDeleted: () => controller.removeAttachment(task.id, file),
+                ),
+              TextButton.icon(
+                  key: const ValueKey('task-attach-file'),
+                  onPressed:
+                      onAttach ?? () => controller.attachFileToTask(task.id),
+                  icon: const Icon(Icons.attach_file_rounded, size: 15),
+                  label: const Text('添加附件', style: TextStyle(fontSize: 11.5))),
+            ],
+          ),
         ],
       ),
     );
@@ -683,37 +690,40 @@ class TaskSourceNotePanel extends StatelessWidget {
     final source = controller.sourceNoteFor(task.id);
     if (source == null) return const SizedBox.shrink();
     final tokens = WorkFollowTheme.of(context);
-    return Material(
+    return Padding(
       key: const ValueKey('task-source-note'),
-      color: tokens.accent.withValues(alpha: .07),
-      borderRadius: BorderRadius.circular(9),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(9),
-        onTap: () => controller.openNote(source.id),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
-          child: Row(children: [
-            Icon(Icons.article_outlined, size: 17, color: tokens.accent),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(source.title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                            fontSize: 12.5,
-                            fontWeight: FontWeight.w600,
-                            color: tokens.textPrimary)),
-                    Text('来自笔记 · ${source.folder}',
-                        style: TextStyle(
-                            fontSize: 10.5, color: tokens.textTertiary)),
-                  ]),
-            ),
-            Icon(Icons.chevron_right_rounded,
-                size: 18, color: tokens.textTertiary),
-          ]),
+      padding: const EdgeInsets.only(top: 18),
+      child: Material(
+        color: tokens.accent.withValues(alpha: .06),
+        borderRadius: BorderRadius.circular(8),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(8),
+          onTap: () => controller.openNote(source.id),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            child: Row(children: [
+              Icon(Icons.article_outlined, size: 17, color: tokens.accent),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(source.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w600,
+                              color: tokens.textPrimary)),
+                      Text('来自笔记 · ${source.folder}',
+                          style: TextStyle(
+                              fontSize: 10.5, color: tokens.textTertiary)),
+                    ]),
+              ),
+              Icon(Icons.chevron_right_rounded,
+                  size: 18, color: tokens.textTertiary),
+            ]),
+          ),
         ),
       ),
     );

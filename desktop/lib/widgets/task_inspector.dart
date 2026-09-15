@@ -284,7 +284,7 @@ class _TaskInspectorState extends State<TaskInspector> {
                   color: task.completed ? tokens.success : null,
                   onPressed: (_) => _complete(task),
                   iconOnly: true),
-              const SizedBox(width: 4),
+              _headerDivider(tokens),
               _TopPropertyButton(
                   key: const ValueKey('task-schedule'),
                   icon: Icons.calendar_today_outlined,
@@ -356,6 +356,13 @@ class _TaskInspectorState extends State<TaskInspector> {
       ]),
     );
   }
+
+  Widget _headerDivider(WorkFollowTheme tokens) => Container(
+        width: 1,
+        height: 20,
+        margin: const EdgeInsets.symmetric(horizontal: 7),
+        color: tokens.border,
+      );
 
   Widget _saveIndicator(WorkFollowTheme tokens) {
     final IconData icon;
@@ -448,47 +455,99 @@ class _TaskInspectorState extends State<TaskInspector> {
     );
   }
 
+  Widget _bodyProperties(
+      BuildContext context, TaskItem task, WorkFollowTheme tokens) {
+    final deadline = localDateTimeFromStorage(task.deadlineAt);
+    final tags = task.tags
+        .map((tag) => tag.trim())
+        .where((tag) => tag.isNotEmpty)
+        .take(2)
+        .map((tag) => '#$tag')
+        .join('  ');
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Wrap(
+        spacing: 7,
+        runSpacing: 6,
+        children: [
+          _InspectorPropertyChip(
+            key: const ValueKey('task-list-summary'),
+            icon: Icons.inbox_outlined,
+            label: task.listName,
+            active: true,
+            onPressed: (anchor) => _list(anchor),
+          ),
+          _InspectorPropertyChip(
+            key: const ValueKey('task-deadline-summary'),
+            icon: Icons.event_available_outlined,
+            label: deadline == null ? '截止日期' : calendarDateLabel(deadline),
+            active: deadline != null,
+            color: deadline == null ? null : tokens.danger,
+            onPressed: (anchor) => _date(anchor, 'deadline'),
+          ),
+          _InspectorPropertyChip(
+            key: const ValueKey('task-tags-summary'),
+            icon: Icons.tag_rounded,
+            label: tags.isEmpty ? '标签' : tags,
+            active: tags.isNotEmpty,
+            onPressed: (anchor) => _tags(anchor),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final task = widget.task;
     final tokens = WorkFollowTheme.of(context);
-    final editorBody = Padding(
-      padding: EdgeInsets.fromLTRB(
-          widget.inline ? 20 : 26, 14, widget.inline ? 20 : 26, 22),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        TextField(
-            key: const ValueKey('task-title-editor'),
-            controller: title,
-            focusNode: titleFocus,
-            minLines: 1,
-            maxLines: 4,
-            style: TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.w700,
-                height: 1.35,
-                letterSpacing: -.3,
-                color:
-                    task.completed ? tokens.textTertiary : tokens.textPrimary,
-                decoration: task.completed ? TextDecoration.lineThrough : null),
-            decoration: const InputDecoration(
-                hintText: '任务标题',
-                border: InputBorder.none,
-                isDense: true,
-                contentPadding: EdgeInsets.zero),
-            onChanged: (value) =>
-                widget.controller.taskActions.setTitle(task.id, value)),
-        const SizedBox(height: 9),
-        TaskDocumentEditor(
-          key: documentKey,
-          task: task,
-          controller: widget.controller,
-          onOpenTags: _tags,
-          onOpenRelation: _relation,
-          onToolbarChanged: (_) {
-            if (mounted) setState(() {});
-          },
+    final editorBody = Align(
+      alignment: Alignment.topCenter,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 820),
+        child: Padding(
+          padding: EdgeInsets.fromLTRB(
+              widget.inline ? 20 : 30, 20, widget.inline ? 20 : 30, 30),
+          child:
+              Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            TextField(
+                key: const ValueKey('task-title-editor'),
+                controller: title,
+                focusNode: titleFocus,
+                minLines: 1,
+                maxLines: 2,
+                style: TextStyle(
+                    fontSize: 25,
+                    fontWeight: FontWeight.w700,
+                    height: 1.24,
+                    letterSpacing: -.45,
+                    color: task.completed
+                        ? tokens.textTertiary
+                        : tokens.textPrimary,
+                    decoration:
+                        task.completed ? TextDecoration.lineThrough : null),
+                decoration: const InputDecoration(
+                    hintText: '任务标题',
+                    border: InputBorder.none,
+                    isDense: true,
+                    contentPadding: EdgeInsets.zero),
+                onChanged: (value) =>
+                    widget.controller.taskActions.setTitle(task.id, value)),
+            const SizedBox(height: 15),
+            _bodyProperties(context, task, tokens),
+            TaskDocumentEditor(
+              key: documentKey,
+              task: task,
+              controller: widget.controller,
+              onOpenTags: _tags,
+              onOpenRelation: _relation,
+              onToolbarChanged: (_) {
+                if (mounted) setState(() {});
+              },
+            ),
+          ]),
         ),
-      ]),
+      ),
     );
     final content = Column(
         mainAxisSize: widget.inline ? MainAxisSize.min : MainAxisSize.max,
@@ -542,6 +601,8 @@ class _TopPropertyButton extends StatelessWidget {
             style: TextButton.styleFrom(
               foregroundColor: foreground,
               backgroundColor: active ? tokens.accentFaint : Colors.transparent,
+              textStyle:
+                  const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
               minimumSize: Size(iconOnly ? 32 : 0, 32),
               padding: EdgeInsets.symmetric(horizontal: iconOnly ? 6 : 9),
               tapTargetSize: MaterialTapTargetSize.shrinkWrap,
@@ -562,6 +623,67 @@ class _TopPropertyButton extends StatelessWidget {
                   ),
                 ],
               ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The three properties people need while reading a task. Less frequently
+/// used actions remain in the top action strip or More menu, keeping the
+/// document itself calm and scannable like TickTick's detail pane.
+class _InspectorPropertyChip extends StatelessWidget {
+  const _InspectorPropertyChip({
+    super.key,
+    required this.icon,
+    required this.label,
+    required this.onPressed,
+    this.active = false,
+    this.color,
+  });
+
+  final IconData icon;
+  final String label;
+  final void Function(BuildContext anchor) onPressed;
+  final bool active;
+  final Color? color;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = WorkFollowTheme.of(context);
+    final foreground = color ?? (active ? tokens.accent : tokens.textSecondary);
+    return Builder(
+      builder: (anchor) => Tooltip(
+        message: label,
+        child: Semantics(
+          button: true,
+          label: label,
+          child: TextButton.icon(
+            onPressed: () => onPressed(anchor),
+            icon: Icon(icon, size: 15),
+            label: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 150),
+              child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
+            ),
+            style: TextButton.styleFrom(
+              foregroundColor: foreground,
+              backgroundColor: active ? tokens.accentFaint : tokens.canvas,
+              textStyle:
+                  const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w500),
+              minimumSize: const Size(0, 32),
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              visualDensity: VisualDensity.compact,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+                side: BorderSide(
+                  color: active
+                      ? tokens.accent.withValues(alpha: .16)
+                      : tokens.border,
+                ),
+              ),
             ),
           ),
         ),

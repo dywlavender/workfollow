@@ -192,7 +192,7 @@ class _NoteDocumentEditorState extends State<NoteDocumentEditor>
       final geometry = calculatePopoverGeometry(
         anchor: Rect.fromLTWH(origin.dx, origin.dy, 1, caretHeight),
         viewport: screen,
-        desiredSize: Size(270, menuHeight),
+        desiredSize: Size(276, menuHeight),
         placement: PopoverPlacement.bottomStart,
         safeArea: const EdgeInsets.all(12),
       );
@@ -286,7 +286,7 @@ class _NoteDocumentEditorState extends State<NoteDocumentEditor>
     await showAnchoredPopover<void>(
       anchor,
       width: 740,
-      maxHeight: 58,
+      maxHeight: 52,
       placement: PopoverPlacement.topEnd,
       focusPolicy: PopoverFocusPolicy.preserveEditor,
       builder: (_) => TaskEditorToolbar(

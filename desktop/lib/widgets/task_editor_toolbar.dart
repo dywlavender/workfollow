@@ -30,10 +30,10 @@ class TaskEditorToolbar extends StatelessWidget {
     final tokens = WorkFollowTheme.of(context);
     return Material(
       key: const ValueKey('task-editor-toolbar'),
-      color: tokens.canvas,
+      color: tokens.content,
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -151,8 +151,8 @@ class TaskEditorToolbar extends StatelessWidget {
 
   Widget _divider(WorkFollowTheme tokens) => Container(
         width: 1,
-        height: 18,
-        margin: const EdgeInsets.symmetric(horizontal: 4),
+        height: 20,
+        margin: const EdgeInsets.symmetric(horizontal: 5),
         color: tokens.border,
       );
 }
@@ -184,13 +184,15 @@ class _ToolButton extends StatelessWidget {
         child: IconButton(
           key: _buttonKey,
           visualDensity: VisualDensity.compact,
-          constraints: const BoxConstraints(minWidth: 30, minHeight: 30),
-          padding: const EdgeInsets.all(5),
+          constraints: const BoxConstraints(minWidth: 29, minHeight: 29),
+          padding: const EdgeInsets.all(4),
+          splashColor: Colors.transparent,
+          hoverColor: tokens.accentFaint,
           onPressed: onPressed,
           icon: label != null
               ? Text(label!,
                   style: TextStyle(
-                      fontSize: 12,
+                      fontSize: 11.5,
                       fontWeight: FontWeight.w700,
                       color: tokens.textSecondary))
               : Icon(icon, size: 17, color: tokens.textSecondary),

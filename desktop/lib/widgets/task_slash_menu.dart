@@ -65,6 +65,10 @@ extension TaskSlashActionLabel on TaskSlashAction {
 }
 
 /// Small command palette shown when a task document line contains `/`.
+///
+/// This is intentionally closer to TickTick's command palette than to a
+/// generic Material popup: the menu is a quiet document surface, grouped by a
+/// hairline divider and with enough room for the icon/title pair to breathe.
 class TaskSlashMenu extends StatelessWidget {
   const TaskSlashMenu({super.key, required this.onSelected, this.actions});
 
@@ -104,28 +108,28 @@ class TaskSlashMenu extends StatelessWidget {
         : visible.where(_task.contains).toList(growable: false);
     return Material(
       key: const ValueKey('task-slash-menu'),
-      elevation: 10,
+      elevation: 8,
+      shadowColor: tokens.shadow,
       color: tokens.content,
       surfaceTintColor: Colors.transparent,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(12),
         side: BorderSide(color: tokens.border),
       ),
       clipBehavior: Clip.antiAlias,
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 270, maxHeight: 390),
+        constraints: const BoxConstraints(maxWidth: 276, maxHeight: 440),
         child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(vertical: 5),
+          padding: const EdgeInsets.symmetric(vertical: 6),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               if (textActions.isNotEmpty) ...[
-                _sectionLabel('文本结构', tokens),
                 for (final action in textActions) _item(action, tokens),
               ],
               if (taskActions.isNotEmpty) ...[
-                _sectionLabel(visible == null ? '任务能力' : '内容', tokens),
+                if (textActions.isNotEmpty) _sectionDivider(tokens),
                 for (final action in taskActions) _item(action, tokens),
               ],
             ],
@@ -135,23 +139,32 @@ class TaskSlashMenu extends StatelessWidget {
     );
   }
 
-  Widget _sectionLabel(String label, WorkFollowTheme tokens) => Padding(
-        padding: const EdgeInsets.fromLTRB(14, 7, 14, 4),
-        child: Text(label,
-            style: TextStyle(
-                fontSize: 10.5,
-                fontWeight: FontWeight.w700,
-                color: tokens.textTertiary)),
+  Widget _sectionDivider(WorkFollowTheme tokens) => Semantics(
+        label: '任务内容操作',
+        container: true,
+        child: Divider(
+          height: 10,
+          thickness: 1,
+          indent: 12,
+          endIndent: 12,
+          color: tokens.border,
+        ),
       );
 
   Widget _item(TaskSlashAction action, WorkFollowTheme tokens) => ListTile(
         key: ValueKey('task-slash-option-${action.keyName}'),
         dense: true,
-        minTileHeight: 34,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 12),
-        leading: Icon(action.icon, size: 16, color: tokens.textSecondary),
+        minTileHeight: 40,
+        horizontalTitleGap: 12,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 13),
+        hoverColor: tokens.accentFaint,
+        splashColor: Colors.transparent,
+        leading: Icon(action.icon, size: 18, color: tokens.textSecondary),
         title: Text(action.label,
-            style: TextStyle(fontSize: 12.5, color: tokens.textPrimary)),
+            style: TextStyle(
+                fontSize: 13.5,
+                fontWeight: FontWeight.w500,
+                color: tokens.textPrimary)),
         onTap: () => onSelected(action),
       );
 }
