@@ -234,6 +234,12 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('task-editor-toolbar')), findsOneWidget);
     expect(find.byKey(const ValueKey('task-format-divider')), findsOneWidget);
+    final toolbarRect =
+        tester.getRect(find.byKey(const ValueKey('task-editor-toolbar')));
+    final toggleRect =
+        tester.getRect(find.byKey(const ValueKey('task-format-toggle')));
+    expect(toolbarRect.top, lessThan(toggleRect.top));
+    expect((toolbarRect.right - toggleRect.right).abs(), lessThan(20));
     await tester.tap(find.byKey(const ValueKey('task-format-bold')));
     await tester.pump();
     expect(

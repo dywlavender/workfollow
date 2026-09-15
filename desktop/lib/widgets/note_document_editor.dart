@@ -71,7 +71,6 @@ class _NoteDocumentEditorState extends State<NoteDocumentEditor>
   void _focusChanged() {
     if (!mounted) return;
     setState(() {
-      if (focus.hasFocus) toolbarVisible = true;
       if (!focus.hasFocus) slashVisible = false;
     });
     _syncSlashOverlay();
@@ -278,10 +277,39 @@ class _NoteDocumentEditorState extends State<NoteDocumentEditor>
     focus.requestFocus();
   }
 
-  void _toggleToolbar() {
+  Future<void> _toggleToolbar(BuildContext anchor) async {
+    if (!mounted || toolbarVisible) return;
+    setState(() => toolbarVisible = true);
+    // The toggle lives outside Quill's editor; explicitly reclaim focus before
+    // presenting the floating strip so a selected range remains formatable.
+    focus.requestFocus();
+    await showAnchoredPopover<void>(
+      anchor,
+      width: 740,
+      maxHeight: 58,
+      placement: PopoverPlacement.topEnd,
+      focusPolicy: PopoverFocusPolicy.preserveEditor,
+      builder: (_) => TaskEditorToolbar(
+        controller: editor,
+        onAttach: _attach,
+        onLink: _link,
+        onInsertSlash: () {
+          final at = editor.selection.baseOffset
+              .clamp(0, editor.document.length - 1)
+              .toInt();
+          editor.replaceText(
+              at, 0, '/', TextSelection.collapsed(offset: at + 1));
+          focus.requestFocus();
+        },
+        onInsertDivider: () {
+          _insertBlock({'type': 'horizontalRule'});
+          focus.requestFocus();
+        },
+      ),
+    );
     if (!mounted) return;
-    setState(() => toolbarVisible = !toolbarVisible);
-    if (toolbarVisible) focus.requestFocus();
+    setState(() => toolbarVisible = false);
+    focus.requestFocus();
   }
 
   Future<void> _attach() async {
@@ -354,29 +382,6 @@ class _NoteDocumentEditorState extends State<NoteDocumentEditor>
               const NoteImageBuilder()
             ],
           )),
-      AnimatedSize(
-        duration: const Duration(milliseconds: 150),
-        curve: Curves.easeOut,
-        child: toolbarVisible
-            ? TaskEditorToolbar(
-                controller: editor,
-                onAttach: _attach,
-                onLink: _link,
-                onInsertSlash: () {
-                  final at = editor.selection.baseOffset
-                      .clamp(0, editor.document.length - 1)
-                      .toInt();
-                  editor.replaceText(
-                      at, 0, '/', TextSelection.collapsed(offset: at + 1));
-                  focus.requestFocus();
-                },
-                onInsertDivider: () {
-                  _insertBlock({'type': 'horizontalRule'});
-                  focus.requestFocus();
-                },
-              )
-            : const SizedBox.shrink(),
-      ),
       Row(children: [
         TextButton.icon(
             key: const ValueKey('generate-task-from-selection'),
@@ -384,17 +389,19 @@ class _NoteDocumentEditorState extends State<NoteDocumentEditor>
             icon: const Icon(Icons.playlist_add, size: 17),
             label: const Text('选中文字生成任务', style: TextStyle(fontSize: 12))),
         const Spacer(),
-        Tooltip(
-          message: toolbarVisible ? '收起格式工具' : '显示格式工具',
-          child: IconButton(
-            key: const ValueKey('note-format-toggle'),
-            visualDensity: VisualDensity.compact,
-            onPressed: _toggleToolbar,
-            icon: Icon(
-              toolbarVisible
-                  ? Icons.keyboard_arrow_up_rounded
-                  : Icons.text_format_rounded,
-              size: 18,
+        Builder(
+          builder: (anchor) => Tooltip(
+            message: toolbarVisible ? '格式工具已打开' : '显示格式工具',
+            child: IconButton(
+              key: const ValueKey('note-format-toggle'),
+              visualDensity: VisualDensity.compact,
+              onPressed: () => unawaited(_toggleToolbar(anchor)),
+              icon: Icon(
+                toolbarVisible
+                    ? Icons.keyboard_arrow_up_rounded
+                    : Icons.text_format_rounded,
+                size: 18,
+              ),
             ),
           ),
         ),

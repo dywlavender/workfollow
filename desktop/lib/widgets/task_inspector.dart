@@ -425,14 +425,17 @@ class _TaskInspectorState extends State<TaskInspector> {
         const Spacer(),
         _saveIndicator(tokens),
         const SizedBox(width: 7),
-        AppIconButton(
-            key: const ValueKey('task-format-toggle'),
-            icon: Icons.text_format_rounded,
-            tooltip: '显示格式工具',
-            active: documentKey.currentState?.toolbarVisible ?? false,
-            onPressed: () => documentKey.currentState?.toggleToolbar(),
-            size: 30,
-            iconSize: 17),
+        Builder(
+            builder: (anchor) => AppIconButton(
+                key: const ValueKey('task-format-toggle'),
+                icon: Icons.text_format_rounded,
+                tooltip: '显示格式工具',
+                active: documentKey.currentState?.toolbarVisible ?? false,
+                onPressed: () {
+                  unawaited(documentKey.currentState?.toggleToolbar(anchor));
+                },
+                size: 30,
+                iconSize: 17)),
         Builder(
             builder: (anchor) => AppIconButton(
                 key: const ValueKey('task-more-actions'),

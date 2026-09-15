@@ -82,16 +82,9 @@ class TaskDocumentEditorState extends State<TaskDocumentEditor>
 
   void _focusChanged() {
     if (!mounted) return;
-    final nextToolbarVisible = focus.hasFocus || toolbarVisible;
     setState(() {
-      if (focus.hasFocus) toolbarVisible = true;
       if (!focus.hasFocus) slashVisible = false;
     });
-    if (nextToolbarVisible != toolbarVisible) {
-      widget.onToolbarChanged?.call(toolbarVisible);
-    } else if (focus.hasFocus) {
-      widget.onToolbarChanged?.call(true);
-    }
     if (!focus.hasFocus) _syncSlashOverlay();
   }
 
@@ -164,17 +157,38 @@ class TaskDocumentEditorState extends State<TaskDocumentEditor>
     super.dispose();
   }
 
-  void toggleToolbar() {
-    if (!mounted) return;
-    setState(() => toolbarVisible = !toolbarVisible);
-    widget.onToolbarChanged?.call(toolbarVisible);
-    if (toolbarVisible) focus.requestFocus();
-  }
-
-  void showToolbar() {
-    if (!mounted) return;
+  Future<void> toggleToolbar(BuildContext anchor) async {
+    if (!mounted || toolbarVisible) return;
     setState(() => toolbarVisible = true);
-    widget.onToolbarChanged?.call(true);
+    widget.onToolbarChanged?.call(toolbarVisible);
+    // Keep the Quill selection alive while the footer trigger opens the
+    // floating strip. The popover itself uses preserveEditor focus policy.
+    focus.requestFocus();
+    await showAnchoredPopover<void>(
+      anchor,
+      width: 740,
+      maxHeight: 58,
+      placement: PopoverPlacement.topEnd,
+      focusPolicy: PopoverFocusPolicy.preserveEditor,
+      builder: (_) => TaskEditorToolbar(
+        controller: editor,
+        onAttach: _attach,
+        onLink: _link,
+        onInsertSlash: () {
+          editor.replaceText(editor.selection.baseOffset, 0, '/',
+              TextSelection.collapsed(offset: editor.selection.baseOffset + 1));
+          focus.requestFocus();
+        },
+        onInsertDivider: () {
+          _insertBlock({'type': 'horizontalRule'});
+          focus.requestFocus();
+        },
+      ),
+    );
+    if (!mounted) return;
+    setState(() => toolbarVisible = false);
+    widget.onToolbarChanged?.call(false);
+    focus.requestFocus();
   }
 
   TextRange? _slashRange() {
@@ -407,30 +421,6 @@ class TaskDocumentEditorState extends State<TaskDocumentEditor>
               ),
             ],
           ),
-        ),
-        AnimatedSize(
-          duration: const Duration(milliseconds: 150),
-          curve: Curves.easeOut,
-          child: toolbarVisible
-              ? TaskEditorToolbar(
-                  controller: editor,
-                  onAttach: _attach,
-                  onLink: _link,
-                  onInsertSlash: () {
-                    editor.replaceText(
-                        editor.selection.baseOffset,
-                        0,
-                        '/',
-                        TextSelection.collapsed(
-                            offset: editor.selection.baseOffset + 1));
-                    focus.requestFocus();
-                  },
-                  onInsertDivider: () {
-                    _insertBlock({'type': 'horizontalRule'});
-                    focus.requestFocus();
-                  },
-                )
-              : const SizedBox.shrink(),
         ),
         if (widget.task.subtasks.isNotEmpty && !hasSubtaskBlock)
           TaskSubtasksPanel(task: widget.task, controller: widget.controller),

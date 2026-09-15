@@ -19,7 +19,7 @@ Widget _surface(WorkspaceController controller) {
 }
 
 void main() {
-  testWidgets('note editor starts clean and reveals the shared compact toolbar',
+  testWidgets('note editor opens the shared toolbar as a floating popover',
       (tester) async {
     final controller = WorkspaceController(seedData: false);
     addTearDown(controller.dispose);
@@ -35,8 +35,11 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('note-body-editor')));
     await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('task-editor-toolbar')), findsOneWidget);
+    expect(find.byKey(const ValueKey('task-editor-toolbar')), findsNothing);
     await tester.tap(find.byKey(const ValueKey('note-format-toggle')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('task-editor-toolbar')), findsOneWidget);
+    await tester.tapAt(const Offset(20, 20));
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('task-editor-toolbar')), findsNothing);
   });
