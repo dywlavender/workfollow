@@ -75,7 +75,7 @@ class _TodayScreenState extends State<TodayScreen> {
     super.initState();
     openVersion = widget.controller.taskOpenVersion;
     detailOnly = widget.controller.selectedTaskId != null;
-    showCompleted = widget.controller.selectedTask?.completed ?? false;
+    showCompleted = widget.controller.selectedTask?.isClosed ?? false;
     if (detailOnly) _revealEditor();
   }
 
@@ -85,7 +85,7 @@ class _TodayScreenState extends State<TodayScreen> {
     if (openVersion != widget.controller.taskOpenVersion) {
       openVersion = widget.controller.taskOpenVersion;
       detailOnly = true;
-      if (widget.controller.selectedTask?.completed == true)
+      if (widget.controller.selectedTask?.isClosed == true)
         showCompleted = true;
       _revealEditor();
     }
@@ -105,8 +105,11 @@ class _TodayScreenState extends State<TodayScreen> {
     final tokens = WorkFollowTheme.of(context);
     final tasks = c.visibleTasks;
     final completedView = c.view == WorkspaceView.completed;
-    final active = _ordered(tasks.where((task) => !task.completed).toList());
+    final active = _ordered(tasks.where((task) => !task.isClosed).toList());
     final completed = tasks.where((task) => task.completed).toList();
+    final abandoned = tasks.where((task) => task.isAbandoned).toList();
+    final pinned = active.where((task) => task.isPinned).toList();
+    final ordinary = active.where((task) => !task.isPinned).toList();
     return LayoutBuilder(builder: (context, constraints) {
       final narrow = constraints.maxWidth < 700;
       final wideInspector = constraints.maxWidth >= _wideInspectorBreakpoint &&
@@ -116,24 +119,27 @@ class _TodayScreenState extends State<TodayScreen> {
       final selected = c.selectedTask;
       final detail = narrow && detailOnly && selected != null;
       final groups = <(String, List<TaskItem>, bool)>[];
+      if (!completedView && pinned.isNotEmpty)
+        groups.add(('置顶', pinned, false));
       if (completedView) {
-        groups.add(('', completed, false));
+        groups.add(('已完成', completed, false));
+        groups.add(('已放弃', abandoned, false));
       } else if ((c.view == WorkspaceView.today ||
               c.view == WorkspaceView.recent) &&
           c.selectedListName == null) {
         if (c.view == WorkspaceView.today) {
           final overdue =
-              active.where((t) => t.bucket == TaskBucket.overdue).toList();
+              ordinary.where((t) => t.bucket == TaskBucket.overdue).toList();
           if (overdue.isNotEmpty) groups.add(('已过期', overdue, true));
           groups.add((
             '今天',
-            active.where((t) => t.bucket != TaskBucket.overdue).toList(),
+            ordinary.where((t) => t.bucket != TaskBucket.overdue).toList(),
             false
           ));
         } else {
-          active.sort((a, b) => (a.dueAt ?? '').compareTo(b.dueAt ?? ''));
+          ordinary.sort((a, b) => (a.dueAt ?? '').compareTo(b.dueAt ?? ''));
           String? currentLabel;
-          for (final task in active) {
+          for (final task in ordinary) {
             final due = localDateTimeFromStorage(task.dueAt);
             final label = task.bucket == TaskBucket.overdue
                 ? '已过期'
@@ -149,15 +155,15 @@ class _TodayScreenState extends State<TodayScreen> {
           }
         }
       } else if (c.view == WorkspaceView.plan) {
-        active.sort((a, b) => (a.dueAt ?? '').compareTo(b.dueAt ?? ''));
-        for (final task in active) {
+        ordinary.sort((a, b) => (a.dueAt ?? '').compareTo(b.dueAt ?? ''));
+        for (final task in ordinary) {
           final label = calendarDateLabel(localDateTimeFromStorage(task.dueAt));
           if (groups.isEmpty || groups.last.$1 != label)
             groups.add((label, [], false));
           groups.last.$2.add(task);
         }
       } else {
-        groups.add(('', active, false));
+        groups.add(('', ordinary, false));
       }
       final list = Container(
           color: tokens.canvas,
@@ -251,7 +257,9 @@ class _TodayScreenState extends State<TodayScreen> {
                                         : WorkFollowSpacing.space4,
                                     WorkFollowSpacing.space7),
                                 children: [
-                                  if ((completedView ? completed : active)
+                                  if ((completedView
+                                          ? [...completed, ...abandoned]
+                                          : active)
                                       .isEmpty)
                                     AppCard(
                                         padding: EdgeInsets.zero,
@@ -284,6 +292,11 @@ class _TodayScreenState extends State<TodayScreen> {
                                           compact: compact,
                                           wideInspector: wideInspector),
                                   ],
+                                  if (!completedView && abandoned.isNotEmpty)
+                                    ..._groupSlivers(
+                                        ('已放弃', abandoned, false), narrow,
+                                        compact: compact,
+                                        wideInspector: wideInspector),
                                   if (!completedView && completed.isNotEmpty)
                                     ..._completedSlivers(completed,
                                         compact: compact,
@@ -452,13 +465,15 @@ class _TodayScreenState extends State<TodayScreen> {
       const SizedBox(width: 8),
       Text(label,
           style: TextStyle(
-              fontSize: WorkFollowTypography.field,
-              fontWeight: FontWeight.w700,
+              fontSize: WorkFollowMacTypography.sectionTitle,
+              height: WorkFollowMacTypography.lineControl,
+              fontWeight: WorkFollowMacWeight.semibold,
               color: textColor)),
       const SizedBox(width: 6),
       Text('$count',
           style: TextStyle(
-              fontSize: WorkFollowTypography.caption,
+              fontSize: WorkFollowMacTypography.listMeta,
+              height: WorkFollowMacTypography.lineControl,
               color: tokens.textTertiary)),
       if (trailing != null) trailing,
     ]);
@@ -636,14 +651,16 @@ class _EmptyInspector extends StatelessWidget {
             Text('选择一个任务开始编辑',
                 style: TextStyle(
                     color: tokens.textSecondary,
-                    fontSize: WorkFollowTypography.body,
-                    fontWeight: FontWeight.w600)),
+                    fontSize: WorkFollowMacTypography.listTitle,
+                    height: WorkFollowMacTypography.lineControl,
+                    fontWeight: WorkFollowMacWeight.semibold)),
             const SizedBox(height: 6),
             Text('标题、备注、日期和子任务都会在这里展开。',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                     color: tokens.textTertiary,
-                    fontSize: WorkFollowTypography.field)),
+                    fontSize: WorkFollowMacTypography.supporting,
+                    height: WorkFollowMacTypography.lineList)),
           ],
         ),
       ),
@@ -672,9 +689,8 @@ class _ProgressSummary extends StatelessWidget {
       SizedBox(height: compact ? 3 : 5),
       Text(total == 0 ? '还没有安排' : '已完成 $done/$total',
           style: TextStyle(
-              fontSize: compact
-                  ? WorkFollowTypography.caption - 1
-                  : WorkFollowTypography.caption,
+              fontSize: WorkFollowMacTypography.listMeta,
+              height: WorkFollowMacTypography.lineControl,
               color: tokens.textTertiary)),
     ]);
   }
@@ -699,8 +715,9 @@ class _BulkBar extends StatelessWidget {
                   padding: const EdgeInsets.only(right: 6),
                   child: Text('已选择 ${controller.multiSelectCount} 项',
                       style: TextStyle(
-                          fontSize: WorkFollowTypography.metadata,
-                          fontWeight: FontWeight.w600,
+                          fontSize: WorkFollowMacTypography.listMeta,
+                          height: WorkFollowMacTypography.lineControl,
+                          fontWeight: WorkFollowMacWeight.medium,
                           color: tokens.textPrimary))),
               TextButton(
                   onPressed: () => controller.taskActions

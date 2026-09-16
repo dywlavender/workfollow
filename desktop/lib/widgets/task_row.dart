@@ -13,11 +13,7 @@ import 'task_date_picker.dart';
 import 'app_icon_button.dart';
 import 'task_schedule_picker.dart';
 import 'task_context_menu.dart';
-import 'task_deadline_picker.dart';
-import 'task_list_picker.dart';
-import 'task_reminder_picker.dart';
-import 'task_repeat_picker.dart';
-import 'task_tag_picker.dart';
+import 'task_menu_actions.dart';
 
 class TaskRow extends StatefulWidget {
   const TaskRow(
@@ -86,98 +82,10 @@ class _TaskRowState extends State<TaskRow> {
         task: widget.task,
         controller: widget.controller,
         globalPosition: globalPosition);
-    if (!mounted) return;
-    // The row can rebuild when an action is selected (for example after
-    // moving a task out of the current projection). Re-anchor any follow-up
-    // picker to the row State rather than reusing a menu overlay context.
-    final pickerAnchor = context;
-    switch (action) {
-      case 'complete':
-        final result = widget.task.completed
-            ? widget.controller.taskActions.restore(widget.task.id)
-            : widget.controller.taskActions.complete(widget.task.id);
-        _showActionFeedback(result);
-      case 'today':
-        final now = DateTime.now();
-        final existing = localDateTimeFromStorage(widget.task.dueAt);
-        _showActionFeedback(widget.controller.taskActions.setSchedule(
-            widget.task.id,
-            TaskScheduleDraft.forDay(now,
-                preserveClock: existing,
-                hasTime: widget.task.scheduledWithTime)));
-      case 'tomorrow':
-        final now = DateTime.now();
-        final existing = localDateTimeFromStorage(widget.task.dueAt);
-        _showActionFeedback(widget.controller.taskActions.setSchedule(
-            widget.task.id,
-            TaskScheduleDraft.forDay(now.add(const Duration(days: 1)),
-                preserveClock: existing,
-                hasTime: widget.task.scheduledWithTime)));
-      case 'next-7':
-        final now = DateTime.now().add(const Duration(days: 7));
-        final existing = localDateTimeFromStorage(widget.task.dueAt);
-        _showActionFeedback(widget.controller.taskActions.setSchedule(
-            widget.task.id,
-            TaskScheduleDraft.forDay(now,
-                preserveClock: existing,
-                hasTime: widget.task.scheduledWithTime)));
-      case 'skip-occurrence':
-        _showActionFeedback(
-            widget.controller.taskActions.skipOccurrence(widget.task.id));
-      case 'clear-date':
-        _showActionFeedback(
-            widget.controller.taskActions.clearSchedule(widget.task.id));
-      case 'priority-high':
-        _showActionFeedback(widget.controller.taskActions
-            .setPriority(widget.task.id, TaskPriority.high));
-      case 'priority-medium':
-        _showActionFeedback(widget.controller.taskActions
-            .setPriority(widget.task.id, TaskPriority.medium));
-      case 'priority-low':
-        _showActionFeedback(widget.controller.taskActions
-            .setPriority(widget.task.id, TaskPriority.low));
-      case 'priority-none':
-        _showActionFeedback(widget.controller.taskActions
-            .setPriority(widget.task.id, TaskPriority.none));
-      case 'list':
-        await _moveToList(pickerAnchor);
-      case 'tags':
-        await _editTags(pickerAnchor);
-      case 'add-subtask':
-        widget.controller.selectTask(widget.task.id);
-        widget.controller.requestInspectorTitleFocus();
-      case 'copy-link':
-        await Clipboard.setData(
-            ClipboardData(text: 'workfollow://task/${widget.task.id}'));
-        _showActionFeedback(const TaskActionResult.success(
-            message: '任务链接已复制', showFeedback: true));
-      case 'open-note':
-        final noteId = widget.task.sourceNoteId;
-        if (noteId != null) widget.controller.openNote(noteId);
-      case 'pin':
-        _showActionFeedback(const TaskActionResult.success(
-            message: '置顶功能即将支持', showFeedback: true));
-      case 'abandon':
-        _showActionFeedback(const TaskActionResult.success(
-            message: '放弃功能即将支持', showFeedback: true));
-      case 'convert-note':
-        _showActionFeedback(const TaskActionResult.success(
-            message: '转换为笔记功能即将支持', showFeedback: true));
-      case 'reminder':
-        await _editReminder(pickerAnchor);
-      case 'repeat':
-        await _editRepeat(pickerAnchor);
-      case 'deadline':
-        await _editDeadline(pickerAnchor);
-      case 'duplicate':
-        _showActionFeedback(
-            widget.controller.taskActions.duplicate(widget.task.id));
-      case 'delete':
-        _showActionFeedback(
-            widget.controller.taskActions.delete(widget.task.id));
-      case 'date':
-        await date(pickerAnchor);
-    }
+    if (!mounted || action == null) return;
+    final result = await runTaskMenuAction(
+        context, widget.controller, widget.task, action);
+    if (result != null) _showActionFeedback(result);
   }
 
   Future<void> date(BuildContext anchor) async {
@@ -191,55 +99,6 @@ class _TaskRowState extends State<TaskRow> {
           : c.taskActions.setSchedule(id,
               TaskScheduleDraft(dueAt: result.date, hasTime: result.hasTime)));
     }
-  }
-
-  Future<void> _moveToList(BuildContext anchor) async {
-    final selected = await TaskListPicker.show(anchor,
-        controller: widget.controller, selected: widget.task.listName);
-    if (!mounted || selected == null) return;
-    _showActionFeedback(
-        widget.controller.taskActions.moveToList(widget.task.id, selected));
-  }
-
-  Future<void> _editTags(BuildContext anchor) async {
-    final value =
-        await TaskTagPicker.show(anchor, initial: widget.task.tags.join('，'));
-    if (!mounted || value == null) return;
-    final tags = value
-        .split(RegExp('[,，]'))
-        .map((tag) => tag.trim())
-        .where((tag) => tag.isNotEmpty)
-        .toList(growable: false);
-    _showActionFeedback(
-        widget.controller.taskActions.setTags(widget.task.id, tags));
-  }
-
-  Future<void> _editReminder(BuildContext anchor) async {
-    final value =
-        await TaskReminderPicker.show(anchor, value: widget.task.reminderAt);
-    if (!mounted || value == null) return;
-    _showActionFeedback(value.date == null
-        ? widget.controller.taskActions.clearReminder(widget.task.id)
-        : widget.controller.taskActions
-            .setReminder(widget.task.id, value.date));
-  }
-
-  Future<void> _editRepeat(BuildContext anchor) async {
-    final value = await TaskRepeatPicker.show(anchor, task: widget.task);
-    if (!mounted || value == null) return;
-    _showActionFeedback(value.enabled
-        ? widget.controller.taskActions.setRecurrence(widget.task.id, value)
-        : widget.controller.taskActions.clearRecurrence(widget.task.id));
-  }
-
-  Future<void> _editDeadline(BuildContext anchor) async {
-    final value =
-        await TaskDeadlinePicker.show(anchor, value: widget.task.deadlineAt);
-    if (!mounted || value == null) return;
-    _showActionFeedback(value.date == null
-        ? widget.controller.taskActions.clearDeadline(widget.task.id)
-        : widget.controller.taskActions
-            .setDeadline(widget.task.id, value.date));
   }
 
   void _showActionFeedback(TaskActionResult result) {
@@ -369,26 +228,34 @@ class _TaskRowState extends State<TaskRow> {
                               SizedBox(
                                   width: WorkFollowMetrics.iconHitTarget - 8,
                                   height: WorkFollowMetrics.iconHitTarget - 4,
-                                  child: Checkbox(
-                                      key: ValueKey(
-                                          'task-row-checkbox-${task.id}'),
-                                      // Multi-selection is a row state, not a
-                                      // completion state. A selected but
-                                      // unfinished task must keep an empty
-                                      // checkbox, otherwise Cmd-click makes
-                                      // it look completed.
-                                      value: task.completed,
-                                      activeColor: task.completed
-                                          ? tokens.success
-                                          : priorityColor,
-                                      semanticLabel:
-                                          task.completed ? '标记未完成' : '完成任务',
-                                      shape: RoundedRectangleBorder(
-                                          borderRadius:
-                                              BorderRadius.circular(5)),
-                                      side: BorderSide(
-                                          color: priorityColor, width: 1.6),
-                                      onChanged: (_) => _complete())),
+                                  child: task.isAbandoned
+                                      ? IconButton(
+                                          tooltip: '恢复任务',
+                                          padding: EdgeInsets.zero,
+                                          icon: AppIcon(WorkFollowIcons.abandon,
+                                              size: 20,
+                                              color: tokens.textTertiary),
+                                          onPressed: _complete)
+                                      : Checkbox(
+                                          key: ValueKey(
+                                              'task-row-checkbox-${task.id}'),
+                                          // Multi-selection is a row state, not a
+                                          // completion state. A selected but
+                                          // unfinished task must keep an empty
+                                          // checkbox, otherwise Cmd-click makes
+                                          // it look completed.
+                                          value: task.isClosed,
+                                          activeColor: task.isClosed
+                                              ? tokens.success
+                                              : priorityColor,
+                                          semanticLabel:
+                                              task.isClosed ? '标记未完成' : '完成任务',
+                                          shape: RoundedRectangleBorder(
+                                              borderRadius:
+                                                  BorderRadius.circular(5)),
+                                          side: BorderSide(
+                                              color: priorityColor, width: 1.6),
+                                          onChanged: (_) => _complete())),
                               const SizedBox(width: 9),
                               Expanded(
                                 child: Column(
@@ -405,15 +272,16 @@ class _TaskRowState extends State<TaskRow> {
                                             maxLines: widget.compact ? 1 : 2,
                                             overflow: TextOverflow.ellipsis,
                                             style: TextStyle(
-                                                fontSize: WorkFollowTypography
-                                                    .webListTitleSize,
-                                                height: WorkFollowTypography
-                                                    .webLineHeightNormal,
-                                                fontWeight: FontWeight.w500,
-                                                color: task.completed
+                                                fontSize:
+                                                    WorkFollowMacTypography.listTitle,
+                                                height:
+                                                    WorkFollowMacTypography.lineList,
+                                                fontWeight:
+                                                    WorkFollowMacWeight.regular,
+                                                color: task.isClosed
                                                     ? tokens.textTertiary
                                                     : tokens.textPrimary,
-                                                decoration: task.completed
+                                                decoration: task.isClosed
                                                     ? TextDecoration.lineThrough
                                                     : null),
                                           ),
@@ -444,11 +312,12 @@ class _TaskRowState extends State<TaskRow> {
                                           maxLines: 1,
                                           overflow: TextOverflow.ellipsis,
                                           style: TextStyle(
-                                              fontSize: WorkFollowTypography
-                                                  .webSupportingCompactSize,
-                                              height: WorkFollowTypography
-                                                  .webLineHeightNormal,
-                                              fontWeight: FontWeight.w400,
+                                              fontSize: WorkFollowMacTypography
+                                                  .listBody,
+                                              height: WorkFollowMacTypography
+                                                  .lineList,
+                                              fontWeight: WorkFollowMacWeight
+                                                  .regular,
                                               color: tokens.textSecondary)),
                                     ],
                                   ],
@@ -487,7 +356,7 @@ class _TaskRowState extends State<TaskRow> {
   }
 
   void _complete() {
-    final result = widget.task.completed
+    final result = widget.task.isClosed
         ? widget.controller.taskActions.restore(widget.task.id)
         : widget.controller.taskActions.complete(widget.task.id);
     _showActionFeedback(result);
@@ -499,6 +368,10 @@ class _TaskRowState extends State<TaskRow> {
     final due = localDateTimeFromStorage(task.dueAt);
     final deadline = localDateTimeFromStorage(task.deadlineAt);
     final result = <Widget>[];
+    if (task.isPinned)
+      result.add(
+          _metaIcon(WorkFollowIcons.pin, tokens.accent, semanticLabel: '已置顶'));
+    if (task.isAbandoned) result.add(_metaText('已放弃', tokens.textTertiary));
     if (widget.controller.selectedListName == null && task.listName != '收集箱') {
       result.add(_metaText(task.listName, tokens.textTertiary));
     }
@@ -526,13 +399,13 @@ class _TaskRowState extends State<TaskRow> {
     }
     if (deadline != null) {
       final today = DateTime.now();
-      final overdue = !task.completed &&
+      final overdue = !task.isClosed &&
           !deadline.isAfter(DateTime(today.year, today.month, today.day));
       result.add(_metaText('${calendarDateLabel(deadline)}截止',
           overdue ? tokens.danger : tokens.textTertiary));
     }
     if (due != null) {
-      final dateColor = task.bucket == TaskBucket.overdue && !task.completed
+      final dateColor = task.bucket == TaskBucket.overdue && !task.isClosed
           ? tokens.warning
           : tokens.textTertiary;
       result.add(Builder(
@@ -548,9 +421,9 @@ class _TaskRowState extends State<TaskRow> {
                   key: ValueKey('task-row-date-${task.id}'),
                   calendarDateLabel(due, hasTime: task.scheduledWithTime),
                   style: TextStyle(
-                      fontSize: WorkFollowTypography.webMetaSize,
-                      height: WorkFollowTypography.webLineHeightNormal,
-                      fontWeight: FontWeight.w400,
+                      fontSize: WorkFollowMacTypography.listMeta,
+                      height: WorkFollowMacTypography.lineControl,
+                      fontWeight: WorkFollowMacWeight.regular,
                       color: dateColor)))));
     }
     return result;
@@ -560,9 +433,9 @@ class _TaskRowState extends State<TaskRow> {
       maxLines: 1,
       overflow: TextOverflow.ellipsis,
       style: TextStyle(
-          fontSize: WorkFollowTypography.webMetaSize,
-          height: WorkFollowTypography.webLineHeightNormal,
-          fontWeight: FontWeight.w400,
+          fontSize: WorkFollowMacTypography.listMeta,
+          height: WorkFollowMacTypography.lineControl,
+          fontWeight: WorkFollowMacWeight.regular,
           color: color));
 
   Widget _metaIcon(IconData icon, Color color,

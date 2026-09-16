@@ -39,7 +39,7 @@ class HabitsScreen extends StatelessWidget {
                   padding:
                       const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
                   textStyle: const TextStyle(
-                      fontSize: 13, fontWeight: FontWeight.w700)),
+                      fontSize: WorkFollowMacTypography.control, fontWeight: WorkFollowMacWeight.semibold)),
             ),
           ),
           const SizedBox(height: 18),
@@ -120,8 +120,8 @@ class HabitsScreen extends StatelessWidget {
                     child: Text('重复日',
                         style: TextStyle(
                             color: tokens.textSecondary,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700))),
+                            fontSize: WorkFollowMacTypography.sectionTitle,
+                            fontWeight: WorkFollowMacWeight.semibold))),
                 const SizedBox(height: 7),
                 Wrap(
                   spacing: 6,
@@ -144,7 +144,7 @@ class HabitsScreen extends StatelessWidget {
                             color: schedule.contains(day)
                                 ? tokens.accent
                                 : tokens.textTertiary,
-                            fontSize: 12),
+                            fontSize: WorkFollowMacTypography.control),
                       ),
                   ],
                 ),
@@ -154,8 +154,8 @@ class HabitsScreen extends StatelessWidget {
                     child: Text('颜色',
                         style: TextStyle(
                             color: tokens.textSecondary,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700))),
+                            fontSize: WorkFollowMacTypography.sectionTitle,
+                            fontWeight: WorkFollowMacWeight.semibold))),
                 const SizedBox(height: 7),
                 Row(children: [
                   for (final value in listColorPalette.take(8))
@@ -183,8 +183,8 @@ class HabitsScreen extends StatelessWidget {
                     child: Text('图标',
                         style: TextStyle(
                             color: tokens.textSecondary,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700))),
+                            fontSize: WorkFollowMacTypography.sectionTitle,
+                            fontWeight: WorkFollowMacWeight.semibold))),
                 const SizedBox(height: 7),
                 Row(children: [
                   for (final candidate in const ['check', 'sun', 'book', 'run'])
@@ -323,11 +323,11 @@ class _HabitCard extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                       color: tokens.textPrimary,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w800)),
+                      fontSize: WorkFollowMacTypography.listTitle,
+                      fontWeight: WorkFollowMacWeight.semibold)),
               const SizedBox(height: 3),
               Text(_scheduleLabel(habit.schedule),
-                  style: TextStyle(color: tokens.textTertiary, fontSize: 11)),
+                  style: TextStyle(color: tokens.textTertiary, fontSize: WorkFollowMacTypography.listMeta)),
             ]),
           ),
           AppIconButton(
@@ -369,8 +369,8 @@ class _HabitCard extends StatelessWidget {
                               : '今天不安排',
                       style: TextStyle(
                           color: done ? accent : tokens.textSecondary,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700)),
+                          fontSize: WorkFollowMacTypography.control,
+                          fontWeight: WorkFollowMacWeight.semibold)),
                 ]),
               ),
             ),
@@ -386,18 +386,18 @@ class _HabitCard extends StatelessWidget {
                 Text('${habit.streak()} 天',
                     style: TextStyle(
                         color: tokens.accent,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w800)),
+                        fontSize: WorkFollowMacTypography.listTitle,
+                        fontWeight: WorkFollowMacWeight.semibold)),
                 Text('连续',
-                    style: TextStyle(color: tokens.textTertiary, fontSize: 11)),
+                    style: TextStyle(color: tokens.textTertiary, fontSize: WorkFollowMacTypography.caption)),
               ])),
         ]),
         const SizedBox(height: 14),
         Text('最近 28 天',
             style: TextStyle(
                 color: tokens.textSecondary,
-                fontSize: 12,
-                fontWeight: FontWeight.w700)),
+                fontSize: WorkFollowMacTypography.sectionTitle,
+                fontWeight: WorkFollowMacWeight.semibold)),
         const SizedBox(height: 8),
         _HabitDots(habit: habit, accent: accent),
       ]),

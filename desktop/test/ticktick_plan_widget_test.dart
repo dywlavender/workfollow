@@ -377,7 +377,7 @@ void main() {
     expect(controller.taskOpenVersion, openVersion);
   });
 
-  testWidgets('KEY-004 Escape unwinds the fixed inspector selection',
+  testWidgets('KEY-004 Escape keeps the fixed inspector selected',
       (tester) async {
     tester.view.physicalSize = const Size(1280, 820);
     tester.view.devicePixelRatio = 1;
@@ -397,8 +397,8 @@ void main() {
 
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('task-title-editor')), findsNothing);
-    expect(find.text('选择一个任务开始编辑'), findsOneWidget);
+    expect(find.byKey(const ValueKey('task-title-editor')), findsOneWidget);
+    expect(find.text('选择一个任务开始编辑'), findsNothing);
   });
 
   testWidgets(
@@ -423,7 +423,7 @@ void main() {
     expect(find.text('显示更多属性'), findsNothing);
     expect(find.byKey(const ValueKey('task-document-editor')), findsOneWidget);
     expect(find.text('子任务'), findsOneWidget);
-    expect(find.byKey(const ValueKey('task-deadline')), findsOneWidget);
+    expect(find.byKey(const ValueKey('task-deadline')), findsNothing);
   });
 
   testWidgets(
@@ -453,28 +453,24 @@ void main() {
     for (final key in const [
       'task-complete',
       'task-schedule',
-      'task-reminder',
-      'task-repeat',
       'task-priority',
-      'task-deadline',
       'task-list-footer',
       'task-format-toggle',
       'task-more-actions',
-      'save-status-indicator',
     ]) {
       expect(find.byKey(ValueKey(key)), findsOneWidget, reason: key);
     }
 
     await tester.tap(find.byKey(const ValueKey('task-schedule')));
     await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('date-input')), findsOneWidget);
+    expect(find.byKey(const ValueKey('task-schedule-panel')), findsOneWidget);
     expect(find.byKey(const ValueKey('date-shortcut-今天')), findsOneWidget);
     expect(find.byKey(const ValueKey('date-shortcut-明天')), findsOneWidget);
     expect(find.byKey(const ValueKey('date-prev-month')), findsOneWidget);
     expect(find.byKey(const ValueKey('date-next-month')), findsOneWidget);
-    expect(find.byKey(const ValueKey('date-time-toggle')), findsOneWidget);
+    expect(find.byKey(const ValueKey('schedule-time')), findsOneWidget);
     expect(find.byKey(const ValueKey('apply-date')), findsOneWidget);
-    await tester.tap(find.byKey(const ValueKey('date-cancel')));
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     await tester.pumpAndSettle();
 
     await tester.tap(find.byKey(const ValueKey('task-more-actions')));
@@ -484,9 +480,9 @@ void main() {
     expect(find.byKey(const ValueKey('menu-option-tags')), findsOneWidget);
     expect(
         find.byKey(const ValueKey('menu-option-attachment')), findsOneWidget);
-    expect(find.byKey(const ValueKey('menu-option-relation')), findsOneWidget);
-    expect(find.byKey(const ValueKey('menu-option-copy')), findsOneWidget);
-    expect(find.byKey(const ValueKey('menu-option-duplicate')), findsOneWidget);
+    expect(find.byKey(const ValueKey('menu-option-relation')), findsNothing);
+    expect(find.byKey(const ValueKey('menu-option-copy')), findsNothing);
+    expect(find.byKey(const ValueKey('menu-option-duplicate')), findsNothing);
     expect(find.byKey(const ValueKey('menu-option-delete')), findsOneWidget);
   });
 
@@ -517,19 +513,27 @@ void main() {
         .tap(find.byKey(const ValueKey('menu-option-TaskPriority.none')));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(const ValueKey('task-reminder')));
+    await tester.tap(find.byKey(const ValueKey('task-schedule')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('schedule-reminder')));
     await tester.pumpAndSettle();
     expect(find.text('提醒我'), findsOneWidget);
     expect(find.byKey(const ValueKey('date-input')), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('date-cancel')));
     await tester.pumpAndSettle();
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(const ValueKey('task-repeat')));
+    await tester.tap(find.byKey(const ValueKey('task-schedule')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('schedule-repeat')));
     await tester.pumpAndSettle();
     expect(find.text('重复任务'), findsOneWidget);
     expect(find.text('频率'), findsOneWidget);
     expect(find.text('完成本次任务后，会自动生成下一次。'), findsOneWidget);
     await tester.tap(find.text('确定').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('apply-date')));
     await tester.pumpAndSettle();
 
     await tester.tap(find.byKey(const ValueKey('task-more-actions')));
@@ -537,8 +541,8 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('menu-option-tags')));
     await tester.pumpAndSettle();
     expect(find.text('标签').last, findsOneWidget);
-    expect(find.text('用逗号分隔，例如 工作，重要'), findsOneWidget);
-    await tester.tap(find.text('完成').last);
+    expect(find.byKey(const ValueKey('task-tag-search')), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('task-tag-confirm')));
     await tester.pumpAndSettle();
 
     await tester.tap(find.byKey(const ValueKey('task-list-footer')));
@@ -581,7 +585,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(
         find.byKey(const ValueKey('task-context-menu-panel')), findsOneWidget);
-    for (final label in ['移动到', '标签', '创建副本', '复制链接', '删除']) {
+    for (final label in ['移动到', '标签', '置顶', '放弃', '转换为笔记', '删除']) {
       expect(find.text(label), findsOneWidget, reason: label);
     }
     expect(find.text('设置提醒…'), findsNothing);
@@ -678,8 +682,12 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('quick-add-tags')));
     await tester.pumpAndSettle();
-    await tester.enterText(find.byType(TextField).last, '项目，重要');
-    await tester.tap(find.text('完成').last);
+    await tester.enterText(
+        find.byKey(const ValueKey('task-tag-search')), '项目，重要');
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('task-tag-create')));
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('task-tag-confirm')));
     await tester.pumpAndSettle();
 
     await tester.tap(find.byKey(const ValueKey('quick-add-reminder')));

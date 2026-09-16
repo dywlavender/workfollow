@@ -1,9 +1,18 @@
+import 'task_menu_glyph.dart';
+import 'task_menu_style.dart';
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../models/task.dart';
 import '../theme/workfollow_icons.dart';
 import '../theme/workfollow_theme.dart';
 import 'app_icon_button.dart';
+import '../state/workspace_controller.dart';
+import 'desktop_popover.dart';
+import 'task_menu_selection.dart';
+import 'task_list_picker.dart';
+import 'task_tag_picker.dart';
 
 /// The small date actions shown at the top of a task context menu.
 ///
@@ -25,37 +34,104 @@ enum TaskContextDateAction {
 /// The surface is intentionally a composite instead of a flat list. Date
 /// shortcuts and priority are compact grids, while the rest of the menu uses
 /// grouped rows with consistent chevrons and destructive styling.
-class TaskContextMenuPanel extends StatelessWidget {
-  const TaskContextMenuPanel({super.key, required this.task});
+class TaskContextMenuPanel extends StatefulWidget {
+  const TaskContextMenuPanel(
+      {super.key,
+      required this.task,
+      this.controller,
+      this.inspectorActions = false});
 
   final TaskItem task;
+  final WorkspaceController? controller;
+  final bool inspectorActions;
+
+  @override
+  State<TaskContextMenuPanel> createState() => _TaskContextMenuPanelState();
+}
+
+class _TaskContextMenuPanelState extends State<TaskContextMenuPanel> {
+  TaskItem get task => widget.task;
+  Timer? hoverTimer;
+  String? submenu;
+
+  @override
+  void dispose() {
+    hoverTimer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _openSubmenu(BuildContext anchor, String action) async {
+    hoverTimer?.cancel();
+    final controller = widget.controller;
+    if (controller == null || submenu != null) return;
+    setState(() => submenu = action);
+    final result = action == 'tags'
+        ? await TaskTagPicker.show(anchor,
+            initial: task.tags.join('，'),
+            availableTags: controller.allTags().keys,
+            placement: const PopoverPlacement(
+                preferredSide: PopoverSide.right, gap: 14))
+        : await TaskListPicker.show(anchor,
+            controller: controller,
+            selected: task.listName,
+            placement: const PopoverPlacement(
+                preferredSide: PopoverSide.right, gap: 14));
+    if (!mounted) return;
+    setState(() => submenu = null);
+    if (result != null)
+      Navigator.of(context)
+          .pop(TaskMenuSelection('set-$action', value: result));
+  }
 
   @override
   Widget build(BuildContext context) {
-    final tokens = WorkFollowTheme.of(context);
-    return Semantics(
-      container: true,
-      label: '任务操作',
-      child: Padding(
-        key: const ValueKey('task-context-menu-panel'),
-        padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 7),
-        child: Column(
-          key: const ValueKey('task-context-menu-content'),
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            _dateSection(context, tokens),
-            const _MenuDivider(),
-            _prioritySection(context, tokens),
-            const _MenuDivider(),
-            _actionSection(context, tokens),
-            const _MenuDivider(),
-            _processingSection(context, tokens),
-          ],
-        ),
-      ),
-    );
+    final tokens = TaskMenuStyle.colors(context);
+    return Focus(
+        onKeyEvent: (node, event) {
+          if (event is! KeyDownEvent && event is! KeyRepeatEvent)
+            return KeyEventResult.ignored;
+          if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
+            FocusScope.of(context).nextFocus();
+            return KeyEventResult.handled;
+          }
+          if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
+            FocusScope.of(context).previousFocus();
+            return KeyEventResult.handled;
+          }
+          return KeyEventResult.ignored;
+        },
+        child: Semantics(
+          container: true,
+          label: '任务操作',
+          child: Padding(
+            key: const ValueKey('task-context-menu-panel'),
+            padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 7),
+            child: Column(
+              key: const ValueKey('task-context-menu-content'),
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (!widget.inspectorActions) ...[
+                  _sectionLabel('日期', tokens),
+                  _dateSection(context, tokens),
+                  _sectionLabel('优先级', tokens),
+                  _prioritySection(context, tokens),
+                  const _MenuDivider(),
+                ],
+                _actionSection(context, tokens),
+                const _MenuDivider(),
+                _processingSection(context, tokens),
+              ],
+            ),
+          ),
+        ));
   }
+
+  Widget _sectionLabel(String label, WorkFollowTheme tokens) => Padding(
+        padding: const EdgeInsets.fromLTRB(12, 8, 12, 5),
+        child: Text(label,
+            style: TextStyle(fontSize: WorkFollowMacTypography.sectionTitle, color: tokens.textTertiary)),
+      );
 
   Widget _dateSection(BuildContext context, WorkFollowTheme tokens) {
     final actions = <TaskContextDateAction>[
@@ -91,7 +167,7 @@ class TaskContextMenuPanel extends StatelessWidget {
     };
     final icon = switch (action) {
       TaskContextDateAction.today => WorkFollowIcons.today,
-      TaskContextDateAction.tomorrow => WorkFollowIcons.tomorrow,
+      TaskContextDateAction.tomorrow => Icons.wb_twilight_outlined,
       TaskContextDateAction.next7 => null,
       TaskContextDateAction.skipOccurrence => WorkFollowIcons.skip,
       TaskContextDateAction.custom => WorkFollowIcons.calendar,
@@ -119,7 +195,7 @@ class TaskContextMenuPanel extends StatelessWidget {
             ? tokens.warning
             : selected
                 ? tokens.accent
-                : tokens.textSecondary;
+                : tokens.textPrimary;
     final tooltip = action == TaskContextDateAction.next7 ? '安排到 7 天后' : label;
     return Tooltip(
       message: tooltip,
@@ -129,8 +205,11 @@ class TaskContextMenuPanel extends StatelessWidget {
         label: label,
         child: InkWell(
           key: ValueKey('menu-option-$value'),
+          autofocus: action == TaskContextDateAction.today,
           borderRadius: BorderRadius.circular(WorkFollowRadii.control),
-          onTap: enabled ? () => Navigator.of(context).pop(value) : null,
+          onTap: enabled
+              ? () => Navigator.of(context).pop(TaskMenuSelection(value))
+              : null,
           child: Container(
             height: 42,
             margin: const EdgeInsets.symmetric(horizontal: 1),
@@ -139,14 +218,10 @@ class TaskContextMenuPanel extends StatelessWidget {
               borderRadius: BorderRadius.circular(WorkFollowRadii.control),
             ),
             alignment: Alignment.center,
-            child: icon == null
-                ? Text(label,
-                    style: TextStyle(
-                        fontSize: WorkFollowTypography.webLabel,
-                        fontWeight: FontWeight.w600,
-                        color: foreground))
-                : AppIcon(icon,
-                    size: WorkFollowMetrics.toolbarIcon, color: foreground),
+            child: action == TaskContextDateAction.skipOccurrence
+                ? AppIcon(icon!,
+                    size: TaskMenuStyle.iconSize, color: foreground)
+                : TaskMenuGlyph(value, size: 23, color: foreground),
           ),
         ),
       ),
@@ -176,7 +251,7 @@ class TaskContextMenuPanel extends StatelessWidget {
       TaskPriority.high => tokens.danger,
       TaskPriority.medium => tokens.warning,
       TaskPriority.low => tokens.accent,
-      TaskPriority.none => tokens.textTertiary,
+      TaskPriority.none => tokens.textPrimary,
     };
     final value = 'priority-${priority.name}';
     return Tooltip(
@@ -188,7 +263,7 @@ class TaskContextMenuPanel extends StatelessWidget {
         child: InkWell(
           key: ValueKey('menu-option-$value'),
           borderRadius: BorderRadius.circular(WorkFollowRadii.control),
-          onTap: () => Navigator.of(context).pop(value),
+          onTap: () => Navigator.of(context).pop(TaskMenuSelection(value)),
           child: Container(
             height: 40,
             margin: const EdgeInsets.symmetric(horizontal: 1),
@@ -197,8 +272,10 @@ class TaskContextMenuPanel extends StatelessWidget {
               borderRadius: BorderRadius.circular(WorkFollowRadii.control),
             ),
             alignment: Alignment.center,
-            child: AppIcon(WorkFollowIcons.flag,
-                size: WorkFollowMetrics.toolbarIcon, color: foreground),
+            child: TaskMenuGlyph('flag',
+                size: 23,
+                color: foreground,
+                filled: priority != TaskPriority.none),
           ),
         ),
       ),
@@ -216,14 +293,15 @@ class TaskContextMenuPanel extends StatelessWidget {
             icon: WorkFollowIcons.subtask),
         _row(context, tokens,
             value: 'pin',
-            label: '置顶',
-            icon: WorkFollowIcons.favoriteOutline,
-            enabled: false),
+            label: task.isPinned ? '取消置顶' : '置顶',
+            icon: WorkFollowIcons.pin),
         _row(context, tokens,
             value: 'abandon',
-            label: '放弃',
-            icon: WorkFollowIcons.forward,
-            enabled: false),
+            label: task.isAbandoned ? '恢复任务' : '放弃',
+            icon: task.isAbandoned
+                ? WorkFollowIcons.restore
+                : WorkFollowIcons.abandon,
+            enabled: !task.completed),
         _row(context, tokens,
             value: 'list',
             label: '移动到',
@@ -232,7 +310,7 @@ class TaskContextMenuPanel extends StatelessWidget {
         _row(context, tokens,
             value: 'tags',
             label: '标签',
-            icon: WorkFollowIcons.tag,
+            icon: WorkFollowIcons.tagLabel,
             trailing: WorkFollowIcons.chevronNext),
       ],
     );
@@ -244,19 +322,34 @@ class TaskContextMenuPanel extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         _row(context, tokens,
-            value: 'duplicate', label: '创建副本', icon: WorkFollowIcons.duplicate),
-        _row(context, tokens,
-            value: 'copy-link', label: '复制链接', icon: WorkFollowIcons.link),
-        _row(context, tokens,
-            value: 'open-note',
-            label: '打开便签',
-            icon: WorkFollowIcons.notes,
-            enabled: task.sourceNoteId != null),
-        _row(context, tokens,
             value: 'convert-note',
             label: '转换为笔记',
-            icon: WorkFollowIcons.noteAlt,
-            enabled: false),
+            icon: WorkFollowIcons.noteAlt),
+        if (widget.inspectorActions) ...[
+          const _MenuDivider(),
+          _row(context, tokens,
+              value: 'reminder', label: '设置提醒', icon: WorkFollowIcons.reminder),
+          _row(context, tokens,
+              value: 'repeat', label: '设置重复', icon: WorkFollowIcons.repeat),
+          _row(context, tokens,
+              value: 'deadline', label: '截止日期', icon: WorkFollowIcons.deadline),
+          _row(context, tokens,
+              value: 'attachment',
+              label: '添加附件',
+              icon: WorkFollowIcons.attachment),
+          _row(context, tokens,
+              value: 'focus', label: '专注记录', icon: WorkFollowIcons.focus),
+          _row(context, tokens,
+              value: 'relation', label: '关联笔记', icon: WorkFollowIcons.link),
+          if (task.sourceNoteId != null)
+            _row(context, tokens,
+                value: 'open-source-note',
+                label: '打开来源笔记',
+                icon: WorkFollowIcons.article),
+          _row(context, tokens,
+              value: 'copy', label: '复制任务正文', icon: WorkFollowIcons.copy),
+          const _MenuDivider(),
+        ],
         _row(context, tokens,
             value: 'delete',
             label: '删除',
@@ -278,38 +371,81 @@ class TaskContextMenuPanel extends StatelessWidget {
         : destructive
             ? tokens.danger
             : tokens.textPrimary;
-    return Semantics(
-      button: true,
-      enabled: enabled,
-      label: label,
-      child: InkWell(
-        key: ValueKey('menu-option-$value'),
-        borderRadius: BorderRadius.circular(WorkFollowRadii.control),
-        onTap: enabled ? () => Navigator.of(context).pop(value) : null,
-        child: SizedBox(
-          height: 38,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8),
-            child: Row(children: [
-              AppIcon(icon,
-                  size: WorkFollowMetrics.toolbarIcon, color: foreground),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(label,
-                    style: TextStyle(
-                        fontSize: WorkFollowTypography.webControlSize,
-                        fontWeight: FontWeight.w500,
-                        color: foreground)),
-              ),
-              if (trailing != null)
-                AppIcon(trailing,
-                    size: WorkFollowMetrics.metadataIcon,
-                    color: enabled ? tokens.textTertiary : foreground),
-            ]),
-          ),
-        ),
-      ),
-    );
+    return Builder(
+        builder: (rowContext) => MouseRegion(
+            onEnter: (_) {
+              if (trailing == null || widget.controller == null) return;
+              hoverTimer?.cancel();
+              hoverTimer = Timer(const Duration(milliseconds: 220), () {
+                if (mounted && rowContext.mounted)
+                  _openSubmenu(rowContext, value);
+              });
+            },
+            onExit: (_) => hoverTimer?.cancel(),
+            child: Semantics(
+              button: true,
+              enabled: enabled,
+              label: label,
+              child: InkWell(
+                  key: ValueKey('menu-option-$value'),
+                  borderRadius: BorderRadius.circular(WorkFollowRadii.control),
+                  hoverColor: tokens.border.withValues(alpha: .55),
+                  onTap: !enabled
+                      ? null
+                      : () {
+                          if (trailing != null && widget.controller != null) {
+                            _openSubmenu(rowContext, value);
+                          } else {
+                            Navigator.of(context).pop(TaskMenuSelection(value));
+                          }
+                        },
+                  child: Ink(
+                    decoration: BoxDecoration(
+                        color: submenu == value
+                            ? (Theme.of(context).brightness == Brightness.light
+                                ? const Color(0xFFF5F5F5)
+                                : tokens.accentFaint)
+                            : null,
+                        borderRadius: BorderRadius.circular(10)),
+                    child: SizedBox(
+                      height: TaskMenuStyle.rowHeight,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        child: Row(children: [
+                          if (const {
+                                'add-subtask',
+                                'pin',
+                                'abandon',
+                                'list',
+                                'tags',
+                                'convert-note',
+                                'delete'
+                              }.contains(value) &&
+                              !(value == 'abandon' && task.isAbandoned))
+                            TaskMenuGlyph(value,
+                                size: TaskMenuStyle.iconSize, color: foreground)
+                          else
+                            AppIcon(icon,
+                                size: TaskMenuStyle.iconSize,
+                                color: foreground),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(label,
+                                style: TextStyle(
+                                    fontSize: TaskMenuStyle.fontSize,
+                                    fontWeight: WorkFollowMacWeight.regular,
+                                    color: foreground)),
+                          ),
+                          if (trailing != null)
+                            AppIcon(trailing,
+                                size: WorkFollowMetrics.metadataIcon,
+                                color:
+                                    enabled ? tokens.textTertiary : foreground),
+                        ]),
+                      ),
+                    ),
+                  )),
+            )));
   }
 
   bool _isSameDay(DateTime? left, DateTime right) {
@@ -325,7 +461,7 @@ class _MenuDivider extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = WorkFollowTheme.of(context);
+    final tokens = TaskMenuStyle.colors(context);
     return Divider(
       height: 13,
       thickness: 1,

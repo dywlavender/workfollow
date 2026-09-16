@@ -12,6 +12,7 @@ class AppIconButton extends StatelessWidget {
     this.size = WorkFollowMetrics.iconHitTarget,
     this.iconSize = WorkFollowMetrics.toolbarIcon,
     this.iconColor,
+    this.activeBackgroundColor,
     this.semanticLabel,
   });
 
@@ -25,6 +26,7 @@ class AppIconButton extends StatelessWidget {
   /// Optional override for icon-only surfaces such as the colored app rail.
   /// Ordinary controls continue to derive their color from the shared theme.
   final Color? iconColor;
+  final Color? activeBackgroundColor;
   final String? semanticLabel;
 
   @override
@@ -35,7 +37,9 @@ class AppIconButton extends StatelessWidget {
       enabled: onPressed != null,
       label: semanticLabel ?? tooltip,
       child: Material(
-        color: active ? tokens.accentSoft : Colors.transparent,
+        color: active
+            ? (activeBackgroundColor ?? tokens.accentSoft)
+            : Colors.transparent,
         borderRadius: BorderRadius.circular(WorkFollowRadii.control),
         child: InkWell(
           onTap: onPressed,
@@ -101,8 +105,8 @@ class SoftPill extends StatelessWidget {
             label,
             style: TextStyle(
               color: textColor ?? tokens.textSecondary,
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
+              fontSize: WorkFollowMacTypography.control,
+              fontWeight: WorkFollowMacWeight.semibold,
               height: 1,
             ),
           ),

@@ -48,3 +48,55 @@ String richPlainTextFromDelta(List<dynamic> delta) {
 
 String encodeRichDocument(Map<String, dynamic> document) =>
     jsonEncode(document);
+
+/// Convert task-only blocks into editable note content, keeping rich text and
+/// attachment blocks in their original positions.
+Map<String, dynamic> noteContentFromTask(TaskItem task) {
+  final delta = <Map<String, dynamic>>[];
+  var insertedSubtasks = false;
+  final attached = <String>{};
+  void insertSubtasks() {
+    if (insertedSubtasks) return;
+    insertedSubtasks = true;
+    for (final subtask in task.subtasks) {
+      delta.add({'insert': subtask.title});
+      delta.add({
+        'insert': '\n',
+        'attributes': {'list': subtask.completed ? 'checked' : 'unchecked'}
+      });
+    }
+  }
+
+  for (final operation in taskDocumentDelta(task)) {
+    final insert = operation['insert'];
+    if (insert is Map && insert['workfollow-block'] is String) {
+      final block = jsonDecode(insert['workfollow-block'] as String);
+      if (block is Map && block['type'] == 'taskSubtasks') {
+        insertSubtasks();
+        continue;
+      }
+      if (block is Map && block['type'] == 'attachment') {
+        final attrs = block['attrs'];
+        if (attrs is Map && attrs['localFile'] is String)
+          attached.add(attrs['localFile'] as String);
+      }
+    }
+    delta.add(operation);
+  }
+  insertSubtasks();
+  for (final filename in task.attachments) {
+    if (!attached.add(filename)) continue;
+    delta.add({
+      'insert': {
+        'workfollow-block': jsonEncode({
+          'type': 'attachment',
+          'attrs': {'name': filename, 'localFile': filename}
+        })
+      }
+    });
+    delta.add({'insert': '\n'});
+  }
+  if (task.tags.isNotEmpty)
+    delta.add({'insert': '\n${task.tags.map((tag) => '#$tag').join(' ')}\n'});
+  return richContentFromDelta(delta);
+}

@@ -161,20 +161,20 @@ class _TaskDatePickerState extends State<TaskDatePicker> {
               Expanded(
                   child: Text(widget.title,
                       style: const TextStyle(
-                          fontSize: 16, fontWeight: FontWeight.w600))),
+                          fontSize: WorkFollowMacTypography.sectionTitle, fontWeight: WorkFollowMacWeight.semibold))),
               TextButton(
                   key: const ValueKey('date-clear'),
                   onPressed: () =>
                       Navigator.of(context).pop(const TaskDateSelection(null)),
                   child: Text(widget.reminder ? '取消提醒' : '清除日期',
-                      style: const TextStyle(fontSize: 13))),
+                      style: const TextStyle(fontSize: WorkFollowMacTypography.control))),
             ]),
             const SizedBox(height: 8),
             TextField(
                 key: const ValueKey('date-input'),
                 controller: dateText,
                 autofocus: true,
-                style: const TextStyle(fontSize: 14),
+                style: const TextStyle(fontSize: WorkFollowMacTypography.body),
                 onSubmitted: (_) => apply(),
                 decoration: const InputDecoration(
                     labelText: '日期',
@@ -205,7 +205,7 @@ class _TaskDatePickerState extends State<TaskDatePicker> {
                             minimumSize: const Size(
                                 0, WorkFollowMetrics.compactButtonHeight)),
                         child: Text(shortcut.$1,
-                            style: const TextStyle(fontSize: 13)))),
+                            style: const TextStyle(fontSize: WorkFollowMacTypography.control)))),
                 if (shortcut.$1 != '下周一') const SizedBox(width: 6),
               ],
             ]),
@@ -214,7 +214,7 @@ class _TaskDatePickerState extends State<TaskDatePicker> {
               Expanded(
                   child: Text('${month.year} 年 ${month.month} 月',
                       style: const TextStyle(
-                          fontSize: 13, fontWeight: FontWeight.w600))),
+                          fontSize: WorkFollowMacTypography.sectionTitle, fontWeight: WorkFollowMacWeight.semibold))),
               IconButton(
                   key: const ValueKey('date-prev-month'),
                   tooltip: '上个月',
@@ -238,7 +238,7 @@ class _TaskDatePickerState extends State<TaskDatePicker> {
                     child: Center(
                         child: Text(day,
                             style: TextStyle(
-                                fontSize: 12, color: tokens.textTertiary))))
+                                fontSize: WorkFollowMacTypography.caption, color: tokens.textTertiary))))
             ]),
             const SizedBox(height: 6),
             GridView.builder(
@@ -272,7 +272,7 @@ class _TaskDatePickerState extends State<TaskDatePicker> {
                               borderRadius: BorderRadius.circular(
                                   WorkFollowRadii.control))),
                       child:
-                          Text('$day', style: const TextStyle(fontSize: 13)));
+                          Text('$day', style: const TextStyle(fontSize: WorkFollowMacTypography.listBody)));
                 }),
             const SizedBox(height: 10),
             const Divider(height: 1),
@@ -291,7 +291,7 @@ class _TaskDatePickerState extends State<TaskDatePicker> {
                 const SizedBox(width: 5),
                 Expanded(
                     child: Text(widget.reminder ? '提醒时间' : '指定时间',
-                        style: const TextStyle(fontSize: 13))),
+                        style: const TextStyle(fontSize: WorkFollowMacTypography.control))),
                 if (timed) ...[
                   _timeField(hour, '小时'),
                   const Padding(
@@ -301,13 +301,13 @@ class _TaskDatePickerState extends State<TaskDatePicker> {
                 ] else
                   Text('全天',
                       style:
-                          TextStyle(fontSize: 13, color: tokens.textTertiary)),
+                          TextStyle(fontSize: WorkFollowMacTypography.control, color: tokens.textTertiary)),
               ]),
             if (error != null)
               Padding(
                   padding: const EdgeInsets.only(top: 10),
                   child: Text(error!,
-                      style: TextStyle(fontSize: 13, color: tokens.danger))),
+                      style: TextStyle(fontSize: WorkFollowMacTypography.supporting, color: tokens.danger))),
             const SizedBox(height: 14),
             Row(mainAxisAlignment: MainAxisAlignment.end, children: [
               TextButton(
@@ -335,7 +335,7 @@ class _TaskDatePickerState extends State<TaskDatePicker> {
             LengthLimitingTextInputFormatter(2)
           ],
           textAlign: TextAlign.center,
-          style: const TextStyle(fontSize: 13),
+          style: const TextStyle(fontSize: WorkFollowMacTypography.control),
           onSubmitted: (_) => apply(),
           decoration: InputDecoration(
               isDense: true,

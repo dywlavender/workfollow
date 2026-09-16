@@ -8,6 +8,7 @@ import '../models/migration.dart';
 import '../models/list_color.dart';
 import '../models/habit.dart';
 import '../models/task.dart';
+import '../models/rich_document.dart';
 import '../services/local_workspace_store.dart';
 import '../services/notification_service.dart';
 import '../services/smart_date_parser.dart';
@@ -18,6 +19,7 @@ import '../features/tasks/application/task_selection_controller.dart';
 import '../features/tasks/application/task_workspace_ui_state.dart';
 import '../features/tasks/domain/task_draft.dart';
 import '../features/tasks/domain/task_schedule.dart';
+import '../features/tasks/domain/task_schedule_settings.dart';
 import '../features/tasks/domain/recurrence_engine.dart';
 
 enum WorkspaceView {
@@ -425,7 +427,10 @@ class WorkspaceController extends ChangeNotifier {
       }
     }
     final overdue = _tasks.where((task) {
-      if (task.deletedAt != null || task.completed) return false;
+      if (task.deletedAt != null ||
+          task.isClosed ||
+          task.isConverted ||
+          task.isSkipped) return false;
       final due = localDateTimeFromStorage(task.dueAt);
       if (due == null) return false;
       final dueDay = DateTime(due.year, due.month, due.day);
@@ -476,8 +481,11 @@ class WorkspaceController extends ChangeNotifier {
 
   /// Tasks and notes available to active views. Skipped recurring occurrences
   /// remain persisted for history/undo, but are intentionally not active.
-  List<TaskItem> get activeTasks => List.unmodifiable(
-      _tasks.where((task) => task.deletedAt == null && !task.isSkipped));
+  List<TaskItem> get activeTasks => List.unmodifiable(_tasks.where((task) =>
+      task.deletedAt == null &&
+      !task.isSkipped &&
+      !task.isConverted &&
+      !task.isAbandoned));
   List<NoteItem> get activeNotes =>
       List.unmodifiable(_notes.where((note) => note.deletedAt == null));
   List<TaskItem> get deletedTasks =>
@@ -593,6 +601,12 @@ class WorkspaceController extends ChangeNotifier {
   bool get notesUnfiledOnly => _notesUnfiledOnly;
   bool get quickAddFocusPending => taskUiState.quickAddFocusPending;
   int get inspectorTitleFocusVersion => taskUiState.inspectorTitleFocusVersion;
+  String? get pendingInspectorTitleTaskId =>
+      taskUiState.pendingInspectorTitleTaskId;
+
+  void consumeInspectorTitleFocus() {
+    taskUiState.pendingInspectorTitleTaskId = null;
+  }
 
   void setNotesFolderFilter(String? folderId) {
     if (_notesFolderFilter == folderId &&
@@ -638,7 +652,19 @@ class WorkspaceController extends ChangeNotifier {
   }
 
   /// Asks the task inspector to focus its title editor (Return on a task row).
+  void requestSubtaskEditor(String id) {
+    taskUiState.pendingSubtaskTaskId = id;
+    if (visibleTasks.any((task) => task.id == id)) {
+      _setSelectedTaskId(id);
+      taskUiState.markTaskOpened();
+      _notify();
+    } else {
+      openTask(id);
+    }
+  }
+
   void requestInspectorTitleFocus() {
+    taskUiState.pendingInspectorTitleTaskId = selectedTaskId;
     taskUiState.requestInspectorTitleFocus();
     _notify();
   }
@@ -704,13 +730,16 @@ class WorkspaceController extends ChangeNotifier {
   }
 
   TaskDestination _destinationForTask(TaskItem? task) {
-    if (task == null || task.deletedAt != null || task.isSkipped) {
+    if (task == null ||
+        task.deletedAt != null ||
+        task.isSkipped ||
+        task.isConverted) {
       return TaskDestination.hidden;
     }
     if (visibleTasks.any((item) => item.id == task.id)) {
       return TaskDestination.current;
     }
-    if (task.completed) return TaskDestination.completed;
+    if (task.isClosed) return TaskDestination.completed;
     if (task.listName == '收集箱') return TaskDestination.inbox;
     if (task.bucket == TaskBucket.overdue) return TaskDestination.overdue;
     if (task.bucket == TaskBucket.later) return TaskDestination.plan;
@@ -985,8 +1014,8 @@ class WorkspaceController extends ChangeNotifier {
         if (task == null) {
           return TaskActionResult.failure('missing-task', '任务不存在');
         }
-        if (task.completed) {
-          return TaskActionResult.failure('already-complete', '任务已经完成');
+        if (task.isClosed) {
+          return TaskActionResult.failure('already-complete', '任务已经结束');
         }
         toggleTask(id);
         final undo = _undoCompletion(task, _lastRecurrenceSpawnId);
@@ -997,11 +1026,11 @@ class WorkspaceController extends ChangeNotifier {
         if (task == null) {
           return TaskActionResult.failure('missing-task', '任务不存在');
         }
-        if (task.deletedAt != null || task.isSkipped) {
+        if (task.deletedAt != null || task.isSkipped || task.isConverted) {
           return TaskActionResult.failure('hidden-task', '任务当前不可跳过');
         }
-        if (task.completed) {
-          return TaskActionResult.failure('already-complete', '已完成任务不能跳过周期');
+        if (task.isClosed) {
+          return TaskActionResult.failure('already-complete', '已结束任务不能跳过周期');
         }
         if (task.recurrenceType.toUpperCase() == 'NONE') {
           return TaskActionResult.failure('not-recurring', '只有重复任务可以跳过本周期');
@@ -1039,11 +1068,51 @@ class WorkspaceController extends ChangeNotifier {
         if (task == null) {
           return TaskActionResult.failure('missing-task', '任务不存在');
         }
-        if (!task.completed) {
+        if (!task.isClosed) {
           return TaskActionResult.failure('already-active', '任务尚未完成');
         }
         toggleTask(id);
         return _taskResult(id, message: '任务已恢复', undo: _undoTaskSnapshot(task));
+      case 'setScheduleSettings':
+        final (id, settings) = payload as (String, TaskScheduleSettings);
+        final before = _taskById(id);
+        if (before == null)
+          return TaskActionResult.failure('missing-task', '任务不存在');
+        final due = settings.schedule.normalizedDueAt;
+        final end = due == null ? null : settings.endAt;
+        if (end != null && end.isBefore(due!)) {
+          return TaskActionResult.failure('invalid-range', '结束时间不能早于开始时间');
+        }
+        final reminder = settings.reminderAt;
+        if (reminder != null &&
+            reminder != localDateTimeFromStorage(before.reminderAt) &&
+            !reminder.isAfter(DateTime.now())) {
+          return TaskActionResult.failure('past-reminder', '提醒时间需要晚于现在');
+        }
+        final recurrence = settings.recurrence.normalized();
+        _replaceTask(
+            id,
+            (task) => task.copyWith(
+                  dueAt: due?.toIso8601String(),
+                  clearDueAt: due == null,
+                  dueEndAt: end?.toIso8601String(),
+                  clearDueEndAt: end == null,
+                  hasDueTime: due != null && settings.schedule.hasTime,
+                  reminderAt: reminder?.toIso8601String(),
+                  clearReminderAt: reminder == null,
+                  recurrenceType: recurrence.type,
+                  recurrenceConfig: recurrence.config,
+                  clearRecurrenceConfig: recurrence.config == null,
+                  bucket: taskBucketForDate(due, completed: task.completed),
+                  timeLabel: taskTimeLabelFor(due,
+                          completed: task.completed,
+                          hasTime: settings.schedule.hasTime) ??
+                      '未安排',
+                  updatedAt: DateTime.now().toIso8601String(),
+                ));
+        _syncReminderFor(_taskById(id)!);
+        return _taskResult(id,
+            message: '日期已更新', undo: _undoTaskSnapshot(before));
       case 'setSchedule':
         final (id, value) = payload as (String, TaskScheduleDraft);
         final before = _taskById(id);
@@ -1199,6 +1268,39 @@ class WorkspaceController extends ChangeNotifier {
         updateTaskDeadline(id, null);
         return _taskResult(id,
             message: '已清除截止日期', undo: _undoTaskSnapshot(before));
+      case 'setPinned':
+        final (id, pinned) = payload as (String, bool);
+        final before = _taskById(id);
+        if (before == null)
+          return TaskActionResult.failure('missing-task', '任务不存在');
+        if (before.isPinned == pinned)
+          return TaskActionResult.failure('unchanged', '置顶状态没有变化');
+        _replaceTask(
+            id,
+            (task) => task.copyWith(
+                isPinned: pinned, updatedAt: DateTime.now().toIso8601String()));
+        return _taskResult(id,
+            message: pinned ? '任务已置顶' : '已取消置顶',
+            undo: _undoTaskSnapshot(before));
+      case 'abandon':
+        final id = payload as String;
+        final before = _taskById(id);
+        if (before == null)
+          return TaskActionResult.failure('missing-task', '任务不存在');
+        if (before.isClosed)
+          return TaskActionResult.failure('closed-task', '任务已经结束');
+        _replaceTask(
+            id,
+            (task) => task.copyWith(
+                abandonedAt: DateTime.now().toIso8601String(),
+                updatedAt: DateTime.now().toIso8601String()));
+        _syncReminderFor(_taskById(id)!);
+        return _taskResult(id,
+            message: '任务已放弃，可在已完成中恢复',
+            showFeedback: true,
+            undo: _undoTaskSnapshot(before));
+      case 'convertToNote':
+        return _convertTaskToNote(payload as String);
       case 'duplicate':
         final id = payload as String;
         final copyId = duplicateTask(id);
@@ -1272,6 +1374,51 @@ class WorkspaceController extends ChangeNotifier {
       default:
         return TaskActionResult.failure('unknown-action', '不支持的任务操作：$action');
     }
+  }
+
+  TaskActionResult _convertTaskToNote(String id) {
+    final before = _taskById(id);
+    if (before == null || before.isConverted) {
+      return TaskActionResult.failure('missing-task', '任务不存在或已转换');
+    }
+    final now = DateTime.now().toIso8601String();
+    final noteId = 'note-${_noteSequence.toString().padLeft(2, '0')}';
+    _noteSequence += 1;
+    final document = noteContentFromTask(before);
+    final plain = richPlainTextFromDelta(document['quillDelta'] as List);
+    final note = NoteItem(
+        id: noteId,
+        title: before.title,
+        preview: notePreviewFromText(plain),
+        updatedLabel: '刚刚',
+        folder: '未归档',
+        contentJson: document,
+        plainText: plain,
+        createdAt: now,
+        updatedAt: now);
+    _notes = [note, ..._notes];
+    final index = _tasks.indexWhere((task) => task.id == id);
+    _tasks[index] = before.copyWith(convertedNoteId: noteId, updatedAt: now);
+    _syncReminderFor(_tasks[index]);
+    _setSelectedTaskId(null);
+    _schedulePersist();
+    _notify();
+    late final UndoCommand undo;
+    undo = UndoCommand(
+        label: '撤销转换',
+        execute: () {
+          if (identical(_lastTaskUndoCommand, undo))
+            _lastTaskUndoCommand = null;
+          _notes.removeWhere((item) => item.id == noteId);
+          if (_selectedNoteId == noteId) _selectedNoteId = null;
+          final restored = _restoreTaskSnapshot(before);
+          if (restored) openTask(id);
+          return restored;
+        });
+    final result =
+        _taskResult(id, message: '已转换为笔记', showFeedback: true, undo: undo);
+    openNote(noteId);
+    return result;
   }
 
   void _prepareBulkSelection(Iterable<String> ids) {
@@ -1508,7 +1655,10 @@ class WorkspaceController extends ChangeNotifier {
   /// preserve dates; date drops preserve the existing clock time.
   void moveTaskToBoardColumn(String id, BoardGroupBy grouping, String column) {
     final task = _tasks.where((item) => item.id == id).firstOrNull;
-    if (task == null || task.deletedAt != null || task.isSkipped) return;
+    if (task == null ||
+        task.deletedAt != null ||
+        task.isSkipped ||
+        task.isConverted) return;
     if (grouping == BoardGroupBy.priority) {
       final priority = TaskPriority.values
           .where((value) => value.name == column)
@@ -1953,12 +2103,13 @@ class WorkspaceController extends ChangeNotifier {
     if (index < 0) return;
     final task = _tasks[index];
     if (task.isSkipped) return;
-    final completing = !task.completed;
+    final completing = !task.isClosed;
     final now = DateTime.now();
     final nowLabel = now.toIso8601String();
     final due = localDateTimeFromStorage(task.dueAt);
     var updated = task.copyWith(
       completed: completing,
+      clearAbandonedAt: true,
       completedAt: completing ? nowLabel : null,
       clearCompletedAt: !completing,
       updatedAt: nowLabel,
@@ -2209,7 +2360,10 @@ class WorkspaceController extends ChangeNotifier {
       final index = _tasks.indexWhere((task) => task.id == id);
       if (index < 0) continue;
       final task = _tasks[index];
-      if (task.completed || task.deletedAt != null || task.isSkipped) continue;
+      if (task.isClosed ||
+          task.deletedAt != null ||
+          task.isSkipped ||
+          task.isConverted) continue;
       final next = _spawnNextRecurrence(task, completedAt: now);
       var updated = task.copyWith(
         completed: true,
@@ -2755,26 +2909,32 @@ class WorkspaceController extends ChangeNotifier {
     final normalized = due == null
         ? null
         : DateTime(due.year, due.month, due.day, due.hour, due.minute);
-    _replaceTask(
-      id,
-      (task) => task.copyWith(
+    _replaceTask(id, (task) {
+      final timed = normalized != null &&
+          (hasTime ?? (normalized.hour != 0 || normalized.minute != 0));
+      final previousStart = localDateTimeFromStorage(task.dueAt);
+      final previousEnd = localDateTimeFromStorage(task.dueEndAt);
+      DateTime? end;
+      if (normalized != null && previousStart != null && previousEnd != null) {
+        final shifted = normalized.add(previousEnd.difference(previousStart));
+        end = timed
+            ? shifted
+            : DateTime(shifted.year, shifted.month, shifted.day);
+      }
+      return task.copyWith(
         dueAt: normalized?.toIso8601String(),
         clearDueAt: normalized == null,
-        // A missing date is always unscheduled. Never persist an orphaned
-        // `hasDueTime` flag from a malformed picker/action payload.
-        hasDueTime: normalized == null
-            ? false
-            : hasTime ?? (normalized.hour != 0 || normalized.minute != 0),
+        dueEndAt: end?.toIso8601String(),
+        clearDueEndAt: end == null,
+        hasDueTime: timed,
         bucket: taskBucketForDate(normalized, completed: task.completed),
         timeLabel: normalized == null
             ? (task.completed ? '已完成' : '未安排')
             : taskTimeLabelFor(normalized,
-                completed: task.completed,
-                hasTime: hasTime ??
-                    (normalized.hour != 0 || normalized.minute != 0)),
+                completed: task.completed, hasTime: timed),
         updatedAt: DateTime.now().toIso8601String(),
-      ),
-    );
+      );
+    });
   }
 
   /// Registers or withdraws the system notification for one task's reminder,
@@ -2784,7 +2944,8 @@ class WorkspaceController extends ChangeNotifier {
     final syncVersion = (_reminderSyncVersions[task.id] ?? 0) + 1;
     _reminderSyncVersions[task.id] = syncVersion;
     final reminder = localDateTimeFromStorage(task.reminderAt);
-    final active = !task.completed &&
+    final active = !task.isClosed &&
+        !task.isConverted &&
         !task.isSkipped &&
         task.deletedAt == null &&
         reminder != null &&
@@ -3514,6 +3675,13 @@ class WorkspaceController extends ChangeNotifier {
   /// Completes after all writes requested so far have finished. The app can
   /// use this before an explicit quit without making every keystroke await IO.
   Future<void> waitForPendingSaves() => _pendingPersist;
+
+  Future<void> retrySave() async {
+    if (_saveStatus != SaveStatus.failed || _loadError != null) return;
+    _schedulePersist();
+    _notify();
+    await waitForPendingSaves();
+  }
 
   Future<void> _persistBundle(MigrationBundle bundle, int version) async {
     try {

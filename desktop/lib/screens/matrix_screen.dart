@@ -169,16 +169,16 @@ class _QuadrantCard extends StatelessWidget {
                     Text(meta.title,
                         style: TextStyle(
                             color: tokens.textPrimary,
-                            fontSize: 14,
-                            fontWeight: FontWeight.w800)),
+                            fontSize: WorkFollowMacTypography.sectionTitle,
+                            fontWeight: WorkFollowMacWeight.semibold)),
                     const SizedBox(height: 2),
                     Text(meta.subtitle,
                         style: TextStyle(
-                            color: tokens.textTertiary, fontSize: 11)),
+                            color: tokens.textTertiary, fontSize: WorkFollowMacTypography.listMeta)),
                   ])),
               Text('${tasks.length}',
                   style: TextStyle(
-                      color: color, fontSize: 12, fontWeight: FontWeight.w800)),
+                      color: color, fontSize: WorkFollowMacTypography.listMeta, fontWeight: WorkFollowMacWeight.semibold)),
             ]),
             const SizedBox(height: 10),
             if (tasks.isEmpty)
@@ -186,7 +186,7 @@ class _QuadrantCard extends StatelessWidget {
                   child: Center(
                       child: Text('把任务拖到这里',
                           style: TextStyle(
-                              color: tokens.textTertiary, fontSize: 11))))
+                              color: tokens.textTertiary, fontSize: WorkFollowMacTypography.caption))))
             else
               Expanded(
                   child: ListView.separated(
@@ -228,7 +228,7 @@ class _MatrixTaskRow extends StatelessWidget {
               child: Text(task.title,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(color: tokens.textPrimary, fontSize: 12)))),
+                  style: TextStyle(color: tokens.textPrimary, fontSize: WorkFollowMacTypography.listTitle)))),
       childWhenDragging: Opacity(opacity: .3, child: _body(tokens, listColor)),
       child: _body(tokens, listColor),
     );
@@ -254,8 +254,8 @@ class _MatrixTaskRow extends StatelessWidget {
                         color: task.completed
                             ? tokens.textTertiary
                             : tokens.textPrimary,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500,
+                        fontSize: WorkFollowMacTypography.listTitle,
+                        fontWeight: WorkFollowMacWeight.medium,
                         decoration: task.completed
                             ? TextDecoration.lineThrough
                             : null))),

@@ -20,7 +20,7 @@ class TaskProjection {
     final viewName = _viewName(view);
     final source = tasks.where((task) => viewName == 'trash'
         ? task.deletedAt != null
-        : task.deletedAt == null && !task.isSkipped);
+        : task.deletedAt == null && !task.isSkipped && !task.isConverted);
     final tagged = selectedTagName == null
         ? source
         : source.where((task) => task.tags.contains(selectedTagName));
@@ -32,15 +32,16 @@ class TaskProjection {
     final filtered = switch (viewName) {
       'home' => tagged,
       'recent' => tagged.where((task) =>
-          !task.completed && isInRecentWindow(task, reference: reference)),
-      'today' =>
-        tagged.where((task) => needsAttentionToday(task, reference: reference)),
+          !task.isClosed && isInRecentWindow(task, reference: reference)),
+      'today' => tagged.where((task) =>
+          !task.isAbandoned && needsAttentionToday(task, reference: reference)),
       'overdue' => tagged.where(
-          (task) => !task.completed && isOverdue(task, reference: reference)),
+          (task) => !task.isClosed && isOverdue(task, reference: reference)),
       'inbox' => tagged.where((task) => task.listName == '收集箱'),
-      'plan' => tagged.where((task) => task.bucket == TaskBucket.later),
+      'plan' => tagged.where(
+          (task) => !task.isAbandoned && task.bucket == TaskBucket.later),
       'all' => tagged,
-      'completed' => tagged.where((task) => task.completed),
+      'completed' => tagged.where((task) => task.isClosed),
       'work' => tagged.where((task) => task.listName == '工作'),
       'study' => tagged.where((task) => task.listName == '学习'),
       'personal' => tagged.where((task) => task.listName == '个人'),
@@ -55,39 +56,38 @@ class TaskProjection {
     DateTime? reference,
   }) {
     final viewName = _viewName(view);
-    final active =
-        tasks.where((task) => task.deletedAt == null && !task.isSkipped);
+    final active = tasks.where((task) =>
+        task.deletedAt == null && !task.isSkipped && !task.isConverted);
     final dueTodayOrOverdue =
         (TaskItem task) => needsAttentionToday(task, reference: reference);
     return switch (viewName) {
       'home' => active
-          .where((task) => !task.completed && dueTodayOrOverdue(task))
+          .where((task) => !task.isClosed && dueTodayOrOverdue(task))
           .length,
       'recent' => active
           .where((task) =>
-              !task.completed && isInRecentWindow(task, reference: reference))
+              !task.isClosed && isInRecentWindow(task, reference: reference))
           .length,
       'today' => active
-          .where((task) => !task.completed && dueTodayOrOverdue(task))
+          .where((task) => !task.isClosed && dueTodayOrOverdue(task))
           .length,
       'overdue' => active
-          .where((task) =>
-              !task.completed && isOverdue(task, reference: reference))
+          .where(
+              (task) => !task.isClosed && isOverdue(task, reference: reference))
           .length,
-      'inbox' => active
-          .where((task) => task.listName == '收集箱' && !task.completed)
-          .length,
+      'inbox' =>
+        active.where((task) => task.listName == '收集箱' && !task.isClosed).length,
       'plan' => active
-          .where((task) => task.bucket == TaskBucket.later && !task.completed)
+          .where((task) => task.bucket == TaskBucket.later && !task.isClosed)
           .length,
-      'all' => active.where((task) => !task.completed).length,
+      'all' => active.where((task) => !task.isClosed).length,
       'completed' => active.where((task) => task.completed).length,
       'work' =>
-        active.where((task) => task.listName == '工作' && !task.completed).length,
+        active.where((task) => task.listName == '工作' && !task.isClosed).length,
       'study' =>
-        active.where((task) => task.listName == '学习' && !task.completed).length,
+        active.where((task) => task.listName == '学习' && !task.isClosed).length,
       'personal' =>
-        active.where((task) => task.listName == '个人' && !task.completed).length,
+        active.where((task) => task.listName == '个人' && !task.isClosed).length,
       'trash' => tasks.where((task) => task.deletedAt != null).length,
       _ => 0,
     };
@@ -98,6 +98,8 @@ class TaskProjection {
       final due = localDateTimeFromStorage(task.dueAt);
       return task.deletedAt == null &&
           !task.isSkipped &&
+          !task.isConverted &&
+          !task.isAbandoned &&
           due != null &&
           due.year == day.year &&
           due.month == day.month &&
@@ -108,7 +110,8 @@ class TaskProjection {
   Map<String, int> tagCounts(Iterable<TaskItem> tasks) {
     final counts = <String, int>{};
     for (final task in tasks) {
-      if (task.deletedAt != null || task.isSkipped) continue;
+      if (task.deletedAt != null || task.isSkipped || task.isConverted)
+        continue;
       for (final raw in task.tags) {
         final tag = raw.trim();
         if (tag.isEmpty) continue;
@@ -127,7 +130,9 @@ class TaskProjection {
       .where((task) =>
           task.deletedAt == null &&
           !task.isSkipped &&
-          !task.completed &&
+          !task.isConverted &&
+          !task.isAbandoned &&
+          !task.isClosed &&
           task.listName == listName)
       .length;
 

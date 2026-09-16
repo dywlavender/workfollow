@@ -75,16 +75,122 @@ class WorkFollowSpacing {
   static const double xxl = 32;
 }
 
-/// Text roles used by the shell and document workbench. Keeping these roles
-/// explicit prevents a local TextStyle from silently drifting away from the
-/// rest of the macOS UI.
+/// The macOS text system.
+///
+/// This is the single type contract for the whole desktop app, not a profile
+/// for one screen. [WorkFollowTypography] below stays the contract for the Web
+/// client (an `Inter` primary face and a browser-sized ladder), but no macOS
+/// widget may borrow it: an `Inter` face plus Web line heights (`1.85` for
+/// editor body) reads like a page in a browser.
+///
+/// What is unified here is the **semantic role**, not the pixel value. Every
+/// surface — task list, notes, calendar, board, matrix, habits, stats,
+/// settings, search, menus — resolves the same role for the same job, so the
+/// app cannot drift into "the task page looks native, the notes page looks
+/// like a web page". Several roles deliberately share a value (13 is used by
+/// [sectionTitle], [listBody] and [control]); they are separate names because
+/// they are separate jobs, and a change to one must not silently move another.
+///
+/// Hierarchy comes from three weights ([WorkFollowMacWeight]) and four line
+/// heights, never from a long ladder of one-off sizes. Chinese strings keep
+/// [WorkFollowMacTracking.none].
+class WorkFollowMacTypography {
+  const WorkFollowMacTypography._();
+
+  // App shell / page.
+  static const double pageTitle = 20;
+  static const double sectionTitle = 13;
+
+  // Navigation.
+  static const double navigation = 14;
+  static const double navigationMeta = 12;
+
+  // List.
+  static const double listTitle = 14;
+  static const double listBody = 13;
+  static const double listMeta = 12;
+
+  // Detail / editor.
+  static const double detailTitle = 18;
+  static const double body = 14;
+  static const double supporting = 12;
+
+  // Controls.
+  static const double control = 13;
+  static const double menu = 14;
+  static const double caption = 11;
+
+  // Line heights.
+  static const double lineTight = 1.25;
+  static const double lineControl = 1.35;
+  static const double lineList = 1.40;
+  static const double lineBody = 1.50;
+}
+
+/// The only three weights the macOS app uses. Semibold is the ceiling:
+/// Chinese text turns heavy and hard the moment bold becomes a habit.
+class WorkFollowMacWeight {
+  const WorkFollowMacWeight._();
+
+  static const FontWeight regular = FontWeight.w400;
+  static const FontWeight medium = FontWeight.w500;
+  static const FontWeight semibold = FontWeight.w600;
+}
+
+/// Sizes that are not type roles.
+///
+/// [WorkFollowMacTypography] answers "which text role is this". These two
+/// elements have no text role: the toolbar label stands in for an icon, and the
+/// focus timer is a display readout. Sizing them from the type scale would
+/// either shrink them out of alignment with their siblings or force a fake role
+/// name, so they live here and stay out of the hierarchy.
+class WorkFollowMacDisplay {
+  const WorkFollowMacDisplay._();
+
+  /// Toolbar labels drawn as text because there is no icon for them
+  /// (`B` / `I` / `H1` / `1.`). Kept level with the drawn `TaskEditorGlyph`
+  /// siblings so a text label and an icon label sit at the same size.
+  static const double glyphLabel = 16;
+
+  /// The focus timer countdown.
+  static const double timer = 42;
+}
+
+/// Letter spacing for the macOS surface.
+class WorkFollowMacTracking {
+  const WorkFollowMacTracking._();
+
+  /// Default for every Chinese UI string. Negative tracking belongs to large
+  /// Latin display type, which this profile does not use.
+  static const double none = 0;
+}
+
+/// Font resolution for the macOS surface.
+class WorkFollowMacTypeFamily {
+  const WorkFollowMacTypeFamily._();
+
+  /// `null` lets Flutter resolve the platform default face, which on macOS is
+  /// the system UI font: SF Pro for Latin and digits, PingFang SC for Chinese
+  /// through the system cascade. Hard-coding `Inter` here is what made the
+  /// shell look like a Web page.
+  static const String? ui = null;
+
+  /// Safety net when the platform cascade cannot resolve a glyph.
+  static const List<String> fallback = ['PingFang SC', 'Hiragino Sans GB'];
+}
+
+/// The Web token catalog.
+///
+/// This mirrors `frontend/src/design-tokens.css` and exists for the browser
+/// client. No macOS widget may read it: the desktop app resolves every text
+/// role from [WorkFollowMacTypography]. The class is kept, not deleted, so the
+/// two clients' tokens can be compared in one place — but it is a catalog, not
+/// a second live scale, and it has no role aliases pointing back into the
+/// desktop scale.
 class WorkFollowTypography {
   const WorkFollowTypography._();
 
-  // Primitive type scale from frontend/src/design-tokens.css. The existing
-  // role aliases below intentionally remain stable for the current Flutter
-  // screens; new code should prefer the explicit Web* names when it needs a
-  // direct CSS mapping.
+  // Primitive type scale from frontend/src/design-tokens.css.
   static const String webUiFontFamily = 'Inter';
   static const String webMonoFontFamily = 'JetBrains Mono';
   static const List<String> webFontFallback = [
@@ -144,17 +250,12 @@ class WorkFollowTypography {
   static const double webEditorTitleSize = webHeadingSmall;
   static const double webEditorBodySize = webBody;
 
-  static const double pageTitle = 26;
-  static const double sectionTitle = 16;
-  static const double sectionLabel = 12;
-  static const double navigation = 14;
-  static const double taskTitle = 15;
-  static const double body = 14;
-  static const double editorBody = 16;
-  static const double field = 13;
-  static const double metadata = 12;
-  static const double caption = 11;
-  static const double button = 13;
+  // The legacy role aliases (pageTitle / taskTitle / field / metadata / …) that
+  // used to live here are gone. They were a second set of names for the same
+  // sizes, so a reader could not tell which one was authoritative, and after the
+  // macOS migration they were both unused and resolving to the desktop scale.
+  // Desktop code names WorkFollowMacTypography directly; the Web* primitives
+  // above remain the browser contract.
 }
 
 class WorkFollowRadii {
@@ -365,16 +466,11 @@ class WorkFollowComponentTokens {
   static const double cardRadius = WorkFollowRadii.lg;
   static const double dialogRadius = WorkFollowRadii.lg;
   static const double popoverRadius = WorkFollowRadii.lg;
-  static const double buttonFontSize = WorkFollowTypography.webControlSize;
-  static const double inputFontSize = WorkFollowTypography.webBodySize;
-  static const double listTitleFontSize = WorkFollowTypography.webListTitleSize;
-  static const double taskNavigationFontSize =
-      WorkFollowTypography.webNavigationSize;
-  static const double taskMetaFontSize = WorkFollowTypography.webMetaSize;
-  static const double editorTitleFontSize =
-      WorkFollowTypography.webEditorTitleSize;
-  static const double editorBodyFontSize =
-      WorkFollowTypography.webEditorBodySize;
+  // The duplicated font-size aliases (buttonFontSize / inputFontSize /
+  // listTitleFontSize / taskNavigationFontSize / taskMetaFontSize /
+  // editorTitleFontSize / editorBodyFontSize) were removed for the same reason
+  // as the Typography aliases: they were a second naming of the same steps and
+  // had no call sites left. Sizes live in WorkFollowMacTypography only.
   static const double editorContentPaddingTop = WorkFollowSpacing.space2;
   static const double detailShadowOffset = -16;
   static const double detailShadowBlur = 44;
@@ -702,13 +798,19 @@ class WorkFollowThemeData {
       onSurface: tokens.textPrimary,
     );
 
+    // The desktop shell resolves to the macOS system face; only the Web build
+    // keeps the Inter + Noto Sans SC stack.
+    final macOS = defaultTargetPlatform == TargetPlatform.macOS;
+
     return ThemeData(
       brightness: brightness,
       useMaterial3: true,
-      fontFamily: defaultTargetPlatform == TargetPlatform.macOS
-          ? '.SF Pro Text'
+      fontFamily: macOS
+          ? WorkFollowMacTypeFamily.ui
           : WorkFollowTypography.webUiFontFamily,
-      fontFamilyFallback: WorkFollowTypography.webFontFallback,
+      fontFamilyFallback: macOS
+          ? WorkFollowMacTypeFamily.fallback
+          : WorkFollowTypography.webFontFallback,
       colorScheme: colorScheme,
       scaffoldBackgroundColor: tokens.canvas,
       canvasColor: tokens.canvas,
@@ -717,62 +819,76 @@ class WorkFollowThemeData {
       hoverColor: tokens.accentSoft,
       focusColor: tokens.accent.withValues(alpha: .22),
       dividerColor: tokens.border,
+      // macOS profile: one page-title step, three weights, no tracking. Sizes
+      // come from WorkFollowMacTypography so a widget never invents its own
+      // step.
       textTheme: TextTheme(
         displaySmall: TextStyle(
             color: tokens.textPrimary,
-            fontSize: WorkFollowTypography.pageTitle,
-            height: 1.18,
-            fontWeight: FontWeight.w700,
-            letterSpacing: -.45),
+            fontSize: WorkFollowMacTypography.pageTitle,
+            height: WorkFollowMacTypography.lineTight,
+            fontWeight: WorkFollowMacWeight.semibold,
+            letterSpacing: WorkFollowMacTracking.none),
         headlineSmall: TextStyle(
             color: tokens.textPrimary,
-            fontSize: WorkFollowTypography.webHeading,
-            height: WorkFollowTypography.webLineHeightCompact,
-            fontWeight: FontWeight.w700,
-            letterSpacing: -.3),
+            fontSize: WorkFollowMacTypography.detailTitle,
+            height: WorkFollowMacTypography.lineControl,
+            fontWeight: WorkFollowMacWeight.semibold,
+            letterSpacing: WorkFollowMacTracking.none),
         titleLarge: TextStyle(
             color: tokens.textPrimary,
-            fontSize: WorkFollowTypography.webHeadingSmall,
-            height: 1.25,
-            fontWeight: FontWeight.w700,
-            letterSpacing: -.25),
+            fontSize: WorkFollowMacTypography.listTitle,
+            height: WorkFollowMacTypography.lineControl,
+            fontWeight: WorkFollowMacWeight.semibold,
+            letterSpacing: WorkFollowMacTracking.none),
         titleMedium: TextStyle(
             color: tokens.textPrimary,
-            fontSize: WorkFollowTypography.sectionTitle,
-            height: 1.25,
-            fontWeight: FontWeight.w600),
+            fontSize: WorkFollowMacTypography.sectionTitle,
+            height: WorkFollowMacTypography.lineControl,
+            fontWeight: WorkFollowMacWeight.semibold,
+            letterSpacing: WorkFollowMacTracking.none),
         titleSmall: TextStyle(
             color: tokens.textSecondary,
-            fontSize: WorkFollowTypography.webNavigationSize,
-            height: 1.3,
-            fontWeight: FontWeight.w600),
+            fontSize: WorkFollowMacTypography.sectionTitle,
+            height: WorkFollowMacTypography.lineControl,
+            fontWeight: WorkFollowMacWeight.medium,
+            letterSpacing: WorkFollowMacTracking.none),
         bodyLarge: TextStyle(
             color: tokens.textPrimary,
-            fontSize: WorkFollowTypography.body,
-            height: 1.45),
+            fontSize: WorkFollowMacTypography.body,
+            height: WorkFollowMacTypography.lineBody,
+            fontWeight: WorkFollowMacWeight.regular,
+            letterSpacing: WorkFollowMacTracking.none),
         bodyMedium: TextStyle(
             color: tokens.textSecondary,
-            fontSize: WorkFollowTypography.webBodySmall,
-            height: 1.4),
+            fontSize: WorkFollowMacTypography.control,
+            height: WorkFollowMacTypography.lineControl,
+            fontWeight: WorkFollowMacWeight.regular,
+            letterSpacing: WorkFollowMacTracking.none),
         bodySmall: TextStyle(
             color: tokens.textTertiary,
-            fontSize: WorkFollowTypography.caption,
-            height: 1.35),
+            fontSize: WorkFollowMacTypography.supporting,
+            height: WorkFollowMacTypography.lineControl,
+            fontWeight: WorkFollowMacWeight.regular,
+            letterSpacing: WorkFollowMacTracking.none),
         labelLarge: TextStyle(
             color: tokens.textPrimary,
-            fontSize: WorkFollowTypography.webControlSize,
-            height: 1.3,
-            fontWeight: FontWeight.w600),
+            fontSize: WorkFollowMacTypography.control,
+            height: WorkFollowMacTypography.lineControl,
+            fontWeight: WorkFollowMacWeight.medium,
+            letterSpacing: WorkFollowMacTracking.none),
         labelMedium: TextStyle(
             color: tokens.textSecondary,
-            fontSize: WorkFollowTypography.metadata,
-            height: 1.3,
-            fontWeight: FontWeight.w600),
+            fontSize: WorkFollowMacTypography.listMeta,
+            height: WorkFollowMacTypography.lineControl,
+            fontWeight: WorkFollowMacWeight.medium,
+            letterSpacing: WorkFollowMacTracking.none),
         labelSmall: TextStyle(
             color: tokens.textTertiary,
-            fontSize: WorkFollowTypography.caption,
-            height: 1.2,
-            fontWeight: FontWeight.w500),
+            fontSize: WorkFollowMacTypography.caption,
+            height: WorkFollowMacTypography.lineControl,
+            fontWeight: WorkFollowMacWeight.regular,
+            letterSpacing: WorkFollowMacTracking.none),
       ),
       iconTheme: IconThemeData(
           color: tokens.textSecondary, size: WorkFollowMetrics.navigationIcon),
@@ -782,8 +898,8 @@ class WorkFollowThemeData {
             color: brightness == Brightness.dark
                 ? tokens.textPrimary
                 : Colors.white,
-            fontSize: WorkFollowTypography.webLabel,
-            fontWeight: FontWeight.w500),
+            fontSize: WorkFollowMacTypography.caption,
+            fontWeight: WorkFollowMacWeight.medium),
         decoration: BoxDecoration(
           color: brightness == Brightness.dark
               ? tokens.overlay
@@ -795,8 +911,8 @@ class WorkFollowThemeData {
         style: TextButton.styleFrom(
           foregroundColor: tokens.accent,
           textStyle: const TextStyle(
-              fontSize: WorkFollowTypography.webControlSize,
-              fontWeight: FontWeight.w600),
+              fontSize: WorkFollowMacTypography.control,
+              fontWeight: WorkFollowMacWeight.medium),
           minimumSize: const Size(0, WorkFollowMetrics.compactButtonHeight),
           shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(WorkFollowRadii.control)),
@@ -806,8 +922,8 @@ class WorkFollowThemeData {
         style: FilledButton.styleFrom(
           minimumSize: const Size(0, WorkFollowMetrics.primaryButtonHeight),
           textStyle: const TextStyle(
-              fontSize: WorkFollowTypography.webControlSize,
-              fontWeight: FontWeight.w600),
+              fontSize: WorkFollowMacTypography.control,
+              fontWeight: WorkFollowMacWeight.medium),
           shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(WorkFollowRadii.control)),
         ),
@@ -816,8 +932,8 @@ class WorkFollowThemeData {
         style: OutlinedButton.styleFrom(
           minimumSize: const Size(0, WorkFollowMetrics.compactButtonHeight),
           textStyle: const TextStyle(
-              fontSize: WorkFollowTypography.webControlSize,
-              fontWeight: FontWeight.w600),
+              fontSize: WorkFollowMacTypography.control,
+              fontWeight: WorkFollowMacWeight.medium),
           side: BorderSide(color: tokens.borderStrong),
           shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(WorkFollowRadii.control)),
@@ -846,19 +962,23 @@ class WorkFollowThemeData {
             borderRadius: BorderRadius.circular(WorkFollowRadii.popover)),
         titleTextStyle: TextStyle(
             color: tokens.textPrimary,
-            fontSize: WorkFollowTypography.sectionTitle + 1,
-            fontWeight: FontWeight.w700),
+            fontSize: WorkFollowMacTypography.detailTitle,
+            height: WorkFollowMacTypography.lineControl,
+            fontWeight: WorkFollowMacWeight.semibold,
+            letterSpacing: WorkFollowMacTracking.none),
         contentTextStyle: TextStyle(
             color: tokens.textSecondary,
-            fontSize: WorkFollowTypography.webSupportingSize + 1,
-            height: 1.4),
+            fontSize: WorkFollowMacTypography.control,
+            height: WorkFollowMacTypography.lineList),
       ),
       popupMenuTheme: PopupMenuThemeData(
         color: tokens.overlay,
         surfaceTintColor: Colors.transparent,
         textStyle: TextStyle(
             color: tokens.textPrimary,
-            fontSize: WorkFollowTypography.webBodySmall),
+            fontSize: WorkFollowMacTypography.menu,
+            height: WorkFollowMacTypography.lineControl,
+            fontWeight: WorkFollowMacWeight.regular),
         shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(WorkFollowRadii.popover)),
       ),

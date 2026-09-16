@@ -73,7 +73,7 @@ class _SmartTextEditingController extends TextEditingController {
           style: (style ?? const TextStyle()).copyWith(
               color: color,
               backgroundColor: color.withValues(alpha: .14),
-              fontWeight: FontWeight.w600)));
+              fontWeight: WorkFollowMacWeight.semibold)));
       cursor = end;
     }
     if (cursor < text.length) {
@@ -378,7 +378,8 @@ class _QuickAddFieldState extends State<QuickAddField> {
 
   Future<void> _pickTags(BuildContext anchor) async {
     final value = await TaskTagPicker.show(anchor,
-        initial: (tagsOverridden ? currentDraft.tags : parse.tags).join('，'));
+        initial: (tagsOverridden ? currentDraft.tags : parse.tags).join('，'),
+        availableTags: widget.controller.allTags().keys);
     if (!mounted || value == null) return;
     setState(() {
       final tags = value
@@ -560,7 +561,9 @@ class _QuickAddFieldState extends State<QuickAddField> {
                       onChanged: (_) => _reparse(),
                       textInputAction: TextInputAction.done,
                       style: TextStyle(
-                          fontSize: WorkFollowTypography.body + 1,
+                          fontSize: WorkFollowMacTypography.listTitle,
+                          height: WorkFollowMacTypography.lineList,
+                          fontWeight: WorkFollowMacWeight.regular,
                           color: tokens.textPrimary),
                       decoration: InputDecoration(
                           hintText: widget.listStyle
@@ -574,7 +577,8 @@ class _QuickAddFieldState extends State<QuickAddField> {
               if (!expanded)
                 Text('⌘N',
                     style: TextStyle(
-                        fontSize: WorkFollowTypography.caption - 1,
+                        fontSize: WorkFollowMacTypography.caption,
+                        height: WorkFollowMacTypography.lineControl,
                         color: tokens.textTertiary)),
             ]),
             if (parse.spans.isNotEmpty)
@@ -595,8 +599,9 @@ class _QuickAddFieldState extends State<QuickAddField> {
                                   : 'smart-chip-${span.kind.name}-${span.raw}'),
                               label: Text(span.label,
                                   style: TextStyle(
-                                      fontSize: WorkFollowTypography.metadata,
-                                      fontWeight: FontWeight.w600,
+                                      fontSize: WorkFollowMacTypography.control,
+                                      height: WorkFollowMacTypography.lineControl,
+                                      fontWeight: WorkFollowMacWeight.medium,
                                       color: _spanColor(span.kind, tokens))),
                               backgroundColor: _spanColor(span.kind, tokens)
                                   .withValues(alpha: .09),
@@ -617,8 +622,9 @@ class _QuickAddFieldState extends State<QuickAddField> {
                       child: Text(_summary,
                           style: TextStyle(
                               color: tokens.textTertiary,
-                              fontSize: WorkFollowTypography.caption,
-                              fontWeight: FontWeight.w500)))),
+                              fontSize: WorkFollowMacTypography.supporting,
+                              height: WorkFollowMacTypography.lineControl,
+                              fontWeight: WorkFollowMacWeight.medium)))),
             if (expanded)
               Padding(
                   padding: const EdgeInsets.only(top: 5, bottom: 4),
@@ -712,7 +718,7 @@ class _QuickAddFieldState extends State<QuickAddField> {
                                   const EdgeInsets.symmetric(horizontal: 12)),
                           child: const Text('添加任务',
                               style: TextStyle(
-                                  fontSize: WorkFollowTypography.button))),
+                                  fontSize: WorkFollowMacTypography.control))),
                   ])),
           ]),
         ));

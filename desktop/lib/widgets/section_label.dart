@@ -27,15 +27,17 @@ class SectionLabel extends StatelessWidget {
           Text(label,
               style: TextStyle(
                   color: tokens.textSecondary,
-                  fontSize: 11.5,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: .3)),
+                  fontSize: WorkFollowMacTypography.sectionTitle,
+                  height: WorkFollowMacTypography.lineControl,
+                  fontWeight: WorkFollowMacWeight.semibold,
+                  letterSpacing: WorkFollowMacTracking.none)),
           const SizedBox(width: 6),
           Text('$count',
               style: TextStyle(
                   color: tokens.textTertiary,
-                  fontSize: 10,
-                  fontWeight: FontWeight.w600)),
+                  fontSize: WorkFollowMacTypography.listMeta,
+                  height: WorkFollowMacTypography.lineControl,
+                  fontWeight: WorkFollowMacWeight.medium)),
         ],
       ),
     );

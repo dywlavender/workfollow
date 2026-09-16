@@ -3,6 +3,7 @@ import 'dart:async';
 import '../../../models/task.dart';
 import '../domain/task_draft.dart';
 import '../domain/task_schedule.dart';
+import '../domain/task_schedule_settings.dart';
 
 enum TaskDestination {
   current,
@@ -111,6 +112,8 @@ abstract class TaskActions {
 
   TaskActionResult setSchedule(String id, TaskScheduleDraft value);
 
+  TaskActionResult setScheduleSettings(String id, TaskScheduleSettings value);
+
   TaskActionResult clearSchedule(String id);
 
   TaskActionResult setReminder(String id, DateTime? reminder);
@@ -130,6 +133,12 @@ abstract class TaskActions {
   TaskActionResult setDeadline(String id, DateTime? deadline);
 
   TaskActionResult clearDeadline(String id);
+
+  TaskActionResult setPinned(String id, bool pinned);
+
+  TaskActionResult abandon(String id);
+
+  TaskActionResult convertToNote(String id);
 
   TaskActionResult duplicate(String id);
 
@@ -191,6 +200,10 @@ class CallbackTaskActions implements TaskActions {
       dispatch('setSchedule', (id, value));
 
   @override
+  TaskActionResult setScheduleSettings(String id, TaskScheduleSettings value) =>
+      dispatch('setScheduleSettings', (id, value));
+
+  @override
   TaskActionResult clearSchedule(String id) => dispatch('clearSchedule', id);
 
   @override
@@ -226,6 +239,16 @@ class CallbackTaskActions implements TaskActions {
 
   @override
   TaskActionResult clearDeadline(String id) => dispatch('clearDeadline', id);
+
+  @override
+  TaskActionResult setPinned(String id, bool pinned) =>
+      dispatch('setPinned', (id, pinned));
+
+  @override
+  TaskActionResult abandon(String id) => dispatch('abandon', id);
+
+  @override
+  TaskActionResult convertToNote(String id) => dispatch('convertToNote', id);
 
   @override
   TaskActionResult duplicate(String id) => dispatch('duplicate', id);

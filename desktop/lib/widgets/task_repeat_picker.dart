@@ -58,7 +58,7 @@ class _TaskRepeatEditorState extends State<_TaskRepeatEditor> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const Text('重复任务', style: TextStyle(fontWeight: FontWeight.w600)),
+            const Text('重复任务', style: TextStyle(fontWeight: WorkFollowMacWeight.semibold)),
             const SizedBox(height: 12),
             DropdownButtonFormField<String>(
                 initialValue: type,
@@ -103,7 +103,7 @@ class _TaskRepeatEditorState extends State<_TaskRepeatEditor> {
                       })),
             ],
             const SizedBox(height: 12),
-            const Text('完成本次任务后，会自动生成下一次。', style: TextStyle(fontSize: 13)),
+            const Text('完成本次任务后，会自动生成下一次。', style: TextStyle(fontSize: WorkFollowMacTypography.supporting)),
             const SizedBox(height: 16),
             Align(
                 alignment: Alignment.centerRight,

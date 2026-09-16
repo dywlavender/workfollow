@@ -56,7 +56,7 @@ class _BoardScreenState extends State<BoardScreen> {
                   labelStyle: TextStyle(
                       color:
                           showCompleted ? tokens.accent : tokens.textSecondary,
-                      fontSize: 12),
+                      fontSize: WorkFollowMacTypography.control),
                 ),
               ],
             ),
@@ -154,8 +154,8 @@ class _GroupingSegment extends StatelessWidget {
                       color: grouping == option.$1
                           ? tokens.accent
                           : tokens.textSecondary,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700)),
+                      fontSize: WorkFollowMacTypography.control,
+                      fontWeight: WorkFollowMacWeight.semibold)),
             ),
           ),
       ]),
@@ -231,13 +231,13 @@ class _BoardColumn extends StatelessWidget {
                     child: Text(meta.title,
                         style: TextStyle(
                             color: tokens.textPrimary,
-                            fontSize: 13,
-                            fontWeight: FontWeight.w800))),
+                            fontSize: WorkFollowMacTypography.sectionTitle,
+                            fontWeight: WorkFollowMacWeight.semibold))),
                 Text('${tasks.length}',
                     style: TextStyle(
                         color: meta.color,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w800)),
+                        fontSize: WorkFollowMacTypography.listMeta,
+                        fontWeight: WorkFollowMacWeight.semibold)),
               ]),
               const SizedBox(height: 3),
               Padding(
@@ -246,7 +246,7 @@ class _BoardColumn extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style:
-                          TextStyle(color: tokens.textTertiary, fontSize: 11))),
+                          TextStyle(color: tokens.textTertiary, fontSize: WorkFollowMacTypography.listMeta))),
               const SizedBox(height: 10),
               Expanded(
                 child: tasks.isEmpty
@@ -255,8 +255,8 @@ class _BoardColumn extends StatelessWidget {
                             style: TextStyle(
                                 color:
                                     active ? meta.color : tokens.textTertiary,
-                                fontSize: 11,
-                                fontWeight: FontWeight.w600)))
+                                fontSize: WorkFollowMacTypography.caption,
+                                fontWeight: WorkFollowMacWeight.semibold)))
                     : ListView.separated(
                         padding: const EdgeInsets.only(bottom: 4),
                         itemCount: tasks.length,
@@ -341,21 +341,21 @@ class _BoardTaskCard extends StatelessWidget {
                     color: task.completed
                         ? tokens.textTertiary
                         : tokens.textPrimary,
-                    fontSize: 13,
-                    height: 1.35,
-                    fontWeight: FontWeight.w600,
+                    fontSize: WorkFollowMacTypography.listTitle,
+                    height: WorkFollowMacTypography.lineList,
+                    fontWeight: WorkFollowMacWeight.semibold,
                     decoration:
                         task.completed ? TextDecoration.lineThrough : null)),
             const SizedBox(height: 6),
             Wrap(spacing: 6, runSpacing: 3, children: [
               Text(task.listName,
-                  style: TextStyle(color: listColor, fontSize: 11)),
+                  style: TextStyle(color: listColor, fontSize: WorkFollowMacTypography.listMeta)),
               if (task.displayTimeLabel != null)
                 Text(task.displayTimeLabel!,
-                    style: TextStyle(color: tokens.textTertiary, fontSize: 11)),
+                    style: TextStyle(color: tokens.textTertiary, fontSize: WorkFollowMacTypography.listMeta)),
               if (task.focusCount > 0)
                 Text('专注 ${task.focusCount}',
-                    style: TextStyle(color: tokens.accent, fontSize: 11)),
+                    style: TextStyle(color: tokens.accent, fontSize: WorkFollowMacTypography.listMeta)),
             ]),
           ]),
         ),

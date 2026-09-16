@@ -62,6 +62,9 @@ class TaskItem {
     this.completedAt,
     this.deletedAt,
     this.skippedAt,
+    this.isPinned = false,
+    this.abandonedAt,
+    this.convertedNoteId,
     this.attachments = const [],
     this.focusCount = 0,
     this.priority = TaskPriority.none,
@@ -107,6 +110,13 @@ class TaskItem {
   /// Skipped records stay out of active projections but are not completed or
   /// moved to the trash.
   final String? skippedAt;
+  final bool isPinned;
+  final String? abandonedAt;
+  final String? convertedNoteId;
+
+  bool get isAbandoned => abandonedAt != null;
+  bool get isClosed => completed || isAbandoned;
+  bool get isConverted => convertedNoteId != null;
   final TaskPriority priority;
   final bool completed;
 
@@ -161,6 +171,10 @@ class TaskItem {
     bool clearDeletedAt = false,
     String? skippedAt,
     bool clearSkippedAt = false,
+    bool? isPinned,
+    String? abandonedAt,
+    bool clearAbandonedAt = false,
+    String? convertedNoteId,
     TaskPriority? priority,
     bool? completed,
     List<String>? attachments,
@@ -196,6 +210,9 @@ class TaskItem {
           clearCompletedAt ? completedAt : completedAt ?? this.completedAt,
       deletedAt: clearDeletedAt ? deletedAt : deletedAt ?? this.deletedAt,
       skippedAt: clearSkippedAt ? skippedAt : skippedAt ?? this.skippedAt,
+      isPinned: isPinned ?? this.isPinned,
+      abandonedAt: clearAbandonedAt ? null : abandonedAt ?? this.abandonedAt,
+      convertedNoteId: convertedNoteId ?? this.convertedNoteId,
       priority: priority ?? this.priority,
       completed: completed ?? this.completed,
       attachments: attachments ?? this.attachments,
@@ -209,8 +226,7 @@ class TaskItem {
     final reminder = localDateTimeFromStorage(record.reminderAt);
     final skipped =
         record.status.toUpperCase() == 'SKIPPED' || record.skippedAt != null;
-    final completed =
-        !skipped && (record.status == 'DONE' || record.status == 'ABANDONED');
+    final completed = !skipped && record.status == 'DONE';
     final skippedAt = normalizeStoredDateTime(record.skippedAt) ??
         (record.status.toUpperCase() == 'SKIPPED'
             ? normalizeStoredDateTime(record.updatedAt) ??
@@ -247,6 +263,13 @@ class TaskItem {
       completedAt: normalizeStoredDateTime(record.completedAt),
       deletedAt: normalizeStoredDateTime(record.deletedAt),
       skippedAt: skippedAt,
+      isPinned: record.isPinned,
+      abandonedAt: normalizeStoredDateTime(record.abandonedAt) ??
+          (record.status == 'ABANDONED'
+              ? normalizeStoredDateTime(record.updatedAt) ??
+                  DateTime.now().toIso8601String()
+              : null),
+      convertedNoteId: record.convertedNoteId,
       attachments: List.unmodifiable(record.attachments),
       focusCount: record.focusCount,
       priority: TaskPriority.values.firstWhere(
@@ -263,7 +286,9 @@ class TaskItem {
       title: title,
       description: description ?? note,
       contentJson: contentJson,
-      status: skippedAt != null ? 'SKIPPED' : (completed ? 'DONE' : 'TODO'),
+      status: isSkipped
+          ? 'SKIPPED'
+          : (isAbandoned ? 'ABANDONED' : (completed ? 'DONE' : 'TODO')),
       priority: priority.name.toUpperCase(),
       dueAt: dueAt,
       dueEndAt: dueEndAt,
@@ -286,6 +311,9 @@ class TaskItem {
       completedAt: completedAt,
       deletedAt: deletedAt,
       skippedAt: skippedAt,
+      isPinned: isPinned,
+      abandonedAt: abandonedAt,
+      convertedNoteId: convertedNoteId,
       attachments: List.unmodifiable(attachments),
       focusCount: focusCount,
     );

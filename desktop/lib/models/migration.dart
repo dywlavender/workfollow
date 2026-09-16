@@ -148,6 +148,9 @@ class MigrationTaskRecord {
     required this.completedAt,
     this.deletedAt,
     this.skippedAt,
+    this.isPinned = false,
+    this.abandonedAt,
+    this.convertedNoteId,
   });
 
   final String id;
@@ -177,6 +180,9 @@ class MigrationTaskRecord {
   /// Optional timestamp for a recurring occurrence that was skipped. Older
   /// snapshots omit this field and continue to deserialize unchanged.
   final String? skippedAt;
+  final bool isPinned;
+  final String? abandonedAt;
+  final String? convertedNoteId;
 
   factory MigrationTaskRecord.fromJson(Map<String, dynamic> json) {
     return MigrationTaskRecord(
@@ -205,6 +211,9 @@ class MigrationTaskRecord {
       completedAt: _nullableString(json['completedAt']),
       deletedAt: _nullableString(json['deletedAt']),
       skippedAt: _nullableString(json['skippedAt']),
+      isPinned: json['isPinned'] == true,
+      abandonedAt: _nullableString(json['abandonedAt']),
+      convertedNoteId: _nullableString(json['convertedNoteId']),
     );
   }
 
@@ -233,6 +242,9 @@ class MigrationTaskRecord {
         'completedAt': completedAt,
         'deletedAt': deletedAt,
         'skippedAt': skippedAt,
+        'isPinned': isPinned,
+        'abandonedAt': abandonedAt,
+        'convertedNoteId': convertedNoteId,
       };
 }
 

@@ -17,6 +17,8 @@ enum TaskSlashAction {
   tag,
   relation,
   attachment,
+  deadline,
+  focus,
 }
 
 extension TaskSlashActionLabel on TaskSlashAction {
@@ -33,6 +35,8 @@ extension TaskSlashActionLabel on TaskSlashAction {
         TaskSlashAction.tag => '标签',
         TaskSlashAction.relation => '关联任务/笔记',
         TaskSlashAction.attachment => '附件',
+        TaskSlashAction.deadline => '截止日期',
+        TaskSlashAction.focus => '专注记录',
       };
 
   String get keyName => switch (this) {
@@ -48,6 +52,8 @@ extension TaskSlashActionLabel on TaskSlashAction {
         TaskSlashAction.tag => 'tag',
         TaskSlashAction.relation => 'relation',
         TaskSlashAction.attachment => 'attachment',
+        TaskSlashAction.deadline => 'deadline',
+        TaskSlashAction.focus => 'focus',
       };
 
   IconData get icon => switch (this) {
@@ -63,6 +69,8 @@ extension TaskSlashActionLabel on TaskSlashAction {
         TaskSlashAction.tag => WorkFollowIcons.tag,
         TaskSlashAction.relation => WorkFollowIcons.link,
         TaskSlashAction.attachment => WorkFollowIcons.attachment,
+        TaskSlashAction.deadline => WorkFollowIcons.deadline,
+        TaskSlashAction.focus => WorkFollowIcons.focus,
       };
 }
 
@@ -96,6 +104,8 @@ class TaskSlashMenu extends StatelessWidget {
     TaskSlashAction.tag,
     TaskSlashAction.relation,
     TaskSlashAction.attachment,
+    TaskSlashAction.deadline,
+    TaskSlashAction.focus,
   ];
 
   @override
@@ -166,8 +176,8 @@ class TaskSlashMenu extends StatelessWidget {
             color: tokens.textSecondary),
         title: Text(action.label,
             style: TextStyle(
-                fontSize: WorkFollowTypography.field,
-                fontWeight: FontWeight.w500,
+                fontSize: WorkFollowMacTypography.control,
+                fontWeight: WorkFollowMacWeight.medium,
                 color: tokens.textPrimary)),
         onTap: () => onSelected(action),
       );

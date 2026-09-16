@@ -13,6 +13,7 @@ import '../theme/workfollow_icons.dart';
 import '../theme/workfollow_theme.dart';
 import 'app_icon_button.dart';
 import 'task_editor_toolbar.dart';
+import 'task_editor_popover.dart';
 import 'desktop_popover.dart';
 import 'task_slash_menu.dart';
 
@@ -259,6 +260,8 @@ class _NoteDocumentEditorState extends State<NoteDocumentEditor>
         _insertBlock({'type': 'horizontalRule'});
       case TaskSlashAction.attachment:
         unawaited(_attach());
+      case TaskSlashAction.deadline:
+      case TaskSlashAction.focus:
       case TaskSlashAction.subtask:
       case TaskSlashAction.tag:
       case TaskSlashAction.relation:
@@ -285,11 +288,19 @@ class _NoteDocumentEditorState extends State<NoteDocumentEditor>
     // The toggle lives outside Quill's editor; explicitly reclaim focus before
     // presenting the floating strip so a selected range remains formatable.
     focus.requestFocus();
-    await showAnchoredPopover<void>(
+    final bounds = context.findRenderObject()! as RenderBox;
+    final trigger = anchor.findRenderObject()! as RenderBox;
+    final center = bounds.localToGlobal(Offset(bounds.size.width / 2, 0));
+    await showTaskEditorPopover<void>(
       anchor,
-      width: 740,
-      maxHeight: 52,
-      placement: PopoverPlacement.topEnd,
+      width: TaskEditorPopoverStyle.toolbarWidth,
+      maxHeight: TaskEditorPopoverStyle.toolbarHeight,
+      anchorRect:
+          Rect.fromLTWH(center.dx, trigger.localToGlobal(Offset.zero).dy, 0, 0),
+      placement: const PopoverPlacement(
+          preferredSide: PopoverSide.top,
+          alignment: PopoverAlignment.center,
+          gap: 28),
       focusPolicy: PopoverFocusPolicy.preserveEditor,
       builder: (_) => TaskEditorToolbar(
         controller: editor,
@@ -350,8 +361,9 @@ class _NoteDocumentEditorState extends State<NoteDocumentEditor>
   Widget build(BuildContext context) {
     final tokens = WorkFollowTheme.of(context);
     final textStyle = Theme.of(context).textTheme.bodyLarge!.copyWith(
-        fontSize: WorkFollowTypography.editorBody,
-        height: 1.65,
+        fontSize: WorkFollowMacTypography.body,
+        height: WorkFollowMacTypography.lineBody,
+        fontWeight: WorkFollowMacWeight.regular,
         color: tokens.textPrimary);
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       quill.QuillEditor(
@@ -392,7 +404,7 @@ class _NoteDocumentEditorState extends State<NoteDocumentEditor>
                 size: WorkFollowMetrics.compactFieldIcon,
                 color: selectionPresent ? tokens.accent : tokens.textTertiary),
             label: const Text('选中文字生成任务',
-                style: TextStyle(fontSize: WorkFollowTypography.button))),
+                style: TextStyle(fontSize: WorkFollowMacTypography.control))),
         const Spacer(),
         Builder(
           builder: (anchor) => Tooltip(
@@ -545,7 +557,7 @@ class NoteBlockBuilder extends quill.EmbedBuilder {
                                             .trimRight()
                                         : '',
                                     style: TextStyle(
-                                        fontSize: WorkFollowTypography.field,
+                                        fontSize: WorkFollowMacTypography.control,
                                         color: tokens.textPrimary))),
                         ]),
                     ])));
@@ -561,7 +573,7 @@ class NoteBlockBuilder extends quill.EmbedBuilder {
                 ? '导入的内容块'
                 : notePlainTextFromContentJson(node).trim(),
             style: TextStyle(
-                fontSize: WorkFollowTypography.field,
+                fontSize: WorkFollowMacTypography.control,
                 color: tokens.textSecondary)));
   }
 }

@@ -69,16 +69,19 @@ class HomeScreen extends StatelessWidget {
                             _greeting(now),
                             style: TextStyle(
                               color: tokens.textPrimary,
-                              fontSize: 26,
-                              fontWeight: FontWeight.w800,
-                              letterSpacing: -.6,
+                              fontSize: WorkFollowMacTypography.pageTitle,
+                              fontWeight: WorkFollowMacWeight.semibold,
+                              height: WorkFollowMacTypography.lineTight,
+                              letterSpacing: WorkFollowMacTracking.none,
                             ),
                           ),
                           const SizedBox(height: 6),
                           Text(
                             '${now.month} 月 ${now.day} 日 · 星期${_weekday(now.weekday)} · 把注意力留给要紧的事。',
                             style: TextStyle(
-                                color: tokens.textTertiary, fontSize: 13),
+                                color: tokens.textTertiary,
+                                fontSize: WorkFollowMacTypography.control,
+                                height: WorkFollowMacTypography.lineList),
                           ),
                         ],
                       ),
@@ -292,13 +295,13 @@ class _WeeklyReviewCard extends StatelessWidget {
           Text('上周回顾',
               style: TextStyle(
                   color: tokens.textPrimary,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w800)),
+                  fontSize: WorkFollowMacTypography.sectionTitle,
+                  fontWeight: WorkFollowMacWeight.semibold)),
           const SizedBox(height: 3),
           Text(message,
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
-              style: TextStyle(color: tokens.textSecondary, fontSize: 12)),
+              style: TextStyle(color: tokens.textSecondary, fontSize: WorkFollowMacTypography.supporting)),
         ])),
         TextButton(
             onPressed: onOpen,
@@ -307,7 +310,7 @@ class _WeeklyReviewCard extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
                 minimumSize: Size.zero,
                 tapTargetSize: MaterialTapTargetSize.shrinkWrap),
-            child: const Text('看完成', style: TextStyle(fontSize: 12))),
+            child: const Text('看完成', style: TextStyle(fontSize: WorkFollowMacTypography.control))),
       ]),
     );
   }
@@ -359,13 +362,16 @@ class _HomePanel extends StatelessWidget {
                     Text(title,
                         style: TextStyle(
                             color: tokens.textPrimary,
-                            fontSize: 15,
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: -.2)),
+                            fontSize: WorkFollowMacTypography.listTitle,
+                            fontWeight: WorkFollowMacWeight.semibold,
+                            height: WorkFollowMacTypography.lineControl,
+                            letterSpacing: WorkFollowMacTracking.none)),
                     const SizedBox(height: 3),
                     Text(subtitle,
                         style: TextStyle(
-                            color: tokens.textTertiary, fontSize: 11)),
+                            color: tokens.textTertiary,
+                            fontSize: WorkFollowMacTypography.supporting,
+                            height: WorkFollowMacTypography.lineList)),
                   ],
                 ),
               ),
@@ -382,8 +388,8 @@ class _HomePanel extends StatelessWidget {
                   child: Text(action!,
                       style: TextStyle(
                           color: tokens.accent,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700)),
+                          fontSize: WorkFollowMacTypography.control,
+                          fontWeight: WorkFollowMacWeight.semibold)),
                 ),
             ],
           ),
@@ -494,8 +500,8 @@ class _HomeTaskRow extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                     color: tokens.textPrimary,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600),
+                    fontSize: WorkFollowMacTypography.listTitle,
+                    fontWeight: WorkFollowMacWeight.semibold),
               ),
             ),
           ),
@@ -503,7 +509,7 @@ class _HomeTaskRow extends StatelessWidget {
           Text(task.displayTimeLabel ?? '未安排',
               style: TextStyle(
                   color: overdue ? tokens.warning : tokens.textTertiary,
-                  fontSize: 11)),
+                  fontSize: WorkFollowMacTypography.listMeta)),
         ],
       ),
     );
@@ -547,19 +553,19 @@ class _HomeNoteList extends StatelessWidget {
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
                                 color: tokens.textPrimary,
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600)),
+                                fontSize: WorkFollowMacTypography.listTitle,
+                                fontWeight: WorkFollowMacWeight.semibold)),
                         const SizedBox(height: 2),
                         Text(note.folder,
                             style: TextStyle(
-                                color: tokens.textTertiary, fontSize: 11)),
+                                color: tokens.textTertiary, fontSize: WorkFollowMacTypography.listMeta)),
                       ],
                     ),
                   ),
                   const SizedBox(width: 8),
                   Text(note.updatedLabel,
                       style:
-                          TextStyle(color: tokens.textTertiary, fontSize: 11)),
+                          TextStyle(color: tokens.textTertiary, fontSize: WorkFollowMacTypography.listMeta)),
                 ],
               ),
             ),
@@ -615,8 +621,8 @@ class _MiniCalendar extends StatelessWidget {
                             child: Text(label,
                                 style: TextStyle(
                                     color: tokens.textTertiary,
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.w700)))),
+                                    fontSize: WorkFollowMacTypography.caption,
+                                    fontWeight: WorkFollowMacWeight.semibold)))),
                 ],
               ),
             ),
@@ -650,10 +656,10 @@ class _MiniCalendar extends StatelessWidget {
                                 color: isToday
                                     ? Colors.white
                                     : tokens.textSecondary,
-                                fontSize: 10,
+                                fontSize: WorkFollowMacTypography.caption,
                                 fontWeight: isToday
-                                    ? FontWeight.w800
-                                    : FontWeight.w500)),
+                                    ? WorkFollowMacWeight.semibold
+                                    : WorkFollowMacWeight.medium)),
                         if (hasTasks) ...[
                           const SizedBox(height: 2),
                           Container(
@@ -701,7 +707,7 @@ class _PanelEmpty extends StatelessWidget {
                   color: tokens.accent)),
           const SizedBox(height: 10),
           Text(label,
-              style: TextStyle(color: tokens.textTertiary, fontSize: 12)),
+              style: TextStyle(color: tokens.textTertiary, fontSize: WorkFollowMacTypography.supporting)),
         ],
       ),
     );

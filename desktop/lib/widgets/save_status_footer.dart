@@ -31,13 +31,13 @@ class SaveStatusFooter extends StatelessWidget {
               label,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
-                  color: color, fontSize: 11, fontWeight: FontWeight.w500),
+                  color: color, fontSize: WorkFollowMacTypography.control, fontWeight: WorkFollowMacWeight.medium),
             ),
           ),
           const Spacer(),
           if (trailing != null)
             Text(trailing!,
-                style: TextStyle(color: tokens.textTertiary, fontSize: 10)),
+                style: TextStyle(color: tokens.textTertiary, fontSize: WorkFollowMacTypography.caption)),
         ],
       ),
     );

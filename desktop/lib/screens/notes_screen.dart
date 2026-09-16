@@ -110,13 +110,13 @@ class _NotesScreenState extends State<NotesScreen> {
                         children: [
                       Text(c.notesFavoritesOnly ? '收藏笔记' : '笔记',
                           style: TextStyle(
-                              fontSize: WorkFollowTypography.webBody,
-                              fontWeight: FontWeight.w600,
+                              fontSize: WorkFollowMacTypography.body,
+                              fontWeight: WorkFollowMacWeight.semibold,
                               color: tokens.textPrimary)),
                       const SizedBox(height: 2),
                       Text('${notes.length} 条笔记',
                           style: TextStyle(
-                              fontSize: WorkFollowTypography.webCaption,
+                              fontSize: WorkFollowMacTypography.listMeta,
                               color: tokens.textTertiary)),
                     ])),
                 _NewNoteButton(onCreate: create),
@@ -128,7 +128,7 @@ class _NotesScreenState extends State<NotesScreen> {
                   controller: search,
                   onChanged: (value) => setState(() => query = value),
                   style:
-                      const TextStyle(fontSize: WorkFollowTypography.webBody),
+                      const TextStyle(fontSize: WorkFollowMacTypography.body),
                   decoration: InputDecoration(
                       hintText: '搜索笔记',
                       prefixIcon: const AppIcon(WorkFollowIcons.search,
@@ -155,7 +155,7 @@ class _NotesScreenState extends State<NotesScreen> {
                         tapTargetSize: MaterialTapTargetSize.shrinkWrap),
                     child: Text(newestFirst ? '最近编辑' : '按标题',
                         style: const TextStyle(
-                            fontSize: WorkFollowTypography.webCaption))),
+                            fontSize: WorkFollowMacTypography.control))),
               ]),
             ),
             Expanded(
@@ -163,7 +163,7 @@ class _NotesScreenState extends State<NotesScreen> {
                     ? Center(
                         child: Text(query.isEmpty ? '从一条新笔记开始' : '没有找到相关笔记',
                             style: TextStyle(
-                                fontSize: 13, color: tokens.textTertiary)))
+                                fontSize: WorkFollowMacTypography.supporting, color: tokens.textTertiary)))
                     : ListView.builder(
                         padding: const EdgeInsets.only(top: 2, bottom: 8),
                         itemCount: notes.length,
@@ -292,8 +292,8 @@ class _NoteCardState extends State<_NoteCard> {
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: TextStyle(
-                                    fontSize: WorkFollowTypography.webLabel,
-                                    fontWeight: FontWeight.w600,
+                                    fontSize: WorkFollowMacTypography.listTitle,
+                                    fontWeight: WorkFollowMacWeight.semibold,
                                     color: tokens.textPrimary))),
                       ]),
                       const SizedBox(height: 4),
@@ -301,14 +301,14 @@ class _NoteCardState extends State<_NoteCard> {
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
-                              fontSize: WorkFollowTypography.webMicro,
-                              height: WorkFollowTypography.webLineHeightNormal,
+                              fontSize: WorkFollowMacTypography.listBody,
+                              height: WorkFollowMacTypography.lineList,
                               color: tokens.textSecondary)),
                       const SizedBox(height: 5),
                       Row(children: [
                         Text(noteUpdatedLabelFor(note.updatedAt),
                             style: TextStyle(
-                                fontSize: WorkFollowTypography.webMicro,
+                                fontSize: WorkFollowMacTypography.listMeta,
                                 color: tokens.textTertiary)),
                         const Spacer(),
                         Flexible(
@@ -323,8 +323,8 @@ class _NoteCardState extends State<_NoteCard> {
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                     style: TextStyle(
-                                        fontSize: WorkFollowTypography.webMicro,
-                                        fontWeight: FontWeight.w600,
+                                        fontSize: WorkFollowMacTypography.listMeta,
+                                        fontWeight: WorkFollowMacWeight.semibold,
                                         color: tokens.textSecondary)))),
                       ]),
                     ]))));
@@ -352,12 +352,12 @@ class _EmptyNote extends StatelessWidget {
           const SizedBox(height: 18),
           Text('给想法一个安静的地方',
               style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w700,
+                  fontSize: WorkFollowMacTypography.detailTitle,
+                  fontWeight: WorkFollowMacWeight.semibold,
                   color: tokens.textPrimary)),
           const SizedBox(height: 8),
           Text('写下笔记，把下一步变成任务。',
-              style: TextStyle(fontSize: 12.5, color: tokens.textTertiary)),
+              style: TextStyle(fontSize: WorkFollowMacTypography.supporting, color: tokens.textTertiary)),
           const SizedBox(height: 22),
           FilledButton.icon(
               onPressed: onCreate,
@@ -480,11 +480,11 @@ class _NotePageState extends State<_NotePage> {
                           minLines: 1,
                           maxLines: 3,
                           style: TextStyle(
-                              fontSize: WorkFollowTypography.webEditorTitleSize,
-                              height: WorkFollowTypography.webLineHeightSnug,
-                              fontWeight: FontWeight.w600,
+                              fontSize: WorkFollowMacTypography.detailTitle,
+                              height: WorkFollowMacTypography.lineControl,
+                              fontWeight: WorkFollowMacWeight.semibold,
                               letterSpacing:
-                                  WorkFollowTypography.webTrackingTight,
+                                  WorkFollowMacTracking.none,
                               color: tokens.textPrimary),
                           decoration: const InputDecoration(
                               hintText: '笔记标题',
@@ -497,7 +497,7 @@ class _NotePageState extends State<_NotePage> {
                       Row(children: [
                         Text('最近编辑于 ${noteUpdatedLabelFor(note.updatedAt)}',
                             style: TextStyle(
-                                fontSize: WorkFollowTypography.caption,
+                                fontSize: WorkFollowMacTypography.listMeta,
                                 color: tokens.textTertiary)),
                         const Spacer(),
                         SoftPill(
@@ -514,13 +514,13 @@ class _NotePageState extends State<_NotePage> {
                         Row(children: [
                           Text('关联任务',
                               style: TextStyle(
-                                  fontSize: WorkFollowTypography.field,
-                                  fontWeight: FontWeight.w700,
+                                  fontSize: WorkFollowMacTypography.control,
+                                  fontWeight: WorkFollowMacWeight.semibold,
                                   color: tokens.textSecondary)),
                           const SizedBox(width: 6),
                           Text('${linked.length}',
                               style: TextStyle(
-                                  fontSize: WorkFollowTypography.caption,
+                                  fontSize: WorkFollowMacTypography.listMeta,
                                   color: tokens.textTertiary)),
                         ]),
                         const SizedBox(height: 8),
@@ -582,8 +582,8 @@ class _LinkedTaskRow extends StatelessWidget {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
-                              fontSize: WorkFollowTypography.field,
-                              fontWeight: FontWeight.w500,
+                              fontSize: WorkFollowMacTypography.control,
+                              fontWeight: WorkFollowMacWeight.medium,
                               color: task.completed
                                   ? tokens.textTertiary
                                   : tokens.textPrimary,

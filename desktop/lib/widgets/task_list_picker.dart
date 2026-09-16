@@ -1,10 +1,11 @@
+import 'task_menu_style.dart';
+import 'task_editor_popover.dart';
+import 'task_editor_glyph.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../state/workspace_controller.dart';
-import '../theme/workfollow_icons.dart';
 import '../theme/workfollow_theme.dart';
-import 'app_icon_button.dart';
 import 'desktop_popover.dart';
 
 /// Searchable list chooser used by the task footer and quick add. It keeps the
@@ -14,14 +15,16 @@ class TaskListPicker {
   const TaskListPicker._();
 
   static Future<String?> show(BuildContext anchor,
-      {required WorkspaceController controller, String? selected}) {
-    return showDesktopPopover<String>(
+      {required WorkspaceController controller,
+      String? selected,
+      PopoverPlacement placement = PopoverPlacement.topStart}) {
+    return showTaskEditorPopover<String>(
       anchor,
-      width: 300,
+      width: TaskEditorPopoverStyle.listWidth,
       maxHeight: 440,
-      placement: PopoverPlacement.topStart,
+      placement: placement,
       focusPolicy: PopoverFocusPolicy.searchField,
-      scrollable: true,
+      scrollable: false,
       builder: (_) => _TaskListPickerBody(
         controller: controller,
         selected: selected,
@@ -44,6 +47,7 @@ class _TaskListPickerBodyState extends State<_TaskListPickerBody> {
   late final TextEditingController search;
   late final FocusNode focus;
   int focusedIndex = 0;
+  bool keyboardNavigation = false;
 
   @override
   void initState() {
@@ -74,6 +78,10 @@ class _TaskListPickerBodyState extends State<_TaskListPickerBody> {
     final lists = _visibleLists();
     if (lists.isEmpty) return KeyEventResult.ignored;
     final key = event.logicalKey;
+    if (key == LogicalKeyboardKey.arrowDown ||
+        key == LogicalKeyboardKey.arrowUp) {
+      keyboardNavigation = true;
+    }
     if (key == LogicalKeyboardKey.arrowDown) {
       setState(() =>
           focusedIndex = (focusedIndex + 1).clamp(0, lists.length - 1).toInt());
@@ -92,7 +100,7 @@ class _TaskListPickerBodyState extends State<_TaskListPickerBody> {
       setState(() => focusedIndex = lists.length - 1);
       return KeyEventResult.handled;
     }
-    if (key == LogicalKeyboardKey.enter || key == LogicalKeyboardKey.space) {
+    if (key == LogicalKeyboardKey.enter && !focus.hasFocus) {
       Navigator.of(context).pop(lists[focusedIndex]);
       return KeyEventResult.handled;
     }
@@ -109,7 +117,7 @@ class _TaskListPickerBodyState extends State<_TaskListPickerBody> {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = WorkFollowTheme.of(context);
+    final tokens = TaskMenuStyle.colors(context);
     final query = search.text.trim().toLowerCase();
     final lists = widget.controller.orderedLists
         .where(
@@ -117,93 +125,101 @@ class _TaskListPickerBodyState extends State<_TaskListPickerBody> {
         .toList(growable: false);
     return Focus(
       onKeyEvent: _onKey,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(10, 10, 10, WorkFollowSpacing.xs),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: 204),
         child: Column(
+          key: const ValueKey('task-list-picker'),
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            TextField(
-              key: const ValueKey('task-list-search'),
-              controller: search,
-              focusNode: focus,
-              autofocus: true,
-              textInputAction: TextInputAction.search,
-              onSubmitted: (_) {
-                final names = _visibleLists();
-                if (names.isNotEmpty) {
-                  Navigator.of(context).pop(
-                      names[focusedIndex.clamp(0, names.length - 1).toInt()]);
-                }
-              },
-              decoration: InputDecoration(
-                prefixIcon: const AppIcon(WorkFollowIcons.search,
-                    size: WorkFollowMetrics.toolbarIcon),
-                suffixIcon: search.text.isEmpty
-                    ? null
-                    : IconButton(
-                        tooltip: '清除搜索',
-                        icon: const AppIcon(WorkFollowIcons.close,
-                            size: WorkFollowMetrics.toolbarIcon),
-                        onPressed: search.clear,
-                      ),
-                hintText: '搜索清单',
-                hintStyle: TextStyle(color: tokens.textTertiary, fontSize: 13),
-                filled: true,
-                fillColor: tokens.canvas,
-                isDense: true,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(WorkFollowRadii.control),
-                  borderSide: BorderSide.none,
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: TextField(
+                key: const ValueKey('task-list-search'),
+                controller: search,
+                focusNode: focus,
+                autofocus: true,
+                cursorColor: tokens.textPrimary,
+                style: Theme.of(context)
+                    .textTheme
+                    .bodyMedium!
+                    .copyWith(fontSize: WorkFollowMacTypography.body, height: WorkFollowMacTypography.lineTight),
+                textInputAction: TextInputAction.search,
+                onSubmitted: (_) {
+                  final names = _visibleLists();
+                  if (names.isNotEmpty)
+                    Navigator.of(context)
+                        .pop(names[focusedIndex.clamp(0, names.length - 1)]);
+                },
+                decoration: InputDecoration(
+                  prefixIcon: TaskEditorGlyph('search',
+                      size: 18, color: tokens.textTertiary),
+                  prefixIconConstraints: const BoxConstraints(minWidth: 28),
+                  hintText: '搜索',
+                  hintStyle: TextStyle(color: tokens.textTertiary),
+                  filled: false,
+                  border: InputBorder.none,
+                  isDense: true,
+                  contentPadding: const EdgeInsets.symmetric(vertical: 6),
                 ),
-                contentPadding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
               ),
             ),
-            const SizedBox(height: 8),
-            if (lists.isEmpty)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 18),
-                child: Text('没有匹配的清单',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(color: tokens.textTertiary, fontSize: 12)),
-              )
-            else
-              for (var index = 0; index < lists.length; index++)
-                MouseRegion(
-                  onEnter: (_) {
-                    if (focusedIndex != index) {
-                      setState(() => focusedIndex = index);
-                    }
-                  },
-                  child: ListTile(
-                    key: ValueKey('menu-option-${lists[index].name}'),
-                    dense: true,
-                    minTileHeight: WorkFollowMetrics.menuRowHeight,
-                    shape: RoundedRectangleBorder(
-                        borderRadius:
-                            BorderRadius.circular(WorkFollowRadii.control)),
-                    tileColor:
-                        focusedIndex == index ? tokens.accentFaint : null,
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 8),
-                    leading: AppIcon(
-                      lists[index].name == '收集箱'
-                          ? WorkFollowIcons.inbox
-                          : WorkFollowIcons.list,
-                      size: WorkFollowMetrics.toolbarIcon,
-                      color: tokens.textSecondary,
-                    ),
-                    title: Text(lists[index].name,
-                        style:
-                            TextStyle(fontSize: 13, color: tokens.textPrimary)),
-                    trailing: widget.selected == lists[index].name
-                        ? AppIcon(WorkFollowIcons.check,
-                            size: WorkFollowMetrics.toolbarIcon,
-                            color: tokens.accent)
-                        : null,
-                    onTap: () => Navigator.of(context).pop(lists[index].name),
-                  ),
-                ),
+            Divider(height: 1, color: tokens.border),
+            Flexible(
+                child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Column(mainAxisSize: MainAxisSize.min, children: [
+                if (lists.isEmpty)
+                  Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 28),
+                      child: Text('没有匹配的清单',
+                          style: TextStyle(
+                              fontSize: WorkFollowMacTypography.body, color: tokens.textTertiary))),
+                for (var index = 0; index < lists.length; index++)
+                  Builder(builder: (context) {
+                    final selected = widget.selected == lists[index].name;
+                    final color = selected ? tokens.accent : tokens.textPrimary;
+                    return Material(
+                      color: keyboardNavigation && focusedIndex == index
+                          ? tokens.accentFaint
+                          : Colors.transparent,
+                      child: InkWell(
+                        key: ValueKey('menu-option-${lists[index].name}'),
+                        onTap: () =>
+                            Navigator.of(context).pop(lists[index].name),
+                        hoverColor: tokens.canvas,
+                        child: SizedBox(
+                            height: 34,
+                            child: Padding(
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 16),
+                              child: Row(children: [
+                                TaskEditorGlyph(
+                                    lists[index].name == '收集箱'
+                                        ? 'inbox'
+                                        : 'menu',
+                                    size: 18,
+                                    color: color),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                    child: Text(lists[index].name,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .bodyMedium!
+                                            .copyWith(
+                                                fontSize: WorkFollowMacTypography.menu, color: color))),
+                                if (selected)
+                                  TaskEditorGlyph('check',
+                                      size: 18, color: tokens.accent),
+                              ]),
+                            )),
+                      ),
+                    );
+                  }),
+              ]),
+            )),
           ],
         ),
       ),

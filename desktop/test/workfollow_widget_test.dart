@@ -169,7 +169,7 @@ void main() {
 
     expect(find.byType(TaskInspector), findsOneWidget);
     expect(find.byKey(const ValueKey('task-schedule')), findsOneWidget);
-    expect(find.byKey(const ValueKey('task-repeat')), findsOneWidget);
+    expect(find.byKey(const ValueKey('task-repeat')), findsNothing);
     expect(find.byKey(const ValueKey('task-priority')), findsOneWidget);
     expect(tester.takeException(), isNull);
   });

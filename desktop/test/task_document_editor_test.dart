@@ -37,6 +37,9 @@ void main() {
     await tester.tap(trigger);
     await tester.pumpAndSettle();
 
+    await tester
+        .ensureVisible(find.byKey(const ValueKey('menu-option-delete')));
+    await tester.pumpAndSettle();
     final triggerRect = tester.getRect(trigger);
     final deleteRect =
         tester.getRect(find.byKey(const ValueKey('menu-option-delete')));
@@ -71,6 +74,9 @@ void main() {
     await tester.tap(trigger);
     await tester.pumpAndSettle();
 
+    await tester
+        .ensureVisible(find.byKey(const ValueKey('menu-option-delete')));
+    await tester.pumpAndSettle();
     final triggerRect = tester.getRect(trigger);
     final deleteRect =
         tester.getRect(find.byKey(const ValueKey('menu-option-delete')));
@@ -110,6 +116,9 @@ void main() {
     await tester.tap(trigger);
     await tester.pumpAndSettle();
 
+    await tester
+        .ensureVisible(find.byKey(const ValueKey('menu-option-delete')));
+    await tester.pumpAndSettle();
     final triggerRect = tester.getRect(trigger);
     final deleteRect =
         tester.getRect(find.byKey(const ValueKey('menu-option-delete')));
@@ -134,7 +143,7 @@ void main() {
 
     expect(find.byKey(const ValueKey('task-document-editor')), findsOneWidget);
     expect(find.byKey(const ValueKey('task-format-toggle')), findsOneWidget);
-    expect(find.byKey(const ValueKey('task-deadline')), findsOneWidget);
+    expect(find.byKey(const ValueKey('task-deadline')), findsNothing);
     expect(find.byKey(const ValueKey('task-advanced-toggle')), findsNothing);
     expect(find.text('显示更多属性'), findsNothing);
   });
@@ -239,7 +248,14 @@ void main() {
     final toggleRect =
         tester.getRect(find.byKey(const ValueKey('task-format-toggle')));
     expect(toolbarRect.top, lessThan(toggleRect.top));
-    expect((toolbarRect.right - toggleRect.right).abs(), lessThan(20));
+    expect(
+        toolbarRect.center.dx,
+        closeTo(
+            tester
+                .getRect(find.byKey(const ValueKey('task-document-editor')))
+                .center
+                .dx,
+            1));
     await tester.tap(find.byKey(const ValueKey('task-format-bold')));
     await tester.pump();
     expect(
@@ -354,28 +370,31 @@ void main() {
     expect(find.byKey(const ValueKey('task-subtasks-block')), findsOneWidget);
   });
 
-  testWidgets('inspector More menu opens the existing focus workflow',
+  testWidgets('inspector More menu excludes controls absent from reference',
       (tester) async {
     final controller = WorkspaceController(seedData: false);
     addTearDown(controller.dispose);
-    controller.addTask('专注任务');
-    final task = controller.tasks.single;
-    var opened = false;
+    controller.addTask('菜单任务');
     await tester.pumpWidget(MaterialApp(
-      theme: WorkFollowThemeData.light(),
-      home: Scaffold(
-        body: TaskInspector(
-          task: task,
-          controller: controller,
-          onOpenFocusTimer: () => opened = true,
-        ),
-      ),
-    ));
+        theme: WorkFollowThemeData.light(),
+        home: Scaffold(
+            body: TaskInspector(
+                task: controller.tasks.single, controller: controller))));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('task-more-actions')));
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('menu-option-focus')));
-    await tester.pump();
-    expect(opened, isTrue);
+    for (final action in [
+      'focus',
+      'relation',
+      'copy',
+      'duplicate',
+      'copy-link',
+      'open-note'
+    ]) {
+      expect(find.byKey(ValueKey('menu-option-$action')), findsNothing);
+    }
+    expect(find.byKey(const ValueKey('menu-option-pin')), findsOneWidget);
+    expect(
+        find.byKey(const ValueKey('menu-option-convert-note')), findsOneWidget);
   });
 }

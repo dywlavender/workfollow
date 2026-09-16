@@ -635,6 +635,9 @@ class _IconRailFooterButton extends StatelessWidget {
               tapTargetSize: MaterialTapTargetSize.shrinkWrap,
             ),
             child: Text(label,
+                // Not a type role: 1pt keeps this invisible target out of the
+                // layout while leaving it keyboard and screen-reader
+                // addressable. Excluded from the typography contract on purpose.
                 style: const TextStyle(fontSize: 1, color: Colors.transparent)),
           ),
         ],
@@ -810,9 +813,10 @@ class _RailSectionHeader extends StatelessWidget {
               label,
               style: TextStyle(
                 color: tokens.textTertiary,
-                fontSize: WorkFollowTypography.sectionLabel,
-                fontWeight: FontWeight.w700,
-                letterSpacing: .5,
+                fontSize: WorkFollowMacTypography.sectionTitle,
+                height: WorkFollowMacTypography.lineControl,
+                fontWeight: WorkFollowMacWeight.semibold,
+                letterSpacing: WorkFollowMacTracking.none,
               ),
             ),
           ),
@@ -863,7 +867,9 @@ class _TagSectionState extends State<_TagSection> {
             child: Text('在任务中输入 #标签',
                 style: TextStyle(
                     color: tokens.textTertiary,
-                    fontSize: WorkFollowTypography.sectionLabel)),
+                    fontSize: WorkFollowMacTypography.supporting,
+                    height: WorkFollowMacTypography.lineList,
+                    fontWeight: WorkFollowMacWeight.regular)),
           ),
         if (expanded)
           ...tags.entries.map((entry) => _TagItem(
@@ -896,8 +902,10 @@ class _RailBrand extends StatelessWidget {
           const SizedBox(width: WorkFollowSpacing.sm),
           Text('打勾',
               style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w700,
+                  fontSize: WorkFollowMacTypography.detailTitle,
+                  height: WorkFollowMacTypography.lineControl,
+                  fontWeight: WorkFollowMacWeight.semibold,
+                  letterSpacing: WorkFollowMacTracking.none,
                   color: tokens.textPrimary)),
         ]));
   }
@@ -972,9 +980,11 @@ class _RailItemState extends State<_RailItem> {
                     style: TextStyle(
                       color:
                           widget.selected ? tokens.accent : tokens.textPrimary,
-                      fontSize: WorkFollowTypography.navigation,
-                      fontWeight:
-                          widget.selected ? FontWeight.w700 : FontWeight.w500,
+                      fontSize: WorkFollowMacTypography.navigation,
+                      height: WorkFollowMacTypography.lineControl,
+                      // Selection is expressed by background and color, not by
+                      // adding weight; heavier nav rows read as "Web page".
+                      fontWeight: WorkFollowMacWeight.medium,
                     ),
                   ),
                 ),
@@ -1003,8 +1013,9 @@ class _RailItemState extends State<_RailItem> {
                             color: widget.selected
                                 ? tokens.accent
                                 : tokens.textTertiary,
-                            fontSize: WorkFollowTypography.metadata,
-                            fontWeight: FontWeight.w700)),
+                            fontSize: WorkFollowMacTypography.navigationMeta,
+                            height: WorkFollowMacTypography.lineControl,
+                            fontWeight: WorkFollowMacWeight.medium)),
                   ),
               ],
             ),
@@ -1093,10 +1104,9 @@ class _TaskListItemState extends State<_TaskListItem> {
                               style: TextStyle(
                                   color:
                                       selected ? listColor : tokens.textPrimary,
-                                  fontSize: WorkFollowTypography.navigation,
-                                  fontWeight: selected
-                                      ? FontWeight.w700
-                                      : FontWeight.w500)),
+                                  fontSize: WorkFollowMacTypography.navigation,
+                                  height: WorkFollowMacTypography.lineControl,
+                                  fontWeight: WorkFollowMacWeight.medium)),
                         ),
                         if (count > 0)
                           Text('$count',
@@ -1104,8 +1114,9 @@ class _TaskListItemState extends State<_TaskListItem> {
                                   color: selected
                                       ? listColor
                                       : tokens.textTertiary,
-                                  fontSize: WorkFollowTypography.metadata,
-                                  fontWeight: FontWeight.w700)),
+                                  fontSize: WorkFollowMacTypography.navigationMeta,
+                                  height: WorkFollowMacTypography.lineControl,
+                                  fontWeight: WorkFollowMacWeight.medium)),
                         ExcludeSemantics(
                           excluding: !hovering,
                           child: AnimatedOpacity(
@@ -1318,14 +1329,15 @@ class _TagItemState extends State<_TagItem> {
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                           color: selected ? tokens.accent : tokens.textPrimary,
-                          fontSize: WorkFollowTypography.navigation,
-                          fontWeight:
-                              selected ? FontWeight.w700 : FontWeight.w500))),
+                          fontSize: WorkFollowMacTypography.navigation,
+                          height: WorkFollowMacTypography.lineControl,
+                          fontWeight: WorkFollowMacWeight.medium))),
               Text('${widget.count}',
                   style: TextStyle(
                       color: selected ? tokens.accent : tokens.textTertiary,
-                      fontSize: WorkFollowTypography.metadata,
-                      fontWeight: FontWeight.w700)),
+                      fontSize: WorkFollowMacTypography.navigationMeta,
+                      height: WorkFollowMacTypography.lineControl,
+                      fontWeight: WorkFollowMacWeight.medium)),
             ]),
           ),
         ),
@@ -1441,9 +1453,9 @@ class _TaskViewItemState extends State<_TaskViewItem> {
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           color: selected ? tokens.accent : tokens.textPrimary,
-                          fontSize: WorkFollowTypography.navigation,
-                          fontWeight:
-                              selected ? FontWeight.w700 : FontWeight.w600,
+                          fontSize: WorkFollowMacTypography.navigation,
+                          height: WorkFollowMacTypography.lineControl,
+                          fontWeight: WorkFollowMacWeight.medium,
                         ),
                       ),
                       const SizedBox(height: 2),
@@ -1453,8 +1465,8 @@ class _TaskViewItemState extends State<_TaskViewItem> {
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                             color: tokens.textTertiary,
-                            fontSize: WorkFollowTypography.metadata,
-                            height: 1.1),
+                            fontSize: WorkFollowMacTypography.navigationMeta,
+                            height: WorkFollowMacTypography.lineControl),
                       ),
                     ],
                   ),
@@ -1466,8 +1478,9 @@ class _TaskViewItemState extends State<_TaskViewItem> {
                       '$count',
                       style: TextStyle(
                         color: selected ? tokens.accent : tokens.textTertiary,
-                        fontSize: WorkFollowTypography.metadata,
-                        fontWeight: FontWeight.w700,
+                        fontSize: WorkFollowMacTypography.navigationMeta,
+                        height: WorkFollowMacTypography.lineControl,
+                        fontWeight: WorkFollowMacWeight.medium,
                       ),
                     ),
                   ),

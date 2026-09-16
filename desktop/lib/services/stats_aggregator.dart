@@ -56,7 +56,8 @@ class StatsAggregator {
     var focusSessions = 0;
 
     for (final task in tasks) {
-      if (task.deletedAt != null) continue;
+      if (task.deletedAt != null || task.isConverted || task.isSkipped)
+        continue;
       focusSessions += task.focusCount;
       if (!task.completed) continue;
       final completedAt = localDateTimeFromStorage(task.completedAt);
@@ -77,20 +78,29 @@ class StatsAggregator {
 
     final weekStart = today.subtract(Duration(days: today.weekday - 1));
     final weekCompleted = tasks.where((task) {
-      if (task.deletedAt != null || !task.completed) return false;
+      if (task.deletedAt != null || task.isConverted || !task.completed)
+        return false;
       final value = localDateTimeFromStorage(task.completedAt);
       return value != null &&
           !value.isBefore(weekStart) &&
           value.isBefore(trendEnd);
     }).length;
     final overdue = tasks.where((task) {
-      if (task.deletedAt != null || task.completed) return false;
+      if (task.deletedAt != null ||
+          task.isClosed ||
+          task.isConverted ||
+          task.isSkipped) return false;
       final due = localDateTimeFromStorage(task.dueAt);
       if (due == null) return false;
       return DateTime(due.year, due.month, due.day).isBefore(today);
     }).length;
-    final active =
-        tasks.where((task) => task.deletedAt == null && !task.completed).length;
+    final active = tasks
+        .where((task) =>
+            task.deletedAt == null &&
+            !task.isClosed &&
+            !task.isConverted &&
+            !task.isSkipped)
+        .length;
     final todayCompleted = completionByDay[today] ?? 0;
 
     return StatsSnapshot(

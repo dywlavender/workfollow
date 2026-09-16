@@ -10,6 +10,8 @@ class TaskWorkspaceUiState {
   int noteOpenVersion = 0;
   bool quickAddFocusPending = false;
   int inspectorTitleFocusVersion = 0;
+  String? pendingInspectorTitleTaskId;
+  String? pendingSubtaskTaskId;
 
   void requestQuickAddFocus() {
     quickAddFocusPending = true;

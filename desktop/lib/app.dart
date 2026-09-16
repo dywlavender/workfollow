@@ -398,7 +398,9 @@ class _WorkFollowShellState extends State<WorkFollowShell> {
                 child: Text('切换任务视图',
                     style: TextStyle(
                         color: tokens.textPrimary,
-                        fontWeight: FontWeight.w700)),
+                        fontSize: WorkFollowMacTypography.listTitle,
+                        height: WorkFollowMacTypography.lineControl,
+                        fontWeight: WorkFollowMacWeight.semibold)),
               ),
             ),
             for (final option in const <(WorkspaceView, String)>[
@@ -445,15 +447,11 @@ class _WorkFollowShellState extends State<WorkFollowShell> {
 
   void _handleGlobalEscape() {
     // Nested editors and popovers receive Escape first. Once those surfaces
-    // are closed, the shell follows TickTick's predictable unwind order:
-    // clear multi-selection, then close the fixed inspector, then release any
-    // remaining focus.
+    // are closed, the shell clears multi-selection or releases focus.
+    // The inspector owns dismissal for inline and narrow presentations;
+    // a fixed detail pane remains selected when focus is elsewhere.
     if (controller.multiSelectCount > 0) {
       controller.clearMultiSelect();
-      return;
-    }
-    if (controller.selectedTaskId != null) {
-      controller.clearTaskSelection();
       return;
     }
     FocusManager.instance.primaryFocus?.unfocus();
@@ -699,8 +697,9 @@ class _AppToolbar extends StatelessWidget {
             Text(title,
                 style: TextStyle(
                     color: tokens.textSecondary,
-                    fontSize: WorkFollowTypography.navigation,
-                    fontWeight: FontWeight.w600)),
+                    fontSize: WorkFollowMacTypography.navigation,
+                    height: WorkFollowMacTypography.lineControl,
+                    fontWeight: WorkFollowMacWeight.medium)),
           const Spacer(),
           _ToolbarSearch(onPressed: onSearch),
           const SizedBox(width: 7),
@@ -723,8 +722,9 @@ class _AppToolbar extends StatelessWidget {
                         const Text('新建',
                             style: TextStyle(
                                 color: Colors.white,
-                                fontSize: WorkFollowTypography.button,
-                                fontWeight: FontWeight.w700))
+                                fontSize: WorkFollowMacTypography.control,
+                                height: WorkFollowMacTypography.lineControl,
+                                fontWeight: WorkFollowMacWeight.medium))
                       ])))),
         ],
       ),
@@ -767,7 +767,8 @@ class _ToolbarSearchState extends State<_ToolbarSearch> {
                 child: Text('搜索',
                     style: TextStyle(
                         color: tokens.textTertiary,
-                        fontSize: WorkFollowTypography.field))),
+                        fontSize: WorkFollowMacTypography.control,
+                        height: WorkFollowMacTypography.lineControl))),
             Container(
                 padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 3),
                 decoration: BoxDecoration(
@@ -777,8 +778,9 @@ class _ToolbarSearchState extends State<_ToolbarSearch> {
                 child: Text('⌘K',
                     style: TextStyle(
                         color: tokens.textTertiary,
-                        fontSize: WorkFollowTypography.caption - 1,
-                        fontWeight: FontWeight.w700)))
+                        fontSize: WorkFollowMacTypography.caption,
+                        height: WorkFollowMacTypography.lineControl,
+                        fontWeight: WorkFollowMacWeight.medium)))
           ]),
         ),
       ),
@@ -860,8 +862,9 @@ class _UndoToast extends StatelessWidget {
               Text(message,
                   style: TextStyle(
                       color: tokens.textPrimary,
-                      fontSize: WorkFollowTypography.field,
-                      fontWeight: FontWeight.w600)),
+                      fontSize: WorkFollowMacTypography.control,
+                      height: WorkFollowMacTypography.lineControl,
+                      fontWeight: WorkFollowMacWeight.medium)),
               const SizedBox(width: 14),
               TextButton(
                   onPressed: onUndo,
@@ -873,8 +876,9 @@ class _UndoToast extends StatelessWidget {
                       tapTargetSize: MaterialTapTargetSize.shrinkWrap),
                   child: const Text('撤销',
                       style: TextStyle(
-                          fontSize: WorkFollowTypography.caption,
-                          fontWeight: FontWeight.w700)))
+                          fontSize: WorkFollowMacTypography.control,
+                          height: WorkFollowMacTypography.lineControl,
+                          fontWeight: WorkFollowMacWeight.medium)))
             ])));
   }
 }

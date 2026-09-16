@@ -183,11 +183,11 @@ class _CardTitle extends StatelessWidget {
       Text(title,
           style: TextStyle(
               color: tokens.textPrimary,
-              fontSize: 14,
-              fontWeight: FontWeight.w800)),
+              fontSize: WorkFollowMacTypography.sectionTitle,
+              fontWeight: WorkFollowMacWeight.semibold)),
       const SizedBox(width: 8),
       Text(subtitle,
-          style: TextStyle(color: tokens.textTertiary, fontSize: 11)),
+          style: TextStyle(color: tokens.textTertiary, fontSize: WorkFollowMacTypography.listMeta)),
     ]);
   }
 }
@@ -226,8 +226,8 @@ class _RangeSegment extends StatelessWidget {
                           color: weekly == option.$1
                               ? tokens.accent
                               : tokens.textSecondary,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600)))),
+                          fontSize: WorkFollowMacTypography.control,
+                          fontWeight: WorkFollowMacWeight.semibold)))),
       ]),
     );
   }
@@ -357,7 +357,7 @@ class _Distribution extends StatelessWidget {
                     color: Color(controller.colorValueForList(entry.key)))),
             const SizedBox(width: 6),
             Text('${entry.key}  ${((entry.value / total) * 100).round()}%',
-                style: TextStyle(color: tokens.textSecondary, fontSize: 12)),
+                style: TextStyle(color: tokens.textSecondary, fontSize: WorkFollowMacTypography.listMeta)),
           ]),
       ])),
     ]);

@@ -91,6 +91,9 @@ class WorkFollowIcons {
   static const noteAlt = Icons.note_alt_outlined;
 
   static const flag = Icons.flag_outlined;
+  static const pin = Icons.vertical_align_top_rounded;
+  static const abandon = Icons.disabled_by_default_outlined;
+  static const tagLabel = Icons.sell_outlined;
   static const reminder = Icons.notifications_none_rounded;
   static const repeat = Icons.repeat_rounded;
   static const deadline = Icons.event_available_outlined;

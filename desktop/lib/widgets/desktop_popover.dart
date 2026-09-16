@@ -247,9 +247,11 @@ Future<T?> showAnchoredPopover<T>(
   bool restoreFocus = true,
   EdgeInsets safeArea = const EdgeInsets.all(12),
   Rect? anchorRect,
+  ThemeData? popoverTheme,
+  BoxDecoration? surfaceDecoration,
 }) async {
   final previousFocus = FocusManager.instance.primaryFocus;
-  final theme = Theme.of(anchor);
+  final theme = popoverTheme ?? Theme.of(anchor);
   final result = await showGeneralDialog<T>(
     context: anchor,
     barrierDismissible: true,
@@ -267,6 +269,7 @@ Future<T?> showAnchoredPopover<T>(
       scrollable: scrollable,
       safeArea: safeArea,
       theme: theme,
+      surfaceDecoration: surfaceDecoration,
     ),
     transitionBuilder: (_, animation, __, child) =>
         FadeTransition(opacity: animation, child: child),
@@ -347,6 +350,7 @@ class _AnchoredPopoverPage extends StatefulWidget {
     required this.scrollable,
     required this.safeArea,
     required this.theme,
+    this.surfaceDecoration,
   });
 
   final BuildContext anchor;
@@ -359,6 +363,7 @@ class _AnchoredPopoverPage extends StatefulWidget {
   final bool scrollable;
   final EdgeInsets safeArea;
   final ThemeData theme;
+  final BoxDecoration? surfaceDecoration;
 
   @override
   State<_AnchoredPopoverPage> createState() => _AnchoredPopoverPageState();
@@ -451,19 +456,26 @@ class _AnchoredPopoverPageState extends State<_AnchoredPopoverPage>
       PopoverFocusPolicy.searchField =>
         FocusScope(autofocus: true, canRequestFocus: true, child: constrained),
     };
-    final tokens = WorkFollowTheme.of(context);
-    final surface = Material(
-      elevation: 12,
+    final tokens = widget.theme.extension<WorkFollowTheme>() ??
+        WorkFollowTheme.of(context);
+    final material = Material(
+      elevation: widget.surfaceDecoration == null ? 12 : 0,
       shadowColor: Colors.black.withValues(alpha: .18),
       color: tokens.overlay,
       surfaceTintColor: Colors.transparent,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(WorkFollowRadii.popover),
-        side: BorderSide(color: tokens.border),
+        borderRadius: widget.surfaceDecoration?.borderRadius ??
+            BorderRadius.circular(WorkFollowRadii.popover),
+        side: widget.surfaceDecoration == null
+            ? BorderSide(color: tokens.border)
+            : BorderSide.none,
       ),
       clipBehavior: Clip.antiAlias,
       child: focusAware,
     );
+    final surface = widget.surfaceDecoration == null
+        ? material
+        : DecoratedBox(decoration: widget.surfaceDecoration!, child: material);
     final positioned = switch (geometry.side) {
       PopoverSide.top => Positioned(
           left: geometry.rect.left,
@@ -691,7 +703,7 @@ class _DesktopMenuSurfaceState<T> extends State<_DesktopMenuSurface<T>> {
                 size: WorkFollowMetrics.toolbarIcon, color: foreground),
         title: Text(entry.label,
             style: TextStyle(
-                fontSize: WorkFollowTypography.field,
+                fontSize: WorkFollowMacTypography.control,
                 color: entry.destructive ? tokens.danger : tokens.textPrimary)),
         trailing: widget.selected == entry.value
             ? AppIcon(WorkFollowIcons.check,
@@ -737,8 +749,8 @@ class PropertyButton extends StatelessWidget {
                   foregroundColor: foreground,
                   backgroundColor: active ? tokens.accentFaint : tokens.canvas,
                   textStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      fontSize: WorkFollowTypography.field,
-                      fontWeight: FontWeight.w500),
+                      fontSize: WorkFollowMacTypography.control,
+                      fontWeight: WorkFollowMacWeight.medium),
                   minimumSize: const Size(0, WorkFollowMetrics.chipHeight),
                   padding:
                       const EdgeInsets.symmetric(horizontal: 10, vertical: 7),

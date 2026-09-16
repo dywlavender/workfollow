@@ -227,12 +227,12 @@ class _CommandPaletteState extends State<_CommandPalette> {
                           cursorColor: tokens.accent,
                           style: TextStyle(
                               color: tokens.textPrimary,
-                              fontSize: 15,
-                              fontWeight: FontWeight.w500),
+                              fontSize: WorkFollowMacTypography.body,
+                              fontWeight: WorkFollowMacWeight.medium),
                           decoration: InputDecoration(
                               hintText: '搜索任务、笔记或命令…',
                               hintStyle: TextStyle(
-                                  color: tokens.textTertiary, fontSize: 15),
+                                  color: tokens.textTertiary, fontSize: WorkFollowMacTypography.body),
                               border: InputBorder.none,
                               isDense: true,
                               contentPadding: EdgeInsets.zero),
@@ -248,8 +248,8 @@ class _CommandPaletteState extends State<_CommandPalette> {
                           child: Text('esc',
                               style: TextStyle(
                                   color: tokens.textTertiary,
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.w700))),
+                                  fontSize: WorkFollowMacTypography.caption,
+                                  fontWeight: WorkFollowMacWeight.semibold))),
                     ],
                   ),
                 ),
@@ -259,7 +259,7 @@ class _CommandPaletteState extends State<_CommandPalette> {
                       padding: const EdgeInsets.all(32),
                       child: Text('没有找到相关内容',
                           style: TextStyle(
-                              color: tokens.textTertiary, fontSize: 13)))
+                              color: tokens.textTertiary, fontSize: WorkFollowMacTypography.supporting)))
                 else
                   Flexible(
                     child: ListView.builder(
@@ -308,13 +308,13 @@ class _CommandPaletteState extends State<_CommandPalette> {
                                       Text(command.title,
                                           style: TextStyle(
                                               color: tokens.textPrimary,
-                                              fontSize: 13,
-                                              fontWeight: FontWeight.w600)),
+                                              fontSize: WorkFollowMacTypography.menu,
+                                              fontWeight: WorkFollowMacWeight.semibold)),
                                       const SizedBox(height: 2),
                                       Text(command.subtitle,
                                           style: TextStyle(
                                               color: tokens.textTertiary,
-                                              fontSize: 11))
+                                              fontSize: WorkFollowMacTypography.listMeta))
                                     ])),
                                 if (selected)
                                   AppIcon(WorkFollowIcons.next,
@@ -339,7 +339,7 @@ class _CommandPaletteState extends State<_CommandPalette> {
                     const SizedBox(width: 5),
                     Text('选择',
                         style: TextStyle(
-                            color: tokens.textTertiary, fontSize: 10)),
+                            color: tokens.textTertiary, fontSize: WorkFollowMacTypography.caption)),
                     const SizedBox(width: 16),
                     AppIcon(WorkFollowIcons.keyboardUp,
                         size: WorkFollowMetrics.metadataIcon,
@@ -350,13 +350,13 @@ class _CommandPaletteState extends State<_CommandPalette> {
                     const SizedBox(width: 5),
                     Text('移动',
                         style: TextStyle(
-                            color: tokens.textTertiary, fontSize: 10)),
+                            color: tokens.textTertiary, fontSize: WorkFollowMacTypography.caption)),
                     const Spacer(),
                     Text('打勾命令面板',
                         style: TextStyle(
                             color: tokens.textTertiary,
-                            fontSize: 10,
-                            fontWeight: FontWeight.w600))
+                            fontSize: WorkFollowMacTypography.caption,
+                            fontWeight: WorkFollowMacWeight.semibold))
                   ]),
                 ),
               ],

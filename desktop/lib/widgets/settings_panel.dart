@@ -131,7 +131,7 @@ class _SettingsPanelState extends State<_SettingsPanel> {
                 children: [
                   Text(
                     '文件来自 Web 端个人空间。',
-                    style: TextStyle(color: tokens.textSecondary, fontSize: 12),
+                    style: TextStyle(color: tokens.textSecondary, fontSize: WorkFollowMacTypography.supporting),
                   ),
                   const SizedBox(height: 17),
                   _ImportCountRow(label: '任务', count: bundle.tasks.length),
@@ -146,9 +146,9 @@ class _SettingsPanelState extends State<_SettingsPanel> {
                     contentPadding: EdgeInsets.zero,
                     activeColor: tokens.accent,
                     title:
-                        const Text('合并到本机', style: TextStyle(fontSize: 12.5)),
+                        const Text('合并到本机', style: TextStyle(fontSize: WorkFollowMacTypography.control)),
                     subtitle: const Text('保留本地已有内容，相同 ID 的记录跳过',
-                        style: TextStyle(fontSize: 10.5)),
+                        style: TextStyle(fontSize: WorkFollowMacTypography.caption)),
                     onChanged: (value) => setDialogState(() => mode = value!),
                   ),
                   RadioListTile<_ImportMode>(
@@ -158,9 +158,9 @@ class _SettingsPanelState extends State<_SettingsPanel> {
                     contentPadding: EdgeInsets.zero,
                     activeColor: tokens.accent,
                     title:
-                        const Text('清空本机后导入', style: TextStyle(fontSize: 12.5)),
+                        const Text('清空本机后导入', style: TextStyle(fontSize: WorkFollowMacTypography.control)),
                     subtitle: const Text('以文件内容为准，本机当前任务和笔记会被清空',
-                        style: TextStyle(fontSize: 10.5)),
+                        style: TextStyle(fontSize: WorkFollowMacTypography.caption)),
                     onChanged: (value) => setDialogState(() => mode = value!),
                   ),
                 ],
@@ -284,8 +284,8 @@ class _SettingsPanelState extends State<_SettingsPanel> {
                                   const EdgeInsets.symmetric(horizontal: 12),
                               child: Text('设置',
                                   style: TextStyle(
-                                      fontSize: 22,
-                                      fontWeight: FontWeight.w700,
+                                      fontSize: WorkFollowMacTypography.pageTitle,
+                                      fontWeight: WorkFollowMacWeight.semibold,
                                       color: tokens.textPrimary))),
                           const SizedBox(height: 24),
                           for (var i = 0; i < pages.length; i++)
@@ -307,14 +307,14 @@ class _SettingsPanelState extends State<_SettingsPanel> {
                                         ][i],
                                         size: WorkFollowMetrics.navigationIcon),
                                     title: Text(pages[i],
-                                        style: const TextStyle(fontSize: 13)),
+                                        style: const TextStyle(fontSize: WorkFollowMacTypography.navigation)),
                                     onTap: () => setState(() => page = i))),
                           const Spacer(),
                           Padding(
                               padding: const EdgeInsets.only(left: 12),
                               child: Text('打勾 · 个人版',
                                   style: TextStyle(
-                                      fontSize: 11,
+                                      fontSize: WorkFollowMacTypography.caption,
                                       color: tokens.textTertiary))),
                         ]))),
             Expanded(
@@ -327,8 +327,8 @@ class _SettingsPanelState extends State<_SettingsPanel> {
                             Expanded(
                                 child: Text(pages[page],
                                     style: const TextStyle(
-                                        fontSize: 18,
-                                        fontWeight: FontWeight.w600))),
+                                        fontSize: WorkFollowMacTypography.detailTitle,
+                                        fontWeight: WorkFollowMacWeight.semibold))),
                             IconButton(
                                 tooltip: '关闭',
                                 onPressed: () => Navigator.of(context).pop(),
@@ -345,12 +345,12 @@ class _SettingsPanelState extends State<_SettingsPanel> {
                                 if (page == 0) ...[
                                   const Text('界面模式',
                                       style: TextStyle(
-                                          fontSize: 14,
-                                          fontWeight: FontWeight.w600)),
+                                          fontSize: WorkFollowMacTypography.sectionTitle,
+                                          fontWeight: WorkFollowMacWeight.semibold)),
                                   const SizedBox(height: 8),
                                   Text('选择你习惯的明暗外观。',
                                       style: TextStyle(
-                                          fontSize: 13,
+                                          fontSize: WorkFollowMacTypography.supporting,
                                           color: tokens.textSecondary)),
                                   const SizedBox(height: 16),
                                   Align(
@@ -364,12 +364,12 @@ class _SettingsPanelState extends State<_SettingsPanel> {
                                   const SizedBox(height: 32),
                                   const Text('列表密度',
                                       style: TextStyle(
-                                          fontSize: 14,
-                                          fontWeight: FontWeight.w600)),
+                                          fontSize: WorkFollowMacTypography.sectionTitle,
+                                          fontWeight: WorkFollowMacWeight.semibold)),
                                   const SizedBox(height: 8),
                                   Text('紧凑模式适合长清单；舒适模式保留更多呼吸感。',
                                       style: TextStyle(
-                                          fontSize: 13,
+                                          fontSize: WorkFollowMacTypography.supporting,
                                           color: tokens.textSecondary)),
                                   const SizedBox(height: 12),
                                   _DensitySegment(
@@ -381,13 +381,13 @@ class _SettingsPanelState extends State<_SettingsPanel> {
                                   const SizedBox(height: 24),
                                   const Text('详情面板',
                                       style: TextStyle(
-                                          fontSize: 14,
-                                          fontWeight: FontWeight.w600)),
+                                          fontSize: WorkFollowMacTypography.sectionTitle,
+                                          fontWeight: WorkFollowMacWeight.semibold)),
                                   const SizedBox(height: 8),
                                   Text('宽窗口可在右侧常驻显示任务详情；关闭后，点击任务仍会打开详情。',
                                       style: TextStyle(
-                                          fontSize: 13,
-                                          height: 1.5,
+                                          fontSize: WorkFollowMacTypography.supporting,
+                                          height: WorkFollowMacTypography.lineControl,
                                           color: tokens.textSecondary)),
                                   const SizedBox(height: 6),
                                   SwitchListTile.adaptive(
@@ -396,9 +396,9 @@ class _SettingsPanelState extends State<_SettingsPanel> {
                                       contentPadding: EdgeInsets.zero,
                                       dense: true,
                                       title: const Text('宽窗常驻详情',
-                                          style: TextStyle(fontSize: 12.5)),
+                                          style: TextStyle(fontSize: WorkFollowMacTypography.control)),
                                       subtitle: const Text('仅在宽窗口生效',
-                                          style: TextStyle(fontSize: 10.5)),
+                                          style: TextStyle(fontSize: WorkFollowMacTypography.caption)),
                                       value: inspectorPersistent,
                                       activeThumbColor: tokens.accent,
                                       onChanged: (value) {
@@ -410,31 +410,31 @@ class _SettingsPanelState extends State<_SettingsPanel> {
                                   const SizedBox(height: 22),
                                   const Text('个人工作空间',
                                       style: TextStyle(
-                                          fontSize: 14,
-                                          fontWeight: FontWeight.w600)),
+                                          fontSize: WorkFollowMacTypography.sectionTitle,
+                                          fontWeight: WorkFollowMacWeight.semibold)),
                                   const SizedBox(height: 8),
                                   Text('任务、笔记与附件保存在这台 Mac。首次使用从空白空间开始。',
                                       style: TextStyle(
-                                          fontSize: 13,
-                                          height: 1.6,
+                                          fontSize: WorkFollowMacTypography.supporting,
+                                          height: WorkFollowMacTypography.lineControl,
                                           color: tokens.textSecondary)),
                                   const SizedBox(height: 12),
                                   Text('清单颜色可在侧栏清单的 ⋯ 菜单中选择，并会同步到任务行、日历和统计。',
                                       style: TextStyle(
-                                          fontSize: 13,
-                                          height: 1.6,
+                                          fontSize: WorkFollowMacTypography.supporting,
+                                          height: WorkFollowMacTypography.lineControl,
                                           color: tokens.textTertiary)),
                                 ],
                                 if (page == 1) ...[
                                   const Text('系统通知',
                                       style: TextStyle(
-                                          fontSize: 14,
-                                          fontWeight: FontWeight.w600)),
+                                          fontSize: WorkFollowMacTypography.sectionTitle,
+                                          fontWeight: WorkFollowMacWeight.semibold)),
                                   const SizedBox(height: 8),
                                   Text('设置任务提醒后，由 macOS 在指定时刻通知你。点击通知可回到任务。',
                                       style: TextStyle(
-                                          fontSize: 13,
-                                          height: 1.6,
+                                          fontSize: WorkFollowMacTypography.supporting,
+                                          height: WorkFollowMacTypography.lineControl,
                                           color: tokens.textSecondary)),
                                   const SizedBox(height: 18),
                                   const Align(
@@ -443,15 +443,15 @@ class _SettingsPanelState extends State<_SettingsPanel> {
                                   const SizedBox(height: 28),
                                   Text('提醒与安排日期是两回事：安排日期决定任务在哪一天显示，提醒决定何时通知。',
                                       style: TextStyle(
-                                          fontSize: 13,
-                                          height: 1.6,
+                                          fontSize: WorkFollowMacTypography.supporting,
+                                          height: WorkFollowMacTypography.lineControl,
                                           color: tokens.textTertiary)),
                                 ],
                                 if (page == 2) ...[
                                   const Text('导入与导出',
                                       style: TextStyle(
-                                          fontSize: 14,
-                                          fontWeight: FontWeight.w600)),
+                                          fontSize: WorkFollowMacTypography.sectionTitle,
+                                          fontWeight: WorkFollowMacWeight.semibold)),
                                   const SizedBox(height: 10),
                                   Wrap(spacing: 10, runSpacing: 8, children: [
                                     OutlinedButton.icon(
@@ -474,19 +474,19 @@ class _SettingsPanelState extends State<_SettingsPanel> {
                                   const SizedBox(height: 8),
                                   Text('导出文件包含任务、笔记和本地附件，可用于迁移到另一台 Mac。',
                                       style: TextStyle(
-                                          fontSize: 13,
-                                          height: 1.6,
+                                          fontSize: WorkFollowMacTypography.supporting,
+                                          height: WorkFollowMacTypography.lineControl,
                                           color: tokens.textSecondary)),
                                   const SizedBox(height: 26),
                                   const Text('备份与恢复',
                                       style: TextStyle(
-                                          fontSize: 14,
-                                          fontWeight: FontWeight.w600)),
+                                          fontSize: WorkFollowMacTypography.sectionTitle,
+                                          fontWeight: WorkFollowMacWeight.semibold)),
                                   const SizedBox(height: 8),
                                   Text('每天自动保存一份快照。恢复前会保留当前内容。',
                                       style: TextStyle(
-                                          fontSize: 13,
-                                          height: 1.6,
+                                          fontSize: WorkFollowMacTypography.supporting,
+                                          height: WorkFollowMacTypography.lineControl,
                                           color: tokens.textSecondary)),
                                   const SizedBox(height: 12),
                                   Wrap(spacing: 10, runSpacing: 8, children: [
@@ -520,10 +520,10 @@ class _SettingsPanelState extends State<_SettingsPanel> {
                                           Expanded(
                                               child: Text(entry.key,
                                                   style: const TextStyle(
-                                                      fontSize: 13))),
+                                                      fontSize: WorkFollowMacTypography.listBody))),
                                           Text(entry.value,
                                               style: TextStyle(
-                                                  fontSize: 13,
+                                                  fontSize: WorkFollowMacTypography.listBody,
                                                   color: tokens.textSecondary)),
                                         ])),
                                 ],
@@ -533,8 +533,8 @@ class _SettingsPanelState extends State<_SettingsPanel> {
                                       padding: const EdgeInsets.only(top: 20),
                                       child: Text(importError ?? importMessage!,
                                           style: TextStyle(
-                                              fontSize: 13,
-                                              height: 1.5,
+                                              fontSize: WorkFollowMacTypography.supporting,
+                                              height: WorkFollowMacTypography.lineControl,
                                               color: importError == null
                                                   ? tokens.success
                                                   : tokens.danger))),
@@ -560,14 +560,14 @@ class _ImportCountRow extends StatelessWidget {
         children: [
           Expanded(
             child: Text(label,
-                style: TextStyle(color: tokens.textSecondary, fontSize: 12)),
+                style: TextStyle(color: tokens.textSecondary, fontSize: WorkFollowMacTypography.listMeta)),
           ),
           Text(
             '$count',
             style: TextStyle(
               color: tokens.textPrimary,
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
+              fontSize: WorkFollowMacTypography.listMeta,
+              fontWeight: WorkFollowMacWeight.semibold,
             ),
           ),
         ],
@@ -625,8 +625,8 @@ class _ModeSegment extends StatelessWidget {
                           color: current == mode.$1
                               ? tokens.accent
                               : tokens.textSecondary,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
+                          fontSize: WorkFollowMacTypography.control,
+                          fontWeight: WorkFollowMacWeight.semibold,
                         )),
                   ],
                 ),
@@ -672,8 +672,8 @@ class _DensitySegment extends StatelessWidget {
                           color: compact == option.$1
                               ? tokens.accent
                               : tokens.textSecondary,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600)))),
+                          fontSize: WorkFollowMacTypography.control,
+                          fontWeight: WorkFollowMacWeight.semibold)))),
       ]),
     );
   }
@@ -724,7 +724,7 @@ class _NotificationStatusState extends State<_NotificationStatus> {
           style: TextStyle(
             color:
                 _status == 'authorized' ? tokens.success : tokens.textTertiary,
-            fontSize: 11,
+            fontSize: WorkFollowMacTypography.caption,
           )),
       if (_status == 'notDetermined' || _status == 'denied') ...[
         const SizedBox(width: 8),
@@ -738,7 +738,7 @@ class _NotificationStatusState extends State<_NotificationStatus> {
             tapTargetSize: MaterialTapTargetSize.shrinkWrap,
           ),
           child: Text(_status == 'denied' ? '需到系统设置' : '开启通知',
-              style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700)),
+              style: TextStyle(fontSize: WorkFollowMacTypography.control, fontWeight: WorkFollowMacWeight.semibold)),
         ),
       ],
     ]);

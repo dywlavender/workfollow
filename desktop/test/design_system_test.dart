@@ -6,6 +6,7 @@ import 'package:workfollow_personal/theme/workfollow_theme.dart';
 import 'package:workfollow_personal/widgets/app_icon_button.dart';
 import 'package:workfollow_personal/widgets/desktop_popover.dart';
 import 'package:workfollow_personal/widgets/task_editor_toolbar.dart';
+import 'package:workfollow_personal/widgets/task_editor_popover.dart';
 import 'package:workfollow_personal/theme/workfollow_icons.dart';
 
 void main() {
@@ -28,9 +29,13 @@ void main() {
     expect(WorkFollowTheme.light.sidebarGradient.colors.first,
         const Color(0xFFDDF5EE));
     expect(WorkFollowTheme.light.accent, const Color(0xFF2FAF95));
-    expect(theme.textTheme.displaySmall?.fontSize, 26);
-    expect(theme.textTheme.bodyLarge?.fontSize, 14);
-    expect(theme.textTheme.bodyMedium?.fontSize, 13);
+    expect(theme.textTheme.displaySmall?.fontSize, WorkFollowMacTypography.pageTitle);
+    expect(theme.textTheme.displaySmall?.fontWeight,
+        WorkFollowMacWeight.semibold);
+    expect(theme.textTheme.displaySmall?.letterSpacing,
+        WorkFollowMacTracking.none);
+    expect(theme.textTheme.bodyLarge?.fontSize, WorkFollowMacTypography.body);
+    expect(theme.textTheme.bodyMedium?.fontSize, WorkFollowMacTypography.control);
     expect(
         theme.textTheme.bodyLarge?.fontFamilyFallback, contains('PingFang SC'));
   });
@@ -54,7 +59,7 @@ void main() {
         WorkFollowMetrics.toolbarIcon);
   });
 
-  testWidgets('document formatting strip keeps a 40 point toolbar height',
+  testWidgets('document formatting strip uses the reference popover height',
       (tester) async {
     final controller = quill.QuillController.basic();
     addTearDown(controller.dispose);
@@ -74,7 +79,7 @@ void main() {
 
     expect(
       tester.getSize(find.byKey(const ValueKey('task-editor-toolbar'))).height,
-      WorkFollowMetrics.editorToolbarHeight,
+      TaskEditorPopoverStyle.toolbarHeight,
     );
   });
 

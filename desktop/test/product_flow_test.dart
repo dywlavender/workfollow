@@ -14,7 +14,7 @@ import 'package:workfollow_personal/models/task.dart';
 import 'package:workfollow_personal/screens/today_screen.dart';
 import 'package:workfollow_personal/services/local_workspace_store.dart';
 import 'package:workfollow_personal/state/workspace_controller.dart';
-import 'package:workfollow_personal/widgets/task_date_picker.dart';
+import 'package:workfollow_personal/widgets/task_schedule_panel.dart';
 
 const capture = bool.fromEnvironment('WORKFOLLOW_CAPTURE');
 final boundary = GlobalKey();
@@ -307,15 +307,15 @@ void main() {
     await tester.ensureVisible(find.byKey(const ValueKey('task-schedule')));
     await tester.tap(find.byKey(const ValueKey('task-schedule')));
     await tester.pumpAndSettle();
-    expect(find.byType(TaskDatePicker), findsOneWidget);
+    expect(find.byType(TaskSchedulePanel), findsOneWidget);
     expect(find.byType(BottomSheet), findsNothing);
     await screenshot(tester, 'date-picker');
-    await tester.tap(find.widgetWithText(TextButton, '明天'));
+    await tester.tap(find.byKey(const ValueKey('date-shortcut-明天')));
     await tester.pump();
     await tester.ensureVisible(find.byKey(const ValueKey('apply-date')));
     await tester.tap(find.byKey(const ValueKey('apply-date')));
     await tester.pumpAndSettle();
-    expect(find.byType(TaskDatePicker), findsNothing);
+    expect(find.byType(TaskSchedulePanel), findsNothing);
     expect(find.text('准备季度产品评审演示文稿'), findsNothing);
     expect(find.text('查看任务'), findsOneWidget);
     await tester.tap(find.text('查看任务'));
@@ -330,7 +330,7 @@ void main() {
   });
 
   testWidgets(
-      'DATE-006 DATE-007 DATE-010 DATE-011 date popup cancels edits and supports manual dates with explicit time',
+      'DATE-006 DATE-007 DATE-010 DATE-011 date popup cancels edits and supports calendar dates with explicit time',
       (tester) async {
     await start(tester);
     await tester.tap(find.byTooltip('任务'));
@@ -339,33 +339,35 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('给设计顾问发一封确认邮件').last);
     await tester.pumpAndSettle();
-    await tester.ensureVisible(find.byKey(const ValueKey('task-schedule')));
-    await tester.tap(find.byKey(const ValueKey('task-schedule')));
-    await tester.pumpAndSettle();
-    await tester.enterText(
-        find.byKey(const ValueKey('date-input')), '2030-05-18');
-    await tester.tap(find.text('取消').last);
-    await tester.pumpAndSettle();
     final c = tester.widget<TodayScreen>(find.byType(TodayScreen)).controller;
-    expect(
-        localDateTimeFromStorage(
-                c.tasks.firstWhere((t) => t.id == 'task-03').dueAt)
-            ?.year,
-        isNot(2030));
+    final original = c.tasks.firstWhere((t) => t.id == 'task-03').dueAt;
+    final now = DateTime.now();
+    final tomorrow = DateTime(now.year, now.month, now.day + 1);
     await tester.tap(find.byKey(const ValueKey('task-schedule')));
     await tester.pumpAndSettle();
-    await tester.enterText(
-        find.byKey(const ValueKey('date-input')), '2030-05-18');
-    await tester.tap(find.descendant(
-        of: find.byType(TaskDatePicker), matching: find.byType(Checkbox)));
-    await tester.pump();
-    await tester.enterText(find.byKey(const ValueKey('date-小时')), '00');
-    await tester.enterText(find.byKey(const ValueKey('date-分钟')), '00');
+    await tester.tap(find.byKey(const ValueKey('date-shortcut-明天')));
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
+    expect(c.tasks.firstWhere((t) => t.id == 'task-03').dueAt, original);
+    await tester.tap(find.byKey(const ValueKey('task-schedule')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('date-shortcut-明天')));
+    await tester.tap(find.byKey(const ValueKey('schedule-time')));
+    await tester.pumpAndSettle();
+    if (tester
+        .widget<Switch>(find.byKey(const ValueKey('date-time-toggle')))
+        .value) {
+      await tester.tap(find.byKey(const ValueKey('date-time-toggle')));
+      await tester.pump();
+    }
+    await tester.enterText(find.byKey(const ValueKey('schedule-开始-小时')), '00');
+    await tester.enterText(find.byKey(const ValueKey('schedule-开始-分钟')), '00');
+    await tester.ensureVisible(find.byKey(const ValueKey('apply-date')));
     await tester.tap(find.byKey(const ValueKey('apply-date')));
     await tester.pumpAndSettle();
     final task = c.tasks.firstWhere((t) => t.id == 'task-03');
     expect(task.scheduledWithTime, isTrue);
-    expect(localDateTimeFromStorage(task.dueAt), DateTime(2030, 5, 18));
+    expect(localDateTimeFromStorage(task.dueAt), tomorrow);
   });
 
   testWidgets(

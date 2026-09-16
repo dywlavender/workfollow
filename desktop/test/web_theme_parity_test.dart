@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -127,17 +128,31 @@ void main() {
     expect(WorkFollowLayers.toast, 220);
   });
 
-  testWidgets('ThemeData consumes the Web font fallback and role scale',
-      (tester) async {
+  test('ThemeData keeps the Web face on non-macOS targets', () {
+    debugDefaultTargetPlatformOverride = TargetPlatform.linux;
     final theme = WorkFollowThemeData.light();
+    debugDefaultTargetPlatformOverride = null;
 
+    expect(theme.textTheme.bodyLarge?.fontFamily,
+        WorkFollowTypography.webUiFontFamily);
     expect(theme.textTheme.bodyLarge?.fontFamilyFallback,
         containsAll(<String>['Noto Sans SC', 'PingFang SC']));
-    expect(theme.textTheme.headlineSmall?.fontSize,
-        WorkFollowTypography.webHeading);
-    expect(theme.textTheme.bodyMedium?.fontSize,
-        WorkFollowTypography.webBodySmall);
-    expect(theme.textTheme.labelLarge?.fontSize,
-        WorkFollowTypography.webControlSize);
+  });
+
+  test('the role scale resolves to the macOS profile on every platform', () {
+    // The Web ladder still exists as a token catalog for the browser client,
+    // but the desktop shell no longer renders its sizes: ThemeData now maps
+    // every role onto WorkFollowMacTypography, so a leftover Web-sized call site
+    // cannot reintroduce the browser scale on one platform only.
+    debugDefaultTargetPlatformOverride = TargetPlatform.linux;
+    final theme = WorkFollowThemeData.light();
+    debugDefaultTargetPlatformOverride = null;
+
+    expect(theme.textTheme.displaySmall?.fontSize, WorkFollowMacTypography.pageTitle);
+    expect(
+        theme.textTheme.headlineSmall?.fontSize, WorkFollowMacTypography.detailTitle);
+    expect(theme.textTheme.bodyLarge?.fontSize, WorkFollowMacTypography.body);
+    expect(theme.textTheme.bodyMedium?.fontSize, WorkFollowMacTypography.control);
+    expect(theme.textTheme.labelLarge?.fontSize, WorkFollowMacTypography.control);
   });
 }

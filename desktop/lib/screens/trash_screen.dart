@@ -27,12 +27,16 @@ class TrashScreen extends StatelessWidget {
           Text('废纸篓',
               style: TextStyle(
                   color: tokens.textPrimary,
-                  fontSize: 22,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: -.45)),
+                  fontSize: WorkFollowMacTypography.pageTitle,
+                  fontWeight: WorkFollowMacWeight.semibold,
+                  height: WorkFollowMacTypography.lineTight,
+                  letterSpacing: WorkFollowMacTracking.none)),
           const SizedBox(height: 5),
           Text('已删除的任务和笔记会保留在这里，直到你永久删除。',
-              style: TextStyle(color: tokens.textTertiary, fontSize: 12)),
+              style: TextStyle(
+                  color: tokens.textTertiary,
+                  fontSize: WorkFollowMacTypography.supporting,
+                  height: WorkFollowMacTypography.lineList)),
           const SizedBox(height: 18),
           Expanded(
             child: tasks.isEmpty && notes.isEmpty
@@ -84,11 +88,11 @@ class _EmptyTrash extends StatelessWidget {
           Text('废纸篓是空的',
               style: TextStyle(
                   color: tokens.textPrimary,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w700)),
+                  fontSize: WorkFollowMacTypography.body,
+                  fontWeight: WorkFollowMacWeight.semibold)),
           const SizedBox(height: 5),
           Text('删除的任务和笔记会先到这里。',
-              style: TextStyle(color: tokens.textTertiary, fontSize: 12)),
+              style: TextStyle(color: tokens.textTertiary, fontSize: WorkFollowMacTypography.supporting)),
         ],
       ),
     );
@@ -109,8 +113,8 @@ class _TrashSectionLabel extends StatelessWidget {
       child: Text('$label · $count',
           style: TextStyle(
               color: tokens.textTertiary,
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
+              fontSize: WorkFollowMacTypography.sectionTitle,
+              fontWeight: WorkFollowMacWeight.semibold,
               letterSpacing: .45)),
     );
   }
@@ -153,15 +157,15 @@ class _TrashRowBase extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                           color: tokens.textPrimary,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
+                          fontSize: WorkFollowMacTypography.listTitle,
+                          fontWeight: WorkFollowMacWeight.semibold,
                           decoration: TextDecoration.lineThrough,
                           decorationColor:
                               tokens.textTertiary.withValues(alpha: .55))),
                   const SizedBox(height: 3),
                   Text('$subtitle · 删除于 $deletedLabel',
                       style:
-                          TextStyle(color: tokens.textTertiary, fontSize: 11)),
+                          TextStyle(color: tokens.textTertiary, fontSize: WorkFollowMacTypography.listMeta)),
                 ],
               ),
             ),

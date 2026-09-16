@@ -98,19 +98,20 @@ class PageHeader extends StatelessWidget {
                     child: Text(eyebrow!,
                         style: TextStyle(
                             color: eyebrowColor ?? tokens.accent,
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: .2))),
+                            fontSize: WorkFollowMacTypography.caption,
+                            height: WorkFollowMacTypography.lineControl,
+                            fontWeight: WorkFollowMacWeight.medium,
+                            letterSpacing: WorkFollowMacTracking.none))),
                 const SizedBox(height: 10),
               ],
               if (iconData == null)
                 Text(title,
                     style: TextStyle(
                         color: tokens.textPrimary,
-                        fontSize: dense ? 21 : 26,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: dense ? -.4 : -.55,
-                        height: 1.15))
+                        fontSize: WorkFollowMacTypography.pageTitle,
+                        fontWeight: WorkFollowMacWeight.semibold,
+                        letterSpacing: WorkFollowMacTracking.none,
+                        height: WorkFollowMacTypography.lineTight))
               else
                 Row(
                   children: [
@@ -125,10 +126,10 @@ class PageHeader extends StatelessWidget {
                       child: Text(title,
                           style: TextStyle(
                               color: tokens.textPrimary,
-                              fontSize: dense ? 21 : 26,
-                              fontWeight: FontWeight.w800,
-                              letterSpacing: dense ? -.4 : -.55,
-                              height: 1.15)),
+                              fontSize: WorkFollowMacTypography.pageTitle,
+                              fontWeight: WorkFollowMacWeight.semibold,
+                              letterSpacing: WorkFollowMacTracking.none,
+                              height: WorkFollowMacTypography.lineTight)),
                     ),
                   ],
                 ),
@@ -137,7 +138,8 @@ class PageHeader extends StatelessWidget {
                 Text(subtitle!,
                     style: TextStyle(
                         color: tokens.textTertiary,
-                        fontSize: dense ? 11.5 : 12.5)),
+                        fontSize: WorkFollowMacTypography.supporting,
+                        height: WorkFollowMacTypography.lineList)),
               ],
             ],
           ),
@@ -181,8 +183,9 @@ class ProgressRing extends StatelessWidget {
             total == 0 ? '—' : '$done',
             style: TextStyle(
                 color: tokens.textPrimary,
-                fontSize: size >= 50 ? 16 : 13,
-                fontWeight: FontWeight.w800),
+                fontSize:
+                    size >= 50 ? WorkFollowMacTypography.body : WorkFollowMacTypography.control,
+                fontWeight: WorkFollowMacWeight.semibold),
           ),
         ),
       ),
@@ -268,11 +271,15 @@ class EmptyHint extends StatelessWidget {
           Text(title,
               style: TextStyle(
                   color: tokens.textPrimary,
-                  fontSize: 15,
-                  fontWeight: FontWeight.w700)),
+                  fontSize: WorkFollowMacTypography.listTitle,
+                  height: WorkFollowMacTypography.lineControl,
+                  fontWeight: WorkFollowMacWeight.semibold)),
           const SizedBox(height: 6),
           Text(hint,
-              style: TextStyle(color: tokens.textTertiary, fontSize: 12)),
+              style: TextStyle(
+                  color: tokens.textTertiary,
+                  fontSize: WorkFollowMacTypography.supporting,
+                  height: WorkFollowMacTypography.lineList)),
           if (actionLabel != null && onAction != null) ...[
             const SizedBox(height: 16),
             FilledButton.tonal(onPressed: onAction, child: Text(actionLabel!)),
@@ -320,13 +327,17 @@ class StatCard extends StatelessWidget {
               Text(value,
                   style: TextStyle(
                       color: tokens.textPrimary,
-                      fontSize: 19,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: -.4,
-                      height: 1.1)),
+                      fontSize: WorkFollowMacTypography.pageTitle,
+                      fontWeight: WorkFollowMacWeight.semibold,
+                      letterSpacing: WorkFollowMacTracking.none,
+                      height: WorkFollowMacTypography.lineTight)),
               const SizedBox(height: 3),
               Text(label,
-                  style: TextStyle(color: tokens.textTertiary, fontSize: 11)),
+                  style: TextStyle(
+                      color: tokens.textTertiary,
+                      fontSize: WorkFollowMacTypography.supporting,
+                      height: WorkFollowMacTypography.lineControl,
+                      fontWeight: WorkFollowMacWeight.medium)),
             ],
           ),
         ),

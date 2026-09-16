@@ -51,13 +51,16 @@ class _CalendarScreenState extends State<CalendarScreen> {
                     Text('日历',
                         style: TextStyle(
                             color: tokens.textPrimary,
-                            fontSize: 22,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: -.45)),
+                            fontSize: WorkFollowMacTypography.pageTitle,
+                            fontWeight: WorkFollowMacWeight.semibold,
+                            height: WorkFollowMacTypography.lineTight,
+                            letterSpacing: WorkFollowMacTracking.none)),
                     const SizedBox(height: 5),
                     Text('把任务放回时间里。',
                         style: TextStyle(
-                            color: tokens.textTertiary, fontSize: 12)),
+                            color: tokens.textTertiary,
+                            fontSize: WorkFollowMacTypography.supporting,
+                            height: WorkFollowMacTypography.lineList)),
                   ],
                 ),
               ),
@@ -71,8 +74,8 @@ class _CalendarScreenState extends State<CalendarScreen> {
                   child: Text('${month.year} 年 ${month.month} 月',
                       style: TextStyle(
                           color: tokens.textPrimary,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700))),
+                          fontSize: WorkFollowMacTypography.sectionTitle,
+                          fontWeight: WorkFollowMacWeight.semibold))),
               AppIconButton(
                   icon: WorkFollowIcons.next,
                   tooltip: '下个月',
@@ -94,8 +97,8 @@ class _CalendarScreenState extends State<CalendarScreen> {
                       child: Text('回到今天',
                           style: TextStyle(
                               color: tokens.accent,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w700))),
+                              fontSize: WorkFollowMacTypography.control,
+                              fontWeight: WorkFollowMacWeight.semibold))),
                 ),
               ),
               const SizedBox(width: 8),
@@ -115,8 +118,8 @@ class _CalendarScreenState extends State<CalendarScreen> {
                           day,
                           style: TextStyle(
                             color: tokens.textTertiary,
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700,
+                            fontSize: WorkFollowMacTypography.caption,
+                            fontWeight: WorkFollowMacWeight.semibold,
                           ),
                         ),
                       ),
@@ -201,8 +204,8 @@ class _CalendarScreenState extends State<CalendarScreen> {
                                                     : (isSelected
                                                         ? tokens.accent
                                                         : tokens.textSecondary),
-                                                fontSize: 13,
-                                                fontWeight: FontWeight.w700))),
+                                                fontSize: WorkFollowMacTypography.listBody,
+                                                fontWeight: WorkFollowMacWeight.semibold))),
                                     const Spacer(),
                                     if (count > 0)
                                       Container(
@@ -218,8 +221,8 @@ class _CalendarScreenState extends State<CalendarScreen> {
                                   Text('$count 件任务',
                                       style: TextStyle(
                                           color: tokens.textTertiary,
-                                          fontSize: 11,
-                                          fontWeight: FontWeight.w500)),
+                                          fontSize: WorkFollowMacTypography.caption,
+                                          fontWeight: WorkFollowMacWeight.medium)),
                               ],
                             ),
                           ),
@@ -285,8 +288,8 @@ class _CalendarModeSegment extends StatelessWidget {
                       color: week == option.$1
                           ? tokens.accent
                           : tokens.textSecondary,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700)),
+                      fontSize: WorkFollowMacTypography.control,
+                      fontWeight: WorkFollowMacWeight.semibold)),
             ),
           ),
       ]),
@@ -373,11 +376,11 @@ class _WeekDayColumn extends StatelessWidget {
                         '周${_weekday(day.weekday)} ${day.month}/${day.day}',
                         style: TextStyle(
                             color: isToday ? accent : tokens.textPrimary,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w800))),
+                            fontSize: WorkFollowMacTypography.sectionTitle,
+                            fontWeight: WorkFollowMacWeight.semibold))),
                 if (tasks.isNotEmpty)
                   Text('${tasks.length}',
-                      style: TextStyle(color: accent, fontSize: 11)),
+                      style: TextStyle(color: accent, fontSize: WorkFollowMacTypography.caption)),
               ]),
               const SizedBox(height: 8),
               Expanded(
@@ -385,7 +388,7 @@ class _WeekDayColumn extends StatelessWidget {
                     ? Center(
                         child: Text('没有安排',
                             style: TextStyle(
-                                color: tokens.textTertiary, fontSize: 11)))
+                                color: tokens.textTertiary, fontSize: WorkFollowMacTypography.caption)))
                     : ListView.separated(
                         itemCount: tasks.length,
                         separatorBuilder: (_, __) => const SizedBox(height: 5),
@@ -455,8 +458,8 @@ class _WeekTaskPill extends StatelessWidget {
             style: TextStyle(
                 color:
                     task.completed ? tokens.textTertiary : tokens.textPrimary,
-                fontSize: 11,
-                height: 1.25,
+                fontSize: WorkFollowMacTypography.caption,
+                height: WorkFollowMacTypography.lineTight,
                 decoration:
                     task.completed ? TextDecoration.lineThrough : null)),
       ),
@@ -496,8 +499,8 @@ Widget _agendaRow(
                 style: TextStyle(
                   color:
                       task.completed ? tokens.textTertiary : tokens.textPrimary,
-                  fontSize: 12.5,
-                  fontWeight: FontWeight.w500,
+                  fontSize: WorkFollowMacTypography.listTitle,
+                  fontWeight: WorkFollowMacWeight.medium,
                   decoration: task.completed
                       ? TextDecoration.lineThrough
                       : TextDecoration.none,
@@ -507,7 +510,7 @@ Widget _agendaRow(
             const SizedBox(width: 10),
             Text(
               '${task.listName} · ${task.displayTimeLabel ?? '全天'}',
-              style: TextStyle(color: tokens.textTertiary, fontSize: 11),
+              style: TextStyle(color: tokens.textTertiary, fontSize: WorkFollowMacTypography.listMeta),
             ),
           ],
         ),
@@ -536,8 +539,8 @@ class _SelectedDayAgenda extends StatelessWidget {
             '${day.month} 月 ${day.day} 日 · 星期$weekday · ${tasks.length} 件任务',
             style: TextStyle(
                 color: tokens.textPrimary,
-                fontSize: 13,
-                fontWeight: FontWeight.w700),
+                fontSize: WorkFollowMacTypography.sectionTitle,
+                fontWeight: WorkFollowMacWeight.semibold),
           ),
           const SizedBox(height: 8),
           Expanded(
@@ -546,7 +549,7 @@ class _SelectedDayAgenda extends StatelessWidget {
                     padding: const EdgeInsets.symmetric(vertical: 10),
                     child: Text('这一天没有安排任务。',
                         style: TextStyle(
-                            color: tokens.textTertiary, fontSize: 12)),
+                            color: tokens.textTertiary, fontSize: WorkFollowMacTypography.supporting)),
                   )
                 : ListView.builder(
                     itemCount: tasks.length,
@@ -571,7 +574,7 @@ class _SelectedDayAgenda extends StatelessWidget {
                                       color: tokens.accent.withValues(alpha: .5))),
                               child: Text(task.title,
                                   style: TextStyle(
-                                      color: tokens.textPrimary, fontSize: 13)),
+                                      color: tokens.textPrimary, fontSize: WorkFollowMacTypography.listTitle)),
                             ),
                           ),
                           childWhenDragging: Opacity(

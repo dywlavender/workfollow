@@ -66,8 +66,8 @@ class _FocusTimerDialogState extends State<_FocusTimerDialog> {
           Text('进行中',
               style: TextStyle(
                   color: tokens.success,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700)),
+                  fontSize: WorkFollowMacTypography.caption,
+                  fontWeight: WorkFollowMacWeight.semibold)),
       ]),
       content: SizedBox(
         width: 390,
@@ -82,12 +82,12 @@ class _FocusTimerDialogState extends State<_FocusTimerDialog> {
               Text(timer.display,
                   style: TextStyle(
                       color: tokens.textPrimary,
-                      fontSize: 42,
-                      fontWeight: FontWeight.w300,
+                      fontSize: WorkFollowMacDisplay.timer,
+                      fontWeight: WorkFollowMacWeight.regular,
                       letterSpacing: 1.2)),
               const SizedBox(height: 5),
               Text(timer.isRunning ? '专注中，保持这个节奏' : '选择时长，开始一轮专注',
-                  style: TextStyle(color: tokens.textTertiary, fontSize: 11)),
+                  style: TextStyle(color: tokens.textTertiary, fontSize: WorkFollowMacTypography.caption)),
             ]),
           ),
           const SizedBox(height: 15),
@@ -96,8 +96,8 @@ class _FocusTimerDialogState extends State<_FocusTimerDialog> {
               child: Text('时长',
                   style: TextStyle(
                       color: tokens.textSecondary,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700))),
+                      fontSize: WorkFollowMacTypography.sectionTitle,
+                      fontWeight: WorkFollowMacWeight.semibold))),
           const SizedBox(height: 7),
           Row(children: [
             for (final minutes in const [15, 25, 45])
@@ -123,7 +123,7 @@ class _FocusTimerDialogState extends State<_FocusTimerDialog> {
                     ),
                     child: Text('$minutes 分',
                         style: const TextStyle(
-                            fontSize: 11, fontWeight: FontWeight.w700)),
+                            fontSize: WorkFollowMacTypography.control, fontWeight: WorkFollowMacWeight.semibold)),
                   ),
                 ),
               ),
@@ -134,8 +134,8 @@ class _FocusTimerDialogState extends State<_FocusTimerDialog> {
               child: Text('关联任务（可选）',
                   style: TextStyle(
                       color: tokens.textSecondary,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700))),
+                      fontSize: WorkFollowMacTypography.sectionTitle,
+                      fontWeight: WorkFollowMacWeight.semibold))),
           const SizedBox(height: 4),
           DropdownButtonFormField<String>(
             initialValue: selectedTaskId,
@@ -169,7 +169,7 @@ class _FocusTimerDialogState extends State<_FocusTimerDialog> {
                 alignment: Alignment.centerLeft,
                 child: Text('暂停后可以继续这一轮，重置会清除当前进度。',
                     style:
-                        TextStyle(color: tokens.textTertiary, fontSize: 10.5))),
+                        TextStyle(color: tokens.textTertiary, fontSize: WorkFollowMacTypography.supporting))),
         ]),
       ),
       actions: [
@@ -226,8 +226,8 @@ class FocusTimerButton extends StatelessWidget {
                   Text(timer.display,
                       style: TextStyle(
                           color: tokens.accent,
-                          fontSize: 10,
-                          fontWeight: FontWeight.w800)),
+                          fontSize: WorkFollowMacTypography.caption,
+                          fontWeight: WorkFollowMacWeight.semibold)),
                 ],
               ]),
             ),

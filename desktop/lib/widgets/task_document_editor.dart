@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_quill/flutter_quill.dart' as quill;
 
 import '../models/rich_document.dart';
@@ -12,6 +13,7 @@ import '../theme/workfollow_icons.dart';
 import '../theme/workfollow_theme.dart';
 import 'app_icon_button.dart';
 import 'task_editor_toolbar.dart';
+import 'task_editor_popover.dart';
 import 'desktop_popover.dart';
 import 'task_slash_menu.dart';
 
@@ -25,14 +27,20 @@ class TaskDocumentEditor extends StatefulWidget {
     required this.controller,
     this.onOpenTags,
     this.onOpenRelation,
+    this.onOpenDeadline,
+    this.onOpenFocus,
     this.onToolbarChanged,
+    this.onEscape,
   });
 
   final TaskItem task;
   final WorkspaceController controller;
   final Future<void> Function(BuildContext anchor)? onOpenTags;
   final Future<void> Function(BuildContext anchor)? onOpenRelation;
+  final Future<void> Function(BuildContext anchor)? onOpenDeadline;
+  final VoidCallback? onOpenFocus;
   final ValueChanged<bool>? onToolbarChanged;
+  final VoidCallback? onEscape;
 
   @override
   TaskDocumentEditorState createState() => TaskDocumentEditorState();
@@ -44,6 +52,7 @@ class TaskDocumentEditorState extends State<TaskDocumentEditor>
   late final FocusNode focus;
   late final ScrollController scroll;
   final renderEditorKey = GlobalKey<quill.EditorState>();
+  final subtaskInputFocus = FocusNode(debugLabel: 'subtask-input');
   OverlayEntry? _slashOverlay;
   Offset _slashOffset = Offset.zero;
   late String serialized;
@@ -53,6 +62,20 @@ class TaskDocumentEditorState extends State<TaskDocumentEditor>
   ScrollPosition? _ancestorScrollPosition;
 
   String get plainText => editor.document.toPlainText().trimRight();
+
+  bool dismissSlashMenu() {
+    if (!slashVisible) return false;
+    setState(() => slashVisible = false);
+    _syncSlashOverlay();
+    return true;
+  }
+
+  void _focusDocumentEnd() {
+    editor.updateSelection(
+        TextSelection.collapsed(offset: editor.document.length - 1),
+        quill.ChangeSource.local);
+    focus.requestFocus();
+  }
 
   @override
   void initState() {
@@ -139,7 +162,9 @@ class TaskDocumentEditorState extends State<TaskDocumentEditor>
   void didUpdateWidget(covariant TaskDocumentEditor oldWidget) {
     super.didUpdateWidget(oldWidget);
     final incoming = jsonEncode(taskDocumentDelta(widget.task));
-    if (incoming == serialized || focus.hasFocus) return;
+    if (incoming == serialized ||
+        incoming == jsonEncode(taskDocumentDelta(oldWidget.task)) ||
+        focus.hasFocus) return;
     editor.document = _documentFor(widget.task);
     serialized = jsonEncode(editor.document.toDelta().toJson());
   }
@@ -152,6 +177,7 @@ class TaskDocumentEditorState extends State<TaskDocumentEditor>
     WidgetsBinding.instance.removeObserver(this);
     editor.removeListener(_changed);
     editor.dispose();
+    subtaskInputFocus.dispose();
     focus
       ..removeListener(_focusChanged)
       ..dispose();
@@ -166,11 +192,19 @@ class TaskDocumentEditorState extends State<TaskDocumentEditor>
     // Keep the Quill selection alive while the footer trigger opens the
     // floating strip. The popover itself uses preserveEditor focus policy.
     focus.requestFocus();
-    await showAnchoredPopover<void>(
+    final bounds = context.findRenderObject()! as RenderBox;
+    final trigger = anchor.findRenderObject()! as RenderBox;
+    final center = bounds.localToGlobal(Offset(bounds.size.width / 2, 0));
+    await showTaskEditorPopover<void>(
       anchor,
-      width: 740,
-      maxHeight: 52,
-      placement: PopoverPlacement.topEnd,
+      width: TaskEditorPopoverStyle.toolbarWidth,
+      maxHeight: TaskEditorPopoverStyle.toolbarHeight,
+      anchorRect:
+          Rect.fromLTWH(center.dx, trigger.localToGlobal(Offset.zero).dy, 0, 0),
+      placement: const PopoverPlacement(
+          preferredSide: PopoverSide.top,
+          alignment: PopoverAlignment.center,
+          gap: 28),
       focusPolicy: PopoverFocusPolicy.preserveEditor,
       builder: (_) => TaskEditorToolbar(
         controller: editor,
@@ -311,6 +345,11 @@ class TaskDocumentEditorState extends State<TaskDocumentEditor>
         if (callback != null) unawaited(callback(context));
       case TaskSlashAction.attachment:
         unawaited(_attach());
+      case TaskSlashAction.deadline:
+        final callback = widget.onOpenDeadline;
+        if (callback != null) unawaited(callback(context));
+      case TaskSlashAction.focus:
+        widget.onOpenFocus?.call();
     }
     focus.requestFocus();
   }
@@ -334,7 +373,7 @@ class TaskDocumentEditorState extends State<TaskDocumentEditor>
   }
 
   Future<void> _link() async {
-    if (editor.selection.isCollapsed) return;
+    final selection = editor.selection;
     final input = TextEditingController();
     final url = await showDialog<String>(
       context: context,
@@ -360,12 +399,32 @@ class TaskDocumentEditorState extends State<TaskDocumentEditor>
     );
     input.dispose();
     if (!mounted || url == null || url.isEmpty) return;
-    editor.formatSelection(quill.LinkAttribute(url));
+    if (selection.isCollapsed) {
+      final at = selection.start.clamp(0, editor.document.length - 1);
+      editor.replaceText(
+          at, 0, url, TextSelection.collapsed(offset: at + url.length));
+      editor.formatText(at, url.length, quill.LinkAttribute(url));
+    } else {
+      editor.formatText(selection.start, selection.end - selection.start,
+          quill.LinkAttribute(url));
+    }
     focus.requestFocus();
   }
 
   /// Public commands used by the inspector More menu and relation picker.
-  void insertSubtasksBlock() => _insertBlock({'type': 'taskSubtasks'});
+  void insertSubtasksBlock() {
+    if (!_hasBlock(widget.task, 'taskSubtasks') &&
+        widget.task.subtasks.isEmpty) {
+      _insertBlock({'type': 'taskSubtasks'});
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      subtaskInputFocus.requestFocus();
+      final inputContext = subtaskInputFocus.context;
+      if (inputContext != null)
+        Scrollable.ensureVisible(inputContext, alignment: .5);
+    });
+  }
 
   void insertRelationBlock(String noteId) => _insertBlock({
         'type': 'relation',
@@ -378,69 +437,113 @@ class TaskDocumentEditorState extends State<TaskDocumentEditor>
   Widget build(BuildContext context) {
     final tokens = WorkFollowTheme.of(context);
     final textStyle = Theme.of(context).textTheme.bodyLarge!.copyWith(
-          fontSize: WorkFollowTypography.webEditorBodySize,
-          height: WorkFollowTypography.webLineHeightEditor,
-          fontWeight: FontWeight.w400,
+          fontSize: WorkFollowMacTypography.body,
+          height: WorkFollowMacTypography.lineBody,
+          fontWeight: WorkFollowMacWeight.regular,
+          letterSpacing: WorkFollowMacTracking.none,
           color: tokens.textPrimary,
         );
     final hasSubtaskBlock = _hasBlock(widget.task, 'taskSubtasks');
     final hasAttachmentBlock = _hasBlock(widget.task, 'attachment');
-    return Column(
-      key: const ValueKey('task-document-surface'),
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        quill.QuillEditor(
-          key: const ValueKey('task-document-editor'),
-          controller: editor,
-          focusNode: focus,
-          scrollController: scroll,
-          config: quill.QuillEditorConfig(
-            editorKey: renderEditorKey,
-            scrollable: false,
-            // Keep an empty task quiet. A large fixed editor viewport makes
-            // the inspector look like a blank form instead of a document;
-            // the content grows naturally once the user starts writing.
-            minHeight: 150,
-            padding: const EdgeInsets.only(bottom: 20),
-            placeholder: '添加描述，输入 / 插入内容',
-            textCapitalization: TextCapitalization.sentences,
-            customStyles: quill.DefaultStyles(
-              paragraph: quill.DefaultTextBlockStyle(
-                textStyle,
-                const quill.HorizontalSpacing(0, 0),
-                const quill.VerticalSpacing(0, 6),
-                const quill.VerticalSpacing(0, 0),
-                null,
-              ),
-              placeHolder: quill.DefaultTextBlockStyle(
-                textStyle.copyWith(color: tokens.textTertiary),
-                const quill.HorizontalSpacing(0, 0),
-                const quill.VerticalSpacing(0, 6),
-                const quill.VerticalSpacing(0, 0),
-                null,
-              ),
-            ),
-            embedBuilders: [
-              TaskDocumentBlockBuilder(
-                task: widget.task,
-                controller: widget.controller,
-              ),
-            ],
-          ),
-        ),
-        if (widget.task.subtasks.isNotEmpty && !hasSubtaskBlock)
-          TaskSubtasksPanel(task: widget.task, controller: widget.controller),
-        if (widget.task.attachments.isNotEmpty && !hasAttachmentBlock)
-          TaskAttachmentsPanel(
-              task: widget.task,
-              controller: widget.controller,
-              onAttach: () => _attach()),
-        if (widget.controller.sourceNoteFor(widget.task.id) != null &&
-            !_hasBlock(widget.task, 'relation'))
-          TaskSourceNotePanel(task: widget.task, controller: widget.controller),
-      ],
-    );
+    final hasTrailingPanels =
+        (widget.task.subtasks.isNotEmpty && !hasSubtaskBlock) ||
+            (widget.task.attachments.isNotEmpty && !hasAttachmentBlock) ||
+            (widget.controller.sourceNoteFor(widget.task.id) != null &&
+                !_hasBlock(widget.task, 'relation'));
+    return LayoutBuilder(
+        builder: (context, constraints) => GestureDetector(
+            behavior: HitTestBehavior.translucent,
+            onTap: _focusDocumentEnd,
+            child: ConstrainedBox(
+                constraints: BoxConstraints(minHeight: constraints.minHeight),
+                child: Column(
+                  key: const ValueKey('task-document-surface'),
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    quill.QuillEditor(
+                      key: const ValueKey('task-document-editor'),
+                      controller: editor,
+                      focusNode: focus,
+                      scrollController: scroll,
+                      config: quill.QuillEditorConfig(
+                        editorKey: renderEditorKey,
+                        // A key set keeps this binding ahead of Quill's
+                        // default single-activator Escape binding when merged.
+                        customShortcuts: {
+                          LogicalKeySet(LogicalKeyboardKey.escape):
+                              const _TaskEditorEscapeIntent(),
+                        },
+                        customActions: {
+                          _TaskEditorEscapeIntent:
+                              CallbackAction<_TaskEditorEscapeIntent>(
+                            onInvoke: (_) {
+                              if (widget.onEscape != null) {
+                                widget.onEscape!();
+                              } else if (!dismissSlashMenu()) {
+                                focus.unfocus();
+                              }
+                              return null;
+                            },
+                          ),
+                        },
+                        scrollable: false,
+                        // Legacy panels stay near the prose; the surrounding surface
+                        // accepts clicks in the remaining blank space below them.
+                        minHeight: hasTrailingPanels
+                            ? 150
+                            : math.max(150, constraints.minHeight),
+                        padding: const EdgeInsets.only(bottom: 20),
+                        placeholder: '添加描述，输入 / 插入内容',
+                        textCapitalization: TextCapitalization.sentences,
+                        customStyles: quill.DefaultStyles(
+                          paragraph: quill.DefaultTextBlockStyle(
+                            textStyle,
+                            const quill.HorizontalSpacing(0, 0),
+                            const quill.VerticalSpacing(0, 6),
+                            const quill.VerticalSpacing(0, 0),
+                            null,
+                          ),
+                          placeHolder: quill.DefaultTextBlockStyle(
+                            textStyle.copyWith(color: tokens.textTertiary),
+                            const quill.HorizontalSpacing(0, 0),
+                            const quill.VerticalSpacing(0, 6),
+                            const quill.VerticalSpacing(0, 0),
+                            null,
+                          ),
+                        ),
+                        embedBuilders: [
+                          TaskDocumentBlockBuilder(
+                            subtaskFocus: subtaskInputFocus,
+                            task: widget.task,
+                            controller: widget.controller,
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (widget.task.subtasks.isNotEmpty && !hasSubtaskBlock)
+                      TaskSubtasksPanel(
+                          focusNode: subtaskInputFocus,
+                          task: widget.task,
+                          controller: widget.controller),
+                    if (widget.task.attachments.isNotEmpty &&
+                        !hasAttachmentBlock)
+                      TaskAttachmentsPanel(
+                          task: widget.task,
+                          controller: widget.controller,
+                          onAttach: () => _attach()),
+                    if (widget.controller.sourceNoteFor(widget.task.id) !=
+                            null &&
+                        !_hasBlock(widget.task, 'relation'))
+                      TaskSourceNotePanel(
+                          task: widget.task, controller: widget.controller),
+                  ],
+                ))));
   }
+}
+
+class _TaskEditorEscapeIntent extends Intent {
+  const _TaskEditorEscapeIntent();
 }
 
 bool _hasBlock(TaskItem task, String type) {
@@ -460,10 +563,11 @@ bool _hasBlock(TaskItem task, String type) {
 /// Renders WorkFollow-specific blocks inside a Quill document.
 class TaskDocumentBlockBuilder extends quill.EmbedBuilder {
   const TaskDocumentBlockBuilder(
-      {required this.task, required this.controller});
+      {required this.task, required this.controller, this.subtaskFocus});
 
   final TaskItem task;
   final WorkspaceController controller;
+  final FocusNode? subtaskFocus;
 
   @override
   String get key => 'workfollow-block';
@@ -483,6 +587,7 @@ class TaskDocumentBlockBuilder extends quill.EmbedBuilder {
           color: WorkFollowTheme.of(context).borderStrong,
           height: 26),
       'taskSubtasks' => TaskSubtasksPanel(
+          focusNode: subtaskFocus,
           key: const ValueKey('task-subtasks-block'),
           task: task,
           controller: controller),
@@ -496,10 +601,14 @@ class TaskDocumentBlockBuilder extends quill.EmbedBuilder {
 
 class TaskSubtasksPanel extends StatefulWidget {
   const TaskSubtasksPanel(
-      {super.key, required this.task, required this.controller});
+      {super.key,
+      required this.task,
+      required this.controller,
+      this.focusNode});
 
   final TaskItem task;
   final WorkspaceController controller;
+  final FocusNode? focusNode;
 
   @override
   State<TaskSubtasksPanel> createState() => _TaskSubtasksPanelState();
@@ -548,17 +657,17 @@ class _TaskSubtasksPanelState extends State<TaskSubtasksPanel> {
               Row(children: [
                 Text('子任务',
                     style: TextStyle(
-                        fontSize: WorkFollowTypography.webPanelTitleSize,
-                        height: WorkFollowTypography.webLineHeightSnug,
-                        fontWeight: FontWeight.w600,
+                        fontSize: WorkFollowMacTypography.sectionTitle,
+                        height: WorkFollowMacTypography.lineControl,
+                        fontWeight: WorkFollowMacWeight.semibold,
                         color: tokens.textPrimary)),
                 const Spacer(),
                 if (task.subtaskTotal > 0)
                   Text('${task.subtaskCompleted}/${task.subtaskTotal}',
                       style: TextStyle(
-                          fontSize: WorkFollowTypography.webMetaSize,
-                          height: WorkFollowTypography.webLineHeightNormal,
-                          fontWeight: FontWeight.w400,
+                          fontSize: WorkFollowMacTypography.listMeta,
+                          height: WorkFollowMacTypography.lineControl,
+                          fontWeight: WorkFollowMacWeight.regular,
                           color: tokens.textTertiary)),
               ]),
               if (task.subtaskTotal > 0) ...[
@@ -589,9 +698,9 @@ class _TaskSubtasksPanelState extends State<TaskSubtasksPanel> {
                       decoration: const InputDecoration(
                           border: InputBorder.none, isDense: true),
                       style: TextStyle(
-                          fontSize: WorkFollowTypography.webListTitleSize,
-                          height: WorkFollowTypography.webLineHeightNormal,
-                          fontWeight: FontWeight.w500,
+                          fontSize: WorkFollowMacTypography.listTitle,
+                          height: WorkFollowMacTypography.lineList,
+                          fontWeight: WorkFollowMacWeight.medium,
                           color: item.completed
                               ? tokens.textTertiary
                               : tokens.textPrimary,
@@ -620,6 +729,7 @@ class _TaskSubtasksPanelState extends State<TaskSubtasksPanel> {
                   Expanded(
                     child: TextField(
                       key: const ValueKey('task-subtask-input'),
+                      focusNode: widget.focusNode,
                       controller: input,
                       onSubmitted: (_) => _add(),
                       decoration: const InputDecoration(
@@ -627,9 +737,9 @@ class _TaskSubtasksPanelState extends State<TaskSubtasksPanel> {
                           border: InputBorder.none,
                           isDense: true),
                       style: TextStyle(
-                          fontSize: WorkFollowTypography.webBodySmall,
-                          height: WorkFollowTypography.webLineHeightNormal,
-                          fontWeight: FontWeight.w400,
+                          fontSize: WorkFollowMacTypography.listTitle,
+                          height: WorkFollowMacTypography.lineList,
+                          fontWeight: WorkFollowMacWeight.regular,
                           color: tokens.textPrimary),
                     ),
                   ),
@@ -662,9 +772,9 @@ class TaskAttachmentsPanel extends StatelessWidget {
         children: [
           Text('附件与关联',
               style: TextStyle(
-                  fontSize: WorkFollowTypography.webSectionTitleSize,
-                  height: WorkFollowTypography.webLineHeightTight,
-                  fontWeight: FontWeight.w600,
+                  fontSize: WorkFollowMacTypography.sectionTitle,
+                  height: WorkFollowMacTypography.lineControl,
+                  fontWeight: WorkFollowMacWeight.semibold,
                   color: tokens.textPrimary)),
           const SizedBox(height: 7),
           Wrap(
@@ -676,9 +786,9 @@ class TaskAttachmentsPanel extends StatelessWidget {
                 InputChip(
                   label: Text(file,
                       style: const TextStyle(
-                          fontSize: WorkFollowTypography.webSupportingSize,
-                          height: WorkFollowTypography.webLineHeightNormal,
-                          fontWeight: FontWeight.w400)),
+                          fontSize: WorkFollowMacTypography.control,
+                          height: WorkFollowMacTypography.lineControl,
+                          fontWeight: WorkFollowMacWeight.regular)),
                   avatar: const AppIcon(WorkFollowIcons.file,
                       size: WorkFollowMetrics.metadataIcon),
                   onPressed: () => controller.revealAttachment(task.id, file),
@@ -693,9 +803,9 @@ class TaskAttachmentsPanel extends StatelessWidget {
                       color: tokens.accent),
                   label: const Text('添加附件',
                       style: TextStyle(
-                          fontSize: WorkFollowTypography.webControlSize,
-                          height: WorkFollowTypography.webLineHeightNormal,
-                          fontWeight: FontWeight.w600))),
+                          fontSize: WorkFollowMacTypography.control,
+                          height: WorkFollowMacTypography.lineControl,
+                          fontWeight: WorkFollowMacWeight.medium))),
             ],
           ),
         ],
@@ -739,16 +849,15 @@ class TaskSourceNotePanel extends StatelessWidget {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
-                              fontSize: WorkFollowTypography.webListTitleSize,
-                              height: WorkFollowTypography.webLineHeightNormal,
-                              fontWeight: FontWeight.w500,
+                              fontSize: WorkFollowMacTypography.listTitle,
+                              height: WorkFollowMacTypography.lineList,
+                              fontWeight: WorkFollowMacWeight.medium,
                               color: tokens.textPrimary)),
                       Text('来自笔记 · ${source.folder}',
                           style: TextStyle(
-                              fontSize:
-                                  WorkFollowTypography.webSupportingCompactSize,
-                              height: WorkFollowTypography.webLineHeightNormal,
-                              fontWeight: FontWeight.w400,
+                              fontSize: WorkFollowMacTypography.listMeta,
+                              height: WorkFollowMacTypography.lineControl,
+                              fontWeight: WorkFollowMacWeight.regular,
                               color: tokens.textTertiary)),
                     ]),
               ),
@@ -790,9 +899,9 @@ class _TaskAttachmentBlock extends StatelessWidget {
             size: WorkFollowMetrics.navigationIcon, color: tokens.accent),
         label: Text(attrs['name']?.toString() ?? '附件',
             style: const TextStyle(
-                fontSize: WorkFollowTypography.webSupportingSize,
-                height: WorkFollowTypography.webLineHeightNormal,
-                fontWeight: FontWeight.w400)),
+                fontSize: WorkFollowMacTypography.control,
+                height: WorkFollowMacTypography.lineControl,
+                fontWeight: WorkFollowMacWeight.regular)),
       ),
     );
   }
