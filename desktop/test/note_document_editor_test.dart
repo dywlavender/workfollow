@@ -41,6 +41,11 @@ void main() {
     expect(find.byKey(const ValueKey('task-editor-toolbar')), findsOneWidget);
     await tester.tapAt(const Offset(20, 20));
     await tester.pumpAndSettle();
+    // The note toolbar is persistent like the task toolbar: clicking back in
+    // the document must not destroy the formatting surface or its selection.
+    expect(find.byKey(const ValueKey('task-editor-toolbar')), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('note-format-toggle')));
+    await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('task-editor-toolbar')), findsNothing);
   });
 

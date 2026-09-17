@@ -7,6 +7,7 @@ import '../theme/workfollow_icons.dart';
 import '../theme/workfollow_theme.dart';
 import '../widgets/app_icon_button.dart';
 import '../widgets/app_surfaces.dart';
+import '../widgets/desktop_popover.dart';
 
 /// A deliberately quiet habit page: today's check-ins are primary, while a
 /// 28-day dot history makes consistency visible without introducing badges,
@@ -407,12 +408,13 @@ class _HabitCard extends StatelessWidget {
   }
 
   Future<void> _showMenu(BuildContext context) async {
-    final action = await showMenu<String>(
-      context: context,
-      position: const RelativeRect.fromLTRB(300, 220, 0, 0),
-      items: const [
-        PopupMenuItem(value: 'edit', child: Text('编辑习惯')),
-        PopupMenuItem(value: 'delete', child: Text('删除习惯')),
+    final action = await showDesktopMenu<String>(
+      context,
+      placement: PopoverPlacement.bottomEnd,
+      entries: const [
+        DesktopMenuEntry('edit', '编辑习惯', icon: WorkFollowIcons.edit),
+        DesktopMenuEntry('delete', '删除习惯',
+            icon: WorkFollowIcons.delete, destructive: true),
       ],
     );
     if (!context.mounted) return;

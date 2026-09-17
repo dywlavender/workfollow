@@ -67,9 +67,8 @@ class TaskDocumentEditorState extends State<TaskDocumentEditor>
   /// The palette keeps its own selection model but never takes focus, so the
   /// editor reaches it through this key and the caret stays in the document.
   final _slashMenuKey = GlobalKey<TaskSlashMenuState>();
-  OverlayEntry? _slashOverlay;
+  final _slashPopover = PersistentAnchoredPopoverController();
   final _formatToolbar = PersistentAnchoredPopoverController();
-  Offset _slashOffset = Offset.zero;
   late String serialized;
   late String _lastEditorText;
   SlashCommandSession? _slashSession;
@@ -244,8 +243,7 @@ class TaskDocumentEditorState extends State<TaskDocumentEditor>
   @override
   void dispose() {
     _formatToolbar.close();
-    _slashOverlay?.remove();
-    _slashOverlay = null;
+    _slashPopover.close();
     _slashSession = null;
     _ancestorScrollPosition?.removeListener(_syncSlashOverlay);
     _ancestorScrollPosition?.removeListener(_syncFormattingToolbarOverlay);
@@ -279,6 +277,7 @@ class TaskDocumentEditorState extends State<TaskDocumentEditor>
           preferredSide: PopoverSide.top,
           alignment: PopoverAlignment.center,
           gap: WorkFollowSpacing.space7),
+      policy: const DesktopOverlayPolicy.toolbar(),
       popoverTheme: TaskEditorPopoverStyle.theme(anchor),
       surfaceDecoration:
           taskFormattingToolbarDecoration(WorkFollowTheme.of(anchor)),
@@ -372,8 +371,7 @@ class TaskDocumentEditorState extends State<TaskDocumentEditor>
   void _closeSlashSession() {
     _slashSession = null;
     if (mounted && slashVisible) setState(() => slashVisible = false);
-    _slashOverlay?.remove();
-    _slashOverlay = null;
+    _slashPopover.close();
   }
 
   TextRange? _slashRange([SlashCommandSession? requested]) {
@@ -398,70 +396,56 @@ class TaskDocumentEditorState extends State<TaskDocumentEditor>
   void _syncSlashOverlay() {
     if (!mounted) return;
     if (!slashVisible) {
-      _slashOverlay?.remove();
-      _slashOverlay = null;
+      _slashPopover.close();
       return;
     }
-    final overlay = Overlay.maybeOf(context, rootOverlay: true);
-    if (overlay == null) return;
     final screen = MediaQuery.sizeOf(context);
     // The full command set is 425pt tall. A window that cannot hold it gets a
     // shorter card that scrolls, instead of one that spills past the edge.
     final menuHeight = math.min(
         TaskSlashMenu.heightFor(null), math.max(220.0, screen.height - 24));
-    Offset? caretOrigin;
-    double caretHeight = 20;
+    if (_slashPopover.isOpen) {
+      _slashPopover.markNeedsBuild();
+      return;
+    }
+    _slashPopover.open(
+      context,
+      width: TaskSlashMenuMetrics.width,
+      height: menuHeight,
+      placement: PopoverPlacement.bottomStart,
+      policy: const DesktopOverlayPolicy(
+        layer: DesktopOverlayLayer.menu,
+        focusPolicy: PopoverFocusPolicy.none,
+        restoreFocus: false,
+      ),
+      anchorRectResolver: _slashAnchorRect,
+      onDismiss: _closeSlashSession,
+      builder: (_) => Focus(
+        canRequestFocus: false,
+        descendantsAreFocusable: false,
+        child: TaskSlashMenu(
+          key: _slashMenuKey,
+          maxHeight: menuHeight,
+          onSelected: _applySlash,
+        ),
+      ),
+    );
+  }
+
+  Rect? _slashAnchorRect() {
     final renderEditor = renderEditorKey.currentState?.renderEditor;
     if (renderEditor != null && editor.selection.isValid) {
       try {
         final caret = renderEditor.getLocalRectForCaret(
             TextPosition(offset: editor.selection.extentOffset));
-        caretOrigin = renderEditor.localToGlobal(caret.topLeft);
-        caretHeight = caret.height;
+        return renderEditor.localToGlobal(caret.topLeft) & caret.size;
       } on Object {
-        // Layout can be between frames while the editor is first gaining
-        // focus. The editor surface fallback below still keeps the menu
-        // visible and clamped instead of dropping the command palette.
+        // The first focus frame can be laid out before the caret is available.
       }
     }
     final box = context.findRenderObject() as RenderBox?;
-    final fallbackOrigin = box?.localToGlobal(Offset.zero);
-    final origin = caretOrigin ?? fallbackOrigin;
-    if (origin != null) {
-      final geometry = calculatePopoverGeometry(
-        anchor: Rect.fromLTWH(origin.dx, origin.dy, 1, caretHeight),
-        viewport: screen,
-        desiredSize: Size(TaskSlashMenuMetrics.width, menuHeight),
-        placement: PopoverPlacement.bottomStart,
-        safeArea: const EdgeInsets.all(WorkFollowSpacing.popoverSafeArea),
-      );
-      _slashOffset = geometry.rect.topLeft;
-    }
-    if (_slashOverlay != null) {
-      _slashOverlay!.markNeedsBuild();
-      return;
-    }
-    _slashOverlay = OverlayEntry(
-      builder: (context) {
-        return Positioned(
-          left: _slashOffset.dx,
-          top: _slashOffset.dy,
-          child: TapRegion(
-            onTapOutside: (_) => _closeSlashSession(),
-            child: Focus(
-              canRequestFocus: false,
-              descendantsAreFocusable: false,
-              child: TaskSlashMenu(
-                key: _slashMenuKey,
-                maxHeight: menuHeight,
-                onSelected: _applySlash,
-              ),
-            ),
-          ),
-        );
-      },
-    );
-    overlay.insert(_slashOverlay!);
+    if (box == null || !box.attached || !box.hasSize) return null;
+    return box.localToGlobal(Offset.zero) & box.size;
   }
 
   void _applySlash(TaskSlashAction action) {
@@ -675,7 +659,8 @@ class TaskDocumentEditorState extends State<TaskDocumentEditor>
                         minHeight: hasTrailingPanels
                             ? 150
                             : math.max(150, constraints.minHeight),
-                        padding: const EdgeInsets.only(bottom: WorkFollowSpacing.space5),
+                        padding: const EdgeInsets.only(
+                            bottom: WorkFollowSpacing.space5),
                         placeholder: '添加描述，输入 / 插入内容',
                         textCapitalization: TextCapitalization.sentences,
                         customStyles: TaskDocumentStyles.build(
@@ -1021,7 +1006,9 @@ class TaskSourceNotePanel extends StatelessWidget {
           borderRadius: BorderRadius.circular(WorkFollowRadii.surface),
           onTap: () => controller.openNote(source.id),
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: WorkFollowSpacing.cardInset, vertical: WorkFollowSpacing.space2),
+            padding: const EdgeInsets.symmetric(
+                horizontal: WorkFollowSpacing.cardInset,
+                vertical: WorkFollowSpacing.space2),
             child: Row(children: [
               AppIcon(WorkFollowIcons.article,
                   size: WorkFollowMetrics.navigationIcon, color: tokens.accent),

@@ -40,7 +40,7 @@ class TaskContextMenu {
         width: TaskMenuStyle.width,
         maxHeight: maxHeight,
         placement: placement,
-        focusPolicy: PopoverFocusPolicy.firstItem,
+        policy: const DesktopOverlayPolicy.menu(),
         scrollable: true,
         anchorRect:
             globalPosition == null ? null : globalPosition & const Size(1, 1),

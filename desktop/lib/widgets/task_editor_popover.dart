@@ -37,6 +37,7 @@ Future<T?> showTaskEditorPopover<T>(
   PopoverFocusPolicy focusPolicy = PopoverFocusPolicy.firstItem,
   bool scrollable = false,
   Rect? anchorRect,
+  DesktopOverlayPolicy? policy,
 }) =>
     showAnchoredPopover<T>(
       anchor,
@@ -47,6 +48,7 @@ Future<T?> showTaskEditorPopover<T>(
       focusPolicy: focusPolicy,
       scrollable: scrollable,
       anchorRect: anchorRect,
+      policy: policy ?? DesktopOverlayPolicy.picker(focusPolicy: focusPolicy),
       popoverTheme: TaskEditorPopoverStyle.theme(anchor),
       surfaceDecoration: WorkFollowSurfaceTokens.popover(
         WorkFollowTheme.of(anchor),

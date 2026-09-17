@@ -22,5 +22,7 @@
 | 并行 State | `task_row.dart`、`task_document_styles.dart`、`widgets/task_list/*`、`widgets/matrix/*`、`features/feedback/*`、`today_screen.dart`、`quick_add.dart`、`task_schedule_options.dart` | 当前由另一项未提交任务维护；D7 只建立共享状态层，后续接入时保留其业务行为 | D7 |
 | 导航专属颜色 | `sidebar.dart` 的 rail、用户清单色和标签色 | 这些是导航/用户内容语义色；D7 统一状态优先级，不把专属选中色误当成全局 palette | D7/D10 |
 | Destructive hover 派生色 | `WorkFollowInteractionStyles` 中由 `tokens.danger` 派生的低 alpha tint | D7 只表达 destructive 状态；D3 颜色体系不新增独立 palette | D3/D7 |
+| Persistent overlay entry | `widgets/persistent_anchored_popover.dart` 的单一 controller | Toolbar 和 caret Slash 需要跨编辑器点击保持 mounted；业务组件不再直接创建或定位 `OverlayEntry` | D8 |
+| 二级 Dialog route | `settings_panel.dart` 的导入预览、恢复选择、恢复确认 | 这些是确认/数据选择 Dialog，不是 anchored Menu / Picker；由 Material `showDialog` 处理 | D8 |
 
 白名单之外的直接 `Color(0x...)`、直接 `Icons.*`、未解释的字号/字距和页面局部动画，默认进入债务总表。

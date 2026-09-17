@@ -31,6 +31,53 @@ enum PopoverFocusPolicy {
   preserveEditor,
 }
 
+/// The interaction contract for a desktop floating surface.
+///
+/// All anchored menus and pickers use the same route, placement and dismissal
+/// machinery.  The layer is deliberately a semantic value: it documents the
+/// intended stacking order without asking individual widgets to invent z-index
+/// values or focus rules.
+enum DesktopOverlayLayer { menu, picker, toolbar, dialog }
+
+class DesktopOverlayPolicy {
+  const DesktopOverlayPolicy({
+    required this.layer,
+    this.focusPolicy = PopoverFocusPolicy.none,
+    this.dismissOnTapOutside = true,
+    this.restoreFocus = true,
+  });
+
+  const DesktopOverlayPolicy.menu()
+      : this(
+          layer: DesktopOverlayLayer.menu,
+          focusPolicy: PopoverFocusPolicy.firstItem,
+        );
+
+  const DesktopOverlayPolicy.picker({
+    PopoverFocusPolicy focusPolicy = PopoverFocusPolicy.searchField,
+  }) : this(
+          layer: DesktopOverlayLayer.picker,
+          focusPolicy: focusPolicy,
+        );
+
+  const DesktopOverlayPolicy.toolbar()
+      : this(
+          layer: DesktopOverlayLayer.toolbar,
+          focusPolicy: PopoverFocusPolicy.preserveEditor,
+          dismissOnTapOutside: false,
+        );
+
+  const DesktopOverlayPolicy.dialog() : this(layer: DesktopOverlayLayer.dialog);
+
+  final DesktopOverlayLayer layer;
+  final PopoverFocusPolicy focusPolicy;
+  final bool dismissOnTapOutside;
+  final bool restoreFocus;
+
+  bool get preservesEditorSelection =>
+      focusPolicy == PopoverFocusPolicy.preserveEditor;
+}
+
 /// Placement policy for an anchored surface.
 class PopoverPlacement {
   const PopoverPlacement({
@@ -251,12 +298,19 @@ Future<T?> showAnchoredPopover<T>(
   Rect? anchorRect,
   ThemeData? popoverTheme,
   BoxDecoration? surfaceDecoration,
+  DesktopOverlayPolicy? policy,
 }) async {
   final previousFocus = FocusManager.instance.primaryFocus;
+  final resolvedPolicy = policy ??
+      DesktopOverlayPolicy(
+        layer: DesktopOverlayLayer.picker,
+        focusPolicy: focusPolicy,
+        restoreFocus: restoreFocus,
+      );
   final theme = popoverTheme ?? Theme.of(anchor);
   final result = await showGeneralDialog<T>(
     context: anchor,
-    barrierDismissible: true,
+    barrierDismissible: resolvedPolicy.dismissOnTapOutside,
     barrierLabel: '关闭弹出面板',
     barrierColor: Colors.transparent,
     transitionDuration: const Duration(milliseconds: 100),
@@ -267,7 +321,7 @@ Future<T?> showAnchoredPopover<T>(
       width: width,
       maxHeight: maxHeight,
       placement: placement,
-      focusPolicy: focusPolicy,
+      policy: resolvedPolicy,
       scrollable: scrollable,
       safeArea: safeArea,
       theme: theme,
@@ -276,7 +330,9 @@ Future<T?> showAnchoredPopover<T>(
     transitionBuilder: (_, animation, __, child) =>
         FadeTransition(opacity: animation, child: child),
   );
-  if (restoreFocus && previousFocus != null && previousFocus.canRequestFocus) {
+  if (resolvedPolicy.restoreFocus &&
+      previousFocus != null &&
+      previousFocus.canRequestFocus) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (previousFocus.canRequestFocus) previousFocus.requestFocus();
     });
@@ -327,6 +383,7 @@ Future<T?> showDesktopPopover<T>(
   bool restoreFocus = true,
   EdgeInsets safeArea = const EdgeInsets.all(WorkFollowSpacing.popoverSafeArea),
   Rect? anchorRect,
+  DesktopOverlayPolicy? policy,
 }) =>
     showAnchoredPopover<T>(
       anchor,
@@ -339,7 +396,41 @@ Future<T?> showDesktopPopover<T>(
       restoreFocus: restoreFocus,
       safeArea: safeArea,
       anchorRect: anchorRect,
+      policy: policy,
     );
+
+/// Shared route entry point for non-anchored desktop overlays such as the
+/// command palette. The route owns the barrier and focus restoration so a
+/// caller only supplies its surface and, when needed, its existing transition.
+Future<T?> showDesktopDialog<T>({
+  required BuildContext context,
+  required WidgetBuilder builder,
+  bool barrierDismissible = true,
+  String barrierLabel = '关闭弹出面板',
+  Color barrierColor = Colors.transparent,
+  Duration transitionDuration = const Duration(milliseconds: 100),
+  RouteTransitionsBuilder? transitionBuilder,
+  bool restoreFocus = true,
+}) async {
+  final previousFocus = FocusManager.instance.primaryFocus;
+  final result = await showGeneralDialog<T>(
+    context: context,
+    barrierDismissible: barrierDismissible,
+    barrierLabel: barrierLabel,
+    barrierColor: barrierColor,
+    transitionDuration: transitionDuration,
+    pageBuilder: (routeContext, _, __) => builder(routeContext),
+    transitionBuilder: transitionBuilder ??
+        (_, animation, __, child) =>
+            FadeTransition(opacity: animation, child: child),
+  );
+  if (restoreFocus && previousFocus != null && previousFocus.canRequestFocus) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (previousFocus.canRequestFocus) previousFocus.requestFocus();
+    });
+  }
+  return result;
+}
 
 class _AnchoredPopoverPage extends StatefulWidget {
   const _AnchoredPopoverPage({
@@ -349,7 +440,7 @@ class _AnchoredPopoverPage extends StatefulWidget {
     required this.width,
     required this.maxHeight,
     required this.placement,
-    required this.focusPolicy,
+    required this.policy,
     required this.scrollable,
     required this.safeArea,
     required this.theme,
@@ -362,7 +453,7 @@ class _AnchoredPopoverPage extends StatefulWidget {
   final double width;
   final double maxHeight;
   final PopoverPlacement placement;
-  final PopoverFocusPolicy focusPolicy;
+  final DesktopOverlayPolicy policy;
   final bool scrollable;
   final EdgeInsets safeArea;
   final ThemeData theme;
@@ -451,7 +542,7 @@ class _AnchoredPopoverPageState extends State<_AnchoredPopoverPage>
       child:
           widget.scrollable ? SingleChildScrollView(child: content) : content,
     );
-    final focusAware = switch (widget.focusPolicy) {
+    final focusAware = switch (widget.policy.focusPolicy) {
       PopoverFocusPolicy.none ||
       PopoverFocusPolicy.preserveEditor =>
         constrained,
@@ -591,7 +682,7 @@ Future<T?> showDesktopMenu<T>(
       width: width,
       maxHeight: maxHeight,
       placement: placement,
-      focusPolicy: PopoverFocusPolicy.firstItem,
+      policy: const DesktopOverlayPolicy.menu(),
       scrollable: true,
       anchorRect: anchorRect,
       builder: (context) => _DesktopMenuSurface<T>(

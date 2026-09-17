@@ -1,10 +1,12 @@
 # D8 Menu / Overlay 盘点
 
+> D8 已完成。施工记录与验收清单见 [`d8-overlays.md`](d8-overlays.md)。
+
 ## 扫描结果
 
 - 弹层 API 命中 34 次，分布在 18 个文件。
 - 主要入口包括 `DesktopPopover`、Task Editor Popover、Persistent Toolbar、Context/More Menu、Slash Menu、Command Palette、Date/List/Tag/Priority/Reminder/Repeat Picker。
-- `desktop_popover.dart` 已提供通用定位基础；问题集中在调用方的视觉、Focus Policy、尺寸和关闭规则。
+- `desktop_popover.dart` 现在提供统一的 `DesktopOverlayPolicy`、定位基础和全局 Dialog route；调用方只声明浮层语义和锚点。
 
 ## Overlay 族清单
 
@@ -23,3 +25,9 @@
 - `Esc` 顺序必须记录：子菜单/搜索状态 → 当前浮层 → 持久 Toolbar → Inspector/页面。
 - Popover 打开和关闭不能意外夺走编辑器或输入框 Focus。
 
+## D8 结果
+
+- Task / Note Slash、A Toolbar、More、Context、日期/清单/标签/优先级/重复 Picker 使用统一的 anchored route 或 persistent controller。
+- Task / Note 不再自行创建 `OverlayEntry`；caret 和 trigger 的位置通过 resolver 交给共享 geometry 计算。
+- Command Palette、Settings Panel 的顶层 route 统一通过 `showDesktopDialog`，保留原有 barrier 和过渡规格。
+- Sidebar 清单/标签和 Habits 的旧 `showMenu` 已迁移到 `showDesktopMenu`，菜单行、焦点、Esc、外部点击行为一致。

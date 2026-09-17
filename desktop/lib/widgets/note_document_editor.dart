@@ -4,6 +4,7 @@ import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_quill/flutter_quill.dart' as quill;
 
 import '../models/note_document.dart';
@@ -15,11 +16,11 @@ import '../features/feedback/feedback_event.dart';
 import '../features/feedback/feedback_scope.dart';
 import 'app_icon_button.dart';
 import 'task_editor_toolbar.dart';
-import 'task_editor_popover.dart';
 import 'desktop_popover.dart';
 import 'task_slash_menu.dart';
 import 'task_document_commands.dart';
 import 'task_document_styles.dart';
+import 'persistent_anchored_popover.dart';
 
 const _noteSlashActions = <TaskSlashAction>[
   TaskSlashAction.heading1,
@@ -49,8 +50,9 @@ class _NoteDocumentEditorState extends State<NoteDocumentEditor>
   final focus = FocusNode();
   final scroll = ScrollController();
   final renderEditorKey = GlobalKey<quill.EditorState>();
-  OverlayEntry? slashOverlay;
-  Offset slashOffset = Offset.zero;
+  final _slashPopover = PersistentAnchoredPopoverController();
+  final _formatToolbar = PersistentAnchoredPopoverController();
+  final _slashMenuKey = GlobalKey<TaskSlashMenuState>();
   late String serialized;
   bool selectionPresent = false;
   bool slashVisible = false;
@@ -124,18 +126,31 @@ class _NoteDocumentEditorState extends State<NoteDocumentEditor>
     final next = Scrollable.maybeOf(context)?.position;
     if (identical(next, _ancestorScrollPosition)) return;
     _ancestorScrollPosition?.removeListener(_syncSlashOverlay);
+    _ancestorScrollPosition?.removeListener(_syncFormattingToolbarOverlay);
     _ancestorScrollPosition = next;
     _ancestorScrollPosition?.addListener(_syncSlashOverlay);
+    _ancestorScrollPosition?.addListener(_syncFormattingToolbarOverlay);
   }
 
   @override
   void didChangeMetrics() {
     _syncSlashOverlay();
+    _syncFormattingToolbarOverlay();
   }
 
   @override
   void didUpdateWidget(covariant NoteDocumentEditor oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (widget.note.id != oldWidget.note.id) {
+      _slashPopover.close();
+      _formatToolbar.close();
+      if (mounted) {
+        setState(() {
+          slashVisible = false;
+          toolbarVisible = false;
+        });
+      }
+    }
     final incoming = jsonEncode(noteDocumentDelta(widget.note));
     if (incoming == serialized || focus.hasFocus) return;
     editor.document = quill.Document.fromJson(noteDocumentDelta(widget.note));
@@ -144,9 +159,10 @@ class _NoteDocumentEditorState extends State<NoteDocumentEditor>
 
   @override
   void dispose() {
-    slashOverlay?.remove();
-    slashOverlay = null;
+    _slashPopover.close();
+    _formatToolbar.close();
     _ancestorScrollPosition?.removeListener(_syncSlashOverlay);
+    _ancestorScrollPosition?.removeListener(_syncFormattingToolbarOverlay);
     WidgetsBinding.instance.removeObserver(this);
     editor.removeListener(_changed);
     editor.dispose();
@@ -176,60 +192,68 @@ class _NoteDocumentEditorState extends State<NoteDocumentEditor>
     _syncSlashOverlay();
   }
 
+  bool _dismissSlash() {
+    if (!slashVisible) return false;
+    _slashPopover.close();
+    setState(() => slashVisible = false);
+    return true;
+  }
+
   void _syncSlashOverlay() {
     if (!mounted) return;
     if (!slashVisible) {
-      slashOverlay?.remove();
-      slashOverlay = null;
+      _slashPopover.close();
       return;
     }
-    final overlay = Overlay.maybeOf(context, rootOverlay: true);
-    if (overlay == null) return;
     final screen = MediaQuery.sizeOf(context);
     final menuHeight = math.min(TaskSlashMenu.heightFor(_noteSlashActions),
         math.max(220.0, screen.height - 24));
-    Offset? caretOrigin;
-    double caretHeight = 20;
-    final renderEditor = renderEditorKey.currentState?.renderEditor;
-    if (renderEditor != null && editor.selection.isValid) {
-      try {
-        final caret = renderEditor.getLocalRectForCaret(
-            TextPosition(offset: editor.selection.extentOffset));
-        caretOrigin = renderEditor.localToGlobal(caret.topLeft);
-        caretHeight = caret.height;
-      } on Object {
-        // The first focus frame can be laid out before the caret is available.
-      }
-    }
-    final box = context.findRenderObject() as RenderBox?;
-    final fallbackOrigin = box?.localToGlobal(Offset.zero);
-    final origin = caretOrigin ?? fallbackOrigin;
-    if (origin != null) {
-      final geometry = calculatePopoverGeometry(
-        anchor: Rect.fromLTWH(origin.dx, origin.dy, 1, caretHeight),
-        viewport: screen,
-        desiredSize: Size(TaskSlashMenuMetrics.width, menuHeight),
-        placement: PopoverPlacement.bottomStart,
-        safeArea: const EdgeInsets.all(WorkFollowSpacing.popoverSafeArea),
-      );
-      slashOffset = geometry.rect.topLeft;
-    }
-    if (slashOverlay != null) {
-      slashOverlay!.markNeedsBuild();
+    if (_slashPopover.isOpen) {
+      _slashPopover.markNeedsBuild();
       return;
     }
-    slashOverlay = OverlayEntry(
-      builder: (context) => Positioned(
-        left: slashOffset.dx,
-        top: slashOffset.dy,
+    _slashPopover.open(
+      context,
+      width: TaskSlashMenuMetrics.width,
+      height: menuHeight,
+      placement: PopoverPlacement.bottomStart,
+      policy: const DesktopOverlayPolicy(
+        layer: DesktopOverlayLayer.menu,
+        focusPolicy: PopoverFocusPolicy.none,
+        restoreFocus: false,
+      ),
+      anchorRectResolver: _slashAnchorRect,
+      onDismiss: () {
+        if (!mounted) return;
+        setState(() => slashVisible = false);
+      },
+      builder: (_) => Focus(
+        canRequestFocus: false,
+        descendantsAreFocusable: false,
         child: TaskSlashMenu(
+          key: _slashMenuKey,
           actions: _noteSlashActions,
           maxHeight: menuHeight,
           onSelected: _applySlash,
         ),
       ),
     );
-    overlay.insert(slashOverlay!);
+  }
+
+  Rect? _slashAnchorRect() {
+    final renderEditor = renderEditorKey.currentState?.renderEditor;
+    if (renderEditor != null && editor.selection.isValid) {
+      try {
+        final caret = renderEditor.getLocalRectForCaret(
+            TextPosition(offset: editor.selection.extentOffset));
+        return renderEditor.localToGlobal(caret.topLeft) & caret.size;
+      } on Object {
+        // The first focus frame can be laid out before the caret is available.
+      }
+    }
+    final box = context.findRenderObject() as RenderBox?;
+    if (box == null || !box.attached || !box.hasSize) return null;
+    return box.localToGlobal(Offset.zero) & box.size;
   }
 
   int _lineStartAtCaret() {
@@ -282,25 +306,23 @@ class _NoteDocumentEditorState extends State<NoteDocumentEditor>
   }
 
   Future<void> _toggleToolbar(BuildContext anchor) async {
-    if (!mounted || toolbarVisible) return;
-    setState(() => toolbarVisible = true);
-    // The toggle lives outside Quill's editor; explicitly reclaim focus before
-    // presenting the floating strip so a selected range remains formatable.
-    focus.requestFocus();
-    final bounds = context.findRenderObject()! as RenderBox;
-    final trigger = anchor.findRenderObject()! as RenderBox;
-    final center = bounds.localToGlobal(Offset(bounds.size.width / 2, 0));
-    await showTaskEditorPopover<void>(
+    if (!mounted) return;
+    if (toolbarVisible || _formatToolbar.isOpen) {
+      _formatToolbar.close();
+      setState(() => toolbarVisible = false);
+      focus.requestFocus();
+      return;
+    }
+    final opened = _formatToolbar.open(
       anchor,
       width: TaskEditorMetrics.toolbarPopoverWidth,
-      maxHeight: TaskEditorMetrics.toolbarPopoverHeight,
-      anchorRect:
-          Rect.fromLTWH(center.dx, trigger.localToGlobal(Offset.zero).dy, 0, 0),
+      height: TaskEditorMetrics.toolbarPopoverHeight,
       placement: const PopoverPlacement(
           preferredSide: PopoverSide.top,
           alignment: PopoverAlignment.center,
           gap: WorkFollowSpacing.space7),
-      focusPolicy: PopoverFocusPolicy.preserveEditor,
+      policy: const DesktopOverlayPolicy.toolbar(),
+      anchorRectResolver: () => _toolbarAnchorRect(anchor),
       builder: (_) => TaskEditorToolbar(
         controller: editor,
         documentCommands: documentCommands,
@@ -310,9 +332,31 @@ class _NoteDocumentEditorState extends State<NoteDocumentEditor>
         onInsertDivider: documentCommands.insertDivider,
       ),
     );
-    if (!mounted) return;
-    setState(() => toolbarVisible = false);
+    if (!opened || !mounted) return;
+    setState(() => toolbarVisible = true);
     focus.requestFocus();
+    _syncFormattingToolbarOverlay();
+  }
+
+  Rect? _toolbarAnchorRect(BuildContext anchor) {
+    final bounds = context.findRenderObject() as RenderBox?;
+    final trigger = anchor.findRenderObject() as RenderBox?;
+    if (bounds == null ||
+        trigger == null ||
+        !bounds.attached ||
+        !trigger.attached ||
+        !bounds.hasSize ||
+        !trigger.hasSize) {
+      return null;
+    }
+    final center = bounds.localToGlobal(Offset(bounds.size.width / 2, 0));
+    return Rect.fromLTWH(
+        center.dx, trigger.localToGlobal(Offset.zero).dy, 0, 0);
+  }
+
+  void _syncFormattingToolbarOverlay() {
+    if (!mounted || !toolbarVisible) return;
+    _formatToolbar.markNeedsBuild();
   }
 
   void _taskFromSelection() {
@@ -348,6 +392,47 @@ class _NoteDocumentEditorState extends State<NoteDocumentEditor>
           key: const ValueKey('note-body-editor'),
           config: quill.QuillEditorConfig(
             editorKey: renderEditorKey,
+            customShortcuts: {
+              LogicalKeySet(LogicalKeyboardKey.escape):
+                  const _NoteEditorEscapeIntent(),
+              if (slashVisible) ...{
+                LogicalKeySet(LogicalKeyboardKey.arrowDown):
+                    const _NoteSlashMoveIntent(1),
+                LogicalKeySet(LogicalKeyboardKey.arrowUp):
+                    const _NoteSlashMoveIntent(-1),
+                LogicalKeySet(LogicalKeyboardKey.enter):
+                    const _NoteSlashAcceptIntent(),
+                LogicalKeySet(LogicalKeyboardKey.numpadEnter):
+                    const _NoteSlashAcceptIntent(),
+              },
+            },
+            customActions: {
+              _NoteEditorEscapeIntent: CallbackAction<_NoteEditorEscapeIntent>(
+                onInvoke: (_) {
+                  if (_dismissSlash()) return null;
+                  if (toolbarVisible) {
+                    _formatToolbar.close();
+                    setState(() => toolbarVisible = false);
+                    focus.requestFocus();
+                    return null;
+                  }
+                  focus.unfocus();
+                  return null;
+                },
+              ),
+              _NoteSlashMoveIntent: CallbackAction<_NoteSlashMoveIntent>(
+                onInvoke: (intent) {
+                  _slashMenuKey.currentState?.moveSelection(intent.delta);
+                  return null;
+                },
+              ),
+              _NoteSlashAcceptIntent: CallbackAction<_NoteSlashAcceptIntent>(
+                onInvoke: (_) {
+                  _slashMenuKey.currentState?.activateFocused();
+                  return null;
+                },
+              ),
+            },
             scrollable: false,
             minHeight: NotesMetrics.editorMinHeight,
             padding: const EdgeInsets.only(bottom: WorkFollowSpacing.space6),
@@ -358,8 +443,7 @@ class _NoteDocumentEditorState extends State<NoteDocumentEditor>
               paragraphBottom: 8,
               placeholderBottom: 8,
             ),
-            customStyleBuilder:
-                TaskDocumentStyles.customStyleBuilder(tokens),
+            customStyleBuilder: TaskDocumentStyles.customStyleBuilder(tokens),
             embedBuilders: [
               NoteBlockBuilder(controller: widget.controller),
               const NoteImageBuilder()
@@ -397,6 +481,20 @@ class _NoteDocumentEditorState extends State<NoteDocumentEditor>
   }
 }
 
+class _NoteEditorEscapeIntent extends Intent {
+  const _NoteEditorEscapeIntent();
+}
+
+class _NoteSlashMoveIntent extends Intent {
+  const _NoteSlashMoveIntent(this.delta);
+
+  final int delta;
+}
+
+class _NoteSlashAcceptIntent extends Intent {
+  const _NoteSlashAcceptIntent();
+}
+
 class NoteImageBuilder extends quill.EmbedBuilder {
   const NoteImageBuilder();
   @override
@@ -426,7 +524,8 @@ class NoteImageBuilder extends quill.EmbedBuilder {
                 fit: BoxFit.contain,
                 errorBuilder: fallback);
     return ConstrainedBox(
-        constraints: const BoxConstraints(maxHeight: NotesMetrics.imageMaxHeight),
+        constraints:
+            const BoxConstraints(maxHeight: NotesMetrics.imageMaxHeight),
         child: image);
   }
 }
@@ -519,7 +618,8 @@ class NoteBlockBuilder extends quill.EmbedBuilder {
                         TableRow(children: [
                           for (var i = 0; i < columns; i++)
                             Padding(
-                                padding: const EdgeInsets.all(WorkFollowSpacing.cardInset),
+                                padding: const EdgeInsets.all(
+                                    WorkFollowSpacing.cardInset),
                                 child: SelectableText(
                                     i < (row['content'] as List).length
                                         ? notePlainTextFromContentJson(

@@ -27,6 +27,7 @@ class TaskMoreMenu {
         width: TaskEditorMetrics.morePopoverWidth,
         placement: PopoverPlacement.topEnd,
         scrollable: true,
+        policy: const DesktopOverlayPolicy.menu(),
         builder: (_) => _MoreMenu(task: task),
       );
 }

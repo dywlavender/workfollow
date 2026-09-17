@@ -54,6 +54,11 @@
 | STATE-003 | States | `sidebar.dart` | navigation/list/tag 自己组合 pressed、focus、hover、selected | `customFill` + `focusBorder` | migrated | D7 |
 | STATE-004 | States | `task_date_picker.dart`、`task_schedule_panel.dart`、`settings_panel.dart` | Picker/Settings 直接维护 selected/hover | 共享 control/picker overlay | migrated | D7 |
 | STATE-005 | States | `task_row.dart`、`task_list/*`、`task_document_styles.dart`、Matrix/Feedback/QuickAdd | 并行任务中的状态分支 | 接入 `WorkFollowInteractionStyles` | deferred | D7 后续 |
+| OVERLAY-001 | Overlay | `desktop_popover.dart`、`task_editor_popover.dart` | Menu / Picker 的定位、翻转、clamp 和 focus policy 多入口 | `DesktopOverlayPolicy` + `calculatePopoverGeometry` | migrated | D8 |
+| OVERLAY-002 | Overlay | `task_document_editor.dart`、`note_document_editor.dart`、`persistent_anchored_popover.dart` | Slash / Toolbar 自己创建或维护 `OverlayEntry` | Persistent anchored overlay controller | migrated | D8 |
+| OVERLAY-003 | Overlay | `command_palette.dart`、`settings_panel.dart` | 顶层浮层各自调用 `showGeneralDialog` | `showDesktopDialog` | migrated | D8 |
+| OVERLAY-004 | Overlay | `sidebar.dart`、`habits_screen.dart`、Context / More | Material `showMenu` 与桌面菜单并存 | `showDesktopMenu` | migrated | D8 |
+| OVERLAY-005 | Overlay | `settings_panel.dart` 内部确认流程 | 真正的二级 Dialog 仍使用 `showDialog` | Dialog 白名单 | deferred · intentional | D8 |
 | MOTION-001 | Motion | `feedback_host.dart`、`app.dart`、Popover 等 | 18 个数字 Duration | Motion Roles | candidate | D9 |
 
 ## 重新扫描命令

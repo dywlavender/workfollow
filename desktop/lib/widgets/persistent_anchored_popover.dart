@@ -26,6 +26,8 @@ class PersistentAnchoredPopoverController {
   PopoverPlacement _placement = PopoverPlacement.bottomStart;
   EdgeInsets _safeArea =
       const EdgeInsets.all(WorkFollowSpacing.popoverSafeArea);
+  bool _dismissOnTapOutside = false;
+  VoidCallback? _onDismiss;
   Rect? _lastAnchorRect;
 
   bool get isOpen => _entry != null;
@@ -43,6 +45,9 @@ class PersistentAnchoredPopoverController {
     ThemeData? popoverTheme,
     BoxDecoration? surfaceDecoration,
     Rect? Function()? anchorRectResolver,
+    DesktopOverlayPolicy? policy,
+    bool dismissOnTapOutside = false,
+    VoidCallback? onDismiss,
   }) {
     close();
     final overlay = Overlay.maybeOf(anchor, rootOverlay: true);
@@ -57,6 +62,8 @@ class PersistentAnchoredPopoverController {
     _height = height;
     _placement = placement;
     _safeArea = safeArea;
+    _dismissOnTapOutside = policy?.dismissOnTapOutside ?? dismissOnTapOutside;
+    _onDismiss = onDismiss;
     _lastAnchorRect = anchorRectResolver?.call() ?? _anchorRect(anchor);
     _entry = OverlayEntry(builder: _build);
     overlay.insert(_entry!);
@@ -75,6 +82,8 @@ class PersistentAnchoredPopoverController {
     _builder = null;
     _theme = null;
     _surfaceDecoration = null;
+    _dismissOnTapOutside = false;
+    _onDismiss = null;
     _lastAnchorRect = null;
   }
 
@@ -124,9 +133,18 @@ class PersistentAnchoredPopoverController {
       clipBehavior: Clip.antiAlias,
       child: content,
     );
-    final surface = _surfaceDecoration == null
+    final decoratedSurface = _surfaceDecoration == null
         ? material
         : DecoratedBox(decoration: _surfaceDecoration!, child: material);
+    final surface = _dismissOnTapOutside
+        ? TapRegion(
+            onTapOutside: (_) {
+              _onDismiss?.call();
+              close();
+            },
+            child: decoratedSurface,
+          )
+        : decoratedSurface;
 
     final positioned = switch (geometry.side) {
       PopoverSide.top => Positioned(

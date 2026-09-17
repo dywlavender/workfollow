@@ -10,20 +10,21 @@ import '../theme/workfollow_surface_tokens.dart';
 import '../theme/workfollow_theme.dart';
 import 'app_icon_button.dart';
 import '../features/tasks/domain/task_draft.dart';
+import 'desktop_popover.dart';
 
 Future<void> showCommandPalette({
   required BuildContext context,
   required WorkspaceController controller,
   required VoidCallback onToggleTheme,
 }) {
-  return showGeneralDialog<void>(
+  return showDesktopDialog<void>(
     context: context,
+    builder: (context) =>
+        _CommandPalette(controller: controller, onToggleTheme: onToggleTheme),
     barrierLabel: '搜索与命令',
     barrierDismissible: true,
     barrierColor: Colors.black.withValues(alpha: .28),
     transitionDuration: const Duration(milliseconds: 180),
-    pageBuilder: (context, animation, secondaryAnimation) =>
-        _CommandPalette(controller: controller, onToggleTheme: onToggleTheme),
     transitionBuilder: (context, animation, secondaryAnimation, child) {
       final curved =
           CurvedAnimation(parent: animation, curve: Curves.easeOutCubic);

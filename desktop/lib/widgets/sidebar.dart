@@ -1137,26 +1137,18 @@ class _TaskListItemState extends State<_TaskListItem> {
   }
 
   Future<void> _showListMenu(BuildContext context) async {
-    final tokens = WorkFollowTheme.of(context);
-    final box = context.findRenderObject() as RenderBox?;
-    final anchor = box == null
-        ? const Offset(200, 200)
-        : box.localToGlobal(Offset(box.size.width - 8, box.size.height - 6));
-    final choice = await showMenu<String>(
-      context: context,
-      color: tokens.overlay,
-      position: RelativeRect.fromLTRB(
-          anchor.dx, anchor.dy, anchor.dx + 1, anchor.dy + 1),
-      items: [
-        PopupMenuItem(
-            value: 'pin', child: Text(widget.list.pinned ? '取消置顶' : '置顶清单')),
-        const PopupMenuItem(value: 'rename', child: Text('重命名')),
-        const PopupMenuItem(value: 'color', child: Text('选择颜色')),
-        const PopupMenuItem(value: 'board', child: Text('在看板中打开')),
-        PopupMenuItem(
-            value: 'delete',
-            child: Text('删除清单',
-                style: TextStyle(color: WorkFollowTheme.of(context).danger))),
+    final choice = await showDesktopMenu<String>(
+      context,
+      placement: PopoverPlacement.bottomEnd,
+      entries: [
+        DesktopMenuEntry(
+            'pin', widget.list.pinned ? '取消置顶' : '置顶清单',
+            icon: WorkFollowIcons.pin),
+        const DesktopMenuEntry('rename', '重命名', icon: WorkFollowIcons.edit),
+        const DesktopMenuEntry('color', '选择颜色'),
+        const DesktopMenuEntry('board', '在看板中打开', icon: WorkFollowIcons.board),
+        const DesktopMenuEntry('delete', '删除清单',
+            icon: WorkFollowIcons.delete, destructive: true),
       ],
     );
     if (!context.mounted) return;
@@ -1368,13 +1360,15 @@ class _TagItemState extends State<_TagItem> {
   }
 
   Future<void> _showMenu(BuildContext context) async {
-    final action = await showMenu<String>(
-        context: context,
-        position: const RelativeRect.fromLTRB(160, 240, 0, 0),
-        items: const [
-          PopupMenuItem(value: 'rename', child: Text('重命名标签')),
-          PopupMenuItem(value: 'delete', child: Text('删除标签')),
-        ]);
+    final action = await showDesktopMenu<String>(
+      context,
+      placement: PopoverPlacement.bottomEnd,
+      entries: const [
+        DesktopMenuEntry('rename', '重命名标签', icon: WorkFollowIcons.edit),
+        DesktopMenuEntry('delete', '删除标签',
+            icon: WorkFollowIcons.delete, destructive: true),
+      ],
+    );
     if (!context.mounted || action == null) return;
     if (action == 'delete') {
       widget.controller.deleteTag(widget.name);

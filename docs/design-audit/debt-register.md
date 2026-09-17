@@ -99,12 +99,12 @@
 
 | 文件 | 组件 | 问题类型 | 当前写法（命中数） | 应归属 Token | 严重程度 | 计划轮次 |
 | --- | --- | --- | --- | --- | --- | --- |
-| `widgets/desktop_popover.dart` | 通用 Popover | Overlay | 定位基础统一，但 surface、shadow、focus policy 分散在调用方 | `TaskMenuStyle`/Overlay spec | P0 | D8 |
-| `widgets/task_editor_popover.dart`、`persistent_anchored_popover.dart` | Editor Popover/Toolbar | Overlay | 两套 surfaceDecoration 和圆角/阴影参数 | Overlay surface role | P0 | D8 |
-| `widgets/task_context_menu_panel.dart`、`task_more_menu.dart` | Task menus | Overlay | 行高、颜色和 disabled/selected 规则各自维护 | Context/More menu roles | P0 | D8 |
-| `widgets/task_slash_menu.dart` | Slash menu | Overlay | 独立 metrics、glyph painter 和 focus/selection | Command menu role | P1 | D8 |
-| `widgets/task_date_picker.dart`、`task_list_picker.dart`、`task_tag_picker.dart` | Property Pickers | Overlay | 各自宽度、padding、selected/empty 状态 | Picker role | P1 | D8 |
-| `widgets/command_palette.dart`、`settings_panel.dart` | Global overlays | Overlay | 各自 transition/barrier/surface | Dialog/Command palette roles | P1 | D8 |
+| `widgets/desktop_popover.dart` | 通用 Popover | Overlay | 定位基础、surface、shadow、focus policy 分散在调用方 | `DesktopOverlayPolicy` + shared geometry | P0 | migrated · D8 |
+| `widgets/task_editor_popover.dart`、`persistent_anchored_popover.dart` | Editor Popover/Toolbar | Overlay | 两套 surfaceDecoration 和圆角/阴影参数 | Overlay surface role + persistent controller | P0 | migrated · D8 |
+| `widgets/task_context_menu_panel.dart`、`task_more_menu.dart` | Task menus | Overlay | 行高、颜色和 disabled/selected 规则各自维护 | Context/More menu roles | P0 | migrated · D8 |
+| `widgets/task_slash_menu.dart`、`task_document_editor.dart`、`note_document_editor.dart` | Slash menu | Overlay | 独立 OverlayEntry、caret 定位和 focus/selection | Command menu role + persistent controller | P1 | migrated · D8 |
+| `widgets/task_date_picker.dart`、`task_list_picker.dart`、`task_tag_picker.dart` | Property Pickers | Overlay | 各自宽度、padding、selected/empty 状态 | Picker role | P1 | migrated · D8 |
+| `widgets/command_palette.dart`、`settings_panel.dart` | Global overlays | Overlay | 各自 transition/barrier/surface | `showDesktopDialog` | P1 | migrated · D8 |
 
 ## Motion
 

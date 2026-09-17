@@ -11,6 +11,7 @@ import '../theme/workfollow_icons.dart';
 import '../theme/workfollow_interaction_states.dart';
 import '../theme/workfollow_theme.dart';
 import 'app_icon_button.dart';
+import 'desktop_popover.dart';
 
 enum _ImportMode { merge, replace }
 
@@ -29,13 +30,9 @@ Future<void> showSettingsPanel({
   bool animatedFeedback = true,
   ValueChanged<bool>? onSetAnimatedFeedback,
 }) {
-  return showGeneralDialog<void>(
+  return showDesktopDialog<void>(
     context: context,
-    barrierDismissible: true,
-    barrierLabel: '设置',
-    barrierColor: Colors.black.withValues(alpha: .24),
-    transitionDuration: const Duration(milliseconds: 180),
-    pageBuilder: (context, animation, secondaryAnimation) => _SettingsPanel(
+    builder: (context) => _SettingsPanel(
       controller: controller,
       onToggleTheme: onToggleTheme,
       onSetThemeMode: onSetThemeMode,
@@ -49,6 +46,10 @@ Future<void> showSettingsPanel({
       animatedFeedback: animatedFeedback,
       onSetAnimatedFeedback: onSetAnimatedFeedback,
     ),
+    barrierDismissible: true,
+    barrierLabel: '设置',
+    barrierColor: Colors.black.withValues(alpha: .24),
+    transitionDuration: const Duration(milliseconds: 180),
     transitionBuilder: (context, animation, secondaryAnimation, child) =>
         BackdropFilter(
             filter: ImageFilter.blur(

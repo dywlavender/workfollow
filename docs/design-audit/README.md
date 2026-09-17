@@ -23,7 +23,7 @@
 | Geometry | 29 个数字圆角；162 个数字宽度；231 个数字高度 | 需要按控件类型归并，不能一次性替换 | D5 |
 | Surfaces | 91 个 `BoxDecoration`；7 个 `BoxShadow`；27 个 `Border.*` | 先建立 Surface 角色，再收口实现 | D6 |
 | States | `selected:` 60；Hover 相关 78；Focus 相关 71；Disabled 相关 32；Active 相关 16 | 语法命中，需按控件状态矩阵归并 | D7 |
-| Overlay | 34 个弹层 API 命中，分布在 18 个文件；菜单/Picker/Toolbar/Popover 各有入口 | 定位基础已共享，视觉和焦点规则仍需统一 | D8 |
+| Overlay | 统一菜单、Picker、Toolbar、Dialog route；34 个基线命中已按契约收口 | `DesktopOverlayPolicy`、shared geometry、persistent controller | D8 · migrated |
 | Motion | 18 个主题外数字 `Duration`；10 个主题外 `Curves.*` | 反馈 HUD 与页面转场需要先定义 Motion Role | D9 |
 | Light / Dark | 32 个明暗模式判断，分布在 10 个文件 | 检查是否把模式差异写进了组件，而不是 Theme | D10 |
 
@@ -68,6 +68,7 @@
 - [Motion](motion.md)
 - [States](states.md)
 - [Overlay](overlay.md)
+- [D8 Overlay migration](d8-overlays.md)
 - [Light / Dark](theme-parity.md)
 
 ## 施工顺序
