@@ -111,7 +111,8 @@ class _TaskTagPickerBodyState extends State<TaskTagPickerBody> {
             ),
           ),
         ),
-        Divider(height: 1, color: tokens.border),
+        Divider(
+            height: WorkFollowMetrics.dividerThickness, color: tokens.border),
         Flexible(
           child: SingleChildScrollView(
             child: Padding(

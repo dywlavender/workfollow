@@ -17,6 +17,10 @@ class WorkFollowMetrics {
   static const double compactFieldIcon = 17;
   static const double metadataIcon = 15;
   static const double iconHitTarget = 32;
+  /// Shared stroke used by compact completion controls and the Material
+  /// checkbox theme. Custom painted controls may opt out when their path has
+  /// a documented visual reason to use a different stroke.
+  static const double checkboxBorderWidth = 1.5;
   // macOS task navigation uses a denser rhythm than the Web reference while
   // keeping the same icon and text roles. The hit target remains large enough
   // for pointer use, but the surrounding row no longer wastes vertical space.
@@ -192,6 +196,9 @@ class TaskMenuMetrics {
 
   static const double width = 264;
   static const double rowHeight = WorkFollowMetrics.menuRowHeight;
+  /// Divider height includes the quiet vertical breathing room around the
+  /// one-pixel hairline in the context menu.
+  static const double dividerHeight = 13;
   static const double dateGridCellHeight = WorkFollowMetrics.menuRowHeight;
   static const double maxHeight = 660;
 }
@@ -585,6 +592,7 @@ class WorkFollowMacTypography {
   static const double feedback = 15;
 
   // Line heights.
+  static const double lineNone = 1;
   static const double lineTight = 1.25;
   static const double lineControl = 1.35;
   static const double lineList = 1.40;
@@ -621,6 +629,10 @@ class WorkFollowMacDisplay {
   /// The focus timer countdown.
   static const double timer = 42;
 
+  /// Invisible accessibility target kept in the icon rail for automation and
+  /// screen readers. It is intentionally outside the visible type ladder.
+  static const double accessibilityHidden = 1;
+
   /// The `H` of the slash menu's `H₁ / H₂ / H₃` leading glyphs. Drawn as text
   /// because no icon carries the level: Material's `title` / `text_fields` /
   /// `short_text` only read as "some heading". Measured off the reference
@@ -642,6 +654,10 @@ class WorkFollowMacTracking {
   /// Default for every Chinese UI string. Negative tracking belongs to large
   /// Latin display type, which this profile does not use.
   static const double none = 0;
+
+  /// The focus timer uses a small positive tracking value so the fixed-width
+  /// digits remain visually separated in its display surface.
+  static const double timer = 1.2;
 }
 
 /// Font resolution for the macOS surface.
@@ -819,6 +835,8 @@ class WorkFollowMotion {
   static const Duration instant = Duration(milliseconds: 80);
   static const Duration fast = Duration(milliseconds: 160);
   static const Duration normal = Duration(milliseconds: 240);
+  static const Duration tooltipWait = Duration(milliseconds: 450);
+  static const Duration submenuIntent = Duration(milliseconds: 220);
   static const Duration pending = instant;
   static const Duration loading = fast;
   static const Duration transition = normal;
@@ -1479,7 +1497,7 @@ class WorkFollowThemeData {
       iconTheme: IconThemeData(
           color: tokens.textSecondary, size: WorkFollowMetrics.navigationIcon),
       tooltipTheme: TooltipThemeData(
-        waitDuration: const Duration(milliseconds: 450),
+        waitDuration: WorkFollowMotion.tooltipWait,
         textStyle: TextStyle(
             color: tokens.feedbackText,
             fontSize: WorkFollowMacTypography.caption,
@@ -1536,7 +1554,9 @@ class WorkFollowThemeData {
         visualDensity: VisualDensity.compact,
         shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(WorkFollowRadii.checkbox)),
-        side: BorderSide(color: tokens.borderStrong, width: 1.5),
+        side: BorderSide(
+            color: tokens.borderStrong,
+            width: WorkFollowMetrics.checkboxBorderWidth),
       ),
       dialogTheme: DialogThemeData(
         backgroundColor: tokens.overlay,

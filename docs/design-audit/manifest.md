@@ -72,6 +72,10 @@
 | THEME-004 | Light-Dark | `screens/home_screen.dart`, `screens/calendar_screen.dart`, `screens/notes_screen.dart`, `widgets/task_tag_picker.dart` | 有色表面固定使用白色前景 | `WorkFollowThemeContrast.foregroundOn` | migrated | D10 |
 | THEME-005 | Light-Dark | `widgets/command_palette.dart`, `widgets/settings_panel.dart` | 黑色 alpha 遮罩 | Overlay barrier exception | accepted-exception | D10 |
 | THEME-006 | Light-Dark | `widgets/task_document_styles.dart`, `widgets/task_schedule_options.dart`, `widgets/task_schedule_panel.dart`, `widgets/task_row.dart`, `widgets/task_list/*`, `widgets/matrix/*`, `features/feedback/*` | 并行任务中的 Checklist/Schedule/Row/Matrix/Feedback 明暗分支 | 对应语义 Token；保留并行工作区 | deferred | D10 后续 |
+| LOCK-001 | Design-Lock | `test/design_system_lock_test.dart` | 业务文件可能重新写入 primitive Token | 自动扫描规则 + 精确并行边界 | migrated | D11 |
+| LOCK-002 | Design-Lock | `theme/design_system_gallery.dart`、`test/design_system_gallery_test.dart` | 关键组件缺少集中双主题预览 | 开发 Gallery + Light/Dark Widget 回归 | migrated | D11 |
+| LOCK-003 | Design-Lock | `docs/design-system/exceptions.md` | 特殊值没有统一 owner 和复核规则 | 例外白名单 | migrated | D11 |
+| LOCK-004 | Design-Lock | `theme/workfollow_theme.dart`、`widgets/app_icon_button.dart`、`widgets/focus_timer_dialog.dart`、`widgets/task_context_menu_panel.dart` | Tooltip/子菜单时序、Divider、隐藏字体和计时器字距仍为局部字面值 | 命名 Motion/Typography/Geometry roles | migrated | D11 |
 
 ## 重新扫描命令
 

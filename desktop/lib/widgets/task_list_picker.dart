@@ -173,7 +173,9 @@ class _TaskListPickerBodyState extends State<_TaskListPickerBody> {
                 ),
               ),
             ),
-            Divider(height: 1, color: tokens.border),
+            Divider(
+                height: WorkFollowMetrics.dividerThickness,
+                color: tokens.border),
             Flexible(
                 child: SingleChildScrollView(
               padding: const EdgeInsets.symmetric(

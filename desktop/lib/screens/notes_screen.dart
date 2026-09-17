@@ -203,7 +203,8 @@ class _NotesScreenState extends State<NotesScreen> {
             key: const ValueKey('web-note-list-pane'),
             width: listWidth,
             child: list),
-        VerticalDivider(width: 1, color: tokens.border),
+        VerticalDivider(
+            width: WorkFollowMetrics.dividerThickness, color: tokens.border),
         Expanded(
             child: KeyedSubtree(
                 key: const ValueKey('web-note-editor-pane'), child: page))

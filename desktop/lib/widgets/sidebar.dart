@@ -8,6 +8,7 @@ import '../theme/workfollow_color_tokens.dart';
 import '../theme/workfollow_interaction_states.dart';
 import '../theme/workfollow_motion.dart';
 import '../theme/workfollow_theme.dart';
+import '../theme/workfollow_theme_parity.dart';
 import '../features/feedback/feedback_event.dart';
 import '../features/feedback/feedback_scope.dart';
 import 'app_icon_button.dart';
@@ -78,7 +79,10 @@ class AppRail extends StatelessWidget {
           (contextColumn ? WorkFollowLayout.compactTaskNavigationWidth : 0),
       decoration: BoxDecoration(
         gradient: WorkFollowColorTokens.navigationGradient(context, tokens),
-        border: Border(right: BorderSide(color: tokens.border, width: 1)),
+        border: Border(
+            right: BorderSide(
+                color: tokens.border,
+                width: WorkFollowMetrics.dividerThickness)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -93,7 +97,8 @@ class AppRail extends StatelessWidget {
             ),
           ),
           if (contextColumn) ...[
-            Container(width: 1, color: tokens.border),
+            Container(
+                width: WorkFollowMetrics.dividerThickness, color: tokens.border),
             Expanded(
               key: const ValueKey('rail-context-column'),
               child: Column(
@@ -530,7 +535,9 @@ class _IconRailFooterButton extends StatelessWidget {
                 // Not a type role: 1pt keeps this invisible target out of the
                 // layout while leaving it keyboard and screen-reader
                 // addressable. Excluded from the typography contract on purpose.
-                style: const TextStyle(fontSize: 1, color: Colors.transparent)),
+                style: const TextStyle(
+                    fontSize: WorkFollowMacDisplay.accessibilityHidden,
+                    color: Colors.transparent)),
           ),
         ],
       ),
@@ -1169,9 +1176,10 @@ class _TaskListItemState extends State<_TaskListItem> {
                             child: widget.controller
                                         .colorHexForList(widget.list.name) ==
                                     colorHexFromValue(value)
-                                ? const AppIcon(WorkFollowIcons.check,
+                                ? AppIcon(WorkFollowIcons.check,
                                     size: WorkFollowMetrics.toolbarIcon,
-                                    color: Colors.white)
+                                    color: WorkFollowThemeContrast.foregroundOn(
+                                        Color(value)))
                                 : null),
                       ),
                   ],

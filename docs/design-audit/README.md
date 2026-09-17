@@ -1,12 +1,12 @@
 # WorkFollow Design System Audit
 
-这是桌面端 Design System 的 D0 盘点入口和 D1–D10 迁移索引。每轮文档记录边界、事实源、例外和验证结果。
+这是桌面端 Design System 的 D0 盘点入口和 D1–D11 迁移索引。每轮文档记录边界、事实源、例外和验证结果。
 
 ## 快照
 
 - 扫描日期：2026-09-18
 - 扫描范围：`desktop/lib/**/*.dart`
-- 文件数：96（包含当前工作区中并行任务新增的 Dart 文件）
+- 文件数：103（最终复核，包含当前工作区中并行任务和 D11 Gallery 新增的 Dart 文件）
 - 排除：`build/`、`.dart_tool/` 和测试目录
 - 当前分支：`feature/flutter-personal-desktop`
 
@@ -26,6 +26,7 @@
 | Overlay | 统一菜单、Picker、Toolbar、Dialog route；34 个基线命中已按契约收口 | `DesktopOverlayPolicy`、shared geometry、persistent controller | D8 · migrated |
 | Motion | 18 个主题外数字 `Duration`；10 个主题外 `Curves.*` | Motion Role 已建立；浮层、页面切换、Feedback HUD 已迁移，并行组件按边界 deferred | D9 · migrated |
 | Light / Dark | 32 个明暗模式判断，分布在 10 个文件 | 语义 Token、对比度、Surface 层级和反色前景已收口；并行文件按边界 deferred | D10 · migrated |
+| D11 Lock | 业务文件的 Token 绕过点、特殊值和并行边界 | 自动约束、开发 Gallery、例外白名单已建立 | D11 · migrated |
 
 ## 规范事实源
 
@@ -41,6 +42,8 @@
 | 圆角 | `WorkFollowRadii` |
 | 动画时序与曲线 | [`workfollow_motion.dart`](/Users/dongyangwei/Documents/学习/代办笔记/workfollow-flutter-personal/desktop/lib/theme/workfollow_motion.dart)；基础值由 `WorkFollowMotion` 提供 |
 | Light / Dark 对比度与反色前景 | [`workfollow_theme_parity.dart`](/Users/dongyangwei/Documents/学习/代办笔记/workfollow-flutter-personal/desktop/lib/theme/workfollow_theme_parity.dart)；颜色角色由 `WorkFollowTheme` 提供 |
+| D11 例外与自动约束 | [`docs/design-system/exceptions.md`](/Users/dongyangwei/Documents/学习/代办笔记/workfollow-flutter-personal/docs/design-system/exceptions.md)、[`design_system_lock_test.dart`](/Users/dongyangwei/Documents/学习/代办笔记/workfollow-flutter-personal/desktop/test/design_system_lock_test.dart) |
+| 开发组件目录 | [`design_system_gallery.dart`](/Users/dongyangwei/Documents/学习/代办笔记/workfollow-flutter-personal/desktop/lib/theme/design_system_gallery.dart) |
 | 任务菜单颜色兼容层 | `TaskMenuStyle`（只转发 `WorkFollowTheme`，不再复制颜色） |
 
 ## D0 发现状态
@@ -73,6 +76,8 @@
 - [D8 Overlay migration](d8-overlays.md)
 - [Light / Dark](theme-parity.md)
 - [D10 Light / Dark migration](d10-theme-parity.md)
+- [D11 cleanup and lock](d11-cleanup.md)
+- [Design System reference](../design-system/README.md)
 
 ## 施工顺序
 

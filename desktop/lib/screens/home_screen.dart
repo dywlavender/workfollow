@@ -495,7 +495,7 @@ class _HomeTaskRow extends StatelessWidget {
                             : overdue
                                 ? tokens.warning
                                 : tokens.borderStrong,
-                        width: 1.5),
+                        width: WorkFollowMetrics.checkboxBorderWidth),
                   ),
                   child: task.completed
                       ? AppIcon(WorkFollowIcons.check,

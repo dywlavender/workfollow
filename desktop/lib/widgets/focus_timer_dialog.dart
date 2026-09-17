@@ -84,7 +84,7 @@ class _FocusTimerDialogState extends State<_FocusTimerDialog> {
                       color: tokens.textPrimary,
                       fontSize: WorkFollowMacDisplay.timer,
                       fontWeight: WorkFollowMacWeight.regular,
-                      letterSpacing: 1.2)),
+                      letterSpacing: WorkFollowMacTracking.timer)),
               const SizedBox(height: WorkFollowSpacing.denseGap),
               Text(timer.isRunning ? '专注中，保持这个节奏' : '选择时长，开始一轮专注',
                   style: TextStyle(color: tokens.textTertiary, fontSize: WorkFollowMacTypography.caption)),

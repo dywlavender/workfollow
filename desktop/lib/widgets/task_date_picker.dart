@@ -326,7 +326,7 @@ class _TaskDatePickerState extends State<TaskDatePicker> {
                               fontSize: WorkFollowMacTypography.listBody)));
                 }),
             const SizedBox(height: WorkFollowSpacing.controlGap),
-            const Divider(height: 1),
+            const Divider(height: WorkFollowMetrics.dividerThickness),
             const SizedBox(height: WorkFollowSpacing.controlGap),
             if (widget.allowTime)
               Row(children: [

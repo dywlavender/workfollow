@@ -33,13 +33,8 @@ void main() {
       }
     }
 
-    expect(rawFontSizes, hasLength(1));
-    expect(rawFontSizes.single, contains('sidebar.dart'));
-    expect(rawFontSizes.single, contains('fontSize: 1'));
-    expect(
-      rawTracking,
-      everyElement(contains('focus_timer_dialog.dart')),
-    );
+    expect(rawFontSizes, isEmpty);
+    expect(rawTracking, isEmpty);
     expect(materialTextThemes, isEmpty);
     expect(webTypographyConsumers, isEmpty);
 

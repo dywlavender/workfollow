@@ -95,7 +95,9 @@ class _MoreMenuState extends State<_MoreMenu> {
                 Padding(
                     padding: const EdgeInsets.symmetric(
                         vertical: WorkFollowSpacing.denseGap),
-                    child: Divider(height: 1, color: colors.border)),
+                    child: Divider(
+                        height: WorkFollowMetrics.dividerThickness,
+                        color: colors.border)),
               Builder(builder: (context) {
                 final entry = entries[i];
                 final destructive = entry.$1 == 'delete';

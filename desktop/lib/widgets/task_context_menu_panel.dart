@@ -370,7 +370,7 @@ class _TaskContextMenuPanelState extends State<TaskContextMenuPanel> {
             onEnter: (_) {
               if (trailing == null || widget.controller == null) return;
               hoverTimer?.cancel();
-              hoverTimer = Timer(const Duration(milliseconds: 220), () {
+              hoverTimer = Timer(WorkFollowMotion.submenuIntent, () {
                 if (mounted && rowContext.mounted)
                   _openSubmenu(rowContext, value);
               });
@@ -457,7 +457,7 @@ class _MenuDivider extends StatelessWidget {
   Widget build(BuildContext context) {
     final tokens = TaskMenuStyle.colors(context);
     return Divider(
-      height: 13,
+      height: TaskMenuMetrics.dividerHeight,
       thickness: 1,
       color: tokens.border.withValues(alpha: .72),
       indent: 4,

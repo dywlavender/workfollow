@@ -304,7 +304,10 @@ class TaskSlashMenuState extends State<TaskSlashMenu> {
   /// line that spans the palette, not one inset to the rows.
   Widget _divider(WorkFollowTheme tokens) => SizedBox(
         height: TaskSlashMenuMetrics.dividerBlock,
-        child: Center(child: Container(height: 1, color: tokens.menuDivider)),
+        child: Center(
+            child: Container(
+                height: WorkFollowMetrics.dividerThickness,
+                color: tokens.menuDivider)),
       );
 
   Widget _item(int index, TaskSlashAction action, WorkFollowTheme tokens) {

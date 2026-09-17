@@ -262,7 +262,9 @@ class _CommandPaletteState extends State<_CommandPalette> {
                     ],
                   ),
                 ),
-                Divider(height: 1, color: tokens.border),
+                Divider(
+                    height: WorkFollowMetrics.dividerThickness,
+                    color: tokens.border),
                 if (list.isEmpty)
                   Padding(
                       padding: const EdgeInsets.all(WorkFollowSpacing.space8),

@@ -67,7 +67,7 @@ class AppIconButton extends StatelessWidget {
     if (tooltip == null || onPressed == null) return child;
     return Tooltip(
         message: tooltip!,
-        waitDuration: const Duration(milliseconds: 450),
+        waitDuration: WorkFollowMotion.tooltipWait,
         child: child);
   }
 }
@@ -114,7 +114,7 @@ class SoftPill extends StatelessWidget {
               color: textColor ?? tokens.textSecondary,
               fontSize: WorkFollowMacTypography.control,
               fontWeight: WorkFollowMacWeight.semibold,
-              height: 1,
+              height: WorkFollowMacTypography.lineNone,
             ),
           ),
         ],

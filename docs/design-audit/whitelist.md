@@ -4,7 +4,7 @@
 
 | 类别 | 文件/值 | 允许原因 | 复核轮次 |
 | --- | --- | --- | --- |
-| 技术字体 | `widgets/sidebar.dart:542` 的隐藏输入 `fontSize: 1` | 输入承载不可见，不参与视觉层级 | D1 |
+| 技术字体 | `widgets/sidebar.dart` 的隐藏输入 `WorkFollowMacDisplay.accessibilityHidden` | 输入承载不可见，不参与视觉层级；值已命名并锁定 | D11 |
 | Display 字体 | `WorkFollowMacDisplay.timer`、`slashHeading`、`slashHeadingIndex`、`slashOrderedNumeral` | 计时器和 Slash glyph 是专属显示角色，不是普通正文 | D1 |
 | 透明色 | `Colors.transparent` | 无背景点击层、占位层、状态清除；不能代替实际 surface | D3 |
 | 反色前景 | `Colors.white` 用于按钮/勾选 | 深色或品牌底上的可读性对比；应由组件角色说明 | D3/D10 |
@@ -27,5 +27,8 @@
 | Destructive hover 派生色 | `WorkFollowInteractionStyles` 中由 `tokens.danger` 派生的低 alpha tint | D7 只表达 destructive 状态；D3 颜色体系不新增独立 palette | D3/D7 |
 | Persistent overlay entry | `widgets/persistent_anchored_popover.dart` 的单一 controller | Toolbar 和 caret Slash 需要跨编辑器点击保持 mounted；业务组件不再直接创建或定位 `OverlayEntry` | D8 |
 | 二级 Dialog route | `settings_panel.dart` 的导入预览、恢复选择、恢复确认 | 这些是确认/数据选择 Dialog，不是 anchored Menu / Picker；由 Material `showDialog` 处理 | D8 |
+| 技术时序 Token | `WorkFollowMotion.tooltipWait`、`WorkFollowMotion.submenuIntent` | Tooltip 等待和子菜单意图延迟不是组件动画，但必须有命名 owner | D11 |
+| 开发 Gallery | `theme/design_system_gallery.dart` | 仅用于开发预览和双主题 Widget 回归，不作为产品导航入口 | D11 |
+| 并行任务边界 | `docs/design-system/exceptions.md` 中列出的精确文件/目录 | 另一项任务仍有未提交改动；合并后必须重新扫描并删除边界 | D11 |
 
 白名单之外的直接 `Color(0x...)`、直接 `Icons.*`、未解释的字号/字距和页面局部动画，默认进入债务总表。

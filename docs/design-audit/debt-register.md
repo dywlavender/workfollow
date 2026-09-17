@@ -129,3 +129,13 @@
 | `widgets/command_palette.dart`、`settings_panel.dart` 等 | Overlay surfaces | Theme parity | barrier 使用黑色 alpha 遮罩；有色表面前景需对比校验 | Overlay barrier exception + `WorkFollowThemeContrast` | P1 | migrated/accepted-exception · D10 |
 | `theme/workfollow_theme.dart` | ThemeData/semantic palette | Theme parity | Light 状态色、Dark error foreground、Tooltip 语义对比不一致 | theme roles + `on*` foreground | P0 | migrated · D10 |
 | `screens/home_screen.dart`、`calendar_screen.dart`、`notes_screen.dart`、`widgets/task_tag_picker.dart` | Filled controls | Theme parity | 有色表面固定白色前景 | `WorkFollowThemeContrast.foregroundOn` | P1 | migrated · D10 |
+
+## Design System Lock
+
+| 文件 | 组件 | 问题类型 | 当前写法（命中数） | 应归属 Token | 严重程度 | 计划轮次 |
+| --- | --- | --- | --- | --- | --- | --- |
+| `widgets/app_icon_button.dart`、`focus_timer_dialog.dart`、`task_editor_glyph.dart` | Tooltip、计时器、专用 glyph | Token 绕过 | 等待时长、字距和无行高局部字面值 | `WorkFollowMotion.tooltipWait`、`WorkFollowMacTracking.timer`、`WorkFollowMacTypography.lineNone` | P2 | migrated · D11 |
+| `widgets/task_context_menu_panel.dart`、任务 Picker/菜单 | Divider 与子菜单意图 | Geometry / Motion | `height: 13`、`220ms` 分散在组件 | `TaskMenuMetrics.dividerHeight`、`WorkFollowMotion.submenuIntent` | P2 | migrated · D11 |
+| `widgets/sidebar.dart` | 用户自定义清单色前景 | Theme parity | 固定白色勾选图标 | `WorkFollowThemeContrast.foregroundOn` | P1 | migrated · D11 |
+| `test/design_system_lock_test.dart` | 业务源码边界 | 自动约束 | 新代码可再次写入 primitive Token | D11 source guard + 精确并行边界 | P0 | migrated · D11 |
+| `theme/design_system_gallery.dart` | 组件状态目录 | 回归 | 关键组件需要跨页面肉眼寻找 | Light/Dark Design System Gallery | P1 | migrated · D11 |

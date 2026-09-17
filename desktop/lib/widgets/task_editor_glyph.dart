@@ -43,7 +43,7 @@ class _Glyph extends CustomPainter {
                   fontFamily: WorkFollowMacTypeFamily.ui,
                   fontFamilyFallback: WorkFollowMacTypeFamily.fallback,
                   fontSize: fontSize,
-                  height: 1,
+                  height: WorkFollowMacTypography.lineNone,
                   fontWeight: weight,
                   color: color)),
           textDirection: TextDirection.ltr)

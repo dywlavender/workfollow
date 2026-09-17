@@ -239,7 +239,9 @@ class _CalendarScreenState extends State<CalendarScreen> {
               }),
             ),
             if (selectedDay != null) ...[
-              Container(height: 1, color: tokens.border),
+              Container(
+                  height: WorkFollowMetrics.dividerThickness,
+                  color: tokens.border),
               const SizedBox(height: WorkFollowSpacing.space3),
               _SelectedDayAgenda(
                   controller: widget.controller, day: selectedDay!),
