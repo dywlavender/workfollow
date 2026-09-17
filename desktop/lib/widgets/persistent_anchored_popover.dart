@@ -23,7 +23,8 @@ class PersistentAnchoredPopoverController {
   double _width = 340;
   double _height = 620;
   PopoverPlacement _placement = PopoverPlacement.bottomStart;
-  EdgeInsets _safeArea = const EdgeInsets.all(12);
+  EdgeInsets _safeArea =
+      const EdgeInsets.all(WorkFollowSpacing.popoverSafeArea);
   Rect? _lastAnchorRect;
 
   bool get isOpen => _entry != null;
@@ -36,7 +37,8 @@ class PersistentAnchoredPopoverController {
     double width = 340,
     double height = 620,
     PopoverPlacement placement = PopoverPlacement.bottomStart,
-    EdgeInsets safeArea = const EdgeInsets.all(12),
+    EdgeInsets safeArea =
+        const EdgeInsets.all(WorkFollowSpacing.popoverSafeArea),
     ThemeData? popoverTheme,
     BoxDecoration? surfaceDecoration,
     Rect? Function()? anchorRectResolver,

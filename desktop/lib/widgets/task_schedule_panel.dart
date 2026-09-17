@@ -160,19 +160,19 @@ class _TaskSchedulePanelState extends State<TaskSchedulePanel> {
         color: colors.textPrimary);
     return Padding(
         key: const ValueKey('task-schedule-panel'),
-        padding: const EdgeInsets.symmetric(vertical: 12),
+        padding: const EdgeInsets.symmetric(vertical: WorkFollowSpacing.space3),
         child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  padding: const EdgeInsets.symmetric(horizontal: WorkFollowSpacing.space4),
                   child: Column(children: [
                     Container(
                         decoration: BoxDecoration(
                             color: scheduleFieldBackground(context),
                             borderRadius: BorderRadius.circular(8)),
-                        padding: const EdgeInsets.all(2),
+                        padding: const EdgeInsets.all(WorkFollowSpacing.microGap),
                         child: Row(children: [
                           for (final tab in [false, true])
                             Expanded(
@@ -201,7 +201,7 @@ class _TaskSchedulePanelState extends State<TaskSchedulePanel> {
                                                     ? colors.textPrimary
                                                     : colors.textSecondary))))),
                         ])),
-                    const SizedBox(height: 20),
+                    const SizedBox(height: WorkFollowSpacing.space5),
                     Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
@@ -251,7 +251,7 @@ class _TaskSchedulePanelState extends State<TaskSchedulePanel> {
                                                     color: colors
                                                         .textSecondary))))),
                         ]),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: WorkFollowSpacing.space4),
                     if (range)
                       Row(children: [
                         for (final isEnd in [false, true])
@@ -298,7 +298,7 @@ class _TaskSchedulePanelState extends State<TaskSchedulePanel> {
                           () => setState(() =>
                               month = DateTime(month.year, month.month + 1))),
                     ]),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: WorkFollowSpacing.space2),
                     Row(children: [
                       for (final day in ['日', '一', '二', '三', '四', '五', '六'])
                         Expanded(
@@ -309,7 +309,7 @@ class _TaskSchedulePanelState extends State<TaskSchedulePanel> {
                                             WorkFollowMacTypography.caption,
                                         color: colors.textTertiary))))
                     ]),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: WorkFollowSpacing.space2),
                     GridView.builder(
                         key: const ValueKey('schedule-calendar'),
                         shrinkWrap: true,
@@ -414,7 +414,7 @@ class _TaskSchedulePanelState extends State<TaskSchedulePanel> {
                               ]));
                         }),
                   ])),
-              const SizedBox(height: 12),
+              const SizedBox(height: WorkFollowSpacing.space3),
               _property(
                   'schedule-time',
                   'clock',
@@ -472,14 +472,14 @@ class _TaskSchedulePanelState extends State<TaskSchedulePanel> {
                 }),
               if (error != null)
                 Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    padding: const EdgeInsets.symmetric(horizontal: WorkFollowSpacing.space4),
                     child: Text(error!,
                         style: text.copyWith(
                             color: colors.danger,
                             fontSize: WorkFollowMacTypography.supporting))),
-              const SizedBox(height: 14),
+              const SizedBox(height: WorkFollowSpacing.relaxedGap),
               Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  padding: const EdgeInsets.symmetric(horizontal: WorkFollowSpacing.space4),
                   child: Row(children: [
                     Expanded(
                         child: OutlinedButton(
@@ -496,7 +496,7 @@ class _TaskSchedulePanelState extends State<TaskSchedulePanel> {
                                     borderRadius: BorderRadius.circular(8)),
                                 textStyle: text),
                             child: const Text('清除'))),
-                    const SizedBox(width: 8),
+                    const SizedBox(width: WorkFollowSpacing.space2),
                     Expanded(
                         child: FilledButton(
                             key: const ValueKey('apply-date'),
@@ -536,7 +536,7 @@ class _TaskSchedulePanelState extends State<TaskSchedulePanel> {
       void Function(BuildContext) onTap) {
     final colors = TaskMenuStyle.colors(context);
     return Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 4),
+        padding: const EdgeInsets.symmetric(horizontal: WorkFollowSpacing.space1),
         child: Builder(
             builder: (anchor) => InkWell(
                 key: ValueKey(key),
@@ -545,14 +545,14 @@ class _TaskSchedulePanelState extends State<TaskSchedulePanel> {
                 child: SizedBox(
                     height: 36,
                     child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 14),
+                        padding: const EdgeInsets.symmetric(horizontal: WorkFollowSpacing.relaxedGap),
                         child: Row(children: [
                           TaskEditorGlyph(icon,
                               size: WorkFollowMetrics.compactFieldIcon,
                               color: selected
                                   ? colors.accent
                                   : colors.textSecondary),
-                          const SizedBox(width: 10),
+                          const SizedBox(width: WorkFollowSpacing.controlGap),
                           Expanded(
                               child: Text(label,
                                   overflow: TextOverflow.ellipsis,
@@ -561,7 +561,7 @@ class _TaskSchedulePanelState extends State<TaskSchedulePanel> {
                                       color: selected
                                           ? colors.accent
                                           : colors.textPrimary))),
-                          const SizedBox(width: 4),
+                          const SizedBox(width: WorkFollowSpacing.space1),
                           AppIcon(WorkFollowIcons.chevronNext,
                               size: WorkFollowMetrics.metadataIcon,
                               color: colors.textTertiary),

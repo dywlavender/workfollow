@@ -38,7 +38,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
     final today = DateTime.now();
     return Container(
       color: tokens.canvas,
-      padding: const EdgeInsets.fromLTRB(26, 23, 26, 26),
+      padding: const EdgeInsets.fromLTRB(WorkFollowSpacing.pageHorizontalPadding, WorkFollowSpacing.pageTopPadding, WorkFollowSpacing.pageHorizontalPadding, WorkFollowSpacing.pageScreenBottomPadding),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -55,7 +55,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
                             fontWeight: WorkFollowMacWeight.semibold,
                             height: WorkFollowMacTypography.lineTight,
                             letterSpacing: WorkFollowMacTracking.none)),
-                    const SizedBox(height: 5),
+                    const SizedBox(height: WorkFollowSpacing.denseGap),
                     Text('把任务放回时间里。',
                         style: TextStyle(
                             color: tokens.textTertiary,
@@ -70,7 +70,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
                   onPressed: () => setState(
                       () => month = DateTime(month.year, month.month - 1))),
               Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 5),
+                  padding: const EdgeInsets.symmetric(horizontal: WorkFollowSpacing.denseGap),
                   child: Text('${month.year} 年 ${month.month} 月',
                       style: TextStyle(
                           color: tokens.textPrimary,
@@ -81,7 +81,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
                   tooltip: '下个月',
                   onPressed: () => setState(
                       () => month = DateTime(month.year, month.month + 1))),
-              const SizedBox(width: 8),
+              const SizedBox(width: WorkFollowSpacing.space2),
               Material(
                 color: tokens.accentFaint,
                 borderRadius: BorderRadius.circular(WorkFollowRadii.control),
@@ -93,7 +93,10 @@ class _CalendarScreenState extends State<CalendarScreen> {
                   borderRadius: BorderRadius.circular(WorkFollowRadii.control),
                   child: Padding(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 7),
+                          horizontal:
+                              WorkFollowSpacing.calendarTodayHorizontalPadding,
+                          vertical:
+                              WorkFollowSpacing.calendarTodayVerticalPadding),
                       child: Text('回到今天',
                           style: TextStyle(
                               color: tokens.accent,
@@ -101,13 +104,13 @@ class _CalendarScreenState extends State<CalendarScreen> {
                               fontWeight: WorkFollowMacWeight.semibold))),
                 ),
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: WorkFollowSpacing.space2),
               _CalendarModeSegment(
                   week: weekView,
                   onChanged: (value) => setState(() => weekView = value)),
             ],
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: WorkFollowSpacing.space5),
           if (!weekView) ...[
             Row(
               children: ['一', '二', '三', '四', '五', '六', '日']
@@ -127,7 +130,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
                   )
                   .toList(),
             ),
-            const SizedBox(height: 9),
+            const SizedBox(height: WorkFollowSpacing.compactInset),
             Expanded(
               flex: 4,
               child: LayoutBuilder(builder: (context, constraints) {
@@ -139,8 +142,8 @@ class _CalendarScreenState extends State<CalendarScreen> {
                   gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                       crossAxisCount: 7,
                       mainAxisExtent: rowHeight,
-                      mainAxisSpacing: 7,
-                      crossAxisSpacing: 7),
+                      mainAxisSpacing: WorkFollowSpacing.compactGap,
+                      crossAxisSpacing: WorkFollowSpacing.compactGap),
                   itemCount: cellCount,
                   itemBuilder: (context, index) {
                     final dayNumber = index - leading + 1;
@@ -169,7 +172,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
                         return GestureDetector(
                           onTap: () => setState(() => selectedDay = date),
                           child: Container(
-                            padding: const EdgeInsets.fromLTRB(9, 8, 8, 7),
+                            padding: const EdgeInsets.fromLTRB(WorkFollowSpacing.compactInset, WorkFollowSpacing.space2, WorkFollowSpacing.space2, WorkFollowSpacing.compactGap),
                             decoration: BoxDecoration(
                                 color: dragActive
                                     ? tokens.accentSoft
@@ -234,7 +237,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
             ),
             if (selectedDay != null) ...[
               Container(height: 1, color: tokens.border),
-              const SizedBox(height: 12),
+              const SizedBox(height: WorkFollowSpacing.space3),
               _SelectedDayAgenda(
                   controller: widget.controller, day: selectedDay!),
             ],
@@ -265,7 +268,7 @@ class _CalendarModeSegment extends StatelessWidget {
   Widget build(BuildContext context) {
     final tokens = WorkFollowTheme.of(context);
     return Container(
-      padding: const EdgeInsets.all(2),
+      padding: const EdgeInsets.all(WorkFollowSpacing.microGap),
       decoration: BoxDecoration(
           color: tokens.content,
           borderRadius: BorderRadius.circular(WorkFollowRadii.control),
@@ -276,7 +279,7 @@ class _CalendarModeSegment extends StatelessWidget {
             onTap: () => onChanged(option.$1),
             borderRadius: BorderRadius.circular(WorkFollowRadii.control),
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+              padding: const EdgeInsets.symmetric(horizontal: WorkFollowSpacing.space2, vertical: WorkFollowSpacing.denseGap),
               decoration: BoxDecoration(
                   color: week == option.$1
                       ? tokens.accentSoft
@@ -357,8 +360,8 @@ class _WeekDayColumn extends StatelessWidget {
         return GestureDetector(
           onTap: () => onSelectDay(day),
           child: Container(
-            margin: const EdgeInsets.only(right: 8),
-            padding: const EdgeInsets.fromLTRB(9, 9, 9, 8),
+            margin: const EdgeInsets.only(right: WorkFollowSpacing.space2),
+            padding: const EdgeInsets.fromLTRB(WorkFollowSpacing.compactInset, WorkFollowSpacing.compactInset, WorkFollowSpacing.compactInset, WorkFollowSpacing.space2),
             decoration: BoxDecoration(
                 color: active ? tokens.accentSoft : tokens.content,
                 borderRadius: BorderRadius.circular(WorkFollowRadii.card),
@@ -380,7 +383,7 @@ class _WeekDayColumn extends StatelessWidget {
                   Text('${tasks.length}',
                       style: TextStyle(color: accent, fontSize: WorkFollowMacTypography.caption)),
               ]),
-              const SizedBox(height: 8),
+              const SizedBox(height: WorkFollowSpacing.space2),
               Expanded(
                 child: tasks.isEmpty
                     ? Center(
@@ -389,7 +392,7 @@ class _WeekDayColumn extends StatelessWidget {
                                 color: tokens.textTertiary, fontSize: WorkFollowMacTypography.caption)))
                     : ListView.separated(
                         itemCount: tasks.length,
-                        separatorBuilder: (_, __) => const SizedBox(height: 5),
+                        separatorBuilder: (_, __) => const SizedBox(height: WorkFollowSpacing.denseGap),
                         itemBuilder: (context, index) {
                           final task = tasks[index];
                           final listColor = Color(
@@ -445,7 +448,7 @@ class _WeekTaskPill extends StatelessWidget {
       onTap: onTap,
       borderRadius: BorderRadius.circular(WorkFollowRadii.control),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 6),
+        padding: const EdgeInsets.symmetric(horizontal: WorkFollowSpacing.compactGap, vertical: WorkFollowSpacing.inlineGap),
         decoration: BoxDecoration(
             color: color.withValues(alpha: .12),
             borderRadius: BorderRadius.circular(WorkFollowRadii.control),
@@ -478,7 +481,7 @@ Widget _agendaRow(
       borderRadius: BorderRadius.circular(WorkFollowRadii.control),
       onTap: onOpen,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+        padding: const EdgeInsets.symmetric(horizontal: WorkFollowSpacing.space2, vertical: WorkFollowSpacing.inlineGap),
         child: Row(
           children: [
             AppIcon(
@@ -488,7 +491,7 @@ Widget _agendaRow(
               size: WorkFollowMetrics.metadataIcon,
               color: task.completed ? tokens.success : listColor,
             ),
-            const SizedBox(width: 9),
+            const SizedBox(width: WorkFollowSpacing.compactInset),
             Expanded(
               child: Text(
                 task.title,
@@ -505,7 +508,7 @@ Widget _agendaRow(
                 ),
               ),
             ),
-            const SizedBox(width: 10),
+            const SizedBox(width: WorkFollowSpacing.controlGap),
             Text(
               '${task.listName} · ${task.displayTimeLabel ?? '全天'}',
               style: TextStyle(color: tokens.textTertiary, fontSize: WorkFollowMacTypography.listMeta),
@@ -540,11 +543,11 @@ class _SelectedDayAgenda extends StatelessWidget {
                 fontSize: WorkFollowMacTypography.sectionTitle,
                 fontWeight: WorkFollowMacWeight.semibold),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: WorkFollowSpacing.space2),
           Expanded(
             child: tasks.isEmpty
                 ? Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    padding: const EdgeInsets.symmetric(vertical: WorkFollowSpacing.cardInset),
                     child: Text('这一天没有安排任务。',
                         style: TextStyle(
                             color: tokens.textTertiary, fontSize: WorkFollowMacTypography.supporting)),
@@ -554,7 +557,7 @@ class _SelectedDayAgenda extends StatelessWidget {
                     itemBuilder: (context, index) {
                       final task = tasks[index];
                       return Padding(
-                        padding: const EdgeInsets.only(bottom: 4),
+                        padding: const EdgeInsets.only(bottom: WorkFollowSpacing.space1),
                         // Dragging an agenda row onto a day cell reschedules
                         // the task to that day.
                         child: Draggable<String>(
@@ -563,7 +566,10 @@ class _SelectedDayAgenda extends StatelessWidget {
                             color: Colors.transparent,
                             child: Container(
                               padding: const EdgeInsets.symmetric(
-                                  horizontal: 10, vertical: 6),
+                                  horizontal: WorkFollowSpacing
+                                      .calendarDragFeedbackHorizontalPadding,
+                                  vertical: WorkFollowSpacing
+                                      .calendarDragFeedbackVerticalPadding),
                               decoration: BoxDecoration(
                                   color: tokens.overlay,
                                   borderRadius: BorderRadius.circular(

@@ -179,7 +179,7 @@ class _TaskDatePickerState extends State<TaskDatePicker> {
     final days = DateTime(month.year, month.month + 1, 0).day;
     final count = ((leading + days) / 7).ceil() * 7;
     return Padding(
-      padding: const EdgeInsets.all(WorkFollowSpacing.md),
+      padding: WorkFollowSpacing.popoverPadding,
       child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -196,7 +196,7 @@ class _TaskDatePickerState extends State<TaskDatePicker> {
                   child: Text(widget.reminder ? '取消提醒' : '清除日期',
                       style: const TextStyle(fontSize: WorkFollowMacTypography.control))),
             ]),
-            const SizedBox(height: 8),
+            const SizedBox(height: WorkFollowSpacing.space2),
             TextField(
                 key: const ValueKey('date-input'),
                 controller: dateText,
@@ -208,9 +208,9 @@ class _TaskDatePickerState extends State<TaskDatePicker> {
                     hintText: 'YYYY-MM-DD',
                     isDense: true,
                     contentPadding:
-                        EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                        EdgeInsets.symmetric(horizontal: WorkFollowSpacing.space3, vertical: WorkFollowSpacing.space3),
                     border: OutlineInputBorder())),
-            const SizedBox(height: 10),
+            const SizedBox(height: WorkFollowSpacing.controlGap),
             Row(children: [
               for (final shortcut in <(String, DateTime)>[
                 ('今天', today),
@@ -228,15 +228,15 @@ class _TaskDatePickerState extends State<TaskDatePicker> {
                         style: TextButton.styleFrom(
                             backgroundColor: tokens.canvas,
                             foregroundColor: tokens.textSecondary,
-                            padding: const EdgeInsets.symmetric(vertical: 8),
+                            padding: const EdgeInsets.symmetric(vertical: WorkFollowSpacing.space2),
                             minimumSize: const Size(
                                 0, WorkFollowMetrics.compactButtonHeight)),
                         child: Text(shortcut.$1,
                             style: const TextStyle(fontSize: WorkFollowMacTypography.control)))),
-                if (shortcut.$1 != '下周一') const SizedBox(width: 6),
+                if (shortcut.$1 != '下周一') const SizedBox(width: WorkFollowSpacing.inlineGap),
               ],
             ]),
-            const SizedBox(height: 12),
+            const SizedBox(height: WorkFollowSpacing.space3),
             Row(children: [
               Expanded(
                   child: Text('${month.year} 年 ${month.month} 月',
@@ -267,15 +267,15 @@ class _TaskDatePickerState extends State<TaskDatePicker> {
                             style: TextStyle(
                                 fontSize: WorkFollowMacTypography.caption, color: tokens.textTertiary))))
             ]),
-            const SizedBox(height: 6),
+            const SizedBox(height: WorkFollowSpacing.inlineGap),
             GridView.builder(
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
                 gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                     crossAxisCount: 7,
                     mainAxisExtent: 34,
-                    crossAxisSpacing: 3,
-                    mainAxisSpacing: 2),
+                    crossAxisSpacing: WorkFollowSpacing.tightGap,
+                    mainAxisSpacing: WorkFollowSpacing.microGap),
                 itemCount: count,
                 itemBuilder: (context, index) {
                   final day = index - leading + 1;
@@ -301,9 +301,9 @@ class _TaskDatePickerState extends State<TaskDatePicker> {
                       child:
                           Text('$day', style: const TextStyle(fontSize: WorkFollowMacTypography.listBody)));
                 }),
-            const SizedBox(height: 10),
+            const SizedBox(height: WorkFollowSpacing.controlGap),
             const Divider(height: 1),
-            const SizedBox(height: 10),
+            const SizedBox(height: WorkFollowSpacing.controlGap),
             if (widget.allowTime)
               Row(children: [
                 if (!widget.reminder)
@@ -315,14 +315,14 @@ class _TaskDatePickerState extends State<TaskDatePicker> {
                           value: timed,
                           onChanged: (value) =>
                               setState(() => timed = value!))),
-                const SizedBox(width: 5),
+                const SizedBox(width: WorkFollowSpacing.denseGap),
                 Expanded(
                     child: Text(widget.reminder ? '提醒时间' : '指定时间',
                         style: const TextStyle(fontSize: WorkFollowMacTypography.control))),
                 if (timed) ...[
                   _timeField(hour, '小时'),
                   const Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                      padding: const EdgeInsets.symmetric(horizontal: WorkFollowSpacing.space1),
                       child: Text(':')),
                   _timeField(minute, '分钟'),
                 ] else
@@ -332,16 +332,16 @@ class _TaskDatePickerState extends State<TaskDatePicker> {
               ]),
             if (error != null)
               Padding(
-                  padding: const EdgeInsets.only(top: 10),
+                  padding: const EdgeInsets.only(top: WorkFollowSpacing.cardInset),
                   child: Text(error!,
                       style: TextStyle(fontSize: WorkFollowMacTypography.supporting, color: tokens.danger))),
-            const SizedBox(height: 14),
+            const SizedBox(height: WorkFollowSpacing.relaxedGap),
             Row(mainAxisAlignment: MainAxisAlignment.end, children: [
               TextButton(
                   key: const ValueKey('date-cancel'),
                   onPressed: () => Navigator.of(context).pop(),
                   child: const Text('取消')),
-              const SizedBox(width: 8),
+              const SizedBox(width: WorkFollowSpacing.space2),
               FilledButton(
                   key: const ValueKey('apply-date'),
                   onPressed: apply,
@@ -368,6 +368,6 @@ class _TaskDatePickerState extends State<TaskDatePicker> {
               isDense: true,
               hintText: '00',
               semanticCounterText: label,
-              contentPadding: const EdgeInsets.symmetric(vertical: 8),
+              contentPadding: const EdgeInsets.symmetric(vertical: WorkFollowSpacing.space2),
               border: const OutlineInputBorder())));
 }

@@ -53,14 +53,14 @@ class _TaskRepeatEditorState extends State<_TaskRepeatEditor> {
 
   @override
   Widget build(BuildContext context) => Padding(
-      padding: const EdgeInsets.all(WorkFollowSpacing.md),
+      padding: WorkFollowSpacing.popoverPadding,
       child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             const Text('重复任务',
                 style: TextStyle(fontWeight: WorkFollowMacWeight.semibold)),
-            const SizedBox(height: 12),
+            const SizedBox(height: WorkFollowSpacing.space3),
             DropdownButtonFormField<String>(
                 initialValue: type,
                 autofocus: true,
@@ -84,7 +84,7 @@ class _TaskRepeatEditorState extends State<_TaskRepeatEditor> {
                 ],
                 onChanged: (value) => setState(() => type = value!)),
             if (type == 'WEEKLY' || type == 'MONTHLY') ...[
-              const SizedBox(height: 12),
+              const SizedBox(height: WorkFollowSpacing.space3),
               DropdownButtonFormField<int>(
                   key: ValueKey(type),
                   initialValue: type == 'WEEKLY' ? weekday : day,
@@ -108,10 +108,10 @@ class _TaskRepeatEditorState extends State<_TaskRepeatEditor> {
                         }
                       })),
             ],
-            const SizedBox(height: 12),
+            const SizedBox(height: WorkFollowSpacing.space3),
             const Text('完成本次任务后，会自动生成下一次。',
                 style: TextStyle(fontSize: WorkFollowMacTypography.supporting)),
-            const SizedBox(height: 16),
+            const SizedBox(height: WorkFollowSpacing.space4),
             Align(
                 alignment: Alignment.centerRight,
                 child: FilledButton(

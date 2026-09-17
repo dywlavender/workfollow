@@ -32,7 +32,7 @@ class _BoardScreenState extends State<BoardScreen> {
     final columns = _columns(tokens);
     return Container(
       color: tokens.canvas,
-      padding: const EdgeInsets.fromLTRB(26, 23, 26, 26),
+      padding: const EdgeInsets.fromLTRB(WorkFollowSpacing.pageHorizontalPadding, WorkFollowSpacing.pageTopPadding, WorkFollowSpacing.pageHorizontalPadding, WorkFollowSpacing.pageScreenBottomPadding),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -45,7 +45,7 @@ class _BoardScreenState extends State<BoardScreen> {
                 _GroupingSegment(
                     grouping: grouping,
                     onChanged: (value) => setState(() => grouping = value)),
-                const SizedBox(width: 12),
+                const SizedBox(width: WorkFollowSpacing.space3),
                 FilterChip(
                   label: const Text('显示已完成'),
                   selected: showCompleted,
@@ -62,15 +62,15 @@ class _BoardScreenState extends State<BoardScreen> {
               ],
             ),
           ),
-          const SizedBox(height: 18),
+          const SizedBox(height: WorkFollowSpacing.sectionGap),
           Expanded(
             child: LayoutBuilder(builder: (context, constraints) {
               final width = constraints.maxWidth < 900 ? 250.0 : 0.0;
               return ListView.separated(
                 scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.only(bottom: 6),
+                padding: const EdgeInsets.only(bottom: WorkFollowSpacing.inlineGap),
                 itemCount: columns.length,
-                separatorBuilder: (_, __) => const SizedBox(width: 12),
+                separatorBuilder: (_, __) => const SizedBox(width: WorkFollowSpacing.space3),
                 itemBuilder: (context, index) {
                   final column = columns[index];
                   final items = tasks
@@ -129,7 +129,7 @@ class _GroupingSegment extends StatelessWidget {
   Widget build(BuildContext context) {
     final tokens = WorkFollowTheme.of(context);
     return Container(
-      padding: const EdgeInsets.all(2),
+      padding: const EdgeInsets.all(WorkFollowSpacing.microGap),
       decoration: BoxDecoration(
           color: tokens.content,
           borderRadius: BorderRadius.circular(WorkFollowRadii.control),
@@ -143,7 +143,7 @@ class _GroupingSegment extends StatelessWidget {
             onTap: () => onChanged(option.$1),
             borderRadius: BorderRadius.circular(WorkFollowRadii.control),
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              padding: const EdgeInsets.symmetric(horizontal: WorkFollowSpacing.cardInset, vertical: WorkFollowSpacing.inlineGap),
               decoration: BoxDecoration(
                   color: grouping == option.$1
                       ? tokens.accentSoft
@@ -215,7 +215,7 @@ class _BoardColumn extends StatelessWidget {
                 color:
                     active ? meta.color.withValues(alpha: .65) : tokens.border),
           ),
-          padding: const EdgeInsets.fromLTRB(10, 10, 10, 8),
+          padding: const EdgeInsets.fromLTRB(WorkFollowSpacing.cardInset, WorkFollowSpacing.cardInset, WorkFollowSpacing.cardInset, WorkFollowSpacing.space2),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -225,7 +225,7 @@ class _BoardColumn extends StatelessWidget {
                     height: 8,
                     decoration: BoxDecoration(
                         color: meta.color, shape: BoxShape.circle)),
-                const SizedBox(width: 8),
+                const SizedBox(width: WorkFollowSpacing.space2),
                 Expanded(
                     child: Text(meta.title,
                         style: TextStyle(
@@ -238,15 +238,15 @@ class _BoardColumn extends StatelessWidget {
                         fontSize: WorkFollowMacTypography.listMeta,
                         fontWeight: WorkFollowMacWeight.semibold)),
               ]),
-              const SizedBox(height: 3),
+              const SizedBox(height: WorkFollowSpacing.tightGap),
               Padding(
-                  padding: const EdgeInsets.only(left: 16),
+                  padding: const EdgeInsets.only(left: WorkFollowSpacing.space4),
                   child: Text(meta.subtitle,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style:
                           TextStyle(color: tokens.textTertiary, fontSize: WorkFollowMacTypography.listMeta))),
-              const SizedBox(height: 10),
+              const SizedBox(height: WorkFollowSpacing.controlGap),
               Expanded(
                 child: tasks.isEmpty
                     ? Center(
@@ -257,9 +257,9 @@ class _BoardColumn extends StatelessWidget {
                                 fontSize: WorkFollowMacTypography.caption,
                                 fontWeight: WorkFollowMacWeight.semibold)))
                     : ListView.separated(
-                        padding: const EdgeInsets.only(bottom: 4),
+                        padding: const EdgeInsets.only(bottom: WorkFollowSpacing.space1),
                         itemCount: tasks.length,
-                        separatorBuilder: (_, __) => const SizedBox(height: 8),
+                        separatorBuilder: (_, __) => const SizedBox(height: WorkFollowSpacing.space2),
                         itemBuilder: (context, index) => _BoardTaskCard(
                             controller: controller,
                             task: tasks[index],
@@ -303,7 +303,7 @@ class _BoardTaskCard extends StatelessWidget {
     final tokens = WorkFollowTheme.of(context);
     final listColor = Color(controller.colorValueForList(task.listName));
     final content = AppCard(
-      padding: const EdgeInsets.fromLTRB(10, 10, 8, 9),
+      padding: const EdgeInsets.fromLTRB(WorkFollowSpacing.cardInset, WorkFollowSpacing.cardInset, WorkFollowSpacing.space2, WorkFollowSpacing.compactInset),
       radius: 10,
       color: tokens.overlay,
       borderColor:
@@ -312,7 +312,7 @@ class _BoardTaskCard extends StatelessWidget {
         Container(
             width: 3,
             height: 30,
-            margin: const EdgeInsets.only(right: 8, top: 1),
+            margin: const EdgeInsets.only(right: WorkFollowSpacing.space2, top: WorkFollowSpacing.hairlineGap),
             decoration: BoxDecoration(
                 color: listColor, borderRadius: BorderRadius.circular(2))),
         SizedBox(
@@ -333,7 +333,7 @@ class _BoardTaskCard extends StatelessWidget {
                   borderRadius: BorderRadius.circular(5)),
               semanticLabel: task.completed ? '标记未完成' : '完成任务'),
         ),
-        const SizedBox(width: 6),
+        const SizedBox(width: WorkFollowSpacing.inlineGap),
         Expanded(
           child:
               Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -349,8 +349,8 @@ class _BoardTaskCard extends StatelessWidget {
                     fontWeight: WorkFollowMacWeight.semibold,
                     decoration:
                         task.completed ? TextDecoration.lineThrough : null)),
-            const SizedBox(height: 6),
-            Wrap(spacing: 6, runSpacing: 3, children: [
+            const SizedBox(height: WorkFollowSpacing.inlineGap),
+            Wrap(spacing: WorkFollowSpacing.inlineGap, runSpacing: WorkFollowSpacing.tightGap, children: [
               Text(task.listName,
                   style: TextStyle(color: listColor, fontSize: WorkFollowMacTypography.listMeta)),
               if (task.displayTimeLabel != null)

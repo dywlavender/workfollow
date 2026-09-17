@@ -14,7 +14,7 @@ class AppCard extends StatelessWidget {
   const AppCard(
       {super.key,
       required this.child,
-      this.padding = const EdgeInsets.all(16),
+      this.padding = const EdgeInsets.all(WorkFollowSpacing.space4),
       this.radius = WorkFollowRadii.card,
       this.color,
       this.borderColor,
@@ -89,7 +89,7 @@ class PageHeader extends StatelessWidget {
               if (eyebrow != null && !dense) ...[
                 Container(
                     padding:
-                        const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                        const EdgeInsets.symmetric(horizontal: WorkFollowSpacing.compactInset, vertical: WorkFollowSpacing.space1),
                     decoration: BoxDecoration(
                         color: (eyebrowColor ?? tokens.accent)
                             .withValues(alpha: .10),
@@ -102,7 +102,7 @@ class PageHeader extends StatelessWidget {
                             height: WorkFollowMacTypography.lineControl,
                             fontWeight: WorkFollowMacWeight.medium,
                             letterSpacing: WorkFollowMacTracking.none))),
-                const SizedBox(height: 10),
+                const SizedBox(height: WorkFollowSpacing.controlGap),
               ],
               if (iconData == null)
                 Text(title,
@@ -121,7 +121,7 @@ class PageHeader extends StatelessWidget {
                             ? WorkFollowMetrics.navigationIcon
                             : WorkFollowMetrics.headerIcon + 4,
                         color: tokens.textSecondary),
-                    const SizedBox(width: 9),
+                    const SizedBox(width: WorkFollowSpacing.compactInset),
                     Expanded(
                       child: Text(title,
                           style: TextStyle(
@@ -134,7 +134,7 @@ class PageHeader extends StatelessWidget {
                   ],
                 ),
               if (subtitle != null) ...[
-                SizedBox(height: dense ? 4 : 7),
+                SizedBox(height: dense ? WorkFollowSpacing.space1 : WorkFollowSpacing.compactGap),
                 Text(subtitle!,
                     style: TextStyle(
                         color: tokens.textTertiary,
@@ -145,7 +145,7 @@ class PageHeader extends StatelessWidget {
           ),
         ),
         if (trailing != null) ...[
-          const SizedBox(width: 16),
+          const SizedBox(width: WorkFollowSpacing.space4),
           trailing!,
         ],
       ],
@@ -254,7 +254,7 @@ class EmptyHint extends StatelessWidget {
     final tokens = WorkFollowTheme.of(context);
     return Padding(
       padding: const EdgeInsets.symmetric(
-          vertical: WorkFollowSpacing.xxl + 12,
+          vertical: WorkFollowSpacing.emptyStateVerticalPadding,
           horizontal: WorkFollowSpacing.lg),
       child: Column(
         children: [
@@ -267,21 +267,21 @@ class EmptyHint extends StatelessWidget {
               child: AppIcon(icon,
                   size: WorkFollowMetrics.headerIcon + 8,
                   color: tokens.accent)),
-          const SizedBox(height: 16),
+          const SizedBox(height: WorkFollowSpacing.space4),
           Text(title,
               style: TextStyle(
                   color: tokens.textPrimary,
                   fontSize: WorkFollowMacTypography.listTitle,
                   height: WorkFollowMacTypography.lineControl,
                   fontWeight: WorkFollowMacWeight.semibold)),
-          const SizedBox(height: 6),
+          const SizedBox(height: WorkFollowSpacing.inlineGap),
           Text(hint,
               style: TextStyle(
                   color: tokens.textTertiary,
                   fontSize: WorkFollowMacTypography.supporting,
                   height: WorkFollowMacTypography.lineList)),
           if (actionLabel != null && onAction != null) ...[
-            const SizedBox(height: 16),
+            const SizedBox(height: WorkFollowSpacing.space4),
             FilledButton.tonal(onPressed: onAction, child: Text(actionLabel!)),
           ],
         ],
@@ -319,7 +319,7 @@ class StatCard extends StatelessWidget {
                 borderRadius: BorderRadius.circular(WorkFollowRadii.surface)),
             child: AppIcon(icon,
                 size: WorkFollowMetrics.toolbarIcon + 1, color: color)),
-        const SizedBox(width: 10),
+        const SizedBox(width: WorkFollowSpacing.controlGap),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -331,7 +331,7 @@ class StatCard extends StatelessWidget {
                       fontWeight: WorkFollowMacWeight.semibold,
                       letterSpacing: WorkFollowMacTracking.none,
                       height: WorkFollowMacTypography.lineTight)),
-              const SizedBox(height: 3),
+              const SizedBox(height: WorkFollowSpacing.tightGap),
               Text(label,
                   style: TextStyle(
                       color: tokens.textTertiary,
@@ -344,7 +344,7 @@ class StatCard extends StatelessWidget {
       ],
     );
     final card = AppCard(
-      padding: const EdgeInsets.fromLTRB(14, 13, 14, 12),
+      padding: const EdgeInsets.fromLTRB(WorkFollowSpacing.relaxedGap, WorkFollowSpacing.controlInset, WorkFollowSpacing.relaxedGap, WorkFollowSpacing.space3),
       child: body,
     );
     if (onTap == null) return card;

@@ -97,7 +97,7 @@ class _NotesScreenState extends State<NotesScreen> {
       final narrow = constraints.maxWidth < 760;
       final list = Container(
           color: tokens.content,
-          padding: const EdgeInsets.fromLTRB(10, 0, 10, 18),
+          padding: const EdgeInsets.fromLTRB(WorkFollowSpacing.cardInset, WorkFollowSpacing.zero, WorkFollowSpacing.cardInset, WorkFollowSpacing.sectionGap),
           child:
               Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
             ConstrainedBox(
@@ -113,7 +113,7 @@ class _NotesScreenState extends State<NotesScreen> {
                               fontSize: WorkFollowMacTypography.body,
                               fontWeight: WorkFollowMacWeight.semibold,
                               color: tokens.textPrimary)),
-                      const SizedBox(height: 2),
+                      const SizedBox(height: WorkFollowSpacing.microGap),
                       Text('${notes.length} 条笔记',
                           style: TextStyle(
                               fontSize: WorkFollowMacTypography.listMeta,
@@ -136,13 +136,13 @@ class _NotesScreenState extends State<NotesScreen> {
                       isDense: true,
                       filled: true,
                       fillColor: tokens.canvas,
-                      contentPadding: const EdgeInsets.symmetric(vertical: 8),
+                      contentPadding: const EdgeInsets.symmetric(vertical: WorkFollowSpacing.space2),
                       border: OutlineInputBorder(
                           borderRadius:
                               BorderRadius.circular(WorkFollowRadii.md),
                           borderSide: BorderSide.none))),
             ),
-            const SizedBox(height: 6),
+            const SizedBox(height: WorkFollowSpacing.inlineGap),
             SizedBox(
               height: 32,
               child: Row(children: [
@@ -150,7 +150,7 @@ class _NotesScreenState extends State<NotesScreen> {
                 TextButton(
                     onPressed: () => setState(() => newestFirst = !newestFirst),
                     style: TextButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(horizontal: 6),
+                        padding: const EdgeInsets.symmetric(horizontal: WorkFollowSpacing.inlineGap),
                         minimumSize: Size.zero,
                         tapTargetSize: MaterialTapTargetSize.shrinkWrap),
                     child: Text(newestFirst ? '最近编辑' : '按标题',
@@ -165,13 +165,13 @@ class _NotesScreenState extends State<NotesScreen> {
                             style: TextStyle(
                                 fontSize: WorkFollowMacTypography.supporting, color: tokens.textTertiary)))
                     : ListView.builder(
-                        padding: const EdgeInsets.only(top: 2, bottom: 8),
+                        padding: const EdgeInsets.only(top: WorkFollowSpacing.microGap, bottom: WorkFollowSpacing.space2),
                         itemCount: notes.length,
                         itemBuilder: (context, index) {
                           final note = notes[index],
                               isSelected = selected?.id == notes[index].id;
                           return Padding(
-                              padding: const EdgeInsets.only(bottom: 8),
+                              padding: const EdgeInsets.only(bottom: WorkFollowSpacing.space2),
                               child: _NoteCard(
                                 note: note,
                                 selected: isSelected,
@@ -263,7 +263,7 @@ class _NoteCardState extends State<_NoteCard> {
             child: Container(
                 key: ValueKey('note-card-${note.id}'),
                 padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+                    const EdgeInsets.symmetric(horizontal: WorkFollowSpacing.cardInset, vertical: WorkFollowSpacing.compactInset),
                 decoration: BoxDecoration(
                     // Web note rows are flat. Use a quiet selected surface
                     // instead of a card border and shadow so the editor stays
@@ -286,7 +286,7 @@ class _NoteCardState extends State<_NoteCard> {
                           AppIcon(WorkFollowIcons.favorite,
                               size: WorkFollowMetrics.metadataIcon,
                               color: tokens.warning),
-                          const SizedBox(width: 5)
+                          const SizedBox(width: WorkFollowSpacing.denseGap)
                         ],
                         Expanded(
                             child: Text(note.title,
@@ -297,7 +297,7 @@ class _NoteCardState extends State<_NoteCard> {
                                     fontWeight: WorkFollowMacWeight.semibold,
                                     color: tokens.textPrimary))),
                       ]),
-                      const SizedBox(height: 4),
+                      const SizedBox(height: WorkFollowSpacing.space1),
                       Text(note.preview.isEmpty ? '还没有内容' : note.preview,
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
@@ -305,7 +305,7 @@ class _NoteCardState extends State<_NoteCard> {
                               fontSize: WorkFollowMacTypography.listBody,
                               height: WorkFollowMacTypography.lineList,
                               color: tokens.textSecondary)),
-                      const SizedBox(height: 5),
+                      const SizedBox(height: WorkFollowSpacing.denseGap),
                       Row(children: [
                         Text(noteUpdatedLabelFor(note.updatedAt),
                             style: TextStyle(
@@ -315,7 +315,10 @@ class _NoteCardState extends State<_NoteCard> {
                         Flexible(
                             child: Container(
                                 padding: const EdgeInsets.symmetric(
-                                    horizontal: 5, vertical: 1),
+                                    horizontal: WorkFollowSpacing
+                                        .noteFolderBadgeHorizontalPadding,
+                                    vertical: WorkFollowSpacing
+                                        .noteFolderBadgeVerticalPadding),
                                 decoration: BoxDecoration(
                                     color: tokens.accent.withValues(alpha: .08),
                                     borderRadius: BorderRadius.circular(
@@ -350,16 +353,16 @@ class _EmptyNote extends StatelessWidget {
                   shape: BoxShape.circle),
               child: AppIcon(WorkFollowIcons.editNote,
                   size: WorkFollowMetrics.railIcon + 8, color: tokens.accent)),
-          const SizedBox(height: 18),
+          const SizedBox(height: WorkFollowSpacing.sectionGap),
           Text('给想法一个安静的地方',
               style: TextStyle(
                   fontSize: WorkFollowMacTypography.detailTitle,
                   fontWeight: WorkFollowMacWeight.semibold,
                   color: tokens.textPrimary)),
-          const SizedBox(height: 8),
+          const SizedBox(height: WorkFollowSpacing.space2),
           Text('写下笔记，把下一步变成任务。',
               style: TextStyle(fontSize: WorkFollowMacTypography.supporting, color: tokens.textTertiary)),
-          const SizedBox(height: 22),
+          const SizedBox(height: WorkFollowSpacing.headingGap),
           FilledButton.icon(
               onPressed: onCreate,
               icon: const AppIcon(WorkFollowIcons.add,
@@ -428,7 +431,7 @@ class _NotePageState extends State<_NotePage> {
         color: tokens.content,
         child: Column(children: [
           Padding(
-              padding: const EdgeInsets.fromLTRB(18, 14, 18, 10),
+              padding: const EdgeInsets.fromLTRB(WorkFollowSpacing.sectionGap, WorkFollowSpacing.relaxedGap, WorkFollowSpacing.sectionGap, WorkFollowSpacing.cardInset),
               child: Row(children: [
                 if (widget.onBack != null)
                   IconButton(
@@ -469,7 +472,7 @@ class _NotePageState extends State<_NotePage> {
             constraints: const BoxConstraints(
                 maxWidth: _NotesScreenState._editorContentMaxWidth),
             child: Padding(
-                padding: const EdgeInsets.fromLTRB(28, 14, 28, 44),
+                padding: const EdgeInsets.fromLTRB(WorkFollowSpacing.space7, WorkFollowSpacing.relaxedGap, WorkFollowSpacing.space7, WorkFollowSpacing.editorBottomPadding),
                 child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
@@ -494,7 +497,7 @@ class _NotePageState extends State<_NotePage> {
                               contentPadding: EdgeInsets.zero),
                           onChanged: (value) => widget.controller
                               .updateNoteTitle(note.id, value)),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: WorkFollowSpacing.space3),
                       Row(children: [
                         Text('最近编辑于 ${noteUpdatedLabelFor(note.updatedAt)}',
                             style: TextStyle(
@@ -505,29 +508,29 @@ class _NotePageState extends State<_NotePage> {
                             label:
                                 '${(note.plainText ?? note.preview).replaceAll(RegExp(r'\s'), '').runes.length} 字'),
                       ]),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: WorkFollowSpacing.space4),
                       NoteDocumentEditor(
                           key: ValueKey('document-${note.id}'),
                           note: note,
                           controller: widget.controller),
                       if (linked.isNotEmpty) ...[
-                        const SizedBox(height: 30),
+                        const SizedBox(height: WorkFollowSpacing.emptyStateGap),
                         Row(children: [
                           Text('关联任务',
                               style: TextStyle(
                                   fontSize: WorkFollowMacTypography.control,
                                   fontWeight: WorkFollowMacWeight.semibold,
                                   color: tokens.textSecondary)),
-                          const SizedBox(width: 6),
+                          const SizedBox(width: WorkFollowSpacing.inlineGap),
                           Text('${linked.length}',
                               style: TextStyle(
                                   fontSize: WorkFollowMacTypography.listMeta,
                                   color: tokens.textTertiary)),
                         ]),
-                        const SizedBox(height: 8),
+                        const SizedBox(height: WorkFollowSpacing.space2),
                         for (final task in linked)
                           Padding(
-                              padding: const EdgeInsets.only(bottom: 6),
+                              padding: const EdgeInsets.only(bottom: WorkFollowSpacing.inlineGap),
                               child: _LinkedTaskRow(
                                   task: task,
                                   onToggle: () => task.completed
@@ -558,7 +561,7 @@ class _LinkedTaskRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final tokens = WorkFollowTheme.of(context);
     return Container(
-        padding: const EdgeInsets.fromLTRB(10, 5, 10, 5),
+        padding: const EdgeInsets.fromLTRB(WorkFollowSpacing.cardInset, WorkFollowSpacing.denseGap, WorkFollowSpacing.cardInset, WorkFollowSpacing.denseGap),
         decoration: BoxDecoration(
             color: tokens.accent.withValues(alpha: .06),
             borderRadius: BorderRadius.circular(WorkFollowRadii.surface),
@@ -572,13 +575,13 @@ class _LinkedTaskRow extends StatelessWidget {
                   shape: const CircleBorder(),
                   side: BorderSide(color: tokens.borderStrong, width: 1.4),
                   onChanged: (_) => onToggle())),
-          const SizedBox(width: 8),
+          const SizedBox(width: WorkFollowSpacing.space2),
           Expanded(
               child: InkWell(
                   borderRadius: BorderRadius.circular(WorkFollowRadii.control),
                   onTap: onOpen,
                   child: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 5),
+                      padding: const EdgeInsets.symmetric(vertical: WorkFollowSpacing.denseGap),
                       child: Text(task.title,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,

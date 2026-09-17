@@ -23,7 +23,7 @@ class HabitsScreen extends StatelessWidget {
     final habits = controller.habits;
     return Container(
       color: tokens.canvas,
-      padding: const EdgeInsets.fromLTRB(26, 23, 26, 26),
+      padding: const EdgeInsets.fromLTRB(WorkFollowSpacing.pageHorizontalPadding, WorkFollowSpacing.pageTopPadding, WorkFollowSpacing.pageHorizontalPadding, WorkFollowSpacing.pageScreenBottomPadding),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -37,12 +37,12 @@ class HabitsScreen extends StatelessWidget {
               label: const Text('新建习惯'),
               style: FilledButton.styleFrom(
                   padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+                      const EdgeInsets.symmetric(horizontal: WorkFollowSpacing.space3, vertical: WorkFollowSpacing.compactInset),
                   textStyle: const TextStyle(
                       fontSize: WorkFollowMacTypography.control, fontWeight: WorkFollowMacWeight.semibold)),
             ),
           ),
-          const SizedBox(height: 18),
+          const SizedBox(height: WorkFollowSpacing.sectionGap),
           if (habits.isEmpty)
             Expanded(
               child: Center(
@@ -64,8 +64,8 @@ class HabitsScreen extends StatelessWidget {
                     : constraints.maxWidth;
                 return SingleChildScrollView(
                   child: Wrap(
-                    spacing: 14,
-                    runSpacing: 14,
+                    spacing: WorkFollowSpacing.relaxedGap,
+                    runSpacing: WorkFollowSpacing.relaxedGap,
                     children: [
                       for (final habit in habits)
                         SizedBox(
@@ -120,7 +120,7 @@ class HabitsScreen extends StatelessWidget {
                       hintText: '例如：喝水、拉伸、阅读',
                       errorText: nameError),
                 ),
-                const SizedBox(height: 10),
+                const SizedBox(height: WorkFollowSpacing.controlGap),
                 Align(
                     alignment: Alignment.centerLeft,
                     child: Text('重复日',
@@ -128,9 +128,9 @@ class HabitsScreen extends StatelessWidget {
                             color: tokens.textSecondary,
                             fontSize: WorkFollowMacTypography.sectionTitle,
                             fontWeight: WorkFollowMacWeight.semibold))),
-                const SizedBox(height: 7),
+                const SizedBox(height: WorkFollowSpacing.compactGap),
                 Wrap(
-                  spacing: 6,
+                  spacing: WorkFollowSpacing.inlineGap,
                   children: [
                     for (var day = 1; day <= 7; day++)
                       FilterChip(
@@ -154,7 +154,7 @@ class HabitsScreen extends StatelessWidget {
                       ),
                   ],
                 ),
-                const SizedBox(height: 13),
+                const SizedBox(height: WorkFollowSpacing.controlInset),
                 Align(
                     alignment: Alignment.centerLeft,
                     child: Text('颜色',
@@ -162,7 +162,7 @@ class HabitsScreen extends StatelessWidget {
                             color: tokens.textSecondary,
                             fontSize: WorkFollowMacTypography.sectionTitle,
                             fontWeight: WorkFollowMacWeight.semibold))),
-                const SizedBox(height: 7),
+                const SizedBox(height: WorkFollowSpacing.compactGap),
                 Row(children: [
                   for (final value in listColorPalette.take(8))
                     InkWell(
@@ -172,7 +172,7 @@ class HabitsScreen extends StatelessWidget {
                       child: Container(
                         width: 25,
                         height: 25,
-                        margin: const EdgeInsets.only(right: 8),
+                        margin: const EdgeInsets.only(right: WorkFollowSpacing.space2),
                         decoration: BoxDecoration(
                             color: Color(value),
                             shape: BoxShape.circle,
@@ -183,7 +183,7 @@ class HabitsScreen extends StatelessWidget {
                       ),
                     ),
                 ]),
-                const SizedBox(height: 13),
+                const SizedBox(height: WorkFollowSpacing.controlInset),
                 Align(
                     alignment: Alignment.centerLeft,
                     child: Text('图标',
@@ -191,7 +191,7 @@ class HabitsScreen extends StatelessWidget {
                             color: tokens.textSecondary,
                             fontSize: WorkFollowMacTypography.sectionTitle,
                             fontWeight: WorkFollowMacWeight.semibold))),
-                const SizedBox(height: 7),
+                const SizedBox(height: WorkFollowSpacing.compactGap),
                 Row(children: [
                   for (final candidate in const ['check', 'sun', 'book', 'run'])
                     IconButton(
@@ -305,7 +305,7 @@ class _HabitCard extends StatelessWidget {
     final done = habit.isCompletedOn(today);
     final scheduled = habit.isScheduledOn(today);
     return AppCard(
-      padding: const EdgeInsets.fromLTRB(16, 14, 14, 14),
+      padding: const EdgeInsets.fromLTRB(WorkFollowSpacing.space4, WorkFollowSpacing.relaxedGap, WorkFollowSpacing.relaxedGap, WorkFollowSpacing.relaxedGap),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Container(
@@ -316,7 +316,7 @@ class _HabitCard extends StatelessWidget {
                   borderRadius: BorderRadius.circular(WorkFollowRadii.surface)),
               child: AppIcon(HabitsScreen._habitIcon(habit.icon),
                   size: WorkFollowMetrics.navigationIcon, color: accent)),
-          const SizedBox(width: 11),
+          const SizedBox(width: WorkFollowSpacing.iconLabelGap),
           Expanded(
             child:
                 Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -327,7 +327,7 @@ class _HabitCard extends StatelessWidget {
                       color: tokens.textPrimary,
                       fontSize: WorkFollowMacTypography.listTitle,
                       fontWeight: WorkFollowMacWeight.semibold)),
-              const SizedBox(height: 3),
+              const SizedBox(height: WorkFollowSpacing.tightGap),
               Text(_scheduleLabel(habit.schedule),
                   style: TextStyle(color: tokens.textTertiary, fontSize: WorkFollowMacTypography.listMeta)),
             ]),
@@ -339,7 +339,7 @@ class _HabitCard extends StatelessWidget {
               iconSize: WorkFollowMetrics.toolbarIcon,
               onPressed: () => _showMenu(context)),
         ]),
-        const SizedBox(height: 13),
+        const SizedBox(height: WorkFollowSpacing.controlInset),
         Row(children: [
           Expanded(
             child: InkWell(
@@ -347,7 +347,7 @@ class _HabitCard extends StatelessWidget {
               borderRadius: BorderRadius.circular(WorkFollowRadii.control),
               child: Container(
                 padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+                    const EdgeInsets.symmetric(horizontal: WorkFollowSpacing.cardInset, vertical: WorkFollowSpacing.compactInset),
                 decoration: BoxDecoration(
                     color:
                         done ? accent.withValues(alpha: .14) : tokens.overlay,
@@ -362,7 +362,7 @@ class _HabitCard extends StatelessWidget {
                       done ? WorkFollowIcons.success : WorkFollowIcons.circle,
                       size: WorkFollowMetrics.navigationIcon,
                       color: scheduled ? accent : tokens.textTertiary),
-                  const SizedBox(width: 8),
+                  const SizedBox(width: WorkFollowSpacing.space2),
                   Text(
                       done
                           ? '今天已完成'
@@ -377,9 +377,9 @@ class _HabitCard extends StatelessWidget {
               ),
             ),
           ),
-          const SizedBox(width: 10),
+          const SizedBox(width: WorkFollowSpacing.controlGap),
           Container(
-              padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 8),
+              padding: const EdgeInsets.symmetric(horizontal: WorkFollowSpacing.compactFieldInset, vertical: WorkFollowSpacing.space2),
               decoration: BoxDecoration(
                   color: tokens.accentFaint,
                   borderRadius: BorderRadius.circular(WorkFollowRadii.control)),
@@ -394,13 +394,13 @@ class _HabitCard extends StatelessWidget {
                     style: TextStyle(color: tokens.textTertiary, fontSize: WorkFollowMacTypography.caption)),
               ])),
         ]),
-        const SizedBox(height: 14),
+        const SizedBox(height: WorkFollowSpacing.relaxedGap),
         Text('最近 28 天',
             style: TextStyle(
                 color: tokens.textSecondary,
                 fontSize: WorkFollowMacTypography.sectionTitle,
                 fontWeight: WorkFollowMacWeight.semibold)),
-        const SizedBox(height: 8),
+        const SizedBox(height: WorkFollowSpacing.space2),
         _HabitDots(habit: habit, accent: accent),
       ]),
     );
@@ -446,8 +446,8 @@ class _HabitDots extends StatelessWidget {
     final tokens = WorkFollowTheme.of(context);
     final today = habitStartOfDay(DateTime.now());
     return Wrap(
-      spacing: 6,
-      runSpacing: 6,
+      spacing: WorkFollowSpacing.inlineGap,
+      runSpacing: WorkFollowSpacing.inlineGap,
       children: [
         for (var offset = 27; offset >= 0; offset--)
           Builder(builder: (context) {

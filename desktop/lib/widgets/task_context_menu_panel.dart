@@ -70,12 +70,12 @@ class _TaskContextMenuPanelState extends State<TaskContextMenuPanel> {
             initial: task.tags.join('，'),
             availableTags: controller.allTags().keys,
             placement: const PopoverPlacement(
-                preferredSide: PopoverSide.right, gap: 14))
+                preferredSide: PopoverSide.right, gap: WorkFollowSpacing.relaxedGap))
         : await TaskListPicker.show(anchor,
             controller: controller,
             selected: task.listName,
             placement: const PopoverPlacement(
-                preferredSide: PopoverSide.right, gap: 14));
+                preferredSide: PopoverSide.right, gap: WorkFollowSpacing.relaxedGap));
     if (!mounted) return;
     setState(() => submenu = null);
     if (result != null)
@@ -105,7 +105,7 @@ class _TaskContextMenuPanelState extends State<TaskContextMenuPanel> {
           label: '任务操作',
           child: Padding(
             key: const ValueKey('task-context-menu-panel'),
-            padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 7),
+            padding: const EdgeInsets.symmetric(vertical: WorkFollowSpacing.inlineGap, horizontal: WorkFollowSpacing.compactGap),
             child: Column(
               key: const ValueKey('task-context-menu-content'),
               mainAxisSize: MainAxisSize.min,
@@ -128,7 +128,7 @@ class _TaskContextMenuPanelState extends State<TaskContextMenuPanel> {
   }
 
   Widget _sectionLabel(String label, WorkFollowTheme tokens) => Padding(
-        padding: const EdgeInsets.fromLTRB(12, 8, 12, 5),
+        padding: const EdgeInsets.fromLTRB(WorkFollowSpacing.space3, WorkFollowSpacing.space2, WorkFollowSpacing.space3, WorkFollowSpacing.denseGap),
         child: Text(label,
             style: TextStyle(fontSize: WorkFollowMacTypography.sectionTitle, color: tokens.textTertiary)),
       );
@@ -212,7 +212,7 @@ class _TaskContextMenuPanelState extends State<TaskContextMenuPanel> {
               : null,
           child: Container(
             height: 42,
-            margin: const EdgeInsets.symmetric(horizontal: 1),
+            margin: const EdgeInsets.symmetric(horizontal: WorkFollowSpacing.hairlineGap),
             decoration: BoxDecoration(
               color: selected ? tokens.menuSelected : null,
               borderRadius: BorderRadius.circular(WorkFollowRadii.control),
@@ -267,7 +267,7 @@ class _TaskContextMenuPanelState extends State<TaskContextMenuPanel> {
           onTap: () => Navigator.of(context).pop(TaskMenuSelection(value)),
           child: Container(
             height: 40,
-            margin: const EdgeInsets.symmetric(horizontal: 1),
+            margin: const EdgeInsets.symmetric(horizontal: WorkFollowSpacing.hairlineGap),
             decoration: BoxDecoration(
               color: selected ? tokens.menuSelected : null,
               borderRadius: BorderRadius.circular(WorkFollowRadii.control),
@@ -389,7 +389,9 @@ class _TaskContextMenuPanelState extends State<TaskContextMenuPanel> {
                     child: SizedBox(
                       height: TaskMenuStyle.rowHeight,
                       child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal:
+                                WorkFollowSpacing.contextMenuHorizontalPadding),
                         child: Row(children: [
                           AppIcon(
                               WorkFollowIcons.taskAction(value,
@@ -397,7 +399,7 @@ class _TaskContextMenuPanelState extends State<TaskContextMenuPanel> {
                                       task.isAbandoned),
                               size: WorkFollowMetrics.fieldIcon,
                               color: foreground),
-                          const SizedBox(width: 12),
+                          const SizedBox(width: WorkFollowSpacing.space3),
                           Expanded(
                             child: Text(label,
                                 style: TextStyle(

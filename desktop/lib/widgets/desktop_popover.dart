@@ -127,7 +127,7 @@ PopoverGeometry calculatePopoverGeometry({
   required Size viewport,
   required Size desiredSize,
   PopoverPlacement placement = PopoverPlacement.bottomStart,
-  EdgeInsets safeArea = const EdgeInsets.all(12),
+  EdgeInsets safeArea = const EdgeInsets.all(WorkFollowSpacing.popoverSafeArea),
 }) {
   final safeWidth = math.max(0.0, viewport.width - safeArea.horizontal);
   final safeHeight = math.max(0.0, viewport.height - safeArea.vertical);
@@ -245,7 +245,7 @@ Future<T?> showAnchoredPopover<T>(
   PopoverFocusPolicy focusPolicy = PopoverFocusPolicy.none,
   bool scrollable = false,
   bool restoreFocus = true,
-  EdgeInsets safeArea = const EdgeInsets.all(12),
+  EdgeInsets safeArea = const EdgeInsets.all(WorkFollowSpacing.popoverSafeArea),
   Rect? anchorRect,
   ThemeData? popoverTheme,
   BoxDecoration? surfaceDecoration,
@@ -295,7 +295,7 @@ class AnchoredPopover {
     PopoverFocusPolicy focusPolicy = PopoverFocusPolicy.none,
     bool scrollable = false,
     bool restoreFocus = true,
-    EdgeInsets safeArea = const EdgeInsets.all(12),
+    EdgeInsets safeArea = const EdgeInsets.all(WorkFollowSpacing.popoverSafeArea),
     Rect? anchorRect,
   }) =>
       showAnchoredPopover<T>(
@@ -322,7 +322,7 @@ Future<T?> showDesktopPopover<T>(
   PopoverFocusPolicy focusPolicy = PopoverFocusPolicy.none,
   bool scrollable = false,
   bool restoreFocus = true,
-  EdgeInsets safeArea = const EdgeInsets.all(12),
+  EdgeInsets safeArea = const EdgeInsets.all(WorkFollowSpacing.popoverSafeArea),
   Rect? anchorRect,
 }) =>
     showAnchoredPopover<T>(
@@ -665,7 +665,7 @@ class _DesktopMenuSurfaceState<T> extends State<_DesktopMenuSurface<T>> {
       focusNode: focus,
       onKeyEvent: _onKey,
       child: Padding(
-        padding: const EdgeInsets.all(6),
+        padding: const EdgeInsets.all(WorkFollowSpacing.inlineGap),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -696,7 +696,7 @@ class _DesktopMenuSurfaceState<T> extends State<_DesktopMenuSurface<T>> {
         shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(WorkFollowRadii.control)),
         tileColor: focused ? tokens.menuSelected : null,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 10),
+        contentPadding: const EdgeInsets.symmetric(horizontal: WorkFollowSpacing.cardInset),
         leading: entry.icon == null
             ? null
             : AppIcon(entry.icon!,
@@ -755,7 +755,7 @@ class PropertyButton extends StatelessWidget {
                       letterSpacing: WorkFollowMacTracking.none),
                   minimumSize: const Size(0, WorkFollowMetrics.chipHeight),
                   padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                      const EdgeInsets.symmetric(horizontal: WorkFollowSpacing.cardInset, vertical: WorkFollowSpacing.compactGap),
                   shape: RoundedRectangleBorder(
                       borderRadius:
                           BorderRadius.circular(WorkFollowRadii.control)),

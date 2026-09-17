@@ -76,7 +76,7 @@ class TaskEditorToolbar extends StatelessWidget {
       placement: PopoverPlacement.topStart,
       focusPolicy: PopoverFocusPolicy.preserveEditor,
       builder: (context) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 6),
+        padding: const EdgeInsets.symmetric(vertical: WorkFollowSpacing.inlineGap),
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           for (final item in [(0, '正文'), (1, '一级标题'), (2, '二级标题'), (3, '三级标题')])
             _PickerRow(
@@ -113,7 +113,7 @@ class TaskEditorToolbar extends StatelessWidget {
       focusPolicy: PopoverFocusPolicy.preserveEditor,
       builder: (context) => Padding(
         key: const ValueKey('task-time-formats'),
-        padding: const EdgeInsets.symmetric(vertical: 6),
+        padding: const EdgeInsets.symmetric(vertical: WorkFollowSpacing.inlineGap),
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           for (final item in [
             ('date', date),
@@ -147,14 +147,15 @@ class TaskEditorToolbar extends StatelessWidget {
           Widget divider() => Container(
               width: 1,
               height: 17,
-              margin: const EdgeInsets.symmetric(horizontal: 4),
+              margin: const EdgeInsets.symmetric(horizontal: WorkFollowSpacing.space1),
               color: colors.border);
           return SizedBox(
             key: const ValueKey('task-editor-toolbar'),
             height: TaskEditorPopoverStyle.toolbarHeight,
             child: SingleChildScrollView(
               scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 8),
+              padding: const EdgeInsets.symmetric(
+                  horizontal: WorkFollowSpacing.toolbarItemGap),
               child: Row(mainAxisSize: MainAxisSize.min, children: [
                 _ToolButton(
                     key: const ValueKey('task-format-heading'),
@@ -261,7 +262,7 @@ class _ToolButton extends StatelessWidget {
                         borderRadius: BorderRadius.circular(4)),
                     child: label != null
                         ? Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 3),
+                            padding: const EdgeInsets.symmetric(horizontal: WorkFollowSpacing.tightGap),
                             decoration: BoxDecoration(
                                 color:
                                     highlight ? colors.documentHighlight : null,
@@ -304,7 +305,7 @@ class _PickerRow extends StatelessWidget {
     return InkWell(
         onTap: onTap,
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 14),
+          padding: const EdgeInsets.symmetric(horizontal: WorkFollowSpacing.relaxedGap),
           child: SizedBox(
               height: 36,
               child: Row(children: [

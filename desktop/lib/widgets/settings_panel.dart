@@ -151,12 +151,12 @@ class _SettingsPanelState extends State<_SettingsPanel> {
                     '文件来自 Web 端个人空间。',
                     style: TextStyle(color: tokens.textSecondary, fontSize: WorkFollowMacTypography.supporting),
                   ),
-                  const SizedBox(height: 17),
+                  const SizedBox(height: WorkFollowSpacing.fieldGap),
                   _ImportCountRow(label: '任务', count: bundle.tasks.length),
                   _ImportCountRow(label: '笔记', count: bundle.notes.length),
                   _ImportCountRow(label: '清单', count: bundle.lists.length),
                   _ImportCountRow(label: '文件夹', count: bundle.folders.length),
-                  const SizedBox(height: 14),
+                  const SizedBox(height: WorkFollowSpacing.relaxedGap),
                   RadioListTile<_ImportMode>(
                     value: _ImportMode.merge,
                     groupValue: mode,
@@ -242,7 +242,7 @@ class _SettingsPanelState extends State<_SettingsPanel> {
                   SimpleDialogOption(
                     onPressed: () => Navigator.of(dialogContext).pop(file),
                     child: Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        padding: const EdgeInsets.symmetric(vertical: WorkFollowSpacing.space2),
                         child: Text(file.uri.pathSegments.last)),
                   )
               ],
@@ -293,22 +293,22 @@ class _SettingsPanelState extends State<_SettingsPanel> {
                 color: tokens.canvas,
                 child: Container(
                     width: 165,
-                    padding: const EdgeInsets.fromLTRB(12, 22, 12, 14),
+                    padding: const EdgeInsets.fromLTRB(WorkFollowSpacing.space3, WorkFollowSpacing.headingGap, WorkFollowSpacing.space3, WorkFollowSpacing.relaxedGap),
                     child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
                           Padding(
                               padding:
-                                  const EdgeInsets.symmetric(horizontal: 12),
+                                  const EdgeInsets.symmetric(horizontal: WorkFollowSpacing.space3),
                               child: Text('设置',
                                   style: TextStyle(
                                       fontSize: WorkFollowMacTypography.pageTitle,
                                       fontWeight: WorkFollowMacWeight.semibold,
                                       color: tokens.textPrimary))),
-                          const SizedBox(height: 24),
+                          const SizedBox(height: WorkFollowSpacing.space6),
                           for (var i = 0; i < pages.length; i++)
                             Padding(
-                                padding: const EdgeInsets.only(bottom: 4),
+                                padding: const EdgeInsets.only(bottom: WorkFollowSpacing.space1),
                                 child: ListTile(
                                     dense: true,
                                     selected: page == i,
@@ -329,7 +329,7 @@ class _SettingsPanelState extends State<_SettingsPanel> {
                                     onTap: () => setState(() => page = i))),
                           const Spacer(),
                           Padding(
-                              padding: const EdgeInsets.only(left: 12),
+                              padding: const EdgeInsets.only(left: WorkFollowSpacing.space3),
                               child: Text('打勾 · 个人版',
                                   style: TextStyle(
                                       fontSize: WorkFollowMacTypography.caption,
@@ -337,7 +337,7 @@ class _SettingsPanelState extends State<_SettingsPanel> {
                         ]))),
             Expanded(
                 child: Padding(
-                    padding: const EdgeInsets.fromLTRB(28, 18, 24, 24),
+                    padding: const EdgeInsets.fromLTRB(WorkFollowSpacing.space7, WorkFollowSpacing.sectionGap, WorkFollowSpacing.space6, WorkFollowSpacing.space6),
                     child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
@@ -353,7 +353,7 @@ class _SettingsPanelState extends State<_SettingsPanel> {
                                 icon: const AppIcon(WorkFollowIcons.close,
                                     size: WorkFollowMetrics.headerIcon))
                           ]),
-                          const SizedBox(height: 22),
+                          const SizedBox(height: WorkFollowSpacing.headingGap),
                           Expanded(
                               child: SingleChildScrollView(
                                   child: Column(
@@ -365,12 +365,12 @@ class _SettingsPanelState extends State<_SettingsPanel> {
                                       style: TextStyle(
                                           fontSize: WorkFollowMacTypography.sectionTitle,
                                           fontWeight: WorkFollowMacWeight.semibold)),
-                                  const SizedBox(height: 8),
+                                  const SizedBox(height: WorkFollowSpacing.space2),
                                   Text('选择你习惯的明暗外观。',
                                       style: TextStyle(
                                           fontSize: WorkFollowMacTypography.supporting,
                                           color: tokens.textSecondary)),
-                                  const SizedBox(height: 16),
+                                  const SizedBox(height: WorkFollowSpacing.space4),
                                   Align(
                                       alignment: Alignment.centerLeft,
                                       child: _ModeSegment(
@@ -379,35 +379,35 @@ class _SettingsPanelState extends State<_SettingsPanel> {
                                             setState(() => appearance = value);
                                             widget.onSetThemeMode(value);
                                           })),
-                                  const SizedBox(height: 32),
+                                  const SizedBox(height: WorkFollowSpacing.space8),
                                   const Text('列表密度',
                                       style: TextStyle(
                                           fontSize: WorkFollowMacTypography.sectionTitle,
                                           fontWeight: WorkFollowMacWeight.semibold)),
-                                  const SizedBox(height: 8),
+                                  const SizedBox(height: WorkFollowSpacing.space2),
                                   Text('紧凑模式适合长清单；舒适模式保留更多呼吸感。',
                                       style: TextStyle(
                                           fontSize: WorkFollowMacTypography.supporting,
                                           color: tokens.textSecondary)),
-                                  const SizedBox(height: 12),
+                                  const SizedBox(height: WorkFollowSpacing.space3),
                                   _DensitySegment(
                                       compact: densityCompact,
                                       onSelect: (value) {
                                         setState(() => densityCompact = value);
                                         widget.onSetDensity?.call(value);
                                       }),
-                                  const SizedBox(height: 24),
+                                  const SizedBox(height: WorkFollowSpacing.space6),
                                   const Text('详情面板',
                                       style: TextStyle(
                                           fontSize: WorkFollowMacTypography.sectionTitle,
                                           fontWeight: WorkFollowMacWeight.semibold)),
-                                  const SizedBox(height: 8),
+                                  const SizedBox(height: WorkFollowSpacing.space2),
                                   Text('宽窗口可在右侧常驻显示任务详情；关闭后，点击任务仍会打开详情。',
                                       style: TextStyle(
                                           fontSize: WorkFollowMacTypography.supporting,
                                           height: WorkFollowMacTypography.lineControl,
                                           color: tokens.textSecondary)),
-                                  const SizedBox(height: 6),
+                                  const SizedBox(height: WorkFollowSpacing.inlineGap),
                                   SwitchListTile.adaptive(
                                       key: const ValueKey(
                                           'persistent-inspector-switch'),
@@ -425,18 +425,18 @@ class _SettingsPanelState extends State<_SettingsPanel> {
                                         widget.onSetPersistentInspector
                                             ?.call(value);
                                       }),
-                                  const SizedBox(height: 22),
+                                  const SizedBox(height: WorkFollowSpacing.headingGap),
                                   const Text('个人工作空间',
                                       style: TextStyle(
                                           fontSize: WorkFollowMacTypography.sectionTitle,
                                           fontWeight: WorkFollowMacWeight.semibold)),
-                                  const SizedBox(height: 8),
+                                  const SizedBox(height: WorkFollowSpacing.space2),
                                   Text('任务、笔记与附件保存在这台 Mac。首次使用从空白空间开始。',
                                       style: TextStyle(
                                           fontSize: WorkFollowMacTypography.supporting,
                                           height: WorkFollowMacTypography.lineControl,
                                           color: tokens.textSecondary)),
-                                  const SizedBox(height: 12),
+                                  const SizedBox(height: WorkFollowSpacing.space3),
                                   Text('清单颜色可在侧栏清单的 ⋯ 菜单中选择，并会同步到任务行、日历和统计。',
                                       style: TextStyle(
                                           fontSize: WorkFollowMacTypography.supporting,
@@ -448,28 +448,28 @@ class _SettingsPanelState extends State<_SettingsPanel> {
                                       style: TextStyle(
                                           fontSize: WorkFollowMacTypography.sectionTitle,
                                           fontWeight: WorkFollowMacWeight.semibold)),
-                                  const SizedBox(height: 8),
+                                  const SizedBox(height: WorkFollowSpacing.space2),
                                   Text('设置任务提醒后，由 macOS 在指定时刻通知你。点击通知可回到任务。',
                                       style: TextStyle(
                                           fontSize: WorkFollowMacTypography.supporting,
                                           height: WorkFollowMacTypography.lineControl,
                                           color: tokens.textSecondary)),
-                                  const SizedBox(height: 18),
+                                  const SizedBox(height: WorkFollowSpacing.sectionGap),
                                   const Align(
                                       alignment: Alignment.centerLeft,
                                       child: _NotificationStatus()),
-                                  const SizedBox(height: 28),
+                                  const SizedBox(height: WorkFollowSpacing.space7),
                                   Text('提醒与安排日期是两回事：安排日期决定任务在哪一天显示，提醒决定何时通知。',
                                       style: TextStyle(
                                           fontSize: WorkFollowMacTypography.supporting,
                                           height: WorkFollowMacTypography.lineControl,
                                           color: tokens.textTertiary)),
-                                  const SizedBox(height: 32),
+                                  const SizedBox(height: WorkFollowSpacing.space8),
                                   const Text('结果反馈',
                                       style: TextStyle(
                                           fontSize: WorkFollowMacTypography.sectionTitle,
                                           fontWeight: WorkFollowMacWeight.semibold)),
-                                  const SizedBox(height: 8),
+                                  const SizedBox(height: WorkFollowSpacing.space2),
                                   Text('完成任务后会有一条短暂的提示，可以顺手撤销。',
                                       style: TextStyle(
                                           fontSize: WorkFollowMacTypography.supporting,
@@ -511,8 +511,8 @@ class _SettingsPanelState extends State<_SettingsPanel> {
                                       style: TextStyle(
                                           fontSize: WorkFollowMacTypography.sectionTitle,
                                           fontWeight: WorkFollowMacWeight.semibold)),
-                                  const SizedBox(height: 10),
-                                  Wrap(spacing: 10, runSpacing: 8, children: [
+                                  const SizedBox(height: WorkFollowSpacing.controlGap),
+                                  Wrap(spacing: WorkFollowSpacing.controlGap, runSpacing: WorkFollowSpacing.space2, children: [
                                     OutlinedButton.icon(
                                         onPressed:
                                             importing ? null : _importData,
@@ -530,25 +530,25 @@ class _SettingsPanelState extends State<_SettingsPanel> {
                                                 WorkFollowMetrics.toolbarIcon),
                                         label: const Text('导出全部数据')),
                                   ]),
-                                  const SizedBox(height: 8),
+                                  const SizedBox(height: WorkFollowSpacing.space2),
                                   Text('导出文件包含任务、笔记和本地附件，可用于迁移到另一台 Mac。',
                                       style: TextStyle(
                                           fontSize: WorkFollowMacTypography.supporting,
                                           height: WorkFollowMacTypography.lineControl,
                                           color: tokens.textSecondary)),
-                                  const SizedBox(height: 26),
+                                  const SizedBox(height: WorkFollowSpacing.pageHorizontalPadding),
                                   const Text('备份与恢复',
                                       style: TextStyle(
                                           fontSize: WorkFollowMacTypography.sectionTitle,
                                           fontWeight: WorkFollowMacWeight.semibold)),
-                                  const SizedBox(height: 8),
+                                  const SizedBox(height: WorkFollowSpacing.space2),
                                   Text('每天自动保存一份快照。恢复前会保留当前内容。',
                                       style: TextStyle(
                                           fontSize: WorkFollowMacTypography.supporting,
                                           height: WorkFollowMacTypography.lineControl,
                                           color: tokens.textSecondary)),
-                                  const SizedBox(height: 12),
-                                  Wrap(spacing: 10, runSpacing: 8, children: [
+                                  const SizedBox(height: WorkFollowSpacing.space3),
+                                  Wrap(spacing: WorkFollowSpacing.controlGap, runSpacing: WorkFollowSpacing.space2, children: [
                                     OutlinedButton(
                                         onPressed: _backup,
                                         child: const Text('立即备份')),
@@ -574,7 +574,8 @@ class _SettingsPanelState extends State<_SettingsPanel> {
                                   }.entries)
                                     Padding(
                                         padding: const EdgeInsets.symmetric(
-                                            vertical: 10),
+                                            vertical: WorkFollowSpacing
+                                                .settingsShortcutRowVerticalPadding),
                                         child: Row(children: [
                                           Expanded(
                                               child: Text(entry.key,
@@ -589,7 +590,7 @@ class _SettingsPanelState extends State<_SettingsPanel> {
                                 if (importMessage != null ||
                                     importError != null)
                                   Padding(
-                                      padding: const EdgeInsets.only(top: 20),
+                                      padding: const EdgeInsets.only(top: WorkFollowSpacing.space5),
                                       child: Text(importError ?? importMessage!,
                                           style: TextStyle(
                                               fontSize: WorkFollowMacTypography.supporting,
@@ -614,7 +615,7 @@ class _ImportCountRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final tokens = WorkFollowTheme.of(context);
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
+      padding: const EdgeInsets.symmetric(vertical: WorkFollowSpacing.space1),
       child: Row(
         children: [
           Expanded(
@@ -645,7 +646,7 @@ class _ModeSegment extends StatelessWidget {
   Widget build(BuildContext context) {
     final tokens = WorkFollowTheme.of(context);
     return Container(
-      padding: const EdgeInsets.all(2),
+      padding: const EdgeInsets.all(WorkFollowSpacing.microGap),
       decoration: BoxDecoration(
         color: tokens.content,
         borderRadius: BorderRadius.circular(WorkFollowRadii.control),
@@ -663,7 +664,7 @@ class _ModeSegment extends StatelessWidget {
               onTap: () => onSelect(mode.$1),
               borderRadius: BorderRadius.circular(WorkFollowRadii.control),
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                padding: const EdgeInsets.symmetric(horizontal: WorkFollowSpacing.space2, vertical: WorkFollowSpacing.space1),
                 decoration: BoxDecoration(
                   color: current == mode.$1
                       ? tokens.accentSoft
@@ -678,7 +679,7 @@ class _ModeSegment extends StatelessWidget {
                         color: current == mode.$1
                             ? tokens.accent
                             : tokens.textTertiary),
-                    const SizedBox(width: 4),
+                    const SizedBox(width: WorkFollowSpacing.space1),
                     Text(mode.$2,
                         style: TextStyle(
                           color: current == mode.$1
@@ -707,7 +708,7 @@ class _DensitySegment extends StatelessWidget {
   Widget build(BuildContext context) {
     final tokens = WorkFollowTheme.of(context);
     return Container(
-      padding: const EdgeInsets.all(2),
+      padding: const EdgeInsets.all(WorkFollowSpacing.microGap),
       decoration: BoxDecoration(
           color: tokens.content,
           borderRadius: BorderRadius.circular(WorkFollowRadii.control),
@@ -719,7 +720,7 @@ class _DensitySegment extends StatelessWidget {
               borderRadius: BorderRadius.circular(WorkFollowRadii.control),
               child: Container(
                   padding:
-                      const EdgeInsets.symmetric(horizontal: 13, vertical: 6),
+                      const EdgeInsets.symmetric(horizontal: WorkFollowSpacing.controlInset, vertical: WorkFollowSpacing.inlineGap),
                   decoration: BoxDecoration(
                       color: compact == option.$1
                           ? tokens.accentSoft
@@ -786,13 +787,13 @@ class _NotificationStatusState extends State<_NotificationStatus> {
             fontSize: WorkFollowMacTypography.caption,
           )),
       if (_status == 'notDetermined' || _status == 'denied') ...[
-        const SizedBox(width: 8),
+        const SizedBox(width: WorkFollowSpacing.space2),
         TextButton(
           onPressed:
               _status == 'denied' ? null : (_requesting ? null : _request),
           style: TextButton.styleFrom(
             foregroundColor: tokens.accent,
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+            padding: const EdgeInsets.symmetric(horizontal: WorkFollowSpacing.inlineGap, vertical: WorkFollowSpacing.tightGap),
             minimumSize: Size.zero,
             tapTargetSize: MaterialTapTargetSize.shrinkWrap,
           ),

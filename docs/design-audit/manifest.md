@@ -41,7 +41,7 @@
 | COLOR-009 | Colors | 用户清单/习惯/图表颜色 | `Color(value)` / saved content color | user-content/data palette whitelist | accepted-exception | D3 |
 | COLOR-010 | Colors | More/Context/List/Command menus | `accentFaint` used for hover/selected fills | `menuSelected` | migrated | D3 |
 | COLOR-011 | Colors | `theme/workfollow_theme.dart` global hover | Theme default hover reused accent soft | `listRowHover` | migrated | D3 |
-| SPACE-001 | Spacing | `sidebar.dart`, `settings_panel.dart`, `calendar_screen.dart` 等 | 多套局部 EdgeInsets/SizedBox | `WorkFollowSpacing` + semantic aliases | candidate | D4 |
+| SPACE-001 | Spacing | `sidebar.dart`, `settings_panel.dart`, `calendar_screen.dart` 等 | 多套局部 EdgeInsets/SizedBox | `WorkFollowSpacing` + semantic aliases | migrated | D4 |
 | GEOM-001 | Geometry | `home_screen.dart`, `quick_add.dart`, `sidebar.dart` 等 | 宽高字面值 | `WorkFollowMetrics` / page roles | candidate | D5 |
 | SURF-001 | Surfaces | 91 个 `BoxDecoration` | 页面/卡片/Popover 混用 | Surface role matrix | candidate | D6 |
 | MOTION-001 | Motion | `feedback_host.dart`、`app.dart`、Popover 等 | 18 个数字 Duration | Motion Roles | candidate | D9 |

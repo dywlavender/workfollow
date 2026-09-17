@@ -19,13 +19,13 @@ class SaveStatusFooter extends StatelessWidget {
     final tokens = WorkFollowTheme.of(context);
     final (icon, label, color) = _statusFor(controller, tokens);
     return Container(
-      padding: const EdgeInsets.fromLTRB(22, 10, 22, 12),
+      padding: const EdgeInsets.fromLTRB(WorkFollowSpacing.headingGap, WorkFollowSpacing.cardInset, WorkFollowSpacing.headingGap, WorkFollowSpacing.space3),
       decoration:
           BoxDecoration(border: Border(top: BorderSide(color: tokens.border))),
       child: Row(
         children: [
           AppIcon(icon, size: WorkFollowMetrics.metadataIcon, color: color),
-          const SizedBox(width: 7),
+          const SizedBox(width: WorkFollowSpacing.compactGap),
           Flexible(
             child: Text(
               label,

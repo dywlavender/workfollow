@@ -308,7 +308,7 @@ class _TaskInspectorState extends State<TaskInspector> {
     return Container(
       key: const ValueKey('task-inspector-header'),
       constraints: const BoxConstraints(minHeight: 58),
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: WorkFollowSpacing.space5, vertical: WorkFollowSpacing.cardInset),
       decoration: widget.inline
           ? null
           : BoxDecoration(
@@ -375,7 +375,7 @@ class _TaskInspectorState extends State<TaskInspector> {
             ]),
           ),
         ),
-        const SizedBox(width: 8),
+        const SizedBox(width: WorkFollowSpacing.space2),
         _TopPropertyButton(
             key: const ValueKey('task-priority'),
             icon: WorkFollowIcons.flag,
@@ -405,7 +405,7 @@ class _TaskInspectorState extends State<TaskInspector> {
   Widget _headerDivider(WorkFollowTheme tokens) => Container(
         width: 1,
         height: 20,
-        margin: const EdgeInsets.symmetric(horizontal: 7),
+        margin: const EdgeInsets.symmetric(horizontal: WorkFollowSpacing.compactGap),
         color: tokens.border,
       );
 
@@ -432,7 +432,7 @@ class _TaskInspectorState extends State<TaskInspector> {
             textStyle: const TextStyle(
                 fontSize: WorkFollowMacTypography.control,
                 fontWeight: WorkFollowMacWeight.medium),
-            padding: const EdgeInsets.symmetric(horizontal: 6)),
+            padding: const EdgeInsets.symmetric(horizontal: WorkFollowSpacing.inlineGap)),
       ),
     );
   }
@@ -441,7 +441,7 @@ class _TaskInspectorState extends State<TaskInspector> {
     return Container(
       key: const ValueKey('task-inspector-footer'),
       constraints: const BoxConstraints(minHeight: 52),
-      padding: const EdgeInsets.fromLTRB(20, 8, 20, 9),
+      padding: const EdgeInsets.fromLTRB(WorkFollowSpacing.space5, WorkFollowSpacing.space2, WorkFollowSpacing.space5, WorkFollowSpacing.compactInset),
       decoration:
           BoxDecoration(border: Border(top: BorderSide(color: tokens.border))),
       child: Row(children: [
@@ -472,7 +472,7 @@ class _TaskInspectorState extends State<TaskInspector> {
                         style: TextButton.styleFrom(
                             backgroundColor:
                                 listOpen ? tokens.canvas : Colors.transparent,
-                            padding: const EdgeInsets.symmetric(horizontal: 6),
+                            padding: const EdgeInsets.symmetric(horizontal: WorkFollowSpacing.inlineGap),
                             minimumSize: const Size(
                                 0, WorkFollowMetrics.compactButtonHeight),
                             tapTargetSize: MaterialTapTargetSize.shrinkWrap,
@@ -508,13 +508,23 @@ class _TaskInspectorState extends State<TaskInspector> {
 
   Widget _editorBody(TaskItem task, WorkFollowTheme tokens,
       {double minHeight = 0}) {
-    final horizontalPadding = widget.inline ? 20.0 : 40.0;
-    final topPadding = widget.inline ? 16.0 : 30.0;
+    final horizontalPadding = widget.inline
+        ? WorkFollowSpacing.inspectorInlineHorizontalPadding
+        : WorkFollowSpacing.inspectorContentHorizontalPadding;
+    final topPadding = widget.inline
+        ? WorkFollowSpacing.inspectorInlineTopPadding
+        : WorkFollowSpacing.inspectorContentTopPadding;
     return Padding(
       padding: EdgeInsets.fromLTRB(
-          horizontalPadding, topPadding, horizontalPadding, 24),
+          horizontalPadding,
+          topPadding,
+          horizontalPadding,
+          WorkFollowSpacing.inspectorContentBottomPadding),
       child: TaskEditorViewport(
-        minHeight: (minHeight - topPadding - 24).clamp(0, double.infinity),
+        minHeight: (minHeight -
+                topPadding -
+                WorkFollowSpacing.inspectorContentBottomPadding)
+            .clamp(0, double.infinity),
         title: TextField(
             key: const ValueKey('task-title-editor'),
             controller: title,
@@ -632,7 +642,7 @@ class _TopPropertyButton extends StatelessWidget {
                   letterSpacing: WorkFollowMacTracking.none),
               minimumSize: Size(iconOnly ? WorkFollowMetrics.iconHitTarget : 0,
                   WorkFollowMetrics.iconHitTarget),
-              padding: EdgeInsets.symmetric(horizontal: iconOnly ? 6 : 9),
+              padding: EdgeInsets.symmetric(horizontal: iconOnly ? WorkFollowSpacing.inlineGap : WorkFollowSpacing.compactInset),
               tapTargetSize: MaterialTapTargetSize.shrinkWrap,
               visualDensity: VisualDensity.compact,
               shape: RoundedRectangleBorder(
@@ -644,7 +654,7 @@ class _TopPropertyButton extends StatelessWidget {
                 AppIcon(icon,
                     size: WorkFollowMetrics.toolbarIcon, color: foreground),
                 if (!iconOnly) ...[
-                  const SizedBox(width: 6),
+                  const SizedBox(width: WorkFollowSpacing.inlineGap),
                   ConstrainedBox(
                     constraints: const BoxConstraints(maxWidth: 320),
                     child: Text(label,
@@ -699,7 +709,7 @@ class _RelationPickerState extends State<_RelationPicker> {
             note.folder.toLowerCase().contains(query))
         .toList(growable: false);
     return Padding(
-      padding: const EdgeInsets.fromLTRB(10, 10, 10, 7),
+      padding: const EdgeInsets.fromLTRB(WorkFollowSpacing.cardInset, WorkFollowSpacing.cardInset, WorkFollowSpacing.cardInset, WorkFollowSpacing.compactGap),
       child: Column(mainAxisSize: MainAxisSize.min, children: [
         TextField(
           key: const ValueKey('task-relation-search'),
@@ -716,7 +726,7 @@ class _RelationPickerState extends State<_RelationPicker> {
                   borderRadius: BorderRadius.circular(WorkFollowRadii.control),
                   borderSide: BorderSide.none)),
         ),
-        const SizedBox(height: 7),
+        const SizedBox(height: WorkFollowSpacing.compactGap),
         for (final note in notes)
           ListTile(
             key: ValueKey('relation-note-${note.id}'),
@@ -745,7 +755,7 @@ class _RelationPickerState extends State<_RelationPicker> {
           ),
         if (notes.isEmpty)
           Padding(
-              padding: const EdgeInsets.symmetric(vertical: 16),
+              padding: const EdgeInsets.symmetric(vertical: WorkFollowSpacing.space4),
               child: Text('没有匹配的笔记',
                   style: TextStyle(
                       fontSize: WorkFollowMacTypography.supporting,

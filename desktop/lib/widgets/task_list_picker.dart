@@ -134,7 +134,7 @@ class _TaskListPickerBodyState extends State<_TaskListPickerBody> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              padding: const EdgeInsets.symmetric(horizontal: WorkFollowSpacing.space4, vertical: WorkFollowSpacing.space2),
               child: TextField(
                 key: const ValueKey('task-list-search'),
                 controller: search,
@@ -163,18 +163,18 @@ class _TaskListPickerBodyState extends State<_TaskListPickerBody> {
                   filled: false,
                   border: InputBorder.none,
                   isDense: true,
-                  contentPadding: const EdgeInsets.symmetric(vertical: 6),
+                  contentPadding: const EdgeInsets.symmetric(vertical: WorkFollowSpacing.inlineGap),
                 ),
               ),
             ),
             Divider(height: 1, color: tokens.border),
             Flexible(
                 child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(vertical: 8),
+              padding: const EdgeInsets.symmetric(vertical: WorkFollowSpacing.space2),
               child: Column(mainAxisSize: MainAxisSize.min, children: [
                 if (lists.isEmpty)
                   Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 28),
+                      padding: const EdgeInsets.symmetric(vertical: WorkFollowSpacing.space7),
                       child: Text('没有匹配的清单',
                           style: TextStyle(
                               fontSize: WorkFollowMacTypography.body, color: tokens.textTertiary))),
@@ -194,8 +194,8 @@ class _TaskListPickerBodyState extends State<_TaskListPickerBody> {
                         child: SizedBox(
                             height: 34,
                             child: Padding(
-                              padding:
-                                  const EdgeInsets.symmetric(horizontal: 16),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: WorkFollowSpacing.menuItemHorizontalPadding),
                               child: Row(children: [
                                 AppIcon(
                                     lists[index].name == '收集箱'
@@ -203,7 +203,7 @@ class _TaskListPickerBodyState extends State<_TaskListPickerBody> {
                                         : WorkFollowIcons.list,
                                     size: WorkFollowMetrics.toolbarIcon,
                                     color: color),
-                                const SizedBox(width: 12),
+                                const SizedBox(width: WorkFollowSpacing.space3),
                                 Expanded(
                                     child: Text(lists[index].name,
                                         maxLines: 1,

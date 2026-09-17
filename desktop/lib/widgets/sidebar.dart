@@ -116,7 +116,10 @@ class AppRail extends StatelessWidget {
                   Expanded(
                     child: SingleChildScrollView(
                       padding: const EdgeInsets.fromLTRB(
-                          9, 6, 9, WorkFollowSpacing.space3),
+                          WorkFollowSpacing.navigationScrollHorizontalPadding,
+                          WorkFollowSpacing.navigationScrollTopPadding,
+                          WorkFollowSpacing.navigationScrollHorizontalPadding,
+                          WorkFollowSpacing.space3),
                       child: _ContextNavigation(controller: controller),
                     ),
                   ),
@@ -363,7 +366,7 @@ class _IconRail extends StatelessWidget {
       width: AppRail._iconRailWidth,
       child: Column(
         children: [
-          const SizedBox(height: 12),
+          const SizedBox(height: WorkFollowSpacing.space3),
           _IconRailButton(
             label: '首页',
             icon: WorkFollowIcons.brand,
@@ -371,7 +374,7 @@ class _IconRail extends StatelessWidget {
             onPressed: () => controller.selectView(WorkspaceView.home),
             filled: true,
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: WorkFollowSpacing.controlGap),
           _IconRailButton(
             label: '任务',
             icon: WorkFollowIcons.tasks,
@@ -444,9 +447,9 @@ class _IconRailFooter extends StatelessWidget {
   Widget build(BuildContext context) {
     final tokens = WorkFollowTheme.of(context);
     return Padding(
-      padding: const EdgeInsets.fromLTRB(6, 8, 6, 10),
+      padding: const EdgeInsets.fromLTRB(WorkFollowSpacing.inlineGap, WorkFollowSpacing.space2, WorkFollowSpacing.inlineGap, WorkFollowSpacing.cardInset),
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 4),
+        padding: const EdgeInsets.symmetric(vertical: WorkFollowSpacing.space1),
         decoration: BoxDecoration(
           color: _lightSidebar(context)
               ? _lightSidebarActive
@@ -463,7 +466,7 @@ class _IconRailFooter extends StatelessWidget {
             Semantics(
               label: '本地空间',
               child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 4),
+                padding: const EdgeInsets.symmetric(vertical: WorkFollowSpacing.space1),
                 child: AppIcon(WorkFollowIcons.system,
                     size: WorkFollowMetrics.toolbarIcon,
                     color: _lightSidebar(context)
@@ -599,7 +602,7 @@ class _IconRailButtonState extends State<_IconRailButton> {
               key: ValueKey('rail-button-${widget.label}'),
               width: 38,
               height: 38,
-              margin: const EdgeInsets.symmetric(vertical: 3),
+              margin: const EdgeInsets.symmetric(vertical: WorkFollowSpacing.tightGap),
               decoration: BoxDecoration(
                 color: active
                     ? (_lightSidebar(context)
@@ -787,7 +790,7 @@ class _TagSectionState extends State<_TagSection> {
         ),
         if (expanded && tags.isEmpty)
           Padding(
-            padding: const EdgeInsets.fromLTRB(11, 3, 8, WorkFollowSpacing.xs),
+            padding: const EdgeInsets.fromLTRB(WorkFollowSpacing.navigationContentInset, WorkFollowSpacing.tightGap, WorkFollowSpacing.space2, WorkFollowSpacing.xs),
             child: Text('在任务中输入 #标签',
                 style: TextStyle(
                     color: tokens.textTertiary,
@@ -812,7 +815,7 @@ class _RailBrand extends StatelessWidget {
   Widget build(BuildContext context) {
     final tokens = WorkFollowTheme.of(context);
     return Padding(
-        padding: const EdgeInsets.fromLTRB(18, 20, 14, 18),
+        padding: const EdgeInsets.fromLTRB(WorkFollowSpacing.sectionGap, WorkFollowSpacing.space5, WorkFollowSpacing.relaxedGap, WorkFollowSpacing.sectionGap),
         child: Row(children: [
           Container(
               width: 28,
@@ -879,8 +882,8 @@ class _RailItemState extends State<_RailItem> {
           child: Container(
             key: ValueKey('rail-navigation-item-${widget.label}'),
             height: WorkFollowMetrics.compactNavigationRowHeight,
-            margin: const EdgeInsets.symmetric(vertical: 1),
-            padding: const EdgeInsets.symmetric(horizontal: 10),
+            margin: const EdgeInsets.symmetric(vertical: WorkFollowSpacing.hairlineGap),
+            padding: const EdgeInsets.symmetric(horizontal: WorkFollowSpacing.cardInset),
             decoration: BoxDecoration(
               color: widget.selected
                   ? _sidebarAccentSoft(context, tokens)
@@ -898,7 +901,7 @@ class _RailItemState extends State<_RailItem> {
                       ? _sidebarAccent(context, tokens)
                       : tokens.textPrimary,
                 ),
-                const SizedBox(width: WorkFollowSpacing.sm - 2),
+                const SizedBox(width: WorkFollowSpacing.controlGap),
                 Expanded(
                   child: Text(
                     widget.label,
@@ -933,7 +936,7 @@ class _RailItemState extends State<_RailItem> {
                 else if (widget.count != null && widget.count! > 0)
                   Container(
                     padding:
-                        const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                        const EdgeInsets.symmetric(horizontal: WorkFollowSpacing.compactGap, vertical: WorkFollowSpacing.microGap),
                     decoration: BoxDecoration(
                       color: widget.selected
                           ? tokens.content
@@ -1003,8 +1006,8 @@ class _TaskListItemState extends State<_TaskListItem> {
                   child: Container(
                     key: ValueKey('rail-list-item-${widget.list.name}'),
                     height: WorkFollowMetrics.compactNavigationRowHeight,
-                    margin: const EdgeInsets.symmetric(vertical: 1),
-                    padding: const EdgeInsets.symmetric(horizontal: 10),
+                    margin: const EdgeInsets.symmetric(vertical: WorkFollowSpacing.hairlineGap),
+                    padding: const EdgeInsets.symmetric(horizontal: WorkFollowSpacing.cardInset),
                     decoration: BoxDecoration(
                       color: dragActive
                           ? _sidebarAccentSoft(context, tokens)
@@ -1028,7 +1031,7 @@ class _TaskListItemState extends State<_TaskListItem> {
                             height: 8,
                             decoration: BoxDecoration(
                                 color: listColor, shape: BoxShape.circle)),
-                        const SizedBox(width: 8),
+                        const SizedBox(width: WorkFollowSpacing.space2),
                         Expanded(
                           child: Text(widget.list.name,
                               maxLines: 1,
@@ -1122,8 +1125,8 @@ class _TaskListItemState extends State<_TaskListItem> {
               content: SizedBox(
                 width: 270,
                 child: Wrap(
-                  spacing: 10,
-                  runSpacing: 10,
+                  spacing: WorkFollowSpacing.controlGap,
+                  runSpacing: WorkFollowSpacing.controlGap,
                   children: [
                     for (final value in listColorPalette)
                       InkWell(
@@ -1246,8 +1249,8 @@ class _TagItemState extends State<_TagItem> {
           child: Container(
             key: ValueKey('rail-tag-item-${widget.name}'),
             height: WorkFollowMetrics.compactNavigationRowHeight,
-            margin: const EdgeInsets.symmetric(vertical: 1),
-            padding: const EdgeInsets.symmetric(horizontal: 10),
+            margin: const EdgeInsets.symmetric(vertical: WorkFollowSpacing.hairlineGap),
+            padding: const EdgeInsets.symmetric(horizontal: WorkFollowSpacing.cardInset),
             decoration: BoxDecoration(
                 color: selected
                     ? _sidebarAccentSoft(context, tokens)
@@ -1261,7 +1264,7 @@ class _TagItemState extends State<_TagItem> {
                   color: selected
                       ? _sidebarAccent(context, tokens)
                       : tokens.textPrimary),
-              const SizedBox(width: WorkFollowSpacing.sm - 2),
+              const SizedBox(width: WorkFollowSpacing.controlGap),
               Expanded(
                   child: Text(widget.name,
                       maxLines: 1,
@@ -1373,9 +1376,12 @@ class _TaskViewItemState extends State<_TaskViewItem> {
           onTap: () => widget.controller.selectView(widget.view),
           child: Container(
             key: ValueKey('rail-view-item-${widget.view.name}'),
-            margin: const EdgeInsets.symmetric(vertical: 2),
+            margin: const EdgeInsets.symmetric(vertical: WorkFollowSpacing.microGap),
             padding: const EdgeInsets.fromLTRB(
-                9, WorkFollowSpacing.xs, 8, WorkFollowSpacing.xs),
+                WorkFollowSpacing.railItemHorizontalInset,
+                WorkFollowSpacing.xs,
+                WorkFollowSpacing.railItemTrailingInset,
+                WorkFollowSpacing.xs),
             decoration: BoxDecoration(
               color: selected
                   ? _sidebarAccentSoft(context, tokens)
@@ -1391,7 +1397,7 @@ class _TaskViewItemState extends State<_TaskViewItem> {
                     color: selected
                         ? _sidebarAccent(context, tokens)
                         : tokens.textPrimary),
-                const SizedBox(width: 9),
+                const SizedBox(width: WorkFollowSpacing.compactInset),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -1411,7 +1417,7 @@ class _TaskViewItemState extends State<_TaskViewItem> {
                               : WorkFollowMacWeight.regular,
                         ),
                       ),
-                      const SizedBox(height: 2),
+                      const SizedBox(height: WorkFollowSpacing.microGap),
                       Text(
                         widget.hint,
                         maxLines: 1,
@@ -1426,7 +1432,7 @@ class _TaskViewItemState extends State<_TaskViewItem> {
                 ),
                 if (count > 0)
                   Padding(
-                    padding: const EdgeInsets.only(left: 6),
+                    padding: const EdgeInsets.only(left: WorkFollowSpacing.inlineGap),
                     child: Text(
                       '$count',
                       style: TextStyle(

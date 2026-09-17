@@ -47,15 +47,18 @@ class HomeScreen extends StatelessWidget {
       color: tokens.canvas,
       child: LayoutBuilder(
         builder: (context, constraints) {
-          // The Wrap lives inside 28pt horizontal padding on each side. Use
+          // The Wrap lives inside the shared page gutter on each side. Use
           // its actual content width; otherwise two half-width cards are
           // always 56pt too wide and Flutter falls back to one column.
-          final contentWidth =
-              (constraints.maxWidth - 56).clamp(0.0, double.infinity);
+          final contentWidth = (constraints.maxWidth -
+                  WorkFollowSpacing.pageHorizontalPadding * 2)
+              .clamp(0.0, double.infinity);
           final panelWidth =
-              contentWidth >= 1060 ? (contentWidth - 14) / 2 : contentWidth;
+              contentWidth >= 1060
+                  ? (contentWidth - WorkFollowSpacing.relaxedGap) / 2
+                  : contentWidth;
           return SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(28, 26, 28, 32),
+            padding: const EdgeInsets.fromLTRB(WorkFollowSpacing.pageHorizontalPadding, WorkFollowSpacing.pageHorizontalPadding, WorkFollowSpacing.pageHorizontalPadding, WorkFollowSpacing.space8),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -76,7 +79,7 @@ class HomeScreen extends StatelessWidget {
                               letterSpacing: WorkFollowMacTracking.none,
                             ),
                           ),
-                          const SizedBox(height: 6),
+                          const SizedBox(height: WorkFollowSpacing.inlineGap),
                           Text(
                             '${now.month} 月 ${now.day} 日 · 星期${_weekday(now.weekday)} · 把注意力留给要紧的事。',
                             style: TextStyle(
@@ -87,19 +90,19 @@ class HomeScreen extends StatelessWidget {
                         ],
                       ),
                     ),
-                    const SizedBox(width: 18),
+                    const SizedBox(width: WorkFollowSpacing.sectionGap),
                     SizedBox(
                         width: 300,
                         child: QuickAddField(controller: controller)),
                   ],
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: WorkFollowSpacing.space5),
                 if (controller.shouldShowWeeklyReview) ...[
                   _WeeklyReviewCard(
                       summary: controller.weeklyReview,
                       onOpen: () =>
                           controller.selectView(WorkspaceView.completed)),
-                  const SizedBox(height: 14),
+                  const SizedBox(height: WorkFollowSpacing.relaxedGap),
                 ],
                 Row(
                   children: [
@@ -112,7 +115,7 @@ class HomeScreen extends StatelessWidget {
                           onTap: () =>
                               controller.selectView(WorkspaceView.today)),
                     ),
-                    const SizedBox(width: 12),
+                    const SizedBox(width: WorkFollowSpacing.space3),
                     Expanded(
                       child: StatCard(
                           label: '今日完成',
@@ -122,7 +125,7 @@ class HomeScreen extends StatelessWidget {
                           onTap: () =>
                               controller.selectView(WorkspaceView.completed)),
                     ),
-                    const SizedBox(width: 12),
+                    const SizedBox(width: WorkFollowSpacing.space3),
                     Expanded(
                       child: StatCard(
                           label: '逾期',
@@ -132,7 +135,7 @@ class HomeScreen extends StatelessWidget {
                           onTap: () =>
                               controller.selectView(WorkspaceView.today)),
                     ),
-                    const SizedBox(width: 12),
+                    const SizedBox(width: WorkFollowSpacing.space3),
                     Expanded(
                       child: StatCard(
                           label: '笔记',
@@ -144,10 +147,10 @@ class HomeScreen extends StatelessWidget {
                     ),
                   ],
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: WorkFollowSpacing.space4),
                 Wrap(
-                  spacing: 14,
-                  runSpacing: 14,
+                  spacing: WorkFollowSpacing.relaxedGap,
+                  runSpacing: WorkFollowSpacing.relaxedGap,
                   children: [
                     SizedBox(
                       width: panelWidth,
@@ -277,7 +280,7 @@ class _WeeklyReviewCard extends StatelessWidget {
         : '上周完成 ${summary.completed} 件 · ${summary.weekdayLabel}'
             '${summary.overdue > 0 ? ' · 还有 ${summary.overdue} 件逾期未清' : ''}';
     return AppCard(
-      padding: const EdgeInsets.fromLTRB(18, 13, 12, 13),
+      padding: const EdgeInsets.fromLTRB(WorkFollowSpacing.sectionGap, WorkFollowSpacing.controlInset, WorkFollowSpacing.space3, WorkFollowSpacing.controlInset),
       color: tokens.accentFaint,
       borderColor: tokens.accent.withValues(alpha: .16),
       child: Row(children: [
@@ -289,7 +292,7 @@ class _WeeklyReviewCard extends StatelessWidget {
                 borderRadius: BorderRadius.circular(WorkFollowRadii.control)),
             child: AppIcon(WorkFollowIcons.autoAwesome,
                 size: WorkFollowMetrics.toolbarIcon, color: tokens.accent)),
-        const SizedBox(width: 11),
+        const SizedBox(width: WorkFollowSpacing.iconLabelGap),
         Expanded(
             child:
                 Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -298,7 +301,7 @@ class _WeeklyReviewCard extends StatelessWidget {
                   color: tokens.textPrimary,
                   fontSize: WorkFollowMacTypography.sectionTitle,
                   fontWeight: WorkFollowMacWeight.semibold)),
-          const SizedBox(height: 3),
+          const SizedBox(height: WorkFollowSpacing.tightGap),
           Text(message,
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
@@ -308,7 +311,7 @@ class _WeeklyReviewCard extends StatelessWidget {
             onPressed: onOpen,
             style: TextButton.styleFrom(
                 foregroundColor: tokens.accent,
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                padding: const EdgeInsets.symmetric(horizontal: WorkFollowSpacing.space2, vertical: WorkFollowSpacing.denseGap),
                 minimumSize: Size.zero,
                 tapTargetSize: MaterialTapTargetSize.shrinkWrap),
             child: const Text('看完成', style: TextStyle(fontSize: WorkFollowMacTypography.control))),
@@ -338,7 +341,7 @@ class _HomePanel extends StatelessWidget {
   Widget build(BuildContext context) {
     final tokens = WorkFollowTheme.of(context);
     return AppCard(
-      padding: const EdgeInsets.fromLTRB(18, 16, 18, 15),
+      padding: const EdgeInsets.fromLTRB(WorkFollowSpacing.sectionGap, WorkFollowSpacing.space4, WorkFollowSpacing.sectionGap, WorkFollowSpacing.statusGap),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -355,7 +358,7 @@ class _HomePanel extends StatelessWidget {
                   child: AppIcon(icon,
                       size: WorkFollowMetrics.toolbarIcon,
                       color: tokens.accent)),
-              const SizedBox(width: 10),
+              const SizedBox(width: WorkFollowSpacing.controlGap),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -367,7 +370,7 @@ class _HomePanel extends StatelessWidget {
                             fontWeight: WorkFollowMacWeight.semibold,
                             height: WorkFollowMacTypography.lineControl,
                             letterSpacing: WorkFollowMacTracking.none)),
-                    const SizedBox(height: 3),
+                    const SizedBox(height: WorkFollowSpacing.tightGap),
                     Text(subtitle,
                         style: TextStyle(
                             color: tokens.textTertiary,
@@ -382,7 +385,7 @@ class _HomePanel extends StatelessWidget {
                   style: TextButton.styleFrom(
                     foregroundColor: tokens.accent,
                     padding:
-                        const EdgeInsets.symmetric(horizontal: 5, vertical: 3),
+                        const EdgeInsets.symmetric(horizontal: WorkFollowSpacing.denseGap, vertical: WorkFollowSpacing.tightGap),
                     minimumSize: Size.zero,
                     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   ),
@@ -394,7 +397,7 @@ class _HomePanel extends StatelessWidget {
                 ),
             ],
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: WorkFollowSpacing.relaxedGap),
           Expanded(child: child),
         ],
       ),
@@ -452,7 +455,7 @@ class _HomeTaskRow extends StatelessWidget {
     final tokens = WorkFollowTheme.of(context);
     final listColor = Color(controller.colorValueForList(task.listName));
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 5),
+      padding: const EdgeInsets.symmetric(vertical: WorkFollowSpacing.denseGap),
       child: Row(
         children: [
           Container(
@@ -460,7 +463,7 @@ class _HomeTaskRow extends StatelessWidget {
               height: 22,
               decoration: BoxDecoration(
                   color: listColor, borderRadius: BorderRadius.circular(2))),
-          const SizedBox(width: 5),
+          const SizedBox(width: WorkFollowSpacing.denseGap),
           GestureDetector(
             onTap: onToggle,
             child: Semantics(
@@ -495,7 +498,7 @@ class _HomeTaskRow extends StatelessWidget {
               ),
             ),
           ),
-          const SizedBox(width: 7),
+          const SizedBox(width: WorkFollowSpacing.compactGap),
           Expanded(
             child: GestureDetector(
               onTap: onOpen,
@@ -510,7 +513,7 @@ class _HomeTaskRow extends StatelessWidget {
               ),
             ),
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: WorkFollowSpacing.space2),
           Text(task.displayTimeLabel ?? '未安排',
               style: TextStyle(
                   color: overdue ? tokens.warning : tokens.textTertiary,
@@ -539,7 +542,7 @@ class _HomeNoteList extends StatelessWidget {
           GestureDetector(
             onTap: () => controller.openNote(note.id),
             child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 5),
+              padding: const EdgeInsets.symmetric(vertical: WorkFollowSpacing.denseGap),
               child: Row(
                 children: [
                   Container(
@@ -548,7 +551,7 @@ class _HomeNoteList extends StatelessWidget {
                       decoration: BoxDecoration(
                           color: Color(note.accent.value),
                           shape: BoxShape.circle)),
-                  const SizedBox(width: 8),
+                  const SizedBox(width: WorkFollowSpacing.space2),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -560,14 +563,14 @@ class _HomeNoteList extends StatelessWidget {
                                 color: tokens.textPrimary,
                                 fontSize: WorkFollowMacTypography.listTitle,
                                 fontWeight: WorkFollowMacWeight.semibold)),
-                        const SizedBox(height: 2),
+                        const SizedBox(height: WorkFollowSpacing.microGap),
                         Text(note.folder,
                             style: TextStyle(
                                 color: tokens.textTertiary, fontSize: WorkFollowMacTypography.listMeta)),
                       ],
                     ),
                   ),
-                  const SizedBox(width: 8),
+                  const SizedBox(width: WorkFollowSpacing.space2),
                   Text(note.updatedLabel,
                       style:
                           TextStyle(color: tokens.textTertiary, fontSize: WorkFollowMacTypography.listMeta)),
@@ -638,7 +641,7 @@ class _MiniCalendar extends StatelessWidget {
                 gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                     crossAxisCount: 7,
                     mainAxisSpacing: rowSpacing,
-                    crossAxisSpacing: 3,
+                    crossAxisSpacing: WorkFollowSpacing.tightGap,
                     mainAxisExtent: rowExtent),
                 itemCount: count,
                 itemBuilder: (context, index) {
@@ -666,7 +669,7 @@ class _MiniCalendar extends StatelessWidget {
                                     ? WorkFollowMacWeight.semibold
                                     : WorkFollowMacWeight.medium)),
                         if (hasTasks) ...[
-                          const SizedBox(height: 2),
+                          const SizedBox(height: WorkFollowSpacing.microGap),
                           Container(
                               width: 3,
                               height: 3,
@@ -710,7 +713,7 @@ class _PanelEmpty extends StatelessWidget {
               child: AppIcon(icon,
                   size: WorkFollowMetrics.navigationIcon,
                   color: tokens.accent)),
-          const SizedBox(height: 10),
+          const SizedBox(height: WorkFollowSpacing.controlGap),
           Text(label,
               style: TextStyle(color: tokens.textTertiary, fontSize: WorkFollowMacTypography.supporting)),
         ],

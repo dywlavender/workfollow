@@ -34,7 +34,7 @@ class _StatsScreenState extends State<StatsScreen> {
       child: LayoutBuilder(builder: (context, constraints) {
         final narrow = constraints.maxWidth < 900;
         return SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(28, 24, 28, 36),
+          padding: const EdgeInsets.fromLTRB(WorkFollowSpacing.pageHorizontalPadding, WorkFollowSpacing.space6, WorkFollowSpacing.pageHorizontalPadding, WorkFollowSpacing.pageBottomSpace),
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 1120),
             child: Column(
@@ -50,10 +50,10 @@ class _StatsScreenState extends State<StatsScreen> {
                       onChanged: (value) =>
                           setState(() => weeklyRange = value)),
                 ),
-                const SizedBox(height: 18),
+                const SizedBox(height: WorkFollowSpacing.sectionGap),
                 Wrap(
-                  spacing: 12,
-                  runSpacing: 12,
+                  spacing: WorkFollowSpacing.space3,
+                  runSpacing: WorkFollowSpacing.space3,
                   children: [
                     SizedBox(
                         width: narrow ? double.infinity : 190,
@@ -92,9 +92,9 @@ class _StatsScreenState extends State<StatsScreen> {
                             color: tokens.accentHover)),
                   ],
                 ),
-                const SizedBox(height: 14),
+                const SizedBox(height: WorkFollowSpacing.relaxedGap),
                 AppCard(
-                  padding: const EdgeInsets.fromLTRB(18, 16, 18, 14),
+                  padding: const EdgeInsets.fromLTRB(WorkFollowSpacing.sectionGap, WorkFollowSpacing.space4, WorkFollowSpacing.sectionGap, WorkFollowSpacing.relaxedGap),
                   child: SizedBox(
                     height: 208,
                     child: Column(
@@ -105,7 +105,7 @@ class _StatsScreenState extends State<StatsScreen> {
                             subtitle: weeklyRange
                                 ? '本周截至今日 · 每日完成数'
                                 : '最近 30 天 · 每日完成数'),
-                        const SizedBox(height: 15),
+                        const SizedBox(height: WorkFollowSpacing.statusGap),
                         Expanded(
                             child: CustomPaint(
                                 painter: _TrendPainter(
@@ -117,9 +117,9 @@ class _StatsScreenState extends State<StatsScreen> {
                     ),
                   ),
                 ),
-                const SizedBox(height: 14),
+                const SizedBox(height: WorkFollowSpacing.relaxedGap),
                 AppCard(
-                  padding: const EdgeInsets.fromLTRB(18, 16, 18, 14),
+                  padding: const EdgeInsets.fromLTRB(WorkFollowSpacing.sectionGap, WorkFollowSpacing.space4, WorkFollowSpacing.sectionGap, WorkFollowSpacing.relaxedGap),
                   child: SizedBox(
                     height: 174,
                     child: Column(
@@ -127,7 +127,7 @@ class _StatsScreenState extends State<StatsScreen> {
                       children: [
                         _CardTitle(
                             title: '完成热力图', subtitle: '近 16 周 · 每个格子代表一天'),
-                        const SizedBox(height: 12),
+                        const SizedBox(height: WorkFollowSpacing.space3),
                         Expanded(
                             child: CustomPaint(
                                 painter: _HeatmapPainter(
@@ -141,17 +141,17 @@ class _StatsScreenState extends State<StatsScreen> {
                     ),
                   ),
                 ),
-                const SizedBox(height: 14),
+                const SizedBox(height: WorkFollowSpacing.relaxedGap),
                 AppCard(
-                  padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
+                  padding: const EdgeInsets.fromLTRB(WorkFollowSpacing.sectionGap, WorkFollowSpacing.space4, WorkFollowSpacing.sectionGap, WorkFollowSpacing.space4),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       _CardTitle(title: '清单分布', subtitle: '按完成记录统计'),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: WorkFollowSpacing.space4),
                       if (total == 0)
                         const Padding(
-                            padding: EdgeInsets.symmetric(vertical: 18),
+                            padding: EdgeInsets.symmetric(vertical: WorkFollowSpacing.sectionGap),
                             child: Text('暂时还没有可统计的完成记录。'))
                       else
                         _Distribution(
@@ -185,7 +185,7 @@ class _CardTitle extends StatelessWidget {
               color: tokens.textPrimary,
               fontSize: WorkFollowMacTypography.sectionTitle,
               fontWeight: WorkFollowMacWeight.semibold)),
-      const SizedBox(width: 8),
+      const SizedBox(width: WorkFollowSpacing.space2),
       Text(subtitle,
           style: TextStyle(color: tokens.textTertiary, fontSize: WorkFollowMacTypography.listMeta)),
     ]);
@@ -202,7 +202,7 @@ class _RangeSegment extends StatelessWidget {
   Widget build(BuildContext context) {
     final tokens = WorkFollowTheme.of(context);
     return Container(
-      padding: const EdgeInsets.all(2),
+      padding: const EdgeInsets.all(WorkFollowSpacing.microGap),
       decoration: BoxDecoration(
           color: tokens.content,
           borderRadius: BorderRadius.circular(WorkFollowRadii.control),
@@ -214,7 +214,7 @@ class _RangeSegment extends StatelessWidget {
               borderRadius: BorderRadius.circular(WorkFollowRadii.control),
               child: Container(
                   padding:
-                      const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+                      const EdgeInsets.symmetric(horizontal: WorkFollowSpacing.compactInset, vertical: WorkFollowSpacing.denseGap),
                   decoration: BoxDecoration(
                       color: weekly == option.$1
                           ? tokens.accentSoft
@@ -344,9 +344,9 @@ class _Distribution extends StatelessWidget {
                   total: total,
                   colorFor: (name) => Color(controller.colorValueForList(name)),
                   track: tokens.border))),
-      const SizedBox(width: 22),
+      const SizedBox(width: WorkFollowSpacing.headingGap),
       Expanded(
-          child: Wrap(spacing: 18, runSpacing: 10, children: [
+          child: Wrap(spacing: WorkFollowSpacing.sectionGap, runSpacing: WorkFollowSpacing.controlGap, children: [
         for (final entry in ordered)
           Row(mainAxisSize: MainAxisSize.min, children: [
             Container(
@@ -355,7 +355,7 @@ class _Distribution extends StatelessWidget {
                 decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     color: Color(controller.colorValueForList(entry.key)))),
-            const SizedBox(width: 6),
+            const SizedBox(width: WorkFollowSpacing.inlineGap),
             Text('${entry.key}  ${((entry.value / total) * 100).round()}%',
                 style: TextStyle(color: tokens.textSecondary, fontSize: WorkFollowMacTypography.listMeta)),
           ]),

@@ -59,6 +59,7 @@
 - [Colors](colors.md)
 - [D3 Colors migration](d3-colors.md)
 - [Spacing](spacing.md)
+- [D4 Spacing migration](d4-spacing.md)
 - [Geometry](geometry.md)
 - [Surfaces](surfaces.md)
 - [Motion](motion.md)

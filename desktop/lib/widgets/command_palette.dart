@@ -191,7 +191,7 @@ class _CommandPaletteState extends State<_CommandPalette> {
           child: Container(
             width: 560,
             constraints: const BoxConstraints(maxHeight: 500),
-            margin: const EdgeInsets.symmetric(horizontal: 24),
+            margin: const EdgeInsets.symmetric(horizontal: WorkFollowSpacing.space6),
             decoration: BoxDecoration(
               color: tokens.overlay,
               borderRadius: BorderRadius.circular(WorkFollowRadii.popover),
@@ -209,13 +209,17 @@ class _CommandPaletteState extends State<_CommandPalette> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(19, 16, 15, 13),
+                  padding: const EdgeInsets.fromLTRB(
+                      WorkFollowSpacing.commandPaletteInputLeading,
+                      WorkFollowSpacing.space4,
+                      WorkFollowSpacing.statusGap,
+                      WorkFollowSpacing.controlInset),
                   child: Row(
                     children: [
                       AppIcon(WorkFollowIcons.search,
                           size: WorkFollowMetrics.headerIcon,
                           color: tokens.accent),
-                      const SizedBox(width: 10),
+                      const SizedBox(width: WorkFollowSpacing.controlGap),
                       Expanded(
                         child: TextField(
                           key: const ValueKey('command-palette-query'),
@@ -240,7 +244,8 @@ class _CommandPaletteState extends State<_CommandPalette> {
                       ),
                       Container(
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 6, vertical: 4),
+                              horizontal: WorkFollowSpacing.inlineGap,
+                              vertical: WorkFollowSpacing.space1),
                           decoration: BoxDecoration(
                               color: tokens.menuSelected,
                               borderRadius: BorderRadius.circular(
@@ -256,7 +261,7 @@ class _CommandPaletteState extends State<_CommandPalette> {
                 Divider(height: 1, color: tokens.border),
                 if (list.isEmpty)
                   Padding(
-                      padding: const EdgeInsets.all(32),
+                      padding: const EdgeInsets.all(WorkFollowSpacing.space8),
                       child: Text('没有找到相关内容',
                           style: TextStyle(
                               color: tokens.textTertiary, fontSize: WorkFollowMacTypography.supporting)))
@@ -264,7 +269,7 @@ class _CommandPaletteState extends State<_CommandPalette> {
                   Flexible(
                     child: ListView.builder(
                       shrinkWrap: true,
-                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      padding: const EdgeInsets.symmetric(vertical: WorkFollowSpacing.space2),
                       itemCount: list.length,
                       itemBuilder: (context, index) {
                         final command = list[index];
@@ -273,9 +278,15 @@ class _CommandPaletteState extends State<_CommandPalette> {
                           onTap: () => _run(command),
                           child: Container(
                             margin: const EdgeInsets.symmetric(
-                                horizontal: 8, vertical: 2),
+                                horizontal: WorkFollowSpacing
+                                    .commandPaletteRowHorizontalMargin,
+                                vertical: WorkFollowSpacing
+                                    .commandPaletteRowVerticalMargin),
                             padding: const EdgeInsets.symmetric(
-                                horizontal: 11, vertical: 10),
+                                horizontal: WorkFollowSpacing
+                                    .commandPaletteRowHorizontalPadding,
+                                vertical: WorkFollowSpacing
+                                    .commandPaletteRowVerticalPadding),
                             decoration: BoxDecoration(
                                 color: selected
                                     ? tokens.menuSelected
@@ -298,7 +309,7 @@ class _CommandPaletteState extends State<_CommandPalette> {
                                         color: selected
                                             ? tokens.accent
                                             : tokens.textSecondary)),
-                                const SizedBox(width: 11),
+                                const SizedBox(width: WorkFollowSpacing.iconLabelGap),
                                 Expanded(
                                     child: Column(
                                         crossAxisAlignment:
@@ -309,7 +320,7 @@ class _CommandPaletteState extends State<_CommandPalette> {
                                               color: tokens.textPrimary,
                                               fontSize: WorkFollowMacTypography.menu,
                                               fontWeight: WorkFollowMacWeight.semibold)),
-                                      const SizedBox(height: 2),
+                                      const SizedBox(height: WorkFollowSpacing.microGap),
                                       Text(command.subtitle,
                                           style: TextStyle(
                                               color: tokens.textTertiary,
@@ -327,7 +338,7 @@ class _CommandPaletteState extends State<_CommandPalette> {
                     ),
                   ),
                 Container(
-                  padding: const EdgeInsets.fromLTRB(17, 10, 17, 11),
+                  padding: const EdgeInsets.fromLTRB(WorkFollowSpacing.fieldGap, WorkFollowSpacing.cardInset, WorkFollowSpacing.fieldGap, WorkFollowSpacing.iconLabelGap),
                   decoration: BoxDecoration(
                       color: tokens.menuSelected.withValues(alpha: .55),
                       border: Border(top: BorderSide(color: tokens.border))),
@@ -335,18 +346,18 @@ class _CommandPaletteState extends State<_CommandPalette> {
                     AppIcon(WorkFollowIcons.keyboardReturn,
                         size: WorkFollowMetrics.metadataIcon,
                         color: tokens.textTertiary),
-                    const SizedBox(width: 5),
+                    const SizedBox(width: WorkFollowSpacing.denseGap),
                     Text('选择',
                         style: TextStyle(
                             color: tokens.textTertiary, fontSize: WorkFollowMacTypography.caption)),
-                    const SizedBox(width: 16),
+                    const SizedBox(width: WorkFollowSpacing.space4),
                     AppIcon(WorkFollowIcons.keyboardUp,
                         size: WorkFollowMetrics.metadataIcon,
                         color: tokens.textTertiary),
                     AppIcon(WorkFollowIcons.keyboardDown,
                         size: WorkFollowMetrics.metadataIcon,
                         color: tokens.textTertiary),
-                    const SizedBox(width: 5),
+                    const SizedBox(width: WorkFollowSpacing.denseGap),
                     Text('移动',
                         style: TextStyle(
                             color: tokens.textTertiary, fontSize: WorkFollowMacTypography.caption)),

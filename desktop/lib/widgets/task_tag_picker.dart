@@ -76,7 +76,7 @@ class _TaskTagPickerBodyState extends State<TaskTagPickerBody> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 10, 10, 8),
+          padding: const EdgeInsets.fromLTRB(WorkFollowSpacing.space4, WorkFollowSpacing.cardInset, WorkFollowSpacing.cardInset, WorkFollowSpacing.space2),
           child: TextField(
             key: const ValueKey('task-tag-search'),
             controller: search,
@@ -94,7 +94,7 @@ class _TaskTagPickerBodyState extends State<TaskTagPickerBody> {
               hintText: '输入标签',
               hintStyle: TextStyle(color: tokens.textTertiary),
               filled: false,
-              contentPadding: const EdgeInsets.symmetric(vertical: 8),
+              contentPadding: const EdgeInsets.symmetric(vertical: WorkFollowSpacing.space2),
               prefixIconConstraints: const BoxConstraints(minWidth: 32),
               border: InputBorder.none,
               isDense: true,
@@ -105,16 +105,16 @@ class _TaskTagPickerBodyState extends State<TaskTagPickerBody> {
         Flexible(
           child: SingleChildScrollView(
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+              padding: const EdgeInsets.symmetric(horizontal: WorkFollowSpacing.space2, vertical: WorkFollowSpacing.space2),
               child: Column(mainAxisSize: MainAxisSize.min, children: [
                 if (matches.isEmpty && !canCreate)
                   Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 24),
+                    padding: const EdgeInsets.symmetric(vertical: WorkFollowSpacing.space6),
                     child: Column(children: [
                       TaskMenuGlyph('tags',
                           size: 60,
                           color: tokens.textTertiary.withValues(alpha: .4)),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: WorkFollowSpacing.space3),
                       Text('没有标签',
                           style: TextStyle(
                               fontSize: WorkFollowMacTypography.body, color: tokens.textPrimary)),
@@ -124,7 +124,7 @@ class _TaskTagPickerBodyState extends State<TaskTagPickerBody> {
                   CheckboxListTile(
                     key: ValueKey('task-tag-$tag'),
                     dense: true,
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 8),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: WorkFollowSpacing.space2),
                     controlAffinity: ListTileControlAffinity.trailing,
                     secondary: AppIcon(WorkFollowIcons.tagLabel,
                         size: WorkFollowMetrics.toolbarIcon,
@@ -154,7 +154,7 @@ class _TaskTagPickerBodyState extends State<TaskTagPickerBody> {
           ),
         ),
         Padding(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(WorkFollowSpacing.space4),
           child: Row(children: [
             Expanded(
                 child: OutlinedButton(
@@ -170,7 +170,7 @@ class _TaskTagPickerBodyState extends State<TaskTagPickerBody> {
                             borderRadius: BorderRadius.circular(8))),
                     onPressed: () => Navigator.of(context).pop(),
                     child: const Text('取消'))),
-            const SizedBox(width: 12),
+            const SizedBox(width: WorkFollowSpacing.space3),
             Expanded(
                 child: FilledButton(
                     style: FilledButton.styleFrom(

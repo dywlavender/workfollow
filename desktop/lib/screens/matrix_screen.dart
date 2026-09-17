@@ -85,7 +85,7 @@ class _MatrixScreenState extends State<MatrixScreen> {
     return SizedBox(
       height: 56,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(14, 10, 12, 4),
+        padding: const EdgeInsets.fromLTRB(WorkFollowSpacing.relaxedGap, WorkFollowSpacing.cardInset, WorkFollowSpacing.space3, WorkFollowSpacing.space1),
         child: Row(
           children: [
             Text(

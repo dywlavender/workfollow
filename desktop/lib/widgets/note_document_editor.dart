@@ -210,7 +210,7 @@ class _NoteDocumentEditorState extends State<NoteDocumentEditor>
         viewport: screen,
         desiredSize: Size(TaskSlashMenuMetrics.width, menuHeight),
         placement: PopoverPlacement.bottomStart,
-        safeArea: const EdgeInsets.all(12),
+        safeArea: const EdgeInsets.all(WorkFollowSpacing.popoverSafeArea),
       );
       slashOffset = geometry.rect.topLeft;
     }
@@ -299,7 +299,7 @@ class _NoteDocumentEditorState extends State<NoteDocumentEditor>
       placement: const PopoverPlacement(
           preferredSide: PopoverSide.top,
           alignment: PopoverAlignment.center,
-          gap: 28),
+          gap: WorkFollowSpacing.space7),
       focusPolicy: PopoverFocusPolicy.preserveEditor,
       builder: (_) => TaskEditorToolbar(
         controller: editor,
@@ -350,7 +350,7 @@ class _NoteDocumentEditorState extends State<NoteDocumentEditor>
             editorKey: renderEditorKey,
             scrollable: false,
             minHeight: 330,
-            padding: const EdgeInsets.only(bottom: 24),
+            padding: const EdgeInsets.only(bottom: WorkFollowSpacing.space6),
             placeholder: '写下你的想法、会议记录或下一步行动…',
             customStyles: TaskDocumentStyles.build(
               tokens,
@@ -406,7 +406,7 @@ class NoteImageBuilder extends quill.EmbedBuilder {
     final source = embedContext.node.value.data.toString();
     Widget fallback(BuildContext _, Object error, StackTrace? stack) =>
         Container(
-            padding: const EdgeInsets.all(18),
+            padding: const EdgeInsets.all(WorkFollowSpacing.sectionGap),
             color: WorkFollowTheme.of(context).canvas,
             child: const Row(children: [
               AppIcon(WorkFollowIcons.brokenImage,
@@ -518,7 +518,7 @@ class NoteBlockBuilder extends quill.EmbedBuilder {
                         TableRow(children: [
                           for (var i = 0; i < columns; i++)
                             Padding(
-                                padding: const EdgeInsets.all(10),
+                                padding: const EdgeInsets.all(WorkFollowSpacing.cardInset),
                                 child: SelectableText(
                                     i < (row['content'] as List).length
                                         ? notePlainTextFromContentJson(
@@ -533,7 +533,7 @@ class NoteBlockBuilder extends quill.EmbedBuilder {
                     ])));
     }
     return Container(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(WorkFollowSpacing.space4),
         decoration: BoxDecoration(
             color: tokens.canvas,
             border: Border.all(color: tokens.border),

@@ -87,7 +87,7 @@ class SoftPill extends StatelessWidget {
     return Container(
       constraints:
           const BoxConstraints(minHeight: WorkFollowMetrics.chipHeight),
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: WorkFollowSpacing.space2, vertical: WorkFollowSpacing.space1),
       decoration: BoxDecoration(
         color: color ?? tokens.accentFaint,
         borderRadius: BorderRadius.circular(WorkFollowRadii.control),
@@ -99,7 +99,7 @@ class SoftPill extends StatelessWidget {
             AppIcon(icon!,
                 size: WorkFollowMetrics.metadataIcon,
                 color: textColor ?? tokens.textSecondary),
-            const SizedBox(width: 4),
+            const SizedBox(width: WorkFollowSpacing.space1),
           ],
           Text(
             label,

@@ -84,12 +84,12 @@ class _MoreMenuState extends State<_MoreMenu> {
         },
         child: Padding(
           key: const ValueKey('task-more-menu'),
-          padding: const EdgeInsets.symmetric(vertical: 6),
+          padding: const EdgeInsets.symmetric(vertical: WorkFollowSpacing.inlineGap),
           child: Column(mainAxisSize: MainAxisSize.min, children: [
             for (var i = 0; i < entries.length; i++) ...[
               if (i == 5)
                 Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 5),
+                    padding: const EdgeInsets.symmetric(vertical: WorkFollowSpacing.denseGap),
                     child: Divider(height: 1, color: colors.border)),
               Builder(builder: (context) {
                 final entry = entries[i];
@@ -101,7 +101,8 @@ class _MoreMenuState extends State<_MoreMenu> {
                   child: Container(
                     height: TaskEditorPopoverStyle.rowHeight,
                     color: focused == i ? colors.menuSelected : null,
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: WorkFollowSpacing.menuItemHorizontalPadding),
                     child: Row(children: [
                       AppIcon(
                           WorkFollowIcons.taskAction(entry.$1,
@@ -109,7 +110,7 @@ class _MoreMenuState extends State<_MoreMenu> {
                                   widget.task.isAbandoned),
                           size: WorkFollowMetrics.toolbarIcon,
                           color: color),
-                      const SizedBox(width: 10),
+                      const SizedBox(width: WorkFollowSpacing.controlGap),
                       Expanded(
                           child: Text(entry.$2,
                               style: TextStyle(

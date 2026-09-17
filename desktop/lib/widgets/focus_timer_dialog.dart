@@ -59,7 +59,7 @@ class _FocusTimerDialogState extends State<_FocusTimerDialog> {
       title: Row(children: [
         AppIcon(WorkFollowIcons.focus,
             size: WorkFollowMetrics.headerIcon + 2, color: tokens.accent),
-        const SizedBox(width: 8),
+        const SizedBox(width: WorkFollowSpacing.space2),
         const Text('专注'),
         const Spacer(),
         if (timer.isRunning)
@@ -74,7 +74,7 @@ class _FocusTimerDialogState extends State<_FocusTimerDialog> {
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           Container(
             width: double.infinity,
-            padding: const EdgeInsets.symmetric(vertical: 24),
+            padding: const EdgeInsets.symmetric(vertical: WorkFollowSpacing.space6),
             decoration: BoxDecoration(
                 color: tokens.accentFaint,
                 borderRadius: BorderRadius.circular(WorkFollowRadii.card)),
@@ -85,12 +85,12 @@ class _FocusTimerDialogState extends State<_FocusTimerDialog> {
                       fontSize: WorkFollowMacDisplay.timer,
                       fontWeight: WorkFollowMacWeight.regular,
                       letterSpacing: 1.2)),
-              const SizedBox(height: 5),
+              const SizedBox(height: WorkFollowSpacing.denseGap),
               Text(timer.isRunning ? '专注中，保持这个节奏' : '选择时长，开始一轮专注',
                   style: TextStyle(color: tokens.textTertiary, fontSize: WorkFollowMacTypography.caption)),
             ]),
           ),
-          const SizedBox(height: 15),
+          const SizedBox(height: WorkFollowSpacing.statusGap),
           Align(
               alignment: Alignment.centerLeft,
               child: Text('时长',
@@ -98,12 +98,12 @@ class _FocusTimerDialogState extends State<_FocusTimerDialog> {
                       color: tokens.textSecondary,
                       fontSize: WorkFollowMacTypography.sectionTitle,
                       fontWeight: WorkFollowMacWeight.semibold))),
-          const SizedBox(height: 7),
+          const SizedBox(height: WorkFollowSpacing.compactGap),
           Row(children: [
             for (final minutes in const [15, 25, 45])
               Expanded(
                 child: Padding(
-                  padding: EdgeInsets.only(right: minutes == 45 ? 0 : 7),
+                  padding: EdgeInsets.only(right: minutes == 45 ? WorkFollowSpacing.zero : WorkFollowSpacing.compactGap),
                   child: OutlinedButton(
                     onPressed: timer.isRunning
                         ? null
@@ -119,7 +119,7 @@ class _FocusTimerDialogState extends State<_FocusTimerDialog> {
                       foregroundColor: timer.durationMinutes == minutes
                           ? tokens.accent
                           : tokens.textSecondary,
-                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      padding: const EdgeInsets.symmetric(vertical: WorkFollowSpacing.space2),
                     ),
                     child: Text('$minutes 分',
                         style: const TextStyle(
@@ -128,7 +128,7 @@ class _FocusTimerDialogState extends State<_FocusTimerDialog> {
                 ),
               ),
           ]),
-          const SizedBox(height: 15),
+          const SizedBox(height: WorkFollowSpacing.statusGap),
           Align(
               alignment: Alignment.centerLeft,
               child: Text('关联任务（可选）',
@@ -136,7 +136,7 @@ class _FocusTimerDialogState extends State<_FocusTimerDialog> {
                       color: tokens.textSecondary,
                       fontSize: WorkFollowMacTypography.sectionTitle,
                       fontWeight: WorkFollowMacWeight.semibold))),
-          const SizedBox(height: 4),
+          const SizedBox(height: WorkFollowSpacing.space1),
           DropdownButtonFormField<String>(
             initialValue: selectedTaskId,
             isExpanded: true,
@@ -161,7 +161,7 @@ class _FocusTimerDialogState extends State<_FocusTimerDialog> {
                 : (value) =>
                     timer.setTask(value?.isEmpty == true ? null : value),
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: WorkFollowSpacing.relaxedGap),
           if (timer.hasStarted &&
               !timer.isRunning &&
               timer.remaining > Duration.zero)
@@ -215,14 +215,14 @@ class FocusTimerButton extends StatelessWidget {
             onTap: onTap,
             borderRadius: BorderRadius.circular(WorkFollowRadii.control),
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
+              padding: const EdgeInsets.symmetric(horizontal: WorkFollowSpacing.space2, vertical: WorkFollowSpacing.compactGap),
               child: Row(mainAxisSize: MainAxisSize.min, children: [
                 AppIcon(WorkFollowIcons.focus,
                     size: WorkFollowMetrics.toolbarIcon,
                     color:
                         timer.isRunning ? tokens.accent : tokens.textTertiary),
                 if (timer.isRunning) ...[
-                  const SizedBox(width: 5),
+                  const SizedBox(width: WorkFollowSpacing.denseGap),
                   Text(timer.display,
                       style: TextStyle(
                           color: tokens.accent,

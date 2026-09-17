@@ -277,7 +277,7 @@ class TaskDocumentEditorState extends State<TaskDocumentEditor>
       placement: const PopoverPlacement(
           preferredSide: PopoverSide.top,
           alignment: PopoverAlignment.center,
-          gap: 28),
+          gap: WorkFollowSpacing.space7),
       popoverTheme: TaskEditorPopoverStyle.theme(anchor),
       surfaceDecoration: taskFormattingToolbarDecoration(),
       anchorRectResolver: () => _formatToolbarAnchorRect(anchor),
@@ -431,7 +431,7 @@ class TaskDocumentEditorState extends State<TaskDocumentEditor>
         viewport: screen,
         desiredSize: Size(TaskSlashMenuMetrics.width, menuHeight),
         placement: PopoverPlacement.bottomStart,
-        safeArea: const EdgeInsets.all(12),
+        safeArea: const EdgeInsets.all(WorkFollowSpacing.popoverSafeArea),
       );
       _slashOffset = geometry.rect.topLeft;
     }
@@ -673,7 +673,7 @@ class TaskDocumentEditorState extends State<TaskDocumentEditor>
                         minHeight: hasTrailingPanels
                             ? 150
                             : math.max(150, constraints.minHeight),
-                        padding: const EdgeInsets.only(bottom: 20),
+                        padding: const EdgeInsets.only(bottom: WorkFollowSpacing.space5),
                         placeholder: '添加描述，输入 / 插入内容',
                         textCapitalization: TextCapitalization.sentences,
                         customStyles: TaskDocumentStyles.build(
@@ -832,7 +832,7 @@ class _TaskSubtasksPanelState extends State<TaskSubtasksPanel> {
             : task.subtaskCompleted / task.subtaskTotal;
         return Padding(
           key: const ValueKey('task-subtasks-panel'),
-          padding: const EdgeInsets.only(top: 22),
+          padding: const EdgeInsets.only(top: WorkFollowSpacing.headingGap),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -853,7 +853,7 @@ class _TaskSubtasksPanelState extends State<TaskSubtasksPanel> {
                           color: tokens.textTertiary)),
               ]),
               if (task.subtaskTotal > 0) ...[
-                const SizedBox(height: 7),
+                const SizedBox(height: WorkFollowSpacing.compactGap),
                 ClipRRect(
                   borderRadius: BorderRadius.circular(2),
                   child: LinearProgressIndicator(
@@ -902,12 +902,12 @@ class _TaskSubtasksPanelState extends State<TaskSubtasksPanel> {
                   ),
                 ]),
               Padding(
-                padding: const EdgeInsets.only(top: 3),
+                padding: const EdgeInsets.only(top: WorkFollowSpacing.tightGap),
                 child: Row(children: [
                   AppIcon(WorkFollowIcons.add,
                       size: WorkFollowMetrics.toolbarIcon,
                       color: tokens.textTertiary),
-                  const SizedBox(width: 5),
+                  const SizedBox(width: WorkFollowSpacing.denseGap),
                   Expanded(
                     child: TextField(
                       key: const ValueKey('task-subtask-input'),
@@ -948,7 +948,7 @@ class TaskAttachmentsPanel extends StatelessWidget {
     final tokens = WorkFollowTheme.of(context);
     return Padding(
       key: const ValueKey('task-attachments-block'),
-      padding: const EdgeInsets.only(top: 22),
+      padding: const EdgeInsets.only(top: WorkFollowSpacing.headingGap),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -958,10 +958,10 @@ class TaskAttachmentsPanel extends StatelessWidget {
                   height: WorkFollowMacTypography.lineControl,
                   fontWeight: WorkFollowMacWeight.semibold,
                   color: tokens.textPrimary)),
-          const SizedBox(height: 7),
+          const SizedBox(height: WorkFollowSpacing.compactGap),
           Wrap(
-            spacing: 7,
-            runSpacing: 4,
+            spacing: WorkFollowSpacing.compactGap,
+            runSpacing: WorkFollowSpacing.space1,
             crossAxisAlignment: WrapCrossAlignment.center,
             children: [
               for (final file in task.attachments)
@@ -1010,7 +1010,7 @@ class TaskSourceNotePanel extends StatelessWidget {
     final tokens = WorkFollowTheme.of(context);
     return Padding(
       key: const ValueKey('task-source-note'),
-      padding: const EdgeInsets.only(top: 18),
+      padding: const EdgeInsets.only(top: WorkFollowSpacing.sectionGap),
       child: Material(
         color: tokens.accent.withValues(alpha: .06),
         borderRadius: BorderRadius.circular(WorkFollowRadii.surface),
@@ -1018,11 +1018,11 @@ class TaskSourceNotePanel extends StatelessWidget {
           borderRadius: BorderRadius.circular(WorkFollowRadii.surface),
           onTap: () => controller.openNote(source.id),
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            padding: const EdgeInsets.symmetric(horizontal: WorkFollowSpacing.cardInset, vertical: WorkFollowSpacing.space2),
             child: Row(children: [
               AppIcon(WorkFollowIcons.article,
                   size: WorkFollowMetrics.navigationIcon, color: tokens.accent),
-              const SizedBox(width: 8),
+              const SizedBox(width: WorkFollowSpacing.space2),
               Expanded(
                 child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,

@@ -71,27 +71,29 @@ class TaskListMetrics {
 
   /// One gutter for the whole page: header, add bar, group headings and rows
   /// share it, so their text starts on a single vertical.
-  static const double horizontalPadding = 20;
+  static const double horizontalPadding = WorkFollowSpacing.space5;
 
   static const double headerHeight = 42;
   static const double headerIconSize = 18;
-  static const double headerIconGap = 10;
-  static const double headerTopPadding = 18;
-  static const double headerBottomGap = 14;
+  static const double headerIconGap = WorkFollowSpacing.controlGap;
+  static const double headerTopPadding = WorkFollowSpacing.sectionGap;
+  static const double headerBottomGap = WorkFollowSpacing.relaxedGap;
 
   static const double quickAddHeight = 42;
   static const double quickAddRadius = 10;
-  static const double quickAddHorizontalPadding = 14;
+  static const double quickAddHorizontalPadding = WorkFollowSpacing.relaxedGap;
 
-  static const double groupTopGap = 18;
+  static const double groupTopGap = WorkFollowSpacing.sectionGap;
   static const double groupHeaderHeight = 30;
 
   /// Chevron on a group heading. Small on purpose: it marks the group as
   /// foldable without competing with the 13pt label beside it.
   static const double groupChevronIconSize = 11;
 
-  static const double rowHorizontalPadding = 8;
-  static const double rowVerticalPadding = 7;
+  static const double rowHorizontalPadding =
+      WorkFollowSpacing.taskRowHorizontalPadding;
+  static const double rowVerticalPadding =
+      WorkFollowSpacing.taskRowVerticalPadding;
   static const double rowMinHeight = 42;
 
   /// Drawn size of the completion box, measured off the reference list.
@@ -103,13 +105,13 @@ class TaskListMetrics {
   static const double checkboxSize = 18;
 
   /// Gap between the checkbox column and the title.
-  static const double checkboxTitleGap = 4;
+  static const double checkboxTitleGap = WorkFollowSpacing.space1;
 
   /// Gap between title and description.
-  static const double titlePreviewGap = 4;
+  static const double titlePreviewGap = WorkFollowSpacing.taskTitleBodyGap;
 
   /// Gap between two metadata items on the trailing edge.
-  static const double metadataGap = 6;
+  static const double metadataGap = WorkFollowSpacing.taskMetadataGap;
 
   /// Where the row hairline starts.
   ///
@@ -118,7 +120,8 @@ class TaskListMetrics {
   /// column. The first version derived it as `checkboxLeft + box + gap` (42),
   /// which started the line under the title instead and looked nothing like
   /// the reference.
-  static const double dividerLeftInset = rowHorizontalPadding - 2;
+  static const double dividerLeftInset =
+      rowHorizontalPadding - WorkFollowSpacing.microGap;
 
   /// Pane width for the space a list + detail row can offer.
   static double paneWidth(double available) =>
@@ -167,6 +170,91 @@ class WorkFollowSpacing {
   static const double lg = 20;
   static const double xl = 24;
   static const double xxl = 32;
+
+  // Semantic spacing roles. The primitive scale above is the default for new
+  // surfaces; these names make recurring component rhythm explicit at call
+  // sites. Values outside the primitive scale are named by role and retained
+  // only where the existing macOS layout has a measured reason to sit between
+  // primitive steps.
+  static const double pageHorizontalPadding = 26;
+  static const double pageTopPadding = 23;
+  static const double pageScreenBottomPadding = 26;
+  static const double pageVerticalPadding = 24;
+  static const double pageBottomPadding = 24;
+  static const double sectionGap = 18;
+  static const double contentGap = space3;
+
+  static const double taskRowHorizontalPadding = space2;
+  static const double taskRowVerticalPadding = 11;
+  static const double taskTitleBodyGap = 6;
+  static const double taskMetadataGap = 6;
+
+  static const double menuItemHorizontalPadding = space4;
+  static const double menuItemVerticalPadding = 6;
+  static const double contextMenuHorizontalPadding = space3;
+  static const EdgeInsets menuItemPadding = EdgeInsets.symmetric(
+      horizontal: menuItemHorizontalPadding, vertical: menuItemVerticalPadding);
+  static const double menuItemIconGap = space2;
+  static const double menuSectionGap = space2;
+
+  static const EdgeInsets popoverPadding = EdgeInsets.all(space4);
+  static const double popoverSafeArea = space3;
+  static const double inspectorContentHorizontalPadding = 40;
+  static const double inspectorInlineHorizontalPadding = space5;
+  static const double inspectorContentTopPadding = 30;
+  static const double inspectorInlineTopPadding = space4;
+  static const double inspectorContentBottomPadding = space6;
+  static const double editorParagraphGap = 7;
+  static const double toolbarItemGap = space2;
+
+  // Small control rhythm used by dense metadata and picker rows.
+  static const double hairlineGap = 1;
+  static const double microGap = 2;
+  static const double tightGap = 3;
+  static const double denseGap = 5;
+  static const double inlineGap = 6;
+  static const double compactGap = 7;
+  static const double controlGap = 10;
+  static const double compactInset = 9;
+  static const double iconLabelGap = 11;
+  static const double navigationContentInset = 11;
+  static const double compactFieldInset = 11;
+  static const double controlInset = 13;
+  static const double relaxedGap = 14;
+  static const double statusGap = 15;
+  static const double fieldGap = 17;
+  static const double headingGap = 22;
+  static const double nestedContentIndent = 29;
+  static const double emptyStateGap = 30;
+  static const double pageBottomSpace = 36;
+  static const double editorBottomPadding = 44;
+
+  // Calibrated component padding that recurs in a single desktop surface.
+  // Keeping the measured value named prevents it from becoming a new inline
+  // literal while leaving geometry and control heights to their own round.
+  static const double commandPaletteInputLeading = 19;
+  static const double commandPaletteRowHorizontalMargin = space2;
+  static const double commandPaletteRowVerticalMargin = microGap;
+  static const double commandPaletteRowHorizontalPadding = iconLabelGap;
+  static const double commandPaletteRowVerticalPadding = controlGap;
+  static const double calendarTodayHorizontalPadding = controlGap;
+  static const double calendarTodayVerticalPadding = compactGap;
+  static const double calendarDragFeedbackHorizontalPadding = controlGap;
+  static const double calendarDragFeedbackVerticalPadding = inlineGap;
+  static const double noteFolderBadgeHorizontalPadding = denseGap;
+  static const double noteFolderBadgeVerticalPadding = hairlineGap;
+  static const double quickAddFieldHorizontalPadding = statusGap;
+  static const double quickAddFieldVerticalPadding = compactGap;
+  static const double navigationScrollHorizontalPadding = compactInset;
+  static const double navigationScrollTopPadding = inlineGap;
+  static const double railItemHorizontalInset = compactInset;
+  static const double railItemTrailingInset = space2;
+  static const double settingsShortcutRowVerticalPadding = controlGap;
+  static const double compactActionHorizontalPadding = space1;
+  static const double compactActionVerticalPadding = inlineGap;
+  static const double emptyStateVerticalPadding = 44;
+
+  static const double cardInset = controlGap;
 }
 
 /// The macOS text system.
@@ -1180,7 +1268,7 @@ class WorkFollowThemeData {
           highlightColor: Colors.transparent,
           minimumSize: const Size(
               WorkFollowMetrics.iconHitTarget, WorkFollowMetrics.iconHitTarget),
-          padding: const EdgeInsets.all(6),
+          padding: const EdgeInsets.all(WorkFollowSpacing.inlineGap),
           visualDensity: VisualDensity.compact,
         ),
       ),

@@ -71,16 +71,16 @@ class TaskSlashMenuMetrics {
   /// window cannot hold it, and the palette scrolls instead of clipping.
   static const double maxHeight = 425;
 
-  static const double padding = 4;
-  static const double itemInset = 4;
+  static const double padding = WorkFollowSpacing.space1;
+  static const double itemInset = WorkFollowSpacing.space1;
   static const double itemHeight = 34;
-  static const double itemLeading = 14;
-  static const double itemTrailing = 12;
+  static const double itemLeading = WorkFollowSpacing.relaxedGap;
+  static const double itemTrailing = WorkFollowSpacing.space3;
   static const double glyphSlot = 14;
-  static const double glyphGap = 11;
+  static const double glyphGap = WorkFollowSpacing.iconLabelGap;
 
   /// 4 above the hairline, 1 for the hairline, 4 below.
-  static const double dividerBlock = 9;
+  static const double dividerBlock = WorkFollowSpacing.compactInset;
 
   /// Material shapes that already match the reference, sized so their ink
   /// lands on the same 12.5pt square as the hand-drawn siblings. The paperclip
