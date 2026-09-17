@@ -748,8 +748,10 @@ class _QuickAddFieldState extends State<QuickAddField> {
           padding: EdgeInsets.symmetric(
               horizontal: widget.listStyle
                   ? TaskListMetrics.quickAddHorizontalPadding
-                  : 15,
-              vertical: widget.listStyle ? 0 : 7),
+                  : WorkFollowSpacing.quickAddFieldHorizontalPadding,
+              vertical: widget.listStyle
+                  ? WorkFollowSpacing.zero
+                  : WorkFollowSpacing.quickAddFieldVerticalPadding),
           child: Column(
               mainAxisSize: MainAxisSize.min,
               mainAxisAlignment: MainAxisAlignment.center,
@@ -762,7 +764,7 @@ class _QuickAddFieldState extends State<QuickAddField> {
                   color: widget.listStyle
                       ? tokens.textTertiary
                       : tokens.accent),
-              const SizedBox(width: 10),
+              const SizedBox(width: WorkFollowSpacing.controlGap),
             Expanded(
                   child: TextField(
                       key: const ValueKey('quick-add-title'),
@@ -803,7 +805,7 @@ class _QuickAddFieldState extends State<QuickAddField> {
                         hasTime: _effectiveHasTime),
                     active: _scheduleActive,
                     onPressed: _pickSchedule),
-                const SizedBox(width: 2),
+                const SizedBox(width: WorkFollowSpacing.microGap),
                 Builder(
                     builder: (anchor) => AppIconButton(
                         key: const ValueKey('quick-add-properties'),
@@ -824,10 +826,10 @@ class _QuickAddFieldState extends State<QuickAddField> {
             ]),
             if (parse.spans.isNotEmpty)
               Padding(
-                  padding: const EdgeInsets.only(top: 4, bottom: 2),
+                  padding: const EdgeInsets.only(top: WorkFollowSpacing.space1, bottom: WorkFollowSpacing.microGap),
                   child: SizedBox(
                       width: double.infinity,
-                      child: Wrap(spacing: 6, runSpacing: 6, children: [
+                      child: Wrap(spacing: WorkFollowSpacing.inlineGap, runSpacing: WorkFollowSpacing.inlineGap, children: [
                         for (final span in parse.spans)
                           InputChip(
                               key: ValueKey(parse.spans
@@ -859,7 +861,7 @@ class _QuickAddFieldState extends State<QuickAddField> {
               Align(
                   alignment: Alignment.centerLeft,
                   child: Padding(
-                      padding: const EdgeInsets.only(left: 29, top: 1),
+                      padding: const EdgeInsets.only(left: WorkFollowSpacing.nestedContentIndent, top: WorkFollowSpacing.hairlineGap),
                       child: Text(_summary,
                           style: TextStyle(
                               color: tokens.textTertiary,
@@ -871,7 +873,7 @@ class _QuickAddFieldState extends State<QuickAddField> {
             // fuller home-card variant.
             if (expanded && !widget.listStyle)
               Padding(
-                  padding: const EdgeInsets.only(top: 5, bottom: 4),
+                  padding: const EdgeInsets.only(top: WorkFollowSpacing.denseGap, bottom: WorkFollowSpacing.space1),
                   child: Row(children: [
                     Expanded(
                         child: SingleChildScrollView(
@@ -885,7 +887,7 @@ class _QuickAddFieldState extends State<QuickAddField> {
                                   active: _scheduleActive,
                                   onPressed: _pickSchedule),
                               if (!widget.listStyle) ...[
-                                const SizedBox(width: 6),
+                                const SizedBox(width: WorkFollowSpacing.inlineGap),
                                 PropertyButton(
                                     key: const ValueKey('quick-add-priority'),
                                     icon: WorkFollowIcons.flag,
@@ -896,7 +898,7 @@ class _QuickAddFieldState extends State<QuickAddField> {
                                     active: currentDraft.priority !=
                                         TaskPriority.none,
                                     onPressed: _pickPriority),
-                                const SizedBox(width: 6),
+                                const SizedBox(width: WorkFollowSpacing.inlineGap),
                                 PropertyButton(
                                     key: const ValueKey('quick-add-list'),
                                     icon: WorkFollowIcons.inbox,
@@ -906,7 +908,7 @@ class _QuickAddFieldState extends State<QuickAddField> {
                                             .first,
                                     active: currentDraft.listName != null,
                                     onPressed: _pickList),
-                                const SizedBox(width: 6),
+                                const SizedBox(width: WorkFollowSpacing.inlineGap),
                                 PropertyButton(
                                     key: const ValueKey('quick-add-tags'),
                                     icon: WorkFollowIcons.tag,
@@ -917,7 +919,7 @@ class _QuickAddFieldState extends State<QuickAddField> {
                                             .join(' '),
                                     active: currentDraft.tags.isNotEmpty,
                                     onPressed: _pickTags),
-                                const SizedBox(width: 6),
+                                const SizedBox(width: WorkFollowSpacing.inlineGap),
                                 PropertyButton(
                                     key: const ValueKey('quick-add-reminder'),
                                     icon: WorkFollowIcons.reminder,
@@ -928,7 +930,7 @@ class _QuickAddFieldState extends State<QuickAddField> {
                                             hasTime: true),
                                     active: currentDraft.reminderAt != null,
                                     onPressed: _pickReminder),
-                                const SizedBox(width: 6),
+                                const SizedBox(width: WorkFollowSpacing.inlineGap),
                                 PropertyButton(
                                     key: const ValueKey('quick-add-repeat'),
                                     icon: WorkFollowIcons.repeat,
@@ -943,7 +945,7 @@ class _QuickAddFieldState extends State<QuickAddField> {
                               minimumSize: const Size(
                                   0, WorkFollowMetrics.compactButtonHeight),
                               padding:
-                                  const EdgeInsets.symmetric(horizontal: 12)),
+                                  const EdgeInsets.symmetric(horizontal: WorkFollowSpacing.space3)),
                           child: const Text('添加任务',
                               style: TextStyle(
                                   fontSize: WorkFollowMacTypography.control))),

@@ -215,7 +215,7 @@ class _TodayScreenState extends State<TodayScreen> {
                                       TaskListMetrics.horizontalPadding,
                                       TaskListMetrics.headerTopPadding,
                                       TaskListMetrics.horizontalPadding,
-                                      0),
+                                      WorkFollowSpacing.zero),
                                   child: Column(
                                       crossAxisAlignment:
                                           CrossAxisAlignment.start,
@@ -237,7 +237,7 @@ class _TodayScreenState extends State<TodayScreen> {
                                     'tasks-${c.view.name}-${c.selectedListName}'),
                                 padding: EdgeInsets.fromLTRB(
                                     TaskListMetrics.horizontalPadding,
-                                    0,
+                                    WorkFollowSpacing.zero,
                                     TaskListMetrics.horizontalPadding,
                                     WorkFollowSpacing.space7),
                                 children: [
@@ -505,7 +505,7 @@ class _TodayScreenState extends State<TodayScreen> {
         onPressed: () => _postponeOverdue(tasks),
         style: TextButton.styleFrom(
             foregroundColor: WorkFollowTheme.of(context).textTertiary,
-            padding: const EdgeInsets.symmetric(horizontal: 6),
+            padding: const EdgeInsets.symmetric(horizontal: WorkFollowSpacing.inlineGap),
             // 20pt, measured: `VisualDensity.compact` shaves 8 off the minimum,
             // which left a 16pt target — too short to hit reliably beside a
             // 30pt heading.
@@ -527,7 +527,7 @@ class _TodayScreenState extends State<TodayScreen> {
         c.multiSelectCount == 0) {
       return Container(
           key: expandedEditorKey,
-          padding: const EdgeInsets.fromLTRB(8, 8, 8, 14),
+          padding: const EdgeInsets.fromLTRB(WorkFollowSpacing.space2, WorkFollowSpacing.space2, WorkFollowSpacing.space2, WorkFollowSpacing.relaxedGap),
           child: TaskInspector(
               key: ValueKey('editor-${task.id}'),
               task: task,
@@ -544,7 +544,7 @@ class _TodayScreenState extends State<TodayScreen> {
                 if (candidates.isNotEmpty)
                   Container(
                       height: 3,
-                      margin: const EdgeInsets.fromLTRB(14, 2, 14, 2),
+                      margin: const EdgeInsets.fromLTRB(WorkFollowSpacing.relaxedGap, WorkFollowSpacing.microGap, WorkFollowSpacing.relaxedGap, WorkFollowSpacing.microGap),
                       decoration: BoxDecoration(
                           color: tokens.accent,
                           borderRadius: BorderRadius.circular(2))),
@@ -557,7 +557,7 @@ class _TodayScreenState extends State<TodayScreen> {
                       child: SizedBox(
                           width: 360,
                           child: Padding(
-                              padding: const EdgeInsets.all(14),
+                              padding: const EdgeInsets.all(WorkFollowSpacing.relaxedGap),
                               child: Text(task.title,
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis)))),
@@ -607,20 +607,20 @@ class _EmptyInspector extends StatelessWidget {
     final tokens = WorkFollowTheme.of(context);
     return Center(
       child: Padding(
-        padding: const EdgeInsets.all(36),
+        padding: const EdgeInsets.all(WorkFollowSpacing.pageBottomSpace),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             AppIcon(WorkFollowIcons.touch,
                 size: WorkFollowMetrics.headerIcon, color: tokens.textTertiary),
-            const SizedBox(height: 12),
+            const SizedBox(height: WorkFollowSpacing.space3),
             Text('选择一个任务开始编辑',
                 style: TextStyle(
                     color: tokens.textSecondary,
                     fontSize: WorkFollowMacTypography.listTitle,
                     height: WorkFollowMacTypography.lineControl,
                     fontWeight: WorkFollowMacWeight.semibold)),
-            const SizedBox(height: 6),
+            const SizedBox(height: WorkFollowSpacing.inlineGap),
             Text('标题、备注、日期和子任务都会在这里展开。',
                 textAlign: TextAlign.center,
                 style: TextStyle(
@@ -643,14 +643,14 @@ class _BulkBar extends StatelessWidget {
     return AppCard(
         elevated: true,
         radius: WorkFollowRadii.card,
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+        padding: const EdgeInsets.symmetric(horizontal: WorkFollowSpacing.space3, vertical: WorkFollowSpacing.denseGap),
         child: Wrap(
-            spacing: 2,
-            runSpacing: 4,
+            spacing: WorkFollowSpacing.microGap,
+            runSpacing: WorkFollowSpacing.space1,
             crossAxisAlignment: WrapCrossAlignment.center,
             children: [
               Padding(
-                  padding: const EdgeInsets.only(right: 6),
+                  padding: const EdgeInsets.only(right: WorkFollowSpacing.inlineGap),
                   child: Text('已选择 ${controller.multiSelectCount} 项',
                       style: TextStyle(
                           fontSize: WorkFollowMacTypography.listMeta,
