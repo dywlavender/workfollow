@@ -6,10 +6,8 @@ import '../state/workspace_controller.dart';
 import '../theme/workfollow_icons.dart';
 import '../theme/workfollow_theme.dart';
 import 'app_icon_button.dart';
-import 'task_editor_glyph.dart';
 import 'desktop_popover.dart';
 import 'task_editor_popover.dart';
-import 'task_menu_glyph.dart';
 import 'task_menu_selection.dart';
 import 'task_menu_style.dart';
 
@@ -105,12 +103,12 @@ class _MoreMenuState extends State<_MoreMenu> {
                     color: focused == i ? colors.accentFaint : null,
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     child: Row(children: [
-                      if (entry.$1 == 'attachment')
-                        TaskEditorGlyph('attachment', size: 18, color: color)
-                      else if (entry.$1 == 'abandon' && widget.task.isAbandoned)
-                        AppIcon(WorkFollowIcons.restore, size: 18, color: color)
-                      else
-                        TaskMenuGlyph(entry.$1, size: 18, color: color),
+                      AppIcon(
+                          WorkFollowIcons.taskAction(entry.$1,
+                              restored: entry.$1 == 'abandon' &&
+                                  widget.task.isAbandoned),
+                          size: WorkFollowMetrics.toolbarIcon,
+                          color: color),
                       const SizedBox(width: 10),
                       Expanded(
                           child: Text(entry.$2,

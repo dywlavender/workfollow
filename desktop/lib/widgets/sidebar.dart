@@ -515,7 +515,7 @@ class _IconRailFooterButton extends StatelessWidget {
               tooltip: label,
               onPressed: onPressed,
               size: 34,
-              iconSize: 17,
+              iconSize: WorkFollowMetrics.compactFieldIcon,
               iconColor: _lightSidebar(context)
                   ? _lightSidebarForeground
                   : tokens.railForeground,
@@ -924,7 +924,7 @@ class _RailItemState extends State<_RailItem> {
                       child: IconButton(
                           tooltip: '文件夹操作',
                           padding: EdgeInsets.zero,
-                          iconSize: 16,
+                          iconSize: WorkFollowMetrics.metadataIcon,
                           onPressed: widget.onMenu,
                           icon: const AppIcon(WorkFollowIcons.more)))
                 else if (widget.count != null && widget.count! > 0)

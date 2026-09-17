@@ -105,7 +105,7 @@ class _MatrixScreenState extends State<MatrixScreen> {
                 icon: WorkFollowIcons.more,
                 tooltip: '四象限设置',
                 size: 32,
-                iconSize: 18,
+                iconSize: WorkFollowMetrics.toolbarIcon,
                 onPressed: () => _openPageMenu(anchor),
               ),
             ),

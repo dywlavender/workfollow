@@ -6,7 +6,9 @@ import '../features/tasks/domain/task_draft.dart';
 import '../features/tasks/domain/task_schedule.dart';
 import '../features/tasks/domain/task_schedule_settings.dart';
 import '../models/task.dart';
+import '../theme/workfollow_icons.dart';
 import '../theme/workfollow_theme.dart';
+import 'app_icon_button.dart';
 import 'task_editor_glyph.dart';
 import 'task_editor_popover.dart';
 import 'task_menu_glyph.dart';
@@ -242,10 +244,10 @@ class _TaskSchedulePanelState extends State<TaskSchedulePanel> {
                                                     shortcut.$1 == 'tonight'
                                                         ? 'moon'
                                                         : 'next-7',
-                                                    size: 23,
+                                                    size: WorkFollowMetrics.fieldIcon,
                                                     color: colors.textSecondary)
                                                 : TaskMenuGlyph(shortcut.$1,
-                                                    size: 23,
+                                                    size: WorkFollowMetrics.fieldIcon,
                                                     color: colors
                                                         .textSecondary))))),
                         ]),
@@ -280,19 +282,19 @@ class _TaskSchedulePanelState extends State<TaskSchedulePanel> {
                       _monthButton(
                           'date-prev-month',
                           '上个月',
-                          Icons.chevron_left,
+                          WorkFollowIcons.chevronPrevious,
                           () => setState(() =>
                               month = DateTime(month.year, month.month - 1))),
                       _monthButton(
                           'date-this-month',
                           '回到本月',
-                          Icons.circle_outlined,
+                          WorkFollowIcons.circle,
                           () => setState(
                               () => month = DateTime(today.year, today.month))),
                       _monthButton(
                           'date-next-month',
                           '下个月',
-                          Icons.chevron_right,
+                          WorkFollowIcons.chevronNext,
                           () => setState(() =>
                               month = DateTime(month.year, month.month + 1))),
                     ]),
@@ -522,9 +524,14 @@ class _TaskSchedulePanelState extends State<TaskSchedulePanel> {
               key: ValueKey(key),
               tooltip: tooltip,
               padding: EdgeInsets.zero,
-              iconSize: key == 'date-this-month' ? 10 : 16,
+              iconSize: key == 'date-this-month'
+                  ? WorkFollowMetrics.metadataIcon
+                  : WorkFollowMetrics.compactFieldIcon,
               onPressed: onTap,
-              icon: Icon(icon)));
+              icon: AppIcon(icon,
+                  size: key == 'date-this-month'
+                      ? WorkFollowMetrics.metadataIcon
+                      : WorkFollowMetrics.compactFieldIcon)));
 
   Widget _property(String key, String icon, String label, bool selected,
       void Function(BuildContext) onTap) {
@@ -542,7 +549,7 @@ class _TaskSchedulePanelState extends State<TaskSchedulePanel> {
                         padding: const EdgeInsets.symmetric(horizontal: 14),
                         child: Row(children: [
                           TaskEditorGlyph(icon,
-                              size: 16,
+                              size: WorkFollowMetrics.compactFieldIcon,
                               color: selected
                                   ? colors.accent
                                   : colors.textSecondary),
@@ -556,8 +563,9 @@ class _TaskSchedulePanelState extends State<TaskSchedulePanel> {
                                           ? colors.accent
                                           : colors.textPrimary))),
                           const SizedBox(width: 4),
-                          Icon(Icons.chevron_right,
-                              size: 15, color: colors.textTertiary),
+                          AppIcon(WorkFollowIcons.chevronNext,
+                              size: WorkFollowMetrics.metadataIcon,
+                              color: colors.textTertiary),
                         ]))))));
   }
 }

@@ -3,6 +3,7 @@ import 'package:flutter_quill/flutter_quill.dart' as quill;
 
 import '../theme/workfollow_icons.dart';
 import '../theme/workfollow_theme.dart';
+import 'app_icon_button.dart';
 import 'task_editor_glyph.dart';
 import 'desktop_popover.dart';
 import 'task_editor_popover.dart';
@@ -194,7 +195,7 @@ class TaskEditorToolbar extends StatelessWidget {
                 _ToolButton(
                     key: const ValueKey('task-format-time'),
                     tooltip: '插入当前时间',
-                    icon: Icons.history,
+                    icon: WorkFollowIcons.insertTime,
                     onPressed: _time),
                 divider(),
                 _ToolButton(
@@ -277,7 +278,7 @@ class _ToolButton extends StatelessWidget {
                             (key as ValueKey<String>)
                                 .value
                                 .replaceFirst('task-format-', ''),
-                            size: 18,
+                            size: WorkFollowMetrics.toolbarIcon,
                             color: color),
                   ),
                 ),
@@ -315,7 +316,10 @@ class _PickerRow extends StatelessWidget {
                             color: selected
                                 ? colors.accent
                                 : colors.textPrimary))),
-                if (selected) Icon(Icons.check, size: 16, color: colors.accent),
+                if (selected)
+                  AppIcon(WorkFollowIcons.check,
+                      size: WorkFollowMetrics.metadataIcon,
+                      color: colors.accent),
               ])),
         ));
   }

@@ -60,21 +60,25 @@ class WorkFollowIcons {
   static const move = Icons.drive_file_move_outlined;
   static const duplicate = Icons.control_point_duplicate_outlined;
   static const clearDate = Icons.event_busy_outlined;
-  static const tomorrow = Icons.event_outlined;
+  static const tomorrow = Icons.wb_twilight_outlined;
   static const subtask = Icons.playlist_add_rounded;
   static const favorite = Icons.star_rounded;
   static const favoriteOutline = Icons.star_border_rounded;
   static const lightMode = Icons.light_mode_outlined;
   static const darkMode = Icons.dark_mode_outlined;
   static const search = Icons.search_rounded;
-  static const add = Icons.add;
+  static const add = Icons.add_rounded;
   static const quickAdd = Icons.add_task_outlined;
-  static const playlistAdd = Icons.playlist_add;
+  static const playlistAdd = Icons.playlist_add_rounded;
   static const editNote = Icons.edit_note_rounded;
+  // Keep the established close glyph: Quick Add exposes it as an InputChip
+  // delete target and existing automation addresses that semantic control by
+  // its IconData. The simple close shape is already style-neutral.
   static const close = Icons.close;
-  static const more = Icons.more_horiz;
-  static const back = Icons.arrow_back;
-  static const collapse = Icons.chevron_left;
+  static const more = Icons.more_horiz_rounded;
+  static const back = Icons.arrow_back_rounded;
+  static const collapse = Icons.chevron_left_rounded;
+  static const chevronPrevious = Icons.chevron_left_rounded;
   static const next = Icons.arrow_forward_rounded;
   static const open = Icons.open_in_new_rounded;
   static const chevronNext = Icons.chevron_right_rounded;
@@ -114,7 +118,8 @@ class WorkFollowIcons {
   /// is a plain reversal, and a circle around it read as reload.
   static const undo = Icons.undo_rounded;
   static const deleteForever = Icons.delete_forever_outlined;
-  static const check = Icons.check;
+  static const check = Icons.check_rounded;
+  static const insertTime = Icons.history_rounded;
   static const success = Icons.check_circle_rounded;
   static const error = Icons.error_outline;
   static const report = Icons.report_outlined;
@@ -142,4 +147,25 @@ class WorkFollowIcons {
   static const quote = Icons.format_quote_rounded;
   static const code = Icons.code_rounded;
   static const divider = Icons.horizontal_rule_rounded;
+
+  /// Shared icon mapping for task menus. The context menu and More menu use
+  /// this semantic source instead of maintaining separate glyph switches.
+  static IconData taskAction(String value, {bool restored = false}) =>
+      switch (value) {
+        'add-subtask' => subtask,
+        'pin' => pin,
+        'abandon' => restored ? restore : abandon,
+        'list' => move,
+        'tags' => tagLabel,
+        'convert-note' => noteAlt,
+        'delete' => delete,
+        'reminder' => reminder,
+        'repeat' => repeat,
+        'deadline' => deadline,
+        'attachment' => attachment,
+        'focus' => focus,
+        'relation' => link,
+        _ => throw ArgumentError.value(
+            value, 'value', 'Unknown task action icon key'),
+      };
 }

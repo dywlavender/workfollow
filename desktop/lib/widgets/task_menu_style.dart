@@ -5,7 +5,10 @@ import '../theme/workfollow_theme.dart';
 class TaskMenuStyle {
   static const width = 264.0;
   static const rowHeight = 44.0;
-  static const iconSize = 20.0;
+
+  /// Source-compatible alias; menu consumers use WorkFollowMetrics directly.
+  @Deprecated('Use WorkFollowMetrics.fieldIcon')
+  static const iconSize = WorkFollowMetrics.fieldIcon;
 
   static WorkFollowTheme colors(BuildContext context) {
     final tokens = WorkFollowTheme.of(context);

@@ -6,7 +6,10 @@ import '../theme/workfollow_theme.dart';
 /// Small vector glyphs sharing the same 24-unit grid and rounded stroke.
 class TaskMenuGlyph extends StatelessWidget {
   const TaskMenuGlyph(this.kind,
-      {super.key, required this.color, this.size = 20, this.filled = false});
+      {super.key,
+      required this.color,
+      this.size = WorkFollowMetrics.fieldIcon,
+      this.filled = false});
   final String kind;
   final Color color;
   final double size;

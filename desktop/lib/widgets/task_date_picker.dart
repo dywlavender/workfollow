@@ -246,7 +246,7 @@ class _TaskDatePickerState extends State<TaskDatePicker> {
                   key: const ValueKey('date-prev-month'),
                   tooltip: '上个月',
                   visualDensity: VisualDensity.compact,
-                  icon: const AppIcon(WorkFollowIcons.collapse,
+                  icon: const AppIcon(WorkFollowIcons.chevronPrevious,
                       size: WorkFollowMetrics.headerIcon),
                   onPressed: () => setState(
                       () => month = DateTime(month.year, month.month - 1))),

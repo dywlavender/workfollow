@@ -167,7 +167,7 @@ class _TaskContextMenuPanelState extends State<TaskContextMenuPanel> {
     };
     final icon = switch (action) {
       TaskContextDateAction.today => WorkFollowIcons.today,
-      TaskContextDateAction.tomorrow => Icons.wb_twilight_outlined,
+      TaskContextDateAction.tomorrow => WorkFollowIcons.tomorrow,
       TaskContextDateAction.next7 => null,
       TaskContextDateAction.skipOccurrence => WorkFollowIcons.skip,
       TaskContextDateAction.custom => WorkFollowIcons.calendar,
@@ -220,8 +220,9 @@ class _TaskContextMenuPanelState extends State<TaskContextMenuPanel> {
             alignment: Alignment.center,
             child: action == TaskContextDateAction.skipOccurrence
                 ? AppIcon(icon!,
-                    size: TaskMenuStyle.iconSize, color: foreground)
-                : TaskMenuGlyph(value, size: 23, color: foreground),
+                    size: WorkFollowMetrics.fieldIcon, color: foreground)
+                : TaskMenuGlyph(value,
+                    size: WorkFollowMetrics.fieldIcon, color: foreground),
           ),
         ),
       ),
@@ -273,7 +274,7 @@ class _TaskContextMenuPanelState extends State<TaskContextMenuPanel> {
             ),
             alignment: Alignment.center,
             child: TaskMenuGlyph('flag',
-                size: 23,
+                size: WorkFollowMetrics.fieldIcon,
                 color: foreground,
                 filled: priority != TaskPriority.none),
           ),
@@ -289,28 +290,21 @@ class _TaskContextMenuPanelState extends State<TaskContextMenuPanel> {
       children: [
         _row(context, tokens,
             value: 'add-subtask',
-            label: '添加子任务',
-            icon: WorkFollowIcons.subtask),
+            label: '添加子任务'),
         _row(context, tokens,
             value: 'pin',
-            label: task.isPinned ? '取消置顶' : '置顶',
-            icon: WorkFollowIcons.pin),
+            label: task.isPinned ? '取消置顶' : '置顶'),
         _row(context, tokens,
             value: 'abandon',
             label: task.isAbandoned ? '恢复任务' : '放弃',
-            icon: task.isAbandoned
-                ? WorkFollowIcons.restore
-                : WorkFollowIcons.abandon,
             enabled: !task.completed),
         _row(context, tokens,
             value: 'list',
             label: '移动到',
-            icon: WorkFollowIcons.move,
             trailing: WorkFollowIcons.chevronNext),
         _row(context, tokens,
             value: 'tags',
             label: '标签',
-            icon: WorkFollowIcons.tagLabel,
             trailing: WorkFollowIcons.chevronNext),
       ],
     );
@@ -323,30 +317,27 @@ class _TaskContextMenuPanelState extends State<TaskContextMenuPanel> {
       children: [
         _row(context, tokens,
             value: 'convert-note',
-            label: '转换为笔记',
-            icon: WorkFollowIcons.noteAlt),
+            label: '转换为笔记'),
         if (widget.inspectorActions) ...[
           const _MenuDivider(),
           _row(context, tokens,
-              value: 'reminder', label: '设置提醒', icon: WorkFollowIcons.reminder),
+              value: 'reminder', label: '设置提醒'),
           _row(context, tokens,
-              value: 'repeat', label: '设置重复', icon: WorkFollowIcons.repeat),
+              value: 'repeat', label: '设置重复'),
           _row(context, tokens,
-              value: 'deadline', label: '截止日期', icon: WorkFollowIcons.deadline),
+              value: 'deadline', label: '截止日期'),
           _row(context, tokens,
               value: 'attachment',
-              label: '添加附件',
-              icon: WorkFollowIcons.attachment),
+              label: '添加附件'),
           _row(context, tokens,
-              value: 'focus', label: '专注记录', icon: WorkFollowIcons.focus),
+              value: 'focus', label: '专注记录'),
           _row(context, tokens,
-              value: 'relation', label: '关联笔记', icon: WorkFollowIcons.link),
+              value: 'relation', label: '关联笔记'),
           const _MenuDivider(),
         ],
         _row(context, tokens,
             value: 'delete',
             label: '删除',
-            icon: WorkFollowIcons.delete,
             destructive: true),
       ],
     );
@@ -355,7 +346,6 @@ class _TaskContextMenuPanelState extends State<TaskContextMenuPanel> {
   Widget _row(BuildContext context, WorkFollowTheme tokens,
       {required String value,
       required String label,
-      required IconData icon,
       IconData? trailing,
       bool destructive = false,
       bool enabled = true}) {
@@ -405,22 +395,12 @@ class _TaskContextMenuPanelState extends State<TaskContextMenuPanel> {
                       child: Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 12),
                         child: Row(children: [
-                          if (const {
-                                'add-subtask',
-                                'pin',
-                                'abandon',
-                                'list',
-                                'tags',
-                                'convert-note',
-                                'delete'
-                              }.contains(value) &&
-                              !(value == 'abandon' && task.isAbandoned))
-                            TaskMenuGlyph(value,
-                                size: TaskMenuStyle.iconSize, color: foreground)
-                          else
-                            AppIcon(icon,
-                                size: TaskMenuStyle.iconSize,
-                                color: foreground),
+                          AppIcon(
+                              WorkFollowIcons.taskAction(value,
+                                  restored: value == 'abandon' &&
+                                      task.isAbandoned),
+                              size: WorkFollowMetrics.fieldIcon,
+                              color: foreground),
                           const SizedBox(width: 12),
                           Expanded(
                             child: Text(label,

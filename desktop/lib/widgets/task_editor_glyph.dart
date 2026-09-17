@@ -6,7 +6,9 @@ import '../theme/workfollow_theme.dart';
 /// Thin, rounded 24-unit glyphs for the compact document popovers.
 class TaskEditorGlyph extends StatelessWidget {
   const TaskEditorGlyph(this.kind,
-      {super.key, required this.color, this.size = 18});
+      {super.key,
+      required this.color,
+      this.size = WorkFollowMetrics.toolbarIcon});
   final String kind;
   final Color color;
   final double size;

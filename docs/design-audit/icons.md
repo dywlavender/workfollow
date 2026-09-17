@@ -36,3 +36,6 @@ UI 组件消费 `WorkFollowIcons` 语义映射，并按组件角色使用 `WorkF
 2. 文字 glyph（例如 `H1`、`B`、`1.`）和真正图标分开记录，不强行替换成相似 Material 图标。
 3. 直接 `Icons.*` 只有在绘制层、测试夹具或确实没有产品语义的临时 glyph 中才能保留，并须在 D2 记录原因。
 
+## D2 状态
+
+D2 迁移已完成，详细变更、白名单和验收结果见 [`d2-icons.md`](d2-icons.md)。业务组件中的直接 `Icons.*` / `CupertinoIcons.*` 已清零，任务菜单动作已统一到 `WorkFollowIcons.taskAction()`。

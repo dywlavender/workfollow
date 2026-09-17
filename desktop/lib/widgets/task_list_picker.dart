@@ -1,11 +1,12 @@
 import 'task_menu_style.dart';
 import 'task_editor_popover.dart';
-import 'task_editor_glyph.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../state/workspace_controller.dart';
+import '../theme/workfollow_icons.dart';
 import '../theme/workfollow_theme.dart';
+import 'app_icon_button.dart';
 import 'desktop_popover.dart';
 
 /// Searchable list chooser used by the task footer and quick add. It keeps the
@@ -153,8 +154,9 @@ class _TaskListPickerBodyState extends State<_TaskListPickerBody> {
                         .pop(names[focusedIndex.clamp(0, names.length - 1)]);
                 },
                 decoration: InputDecoration(
-                  prefixIcon: TaskEditorGlyph('search',
-                      size: 18, color: tokens.textTertiary),
+                  prefixIcon: AppIcon(WorkFollowIcons.search,
+                      size: WorkFollowMetrics.toolbarIcon,
+                      color: tokens.textTertiary),
                   prefixIconConstraints: const BoxConstraints(minWidth: 28),
                   hintText: '搜索',
                   hintStyle: TextStyle(color: tokens.textTertiary),
@@ -195,11 +197,11 @@ class _TaskListPickerBodyState extends State<_TaskListPickerBody> {
                               padding:
                                   const EdgeInsets.symmetric(horizontal: 16),
                               child: Row(children: [
-                                TaskEditorGlyph(
+                                AppIcon(
                                     lists[index].name == '收集箱'
-                                        ? 'inbox'
-                                        : 'menu',
-                                    size: 18,
+                                        ? WorkFollowIcons.inbox
+                                        : WorkFollowIcons.list,
+                                    size: WorkFollowMetrics.toolbarIcon,
                                     color: color),
                                 const SizedBox(width: 12),
                                 Expanded(
@@ -213,8 +215,9 @@ class _TaskListPickerBodyState extends State<_TaskListPickerBody> {
                                             letterSpacing: WorkFollowMacTracking.none,
                                             color: color))),
                                 if (selected)
-                                  TaskEditorGlyph('check',
-                                      size: 18, color: tokens.accent),
+                                  AppIcon(WorkFollowIcons.check,
+                                      size: WorkFollowMetrics.metadataIcon,
+                                      color: tokens.accent),
                               ]),
                             )),
                       ),

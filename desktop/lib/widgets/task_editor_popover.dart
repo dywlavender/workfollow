@@ -6,7 +6,9 @@ import 'task_menu_style.dart';
 
 /// Proportions shared by the task document's four anchored controls.
 class TaskEditorPopoverStyle {
-  static const iconSize = 18.0;
+  /// Source-compatible alias; editor controls use WorkFollowMetrics directly.
+  @Deprecated('Use WorkFollowMetrics.toolbarIcon')
+  static const iconSize = WorkFollowMetrics.toolbarIcon;
   static const rowHeight = 34.0;
   static const listWidth = 196.0;
   static const dateWidth = 260.0;

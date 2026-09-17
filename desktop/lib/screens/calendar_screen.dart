@@ -65,7 +65,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
                 ),
               ),
               AppIconButton(
-                  icon: WorkFollowIcons.collapse,
+                  icon: WorkFollowIcons.chevronPrevious,
                   tooltip: '上个月',
                   onPressed: () => setState(
                       () => month = DateTime(month.year, month.month - 1))),
@@ -77,7 +77,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
                           fontSize: WorkFollowMacTypography.sectionTitle,
                           fontWeight: WorkFollowMacWeight.semibold))),
               AppIconButton(
-                  icon: WorkFollowIcons.next,
+                  icon: WorkFollowIcons.chevronNext,
                   tooltip: '下个月',
                   onPressed: () => setState(
                       () => month = DateTime(month.year, month.month + 1))),
