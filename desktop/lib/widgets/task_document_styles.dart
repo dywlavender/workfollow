@@ -125,39 +125,47 @@ class TaskDocumentStyles {
   static quill.DefaultStyles build(
     WorkFollowTheme tokens, {
     TextStyle? base,
-    double paragraphBottom = 6,
-    double placeholderBottom = 6,
+    double paragraphBottom = WorkFollowSpacing.editorParagraphGap,
+    double placeholderBottom = WorkFollowSpacing.editorParagraphGap,
   }) {
     final bodyStyle = body(tokens, base: base);
-    final blockSpacing = const quill.HorizontalSpacing(0, 0);
-    final paragraphSpacing = quill.VerticalSpacing(0, paragraphBottom);
-    final placeholderSpacing = quill.VerticalSpacing(0, placeholderBottom);
+    final blockSpacing = const quill.HorizontalSpacing(
+        WorkFollowSpacing.zero, WorkFollowSpacing.zero);
+    final paragraphSpacing = quill.VerticalSpacing(
+        WorkFollowSpacing.zero, paragraphBottom);
+    final placeholderSpacing = quill.VerticalSpacing(
+        WorkFollowSpacing.zero, placeholderBottom);
 
     return quill.DefaultStyles(
       h1: _block(
         h1(tokens, base: base),
-        verticalSpacing: const quill.VerticalSpacing(12, 6),
+        verticalSpacing: const quill.VerticalSpacing(
+            WorkFollowSpacing.space3, WorkFollowSpacing.inlineGap),
       ),
       h2: _block(
         h2(tokens, base: base),
-        verticalSpacing: const quill.VerticalSpacing(10, 5),
+        verticalSpacing: const quill.VerticalSpacing(
+            WorkFollowSpacing.controlGap, WorkFollowSpacing.denseGap),
       ),
       h3: _block(
         h3(tokens, base: base),
-        verticalSpacing: const quill.VerticalSpacing(8, 4),
+        verticalSpacing: const quill.VerticalSpacing(
+            WorkFollowSpacing.space2, WorkFollowSpacing.space1),
       ),
       paragraph: quill.DefaultTextBlockStyle(
         bodyStyle,
         blockSpacing,
         paragraphSpacing,
-        const quill.VerticalSpacing(0, 0),
+        const quill.VerticalSpacing(
+            WorkFollowSpacing.zero, WorkFollowSpacing.zero),
         null,
       ),
       placeHolder: quill.DefaultTextBlockStyle(
         bodyStyle.copyWith(color: tokens.textTertiary),
         blockSpacing,
         placeholderSpacing,
-        const quill.VerticalSpacing(0, 0),
+        const quill.VerticalSpacing(
+            WorkFollowSpacing.zero, WorkFollowSpacing.zero),
         null,
       ),
       // The list marker uses this style's paragraph font size when it lays
@@ -167,7 +175,8 @@ class TaskDocumentStyles {
         bodyStyle,
         blockSpacing,
         paragraphSpacing,
-        const quill.VerticalSpacing(0, 0),
+        const quill.VerticalSpacing(
+            WorkFollowSpacing.zero, WorkFollowSpacing.zero),
         null,
         TaskDocumentCheckboxBuilder(tokens),
       ),
@@ -179,7 +188,8 @@ class TaskDocumentStyles {
       // text remains body-sized and textPrimary so Quill never turns it grey.
       quote: _block(
         bodyStyle,
-        horizontalSpacing: const quill.HorizontalSpacing(12, 0),
+        horizontalSpacing: const quill.HorizontalSpacing(
+            WorkFollowSpacing.space3, WorkFollowSpacing.zero),
         verticalSpacing: paragraphSpacing,
         decoration: BoxDecoration(
           border: Border(
@@ -199,8 +209,10 @@ class TaskDocumentStyles {
       ),
       code: _block(
         code(tokens, base: base),
-        horizontalSpacing: const quill.HorizontalSpacing(12, 12),
-        verticalSpacing: const quill.VerticalSpacing(8, 8),
+        horizontalSpacing: const quill.HorizontalSpacing(
+            WorkFollowSpacing.space3, WorkFollowSpacing.space3),
+        verticalSpacing: const quill.VerticalSpacing(
+            WorkFollowSpacing.space2, WorkFollowSpacing.space2),
         decoration: BoxDecoration(
           color: tokens.canvas,
           border: Border.all(color: tokens.border),
@@ -232,10 +244,12 @@ class TaskDocumentStyles {
 
   static quill.DefaultTextBlockStyle _block(
     TextStyle style, {
-    quill.HorizontalSpacing horizontalSpacing =
-        const quill.HorizontalSpacing(0, 0),
-    quill.VerticalSpacing verticalSpacing = const quill.VerticalSpacing(0, 6),
-    quill.VerticalSpacing lineSpacing = const quill.VerticalSpacing(0, 0),
+    quill.HorizontalSpacing horizontalSpacing = const quill.HorizontalSpacing(
+        WorkFollowSpacing.zero, WorkFollowSpacing.zero),
+    quill.VerticalSpacing verticalSpacing = const quill.VerticalSpacing(
+        WorkFollowSpacing.zero, WorkFollowSpacing.editorParagraphGap),
+    quill.VerticalSpacing lineSpacing = const quill.VerticalSpacing(
+        WorkFollowSpacing.zero, WorkFollowSpacing.zero),
     BoxDecoration? decoration,
   }) =>
       quill.DefaultTextBlockStyle(
