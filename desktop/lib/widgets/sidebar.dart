@@ -4,6 +4,7 @@ import '../models/list_color.dart';
 import '../models/migration.dart';
 import '../state/workspace_controller.dart';
 import '../theme/workfollow_icons.dart';
+import '../theme/workfollow_color_tokens.dart';
 import '../theme/workfollow_theme.dart';
 import '../features/feedback/feedback_event.dart';
 import '../features/feedback/feedback_scope.dart';
@@ -13,13 +14,15 @@ import 'desktop_popover.dart';
 // The matrix reference uses a neutral light shell: a pale rail, grey glyphs
 // and a purple active state. This appearance is scoped to navigation so the
 // existing content/status accent remains unchanged elsewhere in the app.
-const _lightSidebarRail = Color(0xFFF1F3F6);
-const _lightSidebarSurface = Color(0xFFF7F8FA);
-const _lightSidebarActive = Color(0xFFEEF2FF);
-const _lightSidebarAccent = Color(0xFF635BFF);
-const _lightSidebarForeground = Color(0xFF697386);
-const _lightSidebarForegroundMuted = Color(0xFF98A1AF);
-const _lightSidebarBorder = Color(0xFFE5E7EB);
+const _lightSidebarRail = WorkFollowColorTokens.lightNavigationRail;
+const _lightSidebarSurface = WorkFollowColorTokens.lightNavigationSurface;
+const _lightSidebarActive = WorkFollowColorTokens.lightNavigationSelected;
+const _lightSidebarAccent = WorkFollowColorTokens.lightNavigationAccent;
+const _lightSidebarForeground =
+    WorkFollowColorTokens.lightNavigationForeground;
+const _lightSidebarForegroundMuted =
+    WorkFollowColorTokens.lightNavigationForegroundMuted;
+const _lightSidebarBorder = WorkFollowColorTokens.lightNavigationBorder;
 
 bool _lightSidebar(BuildContext context) =>
     Theme.of(context).brightness == Brightness.light;
@@ -1091,9 +1094,10 @@ class _TaskListItemState extends State<_TaskListItem> {
         const PopupMenuItem(value: 'rename', child: Text('重命名')),
         const PopupMenuItem(value: 'color', child: Text('选择颜色')),
         const PopupMenuItem(value: 'board', child: Text('在看板中打开')),
-        const PopupMenuItem(
+        PopupMenuItem(
             value: 'delete',
-            child: Text('删除清单', style: TextStyle(color: Colors.redAccent))),
+            child: Text('删除清单',
+                style: TextStyle(color: WorkFollowTheme.of(context).danger))),
       ],
     );
     if (!context.mounted) return;

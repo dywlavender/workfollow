@@ -100,7 +100,7 @@ class _MoreMenuState extends State<_MoreMenu> {
                   onTap: enabled(i) ? () => select(i) : null,
                   child: Container(
                     height: TaskEditorPopoverStyle.rowHeight,
-                    color: focused == i ? colors.accentFaint : null,
+                    color: focused == i ? colors.menuSelected : null,
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     child: Row(children: [
                       AppIcon(

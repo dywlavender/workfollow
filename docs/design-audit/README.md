@@ -33,14 +33,14 @@
 | --- | --- |
 | macOS 字体角色、字重、行高、字距、字体族 | [`workfollow_theme.dart`](/Users/dongyangwei/Documents/学习/代办笔记/workfollow-flutter-personal/desktop/lib/theme/workfollow_theme.dart) 中的 `WorkFollowMacTypography`、`WorkFollowMacWeight`、`WorkFollowMacTracking`、`WorkFollowMacTypeFamily` |
 | 图标语义映射 | [`workfollow_icons.dart`](/Users/dongyangwei/Documents/学习/代办笔记/workfollow-flutter-personal/desktop/lib/theme/workfollow_icons.dart) 中的 `WorkFollowIcons` |
-| 主题语义颜色 | [`workfollow_theme.dart`](/Users/dongyangwei/Documents/学习/代办笔记/workfollow-flutter-personal/desktop/lib/theme/workfollow_theme.dart) 中的 `WorkFollowTheme` |
+| 主题语义颜色 | [`workfollow_theme.dart`](/Users/dongyangwei/Documents/学习/代办笔记/workfollow-flutter-personal/desktop/lib/theme/workfollow_theme.dart) 中的 `WorkFollowTheme`；组件专属角色见 [`workfollow_color_tokens.dart`](/Users/dongyangwei/Documents/学习/代办笔记/workfollow-flutter-personal/desktop/lib/theme/workfollow_color_tokens.dart) |
 | 原始颜色基元 | `WorkFollowColors` |
 | 通用间距 | `WorkFollowSpacing` |
 | 通用尺寸与页面布局 | `WorkFollowMetrics`、`WorkFollowLayout` |
 | 任务列表尺寸 | `TaskListMetrics` |
 | 圆角 | `WorkFollowRadii` |
 | 动画时序与曲线 | `WorkFollowMotion` |
-| 任务菜单颜色兼容层 | `TaskMenuStyle`（现状中存在重复颜色，D3/D8 复核） |
+| 任务菜单颜色兼容层 | `TaskMenuStyle`（只转发 `WorkFollowTheme`，不再复制颜色） |
 
 ## D0 发现状态
 
@@ -57,6 +57,7 @@
 - [Typography](typography.md)
 - [Icons](icons.md)
 - [Colors](colors.md)
+- [D3 Colors migration](d3-colors.md)
 - [Spacing](spacing.md)
 - [Geometry](geometry.md)
 - [Surfaces](surfaces.md)

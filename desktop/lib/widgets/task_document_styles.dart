@@ -51,6 +51,11 @@ class TaskDocumentStyles {
           attribute.value == quill.Attribute.checked.value) {
         return completed;
       }
+      if (attribute.key == quill.Attribute.background.key) {
+        return TextStyle(
+          backgroundColor: tokens.documentHighlight,
+        );
+      }
       return const TextStyle();
     };
   }

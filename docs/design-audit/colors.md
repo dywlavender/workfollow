@@ -1,4 +1,4 @@
-# D3 Colors 盘点
+# D3 Colors 盘点与收口
 
 ## 目标规范
 
@@ -6,7 +6,7 @@
 
 ## 现有事实源
 
-`WorkFollowTheme` 已提供 `textPrimary`、`textSecondary`、`textTertiary`、`border`、`borderStrong`、`accent`、`accentHover`、`accentSoft`、`accentFaint`、`menuSelected`、`menuDivider`、`listRowHover`、`listRowSelected`、`success`、`warning`、`danger`、`shadow`、反馈 HUD 和明暗表面颜色。`WorkFollowColors` 保存原始基元，不应被普通 Widget 直接读取。
+`WorkFollowTheme` 已提供 `textPrimary`、`textSecondary`、`textTertiary`、`border`、`borderStrong`、`accent`、`accentHover`、`accentSoft`、`accentFaint`、`menuSelected`、`menuDivider`、`listRowHover`、`listRowSelected`、`success`、`warning`、`danger`、`shadow`、反馈 HUD 和明暗表面颜色。`WorkFollowColorTokens` 补充侧栏、Quick Add、Matrix 和文档高亮等组件角色。`WorkFollowColors` 保存原始基元，不应被普通 Widget 直接读取。
 
 ## 扫描结果
 
@@ -15,6 +15,8 @@
 | 主题外 `Color(0x...)` | 31 | 明确的 D3 复核候选 |
 | 非透明 `Colors.*` | 21 | 白色图标、危险文字等需按语义判断 |
 | `.withValues(...)` / `.withOpacity(...)` | 64 | alpha 不是自动违规，但应确认是否已有 Soft/Faint/Overlay Token |
+
+本轮迁移后，业务 Widget 中主题外裸 `Color(0x...)` 和直接红/绿/灰语义色均为 `0`；透明层、对比白字、遮罩/阴影及用户内容色按白名单保留。详见 [`d3-colors.md`](d3-colors.md)。
 
 ## 十六进制热点
 
@@ -39,4 +41,3 @@
 1. 先判断颜色的语义角色，再决定是否增加 Token；禁止把已有颜色简单换成另一个 hex。
 2. `accent`、`success`、`danger` 不能互相代替；状态颜色和品牌颜色各自有明确用途。
 3. D3 不改字号、间距、图标、圆角、阴影和布局。
-

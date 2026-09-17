@@ -269,9 +269,9 @@ class _NoteCardState extends State<_NoteCard> {
                     // instead of a card border and shadow so the editor stays
                     // the visual focus.
                     color: widget.selected
-                        ? tokens.accentSoft
+                        ? tokens.listRowSelected
                         : hovering
-                            ? tokens.canvas
+                            ? tokens.listRowHover
                             : Colors.transparent,
                     borderRadius:
                         BorderRadius.circular(WorkFollowRadii.control),

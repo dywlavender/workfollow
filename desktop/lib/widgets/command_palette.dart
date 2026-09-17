@@ -242,7 +242,7 @@ class _CommandPaletteState extends State<_CommandPalette> {
                           padding: const EdgeInsets.symmetric(
                               horizontal: 6, vertical: 4),
                           decoration: BoxDecoration(
-                              color: tokens.accentFaint,
+                              color: tokens.menuSelected,
                               borderRadius: BorderRadius.circular(
                                   WorkFollowRadii.control)),
                           child: Text('esc',
@@ -278,7 +278,7 @@ class _CommandPaletteState extends State<_CommandPalette> {
                                 horizontal: 11, vertical: 10),
                             decoration: BoxDecoration(
                                 color: selected
-                                    ? tokens.accentSoft
+                                    ? tokens.menuSelected
                                     : Colors.transparent,
                                 borderRadius: BorderRadius.circular(
                                     WorkFollowRadii.control)),
@@ -290,7 +290,7 @@ class _CommandPaletteState extends State<_CommandPalette> {
                                     decoration: BoxDecoration(
                                         color: selected
                                             ? tokens.overlay
-                                            : tokens.accentFaint,
+                                            : tokens.menuSelected,
                                         borderRadius: BorderRadius.circular(
                                             WorkFollowRadii.control)),
                                     child: AppIcon(command.icon,
@@ -329,7 +329,7 @@ class _CommandPaletteState extends State<_CommandPalette> {
                 Container(
                   padding: const EdgeInsets.fromLTRB(17, 10, 17, 11),
                   decoration: BoxDecoration(
-                      color: tokens.accentFaint.withValues(alpha: .55),
+                      color: tokens.menuSelected.withValues(alpha: .55),
                       border: Border(top: BorderSide(color: tokens.border))),
                   child: Row(children: [
                     AppIcon(WorkFollowIcons.keyboardReturn,

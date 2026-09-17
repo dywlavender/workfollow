@@ -184,7 +184,7 @@ class _TaskListPickerBodyState extends State<_TaskListPickerBody> {
                     final color = selected ? tokens.accent : tokens.textPrimary;
                     return Material(
                       color: keyboardNavigation && focusedIndex == index
-                          ? tokens.accentFaint
+                          ? tokens.menuSelected
                           : Colors.transparent,
                       child: InkWell(
                         key: ValueKey('menu-option-${lists[index].name}'),

@@ -402,9 +402,8 @@ class _TaskSchedulePanelState extends State<TaskSchedulePanel> {
                                               decoration: BoxDecoration(
                                                   shape: BoxShape.circle,
                                                   color: work
-                                                      ? const Color(0xfffe6d72)
-                                                      : const Color(
-                                                          0xff00c79d)),
+                                                      ? colors.warning
+                                                      : colors.success),
                                               child: Text(work ? '班' : '休',
                                                   style: const TextStyle(
                                                       fontSize:

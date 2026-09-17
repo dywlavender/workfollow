@@ -30,11 +30,17 @@
 | ICON-003 | Icons | `widgets/task_context_menu_panel.dart:170` | `Icons.wb_twilight_outlined` | `tomorrow` 或独立语义映射 | candidate | D2 |
 | ICON-004 | Icons | `widgets/task_schedule_panel.dart` | 4 个直接 chevron/circle glyph | `WorkFollowIcons` 映射 | candidate | D2 |
 | ICON-005 | Icons | `widgets/task_schedule_options.dart:170` | 直接 down/close glyph | `expandMore` / `close` | candidate | D2 |
-| COLOR-001 | Colors | `widgets/task_menu_style.dart` | 9 个浅色 hex 覆盖 | `WorkFollowTheme` | candidate | D3 |
-| COLOR-002 | Colors | `widgets/sidebar.dart` | 7 个局部导航 hex | rail/navigation semantic colors | candidate | D3 |
-| COLOR-003 | Colors | `widgets/quick_add.dart` | 6 个智能 token hex | Quick Add token roles | candidate | D3 |
-| COLOR-004 | Colors | `features/matrix/matrix_models.dart` | 4 个象限 hex | Matrix quadrant roles | candidate | D3 |
-| COLOR-005 | Colors | `widgets/task_editor_toolbar.dart` | 高亮 hex | Document Highlight Token | candidate | D3 |
+| COLOR-001 | Colors | `widgets/task_menu_style.dart` | 9 个浅色 hex 覆盖 | `WorkFollowTheme` | migrated | D3 |
+| COLOR-002 | Colors | `widgets/sidebar.dart` | 7 个局部导航 hex | `WorkFollowColorTokens.lightNavigation*` | migrated | D3 |
+| COLOR-003 | Colors | `widgets/quick_add.dart` | 6 个智能 token hex | Quick Add semantic roles | migrated | D3 |
+| COLOR-004 | Colors | `features/matrix/matrix_models.dart` | 4 个象限 hex | `WorkFollowColorTokens.matrix*` | migrated | D3 |
+| COLOR-005 | Colors | `widgets/task_editor_toolbar.dart` | 高亮 hex | Document Highlight Token | migrated | D3 |
+| COLOR-006 | Colors | `widgets/task_context_menu_panel.dart:389` | 浅色 selected hex | `menuSelected` | migrated | D3 |
+| COLOR-007 | Colors | `widgets/task_schedule_options.dart:16` | 浅色 field hex | `menuSelected` / `canvas` | migrated | D3 |
+| COLOR-008 | Colors | `widgets/task_schedule_panel.dart:405` | 工作日/休息日红绿 hex | `warning` / `success` calendar roles | migrated | D3 |
+| COLOR-009 | Colors | 用户清单/习惯/图表颜色 | `Color(value)` / saved content color | user-content/data palette whitelist | accepted-exception | D3 |
+| COLOR-010 | Colors | More/Context/List/Command menus | `accentFaint` used for hover/selected fills | `menuSelected` | migrated | D3 |
+| COLOR-011 | Colors | `theme/workfollow_theme.dart` global hover | Theme default hover reused accent soft | `listRowHover` | migrated | D3 |
 | SPACE-001 | Spacing | `sidebar.dart`, `settings_panel.dart`, `calendar_screen.dart` 等 | 多套局部 EdgeInsets/SizedBox | `WorkFollowSpacing` + semantic aliases | candidate | D4 |
 | GEOM-001 | Geometry | `home_screen.dart`, `quick_add.dart`, `sidebar.dart` 等 | 宽高字面值 | `WorkFollowMetrics` / page roles | candidate | D5 |
 | SURF-001 | Surfaces | 91 个 `BoxDecoration` | 页面/卡片/Popover 混用 | Surface role matrix | candidate | D6 |

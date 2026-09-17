@@ -695,7 +695,7 @@ class _DesktopMenuSurfaceState<T> extends State<_DesktopMenuSurface<T>> {
         minTileHeight: WorkFollowMetrics.menuRowHeight,
         shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(WorkFollowRadii.control)),
-        tileColor: focused ? tokens.accentFaint : null,
+        tileColor: focused ? tokens.menuSelected : null,
         contentPadding: const EdgeInsets.symmetric(horizontal: 10),
         leading: entry.icon == null
             ? null

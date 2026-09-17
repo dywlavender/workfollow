@@ -170,9 +170,11 @@ class TaskEditorToolbar extends StatelessWidget {
                     label: 'A',
                     highlight: true,
                     selected:
-                        _active(const quill.BackgroundAttribute('#d4ff00')),
+                        _active(const quill.BackgroundAttribute(
+                            TaskDocumentCommands.highlightColor)),
                     onPressed: (_) =>
-                        _format(const quill.BackgroundAttribute('#d4ff00'))),
+                        _format(const quill.BackgroundAttribute(
+                            TaskDocumentCommands.highlightColor))),
                 divider(),
                 format('checklist', '检查项', WorkFollowIcons.checklist,
                     quill.Attribute.unchecked),
@@ -262,7 +264,7 @@ class _ToolButton extends StatelessWidget {
                             padding: const EdgeInsets.symmetric(horizontal: 3),
                             decoration: BoxDecoration(
                                 color:
-                                    highlight ? const Color(0xFFd4ff00) : null,
+                                    highlight ? colors.documentHighlight : null,
                                 borderRadius: BorderRadius.circular(4)),
                             child: Text(label!,
                                 style: TextStyle(
@@ -271,7 +273,7 @@ class _ToolButton extends StatelessWidget {
                                     fontWeight: WorkFollowMacWeight.regular,
                                     letterSpacing: WorkFollowMacTracking.none,
                                     color: highlight
-                                        ? const Color(0xFF566400)
+                                        ? colors.documentHighlightText
                                         : color)),
                           )
                         : TaskEditorGlyph(

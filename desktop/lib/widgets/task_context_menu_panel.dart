@@ -190,7 +190,7 @@ class _TaskContextMenuPanelState extends State<TaskContextMenuPanel> {
       TaskContextDateAction.clearDate => 'clear-date',
     };
     final foreground = !enabled
-        ? tokens.textTertiary.withValues(alpha: .45)
+        ? tokens.textDisabled
         : action == TaskContextDateAction.skipOccurrence
             ? tokens.warning
             : selected
@@ -214,7 +214,7 @@ class _TaskContextMenuPanelState extends State<TaskContextMenuPanel> {
             height: 42,
             margin: const EdgeInsets.symmetric(horizontal: 1),
             decoration: BoxDecoration(
-              color: selected ? tokens.accentFaint : null,
+              color: selected ? tokens.menuSelected : null,
               borderRadius: BorderRadius.circular(WorkFollowRadii.control),
             ),
             alignment: Alignment.center,
@@ -269,7 +269,7 @@ class _TaskContextMenuPanelState extends State<TaskContextMenuPanel> {
             height: 40,
             margin: const EdgeInsets.symmetric(horizontal: 1),
             decoration: BoxDecoration(
-              color: selected ? tokens.accentFaint : null,
+              color: selected ? tokens.menuSelected : null,
               borderRadius: BorderRadius.circular(WorkFollowRadii.control),
             ),
             alignment: Alignment.center,
@@ -350,7 +350,7 @@ class _TaskContextMenuPanelState extends State<TaskContextMenuPanel> {
       bool destructive = false,
       bool enabled = true}) {
     final foreground = !enabled
-        ? tokens.textTertiary.withValues(alpha: .42)
+        ? tokens.textDisabled
         : destructive
             ? tokens.danger
             : tokens.textPrimary;
@@ -384,11 +384,7 @@ class _TaskContextMenuPanelState extends State<TaskContextMenuPanel> {
                         },
                   child: Ink(
                     decoration: BoxDecoration(
-                        color: submenu == value
-                            ? (Theme.of(context).brightness == Brightness.light
-                                ? const Color(0xFFF5F5F5)
-                                : tokens.accentFaint)
-                            : null,
+                        color: submenu == value ? tokens.menuSelected : null,
                         borderRadius: BorderRadius.circular(10)),
                     child: SizedBox(
                       height: TaskMenuStyle.rowHeight,

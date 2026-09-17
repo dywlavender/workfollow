@@ -4,6 +4,8 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_quill/flutter_quill.dart' as quill;
 
+import '../theme/workfollow_color_tokens.dart';
+
 /// Supplies a file path for a document attachment command.
 typedef TaskDocumentAttachmentPicker = Future<String?> Function();
 
@@ -27,7 +29,10 @@ class TaskDocumentCommands {
     this.canMutate,
   });
 
-  static const highlightColor = '#d4ff00';
+  /// Stored in existing Deltas for compatibility. Rendering resolves the
+  /// attribute to the current semantic document highlight surface.
+  static const highlightColor =
+      WorkFollowColorTokens.documentHighlightAttribute;
 
   final quill.QuillController editor;
   final TaskDocumentAttachmentPicker? pickAttachment;

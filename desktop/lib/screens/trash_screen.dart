@@ -160,8 +160,7 @@ class _TrashRowBase extends StatelessWidget {
                           fontSize: WorkFollowMacTypography.listTitle,
                           fontWeight: WorkFollowMacWeight.semibold,
                           decoration: TextDecoration.lineThrough,
-                          decorationColor:
-                              tokens.textTertiary.withValues(alpha: .55))),
+                          decorationColor: tokens.textDisabled)),
                   const SizedBox(height: 3),
                   Text('$subtitle · 删除于 $deletedLabel',
                       style:

@@ -142,7 +142,7 @@ class TaskListColors {
   }
 
   static Color rowFocusRing(WorkFollowTheme tokens) =>
-      tokens.accent.withValues(alpha: .35);
+      tokens.focusRing;
 }
 
 class WorkFollowSpacing {
@@ -742,6 +742,14 @@ class WorkFollowTheme extends ThemeExtension<WorkFollowTheme> {
   final Color textPrimary;
   final Color textSecondary;
   final Color textTertiary;
+
+  /// Derived roles keep disabled and focus treatments semantic without
+  /// adding another near-duplicate palette entry to every light/dark theme.
+  Color get textDisabled => textTertiary.withValues(alpha: .55);
+  Color get focusRing => accent.withValues(alpha: .35);
+  Color get documentHighlight => accentSoft;
+  Color get documentHighlightText => textPrimary;
+
   final Color border;
   final Color borderStrong;
   final Color accent;
@@ -1039,7 +1047,10 @@ class WorkFollowThemeData {
       canvasColor: tokens.canvas,
       extensions: <ThemeExtension<dynamic>>[tokens],
       splashFactory: NoSplash.splashFactory,
-      hoverColor: tokens.accentSoft,
+      // Hover is a neutral interaction state. Accent is reserved for active
+      // controls, links and focus, so a pointer crossing a menu or row never
+      // paints a brand-coloured surface.
+      hoverColor: tokens.listRowHover,
       focusColor: tokens.accent.withValues(alpha: .22),
       dividerColor: tokens.border,
       // macOS profile: one page-title step, three weights, no tracking. Sizes
@@ -1126,7 +1137,7 @@ class WorkFollowThemeData {
         decoration: BoxDecoration(
           color: brightness == Brightness.dark
               ? tokens.overlay
-              : const Color(0xFF2A2D34),
+              : tokens.feedbackSurface,
           borderRadius: BorderRadius.circular(WorkFollowRadii.sm),
         ),
       ),
@@ -1165,7 +1176,7 @@ class WorkFollowThemeData {
       iconButtonTheme: IconButtonThemeData(
         style: IconButton.styleFrom(
           foregroundColor: tokens.textSecondary,
-          hoverColor: tokens.accentFaint,
+          hoverColor: tokens.menuSelected,
           highlightColor: Colors.transparent,
           minimumSize: const Size(
               WorkFollowMetrics.iconHitTarget, WorkFollowMetrics.iconHitTarget),

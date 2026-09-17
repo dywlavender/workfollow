@@ -5,6 +5,7 @@ import '../models/task.dart';
 import '../services/smart_date_parser.dart';
 import '../state/workspace_controller.dart';
 import '../theme/workfollow_icons.dart';
+import '../theme/workfollow_color_tokens.dart';
 import '../theme/workfollow_theme.dart';
 import '../features/feedback/feedback_event.dart';
 import '../features/feedback/feedback_scope.dart';
@@ -71,7 +72,7 @@ class _SmartTextEditingController extends TextEditingController {
       if (span.start > cursor) {
         children.add(TextSpan(text: text.substring(cursor, span.start)));
       }
-      final color = _colorFor(span.kind);
+      final color = _colorFor(span.kind, WorkFollowTheme.of(context));
       children.add(TextSpan(
           text: text.substring(span.start, end),
           style: (style ?? const TextStyle()).copyWith(
@@ -86,15 +87,20 @@ class _SmartTextEditingController extends TextEditingController {
     return TextSpan(style: style, children: children);
   }
 
-  Color _colorFor(SmartTokenKind kind) => switch (kind) {
-        SmartTokenKind.date => const Color(0xFF5B7CFA),
-        SmartTokenKind.time => const Color(0xFF2F9FB5),
-        SmartTokenKind.recurrence => const Color(0xFF9A63D3),
-        SmartTokenKind.tag => const Color(0xFF42A66A),
-        SmartTokenKind.list => const Color(0xFFE8793F),
-        SmartTokenKind.priority => const Color(0xFFE35D6A),
-      };
+  Color _colorFor(SmartTokenKind kind, WorkFollowTheme tokens) =>
+      _smartTokenColor(kind, tokens);
 }
+
+Color _smartTokenColor(SmartTokenKind kind, WorkFollowTheme tokens) =>
+    switch (kind) {
+      SmartTokenKind.date => WorkFollowColorTokens.quickAddDate(tokens),
+      SmartTokenKind.time => WorkFollowColorTokens.quickAddTime(tokens),
+      SmartTokenKind.recurrence =>
+        WorkFollowColorTokens.quickAddRecurrence(tokens),
+      SmartTokenKind.tag => WorkFollowColorTokens.quickAddTag(tokens),
+      SmartTokenKind.list => WorkFollowColorTokens.quickAddList(tokens),
+      SmartTokenKind.priority => WorkFollowColorTokens.quickAddPriority(tokens),
+    };
 
 class QuickAddField extends StatefulWidget {
   const QuickAddField(
@@ -947,12 +953,7 @@ class _QuickAddFieldState extends State<QuickAddField> {
   }
 
   Color _spanColor(SmartTokenKind kind, WorkFollowTheme tokens) =>
-      switch (kind) {
-        SmartTokenKind.date || SmartTokenKind.time => tokens.accent,
-        SmartTokenKind.recurrence => tokens.success,
-        SmartTokenKind.tag => tokens.warning,
-        SmartTokenKind.list || SmartTokenKind.priority => tokens.danger,
-      };
+      _smartTokenColor(kind, tokens);
 
   String get _summary {
     final parts = <String>[];
