@@ -16,14 +16,18 @@ import 'screens/notes_screen.dart';
 import 'screens/stats_screen.dart';
 import 'screens/today_screen.dart';
 import 'screens/trash_screen.dart';
+import 'features/feedback/feedback_controller.dart';
+import 'features/feedback/feedback_event.dart';
+import 'features/feedback/feedback_host.dart';
+import 'features/feedback/feedback_scope.dart';
+import 'features/tasks/application/task_actions.dart';
+import 'features/tasks/presentation/task_feedback_mapper.dart';
 import 'models/task.dart';
 import 'services/preferences_store.dart';
 import 'services/local_workspace_store.dart';
 import 'services/focus_timer.dart';
 import 'state/workspace_controller.dart';
-import 'theme/workfollow_icons.dart';
 import 'theme/workfollow_theme.dart';
-import 'widgets/app_icon_button.dart';
 import 'widgets/command_palette.dart';
 import 'widgets/sidebar.dart';
 import 'widgets/settings_panel.dart';
@@ -51,7 +55,23 @@ class _WorkFollowAppState extends State<WorkFollowApp> {
   // The task inspector is a fixed pane in the macOS task workspace, matching
   // TickTick. Settings can still opt out for a list-only workflow.
   bool _persistentInspector = true;
+
+  /// 完成任务时播放提示音. On by default: the tone is the only signal that
+  /// survives the user looking somewhere else when a task is ticked off.
+  bool _completionSound = true;
+
+  /// 动态反馈. Off keeps every result HUD but fades it in over 120ms instead of
+  /// springing it, which is what a reduce-motion preference asks for.
+  bool _animatedFeedback = true;
+
   late final WorkspacePreferencesStore _preferencesStore;
+
+  /// The app's only transient-result channel.
+  ///
+  /// Created here rather than in the shell so it outlives page switches, and
+  /// mounted above the [Navigator] so dialogs and the task inspector can report
+  /// results too.
+  final FeedbackController _feedback = FeedbackController();
 
   @override
   void initState() {
@@ -62,7 +82,22 @@ class _WorkFollowAppState extends State<WorkFollowApp> {
               LocalWorkspaceStore(namespace: widget.demoMode ? 'preview' : null)
                   .platform,
         );
+    _syncFeedbackSettings();
     unawaited(_restoreThemeMode());
+  }
+
+  @override
+  void dispose() {
+    _feedback.dispose();
+    super.dispose();
+  }
+
+  /// The controller is what reads these two preferences; the bools above are
+  /// the source of truth that Settings edits, so every write goes through here.
+  void _syncFeedbackSettings() {
+    _feedback
+      ..completionSoundEnabled = _completionSound
+      ..animatedFeedback = _animatedFeedback;
   }
 
   Future<void> _restoreThemeMode() async {
@@ -74,40 +109,61 @@ class _WorkFollowAppState extends State<WorkFollowApp> {
         : null;
     final density = preferences['density'];
     final inspector = preferences['inspector'];
-    if (mode != null || density is String || inspector is bool) {
+    final completionSound = preferences['completionSound'];
+    final animatedFeedback = preferences['animatedFeedback'];
+    if (mode != null ||
+        density is String ||
+        inspector is bool ||
+        completionSound is bool ||
+        animatedFeedback is bool) {
       setState(() {
         if (mode != null) _themeMode = mode;
         if (density is String) _compactDensity = density == 'compact';
         if (inspector is bool) _persistentInspector = inspector;
+        if (completionSound is bool) _completionSound = completionSound;
+        if (animatedFeedback is bool) _animatedFeedback = animatedFeedback;
       });
+      _syncFeedbackSettings();
     }
+  }
+
+  /// Every preference is written together. The store replaces the whole map,
+  /// so saving one key alone would drop the others.
+  void _savePreferences() {
+    unawaited(_preferencesStore.save({
+      'themeMode': _themeMode.name,
+      'density': _compactDensity ? 'compact' : 'comfortable',
+      'inspector': _persistentInspector,
+      'completionSound': _completionSound,
+      'animatedFeedback': _animatedFeedback,
+    }));
   }
 
   void _setThemeMode(ThemeMode mode) {
     setState(() => _themeMode = mode);
-    unawaited(_preferencesStore.save({
-      'themeMode': mode.name,
-      'density': _compactDensity ? 'compact' : 'comfortable',
-      'inspector': _persistentInspector,
-    }));
+    _savePreferences();
   }
 
   void _setDensity(bool compact) {
     setState(() => _compactDensity = compact);
-    unawaited(_preferencesStore.save({
-      'themeMode': _themeMode.name,
-      'density': compact ? 'compact' : 'comfortable',
-      'inspector': _persistentInspector,
-    }));
+    _savePreferences();
   }
 
   void _setPersistentInspector(bool enabled) {
     setState(() => _persistentInspector = enabled);
-    unawaited(_preferencesStore.save({
-      'themeMode': _themeMode.name,
-      'density': _compactDensity ? 'compact' : 'comfortable',
-      'inspector': enabled,
-    }));
+    _savePreferences();
+  }
+
+  void _setCompletionSound(bool enabled) {
+    setState(() => _completionSound = enabled);
+    _syncFeedbackSettings();
+    _savePreferences();
+  }
+
+  void _setAnimatedFeedback(bool enabled) {
+    setState(() => _animatedFeedback = enabled);
+    _syncFeedbackSettings();
+    _savePreferences();
   }
 
   void _toggleTheme() {
@@ -132,6 +188,19 @@ class _WorkFollowAppState extends State<WorkFollowApp> {
       theme: WorkFollowThemeData.light(),
       darkTheme: WorkFollowThemeData.dark(),
       themeMode: _themeMode,
+      // Deliberately above the Navigator rather than inside the shell's page
+      // stack: `showDialog` / `showGeneralDialog` build their routes as
+      // siblings of `home`, so a scope placed inside the shell would be
+      // invisible to Settings, the command palette and every confirmation
+      // sheet. `builder` is inside AnimatedTheme, so Theme.of still resolves to
+      // the app theme.
+      builder: (context, child) => FeedbackScope(
+          controller: _feedback,
+          child: Stack(fit: StackFit.expand, children: [
+            if (child != null) child,
+            WorkFollowFeedbackHost(
+                controller: _feedback, animate: _animatedFeedback),
+          ])),
       home: WorkFollowShell(
         demoMode: widget.demoMode,
         onToggleTheme: _toggleTheme,
@@ -141,6 +210,10 @@ class _WorkFollowAppState extends State<WorkFollowApp> {
         onSetDensity: _setDensity,
         persistentInspector: _persistentInspector,
         onSetPersistentInspector: _setPersistentInspector,
+        completionSound: _completionSound,
+        onSetCompletionSound: _setCompletionSound,
+        animatedFeedback: _animatedFeedback,
+        onSetAnimatedFeedback: _setAnimatedFeedback,
       ),
     );
   }
@@ -157,6 +230,10 @@ class WorkFollowShell extends StatefulWidget {
     this.persistentInspector = true,
     this.onSetPersistentInspector,
     this.demoMode = false,
+    this.completionSound = true,
+    this.onSetCompletionSound,
+    this.animatedFeedback = true,
+    this.onSetAnimatedFeedback,
   });
 
   final VoidCallback onToggleTheme;
@@ -167,6 +244,14 @@ class WorkFollowShell extends StatefulWidget {
   final bool persistentInspector;
   final ValueChanged<bool>? onSetPersistentInspector;
   final bool demoMode;
+
+  /// 完成任务时播放提示音.
+  final bool completionSound;
+  final ValueChanged<bool>? onSetCompletionSound;
+
+  /// 动态反馈 — the result HUD springs in when on, fades in over 120ms when off.
+  final bool animatedFeedback;
+  final ValueChanged<bool>? onSetAnimatedFeedback;
 
   @override
   State<WorkFollowShell> createState() => _WorkFollowShellState();
@@ -185,8 +270,11 @@ class _WorkFollowShellState extends State<WorkFollowShell> {
   late final AppLifecycleListener _lifecycleListener;
   Timer? _dateRefresh;
   bool sidebarCollapsed = false;
-  bool showUndo = false;
-  String undoMessage = '';
+
+  /// Resolved in [didChangeDependencies] rather than looked up on demand: the
+  /// action watcher runs from a listener callback, where an inherited-widget
+  /// lookup could land inside another widget's build.
+  FeedbackController? _feedback;
   int lastSeenActionVersion = 0;
 
   @override
@@ -201,10 +289,13 @@ class _WorkFollowShellState extends State<WorkFollowShell> {
       cancelNotification: controller.cancelFocusNotification,
       onCompleted: (taskId) {
         controller.recordFocusSession(taskId);
-        if (mounted) {
-          ScaffoldMessenger.of(context)
-              .showSnackBar(const SnackBar(content: Text('这一轮专注完成了，休息一下吧。')));
-        }
+        // A round running out is its own kind of finished: the same HUD, its
+        // own tone, and nothing to undo.
+        _feedback?.show(const WorkFollowFeedback(
+            kind: WorkFollowFeedbackKind.success,
+            message: '这一轮专注完成了，休息一下吧。',
+            sound: WorkFollowFeedbackSound.focus,
+            duration: Duration(seconds: 3)));
       },
     );
     if (!widget.demoMode) controller.selectView(WorkspaceView.today);
@@ -286,9 +377,13 @@ class _WorkFollowShellState extends State<WorkFollowShell> {
         if (id != null) {
           final task = controller.selectedTask;
           if (task != null) {
-            task.completed
+            final result = task.completed
                 ? controller.taskActions.restore(id)
                 : controller.taskActions.complete(id);
+            // The menu bar reports through the same channel as a row, so a
+            // completion driven from the menu keeps its tone and its undo.
+            presentTaskResultIn(context, result,
+                actionVersion: controller.actionVersion);
           }
         }
       case 'clearSelectedDate':
@@ -316,12 +411,51 @@ class _WorkFollowShellState extends State<WorkFollowShell> {
   void _observeAction() {
     if (!mounted || controller.actionVersion == lastSeenActionVersion) return;
     lastSeenActionVersion = controller.actionVersion;
-    _showUndo(controller.lastActionMessage);
+    // Deferred by one microtask on purpose. The entry point that ran the
+    // command presents its own, richer result immediately after the command
+    // returns — still inside the synchronous block that notified us — so
+    // checking on the next turn is what lets `wasActionPresented` see that
+    // claim. Checking here would race it, and the entry point's completion
+    // would lose to this generic one.
+    scheduleMicrotask(_reportUnclaimedAction);
   }
+
+  /// Reports an action that no entry point claimed: a note going to the trash,
+  /// a bulk edit from the selection bar, a menu-bar command.
+  void _reportUnclaimedAction() {
+    if (!mounted) return;
+    final version = lastSeenActionVersion;
+    final feedback = _feedback;
+    if (feedback == null || feedback.wasActionPresented(version)) return;
+    final message = controller.lastActionMessage;
+    if (message.isEmpty) return;
+    // No intent is known on this path, so the result is offered as undoable:
+    // that is exactly what the previous single global undo tooltip did.
+    presentTaskResult(
+        feedback,
+        TaskActionResult.success(
+            message: message,
+            undo: UndoCommand(label: '撤销', execute: _undoLastAction)),
+        actionVersion: version);
+  }
+
+  /// Bridges the global undo back into a callback shape. `taskActions.undo`
+  /// reports whether anything was actually taken back, which the HUD does not
+  /// need — it has already dismissed itself.
+  Future<bool> _undoLastAction() async =>
+      controller.taskActions.undo().success;
 
   Future<AppExitResponse> _handleExitRequested() async {
     await controller.waitForPendingSaves();
     return AppExitResponse.exit;
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Null when the shell is mounted on its own (widget tests, previews): the
+    // shell then simply reports nothing instead of throwing.
+    _feedback = FeedbackScope.maybeOf(context);
   }
 
   @override
@@ -373,7 +507,11 @@ class _WorkFollowShellState extends State<WorkFollowShell> {
         compactDensity: widget.compactDensity,
         onSetDensity: widget.onSetDensity,
         persistentInspector: widget.persistentInspector,
-        onSetPersistentInspector: widget.onSetPersistentInspector);
+        onSetPersistentInspector: widget.onSetPersistentInspector,
+        completionSound: widget.completionSound,
+        onSetCompletionSound: widget.onSetCompletionSound,
+        animatedFeedback: widget.animatedFeedback,
+        onSetAnimatedFeedback: widget.onSetAnimatedFeedback);
   }
 
   Future<void> _openFocusTimer() => showFocusTimerDialog(
@@ -381,69 +519,6 @@ class _WorkFollowShellState extends State<WorkFollowShell> {
         timer: focusTimer,
         controller: controller,
       );
-
-  Future<void> _openFilters() async {
-    final tokens = WorkFollowTheme.of(context);
-    final destination = await showModalBottomSheet<WorkspaceView>(
-      context: context,
-      backgroundColor: tokens.overlay,
-      builder: (sheetContext) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 18, 20, 8),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: Text('切换任务视图',
-                    style: TextStyle(
-                        color: tokens.textPrimary,
-                        fontSize: WorkFollowMacTypography.listTitle,
-                        height: WorkFollowMacTypography.lineControl,
-                        fontWeight: WorkFollowMacWeight.semibold)),
-              ),
-            ),
-            for (final option in const <(WorkspaceView, String)>[
-              (WorkspaceView.recent, '最近 7 天'),
-              (WorkspaceView.today, '今天'),
-              (WorkspaceView.overdue, '过期'),
-              (WorkspaceView.inbox, '收集箱'),
-              (WorkspaceView.plan, '计划'),
-              (WorkspaceView.all, '全部任务'),
-              (WorkspaceView.completed, '已完成'),
-              (WorkspaceView.matrix, '四象限'),
-              (WorkspaceView.board, '看板'),
-              (WorkspaceView.habits, '习惯'),
-              (WorkspaceView.stats, '统计'),
-            ])
-              ListTile(
-                leading: AppIcon(
-                    option.$1 == controller.view
-                        ? WorkFollowIcons.radioOn
-                        : WorkFollowIcons.radioOff,
-                    size: WorkFollowMetrics.navigationIcon,
-                    color: option.$1 == controller.view
-                        ? tokens.accent
-                        : tokens.textTertiary),
-                title: Text(option.$2),
-                onTap: () => Navigator.of(sheetContext).pop(option.$1),
-              ),
-          ],
-        ),
-      ),
-    );
-    if (destination != null) controller.selectView(destination);
-  }
-
-  void _showUndo(String message) {
-    setState(() {
-      undoMessage = message;
-      showUndo = true;
-    });
-    Future<void>.delayed(const Duration(seconds: 5), () {
-      if (mounted) setState(() => showUndo = false);
-    });
-  }
 
   void _handleGlobalEscape() {
     // Nested editors and popovers receive Escape first. Once those surfaces
@@ -455,13 +530,6 @@ class _WorkFollowShellState extends State<WorkFollowShell> {
       return;
     }
     FocusManager.instance.primaryFocus?.unfocus();
-  }
-
-  String get _viewTitle {
-    // The task list owns its own TickTick-style title row. Leaving this slot
-    // empty avoids rendering a redundant "任务" label above it.
-    if (controller.isTaskView) return '';
-    return controller.viewTitle;
   }
 
   @override
@@ -561,87 +629,47 @@ class _WorkFollowShellState extends State<WorkFollowShell> {
               },
               child: Scaffold(
                 backgroundColor: tokens.canvas,
-                body: Stack(
+                body: Row(
                   children: [
-                    Row(
-                      children: [
-                        ClipRect(
-                          child: AnimatedAlign(
-                            duration: const Duration(milliseconds: 220),
-                            curve: Curves.easeOutCubic,
-                            alignment: Alignment.centerLeft,
-                            widthFactor: sidebarCollapsed ? 0 : 1,
-                            child: AppRail(
-                              controller: controller,
-                              isDark: Theme.of(context).brightness ==
-                                  Brightness.dark,
-                              onToggleTheme: widget.onToggleTheme,
-                              onOpenSettings: () => showSettingsPanel(
-                                  context: context,
-                                  controller: controller,
-                                  onToggleTheme: widget.onToggleTheme,
-                                  onSetThemeMode: widget.onSetThemeMode,
-                                  themeMode: widget.themeMode,
-                                  compactDensity: widget.compactDensity,
-                                  onSetDensity: widget.onSetDensity,
-                                  persistentInspector:
-                                      widget.persistentInspector,
-                                  onSetPersistentInspector:
-                                      widget.onSetPersistentInspector),
-                            ),
-                          ),
+                    ClipRect(
+                      child: AnimatedAlign(
+                        duration: const Duration(milliseconds: 220),
+                        curve: Curves.easeOutCubic,
+                        alignment: Alignment.centerLeft,
+                        widthFactor: sidebarCollapsed ? 0 : 1,
+                        child: AppRail(
+                          controller: controller,
+                          isDark: Theme.of(context).brightness ==
+                              Brightness.dark,
+                          onToggleTheme: widget.onToggleTheme,
+                            onOpenSettings: () => showSettingsPanel(
+                                context: context,
+                                controller: controller,
+                                onToggleTheme: widget.onToggleTheme,
+                                onSetThemeMode: widget.onSetThemeMode,
+                                themeMode: widget.themeMode,
+                                compactDensity: widget.compactDensity,
+                                onSetDensity: widget.onSetDensity,
+                                persistentInspector:
+                                    widget.persistentInspector,
+                                onSetPersistentInspector:
+                                    widget.onSetPersistentInspector,
+                                completionSound: widget.completionSound,
+                                onSetCompletionSound:
+                                    widget.onSetCompletionSound,
+                                animatedFeedback: widget.animatedFeedback,
+                                onSetAnimatedFeedback:
+                                    widget.onSetAnimatedFeedback),
                         ),
-                        Expanded(
-                          child: Column(
-                            children: [
-                              // Task views own their list header and fixed
-                              // inspector. Removing the duplicate global
-                              // toolbar gives the workspace the uninterrupted
-                              // TickTick-style canvas requested for todos;
-                              // search, quick add and Cmd-N remain available
-                              // through the task surface and shortcuts.
-                              if (!controller.isTaskView)
-                                _AppToolbar(
-                                    title: _viewTitle,
-                                    sidebarCollapsed: sidebarCollapsed,
-                                    onToggleSidebar: () => setState(() =>
-                                        sidebarCollapsed = !sidebarCollapsed),
-                                    onSearch: _openCommandPalette,
-                                    onOpenFilters: _openFilters,
-                                    focusTimer: focusTimer,
-                                    onOpenFocusTimer: _openFocusTimer,
-                                    onNewTask:
-                                        controller.view == WorkspaceView.notes
-                                            ? _newNote
-                                            : _newTask),
-                              Expanded(
-                                child: _WorkspaceContent(
-                                    controller: controller,
-                                    compactDensity: widget.compactDensity,
-                                    persistentInspector:
-                                        widget.persistentInspector,
-                                    onOpenFocusTimer: _openFocusTimer),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                    if (showUndo)
-                      Positioned(
-                        left: 0,
-                        right: 0,
-                        bottom: 22,
-                        child: Center(
-                            child: _UndoToast(
-                                message: undoMessage,
-                                onUndo: () {
-                                  // Keep the global toast on the same action
-                                  // boundary as rows, inspectors and menus.
-                                  controller.taskActions.undo();
-                                  setState(() => showUndo = false);
-                                })),
                       ),
+                    ),
+                    Expanded(
+                      child: _WorkspaceContent(
+                          controller: controller,
+                          compactDensity: widget.compactDensity,
+                          persistentInspector: widget.persistentInspector,
+                          onOpenFocusTimer: _openFocusTimer),
+                    ),
                   ],
                 ),
               ),
@@ -649,141 +677,6 @@ class _WorkFollowShellState extends State<WorkFollowShell> {
           ),
         );
       },
-    );
-  }
-}
-
-class _AppToolbar extends StatelessWidget {
-  const _AppToolbar(
-      {required this.title,
-      required this.sidebarCollapsed,
-      required this.onToggleSidebar,
-      required this.onSearch,
-      required this.onOpenFilters,
-      required this.focusTimer,
-      required this.onOpenFocusTimer,
-      required this.onNewTask});
-
-  final String title;
-  final bool sidebarCollapsed;
-  final VoidCallback onToggleSidebar;
-  final VoidCallback onSearch;
-  final VoidCallback onOpenFilters;
-  final FocusTimerController focusTimer;
-  final VoidCallback onOpenFocusTimer;
-  final VoidCallback onNewTask;
-
-  @override
-  Widget build(BuildContext context) {
-    final tokens = WorkFollowTheme.of(context);
-    return Container(
-      height: 50,
-      padding: const EdgeInsets.fromLTRB(11, 7, 16, 7),
-      decoration: BoxDecoration(
-          color: tokens.canvas,
-          border: Border(bottom: BorderSide(color: tokens.border))),
-      child: Row(
-        children: [
-          AppIconButton(
-              icon: sidebarCollapsed
-                  ? WorkFollowIcons.sidebarShow
-                  : WorkFollowIcons.sidebarHide,
-              tooltip: sidebarCollapsed ? '显示侧栏' : '隐藏侧栏',
-              onPressed: onToggleSidebar,
-              size: WorkFollowMetrics.iconHitTarget,
-              iconSize: WorkFollowMetrics.toolbarIcon),
-          const SizedBox(width: 6),
-          if (title.isNotEmpty)
-            Text(title,
-                style: TextStyle(
-                    color: tokens.textSecondary,
-                    fontSize: WorkFollowMacTypography.navigation,
-                    height: WorkFollowMacTypography.lineControl,
-                    fontWeight: WorkFollowMacWeight.medium)),
-          const Spacer(),
-          _ToolbarSearch(onPressed: onSearch),
-          const SizedBox(width: 7),
-          FocusTimerButton(timer: focusTimer, onTap: onOpenFocusTimer),
-          const SizedBox(width: 6),
-          Material(
-              color: tokens.accent,
-              borderRadius: BorderRadius.circular(WorkFollowRadii.control),
-              child: InkWell(
-                  onTap: onNewTask,
-                  borderRadius: BorderRadius.circular(WorkFollowRadii.control),
-                  child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 8),
-                      child: Row(children: [
-                        const AppIcon(WorkFollowIcons.add,
-                            size: WorkFollowMetrics.toolbarIcon,
-                            color: Colors.white),
-                        const SizedBox(width: 5),
-                        const Text('新建',
-                            style: TextStyle(
-                                color: Colors.white,
-                                fontSize: WorkFollowMacTypography.control,
-                                height: WorkFollowMacTypography.lineControl,
-                                fontWeight: WorkFollowMacWeight.medium))
-                      ])))),
-        ],
-      ),
-    );
-  }
-}
-
-class _ToolbarSearch extends StatefulWidget {
-  const _ToolbarSearch({required this.onPressed});
-  final VoidCallback onPressed;
-  @override
-  State<_ToolbarSearch> createState() => _ToolbarSearchState();
-}
-
-class _ToolbarSearchState extends State<_ToolbarSearch> {
-  bool hovering = false;
-  @override
-  Widget build(BuildContext context) {
-    final tokens = WorkFollowTheme.of(context);
-    return MouseRegion(
-      onEnter: (_) => setState(() => hovering = true),
-      onExit: (_) => setState(() => hovering = false),
-      child: GestureDetector(
-        onTap: widget.onPressed,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 140),
-          width: 190,
-          height: 32,
-          padding: const EdgeInsets.symmetric(horizontal: 10),
-          decoration: BoxDecoration(
-              color: hovering ? tokens.accentFaint : tokens.inspector,
-              border: Border.all(color: tokens.border),
-              borderRadius: BorderRadius.circular(WorkFollowRadii.control)),
-          child: Row(children: [
-            AppIcon(WorkFollowIcons.search,
-                size: WorkFollowMetrics.toolbarIcon,
-                color: tokens.textTertiary),
-            const SizedBox(width: 7),
-            Expanded(
-                child: Text('搜索',
-                    style: TextStyle(
-                        color: tokens.textTertiary,
-                        fontSize: WorkFollowMacTypography.control,
-                        height: WorkFollowMacTypography.lineControl))),
-            Container(
-                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 3),
-                decoration: BoxDecoration(
-                    color: tokens.content,
-                    borderRadius:
-                        BorderRadius.circular(WorkFollowRadii.control)),
-                child: Text('⌘K',
-                    style: TextStyle(
-                        color: tokens.textTertiary,
-                        fontSize: WorkFollowMacTypography.caption,
-                        height: WorkFollowMacTypography.lineControl,
-                        fontWeight: WorkFollowMacWeight.medium)))
-          ]),
-        ),
-      ),
     );
   }
 }
@@ -836,50 +729,6 @@ class _WorkspaceContent extends StatelessWidget {
           ),
       },
     );
-  }
-}
-
-class _UndoToast extends StatelessWidget {
-  const _UndoToast({required this.message, required this.onUndo});
-  final String message;
-  final VoidCallback onUndo;
-  @override
-  Widget build(BuildContext context) {
-    final tokens = WorkFollowTheme.of(context);
-    return Material(
-        color: tokens.overlay,
-        borderRadius: BorderRadius.circular(WorkFollowRadii.card),
-        elevation: 8,
-        child: Container(
-            padding: const EdgeInsets.fromLTRB(14, 10, 9, 10),
-            decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(WorkFollowRadii.card),
-                border: Border.all(color: tokens.borderStrong)),
-            child: Row(mainAxisSize: MainAxisSize.min, children: [
-              AppIcon(WorkFollowIcons.success,
-                  size: WorkFollowMetrics.toolbarIcon, color: tokens.success),
-              const SizedBox(width: 8),
-              Text(message,
-                  style: TextStyle(
-                      color: tokens.textPrimary,
-                      fontSize: WorkFollowMacTypography.control,
-                      height: WorkFollowMacTypography.lineControl,
-                      fontWeight: WorkFollowMacWeight.medium)),
-              const SizedBox(width: 14),
-              TextButton(
-                  onPressed: onUndo,
-                  style: TextButton.styleFrom(
-                      foregroundColor: tokens.accent,
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 6, vertical: 3),
-                      minimumSize: Size.zero,
-                      tapTargetSize: MaterialTapTargetSize.shrinkWrap),
-                  child: const Text('撤销',
-                      style: TextStyle(
-                          fontSize: WorkFollowMacTypography.control,
-                          height: WorkFollowMacTypography.lineControl,
-                          fontWeight: WorkFollowMacWeight.medium)))
-            ])));
   }
 }
 

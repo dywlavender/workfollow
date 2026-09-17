@@ -167,12 +167,7 @@ void main() {
     await mount(tester, c);
     await tap(tester, 'task-schedule');
     await tap(tester, 'schedule-repeat');
-    await tester.tap(find.byType(DropdownButtonFormField<String>));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('每天').last);
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('确定').last);
-    await tester.pumpAndSettle();
+    await tap(tester, 'repeat-DAILY');
     expect(c.tasks.single.recurrenceType, 'NONE');
     await escape(tester);
     expect(c.tasks.single.recurrenceType, 'NONE');
@@ -183,18 +178,15 @@ void main() {
     await tap(tester, 'pick-day-2030-09-10');
     await tap(tester, 'pick-day-2030-09-12');
     await tap(tester, 'schedule-time');
-    await tap(tester, 'date-time-toggle');
-    await tester.enterText(keyed('schedule-开始-小时'), '09');
-    await tester.enterText(keyed('schedule-开始-分钟'), '30');
-    await tester.enterText(keyed('schedule-结束-小时'), '18');
-    await tester.enterText(keyed('schedule-结束-分钟'), '45');
+    await tester.enterText(keyed('schedule-time-input'), '09:30');
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pumpAndSettle();
+    await tap(tester, 'schedule-end-time');
+    await tester.enterText(keyed('schedule-time-input'), '18:45');
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pumpAndSettle();
     await tap(tester, 'schedule-repeat');
-    await tester.tap(find.byType(DropdownButtonFormField<String>));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('每天').last);
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('确定').last);
-    await tester.pumpAndSettle();
+    await tap(tester, 'repeat-DAILY');
     await tap(tester, 'apply-date');
     expect(localDateTimeFromStorage(c.tasks.single.dueAt),
         DateTime(2030, 9, 10, 9, 30));
@@ -209,6 +201,98 @@ void main() {
     expect(c.tasks.single.dueEndAt, isNull);
     expect(c.tasks.single.recurrenceType, 'NONE');
     expect(c.tasks.single.scheduledWithTime, isFalse);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+      'schedule reference menus support multiple reminders, repeat ending and draft cancellation',
+      (tester) async {
+    if (capture) {
+      debugDisableShadows = false;
+      addTearDown(() => debugDisableShadows = true);
+    }
+    final c = workspace();
+    final id = c.tasks.single.id;
+    c.taskActions.setScheduleSettings(
+        id,
+        TaskScheduleSettings(
+          schedule: TaskScheduleDraft(
+              dueAt: DateTime(2026, 9, 15, 11), hasTime: true),
+          reminderOffsets: const [0, 30],
+          recurrence:
+              const RecurrenceDraft(type: 'WEEKLY', config: {'weekday': 2}),
+        ));
+    await mount(tester, c);
+    await tap(tester, 'task-schedule');
+    await shot(tester, 'task-date-overview');
+    await tap(tester, 'schedule-time');
+    expect(keyed('time-slot-11:00'), findsOneWidget);
+    await shot(tester, 'task-date-time');
+    await tap(tester, 'time-slot-11:30');
+    expect(c.tasks.single.reminderOffsets, [0, 30]);
+    await tap(tester, 'schedule-reminder');
+    await shot(tester, 'task-date-reminders');
+    await tap(tester, 'reminder-offset-5');
+    await tester.tap(find.text('取消').last);
+    await tester.pumpAndSettle();
+    await tap(tester, 'schedule-reminder');
+    await tap(tester, 'reminder-offset-5');
+    await tap(tester, 'confirm-schedule-option');
+    await tap(tester, 'schedule-repeat');
+    await shot(tester, 'task-date-repeat');
+    await tap(tester, 'repeat-WEEKLY');
+    await tap(tester, 'schedule-repeat-end');
+    await shot(tester, 'task-date-ending');
+    await tap(tester, 'repeat-end-count');
+    await tester.enterText(keyed('repeat-end-count-input'), '3');
+    await tap(tester, 'confirm-schedule-option');
+    await tap(tester, 'apply-date');
+    expect(c.tasks.single.reminderOffsets, [0, 5, 30]);
+    expect(c.tasks.single.recurrenceConfig?['count'], 3);
+    expect(localDateTimeFromStorage(c.tasks.single.dueAt),
+        DateTime(2026, 9, 15, 11, 30));
+    await tap(tester, 'task-schedule');
+    await tap(tester, 'schedule-reminder');
+    await tap(tester, 'schedule-option-clear');
+    await escape(tester);
+    expect(c.tasks.single.reminderOffsets, [0, 5, 30]);
+    expect(tester.takeException(), isNull);
+    if (capture) debugDisableShadows = true;
+  });
+
+  testWidgets(
+      'narrow date menus accept custom reminder and inclusive ending date',
+      (tester) async {
+    final c = workspace();
+    final id = c.tasks.single.id;
+    c.updateTaskDue(id, DateTime(2030, 9, 15));
+    await mount(tester, c, size: const Size(360, 640));
+    await tap(tester, 'task-schedule');
+    await tap(tester, 'schedule-time');
+    await tester.enterText(keyed('schedule-time-input'), '25:00');
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pumpAndSettle();
+    expect(find.text('请输入 00:00 至 23:59'), findsOneWidget);
+    await tester.enterText(keyed('schedule-time-input'), '10:15');
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pumpAndSettle();
+    await tap(tester, 'schedule-reminder');
+    await tap(tester, 'reminder-custom');
+    await tester.enterText(keyed('reminder-custom-amount'), '90');
+    await tap(tester, 'confirm-schedule-option');
+    await tap(tester, 'schedule-repeat');
+    await tap(tester, 'repeat-DAILY');
+    await tap(tester, 'schedule-repeat-end');
+    await tap(tester, 'repeat-end-date');
+    await tester.ensureVisible(find.text('20').last);
+    await tester.tap(find.text('20').last);
+    await tester.pumpAndSettle();
+    await tap(tester, 'confirm-schedule-option');
+    await tap(tester, 'apply-date');
+    expect(c.tasks.single.reminderOffsets, [90]);
+    expect(c.tasks.single.reminderTimes.single, DateTime(2030, 9, 15, 8, 45));
+    expect(c.tasks.single.recurrenceConfig?['endDate'],
+        DateTime(2030, 9, 20).toIso8601String());
     expect(tester.takeException(), isNull);
   });
 
@@ -301,22 +385,26 @@ void main() {
       expect(tester.takeException(), isNull);
       await escape(tester);
     }
-    final editor =
-        tester.widget<quill.QuillEditor>(keyed('task-document-editor'));
-    editor.focusNode.requestFocus();
-    await tester.pump();
-    editor.controller.replaceText(0, editor.controller.document.length - 1, '/',
-        const TextSelection.collapsed(offset: 1));
-    await tester.pump();
-    await tap(tester, 'task-slash-option-deadline');
-    expect(find.text('截止日期').last, findsOneWidget);
-    await escape(tester);
-    editor.focusNode.requestFocus();
-    await tester.pump();
-    editor.controller.replaceText(0, editor.controller.document.length - 1, '/',
-        const TextSelection.collapsed(offset: 1));
-    await tester.pump();
-    await tap(tester, 'task-slash-option-focus');
-    expect(find.text('还没有专注记录'), findsOneWidget);
+    // 截止日期 and 专注记录 left the `/` palette, whose job is now the twelve
+    // reference commands. The more menu does not absorb them either: it is the
+    // seven-entry reference list and clears its anchor by roughly 20pt in the
+    // 900x700 anchoring regression, so one extra row flips it under the
+    // trigger. Their entry point is a separate decision; what this narrow
+    // inspector has to keep is the seven reference rows.
+    await tap(tester, 'task-more-actions');
+    for (final entry in [
+      'add-subtask',
+      'pin',
+      'abandon',
+      'tags',
+      'attachment',
+      'convert-note',
+      'delete',
+    ]) {
+      expect(keyed('menu-option-$entry'), findsOneWidget, reason: entry);
+    }
+    for (final absent in ['deadline', 'focus', 'relation']) {
+      expect(keyed('menu-option-$absent'), findsNothing, reason: absent);
+    }
   });
 }

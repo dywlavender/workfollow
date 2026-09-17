@@ -16,6 +16,30 @@ import 'task_editor_toolbar.dart';
 import 'task_editor_popover.dart';
 import 'desktop_popover.dart';
 import 'task_slash_menu.dart';
+import 'task_document_commands.dart';
+import 'task_document_styles.dart';
+import 'persistent_anchored_popover.dart';
+
+export 'task_document_commands.dart';
+export 'task_document_styles.dart';
+
+/// The immutable state captured when a slash command starts.
+///
+/// A command is anchored to the slash itself, rather than to the current
+/// caret line. The editor can lose focus while the palette is being clicked,
+/// and the text before the slash can contain ordinary prose (for example
+/// `文字/`). Keeping these offsets makes both cases deterministic.
+class SlashCommandSession {
+  const SlashCommandSession({
+    required this.slashOffset,
+    required this.lineStart,
+    required this.originalSelection,
+  });
+
+  final int slashOffset;
+  final int lineStart;
+  final TextSelection originalSelection;
+}
 
 /// A document-first editor for a task. Title editing remains a normal field;
 /// everything below it is a Quill document whose Delta is persisted as the
@@ -49,28 +73,47 @@ class TaskDocumentEditor extends StatefulWidget {
 class TaskDocumentEditorState extends State<TaskDocumentEditor>
     with WidgetsBindingObserver {
   late final quill.QuillController editor;
+  late final TaskDocumentCommands documentCommands;
   late final FocusNode focus;
   late final ScrollController scroll;
   final renderEditorKey = GlobalKey<quill.EditorState>();
   final subtaskInputFocus = FocusNode(debugLabel: 'subtask-input');
+
+  /// The palette keeps its own selection model but never takes focus, so the
+  /// editor reaches it through this key and the caret stays in the document.
+  final _slashMenuKey = GlobalKey<TaskSlashMenuState>();
   OverlayEntry? _slashOverlay;
+  final _formatToolbar = PersistentAnchoredPopoverController();
   Offset _slashOffset = Offset.zero;
   late String serialized;
+  late String _lastEditorText;
+  SlashCommandSession? _slashSession;
+  bool _applyingSlash = false;
   bool selectionPresent = false;
   bool slashVisible = false;
   bool toolbarVisible = false;
+  bool _toolbarSyncScheduled = false;
   ScrollPosition? _ancestorScrollPosition;
 
   String get plainText => editor.document.toPlainText().trimRight();
 
   bool dismissSlashMenu() {
-    if (!slashVisible) return false;
-    setState(() => slashVisible = false);
-    _syncSlashOverlay();
+    if (_slashSession == null && !slashVisible) return false;
+    _closeSlashSession();
+    return true;
+  }
+
+  /// Closes the persistent formatting strip without releasing editor focus.
+  /// Slash and nested pickers are handled before this layer in the Escape
+  /// hierarchy.
+  bool dismissFormattingToolbar() {
+    if (!toolbarVisible && !_formatToolbar.isOpen) return false;
+    _closeFormattingToolbar();
     return true;
   }
 
   void _focusDocumentEnd() {
+    _closeSlashSession();
     editor.updateSelection(
         TextSelection.collapsed(offset: editor.document.length - 1),
         quill.ChangeSource.local);
@@ -93,7 +136,17 @@ class TaskDocumentEditorState extends State<TaskDocumentEditor>
         ),
       ),
     );
+    documentCommands = TaskDocumentCommands(
+      editor: editor,
+      pickAttachment: () =>
+          widget.controller.pickTaskAttachment(widget.task.id),
+      canMutate: () => mounted,
+      requestFocus: () {
+        if (mounted) focus.requestFocus();
+      },
+    );
     serialized = jsonEncode(editor.document.toDelta().toJson());
+    _lastEditorText = editor.document.toPlainText();
     editor.addListener(_changed);
   }
 
@@ -107,31 +160,35 @@ class TaskDocumentEditorState extends State<TaskDocumentEditor>
 
   void _focusChanged() {
     if (!mounted) return;
-    setState(() {
-      if (!focus.hasFocus) slashVisible = false;
-    });
-    if (!focus.hasFocus) _syncSlashOverlay();
+    // A palette click can transiently move focus away from Quill. Focus is
+    // therefore not a slash-session lifecycle event. The session is closed by
+    // an explicit command, Escape, outside click, deletion, task switch, or
+    // disposal instead.
+    if (focus.hasFocus && _slashSession != null) _syncSlashOverlay();
   }
 
   void _changed() {
     final text = editor.document.toPlainText();
-    final caret = editor.selection.baseOffset.clamp(0, text.length).toInt();
-    final beforeCaret = text.substring(0, caret);
-    final lineStart = beforeCaret.lastIndexOf('\n') + 1;
-    final line = beforeCaret.substring(lineStart);
-    final nextSlashVisible = focus.hasFocus &&
-        (line.trim() == '/' ||
-            (line.trimLeft().startsWith('/') && !line.contains('\n')));
-    final nextSelectionPresent = !editor.selection.isCollapsed;
-    if (mounted &&
-        (nextSlashVisible != slashVisible ||
-            nextSelectionPresent != selectionPresent)) {
-      setState(() {
-        slashVisible = nextSlashVisible;
-        selectionPresent = nextSelectionPresent;
-      });
-      _syncSlashOverlay();
+    final selection = editor.selection;
+    if (!_applyingSlash) {
+      final active = _slashSession;
+      if (active == null) {
+        final opened = _sessionForSlashInsertion(text, selection);
+        if (opened != null) _openSlashSession(opened);
+      } else if (!_sessionStillValid(active, text, selection)) {
+        // Typing after the slash, moving the caret, selecting text, or
+        // deleting the slash ends this invocation. There is intentionally no
+        // query/filter mode in this first implementation.
+        _closeSlashSession();
+      }
     }
+
+    final nextSelectionPresent = !selection.isCollapsed;
+    if (mounted && nextSelectionPresent != selectionPresent) {
+      setState(() => selectionPresent = nextSelectionPresent);
+    }
+
+    _lastEditorText = text;
 
     final delta = editor.document.toDelta().toJson();
     final current = jsonEncode(delta);
@@ -149,31 +206,54 @@ class TaskDocumentEditorState extends State<TaskDocumentEditor>
     final next = Scrollable.maybeOf(context)?.position;
     if (identical(next, _ancestorScrollPosition)) return;
     _ancestorScrollPosition?.removeListener(_syncSlashOverlay);
+    _ancestorScrollPosition?.removeListener(_syncFormattingToolbarOverlay);
     _ancestorScrollPosition = next;
     _ancestorScrollPosition?.addListener(_syncSlashOverlay);
+    _ancestorScrollPosition?.addListener(_syncFormattingToolbarOverlay);
   }
 
   @override
   void didChangeMetrics() {
     _syncSlashOverlay();
+    _syncFormattingToolbarOverlay();
   }
 
   @override
   void didUpdateWidget(covariant TaskDocumentEditor oldWidget) {
     super.didUpdateWidget(oldWidget);
+    final taskChanged = widget.task.id != oldWidget.task.id ||
+        !identical(widget.controller, oldWidget.controller);
+    if (taskChanged) {
+      _closeFormattingToolbar(notify: false, requestFocus: false);
+      _closeSlashSession();
+      final wasApplying = _applyingSlash;
+      _applyingSlash = true;
+      editor.document = _documentFor(widget.task);
+      _applyingSlash = wasApplying;
+      serialized = jsonEncode(editor.document.toDelta().toJson());
+      _lastEditorText = editor.document.toPlainText();
+      return;
+    }
     final incoming = jsonEncode(taskDocumentDelta(widget.task));
     if (incoming == serialized ||
         incoming == jsonEncode(taskDocumentDelta(oldWidget.task)) ||
         focus.hasFocus) return;
+    final wasApplying = _applyingSlash;
+    _applyingSlash = true;
     editor.document = _documentFor(widget.task);
+    _applyingSlash = wasApplying;
     serialized = jsonEncode(editor.document.toDelta().toJson());
+    _lastEditorText = editor.document.toPlainText();
   }
 
   @override
   void dispose() {
+    _formatToolbar.close();
     _slashOverlay?.remove();
     _slashOverlay = null;
+    _slashSession = null;
     _ancestorScrollPosition?.removeListener(_syncSlashOverlay);
+    _ancestorScrollPosition?.removeListener(_syncFormattingToolbarOverlay);
     WidgetsBinding.instance.removeObserver(this);
     editor.removeListener(_changed);
     editor.dispose();
@@ -185,66 +265,168 @@ class TaskDocumentEditorState extends State<TaskDocumentEditor>
     super.dispose();
   }
 
+  /// Toggles the persistent formatting strip anchored to the footer's `A`
+  /// button. It intentionally does not use [showTaskEditorPopover]: that API
+  /// creates a modal route whose lifetime is tied to one action.
   Future<void> toggleToolbar(BuildContext anchor) async {
-    if (!mounted || toolbarVisible) return;
-    setState(() => toolbarVisible = true);
-    widget.onToolbarChanged?.call(toolbarVisible);
-    // Keep the Quill selection alive while the footer trigger opens the
-    // floating strip. The popover itself uses preserveEditor focus policy.
-    focus.requestFocus();
-    final bounds = context.findRenderObject()! as RenderBox;
-    final trigger = anchor.findRenderObject()! as RenderBox;
-    final center = bounds.localToGlobal(Offset(bounds.size.width / 2, 0));
-    await showTaskEditorPopover<void>(
+    if (!mounted) return;
+    if (toolbarVisible || _formatToolbar.isOpen) {
+      _closeFormattingToolbar();
+      focus.requestFocus();
+      return;
+    }
+
+    final opened = _formatToolbar.open(
       anchor,
       width: TaskEditorPopoverStyle.toolbarWidth,
-      maxHeight: TaskEditorPopoverStyle.toolbarHeight,
-      anchorRect:
-          Rect.fromLTWH(center.dx, trigger.localToGlobal(Offset.zero).dy, 0, 0),
+      height: TaskEditorPopoverStyle.toolbarHeight,
       placement: const PopoverPlacement(
           preferredSide: PopoverSide.top,
           alignment: PopoverAlignment.center,
           gap: 28),
-      focusPolicy: PopoverFocusPolicy.preserveEditor,
+      popoverTheme: TaskEditorPopoverStyle.theme(anchor),
+      surfaceDecoration: taskFormattingToolbarDecoration(),
+      anchorRectResolver: () => _formatToolbarAnchorRect(anchor),
       builder: (_) => TaskEditorToolbar(
         controller: editor,
-        onAttach: _attach,
-        onLink: _link,
-        onInsertSlash: () {
-          editor.replaceText(editor.selection.baseOffset, 0, '/',
-              TextSelection.collapsed(offset: editor.selection.baseOffset + 1));
-          focus.requestFocus();
-        },
-        onInsertDivider: () {
-          _insertBlock({'type': 'horizontalRule'});
-          focus.requestFocus();
-        },
+        documentCommands: documentCommands,
+        onAttach: () => unawaited(documentCommands.insertAttachment()),
+        onLink: () => unawaited(_link()),
+        onInsertSlash: documentCommands.insertSlash,
+        onInsertDivider: documentCommands.insertDivider,
       ),
     );
-    if (!mounted) return;
-    setState(() => toolbarVisible = false);
-    widget.onToolbarChanged?.call(false);
+    if (!opened || !mounted) {
+      _formatToolbar.close();
+      return;
+    }
+    setState(() => toolbarVisible = true);
+    widget.onToolbarChanged?.call(true);
+    // The footer trigger lives outside Quill; reclaim focus without changing
+    // the controller's existing range so multiple commands can be composed.
     focus.requestFocus();
+    _syncFormattingToolbarOverlay();
   }
 
-  TextRange? _slashRange() {
-    final text = editor.document.toPlainText();
-    final caret = editor.selection.baseOffset.clamp(0, text.length).toInt();
-    final before = text.substring(0, caret);
-    final start = before.lastIndexOf('\n') + 1;
-    if (start >= caret || text.substring(start, caret).trim() != '/') {
+  Rect? _formatToolbarAnchorRect(BuildContext trigger) {
+    final bounds = context.findRenderObject() as RenderBox?;
+    final triggerBox = trigger.findRenderObject() as RenderBox?;
+    if (bounds == null ||
+        triggerBox == null ||
+        !bounds.attached ||
+        !triggerBox.attached ||
+        !bounds.hasSize ||
+        !triggerBox.hasSize) {
       return null;
     }
-    return TextRange(start: caret - 1, end: caret);
+    final center = bounds.localToGlobal(Offset(bounds.size.width / 2, 0));
+    final triggerOrigin = triggerBox.localToGlobal(Offset.zero);
+    return Rect.fromLTWH(center.dx, triggerOrigin.dy, 0, 0);
   }
 
-  void _removeSlash() {
-    final range = _slashRange();
-    if (range == null) return;
-    editor.replaceText(range.start, range.end - range.start, '',
-        TextSelection.collapsed(offset: range.start));
-    if (mounted) setState(() => slashVisible = false);
+  void _closeFormattingToolbar(
+      {bool notify = true, bool requestFocus = false}) {
+    final wasOpen = toolbarVisible || _formatToolbar.isOpen;
+    _formatToolbar.close();
+    if (!wasOpen) return;
+    if (mounted && toolbarVisible) setState(() => toolbarVisible = false);
+    if (notify) widget.onToolbarChanged?.call(false);
+    if (requestFocus) focus.requestFocus();
+  }
+
+  void _syncFormattingToolbarOverlay() {
+    if (!mounted || !toolbarVisible) return;
+    _formatToolbar.markNeedsBuild();
+  }
+
+  void _scheduleFormattingToolbarSync() {
+    if (!toolbarVisible || _toolbarSyncScheduled) return;
+    _toolbarSyncScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _toolbarSyncScheduled = false;
+      if (mounted) _syncFormattingToolbarOverlay();
+    });
+  }
+
+  SlashCommandSession? _sessionForSlashInsertion(
+      String text, TextSelection selection) {
+    if (!selection.isCollapsed || text.isEmpty) return null;
+    final slashOffset = selection.extentOffset - 1;
+    if (slashOffset < 0 ||
+        slashOffset >= text.length ||
+        text[slashOffset] != '/') {
+      return null;
+    }
+
+    // Compare the old/new documents as an edit. The changed part must be one
+    // slash at this exact offset; this handles both an ordinary insertion and
+    // replacing selected text while avoiding a false trigger when a caret is
+    // merely moved into an existing `foo/`.
+    var prefix = 0;
+    final common = math.min(_lastEditorText.length, text.length);
+    while (prefix < common && _lastEditorText[prefix] == text[prefix]) {
+      prefix++;
+    }
+    var oldEnd = _lastEditorText.length - 1;
+    var newEnd = text.length - 1;
+    while (oldEnd >= prefix &&
+        newEnd >= prefix &&
+        _lastEditorText[oldEnd] == text[newEnd]) {
+      oldEnd--;
+      newEnd--;
+    }
+    final inserted = newEnd < prefix ? '' : text.substring(prefix, newEnd + 1);
+    if (inserted != '/' || prefix != slashOffset) return null;
+
+    final lineStart =
+        slashOffset == 0 ? 0 : text.lastIndexOf('\n', slashOffset - 1) + 1;
+    return SlashCommandSession(
+      slashOffset: slashOffset,
+      lineStart: lineStart,
+      originalSelection: selection,
+    );
+  }
+
+  bool _sessionStillValid(
+      SlashCommandSession session, String text, TextSelection selection) {
+    return session.slashOffset >= 0 &&
+        session.slashOffset < text.length &&
+        text[session.slashOffset] == '/' &&
+        selection.isCollapsed &&
+        selection.extentOffset == session.slashOffset + 1;
+  }
+
+  void _openSlashSession(SlashCommandSession session) {
+    _slashSession = session;
+    if (!mounted) return;
+    if (!slashVisible) setState(() => slashVisible = true);
     _syncSlashOverlay();
+  }
+
+  void _closeSlashSession() {
+    _slashSession = null;
+    if (mounted && slashVisible) setState(() => slashVisible = false);
+    _slashOverlay?.remove();
+    _slashOverlay = null;
+  }
+
+  TextRange? _slashRange([SlashCommandSession? requested]) {
+    final session = requested ?? _slashSession;
+    if (session == null) return null;
+    final text = editor.document.toPlainText();
+    if (session.slashOffset < 0 ||
+        session.slashOffset >= text.length ||
+        text[session.slashOffset] != '/') {
+      return null;
+    }
+    return TextRange(start: session.slashOffset, end: session.slashOffset + 1);
+  }
+
+  bool _removeSlash(SlashCommandSession session) {
+    final range = _slashRange(session);
+    if (range == null) return false;
+    documentCommands.deleteRange(range.start, range.end - range.start);
+    return true;
   }
 
   void _syncSlashOverlay() {
@@ -257,7 +439,10 @@ class TaskDocumentEditorState extends State<TaskDocumentEditor>
     final overlay = Overlay.maybeOf(context, rootOverlay: true);
     if (overlay == null) return;
     final screen = MediaQuery.sizeOf(context);
-    final menuHeight = math.min(390.0, math.max(220.0, screen.height - 24));
+    // The full command set is 425pt tall. A window that cannot hold it gets a
+    // shorter card that scrolls, instead of one that spills past the edge.
+    final menuHeight = math.min(
+        TaskSlashMenu.heightFor(null), math.max(220.0, screen.height - 24));
     Offset? caretOrigin;
     double caretHeight = 20;
     final renderEditor = renderEditorKey.currentState?.renderEditor;
@@ -280,7 +465,7 @@ class TaskDocumentEditorState extends State<TaskDocumentEditor>
       final geometry = calculatePopoverGeometry(
         anchor: Rect.fromLTWH(origin.dx, origin.dy, 1, caretHeight),
         viewport: screen,
-        desiredSize: Size(276, menuHeight),
+        desiredSize: Size(TaskSlashMenuMetrics.width, menuHeight),
         placement: PopoverPlacement.bottomStart,
         safeArea: const EdgeInsets.all(12),
       );
@@ -291,131 +476,131 @@ class TaskDocumentEditorState extends State<TaskDocumentEditor>
       return;
     }
     _slashOverlay = OverlayEntry(
-      builder: (context) => Positioned(
-        left: _slashOffset.dx,
-        top: _slashOffset.dy,
-        child: TaskSlashMenu(onSelected: _applySlash),
-      ),
+      builder: (context) {
+        return Positioned(
+          left: _slashOffset.dx,
+          top: _slashOffset.dy,
+          child: TapRegion(
+            onTapOutside: (_) => _closeSlashSession(),
+            child: Focus(
+              canRequestFocus: false,
+              descendantsAreFocusable: false,
+              child: TaskSlashMenu(
+                key: _slashMenuKey,
+                maxHeight: menuHeight,
+                onSelected: _applySlash,
+              ),
+            ),
+          ),
+        );
+      },
     );
     overlay.insert(_slashOverlay!);
   }
 
-  void _formatLine(quill.Attribute attribute) {
-    final text = editor.document.toPlainText();
-    final caret = editor.selection.baseOffset.clamp(0, text.length).toInt();
-    final start = text.substring(0, caret).lastIndexOf('\n') + 1;
-    final endIndex = text.indexOf('\n', caret);
-    final end = endIndex < 0 ? text.length : endIndex + 1;
-    editor.formatText(
-        start, (end - start).clamp(1, text.length - start), attribute);
-  }
-
   void _applySlash(TaskSlashAction action) {
-    _removeSlash();
-    switch (action) {
-      case TaskSlashAction.heading1:
-        _formatLine(quill.Attribute.h1);
-      case TaskSlashAction.heading2:
-        _formatLine(quill.Attribute.h2);
-      case TaskSlashAction.heading3:
-        _formatLine(quill.Attribute.h3);
-      case TaskSlashAction.bullet:
-        _formatLine(quill.Attribute.ul);
-      case TaskSlashAction.ordered:
-        _formatLine(quill.Attribute.ol);
-      case TaskSlashAction.checklist:
-        _formatLine(quill.Attribute.checked);
-      case TaskSlashAction.quote:
-        _formatLine(quill.Attribute.blockQuote);
-      case TaskSlashAction.divider:
-        final at = editor.selection.baseOffset;
-        editor.replaceText(
-            at,
-            0,
-            quill.BlockEmbed(
-                'workfollow-block', jsonEncode({'type': 'horizontalRule'})),
-            TextSelection.collapsed(offset: at + 1));
-      case TaskSlashAction.subtask:
-        _insertBlock({'type': 'taskSubtasks'});
-      case TaskSlashAction.tag:
-        final callback = widget.onOpenTags;
-        if (callback != null) unawaited(callback(context));
-      case TaskSlashAction.relation:
-        final callback = widget.onOpenRelation;
-        if (callback != null) unawaited(callback(context));
-      case TaskSlashAction.attachment:
-        unawaited(_attach());
-      case TaskSlashAction.deadline:
-        final callback = widget.onOpenDeadline;
-        if (callback != null) unawaited(callback(context));
-      case TaskSlashAction.focus:
-        widget.onOpenFocus?.call();
+    final session = _slashSession;
+    if (session == null || _applyingSlash) return;
+    final range = _slashRange(session);
+    if (range == null) {
+      _closeSlashSession();
+      return;
     }
+    final at = session.slashOffset;
+    Future<void> Function(BuildContext)? openPicker;
+    var attach = false;
+    VoidCallback? openFocus;
+    _applyingSlash = true;
+    try {
+      if (!_removeSlash(session)) {
+        _closeSlashSession();
+        return;
+      }
+      switch (action) {
+        case TaskSlashAction.heading1:
+          documentCommands.setHeading1(lineStart: session.lineStart);
+        case TaskSlashAction.heading2:
+          documentCommands.setHeading2(lineStart: session.lineStart);
+        case TaskSlashAction.heading3:
+          documentCommands.setHeading3(lineStart: session.lineStart);
+        case TaskSlashAction.bullet:
+          documentCommands.toggleBulletList(lineStart: session.lineStart);
+        case TaskSlashAction.ordered:
+          documentCommands.toggleOrderedList(lineStart: session.lineStart);
+        case TaskSlashAction.checklist:
+          documentCommands.toggleChecklist(lineStart: session.lineStart);
+        case TaskSlashAction.quote:
+          documentCommands.toggleQuote(lineStart: session.lineStart);
+        case TaskSlashAction.divider:
+          documentCommands.insertDivider(at: at);
+        case TaskSlashAction.subtask:
+          documentCommands.insertSubtaskBlock(at: at);
+        case TaskSlashAction.tag:
+          openPicker = widget.onOpenTags;
+        case TaskSlashAction.relation:
+          openPicker = widget.onOpenRelation;
+        case TaskSlashAction.attachment:
+          attach = true;
+        case TaskSlashAction.deadline:
+          openPicker = widget.onOpenDeadline;
+        case TaskSlashAction.focus:
+          openFocus = widget.onOpenFocus;
+      }
+      final insertedBlock = action == TaskSlashAction.divider ||
+          action == TaskSlashAction.subtask;
+      final desiredCaret = insertedBlock ? at + 1 : at;
+      final maxCaret = math.max(0, editor.document.length - 1);
+      editor.updateSelection(
+          TextSelection.collapsed(
+              offset: desiredCaret.clamp(0, maxCaret).toInt()),
+          quill.ChangeSource.local);
+    } finally {
+      _applyingSlash = false;
+    }
+    _closeSlashSession();
     focus.requestFocus();
-  }
-
-  void _insertBlock(Map<String, dynamic> node) {
-    final at = editor.selection.baseOffset;
-    editor.replaceText(
-        at,
-        0,
-        quill.BlockEmbed('workfollow-block', jsonEncode(node)),
-        TextSelection.collapsed(offset: at + 1));
-  }
-
-  Future<void> _attach() async {
-    final filename = await widget.controller.pickTaskAttachment(widget.task.id);
-    if (!mounted || filename == null) return;
-    _insertBlock({
-      'type': 'attachment',
-      'attrs': {'name': filename, 'localFile': filename},
-    });
+    if (attach) unawaited(documentCommands.insertAttachment(at: at));
+    if (openPicker != null) unawaited(openPicker(context));
+    openFocus?.call();
   }
 
   Future<void> _link() async {
-    final selection = editor.selection;
     final input = TextEditingController();
-    final url = await showDialog<String>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('插入链接'),
-        content: TextField(
-          key: const ValueKey('task-link-input'),
-          controller: input,
-          autofocus: true,
-          keyboardType: TextInputType.url,
-          decoration: const InputDecoration(hintText: 'https://'),
-        ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('取消')),
-          FilledButton(
-              key: const ValueKey('task-link-apply'),
-              onPressed: () => Navigator.of(context).pop(input.text.trim()),
-              child: const Text('应用')),
-        ],
-      ),
+    await documentCommands.insertLink(
+      pickUrl: () async {
+        final url = await showDialog<String>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('插入链接'),
+            content: TextField(
+              key: const ValueKey('task-link-input'),
+              controller: input,
+              autofocus: true,
+              keyboardType: TextInputType.url,
+              decoration: const InputDecoration(hintText: 'https://'),
+            ),
+            actions: [
+              TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('取消')),
+              FilledButton(
+                  key: const ValueKey('task-link-apply'),
+                  onPressed: () => Navigator.of(context).pop(input.text.trim()),
+                  child: const Text('应用')),
+            ],
+          ),
+        );
+        input.dispose();
+        return url;
+      },
     );
-    input.dispose();
-    if (!mounted || url == null || url.isEmpty) return;
-    if (selection.isCollapsed) {
-      final at = selection.start.clamp(0, editor.document.length - 1);
-      editor.replaceText(
-          at, 0, url, TextSelection.collapsed(offset: at + url.length));
-      editor.formatText(at, url.length, quill.LinkAttribute(url));
-    } else {
-      editor.formatText(selection.start, selection.end - selection.start,
-          quill.LinkAttribute(url));
-    }
-    focus.requestFocus();
   }
 
   /// Public commands used by the inspector More menu and relation picker.
   void insertSubtasksBlock() {
     if (!_hasBlock(widget.task, 'taskSubtasks') &&
         widget.task.subtasks.isEmpty) {
-      _insertBlock({'type': 'taskSubtasks'});
+      documentCommands.insertSubtaskBlock();
     }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
@@ -426,23 +611,21 @@ class TaskDocumentEditorState extends State<TaskDocumentEditor>
     });
   }
 
-  void insertRelationBlock(String noteId) => _insertBlock({
-        'type': 'relation',
-        'attrs': {'noteId': noteId}
-      });
+  void insertRelationBlock(String noteId) =>
+      documentCommands.insertRelation(noteId);
 
-  Future<void> attachFile() => _attach();
+  Future<void> attachFile() async {
+    await documentCommands.insertAttachment();
+  }
+
+  /// Shared document command surface used by inspector entry points.
+  TaskDocumentCommands get commands => documentCommands;
 
   @override
   Widget build(BuildContext context) {
     final tokens = WorkFollowTheme.of(context);
-    final textStyle = Theme.of(context).textTheme.bodyLarge!.copyWith(
-          fontSize: WorkFollowMacTypography.body,
-          height: WorkFollowMacTypography.lineBody,
-          fontWeight: WorkFollowMacWeight.regular,
-          letterSpacing: WorkFollowMacTracking.none,
-          color: tokens.textPrimary,
-        );
+    _scheduleFormattingToolbarSync();
+    final textStyle = Theme.of(context).textTheme.bodyLarge!;
     final hasSubtaskBlock = _hasBlock(widget.task, 'taskSubtasks');
     final hasAttachmentBlock = _hasBlock(widget.task, 'attachment');
     final hasTrailingPanels =
@@ -470,19 +653,52 @@ class TaskDocumentEditorState extends State<TaskDocumentEditor>
                         editorKey: renderEditorKey,
                         // A key set keeps this binding ahead of Quill's
                         // default single-activator Escape binding when merged.
+                        //
+                        // ↑/↓/Enter are only claimed while the palette is open.
+                        // Quill sends plain Enter to the text input, and the
+                        // framework's own Enter and Space bindings exist to
+                        // hand those keys to the IME — an inner binding is the
+                        // only place where Enter can mean "run the highlighted
+                        // command" instead of "insert a newline".
                         customShortcuts: {
                           LogicalKeySet(LogicalKeyboardKey.escape):
                               const _TaskEditorEscapeIntent(),
+                          if (slashVisible) ...{
+                            LogicalKeySet(LogicalKeyboardKey.arrowDown):
+                                const _SlashMoveIntent(1),
+                            LogicalKeySet(LogicalKeyboardKey.arrowUp):
+                                const _SlashMoveIntent(-1),
+                            LogicalKeySet(LogicalKeyboardKey.enter):
+                                const _SlashAcceptIntent(),
+                            LogicalKeySet(LogicalKeyboardKey.numpadEnter):
+                                const _SlashAcceptIntent(),
+                          },
                         },
                         customActions: {
                           _TaskEditorEscapeIntent:
                               CallbackAction<_TaskEditorEscapeIntent>(
                             onInvoke: (_) {
+                              if (dismissSlashMenu()) return null;
+                              if (dismissFormattingToolbar()) return null;
                               if (widget.onEscape != null) {
                                 widget.onEscape!();
-                              } else if (!dismissSlashMenu()) {
+                              } else {
                                 focus.unfocus();
                               }
+                              return null;
+                            },
+                          ),
+                          _SlashMoveIntent: CallbackAction<_SlashMoveIntent>(
+                            onInvoke: (intent) {
+                              _slashMenuKey.currentState
+                                  ?.moveSelection(intent.delta);
+                              return null;
+                            },
+                          ),
+                          _SlashAcceptIntent:
+                              CallbackAction<_SlashAcceptIntent>(
+                            onInvoke: (_) {
+                              _slashMenuKey.currentState?.activateFocused();
                               return null;
                             },
                           ),
@@ -496,22 +712,12 @@ class TaskDocumentEditorState extends State<TaskDocumentEditor>
                         padding: const EdgeInsets.only(bottom: 20),
                         placeholder: '添加描述，输入 / 插入内容',
                         textCapitalization: TextCapitalization.sentences,
-                        customStyles: quill.DefaultStyles(
-                          paragraph: quill.DefaultTextBlockStyle(
-                            textStyle,
-                            const quill.HorizontalSpacing(0, 0),
-                            const quill.VerticalSpacing(0, 6),
-                            const quill.VerticalSpacing(0, 0),
-                            null,
-                          ),
-                          placeHolder: quill.DefaultTextBlockStyle(
-                            textStyle.copyWith(color: tokens.textTertiary),
-                            const quill.HorizontalSpacing(0, 0),
-                            const quill.VerticalSpacing(0, 6),
-                            const quill.VerticalSpacing(0, 0),
-                            null,
-                          ),
+                        customStyles: TaskDocumentStyles.build(
+                          tokens,
+                          base: textStyle,
                         ),
+                        customStyleBuilder:
+                            TaskDocumentStyles.customStyleBuilder(tokens),
                         embedBuilders: [
                           TaskDocumentBlockBuilder(
                             subtaskFocus: subtaskInputFocus,
@@ -531,7 +737,7 @@ class TaskDocumentEditorState extends State<TaskDocumentEditor>
                       TaskAttachmentsPanel(
                           task: widget.task,
                           controller: widget.controller,
-                          onAttach: () => _attach()),
+                          onAttach: () => unawaited(attachFile())),
                     if (widget.controller.sourceNoteFor(widget.task.id) !=
                             null &&
                         !_hasBlock(widget.task, 'relation'))
@@ -544,6 +750,18 @@ class TaskDocumentEditorState extends State<TaskDocumentEditor>
 
 class _TaskEditorEscapeIntent extends Intent {
   const _TaskEditorEscapeIntent();
+}
+
+/// ↑ / ↓ while the slash palette is open.
+class _SlashMoveIntent extends Intent {
+  const _SlashMoveIntent(this.delta);
+
+  final int delta;
+}
+
+/// Enter while the slash palette is open.
+class _SlashAcceptIntent extends Intent {
+  const _SlashAcceptIntent();
 }
 
 bool _hasBlock(TaskItem task, String type) {

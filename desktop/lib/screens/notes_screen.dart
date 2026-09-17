@@ -254,13 +254,14 @@ class _NoteCardState extends State<_NoteCard> {
   @override
   Widget build(BuildContext context) {
     final tokens = WorkFollowTheme.of(context), note = widget.note;
+    // See _IconRailButtonState in sidebar.dart: the surface fill never eases.
     return MouseRegion(
         onEnter: (_) => setState(() => hovering = true),
         onExit: (_) => setState(() => hovering = false),
         child: GestureDetector(
             onTap: widget.onTap,
-            child: AnimatedContainer(
-                duration: WorkFollowMotion.instant,
+            child: Container(
+                key: ValueKey('note-card-${note.id}'),
                 padding:
                     const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
                 decoration: BoxDecoration(

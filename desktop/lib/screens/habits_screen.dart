@@ -97,7 +97,8 @@ class HabitsScreen extends StatelessWidget {
     var color = existing?.color ?? colorHexFromValue(listColorPalette[4]);
     var schedule =
         Set<int>.from(existing?.schedule ?? const <int>{1, 2, 3, 4, 5, 6, 7});
-    final result = await showDialog<_HabitDraft>(
+    String? nameError;
+    await showDialog<void>(
       context: context,
       builder: (dialogContext) => StatefulBuilder(
         builder: (context, setState) {
@@ -111,8 +112,13 @@ class HabitsScreen extends StatelessWidget {
                   controller: name,
                   autofocus: true,
                   maxLength: 40,
-                  decoration: const InputDecoration(
-                      labelText: '习惯名称', hintText: '例如：喝水、拉伸、阅读'),
+                  onChanged: (_) {
+                    if (nameError != null) setState(() => nameError = null);
+                  },
+                  decoration: InputDecoration(
+                      labelText: '习惯名称',
+                      hintText: '例如：喝水、拉伸、阅读',
+                      errorText: nameError),
                 ),
                 const SizedBox(height: 10),
                 Align(
@@ -205,11 +211,30 @@ class HabitsScreen extends StatelessWidget {
                   onPressed: () => Navigator.of(dialogContext).pop(),
                   child: const Text('取消')),
               FilledButton(
-                  onPressed: () => Navigator.of(dialogContext).pop(_HabitDraft(
-                      name: name.text,
-                      icon: icon,
-                      color: color,
-                      schedule: schedule)),
+                  onPressed: () {
+                    final value = name.text.trim();
+                    if (value.isEmpty) {
+                      setState(() => nameError = '请输入习惯名称');
+                      return;
+                    }
+                    final saved = existing == null
+                        ? controller.addHabit(value,
+                            icon: icon,
+                            color: color,
+                            schedule: schedule)
+                        : (controller.updateHabit(existing.id,
+                                name: value,
+                                icon: icon,
+                                color: color,
+                                schedule: schedule)
+                            ? existing.id
+                            : null);
+                    if (saved == null) {
+                      setState(() => nameError = '名称为空或已存在');
+                      return;
+                    }
+                    Navigator.of(dialogContext).pop();
+                  },
                   child: Text(existing == null ? '创建' : '保存')),
             ],
           );
@@ -217,18 +242,8 @@ class HabitsScreen extends StatelessWidget {
       ),
     );
     name.dispose();
-    if (!context.mounted || result == null) return;
-    if (existing == null) {
-      controller.addHabit(result.name,
-          icon: result.icon, color: result.color, schedule: result.schedule);
-    } else if (!controller.updateHabit(existing.id,
-        name: result.name,
-        icon: result.icon,
-        color: result.color,
-        schedule: result.schedule)) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('名称为空或已存在。')));
-    }
+    // Creation and update happen inside the dialog so validation can stay next
+    // to the offending field instead of disappearing into a transient HUD.
   }
 
   Future<void> _confirmDelete(BuildContext context,
@@ -267,19 +282,6 @@ class HabitsScreen extends StatelessWidget {
         'run' => WorkFollowIcons.habitRun,
         _ => WorkFollowIcons.check,
       };
-}
-
-class _HabitDraft {
-  const _HabitDraft(
-      {required this.name,
-      required this.icon,
-      required this.color,
-      required this.schedule});
-
-  final String name;
-  final String icon;
-  final String? color;
-  final Set<int> schedule;
 }
 
 class _HabitCard extends StatelessWidget {

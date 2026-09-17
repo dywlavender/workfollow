@@ -51,6 +51,100 @@ class WorkFollowMetrics {
       WorkFollowLayout.taskRowComfortableHeight;
 }
 
+/// Geometry for the shared task-list surface.
+///
+/// Every task list — 最近 7 天 / 今天 / 计划 / 过期 / 收集箱 / 全部 / 已完成 /
+/// 单个清单 — resolves the same pane width, page gutter, row padding, checkbox
+/// size and divider inset from here. A list screen decides *which groups
+/// exist*; it never decides how wide the pane is or where the hairline starts.
+/// One page inventing its own `8` or `41` is how these views drifted apart.
+class TaskListMetrics {
+  const TaskListMetrics._();
+
+  /// Pane width. The list opens at [preferredPaneWidth], shrinks toward
+  /// [minPaneWidth] only before the inspector would drop below its own
+  /// minimum, and stops at [maxPaneWidth] instead of growing without bound the
+  /// way a pure ratio would on a wide display.
+  static const double minPaneWidth = 380;
+  static const double preferredPaneWidth = 440;
+  static const double maxPaneWidth = 470;
+
+  /// One gutter for the whole page: header, add bar, group headings and rows
+  /// share it, so their text starts on a single vertical.
+  static const double horizontalPadding = 20;
+
+  static const double headerHeight = 42;
+  static const double headerIconSize = 18;
+  static const double headerIconGap = 10;
+  static const double headerTopPadding = 18;
+  static const double headerBottomGap = 14;
+
+  static const double quickAddHeight = 42;
+  static const double quickAddRadius = 10;
+  static const double quickAddHorizontalPadding = 14;
+
+  static const double groupTopGap = 18;
+  static const double groupHeaderHeight = 30;
+
+  /// Chevron on a group heading. Small on purpose: it marks the group as
+  /// foldable without competing with the 13pt label beside it.
+  static const double groupChevronIconSize = 11;
+
+  static const double rowHorizontalPadding = 8;
+  static const double rowVerticalPadding = 7;
+  static const double rowMinHeight = 42;
+
+  /// Drawn size of the completion box, measured off the reference list.
+  ///
+  /// It is also the pointer target. An earlier version wrapped the 18pt box in
+  /// a 24x22 target to make it easier to hit, which pushed the title 7pt right
+  /// of where the reference puts it — and the whole row is clickable anyway,
+  /// so the box does not have to carry an oversized hit area itself.
+  static const double checkboxSize = 18;
+
+  /// Gap between the checkbox column and the title.
+  static const double checkboxTitleGap = 4;
+
+  /// Gap between title and description.
+  static const double titlePreviewGap = 4;
+
+  /// Gap between two metadata items on the trailing edge.
+  static const double metadataGap = 6;
+
+  /// Where the row hairline starts.
+  ///
+  /// The reference list draws it from the checkbox column — the line runs in
+  /// from just left of the box, so the box and the hairlines read as one
+  /// column. The first version derived it as `checkboxLeft + box + gap` (42),
+  /// which started the line under the title instead and looked nothing like
+  /// the reference.
+  static const double dividerLeftInset = rowHorizontalPadding - 2;
+
+  /// Pane width for the space a list + detail row can offer.
+  static double paneWidth(double available) =>
+      available.clamp(minPaneWidth, preferredPaneWidth);
+}
+
+/// Row-state fills for the task list.
+///
+/// Selection is neutral. A task row is not a brand-coloured card, and a hover
+/// must not read as a selection — the two used to share one tinted fill, which
+/// is exactly why a row the pointer merely crossed looked clicked. Only the
+/// keyboard keeps a ring, so a mouse click never leaves an outline behind.
+class TaskListColors {
+  const TaskListColors._();
+
+  static Color rowFill(WorkFollowTheme tokens,
+      {required bool selected, required bool hovering}) {
+    if (selected) return tokens.listRowSelected;
+    if (hovering) return tokens.listRowHover;
+    return Colors.transparent;
+  }
+
+  static Color rowFocusRing(WorkFollowTheme tokens) =>
+      tokens.accent.withValues(alpha: .35);
+}
+
 class WorkFollowSpacing {
   const WorkFollowSpacing._();
 
@@ -88,8 +182,16 @@ class WorkFollowSpacing {
 /// settings, search, menus — resolves the same role for the same job, so the
 /// app cannot drift into "the task page looks native, the notes page looks
 /// like a web page". Several roles deliberately share a value (13 is used by
-/// [sectionTitle], [listBody] and [control]); they are separate names because
-/// they are separate jobs, and a change to one must not silently move another.
+/// [sectionTitle] and [control]); they are separate names because they are
+/// separate jobs, and a change to one must not silently move another.
+///
+/// Two values are calibrated against the reference screenshots rather than
+/// rounded to whole pixels:
+///
+/// - [pageTitle] is 19, not 20. At 20 with semibold the page heading read
+///   heavier than the reference; 18 overshoots the other way.
+/// - [listBody] is 12.5, not 13. The task preview sat slightly too prominent
+///   next to the task title; 12 would drop it a full step.
 ///
 /// Hierarchy comes from three weights ([WorkFollowMacWeight]) and four line
 /// heights, never from a long ladder of one-off sizes. Chinese strings keep
@@ -98,7 +200,7 @@ class WorkFollowMacTypography {
   const WorkFollowMacTypography._();
 
   // App shell / page.
-  static const double pageTitle = 20;
+  static const double pageTitle = 19;
   static const double sectionTitle = 13;
 
   // Navigation.
@@ -107,7 +209,7 @@ class WorkFollowMacTypography {
 
   // List.
   static const double listTitle = 14;
-  static const double listBody = 13;
+  static const double listBody = 12.5;
   static const double listMeta = 12;
 
   // Detail / editor.
@@ -115,16 +217,37 @@ class WorkFollowMacTypography {
   static const double body = 14;
   static const double supporting = 12;
 
+  // Task document blocks. These are semantic document roles rather than
+  // Quill's Material defaults, so changing the editor never changes stored
+  // Delta attributes.
+  static const double documentH1 = 22;
+  static const double documentH2 = 19;
+  static const double documentH3 = 16;
+
   // Controls.
   static const double control = 13;
   static const double menu = 14;
   static const double caption = 11;
+
+  /// Tiny labels within the 30-point calendar cells (holiday name and 班／休).
+  static const double calendarAnnotation = 6;
+
+  /// The result HUD's message (see `features/feedback`).
+  ///
+  /// 15 rather than [body]'s 14 is deliberate, and it is a role rather than a
+  /// one-off: the HUD is the only surface in the app that is dark in both
+  /// themes, and it is read at a glance while the pointer is elsewhere. 14 read
+  /// as a second-tier caption on that field; 16 pushed it into a heading. The
+  /// value is calibrated against the reference HUD, so do not round it to 14.
+  static const double feedback = 15;
 
   // Line heights.
   static const double lineTight = 1.25;
   static const double lineControl = 1.35;
   static const double lineList = 1.40;
   static const double lineBody = 1.50;
+  static const double documentHeadingLine = 1.35;
+  static const double documentHeading3Line = 1.40;
 }
 
 /// The only three weights the macOS app uses. Semibold is the ceiling:
@@ -154,6 +277,19 @@ class WorkFollowMacDisplay {
 
   /// The focus timer countdown.
   static const double timer = 42;
+
+  /// The `H` of the slash menu's `H₁ / H₂ / H₃` leading glyphs. Drawn as text
+  /// because no icon carries the level: Material's `title` / `text_fields` /
+  /// `short_text` only read as "some heading". Measured off the reference
+  /// menu, where the `H` cap height is 21px at 2x — 15pt in the system face.
+  static const double slashHeading = 15;
+
+  /// The subscript level of the same glyphs. Sits on the `H` baseline.
+  static const double slashHeadingIndex = 9;
+
+  /// The stacked `1 2 3` inside the ordered-list glyph. Part of the drawn
+  /// icon rather than a text role: at this size it is a mark, not a letter.
+  static const double slashOrderedNumeral = 4.5;
 }
 
 /// Letter spacing for the macOS surface.
@@ -305,8 +441,12 @@ class WorkFollowLayout {
   // Native macOS compact profile. The Web values above remain the migration
   // contract; these values are the deliberate local-shell density choice.
   static const double compactTaskNavigationWidth = 196;
-  static const double compactTaskListWidth = 380;
-  static const double compactTaskListMinWidth = 320;
+  // The native list pane resolves its width from [TaskListMetrics], so every
+  // task list shares one pane. The old 380 was wide enough for a navigation
+  // column and not for a task row: titles ellipsised early, the trailing
+  // metadata crowded the title, and the whole list read as a narrow sidebar.
+  static const double compactTaskListWidth = TaskListMetrics.preferredPaneWidth;
+  static const double compactTaskListMinWidth = TaskListMetrics.minPaneWidth;
   static const double taskListDividerWidth = 1;
   static const double taskDetailMinWidth = 320;
   static const double narrowTaskListMinWidth = 300;
@@ -562,11 +702,18 @@ class WorkFollowTheme extends ThemeExtension<WorkFollowTheme> {
     required this.accentHover,
     required this.accentSoft,
     required this.accentFaint,
+    required this.menuSelected,
+    required this.menuDivider,
+    required this.listRowHover,
+    required this.listRowSelected,
     required this.success,
     required this.warning,
     required this.danger,
     required this.shadow,
     required this.seasonalSky,
+    required this.feedbackSurface,
+    required this.feedbackText,
+    required this.feedbackAction,
   });
 
   final Color canvas;
@@ -595,11 +742,45 @@ class WorkFollowTheme extends ThemeExtension<WorkFollowTheme> {
   final Color accentHover;
   final Color accentSoft;
   final Color accentFaint;
+
+  /// Neutral hover/selected fills for command surfaces — the slash menu, the
+  /// more menu, the command palette.
+  ///
+  /// Menus used to reuse `accentFaint`, which tinted every hover with brand
+  /// teal and made a command list read as an actionable card. A menu is a
+  /// neutral surface: selection is a quiet grey, and the icon and label keep
+  /// their colour and weight so the row does not "jump" as the pointer moves.
+  final Color menuSelected;
+
+  /// Hairline between menu sections. Weaker than [border] on purpose: a menu
+  /// divider separates, it does not frame.
+  final Color menuDivider;
+
+  /// Row-state fills for the task list: a quiet grey hover and a slightly
+  /// deeper, still neutral selection. Kept as (0) state tokens rather than
+  /// tints of [accent] so a row never wears the brand colour.
+  final Color listRowHover;
+  final Color listRowSelected;
+
   final Color success;
   final Color warning;
   final Color danger;
   final Color shadow;
   final LinearGradient seasonalSky;
+
+  /// The result HUD — the one surface that is dark in *both* themes.
+  ///
+  /// A transient system message deliberately does not participate in the
+  /// light/dark adaptation the rest of the app does: it is a HUD, it reads the
+  /// same over either background, and keeping it one colour is what makes
+  /// [feedbackAction] legible against it. [overlay] is the wrong token here —
+  /// it inverts between themes and carries a border.
+  final Color feedbackSurface;
+  final Color feedbackText;
+
+  /// Warm, unlike [accent]: the HUD already owns a cool neutral field, and the
+  /// undo affordance has to separate from the message at 15pt.
+  final Color feedbackAction;
 
   static const light = WorkFollowTheme(
     canvas: Color(0xFFF2F4F8),
@@ -627,6 +808,10 @@ class WorkFollowTheme extends ThemeExtension<WorkFollowTheme> {
     accentHover: Color(0xFF238E79),
     accentSoft: Color(0xFFD8F2EB),
     accentFaint: Color(0xFFEFFAF7),
+    menuSelected: Color(0xFFF6F6F6),
+    menuDivider: Color(0xFFF2F3F3),
+    listRowHover: Color(0xFFF5F7F8),
+    listRowSelected: Color(0xFFEEF1F3),
     success: Color(0xFF2EAB78),
     warning: Color(0xFFC67912),
     danger: Color(0xFFE45454),
@@ -636,6 +821,9 @@ class WorkFollowTheme extends ThemeExtension<WorkFollowTheme> {
       end: Alignment.bottomRight,
       colors: [Color(0xFFF2F4FF), Color(0xFFF7F8FA)],
     ),
+    feedbackSurface: Color(0xFF2C2C2E),
+    feedbackText: Color(0xF5FFFFFF),
+    feedbackAction: Color(0xFFF0B37E),
   );
 
   static const dark = WorkFollowTheme(
@@ -664,6 +852,10 @@ class WorkFollowTheme extends ThemeExtension<WorkFollowTheme> {
     accentHover: Color(0xFF98A1FF),
     accentSoft: Color(0xFF2D355C),
     accentFaint: Color(0xFF252B4A),
+    menuSelected: Color(0xFF363A42),
+    menuDivider: Color(0xFF3A3E47),
+    listRowHover: Color(0xFF23262C),
+    listRowSelected: Color(0xFF2A2E35),
     success: Color(0xFF5BCE91),
     warning: Color(0xFFF2B84B),
     danger: Color(0xFFFF6868),
@@ -673,6 +865,10 @@ class WorkFollowTheme extends ThemeExtension<WorkFollowTheme> {
       end: Alignment.bottomRight,
       colors: [Color(0xFF202124), Color(0xFF1B1C1E)],
     ),
+    // Same HUD in both themes; see the field docs.
+    feedbackSurface: Color(0xFF2C2C2E),
+    feedbackText: Color(0xF5FFFFFF),
+    feedbackAction: Color(0xFFF0B37E),
   );
 
   static WorkFollowTheme of(BuildContext context) {
@@ -703,11 +899,18 @@ class WorkFollowTheme extends ThemeExtension<WorkFollowTheme> {
     Color? accentHover,
     Color? accentSoft,
     Color? accentFaint,
+    Color? menuSelected,
+    Color? menuDivider,
+    Color? listRowHover,
+    Color? listRowSelected,
     Color? success,
     Color? warning,
     Color? danger,
     Color? shadow,
     LinearGradient? seasonalSky,
+    Color? feedbackSurface,
+    Color? feedbackText,
+    Color? feedbackAction,
   }) {
     return WorkFollowTheme(
       canvas: canvas ?? this.canvas,
@@ -731,11 +934,18 @@ class WorkFollowTheme extends ThemeExtension<WorkFollowTheme> {
       accentHover: accentHover ?? this.accentHover,
       accentSoft: accentSoft ?? this.accentSoft,
       accentFaint: accentFaint ?? this.accentFaint,
+      menuSelected: menuSelected ?? this.menuSelected,
+      menuDivider: menuDivider ?? this.menuDivider,
+      listRowHover: listRowHover ?? this.listRowHover,
+      listRowSelected: listRowSelected ?? this.listRowSelected,
       success: success ?? this.success,
       warning: warning ?? this.warning,
       danger: danger ?? this.danger,
       shadow: shadow ?? this.shadow,
       seasonalSky: seasonalSky ?? this.seasonalSky,
+      feedbackSurface: feedbackSurface ?? this.feedbackSurface,
+      feedbackText: feedbackText ?? this.feedbackText,
+      feedbackAction: feedbackAction ?? this.feedbackAction,
     );
   }
 
@@ -765,11 +975,18 @@ class WorkFollowTheme extends ThemeExtension<WorkFollowTheme> {
       accentHover: Color.lerp(accentHover, other.accentHover, t)!,
       accentSoft: Color.lerp(accentSoft, other.accentSoft, t)!,
       accentFaint: Color.lerp(accentFaint, other.accentFaint, t)!,
+      menuSelected: Color.lerp(menuSelected, other.menuSelected, t)!,
+      menuDivider: Color.lerp(menuDivider, other.menuDivider, t)!,
+      listRowHover: Color.lerp(listRowHover, other.listRowHover, t)!,
+      listRowSelected: Color.lerp(listRowSelected, other.listRowSelected, t)!,
       success: Color.lerp(success, other.success, t)!,
       warning: Color.lerp(warning, other.warning, t)!,
       danger: Color.lerp(danger, other.danger, t)!,
       shadow: Color.lerp(shadow, other.shadow, t)!,
       seasonalSky: t < .5 ? seasonalSky : other.seasonalSky,
+      feedbackSurface: Color.lerp(feedbackSurface, other.feedbackSurface, t)!,
+      feedbackText: Color.lerp(feedbackText, other.feedbackText, t)!,
+      feedbackAction: Color.lerp(feedbackAction, other.feedbackAction, t)!,
     );
   }
 }

@@ -271,8 +271,7 @@ class _CommandPaletteState extends State<_CommandPalette> {
                         final selected = index == safeIndex;
                         return GestureDetector(
                           onTap: () => _run(command),
-                          child: AnimatedContainer(
-                            duration: const Duration(milliseconds: 120),
+                          child: Container(
                             margin: const EdgeInsets.symmetric(
                                 horizontal: 8, vertical: 2),
                             padding: const EdgeInsets.symmetric(

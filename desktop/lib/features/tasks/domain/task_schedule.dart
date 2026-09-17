@@ -15,7 +15,10 @@ class TaskScheduleDraft {
         (preserveClock != null &&
             (preserveClock.hour != 0 || preserveClock.minute != 0));
     return TaskScheduleDraft(
-      dueAt: DateTime(day.year, day.month, day.day,
+      dueAt: DateTime(
+          day.year,
+          day.month,
+          day.day,
           timed ? (preserveClock?.hour ?? day.hour) : 0,
           timed ? (preserveClock?.minute ?? day.minute) : 0),
       hasTime: timed,
@@ -27,7 +30,8 @@ class TaskScheduleDraft {
 
   bool get isEmpty => dueAt == null;
 
-  TaskScheduleDraft copyWith({DateTime? dueAt, bool? hasTime, bool clear = false}) {
+  TaskScheduleDraft copyWith(
+      {DateTime? dueAt, bool? hasTime, bool clear = false}) {
     if (clear) return const TaskScheduleDraft();
     return TaskScheduleDraft(
       dueAt: dueAt ?? this.dueAt,
@@ -44,8 +48,8 @@ class TaskScheduleDraft {
   DateTime? get normalizedDueAt {
     final value = dueAt;
     if (value == null) return null;
-    return DateTime(value.year, value.month, value.day, hasTime ? value.hour : 0,
-        hasTime ? value.minute : 0);
+    return DateTime(value.year, value.month, value.day,
+        hasTime ? value.hour : 0, hasTime ? value.minute : 0);
   }
 
   @override

@@ -4,6 +4,7 @@ import '../models/task.dart';
 import '../state/workspace_controller.dart';
 import '../theme/workfollow_icons.dart';
 import '../theme/workfollow_theme.dart';
+import '../features/tasks/presentation/task_feedback_mapper.dart';
 import '../widgets/app_icon_button.dart';
 import '../widgets/app_surfaces.dart';
 import '../widgets/quick_add.dart';
@@ -419,9 +420,13 @@ class _HomeTaskList extends StatelessWidget {
             controller: controller,
             overdue: overdue,
             onOpen: () => controller.openTask(task.id),
-            onToggle: () => task.completed
-                ? controller.taskActions.restore(task.id)
-                : controller.taskActions.complete(task.id),
+            onToggle: () {
+              final result = task.completed
+                  ? controller.taskActions.restore(task.id)
+                  : controller.taskActions.complete(task.id);
+              presentTaskResultIn(context, result,
+                  actionVersion: controller.actionVersion);
+            },
           ),
       ],
     );

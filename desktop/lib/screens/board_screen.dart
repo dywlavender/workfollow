@@ -4,6 +4,7 @@ import '../models/task.dart';
 import '../state/workspace_controller.dart';
 import '../theme/workfollow_icons.dart';
 import '../theme/workfollow_theme.dart';
+import '../features/tasks/presentation/task_feedback_mapper.dart';
 import '../widgets/app_icon_button.dart';
 import '../widgets/app_surfaces.dart';
 
@@ -141,8 +142,7 @@ class _GroupingSegment extends StatelessWidget {
           InkWell(
             onTap: () => onChanged(option.$1),
             borderRadius: BorderRadius.circular(WorkFollowRadii.control),
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 140),
+            child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
               decoration: BoxDecoration(
                   color: grouping == option.$1
@@ -205,8 +205,7 @@ class _BoardColumn extends StatelessWidget {
           controller.moveTaskToBoardColumn(details.data, grouping, meta.key),
       builder: (context, candidateData, rejectedData) {
         final active = candidateData.isNotEmpty;
-        return AnimatedContainer(
-          duration: const Duration(milliseconds: 140),
+        return Container(
           decoration: BoxDecoration(
             color: active
                 ? meta.color.withValues(alpha: .08)
@@ -321,9 +320,13 @@ class _BoardTaskCard extends StatelessWidget {
           height: 24,
           child: Checkbox(
               value: task.completed,
-              onChanged: (_) => task.completed
-                  ? controller.taskActions.restore(task.id)
-                  : controller.taskActions.complete(task.id),
+              onChanged: (_) {
+                final result = task.completed
+                    ? controller.taskActions.restore(task.id)
+                    : controller.taskActions.complete(task.id);
+                presentTaskResultIn(context, result,
+                    actionVersion: controller.actionVersion);
+              },
               activeColor: tokens.success,
               side: BorderSide(color: accent, width: 1.4),
               shape: RoundedRectangleBorder(

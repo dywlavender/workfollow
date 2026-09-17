@@ -7,12 +7,14 @@ import 'task_editor_glyph.dart';
 import 'desktop_popover.dart';
 import 'task_editor_popover.dart';
 import 'task_menu_style.dart';
+import 'task_document_commands.dart';
 
 /// Floating formatting strip; the document selection survives nested pickers.
 class TaskEditorToolbar extends StatelessWidget {
   const TaskEditorToolbar({
     super.key,
     required this.controller,
+    this.documentCommands,
     required this.onAttach,
     required this.onInsertSlash,
     required this.onInsertDivider,
@@ -20,21 +22,51 @@ class TaskEditorToolbar extends StatelessWidget {
   });
 
   final quill.QuillController controller;
+
+  /// Shared document mutation service. It is optional for source-compatible
+  /// callers; task and note editors always provide their owned instance.
+  final TaskDocumentCommands? documentCommands;
   final VoidCallback onAttach;
   final VoidCallback onInsertSlash;
   final VoidCallback onInsertDivider;
   final VoidCallback onLink;
 
+  TaskDocumentCommands get _commands =>
+      documentCommands ?? TaskDocumentCommands(editor: controller);
+
   bool _active(quill.Attribute attribute) {
-    final value =
-        controller.getSelectionStyle().attributes[attribute.key]?.value;
-    return value == attribute.value ||
-        (attribute == quill.Attribute.unchecked &&
-            value == quill.Attribute.checked.value);
+    return _commands.isActive(attribute);
   }
 
-  void _format(quill.Attribute attribute) => controller.formatSelection(
-      _active(attribute) ? quill.Attribute.clone(attribute, null) : attribute);
+  void _format(quill.Attribute attribute) {
+    // The toolbar only chooses a semantic command. Quill attributes are
+    // interpreted and applied by TaskDocumentCommands so the slash palette
+    // and every other document entry point share exactly one mutation path.
+    switch (attribute.key) {
+      case 'bold':
+        _commands.toggleBold();
+      case 'italic':
+        _commands.toggleItalic();
+      case 'underline':
+        _commands.toggleUnderline();
+      case 'strike':
+        _commands.toggleStrike();
+      case 'code':
+        _commands.toggleInlineCode();
+      case 'background':
+        _commands.toggleHighlight();
+      case 'list' when attribute.value == quill.Attribute.unchecked.value:
+        _commands.toggleChecklist();
+      case 'list' when attribute.value == quill.Attribute.ul.value:
+        _commands.toggleBulletList();
+      case 'list' when attribute.value == quill.Attribute.ol.value:
+        _commands.toggleOrderedList();
+      case 'blockquote':
+        _commands.toggleQuote();
+      default:
+        _commands.toggleAttribute(attribute);
+    }
+  }
 
   Future<void> _heading(BuildContext anchor) async {
     final level = await showTaskEditorPopover<int>(
@@ -49,23 +81,26 @@ class TaskEditorToolbar extends StatelessWidget {
             _PickerRow(
                 key: ValueKey('task-format-heading-${item.$1}'),
                 label: item.$2,
-                selected: (controller
-                            .getSelectionStyle()
-                            .attributes[quill.Attribute.header.key]
-                            ?.value ??
-                        0) ==
-                    item.$1,
+                selected: (_commands.headingLevel ?? 0) == item.$1,
                 onTap: () => Navigator.of(context).pop(item.$1)),
         ]),
       ),
     );
-    if (level != null)
-      controller.formatSelection(
-          quill.Attribute.clone(quill.Attribute.h1, level == 0 ? null : level));
+    if (level != null) {
+      switch (level) {
+        case 0:
+          _commands.setParagraph();
+        case 1:
+          _commands.setHeading1();
+        case 2:
+          _commands.setHeading2();
+        case 3:
+          _commands.setHeading3();
+      }
+    }
   }
 
   Future<void> _time(BuildContext anchor) async {
-    final selection = controller.selection;
     final now = DateTime.now();
     final date = '${now.year}年${now.month}月${now.day}日';
     final time =
@@ -92,10 +127,7 @@ class TaskEditorToolbar extends StatelessWidget {
       ),
     );
     if (value == null) return;
-    final at = selection.start.clamp(0, controller.document.length - 1);
-    final length = selection.end.clamp(at, controller.document.length - 1) - at;
-    controller.replaceText(
-        at, length, value, TextSelection.collapsed(offset: at + value.length));
+    _commands.insertText(value);
   }
 
   @override
@@ -127,11 +159,7 @@ class TaskEditorToolbar extends StatelessWidget {
                     key: const ValueKey('task-format-heading'),
                     tooltip: '标题',
                     label: 'H',
-                    selected: controller
-                            .getSelectionStyle()
-                            .attributes[quill.Attribute.header.key]
-                            ?.value !=
-                        null,
+                    selected: _commands.headingLevel != null,
                     onPressed: _heading),
                 format(
                     'bold', '粗体', WorkFollowIcons.bold, quill.Attribute.bold),
@@ -240,8 +268,10 @@ class _ToolButton extends StatelessWidget {
                                     .textTheme
                                     .bodyMedium!
                                     .copyWith(
-                                        fontSize: WorkFollowMacDisplay.glyphLabel,
-                                        height: WorkFollowMacTypography.lineTight,
+                                        fontSize:
+                                            WorkFollowMacDisplay.glyphLabel,
+                                        height:
+                                            WorkFollowMacTypography.lineTight,
                                         color: highlight
                                             ? const Color(0xFF566400)
                                             : color)),

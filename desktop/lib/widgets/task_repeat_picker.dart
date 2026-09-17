@@ -58,7 +58,8 @@ class _TaskRepeatEditorState extends State<_TaskRepeatEditor> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const Text('重复任务', style: TextStyle(fontWeight: WorkFollowMacWeight.semibold)),
+            const Text('重复任务',
+                style: TextStyle(fontWeight: WorkFollowMacWeight.semibold)),
             const SizedBox(height: 12),
             DropdownButtonFormField<String>(
                 initialValue: type,
@@ -72,7 +73,12 @@ class _TaskRepeatEditorState extends State<_TaskRepeatEditor> {
                     'NONE': '不重复',
                     'DAILY': '每天',
                     'WEEKLY': '每周',
-                    'MONTHLY': '每月'
+                    'MONTHLY': '每月',
+                    'YEARLY': '每年',
+                    'WEEKDAYS': '每周一至周五',
+                    'WEEKENDS': '每周六、周日',
+                    'WORKDAYS': '法定工作日',
+                    'HOLIDAYS': '法定休息日'
                   }.entries)
                     DropdownMenuItem(value: entry.key, child: Text(entry.value))
                 ],
@@ -103,19 +109,30 @@ class _TaskRepeatEditorState extends State<_TaskRepeatEditor> {
                       })),
             ],
             const SizedBox(height: 12),
-            const Text('完成本次任务后，会自动生成下一次。', style: TextStyle(fontSize: WorkFollowMacTypography.supporting)),
+            const Text('完成本次任务后，会自动生成下一次。',
+                style: TextStyle(fontSize: WorkFollowMacTypography.supporting)),
             const SizedBox(height: 16),
             Align(
                 alignment: Alignment.centerRight,
                 child: FilledButton(
                     onPressed: () => Navigator.of(context).pop(
-                          RecurrenceDraft(
-                              type: type,
-                              config: type == 'WEEKLY'
-                                  ? <String, dynamic>{'weekday': weekday}
-                                  : type == 'MONTHLY'
-                                      ? <String, dynamic>{'dayOfMonth': day}
-                                      : null),
+                          RecurrenceDraft(type: type, config: {
+                            if (widget.task.recurrenceConfig?['endDate'] !=
+                                null)
+                              'endDate':
+                                  widget.task.recurrenceConfig!['endDate'],
+                            if (widget.task.recurrenceConfig?['count'] != null)
+                              'count': widget.task.recurrenceConfig!['count'],
+                            if (type == 'WEEKLY') 'weekday': weekday,
+                            if (type == 'MONTHLY' || type == 'YEARLY')
+                              'dayOfMonth': day,
+                            if (type == 'YEARLY')
+                              'month': widget.task.recurrenceConfig?['month'] ??
+                                  (localDateTimeFromStorage(
+                                              widget.task.dueAt) ??
+                                          DateTime.now())
+                                      .month,
+                          }),
                         ),
                     child: const Text('确定'))),
           ]));

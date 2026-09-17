@@ -14,8 +14,11 @@ void main() {
     expect(WorkFollowLayout.taskListMinWidth, 360);
     expect(WorkFollowLayout.taskListWidth, 430);
     expect(WorkFollowLayout.compactTaskNavigationWidth, 196);
-    expect(WorkFollowLayout.compactTaskListMinWidth, 320);
-    expect(WorkFollowLayout.compactTaskListWidth, 380);
+    // The native list pane is now driven by TaskListMetrics: 440 wide, never
+    // below 380. The old 380/320 pair was a navigation-column width, and it
+    // ellipsised task titles before their metadata.
+    expect(WorkFollowLayout.compactTaskListMinWidth, 380);
+    expect(WorkFollowLayout.compactTaskListWidth, 440);
     expect(WorkFollowMetrics.compactNavigationRowHeight, 34);
     expect(WorkFollowMetrics.compactNavigationSectionTop, 14);
     expect(WorkFollowLayout.taskListDividerWidth, 1);

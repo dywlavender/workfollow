@@ -15,6 +15,12 @@ import 'task_menu_style.dart';
 
 class TaskMoreMenu {
   const TaskMoreMenu._();
+
+  /// Presents only the entry list and returns the user's selection. The
+  /// controller parameter remains part of the public call shape for existing
+  /// inspectors, but this widget deliberately performs no task or document
+  /// mutation; the inspector routes the result to TaskActions or
+  /// TaskDocumentCommands.
   static Future<TaskMenuSelection?> show(BuildContext anchor,
           {required TaskItem task, required WorkspaceController controller}) =>
       showTaskEditorPopover<TaskMenuSelection>(
@@ -111,7 +117,9 @@ class _MoreMenuState extends State<_MoreMenu> {
                               style: Theme.of(context)
                                   .textTheme
                                   .bodyMedium!
-                                  .copyWith(fontSize: WorkFollowMacTypography.menu, color: color))),
+                                  .copyWith(
+                                      fontSize: WorkFollowMacTypography.menu,
+                                      color: color))),
                     ]),
                   ),
                 );

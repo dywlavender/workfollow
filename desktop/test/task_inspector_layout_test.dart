@@ -291,8 +291,8 @@ void main() {
     }
 
     await openProperty('reminder');
-    await tester.tap(keyed('date-shortcut-明天').last);
-    await tester.tap(keyed('apply-date').last);
+    await tester.tap(keyed('reminder-offset-0'));
+    await tester.tap(keyed('confirm-schedule-option'));
     await tester.pumpAndSettle();
     await tester.tap(keyed('apply-date'));
     await tester.pumpAndSettle();
@@ -306,11 +306,7 @@ void main() {
     expect(keyed('task-reminder'), findsNothing);
 
     await openProperty('repeat');
-    await tester.tap(find.byType(DropdownButtonFormField<String>));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('每天').last);
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('确定').last);
+    await tester.tap(keyed('repeat-DAILY'));
     await tester.pumpAndSettle();
     await tester.tap(keyed('apply-date'));
     await tester.pumpAndSettle();

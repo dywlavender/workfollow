@@ -168,8 +168,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
                         final dragActive = candidateData.isNotEmpty;
                         return GestureDetector(
                           onTap: () => setState(() => selectedDay = date),
-                          child: AnimatedContainer(
-                            duration: const Duration(milliseconds: 140),
+                          child: Container(
                             padding: const EdgeInsets.fromLTRB(9, 8, 8, 7),
                             decoration: BoxDecoration(
                                 color: dragActive
@@ -357,8 +356,7 @@ class _WeekDayColumn extends StatelessWidget {
         final active = candidateData.isNotEmpty;
         return GestureDetector(
           onTap: () => onSelectDay(day),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 140),
+          child: Container(
             margin: const EdgeInsets.only(right: 8),
             padding: const EdgeInsets.fromLTRB(9, 9, 9, 8),
             decoration: BoxDecoration(

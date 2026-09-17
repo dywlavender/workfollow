@@ -7,10 +7,14 @@ class TaskScheduleSettings {
     this.schedule = const TaskScheduleDraft(),
     this.endAt,
     this.reminderAt,
+    this.reminderOffsets = const [],
     this.recurrence = const RecurrenceDraft(),
   });
   final TaskScheduleDraft schedule;
   final DateTime? endAt;
   final DateTime? reminderAt;
+
+  /// Minutes before the scheduled time, or 09:00 for an all-day task.
+  final List<int> reminderOffsets;
   final RecurrenceDraft recurrence;
 }

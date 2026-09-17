@@ -7,14 +7,24 @@ import '../models/task.dart';
 import '../state/workspace_controller.dart';
 import '../theme/workfollow_icons.dart';
 import '../theme/workfollow_theme.dart';
+import '../features/feedback/feedback_scope.dart';
 import '../features/tasks/application/task_actions.dart';
-import '../features/tasks/domain/task_schedule.dart';
-import 'task_date_picker.dart';
+import '../features/tasks/presentation/task_feedback_mapper.dart';
 import 'app_icon_button.dart';
-import 'task_schedule_picker.dart';
+import 'task_schedule_panel.dart';
 import 'task_context_menu.dart';
 import 'task_menu_actions.dart';
+import 'task_list/task_list_row.dart';
+import 'task_list/task_metadata_trail.dart';
 
+/// One task in a task list.
+///
+/// The row owns behaviour — selection, keyboard, context menu, inline date
+/// editing — and delegates every visual decision to the shared task-list
+/// components: [TaskListRowFrame] for the three-column geometry and the
+/// neutral state fill, [TaskMetadataTrail] for the trailing column. Nothing
+/// here picks a font size, a padding or a fill colour on its own, which is
+/// what lets 今天 / 最近 7 天 / 收集箱 / 计划 / 单个清单 all look like one list.
 class TaskRow extends StatefulWidget {
   const TaskRow(
       {super.key,
@@ -90,69 +100,43 @@ class _TaskRowState extends State<TaskRow> {
 
   Future<void> date(BuildContext anchor) async {
     if (!anchor.mounted) return;
-    final result = await TaskSchedulePicker.show(anchor,
-        value: widget.task.dueAt, hasTime: widget.task.scheduledWithTime);
+    final result = await showTaskSchedulePanel(anchor, widget.task);
     if (result != null && mounted) {
       final c = widget.controller, id = widget.task.id;
-      _showActionFeedback(result.date == null
-          ? c.taskActions.clearSchedule(id)
-          : c.taskActions.setSchedule(id,
-              TaskScheduleDraft(dueAt: result.date, hasTime: result.hasTime)));
+      _showActionFeedback(c.taskActions.setScheduleSettings(id, result));
     }
   }
 
   void _showActionFeedback(TaskActionResult result) {
-    if (!mounted || !result.success || result.message == null) return;
-    // Property changes return a snapshot undo command. Keep that affordance
-    // visible even when the task remains in the current list; navigation-only
-    // actions continue to use the existing "查看任务" feedback.
-    final undo = result.undo;
-    // Deletions are surfaced by the shell's single global undo toast. Keeping
-    // a second row-local undo snackbar would duplicate the same affordance;
-    // inline property edits still expose their snapshot undo here.
-    final canUndo =
-        undo != null && (undo.label == '撤销修改' || undo.label == '撤销跳过本周期');
+    if (!mounted) return;
     final id = result.taskId;
     final moved = id != null &&
+        result.feedback != TaskFeedbackIntent.completion &&
         result.destination != null &&
         result.destination != TaskDestination.current &&
         result.destination != TaskDestination.hidden;
-    if (!moved && !canUndo && !result.showFeedback) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      behavior: SnackBarBehavior.floating,
-      // Keep the fixed inspector footer and its property controls clickable.
-      margin: const EdgeInsets.fromLTRB(16, 0, 16, 64),
-      content: Row(children: [
-        Expanded(child: Text(result.message!)),
-        if (canUndo)
-          TextButton(
-              onPressed: () => _runUndo(undo),
-              style: TextButton.styleFrom(
-                  foregroundColor: Colors.white,
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  minimumSize: Size.zero,
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap),
-              child: const Text('撤销')),
-      ]),
-      action: moved
-          ? SnackBarAction(
-              label: '查看任务', onPressed: () => widget.controller.openTask(id))
-          : null,
-    ));
-  }
-
-  void _runUndo(UndoCommand undo) {
-    ScaffoldMessenger.of(context).hideCurrentSnackBar();
-    final outcome = undo.execute();
-    if (outcome is Future<bool>) unawaited(outcome);
+    // A task that left the current list is otherwise invisible. Offer to follow
+    // it rather than an undo: the user asked for the move, not for it to be
+    // taken back.
+    final feedback = FeedbackScope.maybeOf(context);
+    if (feedback == null) return;
+    if (moved) {
+      feedback.show(
+          movedAwayFeedback(result,
+              onOpen: () => widget.controller.openTask(id)),
+          actionVersion: widget.controller.actionVersion);
+      return;
+    }
+    // Everything else — including completion, which now carries its own undo —
+    // is decided by the shared mapper.
+    presentTaskResult(feedback, result,
+        actionVersion: widget.controller.actionVersion);
   }
 
   @override
   Widget build(BuildContext context) {
     final tokens = WorkFollowTheme.of(context), task = widget.task;
     final selected = widget.selected || widget.multiSelected;
-    final listColor = Color(widget.controller.colorValueForList(task.listName));
     final priorityColor = switch (task.priority) {
       TaskPriority.high => tokens.danger,
       TaskPriority.medium => tokens.warning,
@@ -192,139 +176,25 @@ class _TaskRowState extends State<TaskRow> {
                         onSecondaryTap: () =>
                             menu(anchor, globalPosition: _contextMenuPosition),
                         behavior: HitTestBehavior.opaque,
-                        child: AnimatedContainer(
-                          duration: const Duration(milliseconds: 120),
-                          constraints: const BoxConstraints(
-                              minHeight:
-                                  WorkFollowMetrics.taskRowComfortableHeight),
-                          padding: EdgeInsets.symmetric(
-                              horizontal: WorkFollowSpacing.space2,
-                              vertical: widget.compact ? 5 : 6),
-                          decoration: BoxDecoration(
-                              color: selected
-                                  ? tokens.accentSoft.withValues(alpha: .82)
-                                  : hovering
-                                      ? tokens.accent.withValues(alpha: .06)
-                                      : Colors.transparent,
-                              borderRadius: BorderRadius.circular(
-                                  WorkFollowRadii.control),
-                              border: Border.all(
-                                  color: focused
-                                      ? tokens.accent.withValues(alpha: .65)
-                                      : selected
-                                          ? tokens.accent.withValues(alpha: .18)
-                                          : Colors.transparent)),
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Container(
-                                  width: 3,
-                                  height: widget.compact ? 28 : 32,
-                                  margin: const EdgeInsets.only(top: 2),
-                                  decoration: BoxDecoration(
-                                      color: listColor,
-                                      borderRadius: BorderRadius.circular(2))),
-                              const SizedBox(width: 8),
-                              SizedBox(
-                                  width: WorkFollowMetrics.iconHitTarget - 8,
-                                  height: WorkFollowMetrics.iconHitTarget - 4,
-                                  child: task.isAbandoned
-                                      ? IconButton(
-                                          tooltip: '恢复任务',
-                                          padding: EdgeInsets.zero,
-                                          icon: AppIcon(WorkFollowIcons.abandon,
-                                              size: 20,
-                                              color: tokens.textTertiary),
-                                          onPressed: _complete)
-                                      : Checkbox(
-                                          key: ValueKey(
-                                              'task-row-checkbox-${task.id}'),
-                                          // Multi-selection is a row state, not a
-                                          // completion state. A selected but
-                                          // unfinished task must keep an empty
-                                          // checkbox, otherwise Cmd-click makes
-                                          // it look completed.
-                                          value: task.isClosed,
-                                          activeColor: task.isClosed
-                                              ? tokens.success
-                                              : priorityColor,
-                                          semanticLabel:
-                                              task.isClosed ? '标记未完成' : '完成任务',
-                                          shape: RoundedRectangleBorder(
-                                              borderRadius:
-                                                  BorderRadius.circular(5)),
-                                          side: BorderSide(
-                                              color: priorityColor, width: 1.6),
-                                          onChanged: (_) => _complete())),
-                              const SizedBox(width: 9),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.stretch,
-                                  children: [
-                                    Row(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Expanded(
-                                          child: Text(
-                                            task.title,
-                                            maxLines: widget.compact ? 1 : 2,
-                                            overflow: TextOverflow.ellipsis,
-                                            style: TextStyle(
-                                                fontSize:
-                                                    WorkFollowMacTypography.listTitle,
-                                                height:
-                                                    WorkFollowMacTypography.lineList,
-                                                fontWeight:
-                                                    WorkFollowMacWeight.regular,
-                                                color: task.isClosed
-                                                    ? tokens.textTertiary
-                                                    : tokens.textPrimary,
-                                                decoration: task.isClosed
-                                                    ? TextDecoration.lineThrough
-                                                    : null),
-                                          ),
-                                        ),
-                                        if (_metadata.isNotEmpty)
-                                          Flexible(
-                                            child: Align(
-                                              alignment: Alignment.topRight,
-                                              child: Wrap(
-                                                alignment: WrapAlignment.end,
-                                                spacing: 7,
-                                                runSpacing: 2,
-                                                crossAxisAlignment:
-                                                    WrapCrossAlignment.center,
-                                                children: _metadata,
-                                              ),
-                                            ),
-                                          ),
-                                        _moreButton(
-                                            tokens, hovering || selected),
-                                      ],
-                                    ),
-                                    if (preview.isNotEmpty) ...[
-                                      const SizedBox(height: 2),
-                                      Text(preview,
-                                          key: ValueKey(
-                                              'task-row-preview-${task.id}'),
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: TextStyle(
-                                              fontSize: WorkFollowMacTypography
-                                                  .listBody,
-                                              height: WorkFollowMacTypography
-                                                  .lineList,
-                                              fontWeight: WorkFollowMacWeight
-                                                  .regular,
-                                              color: tokens.textSecondary)),
-                                    ],
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
+                        // The row fill never eases. Hover, selection and focus
+                        // all move with the pointer or the click, so they have
+                        // to land in the same frame: a 120ms transition left
+                        // every row the pointer swept past still tinted (0.19 of
+                        // the fill up to 90ms later) and left the row that just
+                        // lost the selection at 157/255 — both read as a stray
+                        // click on a row the user never touched.
+                        child: TaskListRowFrame(
+                          surfaceKey: ValueKey('task-row-surface-${task.id}'),
+                          compact: widget.compact,
+                          selected: selected,
+                          hovering: hovering,
+                          focused: focused,
+                          checkbox: _checkbox(tokens, priorityColor),
+                          content: _content(tokens, preview),
+                          metadata: TaskMetadataTrail(
+                              task: task,
+                              controller: widget.controller,
+                              onEditDate: date),
                         ),
                       ),
                     )),
@@ -334,25 +204,78 @@ class _TaskRowState extends State<TaskRow> {
 
   Offset? _contextMenuPosition;
 
-  Widget _moreButton(WorkFollowTheme tokens, bool visible) {
+  /// The completion box.
+  ///
+  /// It keeps its priority colour while the task is open, because priority is
+  /// the one property that has no other place on a collapsed row. Once the
+  /// task closes the box goes neutral: finishing something should not make it
+  /// the brightest thing on the list.
+  Widget _checkbox(WorkFollowTheme tokens, Color priorityColor) {
+    final task = widget.task;
+    if (task.isAbandoned) {
+      return SizedBox(
+          width: TaskListMetrics.checkboxSize,
+          height: TaskListMetrics.checkboxSize,
+          child: IconButton(
+              tooltip: '恢复任务',
+              padding: EdgeInsets.zero,
+              iconSize: WorkFollowMetrics.metadataIcon,
+              constraints: const BoxConstraints(),
+              icon: AppIcon(WorkFollowIcons.abandon,
+                  size: WorkFollowMetrics.metadataIcon,
+                  color: tokens.textTertiary),
+              onPressed: _complete));
+    }
     return SizedBox(
-        width: WorkFollowMetrics.iconHitTarget,
-        height: WorkFollowMetrics.iconHitTarget,
-        child: Builder(
-            builder: (moreAnchor) => ExcludeSemantics(
-                excluding: !visible,
-                child: AnimatedOpacity(
-                    duration: const Duration(milliseconds: 120),
-                    opacity: visible ? 1 : 0,
-                    child: IconButton(
-                        key: ValueKey('task-row-more-${widget.task.id}'),
-                        tooltip: '更多操作',
-                        padding: EdgeInsets.zero,
-                        iconSize: WorkFollowMetrics.toolbarIcon,
-                        onPressed: visible ? () => menu(moreAnchor) : null,
-                        icon: AppIcon(WorkFollowIcons.more,
-                            size: WorkFollowMetrics.toolbarIcon,
-                            color: tokens.textTertiary))))));
+        width: TaskListMetrics.checkboxSize,
+        height: TaskListMetrics.checkboxSize,
+        child: Checkbox(
+            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            key: ValueKey('task-row-checkbox-${task.id}'),
+            // Multi-selection is a row state, not a completion state. A
+            // selected but unfinished task must keep an empty checkbox,
+            // otherwise Cmd-click makes it look completed.
+            value: task.isClosed,
+            activeColor: tokens.textTertiary,
+            checkColor: tokens.content,
+            semanticLabel: task.isClosed ? '标记未完成' : '完成任务',
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(5)),
+            side: BorderSide(
+                color: task.isClosed ? tokens.textTertiary : priorityColor,
+                width: 1.6),
+            onChanged: (_) => _complete()));
+  }
+
+  Widget _content(WorkFollowTheme tokens, String preview) {
+    final task = widget.task;
+    final closed = task.isClosed;
+    return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(task.title,
+              maxLines: widget.compact ? 1 : 2,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                  fontSize: WorkFollowMacTypography.listTitle,
+                  height: WorkFollowMacTypography.lineList,
+                  fontWeight: WorkFollowMacWeight.regular,
+                  color: closed ? tokens.textTertiary : tokens.textPrimary)),
+          if (preview.isNotEmpty) ...[
+            const SizedBox(height: TaskListMetrics.titlePreviewGap),
+            Text(preview,
+                key: ValueKey('task-row-preview-${task.id}'),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                    fontSize: WorkFollowMacTypography.listBody,
+                    height: WorkFollowMacTypography.lineList,
+                    fontWeight: WorkFollowMacWeight.regular,
+                    color: task.isClosed
+                        ? tokens.textTertiary
+                        : tokens.textSecondary)),
+          ],
+        ]);
   }
 
   void _complete() {
@@ -361,87 +284,4 @@ class _TaskRowState extends State<TaskRow> {
         : widget.controller.taskActions.complete(widget.task.id);
     _showActionFeedback(result);
   }
-
-  List<Widget> get _metadata {
-    final tokens = WorkFollowTheme.of(context);
-    final task = widget.task;
-    final due = localDateTimeFromStorage(task.dueAt);
-    final deadline = localDateTimeFromStorage(task.deadlineAt);
-    final result = <Widget>[];
-    if (task.isPinned)
-      result.add(
-          _metaIcon(WorkFollowIcons.pin, tokens.accent, semanticLabel: '已置顶'));
-    if (task.isAbandoned) result.add(_metaText('已放弃', tokens.textTertiary));
-    if (widget.controller.selectedListName == null && task.listName != '收集箱') {
-      result.add(_metaText(task.listName, tokens.textTertiary));
-    }
-    if (task.priority != TaskPriority.none) {
-      result.add(_metaIcon(
-          WorkFollowIcons.flag,
-          switch (task.priority) {
-            TaskPriority.high => tokens.danger,
-            TaskPriority.medium => tokens.warning,
-            _ => tokens.accent,
-          },
-          semanticLabel: task.priority.label));
-    }
-    if (task.subtaskTotal > 0) {
-      result.add(_metaText('${task.subtaskCompleted}/${task.subtaskTotal}',
-          tokens.textTertiary));
-    }
-    if (task.recurrenceType != 'NONE') {
-      result.add(_metaIcon(WorkFollowIcons.repeat, tokens.textTertiary,
-          semanticLabel: '重复任务'));
-    }
-    if (task.hasAttachment) {
-      result.add(_metaIcon(WorkFollowIcons.attachment, tokens.textTertiary,
-          semanticLabel: '有附件'));
-    }
-    if (deadline != null) {
-      final today = DateTime.now();
-      final overdue = !task.isClosed &&
-          !deadline.isAfter(DateTime(today.year, today.month, today.day));
-      result.add(_metaText('${calendarDateLabel(deadline)}截止',
-          overdue ? tokens.danger : tokens.textTertiary));
-    }
-    if (due != null) {
-      final dateColor = task.bucket == TaskBucket.overdue && !task.isClosed
-          ? tokens.warning
-          : tokens.textTertiary;
-      result.add(Builder(
-          builder: (dateAnchor) => TextButton(
-              onPressed: () => date(dateAnchor),
-              style: TextButton.styleFrom(
-                  foregroundColor: dateColor,
-                  padding: EdgeInsets.zero,
-                  minimumSize: const Size(0, 22),
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  visualDensity: VisualDensity.compact),
-              child: Text(
-                  key: ValueKey('task-row-date-${task.id}'),
-                  calendarDateLabel(due, hasTime: task.scheduledWithTime),
-                  style: TextStyle(
-                      fontSize: WorkFollowMacTypography.listMeta,
-                      height: WorkFollowMacTypography.lineControl,
-                      fontWeight: WorkFollowMacWeight.regular,
-                      color: dateColor)))));
-    }
-    return result;
-  }
-
-  Widget _metaText(String value, Color color) => Text(value,
-      maxLines: 1,
-      overflow: TextOverflow.ellipsis,
-      style: TextStyle(
-          fontSize: WorkFollowMacTypography.listMeta,
-          height: WorkFollowMacTypography.lineControl,
-          fontWeight: WorkFollowMacWeight.regular,
-          color: color));
-
-  Widget _metaIcon(IconData icon, Color color,
-          {required String semanticLabel}) =>
-      Semantics(
-          label: semanticLabel,
-          child: AppIcon(icon,
-              size: WorkFollowMetrics.metadataIcon, color: color));
 }

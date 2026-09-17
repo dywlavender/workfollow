@@ -28,7 +28,14 @@ class WorkFollowIcons {
   static const skip = Icons.skip_next_outlined;
   static const snooze = Icons.snooze_outlined;
 
-  static const recent = Icons.date_range_outlined;
+  // 最近 7 天 is a rolling window of tasks, not a calendar month. The old
+  // `date_range` glyph drew a month grid, which read as "go to calendar" in the
+  // list header; the three-line form says "a list of what is coming".
+  //
+  // `menu` over `subject`: `subject` draws its last rule short, the way a
+  // paragraph ends, so at 18pt it read as body text rather than a list. The
+  // reference heading uses three rules of equal length.
+  static const recent = Icons.menu_rounded;
   static const today = Icons.wb_sunny_outlined;
   static const overdue = Icons.history_rounded;
   static const plan = Icons.upcoming_outlined;
@@ -101,6 +108,11 @@ class WorkFollowIcons {
   static const tag = Icons.tag_outlined;
   static const link = Icons.link_rounded;
   static const restore = Icons.restore_rounded;
+
+  /// Arrow curving back on itself (↶). Distinct from [restore], which is the
+  /// circular "restore item" glyph used in menus and the trash: the HUD's undo
+  /// is a plain reversal, and a circle around it read as reload.
+  static const undo = Icons.undo_rounded;
   static const deleteForever = Icons.delete_forever_outlined;
   static const check = Icons.check;
   static const success = Icons.check_circle_rounded;

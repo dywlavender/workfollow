@@ -100,6 +100,27 @@ class _Glyph extends CustomPainter {
         }
         line(12, 7, 12, 13);
         line(12, 13, 16, 13);
+      case 'next-7':
+        canvas.drawRRect(
+            RRect.fromRectAndRadius(
+                const Rect.fromLTWH(3, 3, 18, 19), const Radius.circular(4)),
+            pen);
+        line(3, 7, 21, 7);
+        line(7, 13, 11, 13);
+        line(9, 11, 9, 15);
+        line(13, 11, 17, 11);
+        line(17, 11, 14, 18);
+      case 'repeat-end':
+        canvas.drawArc(
+            const Rect.fromLTWH(3, 3, 16, 16), -math.pi, math.pi, false, pen);
+        line(19, 3, 19, 8);
+        line(19, 8, 14, 8);
+        canvas.drawArc(const Rect.fromLTWH(3, 3, 16, 16), math.pi / 2,
+            math.pi / 2, false, pen);
+        line(3, 19, 3, 14);
+        line(3, 14, 8, 14);
+        line(16, 16, 21, 21);
+        line(21, 16, 16, 21);
       case 'repeat':
         canvas.drawArc(
             const Rect.fromLTWH(4, 4, 16, 16), -math.pi, math.pi, false, pen);

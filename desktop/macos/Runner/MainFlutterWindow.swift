@@ -78,6 +78,23 @@ class MainFlutterWindow: NSWindow {
       }
     }
 
+    // Result tones. Dart decides *when* a tone is due (including the one-second
+    // throttle for a run of completions); this side only turns a name into a
+    // sound.
+    let feedbackChannel = FlutterMethodChannel(
+      name: "workfollow/feedback",
+      binaryMessenger: flutterViewController.engine.binaryMessenger
+    )
+    feedbackChannel.setMethodCallHandler { call, result in
+      switch call.method {
+      case "playFeedbackSound":
+        FeedbackSoundPlayer.shared.play(call.arguments as? String)
+        result(true)
+      default:
+        result(FlutterMethodNotImplemented)
+      }
+    }
+
     let notificationChannel = FlutterMethodChannel(
       name: "workfollow/notifications",
       binaryMessenger: flutterViewController.engine.binaryMessenger
@@ -419,7 +436,7 @@ class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
       let trigger = UNCalendarNotificationTrigger(dateMatching: components,
                                                   repeats: false)
       let request = UNNotificationRequest(
-        identifier: NotificationManager.identifier(for: taskId),
+        identifier: NotificationManager.identifier(for: (args["notificationId"] as? String) ?? taskId),
         content: content,
         trigger: trigger)
       UNUserNotificationCenter.current().add(request) { error in
@@ -433,9 +450,15 @@ class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
         result(false)
         return
       }
-      UNUserNotificationCenter.current().removePendingNotificationRequests(
-        withIdentifiers: [NotificationManager.identifier(for: taskId)])
-      result(true)
+      let center = UNUserNotificationCenter.current()
+      center.getPendingNotificationRequests { requests in
+        let ids = requests.filter {
+          ($0.content.userInfo["taskId"] as? String) == taskId ||
+            $0.identifier == NotificationManager.identifier(for: taskId)
+        }.map { $0.identifier }
+        center.removePendingNotificationRequests(withIdentifiers: ids)
+        DispatchQueue.main.async { result(true) }
+      }
     case "cancelAll":
       UNUserNotificationCenter.current().removeAllPendingNotificationRequests()
       result(true)
@@ -467,6 +490,45 @@ class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
       channel.invokeMethod("notificationClicked", arguments: taskId)
     }
     completionHandler()
+  }
+}
+
+/// Plays the app's result tones on behalf of `workfollow/feedback`.
+///
+/// System tones rather than a bundled asset or `NSSound.beep()`: the beep is
+/// macOS's generic "you can't do that" sound, and shipping an audio file would
+/// mean one more resource to keep in sync with the design. Both tones are
+/// short, and they differ in pitch and length so a finished timer is
+/// distinguishable from a ticked-off task without looking at the screen.
+final class FeedbackSoundPlayer {
+  static let shared = FeedbackSoundPlayer()
+
+  /// `completion` is the bright short one; `focus` lands lower and holds a
+  /// little longer. A tone that is missing on this machine (or removed by the
+  /// user's Sound settings) degrades to silence, not to an error.
+  private let tones: [String: NSSound] = {
+    var tones: [String: NSSound] = [:]
+    if let completion = NSSound(named: NSSound.Name("Tink")) {
+      tones["completion"] = completion
+    }
+    if let focus = NSSound(named: NSSound.Name("Glass")) {
+      tones["focus"] = focus
+    }
+    return tones
+  }()
+
+  /// Below the system default on purpose: this fires on every completion, and
+  /// often several times in a row.
+  private let volume: Float = 0.4
+
+  func play(_ name: String?) {
+    guard let name, let tone = tones[name] else { return }
+    // A new result replaces the previous tone instead of layering on top of it.
+    for other in tones.values where other !== tone && other.isPlaying {
+      other.stop()
+    }
+    tone.volume = volume
+    tone.play()
   }
 }
 

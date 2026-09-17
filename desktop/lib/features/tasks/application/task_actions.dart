@@ -44,6 +44,7 @@ class TaskActionResult {
     this.showFeedback = false,
     this.undo,
     this.error,
+    this.feedback = TaskFeedbackIntent.none,
   });
 
   const TaskActionResult.success({
@@ -52,6 +53,7 @@ class TaskActionResult {
     String? message,
     bool showFeedback = false,
     UndoCommand? undo,
+    TaskFeedbackIntent feedback = TaskFeedbackIntent.none,
   }) : this(
           success: true,
           taskId: taskId,
@@ -59,6 +61,7 @@ class TaskActionResult {
           message: message,
           showFeedback: showFeedback,
           undo: undo,
+          feedback: feedback,
         );
 
   TaskActionResult.failure(String code, String message)
@@ -77,10 +80,41 @@ class TaskActionResult {
   /// task in the current projection and have no undo command, but still need
   /// one concise confirmation in the originating surface.
   final bool showFeedback;
+
+  /// What this result means, so the UI does not have to infer it.
+  ///
+  /// `none` is the not-yet-migrated case: the presenter falls back to the
+  /// previous heuristics (undo present, destination changed, `showFeedback`).
+  /// Every action that has been migrated states its intent here instead of
+  /// leaving the reader to match on `undo.label`.
+  final TaskFeedbackIntent feedback;
+
   final UndoCommand? undo;
   final TaskActionError? error;
 
   bool get changed => success;
+}
+
+/// The semantic outcome of a task action.
+///
+/// Not a visual style: `completion` means "the user finished something", and
+/// whether that becomes a dark HUD, a chime, a banner or nothing at all is
+/// decided by the feedback layer.
+enum TaskFeedbackIntent {
+  /// Unset; the presenter falls back to legacy inference.
+  none,
+
+  /// A task or batch was finished. The only intent that carries a sound.
+  completion,
+
+  /// Something changed and there is nothing to take back.
+  success,
+
+  /// Something changed and can be undone.
+  undoable,
+
+  /// The task left the current projection; the message is about where it went.
+  navigation,
 }
 
 /// Stable application boundary used by QuickAdd, rows, inspectors, menus and

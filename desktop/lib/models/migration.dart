@@ -135,6 +135,7 @@ class MigrationTaskRecord {
     this.deadlineAt,
     this.hasDueTime,
     required this.reminderAt,
+    this.reminderOffsets = const [],
     required this.recurrenceType,
     required this.recurrenceConfig,
     required this.listName,
@@ -164,6 +165,7 @@ class MigrationTaskRecord {
   final String? deadlineAt;
   final bool? hasDueTime;
   final String? reminderAt;
+  final List<int> reminderOffsets;
   final String recurrenceType;
   final Map<String, dynamic>? recurrenceConfig;
   final String listName;
@@ -198,6 +200,12 @@ class MigrationTaskRecord {
       hasDueTime:
           json['hasDueTime'] is bool ? json['hasDueTime'] as bool : null,
       reminderAt: _nullableString(json['reminderAt']),
+      reminderOffsets: (json['reminderOffsets'] as List? ?? const [])
+          .whereType<num>()
+          .map((n) => n.toInt())
+          .toSet()
+          .toList()
+        ..sort(),
       recurrenceType: _stringValue(json['recurrenceType'], fallback: 'NONE'),
       recurrenceConfig: _mapValue(json['recurrenceConfig']),
       listName: _stringValue(json['listName'], fallback: '收集箱'),
@@ -229,6 +237,7 @@ class MigrationTaskRecord {
         'deadlineAt': deadlineAt,
         'hasDueTime': hasDueTime,
         'reminderAt': reminderAt,
+        if (reminderOffsets.isNotEmpty) 'reminderOffsets': reminderOffsets,
         'recurrenceType': recurrenceType,
         'recurrenceConfig': recurrenceConfig,
         'listName': listName,

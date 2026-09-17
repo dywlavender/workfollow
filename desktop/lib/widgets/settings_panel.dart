@@ -23,6 +23,10 @@ Future<void> showSettingsPanel({
   ValueChanged<bool>? onSetDensity,
   bool persistentInspector = true,
   ValueChanged<bool>? onSetPersistentInspector,
+  bool completionSound = true,
+  ValueChanged<bool>? onSetCompletionSound,
+  bool animatedFeedback = true,
+  ValueChanged<bool>? onSetAnimatedFeedback,
 }) {
   return showGeneralDialog<void>(
     context: context,
@@ -39,6 +43,10 @@ Future<void> showSettingsPanel({
       onSetDensity: onSetDensity,
       persistentInspector: persistentInspector,
       onSetPersistentInspector: onSetPersistentInspector,
+      completionSound: completionSound,
+      onSetCompletionSound: onSetCompletionSound,
+      animatedFeedback: animatedFeedback,
+      onSetAnimatedFeedback: onSetAnimatedFeedback,
     ),
     transitionBuilder: (context, animation, secondaryAnimation, child) =>
         BackdropFilter(
@@ -58,6 +66,10 @@ class _SettingsPanel extends StatefulWidget {
     this.onSetDensity,
     this.persistentInspector = true,
     this.onSetPersistentInspector,
+    this.completionSound = true,
+    this.onSetCompletionSound,
+    this.animatedFeedback = true,
+    this.onSetAnimatedFeedback,
   });
 
   final WorkspaceController controller;
@@ -68,6 +80,10 @@ class _SettingsPanel extends StatefulWidget {
   final ValueChanged<bool>? onSetDensity;
   final bool persistentInspector;
   final ValueChanged<bool>? onSetPersistentInspector;
+  final bool completionSound;
+  final ValueChanged<bool>? onSetCompletionSound;
+  final bool animatedFeedback;
+  final ValueChanged<bool>? onSetAnimatedFeedback;
 
   @override
   State<_SettingsPanel> createState() => _SettingsPanelState();
@@ -79,6 +95,8 @@ class _SettingsPanelState extends State<_SettingsPanel> {
   late ThemeMode appearance = widget.themeMode;
   late bool densityCompact = widget.compactDensity;
   late bool inspectorPersistent = widget.persistentInspector;
+  late bool completionSound = widget.completionSound;
+  late bool animatedFeedback = widget.animatedFeedback;
   String? importMessage;
   String? importError;
 
@@ -446,6 +464,47 @@ class _SettingsPanelState extends State<_SettingsPanel> {
                                           fontSize: WorkFollowMacTypography.supporting,
                                           height: WorkFollowMacTypography.lineControl,
                                           color: tokens.textTertiary)),
+                                  const SizedBox(height: 32),
+                                  const Text('结果反馈',
+                                      style: TextStyle(
+                                          fontSize: WorkFollowMacTypography.sectionTitle,
+                                          fontWeight: WorkFollowMacWeight.semibold)),
+                                  const SizedBox(height: 8),
+                                  Text('完成任务后会有一条短暂的提示，可以顺手撤销。',
+                                      style: TextStyle(
+                                          fontSize: WorkFollowMacTypography.supporting,
+                                          height: WorkFollowMacTypography.lineControl,
+                                          color: tokens.textSecondary)),
+                                  SwitchListTile.adaptive(
+                                      key: const ValueKey(
+                                          'completion-sound-switch'),
+                                      contentPadding: EdgeInsets.zero,
+                                      dense: true,
+                                      title: const Text('完成提示音',
+                                          style: TextStyle(fontSize: WorkFollowMacTypography.control)),
+                                      subtitle: const Text('连续完成时 1 秒内只响一次',
+                                          style: TextStyle(fontSize: WorkFollowMacTypography.caption)),
+                                      value: completionSound,
+                                      activeThumbColor: tokens.accent,
+                                      onChanged: (value) {
+                                        setState(() => completionSound = value);
+                                        widget.onSetCompletionSound?.call(value);
+                                      }),
+                                  SwitchListTile.adaptive(
+                                      key: const ValueKey(
+                                          'animated-feedback-switch'),
+                                      contentPadding: EdgeInsets.zero,
+                                      dense: true,
+                                      title: const Text('动态反馈',
+                                          style: TextStyle(fontSize: WorkFollowMacTypography.control)),
+                                      subtitle: const Text('关闭后提示改为淡入淡出',
+                                          style: TextStyle(fontSize: WorkFollowMacTypography.caption)),
+                                      value: animatedFeedback,
+                                      activeThumbColor: tokens.accent,
+                                      onChanged: (value) {
+                                        setState(() => animatedFeedback = value);
+                                        widget.onSetAnimatedFeedback?.call(value);
+                                      }),
                                 ],
                                 if (page == 2) ...[
                                   const Text('导入与导出',

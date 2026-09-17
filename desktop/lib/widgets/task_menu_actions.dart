@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 
+import '../features/feedback/feedback_scope.dart';
 import '../features/tasks/application/task_actions.dart';
 import '../features/tasks/domain/task_schedule.dart';
+import '../features/tasks/presentation/task_feedback_mapper.dart';
 import '../models/task.dart';
 import '../state/workspace_controller.dart';
 import 'task_menu_selection.dart';
-import 'task_schedule_picker.dart';
+import 'task_schedule_panel.dart';
 
 /// Both task menu entry points execute the same application commands.
 Future<TaskActionResult?> runTaskMenuAction(
@@ -15,6 +17,10 @@ Future<TaskActionResult?> runTaskMenuAction(
     TaskMenuSelection selection) async {
   final actions = controller.taskActions;
   final id = task.id;
+  // Resolved before anything runs. Converting or abandoning removes the
+  // originating row, so looking the channel up afterwards would depend on a
+  // context that is already gone.
+  final feedback = FeedbackScope.maybeOf(context);
   switch (selection.action) {
     case 'today':
     case 'tomorrow':
@@ -29,11 +35,9 @@ Future<TaskActionResult?> runTaskMenuAction(
               preserveClock: localDateTimeFromStorage(task.dueAt),
               hasTime: task.scheduledWithTime));
     case 'date':
-      final value = await TaskSchedulePicker.show(context,
-          value: task.dueAt, hasTime: task.scheduledWithTime);
+      final value = await showTaskSchedulePanel(context, task);
       if (value == null) return null;
-      return actions.setSchedule(
-          id, TaskScheduleDraft(dueAt: value.date, hasTime: value.hasTime));
+      return actions.setScheduleSettings(id, value);
     case 'clear-date':
       return actions.clearSchedule(id);
     case 'skip-occurrence':
@@ -51,38 +55,28 @@ Future<TaskActionResult?> runTaskMenuAction(
     case 'set-tags':
       return actions.setTags(id, selection.value!.split(RegExp('[,，]')));
     case 'add-subtask':
+      // The menu only reports the intent. The inspector owns the document
+      // editor and turns this request into TaskDocumentCommands.insertSubtaskBlock.
       controller.requestSubtaskEditor(id);
       return null;
     case 'pin':
       return actions.setPinned(id, !task.isPinned);
     case 'abandon':
-      final messenger = ScaffoldMessenger.of(context);
       final result =
           task.isAbandoned ? actions.restore(id) : actions.abandon(id);
-      if (result.success)
-        messenger.showSnackBar(SnackBar(
-          content: Text(result.message!),
-          action: SnackBarAction(
-              label: '撤销',
-              onPressed: () {
-                result.undo?.execute();
-              }),
-        ));
+      // Reported here rather than returned: the menu is the last frame the row
+      // exists in, so the caller has nothing left to show it from.
+      if (feedback != null) {
+        presentTaskResult(feedback, result,
+            actionVersion: controller.actionVersion);
+      }
       return null;
     case 'convert-note':
-      // The originating row disappears on conversion; its feedback belongs to
-      // the workspace messenger and must outlive that row.
-      final messenger = ScaffoldMessenger.of(context);
       final result = actions.convertToNote(id);
-      if (result.success)
-        messenger.showSnackBar(SnackBar(
-          content: Text(result.message!),
-          action: SnackBarAction(
-              label: '撤销',
-              onPressed: () {
-                result.undo?.execute();
-              }),
-        ));
+      if (feedback != null) {
+        presentTaskResult(feedback, result,
+            actionVersion: controller.actionVersion);
+      }
       return null;
     case 'delete':
       return actions.delete(id);

@@ -61,7 +61,8 @@ void main() {
     expect(date.style?.fontWeight, WorkFollowMacWeight.regular);
     expect(date.style?.height, WorkFollowMacTypography.lineControl);
 
-    final row = tester.getRect(find.byType(AnimatedContainer));
+    final row = tester.getRect(
+        find.byKey(const ValueKey('task-row-surface-mac-typography-row')));
     expect(row.height,
         greaterThanOrEqualTo(WorkFollowMetrics.taskRowComfortableHeight));
   });
@@ -174,17 +175,19 @@ void main() {
       WorkFollowMacTypography.detailTitle,
       WorkFollowMacTypography.body,
       WorkFollowMacTypography.supporting,
+      WorkFollowMacTypography.documentH1,
+      WorkFollowMacTypography.documentH2,
+      WorkFollowMacTypography.documentH3,
       WorkFollowMacTypography.control,
       WorkFollowMacTypography.menu,
       WorkFollowMacTypography.caption,
     ];
-    expect(sizes.length, 13);
+    expect(sizes.length, 16);
 
     // The job is unified, not the pixel. These pairs deliberately share a
     // value; they are separate names because they are separate roles, and a
     // change to one must not silently move the other.
     expect(WorkFollowMacTypography.sectionTitle, 13);
-    expect(WorkFollowMacTypography.listBody, 13);
     expect(WorkFollowMacTypography.control, 13);
     expect(WorkFollowMacTypography.listMeta, 12);
     expect(WorkFollowMacTypography.supporting, 12);
@@ -193,6 +196,15 @@ void main() {
     expect(WorkFollowMacTypography.listTitle, 14);
     expect(WorkFollowMacTypography.body, 14);
     expect(WorkFollowMacTypography.menu, 14);
+    expect(WorkFollowMacTypography.documentH1, 22);
+    expect(WorkFollowMacTypography.documentH2, 19);
+    expect(WorkFollowMacTypography.documentH3, 16);
+
+    // Calibrated against the reference screenshots rather than rounded to
+    // whole pixels: 20 read heavy for the page heading, and 13 was a full step
+    // too prominent for the task preview under a 14pt task title.
+    expect(WorkFollowMacTypography.pageTitle, 19);
+    expect(WorkFollowMacTypography.listBody, 12.5);
 
     expect(WorkFollowMacWeight.regular, FontWeight.w400);
     expect(WorkFollowMacWeight.medium, FontWeight.w500);
@@ -225,8 +237,8 @@ void main() {
     // Two deliberate exceptions, both documented at the call site:
     //  - the theme file names the Web catalog and defines the one weight set;
     //  - sidebar's 1pt invisible automation target is not a type role.
-    offenders.removeWhere((line) =>
-        line.contains('lib/theme/workfollow_theme.dart'));
+    offenders.removeWhere(
+        (line) => line.contains('lib/theme/workfollow_theme.dart'));
     offenders.removeWhere((line) =>
         line.contains('lib/widgets/sidebar.dart') &&
         line.contains('fontSize: 1'));

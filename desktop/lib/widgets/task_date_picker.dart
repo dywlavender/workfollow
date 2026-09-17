@@ -32,6 +32,33 @@ String calendarDateLabel(DateTime? date,
       : day;
 }
 
+/// The heading above a date group in a task list: `今天, 周三` / `9月22日, 下周二`.
+///
+/// A group heading carries the weekday because the list is walked by date and
+/// `9月22日` on its own does not say how far away that is. Days inside the
+/// current week stay bare, the following week is named, and anything further
+/// out keeps the date alone. Unlike [calendarDateLabel] the date is written the
+/// way it is read — `9月22日`, with no spaces around the unit characters.
+String calendarGroupLabel(DateTime? date, {String empty = '未安排'}) {
+  if (date == null) return empty;
+  final now = DateTime.now();
+  final today = DateTime(now.year, now.month, now.day);
+  final target = DateTime(date.year, date.month, date.day);
+  final difference = target.difference(today).inDays;
+  final weekday = '一二三四五六日'[date.weekday - 1];
+  if (difference == 0) return '今天, 周$weekday';
+  if (difference == 1) return '明天, 周$weekday';
+  if (difference == -1) return '昨天, 周$weekday';
+  final monthDay = date.year == now.year
+      ? '${date.month}月${date.day}日'
+      : '${date.year} 年 ${date.month}月${date.day}日';
+  final monday = today.subtract(Duration(days: now.weekday - 1));
+  final week = target.difference(monday).inDays ~/ 7;
+  if (week == 0) return '$monthDay, 周$weekday';
+  if (week == 1) return '$monthDay, 下周$weekday';
+  return monthDay;
+}
+
 Future<TaskDateSelection?> showTaskDatePicker(
   BuildContext anchor, {
   String? value,

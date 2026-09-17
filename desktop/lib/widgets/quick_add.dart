@@ -6,13 +6,17 @@ import '../services/smart_date_parser.dart';
 import '../state/workspace_controller.dart';
 import '../theme/workfollow_icons.dart';
 import '../theme/workfollow_theme.dart';
+import '../features/feedback/feedback_event.dart';
+import '../features/feedback/feedback_scope.dart';
 import '../features/tasks/application/task_actions.dart';
 import '../features/tasks/domain/task_draft.dart';
 import '../features/tasks/domain/task_schedule.dart';
+import '../features/tasks/domain/task_schedule_settings.dart';
+import '../features/tasks/presentation/task_feedback_mapper.dart';
 import 'app_icon_button.dart';
 import 'desktop_popover.dart';
 import 'task_date_picker.dart';
-import 'task_schedule_picker.dart';
+import 'task_schedule_panel.dart';
 import 'task_priority_picker.dart';
 import 'task_list_picker.dart';
 import 'task_tag_picker.dart';
@@ -250,6 +254,14 @@ class _QuickAddFieldState extends State<QuickAddField> {
   DateTime? get selectedDate => currentDraft.schedule.dueAt;
   bool get hasTime => currentDraft.schedule.hasTime;
 
+  /// The fixed date slot on the add row is lit whenever a date would be
+  /// committed — which, by default, is "today" ([creationDate]).
+  bool get _scheduleActive => customDate
+      ? selectedDate != null
+      : parse.dueAt != null ||
+          (!_hasDismissedScheduling &&
+              widget.controller.creationDate != null);
+
   String _titleForValue(SmartParseResult value) {
     // An @marker only leaves the title when it does not name an existing
     // list. Keep this rule in the Draft projection as well as in submit(), so
@@ -433,44 +445,158 @@ class _QuickAddFieldState extends State<QuickAddField> {
   }
 
   Future<void> _pickSchedule(BuildContext anchor) async {
-    final result = await TaskSchedulePicker.show(anchor,
-        value: _effectiveDue?.toIso8601String(), hasTime: _effectiveHasTime);
+    final task = _schedulePanelTask();
+    final result = await showTaskSchedulePanel(anchor, task);
     if (result != null && mounted) {
+      final reminder = _reminderFromSchedule(result);
       setState(() {
         currentDraft = currentDraft.copyWith(
-            schedule:
-                TaskScheduleDraft(dueAt: result.date, hasTime: result.hasTime));
+            schedule: result.schedule,
+            reminderAt: reminder,
+            clearReminderAt: reminder == null,
+            recurrence: result.recurrence);
         scheduleOverridden = true;
+        reminderOverridden = true;
+        recurrenceOverridden = true;
         _refreshDraft(parse);
       });
     }
   }
 
-  /// Keep the task-list add row quiet by putting secondary properties behind
-  /// the same compact disclosure affordance used by TickTick. The richer
-  /// home-card variant still exposes its property buttons inline.
+  /// The schedule editor is shared with the task inspector. Quick Add keeps
+  /// its values in a Draft, so the panel receives a temporary TaskItem view of
+  /// that Draft and its confirmed settings are projected back below.
+  TaskItem _schedulePanelTask() {
+    final recurrence = recurrenceOverridden
+        ? currentDraft.recurrence
+        : RecurrenceDraft(
+            type: parse.recurrenceType, config: parse.recurrenceConfig);
+    final reminder = reminderOverridden
+        ? currentDraft.reminderAt
+        : parse.reminderAt;
+    return TaskItem(
+      id: 'quick-add-schedule',
+      title: text.text.trim().isEmpty ? '新任务' : text.text.trim(),
+      listName: listOverridden
+          ? (currentDraft.listName ?? '收集箱')
+          : parse.listName ?? '收集箱',
+      bucket: TaskBucket.unscheduled,
+      dueAt: _effectiveDue?.toIso8601String(),
+      hasDueTime: _effectiveDue == null ? null : _effectiveHasTime,
+      reminderAt: reminder?.toIso8601String(),
+      recurrenceType: recurrence.type,
+      recurrenceConfig: recurrence.config,
+    );
+  }
+
+  DateTime? _reminderFromSchedule(TaskScheduleSettings settings) {
+    if (settings.schedule.dueAt == null) return null;
+    if (settings.reminderOffsets.isEmpty) return settings.reminderAt;
+    final due = settings.schedule.normalizedDueAt!;
+    final base = settings.schedule.hasTime
+        ? due
+        : DateTime(due.year, due.month, due.day, 9);
+    final offset = settings.reminderOffsets.reduce(
+        (largest, value) => value > largest ? value : largest);
+    return base.subtract(Duration(minutes: offset));
+  }
+
+  /// The properties disclosure opens the TickTick-style panel: a priority
+  /// flag row on top (one tap commits and closes), then the secondary
+  /// property entries. Date lives on the fixed chip to the left, so it is
+  /// not repeated here.
   Future<void> _openProperties(BuildContext anchor) async {
-    final action = await showDesktopMenu<String>(anchor,
-        placement: PopoverPlacement.topEnd,
-        entries: const [
-          DesktopMenuEntry('schedule', '安排日期…', icon: WorkFollowIcons.calendar),
-          DesktopMenuEntry('priority', '优先级', icon: WorkFollowIcons.flag),
-          DesktopMenuEntry('list', '清单', icon: WorkFollowIcons.inbox),
-          DesktopMenuEntry('tags', '标签', icon: WorkFollowIcons.tag),
-          DesktopMenuEntry('reminder', '提醒', icon: WorkFollowIcons.reminder),
-          DesktopMenuEntry('repeat', '重复', icon: WorkFollowIcons.repeat),
-        ]);
-    if (!mounted || action == null) return;
-    // Closing the first menu can rebuild the inline row (especially while the
-    // field is focused), which invalidates the menu button's Builder context.
-    // Re-anchor the second picker to this State's stable context instead of
-    // trying to reuse a defunct overlay element.
+    final result = await showDesktopPopover<Object>(anchor,
+        width: 245,
+        placement: PopoverPlacement.bottomEnd,
+        builder: (popoverContext) {
+          final tokens = WorkFollowTheme.of(popoverContext);
+          final selected =
+              priorityOverridden ? currentDraft.priority : parse.priority;
+          return Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Padding(
+                        padding: const EdgeInsets.fromLTRB(14, 6, 14, 2),
+                        child: Text('优先级',
+                            style: TextStyle(
+                                fontSize:
+                                    WorkFollowMacTypography.supporting,
+                                height:
+                                    WorkFollowMacTypography.lineControl,
+                                fontWeight: WorkFollowMacWeight.regular,
+                                color: tokens.textTertiary))),
+                    Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 10),
+                        child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceAround,
+                            children: [
+                              for (final priority in TaskPriority.values)
+                                _priorityFlag(
+                                    popoverContext, priority, selected),
+                            ])),
+                    const SizedBox(height: 6),
+                    _propertiesRow(
+                      popoverContext,
+                      entryKey: 'menu-option-list',
+                      icon: WorkFollowIcons.inbox,
+                      label: currentDraft.listName ??
+                          widget.controller.creationTargetLabel
+                              .split(' · ')
+                              .first,
+                      trailing: true,
+                      onTap: () =>
+                          Navigator.pop(popoverContext, 'list'),
+                    ),
+                    _propertiesRow(
+                      popoverContext,
+                      entryKey: 'menu-option-tags',
+                      icon: WorkFollowIcons.tag,
+                      label: currentDraft.tags.isEmpty
+                          ? '标签'
+                          : currentDraft.tags
+                              .map((tag) => '#$tag')
+                              .join(' '),
+                      trailing: true,
+                      onTap: () =>
+                          Navigator.pop(popoverContext, 'tags'),
+                    ),
+                    _propertiesRow(
+                      popoverContext,
+                      entryKey: 'menu-option-reminder',
+                      icon: WorkFollowIcons.reminder,
+                      label: '提醒',
+                      onTap: () =>
+                          Navigator.pop(popoverContext, 'reminder'),
+                    ),
+                    _propertiesRow(
+                      popoverContext,
+                      entryKey: 'menu-option-repeat',
+                      icon: WorkFollowIcons.repeat,
+                      label: '重复',
+                      onTap: () =>
+                          Navigator.pop(popoverContext, 'repeat'),
+                    ),
+                  ]));
+        });
+    if (!mounted) return;
+    if (result is TaskPriority) {
+      setState(() {
+        currentDraft = currentDraft.copyWith(priority: result);
+        priorityOverridden = true;
+        _refreshDraft(parse);
+      });
+      return;
+    }
+    // Closing the panel can rebuild the inline row (especially while the
+    // field is focused), which invalidates the disclosure button's Builder
+    // context. Re-anchor the second picker to this State's stable context
+    // instead of trying to reuse a defunct overlay element.
     final pickerAnchor = context;
-    switch (action) {
-      case 'schedule':
-        await _pickSchedule(pickerAnchor);
-      case 'priority':
-        await _pickPriority(pickerAnchor);
+    switch (result) {
       case 'list':
         await _pickList(pickerAnchor);
       case 'tags':
@@ -480,6 +606,67 @@ class _QuickAddFieldState extends State<QuickAddField> {
       case 'repeat':
         await _pickRecurrence(pickerAnchor);
     }
+  }
+
+  Widget _priorityFlag(BuildContext popoverContext, TaskPriority priority,
+      TaskPriority selected) {
+    final tokens = WorkFollowTheme.of(popoverContext);
+    final color = switch (priority) {
+      TaskPriority.high => tokens.danger,
+      TaskPriority.medium => tokens.warning,
+      TaskPriority.low => tokens.accent,
+      TaskPriority.none => tokens.borderStrong,
+    };
+    final isSelected = priority == selected;
+    return InkWell(
+        key: ValueKey('quick-add-priority-flag-${priority.name}'),
+        borderRadius: BorderRadius.circular(WorkFollowRadii.control),
+        onTap: () => Navigator.pop(popoverContext, priority),
+        child: Container(
+            width: 44,
+            height: 34,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+                color: isSelected ? tokens.listRowHover : null,
+                borderRadius:
+                    BorderRadius.circular(WorkFollowRadii.control)),
+            child: AppIcon(WorkFollowIcons.flag,
+                size: WorkFollowMetrics.fieldIcon, color: color)));
+  }
+
+  Widget _propertiesRow(
+    BuildContext popoverContext, {
+    required String entryKey,
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+    bool trailing = false,
+  }) {
+    final tokens = WorkFollowTheme.of(popoverContext);
+    return InkWell(
+        key: ValueKey(entryKey),
+        onTap: onTap,
+        child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+            child: Row(children: [
+              AppIcon(icon,
+                  size: WorkFollowMetrics.compactFieldIcon,
+                  color: tokens.textSecondary),
+              const SizedBox(width: 10),
+              Expanded(
+                  child: Text(label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                          fontSize: WorkFollowMacTypography.control,
+                          height: WorkFollowMacTypography.lineControl,
+                          fontWeight: WorkFollowMacWeight.regular,
+                          color: tokens.textPrimary))),
+              if (trailing)
+                AppIcon(WorkFollowIcons.next,
+                    size: WorkFollowMetrics.metadataIcon,
+                    color: tokens.textTertiary),
+            ])));
   }
 
   void submit() {
@@ -492,24 +679,26 @@ class _QuickAddFieldState extends State<QuickAddField> {
     final submittedDraft = currentDraft.copyWith(title: title);
     final result = widget.controller.taskCreator.create(submittedDraft);
     if (!result.success) {
-      if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(result.message ?? '无法创建任务')));
-      }
+      // A failure gets the error treatment: the message stays longer and never
+      // borrows the completion tone.
+      final feedback = mounted ? FeedbackScope.maybeOf(context) : null;
+      feedback?.show(WorkFollowFeedback(
+          kind: WorkFollowFeedbackKind.error,
+          message: result.message ?? '无法创建任务'));
       return;
     }
     final id = result.taskId;
+    final feedback = mounted ? FeedbackScope.maybeOf(context) : null;
     if (id != null && result.destination != TaskDestination.current) {
-      final destination = submittedDraft.schedule.normalizedDueAt == null
-          ? '收集箱'
-          : calendarDateLabel(submittedDraft.schedule.normalizedDueAt,
-              hasTime: submittedDraft.schedule.hasTime);
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(result.message ?? '已添加到$destination'),
-        action: SnackBarAction(
-            label: '查看任务', onPressed: () => widget.controller.openTask(id)),
-      ));
+      // The new task is not in this list, so say where it went and offer to
+      // follow it — an undo here would be the wrong offer.
+      feedback?.show(movedAwayFeedback(result,
+          onOpen: () => widget.controller.openTask(id)));
     }
+    // A task that landed in the list being looked at says nothing on its own:
+    // the row that just appeared is the feedback. Its undo still reaches the
+    // shell's catch-all watcher, which is where every unreported creation has
+    // always been reported from.
     setState(_resetDraft);
     _escapePrimed = false;
     focus.requestFocus();
@@ -525,33 +714,50 @@ class _QuickAddFieldState extends State<QuickAddField> {
           const SingleActivator(LogicalKeyboardKey.escape): _handleEscape,
         },
         child: Container(
+          // The list add bar is a quiet neutral slot: no outline, no shadow,
+          // 40pt tall. The home card keeps its frame — there it is a call to
+          // action, here it is the first line of a list.
+          constraints: widget.listStyle
+              ? const BoxConstraints(minHeight: TaskListMetrics.quickAddHeight)
+              : null,
           decoration: BoxDecoration(
-              color: tokens.content,
+              color: widget.listStyle ? tokens.canvas : tokens.content,
               borderRadius: BorderRadius.circular(widget.listStyle
-                  ? WorkFollowRadii.control
+                  ? TaskListMetrics.quickAddRadius
                   : WorkFollowRadii.card),
-              border: Border.all(
-                  color: expanded
-                      ? tokens.accent.withValues(alpha: .55)
-                      : tokens.borderStrong),
-              boxShadow: [
-                BoxShadow(
-                    color: tokens.shadow,
-                    blurRadius: expanded ? 16 : 8,
-                    offset: const Offset(0, 2))
-              ]),
+              border: widget.listStyle
+                  ? (expanded ? Border.all(color: tokens.border) : null)
+                  : Border.all(
+                      color: expanded
+                          ? tokens.accent.withValues(alpha: .55)
+                          : tokens.borderStrong),
+              boxShadow: widget.listStyle
+                  ? null
+                  : [
+                      BoxShadow(
+                          color: tokens.shadow,
+                          blurRadius: expanded ? 16 : 8,
+                          offset: const Offset(0, 2))
+                    ]),
           padding: EdgeInsets.symmetric(
-              horizontal: widget.listStyle ? 12 : 15,
-              vertical: widget.listStyle ? 5 : 7),
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
+              horizontal: widget.listStyle
+                  ? TaskListMetrics.quickAddHorizontalPadding
+                  : 15,
+              vertical: widget.listStyle ? 0 : 7),
+          child: Column(
+              mainAxisSize: MainAxisSize.min,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
             Row(children: [
               AppIcon(WorkFollowIcons.add,
                   size: widget.listStyle
-                      ? WorkFollowMetrics.navigationIcon
+                      ? WorkFollowMetrics.toolbarIcon
                       : WorkFollowMetrics.headerIcon,
-                  color: tokens.accent),
+                  color: widget.listStyle
+                      ? tokens.textTertiary
+                      : tokens.accent),
               const SizedBox(width: 10),
-              Expanded(
+            Expanded(
                   child: TextField(
                       key: const ValueKey('quick-add-title'),
                       controller: text,
@@ -560,21 +766,50 @@ class _QuickAddFieldState extends State<QuickAddField> {
                       onSubmitted: (_) => submit(),
                       onChanged: (_) => _reparse(),
                       textInputAction: TextInputAction.done,
+                      // Quick add is an input control, not a task title. Sizing
+                      // it with [listTitle] made the placeholder read heavier
+                      // than the task rows below it, which have not been
+                      // created yet.
                       style: TextStyle(
-                          fontSize: WorkFollowMacTypography.listTitle,
-                          height: WorkFollowMacTypography.lineList,
+                          fontSize: WorkFollowMacTypography.control,
+                          height: WorkFollowMacTypography.lineControl,
                           fontWeight: WorkFollowMacWeight.regular,
                           color: tokens.textPrimary),
                       decoration: InputDecoration(
                           hintText: widget.listStyle
-                              ? '添加任务至“${widget.controller.creationTargetLabel.split(' · ').first}”'
+                              ? '添加任务至 "${widget.controller.creationTargetLabel.split(' · ').first}"'
                               : '记下下一件事…',
                           hintStyle: TextStyle(color: tokens.textTertiary),
                           border: InputBorder.none,
                           isDense: true,
                           contentPadding:
                               const EdgeInsets.symmetric(vertical: 9)))),
-              if (!expanded)
+              // The list add row keeps two fixed slots right of the field,
+              // matching the TickTick reference: the date chip (defaulting to
+              // "today") and the properties disclosure. They stay visible even
+              // while the field is empty — that is what makes them fixed.
+              if (widget.listStyle) ...[
+                const SizedBox(width: 6),
+                PropertyButton(
+                    key: const ValueKey('quick-add-schedule'),
+                    icon: WorkFollowIcons.calendar,
+                    label: calendarDateLabel(_effectiveDue,
+                        hasTime: _effectiveHasTime),
+                    active: _scheduleActive,
+                    onPressed: _pickSchedule),
+                const SizedBox(width: 2),
+                Builder(
+                    builder: (anchor) => AppIconButton(
+                        key: const ValueKey('quick-add-properties'),
+                        icon: WorkFollowIcons.expandMore,
+                        tooltip: '更多属性',
+                        onPressed: () => _openProperties(anchor),
+                        size: WorkFollowMetrics.iconHitTarget,
+                        iconSize: WorkFollowMetrics.toolbarIcon)),
+              ],
+              // The shortcut still works; it just does not take a slot here. A
+              // permanent ⌘N label was the loudest thing on the quiet slot.
+              if (!expanded && !widget.listStyle)
                 Text('⌘N',
                     style: TextStyle(
                         fontSize: WorkFollowMacTypography.caption,
@@ -625,7 +860,10 @@ class _QuickAddFieldState extends State<QuickAddField> {
                               fontSize: WorkFollowMacTypography.supporting,
                               height: WorkFollowMacTypography.lineControl,
                               fontWeight: WorkFollowMacWeight.medium)))),
-            if (expanded)
+            // The list add row carries its two fixed slots up in the main
+            // line now, so this expanded property strip only remains on the
+            // fuller home-card variant.
+            if (expanded && !widget.listStyle)
               Padding(
                   padding: const EdgeInsets.only(top: 5, bottom: 4),
                   child: Row(children: [
@@ -638,12 +876,7 @@ class _QuickAddFieldState extends State<QuickAddField> {
                                   icon: WorkFollowIcons.calendar,
                                   label: calendarDateLabel(_effectiveDue,
                                       hasTime: _effectiveHasTime),
-                                  active: customDate
-                                      ? selectedDate != null
-                                      : parse.dueAt != null ||
-                                          (!_hasDismissedScheduling &&
-                                              widget.controller.creationDate !=
-                                                  null),
+                                  active: _scheduleActive,
                                   onPressed: _pickSchedule),
                               if (!widget.listStyle) ...[
                                 const SizedBox(width: 6),
@@ -698,18 +931,7 @@ class _QuickAddFieldState extends State<QuickAddField> {
                                     onPressed: _pickRecurrence),
                               ],
                             ]))),
-                    if (widget.listStyle) ...[
-                      const Spacer(),
-                      Builder(
-                          builder: (anchor) => AppIconButton(
-                              key: const ValueKey('quick-add-properties'),
-                              icon: WorkFollowIcons.expandMore,
-                              tooltip: '更多属性',
-                              onPressed: () => _openProperties(anchor),
-                              size: WorkFollowMetrics.iconHitTarget,
-                              iconSize: WorkFollowMetrics.toolbarIcon)),
-                    ] else
-                      FilledButton(
+                    FilledButton(
                           onPressed: text.text.trim().isEmpty ? null : submit,
                           style: FilledButton.styleFrom(
                               minimumSize: const Size(

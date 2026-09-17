@@ -7,18 +7,18 @@ import '../models/task.dart';
 import '../state/workspace_controller.dart';
 import '../theme/workfollow_icons.dart';
 import '../theme/workfollow_theme.dart';
+import '../features/feedback/feedback_event.dart';
+import '../features/feedback/feedback_scope.dart';
 import '../features/tasks/application/task_actions.dart';
-import '../features/tasks/domain/task_schedule.dart';
+import '../features/tasks/presentation/task_feedback_mapper.dart';
 import 'app_icon_button.dart';
 import 'desktop_popover.dart';
 import 'task_date_picker.dart';
 import 'task_schedule_panel.dart';
-import 'task_reminder_picker.dart';
 import 'task_deadline_picker.dart';
 import 'task_priority_picker.dart';
 import 'task_list_picker.dart';
 import 'task_tag_picker.dart';
-import 'task_repeat_picker.dart';
 import 'task_document_editor.dart';
 import 'task_editor_viewport.dart';
 import 'task_more_menu.dart';
@@ -96,6 +96,7 @@ class _TaskInspectorState extends State<TaskInspector> {
 
   void _escape() {
     if (documentKey.currentState?.dismissSlashMenu() ?? false) return;
+    if (documentKey.currentState?.dismissFormattingToolbar() ?? false) return;
     if (editingScope.hasFocus) {
       inspectorFocus.requestFocus();
       return;
@@ -139,38 +140,21 @@ class _TaskInspectorState extends State<TaskInspector> {
 
   Future<void> _date(BuildContext anchor, String kind) async {
     final task = widget.task;
-    if (kind == 'schedule') {
+    if (kind != 'deadline') {
       setState(() => dateOpen = true);
       final value = await showTaskSchedulePanel(anchor, task);
       if (!mounted) return;
       setState(() => dateOpen = false);
-      if (value != null && mounted)
+      if (value != null)
         _showActionFeedback(
             widget.controller.taskActions.setScheduleSettings(task.id, value));
       return;
     }
-    final value = switch (kind) {
-      'reminder' =>
-        await TaskReminderPicker.show(anchor, value: task.reminderAt),
-      'deadline' =>
-        await TaskDeadlinePicker.show(anchor, value: task.deadlineAt),
-      _ => null,
-    };
+    final value = await TaskDeadlinePicker.show(anchor, value: task.deadlineAt);
     if (value == null || !mounted) return;
-    if (kind == 'reminder') {
-      _showActionFeedback(value.date == null
-          ? widget.controller.taskActions.clearReminder(task.id)
-          : widget.controller.taskActions.setReminder(task.id, value.date));
-    } else if (kind == 'deadline') {
-      _showActionFeedback(value.date == null
-          ? widget.controller.taskActions.clearDeadline(task.id)
-          : widget.controller.taskActions.setDeadline(task.id, value.date));
-    } else {
-      _showActionFeedback(value.date == null
-          ? widget.controller.taskActions.clearSchedule(task.id)
-          : widget.controller.taskActions.setSchedule(task.id,
-              TaskScheduleDraft(dueAt: value.date, hasTime: value.hasTime)));
-    }
+    _showActionFeedback(value.date == null
+        ? widget.controller.taskActions.clearDeadline(task.id)
+        : widget.controller.taskActions.setDeadline(task.id, value.date));
   }
 
   Future<void> _list(BuildContext anchor) async {
@@ -201,13 +185,7 @@ class _TaskInspectorState extends State<TaskInspector> {
         .setTags(widget.task.id, value.split(RegExp('[,，]'))));
   }
 
-  Future<void> _repeat(BuildContext anchor) async {
-    final result = await TaskRepeatPicker.show(anchor, task: widget.task);
-    if (result == null || !mounted) return;
-    _showActionFeedback(result.enabled
-        ? widget.controller.taskActions.setRecurrence(widget.task.id, result)
-        : widget.controller.taskActions.clearRecurrence(widget.task.id));
-  }
+  Future<void> _repeat(BuildContext anchor) => _date(anchor, 'schedule');
 
   Future<void> _relation(BuildContext anchor) async {
     final noteId = await showDesktopPopover<String>(anchor,
@@ -232,10 +210,16 @@ class _TaskInspectorState extends State<TaskInspector> {
       widget.onOpenFocusTimer!();
     } else {
       final count = widget.task.focusCount;
-      ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(count == 0 ? '还没有专注记录' : '已专注 $count 个番茄')));
+      _report(WorkFollowFeedback(
+          kind: WorkFollowFeedbackKind.info,
+          message: count == 0 ? '还没有专注记录' : '已专注 $count 个番茄'));
     }
   }
+
+  /// Reports something that is not the outcome of a task command — a failed
+  /// load, a focus count — through the same channel as command results.
+  void _report(WorkFollowFeedback feedback) =>
+      FeedbackScope.maybeOf(context)?.show(feedback);
 
   Future<void> _more(BuildContext anchor) async {
     setState(() => moreOpen = true);
@@ -261,13 +245,6 @@ class _TaskInspectorState extends State<TaskInspector> {
         _openFocus();
       case 'relation':
         await _relation(anchor);
-      case 'open-source-note':
-        final source = widget.controller.sourceNoteFor(widget.task.id);
-        if (source != null) widget.controller.openNote(source.id);
-      case 'copy':
-        await Clipboard.setData(ClipboardData(
-            text: '${title.text}\n${documentKey.currentState?.plainText ?? ''}'
-                .trim()));
       default:
         final result = await runTaskMenuAction(
             context, widget.controller, widget.task, action);
@@ -276,47 +253,24 @@ class _TaskInspectorState extends State<TaskInspector> {
   }
 
   void _showActionFeedback(TaskActionResult result) {
-    if (!mounted || result.message == null) return;
-    if (!result.success) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(result.message!)));
-      return;
-    }
-    final undo = result.undo;
-    final canUndo = undo != null && undo.label != '撤销完成';
+    if (!mounted) return;
     final id = result.taskId;
     final moved = id != null &&
+        result.feedback != TaskFeedbackIntent.completion &&
         result.destination != null &&
         result.destination != TaskDestination.current &&
         result.destination != TaskDestination.hidden;
-    if (!moved && !canUndo && !result.showFeedback) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      behavior: SnackBarBehavior.floating,
-      margin: const EdgeInsets.fromLTRB(16, 0, 16, 64),
-      content: Row(children: [
-        Expanded(child: Text(result.message!)),
-        if (canUndo)
-          TextButton(
-              onPressed: () => _runUndo(undo),
-              style: TextButton.styleFrom(
-                  foregroundColor: Colors.white,
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  minimumSize: Size.zero,
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap),
-              child: const Text('撤销')),
-      ]),
-      action: moved
-          ? SnackBarAction(
-              label: '查看任务', onPressed: () => widget.controller.openTask(id))
-          : null,
-    ));
-  }
-
-  void _runUndo(UndoCommand undo) {
-    ScaffoldMessenger.of(context).hideCurrentSnackBar();
-    final outcome = undo.execute();
-    if (outcome is Future<bool>) unawaited(outcome);
+    final feedback = FeedbackScope.maybeOf(context);
+    if (feedback == null) return;
+    if (moved) {
+      feedback.show(
+          movedAwayFeedback(result,
+              onOpen: () => widget.controller.openTask(id)),
+          actionVersion: widget.controller.actionVersion);
+      return;
+    }
+    presentTaskResult(feedback, result,
+        actionVersion: widget.controller.actionVersion);
   }
 
   Color _scheduleColor(TaskItem task, WorkFollowTheme tokens) {
@@ -332,12 +286,22 @@ class _TaskInspectorState extends State<TaskInspector> {
   }
 
   String _scheduleLabel(TaskItem task) {
-    final start = calendarDateLabel(localDateTimeFromStorage(task.dueAt),
-        hasTime: task.scheduledWithTime, empty: '安排日期');
-    if (task.dueEndAt == null) return start;
-    final end = calendarDateLabel(localDateTimeFromStorage(task.dueEndAt),
-        hasTime: task.scheduledWithTime);
-    return '$start – $end';
+    String label(String? stored) {
+      final date = localDateTimeFromStorage(stored);
+      if (date == null) return '安排日期';
+      var value = calendarDateLabel(date, hasTime: false);
+      if (['今天', '昨天', '明天', '前天', '后天'].contains(value) ||
+          value.contains('周')) {
+        value = '$value, ${date.month}月${date.day}日';
+      }
+      if (task.scheduledWithTime)
+        value =
+            '$value, ${'${date.hour}'.padLeft(2, '0')}:${'${date.minute}'.padLeft(2, '0')}';
+      return value;
+    }
+
+    final start = label(task.dueAt);
+    return task.dueEndAt == null ? start : '$start – ${label(task.dueEndAt)}';
   }
 
   Widget _header(BuildContext context, TaskItem task, WorkFollowTheme tokens) {
@@ -458,8 +422,8 @@ class _TaskInspectorState extends State<TaskInspector> {
         key: const ValueKey('save-status-indicator'),
         onPressed: loadError == null
             ? () => unawaited(widget.controller.retrySave())
-            : () => ScaffoldMessenger.of(context)
-                .showSnackBar(SnackBar(content: Text(loadError))),
+            : () => _report(WorkFollowFeedback(
+                kind: WorkFollowFeedbackKind.error, message: loadError)),
         icon: AppIcon(WorkFollowIcons.error,
             size: WorkFollowMetrics.metadataIcon, color: tokens.danger),
         label: Text(loadError == null ? '保存失败 · 重试' : '读取失败'),
@@ -505,9 +469,11 @@ class _TaskInspectorState extends State<TaskInspector> {
                                     height: WorkFollowMacTypography.lineControl,
                                     fontWeight: WorkFollowMacWeight.medium))),
                         style: TextButton.styleFrom(
-                            backgroundColor: listOpen ? tokens.canvas : Colors.transparent,
+                            backgroundColor:
+                                listOpen ? tokens.canvas : Colors.transparent,
                             padding: const EdgeInsets.symmetric(horizontal: 6),
-                            minimumSize: const Size(0, WorkFollowMetrics.compactButtonHeight),
+                            minimumSize: const Size(
+                                0, WorkFollowMetrics.compactButtonHeight),
                             tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                             visualDensity: VisualDensity.compact))))),
         _saveIndicator(tokens),
@@ -678,7 +644,7 @@ class _TopPropertyButton extends StatelessWidget {
                 if (!iconOnly) ...[
                   const SizedBox(width: 6),
                   ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 120),
+                    constraints: const BoxConstraints(maxWidth: 320),
                     child: Text(label,
                         maxLines: 1, overflow: TextOverflow.ellipsis),
                   ),

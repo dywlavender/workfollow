@@ -5,8 +5,30 @@ import '../models/migration.dart';
 import '../state/workspace_controller.dart';
 import '../theme/workfollow_icons.dart';
 import '../theme/workfollow_theme.dart';
+import '../features/feedback/feedback_event.dart';
+import '../features/feedback/feedback_scope.dart';
 import 'app_icon_button.dart';
 import 'desktop_popover.dart';
+
+// The matrix reference uses a neutral light shell: a pale rail, grey glyphs
+// and a purple active state. This appearance is scoped to navigation so the
+// existing content/status accent remains unchanged elsewhere in the app.
+const _lightSidebarRail = Color(0xFFF1F3F6);
+const _lightSidebarSurface = Color(0xFFF7F8FA);
+const _lightSidebarActive = Color(0xFFEEF2FF);
+const _lightSidebarAccent = Color(0xFF635BFF);
+const _lightSidebarForeground = Color(0xFF697386);
+const _lightSidebarForegroundMuted = Color(0xFF98A1AF);
+const _lightSidebarBorder = Color(0xFFE5E7EB);
+
+bool _lightSidebar(BuildContext context) =>
+    Theme.of(context).brightness == Brightness.light;
+
+Color _sidebarAccent(BuildContext context, WorkFollowTheme tokens) =>
+    _lightSidebar(context) ? _lightSidebarAccent : tokens.accent;
+
+Color _sidebarAccentSoft(BuildContext context, WorkFollowTheme tokens) =>
+    _lightSidebar(context) ? _lightSidebarActive : tokens.accentSoft;
 
 /// The persistent product-level navigation from the web app, adapted to a
 /// native macOS rail. Personal builds intentionally omit team and notification
@@ -28,7 +50,9 @@ class AppRail extends StatelessWidget {
   // This native shell intentionally merges the Web client's global rail and
   // task-view sidebar into one surface. The Web width remains the migration
   // contract, while the local shell uses the compact profile so the second
-  // column does not dominate the macOS window.
+  // column does not dominate the macOS window. [width] is the expanded width;
+  // module pages drop the second column, so the live width is computed in
+  // [build].
   static const double width =
       _iconRailWidth + 1 + WorkFollowLayout.compactTaskNavigationWidth;
   static const double _iconRailWidth = 52;
@@ -41,17 +65,31 @@ class AppRail extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tokens = WorkFollowTheme.of(context);
+    // Module pages (calendar, matrix, board, habits, stats) are self-contained:
+    // their page header already owns the mode and range controls, so a second
+    // column could only repeat the destination the icon rail selected. Dropping
+    // it hands the column's width back to the page and leaves the icons as the
+    // single navigation surface.
+    final contextColumn = !controller.isSelfContainedView;
     return Container(
-      width: width,
+      width: _iconRailWidth +
+          1 +
+          (contextColumn ? WorkFollowLayout.compactTaskNavigationWidth : 0),
       decoration: BoxDecoration(
-        gradient: tokens.sidebarGradient,
+        gradient: _lightSidebar(context)
+            ? const LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [_lightSidebarSurface, _lightSidebarRail],
+              )
+            : tokens.sidebarGradient,
         border: Border(right: BorderSide(color: tokens.border, width: 1)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           ColoredBox(
-            color: tokens.rail,
+            color: _lightSidebar(context) ? _lightSidebarRail : tokens.rail,
             child: _IconRail(
               controller: controller,
               isDark: isDark,
@@ -59,39 +97,42 @@ class AppRail extends StatelessWidget {
               onOpenSettings: onOpenSettings,
             ),
           ),
-          Container(width: 1, color: tokens.border),
-          Expanded(
-            child: Column(
-              children: [
-                // Trash has its own content screen, but it remains inside
-                // the task navigation grammar. Keep its second column
-                // aligned with Plan/Today and do not show the product brand
-                // above the task destinations.
-                if (!controller.isTaskView &&
-                    controller.view != WorkspaceView.trash)
-                  const _RailBrand(),
-                Expanded(
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.fromLTRB(
-                        9, 6, 9, WorkFollowSpacing.space3),
-                    child: _ContextNavigation(controller: controller),
+          if (contextColumn) ...[
+            Container(width: 1, color: tokens.border),
+            Expanded(
+              key: const ValueKey('rail-context-column'),
+              child: Column(
+                children: [
+                  // Trash has its own content screen, but it remains inside
+                  // the task navigation grammar. Keep its second column
+                  // aligned with Plan/Today and do not show the product brand
+                  // above the task destinations.
+                  if (!controller.isTaskView &&
+                      controller.view != WorkspaceView.trash)
+                    const _RailBrand(),
+                  Expanded(
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.fromLTRB(
+                          9, 6, 9, WorkFollowSpacing.space3),
+                      child: _ContextNavigation(controller: controller),
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
+          ],
         ],
       ),
     );
   }
 }
 
-/// Maps every first-level rail destination to its own second-column grammar.
+/// Maps the remaining first-level rail destinations to their second-column
+/// grammar.
 ///
-/// The old implementation only distinguished tasks from notes, which meant
-/// that calendar, matrix, board, habits and stats all rendered the complete
-/// task tree. TickTick keeps those modules quiet and contextual, so the
-/// second column must change as soon as the first rail changes.
+/// Only two contexts own a column: the note tree and the task tree. Home,
+/// calendar, matrix, board, habits and stats have no column at all — see
+/// [WorkspaceController.isSelfContainedView] — so this switch never sees them.
 class _ContextNavigation extends StatelessWidget {
   const _ContextNavigation({required this.controller});
 
@@ -100,158 +141,9 @@ class _ContextNavigation extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return switch (controller.view) {
-      WorkspaceView.home => _HomeNavigation(controller: controller),
       WorkspaceView.notes => _NotesNavigation(controller: controller),
-      WorkspaceView.calendar => _CalendarNavigation(controller: controller),
-      WorkspaceView.matrix => _MatrixNavigation(controller: controller),
-      WorkspaceView.board => _BoardNavigation(controller: controller),
-      WorkspaceView.habits => _HabitsNavigation(controller: controller),
-      WorkspaceView.stats => _StatsNavigation(controller: controller),
       _ => _TaskNavigation(controller: controller),
     };
-  }
-}
-
-/// Home is a dashboard rather than a task list. Keep only dashboard actions
-/// here; task filters remain in the task context after selecting the task rail.
-class _HomeNavigation extends StatelessWidget {
-  const _HomeNavigation({required this.controller});
-
-  final WorkspaceController controller;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _RailSectionHeader(label: '概览'),
-        _RailItem(
-          key: const ValueKey('rail-context-home'),
-          label: '首页',
-          icon: WorkFollowIcons.brand,
-          selected: controller.view == WorkspaceView.home,
-          onTap: () => controller.selectView(WorkspaceView.home),
-        ),
-        _RailItem(
-          key: const ValueKey('rail-context-home-quick-add'),
-          label: '快速录入',
-          icon: WorkFollowIcons.quickAdd,
-          selected: false,
-          onTap: controller.requestQuickAddFocus,
-        ),
-      ],
-    );
-  }
-}
-
-/// Calendar owns its month/week controls in the page header. The second
-/// column intentionally exposes only the calendar destination instead of
-/// duplicating task filters that belong to the task context.
-class _CalendarNavigation extends StatelessWidget {
-  const _CalendarNavigation({required this.controller});
-
-  final WorkspaceController controller;
-
-  @override
-  Widget build(BuildContext context) => _SingleContextNavigation(
-        controller: controller,
-        sectionLabel: '日历',
-        label: '日历',
-        icon: WorkFollowIcons.calendar,
-        view: WorkspaceView.calendar,
-      );
-}
-
-class _MatrixNavigation extends StatelessWidget {
-  const _MatrixNavigation({required this.controller});
-
-  final WorkspaceController controller;
-
-  @override
-  Widget build(BuildContext context) => _SingleContextNavigation(
-        controller: controller,
-        sectionLabel: '四象限',
-        label: '四象限',
-        icon: WorkFollowIcons.matrix,
-        view: WorkspaceView.matrix,
-      );
-}
-
-class _BoardNavigation extends StatelessWidget {
-  const _BoardNavigation({required this.controller});
-
-  final WorkspaceController controller;
-
-  @override
-  Widget build(BuildContext context) => _SingleContextNavigation(
-        controller: controller,
-        sectionLabel: '看板',
-        label: '看板',
-        icon: WorkFollowIcons.board,
-        view: WorkspaceView.board,
-      );
-}
-
-class _HabitsNavigation extends StatelessWidget {
-  const _HabitsNavigation({required this.controller});
-
-  final WorkspaceController controller;
-
-  @override
-  Widget build(BuildContext context) => _SingleContextNavigation(
-        controller: controller,
-        sectionLabel: '习惯',
-        label: '习惯',
-        icon: WorkFollowIcons.habits,
-        view: WorkspaceView.habits,
-      );
-}
-
-class _StatsNavigation extends StatelessWidget {
-  const _StatsNavigation({required this.controller});
-
-  final WorkspaceController controller;
-
-  @override
-  Widget build(BuildContext context) => _SingleContextNavigation(
-        controller: controller,
-        sectionLabel: '统计',
-        label: '统计',
-        icon: WorkFollowIcons.stats,
-        view: WorkspaceView.stats,
-      );
-}
-
-class _SingleContextNavigation extends StatelessWidget {
-  const _SingleContextNavigation({
-    required this.controller,
-    required this.sectionLabel,
-    required this.label,
-    required this.icon,
-    required this.view,
-  });
-
-  final WorkspaceController controller;
-  final String sectionLabel;
-  final String label;
-  final IconData icon;
-  final WorkspaceView view;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _RailSectionHeader(label: sectionLabel),
-        _RailItem(
-          key: ValueKey('rail-context-${view.name}'),
-          label: label,
-          icon: icon,
-          selected: controller.view == view,
-          onTap: () => controller.selectView(view),
-        ),
-      ],
-    );
   }
 }
 
@@ -553,9 +445,14 @@ class _IconRailFooter extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 4),
         decoration: BoxDecoration(
-          color: tokens.railSurface,
+          color: _lightSidebar(context)
+              ? _lightSidebarActive
+              : tokens.railSurface,
           borderRadius: BorderRadius.circular(WorkFollowRadii.surface),
-          border: Border.all(color: tokens.railBorder),
+          border: Border.all(
+              color: _lightSidebar(context)
+                  ? _lightSidebarBorder
+                  : tokens.railBorder),
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -566,7 +463,9 @@ class _IconRailFooter extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(vertical: 4),
                 child: AppIcon(WorkFollowIcons.system,
                     size: WorkFollowMetrics.toolbarIcon,
-                    color: tokens.railForegroundMuted),
+                    color: _lightSidebar(context)
+                        ? _lightSidebarForegroundMuted
+                        : tokens.railForegroundMuted),
               ),
             ),
             _IconRailFooterButton(
@@ -617,7 +516,9 @@ class _IconRailFooterButton extends StatelessWidget {
               onPressed: onPressed,
               size: 34,
               iconSize: 17,
-              iconColor: tokens.railForeground,
+              iconColor: _lightSidebar(context)
+                  ? _lightSidebarForeground
+                  : tokens.railForeground,
             ),
           ),
           // Keep the old text-based automation target available without
@@ -674,6 +575,11 @@ class _IconRailButtonState extends State<_IconRailButton> {
     // `filled` only chooses the home glyph's stronger visual treatment.  It
     // must not make Home look selected while the user is in Tasks/Notes/etc.;
     // the first rail otherwise shows two active destinations at once.
+    // The rail fill never eases: hover and selection both have to land in the
+    // same frame as the pointer or the click. With a 150ms transition every
+    // icon the pointer swept past stayed lit (0.19 of the fill measured 90ms
+    // after the pointer had left) and the icon that just lost the selection
+    // kept its tint for another 150ms — both read as a stray click.
     final active = widget.selected;
     return Tooltip(
       message: widget.label,
@@ -686,16 +592,20 @@ class _IconRailButtonState extends State<_IconRailButton> {
           onExit: (_) => setState(() => hovering = false),
           child: GestureDetector(
             onTap: widget.onPressed,
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 150),
+            child: Container(
+              key: ValueKey('rail-button-${widget.label}'),
               width: 38,
               height: 38,
               margin: const EdgeInsets.symmetric(vertical: 3),
               decoration: BoxDecoration(
                 color: active
-                    ? tokens.railActive
+                    ? (_lightSidebar(context)
+                        ? _lightSidebarActive
+                        : tokens.railActive)
                     : hovering
-                        ? tokens.railForeground.withValues(alpha: .12)
+                        ? (_lightSidebar(context)
+                            ? _lightSidebarForeground.withValues(alpha: .10)
+                            : tokens.railForeground.withValues(alpha: .12))
                         : Colors.transparent,
                 borderRadius: BorderRadius.circular(WorkFollowRadii.surface),
               ),
@@ -705,10 +615,14 @@ class _IconRailButtonState extends State<_IconRailButton> {
                     ? WorkFollowMetrics.railIcon + 1
                     : WorkFollowMetrics.railIcon,
                 color: active
-                    ? tokens.accent
+                    ? _sidebarAccent(context, tokens)
                     : (hovering
-                        ? tokens.railForeground
-                        : tokens.railForegroundMuted),
+                        ? (_lightSidebar(context)
+                            ? _lightSidebarForeground
+                            : tokens.railForeground)
+                        : (_lightSidebar(context)
+                            ? _lightSidebarForegroundMuted
+                            : tokens.railForegroundMuted)),
               ),
             ),
           ),
@@ -747,9 +661,11 @@ Future<void> _showAddListDialog(
   nameController.dispose();
   if (!context.mounted || name == null) return;
   if (!controller.addList(name)) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('清单名称为空，或已经存在。')),
-    );
+    showFeedback(
+        context,
+        const WorkFollowFeedback(
+            kind: WorkFollowFeedbackKind.error,
+            message: '清单名称为空，或已经存在。'));
   }
 }
 
@@ -784,9 +700,11 @@ Future<void> _showAddFolderDialog(
   final folder = controller.addFolder(name);
   if (folder == null) {
     if (!context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('文件夹名称为空，或已经存在。')),
-    );
+    showFeedback(
+        context,
+        const WorkFollowFeedback(
+            kind: WorkFollowFeedbackKind.error,
+            message: '文件夹名称为空，或已经存在。'));
     return;
   }
   controller.setNotesFolderFilter(folder.id);
@@ -813,9 +731,12 @@ class _RailSectionHeader extends StatelessWidget {
               label,
               style: TextStyle(
                 color: tokens.textTertiary,
-                fontSize: WorkFollowMacTypography.sectionTitle,
+                // A rail group title is navigation chrome, not a content
+                // heading: it sits below the [navigation] rows it labels and
+                // stays regular so the rows keep the emphasis.
+                fontSize: WorkFollowMacTypography.navigationMeta,
                 height: WorkFollowMacTypography.lineControl,
-                fontWeight: WorkFollowMacWeight.semibold,
+                fontWeight: WorkFollowMacWeight.regular,
                 letterSpacing: WorkFollowMacTracking.none,
               ),
             ),
@@ -894,7 +815,7 @@ class _RailBrand extends StatelessWidget {
               width: 28,
               height: 28,
               decoration: BoxDecoration(
-                  color: tokens.accent,
+                  color: _sidebarAccent(context, tokens),
                   borderRadius: BorderRadius.circular(WorkFollowRadii.control)),
               child: AppIcon(WorkFollowIcons.brand,
                   size: WorkFollowMetrics.railIcon + 1,
@@ -912,8 +833,10 @@ class _RailBrand extends StatelessWidget {
 }
 
 class _RailItem extends StatefulWidget {
+  // No key: the second column is rebuilt wholesale when the view changes, and
+  // no caller identifies a row by key any more (the home column that did is
+  // gone). Tests reach rows by their label.
   const _RailItem({
-    super.key,
     required this.label,
     required this.icon,
     required this.selected,
@@ -939,6 +862,7 @@ class _RailItemState extends State<_RailItem> {
   @override
   Widget build(BuildContext context) {
     final tokens = WorkFollowTheme.of(context);
+    // See _IconRailButtonState: the surface fill never eases.
     return MouseRegion(
       onEnter: (_) => setState(() => hovering = true),
       onExit: (_) => setState(() => hovering = false),
@@ -949,16 +873,14 @@ class _RailItemState extends State<_RailItem> {
         child: GestureDetector(
           onTap: widget.onTap,
           onSecondaryTap: widget.onMenu,
-          child: AnimatedContainer(
+          child: Container(
             key: ValueKey('rail-navigation-item-${widget.label}'),
-            duration: const Duration(milliseconds: 150),
-            curve: Curves.easeOut,
             height: WorkFollowMetrics.compactNavigationRowHeight,
             margin: const EdgeInsets.symmetric(vertical: 1),
             padding: const EdgeInsets.symmetric(horizontal: 10),
             decoration: BoxDecoration(
               color: widget.selected
-                  ? tokens.accentSoft
+                  ? _sidebarAccentSoft(context, tokens)
                   : (hovering
                       ? tokens.content.withValues(alpha: .65)
                       : Colors.transparent),
@@ -969,7 +891,9 @@ class _RailItemState extends State<_RailItem> {
                 AppIcon(
                   widget.icon,
                   size: WorkFollowMetrics.navigationIcon,
-                  color: widget.selected ? tokens.accent : tokens.textPrimary,
+                  color: widget.selected
+                      ? _sidebarAccent(context, tokens)
+                      : tokens.textPrimary,
                 ),
                 const SizedBox(width: WorkFollowSpacing.sm - 2),
                 Expanded(
@@ -978,13 +902,18 @@ class _RailItemState extends State<_RailItem> {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      color:
-                          widget.selected ? tokens.accent : tokens.textPrimary,
+                      color: widget.selected
+                          ? _sidebarAccent(context, tokens)
+                          : tokens.textPrimary,
                       fontSize: WorkFollowMacTypography.navigation,
                       height: WorkFollowMacTypography.lineControl,
-                      // Selection is expressed by background and color, not by
-                      // adding weight; heavier nav rows read as "Web page".
-                      fontWeight: WorkFollowMacWeight.medium,
+                      // Selection is carried by background and colour; one
+                      // weight step adds the last bit of emphasis. Heavier nav
+                      // rows are what made the rail read bolder than the
+                      // reference, so semibold is never the selected state.
+                      fontWeight: widget.selected
+                          ? WorkFollowMacWeight.medium
+                          : WorkFollowMacWeight.regular,
                     ),
                   ),
                 ),
@@ -1011,11 +940,11 @@ class _RailItemState extends State<_RailItem> {
                     child: Text('${widget.count}',
                         style: TextStyle(
                             color: widget.selected
-                                ? tokens.accent
+                                ? _sidebarAccent(context, tokens)
                                 : tokens.textTertiary,
                             fontSize: WorkFollowMacTypography.navigationMeta,
                             height: WorkFollowMacTypography.lineControl,
-                            fontWeight: WorkFollowMacWeight.medium)),
+                            fontWeight: WorkFollowMacWeight.regular)),
                   ),
               ],
             ),
@@ -1043,6 +972,7 @@ class _TaskListItemState extends State<_TaskListItem> {
   Widget build(BuildContext context) {
     final tokens = WorkFollowTheme.of(context);
     final selected = widget.controller.isListSelected(widget.list.name);
+    // See _IconRailButtonState: the surface fill never eases.
     final count = widget.controller.countForList(widget.list.name);
     final listColor =
         Color(widget.controller.colorValueForList(widget.list.name));
@@ -1067,16 +997,14 @@ class _TaskListItemState extends State<_TaskListItem> {
                 label: '${widget.list.name}，$count 个未完成任务',
                 child: GestureDetector(
                   onTap: () => widget.controller.selectList(widget.list.name),
-                  child: AnimatedContainer(
+                  child: Container(
                     key: ValueKey('rail-list-item-${widget.list.name}'),
-                    duration: const Duration(milliseconds: 150),
-                    curve: Curves.easeOut,
                     height: WorkFollowMetrics.compactNavigationRowHeight,
                     margin: const EdgeInsets.symmetric(vertical: 1),
                     padding: const EdgeInsets.symmetric(horizontal: 10),
                     decoration: BoxDecoration(
                       color: dragActive
-                          ? tokens.accentSoft
+                          ? _sidebarAccentSoft(context, tokens)
                           : (selected
                               ? listColor.withValues(alpha: .12)
                               : (hovering
@@ -1086,7 +1014,8 @@ class _TaskListItemState extends State<_TaskListItem> {
                           BorderRadius.circular(WorkFollowRadii.control),
                       border: dragActive
                           ? Border.all(
-                              color: tokens.accent.withValues(alpha: .5))
+                              color: _sidebarAccent(context, tokens)
+                                  .withValues(alpha: .5))
                           : null,
                     ),
                     child: Row(
@@ -1106,7 +1035,9 @@ class _TaskListItemState extends State<_TaskListItem> {
                                       selected ? listColor : tokens.textPrimary,
                                   fontSize: WorkFollowMacTypography.navigation,
                                   height: WorkFollowMacTypography.lineControl,
-                                  fontWeight: WorkFollowMacWeight.medium)),
+                                  fontWeight: selected
+                                      ? WorkFollowMacWeight.medium
+                                      : WorkFollowMacWeight.regular)),
                         ),
                         if (count > 0)
                           Text('$count',
@@ -1116,7 +1047,7 @@ class _TaskListItemState extends State<_TaskListItem> {
                                       : tokens.textTertiary,
                                   fontSize: WorkFollowMacTypography.navigationMeta,
                                   height: WorkFollowMacTypography.lineControl,
-                                  fontWeight: WorkFollowMacWeight.medium)),
+                                  fontWeight: WorkFollowMacWeight.regular)),
                         ExcludeSemantics(
                           excluding: !hovering,
                           child: AnimatedOpacity(
@@ -1248,8 +1179,10 @@ class _TaskListItemState extends State<_TaskListItem> {
     }
     if (!widget.controller.renameList(widget.list.name, name)) {
       if (!context.mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('名称为空或已存在。')));
+      showFeedback(
+          context,
+          const WorkFollowFeedback(
+              kind: WorkFollowFeedbackKind.error, message: '名称为空或已存在。'));
     }
   }
 
@@ -1295,6 +1228,7 @@ class _TagItemState extends State<_TagItem> {
   Widget build(BuildContext context) {
     final tokens = WorkFollowTheme.of(context);
     final selected = widget.controller.selectedTagName == widget.name;
+    // See _IconRailButtonState: the surface fill never eases.
     return MouseRegion(
       onEnter: (_) => setState(() => hovering = true),
       onExit: (_) => setState(() => hovering = false),
@@ -1305,15 +1239,14 @@ class _TagItemState extends State<_TagItem> {
           button: true,
           selected: selected,
           label: '#${widget.name}，${widget.count} 个任务',
-          child: AnimatedContainer(
+          child: Container(
             key: ValueKey('rail-tag-item-${widget.name}'),
-            duration: const Duration(milliseconds: 140),
             height: WorkFollowMetrics.compactNavigationRowHeight,
             margin: const EdgeInsets.symmetric(vertical: 1),
             padding: const EdgeInsets.symmetric(horizontal: 10),
             decoration: BoxDecoration(
                 color: selected
-                    ? tokens.accentSoft
+                    ? _sidebarAccentSoft(context, tokens)
                     : (hovering
                         ? tokens.content.withValues(alpha: .65)
                         : Colors.transparent),
@@ -1321,23 +1254,31 @@ class _TagItemState extends State<_TagItem> {
             child: Row(children: [
               AppIcon(WorkFollowIcons.tag,
                   size: WorkFollowMetrics.navigationIcon,
-                  color: selected ? tokens.accent : tokens.textPrimary),
+                  color: selected
+                      ? _sidebarAccent(context, tokens)
+                      : tokens.textPrimary),
               const SizedBox(width: WorkFollowSpacing.sm - 2),
               Expanded(
                   child: Text(widget.name,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
-                          color: selected ? tokens.accent : tokens.textPrimary,
+                          color: selected
+                              ? _sidebarAccent(context, tokens)
+                              : tokens.textPrimary,
                           fontSize: WorkFollowMacTypography.navigation,
                           height: WorkFollowMacTypography.lineControl,
-                          fontWeight: WorkFollowMacWeight.medium))),
+                          fontWeight: selected
+                              ? WorkFollowMacWeight.medium
+                              : WorkFollowMacWeight.regular))),
               Text('${widget.count}',
                   style: TextStyle(
-                      color: selected ? tokens.accent : tokens.textTertiary,
+                      color: selected
+                          ? _sidebarAccent(context, tokens)
+                          : tokens.textTertiary,
                       fontSize: WorkFollowMacTypography.navigationMeta,
                       height: WorkFollowMacTypography.lineControl,
-                      fontWeight: WorkFollowMacWeight.medium)),
+                      fontWeight: WorkFollowMacWeight.regular)),
             ]),
           ),
         ),
@@ -1381,8 +1322,10 @@ class _TagItemState extends State<_TagItem> {
     input.dispose();
     if (!context.mounted || name == null) return;
     if (!widget.controller.renameTag(widget.name, name)) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('标签名称为空或已存在。')));
+      showFeedback(
+          context,
+          const WorkFollowFeedback(
+              kind: WorkFollowFeedbackKind.error, message: '标签名称为空或已存在。'));
     }
   }
 }
@@ -1413,6 +1356,7 @@ class _TaskViewItemState extends State<_TaskViewItem> {
   Widget build(BuildContext context) {
     final tokens = WorkFollowTheme.of(context);
     final selected = widget.controller.view == widget.view;
+    // See _IconRailButtonState: the surface fill never eases.
     final count = widget.controller.countFor(widget.view);
     return MouseRegion(
       onEnter: (_) => setState(() => hovering = true),
@@ -1423,15 +1367,14 @@ class _TaskViewItemState extends State<_TaskViewItem> {
         label: '${widget.label}，${widget.hint}',
         child: GestureDetector(
           onTap: () => widget.controller.selectView(widget.view),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 150),
-            curve: Curves.easeOut,
+          child: Container(
+            key: ValueKey('rail-view-item-${widget.view.name}'),
             margin: const EdgeInsets.symmetric(vertical: 2),
             padding: const EdgeInsets.fromLTRB(
                 9, WorkFollowSpacing.xs, 8, WorkFollowSpacing.xs),
             decoration: BoxDecoration(
               color: selected
-                  ? tokens.accentSoft
+                  ? _sidebarAccentSoft(context, tokens)
                   : (hovering
                       ? tokens.content.withValues(alpha: .7)
                       : Colors.transparent),
@@ -1441,7 +1384,9 @@ class _TaskViewItemState extends State<_TaskViewItem> {
               children: [
                 AppIcon(widget.icon,
                     size: WorkFollowMetrics.navigationIcon,
-                    color: selected ? tokens.accent : tokens.textPrimary),
+                    color: selected
+                        ? _sidebarAccent(context, tokens)
+                        : tokens.textPrimary),
                 const SizedBox(width: 9),
                 Expanded(
                   child: Column(
@@ -1452,10 +1397,14 @@ class _TaskViewItemState extends State<_TaskViewItem> {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
-                          color: selected ? tokens.accent : tokens.textPrimary,
+                          color: selected
+                              ? _sidebarAccent(context, tokens)
+                              : tokens.textPrimary,
                           fontSize: WorkFollowMacTypography.navigation,
                           height: WorkFollowMacTypography.lineControl,
-                          fontWeight: WorkFollowMacWeight.medium,
+                          fontWeight: selected
+                              ? WorkFollowMacWeight.medium
+                              : WorkFollowMacWeight.regular,
                         ),
                       ),
                       const SizedBox(height: 2),
@@ -1477,10 +1426,12 @@ class _TaskViewItemState extends State<_TaskViewItem> {
                     child: Text(
                       '$count',
                       style: TextStyle(
-                        color: selected ? tokens.accent : tokens.textTertiary,
+                        color: selected
+                            ? _sidebarAccent(context, tokens)
+                            : tokens.textTertiary,
                         fontSize: WorkFollowMacTypography.navigationMeta,
                         height: WorkFollowMacTypography.lineControl,
-                        fontWeight: WorkFollowMacWeight.medium,
+                        fontWeight: WorkFollowMacWeight.regular,
                       ),
                     ),
                   ),
@@ -1542,7 +1493,10 @@ Future<void> _editFolder(BuildContext anchor, WorkspaceController controller,
   if (name != null &&
       !controller.renameFolder(folder.id, name) &&
       anchor.mounted) {
-    ScaffoldMessenger.of(anchor)
-        .showSnackBar(const SnackBar(content: Text('请输入一个不重复的文件夹名称。')));
+    showFeedback(
+        anchor,
+        const WorkFollowFeedback(
+            kind: WorkFollowFeedbackKind.error,
+            message: '请输入一个不重复的文件夹名称。'));
   }
 }

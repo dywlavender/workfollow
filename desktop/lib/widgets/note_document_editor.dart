@@ -11,11 +11,15 @@ import '../models/task.dart';
 import '../state/workspace_controller.dart';
 import '../theme/workfollow_icons.dart';
 import '../theme/workfollow_theme.dart';
+import '../features/feedback/feedback_event.dart';
+import '../features/feedback/feedback_scope.dart';
 import 'app_icon_button.dart';
 import 'task_editor_toolbar.dart';
 import 'task_editor_popover.dart';
 import 'desktop_popover.dart';
 import 'task_slash_menu.dart';
+import 'task_document_commands.dart';
+import 'task_document_styles.dart';
 
 const _noteSlashActions = <TaskSlashAction>[
   TaskSlashAction.heading1,
@@ -41,6 +45,7 @@ class NoteDocumentEditor extends StatefulWidget {
 class _NoteDocumentEditorState extends State<NoteDocumentEditor>
     with WidgetsBindingObserver {
   late final quill.QuillController editor;
+  late final TaskDocumentCommands documentCommands;
   final focus = FocusNode();
   final scroll = ScrollController();
   final renderEditorKey = GlobalKey<quill.EditorState>();
@@ -67,6 +72,14 @@ class _NoteDocumentEditorState extends State<NoteDocumentEditor>
           onImagePaste: (bytes) async =>
               'data:image/png;base64,${base64Encode(bytes)}',
         )));
+    documentCommands = TaskDocumentCommands(
+      editor: editor,
+      pickAttachment: () => widget.controller.pickNoteAttachment(),
+      canMutate: () => mounted,
+      requestFocus: () {
+        if (mounted) focus.requestFocus();
+      },
+    );
     serialized = jsonEncode(editor.document.toDelta().toJson());
     editor.addListener(_changed);
   }
@@ -158,8 +171,7 @@ class _NoteDocumentEditorState extends State<NoteDocumentEditor>
   void _removeSlash() {
     final range = _slashRange();
     if (range == null) return;
-    editor.replaceText(range.start, range.end - range.start, '',
-        TextSelection.collapsed(offset: range.start));
+    documentCommands.deleteRange(range.start, range.end - range.start);
     if (mounted) setState(() => slashVisible = false);
     _syncSlashOverlay();
   }
@@ -174,7 +186,8 @@ class _NoteDocumentEditorState extends State<NoteDocumentEditor>
     final overlay = Overlay.maybeOf(context, rootOverlay: true);
     if (overlay == null) return;
     final screen = MediaQuery.sizeOf(context);
-    final menuHeight = math.min(390.0, math.max(220.0, screen.height - 24));
+    final menuHeight = math.min(TaskSlashMenu.heightFor(_noteSlashActions),
+        math.max(220.0, screen.height - 24));
     Offset? caretOrigin;
     double caretHeight = 20;
     final renderEditor = renderEditorKey.currentState?.renderEditor;
@@ -195,7 +208,7 @@ class _NoteDocumentEditorState extends State<NoteDocumentEditor>
       final geometry = calculatePopoverGeometry(
         anchor: Rect.fromLTWH(origin.dx, origin.dy, 1, caretHeight),
         viewport: screen,
-        desiredSize: Size(276, menuHeight),
+        desiredSize: Size(TaskSlashMenuMetrics.width, menuHeight),
         placement: PopoverPlacement.bottomStart,
         safeArea: const EdgeInsets.all(12),
       );
@@ -211,6 +224,7 @@ class _NoteDocumentEditorState extends State<NoteDocumentEditor>
         top: slashOffset.dy,
         child: TaskSlashMenu(
           actions: _noteSlashActions,
+          maxHeight: menuHeight,
           onSelected: _applySlash,
         ),
       ),
@@ -218,48 +232,34 @@ class _NoteDocumentEditorState extends State<NoteDocumentEditor>
     overlay.insert(slashOverlay!);
   }
 
-  void _formatLine(quill.Attribute attribute) {
+  int _lineStartAtCaret() {
     final text = editor.document.toPlainText();
     final caret = editor.selection.baseOffset.clamp(0, text.length).toInt();
-    final start = text.substring(0, caret).lastIndexOf('\n') + 1;
-    final endIndex = text.indexOf('\n', caret);
-    final end = endIndex < 0 ? text.length : endIndex + 1;
-    editor.formatText(
-        start, (end - start).clamp(1, text.length - start), attribute);
-  }
-
-  void _insertBlock(Map<String, dynamic> node) {
-    final at = editor.selection.baseOffset
-        .clamp(0, editor.document.length - 1)
-        .toInt();
-    editor.replaceText(
-        at,
-        0,
-        quill.BlockEmbed('workfollow-block', jsonEncode(node)),
-        TextSelection.collapsed(offset: at + 1));
+    return text.substring(0, caret).lastIndexOf('\n') + 1;
   }
 
   void _applySlash(TaskSlashAction action) {
     _removeSlash();
+    final lineStart = _lineStartAtCaret();
     switch (action) {
       case TaskSlashAction.heading1:
-        _formatLine(quill.Attribute.h1);
+        documentCommands.setHeading1(lineStart: lineStart);
       case TaskSlashAction.heading2:
-        _formatLine(quill.Attribute.h2);
+        documentCommands.setHeading2(lineStart: lineStart);
       case TaskSlashAction.heading3:
-        _formatLine(quill.Attribute.h3);
+        documentCommands.setHeading3(lineStart: lineStart);
       case TaskSlashAction.bullet:
-        _formatLine(quill.Attribute.ul);
+        documentCommands.toggleBulletList(lineStart: lineStart);
       case TaskSlashAction.ordered:
-        _formatLine(quill.Attribute.ol);
+        documentCommands.toggleOrderedList(lineStart: lineStart);
       case TaskSlashAction.checklist:
-        _formatLine(quill.Attribute.checked);
+        documentCommands.toggleChecklist(lineStart: lineStart);
       case TaskSlashAction.quote:
-        _formatLine(quill.Attribute.blockQuote);
+        documentCommands.toggleQuote(lineStart: lineStart);
       case TaskSlashAction.divider:
-        _insertBlock({'type': 'horizontalRule'});
+        documentCommands.insertDivider();
       case TaskSlashAction.attachment:
-        unawaited(_attach());
+        unawaited(documentCommands.insertAttachment());
       case TaskSlashAction.deadline:
       case TaskSlashAction.focus:
       case TaskSlashAction.subtask:
@@ -273,13 +273,12 @@ class _NoteDocumentEditorState extends State<NoteDocumentEditor>
 
   Future<void> _link() async {
     if (editor.selection.isCollapsed) return;
-    final url = await showDialog<String>(
-      context: context,
-      builder: (context) => const _NoteLinkDialog(),
+    await documentCommands.insertLink(
+      pickUrl: () => showDialog<String>(
+        context: context,
+        builder: (context) => const _NoteLinkDialog(),
+      ),
     );
-    if (!mounted || url == null || url.isEmpty) return;
-    editor.formatSelection(quill.LinkAttribute(url));
-    focus.requestFocus();
   }
 
   Future<void> _toggleToolbar(BuildContext anchor) async {
@@ -304,40 +303,15 @@ class _NoteDocumentEditorState extends State<NoteDocumentEditor>
       focusPolicy: PopoverFocusPolicy.preserveEditor,
       builder: (_) => TaskEditorToolbar(
         controller: editor,
-        onAttach: _attach,
-        onLink: _link,
-        onInsertSlash: () {
-          final at = editor.selection.baseOffset
-              .clamp(0, editor.document.length - 1)
-              .toInt();
-          editor.replaceText(
-              at, 0, '/', TextSelection.collapsed(offset: at + 1));
-          focus.requestFocus();
-        },
-        onInsertDivider: () {
-          _insertBlock({'type': 'horizontalRule'});
-          focus.requestFocus();
-        },
+        documentCommands: documentCommands,
+        onAttach: () => unawaited(documentCommands.insertAttachment()),
+        onLink: () => unawaited(_link()),
+        onInsertSlash: documentCommands.insertSlash,
+        onInsertDivider: documentCommands.insertDivider,
       ),
     );
     if (!mounted) return;
     setState(() => toolbarVisible = false);
-    focus.requestFocus();
-  }
-
-  Future<void> _attach() async {
-    final filename = await widget.controller.pickNoteAttachment();
-    if (filename == null || !mounted) return;
-    final node = {
-      'type': 'attachment',
-      'attrs': {'name': filename, 'localFile': filename}
-    };
-    final at = editor.selection.baseOffset.clamp(0, editor.document.length - 1);
-    editor.replaceText(
-        at,
-        0,
-        quill.BlockEmbed('workfollow-block', jsonEncode(node)),
-        TextSelection.collapsed(offset: at + 1));
     focus.requestFocus();
   }
 
@@ -351,10 +325,15 @@ class _NoteDocumentEditorState extends State<NoteDocumentEditor>
     final text = body.substring(start, end).trim();
     if (text.isEmpty) return;
     final id = widget.controller.addTaskFromNote(widget.note.id, text);
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: const Text('已添加到收集箱'),
-        action: SnackBarAction(
-            label: '查看', onPressed: () => widget.controller.openTask(id))));
+    // The new task went to the inbox, so offer to follow it instead of an undo.
+    showFeedback(
+        context,
+        WorkFollowFeedback(
+            kind: WorkFollowFeedbackKind.success,
+            message: '已添加到收集箱',
+            actionLabel: '查看任务',
+            actionIcon: WorkFollowIcons.next,
+            onAction: () => widget.controller.openTask(id)));
   }
 
   @override
@@ -377,20 +356,14 @@ class _NoteDocumentEditorState extends State<NoteDocumentEditor>
             minHeight: 330,
             padding: const EdgeInsets.only(bottom: 24),
             placeholder: '写下你的想法、会议记录或下一步行动…',
-            customStyles: quill.DefaultStyles(
-              paragraph: quill.DefaultTextBlockStyle(
-                  textStyle,
-                  const quill.HorizontalSpacing(0, 0),
-                  const quill.VerticalSpacing(0, 8),
-                  const quill.VerticalSpacing(0, 0),
-                  null),
-              placeHolder: quill.DefaultTextBlockStyle(
-                  textStyle.copyWith(color: tokens.textTertiary),
-                  const quill.HorizontalSpacing(0, 0),
-                  const quill.VerticalSpacing(0, 8),
-                  const quill.VerticalSpacing(0, 0),
-                  null),
+            customStyles: TaskDocumentStyles.build(
+              tokens,
+              base: textStyle,
+              paragraphBottom: 8,
+              placeholderBottom: 8,
             ),
+            customStyleBuilder:
+                TaskDocumentStyles.customStyleBuilder(tokens),
             embedBuilders: [
               NoteBlockBuilder(controller: widget.controller),
               const NoteImageBuilder()
@@ -557,7 +530,8 @@ class NoteBlockBuilder extends quill.EmbedBuilder {
                                             .trimRight()
                                         : '',
                                     style: TextStyle(
-                                        fontSize: WorkFollowMacTypography.control,
+                                        fontSize:
+                                            WorkFollowMacTypography.control,
                                         color: tokens.textPrimary))),
                         ]),
                     ])));

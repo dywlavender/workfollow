@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:workfollow_personal/features/tasks/domain/task_draft.dart';
@@ -209,7 +210,11 @@ void main() {
     Future<void> addFromMenu() async {
       c.selectTask(id);
       await tester.pumpAndSettle();
-      await tester.tap(find.byKey(ValueKey('task-row-more-$id')));
+      final gesture = await tester.startGesture(
+          tester.getCenter(find.byKey(ValueKey('task-row-surface-$id'))),
+          kind: PointerDeviceKind.mouse,
+          buttons: kSecondaryMouseButton);
+      await gesture.up();
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('menu-option-add-subtask')));
       await tester.pumpAndSettle();

@@ -2,8 +2,9 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_test/flutter_test.dart';
 
 import 'package:workfollow_personal/app.dart';
 import 'package:workfollow_personal/features/tasks/application/task_actions.dart';
@@ -75,6 +76,7 @@ class _RecordingReminders implements ReminderScheduler {
   @override
   Future<void> schedule({
     required String taskId,
+    String? notificationId,
     required String title,
     String? body,
     required DateTime at,
@@ -1313,7 +1315,14 @@ void main() {
     await tester.pumpWidget(const WorkFollowApp(demoMode: true));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('搜索'));
+    // The toolbar search box went away with the global toolbar; ⌘K is the
+    // surviving entry point. Focus has to sit inside the shell for the key to
+    // reach its binding — the quick-add field puts it there.
+    await tester.tap(find.byKey(const ValueKey('quick-add-title')));
+    await tester.pumpAndSettle();
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.meta, platform: 'macos');
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyK, platform: 'macos');
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.meta, platform: 'macos');
     await tester.pumpAndSettle();
     // The palette must build without a "No Material widget found" crash.
     expect(find.text('搜索任务、笔记或命令…'), findsOneWidget);

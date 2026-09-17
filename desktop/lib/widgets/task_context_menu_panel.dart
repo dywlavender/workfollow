@@ -341,13 +341,6 @@ class _TaskContextMenuPanelState extends State<TaskContextMenuPanel> {
               value: 'focus', label: '专注记录', icon: WorkFollowIcons.focus),
           _row(context, tokens,
               value: 'relation', label: '关联笔记', icon: WorkFollowIcons.link),
-          if (task.sourceNoteId != null)
-            _row(context, tokens,
-                value: 'open-source-note',
-                label: '打开来源笔记',
-                icon: WorkFollowIcons.article),
-          _row(context, tokens,
-              value: 'copy', label: '复制任务正文', icon: WorkFollowIcons.copy),
           const _MenuDivider(),
         ],
         _row(context, tokens,

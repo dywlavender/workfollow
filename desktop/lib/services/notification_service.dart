@@ -8,6 +8,7 @@ abstract class ReminderScheduler {
   Future<String?> authorizationStatus();
   Future<void> schedule({
     required String taskId,
+    String? notificationId,
     required String title,
     String? body,
     required DateTime at,
@@ -44,6 +45,7 @@ class NotificationService implements ReminderScheduler {
   @override
   Future<void> schedule({
     required String taskId,
+    String? notificationId,
     required String title,
     String? body,
     required DateTime at,
@@ -51,6 +53,7 @@ class NotificationService implements ReminderScheduler {
     try {
       await _channel.invokeMethod<void>('schedule', {
         'taskId': taskId,
+        if (notificationId != null) 'notificationId': notificationId,
         'title': title,
         'body': body,
         'fireAtMillis': at.millisecondsSinceEpoch,

@@ -52,6 +52,7 @@ class TaskItem {
     this.deadlineAt,
     this.hasDueTime,
     this.reminderAt,
+    this.reminderOffsets = const [],
     this.recurrenceType = 'NONE',
     this.recurrenceConfig,
     this.tags = const [],
@@ -94,6 +95,22 @@ class TaskItem {
           completed: completed, hasTime: scheduledWithTime);
 
   final String? reminderAt;
+  final List<int> reminderOffsets;
+  List<DateTime> get reminderTimes {
+    final due = localDateTimeFromStorage(dueAt);
+    if (due != null && reminderOffsets.isNotEmpty) {
+      final base =
+          scheduledWithTime ? due : DateTime(due.year, due.month, due.day, 9);
+      return reminderOffsets
+          .map((minutes) => base.subtract(Duration(minutes: minutes)))
+          .toSet()
+          .toList()
+        ..sort();
+    }
+    final reminder = localDateTimeFromStorage(reminderAt);
+    return reminder == null ? const [] : [reminder];
+  }
+
   final String recurrenceType;
   final Map<String, dynamic>? recurrenceConfig;
   final List<String> tags;
@@ -155,6 +172,7 @@ class TaskItem {
     bool clearDeadlineAt = false,
     bool? hasDueTime,
     String? reminderAt,
+    List<int>? reminderOffsets,
     bool clearReminderAt = false,
     String? recurrenceType,
     Map<String, dynamic>? recurrenceConfig,
@@ -196,6 +214,7 @@ class TaskItem {
       deadlineAt: clearDeadlineAt ? null : deadlineAt ?? this.deadlineAt,
       hasDueTime: hasDueTime ?? this.hasDueTime,
       reminderAt: clearReminderAt ? reminderAt : reminderAt ?? this.reminderAt,
+      reminderOffsets: reminderOffsets ?? this.reminderOffsets,
       recurrenceType: recurrenceType ?? this.recurrenceType,
       recurrenceConfig: clearRecurrenceConfig
           ? recurrenceConfig
@@ -247,6 +266,7 @@ class TaskItem {
       deadlineAt: normalizeStoredDateTime(record.deadlineAt),
       hasDueTime: record.hasDueTime,
       reminderAt: reminder?.toIso8601String(),
+      reminderOffsets: record.reminderOffsets,
       recurrenceType: record.recurrenceType,
       recurrenceConfig: record.recurrenceConfig,
       tags: List.unmodifiable(record.tags),
@@ -295,6 +315,7 @@ class TaskItem {
       deadlineAt: deadlineAt,
       hasDueTime: hasDueTime,
       reminderAt: reminderAt,
+      reminderOffsets: reminderOffsets,
       recurrenceType: recurrenceType,
       recurrenceConfig: recurrenceConfig,
       listName: listName,

@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -29,9 +30,10 @@ void main() {
 
     await tester.tap(find.byTooltip('四象限'));
     await tester.pumpAndSettle();
-    expect(find.text('立即做'), findsOneWidget);
-    expect(find.text('安排做'), findsOneWidget);
-    expect(find.text('缓一缓'), findsOneWidget);
+    expect(find.text('重要且紧急'), findsOneWidget);
+    expect(find.text('重要不紧急'), findsOneWidget);
+    expect(find.text('不重要但紧急'), findsOneWidget);
+    expect(find.text('不重要不紧急'), findsOneWidget);
   });
 
   testWidgets('board, habits and week calendar views are reachable',
@@ -377,6 +379,109 @@ void main() {
     expect(controller.taskOpenVersion, openVersion);
   });
 
+  testWidgets('ROW-003 moving the selection snaps instead of cross-fading',
+      (tester) async {
+    final controller = WorkspaceController(seedData: false);
+    addTearDown(controller.dispose);
+    controller.addTask('第一行');
+    controller.addTask('第二行');
+    final first = controller.tasks[0], second = controller.tasks[1];
+    var selectedId = first.id;
+
+    await tester.pumpWidget(MaterialApp(
+      theme: WorkFollowThemeData.light(),
+      home: Scaffold(
+        body: StatefulBuilder(
+          builder: (context, setState) => Column(children: [
+            TaskRow(
+                task: first,
+                controller: controller,
+                selected: selectedId == first.id,
+                onActivate: () => setState(() => selectedId = first.id)),
+            TaskRow(
+                task: second,
+                controller: controller,
+                selected: selectedId == second.id,
+                onActivate: () => setState(() => selectedId = second.id)),
+          ]),
+        ),
+      ),
+    ));
+    await tester.pump();
+
+    Color? fill(String id) {
+      final box = tester.widget<DecoratedBox>(find
+          .descendant(
+              of: find.byKey(ValueKey('task-row-surface-$id')),
+              matching: find.byType(DecoratedBox))
+          .first);
+      return (box.decoration as BoxDecoration).color;
+    }
+
+    expect(fill(first.id), WorkFollowTheme.light.listRowSelected);
+    expect(fill(second.id)?.a ?? 0, 0);
+
+    await tester.tap(find.byType(TaskRow).at(1));
+    // Exactly one frame: the row that just lost the selection has to be back to
+    // normal immediately. Easing it leaves that row carrying 157/255 of its
+    // selected fill 16ms later (measured), which reads as a second click.
+    await tester.pump();
+    expect(fill(first.id)?.a ?? 0, 0, reason: '刚取消选中的行必须当帧就恢复常态');
+    expect(fill(second.id), WorkFollowTheme.light.listRowSelected,
+        reason: '新选中的行必须当帧就位');
+  });
+
+  testWidgets('ROW-004 hovering a row never tints the rows passed over',
+      (tester) async {
+    final controller = WorkspaceController(seedData: false);
+    addTearDown(controller.dispose);
+    controller.addTask('第一行');
+    controller.addTask('第二行');
+    final first = controller.tasks[0], second = controller.tasks[1];
+
+    await tester.pumpWidget(MaterialApp(
+      theme: WorkFollowThemeData.light(),
+      home: Scaffold(
+        body: Column(children: [
+          TaskRow(task: first, controller: controller, selected: false),
+          TaskRow(task: second, controller: controller, selected: false),
+        ]),
+      ),
+    ));
+    await tester.pump();
+
+    Color? fill(String id) {
+      final box = tester.widget<DecoratedBox>(find
+          .descendant(
+              of: find.byKey(ValueKey('task-row-surface-$id')),
+              matching: find.byType(DecoratedBox))
+          .first);
+      return (box.decoration as BoxDecoration).color;
+    }
+
+    final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await gesture.addPointer(location: const Offset(5, 600));
+    await tester.pump();
+
+    await gesture.moveTo(tester.getCenter(find.byType(TaskRow).first));
+    await tester.pump(const Duration(milliseconds: 16));
+    expect(fill(first.id)!.a, greaterThan(0), reason: '指针下的行必须当帧亮起');
+    expect(fill(second.id)!.a, 0);
+
+    // Moving down to the second row has to clear the first one in the same
+    // frame. An eased fill left it tinted for another 120ms, so both rows read
+    // as hovered — and, on a list the pointer sweeps down, several at once.
+    await gesture.moveTo(tester.getCenter(find.byType(TaskRow).last));
+    await tester.pump(const Duration(milliseconds: 16));
+    expect(fill(first.id)!.a, 0, reason: '被路过的行必须当帧清掉 hover 底色');
+    expect(fill(second.id)!.a, greaterThan(0));
+
+    await gesture.moveTo(const Offset(5, 600));
+    await tester.pump(const Duration(milliseconds: 16));
+    expect(fill(second.id)!.a, 0, reason: '指针离开后不得残留 hover 底色');
+    await gesture.removePointer();
+  });
+
   testWidgets('KEY-004 Escape keeps the fixed inspector selected',
       (tester) async {
     tester.view.physicalSize = const Size(1280, 820);
@@ -517,9 +622,9 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('schedule-reminder')));
     await tester.pumpAndSettle();
-    expect(find.text('提醒我'), findsOneWidget);
-    expect(find.byKey(const ValueKey('date-input')), findsOneWidget);
-    await tester.tap(find.byKey(const ValueKey('date-cancel')));
+    expect(find.byKey(const ValueKey('reminder-offset-0')), findsOneWidget);
+    expect(find.byKey(const ValueKey('reminder-offset-30')), findsOneWidget);
+    await tester.tap(find.text('取消').last);
     await tester.pumpAndSettle();
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     await tester.pumpAndSettle();
@@ -528,10 +633,9 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('schedule-repeat')));
     await tester.pumpAndSettle();
-    expect(find.text('重复任务'), findsOneWidget);
-    expect(find.text('频率'), findsOneWidget);
-    expect(find.text('完成本次任务后，会自动生成下一次。'), findsOneWidget);
-    await tester.tap(find.text('确定').last);
+    expect(find.byKey(const ValueKey('repeat-YEARLY')), findsOneWidget);
+    expect(find.byKey(const ValueKey('repeat-workdays')), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('repeat-DAILY')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('apply-date')));
     await tester.pumpAndSettle();
@@ -581,7 +685,11 @@ void main() {
             body:
                 TaskRow(task: task, controller: controller, selected: true))));
 
-    await tester.tap(find.byKey(ValueKey('task-row-more-${task.id}')));
+    final menuGesture = await tester.startGesture(
+        tester.getCenter(find.byKey(ValueKey('task-row-surface-${task.id}'))),
+        kind: PointerDeviceKind.mouse,
+        buttons: kSecondaryMouseButton);
+    await menuGesture.up();
     await tester.pumpAndSettle();
     expect(
         find.byKey(const ValueKey('task-context-menu-panel')), findsOneWidget);
@@ -619,8 +727,12 @@ void main() {
     }
 
     await pumpRow();
-    await tester.tap(
-        find.byKey(ValueKey('task-row-more-${controller.tasks.single.id}')));
+    final firstMenuGesture = await tester.startGesture(
+        tester.getCenter(find.byKey(ValueKey(
+            'task-row-surface-${controller.tasks.single.id}'))),
+        kind: PointerDeviceKind.mouse,
+        buttons: kSecondaryMouseButton);
+    await firstMenuGesture.up();
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('menu-option-today')));
     await tester.pumpAndSettle();
@@ -631,16 +743,24 @@ void main() {
         DateTime(today.year, today.month, today.day));
 
     await pumpRow();
-    await tester.tap(
-        find.byKey(ValueKey('task-row-more-${controller.tasks.single.id}')));
+    final secondMenuGesture = await tester.startGesture(
+        tester.getCenter(find.byKey(ValueKey(
+            'task-row-surface-${controller.tasks.single.id}'))),
+        kind: PointerDeviceKind.mouse,
+        buttons: kSecondaryMouseButton);
+    await secondMenuGesture.up();
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('menu-option-priority-high')));
     await tester.pumpAndSettle();
     expect(controller.tasks.single.priority, TaskPriority.high);
 
     await pumpRow();
-    await tester.tap(
-        find.byKey(ValueKey('task-row-more-${controller.tasks.single.id}')));
+    final thirdMenuGesture = await tester.startGesture(
+        tester.getCenter(find.byKey(ValueKey(
+            'task-row-surface-${controller.tasks.single.id}'))),
+        kind: PointerDeviceKind.mouse,
+        buttons: kSecondaryMouseButton);
+    await thirdMenuGesture.up();
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('menu-option-complete')), findsNothing);
     controller.taskActions.complete(controller.tasks.single.id);
@@ -757,11 +877,11 @@ void main() {
     for (final label in ['优先级', '清单', '标签', '提醒', '重复']) {
       expect(find.text(label), findsWidgets, reason: label);
     }
-    await tester.tap(find.byKey(const ValueKey('menu-option-priority')));
-    await tester.pumpAndSettle();
-    expect(find.text('高优先级'), findsOneWidget);
+    // Priority is a one-tap flag row inside the disclosure panel now, so the
+    // old two-level menu (menu-option-priority → menu-option-TaskPriority.high)
+    // is gone; tapping the high flag commits and closes the panel.
     await tester
-        .tap(find.byKey(const ValueKey('menu-option-TaskPriority.high')));
+        .tap(find.byKey(const ValueKey('quick-add-priority-flag-high')));
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('quick-add-properties')), findsOneWidget);
   });

@@ -11,35 +11,48 @@ class RecurrenceDraft {
 
   bool get enabled => type != 'NONE';
 
-  /// Returns a storage-safe rule. Unsupported frequencies and malformed
-  /// weekly/monthly configuration are disabled instead of being persisted as
-  /// rules that the completion engine cannot advance.
+  /// Normalizes calendar rules and their optional inclusive end boundary.
   RecurrenceDraft normalized() {
-    final normalizedType = type.trim().toUpperCase();
-    switch (normalizedType) {
-      case 'NONE':
-        return const RecurrenceDraft();
-      case 'DAILY':
-        return const RecurrenceDraft(type: 'DAILY');
-      case 'WEEKLY':
-        final weekday = (config?['weekday'] as num?)?.toInt();
-        if (config == null) return const RecurrenceDraft(type: 'WEEKLY');
-        if (weekday == null || weekday < 1 || weekday > 7) {
-          return const RecurrenceDraft();
-        }
-        return RecurrenceDraft(
-            type: 'WEEKLY', config: <String, dynamic>{'weekday': weekday});
-      case 'MONTHLY':
-        final day = (config?['dayOfMonth'] as num?)?.toInt();
-        if (config == null) return const RecurrenceDraft(type: 'MONTHLY');
-        if (day == null || day < 1 || day > 31) {
-          return const RecurrenceDraft();
-        }
-        return RecurrenceDraft(
-            type: 'MONTHLY', config: <String, dynamic>{'dayOfMonth': day});
-      default:
-        return const RecurrenceDraft();
+    final kind = type.trim().toUpperCase();
+    if (!{
+      'DAILY',
+      'WEEKLY',
+      'MONTHLY',
+      'YEARLY',
+      'WEEKDAYS',
+      'WEEKENDS',
+      'WORKDAYS',
+      'HOLIDAYS'
+    }.contains(kind)) return const RecurrenceDraft();
+    final values = <String, dynamic>{};
+    if (kind == 'WEEKLY' && config?['weekday'] != null) {
+      final day = (config!['weekday'] as num).toInt();
+      if (day < 1 || day > 7) return const RecurrenceDraft();
+      values['weekday'] = day;
+    } else if (kind == 'WEEKLY' &&
+        config != null &&
+        !config!.containsKey('count') &&
+        !config!.containsKey('endDate')) {
+      return const RecurrenceDraft();
     }
+    if ((kind == 'MONTHLY' || kind == 'YEARLY') &&
+        config?['dayOfMonth'] != null) {
+      final day = (config!['dayOfMonth'] as num).toInt();
+      if (day < 1 || day > 31) return const RecurrenceDraft();
+      values['dayOfMonth'] = day;
+    }
+    if (kind == 'YEARLY' && config?['month'] != null) {
+      final month = (config!['month'] as num).toInt();
+      if (month < 1 || month > 12) return const RecurrenceDraft();
+      values['month'] = month;
+    }
+    final end = DateTime.tryParse(config?['endDate']?.toString() ?? '');
+    final count = (config?['count'] as num?)?.toInt();
+    if (end != null)
+      values['endDate'] =
+          DateTime(end.year, end.month, end.day).toIso8601String();
+    else if (count != null && count > 0) values['count'] = count;
+    return RecurrenceDraft(type: kind, config: values.isEmpty ? null : values);
   }
 
   RecurrenceDraft copyWith(

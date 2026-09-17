@@ -317,8 +317,13 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(TaskSchedulePanel), findsNothing);
     expect(find.text('准备季度产品评审演示文稿'), findsNothing);
-    expect(find.text('查看任务'), findsOneWidget);
-    await tester.tap(find.text('查看任务'));
+    // The follow affordance is the result HUD's action glyph rather than a
+    // SnackBar button; 查看任务 is its label for assistive tech only.
+    expect(find.text('日期已更新'), findsOneWidget);
+    final follow = find.byKey(const ValueKey('feedback-toast-action'));
+    expect(follow, findsOneWidget);
+    await tester.pumpAndSettle();
+    await tester.tap(follow);
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('task-title-editor')), findsOneWidget);
     final c = tester.widget<TodayScreen>(find.byType(TodayScreen)).controller;
@@ -354,14 +359,10 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('date-shortcut-明天')));
     await tester.tap(find.byKey(const ValueKey('schedule-time')));
     await tester.pumpAndSettle();
-    if (tester
-        .widget<Switch>(find.byKey(const ValueKey('date-time-toggle')))
-        .value) {
-      await tester.tap(find.byKey(const ValueKey('date-time-toggle')));
-      await tester.pump();
-    }
-    await tester.enterText(find.byKey(const ValueKey('schedule-开始-小时')), '00');
-    await tester.enterText(find.byKey(const ValueKey('schedule-开始-分钟')), '00');
+    await tester.enterText(
+        find.byKey(const ValueKey('schedule-time-input')), '00:00');
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pumpAndSettle();
     await tester.ensureVisible(find.byKey(const ValueKey('apply-date')));
     await tester.tap(find.byKey(const ValueKey('apply-date')));
     await tester.pumpAndSettle();
