@@ -122,8 +122,10 @@
 
 | 文件 | 组件 | 问题类型 | 当前写法（命中数） | 应归属 Token | 严重程度 | 计划轮次 |
 | --- | --- | --- | --- | --- | --- | --- |
-| `widgets/sidebar.dart` | Light rail/navigation | Theme parity | 独立 7 个 light hex + 15 个 brightness 判断 | `WorkFollowTheme` rail/navigation surface | P0 | D10 |
-| `widgets/task_menu_style.dart` | Task menus | Theme parity | Light 分支复制颜色，Dark 直接返回 tokens | Theme extension 的明暗值 | P0 | D10 |
-| `widgets/task_document_styles.dart` | Checklist | Theme parity | 亮/暗模式决定 checked fill 与 check color | Document style + semantic contrast roles | P1 | D10 |
-| `widgets/task_schedule_options.dart` | Schedule field | Theme parity | brightness 分支返回固定浅色 `#f6f6f6` | input surface token | P1 | D10 |
-| `widgets/command_palette.dart`、`settings_panel.dart` 等 | Overlay surfaces | Theme parity | barrier/foreground 使用直接 black/white | Overlay semantic contrast roles | P1 | D10 |
+| `widgets/sidebar.dart` | Light rail/navigation | Theme parity | Light/Dark 颜色分支散落在 Widget | `WorkFollowColorTokens.navigation*` | P0 | migrated · D10 |
+| `widgets/task_menu_style.dart` | Task menus | Theme parity | 颜色已由 Theme extension 提供 | `WorkFollowTheme` 菜单语义值 | P0 | migrated · D10 |
+| `widgets/task_document_styles.dart` | Checklist | Theme parity | 并行任务仍在调整 checked fill/check 细节 | Document style + semantic contrast roles | P1 | deferred · D10 后续 |
+| `widgets/task_schedule_options.dart`、`task_schedule_panel.dart` | Schedule field | Theme parity | 并行任务中的日期表面和前景分支 | input/status semantic roles | P1 | deferred · D10 后续 |
+| `widgets/command_palette.dart`、`settings_panel.dart` 等 | Overlay surfaces | Theme parity | barrier 使用黑色 alpha 遮罩；有色表面前景需对比校验 | Overlay barrier exception + `WorkFollowThemeContrast` | P1 | migrated/accepted-exception · D10 |
+| `theme/workfollow_theme.dart` | ThemeData/semantic palette | Theme parity | Light 状态色、Dark error foreground、Tooltip 语义对比不一致 | theme roles + `on*` foreground | P0 | migrated · D10 |
+| `screens/home_screen.dart`、`calendar_screen.dart`、`notes_screen.dart`、`widgets/task_tag_picker.dart` | Filled controls | Theme parity | 有色表面固定白色前景 | `WorkFollowThemeContrast.foregroundOn` | P1 | migrated · D10 |

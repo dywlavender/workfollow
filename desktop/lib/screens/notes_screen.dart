@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import '../models/task.dart';
 import '../state/workspace_controller.dart';
 import '../theme/workfollow_icons.dart';
+import '../theme/workfollow_theme_parity.dart';
 import '../theme/workfollow_theme.dart';
 import '../widgets/app_icon_button.dart';
 import '../widgets/desktop_popover.dart';
@@ -226,12 +227,13 @@ class _NewNoteButton extends StatelessWidget {
             child: InkWell(
                 borderRadius: BorderRadius.circular(WorkFollowRadii.control),
                 onTap: onCreate,
-                child: const SizedBox(
+                child: SizedBox(
                     width: NotesMetrics.newNoteButtonSize,
                     height: NotesMetrics.newNoteButtonSize,
                     child: AppIcon(WorkFollowIcons.add,
                         size: WorkFollowMetrics.toolbarIcon,
-                        color: Colors.white)))));
+                        color: WorkFollowThemeContrast.foregroundOn(
+                            tokens.accent))))));
   }
 }
 

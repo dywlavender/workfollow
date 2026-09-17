@@ -13,27 +13,23 @@ import '../features/feedback/feedback_scope.dart';
 import 'app_icon_button.dart';
 import 'desktop_popover.dart';
 
-// The matrix reference uses a neutral light shell: a pale rail, grey glyphs
-// and a purple active state. This appearance is scoped to navigation so the
-// existing content/status accent remains unchanged elsewhere in the app.
-const _lightSidebarRail = WorkFollowColorTokens.lightNavigationRail;
-const _lightSidebarSurface = WorkFollowColorTokens.lightNavigationSurface;
-const _lightSidebarActive = WorkFollowColorTokens.lightNavigationSelected;
-const _lightSidebarAccent = WorkFollowColorTokens.lightNavigationAccent;
-const _lightSidebarForeground =
-    WorkFollowColorTokens.lightNavigationForeground;
-const _lightSidebarForegroundMuted =
-    WorkFollowColorTokens.lightNavigationForegroundMuted;
-const _lightSidebarBorder = WorkFollowColorTokens.lightNavigationBorder;
-
-bool _lightSidebar(BuildContext context) =>
-    Theme.of(context).brightness == Brightness.light;
-
 Color _sidebarAccent(BuildContext context, WorkFollowTheme tokens) =>
-    _lightSidebar(context) ? _lightSidebarAccent : tokens.accent;
+    WorkFollowColorTokens.navigationAccent(context, tokens);
 
 Color _sidebarAccentSoft(BuildContext context, WorkFollowTheme tokens) =>
-    _lightSidebar(context) ? _lightSidebarActive : tokens.accentSoft;
+    WorkFollowColorTokens.navigationSelected(context, tokens);
+
+Color _sidebarRail(BuildContext context, WorkFollowTheme tokens) =>
+    WorkFollowColorTokens.navigationRail(context, tokens);
+
+Color _sidebarForeground(BuildContext context, WorkFollowTheme tokens) =>
+    WorkFollowColorTokens.navigationForeground(context, tokens);
+
+Color _sidebarForegroundMuted(BuildContext context, WorkFollowTheme tokens) =>
+    WorkFollowColorTokens.navigationForegroundMuted(context, tokens);
+
+Color _sidebarBorder(BuildContext context, WorkFollowTheme tokens) =>
+    WorkFollowColorTokens.navigationBorder(context, tokens);
 
 /// The persistent product-level navigation from the web app, adapted to a
 /// native macOS rail. Personal builds intentionally omit team and notification
@@ -81,20 +77,14 @@ class AppRail extends StatelessWidget {
           1 +
           (contextColumn ? WorkFollowLayout.compactTaskNavigationWidth : 0),
       decoration: BoxDecoration(
-        gradient: _lightSidebar(context)
-            ? const LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [_lightSidebarSurface, _lightSidebarRail],
-              )
-            : tokens.sidebarGradient,
+        gradient: WorkFollowColorTokens.navigationGradient(context, tokens),
         border: Border(right: BorderSide(color: tokens.border, width: 1)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           ColoredBox(
-            color: _lightSidebar(context) ? _lightSidebarRail : tokens.rail,
+            color: _sidebarRail(context, tokens),
             child: _IconRail(
               controller: controller,
               isDark: isDark,
@@ -453,14 +443,11 @@ class _IconRailFooter extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: WorkFollowSpacing.space1),
         decoration: BoxDecoration(
-          color: _lightSidebar(context)
-              ? _lightSidebarActive
-              : tokens.railSurface,
+          color: WorkFollowColorTokens.navigationFooterSurface(
+              context, tokens),
           borderRadius: BorderRadius.circular(WorkFollowRadii.surface),
           border: Border.all(
-              color: _lightSidebar(context)
-                  ? _lightSidebarBorder
-                  : tokens.railBorder),
+              color: _sidebarBorder(context, tokens)),
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -471,9 +458,7 @@ class _IconRailFooter extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(vertical: WorkFollowSpacing.space1),
                 child: AppIcon(WorkFollowIcons.system,
                     size: WorkFollowMetrics.toolbarIcon,
-                    color: _lightSidebar(context)
-                        ? _lightSidebarForegroundMuted
-                        : tokens.railForegroundMuted),
+                    color: _sidebarForegroundMuted(context, tokens)),
               ),
             ),
             _IconRailFooterButton(
@@ -524,9 +509,7 @@ class _IconRailFooterButton extends StatelessWidget {
               onPressed: onPressed,
               size: SidebarMetrics.footerButtonSize,
               iconSize: WorkFollowMetrics.compactFieldIcon,
-              iconColor: _lightSidebar(context)
-                  ? _lightSidebarForeground
-                  : tokens.railForeground,
+              iconColor: _sidebarForeground(context, tokens),
             ),
           ),
           // Keep the old text-based automation target available without
@@ -615,15 +598,12 @@ class _IconRailButtonState extends State<_IconRailButton> {
               decoration: BoxDecoration(
                 color: WorkFollowInteractionStyles.customFill(
                   defaultColor: Colors.transparent,
-                  hoverColor: _lightSidebar(context)
-                      ? _lightSidebarForeground.withValues(alpha: .10)
-                      : tokens.railForeground.withValues(alpha: .12),
-                  selectedColor: _lightSidebar(context)
-                      ? _lightSidebarActive
-                      : tokens.railActive,
-                  pressedColor: _lightSidebar(context)
-                      ? _lightSidebarForeground.withValues(alpha: .16)
-                      : tokens.railForeground.withValues(alpha: .20),
+                  hoverColor: WorkFollowColorTokens.navigationHover(
+                      context, tokens),
+                  selectedColor: WorkFollowColorTokens.navigationRailSelected(
+                      context, tokens),
+                  pressedColor: WorkFollowColorTokens.navigationPressed(
+                      context, tokens),
                   selected: active,
                   hovered: hovering,
                   pressed: pressed,
@@ -644,12 +624,8 @@ class _IconRailButtonState extends State<_IconRailButton> {
                 color: active
                     ? _sidebarAccent(context, tokens)
                     : (hovering
-                        ? (_lightSidebar(context)
-                            ? _lightSidebarForeground
-                            : tokens.railForeground)
-                        : (_lightSidebar(context)
-                            ? _lightSidebarForegroundMuted
-                            : tokens.railForegroundMuted)),
+                        ? _sidebarForeground(context, tokens)
+                        : _sidebarForegroundMuted(context, tokens)),
               ),
               ),
             ),

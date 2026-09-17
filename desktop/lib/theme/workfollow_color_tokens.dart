@@ -76,6 +76,37 @@ class WorkFollowColorTokens {
           ? lightNavigationBorder
           : tokens.railBorder;
 
+  /// Navigation interaction fills keep their light reference profile while
+  /// resolving the actual foreground from the active theme. Widgets should
+  /// ask for the semantic state instead of branching on brightness themselves.
+  static Color navigationHover(BuildContext context, WorkFollowTheme tokens) {
+    final light = Theme.of(context).brightness == Brightness.light;
+    return navigationForeground(context, tokens)
+        .withValues(alpha: light ? .10 : .12);
+  }
+
+  static Color navigationPressed(
+      BuildContext context, WorkFollowTheme tokens) {
+    final light = Theme.of(context).brightness == Brightness.light;
+    return navigationForeground(context, tokens)
+        .withValues(alpha: light ? .16 : .20);
+  }
+
+  /// Selected fill for the compact rail button. The light reference uses a
+  /// quiet navigation fill; the dark rail uses its own active surface.
+  static Color navigationRailSelected(
+          BuildContext context, WorkFollowTheme tokens) =>
+      Theme.of(context).brightness == Brightness.light
+          ? lightNavigationSelected
+          : tokens.railActive;
+
+  /// Surface behind the rail footer controls.
+  static Color navigationFooterSurface(
+          BuildContext context, WorkFollowTheme tokens) =>
+      Theme.of(context).brightness == Brightness.light
+          ? lightNavigationSelected
+          : tokens.railSurface;
+
   static LinearGradient navigationGradient(
       BuildContext context, WorkFollowTheme tokens) {
     if (Theme.of(context).brightness == Brightness.dark) {

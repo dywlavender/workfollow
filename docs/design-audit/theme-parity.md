@@ -1,4 +1,6 @@
-# D10 Light / Dark 盘点
+# D10 Light / Dark 盘点基线
+
+本文件保留 D0 扫描得到的明暗模式候选；施工结果见 [D10 Light / Dark 主题一致性改造](d10-theme-parity.md)。
 
 ## 扫描结果
 
@@ -16,9 +18,8 @@
 | Schedule Picker | `#f6f6f6` 等浅色固定值 | input/menu surface role |
 | Overlay | black/white 直接作为 barrier/前景 | overlay contrast role，保留必要反色例外 |
 
-## D10 验收矩阵
+## D10 验收矩阵（施工前）
 
 逐页检查 Light + Dark：Today、Recent、Inbox、Plan、Task Detail、Notes、Calendar、Matrix、Board、Habits、Stats、Settings，以及 Slash、More、Context、日期、清单、标签、提醒和重复 Picker。
 
 重点观察正文、标题、禁用态、边框、Popover、Selected、Checklist、Danger/Warning 和 Feedback HUD 的对比度与层级，不把“颜色反转”当作主题适配完成。
-

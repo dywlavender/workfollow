@@ -28,7 +28,7 @@ void main() {
     expect(WorkFollowTheme.light.railActive, Colors.white);
     expect(WorkFollowTheme.light.sidebarGradient.colors.first,
         const Color(0xFFDDF5EE));
-    expect(WorkFollowTheme.light.accent, const Color(0xFF2FAF95));
+    expect(WorkFollowTheme.light.accent, const Color(0xFF198570));
     expect(theme.textTheme.displaySmall?.fontSize, WorkFollowMacTypography.pageTitle);
     expect(theme.textTheme.displaySmall?.fontWeight,
         WorkFollowMacWeight.semibold);

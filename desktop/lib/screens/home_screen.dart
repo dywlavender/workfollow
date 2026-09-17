@@ -5,6 +5,7 @@ import '../state/workspace_controller.dart';
 import '../theme/workfollow_icons.dart';
 import '../theme/workfollow_motion.dart';
 import '../theme/workfollow_surface_tokens.dart';
+import '../theme/workfollow_theme_parity.dart';
 import '../theme/workfollow_theme.dart';
 import '../features/tasks/presentation/task_feedback_mapper.dart';
 import '../widgets/app_icon_button.dart';
@@ -497,9 +498,10 @@ class _HomeTaskRow extends StatelessWidget {
                         width: 1.5),
                   ),
                   child: task.completed
-                      ? const AppIcon(WorkFollowIcons.check,
+                      ? AppIcon(WorkFollowIcons.check,
                           size: WorkFollowMetrics.metadataIcon - 3,
-                          color: Colors.white)
+                          color: WorkFollowThemeContrast.foregroundOn(
+                              tokens.success))
                       : null,
                 ),
               ),
@@ -669,7 +671,8 @@ class _MiniCalendar extends StatelessWidget {
                         Text('$day',
                             style: TextStyle(
                                 color: isToday
-                                    ? Colors.white
+                                    ? WorkFollowThemeContrast.foregroundOn(
+                                        tokens.accent)
                                     : tokens.textSecondary,
                                 fontSize: WorkFollowMacTypography.caption,
                                 fontWeight: isToday
@@ -681,7 +684,10 @@ class _MiniCalendar extends StatelessWidget {
                               width: HomeMetrics.miniCalendarDotSize,
                               height: HomeMetrics.miniCalendarDotSize,
                               decoration: BoxDecoration(
-                                  color: isToday ? Colors.white : tokens.accent,
+                                  color: isToday
+                                      ? WorkFollowThemeContrast.foregroundOn(
+                                          tokens.accent)
+                                      : tokens.accent,
                                   shape: BoxShape.circle)),
                         ],
                       ],

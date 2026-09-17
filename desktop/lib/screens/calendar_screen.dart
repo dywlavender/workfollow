@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/task.dart';
 import '../state/workspace_controller.dart';
 import '../theme/workfollow_icons.dart';
+import '../theme/workfollow_theme_parity.dart';
 import '../theme/workfollow_theme.dart';
 import '../widgets/app_icon_button.dart';
 
@@ -202,7 +203,9 @@ class _CalendarScreenState extends State<CalendarScreen> {
                                         child: Text('$dayNumber',
                                             style: TextStyle(
                                                 color: isToday
-                                                    ? Colors.white
+                                                    ? WorkFollowThemeContrast
+                                                        .foregroundOn(
+                                                            tokens.accent)
                                                     : (isSelected
                                                         ? tokens.accent
                                                         : tokens.textSecondary),

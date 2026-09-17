@@ -1,10 +1,10 @@
 # WorkFollow Design System Audit
 
-这是桌面端 Design System 的 D0 盘点入口。D0 只记录现状、规范事实源和迁移顺序，不修改 `desktop/lib` 的视觉或行为。
+这是桌面端 Design System 的 D0 盘点入口和 D1–D10 迁移索引。每轮文档记录边界、事实源、例外和验证结果。
 
 ## 快照
 
-- 扫描日期：2026-09-17
+- 扫描日期：2026-09-18
 - 扫描范围：`desktop/lib/**/*.dart`
 - 文件数：96（包含当前工作区中并行任务新增的 Dart 文件）
 - 排除：`build/`、`.dart_tool/` 和测试目录
@@ -25,7 +25,7 @@
 | States | `selected:` 60；Hover 相关 78；Focus 相关 71；Disabled 相关 32；Active 相关 16 | 语法命中，需按控件状态矩阵归并 | D7 |
 | Overlay | 统一菜单、Picker、Toolbar、Dialog route；34 个基线命中已按契约收口 | `DesktopOverlayPolicy`、shared geometry、persistent controller | D8 · migrated |
 | Motion | 18 个主题外数字 `Duration`；10 个主题外 `Curves.*` | Motion Role 已建立；浮层、页面切换、Feedback HUD 已迁移，并行组件按边界 deferred | D9 · migrated |
-| Light / Dark | 32 个明暗模式判断，分布在 10 个文件 | 检查是否把模式差异写进了组件，而不是 Theme | D10 |
+| Light / Dark | 32 个明暗模式判断，分布在 10 个文件 | 语义 Token、对比度、Surface 层级和反色前景已收口；并行文件按边界 deferred | D10 · migrated |
 
 ## 规范事实源
 
@@ -40,6 +40,7 @@
 | 任务列表尺寸 | `TaskListMetrics` |
 | 圆角 | `WorkFollowRadii` |
 | 动画时序与曲线 | [`workfollow_motion.dart`](/Users/dongyangwei/Documents/学习/代办笔记/workfollow-flutter-personal/desktop/lib/theme/workfollow_motion.dart)；基础值由 `WorkFollowMotion` 提供 |
+| Light / Dark 对比度与反色前景 | [`workfollow_theme_parity.dart`](/Users/dongyangwei/Documents/学习/代办笔记/workfollow-flutter-personal/desktop/lib/theme/workfollow_theme_parity.dart)；颜色角色由 `WorkFollowTheme` 提供 |
 | 任务菜单颜色兼容层 | `TaskMenuStyle`（只转发 `WorkFollowTheme`，不再复制颜色） |
 
 ## D0 发现状态
@@ -71,6 +72,7 @@
 - [Overlay](overlay.md)
 - [D8 Overlay migration](d8-overlays.md)
 - [Light / Dark](theme-parity.md)
+- [D10 Light / Dark migration](d10-theme-parity.md)
 
 ## 施工顺序
 

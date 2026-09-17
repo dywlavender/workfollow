@@ -7,7 +7,7 @@
 | 字段 | 含义 |
 | --- | --- |
 | `id` | 稳定的发现编号，后续提交和回归报告引用它 |
-| `dimension` | Typography / Icons / Colors / Spacing / Geometry / Surfaces / States / Overlay / Motion |
+| `dimension` | Typography / Icons / Colors / Spacing / Geometry / Surfaces / States / Overlay / Motion / Light-Dark |
 | `location` | 文件与行号 |
 | `current` | 当前实现或命中值 |
 | `target` | 目标 Token、语义角色或需新增的角色 |
@@ -66,6 +66,12 @@
 | MOTION-005 | Motion | `screens/today_screen.dart`、`widgets/task_list/*`、`widgets/matrix/*` | 并行任务中的状态/任务行动画 | 对应 task/list/collapse roles | deferred | D9 后续 |
 | MOTION-006 | Motion | `features/feedback/feedback_event.dart` | 4000/5000/2600ms | feedback hold time | accepted-exception | D9 |
 | MOTION-007 | Motion | `widgets/task_context_menu_panel.dart` | 220ms Timer | submenu hover intent delay | accepted-exception | D9 |
+| THEME-001 | Light-Dark | `theme/workfollow_theme.dart` | 明暗状态色和前景对比度不均 | Light/Dark semantic roles + readable foreground | migrated | D10 |
+| THEME-002 | Light-Dark | `theme/workfollow_theme_parity.dart` | 各组件自行判断白/黑前景 | `WorkFollowThemeContrast` | migrated | D10 |
+| THEME-003 | Light-Dark | `widgets/sidebar.dart` | Widget 内散落 Light/Dark rail 分支 | `WorkFollowColorTokens.navigation*` | migrated | D10 |
+| THEME-004 | Light-Dark | `screens/home_screen.dart`, `screens/calendar_screen.dart`, `screens/notes_screen.dart`, `widgets/task_tag_picker.dart` | 有色表面固定使用白色前景 | `WorkFollowThemeContrast.foregroundOn` | migrated | D10 |
+| THEME-005 | Light-Dark | `widgets/command_palette.dart`, `widgets/settings_panel.dart` | 黑色 alpha 遮罩 | Overlay barrier exception | accepted-exception | D10 |
+| THEME-006 | Light-Dark | `widgets/task_document_styles.dart`, `widgets/task_schedule_options.dart`, `widgets/task_schedule_panel.dart`, `widgets/task_row.dart`, `widgets/task_list/*`, `widgets/matrix/*`, `features/feedback/*` | 并行任务中的 Checklist/Schedule/Row/Matrix/Feedback 明暗分支 | 对应语义 Token；保留并行工作区 | deferred | D10 后续 |
 
 ## 重新扫描命令
 

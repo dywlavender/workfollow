@@ -22,6 +22,8 @@
 | 并行 Surface | `quick_add.dart`、`today_screen.dart`、`task_row.dart`、`task_document_styles.dart`、`widgets/matrix/*`、`features/feedback/*`、`task_schedule_options.dart` | 当前由另一项未提交任务维护；本轮不覆盖，后续迁移到 `WorkFollowSurfaceTokens` | D6 |
 | 并行 State | `task_row.dart`、`task_document_styles.dart`、`widgets/task_list/*`、`widgets/matrix/*`、`features/feedback/*`、`today_screen.dart`、`quick_add.dart`、`task_schedule_options.dart` | 当前由另一项未提交任务维护；D7 只建立共享状态层，后续接入时保留其业务行为 | D7 |
 | 导航专属颜色 | `sidebar.dart` 的 rail、用户清单色和标签色 | 这些是导航/用户内容语义色；D7 统一状态优先级，不把专属选中色误当成全局 palette | D7/D10 |
+| 语义前景解析 | `theme/workfollow_theme_parity.dart` 的 `darkForeground` 与白色 | 有色 Accent/Status 表面需要稳定的高对比前景；选择逻辑集中在主题校验层，不由组件自行判断 | D10 |
+| Light/Dark 状态校准 | `WorkFollowTheme.light/dark` 的明暗值差异 | 同一语义在两种主题可使用不同色值，以维持对比度和层级；组件只读取语义角色 | D10 |
 | Destructive hover 派生色 | `WorkFollowInteractionStyles` 中由 `tokens.danger` 派生的低 alpha tint | D7 只表达 destructive 状态；D3 颜色体系不新增独立 palette | D3/D7 |
 | Persistent overlay entry | `widgets/persistent_anchored_popover.dart` 的单一 controller | Toolbar 和 caret Slash 需要跨编辑器点击保持 mounted；业务组件不再直接创建或定位 `OverlayEntry` | D8 |
 | 二级 Dialog route | `settings_panel.dart` 的导入预览、恢复选择、恢复确认 | 这些是确认/数据选择 Dialog，不是 anchored Menu / Picker；由 Material `showDialog` 处理 | D8 |

@@ -1093,7 +1093,9 @@ class WorkFollowTheme extends ThemeExtension<WorkFollowTheme> {
 
   /// Derived roles keep disabled and focus treatments semantic without
   /// adding another near-duplicate palette entry to every light/dark theme.
-  Color get textDisabled => textTertiary.withValues(alpha: .55);
+  // Disabled text remains visibly related to tertiary text in both themes;
+  // the stronger semantic alpha avoids disappearing on light surfaces.
+  Color get textDisabled => textTertiary.withValues(alpha: .72);
   Color get focusRing => accent.withValues(alpha: .35);
   Color get documentHighlight => accentSoft;
   Color get documentHighlightText => textPrimary;
@@ -1163,20 +1165,20 @@ class WorkFollowTheme extends ThemeExtension<WorkFollowTheme> {
     overlay: Color(0xFFFFFFFF),
     textPrimary: Color(0xFF20272C),
     textSecondary: Color(0xFF5D6B75),
-    textTertiary: Color(0xFF94A3A7),
+    textTertiary: Color(0xFF7F8D92),
     border: Color(0xFFDCE6E4),
     borderStrong: Color(0xFFC5D6D2),
-    accent: Color(0xFF2FAF95),
-    accentHover: Color(0xFF238E79),
+    accent: Color(0xFF198570),
+    accentHover: Color(0xFF146F5F),
     accentSoft: Color(0xFFD8F2EB),
     accentFaint: Color(0xFFEFFAF7),
     menuSelected: Color(0xFFF6F6F6),
     menuDivider: Color(0xFFF2F3F3),
     listRowHover: Color(0xFFF5F7F8),
     listRowSelected: Color(0xFFEEF1F3),
-    success: Color(0xFF2EAB78),
-    warning: Color(0xFFC67912),
-    danger: Color(0xFFE45454),
+    success: Color(0xFF237A57),
+    warning: Color(0xFFA15C08),
+    danger: Color(0xFFB13F50),
     shadow: Color(0x14161B2B),
     seasonalSky: LinearGradient(
       begin: Alignment.topLeft,
@@ -1216,7 +1218,7 @@ class WorkFollowTheme extends ThemeExtension<WorkFollowTheme> {
     accentFaint: Color(0xFF252B4A),
     menuSelected: Color(0xFF363A42),
     menuDivider: Color(0xFF3A3E47),
-    listRowHover: Color(0xFF23262C),
+    listRowHover: Color(0xFF272B32),
     listRowSelected: Color(0xFF2A2E35),
     success: Color(0xFF5BCE91),
     warning: Color(0xFFF2B84B),
@@ -1372,7 +1374,9 @@ class WorkFollowThemeData {
           ? Colors.white
           : const Color(0xFF111216),
       error: tokens.danger,
-      onError: Colors.white,
+      onError: brightness == Brightness.light
+          ? Colors.white
+          : const Color(0xFF111216),
       surface: tokens.content,
       onSurface: tokens.textPrimary,
     );
@@ -1477,15 +1481,11 @@ class WorkFollowThemeData {
       tooltipTheme: TooltipThemeData(
         waitDuration: const Duration(milliseconds: 450),
         textStyle: TextStyle(
-            color: brightness == Brightness.dark
-                ? tokens.textPrimary
-                : Colors.white,
+            color: tokens.feedbackText,
             fontSize: WorkFollowMacTypography.caption,
             fontWeight: WorkFollowMacWeight.medium),
         decoration: BoxDecoration(
-          color: brightness == Brightness.dark
-              ? tokens.overlay
-              : tokens.feedbackSurface,
+          color: tokens.feedbackSurface,
           borderRadius: BorderRadius.circular(WorkFollowRadii.sm),
         ),
       ),

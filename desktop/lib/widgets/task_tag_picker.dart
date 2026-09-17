@@ -6,6 +6,7 @@ import 'desktop_popover.dart';
 import 'app_icon_button.dart';
 import '../theme/workfollow_icons.dart';
 import '../theme/workfollow_interaction_states.dart';
+import '../theme/workfollow_theme_parity.dart';
 import '../theme/workfollow_theme.dart';
 
 class TaskTagPicker {
@@ -210,7 +211,8 @@ class _TaskTagPickerBodyState extends State<TaskTagPickerBody> {
                             fontWeight: WorkFollowMacWeight.medium,
                             letterSpacing: WorkFollowMacTracking.none),
                         backgroundColor: tokens.accent,
-                        foregroundColor: Colors.white,
+                        foregroundColor:
+                            WorkFollowThemeContrast.foregroundOn(tokens.accent),
                         shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(
                                 WorkFollowRadii.control))),

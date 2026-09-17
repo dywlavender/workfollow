@@ -14,6 +14,7 @@ void main() {
     final allowedTokenFiles = {
       'theme/workfollow_theme.dart',
       'theme/workfollow_color_tokens.dart',
+      'theme/workfollow_theme_parity.dart',
     };
     final forbidden = RegExp(
         r'\bColors\.(red|redAccent|green|greenAccent|grey|gray|orange|blue|blueAccent|purple|pink|indigo|teal|yellow|amber|deepOrange|lightBlue|cyan|lime|brown|blueGrey)\b');
