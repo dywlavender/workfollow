@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../theme/workfollow_surface_tokens.dart';
 import '../theme/workfollow_theme.dart';
 import 'app_icon_button.dart';
 
@@ -31,19 +32,12 @@ class AppCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final tokens = WorkFollowTheme.of(context);
     return Container(
-      decoration: BoxDecoration(
+      decoration: WorkFollowSurfaceTokens.card(
+        tokens,
         color: color ?? tokens.content,
-        borderRadius: BorderRadius.circular(radius),
-        border: Border.all(color: borderColor ?? tokens.border),
-        boxShadow: elevated
-            ? [
-                BoxShadow(
-                    color: tokens.shadow,
-                    blurRadius: 10,
-                    offset: const Offset(0, 2))
-              ]
-            : null,
-      ),
+        borderColor: borderColor ?? tokens.border,
+        elevated: elevated,
+      ).copyWith(borderRadius: BorderRadius.circular(radius)),
       child:
           ClipRRect(borderRadius: BorderRadius.circular(radius), child: child),
     );

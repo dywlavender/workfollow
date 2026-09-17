@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 
 import '../state/workspace_controller.dart';
 import '../theme/workfollow_icons.dart';
+import '../theme/workfollow_surface_tokens.dart';
 import '../theme/workfollow_theme.dart';
 import 'app_icon_button.dart';
 import '../features/tasks/domain/task_draft.dart';
@@ -193,17 +194,8 @@ class _CommandPaletteState extends State<_CommandPalette> {
             constraints: const BoxConstraints(
                 maxHeight: CommandPaletteMetrics.maxHeight),
             margin: const EdgeInsets.symmetric(horizontal: WorkFollowSpacing.space6),
-            decoration: BoxDecoration(
-              color: tokens.overlay,
-              borderRadius: BorderRadius.circular(WorkFollowRadii.popover),
-              border:
-                  Border.all(color: tokens.borderStrong.withValues(alpha: .72)),
-              boxShadow: [
-                BoxShadow(
-                    color: tokens.shadow,
-                    blurRadius: 46,
-                    offset: const Offset(0, 22))
-              ],
+            decoration: WorkFollowSurfaceTokens.dialog(tokens).copyWith(
+              border: Border.all(color: tokens.borderStrong.withValues(alpha: .72)),
             ),
             clipBehavior: Clip.antiAlias,
             child: Column(

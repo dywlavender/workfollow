@@ -10,6 +10,7 @@ import '../models/rich_document.dart';
 import '../models/task.dart';
 import '../state/workspace_controller.dart';
 import '../theme/workfollow_icons.dart';
+import '../theme/workfollow_surface_tokens.dart';
 import '../theme/workfollow_theme.dart';
 import 'app_icon_button.dart';
 import 'task_editor_toolbar.dart';
@@ -279,7 +280,8 @@ class TaskDocumentEditorState extends State<TaskDocumentEditor>
           alignment: PopoverAlignment.center,
           gap: WorkFollowSpacing.space7),
       popoverTheme: TaskEditorPopoverStyle.theme(anchor),
-      surfaceDecoration: taskFormattingToolbarDecoration(),
+      surfaceDecoration:
+          taskFormattingToolbarDecoration(WorkFollowTheme.of(anchor)),
       anchorRectResolver: () => _formatToolbarAnchorRect(anchor),
       builder: (_) => TaskEditorToolbar(
         controller: editor,
@@ -855,7 +857,8 @@ class _TaskSubtasksPanelState extends State<TaskSubtasksPanel> {
               if (task.subtaskTotal > 0) ...[
                 const SizedBox(height: WorkFollowSpacing.compactGap),
                 ClipRRect(
-                  borderRadius: BorderRadius.circular(2),
+                  borderRadius: BorderRadius.circular(
+                      WorkFollowSurfaceTokens.markerRadius),
                   child: LinearProgressIndicator(
                       value: progress,
                       minHeight: TaskEditorMetrics.subtaskProgressHeight,

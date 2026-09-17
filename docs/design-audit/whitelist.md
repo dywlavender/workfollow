@@ -17,5 +17,7 @@
 | 几何边界 | Divider/Border 的 1px、Quill 图片/代码/水平线、图表与 CustomPainter stroke | 属于表面边界或内容渲染参数，不是普通控件尺寸 | D5/D6 |
 | 响应式几何 | Today / Editor viewport 的 clamp、动态 min/max 约束 | 由 Layout contract 根据可用空间计算，不能替换成固定尺寸 | D5 |
 | 并行组件几何 | Matrix、Feedback、Schedule Options 当前工作区新增组件 | 保留并行任务的改动，待对应模块统一收口 | D5/D6 |
+| 绘制圆角 | `screens/stats_screen.dart`、`widgets/task_editor_glyph.dart`、`widgets/task_slash_menu.dart` 的 `CustomPainter` | 这是图表或专用 glyph 的绘制几何，不是普通 Surface；保留在绘制层 | D6 |
+| 并行 Surface | `quick_add.dart`、`today_screen.dart`、`task_row.dart`、`task_document_styles.dart`、`widgets/matrix/*`、`features/feedback/*`、`task_schedule_options.dart` | 当前由另一项未提交任务维护；本轮不覆盖，后续迁移到 `WorkFollowSurfaceTokens` | D6 |
 
 白名单之外的直接 `Color(0x...)`、直接 `Icons.*`、未解释的字号/字距和页面局部动画，默认进入债务总表。

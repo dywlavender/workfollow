@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../theme/workfollow_icons.dart';
+import '../theme/workfollow_surface_tokens.dart';
 import '../theme/workfollow_theme.dart';
 
 enum TaskSlashAction {
@@ -265,12 +266,13 @@ class TaskSlashMenuState extends State<TaskSlashMenu> {
       descendantsAreFocusable: false,
       child: Material(
         key: const ValueKey('task-slash-menu'),
-        elevation: 8,
+        elevation: WorkFollowShadows.level2Elevation,
         shadowColor: tokens.shadow,
         color: tokens.overlay,
         surfaceTintColor: Colors.transparent,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(WorkFollowRadii.popover),
+          side: BorderSide(color: tokens.border),
         ),
         clipBehavior: Clip.antiAlias,
         child: ConstrainedBox(

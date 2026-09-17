@@ -5,6 +5,7 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 
 import '../theme/workfollow_icons.dart';
+import '../theme/workfollow_surface_tokens.dart';
 import '../theme/workfollow_theme.dart';
 import 'app_icon_button.dart';
 
@@ -459,8 +460,10 @@ class _AnchoredPopoverPageState extends State<_AnchoredPopoverPage>
     final tokens = widget.theme.extension<WorkFollowTheme>() ??
         WorkFollowTheme.of(context);
     final material = Material(
-      elevation: widget.surfaceDecoration == null ? 12 : 0,
-      shadowColor: Colors.black.withValues(alpha: .18),
+      elevation: widget.surfaceDecoration == null
+          ? WorkFollowShadows.level2Elevation
+          : WorkFollowShadows.level0Elevation,
+      shadowColor: tokens.shadow,
       color: tokens.overlay,
       surfaceTintColor: Colors.transparent,
       shape: RoundedRectangleBorder(

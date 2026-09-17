@@ -761,6 +761,11 @@ class WorkFollowRadii {
   static const double card = 12;
   static const double popover = 12;
   static const double pill = 999;
+
+  // Component exceptions are still named roles, so feature widgets do not
+  // carry their own numeric corner values for custom checkboxes or markers.
+  static const double checkbox = 5;
+  static const double marker = 2;
 }
 
 /// Desktop geometry copied from the Web layout contract.
@@ -1529,7 +1534,8 @@ class WorkFollowThemeData {
       ),
       checkboxTheme: CheckboxThemeData(
         visualDensity: VisualDensity.compact,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(5)),
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(WorkFollowRadii.checkbox)),
         side: BorderSide(color: tokens.borderStrong, width: 1.5),
       ),
       dialogTheme: DialogThemeData(

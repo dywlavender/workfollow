@@ -64,9 +64,11 @@ class _TaskRepeatEditorState extends State<_TaskRepeatEditor> {
             DropdownButtonFormField<String>(
                 initialValue: type,
                 autofocus: true,
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                     labelText: '频率',
-                    border: OutlineInputBorder(),
+                    border: OutlineInputBorder(
+                        borderRadius:
+                            BorderRadius.circular(WorkFollowRadii.control)),
                     isDense: true),
                 items: [
                   for (final entry in {
@@ -90,7 +92,9 @@ class _TaskRepeatEditorState extends State<_TaskRepeatEditor> {
                   initialValue: type == 'WEEKLY' ? weekday : day,
                   decoration: InputDecoration(
                       labelText: type == 'WEEKLY' ? '星期' : '每月日期',
-                      border: const OutlineInputBorder(),
+                      border: OutlineInputBorder(
+                          borderRadius:
+                              BorderRadius.circular(WorkFollowRadii.control)),
                       isDense: true),
                   items: [
                     for (var i = 1; i <= (type == 'WEEKLY' ? 7 : 31); i++)

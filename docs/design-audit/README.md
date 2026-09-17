@@ -63,6 +63,7 @@
 - [Geometry](geometry.md)
 - [D5 Geometry migration](d5-geometry.md)
 - [Surfaces](surfaces.md)
+- [D6 Surface migration](d6-surfaces.md)
 - [Motion](motion.md)
 - [States](states.md)
 - [Overlay](overlay.md)

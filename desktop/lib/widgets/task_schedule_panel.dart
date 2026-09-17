@@ -171,7 +171,8 @@ class _TaskSchedulePanelState extends State<TaskSchedulePanel> {
                     Container(
                         decoration: BoxDecoration(
                             color: scheduleFieldBackground(context),
-                            borderRadius: BorderRadius.circular(8)),
+                            borderRadius: BorderRadius.circular(
+                                WorkFollowRadii.control)),
                         padding: const EdgeInsets.all(WorkFollowSpacing.microGap),
                         child: Row(children: [
                           for (final tab in [false, true])
@@ -180,7 +181,8 @@ class _TaskSchedulePanelState extends State<TaskSchedulePanel> {
                                     key: ValueKey(tab
                                         ? 'schedule-range-tab'
                                         : 'schedule-date-tab'),
-                                    borderRadius: BorderRadius.circular(7),
+                                    borderRadius: BorderRadius.circular(
+                                        WorkFollowRadii.control),
                                     onTap: () => setState(() {
                                           range = tab;
                                           choosingEnd = false;
@@ -194,7 +196,8 @@ class _TaskSchedulePanelState extends State<TaskSchedulePanel> {
                                                 ? colors.overlay
                                                 : Colors.transparent,
                                             borderRadius:
-                                                BorderRadius.circular(7)),
+                                                BorderRadius.circular(
+                                                    WorkFollowRadii.control)),
                                         child: Text(tab ? '时间段' : '日期',
                                             style: text.copyWith(
                                                 color: range == tab
@@ -224,7 +227,8 @@ class _TaskSchedulePanelState extends State<TaskSchedulePanel> {
                                 child: InkWell(
                                     key: ValueKey(
                                         'date-shortcut-${shortcut.$2}'),
-                                    borderRadius: BorderRadius.circular(6),
+                                    borderRadius: BorderRadius.circular(
+                                        WorkFollowRadii.sm),
                                     onTap: () {
                                       choose(shortcut.$3);
                                       if (shortcut.$1 == 'tonight')
@@ -493,7 +497,8 @@ class _TaskSchedulePanelState extends State<TaskSchedulePanel> {
                                 tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                                 side: BorderSide(color: colors.border),
                                 shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(8)),
+                                    borderRadius: BorderRadius.circular(
+                                        WorkFollowRadii.control)),
                                 textStyle: text),
                             child: const Text('清除'))),
                     const SizedBox(width: WorkFollowSpacing.space2),
@@ -508,7 +513,8 @@ class _TaskSchedulePanelState extends State<TaskSchedulePanel> {
                                 padding: EdgeInsets.zero,
                                 tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                                 shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(8)),
+                                    borderRadius: BorderRadius.circular(
+                                        WorkFollowRadii.control)),
                                 textStyle: text),
                             child: const Text('确定'))),
                   ])),
@@ -540,7 +546,7 @@ class _TaskSchedulePanelState extends State<TaskSchedulePanel> {
         child: Builder(
             builder: (anchor) => InkWell(
                 key: ValueKey(key),
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(WorkFollowRadii.control),
                 onTap: () => onTap(anchor),
                 child: SizedBox(
                     height: TaskScheduleMetrics.propertyRowHeight,

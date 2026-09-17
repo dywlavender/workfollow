@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/task.dart';
 import '../state/workspace_controller.dart';
 import '../theme/workfollow_icons.dart';
+import '../theme/workfollow_surface_tokens.dart';
 import '../theme/workfollow_theme.dart';
 import '../features/tasks/presentation/task_feedback_mapper.dart';
 import '../widgets/app_icon_button.dart';
@@ -462,7 +463,9 @@ class _HomeTaskRow extends StatelessWidget {
               width: HomeMetrics.taskMarkerWidth,
               height: HomeMetrics.taskMarkerHeight,
               decoration: BoxDecoration(
-                  color: listColor, borderRadius: BorderRadius.circular(2))),
+                  color: listColor,
+                  borderRadius: BorderRadius.circular(
+                      WorkFollowSurfaceTokens.markerRadius))),
           const SizedBox(width: WorkFollowSpacing.denseGap),
           GestureDetector(
             onTap: onToggle,
@@ -655,7 +658,7 @@ class _MiniCalendar extends StatelessWidget {
                     alignment: Alignment.center,
                     decoration: BoxDecoration(
                         color: isToday ? tokens.accent : Colors.transparent,
-                        borderRadius: BorderRadius.circular(6)),
+                        borderRadius: BorderRadius.circular(WorkFollowRadii.sm)),
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [

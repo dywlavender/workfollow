@@ -70,6 +70,17 @@
 | `widgets/task_schedule_panel.dart`、`widgets/task_editor_toolbar.dart` | Picker/Toolbar | Geometry | 行高、工具栏控制槽和弹层宽高已命名；圆角留给 D6 | `TaskEditorMetrics` / `WorkFollowRadii` | P1 | migrated · D5 / D6 |
 | `widgets/matrix/*` | Matrix cards/quadrants | Geometry | 并行新增组件的卡片几何保留，页面 Header/新增面板已命名 | `MatrixMetrics` + module whitelist | P1 | deferred · D5 |
 
+## Surfaces
+
+| 文件 | 组件 | 问题类型 | 当前写法（命中数） | 应归属 Token | 严重程度 | 计划轮次 |
+| --- | --- | --- | --- | --- | --- | --- |
+| `theme/workfollow_surface_tokens.dart` | Surface role matrix | Surface | 页面、Input、Card、Popover、Dialog、Toast 以前各自组合圆角/边框/阴影 | `WorkFollowSurfaceTokens` | P0 | migrated · D6 |
+| `widgets/app_surfaces.dart` | `AppCard` | Surface | Card 自己维护 border 与 BoxShadow | `WorkFollowSurfaceTokens.card` / `WorkFollowShadows.level1` | P0 | migrated · D6 |
+| `widgets/desktop_popover.dart`、`persistent_anchored_popover.dart` | Popover | Shadow | Material elevation 与黑色 shadowColor 分散 | `WorkFollowShadows.level2` | P0 | migrated · D6 |
+| `widgets/task_editor_popover.dart`、`task_slash_menu.dart` | Editor/Slash Popover | Surface | Toolbar/Slash 使用局部 radius、blur、offset | `WorkFollowSurfaceTokens.popover` | P0 | migrated · D6 |
+| `widgets/command_palette.dart` | Command Palette | Surface | 独立大 blur/offset 组合 | `WorkFollowSurfaceTokens.dialog` / `WorkFollowShadows.level3` | P1 | migrated · D6 |
+| `widgets/quick_add.dart`、`screens/today_screen.dart`、`widgets/matrix/*`、`features/feedback/*` | 并行 Surface | Surface | 其他任务未提交的 BoxShadow/数字圆角 | 对应 Surface role | P1 | deferred · D6 |
+
 ## States
 
 | 文件 | 组件 | 问题类型 | 当前写法（命中数） | 应归属 Token | 严重程度 | 计划轮次 |

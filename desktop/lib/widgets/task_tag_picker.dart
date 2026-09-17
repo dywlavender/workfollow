@@ -168,7 +168,8 @@ class _TaskTagPickerBodyState extends State<TaskTagPickerBody> {
                         foregroundColor: tokens.textPrimary,
                         side: BorderSide(color: tokens.borderStrong),
                         shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8))),
+                            borderRadius: BorderRadius.circular(
+                                WorkFollowRadii.control))),
                     onPressed: () => Navigator.of(context).pop(),
                     child: const Text('取消'))),
             const SizedBox(width: WorkFollowSpacing.space3),
@@ -183,7 +184,8 @@ class _TaskTagPickerBodyState extends State<TaskTagPickerBody> {
                         backgroundColor: tokens.accent,
                         foregroundColor: Colors.white,
                         shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8))),
+                            borderRadius: BorderRadius.circular(
+                                WorkFollowRadii.control))),
                     key: const ValueKey('task-tag-confirm'),
                     onPressed: () =>
                         Navigator.of(context).pop(selected.join('，')),

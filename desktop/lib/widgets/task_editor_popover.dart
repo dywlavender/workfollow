@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../theme/workfollow_surface_tokens.dart';
 import '../theme/workfollow_theme.dart';
 import 'desktop_popover.dart';
 import 'task_menu_style.dart';
@@ -47,15 +48,11 @@ Future<T?> showTaskEditorPopover<T>(
       scrollable: scrollable,
       anchorRect: anchorRect,
       popoverTheme: TaskEditorPopoverStyle.theme(anchor),
-      surfaceDecoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(
-            width == TaskEditorPopoverStyle.toolbarWidth ? 8 : 12),
-        boxShadow: [
-          BoxShadow(
-              color: Colors.black.withValues(alpha: .19),
-              blurRadius: 13,
-              spreadRadius: 1,
-              offset: const Offset(0, 2))
-        ],
+      surfaceDecoration: WorkFollowSurfaceTokens.popover(
+        WorkFollowTheme.of(anchor),
+        radius: BorderRadius.circular(
+            width == TaskEditorPopoverStyle.toolbarWidth
+                ? WorkFollowRadii.control
+                : WorkFollowRadii.popover),
       ),
     );

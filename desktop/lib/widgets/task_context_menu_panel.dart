@@ -385,7 +385,8 @@ class _TaskContextMenuPanelState extends State<TaskContextMenuPanel> {
                   child: Ink(
                     decoration: BoxDecoration(
                         color: submenu == value ? tokens.menuSelected : null,
-                        borderRadius: BorderRadius.circular(10)),
+                        borderRadius:
+                            BorderRadius.circular(WorkFollowRadii.control)),
                     child: SizedBox(
                       height: TaskMenuStyle.rowHeight,
                       child: Padding(

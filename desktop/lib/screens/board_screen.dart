@@ -4,6 +4,7 @@ import '../models/task.dart';
 import '../state/workspace_controller.dart';
 import '../theme/workfollow_icons.dart';
 import '../theme/workfollow_theme.dart';
+import '../theme/workfollow_surface_tokens.dart';
 import '../features/tasks/presentation/task_feedback_mapper.dart';
 import '../widgets/app_icon_button.dart';
 import '../widgets/app_surfaces.dart';
@@ -306,7 +307,7 @@ class _BoardTaskCard extends StatelessWidget {
     final listColor = Color(controller.colorValueForList(task.listName));
     final content = AppCard(
       padding: const EdgeInsets.fromLTRB(WorkFollowSpacing.cardInset, WorkFollowSpacing.cardInset, WorkFollowSpacing.space2, WorkFollowSpacing.compactInset),
-      radius: 10,
+      radius: WorkFollowRadii.card,
       color: tokens.overlay,
       borderColor:
           task.completed ? tokens.border : listColor.withValues(alpha: .45),
@@ -316,7 +317,9 @@ class _BoardTaskCard extends StatelessWidget {
             height: BoardMetrics.listMarkerHeight,
             margin: const EdgeInsets.only(right: WorkFollowSpacing.space2, top: WorkFollowSpacing.hairlineGap),
             decoration: BoxDecoration(
-                color: listColor, borderRadius: BorderRadius.circular(2))),
+                color: listColor,
+                borderRadius: BorderRadius.circular(
+                    WorkFollowSurfaceTokens.markerRadius))),
         SizedBox(
           width: BoardMetrics.taskCheckboxSize,
           height: BoardMetrics.taskCheckboxSize,
@@ -332,7 +335,8 @@ class _BoardTaskCard extends StatelessWidget {
               activeColor: tokens.success,
               side: BorderSide(color: accent, width: 1.4),
               shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(5)),
+                  borderRadius: BorderRadius.circular(
+                      WorkFollowSurfaceTokens.checkboxRadius)),
               semanticLabel: task.completed ? '标记未完成' : '完成任务'),
         ),
         const SizedBox(width: WorkFollowSpacing.inlineGap),

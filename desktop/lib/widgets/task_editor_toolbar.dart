@@ -252,21 +252,22 @@ class _ToolButton extends StatelessWidget {
                 selected: selected,
                 child: InkWell(
                   onTap: () => onPressed(anchor),
-                  borderRadius: BorderRadius.circular(4),
+                  borderRadius: BorderRadius.circular(WorkFollowRadii.xs),
                   child: Container(
                     width: TaskEditorMetrics.toolbarButtonWidth,
                     height: TaskEditorMetrics.toolbarButtonHeight,
                     alignment: Alignment.center,
                     decoration: BoxDecoration(
                         color: selected ? colors.accentFaint : null,
-                        borderRadius: BorderRadius.circular(4)),
+                        borderRadius: BorderRadius.circular(WorkFollowRadii.xs)),
                     child: label != null
                         ? Container(
                             padding: const EdgeInsets.symmetric(horizontal: WorkFollowSpacing.tightGap),
                             decoration: BoxDecoration(
                                 color:
                                     highlight ? colors.documentHighlight : null,
-                                borderRadius: BorderRadius.circular(4)),
+                                borderRadius:
+                                    BorderRadius.circular(WorkFollowRadii.xs)),
                             child: Text(label!,
                                 style: TextStyle(
                                     fontSize: WorkFollowMacDisplay.glyphLabel,

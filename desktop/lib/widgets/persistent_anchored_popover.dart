@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../theme/workfollow_surface_tokens.dart';
 import '../theme/workfollow_theme.dart';
 import 'desktop_popover.dart';
 
@@ -107,8 +108,10 @@ class PersistentAnchoredPopoverController {
       ),
     );
     final material = Material(
-      elevation: _surfaceDecoration == null ? 12 : 0,
-      shadowColor: Colors.black.withValues(alpha: .18),
+      elevation: _surfaceDecoration == null
+          ? WorkFollowShadows.level2Elevation
+          : WorkFollowShadows.level0Elevation,
+      shadowColor: tokens.shadow,
       color: tokens.overlay,
       surfaceTintColor: Colors.transparent,
       shape: RoundedRectangleBorder(
@@ -167,13 +170,8 @@ Rect? _anchorRect(BuildContext context) {
 }
 
 /// Returns the standard formatting-strip decoration used by the task editor.
-BoxDecoration taskFormattingToolbarDecoration() => BoxDecoration(
-      borderRadius: BorderRadius.circular(8),
-      boxShadow: [
-        BoxShadow(
-            color: Colors.black.withValues(alpha: .19),
-            blurRadius: 13,
-            spreadRadius: 1,
-            offset: const Offset(0, 2)),
-      ],
+BoxDecoration taskFormattingToolbarDecoration(WorkFollowTheme tokens) =>
+    WorkFollowSurfaceTokens.popover(
+      tokens,
+      radius: BorderRadius.circular(WorkFollowRadii.control),
     );

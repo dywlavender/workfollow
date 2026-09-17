@@ -46,7 +46,9 @@
 | GEOM-002 | Geometry | `task_editor_*`, `task_*_picker.dart`, `task_inspector.dart` | 编辑器/Picker/Inspector 各自维护宽高 | `TaskEditorMetrics` / `TaskPickerMetrics` / `TaskInspectorMetrics` | migrated | D5 |
 | GEOM-003 | Geometry | `task_context_menu_panel.dart`, `task_more_menu.dart`, `command_palette.dart` | 菜单行和弹层约束有多套数字 | `TaskMenuMetrics` / `CommandPaletteMetrics` / `WorkFollowMetrics` | migrated | D5 |
 | GEOM-004 | Geometry | `today_screen.dart`, 并行新增 Matrix/Feedback 组件 | 动态约束或并行改动中的固定尺寸 | Layout contract / 模块白名单 | deferred | D5/D6 |
-| SURF-001 | Surfaces | 91 个 `BoxDecoration` | 页面/卡片/Popover 混用 | Surface role matrix | candidate | D6 |
+| SURF-001 | Surfaces | 91 个 `BoxDecoration` | 页面/卡片/Popover 混用 | `WorkFollowSurfaceTokens` surface role matrix | migrated | D6 |
+| SURF-002 | Surfaces | 6 个基线 `BoxShadow` 与局部 elevation | blur/offset 在 Card、Popover、Dialog 间重复 | `WorkFollowShadows` Level 0–4 | migrated | D6 |
+| SURF-003 | Surfaces | Quick Add、Today、Feedback、Matrix 的并行阴影 | 其他任务未提交的 Surface 组合 | `WorkFollowShadows` 对应角色 | deferred | D6 |
 | MOTION-001 | Motion | `feedback_host.dart`、`app.dart`、Popover 等 | 18 个数字 Duration | Motion Roles | candidate | D9 |
 
 ## 重新扫描命令

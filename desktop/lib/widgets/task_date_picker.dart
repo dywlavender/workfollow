@@ -203,13 +203,15 @@ class _TaskDatePickerState extends State<TaskDatePicker> {
                 autofocus: true,
                 style: const TextStyle(fontSize: WorkFollowMacTypography.body),
                 onSubmitted: (_) => apply(),
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                     labelText: '日期',
                     hintText: 'YYYY-MM-DD',
                     isDense: true,
                     contentPadding:
                         EdgeInsets.symmetric(horizontal: WorkFollowSpacing.space3, vertical: WorkFollowSpacing.space3),
-                    border: OutlineInputBorder())),
+                    border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(
+                            WorkFollowRadii.control)))),
             const SizedBox(height: WorkFollowSpacing.controlGap),
             Row(children: [
               for (final shortcut in <(String, DateTime)>[
@@ -369,5 +371,7 @@ class _TaskDatePickerState extends State<TaskDatePicker> {
               hintText: '00',
               semanticCounterText: label,
               contentPadding: const EdgeInsets.symmetric(vertical: WorkFollowSpacing.space2),
-              border: const OutlineInputBorder())));
+              border: OutlineInputBorder(
+                  borderRadius:
+                      BorderRadius.circular(WorkFollowRadii.control)))));
 }
