@@ -85,14 +85,15 @@
 
 | 文件 | 组件 | 问题类型 | 当前写法（命中数） | 应归属 Token | 严重程度 | 计划轮次 |
 | --- | --- | --- | --- | --- | --- | --- |
-| `widgets/sidebar.dart` | Rail、Navigation、List、Tag | State | selected 25、hover 34，多层嵌套颜色/字重分支 | `TaskListColors` + navigation state matrix | P0 | D7 |
-| `widgets/task_inspector.dart` | Property buttons | State | active 6、selected 3、focus 3 | control selected/focus roles | P1 | D7 |
-| `widgets/task_list/task_list_row.dart` | Task row | State | hover/selected/focus 分支 4/1/3 | `TaskListColors` + focus ring | P0 | D7 |
-| `widgets/task_row.dart` | Legacy task row | State | hover/focus 分支 7/6 | 与共享 TaskListRow 状态矩阵一致 | P0 | D7 |
-| `widgets/task_document_styles.dart` | Checklist | State | hover 2，使用 `menuSelected` 和透明 hoverColor | Document checklist state role | P1 | D7 |
-| `widgets/task_date_picker.dart` | Calendar day | State | selected 日格直接使用 accent/transparent | picker selected/hover/focus roles | P1 | D7 |
-| `widgets/settings_panel.dart` | Tabs/Switches | State | selected/active 色分支 4+ | settings control state roles | P1 | D7 |
-| `widgets/matrix/matrix_quadrant.dart`、`matrix_task_row.dart` | Matrix cards | State | hover/selected 直接组合颜色和阴影 | Matrix state matrix | P1 | D7 |
+| `theme/workfollow_interaction_states.dart` | 全局状态解析 | State | 状态优先级散落在多个组件 | `WorkFollowInteractionStyles` | P0 | migrated · D7 |
+| `widgets/sidebar.dart` | Rail、Navigation、List、Tag | State | selected 25、hover 34，多层嵌套颜色/字重分支 | `customFill` + navigation state matrix | P0 | migrated · D7 |
+| `widgets/desktop_popover.dart`、`widgets/task_inspector.dart` | Property buttons / Menu | State | active 6、selected 3、focus 3 | control selected/focus roles | P1 | migrated · D7 |
+| `widgets/task_list/task_list_row.dart` | Task row | State | hover/selected/focus 分支 4/1/3 | `TaskListColors` + focus ring | P0 | deferred · parallel task |
+| `widgets/task_row.dart` | Legacy task row | State | hover/focus 分支 7/6 | 与共享 TaskListRow 状态矩阵一致 | P0 | deferred · parallel task |
+| `widgets/task_document_styles.dart` | Checklist | State | hover 2，使用 `menuSelected` 和透明 hoverColor | Document checklist state role | P1 | deferred · parallel task |
+| `widgets/task_date_picker.dart`、`widgets/task_schedule_panel.dart` | Calendar day / schedule | State | selected 日格直接使用 accent/transparent | picker selected/hover/focus roles | P1 | migrated · D7 |
+| `widgets/settings_panel.dart` | Tabs/Switches | State | selected/active 色分支 4+ | settings control state roles | P1 | migrated · D7 |
+| `widgets/matrix/matrix_quadrant.dart`、`matrix_task_row.dart` | Matrix cards | State | hover/selected 直接组合颜色和阴影 | Matrix state matrix | P1 | deferred · parallel task |
 
 ## Overlay / Menu
 

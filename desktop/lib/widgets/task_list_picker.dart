@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 
 import '../state/workspace_controller.dart';
 import '../theme/workfollow_icons.dart';
+import '../theme/workfollow_interaction_states.dart';
 import '../theme/workfollow_theme.dart';
 import 'app_icon_button.dart';
 import 'desktop_popover.dart';
@@ -135,7 +136,9 @@ class _TaskListPickerBodyState extends State<_TaskListPickerBody> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: WorkFollowSpacing.space4, vertical: WorkFollowSpacing.space2),
+              padding: const EdgeInsets.symmetric(
+                  horizontal: WorkFollowSpacing.space4,
+                  vertical: WorkFollowSpacing.space2),
               child: TextField(
                 key: const ValueKey('task-list-search'),
                 controller: search,
@@ -158,28 +161,32 @@ class _TaskListPickerBodyState extends State<_TaskListPickerBody> {
                   prefixIcon: AppIcon(WorkFollowIcons.search,
                       size: WorkFollowMetrics.toolbarIcon,
                       color: tokens.textTertiary),
-                      prefixIconConstraints: const BoxConstraints(
-                          minWidth: TaskPickerMetrics.listPrefixMinWidth),
+                  prefixIconConstraints: const BoxConstraints(
+                      minWidth: TaskPickerMetrics.listPrefixMinWidth),
                   hintText: '搜索',
                   hintStyle: TextStyle(color: tokens.textTertiary),
                   filled: false,
                   border: InputBorder.none,
                   isDense: true,
-                  contentPadding: const EdgeInsets.symmetric(vertical: WorkFollowSpacing.inlineGap),
+                  contentPadding: const EdgeInsets.symmetric(
+                      vertical: WorkFollowSpacing.inlineGap),
                 ),
               ),
             ),
             Divider(height: 1, color: tokens.border),
             Flexible(
                 child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(vertical: WorkFollowSpacing.space2),
+              padding: const EdgeInsets.symmetric(
+                  vertical: WorkFollowSpacing.space2),
               child: Column(mainAxisSize: MainAxisSize.min, children: [
                 if (lists.isEmpty)
                   Padding(
-                      padding: const EdgeInsets.symmetric(vertical: WorkFollowSpacing.space7),
+                      padding: const EdgeInsets.symmetric(
+                          vertical: WorkFollowSpacing.space7),
                       child: Text('没有匹配的清单',
                           style: TextStyle(
-                              fontSize: WorkFollowMacTypography.body, color: tokens.textTertiary))),
+                              fontSize: WorkFollowMacTypography.body,
+                              color: tokens.textTertiary))),
                 for (var index = 0; index < lists.length; index++)
                   Builder(builder: (context) {
                     final selected = widget.selected == lists[index].name;
@@ -192,12 +199,18 @@ class _TaskListPickerBodyState extends State<_TaskListPickerBody> {
                         key: ValueKey('menu-option-${lists[index].name}'),
                         onTap: () =>
                             Navigator.of(context).pop(lists[index].name),
-                        hoverColor: tokens.canvas,
+                        focusColor:
+                            WorkFollowInteractionStyles.focusColor(tokens),
+                        overlayColor: WorkFollowInteractionStyles.overlay(
+                          tokens,
+                          menu: true,
+                        ),
                         child: SizedBox(
                             height: WorkFollowMetrics.compactMenuRowHeight,
                             child: Padding(
                               padding: const EdgeInsets.symmetric(
-                                  horizontal: WorkFollowSpacing.menuItemHorizontalPadding),
+                                  horizontal: WorkFollowSpacing
+                                      .menuItemHorizontalPadding),
                               child: Row(children: [
                                 AppIcon(
                                     lists[index].name == '收集箱'
@@ -211,10 +224,14 @@ class _TaskListPickerBodyState extends State<_TaskListPickerBody> {
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
                                         style: TextStyle(
-                                            fontSize: WorkFollowMacTypography.menu,
-                                            height: WorkFollowMacTypography.lineControl,
-                                            fontWeight: WorkFollowMacWeight.regular,
-                                            letterSpacing: WorkFollowMacTracking.none,
+                                            fontSize:
+                                                WorkFollowMacTypography.menu,
+                                            height: WorkFollowMacTypography
+                                                .lineControl,
+                                            fontWeight:
+                                                WorkFollowMacWeight.regular,
+                                            letterSpacing:
+                                                WorkFollowMacTracking.none,
                                             color: color))),
                                 if (selected)
                                   AppIcon(WorkFollowIcons.check,

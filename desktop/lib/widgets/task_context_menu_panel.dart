@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 
 import '../models/task.dart';
 import '../theme/workfollow_icons.dart';
+import '../theme/workfollow_interaction_states.dart';
 import '../theme/workfollow_theme.dart';
 import 'app_icon_button.dart';
 import '../state/workspace_controller.dart';
@@ -70,12 +71,14 @@ class _TaskContextMenuPanelState extends State<TaskContextMenuPanel> {
             initial: task.tags.join('，'),
             availableTags: controller.allTags().keys,
             placement: const PopoverPlacement(
-                preferredSide: PopoverSide.right, gap: WorkFollowSpacing.relaxedGap))
+                preferredSide: PopoverSide.right,
+                gap: WorkFollowSpacing.relaxedGap))
         : await TaskListPicker.show(anchor,
             controller: controller,
             selected: task.listName,
             placement: const PopoverPlacement(
-                preferredSide: PopoverSide.right, gap: WorkFollowSpacing.relaxedGap));
+                preferredSide: PopoverSide.right,
+                gap: WorkFollowSpacing.relaxedGap));
     if (!mounted) return;
     setState(() => submenu = null);
     if (result != null)
@@ -105,7 +108,9 @@ class _TaskContextMenuPanelState extends State<TaskContextMenuPanel> {
           label: '任务操作',
           child: Padding(
             key: const ValueKey('task-context-menu-panel'),
-            padding: const EdgeInsets.symmetric(vertical: WorkFollowSpacing.inlineGap, horizontal: WorkFollowSpacing.compactGap),
+            padding: const EdgeInsets.symmetric(
+                vertical: WorkFollowSpacing.inlineGap,
+                horizontal: WorkFollowSpacing.compactGap),
             child: Column(
               key: const ValueKey('task-context-menu-content'),
               mainAxisSize: MainAxisSize.min,
@@ -128,9 +133,15 @@ class _TaskContextMenuPanelState extends State<TaskContextMenuPanel> {
   }
 
   Widget _sectionLabel(String label, WorkFollowTheme tokens) => Padding(
-        padding: const EdgeInsets.fromLTRB(WorkFollowSpacing.space3, WorkFollowSpacing.space2, WorkFollowSpacing.space3, WorkFollowSpacing.denseGap),
+        padding: const EdgeInsets.fromLTRB(
+            WorkFollowSpacing.space3,
+            WorkFollowSpacing.space2,
+            WorkFollowSpacing.space3,
+            WorkFollowSpacing.denseGap),
         child: Text(label,
-            style: TextStyle(fontSize: WorkFollowMacTypography.sectionTitle, color: tokens.textTertiary)),
+            style: TextStyle(
+                fontSize: WorkFollowMacTypography.sectionTitle,
+                color: tokens.textTertiary)),
       );
 
   Widget _dateSection(BuildContext context, WorkFollowTheme tokens) {
@@ -207,14 +218,24 @@ class _TaskContextMenuPanelState extends State<TaskContextMenuPanel> {
           key: ValueKey('menu-option-$value'),
           autofocus: action == TaskContextDateAction.today,
           borderRadius: BorderRadius.circular(WorkFollowRadii.control),
+          focusColor: WorkFollowInteractionStyles.focusColor(tokens),
+          overlayColor: WorkFollowInteractionStyles.overlay(
+            tokens,
+            menu: true,
+          ),
           onTap: enabled
               ? () => Navigator.of(context).pop(TaskMenuSelection(value))
               : null,
           child: Container(
             height: TaskMenuMetrics.dateGridCellHeight,
-            margin: const EdgeInsets.symmetric(horizontal: WorkFollowSpacing.hairlineGap),
+            margin: const EdgeInsets.symmetric(
+                horizontal: WorkFollowSpacing.hairlineGap),
             decoration: BoxDecoration(
-              color: selected ? tokens.menuSelected : null,
+              color: WorkFollowInteractionStyles.fill(
+                tokens,
+                selected: selected,
+                menu: true,
+              ),
               borderRadius: BorderRadius.circular(WorkFollowRadii.control),
             ),
             alignment: Alignment.center,
@@ -264,12 +285,22 @@ class _TaskContextMenuPanelState extends State<TaskContextMenuPanel> {
         child: InkWell(
           key: ValueKey('menu-option-$value'),
           borderRadius: BorderRadius.circular(WorkFollowRadii.control),
+          focusColor: WorkFollowInteractionStyles.focusColor(tokens),
+          overlayColor: WorkFollowInteractionStyles.overlay(
+            tokens,
+            menu: true,
+          ),
           onTap: () => Navigator.of(context).pop(TaskMenuSelection(value)),
           child: Container(
             height: WorkFollowMetrics.menuRowHeight,
-            margin: const EdgeInsets.symmetric(horizontal: WorkFollowSpacing.hairlineGap),
+            margin: const EdgeInsets.symmetric(
+                horizontal: WorkFollowSpacing.hairlineGap),
             decoration: BoxDecoration(
-              color: selected ? tokens.menuSelected : null,
+              color: WorkFollowInteractionStyles.fill(
+                tokens,
+                selected: selected,
+                menu: true,
+              ),
               borderRadius: BorderRadius.circular(WorkFollowRadii.control),
             ),
             alignment: Alignment.center,
@@ -288,24 +319,17 @@ class _TaskContextMenuPanelState extends State<TaskContextMenuPanel> {
       key: const ValueKey('task-context-action-section'),
       mainAxisSize: MainAxisSize.min,
       children: [
+        _row(context, tokens, value: 'add-subtask', label: '添加子任务'),
         _row(context, tokens,
-            value: 'add-subtask',
-            label: '添加子任务'),
-        _row(context, tokens,
-            value: 'pin',
-            label: task.isPinned ? '取消置顶' : '置顶'),
+            value: 'pin', label: task.isPinned ? '取消置顶' : '置顶'),
         _row(context, tokens,
             value: 'abandon',
             label: task.isAbandoned ? '恢复任务' : '放弃',
             enabled: !task.completed),
         _row(context, tokens,
-            value: 'list',
-            label: '移动到',
-            trailing: WorkFollowIcons.chevronNext),
+            value: 'list', label: '移动到', trailing: WorkFollowIcons.chevronNext),
         _row(context, tokens,
-            value: 'tags',
-            label: '标签',
-            trailing: WorkFollowIcons.chevronNext),
+            value: 'tags', label: '标签', trailing: WorkFollowIcons.chevronNext),
       ],
     );
   }
@@ -315,30 +339,18 @@ class _TaskContextMenuPanelState extends State<TaskContextMenuPanel> {
       key: const ValueKey('task-context-processing-section'),
       mainAxisSize: MainAxisSize.min,
       children: [
-        _row(context, tokens,
-            value: 'convert-note',
-            label: '转换为笔记'),
+        _row(context, tokens, value: 'convert-note', label: '转换为笔记'),
         if (widget.inspectorActions) ...[
           const _MenuDivider(),
-          _row(context, tokens,
-              value: 'reminder', label: '设置提醒'),
-          _row(context, tokens,
-              value: 'repeat', label: '设置重复'),
-          _row(context, tokens,
-              value: 'deadline', label: '截止日期'),
-          _row(context, tokens,
-              value: 'attachment',
-              label: '添加附件'),
-          _row(context, tokens,
-              value: 'focus', label: '专注记录'),
-          _row(context, tokens,
-              value: 'relation', label: '关联笔记'),
+          _row(context, tokens, value: 'reminder', label: '设置提醒'),
+          _row(context, tokens, value: 'repeat', label: '设置重复'),
+          _row(context, tokens, value: 'deadline', label: '截止日期'),
+          _row(context, tokens, value: 'attachment', label: '添加附件'),
+          _row(context, tokens, value: 'focus', label: '专注记录'),
+          _row(context, tokens, value: 'relation', label: '关联笔记'),
           const _MenuDivider(),
         ],
-        _row(context, tokens,
-            value: 'delete',
-            label: '删除',
-            destructive: true),
+        _row(context, tokens, value: 'delete', label: '删除', destructive: true),
       ],
     );
   }
@@ -350,10 +362,9 @@ class _TaskContextMenuPanelState extends State<TaskContextMenuPanel> {
       bool destructive = false,
       bool enabled = true}) {
     final foreground = !enabled
-        ? tokens.textDisabled
-        : destructive
-            ? tokens.danger
-            : tokens.textPrimary;
+        ? WorkFollowInteractionStyles.foreground(tokens, enabled: false)
+        : WorkFollowInteractionStyles.foreground(tokens,
+            destructive: destructive);
     return Builder(
         builder: (rowContext) => MouseRegion(
             onEnter: (_) {
@@ -372,7 +383,12 @@ class _TaskContextMenuPanelState extends State<TaskContextMenuPanel> {
               child: InkWell(
                   key: ValueKey('menu-option-$value'),
                   borderRadius: BorderRadius.circular(WorkFollowRadii.control),
-                  hoverColor: tokens.border.withValues(alpha: .55),
+                  focusColor: WorkFollowInteractionStyles.focusColor(tokens),
+                  overlayColor: WorkFollowInteractionStyles.overlay(
+                    tokens,
+                    destructive: destructive,
+                    menu: true,
+                  ),
                   onTap: !enabled
                       ? null
                       : () {
@@ -384,7 +400,11 @@ class _TaskContextMenuPanelState extends State<TaskContextMenuPanel> {
                         },
                   child: Ink(
                     decoration: BoxDecoration(
-                        color: submenu == value ? tokens.menuSelected : null,
+                        color: WorkFollowInteractionStyles.fill(
+                          tokens,
+                          selected: submenu == value,
+                          menu: true,
+                        ),
                         borderRadius:
                             BorderRadius.circular(WorkFollowRadii.control)),
                     child: SizedBox(
@@ -396,8 +416,8 @@ class _TaskContextMenuPanelState extends State<TaskContextMenuPanel> {
                         child: Row(children: [
                           AppIcon(
                               WorkFollowIcons.taskAction(value,
-                                  restored: value == 'abandon' &&
-                                      task.isAbandoned),
+                                  restored:
+                                      value == 'abandon' && task.isAbandoned),
                               size: WorkFollowMetrics.fieldIcon,
                               color: foreground),
                           const SizedBox(width: WorkFollowSpacing.space3),

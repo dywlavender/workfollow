@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 
 import '../state/workspace_controller.dart';
 import '../theme/workfollow_icons.dart';
+import '../theme/workfollow_interaction_states.dart';
 import '../theme/workfollow_surface_tokens.dart';
 import '../theme/workfollow_theme.dart';
 import 'app_icon_button.dart';
@@ -193,9 +194,11 @@ class _CommandPaletteState extends State<_CommandPalette> {
             width: CommandPaletteMetrics.width,
             constraints: const BoxConstraints(
                 maxHeight: CommandPaletteMetrics.maxHeight),
-            margin: const EdgeInsets.symmetric(horizontal: WorkFollowSpacing.space6),
+            margin: const EdgeInsets.symmetric(
+                horizontal: WorkFollowSpacing.space6),
             decoration: WorkFollowSurfaceTokens.dialog(tokens).copyWith(
-              border: Border.all(color: tokens.borderStrong.withValues(alpha: .72)),
+              border:
+                  Border.all(color: tokens.borderStrong.withValues(alpha: .72)),
             ),
             clipBehavior: Clip.antiAlias,
             child: Column(
@@ -229,7 +232,8 @@ class _CommandPaletteState extends State<_CommandPalette> {
                           decoration: InputDecoration(
                               hintText: '搜索任务、笔记或命令…',
                               hintStyle: TextStyle(
-                                  color: tokens.textTertiary, fontSize: WorkFollowMacTypography.body),
+                                  color: tokens.textTertiary,
+                                  fontSize: WorkFollowMacTypography.body),
                               border: InputBorder.none,
                               isDense: true,
                               contentPadding: EdgeInsets.zero),
@@ -257,18 +261,26 @@ class _CommandPaletteState extends State<_CommandPalette> {
                       padding: const EdgeInsets.all(WorkFollowSpacing.space8),
                       child: Text('没有找到相关内容',
                           style: TextStyle(
-                              color: tokens.textTertiary, fontSize: WorkFollowMacTypography.supporting)))
+                              color: tokens.textTertiary,
+                              fontSize: WorkFollowMacTypography.supporting)))
                 else
                   Flexible(
                     child: ListView.builder(
                       shrinkWrap: true,
-                      padding: const EdgeInsets.symmetric(vertical: WorkFollowSpacing.space2),
+                      padding: const EdgeInsets.symmetric(
+                          vertical: WorkFollowSpacing.space2),
                       itemCount: list.length,
                       itemBuilder: (context, index) {
                         final command = list[index];
                         final selected = index == safeIndex;
-                        return GestureDetector(
+                        return InkWell(
                           onTap: () => _run(command),
+                          focusColor:
+                              WorkFollowInteractionStyles.focusColor(tokens),
+                          overlayColor: WorkFollowInteractionStyles.overlay(
+                            tokens,
+                            menu: true,
+                          ),
                           child: Container(
                             margin: const EdgeInsets.symmetric(
                                 horizontal: WorkFollowSpacing
@@ -281,16 +293,26 @@ class _CommandPaletteState extends State<_CommandPalette> {
                                 vertical: WorkFollowSpacing
                                     .commandPaletteRowVerticalPadding),
                             decoration: BoxDecoration(
-                                color: selected
-                                    ? tokens.menuSelected
-                                    : Colors.transparent,
+                                color: WorkFollowInteractionStyles.fill(
+                                  tokens,
+                                  selected: selected,
+                                  menu: true,
+                                ),
+                                border: Border.fromBorderSide(
+                                  WorkFollowInteractionStyles.focusBorder(
+                                    tokens,
+                                    focused: selected,
+                                  ),
+                                ),
                                 borderRadius: BorderRadius.circular(
                                     WorkFollowRadii.control)),
                             child: Row(
                               children: [
                                 Container(
-                                    width: CommandPaletteMetrics.shortcutChipSize,
-                                    height: CommandPaletteMetrics.shortcutChipSize,
+                                    width:
+                                        CommandPaletteMetrics.shortcutChipSize,
+                                    height:
+                                        CommandPaletteMetrics.shortcutChipSize,
                                     decoration: BoxDecoration(
                                         color: selected
                                             ? tokens.overlay
@@ -302,7 +324,8 @@ class _CommandPaletteState extends State<_CommandPalette> {
                                         color: selected
                                             ? tokens.accent
                                             : tokens.textSecondary)),
-                                const SizedBox(width: WorkFollowSpacing.iconLabelGap),
+                                const SizedBox(
+                                    width: WorkFollowSpacing.iconLabelGap),
                                 Expanded(
                                     child: Column(
                                         crossAxisAlignment:
@@ -311,13 +334,17 @@ class _CommandPaletteState extends State<_CommandPalette> {
                                       Text(command.title,
                                           style: TextStyle(
                                               color: tokens.textPrimary,
-                                              fontSize: WorkFollowMacTypography.menu,
-                                              fontWeight: WorkFollowMacWeight.semibold)),
-                                      const SizedBox(height: WorkFollowSpacing.microGap),
+                                              fontSize:
+                                                  WorkFollowMacTypography.menu,
+                                              fontWeight: WorkFollowMacWeight
+                                                  .semibold)),
+                                      const SizedBox(
+                                          height: WorkFollowSpacing.microGap),
                                       Text(command.subtitle,
                                           style: TextStyle(
                                               color: tokens.textTertiary,
-                                              fontSize: WorkFollowMacTypography.listMeta))
+                                              fontSize: WorkFollowMacTypography
+                                                  .listMeta))
                                     ])),
                                 if (selected)
                                   AppIcon(WorkFollowIcons.next,
@@ -331,7 +358,11 @@ class _CommandPaletteState extends State<_CommandPalette> {
                     ),
                   ),
                 Container(
-                  padding: const EdgeInsets.fromLTRB(WorkFollowSpacing.fieldGap, WorkFollowSpacing.cardInset, WorkFollowSpacing.fieldGap, WorkFollowSpacing.iconLabelGap),
+                  padding: const EdgeInsets.fromLTRB(
+                      WorkFollowSpacing.fieldGap,
+                      WorkFollowSpacing.cardInset,
+                      WorkFollowSpacing.fieldGap,
+                      WorkFollowSpacing.iconLabelGap),
                   decoration: BoxDecoration(
                       color: tokens.menuSelected.withValues(alpha: .55),
                       border: Border(top: BorderSide(color: tokens.border))),
@@ -342,7 +373,8 @@ class _CommandPaletteState extends State<_CommandPalette> {
                     const SizedBox(width: WorkFollowSpacing.denseGap),
                     Text('选择',
                         style: TextStyle(
-                            color: tokens.textTertiary, fontSize: WorkFollowMacTypography.caption)),
+                            color: tokens.textTertiary,
+                            fontSize: WorkFollowMacTypography.caption)),
                     const SizedBox(width: WorkFollowSpacing.space4),
                     AppIcon(WorkFollowIcons.keyboardUp,
                         size: WorkFollowMetrics.metadataIcon,
@@ -353,7 +385,8 @@ class _CommandPaletteState extends State<_CommandPalette> {
                     const SizedBox(width: WorkFollowSpacing.denseGap),
                     Text('移动',
                         style: TextStyle(
-                            color: tokens.textTertiary, fontSize: WorkFollowMacTypography.caption)),
+                            color: tokens.textTertiary,
+                            fontSize: WorkFollowMacTypography.caption)),
                     const Spacer(),
                     Text('打勾命令面板',
                         style: TextStyle(

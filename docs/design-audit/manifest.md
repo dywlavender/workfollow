@@ -49,6 +49,11 @@
 | SURF-001 | Surfaces | 91 个 `BoxDecoration` | 页面/卡片/Popover 混用 | `WorkFollowSurfaceTokens` surface role matrix | migrated | D6 |
 | SURF-002 | Surfaces | 6 个基线 `BoxShadow` 与局部 elevation | blur/offset 在 Card、Popover、Dialog 间重复 | `WorkFollowShadows` Level 0–4 | migrated | D6 |
 | SURF-003 | Surfaces | Quick Add、Today、Feedback、Matrix 的并行阴影 | 其他任务未提交的 Surface 组合 | `WorkFollowShadows` 对应角色 | deferred | D6 |
+| STATE-001 | States | `theme/workfollow_interaction_states.dart` | 状态优先级与 Material overlay 分散在组件中 | `WorkFollowInteractionStyles` | migrated | D7 |
+| STATE-002 | States | `desktop_popover.dart`、More/Context/Slash/Command 菜单 | focused、hover、selected 共用局部背景 | 统一菜单状态矩阵与 focus ring | migrated | D7 |
+| STATE-003 | States | `sidebar.dart` | navigation/list/tag 自己组合 pressed、focus、hover、selected | `customFill` + `focusBorder` | migrated | D7 |
+| STATE-004 | States | `task_date_picker.dart`、`task_schedule_panel.dart`、`settings_panel.dart` | Picker/Settings 直接维护 selected/hover | 共享 control/picker overlay | migrated | D7 |
+| STATE-005 | States | `task_row.dart`、`task_list/*`、`task_document_styles.dart`、Matrix/Feedback/QuickAdd | 并行任务中的状态分支 | 接入 `WorkFollowInteractionStyles` | deferred | D7 后续 |
 | MOTION-001 | Motion | `feedback_host.dart`、`app.dart`、Popover 等 | 18 个数字 Duration | Motion Roles | candidate | D9 |
 
 ## 重新扫描命令

@@ -19,5 +19,8 @@
 | 并行组件几何 | Matrix、Feedback、Schedule Options 当前工作区新增组件 | 保留并行任务的改动，待对应模块统一收口 | D5/D6 |
 | 绘制圆角 | `screens/stats_screen.dart`、`widgets/task_editor_glyph.dart`、`widgets/task_slash_menu.dart` 的 `CustomPainter` | 这是图表或专用 glyph 的绘制几何，不是普通 Surface；保留在绘制层 | D6 |
 | 并行 Surface | `quick_add.dart`、`today_screen.dart`、`task_row.dart`、`task_document_styles.dart`、`widgets/matrix/*`、`features/feedback/*`、`task_schedule_options.dart` | 当前由另一项未提交任务维护；本轮不覆盖，后续迁移到 `WorkFollowSurfaceTokens` | D6 |
+| 并行 State | `task_row.dart`、`task_document_styles.dart`、`widgets/task_list/*`、`widgets/matrix/*`、`features/feedback/*`、`today_screen.dart`、`quick_add.dart`、`task_schedule_options.dart` | 当前由另一项未提交任务维护；D7 只建立共享状态层，后续接入时保留其业务行为 | D7 |
+| 导航专属颜色 | `sidebar.dart` 的 rail、用户清单色和标签色 | 这些是导航/用户内容语义色；D7 统一状态优先级，不把专属选中色误当成全局 palette | D7/D10 |
+| Destructive hover 派生色 | `WorkFollowInteractionStyles` 中由 `tokens.danger` 派生的低 alpha tint | D7 只表达 destructive 状态；D3 颜色体系不新增独立 palette | D3/D7 |
 
 白名单之外的直接 `Color(0x...)`、直接 `Icons.*`、未解释的字号/字距和页面局部动画，默认进入债务总表。

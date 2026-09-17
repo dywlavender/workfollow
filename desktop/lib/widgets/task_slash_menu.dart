@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../theme/workfollow_icons.dart';
+import '../theme/workfollow_interaction_states.dart';
 import '../theme/workfollow_surface_tokens.dart';
 import '../theme/workfollow_theme.dart';
 
@@ -314,13 +315,26 @@ class TaskSlashMenuState extends State<TaskSlashMenu> {
       child: MouseRegion(
         cursor: SystemMouseCursors.click,
         onEnter: (_) => _hover(index),
-        child: GestureDetector(
+        child: InkWell(
           key: ValueKey('task-slash-option-${action.keyName}'),
-          behavior: HitTestBehavior.opaque,
           onTap: () => widget.onSelected(action),
+          overlayColor: WorkFollowInteractionStyles.overlay(
+            tokens,
+            menu: true,
+          ),
           child: DecoratedBox(
             decoration: BoxDecoration(
-              color: selected ? tokens.menuSelected : null,
+              color: WorkFollowInteractionStyles.fill(
+                tokens,
+                selected: selected,
+                menu: true,
+              ),
+              border: Border.fromBorderSide(
+                WorkFollowInteractionStyles.focusBorder(
+                  tokens,
+                  focused: selected,
+                ),
+              ),
               borderRadius: BorderRadius.circular(WorkFollowRadii.sm),
             ),
             child: SizedBox(

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_quill/flutter_quill.dart' as quill;
 
 import '../theme/workfollow_icons.dart';
+import '../theme/workfollow_interaction_states.dart';
 import '../theme/workfollow_theme.dart';
 import 'app_icon_button.dart';
 import 'task_editor_glyph.dart';
@@ -76,7 +77,8 @@ class TaskEditorToolbar extends StatelessWidget {
       placement: PopoverPlacement.topStart,
       focusPolicy: PopoverFocusPolicy.preserveEditor,
       builder: (context) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: WorkFollowSpacing.inlineGap),
+        padding:
+            const EdgeInsets.symmetric(vertical: WorkFollowSpacing.inlineGap),
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           for (final item in [(0, '正文'), (1, '一级标题'), (2, '二级标题'), (3, '三级标题')])
             _PickerRow(
@@ -113,7 +115,8 @@ class TaskEditorToolbar extends StatelessWidget {
       focusPolicy: PopoverFocusPolicy.preserveEditor,
       builder: (context) => Padding(
         key: const ValueKey('task-time-formats'),
-        padding: const EdgeInsets.symmetric(vertical: WorkFollowSpacing.inlineGap),
+        padding:
+            const EdgeInsets.symmetric(vertical: WorkFollowSpacing.inlineGap),
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           for (final item in [
             ('date', date),
@@ -147,7 +150,8 @@ class TaskEditorToolbar extends StatelessWidget {
           Widget divider() => Container(
               width: WorkFollowMetrics.dividerThickness,
               height: TaskEditorMetrics.toolbarDividerHeight,
-              margin: const EdgeInsets.symmetric(horizontal: WorkFollowSpacing.space1),
+              margin: const EdgeInsets.symmetric(
+                  horizontal: WorkFollowSpacing.space1),
               color: colors.border);
           return SizedBox(
             key: const ValueKey('task-editor-toolbar'),
@@ -170,12 +174,10 @@ class TaskEditorToolbar extends StatelessWidget {
                     tooltip: '高亮',
                     label: 'A',
                     highlight: true,
-                    selected:
-                        _active(const quill.BackgroundAttribute(
-                            TaskDocumentCommands.highlightColor)),
-                    onPressed: (_) =>
-                        _format(const quill.BackgroundAttribute(
-                            TaskDocumentCommands.highlightColor))),
+                    selected: _active(const quill.BackgroundAttribute(
+                        TaskDocumentCommands.highlightColor)),
+                    onPressed: (_) => _format(const quill.BackgroundAttribute(
+                        TaskDocumentCommands.highlightColor))),
                 divider(),
                 format('checklist', '检查项', WorkFollowIcons.checklist,
                     quill.Attribute.unchecked),
@@ -253,16 +255,22 @@ class _ToolButton extends StatelessWidget {
                 child: InkWell(
                   onTap: () => onPressed(anchor),
                   borderRadius: BorderRadius.circular(WorkFollowRadii.xs),
+                  focusColor: WorkFollowInteractionStyles.focusColor(colors),
+                  overlayColor: WorkFollowInteractionStyles.overlay(
+                    colors,
+                  ),
                   child: Container(
                     width: TaskEditorMetrics.toolbarButtonWidth,
                     height: TaskEditorMetrics.toolbarButtonHeight,
                     alignment: Alignment.center,
                     decoration: BoxDecoration(
                         color: selected ? colors.accentFaint : null,
-                        borderRadius: BorderRadius.circular(WorkFollowRadii.xs)),
+                        borderRadius:
+                            BorderRadius.circular(WorkFollowRadii.xs)),
                     child: label != null
                         ? Container(
-                            padding: const EdgeInsets.symmetric(horizontal: WorkFollowSpacing.tightGap),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: WorkFollowSpacing.tightGap),
                             decoration: BoxDecoration(
                                 color:
                                     highlight ? colors.documentHighlight : null,
@@ -305,8 +313,14 @@ class _PickerRow extends StatelessWidget {
     final colors = TaskMenuStyle.colors(context);
     return InkWell(
         onTap: onTap,
+        focusColor: WorkFollowInteractionStyles.focusColor(colors),
+        overlayColor: WorkFollowInteractionStyles.overlay(
+          colors,
+          menu: true,
+        ),
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: WorkFollowSpacing.relaxedGap),
+          padding: const EdgeInsets.symmetric(
+              horizontal: WorkFollowSpacing.relaxedGap),
           child: SizedBox(
               height: TaskEditorMetrics.pickerRowHeight,
               child: Row(children: [

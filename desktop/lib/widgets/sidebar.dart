@@ -5,6 +5,7 @@ import '../models/migration.dart';
 import '../state/workspace_controller.dart';
 import '../theme/workfollow_icons.dart';
 import '../theme/workfollow_color_tokens.dart';
+import '../theme/workfollow_interaction_states.dart';
 import '../theme/workfollow_theme.dart';
 import '../features/feedback/feedback_event.dart';
 import '../features/feedback/feedback_scope.dart';
@@ -574,6 +575,8 @@ class _IconRailButton extends StatefulWidget {
 
 class _IconRailButtonState extends State<_IconRailButton> {
   bool hovering = false;
+  bool pressed = false;
+  bool focused = false;
 
   @override
   Widget build(BuildContext context) {
@@ -596,24 +599,41 @@ class _IconRailButtonState extends State<_IconRailButton> {
         child: MouseRegion(
           onEnter: (_) => setState(() => hovering = true),
           onExit: (_) => setState(() => hovering = false),
-          child: GestureDetector(
-            onTap: widget.onPressed,
-            child: Container(
+          child: Focus(
+            onFocusChange: (value) => setState(() => focused = value),
+            child: GestureDetector(
+              onTap: widget.onPressed,
+              onTapDown: (_) => setState(() => pressed = true),
+              onTapUp: (_) => setState(() => pressed = false),
+              onTapCancel: () => setState(() => pressed = false),
+              child: Container(
               key: ValueKey('rail-button-${widget.label}'),
               width: SidebarMetrics.railButtonSize,
               height: SidebarMetrics.railButtonSize,
               margin: const EdgeInsets.symmetric(vertical: WorkFollowSpacing.tightGap),
               decoration: BoxDecoration(
-                color: active
-                    ? (_lightSidebar(context)
-                        ? _lightSidebarActive
-                        : tokens.railActive)
-                    : hovering
-                        ? (_lightSidebar(context)
-                            ? _lightSidebarForeground.withValues(alpha: .10)
-                            : tokens.railForeground.withValues(alpha: .12))
-                        : Colors.transparent,
+                color: WorkFollowInteractionStyles.customFill(
+                  defaultColor: Colors.transparent,
+                  hoverColor: _lightSidebar(context)
+                      ? _lightSidebarForeground.withValues(alpha: .10)
+                      : tokens.railForeground.withValues(alpha: .12),
+                  selectedColor: _lightSidebar(context)
+                      ? _lightSidebarActive
+                      : tokens.railActive,
+                  pressedColor: _lightSidebar(context)
+                      ? _lightSidebarForeground.withValues(alpha: .16)
+                      : tokens.railForeground.withValues(alpha: .20),
+                  selected: active,
+                  hovered: hovering,
+                  pressed: pressed,
+                ),
                 borderRadius: BorderRadius.circular(WorkFollowRadii.surface),
+                border: Border.fromBorderSide(
+                  WorkFollowInteractionStyles.focusBorder(
+                    tokens,
+                    focused: focused,
+                  ),
+                ),
               ),
               child: AppIcon(
                 widget.icon,
@@ -629,6 +649,7 @@ class _IconRailButtonState extends State<_IconRailButton> {
                         : (_lightSidebar(context)
                             ? _lightSidebarForegroundMuted
                             : tokens.railForegroundMuted)),
+              ),
               ),
             ),
           ),
@@ -864,6 +885,8 @@ class _RailItem extends StatefulWidget {
 
 class _RailItemState extends State<_RailItem> {
   bool hovering = false;
+  bool pressed = false;
+  bool focused = false;
 
   @override
   Widget build(BuildContext context) {
@@ -876,21 +899,36 @@ class _RailItemState extends State<_RailItem> {
         button: true,
         selected: widget.selected,
         label: widget.label,
-        child: GestureDetector(
-          onTap: widget.onTap,
-          onSecondaryTap: widget.onMenu,
-          child: Container(
+        child: Focus(
+          onFocusChange: (value) => setState(() => focused = value),
+          child: GestureDetector(
+            onTap: widget.onTap,
+            onTapDown: (_) => setState(() => pressed = true),
+            onTapUp: (_) => setState(() => pressed = false),
+            onTapCancel: () => setState(() => pressed = false),
+            onSecondaryTap: widget.onMenu,
+            child: Container(
             key: ValueKey('rail-navigation-item-${widget.label}'),
             height: WorkFollowMetrics.compactNavigationRowHeight,
             margin: const EdgeInsets.symmetric(vertical: WorkFollowSpacing.hairlineGap),
             padding: const EdgeInsets.symmetric(horizontal: WorkFollowSpacing.cardInset),
             decoration: BoxDecoration(
-              color: widget.selected
-                  ? _sidebarAccentSoft(context, tokens)
-                  : (hovering
-                      ? tokens.content.withValues(alpha: .65)
-                      : Colors.transparent),
+              color: WorkFollowInteractionStyles.customFill(
+                defaultColor: Colors.transparent,
+                hoverColor: tokens.content.withValues(alpha: .65),
+                selectedColor: _sidebarAccentSoft(context, tokens),
+                pressedColor: tokens.content.withValues(alpha: .85),
+                selected: widget.selected,
+                hovered: hovering,
+                pressed: pressed,
+              ),
               borderRadius: BorderRadius.circular(WorkFollowRadii.control),
+              border: Border.fromBorderSide(
+                WorkFollowInteractionStyles.focusBorder(
+                  tokens,
+                  focused: focused,
+                ),
+              ),
             ),
             child: Row(
               children: [
@@ -954,6 +992,7 @@ class _RailItemState extends State<_RailItem> {
                   ),
               ],
             ),
+            ),
           ),
         ),
       ),
@@ -973,6 +1012,8 @@ class _TaskListItem extends StatefulWidget {
 
 class _TaskListItemState extends State<_TaskListItem> {
   bool hovering = false;
+  bool pressed = false;
+  bool focused = false;
 
   @override
   Widget build(BuildContext context) {
@@ -1001,9 +1042,14 @@ class _TaskListItemState extends State<_TaskListItem> {
                 button: true,
                 selected: selected,
                 label: '${widget.list.name}，$count 个未完成任务',
-                child: GestureDetector(
-                  onTap: () => widget.controller.selectList(widget.list.name),
-                  child: Container(
+                child: Focus(
+                  onFocusChange: (value) => setState(() => focused = value),
+                  child: GestureDetector(
+                    onTap: () => widget.controller.selectList(widget.list.name),
+                    onTapDown: (_) => setState(() => pressed = true),
+                    onTapUp: (_) => setState(() => pressed = false),
+                    onTapCancel: () => setState(() => pressed = false),
+                    child: Container(
                     key: ValueKey('rail-list-item-${widget.list.name}'),
                     height: WorkFollowMetrics.compactNavigationRowHeight,
                     margin: const EdgeInsets.symmetric(vertical: WorkFollowSpacing.hairlineGap),
@@ -1011,18 +1057,27 @@ class _TaskListItemState extends State<_TaskListItem> {
                     decoration: BoxDecoration(
                       color: dragActive
                           ? _sidebarAccentSoft(context, tokens)
-                          : (selected
-                              ? listColor.withValues(alpha: .12)
-                              : (hovering
-                                  ? tokens.content.withValues(alpha: .7)
-                                  : Colors.transparent)),
+                          : WorkFollowInteractionStyles.customFill(
+                              defaultColor: Colors.transparent,
+                              hoverColor: tokens.content.withValues(alpha: .7),
+                              selectedColor: listColor.withValues(alpha: .12),
+                              pressedColor: tokens.content.withValues(alpha: .88),
+                              selected: selected,
+                              hovered: hovering,
+                              pressed: pressed,
+                            ),
                       borderRadius:
                           BorderRadius.circular(WorkFollowRadii.control),
                       border: dragActive
                           ? Border.all(
                               color: _sidebarAccent(context, tokens)
                                   .withValues(alpha: .5))
-                          : null,
+                          : Border.fromBorderSide(
+                              WorkFollowInteractionStyles.focusBorder(
+                                tokens,
+                                focused: focused,
+                              ),
+                            ),
                     ),
                     child: Row(
                       children: [
@@ -1069,6 +1124,7 @@ class _TaskListItemState extends State<_TaskListItem> {
                           ),
                         ),
                       ],
+                    ),
                     ),
                   ),
                 ),
@@ -1230,6 +1286,8 @@ class _TagItem extends StatefulWidget {
 
 class _TagItemState extends State<_TagItem> {
   bool hovering = false;
+  bool pressed = false;
+  bool focused = false;
 
   @override
   Widget build(BuildContext context) {
@@ -1239,10 +1297,15 @@ class _TagItemState extends State<_TagItem> {
     return MouseRegion(
       onEnter: (_) => setState(() => hovering = true),
       onExit: (_) => setState(() => hovering = false),
-      child: GestureDetector(
-        onTap: () => widget.controller.selectTag(widget.name),
-        onSecondaryTap: () => _showMenu(context),
-        child: Semantics(
+      child: Focus(
+        onFocusChange: (value) => setState(() => focused = value),
+        child: GestureDetector(
+          onTap: () => widget.controller.selectTag(widget.name),
+          onTapDown: (_) => setState(() => pressed = true),
+          onTapUp: (_) => setState(() => pressed = false),
+          onTapCancel: () => setState(() => pressed = false),
+          onSecondaryTap: () => _showMenu(context),
+          child: Semantics(
           button: true,
           selected: selected,
           label: '#${widget.name}，${widget.count} 个任务',
@@ -1252,12 +1315,22 @@ class _TagItemState extends State<_TagItem> {
             margin: const EdgeInsets.symmetric(vertical: WorkFollowSpacing.hairlineGap),
             padding: const EdgeInsets.symmetric(horizontal: WorkFollowSpacing.cardInset),
             decoration: BoxDecoration(
-                color: selected
-                    ? _sidebarAccentSoft(context, tokens)
-                    : (hovering
-                        ? tokens.content.withValues(alpha: .65)
-                        : Colors.transparent),
-                borderRadius: BorderRadius.circular(WorkFollowRadii.control)),
+                color: WorkFollowInteractionStyles.customFill(
+                  defaultColor: Colors.transparent,
+                  hoverColor: tokens.content.withValues(alpha: .65),
+                  selectedColor: _sidebarAccentSoft(context, tokens),
+                  pressedColor: tokens.content.withValues(alpha: .85),
+                  selected: selected,
+                  hovered: hovering,
+                  pressed: pressed,
+                ),
+                borderRadius: BorderRadius.circular(WorkFollowRadii.control),
+                border: Border.fromBorderSide(
+                  WorkFollowInteractionStyles.focusBorder(
+                    tokens,
+                    focused: focused,
+                  ),
+                )),
             child: Row(children: [
               AppIcon(WorkFollowIcons.tag,
                   size: WorkFollowMetrics.navigationIcon,
@@ -1287,6 +1360,7 @@ class _TagItemState extends State<_TagItem> {
                       height: WorkFollowMacTypography.lineControl,
                       fontWeight: WorkFollowMacWeight.regular)),
             ]),
+          ),
           ),
         ),
       ),
@@ -1358,6 +1432,8 @@ class _TaskViewItem extends StatefulWidget {
 
 class _TaskViewItemState extends State<_TaskViewItem> {
   bool hovering = false;
+  bool pressed = false;
+  bool focused = false;
 
   @override
   Widget build(BuildContext context) {
@@ -1372,9 +1448,14 @@ class _TaskViewItemState extends State<_TaskViewItem> {
         button: true,
         selected: selected,
         label: '${widget.label}，${widget.hint}',
-        child: GestureDetector(
-          onTap: () => widget.controller.selectView(widget.view),
-          child: Container(
+        child: Focus(
+          onFocusChange: (value) => setState(() => focused = value),
+          child: GestureDetector(
+            onTap: () => widget.controller.selectView(widget.view),
+            onTapDown: (_) => setState(() => pressed = true),
+            onTapUp: (_) => setState(() => pressed = false),
+            onTapCancel: () => setState(() => pressed = false),
+            child: Container(
             key: ValueKey('rail-view-item-${widget.view.name}'),
             margin: const EdgeInsets.symmetric(vertical: WorkFollowSpacing.microGap),
             padding: const EdgeInsets.fromLTRB(
@@ -1383,12 +1464,22 @@ class _TaskViewItemState extends State<_TaskViewItem> {
                 WorkFollowSpacing.railItemTrailingInset,
                 WorkFollowSpacing.xs),
             decoration: BoxDecoration(
-              color: selected
-                  ? _sidebarAccentSoft(context, tokens)
-                  : (hovering
-                      ? tokens.content.withValues(alpha: .7)
-                      : Colors.transparent),
+              color: WorkFollowInteractionStyles.customFill(
+                defaultColor: Colors.transparent,
+                hoverColor: tokens.content.withValues(alpha: .7),
+                selectedColor: _sidebarAccentSoft(context, tokens),
+                pressedColor: tokens.content.withValues(alpha: .88),
+                selected: selected,
+                hovered: hovering,
+                pressed: pressed,
+              ),
               borderRadius: BorderRadius.circular(WorkFollowRadii.control),
+              border: Border.fromBorderSide(
+                WorkFollowInteractionStyles.focusBorder(
+                  tokens,
+                  focused: focused,
+                ),
+              ),
             ),
             child: Row(
               children: [
@@ -1446,6 +1537,7 @@ class _TaskViewItemState extends State<_TaskViewItem> {
                     ),
                   ),
               ],
+            ),
             ),
           ),
         ),

@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 
 import '../models/task.dart';
 import '../state/workspace_controller.dart';
+import '../theme/workfollow_interaction_states.dart';
 import '../theme/workfollow_icons.dart';
 import '../theme/workfollow_theme.dart';
 import 'app_icon_button.dart';
@@ -39,6 +40,7 @@ class _MoreMenu extends StatefulWidget {
 
 class _MoreMenuState extends State<_MoreMenu> {
   int? focused;
+  int? hovered;
   List<(String, String)> get entries => [
         ('add-subtask', '添加子任务'),
         ('pin', widget.task.isPinned ? '取消置顶' : '置顶'),
@@ -84,42 +86,72 @@ class _MoreMenuState extends State<_MoreMenu> {
         },
         child: Padding(
           key: const ValueKey('task-more-menu'),
-          padding: const EdgeInsets.symmetric(vertical: WorkFollowSpacing.inlineGap),
+          padding:
+              const EdgeInsets.symmetric(vertical: WorkFollowSpacing.inlineGap),
           child: Column(mainAxisSize: MainAxisSize.min, children: [
             for (var i = 0; i < entries.length; i++) ...[
               if (i == 5)
                 Padding(
-                    padding: const EdgeInsets.symmetric(vertical: WorkFollowSpacing.denseGap),
+                    padding: const EdgeInsets.symmetric(
+                        vertical: WorkFollowSpacing.denseGap),
                     child: Divider(height: 1, color: colors.border)),
               Builder(builder: (context) {
                 final entry = entries[i];
-                final color =
-                    enabled(i) ? colors.textPrimary : colors.textTertiary;
-                return InkWell(
-                  key: ValueKey('menu-option-${entry.$1}'),
-                  onTap: enabled(i) ? () => select(i) : null,
-                  child: Container(
-                    height: TaskEditorMetrics.popoverRowHeight,
-                    color: focused == i ? colors.menuSelected : null,
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: WorkFollowSpacing.menuItemHorizontalPadding),
-                    child: Row(children: [
-                      AppIcon(
-                          WorkFollowIcons.taskAction(entry.$1,
-                              restored: entry.$1 == 'abandon' &&
-                                  widget.task.isAbandoned),
-                          size: WorkFollowMetrics.toolbarIcon,
-                          color: color),
-                      const SizedBox(width: WorkFollowSpacing.controlGap),
-                      Expanded(
-                          child: Text(entry.$2,
-                              style: TextStyle(
-                                  fontSize: WorkFollowMacTypography.menu,
-                                  height: WorkFollowMacTypography.lineControl,
-                                  fontWeight: WorkFollowMacWeight.regular,
-                                  letterSpacing: WorkFollowMacTracking.none,
-                                  color: color))),
-                    ]),
+                final destructive = entry.$1 == 'delete';
+                final color = WorkFollowInteractionStyles.foreground(
+                  colors,
+                  enabled: enabled(i),
+                  destructive: destructive,
+                );
+                return MouseRegion(
+                  onEnter: (_) => setState(() => hovered = i),
+                  onExit: (_) {
+                    if (hovered == i) setState(() => hovered = null);
+                  },
+                  child: InkWell(
+                    key: ValueKey('menu-option-${entry.$1}'),
+                    onTap: enabled(i) ? () => select(i) : null,
+                    overlayColor: WorkFollowInteractionStyles.overlay(
+                      colors,
+                      destructive: destructive,
+                      menu: true,
+                    ),
+                    child: Container(
+                      height: TaskEditorMetrics.popoverRowHeight,
+                      decoration: BoxDecoration(
+                        color: WorkFollowInteractionStyles.fill(
+                          colors,
+                          hovered: hovered == i,
+                          menu: true,
+                        ),
+                        border: Border.fromBorderSide(
+                          WorkFollowInteractionStyles.focusBorder(
+                            colors,
+                            focused: focused == i,
+                          ),
+                        ),
+                      ),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal:
+                              WorkFollowSpacing.menuItemHorizontalPadding),
+                      child: Row(children: [
+                        AppIcon(
+                            WorkFollowIcons.taskAction(entry.$1,
+                                restored: entry.$1 == 'abandon' &&
+                                    widget.task.isAbandoned),
+                            size: WorkFollowMetrics.toolbarIcon,
+                            color: color),
+                        const SizedBox(width: WorkFollowSpacing.controlGap),
+                        Expanded(
+                            child: Text(entry.$2,
+                                style: TextStyle(
+                                    fontSize: WorkFollowMacTypography.menu,
+                                    height: WorkFollowMacTypography.lineControl,
+                                    fontWeight: WorkFollowMacWeight.regular,
+                                    letterSpacing: WorkFollowMacTracking.none,
+                                    color: color))),
+                      ]),
+                    ),
                   ),
                 );
               }),

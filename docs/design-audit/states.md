@@ -1,4 +1,6 @@
-# D7 States 盘点
+# D7 States 盘点与迁移
+
+> 状态：已完成。实施细节见 [D7 迁移记录](d7-states.md)。
 
 ## 扫描结果
 
@@ -30,3 +32,11 @@
 4. 状态变化是否误触发尺寸、字体或布局变化。
 5. Light/Dark 是否各自拥有同一状态角色，而不是在组件中写 `if (dark)`。
 
+## 已完成的收口
+
+- 状态枚举、优先级和 Material overlay 已集中到 `WorkFollowInteractionStyles`。
+- Menu、Slash、More、Context、Toolbar、Picker、Command Palette、Settings 和 Sidebar 已接入共享状态层。
+- Focus 通过独立 focus border 或 focus overlay 表达；selected 不再是 focus 的唯一视觉表达。
+- Disabled 使用 `textDisabled`，不再用组件内散落的透明度分支。
+- Destructive 默认保持中性，仅在 hover/pressed 时使用由既有 danger 语义色派生的弱 tint。
+- 任务行、Checklist、Matrix 和并行 Feedback 组件暂缓，详见 [D7 迁移记录](d7-states.md) 的并行工作区边界。

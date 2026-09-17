@@ -5,6 +5,7 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 
 import '../theme/workfollow_icons.dart';
+import '../theme/workfollow_interaction_states.dart';
 import '../theme/workfollow_surface_tokens.dart';
 import '../theme/workfollow_theme.dart';
 import 'app_icon_button.dart';
@@ -296,7 +297,8 @@ class AnchoredPopover {
     PopoverFocusPolicy focusPolicy = PopoverFocusPolicy.none,
     bool scrollable = false,
     bool restoreFocus = true,
-    EdgeInsets safeArea = const EdgeInsets.all(WorkFollowSpacing.popoverSafeArea),
+    EdgeInsets safeArea =
+        const EdgeInsets.all(WorkFollowSpacing.popoverSafeArea),
     Rect? anchorRect,
   }) =>
       showAnchoredPopover<T>(
@@ -611,6 +613,7 @@ class _DesktopMenuSurface<T> extends StatefulWidget {
 class _DesktopMenuSurfaceState<T> extends State<_DesktopMenuSurface<T>> {
   late final FocusNode focus;
   late int focusedIndex;
+  int? hoveredIndex;
 
   @override
   void initState() {
@@ -683,23 +686,44 @@ class _DesktopMenuSurfaceState<T> extends State<_DesktopMenuSurface<T>> {
   Widget _entry(BuildContext context, DesktopMenuEntry<T> entry, int index,
       WorkFollowTheme tokens) {
     final focused = index == focusedIndex;
-    final foreground = entry.destructive
-        ? tokens.danger
-        : focused
-            ? tokens.textPrimary
-            : tokens.textSecondary;
+    final foreground = WorkFollowInteractionStyles.foreground(
+      tokens,
+      destructive: entry.destructive,
+    );
     return MouseRegion(
       onEnter: (_) {
-        if (focusedIndex != index) setState(() => focusedIndex = index);
+        setState(() {
+          hoveredIndex = index;
+          if (focusedIndex != index) focusedIndex = index;
+        });
+      },
+      onExit: (_) {
+        if (hoveredIndex == index) setState(() => hoveredIndex = null);
       },
       child: ListTile(
         key: ValueKey('menu-option-${entry.value}'),
         dense: true,
         minTileHeight: WorkFollowMetrics.menuRowHeight,
         shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(WorkFollowRadii.control)),
-        tileColor: focused ? tokens.menuSelected : null,
-        contentPadding: const EdgeInsets.symmetric(horizontal: WorkFollowSpacing.cardInset),
+            borderRadius: BorderRadius.circular(WorkFollowRadii.control),
+            side: WorkFollowInteractionStyles.focusBorder(
+              tokens,
+              focused: focused,
+            )),
+        focusColor: WorkFollowInteractionStyles.focusColor(tokens),
+        hoverColor: WorkFollowInteractionStyles.fill(
+          tokens,
+          hovered: true,
+          menu: true,
+        ),
+        tileColor: WorkFollowInteractionStyles.fill(
+          tokens,
+          selected: widget.selected == entry.value || focused,
+          hovered: hoveredIndex == index,
+          menu: true,
+        ),
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: WorkFollowSpacing.cardInset),
         leading: entry.icon == null
             ? null
             : AppIcon(entry.icon!,
@@ -757,11 +781,16 @@ class PropertyButton extends StatelessWidget {
                       fontWeight: WorkFollowMacWeight.medium,
                       letterSpacing: WorkFollowMacTracking.none),
                   minimumSize: const Size(0, WorkFollowMetrics.chipHeight),
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: WorkFollowSpacing.cardInset, vertical: WorkFollowSpacing.compactGap),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: WorkFollowSpacing.cardInset,
+                      vertical: WorkFollowSpacing.compactGap),
                   shape: RoundedRectangleBorder(
                       borderRadius:
                           BorderRadius.circular(WorkFollowRadii.control)),
+                ).copyWith(
+                  overlayColor: WorkFollowInteractionStyles.overlay(
+                    tokens,
+                  ),
                 ),
               ),
             ));

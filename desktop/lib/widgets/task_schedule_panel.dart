@@ -7,6 +7,7 @@ import '../features/tasks/domain/task_schedule.dart';
 import '../features/tasks/domain/task_schedule_settings.dart';
 import '../models/task.dart';
 import '../theme/workfollow_icons.dart';
+import '../theme/workfollow_interaction_states.dart';
 import '../theme/workfollow_theme.dart';
 import 'app_icon_button.dart';
 import 'task_editor_glyph.dart';
@@ -166,14 +167,16 @@ class _TaskSchedulePanelState extends State<TaskSchedulePanel> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: WorkFollowSpacing.space4),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: WorkFollowSpacing.space4),
                   child: Column(children: [
                     Container(
                         decoration: BoxDecoration(
                             color: scheduleFieldBackground(context),
-                            borderRadius: BorderRadius.circular(
-                                WorkFollowRadii.control)),
-                        padding: const EdgeInsets.all(WorkFollowSpacing.microGap),
+                            borderRadius:
+                                BorderRadius.circular(WorkFollowRadii.control)),
+                        padding:
+                            const EdgeInsets.all(WorkFollowSpacing.microGap),
                         child: Row(children: [
                           for (final tab in [false, true])
                             Expanded(
@@ -183,6 +186,13 @@ class _TaskSchedulePanelState extends State<TaskSchedulePanel> {
                                         : 'schedule-date-tab'),
                                     borderRadius: BorderRadius.circular(
                                         WorkFollowRadii.control),
+                                    focusColor:
+                                        WorkFollowInteractionStyles.focusColor(
+                                            colors),
+                                    overlayColor:
+                                        WorkFollowInteractionStyles.overlay(
+                                            colors,
+                                            menu: true),
                                     onTap: () => setState(() {
                                           range = tab;
                                           choosingEnd = false;
@@ -195,9 +205,8 @@ class _TaskSchedulePanelState extends State<TaskSchedulePanel> {
                                             color: range == tab
                                                 ? colors.overlay
                                                 : Colors.transparent,
-                                            borderRadius:
-                                                BorderRadius.circular(
-                                                    WorkFollowRadii.control)),
+                                            borderRadius: BorderRadius.circular(
+                                                WorkFollowRadii.control)),
                                         child: Text(tab ? '时间段' : '日期',
                                             style: text.copyWith(
                                                 color: range == tab
@@ -229,6 +238,10 @@ class _TaskSchedulePanelState extends State<TaskSchedulePanel> {
                                         'date-shortcut-${shortcut.$2}'),
                                     borderRadius: BorderRadius.circular(
                                         WorkFollowRadii.sm),
+                                    focusColor: WorkFollowInteractionStyles.focusColor(
+                                        colors),
+                                    overlayColor: WorkFollowInteractionStyles.overlay(colors,
+                                        menu: true),
                                     onTap: () {
                                       choose(shortcut.$3);
                                       if (shortcut.$1 == 'tonight')
@@ -239,8 +252,10 @@ class _TaskSchedulePanelState extends State<TaskSchedulePanel> {
                                         });
                                     },
                                     child: SizedBox(
-                                        width: TaskScheduleMetrics.dateShortcutSize,
-                                        height: TaskScheduleMetrics.dateShortcutSize,
+                                        width: TaskScheduleMetrics
+                                            .dateShortcutSize,
+                                        height: TaskScheduleMetrics
+                                            .dateShortcutSize,
                                         child: Center(
                                             child: (shortcut.$1 == 'tonight' ||
                                                     shortcut.$1 == 'next-7')
@@ -248,12 +263,12 @@ class _TaskSchedulePanelState extends State<TaskSchedulePanel> {
                                                     shortcut.$1 == 'tonight'
                                                         ? 'moon'
                                                         : 'next-7',
-                                                    size: WorkFollowMetrics.fieldIcon,
+                                                    size: WorkFollowMetrics
+                                                        .fieldIcon,
                                                     color: colors.textSecondary)
                                                 : TaskMenuGlyph(shortcut.$1,
                                                     size: WorkFollowMetrics.fieldIcon,
-                                                    color: colors
-                                                        .textSecondary))))),
+                                                    color: colors.textSecondary))))),
                         ]),
                     const SizedBox(height: WorkFollowSpacing.space4),
                     if (range)
@@ -344,23 +359,30 @@ class _TaskSchedulePanelState extends State<TaskSchedulePanel> {
                                                 'pick-day-${day.year}-${'${day.month}'.padLeft(2, '0')}-${'${day.day}'.padLeft(2, '0')}'),
                                             onPressed: () => choose(day),
                                             style: TextButton.styleFrom(
-                                                padding: EdgeInsets.zero,
-                                                minimumSize: Size.zero,
-                                                tapTargetSize:
-                                                    MaterialTapTargetSize
-                                                        .shrinkWrap,
-                                                shape: const CircleBorder(),
-                                                backgroundColor: selected
-                                                    ? colors.accent
-                                                    : future
-                                                        ? colors.accent
-                                                            .withValues(
-                                                                alpha: .48)
-                                                        : DateUtils.isSameDay(
-                                                                day, today)
-                                                            ? colors.accentFaint
-                                                            : Colors
-                                                                .transparent),
+                                              padding: EdgeInsets.zero,
+                                              minimumSize: Size.zero,
+                                              tapTargetSize:
+                                                  MaterialTapTargetSize
+                                                      .shrinkWrap,
+                                              shape: const CircleBorder(),
+                                              backgroundColor: selected
+                                                  ? colors.accent
+                                                  : future
+                                                      ? colors.accent
+                                                          .withValues(
+                                                              alpha: .48)
+                                                      : DateUtils.isSameDay(
+                                                              day, today)
+                                                          ? colors.accentFaint
+                                                          : Colors.transparent,
+                                            ).copyWith(
+                                              overlayColor:
+                                                  WorkFollowInteractionStyles
+                                                      .overlay(
+                                                colors,
+                                                menu: true,
+                                              ),
+                                            ),
                                             child: Semantics(
                                                 label: future ? '重复日期' : null,
                                                 child: Text('${day.day}',
@@ -400,8 +422,10 @@ class _TaskSchedulePanelState extends State<TaskSchedulePanel> {
                                       top: 1,
                                       child: IgnorePointer(
                                           child: Container(
-                                              width: TaskScheduleMetrics.propertyIndicatorSize,
-                                              height: TaskScheduleMetrics.propertyIndicatorSize,
+                                              width: TaskScheduleMetrics
+                                                  .propertyIndicatorSize,
+                                              height: TaskScheduleMetrics
+                                                  .propertyIndicatorSize,
                                               alignment: Alignment.center,
                                               decoration: BoxDecoration(
                                                   shape: BoxShape.circle,
@@ -476,14 +500,16 @@ class _TaskSchedulePanelState extends State<TaskSchedulePanel> {
                 }),
               if (error != null)
                 Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: WorkFollowSpacing.space4),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: WorkFollowSpacing.space4),
                     child: Text(error!,
                         style: text.copyWith(
                             color: colors.danger,
                             fontSize: WorkFollowMacTypography.supporting))),
               const SizedBox(height: WorkFollowSpacing.relaxedGap),
               Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: WorkFollowSpacing.space4),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: WorkFollowSpacing.space4),
                   child: Row(children: [
                     Expanded(
                         child: OutlinedButton(
@@ -542,16 +568,23 @@ class _TaskSchedulePanelState extends State<TaskSchedulePanel> {
       void Function(BuildContext) onTap) {
     final colors = TaskMenuStyle.colors(context);
     return Padding(
-        padding: const EdgeInsets.symmetric(horizontal: WorkFollowSpacing.space1),
+        padding:
+            const EdgeInsets.symmetric(horizontal: WorkFollowSpacing.space1),
         child: Builder(
             builder: (anchor) => InkWell(
                 key: ValueKey(key),
                 borderRadius: BorderRadius.circular(WorkFollowRadii.control),
+                focusColor: WorkFollowInteractionStyles.focusColor(colors),
+                overlayColor: WorkFollowInteractionStyles.overlay(
+                  colors,
+                  menu: true,
+                ),
                 onTap: () => onTap(anchor),
                 child: SizedBox(
                     height: TaskScheduleMetrics.propertyRowHeight,
                     child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: WorkFollowSpacing.relaxedGap),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: WorkFollowSpacing.relaxedGap),
                         child: Row(children: [
                           TaskEditorGlyph(icon,
                               size: WorkFollowMetrics.compactFieldIcon,

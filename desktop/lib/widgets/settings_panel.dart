@@ -8,6 +8,7 @@ import '../services/local_workspace_store.dart';
 import '../services/notification_service.dart';
 import '../state/workspace_controller.dart';
 import '../theme/workfollow_icons.dart';
+import '../theme/workfollow_interaction_states.dart';
 import '../theme/workfollow_theme.dart';
 import 'app_icon_button.dart';
 
@@ -312,7 +313,13 @@ class _SettingsPanelState extends State<_SettingsPanel> {
                                 child: ListTile(
                                     dense: true,
                                     selected: page == i,
-                                    selectedTileColor: tokens.accentSoft,
+                                    selectedTileColor:
+                                        WorkFollowInteractionStyles.fill(tokens,
+                                            selected: true, menu: true),
+                                    hoverColor: WorkFollowInteractionStyles.fill(
+                                        tokens, hovered: true, menu: true),
+                                    focusColor: WorkFollowInteractionStyles
+                                        .focusColor(tokens),
                                     shape: RoundedRectangleBorder(
                                         borderRadius: BorderRadius.circular(
                                             WorkFollowRadii.control)),

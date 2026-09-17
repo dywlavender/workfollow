@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../theme/workfollow_interaction_states.dart';
 import '../theme/workfollow_theme.dart';
 
 class AppIconButton extends StatelessWidget {
@@ -44,6 +45,9 @@ class AppIconButton extends StatelessWidget {
         child: InkWell(
           onTap: onPressed,
           borderRadius: BorderRadius.circular(WorkFollowRadii.control),
+          overlayColor: WorkFollowInteractionStyles.overlay(
+            tokens,
+          ),
           child: SizedBox(
             width: size,
             height: size,
@@ -52,7 +56,8 @@ class AppIconButton extends StatelessWidget {
               size: iconSize,
               color: iconColor ??
                   (onPressed == null
-                      ? tokens.textTertiary
+                      ? WorkFollowInteractionStyles.foreground(tokens,
+                          enabled: false)
                       : (active ? tokens.accent : tokens.textSecondary)),
             ),
           ),
@@ -87,7 +92,9 @@ class SoftPill extends StatelessWidget {
     return Container(
       constraints:
           const BoxConstraints(minHeight: WorkFollowMetrics.chipHeight),
-      padding: const EdgeInsets.symmetric(horizontal: WorkFollowSpacing.space2, vertical: WorkFollowSpacing.space1),
+      padding: const EdgeInsets.symmetric(
+          horizontal: WorkFollowSpacing.space2,
+          vertical: WorkFollowSpacing.space1),
       decoration: BoxDecoration(
         color: color ?? tokens.accentFaint,
         borderRadius: BorderRadius.circular(WorkFollowRadii.control),

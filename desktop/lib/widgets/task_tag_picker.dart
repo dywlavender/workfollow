@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'desktop_popover.dart';
 import 'app_icon_button.dart';
 import '../theme/workfollow_icons.dart';
+import '../theme/workfollow_interaction_states.dart';
 import '../theme/workfollow_theme.dart';
 
 class TaskTagPicker {
@@ -76,13 +77,19 @@ class _TaskTagPickerBodyState extends State<TaskTagPickerBody> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(WorkFollowSpacing.space4, WorkFollowSpacing.cardInset, WorkFollowSpacing.cardInset, WorkFollowSpacing.space2),
+          padding: const EdgeInsets.fromLTRB(
+              WorkFollowSpacing.space4,
+              WorkFollowSpacing.cardInset,
+              WorkFollowSpacing.cardInset,
+              WorkFollowSpacing.space2),
           child: TextField(
             key: const ValueKey('task-tag-search'),
             controller: search,
             autofocus: true,
             cursorColor: tokens.accent,
-            style: TextStyle(fontSize: WorkFollowMacTypography.body, color: tokens.textPrimary),
+            style: TextStyle(
+                fontSize: WorkFollowMacTypography.body,
+                color: tokens.textPrimary),
             onChanged: (_) => setState(() {}),
             onSubmitted: (_) {
               if (canCreate) createTag();
@@ -94,7 +101,8 @@ class _TaskTagPickerBodyState extends State<TaskTagPickerBody> {
               hintText: '输入标签',
               hintStyle: TextStyle(color: tokens.textTertiary),
               filled: false,
-              contentPadding: const EdgeInsets.symmetric(vertical: WorkFollowSpacing.space2),
+              contentPadding: const EdgeInsets.symmetric(
+                  vertical: WorkFollowSpacing.space2),
               prefixIconConstraints: const BoxConstraints(
                   minWidth: TaskPickerMetrics.fieldPrefixMinWidth),
               border: InputBorder.none,
@@ -106,11 +114,14 @@ class _TaskTagPickerBodyState extends State<TaskTagPickerBody> {
         Flexible(
           child: SingleChildScrollView(
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: WorkFollowSpacing.space2, vertical: WorkFollowSpacing.space2),
+              padding: const EdgeInsets.symmetric(
+                  horizontal: WorkFollowSpacing.space2,
+                  vertical: WorkFollowSpacing.space2),
               child: Column(mainAxisSize: MainAxisSize.min, children: [
                 if (matches.isEmpty && !canCreate)
                   Padding(
-                    padding: const EdgeInsets.symmetric(vertical: WorkFollowSpacing.space6),
+                    padding: const EdgeInsets.symmetric(
+                        vertical: WorkFollowSpacing.space6),
                     child: Column(children: [
                       TaskMenuGlyph('tags',
                           size: 60,
@@ -118,21 +129,36 @@ class _TaskTagPickerBodyState extends State<TaskTagPickerBody> {
                       const SizedBox(height: WorkFollowSpacing.space3),
                       Text('没有标签',
                           style: TextStyle(
-                              fontSize: WorkFollowMacTypography.body, color: tokens.textPrimary)),
+                              fontSize: WorkFollowMacTypography.body,
+                              color: tokens.textPrimary)),
                     ]),
                   ),
                 for (final tag in matches)
                   CheckboxListTile(
                     key: ValueKey('task-tag-$tag'),
                     dense: true,
-                    contentPadding: const EdgeInsets.symmetric(horizontal: WorkFollowSpacing.space2),
+                    contentPadding: const EdgeInsets.symmetric(
+                        horizontal: WorkFollowSpacing.space2),
                     controlAffinity: ListTileControlAffinity.trailing,
+                    selected: selected.contains(tag),
+                    selectedTileColor: tokens.menuSelected,
+                    hoverColor: WorkFollowInteractionStyles.fill(
+                      tokens,
+                      hovered: true,
+                      menu: true,
+                    ),
                     secondary: AppIcon(WorkFollowIcons.tagLabel,
                         size: WorkFollowMetrics.toolbarIcon,
                         color: tokens.textSecondary),
-                    title: Text(tag, style: const TextStyle(fontSize: WorkFollowMacTypography.menu)),
+                    title: Text(tag,
+                        style: const TextStyle(
+                            fontSize: WorkFollowMacTypography.menu)),
                     value: selected.contains(tag),
                     activeColor: tokens.accent,
+                    overlayColor: WorkFollowInteractionStyles.overlay(
+                      tokens,
+                      menu: true,
+                    ),
                     onChanged: (checked) => setState(() {
                       checked == true
                           ? selected.add(tag)
@@ -147,7 +173,9 @@ class _TaskTagPickerBodyState extends State<TaskTagPickerBody> {
                         size: WorkFollowMetrics.toolbarIcon,
                         color: tokens.accent),
                     title: Text('创建「$query」',
-                        style: TextStyle(fontSize: WorkFollowMacTypography.menu, color: tokens.accent)),
+                        style: TextStyle(
+                            fontSize: WorkFollowMacTypography.menu,
+                            color: tokens.accent)),
                     onTap: createTag,
                   ),
               ]),
