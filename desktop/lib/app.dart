@@ -27,6 +27,7 @@ import 'services/preferences_store.dart';
 import 'services/local_workspace_store.dart';
 import 'services/focus_timer.dart';
 import 'state/workspace_controller.dart';
+import 'theme/workfollow_motion.dart';
 import 'theme/workfollow_theme.dart';
 import 'widgets/command_palette.dart';
 import 'widgets/sidebar.dart';
@@ -60,8 +61,8 @@ class _WorkFollowAppState extends State<WorkFollowApp> {
   /// survives the user looking somewhere else when a task is ticked off.
   bool _completionSound = true;
 
-  /// 动态反馈. Off keeps every result HUD but fades it in over 120ms instead of
-  /// springing it, which is what a reduce-motion preference asks for.
+  /// 动态反馈. Off keeps every result HUD but uses the short fade path instead
+  /// of springing it, which is what a reduce-motion preference asks for.
   bool _animatedFeedback = true;
 
   late final WorkspacePreferencesStore _preferencesStore;
@@ -249,7 +250,7 @@ class WorkFollowShell extends StatefulWidget {
   final bool completionSound;
   final ValueChanged<bool>? onSetCompletionSound;
 
-  /// 动态反馈 — the result HUD springs in when on, fades in over 120ms when off.
+  /// 动态反馈 — the result HUD springs in when on and uses a short fade when off.
   final bool animatedFeedback;
   final ValueChanged<bool>? onSetAnimatedFeedback;
 
@@ -633,8 +634,10 @@ class _WorkFollowShellState extends State<WorkFollowShell> {
                   children: [
                     ClipRect(
                       child: AnimatedAlign(
-                        duration: const Duration(milliseconds: 220),
-                        curve: Curves.easeOutCubic,
+                        duration: WorkFollowMotionPolicy.duration(
+                            context, WorkFollowMotionRole.panelTransition),
+                        curve: WorkFollowMotionPolicy.curve(
+                            context, WorkFollowMotionRole.panelTransition),
                         alignment: Alignment.centerLeft,
                         widthFactor: sidebarCollapsed ? 0 : 1,
                         child: AppRail(
@@ -696,9 +699,12 @@ class _WorkspaceContent extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return AnimatedSwitcher(
-      duration: const Duration(milliseconds: 180),
-      switchInCurve: Curves.easeOutCubic,
-      switchOutCurve: Curves.easeIn,
+      duration: WorkFollowMotionPolicy.duration(
+          context, WorkFollowMotionRole.panelTransition),
+      switchInCurve: WorkFollowMotionPolicy.curve(
+          context, WorkFollowMotionRole.panelTransition),
+      switchOutCurve: WorkFollowMotionPolicy.curve(
+          context, WorkFollowMotionRole.popoverExit),
       layoutBuilder: (currentChild, previousChildren) => Stack(children: [
         ...previousChildren,
         if (currentChild != null) currentChild

@@ -24,7 +24,7 @@
 | Surfaces | 91 个 `BoxDecoration`；7 个 `BoxShadow`；27 个 `Border.*` | 先建立 Surface 角色，再收口实现 | D6 |
 | States | `selected:` 60；Hover 相关 78；Focus 相关 71；Disabled 相关 32；Active 相关 16 | 语法命中，需按控件状态矩阵归并 | D7 |
 | Overlay | 统一菜单、Picker、Toolbar、Dialog route；34 个基线命中已按契约收口 | `DesktopOverlayPolicy`、shared geometry、persistent controller | D8 · migrated |
-| Motion | 18 个主题外数字 `Duration`；10 个主题外 `Curves.*` | 反馈 HUD 与页面转场需要先定义 Motion Role | D9 |
+| Motion | 18 个主题外数字 `Duration`；10 个主题外 `Curves.*` | Motion Role 已建立；浮层、页面切换、Feedback HUD 已迁移，并行组件按边界 deferred | D9 · migrated |
 | Light / Dark | 32 个明暗模式判断，分布在 10 个文件 | 检查是否把模式差异写进了组件，而不是 Theme | D10 |
 
 ## 规范事实源
@@ -39,7 +39,7 @@
 | 通用尺寸与页面布局 | `WorkFollowMetrics`、`WorkFollowLayout` |
 | 任务列表尺寸 | `TaskListMetrics` |
 | 圆角 | `WorkFollowRadii` |
-| 动画时序与曲线 | `WorkFollowMotion` |
+| 动画时序与曲线 | [`workfollow_motion.dart`](/Users/dongyangwei/Documents/学习/代办笔记/workfollow-flutter-personal/desktop/lib/theme/workfollow_motion.dart)；基础值由 `WorkFollowMotion` 提供 |
 | 任务菜单颜色兼容层 | `TaskMenuStyle`（只转发 `WorkFollowTheme`，不再复制颜色） |
 
 ## D0 发现状态
@@ -66,6 +66,7 @@
 - [D6 Surface migration](d6-surfaces.md)
 - [D7 States migration](d7-states.md)
 - [Motion](motion.md)
+- [D9 Motion migration](d9-motion.md)
 - [States](states.md)
 - [Overlay](overlay.md)
 - [D8 Overlay migration](d8-overlays.md)

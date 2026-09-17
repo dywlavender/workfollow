@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import '../state/workspace_controller.dart';
 import '../theme/workfollow_icons.dart';
 import '../theme/workfollow_interaction_states.dart';
+import '../theme/workfollow_motion.dart';
 import '../theme/workfollow_surface_tokens.dart';
 import '../theme/workfollow_theme.dart';
 import 'app_icon_button.dart';
@@ -24,10 +25,15 @@ Future<void> showCommandPalette({
     barrierLabel: '搜索与命令',
     barrierDismissible: true,
     barrierColor: Colors.black.withValues(alpha: .28),
-    transitionDuration: const Duration(milliseconds: 180),
+    motionRole: WorkFollowMotionRole.panelTransition,
     transitionBuilder: (context, animation, secondaryAnimation, child) {
-      final curved =
-          CurvedAnimation(parent: animation, curve: Curves.easeOutCubic);
+      final curved = CurvedAnimation(
+        parent: animation,
+        curve: WorkFollowMotionPolicy.curve(
+            context, WorkFollowMotionRole.panelTransition),
+        reverseCurve: WorkFollowMotionPolicy.curve(
+            context, WorkFollowMotionRole.popoverExit),
+      );
       return BackdropFilter(
         filter: ImageFilter.blur(
             sigmaX: 8 * animation.value, sigmaY: 8 * animation.value),

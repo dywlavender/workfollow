@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 
 import '../theme/workfollow_icons.dart';
 import '../theme/workfollow_interaction_states.dart';
+import '../theme/workfollow_motion.dart';
 import '../theme/workfollow_surface_tokens.dart';
 import '../theme/workfollow_theme.dart';
 import 'app_icon_button.dart';
@@ -76,6 +77,16 @@ class DesktopOverlayPolicy {
 
   bool get preservesEditorSelection =>
       focusPolicy == PopoverFocusPolicy.preserveEditor;
+
+  /// Motion follows the overlay layer so menus, pickers and dialogs do not
+  /// each invent their own transition timing.
+  WorkFollowMotionRole get motionRole => switch (layer) {
+        DesktopOverlayLayer.menu ||
+        DesktopOverlayLayer.picker =>
+          WorkFollowMotionRole.popoverEnter,
+        DesktopOverlayLayer.toolbar => WorkFollowMotionRole.controlPress,
+        DesktopOverlayLayer.dialog => WorkFollowMotionRole.panelTransition,
+      };
 }
 
 /// Placement policy for an anchored surface.
@@ -308,12 +319,23 @@ Future<T?> showAnchoredPopover<T>(
         restoreFocus: restoreFocus,
       );
   final theme = popoverTheme ?? Theme.of(anchor);
+  final transitionDuration =
+      WorkFollowMotionPolicy.duration(anchor, resolvedPolicy.motionRole);
+  // A route moves the first focus into its own scope as soon as it becomes
+  // current (`_ModalScopeState._routeSetState`), which yanks the caret out of
+  // whatever text field is being edited. Only surfaces that actually take
+  // keyboard input opt into that; an anchored panel that documents "do not
+  // move focus" must not steal it from the editor behind it.
+  final routeTakesFocus =
+      resolvedPolicy.focusPolicy == PopoverFocusPolicy.firstItem ||
+          resolvedPolicy.focusPolicy == PopoverFocusPolicy.searchField;
   final result = await showGeneralDialog<T>(
     context: anchor,
     barrierDismissible: resolvedPolicy.dismissOnTapOutside,
     barrierLabel: '关闭弹出面板',
     barrierColor: Colors.transparent,
-    transitionDuration: const Duration(milliseconds: 100),
+    transitionDuration: transitionDuration,
+    requestFocus: routeTakesFocus,
     pageBuilder: (context, _, __) => _AnchoredPopoverPage(
       anchor: anchor,
       anchorRect: anchorRect,
@@ -327,8 +349,9 @@ Future<T?> showAnchoredPopover<T>(
       theme: theme,
       surfaceDecoration: surfaceDecoration,
     ),
-    transitionBuilder: (_, animation, __, child) =>
-        FadeTransition(opacity: animation, child: child),
+    transitionBuilder: (context, animation, __, child) =>
+        _desktopOverlayTransition(
+            context, animation, child, resolvedPolicy.motionRole),
   );
   if (resolvedPolicy.restoreFocus &&
       previousFocus != null &&
@@ -408,21 +431,24 @@ Future<T?> showDesktopDialog<T>({
   bool barrierDismissible = true,
   String barrierLabel = '关闭弹出面板',
   Color barrierColor = Colors.transparent,
-  Duration transitionDuration = const Duration(milliseconds: 100),
+  Duration? transitionDuration,
+  WorkFollowMotionRole motionRole = WorkFollowMotionRole.panelTransition,
   RouteTransitionsBuilder? transitionBuilder,
   bool restoreFocus = true,
 }) async {
   final previousFocus = FocusManager.instance.primaryFocus;
+  final resolvedDuration = transitionDuration ??
+      WorkFollowMotionPolicy.duration(context, motionRole);
   final result = await showGeneralDialog<T>(
     context: context,
     barrierDismissible: barrierDismissible,
     barrierLabel: barrierLabel,
     barrierColor: barrierColor,
-    transitionDuration: transitionDuration,
+    transitionDuration: resolvedDuration,
     pageBuilder: (routeContext, _, __) => builder(routeContext),
     transitionBuilder: transitionBuilder ??
-        (_, animation, __, child) =>
-            FadeTransition(opacity: animation, child: child),
+        (routeContext, animation, __, child) => _desktopOverlayTransition(
+            routeContext, animation, child, motionRole),
   );
   if (restoreFocus && previousFocus != null && previousFocus.canRequestFocus) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -430,6 +456,40 @@ Future<T?> showDesktopDialog<T>({
     });
   }
   return result;
+}
+
+/// Shared fade/scale/slide transition for modal and anchored surfaces.
+///
+/// The transform is intentionally small: it gives a popover a clear origin
+/// without changing the geometry contract of the surface once settled.  A
+/// reduced-motion context keeps the same short fade/slide path but removes
+/// easing and the longer panel rhythm.
+Widget _desktopOverlayTransition(
+  BuildContext context,
+  Animation<double> animation,
+  Widget child,
+  WorkFollowMotionRole role,
+) {
+  final curved = CurvedAnimation(
+    parent: animation,
+    curve: WorkFollowMotionPolicy.curve(context, role),
+    reverseCurve: WorkFollowMotionPolicy.curve(
+      context,
+      WorkFollowMotionRole.popoverExit,
+    ),
+  );
+  final offset = Tween<Offset>(
+    begin: const Offset(0, .02),
+    end: Offset.zero,
+  ).animate(curved);
+  final scale = Tween<double>(begin: .98, end: 1).animate(curved);
+  return FadeTransition(
+    opacity: curved,
+    child: SlideTransition(
+      position: offset,
+      child: ScaleTransition(scale: scale, child: child),
+    ),
+  );
 }
 
 class _AnchoredPopoverPage extends StatefulWidget {

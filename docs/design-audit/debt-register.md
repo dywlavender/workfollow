@@ -110,13 +110,13 @@
 
 | 文件 | 组件 | 问题类型 | 当前写法（命中数） | 应归属 Token | 严重程度 | 计划轮次 |
 | --- | --- | --- | --- | --- | --- | --- |
-| `features/feedback/feedback_host.dart` | Feedback HUD | Motion | 420/200/120ms、ease 曲线、TweenSequence | feedback enter/exit/fade/spring roles | P1 | D9 |
-| `features/feedback/feedback_event.dart` | Feedback hold | Motion | 4000/5000/2600ms | feedback hold roles | P2 | D9 |
-| `app.dart` | Shell pane/page switch | Motion | 220/180ms、easeOutCubic/easeIn | shell/panel transition roles | P1 | D9 |
-| `widgets/command_palette.dart` | Command palette | Motion | 180ms + easeOutCubic | command overlay role | P1 | D9 |
-| `widgets/desktop_popover.dart`、`settings_panel.dart` | Popover/Dialog | Motion | 100/180ms | popover/dialog roles | P1 | D9 |
-| `screens/home_screen.dart`、`screens/today_screen.dart` | Task/list transitions | Motion | 150ms、300ms delay | task row/stagger roles | P1 | D9 |
-| `widgets/task_context_menu_panel.dart` | Submenu intent | Motion | 220ms Timer | hover intent delay（与动画分离） | P2 | D9 |
+| `features/feedback/feedback_host.dart` | Feedback HUD | Motion | 420/200/120ms、ease 曲线、TweenSequence | `feedbackToastEnter` / `feedbackToastExit` / fade / spring envelope | P1 | migrated · D9 |
+| `features/feedback/feedback_event.dart` | Feedback hold | Motion | 4000/5000/2600ms | feedback hold time（非动画） | P2 | accepted-exception · D9 |
+| `app.dart`、`widgets/command_palette.dart`、`settings_panel.dart` | Shell/page/dialog | Motion | 220/180ms、ease 曲线 | `panelTransition` | P1 | migrated · D9 |
+| `widgets/desktop_popover.dart`、`persistent_anchored_popover.dart` | Menu/Picker/Toolbar | Motion | 100ms、持久浮层无进退场 | `popoverEnter` / `popoverExit` / `controlPress` | P1 | migrated · D9 |
+| `widgets/sidebar.dart`、`screens/home_screen.dart` | Local state transitions | Motion | 120/150ms | `hoverTransition` / `selectionTransition` | P1 | migrated · D9 |
+| `screens/today_screen.dart`、`widgets/task_list/*`、`widgets/matrix/*` | Parallel task/list transitions | Motion | 并行任务中的动画 | 对应 task/list/collapse roles | P1 | deferred · D9 后续 |
+| `widgets/task_context_menu_panel.dart` | Submenu intent | Motion | 220ms Timer | hover intent delay（与动画分离） | P2 | accepted-exception · D9 |
 
 ## Light / Dark
 

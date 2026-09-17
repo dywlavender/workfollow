@@ -6,6 +6,7 @@ import '../state/workspace_controller.dart';
 import '../theme/workfollow_icons.dart';
 import '../theme/workfollow_color_tokens.dart';
 import '../theme/workfollow_interaction_states.dart';
+import '../theme/workfollow_motion.dart';
 import '../theme/workfollow_theme.dart';
 import '../features/feedback/feedback_event.dart';
 import '../features/feedback/feedback_scope.dart';
@@ -1112,7 +1113,9 @@ class _TaskListItemState extends State<_TaskListItem> {
                         ExcludeSemantics(
                           excluding: !hovering,
                           child: AnimatedOpacity(
-                            duration: const Duration(milliseconds: 120),
+                            duration: WorkFollowMotionPolicy.duration(
+                                context,
+                                WorkFollowMotionRole.hoverTransition),
                             opacity: hovering ? 1 : 0,
                             child: AppIconButton(
                                 icon: WorkFollowIcons.more,

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/task.dart';
 import '../state/workspace_controller.dart';
 import '../theme/workfollow_icons.dart';
+import '../theme/workfollow_motion.dart';
 import '../theme/workfollow_surface_tokens.dart';
 import '../theme/workfollow_theme.dart';
 import '../features/tasks/presentation/task_feedback_mapper.dart';
@@ -478,7 +479,10 @@ class _HomeTaskRow extends StatelessWidget {
                 height: HomeMetrics.taskCheckboxHitTarget,
                 alignment: Alignment.center,
                 child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 150),
+                  duration: WorkFollowMotionPolicy.duration(
+                      context, WorkFollowMotionRole.selectionTransition),
+                  curve: WorkFollowMotionPolicy.curve(
+                      context, WorkFollowMotionRole.selectionTransition),
                   width: HomeMetrics.taskCheckboxVisualWidth,
                   height: HomeMetrics.taskCheckboxVisualHeight,
                   decoration: BoxDecoration(

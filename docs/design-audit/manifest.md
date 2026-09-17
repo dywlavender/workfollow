@@ -59,7 +59,13 @@
 | OVERLAY-003 | Overlay | `command_palette.dart`、`settings_panel.dart` | 顶层浮层各自调用 `showGeneralDialog` | `showDesktopDialog` | migrated | D8 |
 | OVERLAY-004 | Overlay | `sidebar.dart`、`habits_screen.dart`、Context / More | Material `showMenu` 与桌面菜单并存 | `showDesktopMenu` | migrated | D8 |
 | OVERLAY-005 | Overlay | `settings_panel.dart` 内部确认流程 | 真正的二级 Dialog 仍使用 `showDialog` | Dialog 白名单 | deferred · intentional | D8 |
-| MOTION-001 | Motion | `feedback_host.dart`、`app.dart`、Popover 等 | 18 个数字 Duration | Motion Roles | candidate | D9 |
+| MOTION-001 | Motion | `features/feedback/feedback_host.dart` | 420/200/120ms、ease 曲线、TweenSequence | `feedbackToastEnter` / `feedbackToastExit` / fade / spring envelope | migrated | D9 |
+| MOTION-002 | Motion | `app.dart`、`widgets/command_palette.dart`、`widgets/settings_panel.dart` | 220/180ms、ease 曲线 | `panelTransition` | migrated | D9 |
+| MOTION-003 | Motion | `widgets/desktop_popover.dart`、`persistent_anchored_popover.dart` | 100ms、只有 Fade，持久浮层无进退场 | `popoverEnter` / `popoverExit` / `controlPress` | migrated | D9 |
+| MOTION-004 | Motion | `widgets/sidebar.dart`、`screens/home_screen.dart` | 120/150ms | `hoverTransition` / `selectionTransition` | migrated | D9 |
+| MOTION-005 | Motion | `screens/today_screen.dart`、`widgets/task_list/*`、`widgets/matrix/*` | 并行任务中的状态/任务行动画 | 对应 task/list/collapse roles | deferred | D9 后续 |
+| MOTION-006 | Motion | `features/feedback/feedback_event.dart` | 4000/5000/2600ms | feedback hold time | accepted-exception | D9 |
+| MOTION-007 | Motion | `widgets/task_context_menu_panel.dart` | 220ms Timer | submenu hover intent delay | accepted-exception | D9 |
 
 ## 重新扫描命令
 

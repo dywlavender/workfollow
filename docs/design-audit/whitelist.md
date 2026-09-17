@@ -14,6 +14,7 @@
 | 四象限色 | `MatrixQuadrantStyle` 四种颜色 | 四象限需要彼此区分；应在 D3 收口成 Matrix semantic palette | D3 |
 | Hover intent delay | `task_context_menu_panel.dart` 的 220ms Timer | 这是子菜单意图延迟，不是动画 duration | D9 |
 | Feedback hold time | `feedback_event.dart` 的 2600/4000/5000ms | 这是内容停留时长，不应和进退场动画混合 | D9 |
+| Feedback spring envelope | `feedback_host.dart` 的 200ms 上升/过冲/settle | 完成 HUD 的 bounded motion envelope；时长和曲线由 `WorkFollowMotionTokens` 管理，reduced motion 时禁用 | D9 |
 | 几何边界 | Divider/Border 的 1px、Quill 图片/代码/水平线、图表与 CustomPainter stroke | 属于表面边界或内容渲染参数，不是普通控件尺寸 | D5/D6 |
 | 响应式几何 | Today / Editor viewport 的 clamp、动态 min/max 约束 | 由 Layout contract 根据可用空间计算，不能替换成固定尺寸 | D5 |
 | 并行组件几何 | Matrix、Feedback、Schedule Options 当前工作区新增组件 | 保留并行任务的改动，待对应模块统一收口 | D5/D6 |

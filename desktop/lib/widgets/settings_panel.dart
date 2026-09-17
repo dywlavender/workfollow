@@ -9,6 +9,7 @@ import '../services/notification_service.dart';
 import '../state/workspace_controller.dart';
 import '../theme/workfollow_icons.dart';
 import '../theme/workfollow_interaction_states.dart';
+import '../theme/workfollow_motion.dart';
 import '../theme/workfollow_theme.dart';
 import 'app_icon_button.dart';
 import 'desktop_popover.dart';
@@ -49,12 +50,22 @@ Future<void> showSettingsPanel({
     barrierDismissible: true,
     barrierLabel: '设置',
     barrierColor: Colors.black.withValues(alpha: .24),
-    transitionDuration: const Duration(milliseconds: 180),
+    motionRole: WorkFollowMotionRole.panelTransition,
     transitionBuilder: (context, animation, secondaryAnimation, child) =>
         BackdropFilter(
-            filter: ImageFilter.blur(
-                sigmaX: animation.value * 7, sigmaY: animation.value * 7),
-            child: FadeTransition(opacity: animation, child: child)),
+          filter: ImageFilter.blur(
+              sigmaX: animation.value * 7, sigmaY: animation.value * 7),
+          child: FadeTransition(
+            opacity: CurvedAnimation(
+              parent: animation,
+              curve: WorkFollowMotionPolicy.curve(
+                  context, WorkFollowMotionRole.panelTransition),
+              reverseCurve: WorkFollowMotionPolicy.curve(
+                  context, WorkFollowMotionRole.popoverExit),
+            ),
+            child: child,
+          ),
+        ),
   );
 }
 

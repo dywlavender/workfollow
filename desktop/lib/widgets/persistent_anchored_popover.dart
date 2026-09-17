@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../theme/workfollow_motion.dart';
 import '../theme/workfollow_surface_tokens.dart';
 import '../theme/workfollow_theme.dart';
 import 'desktop_popover.dart';
@@ -29,6 +30,7 @@ class PersistentAnchoredPopoverController {
   bool _dismissOnTapOutside = false;
   VoidCallback? _onDismiss;
   Rect? _lastAnchorRect;
+  GlobalKey<_PersistentPopoverSurfaceState>? _surfaceKey;
 
   bool get isOpen => _entry != null;
 
@@ -62,10 +64,13 @@ class PersistentAnchoredPopoverController {
     _height = height;
     _placement = placement;
     _safeArea = safeArea;
+    _policy = policy;
     _dismissOnTapOutside = policy?.dismissOnTapOutside ?? dismissOnTapOutside;
     _onDismiss = onDismiss;
     _lastAnchorRect = anchorRectResolver?.call() ?? _anchorRect(anchor);
-    _entry = OverlayEntry(builder: _build);
+    final surfaceKey = GlobalKey<_PersistentPopoverSurfaceState>();
+    _surfaceKey = surfaceKey;
+    _entry = OverlayEntry(builder: (context) => _build(context, surfaceKey));
     overlay.insert(_entry!);
     return true;
   }
@@ -75,8 +80,11 @@ class PersistentAnchoredPopoverController {
 
   /// Removes the surface and releases its anchor/builder references.
   void close() {
-    _entry?.remove();
+    final entry = _entry;
+    if (entry == null) return;
+    final surfaceKey = _surfaceKey;
     _entry = null;
+    _surfaceKey = null;
     _anchor = null;
     _anchorRectResolver = null;
     _builder = null;
@@ -85,9 +93,24 @@ class PersistentAnchoredPopoverController {
     _dismissOnTapOutside = false;
     _onDismiss = null;
     _lastAnchorRect = null;
+    _policy = null;
+
+    void removeEntry() {
+      // An entry can be closed while a new surface is being opened. The old
+      // exit callback must only remove its own entry.
+      entry.remove();
+    }
+
+    final state = surfaceKey?.currentState;
+    if (state == null) {
+      removeEntry();
+    } else {
+      state.dismiss(removeEntry);
+    }
   }
 
-  Widget _build(BuildContext context) {
+  Widget _build(BuildContext context,
+      GlobalKey<_PersistentPopoverSurfaceState> surfaceKey) {
     final screen = MediaQuery.sizeOf(context);
     final anchor = _anchor;
     final anchorRect = anchor == null
@@ -136,7 +159,7 @@ class PersistentAnchoredPopoverController {
     final decoratedSurface = _surfaceDecoration == null
         ? material
         : DecoratedBox(decoration: _surfaceDecoration!, child: material);
-    final surface = _dismissOnTapOutside
+    final rawSurface = _dismissOnTapOutside
         ? TapRegion(
             onTapOutside: (_) {
               _onDismiss?.call();
@@ -145,6 +168,19 @@ class PersistentAnchoredPopoverController {
             child: decoratedSurface,
           )
         : decoratedSurface;
+    final motionRole = _policy?.motionRole ??
+        (_surfaceDecoration == null
+            ? WorkFollowMotionRole.popoverEnter
+            : WorkFollowMotionRole.controlPress);
+    final surface = _PersistentPopoverSurface(
+      key: surfaceKey,
+      duration: WorkFollowMotionPolicy.duration(context, motionRole),
+      curve: WorkFollowMotionPolicy.curve(context, motionRole),
+      reverseCurve: WorkFollowMotionPolicy.curve(
+          context, WorkFollowMotionRole.popoverExit),
+      toolbar: motionRole == WorkFollowMotionRole.controlPress,
+      child: rawSurface,
+    );
 
     final positioned = switch (geometry.side) {
       PopoverSide.top => Positioned(
@@ -176,6 +212,105 @@ class PersistentAnchoredPopoverController {
     return Theme(
       data: theme,
       child: Stack(clipBehavior: Clip.none, children: [positioned]),
+    );
+  }
+
+  DesktopOverlayPolicy? _policy;
+}
+
+/// Animated surface used by persistent editor overlays.
+///
+/// The controller remains responsible for placement and lifecycle.  This
+/// small stateful wrapper owns only the enter/exit transition, which lets a
+/// toolbar fade out before its entry is removed without changing its settled
+/// size or focus behaviour.
+class _PersistentPopoverSurface extends StatefulWidget {
+  const _PersistentPopoverSurface({
+    super.key,
+    required this.duration,
+    required this.curve,
+    required this.reverseCurve,
+    required this.child,
+    this.toolbar = false,
+  });
+
+  final Duration duration;
+  final Curve curve;
+  final Curve reverseCurve;
+  final Widget child;
+  final bool toolbar;
+
+  @override
+  State<_PersistentPopoverSurface> createState() =>
+      _PersistentPopoverSurfaceState();
+}
+
+class _PersistentPopoverSurfaceState extends State<_PersistentPopoverSurface>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  late final CurvedAnimation _animation;
+  bool _dismissRequested = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(vsync: this, duration: widget.duration);
+    _animation = CurvedAnimation(
+      parent: _controller,
+      curve: widget.curve,
+      reverseCurve: widget.reverseCurve,
+    );
+    _controller.forward();
+  }
+
+  @override
+  void didUpdateWidget(covariant _PersistentPopoverSurface oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.duration != widget.duration) {
+      _controller.duration = widget.duration;
+    }
+    if (oldWidget.curve != widget.curve ||
+        oldWidget.reverseCurve != widget.reverseCurve) {
+      _animation
+        ..curve = widget.curve
+        ..reverseCurve = widget.reverseCurve;
+    }
+  }
+
+  /// Runs the short exit transition, then removes the overlay entry.
+  void dismiss(VoidCallback onDismissed) {
+    if (_dismissRequested) return;
+    _dismissRequested = true;
+    _controller.reverse().whenCompleteOrCancel(() {
+      if (mounted) onDismissed();
+    });
+  }
+
+  @override
+  void dispose() {
+    _animation.dispose();
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final beginOffset =
+        widget.toolbar ? const Offset(0, .015) : const Offset(0, .02);
+    final beginScale = widget.toolbar ? .99 : .98;
+    return IgnorePointer(
+      ignoring: _dismissRequested,
+      child: FadeTransition(
+        opacity: _animation,
+        child: SlideTransition(
+          position: Tween<Offset>(begin: beginOffset, end: Offset.zero)
+              .animate(_animation),
+          child: ScaleTransition(
+            scale: Tween<double>(begin: beginScale, end: 1).animate(_animation),
+            child: widget.child,
+          ),
+        ),
+      ),
     );
   }
 }
