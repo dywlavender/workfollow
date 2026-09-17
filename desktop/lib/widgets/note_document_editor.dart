@@ -339,11 +339,7 @@ class _NoteDocumentEditorState extends State<NoteDocumentEditor>
   @override
   Widget build(BuildContext context) {
     final tokens = WorkFollowTheme.of(context);
-    final textStyle = Theme.of(context).textTheme.bodyLarge!.copyWith(
-        fontSize: WorkFollowMacTypography.body,
-        height: WorkFollowMacTypography.lineBody,
-        fontWeight: WorkFollowMacWeight.regular,
-        color: tokens.textPrimary);
+    final textStyle = TaskDocumentStyles.body(tokens);
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       quill.QuillEditor(
           controller: editor,

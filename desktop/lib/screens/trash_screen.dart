@@ -115,7 +115,7 @@ class _TrashSectionLabel extends StatelessWidget {
               color: tokens.textTertiary,
               fontSize: WorkFollowMacTypography.sectionTitle,
               fontWeight: WorkFollowMacWeight.semibold,
-              letterSpacing: .45)),
+              letterSpacing: WorkFollowMacTracking.none)),
     );
   }
 }

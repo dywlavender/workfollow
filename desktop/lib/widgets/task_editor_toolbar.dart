@@ -264,17 +264,14 @@ class _ToolButton extends StatelessWidget {
                                     highlight ? const Color(0xFFd4ff00) : null,
                                 borderRadius: BorderRadius.circular(4)),
                             child: Text(label!,
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .bodyMedium!
-                                    .copyWith(
-                                        fontSize:
-                                            WorkFollowMacDisplay.glyphLabel,
-                                        height:
-                                            WorkFollowMacTypography.lineTight,
-                                        color: highlight
-                                            ? const Color(0xFF566400)
-                                            : color)),
+                                style: TextStyle(
+                                    fontSize: WorkFollowMacDisplay.glyphLabel,
+                                    height: WorkFollowMacTypography.lineTight,
+                                    fontWeight: WorkFollowMacWeight.regular,
+                                    letterSpacing: WorkFollowMacTracking.none,
+                                    color: highlight
+                                        ? const Color(0xFF566400)
+                                        : color)),
                           )
                         : TaskEditorGlyph(
                             (key as ValueKey<String>)
@@ -310,8 +307,11 @@ class _PickerRow extends StatelessWidget {
               child: Row(children: [
                 Expanded(
                     child: Text(label,
-                        style: Theme.of(context).textTheme.bodyMedium!.copyWith(
+                        style: TextStyle(
                             fontSize: WorkFollowMacTypography.menu,
+                            height: WorkFollowMacTypography.lineControl,
+                            fontWeight: WorkFollowMacWeight.regular,
+                            letterSpacing: WorkFollowMacTracking.none,
                             color: selected
                                 ? colors.accent
                                 : colors.textPrimary))),

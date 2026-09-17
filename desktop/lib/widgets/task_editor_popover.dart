@@ -6,7 +6,6 @@ import 'task_menu_style.dart';
 
 /// Proportions shared by the task document's four anchored controls.
 class TaskEditorPopoverStyle {
-  static const fontSize = 14.0;
   static const iconSize = 18.0;
   static const rowHeight = 34.0;
   static const listWidth = 196.0;

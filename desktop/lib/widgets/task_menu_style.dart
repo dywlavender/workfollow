@@ -5,7 +5,6 @@ import '../theme/workfollow_theme.dart';
 class TaskMenuStyle {
   static const width = 264.0;
   static const rowHeight = 44.0;
-  static const fontSize = 15.0;
   static const iconSize = 20.0;
 
   static WorkFollowTheme colors(BuildContext context) {

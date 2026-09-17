@@ -114,12 +114,12 @@ class _MoreMenuState extends State<_MoreMenu> {
                       const SizedBox(width: 10),
                       Expanded(
                           child: Text(entry.$2,
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .bodyMedium!
-                                  .copyWith(
-                                      fontSize: WorkFollowMacTypography.menu,
-                                      color: color))),
+                              style: TextStyle(
+                                  fontSize: WorkFollowMacTypography.menu,
+                                  height: WorkFollowMacTypography.lineControl,
+                                  fontWeight: WorkFollowMacWeight.regular,
+                                  letterSpacing: WorkFollowMacTracking.none,
+                                  color: color))),
                     ]),
                   ),
                 );

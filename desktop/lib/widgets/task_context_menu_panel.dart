@@ -425,8 +425,10 @@ class _TaskContextMenuPanelState extends State<TaskContextMenuPanel> {
                           Expanded(
                             child: Text(label,
                                 style: TextStyle(
-                                    fontSize: TaskMenuStyle.fontSize,
+                                    fontSize: WorkFollowMacTypography.menu,
+                                    height: WorkFollowMacTypography.lineControl,
                                     fontWeight: WorkFollowMacWeight.regular,
+                                    letterSpacing: WorkFollowMacTracking.none,
                                     color: foreground)),
                           ),
                           if (trailing != null)

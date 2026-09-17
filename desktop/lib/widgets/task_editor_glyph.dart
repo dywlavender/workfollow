@@ -39,6 +39,7 @@ class _Glyph extends CustomPainter {
               text: value,
               style: TextStyle(
                   fontFamily: WorkFollowMacTypeFamily.ui,
+                  fontFamilyFallback: WorkFollowMacTypeFamily.fallback,
                   fontSize: fontSize,
                   height: 1,
                   fontWeight: weight,

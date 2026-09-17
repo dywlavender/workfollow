@@ -150,9 +150,11 @@ class _TaskSchedulePanelState extends State<TaskSchedulePanel> {
     final repeats = RecurrenceEngine.preview(
             previewTask, first.add(const Duration(days: 41)))
         .toSet();
-    final text = Theme.of(context).textTheme.bodyMedium!.copyWith(
+    final text = TextStyle(
         fontSize: WorkFollowMacTypography.body,
         height: WorkFollowMacTypography.lineTight,
+        fontWeight: WorkFollowMacWeight.regular,
+        letterSpacing: WorkFollowMacTracking.none,
         color: colors.textPrimary);
     return Padding(
         key: const ValueKey('task-schedule-panel'),

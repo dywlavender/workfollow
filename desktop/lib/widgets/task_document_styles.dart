@@ -213,6 +213,11 @@ class TaskDocumentStyles {
     required double height,
   }) =>
       (base ?? const TextStyle()).copyWith(
+        // Keep Quill's line styles on the same macOS system cascade as the
+        // surrounding editor. The Web client owns its Inter catalog; the
+        // desktop document never inherits that family accidentally.
+        fontFamily: WorkFollowMacTypeFamily.ui,
+        fontFamilyFallback: WorkFollowMacTypeFamily.fallback,
         fontSize: fontSize,
         fontWeight: fontWeight,
         height: height,

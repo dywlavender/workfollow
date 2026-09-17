@@ -156,11 +156,11 @@ class _TaskTagPickerBodyState extends State<TaskTagPickerBody> {
             Expanded(
                 child: OutlinedButton(
                     style: OutlinedButton.styleFrom(
-                        textStyle: Theme.of(context)
-                            .textTheme
-                            .labelLarge
-                            ?.copyWith(
-                                fontSize: WorkFollowMacTypography.control, fontWeight: WorkFollowMacWeight.medium),
+                        textStyle: TextStyle(
+                            fontSize: WorkFollowMacTypography.control,
+                            height: WorkFollowMacTypography.lineControl,
+                            fontWeight: WorkFollowMacWeight.medium,
+                            letterSpacing: WorkFollowMacTracking.none),
                         foregroundColor: tokens.textPrimary,
                         side: BorderSide(color: tokens.borderStrong),
                         shape: RoundedRectangleBorder(
@@ -171,11 +171,11 @@ class _TaskTagPickerBodyState extends State<TaskTagPickerBody> {
             Expanded(
                 child: FilledButton(
                     style: FilledButton.styleFrom(
-                        textStyle: Theme.of(context)
-                            .textTheme
-                            .labelLarge
-                            ?.copyWith(
-                                fontSize: WorkFollowMacTypography.control, fontWeight: WorkFollowMacWeight.medium),
+                        textStyle: TextStyle(
+                            fontSize: WorkFollowMacTypography.control,
+                            height: WorkFollowMacTypography.lineControl,
+                            fontWeight: WorkFollowMacWeight.medium,
+                            letterSpacing: WorkFollowMacTracking.none),
                         backgroundColor: tokens.accent,
                         foregroundColor: Colors.white,
                         shape: RoundedRectangleBorder(

@@ -463,11 +463,12 @@ class _TaskInspectorState extends State<TaskInspector> {
                             child: Text(task.listName,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
-                                style: Theme.of(context).textTheme.bodyMedium!.copyWith(
+                                style: TextStyle(
                                     color: tokens.textSecondary,
                                     fontSize: WorkFollowMacTypography.control,
                                     height: WorkFollowMacTypography.lineControl,
-                                    fontWeight: WorkFollowMacWeight.medium))),
+                                    fontWeight: WorkFollowMacWeight.medium,
+                                    letterSpacing: WorkFollowMacTracking.none))),
                         style: TextButton.styleFrom(
                             backgroundColor:
                                 listOpen ? tokens.canvas : Colors.transparent,
@@ -624,10 +625,11 @@ class _TopPropertyButton extends StatelessWidget {
             style: TextButton.styleFrom(
               foregroundColor: foreground,
               backgroundColor: popupOpen ? tokens.canvas : Colors.transparent,
-              textStyle: Theme.of(context).textTheme.labelLarge!.copyWith(
+              textStyle: TextStyle(
                   fontSize: WorkFollowMacTypography.control,
                   height: WorkFollowMacTypography.lineControl,
-                  fontWeight: WorkFollowMacWeight.medium),
+                  fontWeight: WorkFollowMacWeight.medium,
+                  letterSpacing: WorkFollowMacTracking.none),
               minimumSize: Size(iconOnly ? WorkFollowMetrics.iconHitTarget : 0,
                   WorkFollowMetrics.iconHitTarget),
               padding: EdgeInsets.symmetric(horizontal: iconOnly ? 6 : 9),

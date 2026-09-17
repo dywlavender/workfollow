@@ -140,10 +140,11 @@ class _TaskListPickerBodyState extends State<_TaskListPickerBody> {
                 focusNode: focus,
                 autofocus: true,
                 cursorColor: tokens.textPrimary,
-                style: Theme.of(context)
-                    .textTheme
-                    .bodyMedium!
-                    .copyWith(fontSize: WorkFollowMacTypography.body, height: WorkFollowMacTypography.lineTight),
+                style: TextStyle(
+                    fontSize: WorkFollowMacTypography.body,
+                    height: WorkFollowMacTypography.lineTight,
+                    fontWeight: WorkFollowMacWeight.regular,
+                    letterSpacing: WorkFollowMacTracking.none),
                 textInputAction: TextInputAction.search,
                 onSubmitted: (_) {
                   final names = _visibleLists();
@@ -205,11 +206,12 @@ class _TaskListPickerBodyState extends State<_TaskListPickerBody> {
                                     child: Text(lists[index].name,
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .bodyMedium!
-                                            .copyWith(
-                                                fontSize: WorkFollowMacTypography.menu, color: color))),
+                                        style: TextStyle(
+                                            fontSize: WorkFollowMacTypography.menu,
+                                            height: WorkFollowMacTypography.lineControl,
+                                            fontWeight: WorkFollowMacWeight.regular,
+                                            letterSpacing: WorkFollowMacTracking.none,
+                                            color: color))),
                                 if (selected)
                                   TaskEditorGlyph('check',
                                       size: 18, color: tokens.accent),

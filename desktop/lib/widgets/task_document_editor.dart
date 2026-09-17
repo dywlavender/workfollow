@@ -589,7 +589,7 @@ class TaskDocumentEditorState extends State<TaskDocumentEditor>
   Widget build(BuildContext context) {
     final tokens = WorkFollowTheme.of(context);
     _scheduleFormattingToolbarSync();
-    final textStyle = Theme.of(context).textTheme.bodyLarge!;
+    final textStyle = TaskDocumentStyles.body(tokens);
     final hasSubtaskBlock = _hasBlock(widget.task, 'taskSubtasks');
     final hasAttachmentBlock = _hasBlock(widget.task, 'attachment');
     final hasTrailingPanels =

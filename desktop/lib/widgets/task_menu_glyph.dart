@@ -75,6 +75,7 @@ class _MenuGlyphPainter extends CustomPainter {
                   text: '+7',
                   style: TextStyle(
                       fontFamily: WorkFollowMacTypeFamily.ui,
+                      fontFamilyFallback: WorkFollowMacTypeFamily.fallback,
                       fontSize: WorkFollowMacTypography.caption,
                       fontWeight: WorkFollowMacWeight.semibold,
                       color: color)),

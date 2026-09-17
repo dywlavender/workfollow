@@ -748,9 +748,11 @@ class PropertyButton extends StatelessWidget {
                 style: TextButton.styleFrom(
                   foregroundColor: foreground,
                   backgroundColor: active ? tokens.accentFaint : tokens.canvas,
-                  textStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  textStyle: TextStyle(
                       fontSize: WorkFollowMacTypography.control,
-                      fontWeight: WorkFollowMacWeight.medium),
+                      height: WorkFollowMacTypography.lineControl,
+                      fontWeight: WorkFollowMacWeight.medium,
+                      letterSpacing: WorkFollowMacTracking.none),
                   minimumSize: const Size(0, WorkFollowMetrics.chipHeight),
                   padding:
                       const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
