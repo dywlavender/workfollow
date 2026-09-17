@@ -259,8 +259,8 @@ class EmptyHint extends StatelessWidget {
       child: Column(
         children: [
           Container(
-              width: 56,
-              height: 56,
+              width: AppSurfaceMetrics.emptyStateIconSize,
+              height: AppSurfaceMetrics.emptyStateIconSize,
               decoration: BoxDecoration(
                   color: tokens.accent.withValues(alpha: .09),
                   shape: BoxShape.circle),
@@ -312,8 +312,8 @@ class StatCard extends StatelessWidget {
     final body = Row(
       children: [
         Container(
-            width: 34,
-            height: 34,
+            width: AppSurfaceMetrics.statisticIconSurfaceSize,
+            height: AppSurfaceMetrics.statisticIconSurfaceSize,
             decoration: BoxDecoration(
                 color: color.withValues(alpha: .12),
                 borderRadius: BorderRadius.circular(WorkFollowRadii.surface)),

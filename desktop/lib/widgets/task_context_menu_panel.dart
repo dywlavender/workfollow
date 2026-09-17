@@ -211,7 +211,7 @@ class _TaskContextMenuPanelState extends State<TaskContextMenuPanel> {
               ? () => Navigator.of(context).pop(TaskMenuSelection(value))
               : null,
           child: Container(
-            height: 42,
+            height: TaskMenuMetrics.dateGridCellHeight,
             margin: const EdgeInsets.symmetric(horizontal: WorkFollowSpacing.hairlineGap),
             decoration: BoxDecoration(
               color: selected ? tokens.menuSelected : null,
@@ -266,7 +266,7 @@ class _TaskContextMenuPanelState extends State<TaskContextMenuPanel> {
           borderRadius: BorderRadius.circular(WorkFollowRadii.control),
           onTap: () => Navigator.of(context).pop(TaskMenuSelection(value)),
           child: Container(
-            height: 40,
+            height: WorkFollowMetrics.menuRowHeight,
             margin: const EdgeInsets.symmetric(horizontal: WorkFollowSpacing.hairlineGap),
             decoration: BoxDecoration(
               color: selected ? tokens.menuSelected : null,

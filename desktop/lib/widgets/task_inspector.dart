@@ -189,8 +189,8 @@ class _TaskInspectorState extends State<TaskInspector> {
 
   Future<void> _relation(BuildContext anchor) async {
     final noteId = await showDesktopPopover<String>(anchor,
-        width: 330,
-        maxHeight: 420,
+        width: TaskInspectorMetrics.overlayWidth,
+        maxHeight: TaskInspectorMetrics.overlayMaxHeight,
         placement: PopoverPlacement.bottomStart,
         focusPolicy: PopoverFocusPolicy.searchField,
         scrollable: true,
@@ -307,7 +307,8 @@ class _TaskInspectorState extends State<TaskInspector> {
   Widget _header(BuildContext context, TaskItem task, WorkFollowTheme tokens) {
     return Container(
       key: const ValueKey('task-inspector-header'),
-      constraints: const BoxConstraints(minHeight: 58),
+      constraints: const BoxConstraints(
+          minHeight: TaskInspectorMetrics.headerMinHeight),
       padding: const EdgeInsets.symmetric(horizontal: WorkFollowSpacing.space5, vertical: WorkFollowSpacing.cardInset),
       decoration: widget.inline
           ? null
@@ -403,8 +404,8 @@ class _TaskInspectorState extends State<TaskInspector> {
   }
 
   Widget _headerDivider(WorkFollowTheme tokens) => Container(
-        width: 1,
-        height: 20,
+        width: TaskInspectorMetrics.headerDividerWidth,
+        height: TaskInspectorMetrics.headerDividerHeight,
         margin: const EdgeInsets.symmetric(horizontal: WorkFollowSpacing.compactGap),
         color: tokens.border,
       );
@@ -440,7 +441,8 @@ class _TaskInspectorState extends State<TaskInspector> {
   Widget _footer(BuildContext context, TaskItem task, WorkFollowTheme tokens) {
     return Container(
       key: const ValueKey('task-inspector-footer'),
-      constraints: const BoxConstraints(minHeight: 52),
+      constraints: const BoxConstraints(
+          minHeight: TaskInspectorMetrics.footerMinHeight),
       padding: const EdgeInsets.fromLTRB(WorkFollowSpacing.space5, WorkFollowSpacing.space2, WorkFollowSpacing.space5, WorkFollowSpacing.compactInset),
       decoration:
           BoxDecoration(border: Border(top: BorderSide(color: tokens.border))),
@@ -459,7 +461,8 @@ class _TaskInspectorState extends State<TaskInspector> {
                             size: WorkFollowMetrics.compactFieldIcon,
                             color: tokens.textSecondary),
                         label: ConstrainedBox(
-                            constraints: const BoxConstraints(maxWidth: 130),
+                            constraints: const BoxConstraints(
+                                maxWidth: TaskInspectorMetrics.listLabelMaxWidth),
                             child: Text(task.listName,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
@@ -656,7 +659,8 @@ class _TopPropertyButton extends StatelessWidget {
                 if (!iconOnly) ...[
                   const SizedBox(width: WorkFollowSpacing.inlineGap),
                   ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 320),
+                    constraints: const BoxConstraints(
+                        maxWidth: TaskInspectorMetrics.propertyLabelMaxWidth),
                     child: Text(label,
                         maxLines: 1, overflow: TextOverflow.ellipsis),
                   ),

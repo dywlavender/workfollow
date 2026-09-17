@@ -92,7 +92,7 @@ class HomeScreen extends StatelessWidget {
                     ),
                     const SizedBox(width: WorkFollowSpacing.sectionGap),
                     SizedBox(
-                        width: 300,
+                        width: HomeMetrics.quickAddWidth,
                         child: QuickAddField(controller: controller)),
                   ],
                 ),
@@ -154,7 +154,7 @@ class HomeScreen extends StatelessWidget {
                   children: [
                     SizedBox(
                       width: panelWidth,
-                      height: 250,
+                      height: HomeMetrics.panelHeight,
                       child: _HomePanel(
                         icon: WorkFollowIcons.today,
                         title: '今天',
@@ -175,7 +175,7 @@ class HomeScreen extends StatelessWidget {
                     ),
                     SizedBox(
                       width: panelWidth,
-                      height: 250,
+                      height: HomeMetrics.panelHeight,
                       child: _HomePanel(
                         icon: WorkFollowIcons.calendar,
                         title: '日历',
@@ -190,7 +190,7 @@ class HomeScreen extends StatelessWidget {
                     ),
                     SizedBox(
                       width: panelWidth,
-                      height: 250,
+                      height: HomeMetrics.panelHeight,
                       child: _HomePanel(
                         icon: WorkFollowIcons.plan,
                         title: '接下来',
@@ -210,7 +210,7 @@ class HomeScreen extends StatelessWidget {
                     ),
                     SizedBox(
                       width: panelWidth,
-                      height: 250,
+                      height: HomeMetrics.panelHeight,
                       child: _HomePanel(
                         icon: WorkFollowIcons.notes,
                         title: '最近笔记',
@@ -223,7 +223,7 @@ class HomeScreen extends StatelessWidget {
                     ),
                     SizedBox(
                       width: panelWidth,
-                      height: 250,
+                      height: HomeMetrics.panelHeight,
                       child: _HomePanel(
                         icon: WorkFollowIcons.overdue,
                         title: '逾期',
@@ -285,8 +285,8 @@ class _WeeklyReviewCard extends StatelessWidget {
       borderColor: tokens.accent.withValues(alpha: .16),
       child: Row(children: [
         Container(
-            width: 32,
-            height: 32,
+            width: HomeMetrics.reviewIconSize,
+            height: HomeMetrics.reviewIconSize,
             decoration: BoxDecoration(
                 color: tokens.accent.withValues(alpha: .12),
                 borderRadius: BorderRadius.circular(WorkFollowRadii.control)),
@@ -349,8 +349,8 @@ class _HomePanel extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Container(
-                  width: 30,
-                  height: 30,
+                  width: HomeMetrics.panelIconSize,
+                  height: HomeMetrics.panelIconSize,
                   decoration: BoxDecoration(
                       color: tokens.accent.withValues(alpha: .1),
                       borderRadius:
@@ -459,8 +459,8 @@ class _HomeTaskRow extends StatelessWidget {
       child: Row(
         children: [
           Container(
-              width: 4,
-              height: 22,
+              width: HomeMetrics.taskMarkerWidth,
+              height: HomeMetrics.taskMarkerHeight,
               decoration: BoxDecoration(
                   color: listColor, borderRadius: BorderRadius.circular(2))),
           const SizedBox(width: WorkFollowSpacing.denseGap),
@@ -471,13 +471,13 @@ class _HomeTaskRow extends StatelessWidget {
               checked: task.completed,
               label: task.completed ? '标记未完成' : '标记完成',
               child: Container(
-                width: 24,
-                height: 24,
+                width: HomeMetrics.taskCheckboxHitTarget,
+                height: HomeMetrics.taskCheckboxHitTarget,
                 alignment: Alignment.center,
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 150),
-                  width: 18,
-                  height: 17,
+                  width: HomeMetrics.taskCheckboxVisualWidth,
+                  height: HomeMetrics.taskCheckboxVisualHeight,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     color: task.completed ? tokens.success : Colors.transparent,
@@ -546,8 +546,8 @@ class _HomeNoteList extends StatelessWidget {
               child: Row(
                 children: [
                   Container(
-                      width: 7,
-                      height: 7,
+                      width: HomeMetrics.noteDotSize,
+                      height: HomeMetrics.noteDotSize,
                       decoration: BoxDecoration(
                           color: Color(note.accent.value),
                           shape: BoxShape.circle)),
@@ -671,8 +671,8 @@ class _MiniCalendar extends StatelessWidget {
                         if (hasTasks) ...[
                           const SizedBox(height: WorkFollowSpacing.microGap),
                           Container(
-                              width: 3,
-                              height: 3,
+                              width: HomeMetrics.miniCalendarDotSize,
+                              height: HomeMetrics.miniCalendarDotSize,
                               decoration: BoxDecoration(
                                   color: isToday ? Colors.white : tokens.accent,
                                   shape: BoxShape.circle)),
@@ -705,8 +705,8 @@ class _PanelEmpty extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Container(
-              width: 40,
-              height: 40,
+              width: HomeMetrics.emptyIconSize,
+              height: HomeMetrics.emptyIconSize,
               decoration: BoxDecoration(
                   color: tokens.accent.withValues(alpha: .08),
                   shape: BoxShape.circle),

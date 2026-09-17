@@ -272,8 +272,8 @@ class TaskDocumentEditorState extends State<TaskDocumentEditor>
 
     final opened = _formatToolbar.open(
       anchor,
-      width: TaskEditorPopoverStyle.toolbarWidth,
-      height: TaskEditorPopoverStyle.toolbarHeight,
+      width: TaskEditorMetrics.toolbarPopoverWidth,
+      height: TaskEditorMetrics.toolbarPopoverHeight,
       placement: const PopoverPlacement(
           preferredSide: PopoverSide.top,
           alignment: PopoverAlignment.center,
@@ -767,7 +767,7 @@ class TaskDocumentBlockBuilder extends quill.EmbedBuilder {
       'horizontalRule' => Divider(
           key: const ValueKey('task-horizontal-rule'),
           color: WorkFollowTheme.of(context).borderStrong,
-          height: 26),
+          height: TaskEditorMetrics.horizontalRuleHeight),
       'taskSubtasks' => TaskSubtasksPanel(
           focusNode: subtaskFocus,
           key: const ValueKey('task-subtasks-block'),
@@ -858,7 +858,7 @@ class _TaskSubtasksPanelState extends State<TaskSubtasksPanel> {
                   borderRadius: BorderRadius.circular(2),
                   child: LinearProgressIndicator(
                       value: progress,
-                      minHeight: 4,
+                      minHeight: TaskEditorMetrics.subtaskProgressHeight,
                       backgroundColor: tokens.border,
                       color: progress == 1 ? tokens.success : tokens.accent),
                 ),

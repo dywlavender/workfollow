@@ -292,8 +292,8 @@ class _NoteDocumentEditorState extends State<NoteDocumentEditor>
     final center = bounds.localToGlobal(Offset(bounds.size.width / 2, 0));
     await showTaskEditorPopover<void>(
       anchor,
-      width: TaskEditorPopoverStyle.toolbarWidth,
-      maxHeight: TaskEditorPopoverStyle.toolbarHeight,
+      width: TaskEditorMetrics.toolbarPopoverWidth,
+      maxHeight: TaskEditorMetrics.toolbarPopoverHeight,
       anchorRect:
           Rect.fromLTWH(center.dx, trigger.localToGlobal(Offset.zero).dy, 0, 0),
       placement: const PopoverPlacement(
@@ -349,7 +349,7 @@ class _NoteDocumentEditorState extends State<NoteDocumentEditor>
           config: quill.QuillEditorConfig(
             editorKey: renderEditorKey,
             scrollable: false,
-            minHeight: 330,
+            minHeight: NotesMetrics.editorMinHeight,
             padding: const EdgeInsets.only(bottom: WorkFollowSpacing.space6),
             placeholder: '写下你的想法、会议记录或下一步行动…',
             customStyles: TaskDocumentStyles.build(
@@ -426,7 +426,8 @@ class NoteImageBuilder extends quill.EmbedBuilder {
                 fit: BoxFit.contain,
                 errorBuilder: fallback);
     return ConstrainedBox(
-        constraints: const BoxConstraints(maxHeight: 420), child: image);
+        constraints: const BoxConstraints(maxHeight: NotesMetrics.imageMaxHeight),
+        child: image);
   }
 }
 

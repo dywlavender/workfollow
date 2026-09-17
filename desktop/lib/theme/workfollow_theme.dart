@@ -26,11 +26,24 @@ class WorkFollowMetrics {
   static const double compactNavigationSectionBottom = 2;
   static const double primaryButtonHeight = 36;
   static const double compactButtonHeight = 34;
+  /// The shared height for ordinary text inputs and primary controls. Keeping
+  /// this role beside the button roles makes a field and its action row align
+  /// without making callers guess between 34, 36 and 38.
+  static const double inputHeight = primaryButtonHeight;
   static const double chipHeight = 30;
   // Keep menu rows at the compact macOS rhythm; the larger field icons do not
   // need an oversized menu and this preserves the trigger-to-popover gap.
   static const double menuRowHeight = 40;
-  static const double taskRowMinHeight = 44;
+  static const double compactMenuRowHeight = compactButtonHeight;
+  static const double pickerRowHeight = 36;
+  static const double toolbarControlWidth = 26;
+  static const double toolbarControlHeight = 28;
+  static const double dividerThickness = 1;
+  static const double popoverMaxHeight = 560;
+  /// Native task rows use the task-list contract below. The alias prevents a
+  /// second 44pt row definition from surviving in the global catalog while
+  /// [WorkFollowLayout.taskRowComfortableHeight] remains the Web contract.
+  static const double taskRowMinHeight = TaskListMetrics.rowMinHeight;
   static const double editorToolbarHeight = 42;
   // List/category rows are intentionally narrower than the full navigation
   // column, leaving the right edge quiet like the TickTick reference.
@@ -126,6 +139,248 @@ class TaskListMetrics {
   /// Pane width for the space a list + detail row can offer.
   static double paneWidth(double available) =>
       available.clamp(minPaneWidth, preferredPaneWidth);
+}
+
+/// Geometry for document formatting controls and their anchored popovers.
+/// Values are shared by the task editor, note editor and every entry point
+/// that opens the document toolbar.
+class TaskEditorMetrics {
+  const TaskEditorMetrics._();
+
+  static const double headingPickerWidth = 150;
+  static const double timePickerWidth = 222;
+  static const double listPopoverWidth = 196;
+  static const double datePopoverWidth = 260;
+  static const double morePopoverWidth = 164;
+  static const double toolbarPopoverWidth = 444;
+  static const double toolbarPopoverHeight = 38;
+  static const double commandMenuWidth = 160;
+  static const double commandMenuMaxHeight = 425;
+  static const double commandGlyphSlot = 14;
+  static const double popoverRowHeight = WorkFollowMetrics.compactMenuRowHeight;
+  static const double pickerRowHeight = WorkFollowMetrics.pickerRowHeight;
+  static const double toolbarButtonWidth = WorkFollowMetrics.toolbarControlWidth;
+  static const double toolbarButtonHeight =
+      WorkFollowMetrics.toolbarControlHeight;
+  static const double toolbarDividerHeight = 17;
+  static const double horizontalRuleHeight = 26;
+  static const double subtaskProgressHeight = 4;
+}
+
+/// Geometry shared by task date, list, tag and repeat pickers.
+class TaskPickerMetrics {
+  const TaskPickerMetrics._();
+
+  static const double datePickerWidth = 328;
+  static const double datePickerMaxHeight = 590;
+  static const double listPickerMaxHeight = 440;
+  static const double listPickerMinHeight = 204;
+  static const double tagPickerWidth = 264;
+  static const double tagPickerMaxHeight = 360;
+  static const double repeatPickerWidth = 300;
+  static const double repeatPickerMaxHeight = 290;
+  static const double listPrefixMinWidth = 28;
+  static const double fieldPrefixMinWidth = 32;
+  static const double dateTimeToggleWidth = 26;
+  static const double dateTimeToggleHeight = 28;
+  static const double timeFieldWidth = 43;
+}
+
+/// Geometry for the task context menu shared by list, board and inspector.
+class TaskMenuMetrics {
+  const TaskMenuMetrics._();
+
+  static const double width = 264;
+  static const double rowHeight = WorkFollowMetrics.menuRowHeight;
+  static const double dateGridCellHeight = WorkFollowMetrics.menuRowHeight;
+  static const double maxHeight = 660;
+}
+
+/// Geometry of the task inspector's overlay and persistent footer/header.
+class TaskInspectorMetrics {
+  const TaskInspectorMetrics._();
+
+  static const double overlayWidth = 330;
+  static const double overlayMaxHeight = 420;
+  static const double headerMinHeight = 58;
+  static const double footerMinHeight = 52;
+  static const double listLabelMaxWidth = 130;
+  static const double propertyLabelMaxWidth = 320;
+  static const double headerDividerWidth = WorkFollowMetrics.dividerThickness;
+  static const double headerDividerHeight = 20;
+}
+
+/// Geometry for schedule/date controls embedded in the task editor.
+class TaskScheduleMetrics {
+  const TaskScheduleMetrics._();
+
+  static const double panelWidth = TaskEditorMetrics.datePopoverWidth;
+  static const double panelMaxHeight = 650;
+  static const double reminderMaxHeight = 410;
+  static const double repeatEndMaxHeight = 470;
+  static const double tabHeight = 28;
+  static const double propertyRowHeight = WorkFollowMetrics.inputHeight;
+  static const double dateShortcutSize = WorkFollowMetrics.iconHitTarget;
+  static const double headerControlSize = WorkFollowMetrics.iconHitTarget;
+  static const double propertyIndicatorSize = 9;
+}
+
+/// Geometry for the command palette and its keyboard shortcut affordance.
+class CommandPaletteMetrics {
+  const CommandPaletteMetrics._();
+
+  static const double width = 560;
+  static const double maxHeight = 500;
+  static const double shortcutChipSize = WorkFollowMetrics.chipHeight;
+}
+
+/// Geometry for the compact icon rail and navigation-only dialogs.
+class SidebarMetrics {
+  const SidebarMetrics._();
+
+  static const double footerButtonSize = WorkFollowMetrics.compactButtonHeight;
+  static const double railButtonSize = 38;
+  static const double brandMarkSize = WorkFollowMetrics.compactNavigationIconHitTarget;
+  static const double folderMoreWidth = 22;
+  static const double folderMoreHeight = 20;
+  static const double listColorPickerWidth = 270;
+  static const double colorSwatchSize = WorkFollowMetrics.chipHeight;
+  static const double listColorDotSize = 8;
+}
+
+/// Geometry of the calendar's day cells and agenda panel.
+class CalendarMetrics {
+  const CalendarMetrics._();
+
+  static const double dayCellSize = 23;
+  static const double dayDotSize = 5;
+  static const double agendaPanelHeight = 168;
+}
+
+/// Geometry of Board cards and their compact completion controls.
+class BoardMetrics {
+  const BoardMetrics._();
+
+  static const double compactColumnWidth = 250;
+  static const double columnStatusDotSize = 8;
+  static const double listMarkerWidth = 3;
+  static const double listMarkerHeight = 30;
+  static const double taskCheckboxSize = 24;
+  static const double relationPreviewWidth = 235;
+}
+
+/// Geometry of Matrix headers and add-task surfaces.
+class MatrixMetrics {
+  const MatrixMetrics._();
+
+  static const double pageHeaderHeight = 56;
+  static const double addSurfaceWidth = 320;
+  static const double addSurfaceMaxHeight = 280;
+}
+
+/// Geometry of the note index and linked-task controls.
+class NotesMetrics {
+  const NotesMetrics._();
+
+  static const double listWidth = 300;
+  static const double compactListWidth = 270;
+  static const double headerHeight = 66;
+  static const double searchHeight = 38;
+  static const double editorContentMaxWidth = 960;
+  static const double sortControlHeight = WorkFollowMetrics.iconHitTarget;
+  static const double newNoteButtonSize = WorkFollowMetrics.iconHitTarget;
+  static const double emptyStateIconSize = 60;
+  static const double linkedTaskCheckboxWidth = 26;
+  static const double linkedTaskCheckboxHeight = 30;
+  static const double editorMinHeight = 330;
+  static const double imageMaxHeight = 420;
+}
+
+/// Geometry of the settings window and import preview.
+class SettingsMetrics {
+  const SettingsMetrics._();
+
+  static const double importPreviewWidth = 380;
+  static const double panelWidth = 720;
+  static const double panelHeight = 520;
+  static const double navigationWidth = 165;
+}
+
+/// Geometry for the focus timer dialog.
+class FocusTimerMetrics {
+  const FocusTimerMetrics._();
+
+  static const double dialogWidth = 390;
+}
+
+/// Geometry for habit cards and their compact indicators.
+class HabitsMetrics {
+  const HabitsMetrics._();
+
+  static const double editorDialogWidth = 390;
+  static const double habitMarkSize = 25;
+  static const double historyCellSize = 38;
+  static const double metadataIconSize = WorkFollowMetrics.metadataIcon;
+}
+
+/// Geometry for the statistics dashboard's bounded content and charts.
+class StatsMetrics {
+  const StatsMetrics._();
+
+  static const double contentMaxWidth = 1120;
+  static const double summaryCardHeight = 208;
+  static const double chartCardHeight = 174;
+  static const double donutSize = 92;
+  static const double legendDotSize = 8;
+}
+
+/// Geometry for the trash empty state.
+class TrashMetrics {
+  const TrashMetrics._();
+
+  static const double emptyStateIconSize = 52;
+}
+
+/// Geometry for the home dashboard's repeated panels and quick add field.
+class HomeMetrics {
+  const HomeMetrics._();
+
+  static const double quickAddWidth = 300;
+  static const double panelHeight = 250;
+  static const double reviewIconSize = WorkFollowMetrics.iconHitTarget;
+  static const double panelIconSize = WorkFollowMetrics.chipHeight;
+  static const double emptyIconSize = 40;
+  static const double taskMarkerWidth = 4;
+  static const double taskMarkerHeight = 22;
+  static const double taskCheckboxHitTarget = 24;
+  static const double taskCheckboxVisualWidth = 18;
+  static const double taskCheckboxVisualHeight = 17;
+  static const double noteDotSize = 7;
+  static const double miniCalendarDotSize = 3;
+}
+
+/// Geometry for reusable empty-state and statistic surfaces.
+class AppSurfaceMetrics {
+  const AppSurfaceMetrics._();
+
+  static const double emptyStateIconSize = 56;
+  static const double statisticIconSurfaceSize = 34;
+}
+
+/// Geometry for the small status marker used by section labels.
+class SectionLabelMetrics {
+  const SectionLabelMetrics._();
+
+  static const double dotSize = 6;
+}
+
+/// Geometry for Quick Add's secondary properties surface.
+class QuickAddMetrics {
+  const QuickAddMetrics._();
+
+  static const double propertiesPopoverWidth = 245;
+  static const double priorityFlagWidth = 44;
+  static const double priorityFlagHeight = WorkFollowMetrics.compactButtonHeight;
 }
 
 /// Row-state fills for the task list.

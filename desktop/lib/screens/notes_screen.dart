@@ -24,11 +24,11 @@ class _NotesScreenState extends State<NotesScreen> {
   // compact desktop media query. NotesScreen receives the width remaining
   // after the native merged rail, hence the local breakpoint below.
   static const double _wideNotesBreakpoint = 1100;
-  static const double _notesListWidth = 300;
-  static const double _compactNotesListWidth = 270;
-  static const double _notesHeaderHeight = 66;
-  static const double _notesSearchHeight = 38;
-  static const double _editorContentMaxWidth = 960;
+  static const double _notesListWidth = NotesMetrics.listWidth;
+  static const double _compactNotesListWidth = NotesMetrics.compactListWidth;
+  static const double _notesHeaderHeight = NotesMetrics.headerHeight;
+  static const double _notesSearchHeight = NotesMetrics.searchHeight;
+  static const double _editorContentMaxWidth = NotesMetrics.editorContentMaxWidth;
 
   String query = '';
   bool newestFirst = true;
@@ -144,7 +144,7 @@ class _NotesScreenState extends State<NotesScreen> {
             ),
             const SizedBox(height: WorkFollowSpacing.inlineGap),
             SizedBox(
-              height: 32,
+              height: NotesMetrics.sortControlHeight,
               child: Row(children: [
                 const Spacer(),
                 TextButton(
@@ -227,8 +227,8 @@ class _NewNoteButton extends StatelessWidget {
                 borderRadius: BorderRadius.circular(WorkFollowRadii.control),
                 onTap: onCreate,
                 child: const SizedBox(
-                    width: 32,
-                    height: 32,
+                    width: NotesMetrics.newNoteButtonSize,
+                    height: NotesMetrics.newNoteButtonSize,
                     child: AppIcon(WorkFollowIcons.add,
                         size: WorkFollowMetrics.toolbarIcon,
                         color: Colors.white)))));
@@ -346,8 +346,8 @@ class _EmptyNote extends StatelessWidget {
         alignment: Alignment.center,
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           Container(
-              width: 60,
-              height: 60,
+              width: NotesMetrics.emptyStateIconSize,
+              height: NotesMetrics.emptyStateIconSize,
               decoration: BoxDecoration(
                   color: tokens.accent.withValues(alpha: .09),
                   shape: BoxShape.circle),
@@ -568,8 +568,8 @@ class _LinkedTaskRow extends StatelessWidget {
             border: Border.all(color: tokens.border)),
         child: Row(children: [
           SizedBox(
-              width: 26,
-              height: 30,
+              width: NotesMetrics.linkedTaskCheckboxWidth,
+              height: NotesMetrics.linkedTaskCheckboxHeight,
               child: Checkbox(
                   value: task.completed,
                   shape: const CircleBorder(),

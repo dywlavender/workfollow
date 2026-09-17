@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../models/task.dart';
 import '../state/workspace_controller.dart';
+import '../theme/workfollow_theme.dart';
 import 'desktop_popover.dart';
 import 'task_context_menu_panel.dart';
 import 'task_menu_selection.dart';
@@ -23,7 +24,7 @@ class TaskContextMenu {
     bool inspectorActions = false,
     PopoverPlacement placement = PopoverPlacement.bottomStart,
   }) {
-    var maxHeight = 660.0;
+    var maxHeight = TaskMenuMetrics.maxHeight;
     if (inspectorActions) {
       final box = anchor.findRenderObject() as RenderBox?;
       if (box != null && box.hasSize) {

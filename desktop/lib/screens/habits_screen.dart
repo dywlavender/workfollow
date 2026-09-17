@@ -106,7 +106,7 @@ class HabitsScreen extends StatelessWidget {
           return AlertDialog(
             title: Text(existing == null ? '新建习惯' : '编辑习惯'),
             content: SizedBox(
-              width: 390,
+              width: HabitsMetrics.editorDialogWidth,
               child: Column(mainAxisSize: MainAxisSize.min, children: [
                 TextField(
                   controller: name,
@@ -170,8 +170,8 @@ class HabitsScreen extends StatelessWidget {
                       onTap: () =>
                           setState(() => color = colorHexFromValue(value)),
                       child: Container(
-                        width: 25,
-                        height: 25,
+                        width: HabitsMetrics.habitMarkSize,
+                        height: HabitsMetrics.habitMarkSize,
                         margin: const EdgeInsets.only(right: WorkFollowSpacing.space2),
                         decoration: BoxDecoration(
                             color: Color(value),
@@ -308,9 +308,9 @@ class _HabitCard extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(WorkFollowSpacing.space4, WorkFollowSpacing.relaxedGap, WorkFollowSpacing.relaxedGap, WorkFollowSpacing.relaxedGap),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Container(
-              width: 38,
-              height: 38,
+            Container(
+              width: HabitsMetrics.historyCellSize,
+              height: HabitsMetrics.historyCellSize,
               decoration: BoxDecoration(
                   color: accent.withValues(alpha: .12),
                   borderRadius: BorderRadius.circular(WorkFollowRadii.surface)),
@@ -458,8 +458,8 @@ class _HabitDots extends StatelessWidget {
             return Tooltip(
               message: '${day.month}月${day.day}日${completed ? ' · 已完成' : ''}',
               child: Container(
-                width: 15,
-                height: 15,
+                width: HabitsMetrics.metadataIconSize,
+                height: HabitsMetrics.metadataIconSize,
                 decoration: BoxDecoration(
                     color: completed
                         ? accent

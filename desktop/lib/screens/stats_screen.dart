@@ -36,7 +36,8 @@ class _StatsScreenState extends State<StatsScreen> {
         return SingleChildScrollView(
           padding: const EdgeInsets.fromLTRB(WorkFollowSpacing.pageHorizontalPadding, WorkFollowSpacing.space6, WorkFollowSpacing.pageHorizontalPadding, WorkFollowSpacing.pageBottomSpace),
           child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 1120),
+            constraints: const BoxConstraints(
+                maxWidth: StatsMetrics.contentMaxWidth),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -96,7 +97,7 @@ class _StatsScreenState extends State<StatsScreen> {
                 AppCard(
                   padding: const EdgeInsets.fromLTRB(WorkFollowSpacing.sectionGap, WorkFollowSpacing.space4, WorkFollowSpacing.sectionGap, WorkFollowSpacing.relaxedGap),
                   child: SizedBox(
-                    height: 208,
+                    height: StatsMetrics.summaryCardHeight,
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -121,7 +122,7 @@ class _StatsScreenState extends State<StatsScreen> {
                 AppCard(
                   padding: const EdgeInsets.fromLTRB(WorkFollowSpacing.sectionGap, WorkFollowSpacing.space4, WorkFollowSpacing.sectionGap, WorkFollowSpacing.relaxedGap),
                   child: SizedBox(
-                    height: 174,
+                    height: StatsMetrics.chartCardHeight,
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -335,9 +336,9 @@ class _Distribution extends StatelessWidget {
     final ordered = values.entries.toList()
       ..sort((a, b) => b.value.compareTo(a.value));
     return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      SizedBox(
-          width: 92,
-          height: 92,
+        SizedBox(
+          width: StatsMetrics.donutSize,
+          height: StatsMetrics.donutSize,
           child: CustomPaint(
               painter: _DonutPainter(
                   entries: ordered,
@@ -349,9 +350,9 @@ class _Distribution extends StatelessWidget {
           child: Wrap(spacing: WorkFollowSpacing.sectionGap, runSpacing: WorkFollowSpacing.controlGap, children: [
         for (final entry in ordered)
           Row(mainAxisSize: MainAxisSize.min, children: [
-            Container(
-                width: 8,
-                height: 8,
+              Container(
+                width: StatsMetrics.legendDotSize,
+                height: StatsMetrics.legendDotSize,
                 decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     color: Color(controller.colorValueForList(entry.key)))),

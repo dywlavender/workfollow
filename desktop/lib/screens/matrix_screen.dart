@@ -83,7 +83,7 @@ class _MatrixScreenState extends State<MatrixScreen> {
   Widget _pageHeader(BuildContext context) {
     final tokens = WorkFollowTheme.of(context);
     return SizedBox(
-      height: 56,
+      height: MatrixMetrics.pageHeaderHeight,
       child: Padding(
         padding: const EdgeInsets.fromLTRB(WorkFollowSpacing.relaxedGap, WorkFollowSpacing.cardInset, WorkFollowSpacing.space3, WorkFollowSpacing.space1),
         child: Row(
@@ -104,7 +104,7 @@ class _MatrixScreenState extends State<MatrixScreen> {
                 key: const ValueKey('matrix-page-more'),
                 icon: WorkFollowIcons.more,
                 tooltip: '四象限设置',
-                size: 32,
+                size: WorkFollowMetrics.iconHitTarget,
                 iconSize: WorkFollowMetrics.toolbarIcon,
                 onPressed: () => _openPageMenu(anchor),
               ),
@@ -149,8 +149,8 @@ class _MatrixScreenState extends State<MatrixScreen> {
   void _addTask(BuildContext anchor, MatrixQuadrant quadrant) {
     showTaskEditorPopover<MatrixAddDraft>(
       anchor,
-      width: 320,
-      maxHeight: 280,
+      width: MatrixMetrics.addSurfaceWidth,
+      maxHeight: MatrixMetrics.addSurfaceMaxHeight,
       placement: PopoverPlacement.bottomEnd,
       focusPolicy: PopoverFocusPolicy.searchField,
       builder: (_) => MatrixAddSurface(

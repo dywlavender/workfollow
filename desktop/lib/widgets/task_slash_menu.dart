@@ -65,18 +65,18 @@ extension TaskSlashActionLabel on TaskSlashAction {
 class TaskSlashMenuMetrics {
   const TaskSlashMenuMetrics._();
 
-  static const double width = 160;
+  static const double width = TaskEditorMetrics.commandMenuWidth;
 
   /// Natural height of the full 12-item palette. The editor lowers it when the
   /// window cannot hold it, and the palette scrolls instead of clipping.
-  static const double maxHeight = 425;
+  static const double maxHeight = TaskEditorMetrics.commandMenuMaxHeight;
 
   static const double padding = WorkFollowSpacing.space1;
   static const double itemInset = WorkFollowSpacing.space1;
-  static const double itemHeight = 34;
+  static const double itemHeight = WorkFollowMetrics.compactMenuRowHeight;
   static const double itemLeading = WorkFollowSpacing.relaxedGap;
   static const double itemTrailing = WorkFollowSpacing.space3;
-  static const double glyphSlot = 14;
+  static const double glyphSlot = TaskEditorMetrics.commandGlyphSlot;
   static const double glyphGap = WorkFollowSpacing.iconLabelGap;
 
   /// 4 above the hairline, 1 for the hairline, 4 below.

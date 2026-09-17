@@ -507,8 +507,8 @@ class _IconRailFooterButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final tokens = WorkFollowTheme.of(context);
     return SizedBox(
-      width: 34,
-      height: 34,
+      width: SidebarMetrics.footerButtonSize,
+      height: SidebarMetrics.footerButtonSize,
       child: Stack(
         fit: StackFit.expand,
         children: [
@@ -520,7 +520,7 @@ class _IconRailFooterButton extends StatelessWidget {
               icon: icon,
               tooltip: label,
               onPressed: onPressed,
-              size: 34,
+              size: SidebarMetrics.footerButtonSize,
               iconSize: WorkFollowMetrics.compactFieldIcon,
               iconColor: _lightSidebar(context)
                   ? _lightSidebarForeground
@@ -600,8 +600,8 @@ class _IconRailButtonState extends State<_IconRailButton> {
             onTap: widget.onPressed,
             child: Container(
               key: ValueKey('rail-button-${widget.label}'),
-              width: 38,
-              height: 38,
+              width: SidebarMetrics.railButtonSize,
+              height: SidebarMetrics.railButtonSize,
               margin: const EdgeInsets.symmetric(vertical: WorkFollowSpacing.tightGap),
               decoration: BoxDecoration(
                 color: active
@@ -818,8 +818,8 @@ class _RailBrand extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(WorkFollowSpacing.sectionGap, WorkFollowSpacing.space5, WorkFollowSpacing.relaxedGap, WorkFollowSpacing.sectionGap),
         child: Row(children: [
           Container(
-              width: 28,
-              height: 28,
+              width: SidebarMetrics.brandMarkSize,
+              height: SidebarMetrics.brandMarkSize,
               decoration: BoxDecoration(
                   color: _sidebarAccent(context, tokens),
                   borderRadius: BorderRadius.circular(WorkFollowRadii.control)),
@@ -925,8 +925,8 @@ class _RailItemState extends State<_RailItem> {
                 ),
                 if (hovering && widget.onMenu != null)
                   SizedBox(
-                      width: 22,
-                      height: 20,
+                      width: SidebarMetrics.folderMoreWidth,
+                      height: SidebarMetrics.folderMoreHeight,
                       child: IconButton(
                           tooltip: '文件夹操作',
                           padding: EdgeInsets.zero,
@@ -1027,8 +1027,8 @@ class _TaskListItemState extends State<_TaskListItem> {
                     child: Row(
                       children: [
                         Container(
-                            width: 8,
-                            height: 8,
+                            width: SidebarMetrics.listColorDotSize,
+                            height: SidebarMetrics.listColorDotSize,
                             decoration: BoxDecoration(
                                 color: listColor, shape: BoxShape.circle)),
                         const SizedBox(width: WorkFollowSpacing.space2),
@@ -1123,7 +1123,7 @@ class _TaskListItemState extends State<_TaskListItem> {
         builder: (dialogContext) => AlertDialog(
               title: const Text('选择清单颜色'),
               content: SizedBox(
-                width: 270,
+                width: SidebarMetrics.listColorPickerWidth,
                 child: Wrap(
                   spacing: WorkFollowSpacing.controlGap,
                   runSpacing: WorkFollowSpacing.controlGap,
@@ -1135,8 +1135,8 @@ class _TaskListItemState extends State<_TaskListItem> {
                         onTap: () => Navigator.of(dialogContext)
                             .pop(colorHexFromValue(value)),
                         child: Container(
-                            width: 30,
-                            height: 30,
+                            width: SidebarMetrics.colorSwatchSize,
+                            height: SidebarMetrics.colorSwatchSize,
                             decoration: BoxDecoration(
                                 color: Color(value), shape: BoxShape.circle),
                             child: widget.controller

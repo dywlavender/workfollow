@@ -21,8 +21,8 @@ class TaskListPicker {
       PopoverPlacement placement = PopoverPlacement.topStart}) {
     return showTaskEditorPopover<String>(
       anchor,
-      width: TaskEditorPopoverStyle.listWidth,
-      maxHeight: 440,
+      width: TaskEditorMetrics.listPopoverWidth,
+      maxHeight: TaskPickerMetrics.listPickerMaxHeight,
       placement: placement,
       focusPolicy: PopoverFocusPolicy.searchField,
       scrollable: false,
@@ -127,7 +127,8 @@ class _TaskListPickerBodyState extends State<_TaskListPickerBody> {
     return Focus(
       onKeyEvent: _onKey,
       child: ConstrainedBox(
-        constraints: const BoxConstraints(minHeight: 204),
+        constraints: const BoxConstraints(
+            minHeight: TaskPickerMetrics.listPickerMinHeight),
         child: Column(
           key: const ValueKey('task-list-picker'),
           mainAxisSize: MainAxisSize.min,
@@ -157,7 +158,8 @@ class _TaskListPickerBodyState extends State<_TaskListPickerBody> {
                   prefixIcon: AppIcon(WorkFollowIcons.search,
                       size: WorkFollowMetrics.toolbarIcon,
                       color: tokens.textTertiary),
-                  prefixIconConstraints: const BoxConstraints(minWidth: 28),
+                      prefixIconConstraints: const BoxConstraints(
+                          minWidth: TaskPickerMetrics.listPrefixMinWidth),
                   hintText: '搜索',
                   hintStyle: TextStyle(color: tokens.textTertiary),
                   filled: false,
@@ -192,7 +194,7 @@ class _TaskListPickerBodyState extends State<_TaskListPickerBody> {
                             Navigator.of(context).pop(lists[index].name),
                         hoverColor: tokens.canvas,
                         child: SizedBox(
-                            height: 34,
+                            height: WorkFollowMetrics.compactMenuRowHeight,
                             child: Padding(
                               padding: const EdgeInsets.symmetric(
                                   horizontal: WorkFollowSpacing.menuItemHorizontalPadding),

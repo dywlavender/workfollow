@@ -11,8 +11,8 @@ class TaskRepeatPicker {
   static Future<RecurrenceDraft?> show(BuildContext anchor,
       {required TaskItem task}) {
     return showDesktopPopover<RecurrenceDraft>(anchor,
-        width: 300,
-        maxHeight: 290,
+        width: TaskPickerMetrics.repeatPickerWidth,
+        maxHeight: TaskPickerMetrics.repeatPickerMaxHeight,
         placement: PopoverPlacement.bottomStart,
         focusPolicy: PopoverFocusPolicy.firstItem,
         builder: (_) => _TaskRepeatEditor(task: task));

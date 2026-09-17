@@ -65,7 +65,9 @@ class _BoardScreenState extends State<BoardScreen> {
           const SizedBox(height: WorkFollowSpacing.sectionGap),
           Expanded(
             child: LayoutBuilder(builder: (context, constraints) {
-              final width = constraints.maxWidth < 900 ? 250.0 : 0.0;
+              final width = constraints.maxWidth < 900
+                  ? BoardMetrics.compactColumnWidth
+                  : 0.0;
               return ListView.separated(
                 scrollDirection: Axis.horizontal,
                 padding: const EdgeInsets.only(bottom: WorkFollowSpacing.inlineGap),
@@ -221,8 +223,8 @@ class _BoardColumn extends StatelessWidget {
             children: [
               Row(children: [
                 Container(
-                    width: 8,
-                    height: 8,
+                    width: BoardMetrics.columnStatusDotSize,
+                    height: BoardMetrics.columnStatusDotSize,
                     decoration: BoxDecoration(
                         color: meta.color, shape: BoxShape.circle)),
                 const SizedBox(width: WorkFollowSpacing.space2),
@@ -310,14 +312,14 @@ class _BoardTaskCard extends StatelessWidget {
           task.completed ? tokens.border : listColor.withValues(alpha: .45),
       child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Container(
-            width: 3,
-            height: 30,
+            width: BoardMetrics.listMarkerWidth,
+            height: BoardMetrics.listMarkerHeight,
             margin: const EdgeInsets.only(right: WorkFollowSpacing.space2, top: WorkFollowSpacing.hairlineGap),
             decoration: BoxDecoration(
                 color: listColor, borderRadius: BorderRadius.circular(2))),
         SizedBox(
-          width: 24,
-          height: 24,
+          width: BoardMetrics.taskCheckboxSize,
+          height: BoardMetrics.taskCheckboxSize,
           child: Checkbox(
               value: task.completed,
               onChanged: (_) {
@@ -375,7 +377,8 @@ class _BoardTaskCard extends StatelessWidget {
       maxSimultaneousDrags: 1,
       feedback: Material(
           color: Colors.transparent,
-          child: SizedBox(width: 235, child: content)),
+          child: SizedBox(
+              width: BoardMetrics.relationPreviewWidth, child: content)),
       childWhenDragging: Opacity(opacity: .32, child: content),
       child: Semantics(
           button: true,

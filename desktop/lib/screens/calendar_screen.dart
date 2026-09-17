@@ -191,8 +191,8 @@ class _CalendarScreenState extends State<CalendarScreen> {
                                 Row(
                                   children: [
                                     Container(
-                                        width: 23,
-                                        height: 23,
+                                        width: CalendarMetrics.dayCellSize,
+                                        height: CalendarMetrics.dayCellSize,
                                         alignment: Alignment.center,
                                         decoration: BoxDecoration(
                                             color: isToday
@@ -211,8 +211,8 @@ class _CalendarScreenState extends State<CalendarScreen> {
                                     const Spacer(),
                                     if (count > 0)
                                       Container(
-                                          width: 5,
-                                          height: 5,
+                                          width: CalendarMetrics.dayDotSize,
+                                          height: CalendarMetrics.dayDotSize,
                                           decoration: BoxDecoration(
                                               color: dayColor,
                                               shape: BoxShape.circle)),
@@ -532,7 +532,7 @@ class _SelectedDayAgenda extends StatelessWidget {
     final tasks = controller.tasksForDay(day);
     final weekday = ['一', '二', '三', '四', '五', '六', '日'][day.weekday - 1];
     return SizedBox(
-      height: 168,
+      height: CalendarMetrics.agendaPanelHeight,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

@@ -68,8 +68,8 @@ Future<TaskDateSelection?> showTaskDatePicker(
   bool allowTime = true,
 }) =>
     showDesktopPopover<TaskDateSelection>(anchor,
-        width: 328,
-        maxHeight: 590,
+        width: TaskPickerMetrics.datePickerWidth,
+        maxHeight: TaskPickerMetrics.datePickerMaxHeight,
         placement: PopoverPlacement.bottomStart,
         focusPolicy: PopoverFocusPolicy.firstItem,
         scrollable: true,
@@ -308,8 +308,8 @@ class _TaskDatePickerState extends State<TaskDatePicker> {
               Row(children: [
                 if (!widget.reminder)
                   SizedBox(
-                      width: 26,
-                      height: 28,
+                      width: TaskPickerMetrics.dateTimeToggleWidth,
+                      height: TaskPickerMetrics.dateTimeToggleHeight,
                       child: Checkbox(
                           key: const ValueKey('date-time-toggle'),
                           value: timed,
@@ -352,7 +352,7 @@ class _TaskDatePickerState extends State<TaskDatePicker> {
   }
 
   Widget _timeField(TextEditingController controller, String label) => SizedBox(
-      width: 43,
+      width: TaskPickerMetrics.timeFieldWidth,
       child: TextField(
           controller: controller,
           key: ValueKey('date-$label'),

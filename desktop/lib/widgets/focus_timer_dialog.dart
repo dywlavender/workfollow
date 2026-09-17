@@ -70,7 +70,7 @@ class _FocusTimerDialogState extends State<_FocusTimerDialog> {
                   fontWeight: WorkFollowMacWeight.semibold)),
       ]),
       content: SizedBox(
-        width: 390,
+        width: FocusTimerMetrics.dialogWidth,
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           Container(
             width: double.infinity,

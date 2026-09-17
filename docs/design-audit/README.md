@@ -61,6 +61,7 @@
 - [Spacing](spacing.md)
 - [D4 Spacing migration](d4-spacing.md)
 - [Geometry](geometry.md)
+- [D5 Geometry migration](d5-geometry.md)
 - [Surfaces](surfaces.md)
 - [Motion](motion.md)
 - [States](states.md)

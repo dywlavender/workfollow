@@ -9,12 +9,12 @@ class TaskEditorPopoverStyle {
   /// Source-compatible alias; editor controls use WorkFollowMetrics directly.
   @Deprecated('Use WorkFollowMetrics.toolbarIcon')
   static const iconSize = WorkFollowMetrics.toolbarIcon;
-  static const rowHeight = 34.0;
-  static const listWidth = 196.0;
-  static const dateWidth = 260.0;
-  static const moreWidth = 164.0;
-  static const toolbarWidth = 444.0;
-  static const toolbarHeight = 38.0;
+  static const rowHeight = TaskEditorMetrics.popoverRowHeight;
+  static const listWidth = TaskEditorMetrics.listPopoverWidth;
+  static const dateWidth = TaskEditorMetrics.datePopoverWidth;
+  static const moreWidth = TaskEditorMetrics.morePopoverWidth;
+  static const toolbarWidth = TaskEditorMetrics.toolbarPopoverWidth;
+  static const toolbarHeight = TaskEditorMetrics.toolbarPopoverHeight;
 
   static ThemeData theme(BuildContext context) {
     final base = Theme.of(context);
@@ -31,7 +31,7 @@ Future<T?> showTaskEditorPopover<T>(
   BuildContext anchor, {
   required WidgetBuilder builder,
   required double width,
-  double maxHeight = 560,
+  double maxHeight = WorkFollowMetrics.popoverMaxHeight,
   PopoverPlacement placement = PopoverPlacement.bottomStart,
   PopoverFocusPolicy focusPolicy = PopoverFocusPolicy.firstItem,
   bool scrollable = false,

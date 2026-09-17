@@ -513,7 +513,7 @@ class _QuickAddFieldState extends State<QuickAddField> {
   /// not repeated here.
   Future<void> _openProperties(BuildContext anchor) async {
     final result = await showDesktopPopover<Object>(anchor,
-        width: 245,
+        width: QuickAddMetrics.propertiesPopoverWidth,
         placement: PopoverPlacement.bottomEnd,
         builder: (popoverContext) {
           final tokens = WorkFollowTheme.of(popoverContext);

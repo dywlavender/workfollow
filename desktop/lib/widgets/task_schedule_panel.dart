@@ -18,8 +18,8 @@ import 'task_schedule_options.dart';
 Future<TaskScheduleSettings?> showTaskSchedulePanel(
         BuildContext anchor, TaskItem task) =>
     showTaskEditorPopover<TaskScheduleSettings>(anchor,
-        width: TaskEditorPopoverStyle.dateWidth,
-        maxHeight: 650,
+        width: TaskScheduleMetrics.panelWidth,
+        maxHeight: TaskScheduleMetrics.panelMaxHeight,
         scrollable: true,
         builder: (_) => TaskSchedulePanel(task: task));
 
@@ -187,7 +187,7 @@ class _TaskSchedulePanelState extends State<TaskSchedulePanel> {
                                           error = null;
                                         }),
                                     child: Container(
-                                        height: 28,
+                                        height: TaskScheduleMetrics.tabHeight,
                                         alignment: Alignment.center,
                                         decoration: BoxDecoration(
                                             color: range == tab
@@ -235,8 +235,8 @@ class _TaskSchedulePanelState extends State<TaskSchedulePanel> {
                                         });
                                     },
                                     child: SizedBox(
-                                        width: 32,
-                                        height: 32,
+                                        width: TaskScheduleMetrics.dateShortcutSize,
+                                        height: TaskScheduleMetrics.dateShortcutSize,
                                         child: Center(
                                             child: (shortcut.$1 == 'tonight' ||
                                                     shortcut.$1 == 'next-7')
@@ -396,8 +396,8 @@ class _TaskSchedulePanelState extends State<TaskSchedulePanel> {
                                       top: 1,
                                       child: IgnorePointer(
                                           child: Container(
-                                              width: 9,
-                                              height: 9,
+                                              width: TaskScheduleMetrics.propertyIndicatorSize,
+                                              height: TaskScheduleMetrics.propertyIndicatorSize,
                                               alignment: Alignment.center,
                                               decoration: BoxDecoration(
                                                   shape: BoxShape.circle,
@@ -438,7 +438,7 @@ class _TaskSchedulePanelState extends State<TaskSchedulePanel> {
                           : '提醒',
                   offsets.isNotEmpty || legacyReminder != null, (anchor) async {
                 final result = await showScheduleOptions<List<int>>(anchor,
-                    maxHeight: 410,
+                    maxHeight: TaskScheduleMetrics.reminderMaxHeight,
                     builder: (_) => ScheduleReminderOptions(
                         offsets: offsets, timed: timed));
                 if (mounted && result != null)
@@ -464,7 +464,7 @@ class _TaskSchedulePanelState extends State<TaskSchedulePanel> {
                     scheduleEndLabel(recurrence), false, (anchor) async {
                   final result = await showScheduleOptions<RecurrenceDraft>(
                       anchor,
-                      maxHeight: 470,
+                      maxHeight: TaskScheduleMetrics.repeatEndMaxHeight,
                       builder: (_) =>
                           ScheduleEndOptions(rule: recurrence, day: start));
                   if (mounted && result != null)
@@ -543,7 +543,7 @@ class _TaskSchedulePanelState extends State<TaskSchedulePanel> {
                 borderRadius: BorderRadius.circular(10),
                 onTap: () => onTap(anchor),
                 child: SizedBox(
-                    height: 36,
+                    height: TaskScheduleMetrics.propertyRowHeight,
                     child: Padding(
                         padding: const EdgeInsets.symmetric(horizontal: WorkFollowSpacing.relaxedGap),
                         child: Row(children: [

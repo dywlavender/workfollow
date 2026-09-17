@@ -72,7 +72,7 @@ class TaskEditorToolbar extends StatelessWidget {
   Future<void> _heading(BuildContext anchor) async {
     final level = await showTaskEditorPopover<int>(
       anchor,
-      width: 150,
+      width: TaskEditorMetrics.headingPickerWidth,
       placement: PopoverPlacement.topStart,
       focusPolicy: PopoverFocusPolicy.preserveEditor,
       builder: (context) => Padding(
@@ -108,7 +108,7 @@ class TaskEditorToolbar extends StatelessWidget {
         '${'${now.hour}'.padLeft(2, '0')}:${'${now.minute}'.padLeft(2, '0')}';
     final value = await showTaskEditorPopover<String>(
       anchor,
-      width: 222,
+      width: TaskEditorMetrics.timePickerWidth,
       placement: PopoverPlacement.topEnd,
       focusPolicy: PopoverFocusPolicy.preserveEditor,
       builder: (context) => Padding(
@@ -145,8 +145,8 @@ class TaskEditorToolbar extends StatelessWidget {
                   selected: _active(attribute),
                   onPressed: (_) => _format(attribute));
           Widget divider() => Container(
-              width: 1,
-              height: 17,
+              width: WorkFollowMetrics.dividerThickness,
+              height: TaskEditorMetrics.toolbarDividerHeight,
               margin: const EdgeInsets.symmetric(horizontal: WorkFollowSpacing.space1),
               color: colors.border);
           return SizedBox(
@@ -254,8 +254,8 @@ class _ToolButton extends StatelessWidget {
                   onTap: () => onPressed(anchor),
                   borderRadius: BorderRadius.circular(4),
                   child: Container(
-                    width: 26,
-                    height: 28,
+                    width: TaskEditorMetrics.toolbarButtonWidth,
+                    height: TaskEditorMetrics.toolbarButtonHeight,
                     alignment: Alignment.center,
                     decoration: BoxDecoration(
                         color: selected ? colors.accentFaint : null,
@@ -307,7 +307,7 @@ class _PickerRow extends StatelessWidget {
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: WorkFollowSpacing.relaxedGap),
           child: SizedBox(
-              height: 36,
+              height: TaskEditorMetrics.pickerRowHeight,
               child: Row(children: [
                 Expanded(
                     child: Text(label,

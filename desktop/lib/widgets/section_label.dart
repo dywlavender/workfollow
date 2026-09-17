@@ -20,8 +20,8 @@ class SectionLabel extends StatelessWidget {
       child: Row(
         children: [
           Container(
-              width: 6,
-              height: 6,
+              width: SectionLabelMetrics.dotSize,
+              height: SectionLabelMetrics.dotSize,
               decoration: BoxDecoration(
                   color: color ?? tokens.textTertiary, shape: BoxShape.circle)),
           const SizedBox(width: WorkFollowSpacing.xs),

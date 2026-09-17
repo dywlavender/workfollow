@@ -189,8 +189,9 @@ class _CommandPaletteState extends State<_CommandPalette> {
           focusNode: focusNode,
           onKeyEvent: _handleKey,
           child: Container(
-            width: 560,
-            constraints: const BoxConstraints(maxHeight: 500),
+            width: CommandPaletteMetrics.width,
+            constraints: const BoxConstraints(
+                maxHeight: CommandPaletteMetrics.maxHeight),
             margin: const EdgeInsets.symmetric(horizontal: WorkFollowSpacing.space6),
             decoration: BoxDecoration(
               color: tokens.overlay,
@@ -296,8 +297,8 @@ class _CommandPaletteState extends State<_CommandPalette> {
                             child: Row(
                               children: [
                                 Container(
-                                    width: 30,
-                                    height: 30,
+                                    width: CommandPaletteMetrics.shortcutChipSize,
+                                    height: CommandPaletteMetrics.shortcutChipSize,
                                     decoration: BoxDecoration(
                                         color: selected
                                             ? tokens.overlay

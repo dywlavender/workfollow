@@ -61,14 +61,14 @@
 
 | 文件 | 组件 | 问题类型 | 当前写法（命中数） | 应归属 Token | 严重程度 | 计划轮次 |
 | --- | --- | --- | --- | --- | --- | --- |
-| `screens/home_screen.dart` | Dashboard cards/calendar | Geometry | 21 个数字宽度、23 个数字高度 | `WorkFollowLayout` / `AppCard` metrics | P1 | D5 |
-| `widgets/quick_add.dart` | Quick Add field/panel | Geometry | 11 个数字宽度、局部固定高度 | Quick Add metrics | P1 | D5 |
-| `widgets/sidebar.dart` | Rail/navigation | Geometry | 11 个数字宽度、9 个数字高度 | `WorkFollowLayout` / navigation metrics | P1 | D5 |
-| `screens/habits_screen.dart` | Habit cards | Geometry | 9 个数字宽度、14 个数字高度 | card/row metrics | P1 | D5 |
-| `screens/notes_screen.dart` | Note pane | Geometry | 8 个数字宽度、15 个数字高度 | note pane/editor metrics | P1 | D5 |
-| `widgets/task_schedule_panel.dart` | Schedule picker | Geometry | 5 个数字宽度、15 个数字高度 | `TaskEditorPopoverStyle` / picker metrics | P1 | D5 |
-| `widgets/task_schedule_panel.dart`、`widgets/task_editor_toolbar.dart` | Picker/Toolbar | Geometry | 数字圆角共 10 次 | `WorkFollowRadii`，具体归属见 D6 | P1 | D5/D6 |
-| `widgets/matrix/*` | Matrix cards/quadrants | Geometry | 数字宽高和圆角分散 | Matrix metrics | P1 | D5 |
+| `screens/home_screen.dart` | Dashboard cards/calendar | Geometry | 重复面板、Quick Add、任务标记和小日历尺寸已命名 | `HomeMetrics` | P1 | migrated · D5 |
+| `widgets/quick_add.dart` | Quick Add field/panel | Geometry | 并行任务正在调整的属性面板仍有局部尺寸 | Quick Add metrics | P1 | deferred · D5 |
+| `widgets/sidebar.dart` | Rail/navigation | Geometry | rail/footer/brand、颜色选择器和色块已命名 | `SidebarMetrics` / `WorkFollowLayout` | P1 | migrated · D5 |
+| `screens/habits_screen.dart` | Habit cards | Geometry | 对话框、习惯标记、历史格和 metadata 尺寸已命名 | `HabitsMetrics` | P1 | migrated · D5 |
+| `screens/notes_screen.dart` | Note pane | Geometry | 索引、Header、搜索、新建、空状态和关联任务尺寸已命名 | `NotesMetrics` | P1 | migrated · D5 |
+| `widgets/task_schedule_panel.dart` | Schedule picker | Geometry | 面板、快捷日期、属性行和子弹层上限已命名 | `TaskScheduleMetrics` | P1 | migrated · D5 |
+| `widgets/task_schedule_panel.dart`、`widgets/task_editor_toolbar.dart` | Picker/Toolbar | Geometry | 行高、工具栏控制槽和弹层宽高已命名；圆角留给 D6 | `TaskEditorMetrics` / `WorkFollowRadii` | P1 | migrated · D5 / D6 |
+| `widgets/matrix/*` | Matrix cards/quadrants | Geometry | 并行新增组件的卡片几何保留，页面 Header/新增面板已命名 | `MatrixMetrics` + module whitelist | P1 | deferred · D5 |
 
 ## States
 
@@ -115,4 +115,3 @@
 | `widgets/task_document_styles.dart` | Checklist | Theme parity | 亮/暗模式决定 checked fill 与 check color | Document style + semantic contrast roles | P1 | D10 |
 | `widgets/task_schedule_options.dart` | Schedule field | Theme parity | brightness 分支返回固定浅色 `#f6f6f6` | input surface token | P1 | D10 |
 | `widgets/command_palette.dart`、`settings_panel.dart` 等 | Overlay surfaces | Theme parity | barrier/foreground 使用直接 black/white | Overlay semantic contrast roles | P1 | D10 |
-

@@ -142,7 +142,7 @@ class _SettingsPanelState extends State<_SettingsPanel> {
           return AlertDialog(
             title: const Text('导入个人数据'),
             content: SizedBox(
-              width: 380,
+              width: SettingsMetrics.importPreviewWidth,
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -286,13 +286,13 @@ class _SettingsPanelState extends State<_SettingsPanel> {
       borderRadius: BorderRadius.circular(WorkFollowRadii.popover),
       clipBehavior: Clip.antiAlias,
       child: SizedBox(
-          width: 720,
-          height: 520,
+          width: SettingsMetrics.panelWidth,
+          height: SettingsMetrics.panelHeight,
           child: Row(children: [
             Material(
                 color: tokens.canvas,
                 child: Container(
-                    width: 165,
+                    width: SettingsMetrics.navigationWidth,
                     padding: const EdgeInsets.fromLTRB(WorkFollowSpacing.space3, WorkFollowSpacing.headingGap, WorkFollowSpacing.space3, WorkFollowSpacing.relaxedGap),
                     child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,

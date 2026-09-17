@@ -15,8 +15,8 @@ class TaskTagPicker {
       Iterable<String> availableTags = const [],
       PopoverPlacement placement = PopoverPlacement.bottomStart}) {
     return showDesktopPopover<String>(anchor,
-        width: 264,
-        maxHeight: 360,
+        width: TaskPickerMetrics.tagPickerWidth,
+        maxHeight: TaskPickerMetrics.tagPickerMaxHeight,
         placement: placement,
         focusPolicy: PopoverFocusPolicy.searchField,
         builder: (_) =>
@@ -95,7 +95,8 @@ class _TaskTagPickerBodyState extends State<TaskTagPickerBody> {
               hintStyle: TextStyle(color: tokens.textTertiary),
               filled: false,
               contentPadding: const EdgeInsets.symmetric(vertical: WorkFollowSpacing.space2),
-              prefixIconConstraints: const BoxConstraints(minWidth: 32),
+              prefixIconConstraints: const BoxConstraints(
+                  minWidth: TaskPickerMetrics.fieldPrefixMinWidth),
               border: InputBorder.none,
               isDense: true,
             ),

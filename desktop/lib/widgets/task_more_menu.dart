@@ -23,7 +23,7 @@ class TaskMoreMenu {
           {required TaskItem task, required WorkspaceController controller}) =>
       showTaskEditorPopover<TaskMenuSelection>(
         anchor,
-        width: TaskEditorPopoverStyle.moreWidth,
+        width: TaskEditorMetrics.morePopoverWidth,
         placement: PopoverPlacement.topEnd,
         scrollable: true,
         builder: (_) => _MoreMenu(task: task),
@@ -99,7 +99,7 @@ class _MoreMenuState extends State<_MoreMenu> {
                   key: ValueKey('menu-option-${entry.$1}'),
                   onTap: enabled(i) ? () => select(i) : null,
                   child: Container(
-                    height: TaskEditorPopoverStyle.rowHeight,
+                    height: TaskEditorMetrics.popoverRowHeight,
                     color: focused == i ? colors.menuSelected : null,
                     padding: const EdgeInsets.symmetric(
                         horizontal: WorkFollowSpacing.menuItemHorizontalPadding),

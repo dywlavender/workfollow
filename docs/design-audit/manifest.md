@@ -42,7 +42,10 @@
 | COLOR-010 | Colors | More/Context/List/Command menus | `accentFaint` used for hover/selected fills | `menuSelected` | migrated | D3 |
 | COLOR-011 | Colors | `theme/workfollow_theme.dart` global hover | Theme default hover reused accent soft | `listRowHover` | migrated | D3 |
 | SPACE-001 | Spacing | `sidebar.dart`, `settings_panel.dart`, `calendar_screen.dart` 等 | 多套局部 EdgeInsets/SizedBox | `WorkFollowSpacing` + semantic aliases | migrated | D4 |
-| GEOM-001 | Geometry | `home_screen.dart`, `quick_add.dart`, `sidebar.dart` 等 | 宽高字面值 | `WorkFollowMetrics` / page roles | candidate | D5 |
+| GEOM-001 | Geometry | `home_screen.dart`, `sidebar.dart`, `notes_screen.dart` 等 | 宽高字面值 | `WorkFollowMetrics` / page roles | migrated | D5 |
+| GEOM-002 | Geometry | `task_editor_*`, `task_*_picker.dart`, `task_inspector.dart` | 编辑器/Picker/Inspector 各自维护宽高 | `TaskEditorMetrics` / `TaskPickerMetrics` / `TaskInspectorMetrics` | migrated | D5 |
+| GEOM-003 | Geometry | `task_context_menu_panel.dart`, `task_more_menu.dart`, `command_palette.dart` | 菜单行和弹层约束有多套数字 | `TaskMenuMetrics` / `CommandPaletteMetrics` / `WorkFollowMetrics` | migrated | D5 |
+| GEOM-004 | Geometry | `today_screen.dart`, 并行新增 Matrix/Feedback 组件 | 动态约束或并行改动中的固定尺寸 | Layout contract / 模块白名单 | deferred | D5/D6 |
 | SURF-001 | Surfaces | 91 个 `BoxDecoration` | 页面/卡片/Popover 混用 | Surface role matrix | candidate | D6 |
 | MOTION-001 | Motion | `feedback_host.dart`、`app.dart`、Popover 等 | 18 个数字 Duration | Motion Roles | candidate | D9 |
 

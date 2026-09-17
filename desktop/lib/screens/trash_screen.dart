@@ -76,9 +76,9 @@ class _EmptyTrash extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Container(
-              width: 52,
-              height: 52,
+            Container(
+              width: TrashMetrics.emptyStateIconSize,
+              height: TrashMetrics.emptyStateIconSize,
               decoration: BoxDecoration(
                   color: tokens.accentFaint, shape: BoxShape.circle),
               child: AppIcon(WorkFollowIcons.trash,
