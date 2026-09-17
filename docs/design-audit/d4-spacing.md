@@ -41,12 +41,13 @@ space1 … space8 = 4 / 8 / 12 / 16 / 20 / 24 / 28 / 32
 | 项目 | D0 基线 | D4 结果 |
 | --- | ---: | ---: |
 | `EdgeInsets.*` | 224 | 249（含语义 Token 与技术/布局例外） |
-| `SizedBox` | 291 | 291（间隔值已 Token 化；固定几何值留给 D5） |
+| `SizedBox` | 291 | 308（当前工作区包含并行新增组件） |
 | `Padding` | 99 | 99 |
-| `spacing` / `runSpacing` / `mainAxisSpacing` / `crossAxisSpacing` / `gap` | 40 | 42（含当前工作区新增 Matrix/Schedule 组件） |
-| 业务代码中的 `WorkFollowSpacing` 引用 | — | 686 |
+| `spacing` / `runSpacing` / `mainAxisSpacing` / `crossAxisSpacing` / `gap` | 40 | 37（当前工作区包含并行新增组件） |
+| 业务代码中的 `WorkFollowSpacing` 引用 | — | 540 |
+| 业务 `EdgeInsets` 中的裸数字留白 | — | 0（固定几何和技术例外除外） |
 
-计数是语法命中数，不等于违规数。D4 后剩余的裸数字只出现在固定几何、边框高度、条件表达式或 Token 定义中；页面和组件留白使用语义 Token。用户内容尺寸、图形绘制值和 D5 的宽高值继续保留在各自 Metrics 中。
+计数按 `rg -n --glob '*.dart'` 对 `desktop/lib` 的语法命中统计，不等于违规数；D4 结果包含当前工作区并行任务新增的 Dart 文件。D4 后剩余的裸数字只出现在固定几何、边框高度、条件表达式或 Token 定义中；页面和组件留白使用语义 Token。用户内容尺寸、图形绘制值和 D5 的宽高值继续保留在各自 Metrics 中。
 
 ## 例外白名单
 
