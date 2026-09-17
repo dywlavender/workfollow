@@ -16,30 +16,14 @@ import 'task_editor_toolbar.dart';
 import 'task_editor_popover.dart';
 import 'desktop_popover.dart';
 import 'task_slash_menu.dart';
+import 'task_slash_session.dart';
 import 'task_document_commands.dart';
 import 'task_document_styles.dart';
 import 'persistent_anchored_popover.dart';
 
 export 'task_document_commands.dart';
 export 'task_document_styles.dart';
-
-/// The immutable state captured when a slash command starts.
-///
-/// A command is anchored to the slash itself, rather than to the current
-/// caret line. The editor can lose focus while the palette is being clicked,
-/// and the text before the slash can contain ordinary prose (for example
-/// `文字/`). Keeping these offsets makes both cases deterministic.
-class SlashCommandSession {
-  const SlashCommandSession({
-    required this.slashOffset,
-    required this.lineStart,
-    required this.originalSelection,
-  });
-
-  final int slashOffset;
-  final int lineStart;
-  final TextSelection originalSelection;
-}
+export 'task_slash_session.dart';
 
 /// A document-first editor for a task. Title editing remains a normal field;
 /// everything below it is a Quill document whose Delta is persisted as the
@@ -350,40 +334,10 @@ class TaskDocumentEditorState extends State<TaskDocumentEditor>
 
   SlashCommandSession? _sessionForSlashInsertion(
       String text, TextSelection selection) {
-    if (!selection.isCollapsed || text.isEmpty) return null;
-    final slashOffset = selection.extentOffset - 1;
-    if (slashOffset < 0 ||
-        slashOffset >= text.length ||
-        text[slashOffset] != '/') {
-      return null;
-    }
-
-    // Compare the old/new documents as an edit. The changed part must be one
-    // slash at this exact offset; this handles both an ordinary insertion and
-    // replacing selected text while avoiding a false trigger when a caret is
-    // merely moved into an existing `foo/`.
-    var prefix = 0;
-    final common = math.min(_lastEditorText.length, text.length);
-    while (prefix < common && _lastEditorText[prefix] == text[prefix]) {
-      prefix++;
-    }
-    var oldEnd = _lastEditorText.length - 1;
-    var newEnd = text.length - 1;
-    while (oldEnd >= prefix &&
-        newEnd >= prefix &&
-        _lastEditorText[oldEnd] == text[newEnd]) {
-      oldEnd--;
-      newEnd--;
-    }
-    final inserted = newEnd < prefix ? '' : text.substring(prefix, newEnd + 1);
-    if (inserted != '/' || prefix != slashOffset) return null;
-
-    final lineStart =
-        slashOffset == 0 ? 0 : text.lastIndexOf('\n', slashOffset - 1) + 1;
-    return SlashCommandSession(
-      slashOffset: slashOffset,
-      lineStart: lineStart,
-      originalSelection: selection,
+    return SlashCommandSession.fromInsertion(
+      previousText: _lastEditorText,
+      text: text,
+      selection: selection,
     );
   }
 
