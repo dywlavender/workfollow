@@ -286,9 +286,9 @@ class _TaskDocumentCheckboxState extends State<_TaskDocumentCheckbox> {
     final checkedFill = TaskDocumentStyles.checklistCheckedFill(
         widget.tokens, brightness);
     const uncheckedFill = Colors.transparent;
-    final checkColor = brightness == Brightness.dark
-        ? widget.tokens.canvas
-        : Colors.white;
+    // The marker fill is neutral in both themes, so the check stays the same
+    // white stroke and never inherits a dark canvas colour in dark mode.
+    const checkColor = Colors.white;
     final background = widget.isChecked
         ? checkedFill
         : (_hovered ? widget.tokens.menuSelected : uncheckedFill);

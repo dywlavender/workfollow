@@ -98,6 +98,10 @@ void main() {
     final normal = TaskDocumentStyles.customStyleBuilder(tokens)(
         quill.Attribute.unchecked);
     expect(normal, const TextStyle());
+    expect(
+        TaskDocumentStyles.checklistCheckedFill(
+            WorkFollowTheme.dark, Brightness.dark),
+        WorkFollowTheme.dark.borderStrong);
   });
 
   testWidgets('checklist marker stays neutral and exposes its checked state',

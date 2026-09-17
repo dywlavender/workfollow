@@ -77,6 +77,7 @@ class TaskDocumentEditorState extends State<TaskDocumentEditor>
   bool slashVisible = false;
   bool toolbarVisible = false;
   bool _toolbarSyncScheduled = false;
+  int _documentLoadGeneration = 0;
   ScrollPosition? _ancestorScrollPosition;
 
   String get plainText => editor.document.toPlainText().trimRight();
@@ -210,24 +211,33 @@ class TaskDocumentEditorState extends State<TaskDocumentEditor>
     if (taskChanged) {
       _closeFormattingToolbar(notify: false, requestFocus: false);
       _closeSlashSession();
-      final wasApplying = _applyingSlash;
-      _applyingSlash = true;
-      editor.document = _documentFor(widget.task);
-      _applyingSlash = wasApplying;
-      serialized = jsonEncode(editor.document.toDelta().toJson());
-      _lastEditorText = editor.document.toPlainText();
+      _scheduleDocumentReplacement(widget.task.id);
       return;
     }
     final incoming = jsonEncode(taskDocumentDelta(widget.task));
     if (incoming == serialized ||
         incoming == jsonEncode(taskDocumentDelta(oldWidget.task)) ||
         focus.hasFocus) return;
-    final wasApplying = _applyingSlash;
-    _applyingSlash = true;
-    editor.document = _documentFor(widget.task);
-    _applyingSlash = wasApplying;
-    serialized = jsonEncode(editor.document.toDelta().toJson());
-    _lastEditorText = editor.document.toPlainText();
+    _scheduleDocumentReplacement(widget.task.id);
+  }
+
+  /// Quill notifies its listeners when [QuillController.document] changes.
+  /// Doing that synchronously from [didUpdateWidget] can notify the toolbar's
+  /// AnimatedBuilder while Flutter is still rebuilding the old overlay. Queue
+  /// the replacement after the frame so task switches close every overlay
+  /// before the controller emits its document notification.
+  void _scheduleDocumentReplacement(String taskId) {
+    final generation = ++_documentLoadGeneration;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || generation != _documentLoadGeneration) return;
+      if (widget.task.id != taskId) return;
+      final wasApplying = _applyingSlash;
+      _applyingSlash = true;
+      editor.document = _documentFor(widget.task);
+      _applyingSlash = wasApplying;
+      serialized = jsonEncode(editor.document.toDelta().toJson());
+      _lastEditorText = editor.document.toPlainText();
+    });
   }
 
   @override
