@@ -313,6 +313,12 @@ class WorkFollowMacTypeFamily {
 
   /// Safety net when the platform cascade cannot resolve a glyph.
   static const List<String> fallback = ['PingFang SC', 'Hiragino Sans GB'];
+
+  /// Monospace face for code blocks and inline code. The regular UI face is
+  /// deliberately never reused here: code needs stable character widths and
+  /// a visibly separate surface in the document.
+  static const String code = 'SFMono-Regular';
+  static const List<String> codeFallback = ['Menlo', 'monospace'];
 }
 
 /// The Web token catalog.
