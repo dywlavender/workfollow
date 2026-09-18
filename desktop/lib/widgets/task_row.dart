@@ -274,7 +274,7 @@ class _TaskRowState extends State<TaskRow> {
     final task = widget.task;
     final closed = task.isClosed;
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      Text(task.title.trim().isEmpty ? '无标题' : task.title,
+      Text(taskDisplayTitle(task),
           maxLines: widget.compact ? 1 : 2,
           overflow: TextOverflow.ellipsis,
           style: TextStyle(

@@ -109,7 +109,7 @@ class TaskEditorProfile extends EditorProfile {
       // The child list joins the trailing stack only once it has content, so
       // an empty parent keeps the full-height prose surface. First children
       // come from the More menu, the row context menu or the slash palette.
-      if (controller.childrenOf(task.id).isNotEmpty)
+      if (!task.isChildTask && controller.childrenOf(task.id).isNotEmpty)
         TaskChildrenPanel(task: task, controller: controller),
       if (task.attachments.isNotEmpty && !hasAttachmentBlock)
         TaskAttachmentsPanel(

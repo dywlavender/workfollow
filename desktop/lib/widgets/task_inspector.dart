@@ -108,6 +108,9 @@ class _TaskInspectorState extends State<TaskInspector> {
   }
 
   void _addChildTask() {
+    // One nesting level for now: a child never spawns grandchildren, no
+    // matter which entry (More menu, slash palette, context menu) fires.
+    if (widget.task.isChildTask) return;
     widget.controller.createChildTask(widget.task.id);
   }
 
@@ -266,6 +269,13 @@ class _TaskInspectorState extends State<TaskInspector> {
         final result = await runTaskMenuAction(
             context, widget.controller, widget.task, action);
         if (result != null) _showActionFeedback(result);
+        // A deleted child's clearest landing spot is its parent: the tree
+        // row is gone, so falling back to a blank list would lose context.
+        if (action == 'delete' &&
+            widget.task.isChildTask &&
+            widget.task.parentTaskId != null) {
+          widget.controller.openTask(widget.task.parentTaskId!);
+        }
     }
   }
 

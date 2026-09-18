@@ -350,6 +350,11 @@ class TaskItem {
   }
 }
 
+/// The rendering name of a task: unnamed records (born from 添加子任务)
+/// display 无标题 everywhere — the value is never written into the data.
+String taskDisplayTitle(TaskItem task) =>
+    task.title.trim().isEmpty ? '无标题' : task.title;
+
 TaskBucket taskBucketForDate(DateTime? due,
     {bool completed = false, DateTime? now}) {
   if (due == null) return TaskBucket.unscheduled;

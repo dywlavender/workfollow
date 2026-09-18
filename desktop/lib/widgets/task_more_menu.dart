@@ -43,7 +43,8 @@ class _MoreMenuState extends State<_MoreMenu> {
   int? focused;
   int? hovered;
   List<(String, String)> get entries => [
-        ('add-subtask', '添加子任务'),
+        // One nesting level: children of children are out of scope for now.
+        if (!widget.task.isChildTask) ('add-subtask', '添加子任务'),
         ('pin', widget.task.isPinned ? '取消置顶' : '置顶'),
         ('abandon', widget.task.isAbandoned ? '恢复任务' : '放弃'),
         ('tags', '标签'),

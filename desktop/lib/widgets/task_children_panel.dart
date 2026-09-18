@@ -256,37 +256,49 @@ class _TaskChildInlineRowState extends State<TaskChildInlineRow> {
 
 /// The `父任务 ›` crumb above a child task's title. Tapping returns to the
 /// parent, which also restores the list selection to the parent row.
-class TaskParentBreadcrumb extends StatelessWidget {
+class TaskParentBreadcrumb extends StatefulWidget {
   const TaskParentBreadcrumb({super.key, required this.parent, this.onOpen});
 
   final TaskItem parent;
   final VoidCallback? onOpen;
 
   @override
+  State<TaskParentBreadcrumb> createState() => _TaskParentBreadcrumbState();
+}
+
+class _TaskParentBreadcrumbState extends State<TaskParentBreadcrumb> {
+  bool hovering = false;
+
+  @override
   Widget build(BuildContext context) {
     final tokens = WorkFollowTheme.of(context);
-    return InkWell(
-        key: const ValueKey('task-parent-breadcrumb'),
-        borderRadius: BorderRadius.circular(WorkFollowRadii.control),
-        onTap: onOpen,
-        child: Padding(
-            padding: const EdgeInsets.symmetric(
-                vertical: WorkFollowSpacing.microGap),
-            child: Row(mainAxisSize: MainAxisSize.min, children: [
-              Flexible(
-                  child: Text(
-                      parent.title.trim().isEmpty ? '无标题' : parent.title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                          fontSize: WorkFollowMacTypography.supporting,
-                          height: WorkFollowMacTypography.lineControl,
-                          fontWeight: WorkFollowMacWeight.medium,
-                          color: tokens.textTertiary))),
-              const SizedBox(width: WorkFollowSpacing.microGap),
-              AppIcon(WorkFollowIcons.chevronNext,
-                  size: WorkFollowMetrics.metadataIcon,
-                  color: tokens.textTertiary),
-            ])));
+    // Quiet navigation text, not a button: secondary ink that warms to
+    // primary on hover, chevron staying tertiary.
+    final titleColor = hovering ? tokens.textPrimary : tokens.textSecondary;
+    return MouseRegion(
+        onEnter: (_) => setState(() => hovering = true),
+        onExit: (_) => setState(() => hovering = false),
+        child: InkWell(
+            key: const ValueKey('task-parent-breadcrumb'),
+            borderRadius: BorderRadius.circular(WorkFollowRadii.control),
+            onTap: widget.onOpen,
+            child: Padding(
+                padding: const EdgeInsets.symmetric(
+                    vertical: WorkFollowSpacing.microGap),
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  Flexible(
+                      child: Text(taskDisplayTitle(widget.parent),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                              fontSize: WorkFollowMacTypography.supporting,
+                              height: WorkFollowMacTypography.lineControl,
+                              fontWeight: WorkFollowMacWeight.medium,
+                              color: titleColor))),
+                  const SizedBox(width: WorkFollowSpacing.microGap),
+                  AppIcon(WorkFollowIcons.chevronNext,
+                      size: WorkFollowMetrics.metadataIcon,
+                      color: tokens.textTertiary),
+                ]))));
   }
 }
