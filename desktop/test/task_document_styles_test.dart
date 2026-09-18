@@ -3,11 +3,11 @@ import 'package:flutter_quill/flutter_quill.dart' as quill;
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:workfollow_personal/theme/workfollow_theme.dart';
-import 'package:workfollow_personal/widgets/task_document_styles.dart';
+import 'package:workfollow_personal/features/editor/document_styles.dart';
 
 void main() {
   test('task document blocks use the WorkFollow type scale', () {
-    final styles = TaskDocumentStyles.build(WorkFollowTheme.light);
+    final styles = DocumentStyles.build(WorkFollowTheme.light);
     final body = styles.paragraph!.style;
 
     expect(body.fontSize, WorkFollowMacTypography.body);
@@ -61,8 +61,8 @@ void main() {
       fontFamily: 'Test Document Face',
       color: Colors.purple,
     );
-    final h1 = TaskDocumentStyles.h1(WorkFollowTheme.dark, base: base);
-    final styles = TaskDocumentStyles.build(WorkFollowTheme.dark, base: base);
+    final h1 = DocumentStyles.h1(WorkFollowTheme.dark, base: base);
+    final styles = DocumentStyles.build(WorkFollowTheme.dark, base: base);
 
     expect(h1.fontFamily, 'Test Document Face');
     expect(h1.color, WorkFollowTheme.dark.textPrimary);
@@ -88,17 +88,17 @@ void main() {
   test('checklist styles use a shared marker builder and completed text role',
       () {
     final tokens = WorkFollowTheme.light;
-    final styles = TaskDocumentStyles.build(tokens);
+    final styles = DocumentStyles.build(tokens);
     final marker = styles.lists!.checkboxUIBuilder;
-    expect(marker, isA<TaskDocumentCheckboxBuilder>());
+    expect(marker, isA<DocumentCheckboxBuilder>());
 
     final completed =
-        TaskDocumentStyles.customStyleBuilder(tokens)(quill.Attribute.checked);
+        DocumentStyles.customStyleBuilder(tokens)(quill.Attribute.checked);
     expect(completed.color, tokens.textSecondary);
     expect(completed.decoration, TextDecoration.lineThrough);
     expect(completed.decorationColor, tokens.textSecondary);
     expect(completed.decorationThickness, 1);
-    final normal = TaskDocumentStyles.customStyleBuilder(tokens)(
+    final normal = DocumentStyles.customStyleBuilder(tokens)(
         quill.Attribute.unchecked);
     expect(normal, const TextStyle());
     // The marker face (numbers and bullets) reads the accent colour.
@@ -111,7 +111,7 @@ void main() {
     await tester.pumpWidget(MaterialApp(
       theme: WorkFollowThemeData.light(),
       home: Builder(
-        builder: (context) => TaskDocumentCheckboxBuilder(WorkFollowTheme.light)
+        builder: (context) => DocumentCheckboxBuilder(WorkFollowTheme.light)
             .build(
               context: context,
               isChecked: true,
@@ -172,11 +172,11 @@ void main() {
           config: quill.QuillEditorConfig(
             scrollable: false,
             minHeight: 120,
-            customStyles: TaskDocumentStyles.build(
+            customStyles: DocumentStyles.build(
               WorkFollowTheme.light,
             ),
             customStyleBuilder:
-                TaskDocumentStyles.customStyleBuilder(WorkFollowTheme.light),
+                DocumentStyles.customStyleBuilder(WorkFollowTheme.light),
           ),
         ),
       ),

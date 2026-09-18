@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 
-import '../theme/workfollow_icons.dart';
-import '../theme/workfollow_interaction_states.dart';
-import '../theme/workfollow_surface_tokens.dart';
-import '../theme/workfollow_theme.dart';
+import '../../theme/workfollow_icons.dart';
+import '../../theme/workfollow_interaction_states.dart';
+import '../../theme/workfollow_surface_tokens.dart';
+import '../../theme/workfollow_theme.dart';
 
-enum TaskSlashAction {
+enum DocumentSlashAction {
   heading1,
   heading2,
   heading3,
@@ -22,39 +22,39 @@ enum TaskSlashAction {
   focus,
 }
 
-extension TaskSlashActionLabel on TaskSlashAction {
+extension DocumentSlashActionLabel on DocumentSlashAction {
   String get label => switch (this) {
-        TaskSlashAction.heading1 => '一级标题',
-        TaskSlashAction.heading2 => '二级标题',
-        TaskSlashAction.heading3 => '三级标题',
-        TaskSlashAction.bullet => '无序列表',
-        TaskSlashAction.ordered => '有序列表',
-        TaskSlashAction.checklist => '检查项',
-        TaskSlashAction.quote => '引用',
-        TaskSlashAction.divider => '水平分割线',
-        TaskSlashAction.subtask => '子任务',
-        TaskSlashAction.tag => '标签',
-        TaskSlashAction.relation => '关联任务/笔记',
-        TaskSlashAction.attachment => '附件',
-        TaskSlashAction.deadline => '截止日期',
-        TaskSlashAction.focus => '专注记录',
+        DocumentSlashAction.heading1 => '一级标题',
+        DocumentSlashAction.heading2 => '二级标题',
+        DocumentSlashAction.heading3 => '三级标题',
+        DocumentSlashAction.bullet => '无序列表',
+        DocumentSlashAction.ordered => '有序列表',
+        DocumentSlashAction.checklist => '检查项',
+        DocumentSlashAction.quote => '引用',
+        DocumentSlashAction.divider => '水平分割线',
+        DocumentSlashAction.subtask => '子任务',
+        DocumentSlashAction.tag => '标签',
+        DocumentSlashAction.relation => '关联任务/笔记',
+        DocumentSlashAction.attachment => '附件',
+        DocumentSlashAction.deadline => '截止日期',
+        DocumentSlashAction.focus => '专注记录',
       };
 
   String get keyName => switch (this) {
-        TaskSlashAction.heading1 => 'heading-1',
-        TaskSlashAction.heading2 => 'heading-2',
-        TaskSlashAction.heading3 => 'heading-3',
-        TaskSlashAction.bullet => 'bullet',
-        TaskSlashAction.ordered => 'ordered',
-        TaskSlashAction.checklist => 'checklist',
-        TaskSlashAction.quote => 'quote',
-        TaskSlashAction.divider => 'divider',
-        TaskSlashAction.subtask => 'subtask',
-        TaskSlashAction.tag => 'tag',
-        TaskSlashAction.relation => 'relation',
-        TaskSlashAction.attachment => 'attachment',
-        TaskSlashAction.deadline => 'deadline',
-        TaskSlashAction.focus => 'focus',
+        DocumentSlashAction.heading1 => 'heading-1',
+        DocumentSlashAction.heading2 => 'heading-2',
+        DocumentSlashAction.heading3 => 'heading-3',
+        DocumentSlashAction.bullet => 'bullet',
+        DocumentSlashAction.ordered => 'ordered',
+        DocumentSlashAction.checklist => 'checklist',
+        DocumentSlashAction.quote => 'quote',
+        DocumentSlashAction.divider => 'divider',
+        DocumentSlashAction.subtask => 'subtask',
+        DocumentSlashAction.tag => 'tag',
+        DocumentSlashAction.relation => 'relation',
+        DocumentSlashAction.attachment => 'attachment',
+        DocumentSlashAction.deadline => 'deadline',
+        DocumentSlashAction.focus => 'focus',
       };
 }
 
@@ -64,8 +64,8 @@ extension TaskSlashActionLabel on TaskSlashAction {
 /// command list, and the old 276 x 40 surface read as a settings panel. Every
 /// value here has a counterpart in the measurement table, so a later
 /// "looks a bit off" pass can compare rather than guess.
-class TaskSlashMenuMetrics {
-  const TaskSlashMenuMetrics._();
+class DocumentSlashMenuMetrics {
+  const DocumentSlashMenuMetrics._();
 
   static const double width = TaskEditorMetrics.commandMenuWidth;
 
@@ -100,46 +100,46 @@ class TaskSlashMenuMetrics {
 /// row context menu, and `deadline` also to the inspector's date property row.
 /// The command stays, the entry point does not — the palette and the more menu
 /// both have a reference to match, so neither grows because a feature exists.
-class TaskSlashMenu extends StatefulWidget {
-  const TaskSlashMenu({
+class DocumentSlashMenu extends StatefulWidget {
+  const DocumentSlashMenu({
     super.key,
     required this.onSelected,
     this.actions,
-    this.maxHeight = TaskSlashMenuMetrics.maxHeight,
+    this.maxHeight = DocumentSlashMenuMetrics.maxHeight,
   });
 
-  final ValueChanged<TaskSlashAction> onSelected;
+  final ValueChanged<DocumentSlashAction> onSelected;
 
   /// Optional subset for other document surfaces such as Notes. The palette
   /// keeps the full task set when this is omitted.
-  final List<TaskSlashAction>? actions;
+  final List<DocumentSlashAction>? actions;
 
   /// Cap handed down by the anchor owner, which is the only layer that knows
   /// how much room the caret has.
   final double maxHeight;
 
-  static const textActions = <TaskSlashAction>[
-    TaskSlashAction.heading1,
-    TaskSlashAction.heading2,
-    TaskSlashAction.heading3,
-    TaskSlashAction.bullet,
-    TaskSlashAction.ordered,
-    TaskSlashAction.checklist,
-    TaskSlashAction.quote,
-    TaskSlashAction.divider,
+  static const textActions = <DocumentSlashAction>[
+    DocumentSlashAction.heading1,
+    DocumentSlashAction.heading2,
+    DocumentSlashAction.heading3,
+    DocumentSlashAction.bullet,
+    DocumentSlashAction.ordered,
+    DocumentSlashAction.checklist,
+    DocumentSlashAction.quote,
+    DocumentSlashAction.divider,
   ];
 
-  static const taskActions = <TaskSlashAction>[
-    TaskSlashAction.attachment,
-    TaskSlashAction.subtask,
-    TaskSlashAction.tag,
-    TaskSlashAction.relation,
+  static const taskActions = <DocumentSlashAction>[
+    DocumentSlashAction.attachment,
+    DocumentSlashAction.subtask,
+    DocumentSlashAction.tag,
+    DocumentSlashAction.relation,
   ];
 
   /// Splits a caller's subset into the two rendered groups, preserving the
   /// palette order rather than the caller's.
-  static ({List<TaskSlashAction> text, List<TaskSlashAction> task}) groupsFor(
-      List<TaskSlashAction>? actions) {
+  static ({List<DocumentSlashAction> text, List<DocumentSlashAction> task}) groupsFor(
+      List<DocumentSlashAction>? actions) {
     if (actions == null) {
       return (text: textActions, task: taskActions);
     }
@@ -151,18 +151,18 @@ class TaskSlashMenu extends StatefulWidget {
 
   /// Exact height [actions] will occupy, so the caller can place the palette
   /// without measuring it.
-  static double heightFor(List<TaskSlashAction>? actions) {
+  static double heightFor(List<DocumentSlashAction>? actions) {
     final groups = groupsFor(actions);
     final count = groups.text.length + groups.task.length;
     final divider =
         groups.text.isNotEmpty && groups.task.isNotEmpty ? 1.0 : 0.0;
-    return count * TaskSlashMenuMetrics.itemHeight +
-        divider * TaskSlashMenuMetrics.dividerBlock +
-        TaskSlashMenuMetrics.padding * 2;
+    return count * DocumentSlashMenuMetrics.itemHeight +
+        divider * DocumentSlashMenuMetrics.dividerBlock +
+        DocumentSlashMenuMetrics.padding * 2;
   }
 
   @override
-  State<TaskSlashMenu> createState() => TaskSlashMenuState();
+  State<DocumentSlashMenu> createState() => DocumentSlashMenuState();
 }
 
 /// Holds the command-palette selection model.
@@ -170,7 +170,7 @@ class TaskSlashMenu extends StatefulWidget {
 /// The palette never takes focus — the caret stays in the document — so the
 /// editor routes ↑/↓/Enter here through a [GlobalKey] instead of stealing the
 /// focus. That is why the selection has to live in a public state class.
-class TaskSlashMenuState extends State<TaskSlashMenu> {
+class DocumentSlashMenuState extends State<DocumentSlashMenu> {
   final _scroll = ScrollController();
   int _focused = 0;
 
@@ -178,15 +178,15 @@ class TaskSlashMenuState extends State<TaskSlashMenu> {
   /// the user sees the moment `/` opens the palette.
   int get focusedIndex => _focused;
 
-  List<TaskSlashAction> get _visible {
-    final groups = TaskSlashMenu.groupsFor(widget.actions);
+  List<DocumentSlashAction> get _visible {
+    final groups = DocumentSlashMenu.groupsFor(widget.actions);
     return [...groups.text, ...groups.task];
   }
 
-  List<TaskSlashAction> get _text =>
-      TaskSlashMenu.groupsFor(widget.actions).text;
-  List<TaskSlashAction> get _task =>
-      TaskSlashMenu.groupsFor(widget.actions).task;
+  List<DocumentSlashAction> get _text =>
+      DocumentSlashMenu.groupsFor(widget.actions).text;
+  List<DocumentSlashAction> get _task =>
+      DocumentSlashMenu.groupsFor(widget.actions).task;
 
   /// Moves the highlight by [delta] rows, wrapping at the ends.
   ///
@@ -228,14 +228,14 @@ class TaskSlashMenuState extends State<TaskSlashMenu> {
   double _offsetOf(int index) {
     final text = _text;
     if (index < text.length) {
-      return TaskSlashMenuMetrics.padding +
-          index * TaskSlashMenuMetrics.itemHeight;
+      return DocumentSlashMenuMetrics.padding +
+          index * DocumentSlashMenuMetrics.itemHeight;
     }
-    final divider = text.isEmpty ? 0.0 : TaskSlashMenuMetrics.dividerBlock;
-    return TaskSlashMenuMetrics.padding +
-        text.length * TaskSlashMenuMetrics.itemHeight +
+    final divider = text.isEmpty ? 0.0 : DocumentSlashMenuMetrics.dividerBlock;
+    return DocumentSlashMenuMetrics.padding +
+        text.length * DocumentSlashMenuMetrics.itemHeight +
         divider +
-        (index - text.length) * TaskSlashMenuMetrics.itemHeight;
+        (index - text.length) * DocumentSlashMenuMetrics.itemHeight;
   }
 
   /// Keeps the highlighted row inside a palette that had to shrink.
@@ -244,7 +244,7 @@ class TaskSlashMenuState extends State<TaskSlashMenu> {
       if (!mounted || !_scroll.hasClients) return;
       final position = _scroll.position;
       final top = _offsetOf(_focused);
-      final bottom = top + TaskSlashMenuMetrics.itemHeight;
+      final bottom = top + DocumentSlashMenuMetrics.itemHeight;
       var target = position.pixels;
       if (top < target) {
         target = top;
@@ -266,7 +266,7 @@ class TaskSlashMenuState extends State<TaskSlashMenu> {
       canRequestFocus: false,
       descendantsAreFocusable: false,
       child: Material(
-        key: const ValueKey('task-slash-menu'),
+        key: const ValueKey('document-slash-menu'),
         elevation: WorkFollowShadows.level2Elevation,
         shadowColor: tokens.shadow,
         color: tokens.overlay,
@@ -278,12 +278,12 @@ class TaskSlashMenuState extends State<TaskSlashMenu> {
         clipBehavior: Clip.antiAlias,
         child: ConstrainedBox(
           constraints: BoxConstraints(
-              maxWidth: TaskSlashMenuMetrics.width,
+              maxWidth: DocumentSlashMenuMetrics.width,
               maxHeight: widget.maxHeight),
           child: SingleChildScrollView(
             controller: _scroll,
             padding: const EdgeInsets.symmetric(
-                vertical: TaskSlashMenuMetrics.padding),
+                vertical: DocumentSlashMenuMetrics.padding),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -303,23 +303,23 @@ class TaskSlashMenuState extends State<TaskSlashMenu> {
   /// A full-bleed hairline. The reference separates the two sections with a
   /// line that spans the palette, not one inset to the rows.
   Widget _divider(WorkFollowTheme tokens) => SizedBox(
-        height: TaskSlashMenuMetrics.dividerBlock,
+        height: DocumentSlashMenuMetrics.dividerBlock,
         child: Center(
             child: Container(
                 height: WorkFollowMetrics.dividerThickness,
                 color: tokens.menuDivider)),
       );
 
-  Widget _item(int index, TaskSlashAction action, WorkFollowTheme tokens) {
+  Widget _item(int index, DocumentSlashAction action, WorkFollowTheme tokens) {
     final selected = index == _focused;
     return Padding(
       padding: const EdgeInsets.symmetric(
-          horizontal: TaskSlashMenuMetrics.itemInset),
+          horizontal: DocumentSlashMenuMetrics.itemInset),
       child: MouseRegion(
         cursor: SystemMouseCursors.click,
         onEnter: (_) => _hover(index),
         child: InkWell(
-          key: ValueKey('task-slash-option-${action.keyName}'),
+          key: ValueKey('document-slash-option-${action.keyName}'),
           onTap: () => widget.onSelected(action),
           overlayColor: WorkFollowInteractionStyles.overlay(
             tokens,
@@ -341,12 +341,12 @@ class TaskSlashMenuState extends State<TaskSlashMenu> {
               borderRadius: BorderRadius.circular(WorkFollowRadii.sm),
             ),
             child: SizedBox(
-              height: TaskSlashMenuMetrics.itemHeight,
+              height: DocumentSlashMenuMetrics.itemHeight,
               child: Row(
                 children: [
-                  const SizedBox(width: TaskSlashMenuMetrics.itemLeading),
+                  const SizedBox(width: DocumentSlashMenuMetrics.itemLeading),
                   _leading(action, tokens),
-                  const SizedBox(width: TaskSlashMenuMetrics.glyphGap),
+                  const SizedBox(width: DocumentSlashMenuMetrics.glyphGap),
                   Expanded(
                     child: Text(
                       action.label,
@@ -367,7 +367,7 @@ class TaskSlashMenuState extends State<TaskSlashMenu> {
                       ),
                     ),
                   ),
-                  const SizedBox(width: TaskSlashMenuMetrics.itemTrailing),
+                  const SizedBox(width: DocumentSlashMenuMetrics.itemTrailing),
                 ],
               ),
             ),
@@ -377,26 +377,26 @@ class TaskSlashMenuState extends State<TaskSlashMenu> {
     );
   }
 
-  Widget _leading(TaskSlashAction action, WorkFollowTheme tokens) {
+  Widget _leading(DocumentSlashAction action, WorkFollowTheme tokens) {
     final glyph = switch (action) {
-      TaskSlashAction.attachment => WorkFollowIcons.attachment,
-      TaskSlashAction.deadline => WorkFollowIcons.deadline,
-      TaskSlashAction.focus => WorkFollowIcons.focus,
+      DocumentSlashAction.attachment => WorkFollowIcons.attachment,
+      DocumentSlashAction.deadline => WorkFollowIcons.deadline,
+      DocumentSlashAction.focus => WorkFollowIcons.focus,
       _ => null,
     };
     if (glyph != null) {
       return SizedBox(
-        width: TaskSlashMenuMetrics.glyphSlot,
-        height: TaskSlashMenuMetrics.glyphSlot,
+        width: DocumentSlashMenuMetrics.glyphSlot,
+        height: DocumentSlashMenuMetrics.glyphSlot,
         child: Center(
           child: Icon(glyph,
-              size: TaskSlashMenuMetrics.fontGlyph, color: tokens.textPrimary),
+              size: DocumentSlashMenuMetrics.fontGlyph, color: tokens.textPrimary),
         ),
       );
     }
     return SizedBox(
-      width: TaskSlashMenuMetrics.glyphSlot,
-      height: TaskSlashMenuMetrics.glyphSlot,
+      width: DocumentSlashMenuMetrics.glyphSlot,
+      height: DocumentSlashMenuMetrics.glyphSlot,
       child: CustomPaint(painter: _SlashMenuGlyph(action, tokens.textPrimary)),
     );
   }
@@ -412,10 +412,10 @@ class TaskSlashMenuState extends State<TaskSlashMenu> {
 class _SlashMenuGlyph extends CustomPainter {
   const _SlashMenuGlyph(this.action, this.color);
 
-  final TaskSlashAction action;
+  final DocumentSlashAction action;
   final Color color;
 
-  static const double _box = TaskSlashMenuMetrics.glyphSlot;
+  static const double _box = DocumentSlashMenuMetrics.glyphSlot;
   static const double _stroke = 1.2;
   static const double _trunk = 1.5;
 
@@ -445,31 +445,31 @@ class _SlashMenuGlyph extends CustomPainter {
       ..isAntiAlias = true;
 
     switch (action) {
-      case TaskSlashAction.heading1:
+      case DocumentSlashAction.heading1:
         _heading(canvas, 1);
-      case TaskSlashAction.heading2:
+      case DocumentSlashAction.heading2:
         _heading(canvas, 2);
-      case TaskSlashAction.heading3:
+      case DocumentSlashAction.heading3:
         _heading(canvas, 3);
-      case TaskSlashAction.bullet:
+      case DocumentSlashAction.bullet:
         _bullet(canvas, line, fill);
-      case TaskSlashAction.ordered:
+      case DocumentSlashAction.ordered:
         _ordered(canvas, line);
-      case TaskSlashAction.checklist:
+      case DocumentSlashAction.checklist:
         _checklist(canvas, line);
-      case TaskSlashAction.quote:
+      case DocumentSlashAction.quote:
         _quote(canvas, fill);
-      case TaskSlashAction.divider:
+      case DocumentSlashAction.divider:
         _divider(canvas, line);
-      case TaskSlashAction.subtask:
+      case DocumentSlashAction.subtask:
         _subtask(canvas, trunk, fill);
-      case TaskSlashAction.tag:
+      case DocumentSlashAction.tag:
         _tag(canvas, line, fill);
-      case TaskSlashAction.relation:
+      case DocumentSlashAction.relation:
         _relation(canvas, line);
-      case TaskSlashAction.attachment:
-      case TaskSlashAction.deadline:
-      case TaskSlashAction.focus:
+      case DocumentSlashAction.attachment:
+      case DocumentSlashAction.deadline:
+      case DocumentSlashAction.focus:
         // Drawn as font glyphs by the caller; the palette never reaches this
         // branch for the two WorkFollow-only commands.
         break;

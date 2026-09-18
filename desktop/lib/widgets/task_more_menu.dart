@@ -19,7 +19,7 @@ class TaskMoreMenu {
   /// controller parameter remains part of the public call shape for existing
   /// inspectors, but this widget deliberately performs no task or document
   /// mutation; the inspector routes the result to TaskActions or
-  /// TaskDocumentCommands.
+  /// DocumentCommands.
   static Future<TaskMenuSelection?> show(BuildContext anchor,
           {required TaskItem task, required WorkspaceController controller}) =>
       showTaskEditorPopover<TaskMenuSelection>(

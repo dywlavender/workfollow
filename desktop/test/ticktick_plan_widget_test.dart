@@ -608,7 +608,7 @@ void main() {
       'task-schedule',
       'task-priority',
       'task-list-footer',
-      'task-format-toggle',
+      'document-format-toggle',
       'task-more-actions',
     ]) {
       expect(find.byKey(ValueKey(key)), findsOneWidget, reason: key);

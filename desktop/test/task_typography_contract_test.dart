@@ -39,7 +39,7 @@ void main() {
     expect(webTypographyConsumers, isEmpty);
 
     final documentStyles =
-        File('lib/widgets/task_document_styles.dart').readAsStringSync();
+        File('lib/features/editor/document_styles.dart').readAsStringSync();
     expect(documentStyles, contains('fontFamily: WorkFollowMacTypeFamily.ui'));
     expect(documentStyles,
         contains('fontFamilyFallback: WorkFollowMacTypeFamily.fallback'));

@@ -29,24 +29,24 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const ValueKey('note-body-editor')), findsOneWidget);
-    expect(find.byKey(const ValueKey('note-format-toggle')), findsOneWidget);
+    expect(find.byKey(const ValueKey('document-format-toggle')), findsOneWidget);
     expect(find.byType(quill.QuillSimpleToolbar), findsNothing);
-    expect(find.byKey(const ValueKey('task-editor-toolbar')), findsNothing);
+    expect(find.byKey(const ValueKey('document-editor-toolbar')), findsNothing);
 
     await tester.tap(find.byKey(const ValueKey('note-body-editor')));
     await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('task-editor-toolbar')), findsNothing);
-    await tester.tap(find.byKey(const ValueKey('note-format-toggle')));
+    expect(find.byKey(const ValueKey('document-editor-toolbar')), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('document-format-toggle')));
     await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('task-editor-toolbar')), findsOneWidget);
+    expect(find.byKey(const ValueKey('document-editor-toolbar')), findsOneWidget);
     await tester.tapAt(const Offset(20, 20));
     await tester.pumpAndSettle();
     // The note toolbar is persistent like the task toolbar: clicking back in
     // the document must not destroy the formatting surface or its selection.
-    expect(find.byKey(const ValueKey('task-editor-toolbar')), findsOneWidget);
-    await tester.tap(find.byKey(const ValueKey('note-format-toggle')));
+    expect(find.byKey(const ValueKey('document-editor-toolbar')), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('document-format-toggle')));
     await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('task-editor-toolbar')), findsNothing);
+    expect(find.byKey(const ValueKey('document-editor-toolbar')), findsNothing);
   });
 
   testWidgets('note slash menu only exposes note-safe document actions',
@@ -66,19 +66,19 @@ void main() {
         const TextSelection.collapsed(offset: 1));
     await tester.pump();
 
-    expect(find.byKey(const ValueKey('task-slash-menu')), findsOneWidget);
-    expect(find.byKey(const ValueKey('task-slash-option-heading-1')),
+    expect(find.byKey(const ValueKey('document-slash-menu')), findsOneWidget);
+    expect(find.byKey(const ValueKey('document-slash-option-heading-1')),
         findsOneWidget);
-    expect(find.byKey(const ValueKey('task-slash-option-checklist')),
+    expect(find.byKey(const ValueKey('document-slash-option-checklist')),
         findsOneWidget);
-    expect(find.byKey(const ValueKey('task-slash-option-attachment')),
+    expect(find.byKey(const ValueKey('document-slash-option-attachment')),
         findsOneWidget);
     expect(
-        find.byKey(const ValueKey('task-slash-option-subtask')), findsNothing);
+        find.byKey(const ValueKey('document-slash-option-subtask')), findsNothing);
     expect(
-        find.byKey(const ValueKey('task-slash-option-relation')), findsNothing);
+        find.byKey(const ValueKey('document-slash-option-relation')), findsNothing);
 
-    await tester.tap(find.byKey(const ValueKey('task-slash-option-heading-1')));
+    await tester.tap(find.byKey(const ValueKey('document-slash-option-heading-1')));
     await tester.pump();
     final delta = editor.document.toDelta().toJson();
     expect(
@@ -105,22 +105,22 @@ void main() {
     editor.updateSelection(const TextSelection(baseOffset: 0, extentOffset: 4),
         quill.ChangeSource.local);
     await tester.pump();
-    await tester.tap(find.byKey(const ValueKey('note-format-toggle')));
+    await tester.tap(find.byKey(const ValueKey('document-format-toggle')));
     await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('task-editor-toolbar')), findsOneWidget);
-    await tester.tap(find.byKey(const ValueKey('task-format-bold')));
+    expect(find.byKey(const ValueKey('document-editor-toolbar')), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('document-format-bold')));
     await tester.pump();
     expect(
         editor.document.toDelta().toJson().any((op) =>
             op['attributes'] is Map && op['attributes']['bold'] == true),
         isTrue);
 
-    await tester.tap(find.byKey(const ValueKey('task-format-link')));
+    await tester.tap(find.byKey(const ValueKey('document-format-link')));
     await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('note-link-input')), findsOneWidget);
+    expect(find.byKey(const ValueKey('document-link-input')), findsOneWidget);
     await tester.enterText(
-        find.byKey(const ValueKey('note-link-input')), 'https://example.com');
-    await tester.tap(find.byKey(const ValueKey('note-link-apply')));
+        find.byKey(const ValueKey('document-link-input')), 'https://example.com');
+    await tester.tap(find.byKey(const ValueKey('document-link-apply')));
     await tester.pumpAndSettle();
     expect(
         editor.document.toDelta().toJson().any((op) =>

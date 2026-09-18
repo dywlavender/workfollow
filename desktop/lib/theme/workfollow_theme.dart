@@ -337,6 +337,14 @@ class TaskDocumentMetrics {
   static const double checklistTrailingInset = 7;
   static const double checklistCheckStrokeWidth = 2;
   static const double quoteBorderWidth = 3;
+
+  /// Height a task document reserves when a legacy panel follows the prose.
+  ///
+  /// Subtasks, attachments and the source note sit under the document, so the
+  /// prose keeps this floor instead of growing to the inspector's viewport —
+  /// which would push the panels out of view. Without them the document takes
+  /// the full viewport and the surface below it accepts clicks.
+  static const double documentMinHeight = 150;
 }
 
 /// Geometry of the note index and linked-task controls.

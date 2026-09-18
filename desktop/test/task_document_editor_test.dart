@@ -8,7 +8,7 @@ import 'package:workfollow_personal/state/workspace_controller.dart';
 import 'package:workfollow_personal/theme/workfollow_theme.dart';
 import 'package:workfollow_personal/widgets/task_inspector.dart';
 import 'package:workfollow_personal/widgets/task_list_picker.dart';
-import 'package:workfollow_personal/widgets/task_slash_menu.dart';
+import 'package:workfollow_personal/features/editor/document_slash_menu.dart';
 
 void main() {
   testWidgets('task inspector More menu stays next to the footer trigger',
@@ -143,7 +143,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const ValueKey('task-document-editor')), findsOneWidget);
-    expect(find.byKey(const ValueKey('task-format-toggle')), findsOneWidget);
+    expect(find.byKey(const ValueKey('document-format-toggle')), findsOneWidget);
     expect(find.byKey(const ValueKey('task-deadline')), findsNothing);
     expect(find.byKey(const ValueKey('task-advanced-toggle')), findsNothing);
     expect(find.text('显示更多属性'), findsNothing);
@@ -170,10 +170,10 @@ void main() {
         const TextSelection.collapsed(offset: 1));
     await tester.pump();
 
-    expect(find.byKey(const ValueKey('task-slash-menu')), findsOneWidget);
+    expect(find.byKey(const ValueKey('document-slash-menu')), findsOneWidget);
     // The palette is the twelve reference commands and nothing else: eight text
     // commands, a hairline, four task commands. WorkFollow's 截止日期 and
-    // 专注记录 are not default entries — see TaskSlashMenu for their entry
+    // 专注记录 are not default entries — see DocumentSlashMenu for their entry
     // points — so a growing feature list never widens this menu.
     for (final key in [
       'heading-1',
@@ -189,14 +189,14 @@ void main() {
       'tag',
       'relation',
     ]) {
-      expect(find.byKey(ValueKey('task-slash-option-$key')), findsOneWidget,
+      expect(find.byKey(ValueKey('document-slash-option-$key')), findsOneWidget,
           reason: key);
     }
     expect(
-        find.byKey(const ValueKey('task-slash-option-deadline')), findsNothing);
-    expect(find.byKey(const ValueKey('task-slash-option-focus')), findsNothing);
+        find.byKey(const ValueKey('document-slash-option-deadline')), findsNothing);
+    expect(find.byKey(const ValueKey('document-slash-option-focus')), findsNothing);
 
-    await tester.tap(find.byKey(const ValueKey('task-slash-option-heading-1')));
+    await tester.tap(find.byKey(const ValueKey('document-slash-option-heading-1')));
     await tester.pump();
     final delta = editor.document.toDelta().toJson();
     expect(
@@ -225,7 +225,7 @@ void main() {
     editor.replaceText(0, editor.document.length - 1, '/',
         const TextSelection.collapsed(offset: 1));
     await tester.pump();
-    await tester.tap(find.byKey(const ValueKey('task-slash-option-checklist')));
+    await tester.tap(find.byKey(const ValueKey('document-slash-option-checklist')));
     await tester.pump();
     final delta = editor.document.toDelta().toJson();
     expect(
@@ -256,14 +256,14 @@ void main() {
     editor.updateSelection(const TextSelection(baseOffset: 0, extentOffset: 2),
         quill.ChangeSource.local);
     await tester.pump();
-    await tester.tap(find.byKey(const ValueKey('task-format-toggle')));
+    await tester.tap(find.byKey(const ValueKey('document-format-toggle')));
     await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('task-editor-toolbar')), findsOneWidget);
-    expect(find.byKey(const ValueKey('task-format-divider')), findsOneWidget);
+    expect(find.byKey(const ValueKey('document-editor-toolbar')), findsOneWidget);
+    expect(find.byKey(const ValueKey('document-format-divider')), findsOneWidget);
     final toolbarRect =
-        tester.getRect(find.byKey(const ValueKey('task-editor-toolbar')));
+        tester.getRect(find.byKey(const ValueKey('document-editor-toolbar')));
     final toggleRect =
-        tester.getRect(find.byKey(const ValueKey('task-format-toggle')));
+        tester.getRect(find.byKey(const ValueKey('document-format-toggle')));
     expect(toolbarRect.top, lessThan(toggleRect.top));
     expect(
         toolbarRect.center.dx,
@@ -273,7 +273,7 @@ void main() {
                 .center
                 .dx,
             1));
-    await tester.tap(find.byKey(const ValueKey('task-format-bold')));
+    await tester.tap(find.byKey(const ValueKey('document-format-bold')));
     await tester.pump();
     expect(
         editor.document.toDelta().toJson().any((op) =>
@@ -332,7 +332,7 @@ void main() {
     editor.replaceText(0, editor.document.length - 1, '/',
         const TextSelection.collapsed(offset: 1));
     await tester.pump();
-    await tester.tap(find.byKey(const ValueKey('task-slash-option-subtask')));
+    await tester.tap(find.byKey(const ValueKey('document-slash-option-subtask')));
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('task-subtasks-block')), findsOneWidget);
     await tester.enterText(
@@ -449,19 +449,19 @@ void main() {
       // place they can be held: a 160pt card with 34pt rows and a 14pt glyph
       // slot is the difference between a command palette and a settings panel.
       final menu =
-          tester.getSize(find.byKey(const ValueKey('task-slash-menu')));
-      expect(menu.width, TaskSlashMenuMetrics.width);
-      expect(menu.height, TaskSlashMenu.heightFor(null));
+          tester.getSize(find.byKey(const ValueKey('document-slash-menu')));
+      expect(menu.width, DocumentSlashMenuMetrics.width);
+      expect(menu.height, DocumentSlashMenu.heightFor(null));
       // Twelve rows, one hairline between the two groups and 4pt of padding
       // top and bottom — the height the editor also reserves above the caret.
       expect(
-          TaskSlashMenu.heightFor(null),
-          TaskSlashMenuMetrics.itemHeight * 12 +
-              TaskSlashMenuMetrics.dividerBlock +
-              TaskSlashMenuMetrics.padding * 2);
+          DocumentSlashMenu.heightFor(null),
+          DocumentSlashMenuMetrics.itemHeight * 12 +
+              DocumentSlashMenuMetrics.dividerBlock +
+              DocumentSlashMenuMetrics.padding * 2);
       final row = tester
-          .getSize(find.byKey(const ValueKey('task-slash-option-heading-1')));
-      expect(row.height, TaskSlashMenuMetrics.itemHeight);
+          .getSize(find.byKey(const ValueKey('document-slash-option-heading-1')));
+      expect(row.height, DocumentSlashMenuMetrics.itemHeight);
     }
   });
 }

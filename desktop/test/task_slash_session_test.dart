@@ -6,7 +6,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:workfollow_personal/state/workspace_controller.dart';
 import 'package:workfollow_personal/theme/workfollow_theme.dart';
 import 'package:workfollow_personal/widgets/task_document_editor.dart';
-import 'package:workfollow_personal/widgets/task_slash_session.dart';
 
 class _AttachmentController extends WorkspaceController {
   _AttachmentController() : super(seedData: false);
@@ -81,7 +80,7 @@ void main() {
     await tester.pump();
   }
 
-  Finder option(String name) => find.byKey(ValueKey('task-slash-option-$name'));
+  Finder option(String name) => find.byKey(ValueKey('document-slash-option-$name'));
 
   testWidgets('SLASH-B01/B02/B03 opens after an empty line or prose slash',
       (tester) async {
@@ -90,7 +89,7 @@ void main() {
     final editor = await freshEditor(tester, c);
 
     await typeSlash(tester, editor, '/');
-    expect(find.byKey(const ValueKey('task-slash-menu')), findsOneWidget);
+    expect(find.byKey(const ValueKey('document-slash-menu')), findsOneWidget);
 
     // A fresh editor state is used for each input shape so the trigger is a
     // new insertion, rather than a caret move inside an existing slash.
@@ -98,13 +97,13 @@ void main() {
     addTearDown(c2.dispose);
     final editor2 = await freshEditor(tester, c2);
     await typeSlash(tester, editor2, '文字/');
-    expect(find.byKey(const ValueKey('task-slash-menu')), findsOneWidget);
+    expect(find.byKey(const ValueKey('document-slash-menu')), findsOneWidget);
 
     final c3 = WorkspaceController(seedData: false);
     addTearDown(c3.dispose);
     final editor3 = await freshEditor(tester, c3);
     await typeSlash(tester, editor3, 'abc/');
-    expect(find.byKey(const ValueKey('task-slash-menu')), findsOneWidget);
+    expect(find.byKey(const ValueKey('document-slash-menu')), findsOneWidget);
   });
 
   testWidgets('SLASH-B04/B05 executes H1 at the recorded slash offset',
@@ -116,7 +115,7 @@ void main() {
     await tester.tap(option('heading-1'));
     await tester.pump();
 
-    expect(find.byKey(const ValueKey('task-slash-menu')), findsNothing);
+    expect(find.byKey(const ValueKey('document-slash-menu')), findsNothing);
     expect(editor.editor.document.toPlainText().trimRight(), '文字');
     expect(
         editor.editor.document.toDelta().toJson().any(
@@ -223,7 +222,7 @@ void main() {
     await tester.pump();
     expect(opened, isTrue);
     expect(editor.editor.document.toPlainText(), '任务\n');
-    expect(find.byKey(const ValueKey('task-slash-menu')), findsNothing);
+    expect(find.byKey(const ValueKey('document-slash-menu')), findsNothing);
   });
 
   testWidgets('SLASH-B08/B09 menu clicks preserve and restore editor focus',
@@ -247,7 +246,7 @@ void main() {
     await typeSlash(tester, editor, '/');
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     await tester.pump();
-    expect(find.byKey(const ValueKey('task-slash-menu')), findsNothing);
+    expect(find.byKey(const ValueKey('document-slash-menu')), findsNothing);
     expect(editor.editor.document.toPlainText(), '/\n');
 
     editor.editor.replaceText(0, editor.editor.document.length - 1, '',
@@ -256,7 +255,7 @@ void main() {
     editor.editor
         .replaceText(0, 1, '', const TextSelection.collapsed(offset: 0));
     await tester.pump();
-    expect(find.byKey(const ValueKey('task-slash-menu')), findsNothing);
+    expect(find.byKey(const ValueKey('document-slash-menu')), findsNothing);
   });
 
   testWidgets('SLASH-B12 ordinary text after slash ends the session',
@@ -265,11 +264,11 @@ void main() {
     addTearDown(c.dispose);
     final editor = await freshEditor(tester, c);
     await typeSlash(tester, editor, '/');
-    expect(find.byKey(const ValueKey('task-slash-menu')), findsOneWidget);
+    expect(find.byKey(const ValueKey('document-slash-menu')), findsOneWidget);
     editor.editor
         .replaceText(1, 0, 'a', const TextSelection.collapsed(offset: 2));
     await tester.pump();
-    expect(find.byKey(const ValueKey('task-slash-menu')), findsNothing);
+    expect(find.byKey(const ValueKey('document-slash-menu')), findsNothing);
     expect(editor.editor.document.toPlainText(), '/a\n');
   });
 
@@ -278,10 +277,10 @@ void main() {
     addTearDown(c.dispose);
     final editor = await freshEditor(tester, c);
     await typeSlash(tester, editor, '/');
-    expect(find.byKey(const ValueKey('task-slash-menu')), findsOneWidget);
+    expect(find.byKey(const ValueKey('document-slash-menu')), findsOneWidget);
     await tester.tapAt(const Offset(760, 560));
     await tester.pump();
-    expect(find.byKey(const ValueKey('task-slash-menu')), findsNothing);
+    expect(find.byKey(const ValueKey('document-slash-menu')), findsNothing);
   });
 
   testWidgets('SLASH-B14 task switch removes a stale palette', (tester) async {
@@ -307,8 +306,8 @@ void main() {
     await pumpTask(c.tasks[0].id);
     final editor = key.currentState!;
     await typeSlash(tester, editor, '/');
-    expect(find.byKey(const ValueKey('task-slash-menu')), findsOneWidget);
+    expect(find.byKey(const ValueKey('document-slash-menu')), findsOneWidget);
     await pumpTask(c.tasks[1].id);
-    expect(find.byKey(const ValueKey('task-slash-menu')), findsNothing);
+    expect(find.byKey(const ValueKey('document-slash-menu')), findsNothing);
   });
 }

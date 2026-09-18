@@ -19,8 +19,9 @@ import 'task_deadline_picker.dart';
 import 'task_priority_picker.dart';
 import 'task_list_picker.dart';
 import 'task_tag_picker.dart';
+import '../features/editor/document_keys.dart';
 import 'task_document_editor.dart';
-import 'task_editor_viewport.dart';
+import '../features/editor/document_editor_viewport.dart';
 import 'task_more_menu.dart';
 import 'task_menu_actions.dart';
 
@@ -505,7 +506,7 @@ class _TaskInspectorState extends State<TaskInspector> {
         _saveIndicator(tokens),
         Builder(
             builder: (anchor) => AppIconButton(
-                key: const ValueKey('task-format-toggle'),
+                key: documentFormattingToggleKey,
                 icon: WorkFollowIcons.format,
                 tooltip: '显示格式工具',
                 active: documentKey.currentState?.toolbarVisible ?? false,
@@ -545,7 +546,7 @@ class _TaskInspectorState extends State<TaskInspector> {
           topPadding,
           horizontalPadding,
           WorkFollowSpacing.inspectorContentBottomPadding),
-      child: TaskEditorViewport(
+      child: DocumentEditorViewport(
         minHeight: (minHeight -
                 topPadding -
                 WorkFollowSpacing.inspectorContentBottomPadding)
@@ -556,19 +557,11 @@ class _TaskInspectorState extends State<TaskInspector> {
             focusNode: titleFocus,
             minLines: 1,
             maxLines: 2,
-            style: TextStyle(
+            style: DocumentStyles.title(tokens,
                 fontSize: WorkFollowMacTypography.detailTitle,
-                fontWeight: WorkFollowMacWeight.semibold,
-                height: WorkFollowMacTypography.lineControl,
-                letterSpacing: WorkFollowMacTracking.none,
-                color:
-                    task.completed ? tokens.textTertiary : tokens.textPrimary,
-                decoration: task.completed ? TextDecoration.lineThrough : null),
-            decoration: const InputDecoration(
-                hintText: '任务标题',
-                border: InputBorder.none,
-                isDense: true,
-                contentPadding: EdgeInsets.zero),
+                muted: task.completed,
+                strikethrough: task.completed),
+            decoration: DocumentStyles.titleDecoration('任务标题'),
             onChanged: (value) =>
                 widget.controller.taskActions.setTitle(task.id, value)),
         document: TaskDocumentEditor(

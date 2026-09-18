@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../features/editor/document_styles.dart';
 import '../models/task.dart';
 import '../state/workspace_controller.dart';
 import '../theme/workfollow_icons.dart';
@@ -588,18 +589,9 @@ class _NotePageState extends State<_NotePage> {
                           autofocus: note.title == '未命名笔记',
                           minLines: 1,
                           maxLines: 3,
-                          style: TextStyle(
-                              fontSize: WorkFollowMacTypography.noteTitle,
-                              height: WorkFollowMacTypography.lineControl,
-                              fontWeight: WorkFollowMacWeight.semibold,
-                              letterSpacing:
-                                  WorkFollowMacTracking.none,
-                              color: tokens.textPrimary),
-                          decoration: const InputDecoration(
-                              hintText: '笔记标题',
-                              border: InputBorder.none,
-                              isDense: true,
-                              contentPadding: EdgeInsets.zero),
+                          style: DocumentStyles.title(tokens,
+                              fontSize: WorkFollowMacTypography.noteTitle),
+                          decoration: DocumentStyles.titleDecoration('笔记标题'),
                           onChanged: (value) => widget.controller
                               .updateNoteTitle(note.id, value)),
                       const SizedBox(height: WorkFollowSpacing.space3),

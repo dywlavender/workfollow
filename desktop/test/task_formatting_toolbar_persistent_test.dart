@@ -37,24 +37,24 @@ void main() {
         quill.ChangeSource.local);
     await tester.pump();
 
-    final toggle = find.byKey(const ValueKey('task-format-toggle'));
+    final toggle = find.byKey(const ValueKey('document-format-toggle'));
     await tester.tap(toggle);
     await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('task-editor-toolbar')), findsOneWidget);
+    expect(find.byKey(const ValueKey('document-editor-toolbar')), findsOneWidget);
 
     final documentRect =
         tester.getRect(find.byKey(const ValueKey('task-document-editor')));
     await tester.tapAt(documentRect.topLeft + const Offset(24, 42));
     await tester.pump();
-    expect(find.byKey(const ValueKey('task-editor-toolbar')), findsOneWidget);
+    expect(find.byKey(const ValueKey('document-editor-toolbar')), findsOneWidget);
 
-    await tester.tap(find.byKey(const ValueKey('task-format-bold')));
+    await tester.tap(find.byKey(const ValueKey('document-format-bold')));
     await tester.pump();
-    expect(find.byKey(const ValueKey('task-editor-toolbar')), findsOneWidget);
+    expect(find.byKey(const ValueKey('document-editor-toolbar')), findsOneWidget);
 
     await tester.tap(toggle);
     await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('task-editor-toolbar')), findsNothing);
+    expect(find.byKey(const ValueKey('document-editor-toolbar')), findsNothing);
   });
 
   testWidgets('Escape closes the toolbar before the inspector', (tester) async {
@@ -76,20 +76,20 @@ void main() {
     ));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(const ValueKey('task-format-toggle')));
+    await tester.tap(find.byKey(const ValueKey('document-format-toggle')));
     await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('task-editor-toolbar')), findsOneWidget);
+    expect(find.byKey(const ValueKey('document-editor-toolbar')), findsOneWidget);
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('task-editor-toolbar')), findsNothing);
+    expect(find.byKey(const ValueKey('document-editor-toolbar')), findsNothing);
     expect(controller.selectedTaskId, task.id);
 
-    await tester.tap(find.byKey(const ValueKey('task-format-toggle')));
+    await tester.tap(find.byKey(const ValueKey('document-format-toggle')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('task-title-editor')));
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('task-editor-toolbar')), findsNothing);
+    expect(find.byKey(const ValueKey('document-editor-toolbar')), findsNothing);
   });
 
   testWidgets('switching tasks clears the persistent toolbar overlay',
@@ -123,12 +123,12 @@ void main() {
     }
 
     await pumpTask(first);
-    await tester.tap(find.byKey(const ValueKey('task-format-toggle')));
+    await tester.tap(find.byKey(const ValueKey('document-format-toggle')));
     await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('task-editor-toolbar')), findsOneWidget);
+    expect(find.byKey(const ValueKey('document-editor-toolbar')), findsOneWidget);
 
     await pumpTask(second);
-    expect(find.byKey(const ValueKey('task-editor-toolbar')), findsNothing);
+    expect(find.byKey(const ValueKey('document-editor-toolbar')), findsNothing);
   });
 
   testWidgets('format toolbar is reclamped after a window resize',
@@ -149,13 +149,13 @@ void main() {
       home: Scaffold(body: TaskInspector(task: task, controller: controller)),
     ));
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('task-format-toggle')));
+    await tester.tap(find.byKey(const ValueKey('document-format-toggle')));
     await tester.pumpAndSettle();
 
     tester.view.physicalSize = const Size(360, 640);
     await tester.pumpAndSettle();
     final rect =
-        tester.getRect(find.byKey(const ValueKey('task-editor-toolbar')));
+        tester.getRect(find.byKey(const ValueKey('document-editor-toolbar')));
     expect(rect.left, greaterThanOrEqualTo(0));
     expect(rect.right, lessThanOrEqualTo(360));
     expect(rect.top, greaterThanOrEqualTo(0));

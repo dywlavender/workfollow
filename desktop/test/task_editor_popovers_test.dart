@@ -113,7 +113,7 @@ void main() {
     for (final item in [
       ('task-list-footer', 'task-list-picker', 'task-editor-list'),
       ('task-schedule', 'task-schedule-panel', 'task-editor-date'),
-      ('task-format-toggle', 'task-editor-toolbar', 'task-editor-format'),
+      ('document-format-toggle', 'document-editor-toolbar', 'task-editor-format'),
       ('task-more-actions', 'task-more-menu', 'task-editor-more')
     ]) {
       await tap(tester, item.$1);
@@ -126,7 +126,7 @@ void main() {
       } else {
         expect(rect.bottom, lessThan(trigger.top));
       }
-      if (item.$1 == 'task-format-toggle')
+      if (item.$1 == 'document-format-toggle')
         expect(rect.center.dx, closeTo(398, 1));
       await shot(tester, item.$3);
       expect(tester.takeException(), isNull);
@@ -335,32 +335,32 @@ void main() {
         .controller;
     editor.replaceText(0, editor.document.length - 1, '前后',
         const TextSelection(baseOffset: 0, extentOffset: 1));
-    await tap(tester, 'task-format-toggle');
-    await tap(tester, 'task-format-bold');
+    await tap(tester, 'document-format-toggle');
+    await tap(tester, 'document-format-bold');
     expect(editor.getSelectionStyle().attributes['bold']?.value, true);
-    await tap(tester, 'task-format-bold');
+    await tap(tester, 'document-format-bold');
     expect(editor.getSelectionStyle().attributes['bold'], isNull);
-    await tap(tester, 'task-format-heading');
-    await tap(tester, 'task-format-heading-2');
+    await tap(tester, 'document-format-heading');
+    await tap(tester, 'document-format-heading-2');
     expect(editor.getSelectionStyle().attributes['header']?.value, 2);
-    await tap(tester, 'task-format-heading');
-    await tap(tester, 'task-format-heading-0');
+    await tap(tester, 'document-format-heading');
+    await tap(tester, 'document-format-heading-0');
     expect(editor.getSelectionStyle().attributes['header'], isNull);
-    await tap(tester, 'task-format-checklist');
+    await tap(tester, 'document-format-checklist');
     expect(editor.getSelectionStyle().attributes['list']?.value, 'unchecked');
-    await tap(tester, 'task-format-checklist');
+    await tap(tester, 'document-format-checklist');
     expect(editor.getSelectionStyle().attributes['list'], isNull);
     for (final kind in ['date', 'datetime', 'time']) {
       editor.replaceText(0, editor.document.length - 1, '前后',
           const TextSelection.collapsed(offset: 1));
-      await tap(tester, 'task-format-time');
+      await tap(tester, 'document-format-time');
       if (kind == 'date') await shot(tester, 'task-editor-time');
-      final option = keyed('task-insert-$kind');
+      final option = keyed('document-insert-$kind');
       final value = tester
           .widget<Text>(
               find.descendant(of: option, matching: find.byType(Text)).first)
           .data!;
-      await tap(tester, 'task-insert-$kind');
+      await tap(tester, 'document-insert-$kind');
       expect(editor.document.toPlainText(), '前${value}后\n');
       expect(editor.selection.baseOffset, 1 + value.length);
       expect(c.tasks.single.description, contains(value));
@@ -375,7 +375,7 @@ void main() {
     for (final entry in [
       ('task-list-footer', 'task-list-picker'),
       ('task-schedule', 'task-schedule-panel'),
-      ('task-format-toggle', 'task-editor-toolbar'),
+      ('document-format-toggle', 'document-editor-toolbar'),
       ('task-more-actions', 'task-more-menu')
     ]) {
       await tap(tester, entry.$1);

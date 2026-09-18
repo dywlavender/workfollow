@@ -3,12 +3,12 @@ import 'dart:math' as math;
 import 'package:flutter/rendering.dart';
 import 'package:flutter/widgets.dart';
 
-import '../theme/workfollow_theme.dart';
+import '../../theme/workfollow_theme.dart';
 
 /// Measures the title before giving the document the remaining viewport.
 /// Both children grow within the inspector's single scroll view.
-class TaskEditorViewport extends MultiChildRenderObjectWidget {
-  TaskEditorViewport({
+class DocumentEditorViewport extends MultiChildRenderObjectWidget {
+  DocumentEditorViewport({
     super.key,
     required this.minHeight,
     required Widget title,
@@ -19,22 +19,22 @@ class TaskEditorViewport extends MultiChildRenderObjectWidget {
 
   @override
   RenderObject createRenderObject(BuildContext context) =>
-      _RenderTaskEditorViewport(minHeight);
+      _RenderDocumentEditorViewport(minHeight);
 
   @override
   void updateRenderObject(
-      BuildContext context, covariant _RenderTaskEditorViewport renderObject) {
+      BuildContext context, covariant _RenderDocumentEditorViewport renderObject) {
     renderObject.minHeight = minHeight;
   }
 }
 
 class _ViewportParentData extends ContainerBoxParentData<RenderBox> {}
 
-class _RenderTaskEditorViewport extends RenderBox
+class _RenderDocumentEditorViewport extends RenderBox
     with
         ContainerRenderObjectMixin<RenderBox, _ViewportParentData>,
         RenderBoxContainerDefaultsMixin<RenderBox, _ViewportParentData> {
-  _RenderTaskEditorViewport(this._minHeight);
+  _RenderDocumentEditorViewport(this._minHeight);
 
   double _minHeight;
   static const gap = WorkFollowSpacing.controlGap;

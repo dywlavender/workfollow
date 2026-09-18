@@ -4,7 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_quill/flutter_quill.dart' as quill;
 import 'package:workfollow_personal/theme/workfollow_color_tokens.dart';
 import 'package:workfollow_personal/theme/workfollow_theme.dart';
-import 'package:workfollow_personal/widgets/task_document_styles.dart';
+import 'package:workfollow_personal/features/editor/document_styles.dart';
 
 void main() {
   test('business widgets consume semantic colors instead of local hex values',
@@ -48,7 +48,7 @@ void main() {
         tokens.accentSoft);
     expect(WorkFollowColorTokens.documentHighlightForeground(tokens),
         tokens.textPrimary);
-    final highlight = TaskDocumentStyles.customStyleBuilder(tokens)(
+    final highlight = DocumentStyles.customStyleBuilder(tokens)(
       const quill.BackgroundAttribute('#d4ff00'),
     );
     expect(highlight.backgroundColor, tokens.accentSoft);

@@ -188,22 +188,22 @@ void main() {
         .controller
         .replaceText(0, 0, '/', const TextSelection.collapsed(offset: 1));
     await tester.pump();
-    expect(keyed('task-slash-menu'), findsOneWidget);
+    expect(keyed('document-slash-menu'), findsOneWidget);
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     await tester.pump();
-    expect(keyed('task-slash-menu'), findsNothing);
+    expect(keyed('document-slash-menu'), findsNothing);
     expect(document(tester).focusNode.hasFocus, isTrue);
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     await tester.pump();
     expect(document(tester).focusNode.hasFocus, isFalse);
     expect(c.selectedTaskId, isNotNull);
 
-    await tester.tap(keyed('task-format-toggle'));
+    await tester.tap(keyed('document-format-toggle'));
     await tester.pumpAndSettle();
-    expect(keyed('task-editor-toolbar'), findsOneWidget);
+    expect(keyed('document-editor-toolbar'), findsOneWidget);
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     await tester.pumpAndSettle();
-    expect(keyed('task-editor-toolbar'), findsNothing);
+    expect(keyed('document-editor-toolbar'), findsNothing);
     expect(c.selectedTaskId, isNotNull);
     await tester.tap(keyed('task-schedule'));
     await tester.pumpAndSettle();

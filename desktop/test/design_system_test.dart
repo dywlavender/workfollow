@@ -5,7 +5,7 @@ import 'package:flutter_quill/flutter_quill.dart' as quill;
 import 'package:workfollow_personal/theme/workfollow_theme.dart';
 import 'package:workfollow_personal/widgets/app_icon_button.dart';
 import 'package:workfollow_personal/widgets/desktop_popover.dart';
-import 'package:workfollow_personal/widgets/task_editor_toolbar.dart';
+import 'package:workfollow_personal/features/editor/document_editor_toolbar.dart';
 import 'package:workfollow_personal/widgets/task_editor_popover.dart';
 import 'package:workfollow_personal/theme/workfollow_icons.dart';
 
@@ -73,7 +73,7 @@ void main() {
     await tester.pumpWidget(MaterialApp(
       theme: WorkFollowThemeData.light(),
       home: Scaffold(
-        body: TaskEditorToolbar(
+        body: DocumentEditorToolbar(
           controller: controller,
           onAttach: () {},
           onInsertSlash: () {},
@@ -84,7 +84,7 @@ void main() {
     ));
 
     expect(
-      tester.getSize(find.byKey(const ValueKey('task-editor-toolbar'))).height,
+      tester.getSize(find.byKey(const ValueKey('document-editor-toolbar'))).height,
       TaskEditorPopoverStyle.toolbarHeight,
     );
   });

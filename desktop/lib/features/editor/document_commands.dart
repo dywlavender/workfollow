@@ -4,16 +4,16 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_quill/flutter_quill.dart' as quill;
 
-import '../theme/workfollow_color_tokens.dart';
+import '../../theme/workfollow_color_tokens.dart';
 
 /// Supplies a file path for a document attachment command.
-typedef TaskDocumentAttachmentPicker = Future<String?> Function();
+typedef DocumentAttachmentPicker = Future<String?> Function();
 
 /// Lets an editor owner restore focus after a document command.
-typedef TaskDocumentFocusRequester = void Function();
+typedef DocumentFocusRequester = void Function();
 
 /// Prevents an asynchronous picker from mutating a disposed document owner.
-typedef TaskDocumentMutationGuard = bool Function();
+typedef DocumentMutationGuard = bool Function();
 
 /// The single mutation boundary for a Quill task (or note) document.
 ///
@@ -21,8 +21,8 @@ typedef TaskDocumentMutationGuard = bool Function();
 /// format a controller or construct embeds themselves. Keeping that work in
 /// one object means a heading selected from `/` has the same Delta and the
 /// same insertion/focus behaviour as a heading selected from the toolbar.
-class TaskDocumentCommands {
-  TaskDocumentCommands({
+class DocumentCommands {
+  DocumentCommands({
     required this.editor,
     this.pickAttachment,
     this.requestFocus,
@@ -35,9 +35,9 @@ class TaskDocumentCommands {
       WorkFollowColorTokens.documentHighlightAttribute;
 
   final quill.QuillController editor;
-  final TaskDocumentAttachmentPicker? pickAttachment;
-  final TaskDocumentFocusRequester? requestFocus;
-  final TaskDocumentMutationGuard? canMutate;
+  final DocumentAttachmentPicker? pickAttachment;
+  final DocumentFocusRequester? requestFocus;
+  final DocumentMutationGuard? canMutate;
 
   /// The header level shared by the heading picker and its active state.
   int? get headingLevel {

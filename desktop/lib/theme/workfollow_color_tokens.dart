@@ -31,7 +31,7 @@ class WorkFollowColorTokens {
   static const Color matrixLater = Color(0xFF1DC8A0);
 
   /// Quill stores this marker in existing document Deltas. Rendering is
-  /// overridden by TaskDocumentStyles to use the theme's highlight surface;
+  /// overridden by DocumentStyles to use the theme's highlight surface;
   /// the string remains here only for backwards-compatible document data.
   static const String documentHighlightAttribute = '#d4ff00';
 

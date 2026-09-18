@@ -56,7 +56,7 @@ Future<TaskActionResult?> runTaskMenuAction(
       return actions.setTags(id, selection.value!.split(RegExp('[,，]')));
     case 'add-subtask':
       // The menu only reports the intent. The inspector owns the document
-      // editor and turns this request into TaskDocumentCommands.insertSubtaskBlock.
+      // editor and turns this request into DocumentCommands.insertSubtaskBlock.
       controller.requestSubtaskEditor(id);
       return null;
     case 'pin':

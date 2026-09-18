@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_quill/flutter_quill.dart' as quill;
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:workfollow_personal/widgets/task_document_commands.dart';
+import 'package:workfollow_personal/features/editor/document_commands.dart';
 
 void main() {
   test('heading commands share semantic Delta attributes with slash callers',
@@ -12,7 +12,7 @@ void main() {
     controller.replaceText(0, controller.document.length - 1, '彩色',
         const TextSelection.collapsed(offset: 2));
     controller.formatText(0, 2, const quill.ColorAttribute('#ff0000'));
-    final commands = TaskDocumentCommands(editor: controller);
+    final commands = DocumentCommands(editor: controller);
 
     commands.setHeading1(lineStart: 0);
 
@@ -38,13 +38,13 @@ void main() {
     controller.updateSelection(
         const TextSelection(baseOffset: 0, extentOffset: 2),
         quill.ChangeSource.local);
-    final commands = TaskDocumentCommands(editor: controller);
+    final commands = DocumentCommands(editor: controller);
 
     commands.toggleBold();
     commands.toggleHighlight();
     expect(controller.getSelectionStyle().attributes['bold']?.value, isTrue);
     expect(controller.getSelectionStyle().attributes['background']?.value,
-        TaskDocumentCommands.highlightColor);
+        DocumentCommands.highlightColor);
 
     controller.updateSelection(
         const TextSelection.collapsed(offset: 1), quill.ChangeSource.local);
@@ -60,7 +60,7 @@ void main() {
     addTearDown(controller.dispose);
     controller.replaceText(0, controller.document.length - 1, '前缀',
         const TextSelection.collapsed(offset: 2));
-    final commands = TaskDocumentCommands(editor: controller);
+    final commands = DocumentCommands(editor: controller);
 
     commands.insertDivider(at: 2);
     commands.insertSubtaskBlock(at: 3);
@@ -86,7 +86,7 @@ void main() {
     controller.updateSelection(
         const TextSelection(baseOffset: 0, extentOffset: 2),
         quill.ChangeSource.local);
-    final commands = TaskDocumentCommands(editor: controller);
+    final commands = DocumentCommands(editor: controller);
 
     expect(commands.applyLink('https://example.com'), isTrue);
     expect(controller.getSelectionStyle().attributes['link']?.value,

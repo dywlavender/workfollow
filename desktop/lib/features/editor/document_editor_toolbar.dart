@@ -1,19 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_quill/flutter_quill.dart' as quill;
 
-import '../theme/workfollow_icons.dart';
-import '../theme/workfollow_interaction_states.dart';
-import '../theme/workfollow_theme.dart';
-import 'app_icon_button.dart';
-import 'task_editor_glyph.dart';
-import 'desktop_popover.dart';
-import 'task_editor_popover.dart';
-import 'task_menu_style.dart';
-import 'task_document_commands.dart';
+import '../../theme/workfollow_icons.dart';
+import '../../theme/workfollow_interaction_states.dart';
+import '../../theme/workfollow_theme.dart';
+import '../../widgets/app_icon_button.dart';
+import '../../widgets/task_editor_glyph.dart';
+import '../../widgets/desktop_popover.dart';
+import '../../widgets/task_editor_popover.dart';
+import '../../widgets/task_menu_style.dart';
+import 'document_commands.dart';
 
 /// Floating formatting strip; the document selection survives nested pickers.
-class TaskEditorToolbar extends StatelessWidget {
-  const TaskEditorToolbar({
+class DocumentEditorToolbar extends StatelessWidget {
+  const DocumentEditorToolbar({
     super.key,
     required this.controller,
     this.documentCommands,
@@ -27,14 +27,14 @@ class TaskEditorToolbar extends StatelessWidget {
 
   /// Shared document mutation service. It is optional for source-compatible
   /// callers; task and note editors always provide their owned instance.
-  final TaskDocumentCommands? documentCommands;
+  final DocumentCommands? documentCommands;
   final VoidCallback onAttach;
   final VoidCallback onInsertSlash;
   final VoidCallback onInsertDivider;
   final VoidCallback onLink;
 
-  TaskDocumentCommands get _commands =>
-      documentCommands ?? TaskDocumentCommands(editor: controller);
+  DocumentCommands get _commands =>
+      documentCommands ?? DocumentCommands(editor: controller);
 
   bool _active(quill.Attribute attribute) {
     return _commands.isActive(attribute);
@@ -42,7 +42,7 @@ class TaskEditorToolbar extends StatelessWidget {
 
   void _format(quill.Attribute attribute) {
     // The toolbar only chooses a semantic command. Quill attributes are
-    // interpreted and applied by TaskDocumentCommands so the slash palette
+    // interpreted and applied by DocumentCommands so the slash palette
     // and every other document entry point share exactly one mutation path.
     switch (attribute.key) {
       case 'bold':
@@ -82,7 +82,7 @@ class TaskEditorToolbar extends StatelessWidget {
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           for (final item in [(0, '正文'), (1, '一级标题'), (2, '二级标题'), (3, '三级标题')])
             _PickerRow(
-                key: ValueKey('task-format-heading-${item.$1}'),
+                key: ValueKey('document-format-heading-${item.$1}'),
                 label: item.$2,
                 selected: (_commands.headingLevel ?? 0) == item.$1,
                 onTap: () => Navigator.of(context).pop(item.$1)),
@@ -114,7 +114,7 @@ class TaskEditorToolbar extends StatelessWidget {
       placement: PopoverPlacement.topEnd,
       focusPolicy: PopoverFocusPolicy.preserveEditor,
       builder: (context) => Padding(
-        key: const ValueKey('task-time-formats'),
+        key: const ValueKey('document-time-formats'),
         padding:
             const EdgeInsets.symmetric(vertical: WorkFollowSpacing.inlineGap),
         child: Column(mainAxisSize: MainAxisSize.min, children: [
@@ -124,7 +124,7 @@ class TaskEditorToolbar extends StatelessWidget {
             ('time', time)
           ])
             _PickerRow(
-                key: ValueKey('task-insert-${item.$1}'),
+                key: ValueKey('document-insert-${item.$1}'),
                 label: item.$2,
                 onTap: () => Navigator.of(context).pop(item.$2)),
         ]),
@@ -142,7 +142,7 @@ class TaskEditorToolbar extends StatelessWidget {
           Widget format(String key, String tooltip, IconData icon,
                   quill.Attribute attribute) =>
               _ToolButton(
-                  key: ValueKey('task-format-$key'),
+                  key: ValueKey('document-format-$key'),
                   tooltip: tooltip,
                   icon: icon,
                   selected: _active(attribute),
@@ -154,7 +154,7 @@ class TaskEditorToolbar extends StatelessWidget {
                   horizontal: WorkFollowSpacing.space1),
               color: colors.border);
           return SizedBox(
-            key: const ValueKey('task-editor-toolbar'),
+            key: const ValueKey('document-editor-toolbar'),
             height: TaskEditorPopoverStyle.toolbarHeight,
             child: SingleChildScrollView(
               scrollDirection: Axis.horizontal,
@@ -162,7 +162,7 @@ class TaskEditorToolbar extends StatelessWidget {
                   horizontal: WorkFollowSpacing.toolbarItemGap),
               child: Row(mainAxisSize: MainAxisSize.min, children: [
                 _ToolButton(
-                    key: const ValueKey('task-format-heading'),
+                    key: const ValueKey('document-format-heading'),
                     tooltip: '标题',
                     label: 'H',
                     selected: _commands.headingLevel != null,
@@ -170,14 +170,14 @@ class TaskEditorToolbar extends StatelessWidget {
                 format(
                     'bold', '粗体', WorkFollowIcons.bold, quill.Attribute.bold),
                 _ToolButton(
-                    key: const ValueKey('task-format-highlight'),
+                    key: const ValueKey('document-format-highlight'),
                     tooltip: '高亮',
                     label: 'A',
                     highlight: true,
                     selected: _active(const quill.BackgroundAttribute(
-                        TaskDocumentCommands.highlightColor)),
+                        DocumentCommands.highlightColor)),
                     onPressed: (_) => _format(const quill.BackgroundAttribute(
-                        TaskDocumentCommands.highlightColor))),
+                        DocumentCommands.highlightColor))),
                 divider(),
                 format('checklist', '检查项', WorkFollowIcons.checklist,
                     quill.Attribute.unchecked),
@@ -193,18 +193,18 @@ class TaskEditorToolbar extends StatelessWidget {
                 format('strike', '删除线', WorkFollowIcons.strike,
                     quill.Attribute.strikeThrough),
                 _ToolButton(
-                    key: const ValueKey('task-format-divider'),
+                    key: const ValueKey('document-format-divider'),
                     tooltip: '分割线',
                     icon: WorkFollowIcons.divider,
                     onPressed: (_) => onInsertDivider()),
                 _ToolButton(
-                    key: const ValueKey('task-format-time'),
+                    key: const ValueKey('document-format-time'),
                     tooltip: '插入当前时间',
                     icon: WorkFollowIcons.insertTime,
                     onPressed: _time),
                 divider(),
                 _ToolButton(
-                    key: const ValueKey('task-format-link'),
+                    key: const ValueKey('document-format-link'),
                     tooltip: '链接',
                     icon: WorkFollowIcons.link,
                     onPressed: (_) => onLink()),
@@ -214,7 +214,7 @@ class TaskEditorToolbar extends StatelessWidget {
                     quill.Attribute.blockQuote),
                 divider(),
                 _ToolButton(
-                    key: const ValueKey('task-format-attachment'),
+                    key: const ValueKey('document-format-attachment'),
                     tooltip: '上传附件',
                     icon: WorkFollowIcons.attachment,
                     onPressed: (_) => onAttach()),
@@ -289,7 +289,7 @@ class _ToolButton extends StatelessWidget {
                         : TaskEditorGlyph(
                             (key as ValueKey<String>)
                                 .value
-                                .replaceFirst('task-format-', ''),
+                                .replaceFirst('document-format-', ''),
                             size: WorkFollowMetrics.toolbarIcon,
                             color: color),
                   ),

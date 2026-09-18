@@ -68,7 +68,6 @@ void main() {
           reject('use a tracking role');
         }
         if (!tokenSource &&
-            relative != 'widgets/note_document_editor.dart' &&
             RegExp(r'\bheight\s*:\s*(?:const\s+)?(?:\d+(?:\.\d+)?|\.\d+)')
                 .hasMatch(line)) {
           reject('use a line-height role or geometry metric');

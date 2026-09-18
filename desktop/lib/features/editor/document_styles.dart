@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_quill/flutter_quill.dart' as quill;
 
-import '../theme/workfollow_theme.dart';
+import '../../theme/workfollow_theme.dart';
 
 /// The visual interpretation of the semantic blocks stored in a task Delta.
 ///
@@ -10,8 +10,8 @@ import '../theme/workfollow_theme.dart';
 /// task document must not change type scale just because that fallback was
 /// selected, so every block used by the task editor is defined here and
 /// inherits the WorkFollow body face and primary text colour.
-class TaskDocumentStyles {
-  const TaskDocumentStyles._();
+class DocumentStyles {
+  const DocumentStyles._();
 
   /// The checklist marker is deliberately separate from the task-list
   /// completion checkbox. It belongs to the document's line leading, so it
@@ -63,6 +63,40 @@ class TaskDocumentStyles {
         fontSize: WorkFollowMacTypography.body,
         fontWeight: WorkFollowMacWeight.regular,
         height: WorkFollowMacTypography.lineBody,
+      );
+
+  /// Title of a document field.
+  ///
+  /// The size is the shell's call, because an inspector's title and a
+  /// full-page note title are different roles — `detailTitle` and `noteTitle`.
+  /// What every document title shares is the weight, the line height, the
+  /// absence of tracking, and the two states it can be in: a completed
+  /// document greys out and strikes through rather than changing size.
+  static TextStyle title(
+    WorkFollowTheme tokens, {
+    required double fontSize,
+    bool muted = false,
+    bool strikethrough = false,
+  }) =>
+      TextStyle(
+        fontSize: fontSize,
+        height: WorkFollowMacTypography.lineControl,
+        fontWeight: WorkFollowMacWeight.semibold,
+        letterSpacing: WorkFollowMacTracking.none,
+        color: muted ? tokens.textTertiary : tokens.textPrimary,
+        decoration: strikethrough ? TextDecoration.lineThrough : null,
+      );
+
+  /// Decoration of a document's title field.
+  ///
+  /// No chrome, dense metrics and no content padding: a title is the first line
+  /// of the document, so it sits on the document's own baseline rather than on
+  /// a Material field's inset one.
+  static InputDecoration titleDecoration(String hintText) => InputDecoration(
+        hintText: hintText,
+        border: InputBorder.none,
+        isDense: true,
+        contentPadding: EdgeInsets.zero,
       );
 
   /// First-level heading style. The larger size is the semantic difference;
@@ -174,7 +208,7 @@ class TaskDocumentStyles {
         const quill.VerticalSpacing(
             WorkFollowSpacing.zero, WorkFollowSpacing.zero),
         null,
-        TaskDocumentCheckboxBuilder(tokens),
+        DocumentCheckboxBuilder(tokens),
       ),
       // Ordered and unordered markers (numbers and bullets) take their face
       // from `leading`; giving it the accent colour produces the TickTick
@@ -266,8 +300,8 @@ class TaskDocumentStyles {
 /// Flutter Quill intentionally exposes the checkbox as a builder on
 /// [quill.DefaultListBlockStyle]. Using that hook avoids replacing Quill's
 /// list leading and preserves its caret/selection behaviour.
-class TaskDocumentCheckboxBuilder extends quill.QuillCheckboxBuilder {
-  TaskDocumentCheckboxBuilder(this.tokens);
+class DocumentCheckboxBuilder extends quill.QuillCheckboxBuilder {
+  DocumentCheckboxBuilder(this.tokens);
 
   final WorkFollowTheme tokens;
 
@@ -276,15 +310,15 @@ class TaskDocumentCheckboxBuilder extends quill.QuillCheckboxBuilder {
     required BuildContext context,
     required bool isChecked,
     required ValueChanged<bool> onChanged,
-  }) => _TaskDocumentCheckbox(
+  }) => _DocumentCheckbox(
         tokens: tokens,
         isChecked: isChecked,
         onChanged: onChanged,
       );
 }
 
-class _TaskDocumentCheckbox extends StatefulWidget {
-  const _TaskDocumentCheckbox({
+class _DocumentCheckbox extends StatefulWidget {
+  const _DocumentCheckbox({
     required this.tokens,
     required this.isChecked,
     required this.onChanged,
@@ -295,10 +329,10 @@ class _TaskDocumentCheckbox extends StatefulWidget {
   final ValueChanged<bool> onChanged;
 
   @override
-  State<_TaskDocumentCheckbox> createState() => _TaskDocumentCheckboxState();
+  State<_DocumentCheckbox> createState() => _DocumentCheckboxState();
 }
 
-class _TaskDocumentCheckboxState extends State<_TaskDocumentCheckbox> {
+class _DocumentCheckboxState extends State<_DocumentCheckbox> {
   bool _hovered = false;
 
   @override
@@ -326,17 +360,17 @@ class _TaskDocumentCheckboxState extends State<_TaskDocumentCheckbox> {
         toggled: widget.isChecked,
         label: widget.isChecked ? '已完成检查项' : '未完成检查项',
         child: SizedBox(
-          width: TaskDocumentStyles.checklistSize,
-          height: TaskDocumentStyles.checklistSize,
+          width: DocumentStyles.checklistSize,
+          height: DocumentStyles.checklistSize,
           child: Material(
             color: background,
             shape: RoundedRectangleBorder(
               side: BorderSide(
                 color: borderColor,
-                width: TaskDocumentStyles.checklistBorderWidth,
+                width: DocumentStyles.checklistBorderWidth,
               ),
               borderRadius:
-                  BorderRadius.circular(TaskDocumentStyles.checklistRadius),
+                  BorderRadius.circular(DocumentStyles.checklistRadius),
             ),
             clipBehavior: Clip.antiAlias,
             child: InkWell(
@@ -347,7 +381,7 @@ class _TaskDocumentCheckboxState extends State<_TaskDocumentCheckbox> {
               splashColor: Colors.transparent,
               child: widget.isChecked
                   ? CustomPaint(
-                      painter: _TaskChecklistCheckPainter(checkColor),
+                      painter: _ChecklistCheckPainter(checkColor),
                     )
                   : null,
             ),
@@ -370,8 +404,8 @@ class _TaskDocumentCheckboxState extends State<_TaskDocumentCheckbox> {
   }
 }
 
-class _TaskChecklistCheckPainter extends CustomPainter {
-  const _TaskChecklistCheckPainter(this.color);
+class _ChecklistCheckPainter extends CustomPainter {
+  const _ChecklistCheckPainter(this.color);
 
   final Color color;
 
@@ -393,6 +427,6 @@ class _TaskChecklistCheckPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant _TaskChecklistCheckPainter oldDelegate) =>
+  bool shouldRepaint(covariant _ChecklistCheckPainter oldDelegate) =>
       oldDelegate.color != color;
 }
