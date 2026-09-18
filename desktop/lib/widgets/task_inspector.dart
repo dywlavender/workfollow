@@ -520,7 +520,7 @@ class _TaskInspectorState extends State<TaskInspector> {
                 WorkFollowSpacing.inspectorContentBottomPadding)
             .clamp(0, double.infinity),
         title: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          if (widget.controller.parentOf(task) case final parent?)
+          if (widget.controller.parentOf(task.id) case final parent?)
             TaskParentBreadcrumb(
                 parent: parent,
                 onOpen: () => widget.controller.openTask(parent.id)),

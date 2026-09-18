@@ -126,6 +126,82 @@ void main() {
     expect(restored.lists.single.color, '#22AA66');
   });
 
+  test('subtask tree fields survive a JSON round trip', () {
+    final bundle = MigrationBundle(
+      format: localSnapshotFormat,
+      schemaVersion: migrationSchemaVersion,
+      exportedAt: null,
+      lists: const [],
+      folders: const [],
+      tasks: const [
+        MigrationTaskRecord(
+          id: 'parent-2',
+          title: '2',
+          description: null,
+          contentJson: null,
+          status: 'TODO',
+          priority: 'NONE',
+          dueAt: null,
+          dueEndAt: null,
+          reminderAt: null,
+          recurrenceType: 'NONE',
+          recurrenceConfig: null,
+          listName: '收集箱',
+          tags: [],
+          createdAt: null,
+          updatedAt: null,
+          completedAt: null,
+        ),
+        MigrationTaskRecord(
+          id: 'child-1',
+          title: '什么',
+          description: null,
+          contentJson: null,
+          status: 'TODO',
+          priority: 'NONE',
+          dueAt: null,
+          dueEndAt: null,
+          reminderAt: null,
+          recurrenceType: 'NONE',
+          recurrenceConfig: null,
+          listName: '收集箱',
+          tags: [],
+          createdAt: null,
+          updatedAt: null,
+          completedAt: null,
+          parentTaskId: 'parent-2',
+          childOrder: 1,
+        ),
+      ],
+      notes: const [],
+    );
+
+    final restored = MigrationBundle.fromJson(bundle.toJson());
+    expect(restored.tasks.first.parentTaskId, isNull);
+    expect(restored.tasks.first.childOrder, 0);
+    expect(restored.tasks.last.parentTaskId, 'parent-2');
+    expect(restored.tasks.last.childOrder, 1);
+    final item = TaskItem.fromMigration(restored.tasks.last);
+    expect(item.isChildTask, isTrue);
+    expect(item.parentTaskId, 'parent-2');
+    expect(item.childOrder, 1);
+  });
+
+  test('legacy task JSON without tree fields loads as a top-level task', () {
+    final record = MigrationTaskRecord.fromJson({
+      'id': 'old-task',
+      'title': '旧数据',
+      'status': 'TODO',
+      'priority': 'NONE',
+      'listName': '收集箱',
+      'tags': [],
+    });
+    expect(record.parentTaskId, isNull);
+    expect(record.childOrder, 0);
+    final item = TaskItem.fromMigration(record);
+    expect(item.isChildTask, isFalse);
+  });
+
   test('rejects an unknown format or schema version', () {
     expect(
       () => MigrationBundle.fromJson({

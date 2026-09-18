@@ -23,11 +23,81 @@ void main() {
     expect(children.last.childOrder, 1);
     expect(children.every((task) => task.title.isEmpty), isTrue);
     expect(children.every((task) => task.listName == parent.listName), isTrue);
-    expect(c.parentOf(children.first)!.id, parent.id);
+    expect(c.parentOf(children.first.id)!.id, parent.id);
     expect(c.hasChildren(parent.id), isTrue);
     expect(c.taskUiState.pendingChildFocusTaskId, second);
     // The parent keeps the selection so the panel shows the new row.
     expect(c.selectedTaskId, parent.id);
+  });
+
+  test('S1 a plain task has no parent and three children order 0/1/2', () {
+    final c = WorkspaceController(seedData: false)..addTask('父任务');
+    addTearDown(c.dispose);
+    final parent = c.tasks.single;
+    expect(parent.parentTaskId, isNull);
+    expect(parent.childOrder, 0);
+    expect(parent.isChildTask, isFalse);
+
+    final a = c.createChildTask(parent.id, title: '什么')!;
+    final b = c.createChildTask(parent.id, title: '问问')!;
+    final empty = c.createChildTask(parent.id)!;
+    expect(
+        c.childrenOf(parent.id).map((task) => task.id), [a, b, empty]);
+    expect(
+        c.childrenOf(parent.id).map((task) => task.childOrder), [0, 1, 2]);
+    expect(c.childCount(parent.id), 3);
+    expect(c.completedChildCount(parent.id), 0);
+  });
+
+  test('S1 childrenOf stays stable when child orders tie', () {
+    final c = WorkspaceController(seedData: false);
+    addTearDown(c.dispose);
+    // Two children with the same childOrder: the createdAt/id tie-break
+    // must keep the listing deterministic instead of depending on the
+    // internal _tasks order.
+    c.expandLegacyForTest(const [
+      TaskItem(
+          id: 'parent-2',
+          title: '2',
+          listName: '收集箱',
+          bucket: TaskBucket.unscheduled),
+      TaskItem(
+          id: 'child-b',
+          title: '问问',
+          listName: '收集箱',
+          bucket: TaskBucket.unscheduled,
+          parentTaskId: 'parent-2',
+          childOrder: 1,
+          createdAt: '2026-09-19T09:00:00.000'),
+      TaskItem(
+          id: 'child-a',
+          title: '什么',
+          listName: '收集箱',
+          bucket: TaskBucket.unscheduled,
+          parentTaskId: 'parent-2',
+          childOrder: 1,
+          createdAt: '2026-09-19T08:00:00.000'),
+    ]);
+    // Earlier createdAt wins the tie: 什么 before 问问, on every call.
+    expect(c.childrenOf('parent-2').map((task) => task.id),
+        ['child-a', 'child-b']);
+    expect(c.childrenOf('parent-2').map((task) => task.id),
+        c.childrenOf('parent-2').map((task) => task.id).toList());
+  });
+
+  test('S1 child edits run through the normal Task actions', () {
+    final c = WorkspaceController(seedData: false)..addTask('父任务');
+    addTearDown(c.dispose);
+    final parentId = c.tasks.single.id;
+    final childId = c.createChildTask(parentId)!;
+    c.taskActions.setTitle(childId, '改名后的子任务');
+    c.taskActions.complete(childId);
+
+    final child = c.tasks.firstWhere((task) => task.id == childId);
+    expect(child.title, '改名后的子任务');
+    expect(child.completed, isTrue);
+    expect(child.completedAt, isNotNull);
+    expect(c.completedChildCount(parentId), 1);
   });
 
   test('SUB-005 completing a child leaves the parent and siblings untouched',

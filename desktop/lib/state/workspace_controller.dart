@@ -1823,12 +1823,28 @@ class WorkspaceController extends ChangeNotifier {
     final children = activeTasks
         .where((task) => task.parentTaskId == parentId)
         .toList()
-      ..sort((a, b) => a.childOrder.compareTo(b.childOrder));
+      ..sort((a, b) {
+        var order = a.childOrder.compareTo(b.childOrder);
+        if (order != 0) return order;
+        // Sibling order is authoritative; the next two keys only keep the
+        // result stable when orders tie (legacy data, duplicates).
+        order = (a.createdAt ?? '').compareTo(b.createdAt ?? '');
+        if (order != 0) return order;
+        return a.id.compareTo(b.id);
+      });
     return List.unmodifiable(children);
   }
 
-  TaskItem? parentOf(TaskItem task) {
-    final parentId = task.parentTaskId;
+  int childCount(String taskId) =>
+      activeTasks.where((task) => task.parentTaskId == taskId).length;
+
+  int completedChildCount(String taskId) => activeTasks
+      .where((task) => task.parentTaskId == taskId && task.completed)
+      .length;
+
+  TaskItem? parentOf(String taskId) {
+    final task = activeTasks.where((item) => item.id == taskId).firstOrNull;
+    final parentId = task?.parentTaskId;
     if (parentId == null) return null;
     return activeTasks.where((item) => item.id == parentId).firstOrNull;
   }
