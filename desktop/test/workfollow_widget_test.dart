@@ -7,6 +7,7 @@ import 'package:flutter_quill/flutter_quill.dart' as quill;
 import 'package:workfollow_personal/app.dart';
 import 'package:workfollow_personal/screens/today_screen.dart';
 import 'package:workfollow_personal/state/workspace_controller.dart';
+import 'package:workfollow_personal/theme/workfollow_color_tokens.dart';
 import 'package:workfollow_personal/theme/workfollow_theme.dart';
 import 'package:workfollow_personal/widgets/task_row.dart';
 import 'package:workfollow_personal/widgets/task_inspector.dart';
@@ -178,6 +179,67 @@ void main() {
     await tester.pump();
     expect(railFill('首页')!.a, 0, reason: '离开的入口必须当帧失去底色，不能淡出');
     expect(railFill('任务')!.a, greaterThan(0), reason: '进入的入口必须当帧就位');
+  });
+
+  testWidgets(
+      'the navigation column states selection with a neutral fill, not ink',
+      (tester) async {
+    tester.view.physicalSize = const Size(1400, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    await tester.pumpWidget(const WorkFollowApp(demoMode: true));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('任务'));
+    await tester.pumpAndSettle();
+
+    const tokens = WorkFollowTheme.light;
+
+    TextStyle words(String rowKey) => tester
+        .widget<Text>(find
+            .descendant(
+                of: find.byKey(ValueKey(rowKey)), matching: find.byType(Text))
+            .first)
+        .style!;
+
+    Color? fill(String rowKey) {
+      final box = tester.widget<DecoratedBox>(find
+          .descendant(
+              of: find.byKey(ValueKey(rowKey)), matching: find.byType(DecoratedBox))
+          .first);
+      return (box.decoration as BoxDecoration).color;
+    }
+
+    void expectNeutral(Color color, String what) {
+      expect(color.red, color.green, reason: '$what 的底色应是中性灰白，不能带色相');
+      expect(color.green, color.blue, reason: '$what 的底色应是中性灰白，不能带色相');
+      expect(color, isNot(WorkFollowColorTokens.lightNavigationSelected),
+          reason: '$what 不该再用主色淡洗来表达选中');
+    }
+
+    // Selected and unselected rows carry the same ink: the darkest text in the
+    // column, one weight step above the body. Selection is the only thing that
+    // may differ, and it belongs to the fill.
+    for (final row in ['rail-navigation-item-今天', 'rail-navigation-item-计划']) {
+      expect(words(row).color, tokens.textPrimary,
+          reason: '$row 的文字是黑色主体，不随选中变色');
+      expect(words(row).fontWeight, WorkFollowMacWeight.medium,
+          reason: '$row 的文字是 medium，普通项不该细到看着发灰');
+    }
+
+    final selected = fill('rail-navigation-item-今天')!;
+    expectNeutral(selected, '选中的导航项');
+
+    // A list keeps its colour on the dot. Tinting the words instead made the
+    // column read as a row of coloured labels rather than as navigation.
+    await tester.tap(find.byKey(const ValueKey('rail-list-item-工作')));
+    await tester.pumpAndSettle();
+    expect(words('rail-list-item-工作').color, tokens.textPrimary);
+    expect(words('rail-list-item-工作').fontWeight, WorkFollowMacWeight.medium);
+    expectNeutral(fill('rail-list-item-工作')!, '选中的清单');
   });
 
   testWidgets('hovering a rail row lights only the row under the pointer',

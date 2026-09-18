@@ -20,6 +20,9 @@ Color _sidebarAccent(BuildContext context, WorkFollowTheme tokens) =>
 Color _sidebarAccentSoft(BuildContext context, WorkFollowTheme tokens) =>
     WorkFollowColorTokens.navigationSelected(context, tokens);
 
+Color _sidebarSelectedNeutral(BuildContext context, WorkFollowTheme tokens) =>
+    WorkFollowColorTokens.navigationSelectedNeutral(context, tokens);
+
 Color _sidebarRail(BuildContext context, WorkFollowTheme tokens) =>
     WorkFollowColorTokens.navigationRail(context, tokens);
 
@@ -861,7 +864,11 @@ class _RailItemState extends State<_RailItem> {
                 color: WorkFollowInteractionStyles.customFill(
                   defaultColor: Colors.transparent,
                   hoverColor: tokens.content.withValues(alpha: .65),
-                  selectedColor: _sidebarAccentSoft(context, tokens),
+                  // Selection is a state, not a colour: the fill is the
+                  // neutral counterpart of the column's own surface, and the
+                  // words keep their own ink. Tinting both was what made the
+                  // column read as a row of coloured labels.
+                  selectedColor: _sidebarSelectedNeutral(context, tokens),
                   pressedColor: tokens.content.withValues(alpha: .85),
                   selected: widget.selected,
                   hovered: hovering,
@@ -880,9 +887,7 @@ class _RailItemState extends State<_RailItem> {
                   AppIcon(
                     widget.icon,
                     size: WorkFollowMetrics.navigationIcon,
-                    color: widget.selected
-                        ? _sidebarAccent(context, tokens)
-                        : tokens.textPrimary,
+                    color: tokens.textPrimary,
                   ),
                   const SizedBox(width: WorkFollowSpacing.controlGap),
                   Expanded(
@@ -891,18 +896,16 @@ class _RailItemState extends State<_RailItem> {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
-                        color: widget.selected
-                            ? _sidebarAccent(context, tokens)
-                            : tokens.textPrimary,
+                        color: tokens.textPrimary,
                         fontSize: WorkFollowMacTypography.navigation,
                         height: WorkFollowMacTypography.lineControl,
-                        // Selection is carried by background and colour; one
-                        // weight step adds the last bit of emphasis. Heavier nav
-                        // rows are what made the rail read bolder than the
-                        // reference, so semibold is never the selected state.
-                        fontWeight: widget.selected
-                            ? WorkFollowMacWeight.medium
-                            : WorkFollowMacWeight.regular,
+                        // Every row carries the same ink and the same weight,
+                        // selected or not. Navigation text is the darkest thing
+                        // in the column and stays medium — one step above the
+                        // body, never semibold, which is what gave the column
+                        // its heavy dashboard look. Selection belongs to the
+                        // fill alone.
+                        fontWeight: WorkFollowMacWeight.medium,
                       ),
                     ),
                   ),
@@ -922,17 +925,19 @@ class _RailItemState extends State<_RailItem> {
                           horizontal: WorkFollowSpacing.compactGap,
                           vertical: WorkFollowSpacing.microGap),
                       decoration: BoxDecoration(
+                        // The count is a quiet figure beside the words, so its
+                        // chip is the one thing that inverts: lighter than the
+                        // column when the row is not selected, a shade deeper
+                        // than the white of a selected one.
                         color: widget.selected
-                            ? tokens.content
+                            ? tokens.listRowSelected
                             : tokens.content.withValues(alpha: .7),
                         borderRadius:
                             BorderRadius.circular(WorkFollowRadii.pill),
                       ),
                       child: Text('${widget.count}',
                           style: TextStyle(
-                              color: widget.selected
-                                  ? _sidebarAccent(context, tokens)
-                                  : tokens.textTertiary,
+                              color: tokens.textTertiary,
                               fontSize: WorkFollowMacTypography.navigationMeta,
                               height: WorkFollowMacTypography.lineControl,
                               fontWeight: WorkFollowMacWeight.regular)),
@@ -1010,7 +1015,12 @@ class _TaskListItemState extends State<_TaskListItem> {
                                 defaultColor: Colors.transparent,
                                 hoverColor:
                                     tokens.content.withValues(alpha: .7),
-                                selectedColor: listColor.withValues(alpha: .12),
+                                // A selected list is a selected row, not a
+                                // swatch: the fill is neutral like every other
+                                // row's, and the list's colour stays on the
+                                // dot where it does the recognising.
+                                selectedColor:
+                                    _sidebarSelectedNeutral(context, tokens),
                                 pressedColor:
                                     tokens.content.withValues(alpha: .88),
                                 selected: selected,
@@ -1043,22 +1053,16 @@ class _TaskListItemState extends State<_TaskListItem> {
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: TextStyle(
-                                    color: selected
-                                        ? listColor
-                                        : tokens.textPrimary,
+                                    color: tokens.textPrimary,
                                     fontSize:
                                         WorkFollowMacTypography.navigation,
                                     height: WorkFollowMacTypography.lineControl,
-                                    fontWeight: selected
-                                        ? WorkFollowMacWeight.medium
-                                        : WorkFollowMacWeight.regular)),
+                                    fontWeight: WorkFollowMacWeight.medium)),
                           ),
                           if (count > 0)
                             Text('$count',
                                 style: TextStyle(
-                                    color: selected
-                                        ? listColor
-                                        : tokens.textTertiary,
+                                    color: tokens.textTertiary,
                                     fontSize:
                                         WorkFollowMacTypography.navigationMeta,
                                     height: WorkFollowMacTypography.lineControl,
@@ -1264,7 +1268,7 @@ class _TagItemState extends State<_TagItem> {
                   color: WorkFollowInteractionStyles.customFill(
                     defaultColor: Colors.transparent,
                     hoverColor: tokens.content.withValues(alpha: .65),
-                    selectedColor: _sidebarAccentSoft(context, tokens),
+                    selectedColor: _sidebarSelectedNeutral(context, tokens),
                     pressedColor: tokens.content.withValues(alpha: .85),
                     selected: selected,
                     hovered: hovering,
@@ -1280,28 +1284,20 @@ class _TagItemState extends State<_TagItem> {
               child: Row(children: [
                 AppIcon(WorkFollowIcons.tag,
                     size: WorkFollowMetrics.navigationIcon,
-                    color: selected
-                        ? _sidebarAccent(context, tokens)
-                        : tokens.textPrimary),
+                    color: tokens.textPrimary),
                 const SizedBox(width: WorkFollowSpacing.controlGap),
                 Expanded(
                     child: Text(widget.name,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
-                            color: selected
-                                ? _sidebarAccent(context, tokens)
-                                : tokens.textPrimary,
+                            color: tokens.textPrimary,
                             fontSize: WorkFollowMacTypography.navigation,
                             height: WorkFollowMacTypography.lineControl,
-                            fontWeight: selected
-                                ? WorkFollowMacWeight.medium
-                                : WorkFollowMacWeight.regular))),
+                            fontWeight: WorkFollowMacWeight.medium))),
                 Text('${widget.count}',
                     style: TextStyle(
-                        color: selected
-                            ? _sidebarAccent(context, tokens)
-                            : tokens.textTertiary,
+                        color: tokens.textTertiary,
                         fontSize: WorkFollowMacTypography.navigationMeta,
                         height: WorkFollowMacTypography.lineControl,
                         fontWeight: WorkFollowMacWeight.regular)),

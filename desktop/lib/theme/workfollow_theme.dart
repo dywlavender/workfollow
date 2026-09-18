@@ -393,8 +393,8 @@ class MatrixMetrics {
 /// Geometry of the two surfaces a page opens *over* itself: the floating task
 /// editor and the compact new-task composer.
 ///
-/// Both are shared — the Matrix, Calendar pages open the same editor on a task
-/// and the same composer to create one — so their sizes live beside
+/// Both are shared — the Matrix and Calendar pages open the same editor on a
+/// task and the same composer to create one — so their sizes live beside
 /// [WorkFollowMetrics] rather than inside a single page's block. The sizes are
 /// the surface's, not the page's: the same 400pt editor has to look the same
 /// wherever it is anchored.

@@ -53,6 +53,18 @@ class WorkFollowColorTokens {
           ? lightNavigationSelected
           : tokens.accentSoft;
 
+  /// Selected fill for a row in the navigation column: neutral, never tinted.
+  ///
+  /// The column's own surface is already grey, so the neutral counterpart of
+  /// the reference's light-grey chip is *lighter* than the surface here rather
+  /// than darker. An accent-tinted fill made a selected row read as a colour
+  /// instead of as a state, and pulled the accent onto the row's words too.
+  static Color navigationSelectedNeutral(
+          BuildContext context, WorkFollowTheme tokens) =>
+      Theme.of(context).brightness == Brightness.light
+          ? tokens.content
+          : tokens.listRowSelected;
+
   static Color navigationAccent(BuildContext context, WorkFollowTheme tokens) =>
       Theme.of(context).brightness == Brightness.light
           ? lightNavigationAccent
