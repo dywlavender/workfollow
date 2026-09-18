@@ -187,6 +187,8 @@ void main() {
     editor.updateSelection(const TextSelection(baseOffset: 0, extentOffset: 6),
         quill.ChangeSource.local);
     await tester.pump();
+    expect(find.byKey(const ValueKey('document-selection-toolbar')),
+        findsOneWidget);
     await tester
         .tap(find.byKey(const ValueKey('generate-task-from-selection')));
     await tester.pump();
@@ -253,6 +255,8 @@ void main() {
     editor.updateSelection(const TextSelection(baseOffset: 0, extentOffset: 2),
         quill.ChangeSource.local);
     await tester.pump();
+    expect(find.byKey(const ValueKey('document-selection-toolbar')),
+        findsOneWidget);
     expect(
         find.byKey(const ValueKey('generate-task-from-selection')), findsOneWidget);
 
@@ -262,6 +266,7 @@ void main() {
     await tester.pump();
     expect(
         find.byKey(const ValueKey('generate-task-from-selection')), findsNothing);
+    expect(find.byKey(const ValueKey('document-selection-toolbar')), findsNothing);
   });
 
   testWidgets('a note canvas refuses the height its host offers it',

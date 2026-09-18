@@ -3,6 +3,7 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_quill/flutter_quill.dart' as quill;
 
 import '../document_slash_menu.dart';
+import 'document_selection_action.dart';
 import 'editor_capability.dart';
 
 /// Everything the document editor core needs from the document it is editing.
@@ -11,7 +12,7 @@ import 'editor_capability.dart';
 /// invocation, the formatting strip, the link dialog, the escape chain and the
 /// persistence handoff. A profile supplies the parts that belong to a document
 /// type — its Delta, its palette vocabulary, its embeds, its under-prose
-/// panels, its footer action — and the core renders them without ever asking
+/// panels and its selection actions — and the core renders them without ever asking
 /// which type it is holding.
 ///
 /// Implementations are rebuilt on every editor build, so they must be cheap
@@ -87,17 +88,10 @@ abstract class EditorProfile {
   /// the document type keeps everything inside the Quill document itself.
   List<Widget> buildTrailingPanels(BuildContext context);
 
-  /// Leading action of the editor footer. Only read when
-  /// [EditorCapability.editorFooter] is present.
-  ///
-  /// [editor] is lent by the core because a document action usually works on
-  /// the current selection — "turn this paragraph into a task" reads the range
-  /// the user has highlighted.
-  Widget? buildFooterLeading(
-    BuildContext context, {
-    required quill.QuillController editor,
-    required bool selectionPresent,
-  });
+  /// Actions shown beside a non-collapsed selection. The editor core owns the
+  /// floating surface and its lifecycle; a profile only supplies the semantic
+  /// actions valid for its document type.
+  List<DocumentSelectionAction> get selectionActions;
 
   /// Requests a file for an attachment block. A null result is a cancelled
   /// picker and leaves the document untouched.

@@ -12,6 +12,7 @@ import '../../../theme/workfollow_surface_tokens.dart';
 import '../../../theme/workfollow_theme.dart';
 import '../../../widgets/app_icon_button.dart';
 import '../document_slash_menu.dart';
+import '../domain/document_selection_action.dart';
 import '../domain/editor_capability.dart';
 import '../domain/editor_profile.dart';
 
@@ -125,15 +126,8 @@ class TaskEditorProfile extends EditorProfile {
     ];
   }
 
-  /// The task footer lives in the inspector, next to the More menu, so the
-  /// editor does not render one.
   @override
-  Widget? buildFooterLeading(
-    BuildContext context, {
-    required quill.QuillController editor,
-    required bool selectionPresent,
-  }) =>
-      null;
+  List<DocumentSelectionAction> get selectionActions => const [];
 
   @override
   Future<String?> pickAttachment() => controller.pickTaskAttachment(task.id);

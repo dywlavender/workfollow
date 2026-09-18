@@ -11,7 +11,7 @@ export '../features/editor/profiles/note_editor_profile.dart';
 /// A note body.
 ///
 /// Notes and tasks edit the same document with the same commands; what differs
-/// is the profile. A note carries images and a footer action that turns a
+/// is the profile. A note carries images and a selection action that turns a
 /// highlighted paragraph into a task, and it carries none of the task blocks —
 /// a note is where work is described, not where it is tracked.
 class NoteDocumentEditor extends StatelessWidget {

@@ -13,19 +13,22 @@ import '../../../widgets/task_editor_popover.dart';
 import '../document_commands.dart';
 import '../document_keys.dart';
 import '../document_editor_toolbar.dart';
+import '../document_selection_toolbar.dart';
 import '../document_slash_menu.dart';
 import '../document_styles.dart';
 import '../slash_command_session.dart';
+import '../domain/document_selection_action.dart';
 import '../domain/editor_capability.dart';
 import '../domain/editor_profile.dart';
 
 /// The one document editor behind every WorkFollow editing surface.
 ///
 /// A task document and a note document differ in their Delta, their palette
-/// vocabulary, their embeds, their under-prose panels and their footer — not in
-/// how a slash invocation, a formatting strip or a save handoff works. Those
-/// mechanics live here once, and [EditorProfile] says which of them a document
-/// loads. The core never asks what kind of document it holds.
+/// vocabulary, their embeds, their under-prose panels and their selection
+/// actions — not in how a slash invocation, a formatting strip or a save
+/// handoff works. Those mechanics live here once, and [EditorProfile] says
+/// which of them a document loads. The core never asks what kind of document it
+/// holds.
 class DocumentEditor extends StatefulWidget {
   const DocumentEditor({
     super.key,
@@ -61,6 +64,7 @@ class DocumentEditorState extends State<DocumentEditor>
   final _slashMenuKey = GlobalKey<DocumentSlashMenuState>();
   final _slashPopover = PersistentAnchoredPopoverController();
   final _formatToolbar = PersistentAnchoredPopoverController();
+  final _selectionPopover = PersistentAnchoredPopoverController();
   late String serialized;
   late String _lastEditorText;
   SlashCommandSession? _slashSession;
@@ -68,6 +72,7 @@ class DocumentEditorState extends State<DocumentEditor>
   bool selectionPresent = false;
   bool slashVisible = false;
   bool toolbarVisible = false;
+  bool selectionToolbarVisible = false;
   bool _toolbarSyncScheduled = false;
   int _documentLoadGeneration = 0;
   ScrollPosition? _ancestorScrollPosition;
@@ -90,6 +95,14 @@ class DocumentEditorState extends State<DocumentEditor>
   bool dismissFormattingToolbar() {
     if (!toolbarVisible && !_formatToolbar.isOpen) return false;
     _closeFormattingToolbar();
+    return true;
+  }
+
+  /// Closes the selection action strip while leaving the editor selection
+  /// intact. The next non-collapsed selection opens it again.
+  bool dismissSelectionToolbar() {
+    if (!selectionToolbarVisible && !_selectionPopover.isOpen) return false;
+    _closeSelectionToolbar();
     return true;
   }
 
@@ -166,6 +179,11 @@ class DocumentEditorState extends State<DocumentEditor>
     if (mounted && nextSelectionPresent != selectionPresent) {
       setState(() => selectionPresent = nextSelectionPresent);
     }
+    if (nextSelectionPresent) {
+      _syncSelectionToolbar(selectionPresentOverride: nextSelectionPresent);
+    } else {
+      _closeSelectionToolbar();
+    }
 
     _lastEditorText = text;
 
@@ -185,15 +203,18 @@ class DocumentEditorState extends State<DocumentEditor>
     if (identical(next, _ancestorScrollPosition)) return;
     _ancestorScrollPosition?.removeListener(_syncSlashOverlay);
     _ancestorScrollPosition?.removeListener(_syncFormattingToolbarOverlay);
+    _ancestorScrollPosition?.removeListener(_syncSelectionToolbar);
     _ancestorScrollPosition = next;
     _ancestorScrollPosition?.addListener(_syncSlashOverlay);
     _ancestorScrollPosition?.addListener(_syncFormattingToolbarOverlay);
+    _ancestorScrollPosition?.addListener(_syncSelectionToolbar);
   }
 
   @override
   void didChangeMetrics() {
     _syncSlashOverlay();
     _syncFormattingToolbarOverlay();
+    _syncSelectionToolbar();
   }
 
   @override
@@ -205,6 +226,7 @@ class DocumentEditorState extends State<DocumentEditor>
     if (documentChanged) {
       _closeFormattingToolbar(notify: false, requestFocus: false);
       _closeSlashSession();
+      _closeSelectionToolbar();
       _scheduleDocumentReplacement(widget.profile.documentId);
       return;
     }
@@ -238,9 +260,11 @@ class DocumentEditorState extends State<DocumentEditor>
   void dispose() {
     _formatToolbar.close();
     _slashPopover.close();
+    _selectionPopover.close();
     _slashSession = null;
     _ancestorScrollPosition?.removeListener(_syncSlashOverlay);
     _ancestorScrollPosition?.removeListener(_syncFormattingToolbarOverlay);
+    _ancestorScrollPosition?.removeListener(_syncSelectionToolbar);
     WidgetsBinding.instance.removeObserver(this);
     editor.removeListener(_changed);
     editor.dispose();
@@ -327,6 +351,81 @@ class DocumentEditorState extends State<DocumentEditor>
   void _syncFormattingToolbarOverlay() {
     if (!mounted || !toolbarVisible) return;
     _formatToolbar.markNeedsBuild();
+  }
+
+  void _closeSelectionToolbar() {
+    final wasOpen = selectionToolbarVisible || _selectionPopover.isOpen;
+    _selectionPopover.close();
+    if (!wasOpen) return;
+    if (mounted && selectionToolbarVisible) {
+      setState(() => selectionToolbarVisible = false);
+    }
+  }
+
+  void _syncSelectionToolbar({bool? selectionPresentOverride}) {
+    if (!mounted) return;
+    final actions = widget.profile.selectionActions;
+    final hasSelection = selectionPresentOverride ?? selectionPresent;
+    if (!hasSelection || editor.selection.isCollapsed || actions.isEmpty) {
+      _closeSelectionToolbar();
+      return;
+    }
+    if (_selectionPopover.isOpen) {
+      _selectionPopover.markNeedsBuild();
+      return;
+    }
+    final opened = _selectionPopover.open(
+      context,
+      width: TaskEditorMetrics.selectionToolbarWidth,
+      height: TaskEditorMetrics.selectionToolbarHeight,
+      placement: PopoverPlacement.topCenter,
+      policy: const DesktopOverlayPolicy(
+        layer: DesktopOverlayLayer.toolbar,
+        focusPolicy: PopoverFocusPolicy.none,
+        dismissOnTapOutside: true,
+        restoreFocus: false,
+      ),
+      popoverTheme: TaskEditorPopoverStyle.theme(context),
+      surfaceDecoration:
+          taskFormattingToolbarDecoration(WorkFollowTheme.of(context)),
+      anchorRectResolver: _selectionAnchorRect,
+      onDismiss: _closeSelectionToolbar,
+      builder: (_) => DocumentSelectionToolbar(
+        actions: actions,
+        onInvoke: _invokeSelectionAction,
+      ),
+    );
+    if (opened && mounted) {
+      setState(() => selectionToolbarVisible = true);
+    }
+  }
+
+  void _invokeSelectionAction(DocumentSelectionAction action) {
+    if (!mounted || editor.selection.isCollapsed) return;
+    action.onInvoke(context, editor);
+    _closeSelectionToolbar();
+    focus.requestFocus();
+  }
+
+  Rect? _selectionAnchorRect() {
+    final renderEditor = renderEditorKey.currentState?.renderEditor;
+    final selection = editor.selection;
+    if (renderEditor == null || !selection.isValid || selection.isCollapsed) {
+      return null;
+    }
+    try {
+      final maxOffset = math.max(0, editor.document.length - 1);
+      final extent = selection.extentOffset.clamp(0, maxOffset).toInt();
+      final caret =
+          renderEditor.getLocalRectForCaret(TextPosition(offset: extent));
+      final global = renderEditor.localToGlobal(caret.topLeft);
+      return Rect.fromLTWH(
+          global.dx, global.dy, math.max(1, caret.width), caret.height);
+    } on Object {
+      // The selection can change before Quill has laid out its new line. Keep
+      // the last popover geometry until the next scroll/layout notification.
+      return null;
+    }
   }
 
   void _scheduleFormattingToolbarSync() {
@@ -577,6 +676,7 @@ class DocumentEditorState extends State<DocumentEditor>
                               CallbackAction<_EditorEscapeIntent>(
                             onInvoke: (_) {
                               if (dismissSlashMenu()) return null;
+                              if (dismissSelectionToolbar()) return null;
                               if (dismissFormattingToolbar()) return null;
                               if (widget.onEscape != null) {
                                 widget.onEscape!();
@@ -630,31 +730,8 @@ class DocumentEditorState extends State<DocumentEditor>
                       ),
                     ),
                     ...panels,
-                    if (capabilities.contains(EditorCapability.editorFooter))
-                      _footer(),
                   ],
                 ))));
-  }
-
-  /// Document footer: the document's own action, on the leading edge.
-  ///
-  /// The formatting trigger is deliberately *not* here. It is chrome about the
-  /// page rather than about the prose, and this strip sits directly under the
-  /// last line — so on a short document it ends up halfway down an empty page.
-  /// Each host places it where its own chrome lives: the task inspector in its
-  /// header, the note page in its bottom status row. Both call [toggleToolbar]
-  /// with their own anchor, so the popover still points at the control the
-  /// pointer actually clicked.
-  Widget _footer() {
-    final leading = widget.profile.buildFooterLeading(
-      context,
-      editor: editor,
-      selectionPresent: selectionPresent,
-    );
-    if (leading == null) return const SizedBox.shrink();
-    // A Row rather than the bare widget: the surrounding column stretches its
-    // children, and a stretched button would paint its overlay across the page.
-    return Row(children: [leading]);
   }
 }
 

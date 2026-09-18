@@ -180,6 +180,8 @@ class TaskEditorMetrics {
   static const double morePopoverWidth = 164;
   static const double toolbarPopoverWidth = 444;
   static const double toolbarPopoverHeight = 38;
+  static const double selectionToolbarWidth = 144;
+  static const double selectionToolbarHeight = 40;
   static const double commandMenuWidth = 160;
   static const double commandMenuMaxHeight = 425;
   static const double commandGlyphSlot = 14;

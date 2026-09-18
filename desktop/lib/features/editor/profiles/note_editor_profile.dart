@@ -14,11 +14,12 @@ import '../../../widgets/app_icon_button.dart';
 import '../../feedback/feedback_event.dart';
 import '../../feedback/feedback_scope.dart';
 import '../document_slash_menu.dart';
+import '../domain/document_selection_action.dart';
 import '../domain/editor_capability.dart';
 import '../domain/editor_profile.dart';
 
-/// The note document: free prose with images, and the note's own footer action
-/// that turns a highlighted paragraph into a task.
+/// The note document: free prose with images, and a selection action that turns
+/// a highlighted paragraph into a task.
 ///
 /// The relation to a task runs the other way here, which is why notes do not
 /// carry the task blocks: a note is the source, not the destination.
@@ -53,7 +54,6 @@ class NoteEditorProfile extends EditorProfile {
   Set<EditorCapability> get capabilities => const {
         EditorCapability.slashPalette,
         EditorCapability.formattingToolbar,
-        EditorCapability.editorFooter,
       };
 
   @override
@@ -103,28 +103,15 @@ class NoteEditorProfile extends EditorProfile {
   @override
   List<Widget> buildTrailingPanels(BuildContext context) => const [];
 
-  /// A selection action, not a permanent row of the page.
-  ///
-  /// With nothing highlighted there is no action to take, and a disabled button
-  /// parked under every note promised one anyway while taking a row of the page
-  /// from the prose. It now arrives with the selection and leaves with it, so
-  /// the label can name the action instead of describing the gesture.
   @override
-  Widget? buildFooterLeading(
-    BuildContext context, {
-    required quill.QuillController editor,
-    required bool selectionPresent,
-  }) {
-    if (!selectionPresent) return null;
-    final tokens = WorkFollowTheme.of(context);
-    return TextButton.icon(
-        key: const ValueKey('generate-task-from-selection'),
-        onPressed: () => _taskFromSelection(context, editor),
-        icon: AppIcon(WorkFollowIcons.playlistAdd,
-            size: WorkFollowMetrics.compactFieldIcon, color: tokens.accent),
-        label: const Text('创建任务',
-            style: TextStyle(fontSize: WorkFollowMacTypography.control)));
-  }
+  List<DocumentSelectionAction> get selectionActions => [
+        DocumentSelectionAction(
+          id: 'create-task',
+          label: '创建任务',
+          icon: WorkFollowIcons.playlistAdd,
+          onInvoke: _taskFromSelection,
+        ),
+      ];
 
   @override
   Future<String?> pickAttachment() => controller.pickNoteAttachment();

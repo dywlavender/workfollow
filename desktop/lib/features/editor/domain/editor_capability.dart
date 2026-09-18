@@ -18,11 +18,4 @@ enum EditorCapability {
 
   /// The profile renders panels between the prose and the end of the document.
   trailingPanels,
-
-  /// The editor renders its own footer: an optional document action on the
-  /// leading edge and the formatting trigger on the trailing edge.
-  ///
-  /// A shell that owns that row itself — the task inspector does — leaves this
-  /// capability off and drives [DocumentEditorState.toggleToolbar] instead.
-  editorFooter,
 }
