@@ -581,7 +581,6 @@ class DocumentEditorState extends State<DocumentEditor>
     final profile = widget.profile;
     Future<void> Function(BuildContext)? openPicker;
     var attach = false;
-    VoidCallback? openFocus;
     _applyingSlash = true;
     try {
       if (!_removeSlash(session)) {
@@ -615,8 +614,6 @@ class DocumentEditorState extends State<DocumentEditor>
           attach = true;
         case DocumentSlashAction.deadline:
           openPicker = profile.onOpenDeadline;
-        case DocumentSlashAction.focus:
-          openFocus = profile.onOpenFocus;
       }
       final insertedBlock = action == DocumentSlashAction.divider ||
           action == DocumentSlashAction.subtask;
@@ -633,7 +630,6 @@ class DocumentEditorState extends State<DocumentEditor>
     focus.requestFocus();
     if (attach) unawaited(documentCommands.insertAttachment(at: at));
     if (openPicker != null) unawaited(openPicker(context));
-    openFocus?.call();
   }
 
   Future<void> _link() async {

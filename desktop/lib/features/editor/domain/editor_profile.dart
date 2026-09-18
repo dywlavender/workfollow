@@ -103,7 +103,6 @@ abstract class EditorProfile {
   Future<void> Function(BuildContext anchor)? get onOpenTags;
   Future<void> Function(BuildContext anchor)? get onOpenRelation;
   Future<void> Function(BuildContext anchor)? get onOpenDeadline;
-  VoidCallback? get onOpenFocus;
 
   /// Keys that address this document type's own surfaces: its body editor and
   /// the surface that accepts clicks below the last line.

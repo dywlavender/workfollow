@@ -1674,31 +1674,6 @@ class WorkspaceController extends ChangeNotifier {
     );
   }
 
-  /// Adds one completed focus session to a task. A null task keeps the timer
-  /// useful as a general focus clock without inventing a task record.
-  void recordFocusSession(String? taskId) {
-    if (taskId == null) return;
-    _replaceTask(
-        taskId,
-        (task) => task.copyWith(
-              focusCount: task.focusCount + 1,
-              updatedAt: DateTime.now().toIso8601String(),
-            ));
-  }
-
-  Future<void> scheduleFocusNotification(String sessionId, DateTime at) async {
-    await _reminders.requestPermission();
-    await _reminders.schedule(
-      taskId: 'focus-$sessionId',
-      title: '专注完成',
-      body: '这一轮专注结束了，起来活动一下。',
-      at: at,
-    );
-  }
-
-  Future<void> cancelFocusNotification(String sessionId) =>
-      _reminders.cancel('focus-$sessionId');
-
   /// Applies the matrix semantics when a task crosses a quadrant boundary.
   /// Priority and date remain task data; the view only asks for this operation
   /// and never edits either field directly.
@@ -2181,7 +2156,6 @@ class WorkspaceController extends ChangeNotifier {
               id: subtask.id, title: subtask.title, completed: false))
           .toList(),
       priority: task.priority,
-      focusCount: task.focusCount,
       createdAt: now,
       updatedAt: now,
     );

@@ -84,16 +84,6 @@ void main() {
     controller.dispose();
   });
 
-  test('focus sessions accumulate on the task and in the snapshot', () {
-    final controller = WorkspaceController(seedData: false);
-    controller.addTask('专注写作');
-    final taskId = controller.tasks.single.id;
-    controller.recordFocusSession(taskId);
-    expect(controller.tasks.single.focusCount, 1);
-    expect(controller.snapshot.tasks.single.focusCount, 1);
-    controller.dispose();
-  });
-
   test('pinned lists stay ordered and survive renaming', () {
     final controller = WorkspaceController(seedData: false);
     controller.toggleListPinned('个人');

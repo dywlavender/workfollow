@@ -128,8 +128,6 @@ class NoteEditorProfile extends EditorProfile {
   Future<void> Function(BuildContext anchor)? get onOpenDeadline => null;
 
   @override
-  VoidCallback? get onOpenFocus => null;
-
   @override
   Key get bodyKey => const ValueKey('note-body-editor');
 

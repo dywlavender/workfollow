@@ -485,34 +485,6 @@ class SettingsMetrics {
   static const double navigationWidth = 165;
 }
 
-/// Geometry for the focus timer dialog.
-class FocusTimerMetrics {
-  const FocusTimerMetrics._();
-
-  static const double dialogWidth = 390;
-}
-
-/// Geometry for habit cards and their compact indicators.
-class HabitsMetrics {
-  const HabitsMetrics._();
-
-  static const double editorDialogWidth = 390;
-  static const double habitMarkSize = 25;
-  static const double historyCellSize = 38;
-  static const double metadataIconSize = WorkFollowMetrics.metadataIcon;
-}
-
-/// Geometry for the statistics dashboard's bounded content and charts.
-class StatsMetrics {
-  const StatsMetrics._();
-
-  static const double contentMaxWidth = 1120;
-  static const double summaryCardHeight = 208;
-  static const double chartCardHeight = 174;
-  static const double donutSize = 92;
-  static const double legendDotSize = 8;
-}
-
 /// Geometry for the trash empty state.
 class TrashMetrics {
   const TrashMetrics._();

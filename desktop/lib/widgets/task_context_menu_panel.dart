@@ -346,7 +346,6 @@ class _TaskContextMenuPanelState extends State<TaskContextMenuPanel> {
           _row(context, tokens, value: 'repeat', label: '设置重复'),
           _row(context, tokens, value: 'deadline', label: '截止日期'),
           _row(context, tokens, value: 'attachment', label: '添加附件'),
-          _row(context, tokens, value: 'focus', label: '专注记录'),
           _row(context, tokens, value: 'relation', label: '关联笔记'),
           const _MenuDivider(),
         ],

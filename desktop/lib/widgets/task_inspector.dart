@@ -53,7 +53,6 @@ class TaskInspector extends StatefulWidget {
     this.showBack = false,
     this.onBack,
     this.presentation = TaskInspectorPresentation.pane,
-    this.onOpenFocusTimer,
   });
 
   final TaskItem task;
@@ -61,7 +60,6 @@ class TaskInspector extends StatefulWidget {
   final bool showBack;
   final VoidCallback? onBack;
   final TaskInspectorPresentation presentation;
-  final VoidCallback? onOpenFocusTimer;
 
   @override
   State<TaskInspector> createState() => _TaskInspectorState();
@@ -231,17 +229,6 @@ class _TaskInspectorState extends State<TaskInspector> {
     if (result.success) documentKey.currentState?.insertRelationBlock(noteId);
   }
 
-  void _openFocus() {
-    if (widget.onOpenFocusTimer != null) {
-      widget.onOpenFocusTimer!();
-    } else {
-      final count = widget.task.focusCount;
-      _report(WorkFollowFeedback(
-          kind: WorkFollowFeedbackKind.info,
-          message: count == 0 ? '还没有专注记录' : '已专注 $count 个番茄'));
-    }
-  }
-
   /// Reports something that is not the outcome of a task command — a failed
   /// load, a focus count — through the same channel as command results.
   void _report(WorkFollowFeedback feedback) =>
@@ -267,8 +254,6 @@ class _TaskInspectorState extends State<TaskInspector> {
         await _tags(anchor);
       case 'attachment':
         await documentKey.currentState?.attachFile();
-      case 'focus':
-        _openFocus();
       case 'relation':
         await _relation(anchor);
       default:
@@ -535,7 +520,6 @@ class _TaskInspectorState extends State<TaskInspector> {
           onOpenTags: _tags,
           onOpenRelation: _relation,
           onOpenDeadline: (anchor) => _date(anchor, 'deadline'),
-          onOpenFocus: _openFocus,
           onEscape: _escape,
           onToolbarChanged: (_) {
             if (mounted) setState(() {});

@@ -116,7 +116,6 @@ class WorkFollowIcons {
   static const report = Icons.report_outlined;
   static const warning = Icons.error_outline_rounded;
   static const sync = Icons.sync_rounded;
-  static const focus = Icons.timer_outlined;
   static const play = Icons.play_arrow_rounded;
   static const keyboardReturn = Icons.keyboard_return_rounded;
   static const keyboardUp = Icons.keyboard_arrow_up_rounded;
@@ -152,7 +151,6 @@ class WorkFollowIcons {
         'repeat' => repeat,
         'deadline' => deadline,
         'attachment' => attachment,
-        'focus' => focus,
         'relation' => link,
         _ => throw ArgumentError.value(
             value, 'value', 'Unknown task action icon key'),

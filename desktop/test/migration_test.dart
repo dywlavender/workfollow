@@ -79,11 +79,10 @@ void main() {
     });
 
     expect(bundle.schemaVersion, 1);
-    expect(TaskItem.fromMigration(bundle.tasks.single).focusCount, 0);
     expect(bundle.lists.single.pinned, isFalse);
   });
 
-  test('round trips list colors, pinning and focus counts', () {
+  test('round trips list colors and pinning', () {
     final bundle = MigrationBundle(
       format: localSnapshotFormat,
       schemaVersion: migrationSchemaVersion,
@@ -114,7 +113,6 @@ void main() {
           recurrenceConfig: null,
           listName: '工作',
           tags: const [],
-          focusCount: 3,
           createdAt: null,
           updatedAt: null,
           completedAt: null,
@@ -126,7 +124,6 @@ void main() {
     final restored = MigrationBundle.fromJson(bundle.toJson());
     expect(restored.lists.single.pinned, isTrue);
     expect(restored.lists.single.color, '#22AA66');
-    expect(restored.tasks.single.focusCount, 3);
   });
 
   test('rejects an unknown format or schema version', () {

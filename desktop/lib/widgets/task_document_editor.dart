@@ -28,7 +28,6 @@ class TaskDocumentEditor extends StatefulWidget {
     this.onOpenTags,
     this.onOpenRelation,
     this.onOpenDeadline,
-    this.onOpenFocus,
     this.onToolbarChanged,
     this.onEscape,
   });
@@ -38,7 +37,6 @@ class TaskDocumentEditor extends StatefulWidget {
   final Future<void> Function(BuildContext anchor)? onOpenTags;
   final Future<void> Function(BuildContext anchor)? onOpenRelation;
   final Future<void> Function(BuildContext anchor)? onOpenDeadline;
-  final VoidCallback? onOpenFocus;
   final ValueChanged<bool>? onToolbarChanged;
   final VoidCallback? onEscape;
 
@@ -62,7 +60,6 @@ class TaskDocumentEditorState extends State<TaskDocumentEditor> {
         onOpenTags: widget.onOpenTags,
         onOpenRelation: widget.onOpenRelation,
         onOpenDeadline: widget.onOpenDeadline,
-        onOpenFocus: widget.onOpenFocus,
       );
 
   quill.QuillController get editor => _delegate.currentState!.editor;

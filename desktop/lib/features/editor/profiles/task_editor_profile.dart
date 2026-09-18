@@ -34,7 +34,6 @@ class TaskEditorProfile extends EditorProfile {
     this.onOpenTags,
     this.onOpenRelation,
     this.onOpenDeadline,
-    this.onOpenFocus,
   });
 
   final TaskItem task;
@@ -47,7 +46,6 @@ class TaskEditorProfile extends EditorProfile {
   final Future<void> Function(BuildContext anchor)? onOpenTags;
   final Future<void> Function(BuildContext anchor)? onOpenRelation;
   final Future<void> Function(BuildContext anchor)? onOpenDeadline;
-  final VoidCallback? onOpenFocus;
 
   @override
   String get documentId => task.id;

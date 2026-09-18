@@ -385,7 +385,7 @@ void main() {
       expect(tester.takeException(), isNull);
       await escape(tester);
     }
-    // 截止日期 and 专注记录 left the `/` palette, whose job is now the twelve
+    // 截止日期 left the `/` palette, whose job is now the twelve
     // reference commands. The more menu does not absorb them either: it is the
     // seven-entry reference list and clears its anchor by roughly 20pt in the
     // 900x700 anchoring regression, so one extra row flips it under the

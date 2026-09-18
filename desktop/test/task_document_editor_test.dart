@@ -173,7 +173,7 @@ void main() {
     expect(find.byKey(const ValueKey('document-slash-menu')), findsOneWidget);
     // The palette is the twelve reference commands and nothing else: eight text
     // commands, a hairline, four task commands. WorkFollow's 截止日期 and
-    // 专注记录 are not default entries — see DocumentSlashMenu for their entry
+    // 截止日期 is not a default entry — see DocumentSlashMenu for its entry
     // points — so a growing feature list never widens this menu.
     for (final key in [
       'heading-1',

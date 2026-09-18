@@ -3,7 +3,7 @@ import 'dart:convert';
 const personalMigrationFormat = 'workfollow-personal-migration';
 const localSnapshotFormat = 'workfollow-local-snapshot';
 
-/// Version 2 adds optional list pinning and task focus counts. The
+/// Version 2 adds optional list pinning. The
 /// reader below still accepts version 1 so snapshots exported by an older
 /// desktop build remain importable.
 const migrationSchemaVersion = 2;
@@ -143,7 +143,6 @@ class MigrationTaskRecord {
     this.subtasks = const [],
     this.sourceNoteId,
     this.attachments = const [],
-    this.focusCount = 0,
     required this.createdAt,
     required this.updatedAt,
     required this.completedAt,
@@ -173,7 +172,6 @@ class MigrationTaskRecord {
   final List<MigrationSubtaskRecord> subtasks;
   final String? sourceNoteId;
   final List<String> attachments;
-  final int focusCount;
   final String? createdAt;
   final String? updatedAt;
   final String? completedAt;
@@ -213,7 +211,6 @@ class MigrationTaskRecord {
       subtasks: _records(json['subtasks'], MigrationSubtaskRecord.fromJson),
       sourceNoteId: _nullableString(json['sourceNoteId']),
       attachments: _stringList(json['attachments']),
-      focusCount: _intValue(json['focusCount']),
       createdAt: _nullableString(json['createdAt']),
       updatedAt: _nullableString(json['updatedAt']),
       completedAt: _nullableString(json['completedAt']),
@@ -245,7 +242,6 @@ class MigrationTaskRecord {
         'subtasks': subtasks.map((item) => item.toJson()).toList(),
         'sourceNoteId': sourceNoteId,
         'attachments': attachments,
-        if (focusCount > 0) 'focusCount': focusCount,
         'createdAt': createdAt,
         'updatedAt': updatedAt,
         'completedAt': completedAt,

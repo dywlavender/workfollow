@@ -19,7 +19,6 @@ enum DocumentSlashAction {
   relation,
   attachment,
   deadline,
-  focus,
 }
 
 extension DocumentSlashActionLabel on DocumentSlashAction {
@@ -37,7 +36,6 @@ extension DocumentSlashActionLabel on DocumentSlashAction {
         DocumentSlashAction.relation => '关联任务/笔记',
         DocumentSlashAction.attachment => '附件',
         DocumentSlashAction.deadline => '截止日期',
-        DocumentSlashAction.focus => '专注记录',
       };
 
   String get keyName => switch (this) {
@@ -54,7 +52,6 @@ extension DocumentSlashActionLabel on DocumentSlashAction {
         DocumentSlashAction.relation => 'relation',
         DocumentSlashAction.attachment => 'attachment',
         DocumentSlashAction.deadline => 'deadline',
-        DocumentSlashAction.focus => 'focus',
       };
 }
 
@@ -94,12 +91,12 @@ class DocumentSlashMenuMetrics {
 ///
 /// Structure, order and glyph language follow the reference menu: eight text
 /// commands, a hairline, then the four task commands in the order
-/// attachment → subtask → tag → relation. WorkFollow's own `deadline` and
-/// `focus` actions are still rendered when a caller asks for them by name, but
-/// they are not part of the task editor's default palette: they belong to the
-/// row context menu, and `deadline` also to the inspector's date property row.
-/// The command stays, the entry point does not — the palette and the more menu
-/// both have a reference to match, so neither grows because a feature exists.
+/// attachment → subtask → tag → relation. WorkFollow's own `deadline` action
+/// is still rendered when a caller asks for it by name, but it is not part of
+/// the task editor's default palette: it belongs to the row context menu and
+/// the inspector's date property row. The command stays, the entry point does
+/// not — the palette and the more menu both have a reference to match, so
+/// neither grows because a feature exists.
 class DocumentSlashMenu extends StatefulWidget {
   const DocumentSlashMenu({
     super.key,
@@ -381,7 +378,6 @@ class DocumentSlashMenuState extends State<DocumentSlashMenu> {
     final glyph = switch (action) {
       DocumentSlashAction.attachment => WorkFollowIcons.attachment,
       DocumentSlashAction.deadline => WorkFollowIcons.deadline,
-      DocumentSlashAction.focus => WorkFollowIcons.focus,
       _ => null,
     };
     if (glyph != null) {
@@ -470,9 +466,8 @@ class _SlashMenuGlyph extends CustomPainter {
         _relation(canvas, line);
       case DocumentSlashAction.attachment:
       case DocumentSlashAction.deadline:
-      case DocumentSlashAction.focus:
         // Drawn as font glyphs by the caller; the palette never reaches this
-        // branch for the two WorkFollow-only commands.
+        // branch for the WorkFollow-only command.
         break;
     }
     canvas.restore();

@@ -47,11 +47,9 @@ class TodayScreen extends StatefulWidget {
       {super.key,
       required this.controller,
       this.compactDensity = false,
-      this.persistentInspector = true,
-      this.onOpenFocusTimer});
+      this.persistentInspector = true});
   final WorkspaceController controller;
   final bool compactDensity;
-  final VoidCallback? onOpenFocusTimer;
 
   /// When enabled, a wide window keeps the right-hand inspector visible even
   /// before a task is selected. This is the macOS default to match TickTick;
@@ -157,8 +155,7 @@ class _TodayScreenState extends State<TodayScreen> {
       final selected = c.selectedTask;
       final detail = narrow && detailOnly && selected != null;
       final groups = <(String, List<TaskItem>)>[];
-      if (!completedView && pinned.isNotEmpty)
-        groups.add(('置顶', pinned));
+      if (!completedView && pinned.isNotEmpty) groups.add(('置顶', pinned));
       if (completedView) {
         groups.add((_completedGroup, completed));
         groups.add(('已放弃', abandoned));
@@ -193,7 +190,8 @@ class _TodayScreenState extends State<TodayScreen> {
         for (final task in ordinary) {
           final label =
               calendarGroupLabel(localDateTimeFromStorage(task.dueAt));
-          if (groups.isEmpty || groups.last.$1 != label) groups.add((label, []));
+          if (groups.isEmpty || groups.last.$1 != label)
+            groups.add((label, []));
           groups.last.$2.add(task);
         }
       } else {
@@ -282,8 +280,7 @@ class _TodayScreenState extends State<TodayScreen> {
                                           compact: compact,
                                           wideInspector: wideInspector),
                                   if (!completedView && abandoned.isNotEmpty)
-                                    ..._groupSlivers(
-                                        ('已放弃', abandoned), narrow,
+                                    ..._groupSlivers(('已放弃', abandoned), narrow,
                                         compact: compact,
                                         wideInspector: wideInspector),
                                   if (!completedView && completed.isNotEmpty)
@@ -328,8 +325,7 @@ class _TodayScreenState extends State<TodayScreen> {
                     : TaskInspector(
                         key: ValueKey('wide-detail-${selected.id}'),
                         task: selected,
-                        controller: c,
-                        onOpenFocusTimer: widget.onOpenFocusTimer),
+                        controller: c),
               ),
             ),
           ],
@@ -343,7 +339,6 @@ class _TodayScreenState extends State<TodayScreen> {
               key: ValueKey('detail-${selected.id}'),
               task: selected,
               controller: c,
-              onOpenFocusTimer: widget.onOpenFocusTimer,
               showBack: true,
               onBack: () => setState(() => detailOnly = false)),
       ]);
@@ -482,7 +477,8 @@ class _TodayScreenState extends State<TodayScreen> {
       // The unnamed group (a plain list of tasks) has no heading to fold with.
       if (label.isEmpty || expanded)
         for (var i = 0; i < tasks.length; i++) ...[
-          _task(tasks[i], narrow, compact: compact, wideInspector: wideInspector),
+          _task(tasks[i], narrow,
+              compact: compact, wideInspector: wideInspector),
           if (i < tasks.length - 1) const TaskListDivider(),
         ],
     ];
@@ -542,7 +538,8 @@ class _TodayScreenState extends State<TodayScreen> {
         onPressed: () => _postponeOverdue(tasks),
         style: TextButton.styleFrom(
             foregroundColor: WorkFollowTheme.of(context).textTertiary,
-            padding: const EdgeInsets.symmetric(horizontal: WorkFollowSpacing.inlineGap),
+            padding: const EdgeInsets.symmetric(
+                horizontal: WorkFollowSpacing.inlineGap),
             // 20pt, measured: `VisualDensity.compact` shaves 8 off the minimum,
             // which left a 16pt target — too short to hit reliably beside a
             // 30pt heading.
@@ -564,12 +561,15 @@ class _TodayScreenState extends State<TodayScreen> {
         c.multiSelectCount == 0) {
       return Container(
           key: expandedEditorKey,
-          padding: const EdgeInsets.fromLTRB(WorkFollowSpacing.space2, WorkFollowSpacing.space2, WorkFollowSpacing.space2, WorkFollowSpacing.relaxedGap),
+          padding: const EdgeInsets.fromLTRB(
+              WorkFollowSpacing.space2,
+              WorkFollowSpacing.space2,
+              WorkFollowSpacing.space2,
+              WorkFollowSpacing.relaxedGap),
           child: TaskInspector(
               key: ValueKey('editor-${task.id}'),
               task: task,
               controller: c,
-              onOpenFocusTimer: widget.onOpenFocusTimer,
               presentation: TaskInspectorPresentation.inline));
     }
     return DragTarget<String>(
@@ -581,7 +581,11 @@ class _TodayScreenState extends State<TodayScreen> {
                 if (candidates.isNotEmpty)
                   Container(
                       height: TaskListMetrics.dragMarkerHeight,
-                      margin: const EdgeInsets.fromLTRB(WorkFollowSpacing.relaxedGap, WorkFollowSpacing.microGap, WorkFollowSpacing.relaxedGap, WorkFollowSpacing.microGap),
+                      margin: const EdgeInsets.fromLTRB(
+                          WorkFollowSpacing.relaxedGap,
+                          WorkFollowSpacing.microGap,
+                          WorkFollowSpacing.relaxedGap,
+                          WorkFollowSpacing.microGap),
                       decoration: BoxDecoration(
                           color: tokens.accent,
                           borderRadius: BorderRadius.circular(
@@ -596,7 +600,8 @@ class _TodayScreenState extends State<TodayScreen> {
                       child: SizedBox(
                           width: TaskListMetrics.dragPreviewWidth,
                           child: Padding(
-                              padding: const EdgeInsets.all(WorkFollowSpacing.relaxedGap),
+                              padding: const EdgeInsets.all(
+                                  WorkFollowSpacing.relaxedGap),
                               child: Text(task.title,
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis)))),
@@ -733,14 +738,17 @@ class _BulkBar extends StatelessWidget {
     return AppCard(
         elevated: true,
         radius: WorkFollowRadii.card,
-        padding: const EdgeInsets.symmetric(horizontal: WorkFollowSpacing.space3, vertical: WorkFollowSpacing.denseGap),
+        padding: const EdgeInsets.symmetric(
+            horizontal: WorkFollowSpacing.space3,
+            vertical: WorkFollowSpacing.denseGap),
         child: Wrap(
             spacing: WorkFollowSpacing.microGap,
             runSpacing: WorkFollowSpacing.space1,
             crossAxisAlignment: WrapCrossAlignment.center,
             children: [
               Padding(
-                  padding: const EdgeInsets.only(right: WorkFollowSpacing.inlineGap),
+                  padding:
+                      const EdgeInsets.only(right: WorkFollowSpacing.inlineGap),
                   child: Text('已选择 ${controller.multiSelectCount} 项',
                       style: TextStyle(
                           fontSize: WorkFollowMacTypography.listMeta,
@@ -773,9 +781,9 @@ class _BulkBar extends StatelessWidget {
                         final settings =
                             await showTaskSchedulePanel(anchor, task);
                         if (settings != null) {
-                          final actionResult = controller.taskActions.bulkSchedule(
-                              controller.multiSelectedTaskIds,
-                              settings.schedule);
+                          final actionResult = controller.taskActions
+                              .bulkSchedule(controller.multiSelectedTaskIds,
+                                  settings.schedule);
                           presentTaskResultIn(context, actionResult,
                               actionVersion: controller.actionVersion);
                         }

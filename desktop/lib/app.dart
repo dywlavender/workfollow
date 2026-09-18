@@ -22,14 +22,12 @@ import 'features/tasks/presentation/task_feedback_mapper.dart';
 import 'models/task.dart';
 import 'services/preferences_store.dart';
 import 'services/local_workspace_store.dart';
-import 'services/focus_timer.dart';
 import 'state/workspace_controller.dart';
 import 'theme/workfollow_motion.dart';
 import 'theme/workfollow_theme.dart';
 import 'widgets/command_palette.dart';
 import 'widgets/sidebar.dart';
 import 'widgets/settings_panel.dart';
-import 'widgets/focus_timer_dialog.dart';
 
 class WorkFollowApp extends StatefulWidget {
   const WorkFollowApp(
@@ -264,7 +262,6 @@ const _captureChannel = MethodChannel('workfollow/capture');
 
 class _WorkFollowShellState extends State<WorkFollowShell> {
   late final WorkspaceController controller;
-  late final FocusTimerController focusTimer;
   late final AppLifecycleListener _lifecycleListener;
   Timer? _dateRefresh;
   bool sidebarCollapsed = false;
@@ -282,20 +279,6 @@ class _WorkFollowShellState extends State<WorkFollowShell> {
         seedData: widget.demoMode,
         store:
             LocalWorkspaceStore(namespace: widget.demoMode ? 'preview' : null));
-    focusTimer = FocusTimerController(
-      scheduleNotification: controller.scheduleFocusNotification,
-      cancelNotification: controller.cancelFocusNotification,
-      onCompleted: (taskId) {
-        controller.recordFocusSession(taskId);
-        // A round running out is its own kind of finished: the same HUD, its
-        // own tone, and nothing to undo.
-        _feedback?.show(const WorkFollowFeedback(
-            kind: WorkFollowFeedbackKind.success,
-            message: '这一轮专注完成了，休息一下吧。',
-            sound: WorkFollowFeedbackSound.focus,
-            duration: Duration(seconds: 3)));
-      },
-    );
     if (!widget.demoMode) controller.selectView(WorkspaceView.today);
     if (!widget.demoMode)
       _dateRefresh = Timer.periodic(
@@ -362,8 +345,6 @@ class _WorkFollowShellState extends State<WorkFollowShell> {
         controller.selectView(WorkspaceView.notes);
       case 'goMatrix':
         controller.selectView(WorkspaceView.matrix);
-      case 'startPomodoro':
-        _openFocusTimer();
       case 'completeSelected':
         final id = controller.selectedTaskId;
         if (id != null) {
@@ -454,7 +435,6 @@ class _WorkFollowShellState extends State<WorkFollowShell> {
     _dateRefresh?.cancel();
     _lifecycleListener.dispose();
     controller.removeListener(_observeAction);
-    focusTimer.dispose();
     controller.dispose();
     super.dispose();
   }
@@ -504,12 +484,6 @@ class _WorkFollowShellState extends State<WorkFollowShell> {
         animatedFeedback: widget.animatedFeedback,
         onSetAnimatedFeedback: widget.onSetAnimatedFeedback);
   }
-
-  Future<void> _openFocusTimer() => showFocusTimerDialog(
-        context: context,
-        timer: focusTimer,
-        controller: controller,
-      );
 
   void _handleGlobalEscape() {
     // Nested editors and popovers receive Escape first. Once those surfaces
@@ -646,8 +620,7 @@ class _WorkFollowShellState extends State<WorkFollowShell> {
                       child: _WorkspaceContent(
                           controller: controller,
                           compactDensity: widget.compactDensity,
-                          persistentInspector: widget.persistentInspector,
-                          onOpenFocusTimer: _openFocusTimer),
+                          persistentInspector: widget.persistentInspector),
                     ),
                   ],
                 ),
@@ -664,13 +637,11 @@ class _WorkspaceContent extends StatelessWidget {
   const _WorkspaceContent(
       {required this.controller,
       required this.compactDensity,
-      required this.persistentInspector,
-      this.onOpenFocusTimer});
+      required this.persistentInspector});
 
   final WorkspaceController controller;
   final bool compactDensity;
   final bool persistentInspector;
-  final VoidCallback? onOpenFocusTimer;
 
   @override
   Widget build(BuildContext context) {
@@ -701,7 +672,6 @@ class _WorkspaceContent extends StatelessWidget {
             controller: controller,
             compactDensity: compactDensity,
             persistentInspector: persistentInspector,
-            onOpenFocusTimer: onOpenFocusTimer,
           ),
       },
     );

@@ -147,14 +147,6 @@ class MainFlutterWindow: NSWindow {
                                   keyEquivalent: "")
     captureEntry.target = captureController
     menu.addItem(captureEntry)
-    if let commandTarget = menuCommandTarget {
-      let focusEntry = NSMenuItem(title: "开始专注",
-                                   action: #selector(MenuCommandTarget.sendCommand(_:)),
-                                   keyEquivalent: "")
-      focusEntry.target = commandTarget
-      focusEntry.representedObject = "startPomodoro"
-      menu.addItem(focusEntry)
-    }
     let openEntry = NSMenuItem(title: "显示打勾",
                                action: #selector(MainFlutterWindow.showMainWindow),
                                keyEquivalent: "")
