@@ -66,6 +66,15 @@ def test_task_is_single_fact_source_with_multiple_assignments(client: TestClient
     assert [item["id"] for item in client.get("/api/tasks?view=collaboration").json()] == [task["id"]]
     assert observer_client.get(f"/api/tasks/{task['id']}").status_code == 404
 
+    owner_personal = client.post("/api/tasks", json={
+        "title": "OWNER 只分配给自己",
+        "teamId": team_id,
+        "assigneeIds": [user_id],
+    })
+    assert owner_personal.status_code == 201, owner_personal.text
+    assert owner_personal.json()["teamId"] is None
+    assert [item["userId"] for item in owner_personal.json()["assignments"]] == [user_id]
+
     first_task = first_client.get(f"/api/tasks/{task['id']}")
     assert first_task.status_code == 200
     assert first_task.json()["permissions"]["editable"] is False
@@ -146,6 +155,14 @@ def test_root_can_create_and_update_team_assignments_without_membership(client: 
     assert [item["userId"] for item in task["assignments"]] == [first.id]
     assert task["permissions"]["assignable"] is True
 
+    personal = root_client.post("/api/tasks", json={
+        "title": "ROOT 只分配给自己",
+        "teamId": team_id,
+    })
+    assert personal.status_code == 201, personal.text
+    assert personal.json()["teamId"] is None
+    assert [item["userId"] for item in personal.json()["assignments"]] == [root.id]
+
     updated = root_client.put(
         f"/api/tasks/{task['id']}/assignees", json={"assigneeIds": [second.id]}
     )
@@ -164,3 +181,44 @@ def test_root_can_create_and_update_team_assignments_without_membership(client: 
         "assigneeIds": [first.id],
     })
     assert inferred.status_code == 422
+
+
+def test_root_does_not_receive_other_users_team_tasks_in_personal_views(client: TestClient, db, user_id: str) -> None:
+    root = add_user(db, "25", role=SystemRole.ROOT)
+    team_admin = add_user(db, "26")
+    team_id = client.post("/api/teams", json={"name": "团队管理员个人视图"}).json()["id"]
+    added = client.post(
+        f"/api/teams/{team_id}/members",
+        json={"identifier": team_admin.username, "role": "ADMIN"},
+    )
+    assert added.status_code == 201, added.text
+
+    admin_client = login_as(client.app, team_admin.username)
+    created = admin_client.post(
+        f"/api/teams/{team_id}/tasks",
+        json={"title": "管理员分配给 OWNER 的团队代办", "assigneeIds": [user_id]},
+    )
+    assert created.status_code == 201, created.text
+    task_id = created.json()["id"]
+    root_client = login_as(client.app, root.username)
+
+    for view in ("all", "today", "inbox"):
+        listed = root_client.get("/api/tasks", params={"view": view})
+        assert listed.status_code == 200, listed.text
+        assert task_id not in {item["id"] for item in listed.json()}
+
+    collaboration = root_client.get("/api/tasks", params={"view": "collaboration"})
+    assert collaboration.status_code == 200, collaboration.text
+    assert task_id not in {item["id"] for item in collaboration.json()}
+
+    owned = root_client.post(
+        "/api/tasks",
+        json={"title": "ROOT 自己创建的团队代办", "teamId": team_id, "assigneeIds": [team_admin.id]},
+    )
+    assert owned.status_code == 201, owned.text
+    owned_id = owned.json()["id"]
+    collaboration = root_client.get("/api/tasks", params={"view": "collaboration"})
+    assert owned_id in {item["id"] for item in collaboration.json()}
+    all_tasks = root_client.get("/api/tasks", params={"view": "all"})
+    assert owned_id in {item["id"] for item in all_tasks.json()}
+    assert root_client.get(f"/api/tasks/{task_id}").status_code == 200

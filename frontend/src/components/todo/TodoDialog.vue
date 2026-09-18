@@ -31,12 +31,19 @@ const emit = defineEmits<{ close: []; save: [payload: TodoPayload]; openSource: 
 useDialogEscape(() => props.open, () => emit('close'))
 const sourceTitle = ref<string | null>(null)
 const assigneeIds = ref<string[]>([])
-const assignmentTeamId = computed(() => props.todo ? props.todo.teamId : (props.teamId ?? null))
+const selectedTeamAssigneeIds = computed(() => {
+  const memberIds = new Set((props.members ?? []).map((member) => member.userId))
+  return assigneeIds.value.filter((id) => memberIds.has(id))
+})
+const assignmentTeamId = computed(() => {
+  if (props.todo) return props.todo.teamId
+  return selectedTeamAssigneeIds.value.length ? props.teamId ?? null : null
+})
 const metadataEditable = computed(() => props.todo ? props.metadataEditable ?? props.todo.permissions.editable : true)
 const contentEditable = computed(() => props.todo ? props.contentEditable ?? props.todo.permissions.contentEditable : true)
 const existingTaskReadOnly = computed(() => Boolean(props.todo) && !metadataEditable.value && !contentEditable.value)
 const assignmentInvalid = computed(() => Boolean(
-  props.canAssign && assignmentTeamId.value && !assigneeIds.value.length,
+  props.canAssign && assignmentTeamId.value && !selectedTeamAssigneeIds.value.length,
 ))
 
 interface FormState {
@@ -92,16 +99,14 @@ function defaultNewTodoDueAt(): string {
 }
 
 function normalizeAssigneeIds() {
-  if (!props.canAssign || !assignmentTeamId.value) return
-  if (!props.members?.length) {
-    if (!props.todo) assigneeIds.value = []
-    return
-  }
-  const memberIds = new Set(props.members.map((member) => member.userId))
+  if (!props.canAssign || !props.teamId) return
+  const memberIds = new Set((props.members ?? []).map((member) => member.userId))
   const filtered = assigneeIds.value.filter((id) => memberIds.has(id))
-  assigneeIds.value = filtered.length || !props.currentUserId || !memberIds.has(props.currentUserId)
+  assigneeIds.value = filtered.length
     ? filtered
-    : [props.currentUserId]
+    : !props.todo && props.currentUserId
+      ? [props.currentUserId]
+      : filtered
 }
 
 function detectReminder(todo: Todo): { preset: string; custom: string } {
@@ -230,8 +235,14 @@ function submit() {
       excerpt: sourceExcerpt ?? null,
     }
   }
-  if (props.canAssign && assigneeIds.value.length) payload.assigneeIds = assigneeIds.value
-  if (props.canAssign && assignmentTeamId.value) payload.teamId = assignmentTeamId.value
+  const teamAssigneeIds = selectedTeamAssigneeIds.value
+  const effectiveAssigneeIds = teamAssigneeIds.length
+    ? teamAssigneeIds
+    : props.currentUserId
+      ? [props.currentUserId]
+      : assigneeIds.value
+  if (props.canAssign && effectiveAssigneeIds.length) payload.assigneeIds = effectiveAssigneeIds
+  if (props.canAssign && teamAssigneeIds.length && props.teamId) payload.teamId = props.teamId
   emit('save', payload as TodoPayload)
 }
 </script>

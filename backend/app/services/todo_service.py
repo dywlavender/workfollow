@@ -150,7 +150,11 @@ def build_todo_query(
         TeamMember.role.in_((TeamMemberRole.OWNER, TeamMemberRole.ADMIN)),
     )
     system_root = exists().where(User.id == user_id, User.system_role == SystemRole.ROOT)
-    team_access = or_(team_admin, and_(Todo.team_id.is_not(None), system_root))
+    # System administrators can manage any team's tasks, but that does not
+    # make every team task part of their personal or collaboration task list.
+    # ROOT access is handled by direct task-management endpoints; list views
+    # should only include tasks with an explicit relationship to the actor.
+    team_access = team_admin
 
     if view == "linkable":
         statement = statement.where(or_(Todo.creator_id == user_id, mine))
@@ -167,14 +171,14 @@ def build_todo_query(
         # only see tasks with their own active Assignment.
         statement = statement.where(
             Todo.team_id.is_not(None),
-            or_(Todo.creator_id == user_id, mine, team_admin, system_root),
+            or_(Todo.creator_id == user_id, mine, team_admin),
         )
     elif view == "assigned-to-me":
         statement = statement.where(mine, Todo.creator_id != user_id)
     else:
-        # Personal tasks remain private. Team OWNER/ADMIN and ROOT can see
-        # team tasks even when they were not explicitly assigned to them.
-        statement = statement.where(or_(mine, team_access))
+        # Personal tasks remain private. A creator can follow a task they
+        # assigned away; team OWNER/ADMIN can also see their team's tasks.
+        statement = statement.where(or_(Todo.creator_id == user_id, mine, team_access))
 
     # A member who left a team no longer receives its collaborative tasks.
     active_team = exists().where(
@@ -205,7 +209,7 @@ def build_todo_query(
             statement = statement.where(or_(
                 my_done,
                 Todo.status == TodoStatus.ABANDONED,
-                and_(Todo.status == TodoStatus.DONE, team_access),
+                and_(Todo.status == TodoStatus.DONE, or_(Todo.creator_id == user_id, team_access)),
             ))
         elif view in ("collaboration", "assigned-to-me", "assigned-by-me", "linkable"):
             pass
@@ -301,6 +305,13 @@ def _validated_assignment_team(
         raise HTTPException(status_code=422, detail="任务至少需要一名执行成员")
 
     desired_ids = set(unique_ids)
+    # A task assigned only to its creator is always personal.  The client may
+    # still carry a stale/current team id while composing a task, so team
+    # membership and team id validation must happen only once another member
+    # is actually assigned.
+    if desired_ids == {creator_id}:
+        return None
+
     actor = db.get(User, creator_id)
     if requested_team_id is not None:
         team = db.scalar(select(Team).where(
@@ -509,13 +520,18 @@ def update_assignees(
     actor = db.get(User, actor_id)
     if actor is not None and actor.system_role == SystemRole.ROOT and todo.team_id is not None:
         desired_ids = set(dict.fromkeys(assignee_ids))
-        active_member_ids = set(db.scalars(select(TeamMember.user_id).where(
-            TeamMember.team_id == todo.team_id,
-            TeamMember.status == TeamMemberStatus.ACTIVE,
-            TeamMember.user_id.in_(desired_ids),
-        ))) if desired_ids else set()
-        if not desired_ids or active_member_ids != desired_ids:
-            raise HTTPException(status_code=422, detail="只能把任务分配给当前团队成员")
+        if desired_ids == {actor_id}:
+            # ROOT is not persisted as a team member, but can still turn a
+            # team task they own back into a personal task for themselves.
+            todo.team_id = None
+        else:
+            active_member_ids = set(db.scalars(select(TeamMember.user_id).where(
+                TeamMember.team_id == todo.team_id,
+                TeamMember.status == TeamMemberStatus.ACTIVE,
+                TeamMember.user_id.in_(desired_ids),
+            ))) if desired_ids else set()
+            if not desired_ids or active_member_ids != desired_ids:
+                raise HTTPException(status_code=422, detail="只能把任务分配给当前团队成员")
     else:
         require_creator(todo, actor_id)
         todo.team_id = _validated_assignment_team(db, actor_id, assignee_ids)

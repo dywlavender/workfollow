@@ -43,6 +43,10 @@ const editing = ref(true)
 const disabledTokens = ref<Set<string>>(new Set())
 const submitting = ref(false)
 const assigneeIds = ref<string[]>(props.currentUserId ? [props.currentUserId] : [])
+const selectedTeamAssigneeIds = computed(() => {
+  const memberIds = new Set(props.members.map((member) => member.userId))
+  return assigneeIds.value.filter((id) => memberIds.has(id))
+})
 const activePanel = ref<ComposerPanel>(null)
 const manualSchedule = ref(false)
 const scheduleValue = ref(props.defaultDueAt ? dayjs(props.defaultDueAt).format('YYYY-MM-DDTHH:mm') : '')
@@ -117,9 +121,11 @@ function normalizeAssigneeIds() {
   if (!props.canAssign || !props.teamId) return
   const memberIds = new Set((props.members ?? []).map((member) => member.userId))
   const filtered = assigneeIds.value.filter((id) => memberIds.has(id))
-  assigneeIds.value = filtered.length || !props.currentUserId || !memberIds.has(props.currentUserId)
+  assigneeIds.value = filtered.length
     ? filtered
-    : [props.currentUserId]
+    : props.currentUserId
+      ? [props.currentUserId]
+      : filtered
 }
 
 watch(
@@ -215,6 +221,12 @@ function recurrenceConfig(dueAt: string | null): Record<string, number | string>
 }
 function buildPayload(): TodoPayload {
   const dueAt = effectiveDueAt.value
+  const teamAssigneeIds = selectedTeamAssigneeIds.value
+  const effectiveAssigneeIds = teamAssigneeIds.length
+    ? teamAssigneeIds
+    : props.currentUserId
+      ? [props.currentUserId]
+      : assigneeIds.value
   const payload: TodoPayload = {
     title: parsed.value.title,
     dueAt,
@@ -224,18 +236,13 @@ function buildPayload(): TodoPayload {
     priority: priority.value,
     listName: listName.value,
     tags: [...tags.value],
-    assigneeIds: props.canAssign && assigneeIds.value.length ? assigneeIds.value : undefined,
+    assigneeIds: props.canAssign && effectiveAssigneeIds.length ? effectiveAssigneeIds : undefined,
   }
-  if (props.canAssign && props.teamId) payload.teamId = props.teamId
+  if (props.canAssign && teamAssigneeIds.length && props.teamId) payload.teamId = props.teamId
   return payload
 }
 async function submit() {
   if (!input.value.trim() || submitting.value) return
-  if (props.canAssign && props.teamId && !assigneeIds.value.length) {
-    feedback.error('请先选择至少一名团队成员。')
-    activePanel.value = 'more'
-    return
-  }
   submitting.value = true
   try {
     await todoStore.create(buildPayload())
