@@ -14,8 +14,9 @@ import '../task_date_picker.dart';
 /// so a task with reminders, recurrence, attachments and content markers does
 /// not turn the list into a property dump. The inspector remains the complete
 /// property surface. A date is the one item that carries state, so it is the
-/// only one that changes colour — overdue is danger, today is accent, and
-/// every other date stays secondary.
+/// only one that changes colour — overdue is danger and every open scheduled
+/// date (today, tomorrow, any future day or time) is accent; closed tasks mute
+/// the whole trail to tertiary.
 class TaskMetadataTrail extends StatelessWidget {
   const TaskMetadataTrail(
       {super.key,
@@ -150,8 +151,7 @@ class TaskMetadataTrail extends StatelessWidget {
 
   Color _dueColor(WorkFollowTheme tokens) {
     if (task.bucket == TaskBucket.overdue) return tokens.danger;
-    if (task.bucket == TaskBucket.today) return tokens.accent;
-    return tokens.textSecondary;
+    return tokens.accent;
   }
 
   TextStyle _dateStyle(Color color) => TextStyle(
