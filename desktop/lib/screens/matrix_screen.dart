@@ -8,10 +8,10 @@ import '../theme/workfollow_icons.dart';
 import '../theme/workfollow_theme.dart';
 import '../widgets/app_icon_button.dart';
 import '../widgets/desktop_popover.dart';
-import '../widgets/matrix/matrix_add_surface.dart';
 import '../widgets/matrix/matrix_board.dart';
-import '../widgets/matrix/matrix_task_editor_popover.dart';
+import '../widgets/task_add_surface.dart';
 import '../widgets/task_editor_popover.dart';
+import '../widgets/task_floating_editor.dart';
 
 class MatrixScreen extends StatefulWidget {
   const MatrixScreen({super.key, required this.controller});
@@ -87,7 +87,7 @@ class _MatrixScreenState extends State<MatrixScreen> {
   Future<void> _openTaskEditor(BuildContext anchor, String taskId) async {
     if (editingTaskId != null) return;
     setState(() => editingTaskId = taskId);
-    await showMatrixTaskEditor(
+    await showTaskFloatingEditor(
       anchor,
       controller: widget.controller,
       taskId: taskId,
@@ -163,15 +163,15 @@ class _MatrixScreenState extends State<MatrixScreen> {
   }
 
   void _addTask(BuildContext anchor, MatrixQuadrant quadrant) {
-    showTaskEditorPopover<MatrixAddDraft>(
+    showTaskEditorPopover<TaskAddDraft>(
       anchor,
-      width: MatrixMetrics.addSurfaceWidth,
-      maxHeight: MatrixMetrics.addSurfaceMaxHeight,
+      width: TaskSurfaceMetrics.composerWidth,
+      maxHeight: TaskSurfaceMetrics.composerMaxHeight,
       placement: PopoverPlacement.bottomEnd,
       focusPolicy: PopoverFocusPolicy.searchField,
-      builder: (_) => MatrixAddSurface(
+      builder: (_) => TaskAddSurface(
         controller: widget.controller,
-        quadrant: quadrant,
+        defaultPriority: quadrant.defaultPriority,
       ),
     ).then((draft) {
       if (!mounted || draft == null) return;

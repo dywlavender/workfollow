@@ -61,7 +61,11 @@ void main() {
 
     await tester.tap(find.byTooltip('日历'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('周'));
+    // The view mode is a menu rather than a segmented control: the current
+    // mode is the control's own label and the alternatives sit behind it.
+    await tester.tap(find.byKey(const ValueKey('calendar-view-mode')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('menu-option-week')));
     await tester.pumpAndSettle();
     expect(find.textContaining('周一'), findsOneWidget);
     expect(find.textContaining('周日'), findsOneWidget);

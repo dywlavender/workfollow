@@ -49,7 +49,31 @@ enum MatrixQuadrant {
   doNow,
   schedule,
   delegate,
-  later,
+  later;
+
+  /// The priority a task created in this quadrant starts on.
+  ///
+  /// It belongs to the quadrant rather than to the composer or the creator
+  /// because both need it: the composer opens on it as a default the user can
+  /// change, and the creator falls back to it when the draft left the field
+  /// alone. A second copy of this table is exactly how a quadrant's default
+  /// drifts from what the quadrant says it is.
+  TaskPriority get defaultPriority => switch (this) {
+        MatrixQuadrant.doNow || MatrixQuadrant.schedule => TaskPriority.high,
+        MatrixQuadrant.delegate => TaskPriority.low,
+        MatrixQuadrant.later => TaskPriority.none,
+      };
+
+  /// The date a task created here lands on when the user picks none. It needs
+  /// [today] because the two urgent quadrants mean "now" rather than a fixed
+  /// date.
+  TaskScheduleDraft defaultSchedule(DateTime today) => switch (this) {
+        MatrixQuadrant.doNow => TaskScheduleDraft.forDay(today),
+        MatrixQuadrant.schedule =>
+          TaskScheduleDraft.forDay(today.add(const Duration(days: 7))),
+        MatrixQuadrant.delegate => TaskScheduleDraft.forDay(today),
+        MatrixQuadrant.later => const TaskScheduleDraft(),
+      };
 }
 
 enum BoardGroupBy { priority, date }
@@ -1961,29 +1985,46 @@ class WorkspaceController extends ChangeNotifier {
     TaskPriority? priority,
   }) {
     final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final defaultSchedule = switch (quadrant) {
-      MatrixQuadrant.doNow => TaskScheduleDraft.forDay(today),
-      MatrixQuadrant.schedule =>
-        TaskScheduleDraft.forDay(today.add(const Duration(days: 7))),
-      MatrixQuadrant.delegate => TaskScheduleDraft.forDay(today),
-      MatrixQuadrant.later => const TaskScheduleDraft(),
-    };
-    final defaultPriority = switch (quadrant) {
-      MatrixQuadrant.doNow || MatrixQuadrant.schedule => TaskPriority.high,
-      MatrixQuadrant.delegate => TaskPriority.low,
-      MatrixQuadrant.later => TaskPriority.none,
-    };
+    return createTaskFromComposer(
+      title: rawTitle,
+      listName: listName,
+      schedule: schedule,
+      scheduleOverridden: scheduleOverridden,
+      fallbackSchedule: quadrant.defaultSchedule(
+          DateTime(now.year, now.month, now.day)),
+      reminderAt: reminderAt,
+      recurrence: recurrence,
+      priority: priority ?? quadrant.defaultPriority,
+    );
+  }
+
+  /// Creates a task from a page's new-task composer.
+  ///
+  /// The composer opens on a date the *page* chose — a quadrant's urgency, the
+  /// calendar day the pointer was on — and the user may change it or leave it
+  /// alone. This resolves the two: what the user decided wins, and what they
+  /// left untouched falls back to [fallbackSchedule]. Clearing the date is a
+  /// decision too, which is what [scheduleOverridden] with no due date means.
+  TaskActionResult createTaskFromComposer({
+    required String title,
+    String listName = '收集箱',
+    TaskScheduleDraft? schedule,
+    bool scheduleOverridden = false,
+    required TaskScheduleDraft fallbackSchedule,
+    DateTime? reminderAt,
+    RecurrenceDraft? recurrence,
+    TaskPriority priority = TaskPriority.none,
+  }) {
     final effectiveSchedule = scheduleOverridden
         ? schedule ?? const TaskScheduleDraft()
-        : defaultSchedule;
+        : fallbackSchedule;
     return createTask(TaskDraft(
-      title: rawTitle,
+      title: title,
       listName: listName,
       schedule: effectiveSchedule,
       reminderAt: reminderAt,
       recurrence: recurrence ?? const RecurrenceDraft(),
-      priority: priority ?? defaultPriority,
+      priority: priority,
       forceUnscheduled: scheduleOverridden && effectiveSchedule.dueAt == null,
     ));
   }

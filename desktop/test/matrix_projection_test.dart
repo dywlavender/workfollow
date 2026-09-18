@@ -225,15 +225,17 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('matrix-quadrant-add-doNow')));
     await tester.pumpAndSettle();
 
-    expect(find.byKey(const ValueKey('matrix-add-title')), findsOneWidget);
-    expect(find.byKey(const ValueKey('matrix-add-schedule')), findsOneWidget);
-    expect(find.byKey(const ValueKey('matrix-add-priority')), findsOneWidget);
-    expect(find.byKey(const ValueKey('matrix-add-list')), findsOneWidget);
-    expect(find.byKey(const ValueKey('matrix-add-more')), findsOneWidget);
+    // The composer is shared, so its keys are named after what it is rather
+    // than after the page that happened to open it first.
+    expect(find.byKey(const ValueKey('task-add-title')), findsOneWidget);
+    expect(find.byKey(const ValueKey('task-add-schedule')), findsOneWidget);
+    expect(find.byKey(const ValueKey('task-add-priority')), findsOneWidget);
+    expect(find.byKey(const ValueKey('task-add-list')), findsOneWidget);
+    expect(find.byKey(const ValueKey('task-add-more')), findsOneWidget);
 
     await tester.enterText(
-        find.byKey(const ValueKey('matrix-add-title')), '面板新任务');
-    await tester.tap(find.byKey(const ValueKey('matrix-add-schedule')));
+        find.byKey(const ValueKey('task-add-title')), '面板新任务');
+    await tester.tap(find.byKey(const ValueKey('task-add-schedule')));
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('task-schedule-panel')), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('date-shortcut-明天')));

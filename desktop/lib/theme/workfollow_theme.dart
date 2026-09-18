@@ -291,13 +291,49 @@ class SidebarMetrics {
   static const double listColorDotSize = 8;
 }
 
-/// Geometry of the calendar's day cells and agenda panel.
+/// Geometry of the month calendar.
+///
+/// The month is one continuous grid, not a board of cards: every cell is the
+/// same size, cells share single hairline edges, and the space a cell leaves
+/// over goes to task bars rather than to padding. The numbers here are the
+/// cells' own rhythm, so a day can hold as many bars as it has room for.
 class CalendarMetrics {
   const CalendarMetrics._();
 
+  /// Top bar: the year and month on the leading edge, the view controls on the
+  /// trailing one.
+  static const double toolbarHeight = 52;
+
+  /// Weekday header above the grid — 周日 through 周六.
+  static const double weekHeaderHeight = 32;
+
+  /// Diameter of the day-number circle. Today is a filled circle behind the
+  /// number only; the cell behind it stays nearly white.
   static const double dayCellSize = 23;
-  static const double dayDotSize = 5;
-  static const double agendaPanelHeight = 168;
+
+  /// Inset from a cell's edge to its header and its task bars.
+  static const double cellHorizontalPadding = 6;
+  static const double cellTopPadding = 4;
+  static const double cellBottomPadding = 4;
+
+  /// One task bar, and the gap that separates it from the next.
+  static const double taskBarHeight = 20;
+  static const double taskBarGap = 2;
+
+  /// Completion circle inside a task bar. Sized to the 20pt bar, not to the
+  /// 20pt completion control a full task row uses.
+  static const double taskBarCheckboxSize = 12;
+
+  /// The tint a month cell takes while a task is dragged over it.
+  static const double dropHighlightAlpha = .12;
+
+  /// The wash on today's cell. Deliberately far below the day-number circle's
+  /// weight, because the circle is what marks today.
+  static const double todayCellAlpha = .04;
+
+  /// The month/week menu. It holds two words, so it is not the width of the
+  /// app's ordinary command menus.
+  static const double viewModeMenuWidth = 132;
 }
 
 /// Geometry of Board cards and their compact completion controls.
@@ -312,31 +348,45 @@ class BoardMetrics {
   static const double relationPreviewWidth = 235;
 }
 
-/// Geometry of Matrix headers and add-task surfaces.
+/// Geometry of Matrix headers and draggable rows.
 class MatrixMetrics {
   const MatrixMetrics._();
 
   static const double pageHeaderHeight = 56;
-  static const double addSurfaceWidth = 320;
-  static const double addSurfaceMaxHeight = 280;
-  static const double taskEditorWidth = 680;
-  static const double taskEditorMinHeight = 420;
-  static const double taskEditorMaxHeight = 620;
-  static const double taskEditorViewportMargin = 48;
 
-  /// Geometry for the quadrant header, add surface and draggable rows.
+  /// Geometry for the quadrant header and draggable rows.
   static const double quadrantRadius = WorkFollowRadii.card;
   static const double quadrantHeaderMarkerSize = 22;
   static const double groupRowHeight = 34;
-  static const double addSurfaceRowHeight = 42;
-  static const double addSurfaceBodyHeight = 126;
-  static const double addSurfaceRadius = WorkFollowRadii.md;
   static const double taskRowDividerHeight = WorkFollowMetrics.dividerThickness;
   static const double taskRowDragPreviewWidth = 280;
   static const double taskRowDragPreviewRadius = WorkFollowRadii.md;
   static const double taskRowCheckboxHitTarget = 21;
   static const double taskRowCheckboxSize = 18;
   static const double taskRowCheckboxRadius = WorkFollowRadii.checkbox;
+}
+
+/// Geometry of the two surfaces a page opens *over* itself: the floating task
+/// editor and the compact new-task composer.
+///
+/// Both are shared — the Matrix, Calendar and Board pages all open the same
+/// editor on a task and the same composer to create one — so their sizes live
+/// beside [WorkFollowMetrics] rather than inside a single page's block. The
+/// sizes are the surface's, not the page's: the same 680pt editor has to look
+/// the same wherever it is anchored.
+class TaskSurfaceMetrics {
+  const TaskSurfaceMetrics._();
+
+  static const double editorWidth = 680;
+  static const double editorMinHeight = 420;
+  static const double editorMaxHeight = 620;
+  static const double editorViewportMargin = 48;
+
+  static const double composerWidth = 320;
+  static const double composerMaxHeight = 280;
+  static const double composerRowHeight = 42;
+  static const double composerBodyHeight = 126;
+  static const double composerRadius = WorkFollowRadii.md;
 }
 
 /// Geometry for document-only controls that do not share the task-list box.
