@@ -3,8 +3,10 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../features/editor/document_keys.dart';
+import '../features/editor/presentation/document_editor_footer.dart';
 import '../features/editor/presentation/document_editor_shell.dart';
+import '../features/editor/presentation/document_formatting_toggle.dart';
+import '../features/editor/presentation/document_save_status.dart';
 import '../features/editor/presentation/document_title_editor.dart';
 import '../models/task.dart';
 import '../state/workspace_controller.dart';
@@ -14,7 +16,6 @@ import '../theme/workfollow_theme.dart';
 import '../widgets/app_icon_button.dart';
 import '../widgets/desktop_popover.dart';
 import '../widgets/note_document_editor.dart';
-import '../widgets/save_status_footer.dart';
 
 /// Notes workspace: a canvas-coloured list of note cards on the left and a
 /// focused writing page on the right (single column on narrow windows).
@@ -716,21 +717,20 @@ class _NotePageState extends State<_NotePage> {
                                       ],
                                     ])),
                           )))))),
-        footer: SaveStatusFooter(
-              controller: widget.controller,
-              trailing: '$wordCount 字',
-              actions: Builder(
-                  builder: (anchor) => AppIconButton(
-                      key: documentFormattingToggleKey,
-                      icon: WorkFollowIcons.format,
-                      tooltip: formatToolbarVisible ? '格式工具已打开' : '显示格式工具',
-                      active: formatToolbarVisible,
-                      activeBackgroundColor: tokens.canvas,
-                      iconColor: tokens.textSecondary,
-                      onPressed: () => unawaited(
-                          documentKey.currentState?.toggleToolbar(anchor)),
-                      size: WorkFollowMetrics.iconHitTarget,
-                      iconSize: WorkFollowMetrics.toolbarIcon))),
+        footer: DocumentEditorFooter(
+          leading: Text('$wordCount 字',
+              style: TextStyle(
+                  color: tokens.textTertiary,
+                  fontSize: WorkFollowMacTypography.caption)),
+          status: DocumentSaveStatus(controller: widget.controller),
+          actions: [
+            DocumentFormattingToggle(
+              active: formatToolbarVisible,
+              onPressed: (anchor) =>
+                  unawaited(documentKey.currentState?.toggleToolbar(anchor)),
+            ),
+          ],
+        ),
         );
   }
 }

@@ -19,11 +19,13 @@ import 'task_deadline_picker.dart';
 import 'task_priority_picker.dart';
 import 'task_list_picker.dart';
 import 'task_tag_picker.dart';
-import '../features/editor/document_keys.dart';
 import 'task_document_editor.dart';
 import '../features/editor/document_editor_viewport.dart';
 import '../features/editor/presentation/document_title_editor.dart';
 import '../features/editor/presentation/document_editor_shell.dart';
+import '../features/editor/presentation/document_editor_footer.dart';
+import '../features/editor/presentation/document_save_status.dart';
+import '../features/editor/presentation/document_formatting_toggle.dart';
 import 'task_more_menu.dart';
 import 'task_menu_actions.dart';
 
@@ -437,95 +439,54 @@ class _TaskInspectorState extends State<TaskInspector> {
         color: tokens.border,
       );
 
-  Widget _saveIndicator(WorkFollowTheme tokens) {
-    final loadError = widget.controller.loadError;
-    if (loadError == null &&
-        widget.controller.saveStatus != SaveStatus.failed) {
-      return const SizedBox.shrink();
-    }
-    final label = loadError ?? '保存失败：${widget.controller.saveError ?? '请重试'}';
-    return Tooltip(
-      message: label,
-      child: TextButton.icon(
-        key: const ValueKey('save-status-indicator'),
-        onPressed: loadError == null
-            ? () => unawaited(widget.controller.retrySave())
-            : () => _report(WorkFollowFeedback(
-                kind: WorkFollowFeedbackKind.error, message: loadError)),
-        icon: AppIcon(WorkFollowIcons.error,
-            size: WorkFollowMetrics.metadataIcon, color: tokens.danger),
-        label: Text(loadError == null ? '保存失败 · 重试' : '读取失败'),
-        style: TextButton.styleFrom(
-            foregroundColor: tokens.danger,
-            textStyle: const TextStyle(
-                fontSize: WorkFollowMacTypography.control,
-                fontWeight: WorkFollowMacWeight.medium),
-            padding: const EdgeInsets.symmetric(
-                horizontal: WorkFollowSpacing.inlineGap)),
-      ),
-    );
-  }
-
   Widget _footer(BuildContext context, TaskItem task, WorkFollowTheme tokens) {
-    return Container(
+    return DocumentEditorFooter(
       key: const ValueKey('task-inspector-footer'),
-      constraints:
-          const BoxConstraints(minHeight: TaskInspectorMetrics.footerMinHeight),
+      showTopBorder: true,
+      minHeight: TaskInspectorMetrics.footerMinHeight,
       padding: const EdgeInsets.fromLTRB(
           WorkFollowSpacing.space5,
           WorkFollowSpacing.space2,
           WorkFollowSpacing.space5,
           WorkFollowSpacing.compactInset),
-      decoration:
-          BoxDecoration(border: Border(top: BorderSide(color: tokens.border))),
-      child: Row(children: [
-        Expanded(
-            child: Align(
-                alignment: Alignment.centerLeft,
-                child: Builder(
-                    builder: (anchor) => TextButton.icon(
-                        key: const ValueKey('task-list-footer'),
-                        onPressed: () => _list(anchor),
-                        icon: AppIcon(task.listName == '收集箱' ? WorkFollowIcons.inbox : WorkFollowIcons.list,
-                            size: WorkFollowMetrics.compactFieldIcon,
-                            color: tokens.textSecondary),
-                        label: ConstrainedBox(
-                            constraints: const BoxConstraints(
-                                maxWidth:
-                                    TaskInspectorMetrics.listLabelMaxWidth),
-                            child: Text(task.listName,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                    color: tokens.textSecondary,
-                                    fontSize: WorkFollowMacTypography.control,
-                                    height: WorkFollowMacTypography.lineControl,
-                                    fontWeight: WorkFollowMacWeight.medium,
-                                    letterSpacing:
-                                        WorkFollowMacTracking.none))),
-                        style: TextButton.styleFrom(
-                            backgroundColor:
-                                listOpen ? tokens.canvas : Colors.transparent,
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: WorkFollowSpacing.inlineGap),
-                            minimumSize:
-                                const Size(0, WorkFollowMetrics.compactButtonHeight),
-                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                            visualDensity: VisualDensity.compact))))),
-        _saveIndicator(tokens),
-        Builder(
-            builder: (anchor) => AppIconButton(
-                key: documentFormattingToggleKey,
-                icon: WorkFollowIcons.format,
-                tooltip: '显示格式工具',
-                active: documentKey.currentState?.toolbarVisible ?? false,
-                activeBackgroundColor: tokens.canvas,
-                iconColor: tokens.textSecondary,
-                onPressed: () {
-                  unawaited(documentKey.currentState?.toggleToolbar(anchor));
-                },
-                size: WorkFollowMetrics.iconHitTarget,
-                iconSize: WorkFollowMetrics.toolbarIcon)),
+      leading: Builder(
+          builder: (anchor) => TextButton.icon(
+              key: const ValueKey('task-list-footer'),
+              onPressed: () => _list(anchor),
+              icon: AppIcon(
+                  task.listName == '收集箱'
+                      ? WorkFollowIcons.inbox
+                      : WorkFollowIcons.list,
+                  size: WorkFollowMetrics.compactFieldIcon,
+                  color: tokens.textSecondary),
+              label: ConstrainedBox(
+                  constraints: const BoxConstraints(
+                      maxWidth: TaskInspectorMetrics.listLabelMaxWidth),
+                  child: Text(task.listName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                          color: tokens.textSecondary,
+                          fontSize: WorkFollowMacTypography.control,
+                          height: WorkFollowMacTypography.lineControl,
+                          fontWeight: WorkFollowMacWeight.medium,
+                          letterSpacing: WorkFollowMacTracking.none))),
+              style: TextButton.styleFrom(
+                  backgroundColor:
+                      listOpen ? tokens.canvas : Colors.transparent,
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: WorkFollowSpacing.inlineGap),
+                  minimumSize:
+                      const Size(0, WorkFollowMetrics.compactButtonHeight),
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  visualDensity: VisualDensity.compact))),
+      status: DocumentSaveStatus(controller: widget.controller),
+      actions: [
+        DocumentFormattingToggle(
+          active: documentKey.currentState?.toolbarVisible ?? false,
+          onPressed: (anchor) =>
+              unawaited(documentKey.currentState?.toggleToolbar(anchor)),
+        ),
         Builder(
             builder: (anchor) => AppIconButton(
                 key: const ValueKey('task-more-actions'),
@@ -537,7 +498,7 @@ class _TaskInspectorState extends State<TaskInspector> {
                 onPressed: () => _more(anchor),
                 size: WorkFollowMetrics.iconHitTarget,
                 iconSize: WorkFollowMetrics.toolbarIcon)),
-      ]),
+      ],
     );
   }
 
