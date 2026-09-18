@@ -3,11 +3,12 @@ import 'dart:convert';
 const personalMigrationFormat = 'workfollow-personal-migration';
 const localSnapshotFormat = 'workfollow-local-snapshot';
 
-/// Version 2 adds optional list pinning. The
-/// reader below still accepts version 1 so snapshots exported by an older
-/// desktop build remain importable.
-const migrationSchemaVersion = 2;
-const supportedMigrationSchemaVersions = <int>{1, migrationSchemaVersion};
+/// Version 2 adds optional list pinning. Version 3 moves subtasks into the
+/// task hierarchy itself: `parentTaskId`/`childOrder` on full tasks, while
+/// the old `subtasks` array stays a read-only legacy shape (v3 exports never
+/// write it). All three versions remain importable.
+const migrationSchemaVersion = 3;
+const supportedMigrationSchemaVersions = <int>{1, 2, migrationSchemaVersion};
 
 class MigrationFormatException implements Exception {
   const MigrationFormatException(this.message);
@@ -99,6 +100,9 @@ class MigrationFolderRecord {
 }
 
 /// One checklist entry under a task. Absent in older files, optional since.
+/// Legacy compatibility only — read from v1/v2 files, never written by v3
+/// exports. Do not use for the new task hierarchy; see MigrationTaskRecord's
+/// parentTaskId/childOrder instead.
 class MigrationSubtaskRecord {
   const MigrationSubtaskRecord({
     required this.id,
@@ -248,7 +252,10 @@ class MigrationTaskRecord {
         'recurrenceConfig': recurrenceConfig,
         'listName': listName,
         'tags': tags,
-        'subtasks': subtasks.map((item) => item.toJson()).toList(),
+        // v3 writes the hierarchy through parentTaskId/childOrder; the
+        // legacy array stays read-only for v1/v2 compatibility.
+        if (subtasks.isNotEmpty)
+          'subtasks': subtasks.map((item) => item.toJson()).toList(),
         if (parentTaskId != null) 'parentTaskId': parentTaskId,
         if (childOrder > 0) 'childOrder': childOrder,
         'sourceNoteId': sourceNoteId,
