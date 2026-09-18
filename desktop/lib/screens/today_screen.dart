@@ -73,10 +73,6 @@ class _TodayScreenState extends State<TodayScreen> {
 
   bool detailOnly = false;
 
-  /// The task list starts at the compact native preferred width and can be
-  /// widened without allowing the inspector to collapse into a sliver.
-  double _listPaneWidth = TaskListMetrics.preferredPaneWidth;
-
   /// Groups the user folded away, keyed by the heading label.
   ///
   /// Membership means "collapsed", so an empty set is the default posture:
@@ -361,7 +357,7 @@ class _TodayScreenState extends State<TodayScreen> {
     final lower = upper < TaskListMetrics.minPaneWidth
         ? upper
         : TaskListMetrics.minPaneWidth;
-    return _listPaneWidth.clamp(lower, upper).toDouble();
+    return _currentListPaneWidth.clamp(lower, upper).toDouble();
   }
 
   void _resizeListPane(double available, double delta) {
@@ -371,10 +367,18 @@ class _TodayScreenState extends State<TodayScreen> {
     final lower = upper < TaskListMetrics.minPaneWidth
         ? upper
         : TaskListMetrics.minPaneWidth;
-    final next = (_listPaneWidth + delta).clamp(lower, upper).toDouble();
-    if (next == _listPaneWidth) return;
-    setState(() => _listPaneWidth = next);
+    final next = (_currentListPaneWidth + delta).clamp(lower, upper).toDouble();
+    if (next == _currentListPaneWidth) return;
+    widget.controller.setTaskListPaneWidth(next);
+    // TodayScreen is also mounted directly in widget tests and in a few
+    // embedders that do not listen to the controller. Keep the current pane
+    // responsive immediately while the controller carries the value to the
+    // next task-view instance.
+    if (mounted) setState(() {});
   }
+
+  double get _currentListPaneWidth =>
+      widget.controller.taskListPaneWidth ?? TaskListMetrics.preferredPaneWidth;
 
   List<TaskItem> _ordered(List<TaskItem> tasks) {
     if (sortMode == _TaskSort.manual) return tasks;

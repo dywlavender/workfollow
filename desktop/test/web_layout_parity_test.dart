@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:workfollow_personal/app.dart';
 import 'package:workfollow_personal/screens/notes_screen.dart';
 import 'package:workfollow_personal/screens/today_screen.dart';
 import 'package:workfollow_personal/state/workspace_controller.dart';
@@ -56,6 +57,81 @@ void main() {
             .width,
         1000 -
             WorkFollowLayout.compactTaskListWidth -
+            WorkFollowLayout.taskListDividerWidth);
+  });
+
+  testWidgets('task list pane width survives task-view changes', (tester) async {
+    tester.view.physicalSize = const Size(1000, 700);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    final controller = WorkspaceController(seedData: false);
+    addTearDown(controller.dispose);
+    controller.selectView(WorkspaceView.today);
+    await tester.pumpWidget(MaterialApp(
+      theme: WorkFollowThemeData.light(),
+      home: Scaffold(
+        body: ListenableBuilder(
+          listenable: controller,
+          builder: (_, __) => SizedBox.expand(
+            child: TodayScreen(controller: controller),
+          ),
+        ),
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    final divider = find.byKey(const ValueKey('task-pane-divider'));
+    await tester.drag(divider, const Offset(30, 0));
+    await tester.pumpAndSettle();
+    final listPane = find.byKey(const ValueKey('web-task-list-pane'));
+    expect(tester.getSize(listPane).width, TaskListMetrics.maxPaneWidth);
+    expect(controller.taskListPaneWidth, TaskListMetrics.maxPaneWidth);
+
+    for (final view in [WorkspaceView.inbox, WorkspaceView.recent]) {
+      controller.selectView(view);
+      await tester.pumpAndSettle();
+      expect(tester.getSize(listPane).width, TaskListMetrics.maxPaneWidth,
+          reason: '${view.name} should reuse the workspace pane width');
+    }
+  });
+
+  testWidgets('full shell locks the 949/950 and 1280 workspace geometry',
+      (tester) async {
+    tester.view.physicalSize = const Size(950, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    await tester.pumpWidget(const WorkFollowApp(demoMode: true));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('任务'));
+    await tester.pumpAndSettle();
+
+    final listPane = find.byKey(const ValueKey('web-task-list-pane'));
+    final detailPane = find.byKey(const ValueKey('web-task-detail-pane'));
+    expect(tester.getSize(listPane).width, TaskListMetrics.minPaneWidth);
+    expect(tester.getSize(detailPane).width,
+        WorkFollowLayout.taskDetailMinWidth);
+
+    tester.view.physicalSize = const Size(949, 800);
+    await tester.pumpAndSettle();
+    expect(detailPane, findsNothing,
+        reason: '949 total window pixels leaves a 700px task workspace');
+
+    tester.view.physicalSize = const Size(1280, 800);
+    await tester.pumpAndSettle();
+    expect(tester.getSize(listPane).width, TaskListMetrics.preferredPaneWidth);
+    expect(
+        tester.getSize(detailPane).width,
+        1280 -
+            AppRail.width -
+            TaskListMetrics.preferredPaneWidth -
             WorkFollowLayout.taskListDividerWidth);
   });
 

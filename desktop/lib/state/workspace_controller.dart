@@ -619,6 +619,7 @@ class WorkspaceController extends ChangeNotifier {
   String? get notesFolderFilter => _notesFolderFilter;
   bool get notesFavoritesOnly => _notesFavoritesOnly;
   bool get notesUnfiledOnly => _notesUnfiledOnly;
+  double? get taskListPaneWidth => taskUiState.taskListPaneWidth;
   bool get quickAddFocusPending => taskUiState.quickAddFocusPending;
   int get inspectorTitleFocusVersion => taskUiState.inspectorTitleFocusVersion;
   String? get pendingInspectorTitleTaskId =>
@@ -635,6 +636,17 @@ class WorkspaceController extends ChangeNotifier {
     _notesFolderFilter = folderId;
     _notesFavoritesOnly = false;
     _notesUnfiledOnly = false;
+    _notify();
+  }
+
+  /// Keeps one task-workspace pane width across TodayScreen instances when the
+  /// user switches between Today, Inbox, Recent and individual lists.
+  ///
+  /// The value is session-only. It is UI state, so it must not enter the task
+  /// snapshot or trigger persistence.
+  void setTaskListPaneWidth(double width) {
+    if (!width.isFinite || taskUiState.taskListPaneWidth == width) return;
+    taskUiState.taskListPaneWidth = width;
     _notify();
   }
 
