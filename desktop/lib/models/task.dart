@@ -67,6 +67,8 @@ class TaskItem {
     this.abandonedAt,
     this.convertedNoteId,
     this.attachments = const [],
+    this.parentTaskId,
+    this.childOrder = 0,
     this.priority = TaskPriority.none,
     this.completed = false,
   });
@@ -140,6 +142,12 @@ class TaskItem {
   /// workspace stays movable).
   final List<String> attachments;
 
+  /// Tree link: set when this task is a subtask of another task. The parent
+  /// link is the authority for nesting; [childOrder] only sorts siblings.
+  final String? parentTaskId;
+  final int childOrder;
+
+  bool get isChildTask => parentTaskId != null;
   bool get hasAttachment => attachments.isNotEmpty;
 
   bool get isSkipped => skippedAt != null;
@@ -191,6 +199,9 @@ class TaskItem {
     TaskPriority? priority,
     bool? completed,
     List<String>? attachments,
+    String? parentTaskId,
+    bool clearParentTaskId = false,
+    int? childOrder,
   }) {
     return TaskItem(
       id: id,
@@ -229,6 +240,9 @@ class TaskItem {
       priority: priority ?? this.priority,
       completed: completed ?? this.completed,
       attachments: attachments ?? this.attachments,
+      parentTaskId:
+          clearParentTaskId ? null : (parentTaskId ?? this.parentTaskId),
+      childOrder: childOrder ?? this.childOrder,
     );
   }
 
@@ -284,6 +298,8 @@ class TaskItem {
               : null),
       convertedNoteId: record.convertedNoteId,
       attachments: List.unmodifiable(record.attachments),
+      parentTaskId: record.parentTaskId,
+      childOrder: record.childOrder,
       priority: TaskPriority.values.firstWhere(
         (value) => value.name.toUpperCase() == record.priority,
         orElse: () => TaskPriority.none,
@@ -328,6 +344,8 @@ class TaskItem {
       abandonedAt: abandonedAt,
       convertedNoteId: convertedNoteId,
       attachments: List.unmodifiable(attachments),
+      parentTaskId: parentTaskId,
+      childOrder: childOrder,
     );
   }
 }

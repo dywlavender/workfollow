@@ -605,7 +605,7 @@ class DocumentEditorState extends State<DocumentEditor>
         case DocumentSlashAction.divider:
           documentCommands.insertDivider(at: at);
         case DocumentSlashAction.subtask:
-          documentCommands.insertSubtaskBlock(at: at);
+          profile.onAddChildTask?.call();
         case DocumentSlashAction.tag:
           openPicker = profile.onOpenTags;
         case DocumentSlashAction.relation:
@@ -615,8 +615,7 @@ class DocumentEditorState extends State<DocumentEditor>
         case DocumentSlashAction.deadline:
           openPicker = profile.onOpenDeadline;
       }
-      final insertedBlock = action == DocumentSlashAction.divider ||
-          action == DocumentSlashAction.subtask;
+      final insertedBlock = action == DocumentSlashAction.divider;
       final desiredCaret = insertedBlock ? at + 1 : at;
       final maxCaret = math.max(0, editor.document.length - 1);
       editor.updateSelection(

@@ -259,23 +259,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets(
-      'legacy subtask panel remains near prose and blank space below is editable',
-      (tester) async {
-    final c = WorkspaceController(seedData: false);
-    addTearDown(c.dispose);
-    c.addTask('旧任务');
-    c.addSubtask(c.tasks.single.id, '原有子任务');
-    await mount(tester, c);
-    final panel = tester.getRect(keyed('task-subtasks-panel'));
-    final surface = tester.getRect(keyed('task-document-surface'));
-    expect(panel.top - surface.top, lessThan(220));
-    expect(surface.bottom - panel.bottom, greaterThan(100));
-    await tester.tapAt(Offset(surface.left + 20, surface.bottom - 20));
-    await tester.pump();
-    expect(document(tester).focusNode.hasFocus, isTrue);
-    expect(tester.takeException(), isNull);
-  });
+  ;
 
   testWidgets('date properties update the task and active header states',
       (tester) async {

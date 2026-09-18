@@ -313,34 +313,7 @@ void main() {
     expect(controller.tasks.single.contentJson?['quillDelta'], isNotNull);
   });
 
-  testWidgets('slash subtask block writes real TaskSubtask records',
-      (tester) async {
-    final controller = WorkspaceController(seedData: false);
-    addTearDown(controller.dispose);
-    controller.addTask('带子任务的文档');
-    final task = controller.tasks.single;
-    await tester.pumpWidget(MaterialApp(
-      theme: WorkFollowThemeData.light(),
-      home: Scaffold(body: TaskInspector(task: task, controller: controller)),
-    ));
-    await tester.pumpAndSettle();
-    final editor = tester
-        .widget<quill.QuillEditor>(
-            find.byKey(const ValueKey('task-document-editor')))
-        .controller;
-    await tester.tap(find.byKey(const ValueKey('task-document-editor')));
-    editor.replaceText(0, editor.document.length - 1, '/',
-        const TextSelection.collapsed(offset: 1));
-    await tester.pump();
-    await tester.tap(find.byKey(const ValueKey('document-slash-option-subtask')));
-    await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('task-subtasks-block')), findsOneWidget);
-    await tester.enterText(
-        find.byKey(const ValueKey('task-subtask-input')), '拆解第一步');
-    await tester.testTextInput.receiveAction(TextInputAction.done);
-    await tester.pump();
-    expect(controller.tasks.single.subtasks.single.title, '拆解第一步');
-  });
+  ;
 
   testWidgets('list popover filters lists without losing current selection',
       (tester) async {
@@ -369,23 +342,7 @@ void main() {
     expect(find.byKey(const ValueKey('menu-option-工作')), findsNothing);
   });
 
-  testWidgets('inspector More menu inserts the subtask block in context',
-      (tester) async {
-    final controller = WorkspaceController(seedData: false);
-    addTearDown(controller.dispose);
-    controller.addTask('更多菜单任务');
-    final task = controller.tasks.single;
-    await tester.pumpWidget(MaterialApp(
-      theme: WorkFollowThemeData.light(),
-      home: Scaffold(body: TaskInspector(task: task, controller: controller)),
-    ));
-    await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('task-more-actions')));
-    await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('menu-option-add-subtask')));
-    await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('task-subtasks-block')), findsOneWidget);
-  });
+  ;
 
   testWidgets('inspector More menu excludes controls absent from reference',
       (tester) async {

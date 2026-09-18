@@ -95,6 +95,10 @@ abstract class EditorProfile {
 
   /// Requests a file for an attachment block. A null result is a cancelled
   /// picker and leaves the document untouched.
+  /// Creates a child task for this document's owner. Only task documents
+  /// provide it; other profiles leave it null and the palette entry no-ops.
+  void Function()? get onAddChildTask => null;
+
   Future<String?> pickAttachment();
 
   /// Picker entry points for the palette commands the core does not implement

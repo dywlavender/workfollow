@@ -20,6 +20,12 @@ class TaskWorkspaceUiState {
   String? pendingInspectorTitleTaskId;
   String? pendingSubtaskTaskId;
 
+  /// The child task whose inline title should take focus after creation.
+  String? pendingChildFocusTaskId;
+
+  /// Parents the list has folded. Absent means expanded — TickTick's default.
+  final Set<String> collapsedTaskIds = {};
+
   void requestQuickAddFocus() {
     quickAddFocusPending = true;
   }

@@ -34,12 +34,22 @@ class TaskRow extends StatefulWidget {
       required this.selected,
       this.multiSelected = false,
       this.compact = false,
+      this.depth = 0,
+      this.expander,
       this.onActivate});
   final TaskItem task;
   final WorkspaceController controller;
   final bool selected;
   final bool multiSelected;
   final bool compact;
+
+  /// Nesting level: 0 for top-level rows, 1 for subtasks. Subtask rows
+  /// keep the full row grammar and only shift right.
+  final int depth;
+
+  /// Leading fold control for parents with children, rendered before
+  /// the checkbox in the row's tree gutter.
+  final Widget? expander;
   final VoidCallback? onActivate;
   @override
   State<TaskRow> createState() => _TaskRowState();
@@ -187,19 +197,26 @@ class _TaskRowState extends State<TaskRow> {
                         child: TaskListRowTransition(
                           taskId: task.id,
                           closed: task.isClosed,
-                          child: TaskListRowFrame(
-                            surfaceKey:
-                                ValueKey('task-row-surface-${task.id}'),
-                            compact: widget.compact,
-                            selected: selected,
-                            hovering: hovering,
-                            focused: focused,
-                            checkbox: _checkbox(tokens, priorityColor),
-                            content: _content(tokens, preview),
-                            metadata: TaskMetadataTrail(
-                                task: task,
-                                controller: widget.controller,
-                                onEditDate: date),
+                          child: Padding(
+                            padding: EdgeInsets.only(
+                                left: widget.depth *
+                                    TaskListMetrics.checkboxTitleGap *
+                                    2),
+                            child: TaskListRowFrame(
+                              surfaceKey:
+                                  ValueKey('task-row-surface-${task.id}'),
+                              compact: widget.compact,
+                              selected: selected,
+                              hovering: hovering,
+                              focused: focused,
+                              leading: widget.expander,
+                              checkbox: _checkbox(tokens, priorityColor),
+                              content: _content(tokens, preview),
+                              metadata: TaskMetadataTrail(
+                                  task: task,
+                                  controller: widget.controller,
+                                  onEditDate: date),
+                            ),
                           ),
                         ),
                       ),
@@ -256,32 +273,35 @@ class _TaskRowState extends State<TaskRow> {
   Widget _content(WorkFollowTheme tokens, String preview) {
     final task = widget.task;
     final closed = task.isClosed;
-    return Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(task.title,
-              maxLines: widget.compact ? 1 : 2,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                  fontSize: WorkFollowMacTypography.listTitle,
-                  height: WorkFollowMacTypography.lineList,
-                  fontWeight: WorkFollowMacWeight.regular,
-                  color: closed ? tokens.textTertiary : tokens.textPrimary)),
-          if (preview.isNotEmpty) ...[
-            const SizedBox(height: TaskListMetrics.titlePreviewGap),
-            Text(preview,
-                key: ValueKey('task-row-preview-${task.id}'),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                    fontSize: WorkFollowMacTypography.listBody,
-                    height: WorkFollowMacTypography.lineList,
-                    fontWeight: WorkFollowMacWeight.regular,
-                    color: task.isClosed
-                        ? tokens.textTertiary
-                        : tokens.textSecondary)),
-          ],
-        ]);
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      Text(task.title.trim().isEmpty ? '无标题' : task.title,
+          maxLines: widget.compact ? 1 : 2,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+              fontSize: WorkFollowMacTypography.listTitle,
+              height: WorkFollowMacTypography.lineList,
+              fontWeight: WorkFollowMacWeight.regular,
+              fontStyle: task.title.trim().isEmpty
+                  ? FontStyle.italic
+                  : FontStyle.normal,
+              color: closed || task.title.trim().isEmpty
+                  ? tokens.textTertiary
+                  : tokens.textPrimary)),
+      if (preview.isNotEmpty) ...[
+        const SizedBox(height: TaskListMetrics.titlePreviewGap),
+        Text(preview,
+            key: ValueKey('task-row-preview-${task.id}'),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+                fontSize: WorkFollowMacTypography.listBody,
+                height: WorkFollowMacTypography.lineList,
+                fontWeight: WorkFollowMacWeight.regular,
+                color: task.isClosed
+                    ? tokens.textTertiary
+                    : tokens.textSecondary)),
+      ],
+    ]);
   }
 
   void _complete() {

@@ -25,6 +25,7 @@ class TaskDocumentEditor extends StatefulWidget {
     super.key,
     required this.task,
     required this.controller,
+    this.onAddChildTask,
     this.onOpenTags,
     this.onOpenRelation,
     this.onOpenDeadline,
@@ -34,6 +35,7 @@ class TaskDocumentEditor extends StatefulWidget {
 
   final TaskItem task;
   final WorkspaceController controller;
+  final VoidCallback? onAddChildTask;
   final Future<void> Function(BuildContext anchor)? onOpenTags;
   final Future<void> Function(BuildContext anchor)? onOpenRelation;
   final Future<void> Function(BuildContext anchor)? onOpenDeadline;
@@ -51,12 +53,10 @@ class TaskDocumentEditorState extends State<TaskDocumentEditor> {
 
   /// Owned by this widget rather than by the profile so it survives the
   /// profile being rebuilt on every frame.
-  final subtaskInputFocus = FocusNode(debugLabel: 'subtask-input');
 
   TaskEditorProfile _profile() => TaskEditorProfile(
         task: widget.task,
         controller: widget.controller,
-        subtaskInputFocus: subtaskInputFocus,
         onOpenTags: widget.onOpenTags,
         onOpenRelation: widget.onOpenRelation,
         onOpenDeadline: widget.onOpenDeadline,
@@ -86,22 +86,6 @@ class TaskDocumentEditorState extends State<TaskDocumentEditor> {
 
   /// Inserts the subtask block and puts the caret in its input.
   ///
-  /// A task that already has subtask records does not get a second block: the
-  /// panel below the prose is already showing those records, and two editors
-  /// for one set of records is how a document starts contradicting itself.
-  void insertSubtasksBlock() {
-    final delegate = _delegate.currentState;
-    if (delegate == null) return;
-    final profile = _profile();
-    if (!profile.hasSubtaskBlock) {
-      delegate.documentCommands.insertSubtaskBlock();
-    }
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      profile.focusSubtaskInput();
-    });
-  }
-
   void insertRelationBlock(String noteId) =>
       _delegate.currentState?.documentCommands.insertRelation(noteId);
 
@@ -110,7 +94,6 @@ class TaskDocumentEditorState extends State<TaskDocumentEditor> {
 
   @override
   void dispose() {
-    subtaskInputFocus.dispose();
     super.dispose();
   }
 

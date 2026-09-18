@@ -646,7 +646,7 @@ void main() {
     expect(find.byKey(const ValueKey('task-advanced-toggle')), findsNothing);
     expect(find.text('显示更多属性'), findsNothing);
     expect(find.byKey(const ValueKey('task-document-editor')), findsOneWidget);
-    expect(find.text('子任务'), findsOneWidget);
+    expect(find.byKey(const ValueKey('task-children-panel')), findsOneWidget);
     expect(find.byKey(const ValueKey('task-deadline')), findsNothing);
   });
 

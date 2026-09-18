@@ -182,6 +182,9 @@ class WorkspaceController extends ChangeNotifier {
         _notes = seedData ? _seedNotes() : [],
         _lists = _defaultLists(),
         _folders = _defaultFolders() {
+    // Legacy subtask records become real child tasks before anything reads
+    // them, so seeds and restored snapshots share one runtime shape.
+    _expandLegacySubtasks();
     taskActions = CallbackTaskActions(_dispatchTaskAction);
     taskCreator = TaskCreator(taskActions);
     // Clicking a delivered reminder opens the task.
@@ -1570,6 +1573,7 @@ class WorkspaceController extends ChangeNotifier {
         : List.from(bundle.lists);
     _folders = List.from(bundle.folders);
     _tasks = bundle.tasks.map(TaskItem.fromMigration).toList();
+    _expandLegacySubtasks();
     for (final task in _tasks) {
       if (_lists.every((list) => list.name != task.listName)) {
         _lists = [
@@ -1796,13 +1800,122 @@ class WorkspaceController extends ChangeNotifier {
   }
 
   List<TaskItem> get visibleTasks {
-    return taskProjection.visible(
+    final flat = taskProjection.visible(
       tasks: _tasks,
       view: _view,
       selectedListName: _selectedListName,
       selectedTagName: _selectedTagName,
       reference: _dateReference,
     );
+    // Subtasks are rendered nested under their parent, never as flat rows.
+    // If the parent is gone (deleted), the child is promoted to top level
+    // rather than silently disappearing.
+    final activeIds = {
+      for (final task in _tasks)
+        if (task.deletedAt == null) task.id,
+    };
+    return List.unmodifiable(flat.where(
+        (task) => !task.isChildTask || !activeIds.contains(task.parentTaskId)));
+  }
+
+  /// Active child tasks of [parentId], in their sibling order.
+  List<TaskItem> childrenOf(String parentId) {
+    final children = activeTasks
+        .where((task) => task.parentTaskId == parentId)
+        .toList()
+      ..sort((a, b) => a.childOrder.compareTo(b.childOrder));
+    return List.unmodifiable(children);
+  }
+
+  TaskItem? parentOf(TaskItem task) {
+    final parentId = task.parentTaskId;
+    if (parentId == null) return null;
+    return activeTasks.where((item) => item.id == parentId).firstOrNull;
+  }
+
+  bool hasChildren(String taskId) =>
+      activeTasks.any((task) => task.parentTaskId == taskId);
+
+  /// Fold state lives in the UI layer: a task is expanded unless it was
+  /// explicitly collapsed, so new parents start open like TickTick's.
+  bool isTaskExpanded(String taskId) =>
+      !taskUiState.collapsedTaskIds.contains(taskId);
+
+  void toggleTaskExpanded(String taskId) {
+    final collapsed = taskUiState.collapsedTaskIds;
+    if (!collapsed.remove(taskId)) collapsed.add(taskId);
+    _notify();
+  }
+
+  /// Creates an empty child task under [parentTaskId] and returns its id.
+  /// The title may stay empty — the inline row shows 无标题 until named, and
+  /// focus lands on the new row's title field (TickTick's quick-capture flow).
+  String? createChildTask(String parentTaskId, {String title = ''}) {
+    final parent =
+        activeTasks.where((task) => task.id == parentTaskId).firstOrNull;
+    if (parent == null) return null;
+    final now = DateTime.now().toIso8601String();
+    final child = TaskItem(
+      id: 'task-${_taskSequence.toString().padLeft(2, '0')}',
+      title: title.trim(),
+      listName: parent.listName,
+      bucket: taskBucketForDate(null),
+      parentTaskId: parent.id,
+      childOrder: childrenOf(parent.id).length,
+      createdAt: now,
+      updatedAt: now,
+    );
+    _taskSequence += 1;
+    final parentIndex = _tasks.indexWhere((task) => task.id == parent.id);
+    final insertAt =
+        parentIndex < 0 ? 0 : parentIndex + 1 + childrenOf(parent.id).length;
+    _tasks.insert(insertAt.clamp(0, _tasks.length), child);
+    taskUiState.pendingChildFocusTaskId = child.id;
+    if (selectedTaskId != parent.id) _setSelectedTaskId(parent.id);
+    _schedulePersist();
+    _notify();
+    return child.id;
+  }
+
+  /// Test seam: run the legacy expansion over an explicit task list.
+  @visibleForTesting
+  void expandLegacyForTest(List<TaskItem> tasks) {
+    _tasks = List.of(tasks);
+    _expandLegacySubtasks();
+  }
+
+  /// Expands legacy `TaskSubtask` records into real child tasks and clears
+  /// the parent's embedded list, making the tree the single runtime shape.
+  void _expandLegacySubtasks() {
+    var expandedAny = false;
+    final rebuilt = <TaskItem>[];
+    final children = <TaskItem>[];
+    for (final task in _tasks) {
+      if (task.subtasks.isEmpty) {
+        rebuilt.add(task);
+        continue;
+      }
+      expandedAny = true;
+      rebuilt.add(task.copyWith(subtasks: const []));
+      for (var i = 0; i < task.subtasks.length; i++) {
+        final sub = task.subtasks[i];
+        children.add(TaskItem(
+          id: 'sub-${task.id}-${sub.id}',
+          title: sub.title,
+          listName: task.listName,
+          bucket: taskBucketForDate(null),
+          parentTaskId: task.id,
+          childOrder: i,
+          completed: sub.completed,
+          completedAt: sub.completed
+              ? (task.completedAt ?? DateTime.now().toIso8601String())
+              : null,
+          createdAt: task.createdAt,
+          updatedAt: task.updatedAt,
+        ));
+      }
+    }
+    if (expandedAny) _tasks = [...rebuilt, ...children];
   }
 
   /// Tasks whose scheduled date falls on [day], independent of the current
@@ -3604,6 +3717,7 @@ class WorkspaceController extends ChangeNotifier {
     _lists = List<MigrationListRecord>.from(bundle.lists);
     _folders = List<MigrationFolderRecord>.from(bundle.folders);
     _tasks = bundle.tasks.map(TaskItem.fromMigration).toList();
+    _expandLegacySubtasks();
     _notes = bundle.notes
         .asMap()
         .entries

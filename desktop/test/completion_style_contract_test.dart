@@ -13,7 +13,7 @@ import 'package:flutter_test/flutter_test.dart';
 /// A line through the text is a different statement, and the two places that
 /// make it are not task titles in a task surface:
 ///
-///  * `document_styles` and `task_editor_profile` style the checklist lines
+///  * `document_styles` styles the checklist lines
 ///    *inside a document*, where a strike through a ticked line is the
 ///    convention the editor is imitating;
 ///  * the trash strikes every title unconditionally, because there the line
@@ -27,7 +27,6 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   const allowed = <String>[
     'lib/features/editor/document_styles.dart',
-    'lib/features/editor/profiles/task_editor_profile.dart',
     'lib/screens/trash_screen.dart',
   ];
 

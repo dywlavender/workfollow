@@ -21,6 +21,7 @@ class TaskListRowFrame extends StatelessWidget {
   const TaskListRowFrame({
     super.key,
     this.surfaceKey,
+    this.leading,
     required this.checkbox,
     required this.content,
     this.metadata,
@@ -33,6 +34,9 @@ class TaskListRowFrame extends StatelessWidget {
 
   /// Key of the fill surface. Tests read the colour from it.
   final Key? surfaceKey;
+
+  /// Optional gutter widget before the checkbox (the tree fold chevron).
+  final Widget? leading;
   final Widget checkbox;
   final Widget content;
   final Widget? metadata;
@@ -64,6 +68,7 @@ class TaskListRowFrame extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          if (leading != null) ...[leading!, const SizedBox(width: 2)],
           checkbox,
           const SizedBox(width: TaskListMetrics.checkboxTitleGap),
           Expanded(child: content),

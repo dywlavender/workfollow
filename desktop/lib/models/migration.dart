@@ -141,6 +141,8 @@ class MigrationTaskRecord {
     required this.listName,
     required this.tags,
     this.subtasks = const [],
+    this.parentTaskId,
+    this.childOrder = 0,
     this.sourceNoteId,
     this.attachments = const [],
     required this.createdAt,
@@ -170,6 +172,11 @@ class MigrationTaskRecord {
   final String listName;
   final List<String> tags;
   final List<MigrationSubtaskRecord> subtasks;
+
+  /// Tree link for subtasks-as-tasks. Absent in older files; [subtasks] is
+  /// kept as a read-only legacy shape that loaders expand into real tasks.
+  final String? parentTaskId;
+  final int childOrder;
   final String? sourceNoteId;
   final List<String> attachments;
   final String? createdAt;
@@ -209,6 +216,8 @@ class MigrationTaskRecord {
       listName: _stringValue(json['listName'], fallback: '收集箱'),
       tags: _stringList(json['tags']),
       subtasks: _records(json['subtasks'], MigrationSubtaskRecord.fromJson),
+      parentTaskId: _nullableString(json['parentTaskId']),
+      childOrder: _intValue(json['childOrder']),
       sourceNoteId: _nullableString(json['sourceNoteId']),
       attachments: _stringList(json['attachments']),
       createdAt: _nullableString(json['createdAt']),
@@ -240,6 +249,8 @@ class MigrationTaskRecord {
         'listName': listName,
         'tags': tags,
         'subtasks': subtasks.map((item) => item.toJson()).toList(),
+        if (parentTaskId != null) 'parentTaskId': parentTaskId,
+        if (childOrder > 0) 'childOrder': childOrder,
         'sourceNoteId': sourceNoteId,
         'attachments': attachments,
         'createdAt': createdAt,

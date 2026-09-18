@@ -13,6 +13,7 @@ import '../features/tasks/application/task_actions.dart';
 import '../features/tasks/presentation/task_feedback_mapper.dart';
 import 'app_icon_button.dart';
 import 'desktop_popover.dart';
+import 'task_children_panel.dart';
 import 'task_completion_box.dart';
 import 'task_date_picker.dart';
 import 'task_schedule_panel.dart';
@@ -102,8 +103,12 @@ class _TaskInspectorState extends State<TaskInspector> {
       return;
     widget.controller.taskUiState.pendingSubtaskTaskId = null;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) documentKey.currentState?.insertSubtasksBlock();
+      if (mounted) _addChildTask();
     });
+  }
+
+  void _addChildTask() {
+    widget.controller.createChildTask(widget.task.id);
   }
 
   void _focusRequested() {
@@ -244,7 +249,7 @@ class _TaskInspectorState extends State<TaskInspector> {
     if (action == null) return;
     switch (action.action) {
       case 'add-subtask':
-        documentKey.currentState?.insertSubtasksBlock();
+        _addChildTask();
       case 'reminder':
         await _date(anchor, 'reminder');
       case 'repeat':
@@ -514,21 +519,28 @@ class _TaskInspectorState extends State<TaskInspector> {
                 topPadding -
                 WorkFollowSpacing.inspectorContentBottomPadding)
             .clamp(0, double.infinity),
-        title: DocumentTitleEditor(
-          fieldKey: const ValueKey('task-title-editor'),
-          controller: title,
-          focusNode: titleFocus,
-          placeholder: '任务标题',
-          fontSize: WorkFollowMacTypography.detailTitle,
-          muted: task.completed,
-          strikethrough: task.completed,
-          onChanged: (value) =>
-              widget.controller.taskActions.setTitle(task.id, value),
-        ),
+        title: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          if (widget.controller.parentOf(task) case final parent?)
+            TaskParentBreadcrumb(
+                parent: parent,
+                onOpen: () => widget.controller.openTask(parent.id)),
+          DocumentTitleEditor(
+            fieldKey: const ValueKey('task-title-editor'),
+            controller: title,
+            focusNode: titleFocus,
+            placeholder: task.isChildTask ? '准备做什么？' : '任务标题',
+            fontSize: WorkFollowMacTypography.detailTitle,
+            muted: task.completed,
+            strikethrough: task.completed,
+            onChanged: (value) =>
+                widget.controller.taskActions.setTitle(task.id, value),
+          ),
+        ]),
         document: TaskDocumentEditor(
           key: documentKey,
           task: task,
           controller: widget.controller,
+          onAddChildTask: _addChildTask,
           onOpenTags: _tags,
           onOpenRelation: _relation,
           onOpenDeadline: (anchor) => _date(anchor, 'deadline'),

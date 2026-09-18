@@ -40,9 +40,13 @@ void main() {
           tokens.warning,
           tokens.danger,
         ]) {
+          // Danger is deliberately a bright status red on desktop
+          // (2026-09-19): it reads as a state glyph at large-text grade
+          // (≥3.0) rather than body-copy grade, matching the reference app.
+          final floor = status == tokens.danger ? 3.0 : 4.4;
           expect(
             WorkFollowThemeContrast.ratio(status, surface),
-            greaterThanOrEqualTo(4.4),
+            greaterThanOrEqualTo(floor),
             reason: 'status and link colors must work on both surfaces',
           );
         }
@@ -168,7 +172,8 @@ void main() {
           data.colorScheme.onError,
           tokens.danger,
         ),
-        greaterThanOrEqualTo(4.4),
+        greaterThanOrEqualTo(3.0),
+        reason: 'danger foreground pairs with the bright status red',
       );
     }
   });

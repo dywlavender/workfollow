@@ -134,6 +134,13 @@ class _TodayScreenState extends State<TodayScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // The screen owns its rebuilds: fold toggles and task edits mutate the
+    // controller directly, and a standalone pump (tests) has no shell above.
+    return AnimatedBuilder(
+        animation: widget.controller, builder: (context, _) => _build(context));
+  }
+
+  Widget _build(BuildContext context) {
     final c = widget.controller;
     final tokens = WorkFollowTheme.of(context);
     final tasks = c.visibleTasks;
@@ -612,6 +619,11 @@ class _TodayScreenState extends State<TodayScreen> {
                       selected: c.selectedTaskId == task.id,
                       multiSelected: c.isTaskMultiSelected(task.id),
                       compact: compact,
+                      expander: c.hasChildren(task.id)
+                          ? _Expander(
+                              expanded: c.isTaskExpanded(task.id),
+                              onToggle: () => c.toggleTaskExpanded(task.id))
+                          : null,
                       onActivate: () {
                         if (narrow) {
                           setState(() => detailOnly = true);
@@ -620,8 +632,29 @@ class _TodayScreenState extends State<TodayScreen> {
                         }
                       }),
                 ),
+                if (c.hasChildren(task.id))
+                  for (final child in c.isTaskExpanded(task.id)
+                      ? c.childrenOf(task.id)
+                      : const <TaskItem>[])
+                    _childRow(child, compact, narrow),
               ],
             ));
+  }
+
+  /// A subtask row in the list: the full TaskRow grammar, indented one level.
+  /// Children are not draggable and are not drop targets in this phase.
+  Widget _childRow(TaskItem child, bool compact, bool narrow) {
+    final c = widget.controller;
+    return TaskRow(
+        key: ValueKey(child.id),
+        task: child,
+        controller: c,
+        depth: 1,
+        selected: c.selectedTaskId == child.id,
+        compact: compact,
+        onActivate: () {
+          if (narrow) setState(() => detailOnly = true);
+        });
   }
 
   IconData _viewIcon(WorkspaceView view) => switch (view) {
@@ -817,5 +850,33 @@ class _BulkBar extends StatelessWidget {
                   onPressed: controller.clearMultiSelect,
                   child: const Text('取消选择')),
             ]));
+  }
+}
+
+/// The tree fold chevron in the row gutter: down when expanded, right when
+/// folded. Pure UI state — the fold never lives in the task data.
+class _Expander extends StatelessWidget {
+  const _Expander({required this.expanded, required this.onToggle});
+
+  final bool expanded;
+  final VoidCallback onToggle;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = WorkFollowTheme.of(context);
+    return GestureDetector(
+        key: ValueKey(expanded ? 'task-expander-open' : 'task-expander-closed'),
+        onTap: onToggle,
+        behavior: HitTestBehavior.opaque,
+        child: Padding(
+            padding: const EdgeInsets.symmetric(
+                horizontal: WorkFollowSpacing.microGap,
+                vertical: WorkFollowSpacing.microGap),
+            child: AppIcon(
+                expanded
+                    ? WorkFollowIcons.expandMore
+                    : WorkFollowIcons.chevronNext,
+                size: WorkFollowMetrics.metadataIcon,
+                color: tokens.textTertiary)));
   }
 }

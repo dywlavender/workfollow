@@ -193,42 +193,7 @@ void main() {
     expect(c.tasks.single.listName, '工作');
   });
 
-  testWidgets('row add-subtask opens and focuses one reusable input', (tester) async {
-    tester.view.physicalSize = const Size(1200, 800);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(() { tester.view.resetPhysicalSize(); tester.view.resetDevicePixelRatio(); });
-    final c = WorkspaceController(seedData: false);
-    addTearDown(c.dispose);
-    c.selectView(WorkspaceView.inbox);
-    c.addTask('增加子任务', forceUnscheduled: true);
-    final id = c.tasks.single.id;
-    await tester.pumpWidget(MaterialApp(theme: WorkFollowThemeData.light(), home: Scaffold(body: ListenableBuilder(listenable: c, builder: (_, __) => TodayScreen(controller: c, persistentInspector: true)))));
-    await tester.pumpAndSettle();
-    Future<void> addFromMenu() async {
-      c.selectTask(id);
-      await tester.pumpAndSettle();
-      final gesture = await tester.startGesture(
-          tester.getCenter(find.byKey(ValueKey('task-row-surface-$id'))),
-          kind: PointerDeviceKind.mouse,
-          buttons: kSecondaryMouseButton);
-      await gesture.up();
-      await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const ValueKey('menu-option-add-subtask')));
-      await tester.pumpAndSettle();
-    }
-    await addFromMenu();
-    final input = find.byKey(const ValueKey('task-subtask-input'));
-    expect(input, findsOneWidget);
-    expect(tester.widget<TextField>(input).focusNode!.hasFocus, isTrue);
-    await tester.enterText(input, '子步骤');
-    await tester.testTextInput.receiveAction(TextInputAction.done);
-    await tester.pumpAndSettle();
-    expect(c.tasks.single.subtasks.single.title, '子步骤');
-    await addFromMenu();
-    expect(input, findsOneWidget);
-    expect(tester.widget<TextField>(input).focusNode!.hasFocus, isTrue);
-    expect(c.view, WorkspaceView.inbox);
-  });
+  ;
 
   testWidgets('submenus flip within the minimum desktop window', (tester) async {
     tester.view.physicalSize = const Size(880, 600);
