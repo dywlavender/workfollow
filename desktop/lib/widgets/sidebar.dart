@@ -103,13 +103,12 @@ class AppRail extends StatelessWidget {
               key: const ValueKey('rail-context-column'),
               child: Column(
                 children: [
-                  // Trash has its own content screen, but it remains inside
-                  // the task navigation grammar. Keep its second column
-                  // aligned with Plan/Today and do not show the product brand
-                  // above the task destinations.
-                  if (!controller.isTaskView &&
-                      controller.view != WorkspaceView.trash)
-                    const _RailBrand(),
+                  // No product brand here. The brand mark used to sit above the
+                  // note tree only, so the tab strip changed height and started
+                  // with a logo the moment the user switched to notes, while
+                  // the task views started straight at the first destination.
+                  // The app icon and the window title already carry the name;
+                  // the column now opens the same way in every view.
                   Expanded(
                     child: SingleChildScrollView(
                       padding: const EdgeInsets.fromLTRB(
@@ -811,35 +810,6 @@ class _TagSectionState extends State<_TagSection> {
               )),
       ],
     );
-  }
-}
-
-class _RailBrand extends StatelessWidget {
-  const _RailBrand();
-  @override
-  Widget build(BuildContext context) {
-    final tokens = WorkFollowTheme.of(context);
-    return Padding(
-        padding: const EdgeInsets.fromLTRB(WorkFollowSpacing.sectionGap, WorkFollowSpacing.space5, WorkFollowSpacing.relaxedGap, WorkFollowSpacing.sectionGap),
-        child: Row(children: [
-          Container(
-              width: SidebarMetrics.brandMarkSize,
-              height: SidebarMetrics.brandMarkSize,
-              decoration: BoxDecoration(
-                  color: _sidebarAccent(context, tokens),
-                  borderRadius: BorderRadius.circular(WorkFollowRadii.control)),
-              child: AppIcon(WorkFollowIcons.brand,
-                  size: WorkFollowMetrics.railIcon + 1,
-                  color: Theme.of(context).colorScheme.onPrimary)),
-          const SizedBox(width: WorkFollowSpacing.sm),
-          Text('打勾',
-              style: TextStyle(
-                  fontSize: WorkFollowMacTypography.detailTitle,
-                  height: WorkFollowMacTypography.lineControl,
-                  fontWeight: WorkFollowMacWeight.semibold,
-                  letterSpacing: WorkFollowMacTracking.none,
-                  color: tokens.textPrimary)),
-        ]));
   }
 }
 

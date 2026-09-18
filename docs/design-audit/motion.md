@@ -1,5 +1,7 @@
 # D9 Motion 盘点
 
+> 历史记录：本页的并行工作区边界已在 [D11.1](d11-integration.md) 收回；当前锁定测试不再跳过这些文件。
+
 ## 基线扫描
 
 扫描范围为 `desktop/lib/**/*.dart`。D0 基线记录了 18 个主题外数字 `Duration`、10 个主题外 `Curves.*` 和 26 个 `Animated*` / `Tween` 命中。命中数包含业务日期、停留时间、Tooltip 延迟和并行组件，因此不能直接当作违规数量。

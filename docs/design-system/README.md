@@ -1,6 +1,6 @@
 # WorkFollow Desktop Design System
 
-这是 D11 之后的桌面端设计系统索引。组件只组合语义 Token 和模块 Metrics；原始值只出现在 Token 层、内容渲染层或 `exceptions.md` 明确记录的例外中。
+这是 D11.1 之后的桌面端设计系统索引。组件只组合语义 Token 和模块 Metrics；原始值只出现在 Token 层、内容渲染层或 `exceptions.md` 明确记录的例外中。
 
 ## 事实源
 
@@ -28,7 +28,7 @@ flutter test test/design_system_lock_test.dart
 flutter test test/design_system_gallery_test.dart
 ```
 
-`design_system_lock_test.dart` 会拒绝业务 Widget 直接使用 Material 图标、原始十六进制颜色、状态色、Web 字体、`textTheme`、数字字号/字距/字重、数字行高、数字圆角、孤立阴影、动画时长和曲线。内容渲染的 Quill 水平线等例外，以及并行任务的明确边界见 [`exceptions.md`](exceptions.md)。
+`design_system_lock_test.dart` 会扫描全部业务 Widget，拒绝直接使用 Material 图标、原始十六进制颜色、状态色、Web 字体、`textTheme`、数字字号/字距/字重、数字行高、数字圆角、孤立阴影、动画时长和曲线。内容渲染的 Quill 水平线、遮罩和用户数据色等明确例外见 [`exceptions.md`](exceptions.md)；并行任务不再拥有路径级延期豁免。
 
 ## 领域说明
 

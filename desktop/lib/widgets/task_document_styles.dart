@@ -17,9 +17,12 @@ class TaskDocumentStyles {
   /// completion checkbox. It belongs to the document's line leading, so it
   /// follows the TickTick treatment: a small hollow square with an accent
   /// check; the completed line greys out through the text style.
-  static const double checklistSize = 16;
-  static const double checklistRadius = 5;
-  static const double checklistBorderWidth = 1.3;
+  // Compatibility aliases for callers that used the document style catalog.
+  // The values themselves belong to the shared document geometry token.
+  static const double checklistSize = TaskDocumentMetrics.checklistSize;
+  static const double checklistRadius = TaskDocumentMetrics.checklistRadius;
+  static const double checklistBorderWidth =
+      TaskDocumentMetrics.checklistBorderWidth;
 
   /// The text treatment used for a completed checklist line. This only
   /// returns the properties that differ from the line's existing style, which
@@ -188,7 +191,9 @@ class TaskDocumentStyles {
         verticalSpacing: paragraphSpacing,
         decoration: BoxDecoration(
           border: Border(
-            left: BorderSide(width: 3, color: tokens.borderStrong),
+            left: BorderSide(
+                width: TaskDocumentMetrics.quoteBorderWidth,
+                color: tokens.borderStrong),
           ),
         ),
       ),
@@ -357,7 +362,8 @@ class _TaskDocumentCheckboxState extends State<_TaskDocumentCheckbox> {
     return Align(
       alignment: AlignmentDirectional.centerEnd,
       child: Padding(
-        padding: const EdgeInsetsDirectional.only(end: 7),
+        padding: const EdgeInsetsDirectional.only(
+            end: TaskDocumentMetrics.checklistTrailingInset),
         child: marker,
       ),
     );
@@ -380,7 +386,7 @@ class _TaskChecklistCheckPainter extends CustomPainter {
       Paint()
         ..color = color
         ..style = PaintingStyle.stroke
-        ..strokeWidth = 2.0
+        ..strokeWidth = TaskDocumentMetrics.checklistCheckStrokeWidth
         ..strokeCap = StrokeCap.round
         ..strokeJoin = StrokeJoin.round,
     );

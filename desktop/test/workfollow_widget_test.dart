@@ -288,6 +288,21 @@ void main() {
     // The note list pane carries its own 笔记 header, so the shell does not
     // repeat it in a global toolbar.
     expect(find.byKey(const ValueKey('app-toolbar')), findsNothing);
+
+    // The navigation column opens at its first destination in every view. The
+    // brand mark used to sit above the note tree only, so the column changed
+    // height — and started with a logo — the moment the user switched to notes.
+    expect(find.text('打勾'), findsNothing);
+
+    // A note row carries its folder and timestamp in one trailing metadata
+    // column, the arrangement the task rows already use for list name and date.
+    final pane = find.byKey(const ValueKey('web-note-list-pane'));
+    final paneRect = tester.getRect(pane);
+    final folder = tester.getRect(find.descendant(
+        of: pane, matching: find.text('工作笔记')));
+    expect(folder.right, greaterThan(paneRect.center.dx));
+    expect(paneRect.right - folder.right,
+        lessThan(NotesMetrics.rowHorizontalPadding * 3));
   });
 
   testWidgets('narrow windows swap the list for a detail pane with a back path',

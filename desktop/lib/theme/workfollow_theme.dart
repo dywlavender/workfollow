@@ -17,6 +17,7 @@ class WorkFollowMetrics {
   static const double compactFieldIcon = 17;
   static const double metadataIcon = 15;
   static const double iconHitTarget = 32;
+
   /// Shared stroke used by compact completion controls and the Material
   /// checkbox theme. Custom painted controls may opt out when their path has
   /// a documented visual reason to use a different stroke.
@@ -30,6 +31,7 @@ class WorkFollowMetrics {
   static const double compactNavigationSectionBottom = 2;
   static const double primaryButtonHeight = 36;
   static const double compactButtonHeight = 34;
+
   /// The shared height for ordinary text inputs and primary controls. Keeping
   /// this role beside the button roles makes a field and its action row align
   /// without making callers guess between 34, 36 and 38.
@@ -44,6 +46,7 @@ class WorkFollowMetrics {
   static const double toolbarControlHeight = 28;
   static const double dividerThickness = 1;
   static const double popoverMaxHeight = 560;
+
   /// Native task rows use the task-list contract below. The alias prevents a
   /// second 44pt row definition from surviving in the global catalog while
   /// [WorkFollowLayout.taskRowComfortableHeight] remains the Web contract.
@@ -99,6 +102,12 @@ class TaskListMetrics {
   static const double quickAddHeight = 42;
   static const double quickAddRadius = 10;
   static const double quickAddHorizontalPadding = WorkFollowSpacing.relaxedGap;
+
+  /// Drag affordances used by every task-list surface.
+  static const double dragMarkerHeight = 3;
+  static const double dragMarkerRadius = WorkFollowRadii.marker;
+  static const double dragPreviewWidth = 360;
+  static const double dragPreviewRadius = WorkFollowRadii.surface;
 
   static const double groupTopGap = WorkFollowSpacing.sectionGap;
   static const double groupHeaderHeight = 30;
@@ -166,7 +175,8 @@ class TaskEditorMetrics {
   static const double commandGlyphSlot = 14;
   static const double popoverRowHeight = WorkFollowMetrics.compactMenuRowHeight;
   static const double pickerRowHeight = WorkFollowMetrics.pickerRowHeight;
-  static const double toolbarButtonWidth = WorkFollowMetrics.toolbarControlWidth;
+  static const double toolbarButtonWidth =
+      WorkFollowMetrics.toolbarControlWidth;
   static const double toolbarButtonHeight =
       WorkFollowMetrics.toolbarControlHeight;
   static const double toolbarDividerHeight = 17;
@@ -199,6 +209,7 @@ class TaskMenuMetrics {
 
   static const double width = 264;
   static const double rowHeight = WorkFollowMetrics.menuRowHeight;
+
   /// Divider height includes the quiet vertical breathing room around the
   /// one-pixel hairline in the context menu.
   static const double dividerHeight = 13;
@@ -233,6 +244,17 @@ class TaskScheduleMetrics {
   static const double dateShortcutSize = WorkFollowMetrics.iconHitTarget;
   static const double headerControlSize = WorkFollowMetrics.iconHitTarget;
   static const double propertyIndicatorSize = 9;
+
+  /// Shared geometry for the nested date, reminder and repeat option sheets.
+  static const double optionRowHeight = 34;
+  static const double optionHeaderHeight = 36;
+  static const double optionHeaderRadius = 10;
+  static const double optionHeaderClearWidth = 26;
+  static const double optionHeaderClearHeight = 30;
+  static const double optionButtonRadius = WorkFollowRadii.md;
+  static const double optionButtonHeight = 28;
+  static const double timeOptionsHeight = 280;
+  static const double optionDividerHeight = WorkFollowMetrics.dividerThickness;
 }
 
 /// Geometry for the command palette and its keyboard shortcut affordance.
@@ -250,7 +272,6 @@ class SidebarMetrics {
 
   static const double footerButtonSize = WorkFollowMetrics.compactButtonHeight;
   static const double railButtonSize = 38;
-  static const double brandMarkSize = WorkFollowMetrics.compactNavigationIconHitTarget;
   static const double folderMoreWidth = 22;
   static const double folderMoreHeight = 20;
   static const double listColorPickerWidth = 270;
@@ -290,6 +311,32 @@ class MatrixMetrics {
   static const double taskEditorMinHeight = 420;
   static const double taskEditorMaxHeight = 620;
   static const double taskEditorViewportMargin = 48;
+
+  /// Geometry for the quadrant header, add surface and draggable rows.
+  static const double quadrantRadius = WorkFollowRadii.card;
+  static const double quadrantHeaderMarkerSize = 22;
+  static const double groupRowHeight = 34;
+  static const double addSurfaceRowHeight = 42;
+  static const double addSurfaceBodyHeight = 126;
+  static const double addSurfaceRadius = WorkFollowRadii.md;
+  static const double taskRowDividerHeight = WorkFollowMetrics.dividerThickness;
+  static const double taskRowDragPreviewWidth = 280;
+  static const double taskRowDragPreviewRadius = WorkFollowRadii.md;
+  static const double taskRowCheckboxHitTarget = 21;
+  static const double taskRowCheckboxSize = 18;
+  static const double taskRowCheckboxRadius = WorkFollowRadii.checkbox;
+}
+
+/// Geometry for document-only controls that do not share the task-list box.
+class TaskDocumentMetrics {
+  const TaskDocumentMetrics._();
+
+  static const double checklistSize = 16;
+  static const double checklistRadius = WorkFollowRadii.checkbox;
+  static const double checklistBorderWidth = 1.3;
+  static const double checklistTrailingInset = 7;
+  static const double checklistCheckStrokeWidth = 2;
+  static const double quoteBorderWidth = 3;
 }
 
 /// Geometry of the note index and linked-task controls.
@@ -302,14 +349,12 @@ class NotesMetrics {
   static const double listWidth = 330;
   static const double compactListWidth = 300;
 
-  /// Index header. The title and the note count share one line and the compose
-  /// action sits on the trailing edge; the search field and the sort control
-  /// share the line below it. The header used to stack four rows — title,
-  /// count, search, sort — which cost about 40pt of list height for no
-  /// information.
+  /// Index header. The title and the compose action share one line; the search
+  /// field and the sort control share the line below it. The header used to
+  /// stack four rows — title, count, search, sort — which cost about 40pt of
+  /// list height for no information.
   static const double headerHeight = 44;
   static const double searchHeight = 34;
-  static const double headerStackGap = WorkFollowSpacing.space3;
 
   /// One note row. Rows are list rows, not cards: a 12pt inset, an 88pt
   /// minimum height, an 8pt selection radius and a hairline between rows.
@@ -318,6 +363,14 @@ class NotesMetrics {
   static const double rowMinHeight = 88;
   static const double rowRadius = WorkFollowRadii.md;
   static const double rowDividerInset = rowHorizontalPadding;
+
+  /// The note row's trailing metadata column.
+  ///
+  /// The task rows already answer "where and when" in one right-aligned
+  /// column; the note index repeats that arrangement rather than laying its
+  /// date across the full width of the row, so the two lists scan the same way.
+  static const double rowMetaGap = WorkFollowSpacing.space3;
+  static const double rowMetaMaxWidth = 96;
 
   /// The note page's own header bar: move-to-folder on the leading edge,
   /// favourite and more on the trailing edge.
@@ -425,7 +478,8 @@ class QuickAddMetrics {
 
   static const double propertiesPopoverWidth = 245;
   static const double priorityFlagWidth = 44;
-  static const double priorityFlagHeight = WorkFollowMetrics.compactButtonHeight;
+  static const double priorityFlagHeight =
+      WorkFollowMetrics.compactButtonHeight;
 }
 
 /// Row-state fills for the task list.
@@ -444,8 +498,7 @@ class TaskListColors {
     return Colors.transparent;
   }
 
-  static Color rowFocusRing(WorkFollowTheme tokens) =>
-      tokens.focusRing;
+  static Color rowFocusRing(WorkFollowTheme tokens) => tokens.focusRing;
 }
 
 /// Row-state fills for the note index.
@@ -903,6 +956,8 @@ class WorkFollowMotion {
   static const Duration normal = Duration(milliseconds: 240);
   static const Duration tooltipWait = Duration(milliseconds: 450);
   static const Duration submenuIntent = Duration(milliseconds: 220);
+  static const Duration dragStartDelay = Duration(milliseconds: 300);
+
   /// Task rows use a shorter state transition than panels. It is long enough
   /// to make completion/restoration legible, while keeping a rapid checkbox
   /// pass from making the list feel behind the pointer.
@@ -1276,7 +1331,8 @@ class WorkFollowTheme extends ThemeExtension<WorkFollowTheme> {
     success: Color(0xFF237A57),
     warning: Color(0xFFA15C08),
     danger: Color(0xFFB13F50),
-    shadow: Color(0x14161B2B),    seasonalSky: LinearGradient(
+    shadow: Color(0x14161B2B),
+    seasonalSky: LinearGradient(
       begin: Alignment.topLeft,
       end: Alignment.bottomRight,
       colors: [Color(0xFFF2F4FF), Color(0xFFF7F8FA)],

@@ -1,6 +1,6 @@
-# D11 Design System 最终清扫与锁定
+# D11 / D11.1 Design System 最终清扫与集成锁定
 
-> 状态：已完成。D11 只清扫 Token 绕过点、建立例外边界和自动回归，不重新设计页面。
+> 状态：已完成。D11 建立规则，D11.1 收回并行工作区、完成全库复核，不重新设计页面。
 
 ## 扫描快照
 
@@ -26,6 +26,9 @@
 - `WorkFollowMotion.tooltipWait`、`WorkFollowMotion.submenuIntent` 收纳等待和子菜单意图时序。
 - `TaskMenuMetrics.dividerHeight`、`WorkFollowMetrics.checkboxBorderWidth` 和共享 Divider thickness 消除了重复几何字面值。
 - Sidebar 的用户色勾选前景改为 `WorkFollowThemeContrast.foregroundOn`，Light/Dark 与任意用户色都可读。
+- D11.1 将 Feedback、Matrix、Task List、Schedule、Today 和 Quick Add 的并行源码与回归测试纳入分支快照。
+- D11.1 将拖拽预览、检查项、日期选项和 Matrix 几何迁移到模块 Metrics，将反馈停留时间迁移到 `WorkFollowFeedbackTiming`。
+- D11.1 将 Feedback HUD 和 Quick Add 表面接入 `WorkFollowSurfaceTokens`，业务源码不再自定义阴影。
 
 ## 自动约束
 
@@ -39,15 +42,15 @@ Web 字体、textTheme 或数字字号/字距/字重
 孤立动画时长和 Curves
 ```
 
-Token 源目录和并行任务边界是显式集合；例外见 [`docs/design-system/exceptions.md`](../design-system/exceptions.md)。
+Token 源目录和内容/绘制例外是显式集合；例外见 [`docs/design-system/exceptions.md`](../design-system/exceptions.md)。全部业务源码都接受同一份锁定测试。
 
 ## 组件目录与回归
 
 [`WorkFollowDesignSystemGallery`](/Users/dongyangwei/Documents/学习/代办笔记/workfollow-flutter-personal/desktop/lib/theme/design_system_gallery.dart) 提供开发预览，覆盖 Typography、Colors、Icons、Controls、TaskRow、Menus、Pickers、Toolbar、Dialog 和 Completion Toast。[`design_system_gallery_test.dart`](/Users/dongyangwei/Documents/学习/代办笔记/workfollow-flutter-personal/desktop/test/design_system_gallery_test.dart) 在 Light/Dark 下确认所有关键 section 可构建且无 Flutter 异常；现有视觉 Widget 测试继续覆盖菜单、编辑器、TaskRow 和 Feedback。
 
-## 并行边界
+## D11.1 集成闭环
 
-当前工作区中另一项任务仍有未提交改动。D11 没有覆盖或清理这些文件；lock test 只跳过精确列出的路径，合并后应删除对应例外并重新运行全库扫描。
+并行任务新增的源码、测试和日期组件文档已经进入当前分支。锁定测试不再按路径跳过业务文件；全库复核只剩内容渲染、遮罩、绘制和用户数据等 `exceptions.md` 中记录的例外。
 
 ## 验证命令
 

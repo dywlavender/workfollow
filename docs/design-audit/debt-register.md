@@ -62,13 +62,13 @@
 | 文件 | 组件 | 问题类型 | 当前写法（命中数） | 应归属 Token | 严重程度 | 计划轮次 |
 | --- | --- | --- | --- | --- | --- | --- |
 | `screens/home_screen.dart` | Dashboard cards/calendar | Geometry | 重复面板、Quick Add、任务标记和小日历尺寸已命名 | `HomeMetrics` | P1 | migrated · D5 |
-| `widgets/quick_add.dart` | Quick Add field/panel | Geometry | 并行任务正在调整的属性面板仍有局部尺寸 | Quick Add metrics | P1 | deferred · D5 |
+| `widgets/quick_add.dart` | Quick Add field/panel | Geometry | 属性面板尺寸 | Quick Add metrics | P1 | migrated · D11.1 |
 | `widgets/sidebar.dart` | Rail/navigation | Geometry | rail/footer/brand、颜色选择器和色块已命名 | `SidebarMetrics` / `WorkFollowLayout` | P1 | migrated · D5 |
 | `screens/habits_screen.dart` | Habit cards | Geometry | 对话框、习惯标记、历史格和 metadata 尺寸已命名 | `HabitsMetrics` | P1 | migrated · D5 |
 | `screens/notes_screen.dart` | Note pane | Geometry | 索引、Header、搜索、新建、空状态和关联任务尺寸已命名 | `NotesMetrics` | P1 | migrated · D5 |
 | `widgets/task_schedule_panel.dart` | Schedule picker | Geometry | 面板、快捷日期、属性行和子弹层上限已命名 | `TaskScheduleMetrics` | P1 | migrated · D5 |
 | `widgets/task_schedule_panel.dart`、`widgets/task_editor_toolbar.dart` | Picker/Toolbar | Geometry | 行高、工具栏控制槽和弹层宽高已命名；圆角留给 D6 | `TaskEditorMetrics` / `WorkFollowRadii` | P1 | migrated · D5 / D6 |
-| `widgets/matrix/*` | Matrix cards/quadrants | Geometry | 并行新增组件的卡片几何保留，页面 Header/新增面板已命名 | `MatrixMetrics` + module whitelist | P1 | deferred · D5 |
+| `widgets/matrix/*` | Matrix cards/quadrants | Geometry | 卡片、分组和新增面板几何 | `MatrixMetrics` | P1 | migrated · D11.1 |
 
 ## Surfaces
 
@@ -79,7 +79,7 @@
 | `widgets/desktop_popover.dart`、`persistent_anchored_popover.dart` | Popover | Shadow | Material elevation 与黑色 shadowColor 分散 | `WorkFollowShadows.level2` | P0 | migrated · D6 |
 | `widgets/task_editor_popover.dart`、`task_slash_menu.dart` | Editor/Slash Popover | Surface | Toolbar/Slash 使用局部 radius、blur、offset | `WorkFollowSurfaceTokens.popover` | P0 | migrated · D6 |
 | `widgets/command_palette.dart` | Command Palette | Surface | 独立大 blur/offset 组合 | `WorkFollowSurfaceTokens.dialog` / `WorkFollowShadows.level3` | P1 | migrated · D6 |
-| `widgets/quick_add.dart`、`screens/today_screen.dart`、`widgets/matrix/*`、`features/feedback/*` | 并行 Surface | Surface | 其他任务未提交的 BoxShadow/数字圆角 | 对应 Surface role | P1 | deferred · D6 |
+| `widgets/quick_add.dart`、`screens/today_screen.dart`、`widgets/matrix/*`、`features/feedback/*` | 任务工作区 Surface | Surface | 局部 BoxShadow/数字圆角 | 对应 Surface role | P1 | migrated · D11.1 |
 
 ## States
 
@@ -88,12 +88,12 @@
 | `theme/workfollow_interaction_states.dart` | 全局状态解析 | State | 状态优先级散落在多个组件 | `WorkFollowInteractionStyles` | P0 | migrated · D7 |
 | `widgets/sidebar.dart` | Rail、Navigation、List、Tag | State | selected 25、hover 34，多层嵌套颜色/字重分支 | `customFill` + navigation state matrix | P0 | migrated · D7 |
 | `widgets/desktop_popover.dart`、`widgets/task_inspector.dart` | Property buttons / Menu | State | active 6、selected 3、focus 3 | control selected/focus roles | P1 | migrated · D7 |
-| `widgets/task_list/task_list_row.dart` | Task row | State | hover/selected/focus 分支 4/1/3 | `TaskListColors` + focus ring | P0 | deferred · parallel task |
-| `widgets/task_row.dart` | Legacy task row | State | hover/focus 分支 7/6 | 与共享 TaskListRow 状态矩阵一致 | P0 | deferred · parallel task |
-| `widgets/task_document_styles.dart` | Checklist | State | hover 2，使用 `menuSelected` 和透明 hoverColor | Document checklist state role | P1 | deferred · parallel task |
+| `widgets/task_list/task_list_row.dart` | Task row | State | hover/selected/focus 分支 4/1/3 | `TaskListColors` + focus ring | P0 | migrated · D11.1 |
+| `widgets/task_row.dart` | Legacy task row | State | hover/focus 分支 7/6 | 与共享 TaskListRow 状态矩阵一致 | P0 | migrated · D11.1 |
+| `widgets/task_document_styles.dart` | Checklist | State | hover 2，使用 `menuSelected` 和透明 hoverColor | Document checklist state role | P1 | migrated · D11.1 |
 | `widgets/task_date_picker.dart`、`widgets/task_schedule_panel.dart` | Calendar day / schedule | State | selected 日格直接使用 accent/transparent | picker selected/hover/focus roles | P1 | migrated · D7 |
 | `widgets/settings_panel.dart` | Tabs/Switches | State | selected/active 色分支 4+ | settings control state roles | P1 | migrated · D7 |
-| `widgets/matrix/matrix_quadrant.dart`、`matrix_task_row.dart` | Matrix cards | State | hover/selected 直接组合颜色和阴影 | Matrix state matrix | P1 | deferred · parallel task |
+| `widgets/matrix/matrix_quadrant.dart`、`matrix_task_row.dart` | Matrix cards | State | hover/selected 直接组合颜色和阴影 | Matrix state matrix | P1 | migrated · D11.1 |
 
 ## Overlay / Menu
 
@@ -115,7 +115,7 @@
 | `app.dart`、`widgets/command_palette.dart`、`settings_panel.dart` | Shell/page/dialog | Motion | 220/180ms、ease 曲线 | `panelTransition` | P1 | migrated · D9 |
 | `widgets/desktop_popover.dart`、`persistent_anchored_popover.dart` | Menu/Picker/Toolbar | Motion | 100ms、持久浮层无进退场 | `popoverEnter` / `popoverExit` / `controlPress` | P1 | migrated · D9 |
 | `widgets/sidebar.dart`、`screens/home_screen.dart` | Local state transitions | Motion | 120/150ms | `hoverTransition` / `selectionTransition` | P1 | migrated · D9 |
-| `screens/today_screen.dart`、`widgets/task_list/*`、`widgets/matrix/*` | Parallel task/list transitions | Motion | 并行任务中的动画 | 对应 task/list/collapse roles | P1 | deferred · D9 后续 |
+| `screens/today_screen.dart`、`widgets/task_list/*`、`widgets/matrix/*` | Parallel task/list transitions | Motion | 并行任务中的动画 | 对应 task/list/collapse roles | P1 | migrated · D11.1 |
 | `widgets/task_context_menu_panel.dart` | Submenu intent | Motion | 220ms Timer | hover intent delay（与动画分离） | P2 | accepted-exception · D9 |
 
 ## Light / Dark
@@ -124,8 +124,8 @@
 | --- | --- | --- | --- | --- | --- | --- |
 | `widgets/sidebar.dart` | Light rail/navigation | Theme parity | Light/Dark 颜色分支散落在 Widget | `WorkFollowColorTokens.navigation*` | P0 | migrated · D10 |
 | `widgets/task_menu_style.dart` | Task menus | Theme parity | 颜色已由 Theme extension 提供 | `WorkFollowTheme` 菜单语义值 | P0 | migrated · D10 |
-| `widgets/task_document_styles.dart` | Checklist | Theme parity | 并行任务仍在调整 checked fill/check 细节 | Document style + semantic contrast roles | P1 | deferred · D10 后续 |
-| `widgets/task_schedule_options.dart`、`task_schedule_panel.dart` | Schedule field | Theme parity | 并行任务中的日期表面和前景分支 | input/status semantic roles | P1 | deferred · D10 后续 |
+| `widgets/task_document_styles.dart` | Checklist | Theme parity | 并行任务仍在调整 checked fill/check 细节 | Document style + semantic contrast roles | P1 | migrated · D11.1 |
+| `widgets/task_schedule_options.dart`、`task_schedule_panel.dart` | Schedule field | Theme parity | 并行任务中的日期表面和前景分支 | input/status semantic roles | P1 | migrated · D11.1 |
 | `widgets/command_palette.dart`、`settings_panel.dart` 等 | Overlay surfaces | Theme parity | barrier 使用黑色 alpha 遮罩；有色表面前景需对比校验 | Overlay barrier exception + `WorkFollowThemeContrast` | P1 | migrated/accepted-exception · D10 |
 | `theme/workfollow_theme.dart` | ThemeData/semantic palette | Theme parity | Light 状态色、Dark error foreground、Tooltip 语义对比不一致 | theme roles + `on*` foreground | P0 | migrated · D10 |
 | `screens/home_screen.dart`、`calendar_screen.dart`、`notes_screen.dart`、`widgets/task_tag_picker.dart` | Filled controls | Theme parity | 有色表面固定白色前景 | `WorkFollowThemeContrast.foregroundOn` | P1 | migrated · D10 |

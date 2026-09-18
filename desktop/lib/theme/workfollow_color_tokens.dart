@@ -52,8 +52,7 @@ class WorkFollowColorTokens {
           ? lightNavigationSelected
           : tokens.accentSoft;
 
-  static Color navigationAccent(
-          BuildContext context, WorkFollowTheme tokens) =>
+  static Color navigationAccent(BuildContext context, WorkFollowTheme tokens) =>
       Theme.of(context).brightness == Brightness.light
           ? lightNavigationAccent
           : tokens.accent;
@@ -70,8 +69,7 @@ class WorkFollowColorTokens {
           ? lightNavigationForegroundMuted
           : tokens.railForegroundMuted;
 
-  static Color navigationBorder(
-          BuildContext context, WorkFollowTheme tokens) =>
+  static Color navigationBorder(BuildContext context, WorkFollowTheme tokens) =>
       Theme.of(context).brightness == Brightness.light
           ? lightNavigationBorder
           : tokens.railBorder;
@@ -85,8 +83,7 @@ class WorkFollowColorTokens {
         .withValues(alpha: light ? .10 : .12);
   }
 
-  static Color navigationPressed(
-      BuildContext context, WorkFollowTheme tokens) {
+  static Color navigationPressed(BuildContext context, WorkFollowTheme tokens) {
     final light = Theme.of(context).brightness == Brightness.light;
     return navigationForeground(context, tokens)
         .withValues(alpha: light ? .16 : .20);
@@ -137,8 +134,27 @@ class WorkFollowColorTokens {
   /// per-kind palette. The roles intentionally remain distinct in the field.
   static Color quickAddDate(WorkFollowTheme tokens) => tokens.accent;
   static Color quickAddTime(WorkFollowTheme tokens) => tokens.accentHover;
-  static Color quickAddRecurrence(WorkFollowTheme tokens) => tokens.textSecondary;
+  static Color quickAddRecurrence(WorkFollowTheme tokens) =>
+      tokens.textSecondary;
   static Color quickAddTag(WorkFollowTheme tokens) => tokens.success;
   static Color quickAddList(WorkFollowTheme tokens) => tokens.warning;
   static Color quickAddPriority(WorkFollowTheme tokens) => tokens.danger;
+
+  /// Frame for the two Quick Add presentations. The list variant is an
+  /// unraised input slot; the dashboard variant is a raised card. Expanded
+  /// state uses the same accent focus treatment in both places.
+  static Color quickAddBorder(
+    WorkFollowTheme tokens, {
+    required bool expanded,
+    required bool listStyle,
+  }) {
+    if (listStyle) {
+      return expanded
+          ? tokens.accent.withValues(alpha: .45)
+          : Colors.transparent;
+    }
+    return expanded
+        ? tokens.accent.withValues(alpha: .55)
+        : tokens.borderStrong;
+  }
 }

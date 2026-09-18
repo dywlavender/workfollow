@@ -1,6 +1,6 @@
 # WorkFollow Design System Audit
 
-这是桌面端 Design System 的 D0 盘点入口和 D1–D11 迁移索引。每轮文档记录边界、事实源、例外和验证结果。
+这是桌面端 Design System 的 D0 盘点入口和 D1–D11.1 迁移索引。每轮文档记录边界、事实源、例外和验证结果。
 
 ## 快照
 
@@ -24,9 +24,9 @@
 | Surfaces | 91 个 `BoxDecoration`；7 个 `BoxShadow`；27 个 `Border.*` | 先建立 Surface 角色，再收口实现 | D6 |
 | States | `selected:` 60；Hover 相关 78；Focus 相关 71；Disabled 相关 32；Active 相关 16 | 语法命中，需按控件状态矩阵归并 | D7 |
 | Overlay | 统一菜单、Picker、Toolbar、Dialog route；34 个基线命中已按契约收口 | `DesktopOverlayPolicy`、shared geometry、persistent controller | D8 · migrated |
-| Motion | 18 个主题外数字 `Duration`；10 个主题外 `Curves.*` | Motion Role 已建立；浮层、页面切换、Feedback HUD 已迁移，并行组件按边界 deferred | D9 · migrated |
-| Light / Dark | 32 个明暗模式判断，分布在 10 个文件 | 语义 Token、对比度、Surface 层级和反色前景已收口；并行文件按边界 deferred | D10 · migrated |
-| D11 Lock | 业务文件的 Token 绕过点、特殊值和并行边界 | 自动约束、开发 Gallery、例外白名单已建立 | D11 · migrated |
+| Motion | 18 个主题外数字 `Duration`；10 个主题外 `Curves.*` | Motion Role 已建立；浮层、页面切换、Feedback HUD 以及并行任务组件均已迁移 | D9/D11.1 · migrated |
+| Light / Dark | 32 个明暗模式判断，分布在 10 个文件 | 语义 Token、对比度、Surface 层级和反色前景已收口；全部业务文件已复核 | D10/D11.1 · migrated |
+| D11 Lock | 业务文件的 Token 绕过点和特殊值 | 自动约束、开发 Gallery、例外白名单已建立；不再有路径级延期 | D11/D11.1 · migrated |
 
 ## 规范事实源
 
@@ -77,6 +77,7 @@
 - [Light / Dark](theme-parity.md)
 - [D10 Light / Dark migration](d10-theme-parity.md)
 - [D11 cleanup and lock](d11-cleanup.md)
+- [D11.1 integration closure](d11-integration.md)
 - [Design System reference](../design-system/README.md)
 
 ## 施工顺序
@@ -105,6 +106,8 @@ D9 Motion
 D10 Light/Dark
   ↓
 D11 Cleanup / Design Lock
+  ↓
+D11.1 Final Integration Closure
 ```
 
 每一轮只改一个维度，并在该轮结束后冻结审计结果、运行回归测试和截图核对。

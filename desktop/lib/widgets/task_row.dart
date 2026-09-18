@@ -246,10 +246,10 @@ class _TaskRowState extends State<TaskRow> {
             checkColor: tokens.content,
             semanticLabel: task.isClosed ? '标记未完成' : '完成任务',
             shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(5)),
+                borderRadius: BorderRadius.circular(WorkFollowRadii.checkbox)),
             side: BorderSide(
                 color: task.isClosed ? tokens.textTertiary : priorityColor,
-                width: 1.6),
+                width: WorkFollowMetrics.checkboxBorderWidth),
             onChanged: (_) => _complete()));
   }
 

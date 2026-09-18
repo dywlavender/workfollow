@@ -96,6 +96,20 @@ class WorkFollowMotionTokens {
       };
 }
 
+/// Hold durations for transient result feedback.
+///
+/// These are not animation durations. They describe how long a result remains
+/// available before the feedback host dismisses it, so callers do not scatter
+/// unexplained timeout literals through the event model.
+class WorkFollowFeedbackTiming {
+  const WorkFollowFeedbackTiming._();
+
+  static const Duration undoHold = Duration(milliseconds: 4000);
+  static const Duration errorHold = Duration(milliseconds: 5000);
+  static const Duration completionHold = Duration(milliseconds: 2600);
+  static const Duration defaultHold = completionHold;
+}
+
 /// Resolves a role against the current accessibility preference.
 ///
 /// Reduced motion keeps a short, linear fade/slide so state changes remain

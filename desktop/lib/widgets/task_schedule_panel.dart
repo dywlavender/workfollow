@@ -8,6 +8,7 @@ import '../features/tasks/domain/task_schedule_settings.dart';
 import '../models/task.dart';
 import '../theme/workfollow_icons.dart';
 import '../theme/workfollow_interaction_states.dart';
+import '../theme/workfollow_theme_parity.dart';
 import '../theme/workfollow_theme.dart';
 import 'app_icon_button.dart';
 import 'desktop_popover.dart';
@@ -398,7 +399,10 @@ class _TaskSchedulePanelState extends State<TaskSchedulePanel> {
                                                 child: Text('${day.day}',
                                                     style: text.copyWith(
                                                         color: selected
-                                                            ? Colors.white
+                                                            ? WorkFollowThemeContrast
+                                                                .foregroundOn(
+                                                                    colors
+                                                                        .accent)
                                                             : DateUtils
                                                                     .isSameDay(
                                                                         day,
@@ -423,7 +427,9 @@ class _TaskSchedulePanelState extends State<TaskSchedulePanel> {
                                                   fontSize:
                                                       WorkFollowMacTypography
                                                           .calendarAnnotation,
-                                                  height: 1,
+                                                  height:
+                                                      WorkFollowMacTypography
+                                                          .lineNone,
                                                   color:
                                                       colors.textTertiary)))),
                                 if (work != null)
@@ -442,13 +448,23 @@ class _TaskSchedulePanelState extends State<TaskSchedulePanel> {
                                                   color: work
                                                       ? colors.warning
                                                       : colors.success),
-                                              child: Text(work ? '班' : '休',
-                                                  style: const TextStyle(
-                                                      fontSize:
-                                                          WorkFollowMacTypography
-                                                              .calendarAnnotation,
-                                                      height: 1,
-                                                      color: Colors.white))))),
+                                              child: Text(
+                                                work ? '班' : '休',
+                                                style: TextStyle(
+                                                  fontSize:
+                                                      WorkFollowMacTypography
+                                                          .calendarAnnotation,
+                                                  height:
+                                                      WorkFollowMacTypography
+                                                          .lineNone,
+                                                  color: WorkFollowThemeContrast
+                                                      .foregroundOn(
+                                                    work
+                                                        ? colors.warning
+                                                        : colors.success,
+                                                  ),
+                                                ),
+                                              )))),
                               ]));
                         }),
                   ])),
@@ -528,7 +544,8 @@ class _TaskSchedulePanelState extends State<TaskSchedulePanel> {
                                 context, const TaskScheduleSettings()),
                             style: OutlinedButton.styleFrom(
                                 foregroundColor: colors.textPrimary,
-                                minimumSize: const Size(0, 28),
+                                minimumSize: const Size(
+                                    0, TaskScheduleMetrics.optionButtonHeight),
                                 padding: EdgeInsets.zero,
                                 tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                                 side: BorderSide(color: colors.border),
@@ -544,8 +561,11 @@ class _TaskSchedulePanelState extends State<TaskSchedulePanel> {
                             onPressed: apply,
                             style: FilledButton.styleFrom(
                                 backgroundColor: colors.accent,
-                                foregroundColor: Colors.white,
-                                minimumSize: const Size(0, 28),
+                                foregroundColor:
+                                    WorkFollowThemeContrast.foregroundOn(
+                                        colors.accent),
+                                minimumSize: const Size(
+                                    0, TaskScheduleMetrics.optionButtonHeight),
                                 padding: EdgeInsets.zero,
                                 tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                                 shape: RoundedRectangleBorder(

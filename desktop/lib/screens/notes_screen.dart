@@ -101,10 +101,11 @@ class _NotesScreenState extends State<NotesScreen> {
           padding: const EdgeInsets.fromLTRB(WorkFollowSpacing.cardInset, WorkFollowSpacing.zero, WorkFollowSpacing.cardInset, WorkFollowSpacing.sectionGap),
           child:
               Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-            // One header line: what this pane is, how many, and the one action
-            // that creates. The count used to sit on its own line under the
-            // title and the search field and the sort control on two more,
-            // which spent about 40pt of the list on nothing.
+            // One header line: what this pane is and the one action that
+            // creates. The count that used to follow the title is gone — the
+            // navigation column beside it already counts 全部笔记, 收藏, 未归档
+            // and every folder, so the index only repeated the number in a
+            // second place that the user has to reconcile.
             SizedBox(
               height: _notesHeaderHeight,
               child:
@@ -114,11 +115,6 @@ class _NotesScreenState extends State<NotesScreen> {
                         fontSize: WorkFollowMacTypography.listTitle,
                         fontWeight: WorkFollowMacWeight.semibold,
                         color: tokens.textPrimary)),
-                const SizedBox(width: WorkFollowSpacing.inlineGap),
-                Text('${notes.length}',
-                    style: TextStyle(
-                        fontSize: WorkFollowMacTypography.listMeta,
-                        color: tokens.textTertiary)),
                 const Spacer(),
                 _NewNoteButton(onCreate: create),
               ]),
@@ -313,13 +309,18 @@ class _NoteSortButton extends StatelessWidget {
   }
 }
 
-/// One row of the note index: title, two-line preview and a meta line.
+/// One row of the note index: title and preview on the left, the folder and
+/// the timestamp in a trailing metadata column.
 ///
 /// It is a row, not a card. The previous version drew a rounded container with
 /// a bottom border, which gave the open note a filled block that the other rows
 /// did not have — two visual languages in one list. Selection is now a soft
 /// primary fill at the same 8pt radius, and every other row is separated by a
 /// hairline inset to the text column.
+///
+/// The metadata moved to the trailing edge to match the task rows: the date
+/// used to sit at the leading edge of a full-width line, so the row read
+/// left-to-right as two unrelated facts with a gap between them.
 class _NoteRow extends StatefulWidget {
   const _NoteRow({
     required this.note,
@@ -362,52 +363,68 @@ class _NoteRowState extends State<_NoteRow> {
                           selected: widget.selected, hovering: hovering),
                       borderRadius:
                           BorderRadius.circular(NotesMetrics.rowRadius)),
-                  child: Column(
+                  child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Row(children: [
-                          if (note.isFavorite) ...[
-                            AppIcon(WorkFollowIcons.favorite,
-                                size: WorkFollowMetrics.metadataIcon,
-                                color: tokens.warning),
-                            const SizedBox(width: WorkFollowSpacing.denseGap)
-                          ],
-                          Expanded(
-                              child: Text(note.title,
-                                  maxLines: 1,
+                        Expanded(
+                            child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                              Row(children: [
+                                if (note.isFavorite) ...[
+                                  AppIcon(WorkFollowIcons.favorite,
+                                      size: WorkFollowMetrics.metadataIcon,
+                                      color: tokens.warning),
+                                  const SizedBox(
+                                      width: WorkFollowSpacing.denseGap)
+                                ],
+                                Expanded(
+                                    child: Text(note.title,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                            fontSize:
+                                                WorkFollowMacTypography.listTitle,
+                                            fontWeight:
+                                                WorkFollowMacWeight.semibold,
+                                            color: tokens.textPrimary))),
+                              ]),
+                              const SizedBox(height: WorkFollowSpacing.space1),
+                              Text(
+                                  note.preview.isEmpty ? '还没有内容' : note.preview,
+                                  maxLines: 2,
                                   overflow: TextOverflow.ellipsis,
                                   style: TextStyle(
-                                      fontSize: WorkFollowMacTypography.listTitle,
-                                      fontWeight: WorkFollowMacWeight.semibold,
-                                      color: tokens.textPrimary))),
-                        ]),
-                        const SizedBox(height: WorkFollowSpacing.space1),
-                        Text(note.preview.isEmpty ? '还没有内容' : note.preview,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                                fontSize: WorkFollowMacTypography.listBody,
-                                height: WorkFollowMacTypography.lineList,
-                                color: tokens.textSecondary)),
-                        const SizedBox(height: WorkFollowSpacing.denseGap),
-                        Row(children: [
-                          Text(noteUpdatedLabelFor(note.updatedAt),
-                              style: TextStyle(
-                                  fontSize: WorkFollowMacTypography.listMeta,
-                                  color: tokens.textTertiary)),
-                          const Spacer(),
-                          // The folder is metadata, not status: it reads as the
-                          // same kind of text as the date instead of a tinted
-                          // pill that competed with the title.
-                          Flexible(
-                              child: Text(note.folder,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  textAlign: TextAlign.end,
-                                  style: TextStyle(
-                                      fontSize: WorkFollowMacTypography.listMeta,
-                                      color: tokens.textTertiary))),
-                        ]),
+                                      fontSize:
+                                          WorkFollowMacTypography.listBody,
+                                      height: WorkFollowMacTypography.lineList,
+                                      color: tokens.textSecondary)),
+                            ])),
+                        const SizedBox(width: NotesMetrics.rowMetaGap),
+                        // Folder above, timestamp below: the same order the task
+                        // rows use for list name and date.
+                        ConstrainedBox(
+                            constraints: const BoxConstraints(
+                                maxWidth: NotesMetrics.rowMetaMaxWidth),
+                            child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                children: [
+                                  Text(note.folder,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                          fontSize: WorkFollowMacTypography
+                                              .listMeta,
+                                          color: tokens.textTertiary)),
+                                  const SizedBox(
+                                      height: WorkFollowSpacing.space1),
+                                  Text(noteUpdatedLabelFor(note.updatedAt),
+                                      maxLines: 1,
+                                      style: TextStyle(
+                                          fontSize: WorkFollowMacTypography
+                                              .listMeta,
+                                          color: tokens.textTertiary)),
+                                ])),
                       ])),
               if (widget.divider)
                 Container(

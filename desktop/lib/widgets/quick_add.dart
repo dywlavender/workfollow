@@ -6,6 +6,7 @@ import '../services/smart_date_parser.dart';
 import '../state/workspace_controller.dart';
 import '../theme/workfollow_icons.dart';
 import '../theme/workfollow_color_tokens.dart';
+import '../theme/workfollow_surface_tokens.dart';
 import '../theme/workfollow_theme.dart';
 import '../features/feedback/feedback_event.dart';
 import '../features/feedback/feedback_scope.dart';
@@ -643,6 +644,30 @@ class _QuickAddFieldState extends State<QuickAddField> {
         parse.spans.isNotEmpty ||
         _propertiesOpen ||
         _scheduleOpen;
+    final surfaceDecoration = widget.listStyle
+        ? BoxDecoration(
+            color: tokens.canvas,
+            borderRadius: BorderRadius.circular(TaskListMetrics.quickAddRadius),
+            border: expanded
+                ? Border.all(
+                    color: WorkFollowColorTokens.quickAddBorder(
+                      tokens,
+                      expanded: expanded,
+                      listStyle: true,
+                    ),
+                  )
+                : null,
+          )
+        : WorkFollowSurfaceTokens.card(
+            tokens,
+            color: tokens.content,
+            borderColor: WorkFollowColorTokens.quickAddBorder(
+              tokens,
+              expanded: expanded,
+              listStyle: false,
+            ),
+            elevated: true,
+          );
     return CallbackShortcuts(
         bindings: {
           const SingleActivator(LogicalKeyboardKey.escape): _handleEscape,
@@ -654,28 +679,7 @@ class _QuickAddFieldState extends State<QuickAddField> {
           constraints: widget.listStyle
               ? const BoxConstraints(minHeight: TaskListMetrics.quickAddHeight)
               : null,
-          decoration: BoxDecoration(
-              color: widget.listStyle ? tokens.canvas : tokens.content,
-              borderRadius: BorderRadius.circular(widget.listStyle
-                  ? TaskListMetrics.quickAddRadius
-                  : WorkFollowRadii.card),
-              border: widget.listStyle
-                  ? (expanded
-                      ? Border.all(
-                          color: tokens.accent.withValues(alpha: .45))
-                      : null)
-                  : Border.all(
-                      color: expanded
-                          ? tokens.accent.withValues(alpha: .55)
-                          : tokens.borderStrong),
-              boxShadow: widget.listStyle
-                  ? null
-                  : [
-                      BoxShadow(
-                          color: tokens.shadow,
-                          blurRadius: expanded ? 16 : 8,
-                          offset: const Offset(0, 2))
-                    ]),
+          decoration: surfaceDecoration,
           padding: EdgeInsets.symmetric(
               horizontal: widget.listStyle
                   ? TaskListMetrics.quickAddHorizontalPadding

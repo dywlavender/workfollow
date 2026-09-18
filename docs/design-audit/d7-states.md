@@ -1,5 +1,7 @@
 # D7 交互状态迁移记录
 
+> 历史记录：本页的并行工作区边界已在 [D11.1](d11-integration.md) 收回；当前锁定测试不再跳过这些文件。
+
 > 状态：已完成。施工边界是 default、hover、pressed、selected、focused、disabled、destructive；字体、图标、间距、尺寸、圆角、阴影和动画保持原有契约。
 
 ## 唯一事实源

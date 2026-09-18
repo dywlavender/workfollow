@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/task.dart';
 import '../state/workspace_controller.dart';
 import '../theme/workfollow_icons.dart';
+import '../theme/workfollow_surface_tokens.dart';
 import '../theme/workfollow_theme.dart';
 import '../features/feedback/feedback_event.dart';
 import '../features/feedback/feedback_scope.dart';
@@ -570,19 +571,21 @@ class _TodayScreenState extends State<TodayScreen> {
               children: [
                 if (candidates.isNotEmpty)
                   Container(
-                      height: 3,
+                      height: TaskListMetrics.dragMarkerHeight,
                       margin: const EdgeInsets.fromLTRB(WorkFollowSpacing.relaxedGap, WorkFollowSpacing.microGap, WorkFollowSpacing.relaxedGap, WorkFollowSpacing.microGap),
                       decoration: BoxDecoration(
                           color: tokens.accent,
-                          borderRadius: BorderRadius.circular(2))),
+                          borderRadius: BorderRadius.circular(
+                              TaskListMetrics.dragMarkerRadius))),
                 LongPressDraggable<String>(
                   data: task.id,
-                  delay: const Duration(milliseconds: 300),
+                  delay: WorkFollowMotion.dragStartDelay,
                   feedback: Material(
-                      elevation: 4,
-                      borderRadius: BorderRadius.circular(10),
+                      elevation: WorkFollowShadows.level1Elevation,
+                      borderRadius: BorderRadius.circular(
+                          TaskListMetrics.dragPreviewRadius),
                       child: SizedBox(
-                          width: 360,
+                          width: TaskListMetrics.dragPreviewWidth,
                           child: Padding(
                               padding: const EdgeInsets.all(WorkFollowSpacing.relaxedGap),
                               child: Text(task.title,
