@@ -6,6 +6,7 @@ import '../theme/workfollow_icons.dart';
 import '../theme/workfollow_surface_tokens.dart';
 import '../theme/workfollow_theme.dart';
 import '../features/feedback/feedback_event.dart';
+import '../features/tasks/application/task_tree_projection.dart';
 import '../features/feedback/feedback_scope.dart';
 import '../features/tasks/application/task_actions.dart';
 import '../features/tasks/domain/task_schedule.dart';
@@ -482,9 +483,11 @@ class _TodayScreenState extends State<TodayScreen> {
             onToggle: () => _toggleGroup(label),
             trailing: label == _overdueGroup ? _postponeButton(tasks) : null),
       // The unnamed group (a plain list of tasks) has no heading to fold with.
+      // Rows come from the tree projection: parents carry their children, so
+      // a child never renders twice and roots stay grouped with their tree.
       if (label.isEmpty || expanded)
         for (var i = 0; i < tasks.length; i++) ...[
-          _task(tasks[i], narrow,
+          ..._treeRows(tasks[i], narrow,
               compact: compact, wideInspector: wideInspector),
           if (i < tasks.length - 1) const TaskListDivider(),
         ],
@@ -560,7 +563,7 @@ class _TodayScreenState extends State<TodayScreen> {
   }
 
   Widget _task(TaskItem task, bool narrow,
-      {bool compact = false, bool wideInspector = false}) {
+      {bool compact = false, bool wideInspector = false, TaskTreeNode? node}) {
     final c = widget.controller, tokens = WorkFollowTheme.of(context);
     if (!narrow &&
         !wideInspector &&
@@ -632,13 +635,28 @@ class _TodayScreenState extends State<TodayScreen> {
                         }
                       }),
                 ),
-                if (c.hasChildren(task.id))
-                  for (final child in c.isTaskExpanded(task.id)
-                      ? c.childrenOf(task.id)
-                      : const <TaskItem>[])
-                    _childRow(child, compact, narrow),
               ],
             ));
+  }
+
+  /// Flattens one root task through the tree projection into list rows: the
+  /// parent (with its disclosure gutter) followed by its visible children.
+  List<Widget> _treeRows(TaskItem root, bool narrow,
+      {bool compact = false, bool wideInspector = false}) {
+    final c = widget.controller;
+    final nodes = taskTreeNodes(
+        roots: [root],
+        childrenOf: c.childRowsFor,
+        hasChildren: c.hasChildren,
+        isExpanded: c.isTaskExpanded);
+    return [
+      for (final node in nodes)
+        if (node.depth == 0)
+          _task(node.task, narrow,
+              compact: compact, wideInspector: wideInspector, node: node)
+        else
+          _childRow(node.task, compact, narrow),
+    ];
   }
 
   /// A subtask row in the list: the full TaskRow grammar, indented one level.
@@ -861,22 +879,28 @@ class _Expander extends StatelessWidget {
   final bool expanded;
   final VoidCallback onToggle;
 
+  /// The gutter every row reserves, so checkbox columns never shift when a
+  /// disclosure appears.
+  static const double width = TaskListMetrics.disclosureWidth;
+
   @override
   Widget build(BuildContext context) {
     final tokens = WorkFollowTheme.of(context);
-    return GestureDetector(
+    return SizedBox(
+      width: width,
+      child: GestureDetector(
         key: ValueKey(expanded ? 'task-expander-open' : 'task-expander-closed'),
         onTap: onToggle,
         behavior: HitTestBehavior.opaque,
-        child: Padding(
-            padding: const EdgeInsets.symmetric(
-                horizontal: WorkFollowSpacing.microGap,
-                vertical: WorkFollowSpacing.microGap),
-            child: AppIcon(
-                expanded
-                    ? WorkFollowIcons.expandMore
-                    : WorkFollowIcons.chevronNext,
-                size: WorkFollowMetrics.metadataIcon,
-                color: tokens.textTertiary)));
+        child: Center(
+          child: AppIcon(
+              expanded
+                  ? WorkFollowIcons.expandMore
+                  : WorkFollowIcons.chevronNext,
+              size: WorkFollowMetrics.metadataIcon,
+              color: tokens.textTertiary),
+        ),
+      ),
+    );
   }
 }

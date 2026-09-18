@@ -1810,6 +1810,34 @@ class WorkspaceController extends ChangeNotifier {
     ));
   }
 
+  /// The flat projection ids of the last [visibleTasks] pass: the tasks the
+  /// current smart view actually matched. Child rows under a parent are
+  /// filtered through it on date-driven pages (S7 §12).
+  Set<String> _projectedIds = const {};
+
+  /// List views (清单/收集箱/全部) are hierarchy-first: an expanded parent
+  /// shows every child. Date-driven smart views are projection-first: only
+  /// children that matched the view's own filter render beneath the parent.
+  bool get _hierarchyFirstChildren => switch (_view) {
+        WorkspaceView.all ||
+        WorkspaceView.inbox ||
+        WorkspaceView.work ||
+        WorkspaceView.study ||
+        WorkspaceView.personal =>
+          true,
+        _ => false,
+      };
+
+  /// The children rendered beneath [parentId] in the task list for the
+  /// current view.
+  List<TaskItem> childRowsFor(String parentId) {
+    final children = childrenOf(parentId);
+    if (_hierarchyFirstChildren) return children;
+    return children
+        .where((task) => _projectedIds.contains(task.id))
+        .toList();
+  }
+
   List<TaskItem> get visibleTasks {
     final flat = taskProjection.visible(
       tasks: _tasks,
@@ -1818,15 +1846,13 @@ class WorkspaceController extends ChangeNotifier {
       selectedTagName: _selectedTagName,
       reference: _dateReference,
     );
-    // Subtasks are rendered nested under their parent, never as flat rows.
-    // If the parent is gone (deleted), the child is promoted to top level
-    // rather than silently disappearing.
-    final activeIds = {
-      for (final task in _tasks)
-        if (task.deletedAt == null) task.id,
-    };
-    return List.unmodifiable(flat.where(
-        (task) => !task.isChildTask || !activeIds.contains(task.parentTaskId)));
+    _projectedIds = {for (final task in flat) task.id};
+    // Children render nested under their parent and never twice. A child
+    // whose parent did not match the current projection is promoted to a
+    // top-level row instead of silently disappearing (S7 §11) — its own
+    // dueAt/completed earned it a place in this view.
+    return List.unmodifiable(flat.where((task) =>
+        !task.isChildTask || !_projectedIds.contains(task.parentTaskId)));
   }
 
   /// Active child tasks of [parentId], in their sibling order.
@@ -2402,6 +2428,17 @@ class WorkspaceController extends ChangeNotifier {
     final now = DateTime.now().toIso8601String();
     _tasks[index] = _tasks[index].copyWith(deletedAt: now, updatedAt: now);
     _syncReminderFor(_tasks[index]);
+    // Deleting a parent takes its whole group out of the workspace. Children
+    // share the parent's exact deletedAt stamp so a later parent restore can
+    // resurrect exactly the cascade — a child deleted earlier on its own
+    // keeps its older stamp and stays in the trash.
+    for (var i = 0; i < _tasks.length; i++) {
+      final child = _tasks[i];
+      if (child.parentTaskId == id && child.deletedAt == null) {
+        _tasks[i] = child.copyWith(deletedAt: now, updatedAt: now);
+        _syncReminderFor(_tasks[i]);
+      }
+    }
     _lastCompletedTaskId = null;
     _lastRemovedTaskId = id;
     _lastRemovedNoteId = null;
@@ -2418,11 +2455,27 @@ class WorkspaceController extends ChangeNotifier {
   void restoreTask(String id) {
     final index = _tasks.indexWhere((task) => task.id == id);
     if (index < 0) return;
+    final cascadeStamp = _tasks[index].deletedAt;
     _tasks[index] = _tasks[index].copyWith(
       clearDeletedAt: true,
       updatedAt: DateTime.now().toIso8601String(),
     );
     _syncReminderFor(_tasks[index]);
+    // Bring back exactly the children this deletion took away: they carry the
+    // parent's own deletedAt stamp. Children soft-deleted earlier on their
+    // own stay in the trash instead of being resurrected by accident.
+    if (cascadeStamp != null) {
+      for (var i = 0; i < _tasks.length; i++) {
+        final child = _tasks[i];
+        if (child.parentTaskId == id &&
+            child.deletedAt != null &&
+            child.deletedAt == cascadeStamp) {
+          _tasks[i] = child.copyWith(
+              clearDeletedAt: true, updatedAt: DateTime.now().toIso8601String());
+          _syncReminderFor(_tasks[i]);
+        }
+      }
+    }
     _schedulePersist();
     _notify();
   }
@@ -3241,6 +3294,15 @@ class WorkspaceController extends ChangeNotifier {
       listName: listName,
       updatedAt: DateTime.now().toIso8601String(),
     );
+    // The tree never splits across lists: a moved parent carries its active
+    // children so清单 structure stays readable on both sides.
+    final movedAt = DateTime.now().toIso8601String();
+    for (var i = 0; i < _tasks.length; i++) {
+      if (_tasks[i].parentTaskId == id && _tasks[i].deletedAt == null) {
+        _tasks[i] = _tasks[i]
+            .copyWith(listName: listName, updatedAt: movedAt);
+      }
+    }
     if (_selectedTaskId == id &&
         isTaskView &&
         !visibleTasks.any((task) => task.id == id)) {

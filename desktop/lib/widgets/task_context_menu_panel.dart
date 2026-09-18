@@ -319,7 +319,9 @@ class _TaskContextMenuPanelState extends State<TaskContextMenuPanel> {
       key: const ValueKey('task-context-action-section'),
       mainAxisSize: MainAxisSize.min,
       children: [
-        _row(context, tokens, value: 'add-subtask', label: '添加子任务'),
+        // One nesting level: child rows get no 添加子任务 entry.
+        if (!widget.task.isChildTask)
+          _row(context, tokens, value: 'add-subtask', label: '添加子任务'),
         _row(context, tokens,
             value: 'pin', label: task.isPinned ? '取消置顶' : '置顶'),
         _row(context, tokens,

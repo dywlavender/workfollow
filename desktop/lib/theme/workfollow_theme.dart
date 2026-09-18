@@ -87,7 +87,14 @@ class WorkFollowMetrics {
 class TaskListMetrics {
   const TaskListMetrics._();
 
-  /// Pane width. The list opens at [preferredPaneWidth], shrinks toward
+  /// Tree geometry for the parent/child list (S6). One indentation step for
+  /// child rows, and the fixed gutter that keeps checkbox columns aligned
+  /// whether or not a row carries a disclosure chevron.
+  static const double hierarchyIndent = 24;
+  static const double disclosureWidth = 22;
+  static const double disclosureTitleGap = 2;
+
+    /// Pane width. The list opens at [preferredPaneWidth], shrinks toward
   /// [minPaneWidth] only before the inspector would drop below its own
   /// minimum, and stops at [maxPaneWidth] instead of growing without bound the
   /// way a pure ratio would on a wide display.

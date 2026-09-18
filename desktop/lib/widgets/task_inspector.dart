@@ -461,7 +461,11 @@ class _TaskInspectorState extends State<TaskInspector> {
           WorkFollowSpacing.space2,
           WorkFollowSpacing.space5,
           WorkFollowSpacing.compactInset),
-      leading: Builder(
+      leading: task.isChildTask
+          // A child moves with its parent (S7): the list entry is hidden
+          // rather than disabled so the footer keeps its rhythm.
+          ? null
+          : Builder(
           builder: (anchor) => TextButton.icon(
               key: const ValueKey('task-list-footer'),
               onPressed: () => _list(anchor),

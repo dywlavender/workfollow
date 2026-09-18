@@ -71,8 +71,12 @@ class TaskMetadataTrail extends StatelessWidget {
                 },
           semanticLabel: task.priority.label));
     }
-    if (task.subtaskTotal > 0) {
-      secondary.add(_text('${task.subtaskCompleted}/${task.subtaskTotal}',
+    // The count reads the live hierarchy, not the legacy embedded list:
+    // children are real tasks now, so 2/4 means two of four child tasks done.
+    if (controller.hasChildren(task.id)) {
+      secondary.add(_text(
+          '${controller.completedChildCount(task.id)}/'
+          '${controller.childCount(task.id)}',
           tokens.textTertiary));
     }
     if (task.recurrenceType != 'NONE') {

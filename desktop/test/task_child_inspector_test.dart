@@ -112,11 +112,19 @@ void main() {
       tester.view.resetPhysicalSize();
       tester.view.resetDevicePixelRatio();
     });
-    final c = WorkspaceController(seedData: false)..addTask('父任务');
+    final c = WorkspaceController(seedData: false);
     addTearDown(c.dispose);
-    final parentId = c.tasks.single.id;
-    final childId = c.createChildTask(parentId, title: '问问')!;
-    c.taskActions.delete(parentId);
+    // Orphans only arise from old data or import errors now that deleting a
+    // parent cascades — build one directly the way a legacy load would.
+    c.normalizeHierarchyForTest(const [
+      TaskItem(
+          id: 'orphan-child',
+          title: '问问',
+          listName: '收集箱',
+          bucket: TaskBucket.unscheduled,
+          parentTaskId: 'gone-parent'),
+    ]);
+    final childId = 'orphan-child';
     c.openTask(childId);
     await pumpInspector(tester, c: c, taskId: childId);
 
