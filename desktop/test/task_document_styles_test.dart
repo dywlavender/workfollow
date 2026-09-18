@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_quill/flutter_quill.dart' as quill;
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:workfollow_personal/theme/workfollow_color_tokens.dart';
 import 'package:workfollow_personal/theme/workfollow_theme.dart';
 import 'package:workfollow_personal/features/editor/document_styles.dart';
 
@@ -51,8 +52,8 @@ void main() {
     expect(styles.code!.style.fontFamily, WorkFollowMacTypeFamily.code);
     final codeDecoration = styles.code!.decoration;
     expect(codeDecoration, isA<BoxDecoration>());
-    expect((codeDecoration! as BoxDecoration).color,
-        WorkFollowTheme.light.canvas);
+    expect(
+        (codeDecoration! as BoxDecoration).color, WorkFollowTheme.light.canvas);
   });
 
   test('block defaults retain the base face while inline colours stay explicit',
@@ -98,39 +99,41 @@ void main() {
     expect(completed.decoration, TextDecoration.lineThrough);
     expect(completed.decorationColor, tokens.textSecondary);
     expect(completed.decorationThickness, 1);
-    final normal = DocumentStyles.customStyleBuilder(tokens)(
-        quill.Attribute.unchecked);
+    final normal =
+        DocumentStyles.customStyleBuilder(tokens)(quill.Attribute.unchecked);
     expect(normal, const TextStyle());
     // The marker face (numbers and bullets) reads the accent colour.
     expect(styles.leading!.style.color, tokens.accent);
   });
 
-  testWidgets('checklist marker uses the native accent treatment and exposes its checked state',
+  testWidgets(
+      'checklist marker uses the neutral completed treatment and exposes its checked state',
       (tester) async {
     var changed = false;
     await tester.pumpWidget(MaterialApp(
       theme: WorkFollowThemeData.light(),
       home: Builder(
-        builder: (context) => DocumentCheckboxBuilder(WorkFollowTheme.light)
-            .build(
-              context: context,
-              isChecked: true,
-              onChanged: (_) => changed = true,
-            ),
+        builder: (context) =>
+            DocumentCheckboxBuilder(WorkFollowTheme.light).build(
+          context: context,
+          isChecked: true,
+          onChanged: (_) => changed = true,
+        ),
       ),
     ));
 
     expect(find.bySemanticsLabel('已完成检查项'), findsOneWidget);
-    // Hollow outlined box: no fill even when checked; the accent lives in
-    // the check stroke now.
+    // Completed documents use the neutral graphite face; the check uses the
+    // contrast role selected by the active theme.
     final material = tester.widget<Material>(find.byType(Material).last);
-    expect(material.color, Colors.transparent);
+    final expectedFill =
+        WorkFollowColorTokens.documentChecklistFill(WorkFollowTheme.light);
+    expect(material.color, expectedFill);
     final shape = material.shape! as RoundedRectangleBorder;
-    expect(shape.side.color, WorkFollowTheme.light.borderStrong);
+    expect(shape.side.color, expectedFill);
 
     await tester.tap(find.descendant(
-        of: find.bySemanticsLabel('已完成检查项'),
-        matching: find.byType(InkWell)));
+        of: find.bySemanticsLabel('已完成检查项'), matching: find.byType(InkWell)));
     expect(changed, isTrue);
   });
 
@@ -187,8 +190,7 @@ void main() {
     expect(find.bySemanticsLabel('未完成检查项'), findsOneWidget);
 
     await tester.tap(find.descendant(
-        of: find.bySemanticsLabel('已完成检查项'),
-        matching: find.byType(InkWell)));
+        of: find.bySemanticsLabel('已完成检查项'), matching: find.byType(InkWell)));
     await tester.pumpAndSettle();
     final uncheckedLines = document.toDelta().toJson().where((op) {
       final attributes = op['attributes'];

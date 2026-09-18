@@ -138,8 +138,8 @@ class DocumentSlashMenu extends StatefulWidget {
 
   /// Splits a caller's subset into the two rendered groups, preserving the
   /// palette order rather than the caller's.
-  static ({List<DocumentSlashAction> text, List<DocumentSlashAction> task}) groupsFor(
-      List<DocumentSlashAction>? actions) {
+  static ({List<DocumentSlashAction> text, List<DocumentSlashAction> task})
+      groupsFor(List<DocumentSlashAction>? actions) {
     if (actions == null) {
       return (text: textActions, task: taskActions);
     }
@@ -390,7 +390,8 @@ class DocumentSlashMenuState extends State<DocumentSlashMenu> {
         height: DocumentSlashMenuMetrics.glyphSlot,
         child: Center(
           child: Icon(glyph,
-              size: DocumentSlashMenuMetrics.fontGlyph, color: tokens.textPrimary),
+              size: DocumentSlashMenuMetrics.fontGlyph,
+              color: tokens.textPrimary),
         ),
       );
     }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_quill/flutter_quill.dart' as quill;
 
+import '../../theme/workfollow_color_tokens.dart';
 import '../../theme/workfollow_theme.dart';
 
 /// The visual interpretation of the semantic blocks stored in a task Delta.
@@ -15,8 +16,8 @@ class DocumentStyles {
 
   /// The checklist marker is deliberately separate from the task-list
   /// completion checkbox. It belongs to the document's line leading, so it
-  /// follows the TickTick treatment: a small hollow square with an accent
-  /// check; the completed line greys out through the text style.
+  /// uses a neutral outline while open and a quiet graphite face when done;
+  /// the completed line greys out through the text style.
   // Compatibility aliases for callers that used the document style catalog.
   // The values themselves belong to the shared document geometry token.
   static const double checklistSize = TaskDocumentMetrics.checklistSize;
@@ -27,8 +28,7 @@ class DocumentStyles {
   /// The text treatment used for a completed checklist line. This only
   /// returns the properties that differ from the line's existing style, which
   /// lets a completed H1 retain its heading size and weight.
-  static TextStyle completedChecklistText(WorkFollowTheme tokens) =>
-      TextStyle(
+  static TextStyle completedChecklistText(WorkFollowTheme tokens) => TextStyle(
         color: tokens.textSecondary,
         decoration: TextDecoration.lineThrough,
         decorationColor: tokens.textSecondary,
@@ -161,10 +161,10 @@ class DocumentStyles {
     final bodyStyle = body(tokens, base: base);
     final blockSpacing = const quill.HorizontalSpacing(
         WorkFollowSpacing.zero, WorkFollowSpacing.zero);
-    final paragraphSpacing = quill.VerticalSpacing(
-        WorkFollowSpacing.zero, paragraphBottom);
-    final placeholderSpacing = quill.VerticalSpacing(
-        WorkFollowSpacing.zero, placeholderBottom);
+    final paragraphSpacing =
+        quill.VerticalSpacing(WorkFollowSpacing.zero, paragraphBottom);
+    final placeholderSpacing =
+        quill.VerticalSpacing(WorkFollowSpacing.zero, placeholderBottom);
 
     return quill.DefaultStyles(
       h1: _block(
@@ -310,7 +310,8 @@ class DocumentCheckboxBuilder extends quill.QuillCheckboxBuilder {
     required BuildContext context,
     required bool isChecked,
     required ValueChanged<bool> onChanged,
-  }) => _DocumentCheckbox(
+  }) =>
+      _DocumentCheckbox(
         tokens: tokens,
         isChecked: isChecked,
         onChanged: onChanged,
@@ -337,14 +338,19 @@ class _DocumentCheckboxState extends State<_DocumentCheckbox> {
 
   @override
   Widget build(BuildContext context) {
-    // TickTick-style outlined check: the box stays hollow with a hairline
-    // border, the check is drawn in the accent colour, and the completed
-    // line greys out through the text style instead of a filled chip.
-    const background = Colors.transparent;
-    final borderColor = _hovered && !widget.isChecked
-        ? widget.tokens.accent
-        : widget.tokens.borderStrong;
-    final checkColor = widget.tokens.accent;
+    // A document checklist is content structure, not a success indicator.
+    // Keep the unchecked marker neutral, and use a theme-owned graphite face
+    // plus a contrast-safe check for the completed state.
+    final checklistFill =
+        WorkFollowColorTokens.documentChecklistFill(widget.tokens);
+    final background = widget.isChecked ? checklistFill : Colors.transparent;
+    final borderColor = widget.isChecked
+        ? checklistFill
+        : _hovered
+            ? widget.tokens.textSecondary
+            : widget.tokens.borderStrong;
+    final checkColor =
+        WorkFollowColorTokens.documentChecklistCheck(widget.tokens);
 
     final marker = MouseRegion(
       cursor: SystemMouseCursors.click,

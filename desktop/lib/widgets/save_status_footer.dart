@@ -18,13 +18,22 @@ import 'app_icon_button.dart';
 /// fades after [savedLinger]. Only the ink fades; the row keeps its height, so
 /// nothing below it moves.
 class SaveStatusFooter extends StatelessWidget {
-  const SaveStatusFooter({super.key, required this.controller, this.trailing});
+  const SaveStatusFooter(
+      {super.key, required this.controller, this.trailing, this.actions});
 
   final WorkspaceController controller;
 
   /// Quiet secondary readout on the leading side of the same line — the note
   /// page puts its word count here instead of keeping a pill in the header.
   final String? trailing;
+
+  /// Page-level controls that ride the same line, after the save state.
+  ///
+  /// The note page puts its formatting trigger here: the trigger belongs to the
+  /// page, and pinning it to the bottom row keeps it off the prose. Ordering
+  /// mirrors the task inspector's header, where the save indicator is likewise
+  /// followed by the formatting toggle.
+  final Widget? actions;
 
   /// How long a successful save stays on screen before it fades.
   static const Duration savedLinger = Duration(seconds: 2);
@@ -54,6 +63,10 @@ class SaveStatusFooter extends StatelessWidget {
             color: status.$3,
             linger: status.$4,
           ),
+          if (actions != null) ...[
+            const SizedBox(width: WorkFollowSpacing.space2),
+            actions!,
+          ],
         ],
       ),
     );

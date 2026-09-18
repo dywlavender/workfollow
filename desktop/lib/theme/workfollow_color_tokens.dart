@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'workfollow_theme.dart';
+import 'workfollow_theme_parity.dart';
 
 /// Color roles that do not belong to the base light/dark theme extension.
 ///
@@ -129,6 +130,21 @@ class WorkFollowColorTokens {
 
   static Color documentHighlightForeground(WorkFollowTheme tokens) =>
       tokens.textPrimary;
+
+  /// Neutral document checklist face. A completed checklist is content state,
+  /// not a success badge, so it deliberately does not use the brand accent or
+  /// success colour. Light surfaces use the secondary graphite role; dark
+  /// surfaces use the stronger neutral border role so the marker stays quiet
+  /// without disappearing into the editor surface.
+  static Color documentChecklistFill(WorkFollowTheme tokens) =>
+      tokens.content.computeLuminance() > .5
+          ? tokens.textSecondary
+          : tokens.borderStrong;
+
+  /// Foreground for the completed marker's check stroke. Keeping the contrast
+  /// choice here gives both editor profiles the same Light/Dark behaviour.
+  static Color documentChecklistCheck(WorkFollowTheme tokens) =>
+      WorkFollowThemeContrast.foregroundOn(documentChecklistFill(tokens));
 
   /// Smart-entry fragments use existing semantic roles rather than a second
   /// per-kind palette. The roles intentionally remain distinct in the field.

@@ -4,10 +4,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_quill/flutter_quill.dart' as quill;
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:workfollow_personal/screens/notes_screen.dart';
 import 'package:workfollow_personal/state/workspace_controller.dart';
 import 'package:workfollow_personal/theme/workfollow_theme.dart';
 import 'package:workfollow_personal/widgets/note_document_editor.dart';
 
+/// The bare editor. Enough for whatever the document itself owns — the slash
+/// palette and the selected-text task action.
 Widget _surface(WorkspaceController controller) {
   final note = controller.notes.single;
   return MaterialApp(
@@ -18,6 +21,28 @@ Widget _surface(WorkspaceController controller) {
   );
 }
 
+/// The whole note page.
+///
+/// The formatting trigger is page chrome — it rides the bottom status row
+/// rather than trailing the prose — so the trigger and the toolbar only ever
+/// coexist once the page is mounted. A test holding the bare editor cannot
+/// reach the trigger at all, which is the point of the split.
+Future<void> _pumpPage(
+    WidgetTester tester, WorkspaceController controller) async {
+  tester.view.physicalSize = const Size(1400, 900);
+  tester.view.devicePixelRatio = 1;
+  addTearDown(() {
+    tester.view.resetPhysicalSize();
+    tester.view.resetDevicePixelRatio();
+  });
+  controller.selectView(WorkspaceView.notes);
+  controller.openNote(controller.notes.single.id);
+  await tester.pumpWidget(MaterialApp(
+      theme: WorkFollowThemeData.light(),
+      home: Scaffold(body: NotesScreen(controller: controller))));
+  await tester.pumpAndSettle();
+}
+
 void main() {
   testWidgets('note editor opens the shared toolbar as a floating popover',
       (tester) async {
@@ -25,8 +50,7 @@ void main() {
     addTearDown(controller.dispose);
     controller.addNote(title: '编辑笔记');
 
-    await tester.pumpWidget(_surface(controller));
-    await tester.pumpAndSettle();
+    await _pumpPage(tester, controller);
 
     expect(find.byKey(const ValueKey('note-body-editor')), findsOneWidget);
     expect(find.byKey(const ValueKey('document-format-toggle')), findsOneWidget);
@@ -39,7 +63,7 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('document-format-toggle')));
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('document-editor-toolbar')), findsOneWidget);
-    await tester.tapAt(const Offset(20, 20));
+    await tester.tap(find.byKey(const ValueKey('note-body-editor')));
     await tester.pumpAndSettle();
     // The note toolbar is persistent like the task toolbar: clicking back in
     // the document must not destroy the formatting surface or its selection.
@@ -94,8 +118,7 @@ void main() {
     addTearDown(controller.dispose);
     controller.addNote(title: '格式笔记');
 
-    await tester.pumpWidget(_surface(controller));
-    await tester.pumpAndSettle();
+    await _pumpPage(tester, controller);
     final editor = tester
         .widget<quill.QuillEditor>(
             find.byKey(const ValueKey('note-body-editor')))

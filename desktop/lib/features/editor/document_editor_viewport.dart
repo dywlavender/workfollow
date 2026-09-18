@@ -22,8 +22,8 @@ class DocumentEditorViewport extends MultiChildRenderObjectWidget {
       _RenderDocumentEditorViewport(minHeight);
 
   @override
-  void updateRenderObject(
-      BuildContext context, covariant _RenderDocumentEditorViewport renderObject) {
+  void updateRenderObject(BuildContext context,
+      covariant _RenderDocumentEditorViewport renderObject) {
     renderObject.minHeight = minHeight;
   }
 }

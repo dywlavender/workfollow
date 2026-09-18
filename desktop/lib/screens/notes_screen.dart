@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../features/editor/document_keys.dart';
 import '../features/editor/document_styles.dart';
 import '../models/task.dart';
 import '../state/workspace_controller.dart';
@@ -488,6 +491,16 @@ class _NotePageState extends State<_NotePage> {
   late final title = TextEditingController(
       text: widget.note.title == '未命名笔记' ? '' : widget.note.title);
   final titleFocus = FocusNode();
+
+  /// Handle on the note's document editor.
+  ///
+  /// The formatting trigger is page chrome — it rides the bottom status row
+  /// instead of trailing the prose, where a short note left it stranded in the
+  /// middle of the page. The page therefore has to reach into the editor to
+  /// open the toolbar, and to read back whether it is currently up.
+  final documentKey = GlobalKey<DocumentEditorState>();
+  bool formatToolbarVisible = false;
+
   @override
   void dispose() {
     title.dispose();
@@ -609,6 +622,12 @@ class _NotePageState extends State<_NotePage> {
                       const SizedBox(height: WorkFollowSpacing.space5),
                       NoteDocumentEditor(
                           key: ValueKey('document-${note.id}'),
+                          editorKey: documentKey,
+                          onToolbarChanged: (visible) {
+                            if (mounted) {
+                              setState(() => formatToolbarVisible = visible);
+                            }
+                          },
                           note: note,
                           controller: widget.controller),
                       if (linked.isNotEmpty) ...[
@@ -642,7 +661,20 @@ class _NotePageState extends State<_NotePage> {
                     ])),
           )))),
           SaveStatusFooter(
-              controller: widget.controller, trailing: '$wordCount 字'),
+              controller: widget.controller,
+              trailing: '$wordCount 字',
+              actions: Builder(
+                  builder: (anchor) => AppIconButton(
+                      key: documentFormattingToggleKey,
+                      icon: WorkFollowIcons.format,
+                      tooltip: formatToolbarVisible ? '格式工具已打开' : '显示格式工具',
+                      active: formatToolbarVisible,
+                      activeBackgroundColor: tokens.canvas,
+                      iconColor: tokens.textSecondary,
+                      onPressed: () => unawaited(
+                          documentKey.currentState?.toggleToolbar(anchor)),
+                      size: WorkFollowMetrics.iconHitTarget,
+                      iconSize: WorkFollowMetrics.toolbarIcon))),
         ]));
   }
 }

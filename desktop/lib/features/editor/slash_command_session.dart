@@ -50,9 +50,8 @@ class SlashCommandSession {
     final inserted = newEnd < prefix ? '' : text.substring(prefix, newEnd + 1);
     if (inserted != '/' || prefix != slashOffset) return null;
 
-    final lineStart = slashOffset == 0
-        ? 0
-        : text.lastIndexOf('\n', slashOffset - 1) + 1;
+    final lineStart =
+        slashOffset == 0 ? 0 : text.lastIndexOf('\n', slashOffset - 1) + 1;
     return SlashCommandSession(
       slashOffset: slashOffset,
       lineStart: lineStart,
