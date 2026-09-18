@@ -73,6 +73,8 @@ class DocumentEditorState extends State<DocumentEditor>
   bool slashVisible = false;
   bool toolbarVisible = false;
   bool selectionToolbarVisible = false;
+  bool _selectionOverlaySuppressed = false;
+  TextSelection? _lastSelectionForOverlay;
   bool _toolbarSyncScheduled = false;
   int _documentLoadGeneration = 0;
   ScrollPosition? _ancestorScrollPosition;
@@ -102,6 +104,7 @@ class DocumentEditorState extends State<DocumentEditor>
   /// intact. The next non-collapsed selection opens it again.
   bool dismissSelectionToolbar() {
     if (!selectionToolbarVisible && !_selectionPopover.isOpen) return false;
+    _selectionOverlaySuppressed = true;
     _closeSelectionToolbar();
     return true;
   }
@@ -162,6 +165,10 @@ class DocumentEditorState extends State<DocumentEditor>
   void _changed() {
     final text = editor.document.toPlainText();
     final selection = editor.selection;
+    final selectionChanged = _lastSelectionForOverlay == null ||
+        selection != _lastSelectionForOverlay;
+    if (selectionChanged) _selectionOverlaySuppressed = false;
+    _lastSelectionForOverlay = selection;
     if (!_applyingSlash) {
       final active = _slashSession;
       if (active == null) {
@@ -182,6 +189,7 @@ class DocumentEditorState extends State<DocumentEditor>
     if (nextSelectionPresent) {
       _syncSelectionToolbar(selectionPresentOverride: nextSelectionPresent);
     } else {
+      _selectionOverlaySuppressed = false;
       _closeSelectionToolbar();
     }
 
@@ -226,6 +234,10 @@ class DocumentEditorState extends State<DocumentEditor>
     if (documentChanged) {
       _closeFormattingToolbar(notify: false, requestFocus: false);
       _closeSlashSession();
+      // A Quill document replacement can briefly retain the old non-collapsed
+      // selection. Keep the old action strip closed until the user makes a
+      // fresh selection in the new document.
+      _selectionOverlaySuppressed = true;
       _closeSelectionToolbar();
       _scheduleDocumentReplacement(widget.profile.documentId);
       return;
@@ -234,6 +246,8 @@ class DocumentEditorState extends State<DocumentEditor>
     if (incoming == serialized ||
         incoming == jsonEncode(oldWidget.profile.ownedDelta) ||
         focus.hasFocus) return;
+    _selectionOverlaySuppressed = true;
+    _closeSelectionToolbar();
     _scheduleDocumentReplacement(widget.profile.documentId);
   }
 
@@ -251,6 +265,8 @@ class DocumentEditorState extends State<DocumentEditor>
       _applyingSlash = true;
       editor.document = widget.profile.buildDocument();
       _applyingSlash = wasApplying;
+      _selectionOverlaySuppressed = true;
+      _lastSelectionForOverlay = editor.selection;
       serialized = jsonEncode(editor.document.toDelta().toJson());
       _lastEditorText = editor.document.toPlainText();
     });
@@ -362,11 +378,19 @@ class DocumentEditorState extends State<DocumentEditor>
     }
   }
 
+  void _dismissSelectionToolbarFromOutside() {
+    _selectionOverlaySuppressed = true;
+    _closeSelectionToolbar();
+  }
+
   void _syncSelectionToolbar({bool? selectionPresentOverride}) {
     if (!mounted) return;
     final actions = widget.profile.selectionActions;
     final hasSelection = selectionPresentOverride ?? selectionPresent;
-    if (!hasSelection || editor.selection.isCollapsed || actions.isEmpty) {
+    if (_selectionOverlaySuppressed ||
+        !hasSelection ||
+        editor.selection.isCollapsed ||
+        actions.isEmpty) {
       _closeSelectionToolbar();
       return;
     }
@@ -389,7 +413,7 @@ class DocumentEditorState extends State<DocumentEditor>
       surfaceDecoration:
           taskFormattingToolbarDecoration(WorkFollowTheme.of(context)),
       anchorRectResolver: _selectionAnchorRect,
-      onDismiss: _closeSelectionToolbar,
+      onDismiss: _dismissSelectionToolbarFromOutside,
       builder: (_) => DocumentSelectionToolbar(
         actions: actions,
         onInvoke: _invokeSelectionAction,
@@ -402,6 +426,7 @@ class DocumentEditorState extends State<DocumentEditor>
 
   void _invokeSelectionAction(DocumentSelectionAction action) {
     if (!mounted || editor.selection.isCollapsed) return;
+    _selectionOverlaySuppressed = true;
     action.onInvoke(context, editor);
     _closeSelectionToolbar();
     focus.requestFocus();

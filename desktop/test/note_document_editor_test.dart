@@ -1,11 +1,12 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_quill/flutter_quill.dart' as quill;
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:workfollow_personal/features/editor/presentation/document_editor.dart'
-    show DocumentEditor;
+    show DocumentEditor, DocumentEditorState;
 import 'package:workfollow_personal/screens/notes_screen.dart';
 import 'package:workfollow_personal/state/workspace_controller.dart';
 import 'package:workfollow_personal/theme/workfollow_theme.dart';
@@ -55,7 +56,8 @@ void main() {
     await _pumpPage(tester, controller);
 
     expect(find.byKey(const ValueKey('note-body-editor')), findsOneWidget);
-    expect(find.byKey(const ValueKey('document-format-toggle')), findsOneWidget);
+    expect(
+        find.byKey(const ValueKey('document-format-toggle')), findsOneWidget);
     expect(find.byType(quill.QuillSimpleToolbar), findsNothing);
     expect(find.byKey(const ValueKey('document-editor-toolbar')), findsNothing);
 
@@ -64,12 +66,14 @@ void main() {
     expect(find.byKey(const ValueKey('document-editor-toolbar')), findsNothing);
     await tester.tap(find.byKey(const ValueKey('document-format-toggle')));
     await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('document-editor-toolbar')), findsOneWidget);
+    expect(
+        find.byKey(const ValueKey('document-editor-toolbar')), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('note-body-editor')));
     await tester.pumpAndSettle();
     // The note toolbar is persistent like the task toolbar: clicking back in
     // the document must not destroy the formatting surface or its selection.
-    expect(find.byKey(const ValueKey('document-editor-toolbar')), findsOneWidget);
+    expect(
+        find.byKey(const ValueKey('document-editor-toolbar')), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('document-format-toggle')));
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('document-editor-toolbar')), findsNothing);
@@ -99,12 +103,13 @@ void main() {
         findsOneWidget);
     expect(find.byKey(const ValueKey('document-slash-option-attachment')),
         findsOneWidget);
-    expect(
-        find.byKey(const ValueKey('document-slash-option-subtask')), findsNothing);
-    expect(
-        find.byKey(const ValueKey('document-slash-option-relation')), findsNothing);
+    expect(find.byKey(const ValueKey('document-slash-option-subtask')),
+        findsNothing);
+    expect(find.byKey(const ValueKey('document-slash-option-relation')),
+        findsNothing);
 
-    await tester.tap(find.byKey(const ValueKey('document-slash-option-heading-1')));
+    await tester
+        .tap(find.byKey(const ValueKey('document-slash-option-heading-1')));
     await tester.pump();
     final delta = editor.document.toDelta().toJson();
     expect(
@@ -132,7 +137,8 @@ void main() {
     await tester.pump();
     await tester.tap(find.byKey(const ValueKey('document-format-toggle')));
     await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('document-editor-toolbar')), findsOneWidget);
+    expect(
+        find.byKey(const ValueKey('document-editor-toolbar')), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('document-format-bold')));
     await tester.pump();
     expect(
@@ -143,8 +149,8 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('document-format-link')));
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('document-link-input')), findsOneWidget);
-    await tester.enterText(
-        find.byKey(const ValueKey('document-link-input')), 'https://example.com');
+    await tester.enterText(find.byKey(const ValueKey('document-link-input')),
+        'https://example.com');
     await tester.tap(find.byKey(const ValueKey('document-link-apply')));
     await tester.pumpAndSettle();
     expect(
@@ -222,7 +228,8 @@ void main() {
 
     // The list follows the prose: it starts one section rhythm under the last
     // line rather than wherever an empty document happened to end.
-    expect(linked.top - doc.bottom, lessThan(NotesMetrics.editorContentMinHeight));
+    expect(
+        linked.top - doc.bottom, lessThan(NotesMetrics.editorContentMinHeight));
 
     // Everything below the prose is blank page, and it is still a way into the
     // document. This is the mechanism that lets the canvas stay content-height.
@@ -243,8 +250,8 @@ void main() {
     await tester.pumpAndSettle();
     // With nothing highlighted there is no action to take, so the page does not
     // spend a row of the prose on a button that cannot do anything.
-    expect(
-        find.byKey(const ValueKey('generate-task-from-selection')), findsNothing);
+    expect(find.byKey(const ValueKey('generate-task-from-selection')),
+        findsNothing);
 
     final editor = tester
         .widget<quill.QuillEditor>(
@@ -257,16 +264,69 @@ void main() {
     await tester.pump();
     expect(find.byKey(const ValueKey('document-selection-toolbar')),
         findsOneWidget);
-    expect(
-        find.byKey(const ValueKey('generate-task-from-selection')), findsOneWidget);
+    expect(find.byKey(const ValueKey('generate-task-from-selection')),
+        findsOneWidget);
 
-    // Leaving the selection takes the action away with it.
-    editor.updateSelection(const TextSelection.collapsed(offset: 2),
-        quill.ChangeSource.local);
+    final documentEditor =
+        tester.state<DocumentEditorState>(find.byType(DocumentEditor));
+    documentEditor.focus.requestFocus();
+    await tester.pump();
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     await tester.pump();
     expect(
-        find.byKey(const ValueKey('generate-task-from-selection')), findsNothing);
-    expect(find.byKey(const ValueKey('document-selection-toolbar')), findsNothing);
+        find.byKey(const ValueKey('document-selection-toolbar')), findsNothing);
+
+    // Dismissing the overlay does not change the selection. A new selection
+    // must still be able to reopen it.
+    editor.updateSelection(const TextSelection(baseOffset: 0, extentOffset: 1),
+        quill.ChangeSource.local);
+    await tester.pump();
+    expect(find.byKey(const ValueKey('document-selection-toolbar')),
+        findsOneWidget);
+
+    // Leaving the selection takes the action away with it.
+    editor.updateSelection(
+        const TextSelection.collapsed(offset: 2), quill.ChangeSource.local);
+    await tester.pump();
+    expect(find.byKey(const ValueKey('generate-task-from-selection')),
+        findsNothing);
+    expect(
+        find.byKey(const ValueKey('document-selection-toolbar')), findsNothing);
+  });
+
+  testWidgets('selection action stays beside the selected text in a long note',
+      (tester) async {
+    final controller = WorkspaceController(seedData: false);
+    addTearDown(controller.dispose);
+    controller.addNote(title: '长笔记');
+
+    await _pumpPage(tester, controller);
+    final editor = tester
+        .widget<quill.QuillEditor>(
+            find.byKey(const ValueKey('note-body-editor')))
+        .controller;
+    final text =
+        List<String>.generate(30, (index) => '第 ${index + 1} 行').join('\n');
+    editor.replaceText(0, editor.document.length - 1, text,
+        const TextSelection.collapsed(offset: 2));
+    editor.updateSelection(const TextSelection(baseOffset: 0, extentOffset: 2),
+        quill.ChangeSource.local);
+    await tester.pumpAndSettle();
+
+    final documentEditor =
+        tester.state<DocumentEditorState>(find.byType(DocumentEditor));
+    final renderEditor =
+        documentEditor.renderEditorKey.currentState!.renderEditor;
+    final caret =
+        renderEditor.getLocalRectForCaret(const TextPosition(offset: 2));
+    final selectionTop = renderEditor.localToGlobal(caret.topLeft).dy;
+    final actionRect = tester.getRect(
+        find.byKey(const ValueKey('document-selection-action-create-task')));
+    final documentRect =
+        tester.getRect(find.byKey(const ValueKey('note-body-editor')));
+
+    expect((actionRect.center.dy - selectionTop).abs(), lessThan(120));
+    expect(actionRect.center.dy, lessThan(documentRect.bottom - 100));
   });
 
   testWidgets('a note canvas refuses the height its host offers it',
