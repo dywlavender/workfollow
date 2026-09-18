@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../features/editor/document_keys.dart';
+import '../features/editor/presentation/document_editor_shell.dart';
 import '../features/editor/presentation/document_title_editor.dart';
 import '../models/task.dart';
 import '../state/workspace_controller.dart';
@@ -559,10 +560,9 @@ class _NotePageState extends State<_NotePage> {
         .replaceAll(RegExp(r'\s'), '')
         .runes
         .length;
-    return Container(
-        color: tokens.content,
-        child: Column(children: [
-          SizedBox(
+    return DocumentEditorShell(
+        backgroundColor: tokens.content,
+        header: SizedBox(
               height: NotesMetrics.editorHeaderHeight,
               child: Padding(
                   padding: const EdgeInsets.symmetric(
@@ -597,7 +597,7 @@ class _NotePageState extends State<_NotePage> {
                                 size: WorkFollowMetrics.headerIcon,
                                 color: tokens.textTertiary))),
                   ]))),
-          Expanded(
+        body: Expanded(
               child: LayoutBuilder(
                   builder: (context, viewport) => SingleChildScrollView(
                       child: GestureDetector(
@@ -716,7 +716,7 @@ class _NotePageState extends State<_NotePage> {
                                       ],
                                     ])),
                           )))))),
-          SaveStatusFooter(
+        footer: SaveStatusFooter(
               controller: widget.controller,
               trailing: '$wordCount 字',
               actions: Builder(
@@ -731,7 +731,7 @@ class _NotePageState extends State<_NotePage> {
                           documentKey.currentState?.toggleToolbar(anchor)),
                       size: WorkFollowMetrics.iconHitTarget,
                       iconSize: WorkFollowMetrics.toolbarIcon))),
-        ]));
+        );
   }
 }
 

@@ -23,6 +23,7 @@ import '../features/editor/document_keys.dart';
 import 'task_document_editor.dart';
 import '../features/editor/document_editor_viewport.dart';
 import '../features/editor/presentation/document_title_editor.dart';
+import '../features/editor/presentation/document_editor_shell.dart';
 import 'task_more_menu.dart';
 import 'task_menu_actions.dart';
 
@@ -587,14 +588,13 @@ class _TaskInspectorState extends State<TaskInspector> {
   Widget build(BuildContext context) {
     final task = widget.task;
     final tokens = WorkFollowTheme.of(context);
-    final content = Column(
-        mainAxisSize: _isInline ? MainAxisSize.min : MainAxisSize.max,
-        children: [
-          _header(context, task, tokens),
-          if (_isInline)
-            FocusScope(node: editingScope, child: _editorBody(task))
-          else
-            Expanded(
+    final shell = DocumentEditorShell(
+      backgroundColor: _isInline ? Colors.transparent : tokens.content,
+      mainAxisSize: _isInline ? MainAxisSize.min : MainAxisSize.max,
+      header: _header(context, task, tokens),
+      body: _isInline
+          ? FocusScope(node: editingScope, child: _editorBody(task))
+          : Expanded(
               child: FocusScope(
                 node: editingScope,
                 child: LayoutBuilder(
@@ -605,15 +605,13 @@ class _TaskInspectorState extends State<TaskInspector> {
                 ),
               ),
             ),
-          _footer(context, task, tokens),
-        ]);
+      footer: _footer(context, task, tokens),
+    );
     return CallbackShortcuts(
         bindings: {const SingleActivator(LogicalKeyboardKey.escape): _escape},
         child: Focus(
           focusNode: inspectorFocus,
-          child: Container(
-              color: _isInline ? Colors.transparent : tokens.content,
-              child: content),
+          child: shell,
         ));
   }
 }
