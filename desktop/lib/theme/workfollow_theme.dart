@@ -142,6 +142,16 @@ class TaskListMetrics {
   /// Gap between two metadata items on the trailing edge.
   static const double metadataGap = WorkFollowSpacing.taskMetadataGap;
 
+  /// Keep the trailing column from taking the title down to a few characters
+  /// when a task carries several properties. The row still lets the metadata
+  /// wrap inside this column; the title owns the rest of the pane.
+  static const double metadataMaxWidth = 180;
+
+  /// A collapsed row is allowed to show a few secondary indicators. The
+  /// inspector remains the complete property surface, so repeating every
+  /// reminder, attachment and content marker in the list only adds noise.
+  static const int secondaryMetadataLimit = 3;
+
   /// Where the row hairline starts.
   ///
   /// The reference list draws it from the checkbox column — the line runs in

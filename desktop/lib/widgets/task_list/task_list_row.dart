@@ -47,7 +47,8 @@ class TaskListRowFrame extends StatelessWidget {
     final tokens = WorkFollowTheme.of(context);
     return Container(
       key: surfaceKey,
-      constraints: const BoxConstraints(minHeight: TaskListMetrics.rowMinHeight),
+      constraints:
+          const BoxConstraints(minHeight: TaskListMetrics.rowMinHeight),
       padding: EdgeInsets.symmetric(
           horizontal: TaskListMetrics.rowHorizontalPadding,
           vertical: compact
@@ -69,10 +70,13 @@ class TaskListRowFrame extends StatelessWidget {
           if (metadata != null) ...[
             const SizedBox(width: WorkFollowSpacing.space2),
             // Let the title take the remaining width. Metadata stays a
-            // non-flex child so its Wrap is measured at its total content
-            // width; because it is the last child, that also pins the trail
-            // to the row's right side without splitting the row 50/50.
-            metadata!,
+            // non-flex child so it remains pinned to the right, but the
+            // column has a contract of its own: a task with several flags
+            // must not squeeze the title down to a couple of characters.
+            ConstrainedBox(
+                constraints: const BoxConstraints(
+                    maxWidth: TaskListMetrics.metadataMaxWidth),
+                child: metadata!),
           ],
           if (trailing != null) trailing!,
         ],

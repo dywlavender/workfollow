@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:workfollow_personal/app.dart';
 import 'package:workfollow_personal/models/task.dart';
 import 'package:workfollow_personal/state/workspace_controller.dart';
+import 'package:workfollow_personal/theme/workfollow_icons.dart';
 import 'package:workfollow_personal/theme/workfollow_theme.dart';
 import 'package:workfollow_personal/widgets/quick_add.dart';
 import 'package:workfollow_personal/widgets/task_row.dart';
@@ -398,6 +399,90 @@ void main() {
     final dateOnlyRect = tester.getRect(metadata.at(0));
     final listAndDateRect = tester.getRect(metadata.at(1));
     expect(listAndDateRect.right, closeTo(dateOnlyRect.right, 0.01));
+  });
+
+  testWidgets('task metadata keeps primary fields and caps secondary noise',
+      (tester) async {
+    final controller = WorkspaceController(seedData: false);
+    addTearDown(controller.dispose);
+    final task = TaskItem(
+      id: 'metadata-hierarchy',
+      title: '一个足够长的任务标题，用来确认属性不会把标题挤成几个字',
+      listName: '工作',
+      bucket: TaskBucket.later,
+      dueAt: DateTime(2030, 9, 18, 10).toIso8601String(),
+      hasDueTime: true,
+      reminderAt: DateTime(2030, 9, 18, 9).toIso8601String(),
+      recurrenceType: 'WEEKLY',
+      tags: const ['项目'],
+      description: '这条描述只应该作为一个次要提示出现',
+      attachments: const ['brief.pdf'],
+      subtasks: const [
+        TaskSubtask(id: 'subtask-1', title: '子任务一'),
+        TaskSubtask(id: 'subtask-2', title: '子任务二'),
+      ],
+      priority: TaskPriority.high,
+    );
+
+    await tester.pumpWidget(MaterialApp(
+      theme: WorkFollowThemeData.light(),
+      home: Scaffold(
+        body: SizedBox(
+          width: TaskListMetrics.preferredPaneWidth,
+          child: TaskRow(task: task, controller: controller, selected: false),
+        ),
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    final title = find.text(task.title);
+    final metadata = find.byType(TaskMetadataTrail);
+    expect(title, findsOneWidget);
+    expect(metadata, findsOneWidget);
+    expect(tester.getSize(title).width, greaterThan(120));
+    expect(tester.getSize(metadata).width,
+        lessThanOrEqualTo(TaskListMetrics.metadataMaxWidth));
+
+    // List, priority, subtask count and the date remain visible row-critical
+    // information. Other secondary indicators are deliberately capped.
+    expect(find.text('工作'), findsOneWidget);
+    expect(find.text('0/2'), findsOneWidget);
+    expect(find.byKey(const ValueKey('task-row-date-metadata-hierarchy')),
+        findsOneWidget);
+    final secondaryCount = [
+      WorkFollowIcons.repeat,
+      WorkFollowIcons.reminder,
+      WorkFollowIcons.tag,
+      WorkFollowIcons.article,
+      WorkFollowIcons.attachment,
+    ].fold<int>(
+        0, (count, icon) => count + find.byIcon(icon).evaluate().length);
+    expect(secondaryCount,
+        lessThanOrEqualTo(TaskListMetrics.secondaryMetadataLimit));
+  });
+
+  testWidgets('task metadata exposes a tag indicator without rendering tags',
+      (tester) async {
+    final controller = WorkspaceController(seedData: false);
+    addTearDown(controller.dispose);
+    final task = TaskItem(
+      id: 'metadata-tag',
+      title: '标签任务',
+      listName: '收集箱',
+      bucket: TaskBucket.unscheduled,
+      tags: const ['项目'],
+    );
+
+    await tester.pumpWidget(MaterialApp(
+      theme: WorkFollowThemeData.light(),
+      home: Scaffold(
+        body: TaskRow(task: task, controller: controller, selected: false),
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    expect(find.byIcon(WorkFollowIcons.tag), findsOneWidget);
+    expect(find.text('项目'), findsNothing);
   });
 
   testWidgets('ROW-002 repeated task-row tap preserves the current selection',
