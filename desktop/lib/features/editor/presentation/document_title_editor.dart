@@ -14,11 +14,11 @@ class DocumentTitleEditor extends StatelessWidget {
     required this.controller,
     required this.focusNode,
     required this.placeholder,
+    required this.fontSize,
     required this.onChanged,
     this.fieldKey,
     this.maxLines = 2,
     this.autofocus = false,
-    this.fontSize,
     this.muted = false,
     this.strikethrough = false,
   });
@@ -26,6 +26,7 @@ class DocumentTitleEditor extends StatelessWidget {
   final TextEditingController controller;
   final FocusNode focusNode;
   final String placeholder;
+  final double fontSize;
   final ValueChanged<String> onChanged;
 
   /// Key for the underlying [TextField]. Keeping this separate from the
@@ -34,7 +35,6 @@ class DocumentTitleEditor extends StatelessWidget {
   final Key? fieldKey;
   final int maxLines;
   final bool autofocus;
-  final double? fontSize;
   final bool muted;
   final bool strikethrough;
 
@@ -50,7 +50,7 @@ class DocumentTitleEditor extends StatelessWidget {
       maxLines: maxLines,
       style: DocumentStyles.title(
         tokens,
-        fontSize: fontSize ?? WorkFollowMacTypography.detailTitle,
+        fontSize: fontSize,
         muted: muted,
         strikethrough: strikethrough,
       ),

@@ -61,6 +61,7 @@ void main() {
           controller: controller,
           focusNode: focusNode,
           placeholder: '任务标题',
+          fontSize: WorkFollowMacTypography.detailTitle,
           muted: true,
           strikethrough: true,
           onChanged: (_) {},

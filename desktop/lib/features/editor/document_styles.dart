@@ -4,12 +4,13 @@ import 'package:flutter_quill/flutter_quill.dart' as quill;
 import '../../theme/workfollow_color_tokens.dart';
 import '../../theme/workfollow_theme.dart';
 
-/// The visual interpretation of the semantic blocks stored in a task Delta.
+/// The visual interpretation of the semantic blocks stored in an editable
+/// document Delta.
 ///
 /// Quill stores a heading, list, or quote as an attribute on a line. It also
-/// ships with a Material-oriented default for each of those attributes. A
-/// task document must not change type scale just because that fallback was
-/// selected, so every block used by the task editor is defined here and
+/// ships with a Material-oriented default for each of those attributes. An
+/// editable document must not change type scale just because that fallback was
+/// selected, so every block used by the document editor is defined here and
 /// inherits the WorkFollow body face and primary text colour.
 class DocumentStyles {
   const DocumentStyles._();
