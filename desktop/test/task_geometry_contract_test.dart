@@ -45,7 +45,7 @@ void main() {
 
   test('screen-specific geometry remains explicit and stable', () {
     expect(MatrixMetrics.pageHeaderHeight, 56);
-    expect(CalendarMetrics.dayCellSize, 23);
+    expect(CalendarMetrics.dayCellSize, 24);
     expect(BoardMetrics.taskCheckboxSize, 24);
     // The note index is the middle column of the notes workspace; 330 matches
     // the reference proportion next to the 196pt navigation column.
@@ -54,5 +54,30 @@ void main() {
     expect(NotesMetrics.editorContentMaxWidth, 820);
     expect(SettingsMetrics.panelWidth, 720);
     expect(CommandPaletteMetrics.maxHeight, 500);
+  });
+
+  // The month grid's numbers were read off a reference rather than chosen, and
+  // the ones that look "almost round" are the ones a later edit is most likely
+  // to tidy up. Pinning them here is what makes that edit fail loudly instead
+  // of quietly moving the grid off the reference.
+  test('the month grid keeps the measurements it was drawn to', () {
+    expect(CalendarMetrics.cellHorizontalPadding, 3);
+    expect(CalendarMetrics.cellTopPadding, 3);
+    expect(CalendarMetrics.cellBottomPadding, 4);
+    expect(CalendarMetrics.dayNumberGap, 2);
+    expect(CalendarMetrics.weekHeaderPadding, 8);
+    expect(CalendarMetrics.taskBarHeight, 17);
+    expect(CalendarMetrics.taskBarGap, 2);
+    expect(CalendarMetrics.taskBarRadius, 3);
+    expect(CalendarMetrics.taskBarCheckboxSize, 11);
+  });
+
+  test('the grid tints rather than highlights', () {
+    // Today is marked by its number; the cell behind it only gets a wash, and
+    // a wash heavy enough to read as a fill would compete with the number.
+    expect(CalendarMetrics.todayCellAlpha, lessThan(.1));
+    // The drop target is a tint over the day's own bars, not a second layer of
+    // colour: it has to stay legible after passing through them.
+    expect(CalendarMetrics.dropHighlightAlpha, lessThan(.2));
   });
 }

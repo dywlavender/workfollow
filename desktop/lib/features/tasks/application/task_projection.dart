@@ -93,19 +93,100 @@ class TaskProjection {
     };
   }
 
+  /// The tasks a month cell draws under its own number: everything that
+  /// begins on [day].
+  ///
+  /// A task that runs across days is *not* filtered out here — the lists, the
+  /// board and the week view all read a multi-day task by the day it starts,
+  /// and dropping it would hide the task from every one of them. The month
+  /// grid asks for [singleDayForDay] instead, because it draws the range
+  /// itself and would otherwise show the same task twice.
   List<TaskItem> forDay(Iterable<TaskItem> tasks, DateTime day) {
     return List.unmodifiable(tasks.where((task) {
-      final due = localDateTimeFromStorage(task.dueAt);
-      return task.deletedAt == null &&
-          !task.isSkipped &&
-          !task.isConverted &&
-          !task.isAbandoned &&
-          due != null &&
-          due.year == day.year &&
-          due.month == day.month &&
-          due.day == day.day;
+      final start = startDayOf(task);
+      return _appearsInDay(task) &&
+          start != null &&
+          start.year == day.year &&
+          start.month == day.month &&
+          start.day == day.day;
     }));
   }
+
+  /// The tasks that begin on [day] and finish there — the ones a month cell
+  /// has to draw for itself, because no band is going to cover them.
+  List<TaskItem> singleDayForDay(Iterable<TaskItem> tasks, DateTime day) {
+    return List.unmodifiable(
+        forDay(tasks, day).where((task) => !spansMultipleDays(task)));
+  }
+
+  /// The day a task starts on: the date half of `dueAt`.
+  DateTime? startDayOf(TaskItem task) {
+    final due = localDateTimeFromStorage(task.dueAt);
+    return due == null ? null : DateTime(due.year, due.month, due.day);
+  }
+
+  /// The last day a task covers.
+  ///
+  /// A range is recognised by its two dates disagreeing — there is no flag for
+  /// it and nothing to migrate, because `dueEndAt` already means two things and
+  /// the dates tell them apart. When the end falls on the start's own day it is
+  /// the *time* the task finishes ("14:00 – 15:00", which is what the schedule
+  /// panel writes by default), not a second day, so the task ends where it
+  /// starts. A missing end is the same case.
+  DateTime? endDayOf(TaskItem task) {
+    final start = startDayOf(task);
+    if (start == null) return null;
+    final end = localDateTimeFromStorage(task.dueEndAt);
+    if (end == null) return start;
+    final endDay = DateTime(end.year, end.month, end.day);
+    return endDay.isAfter(start) ? endDay : start;
+  }
+
+  /// Whether a task covers more than the day it begins on.
+  bool spansMultipleDays(TaskItem task) {
+    final start = startDayOf(task);
+    return start != null && endDayOf(task)!.isAfter(start);
+  }
+
+  /// The multi-day tasks whose range touches `first .. last`, ready for a week
+  /// row to lay out.
+  ///
+  /// The order is the order a row should try to place them in: earlier starts
+  /// first, and among tasks that begin on the same day the longer one first, so
+  /// a five-day band ends up above a two-day band that opened beside it rather
+  /// than the other way round.
+  List<TaskItem> multiDayWithin(
+    Iterable<TaskItem> tasks,
+    DateTime first,
+    DateTime last,
+  ) {
+    final lo = DateTime(first.year, first.month, first.day);
+    final hi = DateTime(last.year, last.month, last.day);
+    final hits = tasks.where((task) {
+      if (!_appearsInDay(task) || !spansMultipleDays(task)) return false;
+      final start = startDayOf(task)!;
+      final end = endDayOf(task)!;
+      return !end.isBefore(lo) && !start.isAfter(hi);
+    }).toList();
+    hits.sort((a, b) {
+      final startA = startDayOf(a)!;
+      final startB = startDayOf(b)!;
+      final byStart = startA.compareTo(startB);
+      if (byStart != 0) return byStart;
+      return endDayOf(b)!
+          .difference(startB)
+          .compareTo(endDayOf(a)!.difference(startA));
+    });
+    return List.unmodifiable(hits);
+  }
+
+  /// Whether a task can be shown in a day at all. The same condition [forDay]
+  /// has always applied, lifted out so the range queries cannot drift from it.
+  bool _appearsInDay(TaskItem task) =>
+      task.deletedAt == null &&
+      !task.isSkipped &&
+      !task.isConverted &&
+      !task.isAbandoned;
 
   Map<String, int> tagCounts(Iterable<TaskItem> tasks) {
     final counts = <String, int>{};

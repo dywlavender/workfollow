@@ -139,27 +139,44 @@ class _CalendarScreenState extends State<CalendarScreen> {
   @override
   Widget build(BuildContext context) {
     final tokens = WorkFollowTheme.of(context);
+    // The page is one sheet, from the rail to the window's edges.
+    //
+    // The grid gets no margin and no frame of its own: a month is a continuous
+    // thing, and insetting it with a border around the outside turns it into a
+    // card of dates floating on the page instead of the page itself. The two
+    // lines the grid's outer edge needs are already there — the rail draws the
+    // one on the left, and the week header draws the one under the weekday
+    // names — so nothing is missing when the frame goes. What is left to the
+    // window's edge is the grid: the last column and the last row draw no line
+    // of their own, which is what makes the edge read as the edge.
     return Container(
-      color: tokens.canvas,
-      padding: const EdgeInsets.fromLTRB(
-          WorkFollowSpacing.pageHorizontalPadding,
-          WorkFollowSpacing.pageTopPadding,
-          WorkFollowSpacing.pageHorizontalPadding,
-          WorkFollowSpacing.pageScreenBottomPadding),
+      color: tokens.content,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          CalendarToolbar(
-            month: month,
-            mode: mode,
-            showCompleted: showCompleted,
-            onPrevious: () => _step(-1),
-            onToday: _goToday,
-            onNext: () => _step(1),
-            onAddTask: (anchor) => _createTask(selectedDay, anchor),
-            onModeChanged: (value) => setState(() => mode = value),
-            onToggleCompleted: () =>
-                setState(() => showCompleted = !showCompleted),
+          // The toolbar is the one thing that keeps the page's insets. It is a
+          // line of text and a row of controls rather than structure, so it
+          // needs the breathing room the grid does not — and its own left inset
+          // is what keeps it reading as the page's heading rather than as a
+          // first cell of the grid.
+          Padding(
+            padding: const EdgeInsets.fromLTRB(
+                WorkFollowSpacing.pageHorizontalPadding,
+                WorkFollowSpacing.pageTopPadding,
+                WorkFollowSpacing.pageHorizontalPadding,
+                0),
+            child: CalendarToolbar(
+              month: month,
+              mode: mode,
+              showCompleted: showCompleted,
+              onPrevious: () => _step(-1),
+              onToday: _goToday,
+              onNext: () => _step(1),
+              onAddTask: (anchor) => _createTask(selectedDay, anchor),
+              onModeChanged: (value) => setState(() => mode = value),
+              onToggleCompleted: () =>
+                  setState(() => showCompleted = !showCompleted),
+            ),
           ),
           Expanded(
             child: mode == CalendarViewMode.month

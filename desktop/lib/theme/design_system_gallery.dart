@@ -310,12 +310,13 @@ class WorkFollowDesignSystemGallery extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                 Text(title,
+                    // Completion is carried by the ink alone. This swatch is
+                    // the reference for what a finished task looks like, so it
+                    // has to agree with the screens it stands for.
                     style: TextStyle(
                         color: titleColor,
                         fontSize: WorkFollowMacTypography.listTitle,
-                        fontWeight: WorkFollowMacWeight.semibold,
-                        decoration:
-                            completed ? TextDecoration.lineThrough : null)),
+                        fontWeight: WorkFollowMacWeight.semibold)),
                 Text('描述 · 日期 · 标签',
                     style: TextStyle(
                         color: tokens.textSecondary,

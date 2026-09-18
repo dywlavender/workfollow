@@ -16,6 +16,7 @@ import '../theme/workfollow_theme.dart';
 import '../widgets/app_icon_button.dart';
 import '../widgets/desktop_popover.dart';
 import '../widgets/note_document_editor.dart';
+import '../widgets/task_completion_box.dart';
 
 /// Notes workspace: a canvas-coloured list of note cards on the left and a
 /// focused writing page on the right (single column on narrow windows).
@@ -825,7 +826,14 @@ class _LinkedTaskRow extends StatelessWidget {
               height: NotesMetrics.linkedTaskCheckboxHeight,
               child: Checkbox(
                   value: task.completed,
-                  shape: const CircleBorder(),
+                  // A rounded square, not a circle: the shape a task row's own
+                  // control has, so a task reads as the same kind of thing on
+                  // a note as it does in the list, on the board and in the
+                  // calendar. Only the size is the note's.
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(
+                          taskCompletionBoxRadius(
+                              WorkFollowMetrics.platformCheckboxSize))),
                   side: BorderSide(color: tokens.borderStrong, width: 1.4),
                   onChanged: (_) => onToggle())),
           const SizedBox(width: WorkFollowSpacing.space2),
@@ -842,12 +850,12 @@ class _LinkedTaskRow extends StatelessWidget {
                           style: TextStyle(
                               fontSize: WorkFollowMacTypography.control,
                               fontWeight: WorkFollowMacWeight.medium,
+                              // Grey, not struck through: a finished linked
+                              // task reads the way it does in the list, on the
+                              // board and in the calendar.
                               color: task.completed
                                   ? tokens.textTertiary
-                                  : tokens.textPrimary,
-                              decoration: task.completed
-                                  ? TextDecoration.lineThrough
-                                  : null))))),
+                                  : tokens.textPrimary))))),
           AppIcon(WorkFollowIcons.next,
               size: WorkFollowMetrics.navigationIcon,
               color: tokens.textTertiary),

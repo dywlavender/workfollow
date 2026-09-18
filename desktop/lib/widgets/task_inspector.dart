@@ -13,6 +13,7 @@ import '../features/tasks/application/task_actions.dart';
 import '../features/tasks/presentation/task_feedback_mapper.dart';
 import 'app_icon_button.dart';
 import 'desktop_popover.dart';
+import 'task_completion_box.dart';
 import 'task_date_picker.dart';
 import 'task_schedule_panel.dart';
 import 'task_deadline_picker.dart';
@@ -336,11 +337,22 @@ class _TaskInspectorState extends State<TaskInspector> {
                   size: WorkFollowMetrics.headerIcon)),
         _TopPropertyButton(
             key: const ValueKey('task-complete'),
-            icon: task.isAbandoned
-                ? WorkFollowIcons.abandon
-                : task.completed
-                    ? WorkFollowIcons.completeBox
-                    : WorkFollowIcons.incompleteBox,
+            // The completion mark is drawn rather than taken from the icon set,
+            // so this control is the same box a task row draws and the same one
+            // a calendar bar carries — one silhouette wherever a task appears.
+            // An abandoned task is not merely an unfinished one and keeps its
+            // own glyph instead of borrowing the box.
+            icon: task.isAbandoned ? WorkFollowIcons.abandon : null,
+            leading: task.isAbandoned
+                ? null
+                : TaskCompletionBox(
+                    size: WorkFollowMetrics.toolbarIcon,
+                    completed: task.completed,
+                    // The button's own ink: an open box in the muted ink of
+                    // every property here that has not been set, a done one in
+                    // the green this control uses to say it succeeded.
+                    openColor: tokens.textSecondary,
+                    doneColor: tokens.success),
             label: task.isAbandoned
                 ? '恢复任务'
                 : task.completed
@@ -565,7 +577,8 @@ class _TaskInspectorState extends State<TaskInspector> {
 class _TopPropertyButton extends StatelessWidget {
   const _TopPropertyButton({
     super.key,
-    required this.icon,
+    this.icon,
+    this.leading,
     required this.label,
     required this.onPressed,
     this.active = false,
@@ -574,7 +587,13 @@ class _TopPropertyButton extends StatelessWidget {
     this.popupOpen = false,
   });
 
-  final IconData icon;
+  /// The glyph at the button's head. Left unset when [leading] draws it.
+  final IconData? icon;
+
+  /// A drawn head instead of a glyph, for the one control whose mark is a shape
+  /// the rest of the product shares rather than an icon of its own.
+  final Widget? leading;
+
   final String label;
   final void Function(BuildContext anchor) onPressed;
   final bool active;
@@ -616,8 +635,9 @@ class _TopPropertyButton extends StatelessWidget {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                AppIcon(icon,
-                    size: WorkFollowMetrics.toolbarIcon, color: foreground),
+                leading ??
+                    AppIcon(icon!,
+                        size: WorkFollowMetrics.toolbarIcon, color: foreground),
                 if (!iconOnly) ...[
                   const SizedBox(width: WorkFollowSpacing.inlineGap),
                   ConstrainedBox(

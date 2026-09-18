@@ -9,6 +9,7 @@ import '../../theme/workfollow_icons.dart';
 import '../../theme/workfollow_surface_tokens.dart';
 import '../../theme/workfollow_theme.dart';
 import '../app_icon_button.dart';
+import '../task_completion_box.dart';
 import '../task_schedule_panel.dart';
 
 /// A flat matrix row. The matrix already communicates importance through its
@@ -166,8 +167,10 @@ class _MatrixTaskRowState extends State<MatrixTaskRow> {
             color: completed
                 ? tokens.textTertiary.withValues(alpha: .27)
                 : Colors.transparent,
-            borderRadius:
-                BorderRadius.circular(MatrixMetrics.taskRowCheckboxRadius),
+            // The row's own corner scaled to this box's size, so the quadrant
+            // draws the shape the task list draws rather than a near miss.
+            borderRadius: BorderRadius.circular(
+                taskCompletionBoxRadius(MatrixMetrics.taskRowCheckboxSize)),
             border: completed
                 ? null
                 : Border.all(

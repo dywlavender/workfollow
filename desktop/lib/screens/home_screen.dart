@@ -11,6 +11,7 @@ import '../features/tasks/presentation/task_feedback_mapper.dart';
 import '../widgets/app_icon_button.dart';
 import '../widgets/app_surfaces.dart';
 import '../widgets/quick_add.dart';
+import '../widgets/task_completion_box.dart';
 
 /// Personal dashboard. The redesigned home leads with a greeting, a stat
 /// strip (今天待办 / 今日完成 / 逾期 / 笔记), then the familiar panel grid:
@@ -484,10 +485,15 @@ class _HomeTaskRow extends StatelessWidget {
                       context, WorkFollowMotionRole.selectionTransition),
                   curve: WorkFollowMotionPolicy.curve(
                       context, WorkFollowMotionRole.selectionTransition),
-                  width: HomeMetrics.taskCheckboxVisualWidth,
-                  height: HomeMetrics.taskCheckboxVisualHeight,
+                  width: HomeMetrics.taskCheckboxVisualSize,
+                  height: HomeMetrics.taskCheckboxVisualSize,
+                  // The completion box, at the corner the rest of the product
+                  // uses. This one was a circle, which made a task on the home
+                  // page read as a different kind of thing from the same task
+                  // in the list; only the animation below stays its own.
                   decoration: BoxDecoration(
-                    shape: BoxShape.circle,
+                    borderRadius: BorderRadius.circular(taskCompletionBoxRadius(
+                        HomeMetrics.taskCheckboxVisualSize)),
                     color: task.completed ? tokens.success : Colors.transparent,
                     border: Border.all(
                         color: task.completed

@@ -22,6 +22,12 @@ class WorkFollowMetrics {
   /// checkbox theme. Custom painted controls may opt out when their path has
   /// a documented visual reason to use a different stroke.
   static const double checkboxBorderWidth = 1.5;
+
+  /// The side of the box Flutter's own `Checkbox` paints, before the tap
+  /// target is grown around it. Anywhere that control is kept for its input
+  /// behaviour, its corner is scaled from this, so it stays the same shape as
+  /// the boxes drawn elsewhere.
+  static const double platformCheckboxSize = 18;
   // macOS task navigation uses a denser rhythm than the Web reference while
   // keeping the same icon and text roles. The hit target remains large enough
   // for pointer use, but the surrounding row no longer wastes vertical space.
@@ -309,27 +315,46 @@ class CalendarMetrics {
 
   /// Diameter of the day-number circle. Today is a filled circle behind the
   /// number only; the cell behind it stays nearly white.
-  static const double dayCellSize = 23;
+  static const double dayCellSize = 24;
 
-  /// Inset from a cell's edge to its header and its task bars.
-  static const double cellHorizontalPadding = 6;
-  static const double cellTopPadding = 4;
+  /// Inset from a cell's edge to its day number and its task bars.
+  ///
+  /// The number and the bars share this one value because they share one
+  /// column: a bar starts under the number and runs as wide as the cell
+  /// allows, so an inset that moved one of them would step the other.
+  static const double cellHorizontalPadding = 3;
+  static const double cellTopPadding = 3;
   static const double cellBottomPadding = 4;
 
+  /// Between the day number and the first task bar.
+  static const double dayNumberGap = 2;
+
+  /// Inset from a weekday column's edge to its label. The header does not
+  /// share [cellHorizontalPadding]: it is a row of words above the grid
+  /// rather than the first line of a cell.
+  static const double weekHeaderPadding = 8;
+
   /// One task bar, and the gap that separates it from the next.
-  static const double taskBarHeight = 20;
+  static const double taskBarHeight = 17;
   static const double taskBarGap = 2;
 
-  /// Completion circle inside a task bar. Sized to the 20pt bar, not to the
-  /// 20pt completion control a full task row uses.
-  static const double taskBarCheckboxSize = 12;
+  /// A bar is a rounded box, and a multiple-day task is one box rather than a
+  /// row of segments, so the radius is the bar's own corner and not a styling
+  /// detail of its ends.
+  static const double taskBarRadius = 3;
+
+  /// The completion box on a calendar task — the month grid's bar and the week
+  /// column's item both draw one. Sized to the strip it sits in rather than to
+  /// the 24pt completion control a full task row gives its own.
+  static const double taskBarCheckboxSize = 11;
 
   /// The tint a month cell takes while a task is dragged over it.
   static const double dropHighlightAlpha = .12;
 
-  /// The wash on today's cell. Deliberately far below the day-number circle's
-  /// weight, because the circle is what marks today.
-  static const double todayCellAlpha = .04;
+  /// The wash on today's cell. It is painted over the cell's contents, so a
+  /// task bar that crosses today is tinted by it too — that is what makes the
+  /// day read as one band rather than as a cell with bars sitting on it.
+  static const double todayCellAlpha = .05;
 
   /// The month/week menu. It holds two words, so it is not the width of the
   /// app's ordinary command menus.
@@ -363,7 +388,6 @@ class MatrixMetrics {
   static const double taskRowDragPreviewRadius = WorkFollowRadii.md;
   static const double taskRowCheckboxHitTarget = 21;
   static const double taskRowCheckboxSize = 18;
-  static const double taskRowCheckboxRadius = WorkFollowRadii.checkbox;
 }
 
 /// Geometry of the two surfaces a page opens *over* itself: the floating task
@@ -504,8 +528,7 @@ class HomeMetrics {
   static const double taskMarkerWidth = 4;
   static const double taskMarkerHeight = 22;
   static const double taskCheckboxHitTarget = 24;
-  static const double taskCheckboxVisualWidth = 18;
-  static const double taskCheckboxVisualHeight = 17;
+  static const double taskCheckboxVisualSize = 18;
   static const double noteDotSize = 7;
   static const double miniCalendarDotSize = 3;
 }

@@ -75,9 +75,12 @@ class WorkFollowSurfaceTokens {
   const WorkFollowSurfaceTokens._();
 
   /// Small geometry exceptions with a semantic owner. These are used by
-  /// custom painted markers and checkboxes, rather than becoming anonymous
+  /// custom painted markers, rather than becoming anonymous
   /// `BorderRadius.circular(...)` values in feature widgets.
-  static const double checkboxRadius = WorkFollowRadii.checkbox;
+  ///
+  /// A completion box is not one of them. Its corner is a fraction of its own
+  /// side — `taskCompletionBoxRadius` — because the box is drawn at four
+  /// different sizes and has to be the same shape at all of them.
   static const double markerRadius = WorkFollowRadii.marker;
 
   static BorderRadius radius(WorkFollowSurfaceRole role) =>
