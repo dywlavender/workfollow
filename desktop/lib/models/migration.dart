@@ -3,7 +3,7 @@ import 'dart:convert';
 const personalMigrationFormat = 'workfollow-personal-migration';
 const localSnapshotFormat = 'workfollow-local-snapshot';
 
-/// Version 2 adds optional list pinning, habits and task focus counts. The
+/// Version 2 adds optional list pinning and task focus counts. The
 /// reader below still accepts version 1 so snapshots exported by an older
 /// desktop build remain importable.
 const migrationSchemaVersion = 2;
@@ -257,55 +257,6 @@ class MigrationTaskRecord {
       };
 }
 
-/// A small, local-only habit record. Dates in [records] use the user's local
-/// calendar (`yyyy-MM-dd`) rather than UTC instants, so a check-in never moves
-/// to the previous day around midnight.
-class MigrationHabitRecord {
-  const MigrationHabitRecord({
-    required this.id,
-    required this.name,
-    required this.icon,
-    this.color,
-    required this.schedule,
-    required this.records,
-    this.createdAt,
-    this.updatedAt,
-  });
-
-  final String id;
-  final String name;
-  final String icon;
-  final String? color;
-  final List<int> schedule;
-  final List<String> records;
-  final String? createdAt;
-  final String? updatedAt;
-
-  factory MigrationHabitRecord.fromJson(Map<String, dynamic> json) {
-    return MigrationHabitRecord(
-      id: _requiredString(json, 'id'),
-      name: _requiredString(json, 'name'),
-      icon: _stringValue(json['icon'], fallback: 'check'),
-      color: _nullableString(json['color']),
-      schedule: _intList(json['schedule']),
-      records: _stringList(json['records']),
-      createdAt: _nullableString(json['createdAt']),
-      updatedAt: _nullableString(json['updatedAt']),
-    );
-  }
-
-  Map<String, dynamic> toJson() => {
-        'id': id,
-        'name': name,
-        'icon': icon,
-        if (color != null && color!.trim().isNotEmpty) 'color': color,
-        'schedule': schedule,
-        'records': records,
-        'createdAt': createdAt,
-        'updatedAt': updatedAt,
-      };
-}
-
 class MigrationNoteRecord {
   const MigrationNoteRecord({
     required this.id,
@@ -375,7 +326,6 @@ class MigrationBundle {
     required this.tasks,
     required this.notes,
     this.embeddedFiles = const {},
-    this.habits = const [],
   });
 
   final String format;
@@ -386,7 +336,6 @@ class MigrationBundle {
   final List<MigrationTaskRecord> tasks;
   final List<MigrationNoteRecord> notes;
   final Map<String, String> embeddedFiles;
-  final List<MigrationHabitRecord> habits;
 
   bool get isLocalSnapshot => format == localSnapshotFormat;
 
@@ -416,7 +365,6 @@ class MigrationBundle {
       folders: _records(json['folders'], MigrationFolderRecord.fromJson),
       tasks: _records(json['tasks'], MigrationTaskRecord.fromJson),
       notes: _records(json['notes'], MigrationNoteRecord.fromJson),
-      habits: _records(json['habits'], MigrationHabitRecord.fromJson),
       embeddedFiles: {
         for (final entry in (_mapValue(json['attachmentFiles']) ?? {}).entries)
           if (entry.value is String) entry.key: entry.value as String
@@ -432,8 +380,6 @@ class MigrationBundle {
         'folders': folders.map((item) => item.toJson()).toList(),
         'tasks': tasks.map((item) => item.toJson()).toList(),
         'notes': notes.map((item) => item.toJson()).toList(),
-        if (habits.isNotEmpty)
-          'habits': habits.map((item) => item.toJson()).toList(),
         if (embeddedFiles.isNotEmpty) 'attachmentFiles': embeddedFiles,
       };
 }

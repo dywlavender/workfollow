@@ -8,12 +8,9 @@ import 'package:flutter_quill/flutter_quill.dart'
     show FlutterQuillLocalizations;
 
 import 'screens/calendar_screen.dart';
-import 'screens/board_screen.dart';
-import 'screens/habits_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/matrix_screen.dart';
 import 'screens/notes_screen.dart';
-import 'screens/stats_screen.dart';
 import 'screens/today_screen.dart';
 import 'screens/trash_screen.dart';
 import 'features/feedback/feedback_controller.dart';
@@ -363,14 +360,8 @@ class _WorkFollowShellState extends State<WorkFollowShell> {
         controller.selectView(WorkspaceView.calendar);
       case 'goNotes':
         controller.selectView(WorkspaceView.notes);
-      case 'goStats':
-        controller.selectView(WorkspaceView.stats);
       case 'goMatrix':
         controller.selectView(WorkspaceView.matrix);
-      case 'goBoard':
-        controller.selectView(WorkspaceView.board);
-      case 'goHabits':
-        controller.selectView(WorkspaceView.habits);
       case 'startPomodoro':
         _openFocusTimer();
       case 'completeSelected':
@@ -443,8 +434,7 @@ class _WorkFollowShellState extends State<WorkFollowShell> {
   /// Bridges the global undo back into a callback shape. `taskActions.undo`
   /// reports whether anything was actually taken back, which the HUD does not
   /// need — it has already dismissed itself.
-  Future<bool> _undoLastAction() async =>
-      controller.taskActions.undo().success;
+  Future<bool> _undoLastAction() async => controller.taskActions.undo().success;
 
   Future<AppExitResponse> _handleExitRequested() async {
     await controller.waitForPendingSaves();
@@ -563,10 +553,6 @@ class _WorkFollowShellState extends State<WorkFollowShell> {
                 NotesIntent(),
             SingleActivator(LogicalKeyboardKey.digit6, meta: true):
                 MatrixIntent(),
-            SingleActivator(LogicalKeyboardKey.digit7, meta: true):
-                BoardIntent(),
-            SingleActivator(LogicalKeyboardKey.digit8, meta: true):
-                HabitsIntent(),
           },
           child: Actions(
             actions: <Type, Action<Intent>>{
@@ -614,14 +600,6 @@ class _WorkFollowShellState extends State<WorkFollowShell> {
                 controller.selectView(WorkspaceView.matrix);
                 return null;
               }),
-              BoardIntent: CallbackAction<Intent>(onInvoke: (_) {
-                controller.selectView(WorkspaceView.board);
-                return null;
-              }),
-              HabitsIntent: CallbackAction<Intent>(onInvoke: (_) {
-                controller.selectView(WorkspaceView.habits);
-                return null;
-              }),
             },
             child: CallbackShortcuts(
               bindings: {
@@ -642,27 +620,25 @@ class _WorkFollowShellState extends State<WorkFollowShell> {
                         widthFactor: sidebarCollapsed ? 0 : 1,
                         child: AppRail(
                           controller: controller,
-                          isDark: Theme.of(context).brightness ==
-                              Brightness.dark,
+                          isDark:
+                              Theme.of(context).brightness == Brightness.dark,
                           onToggleTheme: widget.onToggleTheme,
-                            onOpenSettings: () => showSettingsPanel(
-                                context: context,
-                                controller: controller,
-                                onToggleTheme: widget.onToggleTheme,
-                                onSetThemeMode: widget.onSetThemeMode,
-                                themeMode: widget.themeMode,
-                                compactDensity: widget.compactDensity,
-                                onSetDensity: widget.onSetDensity,
-                                persistentInspector:
-                                    widget.persistentInspector,
-                                onSetPersistentInspector:
-                                    widget.onSetPersistentInspector,
-                                completionSound: widget.completionSound,
-                                onSetCompletionSound:
-                                    widget.onSetCompletionSound,
-                                animatedFeedback: widget.animatedFeedback,
-                                onSetAnimatedFeedback:
-                                    widget.onSetAnimatedFeedback),
+                          onOpenSettings: () => showSettingsPanel(
+                              context: context,
+                              controller: controller,
+                              onToggleTheme: widget.onToggleTheme,
+                              onSetThemeMode: widget.onSetThemeMode,
+                              themeMode: widget.themeMode,
+                              compactDensity: widget.compactDensity,
+                              onSetDensity: widget.onSetDensity,
+                              persistentInspector: widget.persistentInspector,
+                              onSetPersistentInspector:
+                                  widget.onSetPersistentInspector,
+                              completionSound: widget.completionSound,
+                              onSetCompletionSound: widget.onSetCompletionSound,
+                              animatedFeedback: widget.animatedFeedback,
+                              onSetAnimatedFeedback:
+                                  widget.onSetAnimatedFeedback),
                         ),
                       ),
                     ),
@@ -718,14 +694,8 @@ class _WorkspaceContent extends StatelessWidget {
           NotesScreen(key: const ValueKey('notes'), controller: controller),
         WorkspaceView.trash =>
           TrashScreen(key: const ValueKey('trash'), controller: controller),
-        WorkspaceView.stats =>
-          StatsScreen(key: const ValueKey('stats'), controller: controller),
         WorkspaceView.matrix =>
           MatrixScreen(key: const ValueKey('matrix'), controller: controller),
-        WorkspaceView.board =>
-          BoardScreen(key: const ValueKey('board'), controller: controller),
-        WorkspaceView.habits =>
-          HabitsScreen(key: const ValueKey('habits'), controller: controller),
         _ => TodayScreen(
             key: ValueKey(controller.view),
             controller: controller,

@@ -79,12 +79,11 @@ void main() {
     });
 
     expect(bundle.schemaVersion, 1);
-    expect(bundle.habits, isEmpty);
     expect(TaskItem.fromMigration(bundle.tasks.single).focusCount, 0);
     expect(bundle.lists.single.pinned, isFalse);
   });
 
-  test('round trips habits, list pinning and focus counts', () {
+  test('round trips list colors, pinning and focus counts', () {
     final bundle = MigrationBundle(
       format: localSnapshotFormat,
       schemaVersion: migrationSchemaVersion,
@@ -122,24 +121,12 @@ void main() {
         ),
       ],
       notes: const [],
-      habits: const [
-        MigrationHabitRecord(
-          id: 'habit-01',
-          name: '阅读',
-          icon: 'book',
-          color: '#5865C8',
-          schedule: [1, 3, 5],
-          records: ['2026-09-11'],
-        ),
-      ],
     );
 
     final restored = MigrationBundle.fromJson(bundle.toJson());
     expect(restored.lists.single.pinned, isTrue);
     expect(restored.lists.single.color, '#22AA66');
     expect(restored.tasks.single.focusCount, 3);
-    expect(restored.habits.single.schedule, [1, 3, 5]);
-    expect(restored.habits.single.records, ['2026-09-11']);
   });
 
   test('rejects an unknown format or schema version', () {

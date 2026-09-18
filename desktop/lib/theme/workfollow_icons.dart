@@ -14,15 +14,6 @@ class WorkFollowIcons {
   static const notes = Icons.notes_outlined;
   static const calendar = Icons.calendar_month_outlined;
   static const matrix = Icons.grid_view_rounded;
-  static const board = Icons.view_column_outlined;
-  static const habits = Icons.repeat_rounded;
-  static const habitSun = Icons.wb_sunny_outlined;
-  static const habitBook = Icons.menu_book_outlined;
-  static const habitRun = Icons.directions_run_outlined;
-  static const stats = Icons.insights_outlined;
-  static const statToday = Icons.today_outlined;
-  static const trend = Icons.trending_up_rounded;
-  static const historyToggle = Icons.history_toggle_off_rounded;
   static const priorityHigh = Icons.priority_high_rounded;
   static const forward = Icons.forward_to_inbox_outlined;
   static const skip = Icons.skip_next_outlined;
@@ -125,8 +116,6 @@ class WorkFollowIcons {
   static const report = Icons.report_outlined;
   static const warning = Icons.error_outline_rounded;
   static const sync = Icons.sync_rounded;
-  static const completeBox = Icons.check_box_rounded;
-  static const incompleteBox = Icons.check_box_outline_blank_rounded;
   static const focus = Icons.timer_outlined;
   static const play = Icons.play_arrow_rounded;
   static const keyboardReturn = Icons.keyboard_return_rounded;

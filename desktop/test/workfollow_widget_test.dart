@@ -134,10 +134,9 @@ void main() {
     expect(find.text('清单'), findsNothing);
     expect(find.byKey(const ValueKey('rail-context-column')), findsOneWidget);
 
-    // Calendar, matrix, board, habits and stats are self-contained too: their
-    // page header already owns the controls, so the shell keeps only the icon
-    // rail.
-    for (final label in ['日历', '四象限', '看板', '习惯', '统计']) {
+    // Calendar and matrix are self-contained too: their page header already
+    // owns the controls, so the shell keeps only the icon rail.
+    for (final label in ['日历', '四象限']) {
       await tester.tap(find.byTooltip(label));
       await tester.pumpAndSettle();
       expect(find.byKey(const ValueKey('rail-context-column')), findsNothing,

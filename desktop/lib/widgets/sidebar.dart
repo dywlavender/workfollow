@@ -67,7 +67,7 @@ class AppRail extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tokens = WorkFollowTheme.of(context);
-    // Module pages (calendar, matrix, board, habits, stats) are self-contained:
+    // Module pages (calendar, matrix) are self-contained:
     // their page header already owns the mode and range controls, so a second
     // column could only repeat the destination the icon rail selected. Dropping
     // it hands the column's width back to the page and leaves the icons as the
@@ -98,7 +98,8 @@ class AppRail extends StatelessWidget {
           ),
           if (contextColumn) ...[
             Container(
-                width: WorkFollowMetrics.dividerThickness, color: tokens.border),
+                width: WorkFollowMetrics.dividerThickness,
+                color: tokens.border),
             Expanded(
               key: const ValueKey('rail-context-column'),
               child: Column(
@@ -133,7 +134,7 @@ class AppRail extends StatelessWidget {
 /// grammar.
 ///
 /// Only two contexts own a column: the note tree and the task tree. Home,
-/// calendar, matrix, board, habits and stats have no column at all — see
+/// calendar and matrix have no column at all — see
 /// [WorkspaceController.isSelfContainedView] — so this switch never sees them.
 class _ContextNavigation extends StatelessWidget {
   const _ContextNavigation({required this.controller});
@@ -395,24 +396,6 @@ class _IconRail extends StatelessWidget {
             selected: controller.view == WorkspaceView.matrix,
             onPressed: () => controller.selectView(WorkspaceView.matrix),
           ),
-          _IconRailButton(
-            label: '看板',
-            icon: WorkFollowIcons.board,
-            selected: controller.view == WorkspaceView.board,
-            onPressed: () => controller.selectView(WorkspaceView.board),
-          ),
-          _IconRailButton(
-            label: '习惯',
-            icon: WorkFollowIcons.habits,
-            selected: controller.view == WorkspaceView.habits,
-            onPressed: () => controller.selectView(WorkspaceView.habits),
-          ),
-          _IconRailButton(
-            label: '统计',
-            icon: WorkFollowIcons.stats,
-            selected: controller.view == WorkspaceView.stats,
-            onPressed: () => controller.selectView(WorkspaceView.stats),
-          ),
           const Spacer(),
           _IconRailFooter(
             isDark: isDark,
@@ -443,15 +426,17 @@ class _IconRailFooter extends StatelessWidget {
   Widget build(BuildContext context) {
     final tokens = WorkFollowTheme.of(context);
     return Padding(
-      padding: const EdgeInsets.fromLTRB(WorkFollowSpacing.inlineGap, WorkFollowSpacing.space2, WorkFollowSpacing.inlineGap, WorkFollowSpacing.cardInset),
+      padding: const EdgeInsets.fromLTRB(
+          WorkFollowSpacing.inlineGap,
+          WorkFollowSpacing.space2,
+          WorkFollowSpacing.inlineGap,
+          WorkFollowSpacing.cardInset),
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: WorkFollowSpacing.space1),
         decoration: BoxDecoration(
-          color: WorkFollowColorTokens.navigationFooterSurface(
-              context, tokens),
+          color: WorkFollowColorTokens.navigationFooterSurface(context, tokens),
           borderRadius: BorderRadius.circular(WorkFollowRadii.surface),
-          border: Border.all(
-              color: _sidebarBorder(context, tokens)),
+          border: Border.all(color: _sidebarBorder(context, tokens)),
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -459,7 +444,8 @@ class _IconRailFooter extends StatelessWidget {
             Semantics(
               label: '本地空间',
               child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: WorkFollowSpacing.space1),
+                padding: const EdgeInsets.symmetric(
+                    vertical: WorkFollowSpacing.space1),
                 child: AppIcon(WorkFollowIcons.system,
                     size: WorkFollowMetrics.toolbarIcon,
                     color: _sidebarForegroundMuted(context, tokens)),
@@ -597,42 +583,43 @@ class _IconRailButtonState extends State<_IconRailButton> {
               onTapUp: (_) => setState(() => pressed = false),
               onTapCancel: () => setState(() => pressed = false),
               child: Container(
-              key: ValueKey('rail-button-${widget.label}'),
-              width: SidebarMetrics.railButtonSize,
-              height: SidebarMetrics.railButtonSize,
-              margin: const EdgeInsets.symmetric(vertical: WorkFollowSpacing.tightGap),
-              decoration: BoxDecoration(
-                color: WorkFollowInteractionStyles.customFill(
-                  defaultColor: Colors.transparent,
-                  hoverColor: WorkFollowColorTokens.navigationHover(
-                      context, tokens),
-                  selectedColor: WorkFollowColorTokens.navigationRailSelected(
-                      context, tokens),
-                  pressedColor: WorkFollowColorTokens.navigationPressed(
-                      context, tokens),
-                  selected: active,
-                  hovered: hovering,
-                  pressed: pressed,
-                ),
-                borderRadius: BorderRadius.circular(WorkFollowRadii.surface),
-                border: Border.fromBorderSide(
-                  WorkFollowInteractionStyles.focusBorder(
-                    tokens,
-                    focused: focused,
+                key: ValueKey('rail-button-${widget.label}'),
+                width: SidebarMetrics.railButtonSize,
+                height: SidebarMetrics.railButtonSize,
+                margin: const EdgeInsets.symmetric(
+                    vertical: WorkFollowSpacing.tightGap),
+                decoration: BoxDecoration(
+                  color: WorkFollowInteractionStyles.customFill(
+                    defaultColor: Colors.transparent,
+                    hoverColor:
+                        WorkFollowColorTokens.navigationHover(context, tokens),
+                    selectedColor: WorkFollowColorTokens.navigationRailSelected(
+                        context, tokens),
+                    pressedColor: WorkFollowColorTokens.navigationPressed(
+                        context, tokens),
+                    selected: active,
+                    hovered: hovering,
+                    pressed: pressed,
+                  ),
+                  borderRadius: BorderRadius.circular(WorkFollowRadii.surface),
+                  border: Border.fromBorderSide(
+                    WorkFollowInteractionStyles.focusBorder(
+                      tokens,
+                      focused: focused,
+                    ),
                   ),
                 ),
-              ),
-              child: AppIcon(
-                widget.icon,
-                size: widget.filled
-                    ? WorkFollowMetrics.railIcon + 1
-                    : WorkFollowMetrics.railIcon,
-                color: active
-                    ? _sidebarAccent(context, tokens)
-                    : (hovering
-                        ? _sidebarForeground(context, tokens)
-                        : _sidebarForegroundMuted(context, tokens)),
-              ),
+                child: AppIcon(
+                  widget.icon,
+                  size: widget.filled
+                      ? WorkFollowMetrics.railIcon + 1
+                      : WorkFollowMetrics.railIcon,
+                  color: active
+                      ? _sidebarAccent(context, tokens)
+                      : (hovering
+                          ? _sidebarForeground(context, tokens)
+                          : _sidebarForegroundMuted(context, tokens)),
+                ),
               ),
             ),
           ),
@@ -674,8 +661,7 @@ Future<void> _showAddListDialog(
     showFeedback(
         context,
         const WorkFollowFeedback(
-            kind: WorkFollowFeedbackKind.error,
-            message: '清单名称为空，或已经存在。'));
+            kind: WorkFollowFeedbackKind.error, message: '清单名称为空，或已经存在。'));
   }
 }
 
@@ -713,8 +699,7 @@ Future<void> _showAddFolderDialog(
     showFeedback(
         context,
         const WorkFollowFeedback(
-            kind: WorkFollowFeedbackKind.error,
-            message: '文件夹名称为空，或已经存在。'));
+            kind: WorkFollowFeedbackKind.error, message: '文件夹名称为空，或已经存在。'));
     return;
   }
   controller.setNotesFolderFilter(folder.id);
@@ -794,7 +779,11 @@ class _TagSectionState extends State<_TagSection> {
         ),
         if (expanded && tags.isEmpty)
           Padding(
-            padding: const EdgeInsets.fromLTRB(WorkFollowSpacing.navigationContentInset, WorkFollowSpacing.tightGap, WorkFollowSpacing.space2, WorkFollowSpacing.xs),
+            padding: const EdgeInsets.fromLTRB(
+                WorkFollowSpacing.navigationContentInset,
+                WorkFollowSpacing.tightGap,
+                WorkFollowSpacing.space2,
+                WorkFollowSpacing.xs),
             child: Text('在任务中输入 #标签',
                 style: TextStyle(
                     color: tokens.textTertiary,
@@ -862,90 +851,94 @@ class _RailItemState extends State<_RailItem> {
             onTapCancel: () => setState(() => pressed = false),
             onSecondaryTap: widget.onMenu,
             child: Container(
-            key: ValueKey('rail-navigation-item-${widget.label}'),
-            height: WorkFollowMetrics.compactNavigationRowHeight,
-            margin: const EdgeInsets.symmetric(vertical: WorkFollowSpacing.hairlineGap),
-            padding: const EdgeInsets.symmetric(horizontal: WorkFollowSpacing.cardInset),
-            decoration: BoxDecoration(
-              color: WorkFollowInteractionStyles.customFill(
-                defaultColor: Colors.transparent,
-                hoverColor: tokens.content.withValues(alpha: .65),
-                selectedColor: _sidebarAccentSoft(context, tokens),
-                pressedColor: tokens.content.withValues(alpha: .85),
-                selected: widget.selected,
-                hovered: hovering,
-                pressed: pressed,
-              ),
-              borderRadius: BorderRadius.circular(WorkFollowRadii.control),
-              border: Border.fromBorderSide(
-                WorkFollowInteractionStyles.focusBorder(
-                  tokens,
-                  focused: focused,
+              key: ValueKey('rail-navigation-item-${widget.label}'),
+              height: WorkFollowMetrics.compactNavigationRowHeight,
+              margin: const EdgeInsets.symmetric(
+                  vertical: WorkFollowSpacing.hairlineGap),
+              padding: const EdgeInsets.symmetric(
+                  horizontal: WorkFollowSpacing.cardInset),
+              decoration: BoxDecoration(
+                color: WorkFollowInteractionStyles.customFill(
+                  defaultColor: Colors.transparent,
+                  hoverColor: tokens.content.withValues(alpha: .65),
+                  selectedColor: _sidebarAccentSoft(context, tokens),
+                  pressedColor: tokens.content.withValues(alpha: .85),
+                  selected: widget.selected,
+                  hovered: hovering,
+                  pressed: pressed,
                 ),
-              ),
-            ),
-            child: Row(
-              children: [
-                AppIcon(
-                  widget.icon,
-                  size: WorkFollowMetrics.navigationIcon,
-                  color: widget.selected
-                      ? _sidebarAccent(context, tokens)
-                      : tokens.textPrimary,
-                ),
-                const SizedBox(width: WorkFollowSpacing.controlGap),
-                Expanded(
-                  child: Text(
-                    widget.label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: widget.selected
-                          ? _sidebarAccent(context, tokens)
-                          : tokens.textPrimary,
-                      fontSize: WorkFollowMacTypography.navigation,
-                      height: WorkFollowMacTypography.lineControl,
-                      // Selection is carried by background and colour; one
-                      // weight step adds the last bit of emphasis. Heavier nav
-                      // rows are what made the rail read bolder than the
-                      // reference, so semibold is never the selected state.
-                      fontWeight: widget.selected
-                          ? WorkFollowMacWeight.medium
-                          : WorkFollowMacWeight.regular,
-                    ),
+                borderRadius: BorderRadius.circular(WorkFollowRadii.control),
+                border: Border.fromBorderSide(
+                  WorkFollowInteractionStyles.focusBorder(
+                    tokens,
+                    focused: focused,
                   ),
                 ),
-                if (hovering && widget.onMenu != null)
-                  SizedBox(
-                      width: SidebarMetrics.folderMoreWidth,
-                      height: SidebarMetrics.folderMoreHeight,
-                      child: IconButton(
-                          tooltip: '文件夹操作',
-                          padding: EdgeInsets.zero,
-                          iconSize: WorkFollowMetrics.metadataIcon,
-                          onPressed: widget.onMenu,
-                          icon: const AppIcon(WorkFollowIcons.more)))
-                else if (widget.count != null && widget.count! > 0)
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: WorkFollowSpacing.compactGap, vertical: WorkFollowSpacing.microGap),
-                    decoration: BoxDecoration(
-                      color: widget.selected
-                          ? tokens.content
-                          : tokens.content.withValues(alpha: .7),
-                      borderRadius: BorderRadius.circular(WorkFollowRadii.pill),
-                    ),
-                    child: Text('${widget.count}',
-                        style: TextStyle(
-                            color: widget.selected
-                                ? _sidebarAccent(context, tokens)
-                                : tokens.textTertiary,
-                            fontSize: WorkFollowMacTypography.navigationMeta,
-                            height: WorkFollowMacTypography.lineControl,
-                            fontWeight: WorkFollowMacWeight.regular)),
+              ),
+              child: Row(
+                children: [
+                  AppIcon(
+                    widget.icon,
+                    size: WorkFollowMetrics.navigationIcon,
+                    color: widget.selected
+                        ? _sidebarAccent(context, tokens)
+                        : tokens.textPrimary,
                   ),
-              ],
-            ),
+                  const SizedBox(width: WorkFollowSpacing.controlGap),
+                  Expanded(
+                    child: Text(
+                      widget.label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: widget.selected
+                            ? _sidebarAccent(context, tokens)
+                            : tokens.textPrimary,
+                        fontSize: WorkFollowMacTypography.navigation,
+                        height: WorkFollowMacTypography.lineControl,
+                        // Selection is carried by background and colour; one
+                        // weight step adds the last bit of emphasis. Heavier nav
+                        // rows are what made the rail read bolder than the
+                        // reference, so semibold is never the selected state.
+                        fontWeight: widget.selected
+                            ? WorkFollowMacWeight.medium
+                            : WorkFollowMacWeight.regular,
+                      ),
+                    ),
+                  ),
+                  if (hovering && widget.onMenu != null)
+                    SizedBox(
+                        width: SidebarMetrics.folderMoreWidth,
+                        height: SidebarMetrics.folderMoreHeight,
+                        child: IconButton(
+                            tooltip: '文件夹操作',
+                            padding: EdgeInsets.zero,
+                            iconSize: WorkFollowMetrics.metadataIcon,
+                            onPressed: widget.onMenu,
+                            icon: const AppIcon(WorkFollowIcons.more)))
+                  else if (widget.count != null && widget.count! > 0)
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: WorkFollowSpacing.compactGap,
+                          vertical: WorkFollowSpacing.microGap),
+                      decoration: BoxDecoration(
+                        color: widget.selected
+                            ? tokens.content
+                            : tokens.content.withValues(alpha: .7),
+                        borderRadius:
+                            BorderRadius.circular(WorkFollowRadii.pill),
+                      ),
+                      child: Text('${widget.count}',
+                          style: TextStyle(
+                              color: widget.selected
+                                  ? _sidebarAccent(context, tokens)
+                                  : tokens.textTertiary,
+                              fontSize: WorkFollowMacTypography.navigationMeta,
+                              height: WorkFollowMacTypography.lineControl,
+                              fontWeight: WorkFollowMacWeight.regular)),
+                    ),
+                ],
+              ),
             ),
           ),
         ),
@@ -1004,83 +997,89 @@ class _TaskListItemState extends State<_TaskListItem> {
                     onTapUp: (_) => setState(() => pressed = false),
                     onTapCancel: () => setState(() => pressed = false),
                     child: Container(
-                    key: ValueKey('rail-list-item-${widget.list.name}'),
-                    height: WorkFollowMetrics.compactNavigationRowHeight,
-                    margin: const EdgeInsets.symmetric(vertical: WorkFollowSpacing.hairlineGap),
-                    padding: const EdgeInsets.symmetric(horizontal: WorkFollowSpacing.cardInset),
-                    decoration: BoxDecoration(
-                      color: dragActive
-                          ? _sidebarAccentSoft(context, tokens)
-                          : WorkFollowInteractionStyles.customFill(
-                              defaultColor: Colors.transparent,
-                              hoverColor: tokens.content.withValues(alpha: .7),
-                              selectedColor: listColor.withValues(alpha: .12),
-                              pressedColor: tokens.content.withValues(alpha: .88),
-                              selected: selected,
-                              hovered: hovering,
-                              pressed: pressed,
-                            ),
-                      borderRadius:
-                          BorderRadius.circular(WorkFollowRadii.control),
-                      border: dragActive
-                          ? Border.all(
-                              color: _sidebarAccent(context, tokens)
-                                  .withValues(alpha: .5))
-                          : Border.fromBorderSide(
-                              WorkFollowInteractionStyles.focusBorder(
-                                tokens,
-                                focused: focused,
+                      key: ValueKey('rail-list-item-${widget.list.name}'),
+                      height: WorkFollowMetrics.compactNavigationRowHeight,
+                      margin: const EdgeInsets.symmetric(
+                          vertical: WorkFollowSpacing.hairlineGap),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: WorkFollowSpacing.cardInset),
+                      decoration: BoxDecoration(
+                        color: dragActive
+                            ? _sidebarAccentSoft(context, tokens)
+                            : WorkFollowInteractionStyles.customFill(
+                                defaultColor: Colors.transparent,
+                                hoverColor:
+                                    tokens.content.withValues(alpha: .7),
+                                selectedColor: listColor.withValues(alpha: .12),
+                                pressedColor:
+                                    tokens.content.withValues(alpha: .88),
+                                selected: selected,
+                                hovered: hovering,
+                                pressed: pressed,
                               ),
-                            ),
-                    ),
-                    child: Row(
-                      children: [
-                        Container(
-                            width: SidebarMetrics.listColorDotSize,
-                            height: SidebarMetrics.listColorDotSize,
-                            decoration: BoxDecoration(
-                                color: listColor, shape: BoxShape.circle)),
-                        const SizedBox(width: WorkFollowSpacing.space2),
-                        Expanded(
-                          child: Text(widget.list.name,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                  color:
-                                      selected ? listColor : tokens.textPrimary,
-                                  fontSize: WorkFollowMacTypography.navigation,
-                                  height: WorkFollowMacTypography.lineControl,
-                                  fontWeight: selected
-                                      ? WorkFollowMacWeight.medium
-                                      : WorkFollowMacWeight.regular)),
-                        ),
-                        if (count > 0)
-                          Text('$count',
-                              style: TextStyle(
-                                  color: selected
-                                      ? listColor
-                                      : tokens.textTertiary,
-                                  fontSize: WorkFollowMacTypography.navigationMeta,
-                                  height: WorkFollowMacTypography.lineControl,
-                                  fontWeight: WorkFollowMacWeight.regular)),
-                        ExcludeSemantics(
-                          excluding: !hovering,
-                          child: AnimatedOpacity(
-                            duration: WorkFollowMotionPolicy.duration(
-                                context,
-                                WorkFollowMotionRole.hoverTransition),
-                            opacity: hovering ? 1 : 0,
-                            child: AppIconButton(
-                                icon: WorkFollowIcons.more,
-                                tooltip: '清单操作',
-                                size: WorkFollowMetrics
-                                    .compactNavigationIconHitTarget,
-                                iconSize: WorkFollowMetrics.metadataIcon,
-                                onPressed: () => _showListMenu(context)),
+                        borderRadius:
+                            BorderRadius.circular(WorkFollowRadii.control),
+                        border: dragActive
+                            ? Border.all(
+                                color: _sidebarAccent(context, tokens)
+                                    .withValues(alpha: .5))
+                            : Border.fromBorderSide(
+                                WorkFollowInteractionStyles.focusBorder(
+                                  tokens,
+                                  focused: focused,
+                                ),
+                              ),
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                              width: SidebarMetrics.listColorDotSize,
+                              height: SidebarMetrics.listColorDotSize,
+                              decoration: BoxDecoration(
+                                  color: listColor, shape: BoxShape.circle)),
+                          const SizedBox(width: WorkFollowSpacing.space2),
+                          Expanded(
+                            child: Text(widget.list.name,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                    color: selected
+                                        ? listColor
+                                        : tokens.textPrimary,
+                                    fontSize:
+                                        WorkFollowMacTypography.navigation,
+                                    height: WorkFollowMacTypography.lineControl,
+                                    fontWeight: selected
+                                        ? WorkFollowMacWeight.medium
+                                        : WorkFollowMacWeight.regular)),
                           ),
-                        ),
-                      ],
-                    ),
+                          if (count > 0)
+                            Text('$count',
+                                style: TextStyle(
+                                    color: selected
+                                        ? listColor
+                                        : tokens.textTertiary,
+                                    fontSize:
+                                        WorkFollowMacTypography.navigationMeta,
+                                    height: WorkFollowMacTypography.lineControl,
+                                    fontWeight: WorkFollowMacWeight.regular)),
+                          ExcludeSemantics(
+                            excluding: !hovering,
+                            child: AnimatedOpacity(
+                              duration: WorkFollowMotionPolicy.duration(context,
+                                  WorkFollowMotionRole.hoverTransition),
+                              opacity: hovering ? 1 : 0,
+                              child: AppIconButton(
+                                  icon: WorkFollowIcons.more,
+                                  tooltip: '清单操作',
+                                  size: WorkFollowMetrics
+                                      .compactNavigationIconHitTarget,
+                                  iconSize: WorkFollowMetrics.metadataIcon,
+                                  onPressed: () => _showListMenu(context)),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
@@ -1097,12 +1096,10 @@ class _TaskListItemState extends State<_TaskListItem> {
       context,
       placement: PopoverPlacement.bottomEnd,
       entries: [
-        DesktopMenuEntry(
-            'pin', widget.list.pinned ? '取消置顶' : '置顶清单',
+        DesktopMenuEntry('pin', widget.list.pinned ? '取消置顶' : '置顶清单',
             icon: WorkFollowIcons.pin),
         const DesktopMenuEntry('rename', '重命名', icon: WorkFollowIcons.edit),
         const DesktopMenuEntry('color', '选择颜色'),
-        const DesktopMenuEntry('board', '在看板中打开', icon: WorkFollowIcons.board),
         const DesktopMenuEntry('delete', '删除清单',
             icon: WorkFollowIcons.delete, destructive: true),
       ],
@@ -1114,8 +1111,6 @@ class _TaskListItemState extends State<_TaskListItem> {
       await _renameList(context);
     } else if (choice == 'color') {
       await _pickListColor(context);
-    } else if (choice == 'board') {
-      widget.controller.selectBoard(listName: widget.list.name);
     } else if (choice == 'delete') {
       await _confirmDelete(context);
     }
@@ -1255,61 +1250,63 @@ class _TagItemState extends State<_TagItem> {
           onTapCancel: () => setState(() => pressed = false),
           onSecondaryTap: () => _showMenu(context),
           child: Semantics(
-          button: true,
-          selected: selected,
-          label: '#${widget.name}，${widget.count} 个任务',
-          child: Container(
-            key: ValueKey('rail-tag-item-${widget.name}'),
-            height: WorkFollowMetrics.compactNavigationRowHeight,
-            margin: const EdgeInsets.symmetric(vertical: WorkFollowSpacing.hairlineGap),
-            padding: const EdgeInsets.symmetric(horizontal: WorkFollowSpacing.cardInset),
-            decoration: BoxDecoration(
-                color: WorkFollowInteractionStyles.customFill(
-                  defaultColor: Colors.transparent,
-                  hoverColor: tokens.content.withValues(alpha: .65),
-                  selectedColor: _sidebarAccentSoft(context, tokens),
-                  pressedColor: tokens.content.withValues(alpha: .85),
-                  selected: selected,
-                  hovered: hovering,
-                  pressed: pressed,
-                ),
-                borderRadius: BorderRadius.circular(WorkFollowRadii.control),
-                border: Border.fromBorderSide(
-                  WorkFollowInteractionStyles.focusBorder(
-                    tokens,
-                    focused: focused,
+            button: true,
+            selected: selected,
+            label: '#${widget.name}，${widget.count} 个任务',
+            child: Container(
+              key: ValueKey('rail-tag-item-${widget.name}'),
+              height: WorkFollowMetrics.compactNavigationRowHeight,
+              margin: const EdgeInsets.symmetric(
+                  vertical: WorkFollowSpacing.hairlineGap),
+              padding: const EdgeInsets.symmetric(
+                  horizontal: WorkFollowSpacing.cardInset),
+              decoration: BoxDecoration(
+                  color: WorkFollowInteractionStyles.customFill(
+                    defaultColor: Colors.transparent,
+                    hoverColor: tokens.content.withValues(alpha: .65),
+                    selectedColor: _sidebarAccentSoft(context, tokens),
+                    pressedColor: tokens.content.withValues(alpha: .85),
+                    selected: selected,
+                    hovered: hovering,
+                    pressed: pressed,
                   ),
-                )),
-            child: Row(children: [
-              AppIcon(WorkFollowIcons.tag,
-                  size: WorkFollowMetrics.navigationIcon,
-                  color: selected
-                      ? _sidebarAccent(context, tokens)
-                      : tokens.textPrimary),
-              const SizedBox(width: WorkFollowSpacing.controlGap),
-              Expanded(
-                  child: Text(widget.name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                          color: selected
-                              ? _sidebarAccent(context, tokens)
-                              : tokens.textPrimary,
-                          fontSize: WorkFollowMacTypography.navigation,
-                          height: WorkFollowMacTypography.lineControl,
-                          fontWeight: selected
-                              ? WorkFollowMacWeight.medium
-                              : WorkFollowMacWeight.regular))),
-              Text('${widget.count}',
-                  style: TextStyle(
-                      color: selected
-                          ? _sidebarAccent(context, tokens)
-                          : tokens.textTertiary,
-                      fontSize: WorkFollowMacTypography.navigationMeta,
-                      height: WorkFollowMacTypography.lineControl,
-                      fontWeight: WorkFollowMacWeight.regular)),
-            ]),
-          ),
+                  borderRadius: BorderRadius.circular(WorkFollowRadii.control),
+                  border: Border.fromBorderSide(
+                    WorkFollowInteractionStyles.focusBorder(
+                      tokens,
+                      focused: focused,
+                    ),
+                  )),
+              child: Row(children: [
+                AppIcon(WorkFollowIcons.tag,
+                    size: WorkFollowMetrics.navigationIcon,
+                    color: selected
+                        ? _sidebarAccent(context, tokens)
+                        : tokens.textPrimary),
+                const SizedBox(width: WorkFollowSpacing.controlGap),
+                Expanded(
+                    child: Text(widget.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                            color: selected
+                                ? _sidebarAccent(context, tokens)
+                                : tokens.textPrimary,
+                            fontSize: WorkFollowMacTypography.navigation,
+                            height: WorkFollowMacTypography.lineControl,
+                            fontWeight: selected
+                                ? WorkFollowMacWeight.medium
+                                : WorkFollowMacWeight.regular))),
+                Text('${widget.count}',
+                    style: TextStyle(
+                        color: selected
+                            ? _sidebarAccent(context, tokens)
+                            : tokens.textTertiary,
+                        fontSize: WorkFollowMacTypography.navigationMeta,
+                        height: WorkFollowMacTypography.lineControl,
+                        fontWeight: WorkFollowMacWeight.regular)),
+              ]),
+            ),
           ),
         ),
       ),
@@ -1407,88 +1404,90 @@ class _TaskViewItemState extends State<_TaskViewItem> {
             onTapUp: (_) => setState(() => pressed = false),
             onTapCancel: () => setState(() => pressed = false),
             child: Container(
-            key: ValueKey('rail-view-item-${widget.view.name}'),
-            margin: const EdgeInsets.symmetric(vertical: WorkFollowSpacing.microGap),
-            padding: const EdgeInsets.fromLTRB(
-                WorkFollowSpacing.railItemHorizontalInset,
-                WorkFollowSpacing.xs,
-                WorkFollowSpacing.railItemTrailingInset,
-                WorkFollowSpacing.xs),
-            decoration: BoxDecoration(
-              color: WorkFollowInteractionStyles.customFill(
-                defaultColor: Colors.transparent,
-                hoverColor: tokens.content.withValues(alpha: .7),
-                selectedColor: _sidebarAccentSoft(context, tokens),
-                pressedColor: tokens.content.withValues(alpha: .88),
-                selected: selected,
-                hovered: hovering,
-                pressed: pressed,
-              ),
-              borderRadius: BorderRadius.circular(WorkFollowRadii.control),
-              border: Border.fromBorderSide(
-                WorkFollowInteractionStyles.focusBorder(
-                  tokens,
-                  focused: focused,
+              key: ValueKey('rail-view-item-${widget.view.name}'),
+              margin: const EdgeInsets.symmetric(
+                  vertical: WorkFollowSpacing.microGap),
+              padding: const EdgeInsets.fromLTRB(
+                  WorkFollowSpacing.railItemHorizontalInset,
+                  WorkFollowSpacing.xs,
+                  WorkFollowSpacing.railItemTrailingInset,
+                  WorkFollowSpacing.xs),
+              decoration: BoxDecoration(
+                color: WorkFollowInteractionStyles.customFill(
+                  defaultColor: Colors.transparent,
+                  hoverColor: tokens.content.withValues(alpha: .7),
+                  selectedColor: _sidebarAccentSoft(context, tokens),
+                  pressedColor: tokens.content.withValues(alpha: .88),
+                  selected: selected,
+                  hovered: hovering,
+                  pressed: pressed,
+                ),
+                borderRadius: BorderRadius.circular(WorkFollowRadii.control),
+                border: Border.fromBorderSide(
+                  WorkFollowInteractionStyles.focusBorder(
+                    tokens,
+                    focused: focused,
+                  ),
                 ),
               ),
-            ),
-            child: Row(
-              children: [
-                AppIcon(widget.icon,
-                    size: WorkFollowMetrics.navigationIcon,
-                    color: selected
-                        ? _sidebarAccent(context, tokens)
-                        : tokens.textPrimary),
-                const SizedBox(width: WorkFollowSpacing.compactInset),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        widget.label,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+              child: Row(
+                children: [
+                  AppIcon(widget.icon,
+                      size: WorkFollowMetrics.navigationIcon,
+                      color: selected
+                          ? _sidebarAccent(context, tokens)
+                          : tokens.textPrimary),
+                  const SizedBox(width: WorkFollowSpacing.compactInset),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          widget.label,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: selected
+                                ? _sidebarAccent(context, tokens)
+                                : tokens.textPrimary,
+                            fontSize: WorkFollowMacTypography.navigation,
+                            height: WorkFollowMacTypography.lineControl,
+                            fontWeight: selected
+                                ? WorkFollowMacWeight.medium
+                                : WorkFollowMacWeight.regular,
+                          ),
+                        ),
+                        const SizedBox(height: WorkFollowSpacing.microGap),
+                        Text(
+                          widget.hint,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                              color: tokens.textTertiary,
+                              fontSize: WorkFollowMacTypography.navigationMeta,
+                              height: WorkFollowMacTypography.lineControl),
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (count > 0)
+                    Padding(
+                      padding: const EdgeInsets.only(
+                          left: WorkFollowSpacing.inlineGap),
+                      child: Text(
+                        '$count',
                         style: TextStyle(
                           color: selected
                               ? _sidebarAccent(context, tokens)
-                              : tokens.textPrimary,
-                          fontSize: WorkFollowMacTypography.navigation,
+                              : tokens.textTertiary,
+                          fontSize: WorkFollowMacTypography.navigationMeta,
                           height: WorkFollowMacTypography.lineControl,
-                          fontWeight: selected
-                              ? WorkFollowMacWeight.medium
-                              : WorkFollowMacWeight.regular,
+                          fontWeight: WorkFollowMacWeight.regular,
                         ),
                       ),
-                      const SizedBox(height: WorkFollowSpacing.microGap),
-                      Text(
-                        widget.hint,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                            color: tokens.textTertiary,
-                            fontSize: WorkFollowMacTypography.navigationMeta,
-                            height: WorkFollowMacTypography.lineControl),
-                      ),
-                    ],
-                  ),
-                ),
-                if (count > 0)
-                  Padding(
-                    padding: const EdgeInsets.only(left: WorkFollowSpacing.inlineGap),
-                    child: Text(
-                      '$count',
-                      style: TextStyle(
-                        color: selected
-                            ? _sidebarAccent(context, tokens)
-                            : tokens.textTertiary,
-                        fontSize: WorkFollowMacTypography.navigationMeta,
-                        height: WorkFollowMacTypography.lineControl,
-                        fontWeight: WorkFollowMacWeight.regular,
-                      ),
                     ),
-                  ),
-              ],
-            ),
+                ],
+              ),
             ),
           ),
         ),
@@ -1549,7 +1548,6 @@ Future<void> _editFolder(BuildContext anchor, WorkspaceController controller,
     showFeedback(
         anchor,
         const WorkFollowFeedback(
-            kind: WorkFollowFeedbackKind.error,
-            message: '请输入一个不重复的文件夹名称。'));
+            kind: WorkFollowFeedbackKind.error, message: '请输入一个不重复的文件夹名称。'));
   }
 }

@@ -13,8 +13,7 @@ import 'package:workfollow_personal/widgets/task_row.dart';
 import 'package:workfollow_personal/widgets/task_list/task_metadata_trail.dart';
 
 void main() {
-  testWidgets('stats and matrix views are reachable from the native rail',
-      (tester) async {
+  testWidgets('matrix view is reachable from the native rail', (tester) async {
     tester.view.physicalSize = const Size(1280, 820);
     tester.view.devicePixelRatio = 1;
     addTearDown(() {
@@ -23,12 +22,6 @@ void main() {
     });
     await tester.pumpWidget(const WorkFollowApp(demoMode: true));
     await tester.pumpAndSettle();
-
-    await tester.tap(find.byTooltip('统计'));
-    await tester.pumpAndSettle();
-    expect(find.text('完成趋势'), findsOneWidget);
-    expect(find.text('完成热力图'), findsOneWidget);
-    expect(find.text('清单分布'), findsOneWidget);
 
     await tester.tap(find.byTooltip('四象限'));
     await tester.pumpAndSettle();
@@ -38,8 +31,7 @@ void main() {
     expect(find.text('不重要不紧急'), findsOneWidget);
   });
 
-  testWidgets('board, habits and week calendar views are reachable',
-      (tester) async {
+  testWidgets('week calendar view is reachable', (tester) async {
     tester.view.physicalSize = const Size(1280, 820);
     tester.view.devicePixelRatio = 1;
     addTearDown(() {
@@ -48,16 +40,6 @@ void main() {
     });
     await tester.pumpWidget(const WorkFollowApp(demoMode: true));
     await tester.pumpAndSettle();
-
-    await tester.tap(find.byTooltip('看板'));
-    await tester.pumpAndSettle();
-    expect(find.text('优先级'), findsOneWidget);
-    expect(find.text('高优先级'), findsOneWidget);
-
-    await tester.tap(find.byTooltip('习惯'));
-    await tester.pumpAndSettle();
-    expect(find.text('晨间拉伸'), findsOneWidget);
-    expect(find.text('连续'), findsNWidgets(2));
 
     await tester.tap(find.byTooltip('日历'));
     await tester.pumpAndSettle();

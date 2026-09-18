@@ -6,7 +6,6 @@ import 'package:flutter/foundation.dart';
 
 import '../models/migration.dart';
 import '../models/list_color.dart';
-import '../models/habit.dart';
 import '../models/task.dart';
 import '../models/rich_document.dart';
 import '../services/local_workspace_store.dart';
@@ -39,10 +38,7 @@ enum WorkspaceView {
   work,
   study,
   personal,
-  stats,
   matrix,
-  board,
-  habits,
 }
 
 enum MatrixQuadrant {
@@ -75,8 +71,6 @@ enum MatrixQuadrant {
         MatrixQuadrant.later => const TaskScheduleDraft(),
       };
 }
-
-enum BoardGroupBy { priority, date }
 
 /// Reflects the real persistence state, never a fixed label.
 enum SaveStatus { saved, saving, failed }
@@ -187,8 +181,7 @@ class WorkspaceController extends ChangeNotifier {
         _tasks = seedData ? _seedTasks() : [],
         _notes = seedData ? _seedNotes() : [],
         _lists = _defaultLists(),
-        _folders = _defaultFolders(),
-        _habits = seedData ? _seedHabits() : [] {
+        _folders = _defaultFolders() {
     taskActions = CallbackTaskActions(_dispatchTaskAction);
     taskCreator = TaskCreator(taskActions);
     // Clicking a delivered reminder opens the task.
@@ -306,34 +299,6 @@ class WorkspaceController extends ChangeNotifier {
         ),
       ];
 
-  static List<HabitItem> _seedHabits() {
-    final now = DateTime.now();
-    final today = habitStartOfDay(now);
-    final yesterday = today.subtract(const Duration(days: 1));
-    return [
-      HabitItem(
-        id: 'habit-01',
-        name: '晨间拉伸',
-        icon: 'sun',
-        color: '#42A66A',
-        schedule: const {1, 2, 3, 4, 5},
-        records: {habitDateKey(today), habitDateKey(yesterday)},
-        createdAt: now.toIso8601String(),
-        updatedAt: now.toIso8601String(),
-      ),
-      HabitItem(
-        id: 'habit-02',
-        name: '阅读 20 分钟',
-        icon: 'book',
-        color: '#5865C8',
-        schedule: const {1, 2, 3, 4, 5, 6, 7},
-        records: {habitDateKey(yesterday)},
-        createdAt: now.toIso8601String(),
-        updatedAt: now.toIso8601String(),
-      ),
-    ];
-  }
-
   final LocalWorkspaceStore _store;
   final ReminderScheduler _reminders;
   final TaskProjection taskProjection = TaskProjection();
@@ -347,7 +312,6 @@ class WorkspaceController extends ChangeNotifier {
   List<NoteItem> _notes;
   List<MigrationListRecord> _lists;
   List<MigrationFolderRecord> _folders;
-  List<HabitItem> _habits;
   WorkspaceView _view = WorkspaceView.home;
   String? _selectedListName;
   String? _selectedTagName;
@@ -371,7 +335,6 @@ class WorkspaceController extends ChangeNotifier {
   int _taskSequence = 8;
   int _noteSequence = 4;
   int _folderSequence = 4;
-  int _habitSequence = 1;
   bool _restoredFromDisk = false;
   SaveStatus _saveStatus = SaveStatus.saved;
   String? _saveError;
@@ -402,9 +365,7 @@ class WorkspaceController extends ChangeNotifier {
         WorkspaceView.study ||
         WorkspaceView.personal =>
           true,
-        WorkspaceView.board => true,
-        WorkspaceView.stats || WorkspaceView.matrix => false,
-        WorkspaceView.habits => false,
+        WorkspaceView.matrix => false,
         WorkspaceView.home ||
         WorkspaceView.calendar ||
         WorkspaceView.notes ||
@@ -412,8 +373,8 @@ class WorkspaceController extends ChangeNotifier {
           false,
       };
 
-  /// Pages that own their chrome: calendar, matrix, board, habits and stats
-  /// each carry their own mode and range controls in the page header, and hold
+  /// Pages that own their chrome: calendar and matrix each carry their own
+  /// mode and range controls in the page header, and hold
   /// a single destination that the icon rail has already selected. Home is a
   /// dashboard rather than a second navigation tree — its two shortcut rows
   /// only repeated the rail. For all of them the shell keeps the icon rail as
@@ -422,10 +383,7 @@ class WorkspaceController extends ChangeNotifier {
   bool get isSelfContainedView => switch (_view) {
         WorkspaceView.calendar ||
         WorkspaceView.matrix ||
-        WorkspaceView.board ||
-        WorkspaceView.habits ||
-        WorkspaceView.home ||
-        WorkspaceView.stats =>
+        WorkspaceView.home =>
           true,
         _ => false,
       };
@@ -439,7 +397,6 @@ class WorkspaceController extends ChangeNotifier {
   String? get selectedListName => _selectedListName;
   String? get selectedTagName => _selectedTagName;
   bool get shouldShowWeeklyReview => DateTime.now().weekday <= 3;
-  List<HabitItem> get habits => List.unmodifiable(_habits);
 
   WeeklyReviewSummary get weeklyReview {
     final now = DateTime.now();
@@ -490,9 +447,6 @@ class WorkspaceController extends ChangeNotifier {
   }
 
   String get viewTitle {
-    if (_view == WorkspaceView.board && _selectedListName != null) {
-      return '看板 · $_selectedListName';
-    }
     if (_selectedTagName != null) return '标签：$_selectedTagName';
     if (_selectedListName != null) return _selectedListName!;
     return switch (_view) {
@@ -510,10 +464,7 @@ class WorkspaceController extends ChangeNotifier {
       WorkspaceView.calendar => '日历',
       WorkspaceView.notes => '笔记',
       WorkspaceView.trash => '废纸篓',
-      WorkspaceView.stats => '统计',
       WorkspaceView.matrix => '四象限',
-      WorkspaceView.board => '看板',
-      WorkspaceView.habits => '习惯',
     };
   }
 
@@ -1546,7 +1497,6 @@ class WorkspaceController extends ChangeNotifier {
     _saveError = null;
     _folders = _mergeFolders(bundle.folders, _folders);
     _lists = _mergeLists(bundle.lists, _lists);
-    _habits = _mergeHabits(bundle.habits, _habits);
     final taskIds = _tasks.map((task) => task.id).toSet();
     final noteIds = _notes.map((note) => note.id).toSet();
     final importedTasks = <TaskItem>[];
@@ -1586,7 +1536,6 @@ class WorkspaceController extends ChangeNotifier {
     _taskSequence = _nextTaskSequence();
     _noteSequence = _nextNoteSequence();
     _folderSequence = _nextFolderSequence();
-    _habitSequence = _nextHabitSequence();
     _restoredFromDisk = true;
     if ((_selectedTaskId == null ||
             _tasks.every((task) => task.id != _selectedTaskId)) &&
@@ -1620,7 +1569,6 @@ class WorkspaceController extends ChangeNotifier {
         ? List.from(_defaultLists())
         : List.from(bundle.lists);
     _folders = List.from(bundle.folders);
-    _habits = bundle.habits.map(HabitItem.fromMigration).toList();
     _tasks = bundle.tasks.map(TaskItem.fromMigration).toList();
     for (final task in _tasks) {
       if (_lists.every((list) => list.name != task.listName)) {
@@ -1647,7 +1595,6 @@ class WorkspaceController extends ChangeNotifier {
     _taskSequence = _nextTaskSequence();
     _noteSequence = _nextNoteSequence();
     _folderSequence = _nextFolderSequence();
-    _habitSequence = _nextHabitSequence();
     _restoredFromDisk = true;
     _setSelectedTaskId(null);
     _selectedListName = null;
@@ -1725,162 +1672,6 @@ class WorkspaceController extends ChangeNotifier {
       includeCompleted: includeCompleted,
       now: now,
     );
-  }
-
-  /// Returns the active tasks used by the board projection. The grouping is
-  /// intentionally a view concern; the task model remains unchanged.
-  List<TaskItem> boardTasks({bool includeCompleted = false}) {
-    return List.unmodifiable(_tasks.where((task) =>
-        task.deletedAt == null &&
-        !task.isSkipped &&
-        (_selectedListName == null || task.listName == _selectedListName) &&
-        (includeCompleted || !task.completed)));
-  }
-
-  String boardColumnFor(TaskItem task, BoardGroupBy grouping) {
-    if (grouping == BoardGroupBy.priority) return task.priority.name;
-    final due = localDateTimeFromStorage(task.dueAt);
-    if (due == null) return 'unscheduled';
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final monday = today.subtract(Duration(days: today.weekday - 1));
-    final nextMonday = monday.add(const Duration(days: 7));
-    final day = DateTime(due.year, due.month, due.day);
-    // Keep overdue work visible in the first column: a kanban should not hide
-    // tasks merely because their date crossed the current week's boundary.
-    if (day.isBefore(nextMonday)) return 'thisWeek';
-    if (day.isBefore(nextMonday.add(const Duration(days: 7))) &&
-        !day.isBefore(nextMonday)) return 'nextWeek';
-    return 'later';
-  }
-
-  /// Maps a board drop back to the minimal task field change. Priority drops
-  /// preserve dates; date drops preserve the existing clock time.
-  void moveTaskToBoardColumn(String id, BoardGroupBy grouping, String column) {
-    final task = _tasks.where((item) => item.id == id).firstOrNull;
-    if (task == null ||
-        task.deletedAt != null ||
-        task.isSkipped ||
-        task.isConverted) return;
-    if (grouping == BoardGroupBy.priority) {
-      final priority = TaskPriority.values
-          .where((value) => value.name == column)
-          .firstOrNull;
-      if (priority != null) taskActions.setPriority(id, priority);
-      return;
-    }
-    if (column == 'unscheduled') {
-      taskActions.clearSchedule(id);
-      return;
-    }
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final monday = today.subtract(Duration(days: today.weekday - 1));
-    final nextMonday = monday.add(const Duration(days: 7));
-    final existing = localDateTimeFromStorage(task.dueAt);
-    final clockHour = existing?.hour ?? 0;
-    final clockMinute = existing?.minute ?? 0;
-    DateTime target;
-    switch (column) {
-      case 'thisWeek':
-        target = DateTime(
-            today.year, today.month, today.day, clockHour, clockMinute);
-      case 'nextWeek':
-        target = nextMonday;
-        target = DateTime(
-            target.year, target.month, target.day, clockHour, clockMinute);
-      case 'later':
-        target = nextMonday.add(const Duration(days: 7));
-        target = DateTime(
-            target.year, target.month, target.day, clockHour, clockMinute);
-      default:
-        return;
-    }
-    taskActions.setSchedule(
-        id, TaskScheduleDraft(dueAt: target, hasTime: task.scheduledWithTime));
-  }
-
-  // -------------------------------------------------------------------------
-  // Local habits. Records are local calendar keys and are persisted with the
-  // same snapshot as tasks and notes.
-  // -------------------------------------------------------------------------
-
-  HabitItem? habitById(String id) =>
-      _habits.where((habit) => habit.id == id).firstOrNull;
-
-  int habitStreak(String id, {DateTime? from}) =>
-      habitById(id)?.streak(from: from) ?? 0;
-
-  bool isHabitComplete(String id, DateTime day) =>
-      habitById(id)?.isCompletedOn(day) ?? false;
-
-  bool toggleHabit(String id, {DateTime? day}) {
-    final index = _habits.indexWhere((habit) => habit.id == id);
-    if (index < 0) return false;
-    final date = habitDateKey(day ?? DateTime.now());
-    final records = Set<String>.from(_habits[index].records);
-    if (!records.add(date)) records.remove(date);
-    final now = DateTime.now().toIso8601String();
-    _habits[index] = _habits[index].copyWith(
-      records: Set.unmodifiable(records),
-      updatedAt: now,
-    );
-    _schedulePersist();
-    _notify();
-    return true;
-  }
-
-  String? addHabit(String rawName,
-      {String icon = 'check', String? color, Set<int>? schedule}) {
-    final name = rawName.trim();
-    if (name.isEmpty || _habits.any((habit) => habit.name == name)) return null;
-    final now = DateTime.now().toIso8601String();
-    final id = 'habit-${_habitSequence.toString().padLeft(2, '0')}';
-    _habitSequence += 1;
-    final habit = HabitItem(
-      id: id,
-      name: name,
-      icon: icon,
-      color: color,
-      schedule: Set.unmodifiable(schedule ?? {1, 2, 3, 4, 5, 6, 7}),
-      createdAt: now,
-      updatedAt: now,
-    );
-    _habits = [..._habits, habit];
-    _schedulePersist();
-    _notify();
-    return id;
-  }
-
-  bool updateHabit(String id,
-      {String? name, String? icon, String? color, Set<int>? schedule}) {
-    final index = _habits.indexWhere((habit) => habit.id == id);
-    if (index < 0) return false;
-    final nextName = name?.trim();
-    if (nextName != null &&
-        (nextName.isEmpty ||
-            _habits.any((habit) => habit.id != id && habit.name == nextName))) {
-      return false;
-    }
-    _habits[index] = _habits[index].copyWith(
-      name: nextName,
-      icon: icon,
-      color: color,
-      schedule: schedule == null ? null : Set.unmodifiable(schedule),
-      updatedAt: DateTime.now().toIso8601String(),
-    );
-    _schedulePersist();
-    _notify();
-    return true;
-  }
-
-  bool removeHabit(String id) {
-    final index = _habits.indexWhere((habit) => habit.id == id);
-    if (index < 0) return false;
-    _habits = [..._habits]..removeAt(index);
-    _schedulePersist();
-    _notify();
-    return true;
   }
 
   /// Adds one completed focus session to a task. A null task keeps the timer
@@ -1990,8 +1781,8 @@ class WorkspaceController extends ChangeNotifier {
       listName: listName,
       schedule: schedule,
       scheduleOverridden: scheduleOverridden,
-      fallbackSchedule: quadrant.defaultSchedule(
-          DateTime(now.year, now.month, now.day)),
+      fallbackSchedule:
+          quadrant.defaultSchedule(DateTime(now.year, now.month, now.day)),
       reminderAt: reminderAt,
       recurrence: recurrence,
       priority: priority ?? quadrant.defaultPriority,
@@ -2045,6 +1836,26 @@ class WorkspaceController extends ChangeNotifier {
     return taskProjection.forDay(_tasks, day);
   }
 
+  /// The tasks one month cell draws for itself: the ones that begin on [day]
+  /// and end there.
+  ///
+  /// Not [tasksForDay], which is the reading every other surface uses. The
+  /// month draws a task that covers several days as a band spanning those
+  /// days, and drawing it again in the cell it starts in would show it twice.
+  List<TaskItem> singleDayTasksForDay(DateTime day) {
+    return taskProjection.singleDayForDay(_tasks, day);
+  }
+
+  /// The multi-day tasks whose range touches `first .. last`, in the order a
+  /// week row should place them.
+  List<TaskItem> multiDayTasksWithin(DateTime first, DateTime last) {
+    return taskProjection.multiDayWithin(_tasks, first, last);
+  }
+
+  /// Whether [task] covers more than the day it begins on.
+  bool spansMultipleDays(TaskItem task) =>
+      taskProjection.spansMultipleDays(task);
+
   int countFor(WorkspaceView destination) {
     return taskProjection.count(
         tasks: _tasks, view: destination, reference: _dateReference);
@@ -2075,18 +1886,6 @@ class WorkspaceController extends ChangeNotifier {
     if (_view == WorkspaceView.all && _selectedListName == name) return;
     _view = WorkspaceView.all;
     _selectedListName = name;
-    _selectedTagName = null;
-    taskSelection.clearMulti();
-    _syncLegacySelection();
-    _setSelectedTaskId(null);
-    _notify();
-  }
-
-  void selectBoard({String? listName}) {
-    final name = listName?.trim();
-    if (_view == WorkspaceView.board && _selectedListName == name) return;
-    _view = WorkspaceView.board;
-    _selectedListName = name == null || name.isEmpty ? null : name;
     _selectedTagName = null;
     taskSelection.clearMulti();
     _syncLegacySelection();
@@ -3830,7 +3629,6 @@ class WorkspaceController extends ChangeNotifier {
   void _applyBundle(MigrationBundle bundle) {
     _lists = List<MigrationListRecord>.from(bundle.lists);
     _folders = List<MigrationFolderRecord>.from(bundle.folders);
-    _habits = bundle.habits.map(HabitItem.fromMigration).toList();
     _tasks = bundle.tasks.map(TaskItem.fromMigration).toList();
     _notes = bundle.notes
         .asMap()
@@ -3844,7 +3642,6 @@ class WorkspaceController extends ChangeNotifier {
     _taskSequence = _nextTaskSequence();
     _noteSequence = _nextNoteSequence();
     _folderSequence = _nextFolderSequence();
-    _habitSequence = _nextHabitSequence();
     _setSelectedTaskId(null);
     _selectedListName = null;
     _selectedTagName = null;
@@ -3868,7 +3665,6 @@ class WorkspaceController extends ChangeNotifier {
       folders: List.unmodifiable(_folders),
       tasks: _tasks.map((task) => task.toMigrationRecord()).toList(),
       notes: _notes.map((note) => note.toMigrationRecord()).toList(),
-      habits: _habits.map((habit) => habit.toMigrationRecord()).toList(),
     );
   }
 
@@ -3979,18 +3775,6 @@ class WorkspaceController extends ChangeNotifier {
     return merged;
   }
 
-  List<HabitItem> _mergeHabits(
-      List<MigrationHabitRecord> incoming, List<HabitItem> existing) {
-    final merged = List<HabitItem>.from(existing);
-    final ids = merged.map((habit) => habit.id).toSet();
-    final names = merged.map((habit) => habit.name).toSet();
-    for (final record in incoming) {
-      if (!ids.add(record.id) || !names.add(record.name)) continue;
-      merged.add(HabitItem.fromMigration(record));
-    }
-    return merged;
-  }
-
   int _nextTaskSequence() {
     var highest = 0;
     final pattern = RegExp(r'task-(\d+)$');
@@ -4018,17 +3802,6 @@ class WorkspaceController extends ChangeNotifier {
     final pattern = RegExp(r'folder-(?:local-)?(\d+)$');
     for (final folder in _folders) {
       final match = pattern.firstMatch(folder.id);
-      final value = match == null ? 0 : int.tryParse(match.group(1)!) ?? 0;
-      if (value > highest) highest = value;
-    }
-    return highest + 1;
-  }
-
-  int _nextHabitSequence() {
-    var highest = 0;
-    final pattern = RegExp(r'habit-(\d+)$');
-    for (final habit in _habits) {
-      final match = pattern.firstMatch(habit.id);
       final value = match == null ? 0 : int.tryParse(match.group(1)!) ?? 0;
       if (value > highest) highest = value;
     }

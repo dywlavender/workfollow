@@ -8,7 +8,6 @@ import 'package:workfollow_personal/features/tasks/domain/task_schedule.dart';
 import 'package:workfollow_personal/models/task.dart';
 import 'package:workfollow_personal/models/migration.dart';
 import 'package:workfollow_personal/models/rich_document.dart';
-import 'package:workfollow_personal/services/stats_aggregator.dart';
 import 'package:workfollow_personal/services/local_workspace_store.dart';
 import 'package:workfollow_personal/services/notification_service.dart';
 import 'package:workfollow_personal/state/workspace_controller.dart';
@@ -63,8 +62,6 @@ void main() {
     expect(c.tasks, hasLength(1), reason: '放弃不会生成下一周期');
     c.selectView(WorkspaceView.completed);
     expect(c.visibleTasks.single.id, id);
-    expect(StatsAggregator.aggregate(c.tasks).totalCompleted, 0);
-    expect(StatsAggregator.aggregate(c.tasks).active, 0);
     await c.waitForPendingSaves();
     final reopened = WorkspaceController(seedData: false, store: store);
     addTearDown(reopened.dispose);

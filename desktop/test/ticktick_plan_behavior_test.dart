@@ -1,6 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:workfollow_personal/models/habit.dart';
 import 'package:workfollow_personal/models/task.dart';
 import 'package:workfollow_personal/state/workspace_controller.dart';
 
@@ -85,52 +84,8 @@ void main() {
     controller.dispose();
   });
 
-  test('board grouping and drops project back to task fields', () {
+  test('focus sessions accumulate on the task and in the snapshot', () {
     final controller = WorkspaceController(seedData: false);
-    controller.addTask('准备评审', listName: '工作');
-    final id = controller.tasks.single.id;
-    controller.updateTaskPriority(id, TaskPriority.high);
-    expect(
-        controller.boardColumnFor(
-            controller.tasks.single, BoardGroupBy.priority),
-        'high');
-
-    controller.selectBoard(listName: '工作');
-    expect(controller.view, WorkspaceView.board);
-    expect(controller.viewTitle, '看板 · 工作');
-    expect(controller.boardTasks(), hasLength(1));
-
-    controller.moveTaskToBoardColumn(id, BoardGroupBy.priority, 'medium');
-    expect(controller.tasks.single.priority, TaskPriority.medium);
-
-    controller.moveTaskToBoardColumn(id, BoardGroupBy.date, 'unscheduled');
-    expect(controller.tasks.single.dueAt, isNull);
-    expect(
-        controller.boardColumnFor(controller.tasks.single, BoardGroupBy.date),
-        'unscheduled');
-    controller.moveTaskToBoardColumn(id, BoardGroupBy.date, 'nextWeek');
-    final nextWeek = localDateTimeFromStorage(controller.tasks.single.dueAt)!;
-    expect(nextWeek.weekday, DateTime.monday);
-    expect(
-        controller.boardColumnFor(controller.tasks.single, BoardGroupBy.date),
-        'nextWeek');
-    controller.dispose();
-  });
-
-  test('habits keep local date records, streaks and focus counts', () {
-    final controller = WorkspaceController(seedData: false);
-    final habitId = controller.addHabit('晨跑',
-        icon: 'activity',
-        color: '#22AA66',
-        schedule: const {1, 2, 3, 4, 5, 6, 7})!;
-    expect(habitId, 'habit-01');
-    final today = DateTime.now();
-    expect(controller.toggleHabit(habitId, day: today), isTrue);
-    expect(controller.isHabitComplete(habitId, today), isTrue);
-    expect(controller.habitStreak(habitId, from: today), 1);
-    expect(controller.snapshot.habits.single.records,
-        contains(habitDateKey(today)));
-
     controller.addTask('专注写作');
     final taskId = controller.tasks.single.id;
     controller.recordFocusSession(taskId);
