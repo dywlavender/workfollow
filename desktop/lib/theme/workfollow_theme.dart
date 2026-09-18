@@ -393,17 +393,20 @@ class MatrixMetrics {
 /// Geometry of the two surfaces a page opens *over* itself: the floating task
 /// editor and the compact new-task composer.
 ///
-/// Both are shared — the Matrix, Calendar and Board pages all open the same
-/// editor on a task and the same composer to create one — so their sizes live
-/// beside [WorkFollowMetrics] rather than inside a single page's block. The
-/// sizes are the surface's, not the page's: the same 680pt editor has to look
-/// the same wherever it is anchored.
+/// Both are shared — the Matrix, Calendar pages open the same editor on a task
+/// and the same composer to create one — so their sizes live beside
+/// [WorkFollowMetrics] rather than inside a single page's block. The sizes are
+/// the surface's, not the page's: the same 400pt editor has to look the same
+/// wherever it is anchored.
 class TaskSurfaceMetrics {
   const TaskSurfaceMetrics._();
 
-  static const double editorWidth = 680;
-  static const double editorMinHeight = 420;
-  static const double editorMaxHeight = 620;
+  /// Measured off the reference popup this surface imitates: 400 × 356, a
+  /// card that holds a title and a few lines without reading as a page.
+  /// Longer documents scroll inside it rather than growing it.
+  static const double editorWidth = 400;
+  static const double editorMinHeight = 356;
+  static const double editorMaxHeight = 356;
   static const double editorViewportMargin = 48;
 
   static const double composerWidth = 320;
