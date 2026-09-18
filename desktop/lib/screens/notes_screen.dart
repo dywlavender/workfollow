@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../features/editor/document_keys.dart';
-import '../features/editor/document_styles.dart';
+import '../features/editor/presentation/document_title_editor.dart';
 import '../models/task.dart';
 import '../state/workspace_controller.dart';
 import '../theme/workfollow_icons.dart';
@@ -33,7 +33,8 @@ class _NotesScreenState extends State<NotesScreen> {
   static const double _compactNotesListWidth = NotesMetrics.compactListWidth;
   static const double _notesHeaderHeight = NotesMetrics.headerHeight;
   static const double _notesSearchHeight = NotesMetrics.searchHeight;
-  static const double _editorContentMaxWidth = NotesMetrics.editorContentMaxWidth;
+  static const double _editorContentMaxWidth =
+      NotesMetrics.editorContentMaxWidth;
 
   String query = '';
   bool newestFirst = true;
@@ -102,7 +103,11 @@ class _NotesScreenState extends State<NotesScreen> {
       final narrow = constraints.maxWidth < 760;
       final list = Container(
           color: tokens.content,
-          padding: const EdgeInsets.fromLTRB(WorkFollowSpacing.cardInset, WorkFollowSpacing.zero, WorkFollowSpacing.cardInset, WorkFollowSpacing.sectionGap),
+          padding: const EdgeInsets.fromLTRB(
+              WorkFollowSpacing.cardInset,
+              WorkFollowSpacing.zero,
+              WorkFollowSpacing.cardInset,
+              WorkFollowSpacing.sectionGap),
           child:
               Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
             // One header line: what this pane is and the one action that
@@ -133,7 +138,8 @@ class _NotesScreenState extends State<NotesScreen> {
                 const SizedBox(width: WorkFollowSpacing.space1),
                 _NoteSortButton(
                     newestFirst: newestFirst,
-                    onPressed: () => setState(() => newestFirst = !newestFirst)),
+                    onPressed: () =>
+                        setState(() => newestFirst = !newestFirst)),
               ]),
             ),
             const SizedBox(height: WorkFollowSpacing.space2),
@@ -142,15 +148,19 @@ class _NotesScreenState extends State<NotesScreen> {
                     ? Center(
                         child: Text(query.isEmpty ? '从一条新笔记开始' : '没有找到相关笔记',
                             style: TextStyle(
-                                fontSize: WorkFollowMacTypography.supporting, color: tokens.textTertiary)))
+                                fontSize: WorkFollowMacTypography.supporting,
+                                color: tokens.textTertiary)))
                     : ListView.builder(
-                        padding: const EdgeInsets.only(top: WorkFollowSpacing.microGap, bottom: WorkFollowSpacing.space2),
+                        padding: const EdgeInsets.only(
+                            top: WorkFollowSpacing.microGap,
+                            bottom: WorkFollowSpacing.space2),
                         itemCount: notes.length,
                         itemBuilder: (context, index) {
                           final note = notes[index],
                               isSelected = selected?.id == notes[index].id;
-                          final next =
-                              index + 1 < notes.length ? notes[index + 1] : null;
+                          final next = index + 1 < notes.length
+                              ? notes[index + 1]
+                              : null;
                           return _NoteRow(
                             note: note,
                             selected: isSelected,
@@ -309,7 +319,8 @@ class _NoteSortButton extends StatelessWidget {
             key: const ValueKey('notes-sort-toggle'),
             onPressed: onPressed,
             icon: AppIcon(WorkFollowIcons.sort,
-                size: WorkFollowMetrics.toolbarIcon, color: tokens.textTertiary)));
+                size: WorkFollowMetrics.toolbarIcon,
+                color: tokens.textTertiary)));
   }
 }
 
@@ -387,8 +398,8 @@ class _NoteRowState extends State<_NoteRow> {
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
                                         style: TextStyle(
-                                            fontSize:
-                                                WorkFollowMacTypography.listTitle,
+                                            fontSize: WorkFollowMacTypography
+                                                .listTitle,
                                             fontWeight:
                                                 WorkFollowMacWeight.semibold,
                                             color: tokens.textPrimary))),
@@ -417,16 +428,16 @@ class _NoteRowState extends State<_NoteRow> {
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
                                       style: TextStyle(
-                                          fontSize: WorkFollowMacTypography
-                                              .listMeta,
+                                          fontSize:
+                                              WorkFollowMacTypography.listMeta,
                                           color: tokens.textTertiary)),
                                   const SizedBox(
                                       height: WorkFollowSpacing.space1),
                                   Text(noteUpdatedLabelFor(note.updatedAt),
                                       maxLines: 1,
                                       style: TextStyle(
-                                          fontSize: WorkFollowMacTypography
-                                              .listMeta,
+                                          fontSize:
+                                              WorkFollowMacTypography.listMeta,
                                           color: tokens.textTertiary)),
                                 ])),
                       ])),
@@ -466,7 +477,9 @@ class _EmptyNote extends StatelessWidget {
                   color: tokens.textPrimary)),
           const SizedBox(height: WorkFollowSpacing.space2),
           Text('写下笔记，把下一步变成任务。',
-              style: TextStyle(fontSize: WorkFollowMacTypography.supporting, color: tokens.textTertiary)),
+              style: TextStyle(
+                  fontSize: WorkFollowMacTypography.supporting,
+                  color: tokens.textTertiary)),
           const SizedBox(height: WorkFollowSpacing.headingGap),
           FilledButton.icon(
               onPressed: onCreate,
@@ -598,80 +611,111 @@ class _NotePageState extends State<_NotePage> {
                           onTap: () => documentKey.currentState?.focusEnd(),
                           child: Center(
                               child: ConstrainedBox(
-            constraints: BoxConstraints(
-                maxWidth: _NotesScreenState._editorContentMaxWidth,
-                minHeight: viewport.maxHeight),
-            child: Padding(
-                padding: const EdgeInsets.fromLTRB(WorkFollowSpacing.space7, WorkFollowSpacing.relaxedGap, WorkFollowSpacing.space7, WorkFollowSpacing.editorBottomPadding),
-                child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      TextField(
-                          key: const ValueKey('note-title-editor'),
-                          controller: title,
-                          focusNode: titleFocus,
-                          autofocus: note.title == '未命名笔记',
-                          minLines: 1,
-                          maxLines: 3,
-                          style: DocumentStyles.title(tokens,
-                              fontSize: WorkFollowMacTypography.noteTitle),
-                          decoration: DocumentStyles.titleDecoration('笔记标题'),
-                          onChanged: (value) => widget.controller
-                              .updateNoteTitle(note.id, value)),
-                      const SizedBox(height: WorkFollowSpacing.space3),
-                      // The page's timestamp carries the clock. "最近编辑于" is
-                      // a sentence explaining what a timestamp is; the position
-                      // under the title already says it.
-                      Text(noteUpdatedStampFor(note.updatedAt),
-                          style: TextStyle(
-                              fontSize: WorkFollowMacTypography.listMeta,
-                              color: tokens.textTertiary)),
-                      const SizedBox(height: WorkFollowSpacing.space5),
-                      Container(
-                          height: WorkFollowMetrics.dividerThickness,
-                          color: tokens.border),
-                      const SizedBox(height: WorkFollowSpacing.space5),
-                      NoteDocumentEditor(
-                          key: ValueKey('document-${note.id}'),
-                          editorKey: documentKey,
-                          onToolbarChanged: (visible) {
-                            if (mounted) {
-                              setState(() => formatToolbarVisible = visible);
-                            }
-                          },
-                          note: note,
-                          controller: widget.controller),
-                      if (linked.isNotEmpty) ...[
-                        const SizedBox(height: WorkFollowSpacing.emptyStateGap),
-                        Row(children: [
-                          Text('关联任务',
-                              style: TextStyle(
-                                  fontSize: WorkFollowMacTypography.control,
-                                  fontWeight: WorkFollowMacWeight.semibold,
-                                  color: tokens.textSecondary)),
-                          const SizedBox(width: WorkFollowSpacing.inlineGap),
-                          Text('${linked.length}',
-                              style: TextStyle(
-                                  fontSize: WorkFollowMacTypography.listMeta,
-                                  color: tokens.textTertiary)),
-                        ]),
-                        const SizedBox(height: WorkFollowSpacing.space2),
-                        for (final task in linked)
-                          Padding(
-                              padding: const EdgeInsets.only(bottom: WorkFollowSpacing.inlineGap),
-                              child: _LinkedTaskRow(
-                                  key: ValueKey('note-linked-task-${task.id}'),
-                                  task: task,
-                                  onToggle: () => task.completed
-                                      ? widget.controller.taskActions
-                                          .restore(task.id)
-                                      : widget.controller.taskActions
-                                          .complete(task.id),
-                                  onOpen: () =>
-                                      widget.controller.openTask(task.id))),
-                      ],
-                    ])),
-          )))))),
+                            constraints: BoxConstraints(
+                                maxWidth:
+                                    _NotesScreenState._editorContentMaxWidth,
+                                minHeight: viewport.maxHeight),
+                            child: Padding(
+                                padding: const EdgeInsets.fromLTRB(
+                                    WorkFollowSpacing.space7,
+                                    WorkFollowSpacing.relaxedGap,
+                                    WorkFollowSpacing.space7,
+                                    WorkFollowSpacing.editorBottomPadding),
+                                child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.stretch,
+                                    children: [
+                                      DocumentTitleEditor(
+                                        fieldKey:
+                                            const ValueKey('note-title-editor'),
+                                        controller: title,
+                                        focusNode: titleFocus,
+                                        autofocus: note.title == '未命名笔记',
+                                        maxLines: 3,
+                                        fontSize:
+                                            WorkFollowMacTypography.noteTitle,
+                                        placeholder: '笔记标题',
+                                        onChanged: (value) => widget.controller
+                                            .updateNoteTitle(note.id, value),
+                                      ),
+                                      const SizedBox(
+                                          height: WorkFollowSpacing.space3),
+                                      // The page's timestamp carries the clock. "最近编辑于" is
+                                      // a sentence explaining what a timestamp is; the position
+                                      // under the title already says it.
+                                      Text(noteUpdatedStampFor(note.updatedAt),
+                                          style: TextStyle(
+                                              fontSize: WorkFollowMacTypography
+                                                  .listMeta,
+                                              color: tokens.textTertiary)),
+                                      const SizedBox(
+                                          height: WorkFollowSpacing.space5),
+                                      Container(
+                                          height: WorkFollowMetrics
+                                              .dividerThickness,
+                                          color: tokens.border),
+                                      const SizedBox(
+                                          height: WorkFollowSpacing.space5),
+                                      NoteDocumentEditor(
+                                          key: ValueKey('document-${note.id}'),
+                                          editorKey: documentKey,
+                                          onToolbarChanged: (visible) {
+                                            if (mounted) {
+                                              setState(() =>
+                                                  formatToolbarVisible =
+                                                      visible);
+                                            }
+                                          },
+                                          note: note,
+                                          controller: widget.controller),
+                                      if (linked.isNotEmpty) ...[
+                                        const SizedBox(
+                                            height: WorkFollowSpacing
+                                                .emptyStateGap),
+                                        Row(children: [
+                                          Text('关联任务',
+                                              style: TextStyle(
+                                                  fontSize:
+                                                      WorkFollowMacTypography
+                                                          .control,
+                                                  fontWeight:
+                                                      WorkFollowMacWeight
+                                                          .semibold,
+                                                  color: tokens.textSecondary)),
+                                          const SizedBox(
+                                              width:
+                                                  WorkFollowSpacing.inlineGap),
+                                          Text('${linked.length}',
+                                              style: TextStyle(
+                                                  fontSize:
+                                                      WorkFollowMacTypography
+                                                          .listMeta,
+                                                  color: tokens.textTertiary)),
+                                        ]),
+                                        const SizedBox(
+                                            height: WorkFollowSpacing.space2),
+                                        for (final task in linked)
+                                          Padding(
+                                              padding: const EdgeInsets.only(
+                                                  bottom: WorkFollowSpacing
+                                                      .inlineGap),
+                                              child: _LinkedTaskRow(
+                                                  key: ValueKey(
+                                                      'note-linked-task-${task.id}'),
+                                                  task: task,
+                                                  onToggle: () => task.completed
+                                                      ? widget.controller
+                                                          .taskActions
+                                                          .restore(task.id)
+                                                      : widget.controller
+                                                          .taskActions
+                                                          .complete(task.id),
+                                                  onOpen: () => widget
+                                                      .controller
+                                                      .openTask(task.id))),
+                                      ],
+                                    ])),
+                          )))))),
           SaveStatusFooter(
               controller: widget.controller,
               trailing: '$wordCount 字',
@@ -726,9 +770,8 @@ class _NoteFolderLinkState extends State<_NoteFolderLink> {
                         horizontal: WorkFollowSpacing.space2,
                         vertical: WorkFollowSpacing.space1),
                     decoration: BoxDecoration(
-                        color: hovering
-                            ? tokens.listRowHover
-                            : Colors.transparent,
+                        color:
+                            hovering ? tokens.listRowHover : Colors.transparent,
                         borderRadius:
                             BorderRadius.circular(WorkFollowRadii.sm)),
                     child: Row(mainAxisSize: MainAxisSize.min, children: [
@@ -767,7 +810,11 @@ class _LinkedTaskRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final tokens = WorkFollowTheme.of(context);
     return Container(
-        padding: const EdgeInsets.fromLTRB(WorkFollowSpacing.cardInset, WorkFollowSpacing.denseGap, WorkFollowSpacing.cardInset, WorkFollowSpacing.denseGap),
+        padding: const EdgeInsets.fromLTRB(
+            WorkFollowSpacing.cardInset,
+            WorkFollowSpacing.denseGap,
+            WorkFollowSpacing.cardInset,
+            WorkFollowSpacing.denseGap),
         decoration: BoxDecoration(
             color: tokens.accent.withValues(alpha: .06),
             borderRadius: BorderRadius.circular(WorkFollowRadii.surface),
@@ -787,7 +834,8 @@ class _LinkedTaskRow extends StatelessWidget {
                   borderRadius: BorderRadius.circular(WorkFollowRadii.control),
                   onTap: onOpen,
                   child: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: WorkFollowSpacing.denseGap),
+                      padding: const EdgeInsets.symmetric(
+                          vertical: WorkFollowSpacing.denseGap),
                       child: Text(task.title,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,

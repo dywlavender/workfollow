@@ -22,6 +22,7 @@ import 'task_tag_picker.dart';
 import '../features/editor/document_keys.dart';
 import 'task_document_editor.dart';
 import '../features/editor/document_editor_viewport.dart';
+import '../features/editor/presentation/document_title_editor.dart';
 import 'task_more_menu.dart';
 import 'task_menu_actions.dart';
 
@@ -72,8 +73,7 @@ class _TaskInspectorState extends State<TaskInspector> {
   late int focusVersion;
   bool listOpen = false, dateOpen = false, moreOpen = false;
 
-  bool get _isInline =>
-      widget.presentation == TaskInspectorPresentation.inline;
+  bool get _isInline => widget.presentation == TaskInspectorPresentation.inline;
 
   bool get _isPopup => widget.presentation == TaskInspectorPresentation.popup;
 
@@ -330,9 +330,11 @@ class _TaskInspectorState extends State<TaskInspector> {
   Widget _header(BuildContext context, TaskItem task, WorkFollowTheme tokens) {
     return Container(
       key: const ValueKey('task-inspector-header'),
-      constraints: const BoxConstraints(
-          minHeight: TaskInspectorMetrics.headerMinHeight),
-      padding: const EdgeInsets.symmetric(horizontal: WorkFollowSpacing.space5, vertical: WorkFollowSpacing.cardInset),
+      constraints:
+          const BoxConstraints(minHeight: TaskInspectorMetrics.headerMinHeight),
+      padding: const EdgeInsets.symmetric(
+          horizontal: WorkFollowSpacing.space5,
+          vertical: WorkFollowSpacing.cardInset),
       decoration: _isInline
           ? null
           : BoxDecoration(
@@ -429,7 +431,8 @@ class _TaskInspectorState extends State<TaskInspector> {
   Widget _headerDivider(WorkFollowTheme tokens) => Container(
         width: TaskInspectorMetrics.headerDividerWidth,
         height: TaskInspectorMetrics.headerDividerHeight,
-        margin: const EdgeInsets.symmetric(horizontal: WorkFollowSpacing.compactGap),
+        margin: const EdgeInsets.symmetric(
+            horizontal: WorkFollowSpacing.compactGap),
         color: tokens.border,
       );
 
@@ -456,7 +459,8 @@ class _TaskInspectorState extends State<TaskInspector> {
             textStyle: const TextStyle(
                 fontSize: WorkFollowMacTypography.control,
                 fontWeight: WorkFollowMacWeight.medium),
-            padding: const EdgeInsets.symmetric(horizontal: WorkFollowSpacing.inlineGap)),
+            padding: const EdgeInsets.symmetric(
+                horizontal: WorkFollowSpacing.inlineGap)),
       ),
     );
   }
@@ -464,9 +468,13 @@ class _TaskInspectorState extends State<TaskInspector> {
   Widget _footer(BuildContext context, TaskItem task, WorkFollowTheme tokens) {
     return Container(
       key: const ValueKey('task-inspector-footer'),
-      constraints: const BoxConstraints(
-          minHeight: TaskInspectorMetrics.footerMinHeight),
-      padding: const EdgeInsets.fromLTRB(WorkFollowSpacing.space5, WorkFollowSpacing.space2, WorkFollowSpacing.space5, WorkFollowSpacing.compactInset),
+      constraints:
+          const BoxConstraints(minHeight: TaskInspectorMetrics.footerMinHeight),
+      padding: const EdgeInsets.fromLTRB(
+          WorkFollowSpacing.space5,
+          WorkFollowSpacing.space2,
+          WorkFollowSpacing.space5,
+          WorkFollowSpacing.compactInset),
       decoration:
           BoxDecoration(border: Border(top: BorderSide(color: tokens.border))),
       child: Row(children: [
@@ -477,15 +485,13 @@ class _TaskInspectorState extends State<TaskInspector> {
                     builder: (anchor) => TextButton.icon(
                         key: const ValueKey('task-list-footer'),
                         onPressed: () => _list(anchor),
-                        icon: AppIcon(
-                            task.listName == '收集箱'
-                                ? WorkFollowIcons.inbox
-                                : WorkFollowIcons.list,
+                        icon: AppIcon(task.listName == '收集箱' ? WorkFollowIcons.inbox : WorkFollowIcons.list,
                             size: WorkFollowMetrics.compactFieldIcon,
                             color: tokens.textSecondary),
                         label: ConstrainedBox(
                             constraints: const BoxConstraints(
-                                maxWidth: TaskInspectorMetrics.listLabelMaxWidth),
+                                maxWidth:
+                                    TaskInspectorMetrics.listLabelMaxWidth),
                             child: Text(task.listName,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
@@ -494,13 +500,15 @@ class _TaskInspectorState extends State<TaskInspector> {
                                     fontSize: WorkFollowMacTypography.control,
                                     height: WorkFollowMacTypography.lineControl,
                                     fontWeight: WorkFollowMacWeight.medium,
-                                    letterSpacing: WorkFollowMacTracking.none))),
+                                    letterSpacing:
+                                        WorkFollowMacTracking.none))),
                         style: TextButton.styleFrom(
                             backgroundColor:
                                 listOpen ? tokens.canvas : Colors.transparent,
-                            padding: const EdgeInsets.symmetric(horizontal: WorkFollowSpacing.inlineGap),
-                            minimumSize: const Size(
-                                0, WorkFollowMetrics.compactButtonHeight),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: WorkFollowSpacing.inlineGap),
+                            minimumSize:
+                                const Size(0, WorkFollowMetrics.compactButtonHeight),
                             tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                             visualDensity: VisualDensity.compact))))),
         _saveIndicator(tokens),
@@ -532,8 +540,7 @@ class _TaskInspectorState extends State<TaskInspector> {
     );
   }
 
-  Widget _editorBody(TaskItem task, WorkFollowTheme tokens,
-      {double minHeight = 0}) {
+  Widget _editorBody(TaskItem task, {double minHeight = 0}) {
     final horizontalPadding = _isInline
         ? WorkFollowSpacing.inspectorInlineHorizontalPadding
         : WorkFollowSpacing.inspectorContentHorizontalPadding;
@@ -541,29 +548,24 @@ class _TaskInspectorState extends State<TaskInspector> {
         ? WorkFollowSpacing.inspectorInlineTopPadding
         : WorkFollowSpacing.inspectorContentTopPadding;
     return Padding(
-      padding: EdgeInsets.fromLTRB(
-          horizontalPadding,
-          topPadding,
-          horizontalPadding,
-          WorkFollowSpacing.inspectorContentBottomPadding),
+      padding: EdgeInsets.fromLTRB(horizontalPadding, topPadding,
+          horizontalPadding, WorkFollowSpacing.inspectorContentBottomPadding),
       child: DocumentEditorViewport(
         minHeight: (minHeight -
                 topPadding -
                 WorkFollowSpacing.inspectorContentBottomPadding)
             .clamp(0, double.infinity),
-        title: TextField(
-            key: const ValueKey('task-title-editor'),
-            controller: title,
-            focusNode: titleFocus,
-            minLines: 1,
-            maxLines: 2,
-            style: DocumentStyles.title(tokens,
-                fontSize: WorkFollowMacTypography.detailTitle,
-                muted: task.completed,
-                strikethrough: task.completed),
-            decoration: DocumentStyles.titleDecoration('任务标题'),
-            onChanged: (value) =>
-                widget.controller.taskActions.setTitle(task.id, value)),
+        title: DocumentTitleEditor(
+          fieldKey: const ValueKey('task-title-editor'),
+          controller: title,
+          focusNode: titleFocus,
+          placeholder: '任务标题',
+          fontSize: WorkFollowMacTypography.detailTitle,
+          muted: task.completed,
+          strikethrough: task.completed,
+          onChanged: (value) =>
+              widget.controller.taskActions.setTitle(task.id, value),
+        ),
         document: TaskDocumentEditor(
           key: documentKey,
           task: task,
@@ -590,7 +592,7 @@ class _TaskInspectorState extends State<TaskInspector> {
         children: [
           _header(context, task, tokens),
           if (_isInline)
-            FocusScope(node: editingScope, child: _editorBody(task, tokens))
+            FocusScope(node: editingScope, child: _editorBody(task))
           else
             Expanded(
               child: FocusScope(
@@ -598,8 +600,7 @@ class _TaskInspectorState extends State<TaskInspector> {
                 child: LayoutBuilder(
                   builder: (context, constraints) => SingleChildScrollView(
                     key: const ValueKey('task-editor-scroll'),
-                    child: _editorBody(task, tokens,
-                        minHeight: constraints.maxHeight),
+                    child: _editorBody(task, minHeight: constraints.maxHeight),
                   ),
                 ),
               ),
@@ -660,7 +661,10 @@ class _TopPropertyButton extends StatelessWidget {
                   letterSpacing: WorkFollowMacTracking.none),
               minimumSize: Size(iconOnly ? WorkFollowMetrics.iconHitTarget : 0,
                   WorkFollowMetrics.iconHitTarget),
-              padding: EdgeInsets.symmetric(horizontal: iconOnly ? WorkFollowSpacing.inlineGap : WorkFollowSpacing.compactInset),
+              padding: EdgeInsets.symmetric(
+                  horizontal: iconOnly
+                      ? WorkFollowSpacing.inlineGap
+                      : WorkFollowSpacing.compactInset),
               tapTargetSize: MaterialTapTargetSize.shrinkWrap,
               visualDensity: VisualDensity.compact,
               shape: RoundedRectangleBorder(
@@ -728,7 +732,11 @@ class _RelationPickerState extends State<_RelationPicker> {
             note.folder.toLowerCase().contains(query))
         .toList(growable: false);
     return Padding(
-      padding: const EdgeInsets.fromLTRB(WorkFollowSpacing.cardInset, WorkFollowSpacing.cardInset, WorkFollowSpacing.cardInset, WorkFollowSpacing.compactGap),
+      padding: const EdgeInsets.fromLTRB(
+          WorkFollowSpacing.cardInset,
+          WorkFollowSpacing.cardInset,
+          WorkFollowSpacing.cardInset,
+          WorkFollowSpacing.compactGap),
       child: Column(mainAxisSize: MainAxisSize.min, children: [
         TextField(
           key: const ValueKey('task-relation-search'),
@@ -774,7 +782,8 @@ class _RelationPickerState extends State<_RelationPicker> {
           ),
         if (notes.isEmpty)
           Padding(
-              padding: const EdgeInsets.symmetric(vertical: WorkFollowSpacing.space4),
+              padding: const EdgeInsets.symmetric(
+                  vertical: WorkFollowSpacing.space4),
               child: Text('没有匹配的笔记',
                   style: TextStyle(
                       fontSize: WorkFollowMacTypography.supporting,
