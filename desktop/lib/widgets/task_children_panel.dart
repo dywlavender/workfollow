@@ -78,6 +78,101 @@ class _TaskChildrenPanelState extends State<TaskChildrenPanel> {
     assert(result.taskId == child.id || !result.success);
   }
 
+  @override
+  Widget build(BuildContext context) {
+    final tokens = WorkFollowTheme.of(context);
+    return AnimatedBuilder(
+        animation: widget.controller,
+        builder: (context, _) {
+          final children = widget.controller.childrenOf(widget.task.id);
+          return Padding(
+              key: const ValueKey('task-children-panel'),
+              padding: const EdgeInsets.only(top: WorkFollowSpacing.headingGap),
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    for (var i = 0; i < children.length; i++) ...[
+                      TaskChildInlineRow(
+                        key: ValueKey('task-child-row-${children[i].id}'),
+                        child: children[i],
+                        edit: _editFor(children[i]),
+                        focus: _focusFor(children[i].id),
+                        onToggle: () => _toggle(children[i]),
+                        onRename: (value) => widget.controller.taskActions
+                            .setTitle(children[i].id, value),
+                        onOpen: () =>
+                            widget.controller.openTask(children[i].id),
+                      ),
+                      // Hairline between rows, inset to start at the title —
+                      // the checkbox column stays visually outside the rule.
+                      if (i < children.length - 1)
+                        Container(
+                            height: WorkFollowMetrics.dividerThickness,
+                            margin: const EdgeInsets.only(
+                                left: TaskChildInlineRow.checkboxSpace),
+                            color: tokens.border),
+                    ],
+                    InkWell(
+                        key: const ValueKey('task-add-child'),
+                        borderRadius:
+                            BorderRadius.circular(WorkFollowRadii.control),
+                        onTap: () =>
+                            widget.controller.createChildTask(widget.task.id),
+                        child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                                vertical: WorkFollowSpacing.tightGap),
+                            child: Row(children: [
+                              AppIcon(WorkFollowIcons.add,
+                                  size: WorkFollowMetrics.toolbarIcon,
+                                  color: tokens.accent),
+                              const SizedBox(width: WorkFollowSpacing.denseGap),
+                              Text('添加子任务',
+                                  style: TextStyle(
+                                      fontSize:
+                                          WorkFollowMacTypography.listTitle,
+                                      height: WorkFollowMacTypography.lineList,
+                                      fontWeight: WorkFollowMacWeight.medium,
+                                      color: tokens.accent)),
+                            ]))),
+                  ]));
+        });
+  }
+}
+
+/// One inline child row inside the parent's inspector:
+/// `[checkbox] [editable title…] [date] [>]` — nothing else.
+///
+/// The row is transparent (no card), 48pt tall, and shares the parent's
+/// horizontal padding. Only the checkbox, title, date and chevron are shown;
+/// chips and property text stay in the child's own inspector.
+class TaskChildInlineRow extends StatefulWidget {
+  const TaskChildInlineRow({
+    super.key,
+    required this.child,
+    required this.edit,
+    required this.focus,
+    required this.onToggle,
+    required this.onRename,
+    required this.onOpen,
+  });
+
+  static const double checkboxSpace = 32;
+  static const double rowMinHeight = 48;
+
+  final TaskItem child;
+  final TextEditingController edit;
+  final FocusNode focus;
+  final VoidCallback onToggle;
+  final ValueChanged<String> onRename;
+  final VoidCallback onOpen;
+
+  @override
+  State<TaskChildInlineRow> createState() => _TaskChildInlineRowState();
+}
+
+class _TaskChildInlineRowState extends State<TaskChildInlineRow> {
+  bool hoveringArrow = false;
+
   Color _dateColor(TaskItem child, WorkFollowTheme tokens) {
     if (child.isClosed) return tokens.textTertiary;
     final due = localDateTimeFromStorage(child.dueAt);
@@ -93,85 +188,15 @@ class _TaskChildrenPanelState extends State<TaskChildrenPanel> {
   @override
   Widget build(BuildContext context) {
     final tokens = WorkFollowTheme.of(context);
-    return AnimatedBuilder(
-        animation: widget.controller,
-        builder: (context, _) {
-          final children = widget.controller.childrenOf(widget.task.id);
-          return Padding(
-              key: const ValueKey('task-children-panel'),
-              padding: const EdgeInsets.only(top: WorkFollowSpacing.headingGap),
-              child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    for (final child in children)
-                      _ChildRow(
-                        key: ValueKey('task-child-row-${child.id}'),
-                        child: child,
-                        edit: _editFor(child),
-                        focus: _focusFor(child.id),
-                        dateColor: _dateColor(child, tokens),
-                        onToggle: () => _toggle(child),
-                        onRename: (value) => widget.controller.taskActions
-                            .setTitle(child.id, value),
-                        onOpen: () => widget.controller.openTask(child.id),
-                      ),
-                    InkWell(
-                        key: const ValueKey('task-add-child'),
-                        borderRadius:
-                            BorderRadius.circular(WorkFollowRadii.control),
-                        onTap: () =>
-                            widget.controller.createChildTask(widget.task.id),
-                        child: Padding(
-                            padding: const EdgeInsets.symmetric(
-                                vertical: WorkFollowSpacing.tightGap),
-                            child: Row(children: [
-                              AppIcon(WorkFollowIcons.add,
-                                  size: WorkFollowMetrics.toolbarIcon,
-                                  color: tokens.textTertiary),
-                              const SizedBox(width: WorkFollowSpacing.denseGap),
-                              Text('添加子任务',
-                                  style: TextStyle(
-                                      fontSize:
-                                          WorkFollowMacTypography.listTitle,
-                                      height: WorkFollowMacTypography.lineList,
-                                      fontWeight: WorkFollowMacWeight.medium,
-                                      color: tokens.textTertiary)),
-                            ]))),
-                  ]));
-        });
-  }
-}
-
-class _ChildRow extends StatelessWidget {
-  const _ChildRow({
-    super.key,
-    required this.child,
-    required this.edit,
-    required this.focus,
-    required this.dateColor,
-    required this.onToggle,
-    required this.onRename,
-    required this.onOpen,
-  });
-
-  final TaskItem child;
-  final TextEditingController edit;
-  final FocusNode focus;
-  final Color dateColor;
-  final VoidCallback onToggle;
-  final ValueChanged<String> onRename;
-  final VoidCallback onOpen;
-
-  @override
-  Widget build(BuildContext context) {
-    final tokens = WorkFollowTheme.of(context);
+    final child = widget.child;
     final due = localDateTimeFromStorage(child.dueAt);
-    return Padding(
-        padding:
-            const EdgeInsets.symmetric(vertical: WorkFollowSpacing.microGap),
+    return Container(
+        constraints:
+            const BoxConstraints(minHeight: TaskChildInlineRow.rowMinHeight),
+        alignment: Alignment.centerLeft,
         child: Row(children: [
           GestureDetector(
-            onTap: onToggle,
+            onTap: widget.onToggle,
             child: TaskCompletionBox(
                 size: WorkFollowMetrics.toolbarIcon,
                 completed: child.completed,
@@ -182,9 +207,9 @@ class _ChildRow extends StatelessWidget {
           Expanded(
             child: TextField(
               key: ValueKey('task-child-title-${child.id}'),
-              controller: edit,
-              focusNode: focus,
-              onChanged: onRename,
+              controller: widget.edit,
+              focusNode: widget.focus,
+              onChanged: widget.onRename,
               style: TextStyle(
                   fontSize: WorkFollowMacTypography.listTitle,
                   height: WorkFollowMacTypography.lineList,
@@ -197,26 +222,39 @@ class _ChildRow extends StatelessWidget {
             ),
           ),
           if (due != null)
-            Text(calendarDateLabel(due, hasTime: child.scheduledWithTime),
-                key: ValueKey('task-child-date-${child.id}'),
-                style: TextStyle(
-                    fontSize: WorkFollowMacTypography.listMeta,
-                    height: WorkFollowMacTypography.lineControl,
-                    fontWeight: WorkFollowMacWeight.regular,
-                    color: dateColor)),
-          IconButton(
-              key: ValueKey('task-child-open-${child.id}'),
-              tooltip: '打开子任务',
-              visualDensity: VisualDensity.compact,
-              onPressed: onOpen,
-              icon: AppIcon(WorkFollowIcons.chevronNext,
-                  size: WorkFollowMetrics.metadataIcon,
-                  color: tokens.textTertiary)),
+            Padding(
+                padding:
+                    const EdgeInsets.only(left: WorkFollowSpacing.tightGap),
+                child: Text(
+                    calendarDateLabel(due, hasTime: child.scheduledWithTime),
+                    key: ValueKey('task-child-date-${child.id}'),
+                    style: TextStyle(
+                        fontSize: WorkFollowMacTypography.listMeta,
+                        height: WorkFollowMacTypography.lineControl,
+                        fontWeight: WorkFollowMacWeight.regular,
+                        color: _dateColor(child, tokens)))),
+          const SizedBox(width: WorkFollowSpacing.tightGap),
+          // The chevron is the only navigation affordance; the title edits in
+          // place and never jumps to the child inspector.
+          MouseRegion(
+            onEnter: (_) => setState(() => hoveringArrow = true),
+            onExit: (_) => setState(() => hoveringArrow = false),
+            child: IconButton(
+                key: ValueKey('task-child-open-${child.id}'),
+                tooltip: '打开子任务',
+                visualDensity: VisualDensity.compact,
+                onPressed: widget.onOpen,
+                icon: AppIcon(WorkFollowIcons.chevronNext,
+                    size: WorkFollowMetrics.metadataIcon,
+                    color: hoveringArrow
+                        ? tokens.textSecondary
+                        : tokens.textTertiary)),
+          ),
         ]));
   }
 }
 
-/// The `父任务 >` crumb above a child task's title. Tapping returns to the
+/// The `父任务 ›` crumb above a child task's title. Tapping returns to the
 /// parent, which also restores the list selection to the parent row.
 class TaskParentBreadcrumb extends StatelessWidget {
   const TaskParentBreadcrumb({super.key, required this.parent, this.onOpen});

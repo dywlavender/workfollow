@@ -279,6 +279,14 @@ void main() {
     await tester.pumpAndSettle();
     expect(c.childrenOf(parentId).single.title, '改好的标题');
 
+    // S4 geometry: 48pt rows, accent add-row, hairline divider between rows.
+    final rowRect =
+        tester.getRect(find.byKey(ValueKey('task-child-row-$childId')));
+    expect(rowRect.height, greaterThanOrEqualTo(48));
+    expect(find.byKey(const ValueKey('task-add-child')), findsOneWidget);
+    final addText = tester.widget<Text>(find.text('添加子任务'));
+    expect(addText.style?.color, WorkFollowTheme.light.accent);
+
     // Following the chevron opens the child inspector with a crumb.
     await tester.tap(find.byKey(ValueKey('task-child-open-$childId')));
     await tester.pumpAndSettle();
