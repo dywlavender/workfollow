@@ -184,7 +184,7 @@ class WorkspaceController extends ChangeNotifier {
         _folders = _defaultFolders() {
     // Legacy subtask records become real child tasks before anything reads
     // them, so seeds and restored snapshots share one runtime shape.
-    _expandLegacySubtasks();
+    _normalizeTaskHierarchy();
     taskActions = CallbackTaskActions(_dispatchTaskAction);
     taskCreator = TaskCreator(taskActions);
     // Clicking a delivered reminder opens the task.
@@ -957,13 +957,24 @@ class WorkspaceController extends ChangeNotifier {
           return TaskActionResult.failure('invalid-draft', '无效的任务草稿');
         }
         return _createTaskFromDraft(payload);
+      case 'createChild':
+        final parentId = payload as String;
+        final childId = createChildTask(parentId);
+        if (childId == null) {
+          return TaskActionResult.failure('missing-task', '任务不存在');
+        }
+        return _taskResult(childId);
       case 'setTitle':
         final (id, title) = payload as (String, String);
         final before = _taskById(id);
         if (before == null) {
           return TaskActionResult.failure('missing-task', '任务不存在');
         }
-        if (title.trim().isEmpty) {
+        // Child tasks are born unnamed and may stay empty — the UI renders
+        // 无标题; the record keeps the real empty value. Top-level tasks keep
+        // the old guard because a blank row there is a mistake.
+        final isChild = before.isChildTask;
+        if (title.trim().isEmpty && !isChild) {
           return TaskActionResult.failure('empty-title', '标题不能为空');
         }
         updateTaskTitle(id, title);
@@ -1573,7 +1584,7 @@ class WorkspaceController extends ChangeNotifier {
         : List.from(bundle.lists);
     _folders = List.from(bundle.folders);
     _tasks = bundle.tasks.map(TaskItem.fromMigration).toList();
-    _expandLegacySubtasks();
+    _normalizeTaskHierarchy();
     for (final task in _tasks) {
       if (_lists.every((list) => list.name != task.listName)) {
         _lists = [
@@ -1820,18 +1831,17 @@ class WorkspaceController extends ChangeNotifier {
 
   /// Active child tasks of [parentId], in their sibling order.
   List<TaskItem> childrenOf(String parentId) {
-    final children = activeTasks
-        .where((task) => task.parentTaskId == parentId)
-        .toList()
-      ..sort((a, b) {
-        var order = a.childOrder.compareTo(b.childOrder);
-        if (order != 0) return order;
-        // Sibling order is authoritative; the next two keys only keep the
-        // result stable when orders tie (legacy data, duplicates).
-        order = (a.createdAt ?? '').compareTo(b.createdAt ?? '');
-        if (order != 0) return order;
-        return a.id.compareTo(b.id);
-      });
+    final children =
+        activeTasks.where((task) => task.parentTaskId == parentId).toList()
+          ..sort((a, b) {
+            var order = a.childOrder.compareTo(b.childOrder);
+            if (order != 0) return order;
+            // Sibling order is authoritative; the next two keys only keep the
+            // result stable when orders tie (legacy data, duplicates).
+            order = (a.createdAt ?? '').compareTo(b.createdAt ?? '');
+            if (order != 0) return order;
+            return a.id.compareTo(b.id);
+          });
     return List.unmodifiable(children);
   }
 
@@ -1893,19 +1903,63 @@ class WorkspaceController extends ChangeNotifier {
     return child.id;
   }
 
-  /// Test seam: run the legacy expansion over an explicit task list.
-  @visibleForTesting
-  void expandLegacyForTest(List<TaskItem> tasks) {
-    _tasks = List.of(tasks);
-    _expandLegacySubtasks();
+  /// The one entry point for sibling order. [childIds] is the full ordered
+  /// list of the parent's children; unknown ids are ignored and children not
+  /// mentioned keep their relative order after the listed ones.
+  void reorderChildren(String parentId, List<String> childIds) {
+    final order = <String, int>{};
+    for (var i = 0; i < childIds.length; i++) {
+      order[childIds[i]] = i;
+    }
+    var replacedAny = false;
+    final untouched = <String, int>{};
+    for (final task in _tasks) {
+      if (task.parentTaskId == parentId && !order.containsKey(task.id)) {
+        untouched[task.id] = task.childOrder;
+      }
+    }
+    final fallbackStart = childIds.length;
+    final untouchedSorted = untouched.keys.toList()
+      ..sort((a, b) => untouched[a]!.compareTo(untouched[b]!));
+    for (var i = 0; i < untouchedSorted.length; i++) {
+      order[untouchedSorted[i]] = fallbackStart + i;
+    }
+    _tasks = [
+      for (final task in _tasks)
+        if (order.containsKey(task.id) && task.parentTaskId == parentId)
+          () {
+            replacedAny = true;
+            return task.copyWith(childOrder: order[task.id]);
+          }()
+        else
+          task,
+    ];
+    if (!replacedAny) return;
+    _schedulePersist();
+    _notify();
   }
 
-  /// Expands legacy `TaskSubtask` records into real child tasks and clears
-  /// the parent's embedded list, making the tree the single runtime shape.
-  void _expandLegacySubtasks() {
+  /// Test seam: run the hierarchy normalization over an explicit task list.
+  @visibleForTesting
+  void normalizeHierarchyForTest(List<TaskItem> tasks) {
+    _tasks = List.of(tasks);
+    _normalizeTaskHierarchy();
+  }
+
+  /// Normalizes legacy `TaskSubtask` records into real child tasks at the
+  /// data boundary (load, seed, import, restore), so the runtime only ever
+  /// sees the tree shape and `childrenOf` is the single authority.
+  ///
+  /// Child ids are deterministic (`legacy-child-{parentId}-{subId}`) so
+  /// the same old snapshot normalizes to the same children on every load,
+  /// and a child that already exists (re-import) is never duplicated. Legacy
+  /// completed flags are preserved; completedAt stays null — the old records
+  /// carried no completion time and none is invented.
+  void _normalizeTaskHierarchy() {
     var expandedAny = false;
     final rebuilt = <TaskItem>[];
     final children = <TaskItem>[];
+    final existingIds = _tasks.map((task) => task.id).toSet();
     for (final task in _tasks) {
       if (task.subtasks.isEmpty) {
         rebuilt.add(task);
@@ -1915,17 +1969,19 @@ class WorkspaceController extends ChangeNotifier {
       rebuilt.add(task.copyWith(subtasks: const []));
       for (var i = 0; i < task.subtasks.length; i++) {
         final sub = task.subtasks[i];
+        final childId = sub.id.isEmpty
+            ? 'legacy-child-${task.id}-index-$i'
+            : 'legacy-child-${task.id}-${sub.id}';
+        if (existingIds.contains(childId)) continue;
+        existingIds.add(childId);
         children.add(TaskItem(
-          id: 'sub-${task.id}-${sub.id}',
+          id: childId,
           title: sub.title,
           listName: task.listName,
           bucket: taskBucketForDate(null),
           parentTaskId: task.id,
           childOrder: i,
           completed: sub.completed,
-          completedAt: sub.completed
-              ? (task.completedAt ?? DateTime.now().toIso8601String())
-              : null,
           createdAt: task.createdAt,
           updatedAt: task.updatedAt,
         ));
@@ -2903,7 +2959,9 @@ class WorkspaceController extends ChangeNotifier {
 
   void updateTaskTitle(String id, String rawTitle) {
     final title = rawTitle.trim();
-    if (title.isEmpty) return;
+    // An unnamed child keeps its real empty value; only top-level tasks are
+    // protected from being wiped to blank by a stray edit.
+    if (title.isEmpty && !(_taskById(id)?.isChildTask ?? false)) return;
     _replaceTask(
         id,
         (task) => task.copyWith(
@@ -3315,6 +3373,8 @@ class WorkspaceController extends ChangeNotifier {
         activeTasks.where((task) => task.sourceNoteId == noteId));
   }
 
+  /// Legacy compatibility only: the checklist-shaped subtask API. New
+  /// hierarchy code uses createChildTask / TaskActions.setTitle instead.
   bool addSubtask(String taskId, String rawTitle) {
     final title = rawTitle.trim();
     if (title.isEmpty) return false;
@@ -3331,6 +3391,7 @@ class WorkspaceController extends ChangeNotifier {
     );
   }
 
+  /// Legacy compatibility only — children complete via TaskActions.complete.
   bool toggleSubtask(String taskId, String subtaskId) {
     return _replaceTask(
       taskId,
@@ -3345,6 +3406,7 @@ class WorkspaceController extends ChangeNotifier {
     );
   }
 
+  /// Legacy compatibility only — children rename via TaskActions.setTitle.
   bool renameSubtask(String taskId, String subtaskId, String rawTitle) {
     final title = rawTitle.trim();
     if (title.isEmpty) return false;
@@ -3361,6 +3423,7 @@ class WorkspaceController extends ChangeNotifier {
     );
   }
 
+  /// Legacy compatibility only — children delete via TaskActions.delete.
   bool removeSubtask(String taskId, String subtaskId) {
     return _replaceTask(
       taskId,
@@ -3733,7 +3796,7 @@ class WorkspaceController extends ChangeNotifier {
     _lists = List<MigrationListRecord>.from(bundle.lists);
     _folders = List<MigrationFolderRecord>.from(bundle.folders);
     _tasks = bundle.tasks.map(TaskItem.fromMigration).toList();
-    _expandLegacySubtasks();
+    _normalizeTaskHierarchy();
     _notes = bundle.notes
         .asMap()
         .entries

@@ -125,6 +125,11 @@ abstract class TaskActions {
 
   TaskActionResult setTitle(String id, String title);
 
+  /// Creates an empty child task under [parentTaskId]. The child is a normal
+  /// TaskItem: unnamed (the UI shows 无标题), inheriting only the parent's
+  /// list, with childOrder after the existing siblings.
+  TaskActionResult createChild(String parentTaskId);
+
   TaskActionResult setDescription(String id, String description);
 
   /// Replaces the task's structured document and its plain-text projection in
@@ -206,6 +211,10 @@ class CallbackTaskActions implements TaskActions {
   @override
   TaskActionResult setTitle(String id, String title) =>
       dispatch('setTitle', (id, title));
+
+  @override
+  TaskActionResult createChild(String parentTaskId) =>
+      dispatch('createChild', parentTaskId);
 
   @override
   TaskActionResult setDescription(String id, String description) =>

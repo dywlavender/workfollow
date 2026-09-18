@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:workfollow_personal/features/tasks/domain/task_schedule.dart';
+import 'package:workfollow_personal/features/tasks/domain/task_schedule_settings.dart';
 import 'package:workfollow_personal/models/task.dart';
 import 'package:workfollow_personal/screens/today_screen.dart';
 import 'package:workfollow_personal/state/workspace_controller.dart';
@@ -41,10 +42,8 @@ void main() {
     final a = c.createChildTask(parent.id, title: '什么')!;
     final b = c.createChildTask(parent.id, title: '问问')!;
     final empty = c.createChildTask(parent.id)!;
-    expect(
-        c.childrenOf(parent.id).map((task) => task.id), [a, b, empty]);
-    expect(
-        c.childrenOf(parent.id).map((task) => task.childOrder), [0, 1, 2]);
+    expect(c.childrenOf(parent.id).map((task) => task.id), [a, b, empty]);
+    expect(c.childrenOf(parent.id).map((task) => task.childOrder), [0, 1, 2]);
     expect(c.childCount(parent.id), 3);
     expect(c.completedChildCount(parent.id), 0);
   });
@@ -55,7 +54,7 @@ void main() {
     // Two children with the same childOrder: the createdAt/id tie-break
     // must keep the listing deterministic instead of depending on the
     // internal _tasks order.
-    c.expandLegacyForTest(const [
+    c.normalizeHierarchyForTest(const [
       TaskItem(
           id: 'parent-2',
           title: '2',
@@ -142,7 +141,7 @@ void main() {
       ],
     );
     // The same helper the load and seed paths run.
-    c.expandLegacyForTest([parent]);
+    c.normalizeHierarchyForTest([parent]);
 
     final children = c.childrenOf('task-legacy');
     expect(children, hasLength(2));
@@ -150,9 +149,99 @@ void main() {
     expect(children.first.completed, isTrue);
     expect(children.first.parentTaskId, 'task-legacy');
     expect(children.last.title, '核对清单');
-    expect(
-        c.tasks.firstWhere((task) => task.id == 'task-legacy').subtasks,
+    expect(c.tasks.firstWhere((task) => task.id == 'task-legacy').subtasks,
         isEmpty);
+  });
+
+  test('SUB-020/021/022 createChild via TaskActions inherits only the list', () {
+    final c = WorkspaceController(seedData: false);
+    addTearDown(c.dispose);
+    c.addTask('父任务');
+    final parentId = c.tasks.single.id;
+    c.taskActions
+        .setSchedule(parentId, TaskScheduleDraft(dueAt: DateTime(2030, 8, 22), hasTime: false));
+    c.taskActions.setPriority(parentId, TaskPriority.high);
+    c.taskActions.setReminder(parentId, DateTime(2030, 8, 21, 9));
+
+    final result = c.taskActions.createChild(parentId);
+    expect(result.success, isTrue);
+    final child = c.tasks.firstWhere((task) => task.id == result.taskId);
+    expect(child.title, '');
+    expect(child.parentTaskId, parentId);
+    expect(child.childOrder, 0);
+    expect(child.listName, c.tasks.firstWhere((task) => task.id == parentId).listName);
+    // Nothing else is inherited: dates, priority and reminders start clean.
+    expect(child.dueAt, isNull);
+    expect(child.deadlineAt, isNull);
+    expect(child.priority, TaskPriority.none);
+    expect(child.reminderAt, isNull);
+    expect(child.recurrenceType, 'NONE');
+  });
+
+  test('SUB-024 an empty child title saves and stays empty', () {
+    final c = WorkspaceController(seedData: false)..addTask('父任务');
+    addTearDown(c.dispose);
+    final parentId = c.tasks.single.id;
+    final childId = c.createChildTask(parentId)!;
+    // Name it, then clear it: an empty value is a real save, not a rejection.
+    c.taskActions.setTitle(childId, '问问');
+    final result = c.taskActions.setTitle(childId, '   ');
+    expect(result.success, isTrue);
+    expect(c.tasks.firstWhere((task) => task.id == childId).title, '');
+    // Top-level tasks keep the non-empty guard.
+    final topLevel = c.taskActions.setTitle(parentId, '');
+    expect(topLevel.success, isFalse);
+  });
+
+  test('SUB-026 completing a child is undoable', () {
+    final c = WorkspaceController(seedData: false)..addTask('父任务');
+    addTearDown(c.dispose);
+    final childId = c.createChildTask(c.tasks.single.id, title: '问问')!;
+    c.taskActions.complete(childId);
+    expect(c.tasks.firstWhere((task) => task.id == childId).completed, isTrue);
+    c.undoLastAction();
+    expect(c.tasks.firstWhere((task) => task.id == childId).completed, isFalse);
+  });
+
+  test('SUB-027/028 the child schedule is the single source for every view',
+      () {
+    final c = WorkspaceController(seedData: false)..addTask('父任务');
+    addTearDown(c.dispose);
+    final parentId = c.tasks.single.id;
+    final childId = c.createChildTask(parentId)!;
+    c.taskActions.setScheduleSettings(
+        childId,
+        TaskScheduleSettings(
+            schedule: TaskScheduleDraft(
+                dueAt: DateTime(2030, 9, 4), hasTime: false)));
+    final child = c.tasks.firstWhere((task) => task.id == childId);
+    expect(localDateTimeFromStorage(child.dueAt), DateTime(2030, 9, 4));
+    // The parent carries no copy of the child's date.
+    expect(c.tasks.firstWhere((task) => task.id == parentId).dueAt, isNull);
+  });
+
+  test('SUB-030/031 deleting a child shrinks the hierarchy and orders stay stable', () {
+    final c = WorkspaceController(seedData: false)..addTask('父任务');
+    addTearDown(c.dispose);
+    final parentId = c.tasks.single.id;
+    final a = c.createChildTask(parentId, title: '什么')!;
+    final b = c.createChildTask(parentId, title: '问问')!;
+    c.taskActions.delete(b);
+    expect(c.childrenOf(parentId).map((task) => task.id), [a]);
+    expect(c.childCount(parentId), 1);
+    expect(c.childrenOf(parentId).first.childOrder, 0);
+  });
+
+  test('SUB-031 reorderChildren is the only sibling-order entry point', () {
+    final c = WorkspaceController(seedData: false)..addTask('父任务');
+    addTearDown(c.dispose);
+    final parentId = c.tasks.single.id;
+    final a = c.createChildTask(parentId, title: '什么')!;
+    final b = c.createChildTask(parentId, title: '问问')!;
+    final d = c.createChildTask(parentId, title: '无标题')!;
+    c.reorderChildren(parentId, [b, d, a]);
+    expect(c.childrenOf(parentId).map((task) => task.id), [b, d, a]);
+    expect(c.childrenOf(parentId).map((task) => task.childOrder), [0, 1, 2]);
   });
 
   testWidgets(
@@ -178,8 +267,8 @@ void main() {
             body: AnimatedBuilder(
                 animation: c,
                 builder: (context, _) => TaskInspector(
-                    task: c.tasks.firstWhere(
-                        (task) => task.id == c.selectedTaskId),
+                    task: c.tasks
+                        .firstWhere((task) => task.id == c.selectedTaskId),
                     controller: c)))));
     await tester.pumpAndSettle();
 
@@ -224,8 +313,8 @@ void main() {
     // Parent row carries the fold chevron; the child row sits indented below.
     expect(find.byKey(const ValueKey('task-expander-open')), findsOneWidget);
     expect(find.byKey(ValueKey(childId)), findsOneWidget);
-    final parentRect = tester
-        .getRect(find.byKey(ValueKey('task-row-surface-$parentId')));
+    final parentRect =
+        tester.getRect(find.byKey(ValueKey('task-row-surface-$parentId')));
     final childRect =
         tester.getRect(find.byKey(ValueKey('task-row-surface-$childId')));
     expect(childRect.left, greaterThan(parentRect.left));
