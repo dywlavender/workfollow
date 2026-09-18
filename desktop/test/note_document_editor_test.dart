@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_quill/flutter_quill.dart' as quill;
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:workfollow_personal/features/editor/presentation/document_editor.dart'
+    show DocumentEditor;
 import 'package:workfollow_personal/screens/notes_screen.dart';
 import 'package:workfollow_personal/state/workspace_controller.dart';
 import 'package:workfollow_personal/theme/workfollow_theme.dart';
@@ -190,5 +192,103 @@ void main() {
     await tester.pump();
     expect(controller.tasks.single.title, '整理会议纪要');
     expect(controller.tasks.single.sourceNoteId, controller.notes.single.id);
+  });
+
+  testWidgets(
+      'related tasks follow the prose and the blank page focuses the document',
+      (tester) async {
+    final controller = WorkspaceController(seedData: false);
+    addTearDown(controller.dispose);
+    controller.addNote(title: '行动笔记');
+    final note = controller.notes.single;
+    controller.addTaskFromNote(note.id, '测试');
+
+    await _pumpPage(tester, controller);
+
+    final page =
+        tester.getRect(find.byKey(const ValueKey('web-note-editor-pane')));
+    final editor = tester.widget<quill.QuillEditor>(
+        find.byKey(const ValueKey('note-body-editor')));
+    final doc = tester.getRect(find.byKey(const ValueKey('note-body-editor')));
+    final linked = tester.getRect(
+        find.byKey(ValueKey('note-linked-task-${controller.tasks.single.id}')));
+
+    // The document's canvas is its content, not the pane it happens to sit in.
+    // Reserving the pane here is what put "关联任务" — and the formatting
+    // trigger that used to trail the prose — in the middle of a one-line note.
+    expect(doc.height, NotesMetrics.editorContentMinHeight);
+
+    // The list follows the prose: it starts one section rhythm under the last
+    // line rather than wherever an empty document happened to end.
+    expect(linked.top - doc.bottom, lessThan(NotesMetrics.editorContentMinHeight));
+
+    // Everything below the prose is blank page, and it is still a way into the
+    // document. This is the mechanism that lets the canvas stay content-height.
+    expect(linked.bottom, lessThan(page.bottom - 300));
+    expect(editor.focusNode.hasFocus, isFalse);
+    await tester.tapAt(Offset(linked.center.dx, linked.bottom + 200));
+    await tester.pump();
+    expect(editor.focusNode.hasFocus, isTrue);
+  });
+
+  testWidgets('creating a task from a selection is a selection action',
+      (tester) async {
+    final controller = WorkspaceController(seedData: false);
+    addTearDown(controller.dispose);
+    controller.addNote(title: '行动笔记');
+
+    await tester.pumpWidget(_surface(controller));
+    await tester.pumpAndSettle();
+    // With nothing highlighted there is no action to take, so the page does not
+    // spend a row of the prose on a button that cannot do anything.
+    expect(
+        find.byKey(const ValueKey('generate-task-from-selection')), findsNothing);
+
+    final editor = tester
+        .widget<quill.QuillEditor>(
+            find.byKey(const ValueKey('note-body-editor')))
+        .controller;
+    editor.replaceText(0, editor.document.length - 1, '测试',
+        const TextSelection.collapsed(offset: 2));
+    editor.updateSelection(const TextSelection(baseOffset: 0, extentOffset: 2),
+        quill.ChangeSource.local);
+    await tester.pump();
+    expect(
+        find.byKey(const ValueKey('generate-task-from-selection')), findsOneWidget);
+
+    // Leaving the selection takes the action away with it.
+    editor.updateSelection(const TextSelection.collapsed(offset: 2),
+        quill.ChangeSource.local);
+    await tester.pump();
+    expect(
+        find.byKey(const ValueKey('generate-task-from-selection')), findsNothing);
+  });
+
+  testWidgets('a note canvas refuses the height its host offers it',
+      (tester) async {
+    // The task inspector hands its editor the height of the pane, because there
+    // the pane *is* the canvas — see `DocumentEditorViewport`. A note refuses
+    // the same offer: the page under the prose owns that space, and a document
+    // that grew to fill it would push the related-task list down the page with
+    // it. This is the one place the two document types disagree about layout,
+    // so it is stated in the profile rather than inferred from the host.
+    final controller = WorkspaceController(seedData: false);
+    addTearDown(controller.dispose);
+    controller.addNote(title: '行动笔记');
+
+    await tester.pumpWidget(MaterialApp(
+        theme: WorkFollowThemeData.light(),
+        home: Scaffold(
+            body: SizedBox(
+                height: 800,
+                child: DocumentEditor(
+                    profile: NoteEditorProfile(
+                        note: controller.notes.single,
+                        controller: controller))))));
+    await tester.pumpAndSettle();
+
+    expect(
+        tester.getRect(find.byKey(const ValueKey('note-body-editor'))).height,
+        NotesMetrics.editorContentMinHeight);
   });
 }

@@ -720,9 +720,7 @@ class _QuickAddFieldState extends State<QuickAddField> {
                           color: tokens.textPrimary),
                       decoration: InputDecoration(
                           hintText: widget.listStyle
-                              ? (_inboxContext
-                                  ? '添加任务'
-                                  : '添加任务至 "${widget.controller.creationTargetLabel.split(' · ').first}"')
+                              ? '添加任务至“${widget.controller.creationTargetLabel.split(' · ').first}”'
                               : '记下下一件事…',
                           hintStyle: TextStyle(color: tokens.textTertiary),
                           border: InputBorder.none,
@@ -765,7 +763,7 @@ class _QuickAddFieldState extends State<QuickAddField> {
               ],
               // The shortcut still works; it just does not take a slot here. A
               // permanent ⌘N label was the loudest thing on the quiet slot.
-              if (!expanded && !widget.listStyle)
+              if (!expanded)
                 Text('⌘N',
                     style: TextStyle(
                         fontSize: WorkFollowMacTypography.caption,

@@ -62,12 +62,14 @@ class TodayScreen extends StatefulWidget {
 }
 
 class _TodayScreenState extends State<TodayScreen> {
-  // TodayScreen receives the width left after AppRail. The Web workspace
-  // enters its 1024/1120 layouts based on the full window, so the native
-  // equivalent uses the same usable-width threshold after the merged rail.
-  static const double _wideInspectorBreakpoint = 760;
+  // TodayScreen receives the width left after AppRail. Keep the breakpoints
+  // derived from the panes they protect: a wide workspace is only entered
+  // when the list can keep its minimum width beside the inspector, while the
+  // narrow fallback keeps enough room for the compact detail view.
   static const double _detailMinWidth = WorkFollowLayout.taskDetailMinWidth;
   static const double _listDividerWidth = WorkFollowLayout.taskListDividerWidth;
+  static const double _wideInspectorBreakpoint =
+      TaskListMetrics.minPaneWidth + _detailMinWidth + _listDividerWidth;
 
   bool detailOnly = false;
 
@@ -148,7 +150,10 @@ class _TodayScreenState extends State<TodayScreen> {
     final pinned = active.where((task) => task.isPinned).toList();
     final ordinary = active.where((task) => !task.isPinned).toList();
     return LayoutBuilder(builder: (context, constraints) {
-      final narrow = constraints.maxWidth < 700;
+      // Until both panes fit their desktop minimums, keep the list/detail
+      // stack available instead of leaving a selected task without a detail
+      // surface in the intermediate-width band.
+      final narrow = constraints.maxWidth < _wideInspectorBreakpoint;
       final wideInspector = constraints.maxWidth >= _wideInspectorBreakpoint &&
           (widget.persistentInspector || c.selectedTaskId != null);
       // Short windows get a dense header so the first tasks stay on screen.
@@ -287,7 +292,7 @@ class _TodayScreenState extends State<TodayScreen> {
                                         wideInspector: wideInspector),
                                   if (!completedView && completed.isNotEmpty)
                                     ..._groupSlivers(
-                                        (_completedGroup, completed), false,
+                                        (_completedGroup, completed), narrow,
                                         compact: compact,
                                         wideInspector: wideInspector),
                                 ],
@@ -473,7 +478,7 @@ class _TodayScreenState extends State<TodayScreen> {
       // The unnamed group (a plain list of tasks) has no heading to fold with.
       if (label.isEmpty || expanded)
         for (var i = 0; i < tasks.length; i++) ...[
-          _task(tasks[i], narrow, compact: true, wideInspector: wideInspector),
+          _task(tasks[i], narrow, compact: compact, wideInspector: wideInspector),
           if (i < tasks.length - 1) const TaskListDivider(),
         ],
     ];

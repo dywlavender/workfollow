@@ -398,7 +398,18 @@ class NotesMetrics {
   static const double emptyStateIconSize = 60;
   static const double linkedTaskCheckboxWidth = 26;
   static const double linkedTaskCheckboxHeight = 30;
-  static const double editorMinHeight = 330;
+
+  /// Floor for the note's prose, in points — the *document's* floor, not the
+  /// writing canvas.
+  ///
+  /// These are two different heights and must stay separate. The note page is a
+  /// scrolling column, so the page owns the blank area under the last line and
+  /// routes taps in it back into the editor. Inflating the document so that
+  /// area becomes clickable is what pushed the related-task list into the
+  /// middle of a one-line note; the previous value here was 330, which reserved
+  /// most of the pane for an empty line of text.
+  static const double editorContentMinHeight = 80;
+
   static const double imageMaxHeight = 420;
 }
 

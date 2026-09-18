@@ -585,11 +585,22 @@ class _NotePageState extends State<_NotePage> {
                                 color: tokens.textTertiary))),
                   ]))),
           Expanded(
-              child: SingleChildScrollView(
-                  child: Center(
-                      child: ConstrainedBox(
-            constraints: const BoxConstraints(
-                maxWidth: _NotesScreenState._editorContentMaxWidth),
+              child: LayoutBuilder(
+                  builder: (context, viewport) => SingleChildScrollView(
+                      child: GestureDetector(
+                          // The blank area under the prose belongs to the page,
+                          // not to the document. Tapping it puts the caret back
+                          // in the document — which is exactly why the document
+                          // no longer has to grow to fill the pane, and why the
+                          // sections below it follow the text instead of being
+                          // pushed into the middle of the page.
+                          behavior: HitTestBehavior.translucent,
+                          onTap: () => documentKey.currentState?.focusEnd(),
+                          child: Center(
+                              child: ConstrainedBox(
+            constraints: BoxConstraints(
+                maxWidth: _NotesScreenState._editorContentMaxWidth,
+                minHeight: viewport.maxHeight),
             child: Padding(
                 padding: const EdgeInsets.fromLTRB(WorkFollowSpacing.space7, WorkFollowSpacing.relaxedGap, WorkFollowSpacing.space7, WorkFollowSpacing.editorBottomPadding),
                 child: Column(
@@ -649,6 +660,7 @@ class _NotePageState extends State<_NotePage> {
                           Padding(
                               padding: const EdgeInsets.only(bottom: WorkFollowSpacing.inlineGap),
                               child: _LinkedTaskRow(
+                                  key: ValueKey('note-linked-task-${task.id}'),
                                   task: task,
                                   onToggle: () => task.completed
                                       ? widget.controller.taskActions
@@ -659,7 +671,7 @@ class _NotePageState extends State<_NotePage> {
                                       widget.controller.openTask(task.id))),
                       ],
                     ])),
-          )))),
+          )))))),
           SaveStatusFooter(
               controller: widget.controller,
               trailing: '$wordCount 字',
@@ -742,7 +754,10 @@ class _NoteFolderLinkState extends State<_NoteFolderLink> {
 /// One linked task under the note body: checkbox + open-on-tap title.
 class _LinkedTaskRow extends StatelessWidget {
   const _LinkedTaskRow(
-      {required this.task, required this.onToggle, required this.onOpen});
+      {super.key,
+      required this.task,
+      required this.onToggle,
+      required this.onOpen});
 
   final TaskItem task;
   final VoidCallback onToggle;

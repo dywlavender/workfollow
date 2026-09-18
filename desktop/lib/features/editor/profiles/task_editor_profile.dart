@@ -77,6 +77,14 @@ class TaskEditorProfile extends EditorProfile {
   @override
   double get documentMinHeight => TaskDocumentMetrics.documentMinHeight;
 
+  /// The inspector gives the document a fixed pane and no scrolling page of its
+  /// own: the pane is the canvas, so a click below the last line is a click in
+  /// the description. The fill only applies while nothing follows the prose —
+  /// with a subtask or attachment panel under it, the panel is what sits below
+  /// the last line.
+  @override
+  bool get expandsToViewport => true;
+
   @override
   double get documentBottomPadding => WorkFollowSpacing.space5;
 

@@ -15,6 +15,32 @@ import 'package:workfollow_personal/widgets/quick_add.dart';
 /// These tests pin the intended behaviour: the caret stays in the field while
 /// the user sets properties.
 void main() {
+  testWidgets('list quick add names its target and keeps the shortcut visible',
+      (tester) async {
+    tester.view.physicalSize = const Size(560, 240);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    final controller = WorkspaceController(seedData: false);
+    addTearDown(controller.dispose);
+    controller.selectView(WorkspaceView.inbox);
+    await tester.pumpWidget(MaterialApp(
+      theme: WorkFollowThemeData.light(),
+      home: Scaffold(
+        body: QuickAddField(controller: controller, listStyle: true),
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    final field =
+        tester.widget<TextField>(find.byKey(const ValueKey('quick-add-title')));
+    expect(field.decoration?.hintText, '添加任务至“收集箱”');
+    expect(find.text('⌘N'), findsOneWidget);
+  });
+
   Future<void> pumpAddRow(WidgetTester tester) async {
     tester.view.physicalSize = const Size(1200, 800);
     tester.view.devicePixelRatio = 1;
@@ -77,7 +103,8 @@ void main() {
     await tester
         .tap(find.byKey(const ValueKey('quick-add-priority-flag-high')));
     await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('quick-add-properties-panel')), findsNothing);
+    expect(
+        find.byKey(const ValueKey('quick-add-properties-panel')), findsNothing);
     expect(caretInField(tester), isTrue);
   });
 }

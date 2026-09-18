@@ -59,6 +59,53 @@ void main() {
             WorkFollowLayout.taskListDividerWidth);
   });
 
+  testWidgets('workspace keeps the detail fallback until both panes fit',
+      (tester) async {
+    tester.view.physicalSize = const Size(700, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    final controller = WorkspaceController(seedData: true);
+    addTearDown(controller.dispose);
+    controller.selectView(WorkspaceView.inbox);
+    await tester.pumpWidget(MaterialApp(
+        theme: WorkFollowThemeData.light(),
+        home: Scaffold(
+            body:
+                SizedBox.expand(child: TodayScreen(controller: controller)))));
+    await tester.pumpAndSettle();
+
+    // The list still owns the whole surface while the inspector contract does
+    // not fit. Selecting a task must use the stacked detail fallback rather
+    // than leaving the selection without an editor.
+    expect(find.byKey(const ValueKey('web-task-detail-pane')), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('task-03')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('detail-task-03')), findsOneWidget);
+
+    // At the first width where list minimum + divider + detail minimum fit,
+    // the same selection becomes the persistent two-pane workspace.
+    tester.view.physicalSize = const Size(701, 800);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('web-task-detail-pane')), findsOneWidget);
+    expect(
+        tester.getSize(find.byKey(const ValueKey('web-task-list-pane'))).width,
+        greaterThanOrEqualTo(TaskListMetrics.minPaneWidth));
+    expect(
+        tester
+            .getSize(find.byKey(const ValueKey('web-task-detail-pane')))
+            .width,
+        greaterThanOrEqualTo(WorkFollowLayout.taskDetailMinWidth));
+
+    // Non-compact rows retain the two-line title contract used by the shared
+    // list, so a long title does not get clipped just because it is grouped.
+    final title = tester.widget<Text>(find.text('给设计顾问发一封确认邮件').first);
+    expect(title.maxLines, 2);
+  });
+
   testWidgets('task list divider keeps its width inside the readable range',
       (tester) async {
     tester.view.physicalSize = const Size(1000, 700);

@@ -93,6 +93,13 @@ class DocumentEditorState extends State<DocumentEditor>
     return true;
   }
 
+  /// Puts the caret at the end of the document and takes focus.
+  ///
+  /// Page chrome calls this so the blank area under the prose is a way into the
+  /// document. That is the alternative to stretching the document to reach the
+  /// bottom of the pane, which is what used to drag everything after it down.
+  void focusEnd() => _focusDocumentEnd();
+
   void _focusDocumentEnd() {
     _closeSlashSession();
     editor.updateSelection(
@@ -595,10 +602,15 @@ class DocumentEditorState extends State<DocumentEditor>
                           ),
                         },
                         scrollable: false,
-                        // Legacy panels stay near the prose; without them the
-                        // surrounding surface accepts clicks in the remaining
-                        // blank space below the last line.
-                        minHeight: panels.isEmpty
+                        // A profile that owns its pane fills it, so the blank
+                        // area under the last line is part of the canvas — that
+                        // is how a click below a task's prose lands in the task.
+                        // A document inside a scrolling page stays at its floor
+                        // instead, and the page routes clicks in the blank space
+                        // back here: filling the pane would drag everything that
+                        // follows the prose — panels, related tasks — down with
+                        // it. See [EditorProfile.expandsToViewport].
+                        minHeight: profile.expandsToViewport && panels.isEmpty
                             ? math.max(profile.documentMinHeight,
                                 constraints.minHeight)
                             : profile.documentMinHeight,

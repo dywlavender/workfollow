@@ -58,6 +58,19 @@ abstract class EditorProfile {
   /// Height the document reserves when no trailing panel follows it.
   double get documentMinHeight;
 
+  /// Whether the document's canvas grows to the height it was handed, so the
+  /// blank space under the last line belongs to the editor.
+  ///
+  /// A task's detail pane *is* its document: the pane has one height, the area
+  /// below the prose is the same canvas, and a click there puts the caret back
+  /// in the task. A note lives inside a scrolling page — its prose is
+  /// content-height and the page owns everything under it, so the sections that
+  /// follow the prose have to follow the text rather than a fixed position in
+  /// the pane. That difference is the whole reason this is a profile decision
+  /// and not a constant: `documentMinHeight` is the *document's* floor, and
+  /// stretching it to the viewport is a property of the host, not of prose.
+  bool get expandsToViewport;
+
   /// Padding below the last line, before a trailing panel or the shell.
   double get documentBottomPadding;
 

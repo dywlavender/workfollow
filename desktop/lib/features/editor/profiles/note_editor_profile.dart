@@ -72,7 +72,16 @@ class NoteEditorProfile extends EditorProfile {
   TextCapitalization get textCapitalization => TextCapitalization.none;
 
   @override
-  double get documentMinHeight => NotesMetrics.editorMinHeight;
+  double get documentMinHeight => NotesMetrics.editorContentMinHeight;
+
+  /// The page scrolls, so the page owns the blank space under the prose.
+  ///
+  /// Inflating the document to reach the bottom of the pane is what used to
+  /// strand the related-task list in the middle of a one-line note. The page
+  /// routes clicks in that blank space back into the document instead — see
+  /// `DocumentEditorState.focusEnd`.
+  @override
+  bool get expandsToViewport => false;
 
   @override
   double get documentBottomPadding => WorkFollowSpacing.space6;
@@ -94,21 +103,26 @@ class NoteEditorProfile extends EditorProfile {
   @override
   List<Widget> buildTrailingPanels(BuildContext context) => const [];
 
+  /// A selection action, not a permanent row of the page.
+  ///
+  /// With nothing highlighted there is no action to take, and a disabled button
+  /// parked under every note promised one anyway while taking a row of the page
+  /// from the prose. It now arrives with the selection and leaves with it, so
+  /// the label can name the action instead of describing the gesture.
   @override
   Widget? buildFooterLeading(
     BuildContext context, {
     required quill.QuillController editor,
     required bool selectionPresent,
   }) {
+    if (!selectionPresent) return null;
     final tokens = WorkFollowTheme.of(context);
     return TextButton.icon(
         key: const ValueKey('generate-task-from-selection'),
-        onPressed:
-            selectionPresent ? () => _taskFromSelection(context, editor) : null,
+        onPressed: () => _taskFromSelection(context, editor),
         icon: AppIcon(WorkFollowIcons.playlistAdd,
-            size: WorkFollowMetrics.compactFieldIcon,
-            color: selectionPresent ? tokens.accent : tokens.textTertiary),
-        label: const Text('选中文字生成任务',
+            size: WorkFollowMetrics.compactFieldIcon, color: tokens.accent),
+        label: const Text('创建任务',
             style: TextStyle(fontSize: WorkFollowMacTypography.control)));
   }
 
