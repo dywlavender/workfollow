@@ -1239,7 +1239,9 @@ class WorkFollowColors {
   static const Color darkBorderSubtle = Color(0xFF272C35);
   static const Color darkBorder = Color(0xFF343A46);
 
-  // Default palette accent and status values from theme.ts.
+  // Default palette accent and status values from theme.ts. Danger
+  // intentionally diverges from the Web token: desktop light uses a brighter
+  // status red so overdue/destructive states read as true red on white.
   static const Color accent = Color(0xFF4F46E5);
   static const Color accentHover = Color(0xFF4338CA);
   static const Color accentActive = Color(0xFF3730A3);
@@ -1250,8 +1252,8 @@ class WorkFollowColors {
   static const Color successSoft = Color(0xFFE8F5EE);
   static const Color warning = Color(0xFFA15C08);
   static const Color warningSoft = Color(0xFFFFF5DF);
-  static const Color danger = Color(0xFFB13F50);
-  static const Color dangerHover = Color(0xFF963344);
+  static const Color danger = Color(0xFFFF4D4F);
+  static const Color dangerHover = Color(0xFFD94143);
   static const Color dangerSoft = Color(0xFFFFF0F2);
   static const Color overlay = Color(0x47111827);
 }
@@ -1409,7 +1411,7 @@ class WorkFollowTheme extends ThemeExtension<WorkFollowTheme> {
     listRowSelected: Color(0xFFEEF1F3),
     success: Color(0xFF237A57),
     warning: Color(0xFFA15C08),
-    danger: Color(0xFFB13F50),
+    danger: Color(0xFFFF4D4F),
     shadow: Color(0x14161B2B),
     seasonalSky: LinearGradient(
       begin: Alignment.topLeft,

@@ -94,8 +94,10 @@ void main() {
     expect(WorkFollowColors.accentSoft, const Color(0xFFEEF2FF));
     expect(WorkFollowColors.success, const Color(0xFF237A57));
     expect(WorkFollowColors.warning, const Color(0xFFA15C08));
-    expect(WorkFollowColors.danger, const Color(0xFFB13F50));
-    expect(WorkFollowColors.dangerHover, const Color(0xFF963344));
+    // Desktop intentionally diverges from the Web theme.ts danger token:
+    // a brighter status red so overdue/destructive reads as true red (2026-09-19).
+    expect(WorkFollowColors.danger, const Color(0xFFFF4D4F));
+    expect(WorkFollowColors.dangerHover, const Color(0xFFD94143));
     expect(WorkFollowColors.overlay, const Color(0x47111827));
   });
 
