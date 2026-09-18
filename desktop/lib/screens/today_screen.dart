@@ -70,6 +70,10 @@ class _TodayScreenState extends State<TodayScreen> {
 
   bool detailOnly = false;
 
+  /// The task list starts at the compact native preferred width and can be
+  /// widened without allowing the inspector to collapse into a sliver.
+  double _listPaneWidth = TaskListMetrics.preferredPaneWidth;
+
   /// Groups the user folded away, keyed by the heading label.
   ///
   /// Membership means "collapsed", so an empty set is the default posture:
@@ -298,8 +302,9 @@ class _TodayScreenState extends State<TodayScreen> {
                   child: Center(child: _BulkBar(controller: c))),
           ]));
       if (wideInspector) {
-        final listWidth = TaskListMetrics.paneWidth(
-            constraints.maxWidth - _detailMinWidth - _listDividerWidth);
+        final available =
+            constraints.maxWidth - _detailMinWidth - _listDividerWidth;
+        final listWidth = _boundedListPaneWidth(available);
         return Row(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -308,10 +313,10 @@ class _TodayScreenState extends State<TodayScreen> {
               width: listWidth,
               child: list,
             ),
-            VerticalDivider(
-                width: _listDividerWidth,
-                thickness: _listDividerWidth,
-                color: tokens.border),
+            _ResizablePaneDivider(
+              key: const ValueKey('task-pane-divider'),
+              onDrag: (delta) => _resizeListPane(available, delta),
+            ),
             Expanded(
               child: ConstrainedBox(
                 key: const ValueKey('web-task-detail-pane'),
@@ -341,6 +346,28 @@ class _TodayScreenState extends State<TodayScreen> {
               onBack: () => setState(() => detailOnly = false)),
       ]);
     });
+  }
+
+  double _boundedListPaneWidth(double available) {
+    final upper = available < TaskListMetrics.maxPaneWidth
+        ? available
+        : TaskListMetrics.maxPaneWidth;
+    final lower = upper < TaskListMetrics.minPaneWidth
+        ? upper
+        : TaskListMetrics.minPaneWidth;
+    return _listPaneWidth.clamp(lower, upper).toDouble();
+  }
+
+  void _resizeListPane(double available, double delta) {
+    final upper = available < TaskListMetrics.maxPaneWidth
+        ? available
+        : TaskListMetrics.maxPaneWidth;
+    final lower = upper < TaskListMetrics.minPaneWidth
+        ? upper
+        : TaskListMetrics.minPaneWidth;
+    final next = (_listPaneWidth + delta).clamp(lower, upper).toDouble();
+    if (next == _listPaneWidth) return;
+    setState(() => _listPaneWidth = next);
   }
 
   List<TaskItem> _ordered(List<TaskItem> tasks) {
@@ -533,7 +560,7 @@ class _TodayScreenState extends State<TodayScreen> {
               task: task,
               controller: c,
               onOpenFocusTimer: widget.onOpenFocusTimer,
-              inline: true));
+              presentation: TaskInspectorPresentation.inline));
     }
     return DragTarget<String>(
         onWillAcceptWithDetails: (data) => data.data != task.id,
@@ -594,6 +621,57 @@ class _TodayScreenState extends State<TodayScreen> {
           WorkFollowIcons.list,
         _ => WorkFollowIcons.tasks,
       };
+}
+
+/// A one-pixel visual divider with a larger invisible hit target. Keeping the
+/// layout width at one pixel preserves the list/detail geometry while making
+/// the resize gesture usable with a trackpad or mouse.
+class _ResizablePaneDivider extends StatefulWidget {
+  const _ResizablePaneDivider({super.key, required this.onDrag});
+
+  final ValueChanged<double> onDrag;
+
+  @override
+  State<_ResizablePaneDivider> createState() => _ResizablePaneDividerState();
+}
+
+class _ResizablePaneDividerState extends State<_ResizablePaneDivider> {
+  bool hovering = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = WorkFollowTheme.of(context);
+    return SizedBox(
+      width: WorkFollowLayout.taskListDividerWidth,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Positioned.fill(
+            child: ColoredBox(
+              color: hovering ? tokens.accent : tokens.border,
+            ),
+          ),
+          Positioned(
+            left: -6,
+            right: -6,
+            top: 0,
+            bottom: 0,
+            child: MouseRegion(
+              cursor: SystemMouseCursors.resizeLeftRight,
+              onEnter: (_) => setState(() => hovering = true),
+              onExit: (_) => setState(() => hovering = false),
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onHorizontalDragUpdate: (details) =>
+                    widget.onDrag(details.delta.dx),
+                child: const SizedBox.expand(),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 /// Empty state for the persistent wide-window inspector. It keeps the right

@@ -9,6 +9,7 @@ import 'package:workfollow_personal/state/workspace_controller.dart';
 import 'package:workfollow_personal/theme/workfollow_theme.dart';
 import 'package:workfollow_personal/widgets/quick_add.dart';
 import 'package:workfollow_personal/widgets/task_row.dart';
+import 'package:workfollow_personal/widgets/task_list/task_metadata_trail.dart';
 
 void main() {
   testWidgets('stats and matrix views are reachable from the native rail',
@@ -350,6 +351,53 @@ void main() {
     await tester.sendKeyEvent(LogicalKeyboardKey.space);
     await tester.pump();
     expect(controller.tasks.single.completed, isTrue);
+  });
+
+  testWidgets('task metadata keeps one right-aligned column across rows',
+      (tester) async {
+    final controller = WorkspaceController(seedData: false);
+    addTearDown(controller.dispose);
+    final date = DateTime(2030, 9, 18);
+    final dateOnly = TaskItem(
+      id: 'metadata-date-only',
+      title: '只有日期',
+      listName: '收集箱',
+      bucket: TaskBucket.today,
+      dueAt: date.toIso8601String(),
+    );
+    final listAndDate = TaskItem(
+      id: 'metadata-list-and-date',
+      title: '清单和日期',
+      listName: '工作',
+      bucket: TaskBucket.today,
+      dueAt: date.toIso8601String(),
+    );
+
+    await tester.pumpWidget(MaterialApp(
+      theme: WorkFollowThemeData.light(),
+      home: Scaffold(
+        body: SizedBox(
+          width: 720,
+          child: Column(
+            children: [
+              TaskRow(
+                  task: dateOnly, controller: controller, selected: false),
+              TaskRow(
+                  task: listAndDate,
+                  controller: controller,
+                  selected: false),
+            ],
+          ),
+        ),
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    final metadata = find.byType(TaskMetadataTrail);
+    expect(metadata, findsNWidgets(2));
+    final dateOnlyRect = tester.getRect(metadata.at(0));
+    final listAndDateRect = tester.getRect(metadata.at(1));
+    expect(listAndDateRect.right, closeTo(dateOnlyRect.right, 0.01));
   });
 
   testWidgets('ROW-002 repeated task-row tap preserves the current selection',
@@ -884,6 +932,77 @@ void main() {
         .tap(find.byKey(const ValueKey('quick-add-priority-flag-high')));
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('quick-add-properties')), findsOneWidget);
+  });
+
+  testWidgets(
+      'quick-add list and tag pickers stay beside their parent property rows',
+      (tester) async {
+    tester.view.physicalSize = const Size(1200, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    final controller = WorkspaceController(seedData: false);
+    addTearDown(controller.dispose);
+    await tester.pumpWidget(MaterialApp(
+      theme: WorkFollowThemeData.light(),
+      home: Scaffold(
+        body: Align(
+          alignment: Alignment.topLeft,
+          child: SizedBox(
+            width: 560,
+            child: QuickAddField(controller: controller, listStyle: true),
+          ),
+        ),
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    // The disclosure slots appear only while the row is selected (TickTick
+    // rule: an unfocused add row shows just "+ placeholder"), so focus first.
+    await tester.tap(find.byKey(const ValueKey('quick-add-title')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('quick-add-properties')));
+    await tester.pumpAndSettle();
+    final parent =
+        find.byKey(const ValueKey('quick-add-properties-panel'));
+    expect(parent, findsOneWidget);
+
+    final listRow = find.byKey(const ValueKey('menu-option-list'));
+    final parentRect = tester.getRect(parent);
+    final listRowRect = tester.getRect(listRow);
+    await tester.tap(listRow);
+    await tester.pumpAndSettle();
+    expect(parent, findsOneWidget);
+    final listPicker = find.byKey(const ValueKey('task-list-picker'));
+    expect(listPicker, findsOneWidget);
+    final listPickerRect = tester.getRect(listPicker);
+    expect(listPickerRect.left, greaterThan(listRowRect.right));
+    expect(listPickerRect.top, closeTo(listRowRect.top, 1));
+    expect(parentRect.left, lessThan(listPickerRect.left));
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
+    expect(parent, findsOneWidget);
+    expect(listPicker, findsNothing);
+
+    final tagRow = find.byKey(const ValueKey('menu-option-tags'));
+    final tagRowRect = tester.getRect(tagRow);
+    await tester.tap(tagRow);
+    await tester.pumpAndSettle();
+    final tagPicker = find.byKey(const ValueKey('task-tag-picker'));
+    expect(tagPicker, findsOneWidget);
+    final tagPickerRect = tester.getRect(tagPicker);
+    expect(tagPickerRect.left, greaterThan(tagRowRect.right));
+    expect(tagPickerRect.top, closeTo(tagRowRect.top, 1));
+    expect(parent, findsOneWidget);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
   });
 
   testWidgets('task navigation omits summary and trash keeps the task grammar',

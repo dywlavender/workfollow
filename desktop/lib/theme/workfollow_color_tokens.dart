@@ -17,8 +17,8 @@ class WorkFollowColorTokens {
   // sidebar.dart.
   static const Color lightNavigationRail = Color(0xFFF1F3F6);
   static const Color lightNavigationSurface = Color(0xFFF7F8FA);
-  static const Color lightNavigationSelected = Color(0xFFEEF2FF);
-  static const Color lightNavigationAccent = Color(0xFF635BFF);
+  static const Color lightNavigationSelected = Color(0xFFEEF0FF);
+  static const Color lightNavigationAccent = Color(0xFF5B5CEB);
   static const Color lightNavigationForeground = Color(0xFF697386);
   static const Color lightNavigationForegroundMuted = Color(0xFF98A1AF);
   static const Color lightNavigationBorder = Color(0xFFE5E7EB);

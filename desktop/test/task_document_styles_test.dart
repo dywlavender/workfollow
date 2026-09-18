@@ -32,11 +32,14 @@ void main() {
         styles.h3!.style.height, WorkFollowMacTypography.documentHeading3Line);
 
     expect(styles.lists!.style, body);
-    expect(styles.leading!.style, body);
+    // List markers (numbers / bullets) share the body metrics but lead the
+    // line in the accent colour, matching the TickTick reference.
+    expect(styles.leading!.style.fontSize, body.fontSize);
+    expect(styles.leading!.style.height, body.height);
+    expect(styles.leading!.style.color, WorkFollowTheme.light.accent);
     expect(styles.quote!.style, body);
     expect(styles.quote!.horizontalSpacing.left, 12);
     final quoteBorder = styles.quote!.decoration?.border;
-    expect(quoteBorder, isA<Border>());
     expect((quoteBorder! as Border).left.color,
         WorkFollowTheme.light.borderStrong);
 
@@ -98,13 +101,11 @@ void main() {
     final normal = TaskDocumentStyles.customStyleBuilder(tokens)(
         quill.Attribute.unchecked);
     expect(normal, const TextStyle());
-    expect(
-        TaskDocumentStyles.checklistCheckedFill(
-            WorkFollowTheme.dark, Brightness.dark),
-        WorkFollowTheme.dark.borderStrong);
+    // The marker face (numbers and bullets) reads the accent colour.
+    expect(styles.leading!.style.color, tokens.accent);
   });
 
-  testWidgets('checklist marker stays neutral and exposes its checked state',
+  testWidgets('checklist marker uses the native accent treatment and exposes its checked state',
       (tester) async {
     var changed = false;
     await tester.pumpWidget(MaterialApp(
@@ -120,8 +121,12 @@ void main() {
     ));
 
     expect(find.bySemanticsLabel('已完成检查项'), findsOneWidget);
+    // Hollow outlined box: no fill even when checked; the accent lives in
+    // the check stroke now.
     final material = tester.widget<Material>(find.byType(Material).last);
-    expect(material.color, WorkFollowTheme.light.textSecondary);
+    expect(material.color, Colors.transparent);
+    final shape = material.shape! as RoundedRectangleBorder;
+    expect(shape.side.color, WorkFollowTheme.light.borderStrong);
 
     await tester.tap(find.descendant(
         of: find.bySemanticsLabel('已完成检查项'),

@@ -16,6 +16,7 @@ import 'task_context_menu.dart';
 import 'task_menu_actions.dart';
 import 'task_list/task_list_row.dart';
 import 'task_list/task_metadata_trail.dart';
+import 'task_list/task_list_row_transition.dart';
 
 /// One task in a task list.
 ///
@@ -183,18 +184,23 @@ class _TaskRowState extends State<TaskRow> {
                         // the fill up to 90ms later) and left the row that just
                         // lost the selection at 157/255 — both read as a stray
                         // click on a row the user never touched.
-                        child: TaskListRowFrame(
-                          surfaceKey: ValueKey('task-row-surface-${task.id}'),
-                          compact: widget.compact,
-                          selected: selected,
-                          hovering: hovering,
-                          focused: focused,
-                          checkbox: _checkbox(tokens, priorityColor),
-                          content: _content(tokens, preview),
-                          metadata: TaskMetadataTrail(
-                              task: task,
-                              controller: widget.controller,
-                              onEditDate: date),
+                        child: TaskListRowTransition(
+                          taskId: task.id,
+                          closed: task.isClosed,
+                          child: TaskListRowFrame(
+                            surfaceKey:
+                                ValueKey('task-row-surface-${task.id}'),
+                            compact: widget.compact,
+                            selected: selected,
+                            hovering: hovering,
+                            focused: focused,
+                            checkbox: _checkbox(tokens, priorityColor),
+                            content: _content(tokens, preview),
+                            metadata: TaskMetadataTrail(
+                                task: task,
+                                controller: widget.controller,
+                                onEditDate: date),
+                          ),
                         ),
                       ),
                     )),

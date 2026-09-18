@@ -648,6 +648,27 @@ String noteUpdatedLabelFor(String? value) {
   return '${date.month} 月 ${date.day} 日';
 }
 
+/// The open note's timestamp line.
+///
+/// Deliberately not [noteUpdatedLabelFor]: a row in the index answers "which
+/// day", and its label has to stay short next to the title. The page answers
+/// "when did I last touch this", so it carries the clock. Merging the two would
+/// either put a time under every row or drop it from the page.
+String noteUpdatedStampFor(String? value) {
+  if (value == null) return '刚刚';
+  final date = localDateTimeFromStorage(value);
+  if (date == null) return '刚刚';
+  final clock =
+      '${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
+  final now = DateTime.now();
+  final days = DateTime(now.year, now.month, now.day)
+      .difference(DateTime(date.year, date.month, date.day))
+      .inDays;
+  if (days <= 0) return '今天 $clock';
+  if (days == 1) return '昨天 $clock';
+  return '${date.month} 月 ${date.day} 日 $clock';
+}
+
 /// A tiny value object keeps the model layer independent from Flutter widgets.
 class ColorValue {
   const ColorValue(this.value);

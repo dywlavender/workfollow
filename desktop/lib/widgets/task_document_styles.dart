@@ -15,18 +15,11 @@ class TaskDocumentStyles {
 
   /// The checklist marker is deliberately separate from the task-list
   /// completion checkbox. It belongs to the document's line leading, so it
-  /// stays a quiet graphite control in either appearance instead of adopting
-  /// the task accent colour.
-  static const double checklistSize = 17;
-  static const double checklistRadius = 4;
-  static const double checklistBorderWidth = 1.4;
-
-  /// The checked marker stays graphite in both appearances. Light mode uses
-  /// the secondary text tone; dark mode uses the stronger neutral border so a
-  /// completed item does not turn into a pale accent chip.
-  static Color checklistCheckedFill(
-          WorkFollowTheme tokens, Brightness brightness) =>
-      brightness == Brightness.dark ? tokens.borderStrong : tokens.textSecondary;
+  /// follows the TickTick treatment: a small hollow square with an accent
+  /// check; the completed line greys out through the text style.
+  static const double checklistSize = 16;
+  static const double checklistRadius = 5;
+  static const double checklistBorderWidth = 1.3;
 
   /// The text treatment used for a completed checklist line. This only
   /// returns the properties that differ from the line's existing style, which
@@ -180,10 +173,12 @@ class TaskDocumentStyles {
         null,
         TaskDocumentCheckboxBuilder(tokens),
       ),
-      // Ordered and unordered markers read their fallback face from
-      // `leading`, while checklist sizing reads the paragraph style above.
-      // Keep that marker face on the same body step too.
-      leading: _block(bodyStyle),
+      // Ordered and unordered markers (numbers and bullets) take their face
+      // from `leading`; giving it the accent colour produces the TickTick
+      // look where 1./2./3. and • lead the line in the brand tone while the
+      // text itself stays primary. Checklist sizing reads the paragraph
+      // style above instead.
+      leading: _block(bodyStyle.copyWith(color: tokens.accent)),
       // Quote distinction is structural: an inset and a quiet left rule. Its
       // text remains body-sized and textPrimary so Quill never turns it grey.
       quote: _block(
@@ -303,26 +298,16 @@ class _TaskDocumentCheckboxState extends State<_TaskDocumentCheckbox> {
 
   @override
   Widget build(BuildContext context) {
-    final brightness = Theme.of(context).brightness;
-    // The marker is intentionally graphite in both themes. The editor's
-    // surface shows through an unfinished box; only its neutral hover fill is
-    // painted, so the checklist never becomes an accent-coloured chip.
-    final checkedFill = TaskDocumentStyles.checklistCheckedFill(
-        widget.tokens, brightness);
-    const uncheckedFill = Colors.transparent;
-    // The marker fill is neutral in both themes, so the check stays the same
-    // white stroke and never inherits a dark canvas colour in dark mode.
-    const checkColor = Colors.white;
-    final background = widget.isChecked
-        ? checkedFill
-        : (_hovered ? widget.tokens.menuSelected : uncheckedFill);
-    final borderColor = widget.isChecked
-        ? checkedFill
-        : (_hovered
-            ? widget.tokens.textSecondary
-            : widget.tokens.textTertiary);
+    // TickTick-style outlined check: the box stays hollow with a hairline
+    // border, the check is drawn in the accent colour, and the completed
+    // line greys out through the text style instead of a filled chip.
+    const background = Colors.transparent;
+    final borderColor = _hovered && !widget.isChecked
+        ? widget.tokens.accent
+        : widget.tokens.borderStrong;
+    final checkColor = widget.tokens.accent;
 
-    return MouseRegion(
+    final marker = MouseRegion(
       cursor: SystemMouseCursors.click,
       onEnter: (_) {
         if (mounted) setState(() => _hovered = true);
@@ -365,6 +350,17 @@ class _TaskDocumentCheckboxState extends State<_TaskDocumentCheckbox> {
         ),
       ),
     );
+    // Quill hands the leading widget the row's tight height and the full
+    // leading width, so the marker must opt out of stretching or it renders
+    // as a wide rectangle. The default QuillCheckboxPoint wraps itself the
+    // same way before giving the box its natural square size.
+    return Align(
+      alignment: AlignmentDirectional.centerEnd,
+      child: Padding(
+        padding: const EdgeInsetsDirectional.only(end: 7),
+        child: marker,
+      ),
+    );
   }
 }
 
@@ -384,7 +380,7 @@ class _TaskChecklistCheckPainter extends CustomPainter {
       Paint()
         ..color = color
         ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.8
+        ..strokeWidth = 2.0
         ..strokeCap = StrokeCap.round
         ..strokeJoin = StrokeJoin.round,
     );

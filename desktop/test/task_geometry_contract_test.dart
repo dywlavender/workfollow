@@ -47,7 +47,11 @@ void main() {
     expect(MatrixMetrics.pageHeaderHeight, 56);
     expect(CalendarMetrics.dayCellSize, 23);
     expect(BoardMetrics.taskCheckboxSize, 24);
-    expect(NotesMetrics.listWidth, 300);
+    // The note index is the middle column of the notes workspace; 330 matches
+    // the reference proportion next to the 196pt navigation column.
+    expect(NotesMetrics.listWidth, 330);
+    expect(NotesMetrics.compactListWidth, 300);
+    expect(NotesMetrics.editorContentMaxWidth, 820);
     expect(SettingsMetrics.panelWidth, 720);
     expect(CommandPaletteMetrics.maxHeight, 500);
   });

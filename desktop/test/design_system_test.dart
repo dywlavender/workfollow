@@ -28,7 +28,13 @@ void main() {
     expect(WorkFollowTheme.light.railActive, Colors.white);
     expect(WorkFollowTheme.light.sidebarGradient.colors.first,
         const Color(0xFFDDF5EE));
-    expect(WorkFollowTheme.light.accent, const Color(0xFF198570));
+    // One primary for the whole product. The light shell used to carry a teal
+    // accent next to the navigation column's indigo, which is what made the
+    // notes page read as two products sharing a window: the compose button,
+    // the sort control and the folder chips were green while the navigation
+    // selection beside them was blue. Green now means "completed / succeeded"
+    // only.
+    expect(WorkFollowTheme.light.accent, const Color(0xFF5B5CEB));
     expect(theme.textTheme.displaySmall?.fontSize, WorkFollowMacTypography.pageTitle);
     expect(theme.textTheme.displaySmall?.fontWeight,
         WorkFollowMacWeight.semibold);

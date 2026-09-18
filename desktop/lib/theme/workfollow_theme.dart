@@ -107,19 +107,22 @@ class TaskListMetrics {
   /// foldable without competing with the 13pt label beside it.
   static const double groupChevronIconSize = 11;
 
+  // Row height follows the TickTick reference list: a single-line row reads
+  // about 50pt tall with the box at 20pt. Earlier values (7/42/18) made the
+  // list read cramped against the same screenshot.
   static const double rowHorizontalPadding =
       WorkFollowSpacing.taskRowHorizontalPadding;
   static const double rowVerticalPadding =
       WorkFollowSpacing.taskRowVerticalPadding;
-  static const double rowMinHeight = 42;
+  static const double rowMinHeight = 50;
 
   /// Drawn size of the completion box, measured off the reference list.
   ///
-  /// It is also the pointer target. An earlier version wrapped the 18pt box in
-  /// a 24x22 target to make it easier to hit, which pushed the title 7pt right
+  /// It is also the pointer target. An earlier version wrapped the box in
+  /// a 24x22 target to make it easier to hit, which pushed the title right
   /// of where the reference puts it — and the whole row is clickable anyway,
   /// so the box does not have to carry an oversized hit area itself.
-  static const double checkboxSize = 18;
+  static const double checkboxSize = 20;
 
   /// Gap between the checkbox column and the title.
   static const double checkboxTitleGap = WorkFollowSpacing.space1;
@@ -283,17 +286,52 @@ class MatrixMetrics {
   static const double pageHeaderHeight = 56;
   static const double addSurfaceWidth = 320;
   static const double addSurfaceMaxHeight = 280;
+  static const double taskEditorWidth = 680;
+  static const double taskEditorMinHeight = 420;
+  static const double taskEditorMaxHeight = 620;
+  static const double taskEditorViewportMargin = 48;
 }
 
 /// Geometry of the note index and linked-task controls.
 class NotesMetrics {
   const NotesMetrics._();
 
-  static const double listWidth = 300;
-  static const double compactListWidth = 270;
-  static const double headerHeight = 66;
-  static const double searchHeight = 38;
-  static const double editorContentMaxWidth = 960;
+  /// Note index pane. It is the middle column of a three-column workspace
+  /// (navigation 196 + index 330 + the writing page), so it stays near the
+  /// reference width instead of stretching with the window.
+  static const double listWidth = 330;
+  static const double compactListWidth = 300;
+
+  /// Index header. The title and the note count share one line and the compose
+  /// action sits on the trailing edge; the search field and the sort control
+  /// share the line below it. The header used to stack four rows — title,
+  /// count, search, sort — which cost about 40pt of list height for no
+  /// information.
+  static const double headerHeight = 44;
+  static const double searchHeight = 34;
+  static const double headerStackGap = WorkFollowSpacing.space3;
+
+  /// One note row. Rows are list rows, not cards: a 12pt inset, an 88pt
+  /// minimum height, an 8pt selection radius and a hairline between rows.
+  static const double rowHorizontalPadding = WorkFollowSpacing.space3;
+  static const double rowVerticalPadding = WorkFollowSpacing.cardInset;
+  static const double rowMinHeight = 88;
+  static const double rowRadius = WorkFollowRadii.md;
+  static const double rowDividerInset = rowHorizontalPadding;
+
+  /// The note page's own header bar: move-to-folder on the leading edge,
+  /// favourite and more on the trailing edge.
+  static const double editorHeaderHeight = 44;
+  static const double editorHeaderHorizontalPadding = WorkFollowSpacing.space5;
+
+  /// The reading measure of the note page.
+  ///
+  /// The pane is a canvas: the document column stays centred at 820 and the
+  /// slack grows on both sides. At 960 in a 1080pt pane the column was wide
+  /// enough to reach the pane edges, so the page read as a form that filled the
+  /// window — and got emptier the wider the window grew.
+  static const double editorContentMaxWidth = 820;
+
   static const double sortControlHeight = WorkFollowMetrics.iconHitTarget;
   static const double newNoteButtonSize = WorkFollowMetrics.iconHitTarget;
   static const double emptyStateIconSize = 60;
@@ -408,6 +446,25 @@ class TaskListColors {
 
   static Color rowFocusRing(WorkFollowTheme tokens) =>
       tokens.focusRing;
+}
+
+/// Row-state fills for the note index.
+///
+/// The note index does not follow the task list here, and the difference is
+/// deliberate. A task row's selection is a neutral grey because the checkbox —
+/// not the row — is the state the user is tracking. The note index has no
+/// checkbox: the row *is* the selection, and the page beside it carries the
+/// state. It marks the open note with a soft primary fill, and its hover stays
+/// neutral so a pointer crossing the list never looks selected.
+class NotesColors {
+  const NotesColors._();
+
+  static Color rowFill(WorkFollowTheme tokens,
+      {required bool selected, required bool hovering}) {
+    if (selected) return tokens.accentSoft;
+    if (hovering) return tokens.listRowHover;
+    return Colors.transparent;
+  }
 }
 
 class WorkFollowSpacing {
@@ -564,6 +621,15 @@ class WorkFollowMacTypography {
 
   // Detail / editor.
   static const double detailTitle = 18;
+
+  /// The note document's own title on the note page.
+  ///
+  /// Not [detailTitle]: the task inspector's title is a field in a 330pt panel,
+  /// while this is the heading of a page whose body column is 760pt wide. At 18
+  /// it read as one more field label with a large empty page under it rather
+  /// than as the page's centre. Measured off the reference note page.
+  static const double noteTitle = 26;
+
   static const double body = 14;
   static const double supporting = 12;
 
@@ -837,10 +903,16 @@ class WorkFollowMotion {
   static const Duration normal = Duration(milliseconds: 240);
   static const Duration tooltipWait = Duration(milliseconds: 450);
   static const Duration submenuIntent = Duration(milliseconds: 220);
+  /// Task rows use a shorter state transition than panels. It is long enough
+  /// to make completion/restoration legible, while keeping a rapid checkbox
+  /// pass from making the list feel behind the pointer.
+  static const Duration taskRow = Duration(milliseconds: 220);
   static const Duration pending = instant;
   static const Duration loading = fast;
   static const Duration transition = normal;
   static const Curve standard = Cubic(.2, 0, 0, 1);
+  static const Curve taskRowExit = Curves.easeInCubic;
+  static const double taskRowSlide = .04;
 }
 
 /// Material and stacking values shared by atmosphere-enabled surfaces.
@@ -1184,12 +1256,19 @@ class WorkFollowTheme extends ThemeExtension<WorkFollowTheme> {
     textPrimary: Color(0xFF20272C),
     textSecondary: Color(0xFF5D6B75),
     textTertiary: Color(0xFF7F8D92),
-    border: Color(0xFFDCE6E4),
-    borderStrong: Color(0xFFC5D6D2),
-    accent: Color(0xFF198570),
-    accentHover: Color(0xFF146F5F),
-    accentSoft: Color(0xFFD8F2EB),
-    accentFaint: Color(0xFFEFFAF7),
+    // Hairlines are neutral. The teal-tinted greys belonged to the old accent
+    // and read as a second colour in every divider once the primary moved.
+    border: Color(0xFFE6E7EB),
+    borderStrong: Color(0xFFD3D5DC),
+    // One primary for the product, matching the navigation column's indigo.
+    // The previous light accent was a teal-green, which put the compose button,
+    // the sort control and every folder chip in one colour family and the
+    // navigation selection beside them in another. Green is now reserved for
+    // completion and saved state ([success], and the check marks that read it).
+    accent: Color(0xFF5B5CEB),
+    accentHover: Color(0xFF4B4CD9),
+    accentSoft: Color(0xFFEEF0FF),
+    accentFaint: Color(0xFFF6F7FF),
     menuSelected: Color(0xFFF6F6F6),
     menuDivider: Color(0xFFF2F3F3),
     listRowHover: Color(0xFFF5F7F8),
@@ -1197,8 +1276,7 @@ class WorkFollowTheme extends ThemeExtension<WorkFollowTheme> {
     success: Color(0xFF237A57),
     warning: Color(0xFFA15C08),
     danger: Color(0xFFB13F50),
-    shadow: Color(0x14161B2B),
-    seasonalSky: LinearGradient(
+    shadow: Color(0x14161B2B),    seasonalSky: LinearGradient(
       begin: Alignment.topLeft,
       end: Alignment.bottomRight,
       colors: [Color(0xFFF2F4FF), Color(0xFFF7F8FA)],

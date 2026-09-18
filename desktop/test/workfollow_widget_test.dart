@@ -281,7 +281,9 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('全部笔记'), findsOneWidget);
-    expect(find.text('最近编辑'), findsOneWidget);
+    // The index order toggle is an icon on the search line, so it is found by
+    // its tooltip rather than by a visible "最近编辑" label.
+    expect(find.byTooltip('按最近编辑'), findsOneWidget);
     expect(find.text('季度评审 · 叙事结构'), findsWidgets);
     // The note list pane carries its own 笔记 header, so the shell does not
     // repeat it in a global toolbar.

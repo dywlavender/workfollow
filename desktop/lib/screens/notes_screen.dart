@@ -101,64 +101,42 @@ class _NotesScreenState extends State<NotesScreen> {
           padding: const EdgeInsets.fromLTRB(WorkFollowSpacing.cardInset, WorkFollowSpacing.zero, WorkFollowSpacing.cardInset, WorkFollowSpacing.sectionGap),
           child:
               Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-            ConstrainedBox(
-              constraints: const BoxConstraints(minHeight: _notesHeaderHeight),
+            // One header line: what this pane is, how many, and the one action
+            // that creates. The count used to sit on its own line under the
+            // title and the search field and the sort control on two more,
+            // which spent about 40pt of the list on nothing.
+            SizedBox(
+              height: _notesHeaderHeight,
               child:
                   Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
-                Expanded(
-                    child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                      Text(c.notesFavoritesOnly ? '收藏笔记' : '笔记',
-                          style: TextStyle(
-                              fontSize: WorkFollowMacTypography.body,
-                              fontWeight: WorkFollowMacWeight.semibold,
-                              color: tokens.textPrimary)),
-                      const SizedBox(height: WorkFollowSpacing.microGap),
-                      Text('${notes.length} 条笔记',
-                          style: TextStyle(
-                              fontSize: WorkFollowMacTypography.listMeta,
-                              color: tokens.textTertiary)),
-                    ])),
+                Text(c.notesFavoritesOnly ? '收藏笔记' : '笔记',
+                    style: TextStyle(
+                        fontSize: WorkFollowMacTypography.listTitle,
+                        fontWeight: WorkFollowMacWeight.semibold,
+                        color: tokens.textPrimary)),
+                const SizedBox(width: WorkFollowSpacing.inlineGap),
+                Text('${notes.length}',
+                    style: TextStyle(
+                        fontSize: WorkFollowMacTypography.listMeta,
+                        color: tokens.textTertiary)),
+                const Spacer(),
                 _NewNoteButton(onCreate: create),
               ]),
             ),
             SizedBox(
               height: _notesSearchHeight,
-              child: TextField(
-                  controller: search,
-                  onChanged: (value) => setState(() => query = value),
-                  style:
-                      const TextStyle(fontSize: WorkFollowMacTypography.body),
-                  decoration: InputDecoration(
-                      hintText: '搜索笔记',
-                      prefixIcon: const AppIcon(WorkFollowIcons.search,
-                          size: WorkFollowMetrics.toolbarIcon),
-                      isDense: true,
-                      filled: true,
-                      fillColor: tokens.canvas,
-                      contentPadding: const EdgeInsets.symmetric(vertical: WorkFollowSpacing.space2),
-                      border: OutlineInputBorder(
-                          borderRadius:
-                              BorderRadius.circular(WorkFollowRadii.md),
-                          borderSide: BorderSide.none))),
-            ),
-            const SizedBox(height: WorkFollowSpacing.inlineGap),
-            SizedBox(
-              height: NotesMetrics.sortControlHeight,
               child: Row(children: [
-                const Spacer(),
-                TextButton(
-                    onPressed: () => setState(() => newestFirst = !newestFirst),
-                    style: TextButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(horizontal: WorkFollowSpacing.inlineGap),
-                        minimumSize: Size.zero,
-                        tapTargetSize: MaterialTapTargetSize.shrinkWrap),
-                    child: Text(newestFirst ? '最近编辑' : '按标题',
-                        style: const TextStyle(
-                            fontSize: WorkFollowMacTypography.control))),
+                Expanded(
+                    child: _NoteSearchField(
+                        controller: search,
+                        onChanged: (value) => setState(() => query = value))),
+                const SizedBox(width: WorkFollowSpacing.space1),
+                _NoteSortButton(
+                    newestFirst: newestFirst,
+                    onPressed: () => setState(() => newestFirst = !newestFirst)),
               ]),
             ),
+            const SizedBox(height: WorkFollowSpacing.space2),
             Expanded(
                 child: notes.isEmpty
                     ? Center(
@@ -171,16 +149,22 @@ class _NotesScreenState extends State<NotesScreen> {
                         itemBuilder: (context, index) {
                           final note = notes[index],
                               isSelected = selected?.id == notes[index].id;
-                          return Padding(
-                              padding: const EdgeInsets.only(bottom: WorkFollowSpacing.space2),
-                              child: _NoteCard(
-                                note: note,
-                                selected: isSelected,
-                                onTap: () {
-                                  c.selectNote(note.id);
-                                  if (narrow) setState(() => detailOnly = true);
-                                },
-                              ));
+                          final next =
+                              index + 1 < notes.length ? notes[index + 1] : null;
+                          return _NoteRow(
+                            note: note,
+                            selected: isSelected,
+                            // The open row paints a rounded fill and is its own
+                            // separation; every other row is divided from the
+                            // next one, never from the fill.
+                            divider: !isSelected &&
+                                next != null &&
+                                selected?.id != next.id,
+                            onTap: () {
+                              c.selectNote(note.id);
+                              if (narrow) setState(() => detailOnly = true);
+                            },
+                          );
                         })),
           ]));
       final page = selected == null
@@ -238,20 +222,122 @@ class _NewNoteButton extends StatelessWidget {
   }
 }
 
-/// One note card in the list: title, two-line preview and a meta footer.
-class _NoteCard extends StatefulWidget {
-  const _NoteCard(
-      {required this.note, required this.selected, required this.onTap});
+/// The note index's search field.
+///
+/// A resting border made this read as a web input dropped into a native list.
+/// It is a quiet inset field instead: a canvas fill at rest, and on focus the
+/// fill turns to the content colour and a 1pt primary edge appears, so the
+/// control announces itself only while it is being typed in.
+class _NoteSearchField extends StatefulWidget {
+  const _NoteSearchField({required this.controller, required this.onChanged});
+
+  final TextEditingController controller;
+  final ValueChanged<String> onChanged;
+
+  @override
+  State<_NoteSearchField> createState() => _NoteSearchFieldState();
+}
+
+class _NoteSearchFieldState extends State<_NoteSearchField> {
+  final focus = FocusNode();
+  bool focused = false;
+
+  @override
+  void initState() {
+    super.initState();
+    focus.addListener(() {
+      if (mounted) setState(() => focused = focus.hasFocus);
+    });
+  }
+
+  @override
+  void dispose() {
+    focus.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = WorkFollowTheme.of(context);
+    return Container(
+        height: NotesMetrics.searchHeight,
+        decoration: BoxDecoration(
+            color: focused ? tokens.content : tokens.canvas,
+            borderRadius: BorderRadius.circular(WorkFollowRadii.md),
+            border: Border.all(
+                color: focused ? tokens.accent : Colors.transparent,
+                width: WorkFollowMetrics.dividerThickness)),
+        child: Row(children: [
+          const SizedBox(width: WorkFollowSpacing.compactInset),
+          AppIcon(WorkFollowIcons.search,
+              size: WorkFollowMetrics.metadataIcon,
+              color: focused ? tokens.textSecondary : tokens.textTertiary),
+          const SizedBox(width: WorkFollowSpacing.inlineGap),
+          Expanded(
+              child: TextField(
+                  controller: widget.controller,
+                  focusNode: focus,
+                  onChanged: widget.onChanged,
+                  style: const TextStyle(
+                      fontSize: WorkFollowMacTypography.control),
+                  decoration: InputDecoration(
+                      hintText: '搜索笔记',
+                      isCollapsed: true,
+                      border: InputBorder.none,
+                      hintStyle: TextStyle(
+                          fontSize: WorkFollowMacTypography.control,
+                          color: tokens.textTertiary)))),
+          const SizedBox(width: WorkFollowSpacing.compactInset),
+        ]));
+  }
+}
+
+/// The index order toggle. It sits on the search line rather than under it: the
+/// label ("最近编辑" / "按标题") was a full row of the pane for one bit of state.
+class _NoteSortButton extends StatelessWidget {
+  const _NoteSortButton({required this.newestFirst, required this.onPressed});
+
+  final bool newestFirst;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = WorkFollowTheme.of(context);
+    return Tooltip(
+        message: newestFirst ? '按最近编辑' : '按标题',
+        child: IconButton(
+            key: const ValueKey('notes-sort-toggle'),
+            onPressed: onPressed,
+            icon: AppIcon(WorkFollowIcons.sort,
+                size: WorkFollowMetrics.toolbarIcon, color: tokens.textTertiary)));
+  }
+}
+
+/// One row of the note index: title, two-line preview and a meta line.
+///
+/// It is a row, not a card. The previous version drew a rounded container with
+/// a bottom border, which gave the open note a filled block that the other rows
+/// did not have — two visual languages in one list. Selection is now a soft
+/// primary fill at the same 8pt radius, and every other row is separated by a
+/// hairline inset to the text column.
+class _NoteRow extends StatefulWidget {
+  const _NoteRow({
+    required this.note,
+    required this.selected,
+    required this.divider,
+    required this.onTap,
+  });
 
   final NoteItem note;
   final bool selected;
+  final bool divider;
   final VoidCallback onTap;
 
   @override
-  State<_NoteCard> createState() => _NoteCardState();
+  State<_NoteRow> createState() => _NoteRowState();
 }
 
-class _NoteCardState extends State<_NoteCard> {
+class _NoteRowState extends State<_NoteRow> {
   bool hovering = false;
 
   @override
@@ -263,78 +349,73 @@ class _NoteCardState extends State<_NoteCard> {
         onExit: (_) => setState(() => hovering = false),
         child: GestureDetector(
             onTap: widget.onTap,
-            child: Container(
-                key: ValueKey('note-card-${note.id}'),
-                padding:
-                    const EdgeInsets.symmetric(horizontal: WorkFollowSpacing.cardInset, vertical: WorkFollowSpacing.compactInset),
-                decoration: BoxDecoration(
-                    // Web note rows are flat. Use a quiet selected surface
-                    // instead of a card border and shadow so the editor stays
-                    // the visual focus.
-                    color: widget.selected
-                        ? tokens.listRowSelected
-                        : hovering
-                            ? tokens.listRowHover
-                            : Colors.transparent,
-                    borderRadius:
-                        BorderRadius.circular(WorkFollowRadii.control),
-                    border: Border(
-                        bottom: BorderSide(
-                            color: tokens.border.withValues(alpha: .72)))),
-                child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(children: [
-                        if (note.isFavorite) ...[
-                          AppIcon(WorkFollowIcons.favorite,
-                              size: WorkFollowMetrics.metadataIcon,
-                              color: tokens.warning),
-                          const SizedBox(width: WorkFollowSpacing.denseGap)
-                        ],
-                        Expanded(
-                            child: Text(note.title,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                    fontSize: WorkFollowMacTypography.listTitle,
-                                    fontWeight: WorkFollowMacWeight.semibold,
-                                    color: tokens.textPrimary))),
-                      ]),
-                      const SizedBox(height: WorkFollowSpacing.space1),
-                      Text(note.preview.isEmpty ? '还没有内容' : note.preview,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                              fontSize: WorkFollowMacTypography.listBody,
-                              height: WorkFollowMacTypography.lineList,
-                              color: tokens.textSecondary)),
-                      const SizedBox(height: WorkFollowSpacing.denseGap),
-                      Row(children: [
-                        Text(noteUpdatedLabelFor(note.updatedAt),
+            child: Column(children: [
+              Container(
+                  key: ValueKey('note-row-${note.id}'),
+                  constraints: const BoxConstraints(
+                      minHeight: NotesMetrics.rowMinHeight),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: NotesMetrics.rowHorizontalPadding,
+                      vertical: NotesMetrics.rowVerticalPadding),
+                  decoration: BoxDecoration(
+                      color: NotesColors.rowFill(tokens,
+                          selected: widget.selected, hovering: hovering),
+                      borderRadius:
+                          BorderRadius.circular(NotesMetrics.rowRadius)),
+                  child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(children: [
+                          if (note.isFavorite) ...[
+                            AppIcon(WorkFollowIcons.favorite,
+                                size: WorkFollowMetrics.metadataIcon,
+                                color: tokens.warning),
+                            const SizedBox(width: WorkFollowSpacing.denseGap)
+                          ],
+                          Expanded(
+                              child: Text(note.title,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                      fontSize: WorkFollowMacTypography.listTitle,
+                                      fontWeight: WorkFollowMacWeight.semibold,
+                                      color: tokens.textPrimary))),
+                        ]),
+                        const SizedBox(height: WorkFollowSpacing.space1),
+                        Text(note.preview.isEmpty ? '还没有内容' : note.preview,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
                             style: TextStyle(
-                                fontSize: WorkFollowMacTypography.listMeta,
-                                color: tokens.textTertiary)),
-                        const Spacer(),
-                        Flexible(
-                            child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: WorkFollowSpacing
-                                        .noteFolderBadgeHorizontalPadding,
-                                    vertical: WorkFollowSpacing
-                                        .noteFolderBadgeVerticalPadding),
-                                decoration: BoxDecoration(
-                                    color: tokens.accent.withValues(alpha: .08),
-                                    borderRadius: BorderRadius.circular(
-                                        WorkFollowRadii.pill)),
-                                child: Text(note.folder,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: TextStyle(
-                                        fontSize: WorkFollowMacTypography.listMeta,
-                                        fontWeight: WorkFollowMacWeight.semibold,
-                                        color: tokens.textSecondary)))),
-                      ]),
-                    ]))));
+                                fontSize: WorkFollowMacTypography.listBody,
+                                height: WorkFollowMacTypography.lineList,
+                                color: tokens.textSecondary)),
+                        const SizedBox(height: WorkFollowSpacing.denseGap),
+                        Row(children: [
+                          Text(noteUpdatedLabelFor(note.updatedAt),
+                              style: TextStyle(
+                                  fontSize: WorkFollowMacTypography.listMeta,
+                                  color: tokens.textTertiary)),
+                          const Spacer(),
+                          // The folder is metadata, not status: it reads as the
+                          // same kind of text as the date instead of a tinted
+                          // pill that competed with the title.
+                          Flexible(
+                              child: Text(note.folder,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  textAlign: TextAlign.end,
+                                  style: TextStyle(
+                                      fontSize: WorkFollowMacTypography.listMeta,
+                                      color: tokens.textTertiary))),
+                        ]),
+                      ])),
+              if (widget.divider)
+                Container(
+                    height: WorkFollowMetrics.dividerThickness,
+                    margin: const EdgeInsets.symmetric(
+                        horizontal: NotesMetrics.rowDividerInset),
+                    color: tokens.border),
+            ])));
   }
 }
 
@@ -430,44 +511,48 @@ class _NotePageState extends State<_NotePage> {
   Widget build(BuildContext context) {
     final tokens = WorkFollowTheme.of(context), note = widget.note;
     final linked = widget.controller.tasksLinkedToNote(note.id);
+    final wordCount = (note.plainText ?? note.preview)
+        .replaceAll(RegExp(r'\s'), '')
+        .runes
+        .length;
     return Container(
         color: tokens.content,
         child: Column(children: [
-          Padding(
-              padding: const EdgeInsets.fromLTRB(WorkFollowSpacing.sectionGap, WorkFollowSpacing.relaxedGap, WorkFollowSpacing.sectionGap, WorkFollowSpacing.cardInset),
-              child: Row(children: [
-                if (widget.onBack != null)
-                  IconButton(
-                      tooltip: '返回笔记列表',
-                      onPressed: widget.onBack,
-                      icon: const AppIcon(WorkFollowIcons.back,
-                          size: WorkFollowMetrics.headerIcon)),
-                PropertyButton(
-                    icon: WorkFollowIcons.folder,
-                    label: note.folder,
-                    onPressed: move),
-                const Spacer(),
-                IconButton(
-                    tooltip: note.isFavorite ? '取消收藏' : '收藏笔记',
-                    onPressed: () =>
-                        widget.controller.toggleNoteFavorite(note.id),
-                    icon: AppIcon(
-                        note.isFavorite
-                            ? WorkFollowIcons.favorite
-                            : WorkFollowIcons.favoriteOutline,
-                        color: note.isFavorite
-                            ? tokens.warning
-                            : tokens.textTertiary,
-                        size: WorkFollowMetrics.navigationIcon)),
-                Builder(
-                    builder: (anchor) => IconButton(
-                        key: const ValueKey('note-more-actions'),
-                        tooltip: '笔记操作',
-                        onPressed: () => more(anchor),
-                        icon: AppIcon(WorkFollowIcons.more,
-                            size: WorkFollowMetrics.headerIcon,
-                            color: tokens.textTertiary))),
-              ])),
+          SizedBox(
+              height: NotesMetrics.editorHeaderHeight,
+              child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: NotesMetrics.editorHeaderHorizontalPadding),
+                  child: Row(children: [
+                    if (widget.onBack != null)
+                      IconButton(
+                          tooltip: '返回笔记列表',
+                          onPressed: widget.onBack,
+                          icon: const AppIcon(WorkFollowIcons.back,
+                              size: WorkFollowMetrics.headerIcon)),
+                    _NoteFolderLink(folder: note.folder, onPressed: move),
+                    const Spacer(),
+                    IconButton(
+                        tooltip: note.isFavorite ? '取消收藏' : '收藏笔记',
+                        onPressed: () =>
+                            widget.controller.toggleNoteFavorite(note.id),
+                        icon: AppIcon(
+                            note.isFavorite
+                                ? WorkFollowIcons.favorite
+                                : WorkFollowIcons.favoriteOutline,
+                            color: note.isFavorite
+                                ? tokens.warning
+                                : tokens.textTertiary,
+                            size: WorkFollowMetrics.navigationIcon)),
+                    Builder(
+                        builder: (anchor) => IconButton(
+                            key: const ValueKey('note-more-actions'),
+                            tooltip: '笔记操作',
+                            onPressed: () => more(anchor),
+                            icon: AppIcon(WorkFollowIcons.more,
+                                size: WorkFollowMetrics.headerIcon,
+                                color: tokens.textTertiary))),
+                  ]))),
           Expanded(
               child: SingleChildScrollView(
                   child: Center(
@@ -487,7 +572,7 @@ class _NotePageState extends State<_NotePage> {
                           minLines: 1,
                           maxLines: 3,
                           style: TextStyle(
-                              fontSize: WorkFollowMacTypography.detailTitle,
+                              fontSize: WorkFollowMacTypography.noteTitle,
                               height: WorkFollowMacTypography.lineControl,
                               fontWeight: WorkFollowMacWeight.semibold,
                               letterSpacing:
@@ -501,17 +586,18 @@ class _NotePageState extends State<_NotePage> {
                           onChanged: (value) => widget.controller
                               .updateNoteTitle(note.id, value)),
                       const SizedBox(height: WorkFollowSpacing.space3),
-                      Row(children: [
-                        Text('最近编辑于 ${noteUpdatedLabelFor(note.updatedAt)}',
-                            style: TextStyle(
-                                fontSize: WorkFollowMacTypography.listMeta,
-                                color: tokens.textTertiary)),
-                        const Spacer(),
-                        SoftPill(
-                            label:
-                                '${(note.plainText ?? note.preview).replaceAll(RegExp(r'\s'), '').runes.length} 字'),
-                      ]),
-                      const SizedBox(height: WorkFollowSpacing.space4),
+                      // The page's timestamp carries the clock. "最近编辑于" is
+                      // a sentence explaining what a timestamp is; the position
+                      // under the title already says it.
+                      Text(noteUpdatedStampFor(note.updatedAt),
+                          style: TextStyle(
+                              fontSize: WorkFollowMacTypography.listMeta,
+                              color: tokens.textTertiary)),
+                      const SizedBox(height: WorkFollowSpacing.space5),
+                      Container(
+                          height: WorkFollowMetrics.dividerThickness,
+                          color: tokens.border),
+                      const SizedBox(height: WorkFollowSpacing.space5),
                       NoteDocumentEditor(
                           key: ValueKey('document-${note.id}'),
                           note: note,
@@ -546,8 +632,69 @@ class _NotePageState extends State<_NotePage> {
                       ],
                     ])),
           )))),
-          SaveStatusFooter(controller: widget.controller),
+          SaveStatusFooter(
+              controller: widget.controller, trailing: '$wordCount 字'),
         ]));
+  }
+}
+
+/// The note page's folder entry.
+///
+/// A filled chip in the header made the folder read as a status badge on the
+/// document — the loudest control on a page whose subject is the writing. It is
+/// an affordance, not a value: a quiet mark, the name, and a chevron that says
+/// a menu is behind it.
+class _NoteFolderLink extends StatefulWidget {
+  const _NoteFolderLink({required this.folder, required this.onPressed});
+
+  final String folder;
+  final void Function(BuildContext anchor) onPressed;
+
+  @override
+  State<_NoteFolderLink> createState() => _NoteFolderLinkState();
+}
+
+class _NoteFolderLinkState extends State<_NoteFolderLink> {
+  bool hovering = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = WorkFollowTheme.of(context);
+    final foreground = hovering ? tokens.textPrimary : tokens.textSecondary;
+    return Builder(
+        builder: (anchor) => MouseRegion(
+            cursor: SystemMouseCursors.click,
+            onEnter: (_) => setState(() => hovering = true),
+            onExit: (_) => setState(() => hovering = false),
+            child: GestureDetector(
+                onTap: () => widget.onPressed(anchor),
+                child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: WorkFollowSpacing.space2,
+                        vertical: WorkFollowSpacing.space1),
+                    decoration: BoxDecoration(
+                        color: hovering
+                            ? tokens.listRowHover
+                            : Colors.transparent,
+                        borderRadius:
+                            BorderRadius.circular(WorkFollowRadii.sm)),
+                    child: Row(mainAxisSize: MainAxisSize.min, children: [
+                      AppIcon(WorkFollowIcons.folder,
+                          size: WorkFollowMetrics.metadataIcon,
+                          color: foreground),
+                      const SizedBox(width: WorkFollowSpacing.denseGap),
+                      Text(widget.folder,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                              fontSize: WorkFollowMacTypography.listMeta,
+                              fontWeight: WorkFollowMacWeight.regular,
+                              color: foreground)),
+                      const SizedBox(width: WorkFollowSpacing.microGap),
+                      AppIcon(WorkFollowIcons.chevronNext,
+                          size: WorkFollowMetrics.metadataIcon,
+                          color: foreground),
+                    ])))));
   }
 }
 

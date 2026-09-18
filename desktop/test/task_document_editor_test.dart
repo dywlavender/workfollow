@@ -105,7 +105,7 @@ void main() {
             TaskInspector(
               task: controller.tasks.single,
               controller: controller,
-              inline: true,
+              presentation: TaskInspectorPresentation.inline,
             ),
           ],
         ),

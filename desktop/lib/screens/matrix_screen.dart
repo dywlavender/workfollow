@@ -10,6 +10,7 @@ import '../widgets/app_icon_button.dart';
 import '../widgets/desktop_popover.dart';
 import '../widgets/matrix/matrix_add_surface.dart';
 import '../widgets/matrix/matrix_board.dart';
+import '../widgets/matrix/matrix_task_editor_popover.dart';
 import '../widgets/task_editor_popover.dart';
 
 class MatrixScreen extends StatefulWidget {
@@ -26,6 +27,7 @@ class _MatrixScreenState extends State<MatrixScreen> {
   /// screenshot. The optional filter lives in the page menu, not the header.
   bool showCompleted = true;
   final Set<String> collapsedGroups = <String>{};
+  String? editingTaskId;
 
   List<MatrixQuadrantViewModel> get projection =>
       widget.controller.matrixProjection(includeCompleted: showCompleted);
@@ -73,11 +75,25 @@ class _MatrixScreenState extends State<MatrixScreen> {
                 }
               }),
               onAddTask: _addTask,
+              selectedTaskId: editingTaskId,
+              onOpenTask: _openTaskEditor,
             ),
           ),
         ],
       ),
     );
+  }
+
+  Future<void> _openTaskEditor(BuildContext anchor, String taskId) async {
+    if (editingTaskId != null) return;
+    setState(() => editingTaskId = taskId);
+    await showMatrixTaskEditor(
+      anchor,
+      controller: widget.controller,
+      taskId: taskId,
+    );
+    if (!mounted || editingTaskId != taskId) return;
+    setState(() => editingTaskId = null);
   }
 
   Widget _pageHeader(BuildContext context) {

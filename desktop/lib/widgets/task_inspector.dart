@@ -24,6 +24,19 @@ import 'task_editor_viewport.dart';
 import 'task_more_menu.dart';
 import 'task_menu_actions.dart';
 
+/// Controls the layout container used by [TaskInspector]. The editing
+/// capabilities are shared; only the surrounding presentation changes.
+enum TaskInspectorPresentation {
+  /// The persistent detail pane used by the wide Today view.
+  pane,
+
+  /// The compact editor embedded in a task list row.
+  inline,
+
+  /// The floating editor opened from a Matrix task row.
+  popup,
+}
+
 /// TickTick-style task workbench. The inspector stays mounted in the right
 /// pane on wide windows and presents one continuous document surface instead
 /// of hiding normal task capabilities behind an "advanced" toggle.
@@ -34,7 +47,7 @@ class TaskInspector extends StatefulWidget {
     required this.controller,
     this.showBack = false,
     this.onBack,
-    this.inline = false,
+    this.presentation = TaskInspectorPresentation.pane,
     this.onOpenFocusTimer,
   });
 
@@ -42,7 +55,7 @@ class TaskInspector extends StatefulWidget {
   final WorkspaceController controller;
   final bool showBack;
   final VoidCallback? onBack;
-  final bool inline;
+  final TaskInspectorPresentation presentation;
   final VoidCallback? onOpenFocusTimer;
 
   @override
@@ -57,6 +70,11 @@ class _TaskInspectorState extends State<TaskInspector> {
   final documentKey = GlobalKey<TaskDocumentEditorState>();
   late int focusVersion;
   bool listOpen = false, dateOpen = false, moreOpen = false;
+
+  bool get _isInline =>
+      widget.presentation == TaskInspectorPresentation.inline;
+
+  bool get _isPopup => widget.presentation == TaskInspectorPresentation.popup;
 
   @override
   void initState() {
@@ -97,11 +115,15 @@ class _TaskInspectorState extends State<TaskInspector> {
   void _escape() {
     if (documentKey.currentState?.dismissSlashMenu() ?? false) return;
     if (documentKey.currentState?.dismissFormattingToolbar() ?? false) return;
+    if (_isPopup) {
+      close();
+      return;
+    }
     if (editingScope.hasFocus) {
       inspectorFocus.requestFocus();
       return;
     }
-    if (widget.inline || widget.showBack) close();
+    if (_isInline || widget.showBack) close();
   }
 
   @override
@@ -310,7 +332,7 @@ class _TaskInspectorState extends State<TaskInspector> {
       constraints: const BoxConstraints(
           minHeight: TaskInspectorMetrics.headerMinHeight),
       padding: const EdgeInsets.symmetric(horizontal: WorkFollowSpacing.space5, vertical: WorkFollowSpacing.cardInset),
-      decoration: widget.inline
+      decoration: _isInline
           ? null
           : BoxDecoration(
               border: Border(bottom: BorderSide(color: tokens.border))),
@@ -391,7 +413,7 @@ class _TaskInspectorState extends State<TaskInspector> {
                     : null,
             onPressed: _priority,
             iconOnly: true),
-        if (widget.inline)
+        if (_isInline)
           IconButton(
               tooltip: '收起任务',
               visualDensity: VisualDensity.compact,
@@ -511,10 +533,10 @@ class _TaskInspectorState extends State<TaskInspector> {
 
   Widget _editorBody(TaskItem task, WorkFollowTheme tokens,
       {double minHeight = 0}) {
-    final horizontalPadding = widget.inline
+    final horizontalPadding = _isInline
         ? WorkFollowSpacing.inspectorInlineHorizontalPadding
         : WorkFollowSpacing.inspectorContentHorizontalPadding;
-    final topPadding = widget.inline
+    final topPadding = _isInline
         ? WorkFollowSpacing.inspectorInlineTopPadding
         : WorkFollowSpacing.inspectorContentTopPadding;
     return Padding(
@@ -571,10 +593,10 @@ class _TaskInspectorState extends State<TaskInspector> {
     final task = widget.task;
     final tokens = WorkFollowTheme.of(context);
     final content = Column(
-        mainAxisSize: widget.inline ? MainAxisSize.min : MainAxisSize.max,
+        mainAxisSize: _isInline ? MainAxisSize.min : MainAxisSize.max,
         children: [
           _header(context, task, tokens),
-          if (widget.inline)
+          if (_isInline)
             FocusScope(node: editingScope, child: _editorBody(task, tokens))
           else
             Expanded(
@@ -596,7 +618,7 @@ class _TaskInspectorState extends State<TaskInspector> {
         child: Focus(
           focusNode: inspectorFocus,
           child: Container(
-              color: widget.inline ? Colors.transparent : tokens.content,
+              color: _isInline ? Colors.transparent : tokens.content,
               child: content),
         ));
   }

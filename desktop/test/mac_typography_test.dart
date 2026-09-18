@@ -124,7 +124,7 @@ void main() {
             TaskInspector(
               task: controller.tasks.single,
               controller: controller,
-              inline: true,
+              presentation: TaskInspectorPresentation.inline,
             ),
           ],
         ),
@@ -173,6 +173,7 @@ void main() {
       WorkFollowMacTypography.listBody,
       WorkFollowMacTypography.listMeta,
       WorkFollowMacTypography.detailTitle,
+      WorkFollowMacTypography.noteTitle,
       WorkFollowMacTypography.body,
       WorkFollowMacTypography.supporting,
       WorkFollowMacTypography.documentH1,
@@ -182,7 +183,7 @@ void main() {
       WorkFollowMacTypography.menu,
       WorkFollowMacTypography.caption,
     ];
-    expect(sizes.length, 16);
+    expect(sizes.length, 17);
 
     // The job is unified, not the pixel. These pairs deliberately share a
     // value; they are separate names because they are separate roles, and a
@@ -205,6 +206,10 @@ void main() {
     // too prominent for the task preview under a 14pt task title.
     expect(WorkFollowMacTypography.pageTitle, 19);
     expect(WorkFollowMacTypography.listBody, 12.5);
+    // The note page is a canvas, not a form: the document title owns the page
+    // and sits at 26 rather than borrowing the inspector's 18, where it read as
+    // one more field label above a 760pt body column.
+    expect(WorkFollowMacTypography.noteTitle, 26);
 
     expect(WorkFollowMacWeight.regular, FontWeight.w400);
     expect(WorkFollowMacWeight.medium, FontWeight.w500);

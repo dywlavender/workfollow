@@ -59,6 +59,38 @@ void main() {
             WorkFollowLayout.taskListDividerWidth);
   });
 
+  testWidgets('task list divider keeps its width inside the readable range',
+      (tester) async {
+    tester.view.physicalSize = const Size(1000, 700);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    final controller = WorkspaceController(seedData: false);
+    addTearDown(controller.dispose);
+    controller.selectView(WorkspaceView.inbox);
+    await tester.pumpWidget(MaterialApp(
+        theme: WorkFollowThemeData.light(),
+        home: Scaffold(
+            body:
+                SizedBox.expand(child: TodayScreen(controller: controller)))));
+    await tester.pumpAndSettle();
+
+    final listPane = find.byKey(const ValueKey('web-task-list-pane'));
+    final divider = find.byKey(const ValueKey('task-pane-divider'));
+    expect(tester.getSize(listPane).width, TaskListMetrics.preferredPaneWidth);
+
+    await tester.drag(divider, const Offset(1000, 0));
+    await tester.pump();
+    expect(tester.getSize(listPane).width, TaskListMetrics.maxPaneWidth);
+
+    await tester.drag(divider, const Offset(-1000, 0));
+    await tester.pump();
+    expect(tester.getSize(listPane).width, TaskListMetrics.minPaneWidth);
+  });
+
   testWidgets('task navigation and list rows use the compact native rhythm',
       (tester) async {
     final controller = WorkspaceController(seedData: true);
@@ -97,7 +129,7 @@ void main() {
     );
   });
 
-  testWidgets('notes index follows the Web 300/270 desktop widths',
+  testWidgets('notes index resolves the wide and compact pane widths',
       (tester) async {
     tester.view.physicalSize = const Size(1200, 700);
     tester.view.devicePixelRatio = 1;
@@ -116,8 +148,13 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const ValueKey('web-note-list-pane')), findsOneWidget);
+    // 330 wide / 300 compact. The index is a third of a three-column
+    // workspace, so it follows the reference proportion rather than the Web
+    // client's 300/270 index widths.
+    expect(NotesMetrics.listWidth, 330);
+    expect(NotesMetrics.compactListWidth, 300);
     expect(
         tester.getSize(find.byKey(const ValueKey('web-note-list-pane'))).width,
-        300);
+        NotesMetrics.listWidth);
   });
 }

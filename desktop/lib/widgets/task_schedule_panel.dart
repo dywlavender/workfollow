@@ -10,18 +10,28 @@ import '../theme/workfollow_icons.dart';
 import '../theme/workfollow_interaction_states.dart';
 import '../theme/workfollow_theme.dart';
 import 'app_icon_button.dart';
+import 'desktop_popover.dart';
 import 'task_editor_glyph.dart';
 import 'task_editor_popover.dart';
 import 'task_menu_glyph.dart';
 import 'task_menu_style.dart';
 import 'task_schedule_options.dart';
 
+/// Opens the schedule editor.
+///
+/// [focusPolicy] defaults to [PopoverFocusPolicy.firstItem] so the panel takes
+/// the keyboard when it is opened from the task inspector. Callers that open it
+/// from a field being edited (the Quick Add row) pass
+/// [PopoverFocusPolicy.preserveEditor] instead: the pointer-down already
+/// belongs to that field, and moving focus would end the edit.
 Future<TaskScheduleSettings?> showTaskSchedulePanel(
-        BuildContext anchor, TaskItem task) =>
+        BuildContext anchor, TaskItem task,
+        {PopoverFocusPolicy focusPolicy = PopoverFocusPolicy.firstItem}) =>
     showTaskEditorPopover<TaskScheduleSettings>(anchor,
         width: TaskScheduleMetrics.panelWidth,
         maxHeight: TaskScheduleMetrics.panelMaxHeight,
         scrollable: true,
+        focusPolicy: focusPolicy,
         builder: (_) => TaskSchedulePanel(task: task));
 
 class TaskSchedulePanel extends StatefulWidget {
