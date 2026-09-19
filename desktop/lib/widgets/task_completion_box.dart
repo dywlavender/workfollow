@@ -9,11 +9,13 @@ import 'app_icon_button.dart';
 
 /// The corner of a completion box, whatever size it is drawn at.
 ///
-/// One silhouette for one control. A box in a calendar strip is 11pt and one on
-/// a board card is 24pt, and they are the same shape because the radius is a
+/// One silhouette for one control. A box in a calendar strip is 9.9pt and one
+/// in a task row is 16.2pt, and they are the same shape because the radius is a
 /// fraction of the box rather than a number someone picked per screen. The
-/// fraction is the task row's — its 20pt box with a 5pt corner is the shape the
-/// rest of the product matches.
+/// fraction is the task row's — an 18pt box with a 4.5pt corner is the shape
+/// the rest of the product matches, and every other box is that shape scaled.
+/// So a box that gets smaller keeps its corner in proportion and never turns
+/// into a circle or a sharp tile on the way down.
 double taskCompletionBoxRadius(double size) =>
     size * WorkFollowRadii.checkbox / TaskListMetrics.checkboxSize;
 

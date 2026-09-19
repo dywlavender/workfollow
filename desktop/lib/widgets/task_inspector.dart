@@ -361,7 +361,10 @@ class _TaskInspectorState extends State<TaskInspector> {
             leading: task.isAbandoned
                 ? null
                 : TaskCompletionBox(
-                    size: WorkFollowMetrics.toolbarIcon,
+                    // The product's box side, not the toolbar's icon size:
+                    // the two happened to be the same number, which is how a
+                    // change to one would have moved the other.
+                    size: WorkFollowMetrics.completionBoxSize,
                     completed: task.completed,
                     // The same edge the task carries in the list. Priority
                     // lives on the box there, so it lives on the box here:

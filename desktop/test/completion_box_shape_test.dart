@@ -18,8 +18,8 @@ const _tokens = WorkFollowTheme.light;
 /// note, in the inspector's header, in a month cell's bar and in a week column.
 /// Those are four different sizes, and the box has to be recognisably the same
 /// thing at all of them — so its corner is a fraction of its own side rather
-/// than a number each screen picked, and the fraction is the task row's: a 20pt
-/// box with a 5pt corner.
+/// than a number each screen picked, and the fraction is the task row's: an
+/// 18pt box with a 4.5pt corner.
 ///
 /// Drawing it is what keeps that true. An icon arrives with its own corner, its
 /// own stroke and its own idea of a tick, and two places that each reach for
@@ -30,7 +30,8 @@ void main() {
   const sizes = <String, double>{
     'a month cell\'s bar and a week column\'s item':
         CalendarMetrics.taskBarCheckboxSize,
-    "the inspector's header and a quadrant row": WorkFollowMetrics.toolbarIcon,
+    "the inspector's header and a quadrant row":
+        WorkFollowMetrics.completionBoxSize,
     'a task row': TaskListMetrics.checkboxSize,
     'a board card': BoardMetrics.taskCheckboxSize,
   };
@@ -62,6 +63,52 @@ void main() {
           WorkFollowRadii.checkbox / TaskListMetrics.checkboxSize,
           reason: 'a box drawn at $size is the same shape as the row\'s, '
               'scaled — not a corner someone picked for that screen');
+    }
+  });
+
+  test('one side for the product, and the control Flutter caps is scaled to it',
+      () {
+    // Flutter's own Checkbox paints a side of its own and takes no argument
+    // for it, so a surface built on that control reaches the product's side by
+    // scaling. The row's slot is that control's own side, and it is also what
+    // the corner fraction above is quoted against.
+    expect(
+        TaskListMetrics.checkboxSize, WorkFollowMetrics.platformCheckboxSize);
+    expect(WorkFollowMetrics.completionBoxScale,
+        WorkFollowMetrics.completionBoxSize /
+            WorkFollowMetrics.platformCheckboxSize);
+    expect(WorkFollowMetrics.completionBoxScale, lessThan(1),
+        reason: 'Flutter paints the control larger than the product draws it, '
+            'so the scale is a shrink — a scale of one or more means the two '
+            'have drifted apart');
+
+    // The sides the product picks are the product's, not a page's own idea.
+    expect(MatrixMetrics.taskRowCheckboxSize,
+        WorkFollowMetrics.completionBoxSize);
+    expect(
+        HomeMetrics.taskCheckboxVisualSize, WorkFollowMetrics.completionBoxSize);
+    expect(
+        taskCompletionBoxRadius(WorkFollowMetrics.completionBoxSize) /
+            WorkFollowMetrics.completionBoxSize,
+        .25,
+        reason: "the product's box is the row's shape, so its corner is the "
+            'same fraction of its own side');
+
+    // Every surface that keeps Flutter's control has to scale it. One that
+    // forgets draws at the control's own side instead, which is how the same
+    // task ends up two different sizes in two places.
+    for (final path in const [
+      'lib/widgets/task_row.dart',
+      'lib/screens/notes_screen.dart',
+      'lib/widgets/task_date_picker.dart',
+    ]) {
+      final source = File(path).readAsStringSync();
+      expect(source, contains('Transform.scale'),
+          reason: '$path keeps Flutter\'s own Checkbox, so it has to scale it '
+              'to the side the product draws its boxes at');
+      expect(source, contains('WorkFollowMetrics.completionBoxScale'),
+          reason: '$path has to scale by the product\'s factor rather than a '
+              'number of its own');
     }
   });
 

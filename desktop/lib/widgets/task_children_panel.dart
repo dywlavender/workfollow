@@ -224,7 +224,8 @@ class _TaskChildInlineRowState extends State<TaskChildInlineRow> {
                 key: ValueKey('task-child-check-${child.id}'),
                 onTap: widget.onToggle,
                 child: TaskCompletionBox(
-                    size: WorkFollowMetrics.toolbarIcon,
+                    // The product's box side, not the toolbar's icon size.
+                    size: WorkFollowMetrics.completionBoxSize,
                     completed: child.completed,
                     openColor: tokens.textSecondary),
               ),

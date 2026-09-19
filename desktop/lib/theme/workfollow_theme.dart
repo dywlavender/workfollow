@@ -28,6 +28,24 @@ class WorkFollowMetrics {
   /// behaviour, its corner is scaled from this, so it stays the same shape as
   /// the boxes drawn elsewhere.
   static const double platformCheckboxSize = 18;
+
+  /// The side the product draws a completion box at.
+  ///
+  /// One box, one size, wherever a task is marked: the list row, the
+  /// editor's header and its child rows, a quadrant row, a note's linked
+  /// task, the home card and the date picker's toggle. The calendar strip
+  /// and the document editor's checklist marker are the only two that are
+  /// their own, because a bar and a line of prose are not a row.
+  static const double completionBoxSize = 16.2;
+
+  /// What a control built on Flutter's own `Checkbox` is scaled by to
+  /// draw at [completionBoxSize].
+  ///
+  /// That control paints a box of [platformCheckboxSize] and takes no
+  /// size argument, so an enclosing `SizedBox` moves the slot and never
+  /// the box; scaling the control is what reaches the drawn side.
+  static const double completionBoxScale =
+      completionBoxSize / platformCheckboxSize;
   // macOS task navigation uses a denser rhythm than the Web reference while
   // keeping the same icon and text roles. The hit target remains large enough
   // for pointer use, but the surrounding row no longer wastes vertical space.
@@ -138,13 +156,14 @@ class TaskListMetrics {
       WorkFollowSpacing.taskRowVerticalPadding;
   static const double rowMinHeight = 50;
 
-  /// Drawn size of the completion box, measured off the reference list.
+  /// The row's box: the slot the control sits in, and the size the corner
+  /// fraction is quoted against (`WorkFollowRadii.checkbox` of this).
   ///
   /// It is also the pointer target. An earlier version wrapped the box in
   /// a 24x22 target to make it easier to hit, which pushed the title right
   /// of where the reference puts it — and the whole row is clickable anyway,
   /// so the box does not have to carry an oversized hit area itself.
-  static const double checkboxSize = 20;
+  static const double checkboxSize = 18;
 
   /// Gap between the checkbox column and the title.
   static const double checkboxTitleGap = WorkFollowSpacing.space1;
@@ -223,8 +242,8 @@ class TaskPickerMetrics {
   static const double repeatPickerMaxHeight = 290;
   static const double listPrefixMinWidth = 28;
   static const double fieldPrefixMinWidth = 32;
-  static const double dateTimeToggleWidth = 26;
-  static const double dateTimeToggleHeight = 28;
+  static const double dateTimeToggleWidth = 23.4;
+  static const double dateTimeToggleHeight = 25.2;
   static const double timeFieldWidth = 43;
 }
 
@@ -352,8 +371,8 @@ class CalendarMetrics {
 
   /// The completion box on a calendar task — the month grid's bar and the week
   /// column's item both draw one. Sized to the strip it sits in rather than to
-  /// the 24pt completion control a full task row gives its own.
-  static const double taskBarCheckboxSize = 11;
+  /// the 16.2pt box a full task row gives its own.
+  static const double taskBarCheckboxSize = 9.9;
 
   /// The tint a month cell takes while a task is dragged over it.
   static const double dropHighlightAlpha = .12;
@@ -393,8 +412,9 @@ class MatrixMetrics {
   static const double taskRowDividerHeight = WorkFollowMetrics.dividerThickness;
   static const double taskRowDragPreviewWidth = 280;
   static const double taskRowDragPreviewRadius = WorkFollowRadii.md;
-  static const double taskRowCheckboxHitTarget = 21;
-  static const double taskRowCheckboxSize = 18;
+  static const double taskRowCheckboxHitTarget = 18.9;
+  static const double taskRowCheckboxSize =
+      WorkFollowMetrics.completionBoxSize;
 }
 
 /// Geometry of the two surfaces a page opens *over* itself: the floating task
@@ -427,11 +447,11 @@ class TaskSurfaceMetrics {
 class TaskDocumentMetrics {
   const TaskDocumentMetrics._();
 
-  static const double checklistSize = 16;
+  static const double checklistSize = 14.4;
   static const double checklistRadius = WorkFollowRadii.checkbox;
-  static const double checklistBorderWidth = 1.3;
+  static const double checklistBorderWidth = 1.17;
   static const double checklistTrailingInset = 7;
-  static const double checklistCheckStrokeWidth = 2;
+  static const double checklistCheckStrokeWidth = 1.8;
   static const double quoteBorderWidth = 3;
 
   /// Height a task document reserves when a legacy panel follows the prose.
@@ -537,8 +557,9 @@ class HomeMetrics {
   static const double emptyIconSize = 40;
   static const double taskMarkerWidth = 4;
   static const double taskMarkerHeight = 22;
-  static const double taskCheckboxHitTarget = 24;
-  static const double taskCheckboxVisualSize = 18;
+  static const double taskCheckboxHitTarget = 21.6;
+  static const double taskCheckboxVisualSize =
+      WorkFollowMetrics.completionBoxSize;
   static const double noteDotSize = 7;
   static const double miniCalendarDotSize = 3;
 }
@@ -985,7 +1006,7 @@ class WorkFollowRadii {
 
   // Component exceptions are still named roles, so feature widgets do not
   // carry their own numeric corner values for custom checkboxes or markers.
-  static const double checkbox = 5;
+  static const double checkbox = 4.5;
   static const double marker = 2;
 }
 

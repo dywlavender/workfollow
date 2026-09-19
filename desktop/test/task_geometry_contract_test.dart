@@ -69,7 +69,10 @@ void main() {
     expect(CalendarMetrics.taskBarHeight, 17);
     expect(CalendarMetrics.taskBarGap, 2);
     expect(CalendarMetrics.taskBarRadius, 3);
-    expect(CalendarMetrics.taskBarCheckboxSize, 11);
+    // The strip's box, which is the product's box scaled to a strip rather
+    // than to a row. Every completion box in the product shrank by a tenth,
+    // so this is 90% of the 11 it was drawn at first.
+    expect(CalendarMetrics.taskBarCheckboxSize, 9.9);
   });
 
   test('the grid tints rather than highlights', () {

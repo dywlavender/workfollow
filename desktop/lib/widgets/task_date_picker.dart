@@ -334,11 +334,17 @@ class _TaskDatePickerState extends State<TaskDatePicker> {
                   SizedBox(
                       width: TaskPickerMetrics.dateTimeToggleWidth,
                       height: TaskPickerMetrics.dateTimeToggleHeight,
-                      child: Checkbox(
-                          key: const ValueKey('date-time-toggle'),
-                          value: timed,
-                          onChanged: (value) =>
-                              setState(() => timed = value!))),
+                      // The same box the rest of the product marks a task
+                      // with, so it takes the same side: Flutter's control
+                      // paints one of its own, and scaling is what reaches it.
+                      child: Transform.scale(
+                          scale: WorkFollowMetrics.completionBoxScale,
+                          alignment: Alignment.centerLeft,
+                          child: Checkbox(
+                              key: const ValueKey('date-time-toggle'),
+                              value: timed,
+                              onChanged: (value) =>
+                                  setState(() => timed = value!)))),
                 const SizedBox(width: WorkFollowSpacing.denseGap),
                 Expanded(
                     child: Text(widget.reminder ? '提醒时间' : '指定时间',

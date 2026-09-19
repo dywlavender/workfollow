@@ -248,31 +248,41 @@ class _TaskRowState extends State<TaskRow> {
                   color: tokens.textTertiary),
               onPressed: _complete));
     }
+    // The box is drawn by Flutter's own control, which paints a side of its
+    // own and takes no argument for it: the slot below moves the space around
+    // the box, never the box. Scaling the control is the only way to reach the
+    // side the product asks for, and scaling about the left edge keeps the box
+    // where the row puts it rather than drifting towards the middle.
     return SizedBox(
         width: TaskListMetrics.checkboxSize,
         height: TaskListMetrics.checkboxSize,
-        child: Checkbox(
-            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-            key: ValueKey('task-row-checkbox-${task.id}'),
-            // Multi-selection is a row state, not a completion state. A
-            // selected but unfinished task must keep an empty checkbox,
-            // otherwise Cmd-click makes it look completed.
-            value: task.isClosed,
-            activeColor: taskCompletionFill(tokens),
-            checkColor: tokens.content,
-            // No ink around the box. Material draws a circle on hover and
-            // press; it is the only round thing in a row built from rectangles,
-            // and it reads as a second, smaller target inside the row's own.
-            overlayColor: const WidgetStatePropertyAll(Colors.transparent),
-            semanticLabel: task.isClosed ? '标记未完成' : '完成任务',
-            shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(WorkFollowRadii.checkbox)),
-            side: BorderSide(
-                color: task.isClosed
-                    ? taskCompletionFill(tokens)
-                    : priorityColor,
-                width: WorkFollowMetrics.checkboxBorderWidth),
-            onChanged: (_) => _complete()));
+        child: Transform.scale(
+            scale: WorkFollowMetrics.completionBoxScale,
+            alignment: Alignment.centerLeft,
+            child: Checkbox(
+                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                key: ValueKey('task-row-checkbox-${task.id}'),
+                // Multi-selection is a row state, not a completion state. A
+                // selected but unfinished task must keep an empty checkbox,
+                // otherwise Cmd-click makes it look completed.
+                value: task.isClosed,
+                activeColor: taskCompletionFill(tokens),
+                checkColor: tokens.content,
+                // No ink around the box. Material draws a circle on hover and
+                // press; it is the only round thing in a row built from
+                // rectangles, and it reads as a second, smaller target inside
+                // the row's own.
+                overlayColor: const WidgetStatePropertyAll(Colors.transparent),
+                semanticLabel: task.isClosed ? '标记未完成' : '完成任务',
+                shape: RoundedRectangleBorder(
+                    borderRadius:
+                        BorderRadius.circular(WorkFollowRadii.checkbox)),
+                side: BorderSide(
+                    color: task.isClosed
+                        ? taskCompletionFill(tokens)
+                        : priorityColor,
+                    width: WorkFollowMetrics.checkboxBorderWidth),
+                onChanged: (_) => _complete())));
   }
 
   Widget _content(WorkFollowTheme tokens, String preview) {

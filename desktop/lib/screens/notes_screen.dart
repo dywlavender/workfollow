@@ -819,24 +819,33 @@ class _LinkedTaskRow extends StatelessWidget {
           SizedBox(
               width: NotesMetrics.linkedTaskCheckboxWidth,
               height: NotesMetrics.linkedTaskCheckboxHeight,
-              child: Checkbox(
-                  value: task.completed,
-                  // A rounded square, not a circle: the shape a task row's own
-                  // control has, so a task reads as the same kind of thing on
-                  // a note as it does in the list, on the board and in the
-                  // calendar. Only the size is the note's. The fill is the
-                  // shared completion role, and the ink circle Material would
-                  // draw around it is off for the same reason a task row's is.
-                  activeColor: taskCompletionFill(tokens),
-                  checkColor: tokens.content,
-                  overlayColor:
-                      const WidgetStatePropertyAll(Colors.transparent),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(
-                          taskCompletionBoxRadius(
-                              WorkFollowMetrics.platformCheckboxSize))),
-                  side: BorderSide(color: tokens.borderStrong, width: 1.4),
-                  onChanged: (_) => onToggle())),
+              // Flutter's own control paints a side of its own and takes no
+              // argument for it, so the slot above only moves the space around
+              // the box. Scaling is what reaches the drawn side; the left edge
+              // stays put so a note's row keeps its column.
+              child: Transform.scale(
+                  scale: WorkFollowMetrics.completionBoxScale,
+                  alignment: Alignment.centerLeft,
+                  child: Checkbox(
+                      value: task.completed,
+                      // A rounded square, not a circle: the shape a task row's
+                      // own control has, so a task reads as the same kind of
+                      // thing on a note as it does in the list, on the board
+                      // and in the calendar. Only the size is the note's. The
+                      // fill is the shared completion role, and the ink circle
+                      // Material would draw around it is off for the same
+                      // reason a task row's is.
+                      activeColor: taskCompletionFill(tokens),
+                      checkColor: tokens.content,
+                      overlayColor:
+                          const WidgetStatePropertyAll(Colors.transparent),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(
+                              taskCompletionBoxRadius(
+                                  WorkFollowMetrics.platformCheckboxSize))),
+                      side: BorderSide(
+                          color: tokens.borderStrong, width: 1.4),
+                      onChanged: (_) => onToggle()))),
           const SizedBox(width: WorkFollowSpacing.space2),
           Expanded(
               child: InkWell(
