@@ -466,36 +466,36 @@ class _TaskInspectorState extends State<TaskInspector> {
           // rather than disabled so the footer keeps its rhythm.
           ? null
           : Builder(
-          builder: (anchor) => TextButton.icon(
-              key: const ValueKey('task-list-footer'),
-              onPressed: () => _list(anchor),
-              icon: AppIcon(
-                  task.listName == '收集箱'
-                      ? WorkFollowIcons.inbox
-                      : WorkFollowIcons.list,
-                  size: WorkFollowMetrics.compactFieldIcon,
-                  color: tokens.textSecondary),
-              label: ConstrainedBox(
-                  constraints: const BoxConstraints(
-                      maxWidth: TaskInspectorMetrics.listLabelMaxWidth),
-                  child: Text(task.listName,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                          color: tokens.textSecondary,
-                          fontSize: WorkFollowMacTypography.control,
-                          height: WorkFollowMacTypography.lineControl,
-                          fontWeight: WorkFollowMacWeight.medium,
-                          letterSpacing: WorkFollowMacTracking.none))),
-              style: TextButton.styleFrom(
-                  backgroundColor:
-                      listOpen ? tokens.canvas : Colors.transparent,
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: WorkFollowSpacing.inlineGap),
-                  minimumSize:
-                      const Size(0, WorkFollowMetrics.compactButtonHeight),
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  visualDensity: VisualDensity.compact))),
+              builder: (anchor) => TextButton.icon(
+                  key: const ValueKey('task-list-footer'),
+                  onPressed: () => _list(anchor),
+                  icon: AppIcon(
+                      task.listName == '收集箱'
+                          ? WorkFollowIcons.inbox
+                          : WorkFollowIcons.list,
+                      size: WorkFollowMetrics.compactFieldIcon,
+                      color: tokens.textSecondary),
+                  label: ConstrainedBox(
+                      constraints: const BoxConstraints(
+                          maxWidth: TaskInspectorMetrics.listLabelMaxWidth),
+                      child: Text(task.listName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                              color: tokens.textSecondary,
+                              fontSize: WorkFollowMacTypography.control,
+                              height: WorkFollowMacTypography.lineControl,
+                              fontWeight: WorkFollowMacWeight.medium,
+                              letterSpacing: WorkFollowMacTracking.none))),
+                  style: TextButton.styleFrom(
+                      backgroundColor:
+                          listOpen ? tokens.canvas : Colors.transparent,
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: WorkFollowSpacing.inlineGap),
+                      minimumSize:
+                          const Size(0, WorkFollowMetrics.compactButtonHeight),
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      visualDensity: VisualDensity.compact))),
       status: DocumentSaveStatus(controller: widget.controller),
       actions: [
         DocumentFormattingToggle(
@@ -528,41 +528,47 @@ class _TaskInspectorState extends State<TaskInspector> {
     return Padding(
       padding: EdgeInsets.fromLTRB(horizontalPadding, topPadding,
           horizontalPadding, WorkFollowSpacing.inspectorContentBottomPadding),
-      child: DocumentEditorViewport(
-        minHeight: (minHeight -
-                topPadding -
-                WorkFollowSpacing.inspectorContentBottomPadding)
-            .clamp(0, double.infinity),
-        title: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
           if (widget.controller.parentOf(task.id) case final parent?)
-            TaskParentBreadcrumb(
-                parent: parent,
-                onOpen: () => widget.controller.openTask(parent.id)),
-          DocumentTitleEditor(
-            fieldKey: const ValueKey('task-title-editor'),
-            controller: title,
-            focusNode: titleFocus,
-            placeholder: task.isChildTask ? '准备做什么？' : '任务标题',
-            fontSize: WorkFollowMacTypography.detailTitle,
-            muted: task.completed,
-            strikethrough: task.completed,
-            onChanged: (value) =>
-                widget.controller.taskActions.setTitle(task.id, value),
-          ),
-        ]),
-        document: TaskDocumentEditor(
-          key: documentKey,
-          task: task,
-          controller: widget.controller,
-          onAddChildTask: _addChildTask,
-          onOpenTags: _tags,
-          onOpenRelation: _relation,
-          onOpenDeadline: (anchor) => _date(anchor, 'deadline'),
-          onEscape: _escape,
-          onToolbarChanged: (_) {
-            if (mounted) setState(() {});
-          },
-        ),
+            Padding(
+                padding:
+                    const EdgeInsets.only(bottom: WorkFollowSpacing.tightGap),
+                child: TaskParentBreadcrumb(
+                    parent: parent,
+                    onOpen: () => widget.controller.openTask(parent.id))),
+          DocumentEditorViewport(
+            minHeight: (minHeight -
+                    topPadding -
+                    WorkFollowSpacing.inspectorContentBottomPadding)
+                .clamp(0, double.infinity),
+            title: DocumentTitleEditor(
+              fieldKey: const ValueKey('task-title-editor'),
+              controller: title,
+              focusNode: titleFocus,
+              placeholder: task.isChildTask ? '准备做什么？' : '任务标题',
+              fontSize: WorkFollowMacTypography.detailTitle,
+              muted: task.completed,
+              strikethrough: task.completed,
+              onChanged: (value) =>
+                  widget.controller.taskActions.setTitle(task.id, value),
+            ),
+            document: TaskDocumentEditor(
+              key: documentKey,
+              task: task,
+              controller: widget.controller,
+              onAddChildTask: _addChildTask,
+              onOpenTags: _tags,
+              onOpenRelation: _relation,
+              onOpenDeadline: (anchor) => _date(anchor, 'deadline'),
+              onEscape: _escape,
+              onToolbarChanged: (_) {
+                if (mounted) setState(() {});
+              },
+            ),
+          )
+        ],
       ),
     );
   }

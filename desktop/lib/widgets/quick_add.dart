@@ -283,8 +283,7 @@ class _QuickAddFieldState extends State<QuickAddField> {
   /// date affordance is an icon-only entry — no "今天" label, no injected
   /// default date. Time-based views (今天 / 最近 7 天 / 计划) keep the
   /// default-today behaviour.
-  bool get _inboxContext =>
-      widget.controller.view == WorkspaceView.inbox;
+  bool get _inboxContext => widget.controller.view == WorkspaceView.inbox;
 
   String _titleForValue(SmartParseResult value) {
     // An @marker only leaves the title when it does not name an existing
@@ -314,10 +313,12 @@ class _QuickAddFieldState extends State<QuickAddField> {
     final hasSchedulingToken = value.spans.any((span) =>
         span.kind == SmartTokenKind.date || span.kind == SmartTokenKind.time);
     final dismissedScheduling = _hasDismissedScheduling;
-    final defaultDue =
-        !hasSchedulingToken && !dismissedScheduling && !customDate && !_inboxContext
-            ? widget.controller.creationDate
-            : null;
+    final defaultDue = !hasSchedulingToken &&
+            !dismissedScheduling &&
+            !customDate &&
+            !_inboxContext
+        ? widget.controller.creationDate
+        : null;
     final parsedSchedule = TaskScheduleDraft(
       dueAt: value.dueAt ?? defaultDue,
       hasTime: value.hasTime,
@@ -514,9 +515,8 @@ class _QuickAddFieldState extends State<QuickAddField> {
         ? currentDraft.recurrence
         : RecurrenceDraft(
             type: parse.recurrenceType, config: parse.recurrenceConfig);
-    final reminder = reminderOverridden
-        ? currentDraft.reminderAt
-        : parse.reminderAt;
+    final reminder =
+        reminderOverridden ? currentDraft.reminderAt : parse.reminderAt;
     return TaskItem(
       id: 'quick-add-schedule',
       title: text.text.trim().isEmpty ? '新任务' : text.text.trim(),
@@ -539,8 +539,8 @@ class _QuickAddFieldState extends State<QuickAddField> {
     final base = settings.schedule.hasTime
         ? due
         : DateTime(due.year, due.month, due.day, 9);
-    final offset = settings.reminderOffsets.reduce(
-        (largest, value) => value > largest ? value : largest);
+    final offset = settings.reminderOffsets
+        .reduce((largest, value) => value > largest ? value : largest);
     return base.subtract(Duration(minutes: offset));
   }
 
@@ -556,21 +556,21 @@ class _QuickAddFieldState extends State<QuickAddField> {
         builder: (popoverContext) => _QuickAddPropertiesPanel(
               selectedPriority:
                   priorityOverridden ? currentDraft.priority : parse.priority,
-              listLabel: (listOverridden
-                      ? currentDraft.listName
-                      : parse.listName) ??
-                  widget.controller.creationTargetLabel.split(' · ').first,
+              listLabel:
+                  (listOverridden ? currentDraft.listName : parse.listName) ??
+                      widget.controller.creationTargetLabel.split(' · ').first,
               selectedTags: tagsOverridden ? currentDraft.tags : parse.tags,
               onPriority: (priority) =>
                   Navigator.of(popoverContext).pop(priority),
               onList: (rowAnchor) => _pickList(rowAnchor,
                   placement: const PopoverPlacement(
-                      preferredSide: PopoverSide.right, gap: WorkFollowSpacing.space2)),
+                      preferredSide: PopoverSide.right,
+                      gap: WorkFollowSpacing.space2)),
               onTags: (rowAnchor) => _pickTags(rowAnchor,
                   placement: const PopoverPlacement(
-                      preferredSide: PopoverSide.right, gap: WorkFollowSpacing.space2)),
-              onReminder: () =>
-                  Navigator.of(popoverContext).pop('reminder'),
+                      preferredSide: PopoverSide.right,
+                      gap: WorkFollowSpacing.space2)),
+              onReminder: () => Navigator.of(popoverContext).pop('reminder'),
               onRepeat: () => Navigator.of(popoverContext).pop('repeat'),
             ));
     if (!mounted) return;
@@ -691,214 +691,234 @@ class _QuickAddFieldState extends State<QuickAddField> {
               mainAxisSize: MainAxisSize.min,
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-            Row(children: [
-              AppIcon(WorkFollowIcons.add,
-                  size: widget.listStyle
-                      ? WorkFollowMetrics.toolbarIcon
-                      : WorkFollowMetrics.headerIcon,
-                  color: widget.listStyle
-                      ? tokens.textTertiary
-                      : tokens.accent),
-              const SizedBox(width: WorkFollowSpacing.controlGap),
-            Expanded(
-                  child: TextField(
-                      key: const ValueKey('quick-add-title'),
-                      controller: text,
-                      focusNode: focus,
-                      autofocus: widget.autofocus,
-                      onSubmitted: (_) => submit(),
-                      onChanged: (_) => _reparse(),
-                      textInputAction: TextInputAction.done,
-                      // Quick add is an input control, not a task title. Sizing
-                      // it with [listTitle] made the placeholder read heavier
-                      // than the task rows below it, which have not been
-                      // created yet.
-                      style: TextStyle(
-                          fontSize: WorkFollowMacTypography.control,
-                          height: WorkFollowMacTypography.lineControl,
-                          fontWeight: WorkFollowMacWeight.regular,
-                          color: tokens.textPrimary),
-                      decoration: InputDecoration(
-                          hintText: widget.listStyle
-                              ? '添加任务至“${widget.controller.creationTargetLabel.split(' · ').first}”'
-                              : '记下下一件事…',
-                          hintStyle: TextStyle(color: tokens.textTertiary),
-                          border: InputBorder.none,
-                          isDense: true,
-                          contentPadding:
-                              const EdgeInsets.symmetric(vertical: WorkFollowSpacing.compactInset)))),
-              // The list add row keeps two slots right of the field, matching
-              // the TickTick reference — but only while selected: an unfocused
-              // row shows just "+ placeholder". The inbox shows an icon-only
-              // date entry (its tasks start unscheduled); time-based views
-              // show "今天" lit in the accent colour.
-              if (widget.listStyle && expanded) ...[
-                const SizedBox(width: WorkFollowSpacing.inlineGap),
-                // Desktop Flutter drops the caret on any pointer-down outside
-                // the field's tap region. These two slots are part of the
-                // field's own row, so they join its group: tapping the date
-                // chip or the disclosure must not end the edit.
-                TextFieldTapRegion(
-                    child: ExcludeFocus(
-                        child: PropertyButton(
-                            key: const ValueKey('quick-add-schedule'),
-                            icon: WorkFollowIcons.calendar,
-                            label: _inboxContext
-                                ? ''
-                                : calendarDateLabel(_effectiveDue,
-                                    hasTime: _effectiveHasTime),
-                            active: _scheduleActive,
-                            onPressed: _pickSchedule))),
-                const SizedBox(width: WorkFollowSpacing.microGap),
-                TextFieldTapRegion(
-                    child: ExcludeFocus(
-                        child: Builder(
-                            builder: (anchor) => AppIconButton(
-                                key: const ValueKey('quick-add-properties'),
-                                icon: WorkFollowIcons.expandMore,
-                                tooltip: '更多属性',
-                                onPressed: () => _openProperties(anchor),
-                                size: WorkFollowMetrics.iconHitTarget,
-                                iconSize: WorkFollowMetrics.toolbarIcon)))),
-              ],
-              // The shortcut still works; it just does not take a slot here. A
-              // permanent ⌘N label was the loudest thing on the quiet slot.
-              if (!expanded)
-                Text('⌘N',
-                    style: TextStyle(
-                        fontSize: WorkFollowMacTypography.caption,
-                        height: WorkFollowMacTypography.lineControl,
-                        color: tokens.textTertiary)),
-            ]),
-            if (parse.spans.isNotEmpty)
-              Padding(
-                  padding: const EdgeInsets.only(top: WorkFollowSpacing.space1, bottom: WorkFollowSpacing.microGap),
-                  child: SizedBox(
-                      width: double.infinity,
-                      child: Wrap(spacing: WorkFollowSpacing.inlineGap, runSpacing: WorkFollowSpacing.inlineGap, children: [
-                        for (final span in parse.spans)
-                          InputChip(
-                              key: ValueKey(parse.spans
-                                          .where((other) =>
-                                              other.kind == span.kind &&
-                                              other.raw == span.raw)
-                                          .length >
-                                      1
-                                  ? 'smart-chip-${_smartSpanKey(span)}'
-                                  : 'smart-chip-${span.kind.name}-${span.raw}'),
-                              label: Text(span.label,
-                                  style: TextStyle(
-                                      fontSize: WorkFollowMacTypography.control,
-                                      height: WorkFollowMacTypography.lineControl,
-                                      fontWeight: WorkFollowMacWeight.medium,
-                                      color: _spanColor(span.kind, tokens))),
-                              backgroundColor: _spanColor(span.kind, tokens)
-                                  .withValues(alpha: .09),
-                              side: BorderSide.none,
-                              visualDensity: VisualDensity.compact,
-                              materialTapTargetSize:
-                                  MaterialTapTargetSize.shrinkWrap,
-                              deleteIconColor: _spanColor(span.kind, tokens),
-                              deleteIcon: const AppIcon(WorkFollowIcons.close,
-                                  size: WorkFollowMetrics.metadataIcon),
-                              onDeleted: () => _dismissSpan(span)),
-                      ]))),
-            if (expanded && parse.hasStructure && _summary.isNotEmpty)
-              Align(
-                  alignment: Alignment.centerLeft,
-                  child: Padding(
-                      padding: const EdgeInsets.only(left: WorkFollowSpacing.nestedContentIndent, top: WorkFollowSpacing.hairlineGap),
-                      child: Text(_summary,
+                Row(children: [
+                  AppIcon(WorkFollowIcons.add,
+                      size: widget.listStyle
+                          ? WorkFollowMetrics.toolbarIcon
+                          : WorkFollowMetrics.headerIcon,
+                      color: widget.listStyle
+                          ? tokens.textTertiary
+                          : tokens.accent),
+                  const SizedBox(width: WorkFollowSpacing.controlGap),
+                  Expanded(
+                      child: TextField(
+                          key: const ValueKey('quick-add-title'),
+                          controller: text,
+                          focusNode: focus,
+                          autofocus: widget.autofocus,
+                          onSubmitted: (_) => submit(),
+                          onChanged: (_) => _reparse(),
+                          textInputAction: TextInputAction.done,
+                          // Quick add is an input control, not a task title. Sizing
+                          // it with [listTitle] made the placeholder read heavier
+                          // than the task rows below it, which have not been
+                          // created yet.
                           style: TextStyle(
-                              color: tokens.textTertiary,
-                              fontSize: WorkFollowMacTypography.supporting,
+                              fontSize: WorkFollowMacTypography.control,
                               height: WorkFollowMacTypography.lineControl,
-                              fontWeight: WorkFollowMacWeight.medium)))),
-            // The list add row carries its two fixed slots up in the main
-            // line now, so this expanded property strip only remains on the
-            // fuller home-card variant.
-            if (expanded && !widget.listStyle)
-              Padding(
-                  padding: const EdgeInsets.only(top: WorkFollowSpacing.denseGap, bottom: WorkFollowSpacing.space1),
-                  child: Row(children: [
-                    Expanded(
-                        child: SingleChildScrollView(
-                            scrollDirection: Axis.horizontal,
-                            child: TextFieldTapRegion(
-                                child: ExcludeFocus(
-                                    child: Row(children: [
-                              PropertyButton(
-                                  key: const ValueKey('quick-add-schedule'),
-                                  icon: WorkFollowIcons.calendar,
-                                  label: calendarDateLabel(_effectiveDue,
-                                      hasTime: _effectiveHasTime),
-                                  active: _scheduleActive,
-                                  onPressed: _pickSchedule),
-                              if (!widget.listStyle) ...[
-                                const SizedBox(width: WorkFollowSpacing.inlineGap),
-                                PropertyButton(
-                                    key: const ValueKey('quick-add-priority'),
-                                    icon: WorkFollowIcons.flag,
-                                    label: currentDraft.priority ==
-                                            TaskPriority.none
-                                        ? '优先级'
-                                        : currentDraft.priority.label,
-                                    active: currentDraft.priority !=
-                                        TaskPriority.none,
-                                    onPressed: _pickPriority),
-                                const SizedBox(width: WorkFollowSpacing.inlineGap),
-                                PropertyButton(
-                                    key: const ValueKey('quick-add-list'),
-                                    icon: WorkFollowIcons.inbox,
-                                    label: currentDraft.listName ??
-                                        widget.controller.creationTargetLabel
-                                            .split(' · ')
-                                            .first,
-                                    active: currentDraft.listName != null,
-                                    onPressed: _pickList),
-                                const SizedBox(width: WorkFollowSpacing.inlineGap),
-                                PropertyButton(
-                                    key: const ValueKey('quick-add-tags'),
-                                    icon: WorkFollowIcons.tag,
-                                    label: currentDraft.tags.isEmpty
-                                        ? '标签'
-                                        : currentDraft.tags
-                                            .map((tag) => '#$tag')
-                                            .join(' '),
-                                    active: currentDraft.tags.isNotEmpty,
-                                    onPressed: _pickTags),
-                                const SizedBox(width: WorkFollowSpacing.inlineGap),
-                                PropertyButton(
-                                    key: const ValueKey('quick-add-reminder'),
-                                    icon: WorkFollowIcons.reminder,
-                                    label: currentDraft.reminderAt == null
-                                        ? '提醒'
-                                        : calendarDateLabel(
-                                            currentDraft.reminderAt,
-                                            hasTime: true),
-                                    active: currentDraft.reminderAt != null,
-                                    onPressed: _pickReminder),
-                                const SizedBox(width: WorkFollowSpacing.inlineGap),
-                                PropertyButton(
-                                    key: const ValueKey('quick-add-repeat'),
-                                    icon: WorkFollowIcons.repeat,
-                                    label: '重复',
-                                    active: currentDraft.recurrence.enabled,
-                                    onPressed: _pickRecurrence),
-                              ],
-                            ]))))),
-                    FilledButton(
-                          onPressed: text.text.trim().isEmpty ? null : submit,
-                          style: FilledButton.styleFrom(
-                              minimumSize: const Size(
-                                  0, WorkFollowMetrics.compactButtonHeight),
-                              padding:
-                                  const EdgeInsets.symmetric(horizontal: WorkFollowSpacing.space3)),
-                          child: const Text('添加任务',
+                              fontWeight: WorkFollowMacWeight.regular,
+                              color: tokens.textPrimary),
+                          decoration: InputDecoration(
+                              hintText: widget.listStyle
+                                  ? '添加任务至“${widget.controller.creationTargetLabel.split(' · ').first}”'
+                                  : '记下下一件事…',
+                              hintStyle: TextStyle(color: tokens.textTertiary),
+                              border: InputBorder.none,
+                              isDense: true,
+                              contentPadding: const EdgeInsets.symmetric(
+                                  vertical: WorkFollowSpacing.compactInset)))),
+                  // The list add row keeps two slots right of the field, matching
+                  // the TickTick reference — but only while selected: an unfocused
+                  // row shows just "+ placeholder". The inbox shows an icon-only
+                  // date entry (its tasks start unscheduled); time-based views
+                  // show "今天" lit in the accent colour.
+                  if (widget.listStyle && expanded) ...[
+                    const SizedBox(width: WorkFollowSpacing.inlineGap),
+                    // Desktop Flutter drops the caret on any pointer-down outside
+                    // the field's tap region. These two slots are part of the
+                    // field's own row, so they join its group: tapping the date
+                    // chip or the disclosure must not end the edit.
+                    TextFieldTapRegion(
+                        child: ExcludeFocus(
+                            child: PropertyButton(
+                                key: const ValueKey('quick-add-schedule'),
+                                icon: WorkFollowIcons.calendar,
+                                label: _inboxContext
+                                    ? ''
+                                    : calendarDateLabel(_effectiveDue,
+                                        hasTime: _effectiveHasTime),
+                                active: _scheduleActive,
+                                onPressed: _pickSchedule))),
+                    const SizedBox(width: WorkFollowSpacing.microGap),
+                    TextFieldTapRegion(
+                        child: ExcludeFocus(
+                            child: Builder(
+                                builder: (anchor) => AppIconButton(
+                                    key: const ValueKey('quick-add-properties'),
+                                    icon: WorkFollowIcons.expandMore,
+                                    tooltip: '更多属性',
+                                    onPressed: () => _openProperties(anchor),
+                                    size: WorkFollowMetrics.iconHitTarget,
+                                    iconSize: WorkFollowMetrics.toolbarIcon)))),
+                  ],
+                  // The shortcut still works; it just does not take a slot here. A
+                  // permanent ⌘N label was the loudest thing on the quiet slot.
+                  if (!expanded)
+                    Text('⌘N',
+                        style: TextStyle(
+                            fontSize: WorkFollowMacTypography.caption,
+                            height: WorkFollowMacTypography.lineControl,
+                            color: tokens.textTertiary)),
+                ]),
+                if (parse.spans.isNotEmpty)
+                  Padding(
+                      padding: const EdgeInsets.only(
+                          top: WorkFollowSpacing.space1,
+                          bottom: WorkFollowSpacing.microGap),
+                      child: SizedBox(
+                          width: double.infinity,
+                          child: Wrap(
+                              spacing: WorkFollowSpacing.inlineGap,
+                              runSpacing: WorkFollowSpacing.inlineGap,
+                              children: [
+                                for (final span in parse.spans)
+                                  InputChip(
+                                      key: ValueKey(parse.spans.where((other) => other.kind == span.kind && other.raw == span.raw).length > 1
+                                          ? 'smart-chip-${_smartSpanKey(span)}'
+                                          : 'smart-chip-${span.kind.name}-${span.raw}'),
+                                      label: Text(span.label,
+                                          style: TextStyle(
+                                              fontSize: WorkFollowMacTypography
+                                                  .control,
+                                              height: WorkFollowMacTypography
+                                                  .lineControl,
+                                              fontWeight:
+                                                  WorkFollowMacWeight.medium,
+                                              color: _spanColor(
+                                                  span.kind, tokens))),
+                                      backgroundColor:
+                                          _spanColor(span.kind, tokens)
+                                              .withValues(alpha: .09),
+                                      side: BorderSide.none,
+                                      visualDensity: VisualDensity.compact,
+                                      materialTapTargetSize:
+                                          MaterialTapTargetSize.shrinkWrap,
+                                      deleteIconColor:
+                                          _spanColor(span.kind, tokens),
+                                      deleteIcon: const AppIcon(
+                                          WorkFollowIcons.close,
+                                          size: WorkFollowMetrics.metadataIcon),
+                                      onDeleted: () => _dismissSpan(span)),
+                              ]))),
+                if (expanded && parse.hasStructure && _summary.isNotEmpty)
+                  Align(
+                      alignment: Alignment.centerLeft,
+                      child: Padding(
+                          padding: const EdgeInsets.only(
+                              left: WorkFollowSpacing.nestedContentIndent,
+                              top: WorkFollowSpacing.hairlineGap),
+                          child: Text(_summary,
                               style: TextStyle(
-                                  fontSize: WorkFollowMacTypography.control))),
-                  ])),
-          ]),
+                                  color: tokens.textTertiary,
+                                  fontSize: WorkFollowMacTypography.supporting,
+                                  height: WorkFollowMacTypography.lineControl,
+                                  fontWeight: WorkFollowMacWeight.medium)))),
+                // The list add row carries its two fixed slots up in the main
+                // line now, so this expanded property strip only remains on the
+                // fuller home-card variant.
+                if (expanded && !widget.listStyle)
+                  Padding(
+                      padding: const EdgeInsets.only(
+                          top: WorkFollowSpacing.denseGap,
+                          bottom: WorkFollowSpacing.space1),
+                      child: Row(children: [
+                        Expanded(
+                            child: SingleChildScrollView(
+                                scrollDirection: Axis.horizontal,
+                                child: TextFieldTapRegion(
+                                    child: ExcludeFocus(
+                                        child: Row(children: [
+                                  PropertyButton(
+                                      key: const ValueKey('quick-add-schedule'),
+                                      icon: WorkFollowIcons.calendar,
+                                      label: calendarDateLabel(_effectiveDue,
+                                          hasTime: _effectiveHasTime),
+                                      active: _scheduleActive,
+                                      onPressed: _pickSchedule),
+                                  if (!widget.listStyle) ...[
+                                    const SizedBox(
+                                        width: WorkFollowSpacing.inlineGap),
+                                    PropertyButton(
+                                        key: const ValueKey(
+                                            'quick-add-priority'),
+                                        icon: WorkFollowIcons.flag,
+                                        label: currentDraft.priority ==
+                                                TaskPriority.none
+                                            ? '优先级'
+                                            : currentDraft.priority.label,
+                                        active: currentDraft.priority !=
+                                            TaskPriority.none,
+                                        onPressed: _pickPriority),
+                                    const SizedBox(
+                                        width: WorkFollowSpacing.inlineGap),
+                                    PropertyButton(
+                                        key: const ValueKey('quick-add-list'),
+                                        icon: WorkFollowIcons.inbox,
+                                        label: currentDraft.listName ??
+                                            widget
+                                                .controller.creationTargetLabel
+                                                .split(' · ')
+                                                .first,
+                                        active: currentDraft.listName != null,
+                                        onPressed: _pickList),
+                                    const SizedBox(
+                                        width: WorkFollowSpacing.inlineGap),
+                                    PropertyButton(
+                                        key: const ValueKey('quick-add-tags'),
+                                        icon: WorkFollowIcons.tag,
+                                        label: currentDraft.tags.isEmpty
+                                            ? '标签'
+                                            : currentDraft.tags
+                                                .map((tag) => '#$tag')
+                                                .join(' '),
+                                        active: currentDraft.tags.isNotEmpty,
+                                        onPressed: _pickTags),
+                                    const SizedBox(
+                                        width: WorkFollowSpacing.inlineGap),
+                                    PropertyButton(
+                                        key: const ValueKey(
+                                            'quick-add-reminder'),
+                                        icon: WorkFollowIcons.reminder,
+                                        label: currentDraft.reminderAt == null
+                                            ? '提醒'
+                                            : calendarDateLabel(
+                                                currentDraft.reminderAt,
+                                                hasTime: true),
+                                        active: currentDraft.reminderAt != null,
+                                        onPressed: _pickReminder),
+                                    const SizedBox(
+                                        width: WorkFollowSpacing.inlineGap),
+                                    PropertyButton(
+                                        key: const ValueKey('quick-add-repeat'),
+                                        icon: WorkFollowIcons.repeat,
+                                        label: '重复',
+                                        active: currentDraft.recurrence.enabled,
+                                        onPressed: _pickRecurrence),
+                                  ],
+                                ]))))),
+                        FilledButton(
+                            onPressed: text.text.trim().isEmpty ? null : submit,
+                            style: FilledButton.styleFrom(
+                                minimumSize: const Size(
+                                    0, WorkFollowMetrics.compactButtonHeight),
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: WorkFollowSpacing.space3)),
+                            child: const Text('添加任务',
+                                style: TextStyle(
+                                    fontSize:
+                                        WorkFollowMacTypography.control))),
+                      ])),
+              ]),
         ));
   }
 
@@ -1008,63 +1028,68 @@ class _QuickAddPropertiesPanelState extends State<_QuickAddPropertiesPanel> {
     // group too: setting a priority from here must not end the edit.
     return TextFieldTapRegion(
       child: Padding(
-      key: const ValueKey('quick-add-properties-panel'),
-      padding: const EdgeInsets.symmetric(vertical: WorkFollowSpacing.space2),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(WorkFollowSpacing.relaxedGap, WorkFollowSpacing.inlineGap, WorkFollowSpacing.relaxedGap, WorkFollowSpacing.microGap),
-            child: Text(
-              '优先级',
-              style: TextStyle(
-                fontSize: WorkFollowMacTypography.supporting,
-                height: WorkFollowMacTypography.lineControl,
-                fontWeight: WorkFollowMacWeight.regular,
-                color: tokens.textTertiary,
+        key: const ValueKey('quick-add-properties-panel'),
+        padding: const EdgeInsets.symmetric(vertical: WorkFollowSpacing.space2),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                  WorkFollowSpacing.relaxedGap,
+                  WorkFollowSpacing.inlineGap,
+                  WorkFollowSpacing.relaxedGap,
+                  WorkFollowSpacing.microGap),
+              child: Text(
+                '优先级',
+                style: TextStyle(
+                  fontSize: WorkFollowMacTypography.supporting,
+                  height: WorkFollowMacTypography.lineControl,
+                  fontWeight: WorkFollowMacWeight.regular,
+                  color: tokens.textTertiary,
+                ),
               ),
             ),
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: WorkFollowSpacing.cardInset),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: [
-                for (final priority in TaskPriority.values)
-                  _priorityFlag(tokens, priority),
-              ],
+            Padding(
+              padding: const EdgeInsets.symmetric(
+                  horizontal: WorkFollowSpacing.cardInset),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: [
+                  for (final priority in TaskPriority.values)
+                    _priorityFlag(tokens, priority),
+                ],
+              ),
             ),
-          ),
-          const SizedBox(height: WorkFollowSpacing.inlineGap),
-          _submenuRow(
-            action: 'list',
-            icon: WorkFollowIcons.inbox,
-            label: listLabel,
-            onOpen: _openList,
-          ),
-          _submenuRow(
-            action: 'tags',
-            icon: WorkFollowIcons.tag,
-            label: selectedTags.isEmpty
-                ? '标签'
-                : selectedTags.map((tag) => '#$tag').join(' '),
-            onOpen: _openTags,
-          ),
-          _propertiesRow(
-            entryKey: 'menu-option-reminder',
-            icon: WorkFollowIcons.reminder,
-            label: '提醒',
-            onTap: widget.onReminder,
-          ),
-          _propertiesRow(
-            entryKey: 'menu-option-repeat',
-            icon: WorkFollowIcons.repeat,
-            label: '重复',
-            onTap: widget.onRepeat,
-          ),
-        ],
-      ),
+            const SizedBox(height: WorkFollowSpacing.inlineGap),
+            _submenuRow(
+              action: 'list',
+              icon: WorkFollowIcons.inbox,
+              label: listLabel,
+              onOpen: _openList,
+            ),
+            _submenuRow(
+              action: 'tags',
+              icon: WorkFollowIcons.tag,
+              label: selectedTags.isEmpty
+                  ? '标签'
+                  : selectedTags.map((tag) => '#$tag').join(' '),
+              onOpen: _openTags,
+            ),
+            _propertiesRow(
+              entryKey: 'menu-option-reminder',
+              icon: WorkFollowIcons.reminder,
+              label: '提醒',
+              onTap: widget.onReminder,
+            ),
+            _propertiesRow(
+              entryKey: 'menu-option-repeat',
+              icon: WorkFollowIcons.repeat,
+              label: '重复',
+              onTap: widget.onRepeat,
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1135,7 +1160,9 @@ class _QuickAddPropertiesPanelState extends State<_QuickAddPropertiesPanel> {
           borderRadius: BorderRadius.circular(WorkFollowRadii.control),
         ),
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: WorkFollowSpacing.relaxedGap, vertical: WorkFollowSpacing.compactInset),
+          padding: const EdgeInsets.symmetric(
+              horizontal: WorkFollowSpacing.relaxedGap,
+              vertical: WorkFollowSpacing.compactInset),
           child: Row(
             children: [
               AppIcon(

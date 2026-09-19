@@ -164,9 +164,6 @@ class DocumentCommands {
   void insertDivider({int? at}) =>
       insertBlock({'type': 'horizontalRule'}, at: at);
 
-  void insertSubtaskBlock({int? at}) =>
-      insertBlock({'type': 'taskSubtasks'}, at: at);
-
   /// Inserts the relation block used by the task source-note panel.
   void insertRelation(String noteId, {int? at}) => insertBlock(
         {

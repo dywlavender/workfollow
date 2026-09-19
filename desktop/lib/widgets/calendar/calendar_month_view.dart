@@ -34,8 +34,7 @@ class CalendarWeekHeader extends StatelessWidget {
       decoration: BoxDecoration(
         border: Border(
           bottom: BorderSide(
-              color: tokens.border,
-              width: WorkFollowMetrics.dividerThickness),
+              color: tokens.border, width: WorkFollowMetrics.dividerThickness),
         ),
       ),
       child: Row(
@@ -278,8 +277,7 @@ class _WeekRow extends StatelessWidget {
       tasks: showCompleted
           ? tasks
           : tasks.where((task) => !task.completed).toList(),
-      listColorFor: (listName) =>
-          Color(controller.colorValueForList(listName)),
+      listColorFor: (listName) => Color(controller.colorValueForList(listName)),
       onSelect: onSelectDay == null ? null : () => onSelectDay!(date),
       onOpenTask: onOpenTask,
       onCreate:

@@ -58,7 +58,7 @@ void main() {
     addTearDown(c.dispose);
     // Whitespace-titled parents cannot come from addTask; build one the way
     // a legacy load would.
-    c.normalizeHierarchyForTest(const [
+    c.loadTasksForTest(const [
       TaskItem(
           id: 'parent-empty',
           title: '   ',
@@ -116,7 +116,7 @@ void main() {
     addTearDown(c.dispose);
     // Orphans only arise from old data or import errors now that deleting a
     // parent cascades — build one directly the way a legacy load would.
-    c.normalizeHierarchyForTest(const [
+    c.loadTasksForTest(const [
       TaskItem(
           id: 'orphan-child',
           title: '问问',

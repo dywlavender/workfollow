@@ -223,8 +223,8 @@ class _ViewModeControl extends StatelessWidget {
         key: const ValueKey('calendar-view-mode'),
         onTap: () => _pick(anchor),
         child: Padding(
-          padding: const EdgeInsets.symmetric(
-              horizontal: WorkFollowSpacing.space2),
+          padding:
+              const EdgeInsets.symmetric(horizontal: WorkFollowSpacing.space2),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -258,9 +258,7 @@ class _ViewModeControl extends StatelessWidget {
   Future<void> _pick(BuildContext anchor) async {
     final picked = await showDesktopMenu<String>(
       anchor,
-      selected: _values.entries
-          .firstWhere((entry) => entry.value == mode)
-          .key,
+      selected: _values.entries.firstWhere((entry) => entry.value == mode).key,
       width: CalendarMetrics.viewModeMenuWidth,
       placement: PopoverPlacement.bottomEnd,
       entries: const [

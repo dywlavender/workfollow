@@ -51,28 +51,20 @@ String encodeRichDocument(Map<String, dynamic> document) =>
 
 /// Convert task-only blocks into editable note content, keeping rich text and
 /// attachment blocks in their original positions.
-Map<String, dynamic> noteContentFromTask(TaskItem task) {
+/// Converts a task into a note document. [children] (already retired by the
+/// caller) become checklist lines so 转为笔记 keeps the task's action items.
+Map<String, dynamic> noteContentFromTask(TaskItem task,
+    {List<TaskItem> children = const []}) {
   final delta = <Map<String, dynamic>>[];
-  var insertedSubtasks = false;
   final attached = <String>{};
-  void insertSubtasks() {
-    if (insertedSubtasks) return;
-    insertedSubtasks = true;
-    for (final subtask in task.subtasks) {
-      delta.add({'insert': subtask.title});
-      delta.add({
-        'insert': '\n',
-        'attributes': {'list': subtask.completed ? 'checked' : 'unchecked'}
-      });
-    }
-  }
 
   for (final operation in taskDocumentDelta(task)) {
     final insert = operation['insert'];
     if (insert is Map && insert['workfollow-block'] is String) {
       final block = jsonDecode(insert['workfollow-block'] as String);
       if (block is Map && block['type'] == 'taskSubtasks') {
-        insertSubtasks();
+        // Legacy marker: children are real tasks now, the embed carries no
+        // data and contributes nothing to the projection.
         continue;
       }
       if (block is Map && block['type'] == 'attachment') {
@@ -83,7 +75,13 @@ Map<String, dynamic> noteContentFromTask(TaskItem task) {
     }
     delta.add(operation);
   }
-  insertSubtasks();
+  for (final child in children) {
+    delta.add({'insert': child.title.trim().isEmpty ? '无标题' : child.title});
+    delta.add({
+      'insert': '\n',
+      'attributes': {'list': child.completed ? 'checked' : 'unchecked'}
+    });
+  }
   for (final filename in task.attachments) {
     if (!attached.add(filename)) continue;
     delta.add({

@@ -10,33 +10,6 @@ enum TaskBucket {
   unscheduled,
 }
 
-class TaskSubtask {
-  const TaskSubtask({
-    required this.id,
-    required this.title,
-    this.completed = false,
-  });
-
-  final String id;
-  final String title;
-  final bool completed;
-
-  TaskSubtask copyWith({String? title, bool? completed}) => TaskSubtask(
-        id: id,
-        title: title ?? this.title,
-        completed: completed ?? this.completed,
-      );
-
-  static TaskSubtask fromJson(Map<String, dynamic> json) => TaskSubtask(
-        id: json['id']?.toString() ?? '',
-        title: json['title']?.toString() ?? '',
-        completed: json['completed'] == true,
-      );
-
-  Map<String, dynamic> toJson() =>
-      {'id': id, 'title': title, 'completed': completed};
-}
-
 class TaskItem {
   const TaskItem({
     required this.id,
@@ -56,7 +29,6 @@ class TaskItem {
     this.recurrenceType = 'NONE',
     this.recurrenceConfig,
     this.tags = const [],
-    this.subtasks = const [],
     this.sourceNoteId,
     this.createdAt,
     this.updatedAt,
@@ -115,7 +87,6 @@ class TaskItem {
   final String recurrenceType;
   final Map<String, dynamic>? recurrenceConfig;
   final List<String> tags;
-  final List<TaskSubtask> subtasks;
 
   /// The note this task was generated from (the "回到记录" link).
   final String? sourceNoteId;
@@ -152,10 +123,6 @@ class TaskItem {
 
   bool get isSkipped => skippedAt != null;
 
-  int get subtaskTotal => subtasks.length;
-  int get subtaskCompleted =>
-      subtasks.where((subtask) => subtask.completed).length;
-
   TaskItem copyWith({
     String? title,
     String? listName,
@@ -181,7 +148,6 @@ class TaskItem {
     Map<String, dynamic>? recurrenceConfig,
     bool clearRecurrenceConfig = false,
     List<String>? tags,
-    List<TaskSubtask>? subtasks,
     String? sourceNoteId,
     bool clearSourceNoteId = false,
     String? createdAt,
@@ -225,7 +191,6 @@ class TaskItem {
           ? recurrenceConfig
           : recurrenceConfig ?? this.recurrenceConfig,
       tags: tags ?? this.tags,
-      subtasks: subtasks ?? this.subtasks,
       sourceNoteId:
           clearSourceNoteId ? sourceNoteId : sourceNoteId ?? this.sourceNoteId,
       createdAt: createdAt ?? this.createdAt,
@@ -277,13 +242,6 @@ class TaskItem {
       recurrenceType: record.recurrenceType,
       recurrenceConfig: record.recurrenceConfig,
       tags: List.unmodifiable(record.tags),
-      subtasks: record.subtasks
-          .map((subtask) => TaskSubtask(
-                id: subtask.id,
-                title: subtask.title,
-                completed: subtask.completed,
-              ))
-          .toList(),
       sourceNoteId: record.sourceNoteId,
       createdAt: normalizeStoredDateTime(record.createdAt),
       updatedAt: normalizeStoredDateTime(record.updatedAt),
@@ -328,12 +286,6 @@ class TaskItem {
       recurrenceConfig: recurrenceConfig,
       listName: listName,
       tags: List.unmodifiable(tags),
-      subtasks:
-          List.unmodifiable(subtasks.map((subtask) => MigrationSubtaskRecord(
-                id: subtask.id,
-                title: subtask.title,
-                completed: subtask.completed,
-              ))),
       sourceNoteId: sourceNoteId,
       createdAt: createdAt,
       updatedAt: updatedAt,
@@ -348,6 +300,44 @@ class TaskItem {
       childOrder: childOrder,
     );
   }
+}
+
+/// Maps bundle records to runtime tasks, expanding the legacy `subtasks`
+/// array (v1/v2) into real child tasks at the data boundary so the runtime
+/// only ever sees the tree shape and `childrenOf` is the single authority.
+///
+/// Child ids are deterministic (`legacy-child-{parentId}-{subId}`) so the
+/// same old snapshot expands to the same children on every load, and a
+/// child that already exists (re-import) is never duplicated. Legacy
+/// completed flags are preserved; completedAt stays null — the old records
+/// carried no completion time and none is invented.
+List<TaskItem> tasksFromRecords(List<MigrationTaskRecord> records) {
+  final tasks = records.map(TaskItem.fromMigration).toList();
+  final ids = tasks.map((task) => task.id).toSet();
+  final children = <TaskItem>[];
+  for (final record in records) {
+    if (record.subtasks.isEmpty) continue;
+    for (var i = 0; i < record.subtasks.length; i++) {
+      final sub = record.subtasks[i];
+      final childId = sub.id.isEmpty
+          ? 'legacy-child-${record.id}-index-$i'
+          : 'legacy-child-${record.id}-${sub.id}';
+      if (ids.contains(childId)) continue;
+      ids.add(childId);
+      children.add(TaskItem(
+        id: childId,
+        title: sub.title,
+        listName: record.listName,
+        bucket: taskBucketForDate(null),
+        parentTaskId: record.id,
+        childOrder: i,
+        completed: sub.completed,
+        createdAt: record.createdAt,
+        updatedAt: record.updatedAt,
+      ));
+    }
+  }
+  return children.isEmpty ? tasks : [...tasks, ...children];
 }
 
 /// The rendering name of a task: unnamed records (born from 添加子任务)

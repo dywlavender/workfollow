@@ -563,176 +563,167 @@ class _NotePageState extends State<_NotePage> {
         .runes
         .length;
     return DocumentEditorShell(
-        backgroundColor: tokens.content,
-        header: SizedBox(
-              height: NotesMetrics.editorHeaderHeight,
-              child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: NotesMetrics.editorHeaderHorizontalPadding),
-                  child: Row(children: [
-                    if (widget.onBack != null)
-                      IconButton(
-                          tooltip: '返回笔记列表',
-                          onPressed: widget.onBack,
-                          icon: const AppIcon(WorkFollowIcons.back,
-                              size: WorkFollowMetrics.headerIcon)),
-                    _NoteFolderLink(folder: note.folder, onPressed: move),
-                    const Spacer(),
-                    IconButton(
-                        tooltip: note.isFavorite ? '取消收藏' : '收藏笔记',
-                        onPressed: () =>
-                            widget.controller.toggleNoteFavorite(note.id),
-                        icon: AppIcon(
-                            note.isFavorite
-                                ? WorkFollowIcons.favorite
-                                : WorkFollowIcons.favoriteOutline,
-                            color: note.isFavorite
-                                ? tokens.warning
-                                : tokens.textTertiary,
-                            size: WorkFollowMetrics.navigationIcon)),
-                    Builder(
-                        builder: (anchor) => IconButton(
-                            key: const ValueKey('note-more-actions'),
-                            tooltip: '笔记操作',
-                            onPressed: () => more(anchor),
-                            icon: AppIcon(WorkFollowIcons.more,
-                                size: WorkFollowMetrics.headerIcon,
-                                color: tokens.textTertiary))),
-                  ]))),
-        body: Expanded(
-              child: LayoutBuilder(
-                  builder: (context, viewport) => SingleChildScrollView(
-                      child: GestureDetector(
-                          // The blank area under the prose belongs to the page,
-                          // not to the document. Tapping it puts the caret back
-                          // in the document — which is exactly why the document
-                          // no longer has to grow to fill the pane, and why the
-                          // sections below it follow the text instead of being
-                          // pushed into the middle of the page.
-                          behavior: HitTestBehavior.translucent,
-                          onTap: () => documentKey.currentState?.focusEnd(),
-                          child: Center(
-                              child: ConstrainedBox(
-                            constraints: BoxConstraints(
-                                maxWidth:
-                                    _NotesScreenState._editorContentMaxWidth,
-                                minHeight: viewport.maxHeight),
-                            child: Padding(
-                                padding: const EdgeInsets.fromLTRB(
-                                    WorkFollowSpacing.space7,
-                                    WorkFollowSpacing.relaxedGap,
-                                    WorkFollowSpacing.space7,
-                                    WorkFollowSpacing.editorBottomPadding),
-                                child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.stretch,
-                                    children: [
-                                      DocumentTitleEditor(
-                                        fieldKey:
-                                            const ValueKey('note-title-editor'),
-                                        controller: title,
-                                        focusNode: titleFocus,
-                                        autofocus: note.title == '未命名笔记',
-                                        maxLines: 3,
-                                        fontSize:
-                                            WorkFollowMacTypography.noteTitle,
-                                        placeholder: '笔记标题',
-                                        onChanged: (value) => widget.controller
-                                            .updateNoteTitle(note.id, value),
-                                      ),
+      backgroundColor: tokens.content,
+      header: SizedBox(
+          height: NotesMetrics.editorHeaderHeight,
+          child: Padding(
+              padding: const EdgeInsets.symmetric(
+                  horizontal: NotesMetrics.editorHeaderHorizontalPadding),
+              child: Row(children: [
+                if (widget.onBack != null)
+                  IconButton(
+                      tooltip: '返回笔记列表',
+                      onPressed: widget.onBack,
+                      icon: const AppIcon(WorkFollowIcons.back,
+                          size: WorkFollowMetrics.headerIcon)),
+                _NoteFolderLink(folder: note.folder, onPressed: move),
+                const Spacer(),
+                IconButton(
+                    tooltip: note.isFavorite ? '取消收藏' : '收藏笔记',
+                    onPressed: () =>
+                        widget.controller.toggleNoteFavorite(note.id),
+                    icon: AppIcon(
+                        note.isFavorite
+                            ? WorkFollowIcons.favorite
+                            : WorkFollowIcons.favoriteOutline,
+                        color: note.isFavorite
+                            ? tokens.warning
+                            : tokens.textTertiary,
+                        size: WorkFollowMetrics.navigationIcon)),
+                Builder(
+                    builder: (anchor) => IconButton(
+                        key: const ValueKey('note-more-actions'),
+                        tooltip: '笔记操作',
+                        onPressed: () => more(anchor),
+                        icon: AppIcon(WorkFollowIcons.more,
+                            size: WorkFollowMetrics.headerIcon,
+                            color: tokens.textTertiary))),
+              ]))),
+      body: Expanded(
+          child: LayoutBuilder(
+              builder: (context, viewport) => SingleChildScrollView(
+                  child: GestureDetector(
+                      // The blank area under the prose belongs to the page,
+                      // not to the document. Tapping it puts the caret back
+                      // in the document — which is exactly why the document
+                      // no longer has to grow to fill the pane, and why the
+                      // sections below it follow the text instead of being
+                      // pushed into the middle of the page.
+                      behavior: HitTestBehavior.translucent,
+                      onTap: () => documentKey.currentState?.focusEnd(),
+                      child: Center(
+                          child: ConstrainedBox(
+                        constraints: BoxConstraints(
+                            maxWidth: _NotesScreenState._editorContentMaxWidth,
+                            minHeight: viewport.maxHeight),
+                        child: Padding(
+                            padding: const EdgeInsets.fromLTRB(
+                                WorkFollowSpacing.space7,
+                                WorkFollowSpacing.relaxedGap,
+                                WorkFollowSpacing.space7,
+                                WorkFollowSpacing.editorBottomPadding),
+                            child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  DocumentTitleEditor(
+                                    fieldKey:
+                                        const ValueKey('note-title-editor'),
+                                    controller: title,
+                                    focusNode: titleFocus,
+                                    autofocus: note.title == '未命名笔记',
+                                    maxLines: 3,
+                                    fontSize: WorkFollowMacTypography.noteTitle,
+                                    placeholder: '笔记标题',
+                                    onChanged: (value) => widget.controller
+                                        .updateNoteTitle(note.id, value),
+                                  ),
+                                  const SizedBox(
+                                      height: WorkFollowSpacing.space3),
+                                  // The page's timestamp carries the clock. "最近编辑于" is
+                                  // a sentence explaining what a timestamp is; the position
+                                  // under the title already says it.
+                                  Text(noteUpdatedStampFor(note.updatedAt),
+                                      style: TextStyle(
+                                          fontSize:
+                                              WorkFollowMacTypography.listMeta,
+                                          color: tokens.textTertiary)),
+                                  const SizedBox(
+                                      height: WorkFollowSpacing.space5),
+                                  Container(
+                                      height:
+                                          WorkFollowMetrics.dividerThickness,
+                                      color: tokens.border),
+                                  const SizedBox(
+                                      height: WorkFollowSpacing.space5),
+                                  NoteDocumentEditor(
+                                      key: ValueKey('document-${note.id}'),
+                                      editorKey: documentKey,
+                                      onToolbarChanged: (visible) {
+                                        if (mounted) {
+                                          setState(() =>
+                                              formatToolbarVisible = visible);
+                                        }
+                                      },
+                                      note: note,
+                                      controller: widget.controller),
+                                  if (linked.isNotEmpty) ...[
+                                    const SizedBox(
+                                        height:
+                                            WorkFollowSpacing.emptyStateGap),
+                                    Row(children: [
+                                      Text('关联任务',
+                                          style: TextStyle(
+                                              fontSize: WorkFollowMacTypography
+                                                  .control,
+                                              fontWeight:
+                                                  WorkFollowMacWeight.semibold,
+                                              color: tokens.textSecondary)),
                                       const SizedBox(
-                                          height: WorkFollowSpacing.space3),
-                                      // The page's timestamp carries the clock. "最近编辑于" is
-                                      // a sentence explaining what a timestamp is; the position
-                                      // under the title already says it.
-                                      Text(noteUpdatedStampFor(note.updatedAt),
+                                          width: WorkFollowSpacing.inlineGap),
+                                      Text('${linked.length}',
                                           style: TextStyle(
                                               fontSize: WorkFollowMacTypography
                                                   .listMeta,
                                               color: tokens.textTertiary)),
-                                      const SizedBox(
-                                          height: WorkFollowSpacing.space5),
-                                      Container(
-                                          height: WorkFollowMetrics
-                                              .dividerThickness,
-                                          color: tokens.border),
-                                      const SizedBox(
-                                          height: WorkFollowSpacing.space5),
-                                      NoteDocumentEditor(
-                                          key: ValueKey('document-${note.id}'),
-                                          editorKey: documentKey,
-                                          onToolbarChanged: (visible) {
-                                            if (mounted) {
-                                              setState(() =>
-                                                  formatToolbarVisible =
-                                                      visible);
-                                            }
-                                          },
-                                          note: note,
-                                          controller: widget.controller),
-                                      if (linked.isNotEmpty) ...[
-                                        const SizedBox(
-                                            height: WorkFollowSpacing
-                                                .emptyStateGap),
-                                        Row(children: [
-                                          Text('关联任务',
-                                              style: TextStyle(
-                                                  fontSize:
-                                                      WorkFollowMacTypography
-                                                          .control,
-                                                  fontWeight:
-                                                      WorkFollowMacWeight
-                                                          .semibold,
-                                                  color: tokens.textSecondary)),
-                                          const SizedBox(
-                                              width:
+                                    ]),
+                                    const SizedBox(
+                                        height: WorkFollowSpacing.space2),
+                                    for (final task in linked)
+                                      Padding(
+                                          padding: const EdgeInsets.only(
+                                              bottom:
                                                   WorkFollowSpacing.inlineGap),
-                                          Text('${linked.length}',
-                                              style: TextStyle(
-                                                  fontSize:
-                                                      WorkFollowMacTypography
-                                                          .listMeta,
-                                                  color: tokens.textTertiary)),
-                                        ]),
-                                        const SizedBox(
-                                            height: WorkFollowSpacing.space2),
-                                        for (final task in linked)
-                                          Padding(
-                                              padding: const EdgeInsets.only(
-                                                  bottom: WorkFollowSpacing
-                                                      .inlineGap),
-                                              child: _LinkedTaskRow(
-                                                  key: ValueKey(
-                                                      'note-linked-task-${task.id}'),
-                                                  task: task,
-                                                  onToggle: () => task.completed
-                                                      ? widget.controller
-                                                          .taskActions
-                                                          .restore(task.id)
-                                                      : widget.controller
-                                                          .taskActions
-                                                          .complete(task.id),
-                                                  onOpen: () => widget
-                                                      .controller
-                                                      .openTask(task.id))),
-                                      ],
-                                    ])),
-                          )))))),
-        footer: DocumentEditorFooter(
-          leading: Text('$wordCount 字',
-              style: TextStyle(
-                  color: tokens.textTertiary,
-                  fontSize: WorkFollowMacTypography.caption)),
-          status: DocumentSaveStatus(controller: widget.controller),
-          actions: [
-            DocumentFormattingToggle(
-              active: formatToolbarVisible,
-              onPressed: (anchor) =>
-                  unawaited(documentKey.currentState?.toggleToolbar(anchor)),
-            ),
-          ],
-        ),
-        );
+                                          child: _LinkedTaskRow(
+                                              key: ValueKey(
+                                                  'note-linked-task-${task.id}'),
+                                              task: task,
+                                              onToggle: () => task.completed
+                                                  ? widget
+                                                      .controller.taskActions
+                                                      .restore(task.id)
+                                                  : widget
+                                                      .controller.taskActions
+                                                      .complete(task.id),
+                                              onOpen: () => widget.controller
+                                                  .openTask(task.id))),
+                                  ],
+                                ])),
+                      )))))),
+      footer: DocumentEditorFooter(
+        leading: Text('$wordCount 字',
+            style: TextStyle(
+                color: tokens.textTertiary,
+                fontSize: WorkFollowMacTypography.caption)),
+        status: DocumentSaveStatus(controller: widget.controller),
+        actions: [
+          DocumentFormattingToggle(
+            active: formatToolbarVisible,
+            onPressed: (anchor) =>
+                unawaited(documentKey.currentState?.toggleToolbar(anchor)),
+          ),
+        ],
+      ),
+    );
   }
 }
 

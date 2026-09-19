@@ -16,7 +16,10 @@ class MatrixProjection {
     required Iterable<String> listOrder,
     bool includeCompleted = true,
     DateTime? now,
+    bool Function(String taskId) hasChildren = _noChildren,
   }) {
+    // Hierarchy read goes through the caller so the projection stays pure.
+    // Without a resolver, rows simply report no subtask marker.
     final reference = now ?? DateTime.now();
     final order = <String>[];
     final seenLists = <String>{};
@@ -59,6 +62,7 @@ class MatrixProjection {
           completedByQuadrant[quadrant]!,
           order,
           reference,
+          hasChildren: hasChildren,
         ),
     ];
   }
@@ -68,8 +72,9 @@ class MatrixProjection {
     Map<String, List<TaskItem>> active,
     List<TaskItem> completed,
     List<String> listOrder,
-    DateTime now,
-  ) {
+    DateTime now, {
+    required bool Function(String taskId) hasChildren,
+  }) {
     final groups = <MatrixGroupViewModel>[];
     for (final listName in listOrder) {
       final tasks = active[listName];
@@ -79,7 +84,8 @@ class MatrixProjection {
         title: listName,
         count: tasks.length,
         completedGroup: false,
-        tasks: List.unmodifiable(tasks.map((task) => _task(task, now))),
+        tasks: List.unmodifiable(
+            tasks.map((task) => _task(task, now, hasChildren: hasChildren))),
       ));
     }
     if (completed.isNotEmpty) {
@@ -88,7 +94,8 @@ class MatrixProjection {
         title: '已完成',
         count: completed.length,
         completedGroup: true,
-        tasks: List.unmodifiable(completed.map((task) => _task(task, now))),
+        tasks: List.unmodifiable(completed
+            .map((task) => _task(task, now, hasChildren: hasChildren))),
       ));
     }
     return MatrixQuadrantViewModel(
@@ -97,7 +104,10 @@ class MatrixProjection {
     );
   }
 
-  static MatrixTaskViewModel _task(TaskItem task, DateTime now) {
+  static bool _noChildren(String taskId) => false;
+
+  static MatrixTaskViewModel _task(TaskItem task, DateTime now,
+      {required bool Function(String taskId) hasChildren}) {
     final due = localDateTimeFromStorage(task.dueAt);
     final date = due ??
         (task.completed ? localDateTimeFromStorage(task.completedAt) : null);
@@ -109,7 +119,7 @@ class MatrixProjection {
       dateLabel: _dateLabel(date, now),
       overdue: !task.completed && day != null && day.isBefore(today),
       hasNote: _hasNote(task),
-      hasSubtasks: task.subtaskTotal > 0,
+      hasSubtasks: hasChildren(task.id),
       hasReminder: task.reminderTimes.isNotEmpty || task.reminderAt != null,
       recurring: task.recurrenceType.toUpperCase() != 'NONE',
     );
@@ -121,9 +131,8 @@ class MatrixProjection {
         task.contentJson != null;
   }
 
-  static DateTime? _day(DateTime? value) => value == null
-      ? null
-      : DateTime(value.year, value.month, value.day);
+  static DateTime? _day(DateTime? value) =>
+      value == null ? null : DateTime(value.year, value.month, value.day);
 
   /// A compact row label: relative days first, then weekday, then a calendar
   /// date. The weekday form is what keeps the target's `下周二` metadata short

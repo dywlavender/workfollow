@@ -57,12 +57,15 @@ class HomeScreen extends StatelessWidget {
           final contentWidth = (constraints.maxWidth -
                   WorkFollowSpacing.pageHorizontalPadding * 2)
               .clamp(0.0, double.infinity);
-          final panelWidth =
-              contentWidth >= 1060
-                  ? (contentWidth - WorkFollowSpacing.relaxedGap) / 2
-                  : contentWidth;
+          final panelWidth = contentWidth >= 1060
+              ? (contentWidth - WorkFollowSpacing.relaxedGap) / 2
+              : contentWidth;
           return SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(WorkFollowSpacing.pageHorizontalPadding, WorkFollowSpacing.pageHorizontalPadding, WorkFollowSpacing.pageHorizontalPadding, WorkFollowSpacing.space8),
+            padding: const EdgeInsets.fromLTRB(
+                WorkFollowSpacing.pageHorizontalPadding,
+                WorkFollowSpacing.pageHorizontalPadding,
+                WorkFollowSpacing.pageHorizontalPadding,
+                WorkFollowSpacing.space8),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -284,7 +287,11 @@ class _WeeklyReviewCard extends StatelessWidget {
         : '上周完成 ${summary.completed} 件 · ${summary.weekdayLabel}'
             '${summary.overdue > 0 ? ' · 还有 ${summary.overdue} 件逾期未清' : ''}';
     return AppCard(
-      padding: const EdgeInsets.fromLTRB(WorkFollowSpacing.sectionGap, WorkFollowSpacing.controlInset, WorkFollowSpacing.space3, WorkFollowSpacing.controlInset),
+      padding: const EdgeInsets.fromLTRB(
+          WorkFollowSpacing.sectionGap,
+          WorkFollowSpacing.controlInset,
+          WorkFollowSpacing.space3,
+          WorkFollowSpacing.controlInset),
       color: tokens.accentFaint,
       borderColor: tokens.accent.withValues(alpha: .16),
       child: Row(children: [
@@ -309,16 +316,21 @@ class _WeeklyReviewCard extends StatelessWidget {
           Text(message,
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
-              style: TextStyle(color: tokens.textSecondary, fontSize: WorkFollowMacTypography.supporting)),
+              style: TextStyle(
+                  color: tokens.textSecondary,
+                  fontSize: WorkFollowMacTypography.supporting)),
         ])),
         TextButton(
             onPressed: onOpen,
             style: TextButton.styleFrom(
                 foregroundColor: tokens.accent,
-                padding: const EdgeInsets.symmetric(horizontal: WorkFollowSpacing.space2, vertical: WorkFollowSpacing.denseGap),
+                padding: const EdgeInsets.symmetric(
+                    horizontal: WorkFollowSpacing.space2,
+                    vertical: WorkFollowSpacing.denseGap),
                 minimumSize: Size.zero,
                 tapTargetSize: MaterialTapTargetSize.shrinkWrap),
-            child: const Text('看完成', style: TextStyle(fontSize: WorkFollowMacTypography.control))),
+            child: const Text('看完成',
+                style: TextStyle(fontSize: WorkFollowMacTypography.control))),
       ]),
     );
   }
@@ -345,7 +357,11 @@ class _HomePanel extends StatelessWidget {
   Widget build(BuildContext context) {
     final tokens = WorkFollowTheme.of(context);
     return AppCard(
-      padding: const EdgeInsets.fromLTRB(WorkFollowSpacing.sectionGap, WorkFollowSpacing.space4, WorkFollowSpacing.sectionGap, WorkFollowSpacing.statusGap),
+      padding: const EdgeInsets.fromLTRB(
+          WorkFollowSpacing.sectionGap,
+          WorkFollowSpacing.space4,
+          WorkFollowSpacing.sectionGap,
+          WorkFollowSpacing.statusGap),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -388,8 +404,9 @@ class _HomePanel extends StatelessWidget {
                   onPressed: onAction,
                   style: TextButton.styleFrom(
                     foregroundColor: tokens.accent,
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: WorkFollowSpacing.denseGap, vertical: WorkFollowSpacing.tightGap),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: WorkFollowSpacing.denseGap,
+                        vertical: WorkFollowSpacing.tightGap),
                     minimumSize: Size.zero,
                     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   ),
@@ -557,7 +574,8 @@ class _HomeNoteList extends StatelessWidget {
           GestureDetector(
             onTap: () => controller.openNote(note.id),
             child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: WorkFollowSpacing.denseGap),
+              padding: const EdgeInsets.symmetric(
+                  vertical: WorkFollowSpacing.denseGap),
               child: Row(
                 children: [
                   Container(
@@ -581,14 +599,16 @@ class _HomeNoteList extends StatelessWidget {
                         const SizedBox(height: WorkFollowSpacing.microGap),
                         Text(note.folder,
                             style: TextStyle(
-                                color: tokens.textTertiary, fontSize: WorkFollowMacTypography.listMeta)),
+                                color: tokens.textTertiary,
+                                fontSize: WorkFollowMacTypography.listMeta)),
                       ],
                     ),
                   ),
                   const SizedBox(width: WorkFollowSpacing.space2),
                   Text(note.updatedLabel,
-                      style:
-                          TextStyle(color: tokens.textTertiary, fontSize: WorkFollowMacTypography.listMeta)),
+                      style: TextStyle(
+                          color: tokens.textTertiary,
+                          fontSize: WorkFollowMacTypography.listMeta)),
                 ],
               ),
             ),
@@ -645,7 +665,8 @@ class _MiniCalendar extends StatelessWidget {
                                 style: TextStyle(
                                     color: tokens.textTertiary,
                                     fontSize: WorkFollowMacTypography.caption,
-                                    fontWeight: WorkFollowMacWeight.semibold)))),
+                                    fontWeight:
+                                        WorkFollowMacWeight.semibold)))),
                 ],
               ),
             ),
@@ -670,7 +691,8 @@ class _MiniCalendar extends StatelessWidget {
                     alignment: Alignment.center,
                     decoration: BoxDecoration(
                         color: isToday ? tokens.accent : Colors.transparent,
-                        borderRadius: BorderRadius.circular(WorkFollowRadii.sm)),
+                        borderRadius:
+                            BorderRadius.circular(WorkFollowRadii.sm)),
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
@@ -734,7 +756,9 @@ class _PanelEmpty extends StatelessWidget {
                   color: tokens.accent)),
           const SizedBox(height: WorkFollowSpacing.controlGap),
           Text(label,
-              style: TextStyle(color: tokens.textTertiary, fontSize: WorkFollowMacTypography.supporting)),
+              style: TextStyle(
+                  color: tokens.textTertiary,
+                  fontSize: WorkFollowMacTypography.supporting)),
         ],
       ),
     );

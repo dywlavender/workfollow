@@ -57,7 +57,8 @@ class WorkFollowShadows {
     WorkFollowTheme tokens, {
     required double blurRadius,
     required Offset offset,
-  }) => [
+  }) =>
+      [
         BoxShadow(
           color: tokens.shadow,
           blurRadius: blurRadius,
@@ -94,7 +95,8 @@ class WorkFollowSurfaceTokens {
       });
 
   static List<BoxShadow>? shadows(
-      WorkFollowSurfaceRole role, WorkFollowTheme tokens) => switch (role) {
+          WorkFollowSurfaceRole role, WorkFollowTheme tokens) =>
+      switch (role) {
         WorkFollowSurfaceRole.surface || WorkFollowSurfaceRole.input => null,
         WorkFollowSurfaceRole.card => WorkFollowShadows.level1(tokens),
         WorkFollowSurfaceRole.popover => WorkFollowShadows.level2(tokens),
@@ -106,8 +108,10 @@ class WorkFollowSurfaceTokens {
       switch (role) {
         WorkFollowSurfaceRole.surface ||
         WorkFollowSurfaceRole.input ||
-        WorkFollowSurfaceRole.card => tokens.content,
-        WorkFollowSurfaceRole.popover || WorkFollowSurfaceRole.dialog =>
+        WorkFollowSurfaceRole.card =>
+          tokens.content,
+        WorkFollowSurfaceRole.popover ||
+        WorkFollowSurfaceRole.dialog =>
           tokens.overlay,
         WorkFollowSurfaceRole.toast => tokens.feedbackSurface,
       };
@@ -117,7 +121,8 @@ class WorkFollowSurfaceTokens {
         WorkFollowSurfaceRole.input ||
         WorkFollowSurfaceRole.card ||
         WorkFollowSurfaceRole.popover ||
-        WorkFollowSurfaceRole.dialog => true,
+        WorkFollowSurfaceRole.dialog =>
+          true,
       };
 
   static BoxDecoration decoration(
@@ -144,7 +149,8 @@ class WorkFollowSurfaceTokens {
     Color? color,
     Color? borderColor,
     bool elevated = false,
-  }) => decoration(
+  }) =>
+      decoration(
         WorkFollowSurfaceRole.card,
         tokens,
         color: color,
@@ -167,7 +173,8 @@ class WorkFollowSurfaceTokens {
     BorderRadius? radius,
     Color? color,
     bool withShadow = true,
-  }) => decoration(
+  }) =>
+      decoration(
         WorkFollowSurfaceRole.popover,
         tokens,
         color: color,

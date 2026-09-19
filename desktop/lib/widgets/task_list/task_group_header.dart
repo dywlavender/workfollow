@@ -68,8 +68,6 @@ class TaskGroupHeader extends StatelessWidget {
     return MouseRegion(
         cursor: SystemMouseCursors.click,
         child: GestureDetector(
-            onTap: onToggle,
-            behavior: HitTestBehavior.opaque,
-            child: heading));
+            onTap: onToggle, behavior: HitTestBehavior.opaque, child: heading));
   }
 }

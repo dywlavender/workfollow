@@ -182,8 +182,8 @@ class _BarLine extends StatelessWidget {
     final completed = task.completed;
     final label = clock;
     return Padding(
-      padding: const EdgeInsets.symmetric(
-          horizontal: WorkFollowSpacing.denseGap),
+      padding:
+          const EdgeInsets.symmetric(horizontal: WorkFollowSpacing.denseGap),
       child: Row(
         children: [
           if (showBox) ...[

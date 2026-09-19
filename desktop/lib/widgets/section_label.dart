@@ -14,8 +14,10 @@ class SectionLabel extends StatelessWidget {
   Widget build(BuildContext context) {
     final tokens = WorkFollowTheme.of(context);
     return Padding(
-      padding: const EdgeInsets.fromLTRB(WorkFollowSpacing.relaxedGap,
-          WorkFollowSpacing.space5, WorkFollowSpacing.relaxedGap,
+      padding: const EdgeInsets.fromLTRB(
+          WorkFollowSpacing.relaxedGap,
+          WorkFollowSpacing.space5,
+          WorkFollowSpacing.relaxedGap,
           WorkFollowSpacing.compactGap),
       child: Row(
         children: [

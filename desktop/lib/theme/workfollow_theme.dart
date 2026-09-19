@@ -94,7 +94,7 @@ class TaskListMetrics {
   static const double disclosureWidth = 22;
   static const double disclosureTitleGap = 2;
 
-    /// Pane width. The list opens at [preferredPaneWidth], shrinks toward
+  /// Pane width. The list opens at [preferredPaneWidth], shrinks toward
   /// [minPaneWidth] only before the inspector would drop below its own
   /// minimum, and stops at [maxPaneWidth] instead of growing without bound the
   /// way a pure ratio would on a wide display.

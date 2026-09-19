@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:workfollow_personal/features/tasks/domain/task_schedule.dart';
 import 'package:workfollow_personal/features/tasks/domain/task_schedule_settings.dart';
+import 'package:workfollow_personal/models/migration.dart';
 import 'package:workfollow_personal/models/task.dart';
 import 'package:workfollow_personal/screens/today_screen.dart';
 import 'package:workfollow_personal/state/workspace_controller.dart';
@@ -54,7 +55,7 @@ void main() {
     // Two children with the same childOrder: the createdAt/id tie-break
     // must keep the listing deterministic instead of depending on the
     // internal _tasks order.
-    c.normalizeHierarchyForTest(const [
+    c.loadTasksForTest(const [
       TaskItem(
           id: 'parent-2',
           title: '2',
@@ -130,36 +131,55 @@ void main() {
   test('SUB-017 legacy subtask records expand into real child tasks', () {
     final c = WorkspaceController(seedData: false);
     addTearDown(c.dispose);
-    final parent = TaskItem(
-      id: 'task-legacy',
-      title: '旧结构任务',
-      listName: '收集箱',
-      bucket: TaskBucket.unscheduled,
-      subtasks: const [
-        TaskSubtask(id: 'sub-1', title: '整理数据', completed: true),
-        TaskSubtask(id: 'sub-2', title: '核对清单'),
-      ],
-    );
+    final records = [
+      MigrationTaskRecord(
+        id: 'task-legacy',
+        title: '旧结构任务',
+        description: null,
+        contentJson: null,
+        status: 'TODO',
+        priority: 'NONE',
+        dueAt: null,
+        dueEndAt: null,
+        reminderAt: null,
+        recurrenceType: 'NONE',
+        recurrenceConfig: null,
+        listName: '收集箱',
+        tags: const [],
+        createdAt: null,
+        updatedAt: null,
+        completedAt: null,
+        subtasks: const [
+          MigrationSubtaskRecord(id: 'sub-1', title: '整理数据', completed: true),
+          MigrationSubtaskRecord(id: 'sub-2', title: '核对清单', completed: false),
+        ],
+      ),
+    ];
     // The same helper the load and seed paths run.
-    c.normalizeHierarchyForTest([parent]);
+    c.loadTasksForTest(tasksFromRecords(records));
 
     final children = c.childrenOf('task-legacy');
     expect(children, hasLength(2));
+    expect(children.first.id, 'legacy-child-task-legacy-sub-1');
     expect(children.first.title, '整理数据');
     expect(children.first.completed, isTrue);
     expect(children.first.parentTaskId, 'task-legacy');
     expect(children.last.title, '核对清单');
-    expect(c.tasks.firstWhere((task) => task.id == 'task-legacy').subtasks,
-        isEmpty);
+    // Re-running the expansion over the same records never duplicates.
+    expect(
+        tasksFromRecords(records)
+            .where((task) => task.parentTaskId == 'task-legacy'),
+        hasLength(2));
   });
 
-  test('SUB-020/021/022 createChild via TaskActions inherits only the list', () {
+  test('SUB-020/021/022 createChild via TaskActions inherits only the list',
+      () {
     final c = WorkspaceController(seedData: false);
     addTearDown(c.dispose);
     c.addTask('父任务');
     final parentId = c.tasks.single.id;
-    c.taskActions
-        .setSchedule(parentId, TaskScheduleDraft(dueAt: DateTime(2030, 8, 22), hasTime: false));
+    c.taskActions.setSchedule(parentId,
+        TaskScheduleDraft(dueAt: DateTime(2030, 8, 22), hasTime: false));
     c.taskActions.setPriority(parentId, TaskPriority.high);
     c.taskActions.setReminder(parentId, DateTime(2030, 8, 21, 9));
 
@@ -169,7 +189,8 @@ void main() {
     expect(child.title, '');
     expect(child.parentTaskId, parentId);
     expect(child.childOrder, 0);
-    expect(child.listName, c.tasks.firstWhere((task) => task.id == parentId).listName);
+    expect(child.listName,
+        c.tasks.firstWhere((task) => task.id == parentId).listName);
     // Nothing else is inherited: dates, priority and reminders start clean.
     expect(child.dueAt, isNull);
     expect(child.deadlineAt, isNull);
@@ -220,7 +241,9 @@ void main() {
     expect(c.tasks.firstWhere((task) => task.id == parentId).dueAt, isNull);
   });
 
-  test('SUB-030/031 deleting a child shrinks the hierarchy and orders stay stable', () {
+  test(
+      'SUB-030/031 deleting a child shrinks the hierarchy and orders stay stable',
+      () {
     final c = WorkspaceController(seedData: false)..addTask('父任务');
     addTearDown(c.dispose);
     final parentId = c.tasks.single.id;

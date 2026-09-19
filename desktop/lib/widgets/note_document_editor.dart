@@ -5,7 +5,8 @@ import '../features/editor/profiles/note_editor_profile.dart';
 import '../models/task.dart';
 import '../state/workspace_controller.dart';
 
-export '../features/editor/presentation/document_editor.dart' show DocumentEditorState;
+export '../features/editor/presentation/document_editor.dart'
+    show DocumentEditorState;
 export '../features/editor/profiles/note_editor_profile.dart';
 
 /// A note body.

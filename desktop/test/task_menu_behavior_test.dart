@@ -83,8 +83,8 @@ void main() {
     addTearDown(c.dispose);
     c.addTask('资料整理', forceUnscheduled: true);
     final id = c.tasks.single.id;
-    c.addSubtask(id, '检查资料');
-    c.toggleSubtask(id, c.tasks.single.subtasks.single.id);
+    final childId = c.createChildTask(id, title: '检查资料')!;
+    c.taskActions.complete(childId);
     c.taskActions.setTags(id, ['工作']);
     final content = richContentFromDelta([
       {
@@ -122,14 +122,16 @@ void main() {
     expect(jsonEncode(delta), isNot(contains('taskSubtasks')));
     expect(note.plainText, contains('检查资料'));
     expect(note.plainText, contains('#工作'));
-    expect(c.tasks.single.convertedNoteId, note.id);
+    final converted = c.tasks.firstWhere((task) => task.id == id);
+    expect(converted.convertedNoteId, note.id);
     final reopened = TaskItem.fromMigration(MigrationTaskRecord.fromJson(
-        c.tasks.single.toMigrationRecord().toJson()));
+        converted.toMigrationRecord().toJson()));
     expect(reopened.isConverted, isTrue);
     expect(await result.undo!.execute(), isTrue);
     expect(c.notes, isEmpty);
-    expect(c.activeTasks.single.contentJson, content);
-    expect(c.activeTasks.single.subtasks.single.completed, isTrue);
+    expect(c.activeTasks.firstWhere((task) => task.id == id).contentJson,
+        content);
+    expect(c.childCount(id), 1);
   });
 
   testWidgets(
@@ -195,26 +197,43 @@ void main() {
 
   ;
 
-  testWidgets('submenus flip within the minimum desktop window', (tester) async {
+  testWidgets('submenus flip within the minimum desktop window',
+      (tester) async {
     tester.view.physicalSize = const Size(880, 600);
     tester.view.devicePixelRatio = 1;
-    addTearDown(() { tester.view.resetPhysicalSize(); tester.view.resetDevicePixelRatio(); });
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
     final c = WorkspaceController(seedData: false);
     addTearDown(c.dispose);
     c.addTask('靠边菜单', forceUnscheduled: true);
-    await tester.pumpWidget(MaterialApp(theme: WorkFollowThemeData.dark(), home: Scaffold(body: Builder(builder: (context) => TextButton(
-      child: const Text('打开'), onPressed: () => TaskContextMenu.show(context, task: c.tasks.single, controller: c, globalPosition: const Offset(860, 570)),
-    )))));
-    await tester.tap(find.text('打开')); await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('menu-option-tags'))); await tester.pumpAndSettle();
-    final parent = tester.getRect(find.byKey(const ValueKey('task-context-menu-panel')));
+    await tester.pumpWidget(MaterialApp(
+        theme: WorkFollowThemeData.dark(),
+        home: Scaffold(
+            body: Builder(
+                builder: (context) => TextButton(
+                      child: const Text('打开'),
+                      onPressed: () => TaskContextMenu.show(context,
+                          task: c.tasks.single,
+                          controller: c,
+                          globalPosition: const Offset(860, 570)),
+                    )))));
+    await tester.tap(find.text('打开'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('menu-option-tags')));
+    await tester.pumpAndSettle();
+    final parent =
+        tester.getRect(find.byKey(const ValueKey('task-context-menu-panel')));
     final child = tester.getRect(find.byKey(const ValueKey('task-tag-picker')));
     expect(child.right, lessThan(parent.left));
     expect(child.top, greaterThanOrEqualTo(12));
     expect(child.bottom, lessThanOrEqualTo(588));
     expect(tester.takeException(), isNull);
-    await tester.sendKeyEvent(LogicalKeyboardKey.escape); await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('task-context-menu-panel')), findsOneWidget);
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
+    expect(
+        find.byKey(const ValueKey('task-context-menu-panel')), findsOneWidget);
   });
 
   testWidgets(

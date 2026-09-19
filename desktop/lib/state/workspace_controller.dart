@@ -182,9 +182,6 @@ class WorkspaceController extends ChangeNotifier {
         _notes = seedData ? _seedNotes() : [],
         _lists = _defaultLists(),
         _folders = _defaultFolders() {
-    // Legacy subtask records become real child tasks before anything reads
-    // them, so seeds and restored snapshots share one runtime shape.
-    _normalizeTaskHierarchy();
     taskActions = CallbackTaskActions(_dispatchTaskAction);
     taskCreator = TaskCreator(taskActions);
     // Clicking a delivered reminder opens the task.
@@ -208,13 +205,34 @@ class WorkspaceController extends ChangeNotifier {
         timeLabel: '今天 14:00',
         note: '把核心指标、用户反馈和下季度优先级整理成一份清晰的演示。',
         priority: TaskPriority.high,
-        subtasks: [
-          const TaskSubtask(
-              id: 'sub-seed-1', title: '整理核心指标数据', completed: true),
-          const TaskSubtask(
-              id: 'sub-seed-2', title: '完成增长章节图表', completed: true),
-          const TaskSubtask(id: 'sub-seed-3', title: '排练一遍讲述节奏'),
-        ],
+      ),
+      TaskItem(
+        id: 'seed-child-1',
+        title: '整理核心指标数据',
+        listName: '工作',
+        bucket: TaskBucket.today,
+        parentTaskId: 'task-01',
+        childOrder: 0,
+        completed: true,
+        completedAt: at(0, 9, 30).toIso8601String(),
+      ),
+      TaskItem(
+        id: 'seed-child-2',
+        title: '完成增长章节图表',
+        listName: '工作',
+        bucket: TaskBucket.today,
+        parentTaskId: 'task-01',
+        childOrder: 1,
+        completed: true,
+        completedAt: at(0, 11, 0).toIso8601String(),
+      ),
+      TaskItem(
+        id: 'seed-child-3',
+        title: '排练一遍讲述节奏',
+        listName: '工作',
+        bucket: TaskBucket.today,
+        parentTaskId: 'task-01',
+        childOrder: 2,
       ),
       TaskItem(
         id: 'task-02',
@@ -1434,7 +1452,13 @@ class WorkspaceController extends ChangeNotifier {
     final now = DateTime.now().toIso8601String();
     final noteId = 'note-${_noteSequence.toString().padLeft(2, '0')}';
     _noteSequence += 1;
-    final document = noteContentFromTask(before);
+    // Converting a parent folds its children into the note as checklist
+    // lines and retires those child tasks — they now live inside the note.
+    final children = activeTasks
+        .where((task) => task.parentTaskId == id)
+        .toList()
+      ..sort((a, b) => a.childOrder.compareTo(b.childOrder));
+    final document = noteContentFromTask(before, children: children);
     final plain = richPlainTextFromDelta(document['quillDelta'] as List);
     final note = NoteItem(
         id: noteId,
@@ -1447,6 +1471,13 @@ class WorkspaceController extends ChangeNotifier {
         createdAt: now,
         updatedAt: now);
     _notes = [note, ..._notes];
+    for (var i = 0; i < _tasks.length; i++) {
+      if (_tasks[i].parentTaskId == id && _tasks[i].deletedAt == null) {
+        _tasks[i] =
+            _tasks[i].copyWith(deletedAt: now, updatedAt: now);
+        _syncReminderFor(_tasks[i]);
+      }
+    }
     final index = _tasks.indexWhere((task) => task.id == id);
     _tasks[index] = before.copyWith(convertedNoteId: noteId, updatedAt: now);
     _syncReminderFor(_tasks[index]);
@@ -1461,6 +1492,14 @@ class WorkspaceController extends ChangeNotifier {
             _lastTaskUndoCommand = null;
           _notes.removeWhere((item) => item.id == noteId);
           if (_selectedNoteId == noteId) _selectedNoteId = null;
+          // Retired children come back with the parent.
+          for (var i = 0; i < _tasks.length; i++) {
+            if (_tasks[i].parentTaskId == id && _tasks[i].deletedAt == now) {
+              _tasks[i] = _tasks[i].copyWith(
+                  clearDeletedAt: true,
+                  updatedAt: DateTime.now().toIso8601String());
+            }
+          }
           final restored = _restoreTaskSnapshot(before);
           if (restored) openTask(id);
           return restored;
@@ -1583,8 +1622,7 @@ class WorkspaceController extends ChangeNotifier {
         ? List.from(_defaultLists())
         : List.from(bundle.lists);
     _folders = List.from(bundle.folders);
-    _tasks = bundle.tasks.map(TaskItem.fromMigration).toList();
-    _normalizeTaskHierarchy();
+    _tasks = tasksFromRecords(bundle.tasks);
     for (final task in _tasks) {
       if (_lists.every((list) => list.name != task.listName)) {
         _lists = [
@@ -1681,6 +1719,7 @@ class WorkspaceController extends ChangeNotifier {
   List<MatrixQuadrantViewModel> matrixProjection(
       {bool includeCompleted = true, DateTime? now}) {
     return MatrixProjection.project(
+      hasChildren: hasChildren,
       tasks: matrixTasks(includeCompleted: includeCompleted),
       quadrantFor: (task) => matrixQuadrantFor(task, now: now),
       listOrder: orderedLists.map((list) => list.name),
@@ -1833,9 +1872,7 @@ class WorkspaceController extends ChangeNotifier {
   List<TaskItem> childRowsFor(String parentId) {
     final children = childrenOf(parentId);
     if (_hierarchyFirstChildren) return children;
-    return children
-        .where((task) => _projectedIds.contains(task.id))
-        .toList();
+    return children.where((task) => _projectedIds.contains(task.id)).toList();
   }
 
   List<TaskItem> get visibleTasks {
@@ -1966,55 +2003,12 @@ class WorkspaceController extends ChangeNotifier {
   }
 
   /// Test seam: run the hierarchy normalization over an explicit task list.
+  /// Test seam: install an explicit task list, bypassing load paths.
   @visibleForTesting
-  void normalizeHierarchyForTest(List<TaskItem> tasks) {
+  void loadTasksForTest(List<TaskItem> tasks) {
     _tasks = List.of(tasks);
-    _normalizeTaskHierarchy();
   }
 
-  /// Normalizes legacy `TaskSubtask` records into real child tasks at the
-  /// data boundary (load, seed, import, restore), so the runtime only ever
-  /// sees the tree shape and `childrenOf` is the single authority.
-  ///
-  /// Child ids are deterministic (`legacy-child-{parentId}-{subId}`) so
-  /// the same old snapshot normalizes to the same children on every load,
-  /// and a child that already exists (re-import) is never duplicated. Legacy
-  /// completed flags are preserved; completedAt stays null — the old records
-  /// carried no completion time and none is invented.
-  void _normalizeTaskHierarchy() {
-    var expandedAny = false;
-    final rebuilt = <TaskItem>[];
-    final children = <TaskItem>[];
-    final existingIds = _tasks.map((task) => task.id).toSet();
-    for (final task in _tasks) {
-      if (task.subtasks.isEmpty) {
-        rebuilt.add(task);
-        continue;
-      }
-      expandedAny = true;
-      rebuilt.add(task.copyWith(subtasks: const []));
-      for (var i = 0; i < task.subtasks.length; i++) {
-        final sub = task.subtasks[i];
-        final childId = sub.id.isEmpty
-            ? 'legacy-child-${task.id}-index-$i'
-            : 'legacy-child-${task.id}-${sub.id}';
-        if (existingIds.contains(childId)) continue;
-        existingIds.add(childId);
-        children.add(TaskItem(
-          id: childId,
-          title: sub.title,
-          listName: task.listName,
-          bucket: taskBucketForDate(null),
-          parentTaskId: task.id,
-          childOrder: i,
-          completed: sub.completed,
-          createdAt: task.createdAt,
-          updatedAt: task.updatedAt,
-        ));
-      }
-    }
-    if (expandedAny) _tasks = [...rebuilt, ...children];
-  }
 
   /// Tasks whose scheduled date falls on [day], independent of the current
   /// navigation filters, so the calendar never borrows another view's list.
@@ -2362,10 +2356,6 @@ class WorkspaceController extends ChangeNotifier {
       recurrenceType: task.recurrenceType,
       recurrenceConfig: RecurrenceEngine.followingConfig(task),
       tags: task.tags,
-      subtasks: task.subtasks
-          .map((subtask) => TaskSubtask(
-              id: subtask.id, title: subtask.title, completed: false))
-          .toList(),
       priority: task.priority,
       createdAt: now,
       updatedAt: now,
@@ -2471,7 +2461,8 @@ class WorkspaceController extends ChangeNotifier {
             child.deletedAt != null &&
             child.deletedAt == cascadeStamp) {
           _tasks[i] = child.copyWith(
-              clearDeletedAt: true, updatedAt: DateTime.now().toIso8601String());
+              clearDeletedAt: true,
+              updatedAt: DateTime.now().toIso8601String());
           _syncReminderFor(_tasks[i]);
         }
       }
@@ -2812,11 +2803,25 @@ class WorkspaceController extends ChangeNotifier {
     if (_lastActionKind == 'removal' && _lastRemovedTaskId != null) {
       final index = _tasks.indexWhere((task) => task.id == _lastRemovedTaskId);
       if (index < 0) return false;
+      final cascadeStamp = _tasks[index].deletedAt;
       _tasks[index] = _tasks[index].copyWith(
         clearDeletedAt: true,
         updatedAt: DateTime.now().toIso8601String(),
       );
       _syncReminderFor(_tasks[index]);
+      // Undo of a cascading deletion revives the same-stamp children too.
+      if (cascadeStamp != null) {
+        for (var i = 0; i < _tasks.length; i++) {
+          final child = _tasks[i];
+          if (child.parentTaskId == _lastRemovedTaskId &&
+              child.deletedAt == cascadeStamp) {
+            _tasks[i] = child.copyWith(
+                clearDeletedAt: true,
+                updatedAt: DateTime.now().toIso8601String());
+            _syncReminderFor(_tasks[i]);
+          }
+        }
+      }
       _setSelectedTaskId(_lastRemovedTaskId);
       _lastRemovedTaskId = null;
       _lastActionKind = '';
@@ -3299,8 +3304,7 @@ class WorkspaceController extends ChangeNotifier {
     final movedAt = DateTime.now().toIso8601String();
     for (var i = 0; i < _tasks.length; i++) {
       if (_tasks[i].parentTaskId == id && _tasks[i].deletedAt == null) {
-        _tasks[i] = _tasks[i]
-            .copyWith(listName: listName, updatedAt: movedAt);
+        _tasks[i] = _tasks[i].copyWith(listName: listName, updatedAt: movedAt);
       }
     }
     if (_selectedTaskId == id &&
@@ -3433,68 +3437,6 @@ class WorkspaceController extends ChangeNotifier {
   List<TaskItem> tasksLinkedToNote(String noteId) {
     return List.unmodifiable(
         activeTasks.where((task) => task.sourceNoteId == noteId));
-  }
-
-  /// Legacy compatibility only: the checklist-shaped subtask API. New
-  /// hierarchy code uses createChildTask / TaskActions.setTitle instead.
-  bool addSubtask(String taskId, String rawTitle) {
-    final title = rawTitle.trim();
-    if (title.isEmpty) return false;
-    final subtask = TaskSubtask(
-      id: 'sub-${DateTime.now().microsecondsSinceEpoch}',
-      title: title,
-    );
-    return _replaceTask(
-      taskId,
-      (task) => task.copyWith(
-        subtasks: [...task.subtasks, subtask],
-        updatedAt: DateTime.now().toIso8601String(),
-      ),
-    );
-  }
-
-  /// Legacy compatibility only — children complete via TaskActions.complete.
-  bool toggleSubtask(String taskId, String subtaskId) {
-    return _replaceTask(
-      taskId,
-      (task) => task.copyWith(
-        subtasks: task.subtasks
-            .map((subtask) => subtask.id == subtaskId
-                ? subtask.copyWith(completed: !subtask.completed)
-                : subtask)
-            .toList(),
-        updatedAt: DateTime.now().toIso8601String(),
-      ),
-    );
-  }
-
-  /// Legacy compatibility only — children rename via TaskActions.setTitle.
-  bool renameSubtask(String taskId, String subtaskId, String rawTitle) {
-    final title = rawTitle.trim();
-    if (title.isEmpty) return false;
-    return _replaceTask(
-      taskId,
-      (task) => task.copyWith(
-        subtasks: task.subtasks
-            .map((subtask) => subtask.id == subtaskId
-                ? subtask.copyWith(title: title)
-                : subtask)
-            .toList(),
-        updatedAt: DateTime.now().toIso8601String(),
-      ),
-    );
-  }
-
-  /// Legacy compatibility only — children delete via TaskActions.delete.
-  bool removeSubtask(String taskId, String subtaskId) {
-    return _replaceTask(
-      taskId,
-      (task) => task.copyWith(
-        subtasks:
-            task.subtasks.where((subtask) => subtask.id != subtaskId).toList(),
-        updatedAt: DateTime.now().toIso8601String(),
-      ),
-    );
   }
 
   /// Renames a list and every task that belongs to it.
@@ -3857,8 +3799,7 @@ class WorkspaceController extends ChangeNotifier {
   void _applyBundle(MigrationBundle bundle) {
     _lists = List<MigrationListRecord>.from(bundle.lists);
     _folders = List<MigrationFolderRecord>.from(bundle.folders);
-    _tasks = bundle.tasks.map(TaskItem.fromMigration).toList();
-    _normalizeTaskHierarchy();
+    _tasks = tasksFromRecords(bundle.tasks);
     _notes = bundle.notes
         .asMap()
         .entries

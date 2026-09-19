@@ -36,8 +36,8 @@ class MatrixBoard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    MatrixQuadrantViewModel model(MatrixQuadrant quadrant) => quadrants
-        .firstWhere((item) => item.quadrant == quadrant);
+    MatrixQuadrantViewModel model(MatrixQuadrant quadrant) =>
+        quadrants.firstWhere((item) => item.quadrant == quadrant);
 
     Widget cell(MatrixQuadrant quadrant) {
       final value = model(quadrant);
@@ -59,7 +59,11 @@ class MatrixBoard extends StatelessWidget {
     }
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(WorkFollowSpacing.cardInset, WorkFollowSpacing.zero, WorkFollowSpacing.cardInset, WorkFollowSpacing.cardInset),
+      padding: const EdgeInsets.fromLTRB(
+          WorkFollowSpacing.cardInset,
+          WorkFollowSpacing.zero,
+          WorkFollowSpacing.cardInset,
+          WorkFollowSpacing.cardInset),
       child: Column(
         children: [
           Expanded(

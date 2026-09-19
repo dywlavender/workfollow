@@ -9,7 +9,8 @@ import 'calendar_task_bar.dart';
 
 /// Stable key fragment for one day, so the grid and the tests address the same
 /// cell and the same overflow row.
-String calendarDayKey(DateTime date) => '${date.year.toString().padLeft(4, '0')}-'
+String calendarDayKey(DateTime date) =>
+    '${date.year.toString().padLeft(4, '0')}-'
     '${date.month.toString().padLeft(2, '0')}-'
     '${date.day.toString().padLeft(2, '0')}';
 
@@ -140,8 +141,8 @@ class CalendarDayCell extends StatelessWidget {
                 Positioned.fill(
                   child: IgnorePointer(
                     child: ColoredBox(
-                      color: tokens.accent
-                          .withValues(alpha: CalendarMetrics.dropHighlightAlpha),
+                      color: tokens.accent.withValues(
+                          alpha: CalendarMetrics.dropHighlightAlpha),
                     ),
                   ),
                 ),
@@ -222,7 +223,8 @@ class CalendarDayCell extends StatelessWidget {
                 ? const SizedBox.shrink()
                 : Text(
                     festival,
-                    key: ValueKey('calendar-day-festival-${calendarDayKey(date)}'),
+                    key: ValueKey(
+                        'calendar-day-festival-${calendarDayKey(date)}'),
                     textAlign: TextAlign.end,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
@@ -253,7 +255,8 @@ class CalendarDayCell extends StatelessWidget {
     return LayoutBuilder(builder: (context, constraints) {
       const slot = CalendarMetrics.taskBarHeight + CalendarMetrics.taskBarGap;
       final capacity =
-          ((constraints.maxHeight + CalendarMetrics.taskBarGap) / slot).floor() -
+          ((constraints.maxHeight + CalendarMetrics.taskBarGap) / slot)
+                  .floor() -
               skipSlots;
       if (capacity < 1) return const SizedBox.shrink();
       final overflowing = tasks.length > capacity;

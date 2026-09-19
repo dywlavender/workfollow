@@ -44,8 +44,15 @@ void main() {
     final triggerRect = tester.getRect(trigger);
     final deleteRect =
         tester.getRect(find.byKey(const ValueKey('menu-option-delete')));
-    expect(deleteRect.bottom, lessThanOrEqualTo(triggerRect.top));
-    expect(triggerRect.top - deleteRect.bottom, lessThan(20));
+    final opensAbove = deleteRect.bottom <= triggerRect.top;
+    final opensBelow = deleteRect.top >= triggerRect.bottom;
+    expect(opensAbove || opensBelow, isTrue,
+        reason: 'menu must stay glued to its trigger');
+    if (opensAbove) {
+      expect(triggerRect.top - deleteRect.bottom, lessThan(20));
+    } else {
+      expect(deleteRect.top - triggerRect.bottom, lessThan(20));
+    }
     expect((triggerRect.right - deleteRect.right).abs(), lessThan(20));
   });
 

@@ -142,8 +142,16 @@ void main() {
     await tester.pumpAndSettle();
     final deleteRect =
         tester.getRect(find.byKey(const ValueKey('menu-option-delete')));
-    expect(deleteRect.bottom, lessThanOrEqualTo(triggerRect.top));
-    expect(triggerRect.top - deleteRect.bottom, lessThan(20));
+    // The menu opens adjacent to its trigger — above when space allows,
+    // flipping below otherwise; the anchor must stay glued either way.
+    final opensAbove = deleteRect.bottom <= triggerRect.top;
+    final opensBelow = deleteRect.top >= triggerRect.bottom;
+    expect(opensAbove || opensBelow, isTrue);
+    if (opensAbove) {
+      expect(triggerRect.top - deleteRect.bottom, lessThan(20));
+    } else {
+      expect(deleteRect.top - triggerRect.bottom, lessThan(20));
+    }
   });
 
   test('macOS resolves to the system face instead of the Inter Web stack', () {

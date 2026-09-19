@@ -297,7 +297,9 @@ void main() {
     expect(controller.deletedTasks.map((task) => task.id), contains('task-01'));
     expect(controller.activeTasks.map((task) => task.id),
         isNot(contains('task-01')));
-    expect(controller.countFor(WorkspaceView.trash), 1);
+    // The cascade takes the parent's whole group to the trash: task-01 plus
+    // its three converted child tasks.
+    expect(controller.countFor(WorkspaceView.trash), 4);
 
     expect(controller.undoLastAction(), isTrue);
     expect(controller.deletedTasks, isEmpty);
@@ -591,32 +593,6 @@ void main() {
         (task) => task.id != 'task-03' && task.recurrenceType == 'MONTHLY');
     // 2099 is not a leap year: the 31st lands on Feb 28.
     expect(DateTime.parse(spawned.dueAt!), DateTime(2099, 2, 28));
-  });
-
-  test('subtasks can be added, toggled and removed, and survive a round trip',
-      () {
-    final controller = WorkspaceController();
-
-    expect(controller.addSubtask('task-02', '第一步'), isTrue);
-    final task = controller.tasks.firstWhere((task) => task.id == 'task-02');
-    final subtask = task.subtasks.single;
-    expect(task.subtaskTotal, 1);
-    expect(task.subtaskCompleted, 0);
-
-    expect(controller.toggleSubtask('task-02', subtask.id), isTrue);
-    expect(
-        controller.tasks
-            .firstWhere((task) => task.id == 'task-02')
-            .subtaskCompleted,
-        1);
-
-    final roundTripped = TaskItem.fromMigration(task.toMigrationRecord());
-    expect(roundTripped.subtasks, hasLength(1));
-    expect(roundTripped.subtasks.single.title, '第一步');
-
-    expect(controller.removeSubtask('task-02', subtask.id), isTrue);
-    expect(controller.tasks.firstWhere((task) => task.id == 'task-02').subtasks,
-        isEmpty);
   });
 
   test(

@@ -44,9 +44,8 @@ WorkFollowFeedback? feedbackForTaskResult(TaskActionResult result) {
           // total ("已完成 3 个任务"), and folding a later single completion
           // into it would recount to 2.
           coalesceKey: result.taskId == null ? null : 'task-completed',
-          coalescedMessage: result.taskId == null
-              ? null
-              : (count) => '已完成 $count 个任务');
+          coalescedMessage:
+              result.taskId == null ? null : (count) => '已完成 $count 个任务');
     case TaskFeedbackIntent.undoable:
       return WorkFollowFeedback(
           kind: WorkFollowFeedbackKind.undoable,
@@ -109,7 +108,8 @@ void presentTaskResultIn(BuildContext context, TaskActionResult result,
 WorkFollowFeedback? _navigation(TaskActionResult result, String message) {
   final id = result.taskId;
   if (id == null || !_movedAway(result)) return null;
-  return WorkFollowFeedback(kind: WorkFollowFeedbackKind.success, message: message);
+  return WorkFollowFeedback(
+      kind: WorkFollowFeedbackKind.success, message: message);
 }
 
 /// Feedback for a task that landed somewhere the user is not looking, with the

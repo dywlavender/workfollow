@@ -59,7 +59,8 @@ class _FloatingTaskEditorContent extends StatefulWidget {
       _FloatingTaskEditorContentState();
 }
 
-class _FloatingTaskEditorContentState extends State<_FloatingTaskEditorContent> {
+class _FloatingTaskEditorContentState
+    extends State<_FloatingTaskEditorContent> {
   bool closing = false;
 
   TaskItem? get task => widget.controller.tasks

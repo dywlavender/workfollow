@@ -367,12 +367,9 @@ void main() {
           width: 720,
           child: Column(
             children: [
+              TaskRow(task: dateOnly, controller: controller, selected: false),
               TaskRow(
-                  task: dateOnly, controller: controller, selected: false),
-              TaskRow(
-                  task: listAndDate,
-                  controller: controller,
-                  selected: false),
+                  task: listAndDate, controller: controller, selected: false),
             ],
           ),
         ),
@@ -403,12 +400,26 @@ void main() {
       tags: const ['项目'],
       description: '这条描述只应该作为一个次要提示出现',
       attachments: const ['brief.pdf'],
-      subtasks: const [
-        TaskSubtask(id: 'subtask-1', title: '子任务一'),
-        TaskSubtask(id: 'subtask-2', title: '子任务二'),
-      ],
       priority: TaskPriority.high,
     );
+    // Two real child tasks back the hierarchy count in the metadata trail.
+    controller.loadTasksForTest([
+      task,
+      TaskItem(
+          id: 'child-1',
+          title: '子任务一',
+          listName: '工作',
+          bucket: TaskBucket.unscheduled,
+          parentTaskId: task.id,
+          childOrder: 0),
+      TaskItem(
+          id: 'child-2',
+          title: '子任务二',
+          listName: '工作',
+          bucket: TaskBucket.unscheduled,
+          parentTaskId: task.id,
+          childOrder: 1),
+    ]);
 
     await tester.pumpWidget(MaterialApp(
       theme: WorkFollowThemeData.light(),
@@ -432,6 +443,7 @@ void main() {
     // List, priority, subtask count and the date remain visible row-critical
     // information. Other secondary indicators are deliberately capped.
     expect(find.text('工作'), findsOneWidget);
+    // The count reads the hierarchy: two children, none completed.
     expect(find.text('0/2'), findsOneWidget);
     expect(find.byKey(const ValueKey('task-row-date-metadata-hierarchy')),
         findsOneWidget);
@@ -847,8 +859,8 @@ void main() {
 
     await pumpRow();
     final firstMenuGesture = await tester.startGesture(
-        tester.getCenter(find.byKey(ValueKey(
-            'task-row-surface-${controller.tasks.single.id}'))),
+        tester.getCenter(find
+            .byKey(ValueKey('task-row-surface-${controller.tasks.single.id}'))),
         kind: PointerDeviceKind.mouse,
         buttons: kSecondaryMouseButton);
     await firstMenuGesture.up();
@@ -863,8 +875,8 @@ void main() {
 
     await pumpRow();
     final secondMenuGesture = await tester.startGesture(
-        tester.getCenter(find.byKey(ValueKey(
-            'task-row-surface-${controller.tasks.single.id}'))),
+        tester.getCenter(find
+            .byKey(ValueKey('task-row-surface-${controller.tasks.single.id}'))),
         kind: PointerDeviceKind.mouse,
         buttons: kSecondaryMouseButton);
     await secondMenuGesture.up();
@@ -875,8 +887,8 @@ void main() {
 
     await pumpRow();
     final thirdMenuGesture = await tester.startGesture(
-        tester.getCenter(find.byKey(ValueKey(
-            'task-row-surface-${controller.tasks.single.id}'))),
+        tester.getCenter(find
+            .byKey(ValueKey('task-row-surface-${controller.tasks.single.id}'))),
         kind: PointerDeviceKind.mouse,
         buttons: kSecondaryMouseButton);
     await thirdMenuGesture.up();
@@ -1037,8 +1049,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('quick-add-properties')));
     await tester.pumpAndSettle();
-    final parent =
-        find.byKey(const ValueKey('quick-add-properties-panel'));
+    final parent = find.byKey(const ValueKey('quick-add-properties-panel'));
     expect(parent, findsOneWidget);
 
     final listRow = find.byKey(const ValueKey('menu-option-list'));

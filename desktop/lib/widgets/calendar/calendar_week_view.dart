@@ -40,8 +40,7 @@ class CalendarWeekView extends StatelessWidget {
     final normalized = DateTime(anchor.year, anchor.month, anchor.day);
     // Dart counts weekdays from Monday as 1, so Sunday is 7 and `% 7` makes it
     // the week's first column.
-    final start =
-        normalized.subtract(Duration(days: normalized.weekday % 7));
+    final start = normalized.subtract(Duration(days: normalized.weekday % 7));
     final now = today ?? DateTime.now();
     return Row(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -108,67 +107,63 @@ class _WeekDayColumn extends StatelessWidget {
                     color: active
                         ? tokens.accent.withValues(alpha: .6)
                         : tokens.border)),
-            child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(children: [
-                    Expanded(
-                        child: Text(
-                            '周${_weekday(day.weekday)} ${day.month}/${day.day}',
+            child:
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Row(children: [
+                Expanded(
+                    child: Text(
+                        '周${_weekday(day.weekday)} ${day.month}/${day.day}',
+                        style: TextStyle(
+                            color: isToday ? accent : tokens.textPrimary,
+                            fontSize: WorkFollowMacTypography.sectionTitle,
+                            fontWeight: WorkFollowMacWeight.semibold))),
+                if (tasks.isNotEmpty)
+                  Text('${tasks.length}',
+                      style: TextStyle(
+                          color: accent,
+                          fontSize: WorkFollowMacTypography.caption)),
+              ]),
+              const SizedBox(height: WorkFollowSpacing.space2),
+              Expanded(
+                child: tasks.isEmpty
+                    ? Center(
+                        child: Text('没有安排',
                             style: TextStyle(
-                                color: isToday ? accent : tokens.textPrimary,
-                                fontSize: WorkFollowMacTypography.sectionTitle,
-                                fontWeight: WorkFollowMacWeight.semibold))),
-                    if (tasks.isNotEmpty)
-                      Text('${tasks.length}',
-                          style: TextStyle(
-                              color: accent,
-                              fontSize: WorkFollowMacTypography.caption)),
-                  ]),
-                  const SizedBox(height: WorkFollowSpacing.space2),
-                  Expanded(
-                    child: tasks.isEmpty
-                        ? Center(
-                            child: Text('没有安排',
-                                style: TextStyle(
-                                    color: tokens.textTertiary,
-                                    fontSize: WorkFollowMacTypography.caption)))
-                        : ListView.separated(
-                            itemCount: tasks.length,
-                            separatorBuilder: (_, __) => const SizedBox(
-                                height: WorkFollowSpacing.denseGap),
-                            itemBuilder: (context, index) {
-                              final task = tasks[index];
-                              final listColor = Color(
-                                  controller.colorValueForList(task.listName));
-                              return Draggable<String>(
-                                data: task.id,
-                                feedback: Material(
-                                  color: Colors.transparent,
-                                  child: _WeekTaskPill(
-                                      task: task,
-                                      color: listColor,
-                                      tokens: tokens),
-                                ),
-                                childWhenDragging: Opacity(
-                                    opacity: .3,
-                                    child: _WeekTaskPill(
-                                        task: task,
-                                        color: listColor,
-                                        tokens: tokens)),
+                                color: tokens.textTertiary,
+                                fontSize: WorkFollowMacTypography.caption)))
+                    : ListView.separated(
+                        itemCount: tasks.length,
+                        separatorBuilder: (_, __) =>
+                            const SizedBox(height: WorkFollowSpacing.denseGap),
+                        itemBuilder: (context, index) {
+                          final task = tasks[index];
+                          final listColor = Color(
+                              controller.colorValueForList(task.listName));
+                          return Draggable<String>(
+                            data: task.id,
+                            feedback: Material(
+                              color: Colors.transparent,
+                              child: _WeekTaskPill(
+                                  task: task, color: listColor, tokens: tokens),
+                            ),
+                            childWhenDragging: Opacity(
+                                opacity: .3,
                                 child: _WeekTaskPill(
                                     task: task,
                                     color: listColor,
-                                    tokens: tokens,
-                                    onTap: onOpenTask == null
-                                        ? null
-                                        : () => onOpenTask!(
-                                            task.id, context)),
-                              );
-                            },
-                          ),
-                  ),
-                ]),
+                                    tokens: tokens)),
+                            child: _WeekTaskPill(
+                                task: task,
+                                color: listColor,
+                                tokens: tokens,
+                                onTap: onOpenTask == null
+                                    ? null
+                                    : () => onOpenTask!(task.id, context)),
+                          );
+                        },
+                      ),
+              ),
+            ]),
           ),
         );
       },

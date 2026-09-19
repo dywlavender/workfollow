@@ -63,8 +63,7 @@ void main() {
     final commands = DocumentCommands(editor: controller);
 
     commands.insertDivider(at: 2);
-    commands.insertSubtaskBlock(at: 3);
-    commands.insertRelation('note-1', at: 4);
+    commands.insertRelation('note-1', at: 3);
 
     final inserts = controller.document
         .toDelta()
@@ -72,10 +71,9 @@ void main() {
         .where((op) => op['insert'] is Map)
         .map((op) => (op['insert'] as Map)['workfollow-block'].toString())
         .toList();
-    expect(inserts, hasLength(3));
+    expect(inserts, hasLength(2));
     expect(inserts[0], contains('horizontalRule'));
-    expect(inserts[1], contains('taskSubtasks'));
-    expect(inserts[2], contains('note-1'));
+    expect(inserts[1], contains('note-1'));
   });
 
   test('link insertion is applied by the command service', () {

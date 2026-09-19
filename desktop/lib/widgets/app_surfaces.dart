@@ -82,8 +82,9 @@ class PageHeader extends StatelessWidget {
             children: [
               if (eyebrow != null && !dense) ...[
                 Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: WorkFollowSpacing.compactInset, vertical: WorkFollowSpacing.space1),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: WorkFollowSpacing.compactInset,
+                        vertical: WorkFollowSpacing.space1),
                     decoration: BoxDecoration(
                         color: (eyebrowColor ?? tokens.accent)
                             .withValues(alpha: .10),
@@ -128,7 +129,10 @@ class PageHeader extends StatelessWidget {
                   ],
                 ),
               if (subtitle != null) ...[
-                SizedBox(height: dense ? WorkFollowSpacing.space1 : WorkFollowSpacing.compactGap),
+                SizedBox(
+                    height: dense
+                        ? WorkFollowSpacing.space1
+                        : WorkFollowSpacing.compactGap),
                 Text(subtitle!,
                     style: TextStyle(
                         color: tokens.textTertiary,
@@ -177,8 +181,9 @@ class ProgressRing extends StatelessWidget {
             total == 0 ? '—' : '$done',
             style: TextStyle(
                 color: tokens.textPrimary,
-                fontSize:
-                    size >= 50 ? WorkFollowMacTypography.body : WorkFollowMacTypography.control,
+                fontSize: size >= 50
+                    ? WorkFollowMacTypography.body
+                    : WorkFollowMacTypography.control,
                 fontWeight: WorkFollowMacWeight.semibold),
           ),
         ),
@@ -338,7 +343,11 @@ class StatCard extends StatelessWidget {
       ],
     );
     final card = AppCard(
-      padding: const EdgeInsets.fromLTRB(WorkFollowSpacing.relaxedGap, WorkFollowSpacing.controlInset, WorkFollowSpacing.relaxedGap, WorkFollowSpacing.space3),
+      padding: const EdgeInsets.fromLTRB(
+          WorkFollowSpacing.relaxedGap,
+          WorkFollowSpacing.controlInset,
+          WorkFollowSpacing.relaxedGap,
+          WorkFollowSpacing.space3),
       child: body,
     );
     if (onTap == null) return card;

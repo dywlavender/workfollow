@@ -48,9 +48,6 @@ class _MoreMenuState extends State<_MoreMenu> {
         ('pin', widget.task.isPinned ? '取消置顶' : '置顶'),
         ('abandon', widget.task.isAbandoned ? '恢复任务' : '放弃'),
         ('tags', '标签'),
-        // Recurrence on a child is deferred (S7 §18): parent+child repeat
-        // would need occurrence-copy rules this phase deliberately skips.
-        if (!widget.task.isChildTask) ('repeat', '重复'),
         ('attachment', '上传附件'),
         ('convert-note', '转换为笔记'),
         ('delete', '删除'),

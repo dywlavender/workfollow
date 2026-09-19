@@ -19,9 +19,8 @@ class FeedbackScope extends InheritedNotifier<FeedbackController> {
       {super.key, required FeedbackController controller, required super.child})
       : super(notifier: controller);
 
-  static FeedbackController? maybeOf(BuildContext context) => context
-      .dependOnInheritedWidgetOfExactType<FeedbackScope>()
-      ?.notifier;
+  static FeedbackController? maybeOf(BuildContext context) =>
+      context.dependOnInheritedWidgetOfExactType<FeedbackScope>()?.notifier;
 
   static FeedbackController of(BuildContext context) {
     final controller = maybeOf(context);

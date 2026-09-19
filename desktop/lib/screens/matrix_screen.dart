@@ -101,7 +101,11 @@ class _MatrixScreenState extends State<MatrixScreen> {
     return SizedBox(
       height: MatrixMetrics.pageHeaderHeight,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(WorkFollowSpacing.relaxedGap, WorkFollowSpacing.cardInset, WorkFollowSpacing.space3, WorkFollowSpacing.space1),
+        padding: const EdgeInsets.fromLTRB(
+            WorkFollowSpacing.relaxedGap,
+            WorkFollowSpacing.cardInset,
+            WorkFollowSpacing.space3,
+            WorkFollowSpacing.space1),
         child: Row(
           children: [
             Text(
