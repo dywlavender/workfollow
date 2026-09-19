@@ -200,8 +200,7 @@ class _TaskRowState extends State<TaskRow> {
                           child: Padding(
                             padding: EdgeInsets.only(
                                 left: widget.depth *
-                                    TaskListMetrics.checkboxTitleGap *
-                                    2),
+                                    TaskListMetrics.hierarchyIndent),
                             child: TaskListRowFrame(
                               surfaceKey:
                                   ValueKey('task-row-surface-${task.id}'),
@@ -209,7 +208,11 @@ class _TaskRowState extends State<TaskRow> {
                               selected: selected,
                               hovering: hovering,
                               focused: focused,
-                              leading: widget.expander,
+                              leading: widget.expander ??
+                                  // Every row reserves the disclosure gutter
+                                  // so checkbox columns stay aligned (S10.10).
+                                  const SizedBox(
+                                      width: TaskListMetrics.disclosureWidth),
                               checkbox: _checkbox(tokens, priorityColor),
                               content: _content(tokens, preview),
                               metadata: TaskMetadataTrail(

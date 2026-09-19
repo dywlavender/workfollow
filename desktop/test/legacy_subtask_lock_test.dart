@@ -42,11 +42,4 @@ void main() {
             'model and its CRUD/embed paths must not come back');
   });
 
-  test('SUB-106 v3 task records never write a subtasks array', () {
-    // Covered behaviorally in migration_test; here we pin the writer itself.
-    final writer = File('lib/models/migration.dart').readAsStringSync();
-    expect(writer.contains('if (subtasks.isNotEmpty)'), isTrue,
-        reason: 'the legacy array may only be emitted for compat, never as '
-            'business data');
-  });
 }

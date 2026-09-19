@@ -68,7 +68,10 @@ class TaskListRowFrame extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (leading != null) ...[leading!, const SizedBox(width: 2)],
+          if (leading != null) ...[
+            leading!,
+            const SizedBox(width: TaskListMetrics.disclosureTitleGap),
+          ],
           checkbox,
           const SizedBox(width: TaskListMetrics.checkboxTitleGap),
           Expanded(child: content),

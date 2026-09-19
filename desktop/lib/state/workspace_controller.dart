@@ -979,7 +979,14 @@ class WorkspaceController extends ChangeNotifier {
         final parentId = payload as String;
         final childId = createChildTask(parentId);
         if (childId == null) {
-          return TaskActionResult.failure('missing-task', '任务不存在');
+          // Ambiguous on purpose? No — a child parent means the one-level
+          // rule rejected it; a missing parent means the id was stale.
+          final parentExists =
+              _taskById(parentId) != null;
+          return parentExists
+              ? TaskActionResult.failure(
+                  'nested-child-not-supported', '子任务不允许再建子任务')
+              : TaskActionResult.failure('missing-task', '任务不存在');
         }
         return _taskResult(childId);
       case 'setTitle':
@@ -1941,7 +1948,9 @@ class WorkspaceController extends ChangeNotifier {
   String? createChildTask(String parentTaskId, {String title = ''}) {
     final parent =
         activeTasks.where((task) => task.id == parentTaskId).firstOrNull;
-    if (parent == null) return null;
+    // One nesting level is a business rule, not a UI nicety: the data layer
+    // refuses grandchildren so no caller can sneak past the menu guards.
+    if (parent == null || parent.isChildTask) return null;
     final now = DateTime.now().toIso8601String();
     final child = TaskItem(
       id: 'task-${_taskSequence.toString().padLeft(2, '0')}',

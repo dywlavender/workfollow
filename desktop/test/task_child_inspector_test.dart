@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:workfollow_personal/models/task.dart';
+import 'package:workfollow_personal/features/tasks/application/task_actions.dart';
 import 'package:workfollow_personal/state/workspace_controller.dart';
 import 'package:workfollow_personal/theme/workfollow_theme.dart';
 import 'package:workfollow_personal/widgets/task_inspector.dart';
@@ -39,7 +40,8 @@ void main() {
     c.openTask(childId);
     await pumpInspector(tester, c: c, taskId: childId);
 
-    expect(find.byKey(const ValueKey('task-parent-breadcrumb')), findsOneWidget);
+    expect(
+        find.byKey(const ValueKey('task-parent-breadcrumb')), findsOneWidget);
     expect(find.text('父任务二'), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('task-parent-breadcrumb')));
     await tester.pumpAndSettle();
@@ -105,7 +107,8 @@ void main() {
     expect(c.selectedTaskId, parentId);
   });
 
-  testWidgets('SUB-051 an orphaned child opens as a plain task', (tester) async {
+  testWidgets('SUB-051 an orphaned child opens as a plain task',
+      (tester) async {
     tester.view.physicalSize = const Size(1000, 720);
     tester.view.devicePixelRatio = 1;
     addTearDown(() {
@@ -153,5 +156,12 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('task-more-actions')));
     await tester.pumpAndSettle();
     expect(find.text('添加子任务'), findsNothing);
+
+    // The data layer refuses grandchildren even if a caller bypasses the UI.
+    expect(c.createChildTask(childId), isNull);
+    expect(c.childrenOf(childId), isEmpty);
+    final viaActions = c.taskActions.createChild(childId);
+    expect(viaActions.success, isFalse);
+    expect(viaActions.error?.code, 'nested-child-not-supported');
   });
 }

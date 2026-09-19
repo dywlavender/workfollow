@@ -202,6 +202,38 @@ void main() {
     expect(item.isChildTask, isFalse);
   });
 
+  test('SUB-106 v3 export drops the legacy subtasks array', () {
+    final record = MigrationTaskRecord(
+      id: 'child-9',
+      title: '子任务',
+      description: null,
+      contentJson: null,
+      status: 'TODO',
+      priority: 'NONE',
+      dueAt: null,
+      dueEndAt: null,
+      reminderAt: null,
+      recurrenceType: 'NONE',
+      recurrenceConfig: null,
+      listName: '收集箱',
+      tags: const [],
+      createdAt: null,
+      updatedAt: null,
+      completedAt: null,
+      parentTaskId: 'parent-1',
+      childOrder: 2,
+    );
+    // A parsed v1/v2 record still carries the legacy array for reads, but
+    // the v3 writer drops it: read old, write new.
+    final withLegacy = MigrationTaskRecord.fromJson(
+        record.toJson()..['subtasks'] = [
+          {'id': 's1', 'title': '旧', 'completed': false}
+        ]);
+    final json = withLegacy.toJson();
+    expect(json.containsKey('subtasks'), isFalse);
+    expect(json['parentTaskId'], 'parent-1');
+    expect(json['childOrder'], 2);
+  });
   test('rejects an unknown format or schema version', () {
     expect(
       () => MigrationBundle.fromJson({

@@ -252,10 +252,9 @@ class MigrationTaskRecord {
         'recurrenceConfig': recurrenceConfig,
         'listName': listName,
         'tags': tags,
-        // v3 writes the hierarchy through parentTaskId/childOrder; the
-        // legacy array stays read-only for v1/v2 compatibility.
-        if (subtasks.isNotEmpty)
-          'subtasks': subtasks.map((item) => item.toJson()).toList(),
+        // v3 writes the hierarchy through parentTaskId/childOrder only.
+        // The legacy subtasks array is read from v1/v2 files but never
+        // written back — read old, write new.
         if (parentTaskId != null) 'parentTaskId': parentTaskId,
         if (childOrder > 0) 'childOrder': childOrder,
         'sourceNoteId': sourceNoteId,
