@@ -88,7 +88,10 @@ class DocumentSaveStatus extends StatelessWidget {
         if (controller.lastSavedAt == null) {
           return _SaveStatusView(
             icon: WorkFollowIcons.check,
-            label: '更改会自动保存到本机',
+            // Kept short on purpose: the footer also carries the list entry and
+            // two document actions, and in the narrow two-pane workspace the
+            // row only has 280pt to work with.
+            label: '自动保存',
             color: tokens.textTertiary,
           );
         }
