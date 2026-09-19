@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:workfollow_personal/features/tasks/domain/task_draft.dart';
 import 'package:workfollow_personal/features/tasks/domain/task_schedule.dart';
 import 'package:workfollow_personal/features/tasks/domain/task_schedule_settings.dart';
 import 'package:workfollow_personal/services/notification_service.dart';
@@ -258,6 +259,95 @@ void main() {
     expect(c.tasks.map((t) => t.id), isNot(contains(a)));
     expect(c.tasks.map((t) => t.id), isNot(contains(b)));
     expect(c.deletedTasks, isEmpty);
+  });
+
+  test('SUB-130 a recurring parent carries its children into the next cycle',
+      () {
+    final c = build();
+    addTearDown(c.dispose);
+    final created = c.createTask(TaskDraft(
+        title: '每周回顾',
+        schedule:
+            TaskScheduleDraft(dueAt: DateTime(2026, 9, 21), hasTime: false),
+        recurrence: const RecurrenceDraft(type: 'WEEKLY')));
+    final parentId = created.taskId!;
+    final done = c.createChildTask(parentId, title: '已完成项')!;
+    final open = c.createChildTask(parentId, title: '未完成项')!;
+    c.taskActions.complete(done);
+    c.taskActions.setSchedule(
+        open, TaskScheduleDraft(dueAt: DateTime(2026, 9, 22), hasTime: false));
+    c.taskActions.complete(parentId);
+    // The historical record keeps its children but stops recurring.
+    final old = c.tasks.firstWhere((t) => t.id == parentId);
+    expect(old.completed, isTrue);
+    expect(old.recurrenceType.toUpperCase(), 'NONE');
+    expect(c.childrenOf(parentId).length, 2);
+    // The next occurrence is a fresh root carrying the rule and the whole
+    // checklist, reset to incomplete.
+    final spawn = c.tasks.singleWhere((t) =>
+        t.id != parentId &&
+        !t.isChildTask &&
+        t.recurrenceType.toUpperCase() == 'WEEKLY');
+    expect(spawn.completed, isFalse);
+    expect(c.childrenOf(spawn.id).map((t) => t.title), ['已完成项', '未完成项']);
+    for (final carried in c.childrenOf(spawn.id)) {
+      expect(carried.completed, isFalse, reason: carried.title);
+      expect(carried.completedAt, isNull);
+      expect(carried.recurrenceType.toUpperCase(), 'NONE');
+    }
+    // A dated child rides the same recurrence delta as the parent (+7 days).
+    final carriedOpen =
+        c.childrenOf(spawn.id).firstWhere((task) => task.title == '未完成项');
+    expect(DateTime.parse(carriedOpen.dueAt!),
+        DateTime.parse(spawn.dueAt!).add(const Duration(days: 1)));
+    // The undated child stays undated.
+    final carriedDone =
+        c.childrenOf(spawn.id).firstWhere((task) => task.title == '已完成项');
+    expect(carriedDone.dueAt, isNull);
+  });
+
+  test('SUB-131 undoing the completion removes the carried children too', () {
+    final c = build();
+    addTearDown(c.dispose);
+    final created = c.createTask(TaskDraft(
+        title: '每周回顾',
+        schedule:
+            TaskScheduleDraft(dueAt: DateTime(2026, 9, 21), hasTime: false),
+        recurrence: const RecurrenceDraft(type: 'WEEKLY')));
+    final parentId = created.taskId!;
+    c.createChildTask(parentId, title: '甲');
+    c.createChildTask(parentId, title: '乙');
+    c.taskActions.complete(parentId);
+    final spawn = c.tasks.singleWhere((t) =>
+        t.id != parentId &&
+        !t.isChildTask &&
+        t.recurrenceType.toUpperCase() == 'WEEKLY');
+    expect(c.undoLastAction(), isTrue);
+    expect(c.tasks.any((t) => t.id == spawn.id), isFalse);
+    expect(c.tasks.where((t) => t.parentTaskId == spawn.id), isEmpty);
+    final parent = c.tasks.firstWhere((t) => t.id == parentId);
+    expect(parent.recurrenceType.toUpperCase(), 'WEEKLY');
+    expect(parent.completed, isFalse);
+    expect(c.childrenOf(parentId).length, 2);
+  });
+
+  test('SUB-132 a recurring child repeats inside its parent', () {
+    final c = build()..addTask('父任务');
+    addTearDown(c.dispose);
+    final parentId = c.tasks.single.id;
+    final childId = c.createChildTask(parentId, title: '每日打卡')!;
+    c.taskActions.setSchedule(childId,
+        TaskScheduleDraft(dueAt: DateTime(2026, 9, 21), hasTime: false));
+    c.updateTaskRecurrence(childId, 'DAILY');
+    c.taskActions.complete(childId);
+    // The next occurrence is born a child of the same parent, not a root.
+    final respawn = c.tasks
+        .singleWhere((t) => t.parentTaskId == parentId && t.id != childId);
+    expect(respawn.completed, isFalse);
+    expect(respawn.isChildTask, isTrue);
+    expect(respawn.recurrenceType.toUpperCase(), 'DAILY');
+    // The old record stays completed inside the parent.
+    expect(c.tasks.firstWhere((t) => t.id == childId).completed, isTrue);
   });
 }
 
