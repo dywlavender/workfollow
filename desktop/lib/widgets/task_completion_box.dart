@@ -10,12 +10,13 @@ import 'app_icon_button.dart';
 /// The corner of a completion box, whatever size it is drawn at.
 ///
 /// One silhouette for one control. A box in a calendar strip is 9.9pt and one
-/// in a task row is 16.2pt, and they are the same shape because the radius is a
+/// in a task row is 14.58pt, and they are the same shape because the radius is a
 /// fraction of the box rather than a number someone picked per screen. The
-/// fraction is the task row's — an 18pt box with a 4.5pt corner is the shape
-/// the rest of the product matches, and every other box is that shape scaled.
-/// So a box that gets smaller keeps its corner in proportion and never turns
-/// into a circle or a sharp tile on the way down.
+/// fraction is the row's slot — an 18pt box with a 4.5pt corner, which is also
+/// the side Flutter's own Checkbox paints — and every other box is that shape
+/// scaled. So a box that gets smaller keeps its corner in proportion and never
+/// turns into a circle or a sharp tile on the way down, and the family can be
+/// resized by moving the sides alone.
 double taskCompletionBoxRadius(double size) =>
     size * WorkFollowRadii.checkbox / TaskListMetrics.checkboxSize;
 
