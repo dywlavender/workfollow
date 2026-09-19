@@ -480,11 +480,24 @@ class NotesMetrics {
   static const double headerHeight = 44;
   static const double searchHeight = 34;
 
-  /// One note row. Rows are list rows, not cards: a 12pt inset, an 88pt
-  /// minimum height, an 8pt selection radius and a hairline between rows.
+  /// One note row. Rows are list rows, not cards: a 12pt inset, a 61pt
+  /// height, an 8pt selection radius and a hairline between rows.
   static const double rowHorizontalPadding = WorkFollowSpacing.space3;
   static const double rowVerticalPadding = WorkFollowSpacing.cardInset;
-  static const double rowMinHeight = 88;
+
+  /// The row's height, which is the height of what it holds.
+  ///
+  /// A row is a title, a 4pt gap and one preview line — 41pt — with the 10pt
+  /// inset above and below it. This was 88, read off the reference list
+  /// without checking the content: the floor was taller than the row, and
+  /// because the row aligns its text to the top the difference did not read
+  /// as padding, it read as blank space under every note. A floor above the
+  /// content adds a gap, not air.
+  ///
+  /// The floor stays, because it keeps rows uniform if a style changes under
+  /// them; it just has to be what the content measures. Changing what a row
+  /// holds means measuring this again rather than assuming it.
+  static const double rowMinHeight = 61;
   static const double rowRadius = WorkFollowRadii.md;
   static const double rowDividerInset = rowHorizontalPadding;
 

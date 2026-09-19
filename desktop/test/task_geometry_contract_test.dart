@@ -52,6 +52,13 @@ void main() {
     expect(NotesMetrics.listWidth, 330);
     expect(NotesMetrics.compactListWidth, 300);
     expect(NotesMetrics.editorContentMaxWidth, 820);
+    // The note row's height is its content's — a title, a 4pt gap and one
+    // preview line, plus the 10pt inset above and below. It was 88, which is
+    // taller than anything a row holds, and because the row aligns its text to
+    // the top that difference showed as blank space under every note rather
+    // than as padding around it. notes_list_row_test.dart measures the row
+    // against what it holds, so this cannot drift away from the content again.
+    expect(NotesMetrics.rowMinHeight, 61);
     expect(SettingsMetrics.panelWidth, 720);
     expect(CommandPaletteMetrics.maxHeight, 500);
   });
