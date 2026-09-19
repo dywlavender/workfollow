@@ -54,7 +54,8 @@ class DocumentTitleEditor extends StatelessWidget {
         muted: muted,
         strikethrough: strikethrough,
       ),
-      decoration: DocumentStyles.titleDecoration(placeholder),
+      decoration: DocumentStyles.titleDecoration(placeholder,
+          hintColor: WorkFollowTheme.of(context).textTertiary),
       onChanged: onChanged,
     );
   }

@@ -534,7 +534,7 @@ class _TaskInspectorState extends State<TaskInspector> {
           if (widget.controller.parentOf(task.id) case final parent?)
             Padding(
                 padding:
-                    const EdgeInsets.only(bottom: WorkFollowSpacing.tightGap),
+                    const EdgeInsets.only(bottom: WorkFollowSpacing.space3),
                 child: TaskParentBreadcrumb(
                     parent: parent,
                     onOpen: () => widget.controller.openTask(parent.id))),

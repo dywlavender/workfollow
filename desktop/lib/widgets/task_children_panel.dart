@@ -116,11 +116,12 @@ class _TaskChildrenPanelState extends State<TaskChildrenPanel> {
                         key: const ValueKey('task-add-child'),
                         borderRadius:
                             BorderRadius.circular(WorkFollowRadii.control),
+                        hoverColor: tokens.accentFaint,
                         onTap: () =>
                             widget.controller.createChildTask(widget.task.id),
-                        child: Padding(
-                            padding: const EdgeInsets.symmetric(
-                                vertical: WorkFollowSpacing.tightGap),
+                        child: Container(
+                            constraints: const BoxConstraints(minHeight: 42),
+                            alignment: Alignment.centerLeft,
                             child: Row(children: [
                               AppIcon(WorkFollowIcons.add,
                                   size: WorkFollowMetrics.toolbarIcon,
@@ -172,6 +173,24 @@ class TaskChildInlineRow extends StatefulWidget {
 
 class _TaskChildInlineRowState extends State<TaskChildInlineRow> {
   bool hoveringArrow = false;
+  bool hoveringRow = false;
+  bool titleFocused = false;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.focus.addListener(_focusChanged);
+  }
+
+  void _focusChanged() {
+    if (mounted) setState(() => titleFocused = widget.focus.hasFocus);
+  }
+
+  @override
+  void dispose() {
+    widget.focus.removeListener(_focusChanged);
+    super.dispose();
+  }
 
   Color _dateColor(TaskItem child, WorkFollowTheme tokens) {
     if (child.isClosed) return tokens.textTertiary;
@@ -190,67 +209,77 @@ class _TaskChildInlineRowState extends State<TaskChildInlineRow> {
     final tokens = WorkFollowTheme.of(context);
     final child = widget.child;
     final due = localDateTimeFromStorage(child.dueAt);
-    return Container(
-        constraints:
-            const BoxConstraints(minHeight: TaskChildInlineRow.rowMinHeight),
-        alignment: Alignment.centerLeft,
-        child: Row(children: [
-          GestureDetector(
-            onTap: widget.onToggle,
-            child: TaskCompletionBox(
-                size: WorkFollowMetrics.toolbarIcon,
-                completed: child.completed,
-                openColor: tokens.textSecondary,
-                doneColor: tokens.success),
-          ),
-          const SizedBox(width: WorkFollowSpacing.denseGap),
-          Expanded(
-            child: TextField(
-              key: ValueKey('task-child-title-${child.id}'),
-              controller: widget.edit,
-              focusNode: widget.focus,
-              onChanged: widget.onRename,
-              style: TextStyle(
-                  fontSize: WorkFollowMacTypography.listTitle,
-                  height: WorkFollowMacTypography.lineList,
-                  fontWeight: WorkFollowMacWeight.medium,
-                  color: child.completed
-                      ? tokens.textTertiary
-                      : tokens.textPrimary),
-              decoration: const InputDecoration(
-                  hintText: '无标题', border: InputBorder.none, isDense: true),
-            ),
-          ),
-          if (due != null)
-            Padding(
-                padding:
-                    const EdgeInsets.only(left: WorkFollowSpacing.tightGap),
-                child: Text(
-                    calendarDateLabel(due, hasTime: child.scheduledWithTime),
-                    key: ValueKey('task-child-date-${child.id}'),
-                    style: TextStyle(
-                        fontSize: WorkFollowMacTypography.listMeta,
-                        height: WorkFollowMacTypography.lineControl,
-                        fontWeight: WorkFollowMacWeight.regular,
-                        color: _dateColor(child, tokens)))),
-          const SizedBox(width: WorkFollowSpacing.tightGap),
-          // The chevron is the only navigation affordance; the title edits in
-          // place and never jumps to the child inspector.
-          MouseRegion(
-            onEnter: (_) => setState(() => hoveringArrow = true),
-            onExit: (_) => setState(() => hoveringArrow = false),
-            child: IconButton(
-                key: ValueKey('task-child-open-${child.id}'),
-                tooltip: '打开子任务',
-                visualDensity: VisualDensity.compact,
-                onPressed: widget.onOpen,
-                icon: AppIcon(WorkFollowIcons.chevronNext,
-                    size: WorkFollowMetrics.metadataIcon,
-                    color: hoveringArrow
-                        ? tokens.textSecondary
-                        : tokens.textTertiary)),
-          ),
-        ]));
+    return MouseRegion(
+        onEnter: (_) => setState(() => hoveringRow = true),
+        onExit: (_) => setState(() => hoveringRow = false),
+        child: Container(
+            constraints: const BoxConstraints(
+                minHeight: TaskChildInlineRow.rowMinHeight),
+            alignment: Alignment.centerLeft,
+            // S10.13: a whisper of neutral fill on hover only — never opacity,
+            // never a selected state inside the parent's own panel.
+            color: hoveringRow ? tokens.canvas : Colors.transparent,
+            child: Row(children: [
+              GestureDetector(
+                key: ValueKey('task-child-check-${child.id}'),
+                onTap: widget.onToggle,
+                child: TaskCompletionBox(
+                    size: WorkFollowMetrics.toolbarIcon,
+                    completed: child.completed,
+                    openColor: tokens.textSecondary,
+                    doneColor: tokens.success),
+              ),
+              const SizedBox(width: WorkFollowSpacing.space2),
+              Expanded(
+                child: TextField(
+                  key: ValueKey('task-child-title-${child.id}'),
+                  controller: widget.edit,
+                  focusNode: widget.focus,
+                  onChanged: widget.onRename,
+                  style: TextStyle(
+                      fontSize: WorkFollowMacTypography.listTitle,
+                      height: WorkFollowMacTypography.lineList,
+                      fontWeight: WorkFollowMacWeight.medium,
+                      color: child.completed
+                          ? tokens.textTertiary
+                          : tokens.textPrimary),
+                  decoration: InputDecoration(
+                      hintText: titleFocused ? null : '无标题',
+                      border: InputBorder.none,
+                      isDense: true),
+                ),
+              ),
+              if (due != null)
+                Padding(
+                    padding:
+                        const EdgeInsets.only(left: WorkFollowSpacing.tightGap),
+                    child: Text(
+                        calendarDateLabel(due,
+                            hasTime: child.scheduledWithTime),
+                        key: ValueKey('task-child-date-${child.id}'),
+                        style: TextStyle(
+                            fontSize: WorkFollowMacTypography.listMeta,
+                            height: WorkFollowMacTypography.lineControl,
+                            fontWeight: WorkFollowMacWeight.regular,
+                            color: _dateColor(child, tokens)))),
+              const SizedBox(width: WorkFollowSpacing.space2),
+              // The chevron is the only navigation affordance; the title edits in
+              // place and never jumps to the child inspector.
+              MouseRegion(
+                onEnter: (_) => setState(() => hoveringArrow = true),
+                onExit: (_) => setState(() => hoveringArrow = false),
+                child: IconButton(
+                    key: ValueKey('task-child-open-${child.id}'),
+                    tooltip: '打开子任务',
+                    visualDensity: VisualDensity.compact,
+                    onPressed: widget.onOpen,
+                    icon: AppIcon(WorkFollowIcons.chevronNext,
+                        size: WorkFollowMetrics.metadataIcon,
+                        color: hoveringArrow
+                            ? tokens.textSecondary
+                            : tokens.textTertiary)),
+              ),
+            ])));
   }
 }
 
@@ -284,14 +313,14 @@ class _TaskParentBreadcrumbState extends State<TaskParentBreadcrumb> {
             onTap: widget.onOpen,
             child: Padding(
                 padding: const EdgeInsets.symmetric(
-                    vertical: WorkFollowSpacing.microGap),
+                    vertical: WorkFollowSpacing.space1),
                 child: Row(mainAxisSize: MainAxisSize.min, children: [
                   Flexible(
                       child: Text(taskDisplayTitle(widget.parent),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
-                              fontSize: WorkFollowMacTypography.supporting,
+                              fontSize: WorkFollowMacTypography.control,
                               height: WorkFollowMacTypography.lineControl,
                               fontWeight: WorkFollowMacWeight.medium,
                               color: titleColor))),

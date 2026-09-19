@@ -93,8 +93,10 @@ class DocumentStyles {
   /// No chrome, dense metrics and no content padding: a title is the first line
   /// of the document, so it sits on the document's own baseline rather than on
   /// a Material field's inset one.
-  static InputDecoration titleDecoration(String hintText) => InputDecoration(
+  static InputDecoration titleDecoration(String hintText, {Color? hintColor}) =>
+      InputDecoration(
         hintText: hintText,
+        hintStyle: hintColor == null ? null : TextStyle(color: hintColor),
         border: InputBorder.none,
         isDense: true,
         contentPadding: EdgeInsets.zero,
