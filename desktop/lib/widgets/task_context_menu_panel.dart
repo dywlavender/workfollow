@@ -328,8 +328,13 @@ class _TaskContextMenuPanelState extends State<TaskContextMenuPanel> {
             value: 'abandon',
             label: task.isAbandoned ? '恢复任务' : '放弃',
             enabled: !task.completed),
-        _row(context, tokens,
-            value: 'list', label: '移动到', trailing: WorkFollowIcons.chevronNext),
+        // A child follows its parent's list, so there is no standalone
+        // 移动到 entry for it.
+        if (!widget.task.isChildTask)
+          _row(context, tokens,
+              value: 'list',
+              label: '移动到',
+              trailing: WorkFollowIcons.chevronNext),
         _row(context, tokens,
             value: 'tags', label: '标签', trailing: WorkFollowIcons.chevronNext),
       ],

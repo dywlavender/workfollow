@@ -981,8 +981,7 @@ class WorkspaceController extends ChangeNotifier {
         if (childId == null) {
           // Ambiguous on purpose? No — a child parent means the one-level
           // rule rejected it; a missing parent means the id was stale.
-          final parentExists =
-              _taskById(parentId) != null;
+          final parentExists = _taskById(parentId) != null;
           return parentExists
               ? TaskActionResult.failure(
                   'nested-child-not-supported', '子任务不允许再建子任务')
@@ -1281,6 +1280,12 @@ class WorkspaceController extends ChangeNotifier {
         final before = _taskById(id);
         if (before == null) {
           return TaskActionResult.failure('missing-task', '任务不存在');
+        }
+        // Children ride their parent's list: a standalone move would split
+        // the tree across two lists.
+        if (before.isChildTask) {
+          return TaskActionResult.failure(
+              'child-list-move-not-supported', '子任务跟随父任务所属清单');
         }
         if (!moveTaskToList(id, listName)) {
           return TaskActionResult.failure('move-failed', '无法移动任务');
@@ -2482,8 +2487,21 @@ class WorkspaceController extends ChangeNotifier {
     final index = _tasks.indexWhere((task) => task.id == id);
     if (index < 0) return;
     unawaited(_reminders.cancel(id));
-    _tasks.removeAt(index);
-    if (_selectedTaskId == id) _setSelectedTaskId(null);
+    // The trash purge is the end of the same cascade: children must not
+    // outlive their parent with a parentTaskId pointing at nothing, so the
+    // whole subtree goes even when a child was trashed separately earlier.
+    final childIds = _tasks
+        .where((task) => task.parentTaskId == id)
+        .map((task) => task.id)
+        .toList();
+    for (final childId in childIds) {
+      unawaited(_reminders.cancel(childId));
+    }
+    _tasks.removeWhere((task) => task.id == id || task.parentTaskId == id);
+    if (_selectedTaskId != null &&
+        (_selectedTaskId == id || childIds.contains(_selectedTaskId))) {
+      _setSelectedTaskId(null);
+    }
     _schedulePersist();
     _notify();
   }
@@ -2652,17 +2670,35 @@ class WorkspaceController extends ChangeNotifier {
     final previous = <String, String>{};
     final now = DateTime.now().toIso8601String();
     var touched = 0;
+    final movedParents = <String>[];
     for (final id in _multiSelectedTaskIds) {
       final index = _tasks.indexWhere((task) => task.id == id);
       if (index < 0) continue;
       final task = _tasks[index];
       if (task.deletedAt != null || task.listName == listName) continue;
+      // A child never moves on its own; when its parent is in the same
+      // selection the cascade below carries it, keeping the tree whole.
+      if (task.isChildTask) continue;
       previous[id] = task.listName;
       _tasks[index] = task.copyWith(
         listName: listName,
         updatedAt: now,
       );
+      movedParents.add(id);
       touched += 1;
+    }
+    for (final parentId in movedParents) {
+      for (var i = 0; i < _tasks.length; i++) {
+        final child = _tasks[i];
+        if (child.parentTaskId != parentId ||
+            child.deletedAt != null ||
+            child.listName == listName) {
+          continue;
+        }
+        previous[child.id] = child.listName;
+        _tasks[i] = child.copyWith(listName: listName, updatedAt: now);
+        touched += 1;
+      }
     }
     if (touched == 0) return;
     _lastBulkUndo = _BulkTaskUndo(previousListNames: previous);

@@ -2,7 +2,6 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:workfollow_personal/features/tasks/domain/task_schedule.dart';
 import 'package:workfollow_personal/features/tasks/domain/task_schedule_settings.dart';
-import 'package:workfollow_personal/models/task.dart';
 import 'package:workfollow_personal/state/workspace_controller.dart';
 
 /// S7: parent/child business rules and smart-list projection.
@@ -156,6 +155,59 @@ void main() {
     c.selectView(WorkspaceView.all);
     c.childRowsFor(parentId);
     expect(c.childRowsFor(parentId).length, 2);
+  });
+
+  test('SUB-095 a child refuses a standalone list move in TaskActions', () {
+    final c = build()..addTask('父任务');
+    addTearDown(c.dispose);
+    final parentId = c.tasks.single.id;
+    final a = c.createChildTask(parentId, title: '甲')!;
+    c.addList('个人');
+    final result = c.taskActions.moveToList(a, '个人');
+    expect(result.success, isFalse);
+    expect(result.error?.code, 'child-list-move-not-supported');
+    // The child stays on its parent's list.
+    expect(c.tasks.firstWhere((t) => t.id == a).listName,
+        c.tasks.firstWhere((t) => t.id == parentId).listName);
+  });
+
+  test('SUB-096 bulk move skips standalone children and cascades parents', () {
+    final c = build()..addTask('父任务');
+    addTearDown(c.dispose);
+    final parentId = c.tasks.single.id;
+    c.addTask('独立任务');
+    final rootId = c.tasks.firstWhere((t) => t.id != parentId).id;
+    c.addList('个人');
+    final childId = c.createChildTask(parentId, title: '甲')!;
+    // A child-only bulk selection must not split the tree.
+    c.taskActions.bulkMove([childId], '个人');
+    expect(c.tasks.firstWhere((t) => t.id == childId).listName, isNot('个人'));
+    // Selected roots move; a selected parent carries its active children.
+    c.taskActions.bulkMove([parentId, rootId], '个人');
+    expect(c.tasks.firstWhere((t) => t.id == parentId).listName, '个人');
+    expect(c.tasks.firstWhere((t) => t.id == rootId).listName, '个人');
+    expect(c.tasks.firstWhere((t) => t.id == childId).listName, '个人');
+  });
+
+  test('SUB-097 purging a parent removes its children from the trash too', () {
+    final c = build()..addTask('父任务');
+    addTearDown(c.dispose);
+    final parentId = c.tasks.single.id;
+    final a = c.createChildTask(parentId, title: '甲')!;
+    final b = c.createChildTask(parentId, title: '乙')!;
+    // B was trashed on its own before the parent cascade.
+    c.taskActions.delete(b);
+    await_.delayed(const Duration(milliseconds: 5));
+    c.taskActions.delete(parentId);
+    expect(c.deletedTasks.map((t) => t.id), containsAll([parentId, a, b]));
+    c.purgeTask(parentId);
+    final remaining = c.tasks.map((t) => t.id).toSet();
+    expect(remaining, isNot(contains(parentId)));
+    expect(remaining, isNot(contains(a)),
+        reason: 'the cascade child is destroyed with its parent');
+    expect(remaining, isNot(contains(b)),
+        reason:
+            'an independently trashed child still cannot outlive its parent');
   });
 }
 
