@@ -1473,8 +1473,7 @@ class WorkspaceController extends ChangeNotifier {
     _notes = [note, ..._notes];
     for (var i = 0; i < _tasks.length; i++) {
       if (_tasks[i].parentTaskId == id && _tasks[i].deletedAt == null) {
-        _tasks[i] =
-            _tasks[i].copyWith(deletedAt: now, updatedAt: now);
+        _tasks[i] = _tasks[i].copyWith(deletedAt: now, updatedAt: now);
         _syncReminderFor(_tasks[i]);
       }
     }
@@ -2008,7 +2007,6 @@ class WorkspaceController extends ChangeNotifier {
   void loadTasksForTest(List<TaskItem> tasks) {
     _tasks = List.of(tasks);
   }
-
 
   /// Tasks whose scheduled date falls on [day], independent of the current
   /// navigation filters, so the calendar never borrows another view's list.
@@ -3985,15 +3983,24 @@ class WorkspaceController extends ChangeNotifier {
     // Any property mutation may change the current projection (date, list,
     // tag or deadline). Clear an inspector that would otherwise keep showing
     // a task no longer present in the selected view; ActionResult still
-    // reports the new destination for an explicit reopen.
-    if (_selectedTaskId == id &&
-        isTaskView &&
-        !visibleTasks.any((task) => task.id == id)) {
+    // reports the new destination for an explicit reopen. A child counts as
+    // present while its parent row is visible — the tree renders it nested.
+    if (_selectedTaskId == id && isTaskView && !_shownInSelectedView(id)) {
       _setSelectedTaskId(null);
     }
     _schedulePersist();
     _notify();
     return true;
+  }
+
+  /// Whether [taskId] is reachable in the current list: as a flat row or as
+  /// a child nested under a visible parent.
+  bool _shownInSelectedView(String taskId) {
+    if (visibleTasks.any((task) => task.id == taskId)) return true;
+    final parentId =
+        _tasks.where((task) => task.id == taskId).firstOrNull?.parentTaskId;
+    if (parentId == null) return false;
+    return visibleTasks.any((task) => task.id == parentId);
   }
 
   void _replaceNote(String id, NoteItem Function(NoteItem note) update) {
