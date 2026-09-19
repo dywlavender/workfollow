@@ -7,13 +7,18 @@ import '../../../theme/workfollow_icons.dart';
 import '../../../theme/workfollow_theme.dart';
 import '../../../widgets/app_icon_button.dart';
 
-/// Shared persistence feedback for task and note document editors.
+/// Persistence feedback for task and note document editors.
+///
+/// It speaks only when a write has gone wrong. The resting states are gone:
+/// "保存中…" while a write is in flight and "已保存" once it lands were both
+/// saying what the document already implies — a document that saves itself has
+/// nothing to report, and the corner they sat in belongs to the document's own
+/// actions. What is left is the one state a reader cannot infer and may have to
+/// act on, because a failed save with nothing on screen is a silent one.
 class DocumentSaveStatus extends StatelessWidget {
   const DocumentSaveStatus({super.key, required this.controller});
 
   final WorkspaceController controller;
-
-  static const Duration savedLinger = Duration(seconds: 2);
 
   @override
   Widget build(BuildContext context) {
@@ -21,86 +26,51 @@ class DocumentSaveStatus extends StatelessWidget {
       animation: controller,
       builder: (context, _) {
         final tokens = WorkFollowTheme.of(context);
-        final status = _statusFor(controller, tokens);
-        if (status.isFailure) {
-          return Tooltip(
-            message: status.tooltip,
-            child: TextButton.icon(
-              key: const ValueKey('save-status-indicator'),
-              onPressed: status.canRetry
-                  ? () => unawaited(controller.retrySave())
-                  : null,
-              icon: AppIcon(status.icon,
-                  size: WorkFollowMetrics.metadataIcon, color: tokens.danger),
-              label: Text(status.label),
-              style: TextButton.styleFrom(
-                foregroundColor: tokens.danger,
-                textStyle: const TextStyle(
-                    fontSize: WorkFollowMacTypography.control,
-                    fontWeight: WorkFollowMacWeight.medium),
-                padding: const EdgeInsets.symmetric(
-                    horizontal: WorkFollowSpacing.inlineGap),
-              ),
+        final status = _statusFor(controller);
+        if (status == null) return const SizedBox.shrink();
+        return Tooltip(
+          message: status.tooltip,
+          child: TextButton.icon(
+            key: const ValueKey('save-status-indicator'),
+            onPressed: status.canRetry
+                ? () => unawaited(controller.retrySave())
+                : null,
+            icon: AppIcon(status.icon,
+                size: WorkFollowMetrics.metadataIcon, color: tokens.danger),
+            label: Text(status.label),
+            style: TextButton.styleFrom(
+              foregroundColor: tokens.danger,
+              textStyle: const TextStyle(
+                  fontSize: WorkFollowMacTypography.control,
+                  fontWeight: WorkFollowMacWeight.medium),
+              padding: const EdgeInsets.symmetric(
+                  horizontal: WorkFollowSpacing.inlineGap),
             ),
-          );
-        }
-        return _LingeringStatus(
-          key: ValueKey('save-status-${status.icon.codePoint}-'
-              '${controller.lastSavedAt?.toIso8601String()}'),
-          icon: status.icon,
-          label: status.label,
-          color: status.color,
-          linger: status.linger,
+          ),
         );
       },
     );
   }
 
-  _SaveStatusView _statusFor(
-      WorkspaceController controller, WorkFollowTheme tokens) {
+  _SaveStatusView? _statusFor(WorkspaceController controller) {
     if (controller.loadError != null) {
       return _SaveStatusView(
         icon: WorkFollowIcons.report,
         label: '读取失败',
         tooltip: controller.loadError!,
-        color: tokens.danger,
-        isFailure: true,
-        canRetry: false,
       );
     }
     switch (controller.saveStatus) {
-      case SaveStatus.saving:
-        return _SaveStatusView(
-          icon: WorkFollowIcons.more,
-          label: '保存中…',
-          color: tokens.textTertiary,
-        );
       case SaveStatus.failed:
         return _SaveStatusView(
           icon: WorkFollowIcons.error,
           label: '保存失败 · 重试',
           tooltip: controller.saveError ?? '保存失败',
-          color: tokens.danger,
-          isFailure: true,
           canRetry: true,
         );
+      case SaveStatus.saving:
       case SaveStatus.saved:
-        if (controller.lastSavedAt == null) {
-          return _SaveStatusView(
-            icon: WorkFollowIcons.check,
-            // Kept short on purpose: the footer also carries the list entry and
-            // two document actions, and in the narrow two-pane workspace the
-            // row only has 280pt to work with.
-            label: '自动保存',
-            color: tokens.textTertiary,
-          );
-        }
-        return _SaveStatusView(
-          icon: WorkFollowIcons.check,
-          label: '已保存',
-          color: tokens.textTertiary,
-          linger: savedLinger,
-        );
+        return null;
     }
   }
 }
@@ -109,78 +79,12 @@ class _SaveStatusView {
   const _SaveStatusView({
     required this.icon,
     required this.label,
-    required this.color,
     this.tooltip = '',
-    this.linger,
-    this.isFailure = false,
     this.canRetry = false,
   });
 
   final IconData icon;
   final String label;
-  final Color color;
   final String tooltip;
-  final Duration? linger;
-  final bool isFailure;
   final bool canRetry;
-}
-
-class _LingeringStatus extends StatefulWidget {
-  const _LingeringStatus({
-    super.key,
-    required this.icon,
-    required this.label,
-    required this.color,
-    required this.linger,
-  });
-
-  final IconData icon;
-  final String label;
-  final Color color;
-  final Duration? linger;
-
-  @override
-  State<_LingeringStatus> createState() => _LingeringStatusState();
-}
-
-class _LingeringStatusState extends State<_LingeringStatus> {
-  Timer? _timer;
-  bool _faded = false;
-
-  @override
-  void initState() {
-    super.initState();
-    final linger = widget.linger;
-    if (linger == null) return;
-    _timer = Timer(linger, () {
-      if (mounted) setState(() => _faded = true);
-    });
-  }
-
-  @override
-  void dispose() {
-    _timer?.cancel();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedOpacity(
-      opacity: _faded ? 0 : 1,
-      duration: WorkFollowMotion.normal,
-      curve: WorkFollowMotion.standard,
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          AppIcon(widget.icon,
-              size: WorkFollowMetrics.metadataIcon, color: widget.color),
-          const SizedBox(width: WorkFollowSpacing.denseGap),
-          Text(widget.label,
-              style: TextStyle(
-                  color: widget.color,
-                  fontSize: WorkFollowMacTypography.supporting)),
-        ],
-      ),
-    );
-  }
 }
