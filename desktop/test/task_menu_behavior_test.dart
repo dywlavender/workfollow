@@ -124,13 +124,13 @@ void main() {
     expect(note.plainText, contains('#工作'));
     final converted = c.tasks.firstWhere((task) => task.id == id);
     expect(converted.convertedNoteId, note.id);
-    final reopened = TaskItem.fromMigration(MigrationTaskRecord.fromJson(
-        converted.toMigrationRecord().toJson()));
+    final reopened = TaskItem.fromMigration(
+        MigrationTaskRecord.fromJson(converted.toMigrationRecord().toJson()));
     expect(reopened.isConverted, isTrue);
     expect(await result.undo!.execute(), isTrue);
     expect(c.notes, isEmpty);
-    expect(c.activeTasks.firstWhere((task) => task.id == id).contentJson,
-        content);
+    expect(
+        c.activeTasks.firstWhere((task) => task.id == id).contentJson, content);
     expect(c.childCount(id), 1);
   });
 
@@ -196,6 +196,34 @@ void main() {
   });
 
   ;
+
+  testWidgets('SUB-120 a child context menu has no standalone list entry',
+      (tester) async {
+    final c = WorkspaceController(seedData: false);
+    addTearDown(c.dispose);
+    c.addTask('父任务', forceUnscheduled: true);
+    final childId = c.createChildTask(c.tasks.single.id, title: '子任务')!;
+    await tester.pumpWidget(MaterialApp(
+        theme: WorkFollowThemeData.light(),
+        home: Scaffold(
+            body: Builder(
+                builder: (context) => TextButton(
+                    onPressed: () async {
+                      await TaskContextMenu.show(context,
+                          task: c.tasks.firstWhere((t) => t.id == childId),
+                          controller: c);
+                    },
+                    child: const Text('打开菜单'))))));
+    await tester.tap(find.text('打开菜单'));
+    await tester.pumpAndSettle();
+    expect(
+        find.byKey(const ValueKey('task-context-menu-panel')), findsOneWidget);
+    // A child follows its parent's list and never grows a subtree.
+    expect(find.text('移动到'), findsNothing);
+    expect(find.text('添加子任务'), findsNothing);
+    // The rest of the menu stays intact.
+    expect(find.text('删除'), findsOneWidget);
+  });
 
   testWidgets('submenus flip within the minimum desktop window',
       (tester) async {

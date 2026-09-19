@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:workfollow_personal/features/tasks/domain/task_schedule.dart';
 import 'package:workfollow_personal/features/tasks/domain/task_schedule_settings.dart';
+import 'package:workfollow_personal/services/notification_service.dart';
 import 'package:workfollow_personal/state/workspace_controller.dart';
 
 /// S7: parent/child business rules and smart-list projection.
@@ -68,7 +69,7 @@ void main() {
         reason: 'an independently deleted child stays in the trash');
   });
 
-  test('SUB-084 moving a parent moves its active children', () {
+  test('SUB-084/123 moving a parent moves its active children', () {
     final c = build()..addTask('父任务');
     addTearDown(c.dispose);
     final parentId = c.tasks.single.id;
@@ -157,7 +158,7 @@ void main() {
     expect(c.childRowsFor(parentId).length, 2);
   });
 
-  test('SUB-095 a child refuses a standalone list move in TaskActions', () {
+  test('SUB-121/122 a child refuses a standalone list move in TaskActions', () {
     final c = build()..addTask('父任务');
     addTearDown(c.dispose);
     final parentId = c.tasks.single.id;
@@ -189,7 +190,8 @@ void main() {
     expect(c.tasks.firstWhere((t) => t.id == childId).listName, '个人');
   });
 
-  test('SUB-097 purging a parent removes its children from the trash too', () {
+  test('SUB-125/126 purging a parent removes its children from the trash too',
+      () {
     final c = build()..addTask('父任务');
     addTearDown(c.dispose);
     final parentId = c.tasks.single.id;
@@ -208,7 +210,65 @@ void main() {
     expect(remaining, isNot(contains(b)),
         reason:
             'an independently trashed child still cannot outlive its parent');
+    // SUB-126: no orphan survives pointing at the purged parent.
+    expect(c.tasks.where((t) => t.parentTaskId == parentId), isEmpty);
   });
+
+  test('SUB-124 purging a standalone child leaves the parent alone', () {
+    final c = build()..addTask('父任务');
+    addTearDown(c.dispose);
+    final parentId = c.tasks.single.id;
+    final a = c.createChildTask(parentId, title: '甲')!;
+    c.taskActions.delete(a);
+    c.purgeTask(a);
+    expect(c.tasks.map((t) => t.id), isNot(contains(a)));
+    expect(c.tasks.map((t) => t.id), contains(parentId));
+    expect(c.childCount(parentId), 0);
+  });
+
+  test('SUB-127 purging a parent withdraws parent and child reminders', () {
+    final reminders = _RecordingReminders();
+    final c =
+        WorkspaceController(seedData: false, reminderScheduler: reminders);
+    addTearDown(c.dispose);
+    c.addTask('父任务');
+    final parentId = c.tasks.single.id;
+    final childId = c.createChildTask(parentId, title: '甲')!;
+    final when = DateTime.now().add(const Duration(hours: 2));
+    c.updateTaskReminder(parentId, when);
+    c.updateTaskReminder(childId, when);
+    c.taskActions.delete(parentId);
+    c.purgeTask(parentId);
+    expect(reminders.canceled, containsAll([parentId, childId]));
+  });
+
+  test('SUB-128 a purged subtree cannot be restored', () {
+    final c = build()..addTask('父任务');
+    addTearDown(c.dispose);
+    final parentId = c.tasks.single.id;
+    final a = c.createChildTask(parentId, title: '甲')!;
+    final b = c.createChildTask(parentId, title: '乙')!;
+    c.taskActions.delete(parentId);
+    c.purgeTask(parentId);
+    // The rows are gone, so trash restore is a silent no-op.
+    c.restoreTask(parentId);
+    c.restoreTask(a);
+    c.restoreTask(b);
+    expect(c.tasks.map((t) => t.id), isNot(contains(parentId)));
+    expect(c.tasks.map((t) => t.id), isNot(contains(a)));
+    expect(c.tasks.map((t) => t.id), isNot(contains(b)));
+    expect(c.deletedTasks, isEmpty);
+  });
+}
+
+/// Records reminder withdrawals so purge tests can assert the controller
+/// actually cancels notifications instead of leaving them registered.
+class _RecordingReminders extends NotificationService {
+  final canceled = <String>[];
+  @override
+  Future<void> cancel(String taskId) async {
+    canceled.add(taskId);
+  }
 }
 
 // tiny shim so the cascade test can let the clock tick between deletes
