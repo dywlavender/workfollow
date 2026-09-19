@@ -824,7 +824,13 @@ class _LinkedTaskRow extends StatelessWidget {
                   // A rounded square, not a circle: the shape a task row's own
                   // control has, so a task reads as the same kind of thing on
                   // a note as it does in the list, on the board and in the
-                  // calendar. Only the size is the note's.
+                  // calendar. Only the size is the note's. The fill is the
+                  // shared completion role, and the ink circle Material would
+                  // draw around it is off for the same reason a task row's is.
+                  activeColor: taskCompletionFill(tokens),
+                  checkColor: tokens.content,
+                  overlayColor:
+                      const WidgetStatePropertyAll(Colors.transparent),
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(
                           taskCompletionBoxRadius(

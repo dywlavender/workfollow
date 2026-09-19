@@ -366,10 +366,11 @@ class _TaskInspectorState extends State<TaskInspector> {
                     // The same edge the task carries in the list. Priority
                     // lives on the box there, so it lives on the box here:
                     // one task cannot be a red box in the list and a grey one
-                    // in its own editor. The done fill stays this control's
-                    // own green, because this control is what just succeeded.
-                    openColor: taskPriorityColor(task.priority, tokens),
-                    doneColor: tokens.success),
+                    // in its own editor. The done fill is the shared completion
+                    // role for the same reason: the editor used to fill it with
+                    // its own green, which made the same task two different
+                    // boxes on the two sides of the window.
+                    openColor: taskPriorityColor(task.priority, tokens)),
             label: task.isAbandoned
                 ? '恢复任务'
                 : task.completed
@@ -378,7 +379,11 @@ class _TaskInspectorState extends State<TaskInspector> {
             active: task.completed,
             color: task.completed ? tokens.success : null,
             onPressed: (_) => _complete(task),
-            iconOnly: true),
+            iconOnly: true,
+            // The slot carries a box the product draws, whether it shows the
+            // box or the abandoned task's own glyph, so the slot is what drops
+            // the pointer halo rather than the branch.
+            carriesDrawnMark: true),
         _headerDivider(tokens),
         Expanded(
           child: SingleChildScrollView(
@@ -619,6 +624,7 @@ class _TopPropertyButton extends StatelessWidget {
     this.color,
     this.iconOnly = false,
     this.popupOpen = false,
+    this.carriesDrawnMark = false,
   });
 
   /// The glyph at the button's head. Left unset when [leading] draws it.
@@ -635,6 +641,16 @@ class _TopPropertyButton extends StatelessWidget {
   final bool iconOnly;
   final bool popupOpen;
 
+  /// True for the one control whose mark is a box the product draws itself.
+  ///
+  /// Material answers a pointer with a faded halo the size of the whole button.
+  /// Behind a glyph that reads as a button lighting up; behind a drawn box it
+  /// reads as a second, wrong silhouette — the box appears to sit on a plate,
+  /// and the plate eases in and out while every other fill in the product
+  /// switches on the frame. The box already states its own state through its
+  /// fill, so this control answers the pointer with nothing.
+  final bool carriesDrawnMark;
+
   @override
   Widget build(BuildContext context) {
     final tokens = WorkFollowTheme.of(context);
@@ -650,6 +666,7 @@ class _TopPropertyButton extends StatelessWidget {
             style: TextButton.styleFrom(
               foregroundColor: foreground,
               backgroundColor: popupOpen ? tokens.canvas : Colors.transparent,
+              overlayColor: carriesDrawnMark ? Colors.transparent : null,
               textStyle: TextStyle(
                   fontSize: WorkFollowMacTypography.control,
                   height: WorkFollowMacTypography.lineControl,

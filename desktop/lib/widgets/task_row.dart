@@ -258,13 +258,19 @@ class _TaskRowState extends State<TaskRow> {
             // selected but unfinished task must keep an empty checkbox,
             // otherwise Cmd-click makes it look completed.
             value: task.isClosed,
-            activeColor: tokens.textTertiary,
+            activeColor: taskCompletionFill(tokens),
             checkColor: tokens.content,
+            // No ink around the box. Material draws a circle on hover and
+            // press; it is the only round thing in a row built from rectangles,
+            // and it reads as a second, smaller target inside the row's own.
+            overlayColor: const WidgetStatePropertyAll(Colors.transparent),
             semanticLabel: task.isClosed ? '标记未完成' : '完成任务',
             shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(WorkFollowRadii.checkbox)),
             side: BorderSide(
-                color: task.isClosed ? tokens.textTertiary : priorityColor,
+                color: task.isClosed
+                    ? taskCompletionFill(tokens)
+                    : priorityColor,
                 width: WorkFollowMetrics.checkboxBorderWidth),
             onChanged: (_) => _complete()));
   }

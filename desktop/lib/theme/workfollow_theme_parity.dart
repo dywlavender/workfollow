@@ -14,6 +14,14 @@ class WorkFollowThemeContrast {
   /// status or accent surface.  It matches the dark ColorScheme foreground.
   static const Color darkForeground = Color(0xFF111216);
 
+  /// The bright foreground for a small filled marker.
+  ///
+  /// [foregroundOn] answers "which ink is more legible", and on the lighter
+  /// system hues (yellow, green) that answer is the dark ink. A marker is not
+  /// a label though: the matrix numerals are a cut-out in a filled disc, so
+  /// the choice is a role here rather than a per-widget literal.
+  static const Color markerForeground = Color(0xFFFFFFFF);
+
   /// Returns WCAG relative contrast after compositing a translucent
   /// foreground over [background].
   static double ratio(Color foreground, Color background) {

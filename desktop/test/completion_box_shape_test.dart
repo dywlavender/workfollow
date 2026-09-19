@@ -4,9 +4,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:workfollow_personal/models/task.dart';
+import 'package:workfollow_personal/state/workspace_controller.dart';
 import 'package:workfollow_personal/theme/workfollow_icons.dart';
 import 'package:workfollow_personal/theme/workfollow_theme.dart';
 import 'package:workfollow_personal/widgets/task_completion_box.dart';
+import 'package:workfollow_personal/widgets/task_inspector.dart';
 
 const _tokens = WorkFollowTheme.light;
 
@@ -73,9 +75,9 @@ void main() {
     expect(open.border, isNotNull);
     expect((open.border! as Border).top.color, _tokens.textSecondary);
 
-    // Done: filled with the muted ink a finished task takes everywhere, and
-    // carrying a tick rather than being one.
-    expect(done.color, _tokens.textTertiary);
+    // Done: filled with the completed neutral a finished task takes
+    // everywhere, and carrying a tick rather than being one.
+    expect(done.color, taskCompletionFill(_tokens));
     expect(done.border, isNull);
     expect(find.byIcon(WorkFollowIcons.check), findsOneWidget);
 
@@ -149,5 +151,90 @@ void main() {
         contains('openColor: taskPriorityColor('),
         reason: "the editor's header box went back to a fixed ink, which is "
             'what left a high-priority task red in the list and grey here');
+  });
+
+  test('a finished task is the same box on both sides of the window', () {
+    // The editor's header and the editor's child rows each filled their box
+    // with success green while the list filled the same task's box with
+    // graphite — one task, two answers. The fill comes from one role now, and
+    // the surfaces that used to override it take the default again.
+    expect(taskCompletionFill(_tokens), WorkFollowColors.neutralCompleted);
+    expect(taskCompletionFill(WorkFollowTheme.dark),
+        WorkFollowTheme.dark.textTertiary);
+
+    // Light surfaces take the completed neutral, which is a step lighter than
+    // the muted ink the box used to be filled with; the write-up in the user's
+    // words was "too dark to look at".
+    expect(taskCompletionFill(_tokens).computeLuminance(),
+        greaterThan(_tokens.textTertiary.computeLuminance()));
+
+    for (final path in const [
+      'lib/widgets/task_inspector.dart',
+      'lib/widgets/task_children_panel.dart',
+    ]) {
+      expect(File(path).readAsStringSync(), isNot(contains('doneColor:')),
+          reason: '$path fills a completion box with a colour of its own, so '
+              'the same task is two different boxes on the two sides');
+    }
+  });
+
+  test('no completion box raises Material ink around itself', () {
+    // Material answers a pointer with ink drawn around the control. For a
+    // checkbox that ink is a circle the radius of a fingertip in
+    // `ThemeData.hoverColor` — which this app sets to an opaque grey — so
+    // hovering a task's box raised a grey disc around it: the one round thing
+    // in a row built from rectangles, and it read as a second, smaller target
+    // inside the row's own. For a button it is a plate the size of the whole
+    // control, which put a grey slab under the box in the editor's header.
+    //
+    // Every control that draws this box clears its overlay. That is where both
+    // the hover halo and the press ripple are painted from, and this product
+    // answers a pointer with a row fill that switches on the frame rather than
+    // ink that eases in under it.
+    for (final path in const [
+      'lib/widgets/task_row.dart',
+      'lib/screens/notes_screen.dart',
+      'lib/widgets/matrix/matrix_task_row.dart',
+      'lib/widgets/task_inspector.dart',
+    ]) {
+      final source = File(path).readAsStringSync();
+      expect(source, contains('overlayColor'),
+          reason: '$path leaves Material\'s ink on its completion box');
+      expect(source, contains('Colors.transparent'),
+          reason: '$path has to clear the overlay, not just mention it');
+    }
+  });
+
+  testWidgets('the editor\'s box declares no pointer ink', (tester) async {
+    // The source scan above keeps the declaration in the file; this checks the
+    // declaration the widget really resolves, so a style that names the overlay
+    // but hands back something else does not pass as a clear.
+    final controller = WorkspaceController(seedData: false);
+    addTearDown(controller.dispose);
+    controller.addTask('声明的任务');
+
+    await tester.pumpWidget(MaterialApp(
+      theme: WorkFollowThemeData.light(),
+      home: Scaffold(
+          body: TaskInspector(
+              task: controller.tasks.single, controller: controller)),
+    ));
+    await tester.pumpAndSettle();
+
+    final button = tester.widget<TextButton>(find.descendant(
+        of: find.byKey(const ValueKey('task-complete')),
+        matching: find.byType(TextButton)));
+    final overlay = button.style?.overlayColor;
+    expect(overlay, isNotNull,
+        reason: "the editor's completion control leaves Material's default "
+            'overlay in place, which paints a plate under the box on hover');
+    for (final state in const [
+      WidgetState.hovered,
+      WidgetState.pressed,
+      WidgetState.focused,
+    ]) {
+      expect(overlay!.resolve({state}), Colors.transparent,
+          reason: 'the control has to answer $state with no ink at all');
+    }
   });
 }

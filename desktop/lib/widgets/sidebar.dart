@@ -20,9 +20,6 @@ Color _sidebarAccent(BuildContext context, WorkFollowTheme tokens) =>
 Color _sidebarAccentSoft(BuildContext context, WorkFollowTheme tokens) =>
     WorkFollowColorTokens.navigationSelected(context, tokens);
 
-Color _sidebarSelectedNeutral(BuildContext context, WorkFollowTheme tokens) =>
-    WorkFollowColorTokens.navigationSelectedNeutral(context, tokens);
-
 Color _sidebarRail(BuildContext context, WorkFollowTheme tokens) =>
     WorkFollowColorTokens.navigationRail(context, tokens);
 
@@ -81,7 +78,7 @@ class AppRail extends StatelessWidget {
           1 +
           (contextColumn ? WorkFollowLayout.compactTaskNavigationWidth : 0),
       decoration: BoxDecoration(
-        gradient: WorkFollowColorTokens.navigationGradient(context, tokens),
+        color: WorkFollowColorTokens.navigationSurface(context, tokens),
         border: Border(
             right: BorderSide(
                 color: tokens.border,
@@ -863,13 +860,15 @@ class _RailItemState extends State<_RailItem> {
               decoration: BoxDecoration(
                 color: WorkFollowInteractionStyles.customFill(
                   defaultColor: Colors.transparent,
-                  hoverColor: tokens.content.withValues(alpha: .65),
-                  // Selection is a state, not a colour: the fill is the
-                  // neutral counterpart of the column's own surface, and the
-                  // words keep their own ink. Tinting both was what made the
-                  // column read as a row of coloured labels.
-                  selectedColor: _sidebarSelectedNeutral(context, tokens),
-                  pressedColor: tokens.content.withValues(alpha: .85),
+                  hoverColor:
+                      WorkFollowColorTokens.navigationHover(context, tokens),
+                  // Selection is a state, not a colour: the fill is the same
+                  // quiet grey every other selected row wears, and the words
+                  // keep their own ink. Tinting both was what made the column
+                  // read as a row of coloured labels.
+                  selectedColor: tokens.listRowSelected,
+                  pressedColor:
+                      WorkFollowColorTokens.navigationPressed(context, tokens),
                   selected: widget.selected,
                   hovered: hovering,
                   pressed: pressed,
@@ -926,12 +925,12 @@ class _RailItemState extends State<_RailItem> {
                           vertical: WorkFollowSpacing.microGap),
                       decoration: BoxDecoration(
                         // The count is a quiet figure beside the words, so its
-                        // chip is the one thing that inverts: lighter than the
-                        // column when the row is not selected, a shade deeper
-                        // than the white of a selected one.
-                        color: widget.selected
-                            ? tokens.listRowSelected
-                            : tokens.content.withValues(alpha: .7),
+                        // chip is the one thing that steps off the row's own
+                        // surface: a grey pill on the resting column, white
+                        // once the row's selected grey has taken it over.
+                        color: WorkFollowColorTokens.navigationCountChip(
+                            context, tokens,
+                            selected: widget.selected),
                         borderRadius:
                             BorderRadius.circular(WorkFollowRadii.pill),
                       ),
@@ -1013,16 +1012,16 @@ class _TaskListItemState extends State<_TaskListItem> {
                             ? _sidebarAccentSoft(context, tokens)
                             : WorkFollowInteractionStyles.customFill(
                                 defaultColor: Colors.transparent,
-                                hoverColor:
-                                    tokens.content.withValues(alpha: .7),
+                                hoverColor: WorkFollowColorTokens.navigationHover(
+                                    context, tokens),
                                 // A selected list is a selected row, not a
                                 // swatch: the fill is neutral like every other
                                 // row's, and the list's colour stays on the
                                 // dot where it does the recognising.
-                                selectedColor:
-                                    _sidebarSelectedNeutral(context, tokens),
+                                selectedColor: tokens.listRowSelected,
                                 pressedColor:
-                                    tokens.content.withValues(alpha: .88),
+                                    WorkFollowColorTokens.navigationPressed(
+                                        context, tokens),
                                 selected: selected,
                                 hovered: hovering,
                                 pressed: pressed,
@@ -1267,9 +1266,11 @@ class _TagItemState extends State<_TagItem> {
               decoration: BoxDecoration(
                   color: WorkFollowInteractionStyles.customFill(
                     defaultColor: Colors.transparent,
-                    hoverColor: tokens.content.withValues(alpha: .65),
-                    selectedColor: _sidebarSelectedNeutral(context, tokens),
-                    pressedColor: tokens.content.withValues(alpha: .85),
+                    hoverColor:
+                        WorkFollowColorTokens.navigationHover(context, tokens),
+                    selectedColor: tokens.listRowSelected,
+                    pressedColor: WorkFollowColorTokens.navigationPressed(
+                        context, tokens),
                     selected: selected,
                     hovered: hovering,
                     pressed: pressed,
@@ -1411,9 +1412,11 @@ class _TaskViewItemState extends State<_TaskViewItem> {
               decoration: BoxDecoration(
                 color: WorkFollowInteractionStyles.customFill(
                   defaultColor: Colors.transparent,
-                  hoverColor: tokens.content.withValues(alpha: .7),
+                  hoverColor:
+                      WorkFollowColorTokens.navigationHover(context, tokens),
                   selectedColor: _sidebarAccentSoft(context, tokens),
-                  pressedColor: tokens.content.withValues(alpha: .88),
+                  pressedColor:
+                      WorkFollowColorTokens.navigationPressed(context, tokens),
                   selected: selected,
                   hovered: hovering,
                   pressed: pressed,

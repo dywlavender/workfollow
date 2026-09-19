@@ -901,7 +901,7 @@ void main() {
       // arguments, so the assertion survives the box being drawn differently.
       expect((_boxPaint(tester, open).border! as Border).top.color,
           Color(controller.colorValueForList('收集箱')));
-      expect(_boxPaint(tester, done).color, _tokens.textTertiary);
+      expect(_boxPaint(tester, done).color, taskCompletionFill(_tokens));
 
       // It leads the title, on its first line rather than centred on a block
       // that is free to wrap to two.

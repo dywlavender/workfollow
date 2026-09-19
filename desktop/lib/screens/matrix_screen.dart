@@ -4,6 +4,7 @@ import '../features/feedback/feedback_scope.dart';
 import '../features/matrix/matrix_models.dart';
 import '../features/tasks/presentation/task_feedback_mapper.dart';
 import '../state/workspace_controller.dart';
+import '../theme/workfollow_color_tokens.dart';
 import '../theme/workfollow_icons.dart';
 import '../theme/workfollow_theme.dart';
 import '../widgets/app_icon_button.dart';
@@ -41,7 +42,7 @@ class _MatrixScreenState extends State<MatrixScreen> {
     final tokens = WorkFollowTheme.of(context);
     final quadrants = projection;
     return ColoredBox(
-      color: tokens.canvas,
+      color: WorkFollowColorTokens.matrixBackdrop(context, tokens),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [

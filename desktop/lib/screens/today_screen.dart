@@ -328,12 +328,18 @@ class _TodayScreenState extends State<TodayScreen> {
               child: ConstrainedBox(
                 key: const ValueKey('web-task-detail-pane'),
                 constraints: const BoxConstraints(minWidth: _detailMinWidth),
-                child: selected == null
-                    ? const _EmptyInspector()
-                    : TaskInspector(
-                        key: ValueKey('wide-detail-${selected.id}'),
-                        task: selected,
-                        controller: c),
+                // The detail pane is the list's peer, not the page behind it:
+                // it holds the content surface even while it is empty, so the
+                // shell never breaks into a grey field beside a white list.
+                child: ColoredBox(
+                  color: tokens.content,
+                  child: selected == null
+                      ? const _EmptyInspector()
+                      : TaskInspector(
+                          key: ValueKey('wide-detail-${selected.id}'),
+                          task: selected,
+                          controller: c),
+                ),
               ),
             ),
           ],

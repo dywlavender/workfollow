@@ -137,7 +137,7 @@ class _MatrixQuadrantState extends State<MatrixQuadrant> {
           child: Text(
             style.numeral,
             style: TextStyle(
-              color: WorkFollowThemeContrast.foregroundOn(style.color),
+              color: WorkFollowThemeContrast.markerForeground,
               fontSize: WorkFollowMacTypography.caption,
               height: WorkFollowMacTypography.lineNone,
               fontWeight: WorkFollowMacWeight.semibold,

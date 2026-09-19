@@ -226,8 +226,7 @@ class _TaskChildInlineRowState extends State<TaskChildInlineRow> {
                 child: TaskCompletionBox(
                     size: WorkFollowMetrics.toolbarIcon,
                     completed: child.completed,
-                    openColor: tokens.textSecondary,
-                    doneColor: tokens.success),
+                    openColor: tokens.textSecondary),
               ),
               const SizedBox(width: WorkFollowSpacing.space2),
               Expanded(

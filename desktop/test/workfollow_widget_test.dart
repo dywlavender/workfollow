@@ -214,8 +214,19 @@ void main() {
     }
 
     void expectNeutral(Color color, String what) {
-      expect(color.red, color.green, reason: '$what 的底色应是中性灰白，不能带色相');
-      expect(color.green, color.blue, reason: '$what 的底色应是中性灰白，不能带色相');
+      // A neutral fill is the product's own quiet grey, not a colour wash. The
+      // column now shares the content surface with the panes beside it, so a
+      // selected row cannot be a lighter-than-the-column white any more and
+      // takes the same grey every other selected row wears; that grey carries
+      // the theme's few steps of cool lean (238/241/243), so the rule is a
+      // bound on the channel spread rather than three equal channels. An
+      // accent tint is far outside the band.
+      final channels = [color.r, color.g, color.b];
+      final spread =
+          channels.reduce((a, b) => a > b ? a : b) -
+              channels.reduce((a, b) => a < b ? a : b);
+      expect(spread, lessThan(0.04),
+          reason: '$what 的底色应是中性灰，不能带色相');
       expect(color, isNot(WorkFollowColorTokens.lightNavigationSelected),
           reason: '$what 不该再用主色淡洗来表达选中');
     }

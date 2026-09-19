@@ -31,6 +31,19 @@ Color taskPriorityColor(TaskPriority priority, WorkFollowTheme tokens) =>
       TaskPriority.none => tokens.borderStrong,
     };
 
+/// The fill a *completed* task's box takes, wherever that box is drawn.
+///
+/// One task draws this box in the list, in its own editor's header, in the
+/// editor's child rows, on a board card and on a calendar bar. The fill has to
+/// be one value for all of them: a task cannot be green in its editor and
+/// graphite in the list. It is the completed neutral rather than the muted ink
+/// the box used to take — that ink is the *text* weight of a finished row, and
+/// at box size it read as a dark chip instead of a finished one.
+Color taskCompletionFill(WorkFollowTheme tokens) =>
+    tokens.content.computeLuminance() > .5
+        ? WorkFollowColors.neutralCompleted
+        : tokens.textTertiary;
+
 /// A completion box, drawn rather than taken from the icon set.
 ///
 /// Wherever a task appears it is marked by this shape — or by the platform's own
@@ -61,8 +74,10 @@ class TaskCompletionBox extends StatelessWidget {
   /// The outline of a box that is still open. Left unset it takes the muted ink.
   final Color? openColor;
 
-  /// The fill of a box that is done. Left unset it takes the muted ink, which is
-  /// how a finished task reads everywhere else in the product.
+  /// The fill of a box that is done. Left unset it takes the completed
+  /// neutral, which is how a finished task reads everywhere else in the
+  /// product — including in the editor's own header, so the same task is the
+  /// same box on both sides of the window.
   final Color? doneColor;
 
   @override
@@ -75,7 +90,7 @@ class TaskCompletionBox extends StatelessWidget {
         height: size,
         child: DecoratedBox(
           decoration: BoxDecoration(
-            color: doneColor ?? tokens.textTertiary,
+            color: doneColor ?? taskCompletionFill(tokens),
             borderRadius: BorderRadius.circular(radius),
           ),
           child: Center(

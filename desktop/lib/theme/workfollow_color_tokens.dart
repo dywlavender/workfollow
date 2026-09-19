@@ -17,19 +17,26 @@ class WorkFollowColorTokens {
   // component tokens, so the values stay in the design layer rather than in
   // sidebar.dart.
   static const Color lightNavigationRail = Color(0xFFF1F3F6);
-  static const Color lightNavigationSurface = Color(0xFFF7F8FA);
+
+  /// The readable navigation column beside the icon rail.
+  ///
+  /// It shares the content surface with the list and detail panes it opens
+  /// onto, so the shell reads as one working plane and the icon rail — not a
+  /// grey field — is what separates navigation from work.
+  static const Color lightNavigationSurface = Color(0xFFFFFFFF);
   static const Color lightNavigationSelected = Color(0xFFEEF0FF);
   static const Color lightNavigationAccent = Color(0xFF5B5CEB);
   static const Color lightNavigationForeground = Color(0xFF697386);
   static const Color lightNavigationForegroundMuted = Color(0xFF98A1AF);
   static const Color lightNavigationBorder = Color(0xFFE5E7EB);
 
-  // Matrix categories are a fixed visual palette for a derived view. They
-  // are data-viz colors, not task title/row colors.
-  static const Color matrixDoNow = Color(0xFFFF5D68);
-  static const Color matrixSchedule = Color(0xFFFFAB00);
-  static const Color matrixDelegate = Color(0xFF5C7CFA);
-  static const Color matrixLater = Color(0xFF1DC8A0);
+  // Matrix categories carry the macOS system palette: the four headers are
+  // the system's red/yellow/blue/green rather than the neon data-viz hues
+  // they replaced. Values are the light (aqua) variants.
+  static const Color matrixDoNow = Color(0xFFFF3B30);
+  static const Color matrixSchedule = Color(0xFFFFCC00);
+  static const Color matrixDelegate = Color(0xFF007AFF);
+  static const Color matrixLater = Color(0xFF34C759);
 
   /// Quill stores this marker in existing document Deltas. Rendering is
   /// overridden by DocumentStyles to use the theme's highlight surface;
@@ -52,18 +59,6 @@ class WorkFollowColorTokens {
       Theme.of(context).brightness == Brightness.light
           ? lightNavigationSelected
           : tokens.accentSoft;
-
-  /// Selected fill for a row in the navigation column: neutral, never tinted.
-  ///
-  /// The column's own surface is already grey, so the neutral counterpart of
-  /// the reference's light-grey chip is *lighter* than the surface here rather
-  /// than darker. An accent-tinted fill made a selected row read as a colour
-  /// instead of as a state, and pulled the accent onto the row's words too.
-  static Color navigationSelectedNeutral(
-          BuildContext context, WorkFollowTheme tokens) =>
-      Theme.of(context).brightness == Brightness.light
-          ? tokens.content
-          : tokens.listRowSelected;
 
   static Color navigationAccent(BuildContext context, WorkFollowTheme tokens) =>
       Theme.of(context).brightness == Brightness.light
@@ -90,6 +85,10 @@ class WorkFollowColorTokens {
   /// Navigation interaction fills keep their light reference profile while
   /// resolving the actual foreground from the active theme. Widgets should
   /// ask for the semantic state instead of branching on brightness themselves.
+  ///
+  /// Both are ink tints rather than surface tints, so a hovered or pressed
+  /// row reads the same on the icon rail and on the column beside it — one is
+  /// grey, the other is the content surface.
   static Color navigationHover(BuildContext context, WorkFollowTheme tokens) {
     final light = Theme.of(context).brightness == Brightness.light;
     return navigationForeground(context, tokens)
@@ -100,6 +99,22 @@ class WorkFollowColorTokens {
     final light = Theme.of(context).brightness == Brightness.light;
     return navigationForeground(context, tokens)
         .withValues(alpha: light ? .16 : .20);
+  }
+
+  /// Count chip on a navigation row.
+  ///
+  /// The chip is always one step off the surface the row paints: a light
+  /// grey pill on the resting white column, and white once the row's own
+  /// selected grey has taken that surface over.
+  static Color navigationCountChip(
+    BuildContext context,
+    WorkFollowTheme tokens, {
+    required bool selected,
+  }) {
+    if (Theme.of(context).brightness == Brightness.dark) {
+      return selected ? tokens.listRowSelected : tokens.content.withValues(alpha: .7);
+    }
+    return selected ? lightNavigationSurface : lightNavigationRail;
   }
 
   /// Selected fill for the compact rail button. The light reference uses a
@@ -117,17 +132,16 @@ class WorkFollowColorTokens {
           ? lightNavigationSelected
           : tokens.railSurface;
 
-  static LinearGradient navigationGradient(
-      BuildContext context, WorkFollowTheme tokens) {
-    if (Theme.of(context).brightness == Brightness.dark) {
-      return tokens.sidebarGradient;
-    }
-    return const LinearGradient(
-      begin: Alignment.topLeft,
-      end: Alignment.bottomRight,
-      colors: [lightNavigationSurface, lightNavigationRail],
-    );
-  }
+  /// The surface the 2×2 matrix board sits on.
+  ///
+  /// The four cards are [WorkFollowTheme.content], so the page behind them is
+  /// the Web page token: one step greyer than the cards, and several steps
+  /// lighter than [WorkFollowTheme.canvas], which reads as a recessed panel
+  /// rather than as a page.
+  static Color matrixBackdrop(BuildContext context, WorkFollowTheme tokens) =>
+      Theme.of(context).brightness == Brightness.light
+          ? WorkFollowColors.neutral50
+          : tokens.canvas;
 
   /// The schedule property field uses the same neutral selected surface as
   /// the rest of the menu system. Dark mode keeps the existing canvas depth.

@@ -158,15 +158,17 @@ class _MatrixTaskRowState extends State<MatrixTaskRow> {
           width: MatrixMetrics.taskRowCheckboxHitTarget,
           height: MatrixMetrics.taskRowCheckboxHitTarget,
         ),
-        splashRadius: 12,
+        // A task row's box is a shape, not a Material control: the ink circle
+        // the IconButton would draw around it is the only round thing on the
+        // page, and it reads as a second, smaller target. Clearing the overlay
+        // takes the hover halo and the press ripple with it.
+        style: IconButton.styleFrom(overlayColor: Colors.transparent),
         onPressed: _toggle,
         icon: Container(
           width: MatrixMetrics.taskRowCheckboxSize,
           height: MatrixMetrics.taskRowCheckboxSize,
           decoration: BoxDecoration(
-            color: completed
-                ? tokens.textTertiary.withValues(alpha: .27)
-                : Colors.transparent,
+            color: completed ? taskCompletionFill(tokens) : Colors.transparent,
             // The row's own corner scaled to this box's size, so the quadrant
             // draws the shape the task list draws rather than a near miss.
             borderRadius: BorderRadius.circular(
