@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../models/task.dart';
 import '../theme/workfollow_icons.dart';
 import '../theme/workfollow_theme.dart';
 import 'app_icon_button.dart';
@@ -15,6 +16,20 @@ import 'app_icon_button.dart';
 /// rest of the product matches.
 double taskCompletionBoxRadius(double size) =>
     size * WorkFollowRadii.checkbox / TaskListMetrics.checkboxSize;
+
+/// The outline an open task's completion box carries.
+///
+/// Priority is the one property a collapsed row has nowhere else to show, so
+/// the box's edge is where it lives. The mapping sits here rather than beside
+/// the row because the same task draws this box in more than one place, and a
+/// task cannot be a red box in the list and a grey one in its own editor.
+Color taskPriorityColor(TaskPriority priority, WorkFollowTheme tokens) =>
+    switch (priority) {
+      TaskPriority.high => tokens.danger,
+      TaskPriority.medium => tokens.warning,
+      TaskPriority.low => tokens.accent,
+      TaskPriority.none => tokens.borderStrong,
+    };
 
 /// A completion box, drawn rather than taken from the icon set.
 ///

@@ -363,10 +363,12 @@ class _TaskInspectorState extends State<TaskInspector> {
                 : TaskCompletionBox(
                     size: WorkFollowMetrics.toolbarIcon,
                     completed: task.completed,
-                    // The button's own ink: an open box in the muted ink of
-                    // every property here that has not been set, a done one in
-                    // the green this control uses to say it succeeded.
-                    openColor: tokens.textSecondary,
+                    // The same edge the task carries in the list. Priority
+                    // lives on the box there, so it lives on the box here:
+                    // one task cannot be a red box in the list and a grey one
+                    // in its own editor. The done fill stays this control's
+                    // own green, because this control is what just succeeded.
+                    openColor: taskPriorityColor(task.priority, tokens),
                     doneColor: tokens.success),
             label: task.isAbandoned
                 ? '恢复任务'

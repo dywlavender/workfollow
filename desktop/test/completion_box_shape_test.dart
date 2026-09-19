@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:workfollow_personal/models/task.dart';
 import 'package:workfollow_personal/theme/workfollow_icons.dart';
 import 'package:workfollow_personal/theme/workfollow_theme.dart';
 import 'package:workfollow_personal/widgets/task_completion_box.dart';
@@ -119,5 +120,34 @@ void main() {
     expect(offenders, isEmpty,
         reason: 'a completion box is drawn by TaskCompletionBox; an icon brings '
             'its own corner and undoes the one-shape rule');
+  });
+
+  test('the open edge carries priority through one shared mapping', () {
+    // A task's priority lives on its completion box while the task is open,
+    // because a collapsed row has nowhere else to put it. That is exactly why
+    // the mapping cannot be written out per surface: the same task is drawn in
+    // the list and in its editor's header, and it was a red box in one and a
+    // grey one in the other until both started reading this.
+    expect(taskPriorityColor(TaskPriority.high, _tokens), _tokens.danger);
+    expect(taskPriorityColor(TaskPriority.medium, _tokens), _tokens.warning);
+    expect(taskPriorityColor(TaskPriority.low, _tokens), _tokens.accent);
+    expect(taskPriorityColor(TaskPriority.none, _tokens), _tokens.borderStrong);
+
+    // Both surfaces that draw this box for a task take its edge from the same
+    // place. The inspector also colours its priority property button off the
+    // priority, but that is an emphasis rule with its own colours, so this
+    // checks the box's own wiring rather than the file as a whole.
+    for (final path in const [
+      'lib/widgets/task_row.dart',
+      'lib/widgets/task_inspector.dart',
+    ]) {
+      expect(File(path).readAsStringSync(), contains('taskPriorityColor('),
+          reason: '$path draws a completion box, so its edge has to come from '
+              'the shared mapping rather than a colour picked here');
+    }
+    expect(File('lib/widgets/task_inspector.dart').readAsStringSync(),
+        contains('openColor: taskPriorityColor('),
+        reason: "the editor's header box went back to a fixed ink, which is "
+            'what left a high-priority task red in the list and grey here');
   });
 }

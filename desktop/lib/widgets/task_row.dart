@@ -11,6 +11,7 @@ import '../features/feedback/feedback_scope.dart';
 import '../features/tasks/application/task_actions.dart';
 import '../features/tasks/presentation/task_feedback_mapper.dart';
 import 'app_icon_button.dart';
+import 'task_completion_box.dart';
 import 'task_schedule_panel.dart';
 import 'task_context_menu.dart';
 import 'task_menu_actions.dart';
@@ -148,12 +149,7 @@ class _TaskRowState extends State<TaskRow> {
   Widget build(BuildContext context) {
     final tokens = WorkFollowTheme.of(context), task = widget.task;
     final selected = widget.selected || widget.multiSelected;
-    final priorityColor = switch (task.priority) {
-      TaskPriority.high => tokens.danger,
-      TaskPriority.medium => tokens.warning,
-      TaskPriority.low => tokens.accent,
-      TaskPriority.none => tokens.borderStrong,
-    };
+    final priorityColor = taskPriorityColor(task.priority, tokens);
     final preview = (task.description ?? task.note ?? '')
         .replaceAll(RegExp(r'\s+'), ' ')
         .trim();
