@@ -220,9 +220,16 @@ void main() {
     addTearDown(controller.dispose);
 
     final now = DateTime.now();
+    // Anchor the seven tasks to the week's own first day rather than to today.
+    // The window used to start two days back, which lands in the previous week
+    // whenever today is Sunday or Monday — the view reads the current week, so
+    // a task seeded at `now - 2` was simply not on the page and this test went
+    // red on two days out of seven. `weekday % 7` is the Sunday-first index the
+    // month grid uses.
+    final weekStart =
+        DateTime(now.year, now.month, now.day - now.weekday % 7);
     for (var offset = 0; offset < 7; offset++) {
-      final at = DateTime(now.year, now.month, now.day)
-          .add(Duration(days: offset - 2));
+      final at = weekStart.add(Duration(days: offset));
       controller.createTaskFromComposer(
         title: '第 ${offset + 1} 件事',
         listName: offset.isEven ? '工作' : '个人',
