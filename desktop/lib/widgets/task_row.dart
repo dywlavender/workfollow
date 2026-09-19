@@ -277,8 +277,12 @@ class _TaskRowState extends State<TaskRow> {
     final task = widget.task;
     final closed = task.isClosed;
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      // One line, every row. A title that wraps makes the group's rhythm
+      // depend on how long the words happen to be, and the row stops reading
+      // as a scannable entry; the full title stays legible in the editor one
+      // click away.
       Text(taskDisplayTitle(task),
-          maxLines: widget.compact ? 1 : 2,
+          maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: TextStyle(
               fontSize: WorkFollowMacTypography.listTitle,

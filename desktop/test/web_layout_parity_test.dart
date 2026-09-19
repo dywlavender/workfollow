@@ -176,10 +176,10 @@ void main() {
             .width,
         greaterThanOrEqualTo(WorkFollowLayout.taskDetailMinWidth));
 
-    // Non-compact rows retain the two-line title contract used by the shared
-    // list, so a long title does not get clipped just because it is grouped.
+    // Grouped rows hold the same one-line title contract as every other list
+    // entry: a wrapped title would make grouping change the row's height.
     final title = tester.widget<Text>(find.text('给设计顾问发一封确认邮件').first);
-    expect(title.maxLines, 2);
+    expect(title.maxLines, 1);
   });
 
   testWidgets('task list divider keeps its width inside the readable range',

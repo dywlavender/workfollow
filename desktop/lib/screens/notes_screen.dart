@@ -408,9 +408,13 @@ class _NoteRowState extends State<_NoteRow> {
                                             color: tokens.textPrimary))),
                               ]),
                               const SizedBox(height: WorkFollowSpacing.space1),
+                              // One line, same reason the task rows keep one:
+                              // the note index is a list to scan, and a
+                              // preview that wraps turns each card into a
+                              // different height.
                               Text(
                                   note.preview.isEmpty ? '还没有内容' : note.preview,
-                                  maxLines: 2,
+                                  maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   style: TextStyle(
                                       fontSize:
