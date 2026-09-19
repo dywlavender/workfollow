@@ -256,14 +256,25 @@ class DocumentCommands {
     toggleAttribute(attribute);
   }
 
+  /// Applies a block attribute to the line at [lineStart], and to no other.
+  ///
+  /// The range stops at the line's own newline instead of one past it. Quill
+  /// resolves a block attribute onto every newline inside the range, and then
+  /// onto the first newline beyond it — that second pass is what lets a
+  /// caret-only format land on the caret's line, and it is also why a range
+  /// ending past the newline marks the line below as well. Stopping short
+  /// leaves that second pass to mark this line, which is how the toolbar path
+  /// already behaved; asking for both marked two lines, so one 检查项 drew a
+  /// box on its own line and an empty one under it.
   void _formatLine(int lineStart, quill.Attribute attribute) {
     if (!_isUsable) return;
     final text = editor.document.toPlainText();
     if (text.isEmpty) return;
     final start = lineStart.clamp(0, text.length - 1).toInt();
     final endIndex = text.indexOf('\n', start);
-    final end = endIndex < 0 ? text.length : endIndex + 1;
-    final length = (end - start).clamp(1, text.length - start).toInt();
+    // No newline at all means the line runs to the end of the document.
+    final end = endIndex < 0 ? text.length : endIndex;
+    final length = (end - start).clamp(0, text.length - start).toInt();
     editor.formatText(start, length, attribute);
   }
 
