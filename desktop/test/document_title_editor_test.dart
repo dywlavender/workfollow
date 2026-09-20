@@ -44,7 +44,7 @@ void main() {
     expect(changed, '新标题');
   });
 
-  testWidgets('a completed title steps back in ink and keeps its words',
+  testWidgets('a title field reads at full ink and never carries a rule',
       (tester) async {
     final controller = TextEditingController();
     final focusNode = FocusNode();
@@ -57,27 +57,27 @@ void main() {
       theme: WorkFollowThemeData.light(),
       home: Scaffold(
         body: DocumentTitleEditor(
-          fieldKey: const ValueKey('completed-title-field'),
+          fieldKey: const ValueKey('title-field'),
           controller: controller,
           focusNode: focusNode,
           placeholder: '任务标题',
           fontSize: WorkFollowMacTypography.detailTitle,
-          muted: true,
           onChanged: (_) {},
         ),
       ),
     ));
 
-    // The inspector shows a finished task's title the way the rows do: quieter
-    // ink, same words, same size. It used to strike the title through, which
-    // made the one field where a task's name is fully readable the one place a
-    // rule ran across it.
-    final field = tester
-        .widget<TextField>(find.byKey(const ValueKey('completed-title-field')));
-    expect(field.style?.color, WorkFollowTheme.light.textTertiary);
+    // A title field names a document, and it names it the same way in every
+    // state the document can be in. Two parameters used to be reachable from
+    // here — a strike, then a grey — and both were passed by the task
+    // inspector for a finished task, which made the one field where a task's
+    // name is fully readable the one place that name looked wrong.
+    final field =
+        tester.widget<TextField>(find.byKey(const ValueKey('title-field')));
+    expect(field.style?.color, WorkFollowTheme.light.textPrimary,
+        reason: 'the editor shows a task as itself, finished or not');
     expect(field.style?.decoration, isNull,
-        reason: 'completion greys a title out; it never lines through it');
-    expect(field.style?.fontSize, WorkFollowMacTypography.detailTitle,
-        reason: 'and it does not shrink the title either');
+        reason: 'completion never lines through a title');
+    expect(field.style?.fontSize, WorkFollowMacTypography.detailTitle);
   });
 }

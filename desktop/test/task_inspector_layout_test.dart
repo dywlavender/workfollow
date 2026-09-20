@@ -321,4 +321,38 @@ void main() {
     expect(store.saved!.tasks.single.title, '重试保存');
     expect(keyed('save-status-indicator'), findsNothing);
   });
+
+  testWidgets('a finished task keeps its title and date at full ink',
+      (tester) async {
+    // The list is where a closed task steps back in ink: a row is one line in
+    // a column of rows, and the column reads better when the settled items
+    // recede. The editor is the opposite surface — it shows one task as
+    // itself — so a finished task's own title and its own date keep the ink
+    // they had before the box was ticked.
+    final c = WorkspaceController(seedData: false);
+    addTearDown(c.dispose);
+    c.addTask('完成也要看得清');
+    final task = c.tasks.single;
+    c.selectTask(task.id);
+    // A date in the past, so the schedule control has a relationship to
+    // report. Before this was fixed the control answered textTertiary for any
+    // completed task, which hid the one thing its colour is for: this task
+    // was due, and it is overdue.
+    c.updateTaskDue(task.id, DateTime.now().subtract(const Duration(days: 3)));
+    c.taskActions.complete(task.id);
+    await mount(tester, c);
+
+    final tokens =
+        WorkFollowTheme.of(tester.element(keyed('task-title-editor')));
+    final title = tester.widget<TextField>(keyed('task-title-editor'));
+    expect(title.style?.color, tokens.textPrimary,
+        reason: 'the title is the task name, not a report on its state');
+
+    final schedule = tester.widget<TextButton>(find.descendant(
+        of: keyed('task-schedule'), matching: find.byType(TextButton)));
+    expect(schedule.style!.foregroundColor!.resolve({}), tokens.danger,
+        reason: 'a finished task that was due last week still was due');
+    await screenshot(tester, 'task-inspector-completed-ink');
+    expect(tester.takeException(), isNull);
+  });
 }

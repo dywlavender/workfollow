@@ -4,11 +4,19 @@ import 'package:flutter_test/flutter_test.dart';
 
 /// Completion is a step back in ink, never a rule through the words.
 ///
-/// The product carries one reading of "done" wherever it shows a task title —
-/// the task rows, the calendar's bars and bands, the board's cards, and the
-/// linked tasks beside a note all grey the title out and leave it legible. At
-/// 12–14pt a strike costs more of the words than the colour already does, and
-/// it says the same thing a second time.
+/// The product carries one reading of "done" wherever it shows a task title
+/// inside a list — the task rows, the calendar's bars and bands, the board's
+/// cards, and the linked tasks beside a note all grey the title out and leave
+/// it legible. At 12–14pt a strike costs more of the words than the colour
+/// already does, and it says the same thing a second time.
+///
+/// The editor is not on that list. A task list is a column of rows and reads
+/// better when its settled items recede; the inspector shows one task as
+/// itself, so a finished task's title and date keep the ink they had before
+/// the box was ticked. That half of the rule is a widget assertion —
+/// `task_inspector_layout_test.dart`, "a finished task keeps its title and
+/// date at full ink" — because it is about the ink a built field resolves to
+/// rather than about where a decoration may appear.
 ///
 /// A line through the text is a different statement, and the two places that
 /// make it are not task titles in a task surface:

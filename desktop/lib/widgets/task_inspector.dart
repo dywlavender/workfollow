@@ -300,8 +300,13 @@ class _TaskInspectorState extends State<TaskInspector> {
         actionVersion: widget.controller.actionVersion);
   }
 
+  /// The ink of the schedule control in the header.
+  ///
+  /// Date colour states the date's relationship to now — overdue, due, or
+  /// neither — and completion is not one of those relationships. A finished
+  /// task that was due last week still says it was due last week, so the grey
+  /// that the rows use for a closed task does not apply here.
   Color _scheduleColor(TaskItem task, WorkFollowTheme tokens) {
-    if (task.completed) return tokens.textTertiary;
     final due = localDateTimeFromStorage(task.dueAt);
     if (due == null) return tokens.textSecondary;
     final now = DateTime.now();
@@ -406,7 +411,6 @@ class _TaskInspectorState extends State<TaskInspector> {
                     label:
                         '提醒：${calendarDateLabel(localDateTimeFromStorage(task.reminderAt), hasTime: true)}',
                     active: true,
-                    color: task.completed ? tokens.textTertiary : null,
                     onPressed: (anchor) => _date(anchor, 'reminder'),
                     iconOnly: true),
               if (task.recurrenceType != 'NONE')
@@ -420,7 +424,6 @@ class _TaskInspectorState extends State<TaskInspector> {
                       _ => '重复',
                     },
                     active: true,
-                    color: task.completed ? tokens.textTertiary : null,
                     onPressed: _repeat,
                     iconOnly: true),
             ]),
@@ -559,10 +562,13 @@ class _TaskInspectorState extends State<TaskInspector> {
               focusNode: titleFocus,
               placeholder: task.isChildTask ? '准备做什么？' : '任务标题',
               fontSize: WorkFollowMacTypography.detailTitle,
-              // A finished task greys its title out and keeps the words: at
-              // this size a rule through them costs more than the colour
-              // already says, and the list row beside it never drew one.
-              muted: task.completed,
+              // The title reads at full strength whatever state the task is
+              // in. This is the field where the task gets its name, and the
+              // name is the same name after it is done: the list row beside
+              // this pane can step back in ink because a row is one line in a
+              // column of rows, but the editor is where a single task is shown
+              // as itself. A grey here made the one surface that shows the
+              // whole task the only surface where the task looked faded.
               onChanged: (value) =>
                   widget.controller.taskActions.setTitle(task.id, value),
             ),

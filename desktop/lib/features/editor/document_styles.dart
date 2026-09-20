@@ -71,26 +71,24 @@ class DocumentStyles {
   /// The size is the shell's call, and both shells currently resolve the same
   /// role — `detailTitle` — whether the title belongs to a task inspector's
   /// field or to a full-page note. What every document title shares is the
-  /// weight, the line height, the absence of tracking, and the one state it
-  /// can be in: a completed document steps back to `textTertiary` and keeps
-  /// its words.
+  /// weight, the line height, the absence of tracking, and the ink.
   ///
-  /// It also used to strike the title through, which drew a rule across a
-  /// finished task's own name in the inspector — the only surface in the
-  /// product that showed a task title and lined through it. If the size is the
-  /// shell's call, so is the grey; the strike was never either shell's, and
-  /// there is no parameter left here to ask for one.
+  /// The ink is unconditional. A title field is where a document is named and
+  /// renamed, so it reads at full strength in every document state; a finished
+  /// task is a quieter thing in the list it sits in, not in the field that
+  /// names it. Two parameters used to be here — a strike, then a grey — and
+  /// both made the inspector the one place a completed task's own title did
+  /// not look like itself. Neither remains.
   static TextStyle title(
     WorkFollowTheme tokens, {
     required double fontSize,
-    bool muted = false,
   }) =>
       TextStyle(
         fontSize: fontSize,
         height: WorkFollowMacTypography.lineControl,
         fontWeight: WorkFollowMacWeight.semibold,
         letterSpacing: WorkFollowMacTracking.none,
-        color: muted ? tokens.textTertiary : tokens.textPrimary,
+        color: tokens.textPrimary,
       );
 
   /// Decoration of a document's title field.

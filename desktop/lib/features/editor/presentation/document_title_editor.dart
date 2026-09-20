@@ -19,7 +19,6 @@ class DocumentTitleEditor extends StatelessWidget {
     this.fieldKey,
     this.maxLines = 2,
     this.autofocus = false,
-    this.muted = false,
   });
 
   final TextEditingController controller;
@@ -35,11 +34,6 @@ class DocumentTitleEditor extends StatelessWidget {
   final int maxLines;
   final bool autofocus;
 
-  /// A completed document steps back to `textTertiary` and keeps its words —
-  /// the same grey every other finished task title wears. There is deliberately
-  /// no way to draw a rule through the title from here.
-  final bool muted;
-
   @override
   Widget build(BuildContext context) {
     final tokens = WorkFollowTheme.of(context);
@@ -53,7 +47,6 @@ class DocumentTitleEditor extends StatelessWidget {
       style: DocumentStyles.title(
         tokens,
         fontSize: fontSize,
-        muted: muted,
       ),
       decoration: DocumentStyles.titleDecoration(placeholder,
           hintColor: WorkFollowTheme.of(context).textTertiary),
