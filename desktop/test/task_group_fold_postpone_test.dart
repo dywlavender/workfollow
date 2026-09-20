@@ -226,4 +226,41 @@ void main() {
     await tester.pump(const Duration(seconds: 5));
     await tester.pumpAndSettle();
   });
+
+  testWidgets('LIST-F01 顺延 wears the ink a date wears', (tester) async {
+    // 顺延 sat in `textTertiary`, the same grey as the count beside it, so a
+    // control and a number read as the same kind of thing. It takes the ink a
+    // row's date wears instead — and the point of the ask was that the two
+    // *share* it, so this asserts the coupling and not just the value: a
+    // palette move that took one and left the other would pass a value check
+    // written against `accent` alone if `accent` had moved too, and fail here
+    // the moment the two stop agreeing.
+    final controller = WorkspaceController(seedData: false);
+    addTearDown(controller.dispose);
+    controller.selectView(WorkspaceView.today);
+    _addOverdue(controller, '逾期的报告');
+    _addToday(controller, '今天要做');
+
+    await _pumpToday(tester, controller);
+    await tester.pumpAndSettle();
+
+    const tokens = WorkFollowTheme.light;
+    final postpone = tester.widget<TextButton>(
+        find.byKey(const ValueKey('group-postpone-overdue')));
+    final postponeInk = postpone.style?.foregroundColor?.resolve(<WidgetState>{});
+
+    expect(postponeInk, tokens.accent,
+        reason: '顺延 offers to move a task onto a day that is still ahead of '
+            'the reader, so it wears that day\'s ink rather than the muted '
+            'grey the group count wears');
+
+    // The row beside it, drawn by the other file that has an opinion about
+    // this date.
+    final today = controller.tasks.firstWhere((t) => t.title == '今天要做');
+    final date =
+        tester.widget<Text>(find.byKey(ValueKey('task-row-date-${today.id}')));
+    expect(date.style?.color, postponeInk,
+        reason: 'the row says 今天 in one ink and the control offers to move '
+            'the group there in another; the two have to be one token');
+  });
 }

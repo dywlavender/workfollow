@@ -536,12 +536,22 @@ class _TodayScreenState extends State<TodayScreen> {
               }));
   }
 
+  /// The overdue group's one action, drawn in the ink a scheduled date wears.
+  ///
+  /// A row's date is the list's only coloured text — overdue is `danger` and
+  /// anything still open is `accent` — and 顺延 was reading `textTertiary`,
+  /// the same muted grey as the count beside it, so a control and a number
+  /// looked like the same kind of thing. It takes `accent` instead, the one
+  /// token [TaskMetadataTrail] gives a date that is still ahead of the reader:
+  /// postponing onto today and a row dated today are the same statement about
+  /// the same day. Sharing the token is the point — a palette move has to take
+  /// both, or the offer stops matching the thing it offers.
   Widget _postponeButton(List<TaskItem> tasks) {
     return TextButton(
         key: const ValueKey('group-postpone-overdue'),
         onPressed: () => _postponeOverdue(tasks),
         style: TextButton.styleFrom(
-            foregroundColor: WorkFollowTheme.of(context).textTertiary,
+            foregroundColor: WorkFollowTheme.of(context).accent,
             padding: const EdgeInsets.symmetric(
                 horizontal: WorkFollowSpacing.inlineGap),
             // 20pt, measured: `VisualDensity.compact` shaves 8 off the minimum,
