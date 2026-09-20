@@ -39,13 +39,19 @@ Color taskPriorityColor(TaskPriority priority, WorkFollowTheme tokens) =>
 /// One task draws this box in the list, in its own editor's header, in the
 /// editor's child rows, on a board card and on a calendar bar. The fill has to
 /// be one value for all of them: a task cannot be green in its editor and
-/// graphite in the list. It is the completed neutral rather than the muted ink
-/// the box used to take — that ink is the *text* weight of a finished row, and
-/// at box size it read as a dark chip instead of a finished one.
+/// graphite in the list. It is the last step of the finished-row ladder rather
+/// than the muted ink the box used to take — that ink is the *text* weight of a
+/// finished row, and at box size it read as a dark chip instead of a finished
+/// one.
+///
+/// It is also deliberately *fainter* than the row's own metadata: on the
+/// reference list the tick is a pale chip with the surface showing through the
+/// glyph, and the box is the lightest thing on a finished row, not the heaviest.
+/// The tick is cut from [WorkFollowTheme.content], so lowering the fill lowers
+/// the tick's contrast with it too — the two move together, which is what keeps
+/// the box reading as one object instead of a grey plate with a white mark.
 Color taskCompletionFill(WorkFollowTheme tokens) =>
-    tokens.content.computeLuminance() > .5
-        ? WorkFollowColors.neutralCompleted
-        : tokens.textTertiary;
+    tokens.taskCompletedCheckbox;
 
 /// A completion box, drawn rather than taken from the icon set.
 ///

@@ -163,4 +163,62 @@ void main() {
       debugDefaultTargetPlatformOverride = null;
     }
   });
+
+  /// Finished rows on their own, so the ink ladder can be *measured* instead of
+  /// eyeballed: one title, one preview, one trailing column and one box, all on
+  /// the same background, with nothing open beside them to compare against.
+  testWidgets('LIST-D02 capture finished rows', (tester) async {
+    tester.view.physicalSize = const Size(440, 300);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    final controller = WorkspaceController(seedData: false);
+    addTearDown(controller.dispose);
+    controller.selectView(WorkspaceView.completed);
+
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    controller.createTask(TaskDraft(
+        title: '接口评审纪要',
+        description: '把结论同步给测试与运维',
+        listName: '工作',
+        schedule: TaskScheduleDraft(
+            dueAt: today.subtract(const Duration(days: 12)), hasTime: false)));
+    controller.createTask(TaskDraft(
+        title: '补交发票',
+        description: '上季度',
+        listName: '个人',
+        schedule: TaskScheduleDraft(
+            dueAt: today.add(const Duration(hours: 9)), hasTime: true)));
+    for (final task in controller.tasks) {
+      controller.taskActions.complete(task.id);
+    }
+
+    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+    try {
+      final base = WorkFollowThemeData.light();
+      final theme = base.copyWith(
+          textTheme: base.textTheme.apply(fontFamily: 'Hiragino Sans GB'),
+          textButtonTheme: TextButtonThemeData(
+              style: TextButton.styleFrom(
+                  textStyle: const TextStyle(fontFamily: 'Hiragino Sans GB'))));
+      await tester.pumpWidget(MaterialApp(
+          theme: theme,
+          home: Scaffold(
+              body: RepaintBoundary(
+                  key: boundary,
+                  child: AnimatedBuilder(
+                      animation: controller,
+                      builder: (context, _) => TodayScreen(
+                          controller: controller,
+                          persistentInspector: false))))));
+      await tester.pumpAndSettle();
+      await shoot(tester, 'task-list-completed-rows');
+    } finally {
+      debugDefaultTargetPlatformOverride = null;
+    }
+  });
 }

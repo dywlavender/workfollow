@@ -205,15 +205,13 @@ void main() {
     // with success green while the list filled the same task's box with
     // graphite — one task, two answers. The fill comes from one role now, and
     // the surfaces that used to override it take the default again.
-    expect(taskCompletionFill(_tokens), WorkFollowColors.neutralCompleted);
+    expect(taskCompletionFill(_tokens), _tokens.taskCompletedCheckbox);
     expect(taskCompletionFill(WorkFollowTheme.dark),
-        WorkFollowTheme.dark.textTertiary);
+        WorkFollowTheme.dark.taskCompletedCheckbox);
 
-    // Light surfaces take the completed neutral, which is a step lighter than
-    // the muted ink the box used to be filled with; the write-up in the user's
-    // words was "too dark to look at".
-    expect(taskCompletionFill(_tokens).computeLuminance(),
-        greaterThan(_tokens.textTertiary.computeLuminance()));
+    // The box is the last rung of the finished-row ladder and not a value of
+    // its own; where the ladder is asserted is
+    // `completion_style_contract_test.dart`, beside the rest of the rule.
 
     for (final path in const [
       'lib/widgets/task_inspector.dart',

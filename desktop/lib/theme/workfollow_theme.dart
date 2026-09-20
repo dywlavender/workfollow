@@ -1261,7 +1261,6 @@ class WorkFollowColors {
   static const Color neutral500 = Color(0xFF6B7280);
   static const Color neutral700 = Color(0xFF5F6672);
   static const Color neutral900 = Color(0xFF171A21);
-  static const Color neutralCompleted = Color(0xFFAEB5BF);
   static const Color neutralAbandoned = Color(0xFF817A76);
   static const Color neutralAbandonedBorder = Color(0xFFA99C94);
 
@@ -1326,6 +1325,10 @@ class WorkFollowTheme extends ThemeExtension<WorkFollowTheme> {
     required this.textPrimary,
     required this.textSecondary,
     required this.textTertiary,
+    required this.taskCompletedTitle,
+    required this.taskCompletedBody,
+    required this.taskCompletedMeta,
+    required this.taskCompletedCheckbox,
     required this.border,
     required this.borderStrong,
     required this.accent,
@@ -1366,6 +1369,27 @@ class WorkFollowTheme extends ThemeExtension<WorkFollowTheme> {
   final Color textPrimary;
   final Color textSecondary;
   final Color textTertiary;
+
+  /// The four inks of a finished task row, in the order a row shows them.
+  ///
+  /// A closed row used to take [textTertiary] for everything it carried — the
+  /// title, the preview, the list name, the date, the little icons — which
+  /// flattened the row into one grey and, because that grey is also the
+  /// product's *reading* grey for navigation, breadcrumbs and placeholders, it
+  /// could not be lightened without lightening all of those too. A finished row
+  /// is its own state with its own ladder: the title is the darkest thing left
+  /// on it, the preview steps down, the trailing metadata is faintest, and the
+  /// checkbox is a pale chip whose tick is cut out of it.
+  ///
+  /// The values are calibrated against a reference list where a finished row
+  /// reads as settled rather than struck out — see `completion_style_contract`
+  /// for the ladder assertion. This is only about finished rows *in a list*:
+  /// the editor keeps a task at full strength whatever state it is in, because
+  /// that is the surface that shows one task as itself.
+  final Color taskCompletedTitle;
+  final Color taskCompletedBody;
+  final Color taskCompletedMeta;
+  final Color taskCompletedCheckbox;
 
   /// Derived roles keep disabled and focus treatments semantic without
   /// adding another near-duplicate palette entry to every light/dark theme.
@@ -1442,6 +1466,13 @@ class WorkFollowTheme extends ThemeExtension<WorkFollowTheme> {
     textPrimary: Color(0xFF20272C),
     textSecondary: Color(0xFF5D6B75),
     textTertiary: Color(0xFF7F8D92),
+    // One ladder for a finished list row. The steps are even in perceptual
+    // lightness (ΔL* 25.7 / 19.8 / 15.9 / 13.0 off the white surface), so the
+    // row reads as three ordered levels plus a chip rather than as one grey.
+    taskCompletedTitle: Color(0xFFB4B7BC),
+    taskCompletedBody: Color(0xFFC5C7CB),
+    taskCompletedMeta: Color(0xFFD0D2D5),
+    taskCompletedCheckbox: Color(0xFFD8DADE),
     // Hairlines are neutral. The teal-tinted greys belonged to the old accent
     // and read as a second colour in every divider once the primary moved.
     border: Color(0xFFE6E7EB),
@@ -1493,6 +1524,15 @@ class WorkFollowTheme extends ThemeExtension<WorkFollowTheme> {
     textPrimary: Color(0xFFF4F5F7),
     textSecondary: Color(0xFFB8BEC9),
     textTertiary: Color(0xFF858D9A),
+    // The same four steps, measured off this theme's own surface: the light
+    // ladder's perceptual distances from white are re-applied from #202329, on
+    // the palette's own grey ramp. Dark surfaces need slightly more ink for the
+    // same reading, which is why the ratios come out a little higher here
+    // (2.37 / 1.91 / 1.66 / 1.49 against 2.01 / 1.69 / 1.52 / 1.40 on white).
+    taskCompletedTitle: Color(0xFF575D67),
+    taskCompletedBody: Color(0xFF4A4F57),
+    taskCompletedMeta: Color(0xFF41464E),
+    taskCompletedCheckbox: Color(0xFF3B3F47),
     border: Color(0xFF30343D),
     borderStrong: Color(0xFF4A505B),
     accent: Color(0xFF7E88FF),
@@ -1540,6 +1580,10 @@ class WorkFollowTheme extends ThemeExtension<WorkFollowTheme> {
     Color? textPrimary,
     Color? textSecondary,
     Color? textTertiary,
+    Color? taskCompletedTitle,
+    Color? taskCompletedBody,
+    Color? taskCompletedMeta,
+    Color? taskCompletedCheckbox,
     Color? border,
     Color? borderStrong,
     Color? accent,
@@ -1575,6 +1619,11 @@ class WorkFollowTheme extends ThemeExtension<WorkFollowTheme> {
       textPrimary: textPrimary ?? this.textPrimary,
       textSecondary: textSecondary ?? this.textSecondary,
       textTertiary: textTertiary ?? this.textTertiary,
+      taskCompletedTitle: taskCompletedTitle ?? this.taskCompletedTitle,
+      taskCompletedBody: taskCompletedBody ?? this.taskCompletedBody,
+      taskCompletedMeta: taskCompletedMeta ?? this.taskCompletedMeta,
+      taskCompletedCheckbox:
+          taskCompletedCheckbox ?? this.taskCompletedCheckbox,
       border: border ?? this.border,
       borderStrong: borderStrong ?? this.borderStrong,
       accent: accent ?? this.accent,
@@ -1616,6 +1665,14 @@ class WorkFollowTheme extends ThemeExtension<WorkFollowTheme> {
       textPrimary: Color.lerp(textPrimary, other.textPrimary, t)!,
       textSecondary: Color.lerp(textSecondary, other.textSecondary, t)!,
       textTertiary: Color.lerp(textTertiary, other.textTertiary, t)!,
+      taskCompletedTitle:
+          Color.lerp(taskCompletedTitle, other.taskCompletedTitle, t)!,
+      taskCompletedBody:
+          Color.lerp(taskCompletedBody, other.taskCompletedBody, t)!,
+      taskCompletedMeta:
+          Color.lerp(taskCompletedMeta, other.taskCompletedMeta, t)!,
+      taskCompletedCheckbox:
+          Color.lerp(taskCompletedCheckbox, other.taskCompletedCheckbox, t)!,
       border: Color.lerp(border, other.border, t)!,
       borderStrong: Color.lerp(borderStrong, other.borderStrong, t)!,
       accent: Color.lerp(accent, other.accent, t)!,

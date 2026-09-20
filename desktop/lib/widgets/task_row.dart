@@ -303,9 +303,16 @@ class _TaskRowState extends State<TaskRow> {
               fontStyle: task.title.trim().isEmpty
                   ? FontStyle.italic
                   : FontStyle.normal,
-              color: closed || task.title.trim().isEmpty
+              // An empty title is a placeholder, so it keeps the placeholder
+              // ink whatever the task's state. A closed row's title is a real
+              // name and takes the head of the finished-row ladder: it used to
+              // share one grey with the preview, the list name and the date,
+              // which left nothing on the row saying which line was the task.
+              color: task.title.trim().isEmpty
                   ? tokens.textTertiary
-                  : tokens.textPrimary)),
+                  : closed
+                      ? tokens.taskCompletedTitle
+                      : tokens.textPrimary)),
       if (preview.isNotEmpty) ...[
         const SizedBox(height: TaskListMetrics.titlePreviewGap),
         Text(preview,
@@ -317,7 +324,7 @@ class _TaskRowState extends State<TaskRow> {
                 height: WorkFollowMacTypography.lineList,
                 fontWeight: WorkFollowMacWeight.regular,
                 color: task.isClosed
-                    ? tokens.textTertiary
+                    ? tokens.taskCompletedBody
                     : tokens.textSecondary)),
       ],
     ]);

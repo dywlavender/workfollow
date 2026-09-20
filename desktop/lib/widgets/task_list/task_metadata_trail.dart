@@ -15,8 +15,9 @@ import '../task_date_picker.dart';
 /// not turn the list into a property dump. The inspector remains the complete
 /// property surface. A date is the one item that carries state, so it is the
 /// only one that changes colour — overdue is danger and every open scheduled
-/// date (today, tomorrow, any future day or time) is accent; closed tasks mute
-/// the whole trail to tertiary.
+/// date (today, tomorrow, any future day or time) is accent; a closed task
+/// mutes the whole trail one step further, to the last rung of the
+/// finished-row ladder in [WorkFollowTheme.taskCompletedMeta].
 class TaskMetadataTrail extends StatelessWidget {
   const TaskMetadataTrail(
       {super.key,
@@ -50,20 +51,25 @@ class TaskMetadataTrail extends StatelessWidget {
     final primary = <Widget>[];
     final secondary = <Widget>[];
     final closed = task.isClosed;
-    final muted = closed ? tokens.textTertiary : null;
+    // A closed row's trailing column drops one step below an open one: the list
+    // name, the flags, the little state icons and the date all read at the same
+    // faint weight, so the trail stops competing with the row's own title. The
+    // date gives up its danger/accent with them — "overdue" says a task is
+    // still to do, and a finished task is not that.
+    final meta = closed ? tokens.taskCompletedMeta : tokens.textTertiary;
     if (task.isPinned)
       primary.add(_icon(
-          WorkFollowIcons.pin, closed ? tokens.textTertiary : tokens.accent,
+          WorkFollowIcons.pin, closed ? meta : tokens.accent,
           semanticLabel: '已置顶'));
-    if (task.isAbandoned) primary.add(_text('已放弃', tokens.textTertiary));
+    if (task.isAbandoned) primary.add(_text('已放弃', meta));
     if (controller.selectedListName == null && task.listName != '收集箱') {
-      primary.add(_text(task.listName, tokens.textTertiary));
+      primary.add(_text(task.listName, meta));
     }
     if (task.priority != TaskPriority.none) {
       primary.add(_icon(
           WorkFollowIcons.flag,
           closed
-              ? tokens.textTertiary
+              ? meta
               : switch (task.priority) {
                   TaskPriority.high => tokens.danger,
                   TaskPriority.medium => tokens.warning,
@@ -77,10 +83,10 @@ class TaskMetadataTrail extends StatelessWidget {
       secondary.add(_text(
           '${controller.completedChildCount(task.id)}/'
           '${controller.childCount(task.id)}',
-          tokens.textTertiary));
+          meta));
     }
     if (task.recurrenceType != 'NONE') {
-      secondary.add(_icon(WorkFollowIcons.repeat, tokens.textTertiary,
+      secondary.add(_icon(WorkFollowIcons.repeat, meta,
           semanticLabel: '重复任务'));
     }
     // A relative reminder is still a reminder even when the task has no
@@ -88,19 +94,19 @@ class TaskMetadataTrail extends StatelessWidget {
     // model so list rows show the same state as the inspector and schedule
     // panel for both absolute and due-date-relative reminders.
     if (task.reminderTimes.isNotEmpty) {
-      secondary.add(_icon(WorkFollowIcons.reminder, tokens.textTertiary,
+      secondary.add(_icon(WorkFollowIcons.reminder, meta,
           semanticLabel: '有提醒'));
     }
     if (task.tags.isNotEmpty) {
-      secondary.add(_icon(WorkFollowIcons.tag, tokens.textTertiary,
+      secondary.add(_icon(WorkFollowIcons.tag, meta,
           semanticLabel: '有标签'));
     }
     if (_hasDescription) {
-      secondary.add(_icon(WorkFollowIcons.article, tokens.textTertiary,
+      secondary.add(_icon(WorkFollowIcons.article, meta,
           semanticLabel: '有描述'));
     }
     if (task.hasAttachment) {
-      secondary.add(_icon(WorkFollowIcons.attachment, tokens.textTertiary,
+      secondary.add(_icon(WorkFollowIcons.attachment, meta,
           semanticLabel: '有附件'));
     }
     final result = <Widget>[
@@ -112,10 +118,10 @@ class TaskMetadataTrail extends StatelessWidget {
       final overdue =
           !closed && !deadline.isAfter(DateTime(now.year, now.month, now.day));
       result.add(_text('${calendarDateLabel(deadline)}截止',
-          overdue ? tokens.danger : tokens.textTertiary));
+          overdue ? tokens.danger : meta));
     }
     if (due != null) {
-      final dateColor = muted ?? _dueColor(tokens);
+      final dateColor = closed ? meta : _dueColor(tokens);
       // A task with a clock time shows the clock and the time. The date is
       // already in the group heading above it, and `今天 10:30` said the same
       // thing twice on a row that only has room for the time.
