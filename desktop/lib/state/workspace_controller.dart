@@ -27,9 +27,7 @@ enum WorkspaceView {
   home,
   recent,
   today,
-  overdue,
   inbox,
-  plan,
   all,
   completed,
   calendar,
@@ -379,12 +377,19 @@ class WorkspaceController extends ChangeNotifier {
   // add field or the inspector title editor to take focus.
 
   WorkspaceView get view => _view;
+
+  /// The day the projections are pinned to.
+  ///
+  /// Buckets and date labels are recomputed on a rollover rather than on every
+  /// read, so the list grouping has to ask the same reference the rows were
+  /// picked with — otherwise a group could be named for a day its own rows
+  /// disagree with, for the few seconds between midnight and the next refresh.
+  DateTime get dateReference => _dateReference;
+
   bool get isTaskView => switch (_view) {
         WorkspaceView.recent ||
         WorkspaceView.today ||
-        WorkspaceView.overdue ||
         WorkspaceView.inbox ||
-        WorkspaceView.plan ||
         WorkspaceView.all ||
         WorkspaceView.completed ||
         WorkspaceView.work ||
@@ -479,17 +484,15 @@ class WorkspaceController extends ChangeNotifier {
       WorkspaceView.home => '首页',
       WorkspaceView.recent => '最近 7 天',
       WorkspaceView.today => '今天',
-      WorkspaceView.overdue => '过期',
       WorkspaceView.inbox => '收集箱',
-      WorkspaceView.plan => '计划',
-      WorkspaceView.all => '全部任务',
+      WorkspaceView.all => '所有任务',
       WorkspaceView.completed => '已完成',
       WorkspaceView.work => '工作',
       WorkspaceView.study => '学习',
       WorkspaceView.personal => '个人',
       WorkspaceView.calendar => '日历',
       WorkspaceView.notes => '笔记',
-      WorkspaceView.trash => '废纸篓',
+      WorkspaceView.trash => '垃圾桶',
       WorkspaceView.matrix => '四象限',
     };
   }
@@ -1942,11 +1945,7 @@ class WorkspaceController extends ChangeNotifier {
   /// flag, and a finished list must not pull in the still-open children of a
   /// finished parent.
   bool get _childrenFollowMatchedParent => switch (_view) {
-        WorkspaceView.today ||
-        WorkspaceView.recent ||
-        WorkspaceView.overdue ||
-        WorkspaceView.plan =>
-          true,
+        WorkspaceView.today || WorkspaceView.recent => true,
         _ => false,
       };
 
@@ -1960,16 +1959,21 @@ class WorkspaceController extends ChangeNotifier {
     return children.where((task) => ids.contains(task.id)).toList();
   }
 
-  List<TaskItem> get visibleTasks {
-    final flat = _visibleProjection();
-    final ids = {for (final task in flat) task.id};
-    // Children render nested under their parent and never twice. A child
-    // whose parent did not match the current projection is promoted to a
-    // top-level row instead of silently disappearing (S7 §11) — its own
-    // dueAt/completed earned it a place in this view.
-    return List.unmodifiable(
-        flat.where((task) => !task.isChildTask || !ids.contains(task.parentTaskId)));
-  }
+  /// The rows the task list draws for the current view.
+  ///
+  /// Children render nested under their parent and never twice. A child whose
+  /// parent did not match the current projection is promoted to a top-level row
+  /// instead of silently disappearing (S7 §11) — its own dueAt/completed earned
+  /// it a place in this view. That ruleset lives in
+  /// [TaskProjection.dedupChildren] so the list grouping, which files rows under
+  /// headings, folds children by the same rule.
+  List<TaskItem> get visibleTasks => taskProjection.listRows(
+        tasks: _tasks,
+        view: _view,
+        selectedListName: _selectedListName,
+        selectedTagName: _selectedTagName,
+        reference: _dateReference,
+      );
 
   /// Active child tasks of [parentId], in their sibling order.
   List<TaskItem> childrenOf(String parentId) {
@@ -2083,7 +2087,6 @@ class WorkspaceController extends ChangeNotifier {
     _notify();
   }
 
-  /// Test seam: run the hierarchy normalization over an explicit task list.
   /// Test seam: install an explicit task list, bypassing load paths.
   @visibleForTesting
   void loadTasksForTest(List<TaskItem> tasks) {
@@ -2282,9 +2285,10 @@ class WorkspaceController extends ChangeNotifier {
       _view = WorkspaceView.all;
       _selectedListName = name;
     } else {
-      _view = task.bucket == TaskBucket.later
-          ? WorkspaceView.plan
-          : WorkspaceView.today;
+      // A task with no list of its own is only guaranteed to be on one page:
+      // 所有任务 holds every date, and its 已过期 / 今天 / 更远 groups are where
+      // a future-dated task now lives. 今天 would drop anything dated ahead.
+      _view = WorkspaceView.all;
       _selectedListName = null;
     }
     _selectedTagName = null;
@@ -2620,7 +2624,7 @@ class WorkspaceController extends ChangeNotifier {
     _lastRemovedNoteId = null;
     _actionVersion += 1;
     _lastActionKind = 'removal';
-    _lastActionMessage = '任务已移到废纸篓';
+    _lastActionMessage = '任务已移到垃圾桶';
     if (_selectedTaskId == id) {
       _setSelectedTaskId(_nextSelectableTaskId(index));
     }
@@ -2927,7 +2931,7 @@ class WorkspaceController extends ChangeNotifier {
     if (removedIds.isEmpty) return;
     _lastBulkUndo = _BulkTaskUndo(removedIds: removedIds);
     _lastActionKind = 'bulk';
-    _lastActionMessage = '${removedIds.length} 个任务已移到废纸篓';
+    _lastActionMessage = '${removedIds.length} 个任务已移到垃圾桶';
     _actionVersion += 1;
     _lastCompletedTaskId = null;
     if (_selectedTaskId != null && removedIds.contains(_selectedTaskId)) {
@@ -4008,7 +4012,7 @@ class WorkspaceController extends ChangeNotifier {
     _lastRemovedTaskId = null;
     _actionVersion += 1;
     _lastActionKind = 'note-removal';
-    _lastActionMessage = '笔记已移到废纸篓';
+    _lastActionMessage = '笔记已移到垃圾桶';
     _schedulePersist();
     _notify();
     return true;

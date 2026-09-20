@@ -180,20 +180,6 @@ class _TaskNavigation extends StatelessWidget {
           onTap: () => controller.selectView(WorkspaceView.today),
         ),
         _RailItem(
-          label: '过期',
-          icon: WorkFollowIcons.overdue,
-          count: controller.countFor(WorkspaceView.overdue),
-          selected: controller.view == WorkspaceView.overdue,
-          onTap: () => controller.selectView(WorkspaceView.overdue),
-        ),
-        _RailItem(
-          label: '计划',
-          icon: WorkFollowIcons.plan,
-          count: controller.countFor(WorkspaceView.plan),
-          selected: controller.view == WorkspaceView.plan,
-          onTap: () => controller.selectView(WorkspaceView.plan),
-        ),
-        _RailItem(
           label: '收集箱',
           icon: WorkFollowIcons.inbox,
           count: controller.countFor(WorkspaceView.inbox),
@@ -229,7 +215,7 @@ class _TaskNavigation extends StatelessWidget {
             .map((list) => _TaskListItem(controller: controller, list: list)),
         _TagSection(controller: controller),
         _RailItem(
-          label: '废纸篓',
+          label: '垃圾桶',
           icon: WorkFollowIcons.trash,
           count: controller.countFor(WorkspaceView.trash),
           selected: controller.view == WorkspaceView.trash,
@@ -347,9 +333,7 @@ class _IconRail extends StatelessWidget {
     final taskRailSelected = switch (controller.view) {
       WorkspaceView.recent ||
       WorkspaceView.today ||
-      WorkspaceView.overdue ||
       WorkspaceView.inbox ||
-      WorkspaceView.plan ||
       WorkspaceView.all ||
       WorkspaceView.completed ||
       WorkspaceView.work ||

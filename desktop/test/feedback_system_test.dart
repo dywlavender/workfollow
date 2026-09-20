@@ -337,7 +337,7 @@ void main() {
           feedback,
           TaskActionResult.success(
               taskId: 'task-1',
-              message: '任务已移到废纸篓',
+              message: '任务已移到垃圾桶',
               undo: UndoCommand(label: '撤销删除', execute: () => true),
               feedback: TaskFeedbackIntent.undoable));
       await tester.pumpAndSettle();
@@ -345,7 +345,7 @@ void main() {
       presentTaskResult(feedback, _completedSingle('task-2'));
       await tester.pumpAndSettle();
 
-      expect(find.text('任务已移到废纸篓'), findsOneWidget);
+      expect(find.text('任务已移到垃圾桶'), findsOneWidget);
       expect(find.byKey(_actionKey), findsOneWidget);
 
       await _drainHolds(tester);

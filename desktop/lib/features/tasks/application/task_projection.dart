@@ -18,16 +18,14 @@ class TaskProjection {
     DateTime? reference,
   }) {
     final viewName = _viewName(view);
-    final source = tasks.where((task) => viewName == 'trash'
-        ? task.deletedAt != null
-        : task.deletedAt == null && !task.isSkipped && !task.isConverted);
-    final tagged = selectedTagName == null
-        ? source
-        : source.where((task) => task.tags.contains(selectedTagName));
+    final tagged = scope(
+        tasks: tasks,
+        view: view,
+        selectedListName: selectedListName,
+        selectedTagName: selectedTagName);
     if (viewName == 'trash') return List.unmodifiable(tagged);
     if (selectedListName != null && viewName == 'all') {
-      return List.unmodifiable(
-          tagged.where((task) => task.listName == selectedListName));
+      return List.unmodifiable(tagged);
     }
     final filtered = switch (viewName) {
       'home' => tagged,
@@ -35,11 +33,7 @@ class TaskProjection {
           !task.isClosed && isInRecentWindow(task, reference: reference)),
       'today' => tagged.where((task) =>
           !task.isAbandoned && needsAttentionToday(task, reference: reference)),
-      'overdue' => tagged.where(
-          (task) => !task.isClosed && isOverdue(task, reference: reference)),
       'inbox' => tagged.where((task) => task.listName == '收集箱'),
-      'plan' => tagged.where(
-          (task) => !task.isAbandoned && task.bucket == TaskBucket.later),
       'all' => tagged,
       'completed' => tagged.where((task) => task.isClosed),
       'work' => tagged.where((task) => task.listName == '工作'),
@@ -48,6 +42,66 @@ class TaskProjection {
       _ => const <TaskItem>[],
     };
     return List.unmodifiable(filtered);
+  }
+
+  /// The tasks a view is *about*, before the view decides what to do about the
+  /// finished ones.
+  ///
+  /// [visible] narrows this; the list grouping cannot, because a view's closing
+  /// group is "the finished tasks this view is about" and [visible] has already
+  /// dropped them by the time it returns. Keeping the first half of the
+  /// projection in one place is what stops the two from disagreeing about a
+  /// task that is on screen but outside every group.
+  Iterable<TaskItem> scope({
+    required Iterable<TaskItem> tasks,
+    required Object view,
+    String? selectedListName,
+    String? selectedTagName,
+  }) {
+    final viewName = _viewName(view);
+    final source = tasks.where((task) => viewName == 'trash'
+        ? task.deletedAt != null
+        : task.deletedAt == null && !task.isSkipped && !task.isConverted);
+    final tagged = selectedTagName == null
+        ? source
+        : source.where((task) => task.tags.contains(selectedTagName));
+    if (viewName == 'all' && selectedListName != null) {
+      return tagged.where((task) => task.listName == selectedListName);
+    }
+    return tagged;
+  }
+
+  /// The rows a list draws for [view]: [visible] with a child whose parent is
+  /// on the same list folded under that parent instead of repeating at the top.
+  List<TaskItem> listRows({
+    required Iterable<TaskItem> tasks,
+    required Object view,
+    String? selectedListName,
+    String? selectedTagName,
+    DateTime? reference,
+  }) =>
+      dedupChildren(visible(
+        tasks: tasks,
+        view: view,
+        selectedListName: selectedListName,
+        selectedTagName: selectedTagName,
+        reference: reference,
+      ));
+
+  /// Drops a child whose parent is on the same list: it renders nested under
+  /// the parent, and drawing it a second time at the top level would show the
+  /// task twice.
+  ///
+  /// [parents] adds ids that belong to the list but are not in [rows] — a
+  /// parent filed under another heading still owns its children, so a child
+  /// must not be promoted to a row of its own just because the two ended up in
+  /// different groups.
+  List<TaskItem> dedupChildren(Iterable<TaskItem> rows,
+      {Set<String> parents = const {}}) {
+    final list = rows.toList();
+    final ids = {for (final task in list) task.id, ...parents};
+    return List.unmodifiable(list
+        .where((task) => !task.isChildTask || !ids.contains(task.parentTaskId)));
   }
 
   int count({
@@ -71,15 +125,8 @@ class TaskProjection {
       'today' => active
           .where((task) => !task.isClosed && dueTodayOrOverdue(task))
           .length,
-      'overdue' => active
-          .where(
-              (task) => !task.isClosed && isOverdue(task, reference: reference))
-          .length,
       'inbox' =>
         active.where((task) => task.listName == '收集箱' && !task.isClosed).length,
-      'plan' => active
-          .where((task) => task.bucket == TaskBucket.later && !task.isClosed)
-          .length,
       'all' => active.where((task) => !task.isClosed).length,
       'completed' => active.where((task) => task.completed).length,
       'work' =>
@@ -244,7 +291,14 @@ class TaskProjection {
     return dueDay.isBefore(today.add(const Duration(days: 7)));
   }
 
-  String _viewName(Object view) {
+  String _viewName(Object view) => viewNameOf(view);
+
+  /// The lower-case view name a projection switch dispatches on.
+  ///
+  /// Public because the list grouping layer resolves the same names, and two
+  /// copies of "take the text after the last dot, lower-case it" would drift
+  /// the day one of them met a view it had not seen before.
+  static String viewNameOf(Object view) {
     final raw = view.toString();
     final dot = raw.lastIndexOf('.');
     return (dot < 0 ? raw : raw.substring(dot + 1)).toLowerCase();

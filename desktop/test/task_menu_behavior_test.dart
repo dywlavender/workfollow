@@ -10,6 +10,7 @@ import 'package:workfollow_personal/models/migration.dart';
 import 'package:workfollow_personal/models/rich_document.dart';
 import 'package:workfollow_personal/services/local_workspace_store.dart';
 import 'package:workfollow_personal/services/notification_service.dart';
+import 'package:workfollow_personal/widgets/task_date_picker.dart';
 import 'package:workfollow_personal/state/workspace_controller.dart';
 import 'package:workfollow_personal/theme/workfollow_theme.dart';
 import 'package:workfollow_personal/screens/today_screen.dart';
@@ -287,7 +288,11 @@ void main() {
     c.taskActions.abandon(pinnedId);
     c.selectView(WorkspaceView.completed);
     await tester.pumpAndSettle();
-    expect(find.text('已放弃'), findsWidgets);
+    // 已完成 is grouped by the day a task was closed on, so the heading for a
+    // task abandoned a moment ago is that day — the abandoned task is a row
+    // inside it, not a group of its own named 已放弃.
+    expect(find.text(calendarGroupLabel(DateTime.now())), findsOneWidget);
+    expect(find.byKey(ValueKey(pinnedId)), findsOneWidget);
     c.taskActions.restore(pinnedId);
     c.selectView(WorkspaceView.inbox);
     await tester.pumpAndSettle();

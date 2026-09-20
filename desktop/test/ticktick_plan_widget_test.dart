@@ -789,7 +789,7 @@ void main() {
   });
 
   testWidgets(
-      'ARCH-004 recent and overdue smart lists are reachable from the rail',
+      'ARCH-004 the recent list is reachable from the rail, and 过期 is not a destination',
       (tester) async {
     await tester.pumpWidget(const WorkFollowApp(demoMode: true));
     await tester.pumpAndSettle();
@@ -798,9 +798,9 @@ void main() {
     await tester.tap(find.text('最近 7 天').first);
     await tester.pumpAndSettle();
     expect(find.text('最近 7 天'), findsWidgets);
-    await tester.tap(find.text('过期').first);
-    await tester.pumpAndSettle();
-    expect(find.text('过期'), findsWidgets);
+    // Overdue work is now the leading group inside the dated views rather than
+    // a page of its own, so the rail no longer offers 过期.
+    expect(find.text('过期'), findsNothing);
   });
 
   testWidgets(
@@ -1102,7 +1102,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('摘要'), findsNothing);
 
-    await tester.tap(find.text('废纸篓').first);
+    await tester.tap(find.text('垃圾桶').first);
     await tester.pumpAndSettle();
 
     expect(find.byKey(const ValueKey('trash')), findsOneWidget);

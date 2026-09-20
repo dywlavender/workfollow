@@ -558,7 +558,7 @@ class _NotePageState extends State<_NotePage> {
       const DesktopMenuEntry('copy', '复制笔记正文', icon: WorkFollowIcons.copy),
       if (widget.note.hasPreservedRichContent)
         const DesktopMenuEntry('plain', '创建纯文本副本', icon: WorkFollowIcons.text),
-      const DesktopMenuEntry('delete', '移到废纸篓',
+      const DesktopMenuEntry('delete', '移到垃圾桶',
           icon: WorkFollowIcons.delete, destructive: true),
     ]);
     if (action == 'copy')

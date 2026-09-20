@@ -278,9 +278,7 @@ class MainFlutterWindow: NSWindow {
     // Cmd-1…9 equivalents competing with the View menu.
     listMenu.addCommand("最近 7 天", key: "", command: "goRecent", target: commandTarget)
     listMenu.addCommand("今天", key: "", command: "goToday", target: commandTarget)
-    listMenu.addCommand("过期", key: "", command: "goOverdue", target: commandTarget)
     listMenu.addCommand("收集箱", key: "", command: "goInbox", target: commandTarget)
-    listMenu.addCommand("计划", key: "", command: "goPlan", target: commandTarget)
     listMenu.addCommand("所有任务", key: "", command: "goAll", target: commandTarget)
     listMenu.addCommand("已完成", key: "", command: "goCompleted", target: commandTarget)
     listMenuItem.submenu = listMenu
@@ -303,7 +301,7 @@ class MainFlutterWindow: NSWindow {
     let viewMenu = NSMenu(title: "视图")
     viewMenu.addCommand("今天", key: "1", command: "goToday", target: commandTarget)
     viewMenu.addCommand("收集箱", key: "2", command: "goInbox", target: commandTarget)
-    viewMenu.addCommand("计划", key: "3", command: "goPlan", target: commandTarget)
+    viewMenu.addCommand("所有任务", key: "", command: "goAll", target: commandTarget)
     viewMenu.addCommand("日历", key: "4", command: "goCalendar", target: commandTarget)
     viewMenu.addCommand("笔记", key: "5", command: "goNotes", target: commandTarget)
     viewMenu.addCommand("四象限", key: "6", command: "goMatrix", target: commandTarget)

@@ -82,11 +82,12 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('任务'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('计划').first);
+    await tester.tap(find.text('所有任务').first);
     await tester.pumpAndSettle();
 
     expect(find.text('清单'), findsOneWidget);
-    expect(find.text('所有任务'), findsOneWidget);
+    // The rail entry and the page heading carry the same word.
+    expect(find.text('所有任务'), findsWidgets);
     expect(find.text('全部笔记'), findsNothing);
     expect(find.text('阅读《设计心理学》第 4 章并做摘录'), findsWidgets);
     expect(find.byType(Tooltip), findsWidgets);
@@ -234,7 +235,10 @@ void main() {
     // Selected and unselected rows carry the same ink: the darkest text in the
     // column, one weight step above the body. Selection is the only thing that
     // may differ, and it belongs to the fill.
-    for (final row in ['rail-navigation-item-今天', 'rail-navigation-item-计划']) {
+    for (final row in [
+      'rail-navigation-item-今天',
+      'rail-navigation-item-所有任务'
+    ]) {
       expect(words(row).color, tokens.textPrimary,
           reason: '$row 的文字是黑色主体，不随选中变色');
       expect(words(row).fontWeight, WorkFollowMacWeight.medium,

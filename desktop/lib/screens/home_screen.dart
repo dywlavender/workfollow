@@ -202,9 +202,9 @@ class HomeScreen extends StatelessWidget {
                         icon: WorkFollowIcons.plan,
                         title: '接下来',
                         subtitle: '未来安排',
-                        action: '打开计划',
+                        action: '打开所有任务',
                         onAction: () =>
-                            controller.selectView(WorkspaceView.plan),
+                            controller.selectView(WorkspaceView.all),
                         child: upcomingTasks.isEmpty
                             ? _PanelEmpty(
                                 icon: WorkFollowIcons.deadline,

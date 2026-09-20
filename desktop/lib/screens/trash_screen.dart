@@ -28,7 +28,7 @@ class TrashScreen extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('废纸篓',
+          Text('垃圾桶',
               style: TextStyle(
                   color: tokens.textPrimary,
                   fontSize: WorkFollowMacTypography.pageTitle,
@@ -89,7 +89,7 @@ class _EmptyTrash extends StatelessWidget {
                   color: tokens.accent,
                   size: WorkFollowMetrics.navigationIcon + 6)),
           const SizedBox(height: WorkFollowSpacing.statusGap),
-          Text('废纸篓是空的',
+          Text('垃圾桶是空的',
               style: TextStyle(
                   color: tokens.textPrimary,
                   fontSize: WorkFollowMacTypography.body,

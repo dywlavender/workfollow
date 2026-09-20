@@ -9,6 +9,7 @@ import '../features/feedback/feedback_event.dart';
 import '../features/tasks/application/task_tree_projection.dart';
 import '../features/feedback/feedback_scope.dart';
 import '../features/tasks/application/task_actions.dart';
+import '../features/tasks/application/task_list_projection.dart';
 import '../features/tasks/domain/task_schedule.dart';
 import '../features/tasks/presentation/task_feedback_mapper.dart';
 import '../widgets/app_icon_button.dart';
@@ -33,13 +34,15 @@ extension on _TaskSort {
       };
 }
 
-/// Task list pages (最近 7 天 / 今天 / 过期 / 计划 / 收集箱 / 全部 / 已完成 /
-/// individual lists).
+/// Task list pages (最近 7 天 / 今天 / 收集箱 / 所有任务 / 已完成 / individual
+/// lists).
 ///
-/// This screen owns grouping, sorting, selection and the responsive split. It
-/// owns no visual values: pane width, gutter, row padding, group headings and
-/// dividers all come from [TaskListMetrics] and the shared task-list widgets,
-/// so a second list view cannot drift into its own design.
+/// This screen owns sorting, selection and the responsive split. It does *not*
+/// own grouping: which heading a row belongs under is a business rule and lives
+/// in [TaskListProjection]. It owns no visual values either: pane width,
+/// gutter, row padding, group headings and dividers all come from
+/// [TaskListMetrics] and the shared task-list widgets, so a second list view
+/// cannot drift into its own design.
 /// Wide macOS windows use a TickTick-style list + inspector split. Smaller
 /// windows keep the existing list/detail fallback so the task editor never
 /// gets squeezed into an unusable column.
@@ -61,6 +64,10 @@ class TodayScreen extends StatefulWidget {
 }
 
 class _TodayScreenState extends State<TodayScreen> {
+  /// Where the groups come from. Stateless and pure, so building it here costs
+  /// nothing and there is no instance state to keep in step with the view.
+  static const TaskListProjection _listProjection = TaskListProjection();
+
   // TodayScreen receives the width left after AppRail. Keep the breakpoints
   // derived from the panes they protect: a wide workspace is only entered
   // when the list can keep its minimum width beside the inspector, while the
@@ -72,33 +79,57 @@ class _TodayScreenState extends State<TodayScreen> {
 
   bool detailOnly = false;
 
-  /// Groups the user folded away, keyed by the heading label.
+  /// Groups the user folded away, keyed by [TaskListGroup.id].
   ///
   /// Membership means "collapsed", so an empty set is the default posture:
   /// every group open, including 已完成 — starting that one collapsed hides the
   /// tasks the user finished a moment ago, which are exactly the ones they are
   /// still looking at.
   ///
-  /// Keyed by label rather than by index so folding survives a rebuild that
-  /// reorders the groups (a task turning overdue must not fold 今天 by
-  /// accident). Labels are unique within one view; [PageStorageKey] on the list
-  /// scopes the set per view.
+  /// Keyed by id rather than by heading so folding survives a rebuild that
+  /// reorders or renames the groups: a task turning overdue must not fold 今天
+  /// by accident, and the closing group's heading follows its content
+  /// (已完成 / 已放弃 / 已完成&已放弃) without the fold being lost to the
+  /// rename. [PageStorageKey] on the list scopes the set per view.
   final collapsedGroups = <String>{};
 
-  /// The heading that the list menu's 展开/收起已完成 entry drives.
-  static const String _completedGroup = '已完成';
+  bool _isCollapsed(String id) => collapsedGroups.contains(id);
 
-  /// Heading of the overdue group. Named because the grouping code that
-  /// produces it and the heading code that hangs 顺延 off it must not drift.
-  static const String _overdueGroup = '已过期';
-
-  bool _isCollapsed(String label) => collapsedGroups.contains(label);
-
-  void _toggleGroup(String label) {
+  void _toggleGroup(String id) {
     setState(() {
-      if (!collapsedGroups.remove(label)) collapsedGroups.add(label);
+      if (!collapsedGroups.remove(id)) collapsedGroups.add(id);
     });
   }
+
+  /// The list menu's 展开/收起已完成: one switch for every heading that holds
+  /// finished tasks.
+  ///
+  /// The dated views carry one such group; 已完成 carries one per closing day.
+  /// The entry cannot name a single heading, so it acts on whichever are on
+  /// screen and folds them together — a control that collapsed half of them
+  /// would leave the list in a state no second press could describe.
+  void _toggleClosedGroups() {
+    final ids = [
+      for (final group in _groups)
+        if (group.kind == TaskListGroupKind.closed && group.tasks.isNotEmpty)
+          group.id,
+    ];
+    if (ids.isEmpty) return;
+    final collapse = !ids.every(_isCollapsed);
+    setState(() {
+      for (final id in ids) {
+        if (collapse) {
+          collapsedGroups.add(id);
+        } else {
+          collapsedGroups.remove(id);
+        }
+      }
+    });
+  }
+
+  /// The groups the last build drew, so the list menu can act on them without
+  /// recomputing the projection.
+  List<TaskListGroup> _groups = const [];
 
   _TaskSort sortMode = _TaskSort.manual;
   late int openVersion;
@@ -120,7 +151,7 @@ class _TodayScreenState extends State<TodayScreen> {
       detailOnly = true;
       // Opening a finished task has to reveal it, so clear the fold first.
       if (widget.controller.selectedTask?.isClosed == true)
-        collapsedGroups.remove(_completedGroup);
+        collapsedGroups.remove(TaskListProjection.closedId);
       _revealEditor();
     }
   }
@@ -144,13 +175,21 @@ class _TodayScreenState extends State<TodayScreen> {
   Widget _build(BuildContext context) {
     final c = widget.controller;
     final tokens = WorkFollowTheme.of(context);
-    final tasks = c.visibleTasks;
     final completedView = c.view == WorkspaceView.completed;
-    final active = _ordered(tasks.where((task) => !task.isClosed).toList());
-    final completed = tasks.where((task) => task.completed).toList();
-    final abandoned = tasks.where((task) => task.isAbandoned).toList();
-    final pinned = active.where((task) => task.isPinned).toList();
-    final ordinary = active.where((task) => !task.isPinned).toList();
+    // Where each row goes is a business rule, not a rendering detail: the
+    // projection decides the groups, the screen draws them. Sorting stays here
+    // because it is the user's own control over the rows inside a group.
+    final groups = [
+      for (final group in _listProjection.groupsFor(
+        view: c.view,
+        tasks: c.tasks,
+        selectedListName: c.selectedListName,
+        selectedTagName: c.selectedTagName,
+        reference: c.dateReference,
+      ))
+        group,
+    ];
+    _groups = groups;
     return LayoutBuilder(builder: (context, constraints) {
       // Until both panes fit their desktop minimums, keep the list/detail
       // stack available instead of leaving a selected task without a detail
@@ -162,49 +201,7 @@ class _TodayScreenState extends State<TodayScreen> {
       final compact = widget.compactDensity || constraints.maxHeight < 680;
       final selected = c.selectedTask;
       final detail = narrow && detailOnly && selected != null;
-      final groups = <(String, List<TaskItem>)>[];
-      if (!completedView && pinned.isNotEmpty) groups.add(('置顶', pinned));
-      if (completedView) {
-        groups.add((_completedGroup, completed));
-        groups.add(('已放弃', abandoned));
-      } else if ((c.view == WorkspaceView.today ||
-              c.view == WorkspaceView.recent) &&
-          c.selectedListName == null) {
-        if (c.view == WorkspaceView.today) {
-          final overdue =
-              ordinary.where((t) => t.bucket == TaskBucket.overdue).toList();
-          if (overdue.isNotEmpty) groups.add((_overdueGroup, overdue));
-          groups.add((
-            calendarGroupLabel(DateTime.now()),
-            ordinary.where((t) => t.bucket != TaskBucket.overdue).toList()
-          ));
-        } else {
-          ordinary.sort((a, b) => (a.dueAt ?? '').compareTo(b.dueAt ?? ''));
-          String? currentLabel;
-          for (final task in ordinary) {
-            final due = localDateTimeFromStorage(task.dueAt);
-            final label = task.bucket == TaskBucket.overdue
-                ? _overdueGroup
-                : calendarGroupLabel(due, empty: '未安排');
-            if (groups.isEmpty || currentLabel != label) {
-              groups.add((label, []));
-              currentLabel = label;
-            }
-            groups.last.$2.add(task);
-          }
-        }
-      } else if (c.view == WorkspaceView.plan) {
-        ordinary.sort((a, b) => (a.dueAt ?? '').compareTo(b.dueAt ?? ''));
-        for (final task in ordinary) {
-          final label =
-              calendarGroupLabel(localDateTimeFromStorage(task.dueAt));
-          if (groups.isEmpty || groups.last.$1 != label)
-            groups.add((label, []));
-          groups.last.$2.add(task);
-        }
-      } else {
-        groups.add(('', ordinary));
-      }
+      final empty = groups.every((group) => group.tasks.isEmpty);
       final list = Container(
           color: tokens.content,
           child: Stack(children: [
@@ -253,10 +250,7 @@ class _TodayScreenState extends State<TodayScreen> {
                                     TaskListMetrics.horizontalPadding,
                                     WorkFollowSpacing.space7),
                                 children: [
-                                  if ((completedView
-                                          ? [...completed, ...abandoned]
-                                          : active)
-                                      .isEmpty)
+                                  if (empty)
                                     AppCard(
                                         padding: EdgeInsets.zero,
                                         child: EmptyHint(
@@ -270,32 +264,15 @@ class _TodayScreenState extends State<TodayScreen> {
                                                     : c.view ==
                                                             WorkspaceView.recent
                                                         ? '最近 7 天没有需要处理的任务'
-                                                        : c.view ==
-                                                                WorkspaceView
-                                                                    .overdue
-                                                            ? '没有逾期任务'
-                                                            : c.view ==
-                                                                    WorkspaceView
-                                                                        .plan
-                                                                ? '还没有未来的安排'
-                                                                : '这里还是空的',
+                                                        : '这里还是空的',
                                             hint: completedView
                                                 ? '每完成一件事，都是一点进展。'
                                                 : '在上方记下一件事，按 Return 添加。')),
                                   for (final group in groups)
-                                    if (group.$2.isNotEmpty)
+                                    if (group.tasks.isNotEmpty)
                                       ..._groupSlivers(group, narrow,
                                           compact: compact,
                                           wideInspector: wideInspector),
-                                  if (!completedView && abandoned.isNotEmpty)
-                                    ..._groupSlivers(('已放弃', abandoned), narrow,
-                                        compact: compact,
-                                        wideInspector: wideInspector),
-                                  if (!completedView && completed.isNotEmpty)
-                                    ..._groupSlivers(
-                                        (_completedGroup, completed), narrow,
-                                        compact: compact,
-                                        wideInspector: wideInspector),
                                 ],
                               )),
                             ]),
@@ -465,20 +442,29 @@ class _TodayScreenState extends State<TodayScreen> {
       case 'priority':
         setState(() => sortMode = _TaskSort.priority);
       case 'toggle-completed':
-        _toggleGroup(_completedGroup);
+        _toggleClosedGroups();
     }
   }
 
   /// One group: heading plus rows.
   ///
-  /// Folding is decided here, not by each caller, so 今天 / 最近 7 天 / 计划 /
-  /// 已完成 all fold the same way. 顺延 rides the heading's `trailing` slot for
-  /// the same reason — a group-level action is part of the list grammar, and a
-  /// screen that forgot to pass it would silently lose the affordance.
-  List<Widget> _groupSlivers((String, List<TaskItem>) group, bool narrow,
+  /// Folding is decided here, not by each caller, so 今天 / 最近 7 天 / 更远 /
+  /// 已完成 all fold the same way. 顺延 rides the overdue heading's `trailing`
+  /// slot for the same reason — a group-level action is part of the list
+  /// grammar, and a screen that forgot to pass it would silently lose the
+  /// affordance.
+  List<Widget> _groupSlivers(TaskListGroup group, bool narrow,
       {bool compact = false, bool wideInspector = false}) {
-    final (label, tasks) = group;
-    final expanded = !_isCollapsed(label);
+    // A date group is named by its day; a group named by a rule carries its own
+    // heading. The plain group is the one with no heading at all.
+    final label = group.label ?? calendarGroupLabel(group.day);
+    // The sort control orders live work. A group of finished tasks is read by
+    // when it was closed — 已完成 is newest-first on purpose — so re-sorting it
+    // by due date or priority would answer a question nobody asked.
+    final tasks = group.kind == TaskListGroupKind.closed
+        ? group.tasks.toList()
+        : _ordered(group.tasks.toList());
+    final expanded = !_isCollapsed(group.id);
     return [
       const SizedBox(height: TaskListMetrics.groupTopGap),
       if (label.isNotEmpty)
@@ -486,8 +472,10 @@ class _TodayScreenState extends State<TodayScreen> {
             title: label,
             count: tasks.length,
             expanded: expanded,
-            onToggle: () => _toggleGroup(label),
-            trailing: label == _overdueGroup ? _postponeButton(tasks) : null),
+            onToggle: () => _toggleGroup(group.id),
+            trailing: group.kind == TaskListGroupKind.overdue
+                ? _postponeButton(tasks)
+                : null),
       // The unnamed group (a plain list of tasks) has no heading to fold with.
       // Rows come from the tree projection: parents carry their children, so
       // a child never renders twice and roots stay grouped with their tree.
@@ -684,9 +672,7 @@ class _TodayScreenState extends State<TodayScreen> {
   IconData _viewIcon(WorkspaceView view) => switch (view) {
         WorkspaceView.recent => WorkFollowIcons.recent,
         WorkspaceView.today => WorkFollowIcons.today,
-        WorkspaceView.overdue => WorkFollowIcons.overdue,
         WorkspaceView.inbox => WorkFollowIcons.inbox,
-        WorkspaceView.plan => WorkFollowIcons.plan,
         WorkspaceView.all => WorkFollowIcons.allTasks,
         WorkspaceView.completed => WorkFollowIcons.completed,
         WorkspaceView.work ||

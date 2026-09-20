@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:workfollow_personal/features/tasks/application/task_list_projection.dart';
 import 'package:workfollow_personal/features/tasks/domain/task_draft.dart';
 import 'package:workfollow_personal/features/tasks/domain/task_schedule.dart';
 import 'package:workfollow_personal/features/tasks/domain/task_schedule_settings.dart';
@@ -192,15 +193,28 @@ void main() {
     expect(c.childRowsFor(parentId).map((t) => t.id), [a]);
   });
 
-  test('SUB-089 an overdue child enters Overdue on its own dates', () {
+  test('SUB-089 an overdue child enters the overdue group on its own dates', () {
     final c = build()..addTask('父任务');
     addTearDown(c.dispose);
     final parentId = c.tasks.single.id;
     final a = c.createChildTask(parentId, title: '甲')!;
     c.taskActions.setSchedule(
         a, TaskScheduleDraft(dueAt: DateTime(2020, 1, 1), hasTime: false));
-    c.selectView(WorkspaceView.overdue);
+    // 过期 is a group now, not a page: the child is judged by its own date, and
+    // because its undated parent never matched 今天 the child is listed on its
+    // own rather than folded away under it.
+    c.selectView(WorkspaceView.today);
     expect(c.visibleTasks.map((t) => t.id), contains(a));
+    final groups = const TaskListProjection().groupsFor(
+        view: WorkspaceView.today,
+        tasks: c.tasks,
+        reference: c.dateReference);
+    expect(
+        groups
+            .firstWhere((group) => group.id == TaskListProjection.overdueId)
+            .tasks
+            .map((t) => t.id),
+        contains(a));
   });
 
   test('SUB-090 Completed projects by each task own completed flag', () {

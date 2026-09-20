@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:workfollow_personal/features/tasks/application/task_list_projection.dart';
 import 'package:workfollow_personal/features/tasks/application/task_projection.dart';
 import 'package:workfollow_personal/features/tasks/application/task_selection_controller.dart';
 import 'package:workfollow_personal/features/tasks/domain/task_draft.dart';
@@ -102,9 +103,15 @@ void main() {
     expect(
         projection.visible(tasks: tasks, view: 'recent').map((item) => item.id),
         ['overdue', 'today']);
-    expect(
-        projection.visible(tasks: tasks, view: 'overdue').single.id, 'overdue');
     expect(projection.count(tasks: tasks, view: 'today'), 2);
+    // 过期 has no page of its own any more: the same task leads the dated views
+    // as their first group, which is where the rule now has to hold.
+    final groups = const TaskListProjection()
+        .groupsFor(view: 'today', tasks: tasks, reference: now);
+    expect(groups.first.id, TaskListProjection.overdueId);
+    expect(groups.first.tasks.map((item) => item.id), ['overdue']);
+    expect(groups.map((group) => group.id),
+        [TaskListProjection.overdueId, TaskListProjection.todayId]);
   });
 
   test(

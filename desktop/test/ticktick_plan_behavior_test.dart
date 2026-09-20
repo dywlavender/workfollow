@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:workfollow_personal/features/tasks/application/task_list_projection.dart';
 import 'package:workfollow_personal/models/task.dart';
 import 'package:workfollow_personal/state/workspace_controller.dart';
 
@@ -108,7 +109,7 @@ void main() {
   });
 
   test(
-      'ARCH-004 DATE-013 recent and overdue smart lists project real due dates',
+      'ARCH-004 DATE-013 the recent list and the overdue group project real due dates',
       () {
     final controller = WorkspaceController(seedData: false);
     final today = DateTime.now();
@@ -128,9 +129,16 @@ void main() {
         isNot(contains('更远的未来')));
     expect(controller.countFor(WorkspaceView.recent), 3);
 
-    controller.selectView(WorkspaceView.overdue);
-    expect(controller.visibleTasks.map((task) => task.title), ['已过期']);
-    expect(controller.viewTitle, '过期');
+    // 过期 stopped being a destination: the same task now leads the dated views
+    // as their first group, named 已过期, and 最近 7 天 no longer shows it twice.
+    controller.selectView(WorkspaceView.today);
+    expect(controller.viewTitle, '今天');
+    final groups = const TaskListProjection().groupsFor(
+        view: WorkspaceView.today,
+        tasks: controller.tasks,
+        reference: controller.dateReference);
+    expect(groups.first.id, TaskListProjection.overdueId);
+    expect(groups.first.tasks.map((task) => task.title), ['已过期']);
     controller.dispose();
   });
 

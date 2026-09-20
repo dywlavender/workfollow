@@ -329,16 +329,12 @@ class _WorkFollowShellState extends State<WorkFollowShell> {
         controller.selectView(WorkspaceView.today);
       case 'goRecent':
         controller.selectView(WorkspaceView.recent);
-      case 'goOverdue':
-        controller.selectView(WorkspaceView.overdue);
       case 'goAll':
         controller.selectView(WorkspaceView.all);
       case 'goCompleted':
         controller.selectView(WorkspaceView.completed);
       case 'goInbox':
         controller.selectView(WorkspaceView.inbox);
-      case 'goPlan':
-        controller.selectView(WorkspaceView.plan);
       case 'goCalendar':
         controller.selectView(WorkspaceView.calendar);
       case 'goNotes':
@@ -519,8 +515,6 @@ class _WorkFollowShellState extends State<WorkFollowShell> {
                 RecentIntent(),
             SingleActivator(LogicalKeyboardKey.digit2, meta: true):
                 InboxIntent(),
-            SingleActivator(LogicalKeyboardKey.digit3, meta: true):
-                PlanIntent(),
             SingleActivator(LogicalKeyboardKey.digit4, meta: true):
                 CalendarIntent(),
             SingleActivator(LogicalKeyboardKey.digit5, meta: true):
@@ -556,10 +550,6 @@ class _WorkFollowShellState extends State<WorkFollowShell> {
               }),
               InboxIntent: CallbackAction<Intent>(onInvoke: (_) {
                 controller.selectView(WorkspaceView.inbox);
-                return null;
-              }),
-              PlanIntent: CallbackAction<Intent>(onInvoke: (_) {
-                controller.selectView(WorkspaceView.plan);
                 return null;
               }),
               CalendarIntent: CallbackAction<Intent>(onInvoke: (_) {
@@ -704,10 +694,6 @@ class RecentIntent extends Intent {
 
 class InboxIntent extends Intent {
   const InboxIntent();
-}
-
-class PlanIntent extends Intent {
-  const PlanIntent();
 }
 
 class CalendarIntent extends Intent {
