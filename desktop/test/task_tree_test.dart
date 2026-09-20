@@ -397,4 +397,33 @@ void main() {
     // And the row's trail advertises the same two children it draws.
     expect(c.childCount(parentId), 2);
   });
+
+  testWidgets('SUB-140 ticking a parent row ticks its whole subtree',
+      (tester) async {
+    tester.view.physicalSize = const Size(900, 700);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+    final c = WorkspaceController(seedData: false)..addTask('父任务');
+    addTearDown(c.dispose);
+    final parentId = c.tasks.single.id;
+    final childId = c.createChildTask(parentId, title: '问问')!;
+
+    await tester.pumpWidget(MaterialApp(
+        theme: WorkFollowThemeData.light(),
+        home: Scaffold(body: TodayScreen(controller: c))));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(ValueKey('task-row-checkbox-$parentId')));
+    await tester.pumpAndSettle();
+
+    // The child's own box follows the parent's, and the row stays in place
+    // drawn as finished rather than disappearing from under the parent.
+    expect(c.tasks.firstWhere((t) => t.id == childId).completed, isTrue);
+    final childBox = tester.widget<Checkbox>(
+        find.byKey(ValueKey('task-row-checkbox-$childId')));
+    expect(childBox.value, isTrue);
+  });
 }

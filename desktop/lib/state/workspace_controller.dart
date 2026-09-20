@@ -344,6 +344,10 @@ class WorkspaceController extends ChangeNotifier {
   String? _lastRemovedNoteId;
   String? _lastRecurrenceSpawnId;
   List<String> _lastRecurrenceSpawnChildIds = const [];
+  /// The children a parent's completion carried with it, exactly as they were
+  /// beforehand. Undo has to put the whole group back — restoring only the
+  /// parent would leave a live parent sitting above a finished subtree.
+  List<TaskItem> _lastCascadedCompletionChildren = const [];
   String? _lastCompletedRecurrenceType;
   Map<String, dynamic>? _lastCompletedRecurrenceConfig;
   Set<String> _multiSelectedTaskIds = {};
@@ -832,11 +836,12 @@ class WorkspaceController extends ChangeNotifier {
   }
 
   /// Completion has side effects beyond the original record: a recurring
-  /// task can create a next occurrence and register a second reminder. Keep
-  /// the pre-completion snapshot and spawned id in the command so an old toast
-  /// can never undo a later property edit.
-  UndoCommand _undoCompletion(
-      TaskItem before, String? spawnedId, List<String> spawnedChildIds) {
+  /// task can create a next occurrence and register a second reminder, and a
+  /// parent carries its subtree with it. Keep the pre-completion snapshot of
+  /// all of it in the command so an old toast can never undo a later property
+  /// edit — and so it never has to read a field a later completion replaced.
+  UndoCommand _undoCompletion(TaskItem before, String? spawnedId,
+      List<String> spawnedChildIds, List<TaskItem> cascadedChildren) {
     late final UndoCommand command;
     command = UndoCommand(
       label: '撤销完成',
@@ -844,14 +849,15 @@ class WorkspaceController extends ChangeNotifier {
         if (identical(_lastTaskUndoCommand, command)) {
           _lastTaskUndoCommand = null;
         }
-        return _restoreCompletionSnapshot(before, spawnedId, spawnedChildIds);
+        return _restoreCompletionSnapshot(
+            before, spawnedId, spawnedChildIds, cascadedChildren);
       },
     );
     return command;
   }
 
-  bool _restoreCompletionSnapshot(
-      TaskItem before, String? spawnedId, List<String> spawnedChildIds) {
+  bool _restoreCompletionSnapshot(TaskItem before, String? spawnedId,
+      List<String> spawnedChildIds, List<TaskItem> cascadedChildren) {
     final currentIndex = _tasks.indexWhere((task) => task.id == before.id);
     if (currentIndex < 0 || !_tasks[currentIndex].completed) return false;
     if (spawnedId != null) {
@@ -865,6 +871,7 @@ class WorkspaceController extends ChangeNotifier {
     final writeIndex = _tasks.indexWhere((task) => task.id == before.id);
     if (writeIndex < 0) return false;
     _tasks[writeIndex] = before;
+    _restoreCascadedCompletionChildren(cascadedChildren);
     _lastCompletedTaskId = null;
     _lastRecurrenceSpawnId = null;
     _lastRecurrenceSpawnChildIds = const [];
@@ -877,6 +884,22 @@ class WorkspaceController extends ChangeNotifier {
     _schedulePersist();
     _notify();
     return true;
+  }
+
+  /// Puts the children a group completion carried back the way they were.
+  ///
+  /// Shared by both undo paths — the toast's [UndoCommand] and the global
+  /// [undoLastCompletion] — so a single tick and a keyboard undo restore the
+  /// same subtree instead of drifting apart. Each child comes back from its
+  /// own snapshot, so one that was already ticked stays ticked.
+  void _restoreCascadedCompletionChildren(List<TaskItem> snapshots) {
+    for (final snapshot in snapshots) {
+      final index = _tasks.indexWhere((task) => task.id == snapshot.id);
+      if (index < 0) continue;
+      _tasks[index] = snapshot;
+      _syncReminderFor(snapshot);
+    }
+    _lastCascadedCompletionChildren = const [];
   }
 
   /// Builds the inverse of a skip action. A skip is intentionally modelled as
@@ -1078,8 +1101,8 @@ class WorkspaceController extends ChangeNotifier {
           return TaskActionResult.failure('already-complete', '任务已经结束');
         }
         toggleTask(id);
-        final undo = _undoCompletion(
-            task, _lastRecurrenceSpawnId, _lastRecurrenceSpawnChildIds);
+        final undo = _undoCompletion(task, _lastRecurrenceSpawnId,
+            _lastRecurrenceSpawnChildIds, _lastCascadedCompletionChildren);
         return _taskResult(id,
             message: _lastActionMessage,
             undo: undo,
@@ -2314,6 +2337,7 @@ class WorkspaceController extends ChangeNotifier {
   void toggleTask(String id) {
     _lastTaskUndoCommand = null;
     _lastBulkUndo = null;
+    _lastCascadedCompletionChildren = const [];
     final index = _tasks.indexWhere((task) => task.id == id);
     if (index < 0) return;
     final task = _tasks[index];
@@ -2334,11 +2358,18 @@ class WorkspaceController extends ChangeNotifier {
     );
     TaskItem? spawn;
     var carriedChildren = const <TaskItem>[];
+    var cascadedChildren = const <TaskItem>[];
     if (completing) {
       _completionVersion += 1;
       _actionVersion += 1;
       _lastActionKind = 'completion';
       _lastActionMessage = '任务已完成';
+      // Ticking a parent ticks its subtree: the parent's box reads as the
+      // state of the whole group. Un-ticking deliberately does not run the
+      // other way — undoing an accidental group tick is what the toast's undo
+      // is for, and "parent open, child done" is a state the user can reach
+      // anyway by naming a new child afterwards.
+      cascadedChildren = _completeChildrenFor(id, nowLabel);
       final occurrence = _spawnNextRecurrence(updated, completedAt: now);
       if (occurrence != null) {
         spawn = occurrence.spawn;
@@ -2369,12 +2400,42 @@ class WorkspaceController extends ChangeNotifier {
     _lastRecurrenceSpawnId = spawn?.id;
     _lastRecurrenceSpawnChildIds =
         carriedChildren.map((task) => task.id).toList();
+    _lastCascadedCompletionChildren = cascadedChildren;
     _lastCompletedRecurrenceType = spawn != null ? task.recurrenceType : null;
     _lastCompletedRecurrenceConfig =
         spawn != null ? task.recurrenceConfig : null;
     _syncReminderFor(updated);
     _schedulePersist();
     _notify();
+  }
+
+  /// Marks every open child of [parentId] complete under the parent's own
+  /// stamp, and returns the subtree exactly as it was so undo can restore it.
+  ///
+  /// A child's own repeat rule is deliberately left alone: the parent that
+  /// just completed carries the whole checklist into its next cycle (see
+  /// [_spawnNextRecurrence]), so advancing each child here would fork a
+  /// second chain of occurrences under a parent that is already finished.
+  /// Children that are already complete keep their earlier stamp — the group
+  /// tick carries them, it does not re-date them.
+  List<TaskItem> _completeChildrenFor(String parentId, String nowLabel) {
+    final childIds = {for (final child in childrenOf(parentId)) child.id};
+    if (childIds.isEmpty) return const [];
+    final snapshots = <TaskItem>[];
+    for (var index = 0; index < _tasks.length; index++) {
+      final child = _tasks[index];
+      if (!childIds.contains(child.id) || child.completed) continue;
+      snapshots.add(child);
+      final updated = child.copyWith(
+        completed: true,
+        completedAt: nowLabel,
+        updatedAt: nowLabel,
+        timeLabel: '已完成 · 刚刚',
+      );
+      _tasks[index] = updated;
+      _syncReminderFor(updated);
+    }
+    return snapshots;
   }
 
   /// Creates the next occurrence when a recurring task completes. The chain
@@ -2517,6 +2578,7 @@ class WorkspaceController extends ChangeNotifier {
     if (writeIndex >= 0) {
       _tasks[writeIndex] = updated;
     }
+    _restoreCascadedCompletionChildren(_lastCascadedCompletionChildren);
     _lastCompletedTaskId = null;
     _lastRecurrenceSpawnId = null;
     _lastRecurrenceSpawnChildIds = const [];
@@ -2707,6 +2769,13 @@ class WorkspaceController extends ChangeNotifier {
       if (occurrence != null) _syncReminderFor(occurrence.spawn);
     }
     if (completedIds.isEmpty) return;
+    // A bulk tick reaches the same subtree a single tick does: whether the
+    // parent was ticked on its own row or as part of a selection, the group
+    // lands in one state. Runs before the spawns are prepended so the indices
+    // the helper writes are still the ones the loop just used.
+    final cascadedChildren = <TaskItem>[
+      for (final id in completedIds) ..._completeChildrenFor(id, nowLabel),
+    ];
     if (spawned.isNotEmpty) {
       final prepended = <TaskItem>[];
       for (final spawn in spawned) {
@@ -2730,6 +2799,7 @@ class WorkspaceController extends ChangeNotifier {
           ...children.map((task) => task.id),
       ],
       recurrenceRules: rules,
+      cascadedChildren: cascadedChildren,
     );
     _lastActionKind = 'bulk';
     _lastActionMessage = '已完成 ${completedIds.length} 个任务';
@@ -2891,6 +2961,14 @@ class WorkspaceController extends ChangeNotifier {
         recurrenceConfig: rule?.$2,
         clearRecurrenceConfig: rule != null && rule.$2 == null,
       );
+    }
+    // The subtree the bulk completion carried goes back to exactly what it
+    // was, children that were already ticked included.
+    for (final snapshot in bulk.cascadedChildren) {
+      final index = _tasks.indexWhere((task) => task.id == snapshot.id);
+      if (index < 0) continue;
+      _tasks[index] = snapshot;
+      _syncReminderFor(snapshot);
     }
     final spawnIds = bulk.spawnedIds.toSet()..addAll(bulk.spawnedChildIds);
     if (spawnIds.isNotEmpty) {
@@ -3994,6 +4072,7 @@ class WorkspaceController extends ChangeNotifier {
     _lastRemovedNoteId = null;
     _lastRecurrenceSpawnId = null;
     _lastRecurrenceSpawnChildIds = const [];
+    _lastCascadedCompletionChildren = const [];
     _lastCompletedRecurrenceType = null;
     _lastCompletedRecurrenceConfig = null;
     _lastActionKind = '';
@@ -4200,6 +4279,7 @@ class _BulkTaskUndo {
     this.previousDueAts = const {},
     this.previousDueTimes = const {},
     this.previousListNames = const {},
+    this.cascadedChildren = const [],
   });
 
   final List<String> completedIds;
@@ -4210,4 +4290,8 @@ class _BulkTaskUndo {
   final Map<String, String?> previousDueAts;
   final Map<String, bool> previousDueTimes;
   final Map<String, String> previousListNames;
+  /// The subtree a bulk completion carried, as it was beforehand: a full
+  /// snapshot per child, because a child that was already ticked has to come
+  /// back ticked rather than be force-opened by the undo.
+  final List<TaskItem> cascadedChildren;
 }

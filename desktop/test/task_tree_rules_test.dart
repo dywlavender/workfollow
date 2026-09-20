@@ -22,7 +22,7 @@ void main() {
     expect(c.completedChildCount(parentId), 1);
   });
 
-  test('SUB-081 completing a parent does not touch the children', () {
+  test('SUB-081 completing a parent ticks its subtree', () {
     final c = build()..addTask('父任务');
     addTearDown(c.dispose);
     final parentId = c.tasks.single.id;
@@ -30,6 +30,86 @@ void main() {
     final b = c.createChildTask(parentId, title: '乙')!;
     c.taskActions.complete(parentId);
     expect(c.tasks.firstWhere((t) => t.id == parentId).completed, isTrue);
+    // The parent's box reads as the state of the group, so the children come
+    // with it and the row's "done/total" trail matches what is drawn.
+    expect(c.tasks.firstWhere((t) => t.id == a).completed, isTrue);
+    expect(c.tasks.firstWhere((t) => t.id == b).completed, isTrue);
+    expect(c.completedChildCount(parentId), 2);
+  });
+
+  test('SUB-136 un-ticking a parent leaves its subtree alone', () {
+    final c = build()..addTask('父任务');
+    addTearDown(c.dispose);
+    final parentId = c.tasks.single.id;
+    final a = c.createChildTask(parentId, title: '甲')!;
+    c.taskActions.complete(parentId);
+    expect(c.tasks.firstWhere((t) => t.id == a).completed, isTrue);
+    // The group tick runs one way only: undoing an accidental tick is what
+    // the toast's undo is for, not the box.
+    c.taskActions.restore(parentId);
+    expect(c.tasks.firstWhere((t) => t.id == parentId).completed, isFalse);
+    expect(c.tasks.firstWhere((t) => t.id == a).completed, isTrue);
+  });
+
+  test('SUB-137 undo puts back the subtree the completion carried', () {
+    final c = build()..addTask('父任务');
+    addTearDown(c.dispose);
+    final parentId = c.tasks.single.id;
+    final open = c.createChildTask(parentId, title: '未完成')!;
+    final done = c.createChildTask(parentId, title: '先完成')!;
+    c.taskActions.complete(done);
+    final stamp = c.tasks.firstWhere((t) => t.id == done).completedAt;
+
+    c.taskActions.complete(parentId);
+    expect(c.tasks.firstWhere((t) => t.id == open).completed, isTrue,
+        reason: 'the group tick reaches the open child');
+    expect(c.tasks.firstWhere((t) => t.id == done).completedAt, stamp,
+        reason: 'a child already ticked keeps its own completion stamp');
+
+    expect(c.taskActions.undo().success, isTrue);
+    expect(c.tasks.firstWhere((t) => t.id == parentId).completed, isFalse);
+    expect(c.tasks.firstWhere((t) => t.id == open).completed, isFalse,
+        reason: 'the carried child is reverted with the parent');
+    // Each child comes back from its own snapshot: the undo restores the
+    // subtree rather than force-opening all of it.
+    final restored = c.tasks.firstWhere((t) => t.id == done);
+    expect(restored.completed, isTrue);
+    expect(restored.completedAt, stamp);
+  });
+
+  test('SUB-138 a group completion does not fork a recurring child chain', () {
+    final c = build()..addTask('母任务');
+    addTearDown(c.dispose);
+    final parentId = c.tasks.single.id;
+    final childId = c.createChildTask(parentId, title: '每日打卡')!;
+    c.taskActions.setSchedule(childId,
+        TaskScheduleDraft(dueAt: DateTime(2026, 9, 21), hasTime: false));
+    c.updateTaskRecurrence(childId, 'DAILY');
+
+    c.taskActions.complete(parentId);
+    // Completing the child on its own would spawn tomorrow's occurrence
+    // (SUB-132). Under a parent that just finished the checklist rides the
+    // parent's own cycle, so no second chain is born here.
+    expect(c.childrenOf(parentId).map((t) => t.id), [childId]);
+    expect(c.tasks.singleWhere((t) => t.id == childId).completed, isTrue);
+    expect(
+        c.tasks.where((t) => t.recurrenceType.toUpperCase() == 'DAILY'), hasLength(1));
+  });
+
+  test('SUB-139 bulk completion carries a selected parent whole subtree', () {
+    final c = build()..addTask('父任务');
+    addTearDown(c.dispose);
+    final parentId = c.tasks.single.id;
+    final a = c.createChildTask(parentId, title: '甲')!;
+    final b = c.createChildTask(parentId, title: '乙')!;
+    c.toggleMultiSelect(parentId);
+    c.bulkCompleteSelected();
+    // A bulk tick and a single tick must not disagree about the subtree.
+    expect(c.tasks.firstWhere((t) => t.id == a).completed, isTrue);
+    expect(c.tasks.firstWhere((t) => t.id == b).completed, isTrue);
+
+    expect(c.undoLastAction(), isTrue);
+    expect(c.tasks.firstWhere((t) => t.id == parentId).completed, isFalse);
     expect(c.tasks.firstWhere((t) => t.id == a).completed, isFalse);
     expect(c.tasks.firstWhere((t) => t.id == b).completed, isFalse);
   });
@@ -378,17 +458,21 @@ void main() {
     final c = build()..addTask('父任务');
     addTearDown(c.dispose);
     final parentId = c.tasks.single.id;
-    final open = c.createChildTask(parentId, title: '未完成')!;
+    final reopened = c.createChildTask(parentId, title: '又打开了')!;
     final done = c.createChildTask(parentId, title: '已完成')!;
     c.taskActions.complete(done);
     c.taskActions.complete(parentId);
+    // A child can sit open under a finished parent: un-ticking it on its own
+    // leaves the group (SUB-136), which is the state this case guards.
+    c.taskActions.restore(reopened);
     c.selectView(WorkspaceView.completed);
 
     // SUB-133's rule is scoped to the date-driven views. A finished list is
-    // projected by each task's own completed flag, so an unfinished child
-    // must not ride along with its finished parent.
+    // projected by each task's own completed flag, so an open child must not
+    // ride along with its finished parent.
     expect(c.childRowsFor(parentId).map((t) => t.id), [done]);
-    expect(c.childRowsFor(parentId).map((t) => t.id), isNot(contains(open)));
+    expect(
+        c.childRowsFor(parentId).map((t) => t.id), isNot(contains(reopened)));
   });
 }
 
