@@ -124,6 +124,12 @@ class TaskListMetrics {
   /// share it, so their text starts on a single vertical.
   static const double horizontalPadding = WorkFollowSpacing.space5;
 
+  /// How wide a list page is allowed to draw. Past this the rows stop being
+  /// lines of text and start being paragraphs, and every page that sits in the
+  /// same column — the task lists and the trash alike — has to end on the same
+  /// vertical.
+  static const double listColumnMaxWidth = 860;
+
   static const double headerHeight = 42;
   static const double headerIconSize = 18;
   static const double headerIconGap = WorkFollowSpacing.controlGap;
@@ -562,13 +568,6 @@ class SettingsMetrics {
   static const double panelWidth = 720;
   static const double panelHeight = 520;
   static const double navigationWidth = 165;
-}
-
-/// Geometry for the trash empty state.
-class TrashMetrics {
-  const TrashMetrics._();
-
-  static const double emptyStateIconSize = 52;
 }
 
 /// Geometry for the home dashboard's repeated panels and quick add field.

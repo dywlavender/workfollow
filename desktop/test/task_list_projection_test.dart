@@ -12,7 +12,7 @@ import 'package:workfollow_personal/state/workspace_controller.dart';
 import 'package:workfollow_personal/theme/workfollow_theme.dart';
 import 'package:workfollow_personal/widgets/task_date_picker.dart';
 
-/// LIST-001 … LIST-012 — where a row goes.
+/// LIST-001 … LIST-014 — where a row goes.
 ///
 /// Grouping is a business rule, so it is tested as one: these cases read the
 /// projection directly and never pump a widget. A heading that only exists
@@ -68,6 +68,28 @@ TaskListGroup groupOf(List<TaskListGroup> groups, String id) =>
 List<String> ids(List<TaskListGroup> groups) => [
       for (final group in groups) ...group.tasks.map((task) => task.id),
     ];
+
+/// Every row of the second navigation column that is on screen, by label.
+///
+/// The rows are private widgets inside the sidebar, so there is no type a test
+/// can name; they are found by the key each one carries. Read as a set rather
+/// than as a list of expected names so that a row added later cannot slip in
+/// without the ordering contract below noticing.
+List<String> railLabels(WidgetTester tester) {
+  const prefix = 'rail-navigation-item-';
+  final labels = <String>[];
+  for (final element in find
+      .byWidgetPredicate((widget) {
+        final key = widget.key;
+        return key is ValueKey<String> && key.value.startsWith(prefix);
+      })
+      .evaluate()) {
+    labels.add((element.widget.key! as ValueKey<String>)
+        .value
+        .substring(prefix.length));
+  }
+  return labels;
+}
 
 void main() {
   test('LIST-001 今天 reads 已过期 / 今天 / 已完成', () {
@@ -239,6 +261,78 @@ void main() {
     expect(controller.viewTitle, '所有任务');
     controller.selectView(WorkspaceView.trash);
     expect(controller.viewTitle, '垃圾桶');
+  });
+
+  test('LIST-013 the trash reads newest deletion first', () {
+    // Deliberately out of order, and out of the order the store would hold
+    // them in: the page is a timeline of removals, so the stamps decide.
+    final result = groups('trash', [
+      item('oldest', deletedAt: day(-3)),
+      item('newest', deletedAt: day(-1)),
+      item('middle', deletedAt: day(-2)),
+    ]);
+    expect([for (final group in result) group.id], ['plain']);
+    expect(result.single.tasks.map((task) => task.id),
+        ['newest', 'middle', 'oldest']);
+  });
+
+  test('LIST-013 the trash orders within one day too, not just between days',
+      () {
+    // 已完成 groups by day and then sorts inside the day. The trash does not
+    // group, but the ordering still has to be the stamp rather than the day, or
+    // two things thrown away an hour apart would swap places between runs.
+    final result = groups('trash', [
+      item('thisMorning', deletedAt: DateTime(2030, 6, 9, 9)),
+      item('thisEvening', deletedAt: DateTime(2030, 6, 9, 21)),
+    ]);
+    expect(result.single.tasks.map((task) => task.id),
+        ['thisEvening', 'thisMorning']);
+  });
+
+  testWidgets('LIST-014 已完成 sits directly above 垃圾桶, past a break',
+      (tester) async {
+    tester.view.physicalSize = const Size(1400, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+    await tester.pumpWidget(const WorkFollowApp(demoMode: true));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('任务'));
+    await tester.pumpAndSettle();
+
+    final done = find.byKey(const ValueKey('rail-navigation-item-已完成'));
+    final trash = find.byKey(const ValueKey('rail-navigation-item-垃圾桶'));
+    final breakRow = find.byKey(const ValueKey('rail-group-break'));
+    expect(done, findsOneWidget);
+    expect(trash, findsOneWidget);
+    expect(breakRow, findsOneWidget);
+    expect(tester.getTopLeft(done).dy, lessThan(tester.getTopLeft(trash).dy));
+
+    // Nothing sits between them: no other row of the column starts in the gap
+    // the two share. Read off every rail row rather than off a list of names,
+    // so a row added later cannot slip in unnoticed.
+    final rows = <String, double>{};
+    for (final label in railLabels(tester)) {
+      rows[label] =
+          tester.getTopLeft(find.byKey(ValueKey('rail-navigation-item-$label')))
+              .dy;
+    }
+    final ordered = rows.keys.toList()
+      ..sort((a, b) => rows[a]!.compareTo(rows[b]!));
+    expect(ordered.sublist(ordered.length - 2), ['已完成', '垃圾桶']);
+
+    // The break is what makes them a group: the pair starts further below the
+    // row above it than any two plain rows sit apart.
+    final above = find.byKey(ValueKey('rail-navigation-item-${ordered[ordered.length - 3]}'));
+    final plainGap = tester.getTopLeft(trash).dy -
+        tester.getBottomLeft(done).dy;
+    final groupGap =
+        tester.getTopLeft(done).dy - tester.getBottomLeft(above).dy;
+    expect(groupGap, greaterThan(plainGap));
+    expect(tester.getBottomLeft(breakRow).dy,
+        lessThanOrEqualTo(tester.getTopLeft(done).dy));
   });
 
   testWidgets('LIST-007 LIST-008 the rail offers no 过期 or 计划 destination',

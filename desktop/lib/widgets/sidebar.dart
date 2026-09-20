@@ -194,13 +194,6 @@ class _TaskNavigation extends StatelessWidget {
               controller.selectedListName == null,
           onTap: () => controller.selectView(WorkspaceView.all),
         ),
-        _RailItem(
-          label: '已完成',
-          icon: WorkFollowIcons.completed,
-          count: controller.countFor(WorkspaceView.completed),
-          selected: controller.view == WorkspaceView.completed,
-          onTap: () => controller.selectView(WorkspaceView.completed),
-        ),
         _RailSectionHeader(
           label: '清单',
           trailing: AppIconButton(
@@ -214,6 +207,22 @@ class _TaskNavigation extends StatelessWidget {
             .where((list) => list.name != '收集箱')
             .map((list) => _TaskListItem(controller: controller, list: list)),
         _TagSection(controller: controller),
+        // 已完成 and 垃圾桶 close the column as one group. Both hold work the
+        // user is done with, and the finished list used to sit between 所有任务
+        // and 清单 — inside the part of the column that is a live workspace.
+        // The break keeps the pair from reading as two more rows of 标签.
+        //
+        // Keyed after `rail-navigation-item-*`: the pair's placement is a
+        // contract with the column, and the break is the only thing that says
+        // where the pair starts.
+        const _RailGroupBreak(key: ValueKey('rail-group-break')),
+        _RailItem(
+          label: '已完成',
+          icon: WorkFollowIcons.completed,
+          count: controller.countFor(WorkspaceView.completed),
+          selected: controller.view == WorkspaceView.completed,
+          onTap: () => controller.selectView(WorkspaceView.completed),
+        ),
         _RailItem(
           label: '垃圾桶',
           icon: WorkFollowIcons.trash,
@@ -688,6 +697,31 @@ Future<void> _showAddFolderDialog(
   }
   controller.setNotesFolderFilter(folder.id);
   controller.selectView(WorkspaceView.notes);
+}
+
+/// The hairline that opens the rail's closing group (已完成 / 垃圾桶).
+///
+/// The column's other groups announce themselves with a [_RailSectionHeader],
+/// which works because each of them has a name — 任务, 清单, 标签. The closing
+/// pair has no name to carry, and inventing one ("归档", "回收") would put a
+/// word in the user's way that the product never uses. A rule marks the same
+/// break without adding vocabulary.
+class _RailGroupBreak extends StatelessWidget {
+  const _RailGroupBreak({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = WorkFollowTheme.of(context);
+    return Padding(
+      padding: const EdgeInsets.only(
+          top: WorkFollowMetrics.compactNavigationSectionTop,
+          bottom: WorkFollowMetrics.compactNavigationSectionBottom),
+      child: Container(
+        height: WorkFollowMetrics.dividerThickness,
+        color: tokens.border,
+      ),
+    );
+  }
 }
 
 class _RailSectionHeader extends StatelessWidget {

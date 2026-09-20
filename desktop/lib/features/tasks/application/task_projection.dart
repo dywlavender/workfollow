@@ -23,7 +23,7 @@ class TaskProjection {
         view: view,
         selectedListName: selectedListName,
         selectedTagName: selectedTagName);
-    if (viewName == 'trash') return List.unmodifiable(tagged);
+    if (viewName == 'trash') return List.unmodifiable(_byDeletionDate(tagged));
     if (selectedListName != null && viewName == 'all') {
       return List.unmodifiable(tagged);
     }
@@ -42,6 +42,27 @@ class TaskProjection {
       _ => const <TaskItem>[],
     };
     return List.unmodifiable(filtered);
+  }
+
+  /// The trash as a timeline of removals: most recently deleted first.
+  ///
+  /// 已完成 reads by when things were closed and the trash answers the same
+  /// question about removal — "what did I just throw away" — so the two pages
+  /// a user reaches for after finishing with something are ordered alike. The
+  /// order the store happens to hold the rows in carries no such meaning.
+  ///
+  /// The stamp arrives as a string, so it has to be parsed before it can be
+  /// compared. An unparsable one cannot be placed on the timeline; it goes to
+  /// the end rather than being dropped, the way the list's closing group treats
+  /// a closing date it cannot read.
+  static List<TaskItem> _byDeletionDate(Iterable<TaskItem> rows) {
+    return rows.toList()
+      ..sort((a, b) {
+        final aAt = localDateTimeFromStorage(a.deletedAt);
+        final bAt = localDateTimeFromStorage(b.deletedAt);
+        if (aAt == null || bAt == null) return aAt == null ? 1 : -1;
+        return bAt.compareTo(aAt);
+      });
   }
 
   /// The tasks a view is *about*, before the view decides what to do about the

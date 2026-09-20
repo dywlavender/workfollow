@@ -19,10 +19,18 @@ import 'task_inspector.dart';
 /// The editor owns its own lifetime. It closes when the task it holds is gone,
 /// so a task removed from inside the editor does not leave the surface behind
 /// pointing at nothing.
+///
+/// [allowDeletedTasks] is for the one caller that opens a task which is already
+/// in the trash. Everywhere else a deleted task closes the surface — that is
+/// how removing a task from inside the editor takes the editor with it — but on
+/// the trash page the deleted state is what the user clicked on, and refusing to
+/// show it would leave the row inert. It widens only which tasks may be *held*;
+/// a task that is gone entirely still closes the surface.
 Future<void> showTaskFloatingEditor(
   BuildContext anchor, {
   required WorkspaceController controller,
   required String taskId,
+  bool allowDeletedTasks = false,
 }) async {
   final viewport = MediaQuery.sizeOf(anchor);
   final maxHeight = (viewport.height - TaskSurfaceMetrics.editorViewportMargin)
@@ -41,6 +49,7 @@ Future<void> showTaskFloatingEditor(
     builder: (context) => _FloatingTaskEditorContent(
       controller: controller,
       taskId: taskId,
+      allowDeletedTasks: allowDeletedTasks,
     ),
   );
 }
@@ -49,10 +58,12 @@ class _FloatingTaskEditorContent extends StatefulWidget {
   const _FloatingTaskEditorContent({
     required this.controller,
     required this.taskId,
+    required this.allowDeletedTasks,
   });
 
   final WorkspaceController controller;
   final String taskId;
+  final bool allowDeletedTasks;
 
   @override
   State<_FloatingTaskEditorContent> createState() =>
@@ -81,7 +92,8 @@ class _FloatingTaskEditorContentState
       listenable: widget.controller,
       builder: (context, _) {
         final current = task;
-        if (current == null || current.deletedAt != null) {
+        if (current == null ||
+            (current.deletedAt != null && !widget.allowDeletedTasks)) {
           _closeWhenMissing();
           return const SizedBox.shrink();
         }

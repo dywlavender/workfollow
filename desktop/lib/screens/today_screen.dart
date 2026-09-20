@@ -214,7 +214,9 @@ class _TodayScreenState extends State<TodayScreen> {
                         // child. Give the list column the finite height from
                         // the surrounding Expanded so its inner ListView can
                         // own scrolling instead of overflowing.
-                        width: constraints.maxWidth.clamp(0, 860).toDouble(),
+                        width: constraints.maxWidth
+                            .clamp(0, TaskListMetrics.listColumnMaxWidth)
+                            .toDouble(),
                         height: double.infinity,
                         child: Column(
                             crossAxisAlignment: CrossAxisAlignment.stretch,
