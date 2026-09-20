@@ -91,6 +91,14 @@ class _TaskChildrenPanelState extends State<TaskChildrenPanel> {
               child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
+                    // A rule splits the task's prose from the list of things it
+                    // is made of. It runs the full column — unlike the row
+                    // hairlines below, which start at the title — because it
+                    // separates two regions, not two rows.
+                    Container(
+                        key: const ValueKey('task-children-divider'),
+                        height: WorkFollowMetrics.dividerThickness,
+                        color: tokens.border),
                     for (var i = 0; i < children.length; i++) ...[
                       TaskChildInlineRow(
                         key: ValueKey('task-child-row-${children[i].id}'),
@@ -112,29 +120,38 @@ class _TaskChildrenPanelState extends State<TaskChildrenPanel> {
                                 left: TaskChildInlineRow.checkboxSpace),
                             color: tokens.border),
                     ],
-                    InkWell(
-                        key: const ValueKey('task-add-child'),
-                        borderRadius:
-                            BorderRadius.circular(WorkFollowRadii.control),
-                        hoverColor: tokens.accentFaint,
-                        onTap: () =>
-                            widget.controller.createChildTask(widget.task.id),
-                        child: Container(
-                            constraints: const BoxConstraints(minHeight: 42),
-                            alignment: Alignment.centerLeft,
-                            child: Row(children: [
-                              AppIcon(WorkFollowIcons.add,
-                                  size: WorkFollowMetrics.toolbarIcon,
-                                  color: tokens.accent),
-                              const SizedBox(width: WorkFollowSpacing.denseGap),
-                              Text('添加子任务',
-                                  style: TextStyle(
-                                      fontSize:
-                                          WorkFollowMacTypography.listTitle,
-                                      height: WorkFollowMacTypography.lineList,
-                                      fontWeight: WorkFollowMacWeight.medium,
-                                      color: tokens.accent)),
-                            ]))),
+                    // Inset like the child rows above it, so the icon stays on
+                    // the checkbox column and the label on the title column.
+                    Padding(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: TaskChildInlineRow.rowHorizontalInset),
+                        child: InkWell(
+                            key: const ValueKey('task-add-child'),
+                            borderRadius:
+                                BorderRadius.circular(WorkFollowRadii.control),
+                            hoverColor: tokens.accentFaint,
+                            onTap: () => widget.controller
+                                .createChildTask(widget.task.id),
+                            child: Container(
+                                constraints:
+                                    const BoxConstraints(minHeight: 42),
+                                alignment: Alignment.centerLeft,
+                                child: Row(children: [
+                                  AppIcon(WorkFollowIcons.add,
+                                      size: WorkFollowMetrics.toolbarIcon,
+                                      color: tokens.accent),
+                                  const SizedBox(
+                                      width: WorkFollowSpacing.denseGap),
+                                  Text('添加子任务',
+                                      style: TextStyle(
+                                          fontSize: WorkFollowMacTypography
+                                              .listTitle,
+                                          height: WorkFollowMacTypography
+                                              .lineList,
+                                          fontWeight:
+                                              WorkFollowMacWeight.medium,
+                                          color: tokens.accent)),
+                                ])))),
                   ]));
         });
   }
@@ -143,9 +160,13 @@ class _TaskChildrenPanelState extends State<TaskChildrenPanel> {
 /// One inline child row inside the parent's inspector:
 /// `[checkbox] [editable title…] [date] [>]` — nothing else.
 ///
-/// The row is transparent (no card), 48pt tall, and shares the parent's
-/// horizontal padding. Only the checkbox, title, date and chevron are shown;
-/// chips and property text stay in the child's own inspector.
+/// The row paints no card of its own, but hovering fills one: the same
+/// rounded, inset surface a list row raises ([TaskListColors.rowFill] in
+/// [WorkFollowRadii.control]). It used to fill a square band from edge to edge
+/// of the panel, which read as a stray strip rather than a highlight — the
+/// fill belongs to the row, so it stops [rowHorizontalInset] short of both
+/// sides and rounds its corners. Only the checkbox, title, date and chevron
+/// are shown; chips and property text stay in the child's own inspector.
 class TaskChildInlineRow extends StatefulWidget {
   const TaskChildInlineRow({
     super.key,
@@ -159,6 +180,10 @@ class TaskChildInlineRow extends StatefulWidget {
 
   static const double checkboxSpace = 32;
   static const double rowMinHeight = 48;
+
+  /// How far the hover fill stops short of the panel's own edges, so the
+  /// highlight floats inside the column instead of bleeding to both sides.
+  static const double rowHorizontalInset = WorkFollowSpacing.space2;
 
   final TaskItem child;
   final TextEditingController edit;
@@ -212,74 +237,84 @@ class _TaskChildInlineRowState extends State<TaskChildInlineRow> {
     return MouseRegion(
         onEnter: (_) => setState(() => hoveringRow = true),
         onExit: (_) => setState(() => hoveringRow = false),
-        child: Container(
-            constraints: const BoxConstraints(
-                minHeight: TaskChildInlineRow.rowMinHeight),
-            alignment: Alignment.centerLeft,
-            // S10.13: a whisper of neutral fill on hover only — never opacity,
-            // never a selected state inside the parent's own panel.
-            color: hoveringRow ? tokens.canvas : Colors.transparent,
-            child: Row(children: [
-              GestureDetector(
-                key: ValueKey('task-child-check-${child.id}'),
-                onTap: widget.onToggle,
-                child: TaskCompletionBox(
-                    // The product's box side, not the toolbar's icon size.
-                    size: WorkFollowMetrics.completionBoxSize,
-                    completed: child.completed,
-                    openColor: tokens.textSecondary),
-              ),
-              const SizedBox(width: WorkFollowSpacing.space2),
-              Expanded(
-                child: TextField(
-                  key: ValueKey('task-child-title-${child.id}'),
-                  controller: widget.edit,
-                  focusNode: widget.focus,
-                  onChanged: widget.onRename,
-                  style: TextStyle(
-                      fontSize: WorkFollowMacTypography.listTitle,
-                      height: WorkFollowMacTypography.lineList,
-                      fontWeight: WorkFollowMacWeight.medium,
-                      color: child.completed
-                          ? tokens.textTertiary
-                          : tokens.textPrimary),
-                  decoration: InputDecoration(
-                      hintText: titleFocused ? null : '无标题',
-                      border: InputBorder.none,
-                      isDense: true),
-                ),
-              ),
-              if (due != null)
-                Padding(
-                    padding:
-                        const EdgeInsets.only(left: WorkFollowSpacing.tightGap),
-                    child: Text(
-                        calendarDateLabel(due,
-                            hasTime: child.scheduledWithTime),
-                        key: ValueKey('task-child-date-${child.id}'),
-                        style: TextStyle(
-                            fontSize: WorkFollowMacTypography.listMeta,
-                            height: WorkFollowMacTypography.lineControl,
-                            fontWeight: WorkFollowMacWeight.regular,
-                            color: _dateColor(child, tokens)))),
-              const SizedBox(width: WorkFollowSpacing.space2),
-              // The chevron is the only navigation affordance; the title edits in
-              // place and never jumps to the child inspector.
-              MouseRegion(
-                onEnter: (_) => setState(() => hoveringArrow = true),
-                onExit: (_) => setState(() => hoveringArrow = false),
-                child: IconButton(
-                    key: ValueKey('task-child-open-${child.id}'),
-                    tooltip: '打开子任务',
-                    visualDensity: VisualDensity.compact,
-                    onPressed: widget.onOpen,
-                    icon: AppIcon(WorkFollowIcons.chevronNext,
-                        size: WorkFollowMetrics.metadataIcon,
-                        color: hoveringArrow
-                            ? tokens.textSecondary
-                            : tokens.textTertiary)),
-              ),
-            ])));
+        child: Padding(
+            padding: const EdgeInsets.symmetric(
+                horizontal: TaskChildInlineRow.rowHorizontalInset),
+            child: Container(
+                key: ValueKey('task-child-surface-${child.id}'),
+                constraints: const BoxConstraints(
+                    minHeight: TaskChildInlineRow.rowMinHeight),
+                alignment: Alignment.centerLeft,
+                // S10.13: a whisper of neutral fill on hover only — never
+                // opacity, never a selected state inside the parent's own
+                // panel. The fill takes the list row's shape, so a hover here
+                // reads as the same gesture as a hover one pane over.
+                decoration: BoxDecoration(
+                    color: TaskListColors.rowFill(tokens,
+                        selected: false, hovering: hoveringRow),
+                    borderRadius:
+                        BorderRadius.circular(WorkFollowRadii.control)),
+                child: Row(children: [
+                  GestureDetector(
+                    key: ValueKey('task-child-check-${child.id}'),
+                    onTap: widget.onToggle,
+                    child: TaskCompletionBox(
+                        // The product's box side, not the toolbar's icon size.
+                        size: WorkFollowMetrics.completionBoxSize,
+                        completed: child.completed,
+                        openColor: tokens.textSecondary),
+                  ),
+                  const SizedBox(width: WorkFollowSpacing.space2),
+                  Expanded(
+                    child: TextField(
+                      key: ValueKey('task-child-title-${child.id}'),
+                      controller: widget.edit,
+                      focusNode: widget.focus,
+                      onChanged: widget.onRename,
+                      style: TextStyle(
+                          fontSize: WorkFollowMacTypography.listTitle,
+                          height: WorkFollowMacTypography.lineList,
+                          fontWeight: WorkFollowMacWeight.medium,
+                          color: child.completed
+                              ? tokens.textTertiary
+                              : tokens.textPrimary),
+                      decoration: InputDecoration(
+                          hintText: titleFocused ? null : '无标题',
+                          border: InputBorder.none,
+                          isDense: true),
+                    ),
+                  ),
+                  if (due != null)
+                    Padding(
+                        padding: const EdgeInsets.only(
+                            left: WorkFollowSpacing.tightGap),
+                        child: Text(
+                            calendarDateLabel(due,
+                                hasTime: child.scheduledWithTime),
+                            key: ValueKey('task-child-date-${child.id}'),
+                            style: TextStyle(
+                                fontSize: WorkFollowMacTypography.listMeta,
+                                height: WorkFollowMacTypography.lineControl,
+                                fontWeight: WorkFollowMacWeight.regular,
+                                color: _dateColor(child, tokens)))),
+                  const SizedBox(width: WorkFollowSpacing.space2),
+                  // The chevron is the only navigation affordance; the title
+                  // edits in place and never jumps to the child inspector.
+                  MouseRegion(
+                    onEnter: (_) => setState(() => hoveringArrow = true),
+                    onExit: (_) => setState(() => hoveringArrow = false),
+                    child: IconButton(
+                        key: ValueKey('task-child-open-${child.id}'),
+                        tooltip: '打开子任务',
+                        visualDensity: VisualDensity.compact,
+                        onPressed: widget.onOpen,
+                        icon: AppIcon(WorkFollowIcons.chevronNext,
+                            size: WorkFollowMetrics.metadataIcon,
+                            color: hoveringArrow
+                                ? tokens.textSecondary
+                                : tokens.textTertiary)),
+                  ),
+                ]))));
   }
 }
 

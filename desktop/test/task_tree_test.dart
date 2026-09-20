@@ -1,3 +1,5 @@
+import 'dart:ui' show PointerDeviceKind;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -8,6 +10,7 @@ import 'package:workfollow_personal/models/task.dart';
 import 'package:workfollow_personal/screens/today_screen.dart';
 import 'package:workfollow_personal/state/workspace_controller.dart';
 import 'package:workfollow_personal/theme/workfollow_theme.dart';
+import 'package:workfollow_personal/widgets/task_children_panel.dart';
 import 'package:workfollow_personal/widgets/task_inspector.dart';
 
 void main() {
@@ -425,5 +428,113 @@ void main() {
     final childBox = tester.widget<Checkbox>(
         find.byKey(ValueKey('task-row-checkbox-$childId')));
     expect(childBox.value, isTrue);
+  });
+
+  testWidgets('SUB-141 a rule splits the parent\'s prose from its subtasks',
+      (tester) async {
+    tester.view.physicalSize = const Size(1000, 720);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+    final c = WorkspaceController(seedData: false)..addTask('父任务');
+    addTearDown(c.dispose);
+    final parentId = c.tasks.single.id;
+    final childId = c.createChildTask(parentId, title: '问问')!;
+
+    await tester.pumpWidget(MaterialApp(
+        theme: WorkFollowThemeData.light(),
+        home: Scaffold(
+            body: AnimatedBuilder(
+                animation: c,
+                builder: (context, _) => TaskInspector(
+                    task: c.tasks
+                        .firstWhere((task) => task.id == c.selectedTaskId),
+                    controller: c)))));
+    await tester.pumpAndSettle();
+
+    final divider = find.byKey(const ValueKey('task-children-divider'));
+    expect(divider, findsOneWidget);
+    expect(tester.widget<Container>(divider).color, WorkFollowTheme.light.border,
+        reason: 'the split is the same hairline every other rule uses');
+
+    final ruleRect = tester.getRect(divider);
+    final panelRect =
+        tester.getRect(find.byKey(const ValueKey('task-children-panel')));
+    final bodyRect =
+        tester.getRect(find.byKey(const ValueKey('task-document-editor')));
+    final firstRowRect =
+        tester.getRect(find.byKey(ValueKey('task-child-row-$childId')));
+
+    // It reads as one boundary with two sides: under the prose, over the list.
+    expect(ruleRect.top, greaterThanOrEqualTo(bodyRect.bottom),
+        reason: "the rule belongs below the parent's own prose");
+    expect(ruleRect.bottom, lessThanOrEqualTo(firstRowRect.top),
+        reason: 'and above the first subtask, never between two subtasks');
+
+    // Full column, unlike the row hairlines below it which start at the title:
+    // this separates two regions, not two rows.
+    expect(ruleRect.left, closeTo(panelRect.left, .01));
+    expect(ruleRect.right, closeTo(panelRect.right, .01));
+    expect(ruleRect.height, WorkFollowMetrics.dividerThickness);
+  });
+
+  testWidgets('SUB-142 a hovered subtask wears the row fill, inset and rounded',
+      (tester) async {
+    tester.view.physicalSize = const Size(1000, 720);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+    final c = WorkspaceController(seedData: false)..addTask('父任务');
+    addTearDown(c.dispose);
+    final parentId = c.tasks.single.id;
+    final childId = c.createChildTask(parentId, title: '问问')!;
+
+    await tester.pumpWidget(MaterialApp(
+        theme: WorkFollowThemeData.light(),
+        home: Scaffold(
+            body: AnimatedBuilder(
+                animation: c,
+                builder: (context, _) => TaskInspector(
+                    task: c.tasks
+                        .firstWhere((task) => task.id == c.selectedTaskId),
+                    controller: c)))));
+    await tester.pumpAndSettle();
+
+    final surface = find.byKey(ValueKey('task-child-surface-$childId'));
+    final row = find.byKey(ValueKey('task-child-row-$childId'));
+    BoxDecoration fill() =>
+        tester.widget<Container>(surface).decoration! as BoxDecoration;
+
+    // At rest the row paints nothing, and the shape it will fill is the list
+    // row's: a rounded box, not a square band.
+    expect(fill().color, Colors.transparent);
+    expect(fill().borderRadius,
+        BorderRadius.circular(WorkFollowRadii.control));
+
+    // The box stops short of the columns it sits in, so the highlight floats
+    // inside the panel instead of bleeding to both edges.
+    final rowRect = tester.getRect(row);
+    final surfaceRect = tester.getRect(surface);
+    expect(surfaceRect.left - rowRect.left,
+        TaskChildInlineRow.rowHorizontalInset);
+    expect(rowRect.right - surfaceRect.right,
+        TaskChildInlineRow.rowHorizontalInset);
+
+    final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await gesture.addPointer(location: Offset.zero);
+    addTearDown(gesture.removePointer);
+    await gesture.moveTo(tester.getCenter(row));
+    await tester.pump();
+
+    // A resting pointer fills that shape with the list's neutral. The panel
+    // used to answer with the blue-grey canvas, which on a white editor read
+    // as a stray strip across the column rather than a row under the pointer.
+    expect(fill().color, WorkFollowTheme.light.listRowHover);
+    expect(fill().color, isNot(WorkFollowTheme.light.canvas),
+        reason: 'the canvas band is the shape this replaced');
   });
 }
