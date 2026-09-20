@@ -1878,14 +1878,25 @@ class WorkspaceController extends ChangeNotifier {
     ));
   }
 
-  /// The flat projection ids of the last [visibleTasks] pass: the tasks the
-  /// current smart view actually matched. Child rows under a parent are
-  /// filtered through it on date-driven pages (S7 §12).
-  Set<String> _projectedIds = const {};
+  /// The tasks the current view matches.
+  ///
+  /// [visibleTasks] and [childRowsFor] each derive what they need from this.
+  /// They used to share a mutable `_projectedIds` that [visibleTasks] filled
+  /// in as a side effect, so a [childRowsFor] call that ran first read the
+  /// previous view's ids and drew the wrong children (S7 §12). Deriving it in
+  /// both places costs one filter pass and removes the ordering contract.
+  List<TaskItem> _visibleProjection() => taskProjection.visible(
+        tasks: _tasks,
+        view: _view,
+        selectedListName: _selectedListName,
+        selectedTagName: _selectedTagName,
+        reference: _dateReference,
+      );
 
   /// List views (清单/收集箱/全部) are hierarchy-first: an expanded parent
-  /// shows every child. Date-driven smart views are projection-first: only
-  /// children that matched the view's own filter render beneath the parent.
+  /// shows every child. Date-driven smart views are projection-first: a
+  /// parent that matched brings its own subtree along, and anything else has
+  /// to have matched the view itself.
   bool get _hierarchyFirstChildren => switch (_view) {
         WorkspaceView.all ||
         WorkspaceView.inbox ||
@@ -1896,29 +1907,45 @@ class WorkspaceController extends ChangeNotifier {
         _ => false,
       };
 
+  /// Whether a matched parent carries its whole subtree into the row list.
+  ///
+  /// The date-driven views do, because a child's own `dueAt` is not what puts
+  /// it on screen — an undated child of a listed parent has nowhere else to
+  /// render: [visibleTasks] drops it (its parent is on screen) and the
+  /// projection filter would drop it too (it never matched), so the row used
+  /// to vanish outright. TickTick mounts the subtree the same way.
+  ///
+  /// `completed` is deliberately left out: it projects by each task's own
+  /// flag, and a finished list must not pull in the still-open children of a
+  /// finished parent.
+  bool get _childrenFollowMatchedParent => switch (_view) {
+        WorkspaceView.today ||
+        WorkspaceView.recent ||
+        WorkspaceView.overdue ||
+        WorkspaceView.plan =>
+          true,
+        _ => false,
+      };
+
   /// The children rendered beneath [parentId] in the task list for the
   /// current view.
   List<TaskItem> childRowsFor(String parentId) {
     final children = childrenOf(parentId);
     if (_hierarchyFirstChildren) return children;
-    return children.where((task) => _projectedIds.contains(task.id)).toList();
+    final ids = {for (final task in _visibleProjection()) task.id};
+    if (_childrenFollowMatchedParent && ids.contains(parentId)) return children;
+    return children.where((task) => ids.contains(task.id)).toList();
   }
 
   List<TaskItem> get visibleTasks {
-    final flat = taskProjection.visible(
-      tasks: _tasks,
-      view: _view,
-      selectedListName: _selectedListName,
-      selectedTagName: _selectedTagName,
-      reference: _dateReference,
-    );
-    _projectedIds = {for (final task in flat) task.id};
+    final flat = _visibleProjection();
+    final ids = {for (final task in flat) task.id};
     // Children render nested under their parent and never twice. A child
     // whose parent did not match the current projection is promoted to a
     // top-level row instead of silently disappearing (S7 §11) — its own
     // dueAt/completed earned it a place in this view.
-    return List.unmodifiable(flat.where((task) =>
-        !task.isChildTask || !_projectedIds.contains(task.parentTaskId)));
+    return List.unmodifiable(
+        flat.where((task) => !task.isChildTask || !ids.contains(task.parentTaskId)));
   }
 
   /// Active child tasks of [parentId], in their sibling order.

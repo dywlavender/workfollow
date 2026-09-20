@@ -349,6 +349,47 @@ void main() {
     // The old record stays completed inside the parent.
     expect(c.tasks.firstWhere((t) => t.id == childId).completed, isTrue);
   });
+
+  test('SUB-133 a parent listed in a date view brings its undated child along',
+      () {
+    final c = build()..addTask('父任务');
+    addTearDown(c.dispose);
+    final parentId = c.tasks.single.id;
+    final dated = c.createChildTask(parentId, title: '问问')!;
+    final undated = c.createChildTask(parentId, title: '呜呜呜')!;
+    c.taskActions.setSchedule(
+        parentId, TaskScheduleDraft(dueAt: DateTime.now(), hasTime: false));
+    c.taskActions.setSchedule(
+        dated, TaskScheduleDraft(dueAt: DateTime.now(), hasTime: false));
+    c.selectView(WorkspaceView.today);
+
+    // The parent matched Today, so the whole subtree hangs under it — the
+    // undated child included: it has nowhere else to render, and
+    // [visibleTasks] has already dropped it (its parent is on screen).
+    expect(c.visibleTasks.map((t) => t.id), contains(parentId));
+    expect(c.childRowsFor(parentId).map((t) => t.id), [dated, undated]);
+    // Neither child becomes a standalone top-level row.
+    expect(c.visibleTasks.map((t) => t.id), isNot(contains(dated)));
+    expect(c.visibleTasks.map((t) => t.id), isNot(contains(undated)));
+  });
+
+  test('SUB-134 Completed keeps its own filter and never pulls in open work',
+      () {
+    final c = build()..addTask('父任务');
+    addTearDown(c.dispose);
+    final parentId = c.tasks.single.id;
+    final open = c.createChildTask(parentId, title: '未完成')!;
+    final done = c.createChildTask(parentId, title: '已完成')!;
+    c.taskActions.complete(done);
+    c.taskActions.complete(parentId);
+    c.selectView(WorkspaceView.completed);
+
+    // SUB-133's rule is scoped to the date-driven views. A finished list is
+    // projected by each task's own completed flag, so an unfinished child
+    // must not ride along with its finished parent.
+    expect(c.childRowsFor(parentId).map((t) => t.id), [done]);
+    expect(c.childRowsFor(parentId).map((t) => t.id), isNot(contains(open)));
+  });
 }
 
 /// Records reminder withdrawals so purge tests can assert the controller

@@ -357,4 +357,44 @@ void main() {
     expect(c.childrenOf(parentId), hasLength(1));
     expect(c.isTaskExpanded(parentId), isFalse);
   });
+
+  testWidgets(
+      'SUB-135 a parent listed in Today draws its undated child as a nested row',
+      (tester) async {
+    tester.view.physicalSize = const Size(900, 700);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+    final c = WorkspaceController(seedData: false)..addTask('父任务');
+    addTearDown(c.dispose);
+    final parentId = c.tasks.single.id;
+    final dated = c.createChildTask(parentId, title: '问问')!;
+    final undated = c.createChildTask(parentId, title: '呜呜呜')!;
+    c.taskActions.setSchedule(
+        parentId, TaskScheduleDraft(dueAt: DateTime.now(), hasTime: false));
+    c.taskActions.setSchedule(
+        dated, TaskScheduleDraft(dueAt: DateTime.now(), hasTime: false));
+    c.selectView(WorkspaceView.today);
+
+    await tester.pumpWidget(MaterialApp(
+        theme: WorkFollowThemeData.light(),
+        home: Scaffold(body: TodayScreen(controller: c))));
+    await tester.pumpAndSettle();
+
+    // The child's own dates must not decide whether it is on screen: a parent
+    // that matched Today carries its whole subtree, so the undated sibling
+    // renders under the parent instead of vanishing.
+    final parentRect =
+        tester.getRect(find.byKey(ValueKey('task-row-surface-$parentId')));
+    for (final childId in [dated, undated]) {
+      final rect =
+          tester.getRect(find.byKey(ValueKey('task-row-surface-$childId')));
+      expect(rect.left, greaterThan(parentRect.left),
+          reason: 'child $childId renders indented under its parent');
+    }
+    // And the row's trail advertises the same two children it draws.
+    expect(c.childCount(parentId), 2);
+  });
 }
