@@ -91,11 +91,30 @@ class TaskEditorProfile extends EditorProfile {
   @override
   double get paragraphGap => WorkFollowSpacing.editorParagraphGap;
 
-  /// The full palette: eight text commands, then attachment → subtask → tag →
-  /// relation. `deadline` and `focus` are reachable from the row context menu
-  /// and the inspector's property rows, so they are not palette entries.
+  /// The child's palette: the same commands, minus the one a child cannot run.
+  ///
+  /// The hierarchy allows a single level, and that rule is enforced in the
+  /// inspector (`TaskInspector._addChildTask` returns early for a child), not
+  /// here. A palette that still offered 子任务 would be a command that opens,
+  /// closes and does nothing — the second silent no-op this feature has had,
+  /// so the rule is stated where the command is offered instead.
+  static const List<DocumentSlashAction> childSlashActions =
+      <DocumentSlashAction>[
+    ...DocumentSlashMenu.textActions,
+    DocumentSlashAction.attachment,
+    DocumentSlashAction.tag,
+    DocumentSlashAction.relation,
+  ];
+
+  /// The full palette, or [childSlashActions] under a child.
+  ///
+  /// `null` is not "no commands": the core reads it as its own default set —
+  /// eight text commands, then attachment → subtask → tag → relation.
+  /// `deadline` and `focus` are reachable from the row context menu and the
+  /// inspector's property rows, so they are not palette entries.
   @override
-  List<DocumentSlashAction>? get slashActions => null;
+  List<DocumentSlashAction>? get slashActions =>
+      task.isChildTask ? childSlashActions : null;
 
   @override
   List<quill.EmbedBuilder> buildEmbeds(BuildContext context) => [

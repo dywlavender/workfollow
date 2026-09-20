@@ -54,9 +54,17 @@ class TaskDocumentEditorState extends State<TaskDocumentEditor> {
   /// Owned by this widget rather than by the profile so it survives the
   /// profile being rebuilt on every frame.
 
+  /// Every optional callback this widget declares has to be forwarded here.
+  ///
+  /// The profile is the editor core's whole view of the surface, so a callback
+  /// left out of this list is a command that opens, closes and does nothing —
+  /// no error, nothing written. The subtask command lived like that: the
+  /// inspector passed `onAddChildTask`, this widget held it, and the profile
+  /// never saw it, so `/` → 子任务 was silent.
   TaskEditorProfile _profile() => TaskEditorProfile(
         task: widget.task,
         controller: widget.controller,
+        onAddChildTask: widget.onAddChildTask,
         onOpenTags: widget.onOpenTags,
         onOpenRelation: widget.onOpenRelation,
         onOpenDeadline: widget.onOpenDeadline,
