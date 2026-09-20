@@ -71,14 +71,19 @@ class DocumentStyles {
   /// The size is the shell's call, and both shells currently resolve the same
   /// role — `detailTitle` — whether the title belongs to a task inspector's
   /// field or to a full-page note. What every document title shares is the
-  /// weight, the line height, the absence of tracking, and the two states it
-  /// can be in: a completed document greys out and strikes through rather than
-  /// changing size.
+  /// weight, the line height, the absence of tracking, and the one state it
+  /// can be in: a completed document steps back to `textTertiary` and keeps
+  /// its words.
+  ///
+  /// It also used to strike the title through, which drew a rule across a
+  /// finished task's own name in the inspector — the only surface in the
+  /// product that showed a task title and lined through it. If the size is the
+  /// shell's call, so is the grey; the strike was never either shell's, and
+  /// there is no parameter left here to ask for one.
   static TextStyle title(
     WorkFollowTheme tokens, {
     required double fontSize,
     bool muted = false,
-    bool strikethrough = false,
   }) =>
       TextStyle(
         fontSize: fontSize,
@@ -86,7 +91,6 @@ class DocumentStyles {
         fontWeight: WorkFollowMacWeight.semibold,
         letterSpacing: WorkFollowMacTracking.none,
         color: muted ? tokens.textTertiary : tokens.textPrimary,
-        decoration: strikethrough ? TextDecoration.lineThrough : null,
       );
 
   /// Decoration of a document's title field.

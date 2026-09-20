@@ -44,7 +44,7 @@ void main() {
     expect(changed, '新标题');
   });
 
-  testWidgets('shared title editor exposes completed title treatment',
+  testWidgets('a completed title steps back in ink and keeps its words',
       (tester) async {
     final controller = TextEditingController();
     final focusNode = FocusNode();
@@ -63,15 +63,21 @@ void main() {
           placeholder: '任务标题',
           fontSize: WorkFollowMacTypography.detailTitle,
           muted: true,
-          strikethrough: true,
           onChanged: (_) {},
         ),
       ),
     ));
 
+    // The inspector shows a finished task's title the way the rows do: quieter
+    // ink, same words, same size. It used to strike the title through, which
+    // made the one field where a task's name is fully readable the one place a
+    // rule ran across it.
     final field = tester
         .widget<TextField>(find.byKey(const ValueKey('completed-title-field')));
     expect(field.style?.color, WorkFollowTheme.light.textTertiary);
-    expect(field.style?.decoration, TextDecoration.lineThrough);
+    expect(field.style?.decoration, isNull,
+        reason: 'completion greys a title out; it never lines through it');
+    expect(field.style?.fontSize, WorkFollowMacTypography.detailTitle,
+        reason: 'and it does not shrink the title either');
   });
 }

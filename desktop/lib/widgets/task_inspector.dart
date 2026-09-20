@@ -559,8 +559,10 @@ class _TaskInspectorState extends State<TaskInspector> {
               focusNode: titleFocus,
               placeholder: task.isChildTask ? '准备做什么？' : '任务标题',
               fontSize: WorkFollowMacTypography.detailTitle,
+              // A finished task greys its title out and keeps the words: at
+              // this size a rule through them costs more than the colour
+              // already says, and the list row beside it never drew one.
               muted: task.completed,
-              strikethrough: task.completed,
               onChanged: (value) =>
                   widget.controller.taskActions.setTitle(task.id, value),
             ),

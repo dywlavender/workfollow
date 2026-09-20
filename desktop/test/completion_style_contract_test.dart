@@ -54,4 +54,28 @@ void main() {
           reason: '$path no longer strikes anything — drop it from the list');
     }
   });
+
+  test('no title field can ask for a rule through the words', () {
+    // The scan above looks for the decoration itself, and the decoration lives
+    // in the document stylesheet — which is on the exception list because it
+    // strikes a ticked checklist line. So a title field could reach the very
+    // same decoration through a boolean flag and the scan would still pass.
+    //
+    // That is not hypothetical. The inspector passed
+    // `strikethrough: task.completed`, so a finished task's own title wore a
+    // line through it while every row, card and bar in the product greyed out —
+    // and this file happily reported none. The flag is gone; this keeps it from
+    // coming back, and it is written against the word rather than the
+    // decoration for exactly that reason.
+    for (final path in const [
+      'lib/features/editor/document_styles.dart',
+      'lib/features/editor/presentation/document_title_editor.dart',
+      'lib/widgets/task_inspector.dart',
+    ]) {
+      expect(File(path).readAsStringSync().toLowerCase(),
+          isNot(contains('strikethrough')),
+          reason: '$path is on the title pipeline, so it can hand a task title '
+              'a rule through the words');
+    }
+  });
 }
