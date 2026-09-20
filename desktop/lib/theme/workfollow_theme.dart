@@ -1383,9 +1383,11 @@ class WorkFollowTheme extends ThemeExtension<WorkFollowTheme> {
   ///
   /// The values are calibrated against a reference list where a finished row
   /// reads as settled rather than struck out — see `completion_style_contract`
-  /// for the ladder assertion. This is only about finished rows *in a list*:
-  /// the editor keeps a task at full strength whatever state it is in, because
-  /// that is the surface that shows one task as itself.
+  /// for the ladder assertion. The gaps between the rungs are unequal on
+  /// purpose: the title has to separate from the three rungs under it, or the
+  /// row reads as three greys of one weight. This is only about finished rows
+  /// *in a list*: the editor keeps a task at full strength whatever state it is
+  /// in, because that is the surface that shows one task as itself.
   final Color taskCompletedTitle;
   final Color taskCompletedBody;
   final Color taskCompletedMeta;
@@ -1466,13 +1468,16 @@ class WorkFollowTheme extends ThemeExtension<WorkFollowTheme> {
     textPrimary: Color(0xFF20272C),
     textSecondary: Color(0xFF5D6B75),
     textTertiary: Color(0xFF7F8D92),
-    // One ladder for a finished list row. The steps are even in perceptual
-    // lightness (ΔL* 25.7 / 19.8 / 15.9 / 13.0 off the white surface), so the
-    // row reads as three ordered levels plus a chip rather than as one grey.
-    taskCompletedTitle: Color(0xFFB4B7BC),
-    taskCompletedBody: Color(0xFFC5C7CB),
-    taskCompletedMeta: Color(0xFFD0D2D5),
-    taskCompletedCheckbox: Color(0xFFD8DADE),
+    // One ladder for a finished list row, taken off the reference list this row
+    // is drawn after. The steps are deliberately uneven — ΔL* 33.0 / 16.2 /
+    // 13.0 / 9.8 off the white surface. Even steps give three greys of equal
+    // weight; the reference gives a heading, a line and a whisper, and it is
+    // the size of the first drop that makes the title read as the row's head
+    // and the rest read as settled around it.
+    taskCompletedTitle: Color(0xFFA3A3A3),
+    taskCompletedBody: Color(0xFFD1D1D1),
+    taskCompletedMeta: Color(0xFFDADADA),
+    taskCompletedCheckbox: Color(0xFFE3E3E3),
     // Hairlines are neutral. The teal-tinted greys belonged to the old accent
     // and read as a second colour in every divider once the primary moved.
     border: Color(0xFFE6E7EB),
@@ -1526,13 +1531,15 @@ class WorkFollowTheme extends ThemeExtension<WorkFollowTheme> {
     textTertiary: Color(0xFF858D9A),
     // The same four steps, measured off this theme's own surface: the light
     // ladder's perceptual distances from white are re-applied from #202329, on
-    // the palette's own grey ramp. Dark surfaces need slightly more ink for the
-    // same reading, which is why the ratios come out a little higher here
-    // (2.37 / 1.91 / 1.66 / 1.49 against 2.01 / 1.69 / 1.52 / 1.40 on white).
-    taskCompletedTitle: Color(0xFF575D67),
-    taskCompletedBody: Color(0xFF4A4F57),
-    taskCompletedMeta: Color(0xFF41464E),
-    taskCompletedCheckbox: Color(0xFF3B3F47),
+    // the palette's own grey ramp. Matching contrast *ratios* instead would
+    // flatten the ladder — on a dark surface a ratio and a perceived step are
+    // not the same curve — so the distances are matched and the ratios are
+    // allowed to fall where they fall (3.12 / 1.67 / 1.49 / 1.34 here against
+    // 2.52 / 1.53 / 1.40 / 1.28 on white).
+    taskCompletedTitle: Color(0xFF696F7A),
+    taskCompletedBody: Color(0xFF42464F),
+    taskCompletedMeta: Color(0xFF3B3F47),
+    taskCompletedCheckbox: Color(0xFF34383F),
     border: Color(0xFF30343D),
     borderStrong: Color(0xFF4A505B),
     accent: Color(0xFF7E88FF),

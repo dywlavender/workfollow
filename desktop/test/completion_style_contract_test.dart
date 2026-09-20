@@ -126,6 +126,16 @@ void main() {
       expect(ladder['meta'], greaterThan(ladder['checkbox']!),
           reason: 'the trailing column is the faintest, and the box is the '
               'palest chip on the row');
+      // *Ordered* is not the whole rule. A ladder with even steps reads as four
+      // greys of one weight, which is the state this was pulled out of — the
+      // title has to take a decisively larger drop off the surface than the
+      // step below it, or it stops being the row's head. The reference measures
+      // ΔL* 33.0 to the title against 16.2 to the line under it, so this reads
+      // as a wide margin here and still fails the even ladder it replaced.
+      expect(
+          ladder['title']! - ladder['body']!,
+          greaterThan(3 * (ladder['body']! - ladder['meta']!)),
+          reason: 'the title has to separate from the three rungs under it');
       expect(
           ladder['title'],
           lessThan(WorkFollowThemeContrast.ratio(
@@ -134,11 +144,20 @@ void main() {
               'still needs for navigation and placeholders');
 
       // Every rung is still *there*: a row that fades into its own background
-      // has stopped being a row.
-      for (final entry in ladder.entries) {
-        expect(entry.value, greaterThan(1.3),
-            reason: '${entry.key} is no longer visible on the surface');
+      // has stopped being a row. The three inks hold at 1.3, where a run of
+      // glyphs stops being readable against its own surface.
+      for (final key in const ['title', 'body', 'meta']) {
+        expect(ladder[key], greaterThan(1.3),
+            reason: '$key is ink, and ink this close to the surface has '
+                'stopped being readable');
       }
+      // The box is the one rung drawn as a shape rather than as ink, so it
+      // holds at a lower ratio: a solid 14.58pt chip with a tick cut out of it
+      // still reads as a chip at a ratio where a glyph would have gone. The
+      // reference list this ladder was taken from draws its own box at 1.28
+      // against white, so a floor of 1.3 would reject the palette it came from.
+      expect(ladder['checkbox'], greaterThan(1.2),
+          reason: 'the finished box has faded into the surface');
     }
   });
 
