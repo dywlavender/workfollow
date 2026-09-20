@@ -68,11 +68,12 @@ class DocumentStyles {
 
   /// Title of a document field.
   ///
-  /// The size is the shell's call, because an inspector's title and a
-  /// full-page note title are different roles — `detailTitle` and `noteTitle`.
-  /// What every document title shares is the weight, the line height, the
-  /// absence of tracking, and the two states it can be in: a completed
-  /// document greys out and strikes through rather than changing size.
+  /// The size is the shell's call, and both shells currently resolve the same
+  /// role — `detailTitle` — whether the title belongs to a task inspector's
+  /// field or to a full-page note. What every document title shares is the
+  /// weight, the line height, the absence of tracking, and the two states it
+  /// can be in: a completed document greys out and strikes through rather than
+  /// changing size.
   static TextStyle title(
     WorkFollowTheme tokens, {
     required double fontSize,

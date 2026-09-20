@@ -124,8 +124,10 @@ class _NotesScreenState extends State<NotesScreen> {
                   Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
                 Text(c.notesFavoritesOnly ? '收藏笔记' : '笔记',
                     style: TextStyle(
-                        fontSize: WorkFollowMacTypography.listTitle,
+                        fontSize: WorkFollowMacTypography.pageTitle,
+                        height: WorkFollowMacTypography.lineTight,
                         fontWeight: WorkFollowMacWeight.semibold,
+                        letterSpacing: WorkFollowMacTracking.none,
                         color: tokens.textPrimary)),
                 const Spacer(),
                 _NewNoteButton(onCreate: create),
@@ -400,11 +402,19 @@ class _NoteRowState extends State<_NoteRow> {
                                     child: Text(note.title,
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
+                                        // A note row and a task row are the same
+                                        // kind of row, so the title resolves the
+                                        // same role in both: listTitle, regular,
+                                        // lineList. It used to be semibold with
+                                        // no line height, which made the note
+                                        // index read heavier than the task list.
                                         style: TextStyle(
                                             fontSize: WorkFollowMacTypography
                                                 .listTitle,
+                                            height: WorkFollowMacTypography
+                                                .lineList,
                                             fontWeight:
-                                                WorkFollowMacWeight.semibold,
+                                                WorkFollowMacWeight.regular,
                                             color: tokens.textPrimary))),
                               ]),
                               const SizedBox(height: WorkFollowSpacing.space1),
@@ -420,6 +430,7 @@ class _NoteRowState extends State<_NoteRow> {
                                       fontSize:
                                           WorkFollowMacTypography.listBody,
                                       height: WorkFollowMacTypography.lineList,
+                                      fontWeight: WorkFollowMacWeight.regular,
                                       color: tokens.textSecondary)),
                             ])),
                         const SizedBox(width: NotesMetrics.rowMetaGap),
@@ -636,7 +647,13 @@ class _NotePageState extends State<_NotePage> {
                                     focusNode: titleFocus,
                                     autofocus: note.title == '未命名笔记',
                                     maxLines: 3,
-                                    fontSize: WorkFollowMacTypography.noteTitle,
+                                    // Same role as the task inspector's title.
+                                    // 26 was calibrated against the reference
+                                    // note page, but the product decision is one
+                                    // title for both documents, so the note
+                                    // page resolves detailTitle like the task.
+                                    fontSize:
+                                        WorkFollowMacTypography.detailTitle,
                                     placeholder: '笔记标题',
                                     onChanged: (value) => widget.controller
                                         .updateNoteTitle(note.id, value),

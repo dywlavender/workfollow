@@ -805,15 +805,12 @@ class WorkFollowMacTypography {
   static const double listMeta = 12;
 
   // Detail / editor.
+  //
+  // One title role for both documents. The note page used to carry its own
+  // `noteTitle` at 26, calibrated against the reference note page; the product
+  // decision is now that a note's title and a task's title are the same job, so
+  // the 26 step was removed rather than left behind as a dead role.
   static const double detailTitle = 18;
-
-  /// The note document's own title on the note page.
-  ///
-  /// Not [detailTitle]: the task inspector's title is a field in a 330pt panel,
-  /// while this is the heading of a page whose body column is 760pt wide. At 18
-  /// it read as one more field label with a large empty page under it rather
-  /// than as the page's centre. Measured off the reference note page.
-  static const double noteTitle = 26;
 
   static const double body = 14;
   static const double supporting = 12;

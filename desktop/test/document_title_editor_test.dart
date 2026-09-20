@@ -24,7 +24,7 @@ void main() {
           focusNode: focusNode,
           placeholder: '标题占位符',
           maxLines: 3,
-          fontSize: WorkFollowMacTypography.noteTitle,
+          fontSize: WorkFollowMacTypography.detailTitle,
           onChanged: (value) => changed = value,
         ),
       ),
@@ -36,7 +36,7 @@ void main() {
     expect(field.focusNode, same(focusNode));
     expect(field.minLines, 1);
     expect(field.maxLines, 3);
-    expect(field.style?.fontSize, WorkFollowMacTypography.noteTitle);
+    expect(field.style?.fontSize, WorkFollowMacTypography.detailTitle);
     expect(field.decoration?.hintText, '标题占位符');
 
     await tester.enterText(
