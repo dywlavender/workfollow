@@ -13,35 +13,16 @@ import 'package:workfollow_personal/widgets/task_row.dart';
 import 'package:workfollow_personal/widgets/task_inspector.dart';
 
 void main() {
-  testWidgets('renders the personal home workspace', (tester) async {
+  testWidgets('opens directly into Today without a home destination',
+      (tester) async {
     await tester.pumpWidget(const WorkFollowApp(demoMode: true));
     await tester.pumpAndSettle();
 
-    // Home is reached from the icon rail; its own name no longer appears as a
-    // second-column row (that column is gone).
-    expect(find.byTooltip('首页'), findsOneWidget);
+    expect(find.byType(TodayScreen), findsOneWidget);
+    expect(find.byTooltip('首页'), findsNothing);
     expect(find.text('今天'), findsWidgets);
     expect(find.text('准备季度产品评审演示文稿'), findsWidgets);
-    expect(find.text('记下下一件事…'), findsOneWidget);
-  });
-
-  testWidgets('home mini calendar shows every date at the normal window size',
-      (tester) async {
-    tester.view.physicalSize = const Size(1280, 820);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(() {
-      tester.view.resetPhysicalSize();
-      tester.view.resetDevicePixelRatio();
-    });
-
-    await tester.pumpWidget(const WorkFollowApp(demoMode: true));
-    await tester.pumpAndSettle();
-
-    final now = DateTime.now();
-    final days = DateTime(now.year, now.month + 1, 0).day;
-    for (var day = 1; day <= days; day++) {
-      expect(find.text('$day'), findsWidgets, reason: '日历应在首页显示本月 $day 日');
-    }
+    expect(find.byKey(const ValueKey('quick-add-title')), findsOneWidget);
   });
 
   testWidgets('opens the notes view from the sidebar', (tester) async {
@@ -98,7 +79,7 @@ void main() {
     expect(find.text('清单'), findsNothing);
   });
 
-  testWidgets('home and the module pages keep only the icon rail',
+  testWidgets('module pages keep their own navigation chrome',
       (tester) async {
     tester.view.physicalSize = const Size(1400, 900);
     tester.view.devicePixelRatio = 1;
@@ -110,11 +91,9 @@ void main() {
     await tester.pumpWidget(const WorkFollowApp(demoMode: true));
     await tester.pumpAndSettle();
 
-    // Home is a dashboard rather than a second navigation tree: its 首页 and
-    // 快速录入 rows only repeated the icon rail, so the column is gone.
-    expect(find.byKey(const ValueKey('rail-context-column')), findsNothing);
-    expect(find.byTooltip('首页'), findsOneWidget);
-    expect(find.text('清单'), findsNothing);
+    expect(find.byKey(const ValueKey('rail-context-column')), findsOneWidget);
+    expect(find.byTooltip('首页'), findsNothing);
+    expect(find.text('清单'), findsOneWidget);
     expect(find.text('全部笔记'), findsNothing);
 
     // The task and note trees keep their column, and none of them drag the
@@ -173,13 +152,14 @@ void main() {
       return (box.decoration as BoxDecoration).color;
     }
 
-    expect(railFill('首页')!.a, greaterThan(0), reason: '首页应处于选中态');
-    expect(railFill('任务')!.a, 0);
+    expect(find.byKey(const ValueKey('rail-button-首页')), findsNothing);
+    expect(railFill('任务')!.a, greaterThan(0));
+    expect(railFill('笔记')!.a, 0);
 
-    await tester.tap(find.byTooltip('任务'));
+    await tester.tap(find.byTooltip('笔记'));
     await tester.pump();
-    expect(railFill('首页')!.a, 0, reason: '离开的入口必须当帧失去底色，不能淡出');
-    expect(railFill('任务')!.a, greaterThan(0), reason: '进入的入口必须当帧就位');
+    expect(railFill('任务')!.a, 0, reason: '离开的入口必须当帧失去底色，不能淡出');
+    expect(railFill('笔记')!.a, greaterThan(0), reason: '进入的入口必须当帧就位');
   });
 
   testWidgets(

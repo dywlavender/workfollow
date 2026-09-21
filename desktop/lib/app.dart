@@ -8,9 +8,9 @@ import 'package:flutter_quill/flutter_quill.dart'
     show FlutterQuillLocalizations;
 
 import 'screens/calendar_screen.dart';
-import 'screens/home_screen.dart';
 import 'screens/matrix_screen.dart';
 import 'screens/notes_screen.dart';
+import 'screens/notes_trash_screen.dart';
 import 'screens/today_screen.dart';
 import 'screens/trash_screen.dart';
 import 'features/feedback/feedback_controller.dart';
@@ -279,7 +279,6 @@ class _WorkFollowShellState extends State<WorkFollowShell> {
         seedData: widget.demoMode,
         store:
             LocalWorkspaceStore(namespace: widget.demoMode ? 'preview' : null));
-    if (!widget.demoMode) controller.selectView(WorkspaceView.today);
     if (!widget.demoMode)
       _dateRefresh = Timer.periodic(
           const Duration(minutes: 1), (_) => controller.refreshDates());
@@ -450,7 +449,7 @@ class _WorkFollowShellState extends State<WorkFollowShell> {
       controller.addNoteInCurrentFolder();
       return;
     }
-    if (!controller.isTaskView && controller.view != WorkspaceView.home) {
+    if (!controller.isTaskView) {
       controller.selectView(WorkspaceView.today);
     }
     controller.requestQuickAddFocus();
@@ -647,14 +646,18 @@ class _WorkspaceContent extends StatelessWidget {
         if (currentChild != null) currentChild
       ]),
       child: switch (controller.view) {
-        WorkspaceView.home =>
-          HomeScreen(key: const ValueKey('home'), controller: controller),
         WorkspaceView.calendar => CalendarScreen(
             key: const ValueKey('calendar'), controller: controller),
         WorkspaceView.notes =>
           NotesScreen(key: const ValueKey('notes'), controller: controller),
-        WorkspaceView.trash =>
-          TrashScreen(key: const ValueKey('trash'), controller: controller),
+        WorkspaceView.notesTrash => NotesTrashScreen(
+            key: const ValueKey('notes-trash'), controller: controller),
+        WorkspaceView.trash => TrashScreen(
+            key: const ValueKey('trash'),
+            controller: controller,
+            compactDensity: compactDensity,
+            persistentInspector: persistentInspector,
+          ),
         WorkspaceView.matrix =>
           MatrixScreen(key: const ValueKey('matrix'), controller: controller),
         _ => TodayScreen(

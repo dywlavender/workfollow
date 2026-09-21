@@ -33,7 +33,7 @@ class WorkFollowMetrics {
   ///
   /// One box, one size, wherever a task is marked: the list row, the
   /// editor's header and its child rows, a quadrant row, a note's linked
-  /// task, the home card and the date picker's toggle. The calendar strip
+  /// task and the date picker's toggle. The calendar strip
   /// and the document editor's checklist marker are the only two that are
   /// their own, because a bar and a line of prose are not a row.
   static const double completionBoxSize = 14.58;
@@ -426,8 +426,7 @@ class MatrixMetrics {
   static const double taskRowDragPreviewWidth = 280;
   static const double taskRowDragPreviewRadius = WorkFollowRadii.md;
   static const double taskRowCheckboxHitTarget = 17.01;
-  static const double taskRowCheckboxSize =
-      WorkFollowMetrics.completionBoxSize;
+  static const double taskRowCheckboxSize = WorkFollowMetrics.completionBoxSize;
 }
 
 /// Geometry of the two surfaces a page opens *over* itself: the floating task
@@ -573,30 +572,31 @@ class SettingsMetrics {
   static const double navigationWidth = 165;
 }
 
-/// Geometry for the home dashboard's repeated panels and quick add field.
-class HomeMetrics {
-  const HomeMetrics._();
-
-  static const double quickAddWidth = 300;
-  static const double panelHeight = 250;
-  static const double reviewIconSize = WorkFollowMetrics.iconHitTarget;
-  static const double panelIconSize = WorkFollowMetrics.chipHeight;
-  static const double emptyIconSize = 40;
-  static const double taskMarkerWidth = 4;
-  static const double taskMarkerHeight = 22;
-  static const double taskCheckboxHitTarget = 19.44;
-  static const double taskCheckboxVisualSize =
-      WorkFollowMetrics.completionBoxSize;
-  static const double noteDotSize = 7;
-  static const double miniCalendarDotSize = 3;
-}
-
 /// Geometry for reusable empty-state and statistic surfaces.
 class AppSurfaceMetrics {
   const AppSurfaceMetrics._();
 
   static const double emptyStateIconSize = 56;
-  static const double statisticIconSurfaceSize = 34;
+}
+
+/// Geometry of the compact, two-action confirmation used by the trash pages.
+class TrashConfirmationDialogMetrics {
+  const TrashConfirmationDialogMetrics._();
+
+  static const double maxWidth = 440;
+  static const double viewportInset = WorkFollowSpacing.space4;
+  static const double horizontalPadding = WorkFollowSpacing.space4;
+  static const double topPadding = WorkFollowSpacing.space4;
+  static const double bottomPadding = WorkFollowSpacing.space4;
+  static const double dismissRowHeight = 22;
+  static const double dismissTargetSize = WorkFollowMetrics.navigationIcon;
+  static const double dismissGlyphSize = 11;
+  static const double dismissTitleGap = WorkFollowSpacing.space1;
+  static const double titleMessageGap = WorkFollowSpacing.space5;
+  static const double messageActionsGap = WorkFollowSpacing.space6;
+  static const double actionHeight = 40;
+  static const double actionGap = WorkFollowSpacing.space3;
+  static const double actionMaxWidth = 132;
 }
 
 /// Geometry for the small status marker used by section labels.
@@ -652,6 +652,14 @@ class NotesColors {
     if (hovering) return tokens.listRowHover;
     return Colors.transparent;
   }
+}
+
+/// Semantic scrim colors for modal overlays.
+class WorkFollowOverlayTokens {
+  const WorkFollowOverlayTokens._();
+
+  static Color dialogBarrier(WorkFollowTheme tokens) =>
+      tokens.shadow.withValues(alpha: .12);
 }
 
 class WorkFollowSpacing {

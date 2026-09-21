@@ -92,8 +92,10 @@ class _CommandPaletteState extends State<_CommandPalette> {
             () => widget.controller.selectView(WorkspaceView.calendar)),
         _Command('打开笔记', '继续写下刚才的想法', WorkFollowIcons.notes,
             () => widget.controller.selectView(WorkspaceView.notes)),
-        _Command('打开垃圾桶', '恢复或彻底删除已移除的内容', WorkFollowIcons.trash,
+        _Command('打开任务垃圾桶', '恢复或彻底删除已移除的任务', WorkFollowIcons.trash,
             () => widget.controller.selectView(WorkspaceView.trash)),
+        _Command('打开笔记垃圾桶', '恢复或彻底删除已移除的笔记', WorkFollowIcons.trash,
+            () => widget.controller.selectView(WorkspaceView.notesTrash)),
         _Command('切换外观', '在浅色和深色之间切换', WorkFollowIcons.darkMode,
             widget.onToggleTheme),
       ];

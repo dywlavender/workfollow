@@ -5,12 +5,16 @@ import 'package:workfollow_personal/models/task.dart';
 import 'package:workfollow_personal/screens/trash_screen.dart';
 import 'package:workfollow_personal/state/workspace_controller.dart';
 import 'package:workfollow_personal/theme/workfollow_theme.dart';
+import 'package:workfollow_personal/widgets/app_icon_button.dart';
 import 'package:workfollow_personal/widgets/task_list/task_list_divider.dart';
+import 'package:workfollow_personal/widgets/task_list/task_group_header.dart';
 import 'package:workfollow_personal/widgets/task_list/task_list_header.dart';
 import 'package:workfollow_personal/widgets/task_list/task_list_row.dart';
 import 'package:workfollow_personal/widgets/task_completion_box.dart';
+import 'package:workfollow_personal/widgets/task_inspector.dart';
+import 'package:workfollow_personal/widgets/task_list_inspector_split.dart';
 
-/// TRASH-001 … TRASH-008 — the trash page.
+/// TRASH-001 … TRASH-010 — the trash page.
 ///
 /// 已完成 sits directly above 垃圾桶 in the rail, so the two pages are read in
 /// the same breath and have to be the same kind of page: the same header, the
@@ -42,7 +46,8 @@ TaskItem removed(String id,
   );
 }
 
-Future<void> pumpTrash(WidgetTester tester, WorkspaceController controller) async {
+Future<void> pumpTrash(
+    WidgetTester tester, WorkspaceController controller) async {
   tester.view.physicalSize = const Size(1200, 900);
   tester.view.devicePixelRatio = 1;
   addTearDown(() {
@@ -78,6 +83,10 @@ void main() {
     // The header every list page opens with, carrying this page's own name.
     expect(find.byType(TaskListHeader), findsOneWidget);
     expect(find.text('垃圾桶'), findsOneWidget);
+    expect(find.byType(TaskGroupHeader), findsNothing);
+    expect(find.byKey(const ValueKey('web-task-list-pane')), findsOneWidget);
+    expect(find.byKey(const ValueKey('web-task-detail-pane')), findsOneWidget);
+    expect(find.byType(EmptyTaskInspector), findsOneWidget);
 
     // One row frame per removed task, and the rows are separated the way the
     // lists separate theirs rather than by a per-page rule.
@@ -88,10 +97,16 @@ void main() {
 
     // The marker is the task's own box in the state it was thrown away in —
     // reported, not offered. Nothing on this page ticks a task off.
-    expect(tester.widget<TaskCompletionBox>(find.byType(TaskCompletionBox).first)
-        .completed, isFalse);
-    expect(tester.widget<TaskCompletionBox>(find.byType(TaskCompletionBox).last)
-        .completed, isTrue);
+    expect(
+        tester
+            .widget<TaskCompletionBox>(find.byType(TaskCompletionBox).first)
+            .completed,
+        isFalse);
+    expect(
+        tester
+            .widget<TaskCompletionBox>(find.byType(TaskCompletionBox).last)
+            .completed,
+        isTrue);
   });
 
   testWidgets('TRASH-002 the rows run newest deletion first', (tester) async {
@@ -114,7 +129,7 @@ void main() {
     expect(tops['middle']!, lessThan(tops['oldest']!));
   });
 
-  testWidgets('TRASH-003 clicking a trashed task opens it over the page',
+  testWidgets('TRASH-003 selecting a trashed task opens the shared inspector',
       (tester) async {
     final controller = WorkspaceController(seedData: false);
     addTearDown(controller.dispose);
@@ -124,15 +139,15 @@ void main() {
     await tester.tap(surface('gone'));
     await tester.pumpAndSettle();
 
-    // The floating editor is the same surface the board and the calendar open.
-    // A row a user can see but not read is the failure this guards.
-    expect(find.byKey(const ValueKey('floating-task-editor-gone')),
-        findsOneWidget);
-    // Opening a task does not navigate away from the page it was opened on.
+    expect(find.byType(TaskInspector), findsOneWidget);
+    expect(find.byKey(const ValueKey('wide-detail-gone')), findsOneWidget);
+    expect(
+        find.byKey(const ValueKey('floating-task-editor-gone')), findsNothing);
+    // Selecting a task does not navigate away from the page it was selected on.
     expect(find.byType(TrashScreen), findsOneWidget);
   });
 
-  testWidgets('TRASH-004 the editor on a trashed task still holds it',
+  testWidgets('TRASH-004 restoring a selected task clears the inspector',
       (tester) async {
     final controller = WorkspaceController(seedData: false);
     addTearDown(controller.dispose);
@@ -141,42 +156,34 @@ void main() {
 
     await tester.tap(surface('gone'));
     await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('floating-task-editor-gone')),
-        findsOneWidget);
+    expect(find.byType(TaskInspector), findsOneWidget);
 
-    // Everywhere else a deleted task closes the editor — that is how removing
-    // it from inside takes the editor with it. Here the deleted state is what
-    // the user clicked, so the surface has to survive the controller rebuilding
-    // under it. A purge is different: the task is gone, so the surface goes.
+    // A restored task leaves the trash immediately, replacing its editor with
+    // the shared empty inspector.
     controller.restoreTask('gone');
     await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('floating-task-editor-gone')),
-        findsOneWidget);
+    expect(find.byType(TaskInspector), findsNothing);
+    expect(find.byType(EmptyTaskInspector), findsOneWidget);
 
     controller.purgeTask('gone');
     await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('floating-task-editor-gone')), findsNothing);
+    expect(find.byType(TaskInspector), findsNothing);
   });
 
-  testWidgets('TRASH-005 a deleted note has no page to open', (tester) async {
+  testWidgets('TRASH-005 the task trash does not contain deleted notes',
+      (tester) async {
     final controller = WorkspaceController(seedData: false);
     addTearDown(controller.dispose);
+    controller.loadTasksForTest([removed('task-only', title: '仍然只显示任务')]);
     final noteId = controller.addNote(title: '扔掉的笔记');
     controller.removeNote(noteId);
     await pumpTrash(tester, controller);
 
-    // The note is in the trash and wears the same frame — but not a task's box,
-    // because it has no completion state to report.
-    expect(surface(noteId), findsOneWidget);
-    expect(find.byType(TaskCompletionBox), findsNothing);
-    expect(find.text('扔掉的笔记'), findsOneWidget);
-    expect(find.textContaining('删除'), findsOneWidget);
-
-    // Tapping it opens nothing: the notes tree shows live notes only, so there
-    // is no page that could draw a deleted one. Acting on it means 恢复.
-    await tester.tap(surface(noteId));
-    await tester.pumpAndSettle();
-    expect(find.byKey(ValueKey('floating-task-editor-$noteId')), findsNothing);
+    expect(surface('task-only'), findsOneWidget);
+    expect(find.text('仍然只显示任务'), findsOneWidget);
+    expect(find.text('扔掉的笔记'), findsNothing);
+    expect(surface(noteId), findsNothing);
+    expect(find.byType(TaskCompletionBox), findsOneWidget);
   });
 
   testWidgets('TRASH-006 恢复 puts a row back without also opening it',
@@ -188,14 +195,14 @@ void main() {
 
     // The row's own actions sit inside the row's tap target. Tapping one has to
     // mean the action and nothing else.
-    await tester.tap(find.descendant(
-        of: surface('kept'), matching: find.byTooltip('恢复')));
+    await tester.tap(
+        find.descendant(of: surface('kept'), matching: find.byTooltip('恢复')));
     await tester.pumpAndSettle();
 
-    expect(find.byKey(const ValueKey('floating-task-editor-kept')), findsNothing);
-    expect(surface('kept'), findsNothing);
     expect(
-        controller.tasks.firstWhere((task) => task.id == 'kept').deletedAt,
+        find.byKey(const ValueKey('floating-task-editor-kept')), findsNothing);
+    expect(surface('kept'), findsNothing);
+    expect(controller.tasks.firstWhere((task) => task.id == 'kept').deletedAt,
         isNull);
   });
 
@@ -232,9 +239,102 @@ void main() {
   testWidgets('TRASH-008 an empty trash says so', (tester) async {
     final controller = WorkspaceController(seedData: false);
     addTearDown(controller.dispose);
+    final noteId = controller.addNote(title: '只能在笔记垃圾桶出现');
+    controller.removeNote(noteId);
     await pumpTrash(tester, controller);
 
     expect(find.text('垃圾桶是空的'), findsOneWidget);
     expect(find.byType(TaskListRowFrame), findsNothing);
+    expect(find.text('只能在笔记垃圾桶出现'), findsNothing);
+    expect(controller.deletedNotes, hasLength(1));
+    expect(
+        tester
+            .widget<AppIconButton>(
+                find.byKey(const ValueKey('empty-trash-button')))
+            .onPressed,
+        isNull);
+  });
+
+  testWidgets('TRASH-009 the task deletion order ignores deleted notes',
+      (tester) async {
+    final controller = WorkspaceController(seedData: false);
+    addTearDown(controller.dispose);
+    controller.loadTasksForTest([
+      removed('older-task', title: '更早删除的任务', at: DateTime(2020, 6, 10)),
+      removed('newer-task', title: '较新删除的任务', at: DateTime(2021, 6, 10)),
+    ]);
+    final noteId = controller.addNote(title: '较晚删除的笔记');
+    controller.removeNote(noteId);
+    await pumpTrash(tester, controller);
+
+    expect(find.text('较晚删除的笔记'), findsNothing);
+    expect(tester.getTopLeft(surface('newer-task')).dy,
+        lessThan(tester.getTopLeft(surface('older-task')).dy));
+  });
+
+  testWidgets('TRASH-010 the shared pane divider stays within its limits',
+      (tester) async {
+    final controller = WorkspaceController(seedData: false);
+    addTearDown(controller.dispose);
+    controller.loadTasksForTest([removed('resizable')]);
+    await pumpTrash(tester, controller);
+
+    final divider = find.byKey(const ValueKey('task-pane-divider'));
+    expect(divider, findsOneWidget);
+    await tester.drag(divider, const Offset(300, 0));
+    await tester.pumpAndSettle();
+    expect(controller.taskListPaneWidth, TaskListMetrics.maxPaneWidth);
+
+    await tester.drag(divider, const Offset(-500, 0));
+    await tester.pumpAndSettle();
+    expect(controller.taskListPaneWidth, TaskListMetrics.minPaneWidth);
+  });
+
+  testWidgets('TRASH-011 clearing purges tasks but leaves notes alone',
+      (tester) async {
+    final controller = WorkspaceController(seedData: false);
+    addTearDown(controller.dispose);
+    controller.loadTasksForTest([
+      removed('deleted-parent', title: '删除的父任务'),
+      removed('deleted-child', title: '删除的子任务', parent: 'deleted-parent'),
+      TaskItem(
+        id: 'active-child',
+        title: '仍然有效的子任务',
+        listName: '工作',
+        bucket: taskBucketForDate(null, now: anchor),
+        parentTaskId: 'deleted-parent',
+      ),
+    ]);
+    final deletedNoteId = controller.addNote(title: '删除的笔记');
+    controller.removeNote(deletedNoteId);
+    final activeNoteId = controller.addNote(title: '保留的笔记');
+    await pumpTrash(tester, controller);
+
+    await tester.tap(find.byTooltip('清空垃圾桶'));
+    await tester.pumpAndSettle();
+    expect(find.text('清空垃圾桶'), findsOneWidget);
+    expect(find.text('垃圾桶中的任务将被永久删除，确定清空垃圾桶吗？'), findsOneWidget);
+    final dialogSize =
+        tester.getSize(find.byKey(const ValueKey('clear-trash-dialog')));
+    expect(dialogSize.width, lessThanOrEqualTo(440));
+    expect(dialogSize.height, lessThanOrEqualTo(240));
+
+    await tester.tap(find.widgetWithText(OutlinedButton, '取消'));
+    await tester.pumpAndSettle();
+    expect(controller.deletedTasks, hasLength(2));
+    expect(controller.deletedNotes, hasLength(1));
+
+    await tester.tap(find.byTooltip('清空垃圾桶'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, '确认'));
+    await tester.pumpAndSettle();
+
+    expect(controller.deletedTasks, isEmpty);
+    expect(controller.deletedNotes, hasLength(1));
+    expect(controller.deletedNotes.single.id, deletedNoteId);
+    expect(controller.tasks.map((task) => task.id), ['active-child']);
+    expect(controller.tasks.single.parentTaskId, isNull);
+    expect(controller.notes.map((note) => note.id),
+        containsAll([deletedNoteId, activeNoteId]));
   });
 }

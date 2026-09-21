@@ -229,7 +229,8 @@ void main() {
 
   test('SUB-027/028 the child schedule is the single source for every view',
       () {
-    final c = WorkspaceController(seedData: false)..addTask('父任务');
+    final c = WorkspaceController(seedData: false)
+      ..addTask('父任务', forceUnscheduled: true);
     addTearDown(c.dispose);
     final parentId = c.tasks.single.id;
     final childId = c.createChildTask(parentId)!;

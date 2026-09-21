@@ -163,7 +163,7 @@ void main() {
   });
 
   test('SUB-086/087 a child with its own date projects into Today alone', () {
-    final c = build()..addTask('父任务');
+    final c = build()..addTask('父任务', forceUnscheduled: true);
     addTearDown(c.dispose);
     final parentId = c.tasks.single.id;
     final a = c.createChildTask(parentId, title: '甲')!;
@@ -194,7 +194,7 @@ void main() {
   });
 
   test('SUB-089 an overdue child enters the overdue group on its own dates', () {
-    final c = build()..addTask('父任务');
+    final c = build()..addTask('父任务', forceUnscheduled: true);
     addTearDown(c.dispose);
     final parentId = c.tasks.single.id;
     final a = c.createChildTask(parentId, title: '甲')!;

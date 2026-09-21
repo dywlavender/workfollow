@@ -112,8 +112,7 @@ class QuickAddField extends StatefulWidget {
   final WorkspaceController controller;
   final bool autofocus;
 
-  /// Uses the compact inline-row treatment from the macOS list view. Home
-  /// dashboard and other contexts keep the fuller card treatment.
+  /// Uses the compact inline-row treatment from the macOS task list.
   final bool listStyle;
   @override
   State<QuickAddField> createState() => _QuickAddFieldState();
@@ -674,8 +673,7 @@ class _QuickAddFieldState extends State<QuickAddField> {
         },
         child: Container(
           // The list add bar is a quiet neutral slot: no outline, no shadow,
-          // 40pt tall. The home card keeps its frame — there it is a call to
-          // action, here it is the first line of a list.
+          // 40pt tall. The fuller card-style variant keeps its frame.
           constraints: widget.listStyle
               ? const BoxConstraints(minHeight: TaskListMetrics.quickAddHeight)
               : null,
@@ -825,7 +823,7 @@ class _QuickAddFieldState extends State<QuickAddField> {
                                   fontWeight: WorkFollowMacWeight.medium)))),
                 // The list add row carries its two fixed slots up in the main
                 // line now, so this expanded property strip only remains on the
-                // fuller home-card variant.
+                // fuller card-style variant.
                 if (expanded && !widget.listStyle)
                   Padding(
                       padding: const EdgeInsets.only(

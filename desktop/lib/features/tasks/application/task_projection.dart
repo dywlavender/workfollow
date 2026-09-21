@@ -28,7 +28,6 @@ class TaskProjection {
       return List.unmodifiable(tagged);
     }
     final filtered = switch (viewName) {
-      'home' => tagged,
       'recent' => tagged.where((task) =>
           !task.isClosed && isInRecentWindow(task, reference: reference)),
       'today' => tagged.where((task) =>
@@ -136,9 +135,6 @@ class TaskProjection {
     final dueTodayOrOverdue =
         (TaskItem task) => needsAttentionToday(task, reference: reference);
     return switch (viewName) {
-      'home' => active
-          .where((task) => !task.isClosed && dueTodayOrOverdue(task))
-          .length,
       'recent' => active
           .where((task) =>
               !task.isClosed && isInRecentWindow(task, reference: reference))

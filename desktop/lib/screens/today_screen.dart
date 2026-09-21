@@ -19,6 +19,7 @@ import '../widgets/quick_add.dart';
 import '../widgets/task_date_picker.dart';
 import '../widgets/task_schedule_panel.dart';
 import '../widgets/task_inspector.dart';
+import '../widgets/task_list_inspector_split.dart';
 import '../widgets/task_row.dart';
 import '../widgets/task_list/task_group_header.dart';
 import '../widgets/task_list/task_list_divider.dart';
@@ -291,37 +292,16 @@ class _TodayScreenState extends State<TodayScreen> {
         final available =
             constraints.maxWidth - _detailMinWidth - _listDividerWidth;
         final listWidth = _boundedListPaneWidth(available);
-        return Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            SizedBox(
-              key: const ValueKey('web-task-list-pane'),
-              width: listWidth,
-              child: list,
-            ),
-            _ResizablePaneDivider(
-              key: const ValueKey('task-pane-divider'),
-              onDrag: (delta) => _resizeListPane(available, delta),
-            ),
-            Expanded(
-              child: ConstrainedBox(
-                key: const ValueKey('web-task-detail-pane'),
-                constraints: const BoxConstraints(minWidth: _detailMinWidth),
-                // The detail pane is the list's peer, not the page behind it:
-                // it holds the content surface even while it is empty, so the
-                // shell never breaks into a grey field beside a white list.
-                child: ColoredBox(
-                  color: tokens.content,
-                  child: selected == null
-                      ? const _EmptyInspector()
-                      : TaskInspector(
-                          key: ValueKey('wide-detail-${selected.id}'),
-                          task: selected,
-                          controller: c),
-                ),
-              ),
-            ),
-          ],
+        return TaskListInspectorSplit(
+          list: list,
+          listWidth: listWidth,
+          onResize: (delta) => _resizeListPane(available, delta),
+          inspector: selected == null
+              ? const EmptyTaskInspector()
+              : TaskInspector(
+                  key: ValueKey('wide-detail-${selected.id}'),
+                  task: selected,
+                  controller: c),
         );
       }
       if (!narrow) return list;
@@ -693,95 +673,6 @@ class _TodayScreenState extends State<TodayScreen> {
           WorkFollowIcons.list,
         _ => WorkFollowIcons.tasks,
       };
-}
-
-/// A one-pixel visual divider with a larger invisible hit target. Keeping the
-/// layout width at one pixel preserves the list/detail geometry while making
-/// the resize gesture usable with a trackpad or mouse.
-class _ResizablePaneDivider extends StatefulWidget {
-  const _ResizablePaneDivider({super.key, required this.onDrag});
-
-  final ValueChanged<double> onDrag;
-
-  @override
-  State<_ResizablePaneDivider> createState() => _ResizablePaneDividerState();
-}
-
-class _ResizablePaneDividerState extends State<_ResizablePaneDivider> {
-  bool hovering = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final tokens = WorkFollowTheme.of(context);
-    return SizedBox(
-      width: WorkFollowLayout.taskListDividerWidth,
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          Positioned.fill(
-            child: ColoredBox(
-              color: hovering ? tokens.accent : tokens.border,
-            ),
-          ),
-          Positioned(
-            left: -6,
-            right: -6,
-            top: 0,
-            bottom: 0,
-            child: MouseRegion(
-              cursor: SystemMouseCursors.resizeLeftRight,
-              onEnter: (_) => setState(() => hovering = true),
-              onExit: (_) => setState(() => hovering = false),
-              child: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onHorizontalDragUpdate: (details) =>
-                    widget.onDrag(details.delta.dx),
-                child: const SizedBox.expand(),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// Empty state for the persistent wide-window inspector. It keeps the right
-/// pane visually present, just like the reference app, while explaining the
-/// next action instead of leaving an unexplained blank region.
-class _EmptyInspector extends StatelessWidget {
-  const _EmptyInspector();
-
-  @override
-  Widget build(BuildContext context) {
-    final tokens = WorkFollowTheme.of(context);
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(WorkFollowSpacing.pageBottomSpace),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            AppIcon(WorkFollowIcons.touch,
-                size: WorkFollowMetrics.headerIcon, color: tokens.textTertiary),
-            const SizedBox(height: WorkFollowSpacing.space3),
-            Text('选择一个任务开始编辑',
-                style: TextStyle(
-                    color: tokens.textSecondary,
-                    fontSize: WorkFollowMacTypography.listTitle,
-                    height: WorkFollowMacTypography.lineControl,
-                    fontWeight: WorkFollowMacWeight.semibold)),
-            const SizedBox(height: WorkFollowSpacing.inlineGap),
-            Text('标题、备注、日期和子任务都会在这里展开。',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                    color: tokens.textTertiary,
-                    fontSize: WorkFollowMacTypography.supporting,
-                    height: WorkFollowMacTypography.lineList)),
-          ],
-        ),
-      ),
-    );
-  }
 }
 
 class _BulkBar extends StatelessWidget {

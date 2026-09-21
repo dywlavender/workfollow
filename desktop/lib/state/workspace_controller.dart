@@ -24,7 +24,6 @@ import '../features/matrix/matrix_models.dart';
 import '../features/matrix/matrix_projection.dart';
 
 enum WorkspaceView {
-  home,
   recent,
   today,
   inbox,
@@ -32,6 +31,7 @@ enum WorkspaceView {
   completed,
   calendar,
   notes,
+  notesTrash,
   trash,
   work,
   study,
@@ -143,30 +143,6 @@ class MigrationImportSummary {
   final int skippedNotes;
   final int importedLists;
   final int importedFolders;
-}
-
-class WeeklyReviewSummary {
-  const WeeklyReviewSummary({
-    required this.completed,
-    required this.overdue,
-    required this.mostProductiveWeekday,
-    required this.weekStart,
-    required this.weekEnd,
-  });
-
-  final int completed;
-  final int overdue;
-  final int? mostProductiveWeekday;
-  final DateTime weekStart;
-  final DateTime weekEnd;
-
-  bool get isEmpty => completed == 0 && overdue == 0;
-
-  String get weekdayLabel {
-    final weekday = mostProductiveWeekday;
-    if (weekday == null) return '还没有完成记录';
-    return '周${const ['一', '二', '三', '四', '五', '六', '日'][weekday - 1]}最高产';
-  }
 }
 
 class WorkspaceController extends ChangeNotifier {
@@ -331,7 +307,7 @@ class WorkspaceController extends ChangeNotifier {
   List<NoteItem> _notes;
   List<MigrationListRecord> _lists;
   List<MigrationFolderRecord> _folders;
-  WorkspaceView _view = WorkspaceView.home;
+  WorkspaceView _view = WorkspaceView.today;
   String? _selectedListName;
   String? _selectedTagName;
   String? _selectedTaskId;
@@ -342,6 +318,7 @@ class WorkspaceController extends ChangeNotifier {
   String? _lastRemovedNoteId;
   String? _lastRecurrenceSpawnId;
   List<String> _lastRecurrenceSpawnChildIds = const [];
+
   /// The children a parent's completion carried with it, exactly as they were
   /// beforehand. Undo has to put the whole group back — restoring only the
   /// parent would leave a live parent sitting above a finished subtree.
@@ -397,25 +374,18 @@ class WorkspaceController extends ChangeNotifier {
         WorkspaceView.personal =>
           true,
         WorkspaceView.matrix => false,
-        WorkspaceView.home ||
         WorkspaceView.calendar ||
         WorkspaceView.notes ||
+        WorkspaceView.notesTrash ||
         WorkspaceView.trash =>
           false,
       };
 
-  /// Pages that own their chrome: calendar and matrix each carry their own
-  /// mode and range controls in the page header, and hold
-  /// a single destination that the icon rail has already selected. Home is a
-  /// dashboard rather than a second navigation tree — its two shortcut rows
-  /// only repeated the rail. For all of them the shell keeps the icon rail as
-  /// the single navigation surface and hands the column's width back to the
-  /// page.
+  /// Calendar and matrix own their mode and range controls in the page header,
+  /// so the shell keeps the icon rail as the single navigation surface and
+  /// hands the column's width back to those pages.
   bool get isSelfContainedView => switch (_view) {
-        WorkspaceView.calendar ||
-        WorkspaceView.matrix ||
-        WorkspaceView.home =>
-          true,
+        WorkspaceView.calendar || WorkspaceView.matrix => true,
         _ => false,
       };
   String? get selectedTaskId => taskSelection.selectedTaskId;
@@ -427,61 +397,10 @@ class WorkspaceController extends ChangeNotifier {
   String get lastActionMessage => _lastActionMessage;
   String? get selectedListName => _selectedListName;
   String? get selectedTagName => _selectedTagName;
-  bool get shouldShowWeeklyReview => DateTime.now().weekday <= 3;
-
-  WeeklyReviewSummary get weeklyReview {
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final thisMonday = today.subtract(Duration(days: today.weekday - 1));
-    final weekStart = thisMonday.subtract(const Duration(days: 7));
-    final weekEnd = thisMonday;
-    final completionByDay = <int, int>{};
-    var completed = 0;
-    for (final task in _tasks) {
-      if (task.deletedAt != null || !task.completed) continue;
-      final value = localDateTimeFromStorage(task.completedAt);
-      if (value == null ||
-          value.isBefore(weekStart) ||
-          !value.isBefore(weekEnd)) {
-        continue;
-      }
-      completed += 1;
-      completionByDay[value.weekday] =
-          (completionByDay[value.weekday] ?? 0) + 1;
-    }
-    int? mostProductive;
-    for (final entry in completionByDay.entries) {
-      if (mostProductive == null ||
-          entry.value > (completionByDay[mostProductive] ?? 0) ||
-          (entry.value == (completionByDay[mostProductive] ?? 0) &&
-              entry.key < mostProductive)) {
-        mostProductive = entry.key;
-      }
-    }
-    final overdue = _tasks.where((task) {
-      if (task.deletedAt != null ||
-          task.isClosed ||
-          task.isConverted ||
-          task.isSkipped) return false;
-      final due = localDateTimeFromStorage(task.dueAt);
-      if (due == null) return false;
-      final dueDay = DateTime(due.year, due.month, due.day);
-      return dueDay.isBefore(today);
-    }).length;
-    return WeeklyReviewSummary(
-      completed: completed,
-      overdue: overdue,
-      mostProductiveWeekday: mostProductive,
-      weekStart: weekStart,
-      weekEnd: weekEnd,
-    );
-  }
-
   String get viewTitle {
     if (_selectedTagName != null) return '标签：$_selectedTagName';
     if (_selectedListName != null) return _selectedListName!;
     return switch (_view) {
-      WorkspaceView.home => '首页',
       WorkspaceView.recent => '最近 7 天',
       WorkspaceView.today => '今天',
       WorkspaceView.inbox => '收集箱',
@@ -492,6 +411,7 @@ class WorkspaceController extends ChangeNotifier {
       WorkspaceView.personal => '个人',
       WorkspaceView.calendar => '日历',
       WorkspaceView.notes => '笔记',
+      WorkspaceView.notesTrash => '垃圾桶',
       WorkspaceView.trash => '垃圾桶',
       WorkspaceView.matrix => '四象限',
     };
@@ -2093,6 +2013,12 @@ class WorkspaceController extends ChangeNotifier {
     _tasks = List.of(tasks);
   }
 
+  /// Test seam: install explicit notes so trash ordering can use fixed stamps.
+  @visibleForTesting
+  void loadNotesForTest(List<NoteItem> notes) {
+    _notes = List.of(notes);
+  }
+
   /// Tasks whose scheduled date falls on [day], independent of the current
   /// navigation filters, so the calendar never borrows another view's list.
   List<TaskItem> tasksForDay(DateTime day) {
@@ -2120,6 +2046,7 @@ class WorkspaceController extends ChangeNotifier {
       taskProjection.spansMultipleDays(task);
 
   int countFor(WorkspaceView destination) {
+    if (destination == WorkspaceView.notesTrash) return deletedNotes.length;
     return taskProjection.count(
         tasks: _tasks, view: destination, reference: _dateReference);
   }
@@ -2679,6 +2606,56 @@ class WorkspaceController extends ChangeNotifier {
     if (_selectedTaskId != null &&
         (_selectedTaskId == id || childIds.contains(_selectedTaskId))) {
       _setSelectedTaskId(null);
+    }
+    _schedulePersist();
+    _notify();
+  }
+
+  /// Permanently removes every soft-deleted task from the task trash.
+  /// Notes are deliberately handled by [purgeAllDeletedNotes] so each trash
+  /// destination can only affect its own content type.
+  void purgeAllDeletedTasks() {
+    final removedTaskIds = _tasks
+        .where((task) => task.deletedAt != null)
+        .map((task) => task.id)
+        .toSet();
+    if (removedTaskIds.isEmpty) return;
+
+    final now = DateTime.now().toIso8601String();
+    for (var i = 0; i < _tasks.length; i++) {
+      final task = _tasks[i];
+      if (task.deletedAt == null &&
+          task.parentTaskId != null &&
+          removedTaskIds.contains(task.parentTaskId)) {
+        _tasks[i] = task.copyWith(
+          clearParentTaskId: true,
+          updatedAt: now,
+        );
+      }
+    }
+    for (final id in removedTaskIds) {
+      unawaited(_reminders.cancel(id));
+    }
+    _tasks.removeWhere((task) => removedTaskIds.contains(task.id));
+
+    if (_selectedTaskId != null && removedTaskIds.contains(_selectedTaskId)) {
+      _setSelectedTaskId(null);
+    }
+    _schedulePersist();
+    _notify();
+  }
+
+  /// Permanently removes every soft-deleted note from the notes trash.
+  void purgeAllDeletedNotes() {
+    final removedNoteIds = _notes
+        .where((note) => note.deletedAt != null)
+        .map((note) => note.id)
+        .toSet();
+    if (removedNoteIds.isEmpty) return;
+
+    _notes.removeWhere((note) => removedNoteIds.contains(note.id));
+    if (_selectedNoteId != null && removedNoteIds.contains(_selectedNoteId)) {
+      _selectedNoteId = null;
     }
     _schedulePersist();
     _notify();
@@ -4294,6 +4271,7 @@ class _BulkTaskUndo {
   final Map<String, String?> previousDueAts;
   final Map<String, bool> previousDueTimes;
   final Map<String, String> previousListNames;
+
   /// The subtree a bulk completion carried, as it was beforehand: a full
   /// snapshot per child, because a child that was already ticked has to come
   /// back ticked rather than be force-opened by the undo.

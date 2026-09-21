@@ -11,6 +11,7 @@ import 'package:workfollow_personal/theme/workfollow_interaction_states.dart';
 import 'package:workfollow_personal/theme/workfollow_theme.dart';
 import 'package:workfollow_personal/widgets/calendar/calendar_task_bar.dart';
 import 'package:workfollow_personal/widgets/sidebar.dart';
+import 'package:workfollow_personal/widgets/trash_confirmation_dialog.dart';
 
 /// Controls that sit on a surface which already carries a hue must deepen that
 /// hue under the pointer.
@@ -120,6 +121,29 @@ void main() {
           reason: '$path 里的有色表面控件必须显式声明 overlay，'
               '否则又回到吃全局不透明 hover 的老样子');
     }
+  });
+
+  testWidgets('the destructive dismiss key deepens its own red', (tester) async {
+    final error = WorkFollowThemeData.light().colorScheme.error;
+    await tester.pumpWidget(MaterialApp(
+        theme: WorkFollowThemeData.light(),
+        home: Scaffold(
+            body: TrashConfirmationDialog(
+                title: '清空垃圾桶',
+                message: '这会永久删除其中的任务。',
+                onCancel: () {},
+                onConfirm: () {}))));
+    await tester.pumpAndSettle();
+
+    // The disc used to be painted by the InkWell's child, which put the ink
+    // underneath it: hovering showed nothing at all.
+    final key = find.byTooltip('取消');
+    expect(key, findsOneWidget);
+    expect(hoverOverlay(tester, key),
+        Color.alphaBlend(Colors.black.withValues(alpha: .10), error));
+    expect(hoverOverlay(tester, key), isNot(error),
+        reason: '把红叠在自己身上还是红 —— 实心色必须变暗，否则和没反馈一个样');
+    expect(hoverOverlay(tester, key), isNot(tokens.listRowHover));
   });
 
   testWidgets('the palette swatch never tints the colour it is showing',

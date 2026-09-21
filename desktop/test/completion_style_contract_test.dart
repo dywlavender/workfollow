@@ -30,7 +30,8 @@ import 'package:workfollow_personal/widgets/task_row.dart';
 ///    *inside a document*, where a strike through a ticked line is the
 ///    convention the editor is imitating;
 ///  * the trash strikes every title unconditionally, because there the line
-///    means "deleted" rather than "done".
+///    means "deleted" rather than "done". This applies to both the task
+///    trash and the separate notes trash.
 ///
 /// This is a source scan rather than a widget test on purpose. The surfaces
 /// that must not strike a title are private widgets inside four different
@@ -46,6 +47,7 @@ void main() {
   const allowed = <String>[
     'lib/features/editor/document_styles.dart',
     'lib/screens/trash_screen.dart',
+    'lib/screens/notes_trash_screen.dart',
   ];
 
   test('a completed task is greyed out and never struck through', () {
@@ -67,8 +69,8 @@ void main() {
     // Otherwise the exception above outlives the reason it was written for, and
     // the next reader has to re-derive whether it is still true.
     for (final path in allowed) {
-      expect(File(path).readAsStringSync(),
-          contains('TextDecoration.lineThrough'),
+      expect(
+          File(path).readAsStringSync(), contains('TextDecoration.lineThrough'),
           reason: '$path no longer strikes anything — drop it from the list');
     }
   });
@@ -132,8 +134,7 @@ void main() {
       // step below it, or it stops being the row's head. The reference measures
       // ΔL* 33.0 to the title against 16.2 to the line under it, so this reads
       // as a wide margin here and still fails the even ladder it replaced.
-      expect(
-          ladder['title']! - ladder['body']!,
+      expect(ladder['title']! - ladder['body']!,
           greaterThan(3 * (ladder['body']! - ladder['meta']!)),
           reason: 'the title has to separate from the three rungs under it');
       expect(

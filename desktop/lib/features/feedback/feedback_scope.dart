@@ -6,8 +6,8 @@ import 'feedback_event.dart';
 /// Makes the shell's [FeedbackController] reachable from anywhere in the tree.
 ///
 /// An inherited notifier rather than constructor plumbing: the completion
-/// affordance appears in rows, the inspector, the board, the home screen and
-/// the menu bar, and threading a controller through every one of them would
+/// affordance appears in rows, the inspector, the board and the menu bar, and
+/// threading a controller through every one of them would
 /// mean a new parameter on each intermediate widget that has nothing to do with
 /// feedback.
 ///

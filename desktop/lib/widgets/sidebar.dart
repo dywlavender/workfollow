@@ -133,8 +133,8 @@ class AppRail extends StatelessWidget {
 /// Maps the remaining first-level rail destinations to their second-column
 /// grammar.
 ///
-/// Only two contexts own a column: the note tree and the task tree. Home,
-/// calendar and matrix have no column at all — see
+/// Only the note tree and task tree own a column. Calendar and matrix have no
+/// column at all — see
 /// [WorkspaceController.isSelfContainedView] — so this switch never sees them.
 class _ContextNavigation extends StatelessWidget {
   const _ContextNavigation({required this.controller});
@@ -144,7 +144,9 @@ class _ContextNavigation extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return switch (controller.view) {
-      WorkspaceView.notes => _NotesNavigation(controller: controller),
+      WorkspaceView.notes ||
+      WorkspaceView.notesTrash =>
+        _NotesNavigation(controller: controller),
       _ => _TaskNavigation(controller: controller),
     };
   }
@@ -247,20 +249,23 @@ class _NotesNavigation extends StatelessWidget {
       children: [
         _RailSectionHeader(
           label: '笔记',
-          trailing: Row(mainAxisSize: MainAxisSize.min, children: [
-            AppIconButton(
-                icon: WorkFollowIcons.add,
-                tooltip: '新建笔记',
-                size: WorkFollowMetrics.compactNavigationIconHitTarget,
-                iconSize: WorkFollowMetrics.toolbarIcon,
-                onPressed: () => controller.addNoteInCurrentFolder()),
-            AppIconButton(
-                icon: WorkFollowIcons.newFolder,
-                tooltip: '新建文件夹',
-                size: WorkFollowMetrics.compactNavigationIconHitTarget,
-                iconSize: WorkFollowMetrics.toolbarIcon,
-                onPressed: () => _showAddFolderDialog(context, controller)),
-          ]),
+          trailing: controller.view == WorkspaceView.notesTrash
+              ? null
+              : Row(mainAxisSize: MainAxisSize.min, children: [
+                  AppIconButton(
+                      icon: WorkFollowIcons.add,
+                      tooltip: '新建笔记',
+                      size: WorkFollowMetrics.compactNavigationIconHitTarget,
+                      iconSize: WorkFollowMetrics.toolbarIcon,
+                      onPressed: () => controller.addNoteInCurrentFolder()),
+                  AppIconButton(
+                      icon: WorkFollowIcons.newFolder,
+                      tooltip: '新建文件夹',
+                      size: WorkFollowMetrics.compactNavigationIconHitTarget,
+                      iconSize: WorkFollowMetrics.toolbarIcon,
+                      onPressed: () =>
+                          _showAddFolderDialog(context, controller)),
+                ]),
         ),
         _RailItem(
           label: '全部笔记',
@@ -316,6 +321,14 @@ class _NotesNavigation extends StatelessWidget {
                   },
                   onMenu: () => _editFolder(anchor, controller, folder),
                 ))),
+        const _RailGroupBreak(key: ValueKey('notes-trash-group-break')),
+        _RailItem(
+          label: '垃圾桶',
+          icon: WorkFollowIcons.trash,
+          count: controller.countFor(WorkspaceView.notesTrash),
+          selected: controller.view == WorkspaceView.notesTrash,
+          onTap: () => controller.selectView(WorkspaceView.notesTrash),
+        ),
       ],
     );
   }
@@ -358,14 +371,6 @@ class _IconRail extends StatelessWidget {
         children: [
           const SizedBox(height: WorkFollowSpacing.space3),
           _IconRailButton(
-            label: '首页',
-            icon: WorkFollowIcons.brand,
-            selected: controller.view == WorkspaceView.home,
-            onPressed: () => controller.selectView(WorkspaceView.home),
-            filled: true,
-          ),
-          const SizedBox(height: WorkFollowSpacing.controlGap),
-          _IconRailButton(
             label: '任务',
             icon: WorkFollowIcons.tasks,
             selected: taskRailSelected,
@@ -374,7 +379,8 @@ class _IconRail extends StatelessWidget {
           _IconRailButton(
             label: '笔记',
             icon: WorkFollowIcons.notes,
-            selected: controller.view == WorkspaceView.notes,
+            selected: controller.view == WorkspaceView.notes ||
+                controller.view == WorkspaceView.notesTrash,
             onPressed: () => controller.selectView(WorkspaceView.notes),
           ),
           _IconRailButton(
@@ -529,14 +535,12 @@ class _IconRailButton extends StatefulWidget {
     required this.icon,
     required this.selected,
     required this.onPressed,
-    this.filled = false,
   });
 
   final String label;
   final IconData icon;
   final bool selected;
   final VoidCallback onPressed;
-  final bool filled;
 
   @override
   State<_IconRailButton> createState() => _IconRailButtonState();
@@ -550,9 +554,6 @@ class _IconRailButtonState extends State<_IconRailButton> {
   @override
   Widget build(BuildContext context) {
     final tokens = WorkFollowTheme.of(context);
-    // `filled` only chooses the home glyph's stronger visual treatment.  It
-    // must not make Home look selected while the user is in Tasks/Notes/etc.;
-    // the first rail otherwise shows two active destinations at once.
     // The rail fill never eases: hover and selection both have to land in the
     // same frame as the pointer or the click. With a 150ms transition every
     // icon the pointer swept past stayed lit (0.19 of the fill measured 90ms
@@ -604,9 +605,7 @@ class _IconRailButtonState extends State<_IconRailButton> {
                 ),
                 child: AppIcon(
                   widget.icon,
-                  size: widget.filled
-                      ? WorkFollowMetrics.railIcon + 1
-                      : WorkFollowMetrics.railIcon,
+                  size: WorkFollowMetrics.railIcon,
                   color: active
                       ? _sidebarAccent(context, tokens)
                       : (hovering
@@ -823,9 +822,8 @@ class _TagSectionState extends State<_TagSection> {
 }
 
 class _RailItem extends StatefulWidget {
-  // No key: the second column is rebuilt wholesale when the view changes, and
-  // no caller identifies a row by key any more (the home column that did is
-  // gone). Tests reach rows by their label.
+  // No key: the second column is rebuilt wholesale when the view changes.
+  // Tests reach rows by their label.
   const _RailItem({
     required this.label,
     required this.icon,
@@ -1034,8 +1032,9 @@ class _TaskListItemState extends State<_TaskListItem> {
                             ? _sidebarAccentSoft(context, tokens)
                             : WorkFollowInteractionStyles.customFill(
                                 defaultColor: Colors.transparent,
-                                hoverColor: WorkFollowColorTokens.navigationHover(
-                                    context, tokens),
+                                hoverColor:
+                                    WorkFollowColorTokens.navigationHover(
+                                        context, tokens),
                                 // A selected list is a selected row, not a
                                 // swatch: the fill is neutral like every other
                                 // row's, and the list's colour stays on the

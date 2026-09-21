@@ -86,8 +86,6 @@ void main() {
     expect(MatrixMetrics.taskRowCheckboxSize,
         WorkFollowMetrics.completionBoxSize);
     expect(
-        HomeMetrics.taskCheckboxVisualSize, WorkFollowMetrics.completionBoxSize);
-    expect(
         taskCompletionBoxRadius(WorkFollowMetrics.completionBoxSize) /
             WorkFollowMetrics.completionBoxSize,
         .25,

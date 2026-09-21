@@ -9,7 +9,6 @@ import 'package:flutter/material.dart';
 class WorkFollowIcons {
   const WorkFollowIcons._();
 
-  static const brand = Icons.check_rounded;
   static const tasks = Icons.checklist_rounded;
   static const notes = Icons.notes_outlined;
   static const calendar = Icons.calendar_month_outlined;
