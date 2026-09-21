@@ -196,6 +196,13 @@ class _TaskNavigation extends StatelessWidget {
               controller.selectedListName == null,
           onTap: () => controller.selectView(WorkspaceView.all),
         ),
+        // The views above and the lists below are different kinds of thing,
+        // and the header alone was not saying so: 清单 sat as close to 所有任务
+        // as any two rows sit to each other, so it read as one more row of the
+        // group above rather than as the start of a new one. The same rule the
+        // closing pair opens with marks this boundary, keyed so the column's
+        // order stays a contract.
+        const _RailGroupBreak(key: ValueKey('rail-lists-group-break')),
         _RailSectionHeader(
           label: '清单',
           trailing: AppIconButton(
@@ -698,13 +705,15 @@ Future<void> _showAddFolderDialog(
   controller.selectView(WorkspaceView.notes);
 }
 
-/// The hairline that opens the rail's closing group (已完成 / 垃圾桶).
+/// The hairline that separates two groups of the rail's second column.
 ///
-/// The column's other groups announce themselves with a [_RailSectionHeader],
-/// which works because each of them has a name — 任务, 清单, 标签. The closing
-/// pair has no name to carry, and inventing one ("归档", "回收") would put a
-/// word in the user's way that the product never uses. A rule marks the same
-/// break without adding vocabulary.
+/// The column announces most of its groups with a [_RailSectionHeader], which
+/// works because each of them has a name — 任务, 清单, 标签. Two boundaries need
+/// something else. The closing pair has no name to carry, and inventing one
+/// ("归档", "回收") would put a word in the user's way that the product never
+/// uses. 任务 and 清单 do have names, but a header alone left 所有任务 and 清单
+/// sitting no further apart than two ordinary rows, so the views and the lists
+/// read as one group. A rule marks both breaks without adding a word.
 class _RailGroupBreak extends StatelessWidget {
   const _RailGroupBreak({super.key});
 

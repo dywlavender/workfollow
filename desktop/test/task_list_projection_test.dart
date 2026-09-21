@@ -12,7 +12,7 @@ import 'package:workfollow_personal/state/workspace_controller.dart';
 import 'package:workfollow_personal/theme/workfollow_theme.dart';
 import 'package:workfollow_personal/widgets/task_date_picker.dart';
 
-/// LIST-001 … LIST-014 — where a row goes.
+/// LIST-001 … LIST-015 — where a row goes.
 ///
 /// Grouping is a business rule, so it is tested as one: these cases read the
 /// projection directly and never pump a widget. A heading that only exists
@@ -333,6 +333,63 @@ void main() {
     expect(groupGap, greaterThan(plainGap));
     expect(tester.getBottomLeft(breakRow).dy,
         lessThanOrEqualTo(tester.getTopLeft(done).dy));
+  });
+
+  testWidgets('LIST-015 the rule that opens 清单 is the one above 已完成',
+      (tester) async {
+    tester.view.physicalSize = const Size(1400, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+    await tester.pumpWidget(const WorkFollowApp(demoMode: true));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('任务'));
+    await tester.pumpAndSettle();
+
+    // 任务 holds views and 清单 holds lists. With a header alone the two sat no
+    // further apart than two ordinary rows, so the lists read as one more view
+    // of the group above instead of the start of a new group. The boundary now
+    // carries the same hairline the closing pair opens with — and both are
+    // asserted here, because "like the one above 已完成" is the whole rule: a
+    // second, slightly different line would be worse than none.
+    final listsBreak = find.byKey(const ValueKey('rail-lists-group-break'));
+    final closingBreak = find.byKey(const ValueKey('rail-group-break'));
+    expect(listsBreak, findsOneWidget);
+    expect(closingBreak, findsOneWidget);
+
+    /// `_RailGroupBreak` is a Padding around the line, so the line's own box is
+    /// the Container inside it.
+    Finder lineOf(Finder breakFinder) =>
+        find.descendant(of: breakFinder, matching: find.byType(Container));
+
+    expect(tester.getSize(lineOf(listsBreak)).height,
+        WorkFollowMetrics.dividerThickness);
+    expect(tester.getSize(lineOf(listsBreak)).height,
+        tester.getSize(lineOf(closingBreak)).height,
+        reason: '两条分组横线同一厚度');
+    expect(tester.widget<Container>(lineOf(listsBreak)).color,
+        tester.widget<Container>(lineOf(closingBreak)).color,
+        reason: '两条分组横线同一支颜色（tokens.border），不是各自调出来的');
+
+    final views = find.byKey(const ValueKey('rail-navigation-item-所有任务'));
+    final listsHeader = find.text('清单');
+    final line = lineOf(listsBreak);
+    expect(listsHeader, findsOneWidget);
+    expect(tester.getSize(line).width, tester.getSize(lineOf(closingBreak)).width,
+        reason: '两条分组横线画出同一段宽度');
+
+    // Strictly between them, and set off from the group above: the rule carries
+    // the group's top spacing, it does not sit against the last view's edge.
+    // (A row's own box already includes its margin, so two plain rows measure
+    // as touching — the distance has to be read off the line, not off a row.)
+    expect(tester.getTopLeft(line).dy,
+        greaterThan(tester.getBottomLeft(views).dy),
+        reason: '横线在 所有任务 之下，并与它留出组间距');
+    expect(tester.getBottomLeft(line).dy,
+        lessThan(tester.getTopLeft(listsHeader).dy),
+        reason: '横线在 清单 标题之上');
   });
 
   testWidgets('LIST-007 LIST-008 the rail offers no 过期 or 计划 destination',
