@@ -216,7 +216,6 @@ class _WeekTaskPill extends StatelessWidget {
               key: ValueKey('calendar-week-box-${task.id}'),
               size: CalendarMetrics.taskBarCheckboxSize,
               completed: task.completed,
-              openColor: color,
             ),
             const SizedBox(width: WorkFollowSpacing.denseGap),
             Expanded(

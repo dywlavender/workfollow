@@ -178,6 +178,15 @@ BoxDecoration _boxPaint(WidgetTester tester, Finder finder) => tester
         find.descendant(of: finder, matching: find.byType(DecoratedBox)).first)
     .decoration as BoxDecoration;
 
+/// The edge an open box paints, addressed by the bar or item it sits in.
+Color _boxEdge(WidgetTester tester, Finder host) => _boxPaint(
+        tester,
+        find.descendant(
+            of: host, matching: find.byType(TaskCompletionBox)))
+    .border!
+    .top
+    .color;
+
 /// Where one of a row's layers sits in that row's stack.
 ///
 /// The row is a stack of cells, bands, today's wash and lines, and the order
@@ -474,6 +483,10 @@ void main() {
       final doneId = _taskOn(controller, day, '交报销');
       final timedId =
           _taskOn(controller, day, '联调', at: DateTime(2026, 9, 15, 9, 30));
+      // A second open task, in another list. Its bar is a different colour from
+      // 整理周报's, which is what makes the box assertion further down mean
+      // something rather than pass on two bars that happen to match.
+      final otherId = _taskOn(controller, day, '换个清单', listName: '工作');
       controller.toggleTask(doneId);
 
       await _pumpGrid(tester, controller,
@@ -501,6 +514,24 @@ void main() {
       expect(_boxIn(tester, _taskBar(doneId)).completed, isTrue);
       expect(_boxIn(tester, _taskBar(openId)).size,
           CalendarMetrics.taskBarCheckboxSize);
+
+      // The box is the one mark on a bar that reads the same on every list, so
+      // it does not take the bar's colour. The tint already says which list the
+      // task is in; a second reading of it inside the box is all a coloured
+      // edge adds, and it costs the box the only thing it means. The reference
+      // month grid draws every bar's box in plain grey whatever the bar under
+      // it is — so two open tasks in different lists have to paint one edge,
+      // and that edge has to be neither bar's colour.
+      final openBar = _barFill(tester, _taskBar(openId)).withValues(alpha: 1);
+      final otherBar = _barFill(tester, _taskBar(otherId)).withValues(alpha: 1);
+      expect(openBar, isNot(otherBar),
+          reason: 'the two bars sit in different lists, or the rest of this '
+              'passes on two bars that would have matched anyway');
+      final openEdge = _boxEdge(tester, _taskBar(openId));
+      expect(_boxEdge(tester, _taskBar(otherId)), openEdge,
+          reason: 'a box that followed its bar would differ between them');
+      expect(openEdge, isNot(openBar));
+      expect(openEdge, isNot(otherBar));
 
       // A bar spends the cell's whole content width. It is the cell that
       // insets, not the bar: a bar narrower than its cell would leave the day
@@ -890,6 +921,9 @@ void main() {
       final now = DateTime.now();
       final today = DateTime(now.year, now.month, now.day);
       final openId = _taskOn(controller, today, '还没做');
+      // A second open task, in a list whose colour differs from the first's, so
+      // the box rule below is read across two bars rather than off one.
+      final otherId = _taskOn(controller, today, '换个清单', listName: '工作');
       final doneId = _taskOn(controller, today, '已经做完');
       controller.toggleTask(doneId);
 
@@ -914,11 +948,19 @@ void main() {
       expect(tester.widget<TaskCompletionBox>(done).size,
           CalendarMetrics.taskBarCheckboxSize);
 
-      // An open box takes the task's list colour; a finished one is grey along
-      // with the words beside it. Read off what is painted rather than off the
-      // arguments, so the assertion survives the box being drawn differently.
-      expect((_boxPaint(tester, open).border! as Border).top.color,
-          Color(controller.colorValueForList('收集箱')));
+      // An open box carries the product's own edge rather than the task's list
+      // colour — the pill behind it is already saying which list the task is
+      // in, the same way a month cell's bar does — and a finished one is grey
+      // along with the words beside it. Read off what is painted rather than
+      // off the arguments, so the assertion survives the box being drawn
+      // differently.
+      final other = find.byKey(ValueKey('calendar-week-box-$otherId'));
+      final openEdge = (_boxPaint(tester, open).border! as Border).top.color;
+      expect((_boxPaint(tester, other).border! as Border).top.color, openEdge,
+          reason: 'a box that followed its own item would differ between the '
+              'two lists');
+      expect(openEdge, isNot(Color(controller.colorValueForList('收集箱'))));
+      expect(openEdge, isNot(Color(controller.colorValueForList('工作'))));
       expect(_boxPaint(tester, done).color, taskCompletionFill(_tokens));
 
       // It leads the title, on its first line rather than centred on a block

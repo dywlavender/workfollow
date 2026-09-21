@@ -76,7 +76,6 @@ class CalendarTaskBar extends StatelessWidget {
             height: CalendarMetrics.taskBarHeight,
             child: _BarLine(
               task: task,
-              listColor: listColor,
               showBox: true,
               clock: _clockOf(
                 localDateTimeFromStorage(task.dueAt),
@@ -148,7 +147,6 @@ class CalendarTaskSpan extends StatelessWidget {
             height: CalendarMetrics.taskBarHeight,
             child: _BarLine(
               task: span.task,
-              listColor: listColor,
               showBox: span.startsInRow,
               // Gated on the task having a time of day, the same way a
               // single-day bar is. An all-day run is stored with its end at
@@ -177,14 +175,12 @@ class CalendarTaskSpan extends StatelessWidget {
 class _BarLine extends StatelessWidget {
   const _BarLine({
     required this.task,
-    required this.listColor,
     required this.showBox,
     required this.clock,
     required this.clockColor,
   });
 
   final TaskItem task;
-  final Color listColor;
   final bool showBox;
   final String? clock;
   final Color clockColor;
@@ -201,13 +197,15 @@ class _BarLine extends StatelessWidget {
         children: [
           if (showBox) ...[
             // The same box a task row draws, at the size this strip has room
-            // for. An open one takes the list colour so the bar says which
-            // list it belongs to even before the eye reaches the title; a
-            // finished one drops to grey, as a done task does everywhere.
+            // for — and with the same edge it defaults to, the muted ink. The
+            // bar's own colour is already saying which list the task is in, and
+            // a second reading of it inside the box is what a coloured edge
+            // would be: the reference month grid draws every bar's box in plain
+            // grey whatever the bar is tinted, so the box stays the one mark on
+            // the row that means the same thing on every list.
             TaskCompletionBox(
               size: CalendarMetrics.taskBarCheckboxSize,
               completed: completed,
-              openColor: listColor,
             ),
             const SizedBox(width: WorkFollowSpacing.denseGap),
           ],
