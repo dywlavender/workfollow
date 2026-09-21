@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:workfollow_personal/app.dart';
+import 'package:workfollow_personal/models/task.dart';
 import 'package:workfollow_personal/screens/notes_screen.dart';
 import 'package:workfollow_personal/screens/today_screen.dart';
 import 'package:workfollow_personal/state/workspace_controller.dart';
@@ -250,6 +251,61 @@ void main() {
       tester.getSize(find.byKey(const ValueKey('rail-list-item-工作'))).width,
       WorkFollowMetrics.listItemMaxWidth,
     );
+  });
+
+  testWidgets('every kind of row in the navigation column carries one weight',
+      (tester) async {
+    final controller = WorkspaceController(seedData: false);
+    addTearDown(controller.dispose);
+    controller.loadTasksForTest([
+      TaskItem(
+        id: 'tagged',
+        title: '带标签的任务',
+        listName: '工作',
+        bucket: taskBucketForDate(null, now: DateTime.now()),
+        tags: const ['设计'],
+      ),
+    ]);
+    controller.selectView(WorkspaceView.today);
+    await tester.pumpWidget(MaterialApp(
+      theme: WorkFollowThemeData.light(),
+      home: Scaffold(
+        body: SizedBox(
+          width: AppRail.width,
+          height: 720,
+          child: AppRail(
+            controller: controller,
+            isDark: false,
+            onToggleTheme: () {},
+            onOpenSettings: () {},
+          ),
+        ),
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    TextStyle words(String rowKey) => tester
+        .widget<Text>(find
+            .descendant(
+                of: find.byKey(ValueKey(rowKey)), matching: find.byType(Text))
+            .first)
+        .style!;
+
+    // Three widgets draw a row in this column — a smart view, a list, a tag —
+    // and the reference gives all three the same weight. They are asserted in
+    // one place on purpose: the rule belongs to the column, not to one row
+    // widget, and the three drifted apart once already (two were left at
+    // Medium when the first was brought down to the reference).
+    for (final row in [
+      'rail-navigation-item-今天',
+      'rail-list-item-工作',
+      'rail-tag-item-设计',
+    ]) {
+      expect(words(row).fontSize, WorkFollowMacTypography.navigation,
+          reason: '$row 字号与列内其它行同档');
+      expect(words(row).fontWeight, WorkFollowMacWeight.regular,
+          reason: '$row 字重与列内其它行同档：参考图这档是 regular');
+    }
   });
 
   testWidgets('notes index resolves the wide and compact pane widths',

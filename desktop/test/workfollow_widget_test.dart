@@ -232,17 +232,20 @@ void main() {
           reason: '$what 不该再用主色淡洗来表达选中');
     }
 
-    // Selected and unselected rows carry the same ink: the darkest text in the
-    // column, one weight step above the body. Selection is the only thing that
-    // may differ, and it belongs to the fill.
+    // Selected and unselected rows carry the same ink and the same weight.
+    // The weight is Regular because that is what the reference resolves to at
+    // this size: its rows resolve to PingFangUITextSC-Regular, while ours
+    // resolved to Medium — measured off both renderings at the same 14pt, not
+    // eyeballed, and worth about 19% more ink, a full weight step. Selection is
+    // the only thing that may differ, and it belongs to the fill.
     for (final row in [
       'rail-navigation-item-今天',
       'rail-navigation-item-所有任务'
     ]) {
       expect(words(row).color, tokens.textPrimary,
           reason: '$row 的文字是黑色主体，不随选中变色');
-      expect(words(row).fontWeight, WorkFollowMacWeight.medium,
-          reason: '$row 的文字是 medium，普通项不该细到看着发灰');
+      expect(words(row).fontWeight, WorkFollowMacWeight.regular,
+          reason: '$row 与参考图同档 regular；medium 会比参考图多约 19% 墨量');
     }
 
     final selected = fill('rail-navigation-item-今天')!;
@@ -253,7 +256,8 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('rail-list-item-工作')));
     await tester.pumpAndSettle();
     expect(words('rail-list-item-工作').color, tokens.textPrimary);
-    expect(words('rail-list-item-工作').fontWeight, WorkFollowMacWeight.medium);
+    expect(words('rail-list-item-工作').fontWeight, WorkFollowMacWeight.regular,
+        reason: '清单名与导航行是同一类行，字重必须同档');
     expectNeutral(fill('rail-list-item-工作')!, '选中的清单');
   });
 

@@ -745,8 +745,10 @@ class _RailSectionHeader extends StatelessWidget {
               style: TextStyle(
                 color: tokens.textTertiary,
                 // A rail group title is navigation chrome, not a content
-                // heading: it sits below the [navigation] rows it labels and
-                // stays regular so the rows keep the emphasis.
+                // heading: it sits above the [_RailItem] rows it labels and
+                // separates itself from them with colour and size. Weight is
+                // not part of that separation — the rows are regular too, so
+                // this line is not the one carrying the hierarchy.
                 fontSize: WorkFollowMacTypography.navigationMeta,
                 height: WorkFollowMacTypography.lineControl,
                 fontWeight: WorkFollowMacWeight.regular,
@@ -917,12 +919,14 @@ class _RailItemState extends State<_RailItem> {
                         fontSize: WorkFollowMacTypography.navigation,
                         height: WorkFollowMacTypography.lineControl,
                         // Every row carries the same ink and the same weight,
-                        // selected or not. Navigation text is the darkest thing
-                        // in the column and stays medium — one step above the
-                        // body, never semibold, which is what gave the column
-                        // its heavy dashboard look. Selection belongs to the
-                        // fill alone.
-                        fontWeight: WorkFollowMacWeight.medium,
+                        // selected or not. Regular is the reference's weight,
+                        // read off its own rendering rather than eyeballed: at
+                        // the same 14pt the navigation rows there resolve to
+                        // PingFangUITextSC-Regular, while ours resolved to
+                        // Medium and laid down about 19% more ink — a full
+                        // weight step, which is what made the column read as
+                        // heavy. Selection belongs to the fill alone.
+                        fontWeight: WorkFollowMacWeight.regular,
                       ),
                     ),
                   ),
@@ -1074,7 +1078,9 @@ class _TaskListItemState extends State<_TaskListItem> {
                                     fontSize:
                                         WorkFollowMacTypography.navigation,
                                     height: WorkFollowMacTypography.lineControl,
-                                    fontWeight: WorkFollowMacWeight.medium)),
+                                    // Same weight as every other row in this
+                                    // column — see _RailItemState.
+                                    fontWeight: WorkFollowMacWeight.regular)),
                           ),
                           if (count > 0)
                             Text('$count',
@@ -1313,7 +1319,9 @@ class _TagItemState extends State<_TagItem> {
                             color: tokens.textPrimary,
                             fontSize: WorkFollowMacTypography.navigation,
                             height: WorkFollowMacTypography.lineControl,
-                            fontWeight: WorkFollowMacWeight.medium))),
+                            // Same weight as every other row in this column —
+                            // see _RailItemState.
+                            fontWeight: WorkFollowMacWeight.regular))),
                 Text('${widget.count}',
                     style: TextStyle(
                         color: tokens.textTertiary,
@@ -1469,9 +1477,13 @@ class _TaskViewItemState extends State<_TaskViewItem> {
                                 : tokens.textPrimary,
                             fontSize: WorkFollowMacTypography.navigation,
                             height: WorkFollowMacTypography.lineControl,
-                            fontWeight: selected
-                                ? WorkFollowMacWeight.medium
-                                : WorkFollowMacWeight.regular,
+                            // Nothing instantiates this row any more, so this
+                            // is not the grammar the column draws with — see
+                            // _RailItemState. It is kept in step with it rather
+                            // than left at w500, because a `selected ? medium :
+                            // regular` sitting here is exactly the line the
+                            // next reader would take for the rule.
+                            fontWeight: WorkFollowMacWeight.regular,
                           ),
                         ),
                         const SizedBox(height: WorkFollowSpacing.microGap),
