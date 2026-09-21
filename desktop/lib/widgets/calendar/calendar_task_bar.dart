@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../models/task.dart';
+import '../../theme/workfollow_interaction_states.dart';
 import '../../theme/workfollow_theme.dart';
 import '../task_completion_box.dart';
 import 'calendar_spans.dart';
@@ -62,6 +63,9 @@ class CalendarTaskBar extends StatelessWidget {
         child: InkWell(
           onTap: onTap,
           borderRadius: radius,
+          // The bar carries the task's list colour, so the pointer deepens
+          // that colour rather than replacing it with the shared neutral.
+          overlayColor: WorkFollowInteractionStyles.tintedOverlay(listColor),
           child: SizedBox(
             height: CalendarMetrics.taskBarHeight,
             child: _BarLine(
@@ -131,6 +135,8 @@ class CalendarTaskSpan extends StatelessWidget {
         child: InkWell(
           onTap: onTap,
           borderRadius: radius,
+          // Same as the single-day bar: a tinted surface keeps its own colour.
+          overlayColor: WorkFollowInteractionStyles.tintedOverlay(listColor),
           child: SizedBox(
             height: CalendarMetrics.taskBarHeight,
             child: _BarLine(

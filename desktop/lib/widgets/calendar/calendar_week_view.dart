@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../models/task.dart';
 import '../../state/workspace_controller.dart';
+import '../../theme/workfollow_interaction_states.dart';
 import '../../theme/workfollow_theme.dart';
 import '../task_completion_box.dart';
 
@@ -191,6 +192,9 @@ class _WeekTaskPill extends StatelessWidget {
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(WorkFollowRadii.control),
+      // The pill is tinted in the task's list colour; the pointer deepens that
+      // tint instead of the shared neutral hover painting it out.
+      overlayColor: WorkFollowInteractionStyles.tintedOverlay(color),
       child: Container(
         padding: const EdgeInsets.symmetric(
             horizontal: WorkFollowSpacing.compactGap,

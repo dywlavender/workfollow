@@ -116,6 +116,26 @@ class WorkFollowInteractionStyles {
     return tokens.textPrimary;
   }
 
+  /// State overlay for Material controls that already sit on a tinted surface.
+  ///
+  /// [overlay] resolves to the shared neutral hover. That is right for a row
+  /// on the canvas, but it is opaque: laid over an accent chip or a
+  /// list-coloured calendar bar it paints the hue out and the control reads as
+  /// a grey block under the pointer. A tinted control deepens its own colour
+  /// instead, so the pointer only ever makes it more of what it already is.
+  static WidgetStateProperty<Color?> tintedOverlay(Color base) {
+    return WidgetStateProperty.resolveWith<Color?>((states) {
+      if (states.contains(WidgetState.disabled)) return null;
+      if (states.contains(WidgetState.pressed)) {
+        return base.withValues(alpha: .18);
+      }
+      if (states.contains(WidgetState.hovered)) {
+        return base.withValues(alpha: .10);
+      }
+      return null;
+    });
+  }
+
   /// Focus is a border concern, independent from hover and selection fills.
   static BorderSide focusBorder(
     WorkFollowTheme tokens, {

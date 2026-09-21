@@ -8,6 +8,7 @@ import '../../../models/rich_document.dart';
 import '../../../models/task.dart';
 import '../../../state/workspace_controller.dart';
 import '../../../theme/workfollow_icons.dart';
+import '../../../theme/workfollow_interaction_states.dart';
 import '../../../theme/workfollow_surface_tokens.dart';
 import '../../../theme/workfollow_theme.dart';
 import '../../../widgets/app_icon_button.dart';
@@ -288,6 +289,9 @@ class TaskSourceNotePanel extends StatelessWidget {
         borderRadius: BorderRadius.circular(WorkFollowRadii.surface),
         child: InkWell(
           borderRadius: BorderRadius.circular(WorkFollowRadii.surface),
+          // The card sits on an accent tint; hover deepens that tint rather
+          // than dropping an opaque neutral over it.
+          overlayColor: WorkFollowInteractionStyles.tintedOverlay(tokens.accent),
           onTap: () => controller.openNote(source.id),
           child: Padding(
             padding: const EdgeInsets.symmetric(

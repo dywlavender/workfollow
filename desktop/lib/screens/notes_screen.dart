@@ -226,6 +226,18 @@ class _NewNoteButton extends StatelessWidget {
             borderRadius: BorderRadius.circular(WorkFollowRadii.control),
             child: InkWell(
                 borderRadius: BorderRadius.circular(WorkFollowRadii.control),
+                // A solid accent control deepens inside its own hue. The
+                // shared hover is an opaque neutral, and laid over this button
+                // it replaced the blue with a grey block — the icon looked
+                // washed out the moment the pointer arrived. accentHover is
+                // the step the palette keeps for that; it holds one step per
+                // role, so a press lands on the same one.
+                overlayColor: WidgetStateProperty.resolveWith<Color?>(
+                    (states) =>
+                        states.contains(WidgetState.hovered) ||
+                                states.contains(WidgetState.pressed)
+                            ? tokens.accentHover
+                            : null),
                 onTap: onCreate,
                 child: SizedBox(
                     width: NotesMetrics.newNoteButtonSize,
