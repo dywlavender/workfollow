@@ -939,28 +939,18 @@ class _RailItemState extends State<_RailItem> {
                             onPressed: widget.onMenu,
                             icon: const AppIcon(WorkFollowIcons.more)))
                   else if (widget.count != null && widget.count! > 0)
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: WorkFollowSpacing.compactGap,
-                          vertical: WorkFollowSpacing.microGap),
-                      decoration: BoxDecoration(
-                        // The count is a quiet figure beside the words, so its
-                        // chip is the one thing that steps off the row's own
-                        // surface: a grey pill on the resting column, white
-                        // once the row's selected grey has taken it over.
-                        color: WorkFollowColorTokens.navigationCountChip(
-                            context, tokens,
-                            selected: widget.selected),
-                        borderRadius:
-                            BorderRadius.circular(WorkFollowRadii.pill),
-                      ),
-                      child: Text('${widget.count}',
-                          style: TextStyle(
-                              color: tokens.textTertiary,
-                              fontSize: WorkFollowMacTypography.navigationMeta,
-                              height: WorkFollowMacTypography.lineControl,
-                              fontWeight: WorkFollowMacWeight.regular)),
-                    ),
+                    // The figure carries no surface of its own. A pill behind
+                    // it made the count look like a state — and the one it
+                    // suggested changed colour with the row's selection — while
+                    // the lists and tags in this same column already set their
+                    // figures bare beside the words. One grammar for one
+                    // column; `_TaskListItemState` reads exactly like this.
+                    Text('${widget.count}',
+                        style: TextStyle(
+                            color: tokens.textTertiary,
+                            fontSize: WorkFollowMacTypography.navigationMeta,
+                            height: WorkFollowMacTypography.lineControl,
+                            fontWeight: WorkFollowMacWeight.regular)),
                 ],
               ),
             ),

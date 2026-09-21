@@ -101,22 +101,6 @@ class WorkFollowColorTokens {
         .withValues(alpha: light ? .16 : .20);
   }
 
-  /// Count chip on a navigation row.
-  ///
-  /// The chip is always one step off the surface the row paints: a light
-  /// grey pill on the resting white column, and white once the row's own
-  /// selected grey has taken that surface over.
-  static Color navigationCountChip(
-    BuildContext context,
-    WorkFollowTheme tokens, {
-    required bool selected,
-  }) {
-    if (Theme.of(context).brightness == Brightness.dark) {
-      return selected ? tokens.listRowSelected : tokens.content.withValues(alpha: .7);
-    }
-    return selected ? lightNavigationSurface : lightNavigationRail;
-  }
-
   /// Selected fill for the compact rail button. The light reference uses a
   /// quiet navigation fill; the dark rail uses its own active surface.
   static Color navigationRailSelected(

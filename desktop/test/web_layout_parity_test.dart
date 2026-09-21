@@ -308,6 +308,80 @@ void main() {
     }
   });
 
+  testWidgets('every figure in the navigation column is a bare figure',
+      (tester) async {
+    final controller = WorkspaceController(seedData: false);
+    addTearDown(controller.dispose);
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    controller.loadTasksForTest([
+      TaskItem(
+        id: 'counted',
+        title: '带数量的任务',
+        listName: '工作',
+        bucket: taskBucketForDate(today, now: today),
+      ),
+    ]);
+    controller.selectView(WorkspaceView.today);
+    await tester.pumpWidget(MaterialApp(
+      theme: WorkFollowThemeData.light(),
+      home: Scaffold(
+        body: SizedBox(
+          width: AppRail.width,
+          height: 720,
+          child: AppRail(
+            controller: controller,
+            isDark: false,
+            onToggleTheme: () {},
+            onOpenSettings: () {},
+          ),
+        ),
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    // The view row and the list row both show "1" here. The rule belongs to
+    // the column: a count is a quiet figure beside the words, so it gets the
+    // same treatment whichever kind of row it lands in — which is not what it
+    // did while a grey pill was wrapped around the smart views only.
+    Finder figureIn(String rowKey) => find.descendant(
+        of: find.byKey(ValueKey(rowKey)), matching: find.text('1'));
+    TextStyle figure(String rowKey) =>
+        tester.widget<Text>(figureIn(rowKey)).style!;
+
+    /// The first box drawn above a widget. For a figure that must be the row
+    /// surface itself; anything else in between is a fill of its own.
+    Object? nearestBoxKey(Finder target) {
+      Object? key;
+      tester.element(target).visitAncestorElements((element) {
+        if (element.widget is Container) {
+          key = element.widget.key;
+          return false;
+        }
+        return true;
+      });
+      return key;
+    }
+
+    for (final row in ['rail-navigation-item-今天', 'rail-list-item-工作']) {
+      expect(figureIn(row), findsOneWidget, reason: '$row 的行尾应有一个数字');
+      expect(nearestBoxKey(figureIn(row)), ValueKey(row),
+          reason: '$row 的数字外面除了行表面不该再有第二个盒子 —— 那曾是一个灰药丸');
+    }
+
+    expect(figure('rail-navigation-item-今天'), figure('rail-list-item-工作'),
+        reason: '同一栏里两种行的数字必须同字号、同色、同字重');
+
+    // Flush with the row's inner right edge, on the same vertical line as the
+    // section header's +. The pill's own padding used to hold the figure a
+    // step in from it.
+    final row = tester.getRect(find.byKey(const ValueKey('rail-navigation-item-今天')));
+    expect(
+        tester.getRect(figureIn('rail-navigation-item-今天')).right,
+        closeTo(row.right - WorkFollowSpacing.cardInset, .5),
+        reason: '数字紧贴行内右缘；药丸的内边距会把它推离这条线');
+  });
+
   testWidgets('notes index resolves the wide and compact pane widths',
       (tester) async {
     tester.view.physicalSize = const Size(1200, 700);
