@@ -200,9 +200,12 @@ class _WeekTaskPill extends StatelessWidget {
             horizontal: WorkFollowSpacing.compactGap,
             vertical: WorkFollowSpacing.inlineGap),
         decoration: BoxDecoration(
-            color: color.withValues(alpha: .12),
+            color: color.withValues(
+                alpha: CalendarMetrics.taskBarFill(completed: task.completed)),
             borderRadius: BorderRadius.circular(WorkFollowRadii.control),
-            border: Border.all(color: color.withValues(alpha: .34))),
+            border: Border.all(
+                color: color
+                    .withValues(alpha: CalendarMetrics.taskBarBorderAlpha))),
         // The box leads the title, the way it does in a month cell's bar and in
         // a task row. A title that wraps keeps the box beside its first line
         // rather than centred on the block.

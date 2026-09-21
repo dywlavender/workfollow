@@ -109,6 +109,13 @@ Finder _taskBar(String id) => find.byKey(ValueKey('calendar-task-$id'));
 Finder _band(String id, int fromColumn) =>
     find.byKey(ValueKey('calendar-span-$id-$fromColumn'));
 
+/// The colour a bar's own surface is painted with — the bar's, not the wash
+/// today lays over the row it sits in.
+Color _barFill(WidgetTester tester, Finder bar) => tester
+    .widget<Material>(
+        find.descendant(of: bar, matching: find.byType(Material)).first)
+    .color!;
+
 Finder _row(int rowIndex) => find.byKey(ValueKey('calendar-week-row-$rowIndex'));
 
 /// The paper a day is drawn on.
@@ -505,15 +512,26 @@ void main() {
       expect(
           barRect.right, cellRect.right - CalendarMetrics.cellHorizontalPadding);
 
-      // Completion is carried by ink and nothing else: the title steps back to
-      // grey and keeps its words. A rule struck through it said the same thing
-      // a second time, and at this size took more off the title than the colour
-      // already did.
+      // Completion is carried by ink: the title steps back to grey and keeps
+      // its words. A rule struck through it said the same thing a second time,
+      // and at this size took more off the title than the colour already did.
       final completed = tester
           .widget<Text>(find.descendant(of: cell, matching: find.text('交报销')))
           .style!;
       expect(completed.color, _tokens.textTertiary);
       expect(completed.decoration, isNot(TextDecoration.lineThrough));
+
+      // The bar's own tint is the other half of that rule, and the half a
+      // reader gets before reading anything. Both bars carry the task's list
+      // colour, so the two states can only differ in how far that colour is
+      // laid down — and with the titles the same size, a month where they are
+      // laid down alike answers "what is left today" with nothing at all.
+      final openFill = _barFill(tester, _taskBar(openId));
+      final doneFill = _barFill(tester, _taskBar(doneId));
+      expect(openFill.withValues(alpha: 1), doneFill.withValues(alpha: 1),
+          reason: 'the two states share the task\'s list colour');
+      expect(openFill.a, greaterThan(doneFill.a * 2),
+          reason: 'an open bar is the dense one, not a shade off the finished');
     });
 
     testWidgets('a full cell counts the bars it left out', (tester) async {

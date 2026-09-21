@@ -29,6 +29,11 @@ String? _clockOf(DateTime? at, {required bool withTime}) {
 /// month agrees with the rest of the product about which list a task belongs
 /// to without printing the list's name.
 ///
+/// At this size the tint's depth is also the only thing completion can change
+/// beyond the title's ink, so an open bar takes the full tint and a finished
+/// one steps back to the lighter tint — the two levels in [CalendarMetrics],
+/// which the week column's items draw from as well.
+///
 /// The bar is deliberately inert. Dragging, dropping and opening belong to the
 /// grid that arranges these bars, which is the only place that knows what a
 /// position in the month means.
@@ -58,7 +63,8 @@ class CalendarTaskBar extends StatelessWidget {
     return Opacity(
       opacity: dragging ? .35 : 1,
       child: Material(
-        color: listColor.withValues(alpha: .12),
+        color: listColor.withValues(
+            alpha: CalendarMetrics.taskBarFill(completed: task.completed)),
         borderRadius: radius,
         child: InkWell(
           onTap: onTap,
@@ -130,7 +136,8 @@ class CalendarTaskSpan extends StatelessWidget {
     return Opacity(
       opacity: dragging ? .35 : 1,
       child: Material(
-        color: listColor.withValues(alpha: .12),
+        color: listColor.withValues(
+            alpha: CalendarMetrics.taskBarFill(completed: span.task.completed)),
         borderRadius: radius,
         child: InkWell(
           onTap: onTap,
@@ -209,10 +216,10 @@ class _BarLine extends StatelessWidget {
               task.title,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              // Completion is carried by ink and nothing else: a finished task
-              // steps back to grey, the same way a task row does. A rule struck
-              // through the title would say it a second time and, at this size,
-              // take more off the words than the colour already does.
+              // The title's half of completion. A finished task steps back to
+              // grey, the same way a task row does; the bar's own tint says it
+              // again at the size the whole cell is read at, which is why the
+              // title does not also need a rule struck through it.
               style: TextStyle(
                 fontSize: WorkFollowMacTypography.listMeta,
                 height: WorkFollowMacTypography.lineControl,

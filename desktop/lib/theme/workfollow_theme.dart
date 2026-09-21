@@ -387,6 +387,33 @@ class CalendarMetrics {
   /// side stops reading as a mark on a strip and starts filling it.
   static const double taskBarCheckboxSize = 9.9;
 
+  /// The tint on a calendar item whose work is still open, and the lighter one
+  /// it steps back to once the work is finished.
+  ///
+  /// Both bars carry the task's list colour, so before this pair existed the
+  /// only thing completion changed was the title's ink: every bar on the month
+  /// was the finished tint, and a finished grid read the same as an open one.
+  /// Open sits at roughly three times the finished bar's distance from the
+  /// surface, which is the ratio the reference month grid draws its two states
+  /// at — the same ratio, on a bar this small, that lets a day be read for what
+  /// is left in it without the titles being read at all.
+  ///
+  /// They are a pair: moving one without the other costs the month the only
+  /// thing that separates an open bar from a finished one.
+  static const double taskBarFillAlpha = .32;
+  static const double taskBarCompletedFillAlpha = .12;
+
+  /// The fill every calendar item takes, so the month's bars and the week's
+  /// cards cannot drift apart on which state is the denser one.
+  static double taskBarFill({required bool completed}) =>
+      completed ? taskBarCompletedFillAlpha : taskBarFillAlpha;
+
+  /// Outline of the week column's item. The month's bars carry a fill alone —
+  /// at 17pt an outline beside a full-width bar is a second edge where the
+  /// cell's own hairlines already provide one — but the week's item is a card
+  /// with room for two lines of title, and it is outlined as one.
+  static const double taskBarBorderAlpha = .34;
+
   /// The tint a month cell takes while a task is dragged over it.
   static const double dropHighlightAlpha = .12;
 
