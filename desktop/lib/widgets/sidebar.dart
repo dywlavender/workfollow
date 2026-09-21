@@ -1155,24 +1155,13 @@ class _TaskListItemState extends State<_TaskListItem> {
                   runSpacing: WorkFollowSpacing.controlGap,
                   children: [
                     for (final value in listColorPalette)
-                      InkWell(
-                        borderRadius:
-                            BorderRadius.circular(WorkFollowRadii.pill),
-                        onTap: () => Navigator.of(dialogContext)
+                      ListColorSwatch(
+                        value: value,
+                        selected: widget.controller
+                                .colorHexForList(widget.list.name) ==
+                            colorHexFromValue(value),
+                        onPick: () => Navigator.of(dialogContext)
                             .pop(colorHexFromValue(value)),
-                        child: Container(
-                            width: SidebarMetrics.colorSwatchSize,
-                            height: SidebarMetrics.colorSwatchSize,
-                            decoration: BoxDecoration(
-                                color: Color(value), shape: BoxShape.circle),
-                            child: widget.controller
-                                        .colorHexForList(widget.list.name) ==
-                                    colorHexFromValue(value)
-                                ? AppIcon(WorkFollowIcons.check,
-                                    size: WorkFollowMetrics.toolbarIcon,
-                                    color: WorkFollowThemeContrast.foregroundOn(
-                                        Color(value)))
-                                : null),
                       ),
                   ],
                 ),
@@ -1578,5 +1567,67 @@ Future<void> _editFolder(BuildContext anchor, WorkspaceController controller,
         anchor,
         const WorkFollowFeedback(
             kind: WorkFollowFeedbackKind.error, message: '请输入一个不重复的文件夹名称。'));
+  }
+}
+
+/// One colour in the list-colour palette.
+///
+/// The disc *is* the value being chosen, so the pointer must not tint it: a
+/// deeper shade under the cursor would show a colour the row will never get.
+/// The ring is drawn over a transparent border instead, which leaves the
+/// resting swatch pixel-for-pixel unchanged and never grows the swatch, so the
+/// wrap that lays the palette out keeps its geometry.
+///
+/// This deliberately is not an InkWell. An InkWell paints its ink on the
+/// nearest Material, *under* its child, so a fill painted by the child hides
+/// the pointer feedback completely — which is what the swatch used to do.
+class ListColorSwatch extends StatefulWidget {
+  const ListColorSwatch({
+    super.key,
+    required this.value,
+    required this.selected,
+    required this.onPick,
+  });
+
+  final int value;
+  final bool selected;
+  final VoidCallback onPick;
+
+  @override
+  State<ListColorSwatch> createState() => _ListColorSwatchState();
+}
+
+class _ListColorSwatchState extends State<ListColorSwatch> {
+  bool hovering = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = WorkFollowTheme.of(context);
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) => setState(() => hovering = true),
+      onExit: (_) => setState(() => hovering = false),
+      child: GestureDetector(
+        onTap: widget.onPick,
+        child: Container(
+          width: SidebarMetrics.colorSwatchSize,
+          height: SidebarMetrics.colorSwatchSize,
+          decoration: BoxDecoration(
+            color: Color(widget.value),
+            shape: BoxShape.circle,
+            border: Border.all(
+              color: hovering ? tokens.borderStrong : Colors.transparent,
+              width: SidebarMetrics.colorSwatchRingWidth,
+            ),
+          ),
+          child: widget.selected
+              ? AppIcon(WorkFollowIcons.check,
+                  size: WorkFollowMetrics.toolbarIcon,
+                  color: WorkFollowThemeContrast.foregroundOn(
+                      Color(widget.value)))
+              : null,
+        ),
+      ),
+    );
   }
 }

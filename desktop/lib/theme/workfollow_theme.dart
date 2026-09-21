@@ -326,6 +326,9 @@ class SidebarMetrics {
   static const double folderMoreHeight = 20;
   static const double listColorPickerWidth = 270;
   static const double colorSwatchSize = WorkFollowMetrics.chipHeight;
+  // The pointer ring on a colour swatch. It is drawn inset, so it never grows
+  // the swatch and never shifts the wrap that lays the palette out.
+  static const double colorSwatchRingWidth = 2;
   static const double listColorDotSize = 8;
 }
 

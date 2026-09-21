@@ -136,6 +136,27 @@ class WorkFollowInteractionStyles {
     });
   }
 
+  /// Overlay for a control whose fill is already the full-strength colour —
+  /// a filled action rather than a tint of one.
+  ///
+  /// [tintedOverlay] lays the base colour over itself, which is right for a 12%
+  /// list tint and invisible on a solid fill: 10% of red over opaque red is
+  /// still opaque red. Measured on the dismiss key, that produced zero changed
+  /// pixels between the two frames. A solid control darkens instead, the way a
+  /// filled button is expected to.
+  static WidgetStateProperty<Color?> solidTintOverlay(Color base) {
+    return WidgetStateProperty.resolveWith<Color?>((states) {
+      if (states.contains(WidgetState.disabled)) return null;
+      if (states.contains(WidgetState.pressed)) {
+        return Color.alphaBlend(Colors.black.withValues(alpha: .20), base);
+      }
+      if (states.contains(WidgetState.hovered)) {
+        return Color.alphaBlend(Colors.black.withValues(alpha: .10), base);
+      }
+      return null;
+    });
+  }
+
   /// Focus is a border concern, independent from hover and selection fills.
   static BorderSide focusBorder(
     WorkFollowTheme tokens, {

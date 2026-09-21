@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:ui' show PointerDeviceKind;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -9,6 +10,7 @@ import 'package:workfollow_personal/state/workspace_controller.dart';
 import 'package:workfollow_personal/theme/workfollow_interaction_states.dart';
 import 'package:workfollow_personal/theme/workfollow_theme.dart';
 import 'package:workfollow_personal/widgets/calendar/calendar_task_bar.dart';
+import 'package:workfollow_personal/widgets/sidebar.dart';
 
 /// Controls that sit on a surface which already carries a hue must deepen that
 /// hue under the pointer.
@@ -40,6 +42,23 @@ void main() {
     expect(overlay.resolve({WidgetState.disabled}), isNull);
     // The point of the contract: it is never the shared neutral.
     expect(overlay.resolve({WidgetState.hovered}), isNot(tokens.listRowHover));
+  });
+
+  test('a solid fill darkens instead of tinting itself', () {
+    final solid = WorkFollowInteractionStyles.solidTintOverlay(tokens.danger);
+
+    expect(solid.resolve({WidgetState.hovered}),
+        Color.alphaBlend(Colors.black.withValues(alpha: .10), tokens.danger));
+    expect(solid.resolve({WidgetState.pressed}),
+        Color.alphaBlend(Colors.black.withValues(alpha: .20), tokens.danger));
+    expect(solid.resolve(const <WidgetState>{}), isNull);
+    expect(solid.resolve({WidgetState.disabled}), isNull);
+    // The whole reason this is not tintedOverlay: on an opaque fill, the base
+    // colour over itself changes nothing at all.
+    expect(solid.resolve({WidgetState.hovered}), isNot(tokens.danger));
+    expect(solid.resolve({WidgetState.hovered}),
+        isNot(WorkFollowInteractionStyles.tintedOverlay(tokens.danger)
+            .resolve({WidgetState.hovered})));
   });
 
   testWidgets('the new-note button deepens its accent instead of going grey',
@@ -101,5 +120,45 @@ void main() {
           reason: '$path 里的有色表面控件必须显式声明 overlay，'
               '否则又回到吃全局不透明 hover 的老样子');
     }
+  });
+
+  testWidgets('the palette swatch never tints the colour it is showing',
+      (tester) async {
+    const swatch = Color(0xFF7C3AED);
+    await tester.pumpWidget(MaterialApp(
+        theme: WorkFollowThemeData.light(),
+        home: Scaffold(
+            body: Center(
+                child: ListColorSwatch(
+                    value: swatch.toARGB32(),
+                    selected: false,
+                    onPick: () {})))));
+    await tester.pumpAndSettle();
+
+    BoxDecoration deco() =>
+        tester
+            .widget<Container>(find
+                .descendant(
+                    of: find.byType(ListColorSwatch),
+                    matching: find.byType(Container))
+                .first)
+            .decoration! as BoxDecoration;
+
+    expect(deco().color, swatch, reason: '静止时色块就是它代表的那个颜色');
+    expect(deco().border!.top.color, Colors.transparent,
+        reason: '静止时不该有可见的环');
+
+    final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await gesture.addPointer(location: const Offset(4, 4));
+    await tester.pumpAndSettle();
+    await gesture.moveTo(tester.getCenter(find.byType(ListColorSwatch)));
+    for (var i = 0; i < 6; i++) {
+      await tester.pump(const Duration(milliseconds: 16));
+    }
+
+    expect(deco().border!.top.color, tokens.borderStrong,
+        reason: 'hover 用外环表示这里可点');
+    expect(deco().color, swatch,
+        reason: 'hover 绝不能改色块本身的颜色 —— 它显示的就是用户即将选中的值');
   });
 }
