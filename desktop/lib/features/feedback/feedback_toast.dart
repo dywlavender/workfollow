@@ -8,13 +8,16 @@ import 'feedback_event.dart';
 
 /// Geometry of the result HUD.
 ///
-/// Width is a range rather than a fixed number: a two-character message
-/// ("已复制") and a sentence must both look deliberate, and a fixed width would
-/// either squeeze the short one into a slab or clip the long one.
+/// The width is decided by the message, not by a number here: the box is the
+/// text plus the gap plus the action plus [horizontalPadding] on both sides,
+/// and nothing else. A floor was tried and withdrawn — a short message ("已复制")
+/// then rendered in a box twice its content, leaving a band of dead surface on
+/// the right of the pill that read as an unfinished layout. [maxWidth] is the
+/// only fixed bound, and it is where the message stops growing and starts
+/// ellipsizing.
 class FeedbackMetrics {
   const FeedbackMetrics._();
 
-  static const double minWidth = 220;
   static const double maxWidth = 360;
   static const double height = 60;
   static const double horizontalPadding = WorkFollowSpacing.sectionGap;
@@ -48,7 +51,6 @@ class FeedbackToast extends StatelessWidget {
     return Container(
         key: const ValueKey('feedback-toast'),
         constraints: const BoxConstraints(
-            minWidth: FeedbackMetrics.minWidth,
             maxWidth: FeedbackMetrics.maxWidth,
             minHeight: FeedbackMetrics.height,
             maxHeight: FeedbackMetrics.height),

@@ -7,6 +7,7 @@ import 'package:workfollow_personal/features/feedback/feedback_event.dart';
 import 'package:workfollow_personal/features/feedback/feedback_host.dart';
 import 'package:workfollow_personal/features/feedback/feedback_scope.dart';
 import 'package:workfollow_personal/features/feedback/feedback_sound_service.dart';
+import 'package:workfollow_personal/features/feedback/feedback_toast.dart';
 import 'package:workfollow_personal/features/tasks/application/task_actions.dart';
 import 'package:workfollow_personal/features/tasks/domain/task_draft.dart';
 import 'package:workfollow_personal/features/tasks/domain/task_schedule.dart';
@@ -140,9 +141,39 @@ void main() {
       final toast = tester.getRect(find.byKey(_toastKey));
       expect(toast.center.dx, closeTo(window.center.dx, 1));
       expect(window.bottom - toast.bottom, closeTo(26, 1));
-      expect(toast.width, greaterThanOrEqualTo(220));
-      expect(toast.width, lessThanOrEqualTo(360));
       expect(toast.height, closeTo(60, 1));
+
+      // The box is its content and nothing more — text, the gap, the action and
+      // one padding on each side. A fixed floor used to satisfy the upper bound
+      // here while parking a band of dead surface to the right of every short
+      // message, which reads as a layout that never finished.
+      final message = tester.getSize(find.text('任务已完成'));
+      expect(
+          toast.width,
+          closeTo(
+              message.width +
+                  FeedbackMetrics.horizontalPadding * 2 +
+                  FeedbackMetrics.messageActionGap +
+                  FeedbackMetrics.actionHitTarget,
+              1));
+
+      await _drainHolds(tester);
+    });
+
+    testWidgets('a message past the ceiling ellipsizes instead of widening',
+        (tester) async {
+      final feedback = FeedbackController();
+      addTearDown(feedback.dispose);
+      await _pumpHarness(tester, feedback);
+      feedback.show(_completion(
+          message: '这条反馈刻意写得比上限还长，长到必须靠省略号收尾，而不是把弹框一直往外拉'));
+      await tester.pumpAndSettle();
+
+      // The one fixed bound left: long text is clipped with an ellipsis rather
+      // than allowed to reach the window edge.
+      expect(tester.getRect(find.byKey(_toastKey)).width,
+          closeTo(FeedbackMetrics.maxWidth, .5));
+      expect(tester.takeException(), isNull);
 
       await _drainHolds(tester);
     });
