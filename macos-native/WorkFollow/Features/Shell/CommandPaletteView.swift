@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct CommandPaletteView: View {
-    @ObservedObject var workspace: PreviewWorkspace
+    @ObservedObject var navigation: AppNavigation
     @EnvironmentObject private var environment: AppEnvironment
     @State private var query = ""
     @FocusState private var focused: Bool
@@ -39,7 +39,7 @@ struct CommandPaletteView: View {
     }
 
     private func navigate(_ destination: NativeDestination) {
-        workspace.navigate(to: destination)
+        environment.navigate(to: destination)
         environment.commandPalettePresented = false
     }
 }

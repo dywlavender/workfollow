@@ -1,37 +1,7 @@
 import Foundation
 import Combine
 
-enum NativeDestination: String, CaseIterable, Identifiable {
-    case today, inbox, completed, trash, notes, notesTrash, calendar, matrix
-    var id: String { rawValue }
-    var title: String {
-        switch self {
-        case .today: return "今天"
-        case .inbox: return "收集箱"
-        case .completed: return "已完成"
-        case .trash, .notesTrash: return "垃圾桶"
-        case .notes: return "全部笔记"
-        case .calendar: return "日历"
-        case .matrix: return "四象限"
-        }
-    }
-    var symbol: String {
-        switch self {
-        case .today: return "sun.max"
-        case .inbox: return "tray"
-        case .completed: return "checkmark.circle"
-        case .trash, .notesTrash: return "trash"
-        case .notes: return "text.alignleft"
-        case .calendar: return "calendar"
-        case .matrix: return "square.grid.2x2"
-        }
-    }
-    var isTaskList: Bool { [.today, .inbox, .completed, .trash].contains(self) }
-    var isNotes: Bool { self == .notes || self == .notesTrash }
-}
-
-/// Disposable shell fixtures. Full TaskItem/TaskActions migration belongs to
-/// Phase 2; this type is deliberately not a production persistence schema.
+/// Transitional shell fixtures, removed after Task UI moves to the Domain.
 struct PreviewTask: Identifiable {
     let id: UUID
     var title: String
@@ -53,7 +23,6 @@ struct PreviewTask: Identifiable {
 
 @MainActor
 final class PreviewWorkspace: ObservableObject {
-    @Published private(set) var destination: NativeDestination = .today
     @Published private(set) var selectedTaskID: UUID?
     @Published private(set) var tasks: [PreviewTask] = [
         PreviewTask("整理本周用户反馈", list: "工作", priority: true),
@@ -64,8 +33,6 @@ final class PreviewWorkspace: ObservableObject {
     ]
 
     var selectedTask: PreviewTask? { tasks.first { $0.id == selectedTaskID } }
-    var visibleTasks: [PreviewTask] { projectedTasks(for: destination) }
-
     func projectedTasks(for destination: NativeDestination) -> [PreviewTask] {
         switch destination {
         case .today: return tasks.filter { $0.scheduledToday && !$0.completed }
@@ -75,15 +42,10 @@ final class PreviewWorkspace: ObservableObject {
         }
     }
 
-    func navigate(to destination: NativeDestination) {
-        self.destination = destination
-        selectedTaskID = nil
-    }
-
     func select(_ id: UUID?) { selectedTaskID = id }
 
-    func selectAdjacent(_ offset: Int) {
-        let rows = visibleTasks
+    func selectAdjacent(_ offset: Int, in destination: NativeDestination) {
+        let rows = projectedTasks(for: destination)
         guard !rows.isEmpty else { return }
         let current = rows.firstIndex { $0.id == selectedTaskID }
         let index = current.map { min(max($0 + offset, 0), rows.count - 1) }
@@ -91,17 +53,17 @@ final class PreviewWorkspace: ObservableObject {
         selectedTaskID = rows[index].id
     }
 
-    func addTask(_ title: String) {
+    func addTask(_ title: String, to destination: NativeDestination) {
         let title = title.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !title.isEmpty else { return }
         let task = PreviewTask(title, today: destination != .inbox)
         tasks.append(task)
     }
 
-    func toggleCompletion(_ id: UUID) {
+    func toggleCompletion(_ id: UUID, in destination: NativeDestination) {
         guard let index = tasks.firstIndex(where: { $0.id == id }) else { return }
         tasks[index].completed.toggle()
-        if selectedTaskID == id && !visibleTasks.contains(where: { $0.id == id }) {
+        if selectedTaskID == id && !projectedTasks(for: destination).contains(where: { $0.id == id }) {
             selectedTaskID = nil
         }
     }

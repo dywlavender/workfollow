@@ -12,9 +12,9 @@ struct AppCommands: Commands {
             Button("快速打开…") { environment.commandPalettePresented = true }
                 .keyboardShortcut("k", modifiers: .command)
             Divider()
-            Button("今天") { environment.workspace.navigate(to: .today) }
+            Button("今天") { environment.navigate(to: .today) }
                 .keyboardShortcut("1", modifiers: .command)
-            Button("收集箱") { environment.workspace.navigate(to: .inbox) }
+            Button("收集箱") { environment.navigate(to: .inbox) }
                 .keyboardShortcut("2", modifiers: .command)
         }
     }

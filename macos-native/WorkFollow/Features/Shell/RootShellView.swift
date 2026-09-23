@@ -3,31 +3,33 @@ import SwiftUI
 
 struct RootShellView: View {
     @ObservedObject var workspace: PreviewWorkspace
+    @ObservedObject var navigation: AppNavigation
     @EnvironmentObject private var environment: AppEnvironment
 
     var body: some View {
         GeometryReader { geometry in
             let navigationVisible = geometry.size.width >= WFMetrics.navigationBreakpoint
             HStack(spacing: 0) {
-                IconRailView(workspace: workspace)
+                IconRailView(workspace: workspace, navigation: navigation)
                 Divider()
                 if navigationVisible {
-                    NavigationColumnView(workspace: workspace)
+                    NavigationColumnView(workspace: workspace, navigation: navigation)
                         .frame(width: WFMetrics.navigationWidth)
                     Divider()
                 }
-                if workspace.destination.isTaskList {
+                if navigation.destination.isTaskList {
                     TaskWorkspaceView(workspace: workspace,
+                                      navigation: navigation,
                                       navigationVisible: navigationVisible)
                 } else {
-                    ModuleShellView(workspace: workspace,
+                    ModuleShellView(workspace: workspace, navigation: navigation,
                                     navigationVisible: navigationVisible)
                 }
             }
             .background(WFColors.content)
         }
         .sheet(isPresented: $environment.commandPalettePresented) {
-            CommandPaletteView(workspace: workspace)
+            CommandPaletteView(navigation: navigation)
                 .environmentObject(environment)
         }
     }
@@ -35,6 +37,7 @@ struct RootShellView: View {
 
 private struct TaskWorkspaceView: View {
     @ObservedObject var workspace: PreviewWorkspace
+    let navigation: AppNavigation
     let navigationVisible: Bool
     @State private var listWidth = WFMetrics.listPreferred
     @State private var dragOrigin: CGFloat?
@@ -48,7 +51,8 @@ private struct TaskWorkspaceView: View {
             let boundedWidth = min(max(listWidth, WFMetrics.listMinimum), maximum)
             if wide {
                 HStack(spacing: 0) {
-                    TaskListView(workspace: workspace, navigationVisible: navigationVisible)
+                    TaskListView(workspace: workspace, navigation: navigation,
+                                 navigationVisible: navigationVisible)
                         .frame(width: boundedWidth)
                     Rectangle().fill(WFColors.border).frame(width: WFMetrics.divider)
                         .overlay {
@@ -71,7 +75,8 @@ private struct TaskWorkspaceView: View {
             } else if workspace.selectedTask != nil {
                 TaskInspectorShell(workspace: workspace, showBack: true)
             } else {
-                TaskListView(workspace: workspace, navigationVisible: navigationVisible)
+                TaskListView(workspace: workspace, navigation: navigation,
+                             navigationVisible: navigationVisible)
             }
         }
     }
@@ -79,6 +84,7 @@ private struct TaskWorkspaceView: View {
 
 private struct ModuleShellView: View {
     @ObservedObject var workspace: PreviewWorkspace
+    @ObservedObject var navigation: AppNavigation
     let navigationVisible: Bool
     @State private var showNavigation = false
 
@@ -90,16 +96,16 @@ private struct ModuleShellView: View {
                         Image(systemName: "sidebar.left")
                     }.buttonStyle(.plain).help("显示导航")
                         .popover(isPresented: $showNavigation) {
-                            NavigationColumnView(workspace: workspace) { showNavigation = false }
+                            NavigationColumnView(workspace: workspace, navigation: navigation) { showNavigation = false }
                                 .frame(width: WFMetrics.navigationWidth, height: 260)
                         }
                 }
-                Label(workspace.destination.title, systemImage: workspace.destination.symbol)
+                Label(navigation.destination.title, systemImage: navigation.destination.symbol)
                     .font(WFType.pageTitle)
             }
             Spacer()
             VStack(spacing: WFSpace.md) {
-                Image(systemName: workspace.destination.symbol).font(.largeTitle)
+                Image(systemName: navigation.destination.symbol).font(.largeTitle)
                 Text("这里还没有内容").font(WFType.body)
             }
             .foregroundStyle(WFColors.secondaryText)

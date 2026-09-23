@@ -21,7 +21,8 @@ enum NativeAppearance: String, CaseIterable, Identifiable {
 
 @MainActor
 final class AppEnvironment: ObservableObject {
-    let workspace = PreviewWorkspace()
+    let navigation = AppNavigation()
+    let taskWorkspace = PreviewWorkspace()
     @Published var commandPalettePresented = false
     @Published private(set) var quickAddRequest = 0
     @Published var appearance: NativeAppearance {
@@ -39,10 +40,15 @@ final class AppEnvironment: ObservableObject {
     }
 
     func newTask() {
-        if ![.today, .inbox].contains(workspace.destination) {
-            workspace.navigate(to: .today)
+        if ![.today, .inbox].contains(navigation.destination) {
+            navigation.destination = .today
         }
-        workspace.select(nil)
+        taskWorkspace.select(nil)
         quickAddRequest += 1
+    }
+
+    func navigate(to destination: NativeDestination) {
+        navigation.destination = destination
+        taskWorkspace.select(nil)
     }
 }

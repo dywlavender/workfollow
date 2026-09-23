@@ -2,19 +2,20 @@ import SwiftUI
 
 struct IconRailView: View {
     @ObservedObject var workspace: PreviewWorkspace
+    @ObservedObject var navigation: AppNavigation
     @EnvironmentObject private var environment: AppEnvironment
     @Environment(\.openSettings) private var openSettings
 
     var body: some View {
         VStack(spacing: WFSpace.md) {
             railButton(.today, symbol: "checklist", title: "任务",
-                       selected: workspace.destination.isTaskList)
+                       selected: navigation.destination.isTaskList)
             railButton(.notes, symbol: "text.alignleft", title: "笔记",
-                       selected: workspace.destination.isNotes)
+                       selected: navigation.destination.isNotes)
             railButton(.calendar, symbol: "calendar", title: "日历",
-                       selected: workspace.destination == .calendar)
+                       selected: navigation.destination == .calendar)
             railButton(.matrix, symbol: "square.grid.2x2", title: "四象限",
-                       selected: workspace.destination == .matrix)
+                       selected: navigation.destination == .matrix)
             Spacer()
             Button { environment.commandPalettePresented = true } label: {
                 Image(systemName: "magnifyingglass")
@@ -35,7 +36,7 @@ struct IconRailView: View {
 
     private func railButton(_ destination: NativeDestination, symbol: String,
                             title: String, selected: Bool) -> some View {
-        Button { workspace.navigate(to: destination) } label: {
+        Button { environment.navigate(to: destination) } label: {
             Image(systemName: symbol)
                 .foregroundStyle(selected ? WFColors.accent : WFColors.secondaryText)
                 .frame(width: WFMetrics.controlHeight, height: WFMetrics.controlHeight)
@@ -47,23 +48,25 @@ struct IconRailView: View {
 
 struct NavigationColumnView: View {
     @ObservedObject var workspace: PreviewWorkspace
+    @ObservedObject var navigation: AppNavigation
+    @EnvironmentObject private var environment: AppEnvironment
     var onNavigate: () -> Void = {}
 
     private var destinations: [NativeDestination] {
-        if workspace.destination.isNotes { return [.notes, .notesTrash] }
-        if workspace.destination == .calendar { return [.calendar] }
-        if workspace.destination == .matrix { return [.matrix] }
+        if navigation.destination.isNotes { return [.notes, .notesTrash] }
+        if navigation.destination == .calendar { return [.calendar] }
+        if navigation.destination == .matrix { return [.matrix] }
         return [.today, .inbox, .completed, .trash]
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: WFSpace.xs) {
-            Text(workspace.destination.isNotes ? "笔记" : "工作空间")
+            Text(navigation.destination.isNotes ? "笔记" : "工作空间")
                 .font(WFType.supporting).foregroundStyle(WFColors.secondaryText)
                 .padding(.horizontal, WFSpace.sm).padding(.bottom, WFSpace.sm)
             ForEach(destinations) { destination in
                 Button {
-                    workspace.navigate(to: destination)
+                    environment.navigate(to: destination)
                     onNavigate()
                 } label: {
                     HStack(spacing: WFSpace.md) {
@@ -77,11 +80,11 @@ struct NavigationColumnView: View {
                         }
                     }
                     .font(WFType.navigation)
-                    .foregroundStyle(workspace.destination == destination
+                    .foregroundStyle(navigation.destination == destination
                                      ? WFColors.accent : WFColors.text)
                     .padding(.horizontal, WFSpace.sm)
                     .frame(height: WFMetrics.controlHeight)
-                    .background(workspace.destination == destination
+                    .background(navigation.destination == destination
                                 ? WFColors.selection : .clear,
                                 in: RoundedRectangle(cornerRadius: WFMetrics.corner))
                     .contentShape(Rectangle())

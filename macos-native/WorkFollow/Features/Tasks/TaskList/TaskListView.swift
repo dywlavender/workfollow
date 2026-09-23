@@ -2,6 +2,7 @@ import SwiftUI
 
 struct TaskListView: View {
     @ObservedObject var workspace: PreviewWorkspace
+    @ObservedObject var navigation: AppNavigation
     let navigationVisible: Bool
     @EnvironmentObject private var environment: AppEnvironment
     @State private var draft = ""
@@ -9,7 +10,8 @@ struct TaskListView: View {
     @FocusState private var quickAddFocused: Bool
     @FocusState private var listFocused: Bool
 
-    private var canAdd: Bool { [.today, .inbox].contains(workspace.destination) }
+    private var canAdd: Bool { [.today, .inbox].contains(navigation.destination) }
+    private var visibleTasks: [PreviewTask] { workspace.projectedTasks(for: navigation.destination) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: WFSpace.lg) {
@@ -19,14 +21,16 @@ struct TaskListView: View {
                         Image(systemName: "sidebar.left")
                     }.buttonStyle(.plain).help("显示导航")
                         .popover(isPresented: $showNavigation) {
-                            NavigationColumnView(workspace: workspace) { showNavigation = false }
+                            NavigationColumnView(workspace: workspace, navigation: navigation) {
+                                showNavigation = false
+                            }
                                 .frame(width: WFMetrics.navigationWidth, height: 260)
                         }
                 }
-                Label(workspace.destination.title, systemImage: workspace.destination.symbol)
+                Label(navigation.destination.title, systemImage: navigation.destination.symbol)
                     .font(WFType.pageTitle)
                 Spacer(minLength: 0)
-                Text("\(workspace.visibleTasks.count)")
+                Text("\(visibleTasks.count)")
                     .font(WFType.supporting).foregroundStyle(WFColors.secondaryText)
             }
             .padding(.horizontal, WFSpace.xl)
@@ -39,7 +43,7 @@ struct TaskListView: View {
                         .textFieldStyle(.plain).font(WFType.body)
                         .focused($quickAddFocused)
                         .onSubmit(addTask)
-                    if workspace.destination == .today {
+                    if navigation.destination == .today {
                         Image(systemName: "calendar")
                             .foregroundStyle(WFColors.accent).help("今天")
                     }
@@ -52,19 +56,19 @@ struct TaskListView: View {
 
             ScrollView {
                 LazyVStack(spacing: 0) {
-                    if workspace.visibleTasks.isEmpty {
-                        Text(workspace.destination == .trash ? "垃圾桶是空的" : "这里还没有任务")
+                    if visibleTasks.isEmpty {
+                        Text(navigation.destination == .trash ? "垃圾桶是空的" : "这里还没有任务")
                             .font(WFType.body).foregroundStyle(WFColors.secondaryText)
                             .frame(maxWidth: .infinity).padding(.vertical, WFSpace.page)
                     }
-                    ForEach(workspace.visibleTasks) { task in
+                    ForEach(visibleTasks) { task in
                         PreviewTaskRow(task: task,
                                        selected: workspace.selectedTaskID == task.id,
                                        onSelect: {
                                            listFocused = true
                                            workspace.select(task.id)
                                        },
-                                       onComplete: { workspace.toggleCompletion(task.id) })
+                                       onComplete: { workspace.toggleCompletion(task.id, in: navigation.destination) })
                         Divider().padding(.leading, WFSpace.page)
                     }
                 }
@@ -75,17 +79,17 @@ struct TaskListView: View {
             .focused($listFocused)
             .onKeyPress(.upArrow) {
                 guard !quickAddFocused else { return .ignored }
-                workspace.selectAdjacent(-1)
+                workspace.selectAdjacent(-1, in: navigation.destination)
                 return .handled
             }
             .onKeyPress(.downArrow) {
                 guard !quickAddFocused else { return .ignored }
-                workspace.selectAdjacent(1)
+                workspace.selectAdjacent(1, in: navigation.destination)
                 return .handled
             }
             .onKeyPress(.return) {
                 guard !quickAddFocused else { return .ignored }
-                if workspace.selectedTaskID == nil { workspace.selectAdjacent(1) }
+                if workspace.selectedTaskID == nil { workspace.selectAdjacent(1, in: navigation.destination) }
                 return .handled
             }
         }
@@ -103,7 +107,7 @@ struct TaskListView: View {
     }
 
     private func addTask() {
-        workspace.addTask(draft)
+        workspace.addTask(draft, to: navigation.destination)
         draft = ""
     }
 }

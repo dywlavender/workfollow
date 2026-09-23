@@ -7,7 +7,8 @@ struct WorkFollowApp: App {
 
     var body: some Scene {
         WindowGroup("WorkFollow Native", id: "main") {
-            RootShellView(workspace: environment.workspace)
+            RootShellView(workspace: environment.taskWorkspace,
+                          navigation: environment.navigation)
                 .environmentObject(environment)
                 .preferredColorScheme(environment.appearance.colorScheme)
                 .tint(WFColors.accent)
