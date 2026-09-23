@@ -7,19 +7,23 @@ final class DocumentEditorCoordinator: NSObject, NSTextViewDelegate {
     private var document: NativeDocument
     private var onDocumentChange: (NativeDocument) -> Void
     private var onEscape: () -> InspectorEscapeEffect
+    private var onEditingChanged: (Bool) -> Void
 
     init(taskID: UUID, document: NativeDocument,
          onDocumentChange: @escaping (NativeDocument) -> Void,
-         onEscape: @escaping () -> InspectorEscapeEffect) {
+         onEscape: @escaping () -> InspectorEscapeEffect,
+         onEditingChanged: @escaping (Bool) -> Void) {
         self.taskID = taskID
         self.document = document
         self.onDocumentChange = onDocumentChange
         self.onEscape = onEscape
+        self.onEditingChanged = onEditingChanged
     }
 
     func update(_ textView: NativeTextView, taskID: UUID, document: NativeDocument,
                 onDocumentChange: @escaping (NativeDocument) -> Void,
-                onEscape: @escaping () -> InspectorEscapeEffect) {
+                onEscape: @escaping () -> InspectorEscapeEffect,
+                onEditingChanged: @escaping (Bool) -> Void) {
         if self.taskID != taskID {
             flushPendingComposition(in: textView)
             self.taskID = taskID
@@ -37,7 +41,9 @@ final class DocumentEditorCoordinator: NSObject, NSTextViewDelegate {
         }
         self.onDocumentChange = onDocumentChange
         self.onEscape = onEscape
+        self.onEditingChanged = onEditingChanged
         textView.onEscape = onEscape
+        textView.onEditingChanged = onEditingChanged
     }
 
     func textDidChange(_ notification: Notification) {

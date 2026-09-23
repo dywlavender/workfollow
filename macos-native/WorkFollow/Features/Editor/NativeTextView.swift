@@ -2,6 +2,19 @@ import AppKit
 
 final class NativeTextView: NSTextView {
     var onEscape: (() -> InspectorEscapeEffect)?
+    var onEditingChanged: ((Bool) -> Void)?
+
+    override func becomeFirstResponder() -> Bool {
+        let becameFirstResponder = super.becomeFirstResponder()
+        if becameFirstResponder { onEditingChanged?(true) }
+        return becameFirstResponder
+    }
+
+    override func resignFirstResponder() -> Bool {
+        let resigned = super.resignFirstResponder()
+        if resigned { onEditingChanged?(false) }
+        return resigned
+    }
 
     override init(frame frameRect: NSRect, textContainer: NSTextContainer?) {
         super.init(frame: frameRect, textContainer: textContainer)
@@ -33,6 +46,11 @@ final class NativeTextView: NSTextView {
             super.cancelOperation(sender)
             return
         }
-        _ = onEscape()
+        switch onEscape() {
+        case .endEditing, .returnToList:
+            _ = window?.makeFirstResponder(nil)
+        case .dismissPopover, .keepInspector:
+            break
+        }
     }
 }

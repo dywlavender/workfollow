@@ -36,11 +36,7 @@ struct TaskInspectorShell: View {
                                focused: $titleFocused, draft: $presentation.titleDraft)
                     .id(task.id)
                     .padding(WFSpace.page)
-                Text("添加描述…")
-                    .font(WFType.body).foregroundStyle(WFColors.tertiaryText)
-                    .frame(maxWidth: .infinity, minHeight: 72, alignment: .topLeading)
-                    .padding(.horizontal, WFSpace.page)
-                Spacer(minLength: 0)
+                documentEditor(task)
                 Divider()
                 HStack {
                     listMenu(task)
@@ -75,7 +71,11 @@ struct TaskInspectorShell: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(WFColors.content)
         .onChange(of: titleFocused) { _, focused in
-            presentation.editingTarget = focused ? .title : .none
+            if focused {
+                presentation.editingTarget = .title
+            } else if presentation.editingTarget == .title {
+                presentation.editingTarget = .none
+            }
         }
         .onChange(of: workspace.selectedTaskID) { _, _ in
             presentation.synchronizeTitle(taskID: workspace.selectedTask?.id,
@@ -84,24 +84,57 @@ struct TaskInspectorShell: View {
             presentation.editingTarget = .none
             presentation.activePopover = nil
         }
-        .onExitCommand(perform: handleEscape)
+        .onExitCommand { _ = handleEscape() }
         .onAppear {
             presentation.synchronizeTitle(taskID: workspace.selectedTask?.id,
                                           title: workspace.selectedTask?.title ?? "")
         }
     }
 
-    private func handleEscape() {
-        switch presentation.handleEscape(isNarrow: showBack) {
+    @discardableResult
+    private func handleEscape() -> InspectorEscapeEffect {
+        let previousTarget = presentation.editingTarget
+        let effect = presentation.handleEscape(isNarrow: showBack)
+        switch effect {
         case .dismissPopover:
             break
         case .endEditing:
-            titleFocused = false
+            if previousTarget == .title { titleFocused = false }
         case .returnToList:
             workspace.select(nil)
         case .keepInspector:
             break
         }
+        return effect
+    }
+
+    private func documentEditor(_ task: Task) -> some View {
+        ZStack(alignment: .topLeading) {
+            DocumentEditor(
+                taskID: task.id,
+                document: task.document,
+                onDocumentChange: { _ = workspace.setDocument(task.id, $0) },
+                onEscape: handleEscape,
+                onEditingChanged: { isEditing in
+                    if isEditing {
+                        presentation.editingTarget = .body
+                    } else if presentation.editingTarget == .body {
+                        presentation.editingTarget = .none
+                    }
+                }
+            )
+            .id(task.id)
+
+            if task.document.isEmpty {
+                Text("添加描述…")
+                    .font(WFType.body)
+                    .foregroundStyle(WFColors.tertiaryText)
+                    .padding(.top, WFSpace.md)
+                    .allowsHitTesting(false)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .padding(.horizontal, WFSpace.page)
     }
 
     private func scheduleButton(task: Task, field: ScheduleField) -> some View {

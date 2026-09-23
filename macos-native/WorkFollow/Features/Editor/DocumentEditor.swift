@@ -6,11 +6,13 @@ struct DocumentEditor: NSViewRepresentable {
     let document: NativeDocument
     let onDocumentChange: (NativeDocument) -> Void
     let onEscape: () -> InspectorEscapeEffect
+    let onEditingChanged: (Bool) -> Void
 
     func makeCoordinator() -> DocumentEditorCoordinator {
         DocumentEditorCoordinator(taskID: taskID, document: document,
                                   onDocumentChange: onDocumentChange,
-                                  onEscape: onEscape)
+                                  onEscape: onEscape,
+                                  onEditingChanged: onEditingChanged)
     }
 
     func makeNSView(context: Context) -> NSScrollView {
@@ -24,6 +26,7 @@ struct DocumentEditor: NSViewRepresentable {
         textView.delegate = context.coordinator
         textView.string = document.plainText
         textView.onEscape = onEscape
+        textView.onEditingChanged = onEditingChanged
         scrollView.documentView = textView
         return scrollView
     }
@@ -32,7 +35,8 @@ struct DocumentEditor: NSViewRepresentable {
         guard let textView = scrollView.documentView as? NativeTextView else { return }
         context.coordinator.update(textView, taskID: taskID, document: document,
                                    onDocumentChange: onDocumentChange,
-                                   onEscape: onEscape)
+                                   onEscape: onEscape,
+                                   onEditingChanged: onEditingChanged)
     }
 
     static func dismantleNSView(_ scrollView: NSScrollView, coordinator: DocumentEditorCoordinator) {
@@ -40,5 +44,6 @@ struct DocumentEditor: NSViewRepresentable {
         coordinator.flushPendingComposition(in: textView)
         textView.delegate = nil
         textView.onEscape = nil
+        textView.onEditingChanged = nil
     }
 }
