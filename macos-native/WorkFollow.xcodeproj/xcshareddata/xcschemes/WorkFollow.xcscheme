@@ -17,6 +17,13 @@
       <BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="A00000000000000000000006" BuildableName="WorkFollow.app" BlueprintName="WorkFollow" ReferencedContainer="container:WorkFollow.xcodeproj"/>
     </BuildableProductRunnable>
   </ProfileAction>
+  <TestAction buildConfiguration="Debug" selectedDebuggerIdentifier="Xcode.DebuggerFoundation.Debugger.LLDB" selectedLauncherIdentifier="Xcode.IDEFoundation.Launcher.LLDB">
+    <Testables>
+      <TestableReference skipped="NO">
+        <BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="B00000000000000000000001" BuildableName="WorkFollowTests.xctest" BlueprintName="WorkFollowTests" ReferencedContainer="container:WorkFollow.xcodeproj"/>
+      </TestableReference>
+    </Testables>
+  </TestAction>
   <AnalyzeAction buildConfiguration="Debug"/>
   <ArchiveAction buildConfiguration="Release" revealArchiveInOrganizer="YES"/>
 </Scheme>

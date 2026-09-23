@@ -7,6 +7,7 @@ struct TaskListView: View {
     @State private var draft = ""
     @State private var showNavigation = false
     @FocusState private var quickAddFocused: Bool
+    @FocusState private var listFocused: Bool
 
     private var canAdd: Bool { [.today, .inbox].contains(workspace.destination) }
 
@@ -59,7 +60,10 @@ struct TaskListView: View {
                     ForEach(workspace.visibleTasks) { task in
                         PreviewTaskRow(task: task,
                                        selected: workspace.selectedTaskID == task.id,
-                                       onSelect: { workspace.select(task.id) },
+                                       onSelect: {
+                                           listFocused = true
+                                           workspace.select(task.id)
+                                       },
                                        onComplete: { workspace.toggleCompletion(task.id) })
                         Divider().padding(.leading, WFSpace.page)
                     }
@@ -67,11 +71,31 @@ struct TaskListView: View {
                 .padding(.horizontal, WFSpace.md)
                 .padding(.bottom, WFSpace.xl)
             }
+            .focusable()
+            .focused($listFocused)
+            .onKeyPress(.upArrow) {
+                guard !quickAddFocused else { return .ignored }
+                workspace.selectAdjacent(-1)
+                return .handled
+            }
+            .onKeyPress(.downArrow) {
+                guard !quickAddFocused else { return .ignored }
+                workspace.selectAdjacent(1)
+                return .handled
+            }
+            .onKeyPress(.return) {
+                guard !quickAddFocused else { return .ignored }
+                if workspace.selectedTaskID == nil { workspace.selectAdjacent(1) }
+                return .handled
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(WFColors.content)
         .onChange(of: environment.quickAddRequest) { _, _ in quickAddFocused = true }
-        .onAppear { if environment.quickAddRequest > 0 { quickAddFocused = true } }
+        .onAppear {
+            if environment.quickAddRequest > 0 { quickAddFocused = true }
+            else { listFocused = true }
+        }
         .onExitCommand {
             // Leaving quick-add must not dismiss a wide-screen inspector.
             quickAddFocused = false

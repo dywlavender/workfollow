@@ -25,3 +25,13 @@ open /private/tmp/workfollow-native-build/Build/Products/Debug/WorkFollow.app
 `PreviewWorkspace` 是可丢弃的演示状态，不是正式 Domain。任务只在内存中，退出重开恢复种子数据。仅外观、窗口几何写入独立 bundle `com.workfollow.native.preview` 的偏好；不读取 Flutter 数据目录，不访问正式任务、笔记或附件。
 
 后续范围与验收记录见 [迁移计划](../docs/native-migration-plan.md) 和 [行为基线](../docs/ticktick-parity-matrix.md)。
+
+## Phase 2 核心规则与测试
+
+`WorkFollow/Domain` 和 `WorkFollow/Application` 为独立纯 Swift 层，尚未替换 UI 的 PreviewWorkspace。WorkFollowTests 覆盖核心动作、一级父子关系、列表/树投影和 Preview 键盘选择边界。
+
+```sh
+xcodebuild -project macos-native/WorkFollow.xcodeproj -scheme WorkFollow -destination 'platform=macOS,arch=arm64' -derivedDataPath /private/tmp/workfollow-native-build CODE_SIGNING_ALLOWED=NO test
+```
+
+列表获得焦点时 ↑/↓ 切换任务，Return 打开首项或保持所选详情；Quick Add 输入焦点下不接管这些按键。Phase 1 状态仍是 IMPLEMENTED / PARTIALLY VERIFIED。

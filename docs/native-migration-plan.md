@@ -1,5 +1,10 @@
 # Native macOS 迁移计划
 
+当前状态：
+
+- **Phase 1: IMPLEMENTED / PARTIALLY VERIFIED**。代码完成不等于全尺寸、跨屏窗口恢复全部验收。
+- **Phase 2 第一批: IMPLEMENTED / UNIT TEST VERIFIED**。纯 Swift 核心规则已落地，尚未与 SwiftUI 或持久化接线。
+
 ## 决策与边界
 
 从 `feature/flutter-personal-desktop` 创建 `experiment/macos-native`；独立工作区 `workfollow-macos-native`。Flutter 留在 `desktop/` 作为产品行为基准，本轮不修改它。原 Flutter 工作区的暂存设计素材不带入实验工作区。
@@ -27,6 +32,34 @@ SwiftUI 负责组合、普通控件和状态；AppKit 负责窗口、复杂编�
 | 12 | 发布 | 全模块、持久化、迁移验收后签名、公证、发布；保留 Flutter 回退路径 |
 
 第二批先迁 Domain + TaskActions；不要扩展 `PreviewTask` 充当正式实体。目标链路为 View → TaskActions → WorkspaceStore → Repository。独立 Preview Store 可位于 `Application Support/WorkFollowNativePreview`，严禁两端同时读写 Flutter 正式目录。
+
+## Phase 2 第一批结果（2026-09-23）
+
+- 新增 WorkFollowTests XCTest target，并加入共享 scheme 的 TestAction。
+- Domain：Task、TaskPriority、TaskStatus、TaskSchedule、TaskList，均为 Foundation 值类型。
+- Application：TaskActions、TaskActionResult、WorkspaceStore、TaskListProjection、TaskTreeProjection。
+- 单一内存 Store；动作统一写入快照，投影只读；注入 clock 和 Calendar，测试不依赖当天日期和系统时区。
+- 已迁：创建、改标题、优先级、安排日期、完成/恢复、软删除/恢复删除、移清单、一级子任务、Today/Inbox/Completed、树展开与子行去重。
+- 没有扩展 PreviewTask，也没有把正式 Domain 接入 SwiftUI；Inspector、编辑器、Persistence、Notes、Calendar 均未改造。
+
+规则核对发现：Flutter Today/Inbox 页面保留其范围内已完成任务；只有待办计数和开放分组移除它们。因此测试是“完成移出 Today 开放任务，仍在已完成分组”，不是“整个 Today 删除该记录”。PreviewWorkspace 仍保留原先简化逻辑，不能当正式投影依据。
+
+完成父任务带动未完成的活动子任务，已完成孩子保留原完成时间；恢复父任务不恢复孩子。删除父任务带动未删除孩子；从垃圾桶恢复仅恢复同批删除的孩子。移动父任务带动未删除孩子。这里未迁重复任务、放弃/跳过/转换状态、Undo、标签、置顶、全文档正文、持久化及完整清单管理，不宣称完整 Flutter Domain parity。
+
+验证结果：
+
+- `xcodebuild test`：14 项 XCTest 全通过（12 项 Domain/Projection，1 项键盘选择状态，1 项测试 Target smoke）。
+- 实际 Native 窗口：↓ 首选/下一行、↑ 上一行、Return 保持所选详情，未误触完成。
+- ⌘N 后方向键仍交给输入框，未改变列表选中项。
+- 基础键盘导航是本轮唯一 UI 行为补口，不扩大 Phase 1 的全尺寸验收结论。
+
+复跑命令（仓库根目录）：
+
+```sh
+xcodebuild -project macos-native/WorkFollow.xcodeproj -scheme WorkFollow -destination 'platform=macOS,arch=arm64' -derivedDataPath /private/tmp/workfollow-native-build CODE_SIGNING_ALLOWED=NO test
+```
+
+Intel Mac 将 destination 的 arch 改为 x86_64。测试需要 macOS testmanagerd 权限；在限制沙箱里编译成功但 runner 启动失败不算测试通过。
 
 Editor 后续以 NativeDocument/DTO 为持久化模型，不能直接把 NSTextView attributedString 当数据库；Task/Note 共用 DocumentEditor，通过 descriptor/Profile 注入能力。
 

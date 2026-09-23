@@ -19,6 +19,16 @@
 
 若 Contract 与实际 Flutter 实测发生冲突，记录差异并确认产品规则，不借 Native 重写顺便改行为。
 
+## Phase 2 第一批补充
+
+上表“Native 第一批”列记录的是 Shell 基线，不覆盖后续实现状态。现新增独立 Domain/Application 和 12 项核心规则测试（另有 smoke、Preview keyboard 共计 14 项），通过 `xcodebuild test`，未替换当前 UI 的示例 Store。
+
+- Today/Inbox 的页面记录包含匹配的已完成任务；待办计数只算开放任务。Completed 按完成日倒序分组。
+- 已迁父子完成/恢复、单层创建、独立安排日期/优先级、树去重/展开、父任务移清单级联。
+- 已迁软删除及同批子任务恢复；尚未迁垃圾桶 UI、清空、永久删除。
+- 全套 Escape/Editor、Note、Matrix、Calendar 和跨屏恢复仍是待验证或未实现。
+- 现存 Flutter `needsAttentionToday` 的 deadline 条件为截止时间不晚于当天零点；Native 首批保持此条件，不擅自把任意“今天晚些时候截止”纳入。后续若修改须双端同步契约。
+
 ## 截图基线目录
 
 复用已有 `docs/screenshots/` 原图，不把新的 Native 截图冒充 Flutter 基线。
