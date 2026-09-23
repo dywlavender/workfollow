@@ -145,4 +145,36 @@ final class TaskWorkspaceModelTests: XCTestCase {
             XCTAssertNil(model.task(for: id)?.schedule.deadlineAt)
         }
     }
+
+    func testSelectedInspectorTaskReflectsCompleteAndRestoreActions() async {
+        await MainActor.run {
+            let model = TaskWorkspaceModel(clock: { self.now }, calendar: self.calendar,
+                                           seedDemoData: false)
+            let id = model.createTask(title: "Selected", in: .today).taskID!
+            model.select(id)
+
+            _ = model.changeStatus(model.selectedTask!)
+            XCTAssertEqual(model.selectedTaskID, id)
+            XCTAssertEqual(model.selectedTask?.status, .completed)
+            _ = model.changeStatus(model.selectedTask!)
+            XCTAssertEqual(model.selectedTask?.status, .active)
+        }
+    }
+
+    func testOnlyParentTasksCanChangeListAndDeleteClearsSelectedInspector() async {
+        await MainActor.run {
+            let model = TaskWorkspaceModel(clock: { self.now }, calendar: self.calendar,
+                                           seedDemoData: false)
+            let parent = model.createTask(title: "Parent", in: .inbox).taskID!
+            let child = model.createChild(parent, title: "Child").taskID!
+            XCTAssertTrue(model.canMoveToList(parent))
+            XCTAssertFalse(model.canMoveToList(child))
+
+            model.select(parent)
+            _ = model.delete(parent)
+            XCTAssertNil(model.selectedTaskID)
+            XCTAssertEqual(model.task(for: parent)?.deletedAt, self.now)
+            XCTAssertEqual(model.task(for: child)?.deletedAt, self.now)
+        }
+    }
 }

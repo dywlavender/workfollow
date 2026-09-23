@@ -32,4 +32,20 @@ final class TaskInspectorPresentationTests: XCTestCase {
         XCTAssertEqual(state.handleEscape(isNarrow: true), .endEditing)
         XCTAssertEqual(state.handleEscape(isNarrow: true), .returnToList)
     }
+
+    func testTitleDraftResetsForANewTaskButKeepsTheActiveDraftForTheSameTask() {
+        var state = TaskInspectorPresentationState()
+        let firstTaskID = UUID()
+        let secondTaskID = UUID()
+
+        state.synchronizeTitle(taskID: firstTaskID, title: "First")
+        state.titleDraft = "First draft"
+        state.synchronizeTitle(taskID: firstTaskID, title: "Updated First")
+        XCTAssertEqual(state.titleDraft, "First draft")
+
+        state.synchronizeTitle(taskID: secondTaskID, title: "Second")
+        XCTAssertEqual(state.titleDraft, "Second")
+        state.synchronizeTitle(taskID: nil, title: "")
+        XCTAssertEqual(state.titleDraft, "")
+    }
 }

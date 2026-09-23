@@ -5,6 +5,7 @@
 - **Phase 1: IMPLEMENTED / PARTIALLY VERIFIED**。代码完成不等于全尺寸、跨屏窗口恢复全部验收。
 - **Phase 2 第一批: IMPLEMENTED / UNIT TEST VERIFIED**。纯 Swift 核心规则已落地，尚未与 SwiftUI 或持久化接线。
 - **Phase 3: IMPLEMENTED / TEST + LIVE UI VERIFIED**。Today / Inbox / Completed 由正式 Domain 投影驱动；任务仍仅保存在内存中，不含持久化。
+- **Phase 4: IMPLEMENTED / UNIT TEST VERIFIED / LIVE UI PENDING**。Inspector 编辑和系统控件已接线；当前 macOS 会话锁屏，未完成实机 Popover、焦点和 Escape 操作验收。
 
 ## 决策与边界
 
@@ -74,6 +75,18 @@ Editor 后续以 NativeDocument/DTO 为持久化模型，不能直接把 NSTextV
 - 当前 `xcodebuild test` 共 21 项通过；实际窗口验证了 Today/Inbox 投影、完成父任务后的级联和数量更新、选中任务的 Inspector 内容。
 
 限制仍明确：没有数据库或重启持久化，样例数据每次启动重置；Inspector 只读；重复、提醒、标签、附件、Notes、Calendar、Trash 仍未进入本阶段。Phase 1 的多尺寸/跨屏验收状态不因本阶段 UI 接线而改变。
+
+## Phase 4 Task Inspector 实现结果（2026-09-23）
+
+- 新增 `TaskWorkspaceModel.setTitle` / `setPriority` / due-date / deadline Actions；Inspector 不访问 Store，所有改动经 `TaskActions`。
+- 标题使用原生 SwiftUI `TextField` 实时写入任务；以任务 ID 隔离输入草稿，切换任务时重置焦点与临时 Inspector 状态。
+- `TaskInspectorPresentationState` 集中处理 Escape：Popover → 编辑焦点 → 窄屏返回列表；宽屏无编辑状态时保留 Inspector。状态层有 XCTest 覆盖。
+- 安排日期和截止日期为两个独立原生 SwiftUI Popover：今天、明天、下周、无日期、图形日期选择。更新其中一项保留另一项；安排日期编辑清除时间部分。
+- 优先级通过系统 Menu 选择无/低/中/高；清单从收集箱、工作、学习、个人固定选项选择。子任务清单入口 disabled，父任务仍按 Domain 规则带动子任务。
+- Header 提供完成/恢复；Footer 的 More 仅有软删除；正文是不可编辑占位，没有加入 `TextEditor` / 富文本 / 持久化。
+- 新增标题草稿切换、优先级、日期字段独立性、清单约束、删除选中任务和 Inspector 状态的测试。当前共 30 项 XCTest 通过。
+
+待在解锁的真实 macOS 窗口手工核对：标题焦点/任务切换、Popover 锚点和外部关闭、菜单键盘导航、嵌套交互下 Escape 次序、Retina 下呈现，以及窄屏第二次 Escape 返回列表。未做该验收前，不把 Phase 4 标为完整通过。
 
 ## 第一批实现与实测（2026-09-23）
 

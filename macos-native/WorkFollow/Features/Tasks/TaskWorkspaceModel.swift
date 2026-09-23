@@ -5,6 +5,13 @@ import Foundation
 /// every mutation through TaskActions and every list shape through projections.
 @MainActor
 final class TaskWorkspaceModel: ObservableObject {
+    static let inspectorLists = [
+        TaskList.inbox,
+        TaskList(name: "工作"),
+        TaskList(name: "学习"),
+        TaskList(name: "个人")
+    ]
+
     @Published private(set) var selectedTaskID: UUID?
     @Published private(set) var expandedTaskIDs: Set<UUID> = []
     @Published private(set) var revision = 0
@@ -127,6 +134,20 @@ final class TaskWorkspaceModel: ObservableObject {
     @discardableResult
     func moveToList(_ id: UUID, _ list: TaskList) -> TaskActionResult {
         let result = actions.moveToList(id, list)
+        didMutate(result)
+        return result
+    }
+
+    func canMoveToList(_ id: UUID) -> Bool {
+        guard let task = task(for: id) else { return false }
+        return task.parentID == nil && task.deletedAt == nil
+    }
+
+    @discardableResult
+    func delete(_ id: UUID) -> TaskActionResult {
+        let result = actions.delete(id)
+        guard result.taskID != nil else { return result }
+        if selectedTaskID == id { selectedTaskID = nil }
         didMutate(result)
         return result
     }

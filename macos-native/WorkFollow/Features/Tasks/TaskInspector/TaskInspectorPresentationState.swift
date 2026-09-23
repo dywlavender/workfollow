@@ -22,6 +22,14 @@ enum InspectorEscapeEffect: Equatable {
 struct TaskInspectorPresentationState: Equatable {
     var editingTarget: InspectorEditingTarget = .none
     var activePopover: InspectorPopover? = nil
+    var titleDraftTaskID: UUID?
+    var titleDraft = ""
+
+    mutating func synchronizeTitle(taskID: UUID?, title: String) {
+        guard titleDraftTaskID != taskID else { return }
+        titleDraftTaskID = taskID
+        titleDraft = title
+    }
 
     mutating func handleEscape(isNarrow: Bool) -> InspectorEscapeEffect {
         if activePopover != nil {

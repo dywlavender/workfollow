@@ -35,6 +35,13 @@
 - Today Quick Add 设为当天日期，Inbox Quick Add 保持无日期；完成/恢复、父子级联、Inspector 读取真实 Domain Task 已通过 21 项 Native XCTest 和运行中窗口核验。
 - 数据目前仍为内存种子；不代表持久化、完整编辑器、Notes、Matrix、Calendar 或 Trash 已迁移。Phase 1 多尺寸与窗口恢复验收仍未完成。
 
+## Phase 4 Task Inspector 补充（2026-09-23）
+
+- Inspector 标题、状态、安排日期、截止日期、优先级、清单、软删除由 Domain Actions 提供；正文保持占位。安排日期和截止日期分字段修改，不互相覆盖。
+- 日期使用 SwiftUI 系统 Popover / DatePicker，优先级和清单使用系统 Menu；清单选项目前是固定预览列表，子任务入口禁用。
+- Escape 顺序由 `TaskInspectorPresentationState` 统一定义并通过 XCTest 覆盖：Popover → 编辑焦点 → 窄屏返回；宽屏无编辑状态保留选中详情。
+- 30 项 Native XCTest 通过，覆盖标题草稿切换。实机键盘/Popover/焦点和 Retina 位置验收仍待解锁 macOS 会话；此阶段不涵盖正文编辑、提醒、重复、标签、附件及持久化。
+
 ## 截图基线目录
 
 复用已有 `docs/screenshots/` 原图，不把新的 Native 截图冒充 Flutter 基线。

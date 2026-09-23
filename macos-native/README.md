@@ -15,8 +15,10 @@ open /private/tmp/workfollow-native-build/Build/Products/Debug/WorkFollow.app
 
 ## 本轮范围
 
-- SwiftUI 图标栏、导航栏、Today / 收集箱 / 已完成任务列表、任务选择和只读 Inspector。
+- SwiftUI 图标栏、导航栏、Today / 收集箱 / 已完成任务列表和原生 Task Inspector。
 - Task 列表由纯 Swift Domain、`TaskActions` 和 Projection 驱动；完成框独立于行选择，Quick Add 经动作层创建真实 Domain Task。
+- Inspector 支持标题实时编辑、完成/恢复、安排日期与截止日期、优先级、固定清单选择和软删除；正文仍为占位。
+- 日期选择使用系统 Popover 和图形日期控件；优先级、清单和更多操作使用系统 Menu。
 - ⌘N 聚焦新建、⌘K 快速打开、⌘, 设置、⌘1 今天、⌘2 收集箱。
 - 跟随系统/浅色/深色；AppKit 保存窗口位置和尺寸。
 - 列表宽度 340–470pt，受剩余 Inspector 最小 300pt 约束；紧凑窗口使用导航弹层和列表/详情切换。
@@ -36,4 +38,4 @@ xcodebuild -project macos-native/WorkFollow.xcodeproj -scheme WorkFollow -destin
 
 列表获得焦点时 ↑/↓ 切换任务，Return 打开首项或保持所选详情；Quick Add 输入焦点下不接管这些按键。Today Quick Add 设置当天真实 schedule，Inbox Quick Add 不预设日期。Phase 1 全尺寸拖动、窄屏返回和跨屏窗口恢复仍是 IMPLEMENTED / PARTIALLY VERIFIED。
 
-目前未接持久化、Notes、Calendar、Trash、完整任务编辑器和 Inspector 写入；此实验数据不会写入 Flutter 正式数据。
+Inspector 正文编辑、提醒、重复、标签、附件、关联、子任务编辑、Persistence、Notes、Calendar、Trash 均未接入；此实验数据不会写入 Flutter 正式数据。Phase 4 交互单测已通过；真实窗口的 Popover/焦点/Escape 视觉与键盘验收仍需在解锁的 macOS 会话进行。

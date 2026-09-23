@@ -32,7 +32,8 @@ struct TaskInspectorShell: View {
                 }
                 .font(WFType.body).padding(WFSpace.xl)
                 Divider()
-                TaskTitleField(task: task, workspace: workspace, focused: $titleFocused)
+                TaskTitleField(task: task, workspace: workspace,
+                               focused: $titleFocused, draft: $presentation.titleDraft)
                     .id(task.id)
                     .padding(WFSpace.page)
                 Text("添加描述…")
@@ -41,9 +42,25 @@ struct TaskInspectorShell: View {
                     .padding(.horizontal, WFSpace.page)
                 Spacer(minLength: 0)
                 Divider()
-                Label(task.list.name, systemImage: "tray")
-                    .font(WFType.body).foregroundStyle(WFColors.secondaryText)
-                    .padding(WFSpace.xl)
+                HStack {
+                    listMenu(task)
+                    Spacer()
+                    Menu {
+                        Button("删除任务", role: .destructive) {
+                            _ = workspace.delete(task.id)
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis")
+                            .frame(width: WFMetrics.controlHeight, height: WFMetrics.controlHeight)
+                            .contentShape(Rectangle())
+                    }
+                    .menuStyle(.borderlessButton)
+                    .help("更多操作")
+                    .accessibilityLabel("更多任务操作")
+                }
+                .font(WFType.body)
+                .padding(.horizontal, WFSpace.xl)
+                .padding(.vertical, WFSpace.md)
             } else {
                 Spacer()
                 VStack(spacing: WFSpace.md) {
@@ -61,11 +78,17 @@ struct TaskInspectorShell: View {
             presentation.editingTarget = focused ? .title : .none
         }
         .onChange(of: workspace.selectedTaskID) { _, _ in
+            presentation.synchronizeTitle(taskID: workspace.selectedTask?.id,
+                                          title: workspace.selectedTask?.title ?? "")
             titleFocused = false
             presentation.editingTarget = .none
             presentation.activePopover = nil
         }
         .onExitCommand(perform: handleEscape)
+        .onAppear {
+            presentation.synchronizeTitle(taskID: workspace.selectedTask?.id,
+                                          title: workspace.selectedTask?.title ?? "")
+        }
     }
 
     private func handleEscape() {
@@ -137,6 +160,29 @@ struct TaskInspectorShell: View {
         }
     }
 
+    private func listMenu(_ task: Task) -> some View {
+        Menu {
+            ForEach(TaskWorkspaceModel.inspectorLists, id: \.name) { list in
+                Button {
+                    _ = workspace.moveToList(task.id, list)
+                } label: {
+                    if task.list == list {
+                        Label(list.name, systemImage: "checkmark")
+                    } else {
+                        Text(list.name)
+                    }
+                }
+            }
+        } label: {
+            Label(task.list.name, systemImage: "tray")
+                .foregroundStyle(WFColors.secondaryText)
+        }
+        .menuStyle(.borderlessButton)
+        .disabled(!workspace.canMoveToList(task.id))
+        .help(task.parentID == nil ? "移动到清单" : "子任务跟随父任务清单")
+        .accessibilityLabel(task.parentID == nil ? "清单：\(task.list.name)" : "清单：\(task.list.name)，子任务跟随父任务")
+    }
+
     private func popoverBinding(_ popover: InspectorPopover) -> Binding<Bool> {
         Binding(
             get: { presentation.activePopover == popover },
@@ -180,7 +226,6 @@ private enum ScheduleField: Equatable {
 
 private struct SchedulePopoverView: View {
     let title: String
-    let selectedDate: Date?
     let today: Date
     let tomorrow: Date
     let nextWeek: Date
@@ -190,7 +235,6 @@ private struct SchedulePopoverView: View {
     init(title: String, selectedDate: Date?, today: Date, tomorrow: Date,
          nextWeek: Date, onSelect: @escaping (Date?) -> Void) {
         self.title = title
-        self.selectedDate = selectedDate
         self.today = today
         self.tomorrow = tomorrow
         self.nextWeek = nextWeek
@@ -208,13 +252,11 @@ private struct SchedulePopoverView: View {
             }
             Divider()
             DatePicker("自选日期", selection: $customDate, displayedComponents: .date)
-                .datePickerStyle(.compact)
-            HStack {
-                Button("无日期") { onSelect(nil) }
-                Spacer()
-                Button("确定") { onSelect(customDate) }
-                    .keyboardShortcut(.defaultAction)
-            }
+                .datePickerStyle(.graphical)
+                .labelsHidden()
+                .onChange(of: customDate) { _, date in onSelect(date) }
+            Button("无日期") { onSelect(nil) }
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(WFSpace.lg)
         .frame(width: 300)
@@ -231,13 +273,14 @@ private struct TaskTitleField: View {
     let task: Task
     @ObservedObject var workspace: TaskWorkspaceModel
     @FocusState.Binding var focused: Bool
-    @State private var draft: String
+    @Binding var draft: String
 
-    init(task: Task, workspace: TaskWorkspaceModel, focused: FocusState<Bool>.Binding) {
+    init(task: Task, workspace: TaskWorkspaceModel, focused: FocusState<Bool>.Binding,
+         draft: Binding<String>) {
         self.task = task
         self.workspace = workspace
         self._focused = focused
-        self._draft = State(initialValue: task.title)
+        self._draft = draft
     }
 
     var body: some View {
