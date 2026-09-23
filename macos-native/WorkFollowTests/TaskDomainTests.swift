@@ -139,6 +139,20 @@ final class TaskDomainTests: XCTestCase {
         XCTAssertEqual(store.tasks, before)
     }
 
+    func testChildCannotMoveToAnotherListIndependently() throws {
+        let store = WorkspaceStore()
+        let actions = TaskActions(store: store)
+        let parentID = try XCTUnwrap(actions.create(title: "parent", list: TaskList(name: "工作")).taskID)
+        let childID = try XCTUnwrap(actions.createChild(parentID).taskID)
+        let before = store.tasks
+
+        XCTAssertEqual(actions.moveToList(childID, TaskList(name: "个人")),
+                       .failure(.childListMoveNotSupported))
+        XCTAssertEqual(store.task(parentID)?.list, TaskList(name: "工作"))
+        XCTAssertEqual(store.task(childID)?.list, TaskList(name: "工作"))
+        XCTAssertEqual(store.tasks, before)
+    }
+
     func testCompletedGroupsSortNewestFirst() throws {
         let store = WorkspaceStore()
         var now = today

@@ -104,6 +104,7 @@ final class TaskActions {
         guard !list.name.isEmpty else { return .failure(.invalidList) }
         guard let task = store.task(id) else { return .failure(.missingTask) }
         guard task.deletedAt == nil else { return .failure(.deletedTask) }
+        guard task.parentID == nil else { return .failure(.childListMoveNotSupported) }
         let now = clock()
         store.commit(store.tasks.map { original in
             var value = original
