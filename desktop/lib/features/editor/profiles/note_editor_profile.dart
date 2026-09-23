@@ -29,21 +29,6 @@ class NoteEditorProfile extends EditorProfile {
   final NoteItem note;
   final WorkspaceController controller;
 
-  /// Document commands a note offers. The task-only entries (subtask, tag,
-  /// relation) are absent because a note has no records to point at and no
-  /// property rows to open.
-  static const slashActionValues = <DocumentSlashAction>[
-    DocumentSlashAction.heading1,
-    DocumentSlashAction.heading2,
-    DocumentSlashAction.heading3,
-    DocumentSlashAction.bullet,
-    DocumentSlashAction.ordered,
-    DocumentSlashAction.checklist,
-    DocumentSlashAction.quote,
-    DocumentSlashAction.divider,
-    DocumentSlashAction.attachment,
-  ];
-
   @override
   String get documentId => note.id;
 
@@ -92,7 +77,8 @@ class NoteEditorProfile extends EditorProfile {
   double get paragraphGap => WorkFollowSpacing.space2;
 
   @override
-  List<DocumentSlashAction>? get slashActions => slashActionValues;
+  List<DocumentSlashCommand> get slashCommands =>
+      DocumentSlashCommand.sharedDocumentCommands();
 
   @override
   List<quill.EmbedBuilder> buildEmbeds(BuildContext context) => [
@@ -115,17 +101,6 @@ class NoteEditorProfile extends EditorProfile {
 
   @override
   Future<String?> pickAttachment() => controller.pickNoteAttachment();
-
-  /// A note has no property rows of its own, so the palette carries no entry
-  /// point for tags, relations, deadlines or the focus timer.
-  @override
-  Future<void> Function(BuildContext anchor)? get onOpenTags => null;
-
-  @override
-  Future<void> Function(BuildContext anchor)? get onOpenRelation => null;
-
-  @override
-  Future<void> Function(BuildContext anchor)? get onOpenDeadline => null;
 
   @override
   @override

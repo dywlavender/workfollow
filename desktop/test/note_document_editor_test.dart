@@ -105,6 +105,8 @@ void main() {
         findsOneWidget);
     expect(find.byKey(const ValueKey('document-slash-option-subtask')),
         findsNothing);
+    expect(
+        find.byKey(const ValueKey('document-slash-option-tag')), findsNothing);
     expect(find.byKey(const ValueKey('document-slash-option-relation')),
         findsNothing);
 

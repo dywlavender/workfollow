@@ -323,7 +323,7 @@ Rect? _anchorRect(BuildContext context) {
 }
 
 /// Returns the standard formatting-strip decoration used by the task editor.
-BoxDecoration taskFormattingToolbarDecoration(WorkFollowTheme tokens) =>
+BoxDecoration documentFormattingToolbarDecoration(WorkFollowTheme tokens) =>
     WorkFollowSurfaceTokens.popover(
       tokens,
       radius: BorderRadius.circular(WorkFollowRadii.control),

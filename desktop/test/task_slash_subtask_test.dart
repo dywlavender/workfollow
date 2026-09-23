@@ -36,6 +36,8 @@ void main() {
             task: controller.tasks.firstWhere((task) => task.id == taskId),
             controller: controller,
             onAddChildTask: onAddChildTask,
+            onOpenTags: (_) async {},
+            onOpenRelation: (_) async {},
           ),
         ),
       ),

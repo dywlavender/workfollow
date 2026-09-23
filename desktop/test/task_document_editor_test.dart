@@ -9,6 +9,7 @@ import 'package:workfollow_personal/theme/workfollow_theme.dart';
 import 'package:workfollow_personal/widgets/task_inspector.dart';
 import 'package:workfollow_personal/widgets/task_list_picker.dart';
 import 'package:workfollow_personal/features/editor/document_slash_menu.dart';
+import 'package:workfollow_personal/features/editor/profiles/task_editor_profile.dart';
 
 void main() {
   testWidgets('task inspector More menu stays next to the footer trigger',
@@ -412,15 +413,23 @@ void main() {
       // The numbers come off the reference menu at 2x, and a test is the only
       // place they can be held: a 160pt card with 34pt rows and a 14pt glyph
       // slot is the difference between a command palette and a settings panel.
+      final commands = TaskEditorProfile(
+        task: controller.tasks.single,
+        controller: controller,
+        onAddChildTask: () {},
+        onOpenTags: (_) async {},
+        onOpenRelation: (_) async {},
+      ).slashCommands;
+      expect(commands, hasLength(12));
       final menu =
           tester.getSize(find.byKey(const ValueKey('document-slash-menu')));
       expect(menu.width, DocumentSlashMenuMetrics.width);
-      expect(menu.height, DocumentSlashMenu.heightFor(null));
+      expect(menu.height, DocumentSlashMenu.heightFor(commands));
       // Twelve rows, one hairline between the two groups and 4pt of padding
       // top and bottom — the height the editor also reserves above the caret.
       expect(
-          DocumentSlashMenu.heightFor(null),
-          DocumentSlashMenuMetrics.itemHeight * 12 +
+          DocumentSlashMenu.heightFor(commands),
+          DocumentSlashMenuMetrics.itemHeight * commands.length +
               DocumentSlashMenuMetrics.dividerBlock +
               DocumentSlashMenuMetrics.padding * 2);
       final row = tester

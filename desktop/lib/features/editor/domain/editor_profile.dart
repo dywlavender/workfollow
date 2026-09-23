@@ -78,8 +78,9 @@ abstract class EditorProfile {
   /// Vertical rhythm between paragraphs, placeholders and list lines.
   double get paragraphGap;
 
-  /// Palette entries for `/`, or null for the full shared palette.
-  List<DocumentSlashAction>? get slashActions;
+  /// Commands offered by `/`. Shared formatting and insertion commands are
+  /// composed by the profile together with document-specific commands.
+  List<DocumentSlashCommand> get slashCommands;
 
   /// Block and image embeds this document can render.
   List<quill.EmbedBuilder> buildEmbeds(BuildContext context);
@@ -95,18 +96,7 @@ abstract class EditorProfile {
 
   /// Requests a file for an attachment block. A null result is a cancelled
   /// picker and leaves the document untouched.
-  /// Creates a child task for this document's owner. Only task documents
-  /// provide it; other profiles leave it null and the palette entry no-ops.
-  void Function()? get onAddChildTask => null;
-
   Future<String?> pickAttachment();
-
-  /// Picker entry points for the palette commands the core does not implement
-  /// itself. A null callback means the document type does not offer that
-  /// command, which its [slashActions] already reflects.
-  Future<void> Function(BuildContext anchor)? get onOpenTags;
-  Future<void> Function(BuildContext anchor)? get onOpenRelation;
-  Future<void> Function(BuildContext anchor)? get onOpenDeadline;
 
   /// Keys that address this document type's own surfaces: its body editor and
   /// the surface that accepts clicks below the last line.

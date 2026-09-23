@@ -9,13 +9,13 @@ import 'package:flutter_quill/flutter_quill.dart' as quill;
 import '../../../theme/workfollow_theme.dart';
 import '../../../widgets/desktop_popover.dart';
 import '../../../widgets/persistent_anchored_popover.dart';
-import '../../../widgets/task_editor_popover.dart';
 import '../document_commands.dart';
 import '../document_keys.dart';
 import '../document_editor_toolbar.dart';
 import '../document_selection_toolbar.dart';
 import '../document_slash_menu.dart';
 import '../document_styles.dart';
+import 'document_editor_popover_style.dart';
 import '../slash_command_session.dart';
 import '../domain/document_selection_action.dart';
 import '../domain/editor_capability.dart';
@@ -23,12 +23,9 @@ import '../domain/editor_profile.dart';
 
 /// The one document editor behind every WorkFollow editing surface.
 ///
-/// A task document and a note document differ in their Delta, their palette
-/// vocabulary, their embeds, their under-prose panels and their selection
-/// actions — not in how a slash invocation, a formatting strip or a save
-/// handoff works. Those mechanics live here once, and [EditorProfile] says
-/// which of them a document loads. The core never asks what kind of document it
-/// holds.
+/// The profile supplies a document's Delta, commands, embeds, trailing panels
+/// and selection actions. This core owns the shared editing interactions and
+/// persistence handoff without branching on document type.
 class DocumentEditor extends StatefulWidget {
   const DocumentEditor({
     super.key,
@@ -293,9 +290,7 @@ class DocumentEditorState extends State<DocumentEditor>
 
   /// Toggles the persistent formatting strip anchored to its trigger.
   ///
-  /// It intentionally does not use [showTaskEditorPopover]: that API creates a
-  /// modal route whose lifetime is tied to one action, and the strip has to
-  /// survive several commands in a row.
+  /// It uses a persistent overlay so the strip stays open across commands.
   Future<void> toggleToolbar(BuildContext anchor) async {
     if (!mounted) return;
     if (toolbarVisible || _formatToolbar.isOpen) {
@@ -306,16 +301,16 @@ class DocumentEditorState extends State<DocumentEditor>
 
     final opened = _formatToolbar.open(
       anchor,
-      width: TaskEditorMetrics.toolbarPopoverWidth,
-      height: TaskEditorMetrics.toolbarPopoverHeight,
+      width: DocumentEditorMetrics.toolbarPopoverWidth,
+      height: DocumentEditorMetrics.toolbarPopoverHeight,
       placement: const PopoverPlacement(
           preferredSide: PopoverSide.top,
           alignment: PopoverAlignment.center,
           gap: WorkFollowSpacing.space7),
       policy: const DesktopOverlayPolicy.toolbar(),
-      popoverTheme: TaskEditorPopoverStyle.theme(anchor),
+      popoverTheme: DocumentEditorPopoverStyle.theme(anchor),
       surfaceDecoration:
-          taskFormattingToolbarDecoration(WorkFollowTheme.of(anchor)),
+          documentFormattingToolbarDecoration(WorkFollowTheme.of(anchor)),
       anchorRectResolver: () => _formatToolbarAnchorRect(anchor),
       builder: (_) => DocumentEditorToolbar(
         controller: editor,
@@ -400,8 +395,8 @@ class DocumentEditorState extends State<DocumentEditor>
     }
     final opened = _selectionPopover.open(
       context,
-      width: TaskEditorMetrics.selectionToolbarWidth,
-      height: TaskEditorMetrics.selectionToolbarHeight,
+      width: DocumentEditorMetrics.selectionToolbarWidth,
+      height: DocumentEditorMetrics.selectionToolbarHeight,
       placement: PopoverPlacement.topCenter,
       policy: const DesktopOverlayPolicy(
         layer: DesktopOverlayLayer.toolbar,
@@ -409,9 +404,9 @@ class DocumentEditorState extends State<DocumentEditor>
         dismissOnTapOutside: true,
         restoreFocus: false,
       ),
-      popoverTheme: TaskEditorPopoverStyle.theme(context),
+      popoverTheme: DocumentEditorPopoverStyle.theme(context),
       surfaceDecoration:
-          taskFormattingToolbarDecoration(WorkFollowTheme.of(context)),
+          documentFormattingToolbarDecoration(WorkFollowTheme.of(context)),
       anchorRectResolver: _selectionAnchorRect,
       onDismiss: _dismissSelectionToolbarFromOutside,
       builder: (_) => DocumentSelectionToolbar(
@@ -522,7 +517,7 @@ class DocumentEditorState extends State<DocumentEditor>
     // The full command set is 425pt tall. A window that cannot hold it gets a
     // shorter card that scrolls, instead of one that spills past the edge.
     final menuHeight = math.min(
-        DocumentSlashMenu.heightFor(widget.profile.slashActions),
+        DocumentSlashMenu.heightFor(widget.profile.slashCommands),
         math.max(220.0, screen.height - 24));
     if (_slashPopover.isOpen) {
       _slashPopover.markNeedsBuild();
@@ -545,9 +540,9 @@ class DocumentEditorState extends State<DocumentEditor>
         descendantsAreFocusable: false,
         child: DocumentSlashMenu(
           key: _slashMenuKey,
-          actions: widget.profile.slashActions,
+          commands: widget.profile.slashCommands,
           maxHeight: menuHeight,
-          onSelected: _applySlash,
+          onSelected: (command) => unawaited(_applySlash(command)),
         ),
       ),
     );
@@ -569,7 +564,7 @@ class DocumentEditorState extends State<DocumentEditor>
     return box.localToGlobal(Offset.zero) & box.size;
   }
 
-  void _applySlash(DocumentSlashAction action) {
+  Future<void> _applySlash(DocumentSlashCommand command) async {
     final session = _slashSession;
     if (session == null || _applyingSlash) return;
     final range = _slashRange(session);
@@ -578,57 +573,27 @@ class DocumentEditorState extends State<DocumentEditor>
       return;
     }
     final at = session.slashOffset;
-    final profile = widget.profile;
-    Future<void> Function(BuildContext)? openPicker;
-    var attach = false;
     _applyingSlash = true;
     try {
       if (!_removeSlash(session)) {
         _closeSlashSession();
         return;
       }
-      switch (action) {
-        case DocumentSlashAction.heading1:
-          documentCommands.setHeading1(lineStart: session.lineStart);
-        case DocumentSlashAction.heading2:
-          documentCommands.setHeading2(lineStart: session.lineStart);
-        case DocumentSlashAction.heading3:
-          documentCommands.setHeading3(lineStart: session.lineStart);
-        case DocumentSlashAction.bullet:
-          documentCommands.toggleBulletList(lineStart: session.lineStart);
-        case DocumentSlashAction.ordered:
-          documentCommands.toggleOrderedList(lineStart: session.lineStart);
-        case DocumentSlashAction.checklist:
-          documentCommands.toggleChecklist(lineStart: session.lineStart);
-        case DocumentSlashAction.quote:
-          documentCommands.toggleQuote(lineStart: session.lineStart);
-        case DocumentSlashAction.divider:
-          documentCommands.insertDivider(at: at);
-        case DocumentSlashAction.subtask:
-          profile.onAddChildTask?.call();
-        case DocumentSlashAction.tag:
-          openPicker = profile.onOpenTags;
-        case DocumentSlashAction.relation:
-          openPicker = profile.onOpenRelation;
-        case DocumentSlashAction.attachment:
-          attach = true;
-        case DocumentSlashAction.deadline:
-          openPicker = profile.onOpenDeadline;
-      }
-      final insertedBlock = action == DocumentSlashAction.divider;
-      final desiredCaret = insertedBlock ? at + 1 : at;
       final maxCaret = math.max(0, editor.document.length - 1);
       editor.updateSelection(
-          TextSelection.collapsed(
-              offset: desiredCaret.clamp(0, maxCaret).toInt()),
+          TextSelection.collapsed(offset: at.clamp(0, maxCaret).toInt()),
           quill.ChangeSource.local);
     } finally {
       _applyingSlash = false;
     }
     _closeSlashSession();
     focus.requestFocus();
-    if (attach) unawaited(documentCommands.insertAttachment(at: at));
-    if (openPicker != null) unawaited(openPicker(context));
+    await command.onInvoke(DocumentSlashInvocation(
+      anchor: context,
+      commands: documentCommands,
+      slashOffset: at,
+      lineStart: session.lineStart,
+    ));
   }
 
   Future<void> _link() async {
@@ -724,11 +689,11 @@ class DocumentEditorState extends State<DocumentEditor>
                         scrollable: false,
                         // A profile that owns its pane fills it, so the blank
                         // area under the last line is part of the canvas — that
-                        // is how a click below a task's prose lands in the task.
+                        // is how a click below the prose lands in the document.
                         // A document inside a scrolling page stays at its floor
                         // instead, and the page routes clicks in the blank space
                         // back here: filling the pane would drag everything that
-                        // follows the prose — panels, related tasks — down with
+                        // follows the prose — trailing panels — down with
                         // it. See [EditorProfile.expandsToViewport].
                         minHeight: profile.expandsToViewport && panels.isEmpty
                             ? math.max(profile.documentMinHeight,

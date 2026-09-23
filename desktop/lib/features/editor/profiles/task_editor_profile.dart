@@ -9,7 +9,6 @@ import '../../../models/task.dart';
 import '../../../state/workspace_controller.dart';
 import '../../../theme/workfollow_icons.dart';
 import '../../../theme/workfollow_interaction_states.dart';
-import '../../../theme/workfollow_surface_tokens.dart';
 import '../../../theme/workfollow_theme.dart';
 import '../../../widgets/app_icon_button.dart';
 import '../../../widgets/task_children_panel.dart';
@@ -92,30 +91,41 @@ class TaskEditorProfile extends EditorProfile {
   @override
   double get paragraphGap => WorkFollowSpacing.editorParagraphGap;
 
-  /// The child's palette: the same commands, minus the one a child cannot run.
-  ///
-  /// The hierarchy allows a single level, and that rule is enforced in the
-  /// inspector (`TaskInspector._addChildTask` returns early for a child), not
-  /// here. A palette that still offered 子任务 would be a command that opens,
-  /// closes and does nothing — the second silent no-op this feature has had,
-  /// so the rule is stated where the command is offered instead.
-  static const List<DocumentSlashAction> childSlashActions =
-      <DocumentSlashAction>[
-    ...DocumentSlashMenu.textActions,
-    DocumentSlashAction.attachment,
-    DocumentSlashAction.tag,
-    DocumentSlashAction.relation,
-  ];
-
-  /// The full palette, or [childSlashActions] under a child.
-  ///
-  /// `null` is not "no commands": the core reads it as its own default set —
-  /// eight text commands, then attachment → subtask → tag → relation.
-  /// `deadline` and `focus` are reachable from the row context menu and the
-  /// inspector's property rows, so they are not palette entries.
+  /// Composes the shared document commands with task actions that are
+  /// available on this surface. Children cannot create another child task.
   @override
-  List<DocumentSlashAction>? get slashActions =>
-      task.isChildTask ? childSlashActions : null;
+  List<DocumentSlashCommand> get slashCommands {
+    final commands = DocumentSlashCommand.sharedDocumentCommands();
+    if (!task.isChildTask && onAddChildTask != null) {
+      commands.add(DocumentSlashCommand(
+        id: 'subtask',
+        label: '子任务',
+        group: DocumentSlashGroup.insert,
+        onInvoke: (_) => onAddChildTask?.call(),
+      ));
+    }
+    if (onOpenTags != null) {
+      commands.add(DocumentSlashCommand(
+        id: 'tag',
+        label: '标签',
+        group: DocumentSlashGroup.insert,
+        onInvoke: (invocation) async {
+          await onOpenTags?.call(invocation.anchor);
+        },
+      ));
+    }
+    if (onOpenRelation != null) {
+      commands.add(DocumentSlashCommand(
+        id: 'relation',
+        label: '关联任务/笔记',
+        group: DocumentSlashGroup.insert,
+        onInvoke: (invocation) async {
+          await onOpenRelation?.call(invocation.anchor);
+        },
+      ));
+    }
+    return commands;
+  }
 
   @override
   List<quill.EmbedBuilder> buildEmbeds(BuildContext context) => [
@@ -291,7 +301,8 @@ class TaskSourceNotePanel extends StatelessWidget {
           borderRadius: BorderRadius.circular(WorkFollowRadii.surface),
           // The card sits on an accent tint; hover deepens that tint rather
           // than dropping an opaque neutral over it.
-          overlayColor: WorkFollowInteractionStyles.tintedOverlay(tokens.accent),
+          overlayColor:
+              WorkFollowInteractionStyles.tintedOverlay(tokens.accent),
           onTap: () => controller.openNote(source.id),
           child: Padding(
             padding: const EdgeInsets.symmetric(

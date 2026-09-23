@@ -205,11 +205,9 @@ class TaskListMetrics {
       available.clamp(minPaneWidth, preferredPaneWidth);
 }
 
-/// Geometry for document formatting controls and their anchored popovers.
-/// Values are shared by the task editor, note editor and every entry point
-/// that opens the document toolbar.
-class TaskEditorMetrics {
-  const TaskEditorMetrics._();
+/// Geometry for shared document formatting controls and anchored popovers.
+class DocumentEditorMetrics {
+  const DocumentEditorMetrics._();
 
   static const double headingPickerWidth = 150;
   static const double timePickerWidth = 222;
@@ -233,6 +231,10 @@ class TaskEditorMetrics {
   static const double horizontalRuleHeight = 26;
   static const double subtaskProgressHeight = 4;
 }
+
+/// Kept for existing task surfaces while shared editor code uses the generic
+/// [DocumentEditorMetrics] name.
+typedef TaskEditorMetrics = DocumentEditorMetrics;
 
 /// Geometry shared by task date, list, tag and repeat pickers.
 class TaskPickerMetrics {

@@ -1,58 +1,128 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../theme/workfollow_icons.dart';
 import '../../theme/workfollow_interaction_states.dart';
 import '../../theme/workfollow_surface_tokens.dart';
 import '../../theme/workfollow_theme.dart';
+import 'document_commands.dart';
 
-enum DocumentSlashAction {
-  heading1,
-  heading2,
-  heading3,
-  bullet,
-  ordered,
-  checklist,
-  quote,
-  divider,
-  subtask,
-  tag,
-  relation,
-  attachment,
-  deadline,
+/// Commands are grouped by their role in the palette, not by document type.
+enum DocumentSlashGroup { formatting, insert }
+
+/// Values supplied to a slash command when the user selects it.
+class DocumentSlashInvocation {
+  const DocumentSlashInvocation({
+    required this.anchor,
+    required this.commands,
+    required this.slashOffset,
+    required this.lineStart,
+  });
+
+  /// The editor surface context used to anchor document-specific pickers.
+  final BuildContext anchor;
+
+  /// Shared document mutation API.
+  final DocumentCommands commands;
+
+  /// Offset where the `/` was typed, retained after the trigger is removed.
+  final int slashOffset;
+
+  /// Start of the paragraph containing the trigger.
+  final int lineStart;
 }
 
-extension DocumentSlashActionLabel on DocumentSlashAction {
-  String get label => switch (this) {
-        DocumentSlashAction.heading1 => '一级标题',
-        DocumentSlashAction.heading2 => '二级标题',
-        DocumentSlashAction.heading3 => '三级标题',
-        DocumentSlashAction.bullet => '无序列表',
-        DocumentSlashAction.ordered => '有序列表',
-        DocumentSlashAction.checklist => '检查项',
-        DocumentSlashAction.quote => '引用',
-        DocumentSlashAction.divider => '水平分割线',
-        DocumentSlashAction.subtask => '子任务',
-        DocumentSlashAction.tag => '标签',
-        DocumentSlashAction.relation => '关联任务/笔记',
-        DocumentSlashAction.attachment => '附件',
-        DocumentSlashAction.deadline => '截止日期',
-      };
+/// A palette entry provided by the profile for the document being edited.
+///
+/// The menu renders the descriptor and returns it unchanged. It does not
+/// infer behavior from the id; the callback owns the behavior.
+class DocumentSlashCommand {
+  const DocumentSlashCommand({
+    required this.id,
+    required this.label,
+    required this.group,
+    required this.onInvoke,
+    this.icon,
+  });
 
-  String get keyName => switch (this) {
-        DocumentSlashAction.heading1 => 'heading-1',
-        DocumentSlashAction.heading2 => 'heading-2',
-        DocumentSlashAction.heading3 => 'heading-3',
-        DocumentSlashAction.bullet => 'bullet',
-        DocumentSlashAction.ordered => 'ordered',
-        DocumentSlashAction.checklist => 'checklist',
-        DocumentSlashAction.quote => 'quote',
-        DocumentSlashAction.divider => 'divider',
-        DocumentSlashAction.subtask => 'subtask',
-        DocumentSlashAction.tag => 'tag',
-        DocumentSlashAction.relation => 'relation',
-        DocumentSlashAction.attachment => 'attachment',
-        DocumentSlashAction.deadline => 'deadline',
-      };
+  final String id;
+  final String label;
+  final DocumentSlashGroup group;
+  final FutureOr<void> Function(DocumentSlashInvocation invocation) onInvoke;
+
+  /// Optional standard icon. The palette draws its established custom glyphs
+  /// for the shared formatting commands and uses this for icon-led commands.
+  final IconData? icon;
+
+  static List<DocumentSlashCommand> sharedDocumentCommands() => [
+        DocumentSlashCommand(
+          id: 'heading-1',
+          label: '一级标题',
+          group: DocumentSlashGroup.formatting,
+          onInvoke: (invocation) =>
+              invocation.commands.setHeading1(lineStart: invocation.lineStart),
+        ),
+        DocumentSlashCommand(
+          id: 'heading-2',
+          label: '二级标题',
+          group: DocumentSlashGroup.formatting,
+          onInvoke: (invocation) =>
+              invocation.commands.setHeading2(lineStart: invocation.lineStart),
+        ),
+        DocumentSlashCommand(
+          id: 'heading-3',
+          label: '三级标题',
+          group: DocumentSlashGroup.formatting,
+          onInvoke: (invocation) =>
+              invocation.commands.setHeading3(lineStart: invocation.lineStart),
+        ),
+        DocumentSlashCommand(
+          id: 'bullet',
+          label: '无序列表',
+          group: DocumentSlashGroup.formatting,
+          onInvoke: (invocation) => invocation.commands
+              .toggleBulletList(lineStart: invocation.lineStart),
+        ),
+        DocumentSlashCommand(
+          id: 'ordered',
+          label: '有序列表',
+          group: DocumentSlashGroup.formatting,
+          onInvoke: (invocation) => invocation.commands
+              .toggleOrderedList(lineStart: invocation.lineStart),
+        ),
+        DocumentSlashCommand(
+          id: 'checklist',
+          label: '检查项',
+          group: DocumentSlashGroup.formatting,
+          onInvoke: (invocation) => invocation.commands
+              .toggleChecklist(lineStart: invocation.lineStart),
+        ),
+        DocumentSlashCommand(
+          id: 'quote',
+          label: '引用',
+          group: DocumentSlashGroup.formatting,
+          onInvoke: (invocation) =>
+              invocation.commands.toggleQuote(lineStart: invocation.lineStart),
+        ),
+        DocumentSlashCommand(
+          id: 'divider',
+          label: '水平分割线',
+          group: DocumentSlashGroup.formatting,
+          onInvoke: (invocation) =>
+              invocation.commands.insertDivider(at: invocation.slashOffset),
+        ),
+        DocumentSlashCommand(
+          id: 'attachment',
+          label: '附件',
+          group: DocumentSlashGroup.insert,
+          icon: WorkFollowIcons.attachment,
+          onInvoke: (invocation) async {
+            await invocation.commands
+                .insertAttachment(at: invocation.slashOffset);
+          },
+        ),
+      ];
 }
 
 /// Geometry of the command palette, measured off the reference menu at 2x.
@@ -64,95 +134,66 @@ extension DocumentSlashActionLabel on DocumentSlashAction {
 class DocumentSlashMenuMetrics {
   const DocumentSlashMenuMetrics._();
 
-  static const double width = TaskEditorMetrics.commandMenuWidth;
+  static const double width = DocumentEditorMetrics.commandMenuWidth;
 
   /// Natural height of the full 12-item palette. The editor lowers it when the
   /// window cannot hold it, and the palette scrolls instead of clipping.
-  static const double maxHeight = TaskEditorMetrics.commandMenuMaxHeight;
+  static const double maxHeight = DocumentEditorMetrics.commandMenuMaxHeight;
 
   static const double padding = WorkFollowSpacing.space1;
   static const double itemInset = WorkFollowSpacing.space1;
   static const double itemHeight = WorkFollowMetrics.compactMenuRowHeight;
   static const double itemLeading = WorkFollowSpacing.relaxedGap;
   static const double itemTrailing = WorkFollowSpacing.space3;
-  static const double glyphSlot = TaskEditorMetrics.commandGlyphSlot;
+  static const double glyphSlot = DocumentEditorMetrics.commandGlyphSlot;
   static const double glyphGap = WorkFollowSpacing.iconLabelGap;
 
   /// 4 above the hairline, 1 for the hairline, 4 below.
   static const double dividerBlock = WorkFollowSpacing.compactInset;
 
-  /// Material shapes that already match the reference, sized so their ink
-  /// lands on the same 12.5pt square as the hand-drawn siblings. The paperclip
-  /// and the two WorkFollow-only commands keep their font glyph.
+  /// Size of icon-led entries, matched to the hand-drawn glyphs' visual area.
   static const double fontGlyph = 15;
 }
 
 /// The `/` command palette of a document surface.
 ///
-/// Structure, order and glyph language follow the reference menu: eight text
-/// commands, a hairline, then the four task commands in the order
-/// attachment → subtask → tag → relation. WorkFollow's own `deadline` action
-/// is still rendered when a caller asks for it by name, but it is not part of
-/// the task editor's default palette: it belongs to the row context menu and
-/// the inspector's date property row. The command stays, the entry point does
-/// not — the palette and the more menu both have a reference to match, so
-/// neither grows because a feature exists.
+/// The profile supplies ordered command descriptors. The menu only separates
+/// the formatting and insertion groups and handles their visual navigation.
 class DocumentSlashMenu extends StatefulWidget {
   const DocumentSlashMenu({
     super.key,
+    required this.commands,
     required this.onSelected,
-    this.actions,
     this.maxHeight = DocumentSlashMenuMetrics.maxHeight,
   });
 
-  final ValueChanged<DocumentSlashAction> onSelected;
-
-  /// Optional subset for other document surfaces such as Notes. The palette
-  /// keeps the full task set when this is omitted.
-  final List<DocumentSlashAction>? actions;
+  final List<DocumentSlashCommand> commands;
+  final ValueChanged<DocumentSlashCommand> onSelected;
 
   /// Cap handed down by the anchor owner, which is the only layer that knows
   /// how much room the caret has.
   final double maxHeight;
 
-  static const textActions = <DocumentSlashAction>[
-    DocumentSlashAction.heading1,
-    DocumentSlashAction.heading2,
-    DocumentSlashAction.heading3,
-    DocumentSlashAction.bullet,
-    DocumentSlashAction.ordered,
-    DocumentSlashAction.checklist,
-    DocumentSlashAction.quote,
-    DocumentSlashAction.divider,
-  ];
+  /// Splits the supplied descriptors while preserving their order per group.
+  static ({
+    List<DocumentSlashCommand> formatting,
+    List<DocumentSlashCommand> insert,
+  }) groupsFor(List<DocumentSlashCommand> commands) => (
+        formatting: commands
+            .where((command) => command.group == DocumentSlashGroup.formatting)
+            .toList(growable: false),
+        insert: commands
+            .where((command) => command.group == DocumentSlashGroup.insert)
+            .toList(growable: false),
+      );
 
-  static const taskActions = <DocumentSlashAction>[
-    DocumentSlashAction.attachment,
-    DocumentSlashAction.subtask,
-    DocumentSlashAction.tag,
-    DocumentSlashAction.relation,
-  ];
-
-  /// Splits a caller's subset into the two rendered groups, preserving the
-  /// palette order rather than the caller's.
-  static ({List<DocumentSlashAction> text, List<DocumentSlashAction> task})
-      groupsFor(List<DocumentSlashAction>? actions) {
-    if (actions == null) {
-      return (text: textActions, task: taskActions);
-    }
-    return (
-      text: actions.where(textActions.contains).toList(growable: false),
-      task: actions.where(taskActions.contains).toList(growable: false),
-    );
-  }
-
-  /// Exact height [actions] will occupy, so the caller can place the palette
+  /// Exact height [commands] will occupy, so the caller can place the palette
   /// without measuring it.
-  static double heightFor(List<DocumentSlashAction>? actions) {
-    final groups = groupsFor(actions);
-    final count = groups.text.length + groups.task.length;
+  static double heightFor(List<DocumentSlashCommand> commands) {
+    final groups = groupsFor(commands);
+    final count = groups.formatting.length + groups.insert.length;
     final divider =
-        groups.text.isNotEmpty && groups.task.isNotEmpty ? 1.0 : 0.0;
+        groups.formatting.isNotEmpty && groups.insert.isNotEmpty ? 1.0 : 0.0;
     return count * DocumentSlashMenuMetrics.itemHeight +
         divider * DocumentSlashMenuMetrics.dividerBlock +
         DocumentSlashMenuMetrics.padding * 2;
@@ -175,15 +216,15 @@ class DocumentSlashMenuState extends State<DocumentSlashMenu> {
   /// the user sees the moment `/` opens the palette.
   int get focusedIndex => _focused;
 
-  List<DocumentSlashAction> get _visible {
-    final groups = DocumentSlashMenu.groupsFor(widget.actions);
-    return [...groups.text, ...groups.task];
-  }
+  List<DocumentSlashCommand> get _visible => [
+        ..._formatting,
+        ..._insert,
+      ];
 
-  List<DocumentSlashAction> get _text =>
-      DocumentSlashMenu.groupsFor(widget.actions).text;
-  List<DocumentSlashAction> get _task =>
-      DocumentSlashMenu.groupsFor(widget.actions).task;
+  List<DocumentSlashCommand> get _formatting =>
+      DocumentSlashMenu.groupsFor(widget.commands).formatting;
+  List<DocumentSlashCommand> get _insert =>
+      DocumentSlashMenu.groupsFor(widget.commands).insert;
 
   /// Moves the highlight by [delta] rows, wrapping at the ends.
   ///
@@ -223,16 +264,17 @@ class DocumentSlashMenuState extends State<DocumentSlashMenu> {
   }
 
   double _offsetOf(int index) {
-    final text = _text;
-    if (index < text.length) {
+    final formatting = _formatting;
+    if (index < formatting.length) {
       return DocumentSlashMenuMetrics.padding +
           index * DocumentSlashMenuMetrics.itemHeight;
     }
-    final divider = text.isEmpty ? 0.0 : DocumentSlashMenuMetrics.dividerBlock;
+    final divider =
+        formatting.isEmpty ? 0.0 : DocumentSlashMenuMetrics.dividerBlock;
     return DocumentSlashMenuMetrics.padding +
-        text.length * DocumentSlashMenuMetrics.itemHeight +
+        formatting.length * DocumentSlashMenuMetrics.itemHeight +
         divider +
-        (index - text.length) * DocumentSlashMenuMetrics.itemHeight;
+        (index - formatting.length) * DocumentSlashMenuMetrics.itemHeight;
   }
 
   /// Keeps the highlighted row inside a palette that had to shrink.
@@ -257,8 +299,8 @@ class DocumentSlashMenuState extends State<DocumentSlashMenu> {
   @override
   Widget build(BuildContext context) {
     final tokens = WorkFollowTheme.of(context);
-    final text = _text;
-    final task = _task;
+    final formatting = _formatting;
+    final insert = _insert;
     return Focus(
       canRequestFocus: false,
       descendantsAreFocusable: false,
@@ -285,10 +327,12 @@ class DocumentSlashMenuState extends State<DocumentSlashMenu> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                for (var i = 0; i < text.length; i++) _item(i, text[i], tokens),
-                if (text.isNotEmpty && task.isNotEmpty) _divider(tokens),
-                for (var i = 0; i < task.length; i++)
-                  _item(text.length + i, task[i], tokens),
+                for (var i = 0; i < formatting.length; i++)
+                  _item(i, formatting[i], tokens),
+                if (formatting.isNotEmpty && insert.isNotEmpty)
+                  _divider(tokens),
+                for (var i = 0; i < insert.length; i++)
+                  _item(formatting.length + i, insert[i], tokens),
               ],
             ),
           ),
@@ -307,7 +351,8 @@ class DocumentSlashMenuState extends State<DocumentSlashMenu> {
                 color: tokens.menuDivider)),
       );
 
-  Widget _item(int index, DocumentSlashAction action, WorkFollowTheme tokens) {
+  Widget _item(
+      int index, DocumentSlashCommand command, WorkFollowTheme tokens) {
     final selected = index == _focused;
     return Padding(
       padding: const EdgeInsets.symmetric(
@@ -316,8 +361,8 @@ class DocumentSlashMenuState extends State<DocumentSlashMenu> {
         cursor: SystemMouseCursors.click,
         onEnter: (_) => _hover(index),
         child: InkWell(
-          key: ValueKey('document-slash-option-${action.keyName}'),
-          onTap: () => widget.onSelected(action),
+          key: ValueKey('document-slash-option-${command.id}'),
+          onTap: () => widget.onSelected(command),
           overlayColor: WorkFollowInteractionStyles.overlay(
             tokens,
             menu: true,
@@ -342,11 +387,11 @@ class DocumentSlashMenuState extends State<DocumentSlashMenu> {
               child: Row(
                 children: [
                   const SizedBox(width: DocumentSlashMenuMetrics.itemLeading),
-                  _leading(action, tokens),
+                  _leading(command, tokens),
                   const SizedBox(width: DocumentSlashMenuMetrics.glyphGap),
                   Expanded(
                     child: Text(
-                      action.label,
+                      command.label,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
@@ -374,12 +419,8 @@ class DocumentSlashMenuState extends State<DocumentSlashMenu> {
     );
   }
 
-  Widget _leading(DocumentSlashAction action, WorkFollowTheme tokens) {
-    final glyph = switch (action) {
-      DocumentSlashAction.attachment => WorkFollowIcons.attachment,
-      DocumentSlashAction.deadline => WorkFollowIcons.deadline,
-      _ => null,
-    };
+  Widget _leading(DocumentSlashCommand command, WorkFollowTheme tokens) {
+    final glyph = command.icon;
     if (glyph != null) {
       return SizedBox(
         width: DocumentSlashMenuMetrics.glyphSlot,
@@ -394,7 +435,8 @@ class DocumentSlashMenuState extends State<DocumentSlashMenu> {
     return SizedBox(
       width: DocumentSlashMenuMetrics.glyphSlot,
       height: DocumentSlashMenuMetrics.glyphSlot,
-      child: CustomPaint(painter: _SlashMenuGlyph(action, tokens.textPrimary)),
+      child:
+          CustomPaint(painter: _SlashMenuGlyph(command.id, tokens.textPrimary)),
     );
   }
 }
@@ -402,14 +444,14 @@ class DocumentSlashMenuState extends State<DocumentSlashMenu> {
 /// Draws one leading glyph on a 14 x 14 grid.
 ///
 /// The reference palette draws its own icon set — three-dot bullets, `1 2 3`
-/// numbering, a stacked divider, a task branch, two linked rectangles — and no
+/// numbering, a stacked divider, a nested-item branch, two linked rectangles — and no
 /// Material glyph stands in for those without changing the language. The two
 /// heading levels are text, not icons: `H₁ / H₂ / H₃` is the level, and
 /// `title` / `text_fields` / `short_text` only say "some heading".
 class _SlashMenuGlyph extends CustomPainter {
-  const _SlashMenuGlyph(this.action, this.color);
+  const _SlashMenuGlyph(this.commandId, this.color);
 
-  final DocumentSlashAction action;
+  final String commandId;
   final Color color;
 
   static const double _box = DocumentSlashMenuMetrics.glyphSlot;
@@ -441,33 +483,31 @@ class _SlashMenuGlyph extends CustomPainter {
       ..color = color
       ..isAntiAlias = true;
 
-    switch (action) {
-      case DocumentSlashAction.heading1:
+    switch (commandId) {
+      case 'heading-1':
         _heading(canvas, 1);
-      case DocumentSlashAction.heading2:
+      case 'heading-2':
         _heading(canvas, 2);
-      case DocumentSlashAction.heading3:
+      case 'heading-3':
         _heading(canvas, 3);
-      case DocumentSlashAction.bullet:
+      case 'bullet':
         _bullet(canvas, line, fill);
-      case DocumentSlashAction.ordered:
+      case 'ordered':
         _ordered(canvas, line);
-      case DocumentSlashAction.checklist:
+      case 'checklist':
         _checklist(canvas, line);
-      case DocumentSlashAction.quote:
+      case 'quote':
         _quote(canvas, fill);
-      case DocumentSlashAction.divider:
+      case 'divider':
         _divider(canvas, line);
-      case DocumentSlashAction.subtask:
+      case 'subtask':
         _subtask(canvas, trunk, fill);
-      case DocumentSlashAction.tag:
+      case 'tag':
         _tag(canvas, line, fill);
-      case DocumentSlashAction.relation:
+      case 'relation':
         _relation(canvas, line);
-      case DocumentSlashAction.attachment:
-      case DocumentSlashAction.deadline:
-        // Drawn as font glyphs by the caller; the palette never reaches this
-        // branch for the WorkFollow-only command.
+      default:
+        // Extension commands should provide a standard icon on the descriptor.
         break;
     }
     canvas.restore();
@@ -600,5 +640,5 @@ class _SlashMenuGlyph extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _SlashMenuGlyph oldDelegate) =>
-      oldDelegate.action != action || oldDelegate.color != color;
+      oldDelegate.commandId != commandId || oldDelegate.color != color;
 }
