@@ -4,6 +4,7 @@ struct TaskInspectorShell: View {
     @ObservedObject var workspace: TaskWorkspaceModel
     let showBack: Bool
     @FocusState private var titleFocused: Bool
+    @State private var presentation = TaskInspectorPresentationState()
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -32,6 +33,7 @@ struct TaskInspectorShell: View {
                 .font(WFType.body).padding(WFSpace.xl)
                 Divider()
                 TaskTitleField(task: task, workspace: workspace, focused: $titleFocused)
+                    .id(task.id)
                     .padding(WFSpace.page)
                 Text("添加描述…")
                     .font(WFType.body).foregroundStyle(WFColors.tertiaryText)
@@ -55,7 +57,28 @@ struct TaskInspectorShell: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(WFColors.content)
-        .onExitCommand { if showBack { workspace.select(nil) } }
+        .onChange(of: titleFocused) { _, focused in
+            presentation.editingTarget = focused ? .title : .none
+        }
+        .onChange(of: workspace.selectedTaskID) { _, _ in
+            titleFocused = false
+            presentation.editingTarget = .none
+            presentation.activePopover = nil
+        }
+        .onExitCommand(perform: handleEscape)
+    }
+
+    private func handleEscape() {
+        switch presentation.handleEscape(isNarrow: showBack) {
+        case .dismissPopover:
+            break
+        case .endEditing:
+            titleFocused = false
+        case .returnToList:
+            workspace.select(nil)
+        case .keepInspector:
+            break
+        }
     }
 }
 
