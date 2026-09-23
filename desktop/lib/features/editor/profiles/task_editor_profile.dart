@@ -34,7 +34,6 @@ class TaskEditorProfile extends EditorProfile {
     this.onAddChildTask,
     this.onOpenTags,
     this.onOpenRelation,
-    this.onOpenDeadline,
   });
 
   final TaskItem task;
@@ -46,7 +45,6 @@ class TaskEditorProfile extends EditorProfile {
 
   final Future<void> Function(BuildContext anchor)? onOpenTags;
   final Future<void> Function(BuildContext anchor)? onOpenRelation;
-  final Future<void> Function(BuildContext anchor)? onOpenDeadline;
 
   @override
   String get documentId => task.id;
@@ -101,6 +99,10 @@ class TaskEditorProfile extends EditorProfile {
         id: 'subtask',
         label: '子任务',
         group: DocumentSlashGroup.insert,
+        leadingBuilder: (_, color) => DocumentSlashGlyph(
+          kind: DocumentSlashGlyphKind.nestedItems,
+          color: color,
+        ),
         onInvoke: (_) => onAddChildTask?.call(),
       ));
     }
@@ -109,6 +111,10 @@ class TaskEditorProfile extends EditorProfile {
         id: 'tag',
         label: '标签',
         group: DocumentSlashGroup.insert,
+        leadingBuilder: (_, color) => DocumentSlashGlyph(
+          kind: DocumentSlashGlyphKind.labelTag,
+          color: color,
+        ),
         onInvoke: (invocation) async {
           await onOpenTags?.call(invocation.anchor);
         },
@@ -119,6 +125,10 @@ class TaskEditorProfile extends EditorProfile {
         id: 'relation',
         label: '关联任务/笔记',
         group: DocumentSlashGroup.insert,
+        leadingBuilder: (_, color) => DocumentSlashGlyph(
+          kind: DocumentSlashGlyphKind.linkedCards,
+          color: color,
+        ),
         onInvoke: (invocation) async {
           await onOpenRelation?.call(invocation.anchor);
         },

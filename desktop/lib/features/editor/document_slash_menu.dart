@@ -11,6 +11,38 @@ import 'document_commands.dart';
 /// Commands are grouped by their role in the palette, not by document type.
 enum DocumentSlashGroup { formatting, insert }
 
+/// Visual marks used by slash command descriptors. These names describe the
+/// shape, not the behavior represented by a command.
+enum DocumentSlashGlyphKind {
+  heading1,
+  heading2,
+  heading3,
+  bullet,
+  ordered,
+  checklist,
+  quote,
+  divider,
+  nestedItems,
+  labelTag,
+  linkedCards,
+}
+
+/// A hand-drawn glyph that a command descriptor can supply to the menu.
+class DocumentSlashGlyph extends StatelessWidget {
+  const DocumentSlashGlyph({
+    super.key,
+    required this.kind,
+    required this.color,
+  });
+
+  final DocumentSlashGlyphKind kind;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) =>
+      CustomPaint(painter: _SlashMenuGlyph(kind, color));
+}
+
 /// Values supplied to a slash command when the user selects it.
 class DocumentSlashInvocation {
   const DocumentSlashInvocation({
@@ -44,22 +76,31 @@ class DocumentSlashCommand {
     required this.group,
     required this.onInvoke,
     this.icon,
-  });
+    this.leadingBuilder,
+  }) : assert(icon == null || leadingBuilder == null);
 
   final String id;
   final String label;
   final DocumentSlashGroup group;
   final FutureOr<void> Function(DocumentSlashInvocation invocation) onInvoke;
 
-  /// Optional standard icon. The palette draws its established custom glyphs
-  /// for the shared formatting commands and uses this for icon-led commands.
+  /// Optional standard icon for commands that use a standard glyph.
   final IconData? icon;
+
+  /// Optional leading visual. When present, it takes precedence over [icon].
+  final Widget Function(BuildContext context, Color color)? leadingBuilder;
+
+  static Widget Function(BuildContext, Color) _glyph(
+    DocumentSlashGlyphKind kind,
+  ) =>
+      (context, color) => DocumentSlashGlyph(kind: kind, color: color);
 
   static List<DocumentSlashCommand> sharedDocumentCommands() => [
         DocumentSlashCommand(
           id: 'heading-1',
           label: '一级标题',
           group: DocumentSlashGroup.formatting,
+          leadingBuilder: _glyph(DocumentSlashGlyphKind.heading1),
           onInvoke: (invocation) =>
               invocation.commands.setHeading1(lineStart: invocation.lineStart),
         ),
@@ -67,6 +108,7 @@ class DocumentSlashCommand {
           id: 'heading-2',
           label: '二级标题',
           group: DocumentSlashGroup.formatting,
+          leadingBuilder: _glyph(DocumentSlashGlyphKind.heading2),
           onInvoke: (invocation) =>
               invocation.commands.setHeading2(lineStart: invocation.lineStart),
         ),
@@ -74,6 +116,7 @@ class DocumentSlashCommand {
           id: 'heading-3',
           label: '三级标题',
           group: DocumentSlashGroup.formatting,
+          leadingBuilder: _glyph(DocumentSlashGlyphKind.heading3),
           onInvoke: (invocation) =>
               invocation.commands.setHeading3(lineStart: invocation.lineStart),
         ),
@@ -81,6 +124,7 @@ class DocumentSlashCommand {
           id: 'bullet',
           label: '无序列表',
           group: DocumentSlashGroup.formatting,
+          leadingBuilder: _glyph(DocumentSlashGlyphKind.bullet),
           onInvoke: (invocation) => invocation.commands
               .toggleBulletList(lineStart: invocation.lineStart),
         ),
@@ -88,6 +132,7 @@ class DocumentSlashCommand {
           id: 'ordered',
           label: '有序列表',
           group: DocumentSlashGroup.formatting,
+          leadingBuilder: _glyph(DocumentSlashGlyphKind.ordered),
           onInvoke: (invocation) => invocation.commands
               .toggleOrderedList(lineStart: invocation.lineStart),
         ),
@@ -95,6 +140,7 @@ class DocumentSlashCommand {
           id: 'checklist',
           label: '检查项',
           group: DocumentSlashGroup.formatting,
+          leadingBuilder: _glyph(DocumentSlashGlyphKind.checklist),
           onInvoke: (invocation) => invocation.commands
               .toggleChecklist(lineStart: invocation.lineStart),
         ),
@@ -102,6 +148,7 @@ class DocumentSlashCommand {
           id: 'quote',
           label: '引用',
           group: DocumentSlashGroup.formatting,
+          leadingBuilder: _glyph(DocumentSlashGlyphKind.quote),
           onInvoke: (invocation) =>
               invocation.commands.toggleQuote(lineStart: invocation.lineStart),
         ),
@@ -109,6 +156,7 @@ class DocumentSlashCommand {
           id: 'divider',
           label: '水平分割线',
           group: DocumentSlashGroup.formatting,
+          leadingBuilder: _glyph(DocumentSlashGlyphKind.divider),
           onInvoke: (invocation) =>
               invocation.commands.insertDivider(at: invocation.slashOffset),
         ),
@@ -387,7 +435,7 @@ class DocumentSlashMenuState extends State<DocumentSlashMenu> {
               child: Row(
                 children: [
                   const SizedBox(width: DocumentSlashMenuMetrics.itemLeading),
-                  _leading(command, tokens),
+                  _leading(context, command, tokens),
                   const SizedBox(width: DocumentSlashMenuMetrics.glyphGap),
                   Expanded(
                     child: Text(
@@ -419,7 +467,19 @@ class DocumentSlashMenuState extends State<DocumentSlashMenu> {
     );
   }
 
-  Widget _leading(DocumentSlashCommand command, WorkFollowTheme tokens) {
+  Widget _leading(
+    BuildContext context,
+    DocumentSlashCommand command,
+    WorkFollowTheme tokens,
+  ) {
+    final builder = command.leadingBuilder;
+    if (builder != null) {
+      return SizedBox(
+        width: DocumentSlashMenuMetrics.glyphSlot,
+        height: DocumentSlashMenuMetrics.glyphSlot,
+        child: builder(context, tokens.textPrimary),
+      );
+    }
     final glyph = command.icon;
     if (glyph != null) {
       return SizedBox(
@@ -435,8 +495,6 @@ class DocumentSlashMenuState extends State<DocumentSlashMenu> {
     return SizedBox(
       width: DocumentSlashMenuMetrics.glyphSlot,
       height: DocumentSlashMenuMetrics.glyphSlot,
-      child:
-          CustomPaint(painter: _SlashMenuGlyph(command.id, tokens.textPrimary)),
     );
   }
 }
@@ -449,9 +507,9 @@ class DocumentSlashMenuState extends State<DocumentSlashMenu> {
 /// heading levels are text, not icons: `H₁ / H₂ / H₃` is the level, and
 /// `title` / `text_fields` / `short_text` only say "some heading".
 class _SlashMenuGlyph extends CustomPainter {
-  const _SlashMenuGlyph(this.commandId, this.color);
+  const _SlashMenuGlyph(this.kind, this.color);
 
-  final String commandId;
+  final DocumentSlashGlyphKind kind;
   final Color color;
 
   static const double _box = DocumentSlashMenuMetrics.glyphSlot;
@@ -483,32 +541,29 @@ class _SlashMenuGlyph extends CustomPainter {
       ..color = color
       ..isAntiAlias = true;
 
-    switch (commandId) {
-      case 'heading-1':
+    switch (kind) {
+      case DocumentSlashGlyphKind.heading1:
         _heading(canvas, 1);
-      case 'heading-2':
+      case DocumentSlashGlyphKind.heading2:
         _heading(canvas, 2);
-      case 'heading-3':
+      case DocumentSlashGlyphKind.heading3:
         _heading(canvas, 3);
-      case 'bullet':
+      case DocumentSlashGlyphKind.bullet:
         _bullet(canvas, line, fill);
-      case 'ordered':
+      case DocumentSlashGlyphKind.ordered:
         _ordered(canvas, line);
-      case 'checklist':
+      case DocumentSlashGlyphKind.checklist:
         _checklist(canvas, line);
-      case 'quote':
+      case DocumentSlashGlyphKind.quote:
         _quote(canvas, fill);
-      case 'divider':
+      case DocumentSlashGlyphKind.divider:
         _divider(canvas, line);
-      case 'subtask':
-        _subtask(canvas, trunk, fill);
-      case 'tag':
-        _tag(canvas, line, fill);
-      case 'relation':
-        _relation(canvas, line);
-      default:
-        // Extension commands should provide a standard icon on the descriptor.
-        break;
+      case DocumentSlashGlyphKind.nestedItems:
+        _nestedItems(canvas, trunk, fill);
+      case DocumentSlashGlyphKind.labelTag:
+        _labelTag(canvas, line, fill);
+      case DocumentSlashGlyphKind.linkedCards:
+        _linkedCards(canvas, line);
     }
     canvas.restore();
   }
@@ -603,7 +658,7 @@ class _SlashMenuGlyph extends CustomPainter {
   }
 
   /// A trunk with two branches and a node on each, i.e. a task with children.
-  void _subtask(Canvas canvas, Paint trunk, Paint fill) {
+  void _nestedItems(Canvas canvas, Paint trunk, Paint fill) {
     canvas.drawLine(const Offset(1.75, .75), const Offset(1.75, 11.75), trunk);
     canvas.drawLine(const Offset(1.75, 4.5), const Offset(8, 4.5), trunk);
     canvas.drawLine(const Offset(1.75, 11), const Offset(8.5, 11), trunk);
@@ -611,7 +666,7 @@ class _SlashMenuGlyph extends CustomPainter {
     canvas.drawCircle(const Offset(11.4, 11), 1.3, fill);
   }
 
-  void _tag(Canvas canvas, Paint line, Paint fill) {
+  void _labelTag(Canvas canvas, Paint line, Paint fill) {
     canvas.drawPath(
       Path()
         ..moveTo(.1, 6.9)
@@ -626,7 +681,7 @@ class _SlashMenuGlyph extends CustomPainter {
     canvas.drawCircle(const Offset(4, 4), 1.25, fill);
   }
 
-  void _relation(Canvas canvas, Paint line) {
+  void _linkedCards(Canvas canvas, Paint line) {
     const radius = Radius.circular(2.5);
     canvas.drawRRect(
         RRect.fromRectAndRadius(
@@ -640,5 +695,5 @@ class _SlashMenuGlyph extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _SlashMenuGlyph oldDelegate) =>
-      oldDelegate.commandId != commandId || oldDelegate.color != color;
+      oldDelegate.kind != kind || oldDelegate.color != color;
 }

@@ -579,7 +579,6 @@ class _TaskInspectorState extends State<TaskInspector> {
               onAddChildTask: _addChildTask,
               onOpenTags: _tags,
               onOpenRelation: _relation,
-              onOpenDeadline: (anchor) => _date(anchor, 'deadline'),
               onEscape: _escape,
               onToolbarChanged: (_) {
                 if (mounted) setState(() {});

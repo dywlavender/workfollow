@@ -103,7 +103,6 @@ class NoteEditorProfile extends EditorProfile {
   Future<String?> pickAttachment() => controller.pickNoteAttachment();
 
   @override
-  @override
   Key get bodyKey => const ValueKey('note-body-editor');
 
   @override
