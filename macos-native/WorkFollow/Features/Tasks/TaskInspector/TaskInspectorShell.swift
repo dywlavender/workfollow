@@ -15,20 +15,20 @@ struct TaskInspectorShell: View {
                             Label("返回", systemImage: "chevron.left")
                         }.buttonStyle(.plain)
                     }
-                    Image(systemName: task.status == .completed ? "checkmark.square.fill" : "square")
-                        .foregroundStyle(WFColors.secondaryText)
-                    if let date = task.schedule.dueAt {
-                        Label(date.formatted(date: .abbreviated, time: task.schedule.hasTime ? .shortened : .omitted),
-                              systemImage: "calendar").foregroundStyle(WFColors.accent)
+                    Button {
+                        _ = workspace.changeStatus(task)
+                    } label: {
+                        Image(systemName: task.status == .completed ? "checkmark.square.fill" : "square")
+                            .foregroundStyle(task.status == .completed ? WFColors.tertiaryText : WFColors.secondaryText)
                     }
-                    if let deadline = task.schedule.deadlineAt {
-                        Label(deadline.formatted(date: .abbreviated, time: .omitted),
-                              systemImage: "calendar.badge.exclamationmark")
-                            .foregroundStyle(WFColors.secondaryText)
-                    }
+                    .buttonStyle(.plain)
+                    .help(task.status == .completed ? "恢复任务" : "完成任务")
+                    .accessibilityLabel(task.status == .completed ? "恢复任务" : "完成任务")
+                    Divider().frame(height: WFMetrics.icon)
+                    scheduleButton(task: task, field: .due)
+                    scheduleButton(task: task, field: .deadline)
                     Spacer()
-                    Image(systemName: task.priority == .none ? "flag" : "flag.fill")
-                        .foregroundStyle(task.priority == .none ? WFColors.secondaryText : .orange)
+                    priorityMenu(task)
                 }
                 .font(WFType.body).padding(WFSpace.xl)
                 Divider()
@@ -79,6 +79,151 @@ struct TaskInspectorShell: View {
         case .keepInspector:
             break
         }
+    }
+
+    private func scheduleButton(task: Task, field: ScheduleField) -> some View {
+        Button {
+            presentation.activePopover = field.popover
+        } label: {
+            Label(field.date(in: task).map(dateLabel) ?? field.emptyLabel,
+                  systemImage: field.symbol)
+                .foregroundStyle(field.date(in: task) == nil ? WFColors.secondaryText : WFColors.accent)
+        }
+        .buttonStyle(.plain)
+        .help(field.emptyLabel)
+        .accessibilityLabel(field.date(in: task).map { "\(field.emptyLabel)：\(dateLabel($0))" } ?? field.emptyLabel)
+        .popover(isPresented: popoverBinding(field.popover), arrowEdge: .bottom) {
+            SchedulePopoverView(
+                title: field.title,
+                selectedDate: field.date(in: task),
+                today: workspace.dateFromToday(0),
+                tomorrow: workspace.dateFromToday(1),
+                nextWeek: workspace.dateFromToday(7)
+            ) { date in
+                if field == .due {
+                    _ = workspace.setDueDate(task.id, date)
+                } else {
+                    _ = workspace.setDeadline(task.id, date)
+                }
+                presentation.activePopover = nil
+            }
+        }
+    }
+
+    private func priorityMenu(_ task: Task) -> some View {
+        Menu {
+            priorityItem(.none, task: task)
+            priorityItem(.low, task: task)
+            priorityItem(.medium, task: task)
+            priorityItem(.high, task: task)
+        } label: {
+            Label(priorityTitle(task.priority), systemImage: task.priority == .none ? "flag" : "flag.fill")
+                .foregroundStyle(task.priority == .none ? WFColors.secondaryText : .orange)
+        }
+        .menuStyle(.borderlessButton)
+        .help("优先级")
+        .accessibilityLabel("优先级：\(priorityTitle(task.priority))")
+    }
+
+    private func priorityItem(_ priority: TaskPriority, task: Task) -> some View {
+        Button {
+            _ = workspace.setPriority(task.id, priority)
+        } label: {
+            if task.priority == priority {
+                Label(priorityTitle(priority), systemImage: "checkmark")
+            } else {
+                Text(priorityTitle(priority))
+            }
+        }
+    }
+
+    private func popoverBinding(_ popover: InspectorPopover) -> Binding<Bool> {
+        Binding(
+            get: { presentation.activePopover == popover },
+            set: { presented in
+                if presented {
+                    presentation.activePopover = popover
+                } else if presentation.activePopover == popover {
+                    presentation.activePopover = nil
+                }
+            }
+        )
+    }
+
+    private func dateLabel(_ date: Date) -> String {
+        date.formatted(date: .abbreviated, time: .omitted)
+    }
+
+    private func priorityTitle(_ priority: TaskPriority) -> String {
+        switch priority {
+        case .none: "无优先级"
+        case .low: "低"
+        case .medium: "中"
+        case .high: "高"
+        }
+    }
+}
+
+private enum ScheduleField: Equatable {
+    case due
+    case deadline
+
+    var popover: InspectorPopover { self == .due ? .schedule : .deadline }
+    var emptyLabel: String { self == .due ? "安排日期" : "截止日期" }
+    var title: String { self == .due ? "安排日期" : "截止日期" }
+    var symbol: String { self == .due ? "calendar" : "calendar.badge.exclamationmark" }
+
+    func date(in task: Task) -> Date? {
+        self == .due ? task.schedule.dueAt : task.schedule.deadlineAt
+    }
+}
+
+private struct SchedulePopoverView: View {
+    let title: String
+    let selectedDate: Date?
+    let today: Date
+    let tomorrow: Date
+    let nextWeek: Date
+    let onSelect: (Date?) -> Void
+    @State private var customDate: Date
+
+    init(title: String, selectedDate: Date?, today: Date, tomorrow: Date,
+         nextWeek: Date, onSelect: @escaping (Date?) -> Void) {
+        self.title = title
+        self.selectedDate = selectedDate
+        self.today = today
+        self.tomorrow = tomorrow
+        self.nextWeek = nextWeek
+        self.onSelect = onSelect
+        self._customDate = State(initialValue: selectedDate ?? today)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: WFSpace.md) {
+            Text(title).font(WFType.section)
+            HStack {
+                quickDate("今天", date: today)
+                quickDate("明天", date: tomorrow)
+                quickDate("下周", date: nextWeek)
+            }
+            Divider()
+            DatePicker("自选日期", selection: $customDate, displayedComponents: .date)
+                .datePickerStyle(.compact)
+            HStack {
+                Button("无日期") { onSelect(nil) }
+                Spacer()
+                Button("确定") { onSelect(customDate) }
+                    .keyboardShortcut(.defaultAction)
+            }
+        }
+        .padding(WFSpace.lg)
+        .frame(width: 300)
+    }
+
+    private func quickDate(_ title: String, date: Date) -> some View {
+        Button(title) { onSelect(date) }
+            .buttonStyle(.bordered)
+            .frame(maxWidth: .infinity)
     }
 }
 

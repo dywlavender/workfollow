@@ -124,4 +124,25 @@ final class TaskWorkspaceModelTests: XCTestCase {
             XCTAssertEqual(model.selectedTask?.priority, .high)
         }
     }
+
+    func testDueDateAndDeadlineActionsPreserveIndependentScheduleFields() async {
+        await MainActor.run {
+            let model = TaskWorkspaceModel(clock: { self.now }, calendar: self.calendar,
+                                           seedDemoData: false)
+            let id = model.createTask(title: "Scheduled", in: .inbox).taskID!
+            let due = model.dateFromToday(1)
+            let deadline = model.dateFromToday(7)
+            _ = model.setSchedule(id, TaskSchedule(dueAt: self.now, hasTime: true,
+                                                   deadlineAt: deadline))
+
+            _ = model.setDueDate(id, due)
+            XCTAssertEqual(model.task(for: id)?.schedule.dueAt, due)
+            XCTAssertFalse(model.task(for: id)?.schedule.hasTime ?? true)
+            XCTAssertEqual(model.task(for: id)?.schedule.deadlineAt, deadline)
+
+            _ = model.setDeadline(id, nil)
+            XCTAssertEqual(model.task(for: id)?.schedule.dueAt, due)
+            XCTAssertNil(model.task(for: id)?.schedule.deadlineAt)
+        }
+    }
 }

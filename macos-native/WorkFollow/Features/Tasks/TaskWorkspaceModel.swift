@@ -152,6 +152,26 @@ final class TaskWorkspaceModel: ObservableObject {
         return result
     }
 
+    func dateFromToday(_ offset: Int) -> Date {
+        let start = calendar.startOfDay(for: clock())
+        return calendar.date(byAdding: .day, value: offset, to: start) ?? start
+    }
+
+    @discardableResult
+    func setDueDate(_ id: UUID, _ date: Date?) -> TaskActionResult {
+        guard var schedule = task(for: id)?.schedule else { return .failure(.missingTask) }
+        schedule.dueAt = date.map(calendar.startOfDay(for:))
+        schedule.hasTime = false
+        return setSchedule(id, schedule)
+    }
+
+    @discardableResult
+    func setDeadline(_ id: UUID, _ date: Date?) -> TaskActionResult {
+        guard var schedule = task(for: id)?.schedule else { return .failure(.missingTask) }
+        schedule.deadlineAt = date.map(calendar.startOfDay(for:))
+        return setSchedule(id, schedule)
+    }
+
     private func didMutate(_ result: TaskActionResult, scope: TaskListScope? = nil) {
         guard result.taskID != nil else { return }
         revision += 1
