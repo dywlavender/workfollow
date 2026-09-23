@@ -25,6 +25,7 @@ struct TaskSchedule: Equatable {
 struct Task: Identifiable, Equatable {
     let id: UUID
     var title: String
+    var document: NativeDocument = .empty
     var list: TaskList
     var priority: TaskPriority
     var schedule: TaskSchedule
