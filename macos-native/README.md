@@ -38,4 +38,4 @@ xcodebuild -project macos-native/WorkFollow.xcodeproj -scheme WorkFollow -destin
 
 列表获得焦点时 ↑/↓ 切换任务，Return 打开首项或保持所选详情；Quick Add 输入焦点下不接管这些按键。Today Quick Add 设置当天真实 schedule，Inbox Quick Add 不预设日期。Phase 1 全尺寸拖动、窄屏返回和跨屏窗口恢复仍是 IMPLEMENTED / PARTIALLY VERIFIED。
 
-Inspector 正文编辑、提醒、重复、标签、附件、关联、子任务编辑、Persistence、Notes、Calendar、Trash 均未接入；此实验数据不会写入 Flutter 正式数据。Phase 4 交互单测已通过；真实窗口的 Popover/焦点/Escape 视觉与键盘验收仍需在解锁的 macOS 会话进行。
+Inspector 正文编辑、提醒、重复、标签、附件、关联、子任务编辑、Persistence、Notes、Calendar、Trash 均未接入；此实验数据不会写入 Flutter 正式数据。Phase 4 的 30 项 XCTest 通过；已在真实 macOS 窗口核对标题实时编辑、日期 Popover 锚点与 Escape、优先级/清单菜单、父子清单联动及完成/恢复。低于 641pt 紧凑布局阈值后的第二次 Escape、Popover 外部关闭和菜单键盘导航仍待实机验收。

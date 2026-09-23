@@ -5,7 +5,7 @@
 - **Phase 1: IMPLEMENTED / PARTIALLY VERIFIED**。代码完成不等于全尺寸、跨屏窗口恢复全部验收。
 - **Phase 2 第一批: IMPLEMENTED / UNIT TEST VERIFIED**。纯 Swift 核心规则已落地，尚未与 SwiftUI 或持久化接线。
 - **Phase 3: IMPLEMENTED / TEST + LIVE UI VERIFIED**。Today / Inbox / Completed 由正式 Domain 投影驱动；任务仍仅保存在内存中，不含持久化。
-- **Phase 4: IMPLEMENTED / UNIT TEST VERIFIED / LIVE UI PENDING**。Inspector 编辑和系统控件已接线；当前 macOS 会话锁屏，未完成实机 Popover、焦点和 Escape 操作验收。
+- **Phase 4: IMPLEMENTED / UNIT TEST + LIVE UI PARTIALLY VERIFIED**。Inspector 编辑和系统控件已接线；真实窗口已核对标题实时编辑、Popover、优先级/清单菜单、Escape、父子清单联动及完成/恢复。低于紧凑布局阈值时的第二次 Escape 尚未实机核对。
 
 ## 决策与边界
 
@@ -85,8 +85,10 @@ Editor 后续以 NativeDocument/DTO 为持久化模型，不能直接把 NSTextV
 - 优先级通过系统 Menu 选择无/低/中/高；清单从收集箱、工作、学习、个人固定选项选择。子任务清单入口 disabled，父任务仍按 Domain 规则带动子任务。
 - Header 提供完成/恢复；Footer 的 More 仅有软删除；正文是不可编辑占位，没有加入 `TextEditor` / 富文本 / 持久化。
 - 新增标题草稿切换、优先级、日期字段独立性、清单约束、删除选中任务和 Inspector 状态的测试。当前共 30 项 XCTest 通过。
+- 真实窗口截图核验：标题输入实时反映到任务行；第一次 Escape 退出标题输入焦点，第二次 Escape 在宽布局保留 Inspector。安排日期 Popover 锚在日期按钮下方，含快捷日期、月历和无日期，Escape 只关闭 Popover；优先级与清单系统菜单可选。More 菜单仅显示软删除。
+- 真实操作核验父任务移动清单会带动子任务；子任务清单入口 disabled。完成父任务会完成活动子任务；恢复父任务不会强制恢复已完成子任务。上述仅作用于内存演示数据，重启后已恢复种子状态。
 
-待在解锁的真实 macOS 窗口手工核对：标题焦点/任务切换、Popover 锚点和外部关闭、菜单键盘导航、嵌套交互下 Escape 次序、Retina 下呈现，以及窄屏第二次 Escape 返回列表。未做该验收前，不把 Phase 4 标为完整通过。
+仍待实机核对：Popover 外部点击关闭、菜单键盘导航，以及窄布局第二次 Escape 返回列表。此次真实窗口可测试的最窄平铺宽度约 756pt，仍大于 `splitMinimum` 641pt，故紧凑布局返回行为目前由 `TaskInspectorPresentationState` XCTest 覆盖，不能算实机通过。Phase 4 保持部分验证状态。
 
 ## 第一批实现与实测（2026-09-23）
 

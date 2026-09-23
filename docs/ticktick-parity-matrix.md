@@ -40,7 +40,7 @@
 - Inspector 标题、状态、安排日期、截止日期、优先级、清单、软删除由 Domain Actions 提供；正文保持占位。安排日期和截止日期分字段修改，不互相覆盖。
 - 日期使用 SwiftUI 系统 Popover / DatePicker，优先级和清单使用系统 Menu；清单选项目前是固定预览列表，子任务入口禁用。
 - Escape 顺序由 `TaskInspectorPresentationState` 统一定义并通过 XCTest 覆盖：Popover → 编辑焦点 → 窄屏返回；宽屏无编辑状态保留选中详情。
-- 30 项 Native XCTest 通过，覆盖标题草稿切换。实机键盘/Popover/焦点和 Retina 位置验收仍待解锁 macOS 会话；此阶段不涵盖正文编辑、提醒、重复、标签、附件及持久化。
+- 30 项 Native XCTest 通过。真实窗口核对了标题实时写入、宽屏 Escape、日期 Popover 锚点与 Escape、优先级/清单菜单、父子清单联动、完成/恢复规则；More 菜单仅提供软删除。低于 641pt 的紧凑布局 Escape 返回、Popover 外部关闭及菜单键盘导航仍待实机验收。此阶段不涵盖正文编辑、提醒、重复、标签、附件及持久化。
 
 ## 截图基线目录
 
