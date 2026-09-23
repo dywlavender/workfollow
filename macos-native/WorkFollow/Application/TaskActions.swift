@@ -123,6 +123,11 @@ final class TaskActions {
     }
 
     @discardableResult
+    func setDocument(_ id: UUID, _ document: NativeDocument) -> TaskActionResult {
+        edit(id) { $0.document = document }
+    }
+
+    @discardableResult
     func setPriority(_ id: UUID, _ priority: TaskPriority) -> TaskActionResult {
         edit(id) { $0.priority = priority }
     }

@@ -125,6 +125,22 @@ final class TaskWorkspaceModelTests: XCTestCase {
         }
     }
 
+    func testInspectorDocumentActionUpdatesTheSelectedDomainTask() async {
+        await MainActor.run {
+            let model = TaskWorkspaceModel(clock: { self.now }, calendar: self.calendar,
+                                           seedDemoData: false)
+            let id = model.createTask(title: "Document task", in: .inbox).taskID!
+            model.select(id)
+            let document = NativeDocument(plainText: "First paragraph\nSecond paragraph")
+
+            _ = model.setDocument(id, document)
+
+            XCTAssertEqual(model.selectedTask?.document, document)
+            XCTAssertEqual(model.selectedTask?.document.plainText,
+                           "First paragraph\nSecond paragraph")
+        }
+    }
+
     func testDueDateAndDeadlineActionsPreserveIndependentScheduleFields() async {
         await MainActor.run {
             let model = TaskWorkspaceModel(clock: { self.now }, calendar: self.calendar,

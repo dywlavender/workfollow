@@ -167,6 +167,13 @@ final class TaskWorkspaceModel: ObservableObject {
     }
 
     @discardableResult
+    func setDocument(_ id: UUID, _ document: NativeDocument) -> TaskActionResult {
+        let result = actions.setDocument(id, document)
+        didMutate(result)
+        return result
+    }
+
+    @discardableResult
     func setPriority(_ id: UUID, _ priority: TaskPriority) -> TaskActionResult {
         let result = actions.setPriority(id, priority)
         didMutate(result)
