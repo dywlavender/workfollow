@@ -54,6 +54,8 @@ class _CustomCommandProfile extends EditorProfile {
           id: 'custom-command',
           label: '自定义命令',
           group: DocumentSlashGroup.insert,
+          leadingBuilder: (_, color) =>
+              Text('◇', style: TextStyle(color: color)),
           onInvoke: (_) => invoked = true,
         ),
       ];
@@ -109,6 +111,7 @@ void main() {
         find.byKey(const ValueKey('document-slash-option-custom-command'));
     expect(find.byKey(const ValueKey('document-slash-menu')), findsOneWidget);
     expect(option, findsOneWidget);
+    expect(find.text('◇'), findsOneWidget);
 
     await tester.tap(option);
     await tester.pumpAndSettle();
