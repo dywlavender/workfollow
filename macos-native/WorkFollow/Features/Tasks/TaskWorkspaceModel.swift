@@ -138,6 +138,20 @@ final class TaskWorkspaceModel: ObservableObject {
         return result
     }
 
+    @discardableResult
+    func setTitle(_ id: UUID, _ title: String) -> TaskActionResult {
+        let result = actions.setTitle(id, title)
+        didMutate(result)
+        return result
+    }
+
+    @discardableResult
+    func setPriority(_ id: UUID, _ priority: TaskPriority) -> TaskActionResult {
+        let result = actions.setPriority(id, priority)
+        didMutate(result)
+        return result
+    }
+
     private func didMutate(_ result: TaskActionResult, scope: TaskListScope? = nil) {
         guard result.taskID != nil else { return }
         revision += 1

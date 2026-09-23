@@ -109,4 +109,19 @@ final class TaskWorkspaceModelTests: XCTestCase {
             XCTAssertFalse(model.expandedTaskIDs.contains(rows[0].task.id))
         }
     }
+
+    func testInspectorTitleAndPriorityActionsUpdateSelectedDomainTask() async {
+        await MainActor.run {
+            let model = TaskWorkspaceModel(clock: { self.now }, calendar: self.calendar,
+                                           seedDemoData: false)
+            let id = model.createTask(title: "Before", in: .inbox).taskID!
+            model.select(id)
+
+            _ = model.setTitle(id, "Edited title")
+            _ = model.setPriority(id, .high)
+
+            XCTAssertEqual(model.selectedTask?.title, "Edited title")
+            XCTAssertEqual(model.selectedTask?.priority, .high)
+        }
+    }
 }
