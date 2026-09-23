@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct TaskInspectorShell: View {
-    @ObservedObject var workspace: PreviewWorkspace
+    @ObservedObject var workspace: TaskWorkspaceModel
     let showBack: Bool
 
     var body: some View {
@@ -13,14 +13,20 @@ struct TaskInspectorShell: View {
                             Label("返回", systemImage: "chevron.left")
                         }.buttonStyle(.plain)
                     }
-                    Image(systemName: task.completed ? "checkmark.square.fill" : "square")
+                    Image(systemName: task.status == .completed ? "checkmark.square.fill" : "square")
                         .foregroundStyle(WFColors.secondaryText)
-                    if task.scheduledToday {
-                        Label("今天", systemImage: "calendar").foregroundStyle(WFColors.accent)
+                    if let date = task.schedule.dueAt {
+                        Label(date.formatted(date: .abbreviated, time: task.schedule.hasTime ? .shortened : .omitted),
+                              systemImage: "calendar").foregroundStyle(WFColors.accent)
+                    }
+                    if let deadline = task.schedule.deadlineAt {
+                        Label(deadline.formatted(date: .abbreviated, time: .omitted),
+                              systemImage: "calendar.badge.exclamationmark")
+                            .foregroundStyle(WFColors.secondaryText)
                     }
                     Spacer()
-                    Image(systemName: task.priority ? "flag.fill" : "flag")
-                        .foregroundStyle(task.priority ? .orange : WFColors.secondaryText)
+                    Image(systemName: task.priority == .none ? "flag" : "flag.fill")
+                        .foregroundStyle(task.priority == .none ? WFColors.secondaryText : .orange)
                 }
                 .font(WFType.body).padding(WFSpace.xl)
                 Divider()
@@ -28,7 +34,7 @@ struct TaskInspectorShell: View {
                     .textSelection(.enabled).padding(WFSpace.page)
                 Spacer(minLength: 0)
                 Divider()
-                Label(task.list, systemImage: "tray")
+                Label(task.list.name, systemImage: "tray")
                     .font(WFType.body).foregroundStyle(WFColors.secondaryText)
                     .padding(WFSpace.xl)
             } else {

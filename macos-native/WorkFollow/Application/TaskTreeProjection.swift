@@ -8,9 +8,12 @@ struct TaskTreeNode {
 }
 
 enum TaskTreeProjection {
-    static func nodes(roots: [Task], store: WorkspaceStore, expanded: Set<UUID>) -> [TaskTreeNode] {
+    static func nodes(roots: [Task], store: WorkspaceStore, expanded: Set<UUID>,
+                      matchingTaskIDs: Set<UUID>? = nil) -> [TaskTreeNode] {
         roots.flatMap { root -> [TaskTreeNode] in
-            let children = store.children(of: root.id)
+            let children = store.children(of: root.id).filter {
+                matchingTaskIDs?.contains($0.id) ?? true
+            }
             let isExpanded = !children.isEmpty && expanded.contains(root.id)
             return [TaskTreeNode(task: root, depth: 0, hasChildren: !children.isEmpty, expanded: isExpanded)]
                 + (isExpanded ? children.map {

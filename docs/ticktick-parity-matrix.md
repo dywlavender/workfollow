@@ -29,6 +29,12 @@
 - 全套 Escape/Editor、Note、Matrix、Calendar 和跨屏恢复仍是待验证或未实现。
 - 现存 Flutter `needsAttentionToday` 的 deadline 条件为截止时间不晚于当天零点；Native 首批保持此条件，不擅自把任意“今天晚些时候截止”纳入。后续若修改须双端同步契约。
 
+## Phase 3 Task List 补充（2026-09-23）
+
+- Today / Inbox / Completed UI 已由 `TaskListProjection` 和 `TaskTreeProjection` 驱动；TaskActions 是唯一任务变更入口，选择与展开只存在于展示模型。
+- Today Quick Add 设为当天日期，Inbox Quick Add 保持无日期；完成/恢复、父子级联、Inspector 读取真实 Domain Task 已通过 21 项 Native XCTest 和运行中窗口核验。
+- 数据目前仍为内存种子；不代表持久化、完整编辑器、Notes、Matrix、Calendar 或 Trash 已迁移。Phase 1 多尺寸与窗口恢复验收仍未完成。
+
 ## 截图基线目录
 
 复用已有 `docs/screenshots/` 原图，不把新的 Native 截图冒充 Flutter 基线。

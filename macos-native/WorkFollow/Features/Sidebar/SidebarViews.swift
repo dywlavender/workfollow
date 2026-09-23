@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct IconRailView: View {
-    @ObservedObject var workspace: PreviewWorkspace
+    @ObservedObject var workspace: TaskWorkspaceModel
     @ObservedObject var navigation: AppNavigation
     @EnvironmentObject private var environment: AppEnvironment
     @Environment(\.openSettings) private var openSettings
@@ -47,7 +47,7 @@ struct IconRailView: View {
 }
 
 struct NavigationColumnView: View {
-    @ObservedObject var workspace: PreviewWorkspace
+    @ObservedObject var workspace: TaskWorkspaceModel
     @ObservedObject var navigation: AppNavigation
     @EnvironmentObject private var environment: AppEnvironment
     var onNavigate: () -> Void = {}
@@ -73,7 +73,7 @@ struct NavigationColumnView: View {
                         Image(systemName: destination.symbol).frame(width: WFMetrics.icon)
                         Text(destination.title)
                         Spacer(minLength: WFSpace.xs)
-                        let count = workspace.projectedTasks(for: destination).count
+                        let count = workspace.count(for: destination)
                         if count > 0 {
                             Text("\(count)").font(WFType.supporting)
                                 .foregroundStyle(WFColors.secondaryText)

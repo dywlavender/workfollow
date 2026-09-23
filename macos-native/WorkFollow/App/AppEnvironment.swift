@@ -22,7 +22,7 @@ enum NativeAppearance: String, CaseIterable, Identifiable {
 @MainActor
 final class AppEnvironment: ObservableObject {
     let navigation = AppNavigation()
-    let taskWorkspace = PreviewWorkspace()
+    let taskWorkspace = TaskWorkspaceModel()
     @Published var commandPalettePresented = false
     @Published private(set) var quickAddRequest = 0
     @Published var appearance: NativeAppearance {

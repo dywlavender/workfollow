@@ -2,7 +2,7 @@ import AppKit
 import SwiftUI
 
 struct RootShellView: View {
-    @ObservedObject var workspace: PreviewWorkspace
+    @ObservedObject var workspace: TaskWorkspaceModel
     @ObservedObject var navigation: AppNavigation
     @EnvironmentObject private var environment: AppEnvironment
 
@@ -36,7 +36,7 @@ struct RootShellView: View {
 }
 
 private struct TaskWorkspaceView: View {
-    @ObservedObject var workspace: PreviewWorkspace
+    @ObservedObject var workspace: TaskWorkspaceModel
     let navigation: AppNavigation
     let navigationVisible: Bool
     @State private var listWidth = WFMetrics.listPreferred
@@ -83,7 +83,7 @@ private struct TaskWorkspaceView: View {
 }
 
 private struct ModuleShellView: View {
-    @ObservedObject var workspace: PreviewWorkspace
+    @ObservedObject var workspace: TaskWorkspaceModel
     @ObservedObject var navigation: AppNavigation
     let navigationVisible: Bool
     @State private var showNavigation = false

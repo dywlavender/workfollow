@@ -4,6 +4,7 @@
 
 - **Phase 1: IMPLEMENTED / PARTIALLY VERIFIED**。代码完成不等于全尺寸、跨屏窗口恢复全部验收。
 - **Phase 2 第一批: IMPLEMENTED / UNIT TEST VERIFIED**。纯 Swift 核心规则已落地，尚未与 SwiftUI 或持久化接线。
+- **Phase 3: IMPLEMENTED / TEST + LIVE UI VERIFIED**。Today / Inbox / Completed 由正式 Domain 投影驱动；任务仍仅保存在内存中，不含持久化。
 
 ## 决策与边界
 
@@ -62,6 +63,17 @@ xcodebuild -project macos-native/WorkFollow.xcodeproj -scheme WorkFollow -destin
 Intel Mac 将 destination 的 arch 改为 x86_64。测试需要 macOS testmanagerd 权限；在限制沙箱里编译成功但 runner 启动失败不算测试通过。
 
 Editor 后续以 NativeDocument/DTO 为持久化模型，不能直接把 NSTextView attributedString 当数据库；Task/Note 共用 DocumentEditor，通过 descriptor/Profile 注入能力。
+
+## Phase 3 Task List 接线结果（2026-09-23）
+
+- `AppNavigation` 独立持有页面导航；`TaskWorkspaceModel` 仅管理选中项、展开状态，并将所有任务改动路由到 `TaskActions` / `WorkspaceStore`。
+- 移除 `PreviewTask` / `PreviewWorkspace` 和 Preview 键盘状态测试；Today、Inbox、Completed 列表/数量来自 `TaskListProjection`，子行来自 `TaskTreeProjection`。
+- Quick Add：Today 创建有当天开始时间的任务，Inbox 创建无日期任务；完成/恢复更新开放计数并保留当前列表的已完成分组。Completed 使用 completed projection。
+- Task Row 接受 Domain `Task`；父子级联、真实任务选中、只读 Inspector 均已在运行中的 Native 窗口核对。UI 仅展示，不写第二份任务状态。
+- 新增 7 项 `TaskWorkspaceModelTests`，覆盖 Today/Inbox 新建、完成/恢复、树展开与匹配子任务、父级移动及子任务不能独立换清单、选择/展开状态。
+- 当前 `xcodebuild test` 共 21 项通过；实际窗口验证了 Today/Inbox 投影、完成父任务后的级联和数量更新、选中任务的 Inspector 内容。
+
+限制仍明确：没有数据库或重启持久化，样例数据每次启动重置；Inspector 只读；重复、提醒、标签、附件、Notes、Calendar、Trash 仍未进入本阶段。Phase 1 的多尺寸/跨屏验收状态不因本阶段 UI 接线而改变。
 
 ## 第一批实现与实测（2026-09-23）
 
