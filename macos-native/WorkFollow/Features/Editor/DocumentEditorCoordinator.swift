@@ -4,6 +4,7 @@ import SwiftUI
 @MainActor
 final class DocumentEditorCoordinator: NSObject, NSTextViewDelegate {
     private(set) var taskID: UUID
+    private(set) var editorState: DocumentEditorState
     private var document: NativeDocument
     private var onDocumentChange: (NativeDocument) -> Void
     private var onEscape: () -> InspectorEscapeEffect
@@ -14,6 +15,7 @@ final class DocumentEditorCoordinator: NSObject, NSTextViewDelegate {
          onEscape: @escaping () -> InspectorEscapeEffect,
          onEditingChanged: @escaping (Bool) -> Void) {
         self.taskID = taskID
+        self.editorState = DocumentEditorState(taskID: taskID)
         self.document = document
         self.onDocumentChange = onDocumentChange
         self.onEscape = onEscape
@@ -27,14 +29,15 @@ final class DocumentEditorCoordinator: NSObject, NSTextViewDelegate {
         if self.taskID != taskID {
             flushPendingComposition(in: textView)
             self.taskID = taskID
+            editorState.bind(to: taskID)
             self.document = document
-            textView.string = document.plainText
-            textView.setSelectedRange(NSRange(location: 0, length: 0))
-        } else if self.document.plainText != document.plainText,
+            textView.textStorage?.setAttributedString(DocumentTextCodec.render(document))
+            textView.setSelectedRange(editorState.selectedRange)
+        } else if self.document != document,
                   !textView.hasMarkedText() {
             let selection = textView.selectedRange()
             self.document = document
-            textView.string = document.plainText
+            textView.textStorage?.setAttributedString(DocumentTextCodec.render(document))
             let location = min(selection.location, (document.plainText as NSString).length)
             let length = min(selection.length, (document.plainText as NSString).length - location)
             textView.setSelectedRange(NSRange(location: location, length: length))
@@ -52,8 +55,8 @@ final class DocumentEditorCoordinator: NSObject, NSTextViewDelegate {
     }
 
     func textViewDidChangeSelection(_ notification: Notification) {
-        // NSTextView owns the live selection; the editor coordinator intentionally
-        // does not push it into the task domain.
+        guard let textView = notification.object as? NSTextView else { return }
+        editorState.updateSelection(textView.selectedRange())
     }
 
     func flushPendingComposition(in textView: NativeTextView) {
@@ -65,7 +68,7 @@ final class DocumentEditorCoordinator: NSObject, NSTextViewDelegate {
 
     private func commit(_ textView: NSTextView, force: Bool) {
         guard force || !textView.hasMarkedText() else { return }
-        let updated = document.replacingPlainText(textView.string)
+        let updated = DocumentTextCodec.decode(textView.attributedString(), preserving: document)
         guard updated != document else { return }
         document = updated
         onDocumentChange(updated)

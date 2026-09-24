@@ -33,6 +33,16 @@ final class TaskInspectorPresentationTests: XCTestCase {
         XCTAssertEqual(state.handleEscape(isNarrow: true), .returnToList)
     }
 
+    func testBodyEscapeDismissesPopoverBeforeEndingEditing() {
+        var state = TaskInspectorPresentationState(editingTarget: .body,
+                                                  activePopover: .deadline)
+
+        XCTAssertEqual(state.handleEscape(isNarrow: true), .dismissPopover)
+        XCTAssertEqual(state.editingTarget, .body)
+        XCTAssertEqual(state.handleEscape(isNarrow: true), .endEditing)
+        XCTAssertEqual(state.handleEscape(isNarrow: true), .returnToList)
+    }
+
     func testTitleDraftResetsForANewTaskButKeepsTheActiveDraftForTheSameTask() {
         var state = TaskInspectorPresentationState()
         let firstTaskID = UUID()

@@ -141,6 +141,26 @@ final class TaskWorkspaceModelTests: XCTestCase {
         }
     }
 
+    func testTaskDocumentsRemainIsolatedWhenSelectionSwitchesBetweenTasks() async {
+        await MainActor.run {
+            let model = TaskWorkspaceModel(clock: { self.now }, calendar: self.calendar,
+                                           seedDemoData: false)
+            let firstID = model.createTask(title: "First", in: .inbox).taskID!
+            let secondID = model.createTask(title: "Second", in: .inbox).taskID!
+            let firstDocument = NativeDocument(plainText: "First task details")
+            let secondDocument = NativeDocument(plainText: "Second task details")
+
+            _ = model.setDocument(firstID, firstDocument)
+            model.select(firstID)
+            _ = model.setDocument(secondID, secondDocument)
+            model.select(secondID)
+            XCTAssertEqual(model.selectedTask?.document, secondDocument)
+            model.select(firstID)
+            XCTAssertEqual(model.selectedTask?.document, firstDocument)
+            XCTAssertEqual(model.task(for: secondID)?.document, secondDocument)
+        }
+    }
+
     func testDueDateAndDeadlineActionsPreserveIndependentScheduleFields() async {
         await MainActor.run {
             let model = TaskWorkspaceModel(clock: { self.now }, calendar: self.calendar,

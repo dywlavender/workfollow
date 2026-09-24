@@ -5,6 +5,8 @@ struct TaskInspectorShell: View {
     let showBack: Bool
     @FocusState private var titleFocused: Bool
     @State private var presentation = TaskInspectorPresentationState()
+    @State private var newListName = ""
+    @State private var showNewList = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -37,6 +39,29 @@ struct TaskInspectorShell: View {
                     .id(task.id)
                     .padding(WFSpace.page)
                 documentEditor(task)
+                TaskAttributesView(task: task, workspace: workspace).id(task.id)
+                if task.parentID == nil {
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            Text("子任务").font(WFType.section)
+                            Spacer()
+                            Button {
+                                if let id = workspace.createChild(task.id).taskID { workspace.select(id) }
+                            } label: { Image(systemName: "plus") }
+                        }
+                        ForEach(workspace.allTasks.filter { $0.parentID == task.id && $0.deletedAt == nil }.sorted { $0.childOrder < $1.childOrder }) { child in
+                            HStack {
+                                Button { _ = workspace.changeStatus(child) } label: {
+                                    Image(systemName: child.status == .completed ? "checkmark.square.fill" : "square")
+                                }
+                                Button(child.title.isEmpty ? "未命名子任务" : child.title) { workspace.select(child.id) }
+                                Spacer()
+                            }.buttonStyle(.plain)
+                        }
+                    }.padding(.horizontal, WFSpace.page).padding(.vertical, 12)
+                } else if let parentID = task.parentID {
+                    Button("返回父任务") { workspace.select(parentID) }.padding(.horizontal, WFSpace.page).padding(.bottom, 12)
+                }
                 Divider()
                 HStack {
                     listMenu(task)
@@ -88,6 +113,13 @@ struct TaskInspectorShell: View {
         .onAppear {
             presentation.synchronizeTitle(taskID: workspace.selectedTask?.id,
                                           title: workspace.selectedTask?.title ?? "")
+        }
+        .alert("移动到新清单", isPresented: $showNewList) {
+            TextField("清单名称", text: $newListName)
+            Button("取消", role: .cancel) {}
+            Button("移动") {
+                if let id = workspace.selectedTaskID { _ = workspace.moveToList(id, TaskList(name: newListName)) }
+            }.disabled(newListName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         }
     }
 
@@ -195,7 +227,8 @@ struct TaskInspectorShell: View {
 
     private func listMenu(_ task: Task) -> some View {
         Menu {
-            ForEach(TaskWorkspaceModel.inspectorLists, id: \.name) { list in
+            ForEach(Array(Set(TaskWorkspaceModel.inspectorLists.map(\.name) + workspace.allTasks.map { $0.list.name })).sorted(), id: \.self) { name in
+                let list = TaskList(name: name)
                 Button {
                     _ = workspace.moveToList(task.id, list)
                 } label: {
@@ -206,6 +239,8 @@ struct TaskInspectorShell: View {
                     }
                 }
             }
+            Divider()
+            Button("新清单…") { newListName = ""; showNewList = true }
         } label: {
             Label(task.list.name, systemImage: "tray")
                 .foregroundStyle(WFColors.secondaryText)

@@ -1,6 +1,6 @@
 import Foundation
 
-enum TaskListScope { case today, inbox, completed }
+enum TaskListScope { case today, inbox, allTasks, nextSevenDays, overdue, completed }
 enum TaskGroupKind: Equatable { case overdue, today, plain, completed }
 struct TaskListGroup {
     let kind: TaskGroupKind
@@ -15,6 +15,13 @@ enum TaskListProjection {
         store.tasks.filter { task in
             guard task.deletedAt == nil else { return false }
             switch scope {
+            case .allTasks: return true
+            case .nextSevenDays:
+                let start = calendar.startOfDay(for: now)
+                let end = calendar.date(byAdding: .day, value: 7, to: start)!
+                return [task.schedule.dueAt, task.schedule.deadlineAt].compactMap { $0 }.contains { $0 >= start && $0 < end }
+            case .overdue:
+                return task.status == .active && [task.schedule.dueAt, task.schedule.deadlineAt].compactMap { $0 }.contains { calendar.startOfDay(for: $0) < calendar.startOfDay(for: now) }
             case .inbox: return task.list == .inbox
             case .completed: return task.status == .completed
             case .today:

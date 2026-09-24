@@ -1,6 +1,10 @@
 # Native macOS 迁移计划
 
+> 最新进度（2026-09-24）：已按用户要求切换为“先迁功能、最后统一验收”。任务、笔记、垃圾桶、规划视图、富文本和 Native 预览持久化已有新接线，详见 [当前功能清单](native-feature-migration-status.md)。下方 Phase 历史测试结论不覆盖本批代码；本批仅编译检查，尚未功能验收，也未全量迁完。
+
 当前状态：
+
+- **Phase 5A: IN PROGRESS / TEXT INPUT + UNDO + FIND VERIFIED（2026-09-24）**。NSTextView 正文已接线；本轮修复 TextKit 存储生命周期，补齐独立撤销与原生查找。尚不能宣称完整 IME / Editor 验收。
 
 - **Phase 1: IMPLEMENTED / PARTIALLY VERIFIED**。代码完成不等于全尺寸、跨屏窗口恢复全部验收。
 - **Phase 2 第一批: IMPLEMENTED / UNIT TEST VERIFIED**。纯 Swift 核心规则已落地，尚未与 SwiftUI 或持久化接线。
@@ -11,7 +15,21 @@
 
 从 `feature/flutter-personal-desktop` 创建 `experiment/macos-native`；独立工作区 `workfollow-macos-native`。Flutter 留在 `desktop/` 作为产品行为基准，本轮不修改它。原 Flutter 工作区的暂存设计素材不带入实验工作区。
 
-本次只交付第一批 Shell。能启动不等于 Native 已达到 Flutter 水平，更不能据此判断重写收益。收益判断必须等到 Inspector / NSTextView 的 IME、焦点、选择和浮层实测。
+当前已从第一批 Shell 进入 Native 文本编辑基础验证。能启动不等于 Native 已达到 Flutter 水平，更不能据此判断重写收益。收益判断必须等到 Inspector / NSTextView 的 IME、焦点、选择和浮层实测。
+
+## Phase 5A 文本基础补口（2026-09-24）
+
+保留本轮开始时已有的 DocumentEditorCoordinator、DocumentEditorState 及相关测试改动；未覆盖它们，也未动 Flutter 和正式数据。
+
+- 为 NativeTextView 显式建立并持有 NSTextStorage → NSLayoutManager → NSTextContainer，修复空容器/存储生命周期导致的文本输入问题。
+- 每个正文视图有独立 UndoManager；接入原生 undo:/redo: 菜单 action 和可用性校验。切换任务重建视图，撤销不会跨任务；当前不会保留离开任务之前的撤销历史。
+- ⌘F 经 responder chain 打开 NSTextFinder 查找栏；支持增量查找。正文处理 Escape 时，组合输入和查找栏优先于 Inspector。
+- 新增 NativeTextViewTests：输入/撤销/重做及隔离、查找栏 Escape、marked text 暂不发布而提交后写入。连同已有测试，41 项 XCTest 通过。
+- 真实窗口核验：中文多行粘贴→⌘Z 清空→⇧⌘Z 恢复；⌘F 搜索“第二行”命中 1 处；Escape 关闭查找；切换另一任务后 ⌘Z 不改前一任务，切回正文保留。已检查实际截图。
+
+边界：中文粘贴和 marked-text API 测试不等于拼音候选窗实测；输入法候选取消/选词、多段组合、长文滚动、Find 替换、暗色正文仍需专门验收。正文目前仅纯文本段落；已有 Document 模型中的格式类型不代表格式编辑已实现。未加入 Slash、格式工具栏、附件、图片、Checklist，也未加入持久化。
+
+下一批先完成 Phase 5A 的 IME、焦点与长文验证，再做 NativeDocument 的格式映射和编辑命令，避免直接开启全部富文本功能。
 
 SwiftUI 负责组合、普通控件和状态；AppKit 负责窗口、复杂编辑器、菜单/浮层和 responder 交互。当前未实现的层不预建空抽象。
 

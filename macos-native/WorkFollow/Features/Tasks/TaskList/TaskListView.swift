@@ -6,13 +6,16 @@ struct TaskListView: View {
     let navigationVisible: Bool
     @EnvironmentObject private var environment: AppEnvironment
     @State private var draft = ""
+    @State private var search = ""
+    @State private var listFilter: String?
+    @State private var tagFilter: String?
     @State private var showNavigation = false
     @FocusState private var quickAddFocused: Bool
     @FocusState private var listFocused: Bool
 
     private var scope: TaskListScope? { TaskWorkspaceModel.scope(for: navigation.destination) }
     private var groups: [TaskListGroup] { scope.map { workspace.groups(for: $0) } ?? [] }
-    private var canAdd: Bool { scope == .today || scope == .inbox }
+    private var canAdd: Bool { scope == .today || scope == .inbox || scope == .allTasks }
 
     var body: some View {
         VStack(alignment: .leading, spacing: WFSpace.lg) {
@@ -25,12 +28,14 @@ struct TaskListView: View {
                             NavigationColumnView(workspace: workspace, navigation: navigation) {
                                 showNavigation = false
                             }
-                            .frame(width: WFMetrics.navigationWidth, height: 260)
+                            .frame(width: WFMetrics.navigationWidth, height: 340)
                         }
                 }
                 Label(navigation.destination.title, systemImage: navigation.destination.symbol)
                     .font(WFType.pageTitle)
                 Spacer(minLength: 0)
+                Button { workspace.undo() } label: { Image(systemName: "arrow.uturn.backward") }
+                    .help("撤销上一次任务操作").disabled(!workspace.canUndo)
                 if let scope {
                     Text("\(workspace.count(for: scope))")
                         .font(WFType.supporting).foregroundStyle(WFColors.secondaryText)
@@ -57,6 +62,22 @@ struct TaskListView: View {
                 .padding(.horizontal, WFSpace.xl)
             }
 
+            HStack {
+                TextField("搜索任务", text: $search)
+                Menu(listFilter ?? "清单") {
+                    Button("全部清单") { listFilter = nil }
+                    ForEach(Array(Set(workspace.allTasks.filter { $0.deletedAt == nil }.map { $0.list.name })).sorted(), id: \.self) { name in
+                        Button(name) { listFilter = name }
+                    }
+                }
+                Menu(tagFilter.map { "#" + $0 } ?? "标签") {
+                    Button("全部标签") { tagFilter = nil }
+                    ForEach(Array(Set(workspace.allTasks.filter { $0.deletedAt == nil }.flatMap(\.tags))).sorted(), id: \.self) { tag in
+                        Button(tag) { tagFilter = tag }
+                    }
+                }
+            }.padding(.horizontal, WFSpace.xl)
+
             ScrollView {
                 LazyVStack(spacing: 0) {
                     if groups.isEmpty {
@@ -66,7 +87,7 @@ struct TaskListView: View {
                     }
                     ForEach(Array(groups.enumerated()), id: \.offset) { _, group in
                         if group.kind != .plain { groupHeader(group) }
-                        ForEach(workspace.nodes(for: group, scope: scope ?? .today),
+                        ForEach(workspace.nodes(for: group, scope: scope ?? .today).filter(matches),
                                 id: \.task.id) { node in
                             TaskRowView(
                                 task: node.task,
@@ -93,18 +114,18 @@ struct TaskListView: View {
             .focusable()
             .focused($listFocused)
             .onKeyPress(.upArrow) {
-                guard !quickAddFocused, let scope else { return .ignored }
-                workspace.selectAdjacent(-1, in: scope)
+                guard !quickAddFocused, scope != nil else { return .ignored }
+                selectFiltered(-1)
                 return .handled
             }
             .onKeyPress(.downArrow) {
-                guard !quickAddFocused, let scope else { return .ignored }
-                workspace.selectAdjacent(1, in: scope)
+                guard !quickAddFocused, scope != nil else { return .ignored }
+                selectFiltered(1)
                 return .handled
             }
             .onKeyPress(.return) {
-                guard !quickAddFocused, let scope else { return .ignored }
-                if workspace.selectedTaskID == nil { workspace.selectAdjacent(1, in: scope) }
+                guard !quickAddFocused, scope != nil else { return .ignored }
+                if workspace.selectedTaskID == nil { selectFiltered(1) }
                 return .handled
             }
         }
@@ -132,6 +153,21 @@ struct TaskListView: View {
         .padding(.horizontal, WFSpace.sm)
         .padding(.top, WFSpace.lg)
         .padding(.bottom, WFSpace.sm)
+    }
+
+    private func matches(_ node: TaskTreeNode) -> Bool {
+        (listFilter == nil || node.task.list.name == listFilter) &&
+        (tagFilter == nil || node.task.tags.contains(tagFilter!)) &&
+        (search.isEmpty || (node.task.title + node.task.document.plainText).localizedCaseInsensitiveContains(search))
+    }
+
+    private func selectFiltered(_ offset: Int) {
+        guard let scope else { return }
+        let nodes = workspace.visibleNodes(for: scope).filter(matches)
+        guard !nodes.isEmpty else { return }
+        let current = nodes.firstIndex { $0.task.id == workspace.selectedTaskID }
+        let index = current.map { min(max($0 + offset, 0), nodes.count - 1) } ?? (offset < 0 ? nodes.count - 1 : 0)
+        workspace.select(nodes[index].task.id)
     }
 
     private func groupTitle(_ group: TaskListGroup) -> String {
@@ -197,6 +233,9 @@ struct TaskRowView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                     Text(task.list.name).font(WFType.supporting)
                         .foregroundStyle(WFColors.secondaryText).lineLimit(1)
+                    if let tag = task.tags.first { Text("#" + tag).font(WFType.supporting).foregroundStyle(.secondary).lineLimit(1) }
+                    if task.reminderAt != nil { Image(systemName: "bell").font(.caption).foregroundStyle(.secondary) }
+                    if task.recurrence != .never { Image(systemName: "repeat").font(.caption).foregroundStyle(.secondary) }
                     if let dueAt = task.schedule.dueAt {
                         Text(dateLabel(dueAt, hasTime: task.schedule.hasTime))
                             .font(WFType.supporting)

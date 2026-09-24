@@ -17,7 +17,14 @@ struct RootShellView: View {
                         .frame(width: WFMetrics.navigationWidth)
                     Divider()
                 }
-                if navigation.destination.isTaskList {
+                if navigation.destination == .trash {
+                    TaskTrashView(workspace: workspace)
+                } else if navigation.destination.isNotes {
+                    NotesWorkspaceView(notes: environment.notesWorkspace, navigation: navigation, tasks: workspace)
+                } else if navigation.destination == .matrix || navigation.destination == .calendar {
+                    PlanningWorkspaceView(workspace: workspace, matrix: navigation.destination == .matrix)
+                        .id(navigation.destination)
+                } else if navigation.destination.isTaskList {
                     TaskWorkspaceView(workspace: workspace,
                                       navigation: navigation,
                                       navigationVisible: navigationVisible)
@@ -31,6 +38,11 @@ struct RootShellView: View {
         .sheet(isPresented: $environment.commandPalettePresented) {
             CommandPaletteView(navigation: navigation)
                 .environmentObject(environment)
+        }
+        .safeAreaInset(edge: .bottom) {
+            if let error = environment.storageError {
+                Text(error).font(.caption).foregroundStyle(.red).padding(8)
+            }
         }
     }
 }

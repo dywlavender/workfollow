@@ -23,19 +23,41 @@ final class TaskWorkspaceModel: ObservableObject {
 
     init(clock: @escaping () -> Date = Date.init,
          calendar: Calendar = .current,
-         seedDemoData: Bool = true) {
+         seedDemoData: Bool = true, initialTasks: [Task]? = nil) {
         self.clock = clock
         self.calendar = calendar
         let store = WorkspaceStore()
         self.store = store
         self.actions = TaskActions(store: store, clock: clock)
-        if seedDemoData { seed() }
+        if let initialTasks { store.commit(initialTasks); store.clearUndo() }
+        else if seedDemoData { seed() }
     }
 
     var selectedTask: Task? {
         guard let selectedTaskID else { return nil }
         return store.task(selectedTaskID)
     }
+
+    var allTasks: [Task] { _ = revision; return store.tasks }
+    var canUndo: Bool { _ = revision; return store.canUndo }
+    func undo() { actions.undo(); revision += 1; if selectedTask == nil { select(nil) } }
+    func setRepeat(_ id: UUID, _ value: TaskRepeat) { didMutate(actions.setRepeat(id, value)) }
+    var deletedTasks: [Task] {
+        allTasks.filter { $0.deletedAt != nil }.sorted {
+            if $0.deletedAt == $1.deletedAt { return $0.createdAt > $1.createdAt }
+            return $0.deletedAt! > $1.deletedAt!
+        }
+    }
+    func restoreDeleted(_ id: UUID) {
+        let result = actions.restoreDeleted(id)
+        didMutate(result)
+        if result.taskID != nil { select(nil) }
+    }
+    func permanentlyDelete(_ id: UUID) {
+        didMutate(actions.permanentlyDelete(id))
+        if selectedTaskID != nil && selectedTask == nil { select(nil) }
+    }
+    func emptyTrash() { actions.emptyTrash(); select(nil); revision += 1 }
 
     func task(for id: UUID) -> Task? {
         _ = revision
@@ -46,6 +68,9 @@ final class TaskWorkspaceModel: ObservableObject {
         switch destination {
         case .today: return .today
         case .inbox: return .inbox
+        case .allTasks: return .allTasks
+        case .nextSevenDays: return .nextSevenDays
+        case .overdue: return .overdue
         case .completed: return .completed
         default: return nil
         }
@@ -62,6 +87,7 @@ final class TaskWorkspaceModel: ObservableObject {
     }
 
     func count(for destination: NativeDestination) -> Int {
+        if destination == .trash { return deletedTasks.count }
         guard let scope = Self.scope(for: destination) else { return 0 }
         return count(for: scope)
     }
@@ -180,6 +206,10 @@ final class TaskWorkspaceModel: ObservableObject {
         return result
     }
 
+    func setTags(_ id: UUID, _ tags: [String]) { didMutate(actions.setTags(id, tags)) }
+    func setReminder(_ id: UUID, _ date: Date?) { didMutate(actions.setReminder(id, date)) }
+    func setAttachments(_ id: UUID, _ values: [NativeAttachment]) { didMutate(actions.setAttachments(id, values)) }
+
     func dateFromToday(_ offset: Int) -> Date {
         let start = calendar.startOfDay(for: clock())
         return calendar.date(byAdding: .day, value: offset, to: start) ?? start
@@ -242,5 +272,6 @@ final class TaskWorkspaceModel: ObservableObject {
         }
         _ = actions.create(title: "随手收集一个想法")
         revision = 0
+        store.clearUndo()
     }
 }

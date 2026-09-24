@@ -7,6 +7,8 @@ struct DocumentEditor: NSViewRepresentable {
     let onDocumentChange: (NativeDocument) -> Void
     let onEscape: () -> InspectorEscapeEffect
     let onEditingChanged: (Bool) -> Void
+    var selectionActionTitle: String? = nil
+    var onSelectionAction: ((String) -> Void)? = nil
 
     func makeCoordinator() -> DocumentEditorCoordinator {
         DocumentEditorCoordinator(taskID: taskID, document: document,
@@ -24,15 +26,19 @@ struct DocumentEditor: NSViewRepresentable {
 
         let textView = NativeTextView(frame: .zero, textContainer: nil)
         textView.delegate = context.coordinator
-        textView.string = document.plainText
+        textView.textStorage?.setAttributedString(DocumentTextCodec.render(document))
         textView.onEscape = onEscape
         textView.onEditingChanged = onEditingChanged
+        textView.selectionActionTitle = selectionActionTitle
+        textView.onSelectionAction = onSelectionAction
         scrollView.documentView = textView
         return scrollView
     }
 
     func updateNSView(_ scrollView: NSScrollView, context: Context) {
         guard let textView = scrollView.documentView as? NativeTextView else { return }
+        textView.selectionActionTitle = selectionActionTitle
+        textView.onSelectionAction = onSelectionAction
         context.coordinator.update(textView, taskID: taskID, document: document,
                                    onDocumentChange: onDocumentChange,
                                    onEscape: onEscape,
@@ -45,5 +51,6 @@ struct DocumentEditor: NSViewRepresentable {
         textView.delegate = nil
         textView.onEscape = nil
         textView.onEditingChanged = nil
+        textView.onSelectionAction = nil
     }
 }

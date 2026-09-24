@@ -56,7 +56,7 @@ struct NavigationColumnView: View {
         if navigation.destination.isNotes { return [.notes, .notesTrash] }
         if navigation.destination == .calendar { return [.calendar] }
         if navigation.destination == .matrix { return [.matrix] }
-        return [.today, .inbox, .completed, .trash]
+        return [.nextSevenDays, .today, .overdue, .inbox, .allTasks, .completed, .trash]
     }
 
     var body: some View {

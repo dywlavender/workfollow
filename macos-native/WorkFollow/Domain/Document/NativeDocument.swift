@@ -1,6 +1,6 @@
 import Foundation
 
-struct NativeDocument: Equatable {
+struct NativeDocument: Equatable, Codable {
     var blocks: [DocumentBlock]
 
     static var empty: NativeDocument { NativeDocument(plainText: "") }
@@ -61,7 +61,7 @@ struct NativeDocument: Equatable {
     }
 }
 
-struct DocumentBlock: Identifiable, Equatable {
+struct DocumentBlock: Identifiable, Equatable, Codable {
     let id: UUID
     var kind: DocumentBlockKind
     var runs: [DocumentRun]
@@ -75,7 +75,7 @@ struct DocumentBlock: Identifiable, Equatable {
     var plainText: String { runs.map(\.text).joined() }
 }
 
-enum DocumentBlockKind: Equatable {
+enum DocumentBlockKind: Equatable, Codable {
     case paragraph
     case heading(Int)
     case bullet
@@ -85,7 +85,7 @@ enum DocumentBlockKind: Equatable {
     case code
 }
 
-struct DocumentRun: Equatable {
+struct DocumentRun: Equatable, Codable {
     var text: String
     var marks: Set<DocumentMark>
 
@@ -95,9 +95,11 @@ struct DocumentRun: Equatable {
     }
 }
 
-enum DocumentMark: Hashable {
+enum DocumentMark: Hashable, Codable {
     case bold
     case italic
+    case underline
+    case highlight
     case strikethrough
     case code
     case link(String)

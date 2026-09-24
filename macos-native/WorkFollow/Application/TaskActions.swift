@@ -42,7 +42,7 @@ final class TaskActions {
         guard task.deletedAt == nil else { return .failure(.deletedTask) }
         guard task.status != .completed else { return .failure(.alreadyCompleted) }
         let now = clock()
-        let snapshot = store.tasks.map { original -> Task in
+        var snapshot = store.tasks.map { original -> Task in
             var value = original
             if (value.id == id || value.parentID == id), value.deletedAt == nil,
                value.status == .active {
@@ -51,6 +51,33 @@ final class TaskActions {
                 value.updatedAt = now
             }
             return value
+        }
+        // Only the directly completed recurrence starts a new occurrence.
+        // Children carried by parent completion must not spawn separate chains.
+        if task.recurrence != .never {
+            let calendar = Calendar.current
+            let base = task.schedule.dueAt ?? now
+            if let next = calendar.date(byAdding: task.recurrence.component, value: 1, to: base) {
+                let days = calendar.dateComponents([.day], from: base, to: next).day ?? 1
+                func nextOccurrence(_ source: Task, parentID: UUID?) -> Task {
+                    var value = Task(id: UUID(), title: source.title, document: source.document,
+                                     tags: source.tags, recurrence: source.recurrence,
+                                     list: source.list, priority: source.priority, schedule: source.schedule,
+                                     parentID: parentID, childOrder: source.childOrder,
+                                     createdAt: now, updatedAt: now)
+                    value.schedule.dueAt = source.schedule.dueAt.flatMap { calendar.date(byAdding: .day, value: days, to: $0) }
+                    value.schedule.deadlineAt = source.schedule.deadlineAt.flatMap { calendar.date(byAdding: .day, value: days, to: $0) }
+                    value.reminderAt = source.reminderAt.flatMap { calendar.date(byAdding: .day, value: days, to: $0) }
+                    value.attachments = source.attachments
+                    return value
+                }
+                var occurrence = nextOccurrence(task, parentID: task.parentID)
+                occurrence.schedule.dueAt = next
+                snapshot.append(occurrence)
+                if task.parentID == nil {
+                    snapshot += store.children(of: task.id).map { nextOccurrence($0, parentID: occurrence.id) }
+                }
+            }
         }
         store.commit(snapshot)
         return .success(id)
@@ -87,6 +114,9 @@ final class TaskActions {
     func restoreDeleted(_ id: UUID) -> TaskActionResult {
         guard let task = store.task(id) else { return .failure(.missingTask) }
         guard let stamp = task.deletedAt else { return .failure(.notDeleted) }
+        if let parentID = task.parentID, store.task(parentID)?.deletedAt != nil {
+            return .failure(.deletedTask)
+        }
         let now = clock()
         store.commit(store.tasks.map { original in
             var value = original
@@ -133,6 +163,31 @@ final class TaskActions {
     }
 
     @discardableResult
+    func setTags(_ id: UUID, _ tags: [String]) -> TaskActionResult {
+        var seen = Set<String>()
+        let values = tags.map { $0.trimmingCharacters(in: .whitespacesAndNewlines).trimmingCharacters(in: CharacterSet(charactersIn: "#")) }
+            .filter { !$0.isEmpty && seen.insert($0).inserted }
+        return edit(id) { $0.tags = values }
+    }
+
+    @discardableResult
+    func setRepeat(_ id: UUID, _ recurrence: TaskRepeat) -> TaskActionResult {
+        edit(id) { $0.recurrence = recurrence }
+    }
+
+    @discardableResult
+    func setReminder(_ id: UUID, _ date: Date?) -> TaskActionResult {
+        edit(id) { $0.reminderAt = date }
+    }
+
+    @discardableResult
+    func setAttachments(_ id: UUID, _ values: [NativeAttachment]) -> TaskActionResult {
+        edit(id) { $0.attachments = values }
+    }
+
+    func undo() { store.undo() }
+
+    @discardableResult
     func setSchedule(_ id: UUID, _ schedule: TaskSchedule) -> TaskActionResult {
         edit(id) { $0.schedule = schedule }
     }
@@ -147,5 +202,19 @@ final class TaskActions {
         snapshot[index].updatedAt = clock()
         store.commit(snapshot)
         return .success(id)
+    }
+
+    @discardableResult
+    func permanentlyDelete(_ id: UUID) -> TaskActionResult {
+        guard let task = store.task(id) else { return .failure(.missingTask) }
+        guard task.deletedAt != nil else { return .failure(.notDeleted) }
+        store.commit(store.tasks.filter { $0.id != id && $0.parentID != id })
+        store.clearUndo()
+        return .success(id)
+    }
+
+    func emptyTrash() {
+        store.commit(store.tasks.filter { $0.deletedAt == nil })
+        store.clearUndo()
     }
 }
