@@ -1,16 +1,16 @@
 import Foundation
 
 struct DocumentEditorState: Equatable {
-    private(set) var taskID: UUID
+    private(set) var documentID: UUID
     private(set) var selectedRange = NSRange(location: 0, length: 0)
 
-    init(taskID: UUID) {
-        self.taskID = taskID
+    init(documentID: UUID) {
+        self.documentID = documentID
     }
 
-    mutating func bind(to taskID: UUID) {
-        guard self.taskID != taskID else { return }
-        self.taskID = taskID
+    mutating func bind(to documentID: UUID) {
+        guard self.documentID != documentID else { return }
+        self.documentID = documentID
         selectedRange = NSRange(location: 0, length: 0)
     }
 

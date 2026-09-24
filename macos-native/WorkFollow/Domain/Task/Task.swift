@@ -48,6 +48,7 @@ struct Task: Identifiable, Equatable, Codable {
     var document: NativeDocument = .empty
     var tags: [String] = []
     var recurrence: TaskRepeat = .never
+    var recurrenceRule: RecurrenceRule?
     var reminderAt: Date?
     var attachments: [NativeAttachment] = []
     var list: TaskList

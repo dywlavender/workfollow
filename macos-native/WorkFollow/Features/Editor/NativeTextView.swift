@@ -9,21 +9,50 @@ final class NativeTextView: NSTextView {
 
     var onEscape: (() -> InspectorEscapeEffect)?
     var onEditingChanged: ((Bool) -> Void)?
-    var selectionActionTitle: String?
-    var onSelectionAction: ((String) -> Void)?
-    var slashRange: NSRange?
+    var profile = DocumentProfile()
+    var slashSession: SlashSession?
+    var slashPanel: NSPanel?
+    var documentIdentity = UUID()
 
     override func insertText(_ insertString: Any, replacementRange: NSRange) {
         let wasComposing = hasMarkedText()
         super.insertText(insertString, replacementRange: replacementRange)
-        guard !wasComposing, (insertString as? String) == "/", let window else { return }
+        guard !wasComposing, (insertString as? String) == "/" else { refreshSlash(); return }
         let location = selectedRange().location
         guard location > 0 else { return }
-        slashRange = NSRange(location: location - 1, length: 1)
-        let rect = firstRect(forCharacterRange: selectedRange(), actualRange: nil)
-        let point = convert(window.convertPoint(fromScreen: rect.origin), from: nil)
-        formatMenu().popUp(positioning: nil, at: point, in: self)
-        slashRange = nil
+        // A slash in a URL/path is ordinary text, not a command trigger.
+        let prefix = (string as NSString).substring(to: location - 1)
+        guard prefix.isEmpty || prefix.last?.isWhitespace == true else { return }
+        slashSession = SlashSession(start: location - 1)
+        refreshSlash()
+    }
+
+    override func didChangeText() {
+        super.didChangeText()
+        refreshSlash()
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        dismissSlash()
+        super.mouseDown(with: event)
+    }
+
+    override func viewWillMove(toWindow newWindow: NSWindow?) {
+        if newWindow == nil { dismissSlash() }
+        super.viewWillMove(toWindow: newWindow)
+    }
+
+    override func doCommand(by selector: Selector) {
+        if slashSession != nil, !hasMarkedText() {
+            switch selector {
+            case #selector(moveUp(_:)): moveSlash(-1); return
+            case #selector(moveDown(_:)): moveSlash(1); return
+            case #selector(insertNewline(_:)): executeSlash(); return
+            case #selector(cancelOperation(_:)): dismissSlash(); return
+            default: break
+            }
+        }
+        super.doCommand(by: selector)
     }
 
     override func menu(for event: NSEvent) -> NSMenu? {
@@ -31,27 +60,33 @@ final class NativeTextView: NSTextView {
         let formatting = NSMenuItem(title: "格式", action: nil, keyEquivalent: "")
         formatting.submenu = formatMenu()
         menu?.addItem(formatting)
-        if selectedRange().length > 0, let title = selectionActionTitle, onSelectionAction != nil {
+        if selectedRange().length > 0, !profile.selectionActions.isEmpty {
             menu?.addItem(.separator())
-            let item = NSMenuItem(title: title, action: #selector(invokeSelectionAction(_:)), keyEquivalent: "")
-            item.target = self
-            menu?.addItem(item)
+            for (index, action) in profile.selectionActions.enumerated() {
+                let item = NSMenuItem(title: action.title, action: #selector(invokeSelectionAction(_:)), keyEquivalent: "")
+                item.tag = index
+                item.target = self
+                menu?.addItem(item)
+            }
         }
         return menu
     }
 
-    @objc private func invokeSelectionAction(_ sender: Any?) {
+    @objc private func invokeSelectionAction(_ sender: NSMenuItem) {
         let range = selectedRange()
         guard range.length > 0, NSMaxRange(range) <= (string as NSString).length else { return }
-        onSelectionAction?((string as NSString).substring(with: range))
+        guard profile.selectionActions.indices.contains(sender.tag) else { return }
+        profile.selectionActions[sender.tag].perform((string as NSString).substring(with: range))
     }
 
     @objc func undo(_ sender: Any?) {
+        dismissSlash()
         breakUndoCoalescing()
         documentUndoManager.undo()
     }
 
     @objc func redo(_ sender: Any?) {
+        dismissSlash()
         documentUndoManager.redo()
     }
 
@@ -71,7 +106,7 @@ final class NativeTextView: NSTextView {
 
     override func resignFirstResponder() -> Bool {
         let resigned = super.resignFirstResponder()
-        if resigned { onEditingChanged?(false) }
+        if resigned { dismissSlash(); onEditingChanged?(false) }
         return resigned
     }
 
@@ -123,6 +158,7 @@ final class NativeTextView: NSTextView {
             super.cancelOperation(sender)
             return
         }
+        if slashSession != nil { dismissSlash(); return }
         if enclosingScrollView?.isFindBarVisible == true {
             enclosingScrollView?.isFindBarVisible = false
             return

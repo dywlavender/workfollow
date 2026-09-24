@@ -109,15 +109,14 @@ struct NotesWorkspaceView: View {
                 } else {
                     TextField("未命名笔记", text: Binding(get: { notes.selected?.title ?? "" }, set: { value in notes.edit(note.id) { $0.title = value } }))
                         .textFieldStyle(.plain).font(WFType.detailTitle)
-                    DocumentEditor(taskID: note.id, document: note.document,
+                    DocumentEditor(documentID: note.id, document: note.document,
                                    onDocumentChange: { document in notes.edit(note.id) { $0.document = document } },
                                    onEscape: { .endEditing }, onEditingChanged: { _ in },
-                                   selectionActionTitle: "用所选文字创建任务",
-                                   onSelectionAction: { text in
+                                   profile: DocumentProfile(selectionActions: [DocumentSelectionAction(id: "note.createTask", title: "用所选文字创建任务", perform: { text in
                                        if let id = tasks.createTask(title: text, in: .inbox).taskID {
                                            notes.edit(note.id) { $0.linkedTaskIDs.append(id) }
                                        }
-                                   }).id(note.id)
+                                   })])).id(note.id)
                     if !note.linkedTaskIDs.isEmpty {
                         DisclosureGroup("关联任务 \(note.linkedTaskIDs.count)") {
                             ForEach(note.linkedTaskIDs, id: \.self) { id in

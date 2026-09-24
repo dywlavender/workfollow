@@ -3,6 +3,7 @@ import SwiftUI
 
 @main
 struct WorkFollowApp: App {
+    @NSApplicationDelegateAdaptor(NativeLifecycleDelegate.self) private var lifecycle
     @StateObject private var environment = AppEnvironment()
 
     var body: some Scene {
@@ -15,6 +16,7 @@ struct WorkFollowApp: App {
                 .frame(minWidth: WFMetrics.minimumWindow.width,
                        minHeight: WFMetrics.minimumWindow.height)
                 .background(WindowFramePersistence())
+                .onAppear { lifecycle.environment = environment }
         }
         .defaultSize(width: WFMetrics.defaultWindow.width,
                      height: WFMetrics.defaultWindow.height)
@@ -27,6 +29,28 @@ struct WorkFollowApp: App {
                 .preferredColorScheme(environment.appearance.colorScheme)
                 .tint(WFColors.accent)
         }
+    }
+}
+
+@MainActor
+final class NativeLifecycleDelegate: NSObject, NSApplicationDelegate {
+    weak var environment: AppEnvironment?
+
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        guard let environment else { return .terminateNow }
+        // End editing first so title fields and marked text reach the model.
+        for window in sender.windows { window.makeFirstResponder(nil) }
+        environment.flush { error in
+            if let error {
+                let alert = NSAlert()
+                alert.messageText = "预览数据尚未保存"
+                alert.informativeText = error.localizedDescription
+                alert.addButton(withTitle: "返回应用")
+                alert.runModal()
+            }
+            sender.reply(toApplicationShouldTerminate: error == nil)
+        }
+        return .terminateLater
     }
 }
 

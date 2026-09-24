@@ -45,7 +45,7 @@ final class NativeTextViewTests: XCTestCase {
         let editor = NativeTextView(frame: .zero, textContainer: nil)
         var changes: [NativeDocument] = []
         let coordinator = DocumentEditorCoordinator(
-            taskID: UUID(), document: .empty,
+            documentID: UUID(), document: .empty,
             onDocumentChange: { changes.append($0) },
             onEscape: { .keepInspector }, onEditingChanged: { _ in })
         editor.delegate = coordinator

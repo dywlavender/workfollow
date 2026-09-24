@@ -1,6 +1,6 @@
 # Native macOS 迁移计划
 
-> 最新进度（2026-09-24）：已按用户要求切换为“先迁功能、最后统一验收”。任务、笔记、垃圾桶、规划视图、富文本和 Native 预览持久化已有新接线，详见 [当前功能清单](native-feature-migration-status.md)。下方 Phase 历史测试结论不覆盖本批代码；本批仅编译检查，尚未功能验收，也未全量迁完。
+> 最新进度（2026-09-24）：路线调整为 Stage A–G：基础设施、Editor、Task、Notes/Planning、系统集成、数据迁移、统一验收发布。本轮已收口保存/Reminder/Undo/Query/时间注入，完整测试 48/48 通过；不代表全量功能或 UI 已验收。详见 [当前功能清单](native-feature-migration-status.md)。下方 Phase 内容为历史记录。
 
 当前状态：
 

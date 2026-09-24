@@ -3,6 +3,7 @@ import AppKit
 /// TextKit attributes are an editing projection, never the stored document.
 enum DocumentTextCodec {
     static let blockKey = NSAttributedString.Key("WorkFollow.block")
+    static let attachmentKey = NSAttributedString.Key("WorkFollow.attachment")
     static func blockToken(_ kind: DocumentBlockKind) -> String {
         switch kind {
         case .paragraph: "paragraph"
@@ -42,6 +43,10 @@ enum DocumentTextCodec {
             style.textLists = [NSTextList(markerFormat: kind == .bullet ? .disc : .decimal, options: 0)]
             style.headIndent = 22
         }
+        if case .checklist(let checked) = kind {
+            style.textLists = [NSTextList(markerFormat: .init(rawValue: checked ? "☑" : "☐"), options: 0)]
+            style.headIndent = 22
+        }
         var attrs: [NSAttributedString.Key: Any] = [
             blockKey: blockToken(kind), .font: font, .paragraphStyle: style,
             .foregroundColor: kind == .quote ? NSColor.secondaryLabelColor : NSColor.labelColor
@@ -56,7 +61,16 @@ enum DocumentTextCodec {
         let result = NSMutableAttributedString(string: "")
         for (index, block) in document.blocks.enumerated() {
             for run in block.runs {
-                result.append(NSAttributedString(string: run.text, attributes: attributes(kind: block.kind, marks: run.marks)))
+                var attrs = attributes(kind: block.kind, marks: run.marks)
+                if let file = run.attachment, let data = try? JSONEncoder().encode(file) {
+                    attrs[attachmentKey] = data
+                    attrs[.toolTip] = file.name
+                    let attachment = NSTextAttachment()
+                    let cell = NSTextAttachmentCell(textCell: "📎 " + file.name)
+                    attachment.attachmentCell = cell
+                    attrs[.attachment] = attachment
+                }
+                result.append(NSAttributedString(string: run.text, attributes: attrs))
             }
             if index < document.blocks.count - 1 {
                 result.append(NSAttributedString(string: "\n", attributes: attributes(kind: block.kind, marks: [])))
@@ -87,7 +101,8 @@ enum DocumentTextCodec {
                 if let value = attrs[.strikethroughStyle] as? Int, value != 0 { marks.insert(.strikethrough) }
                 if attrs[.backgroundColor] != nil { marks.insert(.highlight) }
                 if let link = attrs[.link] { marks.insert(.link(String(describing: link))) }
-                runs.append(DocumentRun(text: plain.substring(with: range), marks: marks))
+                let attachment = (attrs[attachmentKey] as? Data).flatMap { try? JSONDecoder().decode(NativeAttachment.self, from: $0) }
+                runs.append(DocumentRun(text: plain.substring(with: range), marks: marks, attachment: attachment))
             }
             offset += length + 1
             return DocumentBlock(id: block.id, kind: kind, runs: runs)

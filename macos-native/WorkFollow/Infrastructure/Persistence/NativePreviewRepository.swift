@@ -12,7 +12,9 @@ final class NativePreviewRepository {
         FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("WorkFollowNativePreview", isDirectory: true)
     }
-    private let file = directory.appendingPathComponent("workspace.json")
+    private let directory: URL
+    private var file: URL { directory.appendingPathComponent("workspace.json") }
+    init(directory: URL = NativePreviewRepository.directory) { self.directory = directory }
     func load() throws -> NativeWorkspaceSnapshot? {
         guard FileManager.default.fileExists(atPath: file.path) else { return nil }
         let snapshot = try JSONDecoder().decode(NativeWorkspaceSnapshot.self, from: Data(contentsOf: file))
@@ -23,7 +25,7 @@ final class NativePreviewRepository {
         return snapshot
     }
     func save(_ snapshot: NativeWorkspaceSnapshot) throws {
-        try FileManager.default.createDirectory(at: Self.directory, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys]
         try encoder.encode(snapshot).write(to: file, options: .atomic)

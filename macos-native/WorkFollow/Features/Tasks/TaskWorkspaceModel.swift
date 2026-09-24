@@ -18,8 +18,8 @@ final class TaskWorkspaceModel: ObservableObject {
 
     private let store: WorkspaceStore
     private let actions: TaskActions
-    private let clock: () -> Date
-    private let calendar: Calendar
+    let clock: () -> Date
+    let calendar: Calendar
 
     init(clock: @escaping () -> Date = Date.init,
          calendar: Calendar = .current,
@@ -28,7 +28,7 @@ final class TaskWorkspaceModel: ObservableObject {
         self.calendar = calendar
         let store = WorkspaceStore()
         self.store = store
-        self.actions = TaskActions(store: store, clock: clock)
+        self.actions = TaskActions(store: store, clock: clock, calendar: calendar)
         if let initialTasks { store.commit(initialTasks); store.clearUndo() }
         else if seedDemoData { seed() }
     }
@@ -42,6 +42,9 @@ final class TaskWorkspaceModel: ObservableObject {
     var canUndo: Bool { _ = revision; return store.canUndo }
     func undo() { actions.undo(); revision += 1; if selectedTask == nil { select(nil) } }
     func setRepeat(_ id: UUID, _ value: TaskRepeat) { didMutate(actions.setRepeat(id, value)) }
+    func setRecurrence(_ id: UUID, frequency: TaskRepeat, rule: RecurrenceRule?) {
+        didMutate(actions.setRecurrence(id, frequency: frequency, rule: rule))
+    }
     var deletedTasks: [Task] {
         allTasks.filter { $0.deletedAt != nil }.sorted {
             if $0.deletedAt == $1.deletedAt { return $0.createdAt > $1.createdAt }
@@ -76,9 +79,9 @@ final class TaskWorkspaceModel: ObservableObject {
         }
     }
 
-    func groups(for scope: TaskListScope) -> [TaskListGroup] {
+    func groups(for scope: TaskListScope, query: TaskListQuery = TaskListQuery()) -> [TaskListGroup] {
         _ = revision
-        return TaskListProjection.groups(in: scope, store: store, now: clock(), calendar: calendar)
+        return TaskListProjection.groups(in: scope, store: store, now: clock(), calendar: calendar, query: query)
     }
 
     func count(for scope: TaskListScope) -> Int {
@@ -92,16 +95,16 @@ final class TaskWorkspaceModel: ObservableObject {
         return count(for: scope)
     }
 
-    func nodes(for group: TaskListGroup, scope: TaskListScope) -> [TaskTreeNode] {
+    func nodes(for group: TaskListGroup, scope: TaskListScope, query: TaskListQuery = TaskListQuery()) -> [TaskTreeNode] {
         _ = revision
-        let matching = TaskListProjection.matches(in: scope, store: store, now: clock(), calendar: calendar)
+        let matching = TaskListProjection.matches(in: scope, store: store, now: clock(), calendar: calendar, query: query)
         return TaskTreeProjection.nodes(roots: group.tasks, store: store,
-                                        expanded: expandedTaskIDs,
+                                        expanded: query.isFiltering ? Set(group.tasks.map(\.id)) : expandedTaskIDs,
                                         matchingTaskIDs: Set(matching.map(\.id)))
     }
 
-    func visibleNodes(for scope: TaskListScope) -> [TaskTreeNode] {
-        groups(for: scope).flatMap { nodes(for: $0, scope: scope) }
+    func visibleNodes(for scope: TaskListScope, query: TaskListQuery = TaskListQuery()) -> [TaskTreeNode] {
+        groups(for: scope, query: query).flatMap { nodes(for: $0, scope: scope, query: query) }
     }
 
     func select(_ id: UUID?) { selectedTaskID = id }
@@ -221,6 +224,14 @@ final class TaskWorkspaceModel: ObservableObject {
         schedule.dueAt = date.map(calendar.startOfDay(for:))
         schedule.hasTime = false
         return setSchedule(id, schedule)
+    }
+
+    @discardableResult
+    func moveDueDate(_ id: UUID, to date: Date) -> TaskActionResult {
+        guard let current = task(for: id)?.schedule else { return .failure(.missingTask) }
+        let moved = TaskDateDraft.movingDay(current.dueAt ?? date, to: date, calendar: calendar)
+        return setSchedule(id, TaskDateDraft.applying(date: moved, hasTime: current.hasTime,
+                                                     deadline: false, to: current, calendar: calendar))
     }
 
     @discardableResult

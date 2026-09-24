@@ -14,7 +14,8 @@ struct TaskListView: View {
     @FocusState private var listFocused: Bool
 
     private var scope: TaskListScope? { TaskWorkspaceModel.scope(for: navigation.destination) }
-    private var groups: [TaskListGroup] { scope.map { workspace.groups(for: $0) } ?? [] }
+    private var query: TaskListQuery { TaskListQuery(search: search, list: listFilter, tag: tagFilter) }
+    private var groups: [TaskListGroup] { scope.map { workspace.groups(for: $0, query: query) } ?? [] }
     private var canAdd: Bool { scope == .today || scope == .inbox || scope == .allTasks }
 
     var body: some View {
@@ -87,10 +88,11 @@ struct TaskListView: View {
                     }
                     ForEach(Array(groups.enumerated()), id: \.offset) { _, group in
                         if group.kind != .plain { groupHeader(group) }
-                        ForEach(workspace.nodes(for: group, scope: scope ?? .today).filter(matches),
+                        ForEach(workspace.nodes(for: group, scope: scope ?? .today, query: query),
                                 id: \.task.id) { node in
                             TaskRowView(
                                 task: node.task,
+                                workspace: workspace,
                                 depth: node.depth,
                                 hasChildren: node.hasChildren,
                                 expanded: node.expanded,
@@ -155,15 +157,9 @@ struct TaskListView: View {
         .padding(.bottom, WFSpace.sm)
     }
 
-    private func matches(_ node: TaskTreeNode) -> Bool {
-        (listFilter == nil || node.task.list.name == listFilter) &&
-        (tagFilter == nil || node.task.tags.contains(tagFilter!)) &&
-        (search.isEmpty || (node.task.title + node.task.document.plainText).localizedCaseInsensitiveContains(search))
-    }
-
     private func selectFiltered(_ offset: Int) {
         guard let scope else { return }
-        let nodes = workspace.visibleNodes(for: scope).filter(matches)
+        let nodes = workspace.visibleNodes(for: scope, query: query)
         guard !nodes.isEmpty else { return }
         let current = nodes.firstIndex { $0.task.id == workspace.selectedTaskID }
         let index = current.map { min(max($0 + offset, 0), nodes.count - 1) } ?? (offset < 0 ? nodes.count - 1 : 0)
@@ -189,6 +185,7 @@ struct TaskListView: View {
 
 struct TaskRowView: View {
     let task: Task
+    @ObservedObject var workspace: TaskWorkspaceModel
     let depth: Int
     let hasChildren: Bool
     let expanded: Bool
@@ -236,16 +233,12 @@ struct TaskRowView: View {
                     if let tag = task.tags.first { Text("#" + tag).font(WFType.supporting).foregroundStyle(.secondary).lineLimit(1) }
                     if task.reminderAt != nil { Image(systemName: "bell").font(.caption).foregroundStyle(.secondary) }
                     if task.recurrence != .never { Image(systemName: "repeat").font(.caption).foregroundStyle(.secondary) }
-                    if let dueAt = task.schedule.dueAt {
-                        Text(dateLabel(dueAt, hasTime: task.schedule.hasTime))
-                            .font(WFType.supporting)
-                            .foregroundStyle(task.status == .completed ? WFColors.tertiaryText : WFColors.accent)
-                    }
                 }
                 .padding(.leading, CGFloat(depth) * WFSpace.lg)
                 .frame(maxWidth: .infinity, minHeight: WFMetrics.rowHeight)
                 .contentShape(Rectangle())
             }.buttonStyle(.plain)
+            TaskDateButton(task: task, workspace: workspace)
         }
         .padding(.horizontal, WFSpace.sm)
         .background(selected ? WFColors.selection : hovering ? WFColors.hover : .clear,

@@ -2,6 +2,18 @@ import Foundation
 
 enum TaskListScope { case today, inbox, allTasks, nextSevenDays, overdue, completed }
 enum TaskGroupKind: Equatable { case overdue, today, plain, completed }
+struct TaskListQuery: Equatable {
+    var search = ""
+    var list: String?
+    var tag: String?
+    var isFiltering: Bool { !search.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || list != nil || tag != nil }
+    func matches(_ task: Task) -> Bool {
+        let text = search.trimmingCharacters(in: .whitespacesAndNewlines)
+        return (list == nil || task.list.name == list) &&
+            (tag == nil || task.tags.contains(tag!)) &&
+            (text.isEmpty || (task.title + "\n" + task.document.plainText).localizedCaseInsensitiveContains(text))
+    }
+}
 struct TaskListGroup {
     let kind: TaskGroupKind
     let day: Date?
@@ -11,9 +23,10 @@ struct TaskListGroup {
 enum TaskListProjection {
     /// Flutter keeps matching completed tasks in Today/Inbox, while their badge counts open tasks.
     static func matches(in scope: TaskListScope, store: WorkspaceStore,
-                        now: Date, calendar: Calendar) -> [Task] {
+                        now: Date, calendar: Calendar, query: TaskListQuery = TaskListQuery()) -> [Task] {
         store.tasks.filter { task in
             guard task.deletedAt == nil else { return false }
+            guard query.matches(task) else { return false }
             switch scope {
             case .allTasks: return true
             case .nextSevenDays:
@@ -34,8 +47,8 @@ enum TaskListProjection {
     }
 
     static func rows(in scope: TaskListScope, store: WorkspaceStore,
-                     now: Date, calendar: Calendar) -> [Task] {
-        let tasks = matches(in: scope, store: store, now: now, calendar: calendar)
+                     now: Date, calendar: Calendar, query: TaskListQuery = TaskListQuery()) -> [Task] {
+        let tasks = matches(in: scope, store: store, now: now, calendar: calendar, query: query)
         let ids = Set(tasks.map(\.id))
         return tasks.filter { $0.parentID.map { !ids.contains($0) } ?? true }
     }
@@ -47,8 +60,8 @@ enum TaskListProjection {
     }
 
     static func groups(in scope: TaskListScope, store: WorkspaceStore,
-                       now: Date, calendar: Calendar) -> [TaskListGroup] {
-        let rows = rows(in: scope, store: store, now: now, calendar: calendar)
+                       now: Date, calendar: Calendar, query: TaskListQuery = TaskListQuery()) -> [TaskListGroup] {
+        let rows = rows(in: scope, store: store, now: now, calendar: calendar, query: query)
         let closed = rows.filter { $0.status == .completed }.sorted {
             ($0.completedAt ?? .distantPast) > ($1.completedAt ?? .distantPast)
         }

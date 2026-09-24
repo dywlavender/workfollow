@@ -25,9 +25,10 @@ final class AppEnvironment: ObservableObject {
     let navigation = AppNavigation()
     let taskWorkspace: TaskWorkspaceModel
     let notesWorkspace: NotesWorkspaceModel
-    let reminders = NativeReminderService()
+    let reminders: NativeReminderService
     @Published private(set) var storageError: String?
     private let repository = NativePreviewRepository()
+    private let persistence = PersistenceCoordinator()
     private var subscriptions = Set<AnyCancellable>()
     private var loadFailed = false
     @Published var commandPalettePresented = false
@@ -39,7 +40,8 @@ final class AppEnvironment: ObservableObject {
     // Only the separate WorkFollowNativePreview directory is opened.
     private let preferences: UserDefaults
 
-    init() {
+    init(clock: @escaping () -> Date = Date.init, calendar: Calendar = .current) {
+        reminders = NativeReminderService(clock: clock, calendar: calendar)
         let preferences = UserDefaults.standard
         self.preferences = preferences
         appearance = NativeAppearance(rawValue:
@@ -47,8 +49,11 @@ final class AppEnvironment: ObservableObject {
         var snapshot: NativeWorkspaceSnapshot?
         var failure: Error?
         do { snapshot = try repository.load() } catch { failure = error }
-        taskWorkspace = TaskWorkspaceModel(initialTasks: snapshot?.tasks)
-        notesWorkspace = NotesWorkspaceModel(initialNotes: snapshot?.notes ?? [])
+        taskWorkspace = TaskWorkspaceModel(clock: clock, calendar: calendar, initialTasks: snapshot?.tasks)
+        notesWorkspace = NotesWorkspaceModel(initialNotes: snapshot?.notes ?? [], clock: clock)
+        persistence.onResult = { [weak self] error in
+            DispatchQueue.main.async { self?.storageError = error.map { "预览数据保存失败：\($0.localizedDescription)" } }
+        }
         if let failure { loadFailed = true; storageError = "预览数据读取失败，自动保存已停用：\(failure.localizedDescription)" }
         taskWorkspace.$revision.dropFirst().sink { [weak self] _ in
             self?.savePreview()
@@ -60,10 +65,11 @@ final class AppEnvironment: ObservableObject {
 
     private func savePreview() {
         guard !loadFailed else { return }
-        do {
-            try repository.save(NativeWorkspaceSnapshot(tasks: taskWorkspace.allTasks, notes: notesWorkspace.notes))
-            storageError = nil
-        } catch { storageError = "预览数据保存失败：\(error.localizedDescription)" }
+        persistence.schedule(NativeWorkspaceSnapshot(tasks: taskWorkspace.allTasks, notes: notesWorkspace.notes))
+    }
+
+    func flush(completion: @escaping (Error?) -> Void) {
+        persistence.flush(completion: completion)
     }
 
     func newTask() {

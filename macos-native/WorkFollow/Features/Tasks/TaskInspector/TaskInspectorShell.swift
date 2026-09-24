@@ -143,7 +143,7 @@ struct TaskInspectorShell: View {
     private func documentEditor(_ task: Task) -> some View {
         ZStack(alignment: .topLeading) {
             DocumentEditor(
-                taskID: task.id,
+                documentID: task.id,
                 document: task.document,
                 onDocumentChange: { _ = workspace.setDocument(task.id, $0) },
                 onEscape: handleEscape,
@@ -153,7 +153,12 @@ struct TaskInspectorShell: View {
                     } else if presentation.editingTarget == .body {
                         presentation.editingTarget = .none
                     }
-                }
+                },
+                profile: DocumentProfile(commands: [
+                    DocumentCommand(id: "task.child", title: "创建子任务", group: "任务", keywords: "subtask child") { _ in
+                        if let id = workspace.createChild(task.id).taskID { workspace.select(id) }
+                    }
+                ].filter { _ in task.parentID == nil })
             )
             .id(task.id)
 
@@ -181,18 +186,7 @@ struct TaskInspectorShell: View {
         .help(field.emptyLabel)
         .accessibilityLabel(field.date(in: task).map { "\(field.emptyLabel)：\(dateLabel($0))" } ?? field.emptyLabel)
         .popover(isPresented: popoverBinding(field.popover), arrowEdge: .bottom) {
-            SchedulePopoverView(
-                title: field.title,
-                selectedDate: field.date(in: task),
-                today: workspace.dateFromToday(0),
-                tomorrow: workspace.dateFromToday(1),
-                nextWeek: workspace.dateFromToday(7)
-            ) { date in
-                if field == .due {
-                    _ = workspace.setDueDate(task.id, date)
-                } else {
-                    _ = workspace.setDeadline(task.id, date)
-                }
+            TaskDatePopover(task: task, workspace: workspace, deadline: field == .deadline) {
                 presentation.activePopover = nil
             }
         }
@@ -289,51 +283,6 @@ private enum ScheduleField: Equatable {
 
     func date(in task: Task) -> Date? {
         self == .due ? task.schedule.dueAt : task.schedule.deadlineAt
-    }
-}
-
-private struct SchedulePopoverView: View {
-    let title: String
-    let today: Date
-    let tomorrow: Date
-    let nextWeek: Date
-    let onSelect: (Date?) -> Void
-    @State private var customDate: Date
-
-    init(title: String, selectedDate: Date?, today: Date, tomorrow: Date,
-         nextWeek: Date, onSelect: @escaping (Date?) -> Void) {
-        self.title = title
-        self.today = today
-        self.tomorrow = tomorrow
-        self.nextWeek = nextWeek
-        self.onSelect = onSelect
-        self._customDate = State(initialValue: selectedDate ?? today)
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: WFSpace.md) {
-            Text(title).font(WFType.section)
-            HStack {
-                quickDate("今天", date: today)
-                quickDate("明天", date: tomorrow)
-                quickDate("下周", date: nextWeek)
-            }
-            Divider()
-            DatePicker("自选日期", selection: $customDate, displayedComponents: .date)
-                .datePickerStyle(.graphical)
-                .labelsHidden()
-                .onChange(of: customDate) { _, date in onSelect(date) }
-            Button("无日期") { onSelect(nil) }
-                .frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .padding(WFSpace.lg)
-        .frame(width: 300)
-    }
-
-    private func quickDate(_ title: String, date: Date) -> some View {
-        Button(title) { onSelect(date) }
-            .buttonStyle(.bordered)
-            .frame(maxWidth: .infinity)
     }
 }
 

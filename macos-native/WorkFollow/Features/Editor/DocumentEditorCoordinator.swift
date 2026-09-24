@@ -3,33 +3,37 @@ import SwiftUI
 
 @MainActor
 final class DocumentEditorCoordinator: NSObject, NSTextViewDelegate {
-    private(set) var taskID: UUID
+    private(set) var documentID: UUID
     private(set) var editorState: DocumentEditorState
     private var document: NativeDocument
     private var onDocumentChange: (NativeDocument) -> Void
     private var onEscape: () -> InspectorEscapeEffect
     private var onEditingChanged: (Bool) -> Void
 
-    init(taskID: UUID, document: NativeDocument,
+    init(documentID: UUID, document: NativeDocument,
          onDocumentChange: @escaping (NativeDocument) -> Void,
          onEscape: @escaping () -> InspectorEscapeEffect,
          onEditingChanged: @escaping (Bool) -> Void) {
-        self.taskID = taskID
-        self.editorState = DocumentEditorState(taskID: taskID)
+        self.documentID = documentID
+        self.editorState = DocumentEditorState(documentID: documentID)
         self.document = document
         self.onDocumentChange = onDocumentChange
         self.onEscape = onEscape
         self.onEditingChanged = onEditingChanged
     }
 
-    func update(_ textView: NativeTextView, taskID: UUID, document: NativeDocument,
+    func update(_ textView: NativeTextView, documentID: UUID, document: NativeDocument,
                 onDocumentChange: @escaping (NativeDocument) -> Void,
                 onEscape: @escaping () -> InspectorEscapeEffect,
                 onEditingChanged: @escaping (Bool) -> Void) {
-        if self.taskID != taskID {
+        if self.documentID != documentID {
             flushPendingComposition(in: textView)
-            self.taskID = taskID
-            editorState.bind(to: taskID)
+            textView.dismissSlash()
+            textView.documentIdentity = documentID
+            textView.undoManager?.removeAllActions()
+            self.documentID = documentID
+            editorState.bind(to: documentID)
+            textView.typingAttributes = DocumentTextCodec.attributes(kind: .paragraph, marks: [])
             self.document = document
             textView.textStorage?.setAttributedString(DocumentTextCodec.render(document))
             textView.setSelectedRange(editorState.selectedRange)
@@ -57,6 +61,15 @@ final class DocumentEditorCoordinator: NSObject, NSTextViewDelegate {
     func textViewDidChangeSelection(_ notification: Notification) {
         guard let textView = notification.object as? NSTextView else { return }
         editorState.updateSelection(textView.selectedRange())
+    }
+
+    func textView(_ textView: NSTextView, doubleClickedOn cell: NSTextAttachmentCellProtocol,
+                  in cellFrame: NSRect, at charIndex: Int) {
+        guard let storage = textView.textStorage, charIndex < storage.length,
+              let data = storage.attribute(DocumentTextCodec.attachmentKey, at: charIndex, effectiveRange: nil) as? Data,
+              let attachment = try? JSONDecoder().decode(NativeAttachment.self, from: data),
+              let url = NativeAttachmentFiles.url(for: attachment) else { return }
+        NSWorkspace.shared.open(url)
     }
 
     func flushPendingComposition(in textView: NativeTextView) {

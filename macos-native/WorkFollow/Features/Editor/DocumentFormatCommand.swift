@@ -4,6 +4,18 @@ struct DocumentFormatCommand {
     let title: String
     let block: DocumentBlockKind?
     let mark: DocumentMark?
+    var keywords: String {
+        switch block {
+        case .paragraph: return "paragraph text"
+        case .heading: return "heading title h1 h2"
+        case .quote: return "quote"
+        case .code: return "code"
+        case .bullet: return "bullet list"
+        case .ordered: return "ordered list"
+        case .checklist: return "checklist todo checkbox"
+        default: return String(describing: mark)
+        }
+    }
     static let commands: [Self] = [
         .init(title: "正文", block: .paragraph, mark: nil),
         .init(title: "一级标题", block: .heading(1), mark: nil),
@@ -12,6 +24,8 @@ struct DocumentFormatCommand {
         .init(title: "代码块", block: .code, mark: nil),
         .init(title: "无序列表", block: .bullet, mark: nil),
         .init(title: "有序列表", block: .ordered, mark: nil),
+        .init(title: "待办清单", block: .checklist(false), mark: nil),
+        .init(title: "勾选清单项", block: .checklist(true), mark: nil),
         .init(title: "粗体", block: nil, mark: .bold),
         .init(title: "斜体", block: nil, mark: .italic),
         .init(title: "下划线", block: nil, mark: .underline),
@@ -29,16 +43,22 @@ extension NativeTextView {
             item.target = self
             menu.addItem(item)
         }
+        menu.addItem(.separator())
+        for (title, selector) in [("编辑链接…", #selector(editDocumentLink(_:))), ("移除链接", #selector(removeDocumentLink(_:))), ("插入附件…", #selector(insertDocumentAttachment(_:)))] {
+            let item = NSMenuItem(title: title, action: selector, keyEquivalent: "")
+            item.target = self
+            menu.addItem(item)
+        }
         return menu
     }
 
     @objc func applyDocumentFormat(_ sender: NSMenuItem) {
         guard DocumentFormatCommand.commands.indices.contains(sender.tag) else { return }
         let command = DocumentFormatCommand.commands[sender.tag]
-        if let slashRange {
-            self.slashRange = nil
-            insertText("", replacementRange: slashRange)
-        }
+        applyFormat(command)
+    }
+
+    func applyFormat(_ command: DocumentFormatCommand) {
         var range = selectedRange()
         if command.block != nil { range = (string as NSString).paragraphRange(for: range) }
         if range.length == 0 {

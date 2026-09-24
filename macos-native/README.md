@@ -1,6 +1,6 @@
 # WorkFollow Native 实验
 
-> 当前以 [功能迁移清单](../docs/native-feature-migration-status.md) 为准。已扩展任务/笔记/垃圾桶、四象限、日历、富文本、提醒、附件及独立预览持久化。本批只编译，交互与回归待统一验收；下面早期阶段记录不代表这些新增功能已经验收。
+> 当前以 [功能迁移清单](../docs/native-feature-migration-status.md) 为准。已按新路线完成 Stage A 基础设施收口，完整测试 48/48 通过；全量交互、IME、性能仍待统一验收。下面早期阶段记录不代表所有新增功能已经验收。
 
 Native macOS 实验版本，不是 Flutter 的替代版本。要求 macOS 14+、支持同步文件组的 Xcode 16+；本轮使用 Xcode 26.6 编译。
 

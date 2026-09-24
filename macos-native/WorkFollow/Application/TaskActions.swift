@@ -3,10 +3,12 @@ import Foundation
 final class TaskActions {
     private let store: WorkspaceStore
     private let clock: () -> Date
+    private let calendar: Calendar
 
-    init(store: WorkspaceStore, clock: @escaping () -> Date = Date.init) {
+    init(store: WorkspaceStore, clock: @escaping () -> Date = Date.init, calendar: Calendar = .current) {
         self.store = store
         self.clock = clock
+        self.calendar = calendar
     }
 
     @discardableResult
@@ -55,9 +57,8 @@ final class TaskActions {
         // Only the directly completed recurrence starts a new occurrence.
         // Children carried by parent completion must not spawn separate chains.
         if task.recurrence != .never {
-            let calendar = Calendar.current
-            let base = task.schedule.dueAt ?? now
-            if let next = calendar.date(byAdding: task.recurrence.component, value: 1, to: base) {
+            let base = task.schedule.dueAt ?? calendar.startOfDay(for: now)
+            if let next = RecurrenceEngine.next(for: task, now: now, calendar: calendar) {
                 let days = calendar.dateComponents([.day], from: base, to: next).day ?? 1
                 func nextOccurrence(_ source: Task, parentID: UUID?) -> Task {
                     var value = Task(id: UUID(), title: source.title, document: source.document,
@@ -69,10 +70,15 @@ final class TaskActions {
                     value.schedule.deadlineAt = source.schedule.deadlineAt.flatMap { calendar.date(byAdding: .day, value: days, to: $0) }
                     value.reminderAt = source.reminderAt.flatMap { calendar.date(byAdding: .day, value: days, to: $0) }
                     value.attachments = source.attachments
+                    value.recurrenceRule = source.recurrenceRule
                     return value
                 }
                 var occurrence = nextOccurrence(task, parentID: task.parentID)
                 occurrence.schedule.dueAt = next
+                var rule = task.recurrenceRule ?? RecurrenceRule()
+                rule.monthDay = rule.monthDay ?? calendar.component(.day, from: base)
+                rule.remainingCount = rule.remainingCount.map { $0 - 1 }
+                occurrence.recurrenceRule = rule
                 snapshot.append(occurrence)
                 if task.parentID == nil {
                     snapshot += store.children(of: task.id).map { nextOccurrence($0, parentID: occurrence.id) }
@@ -149,12 +155,12 @@ final class TaskActions {
 
     @discardableResult
     func setTitle(_ id: UUID, _ title: String) -> TaskActionResult {
-        edit(id) { $0.title = title.trimmingCharacters(in: .whitespacesAndNewlines) }
+        edit(id, undoPolicy: .skip) { $0.title = title.trimmingCharacters(in: .whitespacesAndNewlines) }
     }
 
     @discardableResult
     func setDocument(_ id: UUID, _ document: NativeDocument) -> TaskActionResult {
-        edit(id) { $0.document = document }
+        edit(id, undoPolicy: .skip) { $0.document = document }
     }
 
     @discardableResult
@@ -172,7 +178,18 @@ final class TaskActions {
 
     @discardableResult
     func setRepeat(_ id: UUID, _ recurrence: TaskRepeat) -> TaskActionResult {
-        edit(id) { $0.recurrence = recurrence }
+        setRecurrence(id, frequency: recurrence, rule: nil)
+    }
+
+    @discardableResult
+    func setRecurrence(_ id: UUID, frequency: TaskRepeat, rule: RecurrenceRule?) -> TaskActionResult {
+        edit(id) { task in
+            task.recurrence = frequency
+            var normalized = rule
+            normalized?.interval = max(1, rule?.interval ?? 1)
+            normalized?.remainingCount = rule?.remainingCount.map { max(1, $0) }
+            task.recurrenceRule = frequency == .never ? nil : normalized
+        }
     }
 
     @discardableResult
@@ -192,15 +209,16 @@ final class TaskActions {
         edit(id) { $0.schedule = schedule }
     }
 
-    private func edit(_ id: UUID, mutation: (inout Task) -> Void) -> TaskActionResult {
+    private func edit(_ id: UUID, undoPolicy: WorkspaceStore.UndoPolicy = .record, mutation: (inout Task) -> Void) -> TaskActionResult {
         var snapshot = store.tasks
         guard let index = snapshot.firstIndex(where: { $0.id == id }) else {
             return .failure(.missingTask)
         }
         guard snapshot[index].deletedAt == nil else { return .failure(.deletedTask) }
         mutation(&snapshot[index])
+        guard snapshot[index] != store.tasks[index] else { return .success(id) }
         snapshot[index].updatedAt = clock()
-        store.commit(snapshot)
+        store.commit(snapshot, undoPolicy: undoPolicy)
         return .success(id)
     }
 

@@ -2,16 +2,15 @@ import AppKit
 import SwiftUI
 
 struct DocumentEditor: NSViewRepresentable {
-    let taskID: UUID
+    let documentID: UUID
     let document: NativeDocument
     let onDocumentChange: (NativeDocument) -> Void
     let onEscape: () -> InspectorEscapeEffect
     let onEditingChanged: (Bool) -> Void
-    var selectionActionTitle: String? = nil
-    var onSelectionAction: ((String) -> Void)? = nil
+    var profile = DocumentProfile()
 
     func makeCoordinator() -> DocumentEditorCoordinator {
-        DocumentEditorCoordinator(taskID: taskID, document: document,
+        DocumentEditorCoordinator(documentID: documentID, document: document,
                                   onDocumentChange: onDocumentChange,
                                   onEscape: onEscape,
                                   onEditingChanged: onEditingChanged)
@@ -25,21 +24,20 @@ struct DocumentEditor: NSViewRepresentable {
         scrollView.autohidesScrollers = true
 
         let textView = NativeTextView(frame: .zero, textContainer: nil)
+        textView.documentIdentity = documentID
         textView.delegate = context.coordinator
         textView.textStorage?.setAttributedString(DocumentTextCodec.render(document))
         textView.onEscape = onEscape
         textView.onEditingChanged = onEditingChanged
-        textView.selectionActionTitle = selectionActionTitle
-        textView.onSelectionAction = onSelectionAction
+        textView.profile = profile
         scrollView.documentView = textView
         return scrollView
     }
 
     func updateNSView(_ scrollView: NSScrollView, context: Context) {
         guard let textView = scrollView.documentView as? NativeTextView else { return }
-        textView.selectionActionTitle = selectionActionTitle
-        textView.onSelectionAction = onSelectionAction
-        context.coordinator.update(textView, taskID: taskID, document: document,
+        textView.profile = profile
+        context.coordinator.update(textView, documentID: documentID, document: document,
                                    onDocumentChange: onDocumentChange,
                                    onEscape: onEscape,
                                    onEditingChanged: onEditingChanged)
@@ -51,6 +49,8 @@ struct DocumentEditor: NSViewRepresentable {
         textView.delegate = nil
         textView.onEscape = nil
         textView.onEditingChanged = nil
-        textView.onSelectionAction = nil
+        textView.dismissSlash()
+        textView.documentIdentity = UUID()
+        textView.profile = DocumentProfile()
     }
 }

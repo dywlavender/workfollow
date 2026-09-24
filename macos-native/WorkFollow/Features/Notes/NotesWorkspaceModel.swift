@@ -4,7 +4,7 @@ import Foundation
 @MainActor
 final class NotesWorkspaceModel: ObservableObject {
     private let store: NoteStore
-    init(initialNotes: [Note] = []) { store = NoteStore(notes: initialNotes) }
+    init(initialNotes: [Note] = [], clock: @escaping () -> Date = Date.init) { store = NoteStore(notes: initialNotes, clock: clock) }
     @Published var selectedID: UUID?
     @Published private(set) var revision = 0
     var notes: [Note] { _ = revision; return store.notes }

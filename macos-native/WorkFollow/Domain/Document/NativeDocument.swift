@@ -88,10 +88,12 @@ enum DocumentBlockKind: Equatable, Codable {
 struct DocumentRun: Equatable, Codable {
     var text: String
     var marks: Set<DocumentMark>
+    var attachment: NativeAttachment?
 
-    init(text: String, marks: Set<DocumentMark> = []) {
+    init(text: String, marks: Set<DocumentMark> = [], attachment: NativeAttachment? = nil) {
         self.text = text
         self.marks = marks
+        self.attachment = attachment
     }
 }
 

@@ -10,9 +10,7 @@ struct TaskAttributesView: View {
             VStack(alignment: .leading, spacing: 12) {
                 ReminderAttributesView(task: task, workspace: workspace, service: environment.reminders)
                 AttachmentListView(attachments: task.attachments) { workspace.setAttachments(task.id, $0) }
-                Picker("重复", selection: Binding(get: { task.recurrence }, set: { workspace.setRepeat(task.id, $0) })) {
-                    ForEach(TaskRepeat.allCases, id: \.self) { Text($0.title).tag($0) }
-                }
+                TaskRecurrenceEditor(task: task, workspace: workspace)
                 HStack {
                     TextField("标签，用逗号分隔", text: $tagsDraft)
                         .onSubmit(saveTags)
@@ -23,7 +21,7 @@ struct TaskAttributesView: View {
                     Toggle("指定时间", isOn: Binding(get: { task.schedule.hasTime }, set: { enabled in
                         var value = task.schedule
                         value.hasTime = enabled
-                        if !enabled { value.dueAt = Calendar.current.startOfDay(for: due) }
+                        if !enabled { value.dueAt = workspace.calendar.startOfDay(for: due) }
                         _ = workspace.setSchedule(task.id, value)
                     }))
                     if task.schedule.hasTime {
@@ -50,7 +48,7 @@ private struct ReminderAttributesView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Toggle("提醒", isOn: Binding(get: { task.reminderAt != nil }, set: {
-                workspace.setReminder(task.id, $0 ? Date().addingTimeInterval(3600) : nil)
+                workspace.setReminder(task.id, $0 ? workspace.clock().addingTimeInterval(3600) : nil)
             }))
             if let reminder = task.reminderAt {
                 DatePicker("提醒时间", selection: Binding(get: { reminder }, set: { workspace.setReminder(task.id, $0) }))
