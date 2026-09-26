@@ -40,7 +40,7 @@ final class StageAInfrastructureTests: XCTestCase {
             let parent = model.createTask(title: "match parent", in: .inbox).taskID!
             let child = model.createChild(parent, title: "match child").taskID!
             XCTAssertEqual(model.visibleNodes(for: .inbox, query: TaskListQuery(search: "match")).map(\.task.id), [parent, child])
-            XCTAssertTrue(model.expandedTaskIDs.isEmpty)
+            XCTAssertTrue(model.collapsedTaskIDs.isEmpty)
         }
     }
 

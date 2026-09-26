@@ -13,8 +13,14 @@ final class TaskWorkspaceModel: ObservableObject {
     ]
 
     @Published private(set) var selectedTaskID: UUID?
-    @Published private(set) var expandedTaskIDs: Set<UUID> = []
+    @Published private(set) var collapsedTaskIDs: Set<UUID> = []
+    @Published private(set) var pendingChildTitleEditorID: UUID?
     @Published private(set) var revision = 0
+    @Published private(set) var taskListPaneWidth = WFMetrics.listPreferred
+    @Published var activeList: String?
+    @Published var activeTag: String?
+    @Published var bulkSelection: Set<UUID> = []
+    @Published private(set) var bulkAnchorTaskID: UUID?
 
     private let store: WorkspaceStore
     private let actions: TaskActions
@@ -23,7 +29,7 @@ final class TaskWorkspaceModel: ObservableObject {
 
     init(clock: @escaping () -> Date = Date.init,
          calendar: Calendar = .current,
-         seedDemoData: Bool = true, initialTasks: [Task]? = nil) {
+         seedDemoData: Bool = true, initialTasks: [Task]? = nil, initialLists: [String] = []) {
         self.clock = clock
         self.calendar = calendar
         let store = WorkspaceStore()
@@ -31,6 +37,102 @@ final class TaskWorkspaceModel: ObservableObject {
         self.actions = TaskActions(store: store, clock: clock, calendar: calendar)
         if let initialTasks { store.commit(initialTasks); store.clearUndo() }
         else if seedDemoData { seed() }
+        store.commit(store.tasks, lists: initialLists)
+        store.clearUndo()
+    }
+
+    var listNames: [String] {
+        Array(Set(store.lists + allTasks.map { $0.list.name })).filter { $0 != TaskList.inbox.name }.sorted()
+    }
+    var allListNames: [String] { [TaskList.inbox.name] + listNames }
+    var tagNames: [String] { Array(Set(allTasks.flatMap(\.tags))).sorted() }
+
+    @discardableResult
+    func saveList(_ raw: String, replacing old: String? = nil) -> Bool {
+        let name = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty, name != TaskList.inbox.name,
+              name == old || !allListNames.contains(name) else { return false }
+        actions.renameList(old, to: name)
+        if activeList == old { activeList = name }
+        revision += 1
+        return true
+    }
+    func removeList(_ name: String) {
+        actions.removeList(name)
+        if activeList == name { activeList = nil }
+        revision += 1
+    }
+    func renameTag(_ old: String, to value: String?) {
+        actions.renameTag(old, to: value)
+        if activeTag == old { activeTag = value }
+        revision += 1
+    }
+    func applyBulk(_ operation: TaskBatchOperation) {
+        actions.batch(bulkSelection, operation: operation)
+        clearBulkSelection()
+        revision += 1
+        if selectedTask?.deletedAt != nil { select(nil) }
+    }
+
+    func setBulkSelected(_ id: UUID, _ selected: Bool) {
+        if selected { bulkSelection.insert(id) } else { bulkSelection.remove(id) }
+        bulkAnchorTaskID = id
+    }
+
+    func toggleBulkSelection(_ id: UUID) {
+        if !bulkSelection.insert(id).inserted { bulkSelection.remove(id) }
+        bulkAnchorTaskID = id
+    }
+
+    func setBulkSelection(in order: [UUID]) {
+        bulkSelection = Set(order)
+        bulkAnchorTaskID = order.first
+    }
+
+    func extendBulkSelection(to id: UUID, in order: [UUID]) {
+        guard let anchor = bulkAnchorTaskID,
+              let start = order.firstIndex(of: anchor),
+              let end = order.firstIndex(of: id) else {
+            bulkSelection.insert(id)
+            return
+        }
+        bulkSelection.formUnion(order[min(start, end)...max(start, end)])
+    }
+
+    func clearBulkSelection() {
+        bulkSelection.removeAll()
+        bulkAnchorTaskID = nil
+    }
+
+    /// One session-wide width is shared by task lists and task trash, matching
+    /// the Flutter workspace UI state without mixing presentation into task data.
+    func setTaskListPaneWidth(_ width: CGFloat) {
+        guard width.isFinite, taskListPaneWidth != width else { return }
+        taskListPaneWidth = min(max(width, WFMetrics.listMinimum), WFMetrics.listMaximum)
+    }
+
+    func selectFromKeyboard(_ id: UUID) {
+        clearBulkSelection()
+        select(id)
+    }
+    func duplicate(_ id: UUID) { didMutate(actions.duplicate(id)) }
+    func skip(_ id: UUID) { didMutate(actions.skip(id)); select(nil) }
+    func reorder(_ id: UUID, before target: UUID) { actions.reorder(id, before: target); revision += 1 }
+    func postponeOverdue(_ ids: Set<UUID>) {
+        actions.postponeOverdue(ids, to: clock())
+        revision += 1
+    }
+
+    @discardableResult
+    func createDraft(title: String, list: String, schedule: TaskSchedule, priority: TaskPriority,
+                     tags: [String], reminder: Date?, repeatFrequency: TaskRepeat,
+                     recurrenceRule: RecurrenceRule? = nil) -> TaskActionResult {
+        let result = actions.createDraft(title: title, list: list, schedule: schedule, priority: priority,
+                                         tags: tags, reminder: reminder, frequency: repeatFrequency,
+                                         recurrenceRule: recurrenceRule)
+        didMutate(result)
+        if let id = result.taskID { select(id) }
+        return result
     }
 
     var selectedTask: Task? {
@@ -44,6 +146,12 @@ final class TaskWorkspaceModel: ObservableObject {
     func setRepeat(_ id: UUID, _ value: TaskRepeat) { didMutate(actions.setRepeat(id, value)) }
     func setRecurrence(_ id: UUID, frequency: TaskRepeat, rule: RecurrenceRule?) {
         didMutate(actions.setRecurrence(id, frequency: frequency, rule: rule))
+    }
+    func saveTiming(_ id: UUID, schedule: TaskSchedule, reminder: Date?, frequency: TaskRepeat,
+                    recurrenceRule: RecurrenceRule? = nil) {
+        let result = actions.saveTiming(id, schedule: schedule, reminder: reminder,
+                                        frequency: frequency, recurrenceRule: recurrenceRule)
+        didMutate(result)
     }
     var deletedTasks: [Task] {
         allTasks.filter { $0.deletedAt != nil }.sorted {
@@ -73,7 +181,6 @@ final class TaskWorkspaceModel: ObservableObject {
         case .inbox: return .inbox
         case .allTasks: return .allTasks
         case .nextSevenDays: return .nextSevenDays
-        case .overdue: return .overdue
         case .completed: return .completed
         default: return nil
         }
@@ -95,23 +202,30 @@ final class TaskWorkspaceModel: ObservableObject {
         return count(for: scope)
     }
 
-    func nodes(for group: TaskListGroup, scope: TaskListScope, query: TaskListQuery = TaskListQuery()) -> [TaskTreeNode] {
+    func nodes(for group: TaskListGroup, scope: TaskListScope, query: TaskListQuery = TaskListQuery(),
+               orderedRoots: [Task]? = nil) -> [TaskTreeNode] {
         _ = revision
         let matching = TaskListProjection.matches(in: scope, store: store, now: clock(), calendar: calendar, query: query)
-        return TaskTreeProjection.nodes(roots: group.tasks, store: store,
-                                        expanded: query.isFiltering ? Set(group.tasks.map(\.id)) : expandedTaskIDs,
-                                        matchingTaskIDs: Set(matching.map(\.id)))
+        let followsMatchedParent = (scope == .today || scope == .nextSevenDays) &&
+            query.search.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        let roots = Set(group.tasks.map(\.id))
+        return TaskTreeProjection.nodes(roots: orderedRoots ?? group.tasks, store: store,
+                                        expanded: query.isFiltering ? roots : roots.subtracting(collapsedTaskIDs),
+                                        matchingTaskIDs: followsMatchedParent ? nil : Set(matching.map(\.id)))
     }
 
     func visibleNodes(for scope: TaskListScope, query: TaskListQuery = TaskListQuery()) -> [TaskTreeNode] {
         groups(for: scope, query: query).flatMap { nodes(for: $0, scope: scope, query: query) }
     }
 
-    func select(_ id: UUID?) { selectedTaskID = id }
+    func select(_ id: UUID?) {
+        selectedTaskID = id
+        bulkAnchorTaskID = id
+    }
 
     func toggleExpanded(_ id: UUID) {
-        if !expandedTaskIDs.insert(id).inserted {
-            expandedTaskIDs.remove(id)
+        if !collapsedTaskIDs.insert(id).inserted {
+            collapsedTaskIDs.remove(id)
         }
     }
 
@@ -121,7 +235,7 @@ final class TaskWorkspaceModel: ObservableObject {
         let current = nodes.firstIndex { $0.task.id == selectedTaskID }
         let index = current.map { min(max($0 + offset, 0), nodes.count - 1) }
             ?? (offset < 0 ? nodes.count - 1 : 0)
-        selectedTaskID = nodes[index].task.id
+        selectFromKeyboard(nodes[index].task.id)
     }
 
     @discardableResult
@@ -142,6 +256,21 @@ final class TaskWorkspaceModel: ObservableObject {
     }
 
     @discardableResult
+    func requestChildTitleEditor(for parentID: UUID) -> UUID? {
+        let result = actions.createChild(parentID)
+        didMutate(result)
+        guard let childID = result.taskID else { return nil }
+        select(parentID)
+        pendingChildTitleEditorID = childID
+        return childID
+    }
+
+    func consumePendingChildTitleEditor() -> UUID? {
+        defer { pendingChildTitleEditorID = nil }
+        return pendingChildTitleEditorID
+    }
+
+    @discardableResult
     func complete(_ id: UUID, in scope: TaskListScope? = nil) -> TaskActionResult {
         let result = actions.complete(id)
         didMutate(result, scope: scope)
@@ -157,7 +286,14 @@ final class TaskWorkspaceModel: ObservableObject {
 
     @discardableResult
     func changeStatus(_ task: Task, in scope: TaskListScope? = nil) -> TaskActionResult {
-        task.status == .completed ? restore(task.id, in: scope) : complete(task.id, in: scope)
+        task.isClosed ? restore(task.id, in: scope) : complete(task.id, in: scope)
+    }
+
+    @discardableResult
+    func abandon(_ id: UUID, in scope: TaskListScope? = nil) -> TaskActionResult {
+        let result = actions.abandon(id)
+        didMutate(result, scope: scope)
+        return result
     }
 
     @discardableResult
@@ -202,10 +338,27 @@ final class TaskWorkspaceModel: ObservableObject {
         return result
     }
 
+    func setSourceNote(_ id: UUID, _ noteID: UUID) { didMutate(actions.setSourceNote(id, noteID)) }
+
     @discardableResult
     func setPriority(_ id: UUID, _ priority: TaskPriority) -> TaskActionResult {
         let result = actions.setPriority(id, priority)
         didMutate(result)
+        return result
+    }
+
+    @discardableResult
+    func setPinned(_ id: UUID, _ isPinned: Bool) -> TaskActionResult {
+        let result = actions.setPinned(id, isPinned)
+        didMutate(result)
+        return result
+    }
+
+    @discardableResult
+    func convertToNote(_ id: UUID, noteID: UUID, undoNote: @escaping () -> Void) -> TaskActionResult {
+        let result = actions.convertToNote(id, noteID: noteID, undoNote: undoNote)
+        didMutate(result)
+        if result.taskID != nil { select(nil) }
         return result
     }
 
@@ -224,6 +377,31 @@ final class TaskWorkspaceModel: ObservableObject {
         schedule.dueAt = date.map(calendar.startOfDay(for:))
         schedule.hasTime = false
         return setSchedule(id, schedule)
+    }
+
+    @discardableResult
+    func clearDueDate(_ id: UUID) -> TaskActionResult {
+        guard let task = task(for: id) else { return .failure(.missingTask) }
+        var schedule = task.schedule
+        schedule.dueAt = nil
+        schedule.hasTime = false
+        let result = actions.saveTiming(id, schedule: schedule, reminder: task.reminderAt,
+                                        frequency: task.recurrence,
+                                        recurrenceRule: task.recurrenceRule)
+        didMutate(result)
+        return result
+    }
+
+    @discardableResult
+    func clearScheduledProperties(_ id: UUID) -> TaskActionResult {
+        guard let task = task(for: id) else { return .failure(.missingTask) }
+        var schedule = task.schedule
+        schedule.dueAt = nil
+        schedule.hasTime = false
+        let result = actions.saveTiming(id, schedule: schedule, reminder: nil,
+                                        frequency: .never, recurrenceRule: nil)
+        didMutate(result)
+        return result
     }
 
     @discardableResult
@@ -260,7 +438,6 @@ final class TaskWorkspaceModel: ObservableObject {
             schedule: TaskSchedule(dueAt: today),
             priority: .high
         ).taskID else { return }
-        expandedTaskIDs.insert(parentID)
         if let first = actions.createChild(parentID, title: "归纳高频问题").taskID {
             _ = actions.setSchedule(first, TaskSchedule(dueAt: today))
         }

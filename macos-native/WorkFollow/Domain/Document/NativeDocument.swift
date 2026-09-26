@@ -83,6 +83,7 @@ enum DocumentBlockKind: Equatable, Codable {
     case checklist(Bool)
     case quote
     case code
+    case divider
 }
 
 struct DocumentRun: Equatable, Codable {

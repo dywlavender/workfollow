@@ -63,6 +63,10 @@ final class DocumentEditorCoordinator: NSObject, NSTextViewDelegate {
         editorState.updateSelection(textView.selectedRange())
     }
 
+    func textView(_ textView: NSTextView, clickedOnLink link: Any, at charIndex: Int) -> Bool {
+        (textView as? NativeTextView)?.profile.onOpenLink?(String(describing: link)) ?? false
+    }
+
     func textView(_ textView: NSTextView, doubleClickedOn cell: NSTextAttachmentCellProtocol,
                   in cellFrame: NSRect, at charIndex: Int) {
         guard let storage = textView.textStorage, charIndex < storage.length,

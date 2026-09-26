@@ -4,11 +4,23 @@ import XCTest
 
 @MainActor
 final class SlashSessionTests: XCTestCase {
+    func testTaskSlashTriggersAfterTextAndClosesWhenTypingContinues() {
+        let editor = NativeTextView(frame: .zero, textContainer: nil)
+        editor.profile = DocumentProfile(taskSlash: true)
+        editor.insertText("正文", replacementRange: NSRange(location: 0, length: 0))
+        editor.insertText("/", replacementRange: NSRange(location: 2, length: 0))
+        XCTAssertNotNil(editor.slashSession)
+        XCTAssertEqual(editor.profile.slashCommands.map(\.title), ["一级标题", "二级标题", "三级标题", "无序列表", "有序列表", "待办清单", "引用", "水平分割线", "附件"])
+        editor.insertText("a", replacementRange: NSRange(location: 3, length: 0))
+        XCTAssertNil(editor.slashSession)
+        XCTAssertEqual(editor.string, "正文/a")
+    }
+
     func testUTF16RangeSearchAndKeyboardWrap() {
         var session = SlashSession(start: 3)
         XCTAssertTrue(session.update(text: "😀 /标题", selection: NSRange(location: 6, length: 0)))
         XCTAssertEqual(session.range, NSRange(location: 3, length: 3))
-        XCTAssertEqual(session.results(in: DocumentProfile().slashCommands).count, 2)
+        XCTAssertEqual(session.results(in: DocumentProfile().slashCommands).count, 3)
         session.move(-1, count: 2)
         XCTAssertEqual(session.selectedIndex, 1)
         session.move(1, count: 2)

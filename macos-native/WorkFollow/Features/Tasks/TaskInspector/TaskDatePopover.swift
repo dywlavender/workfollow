@@ -3,83 +3,43 @@ import SwiftUI
 struct TaskDateButton: View {
     let task: Task
     @ObservedObject var workspace: TaskWorkspaceModel
+    var timeOnly = false
     @State private var presented = false
     var body: some View {
         Button { presented = true } label: {
             if let date = task.schedule.dueAt {
-                Text(date.formatted(date: .abbreviated, time: task.schedule.hasTime ? .shortened : .omitted))
+                Text(timeOnly && task.schedule.hasTime
+                     ? Self.clockLabel(date, calendar: workspace.calendar)
+                     : TaskDateLabel.text(date, hasTime: task.schedule.hasTime, now: workspace.clock(), calendar: workspace.calendar))
                     .lineLimit(1)
             } else {
                 Image(systemName: "calendar.badge.plus")
             }
         }.buttonStyle(.plain).font(WFType.supporting)
-            .foregroundStyle(task.status == .completed ? WFColors.tertiaryText : WFColors.accent)
+            .foregroundStyle(task.isClosed ? WFColors.tertiaryText : isOverdue ? .red : WFColors.accent)
             .help("修改安排日期")
             .popover(isPresented: $presented) {
-                TaskDatePopover(task: task, workspace: workspace) { presented = false }
+                TaskDatePopoverV2(task: task, workspace: workspace) { presented = false }
             }
+    }
+
+    private var isOverdue: Bool {
+        guard let dueAt = task.schedule.dueAt else { return false }
+        return workspace.calendar.startOfDay(for: dueAt) < workspace.calendar.startOfDay(for: workspace.clock())
+    }
+
+    private static func clockLabel(_ date: Date, calendar: Calendar) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "zh_CN")
+        formatter.calendar = calendar
+        formatter.timeZone = calendar.timeZone
+        formatter.dateFormat = "HH:mm"
+        return formatter.string(from: date)
     }
 }
 
 /// A draft: selecting a day never mutates the task until Confirm is pressed.
-struct TaskDatePopover: View {
-    let taskID: UUID
-    @ObservedObject var workspace: TaskWorkspaceModel
-    var deadline = false
-    let onClose: () -> Void
-    @State private var date: Date
-    @State private var hasTime: Bool
-
-    init(task: Task, workspace: TaskWorkspaceModel, deadline: Bool = false, onClose: @escaping () -> Void) {
-        taskID = task.id
-        self.workspace = workspace
-        self.deadline = deadline
-        self.onClose = onClose
-        _date = State(initialValue: (deadline ? task.schedule.deadlineAt : task.schedule.dueAt) ?? workspace.dateFromToday(0))
-        _hasTime = State(initialValue: !deadline && task.schedule.hasTime)
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text(deadline ? "截止日期" : "安排日期").font(WFType.section)
-            HStack {
-                Button("今天") { chooseDay(workspace.dateFromToday(0)) }
-                Button("明天") { chooseDay(workspace.dateFromToday(1)) }
-                Button("下周") { chooseDay(workspace.dateFromToday(7)) }
-            }
-            DatePicker("日期", selection: Binding(get: { date }, set: chooseDay), displayedComponents: .date)
-                .datePickerStyle(.graphical).labelsHidden()
-            if !deadline {
-                Toggle("指定时间", isOn: $hasTime)
-                if hasTime { DatePicker("时间", selection: $date, displayedComponents: .hourAndMinute) }
-                Text("提醒与重复可在任务更多属性中设置。")
-                    .font(.caption).foregroundStyle(.secondary)
-            }
-            Divider()
-            HStack {
-                Button("清除") { save(clear: true) }
-                Spacer()
-                Button("取消", action: onClose)
-                Button("确定") { save(clear: false) }.buttonStyle(.borderedProminent)
-            }
-        }.padding(16).frame(width: 300)
-            .environment(\.calendar, workspace.calendar)
-            .environment(\.timeZone, workspace.calendar.timeZone)
-    }
-
-    private func chooseDay(_ day: Date) {
-        date = TaskDateDraft.movingDay(date, to: day, calendar: workspace.calendar)
-    }
-
-    private func save(clear: Bool) {
-        // Read current task here, so an open popover cannot overwrite other edits.
-        guard let current = workspace.task(for: taskID)?.schedule else { onClose(); return }
-        let schedule = TaskDateDraft.applying(date: clear ? nil : date, hasTime: hasTime,
-                                             deadline: deadline, to: current, calendar: workspace.calendar)
-        _ = workspace.setSchedule(taskID, schedule)
-        onClose()
-    }
-}
+/// The redesigned popover lives in TaskDatePopoverV2.
 
 struct TaskRecurrenceEditor: View {
     let task: Task
@@ -96,23 +56,34 @@ struct TaskRecurrenceEditor: View {
     }
 }
 
-private struct RecurrenceDraftView: View {
+/// Recurrence rule editor. Standalone in its own popover, or embedded as the
+/// 重复 sub-page of TaskDatePopoverV2 (same width, back instead of cancel).
+/// Saves immediately on 确定, matching TaskRecurrenceEditor's contract.
+struct RecurrenceDraftView: View {
     let task: Task
     @ObservedObject var workspace: TaskWorkspaceModel
+    var embedded = false
     let onClose: () -> Void
     @State private var frequency: TaskRepeat
     @State private var interval: Int
     @State private var ending: Int
     @State private var count: Int
     @State private var endDate: Date
+    @State private var weekday: Int
+    @State private var monthDay: Int
+    @State private var month: Int
 
-    init(task: Task, workspace: TaskWorkspaceModel, onClose: @escaping () -> Void) {
-        self.task = task; self.workspace = workspace; self.onClose = onClose
+    init(task: Task, workspace: TaskWorkspaceModel, embedded: Bool = false, onClose: @escaping () -> Void) {
+        self.task = task; self.workspace = workspace; self.embedded = embedded; self.onClose = onClose
         _frequency = State(initialValue: task.recurrence)
         _interval = State(initialValue: task.recurrenceRule?.interval ?? 1)
         _ending = State(initialValue: task.recurrenceRule?.endDate != nil ? 1 : task.recurrenceRule?.remainingCount != nil ? 2 : 0)
         _count = State(initialValue: task.recurrenceRule?.remainingCount ?? 10)
         _endDate = State(initialValue: task.recurrenceRule?.endDate ?? workspace.dateFromToday(30))
+        let base = task.schedule.dueAt ?? workspace.clock()
+        _weekday = State(initialValue: task.recurrenceRule?.weekday ?? workspace.calendar.component(.weekday, from: base))
+        _monthDay = State(initialValue: task.recurrenceRule?.monthDay ?? workspace.calendar.component(.day, from: base))
+        _month = State(initialValue: task.recurrenceRule?.month ?? workspace.calendar.component(.month, from: base))
     }
 
     var body: some View {
@@ -123,6 +94,17 @@ private struct RecurrenceDraftView: View {
             }
             if frequency != .never {
                 Stepper("间隔：\(interval) 个周期", value: $interval, in: 1...365)
+                if frequency == .weekly {
+                    Picker("星期", selection: $weekday) {
+                        ForEach(1...7, id: \.self) { day in Text(["周日", "周一", "周二", "周三", "周四", "周五", "周六"][day - 1]).tag(day) }
+                    }
+                }
+                if frequency == .yearly { Stepper("月份：\(month)", value: $month, in: 1...12) }
+                if frequency == .monthly || frequency == .yearly { Stepper("日期：\(monthDay) 日", value: $monthDay, in: 1...31) }
+                if frequency == .workdays || frequency == .holidays {
+                    Text("内置 2025–2026 年中国节假日；其他年份按普通周末计算。")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
                 Picker("结束", selection: $ending) {
                     Text("永不").tag(0); Text("指定日期（含当天）").tag(1); Text("指定次数").tag(2)
                 }
@@ -133,14 +115,13 @@ private struct RecurrenceDraftView: View {
             }
             HStack {
                 Spacer()
-                Button("取消", action: onClose)
+                Button(embedded ? "返回" : "取消", action: onClose)
                 Button("确定") {
-                    let base = workspace.task(for: task.id)?.schedule.dueAt ?? workspace.clock()
                     workspace.setRecurrence(task.id, frequency: frequency,
                         rule: RecurrenceRule(interval: interval,
                             endDate: ending == 1 ? endDate : nil,
                             remainingCount: ending == 2 ? count : nil,
-                            monthDay: frequency == task.recurrence ? task.recurrenceRule?.monthDay ?? workspace.calendar.component(.day, from: base) : workspace.calendar.component(.day, from: base)))
+                            monthDay: monthDay, weekday: weekday, month: month))
                     onClose()
                 }.buttonStyle(.borderedProminent)
             }

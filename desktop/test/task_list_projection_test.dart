@@ -30,6 +30,7 @@ final TaskListProjection lists =
 TaskItem item(String id,
     {String? title,
     DateTime? due,
+    DateTime? deadline,
     bool completed = false,
     DateTime? completedAt,
     DateTime? abandonedAt,
@@ -43,6 +44,7 @@ TaskItem item(String id,
     listName: list,
     bucket: taskBucketForDate(due, now: anchor),
     dueAt: due?.toIso8601String(),
+    deadlineAt: deadline?.toIso8601String(),
     completed: completed,
     completedAt: completedAt?.toIso8601String(),
     abandonedAt: abandonedAt?.toIso8601String(),
@@ -106,6 +108,22 @@ void main() {
     // The day group is named by its day, and the screen writes that name.
     expect(groupOf(result, 'today').day, day(0));
     expect(groupOf(result, 'today').label, isNull);
+  });
+
+  test('TASK-LIST-001 deadline-only tasks appear in Today and match its count', () {
+    final tasks = [
+      item('deadlineToday', deadline: day(0)),
+      item('deadlinePast', deadline: day(-1)),
+      item('ordinaryUndated'),
+      item('dueToday', due: day(0)),
+    ];
+    final result = groups('today', tasks);
+
+    expect(groupOf(result, 'today').tasks.map((task) => task.id),
+        ['deadlineToday', 'deadlinePast', 'dueToday']);
+    expect(
+        lists.projection.count(tasks: tasks, view: 'today', reference: anchor),
+        3);
   });
 
   test('LIST-002 最近 7 天 walks the week day by day, earliest first', () {
@@ -213,6 +231,18 @@ void main() {
         ['doneToday']);
     // 所有任务 is about everything, so it holds all three.
     expect(groupOf(groups('all', tasks), 'closed').tasks.length, 3);
+  });
+
+  test('TASK-LIST-004 Inbox closing group excludes tasks from other lists', () {
+    final result = groups('inbox', [
+      item('doneInbox', completed: true, completedAt: day(0)),
+      item('doneWork', completed: true, completedAt: day(0), list: '工作'),
+      item('openInbox'),
+    ]);
+
+    expect([for (final group in result) group.id], ['plain', 'closed']);
+    expect(groupOf(result, 'plain').tasks.map((task) => task.id), ['openInbox']);
+    expect(groupOf(result, 'closed').tasks.map((task) => task.id), ['doneInbox']);
   });
 
   test('LIST-006 a child of a listed parent is not also a row of its own', () {

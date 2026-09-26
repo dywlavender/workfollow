@@ -4,42 +4,112 @@ struct CommandPaletteView: View {
     @ObservedObject var navigation: AppNavigation
     @EnvironmentObject private var environment: AppEnvironment
     @State private var query = ""
+    @State private var selectedIndex = 0
     @FocusState private var focused: Bool
 
-    private var destinations: [NativeDestination] {
-        NativeDestination.allCases.filter { query.isEmpty || $0.title.localizedCaseInsensitiveContains(query) }
+    private var entries: [CommandPaletteEntry] {
+        CommandPaletteProjection.entries(
+            query: query,
+            tasks: environment.taskWorkspace.allTasks,
+            notes: environment.notesWorkspace.notes,
+            creationList: environment.taskWorkspace.activeList ?? TaskList.inbox.name,
+            schedulesForToday: navigation.destination == .today,
+            now: environment.taskWorkspace.clock(),
+            calendar: environment.taskWorkspace.calendar)
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: WFSpace.md) {
-            HStack {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: WFSpace.md) {
                 Image(systemName: "magnifyingglass")
-                TextField("搜索页面", text: $query).textFieldStyle(.plain)
-                    .focused($focused).onSubmit { if let first = destinations.first { navigate(first) } }
+                    .foregroundStyle(WFColors.secondaryText)
+                TextField("搜索任务、笔记或命令…", text: $query)
+                    .textFieldStyle(.plain)
+                    .focused($focused)
+                    .onSubmit(runSelected)
+                    .onKeyPress(.downArrow) { moveSelection(1) }
+                    .onKeyPress(.upArrow) { moveSelection(-1) }
+                    .onKeyPress(.escape) {
+                        environment.commandPalettePresented = false
+                        return .handled
+                    }
                 Button("取消") { environment.commandPalettePresented = false }
                     .keyboardShortcut(.cancelAction)
-            }.padding(WFSpace.lg)
+            }
+            .padding(WFSpace.lg)
+
             Divider()
+
             ScrollView {
-                VStack(spacing: WFSpace.xs) {
-                    ForEach(destinations) { destination in
-                        Button { navigate(destination) } label: {
-                            Label(destination == .notesTrash ? "笔记垃圾桶" : destination.title,
-                                  systemImage: destination.symbol)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(WFSpace.md).contentShape(Rectangle())
-                        }.buttonStyle(.plain)
+                LazyVStack(spacing: WFSpace.xs) {
+                    ForEach(Array(entries.enumerated()), id: \.element.id) { index, entry in
+                        Button { run(entry) } label: {
+                            HStack(spacing: WFSpace.md) {
+                                Image(systemName: entry.symbol)
+                                    .frame(width: WFMetrics.icon)
+                                    .foregroundStyle(WFColors.secondaryText)
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text(entry.title).lineLimit(1)
+                                    Text(entry.subtitle).font(WFType.supporting)
+                                        .foregroundStyle(WFColors.secondaryText).lineLimit(1)
+                                }
+                                Spacer(minLength: 0)
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, WFSpace.md)
+                            .padding(.vertical, WFSpace.sm)
+                            .background(index == selectedIndex ? WFColors.selection : .clear,
+                                        in: RoundedRectangle(cornerRadius: WFMetrics.corner))
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .padding(.horizontal, WFSpace.sm)
+                    }
+                    if entries.isEmpty {
+                        Text("没有匹配结果")
+                            .font(WFType.supporting)
+                            .foregroundStyle(WFColors.secondaryText)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(WFSpace.lg)
                     }
                 }
+                .padding(.vertical, WFSpace.sm)
             }
         }
-        .frame(minWidth: 280, idealWidth: 400, maxWidth: 440,
-               minHeight: 300, idealHeight: 390, maxHeight: 420)
+        .frame(minWidth: 320, idealWidth: 500, maxWidth: 560,
+               minHeight: 300, idealHeight: 420, maxHeight: 520)
         .onAppear { focused = true }
+        .onChange(of: query) { _, _ in selectedIndex = 0 }
     }
 
-    private func navigate(_ destination: NativeDestination) {
-        environment.navigate(to: destination)
+    private func moveSelection(_ offset: Int) -> KeyPress.Result {
+        guard !entries.isEmpty else { return .ignored }
+        selectedIndex = (selectedIndex + offset + entries.count) % entries.count
+        return .handled
+    }
+
+    private func runSelected() {
+        guard entries.indices.contains(selectedIndex) else { return }
+        run(entries[selectedIndex])
+    }
+
+    private func run(_ entry: CommandPaletteEntry) {
+        switch entry.action {
+        case let .createTask(title):
+            guard CommandPaletteProjection.createTask(
+                title, workspace: environment.taskWorkspace, navigation: navigation).taskID != nil else { return }
+        case let .openTask(id):
+            guard CommandPaletteProjection.openTask(
+                id, workspace: environment.taskWorkspace, navigation: navigation) else { return }
+        case let .openNote(id):
+            guard CommandPaletteProjection.openNote(
+                id, workspace: environment.notesWorkspace,
+                taskWorkspace: environment.taskWorkspace, navigation: navigation) else { return }
+        case let .navigate(destination):
+            environment.navigate(to: destination)
+        case .toggleAppearance:
+            environment.appearance = environment.appearance == .dark ? .light : .dark
+        }
         environment.commandPalettePresented = false
     }
 }

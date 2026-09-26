@@ -56,7 +56,7 @@ struct NavigationColumnView: View {
         if navigation.destination.isNotes { return [.notes, .notesTrash] }
         if navigation.destination == .calendar { return [.calendar] }
         if navigation.destination == .matrix { return [.matrix] }
-        return [.nextSevenDays, .today, .overdue, .inbox, .allTasks, .completed, .trash]
+        return NativeDestination.taskDestinations
     }
 
     var body: some View {
@@ -89,6 +89,11 @@ struct NavigationColumnView: View {
                                 in: RoundedRectangle(cornerRadius: WFMetrics.corner))
                     .contentShape(Rectangle())
                 }.buttonStyle(.plain)
+            }
+            if navigation.destination.isTaskList {
+                ScrollView {
+                    TaskCollectionsView(workspace: workspace, navigation: navigation, onNavigate: onNavigate)
+                }
             }
             Spacer(minLength: 0)
         }

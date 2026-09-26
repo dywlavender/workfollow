@@ -23,7 +23,6 @@ struct NotesWorkspaceView: View {
                 }
             }
         }
-        .onChange(of: navigation.destination) { _, _ in notes.selectedID = nil }
         .alert("清空笔记垃圾桶", isPresented: $confirmClear) {
             Button("取消", role: .cancel) {}
             Button("全部删除", role: .destructive) { notes.emptyTrash() }

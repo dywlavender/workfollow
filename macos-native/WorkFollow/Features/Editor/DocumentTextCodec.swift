@@ -4,6 +4,7 @@ import AppKit
 enum DocumentTextCodec {
     static let blockKey = NSAttributedString.Key("WorkFollow.block")
     static let attachmentKey = NSAttributedString.Key("WorkFollow.attachment")
+    static let inlineCodeKey = NSAttributedString.Key("WorkFollow.inlineCode")
     static func blockToken(_ kind: DocumentBlockKind) -> String {
         switch kind {
         case .paragraph: "paragraph"
@@ -13,6 +14,7 @@ enum DocumentTextCodec {
         case .checklist(let checked): checked ? "checked" : "checklist"
         case .quote: "quote"
         case .code: "code"
+        case .divider: "divider"
         }
     }
     static func kind(_ token: String) -> DocumentBlockKind {
@@ -24,6 +26,7 @@ enum DocumentTextCodec {
         case "checked": return .checklist(true)
         case "quote": return .quote
         case "code": return .code
+        case "divider": return .divider
         default: return .paragraph
         }
     }
@@ -31,7 +34,7 @@ enum DocumentTextCodec {
         let style = NSMutableParagraphStyle()
         style.paragraphSpacing = 6
         var size: CGFloat = 15
-        if case .heading(let level) = kind { size = level == 1 ? 24 : 20 }
+        if case .heading(let level) = kind { size = level == 1 ? 24 : level == 2 ? 20 : 17 }
         var font = kind == .code || marks.contains(.code)
             ? NSFont.monospacedSystemFont(ofSize: size, weight: .regular) : NSFont.systemFont(ofSize: size)
         if marks.contains(.bold) || { if case .heading = kind { return true }; return false }() {
@@ -51,6 +54,7 @@ enum DocumentTextCodec {
             blockKey: blockToken(kind), .font: font, .paragraphStyle: style,
             .foregroundColor: kind == .quote ? NSColor.secondaryLabelColor : NSColor.labelColor
         ]
+        if marks.contains(.code) { attrs[inlineCodeKey] = true }
         if marks.contains(.underline) { attrs[.underlineStyle] = NSUnderlineStyle.single.rawValue }
         if marks.contains(.strikethrough) { attrs[.strikethroughStyle] = NSUnderlineStyle.single.rawValue }
         if marks.contains(.highlight) { attrs[.backgroundColor] = NSColor.systemYellow.withAlphaComponent(0.45) }
@@ -62,6 +66,11 @@ enum DocumentTextCodec {
         for (index, block) in document.blocks.enumerated() {
             for run in block.runs {
                 var attrs = attributes(kind: block.kind, marks: run.marks)
+                if block.kind == .divider {
+                    let attachment = NSTextAttachment()
+                    attachment.attachmentCell = DocumentDividerCell()
+                    attrs[.attachment] = attachment
+                }
                 if let file = run.attachment, let data = try? JSONEncoder().encode(file) {
                     attrs[attachmentKey] = data
                     attrs[.toolTip] = file.name
@@ -73,7 +82,7 @@ enum DocumentTextCodec {
                 result.append(NSAttributedString(string: run.text, attributes: attrs))
             }
             if index < document.blocks.count - 1 {
-                result.append(NSAttributedString(string: "\n", attributes: attributes(kind: block.kind, marks: [])))
+                result.append(NSAttributedString(string: "\n", attributes: attributes(kind: block.kind == .divider ? .paragraph : block.kind, marks: [])))
             }
         }
         return result
@@ -91,6 +100,7 @@ enum DocumentTextCodec {
             }
             text.enumerateAttributes(in: NSRange(location: min(offset, text.length), length: length)) { attrs, range, _ in
                 var marks = Set<DocumentMark>()
+                if attrs[inlineCodeKey] as? Bool == true { marks.insert(.code) }
                 if let font = attrs[.font] as? NSFont {
                     let traits = NSFontManager.shared.traits(of: font)
                     if traits.contains(.boldFontMask) { marks.insert(.bold) }
@@ -108,5 +118,14 @@ enum DocumentTextCodec {
             return DocumentBlock(id: block.id, kind: kind, runs: runs)
         }
         return NativeDocument(blocks: blocks)
+    }
+}
+
+final class DocumentDividerCell: NSTextAttachmentCell {
+    var lineWidth: CGFloat = 240
+    override func cellSize() -> NSSize { NSSize(width: lineWidth, height: 20) }
+    override func draw(withFrame cellFrame: NSRect, in controlView: NSView?) {
+        NSColor.separatorColor.setFill()
+        NSRect(x: cellFrame.minX, y: cellFrame.midY, width: cellFrame.width, height: 1).fill()
     }
 }

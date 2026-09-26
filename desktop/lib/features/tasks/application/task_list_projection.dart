@@ -15,7 +15,7 @@ enum TaskListGroupKind {
   /// Open tasks whose day has already passed.
   overdue,
 
-  /// Open tasks due today.
+  /// Open tasks due today, plus undated tasks whose deadline has arrived.
   today,
 
   /// Open tasks due on one later day — see [TaskListGroup.day].
@@ -220,6 +220,8 @@ class TaskListProjection {
             projection.needsAttentionToday(task, reference: reference);
       case 'recent':
         return projection.isInRecentWindow(task, reference: reference);
+      case 'inbox':
+        return task.listName == '收集箱';
       default:
         return true;
     }
@@ -255,7 +257,15 @@ class TaskListProjection {
         // nothing is drawn for it.
         return [
           if (overdueGroup != null) overdueGroup,
-          _group(todayId, TaskListGroupKind.today, onToday, day: today),
+          _group(
+              todayId,
+              TaskListGroupKind.today,
+              due
+                  .where((task) =>
+                      _isToday(task, today) ||
+                      _hasReachedDeadlineWithoutDue(task, today))
+                  .toList(),
+              day: today),
         ];
       case 'recent':
         return [
@@ -382,6 +392,14 @@ class TaskListProjection {
 
   static bool _isToday(TaskItem task, DateTime today) =>
       _sameDay(_dueDay(task), today);
+
+  /// A deadline is a date by which a task must be done, so a task without a
+  /// planned start date still belongs in Today once that deadline is reached.
+  static bool _hasReachedDeadlineWithoutDue(TaskItem task, DateTime today) {
+    if (_dueDay(task) != null) return false;
+    final deadline = localDateTimeFromStorage(task.deadlineAt);
+    return deadline != null && !_dayOf(deadline).isAfter(today);
+  }
 
   /// Inside the recent window, which is the same window 最近 7 天 projects by:
   /// after today, and short of seven days out.

@@ -18,8 +18,19 @@ struct DocumentSelectionAction: Identifiable {
 struct DocumentProfile {
     var commands: [DocumentCommand] = []
     var selectionActions: [DocumentSelectionAction] = []
+    var taskSlash = false
+    var onOpenLink: ((String) -> Bool)?
     var slashCommands: [DocumentCommand] {
-        DocumentFormatCommand.commands.enumerated().map { index, format in
+        if taskSlash {
+            let formats = [1, 2, 14, 5, 6, 7, 3].map { DocumentFormatCommand.commands[$0] }
+            return formats.enumerated().map { index, format in
+                DocumentCommand(id: "task.format.\(index)", title: format.title, group: "格式") { $0.applyFormat(format) }
+            } + [
+                DocumentCommand(id: "shared.divider", title: "水平分割线", group: "格式") { $0.insertDocumentDivider() },
+                DocumentCommand(id: "shared.attachment", title: "附件", group: "插入") { $0.insertDocumentAttachment(nil) }
+            ] + commands
+        }
+        return DocumentFormatCommand.commands.enumerated().map { index, format in
             DocumentCommand(id: "format.\(index)", title: format.title,
                             group: format.block == nil ? "文字格式" : "段落",
                             keywords: format.keywords) { $0.applyFormat(format) }
@@ -38,13 +49,14 @@ struct SlashSession {
 
     init(start: Int) { self.start = start; range = NSRange(location: start, length: 1) }
 
-    mutating func update(text: String, selection: NSRange) -> Bool {
+    mutating func update(text: String, selection: NSRange, allowsQuery: Bool = true) -> Bool {
         let text = text as NSString
         guard selection.length == 0, selection.location > start,
               selection.location <= text.length, start >= 0,
               text.substring(with: NSRange(location: start, length: 1)) == "/" else { return false }
         let range = NSRange(location: start, length: selection.location - start)
         let query = String(text.substring(with: range).dropFirst())
+        guard allowsQuery || query.isEmpty else { return false }
         guard !query.contains("\n"), !query.contains("/") else { return false }
         if self.query != query { selectedIndex = 0 }
         self.query = query

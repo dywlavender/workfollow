@@ -9,7 +9,7 @@ struct ReminderSignature: Equatable {
 
     static func values(_ tasks: [Task]) -> [Self] {
         tasks.compactMap { task in
-            guard task.status == .active, task.deletedAt == nil, let date = task.reminderAt else { return nil }
+            guard !task.isClosed, task.deletedAt == nil, task.skippedAt == nil, let date = task.reminderAt else { return nil }
             return Self(id: task.id, date: date, title: task.title, list: task.list.name)
         }.sorted { $0.id.uuidString < $1.id.uuidString }
     }
@@ -52,7 +52,7 @@ final class NativeReminderService: ObservableObject {
             let pending = await center.pendingNotificationRequests()
             guard !_Concurrency.Task.isCancelled else { return }
             center.removePendingNotificationRequests(withIdentifiers: pending.filter { $0.identifier.hasPrefix("task.") }.map(\.identifier))
-            for task in tasks where task.deletedAt == nil && task.status == .active {
+            for task in tasks where task.deletedAt == nil && task.skippedAt == nil && !task.isClosed {
                 guard !_Concurrency.Task.isCancelled else { return }
                 guard let reminder = task.reminderAt, reminder > clock() else { continue }
                 let content = UNMutableNotificationContent()

@@ -49,7 +49,7 @@ final class AppEnvironment: ObservableObject {
         var snapshot: NativeWorkspaceSnapshot?
         var failure: Error?
         do { snapshot = try repository.load() } catch { failure = error }
-        taskWorkspace = TaskWorkspaceModel(clock: clock, calendar: calendar, initialTasks: snapshot?.tasks)
+        taskWorkspace = TaskWorkspaceModel(clock: clock, calendar: calendar, initialTasks: snapshot?.tasks, initialLists: snapshot?.taskLists ?? [])
         notesWorkspace = NotesWorkspaceModel(initialNotes: snapshot?.notes ?? [], clock: clock)
         persistence.onResult = { [weak self] error in
             DispatchQueue.main.async { self?.storageError = error.map { "预览数据保存失败：\($0.localizedDescription)" } }
@@ -65,7 +65,7 @@ final class AppEnvironment: ObservableObject {
 
     private func savePreview() {
         guard !loadFailed else { return }
-        persistence.schedule(NativeWorkspaceSnapshot(tasks: taskWorkspace.allTasks, notes: notesWorkspace.notes))
+        persistence.schedule(NativeWorkspaceSnapshot(tasks: taskWorkspace.allTasks, notes: notesWorkspace.notes, taskLists: taskWorkspace.listNames))
     }
 
     func flush(completion: @escaping (Error?) -> Void) {
@@ -86,7 +86,28 @@ final class AppEnvironment: ObservableObject {
     }
 
     func navigate(to destination: NativeDestination) {
+        taskWorkspace.activeList = nil
+        taskWorkspace.activeTag = nil
         navigation.destination = destination
         taskWorkspace.select(nil)
+    }
+
+    @discardableResult
+    func convertTaskToNote(_ id: UUID) -> UUID? {
+        guard let task = taskWorkspace.task(for: id), !task.isConverted else { return nil }
+        let children = taskWorkspace.allTasks
+            .filter { $0.parentID == id && $0.deletedAt == nil && $0.skippedAt == nil }
+            .sorted { $0.childOrder < $1.childOrder }
+        let noteID = notesWorkspace.createFromTask(task, children: children, clock: taskWorkspace.clock)
+        let result = taskWorkspace.convertToNote(id, noteID: noteID) { [weak notes = notesWorkspace] in
+            MainActor.assumeIsolated { notes?.discardCreatedNoteForUndo(noteID) }
+        }
+        guard result.taskID != nil else {
+            notesWorkspace.discardCreatedNoteForUndo(noteID)
+            return nil
+        }
+        navigation.destination = .notes
+        notesWorkspace.selectedID = noteID
+        return noteID
     }
 }

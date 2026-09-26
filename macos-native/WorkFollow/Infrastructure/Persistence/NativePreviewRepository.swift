@@ -4,6 +4,7 @@ struct NativeWorkspaceSnapshot: Codable {
     var version = 1
     let tasks: [Task]
     let notes: [Note]
+    var taskLists: [String]? = nil
 }
 
 /// Native-only storage; never reads or writes the Flutter WorkFollow directory.

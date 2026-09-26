@@ -3,7 +3,7 @@ import Foundation
 enum TaskPriority: Int, Equatable, Codable { case none = 0, low, medium, high }
 enum TaskStatus: Equatable, Codable { case active, completed }
 enum TaskRepeat: String, CaseIterable, Equatable, Codable {
-    case never, daily, weekly, monthly, yearly
+    case never, daily, weekly, monthly, yearly, weekdays, weekends, workdays, holidays
     var title: String {
         switch self {
         case .never: "不重复"
@@ -11,11 +11,15 @@ enum TaskRepeat: String, CaseIterable, Equatable, Codable {
         case .weekly: "每周"
         case .monthly: "每月"
         case .yearly: "每年"
+        case .weekdays: "每周一至周五"
+        case .weekends: "每周六、周日"
+        case .workdays: "法定工作日"
+        case .holidays: "法定休息日"
         }
     }
     var component: Calendar.Component {
         switch self {
-        case .never, .daily: .day
+        case .never, .daily, .weekdays, .weekends, .workdays, .holidays: .day
         case .weekly: .weekOfYear
         case .monthly: .month
         case .yearly: .year
@@ -56,9 +60,85 @@ struct Task: Identifiable, Equatable, Codable {
     var schedule: TaskSchedule
     var status: TaskStatus = .active
     let parentID: UUID?
-    let childOrder: Int
+    var childOrder: Int
     let createdAt: Date
     var updatedAt: Date
     var completedAt: Date?
     var deletedAt: Date?
+    var isPinned: Bool = false
+    var abandonedAt: Date? = nil
+    var skippedAt: Date? = nil
+    var convertedNoteID: UUID? = nil
+    var sourceNoteID: UUID? = nil
+
+    var isAbandoned: Bool { abandonedAt != nil }
+    var isClosed: Bool { status == .completed || isAbandoned }
+    var closedAt: Date? { status == .completed ? completedAt : abandonedAt }
+    var isConverted: Bool { convertedNoteID != nil }
+}
+
+// Native preview snapshots are independent from Flutter storage, but they
+// still need to survive additive model changes. Older snapshots have no
+// isPinned or abandonedAt key, so decode those as their neutral states.
+extension Task {
+    private enum CodingKeys: String, CodingKey {
+        case id, title, document, tags, recurrence, recurrenceRule, reminderAt
+        case attachments, list, priority, schedule, status, parentID, childOrder
+        case createdAt, updatedAt, completedAt, deletedAt, isPinned, abandonedAt, skippedAt, convertedNoteID
+        case sourceNoteID
+    }
+
+    init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        id = try values.decode(UUID.self, forKey: .id)
+        title = try values.decode(String.self, forKey: .title)
+        document = try values.decodeIfPresent(NativeDocument.self, forKey: .document) ?? .empty
+        tags = try values.decodeIfPresent([String].self, forKey: .tags) ?? []
+        recurrence = try values.decodeIfPresent(TaskRepeat.self, forKey: .recurrence) ?? .never
+        recurrenceRule = try values.decodeIfPresent(RecurrenceRule.self, forKey: .recurrenceRule)
+        reminderAt = try values.decodeIfPresent(Date.self, forKey: .reminderAt)
+        attachments = try values.decodeIfPresent([NativeAttachment].self, forKey: .attachments) ?? []
+        list = try values.decode(TaskList.self, forKey: .list)
+        priority = try values.decode(TaskPriority.self, forKey: .priority)
+        schedule = try values.decode(TaskSchedule.self, forKey: .schedule)
+        status = try values.decodeIfPresent(TaskStatus.self, forKey: .status) ?? .active
+        parentID = try values.decodeIfPresent(UUID.self, forKey: .parentID)
+        childOrder = try values.decode(Int.self, forKey: .childOrder)
+        createdAt = try values.decode(Date.self, forKey: .createdAt)
+        updatedAt = try values.decode(Date.self, forKey: .updatedAt)
+        completedAt = try values.decodeIfPresent(Date.self, forKey: .completedAt)
+        deletedAt = try values.decodeIfPresent(Date.self, forKey: .deletedAt)
+        isPinned = try values.decodeIfPresent(Bool.self, forKey: .isPinned) ?? false
+        abandonedAt = try values.decodeIfPresent(Date.self, forKey: .abandonedAt)
+        skippedAt = try values.decodeIfPresent(Date.self, forKey: .skippedAt)
+        convertedNoteID = try values.decodeIfPresent(UUID.self, forKey: .convertedNoteID)
+        sourceNoteID = try values.decodeIfPresent(UUID.self, forKey: .sourceNoteID)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var values = encoder.container(keyedBy: CodingKeys.self)
+        try values.encode(id, forKey: .id)
+        try values.encodeIfPresent(sourceNoteID, forKey: .sourceNoteID)
+        try values.encode(title, forKey: .title)
+        try values.encode(document, forKey: .document)
+        try values.encode(tags, forKey: .tags)
+        try values.encode(recurrence, forKey: .recurrence)
+        try values.encodeIfPresent(recurrenceRule, forKey: .recurrenceRule)
+        try values.encodeIfPresent(reminderAt, forKey: .reminderAt)
+        try values.encode(attachments, forKey: .attachments)
+        try values.encode(list, forKey: .list)
+        try values.encode(priority, forKey: .priority)
+        try values.encode(schedule, forKey: .schedule)
+        try values.encode(status, forKey: .status)
+        try values.encodeIfPresent(parentID, forKey: .parentID)
+        try values.encode(childOrder, forKey: .childOrder)
+        try values.encode(createdAt, forKey: .createdAt)
+        try values.encode(updatedAt, forKey: .updatedAt)
+        try values.encodeIfPresent(completedAt, forKey: .completedAt)
+        try values.encodeIfPresent(deletedAt, forKey: .deletedAt)
+        try values.encode(isPinned, forKey: .isPinned)
+        try values.encodeIfPresent(abandonedAt, forKey: .abandonedAt)
+        try values.encodeIfPresent(skippedAt, forKey: .skippedAt)
+        try values.encodeIfPresent(convertedNoteID, forKey: .convertedNoteID)
+    }
 }

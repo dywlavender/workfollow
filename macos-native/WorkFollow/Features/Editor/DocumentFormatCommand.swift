@@ -30,11 +30,46 @@ struct DocumentFormatCommand {
         .init(title: "斜体", block: nil, mark: .italic),
         .init(title: "下划线", block: nil, mark: .underline),
         .init(title: "删除线", block: nil, mark: .strikethrough),
-        .init(title: "高亮", block: nil, mark: .highlight)
+        .init(title: "高亮", block: nil, mark: .highlight),
+        .init(title: "三级标题", block: .heading(3), mark: nil),
+        .init(title: "行内代码", block: nil, mark: .code)
     ]
 }
 
 extension NativeTextView {
+    func insertDocumentTime(_ date: Date = Date(), format: String = "yyyy年M月d日 HH:mm") {
+        let formatter = DateFormatter()
+        formatter.dateFormat = format
+        insertText(formatter.string(from: date), replacementRange: selectedRange())
+    }
+
+    func insertDocumentDivider() {
+        let range = selectedRange()
+        let text = string as NSString
+        let needsLeadingBreak = range.location > 0 && text.substring(with: NSRange(location: range.location - 1, length: 1)) != "\n"
+        let insertion = NSMutableAttributedString(string: needsLeadingBreak ? "\n" : "",
+            attributes: DocumentTextCodec.attributes(kind: .paragraph, marks: []))
+        insertion.append(DocumentTextCodec.render(NativeDocument(blocks: [
+            DocumentBlock(kind: .divider, runs: [DocumentRun(text: "\u{FFFC}")]),
+            DocumentBlock(kind: .paragraph, runs: [DocumentRun(text: "")])
+        ])))
+        insertText(insertion, replacementRange: range)
+        typingAttributes = DocumentTextCodec.attributes(kind: .paragraph, marks: [])
+        resizeDocumentDividers()
+    }
+
+    func resizeDocumentDividers() {
+        guard let storage = textStorage else { return }
+        let width = max(1, bounds.width - textContainerInset.width * 2 - (textContainer?.lineFragmentPadding ?? 5) * 2)
+        storage.enumerateAttribute(.attachment, in: NSRange(location: 0, length: storage.length)) { value, range, _ in
+            guard let attachment = value as? NSTextAttachment,
+                  let cell = attachment.attachmentCell as? DocumentDividerCell,
+                  cell.lineWidth != width else { return }
+            cell.lineWidth = width
+            layoutManager?.invalidateLayout(forCharacterRange: range, actualCharacterRange: nil)
+        }
+    }
+
     func formatMenu() -> NSMenu {
         let menu = NSMenu(title: "格式")
         for (index, command) in DocumentFormatCommand.commands.enumerated() {

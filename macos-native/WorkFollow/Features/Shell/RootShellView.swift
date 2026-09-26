@@ -34,6 +34,19 @@ struct RootShellView: View {
                 }
             }
             .background(WFColors.content)
+            .onChange(of: navigation.destination) { _, destination in
+                let routedTaskID = navigation.taskSelectionToPreserveOnNextNavigation
+                navigation.taskSelectionToPreserveOnNextNavigation = nil
+                if routedTaskID != workspace.selectedTaskID { workspace.select(nil) }
+                workspace.clearBulkSelection()
+
+                if !destination.isNotes {
+                    environment.notesWorkspace.selectedID = nil
+                } else if let selected = environment.notesWorkspace.selected,
+                          (selected.deletedAt != nil) != (destination == .notesTrash) {
+                    environment.notesWorkspace.selectedID = nil
+                }
+            }
         }
         .sheet(isPresented: $environment.commandPalettePresented) {
             CommandPaletteView(navigation: navigation)
@@ -51,7 +64,6 @@ private struct TaskWorkspaceView: View {
     @ObservedObject var workspace: TaskWorkspaceModel
     let navigation: AppNavigation
     let navigationVisible: Bool
-    @State private var listWidth = WFMetrics.listPreferred
     @State private var dragOrigin: CGFloat?
 
     var body: some View {
@@ -60,7 +72,7 @@ private struct TaskWorkspaceView: View {
             let maximum = max(WFMetrics.listMinimum,
                               min(WFMetrics.listMaximum,
                                   geometry.size.width - WFMetrics.inspectorMinimum - WFMetrics.divider))
-            let boundedWidth = min(max(listWidth, WFMetrics.listMinimum), maximum)
+            let boundedWidth = min(max(workspace.taskListPaneWidth, WFMetrics.listMinimum), maximum)
             if wide {
                 HStack(spacing: 0) {
                     TaskListView(workspace: workspace, navigation: navigation,
@@ -76,8 +88,8 @@ private struct TaskWorkspaceView: View {
                                 .gesture(DragGesture(minimumDistance: 1)
                                     .onChanged { value in
                                         if dragOrigin == nil { dragOrigin = boundedWidth }
-                                        listWidth = min(max((dragOrigin ?? boundedWidth)
-                                            + value.translation.width, WFMetrics.listMinimum), maximum)
+                                        workspace.setTaskListPaneWidth(min(max((dragOrigin ?? boundedWidth)
+                                            + value.translation.width, WFMetrics.listMinimum), maximum))
                                     }
                                     .onEnded { _ in dragOrigin = nil })
                         }

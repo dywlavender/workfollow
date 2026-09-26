@@ -2,6 +2,18 @@ import XCTest
 @testable import WorkFollow
 
 final class TaskWorkspaceModelTests: XCTestCase {
+    func testSourceNotePersistsAndCanUndo() async throws {
+        try await MainActor.run {
+            let model = TaskWorkspaceModel(seedDemoData: false)
+            let id = model.createTask(title: "关联验收", in: .inbox).taskID!
+            let noteID = UUID()
+            model.setSourceNote(id, noteID)
+            let restored = try JSONDecoder().decode(Task.self, from: JSONEncoder().encode(model.task(for: id)!))
+            XCTAssertEqual(restored.sourceNoteID, noteID)
+            model.undo()
+            XCTAssertNil(model.task(for: id)?.sourceNoteID)
+        }
+    }
     private let now = Date(timeIntervalSince1970: 1_800_000_000)
     private var calendar: Calendar {
         var value = Calendar(identifier: .gregorian)
@@ -22,6 +34,19 @@ final class TaskWorkspaceModelTests: XCTestCase {
             let inbox = model.createTask(title: "Inbox task", in: .inbox).taskID!
             XCTAssertNil(model.task(for: inbox)?.schedule.dueAt)
             XCTAssertEqual(model.count(for: TaskListScope.inbox), 2)
+        }
+    }
+
+    func testTaskListPaneWidthIsSharedAndClampedToProductBounds() async {
+        await MainActor.run {
+            let model = TaskWorkspaceModel(seedDemoData: false)
+            XCTAssertEqual(model.taskListPaneWidth, WFMetrics.listPreferred)
+
+            model.setTaskListPaneWidth(360)
+            XCTAssertEqual(model.taskListPaneWidth, WFMetrics.listMinimum)
+
+            model.setTaskListPaneWidth(520)
+            XCTAssertEqual(model.taskListPaneWidth, WFMetrics.listMaximum)
         }
     }
 
@@ -56,7 +81,7 @@ final class TaskWorkspaceModelTests: XCTestCase {
         }
     }
 
-    func testParentAndMatchingChildrenFlattenOnceAndExpandFromProjection() async {
+    func testNewParentWithChildrenStartsExpandedAndCanBeCollapsed() async {
         await MainActor.run {
             let model = TaskWorkspaceModel(clock: { self.now }, calendar: self.calendar, seedDemoData: false)
             let parent = model.createTask(title: "parent", in: .today).taskID!
@@ -64,10 +89,81 @@ final class TaskWorkspaceModelTests: XCTestCase {
             // Parent's schedule is today; add today's schedule to the child through the model action path.
             _ = model.setSchedule(child, TaskSchedule(dueAt: self.calendar.startOfDay(for: self.now)))
             let group = model.groups(for: .today).first!
+            let initiallyExpanded = model.nodes(for: group, scope: .today)
+            XCTAssertEqual(initiallyExpanded.map(\.task.id), [parent, child])
+            XCTAssertEqual(initiallyExpanded.map(\.depth), [0, 1])
+
             model.toggleExpanded(parent)
-            let nodes = model.nodes(for: group, scope: .today)
-            XCTAssertEqual(nodes.map(\.task.id), [parent, child])
-            XCTAssertEqual(nodes.map(\.depth), [0, 1])
+            XCTAssertEqual(model.nodes(for: group, scope: .today).map(\.task.id), [parent])
+        }
+    }
+
+    func testAddChildMenuKeepsParentSelectedAndRequestsInlineTitleEditing() async {
+        await MainActor.run {
+            let model = TaskWorkspaceModel(clock: { self.now }, calendar: self.calendar, seedDemoData: false)
+            let parentID = model.createTask(title: "parent", in: .inbox).taskID!
+            let childID = model.requestChildTitleEditor(for: parentID)
+
+            XCTAssertNotNil(childID)
+            XCTAssertEqual(model.task(for: childID!)?.parentID, parentID)
+            XCTAssertEqual(model.task(for: childID!)?.title, "")
+            XCTAssertEqual(model.selectedTaskID, parentID)
+            XCTAssertEqual(model.pendingChildTitleEditorID, childID)
+            XCTAssertEqual(model.consumePendingChildTitleEditor(), childID)
+            XCTAssertNil(model.pendingChildTitleEditorID)
+        }
+    }
+
+    func testTodayAndRecentMatchedParentCarryUnscheduledChildren() async {
+        await MainActor.run {
+            let model = TaskWorkspaceModel(clock: { self.now }, calendar: self.calendar, seedDemoData: false)
+            let parent = model.createTask(title: "dated parent", in: .today).taskID!
+            let child = model.createChild(parent, title: "undated child").taskID!
+
+            for scope in [TaskListScope.today, .nextSevenDays] {
+                let group = model.groups(for: scope).first!
+                let nodes = model.nodes(for: group, scope: scope)
+                XCTAssertEqual(nodes.map(\.task.id), [parent, child])
+                XCTAssertEqual(nodes.map(\.depth), [0, 1])
+            }
+
+            model.toggleExpanded(parent)
+            for scope in [TaskListScope.today, .nextSevenDays] {
+                let group = model.groups(for: scope).first!
+                XCTAssertEqual(model.nodes(for: group, scope: scope).map(\.task.id), [parent])
+            }
+        }
+    }
+
+    func testDeadlineOnlyTaskAppearsInTodayAndMatchesBadgeCount() async {
+        await MainActor.run {
+            let model = TaskWorkspaceModel(clock: { self.now }, calendar: self.calendar, seedDemoData: false)
+            let id = model.createTask(title: "deadline only", in: .inbox).taskID!
+            _ = model.setDeadline(id, self.calendar.startOfDay(for: self.now))
+
+            XCTAssertNil(model.task(for: id)?.schedule.dueAt)
+            XCTAssertEqual(model.count(for: TaskListScope.today), 1)
+            XCTAssertEqual(model.groups(for: .today).flatMap(\.tasks).map(\.id), [id])
+        }
+    }
+
+    func testBulkShiftRangeUsesMostRecentSelectionAnchorLikeFlutter() async {
+        await MainActor.run {
+            let model = TaskWorkspaceModel(clock: { self.now }, calendar: self.calendar, seedDemoData: false)
+            let ids = (0..<4).map { model.createTask(title: "task \($0)", in: .inbox).taskID! }
+
+            model.select(ids[0])
+            model.toggleBulkSelection(ids[1])
+            model.extendBulkSelection(to: ids[3], in: ids)
+
+            XCTAssertEqual(model.bulkSelection, Set(ids[1...3]))
+            XCTAssertEqual(model.bulkAnchorTaskID, ids[1])
+            XCTAssertEqual(model.selectedTaskID, ids[0], "Modifier selection does not replace the Inspector task")
+
+            model.selectFromKeyboard(ids[2])
+            XCTAssertTrue(model.bulkSelection.isEmpty)
+            XCTAssertEqual(model.bulkAnchorTaskID, ids[2])
+            XCTAssertEqual(model.selectedTaskID, ids[2])
         }
     }
 
@@ -96,7 +192,7 @@ final class TaskWorkspaceModelTests: XCTestCase {
         }
     }
 
-    func testSelectionAndExpandedStateStayInPresentationModel() async {
+    func testSelectionAndCollapsedStateStayInPresentationModel() async {
         await MainActor.run {
             let model = TaskWorkspaceModel(clock: { self.now }, calendar: self.calendar)
             let rows = model.visibleNodes(for: .today)
@@ -106,7 +202,7 @@ final class TaskWorkspaceModelTests: XCTestCase {
             model.selectAdjacent(1, in: .today)
             XCTAssertEqual(model.selectedTaskID, rows[1].task.id)
             model.toggleExpanded(rows[0].task.id)
-            XCTAssertFalse(model.expandedTaskIDs.contains(rows[0].task.id))
+            XCTAssertTrue(model.collapsedTaskIDs.contains(rows[0].task.id))
         }
     }
 
@@ -179,6 +275,63 @@ final class TaskWorkspaceModelTests: XCTestCase {
             _ = model.setDeadline(id, nil)
             XCTAssertEqual(model.task(for: id)?.schedule.dueAt, due)
             XCTAssertNil(model.task(for: id)?.schedule.deadlineAt)
+        }
+    }
+
+    func testClearingDueDatePreservesReminderDeadlineAndRecurrenceAndUndoesTogether() async {
+        await MainActor.run {
+            let model = TaskWorkspaceModel(clock: { self.now }, calendar: self.calendar,
+                                           seedDemoData: false)
+            let id = model.createTask(title: "Scheduled", in: .inbox).taskID!
+            let due = model.dateFromToday(1)
+            let deadline = model.dateFromToday(7)
+            let reminder = due.addingTimeInterval(-1800)
+            let rule = RecurrenceRule(interval: 2, weekday: 3)
+            _ = model.setSchedule(id, TaskSchedule(dueAt: due, hasTime: true, deadlineAt: deadline))
+            model.setReminder(id, reminder)
+            model.setRecurrence(id, frequency: .weekly, rule: rule)
+
+            _ = model.clearDueDate(id)
+            XCTAssertNil(model.task(for: id)?.schedule.dueAt)
+            XCTAssertFalse(model.task(for: id)?.schedule.hasTime ?? true)
+            XCTAssertEqual(model.task(for: id)?.reminderAt, reminder)
+            XCTAssertEqual(model.task(for: id)?.schedule.deadlineAt, deadline)
+            XCTAssertEqual(model.task(for: id)?.recurrenceRule, rule)
+
+            model.undo()
+            XCTAssertEqual(model.task(for: id)?.schedule.dueAt, due)
+            XCTAssertEqual(model.task(for: id)?.reminderAt, reminder)
+            XCTAssertEqual(model.task(for: id)?.schedule.deadlineAt, deadline)
+            XCTAssertEqual(model.task(for: id)?.recurrenceRule, rule)
+        }
+    }
+
+    func testClearingDatePopoverScheduleAlsoClearsRepeatButKeepsDeadlineAndUndoesTogether() async {
+        await MainActor.run {
+            let model = TaskWorkspaceModel(clock: { self.now }, calendar: self.calendar,
+                                           seedDemoData: false)
+            let id = model.createTask(title: "Scheduled", in: .inbox).taskID!
+            let due = model.dateFromToday(1)
+            let deadline = model.dateFromToday(7)
+            let reminder = due.addingTimeInterval(-1800)
+            let rule = RecurrenceRule(interval: 2, weekday: 3)
+            _ = model.setSchedule(id, TaskSchedule(dueAt: due, hasTime: true, deadlineAt: deadline))
+            model.setReminder(id, reminder)
+            model.setRecurrence(id, frequency: .weekly, rule: rule)
+
+            _ = model.clearScheduledProperties(id)
+            XCTAssertNil(model.task(for: id)?.schedule.dueAt)
+            XCTAssertFalse(model.task(for: id)?.schedule.hasTime ?? true)
+            XCTAssertNil(model.task(for: id)?.reminderAt)
+            XCTAssertEqual(model.task(for: id)?.schedule.deadlineAt, deadline)
+            XCTAssertEqual(model.task(for: id)?.recurrence, .never)
+            XCTAssertNil(model.task(for: id)?.recurrenceRule)
+
+            model.undo()
+            XCTAssertEqual(model.task(for: id)?.schedule.dueAt, due)
+            XCTAssertEqual(model.task(for: id)?.reminderAt, reminder)
+            XCTAssertEqual(model.task(for: id)?.schedule.deadlineAt, deadline)
+            XCTAssertEqual(model.task(for: id)?.recurrenceRule, rule)
         }
     }
 

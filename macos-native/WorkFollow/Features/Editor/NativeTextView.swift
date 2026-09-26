@@ -13,6 +13,7 @@ final class NativeTextView: NSTextView {
     var slashSession: SlashSession?
     var slashPanel: NSPanel?
     var documentIdentity = UUID()
+    var needsHostCaretReveal = false
 
     override func insertText(_ insertString: Any, replacementRange: NSRange) {
         let wasComposing = hasMarkedText()
@@ -22,7 +23,7 @@ final class NativeTextView: NSTextView {
         guard location > 0 else { return }
         // A slash in a URL/path is ordinary text, not a command trigger.
         let prefix = (string as NSString).substring(to: location - 1)
-        guard prefix.isEmpty || prefix.last?.isWhitespace == true else { return }
+        guard profile.taskSlash || prefix.isEmpty || prefix.last?.isWhitespace == true else { return }
         slashSession = SlashSession(start: location - 1)
         refreshSlash()
     }
@@ -30,6 +31,31 @@ final class NativeTextView: NSTextView {
     override func didChangeText() {
         super.didChangeText()
         refreshSlash()
+        // The task editor grows inside the inspector's scroll view. Its own
+        // clip view has nothing to scroll; reveal the caret in the host after
+        // SwiftUI has applied the new document height.
+        needsHostCaretReveal = true
+    }
+
+    func revealCaretInHostAfterLayout() {
+        guard needsHostCaretReveal else { return }
+        DispatchQueue.main.async { [weak self] in
+            guard let self, self.window?.firstResponder === self,
+                  let inner = self.enclosingScrollView, !inner.hasVerticalScroller,
+                  let window = self.window else { return }
+            window.contentView?.layoutSubtreeIfNeeded()
+            var ancestor = inner.superview
+            while let view = ancestor {
+                if let outer = view as? NSScrollView, let document = outer.documentView {
+                    let screenRect = self.firstRect(forCharacterRange: self.selectedRange(), actualRange: nil)
+                    let caret = document.convert(window.convertFromScreen(screenRect), from: nil)
+                    document.scrollToVisible(caret.insetBy(dx: 0, dy: -12))
+                    self.needsHostCaretReveal = false
+                    break
+                }
+                ancestor = view.superview
+            }
+        }
     }
 
     override func mouseDown(with event: NSEvent) {

@@ -14,7 +14,7 @@ struct PlanningWorkspaceView: View {
     private let titles = ["Ⅰ 重要且紧急", "Ⅱ 重要不紧急", "Ⅲ 不重要但紧急", "Ⅳ 不重要不紧急"]
     private let colors: [Color] = [.red, .orange, .blue, .green]
     private var tasks: [Task] {
-        workspace.allTasks.filter { $0.deletedAt == nil && (showCompleted || $0.status == .active) }
+        workspace.allTasks.filter { $0.deletedAt == nil && $0.skippedAt == nil && !$0.isAbandoned && (showCompleted || !$0.isClosed) }
     }
 
     var body: some View {

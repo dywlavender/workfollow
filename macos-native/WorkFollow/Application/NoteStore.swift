@@ -11,6 +11,8 @@ final class NoteStore {
         notes.insert(note, at: 0)
         return note.id
     }
+    func insert(_ note: Note) { notes.insert(note, at: 0) }
+    func removeCreatedNote(_ id: UUID) { notes.removeAll { $0.id == id } }
     func edit(_ id: UUID, _ mutation: (inout Note) -> Void) {
         guard let index = notes.firstIndex(where: { $0.id == id && $0.deletedAt == nil }) else { return }
         mutation(&notes[index])
