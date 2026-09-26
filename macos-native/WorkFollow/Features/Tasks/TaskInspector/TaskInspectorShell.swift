@@ -127,6 +127,18 @@ struct TaskInspectorShell: View {
             scheduleChip(task, field: .due)
             priorityMenu(task)
             Spacer(minLength: 0)
+            // 滴答式：右上角常驻置顶入口。
+            Button {
+                _ = workspace.setPinned(task.id, !task.isPinned)
+            } label: {
+                Image(systemName: task.isPinned ? "pin.fill" : "pin")
+                    .foregroundStyle(task.isPinned ? WFColors.accent : WFColors.secondaryText)
+                    .frame(width: 24, height: WFMetrics.controlHeight)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help(task.isPinned ? "取消置顶" : "置顶")
+            .accessibilityLabel(task.isPinned ? "取消置顶" : "置顶任务")
         }
         .padding(.horizontal, WFSpace.xl)
         .frame(height: 48)
@@ -260,11 +272,12 @@ struct TaskInspectorShell: View {
                 .id(task.id)
                 .padding(.horizontal, WFSpace.xl)
                 .padding(.top, WFSpace.lg)
-                .padding(.bottom, WFSpace.sm)
+                .padding(.bottom, WFSpace.md)
             documentEditor(task)
-                .padding(.top, WFSpace.xs)
+                .padding(.top, WFSpace.sm)
             if task.parentID == nil {
                 subtaskSection(task)
+                    .padding(.top, WFSpace.xl)
             } else if let parentID = task.parentID {
                 Button("返回父任务") { workspace.select(parentID) }
                     .buttonStyle(.plain)
@@ -289,18 +302,18 @@ struct TaskInspectorShell: View {
 
     /// 顶部日期入口；点击仍使用现有日期 popover。
     private func scheduleChip(_ task: Task, field: ScheduleField) -> some View {
-        Button {
-            presentation.activePopover = field.popover
-        } label: {
-            chipLabel {
-                Image(systemName: field.symbol)
-                Text(field.date(in: task).map(dateLabel) ?? field.emptyLabel)
+            Button {
+                presentation.activePopover = field.popover
+            } label: {
+                chipLabel {
+                    Image(systemName: field.symbol)
+                    Text(scheduleChipLabel(task, field: field))
+                }
+                .foregroundStyle(scheduleChipColor(task, field: field))
             }
-            .foregroundStyle(scheduleChipColor(task, field: field))
-        }
-        .buttonStyle(.plain)
-        .help(field.emptyLabel)
-        .accessibilityLabel(field.date(in: task).map { "\(field.emptyLabel)：\(dateLabel($0))" } ?? field.emptyLabel)
+            .buttonStyle(.plain)
+            .help(field.emptyLabel)
+            .accessibilityLabel(field.date(in: task).map { "\(field.emptyLabel)：\(dateLabel($0))" } ?? field.emptyLabel)
         .popover(isPresented: popoverBinding(field.popover), arrowEdge: .bottom) {
             TaskDatePopoverV2(task: task, workspace: workspace, deadline: field == .deadline) {
                 presentation.activePopover = nil
@@ -486,12 +499,13 @@ struct TaskInspectorShell: View {
                     .accessibilityLabel("子任务标题")
             } else {
                 Button(child.title.isEmpty ? "未命名子任务" : child.title) { workspace.select(child.id) }
-                    .foregroundStyle(child.isClosed ? WFColors.tertiaryText : WFColors.text)
+                    // 滴答式：未完成子任务标题灰显，与正文区分层级。
+                    .foregroundStyle(child.isClosed ? WFColors.tertiaryText : WFColors.secondaryText)
             }
             Spacer(minLength: 8)
             TaskDateButton(task: child, workspace: workspace)
         }.buttonStyle(.plain).font(WFType.body)
-            .frame(minHeight: 36)
+            .frame(minHeight: 40)
             .contextMenu { Button("删除子任务") { _ = workspace.delete(child.id) } }
     }
 
@@ -677,6 +691,19 @@ struct TaskInspectorShell: View {
                            now: workspace.clock(), calendar: workspace.calendar)
     }
 
+    /// 滴答式逾期上下文：日期 chip 里附带"延期 N 天"。
+    private func scheduleChipLabel(_ task: Task, field: ScheduleField) -> String {
+        guard let date = field.date(in: task) else { return field.emptyLabel }
+        var label = dateLabel(date)
+        if field == .due, let dueAt = task.schedule.dueAt, !task.isClosed {
+            let days = workspace.calendar.dateComponents([.day],
+                from: workspace.calendar.startOfDay(for: dueAt),
+                to: workspace.calendar.startOfDay(for: workspace.clock())).day ?? 0
+            if days > 0 { label += "，逾期 \(days) 天" }
+        }
+        return label
+    }
+
     private func priorityTitle(_ priority: TaskPriority) -> String {
         switch priority {
         case .none: "无优先级"
@@ -727,7 +754,8 @@ private struct TaskTitleField: View {
     var body: some View {
         TextField(task.parentID == nil ? "任务标题" : "准备做什么？", text: $draft, axis: .vertical)
             .textFieldStyle(.plain)
-            .font(WFType.detailTitle)
+            // 对齐滴答：详情标题大而重，是检查器的视觉锚点。
+            .font(.system(size: 22, weight: .bold))
             .focused($focused)
             .onChange(of: draft) { _, value in
                 _ = workspace.setTitle(task.id, value)

@@ -96,6 +96,13 @@ final class AppEnvironment: ObservableObject {
               arguments.indices.contains(index + 1),
               let destination = NativeDestination(rawValue: arguments[index + 1]) else { return }
         navigation.destination = destination
+        // `--wf-select-first`：程序化选中一个任务，验收检查器时不需要点击。
+        guard arguments.contains("--wf-select-first") else { return }
+        let pool = taskWorkspace.allTasks.filter { $0.deletedAt == nil && $0.skippedAt == nil }
+        let pick = pool.first { $0.title.contains("编辑栏主控验收") }
+            ?? pool.first { !$0.isClosed && !$0.title.isEmpty }
+            ?? pool.first
+        if let pick { taskWorkspace.select(pick.id) }
     }
 
     private func savePreview() {

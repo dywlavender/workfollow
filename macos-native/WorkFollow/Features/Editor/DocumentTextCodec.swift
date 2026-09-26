@@ -33,7 +33,9 @@ enum DocumentTextCodec {
     }
     static func attributes(kind: DocumentBlockKind, marks: Set<DocumentMark>) -> [NSAttributedString.Key: Any] {
         let style = NSMutableParagraphStyle()
-        style.paragraphSpacing = 6
+        style.paragraphSpacing = 8
+        // 滴答式阅读行距：15pt 正文配 ~5pt 行距，长正文不密排。
+        style.lineSpacing = 5
         var size: CGFloat = 15
         if case .heading(let level) = kind { size = level == 1 ? 24 : level == 2 ? 20 : 17 }
         var font = kind == .code || marks.contains(.code)

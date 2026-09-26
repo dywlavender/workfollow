@@ -364,13 +364,15 @@ struct TaskListView: View {
         switch group.kind {
         case .pinned: return "置顶"
         case .overdue: return "已过期"
-        case .today: return "今天"
+        // 滴答式组标题带星期上下文："今天, 周六"。
+        case .today:
+            return "今天, " + workspace.clock().formatted(.dateTime.weekday(.abbreviated).locale(.appDate))
         case .upcoming: return "最近 7 天"
         case .later: return "更远"
         case .undated: return "无日期"
         case .day:
             guard let day = group.day else { return "" }
-            return day.formatted(.dateTime.month(.abbreviated).day().locale(.appDate))
+            return day.formatted(.dateTime.month(.abbreviated).day().weekday(.abbreviated).locale(.appDate))
         case .plain: return ""
         case .completed:
             guard let day = group.day else { return group.label ?? "已完成" }
@@ -545,7 +547,8 @@ struct TaskRowView: View {
     @State private var showTaskContextMenu = false
     @State private var contextMenuAnchor = CGPoint.zero
 
-    /// 与父行复选框对齐的展开区宽度（14 + WFSpace.sm 间距 = 子行缩进 22）。
+    /// 父行展开箭头区宽度：14 + WFSpace.sm 间距 = 22，是子行缩进与父复选框对齐的基准；
+    /// 子行缩进步进 44 = 22 + 22，让 depth=1 的子复选框落在父标题起点再偏右一点。
     private var chevronZoneWidth: CGFloat { 14 }
 
     var body: some View {
@@ -567,11 +570,7 @@ struct TaskRowView: View {
                 .frame(width: chevronZoneWidth)
             }
             Button(action: task.isClosed ? onRestore : onComplete) {
-                Image(systemName: task.isAbandoned ? "circle.slash"
-                                 : task.isClosed ? "checkmark.square.fill" : "square")
-                    .font(.system(size: 15))
-                    .foregroundStyle(task.isClosed ? WFColors.tertiaryText
-                                     : task.isAbandoned ? WFColors.secondaryText : WFColors.secondaryText)
+                TaskRowCompletionBox(task: task)
                     .frame(width: WFSpace.xl, height: WFMetrics.controlHeight)
             }
             .buttonStyle(.plain)
@@ -583,25 +582,36 @@ struct TaskRowView: View {
                     Text(task.title.isEmpty ? "无标题" : task.title)
                         .font(WFType.listTitle).lineLimit(1)
                         .foregroundStyle(task.isClosed ? WFColors.secondaryText : WFColors.text)
-                    if let preview = subtaskPreview {
+                    if let preview = rowPreview {
                         Text(preview)
                             .font(WFType.supporting).lineLimit(1)
                             .foregroundStyle(WFColors.secondaryText)
                     }
                 }
-                .frame(maxWidth: .infinity, minHeight: 36, alignment: .leading)
+                .frame(maxWidth: .infinity, minHeight: 40, alignment: .leading)
                 .contentShape(Rectangle())
             }.buttonStyle(.plain)
 
-            TaskRowMetadataTrail(task: task, workspace: workspace,
-                                 showsListBadge: showsListBadge,
-                                 onOpenDate: { showDatePopover = true })
-
-            hoverQuickActions
+            // 元数据与快捷操作共用右缘槽位：非 hover 显示日期等（贴右缘），
+            // hover 时原位淡入淡出切换为快捷操作，无固定占位宽度，行高不跳变。
+            ZStack(alignment: .trailing) {
+                if hovering && !task.isClosed {
+                    hoverQuickActions
+                        .transition(.opacity)
+                } else {
+                    TaskRowMetadataTrail(task: task, workspace: workspace,
+                                         showsListBadge: showsListBadge,
+                                         isHovered: hovering,
+                                         onOpenDate: { showDatePopover = true })
+                        .transition(.opacity)
+                }
+            }
+            .animation(.easeInOut(duration: 0.15), value: hovering)
         }
         .padding(.horizontal, WFSpace.sm)
-        .padding(.leading, CGFloat(depth) * 22)
-        .frame(minHeight: 36)
+        // 子行每层缩进 44：父行 depth=0 不变；展开箭头区只挂在 depth=0 行上不受影响。
+        .padding(.leading, CGFloat(depth) * 44)
+        .frame(minHeight: 40)
         .background(selected ? WFColors.selection : hovering ? WFColors.hover : .clear,
                     in: RoundedRectangle(cornerRadius: WFMetrics.corner))
         .onHover { hovering = $0 }
@@ -660,7 +670,13 @@ struct TaskRowView: View {
         return TaskListViewDefaults.subtaskPreview(titles: children.map(\.title))
     }
 
-    /// hover 行时尾部浮现的日期/优先级快捷操作。
+    /// 标题下的灰色预览行：折叠且有子任务用子任务预览，否则正文有内容时用单行正文。
+    private var rowPreview: String? {
+        subtaskPreview ?? TaskListViewDefaults.bodyPreview(of: task.document.plainText)
+    }
+
+    /// hover 行时在元数据槽位原位浮现的日期/优先级快捷操作；可见性由行内
+    /// ZStack 分支控制，自身不带占位宽度与透明度开关。
     private var hoverQuickActions: some View {
         HStack(spacing: 2) {
             Button { showDatePopover = true } label: {
@@ -697,9 +713,6 @@ struct TaskRowView: View {
             .accessibilityLabel("优先级：\(task.title.isEmpty ? "无标题" : task.title)")
         }
         .font(.system(size: 12))
-        .frame(width: 50)
-        .opacity(hovering && !task.isClosed ? 1 : 0)
-        .allowsHitTesting(hovering && !task.isClosed)
     }
 }
 
@@ -719,6 +732,28 @@ private enum TaskRowPriority {
         case .low: WFColors.accent
         case .medium: .orange
         case .high: .red
+        }
+    }
+}
+
+/// 滴答/Flutter 同源的完成框：描边按优先级着色（高红/中橙/低=强调色），
+/// 完成后统一强调色填充，放弃显示斜杠圆。
+private struct TaskRowCompletionBox: View {
+    let task: Task
+
+    var body: some View {
+        if task.isAbandoned {
+            Image(systemName: "circle.slash")
+                .font(.system(size: 14))
+                .foregroundStyle(WFColors.secondaryText)
+        } else if task.isClosed {
+            Image(systemName: "checkmark.square.fill")
+                .font(.system(size: 15))
+                .foregroundStyle(WFColors.accent)
+        } else {
+            RoundedRectangle(cornerRadius: 4)
+                .stroke(TaskRowPriority.color(task.priority), lineWidth: 1.5)
+                .frame(width: 16, height: 16)
         }
     }
 }
@@ -751,12 +786,14 @@ private struct TaskReorderDropModifier: ViewModifier {
     }
 }
 
-/// 行尾右对齐的元数据：清单、优先级、截止、描述/提醒等小图标与日期徽标。
-/// 日期徽标颜色：今天=强调色、过期=红色、其余=灰色（对齐滴答的信息层级）。
+/// 行尾右对齐的元数据：清单与日期常驻，其余小图标（重复/提醒/描述/附件/
+/// 截止）只在 hover 时浮现——滴答行内最多"清单名 + 日期"，次要素材收进详情。
+/// 日期徽标颜色：今天=强调色、过期=红色、其余=灰色。
 private struct TaskRowMetadataTrail: View {
     let task: Task
     @ObservedObject var workspace: TaskWorkspaceModel
     var showsListBadge: Bool
+    let isHovered: Bool
     let onOpenDate: () -> Void
 
     private var deadlineOverdue: Bool {
@@ -784,24 +821,23 @@ private struct TaskRowMetadataTrail: View {
                 Text(task.list.name).lineLimit(1)
                     .frame(maxWidth: 40).foregroundStyle(muted).layoutPriority(-1)
             }
-            if task.priority != .none {
-                Image(systemName: "flag.fill")
-                    .foregroundStyle(task.isClosed ? muted : TaskRowPriority.color(task.priority))
-                    .accessibilityLabel(TaskRowPriority.title(task.priority))
-            }
-            ForEach(Array(secondaryMetadata.prefix(WFMetrics.secondaryMetadataLimit))) { item in
-                if let value = item.value {
-                    Text(value).foregroundStyle(muted).accessibilityLabel(item.accessibilityLabel)
-                } else if let symbol = item.symbol {
-                    Image(systemName: symbol).foregroundStyle(muted)
-                        .accessibilityLabel(item.accessibilityLabel)
+            // 优先级已画在完成框描边上（滴答/Flutter 同源），行内不再放旗标。
+            // 次要图标与截止只在 hover 时浮现（滴答行内最多"清单 + 日期"）。
+            if isHovered {
+                ForEach(secondaryMetadata) { item in
+                    if let value = item.value {
+                        Text(value).foregroundStyle(muted).accessibilityLabel(item.accessibilityLabel)
+                    } else if let symbol = item.symbol {
+                        Image(systemName: symbol).foregroundStyle(muted)
+                            .accessibilityLabel(item.accessibilityLabel)
+                    }
                 }
-            }
-            if let deadline = task.schedule.deadlineAt {
-                Text(TaskDateLabel.text(deadline, hasTime: false,
-                                        now: workspace.clock(), calendar: workspace.calendar) + "截止")
-                    .foregroundStyle(task.isClosed ? muted : deadlineOverdue ? .red : muted)
-                    .layoutPriority(0)
+                if let deadline = task.schedule.deadlineAt {
+                    Text(TaskDateLabel.text(deadline, hasTime: false,
+                                            now: workspace.clock(), calendar: workspace.calendar) + "截止")
+                        .foregroundStyle(task.isClosed ? muted : deadlineOverdue ? .red : muted)
+                        .layoutPriority(0)
+                }
             }
             if task.schedule.dueAt != nil {
                 // 日期是行内最重要的元信息：固定尺寸不被压缩。
@@ -911,6 +947,15 @@ enum TaskListViewDefaults {
         let names = titles.map { $0.isEmpty ? "无标题" : $0 }.prefix(max(limit, 1))
         guard !names.isEmpty else { return nil }
         return names.map { "- [ ] " + $0 }.joined(separator: " ")
+    }
+
+    /// 行内正文预览：取纯文本第一个非空行；正文为空返回 nil（不占预览行）。
+    static func bodyPreview(of plainText: String) -> String? {
+        for line in plainText.split(separator: "\n") {
+            let trimmed = String(line).trimmingCharacters(in: .whitespacesAndNewlines)
+            if !trimmed.isEmpty { return trimmed }
+        }
+        return nil
     }
 
     /// 分组标题右侧的小字尾注；只有"已过期"组显示"顺延"。
