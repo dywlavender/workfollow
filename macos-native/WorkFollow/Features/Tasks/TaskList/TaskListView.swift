@@ -270,8 +270,9 @@ struct TaskListView: View {
         .frame(minHeight: 36, alignment: .center)
         .padding(.horizontal, WFSpace.md)
         .padding(.vertical, 4)
-        .background(WFColors.secondarySurface,
-                    in: RoundedRectangle(cornerRadius: WFMetrics.corner))
+        // 滴答式可见的浅灰圆角条：controlBackgroundColor 在浅色模式下与白底无差别。
+        .background(WFColors.canvas, in: RoundedRectangle(cornerRadius: WFMetrics.corner))
+        .overlay(WFColors.border, in: RoundedRectangle(cornerRadius: WFMetrics.corner))
         .padding(.horizontal, WFSpace.xl)
         .padding(.bottom, WFSpace.xs)
     }
@@ -737,7 +738,9 @@ private struct TaskRowMetadataTrail: View {
             }
             if task.isAbandoned { Text("已放弃").foregroundStyle(muted) }
             if showsListBadge, task.list.name != TaskList.inbox.name {
-                Text(task.list.name).lineLimit(1).frame(maxWidth: 48).foregroundStyle(muted)
+                // 清单名最先被压缩：低优先级 + 40pt 上限，把宽度让给日期。
+                Text(task.list.name).lineLimit(1)
+                    .frame(maxWidth: 40).foregroundStyle(muted).layoutPriority(-1)
             }
             if task.priority != .none {
                 Image(systemName: "flag.fill")
@@ -756,14 +759,16 @@ private struct TaskRowMetadataTrail: View {
                 Text(TaskDateLabel.text(deadline, hasTime: false,
                                         now: workspace.clock(), calendar: workspace.calendar) + "截止")
                     .foregroundStyle(task.isClosed ? muted : deadlineOverdue ? .red : muted)
+                    .layoutPriority(0)
             }
             if task.schedule.dueAt != nil {
-                dateBadge
+                // 日期是行内最重要的元信息：固定尺寸不被压缩。
+                dateBadge.fixedSize().layoutPriority(2)
             }
         }
         .font(WFType.supporting)
         .lineLimit(1)
-        .frame(maxWidth: 180, alignment: .trailing)
+        .frame(maxWidth: 200, alignment: .trailing)
     }
 
     private var dateBadge: some View {

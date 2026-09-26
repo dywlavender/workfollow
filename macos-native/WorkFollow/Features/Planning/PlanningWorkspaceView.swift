@@ -59,6 +59,7 @@ struct PlanningWorkspaceView: View {
                         Text("周").tag(ViewMode.week)
                         Text("年").tag(ViewMode.year)
                     }
+                    .labelsHidden()
                     .pickerStyle(.segmented).controlSize(.small).frame(width: 120)
                 }
                 optionsMenu
@@ -236,7 +237,9 @@ struct PlanningWorkspaceView: View {
     /// 月/周网格，向滴答靠拢：灰底周头、白底细线日期格、今天描边圆点、
     /// 任务为按清单着色的圆角小条（点击条 = 选中任务），"+"仅 hover 显示。
     private var monthWeekBoard: some View {
-        ScrollView([.horizontal, .vertical]) {
+        // 只纵向滚动：横向轴会让 LazyVGrid 收缩到最小宽度、两侧留白，
+        // 去掉后网格随内容区满宽拉伸（对齐滴答的满宽月视图）。
+        ScrollView(.vertical) {
             let days = mode == .week ? PlanningProjection.weekDays(containing: anchor, calendar: workspace.calendar) : PlanningProjection.monthDays(containing: anchor, calendar: workspace.calendar)
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(minimum: 88), spacing: 1), count: 7), spacing: 1) {
                 // 表头用 offset 作 id：与日期格共用 Date id 会让 LazyVGrid
@@ -349,12 +352,13 @@ private struct QuadrantCard: View {
                                 listGroup(name: name, tasks: active.filter { $0.list.name == name })
                             }
                             if !completed.isEmpty {
-                                if !listNames.isEmpty { Spacer(minLength: WFSpace.xs) }
+                                // 紧跟活动分组之后（滴答不做沉底，沉底会造成大空档）。
                                 completedGroup
                             }
                         }
                         .padding(WFSpace.md)
-                        .frame(minHeight: geometry.size.height)
+                        .padding(.bottom, WFSpace.sm)
+                        .frame(minHeight: geometry.size.height, alignment: .topLeading)
                     }
                 }
             }

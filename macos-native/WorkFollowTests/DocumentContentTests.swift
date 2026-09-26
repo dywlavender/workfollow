@@ -4,6 +4,22 @@ import XCTest
 
 @MainActor
 final class DocumentContentTests: XCTestCase {
+    func testBlockPresentationDoesNotBecomeInlineFormatting() {
+        for kind in [DocumentBlockKind.heading(1), .heading(3), .code] {
+            let editor = NativeTextView(frame: .zero, textContainer: nil)
+            let original = NativeDocument(blocks: [DocumentBlock(kind: kind, runs: [DocumentRun(text: "正文")])])
+            editor.textStorage?.setAttributedString(DocumentTextCodec.render(original))
+            editor.setSelectedRange(NSRange(location: 0, length: 2))
+            editor.applyFormat(.init(title: "正文", block: .paragraph, mark: nil))
+            let converted = DocumentTextCodec.decode(editor.attributedString(), preserving: original)
+            XCTAssertEqual(converted.blocks[0].kind, .paragraph)
+            XCTAssertEqual(converted.blocks[0].runs[0].marks, [])
+        }
+        let explicit = NativeDocument(blocks: [DocumentBlock(kind: .heading(2), runs: [DocumentRun(text: "手动粗体", marks: [.bold])])])
+        let decoded = DocumentTextCodec.decode(DocumentTextCodec.render(explicit), preserving: explicit)
+        XCTAssertEqual(decoded.blocks[0].runs[0].marks, [.bold])
+    }
+
     func testCaretFormatsComposeAndToggleWithoutChangingExistingText() {
         let editor = NativeTextView(frame: .zero, textContainer: nil)
         editor.typingAttributes = DocumentTextCodec.attributes(kind: .paragraph, marks: [])

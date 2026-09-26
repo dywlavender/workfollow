@@ -5,6 +5,7 @@ enum DocumentTextCodec {
     static let blockKey = NSAttributedString.Key("WorkFollow.block")
     static let attachmentKey = NSAttributedString.Key("WorkFollow.attachment")
     static let inlineCodeKey = NSAttributedString.Key("WorkFollow.inlineCode")
+    static let explicitBoldKey = NSAttributedString.Key("WorkFollow.explicitBold")
     static func blockToken(_ kind: DocumentBlockKind) -> String {
         switch kind {
         case .paragraph: "paragraph"
@@ -51,7 +52,7 @@ enum DocumentTextCodec {
             style.headIndent = 22
         }
         var attrs: [NSAttributedString.Key: Any] = [
-            blockKey: blockToken(kind), .font: font, .paragraphStyle: style,
+            blockKey: blockToken(kind), explicitBoldKey: marks.contains(.bold), .font: font, .paragraphStyle: style,
             .foregroundColor: kind == .quote ? NSColor.secondaryLabelColor : NSColor.labelColor
         ]
         if marks.contains(.code) { attrs[inlineCodeKey] = true }
@@ -103,9 +104,15 @@ enum DocumentTextCodec {
                 if attrs[inlineCodeKey] as? Bool == true { marks.insert(.code) }
                 if let font = attrs[.font] as? NSFont {
                     let traits = NSFontManager.shared.traits(of: font)
-                    if traits.contains(.boldFontMask) { marks.insert(.bold) }
+                    // Heading weight is presentation, not a user-applied mark.
+                    // Preserve explicit bold on headings, while plain/rich-text
+                    // paragraphs still accept font traits from native editing.
+                    let isHeading: Bool = { if case .heading = kind { return true }; return false }()
+                    if traits.contains(.boldFontMask), !isHeading || attrs[explicitBoldKey] as? Bool == true {
+                        marks.insert(.bold)
+                    }
                     if traits.contains(.italicFontMask) { marks.insert(.italic) }
-                    if font.isFixedPitch { marks.insert(.code) }
+                    if font.isFixedPitch && kind != .code { marks.insert(.code) }
                 }
                 if let value = attrs[.underlineStyle] as? Int, value != 0 { marks.insert(.underline) }
                 if let value = attrs[.strikethroughStyle] as? Int, value != 0 { marks.insert(.strikethrough) }
