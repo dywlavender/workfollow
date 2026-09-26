@@ -186,6 +186,19 @@ struct TaskListView: View {
 
     // MARK: - 快速添加：浅灰圆角条，聚焦后展开解析预览
 
+    /// 快速添加日期入口的配色：与任务行日期徽标共用 dateBadgeStyle 归类
+    /// （过期红、今天强调色、未来/无日期灰）。
+    private func quickAddBadgeColor(_ timing: QuickAddScheduleDraft) -> Color {
+        guard let dueAt = timing.dueAt else { return WFColors.secondaryText }
+        switch TaskListViewDefaults.dateBadgeStyle(dueAt: dueAt, isClosed: false,
+                                                   now: workspace.clock(),
+                                                   calendar: workspace.calendar) {
+        case .overdue: return .red
+        case .today: return WFColors.accent
+        case .scheduled, .none: return WFColors.secondaryText
+        }
+    }
+
     private func quickAddBar(in scope: TaskListScope) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: WFSpace.sm) {
@@ -199,16 +212,18 @@ struct TaskListView: View {
                     .onSubmit { addTask(in: scope) }
                 if quickAddFocused || !draft.isEmpty || showQuickAddSchedule || showQuickAddProperties {
                     let timing = quickAddScheduleOverride ?? currentQuickAddSchedule(for: scope)
+                    // 日期入口与任务行日期徽标同款：10pt 日历图标 + 日期文案，
+                    // 配色走 dateBadgeStyle（过期红、今天强调色、其余灰）。
                     Button { showQuickAddSchedule = true } label: {
-                        HStack(spacing: WFSpace.xs) {
-                            Image(systemName: timing.dueAt == nil ? "calendar.badge.plus" : "calendar")
+                        HStack(spacing: 3) {
+                            Image(systemName: "calendar").font(.system(size: 10))
                             if navigation.destination != .inbox, let dueAt = timing.dueAt {
                                 Text(TaskDateLabel.text(dueAt, hasTime: timing.hasTime,
-                                                       now: workspace.clock(), calendar: workspace.calendar))
+                                                        now: workspace.clock(), calendar: workspace.calendar))
                                     .lineLimit(1)
                             }
                         }
-                        .foregroundStyle(timing.dueAt == nil ? WFColors.secondaryText : WFColors.accent)
+                        .foregroundStyle(quickAddBadgeColor(timing))
                         .frame(height: WFMetrics.controlHeight)
                         .contentShape(Rectangle())
                     }
