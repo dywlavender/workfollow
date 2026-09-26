@@ -588,27 +588,21 @@ struct TaskRowView: View {
                             .foregroundStyle(WFColors.secondaryText)
                     }
                 }
-                .frame(maxWidth: .infinity, minHeight: 36, alignment: .leading)
+                .frame(maxWidth: .infinity, minHeight: 50, alignment: .leading)
                 .contentShape(Rectangle())
             }.buttonStyle(.plain)
 
-            // 元数据尾栏常驻（清单/旗标/小图标/截止/日期，与迁移版一致），hover
-            // 时行尾追加淡入的日期/优先级快捷操作：日期不悬浮时仍贴右缘，尾栏
-            // 让位滑动走 0.15s 动画，行内没有任何元素被替换或隐藏。
+            // 与 Flutter 行一致：元数据尾栏常驻，悬浮只做行背景高亮，不浮现
+            // 任何快捷按钮（日期走尾栏日期徽章，优先级走右键菜单/检查器）。
             TaskRowMetadataTrail(task: task, workspace: workspace,
                                  showsListBadge: showsListBadge,
                                  onOpenDate: { showDatePopover = true })
-
-            if hovering && !task.isClosed {
-                hoverQuickActions
-                    .transition(.opacity)
-            }
         }
-        .animation(.easeInOut(duration: 0.15), value: hovering)
         .padding(.horizontal, WFSpace.sm)
         // 子行每层缩进 44：父行 depth=0 不变；展开箭头区只挂在 depth=0 行上不受影响。
         .padding(.leading, CGFloat(depth) * 44)
-        .frame(minHeight: 36)
+        // 行高对齐 Flutter rowMinHeight = 50（滴答参考列表的单行读感）。
+        .frame(minHeight: 50)
         .background(selected ? WFColors.selection : hovering ? WFColors.hover : .clear,
                     in: RoundedRectangle(cornerRadius: WFMetrics.corner))
         .onHover { hovering = $0 }
@@ -672,46 +666,6 @@ struct TaskRowView: View {
         subtaskPreview ?? TaskListViewDefaults.bodyPreview(of: task.document.plainText)
     }
 
-    /// hover 行时行尾淡入的日期/优先级快捷操作；可见性由行内条件挂载控制，
-    /// 挂载后占固定 50pt，元数据尾栏让位的滑动由行级动画接管。
-    private var hoverQuickActions: some View {
-        HStack(spacing: 2) {
-            Button { showDatePopover = true } label: {
-                Image(systemName: task.schedule.dueAt == nil ? "calendar.badge.plus" : "calendar")
-                    .frame(width: 24, height: 26)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .foregroundStyle(WFColors.secondaryText)
-            .help("安排日期")
-            .accessibilityLabel("安排日期：\(task.title.isEmpty ? "无标题" : task.title)")
-            Menu {
-                ForEach([TaskPriority.high, .medium, .low, .none], id: \.self) { priority in
-                    Button {
-                        _ = workspace.setPriority(task.id, priority)
-                    } label: {
-                        if task.priority == priority {
-                            Label(TaskRowPriority.title(priority), systemImage: "checkmark")
-                        } else {
-                            Text(TaskRowPriority.title(priority))
-                        }
-                    }
-                }
-            } label: {
-                Image(systemName: "flag")
-                    .frame(width: 24, height: 26)
-                    .contentShape(Rectangle())
-            }
-            .menuStyle(.borderlessButton)
-            .menuIndicator(.hidden)
-            .fixedSize()
-            .foregroundStyle(WFColors.secondaryText)
-            .help("优先级")
-            .accessibilityLabel("优先级：\(task.title.isEmpty ? "无标题" : task.title)")
-        }
-        .font(.system(size: 12))
-        .frame(width: 50)
-    }
 }
 
 private enum TaskRowPriority {
