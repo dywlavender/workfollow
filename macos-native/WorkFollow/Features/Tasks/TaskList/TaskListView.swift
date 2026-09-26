@@ -283,7 +283,10 @@ struct TaskListView: View {
         .padding(.vertical, 4)
         // 滴答式可见的浅灰圆角条：controlBackgroundColor 在浅色模式下与白底无差别。
         .background(WFColors.canvas, in: RoundedRectangle(cornerRadius: WFMetrics.corner))
-        .overlay(WFColors.border, in: RoundedRectangle(cornerRadius: WFMetrics.corner))
+        // 描边必须用 stroke：overlay 直接填颜色会整块盖住输入框并吃掉点击。
+        .overlay(RoundedRectangle(cornerRadius: WFMetrics.corner).stroke(WFColors.border, lineWidth: 1))
+        // 对齐 Flutter：点击栏上任意位置都聚焦输入框（按钮优先级更高不受影响）。
+        .onTapGesture { quickAddFocused = true }
         .padding(.horizontal, WFSpace.xl)
         .padding(.bottom, WFSpace.xs)
     }
