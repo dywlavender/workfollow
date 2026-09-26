@@ -19,11 +19,14 @@ final class TaskWorkspaceModel: ObservableObject {
     @Published private(set) var taskListPaneWidth = WFMetrics.listPreferred
     @Published var activeList: String?
     @Published var activeTag: String?
+    @Published var activeFilterID: UUID?
     @Published var bulkSelection: Set<UUID> = []
     @Published private(set) var bulkAnchorTaskID: UUID?
 
     private let store: WorkspaceStore
     private let actions: TaskActions
+    private var filterStore: FilterStore?
+    private var filterCancellable: AnyCancellable?
     let clock: () -> Date
     let calendar: Calendar
 
@@ -66,6 +69,39 @@ final class TaskWorkspaceModel: ObservableObject {
         actions.renameTag(old, to: value)
         if activeTag == old { activeTag = value }
         revision += 1
+    }
+
+    /// Called once by AppEnvironment after both stores exist. Resolves
+    /// `activeFilterID` through the store, refreshes projections when filter
+    /// contents change, and clears the active filter if it is deleted anywhere.
+    func attachFilterStore(_ store: FilterStore) {
+        filterStore = store
+        filterCancellable = store.$filters.sink { [weak self] filters in
+            guard let self else { return }
+            self.revision += 1
+            if let activeFilterID = self.activeFilterID,
+               !filters.contains(where: { $0.id == activeFilterID }) {
+                self.activeFilterID = nil
+            }
+        }
+    }
+
+    func openFilter(_ id: UUID?) {
+        activeFilterID = id
+    }
+
+    /// Deletes through the attached store and, mirroring `renameTag`, clears
+    /// the active selection when the deleted filter was the active one.
+    @discardableResult
+    func deleteFilter(_ id: UUID) -> Bool {
+        guard let filterStore, filterStore.delete(id) else { return false }
+        if activeFilterID == id { activeFilterID = nil }
+        return true
+    }
+
+    var activeFilter: SavedFilter? {
+        guard let activeFilterID else { return nil }
+        return filterStore?.filter(withID: activeFilterID)
     }
     func applyBulk(_ operation: TaskBatchOperation) {
         actions.batch(bulkSelection, operation: operation)
@@ -188,24 +224,30 @@ final class TaskWorkspaceModel: ObservableObject {
 
     func groups(for scope: TaskListScope, query: TaskListQuery = TaskListQuery()) -> [TaskListGroup] {
         _ = revision
-        return TaskListProjection.groups(in: scope, store: store, now: clock(), calendar: calendar, query: query)
+        return applyingFilter(
+            TaskListProjection.groups(in: scope, store: store, now: clock(), calendar: calendar, query: query))
     }
 
+    /// Count for the visible list; when a saved filter is active the header
+    /// count shrinks with the filtered content (like `activeList`/`activeTag`).
     func count(for scope: TaskListScope) -> Int {
         _ = revision
-        return TaskListProjection.count(in: scope, store: store, now: clock(), calendar: calendar)
+        return filteredMatches(in: scope, query: TaskListQuery())
+            .filter { scope == .completed || !$0.isClosed }.count
     }
 
+    /// Sidebar badge count: intentionally ignores the saved filter (and the
+    /// list/tag query) so destination badges stay stable while filtering.
     func count(for destination: NativeDestination) -> Int {
         if destination == .trash { return deletedTasks.count }
         guard let scope = Self.scope(for: destination) else { return 0 }
-        return count(for: scope)
+        return TaskListProjection.count(in: scope, store: store, now: clock(), calendar: calendar)
     }
 
     func nodes(for group: TaskListGroup, scope: TaskListScope, query: TaskListQuery = TaskListQuery(),
                orderedRoots: [Task]? = nil) -> [TaskTreeNode] {
         _ = revision
-        let matching = TaskListProjection.matches(in: scope, store: store, now: clock(), calendar: calendar, query: query)
+        let matching = filteredMatches(in: scope, query: query)
         let followsMatchedParent = (scope == .today || scope == .nextSevenDays) &&
             query.search.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         let roots = Set(group.tasks.map(\.id))
@@ -216,6 +258,41 @@ final class TaskWorkspaceModel: ObservableObject {
 
     func visibleNodes(for scope: TaskListScope, query: TaskListQuery = TaskListQuery()) -> [TaskTreeNode] {
         groups(for: scope, query: query).flatMap { nodes(for: $0, scope: scope, query: query) }
+    }
+
+    // MARK: Saved filter application
+
+    private func filterMatches(_ task: Task) -> Bool {
+        guard let filter = activeFilter else { return true }
+        return FilterEvaluator.matches(task, filter: filter, now: clock(), calendar: calendar)
+    }
+
+    /// Post-filters projection output with the active saved filter, dropping
+    /// groups that end up empty so the view falls back to its empty state. A
+    /// root that fails the filter stays when one of its children passes, so
+    /// the matched child remains reachable — mirroring how the list/tag query
+    /// promotes matching children into rows.
+    private func applyingFilter(_ groups: [TaskListGroup]) -> [TaskListGroup] {
+        guard let filter = activeFilter else { return groups }
+        return groups.compactMap { group in
+            let tasks = group.tasks.filter { task in
+                filterMatches(task) || hasMatchingChild(of: task, filter: filter)
+            }
+            guard !tasks.isEmpty else { return nil }
+            guard tasks.count != group.tasks.count else { return group }
+            return TaskListGroup(kind: group.kind, day: group.day, tasks: tasks, label: group.label)
+        }
+    }
+
+    private func hasMatchingChild(of task: Task, filter: SavedFilter) -> Bool {
+        store.children(of: task.id).contains {
+            FilterEvaluator.matches($0, filter: filter, now: clock(), calendar: calendar)
+        }
+    }
+
+    private func filteredMatches(in scope: TaskListScope, query: TaskListQuery) -> [Task] {
+        TaskListProjection.matches(in: scope, store: store, now: clock(), calendar: calendar, query: query)
+            .filter { filterMatches($0) }
     }
 
     func select(_ id: UUID?) {

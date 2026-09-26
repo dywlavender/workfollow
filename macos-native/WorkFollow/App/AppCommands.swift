@@ -3,6 +3,8 @@ import SwiftUI
 
 struct AppCommands: Commands {
     @ObservedObject var environment: AppEnvironment
+    @ObservedObject var quickAdd: GlobalQuickAddController
+    @AppStorage("globalQuickAddEnabled") private var globalQuickAddEnabled = false
 
     var body: some Commands {
         CommandGroup(replacing: .newItem) {
@@ -21,6 +23,11 @@ struct AppCommands: Commands {
         CommandMenu("导航") {
             Button("快速打开…") { environment.commandPalettePresented = true }
                 .keyboardShortcut("k", modifiers: .command)
+            Divider()
+            Toggle("启用全局快速添加（⌘⇧A）", isOn: $globalQuickAddEnabled)
+                .onChange(of: globalQuickAddEnabled) { _, enabled in
+                    quickAdd.setEnabled(enabled)
+                }
             Divider()
             Button("今天") { environment.navigate(to: .today) }
                 .keyboardShortcut("1", modifiers: .command)

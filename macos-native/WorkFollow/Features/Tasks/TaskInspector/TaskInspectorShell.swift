@@ -1,5 +1,8 @@
 import SwiftUI
 
+/// 对齐滴答清单的任务详情：顶部日期 chip + 更多菜单，标题大字直接编辑，
+/// 标签/优先级/重复以紧凑 chip 呈现，子任务清单占主体，底部左清单右图标位，
+/// 全页"白纸 + 细线"分区。
 struct TaskInspectorShell: View {
     @ObservedObject var workspace: TaskWorkspaceModel
     @EnvironmentObject private var environment: AppEnvironment
@@ -15,137 +18,21 @@ struct TaskInspectorShell: View {
     @State private var showAttributesPopover = false
     @State private var showFormattingToolbar = false
     @State private var showRelationsPopover = false
+    @State private var showRepeatPopover = false
     @State private var relationQuery = ""
     @StateObject private var editorHandle = DocumentEditorHandle()
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             if let task = workspace.selectedTask {
-                HStack(spacing: WFSpace.md) {
-                    if showBack {
-                        Button { workspace.select(nil) } label: {
-                            Label("返回", systemImage: "chevron.left")
-                        }.buttonStyle(.plain)
-                    }
-                    Button {
-                        _ = workspace.changeStatus(task)
-                    } label: {
-                        Image(systemName: task.isAbandoned ? "circle.slash"
-                                         : task.isClosed ? "checkmark.square.fill" : "square")
-                            .foregroundStyle(task.isClosed ? WFColors.tertiaryText : WFColors.secondaryText)
-                    }
-                    .buttonStyle(.plain)
-                    .help(task.isClosed ? "恢复任务" : "完成任务")
-                    .accessibilityLabel(task.isClosed ? "恢复任务" : "完成任务")
-                    Divider().frame(height: WFMetrics.icon)
-                    scheduleButton(task: task, field: .due)
-                    Spacer()
-                    priorityMenu(task)
-                }
-                .font(WFType.body)
-                .padding(.horizontal, 24)
-                .frame(height: 56)
+                headerBar(task)
                 Divider()
                 ScrollView {
-                VStack(alignment: .leading, spacing: 0) {
-                TaskTitleField(task: task, workspace: workspace,
-                               focused: $titleFocused, draft: $presentation.titleDraft)
-                    .id(task.id)
-                    .padding(.horizontal, 24)
-                    .padding(.top, 24)
-                    .padding(.bottom, 20)
-                documentEditor(task)
-                if task.parentID == nil {
-                    VStack(alignment: .leading, spacing: 0) {
-                        ForEach(editorChildren(task.id)) { child in
-                            childRow(child)
-                            Divider().padding(.leading, 27)
-                        }
-                        Button {
-                            workspace.requestChildTitleEditor(for: task.id)
-                        } label: {
-                            Label("添加子任务", systemImage: "plus")
-                                .frame(minHeight: 44, alignment: .leading)
-                        }.buttonStyle(.plain).foregroundStyle(WFColors.accent)
-                    }.padding(.horizontal, 24).padding(.top, 12)
-                } else if let parentID = task.parentID {
-                    Button("返回父任务") { workspace.select(parentID) }.padding(.horizontal, WFSpace.page).padding(.bottom, 12)
+                    inspectorContent(task)
                 }
-                }.padding(.bottom, 24)
-                    .frame(maxWidth: .infinity, alignment: .topLeading)
-                }.frame(maxWidth: .infinity, maxHeight: .infinity)
-                HStack {
-                    listMenu(task)
-                    Spacer()
-                    Button { showFormattingToolbar.toggle() } label: {
-                        Image(systemName: "textformat").font(.system(size: 18))
-                            .frame(width: 30, height: 30)
-                    }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(showFormattingToolbar ? WFColors.accent : WFColors.text)
-                    .help("正文格式").accessibilityLabel("正文格式")
-                    Menu {
-                        if task.parentID == nil {
-                            Button("添加子任务") { workspace.requestChildTitleEditor(for: task.id) }
-                        }
-                        Button(task.isPinned ? "取消置顶" : "置顶") { _ = workspace.setPinned(task.id, !task.isPinned) }
-                        Button("标签…") { showTagsPopover = true }
-                        Button("更多属性…") { showAttributesPopover = true }
-                        Button("添加附件…") { addAttachments(to: task.id) }
-                        Button("截止日期…") { presentation.activePopover = .deadline }
-                        Button("转换为笔记") { _ = environment.convertTaskToNote(task.id) }
-                        if !task.isClosed && task.recurrence != .never {
-                            Button("跳过本周期") { workspace.skip(task.id) }
-                                .disabled(RecurrenceEngine.next(for: task, now: workspace.clock(), calendar: workspace.calendar) == nil)
-                        }
-                        Button(task.isAbandoned ? "恢复任务" : "放弃任务") {
-                            if task.isAbandoned { _ = workspace.restore(task.id) }
-                            else { _ = workspace.abandon(task.id) }
-                        }
-                        .disabled(task.status == .completed)
-                        Button("删除任务", role: .destructive) {
-                            _ = workspace.delete(task.id)
-                        }
-                    } label: {
-                        Image(systemName: "ellipsis")
-                            .frame(width: WFMetrics.controlHeight, height: WFMetrics.controlHeight)
-                            .contentShape(Rectangle())
-                    }
-                    .menuStyle(.borderlessButton)
-                    .menuIndicator(.hidden).fixedSize()
-                    .help("更多操作")
-                    .accessibilityLabel("更多任务操作")
-                    .popover(isPresented: $showTagsPopover, arrowEdge: .top) {
-                        TaskTagPickerPopover(initialTags: task.tags, workspace: workspace,
-                            onCancel: { showTagsPopover = false },
-                            onApply: { tags in
-                                workspace.setTags(task.id, tags)
-                                showTagsPopover = false
-                            })
-                    }
-                    .popover(isPresented: $showAttributesPopover, arrowEdge: .top) {
-                        ScrollView {
-                            TaskAttributesView(task: workspace.task(for: task.id) ?? task,
-                                               workspace: workspace)
-                        }.frame(width: 320, height: 360)
-                    }
-                    .popover(isPresented: $showRelationsPopover, arrowEdge: .top) {
-                        relationPicker(task)
-                    }
-                    .popover(isPresented: popoverBinding(.deadline), arrowEdge: .top) {
-                        TaskDatePopoverV2(task: task, workspace: workspace, deadline: true) {
-                            presentation.activePopover = nil
-                        }
-                    }
-                }
-                .font(WFType.body)
-                .padding(.horizontal, 24)
-                .frame(height: 48)
-                .overlay(alignment: .bottomTrailing) {
-                    if showFormattingToolbar {
-                        formattingToolbar.padding(.horizontal, 16).padding(.bottom, 48)
-                    }
-                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                Divider()
+                bottomBar(task)
             } else {
                 Spacer()
                 VStack(spacing: WFSpace.md) {
@@ -176,6 +63,7 @@ struct TaskInspectorShell: View {
             showAttributesPopover = false
             showFormattingToolbar = false
             showRelationsPopover = false
+            showRepeatPopover = false
         }
         .onChange(of: workspace.pendingChildTitleEditorID) { _, _ in beginPendingChildEditing() }
         .onExitCommand {
@@ -196,6 +84,287 @@ struct TaskInspectorShell: View {
                     else { TaskNamePrompt.invalidName() }
                 }
             }.disabled(newListName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+        }
+    }
+
+    // MARK: - 顶部：状态框 + 日期 chip + 更多
+
+    private func headerBar(_ task: Task) -> some View {
+        HStack(spacing: WFSpace.sm) {
+            if showBack {
+                Button { workspace.select(nil) } label: {
+                    Image(systemName: "chevron.left")
+                        .frame(width: 24, height: WFMetrics.controlHeight)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help("返回列表")
+                .accessibilityLabel("返回列表")
+            }
+            Button {
+                _ = workspace.changeStatus(task)
+            } label: {
+                Image(systemName: task.isAbandoned ? "circle.slash"
+                                 : task.isClosed ? "checkmark.square.fill" : "square")
+                    .foregroundStyle(task.isClosed ? WFColors.tertiaryText : WFColors.secondaryText)
+            }
+            .buttonStyle(.plain)
+            .help(task.isClosed ? "恢复任务" : "完成任务")
+            .accessibilityLabel(task.isClosed ? "恢复任务" : "完成任务")
+            scheduleChip(task, field: .due)
+            Spacer(minLength: 0)
+            moreMenu(task)
+        }
+        .padding(.horizontal, WFSpace.xl)
+        .frame(height: 48)
+    }
+
+    private func moreMenu(_ task: Task) -> some View {
+        Menu {
+            if task.parentID == nil {
+                Button("添加子任务") { workspace.requestChildTitleEditor(for: task.id) }
+            }
+            Button(task.isPinned ? "取消置顶" : "置顶") { _ = workspace.setPinned(task.id, !task.isPinned) }
+            Button("标签…") { showTagsPopover = true }
+            Button("更多属性…") { showAttributesPopover = true }
+            Button("添加附件…") { addAttachments(to: task.id) }
+            Button("截止日期…") { presentation.activePopover = .deadline }
+            Button("转换为笔记") { _ = environment.convertTaskToNote(task.id) }
+            Button("保存为模板…") { saveAsTemplate() }
+            if !task.isClosed && task.recurrence != .never {
+                Button("跳过本周期") { workspace.skip(task.id) }
+                    .disabled(RecurrenceEngine.next(for: task, now: workspace.clock(), calendar: workspace.calendar) == nil)
+            }
+            Button(task.isAbandoned ? "恢复任务" : "放弃任务") {
+                if task.isAbandoned { _ = workspace.restore(task.id) }
+                else { _ = workspace.abandon(task.id) }
+            }
+            .disabled(task.status == .completed)
+            Button("删除任务", role: .destructive) {
+                _ = workspace.delete(task.id)
+            }
+        } label: {
+            Image(systemName: "ellipsis")
+                .frame(width: WFMetrics.controlHeight, height: WFMetrics.controlHeight)
+                .contentShape(Rectangle())
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden).fixedSize()
+        .help("更多操作")
+        .accessibilityLabel("更多任务操作")
+        .popover(isPresented: $showTagsPopover, arrowEdge: .top) {
+            TaskTagPickerPopover(initialTags: task.tags, workspace: workspace,
+                onCancel: { showTagsPopover = false },
+                onApply: { tags in
+                    workspace.setTags(task.id, tags)
+                    showTagsPopover = false
+                })
+        }
+        .popover(isPresented: $showAttributesPopover, arrowEdge: .top) {
+            ScrollView {
+                TaskAttributesView(task: workspace.task(for: task.id) ?? task,
+                                   workspace: workspace)
+            }.frame(width: 320, height: 360)
+        }
+        .popover(isPresented: $showRelationsPopover, arrowEdge: .top) {
+            relationPicker(task)
+        }
+        .popover(isPresented: popoverBinding(.deadline), arrowEdge: .top) {
+            TaskDatePopoverV2(task: task, workspace: workspace, deadline: true) {
+                presentation.activePopover = nil
+            }
+        }
+    }
+
+    // MARK: - 主体：标题 → 属性 chip 行 → 子任务 → 描述
+
+    private func inspectorContent(_ task: Task) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            TaskTitleField(task: task, workspace: workspace,
+                           focused: $titleFocused, draft: $presentation.titleDraft)
+                .id(task.id)
+                .padding(.horizontal, WFSpace.xl)
+                .padding(.top, WFSpace.lg)
+                .padding(.bottom, WFSpace.sm)
+            attributeChipRow(task)
+            if task.parentID == nil {
+                subtaskSection(task)
+            } else if let parentID = task.parentID {
+                Button("返回父任务") { workspace.select(parentID) }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(WFColors.accent)
+                    .font(WFType.supporting)
+                    .padding(.horizontal, WFSpace.xl)
+                    .padding(.top, WFSpace.md)
+            }
+            documentEditor(task)
+                .padding(.top, WFSpace.lg)
+        }
+        .padding(.bottom, WFSpace.xl)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+    }
+
+    /// 属性 chip 行：清单走底部工具行（对齐滴答），这里放标签 / 优先级 / 重复 / 截止。
+    private func attributeChipRow(_ task: Task) -> some View {
+        HStack(spacing: WFSpace.xs) {
+            tagsChip(task)
+            priorityChip(task)
+            repeatChip(task)
+            if task.schedule.deadlineAt != nil {
+                scheduleChip(task, field: .deadline)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, WFSpace.xl)
+    }
+
+    private func chipLabel<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
+        HStack(spacing: 4) { content() }
+            .font(WFType.supporting)
+            .lineLimit(1)
+            .padding(.horizontal, WFSpace.sm)
+            .frame(height: 26)
+            .background(WFColors.secondarySurface, in: Capsule())
+    }
+
+    private func tagsChip(_ task: Task) -> some View {
+        Button { showTagsPopover = true } label: {
+            chipLabel {
+                Image(systemName: "tag")
+                Text(task.tags.isEmpty ? "标签"
+                     : task.tags.prefix(3).map { "#" + $0 }.joined(separator: " "))
+            }
+            .foregroundStyle(task.tags.isEmpty ? WFColors.secondaryText : WFColors.accent)
+        }
+        .buttonStyle(.plain)
+        .help("标签")
+        .accessibilityLabel(task.tags.isEmpty ? "添加标签" : "标签：\(task.tags.joined(separator: "、"))")
+    }
+
+    private func priorityChip(_ task: Task) -> some View {
+        Menu {
+            priorityItem(.none, task: task)
+            priorityItem(.low, task: task)
+            priorityItem(.medium, task: task)
+            priorityItem(.high, task: task)
+        } label: {
+            chipLabel {
+                Image(systemName: task.priority == .none ? "flag" : "flag.fill")
+                Text(task.priority == .none ? "优先级" : priorityTitle(task.priority))
+            }
+            .foregroundStyle(task.priority == .none ? WFColors.secondaryText : priorityColor(task.priority))
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden).fixedSize()
+        .help("优先级")
+        .accessibilityLabel("优先级：\(priorityTitle(task.priority))")
+    }
+
+    private func repeatChip(_ task: Task) -> some View {
+        Button { showRepeatPopover = true } label: {
+            chipLabel {
+                Image(systemName: "repeat")
+                Text(task.recurrence == .never ? "重复" : task.recurrence.title)
+            }
+            .foregroundStyle(task.recurrence == .never ? WFColors.secondaryText : WFColors.accent)
+        }
+        .buttonStyle(.plain)
+        .help("重复")
+        .accessibilityLabel(task.recurrence == .never ? "设置重复" : "重复：\(task.recurrence.title)")
+        .popover(isPresented: $showRepeatPopover, arrowEdge: .top) {
+            RecurrenceDraftView(task: task, workspace: workspace) { showRepeatPopover = false }
+        }
+    }
+
+    /// 顶部日期 chip（.due）与截止 chip（.deadline）共用，点击弹现有日期 popover。
+    private func scheduleChip(_ task: Task, field: ScheduleField) -> some View {
+        Button {
+            presentation.activePopover = field.popover
+        } label: {
+            chipLabel {
+                Image(systemName: field.symbol)
+                Text(field.date(in: task).map(dateLabel) ?? field.emptyLabel)
+            }
+            .foregroundStyle(scheduleChipColor(task, field: field))
+        }
+        .buttonStyle(.plain)
+        .help(field.emptyLabel)
+        .accessibilityLabel(field.date(in: task).map { "\(field.emptyLabel)：\(dateLabel($0))" } ?? field.emptyLabel)
+        .popover(isPresented: popoverBinding(field.popover), arrowEdge: .bottom) {
+            TaskDatePopoverV2(task: task, workspace: workspace, deadline: field == .deadline) {
+                presentation.activePopover = nil
+            }
+        }
+    }
+
+    private func scheduleChipColor(_ task: Task, field: ScheduleField) -> Color {
+        guard field == .due, !task.isClosed else { return WFColors.secondaryText }
+        switch TaskListViewDefaults.dateBadgeStyle(dueAt: task.schedule.dueAt, isClosed: task.isClosed,
+                                                   now: workspace.clock(), calendar: workspace.calendar) {
+        case .overdue: return .red
+        case .today, .scheduled: return WFColors.accent
+        case .none: return WFColors.secondaryText
+        }
+    }
+
+    private func subtaskSection(_ task: Task) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            ForEach(editorChildren(task.id)) { child in
+                childRow(child)
+                Divider().padding(.leading, 27)
+            }
+            Button {
+                workspace.requestChildTitleEditor(for: task.id)
+            } label: {
+                Label("添加子任务", systemImage: "plus")
+                    .font(WFType.supporting)
+                    .frame(minHeight: 36, alignment: .leading)
+            }.buttonStyle(.plain).foregroundStyle(WFColors.accent)
+        }
+        .padding(.horizontal, WFSpace.xl)
+        .padding(.top, WFSpace.md)
+    }
+
+    // MARK: - 底部工具行：左清单选择，右附件/评论/正文格式图标位
+
+    private func bottomBar(_ task: Task) -> some View {
+        HStack(spacing: WFSpace.xs) {
+            listMenu(task)
+            Spacer(minLength: 0)
+            Button { addAttachments(to: task.id) } label: {
+                Image(systemName: "paperclip")
+                    .frame(width: 28, height: 28)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(WFColors.secondaryText)
+            .help("添加附件")
+            .accessibilityLabel("添加附件")
+            Button {} label: {
+                Image(systemName: "bubble.right")
+                    .frame(width: 28, height: 28)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(WFColors.tertiaryText)
+            .disabled(true)
+            .help("评论（即将支持）")
+            Button { showFormattingToolbar.toggle() } label: {
+                Image(systemName: "textformat")
+                    .frame(width: 28, height: 28)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(showFormattingToolbar ? WFColors.accent : WFColors.secondaryText)
+            .help("正文格式").accessibilityLabel("正文格式")
+        }
+        .font(WFType.body)
+        .padding(.horizontal, WFSpace.xl)
+        .frame(height: 44)
+        .overlay(alignment: .bottomTrailing) {
+            if showFormattingToolbar {
+                formattingToolbar.padding(.horizontal, 16).padding(.bottom, 48)
+            }
         }
     }
 
@@ -304,7 +473,8 @@ struct TaskInspectorShell: View {
         HStack(spacing: 10) {
             Button { _ = workspace.changeStatus(child) } label: {
                 Image(systemName: child.isAbandoned ? "circle.slash" : child.isClosed ? "checkmark.square.fill" : "square")
-                    .font(.system(size: 17))
+                    .font(.system(size: 15))
+                    .foregroundStyle(child.isClosed ? WFColors.tertiaryText : WFColors.secondaryText)
             }
             .accessibilityLabel(Text((child.isClosed ? "恢复子任务：" : "完成子任务：") + child.title))
             if inlineChildEditorID == child.id {
@@ -318,12 +488,12 @@ struct TaskInspectorShell: View {
                     .accessibilityLabel("子任务标题")
             } else {
                 Button(child.title.isEmpty ? "未命名子任务" : child.title) { workspace.select(child.id) }
+                    .foregroundStyle(child.isClosed ? WFColors.tertiaryText : WFColors.text)
             }
             Spacer(minLength: 8)
             TaskDateButton(task: child, workspace: workspace)
         }.buttonStyle(.plain).font(WFType.body)
-            .foregroundStyle(child.isClosed ? WFColors.tertiaryText : WFColors.text)
-            .frame(minHeight: 44)
+            .frame(minHeight: 36)
             .contextMenu { Button("删除子任务") { _ = workspace.delete(child.id) } }
     }
 
@@ -346,6 +516,23 @@ struct TaskInspectorShell: View {
                   let current = workspace.task(for: taskID) else { return }
             workspace.setAttachments(taskID, current.attachments + attachments)
         }
+    }
+
+    @MainActor
+    private func saveAsTemplate() {
+        guard let task = workspace.selectedTask else { return }
+        guard let name = TaskNamePrompt.ask("保存为模板", value: task.title, confirm: "保存"),
+              !name.isEmpty else { return }
+        let children = workspace.allTasks.filter {
+            $0.parentID == task.id && $0.deletedAt == nil && $0.skippedAt == nil &&
+                !$0.isAbandoned && !$0.isConverted
+        }.sorted { $0.childOrder < $1.childOrder }
+        if TemplateStore.shared.contains(name: name) {
+            guard TaskNamePrompt.confirm("模板“\(name)”已存在",
+                                         message: "是否用当前任务替换这个模板？") else { return }
+        }
+        _ = TemplateStore.shared.save(name: name, from: task,
+                                      includingChildren: children, forceReplace: true)
     }
 
     @discardableResult
@@ -409,43 +596,7 @@ struct TaskInspectorShell: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .topLeading)
-        .padding(.horizontal, 24)
-    }
-
-    private func scheduleButton(task: Task, field: ScheduleField) -> some View {
-        Button {
-            presentation.activePopover = field.popover
-        } label: {
-            Label(field.date(in: task).map(dateLabel) ?? field.emptyLabel,
-                  systemImage: field.symbol)
-                .foregroundStyle(field.date(in: task) == nil ? WFColors.secondaryText : WFColors.accent)
-        }
-        .buttonStyle(.plain)
-        .help(field.emptyLabel)
-        .accessibilityLabel(field.date(in: task).map { "\(field.emptyLabel)：\(dateLabel($0))" } ?? field.emptyLabel)
-        .popover(isPresented: popoverBinding(field.popover), arrowEdge: .bottom) {
-            TaskDatePopoverV2(task: task, workspace: workspace, deadline: field == .deadline) {
-                presentation.activePopover = nil
-            }
-        }
-    }
-
-    private func priorityMenu(_ task: Task) -> some View {
-        Menu {
-            priorityItem(.none, task: task)
-            priorityItem(.low, task: task)
-            priorityItem(.medium, task: task)
-            priorityItem(.high, task: task)
-        } label: {
-            Image(systemName: task.priority == .none ? "flag" : "flag.fill")
-                .font(.system(size: 18))
-                .foregroundStyle(task.priority == .none ? WFColors.secondaryText : task.priority == .high ? .red : task.priority == .medium ? .orange : WFColors.accent)
-                .frame(width: 28, height: 28)
-        }
-        .menuStyle(.borderlessButton)
-        .menuIndicator(.hidden).fixedSize()
-        .help("优先级")
-        .accessibilityLabel("优先级：\(priorityTitle(task.priority))")
+        .padding(.horizontal, WFSpace.xl)
     }
 
     private func priorityItem(_ priority: TaskPriority, task: Task) -> some View {
@@ -478,6 +629,7 @@ struct TaskInspectorShell: View {
             Button("新清单…") { newListName = ""; showNewList = true }
         } label: {
             Label(task.list.name, systemImage: "tray")
+                .font(WFType.supporting)
                 .foregroundStyle(WFColors.secondaryText)
         }
         .menuStyle(.borderlessButton)
@@ -511,6 +663,15 @@ struct TaskInspectorShell: View {
         case .low: "低"
         case .medium: "中"
         case .high: "高"
+        }
+    }
+
+    private func priorityColor(_ priority: TaskPriority) -> Color {
+        switch priority {
+        case .none: WFColors.secondaryText
+        case .low: WFColors.accent
+        case .medium: .orange
+        case .high: .red
         }
     }
 }

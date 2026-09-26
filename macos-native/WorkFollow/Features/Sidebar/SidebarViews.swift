@@ -16,6 +16,12 @@ struct IconRailView: View {
                        selected: navigation.destination == .calendar)
             railButton(.matrix, symbol: "square.grid.2x2", title: "四象限",
                        selected: navigation.destination == .matrix)
+            railButton(.focus, symbol: "timer", title: "专注",
+                       selected: navigation.destination == .focus)
+            railButton(.habits, symbol: "checkmark.seal", title: "习惯",
+                       selected: navigation.destination == .habits)
+            railButton(.summary, symbol: "square.and.pencil", title: "摘要",
+                       selected: navigation.destination == .summary)
             Spacer()
             Button { environment.commandPalettePresented = true } label: {
                 Image(systemName: "magnifyingglass")
@@ -46,60 +52,182 @@ struct IconRailView: View {
     }
 }
 
+/// 对齐滴答清单的侧栏：智能清单（右侧灰计数）→ 中段清单/过滤器/标签 →
+/// 底部固定"已完成 / 垃圾桶"，行高 32 的紧凑密度。
 struct NavigationColumnView: View {
     @ObservedObject var workspace: TaskWorkspaceModel
     @ObservedObject var navigation: AppNavigation
     @EnvironmentObject private var environment: AppEnvironment
+    /// Seam for the saved-filter group (Wave 1 F5): the shell passes the
+    /// module's FilterStore here; when nil the section stays hidden.
+    var filterStore: FilterStore? = nil
     var onNavigate: () -> Void = {}
+
+    /// 智能清单顺序对齐滴答：所有 → 最近 7 天 → 今天 → 收集箱。
+    private let smartLists: [NativeDestination] = [.allTasks, .nextSevenDays, .today, .inbox]
+    private let bottomLists: [NativeDestination] = [.completed, .trash]
 
     private var destinations: [NativeDestination] {
         if navigation.destination.isNotes { return [.notes, .notesTrash] }
         if navigation.destination == .calendar { return [.calendar] }
         if navigation.destination == .matrix { return [.matrix] }
+        if navigation.destination == .focus { return [.focus] }
+        if navigation.destination == .habits { return [.habits] }
+        if navigation.destination == .summary { return [.summary] }
         return NativeDestination.taskDestinations
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: WFSpace.xs) {
-            Text(navigation.destination.isNotes ? "笔记" : "工作空间")
-                .font(WFType.supporting).foregroundStyle(WFColors.secondaryText)
-                .padding(.horizontal, WFSpace.sm).padding(.bottom, WFSpace.sm)
-            ForEach(destinations) { destination in
-                Button {
-                    environment.navigate(to: destination)
-                    onNavigate()
-                } label: {
-                    HStack(spacing: WFSpace.md) {
-                        Image(systemName: destination.symbol).frame(width: WFMetrics.icon)
-                        Text(destination.title)
-                        Spacer(minLength: WFSpace.xs)
-                        let count = workspace.count(for: destination)
-                        if count > 0 {
-                            Text("\(count)").font(WFType.supporting)
-                                .foregroundStyle(WFColors.secondaryText)
-                        }
-                    }
-                    .font(WFType.navigation)
-                    .foregroundStyle(navigation.destination == destination
-                                     ? WFColors.accent : WFColors.text)
-                    .padding(.horizontal, WFSpace.sm)
-                    .frame(height: WFMetrics.controlHeight)
-                    .background(navigation.destination == destination
-                                ? WFColors.selection : .clear,
-                                in: RoundedRectangle(cornerRadius: WFMetrics.corner))
-                    .contentShape(Rectangle())
-                }.buttonStyle(.plain)
-            }
+        VStack(alignment: .leading, spacing: 0) {
             if navigation.destination.isTaskList {
+                ForEach(smartLists) { destinationRow($0) }
                 ScrollView {
-                    TaskCollectionsView(workspace: workspace, navigation: navigation, onNavigate: onNavigate)
+                    VStack(alignment: .leading, spacing: 0) {
+                        TaskCollectionsView(workspace: workspace, navigation: navigation, onNavigate: onNavigate)
+                        if let filterStore {
+                            TaskFiltersSectionView(workspace: workspace, filterStore: filterStore,
+                                                   navigation: navigation, onNavigate: onNavigate)
+                        }
+                        TaskTagsSectionView(workspace: workspace, navigation: navigation, onNavigate: onNavigate)
+                    }
                 }
+                Divider().padding(.vertical, WFSpace.xs)
+                ForEach(bottomLists) { destinationRow($0) }
+            } else {
+                Text(navigation.destination.isNotes ? "笔记" : "工作空间")
+                    .font(WFType.supporting).foregroundStyle(WFColors.secondaryText)
+                    .padding(.horizontal, WFSpace.sm).padding(.bottom, WFSpace.sm)
+                ForEach(destinations) { destinationRow($0) }
+                Spacer(minLength: 0)
             }
-            Spacer(minLength: 0)
         }
         .padding(.horizontal, WFSpace.sm)
-        .padding(.vertical, WFSpace.xl)
+        .padding(.vertical, WFSpace.md)
         .frame(maxHeight: .infinity)
         .background(WFColors.content)
+    }
+
+    private func destinationRow(_ destination: NativeDestination) -> some View {
+        Button {
+            environment.navigate(to: destination)
+            onNavigate()
+        } label: {
+            HStack(spacing: WFSpace.sm) {
+                Image(systemName: destination.symbol)
+                    .font(.system(size: 14))
+                    .frame(width: 18)
+                Text(destination.title).lineLimit(1)
+                Spacer(minLength: WFSpace.xs)
+                let count = workspace.count(for: destination)
+                if count > 0 {
+                    Text("\(count)").font(WFType.supporting)
+                        .foregroundStyle(WFColors.secondaryText)
+                }
+            }
+            .font(WFType.navigation)
+            .foregroundStyle(navigation.destination == destination
+                             ? WFColors.accent : WFColors.text)
+            .padding(.horizontal, WFSpace.sm)
+            .frame(height: 32)
+            .background(navigation.destination == destination
+                        ? WFColors.selection : .clear,
+                        in: RoundedRectangle(cornerRadius: WFMetrics.corner))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(destination.title)
+    }
+}
+
+/// Saved-filter group (Wave 1 F5) shown under the task collections. Rendered
+/// only when the shell wires a FilterStore through `NavigationColumnView.filterStore`.
+/// Clicking an entry navigates to 所有任务 and activates it; clicking the active
+/// entry again cancels the filter. Editing/deleting lives in the row's context menu.
+private struct TaskFiltersSectionView: View {
+    @ObservedObject var workspace: TaskWorkspaceModel
+    @ObservedObject var filterStore: FilterStore
+    @ObservedObject var navigation: AppNavigation
+    var onNavigate: () -> Void = {}
+    @EnvironmentObject private var environment: AppEnvironment
+    @State private var showEditor = false
+    @State private var editingFilter: SavedFilter?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: WFSpace.xs) {
+            sectionHeader("过滤器")
+            ForEach(filterStore.filters) { filter in
+                filterRow(filter)
+            }
+            Button {
+                editingFilter = nil
+                showEditor = true
+            } label: {
+                HStack(spacing: WFSpace.sm) {
+                    Image(systemName: "plus").font(.system(size: 13))
+                    Text("新建过滤器").lineLimit(1)
+                }
+                .foregroundStyle(WFColors.secondaryText)
+                .padding(.horizontal, WFSpace.sm)
+                .frame(height: 32)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
+            }
+            .help("新建过滤器")
+        }
+        .buttonStyle(.plain)
+        .font(WFType.navigation)
+        .sheet(isPresented: $showEditor) {
+            FilterEditorView(store: filterStore, workspace: workspace,
+                             initial: editingFilter) { showEditor = false }
+        }
+    }
+
+    private func sectionHeader(_ title: String) -> some View {
+        Text(title)
+            .font(WFType.supporting)
+            .foregroundStyle(WFColors.secondaryText)
+            .padding(.horizontal, WFSpace.sm)
+            .padding(.top, WFSpace.lg)
+            .padding(.bottom, WFSpace.xs)
+            .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func filterRow(_ filter: SavedFilter) -> some View {
+        let selected = navigation.destination == .allTasks && workspace.activeFilterID == filter.id
+        return Button {
+            if selected {
+                workspace.openFilter(nil)
+            } else {
+                environment.navigate(to: .allTasks)
+                workspace.openFilter(filter.id)
+                onNavigate()
+            }
+        } label: {
+            HStack(spacing: WFSpace.sm) {
+                Image(systemName: "line.3.horizontal.decrease")
+                    .font(.system(size: 13))
+                    .frame(width: 18)
+                Text(filter.name).lineLimit(1)
+                Spacer(minLength: WFSpace.xs)
+            }
+            .foregroundStyle(selected ? WFColors.accent : WFColors.text)
+            .padding(.horizontal, WFSpace.sm)
+            .frame(height: 32)
+            .background(selected ? WFColors.selection : .clear,
+                        in: RoundedRectangle(cornerRadius: WFMetrics.corner))
+            .contentShape(Rectangle())
+        }
+        .contextMenu {
+            Button("编辑") {
+                editingFilter = filter
+                showEditor = true
+            }
+            Button("删除…") {
+                if TaskNamePrompt.confirm("删除过滤器“\(filter.name)”？",
+                                          message: "只删除过滤器本身，不会删除任务。") {
+                    _ = workspace.deleteFilter(filter.id)
+                }
+            }
+        }
     }
 }

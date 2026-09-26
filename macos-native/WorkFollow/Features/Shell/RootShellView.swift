@@ -13,12 +13,19 @@ struct RootShellView: View {
                 IconRailView(workspace: workspace, navigation: navigation)
                 Divider()
                 if navigationVisible {
-                    NavigationColumnView(workspace: workspace, navigation: navigation)
+                    NavigationColumnView(workspace: workspace, navigation: navigation,
+                                         filterStore: environment.filterStore)
                         .frame(width: WFMetrics.navigationWidth)
                     Divider()
                 }
                 if navigation.destination == .trash {
                     TaskTrashView(workspace: workspace)
+                } else if navigation.destination == .focus {
+                    FocusWorkspaceView(store: environment.focusStore, workspace: workspace)
+                } else if navigation.destination == .habits {
+                    HabitsWorkspaceView(store: environment.habitStore)
+                } else if navigation.destination == .summary {
+                    SummaryWorkspaceView(store: environment.summaryStore, workspace: workspace)
                 } else if navigation.destination.isNotes {
                     NotesWorkspaceView(notes: environment.notesWorkspace, navigation: navigation, tasks: workspace)
                 } else if navigation.destination == .matrix || navigation.destination == .calendar {
@@ -111,6 +118,7 @@ private struct ModuleShellView: View {
     @ObservedObject var navigation: AppNavigation
     let navigationVisible: Bool
     @State private var showNavigation = false
+    @EnvironmentObject private var environment: AppEnvironment
 
     var body: some View {
         VStack(alignment: .leading, spacing: WFSpace.xl) {
@@ -120,7 +128,9 @@ private struct ModuleShellView: View {
                         Image(systemName: "sidebar.left")
                     }.buttonStyle(.plain).help("显示导航")
                         .popover(isPresented: $showNavigation) {
-                            NavigationColumnView(workspace: workspace, navigation: navigation) { showNavigation = false }
+                            NavigationColumnView(workspace: workspace, navigation: navigation,
+                                                 filterStore: environment.filterStore,
+                                                 onNavigate: { showNavigation = false })
                                 .frame(width: WFMetrics.navigationWidth, height: 260)
                         }
                 }

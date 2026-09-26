@@ -26,6 +26,11 @@ final class AppEnvironment: ObservableObject {
     let taskWorkspace: TaskWorkspaceModel
     let notesWorkspace: NotesWorkspaceModel
     let reminders: NativeReminderService
+    let focusStore: FocusStore
+    let habitStore: HabitStore
+    let summaryStore: SummaryStore
+    let filterStore: FilterStore
+    private let moduleStores: [ModuleStoreFlushable]
     @Published private(set) var storageError: String?
     private let repository = NativePreviewRepository()
     private let persistence = PersistenceCoordinator()
@@ -51,10 +56,17 @@ final class AppEnvironment: ObservableObject {
         do { snapshot = try repository.load() } catch { failure = error }
         taskWorkspace = TaskWorkspaceModel(clock: clock, calendar: calendar, initialTasks: snapshot?.tasks, initialLists: snapshot?.taskLists ?? [])
         notesWorkspace = NotesWorkspaceModel(initialNotes: snapshot?.notes ?? [], clock: clock)
+        focusStore = FocusStore(clock: clock)
+        habitStore = HabitStore(clock: clock)
+        summaryStore = SummaryStore(clock: clock)
+        filterStore = FilterStore(clock: clock)
+        taskWorkspace.attachFilterStore(filterStore)
+        moduleStores = [focusStore, habitStore, summaryStore, filterStore, TemplateStore.shared]
         persistence.onResult = { [weak self] error in
             DispatchQueue.main.async { self?.storageError = error.map { "预览数据保存失败：\($0.localizedDescription)" } }
         }
         if let failure { loadFailed = true; storageError = "预览数据读取失败，自动保存已停用：\(failure.localizedDescription)" }
+        applyAcceptanceDestination()
         taskWorkspace.$revision.dropFirst().sink { [weak self] _ in
             self?.savePreview()
             if let self, !self.loadFailed { self.reminders.reconcile(self.taskWorkspace.allTasks) }
@@ -63,13 +75,44 @@ final class AppEnvironment: ObservableObject {
         if !loadFailed { reminders.reconcile(taskWorkspace.allTasks) }
     }
 
+    /// Acceptance harness: `--wf-destination <rawValue>` opens that view directly
+    /// so screenshots can be taken without UI automation.
+    private func applyAcceptanceDestination() {
+        let arguments = ProcessInfo.processInfo.arguments
+        guard let index = arguments.firstIndex(of: "--wf-destination"),
+              arguments.indices.contains(index + 1),
+              let destination = NativeDestination(rawValue: arguments[index + 1]) else { return }
+        navigation.destination = destination
+    }
+
     private func savePreview() {
         guard !loadFailed else { return }
         persistence.schedule(NativeWorkspaceSnapshot(tasks: taskWorkspace.allTasks, notes: notesWorkspace.notes, taskLists: taskWorkspace.listNames))
     }
 
     func flush(completion: @escaping (Error?) -> Void) {
-        persistence.flush(completion: completion)
+        persistence.flush { first in
+            // Module stores flush on their own queues; aggregate the errors.
+            let group = DispatchGroup()
+            let box = ErrorBox()
+            for store in self.moduleStores {
+                group.enter()
+                store.flush { error in
+                    if let error { box.add(error) }
+                    group.leave()
+                }
+            }
+            group.notify(queue: .main) {
+                completion(first ?? box.error)
+            }
+        }
+    }
+
+    private final class ErrorBox: @unchecked Sendable {
+        private let lock = NSLock()
+        private var stored: Error?
+        var error: Error? { lock.withLock { stored } }
+        func add(_ error: Error) { lock.withLock { stored = stored ?? error } }
     }
 
     func newTask() {

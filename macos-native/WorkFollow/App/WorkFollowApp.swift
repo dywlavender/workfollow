@@ -4,7 +4,14 @@ import SwiftUI
 @main
 struct WorkFollowApp: App {
     @NSApplicationDelegateAdaptor(NativeLifecycleDelegate.self) private var lifecycle
-    @StateObject private var environment = AppEnvironment()
+    @StateObject private var environment: AppEnvironment
+    @StateObject private var quickAdd: GlobalQuickAddController
+
+    init() {
+        let environment = AppEnvironment()
+        _environment = StateObject(wrappedValue: environment)
+        _quickAdd = StateObject(wrappedValue: GlobalQuickAddController(workspace: environment.taskWorkspace))
+    }
 
     var body: some Scene {
         WindowGroup("WorkFollow Native", id: "main") {
@@ -21,7 +28,7 @@ struct WorkFollowApp: App {
         .defaultSize(width: WFMetrics.defaultWindow.width,
                      height: WFMetrics.defaultWindow.height)
         .windowResizability(.contentMinSize)
-        .commands { AppCommands(environment: environment) }
+        .commands { AppCommands(environment: environment, quickAdd: quickAdd) }
 
         Settings {
             SettingsShellView()

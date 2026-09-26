@@ -1,5 +1,27 @@
 import SwiftUI
 
+/// 对齐滴答清单 mac 版的低饱和度语义色：四象限红橙蓝绿、清单色板、过期红。
+/// 打勾的紫色强调（WFColors.accent）保持不动，这里只补齐滴答的着色维度。
+private enum WFPlanningPalette {
+    static let quadrant: [Color] = [
+        Color(red: 0.90, green: 0.38, blue: 0.40),  // Ⅰ 重要且紧急（红）
+        Color(red: 0.94, green: 0.62, blue: 0.28),  // Ⅱ 重要不紧急（橙）
+        Color(red: 0.38, green: 0.58, blue: 0.92),  // Ⅲ 不重要但紧急（蓝）
+        Color(red: 0.36, green: 0.70, blue: 0.47),  // Ⅳ 不重要不紧急（绿）
+    ]
+    static let list: [Color] = [
+        Color(red: 0.55, green: 0.46, blue: 0.90),  // 紫（与强调色同族）
+        Color(red: 0.38, green: 0.58, blue: 0.92),  // 蓝
+        Color(red: 0.36, green: 0.70, blue: 0.47),  // 绿
+        Color(red: 0.90, green: 0.38, blue: 0.40),  // 红
+        Color(red: 0.94, green: 0.62, blue: 0.28),  // 橙
+        Color(red: 0.88, green: 0.52, blue: 0.74),  // 粉
+        Color(red: 0.40, green: 0.66, blue: 0.86),  // 天蓝
+        Color(red: 0.76, green: 0.60, blue: 0.34),  // 棕黄
+    ]
+    static let overdue = Color(red: 0.90, green: 0.38, blue: 0.40)
+}
+
 struct PlanningWorkspaceView: View {
     @ObservedObject var workspace: TaskWorkspaceModel
     let matrix: Bool
@@ -9,121 +31,242 @@ struct PlanningWorkspaceView: View {
         self.matrix = matrix
         _anchor = State(initialValue: workspace.clock())
     }
-    @State private var week = false
+    private enum ViewMode { case month, week, year }
+    @State private var mode: ViewMode = .month
     @State private var showCompleted = true
-    private let titles = ["Ⅰ 重要且紧急", "Ⅱ 重要不紧急", "Ⅲ 不重要但紧急", "Ⅳ 不重要不紧急"]
-    private let colors: [Color] = [.red, .orange, .blue, .green]
+    private let quadrantTitles = ["重要且紧急", "重要不紧急", "不重要但紧急", "不重要不紧急"]
+    private let quadrantNumerals = ["Ⅰ", "Ⅱ", "Ⅲ", "Ⅳ"]
     private var tasks: [Task] {
         workspace.allTasks.filter { $0.deletedAt == nil && $0.skippedAt == nil && !$0.isAbandoned && (showCompleted || !$0.isClosed) }
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack {
+        VStack(alignment: .leading, spacing: WFSpace.lg) {
+            HStack(spacing: WFSpace.md) {
                 Text(matrix ? "四象限" : "日历").font(WFType.pageTitle)
-                Spacer()
-                Toggle("显示已完成", isOn: $showCompleted).toggleStyle(.checkbox)
                 if !matrix {
-                    Picker("视图", selection: $week) { Text("月").tag(false); Text("周").tag(true) }
-                        .pickerStyle(.segmented).frame(width: 100)
+                    HStack(spacing: WFSpace.sm) {
+                        Button { step(-1) } label: { Image(systemName: "chevron.left") }
+                        Text(headerTitle).font(WFType.navigation)
+                        Button { step(1) } label: { Image(systemName: "chevron.right") }
+                        Button(mode == .year ? "今年" : "今天") { anchor = workspace.clock() }
+                    }
                 }
+                Spacer()
+                if !matrix {
+                    Picker("视图", selection: $mode) {
+                        Text("月").tag(ViewMode.month)
+                        Text("周").tag(ViewMode.week)
+                        Text("年").tag(ViewMode.year)
+                    }
+                    .pickerStyle(.segmented).controlSize(.small).frame(width: 120)
+                }
+                optionsMenu
             }
             if matrix { matrixBoard } else { calendarBoard }
-        }.padding(20)
+        }.padding(WFSpace.xl)
             .sheet(isPresented: Binding(get: { workspace.selectedTask != nil }, set: { if !$0 { workspace.select(nil) } })) {
                 TaskInspectorShell(workspace: workspace, showBack: true)
                     .frame(minWidth: 340, idealWidth: 560, minHeight: 460, idealHeight: 620)
             }
     }
 
+    /// 头部唯一的入口："…"收纳"显示已完成"开关；四象限另收纳四个添加项，
+    /// 象限/日期格内的"+"改为 hover 才出现（对齐滴答）。
+    private var optionsMenu: some View {
+        Menu {
+            Toggle("显示已完成", isOn: $showCompleted)
+            if matrix {
+                Divider()
+                ForEach(0..<4, id: \.self) { quadrant in
+                    Button("添加到\(quadrantNumerals[quadrant]) \(quadrantTitles[quadrant])") { addToQuadrant(quadrant) }
+                }
+            }
+        } label: {
+            Image(systemName: "ellipsis")
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(WFColors.secondaryText)
+                .frame(width: 24, height: 22)
+                .contentShape(Rectangle())
+        }
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .help("视图选项")
+    }
+
+    // MARK: - 四象限
+
+    /// 整页固定 2×2 四张半屏卡片，不整页滚动；任务多时只在卡片任务区滚动。
     private var matrixBoard: some View {
         GeometryReader { geometry in
+            if geometry.size.width < 650 {
+                ScrollView {
+                    LazyVGrid(columns: [GridItem(.flexible(), spacing: WFSpace.lg)], spacing: WFSpace.lg) {
+                        ForEach(0..<4, id: \.self) { quadrant in
+                            quadrantCard(quadrant, height: 340)
+                        }
+                    }
+                }.background(WFColors.canvas)
+            } else {
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: WFSpace.lg), count: 2), spacing: WFSpace.lg) {
+                    ForEach(0..<4, id: \.self) { quadrant in
+                        quadrantCard(quadrant, height: max(240, (geometry.size.height - WFSpace.lg) / 2))
+                    }
+                }.background(WFColors.canvas)
+            }
+        }
+    }
+
+    private func quadrantCard(_ quadrant: Int, height: CGFloat) -> some View {
+        let values = tasks.filter { PlanningProjection.quadrant($0, now: workspace.clock(), calendar: workspace.calendar) == quadrant }
+        return QuadrantCard(
+            title: quadrantTitles[quadrant],
+            numeral: quadrantNumerals[quadrant],
+            color: WFPlanningPalette.quadrant[quadrant],
+            tasks: values,
+            now: workspace.clock(),
+            calendar: workspace.calendar,
+            listPalette: WFPlanningPalette.list,
+            onToggle: { _ = workspace.changeStatus($0) },
+            onSelect: { workspace.select($0) },
+            onAdd: { addToQuadrant(quadrant) }
+        )
+        .frame(height: height)
+        .dropDestination(for: String.self) { strings, _ in
+            guard let id = strings.first.flatMap(UUID.init(uuidString:)) else { return false }
+            moveToQuadrant(id, quadrant)
+            return true
+        }
+    }
+
+    // MARK: - 日历
+
+    @ViewBuilder
+    private var calendarBoard: some View {
+        if mode == .year { yearBoard } else { monthWeekBoard }
+    }
+
+    private var headerTitle: String {
+        if mode == .year { return "\(workspace.calendar.component(.year, from: anchor))年" }
+        return anchor.formatted(.dateTime.year().month(.wide).locale(.appDate))
+    }
+
+    /// 年视图：12 个月小网格，色深表示当天任务数量，点击某天回到月视图。
+    private var yearBoard: some View {
+        GeometryReader { geometry in
             ScrollView {
-                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: geometry.size.width < 650 ? 1 : 2), spacing: 12) {
-                    ForEach(0..<4) { quadrant in
-                        VStack(alignment: .leading, spacing: 12) {
-                            HStack {
-                                Text(titles[quadrant]).foregroundStyle(colors[quadrant]).font(WFType.section)
-                                Spacer()
-                                Button { addToQuadrant(quadrant) } label: { Image(systemName: "plus") }
-                            }
-                            ScrollView {
-                                let values = tasks.filter { PlanningProjection.quadrant($0, now: workspace.clock(), calendar: workspace.calendar) == quadrant }
-                                let names = Array(Set(values.filter { $0.status == .active }.map { $0.list.name })).sorted()
-                                VStack(alignment: .leading, spacing: 10) {
-                                    ForEach(names, id: \.self) { name in
-                                        DisclosureGroup(name) {
-                                            ForEach(values.filter { $0.status == .active && $0.list.name == name }) { task in taskRow(task) }
-                                        }
-                                    }
-                                    let completed = values.filter { $0.status == .completed }
-                                    if !completed.isEmpty {
-                                        DisclosureGroup("已完成 \(completed.count)") {
-                                            ForEach(completed) { task in taskRow(task) }
-                                        }
-                                    }
-                                    if values.isEmpty { Text("暂无任务").foregroundStyle(.tertiary) }
-                                }
-                            }
-                        }.padding(16).frame(height: max(240, (geometry.size.height - 44) / 2))
-                            .background(WFColors.content, in: RoundedRectangle(cornerRadius: 12))
-                            .dropDestination(for: String.self) { strings, _ in
-                                guard let id = strings.first.flatMap(UUID.init(uuidString:)) else { return false }
-                                moveToQuadrant(id, quadrant)
-                                return true
-                            }
+                let calendar = workspace.calendar
+                let year = calendar.component(.year, from: anchor)
+                let counts = PlanningProjection.countsByDay(tasks: workspace.allTasks, in: year,
+                                                            calendar: calendar, includeCompleted: showCompleted)
+                let today = calendar.startOfDay(for: workspace.clock())
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: WFSpace.md),
+                                         count: geometry.size.width < 780 ? 2 : 3), spacing: WFSpace.md) {
+                    ForEach(PlanningProjection.yearMonths(containing: year, calendar: calendar), id: \.self) { month in
+                        yearMonthCard(month, counts: counts, today: today)
                     }
                 }
             }.background(WFColors.canvas)
         }
     }
 
-    private var calendarBoard: some View {
-        VStack(spacing: 12) {
-            HStack {
-                Button { step(-1) } label: { Image(systemName: "chevron.left") }
-                Text(anchor.formatted(.dateTime.year().month(.wide)))
-                Button { step(1) } label: { Image(systemName: "chevron.right") }
-                Spacer()
-                Button("今天") { anchor = workspace.clock() }
+    private func yearMonthCard(_ month: Date, counts: [Date: Int], today: Date) -> some View {
+        let weekdays = PlanningProjection.monthDays(containing: month, calendar: workspace.calendar).prefix(7)
+        let grid = PlanningProjection.monthGrid(in: month, calendar: workspace.calendar)
+        return VStack(alignment: .leading, spacing: WFSpace.sm) {
+            Text(month.formatted(.dateTime.month(.wide).locale(.appDate))).font(WFType.section)
+            HStack(spacing: WFSpace.xs) {
+                ForEach(weekdays, id: \.self) { day in
+                    Text(day.formatted(.dateTime.weekday(.abbreviated).locale(.appDate)))
+                        .font(.caption2).foregroundStyle(WFColors.secondaryText)
+                        .frame(maxWidth: .infinity)
+                }
             }
-            ScrollView([.horizontal, .vertical]) {
-                let days = week ? PlanningProjection.weekDays(containing: anchor, calendar: workspace.calendar) : PlanningProjection.monthDays(containing: anchor, calendar: workspace.calendar)
-                LazyVGrid(columns: Array(repeating: GridItem(.flexible(minimum: 120), spacing: 1), count: 7), spacing: 1) {
-                    ForEach(days.prefix(7), id: \.self) { day in Text(day.formatted(.dateTime.weekday(.abbreviated))).font(.caption).padding(8) }
-                    ForEach(days, id: \.self) { day in
-                        VStack(alignment: .leading, spacing: 6) {
-                            HStack {
-                                Text(day.formatted(.dateTime.day())).foregroundStyle(workspace.calendar.isDate(day, inSameDayAs: workspace.clock()) ? WFColors.accent : WFColors.text)
-                                Spacer()
-                                Button { addOnDate(day) } label: { Image(systemName: "plus") }.buttonStyle(.plain)
-                            }
-                            ForEach(PlanningProjection.tasks(on: day, from: tasks, calendar: workspace.calendar)) { task in taskRow(task) }
-                            Spacer(minLength: 0)
-                        }.padding(8).frame(minWidth: 120, maxWidth: .infinity, minHeight: week ? 480 : 110, alignment: .topLeading)
-                            .background(WFColors.content)
-                            .dropDestination(for: String.self) { strings, _ in
-                                guard let id = strings.first.flatMap(UUID.init(uuidString:)) else { return false }
-                                _ = workspace.moveDueDate(id, to: day)
-                                return true
-                            }
+            ForEach(0..<6, id: \.self) { row in
+                HStack(spacing: WFSpace.xs) {
+                    ForEach(0..<7, id: \.self) { column in
+                        yearDayCell(grid[row * 7 + column], counts: counts, today: today)
                     }
-                }.frame(minWidth: 900).background(WFColors.border)
+                }
+            }
+            Spacer(minLength: 0)
+        }.padding(WFSpace.md)
+            .frame(maxWidth: .infinity, minHeight: 210, alignment: .topLeading)
+            .background(WFColors.content, in: RoundedRectangle(cornerRadius: 12))
+            .overlay(RoundedRectangle(cornerRadius: 12).stroke(WFColors.border, lineWidth: 1))
+    }
+
+    private func yearDayCell(_ day: Date?, counts: [Date: Int], today: Date) -> some View {
+        Group {
+            if let day = day {
+                let calendar = workspace.calendar
+                let count = counts[calendar.startOfDay(for: day)] ?? 0
+                let level = PlanningProjection.heatLevel(count: count)
+                let isToday = calendar.isDate(day, inSameDayAs: today)
+                let cell = Text(day.formatted(.dateTime.day()))
+                    .font(.caption2).foregroundStyle(WFColors.text)
+                    .frame(maxWidth: .infinity, minHeight: 20)
+                    .background(RoundedRectangle(cornerRadius: 4).fill(heatColor(level)))
+                    .overlay(RoundedRectangle(cornerRadius: 4).stroke(level == 0 ? WFColors.border : Color.clear, lineWidth: 1))
+                    .overlay(RoundedRectangle(cornerRadius: 4).stroke(WFColors.accent, lineWidth: isToday ? 1.5 : 0))
+                    .contentShape(RoundedRectangle(cornerRadius: 4))
+                    .onTapGesture { showMonth(containing: day) }
+                if count > 0 { cell.help("\(count) 个任务") } else { cell }
+            } else {
+                Color.clear.frame(maxWidth: .infinity, minHeight: 20)
             }
         }
     }
 
-    private func taskRow(_ task: Task) -> some View {
-        HStack(spacing: 6) {
-            Button { _ = workspace.changeStatus(task) } label: {
-                Image(systemName: task.status == .completed ? "checkmark.square.fill" : "square")
-            }.buttonStyle(.plain)
-            Button { workspace.select(task.id) } label: {
-                Text(task.title.isEmpty ? "未命名任务" : task.title).lineLimit(1).frame(maxWidth: .infinity, alignment: .leading)
-            }.buttonStyle(.plain)
-            TaskDateButton(task: task, workspace: workspace)
-        }.font(.callout).foregroundStyle(task.status == .completed ? WFColors.tertiaryText : WFColors.text)
-            .padding(.vertical, 5).draggable(task.id.uuidString)
+    private func heatColor(_ level: Int) -> Color {
+        switch level {
+        case 0: return WFColors.content
+        case 1: return WFColors.accent.opacity(0.20)
+        case 2: return WFColors.accent.opacity(0.40)
+        case 3: return WFColors.accent.opacity(0.65)
+        default: return WFColors.accent.opacity(0.90)
+        }
+    }
+
+    private func showMonth(containing day: Date) {
+        anchor = day
+        mode = .month
+    }
+
+    /// 月/周网格，向滴答靠拢：灰底周头、白底细线日期格、今天描边圆点、
+    /// 任务为按清单着色的圆角小条（点击条 = 选中任务），"+"仅 hover 显示。
+    private var monthWeekBoard: some View {
+        ScrollView([.horizontal, .vertical]) {
+            let days = mode == .week ? PlanningProjection.weekDays(containing: anchor, calendar: workspace.calendar) : PlanningProjection.monthDays(containing: anchor, calendar: workspace.calendar)
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(minimum: 88), spacing: 1), count: 7), spacing: 1) {
+                // 表头用 offset 作 id：与日期格共用 Date id 会让 LazyVGrid
+                // 把第一周（8/31–9/6 这类跨月格）当作重复身份丢掉。
+                ForEach(Array(days.prefix(7).enumerated()), id: \.offset) { _, day in
+                    Text(day.formatted(.dateTime.weekday(.abbreviated).locale(.appDate)))
+                        .font(.caption).foregroundStyle(WFColors.secondaryText)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 6)
+                        .background(WFColors.secondarySurface)
+                }
+                ForEach(days, id: \.self) { day in
+                    CalendarDayCell(
+                        dayText: String(workspace.calendar.component(.day, from: day)),
+                        isToday: workspace.calendar.isDate(day, inSameDayAs: workspace.clock()),
+                        inMonth: mode == .week || workspace.calendar.isDate(day, equalTo: anchor, toGranularity: .month),
+                        events: PlanningProjection.tasks(on: day, from: tasks, calendar: workspace.calendar),
+                        listPalette: WFPlanningPalette.list,
+                        onSelect: { workspace.select($0) },
+                        onAdd: { addOnDate(day) }
+                    )
+                    .frame(minWidth: 120, maxWidth: .infinity, minHeight: mode == .week ? 480 : 112, alignment: .topLeading)
+                    .dropDestination(for: String.self) { strings, _ in
+                        guard let id = strings.first.flatMap(UUID.init(uuidString:)) else { return false }
+                        _ = workspace.moveDueDate(id, to: day)
+                        return true
+                    }
+                }
+            }.frame(minWidth: 620).background(WFColors.border)
+        }
     }
 
     private func addOnDate(_ date: Date) {
@@ -141,6 +284,225 @@ struct PlanningWorkspaceView: View {
         _ = workspace.moveDueDate(id, to: quadrant == 0 || quadrant == 2 ? workspace.dateFromToday(0) : workspace.dateFromToday(4))
     }
     private func step(_ amount: Int) {
-        anchor = workspace.calendar.date(byAdding: week ? .weekOfYear : .month, value: amount, to: anchor) ?? anchor
+        let component: Calendar.Component
+        switch mode {
+        case .year: component = .year
+        case .month: component = .month
+        case .week: component = .weekOfYear
+        }
+        anchor = workspace.calendar.date(byAdding: component, value: amount, to: anchor) ?? anchor
+    }
+}
+
+/// 四象限单卡：彩点序号 + 标题，白底圆角细边；清单分组可折叠，任务行 =
+/// 复选框 + 标题 + 右对齐元信息（清单名 + 日期 chip）；"已完成 N"置底灰显。
+/// 滚动只发生在任务区（ScrollView 包住分组列表，短内容时"已完成"沉底）。
+private struct QuadrantCard: View {
+    let title: String
+    let numeral: String
+    let color: Color
+    let tasks: [Task]
+    let now: Date
+    let calendar: Calendar
+    let listPalette: [Color]
+    let onToggle: (Task) -> Void
+    let onSelect: (UUID) -> Void
+    let onAdd: () -> Void
+
+    @State private var hovered = false
+    @State private var collapsedLists: Set<String> = []
+    @State private var completedCollapsed = false
+
+    private var active: [Task] { tasks.filter { $0.status == .active } }
+    private var completed: [Task] { tasks.filter { $0.status == .completed } }
+    private var listNames: [String] { Array(Set(active.map { $0.list.name })).sorted() }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: WFSpace.sm) {
+                Text(numeral)
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(.white)
+                    .frame(width: 16, height: 16)
+                    .background(Circle().fill(color))
+                Text(title).font(WFType.section).foregroundStyle(color)
+                Spacer()
+                if hovered {
+                    Button(action: onAdd) {
+                        Image(systemName: "plus").font(.system(size: 12, weight: .medium))
+                    }.buttonStyle(.plain).foregroundStyle(WFColors.secondaryText)
+                        .help("添加任务")
+                }
+            }.padding(.horizontal, WFSpace.lg).padding(.vertical, 10)
+            Rectangle().fill(WFColors.border).frame(height: 1)
+            if tasks.isEmpty {
+                VStack {
+                    Spacer()
+                    Text("暂无任务").font(WFType.supporting).foregroundStyle(WFColors.tertiaryText)
+                    Spacer()
+                }
+            } else {
+                GeometryReader { geometry in
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: WFSpace.md) {
+                            ForEach(listNames, id: \.self) { name in
+                                listGroup(name: name, tasks: active.filter { $0.list.name == name })
+                            }
+                            if !completed.isEmpty {
+                                if !listNames.isEmpty { Spacer(minLength: WFSpace.xs) }
+                                completedGroup
+                            }
+                        }
+                        .padding(WFSpace.md)
+                        .frame(minHeight: geometry.size.height)
+                    }
+                }
+            }
+        }
+        .background(WFColors.content, in: RoundedRectangle(cornerRadius: 12))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(WFColors.border, lineWidth: 1))
+        .onHover { hovered = $0 }
+    }
+
+    private func listGroup(name: String, tasks: [Task]) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Button {
+                withAnimation(.easeInOut(duration: 0.15)) { toggleCollapsed(name) }
+            } label: {
+                HStack(spacing: WFSpace.xs) {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundStyle(WFColors.tertiaryText)
+                        .rotationEffect(.degrees(collapsedLists.contains(name) ? 0 : 90))
+                    Text(name).font(WFType.supporting).foregroundStyle(WFColors.secondaryText)
+                    Text("\(tasks.count)").font(WFType.supporting).foregroundStyle(WFColors.tertiaryText)
+                    Spacer()
+                }.contentShape(Rectangle())
+            }.buttonStyle(.plain)
+            if !collapsedLists.contains(name) {
+                ForEach(tasks) { task in taskRow(task) }
+            }
+        }
+    }
+
+    private var completedGroup: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Button {
+                withAnimation(.easeInOut(duration: 0.15)) { completedCollapsed.toggle() }
+            } label: {
+                HStack(spacing: WFSpace.xs) {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundStyle(WFColors.tertiaryText)
+                        .rotationEffect(.degrees(completedCollapsed ? 0 : 90))
+                    Text("已完成 \(completed.count)").font(WFType.supporting).foregroundStyle(WFColors.tertiaryText)
+                    Spacer()
+                }.contentShape(Rectangle())
+            }.buttonStyle(.plain)
+            if !completedCollapsed {
+                ForEach(completed) { task in taskRow(task) }
+            }
+        }
+    }
+
+    private func taskRow(_ task: Task) -> some View {
+        let done = task.status == .completed
+        let chipKind = PlanningProjection.dateChipKind(dueAt: task.schedule.dueAt, now: now, calendar: calendar)
+        return HStack(spacing: WFSpace.sm) {
+            Button { onToggle(task) } label: {
+                Image(systemName: done ? "checkmark.square.fill" : "square")
+                    .font(.system(size: 13))
+            }.buttonStyle(.plain)
+                .foregroundStyle(done ? WFColors.tertiaryText : WFColors.secondaryText)
+            Button { onSelect(task.id) } label: {
+                Text(task.title.isEmpty ? "未命名任务" : task.title)
+                    .lineLimit(1).frame(maxWidth: .infinity, alignment: .leading)
+            }.buttonStyle(.plain)
+            Text(task.list.name).font(WFType.supporting).foregroundStyle(WFColors.tertiaryText)
+            if let dueAt = task.schedule.dueAt {
+                Text(PlanningProjection.dateChipText(dueAt, hasTime: task.schedule.hasTime, now: now, calendar: calendar))
+                    .font(WFType.supporting)
+                    .foregroundStyle(done ? WFColors.tertiaryText : chipColor(chipKind))
+            }
+        }.font(WFType.listTitle)
+            .foregroundStyle(done ? WFColors.tertiaryText : WFColors.text)
+            .padding(.vertical, 5)
+            .contentShape(Rectangle())
+            .draggable(task.id.uuidString)
+    }
+
+    /// 滴答规则：过期红、今天强调色、其余灰。
+    private func chipColor(_ kind: PlanningProjection.DateChipKind) -> Color {
+        switch kind {
+        case .overdue: return WFPlanningPalette.overdue
+        case .today: return WFColors.accent
+        default: return WFColors.secondaryText
+        }
+    }
+
+    private func toggleCollapsed(_ name: String) {
+        if collapsedLists.contains(name) { collapsedLists.remove(name) } else { collapsedLists.insert(name) }
+    }
+}
+
+/// 日历日期格：白底、细线（共享 LazyVGrid 的 1pt 间隙 + 边框底色），
+/// 今天为强调色圆点，任务按清单着色成圆角小条，"+"仅 hover 显示。
+private struct CalendarDayCell: View {
+    let dayText: String
+    let isToday: Bool
+    let inMonth: Bool
+    let events: [Task]
+    let listPalette: [Color]
+    let onSelect: (UUID) -> Void
+    let onAdd: () -> Void
+
+    @State private var hovered = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: WFSpace.xs) {
+            HStack(spacing: WFSpace.xs) {
+                if isToday {
+                    Text(dayText)
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .frame(width: 18, height: 18)
+                        .background(Circle().fill(WFColors.accent))
+                } else {
+                    Text(dayText)
+                        .font(.system(size: 11))
+                        .foregroundStyle(inMonth ? WFColors.text : WFColors.tertiaryText)
+                }
+                Spacer()
+                if hovered {
+                    Button(action: onAdd) {
+                        Image(systemName: "plus").font(.system(size: 10, weight: .medium))
+                    }.buttonStyle(.plain).foregroundStyle(WFColors.secondaryText)
+                        .help("添加任务")
+                }
+            }
+            ForEach(events) { event in eventBar(event) }
+            Spacer(minLength: 0)
+        }
+        .padding(WFSpace.sm)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(WFColors.content)
+        .contentShape(Rectangle())
+        .onHover { hovered = $0 }
+    }
+
+    /// 一行截断的小条，不做复选框与完整行；点击 = 选中打开详情。
+    private func eventBar(_ task: Task) -> some View {
+        let done = task.status == .completed
+        let color = listPalette[PlanningProjection.listColorIndex(for: task.list.name)]
+        return Button { onSelect(task.id) } label: {
+            Text(task.title.isEmpty ? "未命名任务" : task.title)
+                .font(.caption2).lineLimit(1)
+                .foregroundStyle(done ? WFColors.tertiaryText : color)
+                .strikethrough(done, color: WFColors.tertiaryText)
+                .padding(.horizontal, WFSpace.xs)
+                .frame(maxWidth: .infinity, minHeight: 18, alignment: .leading)
+                .background(RoundedRectangle(cornerRadius: 4).fill(done ? WFColors.hover : color.opacity(0.16)))
+        }.buttonStyle(.plain)
     }
 }

@@ -73,7 +73,7 @@ struct NotesWorkspaceView: View {
                                     Spacer()
                                 }
                                 Text(note.document.plainText).font(.caption).foregroundStyle(.secondary).lineLimit(2)
-                                Text("\(note.folder) · \((note.deletedAt ?? note.updatedAt).formatted(date: .abbreviated, time: .omitted))")
+                                Text("\(note.folder) · \((note.deletedAt ?? note.updatedAt).formatted(.dateTime.year().month().day().locale(.appDate)))")
                                     .font(.caption2).foregroundStyle(.secondary)
                             }.padding(12).frame(maxWidth: .infinity, alignment: .leading)
                                 .background(notes.selectedID == note.id ? WFColors.selection : .clear,

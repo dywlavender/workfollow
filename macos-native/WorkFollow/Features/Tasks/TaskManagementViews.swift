@@ -24,63 +24,141 @@ enum TaskNamePrompt {
     }
 }
 
+/// 侧栏"清单"分组：小号灰字标题 + 右侧新建，行内右侧灰色计数。
 struct TaskCollectionsView: View {
     @ObservedObject var workspace: TaskWorkspaceModel
     @ObservedObject var navigation: AppNavigation
     var onNavigate: () -> Void = {}
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text("清单").foregroundStyle(.secondary)
-                Spacer()
-                Button {
-                    if let value = TaskNamePrompt.ask("新建清单") {
-                        if workspace.saveList(value) { openList(value) } else { TaskNamePrompt.invalidName() }
-                    }
-                } label: { Image(systemName: "plus") }.help("新建清单")
-            }.padding(.top, 18)
+        VStack(alignment: .leading, spacing: WFSpace.xs) {
+            sectionHeader("清单", trailing: newListBox)
             ForEach(workspace.listNames, id: \.self) { name in
-                Button { openList(name) } label: {
-                    HStack {
-                        Image(systemName: "list.bullet")
-                        Text(name).lineLimit(1)
-                        Spacer()
-                        Text("\(workspace.allTasks.filter { $0.list.name == name && !$0.isClosed && $0.deletedAt == nil && $0.skippedAt == nil }.count)")
-                            .foregroundStyle(.secondary)
-                    }.padding(7).background(workspace.activeList == name ? WFColors.selection : .clear,
-                                             in: RoundedRectangle(cornerRadius: 6))
-                }.contextMenu {
-                    Button("重命名") {
-                        if let value = TaskNamePrompt.ask("重命名清单", value: name), !workspace.saveList(value, replacing: name) { TaskNamePrompt.invalidName() }
-                    }
-                    Button("删除清单…") {
-                        if TaskNamePrompt.confirm("删除清单“\(name)”？", message: "任务（含子任务）将移到收集箱，不删除任务。可撤销。") { workspace.removeList(name) }
-                    }
-                }
-                .dropDestination(for: String.self) { values, _ in
-                    guard let id = values.first.flatMap(UUID.init(uuidString:)) else { return false }
-                    return workspace.moveToList(id, TaskList(name: name)).taskID != nil
-                }
-            }
-            Text("标签").foregroundStyle(.secondary).padding(.top, 12)
-            if workspace.tagNames.isEmpty { Text("在任务属性中添加标签").font(.caption).foregroundStyle(.tertiary) }
-            ForEach(workspace.tagNames, id: \.self) { tag in
-                Button("# " + tag) {
-                    navigation.destination = .allTasks; workspace.activeList = nil; workspace.activeTag = tag; onNavigate()
-                }.contextMenu {
-                    Button("重命名标签") {
-                        if let value = TaskNamePrompt.ask("重命名标签", value: tag), !value.isEmpty { workspace.renameTag(tag, to: value) }
-                    }
-                    Button("移除标签…") {
-                        if TaskNamePrompt.confirm("移除标签“\(tag)”？", message: "从所有任务移除此标签，不删除任务。可撤销。") { workspace.renameTag(tag, to: nil) }
-                    }
-                }.padding(.vertical, 4)
+                listRow(name)
             }
         }.buttonStyle(.plain).font(WFType.navigation)
     }
+
+    /// 滴答式分组标题：小号灰字，"清单"标题右侧带新建按钮。
+    private func sectionHeader(_ title: String) -> some View {
+        sectionHeader(title, trailing: EmptyView())
+    }
+
+    private func sectionHeader<Trailing: View>(_ title: String,
+                                               trailing: Trailing) -> some View {
+        HStack(spacing: WFSpace.xs) {
+            Text(title).font(WFType.supporting).foregroundStyle(WFColors.secondaryText)
+            Spacer(minLength: 0)
+            trailing
+        }
+        .padding(.horizontal, WFSpace.sm)
+        .padding(.top, WFSpace.lg)
+        .padding(.bottom, WFSpace.xs)
+    }
+
+    private var newListBox: some View {
+        Button {
+            if let value = TaskNamePrompt.ask("新建清单") {
+                if workspace.saveList(value) { openList(value) } else { TaskNamePrompt.invalidName() }
+            }
+        } label: {
+            Image(systemName: "plus").font(.system(size: 12))
+                .foregroundStyle(WFColors.secondaryText)
+                .frame(width: 20, height: 20)
+                .contentShape(Rectangle())
+        }.help("新建清单")
+    }
+
+    private func listRow(_ name: String) -> some View {
+        let openCount = workspace.allTasks.filter {
+            $0.list.name == name && !$0.isClosed && $0.deletedAt == nil && $0.skippedAt == nil
+        }.count
+        return Button { openList(name) } label: {
+            HStack(spacing: WFSpace.sm) {
+                Image(systemName: "list.bullet").font(.system(size: 13)).frame(width: 18)
+                Text(name).lineLimit(1)
+                Spacer(minLength: WFSpace.xs)
+                if openCount > 0 {
+                    Text("\(openCount)").font(WFType.supporting).foregroundStyle(WFColors.secondaryText)
+                }
+            }
+            .padding(.horizontal, WFSpace.sm)
+            .frame(height: 32)
+            .background(workspace.activeList == name ? WFColors.selection : .clear,
+                        in: RoundedRectangle(cornerRadius: WFMetrics.corner))
+            .contentShape(Rectangle())
+        }
+        .contextMenu {
+            Button("重命名") {
+                if let value = TaskNamePrompt.ask("重命名清单", value: name), !workspace.saveList(value, replacing: name) { TaskNamePrompt.invalidName() }
+            }
+            Button("删除清单…") {
+                if TaskNamePrompt.confirm("删除清单“\(name)”？", message: "任务（含子任务）将移到收集箱，不删除任务。可撤销。") { workspace.removeList(name) }
+            }
+        }
+        .dropDestination(for: String.self) { values, _ in
+            guard let id = values.first.flatMap(UUID.init(uuidString:)) else { return false }
+            return workspace.moveToList(id, TaskList(name: name)).taskID != nil
+        }
+    }
+
     private func openList(_ name: String) {
         navigation.destination = .allTasks; workspace.activeList = name; workspace.activeTag = nil
         workspace.select(nil); workspace.clearBulkSelection(); onNavigate()
+    }
+}
+
+/// 侧栏"标签"分组，行样式与智能清单/清单一致（小图标 + 名称，行高 32）。
+struct TaskTagsSectionView: View {
+    @ObservedObject var workspace: TaskWorkspaceModel
+    @ObservedObject var navigation: AppNavigation
+    var onNavigate: () -> Void = {}
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: WFSpace.xs) {
+            sectionHeader("标签")
+            if workspace.tagNames.isEmpty {
+                Text("在任务属性中添加标签").font(.caption).foregroundStyle(.tertiary)
+                    .padding(.horizontal, WFSpace.sm)
+            }
+            ForEach(workspace.tagNames, id: \.self) { tag in
+                tagRow(tag)
+            }
+        }.buttonStyle(.plain).font(WFType.navigation)
+    }
+
+    private func sectionHeader(_ title: String) -> some View {
+        Text(title)
+            .font(WFType.supporting)
+            .foregroundStyle(WFColors.secondaryText)
+            .padding(.horizontal, WFSpace.sm)
+            .padding(.top, WFSpace.lg)
+            .padding(.bottom, WFSpace.xs)
+            .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func tagRow(_ tag: String) -> some View {
+        Button {
+            navigation.destination = .allTasks; workspace.activeList = nil; workspace.activeTag = tag; onNavigate()
+        } label: {
+            HStack(spacing: WFSpace.sm) {
+                Image(systemName: "tag").font(.system(size: 12)).frame(width: 18)
+                Text(tag).lineLimit(1)
+                Spacer(minLength: WFSpace.xs)
+            }
+            .padding(.horizontal, WFSpace.sm)
+            .frame(height: 32)
+            .background(workspace.activeTag == tag ? WFColors.selection : .clear,
+                        in: RoundedRectangle(cornerRadius: WFMetrics.corner))
+            .contentShape(Rectangle())
+        }
+        .contextMenu {
+            Button("重命名标签") {
+                if let value = TaskNamePrompt.ask("重命名标签", value: tag), !value.isEmpty { workspace.renameTag(tag, to: value) }
+            }
+            Button("移除标签…") {
+                if TaskNamePrompt.confirm("移除标签“\(tag)”？", message: "从所有任务移除此标签，不删除任务。可撤销。") { workspace.renameTag(tag, to: nil) }
+            }
+        }
     }
 }
 
