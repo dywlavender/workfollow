@@ -52,13 +52,9 @@ struct TaskDatePopoverV2: View {
     // MARK: Main page
 
     private var mainPage: some View {
-        VStack(spacing: 10) {
+        VStack(spacing: 12) {
             if !deadline {
-                Picker("", selection: tabBinding) {
-                    Text("日期").tag(TaskDateDraftModel.Tab.date)
-                    Text("时间段").tag(TaskDateDraftModel.Tab.period)
-                }
-                .pickerStyle(.segmented).labelsHidden()
+                segmented
             }
             shortcutRow
             LunarMonthGridView(
@@ -70,30 +66,96 @@ struct TaskDatePopoverV2: View {
                 onSelect: model.select
             )
             if !deadline {
+                if model.tab == .period {
+                    Text(rangeCaption)
+                        .font(.system(size: 11))
+                        .foregroundStyle(WFColors.secondaryText)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
                 VStack(spacing: 0) {
-                    Divider()
                     menuRow("时间", value: timeValue, icon: "clock") { page = .time }
-                    Divider()
                     menuRow("提醒", value: reminderValue, icon: "alarm") { page = .reminder }
-                    Divider()
                     menuRow("重复", value: repeatValue, icon: "repeat") { page = .recurrence }
                 }
             }
-            HStack(spacing: 12) {
-                Button("清除") { clear() }
-                    .buttonStyle(.bordered).frame(maxWidth: .infinity)
-                Button("确定") { save() }
-                    .buttonStyle(.borderedProminent).frame(maxWidth: .infinity)
-                    .tint(WFColors.accent)
-                    .keyboardShortcut(.defaultAction)
-            }
+            footer
         }
-        .padding(12)
-        .frame(width: 320)
+        .padding(14)
+        .frame(width: 260)
     }
 
-    private var tabBinding: Binding<TaskDateDraftModel.Tab> {
-        Binding(get: { model.tab }, set: { model.setTab($0) })
+    /// Pill segmented control replicating the reference design: grey track,
+    /// floating white capsule on the selected tab.
+    private var segmented: some View {
+        HStack(spacing: 3) {
+            segment("日期", .date)
+            segment("时间段", .period)
+        }
+        .padding(3)
+        .background(WFColors.hover, in: RoundedRectangle(cornerRadius: 9))
+    }
+
+    private func segment(_ title: String, _ value: TaskDateDraftModel.Tab) -> some View {
+        let selected = model.tab == value
+        return Button {
+            model.setTab(value)
+        } label: {
+            Text(title)
+                .font(.system(size: 12, weight: selected ? .semibold : .regular))
+                .foregroundStyle(selected ? WFColors.text : WFColors.secondaryText)
+                .frame(maxWidth: .infinity, minHeight: 24)
+                .background {
+                    if selected {
+                        RoundedRectangle(cornerRadius: 7)
+                            .fill(WFColors.content)
+                            .shadow(color: .black.opacity(0.10), radius: 2, y: 1)
+                    }
+                }
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var rangeCaption: String {
+        guard let range = model.periodRange else { return "在日历上点选开始与结束日期" }
+        if range.lowerBound == range.upperBound {
+            return "开始：\(dayText(range.lowerBound))，继续点选结束日期"
+        }
+        return "\(dayText(range.lowerBound)) – \(dayText(range.upperBound))"
+    }
+
+    private func dayText(_ date: Date) -> String {
+        let components = workspace.calendar.dateComponents([.month, .day], from: date)
+        return "\(components.month ?? 0)月\(components.day ?? 0)日"
+    }
+
+    private var footer: some View {
+        HStack(spacing: 12) {
+            Button {
+                clear()
+            } label: {
+                Text("清除")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(WFColors.text)
+                    .frame(maxWidth: .infinity, minHeight: 28)
+                    .background(WFColors.content, in: RoundedRectangle(cornerRadius: 8))
+                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(WFColors.border))
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+
+            Button {
+                save()
+            } label: {
+                Text("确定")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(Color.white)
+                    .frame(maxWidth: .infinity, minHeight: 28)
+                    .background(WFColors.accent, in: RoundedRectangle(cornerRadius: 8))
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .keyboardShortcut(.defaultAction)
+        }
     }
 
     private var shortcutRow: some View {
@@ -107,13 +169,13 @@ struct TaskDatePopoverV2: View {
 
     private func shortcutButton(_ symbol: String, _ help: String, action: @escaping () -> Void) -> some View {
         shortcutLabel(help, action: action) {
-            Image(systemName: symbol).font(.system(size: 15))
+            Image(systemName: symbol).font(.system(size: 16))
         }
     }
 
     private func shortcutButton(badge: String, _ help: String, action: @escaping () -> Void) -> some View {
         shortcutLabel(help, action: action) {
-            Image(systemName: "calendar").font(.system(size: 15))
+            Image(systemName: "calendar").font(.system(size: 16))
                 .overlay(alignment: .topTrailing) {
                     Text(badge).font(.system(size: 7, weight: .bold)).offset(x: 4, y: -2)
                 }
@@ -126,7 +188,7 @@ struct TaskDatePopoverV2: View {
         } label: {
             icon()
                 .foregroundStyle(WFColors.secondaryText)
-                .frame(maxWidth: .infinity, minHeight: 28)
+                .frame(maxWidth: .infinity, minHeight: 26)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -137,7 +199,7 @@ struct TaskDatePopoverV2: View {
         Button(action: action) {
             HStack(spacing: 10) {
                 Image(systemName: icon)
-                    .font(.system(size: 13))
+                    .font(.system(size: 14))
                     .foregroundStyle(WFColors.secondaryText)
                     .frame(width: 18)
                 Text(title).font(WFType.body).foregroundStyle(WFColors.text)
@@ -148,7 +210,7 @@ struct TaskDatePopoverV2: View {
                     .foregroundStyle(WFColors.tertiaryText)
             }
             .padding(.horizontal, 2)
-            .frame(minHeight: 28)
+            .frame(minHeight: 30)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -158,15 +220,26 @@ struct TaskDatePopoverV2: View {
 
     private func subPage(_ title: String, @ViewBuilder content: () -> some View) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack {
+            HStack(spacing: 8) {
+                Button {
+                    page = .main
+                } label: {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(WFColors.secondaryText)
+                        .frame(width: 20, height: 20)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help("返回")
                 Text(title).font(WFType.section)
                 Spacer()
                 Button("完成") { page = .main }.buttonStyle(.bordered).controlSize(.small)
             }
             content()
         }
-        .padding(12)
-        .frame(width: 320)
+        .padding(14)
+        .frame(width: 260)
     }
 
     private var timePage: some View {
@@ -196,9 +269,15 @@ struct TaskDatePopoverV2: View {
         let base = anchor ?? workspace.dateFromToday(0)
         let target = workspace.calendar.date(bySettingHour: hour, minute: minute, second: 0, of: base) ?? base
         return Button(title) { model.setTime(target) }
-            .buttonStyle(.bordered)
-            .tint(selected ? WFColors.accent : WFColors.secondaryText)
-            .controlSize(.small)
+            .buttonStyle(.plain)
+            .font(.system(size: 11))
+            .foregroundStyle(selected ? WFColors.accent : WFColors.text)
+            .padding(.horizontal, 8)
+            .frame(minHeight: 22)
+            .background(
+                selected ? WFColors.selection : WFColors.hover,
+                in: RoundedRectangle(cornerRadius: 7)
+            )
     }
 
     private var reminderPage: some View {
@@ -326,7 +405,7 @@ struct TaskDatePopoverV2: View {
             Text(symbols[weekday - 1])
                 .font(WFType.supporting)
                 .foregroundStyle(model.weekday == weekday ? Color.white : WFColors.secondaryText)
-                .frame(width: 24, height: 24)
+                .frame(width: 20, height: 20)
                 .background(Circle().fill(model.weekday == weekday ? WFColors.accent : WFColors.hover))
         }
         .buttonStyle(.plain)

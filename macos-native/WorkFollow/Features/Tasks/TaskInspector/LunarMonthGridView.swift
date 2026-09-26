@@ -17,12 +17,20 @@ struct LunarMonthGridView: View {
     /// calendar would localize the weekday row (and repeat letters break ForEach ids).
     private static let weekdayLabels = ["日", "一", "二", "三", "四", "五", "六"]
 
+    /// The reference design always starts weeks on Sunday, regardless of the
+    /// user's system preference; only layout uses this, date math is unchanged.
+    private var layoutCalendar: Calendar {
+        var value = calendar
+        value.firstWeekday = 1
+        return value
+    }
+
     var body: some View {
         VStack(spacing: 4) {
             header
             weekdayRow
             LazyVGrid(columns: Self.columns, spacing: 2) {
-                ForEach(MonthGridCalculator.cells(displayedMonth: displayedMonth, calendar: calendar)) { cell in
+                ForEach(MonthGridCalculator.cells(displayedMonth: displayedMonth, calendar: layoutCalendar)) { cell in
                     GridDayCell(
                         day: calendar.component(.day, from: cell.date),
                         inMonth: cell.inMonth,
@@ -55,7 +63,7 @@ struct LunarMonthGridView: View {
                 Text(symbol)
                     .font(.system(size: 11))
                     .foregroundStyle(WFColors.secondaryText)
-                    .frame(maxWidth: .infinity, minHeight: 16)
+                    .frame(maxWidth: .infinity, minHeight: 15)
             }
         }
     }
@@ -66,7 +74,7 @@ struct LunarMonthGridView: View {
     }
 
     private var orderedWeekdayLabels: [String] {
-        let start = calendar.firstWeekday - 1
+        let start = layoutCalendar.firstWeekday - 1
         return Array(Self.weekdayLabels[start...] + Self.weekdayLabels[..<start])
     }
 
@@ -75,7 +83,7 @@ struct LunarMonthGridView: View {
             Image(systemName: symbol)
                 .font(.system(size: 11, weight: .medium))
                 .foregroundStyle(WFColors.secondaryText)
-                .frame(width: 20, height: 20)
+                .frame(width: 18, height: 18)
                 .contentShape(Rectangle())
         }.buttonStyle(.plain)
     }
@@ -112,10 +120,14 @@ private struct GridDayCell: View {
         ZStack {
             if isSelected {
                 Circle().fill(WFColors.accent)
+                    .frame(width: 26, height: 26)
             } else if isRangeMiddle {
                 RoundedRectangle(cornerRadius: 8).fill(WFColors.selection)
+                    .frame(height: 26)
+                    .padding(.horizontal, 1)
             } else if isToday {
                 Circle().strokeBorder(WFColors.accent.opacity(0.5), lineWidth: 1)
+                    .frame(width: 26, height: 26)
             }
             VStack(spacing: 0) {
                 Text("\(day)")
@@ -123,13 +135,13 @@ private struct GridDayCell: View {
                     .foregroundStyle(numberColor)
                 if let festival {
                     Text(festival)
-                        .font(.system(size: 7.5))
+                        .font(.system(size: 7))
                         .foregroundStyle(festivalColor)
                         .lineLimit(1)
                 }
             }
         }
-        .frame(maxWidth: .infinity, minHeight: 34)
+        .frame(maxWidth: .infinity, minHeight: 30)
         .contentShape(Rectangle())
         .onTapGesture(perform: action)
     }
