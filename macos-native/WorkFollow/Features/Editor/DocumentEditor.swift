@@ -51,6 +51,10 @@ struct DocumentEditor: NSViewRepresentable {
         scrollView.hasVerticalScroller = !contentSized
         scrollView.hasHorizontalScroller = false
         scrollView.autohidesScrollers = true
+        // NSScrollView draws the system focus ring around the whole editor
+        // while its text view is first responder; the design keeps editing
+        // affordances to the caret and selection only.
+        scrollView.focusRingType = .none
 
         let textView = NativeTextView(frame: .zero, textContainer: nil)
         textView.documentIdentity = documentID

@@ -182,72 +182,7 @@ struct TaskListView: View {
 
             if !workspace.bulkSelection.isEmpty { TaskBulkBar(workspace: workspace) }
 
-            ScrollView {
-                LazyVStack(spacing: 0) {
-                    if groups.isEmpty {
-                        Text(navigation.destination == .trash ? "垃圾桶是空的" : "这里还没有任务")
-                            .font(WFType.body).foregroundStyle(WFColors.secondaryText)
-                            .frame(maxWidth: .infinity).padding(.vertical, WFSpace.page)
-                    }
-                    ForEach(groups, id: \.id) { group in
-                        if group.kind != .plain { groupHeader(group) }
-                        if group.kind == .plain || !groupExpansion.isCollapsed(group) {
-                            ForEach(displayedNodes(for: group, scope: scope ?? .today),
-                                    id: \.task.id) { node in
-                                HStack(spacing: 0) {
-                                    if selecting {
-                                        Toggle("选择", isOn: Binding(get: { workspace.bulkSelection.contains(node.task.id) }, set: { value in
-                                            workspace.setBulkSelected(node.task.id, value)
-                                        })).labelsHidden()
-                                    }
-                                    TaskRowView(
-                                        task: node.task,
-                                        workspace: workspace,
-                                        depth: node.depth,
-                                        hasChildren: node.hasChildren,
-                                        expanded: node.expanded,
-                                        selected: workspace.selectedTaskID == node.task.id || workspace.bulkSelection.contains(node.task.id),
-                                        onSelect: { handleSelection(of: node.task.id) },
-                                        onComplete: { _ = workspace.complete(node.task.id, in: scope) },
-                                        onRestore: { _ = workspace.restore(node.task.id, in: scope) },
-                                        onToggleExpanded: { workspace.toggleExpanded(node.task.id) }
-                                    )
-                                }
-                                .draggable(node.task.id.uuidString)
-                                .dropDestination(for: String.self) { values, _ in
-                                    guard let id = values.first.flatMap(UUID.init(uuidString:)) else { return false }
-                                    workspace.reorder(id, before: node.task.id); return true
-                                }
-                                .id(rowIdentity(group: group, task: node.task))
-                                Divider().padding(.leading, WFSpace.page)
-                            }
-                        }
-                    }
-                }
-                .padding(.horizontal, WFSpace.md)
-                .padding(.bottom, WFSpace.xl)
-            }
-            .focusable()
-            .focused($listFocused)
-            .onKeyPress(.upArrow) {
-                guard !quickAddFocused, scope != nil else { return .ignored }
-                selectFiltered(-1)
-                return .handled
-            }
-            .onKeyPress(.downArrow) {
-                guard !quickAddFocused, scope != nil else { return .ignored }
-                selectFiltered(1)
-                return .handled
-            }
-            .onKeyPress(.return) {
-                guard !quickAddFocused, scope != nil else { return .ignored }
-                if workspace.selectedTaskID == nil { selectFiltered(1) }
-                return .handled
-            }
-            .onKeyPress(.space) {
-                guard !quickAddFocused, let task = workspace.selectedTask else { return .ignored }
-                _ = workspace.changeStatus(task, in: scope); return .handled
-            }
+            taskListSection()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(WFColors.content)
@@ -360,6 +295,82 @@ struct TaskListView: View {
         let status = task.status == .completed ? "completed" : "active"
         let abandoned = task.isAbandoned ? "abandoned" : "normal"
         return group.id + ":" + task.id.uuidString + ":" + status + ":" + abandoned
+    }
+
+    @ViewBuilder
+    private func taskListSection() -> some View {
+        ScrollView {
+            LazyVStack(spacing: 0) {
+                if groups.isEmpty {
+                    Text(navigation.destination == .trash ? "垃圾桶是空的" : "这里还没有任务")
+                        .font(WFType.body).foregroundStyle(WFColors.secondaryText)
+                        .frame(maxWidth: .infinity).padding(.vertical, WFSpace.page)
+                }
+                ForEach(groups, id: \.id) { group in
+                    if group.kind != .plain { groupHeader(group) }
+                    if group.kind == .plain || !groupExpansion.isCollapsed(group) {
+                        ForEach(displayedNodes(for: group, scope: scope ?? .today),
+                                id: \.task.id) { node in
+                            taskRow(group: group, node: node)
+                        }
+                    }
+                }
+            }
+            .padding(.horizontal, WFSpace.md)
+            .padding(.bottom, WFSpace.xl)
+        }
+        .focusable()
+        .focused($listFocused)
+        .focusEffectDisabled()
+        .onKeyPress(.upArrow) {
+            guard !quickAddFocused, scope != nil else { return .ignored }
+            selectFiltered(-1)
+            return .handled
+        }
+        .onKeyPress(.downArrow) {
+            guard !quickAddFocused, scope != nil else { return .ignored }
+            selectFiltered(1)
+            return .handled
+        }
+        .onKeyPress(.return) {
+            guard !quickAddFocused, scope != nil else { return .ignored }
+            if workspace.selectedTaskID == nil { selectFiltered(1) }
+            return .handled
+        }
+        .onKeyPress(.space) {
+            guard !quickAddFocused, let task = workspace.selectedTask else { return .ignored }
+            _ = workspace.changeStatus(task, in: scope); return .handled
+        }
+    }
+
+    @ViewBuilder
+    private func taskRow(group: TaskListGroup, node: TaskTreeNode) -> some View {
+        HStack(spacing: 0) {
+            if selecting {
+                Toggle("选择", isOn: Binding(get: { workspace.bulkSelection.contains(node.task.id) }, set: { value in
+                    workspace.setBulkSelected(node.task.id, value)
+                })).labelsHidden()
+            }
+            TaskRowView(
+                task: node.task,
+                workspace: workspace,
+                depth: node.depth,
+                hasChildren: node.hasChildren,
+                expanded: node.expanded,
+                selected: workspace.selectedTaskID == node.task.id || workspace.bulkSelection.contains(node.task.id),
+                onSelect: { handleSelection(of: node.task.id) },
+                onComplete: { _ = workspace.complete(node.task.id, in: scope) },
+                onRestore: { _ = workspace.restore(node.task.id, in: scope) },
+                onToggleExpanded: { workspace.toggleExpanded(node.task.id) }
+            )
+        }
+        .draggable(node.task.id.uuidString)
+        .dropDestination(for: String.self) { values, _ in
+            guard let id = values.first.flatMap(UUID.init(uuidString:)) else { return false }
+            workspace.reorder(id, before: node.task.id); return true
+        }
+        .id(rowIdentity(group: group, task: node.task))
+        Divider().padding(.leading, WFSpace.page)
     }
 
     private func handleSelection(of taskID: UUID) {

@@ -152,6 +152,7 @@ final class NativeTextView: NSTextView {
         }
         super.init(frame: frameRect, textContainer: container)
         ownedTextStorage = ownedStorage
+        focusRingType = .none
         isRichText = true
         usesRuler = false
         importsGraphics = false
