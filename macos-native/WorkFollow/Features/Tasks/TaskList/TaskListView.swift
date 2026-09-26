@@ -550,7 +550,7 @@ struct TaskRowView: View {
     private var chevronZoneWidth: CGFloat { 14 }
 
     var body: some View {
-        HStack(spacing: WFSpace.sm) {
+        HStack(alignment: .top, spacing: WFSpace.sm) {
             if depth == 0 {
                 ZStack(alignment: .leading) {
                     if hasChildren {
@@ -569,7 +569,7 @@ struct TaskRowView: View {
             }
             Button(action: task.isClosed ? onRestore : onComplete) {
                 TaskRowCompletionBox(task: task)
-                    .frame(width: WFSpace.xl, height: WFMetrics.controlHeight)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .help(task.isClosed ? "恢复任务" : "完成任务")
@@ -586,7 +586,9 @@ struct TaskRowView: View {
                             .foregroundStyle(WFColors.secondaryText)
                     }
                 }
-                .frame(maxWidth: .infinity, minHeight: 55, alignment: .leading)
+                // 内容区高度 = 行高 55 − 上下 11 内边距：点击区铺满内容区，
+                // 标题顶对齐（勾选框与标题首行同轴，对齐 Flutter 顶对齐行）。
+                .frame(maxWidth: .infinity, minHeight: 33, alignment: .topLeading)
                 .contentShape(Rectangle())
             }.buttonStyle(.plain)
 
@@ -597,6 +599,8 @@ struct TaskRowView: View {
                                  onOpenDate: { showDatePopover = true })
         }
         .padding(.horizontal, WFSpace.sm)
+        // 对齐 Flutter rowVerticalPadding = 11：内容顶对齐，勾选框贴标题首行。
+        .padding(.vertical, 11)
         // 子行每层缩进 44：父行 depth=0 不变；展开箭头区只挂在 depth=0 行上不受影响。
         .padding(.leading, CGFloat(depth) * 44)
         // 行高 55：在 Flutter rowMinHeight = 50 的基础上按使用习惯放宽。
@@ -672,24 +676,28 @@ private enum TaskRowPriority {
     }
 }
 
-/// 滴答/Flutter 同源的完成框：描边按优先级着色（高红/中橙/低=强调色），
-/// 完成后统一强调色填充，放弃显示斜杠圆。
+/// 勾选框对齐 Flutter：18×18 槽位（即点击区），描边盒按 completionBoxSize
+/// 14.58 绘制（圆角 4.5 × 缩放 0.81 ≈ 3.6），贴槽位左缘；完成/放弃图标居中。
+/// 描边按优先级着色（高红/中橙/低=强调色），完成后强调色填充。
 private struct TaskRowCompletionBox: View {
     let task: Task
 
     var body: some View {
         if task.isAbandoned {
             Image(systemName: "circle.slash")
-                .font(.system(size: 14))
+                .font(.system(size: 15))
                 .foregroundStyle(WFColors.secondaryText)
+                .frame(width: 18, height: 18)
         } else if task.isClosed {
             Image(systemName: "checkmark.square.fill")
-                .font(.system(size: 15))
+                .font(.system(size: 14.5))
                 .foregroundStyle(WFColors.accent)
+                .frame(width: 18, height: 18)
         } else {
-            RoundedRectangle(cornerRadius: 4)
+            RoundedRectangle(cornerRadius: 3.6)
                 .stroke(TaskRowPriority.color(task.priority), lineWidth: 1.5)
-                .frame(width: 16, height: 16)
+                .frame(width: 14.58, height: 14.58)
+                .frame(width: 18, height: 18, alignment: .leading)
         }
     }
 }
