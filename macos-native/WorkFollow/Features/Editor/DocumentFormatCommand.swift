@@ -98,7 +98,13 @@ extension NativeTextView {
         if command.block != nil { range = (string as NSString).paragraphRange(for: range) }
         if range.length == 0 {
             let token = typingAttributes[DocumentTextCodec.blockKey] as? String ?? "paragraph"
-            typingAttributes = DocumentTextCodec.attributes(kind: command.block ?? DocumentTextCodec.kind(token), marks: command.mark.map { [$0] } ?? [])
+            let sample = NSAttributedString(string: " ", attributes: typingAttributes)
+            var marks = DocumentTextCodec.decode(sample, preserving: .empty).blocks.first?.runs.first?.marks ?? []
+            if let mark = command.mark {
+                if marks.contains(mark) { marks.remove(mark) }
+                else { marks.insert(mark) }
+            }
+            typingAttributes = DocumentTextCodec.attributes(kind: command.block ?? DocumentTextCodec.kind(token), marks: marks)
             return
         }
         guard let storage = textStorage else { return }

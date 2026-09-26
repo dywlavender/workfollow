@@ -4,6 +4,20 @@ import XCTest
 
 @MainActor
 final class DocumentContentTests: XCTestCase {
+    func testCaretFormatsComposeAndToggleWithoutChangingExistingText() {
+        let editor = NativeTextView(frame: .zero, textContainer: nil)
+        editor.typingAttributes = DocumentTextCodec.attributes(kind: .paragraph, marks: [])
+        editor.applyFormat(.init(title: "粗体", block: nil, mark: .bold))
+        editor.applyFormat(.init(title: "下划线", block: nil, mark: .underline))
+        editor.insertText("甲", replacementRange: editor.selectedRange())
+        editor.applyFormat(.init(title: "粗体", block: nil, mark: .bold))
+        editor.insertText("乙", replacementRange: editor.selectedRange())
+        let runs = DocumentTextCodec.decode(editor.attributedString(), preserving: .empty).blocks[0].runs
+        XCTAssertEqual(runs.map(\.text), ["甲", "乙"])
+        XCTAssertEqual(runs[0].marks, [.bold, .underline])
+        XCTAssertEqual(runs[1].marks, [.underline])
+    }
+
     func testEditorFormattingAdditionsPersistAndUndo() throws {
         let editor = NativeTextView(frame: NSRect(x: 0, y: 0, width: 400, height: 300), textContainer: nil)
         editor.insertText("验收", replacementRange: NSRange(location: 0, length: 0))

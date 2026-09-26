@@ -1,10 +1,12 @@
 import SwiftUI
 
 /// Redesigned date popover: 日期/时间段 tabs, quick-date icons, lunar month
-/// grid and 时间/提醒/重复 sub-pages driven by TaskDateDraftModel. A draft:
-/// nothing mutates the task until 确定 (清除 applies the clear plan; Esc or
-/// clicking away discards). The view only re-reads the current task and writes
-/// the model's plan through the workspace.
+/// grid, driven by TaskDateDraftModel. 时间/提醒 use inline sheets below their
+/// rows (editable time field with half-hour option list; reminder presets with
+/// 自定义 and 取消/确定), 重复 pushes a sub-page. A draft: nothing mutates the
+/// task until 确定 (清除 applies the clear plan; Esc or clicking away discards).
+/// The view only re-reads the current task and writes the model's plan through
+/// the workspace.
 struct TaskDatePopoverV2: View {
     enum Page {
         case main, time, reminder, recurrence
@@ -17,8 +19,18 @@ struct TaskDatePopoverV2: View {
     var initialPage: Page = .main
     let onClose: () -> Void
 
+    /// Floating sheet over the popover: 时间/提醒 open below their row,
+    /// 重复 opens above its row covering the calendar (TickTick-style). The
+    /// base layout never reflows, so the calendar does not move.
+    enum InlineSheet {
+        case time, reminder, `repeat`
+    }
+
     @StateObject private var model: TaskDateDraftModel
-    @State private var page: Page
+    @State private var inlineSheet: InlineSheet?
+    @State private var customReminderDraft: Date
+    @State private var stagedCustomReminder = false
+    @State private var timeSheetBase: Date
 
     init(task: Task, workspace: TaskWorkspaceModel, deadline: Bool = false, initialPage: Page = .main,
          onClose: @escaping () -> Void) {
@@ -28,60 +40,336 @@ struct TaskDatePopoverV2: View {
         self.deadline = deadline
         self.initialPage = initialPage
         self.onClose = onClose
-        _model = StateObject(wrappedValue: TaskDateDraftModel(
-            task: task, calendar: workspace.calendar, now: workspace.clock, deadline: deadline))
-        _page = State(initialValue: initialPage)
+        let draftModel = TaskDateDraftModel(
+            task: task, calendar: workspace.calendar, now: workspace.clock, deadline: deadline)
+        _model = StateObject(wrappedValue: draftModel)
+        _inlineSheet = State(initialValue: initialPage == .time ? .time
+            : initialPage == .reminder ? .reminder
+            : initialPage == .recurrence ? .`repeat` : nil)
+        _customReminderDraft = State(initialValue: draftModel.reminderDate(for: .custom)
+            ?? workspace.clock().addingTimeInterval(3600))
+        _timeSheetBase = State(initialValue: draftModel.timeAnchor ?? workspace.clock())
     }
 
-    private let pageTransition = AnyTransition.move(edge: .trailing).combined(with: .opacity)
-
     var body: some View {
-        ZStack {
-            switch page {
-            case .main: mainPage.transition(pageTransition)
-            case .time: timePage.transition(pageTransition)
-            case .reminder: reminderPage.transition(pageTransition)
-            case .recurrence: recurrencePage.transition(pageTransition)
-            }
-        }
-        .animation(.easeInOut(duration: 0.16), value: page)
-        .environment(\.calendar, workspace.calendar)
-        .environment(\.timeZone, workspace.calendar.timeZone)
+        mainPage
+            .environment(\.calendar, workspace.calendar)
+            .environment(\.timeZone, workspace.calendar.timeZone)
     }
 
     // MARK: Main page
 
     private var mainPage: some View {
-        VStack(spacing: 12) {
-            if !deadline {
-                segmented
-            }
-            shortcutRow
-            LunarMonthGridView(
-                calendar: workspace.calendar,
-                displayedMonth: $model.displayedMonth,
-                today: workspace.dateFromToday(0),
-                selection: deadline || model.tab == .date ? model.selectedDate : nil,
-                range: !deadline && model.tab == .period ? model.periodRange : nil,
-                onSelect: model.select
-            )
-            if !deadline {
-                if model.tab == .period {
+        ZStack(alignment: .top) {
+            VStack(spacing: 12) {
+                if !deadline {
+                    segmented
+                }
+                shortcutRow
+                LunarMonthGridView(
+                    calendar: workspace.calendar,
+                    displayedMonth: $model.displayedMonth,
+                    today: workspace.dateFromToday(0),
+                    selection: deadline || model.tab == .date ? model.selectedDate : nil,
+                    range: !deadline && model.tab == .period ? model.periodRange : nil,
+                    onSelect: model.select
+                )
+                .simultaneousGesture(TapGesture().onEnded { closeSheet() })
+                if !deadline && model.tab == .period {
                     Text(rangeCaption)
                         .font(.system(size: 11))
                         .foregroundStyle(WFColors.secondaryText)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                VStack(spacing: 0) {
-                    menuRow("时间", value: timeValue, icon: "clock") { page = .time }
-                    menuRow("提醒", value: reminderValue, icon: "alarm") { page = .reminder }
-                    menuRow("重复", value: repeatValue, icon: "repeat") { page = .recurrence }
+                if !deadline {
+                    scheduleRows
                 }
+                footer
             }
-            footer
+            if inlineSheet == .time {
+                timeSheet.offset(y: timeSheetY).zIndex(10)
+            }
+            if inlineSheet == .reminder {
+                reminderSheet.offset(y: reminderSheetY).zIndex(10)
+            }
+        }
+        .overlay(alignment: .bottom) {
+            if inlineSheet == .`repeat` {
+                repeatSheet.padding(.bottom, repeatSheetBottomPadding)
+            }
         }
         .padding(14)
         .frame(width: 260)
+    }
+
+    // Sheet positions, derived from the fixed base layout so the calendar
+    // never reflows when a sheet opens.
+    private var rowsTopY: CGFloat {
+        let base: CGFloat = 14 + 30 + 12 + 26 + 12 + 233 + 12
+        return !deadline && model.tab == .period ? base + 16 + 14 : base
+    }
+
+    private var timeRowHeight: CGFloat { model.hasTime && model.timeAnchor != nil ? 28 : 30 }
+    private var reminderRowHeight: CGFloat { model.reminderOption != .none ? 28 : 30 }
+
+    private var timeSheetY: CGFloat { rowsTopY + timeRowHeight + 4 }
+    private var reminderSheetY: CGFloat { rowsTopY + timeRowHeight + reminderRowHeight + 2 }
+    private var repeatSheetBottomPadding: CGFloat { 28 + 12 + 30 + 4 }
+
+    // MARK: Inline 时间/提醒 rows and sheets
+
+    private var scheduleRows: some View {
+        VStack(spacing: 0) {
+            timeRowView
+            reminderRowView
+            menuRow("重复", value: repeatValue, icon: "repeat") { toggleSheet(.repeat) }
+        }
+    }
+
+    @ViewBuilder
+    private var timeRowView: some View {
+        if model.hasTime, let anchor = model.timeAnchor {
+            HStack(spacing: 4) {
+                Image(systemName: "clock")
+                    .font(.system(size: 13))
+                    .foregroundStyle(WFColors.accent)
+                TextField("", text: chipHourBinding(of: anchor))
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(WFColors.text)
+                    .multilineTextAlignment(.center)
+                    .frame(width: 18)
+                Text(":")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(WFColors.text)
+                TextField("", text: chipMinuteBinding(of: anchor))
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(WFColors.text)
+                    .multilineTextAlignment(.center)
+                    .frame(width: 18)
+                Spacer()
+                sheetClearButton { model.setHasTime(false); closeSheet() }
+            }
+            .padding(.horizontal, 10)
+            .frame(minHeight: 28)
+            .background(WFColors.hover, in: RoundedRectangle(cornerRadius: 7))
+            .contentShape(Rectangle())
+            .onTapGesture { toggleSheet(.time) }
+        } else {
+            menuRow("时间", value: "无", icon: "clock") {
+                model.setHasTime(true)
+                openSheet(.time)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var reminderRowView: some View {
+        if model.reminderOption != .none {
+            HStack(spacing: 6) {
+                Image(systemName: "alarm")
+                    .font(.system(size: 13))
+                    .foregroundStyle(WFColors.accent)
+                Text(reminderChipTitle)
+                    .font(.system(size: 12))
+                    .foregroundStyle(WFColors.text)
+                    .lineLimit(1)
+                Spacer()
+                sheetClearButton { model.chooseReminderOption(.none); closeSheet() }
+            }
+            .padding(.horizontal, 10)
+            .frame(minHeight: 28)
+            .background(WFColors.hover, in: RoundedRectangle(cornerRadius: 7))
+            .contentShape(Rectangle())
+            .onTapGesture { toggleSheet(.reminder) }
+        } else {
+            menuRow("提醒", value: "无", icon: "alarm") { openSheet(.reminder) }
+        }
+    }
+
+    private func sheetClearButton(action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: "xmark")
+                .font(.system(size: 8, weight: .semibold))
+                .foregroundStyle(WFColors.tertiaryText)
+                .frame(width: 16, height: 16)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var sheetCard: some View {
+        RoundedRectangle(cornerRadius: 8)
+            .fill(WFColors.content)
+            .overlay(RoundedRectangle(cornerRadius: 8).stroke(WFColors.border))
+            .shadow(color: .black.opacity(0.12), radius: 6, y: 2)
+    }
+
+    /// Half-hour steps starting at the drafted time (or now), like the reference.
+    private var timeOptions: [Date] {
+        var cursor = timeSheetBase
+        var options: [Date] = []
+        for _ in 0..<48 {
+            options.append(cursor)
+            cursor = workspace.calendar.date(byAdding: .minute, value: 30, to: cursor) ?? cursor
+        }
+        return options
+    }
+
+    private var timeSheet: some View {
+        ScrollViewReader { proxy in
+            ScrollView {
+                VStack(spacing: 0) {
+                    ForEach(timeOptions, id: \.self) { option in
+                        sheetOptionRow(timeText(option), checked: isSelectedTime(option)) {
+                            model.setTime(option)
+                            closeSheet()
+                        }
+                    }
+                }
+            }
+            .onAppear {
+                if let selected = timeOptions.first(where: isSelectedTime) {
+                    proxy.scrollTo(selected, anchor: .top)
+                }
+            }
+        }
+        .frame(height: 92)
+        .frame(maxWidth: .infinity)
+        .background(sheetCard)
+    }
+
+    private var reminderSheet: some View {
+        Group {
+            if stagedCustomReminder {
+                VStack(spacing: 8) {
+                    DatePicker("", selection: $customReminderDraft, displayedComponents: [.date, .hourAndMinute])
+                        .labelsHidden()
+                    HStack(spacing: 8) {
+                        sheetFooterButton("取消", filled: false) { stagedCustomReminder = false }
+                        sheetFooterButton("确定", filled: true) {
+                            model.chooseCustomReminder(customReminderDraft)
+                            model.chooseReminderOption(.custom)
+                            closeSheet()
+                        }
+                    }
+                }
+                .padding(10)
+            } else {
+                ScrollView {
+                    VStack(spacing: 0) {
+                        ForEach(TaskDateDraftModel.presetOffsets, id: \.option) { preset in
+                            sheetOptionRow(preset.title, checked: model.reminderOption == preset.option) {
+                                model.chooseReminderOption(preset.option)
+                                closeSheet()
+                            }
+                        }
+                        sheetOptionRow("自定义", checked: model.reminderOption == .custom) {
+                            customReminderDraft = model.reminderDate(for: .custom)
+                                ?? model.dueAnchor ?? workspace.clock().addingTimeInterval(3600)
+                            stagedCustomReminder = true
+                        }
+                    }
+                }
+            }
+        }
+        .frame(height: 88)
+        .frame(maxWidth: .infinity)
+        .background(sheetCard)
+    }
+
+    private func sheetOptionRow(_ title: String, checked: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack {
+                Text(title)
+                    .font(.system(size: 12))
+                    .foregroundStyle(checked ? WFColors.accent : WFColors.text)
+                Spacer()
+                if checked {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(WFColors.accent)
+                }
+            }
+            .padding(.horizontal, 12)
+            .frame(minHeight: 28)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func sheetFooterButton(_ title: String, filled: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title)
+                .font(.system(size: 12, weight: filled ? .semibold : .medium))
+                .foregroundStyle(filled ? Color.white : WFColors.text)
+                .frame(maxWidth: .infinity, minHeight: 26)
+                .background(filled ? WFColors.accent : WFColors.content, in: RoundedRectangle(cornerRadius: 7))
+                .overlay(RoundedRectangle(cornerRadius: 7).stroke(filled ? Color.clear : WFColors.border))
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func toggleSheet(_ sheet: InlineSheet) {
+        if inlineSheet == sheet { closeSheet() } else { openSheet(sheet) }
+    }
+
+    private func closeSheet() {
+        inlineSheet = nil
+    }
+
+    private func openSheet(_ sheet: InlineSheet) {
+        if sheet == .reminder {
+            stagedCustomReminder = false
+        }
+        if sheet == .time {
+            if let anchor = model.timeAnchor {
+                timeSheetBase = anchor
+            } else {
+                // No start day drafted: list times from the coming half hour.
+                let now = workspace.clock()
+                let minute = workspace.calendar.component(.minute, from: now)
+                let add = minute % 30 == 0 ? 0 : 30 - minute % 30
+                timeSheetBase = workspace.calendar.date(byAdding: .minute, value: add, to: now) ?? now
+            }
+        }
+        inlineSheet = sheet
+    }
+
+    private func isSelectedTime(_ option: Date) -> Bool {
+        guard let anchor = model.timeAnchor else { return false }
+        let calendar = workspace.calendar
+        return calendar.component(.hour, from: anchor) == calendar.component(.hour, from: option)
+            && calendar.component(.minute, from: anchor) == calendar.component(.minute, from: option)
+    }
+
+    private func timeText(_ date: Date) -> String {
+        let components = workspace.calendar.dateComponents([.hour, .minute], from: date)
+        return String(format: "%02d:%02d", components.hour ?? 0, components.minute ?? 0)
+    }
+
+    private func chipHourBinding(of anchor: Date) -> Binding<String> {
+        Binding(
+            get: { String(format: "%02d", workspace.calendar.component(.hour, from: anchor)) },
+            set: { text in
+                guard let hour = Int(text), (0...23).contains(hour) else { return }
+                model.setTime(workspace.calendar.date(
+                    bySettingHour: hour, minute: workspace.calendar.component(.minute, from: anchor),
+                    second: 0, of: anchor) ?? anchor)
+            })
+    }
+
+    private func chipMinuteBinding(of anchor: Date) -> Binding<String> {
+        Binding(
+            get: { String(format: "%02d", workspace.calendar.component(.minute, from: anchor)) },
+            set: { text in
+                guard let minute = Int(text), (0...59).contains(minute) else { return }
+                model.setTime(workspace.calendar.date(
+                    bySettingHour: workspace.calendar.component(.hour, from: anchor), minute: minute,
+                    second: 0, of: anchor) ?? anchor)
+            })
     }
 
     /// Pill segmented control replicating the reference design: grey track,
@@ -98,6 +386,7 @@ struct TaskDatePopoverV2: View {
     private func segment(_ title: String, _ value: TaskDateDraftModel.Tab) -> some View {
         let selected = model.tab == value
         return Button {
+            closeSheet()
             model.setTab(value)
         } label: {
             Text(title)
@@ -184,6 +473,7 @@ struct TaskDatePopoverV2: View {
 
     private func shortcutLabel(_ help: String, action: @escaping () -> Void, @ViewBuilder icon: () -> some View) -> some View {
         Button {
+            closeSheet()
             action()
         } label: {
             icon()
@@ -218,113 +508,34 @@ struct TaskDatePopoverV2: View {
 
     // MARK: Sub pages
 
-    private func subPage(_ title: String, @ViewBuilder content: () -> some View) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 8) {
-                Button {
-                    page = .main
-                } label: {
-                    Image(systemName: "chevron.left")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(WFColors.secondaryText)
-                        .frame(width: 20, height: 20)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .help("返回")
-                Text(title).font(WFType.section)
+    private var repeatSheet: some View {
+        VStack(spacing: 0) {
+            HStack {
+                Text("重复规则").font(WFType.section)
                 Spacer()
-                Button("完成") { page = .main }.buttonStyle(.bordered).controlSize(.small)
+                sheetClearButton { closeSheet() }
             }
-            content()
-        }
-        .padding(14)
-        .frame(width: 260)
-    }
-
-    private var timePage: some View {
-        subPage("时间") {
-            VStack(alignment: .leading, spacing: 14) {
-                Toggle("指定时间", isOn: Binding(get: { model.hasTime }, set: { model.setHasTime($0) }))
-                if model.hasTime {
-                    HStack(spacing: 8) {
-                        timePreset(hour: 9, minute: 0, title: "早上 9:00")
-                        timePreset(hour: 12, minute: 0, title: "中午 12:00")
-                        timePreset(hour: 18, minute: 0, title: "下午 6:00")
-                        timePreset(hour: 21, minute: 0, title: "晚上 9:00")
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 2) {
+                    ForEach(TaskRepeat.allCases, id: \.self) { value in
+                        optionRow(value.title, isSelected: model.frequency == value) {
+                            model.chooseFrequency(value)
+                        }
                     }
-                    DatePicker("自定义时间", selection: Binding(
-                        get: { model.timeAnchor ?? workspace.dateFromToday(0) },
-                        set: { model.setTime($0) }), displayedComponents: .hourAndMinute)
-                }
-            }
-        }
-    }
-
-    private func timePreset(hour: Int, minute: Int, title: String) -> some View {
-        let anchor = model.timeAnchor
-        let selected = anchor != nil
-            && workspace.calendar.component(.hour, from: anchor!) == hour
-            && workspace.calendar.component(.minute, from: anchor!) == minute
-        let base = anchor ?? workspace.dateFromToday(0)
-        let target = workspace.calendar.date(bySettingHour: hour, minute: minute, second: 0, of: base) ?? base
-        return Button(title) { model.setTime(target) }
-            .buttonStyle(.plain)
-            .font(.system(size: 11))
-            .foregroundStyle(selected ? WFColors.accent : WFColors.text)
-            .padding(.horizontal, 8)
-            .frame(minHeight: 22)
-            .background(
-                selected ? WFColors.selection : WFColors.hover,
-                in: RoundedRectangle(cornerRadius: 7)
-            )
-    }
-
-    private var reminderPage: some View {
-        subPage("提醒") {
-            VStack(alignment: .leading, spacing: 2) {
-                reminderRow(.none, "不提醒")
-                if model.dueAnchor != nil {
-                    ForEach(TaskDateDraftModel.presetOffsets, id: \.option) { preset in
-                        reminderRow(preset.option, preset.title)
+                    if model.frequency != .never {
+                        Divider().padding(.vertical, 6)
+                        recurrenceRuleFields
                     }
                 }
-                reminderRow(.custom, "自定义时间")
-                if model.reminderOption == .custom {
-                    DatePicker("提醒时间", selection: Binding(
-                        get: { model.customReminder }, set: { model.chooseCustomReminder($0) }))
-                        .labelsHidden().padding(.top, 6)
-                }
-                if model.dueAnchor == nil {
-                    Text("先设置开始日期后，可按日期提醒。")
-                        .font(WFType.supporting).foregroundStyle(WFColors.tertiaryText)
-                        .padding(.top, 6)
-                }
+                .padding(.horizontal, 12)
+                .padding(.bottom, 10)
             }
         }
-    }
-
-    private func reminderRow(_ option: TaskDateDraftModel.ReminderOption, _ title: String) -> some View {
-        optionRow(title, isSelected: model.reminderOption == option) {
-            model.chooseReminderOption(option)
-        }
-        .disabled(model.dueAnchor == nil && option != .none && option != .custom)
-    }
-
-    private var recurrencePage: some View {
-        subPage("重复") {
-            VStack(alignment: .leading, spacing: 2) {
-                ForEach(TaskRepeat.allCases, id: \.self) { value in
-                    optionRow(value.title, isSelected: model.frequency == value) {
-                        model.chooseFrequency(value)
-                    }
-                }
-                if model.frequency != .never {
-                    Divider().padding(.vertical, 8)
-                    recurrenceRuleFields
-                }
-            }
-        }
+        .frame(height: 300)
+        .frame(maxWidth: .infinity)
+        .background(sheetCard)
     }
 
     @ViewBuilder
@@ -431,16 +642,17 @@ struct TaskDatePopoverV2: View {
 
     // MARK: Row values
 
-    private var timeValue: String {
-        guard model.hasTime else { return "无" }
-        guard let anchor = model.timeAnchor else { return "无" }
-        let components = workspace.calendar.dateComponents([.hour, .minute], from: anchor)
-        return String(format: "%02d:%02d", components.hour ?? 0, components.minute ?? 0)
-    }
-
-    private var reminderValue: String {
-        guard let reminder = model.reminderValue else { return "无" }
-        return TaskDateLabel.text(reminder, hasTime: true, now: workspace.clock(), calendar: workspace.calendar)
+    /// Chip label for a set reminder: preset title or the absolute time.
+    private var reminderChipTitle: String {
+        switch model.reminderOption {
+        case .none: return "无"
+        case .custom:
+            return TaskDateLabel.text(model.customReminder, hasTime: true,
+                                      now: workspace.clock(), calendar: workspace.calendar)
+        default:
+            return TaskDateDraftModel.presetOffsets
+                .first { $0.option == model.reminderOption }?.title ?? "准时"
+        }
     }
 
     private var repeatValue: String {
