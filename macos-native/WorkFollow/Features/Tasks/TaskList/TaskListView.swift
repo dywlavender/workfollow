@@ -463,9 +463,9 @@ struct TaskListView: View {
             // 子任务不可拖、也不作为重排落点（对齐 Flutter）。
             row.id(rowIdentity(group: group, task: node.task))
         }
-        // 行分隔线：比系统 Divider 更淡，右端收进一截（Flutter 仅收左端）。
+        // 行分隔线：与行悬浮底色同色（WFColors.hover），右端收进一截。
         Rectangle()
-            .fill(Color.primary.opacity(0.1))
+            .fill(WFColors.hover)
             .frame(height: 1)
             .padding(.leading, WFSpace.page)
             .padding(.trailing, WFSpace.lg)
