@@ -463,7 +463,12 @@ struct TaskListView: View {
             // 子任务不可拖、也不作为重排落点（对齐 Flutter）。
             row.id(rowIdentity(group: group, task: node.task))
         }
-        Divider().padding(.leading, WFSpace.page)
+        // 行分隔线：比系统 Divider 更淡，右端收进一截（Flutter 仅收左端）。
+        Rectangle()
+            .fill(Color.primary.opacity(0.1))
+            .frame(height: 1)
+            .padding(.leading, WFSpace.page)
+            .padding(.trailing, WFSpace.lg)
     }
 
     private func handleSelection(of taskID: UUID) {
