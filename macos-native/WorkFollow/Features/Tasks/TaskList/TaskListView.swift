@@ -588,30 +588,27 @@ struct TaskRowView: View {
                             .foregroundStyle(WFColors.secondaryText)
                     }
                 }
-                .frame(maxWidth: .infinity, minHeight: 40, alignment: .leading)
+                .frame(maxWidth: .infinity, minHeight: 36, alignment: .leading)
                 .contentShape(Rectangle())
             }.buttonStyle(.plain)
 
-            // 元数据与快捷操作共用右缘槽位：非 hover 显示日期等（贴右缘），
-            // hover 时原位淡入淡出切换为快捷操作，无固定占位宽度，行高不跳变。
-            ZStack(alignment: .trailing) {
-                if hovering && !task.isClosed {
-                    hoverQuickActions
-                        .transition(.opacity)
-                } else {
-                    TaskRowMetadataTrail(task: task, workspace: workspace,
-                                         showsListBadge: showsListBadge,
-                                         isHovered: hovering,
-                                         onOpenDate: { showDatePopover = true })
-                        .transition(.opacity)
-                }
+            // 元数据尾栏常驻（清单/旗标/小图标/截止/日期，与迁移版一致），hover
+            // 时行尾追加淡入的日期/优先级快捷操作：日期不悬浮时仍贴右缘，尾栏
+            // 让位滑动走 0.15s 动画，行内没有任何元素被替换或隐藏。
+            TaskRowMetadataTrail(task: task, workspace: workspace,
+                                 showsListBadge: showsListBadge,
+                                 onOpenDate: { showDatePopover = true })
+
+            if hovering && !task.isClosed {
+                hoverQuickActions
+                    .transition(.opacity)
             }
-            .animation(.easeInOut(duration: 0.15), value: hovering)
         }
+        .animation(.easeInOut(duration: 0.15), value: hovering)
         .padding(.horizontal, WFSpace.sm)
         // 子行每层缩进 44：父行 depth=0 不变；展开箭头区只挂在 depth=0 行上不受影响。
         .padding(.leading, CGFloat(depth) * 44)
-        .frame(minHeight: 40)
+        .frame(minHeight: 36)
         .background(selected ? WFColors.selection : hovering ? WFColors.hover : .clear,
                     in: RoundedRectangle(cornerRadius: WFMetrics.corner))
         .onHover { hovering = $0 }
@@ -675,8 +672,8 @@ struct TaskRowView: View {
         subtaskPreview ?? TaskListViewDefaults.bodyPreview(of: task.document.plainText)
     }
 
-    /// hover 行时在元数据槽位原位浮现的日期/优先级快捷操作；可见性由行内
-    /// ZStack 分支控制，自身不带占位宽度与透明度开关。
+    /// hover 行时行尾淡入的日期/优先级快捷操作；可见性由行内条件挂载控制，
+    /// 挂载后占固定 50pt，元数据尾栏让位的滑动由行级动画接管。
     private var hoverQuickActions: some View {
         HStack(spacing: 2) {
             Button { showDatePopover = true } label: {
@@ -713,6 +710,7 @@ struct TaskRowView: View {
             .accessibilityLabel("优先级：\(task.title.isEmpty ? "无标题" : task.title)")
         }
         .font(.system(size: 12))
+        .frame(width: 50)
     }
 }
 
@@ -786,14 +784,13 @@ private struct TaskReorderDropModifier: ViewModifier {
     }
 }
 
-/// 行尾右对齐的元数据：清单与日期常驻，其余小图标（重复/提醒/描述/附件/
-/// 截止）只在 hover 时浮现——滴答行内最多"清单名 + 日期"，次要素材收进详情。
+/// 行尾右对齐的元数据：清单、优先级旗标、截止、描述/提醒等小图标与日期徽标
+/// 全部常驻（与迁移版一致），悬浮时快捷操作在尾栏右侧追加，不替换任何元素。
 /// 日期徽标颜色：今天=强调色、过期=红色、其余=灰色。
 private struct TaskRowMetadataTrail: View {
     let task: Task
     @ObservedObject var workspace: TaskWorkspaceModel
     var showsListBadge: Bool
-    let isHovered: Bool
     let onOpenDate: () -> Void
 
     private var deadlineOverdue: Bool {
@@ -821,23 +818,24 @@ private struct TaskRowMetadataTrail: View {
                 Text(task.list.name).lineLimit(1)
                     .frame(maxWidth: 40).foregroundStyle(muted).layoutPriority(-1)
             }
-            // 优先级已画在完成框描边上（滴答/Flutter 同源），行内不再放旗标。
-            // 次要图标与截止只在 hover 时浮现（滴答行内最多"清单 + 日期"）。
-            if isHovered {
-                ForEach(secondaryMetadata) { item in
-                    if let value = item.value {
-                        Text(value).foregroundStyle(muted).accessibilityLabel(item.accessibilityLabel)
-                    } else if let symbol = item.symbol {
-                        Image(systemName: symbol).foregroundStyle(muted)
-                            .accessibilityLabel(item.accessibilityLabel)
-                    }
+            if task.priority != .none {
+                Image(systemName: "flag.fill")
+                    .foregroundStyle(task.isClosed ? muted : TaskRowPriority.color(task.priority))
+                    .accessibilityLabel(TaskRowPriority.title(task.priority))
+            }
+            ForEach(Array(secondaryMetadata.prefix(WFMetrics.secondaryMetadataLimit))) { item in
+                if let value = item.value {
+                    Text(value).foregroundStyle(muted).accessibilityLabel(item.accessibilityLabel)
+                } else if let symbol = item.symbol {
+                    Image(systemName: symbol).foregroundStyle(muted)
+                        .accessibilityLabel(item.accessibilityLabel)
                 }
-                if let deadline = task.schedule.deadlineAt {
-                    Text(TaskDateLabel.text(deadline, hasTime: false,
-                                            now: workspace.clock(), calendar: workspace.calendar) + "截止")
-                        .foregroundStyle(task.isClosed ? muted : deadlineOverdue ? .red : muted)
-                        .layoutPriority(0)
-                }
+            }
+            if let deadline = task.schedule.deadlineAt {
+                Text(TaskDateLabel.text(deadline, hasTime: false,
+                                        now: workspace.clock(), calendar: workspace.calendar) + "截止")
+                    .foregroundStyle(task.isClosed ? muted : deadlineOverdue ? .red : muted)
+                    .layoutPriority(0)
             }
             if task.schedule.dueAt != nil {
                 // 日期是行内最重要的元信息：固定尺寸不被压缩。
