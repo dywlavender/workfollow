@@ -2,7 +2,7 @@ import AppKit
 import SwiftUI
 
 struct SecondaryClickCapture: NSViewRepresentable {
-    let onSecondaryClick: (CGPoint) -> Void
+    let onSecondaryClick: (NSView, CGPoint) -> Void
 
     func makeNSView(context: Context) -> SecondaryClickView {
         let view = SecondaryClickView()
@@ -15,7 +15,8 @@ struct SecondaryClickCapture: NSViewRepresentable {
     }
 
     final class SecondaryClickView: NSView {
-        var onSecondaryClick: ((CGPoint) -> Void)?
+        // 回调带 self（行视图），调用方需要在视图坐标里挂锚点呈现弹窗。
+        var onSecondaryClick: ((NSView, CGPoint) -> Void)?
 
         override func hitTest(_ point: NSPoint) -> NSView? {
             guard NSApp.currentEvent?.type == .rightMouseDown else { return nil }
@@ -24,7 +25,7 @@ struct SecondaryClickCapture: NSViewRepresentable {
 
         override func rightMouseDown(with event: NSEvent) {
             let location = convert(event.locationInWindow, from: nil)
-            onSecondaryClick?(CGPoint(x: location.x, y: location.y))
+            onSecondaryClick?(self, CGPoint(x: location.x, y: location.y))
         }
     }
 }

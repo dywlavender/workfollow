@@ -544,8 +544,6 @@ struct TaskRowView: View {
     @State private var hovering = false
     @State private var showDatePopover = false
     @State private var showTagPicker = false
-    @State private var showTaskContextMenu = false
-    @State private var contextMenuAnchor = CGPoint.zero
 
     /// 父行展开箭头区宽度：14 + WFSpace.sm 间距 = 22，是子行缩进与父复选框对齐的基准；
     /// 子行缩进步进 44 = 22 + 22，让 depth=1 的子复选框落在父标题起点再偏右一点。
@@ -607,29 +605,15 @@ struct TaskRowView: View {
                     in: RoundedRectangle(cornerRadius: WFMetrics.corner))
         .onHover { hovering = $0 }
         .overlay {
-            GeometryReader { geometry in
-                ZStack(alignment: .topLeading) {
-                    SecondaryClickCapture { point in
-                        contextMenuAnchor = CGPoint(x: point.x,
-                            y: geometry.size.height - point.y)
-                        showTaskContextMenu = true
-                    }
-                    Color.clear
-                        .frame(width: 1, height: 1)
-                        .position(x: contextMenuAnchor.x, y: contextMenuAnchor.y)
-                        .popover(isPresented: $showTaskContextMenu, arrowEdge: .trailing) {
-                            if let current = workspace.task(for: task.id) {
-                                TaskContextMenuPopover(workspace: workspace,
-                                    isPresented: $showTaskContextMenu, task: current,
-                                    onCustomDate: {
-                                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-                                            showDatePopover = true
-                                        }
-                                    })
-                                }
-                            }
-                        }
-                }
+            // 右键菜单走 AppKit NSPopover 显式定位（对齐 Flutter bottomStart：
+            // 面板顶部在光标下方、左缘对齐光标），见 TaskContextMenuPresenter。
+            SecondaryClickCapture { rowView, point in
+                guard let current = workspace.task(for: task.id) else { return }
+                TaskContextMenuPresenter.show(in: rowView, at: point,
+                                              environment: environment,
+                                              workspace: workspace, task: current,
+                                              onCustomDate: { showDatePopover = true })
+            }
         }
         .popover(isPresented: $showDatePopover, arrowEdge: .trailing) {
             if let current = workspace.task(for: task.id) {

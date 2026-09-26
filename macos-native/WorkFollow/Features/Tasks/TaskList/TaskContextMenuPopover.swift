@@ -8,6 +8,23 @@ struct TaskContextMenuPopover: View {
     @EnvironmentObject private var environment: AppEnvironment
     @State private var showingListPicker = false
     @State private var showingTagPicker = false
+    @State private var submenuHoverTimer: DispatchWorkItem?
+
+    /// 面板宽度对齐 Flutter TaskMenuMetrics.width = 264。
+    static let menuWidth: CGFloat = 264
+
+    /// 悬浮多久后展开子菜单，对齐 Flutter WorkFollowMotion.submenuIntent（220ms）。
+    private static let submenuIntent: TimeInterval = 0.22
+
+    /// 悬浮带子菜单的行时延迟展开；已有子菜单打开时不抢占（对齐 Flutter
+    /// `_openSubmenu` 的 `submenu != null` 守卫）。
+    private func hoverOpensSubmenu(_ entering: Bool, open: @escaping () -> Void) {
+        submenuHoverTimer?.cancel()
+        guard entering, !showingListPicker, !showingTagPicker else { return }
+        let work = DispatchWorkItem { open() }
+        submenuHoverTimer = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.submenuIntent, execute: work)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -98,6 +115,10 @@ struct TaskContextMenuPopover: View {
                     }
                     .buttonStyle(.plain)
                     .disabled(!workspace.canMoveToList(task.id))
+                    // Flutter：子菜单挂到行右侧（gap 14），展开期间行保持选中底色。
+                    .background(showingListPicker ? WFColors.selection : .clear,
+                                in: RoundedRectangle(cornerRadius: WFMetrics.corner))
+                    .onHover { hoverOpensSubmenu($0) { showingListPicker = true } }
                     .popover(isPresented: $showingListPicker, arrowEdge: .trailing) {
                         TaskContextListPicker(workspace: workspace, selected: task.list.name,
                             onCancel: { showingListPicker = false },
@@ -111,6 +132,9 @@ struct TaskContextMenuPopover: View {
                     menuRow("标签", symbol: "tag", trailing: "chevron.right")
                 }
                 .buttonStyle(.plain)
+                .background(showingTagPicker ? WFColors.selection : .clear,
+                            in: RoundedRectangle(cornerRadius: WFMetrics.corner))
+                .onHover { hoverOpensSubmenu($0) { showingTagPicker = true } }
                 .popover(isPresented: $showingTagPicker, arrowEdge: .trailing) {
                     TaskTagPickerPopover(initialTags: task.tags, workspace: workspace,
                         onCancel: { showingTagPicker = false },
@@ -130,7 +154,7 @@ struct TaskContextMenuPopover: View {
             }
         }
         .padding(.vertical, WFSpace.xs)
-        .frame(width: 286)
+        .frame(width: Self.menuWidth)
         .onExitCommand { isPresented = false }
     }
 
@@ -193,6 +217,7 @@ struct TaskContextMenuPopover: View {
         .padding(.horizontal, WFSpace.md)
         .frame(height: WFMetrics.controlHeight)
         .contentShape(Rectangle())
+        .modifier(MenuRowHoverHighlight())
     }
 
     private func priorityTitle(_ priority: TaskPriority) -> String {
@@ -207,6 +232,18 @@ struct TaskContextMenuPopover: View {
     private func perform(_ action: () -> Void) {
         isPresented = false
         action()
+    }
+}
+
+/// 菜单行的悬浮底色（对齐 Flutter 菜单 InkWell 的 hover overlay）。
+private struct MenuRowHoverHighlight: ViewModifier {
+    @State private var hovered = false
+
+    func body(content: Content) -> some View {
+        content
+            .background(hovered ? WFColors.hover : .clear,
+                        in: RoundedRectangle(cornerRadius: WFMetrics.corner))
+            .onHover { hovered = $0 }
     }
 }
 
@@ -253,7 +290,8 @@ private struct TaskContextListPicker: View {
                 }
             }
         }
-        .frame(width: 250, height: 300)
+        // 宽度对齐 Flutter TaskEditorMetrics.listPopoverWidth = 196。
+        .frame(width: 196, height: 300)
         .onAppear { searchFocused = true }
         .onExitCommand(perform: onCancel)
     }
