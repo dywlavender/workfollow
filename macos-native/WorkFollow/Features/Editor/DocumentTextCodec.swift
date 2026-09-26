@@ -76,8 +76,15 @@ enum DocumentTextCodec {
                     attrs[attachmentKey] = data
                     attrs[.toolTip] = file.name
                     let attachment = NSTextAttachment()
-                    let cell = NSTextAttachmentCell(textCell: "📎 " + file.name)
-                    attachment.attachmentCell = cell
+                    if let image = Self.pastedImage(from: file) {
+                        // 粘贴图片以 data URL 存在附件里（NativeDocument 暂无图片块类型），
+                        // 渲染成真实图片；其余附件保持 📎 文本单元。
+                        attachment.image = image
+                        attachment.bounds = Self.imageBounds(for: image)
+                    } else {
+                        let cell = NSTextAttachmentCell(textCell: "📎 " + file.name)
+                        attachment.attachmentCell = cell
+                    }
                     attrs[.attachment] = attachment
                 }
                 result.append(NSAttributedString(string: run.text, attributes: attrs))
@@ -134,5 +141,31 @@ final class DocumentDividerCell: NSTextAttachmentCell {
     override func draw(withFrame cellFrame: NSRect, in controlView: NSView?) {
         NSColor.separatorColor.setFill()
         NSRect(x: cellFrame.minX, y: cellFrame.midY, width: cellFrame.width, height: 1).fill()
+    }
+}
+
+extension DocumentTextCodec {
+    /// 识别以 data URL 承载的粘贴图片附件（NativeTextView.paste 写入）。
+    static func pastedImage(from file: NativeAttachment) -> NSImage? {
+        guard file.storedName.hasPrefix("data:image/"),
+              let comma = file.storedName.firstIndex(of: ","),
+              let data = Data(base64Encoded: String(file.storedName[file.storedName.index(after: comma)...])) else { return nil }
+        return NSImage(data: data)
+    }
+
+    /// 等比放入正文宽度内：上限 480×320，小图保持原尺寸不放大。
+    static func imageBounds(for image: NSImage) -> NSRect {
+        var size = image.size
+        guard size.width > 0, size.height > 0 else { return NSRect(x: 0, y: 0, width: 1, height: 1) }
+        let maximum = NSSize(width: 480, height: 320)
+        if size.height > maximum.height {
+            size.width *= maximum.height / size.height
+            size.height = maximum.height
+        }
+        if size.width > maximum.width {
+            size.height *= maximum.width / size.width
+            size.width = maximum.width
+        }
+        return NSRect(x: 0, y: 0, width: max(1, ceil(size.width)), height: max(1, ceil(size.height)))
     }
 }

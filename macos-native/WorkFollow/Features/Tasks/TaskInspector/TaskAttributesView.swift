@@ -2,39 +2,45 @@ import SwiftUI
 
 struct TaskAttributesView: View {
     let task: Task
+    let onEscape: () -> Void
     @ObservedObject var workspace: TaskWorkspaceModel
     @State private var tagsDraft = ""
     @EnvironmentObject private var environment: AppEnvironment
     var body: some View {
-        DisclosureGroup("更多属性") {
-            VStack(alignment: .leading, spacing: 12) {
-                ReminderAttributesView(task: task, workspace: workspace, service: environment.reminders)
-                AttachmentListView(attachments: task.attachments) { workspace.setAttachments(task.id, $0) }
-                TaskRecurrenceEditor(task: task, workspace: workspace)
-                HStack {
-                    TextField("标签，用逗号分隔", text: $tagsDraft)
-                        .onSubmit(saveTags)
-                    Button("应用", action: saveTags)
-                }
-                if !task.tags.isEmpty { Text(task.tags.map { "#" + $0 }.joined(separator: "  ")).foregroundStyle(WFColors.accent) }
-                if let due = task.schedule.dueAt {
-                    Toggle("指定时间", isOn: Binding(get: { task.schedule.hasTime }, set: { enabled in
-                        var value = task.schedule
-                        value.hasTime = enabled
-                        if !enabled { value.dueAt = workspace.calendar.startOfDay(for: due) }
-                        _ = workspace.setSchedule(task.id, value)
-                    }))
-                    if task.schedule.hasTime {
-                        DatePicker("时间", selection: Binding(get: { task.schedule.dueAt ?? due }, set: { date in
-                            var value = task.schedule
-                            value.dueAt = date
-                            _ = workspace.setSchedule(task.id, value)
-                        }), displayedComponents: [.hourAndMinute])
+        VStack(alignment: .leading, spacing: 12) {
+            ReminderAttributesView(task: task, workspace: workspace, service: environment.reminders)
+            AttachmentListView(attachments: task.attachments) { workspace.setAttachments(task.id, $0) }
+            TaskRecurrenceEditor(task: task, workspace: workspace)
+            HStack {
+                TextField("标签，用逗号分隔", text: $tagsDraft)
+                    .onSubmit(saveTags)
+                    .onKeyPress(.escape) {
+                        onEscape()
+                        return .handled
                     }
+                Button("应用", action: saveTags)
+            }
+            if !task.tags.isEmpty { Text(task.tags.map { "#" + $0 }.joined(separator: "  ")).foregroundStyle(WFColors.accent) }
+            if let due = task.schedule.dueAt {
+                Toggle("指定时间", isOn: Binding(get: { task.schedule.hasTime }, set: { enabled in
+                    var value = task.schedule
+                    value.hasTime = enabled
+                    if !enabled { value.dueAt = workspace.calendar.startOfDay(for: due) }
+                    _ = workspace.setSchedule(task.id, value)
+                }))
+                if task.schedule.hasTime {
+                    DatePicker("时间", selection: Binding(get: { task.schedule.dueAt ?? due }, set: { date in
+                        var value = task.schedule
+                        value.dueAt = date
+                        _ = workspace.setSchedule(task.id, value)
+                    }), displayedComponents: [.hourAndMinute])
                 }
-            }.padding(.top, 8)
-        }.padding(.horizontal, WFSpace.page).padding(.vertical, 8)
-            .onAppear { tagsDraft = task.tags.joined(separator: ", ") }
+            }
+        }
+        .padding(.horizontal, WFSpace.page)
+        .padding(.vertical, 12)
+        .onAppear { tagsDraft = task.tags.joined(separator: ", ") }
+        .onExitCommand(perform: onEscape)
     }
     private func saveTags() {
         workspace.setTags(task.id, tagsDraft.replacingOccurrences(of: "，", with: ",").components(separatedBy: ","))

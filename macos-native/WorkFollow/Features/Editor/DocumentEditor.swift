@@ -11,6 +11,11 @@ final class DocumentEditorHandle: ObservableObject {
         textView.applyFormat(command)
     }
 
+    func focusEditor() {
+        guard let textView else { return }
+        textView.window?.makeFirstResponder(textView)
+    }
+
     func editLink() { textView?.editDocumentLink(nil) }
     func removeLink() { textView?.removeDocumentLink(nil) }
     func insertAttachment() { textView?.insertDocumentAttachment(nil) }
@@ -103,6 +108,7 @@ struct DocumentEditor: NSViewRepresentable {
         textView.onEscape = nil
         textView.onEditingChanged = nil
         textView.dismissSlash()
+        textView.dismissSelectionToolbar()
         textView.documentIdentity = UUID()
         textView.profile = DocumentProfile()
     }

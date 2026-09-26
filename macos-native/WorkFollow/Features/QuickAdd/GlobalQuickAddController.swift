@@ -11,7 +11,7 @@ struct GlobalQuickAddComposer {
 
     func parse(_ text: String) -> QuickAddParseResult {
         QuickAddParser.parse(text, now: workspace.clock(), calendar: workspace.calendar,
-                             availableLists: workspace.allListNames)
+                             knownLists: Set(workspace.allListNames))
     }
 
     /// 把解析结果映射到 TaskWorkspaceModel 现有创建 API。与快速添加"不悄悄改

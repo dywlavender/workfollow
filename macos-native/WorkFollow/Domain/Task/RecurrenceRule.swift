@@ -7,76 +7,126 @@ struct RecurrenceRule: Equatable, Codable {
     /// Includes the current occurrence, matching Flutter's count contract.
     var remainingCount: Int?
     var monthDay: Int?
+    /// Gregorian weekday 1=Sunday … 7=Saturday.
     var weekday: Int?
     var month: Int?
 }
 
-enum RecurrenceEngine {
-    static func next(for task: Task, now: Date, calendar: Calendar) -> Date? {
-        guard task.recurrence != .never else { return nil }
-        let rule = task.recurrenceRule ?? RecurrenceRule()
-        guard rule.remainingCount.map({ $0 > 1 }) ?? true else { return nil }
-        let base = task.schedule.dueAt ?? calendar.startOfDay(for: now)
-        let interval = max(1, rule.interval)
+extension RecurrenceRule {
+    /// The rule carried by the next occurrence: the count boundary is consumed
+    /// by the occurrence that just completed (Flutter's followingConfig).
+    var following: RecurrenceRule {
+        var value = self
+        value.remainingCount = remainingCount.map { max(0, $0 - 1) }
+        return value
+    }
+
+    /// Validates and repairs the rule; nil marks a structurally invalid rule
+    /// (out-of-range weekday/month fields) that must not drive a recurrence —
+    /// mirroring Flutter's RecurrenceDraft.normalized. A count below 1 is
+    /// dropped (never-ending) rather than rejected, and endDate collapses to
+    /// the start of its day so the whole day stays inside the boundary.
+    func normalized(calendar: Calendar = .current) -> RecurrenceRule? {
+        if let weekday, !(1...7).contains(weekday) { return nil }
+        if let monthDay, !(1...31).contains(monthDay) { return nil }
+        if let month, !(1...12).contains(month) { return nil }
+        var value = self
+        value.interval = max(1, interval)
+        if let remainingCount, remainingCount < 1 { value.remainingCount = nil }
+        value.endDate = endDate.map { calendar.startOfDay(for: $0) }
+        return value
+    }
+
+    /// Next occurrence strictly after `after` (the current due moment), keeping
+    /// the anchor's wall-clock time. Shifting child dates, deadlines and
+    /// reminders deliberately lives in TaskActions. Years without an official
+    /// holiday table degrade to the ordinary Monday–Friday calendar.
+    func nextOccurrence(after base: Date?, frequency: TaskRepeat, calendar: Calendar) -> Date? {
+        guard frequency != .never, let base else { return nil }
+        guard remainingCount.map({ $0 > 1 }) ?? true else { return nil }
+        let interval = max(1, self.interval)
+        let time = calendar.dateComponents([.hour, .minute, .second], from: base)
         var next: Date?
-        if task.recurrence == .monthly || task.recurrence == .yearly {
+        switch frequency {
+        case .never:
+            return nil
+        case .daily:
+            next = calendar.date(byAdding: .day, value: interval, to: base)
+        case .weekly:
+            let current = calendar.component(.weekday, from: base)
+            let target = weekday ?? current
+            let distance = (target - current + 7) % 7
+            next = calendar.date(byAdding: .day, value: (distance == 0 ? 7 : distance) + 7 * (interval - 1), to: base)
+        case .monthly, .yearly:
             // Advance from the first day, then clamp the original target day.
             // Jan 31 → Feb 28 → Mar 31, not Mar 28.
             var parts = calendar.dateComponents([.year, .month, .day, .hour, .minute, .second], from: base)
-            let target = rule.monthDay ?? parts.day ?? 1
+            let target = monthDay ?? parts.day ?? 1
             parts.day = 1
-            if task.recurrence == .yearly, let month = rule.month { parts.month = min(12, max(1, month)) }
+            if frequency == .yearly, let month { parts.month = min(12, max(1, month)) }
             if let first = calendar.date(from: parts),
-               let month = calendar.date(byAdding: task.recurrence.component, value: interval, to: first),
-               let days = calendar.range(of: .day, in: .month, for: month) {
-                next = calendar.date(byAdding: .day, value: min(max(1, target), days.count) - 1, to: month)
+               let anchor = calendar.date(byAdding: frequency == .yearly ? .year : .month, value: interval, to: first),
+               let days = calendar.range(of: .day, in: .month, for: anchor) {
+                next = calendar.date(byAdding: .day, value: min(max(1, target), days.count) - 1, to: anchor)
             }
-        } else if task.recurrence == .weekly, let weekday = rule.weekday {
-            let current = calendar.component(.weekday, from: base)
-            let distance = (weekday - current + 7) % 7
-            next = calendar.date(byAdding: .day, value: (distance == 0 ? 7 : distance) + 7 * (interval - 1), to: base)
-        } else if [.weekdays, .weekends, .workdays, .holidays].contains(task.recurrence) {
+        case .weekdays, .weekends, .workdays, .holidays:
             var candidate = base
             var remaining = interval
             while remaining > 0 {
                 guard let day = calendar.date(byAdding: .day, value: 1, to: candidate) else { return nil }
                 candidate = day
-                let weekday = calendar.component(.weekday, from: candidate)
-                let isWeekday = weekday != 1 && weekday != 7
-                let matches: Bool
-                switch task.recurrence {
-                case .weekdays: matches = isWeekday
-                case .weekends: matches = !isWeekday
-                case .workdays: matches = NativeWorkCalendar.isWorkday(candidate, calendar: calendar)
-                default: matches = !NativeWorkCalendar.isWorkday(candidate, calendar: calendar)
-                }
-                if matches { remaining -= 1 }
+                if matches(candidate, frequency: frequency, calendar: calendar) { remaining -= 1 }
             }
             next = candidate
-        } else {
-            next = calendar.date(byAdding: task.recurrence.component, value: interval, to: base)
         }
-        if let next, let end = rule.endDate,
-           calendar.startOfDay(for: next) > calendar.startOfDay(for: end) { return nil }
-        return next
+        guard let next else { return nil }
+        // Rules above only move the day; rebuild so the clock survives exactly.
+        var shifted = calendar.dateComponents([.year, .month, .day], from: next)
+        shifted.hour = time.hour
+        shifted.minute = time.minute
+        shifted.second = time.second
+        let result = calendar.date(from: shifted) ?? next
+        if let end = endDate, calendar.startOfDay(for: result) > calendar.startOfDay(for: end) { return nil }
+        return result
+    }
+
+    /// Up to `limit` future occurrence days for calendar previews; the count
+    /// boundary is consumed step by step, so count rules terminate early.
+    func occurrenceDays(after base: Date, frequency: TaskRepeat, calendar: Calendar, limit: Int) -> Set<Date> {
+        var rule = self
+        var cursor = base
+        var days: Set<Date> = []
+        for _ in 0..<max(0, limit) {
+            guard let next = rule.nextOccurrence(after: cursor, frequency: frequency, calendar: calendar) else { break }
+            days.insert(calendar.startOfDay(for: next))
+            rule = rule.following
+            cursor = next
+        }
+        return days
+    }
+
+    private func matches(_ date: Date, frequency: TaskRepeat, calendar: Calendar) -> Bool {
+        let weekday = calendar.component(.weekday, from: date)
+        let isWeekday = weekday != 1 && weekday != 7
+        switch frequency {
+        case .weekdays: return isWeekday
+        case .weekends: return !isWeekday
+        case .workdays: return ChineseWorkCalendar.isWorkday(date: date, calendar: calendar)
+        case .holidays: return !ChineseWorkCalendar.isWorkday(date: date, calendar: calendar)
+        default: return false
+        }
     }
 }
 
-/// Same bundled 2025/2026 table as Flutter's ChineseWorkCalendar. Outside that
-/// table the product falls back to Monday–Friday and discloses this in the UI.
-enum NativeWorkCalendar {
-    static func isWorkday(_ date: Date, calendar: Calendar) -> Bool {
-        let parts = calendar.dateComponents([.year, .month, .day, .weekday], from: date)
-        let key = String(format: "%04d-%02d-%02d", parts.year!, parts.month!, parts.day!)
-        let working = ["2025-01-26", "2025-02-08", "2025-04-27", "2025-09-28", "2025-10-11", "2026-01-04", "2026-02-14", "2026-02-28", "2026-05-09", "2026-09-20", "2026-10-10"]
-        if working.contains(key) { return true }
-        let periods = [(2025,1,1,1),(2025,1,28,8),(2025,4,4,3),(2025,5,1,5),(2025,5,31,3),(2025,10,1,8),
-                       (2026,1,1,3),(2026,2,15,9),(2026,4,4,3),(2026,5,1,5),(2026,6,19,3),(2026,9,25,3),(2026,10,1,7)]
-        for (year, month, day, length) in periods {
-            guard let start = calendar.date(from: DateComponents(year: year, month: month, day: day)),
-                  let end = calendar.date(byAdding: .day, value: length, to: start) else { continue }
-            if date >= start && date < end { return false }
-        }
-        return parts.weekday != 1 && parts.weekday != 7
+enum RecurrenceEngine {
+    /// Task-level convenience kept for callers that hold a Task: resolves the
+    /// rule (defaulting when unset) and anchors on the due moment, or on the
+    /// start of `now` for undated tasks. Rule-level callers use
+    /// `RecurrenceRule.nextOccurrence` directly.
+    static func next(for task: Task, now: Date, calendar: Calendar) -> Date? {
+        guard task.recurrence != .never else { return nil }
+        let rule = task.recurrenceRule ?? RecurrenceRule()
+        return rule.nextOccurrence(after: task.schedule.dueAt ?? calendar.startOfDay(for: now),
+                                   frequency: task.recurrence, calendar: calendar)
     }
 }

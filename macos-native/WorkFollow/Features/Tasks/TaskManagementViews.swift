@@ -25,6 +25,8 @@ enum TaskNamePrompt {
 }
 
 /// 侧栏"清单"分组：小号灰字标题 + 右侧新建，行内右侧灰色计数。
+/// 行样式对齐 Flutter _TaskListItem：色板圆点 + hover"⋯"清单操作 +
+/// 拖放高亮；置顶清单排在分组前。
 struct TaskCollectionsView: View {
     @ObservedObject var workspace: TaskWorkspaceModel
     @ObservedObject var navigation: AppNavigation
@@ -32,8 +34,8 @@ struct TaskCollectionsView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: WFSpace.xs) {
             sectionHeader("清单", trailing: newListBox)
-            ForEach(workspace.listNames, id: \.self) { name in
-                listRow(name)
+            ForEach(workspace.orderedListNames, id: \.self) { name in
+                SidebarListRowView(workspace: workspace, name: name) { openList(name) }
             }
         }.buttonStyle(.plain).font(WFType.navigation)
     }
@@ -68,42 +70,167 @@ struct TaskCollectionsView: View {
         }.help("新建清单")
     }
 
-    private func listRow(_ name: String) -> some View {
-        let openCount = workspace.allTasks.filter {
-            $0.list.name == name && !$0.isClosed && $0.deletedAt == nil && $0.skippedAt == nil
-        }.count
-        return Button { openList(name) } label: {
-            HStack(spacing: WFSpace.sm) {
-                Image(systemName: "list.bullet").font(.system(size: 13)).frame(width: 18)
-                Text(name).lineLimit(1)
-                Spacer(minLength: WFSpace.xs)
-                if openCount > 0 {
-                    Text("\(openCount)").font(WFType.supporting).foregroundStyle(WFColors.secondaryText)
-                }
-            }
-            .padding(.horizontal, WFSpace.sm)
-            .frame(height: 32)
-            .background(workspace.activeList == name ? WFColors.selection : .clear,
-                        in: RoundedRectangle(cornerRadius: WFMetrics.corner))
-            .contentShape(Rectangle())
-        }
-        .contextMenu {
-            Button("重命名") {
-                if let value = TaskNamePrompt.ask("重命名清单", value: name), !workspace.saveList(value, replacing: name) { TaskNamePrompt.invalidName() }
-            }
-            Button("删除清单…") {
-                if TaskNamePrompt.confirm("删除清单“\(name)”？", message: "任务（含子任务）将移到收集箱，不删除任务。可撤销。") { workspace.removeList(name) }
-            }
-        }
-        .dropDestination(for: String.self) { values, _ in
-            guard let id = values.first.flatMap(UUID.init(uuidString:)) else { return false }
-            return workspace.moveToList(id, TaskList(name: name)).taskID != nil
-        }
-    }
-
     private func openList(_ name: String) {
         navigation.destination = .allTasks; workspace.activeList = name; workspace.activeTag = nil
         workspace.select(nil); workspace.clearBulkSelection(); onNavigate()
+    }
+}
+
+/// 侧栏清单行（Round B1）：色板圆点、hover"⋯"菜单（置顶/重命名/颜色/删除）、
+/// 作为拖放目标接收任务行拖拽（drop → moveToList），拖拽悬停时高亮描边。
+private struct SidebarListRowView: View {
+    @ObservedObject var workspace: TaskWorkspaceModel
+    let name: String
+    let onOpen: () -> Void
+    @State private var hovering = false
+    @State private var dragTargeted = false
+    @State private var showColorPicker = false
+
+    private var meta: TaskListMeta? { workspace.listMeta(for: name) }
+    private var pinned: Bool { meta?.isPinned ?? false }
+    private var selected: Bool { workspace.activeList == name }
+    private var dotColor: Color {
+        WFListPalette.swatch(WFListPalette.argb[
+            WFListPalette.colorIndex(for: name, explicit: meta?.colorIndex)
+        ])
+    }
+    private var openCount: Int {
+        workspace.allTasks.filter {
+            $0.list.name == name && !$0.isClosed && $0.deletedAt == nil && $0.skippedAt == nil
+        }.count
+    }
+
+    var body: some View {
+        HStack(spacing: WFSpace.xs) {
+            Button(action: onOpen) {
+                HStack(spacing: WFSpace.sm) {
+                    Circle().fill(dotColor).frame(width: 9, height: 9)
+                        .accessibilityLabel("清单颜色")
+                    Text(name).lineLimit(1)
+                    Spacer(minLength: WFSpace.xs)
+                    if openCount > 0 {
+                        Text("\(openCount)").font(WFType.supporting)
+                            .foregroundStyle(WFColors.secondaryText)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            // "⋯"常驻占位（对齐 Flutter 的 AnimatedOpacity）：行宽不因 hover 抖动。
+            Menu { menuItems } label: {
+                Image(systemName: "ellipsis")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(WFColors.secondaryText)
+                    .frame(width: 18, height: 20)
+                    .contentShape(Rectangle())
+            }
+            .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
+            .fixedSize()
+            .opacity(hovering ? 1 : 0)
+            .allowsHitTesting(hovering)
+            .disabled(!hovering)
+            .help("清单操作")
+        }
+        .padding(.horizontal, WFSpace.sm)
+        .frame(height: 32)
+        .background(selected || dragTargeted ? WFColors.selection : .clear,
+                    in: RoundedRectangle(cornerRadius: WFMetrics.corner))
+        // 拖拽悬停高亮描边（对齐 Flutter dragActive 的 accent 边框）。
+        .overlay(RoundedRectangle(cornerRadius: WFMetrics.corner)
+            .strokeBorder(dragTargeted ? WFColors.accent : Color.clear, lineWidth: 1))
+        .contentShape(Rectangle())
+        .onHover { hovering = $0 }
+        .contextMenu { menuItems }
+        // 任务行拖来的负载是任务 id 字符串：drop 即移入本清单（HUD 由 workspace 自动上报）。
+        .dropDestination(for: String.self) { values, _ in
+            guard let id = values.first.flatMap(UUID.init(uuidString:)) else { return false }
+            return workspace.moveToList(id, TaskList(name: name)).taskID != nil
+        } isTargeted: { dragTargeted = $0 }
+        .popover(isPresented: $showColorPicker, arrowEdge: .trailing) {
+            ListColorPickerPopover(workspace: workspace, name: name) { showColorPicker = false }
+        }
+    }
+
+    @ViewBuilder
+    private var menuItems: some View {
+        Button(pinned ? "取消置顶" : "置顶清单") {
+            _ = workspace.setListPinned(name, !pinned)
+        }
+        Button("重命名") {
+            if let value = TaskNamePrompt.ask("重命名清单", value: name),
+               !workspace.saveList(value, replacing: name) {
+                TaskNamePrompt.invalidName()
+            }
+        }
+        // 菜单关闭后再弹色板，避免 macOS 菜单吞掉 popover 的呈现时机。
+        Button("选择颜色") {
+            DispatchQueue.main.async { showColorPicker = true }
+        }
+        Divider()
+        Button("删除清单…", role: .destructive) {
+            if TaskNamePrompt.confirm("删除清单“\(name)”？",
+                                      message: "任务（含子任务）将移到收集箱，不删除任务。可撤销。") {
+                workspace.removeList(name)
+            }
+        }
+    }
+}
+
+/// 14 色网格弹层（对齐 Flutter ListColorSwatch）：当前生效色打勾，点选即保存。
+private struct ListColorPickerPopover: View {
+    @ObservedObject var workspace: TaskWorkspaceModel
+    let name: String
+    let onDismiss: () -> Void
+    private let columns = Array(repeating: GridItem(.fixed(22), spacing: 10), count: 7)
+
+    private var effectiveIndex: Int {
+        WFListPalette.colorIndex(for: name, explicit: workspace.listMeta(for: name)?.colorIndex)
+    }
+
+    var body: some View {
+        VStack(spacing: WFSpace.sm) {
+            Text("选择清单颜色").font(WFType.supporting).foregroundStyle(WFColors.secondaryText)
+            LazyVGrid(columns: columns, spacing: 10) {
+                ForEach(WFListPalette.argb.indices, id: \.self) { index in
+                    Button {
+                        _ = workspace.setListColor(name, colorIndex: index)
+                        onDismiss()
+                    } label: {
+                        ZStack {
+                            Circle()
+                                .fill(WFListPalette.swatch(WFListPalette.argb[index]))
+                                .frame(width: 22, height: 22)
+                            if index == effectiveIndex {
+                                Image(systemName: "checkmark")
+                                    .font(.system(size: 10, weight: .bold))
+                                    .foregroundStyle(WFListPalette.checkmarkOn(WFListPalette.argb[index]))
+                            }
+                        }
+                        .contentShape(Circle())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+        .padding(WFSpace.lg)
+        .onExitCommand(perform: onDismiss)
+    }
+}
+
+/// 色板 ARGB 值 → SwiftUI 颜色的视图侧映射（色板本身留在 Foundation 层）。
+extension WFListPalette {
+    static func swatch(_ value: UInt32) -> Color {
+        Color(red: Double((value >> 16) & 0xFF) / 255,
+              green: Double((value >> 8) & 0xFF) / 255,
+              blue: Double(value & 0xFF) / 255)
+    }
+
+    /// 色块上的勾选颜色：按亮度取黑/白（对齐 Flutter WorkFollowThemeContrast.foregroundOn）。
+    static func checkmarkOn(_ value: UInt32) -> Color {
+        let r = Double((value >> 16) & 0xFF), g = Double((value >> 8) & 0xFF), b = Double(value & 0xFF)
+        return (0.299 * r + 0.587 * g + 0.114 * b) / 255 > 0.6 ? .black : .white
     }
 }
 
@@ -199,7 +326,7 @@ struct TaskComposer: View {
          initialProperties: QuickAddPropertiesOverrides = QuickAddPropertiesOverrides(
             priority: nil, listName: nil, tags: nil)) {
         let parsed = QuickAddParser.parse(title, now: workspace.clock(), calendar: workspace.calendar,
-                                          availableLists: workspace.allListNames,
+                                          knownLists: Set(workspace.allListNames),
                                           dismissedTokenIDs: dismissedTokenIDs)
         self.workspace = workspace
         self.onClose = onClose
@@ -284,7 +411,7 @@ struct TaskComposer: View {
                 Button("取消") { onClose(false) }.keyboardShortcut(.cancelAction)
                 Button("创建") {
                     let parsed = QuickAddParser.parse(title, now: workspace.clock(), calendar: workspace.calendar,
-                                                     availableLists: workspace.allListNames,
+                                                     knownLists: Set(workspace.allListNames),
                                                      dismissedTokenIDs: dismissedTokenIDs)
                     guard !parsed.title.isEmpty else { return }
                     let dueAt = scheduleEdited

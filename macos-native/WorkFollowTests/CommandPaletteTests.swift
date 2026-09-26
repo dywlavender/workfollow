@@ -9,15 +9,29 @@ final class CommandPaletteTests: XCTestCase {
         return value
     }
 
-    func testEmptyPaletteShowsFlutterNavigationCommandsOnly() {
+    func testEmptyPaletteLeadsWithCreateEntryFollowedByAllCommands() {
         let entries = CommandPaletteProjection.entries(
             query: "  ", tasks: [], notes: [], creationList: "收集箱",
             schedulesForToday: false, now: now, calendar: calendar)
 
-        XCTAssertEqual(entries.count, 9)
-        XCTAssertEqual(entries.first?.title, "打开最近 7 天")
-        XCTAssertEqual(entries.last?.title, "切换外观")
+        // 首项恒为"新建任务"，其后是完整命令区（Flutter 命令全集）。
+        XCTAssertEqual(entries.count, 10)
+        XCTAssertEqual(entries.first?.kind, .createTask)
+        XCTAssertEqual(entries.first?.title, "新建任务")
+        XCTAssertEqual(entries.first?.subtitle, "保存到收集箱")
+        XCTAssertEqual(entries.first?.action, .createTask(""))
+        XCTAssertEqual(entries.dropFirst().map(\.title),
+                       ["打开最近 7 天", "打开今天", "打开收集箱", "打开所有任务",
+                        "打开日历", "打开笔记", "打开任务垃圾桶", "打开笔记垃圾桶", "切换外观"])
         XCTAssertFalse(entries.contains { $0.title == "已完成" || $0.title == "四象限" })
+    }
+
+    func testCreateEntryAnnouncesTodayScheduleInTodayContext() {
+        let entries = CommandPaletteProjection.entries(
+            query: "", tasks: [], notes: [], creationList: "收集箱",
+            schedulesForToday: true, now: now, calendar: calendar)
+
+        XCTAssertEqual(entries.first?.subtitle, "保存到收集箱 · 安排到今天")
     }
 
     func testSearchOffersCreateTaskThenMatchingTasksNotesAndCommands() async {
@@ -46,6 +60,8 @@ final class CommandPaletteTests: XCTestCase {
                 now: self.now, calendar: self.calendar)
 
             XCTAssertEqual(entries.first?.title, "新建任务「search」")
+            XCTAssertEqual(entries.first?.kind, .createTask)
+            XCTAssertEqual(entries.first?.action, .createTask("search"))
             XCTAssertTrue(entries.contains { $0.id == "task-\(matchingTask.uuidString)" })
             XCTAssertTrue(entries.contains { $0.id == "task-\(bodyMatch.uuidString)" })
             XCTAssertTrue(entries.contains { $0.id == "note-\(matchingNote.uuidString)" })
@@ -76,6 +92,12 @@ final class CommandPaletteTests: XCTestCase {
             XCTAssertEqual(entries.filter { $0.id.hasPrefix("task-") }.count, 7)
             XCTAssertEqual(entries.filter { $0.id.hasPrefix("note-") }.count, 5)
         }
+    }
+
+    func testNextAppearanceCyclesThroughSystemLightAndDark() {
+        XCTAssertEqual(CommandPaletteProjection.nextAppearance(after: .system), .light)
+        XCTAssertEqual(CommandPaletteProjection.nextAppearance(after: .light), .dark)
+        XCTAssertEqual(CommandPaletteProjection.nextAppearance(after: .dark), .system)
     }
 
     func testOpenTaskRoutesToItsListAndPreservesSelectionAcrossNavigation() async {
@@ -137,6 +159,21 @@ final class CommandPaletteTests: XCTestCase {
                                                                navigation: navigation).taskID!
             XCTAssertEqual(workspace.task(for: laterID)?.list.name, "工作")
             XCTAssertNil(workspace.task(for: laterID)?.schedule.dueAt)
+        }
+    }
+
+    func testCreateTaskFromEmptyQueryFallsBackToUntitledInCurrentContext() async {
+        await MainActor.run {
+            let workspace = TaskWorkspaceModel(clock: { self.now }, calendar: self.calendar, seedDemoData: false)
+            let navigation = AppNavigation()
+
+            let id = CommandPaletteProjection.createTask("   ", workspace: workspace,
+                                                         navigation: navigation).taskID!
+            XCTAssertEqual(workspace.task(for: id)?.title, "无标题")
+            XCTAssertEqual(workspace.task(for: id)?.list.name, "收集箱")
+            // 默认目的地是"今天"：当前上下文语义下应排今天。
+            XCTAssertEqual(workspace.task(for: id)?.schedule.dueAt,
+                           workspace.calendar.startOfDay(for: now))
         }
     }
 }

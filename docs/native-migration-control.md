@@ -4,6 +4,17 @@
 
 ## 当前串行关卡
 
+### 2026-09-26 21:44 编辑栏当前构建复验
+
+- 当前仍只推进“编辑栏”关卡，日期、列表未开始；不把已有功能数量当作 parity 通过。
+- 修正 Native 格式命令标签“待办清单”为 Flutter 的“检查项”，并新增任务父/子 Slash profile 命令集及“斜杠后继续输入即关闭”回归测试。任务 profile 的命令顺序、数量、标签与 Flutter 源码对齐；通用 profile 仍可查询。
+- 格式条改为 Footer 水平居中。打开时调用 `DocumentEditorHandle.focusEditor()` 让正文重新成为 first responder；真实窗口实测：打开后 AX 焦点仍为正文，不先点击正文，直接按 Escape，格式条即关闭且正文继续持有焦点。最新截图见本对话工具结果，未另存仓库 PNG。
+- 真实窗口还确认格式条在宽 Inspector 中水平居中。Slash 命令弹层曾在真窗显示父任务 12 项，键入 `q` 后收起；输入的临时 `/q` 已退格清掉，正文回读未留验收文本。该证据没有验证 Slash 面板与 Flutter 的行高/优先锚点差异，也不覆盖每个 Slash 命令的动作。
+- 为让共享工作区当前源码可完整编译，给 `QuickAddParser` 保留旧数组参数的转发 overload，并将侧栏 palette 索引适配为颜色值；这两项是 API/类型接线，不改变查询或配色语义。新增的 `ListMetaTests` 加 `@MainActor` 后，当前 XCTest target 可编译运行。
+- 最新构建命令 `xcodebuild -quiet -project macos-native/WorkFollow.xcodeproj -scheme WorkFollow -destination 'platform=macOS,arch=arm64' -derivedDataPath /private/tmp/workfollow-native-editor-review CODE_SIGNING_ALLOWED=NO build` 返回成功。运行 app：`/private/tmp/workfollow-native-editor-review/Build/Products/Debug/WorkFollow.app`。
+- 定向 `DocumentProfileTests`、`SlashSessionTests`、`ListMetaTests` 通过；最新全量测试 **353 通过、0 失败、0 跳过**，结果 `/private/tmp/workfollow-native-editor-review/Logs/Test/Test-WorkFollow-2026.09.26_21-44-15-+0800.xcresult`。21:40 的中间结果曾失败于当时正在更新的 CommandPalette 断言；源码稳定后对单项和全量都重跑通过，不以该中间结果代表当前状态。
+- `git diff --check` 已通过（文档更新后还需再跑一次）。编辑栏关卡仍**未通过**：附件真实导入/回读、输入法组词、窄屏及 Slash 几何和各动作仍缺当前构建验收。日期、列表继续等待编辑栏完整通过。
+
 ### 2026-09-26 19:21 最新源码补充
 
 - 本轮起始工作区干净，基于现有最新实现继续；没有恢复旧布局，也未覆盖日期/列表更新。

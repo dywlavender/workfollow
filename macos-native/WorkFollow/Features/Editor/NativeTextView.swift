@@ -1,4 +1,6 @@
 import AppKit
+import ImageIO
+import SwiftUI
 
 final class NativeTextView: NSTextView {
     // An inspector is recreated for each document. Never share the window's
@@ -12,6 +14,7 @@ final class NativeTextView: NSTextView {
     var profile = DocumentProfile()
     var slashSession: SlashSession?
     var slashPanel: NSPanel?
+    var selectionPanel: NSPanel?
     var documentIdentity = UUID()
     var needsHostCaretReveal = false
 
@@ -64,7 +67,10 @@ final class NativeTextView: NSTextView {
     }
 
     override func viewWillMove(toWindow newWindow: NSWindow?) {
-        if newWindow == nil { dismissSlash() }
+        if newWindow == nil {
+            dismissSlash()
+            dismissSelectionToolbar()
+        }
         super.viewWillMove(toWindow: newWindow)
     }
 
@@ -103,6 +109,153 @@ final class NativeTextView: NSTextView {
         guard range.length > 0, NSMaxRange(range) <= (string as NSString).length else { return }
         guard profile.selectionActions.indices.contains(sender.tag) else { return }
         profile.selectionActions[sender.tag].perform((string as NSString).substring(with: range))
+    }
+
+    // MARK: - 选区浮动工具条（迁移自 Flutter DocumentSelectionToolbar；笔记 profile）
+
+    /// Escape 或调用动作后压住浮条，直到选区再次变化（Flutter 的 selectionOverlaySuppressed）。
+    var selectionToolbarSuppressed = false
+    private var lastSelectionToolbarRange = NSRange(location: NSNotFound, length: 0)
+
+    /// 选区变化时由协调器调用；非空选区 + 笔记 profile（有选区动作、非任务文档）浮现。
+    func refreshSelectionToolbar() {
+        let range = selectedRange()
+        if range != lastSelectionToolbarRange {
+            lastSelectionToolbarRange = range
+            selectionToolbarSuppressed = false
+        }
+        let eligible = window != nil && !hasMarkedText() && range.length > 0 && !profile.taskSlash
+            && !profile.selectionActions.isEmpty && NSMaxRange(range) <= (string as NSString).length
+        guard eligible, !selectionToolbarSuppressed else {
+            closeSelectionPanel()
+            return
+        }
+        showSelectionPanel(for: range)
+    }
+
+    /// 压住并关闭（Escape、执行动作、文档切换）。
+    func dismissSelectionToolbar() {
+        selectionToolbarSuppressed = true
+        closeSelectionPanel()
+    }
+
+    func closeSelectionPanel() {
+        if let panel = selectionPanel {
+            panel.parent?.removeChildWindow(panel)
+            panel.orderOut(nil)
+        }
+        selectionPanel = nil
+    }
+
+    private func showSelectionPanel(for range: NSRange) {
+        guard let window else { return }
+        let panel: NSPanel
+        if let existing = selectionPanel {
+            panel = existing
+        } else {
+            panel = NSPanel(contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
+            panel.isReleasedWhenClosed = false
+            panel.hasShadow = true
+            panel.backgroundColor = .clear
+            panel.isOpaque = false
+            panel.becomesKeyOnlyIfNeeded = true
+            panel.appearance = window.effectiveAppearance
+            window.addChildWindow(panel, ordered: .above)
+            selectionPanel = panel
+        }
+        panel.contentView = NSHostingView(rootView: DocumentSelectionToolbarView(
+            actions: profile.selectionActions,
+            onInvoke: { [weak self] action in self?.invokeSelectionToolbarAction(action) },
+            onFormat: { [weak self] command in self?.invokeSelectionToolbarFormat(command) },
+            onLink: { [weak self] in self?.invokeSelectionToolbarLink() }))
+        let content = panel.contentView ?? NSView()
+        let size = content.fittingSize
+        // firstRect 返回屏幕坐标，与子窗口 setFrame 同一坐标系。
+        let rect = firstRect(forCharacterRange: range, actualRange: nil)
+        let bounds = (window.screen?.visibleFrame ?? window.frame).intersection(window.frame).insetBy(dx: 8, dy: 8)
+        let width = min(max(size.width, 120), bounds.width)
+        let height = max(size.height, 30)
+        let x = min(max(rect.midX - width / 2, bounds.minX), bounds.maxX - width)
+        let y = rect.maxY + 6 + height <= bounds.maxY
+            ? rect.maxY + 6
+            : max(bounds.minY, rect.minY - height - 6)
+        panel.setFrame(NSRect(x: x, y: y, width: width, height: height), display: true)
+        panel.orderFront(nil)
+    }
+
+    private func invokeSelectionToolbarAction(_ action: DocumentSelectionAction) {
+        let range = selectedRange()
+        guard range.length > 0, NSMaxRange(range) <= (string as NSString).length else {
+            dismissSelectionToolbar()
+            return
+        }
+        let text = (string as NSString).substring(with: range)
+        dismissSelectionToolbar()
+        window?.makeFirstResponder(self)
+        action.perform(text)
+    }
+
+    private func invokeSelectionToolbarFormat(_ command: DocumentFormatCommand) {
+        dismissSelectionToolbar()
+        window?.makeFirstResponder(self)
+        applyFormat(command)
+    }
+
+    private func invokeSelectionToolbarLink() {
+        dismissSelectionToolbar()
+        window?.makeFirstResponder(self)
+        editDocumentLink(nil)
+    }
+
+    // MARK: - 图片粘贴（迁移自 Flutter onImagePaste：剪贴板图片 → data URL 图片块）
+
+    override func paste(_ sender: Any?) {
+        if insertPastedImage() { return }
+        super.paste(sender)
+    }
+
+    /// 剪贴板带位图（且不是 Finder 文件）时转 data URL 附件块插入；返回是否已处理。
+    /// NativeDocument 没有独立图片块类型，按迁移决策用附件 run 承载 data URL
+    /// （DocumentTextCodec 会把这类附件渲染成真实图片）。
+    @discardableResult
+    private func insertPastedImage() -> Bool {
+        guard isEditable, NSPasteboard.general.data(forType: .fileURL) == nil,
+              let raw = Self.pasteboardImageData() else { return false }
+        let dataURL = "data:image/png;base64," + Self.normalizedPNG(raw).base64EncodedString()
+        let attachment = NativeAttachment(id: UUID(), name: "粘贴的图片.png", storedName: dataURL)
+        breakUndoCoalescing()
+        undoManager?.beginUndoGrouping()
+        insertAttachments([attachment])
+        undoManager?.endUndoGrouping()
+        return true
+    }
+
+    private static func pasteboardImageData() -> Data? {
+        let board = NSPasteboard.general
+        if let png = board.data(forType: .png) { return png }
+        return board.data(forType: .tiff)
+    }
+
+    /// 粘贴的截图常远超正文宽度：最长边超过 1600px 时等比缩小后再编码，
+    /// 避免快照 JSON 膨胀（data URL 随笔记文档持久化）。
+    static func normalizedPNG(_ data: Data) -> Data {
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil),
+              let image = CGImageSourceCreateImageAtIndex(source, 0, nil),
+              max(image.width, image.height) > 1600 else { return data }
+        let scale = 1600.0 / CGFloat(max(image.width, image.height))
+        let width = max(1, Int((CGFloat(image.width) * scale).rounded()))
+        let height = max(1, Int((CGFloat(image.height) * scale).rounded()))
+        guard let context = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0,
+                                      space: CGColorSpace(name: CGColorSpace.sRGB) ?? CGColorSpaceCreateDeviceRGB(),
+                                      bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return data }
+        context.interpolationQuality = .high
+        context.draw(image, in: NSRect(x: 0, y: 0, width: width, height: height))
+        guard let scaled = context.makeImage() else { return data }
+        let output = NSMutableData()
+        guard let destination = CGImageDestinationCreateWithData(output as CFMutableData, "public.png" as CFString, 1, nil) else { return data }
+        CGImageDestinationAddImage(destination, scaled, nil)
+        guard CGImageDestinationFinalize(destination) else { return data }
+        return output as Data
     }
 
     @objc func undo(_ sender: Any?) {
@@ -186,6 +339,7 @@ final class NativeTextView: NSTextView {
             return
         }
         if slashSession != nil { dismissSlash(); return }
+        if selectionPanel != nil { dismissSelectionToolbar(); return }
         if enclosingScrollView?.isFindBarVisible == true {
             enclosingScrollView?.isFindBarVisible = false
             return

@@ -56,37 +56,62 @@ final class TaskActions {
         }
         // Only the directly completed recurrence starts a new occurrence.
         // Children carried by parent completion must not spawn separate chains.
-        if task.recurrence != .never {
-            let base = task.schedule.dueAt ?? calendar.startOfDay(for: now)
-            if let next = RecurrenceEngine.next(for: task, now: now, calendar: calendar) {
-                let days = calendar.dateComponents([.day], from: base, to: next).day ?? 1
-                func nextOccurrence(_ source: Task, parentID: UUID?) -> Task {
-                    var value = Task(id: UUID(), title: source.title, document: source.document,
-                                     tags: source.tags, recurrence: source.recurrence,
-                                     list: source.list, priority: source.priority, schedule: source.schedule,
-                                     parentID: parentID, childOrder: source.childOrder,
-                                     createdAt: now, updatedAt: now)
-                    value.schedule.dueAt = source.schedule.dueAt.flatMap { calendar.date(byAdding: .day, value: days, to: $0) }
-                    value.schedule.deadlineAt = source.schedule.deadlineAt.flatMap { calendar.date(byAdding: .day, value: days, to: $0) }
-                    value.reminderAt = source.reminderAt.flatMap { calendar.date(byAdding: .day, value: days, to: $0) }
-                    value.attachments = source.attachments
-                    value.recurrenceRule = source.recurrenceRule
-                    return value
-                }
-                var occurrence = nextOccurrence(task, parentID: task.parentID)
-                occurrence.schedule.dueAt = next
-                var rule = task.recurrenceRule ?? RecurrenceRule()
-                rule.monthDay = rule.monthDay ?? calendar.component(.day, from: base)
-                rule.remainingCount = rule.remainingCount.map { $0 - 1 }
-                occurrence.recurrenceRule = rule
-                snapshot.append(occurrence)
-                if task.parentID == nil {
-                    snapshot += store.children(of: task.id).map { nextOccurrence($0, parentID: occurrence.id) }
-                }
-            }
+        var resultID = id
+        if task.recurrence != .never,
+           let occurrence = makeNextOccurrence(of: task, completedAt: now) {
+            snapshot.append(occurrence.spawn)
+            snapshot += occurrence.children
+            resultID = occurrence.spawn.id
         }
         store.commit(snapshot)
-        return .success(id)
+        // The returned id points at the spawned occurrence so callers can move
+        // the selection onto the next instance of the chain.
+        return .success(resultID)
+    }
+
+    /// Builds the next occurrence for a completing or skipped recurring task
+    /// (Flutter's _spawnNextRecurrence): due, deadline and reminder ride the
+    /// recurrence delta, the count boundary is consumed, and the children come
+    /// along as a fresh incomplete checklist whose own repeat rules are cleared.
+    private func makeNextOccurrence(of task: Task, completedAt: Date) -> (spawn: Task, children: [Task])? {
+        let base = task.schedule.dueAt ?? calendar.startOfDay(for: completedAt)
+        var rule = task.recurrenceRule ?? RecurrenceRule()
+        rule.monthDay = rule.monthDay ?? calendar.component(.day, from: base)
+        guard let next = rule.nextOccurrence(after: base, frequency: task.recurrence, calendar: calendar) else { return nil }
+        let days = calendar.dateComponents([.day], from: base, to: next).day ?? 0
+        func shifted(_ date: Date?) -> Date? {
+            date.flatMap { calendar.date(byAdding: .day, value: days, to: $0) }
+        }
+        let now = clock()
+        var spawn = Task(id: UUID(), title: task.title, document: task.document,
+                         tags: task.tags, recurrence: task.recurrence, list: task.list,
+                         priority: task.priority, schedule: task.schedule,
+                         parentID: task.parentID, childOrder: task.childOrder,
+                         createdAt: now, updatedAt: now)
+        spawn.schedule.dueAt = next
+        spawn.schedule.deadlineAt = shifted(task.schedule.deadlineAt)
+        spawn.reminderAt = shifted(task.reminderAt)
+        spawn.reminderOffsets = task.reminderOffsets
+        spawn.attachments = task.attachments
+        spawn.recurrenceRule = rule.following
+        spawn.sourceNoteID = task.sourceNoteID
+        let children = store.children(of: task.id).enumerated().map { order, child -> Task in
+            var value = Task(id: UUID(), title: child.title, document: child.document,
+                             tags: child.tags, list: child.list, priority: child.priority,
+                             schedule: child.schedule, parentID: spawn.id, childOrder: order,
+                             createdAt: now, updatedAt: now)
+            value.schedule.dueAt = shifted(child.schedule.dueAt)
+            value.schedule.deadlineAt = shifted(child.schedule.deadlineAt)
+            value.reminderAt = shifted(child.reminderAt)
+            value.reminderOffsets = child.reminderOffsets
+            value.attachments = child.attachments
+            value.convertedNoteID = child.convertedNoteID
+            value.sourceNoteID = child.sourceNoteID
+            // Fresh defaults: status .active, recurrence .never, rule nil —
+            // only the parent drives the chain of occurrences.
+            return value
+        }
+        return (spawn, children)
     }
 
     /// Reopen a completed task, not a trash restore. Does not reopen descendants.
@@ -224,10 +249,9 @@ final class TaskActions {
     func setRecurrence(_ id: UUID, frequency: TaskRepeat, rule: RecurrenceRule?) -> TaskActionResult {
         edit(id) { task in
             task.recurrence = frequency
-            var normalized = rule
-            normalized?.interval = max(1, rule?.interval ?? 1)
-            normalized?.remainingCount = rule?.remainingCount.map { max(1, $0) }
-            task.recurrenceRule = frequency == .never ? nil : normalized
+            // Normalization drops out-of-range calendar fields and zero counts
+            // (never-ending), mirroring Flutter's RecurrenceDraft.normalized.
+            task.recurrenceRule = frequency == .never ? nil : rule?.normalized(calendar: calendar)
         }
     }
 
@@ -244,12 +268,15 @@ final class TaskActions {
     func undo() { store.undo() }
     @discardableResult
     func saveTiming(_ id: UUID, schedule: TaskSchedule, reminder: Date?, frequency: TaskRepeat,
-                    recurrenceRule: RecurrenceRule? = nil) -> TaskActionResult {
+                    recurrenceRule: RecurrenceRule? = nil, reminderOffsets: [Int]? = nil) -> TaskActionResult {
         guard let current = store.task(id) else { return .failure(.missingTask) }
         guard current.deletedAt == nil else { return .failure(.deletedTask) }
         store.transaction {
             _ = setSchedule(id, schedule)
             _ = setReminder(id, reminder)
+            // nil leaves the stored offsets untouched; an explicit list (even
+            // empty) replaces them.
+            if let reminderOffsets { _ = setReminderOffsets(id, reminderOffsets) }
             if current.recurrence != frequency {
                 _ = setRecurrence(id, frequency: frequency, rule: recurrenceRule)
             } else if let recurrenceRule, current.recurrenceRule != recurrenceRule {
@@ -360,6 +387,7 @@ final class TaskActions {
                     if task.parentID == nil { _ = moveToList(task.id, TaskList(name: list)) }
                 case .schedule(let schedule): _ = setSchedule(task.id, TaskSchedule(dueAt: schedule.dueAt, hasTime: schedule.hasTime, deadlineAt: task.schedule.deadlineAt))
                 case .priority(let priority): _ = setPriority(task.id, priority)
+                case .reminderOffsets(let offsets): _ = setReminderOffsets(task.id, offsets)
                 }
             }
         }
@@ -398,21 +426,41 @@ final class TaskActions {
         return .success(value.id)
     }
 
-    func skip(_ id: UUID) -> TaskActionResult {
-        guard let task = store.task(id), !task.isClosed, task.deletedAt == nil,
-              RecurrenceEngine.next(for: task, now: clock(), calendar: calendar) != nil else { return .failure(.missingTask) }
-        let original = store.tasks
-        store.transaction {
-            _ = complete(id)
-            store.commit(store.tasks.map { value in
-                guard let previous = original.first(where: { $0.id == value.id }),
-                      value.id == id || value.parentID == id else { return value }
-                var skipped = previous
-                skipped.skippedAt = clock(); skipped.updatedAt = clock()
-                return skipped
-            })
-        }
-        return .success(id)
+    /// Skips the current occurrence of a recurring task (Flutter parity): the
+    /// next occurrence is spawned exactly as completion would, and the current
+    /// instance stays in storage stamped `skippedAt` — persisted, but excluded
+    /// from active projections. Undo restores the pre-skip snapshot, which
+    /// removes the spawned occurrence and clears the skip stamp.
+    @discardableResult
+    func skipOccurrence(_ id: UUID) -> TaskActionResult {
+        guard let task = store.task(id), task.deletedAt == nil, task.skippedAt == nil,
+              !task.isClosed, task.recurrence != .never else { return .failure(.missingTask) }
+        let now = clock()
+        guard let occurrence = makeNextOccurrence(of: task, completedAt: now) else { return .failure(.missingTask) }
+        var snapshot = store.tasks
+        guard let index = snapshot.firstIndex(where: { $0.id == id }) else { return .failure(.missingTask) }
+        snapshot[index].skippedAt = now
+        snapshot[index].updatedAt = now
+        snapshot.append(occurrence.spawn)
+        snapshot += occurrence.children
+        store.commit(snapshot)
+        return .success(occurrence.spawn.id)
+    }
+
+    /// Reminder offsets in minutes relative to the schedule anchor: 0 = on
+    /// time, negative = early. An empty list clears the offsets so the legacy
+    /// absolute `reminderAt` applies again.
+    @discardableResult
+    func setReminderOffsets(_ id: UUID, _ offsets: [Int]?) -> TaskActionResult {
+        edit(id) { $0.reminderOffsets = Self.normalizedOffsets(offsets) }
+    }
+
+    /// Deduplicates into ascending (earliest-first) on-time/early values;
+    /// positive inputs are read as "early" magnitudes like the picker sends.
+    static func normalizedOffsets(_ offsets: [Int]?) -> [Int]? {
+        guard let offsets else { return nil }
+        let values = Set(offsets.map { $0 > 0 ? -$0 : $0 }).filter { $0 <= 0 }.sorted()
+        return values.isEmpty ? nil : values
     }
 
     func reorder(_ id: UUID, before targetID: UUID) {
@@ -429,8 +477,54 @@ final class TaskActions {
         }
         store.commit(values)
     }
+
+    // MARK: - 清单元数据（Round B1 加法：颜色/置顶只走 store 的 meta 通道，不碰任务数据）
+
+    /// 收集箱是固定的系统清单：不可改名、不可删除、也不可着色/置顶（对齐 Flutter）。
+    private func canManageList(_ raw: String) -> Bool {
+        let name = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        return !name.isEmpty && name != TaskList.inbox.name
+    }
+
+    /// 对一个清单的 meta 做变更并提交；隐式清单（快速添加里 @新清单 产生、尚未注册的）
+    /// 首次从侧栏管理时注册进 store.lists，使颜色/置顶与清单本身一起持久化、可删除。
+    private func commitListMeta(_ raw: String, mutation: (inout TaskListMeta) -> Void) -> Bool {
+        let name = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard canManageList(name) else { return false }
+        var metas = store.listMetas
+        if let index = metas.firstIndex(where: { $0.name == name }) {
+            mutation(&metas[index])
+        } else {
+            var fresh = TaskListMeta(name: name)
+            mutation(&fresh)
+            metas.append(fresh)
+        }
+        if store.lists.contains(name) {
+            store.commit(store.tasks, listMetas: metas)
+        } else {
+            store.commit(store.tasks, lists: store.lists + [name], listMetas: metas)
+        }
+        return true
+    }
+
+    /// 设置清单颜色（WFListPalette 下标；nil 表示清除显式色，回到按名推导的稳定色）。
+    @discardableResult
+    func setListColor(_ name: String, _ colorIndex: Int?) -> Bool {
+        commitListMeta(name) {
+            $0.colorIndex = colorIndex.map { min(max($0, 0), WFListPalette.argb.count - 1) }
+        }
+    }
+
+    /// 置顶/取消置顶清单；侧栏置顶分组排在其余清单之前。
+    @discardableResult
+    func setListPinned(_ name: String, _ isPinned: Bool) -> Bool {
+        commitListMeta(name) { $0.isPinned = isPinned }
+    }
 }
 
 enum TaskBatchOperation {
     case complete, delete, move(String), schedule(TaskSchedule), priority(TaskPriority)
+    /// Reminder offsets in minutes (0 = on time, negative = early); an empty
+    /// list clears the stored offsets.
+    case reminderOffsets([Int])
 }

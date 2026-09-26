@@ -144,7 +144,13 @@ struct PlanningWorkspaceView: View {
 
     @ViewBuilder
     private var calendarBoard: some View {
-        if mode == .year { yearBoard } else { monthWeekBoard }
+        if mode == .year {
+            yearBoard
+        } else if mode == .week {
+            weekBoard
+        } else {
+            monthBoard
+        }
     }
 
     private var headerTitle: String {
@@ -234,41 +240,82 @@ struct PlanningWorkspaceView: View {
         mode = .month
     }
 
-    /// 月/周网格，向滴答靠拢：灰底周头、白底细线日期格、今天描边圆点、
-    /// 任务为按清单着色的圆角小条（点击条 = 选中任务），"+"仅 hover 显示。
-    private var monthWeekBoard: some View {
-        // 只纵向滚动：横向轴会让 LazyVGrid 收缩到最小宽度、两侧留白，
+    /// 月视图：灰底周头 + 白底细线日期格，跨天任务渲染为周行内的横跨圆角色带
+    /// （lane 布局见 CalendarSpans），单日任务仍是清单着色小条，今天圆点、
+    /// hover"+"不变。
+    private var monthBoard: some View {
+        // 只纵向滚动：横向轴会让网格收缩到最小宽度、两侧留白，
         // 去掉后网格随内容区满宽拉伸（对齐滴答的满宽月视图）。
         ScrollView(.vertical) {
-            let days = mode == .week ? PlanningProjection.weekDays(containing: anchor, calendar: workspace.calendar) : PlanningProjection.monthDays(containing: anchor, calendar: workspace.calendar)
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible(minimum: 88), spacing: 1), count: 7), spacing: 1) {
-                // 表头用 offset 作 id：与日期格共用 Date id 会让 LazyVGrid
-                // 把第一周（8/31–9/6 这类跨月格）当作重复身份丢掉。
-                ForEach(Array(days.prefix(7).enumerated()), id: \.offset) { _, day in
-                    Text(day.formatted(.dateTime.weekday(.abbreviated).locale(.appDate)))
-                        .font(.caption).foregroundStyle(WFColors.secondaryText)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 6)
-                        .background(WFColors.secondarySurface)
-                }
-                ForEach(days, id: \.self) { day in
-                    CalendarDayCell(
-                        dayText: String(workspace.calendar.component(.day, from: day)),
-                        isToday: workspace.calendar.isDate(day, inSameDayAs: workspace.clock()),
-                        inMonth: mode == .week || workspace.calendar.isDate(day, equalTo: anchor, toGranularity: .month),
-                        events: PlanningProjection.tasks(on: day, from: tasks, calendar: workspace.calendar),
-                        listPalette: WFPlanningPalette.list,
-                        onSelect: { workspace.select($0) },
-                        onAdd: { addOnDate(day) }
-                    )
-                    .frame(minWidth: 120, maxWidth: .infinity, minHeight: mode == .week ? 480 : 112, alignment: .topLeading)
-                    .dropDestination(for: String.self) { strings, _ in
-                        guard let id = strings.first.flatMap(UUID.init(uuidString:)) else { return false }
-                        _ = workspace.moveDueDate(id, to: day)
-                        return true
+            let days = PlanningProjection.monthDays(containing: anchor, calendar: workspace.calendar)
+            VStack(spacing: 1) {
+                // 表头用 offset 作 id：与日期格共用 Date id 会把第一周
+                // （8/31–9/6 这类跨月格）当作重复身份丢掉。
+                HStack(spacing: 1) {
+                    ForEach(Array(days.prefix(7).enumerated()), id: \.offset) { _, day in
+                        Text(day.formatted(.dateTime.weekday(.abbreviated).locale(.appDate)))
+                            .font(.caption).foregroundStyle(WFColors.secondaryText)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 6)
+                            .background(WFColors.secondarySurface)
                     }
                 }
-            }.frame(minWidth: 620).background(WFColors.border)
+                ForEach(Array(stride(from: 0, to: days.count, by: 7)), id: \.self) { offset in
+                    CalendarMonthRow(
+                        calendar: workspace.calendar,
+                        today: workspace.clock(),
+                        days: Array(days[offset..<offset + 7]),
+                        monthReference: anchor,
+                        tasks: tasks,
+                        listPalette: WFPlanningPalette.list,
+                        onSelect: { workspace.select($0) },
+                        onAdd: { addOnDate($0) },
+                        onDrop: dropTask
+                    )
+                }
+            }
+            .frame(minWidth: 620)
+            .background(WFColors.border)
+        }
+    }
+
+    /// 周视图：7 列卡片式日列（白底圆角卡 + 日期头 + 计数徽标），对齐打勾的
+    /// 卡式周列；跨天色带同样在卡内渲染（排在单日小条之前），无任务日显示
+    /// "没有安排"。整卡是投放目标：单日任务落卡改期，跨天任务平移整个区间。
+    private var weekBoard: some View {
+        let calendar = workspace.calendar
+        let days = PlanningProjection.weekDays(containing: anchor, calendar: calendar)
+        let spans = CalendarSpans.lanes(for: days, tasks: tasks, calendar: calendar)
+        return HStack(spacing: WFSpace.sm) {
+            ForEach(Array(days.enumerated()), id: \.offset) { index, day in
+                CalendarWeekCard(
+                    calendar: calendar,
+                    today: workspace.clock(),
+                    day: day,
+                    dayIndex: index,
+                    tasks: tasks,
+                    spans: spans,
+                    listPalette: WFPlanningPalette.list,
+                    onSelect: { workspace.select($0) },
+                    onDrop: dropTask
+                )
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .background(WFColors.canvas)
+    }
+
+    /// 落格改期：单日任务沿用 moveDueDate（只改 dueAt，保留时点）；跨天任务
+    /// 平移整个区间——按「目标日 − 原安排日」同时移动 dueAt 与 deadlineAt。
+    /// workspace 没有一次改两个字段的 API，用 moveDueDate（比 setDueDate 多
+    /// 保留 hasTime）+ setDeadline 组合调用，两次独立写档。
+    private func dropTask(_ id: UUID, on day: Date) {
+        guard let task = workspace.allTasks.first(where: { $0.id == id }) else { return }
+        if let shift = CalendarSpans.intervalShift(task: task, to: day, calendar: workspace.calendar) {
+            _ = workspace.moveDueDate(id, to: shift.dueAt)
+            _ = workspace.setDeadline(id, shift.deadlineAt)
+        } else {
+            _ = workspace.moveDueDate(id, to: day)
         }
     }
 
@@ -450,16 +497,116 @@ private struct QuadrantCard: View {
     }
 }
 
-/// 日历日期格：白底、细线（共享 LazyVGrid 的 1pt 间隙 + 边框底色），
+/// 月视图的一周行：日期格铺底，跨天色带层绝对定位压在格子上方，竖向细线
+/// 压顶（细线穿过色带而非止步于色带，对齐打勾的绘制顺序）。lane 布局按周行
+/// 独立计算（CalendarSpans.lanes），格内小条让出被色带占用的槽位。
+private struct CalendarMonthRow: View {
+    let calendar: Calendar
+    let today: Date
+    /// 本行的 7 天（列 0 = 周首日，随 firstWeekday）。
+    let days: [Date]
+    /// 判断格内/格外的参照日（当前月的锚点）。
+    let monthReference: Date
+    /// 视图已过滤的可见任务（含跨天任务，色带层从中取）。
+    let tasks: [Task]
+    let listPalette: [Color]
+    let onSelect: (UUID) -> Void
+    let onAdd: (Date) -> Void
+    let onDrop: (UUID, Date) -> Void
+
+    private var spans: [CalendarSpanBar] {
+        CalendarSpans.lanes(for: days, tasks: tasks, calendar: calendar)
+    }
+
+    var body: some View { content }
+
+    private var content: some View {
+        let spans = self.spans
+        return HStack(spacing: 1) {
+            ForEach(Array(days.enumerated()), id: \.offset) { column, day in
+                CalendarDayCell(
+                    dayText: String(calendar.component(.day, from: day)),
+                    isToday: calendar.isDate(day, inSameDayAs: today),
+                    inMonth: calendar.isDate(day, equalTo: monthReference, toGranularity: .month),
+                    skipSlots: CalendarSpans.slotsOver(spans, column: column),
+                    events: dayEvents(on: day),
+                    listPalette: listPalette,
+                    onSelect: onSelect,
+                    onAdd: { onAdd(day) }
+                )
+                .frame(minWidth: 120, maxWidth: .infinity, minHeight: 112, alignment: .topLeading)
+                .dropDestination(for: String.self) { strings, _ in
+                    guard let id = strings.first.flatMap(UUID.init(uuidString:)) else { return false }
+                    onDrop(id, day)
+                    return true
+                }
+            }
+        }
+        .overlay(alignment: .topLeading) {
+            GeometryReader { geometry in
+                let columnWidth = (geometry.size.width - 6) / 7
+                ZStack(alignment: .topLeading) {
+                    ForEach(spans) { span in
+                        spanBand(span, columnWidth: columnWidth)
+                    }
+                    verticalHairlines(columnWidth: columnWidth)
+                }
+            }
+        }
+    }
+
+    /// 单日小条列表：跨天任务整个归色带层，格内不再重复出现。
+    private func dayEvents(on day: Date) -> [Task] {
+        PlanningProjection.tasks(on: day, from: tasks, calendar: calendar)
+            .filter { !CalendarSpans.isMultiDay($0, calendar: calendar) }
+    }
+
+    /// 色带定位：left = 列起点 +（未被裁剪端的格内缩进），top = 事件区首行 +
+    /// lane × 槽位步进；宽度覆盖本段各列与列间 1pt 细缝，两端各让出格内缩进。
+    /// 被周边界裁剪的一端贴到行边缘，让上下两周的色带接得上。
+    private func spanBand(_ span: CalendarSpanBar, columnWidth: CGFloat) -> some View {
+        let inset = CGFloat(WFSpace.xs)
+        let left = CGFloat(span.startDayIndex) * (columnWidth + 1) + (span.startClamped ? 0 : inset)
+        let width = CGFloat(span.spanDays) * columnWidth + CGFloat(span.spanDays - 1)
+            - (span.startClamped ? 0 : inset) - (span.endClamped ? 0 : inset)
+        let top = CalendarDayCell.contentTop + CGFloat(span.laneIndex) * CalendarDayCell.slotStride
+        return CalendarSpanBand(span: span, listPalette: listPalette, roundsClippedEdges: false, onSelect: onSelect)
+            .frame(width: max(width, 0), height: CalendarDayCell.slotHeight)
+            .offset(x: left, y: top)
+    }
+
+    /// 竖向细线画在色带之上：色带横跨列间细缝，线若不压顶就会在每条色带处断开。
+    private func verticalHairlines(columnWidth: CGFloat) -> some View {
+        ForEach(1..<7, id: \.self) { index in
+            Rectangle()
+                .fill(WFColors.border)
+                .frame(width: 1)
+                .offset(x: CGFloat(index) * (columnWidth + 1) - 0.5)
+        }
+    }
+}
+
+/// 日历日期格：白底、细线（共享周行的 1pt 间隙 + 边框底色），
 /// 今天为强调色圆点，任务按清单着色成圆角小条，"+"仅 hover 显示。
 private struct CalendarDayCell: View {
     let dayText: String
     let isToday: Bool
     let inMonth: Bool
+    /// 跨天色带在本列占用的槽位数：格内自己的小条从色带之下开始
+    /// （色带横穿格子，格子不能占用它的槽位——对齐打勾的 skipSlots）。
+    var skipSlots: Int = 0
     let events: [Task]
     let listPalette: [Color]
     let onSelect: (UUID) -> Void
     let onAdd: () -> Void
+
+    /// 小条/色带的标准高度（月格、周卡共用一套规格）。
+    static let slotHeight: CGFloat = 18
+    /// 相邻槽位的步进 = 小条高度 + 行距。
+    static let slotStride: CGFloat = slotHeight + WFSpace.xs
+    /// 事件区首行距格顶的距离：格 padding(8) + 日期头(18) + 行距(4)。
+    /// 跨天色带的纵向定位依赖这套常量，改动时与色带层一起动。
+    static let contentTop: CGFloat = WFSpace.sm + slotHeight + WFSpace.xs
 
     @State private var hovered = false
 
@@ -485,7 +632,14 @@ private struct CalendarDayCell: View {
                         .help("添加任务")
                 }
             }
-            ForEach(events) { event in eventBar(event) }
+            // 日期头固定 18pt：跨天色带的纵向定位以它为锚。
+            .frame(height: Self.slotHeight)
+            ForEach(0..<skipSlots, id: \.self) { _ in
+                Color.clear.frame(height: Self.slotHeight)
+            }
+            ForEach(events) { event in
+                CalendarEventBar(task: event, listPalette: listPalette, onSelect: onSelect)
+            }
             Spacer(minLength: 0)
         }
         .padding(WFSpace.sm)
@@ -494,19 +648,159 @@ private struct CalendarDayCell: View {
         .contentShape(Rectangle())
         .onHover { hovered = $0 }
     }
+}
 
-    /// 一行截断的小条，不做复选框与完整行；点击 = 选中打开详情。
-    private func eventBar(_ task: Task) -> some View {
+/// 单日任务的清单色小条：一行截断、不做复选框；点击 = 选中打开详情。
+/// 月格与周卡片共用，保证两处同规格；周卡片里可拖动改期（月格保持不动，
+/// 与打勾一致——月格里的拖放属于网格本身）。
+private struct CalendarEventBar: View {
+    let task: Task
+    let listPalette: [Color]
+    let onSelect: (UUID) -> Void
+    var isDraggable: Bool = false
+
+    var body: some View {
         let done = task.status == .completed
         let color = listPalette[PlanningProjection.listColorIndex(for: task.list.name)]
-        return Button { onSelect(task.id) } label: {
+        let bar = Button { onSelect(task.id) } label: {
             Text(task.title.isEmpty ? "未命名任务" : task.title)
                 .font(.caption2).lineLimit(1)
                 .foregroundStyle(done ? WFColors.tertiaryText : color)
                 .strikethrough(done, color: WFColors.tertiaryText)
                 .padding(.horizontal, WFSpace.xs)
-                .frame(maxWidth: .infinity, minHeight: 18, alignment: .leading)
+                .frame(maxWidth: .infinity, minHeight: CalendarDayCell.slotHeight, alignment: .leading)
                 .background(RoundedRectangle(cornerRadius: 4).fill(done ? WFColors.hover : color.opacity(0.16)))
-        }.buttonStyle(.plain)
+        }
+        .buttonStyle(.plain)
+        Group {
+            if isDraggable {
+                bar.draggable(task.id.uuidString)
+            } else {
+                bar
+            }
+        }
+    }
+}
+
+/// 跨天色带：清单色 0.16 透明度底 + 同色文字，18pt 高（与单日小条同规格）。
+/// 月网格里被周边界裁剪的一端取方角，读起来仍是同一条延续；周卡片里两端
+/// 都取圆角。点击选中任务；拖动以任务 id 为负载，落格后按区间整体平移
+/// （见 PlanningWorkspaceView.dropTask），而非只挪抓取的那天。
+private struct CalendarSpanBand: View {
+    let span: CalendarSpanBar
+    let listPalette: [Color]
+    var roundsClippedEdges: Bool = false
+    let onSelect: (UUID) -> Void
+
+    var body: some View {
+        let done = span.task.status == .completed
+        let color = listPalette[PlanningProjection.listColorIndex(for: span.task.list.name)]
+        Button { onSelect(span.task.id) } label: {
+            Text(span.task.title.isEmpty ? "未命名任务" : span.task.title)
+                .font(.caption2).lineLimit(1)
+                .foregroundStyle(done ? WFColors.tertiaryText : color)
+                .strikethrough(done, color: WFColors.tertiaryText)
+                .padding(.horizontal, WFSpace.xs)
+                .frame(maxWidth: .infinity, minHeight: CalendarDayCell.slotHeight, alignment: .leading)
+                .background(done ? AnyShapeStyle(WFColors.hover) : AnyShapeStyle(color.opacity(0.16)),
+                            in: bandShape)
+        }
+        .buttonStyle(.plain)
+        .draggable(span.task.id.uuidString)
+    }
+
+    /// 被裁剪的一端方角、真实端点圆角；周卡片里不做裁剪端区分。
+    private var bandShape: AnyShape {
+        let corner: CGFloat = 4
+        if roundsClippedEdges {
+            return AnyShape(RoundedRectangle(cornerRadius: corner))
+        }
+        return AnyShape(UnevenRoundedRectangle(
+            topLeadingRadius: span.startClamped ? 0 : corner,
+            bottomLeadingRadius: span.startClamped ? 0 : corner,
+            bottomTrailingRadius: span.endClamped ? 0 : corner,
+            topTrailingRadius: span.endClamped ? 0 : corner))
+    }
+}
+
+/// 周视图的一天卡片：白底圆角卡 + 日期头（今天强调色）+ 计数徽标。
+/// 色带按 lane 顺序流式排在单日小条之前（卡内不做跨格绝对定位）；
+/// 无任务日居中显示"没有安排"。
+private struct CalendarWeekCard: View {
+    let calendar: Calendar
+    let today: Date
+    let day: Date
+    let dayIndex: Int
+    let tasks: [Task]
+    let spans: [CalendarSpanBar]
+    let listPalette: [Color]
+    let onSelect: (UUID) -> Void
+    let onDrop: (UUID, Date) -> Void
+
+    /// 本列上方的色带（lane 只决定次序）。
+    private var coveringSpans: [CalendarSpanBar] {
+        spans.filter { $0.startDayIndex <= dayIndex && dayIndex <= $0.endDayIndex }
+    }
+
+    private var dayEvents: [Task] {
+        PlanningProjection.tasks(on: day, from: tasks, calendar: calendar)
+            .filter { !CalendarSpans.isMultiDay($0, calendar: calendar) }
+    }
+
+    private var isToday: Bool { calendar.isDate(day, inSameDayAs: today) }
+
+    /// 徽标计数 = 卡内可见条数（跨天色带 + 单日小条）。
+    private var visibleCount: Int { coveringSpans.count + dayEvents.count }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: WFSpace.sm) {
+            HStack(spacing: WFSpace.xs) {
+                Text(headerText)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(isToday ? WFColors.accent : WFColors.text)
+                Spacer()
+                if visibleCount > 0 {
+                    Text("\(visibleCount)").font(WFType.supporting).foregroundStyle(WFColors.accent)
+                }
+            }
+            if coveringSpans.isEmpty && dayEvents.isEmpty {
+                VStack(spacing: 0) {
+                    Spacer(minLength: 0)
+                    Text("没有安排").font(WFType.supporting).foregroundStyle(WFColors.tertiaryText)
+                        .frame(maxWidth: .infinity)
+                    Spacer(minLength: 0)
+                }
+            } else {
+                ScrollView(.vertical) {
+                    VStack(alignment: .leading, spacing: WFSpace.xs) {
+                        ForEach(coveringSpans) { span in
+                            CalendarSpanBand(span: span, listPalette: listPalette,
+                                             roundsClippedEdges: true, onSelect: onSelect)
+                        }
+                        ForEach(dayEvents) { event in
+                            CalendarEventBar(task: event, listPalette: listPalette,
+                                             onSelect: onSelect, isDraggable: true)
+                        }
+                    }
+                }
+            }
+        }
+        .padding(WFSpace.md)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(WFColors.content, in: RoundedRectangle(cornerRadius: 12))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(WFColors.border, lineWidth: 1))
+        .contentShape(RoundedRectangle(cornerRadius: 12))
+        .dropDestination(for: String.self) { strings, _ in
+            guard let id = strings.first.flatMap(UUID.init(uuidString:)) else { return false }
+            onDrop(id, day)
+            return true
+        }
+    }
+
+    /// "周三 9/23"；今天不加字，强调色已经说了是今天。
+    private var headerText: String {
+        let weekday = ["日", "一", "二", "三", "四", "五", "六"][calendar.component(.weekday, from: day) - 1]
+        return "周\(weekday) \(calendar.component(.month, from: day))/\(calendar.component(.day, from: day))"
     }
 }

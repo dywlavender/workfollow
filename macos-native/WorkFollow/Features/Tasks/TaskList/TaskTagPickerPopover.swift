@@ -37,6 +37,10 @@ struct TaskTagPickerPopover: View {
                 TextField("输入标签", text: $query)
                     .textFieldStyle(.plain)
                     .focused($searchFocused)
+                    .onKeyPress(.escape) {
+                        onCancel()
+                        return .handled
+                    }
             }
             .padding(WFSpace.md)
             Divider()

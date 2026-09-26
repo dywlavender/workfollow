@@ -25,6 +25,8 @@ final class TaskWorkspaceModel: ObservableObject {
 
     private let store: WorkspaceStore
     private let actions: TaskActions
+    /// 反馈出口（A3 HUD 反馈迁移），由 AppEnvironment 注入；为 nil 时动作照常执行、只是不弹 HUD。
+    weak var feedbackSink: FeedbackCenter?
     private var filterStore: FilterStore?
     private var filterCancellable: AnyCancellable?
     let clock: () -> Date
@@ -32,7 +34,8 @@ final class TaskWorkspaceModel: ObservableObject {
 
     init(clock: @escaping () -> Date = Date.init,
          calendar: Calendar = .current,
-         seedDemoData: Bool = true, initialTasks: [Task]? = nil, initialLists: [String] = []) {
+         seedDemoData: Bool = true, initialTasks: [Task]? = nil, initialLists: [String] = [],
+         initialListMeta: [TaskListMeta]? = nil) {
         self.clock = clock
         self.calendar = calendar
         let store = WorkspaceStore()
@@ -40,7 +43,7 @@ final class TaskWorkspaceModel: ObservableObject {
         self.actions = TaskActions(store: store, clock: clock, calendar: calendar)
         if let initialTasks { store.commit(initialTasks); store.clearUndo() }
         else if seedDemoData { seed() }
-        store.commit(store.tasks, lists: initialLists)
+        store.commit(store.tasks, lists: initialLists, listMetas: initialListMeta)
         store.clearUndo()
     }
 
@@ -49,6 +52,38 @@ final class TaskWorkspaceModel: ObservableObject {
     }
     var allListNames: [String] { [TaskList.inbox.name] + listNames }
     var tagNames: [String] { Array(Set(allTasks.flatMap(\.tags))).sorted() }
+
+    // MARK: 清单元数据（Round B1 加法）
+
+    /// 侧栏清单显示顺序（对齐 Flutter orderedLists）：置顶在前，其余按 meta
+    /// sortOrder、再按名字；未注册/无 meta 的清单按字典序排在后面。
+    var orderedListNames: [String] {
+        _ = revision
+        return TaskListOrdering.ordered(listNames, metas: store.listMetas)
+    }
+    func listMeta(for name: String) -> TaskListMeta? {
+        _ = revision
+        return store.listMeta(for: name)
+    }
+    /// 全部清单 meta（持久化接线用：随快照的 taskListMeta 存取）。
+    var listMetas: [TaskListMeta] {
+        _ = revision
+        return store.listMetas
+    }
+    /// 清单颜色（WFListPalette 下标，nil 清除显式色）。收集箱不可着色。
+    @discardableResult
+    func setListColor(_ name: String, colorIndex: Int?) -> Bool {
+        let changed = actions.setListColor(name, colorIndex)
+        if changed { revision += 1 }
+        return changed
+    }
+    /// 置顶/取消置顶清单；侧栏置顶分组排在其余清单之前。
+    @discardableResult
+    func setListPinned(_ name: String, _ isPinned: Bool) -> Bool {
+        let changed = actions.setListPinned(name, isPinned)
+        if changed { revision += 1 }
+        return changed
+    }
 
     @discardableResult
     func saveList(_ raw: String, replacing old: String? = nil) -> Bool {
@@ -104,9 +139,12 @@ final class TaskWorkspaceModel: ObservableObject {
         return filterStore?.filter(withID: activeFilterID)
     }
     func applyBulk(_ operation: TaskBatchOperation) {
+        let count = bulkSelection.count
+        let tasksBeforeBatch = store.tasks
         actions.batch(bulkSelection, operation: operation)
         clearBulkSelection()
         revision += 1
+        reportBulk(operation, count: count, changed: store.tasks != tasksBeforeBatch)
         if selectedTask?.deletedAt != nil { select(nil) }
     }
 
@@ -151,12 +189,33 @@ final class TaskWorkspaceModel: ObservableObject {
         clearBulkSelection()
         select(id)
     }
-    func duplicate(_ id: UUID) { didMutate(actions.duplicate(id)) }
-    func skip(_ id: UUID) { didMutate(actions.skip(id)); select(nil) }
+    /// 复制任务（Flutter 的"复制任务"）：连同子任务生成副本，HUD 带一步撤销。
+    func duplicate(_ id: UUID) {
+        let result = actions.duplicate(id)
+        didMutate(result)
+        if result.taskID != nil {
+            report(FeedbackEvent(kind: .success, message: "已复制\(quotedTitle(id))",
+                                 actionTitle: "撤销", action: undoStep()))
+        }
+    }
+    func skip(_ id: UUID) { didMutate(actions.skipOccurrence(id)); select(nil) }
     func reorder(_ id: UUID, before target: UUID) { actions.reorder(id, before: target); revision += 1 }
+    /// 已过期组头"顺延"（对齐 Flutter _postponeOverdue）：逐任务保留各自时钟，
+    /// 整组动作是单条事务，一次撤销整组生效；HUD 报告顺延数量。
     func postponeOverdue(_ ids: Set<UUID>) {
+        let before = store.tasks
         actions.postponeOverdue(ids, to: clock())
+        let moved = store.tasks.filter { task in
+            guard let previous = before.first(where: { $0.id == task.id }) else { return false }
+            return previous.schedule.dueAt != task.schedule.dueAt
+        }.count
         revision += 1
+        guard moved > 0 else {
+            report(FeedbackEvent(kind: .info, message: "没有可顺延的任务"))
+            return
+        }
+        report(FeedbackEvent(kind: .undoable, message: "已顺延 \(moved) 项到今天",
+                             actionTitle: "撤销", action: undoStep()))
     }
 
     @discardableResult
@@ -322,6 +381,9 @@ final class TaskWorkspaceModel: ObservableObject {
             : TaskSchedule()
         let result = actions.create(title: title, list: .inbox, schedule: schedule)
         didMutate(result, scope: scope)
+        if result.taskID != nil {
+            report(FeedbackEvent(kind: .info, message: "已添加到「\(TaskList.inbox.name)」"))
+        }
         return result
     }
 
@@ -351,6 +413,12 @@ final class TaskWorkspaceModel: ObservableObject {
     func complete(_ id: UUID, in scope: TaskListScope? = nil) -> TaskActionResult {
         let result = actions.complete(id)
         didMutate(result, scope: scope)
+        if result.taskID != nil {
+            report(FeedbackEvent(kind: .completion, message: "已完成\(quotedTitle(id))",
+                                 actionTitle: "撤销", action: undoStep(), sound: .completion,
+                                 coalesceKey: "task-completed",
+                                 coalescedMessage: { "已完成 \($0) 个任务" }))
+        }
         return result
     }
 
@@ -358,6 +426,10 @@ final class TaskWorkspaceModel: ObservableObject {
     func restore(_ id: UUID, in scope: TaskListScope? = nil) -> TaskActionResult {
         let result = actions.restore(id)
         didMutate(result, scope: scope)
+        if result.taskID != nil {
+            report(FeedbackEvent(kind: .completion, message: "已恢复\(quotedTitle(id))",
+                                 actionTitle: "撤销", action: undoStep()))
+        }
         return result
     }
 
@@ -370,13 +442,23 @@ final class TaskWorkspaceModel: ObservableObject {
     func abandon(_ id: UUID, in scope: TaskListScope? = nil) -> TaskActionResult {
         let result = actions.abandon(id)
         didMutate(result, scope: scope)
+        if result.taskID != nil {
+            report(FeedbackEvent(kind: .undoable, message: "已放弃\(quotedTitle(id))",
+                                 actionTitle: "撤销", action: undoStep()))
+        }
         return result
     }
 
     @discardableResult
     func moveToList(_ id: UUID, _ list: TaskList) -> TaskActionResult {
+        let listBefore = task(for: id)?.list.name
         let result = actions.moveToList(id, list)
         didMutate(result)
+        if result.taskID != nil, listBefore != list.name {
+            report(FeedbackEvent(kind: .undoable,
+                                 message: "已移动到「\(task(for: id)?.list.name ?? list.name)」",
+                                 actionTitle: "撤销", action: undoStep()))
+        }
         return result
     }
 
@@ -391,6 +473,8 @@ final class TaskWorkspaceModel: ObservableObject {
         guard result.taskID != nil else { return result }
         if selectedTaskID == id { selectedTaskID = nil }
         didMutate(result)
+        report(FeedbackEvent(kind: .undoable, message: "已删除\(quotedTitle(id))",
+                             actionTitle: "撤销", action: undoStep()))
         return result
     }
 
@@ -426,8 +510,12 @@ final class TaskWorkspaceModel: ObservableObject {
 
     @discardableResult
     func setPinned(_ id: UUID, _ isPinned: Bool) -> TaskActionResult {
+        let pinnedBefore = task(for: id)?.isPinned
         let result = actions.setPinned(id, isPinned)
         didMutate(result)
+        if result.taskID != nil, pinnedBefore != isPinned {
+            report(FeedbackEvent(kind: .success, message: isPinned ? "已置顶" : "已取消置顶"))
+        }
         return result
     }
 
@@ -436,6 +524,10 @@ final class TaskWorkspaceModel: ObservableObject {
         let result = actions.convertToNote(id, noteID: noteID, undoNote: undoNote)
         didMutate(result)
         if result.taskID != nil { select(nil) }
+        if result.taskID != nil {
+            report(FeedbackEvent(kind: .undoable, message: "已转换为笔记",
+                                 actionTitle: "撤销", action: undoStep()))
+        }
         return result
     }
 
@@ -494,6 +586,45 @@ final class TaskWorkspaceModel: ObservableObject {
         guard var schedule = task(for: id)?.schedule else { return .failure(.missingTask) }
         schedule.deadlineAt = date.map(calendar.startOfDay(for:))
         return setSchedule(id, schedule)
+    }
+
+    // MARK: 反馈上报（A3 加法：动作层只声明发生了什么；显示、时长与仲裁归 FeedbackCenter）
+
+    private func report(_ event: FeedbackEvent) {
+        feedbackSink?.show(event)
+    }
+
+    /// 单步全局撤销：WorkspaceStore 快照栈回退一次（批量操作是单条事务，一次撤销整批生效）。
+    private func undoStep() -> () -> Void {
+        { [weak self] in self?.undo() }
+    }
+
+    private func quotedTitle(_ id: UUID) -> String {
+        guard let title = task(for: id)?.title, !title.isEmpty else { return "任务" }
+        return "「\(title)」"
+    }
+
+    private func reportBulk(_ operation: TaskBatchOperation, count: Int, changed: Bool) {
+        guard changed, count > 0 else { return }
+        switch operation {
+        case .complete:
+            // 批量自带总数，不参与单条合并（再叠一条会重计成 2）。
+            report(FeedbackEvent(kind: .completion, message: "已完成 \(count) 个任务",
+                                 actionTitle: "撤销", action: undoStep(), sound: .completion))
+        case .delete:
+            report(FeedbackEvent(kind: .undoable, message: "已删除 \(count) 个任务",
+                                 actionTitle: "撤销", action: undoStep()))
+        case .move(let list):
+            report(FeedbackEvent(kind: .undoable, message: "已移动 \(count) 个任务到「\(list)」",
+                                 actionTitle: "撤销", action: undoStep()))
+        case .schedule:
+            report(FeedbackEvent(kind: .undoable, message: "已调整 \(count) 个任务的日期",
+                                 actionTitle: "撤销", action: undoStep()))
+        case .priority:
+            report(FeedbackEvent(kind: .success, message: "已更新 \(count) 个任务的优先级"))
+        case .reminderOffsets:
+            report(FeedbackEvent(kind: .success, message: "已更新 \(count) 个任务的提醒"))
+        }
     }
 
     private func didMutate(_ result: TaskActionResult, scope: TaskListScope? = nil) {

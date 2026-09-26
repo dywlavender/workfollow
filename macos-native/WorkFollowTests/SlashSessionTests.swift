@@ -10,7 +10,7 @@ final class SlashSessionTests: XCTestCase {
         editor.insertText("正文", replacementRange: NSRange(location: 0, length: 0))
         editor.insertText("/", replacementRange: NSRange(location: 2, length: 0))
         XCTAssertNotNil(editor.slashSession)
-        XCTAssertEqual(editor.profile.slashCommands.map(\.title), ["一级标题", "二级标题", "三级标题", "无序列表", "有序列表", "待办清单", "引用", "水平分割线", "附件"])
+        XCTAssertEqual(editor.profile.slashCommands.map(\.title), ["一级标题", "二级标题", "三级标题", "无序列表", "有序列表", "检查项", "引用", "水平分割线", "附件"])
         editor.insertText("a", replacementRange: NSRange(location: 3, length: 0))
         XCTAssertNil(editor.slashSession)
         XCTAssertEqual(editor.string, "正文/a")

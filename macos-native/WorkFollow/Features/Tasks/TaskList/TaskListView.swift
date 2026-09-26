@@ -266,6 +266,17 @@ struct TaskListView: View {
                 }
                 .padding(.leading, 24)
             }
+            if quickAddFocused || !draft.isEmpty {
+                // 识别摘要行（Flutter 语义：→ 日期 · 提醒 · 每天 · #tag · @清单 · 高优先级）。
+                let summary = QuickAddParser.summaryLine(for: draft,
+                                                         knownLists: Set(workspace.allListNames),
+                                                         now: workspace.clock(),
+                                                         calendar: workspace.calendar)
+                if !summary.isEmpty {
+                    Text(summary).font(WFType.supporting).foregroundStyle(WFColors.secondaryText)
+                        .padding(.leading, 24)
+                }
+            }
         }
         .frame(minHeight: 36, alignment: .center)
         .padding(.horizontal, WFSpace.md)
@@ -421,7 +432,7 @@ struct TaskListView: View {
 
     @ViewBuilder
     private func taskRow(group: TaskListGroup, node: TaskTreeNode) -> some View {
-        HStack(spacing: 0) {
+        let row = HStack(spacing: 0) {
             if selecting {
                 Toggle("选择", isOn: Binding(get: { workspace.bulkSelection.contains(node.task.id) }, set: { value in
                     workspace.setBulkSelected(node.task.id, value)
@@ -441,12 +452,15 @@ struct TaskListView: View {
                 onToggleExpanded: { workspace.toggleExpanded(node.task.id) }
             )
         }
-        .draggable(node.task.id.uuidString)
-        .dropDestination(for: String.self) { values, _ in
-            guard let id = values.first.flatMap(UUID.init(uuidString:)) else { return false }
-            workspace.reorder(id, before: node.task.id); return true
+        if node.depth == 0 {
+            row
+                .draggable(node.task.id.uuidString)
+                .modifier(TaskReorderDropModifier(workspace: workspace, targetID: node.task.id))
+                .id(rowIdentity(group: group, task: node.task))
+        } else {
+            // 子任务不可拖、也不作为重排落点（对齐 Flutter）。
+            row.id(rowIdentity(group: group, task: node.task))
         }
-        .id(rowIdentity(group: group, task: node.task))
         Divider().padding(.leading, WFSpace.page)
     }
 
@@ -469,13 +483,13 @@ struct TaskListView: View {
 
     private var quickAddResult: QuickAddParseResult {
         QuickAddParser.parse(draft, now: workspace.clock(), calendar: workspace.calendar,
-                             availableLists: workspace.allListNames,
+                             knownLists: Set(workspace.allListNames),
                              dismissedTokenIDs: dismissedQuickAddTokens)
     }
 
     private var hasDismissedQuickAddScheduleToken: Bool {
         QuickAddParser.hasDismissedScheduleToken(in: draft, now: workspace.clock(),
-            calendar: workspace.calendar, availableLists: workspace.allListNames,
+            calendar: workspace.calendar, knownLists: Set(workspace.allListNames),
             dismissedTokenIDs: dismissedQuickAddTokens)
     }
 
@@ -706,6 +720,34 @@ private enum TaskRowPriority {
         case .medium: .orange
         case .high: .red
         }
+    }
+}
+
+/// 手动排序的拖放目标（Round B1，对齐 Flutter moveTaskBefore）：拖行悬停时在
+/// 目标行上缘显示插入条，drop → workspace.reorder(id, before:)。只挂在根任务
+/// 行上（见 taskRow），子任务不可拖也不作为落点。
+private struct TaskReorderDropModifier: ViewModifier {
+    @ObservedObject var workspace: TaskWorkspaceModel
+    let targetID: UUID
+    @State private var targeted = false
+
+    func body(content: Content) -> some View {
+        content
+            .dropDestination(for: String.self) { values, _ in
+                guard let id = values.first.flatMap(UUID.init(uuidString:)),
+                      id != targetID else { return false }
+                workspace.reorder(id, before: targetID)
+                return true
+            } isTargeted: { targeted = $0 }
+            .overlay(alignment: .top) {
+                if targeted {
+                    Capsule()
+                        .fill(WFColors.accent)
+                        .frame(height: 2)
+                        .padding(.horizontal, WFSpace.sm)
+                        .transition(.opacity)
+                }
+            }
     }
 }
 

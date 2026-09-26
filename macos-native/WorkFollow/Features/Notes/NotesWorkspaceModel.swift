@@ -4,7 +4,11 @@ import Foundation
 @MainActor
 final class NotesWorkspaceModel: ObservableObject {
     private let store: NoteStore
-    init(initialNotes: [Note] = [], clock: @escaping () -> Date = Date.init) { store = NoteStore(notes: initialNotes, clock: clock) }
+    private let clock: () -> Date
+    init(initialNotes: [Note] = [], clock: @escaping () -> Date = Date.init) {
+        store = NoteStore(notes: initialNotes, clock: clock)
+        self.clock = clock
+    }
     @Published var selectedID: UUID?
     @Published private(set) var revision = 0
     var notes: [Note] { _ = revision; return store.notes }
@@ -52,4 +56,60 @@ final class NotesWorkspaceModel: ObservableObject {
     func restore(_ id: UUID) { store.restore(id); selectedID = nil; revision += 1 }
     func purge(_ id: UUID) { store.purge(id); selectedID = nil; revision += 1 }
     func emptyTrash() { store.emptyTrash(); selectedID = nil; revision += 1 }
+
+    // MARK: - 任务数据接缝（Round B2 迁移）
+
+    /// NoteStore 拿不到任务数据；由主线在 AppEnvironment 注入：
+    /// `notesWorkspace.taskProvider = { [weak taskWorkspace] in taskWorkspace?.allTasks ?? [] }`。
+    /// 未接线时关联任务区只显示 linkedTaskIDs 命中的任务。
+    var taskProvider: (() -> [Task])?
+
+    /// 打开关联任务的回调；由主线接 `taskWorkspace.select(id)`（必要时切换 destination）。
+    var openTask: ((UUID) -> Void)?
+
+    /// Flutter tasksLinkedToNote 语义：sourceNoteID 指向本笔记的未删除任务。
+    func tasksLinkedToNote(_ note: Note) -> [Task] {
+        guard let taskProvider else { return [] }
+        return taskProvider().filter { $0.sourceNoteID == note.id && $0.deletedAt == nil }
+    }
+
+    /// 导入/迁移侧写入原始富文本 JSON；写入后该笔记进入受保护状态
+    /// （MigrationSnapshot 属禁改文件，未来接入时调用这里）。
+    func preserveOriginalContent(_ id: UUID, json: String) {
+        edit(id) { $0.originalContentJson = json }
+    }
+
+    /// Flutter convertNoteToPlainText：显式创建可独立编辑的纯文本副本。
+    /// 原导入笔记与其富文本源保持不动，副本成为当前选中笔记。
+    /// 仅受保护（hasPreservedRichContent）的笔记可转换。
+    @discardableResult
+    func createPlainTextCopy(_ id: UUID) -> UUID? {
+        guard let source = notes.first(where: { $0.id == id }),
+              source.hasPreservedRichContent else { return nil }
+        let copy = Note(id: UUID(),
+                        title: notePlainTextCopyTitle(source.title),
+                        document: NativeDocument(plainText: notePlainTextBody(source.document)),
+                        folder: source.folder,
+                        favorite: source.favorite,
+                        updatedAt: clock())
+        store.insert(copy)
+        selectedID = copy.id
+        revision += 1
+        return copy.id
+    }
+}
+
+/// 页脚字数统计（对齐 Flutter：去掉全部空白后按 Unicode 码点/rune 计数）。
+func noteWordCount(_ text: String) -> Int {
+    text.filter { !$0.isWhitespace }.unicodeScalars.count
+}
+
+/// 纯文本副本标题（Flutter：“标题（纯文本副本）”；无标题时即“（纯文本副本）”）。
+func notePlainTextCopyTitle(_ title: String) -> String {
+    title.isEmpty ? "（纯文本副本）" : title + "（纯文本副本）"
+}
+
+/// 纯文本副本正文：只保留文字与换行，剥离附件占位符（对象替换符 U+FFFC）。
+func notePlainTextBody(_ document: NativeDocument) -> String {
+    document.plainText.replacingOccurrences(of: "\u{FFFC}", with: "")
 }

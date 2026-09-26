@@ -30,8 +30,11 @@ final class AppEnvironment: ObservableObject {
     let habitStore: HabitStore
     let summaryStore: SummaryStore
     let filterStore: FilterStore
+    /// 全应用唯一的瞬态结果通道：任务动作经 workspace.feedbackSink 上报到这里。
+    let feedback: FeedbackCenter
     private let moduleStores: [ModuleStoreFlushable]
     @Published private(set) var storageError: String?
+    @Published var sidebarVisible = true
     private let repository = NativePreviewRepository()
     private let persistence = PersistenceCoordinator()
     private var subscriptions = Set<AnyCancellable>()
@@ -54,18 +57,28 @@ final class AppEnvironment: ObservableObject {
         var snapshot: NativeWorkspaceSnapshot?
         var failure: Error?
         do { snapshot = try repository.load() } catch { failure = error }
-        taskWorkspace = TaskWorkspaceModel(clock: clock, calendar: calendar, initialTasks: snapshot?.tasks, initialLists: snapshot?.taskLists ?? [])
+        let feedback = FeedbackCenter(
+            completionSoundEnabled: preferences.object(forKey: "completionSoundEnabled") as? Bool ?? true,
+            playSound: { Self.playFeedbackSound($0) })
+        self.feedback = feedback
+        taskWorkspace = TaskWorkspaceModel(clock: clock, calendar: calendar, initialTasks: snapshot?.tasks, initialLists: snapshot?.taskLists ?? [], initialListMeta: snapshot?.taskListMeta)
         notesWorkspace = NotesWorkspaceModel(initialNotes: snapshot?.notes ?? [], clock: clock)
         focusStore = FocusStore(clock: clock)
         habitStore = HabitStore(clock: clock)
         summaryStore = SummaryStore(clock: clock)
         filterStore = FilterStore(clock: clock)
         taskWorkspace.attachFilterStore(filterStore)
+        taskWorkspace.feedbackSink = feedback
         moduleStores = [focusStore, habitStore, summaryStore, filterStore, TemplateStore.shared]
         persistence.onResult = { [weak self] error in
             DispatchQueue.main.async { self?.storageError = error.map { "预览数据保存失败：\($0.localizedDescription)" } }
         }
         if let failure { loadFailed = true; storageError = "预览数据读取失败，自动保存已停用：\(failure.localizedDescription)" }
+        // B2 笔记↔任务联动：笔记详情展示/勾选/打开 sourceNoteID 关联的任务。
+        notesWorkspace.taskProvider = { [weak taskWorkspace] in taskWorkspace?.allTasks ?? [] }
+        notesWorkspace.openTask = { [weak self] id in
+            self?.taskWorkspace.select(id)
+        }
         applyAcceptanceDestination()
         taskWorkspace.$revision.dropFirst().sink { [weak self] _ in
             self?.savePreview()
@@ -87,7 +100,21 @@ final class AppEnvironment: ObservableObject {
 
     private func savePreview() {
         guard !loadFailed else { return }
-        persistence.schedule(NativeWorkspaceSnapshot(tasks: taskWorkspace.allTasks, notes: notesWorkspace.notes, taskLists: taskWorkspace.listNames))
+        persistence.schedule(NativeWorkspaceSnapshot(tasks: taskWorkspace.allTasks, notes: notesWorkspace.notes, taskLists: taskWorkspace.listNames, taskListMeta: taskWorkspace.listMetas))
+    }
+
+    /// ⌘\ 显示或隐藏侧栏。
+    func toggleSidebar() {
+        sidebarVisible.toggle()
+    }
+
+    /// 完成提示音（对齐 Flutter FeedbackSoundPlayer）：系统 Tink 短音、0.4 音量，
+    /// 新音替换旧音而非叠加；缺音时静默降级，不视为错误。
+    private static func playFeedbackSound(_ sound: FeedbackSound) {
+        guard sound == .completion, let tone = NSSound(named: NSSound.Name("Tink")) else { return }
+        tone.stop()
+        tone.volume = 0.4
+        tone.play()
     }
 
     func flush(completion: @escaping (Error?) -> Void) {

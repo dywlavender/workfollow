@@ -36,7 +36,7 @@ final class TaskManagementFlowTests: XCTestCase {
         let id = actions.create(title: "repeat").taskID!
         actions.setRepeat(id, .daily)
         let before = store.tasks
-        XCTAssertNotNil(actions.skip(id).taskID)
+        XCTAssertNotNil(actions.skipOccurrence(id).taskID)
         XCTAssertNotNil(store.task(id)?.skippedAt)
         XCTAssertEqual(store.task(id)?.status, .active)
         XCTAssertEqual(TaskListProjection.rows(in: .allTasks, store: store, now: Date(), calendar: .current).count, 1)
@@ -96,7 +96,7 @@ final class TaskManagementFlowTests: XCTestCase {
             let workspace = TaskWorkspaceModel(clock: { now }, calendar: calendar, seedDemoData: false)
             XCTAssertTrue(workspace.saveList("个人"))
             let parsed = QuickAddParser.parse("每天 明早9点 #工作 @个人 !!!准备评审", now: now,
-                                             calendar: calendar, availableLists: workspace.allListNames)
+                                             calendar: calendar, knownLists: Set(workspace.allListNames))
 
             let result = workspace.createDraft(title: parsed.title, list: parsed.listName ?? "收集箱",
                                                 schedule: TaskSchedule(dueAt: parsed.dueAt, hasTime: parsed.hasTime),

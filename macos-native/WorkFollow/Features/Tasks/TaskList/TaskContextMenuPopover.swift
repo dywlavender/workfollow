@@ -80,6 +80,10 @@ struct TaskContextMenuPopover: View {
                 actionRow(task.isPinned ? "取消置顶" : "置顶", symbol: "pin") {
                     perform { _ = workspace.setPinned(task.id, !task.isPinned) }
                 }
+                // 复制任务（Round B1，对齐 Flutter）：连同子任务生成副本，HUD 自动带撤销。
+                actionRow("复制任务", symbol: "doc.on.doc") {
+                    perform { workspace.duplicate(task.id) }
+                }
                 actionRow(task.isAbandoned ? "恢复任务" : "放弃任务",
                           symbol: task.isAbandoned ? "arrow.uturn.backward" : "xmark.circle",
                           disabled: task.status == .completed && !task.isAbandoned) {

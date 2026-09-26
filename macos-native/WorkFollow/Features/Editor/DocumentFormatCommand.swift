@@ -24,7 +24,7 @@ struct DocumentFormatCommand {
         .init(title: "代码块", block: .code, mark: nil),
         .init(title: "无序列表", block: .bullet, mark: nil),
         .init(title: "有序列表", block: .ordered, mark: nil),
-        .init(title: "待办清单", block: .checklist(false), mark: nil),
+        .init(title: "检查项", block: .checklist(false), mark: nil),
         .init(title: "勾选清单项", block: .checklist(true), mark: nil),
         .init(title: "粗体", block: nil, mark: .bold),
         .init(title: "斜体", block: nil, mark: .italic),

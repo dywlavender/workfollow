@@ -1,13 +1,16 @@
 import Foundation
 
 /// One serial queue owns debounce, encoding and atomic writes. Flush is a queue
-/// barrier: older writes can never finish after the final snapshot.
+/// barrier: older writes can never finish after the final snapshot. The first
+/// successful write of each day also leaves a daily backup copy behind.
 final class PersistenceCoordinator {
     private let queue = DispatchQueue(label: "WorkFollow.preview.persistence", qos: .utility)
     private let repository: NativePreviewRepository
     private let delay: TimeInterval
     private var pending: NativeWorkspaceSnapshot?
     private var work: DispatchWorkItem?
+    /// 当天已尝试过每日备份后不再重复扫描（队列内私有状态）。
+    private var lastDailyBackupDay: String?
     var onResult: ((Error?) -> Void)?
 
     init(repository: NativePreviewRepository = NativePreviewRepository(), delay: TimeInterval = 0.4) {
@@ -39,6 +42,7 @@ final class PersistenceCoordinator {
         do {
             try repository.save(snapshot)
             pending = nil
+            maintainDailyBackupIfNeeded()
             onResult?(nil)
             return nil
         } catch {
@@ -46,5 +50,13 @@ final class PersistenceCoordinator {
             onResult?(error)
             return error
         }
+    }
+
+    /// 当天首次写入成功后留一份每日快照（maintainDailyBackup 内部吞掉所有错误）。
+    private func maintainDailyBackupIfNeeded() {
+        let day = NativePreviewRepository.dayStamp(for: Date())
+        guard day != lastDailyBackupDay else { return }
+        lastDailyBackupDay = day
+        repository.maintainDailyBackup()
     }
 }

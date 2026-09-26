@@ -29,6 +29,8 @@ final class DocumentEditorCoordinator: NSObject, NSTextViewDelegate {
         if self.documentID != documentID {
             flushPendingComposition(in: textView)
             textView.dismissSlash()
+            // 文档切换时压住选区浮条，等用户在新文档里重新选择（Flutter 对齐）。
+            textView.dismissSelectionToolbar()
             textView.documentIdentity = documentID
             textView.undoManager?.removeAllActions()
             self.documentID = documentID
@@ -59,8 +61,9 @@ final class DocumentEditorCoordinator: NSObject, NSTextViewDelegate {
     }
 
     func textViewDidChangeSelection(_ notification: Notification) {
-        guard let textView = notification.object as? NSTextView else { return }
+        guard let textView = notification.object as? NativeTextView else { return }
         editorState.updateSelection(textView.selectedRange())
+        textView.refreshSelectionToolbar()
     }
 
     func textView(_ textView: NSTextView, clickedOnLink link: Any, at charIndex: Int) -> Bool {

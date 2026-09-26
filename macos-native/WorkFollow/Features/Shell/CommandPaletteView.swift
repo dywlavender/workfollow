@@ -47,9 +47,12 @@ struct CommandPaletteView: View {
                             HStack(spacing: WFSpace.md) {
                                 Image(systemName: entry.symbol)
                                     .frame(width: WFMetrics.icon)
-                                    .foregroundStyle(WFColors.secondaryText)
+                                    .foregroundStyle(entry.kind == .createTask
+                                                     ? WFColors.accent : WFColors.secondaryText)
                                 VStack(alignment: .leading, spacing: 3) {
-                                    Text(entry.title).lineLimit(1)
+                                    Text(entry.title)
+                                        .fontWeight(entry.kind == .createTask ? .semibold : .regular)
+                                        .lineLimit(1)
                                     Text(entry.subtitle).font(WFType.supporting)
                                         .foregroundStyle(WFColors.secondaryText).lineLimit(1)
                                 }
@@ -65,16 +68,26 @@ struct CommandPaletteView: View {
                         .buttonStyle(.plain)
                         .padding(.horizontal, WFSpace.sm)
                     }
-                    if entries.isEmpty {
-                        Text("没有匹配结果")
-                            .font(WFType.supporting)
-                            .foregroundStyle(WFColors.secondaryText)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(WFSpace.lg)
-                    }
                 }
                 .padding(.vertical, WFSpace.sm)
             }
+
+            Divider()
+
+            // 底部快捷键提示条（Flutter 命令面板对齐）。
+            HStack(spacing: WFSpace.sm) {
+                Text("↑↓ 选择 · ↵ 执行 · esc 关闭")
+                    .font(WFType.supporting)
+                    .foregroundStyle(WFColors.secondaryText)
+                Spacer(minLength: 0)
+                Text("打勾命令面板")
+                    .font(WFType.supporting)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(WFColors.secondaryText)
+            }
+            .padding(.horizontal, WFSpace.lg)
+            .padding(.vertical, WFSpace.sm)
+            .background(WFColors.canvas)
         }
         .frame(minWidth: 320, idealWidth: 500, maxWidth: 560,
                minHeight: 300, idealHeight: 420, maxHeight: 520)
@@ -108,7 +121,7 @@ struct CommandPaletteView: View {
         case let .navigate(destination):
             environment.navigate(to: destination)
         case .toggleAppearance:
-            environment.appearance = environment.appearance == .dark ? .light : .dark
+            environment.appearance = CommandPaletteProjection.nextAppearance(after: environment.appearance)
         }
         environment.commandPalettePresented = false
     }

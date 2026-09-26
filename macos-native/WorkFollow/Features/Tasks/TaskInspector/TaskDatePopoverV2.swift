@@ -26,11 +26,20 @@ struct TaskDatePopoverV2: View {
         case time, reminder, `repeat`
     }
 
+    /// Submenu of the repeat sheet (Flutter parity: 工作日›/节假日›).
+    private enum RepeatGroup {
+        case work, holiday
+    }
+
     @StateObject private var model: TaskDateDraftModel
     @State private var inlineSheet: InlineSheet?
     @State private var customReminderDraft: Date
     @State private var stagedCustomReminder = false
     @State private var timeSheetBase: Date
+    @State private var stagedCustomOffset = false
+    @State private var customOffsetAmount = ""
+    @State private var customOffsetUnit = 1
+    @State private var repeatGroup: RepeatGroup?
 
     init(task: Task, workspace: TaskWorkspaceModel, deadline: Bool = false, initialPage: Page = .main,
          onClose: @escaping () -> Void) {
@@ -75,6 +84,16 @@ struct TaskDatePopoverV2: View {
                     onSelect: model.select
                 )
                 .simultaneousGesture(TapGesture().onEnded { closeSheet() })
+                .overlay(alignment: .top) {
+                    // Pale accent discs for future occurrences, plus 班/休 badges
+                    // and statutory festival names from ChineseWorkCalendar.
+                    CalendarAnnotationOverlay(
+                        calendar: workspace.calendar,
+                        displayedMonth: model.displayedMonth,
+                        occurrenceDays: model.occurrencePreviewDays(),
+                        showBadges: true)
+                        .allowsHitTesting(false)
+                }
                 if !deadline && model.tab == .period {
                     Text(rangeCaption)
                         .font(.system(size: 11))
@@ -110,7 +129,7 @@ struct TaskDatePopoverV2: View {
     }
 
     private var timeRowHeight: CGFloat { model.hasTime && model.timeAnchor != nil ? 28 : 30 }
-    private var reminderRowHeight: CGFloat { model.reminderOption != .none ? 28 : 30 }
+    private var reminderRowHeight: CGFloat { model.hasReminderDraft ? 28 : 30 }
 
     private var timeSheetY: CGFloat { rowsTopY + timeRowHeight + 4 }
     private var reminderSheetY: CGFloat { rowsTopY + timeRowHeight + reminderRowHeight + 2 }
@@ -166,17 +185,17 @@ struct TaskDatePopoverV2: View {
 
     @ViewBuilder
     private var reminderRowView: some View {
-        if model.reminderOption != .none {
+        if model.hasReminderDraft {
             HStack(spacing: 6) {
                 Image(systemName: "alarm")
                     .font(.system(size: 13))
                     .foregroundStyle(WFColors.accent)
-                Text(reminderChipTitle)
+                Text(reminderRowTitle)
                     .font(.system(size: 12))
                     .foregroundStyle(WFColors.text)
                     .lineLimit(1)
                 Spacer()
-                sheetClearButton { model.chooseReminderOption(.none); closeSheet() }
+                sheetClearButton { model.clearReminder(); closeSheet() }
             }
             .padding(.horizontal, 10)
             .frame(minHeight: 28)
@@ -186,6 +205,15 @@ struct TaskDatePopoverV2: View {
         } else {
             menuRow("提醒", value: "无", icon: "alarm") { openSheet(.reminder) }
         }
+    }
+
+    /// Row label: joined offset titles (multi-select) or the legacy chip.
+    private var reminderRowTitle: String {
+        let offsets = model.reminderOffsetsDraft
+        if !offsets.isEmpty {
+            return offsets.map(TaskDateDraftModel.offsetTitle).joined(separator: ", ")
+        }
+        return reminderChipTitle
     }
 
     private func sheetClearButton(action: @escaping () -> Void) -> some View {
@@ -259,24 +287,75 @@ struct TaskDatePopoverV2: View {
             } else {
                 ScrollView {
                     VStack(spacing: 0) {
-                        ForEach(TaskDateDraftModel.presetOffsets, id: \.option) { preset in
-                            sheetOptionRow(preset.title, checked: model.reminderOption == preset.option) {
-                                model.chooseReminderOption(preset.option)
-                                closeSheet()
+                        if !model.hasTime {
+                            Text("全天任务将按当天 09:00 提醒")
+                                .font(.system(size: 10))
+                                .foregroundStyle(WFColors.tertiaryText)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 4)
+                        }
+                        ForEach(TaskDateDraftModel.offsetChoices, id: \.self) { minutes in
+                            sheetOptionRow(TaskDateDraftModel.offsetTitle(minutes),
+                                           checked: model.reminderOffsets.contains(minutes)) {
+                                model.toggleReminderOffset(minutes)
                             }
                         }
-                        sheetOptionRow("自定义", checked: model.reminderOption == .custom) {
-                            customReminderDraft = model.reminderDate(for: .custom)
-                                ?? model.dueAnchor ?? workspace.clock().addingTimeInterval(3600)
-                            stagedCustomReminder = true
+                        if stagedCustomOffset {
+                            customOffsetRow
+                        } else {
+                            sheetOptionRow("自定义", checked: hasCustomOffsetChoice) {
+                                customOffsetAmount = ""
+                                stagedCustomOffset = true
+                            }
+                            sheetOptionRow("自定义时间…", checked: model.reminderOption == .custom) {
+                                customReminderDraft = model.reminderDate(for: .custom)
+                                    ?? model.dueAnchor ?? workspace.clock().addingTimeInterval(3600)
+                                stagedCustomReminder = true
+                            }
                         }
                     }
                 }
             }
         }
-        .frame(height: 88)
+        .frame(height: stagedCustomReminder ? 88 : 158)
         .frame(maxWidth: .infinity)
         .background(sheetCard)
+    }
+
+    /// 自定义提前量: amount + unit, mirroring the Flutter panel's custom row.
+    private var customOffsetRow: some View {
+        HStack(spacing: 6) {
+            Text("提前").font(.system(size: 11)).foregroundStyle(WFColors.text)
+            TextField("10", text: $customOffsetAmount)
+                .textFieldStyle(.plain)
+                .font(.system(size: 11))
+                .multilineTextAlignment(.center)
+                .frame(width: 34)
+                .padding(.vertical, 2)
+                .background(WFColors.hover, in: RoundedRectangle(cornerRadius: 5))
+            Picker("", selection: $customOffsetUnit) {
+                Text("分钟").tag(1)
+                Text("小时").tag(60)
+                Text("天").tag(1440)
+            }
+            .labelsHidden()
+            .pickerStyle(.menu)
+            .frame(width: 62)
+            sheetFooterButton("添加", filled: true) {
+                if let amount = Int(customOffsetAmount), amount > 0 {
+                    model.addCustomReminderOffset(minutes: amount * customOffsetUnit)
+                }
+                stagedCustomOffset = false
+            }
+            .frame(width: 44)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+    }
+
+    private var hasCustomOffsetChoice: Bool {
+        !model.reminderOffsets.isSubset(of: Set(TaskDateDraftModel.offsetChoices))
     }
 
     private func sheetOptionRow(_ title: String, checked: Bool, action: @escaping () -> Void) -> some View {
@@ -323,6 +402,10 @@ struct TaskDatePopoverV2: View {
     private func openSheet(_ sheet: InlineSheet) {
         if sheet == .reminder {
             stagedCustomReminder = false
+            stagedCustomOffset = false
+        }
+        if sheet == .`repeat` {
+            repeatGroup = nil
         }
         if sheet == .time {
             if let anchor = model.timeAnchor {
@@ -453,6 +536,7 @@ struct TaskDatePopoverV2: View {
             shortcutButton("sunrise", "明天") { model.quick(1) }
             shortcutButton(badge: "+7", "下周") { model.quick(7) }
             shortcutButton("moon", "周末") { model.selectWeekend() }
+            shortcutButton("moon.stars", "今晚") { model.selectTonight() }
         }
     }
 
@@ -519,9 +603,30 @@ struct TaskDatePopoverV2: View {
             .padding(.vertical, 8)
             ScrollView {
                 VStack(alignment: .leading, spacing: 2) {
-                    ForEach(TaskRepeat.allCases, id: \.self) { value in
-                        optionRow(value.title, isSelected: model.frequency == value) {
-                            model.chooseFrequency(value)
+                    if let group = repeatGroup {
+                        optionRow("‹ 返回", isSelected: false) { repeatGroup = nil }
+                        ForEach(group == .work ? [TaskRepeat.weekdays, .workdays] : [TaskRepeat.weekends, .holidays], id: \.self) { value in
+                            optionRow(value.title, isSelected: model.frequency == value) {
+                                model.chooseFrequency(value)
+                            }
+                        }
+                        Text(ChineseWorkCalendar.hasYear(recurrenceAnchorYear)
+                             ? "法定选项包含周末与调休安排。"
+                             : "该年份尚无调休数据，法定选项暂按周一至周五／周末计算。")
+                            .font(WFType.supporting).foregroundStyle(WFColors.tertiaryText)
+                            .padding(.vertical, 4)
+                    } else {
+                        ForEach([TaskRepeat.never, .daily, .weekly, .monthly, .yearly], id: \.self) { value in
+                            optionRow(value.title, isSelected: model.frequency == value) {
+                                model.chooseFrequency(value)
+                            }
+                        }
+                        Divider().padding(.vertical, 6)
+                        optionRow("工作日", isSelected: [TaskRepeat.weekdays, .workdays].contains(model.frequency), arrow: true) {
+                            repeatGroup = .work
+                        }
+                        optionRow("节假日", isSelected: [TaskRepeat.weekends, .holidays].contains(model.frequency), arrow: true) {
+                            repeatGroup = .holiday
                         }
                     }
                     if model.frequency != .never {
@@ -536,6 +641,12 @@ struct TaskDatePopoverV2: View {
         .frame(height: 300)
         .frame(maxWidth: .infinity)
         .background(sheetCard)
+    }
+
+    /// Year of the drafted start day: decides the 法定选项 disclosure copy.
+    private var recurrenceAnchorYear: Int {
+        let anchor = model.tab == .period ? (model.periodStart ?? model.selectedDate) : model.selectedDate
+        return workspace.calendar.component(.year, from: anchor)
     }
 
     @ViewBuilder
@@ -562,8 +673,9 @@ struct TaskDatePopoverV2: View {
                 get: { model.month }, set: { model.chooseMonth($0) }), in: 1...12)
                 .padding(.vertical, 4)
         }
-        if model.frequency == .workdays || model.frequency == .holidays {
-            Text("内置 2025–2026 年中国节假日；其他年份按普通周末计算。")
+        if model.frequency == .weekdays || model.frequency == .weekends
+            || model.frequency == .workdays || model.frequency == .holidays {
+            Text("内置 2025–2026 年中国节假日；其他年份按普通周一至五／周末计算。")
                 .font(WFType.supporting).foregroundStyle(WFColors.tertiaryText)
                 .padding(.vertical, 4)
         }
@@ -622,7 +734,7 @@ struct TaskDatePopoverV2: View {
         .buttonStyle(.plain)
     }
 
-    private func optionRow(_ title: String, isSelected: Bool, action: @escaping () -> Void) -> some View {
+    private func optionRow(_ title: String, isSelected: Bool, arrow: Bool = false, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack {
                 Text(title).font(WFType.body).foregroundStyle(WFColors.text)
@@ -631,6 +743,10 @@ struct TaskDatePopoverV2: View {
                     Image(systemName: "checkmark")
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(WFColors.accent)
+                } else if arrow {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(WFColors.tertiaryText)
                 }
             }
             .padding(.horizontal, 2)
@@ -667,6 +783,7 @@ struct TaskDatePopoverV2: View {
         let plan = model.commitPlan(for: current)
         workspace.saveTiming(taskID, schedule: plan.schedule, reminder: plan.reminder,
                              frequency: plan.frequency, recurrenceRule: plan.recurrenceRule)
+        persistReminderOffsets(plan.reminderOffsets, on: current)
         onClose()
     }
 
@@ -675,6 +792,96 @@ struct TaskDatePopoverV2: View {
         let plan = model.clearPlan(for: current)
         workspace.saveTiming(taskID, schedule: plan.schedule, reminder: plan.reminder,
                              frequency: plan.frequency, recurrenceRule: plan.recurrenceRule)
+        persistReminderOffsets(plan.reminderOffsets, on: current)
         onClose()
+    }
+
+    /// The workspace model has no direct offsets passthrough yet; the public
+    /// bulk channel carries the write (TaskActions.batch handles
+    /// .reminderOffsets). No-op when the stored offsets already match.
+    private func persistReminderOffsets(_ offsets: [Int], on current: Task) {
+        guard offsets != (current.reminderOffsets ?? []) else { return }
+        workspace.bulkSelection = [taskID]
+        workspace.applyBulk(.reminderOffsets(offsets))
+    }
+}
+
+/// Pixel-aligned marks over LunarMonthGridView: the overlay replicates the
+/// grid's exact VStack/header/weekday structure with empty placeholders, so
+/// occurrence discs, 班/休 badges and statutory festival names land on the
+/// right cells without touching the grid itself.
+private struct CalendarAnnotationOverlay: View {
+    let calendar: Calendar
+    let displayedMonth: Date
+    let occurrenceDays: Set<Date>
+    let showBadges: Bool
+
+    private static let columns = Array(repeating: GridItem(.flexible(), spacing: 0), count: 7)
+
+    /// The reference grid always lays out weeks from Sunday.
+    private var layoutCalendar: Calendar {
+        var value = calendar
+        value.firstWeekday = 1
+        return value
+    }
+
+    var body: some View {
+        VStack(spacing: 4) {
+            HStack(spacing: 14) {
+                Text(title).font(.system(size: 14, weight: .semibold)).foregroundStyle(.clear)
+                Spacer()
+                ForEach(0..<3, id: \.self) { _ in Color.clear.frame(width: 18, height: 18) }
+            }
+            LazyVGrid(columns: Self.columns, spacing: 0) {
+                ForEach(0..<7, id: \.self) { _ in
+                    Color.clear.frame(maxWidth: .infinity, minHeight: 15)
+                }
+            }
+            LazyVGrid(columns: Self.columns, spacing: 2) {
+                ForEach(MonthGridCalculator.cells(displayedMonth: displayedMonth, calendar: layoutCalendar)) { cell in
+                    markCell(cell.date)
+                }
+            }
+        }
+    }
+
+    private var title: String {
+        let components = calendar.dateComponents([.year, .month], from: displayedMonth)
+        return "\(components.year ?? 0)年\(components.month ?? 0)月"
+    }
+
+    private func markCell(_ date: Date) -> some View {
+        let day = calendar.startOfDay(for: date)
+        let override = showBadges ? ChineseWorkCalendar.override(for: day, calendar: calendar) : nil
+        // The grid already labels lunar/solar festivals; only fill the gaps
+        // (e.g. 清明节) from the statutory table to avoid double labels.
+        let festival = LunarCalendarService.festivalLabel(for: day, calendar: calendar) == nil
+            ? ChineseWorkCalendar.festivalName(date: day, calendar: calendar) : nil
+        return ZStack {
+            if occurrenceDays.contains(day) {
+                Circle().fill(WFColors.accent.opacity(0.30))
+                    .frame(width: 26, height: 26)
+            }
+        }
+        .frame(maxWidth: .infinity, minHeight: 30)
+        .overlay(alignment: .bottom) {
+            if let festival {
+                Text(festival)
+                    .font(.system(size: 7))
+                    .foregroundStyle(WFColors.secondaryText)
+                    .lineLimit(1)
+            }
+        }
+        .overlay(alignment: .topTrailing) {
+            if let override {
+                Text(override ? "班" : "休")
+                    .font(.system(size: 6, weight: .semibold))
+                    .foregroundStyle(Color.white)
+                    .frame(width: 10, height: 10)
+                    .background(Circle().fill(override ? Color(nsColor: .systemOrange)
+                                                       : Color(nsColor: .systemGreen)))
+                    .offset(x: 3, y: -1)
+            }
+        }
     }
 }

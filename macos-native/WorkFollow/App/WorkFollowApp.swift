@@ -6,11 +6,14 @@ struct WorkFollowApp: App {
     @NSApplicationDelegateAdaptor(NativeLifecycleDelegate.self) private var lifecycle
     @StateObject private var environment: AppEnvironment
     @StateObject private var quickAdd: GlobalQuickAddController
+    @StateObject private var statusItem: StatusItemController
 
     init() {
         let environment = AppEnvironment()
+        let quickAdd = GlobalQuickAddController(workspace: environment.taskWorkspace)
         _environment = StateObject(wrappedValue: environment)
-        _quickAdd = StateObject(wrappedValue: GlobalQuickAddController(workspace: environment.taskWorkspace))
+        _quickAdd = StateObject(wrappedValue: quickAdd)
+        _statusItem = StateObject(wrappedValue: StatusItemController(quickAdd: quickAdd))
     }
 
     var body: some Scene {

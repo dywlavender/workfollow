@@ -273,3 +273,53 @@ enum TaskListProjection {
         return groups
     }
 }
+
+/// 清单 14 色板（照搬 Flutter list_color.dart 的 ARGB 值），加清单色的
+/// 稳定推导与侧栏排序两条纯规则，保持可单测、不依赖 SwiftUI。
+enum WFListPalette {
+    static let argb: [UInt32] = [
+        0xFFE35D6A, // red
+        0xFFE8793F, // orange
+        0xFFD7A62B, // yellow
+        0xFF9AA63A, // olive
+        0xFF42A66A, // green
+        0xFF38A89D, // mint
+        0xFF2F9FB5, // cyan
+        0xFF4285D4, // blue
+        0xFF5865C8, // indigo
+        0xFF8056C7, // purple
+        0xFFC04D9A, // magenta
+        0xFF9A756A, // warm grey
+        0xFF66758A, // slate
+        0xFF8A909B, // grey
+    ]
+
+    /// 清单最终落在色板上的下标：显式 meta 优先（越界回退），未选色时按清单名
+    /// 做稳定字符折叠（Flutter listColorValueForName 同款），等名永远同色。
+    static func colorIndex(for name: String, explicit: Int?) -> Int {
+        if let explicit, explicit >= 0, explicit < argb.count { return explicit }
+        guard !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return 0 }
+        let score = name.unicodeScalars.reduce(0) { ($0 + Int($1.value)) & 0x7FFF_FFFF }
+        return score % argb.count
+    }
+}
+
+/// 侧栏清单显示顺序（对齐 Flutter WorkspaceController.orderedLists）：
+/// 置顶在前，其余按 meta sortOrder，再按名字；无 meta 的清单排在有 meta
+/// 之后、按字典序。纯函数，便于对排序语义做单测。
+enum TaskListOrdering {
+    static func ordered(_ names: [String], metas: [TaskListMeta]) -> [String] {
+        let byName = Dictionary(metas.map { ($0.name, $0) },
+                                uniquingKeysWith: { current, _ in current })
+        return names.sorted { lhs, rhs in
+            let left = byName[lhs], right = byName[rhs]
+            if (left?.isPinned ?? false) != (right?.isPinned ?? false) {
+                return left?.isPinned ?? false
+            }
+            let leftOrder = left?.sortOrder ?? Int.max
+            let rightOrder = right?.sortOrder ?? Int.max
+            if leftOrder != rightOrder { return leftOrder < rightOrder }
+            return lhs.localizedCompare(rhs) == .orderedAscending
+        }
+    }
+}

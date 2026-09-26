@@ -33,6 +33,42 @@ struct TaskList: Equatable, Codable {
     static let inbox = TaskList(name: "收集箱")
 }
 
+/// 侧栏清单元数据（对齐 Flutter MigrationListRecord 的 color/pinned/sortOrder）。
+/// 按清单名关联、随快照单独存取，不写进任务本身；旧快照没有 meta 的清单
+/// 退回默认色板色与字典序。additive Codable：缺失键解码为中性值。
+struct TaskListMeta: Equatable, Codable {
+    var name: String
+    /// WFListPalette 下标；nil = 未选色（视图按清单名推导稳定色）。
+    var colorIndex: Int?
+    var isPinned: Bool
+    var sortOrder: Int
+
+    init(name: String, colorIndex: Int? = nil, isPinned: Bool = false, sortOrder: Int = 0) {
+        self.name = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        self.colorIndex = colorIndex
+        self.isPinned = isPinned
+        self.sortOrder = sortOrder
+    }
+
+    private enum CodingKeys: String, CodingKey { case name, colorIndex, isPinned, sortOrder }
+
+    init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        name = try values.decode(String.self, forKey: .name)
+        colorIndex = try values.decodeIfPresent(Int.self, forKey: .colorIndex)
+        isPinned = try values.decodeIfPresent(Bool.self, forKey: .isPinned) ?? false
+        sortOrder = try values.decodeIfPresent(Int.self, forKey: .sortOrder) ?? 0
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var values = encoder.container(keyedBy: CodingKeys.self)
+        try values.encode(name, forKey: .name)
+        try values.encodeIfPresent(colorIndex, forKey: .colorIndex)
+        try values.encode(isPinned, forKey: .isPinned)
+        try values.encode(sortOrder, forKey: .sortOrder)
+    }
+}
+
 /// Schedule and deadline are intentionally distinct. Calendar is injected into projections.
 struct TaskSchedule: Equatable, Codable {
     var dueAt: Date?
@@ -54,6 +90,10 @@ struct Task: Identifiable, Equatable, Codable {
     var recurrence: TaskRepeat = .never
     var recurrenceRule: RecurrenceRule?
     var reminderAt: Date?
+    /// Reminder offsets in minutes relative to the schedule anchor (0 = on
+    /// time, negative = early). nil keeps the legacy single absolute reminderAt;
+    /// a non-empty list drives multiple notifications instead (Flutter parity).
+    var reminderOffsets: [Int]? = nil
     var attachments: [NativeAttachment] = []
     var list: TaskList
     var priority: TaskPriority
@@ -82,7 +122,7 @@ struct Task: Identifiable, Equatable, Codable {
 // isPinned or abandonedAt key, so decode those as their neutral states.
 extension Task {
     private enum CodingKeys: String, CodingKey {
-        case id, title, document, tags, recurrence, recurrenceRule, reminderAt
+        case id, title, document, tags, recurrence, recurrenceRule, reminderAt, reminderOffsets
         case attachments, list, priority, schedule, status, parentID, childOrder
         case createdAt, updatedAt, completedAt, deletedAt, isPinned, abandonedAt, skippedAt, convertedNoteID
         case sourceNoteID
@@ -97,6 +137,7 @@ extension Task {
         recurrence = try values.decodeIfPresent(TaskRepeat.self, forKey: .recurrence) ?? .never
         recurrenceRule = try values.decodeIfPresent(RecurrenceRule.self, forKey: .recurrenceRule)
         reminderAt = try values.decodeIfPresent(Date.self, forKey: .reminderAt)
+        reminderOffsets = try values.decodeIfPresent([Int].self, forKey: .reminderOffsets)
         attachments = try values.decodeIfPresent([NativeAttachment].self, forKey: .attachments) ?? []
         list = try values.decode(TaskList.self, forKey: .list)
         priority = try values.decode(TaskPriority.self, forKey: .priority)
@@ -125,6 +166,7 @@ extension Task {
         try values.encode(recurrence, forKey: .recurrence)
         try values.encodeIfPresent(recurrenceRule, forKey: .recurrenceRule)
         try values.encodeIfPresent(reminderAt, forKey: .reminderAt)
+        try values.encodeIfPresent(reminderOffsets, forKey: .reminderOffsets)
         try values.encode(attachments, forKey: .attachments)
         try values.encode(list, forKey: .list)
         try values.encode(priority, forKey: .priority)

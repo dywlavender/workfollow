@@ -92,3 +92,30 @@
 4. 月网格两侧大片留白 → 去掉横向滚动轴，网格随内容区满宽拉伸；四象限已完成组不再沉底、卡底留白防裁切
 
 复验通过后回归：252 项测试全部通过。
+
+---
+
+# 第三轮：Flutter 个人版剩余功能迁移（2026-09-26 晚）
+
+基准：`workfollow-flutter-personal/desktop/lib`（个人分支）全量功能盘点（24 模块 + 易漏清单）；对照原生版现状核对后，迁移缺口如下。已确认原生版已有：放弃/恢复、置顶+置顶组、手动/日期/优先级排序、重复 endDate、笔记 folder/favorite/linkedTaskIDs、批量选择、垃圾桶完整交互。
+
+## 缺口包与文件归属
+
+**Round A（并行 3）**
+| # | 包 | 拥有文件 |
+| --- | --- | --- |
+| A1 | 重复/提醒引擎+调度面板（法定工作日节假日、重复结束=日期/次数、完成后生成下一实例含子任务携带+撤销链+选中跳新实例、跳过此周期、提醒偏移多值、时间段 dueEndAt、今晚快捷、发生日预览、节假日角标） | `Domain/Task/RecurrenceRule.swift`、新增 `Domain/Task/ChineseWorkCalendar.swift`、`Application/TaskActions.swift`、`Infrastructure/Notifications/NativeReminderService.swift`、`Features/Tasks/TaskInspector/TaskDatePopoverV2.swift`（最小增量）、`Features/Tasks/TaskInspector/TaskDateDraftModel.swift` + 测试 |
+| A2 | 数据迁移与备份（导入 workfollow-personal-migration v1/v2/v3 合并/替换+预览计数、导出含附件 base64、每日自动备份保留 7 天、恢复备份） | `Features/Settings/SettingsDataView.swift`、`Infrastructure/Persistence/NativePreviewRepository.swift`、`PersistenceCoordinator.swift`、新增 `Infrastructure/Persistence/MigrationSnapshot.swift` + 测试 |
+| A3 | HUD 反馈+系统集成（五类优先级仲裁 HUD、撤销按钮、合并计数、完成提示音+节流、菜单栏 StatusItem、⌘1/2/9/4/5/6/⌘\ 快捷键、任务菜单） | `Features/Tasks/TaskWorkspaceModel.swift`（反馈埋点）、`App/AppEnvironment.swift`、`App/AppCommands.swift`、`App/WorkFollowApp.swift`、`Features/Shell/RootShellView.swift`、新增 `Features/Feedback/*`、`Features/QuickAdd/StatusItemController.swift` + 测试 |
+
+**Round B（并行 3 + 1）**
+| # | 包 | 拥有文件 |
+| --- | --- | --- |
+| B1 | 清单元数据与列表交互（清单颜色/置顶/删除回收集箱、侧栏拖放目标、行拖拽重排、⌘/Shift 多选、顺延动作、复制任务入口） | `Application/WorkspaceStore.swift`、`Application/TaskListProjection.swift`、`Features/Tasks/TaskManagementViews.swift`、`Features/Sidebar/SidebarViews.swift`、`Features/Tasks/TaskList/TaskListView.swift`、`Features/Tasks/TaskList/TaskContextMenuPopover.swift` |
+| B2 | 笔记与编辑器补全（字数统计、复制正文、纯文本副本、富文本保护、笔记关联任务区；工具栏补高亮/链接/插入时间/代码/引用、选区创建任务、图片粘贴） | `Features/Notes/*`、`Features/Editor/*` |
+| B3 | 命令面板与快速添加打磨（首项"新建任务「query」"、命令全集、搜索范围；识别摘要行、chip 删除语义、@清单识别已有清单） | `Features/Shell/CommandPalette*.swift`、`Features/Tasks/TaskList/QuickAdd*.swift` |
+| B4 | 日历跨天色带（lane 布局整体拖动）与周视图增强 | `Features/Planning/PlanningWorkspaceView.swift`、新增 `Features/Planning/CalendarSpans.swift` |
+
+明确不迁移：看板⌘7/习惯⌘8/统计菜单（Flutter 端为死菜单项）、演示模式（开发工具）。
+
+迁移完成后：逐功能与滴答对比，产出 `docs/ticktick-feature-parity-2026-09-26.md`。

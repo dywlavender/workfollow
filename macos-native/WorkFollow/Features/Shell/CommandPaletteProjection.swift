@@ -1,6 +1,6 @@
 import Foundation
 
-enum CommandPaletteAction {
+enum CommandPaletteAction: Equatable {
     case createTask(String)
     case openTask(UUID)
     case openNote(UUID)
@@ -9,7 +9,11 @@ enum CommandPaletteAction {
 }
 
 struct CommandPaletteEntry: Identifiable {
+    /// 区分首项"新建任务"（视图渲染高亮）与任务/笔记/命令结果。
+    enum Kind: Equatable { case createTask, task, note, command }
+
     let id: String
+    let kind: Kind
     let title: String
     let subtitle: String
     let symbol: String
@@ -26,16 +30,21 @@ enum CommandPaletteProjection {
                         calendar: Calendar = .current) -> [CommandPaletteEntry] {
         let commands = commandEntries()
         let query = rawQuery.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !query.isEmpty else { return commands }
 
-        let loweredQuery = query.lowercased()
+        // 首项恒为"新建任务"：无论是否输入了 query，都提供把当前输入落到
+        // 当前上下文的入口（Flutter 对齐：有 query 显示「query」，空 query
+        // 显示"新建任务"，命令面板从不发明"未命名任务"去追赶用户）。
         let create = CommandPaletteEntry(
             id: "create-task",
-            title: "新建任务「\(query)」",
+            kind: .createTask,
+            title: query.isEmpty ? "新建任务" : "新建任务「\(query)」",
             subtitle: "保存到\(creationList)\(schedulesForToday ? " · 安排到今天" : "")",
             symbol: "plus",
             action: .createTask(query))
 
+        guard !query.isEmpty else { return [create] + commands }
+
+        let loweredQuery = query.lowercased()
         let taskResults = tasks.lazy
             .filter { $0.deletedAt == nil && $0.skippedAt == nil && !$0.isAbandoned && !$0.isConverted }
             .filter {
@@ -47,6 +56,7 @@ enum CommandPaletteProjection {
                 let time = taskTimeLabel(for: task, now: now, calendar: calendar) ?? "未安排"
                 return CommandPaletteEntry(
                     id: "task-\(task.id.uuidString)",
+                    kind: .task,
                     title: task.title.isEmpty ? "无标题" : task.title,
                     subtitle: "\(task.list.name) · \(time)",
                     symbol: task.isClosed ? "checkmark.square.fill" : "square",
@@ -63,6 +73,7 @@ enum CommandPaletteProjection {
             .map { note in
                 CommandPaletteEntry(
                     id: "note-\(note.id.uuidString)",
+                    kind: .note,
                     title: note.title.isEmpty ? "未命名笔记" : note.title,
                     subtitle: "笔记 · \(note.folder)",
                     symbol: "text.alignleft",
@@ -73,6 +84,14 @@ enum CommandPaletteProjection {
             ($0.title + " " + $0.subtitle).localizedLowercase.contains(loweredQuery)
         }
         return [create] + taskResults + noteResults + matchingCommands
+    }
+
+    /// "切换外观"命令的轮换顺序：跟随系统 → 浅色 → 深色 → 跟随系统。
+    /// 经 AppEnvironment.appearance 通道生效（视图层执行赋值）。
+    static func nextAppearance(after current: NativeAppearance) -> NativeAppearance {
+        let all = NativeAppearance.allCases
+        guard let index = all.firstIndex(of: current) else { return .system }
+        return all[(index + 1) % all.count]
     }
 
     @MainActor
@@ -119,8 +138,10 @@ enum CommandPaletteProjection {
         let list = workspace.activeList ?? TaskList.inbox.name
         let dueAt = navigation.destination == .today
             ? workspace.calendar.startOfDay(for: workspace.clock()) : nil
+        // 空标题（空 query 的"新建任务"首项）落一个"无标题"任务，仍进当前上下文；
+        // 行渲染对空标题本就显示"无标题"。
         return workspace.createDraft(
-            title: title,
+            title: title.isEmpty ? "无标题" : title,
             list: list,
             schedule: TaskSchedule(dueAt: dueAt),
             priority: .none,
@@ -139,13 +160,13 @@ enum CommandPaletteProjection {
             command("打开笔记", "继续写下刚才的想法", "text.alignleft", .navigate(.notes)),
             command("打开任务垃圾桶", "恢复或彻底删除已移除的任务", "trash", .navigate(.trash)),
             command("打开笔记垃圾桶", "恢复或彻底删除已移除的笔记", "trash", .navigate(.notesTrash)),
-            command("切换外观", "在浅色和深色之间切换", "moon", .toggleAppearance)
+            command("切换外观", "在浅色、深色和跟随系统之间轮换", "moon", .toggleAppearance)
         ]
     }
 
     private static func command(_ title: String, _ subtitle: String, _ symbol: String,
                                 _ action: CommandPaletteAction) -> CommandPaletteEntry {
-        CommandPaletteEntry(id: "command-\(title)", title: title,
+        CommandPaletteEntry(id: "command-\(title)", kind: .command, title: title,
                             subtitle: subtitle, symbol: symbol, action: action)
     }
 

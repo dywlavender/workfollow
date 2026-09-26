@@ -12,7 +12,7 @@ struct RootShellView: View {
             HStack(spacing: 0) {
                 IconRailView(workspace: workspace, navigation: navigation)
                 Divider()
-                if navigationVisible {
+                if navigationVisible, environment.sidebarVisible {
                     NavigationColumnView(workspace: workspace, navigation: navigation,
                                          filterStore: environment.filterStore)
                         .frame(width: WFMetrics.navigationWidth)
@@ -60,8 +60,12 @@ struct RootShellView: View {
                 .environmentObject(environment)
         }
         .safeAreaInset(edge: .bottom) {
-            if let error = environment.storageError {
-                Text(error).font(.caption).foregroundStyle(.red).padding(8)
+            // 反馈 HUD 挂载在底部居中：空场不占布局，有内容时也不遮挡点击。
+            VStack(spacing: 0) {
+                FeedbackHostView(center: environment.feedback)
+                if let error = environment.storageError {
+                    Text(error).font(.caption).foregroundStyle(.red).padding(8)
+                }
             }
         }
     }

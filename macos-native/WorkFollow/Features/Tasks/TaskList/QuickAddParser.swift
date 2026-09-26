@@ -20,8 +20,17 @@ struct QuickAddParseResult {
     let tags: [String]
     let priority: TaskPriority
     let tokens: [QuickAddToken]
+    /// 原始输入文本：token 的 range 以它为基准，供 chip 删除等文本投影使用。
+    let sourceText: String
 
     var summary: String { tokens.map(\.label).joined(separator: " · ") }
+
+    /// 删除某个识别 chip 后的等价文本：该片段退出结构化识别、退化为普通标题
+    /// 文字而非消失（对齐 Flutter 掩码重解析的最终效果），其余识别片段仍被剥离。
+    /// 属性的重解析仍走 `QuickAddParser.parse(dismissedTokenIDs:)`。
+    func text(removing token: QuickAddToken) -> String {
+        QuickAddParser.title(sourceText, removing: tokens.filter { $0.id != token.id })
+    }
 }
 
 /// A focused native port of the Flutter smart-capture vocabulary. Parsing is
@@ -39,16 +48,79 @@ enum QuickAddParser {
     }
 
     static func hasDismissedScheduleToken(in input: String, now: Date, calendar: Calendar,
-                                          availableLists: [String], dismissedTokenIDs: Set<String>) -> Bool {
+                                          knownLists: Set<String>, dismissedTokenIDs: Set<String>) -> Bool {
         guard !dismissedTokenIDs.isEmpty else { return false }
-        let allTokens = parse(input, now: now, calendar: calendar, availableLists: availableLists).tokens
+        let allTokens = parse(input, now: now, calendar: calendar, knownLists: knownLists).tokens
         return allTokens.contains { token in
             dismissedTokenIDs.contains(token.id) && (token.kind == .date || token.kind == .time)
         }
     }
 
+    /// Transitional overload for existing views that still own list names as an array.
+    /// New call sites should pass `knownLists` as a set.
+    static func hasDismissedScheduleToken(in input: String, now: Date, calendar: Calendar,
+                                          availableLists: [String], dismissedTokenIDs: Set<String>) -> Bool {
+        hasDismissedScheduleToken(in: input, now: now, calendar: calendar,
+                                  knownLists: Set(availableLists), dismissedTokenIDs: dismissedTokenIDs)
+    }
+
+    /// 识别摘要行："→ 9月27日 09:00 · 每天 · #工作 · @个人 · 高优先级"式。
+    /// 各成分依次为 日期(含时间) · 提醒 · 重复 · 标签 · 清单 · 优先级，
+    /// 缺省成分直接省略；没有任何识别项时返回空串。
+    /// @ 清单只在命中已知清单时进入摘要（未知 @ 名仍留在标题里）。
+    static func summaryLine(for text: String, knownLists: Set<String>,
+                            now: Date = Date(), calendar: Calendar = .current) -> String {
+        let result = parse(text, now: now, calendar: calendar, knownLists: knownLists)
+        var parts: [String] = []
+        if let due = result.dueAt {
+            parts.append(dateLabel(due, hasTime: result.hasTime, calendar: calendar))
+        }
+        if let reminder = result.reminderAt, reminder != result.dueAt {
+            parts.append("提醒")
+        }
+        if result.recurrence != .never { parts.append(result.recurrence.title) }
+        if !result.tags.isEmpty {
+            parts.append(result.tags.map { "#\($0)" }.joined(separator: " "))
+        }
+        if let list = result.listName { parts.append("@\(list)") }
+        switch result.priority {
+        case .high: parts.append("高优先级")
+        case .medium: parts.append("中优先级")
+        case .low: parts.append("低优先级")
+        case .none: break
+        }
+        guard !parts.isEmpty else { return "" }
+        return "→ " + parts.joined(separator: " · ")
+    }
+
+    /// Flutter `titleFromSpans` 的移植：把给定 token 的源文本区间替换为空格，
+    /// 再折叠空白、去除首尾标点，得到干净标题。删除 chip 时被删片段不参与
+    /// 替换，因此保留为普通标题文字。
+    static func title(_ input: String, removing tokens: [QuickAddToken]) -> String {
+        let mutable = NSMutableString(string: input)
+        for token in tokens.sorted(by: { $0.range.location > $1.range.location }) {
+            guard token.range.location >= 0, NSMaxRange(token.range) <= mutable.length else { continue }
+            mutable.replaceCharacters(in: token.range, with: " ")
+        }
+        return (mutable as String)
+            .components(separatedBy: .whitespacesAndNewlines)
+            .filter { !$0.isEmpty }
+            .joined(separator: " ")
+            .trimmingCharacters(in: CharacterSet(charactersIn: "，,、。;；-— "))
+    }
+
+    private static func dateLabel(_ date: Date, hasTime: Bool, calendar: Calendar) -> String {
+        let parts = calendar.dateComponents([.month, .day, .hour, .minute], from: date)
+        let label = "\(parts.month ?? 1)月\(parts.day ?? 1)日"
+        guard hasTime else { return label }
+        return label + String(format: " %02d:%02d", parts.hour ?? 0, parts.minute ?? 0)
+    }
+
+    /// - Parameters:
+    ///   - knownLists: 已存在的清单名。@ 片段只有命中其中之一才识别为清单
+    ///     token，未知名保持原样留在标题里。
     static func parse(_ input: String, now: Date, calendar: Calendar,
-                      availableLists: [String], dismissedTokenIDs: Set<String> = []) -> QuickAddParseResult {
+                      knownLists: Set<String>, dismissedTokenIDs: Set<String> = []) -> QuickAddParseResult {
         let source = input as NSString
         let today = calendar.startOfDay(for: now)
         var candidates: [Candidate] = []
@@ -116,10 +188,7 @@ enum QuickAddParser {
             return candidate > now ? candidate : (calendar.date(byAdding: .day, value: 1, to: candidate) ?? candidate)
         }
         func formatted(_ date: Date, time: Bool) -> String {
-            let parts = calendar.dateComponents([.month, .day, .hour, .minute], from: date)
-            let dateLabel = "\(parts.month ?? 1)月\(parts.day ?? 1)日"
-            guard time else { return dateLabel }
-            return dateLabel + String(format: " %02d:%02d", parts.hour ?? 0, parts.minute ?? 0)
+            dateLabel(date, hasTime: time, calendar: calendar)
         }
 
         // Combined forms such as “明早9点” and “明天 下午3点” take precedence
@@ -221,7 +290,7 @@ enum QuickAddParser {
             return Candidate(token: token(match, kind: .tag, label: "#\(name)"), tag: name)
         }
         append("@([^\\s#@，,。;；！!]+)") { match in
-            guard let name = capture(match, 1), availableLists.contains(name) else { return nil }
+            guard let name = capture(match, 1), !name.isEmpty, knownLists.contains(name) else { return nil }
             return Candidate(token: token(match, kind: .list, label: "@\(name)"), list: name)
         }
         append("(?m)(^|\\s)(!!!|!!)(?=\\S|\\s|$)") { match in
@@ -303,18 +372,20 @@ enum QuickAddParser {
         }
 
         let tokens = accepted.map(\.token).sorted { $0.range.location < $1.range.location }
-        let titleParts = NSMutableString(string: input)
-        for token in tokens.sorted(by: { $0.range.location > $1.range.location }) {
-            titleParts.replaceCharacters(in: token.range, with: " ")
-        }
-        let title = titleParts as String
-        let cleanedTitle = title.components(separatedBy: .whitespacesAndNewlines)
-            .filter { !$0.isEmpty }.joined(separator: " ")
-            .trimmingCharacters(in: CharacterSet(charactersIn: "，,、。;；-— "))
+        let cleanedTitle = title(input, removing: tokens)
 
         return QuickAddParseResult(title: cleanedTitle, listName: listName, dueAt: dueAt,
                                    hasTime: hasTime, reminderAt: reminderAt,
                                    recurrence: recurrence, recurrenceRule: recurrenceRule,
-                                   tags: tags, priority: priority, tokens: tokens)
+                                   tags: tags, priority: priority, tokens: tokens,
+                                   sourceText: input)
+    }
+
+    /// Transitional overload for existing views that still own list names as an array.
+    /// New call sites should pass `knownLists` as a set.
+    static func parse(_ input: String, now: Date, calendar: Calendar,
+                      availableLists: [String], dismissedTokenIDs: Set<String> = []) -> QuickAddParseResult {
+        parse(input, now: now, calendar: calendar, knownLists: Set(availableLists),
+              dismissedTokenIDs: dismissedTokenIDs)
     }
 }

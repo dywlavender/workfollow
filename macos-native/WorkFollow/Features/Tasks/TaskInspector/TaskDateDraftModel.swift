@@ -22,6 +22,9 @@ final class TaskDateDraftModel: ObservableObject {
     struct CommitPlan: Equatable {
         var schedule: TaskSchedule
         var reminder: Date?
+        /// Ascending offsets in minutes (0 = on time, negative = early); an
+        /// empty list clears stored offsets so the legacy reminder applies.
+        var reminderOffsets: [Int]
         var frequency: TaskRepeat
         var recurrenceRule: RecurrenceRule?
     }
@@ -37,6 +40,18 @@ final class TaskDateDraftModel: ObservableObject {
     /// All-day tasks anchor presets to this hour of the scheduled day.
     static let allDayAnchorHour = 9
 
+    /// Flutter panel parity: the reminder row multi-selects these offsets
+    /// (minutes relative to the anchor; 0 = on time, negative = early).
+    static let offsetChoices = [0, -5, -30, -60, -1440]
+
+    static func offsetTitle(_ minutes: Int) -> String {
+        guard minutes != 0 else { return "准时" }
+        let value = abs(minutes)
+        if value % 1440 == 0 { return "提前\(value / 1440)天" }
+        if value % 60 == 0 { return "提前\(value / 60)小时" }
+        return "提前\(value)分钟"
+    }
+
     @Published var tab: Tab
     @Published var displayedMonth: Date
     @Published private(set) var selectedDate: Date
@@ -44,6 +59,9 @@ final class TaskDateDraftModel: ObservableObject {
     @Published private(set) var periodEnd: Date?
     @Published private(set) var hasTime: Bool
     @Published private(set) var reminderOption: ReminderOption
+    /// Multi-select reminder offsets (Flutter panel parity); non-empty takes
+    /// precedence over the legacy single `reminderOption`.
+    @Published private(set) var reminderOffsets: Set<Int>
     @Published private(set) var customReminder: Date
     @Published private(set) var frequency: TaskRepeat
     @Published private(set) var interval: Int
@@ -75,11 +93,15 @@ final class TaskDateDraftModel: ObservableObject {
         _displayedMonth = Published(initialValue: calendar.date(from: calendar.dateComponents([.year, .month], from: anchor)) ?? anchor)
         _hasTime = Published(initialValue: !deadline && task.schedule.hasTime)
 
+        let storedOffsets = Set(task.reminderOffsets ?? [])
+        _reminderOffsets = Published(initialValue: storedOffsets)
         if let reminderAt = task.reminderAt {
             _customReminder = Published(initialValue: reminderAt)
             let base = Self.reminderBase(for: due, hasTime: task.schedule.hasTime, calendar: calendar)
             let preset = base.flatMap { base in Self.presetOffsets.first { base.addingTimeInterval($0.offset) == reminderAt }?.option }
-            _reminderOption = Published(initialValue: preset ?? .custom)
+            // With multi-offsets stored, the row shows the offsets and the
+            // legacy single option stays out of the way.
+            _reminderOption = Published(initialValue: storedOffsets.isEmpty ? (preset ?? .custom) : .none)
         } else {
             _customReminder = Published(initialValue: now().addingTimeInterval(3600))
             _reminderOption = Published(initialValue: .none)
@@ -113,6 +135,16 @@ final class TaskDateDraftModel: ObservableObject {
 
     func quick(_ offset: Int) {
         select(dateFromToday(offset))
+    }
+
+    /// 今晚 shortcut: today at 20:00, timed (Flutter's tonight quick action).
+    func selectTonight() {
+        let today = dateFromToday(0)
+        select(today)
+        setHasTime(true)
+        if let evening = calendar.date(bySettingHour: 20, minute: 0, second: 0, of: today) {
+            setTime(evening)
+        }
     }
 
     /// Next Saturday, or today when today is Saturday.
@@ -179,8 +211,39 @@ final class TaskDateDraftModel: ObservableObject {
 
     // MARK: Reminder
 
+    /// Whether the reminder row shows an active value (offsets or legacy).
+    var hasReminderDraft: Bool {
+        !reminderOffsets.isEmpty || reminderOption != .none
+    }
+
+    /// Ascending (earliest-first) draft offsets in minutes.
+    var reminderOffsetsDraft: [Int] {
+        reminderOffsets.sorted()
+    }
+
     func chooseReminderOption(_ value: ReminderOption) {
         reminderOption = value
+        // A single absolute/preset reminder replaces any offset selection.
+        if value != .none { reminderOffsets.removeAll() }
+    }
+
+    /// Row-level 清除: drops both the offsets and the legacy option.
+    func clearReminder() {
+        reminderOffsets.removeAll()
+        reminderOption = .none
+    }
+
+    /// Toggles one preset offset; the first selection takes over the row.
+    func toggleReminderOffset(_ minutes: Int) {
+        if !reminderOffsets.insert(minutes).inserted { reminderOffsets.remove(minutes) }
+        if !reminderOffsets.isEmpty { reminderOption = .none }
+    }
+
+    /// 自定义提前量: a positive amount in minutes becomes a negative offset.
+    func addCustomReminderOffset(minutes: Int) {
+        guard minutes > 0 else { return }
+        reminderOffsets.insert(-minutes)
+        reminderOption = .none
     }
 
     func chooseCustomReminder(_ value: Date) {
@@ -243,6 +306,7 @@ final class TaskDateDraftModel: ObservableObject {
         if deadline {
             schedule.deadlineAt = calendar.startOfDay(for: selectedDate)
             return CommitPlan(schedule: schedule, reminder: current.reminderAt,
+                              reminderOffsets: current.reminderOffsets ?? [],
                               frequency: current.recurrence, recurrenceRule: current.recurrenceRule)
         }
         switch tab {
@@ -254,11 +318,25 @@ final class TaskDateDraftModel: ObservableObject {
             schedule.hasTime = periodStart != nil && hasTime
             schedule.deadlineAt = periodEnd.map { calendar.startOfDay(for: $0) }
         }
+        // Offsets need a schedulable anchor; without a due they clear (Flutter
+        // parity), and the legacy single reminder then applies again.
+        var offsets = reminderOffsetsDraft
+        if schedule.dueAt == nil { offsets = [] }
+        let reminder: Date?
+        if offsets.isEmpty {
+            reminder = reminderValue
+        } else if let base = Self.reminderBase(for: schedule.dueAt, hasTime: schedule.hasTime, calendar: calendar) {
+            // The stored reminderAt mirrors the earliest fire date, matching
+            // what Flutter persists alongside its offsets.
+            reminder = base.addingTimeInterval(TimeInterval(offsets.first ?? 0) * 60)
+        } else {
+            reminder = nil
+        }
         if recurrenceTouched {
-            return CommitPlan(schedule: schedule, reminder: reminderValue,
+            return CommitPlan(schedule: schedule, reminder: reminder, reminderOffsets: offsets,
                               frequency: frequency, recurrenceRule: builtRule)
         }
-        return CommitPlan(schedule: schedule, reminder: reminderValue,
+        return CommitPlan(schedule: schedule, reminder: reminder, reminderOffsets: offsets,
                           frequency: current.recurrence, recurrenceRule: current.recurrenceRule)
     }
 
@@ -270,21 +348,36 @@ final class TaskDateDraftModel: ObservableObject {
         if deadline {
             schedule.deadlineAt = nil
             return CommitPlan(schedule: schedule, reminder: current.reminderAt,
+                              reminderOffsets: current.reminderOffsets ?? [],
                               frequency: current.recurrence, recurrenceRule: current.recurrenceRule)
         }
         schedule.dueAt = nil
         schedule.hasTime = false
         if tab == .period { schedule.deadlineAt = nil }
-        return CommitPlan(schedule: schedule, reminder: nil, frequency: .never, recurrenceRule: nil)
+        return CommitPlan(schedule: schedule, reminder: nil, reminderOffsets: [],
+                          frequency: .never, recurrenceRule: nil)
     }
 
-    private var builtRule: RecurrenceRule? {
+    /// The recurrence rule as currently drafted (used for previews and commit).
+    var draftRule: RecurrenceRule? {
         guard frequency != .never else { return nil }
         return RecurrenceRule(
             interval: max(1, interval),
             endDate: ending == .untilDate ? calendar.startOfDay(for: repeatEndDate) : nil,
             remainingCount: ending == .count ? max(1, repeatCount) : nil,
             monthDay: monthDay, weekday: weekday, month: month)
+    }
+
+    private var builtRule: RecurrenceRule? {
+        frequency == .never ? nil : draftRule?.normalized(calendar: calendar)
+    }
+
+    /// Future occurrence days for the calendar preview (pale accent discs),
+    /// anchored on the drafted start day.
+    func occurrencePreviewDays(limit: Int = 12) -> Set<Date> {
+        guard let rule = draftRule else { return [] }
+        let base = (tab == .period ? periodStart : selectedDate) ?? selectedDate
+        return rule.occurrenceDays(after: base, frequency: frequency, calendar: calendar, limit: limit)
     }
 
     // MARK: Range
