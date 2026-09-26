@@ -586,7 +586,7 @@ struct TaskRowView: View {
                             .foregroundStyle(WFColors.secondaryText)
                     }
                 }
-                .frame(maxWidth: .infinity, minHeight: 50, alignment: .leading)
+                .frame(maxWidth: .infinity, minHeight: 55, alignment: .leading)
                 .contentShape(Rectangle())
             }.buttonStyle(.plain)
 
@@ -599,8 +599,8 @@ struct TaskRowView: View {
         .padding(.horizontal, WFSpace.sm)
         // 子行每层缩进 44：父行 depth=0 不变；展开箭头区只挂在 depth=0 行上不受影响。
         .padding(.leading, CGFloat(depth) * 44)
-        // 行高对齐 Flutter rowMinHeight = 50（滴答参考列表的单行读感）。
-        .frame(minHeight: 50)
+        // 行高 55：在 Flutter rowMinHeight = 50 的基础上按使用习惯放宽。
+        .frame(minHeight: 55)
         .background(selected ? WFColors.selection : hovering ? WFColors.hover : .clear,
                     in: RoundedRectangle(cornerRadius: WFMetrics.corner))
         .onHover { hovering = $0 }
