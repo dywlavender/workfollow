@@ -70,12 +70,23 @@ extension NativeTextView {
     }
 
     @objc func insertDocumentAttachment(_ sender: Any?) {
+        insertDocumentAttachment(at: nil)
+    }
+
+    func insertDocumentAttachment(at offset: Int?) {
         guard isEditable else { return }
         let identity = documentIdentity
+        let insertionRange: NSRange
+        if let offset {
+            let location = min(max(0, offset), (string as NSString).length)
+            insertionRange = NSRange(location: location, length: 0)
+        } else {
+            insertionRange = selectedRange()
+        }
         NativeAttachmentFiles.choose { [weak self] result in
             guard let self, self.documentIdentity == identity else { return }
             switch result {
-            case .success(let files): self.insertAttachments(files)
+            case .success(let files): self.insertAttachments(files, replacing: insertionRange)
             case .failure(let error):
                 let alert = NSAlert(error: error)
                 alert.runModal()
@@ -83,11 +94,11 @@ extension NativeTextView {
         }
     }
 
-    func insertAttachments(_ files: [NativeAttachment]) {
+    func insertAttachments(_ files: [NativeAttachment], replacing range: NSRange? = nil) {
         guard !files.isEmpty else { return }
         let runs = files.flatMap { [DocumentRun(text: "\u{FFFC}", attachment: $0), DocumentRun(text: " ")] }
         let content = NativeDocument(blocks: [DocumentBlock(kind: .paragraph, runs: runs)])
-        insertText(DocumentTextCodec.render(content), replacementRange: selectedRange())
+        insertText(DocumentTextCodec.render(content), replacementRange: range ?? selectedRange())
         typingAttributes = DocumentTextCodec.attributes(kind: .paragraph, marks: [])
     }
 }

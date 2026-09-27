@@ -4,6 +4,43 @@ import XCTest
 
 @MainActor
 final class NoteFeatureTests: XCTestCase {
+    func testNoteSlashMatchesFlutterSharedDocumentCommands() {
+        let profile = DocumentProfile(noteSlash: true)
+        XCTAssertEqual(profile.slashCommands.map(\.title), ["一级标题", "二级标题", "三级标题", "无序列表", "有序列表", "检查项", "引用", "水平分割线", "附件"])
+        XCTAssertFalse(profile.taskSlash)
+        XCTAssertTrue(profile.compactSlash)
+    }
+    func testNoteIndexSortAndCreationInCurrentFolder() {
+        let a = Note(id: UUID(), title: "A", document: .empty, folder: "工作", favorite: true,
+                     updatedAt: Date(timeIntervalSince1970: 1))
+        let b = Note(id: UUID(), title: "B", document: .empty, folder: "未归档",
+                     updatedAt: Date(timeIntervalSince1970: 2))
+        let model = NotesWorkspaceModel(initialNotes: [a, b])
+        XCTAssertEqual(model.rows(trash: false, query: "", folder: nil, favorites: false).map(\.title), ["B", "A"])
+        XCTAssertEqual(model.rows(trash: false, query: "", folder: nil, favorites: false, newestFirst: false).map(\.title), ["A", "B"])
+        XCTAssertEqual(model.rows(trash: false, query: "", folder: "工作", favorites: true).map(\.id), [a.id])
+        model.create(folder: "工作")
+        XCTAssertEqual(model.selected?.folder, "工作")
+        XCTAssertEqual(model.folders, ["工作"])
+    }
+
+    func testFolderLifecycleAndSnapshotPersistence() throws {
+        let model = NotesWorkspaceModel()
+        XCTAssertTrue(model.addFolder("会议"))
+        XCTAssertFalse(model.addFolder("会议"))
+        let data = try JSONEncoder().encode(NativeWorkspaceSnapshot(tasks: [], notes: [], noteFolders: model.folders))
+        let snapshot = try JSONDecoder().decode(NativeWorkspaceSnapshot.self, from: data)
+        let reopened = NotesWorkspaceModel(initialNotes: snapshot.notes, folders: snapshot.noteFolders ?? [])
+        XCTAssertEqual(reopened.folders, ["会议"])
+        reopened.create(folder: "会议")
+        XCTAssertTrue(reopened.renameFolder("会议", to: "会议记录"))
+        XCTAssertEqual(reopened.selected?.folder, "会议记录")
+        reopened.removeFolder("会议记录")
+        XCTAssertEqual(reopened.selected?.folder, "未归档")
+        XCTAssertEqual(reopened.notes.count, 1)
+        XCTAssertTrue(reopened.folders.isEmpty)
+    }
+
     // MARK: - 页脚字数统计（去空白 rune 计数）
 
     func testWordCountSkipsWhitespaceAndCountsCodePoints() {

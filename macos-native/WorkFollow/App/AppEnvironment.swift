@@ -62,7 +62,7 @@ final class AppEnvironment: ObservableObject {
             playSound: { Self.playFeedbackSound($0) })
         self.feedback = feedback
         taskWorkspace = TaskWorkspaceModel(clock: clock, calendar: calendar, initialTasks: snapshot?.tasks, initialLists: snapshot?.taskLists ?? [], initialListMeta: snapshot?.taskListMeta)
-        notesWorkspace = NotesWorkspaceModel(initialNotes: snapshot?.notes ?? [], clock: clock)
+        notesWorkspace = NotesWorkspaceModel(initialNotes: snapshot?.notes ?? [], folders: snapshot?.noteFolders ?? [], clock: clock)
         focusStore = FocusStore(clock: clock)
         habitStore = HabitStore(clock: clock)
         summaryStore = SummaryStore(clock: clock)
@@ -107,7 +107,7 @@ final class AppEnvironment: ObservableObject {
 
     private func savePreview() {
         guard !loadFailed else { return }
-        persistence.schedule(NativeWorkspaceSnapshot(tasks: taskWorkspace.allTasks, notes: notesWorkspace.notes, taskLists: taskWorkspace.listNames, taskListMeta: taskWorkspace.listMetas))
+        persistence.schedule(NativeWorkspaceSnapshot(tasks: taskWorkspace.allTasks, notes: notesWorkspace.notes, taskLists: taskWorkspace.listNames, taskListMeta: taskWorkspace.listMetas, noteFolders: notesWorkspace.folders))
     }
 
     /// ⌘\ 显示或隐藏侧栏。

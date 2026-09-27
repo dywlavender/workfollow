@@ -6,27 +6,41 @@ struct NotesWorkspaceView: View {
     @ObservedObject var navigation: AppNavigation
     @ObservedObject var tasks: TaskWorkspaceModel
     @State private var query = ""
-    @State private var folder: String?
-    @State private var favorites = false
+    private var folder: String? { notes.folderFilter }
+    private var favorites: Bool { notes.favoritesOnly }
+    @State private var newestFirst = true
+    @State private var detailOnly = false
     @State private var confirmClear = false
     @State private var purgeID: UUID?
     // 笔记页脚的浮动格式工具条（Round B2 迁移：Flutter DocumentEditorFooter + DocumentEditorToolbar）。
     @State private var showFormatToolbar = false
     @StateObject private var editorHandle = DocumentEditorHandle()
     private var trash: Bool { navigation.destination == .notesTrash }
+    private var rows: [Note] { notes.rows(trash: trash, query: query, folder: folder, favorites: favorites, newestFirst: newestFirst) }
+    private var visibleNote: Note? { rows.first { $0.id == notes.selectedID } ?? rows.first }
+    private func createNote() {
+        query = ""
+        notes.favoritesOnly = false
+        notes.create(folder: folder)
+        detailOnly = true
+    }
 
     var body: some View {
         GeometryReader { geometry in
             HStack(spacing: 0) {
-                if geometry.size.width >= 640 || notes.selected == nil {
-                    list.frame(maxWidth: geometry.size.width >= 640 ? 360 : .infinity)
+                if geometry.size.width >= 760 || !detailOnly || visibleNote == nil {
+                    list.frame(maxWidth: geometry.size.width >= 760 ? (geometry.size.width >= 1100 ? 330 : 300) : .infinity)
                 }
-                if geometry.size.width >= 640 || notes.selected != nil {
-                    Divider()
-                    inspector
+                if geometry.size.width >= 760 || (detailOnly && visibleNote != nil) {
+                    if geometry.size.width >= 760 { Divider() }
+                    inspector(compact: geometry.size.width < 760)
                 }
             }
         }
+        .onChange(of: notes.selectedID) { _, _ in showFormatToolbar = false }
+        .onChange(of: navigation.destination) { _, _ in detailOnly = false; query = ""; showFormatToolbar = false }
+        .onChange(of: notes.folderFilter) { _, _ in detailOnly = false; query = "" }
+        .onChange(of: notes.favoritesOnly) { _, _ in detailOnly = false; query = "" }
         .alert("清空笔记垃圾桶", isPresented: $confirmClear) {
             Button("取消", role: .cancel) {}
             Button("全部删除", role: .destructive) { notes.emptyTrash() }
@@ -38,81 +52,109 @@ struct NotesWorkspaceView: View {
     }
 
     private var list: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Text(trash ? "笔记垃圾桶" : "笔记").font(WFType.pageTitle)
+                Text(trash ? "垃圾桶" : favorites ? "收藏笔记" : "笔记").font(WFType.pageTitle)
                 Spacer()
                 if trash {
                     Button("全部删除") { confirmClear = true }.disabled(!notes.notes.contains { $0.deletedAt != nil })
                 } else {
-                    Button { notes.create() } label: { Image(systemName: "plus") }.help("新建笔记")
+                    Button(action: createNote) { Image(systemName: "plus").frame(width: 28, height: 28) }
+                        .buttonStyle(.plain).foregroundStyle(.white)
+                        .background(WFColors.accent, in: RoundedRectangle(cornerRadius: 6)).help("新建笔记")
                 }
             }
-            HStack {
-                Button("全部笔记") { navigation.destination = .notes }
-                Button("垃圾桶") { navigation.destination = .notesTrash }
-            }.buttonStyle(.borderless)
-            TextField("搜索笔记", text: $query)
-            if !trash {
-                HStack {
-                    Menu(folder ?? "全部文件夹") {
-                        Button("全部文件夹") { folder = nil }
-                        ForEach(Array(Set(notes.notes.map(\.folder))).sorted(), id: \.self) { value in
-                            Button(value) { folder = value }
-                        }
-                    }
-                    Toggle("收藏", isOn: $favorites).toggleStyle(.checkbox)
+            .frame(height: 44)
+            HStack(spacing: 4) {
+                TextField("搜索笔记", text: $query).textFieldStyle(.roundedBorder)
+                if !trash {
+                    Menu {
+                        Button(newestFirst ? "按标题排序" : "按最近编辑排序") { newestFirst.toggle() }
+                    } label: { Image(systemName: "arrow.up.arrow.down") }
+                    .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize().help("笔记排序")
                 }
-            }
+            }.frame(height: 34)
             ScrollView {
                 LazyVStack(spacing: 4) {
-                    let rows = notes.rows(trash: trash, query: query, folder: folder, favorites: favorites)
-                    if rows.isEmpty { Text("暂无笔记").foregroundStyle(.secondary).padding() }
+                    if rows.isEmpty { Text(query.isEmpty ? (trash ? "笔记垃圾桶是空的" : "从一条新笔记开始") : "没有找到相关笔记").foregroundStyle(.secondary).padding() }
                     ForEach(rows) { note in
-                        Button { notes.selectedID = note.id } label: {
-                            VStack(alignment: .leading, spacing: 6) {
+                        Button { notes.selectedID = note.id; detailOnly = true } label: {
+                            HStack(alignment: .top, spacing: 12) {
+                            VStack(alignment: .leading, spacing: 4) {
                                 HStack {
                                     if note.favorite { Image(systemName: "star.fill") }
-                                    Text(note.title.isEmpty ? "未命名笔记" : note.title).lineLimit(1)
+                                    Text(note.title.isEmpty ? "未命名笔记" : note.title).lineLimit(1).strikethrough(trash)
                                     Spacer()
                                 }
-                                Text(note.document.plainText).font(.caption).foregroundStyle(.secondary).lineLimit(2)
-                                Text("\(note.folder) · \((note.deletedAt ?? note.updatedAt).formatted(.dateTime.year().month().day().locale(.appDate)))")
-                                    .font(.caption2).foregroundStyle(.secondary)
-                            }.padding(12).frame(maxWidth: .infinity, alignment: .leading)
-                                .background(notes.selectedID == note.id ? WFColors.selection : .clear,
+                                Text(note.document.isEmpty ? "还没有内容" : note.document.plainText.replacingOccurrences(of: "\n", with: " "))
+                                    .font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                            }.frame(maxWidth: .infinity, alignment: .leading)
+                            VStack(alignment: .trailing, spacing: 4) {
+                                Text(note.folder)
+                                Text((note.deletedAt ?? note.updatedAt).formatted(.dateTime.month().day().locale(.appDate)))
+                            }.font(.caption2).foregroundStyle(.secondary).lineLimit(1).frame(maxWidth: 96, alignment: .trailing)
+                            }.padding(.horizontal, 12).padding(.vertical, 10).frame(minHeight: 61)
+                                .background(visibleNote?.id == note.id ? WFColors.selection : .clear,
                                             in: RoundedRectangle(cornerRadius: 8))
                         }.buttonStyle(.plain)
-                        Divider()
+                        if visibleNote?.id != note.id { Divider().padding(.horizontal, 12) }
                     }
                 }
             }
-        }.padding(20)
+        }.padding(.horizontal, 10).padding(.bottom, 16)
     }
 
-    @ViewBuilder private var inspector: some View {
-        if let note = notes.selected {
-            VStack(alignment: .leading, spacing: 16) {
+    @ViewBuilder private func inspector(compact: Bool) -> some View {
+        if let note = visibleNote {
+            VStack(alignment: .leading, spacing: 0) {
                 HStack {
-                    Button { notes.selectedID = nil } label: { Image(systemName: "chevron.left") }
+                    if compact { Button { detailOnly = false } label: { Image(systemName: "chevron.left") }.help(trash ? "返回笔记垃圾桶" : "返回笔记列表") }
+                    if trash {
+                        Label("已删除的笔记", systemImage: "trash").foregroundStyle(.secondary)
+                    } else {
+                    Menu {
+                        ForEach(["未归档"] + notes.folders, id: \.self) { value in
+                            Button(value) { notes.edit(note.id) { $0.folder = value } }
+                        }
+                        Divider()
+                        Button("移到新文件夹…") {
+                            if let value = TaskNamePrompt.ask("文件夹名称"), !value.isEmpty {
+                                guard notes.addFolder(value) else { TaskNamePrompt.invalidName(); return }
+                                notes.edit(note.id) { $0.folder = value }
+                            }
+                        }
+                    } label: { Label(note.folder, systemImage: "folder") }
+                    .menuStyle(.borderlessButton).menuIndicator(.hidden).lineLimit(1)
+                    }
                     Spacer()
                     if trash {
-                        Button("恢复") { notes.restore(note.id) }
-                        Button("永久删除", role: .destructive) { purgeID = note.id }
+                        Button { notes.restore(note.id); detailOnly = false } label: { Image(systemName: "arrow.uturn.backward") }.help("恢复笔记")
+                        Button(role: .destructive) { purgeID = note.id } label: { Image(systemName: "trash.slash") }.help("永久删除笔记")
                     } else {
                         Button { notes.edit(note.id) { $0.favorite.toggle() } } label: {
                             Image(systemName: note.favorite ? "star.fill" : "star")
                         }
-                        Button("删除", role: .destructive) { notes.delete(note.id) }
                         noteActionsMenu(note)
                     }
-                }.buttonStyle(.borderless)
+                }.buttonStyle(.borderless).padding(.horizontal, 20).frame(height: 44)
+                Divider()
+                ScrollView {
+                VStack(alignment: .leading, spacing: 20) {
                 if trash {
-                    Text(note.title.isEmpty ? "未命名笔记" : note.title).font(WFType.detailTitle)
-                    ScrollView { Text(note.document.plainText).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading) }
+                    Text(note.title.isEmpty ? "未命名笔记" : note.title).font(WFType.detailTitle).strikethrough().frame(maxWidth: .infinity, alignment: .leading)
+                    Text("\(note.folder) · \((note.deletedAt ?? note.updatedAt).formatted(.dateTime.year().month().day().hour().minute().locale(.appDate)))删除")
+                        .font(.caption).foregroundStyle(.secondary)
+                    Divider()
+                    let body = note.document.plainText.trimmingCharacters(in: .whitespacesAndNewlines)
+                    Text(body.isEmpty ? "还没有正文。" : body).font(WFType.body)
+                        .foregroundStyle(body.isEmpty ? WFColors.tertiaryText : WFColors.text)
+                        .textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading)
                 } else {
-                    TextField("未命名笔记", text: Binding(get: { notes.selected?.title ?? "" }, set: { value in notes.edit(note.id) { $0.title = value } }))
+                    TextField("笔记标题", text: Binding(get: { notes.notes.first { $0.id == note.id }?.title ?? "" }, set: { value in notes.edit(note.id) { $0.title = value } }), axis: .vertical)
                         .textFieldStyle(.plain).font(WFType.detailTitle)
+                    Text(note.updatedAt.formatted(.dateTime.year().month().day().hour().minute().locale(.appDate)))
+                        .font(.caption).foregroundStyle(.secondary)
+                    Divider()
                     if note.hasPreservedRichContent {
                         // 富文本保护降级实现：原文 JSON 保留在 originalContentJson，编辑照常进行，
                         // 显式“创建纯文本副本”才得到可自由编辑的副本（Flutter 草稿保护的可用替代）。
@@ -136,19 +178,20 @@ struct NotesWorkspaceView: View {
                                        guard !trimmed.isEmpty,
                                              let id = tasks.createTask(title: trimmed, in: .inbox).taskID else { return }
                                        notes.edit(note.id) { $0.linkedTaskIDs.append(id) }
-                                   })]),
-                                   handle: editorHandle).id(note.id)
+                                   })], noteSlash: true),
+                                   contentSized: true, handle: editorHandle).id(note.id)
                     linkedTasksSection(note)
-                    TextField("文件夹", text: Binding(get: { notes.selected?.folder ?? "" }, set: { value in notes.edit(note.id) { $0.folder = value.isEmpty ? "未归档" : value } }))
-                    AttachmentListView(attachments: note.attachments) { attachments in
+                    if !note.attachments.isEmpty { AttachmentListView(attachments: note.attachments) { attachments in
                         notes.edit(note.id) { $0.attachments = attachments }
-                    }
+                    } }
                 }
-                Spacer(minLength: 0)
-                if !trash { footer(note) }
-            }.padding(24).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                }.padding(.horizontal, 28).padding(.top, 14).padding(.bottom, 44)
+                    .frame(maxWidth: 820).frame(maxWidth: .infinity)
+                }
+                if !trash { Divider(); footer(note).padding(.horizontal, 20).frame(height: 44) }
+            }.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         } else {
-            Text("选择一篇笔记").foregroundStyle(.secondary).frame(maxWidth: .infinity, maxHeight: .infinity)
+            Text(trash ? "没有可预览的笔记" : "选择一篇笔记").foregroundStyle(.secondary).frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
 
@@ -160,6 +203,8 @@ struct NotesWorkspaceView: View {
             if note.hasPreservedRichContent {
                 Button("创建纯文本副本") { _ = notes.createPlainTextCopy(note.id) }
             }
+            Divider()
+            Button("移到垃圾桶", role: .destructive) { notes.delete(note.id) }
         } label: {
             Image(systemName: "ellipsis")
         }.menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
@@ -247,12 +292,12 @@ struct NotesWorkspaceView: View {
             Text("\(noteWordCount(note.document.plainText)) 字")
                 .font(.caption).foregroundStyle(.secondary)
             Spacer()
-            Button { showFormatToolbar.toggle() } label: {
+            Button { showFormatToolbar.toggle(); if showFormatToolbar { editorHandle.focusEditor() } } label: {
                 Image(systemName: "textformat")
                     .foregroundStyle(showFormatToolbar ? WFColors.accent : WFColors.secondaryText)
             }.buttonStyle(.plain).help("正文格式").accessibilityLabel("正文格式")
         }
-        .overlay(alignment: .bottomTrailing) {
+        .overlay(alignment: .bottom) {
             if showFormatToolbar {
                 DocumentFormatToolbarView(handle: editorHandle)
                     .padding(.trailing, 2).padding(.bottom, 32)

@@ -93,6 +93,8 @@ struct NavigationColumnView: View {
                 }
                 Divider().padding(.vertical, WFSpace.xs)
                 ForEach(bottomLists) { destinationRow($0) }
+            } else if navigation.destination.isNotes {
+                NotesNavigationSection(notes: environment.notesWorkspace, navigation: navigation, onNavigate: onNavigate)
             } else {
                 Text(navigation.destination.isNotes ? "笔记" : "工作空间")
                     .font(WFType.supporting).foregroundStyle(WFColors.secondaryText)
@@ -136,6 +138,73 @@ struct NavigationColumnView: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(destination.title)
+    }
+}
+
+private struct NotesNavigationSection: View {
+    @ObservedObject var notes: NotesWorkspaceModel
+    @ObservedObject var navigation: AppNavigation
+    @EnvironmentObject private var environment: AppEnvironment
+    var onNavigate: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            row("全部笔记", symbol: "text.alignleft", folder: nil)
+            row("收藏", symbol: "star", folder: nil, favorites: true)
+            row("未归档", symbol: "folder", folder: "未归档")
+            HStack {
+                Text("文件夹").font(WFType.supporting)
+                Spacer()
+                Button {
+                    if let name = TaskNamePrompt.ask("新建文件夹") {
+                        if notes.addFolder(name) { notes.folderFilter = name; notes.favoritesOnly = false; environment.navigate(to: .notes) }
+                        else { TaskNamePrompt.invalidName() }
+                    }
+                } label: { Image(systemName: "plus") }.buttonStyle(.plain).help("新建文件夹")
+            }.foregroundStyle(WFColors.secondaryText)
+             .padding(.horizontal, WFSpace.sm).padding(.top, WFSpace.lg).padding(.bottom, WFSpace.sm)
+            ScrollView {
+                VStack(spacing: 0) {
+                    ForEach(notes.folders, id: \.self) { folder in
+                        row(folder, symbol: "folder", folder: folder)
+                            .contextMenu {
+                                Button("重命名文件夹…") {
+                                    if let name = TaskNamePrompt.ask("重命名文件夹", value: folder), name != folder,
+                                       !notes.renameFolder(folder, to: name) { TaskNamePrompt.invalidName() }
+                                }
+                                Button("删除文件夹…") {
+                                    if TaskNamePrompt.confirm("删除文件夹“\(folder)”？", message: "其中的笔记会保留，并移到“未归档”。") { notes.removeFolder(folder) }
+                                }
+                            }
+                    }
+                }
+            }
+            Divider().padding(.vertical, WFSpace.xs)
+            row("垃圾桶", symbol: "trash", folder: nil, trash: true)
+        }
+    }
+
+    private func row(_ title: String, symbol: String, folder: String?, favorites: Bool = false, trash: Bool = false) -> some View {
+        let selected = trash ? navigation.destination == .notesTrash :
+            navigation.destination == .notes && notes.folderFilter == folder && notes.favoritesOnly == favorites
+        let count = notes.rows(trash: trash, query: "", folder: folder, favorites: favorites).count
+        return Button {
+            notes.folderFilter = folder
+            notes.favoritesOnly = favorites
+            environment.navigate(to: trash ? .notesTrash : .notes)
+            onNavigate()
+        } label: {
+            HStack(spacing: WFSpace.sm) {
+                Image(systemName: symbol).frame(width: 18)
+                Text(title).lineLimit(1)
+                Spacer(minLength: 4)
+                if count > 0 { Text("\(count)").font(WFType.supporting).foregroundStyle(WFColors.secondaryText) }
+            }
+            .font(WFType.navigation).padding(.horizontal, WFSpace.sm).frame(height: 32)
+            .foregroundStyle(selected ? WFColors.accent : WFColors.text)
+            .background(selected ? WFColors.selection : .clear, in: RoundedRectangle(cornerRadius: WFMetrics.corner))
+            .contentShape(Rectangle())
+        }.buttonStyle(.plain)
     }
 }
 

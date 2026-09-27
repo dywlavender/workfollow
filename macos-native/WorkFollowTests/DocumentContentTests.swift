@@ -93,6 +93,30 @@ final class DocumentContentTests: XCTestCase {
         }
     }
 
+    func testConsecutiveOrderedBlocksShareOneNativeList() throws {
+        let document = NativeDocument(blocks: [
+            DocumentBlock(kind: .ordered, runs: [DocumentRun(text: "第一项")]),
+            DocumentBlock(kind: .ordered, runs: [DocumentRun(text: "第二项")]),
+            DocumentBlock(kind: .ordered, runs: [DocumentRun(text: "第三项")]),
+            DocumentBlock(kind: .paragraph, runs: [DocumentRun(text: "分组结束")]),
+            DocumentBlock(kind: .ordered, runs: [DocumentRun(text: "新列表")])
+        ])
+        let rendered = DocumentTextCodec.render(document)
+        let first = try XCTUnwrap((rendered.attribute(.paragraphStyle, at: 0, effectiveRange: nil) as? NSParagraphStyle)?.textLists.first)
+        let second = (rendered.attribute(.paragraphStyle, at: 4, effectiveRange: nil) as? NSParagraphStyle)?.textLists.first
+        let third = (rendered.attribute(.paragraphStyle, at: 8, effectiveRange: nil) as? NSParagraphStyle)?.textLists.first
+        let afterGap = (rendered.attribute(.paragraphStyle, at: 17, effectiveRange: nil) as? NSParagraphStyle)?.textLists.first
+
+        XCTAssertNotNil(first)
+        XCTAssertTrue(first === second)
+        XCTAssertTrue(first === third)
+        XCTAssertFalse(first === afterGap)
+        XCTAssertEqual(rendered.itemNumber(in: first, at: 0), 1)
+        XCTAssertEqual(rendered.itemNumber(in: first, at: 4), 2)
+        XCTAssertEqual(rendered.itemNumber(in: first, at: 8), 3)
+        XCTAssertEqual(rendered.itemNumber(in: try XCTUnwrap(afterGap), at: 17), 1)
+    }
+
     func testLinkEditingPreservesTextAndOtherMarks() {
         let editor = NativeTextView(frame: .zero, textContainer: nil)
         let document = NativeDocument(blocks: [DocumentBlock(kind: .paragraph, runs: [DocumentRun(text: "网站", marks: [.bold])])])

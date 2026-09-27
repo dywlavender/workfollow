@@ -43,8 +43,14 @@ extension NativeTextView {
         insertText(formatter.string(from: date), replacementRange: selectedRange())
     }
 
-    func insertDocumentDivider() {
-        let range = selectedRange()
+    func insertDocumentDivider(at offset: Int? = nil) {
+        let range: NSRange
+        if let offset {
+            let location = min(max(0, offset), (string as NSString).length)
+            range = NSRange(location: location, length: 0)
+        } else {
+            range = selectedRange()
+        }
         let text = string as NSString
         let needsLeadingBreak = range.location > 0 && text.substring(with: NSRange(location: range.location - 1, length: 1)) != "\n"
         let insertion = NSMutableAttributedString(string: needsLeadingBreak ? "\n" : "",
@@ -63,10 +69,10 @@ extension NativeTextView {
         let width = max(1, bounds.width - textContainerInset.width * 2 - (textContainer?.lineFragmentPadding ?? 5) * 2)
         storage.enumerateAttribute(.attachment, in: NSRange(location: 0, length: storage.length)) { value, range, _ in
             guard let attachment = value as? NSTextAttachment,
-                  let cell = attachment.attachmentCell as? DocumentDividerCell,
+          let cell = attachment.attachmentCell as? DocumentDividerCell,
                   cell.lineWidth != width else { return }
             cell.lineWidth = width
-            layoutManager?.invalidateLayout(forCharacterRange: range, actualCharacterRange: nil)
+            invalidateDocumentLayout(for: range)
         }
     }
 
@@ -93,9 +99,26 @@ extension NativeTextView {
         applyFormat(command)
     }
 
-    func applyFormat(_ command: DocumentFormatCommand) {
-        var range = selectedRange()
-        if command.block != nil { range = (string as NSString).paragraphRange(for: range) }
+    func applyFormat(_ command: DocumentFormatCommand, lineStart: Int? = nil) {
+        let originalSelection = selectedRange()
+        var range = originalSelection
+        if command.block != nil {
+            let source = string as NSString
+            if source.length == 0 {
+                range = NSRange(location: 0, length: 0)
+            } else if let lineStart {
+                let location = min(max(0, lineStart), source.length - 1)
+                range = source.paragraphRange(for: NSRange(location: location, length: 0))
+            } else {
+                range = source.paragraphRange(for: originalSelection)
+            }
+            if let block = command.block,
+               block == .bullet || block == .ordered || isChecklist(block),
+               let storage = textStorage {
+                range = listRunRange(around: range, token: DocumentTextCodec.blockToken(block),
+                                     source: source, storage: storage)
+            }
+        }
         if range.length == 0 {
             let token = typingAttributes[DocumentTextCodec.blockKey] as? String ?? "paragraph"
             let sample = NSAttributedString(string: " ", attributes: typingAttributes)
@@ -121,6 +144,39 @@ extension NativeTextView {
             }
         }
         insertText(DocumentTextCodec.render(document), replacementRange: range)
-        setSelectedRange(range)
+        // Formatting expands to the paragraph, but must not replace the user's
+        // caret/selection with that entire paragraph.
+        let location = min(originalSelection.location, (string as NSString).length)
+        let length = min(originalSelection.length, (string as NSString).length - location)
+        setSelectedRange(NSRange(location: location, length: length))
+    }
+
+    private func listRunRange(around range: NSRange, token: String,
+                              source: NSString, storage: NSTextStorage) -> NSRange {
+        var start = range.location
+        var end = NSMaxRange(range)
+
+        while start > 0 {
+            let previous = source.paragraphRange(for: NSRange(location: start - 1, length: 0))
+            guard previous.location < start,
+                  storage.attribute(DocumentTextCodec.blockKey, at: previous.location, effectiveRange: nil) as? String == token
+            else { break }
+            start = previous.location
+            end = max(end, NSMaxRange(previous))
+        }
+
+        while end < source.length {
+            let next = source.paragraphRange(for: NSRange(location: end, length: 0))
+            guard next.location >= end, next.location < storage.length,
+                  storage.attribute(DocumentTextCodec.blockKey, at: next.location, effectiveRange: nil) as? String == token
+            else { break }
+            end = max(end, NSMaxRange(next))
+        }
+        return NSRange(location: start, length: min(end, source.length) - start)
+    }
+
+    private func isChecklist(_ kind: DocumentBlockKind) -> Bool {
+        if case .checklist = kind { return true }
+        return false
     }
 }

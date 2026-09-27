@@ -31,7 +31,8 @@ enum DocumentTextCodec {
         default: return .paragraph
         }
     }
-    static func attributes(kind: DocumentBlockKind, marks: Set<DocumentMark>) -> [NSAttributedString.Key: Any] {
+    static func attributes(kind: DocumentBlockKind, marks: Set<DocumentMark>,
+                           textList: NSTextList? = nil) -> [NSAttributedString.Key: Any] {
         let style = NSMutableParagraphStyle()
         style.paragraphSpacing = 8
         // 滴答式阅读行距：15pt 正文配 ~5pt 行距，长正文不密排。
@@ -45,12 +46,8 @@ enum DocumentTextCodec {
         }
         if marks.contains(.italic) { font = NSFontManager.shared.convert(font, toHaveTrait: .italicFontMask) }
         if kind == .quote { style.headIndent = 18; style.firstLineHeadIndent = 18 }
-        if kind == .bullet || kind == .ordered {
-            style.textLists = [NSTextList(markerFormat: kind == .bullet ? .disc : .decimal, options: 0)]
-            style.headIndent = 22
-        }
-        if case .checklist(let checked) = kind {
-            style.textLists = [NSTextList(markerFormat: .init(rawValue: checked ? "☑" : "☐"), options: 0)]
+        if let textList = textList ?? makeTextList(for: kind) {
+            style.textLists = [textList]
             style.headIndent = 22
         }
         var attrs: [NSAttributedString.Key: Any] = [
@@ -66,9 +63,20 @@ enum DocumentTextCodec {
     }
     static func render(_ document: NativeDocument) -> NSAttributedString {
         let result = NSMutableAttributedString(string: "")
+        var previousListKind: DocumentBlockKind?
+        var currentTextList: NSTextList?
         for (index, block) in document.blocks.enumerated() {
+            if listMarkerFormat(for: block.kind) != nil {
+                if previousListKind != block.kind {
+                    currentTextList = makeTextList(for: block.kind)
+                }
+                previousListKind = block.kind
+            } else {
+                previousListKind = nil
+                currentTextList = nil
+            }
             for run in block.runs {
-                var attrs = attributes(kind: block.kind, marks: run.marks)
+                var attrs = attributes(kind: block.kind, marks: run.marks, textList: currentTextList)
                 if block.kind == .divider {
                     let attachment = NSTextAttachment()
                     attachment.attachmentCell = DocumentDividerCell()
@@ -92,10 +100,27 @@ enum DocumentTextCodec {
                 result.append(NSAttributedString(string: run.text, attributes: attrs))
             }
             if index < document.blocks.count - 1 {
-                result.append(NSAttributedString(string: "\n", attributes: attributes(kind: block.kind == .divider ? .paragraph : block.kind, marks: [])))
+                let separatorKind = block.kind == .divider ? DocumentBlockKind.paragraph : block.kind
+                let separatorList = separatorKind == block.kind ? currentTextList : nil
+                result.append(NSAttributedString(string: "\n", attributes: attributes(
+                    kind: separatorKind, marks: [], textList: separatorList)))
             }
         }
         return result
+    }
+
+    private static func makeTextList(for kind: DocumentBlockKind) -> NSTextList? {
+        guard let marker = listMarkerFormat(for: kind) else { return nil }
+        return NSTextList(markerFormat: marker, options: 0)
+    }
+
+    private static func listMarkerFormat(for kind: DocumentBlockKind) -> NSTextList.MarkerFormat? {
+        switch kind {
+        case .bullet: .disc
+        case .ordered: .decimal
+        case .checklist(let checked): .init(rawValue: checked ? "☑" : "☐")
+        default: nil
+        }
     }
     static func decode(_ text: NSAttributedString, preserving previous: NativeDocument) -> NativeDocument {
         let plain = text.string as NSString

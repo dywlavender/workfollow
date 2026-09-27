@@ -6,7 +6,7 @@ final class NativeTextView: NSTextView {
     // An inspector is recreated for each document. Never share the window's
     // undo history with another task or its title field.
     private let documentUndoManager = UndoManager()
-    private var ownedTextStorage: NSTextStorage?
+    private var ownedTextContentStorage: NSTextContentStorage?
     override var undoManager: UndoManager? { documentUndoManager }
 
     var onEscape: (() -> InspectorEscapeEffect)?
@@ -26,7 +26,7 @@ final class NativeTextView: NSTextView {
         guard location > 0 else { return }
         // A slash in a URL/path is ordinary text, not a command trigger.
         let prefix = (string as NSString).substring(to: location - 1)
-        guard profile.taskSlash || prefix.isEmpty || prefix.last?.isWhitespace == true else { return }
+        guard profile.compactSlash || prefix.isEmpty || prefix.last?.isWhitespace == true else { return }
         slashSession = SlashSession(start: location - 1)
         refreshSlash()
     }
@@ -59,6 +59,16 @@ final class NativeTextView: NSTextView {
                 ancestor = view.superview
             }
         }
+    }
+
+    func invalidateDocumentLayout(for range: NSRange) {
+        if let contentStorage = ownedTextContentStorage,
+           let textLayoutManager {
+            textLayoutManager.invalidateLayout(for: contentStorage.documentRange)
+            needsDisplay = true
+            return
+        }
+        layoutManager?.invalidateLayout(forCharacterRange: range, actualCharacterRange: nil)
     }
 
     override func mouseDown(with event: NSEvent) {
@@ -291,20 +301,20 @@ final class NativeTextView: NSTextView {
 
     override init(frame frameRect: NSRect, textContainer: NSTextContainer?) {
         let container: NSTextContainer
-        var ownedStorage: NSTextStorage?
+        var ownedContentStorage: NSTextContentStorage?
         if let textContainer {
             container = textContainer
         } else {
-            let storage = NSTextStorage()
-            let layout = NSLayoutManager()
             container = NSTextContainer(size: NSSize(
                 width: max(frameRect.width, 1), height: CGFloat.greatestFiniteMagnitude))
-            storage.addLayoutManager(layout)
-            layout.addTextContainer(container)
-            ownedStorage = storage
+            let contentStorage = NSTextContentStorage()
+            let layout = NSTextLayoutManager()
+            layout.textContainer = container
+            contentStorage.addTextLayoutManager(layout)
+            ownedContentStorage = contentStorage
         }
         super.init(frame: frameRect, textContainer: container)
-        ownedTextStorage = ownedStorage
+        ownedTextContentStorage = ownedContentStorage
         focusRingType = .none
         isRichText = true
         usesRuler = false

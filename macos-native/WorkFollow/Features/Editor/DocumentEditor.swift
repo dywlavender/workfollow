@@ -89,13 +89,12 @@ struct DocumentEditor: NSViewRepresentable {
         guard contentSized, let width = proposal.width, width > 0,
               let textView = nsView.documentView as? NativeTextView,
               let container = textView.textContainer,
-              let layout = textView.layoutManager else { return nil }
+              let layout = textView.textLayoutManager else { return nil }
         textView.setFrameSize(NSSize(width: width, height: textView.frame.height))
         textView.resizeDocumentDividers()
         container.containerSize = NSSize(width: width, height: .greatestFiniteMagnitude)
-        layout.ensureLayout(for: container)
-        let bottom = max(layout.usedRect(for: container).maxY,
-                         layout.extraLineFragmentRect.maxY)
+        layout.ensureLayout(for: NSRect(origin: .zero, size: container.containerSize))
+        let bottom = layout.usageBoundsForTextContainer.maxY
         let height = max(48, ceil(bottom + textView.textContainerInset.height * 2 + 8))
         textView.revealCaretInHostAfterLayout()
         return CGSize(width: width, height: height)

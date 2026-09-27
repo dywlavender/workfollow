@@ -58,6 +58,112 @@ final class SlashSessionTests: XCTestCase {
         XCTAssertEqual(editor.string, "")
     }
 
+    func testSlashBlockFormatsMatchFlutterLineScopeAndKeepCaret() {
+        let cases: [(Int, DocumentBlockKind)] = [
+            (0, .heading(1)), (1, .heading(2)), (2, .heading(3)),
+            (3, .bullet), (4, .ordered), (5, .checklist(false)), (6, .quote)
+        ]
+
+        for (commandIndex, expectedKind) in cases {
+            let editor = NativeTextView(frame: .zero, textContainer: nil)
+            editor.profile = DocumentProfile(taskSlash: true)
+            let original = "前置\n目标内容\n后置"
+            editor.textStorage?.setAttributedString(DocumentTextCodec.render(NativeDocument(plainText: original)))
+            editor.setSelectedRange(NSRange(location: 5, length: 0))
+            editor.insertText("/", replacementRange: editor.selectedRange())
+
+            editor.executeSlash(at: commandIndex)
+
+            XCTAssertEqual(editor.string, original, "command \(commandIndex) must only remove its slash trigger")
+            XCTAssertEqual(editor.selectedRange(), NSRange(location: 5, length: 0), "command \(commandIndex) must preserve the caret")
+            let document = DocumentTextCodec.decode(
+                editor.attributedString(), preserving: NativeDocument(plainText: editor.string))
+            XCTAssertEqual(document.blocks.map(\.kind), [.paragraph, expectedKind, .paragraph],
+                           "command \(commandIndex) must format only the invoking line")
+
+            editor.insertText("续", replacementRange: editor.selectedRange())
+            let continued = DocumentTextCodec.decode(
+                editor.attributedString(), preserving: NativeDocument(plainText: editor.string))
+            XCTAssertEqual(editor.string, "前置\n目标续内容\n后置")
+            XCTAssertEqual(continued.blocks.map(\.kind), [.paragraph, expectedKind, .paragraph],
+                           "typing after command \(commandIndex) must retain the line format")
+
+            if expectedKind == .bullet || expectedKind == .ordered || expectedKind == .checklist(false) {
+                let style = editor.attributedString().attribute(.paragraphStyle, at: 3, effectiveRange: nil) as? NSParagraphStyle
+                XCTAssertEqual(style?.textLists.count, 1, "list command \(commandIndex) must render a native list marker")
+            }
+        }
+    }
+
+    func testSlashChecklistFormatsOneEmptyLineWithoutMarkingTheNextLine() {
+        let editor = NativeTextView(frame: .zero, textContainer: nil)
+        editor.profile = DocumentProfile(taskSlash: true)
+        let original = "前置\n\n后置"
+        editor.textStorage?.setAttributedString(DocumentTextCodec.render(NativeDocument(plainText: original)))
+        editor.setSelectedRange(NSRange(location: 3, length: 0))
+        editor.insertText("/", replacementRange: editor.selectedRange())
+
+        editor.executeSlash(at: 5)
+
+        XCTAssertEqual(editor.string, original)
+        let document = DocumentTextCodec.decode(
+            editor.attributedString(), preserving: NativeDocument(plainText: editor.string))
+        XCTAssertEqual(document.blocks.map(\.kind), [.paragraph, .checklist(false), .paragraph])
+    }
+
+    func testSlashOrderedFormatJoinsAdjacentOrderedItems() throws {
+        let editor = NativeTextView(frame: .zero, textContainer: nil)
+        editor.profile = DocumentProfile(taskSlash: true)
+        let document = NativeDocument(blocks: [
+            DocumentBlock(kind: .paragraph, runs: [DocumentRun(text: "前置")]),
+            DocumentBlock(kind: .ordered, runs: [DocumentRun(text: "第一项")]),
+            DocumentBlock(kind: .paragraph, runs: [DocumentRun(text: "目标项")]),
+            DocumentBlock(kind: .ordered, runs: [DocumentRun(text: "第三项")]),
+            DocumentBlock(kind: .paragraph, runs: [DocumentRun(text: "后置")])
+        ])
+        editor.textStorage?.setAttributedString(DocumentTextCodec.render(document))
+        editor.setSelectedRange(NSRange(location: 9, length: 0))
+        editor.insertText("/", replacementRange: editor.selectedRange())
+
+        editor.executeSlash(at: 4)
+
+        let rendered = editor.attributedString()
+        let first = try XCTUnwrap((rendered.attribute(.paragraphStyle, at: 3, effectiveRange: nil) as? NSParagraphStyle)?.textLists.first)
+        let second = (rendered.attribute(.paragraphStyle, at: 7, effectiveRange: nil) as? NSParagraphStyle)?.textLists.first
+        let third = (rendered.attribute(.paragraphStyle, at: 11, effectiveRange: nil) as? NSParagraphStyle)?.textLists.first
+        XCTAssertTrue(first === second)
+        XCTAssertTrue(second === third)
+        XCTAssertEqual(rendered.itemNumber(in: first, at: 3), 1)
+        XCTAssertEqual(rendered.itemNumber(in: first, at: 7), 2)
+        XCTAssertEqual(rendered.itemNumber(in: first, at: 11), 3)
+    }
+
+    func testSlashInlineFormatAppliesToNextTypedText() {
+        let editor = NativeTextView(frame: .zero, textContainer: nil)
+        editor.textStorage?.setAttributedString(DocumentTextCodec.render(NativeDocument(plainText: "正文")))
+        editor.setSelectedRange(NSRange(location: 0, length: 0))
+        editor.insertText("/", replacementRange: editor.selectedRange())
+        let boldIndex = editor.profile.slashCommands.firstIndex { $0.id == "format.9" }!
+        editor.executeSlash(at: boldIndex)
+        editor.insertText("加粗", replacementRange: editor.selectedRange())
+        let boldDocument = DocumentTextCodec.decode(
+            editor.attributedString(), preserving: NativeDocument(plainText: editor.string))
+        XCTAssertTrue(boldDocument.blocks[0].runs.contains { $0.text == "加粗" && $0.marks.contains(.bold) })
+    }
+
+    func testSlashDividerKeepsSurroundingText() {
+        let divider = NativeTextView(frame: .zero, textContainer: nil)
+        divider.profile = DocumentProfile(taskSlash: true)
+        divider.textStorage?.setAttributedString(DocumentTextCodec.render(NativeDocument(plainText: "前置内容")))
+        divider.setSelectedRange(NSRange(location: 2, length: 0))
+        divider.insertText("/", replacementRange: divider.selectedRange())
+        divider.executeSlash(at: 7)
+        XCTAssertEqual(divider.string, "前置\n\u{FFFC}\n内容")
+        let dividerDocument = DocumentTextCodec.decode(
+            divider.attributedString(), preserving: NativeDocument(plainText: divider.string))
+        XCTAssertTrue(dividerDocument.blocks.contains { $0.kind == .divider })
+    }
+
     func testEscapeKeepsQueryAndDoesNotEscapeHost() {
         let editor = NativeTextView(frame: .zero, textContainer: nil)
         var escaped = false

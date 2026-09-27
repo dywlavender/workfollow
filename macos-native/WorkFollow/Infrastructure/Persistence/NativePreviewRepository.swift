@@ -7,6 +7,7 @@ struct NativeWorkspaceSnapshot: Codable {
     var taskLists: [String]? = nil
     /// 侧栏清单元数据（Round B1 additive）：旧快照没有该键，解码为 nil。
     var taskListMeta: [TaskListMeta]? = nil
+    var noteFolders: [String]? = nil
 }
 
 /// Snapshot backup overview for the settings page.

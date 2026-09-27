@@ -12,7 +12,7 @@ struct RootShellView: View {
             HStack(spacing: 0) {
                 IconRailView(workspace: workspace, navigation: navigation)
                 Divider()
-                if navigationVisible, environment.sidebarVisible {
+                if navigationVisible, environment.sidebarVisible, navigation.destination != .calendar, navigation.destination != .matrix {
                     NavigationColumnView(workspace: workspace, navigation: navigation,
                                          filterStore: environment.filterStore)
                         .frame(width: WFMetrics.navigationWidth)

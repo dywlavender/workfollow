@@ -5,15 +5,42 @@ import Foundation
 final class NotesWorkspaceModel: ObservableObject {
     private let store: NoteStore
     private let clock: () -> Date
-    init(initialNotes: [Note] = [], clock: @escaping () -> Date = Date.init) {
+    private var savedFolders: [String]
+    init(initialNotes: [Note] = [], folders: [String] = [], clock: @escaping () -> Date = Date.init) {
         store = NoteStore(notes: initialNotes, clock: clock)
+        savedFolders = folders
         self.clock = clock
     }
     @Published var selectedID: UUID?
+    @Published var folderFilter: String?
+    @Published var favoritesOnly = false
+    var folders: [String] { Array(Set(savedFolders + notes.filter { $0.deletedAt == nil }.map(\.folder))).filter { $0 != "未归档" }.sorted() }
+    @discardableResult func addFolder(_ rawName: String) -> Bool {
+        let name = rawName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty, name != "未归档", !folders.contains(name) else { return false }
+        savedFolders = folders + [name]
+        revision += 1
+        return true
+    }
+    @discardableResult func renameFolder(_ old: String, to rawName: String) -> Bool {
+        let name = rawName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty, name != "未归档", name != old, !folders.contains(name) else { return false }
+        savedFolders = folders.map { $0 == old ? name : $0 }
+        for note in notes where note.folder == old { store.edit(note.id) { $0.folder = name } }
+        if folderFilter == old { folderFilter = name }
+        revision += 1
+        return true
+    }
+    func removeFolder(_ name: String) {
+        savedFolders = folders.filter { $0 != name }
+        for note in notes where note.folder == name { store.edit(note.id) { $0.folder = "未归档" } }
+        if folderFilter == name { folderFilter = nil }
+        revision += 1
+    }
     @Published private(set) var revision = 0
     var notes: [Note] { _ = revision; return store.notes }
     var selected: Note? { notes.first { $0.id == selectedID } }
-    func rows(trash: Bool, query: String, folder: String?, favorites: Bool) -> [Note] {
+    func rows(trash: Bool, query: String, folder: String?, favorites: Bool, newestFirst: Bool = true) -> [Note] {
         notes.filter {
             ($0.deletedAt != nil) == trash &&
             (trash || folder == nil || $0.folder == folder) &&
@@ -21,10 +48,16 @@ final class NotesWorkspaceModel: ObservableObject {
             (query.isEmpty || ($0.title + $0.document.plainText).localizedCaseInsensitiveContains(query))
         }.sorted {
             if trash { return $0.deletedAt! > $1.deletedAt! }
+            if !newestFirst { return $0.title < $1.title }
             return $0.updatedAt > $1.updatedAt
         }
     }
-    func create() { selectedID = store.create(); revision += 1 }
+    func create(folder: String? = nil) {
+        let id = store.create()
+        if let folder { store.edit(id) { $0.folder = folder } }
+        selectedID = id
+        revision += 1
+    }
     @discardableResult
     func createFromTask(_ task: Task, children: [Task], clock: () -> Date) -> UUID {
         var blocks = task.document.blocks

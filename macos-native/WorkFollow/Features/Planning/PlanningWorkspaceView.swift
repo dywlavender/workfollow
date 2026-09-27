@@ -34,42 +34,68 @@ struct PlanningWorkspaceView: View {
     private enum ViewMode { case month, week, year }
     @State private var mode: ViewMode = .month
     @State private var showCompleted = true
+    @State private var composerPresented = false
+    @State private var draftDate: Date?
+    @State private var draftPriority: TaskPriority = .none
+    @State private var selectedDay: Date?
+    private var calendar: Calendar { var value = workspace.calendar; value.firstWeekday = 1; return value }
     private let quadrantTitles = ["重要且紧急", "重要不紧急", "不重要但紧急", "不重要不紧急"]
     private let quadrantNumerals = ["Ⅰ", "Ⅱ", "Ⅲ", "Ⅳ"]
     private var tasks: [Task] {
-        workspace.allTasks.filter { $0.deletedAt == nil && $0.skippedAt == nil && !$0.isAbandoned && (showCompleted || !$0.isClosed) }
+        workspace.allTasks.filter { $0.deletedAt == nil && $0.skippedAt == nil && !$0.isAbandoned && !$0.isConverted && (showCompleted || !$0.isClosed) }
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: WFSpace.lg) {
+        VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: WFSpace.md) {
-                Text(matrix ? "四象限" : "日历").font(WFType.pageTitle)
+                Text(matrix ? "四象限" : headerTitle).font(WFType.pageTitle)
                 if !matrix {
                     HStack(spacing: WFSpace.sm) {
                         Button { step(-1) } label: { Image(systemName: "chevron.left") }
-                        Text(headerTitle).font(WFType.navigation)
                         Button { step(1) } label: { Image(systemName: "chevron.right") }
-                        Button(mode == .year ? "今年" : "今天") { anchor = workspace.clock() }
+                        Button("今天") { anchor = workspace.clock(); selectedDay = anchor }
                     }
                 }
                 Spacer()
                 if !matrix {
+                    Button { addOnDate(selectedDay ?? anchor) } label: { Image(systemName: "plus") }.help("新建日历任务")
                     Picker("视图", selection: $mode) {
                         Text("月").tag(ViewMode.month)
                         Text("周").tag(ViewMode.week)
-                        Text("年").tag(ViewMode.year)
                     }
                     .labelsHidden()
                     .pickerStyle(.segmented).controlSize(.small).frame(width: 120)
                 }
                 optionsMenu
+            }.padding(.horizontal, 16).frame(height: 52)
+            if matrix { matrixBoard.padding(.horizontal, 8).padding(.bottom, 8) } else { calendarBoard }
+        }
+        .background(matrix ? WFColors.canvas : WFColors.content)
+        .overlay {
+            GeometryReader { geometry in
+                if composerPresented || workspace.selectedTask != nil {
+                    ZStack {
+                        Color.black.opacity(0.001).onTapGesture { composerPresented = false; workspace.select(nil) }
+                        Group {
+                            if composerPresented {
+                                ScrollView {
+                                    TaskComposer(workspace: workspace, onClose: { _ in composerPresented = false },
+                                                 title: "", list: "收集箱", scheduled: draftDate != nil,
+                                                 date: draftDate ?? workspace.clock(), initialSchedule: QuickAddScheduleDraft(dueAt: draftDate),
+                                                 initialProperties: QuickAddPropertiesOverrides(priority: draftPriority, listName: nil, tags: nil))
+                                }
+                            } else {
+                                TaskInspectorShell(workspace: workspace, showBack: true)
+                            }
+                        }
+                        .frame(width: min(560, max(280, geometry.size.width - 32)), height: min(620, max(280, geometry.size.height - 32)))
+                        .background(WFColors.content, in: RoundedRectangle(cornerRadius: 16))
+                        .clipShape(RoundedRectangle(cornerRadius: 16))
+                        .shadow(color: .black.opacity(0.18), radius: 18, y: 6)
+                    }.frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
             }
-            if matrix { matrixBoard } else { calendarBoard }
-        }.padding(WFSpace.xl)
-            .sheet(isPresented: Binding(get: { workspace.selectedTask != nil }, set: { if !$0 { workspace.select(nil) } })) {
-                TaskInspectorShell(workspace: workspace, showBack: true)
-                    .frame(minWidth: 340, idealWidth: 560, minHeight: 460, idealHeight: 620)
-            }
+        }
     }
 
     /// 头部唯一的入口："…"收纳"显示已完成"开关；四象限另收纳四个添加项，
@@ -97,30 +123,21 @@ struct PlanningWorkspaceView: View {
 
     // MARK: - 四象限
 
-    /// 整页固定 2×2 四张半屏卡片，不整页滚动；任务多时只在卡片任务区滚动。
+    /// Flutter 固定 2×2，每个象限独立滚动，窄窗也不改成单列。
     private var matrixBoard: some View {
         GeometryReader { geometry in
-            if geometry.size.width < 650 {
-                ScrollView {
-                    LazyVGrid(columns: [GridItem(.flexible(), spacing: WFSpace.lg)], spacing: WFSpace.lg) {
-                        ForEach(0..<4, id: \.self) { quadrant in
-                            quadrantCard(quadrant, height: 340)
-                        }
-                    }
-                }.background(WFColors.canvas)
-            } else {
                 LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: WFSpace.lg), count: 2), spacing: WFSpace.lg) {
                     ForEach(0..<4, id: \.self) { quadrant in
-                        quadrantCard(quadrant, height: max(240, (geometry.size.height - WFSpace.lg) / 2))
+                        quadrantCard(quadrant, height: max(100, (geometry.size.height - WFSpace.lg) / 2))
                     }
                 }.background(WFColors.canvas)
-            }
         }
     }
 
     private func quadrantCard(_ quadrant: Int, height: CGFloat) -> some View {
         let values = tasks.filter { PlanningProjection.quadrant($0, now: workspace.clock(), calendar: workspace.calendar) == quadrant }
         return QuadrantCard(
+            workspace: workspace,
             title: quadrantTitles[quadrant],
             numeral: quadrantNumerals[quadrant],
             color: WFPlanningPalette.quadrant[quadrant],
@@ -247,7 +264,7 @@ struct PlanningWorkspaceView: View {
         // 只纵向滚动：横向轴会让网格收缩到最小宽度、两侧留白，
         // 去掉后网格随内容区满宽拉伸（对齐滴答的满宽月视图）。
         ScrollView(.vertical) {
-            let days = PlanningProjection.monthDays(containing: anchor, calendar: workspace.calendar)
+            let days = PlanningProjection.monthDays(containing: anchor, calendar: calendar)
             VStack(spacing: 1) {
                 // 表头用 offset 作 id：与日期格共用 Date id 会把第一周
                 // （8/31–9/6 这类跨月格）当作重复身份丢掉。
@@ -262,10 +279,12 @@ struct PlanningWorkspaceView: View {
                 }
                 ForEach(Array(stride(from: 0, to: days.count, by: 7)), id: \.self) { offset in
                     CalendarMonthRow(
-                        calendar: workspace.calendar,
+                        calendar: calendar,
                         today: workspace.clock(),
                         days: Array(days[offset..<offset + 7]),
                         monthReference: anchor,
+                        selectedDay: selectedDay ?? workspace.clock(),
+                        onSelectDay: { selectedDay = $0; anchor = $0 },
                         tasks: tasks,
                         listPalette: WFPlanningPalette.list,
                         onSelect: { workspace.select($0) },
@@ -283,7 +302,7 @@ struct PlanningWorkspaceView: View {
     /// 卡式周列；跨天色带同样在卡内渲染（排在单日小条之前），无任务日显示
     /// "没有安排"。整卡是投放目标：单日任务落卡改期，跨天任务平移整个区间。
     private var weekBoard: some View {
-        let calendar = workspace.calendar
+        let calendar = self.calendar
         let days = PlanningProjection.weekDays(containing: anchor, calendar: calendar)
         let spans = CalendarSpans.lanes(for: days, tasks: tasks, calendar: calendar)
         return HStack(spacing: WFSpace.sm) {
@@ -320,18 +339,36 @@ struct PlanningWorkspaceView: View {
     }
 
     private func addOnDate(_ date: Date) {
-        guard let id = workspace.createTask(title: "", in: .inbox).taskID else { return }
-        _ = workspace.setDueDate(id, date)
-        workspace.select(id)
+        workspace.select(nil)
+        draftDate = date
+        draftPriority = .none
+        composerPresented = true
     }
     private func addToQuadrant(_ quadrant: Int) {
-        guard let id = workspace.createTask(title: "", in: .inbox).taskID else { return }
-        moveToQuadrant(id, quadrant)
-        workspace.select(id)
+        workspace.select(nil)
+        draftPriority = quadrant < 2 ? .high : quadrant == 2 ? .low : .none
+        draftDate = quadrant == 3 ? nil : workspace.dateFromToday(quadrant == 1 ? 7 : 0)
+        composerPresented = true
     }
     private func moveToQuadrant(_ id: UUID, _ quadrant: Int) {
-        _ = workspace.setPriority(id, quadrant < 2 ? .high : .none)
-        _ = workspace.moveDueDate(id, to: quadrant == 0 || quadrant == 2 ? workspace.dateFromToday(0) : workspace.dateFromToday(4))
+        guard let task = workspace.task(for: id) else { return }
+        let original = PlanningProjection.quadrant(task, now: workspace.clock(), calendar: workspace.calendar)
+        let important = original < 2
+        let urgent = original == 0 || original == 2
+        switch quadrant {
+        case 0:
+            if !important { _ = workspace.setPriority(id, .high) }
+            _ = workspace.moveDueDate(id, to: workspace.dateFromToday(0))
+        case 1:
+            if !important { _ = workspace.setPriority(id, .high) }
+            if urgent { _ = workspace.moveDueDate(id, to: workspace.dateFromToday(7)) }
+        case 2:
+            if important { _ = workspace.setPriority(id, .low) }
+            if !urgent { _ = workspace.moveDueDate(id, to: workspace.dateFromToday(0)) }
+        default:
+            if important { _ = workspace.setPriority(id, .none) }
+            if urgent { _ = workspace.moveDueDate(id, to: workspace.dateFromToday(7)) }
+        }
     }
     private func step(_ amount: Int) {
         let component: Calendar.Component
@@ -348,6 +385,7 @@ struct PlanningWorkspaceView: View {
 /// 复选框 + 标题 + 右对齐元信息（清单名 + 日期 chip）；"已完成 N"置底灰显。
 /// 滚动只发生在任务区（ScrollView 包住分组列表，短内容时"已完成"沉底）。
 private struct QuadrantCard: View {
+    @ObservedObject var workspace: TaskWorkspaceModel
     let title: String
     let numeral: String
     let color: Color
@@ -365,7 +403,11 @@ private struct QuadrantCard: View {
 
     private var active: [Task] { tasks.filter { $0.status == .active } }
     private var completed: [Task] { tasks.filter { $0.status == .completed } }
-    private var listNames: [String] { Array(Set(active.map { $0.list.name })).sorted() }
+    private var listNames: [String] {
+        let names = Set(active.map { $0.list.name })
+        let ordered = workspace.allListNames.filter { names.contains($0) }
+        return ordered + names.subtracting(ordered).sorted()
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -382,9 +424,12 @@ private struct QuadrantCard: View {
                         Image(systemName: "plus").font(.system(size: 12, weight: .medium))
                     }.buttonStyle(.plain).foregroundStyle(WFColors.secondaryText)
                         .help("添加任务")
+                    Menu {
+                        Button("全部展开") { collapsedLists = []; completedCollapsed = false }
+                        Button("全部折叠") { collapsedLists = Set(listNames); completedCollapsed = true }
+                    } label: { Image(systemName: "ellipsis") }.menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
                 }
             }.padding(.horizontal, WFSpace.lg).padding(.vertical, 10)
-            Rectangle().fill(WFColors.border).frame(height: 1)
             if tasks.isEmpty {
                 VStack {
                     Spacer()
@@ -412,7 +457,6 @@ private struct QuadrantCard: View {
         }
         .background(WFColors.content, in: RoundedRectangle(cornerRadius: 12))
         .clipShape(RoundedRectangle(cornerRadius: 12))
-        .overlay(RoundedRectangle(cornerRadius: 12).stroke(WFColors.border, lineWidth: 1))
         .onHover { hovered = $0 }
     }
 
@@ -426,7 +470,7 @@ private struct QuadrantCard: View {
                         .font(.system(size: 9, weight: .semibold))
                         .foregroundStyle(WFColors.tertiaryText)
                         .rotationEffect(.degrees(collapsedLists.contains(name) ? 0 : 90))
-                    Text(name).font(WFType.supporting).foregroundStyle(WFColors.secondaryText)
+                    Text(name).font(WFType.supporting.weight(.semibold)).foregroundStyle(WFColors.text)
                     Text("\(tasks.count)").font(WFType.supporting).foregroundStyle(WFColors.tertiaryText)
                     Spacer()
                 }.contentShape(Rectangle())
@@ -459,7 +503,6 @@ private struct QuadrantCard: View {
 
     private func taskRow(_ task: Task) -> some View {
         let done = task.status == .completed
-        let chipKind = PlanningProjection.dateChipKind(dueAt: task.schedule.dueAt, now: now, calendar: calendar)
         return HStack(spacing: WFSpace.sm) {
             Button { onToggle(task) } label: {
                 Image(systemName: done ? "checkmark.square.fill" : "square")
@@ -470,15 +513,18 @@ private struct QuadrantCard: View {
                 Text(task.title.isEmpty ? "未命名任务" : task.title)
                     .lineLimit(1).frame(maxWidth: .infinity, alignment: .leading)
             }.buttonStyle(.plain)
-            Text(task.list.name).font(WFType.supporting).foregroundStyle(WFColors.tertiaryText)
-            if let dueAt = task.schedule.dueAt {
-                Text(PlanningProjection.dateChipText(dueAt, hasTime: task.schedule.hasTime, now: now, calendar: calendar))
-                    .font(WFType.supporting)
-                    .foregroundStyle(done ? WFColors.tertiaryText : chipColor(chipKind))
+            Text(task.list.name).font(WFType.supporting).foregroundStyle(WFColors.tertiaryText).lineLimit(1)
+                .frame(maxWidth: 90, alignment: .trailing)
+            if task.recurrence != .never { Image(systemName: "repeat").font(.caption2).foregroundStyle(WFColors.tertiaryText) }
+            if !task.document.isEmpty { Image(systemName: "text.alignleft").font(.caption2).foregroundStyle(WFColors.tertiaryText) }
+            if task.schedule.dueAt != nil {
+                TaskDateButton(task: task, workspace: workspace)
             }
         }.font(WFType.listTitle)
             .foregroundStyle(done ? WFColors.tertiaryText : WFColors.text)
             .padding(.vertical, 5)
+            .background(workspace.selectedTaskID == task.id ? WFColors.selection : .clear, in: RoundedRectangle(cornerRadius: 6))
+            .overlay(alignment: .bottom) { Divider().padding(.leading, 22) }
             .contentShape(Rectangle())
             .draggable(task.id.uuidString)
     }
@@ -507,6 +553,8 @@ private struct CalendarMonthRow: View {
     let days: [Date]
     /// 判断格内/格外的参照日（当前月的锚点）。
     let monthReference: Date
+    let selectedDay: Date
+    let onSelectDay: (Date) -> Void
     /// 视图已过滤的可见任务（含跨天任务，色带层从中取）。
     let tasks: [Task]
     let listPalette: [Color]
@@ -534,7 +582,9 @@ private struct CalendarMonthRow: View {
                     onSelect: onSelect,
                     onAdd: { onAdd(day) }
                 )
-                .frame(minWidth: 120, maxWidth: .infinity, minHeight: 112, alignment: .topLeading)
+                .frame(minWidth: 0, maxWidth: .infinity, minHeight: 112, alignment: .topLeading)
+                .overlay { Rectangle().stroke(calendar.isDate(day, inSameDayAs: selectedDay) ? WFColors.accent : .clear, lineWidth: 1).allowsHitTesting(false) }
+                .onTapGesture { onSelectDay(day) }
                 .dropDestination(for: String.self) { strings, _ in
                     guard let id = strings.first.flatMap(UUID.init(uuidString:)) else { return false }
                     onDrop(id, day)
