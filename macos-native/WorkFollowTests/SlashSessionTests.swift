@@ -175,6 +175,31 @@ final class SlashSessionTests: XCTestCase {
         XCTAssertFalse(escaped)
     }
 
+    /// 用 `/` 覆盖一段选中文本是普通编辑：原版按前后文本差异判断"这是插入了一个
+    /// `/`"，选中内容被替换掉不算，因此不该开面板（`slash_command_session.dart:21-31`）。
+    func testTypingSlashOverASelectionIsOrdinaryText() {
+        let editor = NativeTextView(frame: .zero, textContainer: nil)
+        editor.profile = DocumentProfile(taskSlash: true)
+        editor.insertText("选中的文字", replacementRange: NSRange(location: 0, length: 0))
+        editor.setSelectedRange(NSRange(location: 0, length: 3))
+        editor.insertText("/", replacementRange: editor.selectedRange())
+
+        XCTAssertEqual(editor.string, "/文字")
+        XCTAssertNil(editor.slashSession, "替换选中文本不该开斜杠面板")
+    }
+
+    /// 对照面：光标处插入 `/` 仍然要开面板。
+    func testTypingSlashAtTheCaretStillOpensThePalette() {
+        let editor = NativeTextView(frame: .zero, textContainer: nil)
+        editor.profile = DocumentProfile(taskSlash: true)
+        editor.insertText("正文", replacementRange: NSRange(location: 0, length: 0))
+        editor.setSelectedRange(NSRange(location: 2, length: 0))
+        editor.insertText("/", replacementRange: editor.selectedRange())
+
+        XCTAssertEqual(editor.string, "正文/")
+        XCTAssertNotNil(editor.slashSession)
+    }
+
     func testURLDoesNotOpenSession() {
         let editor = NativeTextView(frame: .zero, textContainer: nil)
         editor.insertText("https:", replacementRange: NSRange(location: 0, length: 0))

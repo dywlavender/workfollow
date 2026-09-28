@@ -44,6 +44,7 @@ private enum SlashLayout {
 extension NativeTextView {
     func dismissSlash() {
         slashSession = nil
+        stopFollowingSlash()
         if let panel = slashPanel {
             panel.parent?.removeChildWindow(panel)
             panel.orderOut(nil)
@@ -98,6 +99,37 @@ extension NativeTextView {
             : min(caret.maxY + SlashLayout.gap, bounds.maxY - height)
         panel.setFrame(NSRect(x: x, y: y, width: width, height: height), display: true)
         panel.orderFront(nil)
+        startFollowingSlash()
+    }
+
+    /// 面板要**跟着滚动与窗口变化走**：原版在滚动容器的 position 变化和窗口尺寸
+    /// 变化时都会重新定位（`document_editor.dart:213` 的 `_ancestorScrollPosition`
+    /// 监听与 `didChangeMetrics`），否则一滚动面板就与光标脱钩。
+    ///
+    /// 这里盯两处：包着正文的 `NSClipView`（SwiftUI 的 `ScrollView` 背后也是它）
+    /// 和窗口的移动/缩放。
+    private func startFollowingSlash() {
+        guard slashObservers.isEmpty else { return }
+        let recenter: (Notification) -> Void = { [weak self] _ in
+            MainActor.assumeIsolated { self?.refreshSlash() }
+        }
+        if let clip = enclosingScrollView?.contentView {
+            clip.postsBoundsChangedNotifications = true
+            slashObservers.append(NotificationCenter.default.addObserver(
+                forName: NSView.boundsDidChangeNotification, object: clip, queue: .main,
+                using: recenter))
+        }
+        if let window {
+            for name in [NSWindow.didResizeNotification, NSWindow.didMoveNotification] {
+                slashObservers.append(NotificationCenter.default.addObserver(
+                    forName: name, object: window, queue: .main, using: recenter))
+            }
+        }
+    }
+
+    private func stopFollowingSlash() {
+        for observer in slashObservers { NotificationCenter.default.removeObserver(observer) }
+        slashObservers.removeAll()
     }
 
     func moveSlash(_ offset: Int) {

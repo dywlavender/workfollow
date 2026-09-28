@@ -16,14 +16,20 @@ final class NativeTextView: NSTextView {
     var profile = DocumentProfile()
     var slashSession: SlashSession?
     var slashPanel: NSPanel?
+    /// 斜杠面板"跟着滚动与窗口变化走"用的通知观察者（见 `startFollowingSlash`）。
+    var slashObservers: [Any] = []
     var selectionPanel: NSPanel?
     var documentIdentity = UUID()
     var needsHostCaretReveal = false
 
     override func insertText(_ insertString: Any, replacementRange: NSRange) {
         let wasComposing = hasMarkedText()
+        // 用 `/` 覆盖一段选中文本是普通编辑，不该开命令面板：原版按前后文本差异
+        // 判断"这是插入了一个 `/`"，选中内容被替换掉不算（`slash_command_session.dart:21-31`）。
+        let target = replacementRange.location == NSNotFound ? selectedRange() : replacementRange
+        let replacedSelection = target.length > 0
         super.insertText(insertString, replacementRange: replacementRange)
-        guard !wasComposing, (insertString as? String) == "/" else { refreshSlash(); return }
+        guard !wasComposing, !replacedSelection, (insertString as? String) == "/" else { refreshSlash(); return }
         let location = selectedRange().location
         guard location > 0 else { return }
         // A slash in a URL/path is ordinary text, not a command trigger.
