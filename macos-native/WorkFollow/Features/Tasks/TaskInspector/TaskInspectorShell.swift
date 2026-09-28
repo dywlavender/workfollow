@@ -32,8 +32,20 @@ struct TaskInspectorShell: View {
             if let task = workspace.selectedTask {
                 headerBar(task)
                 Divider()
-                ScrollView {
-                    inspectorContent(task)
+                GeometryReader { viewport in
+                    ScrollView {
+                        inspectorContent(task)
+                            .frame(minWidth: viewport.size.width,
+                                   minHeight: viewport.size.height,
+                                   alignment: .topLeading)
+                            .background {
+                                // 点击编辑栏空白处：光标送到最近的输入行（文末），
+                                // 与笔记页的空白点按行为一致；文字行上的点击仍由
+                                // 文本视图自己按就近字符定位。
+                                Color.clear.contentShape(Rectangle())
+                                    .onTapGesture { editorHandle.focusEnd() }
+                            }
+                    }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 Divider()

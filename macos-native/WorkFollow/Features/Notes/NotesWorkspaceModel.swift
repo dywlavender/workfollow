@@ -40,17 +40,18 @@ final class NotesWorkspaceModel: ObservableObject {
     @Published private(set) var revision = 0
     var notes: [Note] { _ = revision; return store.notes }
     var selected: Note? { notes.first { $0.id == selectedID } }
-    func rows(trash: Bool, query: String, folder: String?, favorites: Bool, newestFirst: Bool = true) -> [Note] {
-        notes.filter {
+    func rows(trash: Bool, query: String, folder: String?, favorites: Bool) -> [Note] {
+        let filtered = notes.filter {
             ($0.deletedAt != nil) == trash &&
             (trash || folder == nil || $0.folder == folder) &&
             (trash || !favorites || $0.favorite) &&
             (query.isEmpty || ($0.title + $0.document.plainText).localizedCaseInsensitiveContains(query))
-        }.sorted {
-            if trash { return $0.deletedAt! > $1.deletedAt! }
-            if !newestFirst { return $0.title < $1.title }
-            return $0.updatedAt > $1.updatedAt
         }
+        return trash ? filtered.sorted { $0.deletedAt! > $1.deletedAt! } : filtered
+    }
+    func sort(_ order: NoteListSort) {
+        store.sort(order)
+        revision += 1
     }
     func create(folder: String? = nil) {
         let id = store.create()

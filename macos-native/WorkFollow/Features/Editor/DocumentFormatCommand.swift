@@ -104,19 +104,21 @@ extension NativeTextView {
         var range = originalSelection
         if command.block != nil {
             let source = string as NSString
-            if source.length == 0 {
-                range = NSRange(location: 0, length: 0)
+            // 文末空段（光标在末尾、文档以换行结尾）：它没有字符可定位，
+            // 必须走"无字符段落"分支（输入属性 + 待定级别）。若按常规钳制到
+            // length-1，段落解析会落到**上一行**——列表格式跑到上面一行的
+            // 就是这个（斜杠先删"/"再应用格式，触发这个边界）。
+            let atTrailingEmpty = source.length > 0
+                && originalSelection.length == 0
+                && originalSelection.location == source.length
+                && source.character(at: source.length - 1) == 0x0A
+            if source.length == 0 || atTrailingEmpty {
+                range = NSRange(location: source.length, length: 0)
             } else if let lineStart {
                 let location = min(max(0, lineStart), source.length - 1)
                 range = source.paragraphRange(for: NSRange(location: location, length: 0))
             } else {
                 range = source.paragraphRange(for: originalSelection)
-            }
-            if let block = command.block,
-               block == .bullet || block == .ordered || isChecklist(block),
-               let storage = textStorage {
-                range = listRunRange(around: range, token: DocumentTextCodec.blockToken(block),
-                                     source: source, storage: storage)
             }
         }
         if range.length == 0 {
@@ -129,18 +131,22 @@ extension NativeTextView {
             }
             let current = DocumentTextCodec.kind(token)
             let resolved = resolvedBlock(command.block, current: current, lineStart: lineStart)
-            typingAttributes = DocumentTextCodec.attributes(kind: resolved, marks: marks)
             // 这个分支只在"段落里一个字符都没有"时走（文末空行或空文档）。TextKit 把
             // 段落样式挂在字符上，而这里没有字符，所以把级别记成"待定"交给模型，并
             // 当场让协调器收到变更——否则在文末空行上选完标题、不输入就切走会丢掉
             // 这一级（原版把行属性存在 Delta 里，没有这个边界）。
-            pendingTrailingBlock = resolved == .paragraph ? nil : resolved
-            didChangeText()
+            replaceEmptyBlock(range: range, content: NSAttributedString(string: ""),
+                              typing: DocumentTextCodec.attributes(kind: resolved, marks: marks),
+                              trailing: resolved == .paragraph ? nil : resolved)
             return
         }
         guard let storage = textStorage else { return }
         let selected = storage.attributedSubstring(from: range)
         var document = DocumentTextCodec.decode(selected, preserving: NativeDocument(plainText: selected.string))
+        // 段尾换行解码会产生一个无字符的占位块，它不属于本次选中的段落，
+        // 不能参与“全部已是此格式”的判断，否则再次点击列表按钮无法取消。
+        let selectedBlocks = selected.string.hasSuffix("\n")
+            ? Array(document.blocks.dropLast()) : document.blocks
         let remove = command.mark.map { mark in document.blocks.flatMap(\.runs).allSatisfy { $0.marks.contains(mark) } } ?? false
         // 段落类型：工具条与选区浮条（无 lineStart）是**切换**，斜杠面板带 lineStart 是**设值**。
         // 原版就是这么分的（`_toggleBlock` vs `_formatLine`，`document_commands.dart:242-279`）。
@@ -148,7 +154,7 @@ extension NativeTextView {
             resolvedBlock(block,
                           current: document.blocks.first?.kind ?? .paragraph,
                           lineStart: lineStart,
-                          allMatchCurrent: document.blocks.allSatisfy {
+                          allMatchCurrent: selectedBlocks.allSatisfy {
                               DocumentTextCodec.blockToken($0.kind) == DocumentTextCodec.blockToken(block)
                           })
         }
@@ -230,32 +236,4 @@ extension NativeTextView {
         return matches ? .paragraph : block
     }
 
-    private func listRunRange(around range: NSRange, token: String,
-                              source: NSString, storage: NSTextStorage) -> NSRange {
-        var start = range.location
-        var end = NSMaxRange(range)
-
-        while start > 0 {
-            let previous = source.paragraphRange(for: NSRange(location: start - 1, length: 0))
-            guard previous.location < start,
-                  storage.attribute(DocumentTextCodec.blockKey, at: previous.location, effectiveRange: nil) as? String == token
-            else { break }
-            start = previous.location
-            end = max(end, NSMaxRange(previous))
-        }
-
-        while end < source.length {
-            let next = source.paragraphRange(for: NSRange(location: end, length: 0))
-            guard next.location >= end, next.location < storage.length,
-                  storage.attribute(DocumentTextCodec.blockKey, at: next.location, effectiveRange: nil) as? String == token
-            else { break }
-            end = max(end, NSMaxRange(next))
-        }
-        return NSRange(location: start, length: min(end, source.length) - start)
-    }
-
-    private func isChecklist(_ kind: DocumentBlockKind) -> Bool {
-        if case .checklist = kind { return true }
-        return false
-    }
 }

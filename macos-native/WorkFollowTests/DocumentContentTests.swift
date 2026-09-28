@@ -4,6 +4,103 @@ import XCTest
 
 @MainActor
 final class DocumentContentTests: XCTestCase {
+    /// 标题行末尾回车：新行延续标题级别（模型里的文末空段靠 pendingTrailingBlock）。
+    func testEnterAfterHeadingContinuesHeadingAtDocumentEnd() throws {
+        let editor = NativeTextView(frame: .zero, textContainer: nil)
+        let document = NativeDocument(blocks: [DocumentBlock(kind: .heading(2), runs: [DocumentRun(text: "标题")])])
+        editor.textStorage?.setAttributedString(DocumentTextCodec.render(document))
+        editor.setSelectedRange(NSRange(location: 2, length: 0))
+        editor.typingAttributes = DocumentTextCodec.attributes(kind: .heading(2), marks: [])
+
+        editor.insertNewline(nil)
+
+        XCTAssertEqual(editor.pendingTrailingBlock, .heading(2), "回车后文末空段应待定为 H2")
+        editor.insertText("正文")
+        let decoded = DocumentTextCodec.decode(editor.attributedString(), preserving: document,
+                                               trailing: editor.pendingTrailingBlock)
+        XCTAssertEqual(decoded.blocks.count, 2)
+        XCTAssertEqual(decoded.blocks.last?.kind, .heading(2), "换行后输入的内容应延续 H2")
+    }
+
+    /// 空标题行上回车：退回正文（连按两次回车退出标题，滴答/Quill 同款）。
+    func testEnterOnEmptyHeadingExitsToParagraph() throws {
+        let editor = NativeTextView(frame: .zero, textContainer: nil)
+        let document = NativeDocument(blocks: [DocumentBlock(kind: .heading(2), runs: [DocumentRun(text: "标题")])])
+        editor.textStorage?.setAttributedString(DocumentTextCodec.render(document))
+        editor.setSelectedRange(NSRange(location: 2, length: 0))
+        editor.typingAttributes = DocumentTextCodec.attributes(kind: .heading(2), marks: [])
+        editor.insertNewline(nil)
+
+        XCTAssertTrue(editor.exitEmptyBlockOnNewline(), "空标题行回车应被退出逻辑处理")
+        XCTAssertEqual(editor.pendingTrailingBlock, .paragraph)
+        XCTAssertEqual(editor.typingAttributes[DocumentTextCodec.blockKey] as? String, "paragraph")
+        let decoded = DocumentTextCodec.decode(editor.attributedString(), preserving: document,
+                                               trailing: editor.pendingTrailingBlock)
+        XCTAssertEqual(decoded.blocks.last?.kind, .paragraph, "空标题行回车后应退回普通段落")
+    }
+
+    /// 空列表项（有序/无序/检查项）上回车：同样退回正文。
+    func testEnterOnEmptyListItemExitsToParagraph() {
+        for kind in [DocumentBlockKind.bullet, .ordered, .checklist(false)] {
+            let editor = NativeTextView(frame: .zero, textContainer: nil)
+            let document = NativeDocument(blocks: [DocumentBlock(kind: kind, runs: [DocumentRun(text: "事项")])])
+            editor.textStorage?.setAttributedString(DocumentTextCodec.render(document))
+            editor.setSelectedRange(NSRange(location: 2, length: 0))
+            editor.typingAttributes = DocumentTextCodec.attributes(kind: kind, marks: [])
+            editor.insertNewline(nil)
+
+            XCTAssertTrue(editor.exitEmptyBlockOnNewline(), "\(kind) 空项回车应被退出逻辑处理")
+            let decoded = DocumentTextCodec.decode(editor.attributedString(), preserving: document,
+                                                   trailing: editor.pendingTrailingBlock)
+            XCTAssertEqual(decoded.blocks.last?.kind, .paragraph, "\(kind) 空项回车后应退回普通段落")
+        }
+    }
+
+    /// 文末空段上应用列表：格式必须落在文末空段（待定级别），不能跑到上一行。
+    func testApplyingListOnTrailingEmptyLineDoesNotTouchLineAbove() {
+        let editor = NativeTextView(frame: .zero, textContainer: nil)
+        let document = NativeDocument(blocks: [
+            DocumentBlock(kind: .paragraph, runs: [DocumentRun(text: "上一行")]),
+            DocumentBlock(kind: .paragraph, runs: [DocumentRun(text: "")]),
+        ])
+        editor.textStorage?.setAttributedString(DocumentTextCodec.render(document))
+        editor.setSelectedRange(NSRange(location: 4, length: 0))
+
+        editor.applyFormat(.init(title: "无序列表", block: .bullet, mark: nil), lineStart: 4)
+
+        XCTAssertEqual(editor.pendingTrailingBlock, .bullet, "文末空段应待定为无序列表")
+        let decoded = DocumentTextCodec.decode(editor.attributedString(), preserving: document,
+                                               trailing: editor.pendingTrailingBlock)
+        XCTAssertEqual(decoded.blocks.first?.kind, .paragraph, "上一行不应被改成列表")
+        editor.insertText("条目")
+        let after = DocumentTextCodec.decode(editor.attributedString(), preserving: decoded,
+                                             trailing: editor.pendingTrailingBlock)
+        XCTAssertEqual(after.blocks.last?.kind, .bullet, "随后输入的内容应成为列表项")
+    }
+
+    /// 文末空段的检查项点击翻转：无字符段落的状态走输入属性 + 待定级别，
+    /// 光标要落到文末，级别才能随下一次 commit 进模型。
+    func testTrailingChecklistTogglesFromEmptyLine() {
+        let editor = NativeTextView(frame: .zero, textContainer: nil)
+        let document = NativeDocument(blocks: [
+            DocumentBlock(kind: .paragraph, runs: [DocumentRun(text: "上文")]),
+            DocumentBlock(kind: .paragraph, runs: [DocumentRun(text: "")]),
+        ])
+        editor.textStorage?.setAttributedString(DocumentTextCodec.render(document))
+        editor.setSelectedRange(NSRange(location: 3, length: 0))
+        editor.pendingTrailingBlock = .checklist(false)
+        editor.displayedTrailingBlock = .checklist(false)
+
+        editor.setTrailingChecklist(checked: true)
+
+        XCTAssertEqual(editor.pendingTrailingBlock, .checklist(true))
+        XCTAssertEqual(editor.typingAttributes[DocumentTextCodec.blockKey] as? String, "checked")
+        XCTAssertEqual(editor.selectedRange().location, 3, "光标应落在文末空段")
+        let decoded = DocumentTextCodec.decode(editor.attributedString(), preserving: document,
+                                               trailing: editor.pendingTrailingBlock)
+        XCTAssertEqual(decoded.blocks.last?.kind, .checklist(true), "文末空段应记录为已勾选检查项")
+    }
+
     func testBlockPresentationDoesNotBecomeInlineFormatting() {
         for kind in [DocumentBlockKind.heading(1), .heading(3), .code] {
             let editor = NativeTextView(frame: .zero, textContainer: nil)
@@ -89,11 +186,14 @@ final class DocumentContentTests: XCTestCase {
             let rendered = DocumentTextCodec.render(document)
             XCTAssertEqual(DocumentTextCodec.decode(rendered, preserving: document).blocks.first?.kind, .checklist(checked))
             let style = rendered.attribute(.paragraphStyle, at: 0, effectiveRange: nil) as? NSParagraphStyle
-            XCTAssertEqual(style?.textLists.count, 1)
+            // 标记由视图层自绘：段落不挂 NSTextList，否则 TextKit 2（macOS 14+）
+            // 会再画一份灰色标记并挤占行首空间。
+            XCTAssertEqual(style?.textLists.isEmpty, true)
+            XCTAssertEqual(style?.firstLineHeadIndent, 42)
         }
     }
 
-    func testConsecutiveOrderedBlocksShareOneNativeList() throws {
+    func testConsecutiveOrderedBlocksNumberContinuously() {
         let document = NativeDocument(blocks: [
             DocumentBlock(kind: .ordered, runs: [DocumentRun(text: "第一项")]),
             DocumentBlock(kind: .ordered, runs: [DocumentRun(text: "第二项")]),
@@ -102,30 +202,32 @@ final class DocumentContentTests: XCTestCase {
             DocumentBlock(kind: .ordered, runs: [DocumentRun(text: "新列表")])
         ])
         let rendered = DocumentTextCodec.render(document)
-        let first = try XCTUnwrap((rendered.attribute(.paragraphStyle, at: 0, effectiveRange: nil) as? NSParagraphStyle)?.textLists.first)
-        let second = (rendered.attribute(.paragraphStyle, at: 4, effectiveRange: nil) as? NSParagraphStyle)?.textLists.first
-        let third = (rendered.attribute(.paragraphStyle, at: 8, effectiveRange: nil) as? NSParagraphStyle)?.textLists.first
-        let afterGap = (rendered.attribute(.paragraphStyle, at: 17, effectiveRange: nil) as? NSParagraphStyle)?.textLists.first
-
-        XCTAssertNotNil(first)
-        XCTAssertTrue(first === second)
-        XCTAssertTrue(first === third)
-        XCTAssertFalse(first === afterGap)
-        XCTAssertEqual(rendered.itemNumber(in: first, at: 0), 1)
-        XCTAssertEqual(rendered.itemNumber(in: first, at: 4), 2)
-        XCTAssertEqual(rendered.itemNumber(in: first, at: 8), 3)
-        XCTAssertEqual(rendered.itemNumber(in: try XCTUnwrap(afterGap), at: 17), 1)
+        let style = rendered.attribute(.paragraphStyle, at: 0, effectiveRange: nil) as? NSParagraphStyle
+        XCTAssertEqual(style?.textLists.isEmpty, true)
+        // 序号口径：向前数连续 ordered 段，普通段落打断后重新从 1 计。
+        XCTAssertEqual(DocumentTextCodec.ordinal(forOrderedParagraphAt: 0, in: rendered), 1)
+        XCTAssertEqual(DocumentTextCodec.ordinal(forOrderedParagraphAt: 4, in: rendered), 2)
+        XCTAssertEqual(DocumentTextCodec.ordinal(forOrderedParagraphAt: 8, in: rendered), 3)
+        XCTAssertEqual(DocumentTextCodec.ordinal(forOrderedParagraphAt: 17, in: rendered), 1)
     }
 
     func testLinkEditingPreservesTextAndOtherMarks() {
         let editor = NativeTextView(frame: .zero, textContainer: nil)
         let document = NativeDocument(blocks: [DocumentBlock(kind: .paragraph, runs: [DocumentRun(text: "网站", marks: [.bold])])])
         editor.textStorage?.setAttributedString(DocumentTextCodec.render(document))
+        editor.setSelectedRange(NSRange(location: 0, length: 2))
         editor.setDocumentLink("https://example.com", range: NSRange(location: 0, length: 2))
+        XCTAssertEqual(editor.selectedRange(), NSRange(location: 0, length: 2))
         var updated = DocumentTextCodec.decode(editor.attributedString(), preserving: document)
         XCTAssertEqual(updated.plainText, "网站")
         XCTAssertTrue(updated.blocks[0].runs[0].marks.contains(.link("https://example.com")))
         XCTAssertTrue(updated.blocks[0].runs[0].marks.contains(.bold))
+        editor.undo(nil)
+        XCTAssertEqual(editor.selectedRange(), NSRange(location: 0, length: 2))
+        XCTAssertNil(editor.attributedString().attribute(.link, at: 0, effectiveRange: nil))
+        editor.redo(nil)
+        XCTAssertEqual(editor.attributedString().attribute(.link, at: 0, effectiveRange: nil) as? String,
+                       "https://example.com")
         editor.setSelectedRange(NSRange(location: 0, length: 0))
         editor.removeDocumentLink(nil)
         updated = DocumentTextCodec.decode(editor.attributedString(), preserving: document)

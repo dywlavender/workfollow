@@ -25,11 +25,16 @@ final class NativeTextView: NSTextView {
     /// 否则"在文末空行上选标题、不输入内容就切走"会丢掉级别；原版把行属性存在
     /// Delta 里，没有这个边界。
     var pendingTrailingBlock: DocumentBlockKind?
+    /// 模型里文末空段的级别（协调器每次模型同步时刷新）。文末空段没有字符，
+    /// 主循环装饰看不见它；列表标记的常驻绘制靠这个级别——光标不在行上时
+    /// 项目符号/复选框也要显示。
+    var displayedTrailingBlock: DocumentBlockKind?
 
     /// 绑定文档时把模型里的文末级别带回输入属性（由协调器调用），这样切走再回来
     /// 接着在文末输入时，字号与级别都还在。
     func seedTrailingParagraphKind(_ kind: DocumentBlockKind?) {
         pendingTrailingBlock = kind
+        displayedTrailingBlock = kind
         guard let kind else { return }
         typingAttributes = DocumentTextCodec.attributes(kind: kind, marks: [])
     }
@@ -48,8 +53,6 @@ final class NativeTextView: NSTextView {
         super.insertText(insertString, replacementRange: replacementRange)
         guard !wasComposing, !replacedSelection, (insertString as? String) == "/" else {
             refreshSlash()
-            // 选区已落位，Markdown 触发串在这里判断才准（didChangeText 时选区未定）。
-            applyMarkdownBlockTriggers()
             return
         }
         let location = selectedRange().location
@@ -62,12 +65,102 @@ final class NativeTextView: NSTextView {
     }
 
     override func didChangeText() {
+        // 先同步文末空段的待定级别，delegate 的 commit 解码才能带上正确类型
+        // （标题行回车后新行延续级别靠这一步）。
+        syncPendingTrailingBlock()
         super.didChangeText()
         refreshSlash()
+        // 行首标记活在文本区外的沟槽里（标题角标 / 空行"+"），文字变化不会
+        // 自动把它标脏：段落类型变了要显式重绘。
+        needsDisplay = true
         // The task editor grows inside the inspector's scroll view. Its own
         // clip view has nothing to scroll; reveal the caret in the host after
         // SwiftUI has applied the new document height.
         needsHostCaretReveal = true
+    }
+
+    /// 光标停在文末空段时，把"接下来输入的类型"记进 `pendingTrailingBlock`
+    /// （该段没有字符，级别只活在输入属性里，模型解码靠它定类型）；
+    /// 离开文末空段就清掉。标题/列表换行延续、切走再切回不丢级别都靠它。
+    func syncPendingTrailingBlock() {
+        guard let storage = textStorage else { return }
+        let source = storage.string as NSString
+        let caret = min(max(selectedRange().location, 0), source.length)
+        let atTrailingEmpty = source.length == 0
+            || (caret == source.length && source.character(at: source.length - 1) == 0x0A)
+        if atTrailingEmpty {
+            pendingTrailingBlock = DocumentTextCodec.kind(
+                typingAttributes[DocumentTextCodec.blockKey] as? String ?? "paragraph")
+        } else {
+            pendingTrailingBlock = nil
+        }
+    }
+
+    /// 空的标题/列表行上按回车 → 退回正文（滴答/Quill 同款：再按一次回车退出格式），
+    /// 返回是否已处理。有内容的行回车会延续格式，不走这里。
+    func exitEmptyBlockOnNewline() -> Bool {
+        guard isEditable, !hasMarkedText(), let storage = textStorage else { return false }
+        let source = storage.string as NSString
+        let caret = min(max(selectedRange().location, 0), source.length)
+        let trailingEmpty = source.length == 0
+            || (caret == source.length && source.character(at: source.length - 1) == 0x0A)
+        let plain = DocumentTextCodec.attributes(kind: .paragraph, marks: [])
+        // 可退出的块：标题与三类列表（有序/无序/检查项）。
+        func isExitable(_ kind: DocumentBlockKind) -> Bool {
+            switch kind {
+            case .heading, .bullet, .ordered, .checklist: return true
+            default: return false
+            }
+        }
+        if trailingEmpty {
+            // 文末空段：级别只活在输入属性里，直接退回正文，不用改存储。
+            guard isExitable(DocumentTextCodec.kind(
+                typingAttributes[DocumentTextCodec.blockKey] as? String ?? "paragraph")) else { return false }
+            replaceEmptyBlock(range: NSRange(location: caret, length: 0),
+                              content: NSAttributedString(string: ""),
+                              typing: plain, trailing: nil)
+            return true
+        }
+        let paragraph = source.paragraphRange(for: NSRange(location: caret, length: 0))
+        guard paragraph.length > 0 else { return false }
+        let lastCharacter = source.character(at: NSMaxRange(paragraph) - 1)
+        let contentLength = paragraph.length - (lastCharacter == 0x0A ? 1 : 0)
+        guard contentLength == 0,
+              let token = storage.attribute(DocumentTextCodec.blockKey, at: paragraph.location,
+                                            effectiveRange: nil) as? String,
+              isExitable(DocumentTextCodec.kind(token)) else { return false }
+        // 中间的空行：整段（含段尾换行）重设为正文属性，不新增行。
+        replaceEmptyBlock(range: paragraph,
+                          content: NSAttributedString(string: storage.attributedSubstring(from: paragraph).string,
+                                                      attributes: plain),
+                          typing: plain, trailing: nil)
+        return true
+    }
+
+    /// 空段落的格式也是一次编辑；字符没有增减时 NSTextView 不会自动记录它。
+    func replaceEmptyBlock(range: NSRange, content: NSAttributedString,
+                                   typing: [NSAttributedString.Key: Any],
+                                   trailing: DocumentBlockKind?) {
+        guard let storage = textStorage else { return }
+        let previous = storage.attributedSubstring(from: range)
+        let previousTyping = typingAttributes
+        let previousTrailing = pendingTrailingBlock
+        let selection = selectedRange()
+        breakUndoCoalescing()
+        documentUndoManager.registerUndo(withTarget: self) { view in
+            view.replaceEmptyBlock(range: range, content: previous,
+                                   typing: previousTyping, trailing: previousTrailing)
+        }
+        if range.length > 0 {
+            storage.replaceCharacters(in: range, with: content)
+            invalidateDocumentLayout(for: range)
+        }
+        setSelectedRange(selection)
+        typingAttributes = typing
+        pendingTrailingBlock = trailing
+        displayedTrailingBlock = trailing
+        needsDisplay = true
+        didChangeText()
     }
 
     func revealCaretInHostAfterLayout() {
@@ -120,8 +213,45 @@ final class NativeTextView: NSTextView {
                     return
                 }
             }
+            // 文末空段的检查项没有字符可读 token：级别活在待定/模型状态里，
+            // 点中标记区按它翻转（显示已支持，这里补点击）。
+            let trailingKind = pendingTrailingBlock ?? displayedTrailingBlock
+            if token != "checklist", token != "checked",
+               case .checklist(let checked) = trailingKind {
+                let screenRect = firstRect(forCharacterRange: NSRange(location: storage.length, length: 0), actualRange: nil)
+                let caret = convert(window.convertFromScreen(screenRect), from: nil)
+                let marker = NSRect(x: caret.minX - 28, y: caret.minY, width: 28, height: caret.height)
+                if marker.contains(point) {
+                    window.makeFirstResponder(self)
+                    setTrailingChecklist(checked: !checked)
+                    return
+                }
+            }
         }
         super.mouseDown(with: event)
+    }
+
+    /// 文末空段的检查项翻转：无字符可改，直接改输入属性与待定级别并注册撤销；
+    /// 光标同时落到文末（级别只有这样才会随下一次 commit 进模型）。
+    func setTrailingChecklist(checked: Bool) {
+        applyTrailingState(typing: DocumentTextCodec.attributes(kind: .checklist(checked), marks: []),
+                           trailing: .checklist(checked))
+    }
+
+    private func applyTrailingState(typing: [NSAttributedString.Key: Any], trailing: DocumentBlockKind?) {
+        guard let storage = textStorage else { return }
+        let previousTyping = typingAttributes
+        let previousTrailing = pendingTrailingBlock
+        breakUndoCoalescing()
+        documentUndoManager.registerUndo(withTarget: self) { view in
+            view.applyTrailingState(typing: previousTyping, trailing: previousTrailing)
+        }
+        typingAttributes = typing
+        pendingTrailingBlock = trailing
+        displayedTrailingBlock = trailing
+        setSelectedRange(NSRange(location: storage.length, length: 0))
+        needsDisplay = true
+        didChangeText()
     }
 
     func toggleNoteChecklist(at offset: Int) {
@@ -154,9 +284,9 @@ final class NativeTextView: NSTextView {
             default: break
             }
         }
-        // `---` 整行 + 回车 → 分割线（滴答同款；斜杠面板优先）。
+        // 空标题/列表行上回车：退回正文（有内容的行回车会延续格式，不受影响）。
         if selector == #selector(insertNewline(_:)), !hasMarkedText(),
-           convertDividerTriggerIfNeeded() { return }
+           exitEmptyBlockOnNewline() { return }
         super.doCommand(by: selector)
     }
 
@@ -331,15 +461,37 @@ final class NativeTextView: NSTextView {
         return output as Data
     }
 
+    /// 撤销/重做闭包请求"操作完成后恢复的选区"。
+    ///
+    /// 实测：撤销机制会在闭包结束之后、`undo()` 返回之前，再把插入点吸附回
+    /// 编辑位置（闭包里的 `setSelectedRange` 会被随后覆盖）。所以闭包只能
+    /// **登记意图**，由 `undo()`/`redo()` 返回后统一补写。
+    private var selectionAfterUndoRedo: NSRange?
+
+    /// 撤销/重做闭包里调用：登记操作完成后要恢复的选区（仅撤销/重做期间生效）。
+    func requestSelectionAfterUndoRedo(_ range: NSRange) {
+        guard documentUndoManager.isUndoing || documentUndoManager.isRedoing else { return }
+        selectionAfterUndoRedo = range
+    }
+
     @objc func undo(_ sender: Any?) {
         dismissSlash()
         breakUndoCoalescing()
         documentUndoManager.undo()
+        applySelectionAfterUndoRedo()
     }
 
     @objc func redo(_ sender: Any?) {
         dismissSlash()
         documentUndoManager.redo()
+        applySelectionAfterUndoRedo()
+    }
+
+    private func applySelectionAfterUndoRedo() {
+        guard let range = selectionAfterUndoRedo else { return }
+        selectionAfterUndoRedo = nil
+        guard NSMaxRange(range) <= (string as NSString).length else { return }
+        setSelectedRange(range)
     }
 
     override func validateUserInterfaceItem(_ item: NSValidatedUserInterfaceItem) -> Bool {
@@ -352,13 +504,20 @@ final class NativeTextView: NSTextView {
 
     override func becomeFirstResponder() -> Bool {
         let becameFirstResponder = super.becomeFirstResponder()
-        if becameFirstResponder { onEditingChanged?(true) }
+        if becameFirstResponder {
+            // 重新聚焦后活动行标记（标题角标 / 空行"+"）要回来。
+            needsDisplay = true
+            onEditingChanged?(true)
+        }
         return becameFirstResponder
     }
 
     override func resignFirstResponder() -> Bool {
         let resigned = super.resignFirstResponder()
-        if resigned { dismissSlash(); onEditingChanged?(false) }
+        if resigned {
+            needsDisplay = true
+            dismissSlash(); onEditingChanged?(false)
+        }
         return resigned
     }
 
@@ -391,6 +550,9 @@ final class NativeTextView: NSTextView {
         backgroundColor = .clear
         textColor = .labelColor
         font = .systemFont(ofSize: 15)
+        // 行首沟槽（角标 / 空行"+" / 列表标记）由各段落的 headIndent 留出，
+        // 而不是 textContainerInset：NSTextView 会把绘制裁剪到文本容器区域，
+        // 画在容器左侧留白里的装饰（x < inset.width）一律不可见（实测）。
         textContainerInset = NSSize(width: 0, height: 4)
         minSize = NSSize(width: 0, height: 0)
         maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude,

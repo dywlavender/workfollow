@@ -90,7 +90,9 @@ final class SlashSessionTests: XCTestCase {
 
             if expectedKind == .bullet || expectedKind == .ordered || expectedKind == .checklist(false) {
                 let style = editor.attributedString().attribute(.paragraphStyle, at: 3, effectiveRange: nil) as? NSParagraphStyle
-                XCTAssertEqual(style?.textLists.count, 1, "list command \(commandIndex) must render a native list marker")
+                // 标记由视图层自绘，段落不挂 NSTextList（否则与自绘标记重复）。
+                XCTAssertEqual(style?.textLists.isEmpty, true,
+                               "list command \(commandIndex) must not carry a native text list")
             }
         }
     }
@@ -128,14 +130,9 @@ final class SlashSessionTests: XCTestCase {
         editor.executeSlash(at: 4)
 
         let rendered = editor.attributedString()
-        let first = try XCTUnwrap((rendered.attribute(.paragraphStyle, at: 3, effectiveRange: nil) as? NSParagraphStyle)?.textLists.first)
-        let second = (rendered.attribute(.paragraphStyle, at: 7, effectiveRange: nil) as? NSParagraphStyle)?.textLists.first
-        let third = (rendered.attribute(.paragraphStyle, at: 11, effectiveRange: nil) as? NSParagraphStyle)?.textLists.first
-        XCTAssertTrue(first === second)
-        XCTAssertTrue(second === third)
-        XCTAssertEqual(rendered.itemNumber(in: first, at: 3), 1)
-        XCTAssertEqual(rendered.itemNumber(in: first, at: 7), 2)
-        XCTAssertEqual(rendered.itemNumber(in: first, at: 11), 3)
+        XCTAssertEqual(DocumentTextCodec.ordinal(forOrderedParagraphAt: 3, in: rendered), 1)
+        XCTAssertEqual(DocumentTextCodec.ordinal(forOrderedParagraphAt: 7, in: rendered), 2)
+        XCTAssertEqual(DocumentTextCodec.ordinal(forOrderedParagraphAt: 11, in: rendered), 3)
     }
 
     func testSlashInlineFormatAppliesToNextTypedText() {

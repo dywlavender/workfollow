@@ -8,6 +8,88 @@ import XCTest
 /// 也与"再点一次会取消"的判断同源——否则会出现按钮亮着却取消不掉的错位）。
 final class DocumentFormatStyleTests: XCTestCase {
 
+    @MainActor
+    func testListFormattingOnlyChangesSelectedParagraphs() throws {
+        for kind in [DocumentBlockKind.bullet, .ordered, .checklist(false)] {
+            for selectedCount in [1, 2] {
+                let view = NativeTextView(frame: .zero, textContainer: nil)
+                let document = NativeDocument(blocks: ["甲", "乙", "丙", "丁"].map {
+                    DocumentBlock(kind: kind, runs: [DocumentRun(text: $0)])
+                })
+                view.textStorage?.setAttributedString(DocumentTextCodec.render(document))
+                let selection = NSRange(location: 2, length: selectedCount == 1 ? 0 : 3)
+                view.setSelectedRange(selection)
+                let command = try XCTUnwrap(DocumentFormatCommand.commands.first { $0.block == kind })
+                view.applyFormat(command)
+                let decoded = DocumentTextCodec.decode(view.attributedString(), preserving: document)
+                XCTAssertEqual(decoded.blocks.map(\.kind),
+                               [kind, .paragraph, selectedCount == 2 ? .paragraph : kind, kind])
+                XCTAssertEqual(view.selectedRange(), selection)
+                XCTAssertEqual(view.string, "甲\n乙\n丙\n丁")
+            }
+        }
+    }
+
+    @MainActor
+    func testSettingEmptyParagraphFormatSupportsUndoAndRedo() throws {
+        for text in ["", "正文\n"] {
+            for kind in [DocumentBlockKind.heading(1), .bullet, .ordered, .checklist(false), .quote] {
+                let view = NativeTextView(frame: .zero, textContainer: nil)
+                let document = NativeDocument(plainText: text)
+                view.textStorage?.setAttributedString(DocumentTextCodec.render(document))
+                view.setSelectedRange(NSRange(location: (text as NSString).length, length: 0))
+                view.typingAttributes = DocumentTextCodec.attributes(kind: .paragraph, marks: [])
+                view.undoManager?.removeAllActions()
+                let command = try XCTUnwrap(DocumentFormatCommand.commands.first { $0.block == kind })
+                view.applyFormat(command)
+                XCTAssertEqual(view.pendingTrailingBlock, kind)
+                XCTAssertTrue(view.undoManager?.canUndo == true)
+                view.undo(nil)
+                XCTAssertEqual(DocumentTextCodec.decode(view.attributedString(), preserving: document,
+                                                        trailing: view.pendingTrailingBlock).blocks.last?.kind,
+                               .paragraph)
+                XCTAssertEqual(view.string, text)
+                view.redo(nil)
+                XCTAssertEqual(view.pendingTrailingBlock, kind)
+                view.insertText("继续输入", replacementRange: view.selectedRange())
+                let saved = DocumentTextCodec.decode(view.attributedString(), preserving: document,
+                                                     trailing: view.pendingTrailingBlock)
+                XCTAssertEqual(saved.blocks.last?.kind, kind)
+            }
+        }
+    }
+
+    @MainActor
+    func testExitingEmptyBlockSupportsUndoAndRedo() throws {
+        for trailing in [false, true] {
+            let view = NativeTextView(frame: .zero, textContainer: nil)
+            view.isEditable = true
+            let blocks = [DocumentBlock(kind: .paragraph, runs: [DocumentRun(text: "前文")]),
+                          DocumentBlock(kind: .heading(2), runs: [])]
+                + (trailing ? [] : [DocumentBlock(kind: .paragraph, runs: [DocumentRun(text: "后文")])])
+            let document = NativeDocument(blocks: blocks)
+            view.textStorage?.setAttributedString(DocumentTextCodec.render(document))
+            view.setSelectedRange(NSRange(location: 3, length: 0))
+            view.typingAttributes = DocumentTextCodec.attributes(kind: .heading(2), marks: [])
+            view.pendingTrailingBlock = trailing ? .heading(2) : nil
+            view.undoManager?.removeAllActions()
+
+            XCTAssertTrue(view.exitEmptyBlockOnNewline())
+            func kinds() -> [DocumentBlockKind] {
+                DocumentTextCodec.decode(view.attributedString(), preserving: document,
+                                         trailing: view.pendingTrailingBlock).blocks.map(\.kind)
+            }
+            XCTAssertEqual(kinds()[1], .paragraph)
+            XCTAssertTrue(view.undoManager?.canUndo == true)
+            view.undo(nil)
+            XCTAssertEqual(kinds()[1], .heading(2))
+            XCTAssertEqual((view.typingAttributes[.font] as? NSFont)?.pointSize, 19)
+            view.redo(nil)
+            XCTAssertEqual(kinds()[1], .paragraph)
+            XCTAssertEqual(view.selectedRange(), NSRange(location: 3, length: 0))
+        }
+    }
+
     func testReadsBlockKindOfAHeading() {
         let document = NativeDocument(blocks: [
             DocumentBlock(kind: .heading(1), runs: [DocumentRun(text: "标题", marks: [])])
@@ -155,49 +237,20 @@ final class DocumentFormatStyleTests: XCTestCase {
     /// Markdown 快捷输入：敲完前缀（光标紧跟其后）自动成块，触发串从正文里移除，
     /// 随后输入的内容落在新块里——与真实打字顺序一致。
     @MainActor
-    func testMarkdownTriggersConvertTypedPrefixes() throws {
-        let cases: [(String, DocumentBlockKind, String)] = [
-            ("# ", .heading(1), "标题"),
-            ("## ", .heading(2), "标题"),
-            ("- ", .bullet, "项目"),
-            ("1. ", .ordered, "事项"),
-            ("[] ", .checklist(false), "待办"),
-            ("> ", .quote, "引用")
-        ]
-        for (prefix, kind, rest) in cases {
+    /// Markdown 符号触发已按产品要求移除：段落格式只通过"/"菜单与工具条修改，
+    /// 输入 `# `/`- `/`---` 等前缀必须保持普通文本。
+    func testTypedMarkdownPrefixesStayPlain() {
+        for prefix in ["# ", "## ", "- ", "1. ", "[] ", "> ", "---"] {
             let view = NativeTextView(frame: .zero, textContainer: nil)
             view.profile = DocumentProfile(taskSlash: true)
             view.insertText(prefix, replacementRange: NSRange(location: 0, length: 0))
-            // 剩余为空 → 整篇变空段落，级别记为待定（模型层由 decode(trailing:) 接收）
-            XCTAssertEqual(view.pendingTrailingBlock, kind, "\(prefix) 应把级别记为待定")
-            XCTAssertEqual(view.string, "", "\(prefix) 的触发串应被移除")
-            view.insertText(rest, replacementRange: view.selectedRange())
-            let after = DocumentTextCodec.decode(view.attributedString(),
-                                                 preserving: NativeDocument(plainText: view.string))
-            XCTAssertEqual(after.blocks.map(\.kind), [kind], "\(prefix) 之后输入的内容应留在 \(kind)")
-            XCTAssertEqual(after.plainText, rest)
+            XCTAssertNil(view.pendingTrailingBlock, "\(prefix) 不应触发任何段落类型")
+            let decoded = DocumentTextCodec.decode(view.attributedString(),
+                                                   preserving: NativeDocument(plainText: view.string))
+            XCTAssertEqual(decoded.blocks.map(\.kind), [.paragraph],
+                           "\(prefix) 应保持普通文本，不做格式转换")
+            XCTAssertTrue(view.string.contains(prefix), "\(prefix) 应原样保留在文本里")
         }
-        // 非触发：`#` 后没有空格不成块
-        let plain = NativeTextView(frame: .zero, textContainer: nil)
-        plain.profile = DocumentProfile(taskSlash: true)
-        plain.insertText("#没有空格", replacementRange: NSRange(location: 0, length: 0))
-        let kept = DocumentTextCodec.decode(plain.attributedString(),
-                                            preserving: NativeDocument(plainText: plain.string))
-        XCTAssertEqual(kept.blocks.map(\.kind), [.paragraph])
-    }
-
-    /// `---` 整行 + 回车 → 分割线。
-    @MainActor
-    func testMarkdownDividerTriggerOnNewline() {
-        let view = NativeTextView(frame: .zero, textContainer: nil)
-        view.profile = DocumentProfile(taskSlash: true)
-        view.textStorage?.setAttributedString(DocumentTextCodec.render(NativeDocument(plainText: "---")))
-        view.setSelectedRange(NSRange(location: 3, length: 0))
-        view.doCommand(by: #selector(NSTextView.insertNewline(_:)))
-        let decoded = DocumentTextCodec.decode(view.attributedString(),
-                                               preserving: NativeDocument(plainText: view.string))
-        XCTAssertTrue(decoded.blocks.contains { $0.kind == .divider })
-        XCTAssertFalse(view.string.contains("---"))
     }
 
     /// 已勾选检查项的置灰与删除线是**展示层**：渲染时写入，解码时不成为用户标记。

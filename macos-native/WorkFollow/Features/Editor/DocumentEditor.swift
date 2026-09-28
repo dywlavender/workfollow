@@ -143,7 +143,11 @@ struct DocumentEditor: NSViewRepresentable {
               let layout = textView.textLayoutManager else { return nil }
         textView.setFrameSize(NSSize(width: width, height: textView.frame.height))
         textView.resizeDocumentDividers()
-        container.containerSize = NSSize(width: width, height: .greatestFiniteMagnitude)
+        // 容器宽 = 视图宽 − 左右 textContainerInset（与 widthTracksTextView 的
+        // 自动口径一致），否则行宽会超出视图右缘 20pt。
+        container.containerSize = NSSize(
+            width: max(1, width - textView.textContainerInset.width * 2),
+            height: .greatestFiniteMagnitude)
         layout.ensureLayout(for: NSRect(origin: .zero, size: container.containerSize))
         let bottom = layout.usageBoundsForTextContainer.maxY
         let height = max(48, ceil(bottom + textView.textContainerInset.height * 2 + 8))

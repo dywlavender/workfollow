@@ -73,8 +73,7 @@ enum DocumentTextCodec {
         return ordinal
     }
 
-    static func attributes(kind: DocumentBlockKind, marks: Set<DocumentMark>,
-                           textList: NSTextList? = nil) -> [NSAttributedString.Key: Any] {
+    static func attributes(kind: DocumentBlockKind, marks: Set<DocumentMark>) -> [NSAttributedString.Key: Any] {
         let style = NSMutableParagraphStyle()
         style.paragraphSpacing = 8
         // 正文 14 配 ~4pt 行距：原版 `lineBody` 是 1.50（14 × 1.5 = 21 的行盒，
@@ -96,24 +95,28 @@ enum DocumentTextCodec {
         }
         if marks.contains(.bold) { font = NSFontManager.shared.convert(font, toHaveTrait: .boldFontMask) }
         if marks.contains(.italic) { font = NSFontManager.shared.convert(font, toHaveTrait: .italicFontMask) }
+        // 所有段落统一留 20pt 行首沟槽：H 角标 / 空行"+"画在文字左侧的这段
+        // 空白里（滴答同款视觉）。沟槽必须在文本容器**内**——NSTextView 把
+        // 绘制裁剪到容器区域，靠 textContainerInset 留白会让装饰不可见。
+        let gutter: CGFloat = 20
         if kind == .quote {
-            // 引用是"12pt 缩进 + 3pt 左竖线"的结构表达（竖线由视图层绘制）。
-            // 文字转灰是对齐滴答截图的有意选择：基线里 Quill 的引用保持正文色。
-            style.headIndent = 16
-            style.firstLineHeadIndent = 16
+            // 引用是"行首缩进 + 3pt 左竖线"的结构表达（竖线由视图层绘制，
+            // 画在正文起点处）。文字转灰是对齐滴答截图的有意选择。
+            style.headIndent = gutter + 16
+            style.firstLineHeadIndent = gutter + 16
         } else if isListKind(kind) {
-            // 列表缩进与标记**全部由视图层负责**：TextKit 2 不绘制 `textLists` 的
-            // 标记（实测：属性在、渲染无缩进无标记），滴答同样弃用了 NSTextList
-            // 自绘标记。22pt 给标记留沟槽，标记画在 0..18。
-            style.firstLineHeadIndent = 22
-            style.headIndent = 22
+            // 列表缩进与标记**全部由视图层负责**：段落绝不挂 `textLists`——
+            // macOS 14+ 的 TextKit 2 会自绘 NSTextList 标记并占用行首空间，
+            // 与视图层画的强调色标记叠成"双点/1.1"（用户实测）。标记右缘
+            // 距文字 7pt（由装饰层按 lineRect.minX 反推）。
+            style.firstLineHeadIndent = gutter + 22
+            style.headIndent = gutter + 22
+        } else {
+            style.firstLineHeadIndent = gutter
+            style.headIndent = gutter
         }
         if kind == .checklist(true) {
             // 勾选后的检查项不再额外调段落间距，保持与未勾选一致。
-        }
-        if let textList = textList ?? makeTextList(for: kind) {
-            style.textLists = [textList]
-            style.headIndent = 22
         }
         var attrs: [NSAttributedString.Key: Any] = [
             blockKey: blockToken(kind), explicitBoldKey: marks.contains(.bold), .font: font, .paragraphStyle: style,
@@ -134,20 +137,9 @@ enum DocumentTextCodec {
     }
     static func render(_ document: NativeDocument) -> NSAttributedString {
         let result = NSMutableAttributedString(string: "")
-        var previousListKind: DocumentBlockKind?
-        var currentTextList: NSTextList?
         for (index, block) in document.blocks.enumerated() {
-            if listMarkerFormat(for: block.kind) != nil {
-                if previousListKind != block.kind {
-                    currentTextList = makeTextList(for: block.kind)
-                }
-                previousListKind = block.kind
-            } else {
-                previousListKind = nil
-                currentTextList = nil
-            }
             for run in block.runs {
-                var attrs = attributes(kind: block.kind, marks: run.marks, textList: currentTextList)
+                var attrs = attributes(kind: block.kind, marks: run.marks)
                 if block.kind == .divider {
                     let attachment = NSTextAttachment()
                     attachment.attachmentCell = DocumentDividerCell()
@@ -172,27 +164,13 @@ enum DocumentTextCodec {
             }
             if index < document.blocks.count - 1 {
                 let separatorKind = block.kind == .divider ? DocumentBlockKind.paragraph : block.kind
-                let separatorList = separatorKind == block.kind ? currentTextList : nil
                 result.append(NSAttributedString(string: "\n", attributes: attributes(
-                    kind: separatorKind, marks: [], textList: separatorList)))
+                    kind: separatorKind, marks: [])))
             }
         }
         return result
     }
 
-    private static func makeTextList(for kind: DocumentBlockKind) -> NSTextList? {
-        guard let marker = listMarkerFormat(for: kind) else { return nil }
-        return NSTextList(markerFormat: marker, options: 0)
-    }
-
-    private static func listMarkerFormat(for kind: DocumentBlockKind) -> NSTextList.MarkerFormat? {
-        switch kind {
-        case .bullet: .disc
-        case .ordered: .decimal
-        case .checklist(let checked): .init(rawValue: checked ? "☑" : "☐")
-        default: nil
-        }
-    }
     static func decode(_ text: NSAttributedString, preserving previous: NativeDocument,
                        trailing: DocumentBlockKind? = nil) -> NativeDocument {
         let plain = text.string as NSString

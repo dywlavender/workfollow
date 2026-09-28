@@ -52,8 +52,11 @@ final class NoteFeatureTests: XCTestCase {
         let b = Note(id: UUID(), title: "B", document: .empty, folder: "未归档",
                      updatedAt: Date(timeIntervalSince1970: 2))
         let model = NotesWorkspaceModel(initialNotes: [a, b])
+        XCTAssertEqual(model.rows(trash: false, query: "", folder: nil, favorites: false).map(\.title), ["A", "B"])
+        model.sort(.recentlyEdited)
         XCTAssertEqual(model.rows(trash: false, query: "", folder: nil, favorites: false).map(\.title), ["B", "A"])
-        XCTAssertEqual(model.rows(trash: false, query: "", folder: nil, favorites: false, newestFirst: false).map(\.title), ["A", "B"])
+        model.sort(.title)
+        XCTAssertEqual(model.rows(trash: false, query: "", folder: nil, favorites: false).map(\.title), ["A", "B"])
         XCTAssertEqual(model.rows(trash: false, query: "", folder: "工作", favorites: true).map(\.id), [a.id])
         model.create(folder: "工作")
         XCTAssertEqual(model.selected?.folder, "工作")
@@ -75,6 +78,27 @@ final class NoteFeatureTests: XCTestCase {
         XCTAssertEqual(reopened.selected?.folder, "未归档")
         XCTAssertEqual(reopened.notes.count, 1)
         XCTAssertTrue(reopened.folders.isEmpty)
+    }
+
+    func testEditingDoesNotReorderNotesAndExplicitOrderSurvivesReopening() throws {
+        let model = NotesWorkspaceModel()
+        model.create()
+        let first = try XCTUnwrap(model.selectedID)
+        model.edit(first) { $0.title = "A" }
+        model.create()
+        let second = try XCTUnwrap(model.selectedID)
+        model.edit(second) { $0.title = "B" }
+        model.edit(first) { $0.document = NativeDocument(plainText: "更新正文"); $0.favorite = true }
+        XCTAssertEqual(model.rows(trash: false, query: "", folder: nil, favorites: false).map(\.id), [second, first])
+        model.sort(.title)
+        model.edit(second) { $0.title = "0" }
+        XCTAssertEqual(model.rows(trash: false, query: "", folder: nil, favorites: false).map(\.id), [first, second])
+        let data = try JSONEncoder().encode(NativeWorkspaceSnapshot(tasks: [], notes: model.notes))
+        let saved = try JSONDecoder().decode(NativeWorkspaceSnapshot.self, from: data)
+        let reopened = NotesWorkspaceModel(initialNotes: saved.notes)
+        XCTAssertEqual(reopened.rows(trash: false, query: "", folder: nil, favorites: false).map(\.id), [first, second])
+        reopened.create()
+        XCTAssertEqual(reopened.rows(trash: false, query: "", folder: nil, favorites: false).first?.id, reopened.selectedID)
     }
 
     // MARK: - 页脚字数统计（去空白 rune 计数）

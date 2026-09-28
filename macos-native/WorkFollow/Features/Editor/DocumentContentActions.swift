@@ -37,8 +37,10 @@ extension NativeTextView {
             ? NSMutableAttributedString(string: target, attributes: typingAttributes)
             : NSMutableAttributedString(attributedString: attributedString().attributedSubstring(from: range))
         value.addAttribute(.link, value: target, range: NSRange(location: 0, length: value.length))
-        replaceRichContent(value, range: range)
+        replaceRichContent(value, range: range,
+                           selection: range.length > 0 ? range : NSRange(location: range.location + value.length, length: 0))
         typingAttributes.removeValue(forKey: .link)
+        if range.length > 0 { setSelectedRange(range) }
     }
 
     @objc func removeDocumentLink(_ sender: Any?) {
@@ -51,21 +53,27 @@ extension NativeTextView {
         guard range.length > 0, NSMaxRange(range) <= source.length else { return }
         let value = NSMutableAttributedString(attributedString: source.attributedSubstring(from: range))
         value.removeAttribute(.link, range: NSRange(location: 0, length: value.length))
-        replaceRichContent(value, range: range)
-        setSelectedRange(range)
+        replaceRichContent(value, range: range, selection: range)
         typingAttributes.removeValue(forKey: .link)
+        setSelectedRange(range)
     }
 
     /// Attribute removal must not inherit attributes from the replaced text.
-    private func replaceRichContent(_ value: NSAttributedString, range: NSRange) {
+    private func replaceRichContent(_ value: NSAttributedString, range: NSRange, selection: NSRange) {
         guard let storage = textStorage, NSMaxRange(range) <= storage.length,
               shouldChangeText(in: range, replacementString: value.string) else { return }
         let previous = storage.attributedSubstring(from: range)
+        let previousSelection = selectedRange()
+        breakUndoCoalescing()
         undoManager?.registerUndo(withTarget: self) { view in
-            view.replaceRichContent(previous, range: NSRange(location: range.location, length: value.length))
+            view.replaceRichContent(previous, range: NSRange(location: range.location, length: value.length),
+                                    selection: previousSelection)
         }
         storage.replaceCharacters(in: range, with: value)
-        setSelectedRange(NSRange(location: range.location + value.length, length: 0))
+        setSelectedRange(selection)
+        // 撤销/重做期间：登记意图，等 undo()/redo() 返回后补写——TextKit 会在
+        // 闭包结束后把插入点吸附回编辑位置，同步设置会被它覆盖。
+        requestSelectionAfterUndoRedo(selection)
         didChangeText()
     }
 

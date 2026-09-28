@@ -13,7 +13,6 @@ struct NotesWorkspaceView: View {
     @State private var query = ""
     private var folder: String? { notes.folderFilter }
     private var favorites: Bool { notes.favoritesOnly }
-    @State private var newestFirst = true
     @State private var detailOnly = false
     @State private var confirmClear = false
     @State private var purgeID: UUID?
@@ -21,7 +20,7 @@ struct NotesWorkspaceView: View {
     @State private var showFormatToolbar = false
     @StateObject private var editorHandle = DocumentEditorHandle()
     private var trash: Bool { navigation.destination == .notesTrash }
-    private var rows: [Note] { notes.rows(trash: trash, query: query, folder: folder, favorites: favorites, newestFirst: newestFirst) }
+    private var rows: [Note] { notes.rows(trash: trash, query: query, folder: folder, favorites: favorites) }
     private var visibleNote: Note? { rows.first { $0.id == notes.selectedID } ?? rows.first }
     private func createNote() {
         query = ""
@@ -104,7 +103,8 @@ struct NotesWorkspaceView: View {
                 TextField("搜索笔记", text: $query).textFieldStyle(.roundedBorder)
                 if !trash {
                     Menu {
-                        Button(newestFirst ? "按标题排序" : "按最近编辑排序") { newestFirst.toggle() }
+                        Button("按标题排序") { notes.sort(.title) }
+                        Button("按最近编辑排序") { notes.sort(.recentlyEdited) }
                     } label: { Image(systemName: "arrow.up.arrow.down") }
                     .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize().help("笔记排序")
                 }

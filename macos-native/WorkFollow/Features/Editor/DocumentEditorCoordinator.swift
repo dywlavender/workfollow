@@ -56,6 +56,8 @@ final class DocumentEditorCoordinator: NSObject, NSTextViewDelegate {
         self.onEditingChanged = onEditingChanged
         textView.onEscape = onEscape
         textView.onEditingChanged = onEditingChanged
+        // 文末空段的级别供装饰层常驻绘制（它没有字符，主循环看不见）。
+        textView.displayedTrailingBlock = Self.trailingBlockKind(of: document)
     }
 
 
@@ -67,7 +69,12 @@ final class DocumentEditorCoordinator: NSObject, NSTextViewDelegate {
     func textViewDidChangeSelection(_ notification: Notification) {
         guard let textView = notification.object as? NativeTextView else { return }
         editorState.updateSelection(textView.selectedRange())
+        // 光标停/离开文末空段时同步待定级别（标题换行延续、切回不丢级别）。
+        textView.syncPendingTrailingBlock()
         textView.refreshSelectionToolbar()
+        // 活动行标记（标题角标 / 空行"+"）跟着光标走：沟槽在文本区外，
+        // 选区变化不会自动把它标脏，这里显式重绘。
+        textView.needsDisplay = true
         textView.onSelectionChanged?()
     }
 
@@ -93,8 +100,11 @@ final class DocumentEditorCoordinator: NSObject, NSTextViewDelegate {
 
     private func commit(_ textView: NSTextView, force: Bool) {
         guard force || !textView.hasMarkedText() else { return }
+        // 文末空段的级别：优先用输入待定（光标在行上的最新意图），光标不在时
+        // 回退到模型当前值——否则在别处编辑一次，文末列表就会丢级别。
+        let pending = (textView as? NativeTextView)?.pendingTrailingBlock
         let updated = DocumentTextCodec.decode(textView.attributedString(), preserving: document,
-                                              trailing: (textView as? NativeTextView)?.pendingTrailingBlock)
+                                              trailing: pending ?? Self.trailingBlockKind(of: document))
         guard updated != document else { return }
         document = updated
         onDocumentChange(updated)

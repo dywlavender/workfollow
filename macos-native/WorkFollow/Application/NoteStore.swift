@@ -1,5 +1,9 @@
 import Foundation
 
+enum NoteListSort {
+    case title, recentlyEdited
+}
+
 /// Notes have their own mutation boundary; trash operations never touch tasks.
 final class NoteStore {
     private(set) var notes: [Note] = []
@@ -12,6 +16,19 @@ final class NoteStore {
         return note.id
     }
     func insert(_ note: Note) { notes.insert(note, at: 0) }
+    func sort(_ order: NoteListSort) {
+        // Sort only on an explicit command. The array itself is persisted, so
+        // later edits and reopening the app keep the resulting order.
+        notes = notes.enumerated().sorted { lhs, rhs in
+            switch order {
+            case .title:
+                if lhs.element.title != rhs.element.title { return lhs.element.title < rhs.element.title }
+            case .recentlyEdited:
+                if lhs.element.updatedAt != rhs.element.updatedAt { return lhs.element.updatedAt > rhs.element.updatedAt }
+            }
+            return lhs.offset < rhs.offset
+        }.map(\.element)
+    }
     func removeCreatedNote(_ id: UUID) { notes.removeAll { $0.id == id } }
     func edit(_ id: UUID, _ mutation: (inout Note) -> Void) {
         guard let index = notes.firstIndex(where: { $0.id == id && $0.deletedAt == nil }) else { return }
