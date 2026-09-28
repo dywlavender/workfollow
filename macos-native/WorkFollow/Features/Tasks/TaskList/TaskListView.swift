@@ -19,11 +19,30 @@ struct TaskListView: View {
     @State private var quickAddTagsOverride: [String]?
     @State private var dismissedQuickAddTokens: Set<String> = []
     @State private var quickAddEscapePrimed = false
+    /// Tab 进入的任务描述草稿（对齐滴答「敲击 Tab 添加任务描述」）。只在创建
+    /// 单个任务时随任务一起写进正文；批量创建时每一行各自成任务，不带描述。
+    @State private var descriptionDraft = ""
+    /// `#`/`@` 候选与描述行的界面状态；与全局快速添加面板共用同一套状态机。
+    @State private var candidate = QuickAddCandidateState()
+    /// 快速添加输入框是否持有焦点。**两个方向共用的唯一真值。**
+    ///
+    /// 这里曾经是 `@FocusState` + 另一个 `@State fieldFocused` 并存：
+    /// `@FocusState` 挂在 `NSViewRepresentable` 上是**死信号**（没有 `.focused()`
+    /// 绑定，SwiftUI 不为它维护状态，写不生效、读永远 `false`，已实测），
+    /// 只好另开一路让控件自己上报。代价是两个真值：`quickAddExpanded` 靠
+    /// `fieldFocused` 撑着（所以「点击展开」能修好），而 `guard quickAddFocused`
+    /// （Esc 两级语义）、`guard !quickAddFocused`（列表上下键/回车/空格不抢键）
+    /// 这些守卫**全部恒假**，静默失效——症状分散在几个看起来无关的功能上。
+    ///
+    /// 现在合成一个 `@State`：控件上报（`onFieldFocusChange`）与
+    /// `controlTextDidBegin/EndEditing` 都写它，`QuickAddTextField.updateNSView`
+    /// 按它做程序化聚焦与交还。读写都可靠，那些守卫才恢复意义。
+    @State private var quickAddFocused = false
     @State private var selecting = false
     @State private var groupExpansion = TaskGroupExpansionState()
     @State private var sortMode = TaskListSortMode.manual
     @State private var seenCompletedGroupIDs: Set<String> = []
-    @FocusState private var quickAddFocused: Bool
+    @FocusState private var descriptionFocused: Bool
     @FocusState private var listFocused: Bool
 
     private var scope: TaskListScope? { TaskWorkspaceModel.scope(for: navigation.destination) }
@@ -43,13 +62,19 @@ struct TaskListView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             headerBar
-            if canAdd, let scope { quickAddBar(in: scope) }
+            // 候选列表挂在快速添加条的 overlay 上，会画到任务列表上方；提升层级
+            // 才能盖住后面那个兄弟视图（SwiftUI 默认后者在上）。
+            if canAdd, let scope { quickAddBar(in: scope).zIndex(1) }
             if !workspace.bulkSelection.isEmpty { TaskBulkBar(workspace: workspace) }
             taskListSection()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(WFColors.content)
         .onChange(of: environment.quickAddRequest) { _, _ in quickAddFocused = true }
+        .onChange(of: draft) { _, _ in
+            // 文本一变，「已被忽略」和候选高亮都作废：候选列表要按新的查询重开。
+            candidate.textDidChange()
+        }
         .onChange(of: showQuickAddSchedule) { _, isPresented in
             if !isPresented { quickAddFocused = true }
         }
@@ -77,7 +102,9 @@ struct TaskListView: View {
             revealSelectedClosedTask()
             collapseNewCompletedGroups()
         }
-        .onExitCommand(perform: handleQuickAddEscape)
+        // Esc **不在这里接**：视图层 `.onExitCommand` 实测收不到这个按键
+        // （见下方 handleQuickAddEscape 的说明），接了也是死代码。
+        // 输入框自身的 `cancelOperation:` 才是唯一入口。
     }
 
     // MARK: - Header bar：☰ + 标题 + 排序/更多（TickTick 式精简）
@@ -200,7 +227,12 @@ struct TaskListView: View {
                     tokens: quickAddResult.tokens,
                     focused: $quickAddFocused,
                     onSubmit: { addTask(in: scope) },
-                    onEscape: handleQuickAddEscape
+                    onEscape: handleQuickAddEscape,
+                    onTab: handleQuickAddTab,
+                    onShiftReturn: openQuickAddDescription,
+                    onMoveUp: { moveCandidateSelection(by: -1) },
+                    onMoveDown: { moveCandidateSelection(by: 1) },
+                    onFieldFocusChange: { quickAddFocused = $0 }
                 )
                 .frame(maxWidth: .infinity)
                 if quickAddExpanded {
@@ -246,6 +278,14 @@ struct TaskListView: View {
                     Button { showQuickAddProperties = true } label: {
                         Image(systemName: "ellipsis")
                             .foregroundStyle(WFColors.secondaryText)
+                            // 必须给足命中区域。少了这两行，纯 `Image` 标签的 `.plain`
+                            // 按钮命中区会塌缩到**图形的着墨范围**——省略号是横排的三个点，
+                            // 实测 AX 报出来的框是 `12x2`：一个两点高的缝。
+                            // 用户瞄着看得见的 `⋯` 点下去，绝大多数位置都落在缝外，
+                            // 表现就是「点了没反应」（实测 y=134 / y=140 均无效，只有 137–138 有效）。
+                            // 旁边那个日期按钮一直是这么写的，所以它有 41x34 的框。
+                            .frame(width: WFMetrics.controlHeight, height: WFMetrics.controlHeight)
+                            .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                     .help("更多任务属性")
@@ -270,6 +310,24 @@ struct TaskListView: View {
                         .font(WFType.caption)
                         .foregroundStyle(WFColors.secondaryText)
                 }
+            }
+            // Tab 进来的描述行（对齐滴答「敲击 Tab 添加任务描述」）。紧贴标题下方，
+            // 这样 Tab 的落点就是「下一行」；描述是纯文本，不参与智能识别。
+            if candidate.descriptionVisible || !descriptionDraft.isEmpty {
+                HStack(spacing: WFSpace.sm) {
+                    Image(systemName: "text.alignleft")
+                        .font(.system(size: 11))
+                        .foregroundStyle(WFColors.secondaryText)
+                        .frame(width: 12)
+                    TextField("添加描述", text: $descriptionDraft)
+                        .textFieldStyle(.plain)
+                        .font(WFType.control)
+                        .foregroundStyle(WFColors.text)
+                        .focused($descriptionFocused)
+                        .onSubmit { addTask(in: scope) }
+                        .onExitCommand { closeDescriptionRow() }
+                }
+                .padding(.leading, 24)
             }
             let parsed = quickAddResult
             if !parsed.tokens.isEmpty {
@@ -313,6 +371,16 @@ struct TaskListView: View {
             if quickAddExpanded {
                 RoundedRectangle(cornerRadius: WFMetrics.corner)
                     .stroke(WFColors.border, lineWidth: 1)
+                    // 纯装饰层：必须放行点击，否则它会压在输入框上方把点击吃掉，
+                    // 输入框拿不到第一响应者，展开也就无从触发。
+                    .allowsHitTesting(false)
+            }
+        }
+        // `#`/`@` 候选浮在条下方：overlay 不参与布局，任务列表不会被推下去。
+        .overlay(alignment: .bottomLeading) {
+            if isCandidateListVisible {
+                candidateList
+                    .offset(y: QuickAddCandidateList.height(forCount: candidateNames.count) + 6)
             }
         }
         .onTapGesture { quickAddFocused = true }
@@ -320,13 +388,101 @@ struct TaskListView: View {
         .padding(.bottom, WFSpace.xs)
     }
 
+    // MARK: - `#` / `@` 候选（对齐滴答「在添加任务时输入 # 可快速选择标签」）
+
+    @ViewBuilder
+    private var candidateList: some View {
+        if let marker = activeMarkerQuery {
+            QuickAddCandidateList(
+                names: candidateNames,
+                selectedIndex: min(candidate.selection, max(0, candidateNames.count - 1)),
+                emptyMessage: marker.kind == .tag ? "没有匹配的标签" : "没有匹配的清单",
+                icon: marker.kind == .tag ? "tag" : "list.bullet",
+                onHover: { candidate.selection = $0 },
+                onCommit: { commitCandidate($0) }
+            )
+        }
+    }
+
+    /// 输入末尾的标记片段，且没被 Esc 忽略过。
+    /// 焦点判据就是输入框的聚焦真值：不聚焦时不该弹候选列表（对齐滴答的输入态）。
+    private var activeMarkerQuery: QuickAddComposition.MarkerQuery? {
+        candidate.marker(in: draft, isFocused: quickAddFocused)
+    }
+
+    /// 候选来源：`#` 查已有标签、`@` 查已有清单。
+    private func candidateSource(_ kind: QuickAddComposition.MarkerQuery.Kind) -> [String] {
+        kind == .tag ? workspace.tagNames : workspace.allListNames
+    }
+
+    private var candidateNames: [String] {
+        guard let marker = activeMarkerQuery else { return [] }
+        return QuickAddComposition.candidates(candidateSource(marker.kind), matching: marker.query)
+    }
+
+    private var isCandidateListVisible: Bool {
+        candidate.isListVisible(marker: activeMarkerQuery, names: candidateNames)
+    }
+
+    /// Tab：候选列表开着就先提交候选，否则把焦点送进描述行。
+    private func handleQuickAddTab() {
+        if isCandidateListVisible, candidate.selection >= 0, candidate.selection < candidateNames.count {
+            commitCandidate(candidateNames[candidate.selection])
+            return
+        }
+        openQuickAddDescription()
+    }
+
+    /// Shift+↩︎：按字面意思就是「加描述」，所以不参与候选提交——候选列表让位收起，
+    /// 已输入的文字原样留着。两条快捷键的分工与滴答的提示一致
+    /// （`敲击 Enter 添加任务；敲击 Tab 添加任务描述`、`Shift+↩︎ 可添加描述`）。
+    private func openQuickAddDescription() {
+        if isCandidateListVisible { dismissCandidateList() }
+        candidate.descriptionVisible = true
+        DispatchQueue.main.async { descriptionFocused = true }
+    }
+
+    /// 上下键：只有候选列表开着时才消费按键，否则让插入点照常移动。
+    private func moveCandidateSelection(by delta: Int) -> Bool {
+        guard isCandidateListVisible else { return false }
+        return candidate.move(by: delta, count: candidateNames.count)
+    }
+
+    private func commitCandidate(_ name: String) {
+        draft = QuickAddComposition.replacingTrailingMarker(in: draft, with: name)
+        candidate.textDidChange()
+        quickAddFocused = true
+    }
+
+    /// 一次 Esc 只收掉候选列表这一层，不清空草稿。
+    private func dismissCandidateList() {
+        candidate.dismiss(draft: draft)
+    }
+
+    private func closeDescriptionRow() {
+        descriptionFocused = false
+        if descriptionDraft.isEmpty { candidate.descriptionVisible = false }
+        DispatchQueue.main.async { quickAddFocused = true }
+    }
+
     private var quickAddTargetName: String {
         TaskListViewDefaults.quickAddTargetName(activeList: workspace.activeList,
                                                 inboxName: TaskList.inbox.name)
     }
 
+    /// 快速添加条是否展开（露出日期与「更多」两个槽位、识别 chip 行与摘要行）。
+    ///
+    /// 逐项对齐 Flutter 参照物 `quick_add.dart:640-645` 的
+    /// `expanded = focused || customDate || text.isNotEmpty || spans.isNotEmpty
+    /// || _propertiesOpen || _scheduleOpen`：
+    /// `focused`↔`quickAddFocused`、`customDate`↔`quickAddScheduleOverride`、
+    /// `text.isNotEmpty`↔`!draft.isEmpty`、`spans.isNotEmpty`↔`!parsed.tokens.isEmpty`、
+    /// `_propertiesOpen`↔`showQuickAddProperties`、`_scheduleOpen`↔`showQuickAddSchedule`。
+    /// 多出的 `description*` 三项对应原生独有的描述行。
     private var quickAddExpanded: Bool {
-        quickAddFocused || !draft.isEmpty || quickAddScheduleOverride != nil
+        quickAddFocused
+            || descriptionFocused || candidate.descriptionVisible || !descriptionDraft.isEmpty
+            || !draft.isEmpty || quickAddScheduleOverride != nil
             || showQuickAddSchedule || showQuickAddProperties
     }
 
@@ -406,7 +562,42 @@ struct TaskListView: View {
         return parts.isEmpty ? "" : "→ " + parts.joined(separator: " · ")
     }
 
+    /// Esc 的两级语义，逐行对齐 Flutter `quick_add.dart:379-394` 的 `_handleEscape`：
+    ///
+    /// ```dart
+    /// if (focus.hasFocus) {
+    ///   if (_escapePrimed) { setState(_resetDraft); _escapePrimed = false; }
+    ///   else               { _escapePrimed = true; focus.unfocus(); }
+    ///   return;
+    /// }
+    /// // 焦点不在输入框 → 草稿留着，什么都不做
+    /// ```
+    ///
+    /// 即：**第一下只收起（不动草稿），重新点回输入框之后再按才清空。**
+    /// `focus.unfocus()` 对应这里把 `quickAddFocused` 置假——真正的 AppKit 焦点
+    /// 释放由 `QuickAddTextField.updateNSView` 的反向分支执行。
+    ///
+    /// 候选列表与描述行是原生独有的中间层，按「一次 Esc 只收一层」插在两级之前
+    /// （Flutter 那边由 picker/popover 自己处理，不进 `_handleEscape`）。
+    ///
+    /// **唯一的入口是输入框的 `cancelOperation:`**（`QuickAddTextField.Coordinator`）。
+    /// 这里曾经在视图层另挂了一层 `.onExitCommand`，审计时怀疑会重复消费、
+    /// 一次按键吃掉两级。插桩数过调用次数后定案：**不会**。
+    /// 输入框聚焦时字段自己 `return true` 就把按键消费掉了，视图层那一层收不到；
+    /// 描述行聚焦时是描述框自己的 `.onExitCommand` 接管；两者都没聚焦时谁都不触发。
+    /// 三层实测（`field=1 view=0`）都证实视图层那层不可达，所以删掉了——
+    /// 留着只会让「Esc 到底谁在处理」重新变成需要猜的问题。
     private func handleQuickAddEscape() {
+        // 候选列表在最上层，先收起它——一次 Esc 只关一层，不顺手清空草稿。
+        if isCandidateListVisible {
+            dismissCandidateList()
+            return
+        }
+        // 描述行同理：先把焦点还给标题，行本身留着（有内容时不隐藏）。
+        if descriptionFocused {
+            closeDescriptionRow()
+            return
+        }
         // A schedule/properties picker gets first refusal, just like Flutter's
         // nested popovers. Escape on the field is deliberately two-stage.
         guard quickAddFocused,
@@ -428,6 +619,9 @@ struct TaskListView: View {
         quickAddPriorityOverride = nil
         quickAddListOverride = nil
         quickAddTagsOverride = nil
+        descriptionDraft = ""
+        descriptionFocused = false
+        candidate.reset()
     }
 
     @ViewBuilder
@@ -642,27 +836,56 @@ struct TaskListView: View {
     }
 
     private func addTask(in scope: TaskListScope) {
-        let parsed = quickAddResult
-        guard !parsed.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
-        let timing = quickAddScheduleOverride ?? currentQuickAddSchedule(for: scope)
-        let priority = quickAddPriorityOverride ?? parsed.priority
-        let list = quickAddListOverride ?? parsed.listName ?? workspace.activeList ?? TaskList.inbox.name
-        let selectedTags = quickAddTagsOverride ?? parsed.tags
-        var tags = workspace.activeTag.map { [$0] } ?? []
-        tags.append(contentsOf: selectedTags)
-        tags = tags.reduce(into: []) { values, tag in if !values.contains(tag) { values.append(tag) } }
-        let result = workspace.createDraft(title: parsed.title,
-                                           list: list,
-                                           schedule: timing.schedule,
-                                           priority: priority, tags: tags,
-                                           reminder: timing.reminderAt,
-                                           repeatFrequency: timing.repeatFrequency,
-                                           recurrenceRule: timing.recurrenceRule)
+        // 换行批量添加（对齐滴答「换行可添加多个任务」）：粘贴进来的多行文本按行
+        // 各自成一个任务，行内仍然走同一套智能识别。
+        let lines = QuickAddComposition.batchLines(in: draft)
+        guard !lines.isEmpty else { return }
+        let batch = lines.count > 1
+        let description = descriptionDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        var created = 0
+
+        for line in lines {
+            // 单行时沿用整条草稿的解析结果——只有它带着 chip 删除的忽略状态；
+            // 批量时每一行独立解析，行与行之间不互相污染。
+            let parsed = batch
+                ? QuickAddParser.parse(line, now: workspace.clock(),
+                                       calendar: workspace.calendar,
+                                       knownLists: Set(workspace.allListNames))
+                : quickAddResult
+            guard !parsed.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { continue }
+
+            let timing = quickAddScheduleOverride
+                ?? (batch
+                    ? QuickAddScheduleDraft(parsed: parsed,
+                                            defaultDueAt: scope == .today ? workspace.dateFromToday(0) : nil)
+                    : currentQuickAddSchedule(for: scope))
+            let priority = quickAddPriorityOverride ?? parsed.priority
+            let list = quickAddListOverride ?? parsed.listName ?? workspace.activeList ?? TaskList.inbox.name
+            let selectedTags = quickAddTagsOverride ?? parsed.tags
+            var tags = workspace.activeTag.map { [$0] } ?? []
+            tags.append(contentsOf: selectedTags)
+            tags = tags.reduce(into: []) { values, tag in if !values.contains(tag) { values.append(tag) } }
+            let result = workspace.createDraft(title: parsed.title,
+                                               list: list,
+                                               schedule: timing.schedule,
+                                               priority: priority, tags: tags,
+                                               reminder: timing.reminderAt,
+                                               repeatFrequency: timing.repeatFrequency,
+                                               recurrenceRule: timing.recurrenceRule,
+                                               // 批量创建时每一行各自成任务，共享同一段
+                                               // 描述没有意义，描述只跟随单条创建。
+                                               document: batch ? NativeDocument.empty
+                                                               : NativeDocument(plainText: description))
+            if result.taskID != nil { created += 1 }
+        }
+
         // Keep the draft available if creation is rejected; Flutter follows
         // the same rule and only resets after TaskCreator reports success.
-        guard result.taskID != nil else { return }
+        guard created > 0 else { return }
         clearQuickAddDraft()
         quickAddEscapePrimed = false
+        // 描述行也能提交，提交后焦点必须回到标题，否则下一次输入无处可去。
+        quickAddFocused = true
     }
 }
 

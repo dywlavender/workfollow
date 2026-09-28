@@ -397,7 +397,8 @@ final class TaskActions {
 
     func createDraft(title: String, list: String, schedule: TaskSchedule, priority: TaskPriority,
                      tags: [String], reminder: Date?, frequency: TaskRepeat,
-                     recurrenceRule: RecurrenceRule? = nil) -> TaskActionResult {
+                     recurrenceRule: RecurrenceRule? = nil,
+                     document: NativeDocument = .empty) -> TaskActionResult {
         guard !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return .failure(.invalidList) }
         var result: TaskActionResult = .failure(.missingTask)
         store.transaction {
@@ -406,6 +407,9 @@ final class TaskActions {
                 _ = setTags(id, tags)
                 _ = setReminder(id, reminder)
                 _ = setRecurrence(id, frequency: frequency, rule: recurrenceRule)
+                // 正文与其它属性同处一个事务：快速添加的 Tab 描述要么整条任务都建好，
+                // 要么一点都不留下。空正文跳过，避免写一个空段落。
+                if !document.isEmpty { _ = setDocument(id, document) }
             }
         }
         return result

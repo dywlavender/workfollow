@@ -221,10 +221,11 @@ final class TaskWorkspaceModel: ObservableObject {
     @discardableResult
     func createDraft(title: String, list: String, schedule: TaskSchedule, priority: TaskPriority,
                      tags: [String], reminder: Date?, repeatFrequency: TaskRepeat,
-                     recurrenceRule: RecurrenceRule? = nil) -> TaskActionResult {
+                     recurrenceRule: RecurrenceRule? = nil,
+                     document: NativeDocument = .empty) -> TaskActionResult {
         let result = actions.createDraft(title: title, list: list, schedule: schedule, priority: priority,
                                          tags: tags, reminder: reminder, frequency: repeatFrequency,
-                                         recurrenceRule: recurrenceRule)
+                                         recurrenceRule: recurrenceRule, document: document)
         didMutate(result)
         if let id = result.taskID { select(id) }
         return result
