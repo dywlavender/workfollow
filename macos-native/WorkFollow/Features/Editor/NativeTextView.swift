@@ -46,7 +46,12 @@ final class NativeTextView: NSTextView {
         // 真有字进来了，段落样式就由字符承载，"文末待定级别"不再需要。
         if let inserted = insertString as? String, !inserted.isEmpty { pendingTrailingBlock = nil }
         super.insertText(insertString, replacementRange: replacementRange)
-        guard !wasComposing, !replacedSelection, (insertString as? String) == "/" else { refreshSlash(); return }
+        guard !wasComposing, !replacedSelection, (insertString as? String) == "/" else {
+            refreshSlash()
+            // 选区已落位，Markdown 触发串在这里判断才准（didChangeText 时选区未定）。
+            applyMarkdownBlockTriggers()
+            return
+        }
         let location = selectedRange().location
         guard location > 0 else { return }
         // A slash in a URL/path is ordinary text, not a command trigger.
@@ -98,7 +103,9 @@ final class NativeTextView: NSTextView {
 
     override func mouseDown(with event: NSEvent) {
         dismissSlash()
-        if profile.noteSlash, isEditable, let window, let storage = textStorage, storage.length > 0 {
+        // 文档复选框在任务与笔记两个面都可点（原版 `DocumentCheckboxBuilder` 挂在
+        // 共享文档样式上，不分面）。
+        if isEditable, let window, let storage = textStorage, storage.length > 0 {
             let point = convert(event.locationInWindow, from: nil)
             let offset = min(characterIndexForInsertion(at: point), storage.length - 1)
             let paragraph = (string as NSString).paragraphRange(for: NSRange(location: offset, length: 0))
@@ -147,6 +154,9 @@ final class NativeTextView: NSTextView {
             default: break
             }
         }
+        // `---` 整行 + 回车 → 分割线（滴答同款；斜杠面板优先）。
+        if selector == #selector(insertNewline(_:)), !hasMarkedText(),
+           convertDividerTriggerIfNeeded() { return }
         super.doCommand(by: selector)
     }
 

@@ -39,7 +39,8 @@ struct NotesWorkspaceView: View {
                 : (geometry.size.width >= 1100 ? 330.0 : 300.0)
             HStack(spacing: 0) {
                 if wide || !detailOnly || visibleNote == nil {
-                    list.frame(maxWidth: wide ? paneWidth : .infinity)
+                    list.frame(width: wide ? paneWidth : nil)
+                        .frame(maxWidth: wide ? nil : .infinity)
                 }
                 if wide || (detailOnly && visibleNote != nil) {
                     if wide {

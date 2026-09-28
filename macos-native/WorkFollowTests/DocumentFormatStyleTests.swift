@@ -152,6 +152,70 @@ final class DocumentFormatStyleTests: XCTestCase {
         XCTAssertEqual((view.typingAttributes[.font] as? NSFont)?.pointSize, 19)
     }
 
+    /// Markdown 快捷输入：敲完前缀（光标紧跟其后）自动成块，触发串从正文里移除，
+    /// 随后输入的内容落在新块里——与真实打字顺序一致。
+    @MainActor
+    func testMarkdownTriggersConvertTypedPrefixes() throws {
+        let cases: [(String, DocumentBlockKind, String)] = [
+            ("# ", .heading(1), "标题"),
+            ("## ", .heading(2), "标题"),
+            ("- ", .bullet, "项目"),
+            ("1. ", .ordered, "事项"),
+            ("[] ", .checklist(false), "待办"),
+            ("> ", .quote, "引用")
+        ]
+        for (prefix, kind, rest) in cases {
+            let view = NativeTextView(frame: .zero, textContainer: nil)
+            view.profile = DocumentProfile(taskSlash: true)
+            view.insertText(prefix, replacementRange: NSRange(location: 0, length: 0))
+            // 剩余为空 → 整篇变空段落，级别记为待定（模型层由 decode(trailing:) 接收）
+            XCTAssertEqual(view.pendingTrailingBlock, kind, "\(prefix) 应把级别记为待定")
+            XCTAssertEqual(view.string, "", "\(prefix) 的触发串应被移除")
+            view.insertText(rest, replacementRange: view.selectedRange())
+            let after = DocumentTextCodec.decode(view.attributedString(),
+                                                 preserving: NativeDocument(plainText: view.string))
+            XCTAssertEqual(after.blocks.map(\.kind), [kind], "\(prefix) 之后输入的内容应留在 \(kind)")
+            XCTAssertEqual(after.plainText, rest)
+        }
+        // 非触发：`#` 后没有空格不成块
+        let plain = NativeTextView(frame: .zero, textContainer: nil)
+        plain.profile = DocumentProfile(taskSlash: true)
+        plain.insertText("#没有空格", replacementRange: NSRange(location: 0, length: 0))
+        let kept = DocumentTextCodec.decode(plain.attributedString(),
+                                            preserving: NativeDocument(plainText: plain.string))
+        XCTAssertEqual(kept.blocks.map(\.kind), [.paragraph])
+    }
+
+    /// `---` 整行 + 回车 → 分割线。
+    @MainActor
+    func testMarkdownDividerTriggerOnNewline() {
+        let view = NativeTextView(frame: .zero, textContainer: nil)
+        view.profile = DocumentProfile(taskSlash: true)
+        view.textStorage?.setAttributedString(DocumentTextCodec.render(NativeDocument(plainText: "---")))
+        view.setSelectedRange(NSRange(location: 3, length: 0))
+        view.doCommand(by: #selector(NSTextView.insertNewline(_:)))
+        let decoded = DocumentTextCodec.decode(view.attributedString(),
+                                               preserving: NativeDocument(plainText: view.string))
+        XCTAssertTrue(decoded.blocks.contains { $0.kind == .divider })
+        XCTAssertFalse(view.string.contains("---"))
+    }
+
+    /// 已勾选检查项的置灰与删除线是**展示层**：渲染时写入，解码时不成为用户标记。
+    @MainActor
+    func testCheckedChecklistGreysAndStrikesWithoutPollutingMarks() {
+        let document = NativeDocument(blocks: [
+            DocumentBlock(kind: .checklist(true), runs: [DocumentRun(text: "已完成", marks: [])])
+        ])
+        let rendered = DocumentTextCodec.render(document)
+        XCTAssertEqual((rendered.attribute(.foregroundColor, at: 0, effectiveRange: nil) as? NSColor),
+                       NSColor.secondaryLabelColor)
+        XCTAssertNotEqual(rendered.attribute(.strikethroughStyle, at: 0, effectiveRange: nil) as? Int, 0)
+
+        let decoded = DocumentTextCodec.decode(rendered, preserving: document)
+        XCTAssertEqual(decoded.blocks[0].runs[0].marks, [], "删除线不应写进用户标记")
+        XCTAssertEqual(decoded.blocks[0].kind, .checklist(true))
+    }
+
     /// "输入的字号"这条链：空段落上设标题走的是 `typingAttributes` 分支，之后真正
     /// 敲进去的字必须继承该级别字号（三级标题各不相同）。
     @MainActor

@@ -47,6 +47,32 @@ enum DocumentTextCodec {
         return DocumentSelectionStyle(blockToken: token, marks: intersection ?? [])
     }
 
+    /// 有"行首标记"的段落类型（点列/编号/检查项）：缩进与标记都由视图层绘制。
+    static func isListKind(_ kind: DocumentBlockKind) -> Bool {
+        switch kind {
+        case .bullet, .ordered, .checklist: return true
+        default: return false
+        }
+    }
+
+    /// 有序列表项的序号：向前数连续的 ordered 段（与原版 Quill 的编号口径一致，
+    /// 中间断开就重新从 1 计）。
+    static func ordinal(forOrderedParagraphAt location: Int, in source: NSAttributedString) -> Int {
+        let ns = source.string as NSString
+        guard location > 0, location <= ns.length else { return 1 }
+        var ordinal = 1
+        var offset = location
+        while offset > 0 {
+            let paragraph = ns.paragraphRange(for: NSRange(location: offset - 1, length: 0))
+            guard let token = source.attribute(blockKey, at: paragraph.location,
+                                               effectiveRange: nil) as? String,
+                  token == "ordered" else { break }
+            ordinal += 1
+            offset = paragraph.location
+        }
+        return ordinal
+    }
+
     static func attributes(kind: DocumentBlockKind, marks: Set<DocumentMark>,
                            textList: NSTextList? = nil) -> [NSAttributedString.Key: Any] {
         let style = NSMutableParagraphStyle()
@@ -70,15 +96,35 @@ enum DocumentTextCodec {
         }
         if marks.contains(.bold) { font = NSFontManager.shared.convert(font, toHaveTrait: .boldFontMask) }
         if marks.contains(.italic) { font = NSFontManager.shared.convert(font, toHaveTrait: .italicFontMask) }
-        if kind == .quote { style.headIndent = 18; style.firstLineHeadIndent = 18 }
+        if kind == .quote {
+            // 引用是"12pt 缩进 + 3pt 左竖线"的结构表达（竖线由视图层绘制）。
+            // 文字转灰是对齐滴答截图的有意选择：基线里 Quill 的引用保持正文色。
+            style.headIndent = 16
+            style.firstLineHeadIndent = 16
+        } else if isListKind(kind) {
+            // 列表缩进与标记**全部由视图层负责**：TextKit 2 不绘制 `textLists` 的
+            // 标记（实测：属性在、渲染无缩进无标记），滴答同样弃用了 NSTextList
+            // 自绘标记。22pt 给标记留沟槽，标记画在 0..18。
+            style.firstLineHeadIndent = 22
+            style.headIndent = 22
+        }
+        if kind == .checklist(true) {
+            // 勾选后的检查项不再额外调段落间距，保持与未勾选一致。
+        }
         if let textList = textList ?? makeTextList(for: kind) {
             style.textLists = [textList]
             style.headIndent = 22
         }
         var attrs: [NSAttributedString.Key: Any] = [
             blockKey: blockToken(kind), explicitBoldKey: marks.contains(.bold), .font: font, .paragraphStyle: style,
-            .foregroundColor: kind == .quote ? NSColor.secondaryLabelColor : NSColor.labelColor
+            // 引用与已勾选检查项转灰：前者对齐滴答截图，后者是原版
+            // `completedChecklistText`（勾选后置灰 + 删除线）。
+            .foregroundColor: kind == .quote || kind == .checklist(true)
+                ? NSColor.secondaryLabelColor : NSColor.labelColor
         ]
+        if kind == .checklist(true) {
+            attrs[.strikethroughStyle] = NSUnderlineStyle.single.rawValue
+        }
         if marks.contains(.code) { attrs[inlineCodeKey] = true }
         if marks.contains(.underline) { attrs[.underlineStyle] = NSUnderlineStyle.single.rawValue }
         if marks.contains(.strikethrough) { attrs[.strikethroughStyle] = NSUnderlineStyle.single.rawValue }
@@ -179,7 +225,10 @@ enum DocumentTextCodec {
                     if font.isFixedPitch && kind != .code { marks.insert(.code) }
                 }
                 if let value = attrs[.underlineStyle] as? Int, value != 0 { marks.insert(.underline) }
-                if let value = attrs[.strikethroughStyle] as? Int, value != 0 { marks.insert(.strikethrough) }
+                // 已勾选检查项的删除线是展示层（原版 `completedChecklistText`），
+                // 不是用户标记：decode 时忽略，否则会写进 Delta 且勾选状态无法切换。
+                if let value = attrs[.strikethroughStyle] as? Int, value != 0,
+                   kind != .checklist(true) { marks.insert(.strikethrough) }
                 if attrs[.backgroundColor] != nil { marks.insert(.highlight) }
                 if let link = attrs[.link] { marks.insert(.link(String(describing: link))) }
                 let attachment = (attrs[attachmentKey] as? Data).flatMap { try? JSONDecoder().decode(NativeAttachment.self, from: $0) }

@@ -47,6 +47,10 @@ enum WFColors {
     /// 强调色最浅的一档（Flutter `accentFaint`）：只用在"这一行可以点"的悬停底色上，
     /// 比 `accentSoft` 再淡一档——它底下通常是内容而不是选中态。
     static let accentFaint = themed(rgb(0xF6F7FF), rgb(0x252B4A))
+    /// 已勾选检查项的填充（原版 `documentChecklistFill`：浅色取次要墨色、深色取 borderStrong）。
+    static let documentChecklistFill = themed(rgb(0x5D6B75), rgb(0x4A505B))
+    /// 填充上的勾（原版 `documentChecklistCheck`：对比安全色）。
+    static let documentChecklistCheck = themed(rgb(0xFFFFFF), rgb(0xEDEFF2))
     /// 列表行的 hover 底。四象限任务行与侧栏清单行共用。
     static let listRowHover = themed(rgb(0xF5F7F8), rgb(0x272B32))
     /// 菜单行的 hover 底（Flutter `menuSelected`）。刻意是中性灰而不是强调色：
