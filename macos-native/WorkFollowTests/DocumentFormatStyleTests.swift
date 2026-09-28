@@ -80,6 +80,34 @@ final class DocumentFormatStyleTests: XCTestCase {
         }
     }
 
+    /// 用户报的问题：空行上选完标题，**当场**就该按该级别重排，且接着输入的字也
+    /// 必须是该级别字号——原版 Quill 的 `formatText` 直接改 Delta，并把行格式留在
+    /// 输入位置上；而不是等整篇重新渲染（切走再切回来）才换字号。
+    @MainActor
+    func testApplyingHeadingToAnEmptyLineAppliesAndContinuesAtThatSize() throws {
+        let view = NativeTextView(frame: .zero, textContainer: nil)
+        view.profile = DocumentProfile(taskSlash: true)
+        // 中间的空行在文档里就是那一个换行字符（下标 6）。
+        let document = NativeDocument(plainText: "前面的段落\n\n后面的段落")
+        view.textStorage?.setAttributedString(DocumentTextCodec.render(document))
+        view.setSelectedRange(NSRange(location: 6, length: 0))
+
+        let command = try XCTUnwrap(DocumentFormatCommand.commands.first { $0.block == .heading(1) })
+        view.applyFormat(command)
+
+        let token = try XCTUnwrap(view.textStorage?.attribute(DocumentTextCodec.blockKey, at: 6,
+                                                             effectiveRange: nil) as? String)
+        XCTAssertEqual(token, "h1", "空行设标题后，文档里那一行当场就该是 h1")
+        let font = try XCTUnwrap(view.textStorage?.attribute(.font, at: 6, effectiveRange: nil) as? NSFont)
+        XCTAssertEqual(font.pointSize, 22, "空行那一行当场就该按 22pt 重排")
+        let typing = try XCTUnwrap(view.typingAttributes[.font] as? NSFont)
+        XCTAssertEqual(typing.pointSize, 22, "接着输入的字也必须继承标题字号")
+
+        view.insertText("标题内容", replacementRange: view.selectedRange())
+        let typed = try XCTUnwrap(view.textStorage?.attribute(.font, at: 6, effectiveRange: nil) as? NSFont)
+        XCTAssertEqual(typed.pointSize, 22, "实际敲进去的字是 22pt")
+    }
+
     /// "输入的字号"这条链：空段落上设标题走的是 `typingAttributes` 分支，之后真正
     /// 敲进去的字必须继承该级别字号（三级标题各不相同）。
     @MainActor

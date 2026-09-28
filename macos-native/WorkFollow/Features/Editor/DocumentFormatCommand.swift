@@ -162,6 +162,47 @@ extension NativeTextView {
         let location = min(originalSelection.location, (string as NSString).length)
         let length = min(originalSelection.length, (string as NSString).length - location)
         setSelectedRange(NSRange(location: location, length: length))
+        syncParagraphStyleAfterEdit(at: location)
+    }
+
+    /// 编辑之后把光标所在段的字号/段落样式再落一次，并让"接着输入"继承它。
+    ///
+    /// 两个原因，都对应"选完标题当场没变化、切走再回来才变"这个实测现象：
+    ///
+    /// 1. 空行在文档里就只有那一个换行字符。TextKit 在编辑时会把**段落分隔符**的
+    ///    字体修正回基础字体（段落类型是我们自己的键，它不碰），于是空行看起来
+    ///    还是 14pt，要等整篇重新渲染才按标题重排。原版 Quill 直接改 Delta 并重排
+    ///    那一行，没有这道二次修正，所以在编辑之后把字号**再写一次**。
+    /// 2. 原版 `formatText` 会把行格式留在输入位置上，之后敲进去的字就是标题字号。
+    ///    原生只在"段落里一个字符都没有"时才设 `typingAttributes`，空行（有一个
+    ///    换行）这条路上漏了，于是输入的字仍是旧字号。
+    private func syncParagraphStyleAfterEdit(at location: Int) {
+        guard let storage = textStorage else { return }
+        let source = string as NSString
+        guard source.length > 0 else { return }
+        let caret = min(max(0, location), source.length)
+        let paragraph = source.paragraphRange(for: NSRange(location: caret, length: 0))
+        guard paragraph.length > 0 else { return }
+
+        let selected = storage.attributedSubstring(from: paragraph)
+        let decoded = DocumentTextCodec.decode(selected, preserving: NativeDocument(plainText: selected.string))
+        let attributes = DocumentTextCodec.attributes(kind: decoded.blocks.first?.kind ?? .paragraph,
+                                                      marks: decoded.blocks.first?.runs.first?.marks ?? [])
+        typingAttributes = attributes
+
+        // 段落分隔符（空行的唯一字符）承受整段的字号与段落样式。
+        let separator = NSRange(location: NSMaxRange(paragraph) - 1, length: 1)
+        if NSMaxRange(separator) <= storage.length, source.substring(with: separator) == "\n" {
+            var patch: [NSAttributedString.Key: Any] = [:]
+            if let font = attributes[.font] { patch[.font] = font }
+            if let style = attributes[.paragraphStyle] { patch[.paragraphStyle] = style }
+            if !patch.isEmpty {
+                storage.addAttributes(patch, range: separator)
+                invalidateDocumentLayout(for: separator)
+            }
+        }
+        invalidateDocumentLayout(for: paragraph)
+        needsDisplay = true
     }
 
     /// 段落类命令最终落到哪一种段落。
