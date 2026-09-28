@@ -26,15 +26,15 @@ final class NotesWorkspaceModel: ObservableObject {
         let name = rawName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !name.isEmpty, name != "未归档", name != old, !folders.contains(name) else { return false }
         savedFolders = folders.map { $0 == old ? name : $0 }
-        for note in notes where note.folder == old { store.edit(note.id) { $0.folder = name } }
+        store.moveFolder(old, to: name)
         if folderFilter == old { folderFilter = name }
         revision += 1
         return true
     }
     func removeFolder(_ name: String) {
         savedFolders = folders.filter { $0 != name }
-        for note in notes where note.folder == name { store.edit(note.id) { $0.folder = "未归档" } }
-        if folderFilter == name { folderFilter = nil }
+        store.moveFolder(name, to: "未归档")
+        if folderFilter == name { folderFilter = "未归档" }
         revision += 1
     }
     @Published private(set) var revision = 0

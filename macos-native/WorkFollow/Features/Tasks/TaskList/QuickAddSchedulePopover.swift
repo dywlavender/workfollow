@@ -2,16 +2,21 @@ import SwiftUI
 
 struct QuickAddScheduleDraft: Equatable {
     var dueAt: Date?
+    var dueEndAt: Date?
     var hasTime: Bool
     var reminderAt: Date?
     var repeatFrequency: TaskRepeat
     var recurrenceRule: RecurrenceRule?
 
-    var schedule: TaskSchedule { TaskSchedule(dueAt: dueAt, hasTime: hasTime) }
+    var schedule: TaskSchedule {
+        TaskSchedule(dueAt: dueAt, hasTime: hasTime, dueEndAt: dueEndAt)
+    }
 
-    init(dueAt: Date? = nil, hasTime: Bool = false, reminderAt: Date? = nil,
+    init(dueAt: Date? = nil, dueEndAt: Date? = nil, hasTime: Bool = false,
+         reminderAt: Date? = nil,
          repeatFrequency: TaskRepeat = .never, recurrenceRule: RecurrenceRule? = nil) {
         self.dueAt = dueAt
+        self.dueEndAt = dueAt == nil ? nil : dueEndAt
         self.hasTime = dueAt != nil && hasTime
         self.reminderAt = reminderAt
         self.repeatFrequency = repeatFrequency

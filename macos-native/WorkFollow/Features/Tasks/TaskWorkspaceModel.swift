@@ -545,6 +545,8 @@ final class TaskWorkspaceModel: ObservableObject {
         guard var schedule = task(for: id)?.schedule else { return .failure(.missingTask) }
         schedule.dueAt = date.map(calendar.startOfDay(for:))
         schedule.hasTime = false
+        // 没有开始日的区间不成区间：清掉安排日时时间段一并清掉（Flutter 同款）。
+        if date == nil { schedule.dueEndAt = nil }
         return setSchedule(id, schedule)
     }
 
@@ -554,6 +556,7 @@ final class TaskWorkspaceModel: ObservableObject {
         var schedule = task.schedule
         schedule.dueAt = nil
         schedule.hasTime = false
+        schedule.dueEndAt = nil
         let result = actions.saveTiming(id, schedule: schedule, reminder: task.reminderAt,
                                         frequency: task.recurrence,
                                         recurrenceRule: task.recurrenceRule)
@@ -567,6 +570,7 @@ final class TaskWorkspaceModel: ObservableObject {
         var schedule = task.schedule
         schedule.dueAt = nil
         schedule.hasTime = false
+        schedule.dueEndAt = nil
         let result = actions.saveTiming(id, schedule: schedule, reminder: nil,
                                         frequency: .never, recurrenceRule: nil)
         didMutate(result)
@@ -577,8 +581,16 @@ final class TaskWorkspaceModel: ObservableObject {
     func moveDueDate(_ id: UUID, to date: Date) -> TaskActionResult {
         guard let current = task(for: id)?.schedule else { return .failure(.missingTask) }
         let moved = TaskDateDraft.movingDay(current.dueAt ?? date, to: date, calendar: calendar)
-        return setSchedule(id, TaskDateDraft.applying(date: moved, hasTime: current.hasTime,
-                                                     deadline: false, to: current, calendar: calendar))
+        var next = TaskDateDraft.applying(date: moved, hasTime: current.hasTime,
+                                          deadline: false, to: current, calendar: calendar)
+        // 对齐 Flutter `updateTaskDue`：改期平移整个时间段，区间长度不变。
+        // 只挪开始日会把「9/1 – 9/5」压成「9/3 – 9/5」——日历上一条跨天色带
+        // 被拖到别的日子后长度不该变。
+        if let start = current.dueAt, let end = current.dueEndAt {
+            let shifted = end.addingTimeInterval(moved.timeIntervalSince(start))
+            next.dueEndAt = current.hasTime ? shifted : calendar.startOfDay(for: shifted)
+        }
+        return setSchedule(id, next)
     }
 
     @discardableResult
@@ -586,6 +598,66 @@ final class TaskWorkspaceModel: ObservableObject {
         guard var schedule = task(for: id)?.schedule else { return .failure(.missingTask) }
         schedule.deadlineAt = date.map(calendar.startOfDay(for:))
         return setSchedule(id, schedule)
+    }
+
+    /// 是否有未删除的一级子任务。四象限行尾的「有子任务」标记用它。
+    func hasChildren(_ id: UUID) -> Bool {
+        allTasks.contains { task in
+            task.parentID == id && task.deletedAt == nil && task.skippedAt == nil &&
+                !task.isAbandoned && !task.isConverted
+        }
+    }
+
+    /// 任务被拖进某个象限时的语义（对齐 Flutter `moveTaskToMatrix`）。
+    ///
+    /// 象限由「重要」（优先级）与「紧急」（安排日在三天内）两个属性推出来，
+    /// 所以跨象限就是改这两项：重要性与紧迫性在**改动之前**各算一次，然后按
+    /// 象限补齐缺的那一项。`later` 象限里先降优先级再判「重要」会得到另一个
+    /// 答案，所以那两个布尔值必须先落定。
+    ///
+    /// 日期只挪「日」的部分，时刻跟着走（06:30 的任务拖进 Ⅰ 象限仍是今天
+    /// 06:30），全天任务仍然是全天。
+    @discardableResult
+    func moveTaskToMatrix(_ id: UUID, _ quadrant: MatrixQuadrant) -> TaskActionResult {
+        guard let current = task(for: id), current.deletedAt == nil,
+              current.skippedAt == nil, !current.isAbandoned, !current.isConverted else {
+            return .failure(.missingTask)
+        }
+        let now = clock()
+        let important = PlanningProjection.isImportant(current)
+        let urgent = PlanningProjection.isUrgent(current, now: now, calendar: calendar)
+
+        func onDay(_ offset: Int) -> TaskSchedule {
+            var next = TaskDateDraft.applying(date: TaskDateDraft.movingDay(
+                current.schedule.dueAt ?? dateFromToday(offset),
+                to: dateFromToday(offset), calendar: calendar),
+                hasTime: current.schedule.hasTime, deadline: false,
+                to: current.schedule, calendar: calendar)
+            // 只挪开始日会截断区间：时间段跟着一起平移，长度不变。
+            if let start = current.schedule.dueAt, let end = current.schedule.dueEndAt {
+                let shifted = end.addingTimeInterval(
+                    (next.dueAt ?? start).timeIntervalSince(start))
+                next.dueEndAt = current.schedule.hasTime ? shifted : calendar.startOfDay(for: shifted)
+            }
+            return next
+        }
+
+        var result = TaskActionResult.success(id)
+        switch quadrant {
+        case .doNow:
+            if !important { result = setPriority(id, .high) }
+            result = setSchedule(id, onDay(0))
+        case .schedule:
+            if !important { result = setPriority(id, .high) }
+            if urgent { result = setSchedule(id, onDay(7)) }
+        case .delegate:
+            if !urgent { result = setSchedule(id, onDay(0)) }
+            if important { result = setPriority(id, .low) }
+        case .later:
+            if important { result = setPriority(id, .none) }
+            if urgent { result = setSchedule(id, onDay(7)) }
+        }
+        return result
     }
 
     // MARK: 反馈上报（A3 加法：动作层只声明发生了什么；显示、时长与仲裁归 FeedbackCenter）

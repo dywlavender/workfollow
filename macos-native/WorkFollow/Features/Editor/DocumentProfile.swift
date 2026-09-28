@@ -54,7 +54,17 @@ struct DocumentProfile {
     var onOpenLink: ((String) -> Bool)?
     var slashCommands: [DocumentCommand] {
         if compactSlash {
-            let formats = [1, 2, 14, 5, 6, 7, 3].map { DocumentFormatCommand.commands[$0] }
+            // 清单项与顺序取原版 `DocumentSlashCommand.sharedDocumentCommands()`：
+            // 一级/二级/三级标题 → 无序 → 有序 → 检查项 → 引用。
+            //
+            // **按段落类型取值，不按下标**：原先写的是 `[1, 2, 14, 5, 6, 7, 3]`，
+            // `DocumentFormatCommand.commands` 一旦重排，面板会静默错位。这里的顺序
+            // 同时是 `SlashCommandList` 图标映射（`task.format.0..6`）的契约。
+            let formats = [DocumentBlockKind.heading(1), .heading(2), .heading(3),
+                           .bullet, .ordered, .checklist(false), .quote]
+                .compactMap { block in
+                    DocumentFormatCommand.commands.first { $0.block == block }
+                }
             return formats.enumerated().map { index, format in
                 DocumentCommand(id: "task.format.\(index)", title: format.title, group: "格式",
                                 perform: { $0.applyFormat(format) },
@@ -124,5 +134,12 @@ struct SlashSession {
     mutating func move(_ offset: Int, count: Int) {
         guard count > 0 else { selectedIndex = 0; return }
         selectedIndex = (selectedIndex + offset + count) % count
+    }
+
+    /// 指针移到某一行：原版 `MouseRegion.onEnter` 会把**键盘高亮也移到那一行**，
+    /// 悬停与键盘共用同一根高亮条，而不是各画一根。
+    mutating func select(_ index: Int) {
+        guard index >= 0, index != selectedIndex else { return }
+        selectedIndex = index
     }
 }

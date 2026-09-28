@@ -31,19 +31,44 @@ enum DocumentTextCodec {
         default: return .paragraph
         }
     }
+    /// 读一段富文本的"段落类型 + 每个 run 都带的标记"，供工具条显示激活态。
+    ///
+    /// 与 `applyFormat` 走同一套解码口径，所以"工具条显示激活"与"再点一次会取消"
+    /// 判断的是同一件事，不会出现按钮亮着却取消不掉的错位。
+    static func style(of attributed: NSAttributedString) -> DocumentSelectionStyle {
+        let document = decode(attributed, preserving: NativeDocument(plainText: attributed.string))
+        let token = document.blocks.first.map { blockToken($0.kind) } ?? blockToken(.paragraph)
+        var intersection: Set<DocumentMark>?
+        for block in document.blocks {
+            for run in block.runs {
+                intersection = intersection.map { $0.intersection(run.marks) } ?? run.marks
+            }
+        }
+        return DocumentSelectionStyle(blockToken: token, marks: intersection ?? [])
+    }
+
     static func attributes(kind: DocumentBlockKind, marks: Set<DocumentMark>,
                            textList: NSTextList? = nil) -> [NSAttributedString.Key: Any] {
         let style = NSMutableParagraphStyle()
         style.paragraphSpacing = 8
-        // 滴答式阅读行距：15pt 正文配 ~5pt 行距，长正文不密排。
-        style.lineSpacing = 5
-        var size: CGFloat = 15
-        if case .heading(let level) = kind { size = level == 1 ? 24 : level == 2 ? 20 : 17 }
-        var font = kind == .code || marks.contains(.code)
-            ? NSFont.monospacedSystemFont(ofSize: size, weight: .regular) : NSFont.systemFont(ofSize: size)
-        if marks.contains(.bold) || { if case .heading = kind { return true }; return false }() {
-            font = NSFontManager.shared.convert(font, toHaveTrait: .boldFontMask)
+        // 正文 14 配 ~4pt 行距：原版 `lineBody` 是 1.50（14 × 1.5 = 21 的行盒，
+        // 扣掉系统字体的自然行高约 17，多出来的就是这 4pt）。标题按原版的
+        // `documentHeadingLine` 1.35 走，行距不动——它们是短行。
+        style.lineSpacing = 4
+        var size: CGFloat = 14
+        if case .heading(let level) = kind { size = level == 1 ? 22 : level == 2 ? 19 : 16 }
+        let isHeading: Bool = { if case .heading = kind { return true }; return false }()
+        var font: NSFont
+        if kind == .code || marks.contains(.code) {
+            font = NSFont.monospacedSystemFont(ofSize: size, weight: .regular)
+        } else if isHeading {
+            // 标题是**半粗**、不是粗体：原版 `WorkFollowMacWeight.semibold` 是这套字阶
+            // 的上限（`document_styles.dart:114` "中文一上粗体就发闷"）。
+            font = NSFont.systemFont(ofSize: size, weight: .semibold)
+        } else {
+            font = NSFont.systemFont(ofSize: size)
         }
+        if marks.contains(.bold) { font = NSFontManager.shared.convert(font, toHaveTrait: .boldFontMask) }
         if marks.contains(.italic) { font = NSFontManager.shared.convert(font, toHaveTrait: .italicFontMask) }
         if kind == .quote { style.headIndent = 18; style.firstLineHeadIndent = 18 }
         if let textList = textList ?? makeTextList(for: kind) {

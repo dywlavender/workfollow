@@ -16,25 +16,15 @@ final class TaskListViewDefaultsTests: XCTestCase {
 
     private var now: Date { date(9, 26, hour: 12) }
 
-    func testQuickAddTargetNamePrefersListThenTagThenViewScope() {
-        // 已按清单过滤时占位跟随清单（最高优先）。
+    func testQuickAddTargetNameUsesCreationListRatherThanViewOrTag() {
+        // Flutter 的 creationTargetLabel 取清单名；标签过滤不改变创建清单。
         XCTAssertEqual(TaskListViewDefaults.quickAddTargetName(
-            scope: .today, activeList: "工作", activeTag: "验收", inboxName: "收集箱"), "工作")
-        // 只有标签过滤时显示标签。
+            activeList: "工作", inboxName: "收集箱"), "工作")
+        // Today、最近 7 天、所有任务以及标签过滤均默认创建到收集箱。
         XCTAssertEqual(TaskListViewDefaults.quickAddTargetName(
-            scope: .allTasks, activeList: nil, activeTag: "验收", inboxName: "收集箱"), "#验收")
-        // 无清单/标签时跟随视图语义。
+            activeList: nil, inboxName: "收集箱"), "收集箱")
         XCTAssertEqual(TaskListViewDefaults.quickAddTargetName(
-            scope: .today, activeList: nil, activeTag: nil, inboxName: "收集箱"), "今天")
-        XCTAssertEqual(TaskListViewDefaults.quickAddTargetName(
-            scope: .nextSevenDays, activeList: nil, activeTag: nil, inboxName: "收集箱"), "最近 7 天")
-        // 其余（收集箱/所有任务/空）回落到收集箱。
-        XCTAssertEqual(TaskListViewDefaults.quickAddTargetName(
-            scope: .inbox, activeList: nil, activeTag: nil, inboxName: "收集箱"), "收集箱")
-        XCTAssertEqual(TaskListViewDefaults.quickAddTargetName(
-            scope: .allTasks, activeList: nil, activeTag: nil, inboxName: "收集箱"), "收集箱")
-        XCTAssertEqual(TaskListViewDefaults.quickAddTargetName(
-            scope: nil, activeList: nil, activeTag: nil, inboxName: "收集箱"), "收集箱")
+            activeList: nil, inboxName: TaskList.inbox.name), TaskList.inbox.name)
     }
 
     func testDateBadgeStyleClassifiesOverdueTodayFutureAndClosed() {

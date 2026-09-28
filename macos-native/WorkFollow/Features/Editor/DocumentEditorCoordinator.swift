@@ -55,6 +55,7 @@ final class DocumentEditorCoordinator: NSObject, NSTextViewDelegate {
         textView.onEditingChanged = onEditingChanged
     }
 
+
     func textDidChange(_ notification: Notification) {
         guard let textView = notification.object as? NSTextView else { return }
         commit(textView, force: false)
@@ -64,6 +65,7 @@ final class DocumentEditorCoordinator: NSObject, NSTextViewDelegate {
         guard let textView = notification.object as? NativeTextView else { return }
         editorState.updateSelection(textView.selectedRange())
         textView.refreshSelectionToolbar()
+        textView.onSelectionChanged?()
     }
 
     func textView(_ textView: NSTextView, clickedOnLink link: Any, at charIndex: Int) -> Bool {

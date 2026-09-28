@@ -8,15 +8,17 @@ struct TaskListView: View {
     @ObservedObject private var templateStore = TemplateStore.shared
     @State private var draft = ""
     @State private var showNavigation = false
-    @State private var showComposer = false
     @State private var showTemplatePicker = false
     @State private var showQuickAddSchedule = false
+    @State private var quickAddSchedulePage: TaskDatePopoverV2.Page = .main
+    @State private var pendingQuickAddSchedulePage: TaskDatePopoverV2.Page?
     @State private var showQuickAddProperties = false
     @State private var quickAddScheduleOverride: QuickAddScheduleDraft?
     @State private var quickAddPriorityOverride: TaskPriority?
     @State private var quickAddListOverride: String?
     @State private var quickAddTagsOverride: [String]?
     @State private var dismissedQuickAddTokens: Set<String> = []
+    @State private var quickAddEscapePrimed = false
     @State private var selecting = false
     @State private var groupExpansion = TaskGroupExpansionState()
     @State private var sortMode = TaskListSortMode.manual
@@ -52,30 +54,18 @@ struct TaskListView: View {
             if !isPresented { quickAddFocused = true }
         }
         .onChange(of: showQuickAddProperties) { _, isPresented in
-            if !isPresented { quickAddFocused = true }
+            guard !isPresented else { return }
+            if let page = pendingQuickAddSchedulePage {
+                pendingQuickAddSchedulePage = nil
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
+                    quickAddSchedulePage = page
+                    showQuickAddSchedule = true
+                }
+            } else {
+                quickAddFocused = true
+            }
         }
         .onChange(of: groupIDs) { _, _ in collapseNewCompletedGroups() }
-        .sheet(isPresented: $showComposer) {
-            TaskComposer(workspace: workspace, onClose: { created in
-                showComposer = false
-                if created {
-                    draft = ""
-                    dismissedQuickAddTokens.removeAll()
-                    quickAddScheduleOverride = nil
-                    quickAddPriorityOverride = nil
-                    quickAddListOverride = nil
-                    quickAddTagsOverride = nil
-                }
-            }, dismissedTokenIDs: dismissedQuickAddTokens, title: draft,
-                         list: workspace.activeList ?? TaskList.inbox.name,
-                         scheduled: scope == .today && !hasDismissedQuickAddScheduleToken,
-                         date: workspace.dateFromToday(0),
-                         initialSchedule: quickAddScheduleOverride,
-                         initialProperties: QuickAddPropertiesOverrides(
-                            priority: quickAddPriorityOverride,
-                            listName: quickAddListOverride,
-                            tags: quickAddTagsOverride))
-        }
         .sheet(isPresented: $showTemplatePicker) {
             TemplatePickerView(workspace: workspace, templateStore: templateStore,
                                onDismiss: { showTemplatePicker = false })
@@ -87,7 +77,7 @@ struct TaskListView: View {
             revealSelectedClosedTask()
             collapseNewCompletedGroups()
         }
-        .onExitCommand { quickAddFocused = false }
+        .onExitCommand(perform: handleQuickAddEscape)
     }
 
     // MARK: - Header bar：☰ + 标题 + 排序/更多（TickTick 式精简）
@@ -202,24 +192,36 @@ struct TaskListView: View {
     private func quickAddBar(in scope: TaskListScope) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: WFSpace.sm) {
-                Button { showComposer = true } label: {
-                    Image(systemName: "plus")
-                        .foregroundStyle(WFColors.secondaryText)
-                }.buttonStyle(.plain).help("新建任务（完整属性）")
-                TextField("添加任务至“\(quickAddTargetName)”", text: $draft)
-                    .textFieldStyle(.plain).font(WFType.body)
-                    .focused($quickAddFocused)
-                    .onSubmit { addTask(in: scope) }
-                if quickAddFocused || !draft.isEmpty || showQuickAddSchedule || showQuickAddProperties {
+                Image(systemName: "plus")
+                    .foregroundStyle(WFColors.secondaryText)
+                QuickAddTextField(
+                    text: $draft,
+                    placeholder: "添加任务至“\(quickAddTargetName)”",
+                    tokens: quickAddResult.tokens,
+                    focused: $quickAddFocused,
+                    onSubmit: { addTask(in: scope) },
+                    onEscape: handleQuickAddEscape
+                )
+                .frame(maxWidth: .infinity)
+                if quickAddExpanded {
                     let timing = quickAddScheduleOverride ?? currentQuickAddSchedule(for: scope)
-                    // 日期入口与任务行日期徽标同款：10pt 日历图标 + 日期文案，
-                    // 配色走 dateBadgeStyle（过期红、今天强调色、其余灰）。
-                    Button { showQuickAddSchedule = true } label: {
+                    Button {
+                        quickAddSchedulePage = .main
+                        showQuickAddSchedule = true
+                    } label: {
                         HStack(spacing: 3) {
                             Image(systemName: "calendar").font(.system(size: 10))
                             if navigation.destination != .inbox, let dueAt = timing.dueAt {
-                                Text(TaskDateLabel.text(dueAt, hasTime: timing.hasTime,
-                                                        now: workspace.clock(), calendar: workspace.calendar))
+                                let start = TaskDateLabel.text(
+                                    dueAt, hasTime: timing.hasTime,
+                                    now: workspace.clock(), calendar: workspace.calendar)
+                                let label = timing.dueEndAt.map { end in
+                                    let endLabel = TaskDateLabel.text(
+                                        end, hasTime: timing.hasTime,
+                                        now: workspace.clock(), calendar: workspace.calendar)
+                                    return "\(start) – \(endLabel)"
+                                } ?? start
+                                Text(label)
                                     .lineLimit(1)
                             }
                         }
@@ -230,12 +232,16 @@ struct TaskListView: View {
                     .buttonStyle(.plain)
                     .help("安排日期、提醒和重复")
                     .popover(isPresented: $showQuickAddSchedule, arrowEdge: .bottom) {
-                        QuickAddSchedulePopover(workspace: workspace, initial: timing,
-                            onCancel: { showQuickAddSchedule = false },
-                            onApply: { value in
-                                quickAddScheduleOverride = value
-                                showQuickAddSchedule = false
-                            })
+                        TaskDatePopoverV2(
+                            task: quickAddScheduleTask(in: scope),
+                            workspace: workspace,
+                            initialPage: quickAddSchedulePage,
+                            draftCommit: applyQuickAddSchedulePlan
+                        ) {
+                            showQuickAddSchedule = false
+                        }
+                        .environment(\.calendar, workspace.calendar)
+                        .environment(\.timeZone, workspace.calendar.timeZone)
                     }
                     Button { showQuickAddProperties = true } label: {
                         Image(systemName: "ellipsis")
@@ -254,41 +260,47 @@ struct TaskListView: View {
                                 showQuickAddProperties = false
                             },
                             onList: { quickAddListOverride = $0 },
-                            onTags: { quickAddTagsOverride = $0 }
+                            onTags: { quickAddTagsOverride = $0 },
+                            onReminder: { openQuickAddSchedulePage(.reminder) },
+                            onRepeat: { openQuickAddSchedulePage(.recurrence) }
                         )
                     }
+                } else {
+                    Text("⌘N")
+                        .font(WFType.caption)
+                        .foregroundStyle(WFColors.secondaryText)
                 }
             }
             let parsed = quickAddResult
             if !parsed.tokens.isEmpty {
-                HStack(spacing: 5) {
+                QuickAddTokenFlowLayout(horizontalSpacing: 5, verticalSpacing: 5) {
                     ForEach(parsed.tokens) { token in
                         Button {
                             dismissedQuickAddTokens.insert(token.id)
                         } label: {
+                            let color = QuickAddTokenColor.swiftUIColor(for: token.kind)
                             HStack(spacing: 3) {
                                 Text(token.label)
-                                Image(systemName: "xmark.circle.fill").font(.system(size: 9))
+                                Image(systemName: "xmark.circle.fill")
+                                    .font(.system(size: 9))
                             }
-                            .font(.caption2)
+                            .font(WFType.control)
+                            .foregroundStyle(color)
                             .padding(.horizontal, 6).padding(.vertical, 3)
-                            .background(WFColors.selection, in: Capsule())
+                            .background(color.opacity(0.09), in: Capsule())
                         }
                         .buttonStyle(.plain)
                         .help("移除识别项：\(token.label)")
                     }
-                    Spacer(minLength: 0)
                 }
                 .padding(.leading, 24)
             }
-            if quickAddFocused || !draft.isEmpty {
-                // 识别摘要行（Flutter 语义：→ 日期 · 提醒 · 每天 · #tag · @清单 · 高优先级）。
-                let summary = QuickAddParser.summaryLine(for: draft,
-                                                         knownLists: Set(workspace.allListNames),
-                                                         now: workspace.clock(),
-                                                         calendar: workspace.calendar)
+            if quickAddExpanded, !parsed.tokens.isEmpty {
+                let summary = quickAddSummary(for: scope)
                 if !summary.isEmpty {
-                    Text(summary).font(WFType.supporting).foregroundStyle(WFColors.secondaryText)
+                    Text(summary)
+                        .font(WFType.metaMedium)
+                        .foregroundStyle(WFColors.secondaryText)
                         .padding(.leading, 24)
                 }
             }
@@ -296,21 +308,126 @@ struct TaskListView: View {
         .frame(minHeight: 36, alignment: .center)
         .padding(.horizontal, WFSpace.md)
         .padding(.vertical, 4)
-        // 滴答式可见的浅灰圆角条：controlBackgroundColor 在浅色模式下与白底无差别。
         .background(WFColors.canvas, in: RoundedRectangle(cornerRadius: WFMetrics.corner))
-        // 描边必须用 stroke：overlay 直接填颜色会整块盖住输入框并吃掉点击。
-        .overlay(RoundedRectangle(cornerRadius: WFMetrics.corner).stroke(WFColors.border, lineWidth: 1))
-        // 对齐 Flutter：点击栏上任意位置都聚焦输入框（按钮优先级更高不受影响）。
+        .overlay {
+            if quickAddExpanded {
+                RoundedRectangle(cornerRadius: WFMetrics.corner)
+                    .stroke(WFColors.border, lineWidth: 1)
+            }
+        }
         .onTapGesture { quickAddFocused = true }
         .padding(.horizontal, WFSpace.xl)
         .padding(.bottom, WFSpace.xs)
     }
 
     private var quickAddTargetName: String {
-        TaskListViewDefaults.quickAddTargetName(scope: scope,
-                                                activeList: workspace.activeList,
-                                                activeTag: workspace.activeTag,
+        TaskListViewDefaults.quickAddTargetName(activeList: workspace.activeList,
                                                 inboxName: TaskList.inbox.name)
+    }
+
+    private var quickAddExpanded: Bool {
+        quickAddFocused || !draft.isEmpty || quickAddScheduleOverride != nil
+            || showQuickAddSchedule || showQuickAddProperties
+    }
+
+    private func openQuickAddSchedulePage(_ page: TaskDatePopoverV2.Page) {
+        pendingQuickAddSchedulePage = page
+        showQuickAddProperties = false
+    }
+
+    private func quickAddScheduleTask(in scope: TaskListScope) -> Task {
+        let parsed = quickAddResult
+        let timing = quickAddScheduleOverride ?? currentQuickAddSchedule(for: scope)
+        let now = workspace.clock()
+        return Task(
+            id: Self.quickAddDraftTaskID,
+            title: parsed.title.isEmpty ? "新任务" : parsed.title,
+            tags: quickAddTagsOverride ?? parsed.tags,
+            recurrence: timing.repeatFrequency,
+            recurrenceRule: timing.recurrenceRule,
+            reminderAt: timing.reminderAt,
+            list: TaskList(name: quickAddListOverride ?? parsed.listName
+                ?? workspace.activeList ?? TaskList.inbox.name),
+            priority: quickAddPriorityOverride ?? parsed.priority,
+            schedule: timing.schedule,
+            parentID: nil,
+            childOrder: 0,
+            createdAt: now,
+            updatedAt: now
+        )
+    }
+
+    private static let quickAddDraftTaskID =
+        UUID(uuidString: "00000000-0000-0000-0000-00000000ADD2")!
+
+    private func applyQuickAddSchedulePlan(_ plan: TaskDateDraftModel.CommitPlan) {
+        quickAddScheduleOverride = QuickAddScheduleDraft(
+            dueAt: plan.schedule.dueAt,
+            dueEndAt: plan.schedule.dueEndAt,
+            hasTime: plan.schedule.hasTime,
+            reminderAt: plan.reminder,
+            repeatFrequency: plan.frequency,
+            recurrenceRule: plan.recurrenceRule
+        )
+    }
+
+    private func quickAddSummary(for scope: TaskListScope) -> String {
+        let parsed = quickAddResult
+        let timing = quickAddScheduleOverride ?? currentQuickAddSchedule(for: scope)
+        var parts: [String] = []
+        if let dueAt = timing.dueAt {
+            let start = TaskDateLabel.text(dueAt, hasTime: timing.hasTime,
+                                           now: workspace.clock(), calendar: workspace.calendar)
+            if let dueEndAt = timing.dueEndAt {
+                let end = TaskDateLabel.text(dueEndAt, hasTime: timing.hasTime,
+                                             now: workspace.clock(), calendar: workspace.calendar)
+                parts.append("\(start) – \(end)")
+            } else {
+                parts.append(start)
+            }
+        }
+        if timing.reminderAt != nil { parts.append("提醒") }
+        switch timing.repeatFrequency {
+        case .never: break
+        case .daily: parts.append("每天")
+        case .weekly: parts.append("每周")
+        case .monthly: parts.append("每月")
+        default: parts.append("重复")
+        }
+        let tags = quickAddTagsOverride ?? parsed.tags
+        if !tags.isEmpty { parts.append(tags.map { "#\($0)" }.joined(separator: " ")) }
+        if let list = quickAddListOverride ?? parsed.listName { parts.append("@\(list)") }
+        switch quickAddPriorityOverride ?? parsed.priority {
+        case .none: break
+        case .low: parts.append("低优先级")
+        case .medium: parts.append("中优先级")
+        case .high: parts.append("高优先级")
+        }
+        return parts.isEmpty ? "" : "→ " + parts.joined(separator: " · ")
+    }
+
+    private func handleQuickAddEscape() {
+        // A schedule/properties picker gets first refusal, just like Flutter's
+        // nested popovers. Escape on the field is deliberately two-stage.
+        guard quickAddFocused,
+              !showQuickAddSchedule,
+              !showQuickAddProperties else { return }
+        if quickAddEscapePrimed {
+            clearQuickAddDraft()
+            quickAddEscapePrimed = false
+        } else {
+            quickAddEscapePrimed = true
+            quickAddFocused = false
+        }
+    }
+
+    private func clearQuickAddDraft() {
+        draft = ""
+        dismissedQuickAddTokens.removeAll()
+        quickAddScheduleOverride = nil
+        quickAddPriorityOverride = nil
+        quickAddListOverride = nil
+        quickAddTagsOverride = nil
     }
 
     @ViewBuilder
@@ -321,7 +438,7 @@ struct TaskListView: View {
                     Image(systemName: groupExpansion.isCollapsed(group) ? "chevron.right" : "chevron.down")
                         .font(.system(size: 10, weight: .semibold))
                         .foregroundStyle(WFColors.secondaryText)
-                    Text(groupTitle(group)).font(WFType.section)
+                    Text(groupTitle(group)).font(WFType.sectionSemibold)
                     Text("\(group.tasks.count)").font(WFType.supporting)
                         .foregroundStyle(WFColors.secondaryText)
                     Spacer(minLength: 0)
@@ -534,18 +651,18 @@ struct TaskListView: View {
         var tags = workspace.activeTag.map { [$0] } ?? []
         tags.append(contentsOf: selectedTags)
         tags = tags.reduce(into: []) { values, tag in if !values.contains(tag) { values.append(tag) } }
-        _ = workspace.createDraft(title: parsed.title,
-                                  list: list,
-                                  schedule: timing.schedule,
-                                  priority: priority, tags: tags,
-                                  reminder: timing.reminderAt, repeatFrequency: timing.repeatFrequency,
-                                  recurrenceRule: timing.recurrenceRule)
-        draft = ""
-        dismissedQuickAddTokens.removeAll()
-        quickAddScheduleOverride = nil
-        quickAddPriorityOverride = nil
-        quickAddListOverride = nil
-        quickAddTagsOverride = nil
+        let result = workspace.createDraft(title: parsed.title,
+                                           list: list,
+                                           schedule: timing.schedule,
+                                           priority: priority, tags: tags,
+                                           reminder: timing.reminderAt,
+                                           repeatFrequency: timing.repeatFrequency,
+                                           recurrenceRule: timing.recurrenceRule)
+        // Keep the draft available if creation is rejected; Flutter follows
+        // the same rule and only resets after TaskCreator reports success.
+        guard result.taskID != nil else { return }
+        clearQuickAddDraft()
+        quickAddEscapePrimed = false
     }
 }
 
@@ -605,7 +722,7 @@ struct TaskRowView: View {
                         .foregroundStyle(task.isClosed ? WFColors.secondaryText : WFColors.text)
                     if let preview = rowPreview {
                         Text(preview)
-                            .font(WFType.supporting).lineLimit(1)
+                            .font(WFType.listBody).lineLimit(1)
                             .foregroundStyle(WFColors.secondaryText)
                     }
                 }
@@ -878,16 +995,10 @@ enum TaskListViewDefaults {
         case overdue, today, scheduled, none
     }
 
-    /// 快速添加框占位"添加任务至"X""的目标名：清单 → 标签 → 视图语义 → 收集箱。
-    static func quickAddTargetName(scope: TaskListScope?, activeList: String?,
-                                   activeTag: String?, inboxName: String) -> String {
-        if let activeList { return activeList }
-        if let activeTag { return "#" + activeTag }
-        switch scope {
-        case .today: return "今天"
-        case .nextSevenDays: return "最近 7 天"
-        default: return inboxName
-        }
+    /// Flutter uses the creation list in the placeholder, not the current view
+    /// or tag filter. With no explicit list selection, capture targets Inbox.
+    static func quickAddTargetName(activeList: String?, inboxName: String) -> String {
+        activeList ?? inboxName
     }
 
     /// 列表为空时的文案，对齐滴答各视图的空状态。

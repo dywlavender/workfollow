@@ -127,15 +127,28 @@ extension NativeTextView {
                 if marks.contains(mark) { marks.remove(mark) }
                 else { marks.insert(mark) }
             }
-            typingAttributes = DocumentTextCodec.attributes(kind: command.block ?? DocumentTextCodec.kind(token), marks: marks)
+            let current = DocumentTextCodec.kind(token)
+            typingAttributes = DocumentTextCodec.attributes(
+                kind: resolvedBlock(command.block, current: current, lineStart: lineStart),
+                marks: marks)
             return
         }
         guard let storage = textStorage else { return }
         let selected = storage.attributedSubstring(from: range)
         var document = DocumentTextCodec.decode(selected, preserving: NativeDocument(plainText: selected.string))
         let remove = command.mark.map { mark in document.blocks.flatMap(\.runs).allSatisfy { $0.marks.contains(mark) } } ?? false
+        // 段落类型：工具条与选区浮条（无 lineStart）是**切换**，斜杠面板带 lineStart 是**设值**。
+        // 原版就是这么分的（`_toggleBlock` vs `_formatLine`，`document_commands.dart:242-279`）。
+        let targetBlock = command.block.map { block in
+            resolvedBlock(block,
+                          current: document.blocks.first?.kind ?? .paragraph,
+                          lineStart: lineStart,
+                          allMatchCurrent: document.blocks.allSatisfy {
+                              DocumentTextCodec.blockToken($0.kind) == DocumentTextCodec.blockToken(block)
+                          })
+        }
         for index in document.blocks.indices {
-            if let block = command.block { document.blocks[index].kind = block }
+            if let block = targetBlock { document.blocks[index].kind = block }
             if let mark = command.mark {
                 for run in document.blocks[index].runs.indices {
                     if remove { document.blocks[index].runs[run].marks.remove(mark) }
@@ -149,6 +162,26 @@ extension NativeTextView {
         let location = min(originalSelection.location, (string as NSString).length)
         let length = min(originalSelection.length, (string as NSString).length - location)
         setSelectedRange(NSRange(location: location, length: length))
+    }
+
+    /// 段落类命令最终落到哪一种段落。
+    ///
+    /// - 带 `lineStart`：斜杠面板那条路，按**设值**处理（原版 `_formatLine`）。
+    /// - 不带 `lineStart`：工具条与选区浮条那条路，按**切换**处理（原版 `_toggleBlock`）：
+    ///   当前段落（或选区里每一段）已经是同一种，就回到正文；否则设成目标。
+    /// - 「正文」永远按设值：它本身就是"取消段落格式"，没有可切换的目标。
+    ///
+    /// 此前段落类一律设值，于是"再点一次引用"不会取消，用户读成按钮失效。
+    private func resolvedBlock(_ block: DocumentBlockKind?,
+                               current: DocumentBlockKind,
+                               lineStart: Int?,
+                               allMatchCurrent: Bool = true) -> DocumentBlockKind {
+        guard let block else { return current }
+        guard lineStart == nil else { return block }
+        let target = DocumentTextCodec.blockToken(block)
+        guard target != DocumentTextCodec.blockToken(.paragraph) else { return block }
+        let matches = allMatchCurrent && DocumentTextCodec.blockToken(current) == target
+        return matches ? .paragraph : block
     }
 
     private func listRunRange(around range: NSRange, token: String,

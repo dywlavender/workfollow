@@ -359,7 +359,7 @@ struct TaskComposer: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("新建任务").font(.title2.bold())
+            Text("新建任务").font(WFType.detailTitle)
             TextField("准备做什么？", text: $title).focused($titleFocused)
             Picker("清单", selection: $list) {
                 ForEach(workspace.allListNames, id: \.self) { Text($0).tag($0) }
@@ -482,6 +482,6 @@ struct TaskBulkBar: View {
             }
             Button("删除") { workspace.applyBulk(.delete) }
             Button { workspace.clearBulkSelection() } label: { Image(systemName: "xmark") }.help("取消选择")
-        }.font(.caption).padding(10).background(WFColors.selection)
+        }.font(WFType.metaMedium).padding(10).background(WFColors.selection)
     }
 }

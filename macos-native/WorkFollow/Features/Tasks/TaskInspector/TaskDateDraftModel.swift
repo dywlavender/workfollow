@@ -83,13 +83,16 @@ final class TaskDateDraftModel: ObservableObject {
         self.deadline = deadline
         let today = calendar.startOfDay(for: now())
         let due = task.schedule.dueAt
+        let dueEnd = task.schedule.dueEndAt
         let deadlineAt = task.schedule.deadlineAt
         let anchor = (deadline ? deadlineAt : due) ?? today
 
         _selectedDate = Published(initialValue: anchor)
         _periodStart = Published(initialValue: due)
-        _periodEnd = Published(initialValue: deadlineAt)
-        _tab = Published(initialValue: !deadline && due != nil && deadlineAt != nil ? .period : .date)
+        // 时间段的结束是 `dueEndAt`（安排结束），不是 `deadlineAt`（截止日期）。
+        // 两者在 Flutter 里是两个字段：前者定义区间，后者只是截止点。
+        _periodEnd = Published(initialValue: dueEnd)
+        _tab = Published(initialValue: !deadline && due != nil && dueEnd != nil ? .period : .date)
         _displayedMonth = Published(initialValue: calendar.date(from: calendar.dateComponents([.year, .month], from: anchor)) ?? anchor)
         _hasTime = Published(initialValue: !deadline && task.schedule.hasTime)
 
@@ -316,7 +319,7 @@ final class TaskDateDraftModel: ObservableObject {
         case .period:
             schedule.dueAt = periodStart.map { hasTime ? $0 : calendar.startOfDay(for: $0) }
             schedule.hasTime = periodStart != nil && hasTime
-            schedule.deadlineAt = periodEnd.map { calendar.startOfDay(for: $0) }
+            schedule.dueEndAt = periodEnd.map { calendar.startOfDay(for: $0) }
         }
         // Offsets need a schedulable anchor; without a due they clear (Flutter
         // parity), and the legacy single reminder then applies again.
@@ -340,9 +343,11 @@ final class TaskDateDraftModel: ObservableObject {
                           frequency: current.recurrence, recurrenceRule: current.recurrenceRule)
     }
 
-    /// 清除 semantics: deadline mode drops only the deadline; the date tab
-    /// matches clearScheduledProperties (due, time, reminder, recurrence — the
-    /// deadline stays); the period tab drops the whole range as well.
+    /// 清除 semantics: deadline mode drops only the deadline; otherwise the
+    /// whole 安排 goes — start, time, range end, reminder and recurrence. The
+    /// 截止日期 stays: it is a separate field, and the panel's 清除 button is
+    /// the same one on both tabs (Flutter pops an empty `TaskScheduleSettings`,
+    /// which carries no deadline at all).
     func clearPlan(for current: Task) -> CommitPlan {
         var schedule = current.schedule
         if deadline {
@@ -353,7 +358,7 @@ final class TaskDateDraftModel: ObservableObject {
         }
         schedule.dueAt = nil
         schedule.hasTime = false
-        if tab == .period { schedule.deadlineAt = nil }
+        schedule.dueEndAt = nil
         return CommitPlan(schedule: schedule, reminder: nil, reminderOffsets: [],
                           frequency: .never, recurrenceRule: nil)
     }

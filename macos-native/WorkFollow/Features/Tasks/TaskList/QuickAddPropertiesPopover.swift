@@ -14,6 +14,8 @@ struct QuickAddPropertiesPopover: View {
     let onPriority: (TaskPriority) -> Void
     let onList: (String) -> Void
     let onTags: ([String]) -> Void
+    let onReminder: () -> Void
+    let onRepeat: () -> Void
 
     @State private var showingListPicker = false
     @State private var showingTagPicker = false
@@ -57,6 +59,14 @@ struct QuickAddPropertiesPopover: View {
                         showingTagPicker = false
                     })
             }
+            Button(action: onReminder) {
+                propertyRow(icon: "alarm", title: "提醒", detail: "提醒")
+            }
+            .buttonStyle(.plain)
+            Button(action: onRepeat) {
+                propertyRow(icon: "repeat", title: "重复", detail: "重复")
+            }
+            .buttonStyle(.plain)
         }
         .padding(WFSpace.md)
         .frame(width: 270)

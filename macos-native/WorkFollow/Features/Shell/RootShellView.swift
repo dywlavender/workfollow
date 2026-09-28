@@ -27,9 +27,13 @@ struct RootShellView: View {
                 } else if navigation.destination == .summary {
                     SummaryWorkspaceView(store: environment.summaryStore, workspace: workspace)
                 } else if navigation.destination.isNotes {
-                    NotesWorkspaceView(notes: environment.notesWorkspace, navigation: navigation, tasks: workspace)
-                } else if navigation.destination == .matrix || navigation.destination == .calendar {
-                    PlanningWorkspaceView(workspace: workspace, matrix: navigation.destination == .matrix)
+                    NotesWorkspaceView(notes: environment.notesWorkspace, navigation: navigation, tasks: workspace,
+                                       navigationVisible: navigationVisible)
+                } else if navigation.destination == .calendar {
+                    CalendarWorkspaceView(workspace: workspace)
+                        .id(navigation.destination)
+                } else if navigation.destination == .matrix {
+                    MatrixWorkspaceView(workspace: workspace)
                         .id(navigation.destination)
                 } else if navigation.destination.isTaskList {
                     TaskWorkspaceView(workspace: workspace,

@@ -11,6 +11,8 @@ final class NativeTextView: NSTextView {
 
     var onEscape: (() -> InspectorEscapeEffect)?
     var onEditingChanged: ((Bool) -> Void)?
+    /// 选区或输入属性变了：工具条靠它刷新激活态（对齐原版 `_active` 的那条路）。
+    var onSelectionChanged: (() -> Void)?
     var profile = DocumentProfile()
     var slashSession: SlashSession?
     var slashPanel: NSPanel?
@@ -73,7 +75,35 @@ final class NativeTextView: NSTextView {
 
     override func mouseDown(with event: NSEvent) {
         dismissSlash()
+        if profile.noteSlash, isEditable, let window, let storage = textStorage, storage.length > 0 {
+            let point = convert(event.locationInWindow, from: nil)
+            let offset = min(characterIndexForInsertion(at: point), storage.length - 1)
+            let paragraph = (string as NSString).paragraphRange(for: NSRange(location: offset, length: 0))
+            let token = storage.attribute(DocumentTextCodec.blockKey, at: paragraph.location, effectiveRange: nil) as? String
+            if token == "checklist" || token == "checked" {
+                let screenRect = firstRect(forCharacterRange: NSRange(location: paragraph.location, length: 0), actualRange: nil)
+                let caret = convert(window.convertFromScreen(screenRect), from: nil)
+                let marker = NSRect(x: caret.minX - 28, y: caret.minY, width: 28, height: caret.height)
+                if marker.contains(point) {
+                    window.makeFirstResponder(self)
+                    toggleNoteChecklist(at: paragraph.location)
+                    return
+                }
+            }
+        }
         super.mouseDown(with: event)
+    }
+
+    func toggleNoteChecklist(at offset: Int) {
+        guard let storage = textStorage, offset >= 0, offset < storage.length else { return }
+        let range = (string as NSString).paragraphRange(for: NSRange(location: offset, length: 0))
+        let selected = storage.attributedSubstring(from: range)
+        var document = DocumentTextCodec.decode(selected, preserving: NativeDocument(plainText: selected.string))
+        guard let first = document.blocks.first, case .checklist(let checked) = first.kind else { return }
+        document.blocks[0].kind = .checklist(!checked)
+        let selection = selectedRange()
+        insertText(DocumentTextCodec.render(document), replacementRange: range)
+        setSelectedRange(selection)
     }
 
     override func viewWillMove(toWindow newWindow: NSWindow?) {

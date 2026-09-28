@@ -25,7 +25,8 @@ open /private/tmp/workfollow-native-build/Build/Products/Debug/WorkFollow.app
 - ⌘N 聚焦新建、⌘K 快速打开、⌘, 设置、⌘1 今天、⌘2 收集箱。
 - 跟随系统/浅色/深色；AppKit 保存窗口位置和尺寸。
 - 列表宽度 340–470pt，受剩余 Inspector 最小 300pt 约束；紧凑窗口使用导航弹层和列表/详情切换。
-- 笔记、两个垃圾桶、日历、四象限仅导航占位，未接业务。
+- 日历与四象限已接业务：月/周网格（含跨天色带、今天圈、节假日角标）与固定 2×2 棋盘都由 Domain 投影驱动；点任务条/任务行弹出 **400×356** 的锚定编辑器，点「+」或双击某天弹出 **320×212** 的锚定新建卡。这两个浮层没有箭头、贴着被点元素，位置与尺寸按原版 `calculatePopoverGeometry` 逐点对齐（见 `Features/Planning/PlanningOverlay.swift` 与 `PlanningOverlayLayer.swift`）。浮层画在页面自己的叠层里，与原版同架构，因此键盘输入、焦点与嵌套日期面板的行为都与任务页一致。
+- 笔记与两个垃圾桶仍是导航占位。
 
 `TaskWorkspaceModel` 通过 `TaskActions` 操作 `WorkspaceStore`，列表来自 Domain 投影。首次启动无快照时载入示例任务；后续编辑同步原子保存至独立 `Application Support/WorkFollowNativePreview/workspace.json`，重启重载，读取失败会停止自动保存并提示。附件副本也存于该独立目录。不读取 Flutter 正式任务、笔记或附件。
 
@@ -41,4 +42,4 @@ xcodebuild -project macos-native/WorkFollow.xcodeproj -scheme WorkFollow -destin
 
 列表获得焦点时 ↑/↓ 切换任务，Return 打开首项或保持所选详情；Quick Add 输入焦点下不接管这些按键。Today Quick Add 设置当天真实 schedule，Inbox Quick Add 不预设日期。Phase 1 全尺寸拖动、窄屏返回和跨屏窗口恢复仍是 IMPLEMENTED / PARTIALLY VERIFIED。
 
-提醒、重复、标签、附件、关联、Persistence、Notes、Calendar、Trash 尚未接入完整业务；此实验数据不会写入 Flutter 正式数据。当前 41 项 XCTest 通过。正文中文多行粘贴、撤销/重做、查找、跨任务隔离已实机验证；中文输入法候选窗仍待专门实测。Phase 4 的日期 Popover、优先级/清单菜单、父子清单联动及完成/恢复已有验收记录；低于 641pt 紧凑布局阈值后的第二次 Escape、Popover 外部关闭和菜单键盘导航仍待实机验收。
+提醒、重复、标签、附件、关联、Persistence、Notes 尚未接入完整业务；此实验数据不会写入 Flutter 正式数据。当前 401 项 XCTest 通过。正文中文多行粘贴、撤销/重做、查找、跨任务隔离已实机验证；中文输入法候选窗仍待专门实测。Phase 4 的日期 Popover、优先级/清单菜单、父子清单联动及完成/恢复已有验收记录；低于 641pt 紧凑布局阈值后的第二次 Escape、Popover 外部关闭和菜单键盘导航仍待实机验收。

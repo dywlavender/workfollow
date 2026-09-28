@@ -6,6 +6,10 @@ struct TaskInspectorShell: View {
     @ObservedObject var workspace: TaskWorkspaceModel
     @EnvironmentObject private var environment: AppEnvironment
     let showBack: Bool
+    /// 浮层里的详情（日历/四象限点任务条打开的那个）：Esc 要关掉浮层，而不是
+    /// 把选中项清掉后留在原地不动——对齐 Flutter `TaskInspector._escape()` 的
+    /// `_isPopup` 分支（它排在"退回列表"之前）。
+    var onRequestClose: (() -> Void)? = nil
     @FocusState private var titleFocused: Bool
     @FocusState private var childTitleFocused: Bool
     @State private var presentation = TaskInspectorPresentationState()
@@ -19,6 +23,8 @@ struct TaskInspectorShell: View {
     @State private var showFormattingToolbar = false
     @State private var showRelationsPopover = false
     @State private var relationQuery = ""
+    /// 「添加子任务」整行的悬停态（原版 `InkWell.hoverColor`）。
+    @State private var hoveringAddChild = false
     @StateObject private var editorHandle = DocumentEditorHandle()
 
     var body: some View {
@@ -255,6 +261,7 @@ struct TaskInspectorShell: View {
             action()
         } label: {
             Label(title, systemImage: symbol)
+                .font(WFType.menu)
                 .frame(maxWidth: .infinity, minHeight: 32, alignment: .leading)
                 .contentShape(Rectangle())
         }
@@ -275,14 +282,18 @@ struct TaskInspectorShell: View {
                 .padding(.bottom, WFSpace.md)
             documentEditor(task)
                 .padding(.top, WFSpace.sm)
-            if task.parentID == nil {
+            // 子任务区只在**已经有子任务**时出现——新建的空任务不自动带上它。
+            // 原版 `task_editor_profile.dart:149-153` 就是这么挂的：
+            // `if (!task.isChildTask && childrenOf(task.id).isNotEmpty)`，注释写着
+            // "空父任务保持整屏正文；第一个子任务从更多菜单、行右键菜单或 / 面板来"。
+            if task.parentID == nil, !editorChildren(task.id).isEmpty {
                 subtaskSection(task)
                     .padding(.top, WFSpace.xl)
             } else if let parentID = task.parentID {
                 Button("返回父任务") { workspace.select(parentID) }
                     .buttonStyle(.plain)
                     .foregroundStyle(WFColors.accent)
-                    .font(WFType.supporting)
+                    .font(WFType.control)
                     .padding(.horizontal, WFSpace.xl)
                     .padding(.top, WFSpace.md)
             }
@@ -293,7 +304,7 @@ struct TaskInspectorShell: View {
 
     private func chipLabel<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
         HStack(spacing: 4) { content() }
-            .font(WFType.supporting)
+            .font(WFType.control)
             .lineLimit(1)
             .padding(.horizontal, WFSpace.sm)
             .frame(height: 26)
@@ -337,16 +348,45 @@ struct TaskInspectorShell: View {
                 childRow(child)
                 Divider().padding(.leading, 27)
             }
-            Button {
-                workspace.requestChildTitleEditor(for: task.id)
-            } label: {
-                Label("添加子任务", systemImage: "plus")
-                    .font(WFType.supporting)
-                    .frame(minHeight: 36, alignment: .leading)
-            }.buttonStyle(.plain).foregroundStyle(WFColors.accent)
+            // 一级子任务不再给这个入口：原版 `_addChildTask` 对子任务直接 return，
+            // 动作层也会以"子任务不能再建子任务"失败，留着它只是个点了没反应的入口。
+            if task.parentID == nil { addChildRow(task) }
         }
         .padding(.horizontal, WFSpace.xl)
         .padding(.top, WFSpace.md)
+    }
+
+    /// 「添加子任务」整行。
+    ///
+    /// 与原版的 add row（`task_children_panel.dart` 里 `task-add-child` 那一段）
+    /// 逐项对齐：`＋` 图标 18、文字 14 medium、两者都用强调色，行高 42，悬停时整行
+    /// 染强调色最浅的一档（`accentFaint`）并收 `control` 圆角；文字与上面子任务行的
+    /// 标题列同一条竖线（原版注释：inset like the child rows above it）。
+    ///
+    /// 原先这里是一个 12pt 的 `Label`、行高 36、没有悬停反馈，点起来像一句静态说明。
+    private func addChildRow(_ task: Task) -> some View {
+        Button {
+            workspace.requestChildTitleEditor(for: task.id)
+        } label: {
+            HStack(spacing: WFSpace.dense) {
+                Image(systemName: "plus").font(.system(size: WFMetrics.icon))
+                Text("添加子任务").font(WFType.listTitleMedium)
+                Spacer(minLength: 0)
+            }
+            .foregroundStyle(WFColors.accent)
+            .padding(.horizontal, WFSpace.sm)
+            .frame(minHeight: 42, alignment: .leading)
+            .contentShape(Rectangle())
+            .background(hoveringAddChild ? WFColors.accentFaint : .clear,
+                        in: RoundedRectangle(cornerRadius: WFSpace.compact))
+        }
+        .buttonStyle(.plain)
+        // 悬停底色比内容再宽 8：图标仍落在子任务行勾选框那条竖线上，底色却像原版那
+        // 样比文字内容宽一圈。
+        .padding(.horizontal, -WFSpace.sm)
+        .onHover { hoveringAddChild = $0 }
+        .help("添加子任务")
+        .accessibilityLabel("添加子任务")
     }
 
     // MARK: - 底部工具行：左清单选择，右正文格式与更多操作
@@ -380,57 +420,8 @@ struct TaskInspectorShell: View {
     }
 
     private var formattingToolbar: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 2) {
-                Menu {
-                    ForEach([0, 1, 2, 14], id: \.self) { index in
-                        let command = DocumentFormatCommand.commands[index]
-                        Button(command.title) { editorHandle.format(command) }
-                    }
-                } label: { Image(systemName: "textformat.size").frame(width: 30, height: 30) }
-                    .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
-                    .help("标题").accessibilityLabel("标题格式")
-                formatButton("粗体", "bold", 9)
-                formatButton("高亮", "highlighter", 13)
-                formatButton("检查项", "checklist", 7)
-                formatButton("无序列表", "list.bullet", 5)
-                formatButton("有序列表", "list.number", 6)
-                Divider().frame(height: 18)
-                formatButton("斜体", "italic", 10)
-                formatButton("下划线", "underline", 11)
-                formatButton("删除线", "strikethrough", 12)
-                Button { editorHandle.insertDivider() } label: {
-                    Image(systemName: "minus").frame(width: 26, height: 30)
-                }.help("分割线").accessibilityLabel("分割线")
-                Menu {
-                    Button("日期") { editorHandle.insertTime(format: "yyyy年M月d日") }
-                    Button("日期时间") { editorHandle.insertTime(format: "yyyy年M月d日 HH:mm") }
-                    Button("仅时间") { editorHandle.insertTime(format: "HH:mm") }
-                } label: {
-                    Image(systemName: "clock").frame(width: 26, height: 30)
-                }.menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
-                    .help("插入当前时间").accessibilityLabel("插入当前时间")
-                Button { editorHandle.editLink() } label: {
-                    Image(systemName: "link").frame(width: 30, height: 30)
-                }.help("链接").accessibilityLabel("链接")
-                formatButton("行内代码", "chevron.left.forwardslash.chevron.right", 15)
-                formatButton("引用", "text.quote", 3)
-                Button { editorHandle.insertAttachment() } label: {
-                    Image(systemName: "paperclip").frame(width: 30, height: 30)
-                }.help("附件").accessibilityLabel("附件")
-            }.buttonStyle(.plain).font(.system(size: 14))
-                .padding(.horizontal, 6).padding(.vertical, 4)
-        }
-        .frame(maxWidth: 444).frame(height: 38)
-        .background(WFColors.content, in: RoundedRectangle(cornerRadius: 8))
-        .overlay(RoundedRectangle(cornerRadius: 8).stroke(WFColors.border))
-        .shadow(color: .black.opacity(0.12), radius: 8, y: 3)
-    }
-
-    private func formatButton(_ title: String, _ symbol: String, _ index: Int) -> some View {
-        Button { editorHandle.format(DocumentFormatCommand.commands[index]) } label: {
-            Image(systemName: symbol).frame(width: 26, height: 30)
-        }.help(title).accessibilityLabel(title)
+        // 宽度与提示文案都取原版默认值（444 / 「上传附件」），不再在调用点上改写。
+        DocumentFormatToolbarView(handle: editorHandle)
     }
 
     private func editorChildren(_ parentID: UUID) -> [Task] {
@@ -487,6 +478,7 @@ struct TaskInspectorShell: View {
                     .font(.system(size: 15))
                     .foregroundStyle(child.isClosed ? WFColors.tertiaryText : WFColors.secondaryText)
             }
+            .help(child.isClosed ? "恢复任务" : "完成任务")
             .accessibilityLabel(Text((child.isClosed ? "恢复子任务：" : "完成子任务：") + child.title))
             if inlineChildEditorID == child.id {
                 TextField("子任务名称", text: $inlineChildTitleDraft)
@@ -504,7 +496,7 @@ struct TaskInspectorShell: View {
             }
             Spacer(minLength: 8)
             TaskDateButton(task: child, workspace: workspace)
-        }.buttonStyle(.plain).font(WFType.body)
+        }.buttonStyle(.plain).font(WFType.listTitleMedium)
             .frame(minHeight: 40)
             .contextMenu { Button("删除子任务") { _ = workspace.delete(child.id) } }
     }
@@ -555,6 +547,11 @@ struct TaskInspectorShell: View {
         }
         if showFormattingToolbar {
             showFormattingToolbar = false
+            return .dismissPopover
+        }
+        // 浮层优先于"退回列表"：原版里 popup 的 Esc 就是把浮层关掉。
+        if let onRequestClose {
+            onRequestClose()
             return .dismissPopover
         }
         let previousTarget = presentation.editingTarget
@@ -663,7 +660,7 @@ struct TaskInspectorShell: View {
             Button("新清单…") { newListName = ""; showNewList = true }
         } label: {
             Label(task.list.name, systemImage: "tray")
-                .font(WFType.supporting)
+                .font(WFType.control)
                 .foregroundStyle(WFColors.secondaryText)
         }
         .menuStyle(.borderlessButton)
@@ -754,8 +751,9 @@ private struct TaskTitleField: View {
     var body: some View {
         TextField(task.parentID == nil ? "任务标题" : "准备做什么？", text: $draft, axis: .vertical)
             .textFieldStyle(.plain)
-            // 对齐滴答：详情标题大而重，是检查器的视觉锚点。
-            .font(.system(size: 22, weight: .bold))
+            // 与文档标题同一个角色：原版这里是 `detailTitle`（18 semibold）配
+            // `lineControl`。曾经的 22 bold 是照参考图放大过的，比原版重两档。
+            .font(WFType.detailTitle)
             .focused($focused)
             .onChange(of: draft) { _, value in
                 _ = workspace.setTitle(task.id, value)

@@ -72,6 +72,9 @@ struct MigrationTaskRecord: Equatable {
     let status: String
     let priority: String
     let dueAt: String?
+    /// 时间段的结束（安排结束）。与 `deadlineAt`（截止日期）是两个字段：
+    /// 前者定义区间，后者只是截止点，日历色带只认前者。
+    let dueEndAt: String?
     let deadlineAt: String?
     let hasDueTime: Bool?
     let reminderAt: String?
@@ -93,7 +96,9 @@ struct MigrationTaskRecord: Equatable {
     let isPinned: Bool
     let abandonedAt: String?
     let convertedNoteId: String?
-    /// 原生模型没有对应字段的键（bucket/timeLabel/dueEndAt/reminderOffsets/contentJson），降级映射时计数。
+    /// 原生模型没有对应字段的键（bucket/timeLabel/contentJson），或只做了降级
+    /// 映射的键（reminderOffsets），降级映射时计数。`dueEndAt` 已迁入
+    /// `TaskSchedule.dueEndAt`，不再计入。
     let ignoredKeys: Set<String>
 }
 
@@ -230,7 +235,6 @@ enum MigrationSnapshot {
         for key in ["bucket", "timeLabel"] where json[key] != nil && !(json[key] is NSNull) {
             ignored.insert(key)
         }
-        if let dueEnd = json["dueEndAt"], !(dueEnd is NSNull) { ignored.insert("dueEndAt") }
         if let offsets = json["reminderOffsets"] as? [Any], !offsets.isEmpty { ignored.insert("reminderOffsets") }
         if let content = json["contentJson"], !(content is NSNull) { ignored.insert("contentJson") }
 
@@ -241,6 +245,7 @@ enum MigrationSnapshot {
             status: stringValue(json["status"], fallback: "TODO"),
             priority: stringValue(json["priority"], fallback: "NONE"),
             dueAt: nullableString(json["dueAt"]),
+            dueEndAt: nullableString(json["dueEndAt"]),
             deadlineAt: nullableString(json["deadlineAt"]),
             hasDueTime: strictBool(json["hasDueTime"]),
             reminderAt: nullableString(json["reminderAt"]),
@@ -550,7 +555,9 @@ enum MigrationSnapshot {
             attachments: attachments(named: record.attachments, in: attachmentNames),
             list: TaskList(name: record.listName),
             priority: priority(for: record.priority),
-            schedule: TaskSchedule(dueAt: due, hasTime: hasTime, deadlineAt: parseDate(record.deadlineAt)),
+            schedule: TaskSchedule(dueAt: due, hasTime: hasTime,
+                                   dueEndAt: parseDate(record.dueEndAt),
+                                   deadlineAt: parseDate(record.deadlineAt)),
             status: completed ? .completed : .active,
             parentID: record.parentTaskId.map(uuid(forRawID:)),
             childOrder: record.childOrder,
@@ -749,7 +756,7 @@ enum MigrationSnapshot {
             "status": status,
             "priority": priorityNames[task.priority.rawValue],
             "dueAt": task.schedule.dueAt.map(formatDate) ?? NSNull(),
-            "dueEndAt": NSNull(),
+            "dueEndAt": task.schedule.dueEndAt.map(formatDate) ?? NSNull(),
             "deadlineAt": task.schedule.deadlineAt.map(formatDate) ?? NSNull(),
             "hasDueTime": task.schedule.dueAt != nil ? task.schedule.hasTime : NSNull(),
             "reminderAt": task.reminderAt.map(formatDate) ?? NSNull(),

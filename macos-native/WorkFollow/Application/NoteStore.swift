@@ -26,4 +26,12 @@ final class NoteStore {
     }
     func purge(_ id: UUID) { notes.removeAll { $0.id == id && $0.deletedAt != nil } }
     func emptyTrash() { notes.removeAll { $0.deletedAt != nil } }
+
+    // Folder operations apply to deleted notes too, so restoring one cannot
+    // resurrect a removed folder. They do not count as editing the document.
+    func moveFolder(_ folder: String, to destination: String) {
+        for index in notes.indices where notes[index].folder == folder {
+            notes[index].folder = destination
+        }
+    }
 }

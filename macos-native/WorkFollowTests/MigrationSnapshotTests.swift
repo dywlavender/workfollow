@@ -270,13 +270,19 @@ final class MigrationSnapshotTests: XCTestCase {
         XCTAssertTrue(bundle.lists.first { $0.name == "读书" }?.isPinned ?? false)
 
         let (snapshot, summary) = MigrationSnapshot.replaced(bundle, attachmentNames: [])
-        // 无对应字段被计数：bucket / timeLabel / dueEndAt / reminderOffsets。
-        for key in ["bucket", "timeLabel", "dueEndAt", "reminderOffsets"] {
+        // 无对应字段被计数：bucket / timeLabel / contentJson 这类原生没有的键，
+        // 以及只做了降级映射的 reminderOffsets。`dueEndAt` 已迁入
+        // `TaskSchedule.dueEndAt`，不再计入。
+        for key in ["bucket", "timeLabel", "reminderOffsets"] {
             XCTAssertEqual(summary.ignoredFieldCounts[key], 1, "字段 \(key) 应被计数一次")
         }
+        XCTAssertNil(summary.ignoredFieldCounts["dueEndAt"], "dueEndAt 已有对应字段，不该再算忽略")
         let task = try XCTUnwrap(snapshot.tasks.first)
         XCTAssertEqual(task.recurrence, .never)
         XCTAssertNil(task.schedule.dueAt, "无对应字段的日期不落盘")
+        XCTAssertEqual(task.schedule.dueEndAt,
+                       MigrationSnapshot.parseDate("2026-09-29T00:00:00"),
+                       "时间段结束必须落进 schedule.dueEndAt，否则日历画不出色带")
     }
 
     // MARK: merge / replace 语义

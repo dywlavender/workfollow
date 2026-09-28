@@ -1,14 +1,54 @@
 import AppKit
 import SwiftUI
 
+/// 当前选区的样式：段落类型 + 行内标记。
+///
+/// 工具条靠它显示"现在是什么样式"——原版每个按钮都有
+/// `selected: _active(attribute)`（`document_editor_toolbar.dart:148,168,177`），
+/// 原生此前没有这一层，按钮永远是灰的，用户点完看不出到底生效没有。
+struct DocumentSelectionStyle: Equatable {
+    var blockToken: String = DocumentTextCodec.blockToken(.paragraph)
+    /// 选区里**每个** run 都带的标记（空选区取输入属性）。只有全选都是粗体才算
+    /// 粗体激活——与原版 `isActive` 的口径一致。
+    var marks: Set<DocumentMark> = []
+
+    func isBlock(_ kind: DocumentBlockKind?) -> Bool {
+        guard let kind else { return false }
+        return blockToken == DocumentTextCodec.blockToken(kind)
+    }
+
+    func has(_ mark: DocumentMark?) -> Bool {
+        guard let mark else { return false }
+        return marks.contains(mark)
+    }
+}
+
 @MainActor
 final class DocumentEditorHandle: ObservableObject {
     weak var textView: NativeTextView?
+    /// 工具条据此显示激活态；选区变化与每次格式化后都会重算。
+    @Published private(set) var style = DocumentSelectionStyle()
 
     func format(_ command: DocumentFormatCommand) {
         guard let textView else { return }
         textView.window?.makeFirstResponder(textView)
         textView.applyFormat(command)
+        refreshStyle()
+    }
+
+    /// 从当前选区重算样式。空选区读 `typingAttributes`——那正是"接下来输入会是什么
+    /// 样式"，所以空文档里点段落格式也能在工具条上看到反馈（原版同理）。
+    func refreshStyle() {
+        guard let textView, let storage = textView.textStorage else {
+            style = DocumentSelectionStyle()
+            return
+        }
+        let range = textView.selectedRange()
+        let sample = range.length == 0
+            ? NSAttributedString(string: " ", attributes: textView.typingAttributes)
+            : storage.attributedSubstring(from: range)
+        let next = DocumentTextCodec.style(of: sample)
+        if next != style { style = next }
     }
 
     func focusEditor() {
@@ -16,11 +56,18 @@ final class DocumentEditorHandle: ObservableObject {
         textView.window?.makeFirstResponder(textView)
     }
 
-    func editLink() { textView?.editDocumentLink(nil) }
-    func removeLink() { textView?.removeDocumentLink(nil) }
-    func insertAttachment() { textView?.insertDocumentAttachment(nil) }
-    func insertTime(format: String) { textView?.window?.makeFirstResponder(textView); textView?.insertDocumentTime(format: format) }
-    func insertDivider() { textView?.window?.makeFirstResponder(textView); textView?.insertDocumentDivider() }
+    func focusEnd() {
+        guard let textView else { return }
+        textView.window?.makeFirstResponder(textView)
+        textView.setSelectedRange(NSRange(location: (textView.string as NSString).length, length: 0))
+        textView.scrollRangeToVisible(textView.selectedRange())
+    }
+
+    func editLink() { textView?.editDocumentLink(nil); refreshStyle() }
+    func removeLink() { textView?.removeDocumentLink(nil); refreshStyle() }
+    func insertAttachment() { textView?.insertDocumentAttachment(nil); refreshStyle() }
+    func insertTime(format: String) { textView?.window?.makeFirstResponder(textView); textView?.insertDocumentTime(format: format); refreshStyle() }
+    func insertDivider() { textView?.window?.makeFirstResponder(textView); textView?.insertDocumentDivider(); refreshStyle() }
     func insertNoteReference(_ note: Note) {
         guard let textView else { return }
         textView.window?.makeFirstResponder(textView)
@@ -67,10 +114,12 @@ struct DocumentEditor: NSViewRepresentable {
         textView.textStorage?.setAttributedString(DocumentTextCodec.render(document))
         textView.onEscape = onEscape
         textView.onEditingChanged = onEditingChanged
+        textView.onSelectionChanged = { [weak handle] in handle?.refreshStyle() }
         textView.profile = profile
         textView.autoresizingMask = [.width]
         scrollView.documentView = textView
         handle?.textView = textView
+        handle?.refreshStyle()
         return scrollView
     }
 
@@ -78,6 +127,8 @@ struct DocumentEditor: NSViewRepresentable {
         guard let textView = scrollView.documentView as? NativeTextView else { return }
         textView.profile = profile
         handle?.textView = textView
+        textView.onSelectionChanged = { [weak handle] in handle?.refreshStyle() }
+        handle?.refreshStyle()
         context.coordinator.update(textView, documentID: documentID, document: document,
                                    onDocumentChange: onDocumentChange,
                                    onEscape: onEscape,

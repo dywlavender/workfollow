@@ -64,6 +64,31 @@ final class QuickAddParserTests: XCTestCase {
         XCTAssertTrue(result.hasTime)
     }
 
+    func testUnknownListMarkerIsShownAsChipButRemainsInTitle() throws {
+        let input = "买牛奶 @冰箱"
+        let result = QuickAddParser.parse(input, now: now, calendar: calendar,
+                                          knownLists: ["收集箱"])
+        let token = try XCTUnwrap(result.tokens.first { $0.kind == .list })
+
+        XCTAssertTrue(token.retainsInTitle)
+        XCTAssertEqual(result.title, input)
+        XCTAssertEqual(result.text(removing: token), input)
+    }
+
+    func testDismissingUnknownListMarkerKeepsItAsTitleText() throws {
+        let input = "买牛奶 @冰箱"
+        let recognized = QuickAddParser.parse(input, now: now, calendar: calendar,
+                                             knownLists: ["收集箱"])
+        let token = try XCTUnwrap(recognized.tokens.first { $0.kind == .list })
+        let dismissed = QuickAddParser.parse(
+            input, now: now, calendar: calendar, knownLists: ["收集箱"],
+            dismissedTokenIDs: [token.id])
+
+        XCTAssertEqual(dismissed.title, input)
+        XCTAssertNil(dismissed.listName)
+        XCTAssertFalse(dismissed.tokens.contains { $0.id == token.id })
+    }
+
     func testKnownListMarkerIsRecognizedAndRemovedFromTitle() {
         let result = QuickAddParser.parse("整理资料 @个人", now: now,
                                          calendar: calendar, knownLists: ["收集箱", "个人"])
@@ -106,6 +131,15 @@ final class QuickAddParserTests: XCTestCase {
         XCTAssertNil(inboxDraft.dueAt)
         XCTAssertNil(explicitlyCleared.schedule.dueAt)
         XCTAssertEqual(explicitlyCleared.repeatFrequency, .never)
+    }
+
+    func testQuickAddScheduleDraftPreservesSelectedDateRange() {
+        let start = calendar.date(from: DateComponents(year: 2026, month: 9, day: 15))!
+        let end = calendar.date(from: DateComponents(year: 2026, month: 9, day: 18))!
+        let draft = QuickAddScheduleDraft(dueAt: start, dueEndAt: end)
+
+        XCTAssertEqual(draft.schedule.dueAt, start)
+        XCTAssertEqual(draft.schedule.dueEndAt, end)
     }
 
     func testRemovingDateOrTimeTokenSuppressesTodayDefaultButNotOtherTokens() throws {
@@ -185,6 +219,17 @@ final class QuickAddParserTests: XCTestCase {
                                               now: now, calendar: calendar)
 
         XCTAssertEqual(line, "→ 9月15日")
+    }
+
+    func testSummaryLineOmitsDismissedSmartTokens() throws {
+        let input = "明天 #工作 评审"
+        let parsed = QuickAddParser.parse(input, now: now, calendar: calendar,
+                                          knownLists: ["收集箱"])
+        let dateID = try XCTUnwrap(parsed.tokens.first { $0.kind == .date }?.id)
+
+        XCTAssertEqual(QuickAddParser.summaryLine(
+            for: input, knownLists: ["收集箱"], dismissedTokenIDs: [dateID],
+            now: now, calendar: calendar), "→ #工作")
     }
 
     func testSummaryLineOmitsMissingComponentsAndUnknownList() {

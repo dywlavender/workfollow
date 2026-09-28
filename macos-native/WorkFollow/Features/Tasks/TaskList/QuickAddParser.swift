@@ -6,6 +6,9 @@ struct QuickAddToken: Identifiable, Equatable {
     let label: String
     let range: NSRange
     let raw: String
+    /// Unknown `@list` markers still render as removable chips but remain part
+    /// of the title, matching Flutter's list-marker projection.
+    let retainsInTitle: Bool
     var id: String { "\(kind.rawValue):\(range.location):\(range.length):\(raw)" }
 }
 
@@ -69,8 +72,10 @@ enum QuickAddParser {
     /// 缺省成分直接省略；没有任何识别项时返回空串。
     /// @ 清单只在命中已知清单时进入摘要（未知 @ 名仍留在标题里）。
     static func summaryLine(for text: String, knownLists: Set<String>,
+                            dismissedTokenIDs: Set<String> = [],
                             now: Date = Date(), calendar: Calendar = .current) -> String {
-        let result = parse(text, now: now, calendar: calendar, knownLists: knownLists)
+        let result = parse(text, now: now, calendar: calendar, knownLists: knownLists,
+                           dismissedTokenIDs: dismissedTokenIDs)
         var parts: [String] = []
         if let due = result.dueAt {
             parts.append(dateLabel(due, hasTime: result.hasTime, calendar: calendar))
@@ -98,7 +103,8 @@ enum QuickAddParser {
     /// 替换，因此保留为普通标题文字。
     static func title(_ input: String, removing tokens: [QuickAddToken]) -> String {
         let mutable = NSMutableString(string: input)
-        for token in tokens.sorted(by: { $0.range.location > $1.range.location }) {
+        for token in tokens.filter({ !$0.retainsInTitle })
+            .sorted(by: { $0.range.location > $1.range.location }) {
             guard token.range.location >= 0, NSMaxRange(token.range) <= mutable.length else { continue }
             mutable.replaceCharacters(in: token.range, with: " ")
         }
@@ -138,10 +144,12 @@ enum QuickAddParser {
             return source.substring(with: range)
         }
         func token(_ match: NSTextCheckingResult, kind: QuickAddToken.Kind,
-                   label: String, range: NSRange? = nil) -> QuickAddToken {
+                   label: String, range: NSRange? = nil,
+                   retainsInTitle: Bool = false) -> QuickAddToken {
             let tokenRange = range ?? match.range
             return QuickAddToken(kind: kind, label: label, range: tokenRange,
-                                 raw: source.substring(with: tokenRange))
+                                 raw: source.substring(with: tokenRange),
+                                 retainsInTitle: retainsInTitle)
         }
         func makeDate(_ day: Date, hour: Int? = nil, minute: Int = 0) -> Date {
             var parts = calendar.dateComponents([.year, .month, .day], from: day)
@@ -290,8 +298,11 @@ enum QuickAddParser {
             return Candidate(token: token(match, kind: .tag, label: "#\(name)"), tag: name)
         }
         append("@([^\\s#@，,。;；！!]+)") { match in
-            guard let name = capture(match, 1), !name.isEmpty, knownLists.contains(name) else { return nil }
-            return Candidate(token: token(match, kind: .list, label: "@\(name)"), list: name)
+            guard let name = capture(match, 1), !name.isEmpty else { return nil }
+            let isKnownList = knownLists.contains(name)
+            return Candidate(token: token(match, kind: .list, label: "@\(name)",
+                                           retainsInTitle: !isKnownList),
+                             list: isKnownList ? name : nil)
         }
         append("(?m)(^|\\s)(!!!|!!)(?=\\S|\\s|$)") { match in
             let range = match.range(at: 2)

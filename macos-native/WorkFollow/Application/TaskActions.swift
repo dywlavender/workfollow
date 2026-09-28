@@ -89,6 +89,7 @@ final class TaskActions {
                          parentID: task.parentID, childOrder: task.childOrder,
                          createdAt: now, updatedAt: now)
         spawn.schedule.dueAt = next
+        spawn.schedule.dueEndAt = shifted(task.schedule.dueEndAt)
         spawn.schedule.deadlineAt = shifted(task.schedule.deadlineAt)
         spawn.reminderAt = shifted(task.reminderAt)
         spawn.reminderOffsets = task.reminderOffsets
@@ -101,6 +102,7 @@ final class TaskActions {
                              schedule: child.schedule, parentID: spawn.id, childOrder: order,
                              createdAt: now, updatedAt: now)
             value.schedule.dueAt = shifted(child.schedule.dueAt)
+            value.schedule.dueEndAt = shifted(child.schedule.dueEndAt)
             value.schedule.deadlineAt = shifted(child.schedule.deadlineAt)
             value.reminderAt = shifted(child.reminderAt)
             value.reminderOffsets = child.reminderOffsets

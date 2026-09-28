@@ -4,6 +4,42 @@ import XCTest
 
 @MainActor
 final class NoteFeatureTests: XCTestCase {
+    func testNoteChecklistToggleChangesOnlyClickedParagraphAndSupportsUndo() {
+        let view = NativeTextView(frame: .zero, textContainer: nil)
+        view.profile = DocumentProfile(noteSlash: true)
+        let document = NativeDocument(blocks: [
+            DocumentBlock(kind: .checklist(false), runs: [DocumentRun(text: "第一项")]),
+            DocumentBlock(kind: .checklist(false), runs: [DocumentRun(text: "第二项")])
+        ])
+        view.textStorage?.setAttributedString(DocumentTextCodec.render(document))
+        view.setSelectedRange(NSRange(location: 5, length: 0))
+        view.toggleNoteChecklist(at: 0)
+        let result = DocumentTextCodec.decode(view.attributedString(), preserving: document)
+        XCTAssertEqual(result.blocks.map(\.kind), [.checklist(true), .checklist(false)])
+        XCTAssertEqual(view.selectedRange(), NSRange(location: 5, length: 0))
+        view.undoManager?.undo()
+        XCTAssertEqual(DocumentTextCodec.decode(view.attributedString(), preserving: document).blocks.map(\.kind),
+                       [.checklist(false), .checklist(false)])
+    }
+
+    func testFolderChangesAlsoApplyToTrashWithoutChangingDeletionOrder() throws {
+        let date = Date(timeIntervalSince1970: 10)
+        let model = NotesWorkspaceModel(clock: { date })
+        XCTAssertTrue(model.addFolder("会议"))
+        model.create(folder: "会议")
+        let id = try XCTUnwrap(model.selectedID)
+        model.delete(id)
+        XCTAssertTrue(model.renameFolder("会议", to: "记录"))
+        XCTAssertEqual(model.notes.first?.folder, "记录")
+        XCTAssertEqual(model.notes.first?.deletedAt, date)
+        model.folderFilter = "记录"
+        model.removeFolder("记录")
+        XCTAssertEqual(model.folderFilter, "未归档")
+        model.restore(id)
+        XCTAssertEqual(model.notes.first?.folder, "未归档")
+        XCTAssertTrue(model.folders.isEmpty)
+    }
+
     func testNoteSlashMatchesFlutterSharedDocumentCommands() {
         let profile = DocumentProfile(noteSlash: true)
         XCTAssertEqual(profile.slashCommands.map(\.title), ["一级标题", "二级标题", "三级标题", "无序列表", "有序列表", "检查项", "引用", "水平分割线", "附件"])

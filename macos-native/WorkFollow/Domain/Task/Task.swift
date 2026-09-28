@@ -69,14 +69,24 @@ struct TaskListMeta: Equatable, Codable {
     }
 }
 
-/// Schedule and deadline are intentionally distinct. Calendar is injected into projections.
+/// Schedule, period end and deadline are three different things and stay
+/// separate, exactly as in the Flutter baseline:
+///
+/// - `dueAt` is when the work starts (the day a task appears on);
+/// - `dueEndAt` is the end of the period, which is what makes a task cover more
+///   than one day. Without it a "9月1日 – 9月5日" task is indistinguishable from
+///   a one-day task, and the calendar has no way to draw it as a band;
+/// - `deadlineAt` is the separate 截止日期, which never defines a range.
 struct TaskSchedule: Equatable, Codable {
     var dueAt: Date?
     var hasTime: Bool
+    var dueEndAt: Date?
     var deadlineAt: Date?
-    init(dueAt: Date? = nil, hasTime: Bool = false, deadlineAt: Date? = nil) {
+    init(dueAt: Date? = nil, hasTime: Bool = false,
+         dueEndAt: Date? = nil, deadlineAt: Date? = nil) {
         self.dueAt = dueAt
         self.hasTime = dueAt != nil && hasTime
+        self.dueEndAt = dueEndAt
         self.deadlineAt = deadlineAt
     }
 }

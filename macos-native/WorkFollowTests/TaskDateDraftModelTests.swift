@@ -18,12 +18,14 @@ final class TaskDateDraftModelTests: XCTestCase {
     /// All-day dues are stored at start of day.
     private func allDay(_ month: Int, _ day: Int) -> Date { date(month, day, 0, 0) }
 
-    private func makeTask(due: Date? = nil, hasTime: Bool = false, deadline: Date? = nil,
+    private func makeTask(due: Date? = nil, hasTime: Bool = false, dueEnd: Date? = nil,
+                          deadline: Date? = nil,
                           reminder: Date? = nil, recurrence: TaskRepeat = .never,
                           rule: RecurrenceRule? = nil) -> Task {
         Task(id: UUID(), title: "date popover test", recurrence: recurrence, recurrenceRule: rule,
              reminderAt: reminder, list: .inbox, priority: .none,
-             schedule: TaskSchedule(dueAt: due, hasTime: hasTime, deadlineAt: deadline),
+             schedule: TaskSchedule(dueAt: due, hasTime: hasTime, dueEndAt: dueEnd,
+                                    deadlineAt: deadline),
              parentID: nil, childOrder: 0, createdAt: fixedNow, updatedAt: fixedNow)
     }
 
@@ -68,7 +70,7 @@ final class TaskDateDraftModelTests: XCTestCase {
     }
 
     func testBothDatesOpenOnPeriodTabAndSwitchSyncsDrafts() {
-        let model = makeModel(task: makeTask(due: date(8, 10, 8, 0), hasTime: true, deadline: date(8, 12)))
+        let model = makeModel(task: makeTask(due: date(8, 10, 8, 0), hasTime: true, dueEnd: date(8, 12)))
         XCTAssertEqual(model.tab, .period)
         XCTAssertEqual(model.periodStart, date(8, 10, 8, 0))
         model.setTab(.date)
@@ -78,6 +80,14 @@ final class TaskDateDraftModelTests: XCTestCase {
         XCTAssertEqual(model.periodStart, date(8, 20, 8, 0)) // start day follows the date tab, time kept
         XCTAssertNil(model.periodEnd) // end < start was dropped
         XCTAssertEqual(model.periodRange, date(8, 20, 8, 0)...date(8, 20, 8, 0)) // single-point range
+    }
+
+    /// 区间由 `dueEndAt` 表达，不是 `deadlineAt`：后者是独立的截止点，
+    /// 只有它时面板仍停在日期页签。
+    func testDeadlineAloneKeepsTheDateTab() {
+        let model = makeModel(task: makeTask(due: date(8, 10), deadline: date(8, 12)))
+        XCTAssertEqual(model.tab, .date)
+        XCTAssertNil(model.periodEnd)
     }
 
     // MARK: Time
@@ -167,7 +177,7 @@ final class TaskDateDraftModelTests: XCTestCase {
         XCTAssertNil(plan.recurrenceRule)
     }
 
-    func testCommitPeriodTabWritesStartAndDeadline() {
+    func testCommitPeriodTabWritesStartAndRangeEnd() {
         let task = makeTask()
         let model = makeModel(task: task)
         model.setTab(.period)
@@ -176,31 +186,36 @@ final class TaskDateDraftModelTests: XCTestCase {
         let plan = model.commitPlan(for: task)
         XCTAssertEqual(plan.schedule.dueAt, calendar.startOfDay(for: date(8, 10)))
         XCTAssertFalse(plan.schedule.hasTime)
-        XCTAssertEqual(plan.schedule.deadlineAt, calendar.startOfDay(for: date(8, 12)))
+        XCTAssertEqual(plan.schedule.dueEndAt, calendar.startOfDay(for: date(8, 12)))
+        XCTAssertNil(plan.schedule.deadlineAt, "时间段页签不碰截止日期")
     }
 
     // MARK: Clear
 
     func testClearDateTabKeepsDeadlineAndDropsTheRest() {
-        let task = makeTask(due: allDay(8, 22), deadline: date(9, 1, 0, 0), reminder: date(8, 22, 10, 0), recurrence: .daily)
+        let task = makeTask(due: allDay(8, 22), dueEnd: allDay(8, 25), deadline: date(9, 1, 0, 0),
+                            reminder: date(8, 22, 10, 0), recurrence: .daily)
         let model = makeModel(task: task)
-        model.setTab(.date) // both dates set → opens on the period tab; clear on the date tab keeps the deadline
+        XCTAssertEqual(model.tab, .period)
+        model.setTab(.date)
         let plan = model.clearPlan(for: task)
         XCTAssertNil(plan.schedule.dueAt)
         XCTAssertFalse(plan.schedule.hasTime)
-        XCTAssertEqual(plan.schedule.deadlineAt, calendar.startOfDay(for: date(9, 1)))
+        XCTAssertNil(plan.schedule.dueEndAt, "清除清掉整段安排，不含页签之分")
+        XCTAssertEqual(plan.schedule.deadlineAt, calendar.startOfDay(for: date(9, 1)),
+                       "截止日期是另一个字段，清除动不到它")
         XCTAssertNil(plan.reminder)
         XCTAssertEqual(plan.frequency, .never)
         XCTAssertNil(plan.recurrenceRule)
     }
 
-    func testClearPeriodTabDropsDeadlineToo() {
-        let task = makeTask(due: date(8, 10), deadline: date(8, 12))
+    func testClearPeriodTabDropsTheWholeRange() {
+        let task = makeTask(due: date(8, 10), dueEnd: date(8, 12))
         let model = makeModel(task: task)
         XCTAssertEqual(model.tab, .period)
         let plan = model.clearPlan(for: task)
         XCTAssertNil(plan.schedule.dueAt)
-        XCTAssertNil(plan.schedule.deadlineAt)
+        XCTAssertNil(plan.schedule.dueEndAt)
     }
 
     func testDeadlineModeCommitAndClearOnlyTouchDeadline() {

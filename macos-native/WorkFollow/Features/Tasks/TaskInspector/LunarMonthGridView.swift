@@ -49,11 +49,11 @@ struct LunarMonthGridView: View {
         HStack(spacing: 14) {
             Text(title).font(.system(size: 14, weight: .semibold)).foregroundStyle(WFColors.text)
             Spacer()
-            navButton("chevron.left") { changeMonth(-1) }
-            navButton("circle") {
+            navButton("chevron.left", "上个月") { changeMonth(-1) }
+            navButton("circle", "回到今天") {
                 onSelect(calendar.startOfDay(for: today))
             }
-            navButton("chevron.right") { changeMonth(1) }
+            navButton("chevron.right", "下个月") { changeMonth(1) }
         }
     }
 
@@ -78,7 +78,10 @@ struct LunarMonthGridView: View {
         return Array(Self.weekdayLabels[start...] + Self.weekdayLabels[..<start])
     }
 
-    private func navButton(_ symbol: String, action: @escaping () -> Void) -> some View {
+    /// 月历头部的三个导航控件。它们是只有图标的按钮，所以要自己带功能名称——
+    /// 原版这三个按钮（`task_schedule_panel.dart:314/321/326`）都带 tooltip。
+    private func navButton(_ symbol: String, _ help: String,
+                           action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: symbol)
                 .font(.system(size: 11, weight: .medium))
@@ -86,6 +89,8 @@ struct LunarMonthGridView: View {
                 .frame(width: 18, height: 18)
                 .contentShape(Rectangle())
         }.buttonStyle(.plain)
+            .help(help)
+            .accessibilityLabel(help)
     }
 
     private func changeMonth(_ delta: Int) {
@@ -131,11 +136,14 @@ private struct GridDayCell: View {
             }
             VStack(spacing: 0) {
                 Text("\(day)")
-                    .font(.system(size: 12, weight: isSelected ? .semibold : isToday ? .medium : .regular))
+                    // 原版日期数字取 `body`（14）regular：今天/选中由上面那个圆圈
+                    // 表达，字重不再重复说一遍。
+                    .font(WFType.body)
                     .foregroundStyle(numberColor)
                 if let festival {
                     Text(festival)
-                        .font(.system(size: 7))
+                        // 原版节日小字 `calendarAnnotation` = 6。
+                        .font(.system(size: 6))
                         .foregroundStyle(festivalColor)
                         .lineLimit(1)
                 }

@@ -18,6 +18,9 @@ struct TaskDatePopoverV2: View {
     var deadline = false
     var initialPage: Page = .main
     let onClose: () -> Void
+    /// 草稿宿主（日历/四象限的新建卡）：任务还没被创建，确定与清除只把计划交回
+    /// 调用方，不写工作区，也不动批量选择。
+    private let draftCommit: ((TaskDateDraftModel.CommitPlan) -> Void)?
 
     /// Floating sheet over the popover: 时间/提醒 open below their row,
     /// 重复 opens above its row covering the calendar (TickTick-style). The
@@ -42,12 +45,14 @@ struct TaskDatePopoverV2: View {
     @State private var repeatGroup: RepeatGroup?
 
     init(task: Task, workspace: TaskWorkspaceModel, deadline: Bool = false, initialPage: Page = .main,
+         draftCommit: ((TaskDateDraftModel.CommitPlan) -> Void)? = nil,
          onClose: @escaping () -> Void) {
         taskID = task.id
         self.task = task
         self.workspace = workspace
         self.deadline = deadline
         self.initialPage = initialPage
+        self.draftCommit = draftCommit
         self.onClose = onClose
         let draftModel = TaskDateDraftModel(
             task: task, calendar: workspace.calendar, now: workspace.clock, deadline: deadline)
@@ -225,6 +230,10 @@ struct TaskDatePopoverV2: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        // 只有图标，提示语取原版同一个位置上的动作名（`task_schedule_options.dart:177`
+        // 的 '清除'）。
+        .help("清除")
+        .accessibilityLabel("清除")
     }
 
     private var sheetCard: some View {
@@ -473,7 +482,9 @@ struct TaskDatePopoverV2: View {
             model.setTab(value)
         } label: {
             Text(title)
-                .font(.system(size: 12, weight: selected ? .semibold : .regular))
+                // 原版分段文字取 `body`（14）配 regular：选中由下面那块填色胶囊表达，
+                // 不再叠一层字重。
+                .font(.system(size: 14))
                 .foregroundStyle(selected ? WFColors.text : WFColors.secondaryText)
                 .frame(maxWidth: .infinity, minHeight: 24)
                 .background {
@@ -506,7 +517,7 @@ struct TaskDatePopoverV2: View {
                 clear()
             } label: {
                 Text("清除")
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.system(size: 14))
                     .foregroundStyle(WFColors.text)
                     .frame(maxWidth: .infinity, minHeight: 28)
                     .background(WFColors.content, in: RoundedRectangle(cornerRadius: 8))
@@ -519,7 +530,7 @@ struct TaskDatePopoverV2: View {
                 save()
             } label: {
                 Text("确定")
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.system(size: 14))
                     .foregroundStyle(Color.white)
                     .frame(maxWidth: .infinity, minHeight: 28)
                     .background(WFColors.accent, in: RoundedRectangle(cornerRadius: 8))
@@ -578,7 +589,7 @@ struct TaskDatePopoverV2: View {
                     .frame(width: 18)
                 Text(title).font(WFType.body).foregroundStyle(WFColors.text)
                 Spacer()
-                Text(value).font(WFType.supporting).foregroundStyle(WFColors.secondaryText)
+                Text(value).font(WFType.body).foregroundStyle(WFColors.secondaryText)
                 Image(systemName: "chevron.right")
                     .font(.system(size: 10, weight: .semibold))
                     .foregroundStyle(WFColors.tertiaryText)
@@ -595,7 +606,7 @@ struct TaskDatePopoverV2: View {
     private var repeatSheet: some View {
         VStack(spacing: 0) {
             HStack {
-                Text("重复规则").font(WFType.section)
+                Text("重复规则").font(WFType.body)
                 Spacer()
                 sheetClearButton { closeSheet() }
             }
@@ -726,7 +737,7 @@ struct TaskDatePopoverV2: View {
             model.chooseWeekday(weekday)
         } label: {
             Text(symbols[weekday - 1])
-                .font(WFType.supporting)
+                .font(WFType.caption)
                 .foregroundStyle(model.weekday == weekday ? Color.white : WFColors.secondaryText)
                 .frame(width: 20, height: 20)
                 .background(Circle().fill(model.weekday == weekday ? WFColors.accent : WFColors.hover))
@@ -778,6 +789,12 @@ struct TaskDatePopoverV2: View {
     // MARK: Commit
 
     private func save() {
+        // 草稿宿主：把计划交给调用方（新建卡把它带回草稿状态），不碰工作区。
+        if let draftCommit {
+            draftCommit(model.commitPlan(for: task))
+            onClose()
+            return
+        }
         // Read current task here, so an open popover cannot overwrite other edits.
         guard let current = workspace.task(for: taskID) else { onClose(); return }
         let plan = model.commitPlan(for: current)
@@ -788,6 +805,11 @@ struct TaskDatePopoverV2: View {
     }
 
     private func clear() {
+        if let draftCommit {
+            draftCommit(model.clearPlan(for: task))
+            onClose()
+            return
+        }
         guard let current = workspace.task(for: taskID) else { onClose(); return }
         let plan = model.clearPlan(for: current)
         workspace.saveTiming(taskID, schedule: plan.schedule, reminder: plan.reminder,
