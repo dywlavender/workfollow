@@ -18,6 +18,21 @@ final class NativeTextView: NSTextView {
     var slashPanel: NSPanel?
     /// 斜杠面板"跟着滚动与窗口变化走"用的通知观察者（见 `startFollowingSlash`）。
     var slashObservers: [Any] = []
+    /// 文末那个"一个字符都没有"的空段落当前的待定段落类型。
+    ///
+    /// TextKit 把段落样式挂在字符上，而文末空段落没有字符——它的级别只活在
+    /// `typingAttributes` 里。这里记下来交给模型（`DocumentTextCodec.decode(trailing:)`），
+    /// 否则"在文末空行上选标题、不输入内容就切走"会丢掉级别；原版把行属性存在
+    /// Delta 里，没有这个边界。
+    var pendingTrailingBlock: DocumentBlockKind?
+
+    /// 绑定文档时把模型里的文末级别带回输入属性（由协调器调用），这样切走再回来
+    /// 接着在文末输入时，字号与级别都还在。
+    func seedTrailingParagraphKind(_ kind: DocumentBlockKind?) {
+        pendingTrailingBlock = kind
+        guard let kind else { return }
+        typingAttributes = DocumentTextCodec.attributes(kind: kind, marks: [])
+    }
     var selectionPanel: NSPanel?
     var documentIdentity = UUID()
     var needsHostCaretReveal = false
@@ -28,6 +43,8 @@ final class NativeTextView: NSTextView {
         // 判断"这是插入了一个 `/`"，选中内容被替换掉不算（`slash_command_session.dart:21-31`）。
         let target = replacementRange.location == NSNotFound ? selectedRange() : replacementRange
         let replacedSelection = target.length > 0
+        // 真有字进来了，段落样式就由字符承载，"文末待定级别"不再需要。
+        if let inserted = insertString as? String, !inserted.isEmpty { pendingTrailingBlock = nil }
         super.insertText(insertString, replacementRange: replacementRange)
         guard !wasComposing, !replacedSelection, (insertString as? String) == "/" else { refreshSlash(); return }
         let location = selectedRange().location

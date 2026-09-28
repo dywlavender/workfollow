@@ -39,6 +39,9 @@ final class DocumentEditorCoordinator: NSObject, NSTextViewDelegate {
             self.document = document
             textView.textStorage?.setAttributedString(DocumentTextCodec.render(document))
             textView.setSelectedRange(editorState.selectedRange)
+            // 文末空段落的级别只能从模型带回输入属性（它的样式在文档里没有字符可承载），
+            // 否则切回来接着在文末输入会退回正文。
+            textView.seedTrailingParagraphKind(Self.trailingBlockKind(of: document))
         } else if self.document != document,
                   !textView.hasMarkedText() {
             let selection = textView.selectedRange()
@@ -90,9 +93,17 @@ final class DocumentEditorCoordinator: NSObject, NSTextViewDelegate {
 
     private func commit(_ textView: NSTextView, force: Bool) {
         guard force || !textView.hasMarkedText() else { return }
-        let updated = DocumentTextCodec.decode(textView.attributedString(), preserving: document)
+        let updated = DocumentTextCodec.decode(textView.attributedString(), preserving: document,
+                                              trailing: (textView as? NativeTextView)?.pendingTrailingBlock)
         guard updated != document else { return }
         document = updated
         onDocumentChange(updated)
+    }
+
+    /// 模型里最后一个块没有字符时，它的段落类型只存在于"输入属性"这一层。
+    private static func trailingBlockKind(of document: NativeDocument) -> DocumentBlockKind? {
+        guard let last = document.blocks.last, last.kind != .paragraph,
+              last.runs.allSatisfy({ $0.text.isEmpty }) else { return nil }
+        return last.kind
     }
 }

@@ -147,17 +147,22 @@ enum DocumentTextCodec {
         default: nil
         }
     }
-    static func decode(_ text: NSAttributedString, preserving previous: NativeDocument) -> NativeDocument {
+    static func decode(_ text: NSAttributedString, preserving previous: NativeDocument,
+                       trailing: DocumentBlockKind? = nil) -> NativeDocument {
         let plain = text.string as NSString
         let skeleton = previous.replacingPlainText(text.string)
         var offset = 0
-        let blocks = skeleton.blocks.map { block -> DocumentBlock in
+        let blocks = skeleton.blocks.enumerated().map { index, block -> DocumentBlock in
             let length = (block.plainText as NSString).length
             var runs: [DocumentRun] = []
             var kind: DocumentBlockKind = .paragraph
             if offset < text.length, let token = text.attribute(blockKey, at: offset, effectiveRange: nil) as? String {
                 kind = Self.kind(token)
             }
+            // 文末那个"一个字符都没有"的空段落：TextKit 把段落样式挂在字符上，而它
+            // 没有字符，级别只活在输入属性里，所以由视图把待定级别报进来。原版把行
+            // 属性存在 Delta 里，没有这个边界。
+            if length == 0, index == skeleton.blocks.count - 1, let trailing { kind = trailing }
             text.enumerateAttributes(in: NSRange(location: min(offset, text.length), length: length)) { attrs, range, _ in
                 var marks = Set<DocumentMark>()
                 if attrs[inlineCodeKey] as? Bool == true { marks.insert(.code) }

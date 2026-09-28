@@ -108,6 +108,50 @@ final class DocumentFormatStyleTests: XCTestCase {
         XCTAssertEqual(typed.pointSize, 22, "实际敲进去的字是 22pt")
     }
 
+    /// 文末那个"一个字符都没有"的空段落：级别只存在于输入属性里，模型必须能收到它，
+    /// 否则"在文末空行上选标题、不输入就切走"会丢掉这一级。
+    @MainActor
+    func testHeadingOnATrailingEmptyParagraphSurvivesIntoTheModel() throws {
+        let view = NativeTextView(frame: .zero, textContainer: nil)
+        view.profile = DocumentProfile(taskSlash: true)
+        let document = NativeDocument(plainText: "正文\n")
+        view.textStorage?.setAttributedString(DocumentTextCodec.render(document))
+        view.setSelectedRange(NSRange(location: 3, length: 0))
+
+        let command = try XCTUnwrap(DocumentFormatCommand.commands.first { $0.block == .heading(2) })
+        view.applyFormat(command)
+
+        XCTAssertEqual(view.pendingTrailingBlock, .heading(2), "文末空段落的级别要被记为待定")
+        let saved = DocumentTextCodec.decode(view.attributedString(), preserving: document,
+                                             trailing: view.pendingTrailingBlock)
+        XCTAssertEqual(saved.blocks.map(\.kind), [.paragraph, .heading(2)])
+
+        // 再渲染一次（等于切走再回来）：文末空段落仍是二级标题
+        let reloaded = DocumentTextCodec.decode(DocumentTextCodec.render(saved), preserving: saved,
+                                                trailing: view.pendingTrailingBlock)
+        XCTAssertEqual(reloaded.blocks.map(\.kind), [.paragraph, .heading(2)])
+    }
+
+    /// 绑定文档时把文末级别带回输入属性，切走再回来接着输入才不会退回正文。
+    @MainActor
+    func testDocumentRebindSeedsTheTrailingBlockKindForTyping() {
+        let view = NativeTextView(frame: .zero, textContainer: nil)
+        let coordinator = DocumentEditorCoordinator(documentID: UUID(), document: .empty,
+            onDocumentChange: { _ in }, onEscape: { .keepInspector }, onEditingChanged: { _ in })
+        view.delegate = coordinator
+        let document = NativeDocument(blocks: [
+            DocumentBlock(kind: .paragraph, runs: [DocumentRun(text: "正文")]),
+            DocumentBlock(kind: .heading(2), runs: [])
+        ])
+
+        coordinator.update(view, documentID: UUID(), document: document,
+                           onDocumentChange: { _ in }, onEscape: { .keepInspector },
+                           onEditingChanged: { _ in })
+
+        XCTAssertEqual(view.pendingTrailingBlock, .heading(2))
+        XCTAssertEqual((view.typingAttributes[.font] as? NSFont)?.pointSize, 19)
+    }
+
     /// "输入的字号"这条链：空段落上设标题走的是 `typingAttributes` 分支，之后真正
     /// 敲进去的字必须继承该级别字号（三级标题各不相同）。
     @MainActor

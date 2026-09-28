@@ -250,54 +250,8 @@ private struct SlashCommandList: View {
 
     @ViewBuilder
     private func glyph(_ command: DocumentCommand) -> some View {
-        if let level = Self.headingLevel(command.id) {
-            SlashHeadingGlyph(level: level)
-        } else {
-            Image(systemName: Self.symbol(command.id))
-                .font(.system(size: 13))
-                .frame(width: SlashMenuMetrics.glyphSlot, height: SlashMenuMetrics.glyphSlot)
-        }
-    }
-
-    /// 三个标题项必须**看得出级别**：原版手绘的是 H₁ / H₂ / H₃ 三个文字字形，而不是
-    /// 三个一样的图标（`document_slash_menu.dart:571` 的 `_heading`）。
-    private static func headingLevel(_ id: String) -> Int? {
-        switch id {
-        case "task.format.0": return 1
-        case "task.format.1": return 2
-        case "task.format.2": return 3
-        default: return nil
-        }
-    }
-
-    private static func symbol(_ id: String) -> String {
-        switch id {
-        case "task.format.3": return "list.bullet"
-        case "task.format.4": return "list.number"
-        case "task.format.5": return "checklist"
-        case "task.format.6": return "text.quote"
-        case "shared.divider": return "minus"
-        case "shared.attachment": return "paperclip"
-        case "task.child": return "list.bullet.indent"
-        case "task.tags": return "tag"
-        case "task.relation": return "link"
-        default: return "text.alignleft"
-        }
-    }
-}
-
-/// 手绘 `H` + 下标级别（原版 `_heading`：H 15pt，级别 9pt medium 且坐得比 H 基线低
-/// 一点）。字形本身是平台差异，但**级别必须可区分**。
-private struct SlashHeadingGlyph: View {
-    let level: Int
-
-    var body: some View {
-        ZStack(alignment: .bottomLeading) {
-            Text("H").font(.system(size: 15))
-            Text("\(level)").font(.system(size: 9, weight: .medium)).baselineOffset(-1)
-        }
-        .foregroundStyle(WFColors.text)
-        .frame(width: SlashMenuMetrics.glyphSlot, height: SlashMenuMetrics.glyphSlot,
-               alignment: .bottomLeading)
+        // 图形按原版手绘（见 `SlashMenuGlyph`）：面板这一栏是原版自己画的图标集，
+        // SF Symbols 只有语义相近、笔画不同的替代品。
+        SlashMenuGlyph(kind: SlashGlyphKind.forCommand(command.id))
     }
 }

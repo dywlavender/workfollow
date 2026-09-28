@@ -175,6 +175,18 @@ final class SlashSessionTests: XCTestCase {
         XCTAssertFalse(escaped)
     }
 
+    /// 面板每一项的图形：三个标题是 H + 下标级别，其余段落字形按原版手绘，
+    /// 只有附件走系统图标。这里把 id → 图形的映射与真实清单钉在一起，
+    /// `DocumentProfile` 里那七项的顺序一变就会被抓住。
+    func testSlashGlyphMappingFollowsThePaletteOrder() {
+        XCTAssertEqual(DocumentProfile(taskSlash: true).slashCommands.map { SlashGlyphKind.forCommand($0.id) },
+                       [.heading(1), .heading(2), .heading(3), .bullet, .ordered, .checklist,
+                        .quote, .divider, .symbol("paperclip")])
+        XCTAssertEqual(SlashGlyphKind.forCommand("task.child"), .nestedItems)
+        XCTAssertEqual(SlashGlyphKind.forCommand("task.tags"), .labelTag)
+        XCTAssertEqual(SlashGlyphKind.forCommand("task.relation"), .linkedCards)
+    }
+
     /// 用 `/` 覆盖一段选中文本是普通编辑：原版按前后文本差异判断"这是插入了一个
     /// `/`"，选中内容被替换掉不算，因此不该开面板（`slash_command_session.dart:21-31`）。
     func testTypingSlashOverASelectionIsOrdinaryText() {

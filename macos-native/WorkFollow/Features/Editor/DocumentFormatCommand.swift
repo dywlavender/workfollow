@@ -128,9 +128,14 @@ extension NativeTextView {
                 else { marks.insert(mark) }
             }
             let current = DocumentTextCodec.kind(token)
-            typingAttributes = DocumentTextCodec.attributes(
-                kind: resolvedBlock(command.block, current: current, lineStart: lineStart),
-                marks: marks)
+            let resolved = resolvedBlock(command.block, current: current, lineStart: lineStart)
+            typingAttributes = DocumentTextCodec.attributes(kind: resolved, marks: marks)
+            // 这个分支只在"段落里一个字符都没有"时走（文末空行或空文档）。TextKit 把
+            // 段落样式挂在字符上，而这里没有字符，所以把级别记成"待定"交给模型，并
+            // 当场让协调器收到变更——否则在文末空行上选完标题、不输入就切走会丢掉
+            // 这一级（原版把行属性存在 Delta 里，没有这个边界）。
+            pendingTrailingBlock = resolved == .paragraph ? nil : resolved
+            didChangeText()
             return
         }
         guard let storage = textStorage else { return }
