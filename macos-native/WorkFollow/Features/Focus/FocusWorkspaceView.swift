@@ -12,16 +12,6 @@ struct FocusWorkspaceView: View {
     /// 专注页主题：底色与整体一致，前后景随系统外观切换。
     private var theme: FocusTheme { FocusTheme(colorScheme) }
 
-    private enum DurationChoice: Hashable {
-        case preset(Int)
-        case custom
-    }
-
-    private static let presetMinutes = [25, 45, 60]
-
-    @State private var durationSelection: DurationChoice = .preset(25)
-    @State private var customMinutes = ""
-    @State private var durationHint: String?
     @State private var linkedTaskID: UUID?
     @State private var hoveredRecordID: UUID?
     @State private var showGiveUpConfirmation = false
@@ -30,7 +20,6 @@ struct FocusWorkspaceView: View {
     @State private var addRecordTaskID: UUID?
     @State private var addRecordMinutes = "25"
     @State private var addRecordHint: String?
-    @State private var showRhythmPopover = false
     @State private var showAddTimer = false
     @State private var addTimerName = ""
     @State private var addTimerStopwatch = false
@@ -38,7 +27,6 @@ struct FocusWorkspaceView: View {
     @State private var addTimerHint: String?
     @State private var addTimerEmoji = "😀"
     @State private var showEmojiPicker = false
-    @State private var hoveredPresetID: UUID?
 
     init(store: FocusStore) {
         self.store = store
@@ -52,13 +40,13 @@ struct FocusWorkspaceView: View {
 
     var body: some View {
         GeometryReader { geo in
-            let s = Self.scale(for: geo.size)
-            content(scale: s, width: geo.size.width)
+            let overviewScale = Self.scale(for: geo.size)
+            content(scale: overviewScale, width: geo.size.width)
                 .frame(width: geo.size.width, height: geo.size.height)
         }
     }
 
-    /// 设计基准高 1150：窗口更矮时按比例收缩，更高时最多放大 15%。
+    /// Overview 与既有弹框暂保留原有比例；FocusTimerPane 的核心尺寸不使用该缩放值。
     static func scale(for size: CGSize) -> CGFloat {
         min(1.2, max(0.6, min(size.height / 982, size.width / 1512)))
     }
@@ -68,7 +56,11 @@ struct FocusWorkspaceView: View {
     private func content(scale s: CGFloat, width: CGFloat) -> some View {
         let leftWidth = FocusLayoutMetrics.focusPaneWidth(availableWidth: width)
         return HStack(spacing: 0) {
-            timerPane(s: s, paneWidth: leftWidth)
+            FocusTimerPane(store: store,
+                           workspace: workspace,
+                           linkedTaskID: $linkedTaskID,
+                           showGiveUpConfirmation: $showGiveUpConfirmation,
+                           onAddTimer: prepareAddTimer)
                 .frame(width: leftWidth)
                 .frame(maxHeight: .infinity)
             Rectangle()
@@ -106,359 +98,10 @@ struct FocusWorkspaceView: View {
         }
         .onAppear {
             store.refresh()
-            syncLocalState()
-        }
-    }
-
-    // MARK: - 左栏 专注计时
-
-    private func timerPane(s: CGFloat, paneWidth: CGFloat) -> some View {
-        VStack(spacing: 0) {
-            paneHeader(s: s)
-            if !store.timers.isEmpty {
-                presetChipsRow(s: s)
-                    .padding(.top, 12 * s)
-            }
-            Spacer(minLength: 10 * s)
-            selectorRow(s: s)
-                .padding(.bottom, 18 * s)
-            ringView(s: s, paneWidth: paneWidth)
-            if store.phase != .idle {
-                runningStatus(s: s)
-                    .padding(.top, 18 * s)
-            }
-            if store.phase == .breaking, store.preferences.autoStartNextPomodoro {
-                Text("下一番茄 \(nextAutoStartTime) 自动开始")
-                    .font(.system(size: 14 * s))
-                    .foregroundStyle(theme.text3)
-                    .padding(.top, 10 * s)
-            }
-            Spacer(minLength: 10 * s)
-            actionsColumn(s: s)
-            Spacer().frame(height: 36 * s)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .padding(.horizontal, 36 * s)
-    }
-
-    private func paneHeader(s: CGFloat) -> some View {
-        HStack {
-            Text("番茄专注")
-                .font(.system(size: 21 * s, weight: .bold))
-                .foregroundStyle(theme.text)
-            Spacer()
-            modeSegment(s: s)
-            Spacer()
-            headerIcons(s: s)
-        }
-        .padding(.top, 18 * s)
-    }
-
-    /// 模式分段：番茄计时 / 正计时（会话进行中锁定）。
-    private func modeSegment(s: CGFloat) -> some View {
-        HStack(spacing: 3 * s) {
-            segmentItem("番茄计时",
-                        selected: !store.preferences.stopwatchMode, s: s) {
-                store.setStopwatchMode(false)
-            }
-            segmentItem("正计时",
-                        selected: store.preferences.stopwatchMode, s: s) {
-                store.setStopwatchMode(true)
+            if linkedTaskID == nil {
+                linkedTaskID = store.preferences.lastTaskID ?? workspace?.selectedTaskID
             }
         }
-        .padding(4 * s)
-        .background(Capsule().fill(theme.chipBackground))
-        .opacity(store.phase == .idle ? 1 : 0.55)
-        .help(store.phase != .idle ? "会话结束后可切换" : "")
-    }
-
-    private func segmentItem(_ title: String, selected: Bool, s: CGFloat,
-                             action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Text(title)
-                .font(.system(size: 14 * s, weight: selected ? .semibold : .regular))
-                .foregroundStyle(selected ? theme.text : theme.text2)
-                .padding(.horizontal, 15 * s)
-                .padding(.vertical, 6 * s)
-                .background(Capsule().fill(selected ? theme.segmentActive : .clear))
-        }
-        .buttonStyle(.plain)
-    }
-
-    /// 头部右侧：补记、铃声、节奏。
-    private func headerIcons(s: CGFloat) -> some View {
-        HStack(spacing: 18 * s) {
-            Button {
-                addTimerName = ""
-                addTimerMinutes = "25"
-                addTimerStopwatch = false
-                addTimerHint = nil
-                addTimerEmoji = "😀"
-                showEmojiPicker = false
-                showAddTimer = true
-            } label: {
-                Image(systemName: "plus")
-                    .font(.system(size: 17 * s, weight: .medium))
-            }
-            .buttonStyle(.plain)
-            .foregroundStyle(theme.text2)
-            .help("添加常用专注")
-
-            Menu {
-                ForEach(FocusBell.allCases, id: \.self) { bell in
-                    Button(bell.rawValue) { store.setBell(bell.rawValue) }
-                }
-            } label: {
-                Image(systemName: bellIcon)
-                    .font(.system(size: 16 * s))
-            }
-            .menuStyle(.button)
-            .menuIndicator(.hidden)
-            .foregroundStyle(theme.text2)
-            .help("结束铃声：\(currentBellLabel)")
-
-            Button { showRhythmPopover = true } label: {
-                Image(systemName: "ellipsis")
-                    .font(.system(size: 17 * s, weight: .medium))
-            }
-            .buttonStyle(.plain)
-            .foregroundStyle(theme.text2)
-            .help("节奏设置")
-            .popover(isPresented: $showRhythmPopover, arrowEdge: .bottom) {
-                rhythmPopover(s: s)
-            }
-        }
-    }
-
-    private var bellIcon: String {
-        (FocusBell(rawValue: store.preferences.bellSound ?? "") ?? .off) == .off
-            ? "speaker.slash" : "speaker.wave.2"
-    }
-
-    private var currentBellLabel: String {
-        (FocusBell(rawValue: store.preferences.bellSound ?? "") ?? .off).rawValue
-    }
-
-    /// 任务选择行：未绑定时是安静的「专注 ›」，绑定后显示清单色点 + 标题。
-    @ViewBuilder
-    private func selectorRow(s: CGFloat) -> some View {
-        if let workspace {
-            let linkID = store.phase == .idle ? linkedTaskID : store.currentTaskID
-            let boundTask = linkID.flatMap { workspace.task(for: $0) }
-            let title = boundTask.map { $0.title.isEmpty ? "未命名任务" : $0.title }
-            let overdue = boundTask.map { isDueOverdue($0) } ?? false
-            Menu {
-                Button("不关联") {
-                    if store.phase == .idle { linkedTaskID = nil } else { store.reattach(taskID: nil) }
-                }
-                ForEach(unfinishedTasks(in: workspace)) { task in
-                    Button {
-                        if store.phase == .idle { linkedTaskID = task.id } else { store.reattach(taskID: task.id) }
-                    } label: {
-                        if task.id == linkID {
-                            Label(taskMenuTitle(task), systemImage: "checkmark")
-                        } else {
-                            Text(taskMenuTitle(task))
-                        }
-                    }
-                }
-            } label: {
-                HStack(spacing: 8 * s) {
-                    if let boundTask {
-                        Circle()
-                            .fill(listDotColor(for: boundTask.id))
-                            .frame(width: 8 * s, height: 8 * s)
-                    }
-                    Text(title ?? "专注")
-                        .font(.system(size: 15 * s, weight: title == nil ? .regular : .semibold))
-                        .foregroundStyle(title == nil ? theme.text3
-                                         : (overdue ? theme.warn : theme.text))
-                        .lineLimit(1)
-                    Text("›")
-                        .font(.system(size: 14 * s))
-                        .foregroundStyle(theme.text3)
-                }
-                .contentShape(Rectangle())
-            }
-            .menuStyle(.button)
-            .menuIndicator(.hidden)
-            .fixedSize()
-            .help("选择一个任务并开始专注")
-        }
-    }
-
-    private func ringView(s: CGFloat, paneWidth: CGFloat) -> some View {
-        let size = min(240 * s, paneWidth * 0.42)
-        let active = store.phase == .focusing || store.phase == .breaking
-        let stopwatch = store.preferences.stopwatchMode
-        return ZStack {
-            Circle()
-                .stroke(theme.track,
-                        style: stopwatch
-                            ? StrokeStyle(lineWidth: 2 * max(s, 0.8), dash: [2.5, 5])
-                            : StrokeStyle(lineWidth: 2 * max(s, 0.8)))
-            Circle()
-                .trim(from: 0, to: progress)
-                .stroke(progressGradient,
-                        style: StrokeStyle(lineWidth: 6 * s, lineCap: .round))
-                .rotationEffect(.degrees(-90))
-                .animation(.linear(duration: 0.3), value: progress)
-            ringCenter(s: s)
-        }
-        .frame(width: size, height: size)
-        .shadow(color: active ? theme.accent.opacity(0.18) : .clear, radius: 30 * s)
-    }
-
-    /// 环心：剩余/已计时间 + 阶段文案 + 关联任务名。
-    private func ringCenter(s: CGFloat) -> some View {
-        VStack(spacing: 10 * s) {
-            Text(FocusViewLogic.clockText(displaySeconds))
-                .font(.system(size: 34 * s, weight: .regular))
-                .monospacedDigit()
-                .foregroundStyle(theme.text)
-            Text(FocusViewLogic.phaseTitle(for: store.phase, isLongBreak: store.isLongBreak))
-                .font(.system(size: 14 * s))
-                .foregroundStyle(theme.text2)
-            if let title = ringTaskTitle, store.phase != .idle {
-                Text(title)
-                    .font(.system(size: 15 * s))
-                    .foregroundStyle(theme.text3)
-                    .lineLimit(2)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal, 40 * s)
-            }
-        }
-    }
-
-    private func runningStatus(s: CGFloat) -> some View {
-        HStack(spacing: 10 * s) {
-            Circle()
-                .fill(statusDotColor)
-                .frame(width: 7 * s, height: 7 * s)
-            Text("专注中 · 已专注 \(store.elapsedSeconds / 60) 分钟 · 第 \(store.todayPomodoros + 1) 个番茄")
-                .font(.system(size: 14 * s))
-                .foregroundStyle(theme.text2)
-        }
-    }
-
-    private var statusDotColor: Color {
-        switch store.phase {
-        case .focusing, .breaking: theme.good
-        case .pausedFocus, .pausedBreak, .idle: theme.text3
-        }
-    }
-
-    // MARK: - 主操作
-
-    @ViewBuilder
-    private func actionsColumn(s: CGFloat) -> some View {
-        VStack(spacing: 14 * s) {
-            switch store.phase {
-            case .idle:
-                primaryButton("开始", s: s) { store.start(taskID: linkedTaskID) }
-            case .focusing, .pausedFocus:
-                let running = store.phase == .focusing
-                primaryButton(running ? "暂 停" : "继 续", s: s) {
-                    if running { store.pause() } else { store.resume() }
-                }
-                HStack(spacing: 22 * s) {
-                    linkButton("完成本番茄", s: s) { store.finishEarly() }
-                    linkButton("放弃", s: s) { showGiveUpConfirmation = true }
-                }
-            case .breaking:
-                primaryButton("跳过休息", s: s) { _ = store.giveUp() }
-            case .pausedBreak:
-                HStack(spacing: 22 * s) {
-                    primaryButton("继 续", s: s) { store.resume() }
-                    linkButton("跳过休息", s: s) { _ = store.giveUp() }
-                }
-            }
-        }
-        .confirmationDialog("确定要放弃这个番茄吗？",
-                            isPresented: $showGiveUpConfirmation,
-                            titleVisibility: .visible) {
-            Button("放弃番茄", role: .destructive) { _ = store.giveUp() }
-            Button("继续专注", role: .cancel) {}
-        } message: {
-            Text("已专注满 5 分钟的记录将保留为未完成。")
-        }
-    }
-
-    private func primaryButton(_ title: String, s: CGFloat, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Text(title)
-                .font(.system(size: 16 * s, weight: .semibold))
-                .tracking(1 * s)
-                .foregroundStyle(.white)
-                .frame(width: 130 * s, height: 46 * s)
-                .background(Capsule().fill(theme.accent))
-        }
-        .buttonStyle(.plain)
-    }
-
-    private func linkButton(_ title: String, s: CGFloat, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Text(title)
-                .font(.system(size: 14 * s))
-                .foregroundStyle(theme.text2)
-                .padding(.vertical, 10 * s)
-        }
-        .buttonStyle(.plain)
-    }
-
-    // MARK: - 计时数据
-
-    private var ringTaskTitle: String? {
-        let id = store.phase == .idle ? linkedTaskID : store.currentTaskID
-        return taskTitle(for: id)
-    }
-
-    private var displaySeconds: Int {
-        if store.phase == .idle {
-            return store.preferences.stopwatchMode ? 0 : store.preferences.focusMinutes * 60
-        }
-        if store.preferences.stopwatchMode, store.phase == .focusing || store.phase == .pausedFocus {
-            return store.elapsedSeconds
-        }
-        return store.remainingSeconds
-    }
-
-    private var progress: CGFloat {
-        guard store.phaseSeconds > 0 else { return 0 }
-        let value = CGFloat(store.phaseSeconds - store.remainingSeconds) / CGFloat(store.phaseSeconds)
-        return min(max(value, 0), 1)
-    }
-
-    /// 进度弧配色：专注 = 强调色渐变，休息 = 绿系渐变，暂停整体降透明。
-    private var progressGradient: AngularGradient {
-        let (a, b) = progressColors
-        return AngularGradient(colors: [a, b],
-                               center: .center,
-                               startAngle: .degrees(-90),
-                               endAngle: .degrees(270))
-    }
-
-    private var progressColors: (Color, Color) {
-        let isBreak = store.phase == .breaking || store.phase == .pausedBreak
-        let a = isBreak ? theme.good : theme.accent
-        let b = isBreak ? theme.goodSoft : theme.accentSoft
-        let paused = store.phase == .pausedFocus || store.phase == .pausedBreak
-        return paused ? (a.opacity(0.4), b.opacity(0.4)) : (a, b)
-    }
-
-    /// 自动开始开启时，休息态显示下一番茄的开始时刻。
-    private var nextAutoStartTime: String {
-        let reference = workspace?.clock() ?? Date()
-        return reference.addingTimeInterval(TimeInterval(store.remainingSeconds))
-            .formatted(.dateTime.hour().minute())
-    }
-
-    private func applyCustomMinutes() {
-        guard let minutes = Int(customMinutes.trimmingCharacters(in: .whitespaces)) else {
-            durationHint = "请输入 5–180 之间的整数"
-            return
-        }
-        durationHint = store.setFocusMinutes(minutes) ? nil : "时长需在 5–180 分钟之间"
     }
 
     // MARK: - 右栏 概览与记录
@@ -629,125 +272,6 @@ struct FocusWorkspaceView: View {
         }
     }
 
-    // MARK: - 节奏弹层
-
-    /// 节奏弹层：短/长休息与长休息间隔步进、自动开始开关（全部落 FocusStore）。
-    private func rhythmPopover(s: CGFloat) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Text("节奏")
-                .font(.system(size: 20 * s, weight: .semibold))
-                .foregroundStyle(theme.text)
-                .padding(.bottom, 8 * s)
-            rhythmStepper("短休息", value: store.preferences.breakMinutes, unit: "分钟",
-                          range: 1...60, s: s) { store.setBreakMinutes($0) }
-            rhythmStepper("长休息", value: store.preferences.longBreakMinutes, unit: "分钟",
-                          range: 1...60, s: s) { store.setLongBreakMinutes($0) }
-            rhythmStepper("长休息间隔", value: store.preferences.longBreakInterval, unit: "番茄",
-                          range: 2...8, s: s) { store.setLongBreakInterval($0) }
-            HStack {
-                Text("休息结束自动开始下一番茄")
-                    .foregroundStyle(theme.text2)
-                Spacer(minLength: 12 * s)
-                SwitchView(isOn: Binding(
-                    get: { store.preferences.autoStartNextPomodoro },
-                    set: { store.setAutoStartNextPomodoro($0) }))
-            }
-            .font(.system(size: 15 * s))
-            .padding(.vertical, 12 * s)
-            .overlay(alignment: .bottom) {
-                Rectangle().fill(theme.hairline).frame(height: 1)
-            }
-            Text("开启后，休息结束时将用同一任务自动开始下一个番茄")
-                .font(.system(size: 14 * s))
-                .foregroundStyle(theme.text3)
-                .padding(.top, 12 * s)
-        }
-        .padding(22 * s)
-        .frame(width: 360 * s)
-    }
-
-    private func rhythmStepper(_ key: String, value: Int, unit: String, range: ClosedRange<Int>,
-                               s: CGFloat, setter: @escaping (Int) -> Bool) -> some View {
-        HStack(spacing: 10 * s) {
-            Text(key).foregroundStyle(theme.text2)
-            Spacer(minLength: 12 * s)
-            stepperButton("minus", s: s) {
-                if value > range.lowerBound { _ = setter(value - 1) }
-            }
-            Text("\(value) \(unit)")
-                .monospacedDigit()
-                .foregroundStyle(theme.text)
-                .frame(width: 88 * s)
-            stepperButton("plus", s: s) {
-                if value < range.upperBound { _ = setter(value + 1) }
-            }
-        }
-        .font(.system(size: 15 * s))
-        .padding(.vertical, 11 * s)
-        .overlay(alignment: .bottom) {
-            Rectangle().fill(theme.hairline).frame(height: 1)
-        }
-    }
-
-    private func stepperButton(_ symbol: String, s: CGFloat, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Image(systemName: symbol)
-                .font(.system(size: 12 * s, weight: .semibold))
-                .foregroundStyle(theme.text2)
-                .frame(width: 26 * s, height: 26 * s)
-                .background(Circle().fill(theme.chipBackground))
-        }
-        .buttonStyle(.plain)
-    }
-
-    // MARK: - 常用专注
-
-    /// 常用专注 chips：点击应用预设，悬浮出现删除。
-    private func presetChipsRow(s: CGFloat) -> some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 10 * s) {
-                ForEach(store.timers) { preset in
-                    let active = store.preferences.stopwatchMode == preset.stopwatch
-                        && (preset.stopwatch || store.preferences.focusMinutes == preset.minutes)
-                    HStack(spacing: 8 * s) {
-                        Text(preset.emoji)
-                            .font(.system(size: 19 * s))
-                        Text(preset.name)
-                            .font(.system(size: 19 * s, weight: .medium))
-                            .foregroundStyle(active ? theme.accent : theme.text)
-                            .lineLimit(1)
-                        Text(preset.stopwatch ? "正计时" : "\(preset.minutes) 分钟")
-                            .font(.system(size: 17 * s))
-                            .foregroundStyle(theme.text3)
-                        Button {
-                            store.deleteTimer(preset.id)
-                        } label: {
-                            Image(systemName: "xmark.circle.fill")
-                                .font(.system(size: 13 * s))
-                                .foregroundStyle(theme.text3)
-                        }
-                        .buttonStyle(.plain)
-                        .opacity(hoveredPresetID == preset.id ? 1 : 0)
-                        .help("删除常用专注")
-                    }
-                    .padding(.horizontal, 16 * s)
-                    .padding(.vertical, 9 * s)
-                    .background(Capsule().fill(active ? theme.accentSoft : theme.chipBackground))
-                    .contentShape(Capsule())
-                    .onTapGesture { store.applyTimerPreset(preset) }
-                    .onHover { hovering in
-                        if hovering {
-                            hoveredPresetID = preset.id
-                        } else if hoveredPresetID == preset.id {
-                            hoveredPresetID = nil
-                        }
-                    }
-                }
-            }
-            .padding(.horizontal, 4 * s)
-        }
-    }
-
     /// 添加常用专注对话框：emoji 头像 + 名称 + 计时模式（不压暗页面，对齐滴答）。
     private func addTimerDialog(s: CGFloat) -> some View {
         let nameValid = !addTimerName.trimmingCharacters(in: .whitespaces).isEmpty
@@ -886,6 +410,16 @@ struct FocusWorkspaceView: View {
             }
         }
         .frame(width: 16 * s, height: 16 * s)
+    }
+
+    private func prepareAddTimer() {
+        addTimerName = ""
+        addTimerMinutes = "25"
+        addTimerStopwatch = false
+        addTimerHint = nil
+        addTimerEmoji = "😀"
+        showEmojiPicker = false
+        showAddTimer = true
     }
 
     private func submitAddTimer() {
@@ -1055,29 +589,10 @@ struct FocusWorkspaceView: View {
                      blue: Double(argb & 0xFF) / 255)
     }
 
-    /// 绑定任务的安排日期早于今天即视为逾期，选择行整段标红提醒。
-    private func isDueOverdue(_ task: Task) -> Bool {
-        guard let workspace, let dueAt = task.schedule.dueAt else { return false }
-        return workspace.calendar.startOfDay(for: dueAt)
-            < workspace.calendar.startOfDay(for: workspace.clock())
-    }
-
-    private func syncLocalState() {
-        let minutes = store.preferences.focusMinutes
-        if Self.presetMinutes.contains(minutes) {
-            durationSelection = .preset(minutes)
-        } else {
-            durationSelection = .custom
-            customMinutes = String(minutes)
-        }
-        if linkedTaskID == nil {
-            linkedTaskID = store.preferences.lastTaskID ?? workspace?.selectedTaskID
-        }
-    }
 }
 
 /// 专注页主题：与应用同一底色（WFColors.canvas），其余配色随系统外观切换。
-private struct FocusTheme {
+struct FocusTheme {
     /// 常用专注头像的可选 emoji。
     static let emojiChoices = ["😀", "😎", "🥳", "🤔", "🍅", "⏰", "📚", "💼", "🏃", "🧘", "💻", "🎨"]
 
@@ -1133,7 +648,7 @@ private struct FocusTheme {
 }
 
 /// 迷你开关：专注页节奏弹层用的胶囊式 Switch。
-private struct SwitchView: View {
+struct SwitchView: View {
     @Binding var isOn: Bool
     @Environment(\.colorScheme) private var colorScheme
 
