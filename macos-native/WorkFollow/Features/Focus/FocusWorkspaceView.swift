@@ -31,6 +31,7 @@ struct FocusWorkspaceView: View {
     @State private var addRecordTaskID: UUID?
     @State private var addRecordMinutes = "25"
     @State private var addRecordHint: String?
+    @State private var showRhythmPopover = false
 
     init(store: FocusStore) {
         self.store = store
@@ -140,13 +141,30 @@ struct FocusWorkspaceView: View {
                 statusLine(s: s)
                     .padding(.bottom, 30 * s)
             }
+            if store.phase == .breaking, store.preferences.autoStartNextPomodoro {
+                Text("下一番茄 \(nextAutoStartTime) 自动开始")
+                    .font(.system(size: 20 * s))
+                    .foregroundStyle(theme.text3)
+                    .padding(.bottom, 20 * s)
+            }
             if store.phase == .idle {
                 durationPills(s: s)
-                    .padding(.bottom, 22 * s)
+                    .padding(.bottom, 14 * s)
                 if durationSelection == .custom {
                     customDurationRow(s: s)
-                        .padding(.bottom, 16 * s)
+                        .padding(.bottom, 14 * s)
                 }
+                Button { showRhythmPopover = true } label: {
+                    Text("节奏 ›")
+                        .font(.system(size: 20 * s))
+                        .foregroundStyle(theme.text3)
+                }
+                .buttonStyle(.plain)
+                .help("短休息、长休息与自动开始")
+                .popover(isPresented: $showRhythmPopover, arrowEdge: .top) {
+                    rhythmPopover(s: s)
+                }
+                .padding(.bottom, 20 * s)
             }
             actionsRow(s: s)
             if store.phase == .focusing {
@@ -438,6 +456,13 @@ struct FocusWorkspaceView: View {
         case .pausedFocus, .pausedBreak: theme.text3
         case .idle: theme.text3
         }
+    }
+
+    /// 自动开始开启时，休息态显示下一番茄的开始时刻。
+    private var nextAutoStartTime: String {
+        let reference = workspace?.clock() ?? Date()
+        return reference.addingTimeInterval(TimeInterval(store.remainingSeconds))
+            .formatted(.dateTime.hour().minute())
     }
 
     @ViewBuilder
@@ -822,7 +847,76 @@ struct FocusWorkspaceView: View {
                      blue: Double(argb & 0xFF) / 255)
     }
 
-    private func syncLocalState() {
+    /// 节奏弹层：短/长休息与长休息间隔步进、自动开始开关（全部落 FocusStore）。
+    private func rhythmPopover(s: CGFloat) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text("节奏")
+                .font(.system(size: 24 * s, weight: .semibold))
+                .foregroundStyle(theme.text)
+                .padding(.bottom, 10 * s)
+            rhythmStepper("短休息", value: store.preferences.breakMinutes, unit: "分钟",
+                          range: 1...60, s: s) { store.setBreakMinutes($0) }
+            rhythmStepper("长休息", value: store.preferences.longBreakMinutes, unit: "分钟",
+                          range: 1...60, s: s) { store.setLongBreakMinutes($0) }
+            rhythmStepper("长休息间隔", value: store.preferences.longBreakInterval, unit: "番茄",
+                          range: 2...8, s: s) { store.setLongBreakInterval($0) }
+            HStack {
+                Text("休息结束自动开始下一番茄")
+                    .foregroundStyle(theme.text2)
+                Spacer(minLength: 12 * s)
+                SwitchView(isOn: Binding(
+                    get: { store.preferences.autoStartNextPomodoro },
+                    set: { store.setAutoStartNextPomodoro($0) }))
+            }
+            .font(.system(size: 21 * s))
+            .padding(.vertical, 15 * s)
+            .overlay(alignment: .bottom) {
+                Rectangle().fill(theme.hairline).frame(height: 1)
+            }
+            Text("开启后，休息结束时将用同一任务自动开始下一个番茄")
+                .font(.system(size: 18 * s))
+                .foregroundStyle(theme.text3)
+                .padding(.top, 14 * s)
+        }
+        .padding(28 * s)
+        .frame(width: 400 * s)
+    }
+
+    private func rhythmStepper(_ key: String, value: Int, unit: String, range: ClosedRange<Int>,
+                               s: CGFloat, setter: @escaping (Int) -> Bool) -> some View {
+        HStack(spacing: 14 * s) {
+            Text(key).foregroundStyle(theme.text2)
+            Spacer(minLength: 12 * s)
+            stepperButton("minus", s: s) {
+                if value > range.lowerBound { _ = setter(value - 1) }
+            }
+            Text("\(value) \(unit)")
+                .monospacedDigit()
+                .foregroundStyle(theme.text)
+                .frame(width: 110 * s)
+            stepperButton("plus", s: s) {
+                if value < range.upperBound { _ = setter(value + 1) }
+            }
+        }
+        .font(.system(size: 21 * s))
+        .padding(.vertical, 13 * s)
+        .overlay(alignment: .bottom) {
+            Rectangle().fill(theme.hairline).frame(height: 1)
+        }
+    }
+
+    private func stepperButton(_ symbol: String, s: CGFloat, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(.system(size: 14 * s, weight: .semibold))
+                .foregroundStyle(theme.text2)
+                .frame(width: 30 * s, height: 30 * s)
+                .background(Circle().fill(theme.chipBackground))
+        }
+        .buttonStyle(.plain)
+    }
+
+        private func syncLocalState() {
         let minutes = store.preferences.focusMinutes
         if Self.presetMinutes.contains(minutes) {
             durationSelection = .preset(minutes)
@@ -839,6 +933,7 @@ struct FocusWorkspaceView: View {
 /// 专注页主题：与应用同一底色（WFColors.canvas），其余配色随系统外观切换——
 /// 深色外观下即是沉浸深色稿，浅色外观下为极简浅色稿。
 private struct FocusTheme {
+
     let canvas = WFColors.canvas
     let text: Color
     let text2: Color
@@ -878,6 +973,30 @@ private struct FocusTheme {
             goodSoft = Color(red: 0.220, green: 0.808, blue: 0.553)
             warn = .red
         }
+    }
+}
+
+/// 迷你开关：专注页节奏弹层用的胶囊式 Switch。
+private struct SwitchView: View {
+    @Binding var isOn: Bool
+    @Environment(\.colorScheme) private var colorScheme
+
+    var body: some View {
+        let theme = FocusTheme(colorScheme)
+        Capsule()
+            .fill(isOn ? theme.accent : theme.track)
+            .frame(width: 52, height: 30)
+            .overlay(alignment: isOn ? .trailing : .leading) {
+                Circle()
+                    .fill(.white)
+                    .frame(width: 24, height: 24)
+                    .padding(3)
+            }
+            .contentShape(Capsule())
+            .onTapGesture { isOn.toggle() }
+            .animation(.easeInOut(duration: 0.15), value: isOn)
+            .accessibilityLabel("自动开始下一番茄")
+            .accessibilityAddTraits(.isButton)
     }
 }
 

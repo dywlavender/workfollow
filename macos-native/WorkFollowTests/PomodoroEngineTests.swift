@@ -245,4 +245,34 @@ final class PomodoroEngineTests: XCTestCase {
         XCTAssertEqual(reloaded.records, store.records)
         XCTAssertEqual(reloaded.preferences.focusMinutes, 5)
     }
+
+    // MARK: 自动开始下一番茄
+
+    func testBreakEndAutoStartsNextPomodoroWithSameTaskWhenEnabled() {
+        let (engine, advance) = makeEngine(focusMinutes: 5, breakMinutes: 5)
+        engine.apply(PomodoroSettings(focusMinutes: 5, breakMinutes: 5, longBreakMinutes: 15,
+                                      longBreakInterval: 4, autoStartNextPomodoro: true))
+        let taskID = UUID()
+        XCTAssertTrue(engine.start(taskID: taskID, focusMinutes: 5))
+        advance(5 * 60)
+        XCTAssertNotNil(engine.handleCompletion())  // 专注完成 → 进入休息
+        XCTAssertEqual(engine.phase, .breaking)
+        advance(5 * 60)
+        XCTAssertNil(engine.handleCompletion())     // 休息到点 → 自动开始下一番茄
+        XCTAssertEqual(engine.phase, .focusing)
+        XCTAssertEqual(engine.currentTaskID, taskID)  // 同一任务续上
+        XCTAssertEqual(engine.remainingSeconds, 5 * 60)
+    }
+
+    func testBreakEndStaysIdleWhenAutoStartDisabled() {
+        let (engine, advance) = makeEngine(focusMinutes: 5, breakMinutes: 5)
+        XCTAssertTrue(engine.start(taskID: UUID(), focusMinutes: 5))
+        advance(5 * 60)
+        _ = engine.handleCompletion()
+        XCTAssertEqual(engine.phase, .breaking)
+        advance(5 * 60)
+        _ = engine.handleCompletion()
+        XCTAssertEqual(engine.phase, .idle)
+        XCTAssertNil(engine.currentTaskID)
+    }
 }

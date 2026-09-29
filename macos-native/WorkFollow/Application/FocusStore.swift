@@ -18,12 +18,15 @@ struct FocusPreferences: Codable, Equatable {
     var dailyGoal = 8
     /// 上一次专注绑定的任务：进入专注页时默认带上（additive Codable）。
     var lastTaskID: UUID?
+    /// 休息结束自动开始下一番茄（additive Codable）。
+    var autoStartNextPomodoro = false
 
     static let dailyGoalRange = 1...24
 
     var pomodoroSettings: PomodoroSettings {
         PomodoroSettings(focusMinutes: focusMinutes, breakMinutes: breakMinutes,
-                         longBreakMinutes: longBreakMinutes, longBreakInterval: longBreakInterval)
+                         longBreakMinutes: longBreakMinutes, longBreakInterval: longBreakInterval,
+                         autoStartNextPomodoro: autoStartNextPomodoro)
     }
 
     /// 越界值回退默认，避免损坏或手改的存档影响会话。
@@ -190,6 +193,14 @@ final class FocusStore: ObservableObject, ModuleStoreFlushable {
     func setLongBreakInterval(_ count: Int) -> Bool {
         guard PomodoroSettings.intervalRange.contains(count) else { return false }
         preferences.longBreakInterval = count
+        engine.apply(preferences.pomodoroSettings)
+        schedulePersistence()
+        return true
+    }
+
+    @discardableResult
+    func setAutoStartNextPomodoro(_ enabled: Bool) -> Bool {
+        preferences.autoStartNextPomodoro = enabled
         engine.apply(preferences.pomodoroSettings)
         schedulePersistence()
         return true

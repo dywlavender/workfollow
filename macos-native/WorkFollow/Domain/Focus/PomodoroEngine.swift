@@ -15,6 +15,8 @@ struct PomodoroSettings: Equatable, Codable {
     var breakMinutes = 5
     var longBreakMinutes = 15
     var longBreakInterval = 4
+    /// 休息结束后自动开始下一番茄（同一任务）；additive Codable。
+    var autoStartNextPomodoro = false
 
     static let focusRange = 5...180
     static let breakRange = 1...60
@@ -36,6 +38,8 @@ final class PomodoroEngine {
     private(set) var phaseSeconds = 0
     /// 引擎创建以来完成的专注数，驱动长休息节奏。
     private(set) var completedFocusCount = 0
+    /// 休息结束自动开始时要续上的任务（进入休息时从当前任务暂存）。
+    private var breakCarriedTaskID: UUID?
 
     private var phaseStart: Date?
     private var phaseEnd: Date?
@@ -131,6 +135,11 @@ final class PomodoroEngine {
             return record
         case .breaking:
             guard let end = phaseEnd, clock() >= end else { return nil }
+            if settings.autoStartNextPomodoro, let taskID = breakCarriedTaskID {
+                reset()
+                start(taskID: taskID)
+                return nil
+            }
             reset()
             return nil
         case .idle, .pausedFocus, .pausedBreak:
@@ -162,6 +171,7 @@ final class PomodoroEngine {
         phaseStart = date
         phaseSeconds = (long ? settings.longBreakMinutes : settings.breakMinutes) * 60
         phaseEnd = date.addingTimeInterval(TimeInterval(phaseSeconds))
+        breakCarriedTaskID = currentTaskID
         currentTaskID = nil
         pausedAt = nil
         pausedSeconds = 0
