@@ -22,8 +22,6 @@ struct FocusWorkspaceView: View {
     @State private var hoveredRecordID: UUID?
     @State private var showGiveUpConfirmation = false
     @State private var showGoalPopover = false
-    /// 节奏行里的自动开始开关（视觉状态；轮次自动开始待 FocusStore 支持后接入）。
-    @State private var autoStartNext = true
 
     init(store: FocusStore) {
         self.store = store
@@ -53,9 +51,7 @@ struct FocusWorkspaceView: View {
     private func content(scale s: CGFloat) -> some View {
         VStack(spacing: 0) {
             headerBar(s: s)
-            HStack(alignment: .center, spacing: 56 * s) {
-                settingsRail(s: s)
-                    .frame(width: 330 * s)
+            HStack(alignment: .center, spacing: 72 * s) {
                 heroColumn(s: s)
                     .frame(maxWidth: .infinity)
                 recordsRail(s: s)
@@ -102,73 +98,75 @@ struct FocusWorkspaceView: View {
         }
     }
 
-    // MARK: - 左栏 时长与节奏
+    // MARK: - 中栏 计时主角
 
-    private func settingsRail(s: CGFloat) -> some View {
-        VStack(alignment: .leading, spacing: 52 * s) {
-            VStack(alignment: .leading, spacing: 0) {
-                railCap("番茄时长", s: s)
-                ForEach(Self.presetMinutes, id: \.self) { minutes in
-                    optionRow("\(minutes) 分钟",
-                              selected: durationSelection == .preset(minutes),
-                              s: s) {
-                        durationSelection = .preset(minutes)
-                        store.setFocusMinutes(minutes)
-                    }
-                }
-                optionRow("自定义", selected: durationSelection == .custom, s: s) {
-                    durationSelection = .custom
-                }
+    private func heroColumn(s: CGFloat) -> some View {
+        VStack(spacing: 0) {
+            taskChip(s: s)
+                .padding(.bottom, 30 * s)
+            ringView(s: s)
+                .padding(.bottom, 30 * s)
+            statusLine(s: s)
+                .padding(.bottom, 30 * s)
+            if store.phase == .idle {
+                durationPills(s: s)
+                    .padding(.bottom, 22 * s)
                 if durationSelection == .custom {
                     customDurationRow(s: s)
+                        .padding(.bottom, 16 * s)
                 }
             }
-            VStack(alignment: .leading, spacing: 0) {
-                railCap("节奏", s: s)
-                kvRow("短休息", value: "5 分钟", s: s)
-                kvRow("长休息", value: "每 4 番茄", s: s)
-                kvSwitchRow("自动开始", isOn: $autoStartNext, s: s)
-                kvRow("结束铃声", value: "清脆 ›", s: s)
+            actionsRow(s: s)
+            if store.phase == .focusing {
+                Text("剩余不足 5 分钟时，会询问是否提前完成本番茄")
+                    .font(.system(size: 19 * s))
+                    .foregroundStyle(FocusPalette.text3)
+                    .padding(.top, 26 * s)
+            }
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    /// 时长选择：滴答式 pills，就绪态出现在计时器下方；选中态描边 + 强调色。
+    private func durationPills(s: CGFloat) -> some View {
+        HStack(spacing: 14 * s) {
+            ForEach(Self.presetMinutes, id: \.self) { minutes in
+                pill("\(minutes) 分钟",
+                     selected: durationSelection == .preset(minutes),
+                     s: s) {
+                    durationSelection = .preset(minutes)
+                    store.setFocusMinutes(minutes)
+                }
+            }
+            pill("自定义", selected: durationSelection == .custom, s: s) {
+                durationSelection = .custom
             }
         }
     }
 
-    private func railCap(_ title: String, s: CGFloat) -> some View {
-        Text(title)
-            .font(.system(size: 18 * s, weight: .semibold))
-            .tracking(4 * s)
-            .foregroundStyle(FocusPalette.text3)
-            .padding(.bottom, 16 * s)
-    }
-
-    /// 时长选项行：选中项一颗强调色小圆点 + 主文字色，安静的文字列表。
-    private func optionRow(_ title: String, selected: Bool, s: CGFloat,
-                           action: @escaping () -> Void) -> some View {
-        let interactive = store.phase == .idle
-        return HStack(spacing: 14 * s) {
-            Circle()
-                .fill(selected ? FocusPalette.accent : .clear)
-                .frame(width: 6 * s, height: 6 * s)
+    private func pill(_ title: String, selected: Bool, s: CGFloat,
+                      action: @escaping () -> Void) -> some View {
+        Button(action: action) {
             Text(title)
-                .font(.system(size: 24 * s, weight: selected ? .semibold : .regular))
-                .foregroundStyle(selected ? FocusPalette.text : FocusPalette.text2)
-            Spacer(minLength: 0)
+                .font(.system(size: 23 * s, weight: selected ? .semibold : .regular))
+                .foregroundStyle(selected ? FocusPalette.accent : FocusPalette.text2)
+                .padding(.horizontal, 28 * s)
+                .padding(.vertical, 14 * s)
+                .background(Capsule().stroke(
+                    selected ? FocusPalette.accent : FocusPalette.hairline, lineWidth: 1.5))
         }
-        .padding(.vertical, 12 * s)
-        .contentShape(Rectangle())
-        .onTapGesture { guard interactive else { return }; action() }
-        .opacity(interactive ? 1 : 0.55)
+        .buttonStyle(.plain)
     }
 
     private func customDurationRow(s: CGFloat) -> some View {
-        VStack(alignment: .leading, spacing: 8 * s) {
+        VStack(spacing: 8 * s) {
             HStack(spacing: 12 * s) {
                 TextField("分钟（5–180）", text: $customMinutes)
                     .textFieldStyle(.plain)
                     .font(.system(size: 22 * s))
                     .foregroundStyle(FocusPalette.text)
-                    .multilineTextAlignment(.leading)
-                    .frame(width: 120 * s)
+                    .multilineTextAlignment(.center)
+                    .frame(width: 130 * s)
                     .onSubmit(applyCustomMinutes)
                 Button("应用", action: applyCustomMinutes)
                     .buttonStyle(.plain)
@@ -181,54 +179,6 @@ struct FocusWorkspaceView: View {
                     .foregroundStyle(FocusPalette.warn)
             }
         }
-        .padding(.leading, 20 * s)
-    }
-
-    private func kvRow(_ key: String, value: String, s: CGFloat) -> some View {
-        HStack {
-            Text(key).foregroundStyle(FocusPalette.text2)
-            Spacer(minLength: 12 * s)
-            Text(value).foregroundStyle(FocusPalette.text)
-        }
-        .font(.system(size: 21 * s))
-        .padding(.vertical, 15 * s)
-        .overlay(alignment: .bottom) {
-            Rectangle().fill(FocusPalette.hairline).frame(height: 1)
-        }
-    }
-
-    private func kvSwitchRow(_ key: String, isOn: Binding<Bool>, s: CGFloat) -> some View {
-        HStack {
-            Text(key).foregroundStyle(FocusPalette.text2)
-            Spacer(minLength: 12 * s)
-            SwitchView(isOn: isOn)
-        }
-        .font(.system(size: 21 * s))
-        .padding(.vertical, 15 * s)
-        .overlay(alignment: .bottom) {
-            Rectangle().fill(FocusPalette.hairline).frame(height: 1)
-        }
-    }
-
-    // MARK: - 中栏 计时主角
-
-    private func heroColumn(s: CGFloat) -> some View {
-        VStack(spacing: 0) {
-            taskChip(s: s)
-                .padding(.bottom, 30 * s)
-            ringView(s: s)
-                .padding(.bottom, 34 * s)
-            statusLine(s: s)
-                .padding(.bottom, 34 * s)
-            actionsRow(s: s)
-            if store.phase == .focusing {
-                Text("剩余不足 5 分钟时，会询问是否提前完成本番茄")
-                    .font(.system(size: 19 * s))
-                    .foregroundStyle(FocusPalette.text3)
-                    .padding(.top, 26 * s)
-            }
-        }
-        .frame(maxWidth: .infinity)
     }
 
     /// 任务绑定 chip：清单色点 + 标题 + 元信息；就绪态可点击换绑、✕ 解绑。
@@ -732,26 +682,6 @@ private enum FocusPalette {
     static let good = Color(red: 0.290, green: 0.871, blue: 0.502)
     static let goodSoft = Color(red: 0.545, green: 0.937, blue: 0.702)
     static let warn = Color(red: 0.973, green: 0.443, blue: 0.443)
-}
-
-/// 迷你开关：与应用视觉一致的胶囊式 Switch（视觉状态，业务接入待 FocusStore）。
-private struct SwitchView: View {
-    @Binding var isOn: Bool
-
-    var body: some View {
-        Capsule()
-            .fill(isOn ? FocusPalette.accent : FocusPalette.track)
-            .frame(width: 52, height: 30)
-            .overlay(alignment: isOn ? .trailing : .leading) {
-                Circle()
-                    .fill(.white)
-                    .frame(width: 24, height: 24)
-                    .padding(3)
-            }
-            .contentShape(Capsule())
-            .onTapGesture { isOn.toggle() }
-            .animation(.easeInOut(duration: 0.15), value: isOn)
-    }
 }
 
 /// 专注页纯展示逻辑：时间/阶段/概览文案与日期分组头，供视图与单元测试共用。
