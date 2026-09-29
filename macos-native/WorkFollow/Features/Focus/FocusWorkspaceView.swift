@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// 专注工作区：对齐滴答的双栏结构——左栏专注计时（标题 + 模式分段 + 环 + 开始），
-/// 右栏概览（今日/总量四卡）与专注记录。底色与应用一致，配色随系统外观切换。
+/// 专注工作区：与 RootShell 的全局 Icon Rail 组成三栏结构；本页包含左侧计时和右侧概览。
+/// 底色与应用一致，配色随系统外观切换。
 /// `workspace` 为可选的任务关联入口。
 struct FocusWorkspaceView: View {
     @ObservedObject var store: FocusStore
@@ -66,14 +66,14 @@ struct FocusWorkspaceView: View {
     // MARK: - 骨架
 
     private func content(scale s: CGFloat, width: CGFloat) -> some View {
-        let leftWidth = max(430, width * 0.40)
+        let leftWidth = FocusLayoutMetrics.focusPaneWidth(availableWidth: width)
         return HStack(spacing: 0) {
             timerPane(s: s, paneWidth: leftWidth)
                 .frame(width: leftWidth)
                 .frame(maxHeight: .infinity)
             Rectangle()
                 .fill(theme.hairline)
-                .frame(width: 1)
+                .frame(width: FocusLayoutMetrics.dividerWidth)
             overviewPane(s: s)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
