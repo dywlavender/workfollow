@@ -263,7 +263,7 @@ struct TaskListView: View {
                     }
                     .buttonStyle(.plain)
                     .help("安排日期、提醒和重复")
-                    .popover(isPresented: $showQuickAddSchedule) {
+                    .schedulePopover(isPresented: $showQuickAddSchedule) {
                         TaskDatePopoverV2(
                             task: quickAddScheduleTask(in: scope),
                             workspace: workspace,
@@ -989,7 +989,7 @@ struct TaskRowView: View {
                                               onCustomDate: { showDatePopover = true })
             }
         }
-        .popover(isPresented: $showDatePopover) {
+        .schedulePopover(isPresented: $showDatePopover) {
             if let current = workspace.task(for: task.id) {
                 TaskDatePopoverV2(task: current, workspace: workspace) { showDatePopover = false }
             }

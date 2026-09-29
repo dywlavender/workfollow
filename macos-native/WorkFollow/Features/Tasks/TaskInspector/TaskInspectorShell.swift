@@ -337,7 +337,7 @@ struct TaskInspectorShell: View {
             .buttonStyle(.plain)
             .help(field.emptyLabel)
             .accessibilityLabel(field.date(in: task).map { "\(field.emptyLabel)：\(dateLabel($0))" } ?? field.emptyLabel)
-        .popover(isPresented: popoverBinding(field.popover)) {
+        .schedulePopover(isPresented: popoverBinding(field.popover)) {
             TaskDatePopoverV2(task: task, workspace: workspace, deadline: field == .deadline) {
                 presentation.activePopover = nil
             }

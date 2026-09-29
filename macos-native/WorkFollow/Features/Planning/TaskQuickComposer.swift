@@ -59,7 +59,7 @@ struct TaskQuickComposer: View {
             listRow
         }
         .background(WFColors.overlay)
-        .popover(isPresented: datePopoverBinding) {
+        .schedulePopover(isPresented: datePopoverBinding) {
             if let page = datePage {
                 TaskDatePopoverV2(task: draftTask, workspace: workspace, initialPage: page,
                                   draftCommit: applyPlan) {

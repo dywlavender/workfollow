@@ -41,15 +41,8 @@ struct TaskDatePopoverV2: View {
         case date, count
     }
 
-    /// 子面板度量（对齐 Flutter `TaskScheduleMetrics`）。
-    private enum Metrics {
-        static let rowHeight: CGFloat = 30
-        static let optionRowHeight: CGFloat = 34
-        static let timeListHeight: CGFloat = 280
-        /// 浮层内容宽（Flutter：子菜单宽度 = 属性行宽）。
-        static let panelWidth: CGFloat = 232
-    }
-
+    /// 尺寸契约统一走 `ScheduleMetrics`（主面板宽 260 / 行高 30 / 选项行 34 /
+    /// 时间列表 280 / 子浮层宽 232）。
     @StateObject private var model: TaskDateDraftModel
     @State private var inlineSheet: InlineSheet?
     @State private var repeatGroup: RepeatGroup?
@@ -137,8 +130,8 @@ struct TaskDatePopoverV2: View {
                 footer
             }
         }
-        .padding(14)
-        .frame(width: 260)
+        .padding(ScheduleMetrics.horizontalPadding)
+        .frame(width: ScheduleMetrics.panelWidth)
         // macOS 27：`.popover` 不传 arrowEdge（默认 nil）就不画三角箭头，
         // 系统自带圆角卡片样式（对齐滴答/参考图），无需任何背景补丁。
         .onChange(of: model.timeAnchor) { _, _ in syncTimeField() }
@@ -211,7 +204,7 @@ struct TaskDatePopoverV2: View {
             }
         }
         .padding(.horizontal, open ? 10 : 2)
-        .frame(height: Metrics.rowHeight)
+        .frame(height: ScheduleMetrics.rowHeight)
         .background(open ? WFColors.hover : Color.clear, in: RoundedRectangle(cornerRadius: 8))
         // 整行开合的命中区放在**内容之下**：输入框与清除按钮在它前面，先拿到自己的
         // 点击；点行内其余任何位置都能开合（行上有输入框时也照常能展开）。
@@ -227,7 +220,7 @@ struct TaskDatePopoverV2: View {
                 hoveredSheet = nil
             }
         }
-        .popover(isPresented: sheetBinding(sheet)) {
+        .schedulePopover(isPresented: sheetBinding(sheet)) {
             panel(body: body)
         }
     }
@@ -300,7 +293,7 @@ struct TaskDatePopoverV2: View {
     /// 当前值，再画一层头部就是重复，所以这里只放选项。
     private func panel<Body: View>(@ViewBuilder body: () -> Body) -> some View {
         body()
-            .frame(width: Metrics.panelWidth)
+            .frame(width: ScheduleMetrics.optionPanelWidth)
     }
 
     // MARK: 时间子面板（Flutter ScheduleTimeOptions）
@@ -326,7 +319,7 @@ struct TaskDatePopoverV2: View {
                     }
                 }
             }
-            .frame(height: Metrics.timeListHeight)
+            .frame(height: ScheduleMetrics.timeOptionsHeight)
             .onAppear {
                 if let target = halfHourOptions.first(where: { isDraftTime($0) })
                     ?? halfHourOptions.first(where: { Self.isClock($0, hour: 9, minute: 0,
@@ -494,7 +487,7 @@ struct TaskDatePopoverV2: View {
             }
         }
         .padding(.horizontal, 12)
-        .frame(height: Metrics.optionRowHeight)
+        .frame(height: ScheduleMetrics.optionRowHeight)
     }
 
     private func intervalStepButton(_ symbol: String, action: @escaping () -> Void) -> some View {
@@ -630,7 +623,7 @@ struct TaskDatePopoverV2: View {
                 }
             }
             .padding(.horizontal, 12)
-            .frame(height: Metrics.optionRowHeight)
+            .frame(height: ScheduleMetrics.optionRowHeight)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
