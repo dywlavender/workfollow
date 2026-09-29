@@ -16,6 +16,8 @@ struct IconRailView: View {
                        selected: navigation.destination == .calendar)
             railButton(.matrix, symbol: "square.grid.2x2", title: "四象限",
                        selected: navigation.destination == .matrix)
+            railButton(.countdown, symbol: "hourglass", title: "倒数纪念日",
+                       selected: navigation.destination == .countdown)
             railButton(.focus, symbol: "timer", title: "专注",
                        selected: navigation.destination == .focus)
             railButton(.habits, symbol: "checkmark.seal", title: "习惯",
@@ -71,6 +73,7 @@ struct NavigationColumnView: View {
         if navigation.destination.isNotes { return [.notes, .notesTrash] }
         if navigation.destination == .calendar { return [.calendar] }
         if navigation.destination == .matrix { return [.matrix] }
+        if navigation.destination == .countdown { return [.countdown] }
         if navigation.destination == .focus { return [.focus] }
         if navigation.destination == .habits { return [.habits] }
         if navigation.destination == .summary { return [.summary] }

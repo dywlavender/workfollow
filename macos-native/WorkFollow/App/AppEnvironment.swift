@@ -30,6 +30,7 @@ final class AppEnvironment: ObservableObject {
     let focusStore: FocusStore
     let habitStore: HabitStore
     let summaryStore: SummaryStore
+    let countdownStore: CountdownStore
     let filterStore: FilterStore
     /// 全应用唯一的瞬态结果通道：任务动作经 workspace.feedbackSink 上报到这里。
     let feedback: FeedbackCenter
@@ -70,23 +71,33 @@ final class AppEnvironment: ObservableObject {
         focusStore = FocusStore(clock: clock)
         habitStore = HabitStore(clock: clock)
         summaryStore = SummaryStore(clock: clock)
+        countdownStore = CountdownStore(clock: clock)
         filterStore = FilterStore(clock: clock)
         taskWorkspace.attachFilterStore(filterStore)
         taskWorkspace.feedbackSink = feedback
-        moduleStores = [focusStore, habitStore, summaryStore, filterStore, TemplateStore.shared]
+        moduleStores = [focusStore, habitStore, summaryStore, countdownStore, filterStore, TemplateStore.shared]
         persistence.onResult = { [weak self] error in
             DispatchQueue.main.async { self?.storageError = error.map { "预览数据保存失败：\($0.localizedDescription)" } }
         }
         if let failure { loadFailed = true; storageError = "预览数据读取失败，自动保存已停用：\(failure.localizedDescription)" }
         Timer.publish(every: 60, on: .main, in: .common)
             .autoconnect()
-            .sink { [weak self] _ in self?.taskWorkspace.refreshDates() }
+            .sink { [weak self] _ in
+                self?.taskWorkspace.refreshDates()
+                self?.countdownStore.refresh()
+            }
             .store(in: &subscriptions)
         NotificationCenter.default.publisher(for: .NSCalendarDayChanged)
-            .sink { [weak self] _ in self?.taskWorkspace.refreshDates() }
+            .sink { [weak self] _ in
+                self?.taskWorkspace.refreshDates()
+                self?.countdownStore.refresh()
+            }
             .store(in: &subscriptions)
         NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)
-            .sink { [weak self] _ in self?.taskWorkspace.refreshDates() }
+            .sink { [weak self] _ in
+                self?.taskWorkspace.refreshDates()
+                self?.countdownStore.refresh()
+            }
             .store(in: &subscriptions)
         // B2 笔记↔任务联动：笔记详情展示/勾选/打开 sourceNoteID 关联的任务。
         notesWorkspace.taskProvider = { [weak taskWorkspace] in taskWorkspace?.allTasks ?? [] }

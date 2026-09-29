@@ -3,7 +3,7 @@ import Foundation
 
 enum NativeDestination: String, CaseIterable, Identifiable {
     case today, inbox, allTasks, nextSevenDays, completed, trash, notes, notesTrash, calendar, matrix
-    case focus, habits, summary
+    case focus, habits, summary, countdown
     static let taskDestinations: [NativeDestination] = [
         .nextSevenDays, .today, .inbox, .allTasks, .completed, .trash
     ]
@@ -22,6 +22,7 @@ enum NativeDestination: String, CaseIterable, Identifiable {
         case .focus: return "专注"
         case .habits: return "习惯"
         case .summary: return "摘要"
+        case .countdown: return "倒数纪念日"
         }
     }
     var symbol: String {
@@ -38,6 +39,7 @@ enum NativeDestination: String, CaseIterable, Identifiable {
         case .focus: return "timer"
         case .habits: return "checkmark.seal"
         case .summary: return "square.and.pencil"
+        case .countdown: return "hourglass"
         }
     }
     var isTaskList: Bool { Self.taskDestinations.contains(self) }
