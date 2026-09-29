@@ -290,9 +290,13 @@ struct FocusWorkspaceView: View {
     private func ringView(s: CGFloat, paneWidth: CGFloat) -> some View {
         let size = min(430 * s, paneWidth * 0.66)
         let active = store.phase == .focusing || store.phase == .breaking
+        let stopwatch = store.preferences.stopwatchMode
         return ZStack {
             Circle()
-                .stroke(theme.track, lineWidth: 2 * max(s, 0.8))
+                .stroke(theme.track,
+                        style: stopwatch
+                            ? StrokeStyle(lineWidth: 2 * max(s, 0.8), dash: [2.5, 5])
+                            : StrokeStyle(lineWidth: 2 * max(s, 0.8)))
             Circle()
                 .trim(from: 0, to: progress)
                 .stroke(progressGradient,
@@ -759,10 +763,10 @@ struct FocusWorkspaceView: View {
                     Button { showEmojiPicker.toggle() } label: {
                         ZStack(alignment: .bottomTrailing) {
                             Circle()
-                                .fill(theme.accentSoft)
-                                .frame(width: 56 * s, height: 56 * s)
+                                .fill(theme.avatarBackground)
+                                .frame(width: 58 * s, height: 58 * s)
                             Text(addTimerEmoji)
-                                .font(.system(size: 30 * s))
+                                .font(.system(size: 34 * s))
                             Circle()
                                 .fill(theme.canvas)
                                 .frame(width: 20 * s, height: 20 * s)
@@ -781,7 +785,7 @@ struct FocusWorkspaceView: View {
                         .padding(.horizontal, 14 * s)
                         .padding(.vertical, 13 * s)
                         .background(RoundedRectangle(cornerRadius: 10 * s)
-                            .stroke(nameValid ? theme.accent : theme.hairline, lineWidth: 1.5))
+                            .stroke(theme.hairline, lineWidth: 1.5))
                 }
                 if showEmojiPicker {
                     ScrollView(.horizontal, showsIndicators: false) {
@@ -848,7 +852,10 @@ struct FocusWorkspaceView: View {
                             .font(.system(size: 21 * s))
                             .foregroundStyle(theme.text2)
                             .frame(width: 110 * s, height: 42 * s)
-                            .background(Capsule().stroke(theme.hairline, lineWidth: 1.5))
+                            .background(RoundedRectangle(cornerRadius: 10 * s)
+                                .fill(theme.canvas)
+                                .overlay(RoundedRectangle(cornerRadius: 10 * s)
+                                    .stroke(theme.hairline, lineWidth: 1.5)))
                     }
                     .buttonStyle(.plain)
                     Button { submitAddTimer() } label: {
@@ -856,7 +863,8 @@ struct FocusWorkspaceView: View {
                             .font(.system(size: 21 * s, weight: .semibold))
                             .foregroundStyle(.white)
                             .frame(width: 110 * s, height: 42 * s)
-                            .background(Capsule().fill(theme.accent.opacity(nameValid ? 1 : 0.4)))
+                            .background(RoundedRectangle(cornerRadius: 10 * s)
+                                .fill(theme.accent.opacity(nameValid ? 1 : 0.45)))
                     }
                     .buttonStyle(.plain)
                     .disabled(!nameValid)
@@ -1084,6 +1092,7 @@ private struct FocusTheme {
     let chipBackground: Color
     let cardBackground: Color
     let segmentActive: Color
+    let avatarBackground: Color
     let good: Color
     let goodSoft: Color
     let warn: Color
@@ -1100,6 +1109,7 @@ private struct FocusTheme {
             chipBackground = Color.white.opacity(0.04)
             cardBackground = Color.white.opacity(0.06)
             segmentActive = Color.white.opacity(0.14)
+            avatarBackground = Color.white.opacity(0.12)
             good = Color(red: 0.290, green: 0.871, blue: 0.502)
             goodSoft = Color(red: 0.545, green: 0.937, blue: 0.702)
             warn = Color(red: 0.973, green: 0.443, blue: 0.443)
@@ -1114,6 +1124,7 @@ private struct FocusTheme {
             chipBackground = Color.primary.opacity(0.04)
             cardBackground = Color.primary.opacity(0.045)
             segmentActive = .white
+            avatarBackground = Color(red: 1.0, green: 0.94, blue: 0.62)
             good = Color(red: 0.082, green: 0.686, blue: 0.427)
             goodSoft = Color(red: 0.220, green: 0.808, blue: 0.553)
             warn = .red
