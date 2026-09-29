@@ -8,6 +8,7 @@ struct FocusWorkspaceView: View {
     @ObservedObject var store: FocusStore
     let workspace: TaskWorkspaceModel?
     @Environment(\.colorScheme) private var colorScheme
+    @EnvironmentObject private var environment: AppEnvironment
 
     /// 专注页主题：底色与整体一致，前后景随系统外观切换。
     private var theme: FocusTheme { FocusTheme(colorScheme) }
@@ -26,6 +27,10 @@ struct FocusWorkspaceView: View {
     @State private var hoveredRecordID: UUID?
     @State private var showGiveUpConfirmation = false
     @State private var showGoalPopover = false
+    @State private var showAddRecord = false
+    @State private var addRecordTaskID: UUID?
+    @State private var addRecordMinutes = "25"
+    @State private var addRecordHint: String?
 
     init(store: FocusStore) {
         self.store = store
@@ -40,7 +45,7 @@ struct FocusWorkspaceView: View {
     var body: some View {
         GeometryReader { geo in
             let s = Self.scale(for: geo.size)
-            content(scale: s)
+            content(scale: s, width: geo.size.width)
                 .frame(width: geo.size.width, height: geo.size.height)
         }
     }
@@ -52,20 +57,41 @@ struct FocusWorkspaceView: View {
 
     // MARK: - 画布与骨架
 
-    private func content(scale s: CGFloat) -> some View {
+    private func content(scale s: CGFloat, width: CGFloat) -> some View {
         VStack(spacing: 0) {
             headerBar(s: s)
             HStack(alignment: .center, spacing: 72 * s) {
                 heroColumn(s: s)
                     .frame(maxWidth: .infinity)
                 recordsRail(s: s)
-                    .frame(width: 440 * s)
+                    .frame(width: min(440 * s, max(330, width * 0.36)))
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .padding(.horizontal, 88 * s)
             .padding(.bottom, 48 * s)
         }
         .background(theme.canvas)
+        .background {
+            if store.phase != .idle {
+                Group {
+                    Button("专注空格键") {
+                        switch store.phase {
+                        case .focusing: store.pause()
+                        case .pausedFocus, .pausedBreak: store.resume()
+                        case .breaking: _ = store.giveUp()
+                        case .idle: break
+                        }
+                    }
+                    .keyboardShortcut(.space, modifiers: [])
+                    Button("专注Esc键") {
+                        if store.phase == .focusing { showGiveUpConfirmation = true }
+                    }
+                    .keyboardShortcut(.escape, modifiers: [])
+                }
+                .frame(width: 0, height: 0)
+                .opacity(0)
+            }
+        }
         .onAppear {
             store.refresh()
             syncLocalState()
@@ -110,8 +136,10 @@ struct FocusWorkspaceView: View {
                 .padding(.bottom, 30 * s)
             ringView(s: s)
                 .padding(.bottom, 30 * s)
-            statusLine(s: s)
-                .padding(.bottom, 30 * s)
+            if store.phase != .idle {
+                statusLine(s: s)
+                    .padding(.bottom, 30 * s)
+            }
             if store.phase == .idle {
                 durationPills(s: s)
                     .padding(.bottom, 22 * s)
@@ -199,8 +227,8 @@ struct FocusWorkspaceView: View {
                         .font(.system(size: 26 * s, weight: .semibold))
                         .foregroundStyle(theme.text)
                         .lineLimit(1)
+                    chipMeta(for: linkID, s: s)
                     if store.phase == .idle {
-                        chipMeta(for: linkID, s: s)
                         Button {
                             linkedTaskID = nil
                         } label: {
@@ -290,10 +318,17 @@ struct FocusWorkspaceView: View {
             if !meta.isEmpty {
                 Text(meta)
                     .font(.system(size: 21 * s))
-                    .foregroundStyle(theme.text3)
+                    .foregroundStyle(isDueOverdue(task) ? theme.warn : theme.text3)
                     .lineLimit(1)
             }
         }
+    }
+
+    /// 绑定任务的安排日期早于今天即视为逾期，chip 元信息整段标红提醒。
+    private func isDueOverdue(_ task: Task) -> Bool {
+        guard let workspace, let dueAt = task.schedule.dueAt else { return false }
+        return workspace.calendar.startOfDay(for: dueAt)
+            < workspace.calendar.startOfDay(for: workspace.clock())
     }
 
     private func chipMetaText(_ task: Task) -> String {
@@ -478,8 +513,28 @@ struct FocusWorkspaceView: View {
             .padding(.bottom, 30 * s)
             goalLine(s: s)
                 .padding(.bottom, 34 * s)
-            sparkline(s: s)
-                .padding(.bottom, 34 * s)
+            if store.recentDailyStats().reduce(0, { $0 + $1.minutes }) > 0 {
+                sparkline(s: s)
+                    .padding(.bottom, 34 * s)
+            }
+            HStack {
+                Text("记 录")
+                    .font(.system(size: 18 * s, weight: .semibold))
+                    .tracking(4 * s)
+                    .foregroundStyle(theme.text3)
+                Spacer()
+                Button { showAddRecord = true } label: {
+                    Text("＋ 补记")
+                        .font(.system(size: 20 * s))
+                        .foregroundStyle(theme.accent)
+                }
+                .buttonStyle(.plain)
+                .help("手动添加一条过去的专注记录")
+            }
+            .padding(.bottom, 8 * s)
+            .popover(isPresented: $showAddRecord, arrowEdge: .leading) {
+                addRecordPopover(s: s)
+            }
             if store.recordGroups.isEmpty {
                 Text("选择一个任务并开始专注")
                     .font(.system(size: 21 * s))
@@ -490,6 +545,108 @@ struct FocusWorkspaceView: View {
                     recordsList(s: s)
                 }
             }
+        }
+    }
+
+    /// 补记弹层：任务 + 时长，默认开始时间 = 此刻减去时长（即刚结束的一段）。
+    private func addRecordPopover(s: CGFloat) -> some View {
+        VStack(alignment: .leading, spacing: 20 * s) {
+            Text("补记专注")
+                .font(.system(size: 24 * s, weight: .semibold))
+                .foregroundStyle(theme.text)
+            Menu {
+                Button("不关联") { addRecordTaskID = nil }
+                ForEach(recordCandidates) { task in
+                    Button {
+                        addRecordTaskID = task.id
+                    } label: {
+                        if task.id == addRecordTaskID {
+                            Label(taskMenuTitle(task), systemImage: "checkmark")
+                        } else {
+                            Text(taskMenuTitle(task))
+                        }
+                    }
+                }
+            } label: {
+                HStack(spacing: 12 * s) {
+                    Circle()
+                        .fill(listDotColor(for: addRecordTaskID))
+                        .frame(width: 10 * s, height: 10 * s)
+                    Text(addRecordTaskTitle)
+                        .font(.system(size: 22 * s))
+                        .foregroundStyle(theme.text)
+                        .lineLimit(1)
+                    Spacer(minLength: 8 * s)
+                    Image(systemName: "chevron.up.chevron.down")
+                        .font(.system(size: 15 * s))
+                        .foregroundStyle(theme.text3)
+                }
+                .frame(width: 320 * s)
+            }
+            .menuStyle(.button)
+            .menuIndicator(.hidden)
+            .fixedSize()
+            HStack(spacing: 14 * s) {
+                Text("时长")
+                    .font(.system(size: 21 * s))
+                    .foregroundStyle(theme.text2)
+                TextField("分钟", text: $addRecordMinutes)
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 22 * s))
+                    .monospacedDigit()
+                    .multilineTextAlignment(.center)
+                    .foregroundStyle(theme.text)
+                    .frame(width: 96 * s)
+                    .padding(.vertical, 8 * s)
+                    .background(Capsule().stroke(theme.hairline, lineWidth: 1.5))
+                    .onSubmit(submitAddRecord)
+            }
+            if let addRecordHint {
+                Text(addRecordHint)
+                    .font(.system(size: 19 * s))
+                    .foregroundStyle(theme.warn)
+            }
+            Text("仅支持补记最近 7 天内、此刻之前的专注")
+                .font(.system(size: 18 * s))
+                .foregroundStyle(theme.text3)
+            HStack {
+                Spacer()
+                Button {
+                    submitAddRecord()
+                } label: {
+                    Text("添 加")
+                        .font(.system(size: 22 * s, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .frame(width: 140 * s, height: 44 * s)
+                        .background(Capsule().fill(theme.accent))
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(30 * s)
+        .frame(width: 380 * s)
+    }
+
+    private var recordCandidates: [Task] {
+        guard let workspace else { return [] }
+        return workspace.allTasks.filter { $0.deletedAt == nil && !$0.isAbandoned }
+    }
+
+    private var addRecordTaskTitle: String {
+        guard let id = addRecordTaskID, let title = taskTitle(for: id) else { return "不关联" }
+        return title
+    }
+
+    private func submitAddRecord() {
+        let minutes = Int(addRecordMinutes.trimmingCharacters(in: .whitespaces)) ?? 0
+        let endedNow = workspace?.clock() ?? Date()
+        let startedAt = endedNow.addingTimeInterval(TimeInterval(-minutes * 60))
+        if store.addRecord(taskID: addRecordTaskID, startedAt: startedAt, minutes: minutes) {
+            showAddRecord = false
+            addRecordHint = nil
+            addRecordMinutes = "25"
+        } else {
+            addRecordHint = "补记失败：时长需 1–180 分钟，且时间要在最近 7 天内"
         }
     }
 
@@ -526,6 +683,7 @@ struct FocusWorkspaceView: View {
             }
         }
         .buttonStyle(.plain)
+        .help("点击修改每日目标")
         .popover(isPresented: $showGoalPopover, arrowEdge: .bottom) {
             goalEditor
         }
@@ -537,10 +695,11 @@ struct FocusWorkspaceView: View {
         let peak = max(stats.map(\.minutes).max() ?? 0, 1)
         return HStack(alignment: .bottom, spacing: 14 * s) {
             ForEach(stats.indices, id: \.self) { index in
-                let isToday = index == stats.count - 1
+                let stat = stats[index]
                 Capsule()
-                    .fill(isToday ? theme.accent : theme.track)
-                    .frame(height: max(6 * s, 72 * s * CGFloat(stats[index].minutes) / CGFloat(peak)))
+                    .fill(index == stats.count - 1 ? theme.accent : theme.track)
+                    .frame(height: max(6 * s, 72 * s * CGFloat(stat.minutes) / CGFloat(peak)))
+                    .help("\(stat.day.formatted(.dateTime.weekday(.abbreviated).locale(.appDate))) · \(stat.minutes) 分钟")
             }
         }
         .frame(height: 74 * s, alignment: .bottom)
@@ -600,6 +759,11 @@ struct FocusWorkspaceView: View {
             Rectangle().fill(theme.hairline).frame(height: 1)
         }
         .contentShape(Rectangle())
+        .onTapGesture {
+            guard let taskID = record.taskID else { return }
+            workspace?.select(taskID)
+            environment.navigation.destination = .allTasks
+        }
         .onHover { hovering in
             if hovering {
                 hoveredRecordID = record.id
@@ -666,7 +830,9 @@ struct FocusWorkspaceView: View {
             durationSelection = .custom
             customMinutes = String(minutes)
         }
-        if linkedTaskID == nil { linkedTaskID = workspace?.selectedTaskID }
+        if linkedTaskID == nil {
+            linkedTaskID = store.preferences.lastTaskID ?? workspace?.selectedTaskID
+        }
     }
 }
 

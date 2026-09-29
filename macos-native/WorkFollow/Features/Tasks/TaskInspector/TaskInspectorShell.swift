@@ -145,7 +145,18 @@ struct TaskInspectorShell: View {
             scheduleChip(task, field: .due)
             priorityMenu(task)
             Spacer(minLength: 0)
-            // 滴答式：右上角常驻置顶入口。
+            // 滴答式：右上角专注与置顶常驻入口。
+            Button {
+                environment.startFocus(for: task.id)
+            } label: {
+                Image(systemName: "timer")
+                    .foregroundStyle(WFColors.secondaryText)
+                    .frame(width: 24, height: WFMetrics.controlHeight)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help("开始专注")
+            .accessibilityLabel("开始专注")
             Button {
                 _ = workspace.setPinned(task.id, !task.isPinned)
             } label: {

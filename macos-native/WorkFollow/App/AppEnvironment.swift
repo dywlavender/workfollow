@@ -113,6 +113,14 @@ final class AppEnvironment: ObservableObject {
         if !loadFailed { reminders.reconcile(taskWorkspace.allTasks) }
     }
 
+    /// 从任务侧发起专注：跳到专注页并直接开始该任务的番茄；已有进行中会话
+    /// 时只做跳转，不打断当前计时。
+    func startFocus(for taskID: UUID) {
+        taskWorkspace.select(taskID)
+        navigation.destination = .focus
+        _ = focusStore.start(taskID: taskID)
+    }
+
     /// Acceptance harness: `--wf-destination <rawValue>` opens that view directly
     /// so screenshots can be taken without UI automation.
     private func applyAcceptanceDestination() {

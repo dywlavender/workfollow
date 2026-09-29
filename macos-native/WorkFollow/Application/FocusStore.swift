@@ -16,6 +16,8 @@ struct FocusPreferences: Codable, Equatable {
     var longBreakMinutes = 15
     var longBreakInterval = 4
     var dailyGoal = 8
+    /// 上一次专注绑定的任务：进入专注页时默认带上（additive Codable）。
+    var lastTaskID: UUID?
 
     static let dailyGoalRange = 1...24
 
@@ -106,6 +108,10 @@ final class FocusStore: ObservableObject, ModuleStoreFlushable {
             schedulePersistence()
         }
         guard engine.start(taskID: taskID) else { return false }
+        if let taskID {
+            preferences.lastTaskID = taskID
+            schedulePersistence()
+        }
         sync()
         startTimer()
         return true
@@ -198,6 +204,24 @@ final class FocusStore: ObservableObject, ModuleStoreFlushable {
     }
 
     // MARK: - 记录
+
+    /// 手动补记一条过去的专注记录（对齐滴答）：只允许此刻之前、且落在最近
+    /// 7 天内的时段，分钟数 1–180；记录按开始时间归位排序。
+    @discardableResult
+    func addRecord(taskID: UUID?, startedAt: Date, minutes: Int) -> Bool {
+        guard (1...180).contains(minutes) else { return false }
+        let now = clock()
+        guard startedAt < now else { return false }
+        guard let days = calendar.dateComponents([.day], from: startedAt, to: now).day,
+              days < 7 else { return false }
+        let record = PomodoroRecord(id: UUID(), taskID: taskID, startedAt: startedAt,
+                                    minutes: minutes, completed: true)
+        records.append(record)
+        records.sort { $0.startedAt > $1.startedAt }
+        refreshDailyStats()
+        schedulePersistence()
+        return true
+    }
 
     func deleteRecord(_ id: UUID) {
         guard let index = records.firstIndex(where: { $0.id == id }) else { return }

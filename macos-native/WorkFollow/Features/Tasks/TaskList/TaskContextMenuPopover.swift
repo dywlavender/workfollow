@@ -89,6 +89,9 @@ struct TaskContextMenuPopover: View {
 
             Divider().padding(.vertical, WFSpace.xs)
             VStack(spacing: 2) {
+                actionRow("开始专注", symbol: "timer") {
+                    perform { environment.startFocus(for: task.id) }
+                }
                 if task.parentID == nil {
                     actionRow("添加子任务", symbol: "plus.square.on.square") {
                         perform { _ = workspace.requestChildTitleEditor(for: task.id) }

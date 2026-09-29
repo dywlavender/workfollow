@@ -13,7 +13,13 @@ struct WorkFollowApp: App {
         let quickAdd = GlobalQuickAddController(workspace: environment.taskWorkspace)
         _environment = StateObject(wrappedValue: environment)
         _quickAdd = StateObject(wrappedValue: quickAdd)
-        _statusItem = StateObject(wrappedValue: StatusItemController(quickAdd: quickAdd))
+        _statusItem = StateObject(wrappedValue: StatusItemController(quickAdd: quickAdd,
+                                                                    focusStore: environment.focusStore,
+                                                                    onOpenFocus: {
+            environment.navigation.destination = .focus
+            NSApp.activate(ignoringOtherApps: true)
+            NSApp.windows.first { !($0 is NSPanel) && $0.isVisible }?.makeKeyAndOrderFront(nil)
+        }))
     }
 
     var body: some Scene {
