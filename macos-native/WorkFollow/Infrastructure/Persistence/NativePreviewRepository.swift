@@ -8,6 +8,8 @@ struct NativeWorkspaceSnapshot: Codable {
     /// 侧栏清单元数据（Round B1 additive）：旧快照没有该键，解码为 nil。
     var taskListMeta: [TaskListMeta]? = nil
     var noteFolders: [String]? = nil
+    /// Full stable folder records; additive so older preview snapshots still decode.
+    var noteFolderMetadata: [NoteFolderMeta]? = nil
 }
 
 /// Snapshot backup overview for the settings page.

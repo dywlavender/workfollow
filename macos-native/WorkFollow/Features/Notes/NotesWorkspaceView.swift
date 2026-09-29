@@ -156,15 +156,15 @@ struct NotesWorkspaceView: View {
                     if trash {
                         Label("已删除的笔记", systemImage: "trash").foregroundStyle(.secondary)
                     } else {
-                    Menu {
-                        ForEach(["未归档"] + notes.folders, id: \.self) { value in
-                            Button(value) { notes.edit(note.id) { $0.folder = value } }
+                        Menu {
+                            ForEach(["未归档"] + notes.folders, id: \.self) { value in
+                            Button(value) { notes.moveNoteToFolder(note.id, named: value) }
                         }
                         Divider()
                         Button("移到新文件夹…") {
                             if let value = TaskNamePrompt.ask("文件夹名称"), !value.isEmpty {
                                 guard notes.addFolder(value) else { TaskNamePrompt.invalidName(); return }
-                                notes.edit(note.id) { $0.folder = value }
+                                notes.moveNoteToFolder(note.id, named: value)
                             }
                         }
                     } label: { Label(note.folder, systemImage: "folder") }

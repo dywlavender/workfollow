@@ -50,9 +50,10 @@ final class MigrationSnapshotTests: XCTestCase {
              createdAt: fixedDate, updatedAt: fixedDate)
     }
 
-    private func makeNote(id: UUID, title: String, folder: String = "未归档") -> Note {
+    private func makeNote(id: UUID, title: String, folder: String = "未归档",
+                          folderID: String? = nil) -> Note {
         Note(id: id, title: title, document: NativeDocument(plainText: title), folder: folder,
-             updatedAt: fixedDate)
+             folderID: folderID, updatedAt: fixedDate)
     }
 
     /// 一份最小 v3 数据：父任务 + 子任务 + 笔记 + 清单 + 文件夹 + base64 附件。
@@ -64,11 +65,14 @@ final class MigrationSnapshotTests: XCTestCase {
           "exportedAt": "2026-09-25T18:00:00",
           "lists": [
             {"id": null, "name": "收集箱", "sortOrder": 0, "protected": true},
-            {"id": null, "name": "读书", "sortOrder": 1, "protected": false}
+            {"id": null, "name": "读书", "sortOrder": 1, "protected": false,
+             "color": "#4285D4", "pinned": true}
           ],
           "folders": [
-            {"id": "folder-1", "parentId": null, "name": "工作笔记", "sortOrder": 0,
-             "createdAt": null, "updatedAt": null}
+            {"id": "folder-parent", "parentId": null, "name": "笔记", "sortOrder": 0,
+             "createdAt": "2026-09-20T08:00:00", "updatedAt": "2026-09-21T09:00:00"},
+            {"id": "folder-1", "parentId": "folder-parent", "name": "工作笔记", "sortOrder": 1,
+             "createdAt": "2026-09-22T10:00:00", "updatedAt": "2026-09-23T11:00:00"}
           ],
           "tasks": [
             {"id": "task-01", "title": "写周报", "description": "周五整理",
@@ -115,9 +119,19 @@ final class MigrationSnapshotTests: XCTestCase {
         let (snapshot, summary) = MigrationSnapshot.replaced(bundle, attachmentNames: ["a.txt"])
         XCTAssertEqual(summary.importedTasks, 2)
         XCTAssertEqual(summary.importedNotes, 1)
-        XCTAssertEqual(summary.importedFolders, 1)
+        XCTAssertEqual(summary.importedFolders, 2)
         XCTAssertEqual(summary.importedLegacyChildren, 0)
         XCTAssertEqual(snapshot.taskLists, ["收集箱", "读书"])
+        XCTAssertEqual(snapshot.noteFolders, ["笔记", "工作笔记"])
+        let folderMeta = try XCTUnwrap(snapshot.noteFolderMetadata?.first { $0.id == "folder-1" })
+        XCTAssertEqual(folderMeta.parentID, "folder-parent")
+        XCTAssertEqual(folderMeta.sortOrder, 1)
+        XCTAssertEqual(folderMeta.createdAt, "2026-09-22T10:00:00")
+        XCTAssertEqual(folderMeta.updatedAt, "2026-09-23T11:00:00")
+        let readingMeta = try XCTUnwrap(snapshot.taskListMeta?.first { $0.name == "读书" })
+        XCTAssertEqual(readingMeta.colorIndex, 7)
+        XCTAssertTrue(readingMeta.isPinned)
+        XCTAssertEqual(readingMeta.sortOrder, 1)
 
         let parent = try XCTUnwrap(snapshot.tasks.first { $0.title == "写周报" })
         XCTAssertEqual(parent.id, MigrationSnapshot.uuid(forRawID: "task-01"))
@@ -141,6 +155,7 @@ final class MigrationSnapshotTests: XCTestCase {
         let note = try XCTUnwrap(snapshot.notes.first)
         XCTAssertEqual(note.id, MigrationSnapshot.uuid(forRawID: "note-01"))
         XCTAssertEqual(note.folder, "工作笔记")
+        XCTAssertEqual(note.folderID, "folder-1")
         XCTAssertTrue(note.favorite)
         XCTAssertEqual(note.document.plainText, "正文第一行")
     }
@@ -153,9 +168,21 @@ final class MigrationSnapshotTests: XCTestCase {
         let parent = makeTask(id: MigrationSnapshot.uuid(forRawID: "task-01"), title: "写周报", list: "读书")
         let child = makeTask(id: MigrationSnapshot.uuid(forRawID: "sub-1"), title: "收集数据",
                              list: "读书", status: .completed, parent: parent.id, childOrder: 1)
-        let note = makeNote(id: MigrationSnapshot.uuid(forRawID: "note-01"), title: "读书笔记", folder: "工作笔记")
+        let note = makeNote(id: MigrationSnapshot.uuid(forRawID: "note-01"), title: "读书笔记",
+                            folder: "工作笔记", folderID: "folder-child")
+        let noteFolders = [
+            NoteFolderMeta(id: "folder-parent", parentID: nil, name: "笔记", sortOrder: 0,
+                           createdAt: "2026-09-20T08:00:00", updatedAt: "2026-09-21T09:00:00"),
+            NoteFolderMeta(id: "folder-child", parentID: "folder-parent", name: "工作笔记", sortOrder: 1,
+                           createdAt: "2026-09-22T10:00:00", updatedAt: "2026-09-23T11:00:00"),
+        ]
         let snapshot = NativeWorkspaceSnapshot(
-            tasks: [parent, child], notes: [note], taskLists: ["收集箱", "读书"])
+            tasks: [parent, child], notes: [note], taskLists: ["收集箱", "工作", "读书"],
+            taskListMeta: [
+                TaskListMeta(name: "收集箱", sortOrder: 0),
+                TaskListMeta(name: "读书", colorIndex: 7, isPinned: true, sortOrder: 1),
+                TaskListMeta(name: "工作", sortOrder: 2),
+            ], noteFolders: ["笔记", "工作笔记"], noteFolderMetadata: noteFolders)
 
         let now = stampFormatter.date(from: "2026-09-26 14:30:00")!
         let data = try MigrationSnapshot.exportJSON(from: snapshot, attachmentDirectory: attachments, now: now)
@@ -170,6 +197,16 @@ final class MigrationSnapshotTests: XCTestCase {
         XCTAssertEqual(reparsed.embeddedFiles["a.txt"], Data("hello".utf8).base64EncodedString())
         XCTAssertEqual(reparsed.tasks.count, 2)
         XCTAssertEqual(reparsed.notes.count, 1)
+        XCTAssertEqual(reparsed.lists.map(\.name), ["收集箱", "读书", "工作"])
+        XCTAssertEqual(reparsed.folders.map(\.id), ["folder-parent", "folder-child"])
+        XCTAssertEqual(reparsed.folders.last?.parentID, "folder-parent")
+        XCTAssertEqual(reparsed.folders.last?.sortOrder, 1)
+        XCTAssertEqual(reparsed.folders.last?.createdAt, "2026-09-22T10:00:00")
+        XCTAssertEqual(reparsed.notes.first?.folderId, "folder-child")
+        let exportedReadingList = try XCTUnwrap(reparsed.lists.first { $0.name == "读书" })
+        XCTAssertEqual(exportedReadingList.color, "#4285D4")
+        XCTAssertTrue(exportedReadingList.isPinned)
+        XCTAssertEqual(exportedReadingList.sortOrder, 1)
 
         // 导出的 v3：id 为 UUID 字符串；dueEndAt/contentJson 置空；无 subtasks 键。
         let object = try XCTUnwrap(try JSONSerialization.jsonObject(with: data) as? [String: Any])
@@ -189,9 +226,16 @@ final class MigrationSnapshotTests: XCTestCase {
         XCTAssertEqual(summary.importedTasks, 2)
         XCTAssertEqual(rebuilt.tasks.map(\.id), snapshot.tasks.map(\.id))
         XCTAssertEqual(rebuilt.notes.map(\.id), snapshot.notes.map(\.id))
-        XCTAssertEqual(rebuilt.taskLists, ["收集箱", "读书"])
+        XCTAssertEqual(rebuilt.taskLists, ["收集箱", "读书", "工作"])
+        XCTAssertEqual(rebuilt.noteFolders, ["笔记", "工作笔记"])
+        XCTAssertEqual(rebuilt.noteFolderMetadata, noteFolders)
+        let rebuiltReadingMeta = try XCTUnwrap(rebuilt.taskListMeta?.first { $0.name == "读书" })
+        XCTAssertEqual(rebuiltReadingMeta.colorIndex, 7)
+        XCTAssertTrue(rebuiltReadingMeta.isPinned)
+        XCTAssertEqual(rebuiltReadingMeta.sortOrder, 1)
         let rebuiltNote = try XCTUnwrap(rebuilt.notes.first)
         XCTAssertEqual(rebuiltNote.folder, "工作笔记")
+        XCTAssertEqual(rebuiltNote.folderID, "folder-child")
         XCTAssertEqual(rebuiltNote.document.plainText, "读书笔记")
     }
 
@@ -283,6 +327,14 @@ final class MigrationSnapshotTests: XCTestCase {
         XCTAssertEqual(task.schedule.dueEndAt,
                        MigrationSnapshot.parseDate("2026-09-29T00:00:00"),
                        "时间段结束必须落进 schedule.dueEndAt，否则日历画不出色带")
+        let importedListMeta = try XCTUnwrap(snapshot.taskListMeta?.first { $0.name == "读书" })
+        XCTAssertEqual(importedListMeta.colorARGB, 0xFF123456)
+        XCTAssertNil(importedListMeta.colorIndex)
+        XCTAssertTrue(importedListMeta.isPinned)
+
+        let exported = try MigrationSnapshot.exportJSON(from: snapshot, attachmentDirectory: nil, now: fixedDate)
+        let exportedBundle = try MigrationSnapshot.parse(exported)
+        XCTAssertEqual(exportedBundle.lists.first { $0.name == "读书" }?.color, "#123456")
     }
 
     // MARK: merge / replace 语义
@@ -302,6 +354,9 @@ final class MigrationSnapshotTests: XCTestCase {
         XCTAssertEqual(summary.importedTasks, 1, "新 ID 的 v3 子任务照常导入")
         XCTAssertEqual(summary.importedLists, 1, "未知清单「读书」自动创建")
         XCTAssertEqual(merged.taskLists, ["收集箱", "读书"])
+        let readingMeta = try XCTUnwrap(merged.taskListMeta?.first { $0.name == "读书" })
+        XCTAssertEqual(readingMeta.colorIndex, 7)
+        XCTAssertTrue(readingMeta.isPinned)
 
         // 本机版本保留，导入版本不覆盖。
         let kept = try XCTUnwrap(merged.tasks.first { $0.id == localID })
@@ -311,6 +366,24 @@ final class MigrationSnapshotTests: XCTestCase {
         let importedChild = try XCTUnwrap(merged.tasks.first { $0.title == "收集数据" })
         XCTAssertEqual(importedChild.parentID, localID)
         XCTAssertEqual(merged.tasks.last?.id, localID)
+    }
+
+    func testMergeKeepsLocalMetadataForAnExistingList() throws {
+        let local = NativeWorkspaceSnapshot(
+            tasks: [], notes: [], taskLists: ["收集箱", "读书"],
+            taskListMeta: [
+                TaskListMeta(name: "收集箱", sortOrder: 0),
+                TaskListMeta(name: "读书", colorIndex: 2, isPinned: false, sortOrder: 1),
+            ])
+        let bundle = try MigrationSnapshot.parse(Data(v3JSON.utf8))
+
+        let (merged, summary) = MigrationSnapshot.merged(bundle, into: local, attachmentNames: [])
+
+        XCTAssertEqual(summary.importedLists, 0)
+        let readingMeta = try XCTUnwrap(merged.taskListMeta?.first { $0.name == "读书" })
+        XCTAssertEqual(readingMeta.colorIndex, 2)
+        XCTAssertFalse(readingMeta.isPinned)
+        XCTAssertEqual(readingMeta.sortOrder, 1)
     }
 
     func testReplaceClearsLocalAndImportsBundleContentOnly() throws {

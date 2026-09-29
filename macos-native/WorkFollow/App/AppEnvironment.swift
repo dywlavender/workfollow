@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 import Combine
 
@@ -62,7 +63,10 @@ final class AppEnvironment: ObservableObject {
             playSound: { Self.playFeedbackSound($0) })
         self.feedback = feedback
         taskWorkspace = TaskWorkspaceModel(clock: clock, calendar: calendar, initialTasks: snapshot?.tasks, initialLists: snapshot?.taskLists ?? [], initialListMeta: snapshot?.taskListMeta)
-        notesWorkspace = NotesWorkspaceModel(initialNotes: snapshot?.notes ?? [], folders: snapshot?.noteFolders ?? [], clock: clock)
+        notesWorkspace = NotesWorkspaceModel(initialNotes: snapshot?.notes ?? [],
+                                             folders: snapshot?.noteFolders ?? [],
+                                             folderMetadata: snapshot?.noteFolderMetadata ?? [],
+                                             clock: clock)
         focusStore = FocusStore(clock: clock)
         habitStore = HabitStore(clock: clock)
         summaryStore = SummaryStore(clock: clock)
@@ -74,6 +78,16 @@ final class AppEnvironment: ObservableObject {
             DispatchQueue.main.async { self?.storageError = error.map { "预览数据保存失败：\($0.localizedDescription)" } }
         }
         if let failure { loadFailed = true; storageError = "预览数据读取失败，自动保存已停用：\(failure.localizedDescription)" }
+        Timer.publish(every: 60, on: .main, in: .common)
+            .autoconnect()
+            .sink { [weak self] _ in self?.taskWorkspace.refreshDates() }
+            .store(in: &subscriptions)
+        NotificationCenter.default.publisher(for: .NSCalendarDayChanged)
+            .sink { [weak self] _ in self?.taskWorkspace.refreshDates() }
+            .store(in: &subscriptions)
+        NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)
+            .sink { [weak self] _ in self?.taskWorkspace.refreshDates() }
+            .store(in: &subscriptions)
         // B2 笔记↔任务联动：笔记详情展示/勾选/打开 sourceNoteID 关联的任务。
         notesWorkspace.taskProvider = { [weak taskWorkspace] in taskWorkspace?.allTasks ?? [] }
         notesWorkspace.openTask = { [weak self] id in
@@ -107,7 +121,12 @@ final class AppEnvironment: ObservableObject {
 
     private func savePreview() {
         guard !loadFailed else { return }
-        persistence.schedule(NativeWorkspaceSnapshot(tasks: taskWorkspace.allTasks, notes: notesWorkspace.notes, taskLists: taskWorkspace.listNames, taskListMeta: taskWorkspace.listMetas, noteFolders: notesWorkspace.folders))
+        persistence.schedule(NativeWorkspaceSnapshot(tasks: taskWorkspace.allTasks,
+                                                     notes: notesWorkspace.notes,
+                                                     taskLists: taskWorkspace.listNames,
+                                                     taskListMeta: taskWorkspace.listMetas,
+                                                     noteFolders: notesWorkspace.folders,
+                                                     noteFolderMetadata: notesWorkspace.folderMetadataForPersistence))
     }
 
     /// ⌘\ 显示或隐藏侧栏。

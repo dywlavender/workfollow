@@ -6,34 +6,81 @@ final class NotesWorkspaceModel: ObservableObject {
     private let store: NoteStore
     private let clock: () -> Date
     private var savedFolders: [String]
-    init(initialNotes: [Note] = [], folders: [String] = [], clock: @escaping () -> Date = Date.init) {
+    private var folderRecords: [NoteFolderMeta]
+
+    init(initialNotes: [Note] = [], folders: [String] = [],
+         folderMetadata: [NoteFolderMeta] = [], clock: @escaping () -> Date = Date.init) {
         store = NoteStore(notes: initialNotes, clock: clock)
         savedFolders = folders
+        folderRecords = folderMetadata
         self.clock = clock
+        let allNames = folders + folderMetadata.map(\.name) + initialNotes.map(\.folder)
+        var knownNames = Set(folderRecords.map(\.name))
+        for name in allNames where name != "未归档" && knownNames.insert(name).inserted {
+            folderRecords.append(NoteFolderMeta(id: UUID().uuidString, parentID: nil,
+                                                name: name, sortOrder: folderRecords.count,
+                                                createdAt: nil, updatedAt: nil))
+        }
     }
     @Published var selectedID: UUID?
     @Published var folderFilter: String?
     @Published var favoritesOnly = false
-    var folders: [String] { Array(Set(savedFolders + notes.filter { $0.deletedAt == nil }.map(\.folder))).filter { $0 != "未归档" }.sorted() }
+    var folders: [String] {
+        let names = Array(Set(savedFolders + folderRecords.map(\.name)
+                              + notes.filter { $0.deletedAt == nil }.map(\.folder)))
+            .filter { $0 != "未归档" }
+        let orderByName = Dictionary(folderRecords.map { ($0.name, $0.sortOrder) },
+                                     uniquingKeysWith: { current, _ in current })
+        return names.sorted { lhs, rhs in
+            let left = orderByName[lhs] ?? Int.max
+            let right = orderByName[rhs] ?? Int.max
+            if left != right { return left < right }
+            return lhs.localizedCompare(rhs) == .orderedAscending
+        }
+    }
+    var folderMetadataForPersistence: [NoteFolderMeta] {
+        let recordsByName = Dictionary(folderRecords.map { ($0.name, $0) },
+                                       uniquingKeysWith: { current, _ in current })
+        return folders.enumerated().map { index, name in
+            var record = recordsByName[name]
+                ?? NoteFolderMeta(id: UUID().uuidString, parentID: nil, name: name,
+                                  sortOrder: index, createdAt: nil, updatedAt: nil)
+            record.sortOrder = index
+            return record
+        }
+    }
+
+    func folderID(named name: String) -> String? {
+        folderRecords.first { $0.name == name }?.id
+    }
+
     @discardableResult func addFolder(_ rawName: String) -> Bool {
         let name = rawName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !name.isEmpty, name != "未归档", !folders.contains(name) else { return false }
         savedFolders = folders + [name]
+        folderRecords.append(NoteFolderMeta(id: UUID().uuidString, parentID: nil,
+                                            name: name, sortOrder: folderRecords.count,
+                                            createdAt: nil, updatedAt: nil))
         revision += 1
         return true
     }
     @discardableResult func renameFolder(_ old: String, to rawName: String) -> Bool {
         let name = rawName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !name.isEmpty, name != "未归档", name != old, !folders.contains(name) else { return false }
+        let folderID = self.folderID(named: old)
+        if let index = folderRecords.firstIndex(where: { $0.name == old }) {
+            folderRecords[index].name = name
+        }
         savedFolders = folders.map { $0 == old ? name : $0 }
-        store.moveFolder(old, to: name)
+        store.moveFolder(old, to: name, destinationID: folderID)
         if folderFilter == old { folderFilter = name }
         revision += 1
         return true
     }
     func removeFolder(_ name: String) {
         savedFolders = folders.filter { $0 != name }
-        store.moveFolder(name, to: "未归档")
+        store.moveFolder(name, to: "未归档", destinationID: nil)
+        folderRecords.removeAll { $0.name == name }
         if folderFilter == name { folderFilter = "未归档" }
         revision += 1
     }
@@ -55,9 +102,23 @@ final class NotesWorkspaceModel: ObservableObject {
     }
     func create(folder: String? = nil) {
         let id = store.create()
-        if let folder { store.edit(id) { $0.folder = folder } }
+        if let folder {
+            let folderID = self.folderID(named: folder)
+            store.edit(id) {
+                $0.folder = folder
+                $0.folderID = folderID
+            }
+        }
         selectedID = id
         revision += 1
+    }
+
+    func moveNoteToFolder(_ id: UUID, named folder: String) {
+        let folderID = self.folderID(named: folder)
+        edit(id) {
+            $0.folder = folder
+            $0.folderID = folderID
+        }
     }
     @discardableResult
     func createFromTask(_ task: Task, children: [Task], clock: () -> Date) -> UUID {
@@ -124,6 +185,7 @@ final class NotesWorkspaceModel: ObservableObject {
                         title: notePlainTextCopyTitle(source.title),
                         document: NativeDocument(plainText: notePlainTextBody(source.document)),
                         folder: source.folder,
+                        folderID: source.folderID,
                         favorite: source.favorite,
                         updatedAt: clock())
         store.insert(copy)

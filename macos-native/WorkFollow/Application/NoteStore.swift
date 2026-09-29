@@ -46,9 +46,10 @@ final class NoteStore {
 
     // Folder operations apply to deleted notes too, so restoring one cannot
     // resurrect a removed folder. They do not count as editing the document.
-    func moveFolder(_ folder: String, to destination: String) {
+    func moveFolder(_ folder: String, to destination: String, destinationID: String?) {
         for index in notes.indices where notes[index].folder == folder {
             notes[index].folder = destination
+            notes[index].folderID = destinationID
         }
     }
 }

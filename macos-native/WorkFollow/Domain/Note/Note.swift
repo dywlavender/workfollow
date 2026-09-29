@@ -1,10 +1,22 @@
 import Foundation
 
+/// Stable folder identity and migration ordering, retained independently from
+/// the flat folder-name presentation used by the current Native notes UI.
+struct NoteFolderMeta: Identifiable, Equatable, Codable {
+    var id: String
+    var parentID: String?
+    var name: String
+    var sortOrder: Int
+    var createdAt: String?
+    var updatedAt: String?
+}
+
 struct Note: Identifiable, Equatable, Codable {
     let id: UUID
     var title: String
     var document: NativeDocument
     var folder: String
+    var folderID: String? = nil
     var favorite = false
     var linkedTaskIDs: [UUID] = []
     var attachments: [NativeAttachment] = []

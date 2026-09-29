@@ -426,11 +426,58 @@ enum MigrationSnapshot {
         var summary = MigrationImportSummary()
         summary.importedFolders = bundle.folders.count
 
-        var lists = local.taskLists ?? []
-        for record in bundle.lists.sorted(by: { $0.sortOrder < $1.sortOrder })
-        where !record.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !lists.contains(record.name) {
-            lists.append(record.name)
+        var lists = normalizedListNames((local.taskLists ?? []) + local.tasks.map(\.list.name))
+        var listMetaByName = Dictionary((local.taskListMeta ?? []).map { ($0.name, $0) },
+                                        uniquingKeysWith: { current, _ in current })
+        let localMetaNames = Set(listMetaByName.keys)
+        var nextListOrder = max((listMetaByName.values.map(\.sortOrder).max() ?? -1) + 1, lists.count)
+        for (index, name) in lists.enumerated() where listMetaByName[name] == nil {
+            listMetaByName[name] = TaskListMeta(name: name, sortOrder: index)
+        }
+        let sortedIncomingLists = bundle.lists.enumerated().sorted(by: {
+            $0.element.sortOrder == $1.element.sortOrder
+                ? $0.offset < $1.offset
+                : $0.element.sortOrder < $1.element.sortOrder
+        }).map { $0.element }
+        for record in sortedIncomingLists {
+            let name = record.name.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !name.isEmpty else { continue }
+            if lists.contains(name) {
+                // Existing local metadata wins. If an older local snapshot has
+                // no metadata for this name, use the import to fill that gap.
+                if !localMetaNames.contains(name) {
+                    listMetaByName[name] = taskListMeta(from: record, sortOrder: lists.firstIndex(of: name) ?? nextListOrder)
+                }
+                continue
+            }
+            lists.append(name)
+            listMetaByName[name] = taskListMeta(from: record, sortOrder: nextListOrder)
+            nextListOrder += 1
             summary.importedLists += 1
+        }
+
+        var localFolderRecords = local.noteFolderMetadata ?? []
+        var folderIDs = Set(localFolderRecords.map(\.id))
+        var folderNames = Set(localFolderRecords.map(\.name))
+        for (index, name) in uniqueFolderNames((local.noteFolders ?? []) + local.notes.map(\.folder)).enumerated()
+        where folderNames.insert(name).inserted {
+            let existingID = local.notes.first(where: { $0.folder == name })?.folderID
+            let id = existingID ?? UUID().uuidString
+            localFolderRecords.append(NoteFolderMeta(id: id, parentID: nil, name: name,
+                                                     sortOrder: index, createdAt: nil, updatedAt: nil))
+            folderIDs.insert(id)
+        }
+        let existingFolderRecords = localFolderRecords
+        var folderRecords = localFolderRecords
+        for record in bundle.folders.enumerated().sorted(by: {
+            $0.element.sortOrder == $1.element.sortOrder
+                ? $0.offset < $1.offset
+                : $0.element.sortOrder < $1.element.sortOrder
+        }).map({ $0.element }) {
+            guard !record.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                  folderIDs.insert(record.id).inserted,
+                  folderNames.insert(record.name).inserted else { continue }
+            folderRecords.append(noteFolderMeta(from: record))
         }
 
         var localIDs = Set(local.tasks.map(\.id))
@@ -454,6 +501,8 @@ enum MigrationSnapshot {
         }
         for name in (importedTasks + legacyChildren).map({ $0.list.name }) where !lists.contains(name) {
             lists.append(name)
+            listMetaByName[name] = TaskListMeta(name: name, sortOrder: nextListOrder)
+            nextListOrder += 1
             summary.importedLists += 1
         }
 
@@ -466,13 +515,23 @@ enum MigrationSnapshot {
                 continue
             }
             if record.hasRichContent { summary.countIgnored(["contentJson"]) }
-            importedNotes.append(note(from: record, bundle: bundle, now: now))
+            importedNotes.append(note(from: record, bundle: bundle, now: now,
+                                      folderIDOverride: importedFolderID(record.folderId,
+                                                                        incoming: bundle.folders,
+                                                                        existing: existingFolderRecords)))
         }
 
+        let orderedNames = orderedListNames(lists, metadata: listMetaByName)
+        let listMetas = normalizedListMetas(orderedNames, metadata: listMetaByName)
+        let orderedFolderRecords = normalizedNoteFolderMetadata(folderRecords)
+        let savedFolderNames = uniqueFolderNames((local.noteFolders ?? []) + orderedFolderRecords.map(\.name))
         let snapshot = NativeWorkspaceSnapshot(
             tasks: importedTasks + legacyChildren + local.tasks,
             notes: importedNotes + local.notes,
-            taskLists: normalizedListNames(lists))
+            taskLists: orderedNames,
+            taskListMeta: listMetas,
+            noteFolders: savedFolderNames,
+            noteFolderMetadata: orderedFolderRecords)
         summary.importedTasks = importedTasks.count + legacyChildren.count
         summary.importedNotes = importedNotes.count
         return (snapshot, summary)
@@ -485,11 +544,21 @@ enum MigrationSnapshot {
         var summary = MigrationImportSummary()
         summary.importedFolders = bundle.folders.count
 
-        var lists = bundle.lists
-            .sorted(by: { $0.sortOrder < $1.sortOrder })
-            .map(\.name)
-            .filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+        let sortedListRecords = bundle.lists.enumerated().sorted(by: {
+            $0.element.sortOrder == $1.element.sortOrder
+                ? $0.offset < $1.offset
+                : $0.element.sortOrder < $1.element.sortOrder
+        }).map { $0.element }
+        var lists = sortedListRecords
+            .map { $0.name.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
         if lists.isEmpty { lists = defaultListNames }
+        var listMetaByName: [String: TaskListMeta] = [:]
+        for record in sortedListRecords {
+            let name = record.name.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !name.isEmpty, listMetaByName[name] == nil else { continue }
+            listMetaByName[name] = taskListMeta(from: record, sortOrder: record.sortOrder)
+        }
 
         var ids = Set<UUID>()
         var tasks: [Task] = []
@@ -505,15 +574,24 @@ enum MigrationSnapshot {
                 }
             }
         }
-        for name in tasks.map({ $0.list.name }) where !lists.contains(name) { lists.append(name) }
+        for name in tasks.map({ $0.list.name }) where !lists.contains(name) {
+            lists.append(name)
+            listMetaByName[name] = TaskListMeta(name: name, sortOrder: lists.count - 1)
+        }
 
+        let folderRecords = normalizedNoteFolderMetadata(bundle.folders.map(noteFolderMeta(from:)))
         var notes: [Note] = []
         for record in bundle.notes {
             if record.hasRichContent { summary.countIgnored(["contentJson"]) }
             notes.append(note(from: record, bundle: bundle, now: now))
         }
 
-        let snapshot = NativeWorkspaceSnapshot(tasks: tasks, notes: notes, taskLists: normalizedListNames(lists))
+        let orderedNames = orderedListNames(lists, metadata: listMetaByName)
+        let listMetas = normalizedListMetas(orderedNames, metadata: listMetaByName)
+        let snapshot = NativeWorkspaceSnapshot(tasks: tasks, notes: notes,
+                                               taskLists: orderedNames, taskListMeta: listMetas,
+                                               noteFolders: uniqueFolderNames(folderRecords.map(\.name)),
+                                               noteFolderMetadata: folderRecords)
         summary.importedTasks = tasks.count
         summary.importedNotes = notes.count
         summary.importedLists = lists.count
@@ -530,6 +608,59 @@ enum MigrationSnapshot {
             result.append(trimmed)
         }
         return result
+    }
+
+    private static func taskListMeta(from record: MigrationListRecord, sortOrder: Int) -> TaskListMeta {
+        let argb = listARGB(from: record.color)
+        let colorIndex = argb.flatMap { WFListPalette.argb.firstIndex(of: $0) }
+        return TaskListMeta(name: record.name,
+                            colorIndex: colorIndex,
+                            isPinned: record.isPinned,
+                            sortOrder: sortOrder,
+                            colorARGB: colorIndex == nil ? argb : nil)
+    }
+
+    private static func listARGB(from raw: String?) -> UInt32? {
+        guard var value = raw?.trimmingCharacters(in: .whitespacesAndNewlines), !value.isEmpty else { return nil }
+        if value.hasPrefix("#") { value.removeFirst() }
+        if value.lowercased().hasPrefix("0x") { value.removeFirst(2) }
+        if value.count == 6 { value = "FF" + value }
+        guard value.count == 8, let argb = UInt32(value, radix: 16) else { return nil }
+        return argb
+    }
+
+    private static func listColorHex(for meta: TaskListMeta?) -> String? {
+        let argb: UInt32
+        if let importedColor = meta?.colorARGB {
+            argb = importedColor
+        } else if let index = meta?.colorIndex, WFListPalette.argb.indices.contains(index) {
+            argb = WFListPalette.argb[index]
+        } else {
+            return nil
+        }
+        return argb >> 24 == 0xFF
+            ? String(format: "#%06X", argb & 0x00FF_FFFF)
+            : String(format: "#%08X", argb)
+    }
+
+    private static func orderedListNames(_ raw: [String], metadata: [String: TaskListMeta]) -> [String] {
+        normalizedListNames(raw).enumerated().sorted { left, right in
+            if left.element == inboxListName { return right.element != inboxListName }
+            if right.element == inboxListName { return false }
+            let leftOrder = metadata[left.element]?.sortOrder ?? Int.max
+            let rightOrder = metadata[right.element]?.sortOrder ?? Int.max
+            if leftOrder != rightOrder { return leftOrder < rightOrder }
+            return left.offset < right.offset
+        }.map { $0.element }
+    }
+
+    private static func normalizedListMetas(_ names: [String], metadata: [String: TaskListMeta]) -> [TaskListMeta] {
+        names.enumerated().map { index, name in
+            var meta = metadata[name] ?? TaskListMeta(name: name)
+            meta.name = name
+            meta.sortOrder = index
+            return meta
+        }
     }
 
     private static func task(from record: MigrationTaskRecord,
@@ -591,15 +722,54 @@ enum MigrationSnapshot {
         }
     }
 
-    private static func note(from record: MigrationNoteRecord, bundle: MigrationBundle, now: Date) -> Note {
+    private static func note(from record: MigrationNoteRecord,
+                             bundle: MigrationBundle,
+                             now: Date,
+                             folderIDOverride: String? = nil) -> Note {
         Note(
             id: uuid(forRawID: record.id),
             title: record.title,
             document: NativeDocument(plainText: record.plainText),
             folder: folderName(for: record.folderId, in: bundle.folders),
+            folderID: folderIDOverride ?? record.folderId,
             favorite: record.isFavorite,
             updatedAt: parseDate(record.updatedAt) ?? now,
             deletedAt: parseDate(record.deletedAt))
+    }
+
+    private static func noteFolderMeta(from record: MigrationFolderRecord) -> NoteFolderMeta {
+        NoteFolderMeta(id: record.id, parentID: record.parentID, name: record.name,
+                       sortOrder: record.sortOrder, createdAt: record.createdAt,
+                       updatedAt: record.updatedAt)
+    }
+
+    private static func importedFolderID(_ folderID: String?,
+                                         incoming: [MigrationFolderRecord],
+                                         existing: [NoteFolderMeta]) -> String? {
+        guard let folderID,
+              let incomingFolder = incoming.first(where: { $0.id == folderID }) else { return folderID }
+        return existing.first(where: { $0.name == incomingFolder.name })?.id ?? incomingFolder.id
+    }
+
+    private static func normalizedNoteFolderMetadata(_ records: [NoteFolderMeta]) -> [NoteFolderMeta] {
+        records.enumerated().sorted(by: {
+            $0.element.sortOrder == $1.element.sortOrder
+                ? $0.offset < $1.offset
+                : $0.element.sortOrder < $1.element.sortOrder
+        }).enumerated().map { index, entry in
+            var record = entry.element
+            record.sortOrder = index
+            return record
+        }
+    }
+
+    private static func uniqueFolderNames(_ raw: [String]) -> [String] {
+        var seen = Set<String>()
+        return raw.compactMap { value in
+            let name = value.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !name.isEmpty, name != unfiledFolderName, seen.insert(name).inserted else { return nil }
+            return name
+        }
     }
 
     private static func folderName(for folderId: String?, in folders: [MigrationFolderRecord]) -> String {
@@ -690,22 +860,35 @@ enum MigrationSnapshot {
                            now: Date = Date()) throws -> Data {
         var listNames = snapshot.taskLists ?? []
         for name in snapshot.tasks.map({ $0.list.name }) where !listNames.contains(name) { listNames.append(name) }
-        listNames = normalizedListNames(listNames)
+        let listMetaByName = Dictionary((snapshot.taskListMeta ?? []).map { ($0.name, $0) },
+                                        uniquingKeysWith: { current, _ in current })
+        listNames = orderedListNames(listNames, metadata: listMetaByName)
 
-        var folderNames: [String] = []
-        for note in snapshot.notes {
-            let name = note.folder.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !name.isEmpty, name != unfiledFolderName, !folderNames.contains(name) else { continue }
-            folderNames.append(name)
+        let folderNames = uniqueFolderNames((snapshot.noteFolderMetadata ?? []).sorted {
+            $0.sortOrder < $1.sortOrder
+        }.map(\.name) + (snapshot.noteFolders ?? []) + snapshot.notes.map(\.folder))
+        var folderMetaByName = Dictionary((snapshot.noteFolderMetadata ?? []).map { ($0.name, $0) },
+                                          uniquingKeysWith: { current, _ in current })
+        var nextFolderOrder = max((folderMetaByName.values.map(\.sortOrder).max() ?? -1) + 1,
+                                  folderMetaByName.count)
+        for name in folderNames where folderMetaByName[name] == nil {
+            folderMetaByName[name] = NoteFolderMeta(
+                id: "folder-" + uuid(forRawID: name).uuidString,
+                parentID: nil, name: name, sortOrder: nextFolderOrder,
+                createdAt: nil, updatedAt: nil)
+            nextFolderOrder += 1
         }
-        let folders: [[String: Any]] = folderNames.enumerated().map { index, name in
+        let orderedFolderRecords = folderNames.compactMap { folderMetaByName[$0] }
+        let folderIDsByName = Dictionary(orderedFolderRecords.map { ($0.name, $0.id) },
+                                         uniquingKeysWith: { current, _ in current })
+        let folders: [[String: Any]] = orderedFolderRecords.map { record in
             [
-                "id": "folder-" + uuid(forRawID: name).uuidString,
-                "parentId": NSNull(),
-                "name": name,
-                "sortOrder": index,
-                "createdAt": NSNull(),
-                "updatedAt": NSNull(),
+                "id": record.id,
+                "parentId": record.parentID.map { $0 as Any } ?? NSNull(),
+                "name": record.name,
+                "sortOrder": record.sortOrder,
+                "createdAt": record.createdAt.map { $0 as Any } ?? NSNull(),
+                "updatedAt": record.updatedAt.map { $0 as Any } ?? NSNull(),
             ]
         }
 
@@ -714,11 +897,20 @@ enum MigrationSnapshot {
             "schemaVersion": 3,
             "exportedAt": formatDate(now),
             "lists": listNames.enumerated().map { index, name in
-                ["id": NSNull(), "name": name, "sortOrder": index, "protected": name == inboxListName]
+                let meta = listMetaByName[name]
+                var record: [String: Any] = [
+                    "id": NSNull(),
+                    "name": name,
+                    "sortOrder": index,
+                    "protected": name == inboxListName,
+                ]
+                if let color = listColorHex(for: meta) { record["color"] = color }
+                if meta?.isPinned == true { record["pinned"] = true }
+                return record
             },
             "folders": folders,
             "tasks": snapshot.tasks.map(taskRecord),
-            "notes": snapshot.notes.map { noteRecord($0, folderNames: folderNames) },
+            "notes": snapshot.notes.map { noteRecord($0, folderIDsByName: folderIDsByName) },
         ]
 
         var embedded: [String: String] = [:]
@@ -780,10 +972,10 @@ enum MigrationSnapshot {
         return record
     }
 
-    private static func noteRecord(_ note: Note, folderNames: [String]) -> [String: Any] {
+    private static func noteRecord(_ note: Note, folderIDsByName: [String: String]) -> [String: Any] {
         let folderID: Any
-        if folderNames.contains(note.folder) {
-            folderID = "folder-" + uuid(forRawID: note.folder).uuidString
+        if let id = note.folderID ?? folderIDsByName[note.folder] {
+            folderID = id
         } else {
             folderID = NSNull()
         }
