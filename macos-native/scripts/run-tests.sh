@@ -37,10 +37,25 @@ if [[ -n "${WORKFOLLOW_DERIVED_DATA:-}" ]]; then
   DERIVED_DATA_ARGS=(-derivedDataPath "$WORKFOLLOW_DERIVED_DATA")
 fi
 
+# Xcode 27 起 `@State` 变成了宏，Swift 编译宏时要在一个子沙箱里跑
+# swift-plugin-server。若当前进程树本身已被沙箱化（agent 沙箱、CI 容器等），
+# 子沙箱会套不上，报：
+#   sandbox-exec: sandbox_apply: Operation not permitted
+#   error: external macro implementation type 'SwiftUIMacros.StateMacro' could
+#          not be found for macro 'State()'; ... produced malformed response
+# 这**不是代码问题**，而且会连带报出一堆 `cannot find '_name' in scope` /
+# `cannot assign to property: 'self' is immutable` 的假错误。
+# 设 WORKFOLLOW_DISABLE_SWIFT_SANDBOX=1 绕开（本地 Xcode GUI 构建不需要）。
+EXTRA_BUILD_ARGS=()
+if [[ -n "${WORKFOLLOW_DISABLE_SWIFT_SANDBOX:-}" ]]; then
+  EXTRA_BUILD_ARGS=(OTHER_SWIFT_FLAGS='$(inherited) -Xfrontend -disable-sandbox')
+fi
+
 echo "==> 构建测试产物"
 xcodebuild build-for-testing \
   -project "$PROJECT" -scheme "$SCHEME" -destination 'platform=macOS' \
   "${DERIVED_DATA_ARGS[@]+"${DERIVED_DATA_ARGS[@]}"}" \
+  "${EXTRA_BUILD_ARGS[@]+"${EXTRA_BUILD_ARGS[@]}"}" \
   2>&1 | grep -E "error:|TEST BUILD" || true
 
 if [[ ${#DERIVED_DATA_ARGS[@]} -gt 0 ]]; then
