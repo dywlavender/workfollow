@@ -1,7 +1,7 @@
 import Foundation
 
 /// 番茄钟阶段；暂停保留来源阶段，恢复后回到原阶段。
-enum PomodoroPhase: Equatable {
+enum PomodoroPhase: Equatable, Codable {
     case idle
     case focusing
     case breaking
@@ -24,6 +24,20 @@ struct PomodoroSettings: Equatable, Codable {
     static let intervalRange = 2...8
 }
 
+/// 会话快照：应用重启时恢复进行中的专注/休息（additive Codable）。
+struct FocusSessionSnapshot: Codable, Equatable {
+    var phase: PomodoroPhase
+    var isLongBreak: Bool
+    var taskID: UUID?
+    var phaseStart: Date
+    var phaseEnd: Date?
+    var phaseSeconds: Int
+    var pausedAt: Date?
+    var pausedSeconds: TimeInterval
+    var completedFocusCount: Int
+    var breakCarriedTaskID: UUID?
+}
+
 /// 纯逻辑番茄状态机：不持有真实计时器，时间推进与到点判定全部由注入 clock 驱动。
 final class PomodoroEngine {
     /// 放弃专注也保留记录的最少秒数。
@@ -40,6 +54,30 @@ final class PomodoroEngine {
     private(set) var completedFocusCount = 0
     /// 休息结束自动开始时要续上的任务（进入休息时从当前任务暂存）。
     private var breakCarriedTaskID: UUID?
+
+    /// 进行中的会话快照（空闲为 nil），供持久化层落盘与重启接续。
+    var sessionSnapshot: FocusSessionSnapshot? {
+        guard phase != .idle, let start = phaseStart else { return nil }
+        return FocusSessionSnapshot(phase: phase, isLongBreak: isLongBreak, taskID: currentTaskID,
+                                    phaseStart: start, phaseEnd: phaseEnd, phaseSeconds: phaseSeconds,
+                                    pausedAt: pausedAt, pausedSeconds: pausedSeconds,
+                                    completedFocusCount: completedFocusCount,
+                                    breakCarriedTaskID: breakCarriedTaskID)
+    }
+
+    /// 从持久化快照恢复会话（应用重启接续）；是否已到点交给 handleCompletion 判定。
+    func restore(_ snapshot: FocusSessionSnapshot) {
+        phase = snapshot.phase
+        isLongBreak = snapshot.isLongBreak
+        currentTaskID = snapshot.taskID
+        phaseStart = snapshot.phaseStart
+        phaseEnd = snapshot.phaseEnd
+        phaseSeconds = snapshot.phaseSeconds
+        pausedAt = snapshot.pausedAt
+        pausedSeconds = snapshot.pausedSeconds
+        completedFocusCount = snapshot.completedFocusCount
+        breakCarriedTaskID = snapshot.breakCarriedTaskID
+    }
 
     private var phaseStart: Date?
     private var phaseEnd: Date?
@@ -64,8 +102,9 @@ final class PomodoroEngine {
     }
 
     /// 开始一次专注；focusMinutes 越界或不在就绪状态时拒绝。
+    /// stopwatch = true 时为正计时模式：无终止时间，计时只增不减。
     @discardableResult
-    func start(taskID: UUID? = nil, focusMinutes: Int? = nil) -> Bool {
+    func start(taskID: UUID? = nil, focusMinutes: Int? = nil, stopwatch: Bool = false) -> Bool {
         guard phase == .idle else { return false }
         if let focusMinutes {
             guard PomodoroSettings.focusRange.contains(focusMinutes) else { return false }
@@ -75,11 +114,29 @@ final class PomodoroEngine {
         phase = .focusing
         currentTaskID = taskID
         phaseStart = now
-        phaseSeconds = settings.focusMinutes * 60
-        phaseEnd = now.addingTimeInterval(TimeInterval(phaseSeconds))
+        if stopwatch {
+            phaseSeconds = 0
+            phaseEnd = nil
+        } else {
+            phaseSeconds = settings.focusMinutes * 60
+            phaseEnd = now.addingTimeInterval(TimeInterval(phaseSeconds))
+        }
         pausedAt = nil
         pausedSeconds = 0
         return true
+    }
+
+    /// 当前专注的实际经过秒数（正计时模式的显示值，暂停不计）。
+    var elapsedSeconds: Int {
+        guard phaseStart != nil, phase == .focusing || phase == .pausedFocus else { return 0 }
+        return Int(focusElapsedSeconds())
+    }
+
+    /// 运行中换绑当前专注的任务（影响完成记录的归属）。
+    func reattach(taskID: UUID?) {
+        guard phase == .focusing || phase == .pausedFocus else { return }
+        currentTaskID = taskID
+        breakCarriedTaskID = taskID
     }
 
     @discardableResult
@@ -93,9 +150,11 @@ final class PomodoroEngine {
     /// 恢复：用注入 clock 的差值顺延阶段结束时间，暂停时长不计入阶段。
     @discardableResult
     func resume() -> Bool {
-        guard let paused = pausedAt, let end = phaseEnd else { return false }
+        guard let paused = pausedAt else { return false }
         let now = clock()
-        phaseEnd = now.addingTimeInterval(end.timeIntervalSince(paused))
+        if let end = phaseEnd {
+            phaseEnd = now.addingTimeInterval(end.timeIntervalSince(paused))
+        }
         if phase == .pausedFocus { pausedSeconds += now.timeIntervalSince(paused) }
         pausedAt = nil
         phase = phase == .pausedFocus ? .focusing : .breaking

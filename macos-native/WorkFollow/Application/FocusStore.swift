@@ -9,6 +9,23 @@ struct PomodoroRecord: Identifiable, Codable, Equatable {
     var completed: Bool
 }
 
+/// 结束铃声选项：系统音效名，关闭 = 静默。
+enum FocusBell: String, CaseIterable {
+    case crisp = "清脆"
+    case soft = "温和"
+    case chime = "灵动"
+    case off = "关闭"
+
+    var soundName: String? {
+        switch self {
+        case .crisp: "Glass"
+        case .soft: "Ping"
+        case .chime: "Tink"
+        case .off: nil
+        }
+    }
+}
+
 /// 番茄偏好，与记录一起持久化到 focus.json。
 struct FocusPreferences: Codable, Equatable {
     var focusMinutes = 25
@@ -20,6 +37,10 @@ struct FocusPreferences: Codable, Equatable {
     var lastTaskID: UUID?
     /// 休息结束自动开始下一番茄（additive Codable）。
     var autoStartNextPomodoro = false
+    /// 正计时模式（tab 切换；additive Codable）。
+    var stopwatchMode = false
+    /// 结束铃声：FocusBell rawValue，nil/关闭 = 静默（additive Codable）。
+    var bellSound: String?
 
     static let dailyGoalRange = 1...24
 
@@ -47,6 +68,13 @@ final class FocusStore: ObservableObject, ModuleStoreFlushable {
     struct Archive: Codable {
         var records: [PomodoroRecord] = []
         var preferences = FocusPreferences()
+        /// 进行中的会话快照：重启后接续计时，空闲时为 nil（additive Codable）。
+        var session: FocusSessionSnapshot?
+    }
+
+    struct TaskFocusTotal: Equatable {
+        let taskID: UUID?
+        let minutes: Int
     }
 
     struct DailyFocusStats: Equatable {
@@ -72,6 +100,8 @@ final class FocusStore: ObservableObject, ModuleStoreFlushable {
     @Published private(set) var currentTaskID: UUID?
     @Published private(set) var todayPomodoros = 0
     @Published private(set) var todayMinutes = 0
+    /// 阶段切换提醒（通知 + 铃声）；由 AppEnvironment 挂载，测试下为 nil。
+    var notifier: FocusNotifier?
 
     private let engine: PomodoroEngine
     private let persistence: JSONFileStore<Archive>
@@ -93,6 +123,11 @@ final class FocusStore: ObservableObject, ModuleStoreFlushable {
         records = loaded.records.sorted { $0.startedAt > $1.startedAt }
         preferences = loaded.preferences.normalized()
         engine.apply(preferences.pomodoroSettings)
+        if let session = loaded.session {
+            engine.restore(session)
+        }
+        sync()
+        if phase != .idle { startTimer() }
         refreshDailyStats()
     }
 
@@ -101,8 +136,9 @@ final class FocusStore: ObservableObject, ModuleStoreFlushable {
     // MARK: - 会话控制
 
     /// 开始专注；minutes 越界（合法范围 5–180）或已有会话时拒绝，成功后记忆为默认时长。
+    /// 正计时模式（stopwatchMode）忽略 minutes。
     @discardableResult
-    func start(taskID: UUID? = nil, minutes: Int? = nil) -> Bool {
+    func start(taskID: UUID? = nil, minutes: Int? = nil, stopwatch: Bool? = nil) -> Bool {
         guard engine.phase == .idle else { return false }
         if let minutes {
             guard PomodoroSettings.focusRange.contains(minutes) else { return false }
@@ -110,13 +146,16 @@ final class FocusStore: ObservableObject, ModuleStoreFlushable {
             engine.apply(preferences.pomodoroSettings)
             schedulePersistence()
         }
-        guard engine.start(taskID: taskID) else { return false }
+        notifier?.requestAuthorizationIfNeeded()
+        guard engine.start(taskID: taskID,
+                           stopwatch: stopwatch ?? preferences.stopwatchMode) else { return false }
         if let taskID {
             preferences.lastTaskID = taskID
             schedulePersistence()
         }
         sync()
         startTimer()
+        schedulePersistence()
         return true
     }
 
@@ -214,6 +253,46 @@ final class FocusStore: ObservableObject, ModuleStoreFlushable {
         return true
     }
 
+    /// 运行中换绑当前专注的任务。
+    @discardableResult
+    func reattach(taskID: UUID?) -> Bool {
+        guard engine.phase == .focusing || engine.phase == .pausedFocus else { return false }
+        engine.reattach(taskID: taskID)
+        schedulePersistence()
+        return true
+    }
+
+    /// 正计时模式已走过的秒数（非正计时返回 0）。
+    var elapsedSeconds: Int { engine.elapsedSeconds }
+
+    /// 最近 days 天按任务聚合的专注分钟（降序，前 limit 条）。
+    func weeklyTaskTotals(days: Int = 7, limit: Int = 3) -> [TaskFocusTotal] {
+        let cutoff = calendar.date(byAdding: .day, value: -days, to: clock()) ?? clock()
+        var byTask: [UUID?: Int] = [:]
+        for record in records where record.startedAt >= cutoff {
+            byTask[record.taskID, default: 0] += record.minutes
+        }
+        return byTask
+            .sorted { $0.value > $1.value }
+            .prefix(limit)
+            .map { TaskFocusTotal(taskID: $0.key, minutes: $0.value) }
+    }
+
+    @discardableResult
+    func setBell(_ rawValue: String) -> Bool {
+        preferences.bellSound = rawValue
+        schedulePersistence()
+        return true
+    }
+
+    @discardableResult
+    func setStopwatchMode(_ enabled: Bool) -> Bool {
+        guard engine.phase == .idle else { return false }
+        preferences.stopwatchMode = enabled
+        schedulePersistence()
+        return true
+    }
+
     // MARK: - 记录
 
     /// 手动补记一条过去的专注记录（对齐滴答）：只允许此刻之前、且落在最近
@@ -283,8 +362,22 @@ final class FocusStore: ObservableObject, ModuleStoreFlushable {
     }
 
     /// 把引擎状态镜像进 @Published 字段；值未变化时不重复发布。
+    /// 阶段切换时发提醒；会话进行中每 5 秒落一次快照供重启接续。
     private func sync() {
+        let previousPhase = phase
         if phase != engine.phase { phase = engine.phase }
+        notifyTransitions(from: previousPhase, to: phase)
+        if previousPhase != phase {
+            // 阶段切换即落盘：会话快照与记录状态不因后续崩溃/退出丢失。
+            schedulePersistence()
+        }
+        if engine.phase != .idle {
+            let now = clock()
+            if now.timeIntervalSince(lastSessionSave) > 5 {
+                lastSessionSave = now
+                schedulePersistence()
+            }
+        }
         if isLongBreak != engine.isLongBreak { isLongBreak = engine.isLongBreak }
         if currentTaskID != engine.currentTaskID { currentTaskID = engine.currentTaskID }
         if phaseSeconds != engine.phaseSeconds { phaseSeconds = engine.phaseSeconds }
@@ -302,13 +395,35 @@ final class FocusStore: ObservableObject, ModuleStoreFlushable {
         if todayMinutes != minutes { todayMinutes = minutes }
     }
 
+    private var lastSessionSave = Date.distantPast
+
+    /// 阶段切换提醒：番茄完成 / 休息结束 / 自动开始（放弃与手动跳过不打扰）。
+    private func notifyTransitions(from old: PomodoroPhase, to new: PomodoroPhase) {
+        guard let notifier else { return }
+        switch (old, new) {
+        case (.focusing, .breaking):
+            notifier.announce(bell: preferences.bellSound, title: "番茄完成",
+                              body: (isLongBreak ? "长休息 \(preferences.longBreakMinutes) 分钟开始"
+                                     : "休息 \(preferences.breakMinutes) 分钟开始"))
+        case (.breaking, .focusing):
+            notifier.announce(bell: preferences.bellSound, title: "休息结束",
+                              body: "已用同一任务自动开始下一个番茄")
+        case (.breaking, .idle):
+            notifier.announce(bell: preferences.bellSound, title: "休息结束",
+                              body: "准备好了就开始下一个番茄")
+        default:
+            break
+        }
+    }
+
     private func dayKey(_ date: Date) -> String {
         let parts = calendar.dateComponents([.year, .month, .day], from: date)
         return String(format: "%04d-%02d-%02d", parts.year ?? 0, parts.month ?? 0, parts.day ?? 0)
     }
 
     private func schedulePersistence() {
-        persistence.schedule(Archive(records: records, preferences: preferences))
+        persistence.schedule(Archive(records: records, preferences: preferences,
+                                     session: engine.sessionSnapshot))
     }
 
     private func startTimer() {

@@ -107,26 +107,33 @@ struct FocusWorkspaceView: View {
                 .foregroundStyle(theme.text2)
             Spacer()
             HStack(spacing: 40 * s) {
-                modeTab("番茄", active: true, s: s)
-                Text("正计时")
-                    .font(.system(size: 23 * s))
-                    .foregroundStyle(theme.text3)
-                    .help("正计时模式即将上线")
+                modeTab("番茄", active: !store.preferences.stopwatchMode, s: s) {
+                    store.setStopwatchMode(false)
+                }
+                modeTab("正计时", active: store.preferences.stopwatchMode, s: s) {
+                    store.setStopwatchMode(true)
+                }
             }
         }
         .padding(.horizontal, 88 * s)
         .frame(height: 92 * s)
     }
 
-    private func modeTab(_ title: String, active: Bool, s: CGFloat) -> some View {
-        VStack(spacing: 7 * s) {
-            Text(title)
-                .font(.system(size: 23 * s, weight: active ? .semibold : .regular))
-                .foregroundStyle(active ? theme.accent : theme.text2)
-            Capsule()
-                .fill(active ? theme.accent : .clear)
-                .frame(width: 30 * s, height: 2.5)
+    private func modeTab(_ title: String, active: Bool, s: CGFloat,
+                         action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            VStack(spacing: 7 * s) {
+                Text(title)
+                    .font(.system(size: 23 * s, weight: active ? .semibold : .regular))
+                    .foregroundStyle(active ? theme.accent : theme.text2)
+                Capsule()
+                    .fill(active ? theme.accent : .clear)
+                    .frame(width: 30 * s, height: 2.5)
+            }
         }
+        .buttonStyle(.plain)
+        .disabled(store.phase != .idle)
+        .help(store.phase != .idle ? "会话结束后可切换" : "")
     }
 
     // MARK: - 中栏 计时主角
@@ -148,11 +155,13 @@ struct FocusWorkspaceView: View {
                     .padding(.bottom, 20 * s)
             }
             if store.phase == .idle {
-                durationPills(s: s)
-                    .padding(.bottom, 14 * s)
-                if durationSelection == .custom {
-                    customDurationRow(s: s)
+                if !store.preferences.stopwatchMode {
+                    durationPills(s: s)
                         .padding(.bottom, 14 * s)
+                    if durationSelection == .custom {
+                        customDurationRow(s: s)
+                            .padding(.bottom, 14 * s)
+                    }
                 }
                 Button { showRhythmPopover = true } label: {
                     Text("节奏 ›")
@@ -283,7 +292,24 @@ struct FocusWorkspaceView: View {
                         .fixedSize()
                         .help("选择一个任务并开始专注")
                 } else {
-                    chipView
+                    Menu {
+                        Button("不关联") { store.reattach(taskID: nil) }
+                        ForEach(unfinishedTasks(in: workspace)) { task in
+                            Button {
+                                store.reattach(taskID: task.id)
+                            } label: {
+                                if store.currentTaskID == task.id {
+                                    Label(taskMenuTitle(task), systemImage: "checkmark")
+                                } else {
+                                    Text(taskMenuTitle(task))
+                                }
+                            }
+                        }
+                    } label: { chipView }
+                        .menuStyle(.button)
+                        .menuIndicator(.hidden)
+                        .fixedSize()
+                        .help("更换专注任务")
                 }
             } else if store.phase == .idle {
                 if unfinishedTasks(in: workspace).isEmpty {
@@ -408,7 +434,13 @@ struct FocusWorkspaceView: View {
     }
 
     private var displaySeconds: Int {
-        store.phase == .idle ? store.preferences.focusMinutes * 60 : store.remainingSeconds
+        if store.phase == .idle {
+            return store.preferences.stopwatchMode ? 0 : store.preferences.focusMinutes * 60
+        }
+        if store.preferences.stopwatchMode, store.phase == .focusing || store.phase == .pausedFocus {
+            return store.elapsedSeconds
+        }
+        return store.remainingSeconds
     }
 
     private var progress: CGFloat {
@@ -442,7 +474,9 @@ struct FocusWorkspaceView: View {
             Text(FocusViewLogic.phaseTitle(for: store.phase, isLongBreak: store.isLongBreak))
                 .font(.system(size: 23 * s))
             if store.phase == .focusing {
-                Text("· 已专注 \(max(0, store.phaseSeconds - store.remainingSeconds) / 60) 分钟")
+                Text("· 已专注 \(store.elapsedSeconds / 60) 分钟")
+                    .font(.system(size: 23 * s))
+                Text("· 第 \(store.todayPomodoros + 1) 个番茄")
                     .font(.system(size: 23 * s))
             }
         }
@@ -533,7 +567,11 @@ struct FocusWorkspaceView: View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 52 * s) {
                 bigStat(store.todayMinutes, label: "今日分钟", s: s)
-                bigStat(store.todayPomodoros, label: "今日番茄", s: s)
+                let goalMet = store.preferences.dailyGoal > 0
+                    && store.todayPomodoros >= store.preferences.dailyGoal
+                bigStat(store.todayPomodoros,
+                        label: goalMet ? "已达今日目标" : "今日番茄",
+                        s: s, valueColor: goalMet ? theme.good : nil)
             }
             .padding(.bottom, 30 * s)
             goalLine(s: s)
@@ -541,6 +579,32 @@ struct FocusWorkspaceView: View {
             if store.recentDailyStats().reduce(0, { $0 + $1.minutes }) > 0 {
                 sparkline(s: s)
                     .padding(.bottom, 34 * s)
+            }
+            let topTasks = store.weeklyTaskTotals()
+            if !topTasks.isEmpty {
+                Text("本周时间分布")
+                    .font(.system(size: 18 * s, weight: .semibold))
+                    .tracking(4 * s)
+                    .foregroundStyle(theme.text3)
+                    .padding(.bottom, 4 * s)
+                ForEach(topTasks.indices, id: \.self) { index in
+                    let total = topTasks[index]
+                    HStack(spacing: 12 * s) {
+                        Circle()
+                            .fill(listDotColor(for: total.taskID))
+                            .frame(width: 9 * s, height: 9 * s)
+                        Text(taskTitle(for: total.taskID) ?? "未关联任务")
+                            .font(.system(size: 21 * s))
+                            .foregroundStyle(theme.text)
+                            .lineLimit(1)
+                        Spacer(minLength: 10 * s)
+                        Text("\(total.minutes) 分钟")
+                            .font(.system(size: 20 * s))
+                            .monospacedDigit()
+                            .foregroundStyle(theme.text2)
+                    }
+                    .padding(.vertical, 8 * s)
+                }
             }
             HStack {
                 Text("记 录")
@@ -675,12 +739,12 @@ struct FocusWorkspaceView: View {
         }
     }
 
-    private func bigStat(_ value: Int, label: String, s: CGFloat) -> some View {
+    private func bigStat(_ value: Int, label: String, s: CGFloat, valueColor: Color? = nil) -> some View {
         VStack(alignment: .leading, spacing: 8 * s) {
             Text("\(value)")
                 .font(.system(size: 46 * s, weight: .light))
                 .monospacedDigit()
-                .foregroundStyle(theme.text)
+                .foregroundStyle(valueColor ?? theme.text)
             Text(label)
                 .font(.system(size: 20 * s))
                 .foregroundStyle(theme.text2)
