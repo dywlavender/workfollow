@@ -80,7 +80,7 @@ final class FocusStoreTests: XCTestCase {
     // MARK: 常用专注
 
     func testAddApplyAndDeleteTimers() {
-        let store = FocusStore(clock: { base }, directory: makeDirectory())
+        let store = FocusStore(clock: { self.base }, directory: makeDirectory())
         XCTAssertTrue(store.addTimer(name: "晨间写作", stopwatch: false, minutes: 50))
         XCTAssertTrue(store.addTimer(name: "随手记", stopwatch: true, minutes: 0))
         XCTAssertFalse(store.addTimer(name: "   ", stopwatch: false, minutes: 25))   // 名称必填
