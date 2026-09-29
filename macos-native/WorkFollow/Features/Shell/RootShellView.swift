@@ -12,7 +12,7 @@ struct RootShellView: View {
             HStack(spacing: 0) {
                 IconRailView(workspace: workspace, navigation: navigation)
                 Divider()
-                if navigationVisible, environment.sidebarVisible, navigation.destination != .calendar, navigation.destination != .matrix {
+                if navigationVisible, environment.sidebarVisible, navigation.destination != .calendar, navigation.destination != .matrix, navigation.destination != .countdown, navigation.destination != .focus {
                     NavigationColumnView(workspace: workspace, navigation: navigation,
                                          filterStore: environment.filterStore)
                         .frame(width: WFMetrics.navigationWidth)
@@ -26,6 +26,8 @@ struct RootShellView: View {
                     HabitsWorkspaceView(store: environment.habitStore)
                 } else if navigation.destination == .summary {
                     SummaryWorkspaceView(store: environment.summaryStore, workspace: workspace)
+                } else if navigation.destination == .countdown {
+                    CountdownWorkspaceView(store: environment.countdownStore)
                 } else if navigation.destination.isNotes {
                     NotesWorkspaceView(notes: environment.notesWorkspace, navigation: navigation, tasks: workspace,
                                        navigationVisible: navigationVisible)
