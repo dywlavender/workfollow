@@ -977,6 +977,11 @@ struct TaskRowView: View {
         .frame(minHeight: 55)
         .background(selected ? WFColors.selection : hovering ? WFColors.hover : .clear,
                     in: RoundedRectangle(cornerRadius: WFMetrics.corner))
+        // 整行可点（对齐 Flutter GestureDetector opaque）：标题旁的留白、行内
+        // 空隙、元数据区点下去也能选中打开编辑栏；Cmd/Shift 多选逻辑仍由
+        // handleSelection 统一读取修饰键，行内按钮（勾选框/日期）优先级更高。
+        .contentShape(Rectangle())
+        .onTapGesture { onSelect() }
         .onHover { hovering = $0 }
         .overlay {
             // 右键菜单走 AppKit NSPopover 显式定位（对齐 Flutter bottomStart：
@@ -1192,7 +1197,8 @@ private struct TaskRowMetadataTrail: View {
         if task.recurrence != .never {
             items.append(.init(id: "repeat", symbol: "repeat", accessibilityLabel: "重复任务"))
         }
-        if task.reminderAt != nil {
+        if TaskListViewDefaults.hasReminder(reminderAt: task.reminderAt,
+                                            reminderOffsets: task.reminderOffsets) {
             items.append(.init(id: "reminder", symbol: "bell", accessibilityLabel: "有提醒"))
         }
         if !task.tags.isEmpty {
@@ -1269,5 +1275,9 @@ enum TaskListViewDefaults {
     /// 分组标题右侧的小字尾注；只有"已过期"组显示"顺延"。
     static func groupTrailingNote(for kind: TaskGroupKind) -> String? {
         kind == .overdue ? "顺延" : nil
+    }
+
+    static func hasReminder(reminderAt: Date?, reminderOffsets: [Int]?) -> Bool {
+        reminderAt != nil || !(reminderOffsets ?? []).isEmpty
     }
 }
