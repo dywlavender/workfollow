@@ -7,6 +7,10 @@ import SwiftUI
 struct FocusWorkspaceView: View {
     @ObservedObject var store: FocusStore
     let workspace: TaskWorkspaceModel?
+    @Environment(\.colorScheme) private var colorScheme
+
+    /// 专注页主题：底色与整体一致，前后景随系统外观切换。
+    private var theme: FocusTheme { FocusTheme(colorScheme) }
 
     private enum DurationChoice: Hashable {
         case preset(Int)
@@ -61,7 +65,7 @@ struct FocusWorkspaceView: View {
             .padding(.horizontal, 88 * s)
             .padding(.bottom, 48 * s)
         }
-        .background(FocusPalette.background)
+        .background(theme.canvas)
         .onAppear {
             store.refresh()
             syncLocalState()
@@ -73,13 +77,13 @@ struct FocusWorkspaceView: View {
             Text("专 注")
                 .font(.system(size: 24 * s, weight: .semibold))
                 .tracking(6 * s)
-                .foregroundStyle(FocusPalette.text2)
+                .foregroundStyle(theme.text2)
             Spacer()
             HStack(spacing: 40 * s) {
                 modeTab("番茄", active: true, s: s)
                 Text("正计时")
                     .font(.system(size: 23 * s))
-                    .foregroundStyle(FocusPalette.text3)
+                    .foregroundStyle(theme.text3)
                     .help("正计时模式即将上线")
             }
         }
@@ -91,9 +95,9 @@ struct FocusWorkspaceView: View {
         VStack(spacing: 7 * s) {
             Text(title)
                 .font(.system(size: 23 * s, weight: active ? .semibold : .regular))
-                .foregroundStyle(active ? FocusPalette.accent : FocusPalette.text2)
+                .foregroundStyle(active ? theme.accent : theme.text2)
             Capsule()
-                .fill(active ? FocusPalette.accent : .clear)
+                .fill(active ? theme.accent : .clear)
                 .frame(width: 30 * s, height: 2.5)
         }
     }
@@ -120,7 +124,7 @@ struct FocusWorkspaceView: View {
             if store.phase == .focusing {
                 Text("剩余不足 5 分钟时，会询问是否提前完成本番茄")
                     .font(.system(size: 19 * s))
-                    .foregroundStyle(FocusPalette.text3)
+                    .foregroundStyle(theme.text3)
                     .padding(.top, 26 * s)
             }
         }
@@ -149,11 +153,11 @@ struct FocusWorkspaceView: View {
         Button(action: action) {
             Text(title)
                 .font(.system(size: 23 * s, weight: selected ? .semibold : .regular))
-                .foregroundStyle(selected ? FocusPalette.accent : FocusPalette.text2)
+                .foregroundStyle(selected ? theme.accent : theme.text2)
                 .padding(.horizontal, 28 * s)
                 .padding(.vertical, 14 * s)
                 .background(Capsule().stroke(
-                    selected ? FocusPalette.accent : FocusPalette.hairline, lineWidth: 1.5))
+                    selected ? theme.accent : theme.hairline, lineWidth: 1.5))
         }
         .buttonStyle(.plain)
     }
@@ -164,19 +168,19 @@ struct FocusWorkspaceView: View {
                 TextField("分钟（5–180）", text: $customMinutes)
                     .textFieldStyle(.plain)
                     .font(.system(size: 22 * s))
-                    .foregroundStyle(FocusPalette.text)
+                    .foregroundStyle(theme.text)
                     .multilineTextAlignment(.center)
                     .frame(width: 130 * s)
                     .onSubmit(applyCustomMinutes)
                 Button("应用", action: applyCustomMinutes)
                     .buttonStyle(.plain)
                     .font(.system(size: 21 * s))
-                    .foregroundStyle(FocusPalette.accent)
+                    .foregroundStyle(theme.accent)
             }
             if let durationHint {
                 Text(durationHint)
                     .font(.system(size: 19 * s))
-                    .foregroundStyle(FocusPalette.warn)
+                    .foregroundStyle(theme.warn)
             }
         }
     }
@@ -193,7 +197,7 @@ struct FocusWorkspaceView: View {
                         .frame(width: 11 * s, height: 11 * s)
                     Text(title)
                         .font(.system(size: 26 * s, weight: .semibold))
-                        .foregroundStyle(FocusPalette.text)
+                        .foregroundStyle(theme.text)
                         .lineLimit(1)
                     if store.phase == .idle {
                         chipMeta(for: linkID, s: s)
@@ -202,7 +206,7 @@ struct FocusWorkspaceView: View {
                         } label: {
                             Text("✕")
                                 .font(.system(size: 20 * s))
-                                .foregroundStyle(FocusPalette.text3)
+                                .foregroundStyle(theme.text3)
                         }
                         .buttonStyle(.plain)
                         .help("解除关联")
@@ -210,7 +214,7 @@ struct FocusWorkspaceView: View {
                 }
                 .padding(.horizontal, 26 * s)
                 .padding(.vertical, 12 * s)
-                .background(Capsule().fill(Color.white.opacity(0.04)))
+                .background(Capsule().fill(theme.chipBackground))
                 .contentShape(Capsule())
 
                 if store.phase == .idle {
@@ -239,7 +243,7 @@ struct FocusWorkspaceView: View {
                 if unfinishedTasks(in: workspace).isEmpty {
                     Text("暂无未完成任务")
                         .font(.system(size: 23 * s))
-                        .foregroundStyle(FocusPalette.text3)
+                        .foregroundStyle(theme.text3)
                 } else {
                     Menu {
                         Button("不关联") { linkedTaskID = nil }
@@ -257,18 +261,18 @@ struct FocusWorkspaceView: View {
                     } label: {
                         HStack(spacing: 14 * s) {
                             Circle()
-                                .stroke(FocusPalette.text3, lineWidth: 1.5)
+                                .stroke(theme.text3, lineWidth: 1.5)
                                 .frame(width: 11 * s, height: 11 * s)
                             Text("选择任务…")
                                 .font(.system(size: 26 * s, weight: .semibold))
-                                .foregroundStyle(FocusPalette.text2)
+                                .foregroundStyle(theme.text2)
                             Image(systemName: "chevron.up.chevron.down")
                                 .font(.system(size: 16 * s, weight: .medium))
-                                .foregroundStyle(FocusPalette.text3)
+                                .foregroundStyle(theme.text3)
                         }
                         .padding(.horizontal, 26 * s)
                         .padding(.vertical, 12 * s)
-                        .background(Capsule().fill(Color.white.opacity(0.04)))
+                        .background(Capsule().fill(theme.chipBackground))
                     }
                     .menuStyle(.button)
                     .menuIndicator(.hidden)
@@ -286,7 +290,7 @@ struct FocusWorkspaceView: View {
             if !meta.isEmpty {
                 Text(meta)
                     .font(.system(size: 21 * s))
-                    .foregroundStyle(FocusPalette.text3)
+                    .foregroundStyle(theme.text3)
                     .lineLimit(1)
             }
         }
@@ -307,7 +311,7 @@ struct FocusWorkspaceView: View {
         let active = store.phase == .focusing || store.phase == .breaking
         return ZStack {
             Circle()
-                .stroke(FocusPalette.track, lineWidth: 5 * s)
+                .stroke(theme.track, lineWidth: 5 * s)
             Circle()
                 .trim(from: 0, to: progress)
                 .stroke(progressGradient,
@@ -317,7 +321,7 @@ struct FocusWorkspaceView: View {
             ringCenter(s: s)
         }
         .frame(width: size, height: size)
-        .shadow(color: active ? FocusPalette.accent.opacity(0.26) : .clear, radius: 48 * s)
+        .shadow(color: active ? theme.accent.opacity(0.26) : .clear, radius: 48 * s)
     }
 
     /// 环心：剩余时间 + 阶段文案 + 关联任务名。
@@ -326,14 +330,14 @@ struct FocusWorkspaceView: View {
             Text(FocusViewLogic.clockText(displaySeconds))
                 .font(.system(size: 150 * s, weight: .thin))
                 .monospacedDigit()
-                .foregroundStyle(FocusPalette.text)
+                .foregroundStyle(theme.text)
             Text(FocusViewLogic.phaseTitle(for: store.phase, isLongBreak: store.isLongBreak))
                 .font(.system(size: 23 * s))
-                .foregroundStyle(FocusPalette.text2)
+                .foregroundStyle(theme.text2)
             if let title = ringTaskTitle, store.phase != .idle {
                 Text(title)
                     .font(.system(size: 21 * s))
-                    .foregroundStyle(FocusPalette.text3)
+                    .foregroundStyle(theme.text3)
                     .lineLimit(2)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 60 * s)
@@ -371,8 +375,8 @@ struct FocusWorkspaceView: View {
 
     private var progressColors: (Color, Color) {
         let isBreak = store.phase == .breaking || store.phase == .pausedBreak
-        let a = isBreak ? FocusPalette.good : FocusPalette.accent
-        let b = isBreak ? FocusPalette.goodSoft : FocusPalette.accent2
+        let a = isBreak ? theme.good : theme.accent
+        let b = isBreak ? theme.goodSoft : theme.accentSoft
         let paused = store.phase == .pausedFocus || store.phase == .pausedBreak
         return paused ? (a.opacity(0.4), b.opacity(0.4)) : (a, b)
     }
@@ -389,15 +393,15 @@ struct FocusWorkspaceView: View {
                     .font(.system(size: 23 * s))
             }
         }
-        .foregroundStyle(FocusPalette.text2)
+        .foregroundStyle(theme.text2)
     }
 
     private var statusDotColor: Color {
         switch store.phase {
-        case .focusing: FocusPalette.good
-        case .breaking: FocusPalette.good
-        case .pausedFocus, .pausedBreak: FocusPalette.text3
-        case .idle: FocusPalette.text3
+        case .focusing: theme.good
+        case .breaking: theme.good
+        case .pausedFocus, .pausedBreak: theme.text3
+        case .idle: theme.text3
         }
     }
 
@@ -440,7 +444,7 @@ struct FocusWorkspaceView: View {
                 .tracking(3 * s)
                 .foregroundStyle(.white)
                 .frame(width: 300 * s, height: 64 * s)
-                .background(Capsule().fill(FocusPalette.accent))
+                .background(Capsule().fill(theme.accent))
         }
         .buttonStyle(.plain)
     }
@@ -449,7 +453,7 @@ struct FocusWorkspaceView: View {
         Button(action: action) {
             Text(title)
                 .font(.system(size: 24 * s))
-                .foregroundStyle(FocusPalette.text2)
+                .foregroundStyle(theme.text2)
                 .padding(.vertical, 14 * s)
         }
         .buttonStyle(.plain)
@@ -479,7 +483,7 @@ struct FocusWorkspaceView: View {
             if store.recordGroups.isEmpty {
                 Text("选择一个任务并开始专注")
                     .font(.system(size: 21 * s))
-                    .foregroundStyle(FocusPalette.text3)
+                    .foregroundStyle(theme.text3)
                     .padding(.top, 12 * s)
             } else {
                 ScrollView {
@@ -494,10 +498,10 @@ struct FocusWorkspaceView: View {
             Text("\(value)")
                 .font(.system(size: 46 * s, weight: .light))
                 .monospacedDigit()
-                .foregroundStyle(FocusPalette.text)
+                .foregroundStyle(theme.text)
             Text(label)
                 .font(.system(size: 20 * s))
-                .foregroundStyle(FocusPalette.text2)
+                .foregroundStyle(theme.text2)
         }
     }
 
@@ -507,12 +511,12 @@ struct FocusWorkspaceView: View {
             HStack(spacing: 16 * s) {
                 Text("今日目标 \(store.todayPomodoros) / \(store.preferences.dailyGoal)")
                     .font(.system(size: 22 * s))
-                    .foregroundStyle(FocusPalette.text2)
+                    .foregroundStyle(theme.text2)
                 GeometryReader { geo in
                     ZStack(alignment: .leading) {
-                        Capsule().fill(FocusPalette.track)
+                        Capsule().fill(theme.track)
                         Capsule()
-                            .fill(FocusPalette.accent)
+                            .fill(theme.accent)
                             .frame(width: max(0, geo.size.width *
                                 CGFloat(min(store.todayPomodoros, store.preferences.dailyGoal)) /
                                 CGFloat(max(1, store.preferences.dailyGoal))))
@@ -535,7 +539,7 @@ struct FocusWorkspaceView: View {
             ForEach(stats.indices, id: \.self) { index in
                 let isToday = index == stats.count - 1
                 Capsule()
-                    .fill(isToday ? FocusPalette.accent : FocusPalette.track)
+                    .fill(isToday ? theme.accent : theme.track)
                     .frame(height: max(6 * s, 72 * s * CGFloat(stats[index].minutes) / CGFloat(peak)))
             }
         }
@@ -549,7 +553,7 @@ struct FocusWorkspaceView: View {
                 Text(FocusViewLogic.dayLabel(for: group.day))
                     .font(.system(size: 19, weight: .semibold))
                     .tracking(4)
-                    .foregroundStyle(FocusPalette.text3)
+                    .foregroundStyle(theme.text3)
                     .padding(.top, 26)
                     .padding(.bottom, 6)
                 ForEach(group.records) { record in
@@ -566,26 +570,26 @@ struct FocusWorkspaceView: View {
             Text(timeText(record.startedAt))
                 .font(.system(size: 21))
                 .monospacedDigit()
-                .foregroundStyle(FocusPalette.text3)
+                .foregroundStyle(theme.text3)
                 .frame(width: 92, alignment: .leading)
             Text(recordTitle(for: record))
                 .font(.system(size: 23))
-                .foregroundStyle(FocusPalette.text)
+                .foregroundStyle(theme.text)
                 .lineLimit(1)
             Spacer(minLength: 16)
             Text("\(record.minutes) 分钟")
                 .font(.system(size: 21))
                 .monospacedDigit()
-                .foregroundStyle(record.completed ? FocusPalette.text2 : FocusPalette.text3)
+                .foregroundStyle(record.completed ? theme.text2 : theme.text3)
             Circle()
-                .fill(record.completed ? FocusPalette.good : FocusPalette.warn)
+                .fill(record.completed ? theme.good : theme.warn)
                 .frame(width: 7, height: 7)
             Button {
                 store.deleteRecord(record.id)
             } label: {
                 Image(systemName: "trash")
                     .font(.system(size: 13))
-                    .foregroundStyle(FocusPalette.text3)
+                    .foregroundStyle(theme.text3)
             }
             .buttonStyle(.plain)
             .opacity(isHovered ? 1 : 0)
@@ -593,7 +597,7 @@ struct FocusWorkspaceView: View {
         }
         .padding(.vertical, 15)
         .overlay(alignment: .bottom) {
-            Rectangle().fill(FocusPalette.hairline).frame(height: 1)
+            Rectangle().fill(theme.hairline).frame(height: 1)
         }
         .contentShape(Rectangle())
         .onHover { hovering in
@@ -648,7 +652,7 @@ struct FocusWorkspaceView: View {
     private func listDotColor(for id: UUID?) -> Color {
         guard let id, let workspace, let task = workspace.task(for: id),
               let argb = workspace.listMetas.first(where: { $0.name == task.list.name })?.colorARGB
-        else { return FocusPalette.accent }
+        else { return theme.accent }
         return Color(red: Double((argb >> 16) & 0xFF) / 255,
                      green: Double((argb >> 8) & 0xFF) / 255,
                      blue: Double(argb & 0xFF) / 255)
@@ -666,22 +670,49 @@ struct FocusWorkspaceView: View {
     }
 }
 
-/// 专注页专用深色配色：浅色应用里这一页刻意沉浸。
-private enum FocusPalette {
-    static let background = RadialGradient(
-        colors: [Color(red: 0.114, green: 0.114, blue: 0.161),
-                 Color(red: 0.086, green: 0.086, blue: 0.118)],
-        center: UnitPoint(x: 0.5, y: -0.1), startRadius: 10, endRadius: 1500)
-    static let text = Color.white.opacity(0.96)
-    static let text2 = Color.white.opacity(0.52)
-    static let text3 = Color.white.opacity(0.30)
-    static let hairline = Color.white.opacity(0.075)
-    static let accent = Color(red: 0.545, green: 0.486, blue: 0.969)
-    static let accent2 = Color(red: 0.757, green: 0.659, blue: 1.0)
-    static let track = Color.white.opacity(0.09)
-    static let good = Color(red: 0.290, green: 0.871, blue: 0.502)
-    static let goodSoft = Color(red: 0.545, green: 0.937, blue: 0.702)
-    static let warn = Color(red: 0.973, green: 0.443, blue: 0.443)
+/// 专注页主题：与应用同一底色（WFColors.canvas），其余配色随系统外观切换——
+/// 深色外观下即是沉浸深色稿，浅色外观下为极简浅色稿。
+private struct FocusTheme {
+    let canvas = WFColors.canvas
+    let text: Color
+    let text2: Color
+    let text3: Color
+    let hairline: Color
+    let accent: Color
+    let accentSoft: Color
+    let track: Color
+    let chipBackground: Color
+    let good: Color
+    let goodSoft: Color
+    let warn: Color
+
+    init(_ scheme: ColorScheme) {
+        if scheme == .dark {
+            text = Color.white.opacity(0.96)
+            text2 = Color.white.opacity(0.52)
+            text3 = Color.white.opacity(0.30)
+            hairline = Color.white.opacity(0.075)
+            accent = Color(red: 0.545, green: 0.486, blue: 0.969)
+            accentSoft = Color(red: 0.757, green: 0.659, blue: 1.0)
+            track = Color.white.opacity(0.09)
+            chipBackground = Color.white.opacity(0.04)
+            good = Color(red: 0.290, green: 0.871, blue: 0.502)
+            goodSoft = Color(red: 0.545, green: 0.937, blue: 0.702)
+            warn = Color(red: 0.973, green: 0.443, blue: 0.443)
+        } else {
+            text = WFColors.text
+            text2 = WFColors.secondaryText
+            text3 = WFColors.tertiaryText
+            hairline = WFColors.border.opacity(0.7)
+            accent = WFColors.accent
+            accentSoft = WFColors.accent.opacity(0.6)
+            track = Color.primary.opacity(0.08)
+            chipBackground = Color.primary.opacity(0.04)
+            good = Color(red: 0.082, green: 0.686, blue: 0.427)
+            goodSoft = Color(red: 0.220, green: 0.808, blue: 0.553)
+            warn = .red
+        }
+    }
 }
 
 /// 专注页纯展示逻辑：时间/阶段/概览文案与日期分组头，供视图与单元测试共用。
