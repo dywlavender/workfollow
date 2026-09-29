@@ -1,8 +1,7 @@
 import SwiftUI
 
-/// 专注工作区：沉浸式深色画布——中央大圆环计时为主角，左侧时长与节奏、右侧
-/// 今日统计与安静记录列（设计定稿：focus mock 2026-09 深色全宽版）。
-/// 浅色应用里该页刻意用深色，表达「进入专注模式」的空间切换。
+/// 专注工作区：对齐滴答的双栏结构——左栏专注计时（标题 + 模式分段 + 环 + 开始），
+/// 右栏概览（今日/总量四卡）与专注记录。底色与应用一致，配色随系统外观切换。
 /// `workspace` 为可选的任务关联入口。
 struct FocusWorkspaceView: View {
     @ObservedObject var store: FocusStore
@@ -51,25 +50,24 @@ struct FocusWorkspaceView: View {
         }
     }
 
-    /// 设计稿基准高 1150：窗口更矮时按比例收缩圆环与栏宽，更高时最多放大 15%。
+    /// 设计基准高 1150：窗口更矮时按比例收缩，更高时最多放大 15%。
     static func scale(for size: CGSize) -> CGFloat {
-        min(1.15, max(0.55, min(size.height / 1150, size.width / 1500)))
+        min(1.15, max(0.55, min(size.height / 1150, size.width / 1400)))
     }
 
-    // MARK: - 画布与骨架
+    // MARK: - 骨架
 
     private func content(scale s: CGFloat, width: CGFloat) -> some View {
-        VStack(spacing: 0) {
-            headerBar(s: s)
-            HStack(alignment: .center, spacing: 72 * s) {
-                heroColumn(s: s)
-                    .frame(maxWidth: .infinity)
-                recordsRail(s: s)
-                    .frame(width: min(440 * s, max(330, width * 0.36)))
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .padding(.horizontal, 88 * s)
-            .padding(.bottom, 48 * s)
+        let rightWidth = min(640 * s, max(380, width * 0.44))
+        return HStack(spacing: 0) {
+            timerPane(s: s, paneWidth: width - rightWidth)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            Rectangle()
+                .fill(theme.hairline)
+                .frame(width: 1)
+            overviewPane(s: s)
+                .frame(width: rightWidth)
+                .frame(maxHeight: .infinity)
         }
         .background(theme.canvas)
         .background {
@@ -99,334 +97,287 @@ struct FocusWorkspaceView: View {
         }
     }
 
-    private func headerBar(s: CGFloat) -> some View {
-        HStack {
-            Text("专 注")
-                .font(.system(size: 24 * s, weight: .semibold))
-                .tracking(6 * s)
-                .foregroundStyle(theme.text2)
-            Spacer()
-            HStack(spacing: 40 * s) {
-                modeTab("番茄", active: !store.preferences.stopwatchMode, s: s) {
-                    store.setStopwatchMode(false)
-                }
-                modeTab("正计时", active: store.preferences.stopwatchMode, s: s) {
-                    store.setStopwatchMode(true)
-                }
-            }
-        }
-        .padding(.horizontal, 88 * s)
-        .frame(height: 92 * s)
-    }
+    // MARK: - 左栏 专注计时
 
-    private func modeTab(_ title: String, active: Bool, s: CGFloat,
-                         action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            VStack(spacing: 7 * s) {
-                Text(title)
-                    .font(.system(size: 23 * s, weight: active ? .semibold : .regular))
-                    .foregroundStyle(active ? theme.accent : theme.text2)
-                Capsule()
-                    .fill(active ? theme.accent : .clear)
-                    .frame(width: 30 * s, height: 2.5)
-            }
-        }
-        .buttonStyle(.plain)
-        .disabled(store.phase != .idle)
-        .help(store.phase != .idle ? "会话结束后可切换" : "")
-    }
-
-    // MARK: - 中栏 计时主角
-
-    private func heroColumn(s: CGFloat) -> some View {
+    private func timerPane(s: CGFloat, paneWidth: CGFloat) -> some View {
         VStack(spacing: 0) {
-            taskChip(s: s)
-                .padding(.bottom, 30 * s)
-            ringView(s: s)
-                .padding(.bottom, 30 * s)
+            paneHeader(s: s)
+            Spacer(minLength: 16 * s)
+            selectorRow(s: s)
+                .padding(.bottom, 24 * s)
+            ringView(s: s, paneWidth: paneWidth)
             if store.phase != .idle {
-                statusLine(s: s)
-                    .padding(.bottom, 30 * s)
+                runningStatus(s: s)
+                    .padding(.top, 24 * s)
             }
             if store.phase == .breaking, store.preferences.autoStartNextPomodoro {
                 Text("下一番茄 \(nextAutoStartTime) 自动开始")
                     .font(.system(size: 20 * s))
                     .foregroundStyle(theme.text3)
-                    .padding(.bottom, 20 * s)
+                    .padding(.top, 12 * s)
             }
-            if store.phase == .idle {
-                if !store.preferences.stopwatchMode {
-                    durationPills(s: s)
-                        .padding(.bottom, 14 * s)
-                    if durationSelection == .custom {
-                        customDurationRow(s: s)
-                            .padding(.bottom, 14 * s)
-                    }
-                }
-                Button { showRhythmPopover = true } label: {
-                    Text("节奏 ›")
-                        .font(.system(size: 20 * s))
-                        .foregroundStyle(theme.text3)
-                }
-                .buttonStyle(.plain)
-                .help("短休息、长休息与自动开始")
-                .popover(isPresented: $showRhythmPopover, arrowEdge: .top) {
-                    rhythmPopover(s: s)
-                }
-                .padding(.bottom, 20 * s)
-            }
-            actionsRow(s: s)
-            if store.phase == .focusing {
-                Text("剩余不足 5 分钟时，会询问是否提前完成本番茄")
-                    .font(.system(size: 19 * s))
-                    .foregroundStyle(theme.text3)
-                    .padding(.top, 26 * s)
-            }
+            Spacer(minLength: 16 * s)
+            actionsColumn(s: s)
+            Spacer().frame(height: 44 * s)
         }
-        .frame(maxWidth: .infinity)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(.horizontal, 44 * s)
     }
 
-    /// 时长选择：滴答式 pills，就绪态出现在计时器下方；选中态描边 + 强调色。
-    private func durationPills(s: CGFloat) -> some View {
-        HStack(spacing: 14 * s) {
-            ForEach(Self.presetMinutes, id: \.self) { minutes in
-                pill("\(minutes) 分钟",
-                     selected: durationSelection == .preset(minutes),
-                     s: s) {
-                    durationSelection = .preset(minutes)
-                    store.setFocusMinutes(minutes)
-                }
-            }
-            pill("自定义", selected: durationSelection == .custom, s: s) {
-                durationSelection = .custom
-            }
+    private func paneHeader(s: CGFloat) -> some View {
+        HStack {
+            Text("番茄专注")
+                .font(.system(size: 28 * s, weight: .bold))
+                .foregroundStyle(theme.text)
+            Spacer()
+            modeSegment(s: s)
+            Spacer()
+            headerIcons(s: s)
         }
+        .padding(.top, 26 * s)
     }
 
-    private func pill(_ title: String, selected: Bool, s: CGFloat,
-                      action: @escaping () -> Void) -> some View {
+    /// 模式分段：番茄计时 / 正计时（会话进行中锁定）。
+    private func modeSegment(s: CGFloat) -> some View {
+        HStack(spacing: 4 * s) {
+            segmentItem("番茄计时",
+                        selected: !store.preferences.stopwatchMode, s: s) {
+                store.setStopwatchMode(false)
+            }
+            segmentItem("正计时",
+                        selected: store.preferences.stopwatchMode, s: s) {
+                store.setStopwatchMode(true)
+            }
+        }
+        .padding(5 * s)
+        .background(Capsule().fill(theme.chipBackground))
+        .opacity(store.phase == .idle ? 1 : 0.55)
+        .help(store.phase != .idle ? "会话结束后可切换" : "")
+    }
+
+    private func segmentItem(_ title: String, selected: Bool, s: CGFloat,
+                             action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(title)
-                .font(.system(size: 23 * s, weight: selected ? .semibold : .regular))
-                .foregroundStyle(selected ? theme.accent : theme.text2)
-                .padding(.horizontal, 28 * s)
-                .padding(.vertical, 14 * s)
-                .background(Capsule().stroke(
-                    selected ? theme.accent : theme.hairline, lineWidth: 1.5))
+                .font(.system(size: 19 * s, weight: selected ? .semibold : .regular))
+                .foregroundStyle(selected ? theme.text : theme.text2)
+                .padding(.horizontal, 20 * s)
+                .padding(.vertical, 8 * s)
+                .background(Capsule().fill(selected ? theme.segmentActive : .clear))
         }
         .buttonStyle(.plain)
     }
 
-    private func customDurationRow(s: CGFloat) -> some View {
-        VStack(spacing: 8 * s) {
-            HStack(spacing: 12 * s) {
-                TextField("分钟（5–180）", text: $customMinutes)
-                    .textFieldStyle(.plain)
-                    .font(.system(size: 22 * s))
-                    .foregroundStyle(theme.text)
-                    .multilineTextAlignment(.center)
-                    .frame(width: 130 * s)
-                    .onSubmit(applyCustomMinutes)
-                Button("应用", action: applyCustomMinutes)
-                    .buttonStyle(.plain)
-                    .font(.system(size: 21 * s))
-                    .foregroundStyle(theme.accent)
+    /// 头部右侧：补记、铃声、节奏。
+    private func headerIcons(s: CGFloat) -> some View {
+        HStack(spacing: 24 * s) {
+            Button { showAddRecord = true } label: {
+                Image(systemName: "plus")
+                    .font(.system(size: 21 * s, weight: .medium))
             }
-            if let durationHint {
-                Text(durationHint)
+            .buttonStyle(.plain)
+            .foregroundStyle(theme.text2)
+            .help("补记专注")
+
+            Menu {
+                ForEach(FocusBell.allCases, id: \.self) { bell in
+                    Button(bell.rawValue) { store.setBell(bell.rawValue) }
+                }
+            } label: {
+                Image(systemName: bellIcon)
                     .font(.system(size: 19 * s))
-                    .foregroundStyle(theme.warn)
+            }
+            .menuStyle(.button)
+            .menuIndicator(.hidden)
+            .foregroundStyle(theme.text2)
+            .help("结束铃声：\(currentBellLabel)")
+
+            Button { showRhythmPopover = true } label: {
+                Image(systemName: "ellipsis")
+                    .font(.system(size: 21 * s, weight: .medium))
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(theme.text2)
+            .help("节奏设置")
+            .popover(isPresented: $showRhythmPopover, arrowEdge: .bottom) {
+                rhythmPopover(s: s)
             }
         }
     }
 
-    /// 任务绑定 chip：清单色点 + 标题 + 元信息；就绪态可点击换绑、✕ 解绑。
+    private var bellIcon: String {
+        (FocusBell(rawValue: store.preferences.bellSound ?? "") ?? .off) == .off
+            ? "speaker.slash" : "speaker.wave.2"
+    }
+
+    private var currentBellLabel: String {
+        (FocusBell(rawValue: store.preferences.bellSound ?? "") ?? .off).rawValue
+    }
+
+    /// 任务选择行：未绑定时是安静的「专注 ›」，绑定后显示清单色点 + 标题。
     @ViewBuilder
-    private func taskChip(s: CGFloat) -> some View {
+    private func selectorRow(s: CGFloat) -> some View {
         if let workspace {
             let linkID = store.phase == .idle ? linkedTaskID : store.currentTaskID
-            if let title = taskTitle(for: linkID) {
-                let chipView = HStack(spacing: 14 * s) {
-                    Circle()
-                        .fill(listDotColor(for: linkID))
-                        .frame(width: 11 * s, height: 11 * s)
-                    Text(title)
-                        .font(.system(size: 26 * s, weight: .semibold))
-                        .foregroundStyle(theme.text)
-                        .lineLimit(1)
-                    chipMeta(for: linkID, s: s)
-                    if store.phase == .idle {
-                        Button {
-                            linkedTaskID = nil
-                        } label: {
-                            Text("✕")
-                                .font(.system(size: 20 * s))
-                                .foregroundStyle(theme.text3)
+            let boundTask = linkID.flatMap { workspace.task(for: $0) }
+            let title = boundTask.map { $0.title.isEmpty ? "未命名任务" : $0.title }
+            let overdue = boundTask.map { isDueOverdue($0) } ?? false
+            Menu {
+                Button("不关联") {
+                    if store.phase == .idle { linkedTaskID = nil } else { store.reattach(taskID: nil) }
+                }
+                ForEach(unfinishedTasks(in: workspace)) { task in
+                    Button {
+                        if store.phase == .idle { linkedTaskID = task.id } else { store.reattach(taskID: task.id) }
+                    } label: {
+                        if task.id == linkID {
+                            Label(taskMenuTitle(task), systemImage: "checkmark")
+                        } else {
+                            Text(taskMenuTitle(task))
                         }
-                        .buttonStyle(.plain)
-                        .help("解除关联")
                     }
                 }
-                .padding(.horizontal, 26 * s)
-                .padding(.vertical, 12 * s)
-                .background(Capsule().fill(theme.chipBackground))
-                .contentShape(Capsule())
-
-                if store.phase == .idle {
-                    Menu {
-                        Button("不关联") { linkedTaskID = nil }
-                        ForEach(unfinishedTasks(in: workspace)) { task in
-                            Button {
-                                linkedTaskID = task.id
-                            } label: {
-                                if task.id == linkedTaskID {
-                                    Label(taskMenuTitle(task), systemImage: "checkmark")
-                                } else {
-                                    Text(taskMenuTitle(task))
-                                }
-                            }
-                        }
-                    } label: { chipView }
-                        .menuStyle(.button)
-                        .menuIndicator(.hidden)
-                        .fixedSize()
-                        .help("选择一个任务并开始专注")
-                } else {
-                    Menu {
-                        Button("不关联") { store.reattach(taskID: nil) }
-                        ForEach(unfinishedTasks(in: workspace)) { task in
-                            Button {
-                                store.reattach(taskID: task.id)
-                            } label: {
-                                if store.currentTaskID == task.id {
-                                    Label(taskMenuTitle(task), systemImage: "checkmark")
-                                } else {
-                                    Text(taskMenuTitle(task))
-                                }
-                            }
-                        }
-                    } label: { chipView }
-                        .menuStyle(.button)
-                        .menuIndicator(.hidden)
-                        .fixedSize()
-                        .help("更换专注任务")
-                }
-            } else if store.phase == .idle {
-                if unfinishedTasks(in: workspace).isEmpty {
-                    Text("暂无未完成任务")
+            } label: {
+                HStack(spacing: 10 * s) {
+                    if let boundTask {
+                        Circle()
+                            .fill(listDotColor(for: boundTask.id))
+                            .frame(width: 10 * s, height: 10 * s)
+                    }
+                    Text(title ?? "专注")
+                        .font(.system(size: 25 * s, weight: title == nil ? .regular : .semibold))
+                        .foregroundStyle(title == nil ? theme.text3
+                                         : (overdue ? theme.warn : theme.text))
+                        .lineLimit(1)
+                    Text("›")
                         .font(.system(size: 23 * s))
                         .foregroundStyle(theme.text3)
-                } else {
-                    Menu {
-                        Button("不关联") { linkedTaskID = nil }
-                        ForEach(unfinishedTasks(in: workspace)) { task in
-                            Button {
-                                linkedTaskID = task.id
-                            } label: {
-                                if task.id == linkedTaskID {
-                                    Label(taskMenuTitle(task), systemImage: "checkmark")
-                                } else {
-                                    Text(taskMenuTitle(task))
-                                }
-                            }
-                        }
-                    } label: {
-                        HStack(spacing: 14 * s) {
-                            Circle()
-                                .stroke(theme.text3, lineWidth: 1.5)
-                                .frame(width: 11 * s, height: 11 * s)
-                            Text("选择任务…")
-                                .font(.system(size: 26 * s, weight: .semibold))
-                                .foregroundStyle(theme.text2)
-                            Image(systemName: "chevron.up.chevron.down")
-                                .font(.system(size: 16 * s, weight: .medium))
-                                .foregroundStyle(theme.text3)
-                        }
-                        .padding(.horizontal, 26 * s)
-                        .padding(.vertical, 12 * s)
-                        .background(Capsule().fill(theme.chipBackground))
-                    }
-                    .menuStyle(.button)
-                    .menuIndicator(.hidden)
-                    .fixedSize()
-                    .help("选择一个任务并开始专注")
                 }
+                .contentShape(Rectangle())
             }
+            .menuStyle(.button)
+            .menuIndicator(.hidden)
+            .fixedSize()
+            .help("选择一个任务并开始专注")
         }
     }
 
-    @ViewBuilder
-    private func chipMeta(for id: UUID?, s: CGFloat) -> some View {
-        if let id, let workspace, let task = workspace.task(for: id) {
-            let meta = chipMetaText(task)
-            if !meta.isEmpty {
-                Text(meta)
-                    .font(.system(size: 21 * s))
-                    .foregroundStyle(isDueOverdue(task) ? theme.warn : theme.text3)
-                    .lineLimit(1)
-            }
-        }
-    }
-
-    /// 绑定任务的安排日期早于今天即视为逾期，chip 元信息整段标红提醒。
-    private func isDueOverdue(_ task: Task) -> Bool {
-        guard let workspace, let dueAt = task.schedule.dueAt else { return false }
-        return workspace.calendar.startOfDay(for: dueAt)
-            < workspace.calendar.startOfDay(for: workspace.clock())
-    }
-
-    private func chipMetaText(_ task: Task) -> String {
-        var parts: [String] = [task.list.name]
-        if let dueAt = task.schedule.dueAt {
-            parts.append(dueAt.formatted(.dateTime.month().day().locale(.appDate)))
-        }
-        return parts.joined(separator: " · ")
-    }
-
-    private var ringSize: CGFloat { 560 }
-
-    private func ringView(s: CGFloat) -> some View {
-        let size = ringSize * s
+    private func ringView(s: CGFloat, paneWidth: CGFloat) -> some View {
+        let size = min(430 * s, paneWidth * 0.66)
         let active = store.phase == .focusing || store.phase == .breaking
         return ZStack {
             Circle()
-                .stroke(theme.track, lineWidth: 5 * s)
+                .stroke(theme.track, lineWidth: 2 * max(s, 0.8))
             Circle()
                 .trim(from: 0, to: progress)
                 .stroke(progressGradient,
-                        style: StrokeStyle(lineWidth: 10 * s, lineCap: .round))
+                        style: StrokeStyle(lineWidth: 8 * s, lineCap: .round))
                 .rotationEffect(.degrees(-90))
                 .animation(.linear(duration: 0.3), value: progress)
             ringCenter(s: s)
         }
         .frame(width: size, height: size)
-        .shadow(color: active ? theme.accent.opacity(0.26) : .clear, radius: 48 * s)
+        .shadow(color: active ? theme.accent.opacity(0.20) : .clear, radius: 40 * s)
     }
 
-    /// 环心：剩余时间 + 阶段文案 + 关联任务名。
+    /// 环心：剩余/已计时间 + 阶段文案 + 关联任务名。
     private func ringCenter(s: CGFloat) -> some View {
-        VStack(spacing: 18 * s) {
+        VStack(spacing: 16 * s) {
             Text(FocusViewLogic.clockText(displaySeconds))
-                .font(.system(size: 150 * s, weight: .thin))
+                .font(.system(size: 108 * s, weight: .regular))
                 .monospacedDigit()
                 .foregroundStyle(theme.text)
             Text(FocusViewLogic.phaseTitle(for: store.phase, isLongBreak: store.isLongBreak))
-                .font(.system(size: 23 * s))
+                .font(.system(size: 22 * s))
                 .foregroundStyle(theme.text2)
             if let title = ringTaskTitle, store.phase != .idle {
                 Text(title)
-                    .font(.system(size: 21 * s))
+                    .font(.system(size: 20 * s))
                     .foregroundStyle(theme.text3)
                     .lineLimit(2)
                     .multilineTextAlignment(.center)
-                    .padding(.horizontal, 60 * s)
+                    .padding(.horizontal, 50 * s)
             }
         }
     }
 
-    private func taskMenuTitle(_ task: Task) -> String {
-        task.title.isEmpty ? "未命名任务" : task.title
+    private func runningStatus(s: CGFloat) -> some View {
+        HStack(spacing: 12 * s) {
+            Circle()
+                .fill(statusDotColor)
+                .frame(width: 8 * s, height: 8 * s)
+            Text("专注中 · 已专注 \(store.elapsedSeconds / 60) 分钟 · 第 \(store.todayPomodoros + 1) 个番茄")
+                .font(.system(size: 21 * s))
+                .foregroundStyle(theme.text2)
+        }
     }
+
+    private var statusDotColor: Color {
+        switch store.phase {
+        case .focusing, .breaking: theme.good
+        case .pausedFocus, .pausedBreak, .idle: theme.text3
+        }
+    }
+
+    // MARK: - 主操作
+
+    @ViewBuilder
+    private func actionsColumn(s: CGFloat) -> some View {
+        VStack(spacing: 18 * s) {
+            switch store.phase {
+            case .idle:
+                primaryButton("开始", s: s) { store.start(taskID: linkedTaskID) }
+            case .focusing, .pausedFocus:
+                let running = store.phase == .focusing
+                primaryButton(running ? "暂 停" : "继 续", s: s) {
+                    if running { store.pause() } else { store.resume() }
+                }
+                HStack(spacing: 30 * s) {
+                    linkButton("完成本番茄", s: s) { store.finishEarly() }
+                    linkButton("放弃", s: s) { showGiveUpConfirmation = true }
+                }
+            case .breaking:
+                primaryButton("跳过休息", s: s) { _ = store.giveUp() }
+            case .pausedBreak:
+                HStack(spacing: 30 * s) {
+                    primaryButton("继 续", s: s) { store.resume() }
+                    linkButton("跳过休息", s: s) { _ = store.giveUp() }
+                }
+            }
+        }
+        .confirmationDialog("确定要放弃这个番茄吗？",
+                            isPresented: $showGiveUpConfirmation,
+                            titleVisibility: .visible) {
+            Button("放弃番茄", role: .destructive) { _ = store.giveUp() }
+            Button("继续专注", role: .cancel) {}
+        } message: {
+            Text("已专注满 5 分钟的记录将保留为未完成。")
+        }
+    }
+
+    private func primaryButton(_ title: String, s: CGFloat, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title)
+                .font(.system(size: 26 * s, weight: .semibold))
+                .tracking(2 * s)
+                .foregroundStyle(.white)
+                .frame(width: 220 * s, height: 62 * s)
+                .background(Capsule().fill(theme.accent))
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func linkButton(_ title: String, s: CGFloat, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title)
+                .font(.system(size: 23 * s))
+                .foregroundStyle(theme.text2)
+                .padding(.vertical, 12 * s)
+        }
+        .buttonStyle(.plain)
+    }
+
+    // MARK: - 计时数据
 
     private var ringTaskTitle: String? {
         let id = store.phase == .idle ? linkedTaskID : store.currentTaskID
@@ -466,91 +417,11 @@ struct FocusWorkspaceView: View {
         return paused ? (a.opacity(0.4), b.opacity(0.4)) : (a, b)
     }
 
-    private func statusLine(s: CGFloat) -> some View {
-        HStack(spacing: 12 * s) {
-            Circle()
-                .fill(statusDotColor)
-                .frame(width: 9 * s, height: 9 * s)
-            Text(FocusViewLogic.phaseTitle(for: store.phase, isLongBreak: store.isLongBreak))
-                .font(.system(size: 23 * s))
-            if store.phase == .focusing {
-                Text("· 已专注 \(store.elapsedSeconds / 60) 分钟")
-                    .font(.system(size: 23 * s))
-                Text("· 第 \(store.todayPomodoros + 1) 个番茄")
-                    .font(.system(size: 23 * s))
-            }
-        }
-        .foregroundStyle(theme.text2)
-    }
-
-    private var statusDotColor: Color {
-        switch store.phase {
-        case .focusing: theme.good
-        case .breaking: theme.good
-        case .pausedFocus, .pausedBreak: theme.text3
-        case .idle: theme.text3
-        }
-    }
-
     /// 自动开始开启时，休息态显示下一番茄的开始时刻。
     private var nextAutoStartTime: String {
         let reference = workspace?.clock() ?? Date()
         return reference.addingTimeInterval(TimeInterval(store.remainingSeconds))
             .formatted(.dateTime.hour().minute())
-    }
-
-    @ViewBuilder
-    private func actionsRow(s: CGFloat) -> some View {
-        switch store.phase {
-        case .idle:
-            primaryButton("开始专注", s: s) { store.start(taskID: linkedTaskID) }
-        case .focusing, .pausedFocus:
-            let running = store.phase == .focusing
-            HStack(spacing: 34 * s) {
-                primaryButton(running ? "暂 停" : "继 续", s: s) {
-                    if running { store.pause() } else { store.resume() }
-                }
-                linkButton("完成本番茄", s: s) { store.finishEarly() }
-                linkButton("放弃", s: s) { showGiveUpConfirmation = true }
-            }
-            .confirmationDialog("确定要放弃这个番茄吗？",
-                                isPresented: $showGiveUpConfirmation,
-                                titleVisibility: .visible) {
-                Button("放弃番茄", role: .destructive) { _ = store.giveUp() }
-                Button("继续专注", role: .cancel) {}
-            } message: {
-                Text("已专注满 5 分钟的记录将保留为未完成。")
-            }
-        case .breaking:
-            primaryButton("跳过休息", s: s) { _ = store.giveUp() }
-        case .pausedBreak:
-            HStack(spacing: 34 * s) {
-                primaryButton("继 续", s: s) { store.resume() }
-                linkButton("跳过休息", s: s) { _ = store.giveUp() }
-            }
-        }
-    }
-
-    private func primaryButton(_ title: String, s: CGFloat, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Text(title)
-                .font(.system(size: 27 * s, weight: .semibold))
-                .tracking(3 * s)
-                .foregroundStyle(.white)
-                .frame(width: 300 * s, height: 64 * s)
-                .background(Capsule().fill(theme.accent))
-        }
-        .buttonStyle(.plain)
-    }
-
-    private func linkButton(_ title: String, s: CGFloat, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Text(title)
-                .font(.system(size: 24 * s))
-                .foregroundStyle(theme.text2)
-                .padding(.vertical, 14 * s)
-        }
-        .buttonStyle(.plain)
     }
 
     private func applyCustomMinutes() {
@@ -561,81 +432,246 @@ struct FocusWorkspaceView: View {
         durationHint = store.setFocusMinutes(minutes) ? nil : "时长需在 5–180 分钟之间"
     }
 
-    // MARK: - 右栏 今日统计与记录
+    // MARK: - 右栏 概览与记录
 
-    private func recordsRail(s: CGFloat) -> some View {
+    private func overviewPane(s: CGFloat) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 52 * s) {
-                bigStat(store.todayMinutes, label: "今日分钟", s: s)
-                let goalMet = store.preferences.dailyGoal > 0
-                    && store.todayPomodoros >= store.preferences.dailyGoal
-                bigStat(store.todayPomodoros,
-                        label: goalMet ? "已达今日目标" : "今日番茄",
-                        s: s, valueColor: goalMet ? theme.good : nil)
+            Text("概览")
+                .font(.system(size: 26 * s, weight: .bold))
+                .foregroundStyle(theme.text)
+                .padding(.bottom, 24 * s)
+            LazyVGrid(columns: [GridItem(.flexible(), spacing: 20 * s),
+                                GridItem(.flexible(), spacing: 20 * s)],
+                      spacing: 20 * s) {
+                statCard("今日番茄", value: "\(store.todayPomodoros)", s: s)
+                statCard("今日专注时长", value: "\(store.todayMinutes)m", s: s)
+                statCard("总番茄", value: "\(store.allTimePomodoros)", s: s)
+                statCard("总专注时长", value: "\(store.allTimeMinutes)m", s: s)
             }
-            .padding(.bottom, 30 * s)
             goalLine(s: s)
-                .padding(.bottom, 34 * s)
-            if store.recentDailyStats().reduce(0, { $0 + $1.minutes }) > 0 {
-                sparkline(s: s)
-                    .padding(.bottom, 34 * s)
-            }
-            let topTasks = store.weeklyTaskTotals()
-            if !topTasks.isEmpty {
-                Text("本周时间分布")
-                    .font(.system(size: 18 * s, weight: .semibold))
-                    .tracking(4 * s)
-                    .foregroundStyle(theme.text3)
-                    .padding(.bottom, 4 * s)
-                ForEach(topTasks.indices, id: \.self) { index in
-                    let total = topTasks[index]
-                    HStack(spacing: 12 * s) {
-                        Circle()
-                            .fill(listDotColor(for: total.taskID))
-                            .frame(width: 9 * s, height: 9 * s)
-                        Text(taskTitle(for: total.taskID) ?? "未关联任务")
-                            .font(.system(size: 21 * s))
-                            .foregroundStyle(theme.text)
-                            .lineLimit(1)
-                        Spacer(minLength: 10 * s)
-                        Text("\(total.minutes) 分钟")
-                            .font(.system(size: 20 * s))
-                            .monospacedDigit()
-                            .foregroundStyle(theme.text2)
-                    }
-                    .padding(.vertical, 8 * s)
-                }
-            }
-            HStack {
-                Text("记 录")
-                    .font(.system(size: 18 * s, weight: .semibold))
-                    .tracking(4 * s)
-                    .foregroundStyle(theme.text3)
+                .padding(.top, 20 * s)
+            HStack(alignment: .firstTextBaseline) {
+                Text("专注记录")
+                    .font(.system(size: 26 * s, weight: .bold))
+                    .foregroundStyle(theme.text)
                 Spacer()
                 Button { showAddRecord = true } label: {
-                    Text("＋ 补记")
-                        .font(.system(size: 20 * s))
-                        .foregroundStyle(theme.accent)
+                    Image(systemName: "plus")
+                        .font(.system(size: 21 * s, weight: .medium))
                 }
                 .buttonStyle(.plain)
-                .help("手动添加一条过去的专注记录")
+                .foregroundStyle(theme.text2)
+                .help("补记专注")
             }
+            .padding(.top, 44 * s)
             .padding(.bottom, 8 * s)
-            .popover(isPresented: $showAddRecord, arrowEdge: .leading) {
-                addRecordPopover(s: s)
-            }
             if store.recordGroups.isEmpty {
-                Text("选择一个任务并开始专注")
-                    .font(.system(size: 21 * s))
-                    .foregroundStyle(theme.text3)
-                    .padding(.top, 12 * s)
+                Spacer(minLength: 20 * s)
+                VStack(spacing: 16 * s) {
+                    Image(systemName: "timer")
+                        .font(.system(size: 60 * s))
+                        .foregroundStyle(theme.text3.opacity(0.7))
+                    Text("还没有专注记录")
+                        .font(.system(size: 21 * s))
+                        .foregroundStyle(theme.text3)
+                }
+                .frame(maxWidth: .infinity)
+                Spacer(minLength: 20 * s)
             } else {
                 ScrollView {
                     recordsList(s: s)
                 }
             }
         }
+        .padding(.horizontal, 44 * s)
+        .padding(.vertical, 30 * s)
     }
+
+    private func statCard(_ label: String, value: String, s: CGFloat) -> some View {
+        VStack(alignment: .leading, spacing: 12 * s) {
+            Text(label)
+                .font(.system(size: 20 * s))
+                .foregroundStyle(theme.text2)
+            Text(value)
+                .font(.system(size: 40 * s, weight: .medium))
+                .monospacedDigit()
+                .foregroundStyle(theme.text)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 26 * s)
+        .padding(.vertical, 22 * s)
+        .background(RoundedRectangle(cornerRadius: 14 * s).fill(theme.cardBackground))
+    }
+
+    /// 今日目标进度：文字 + 细线，点击弹原有目标编辑器。
+    private func goalLine(s: CGFloat) -> some View {
+        Button { showGoalPopover = true } label: {
+            HStack(spacing: 16 * s) {
+                Text("今日目标 \(store.todayPomodoros) / \(store.preferences.dailyGoal)")
+                    .font(.system(size: 21 * s))
+                    .foregroundStyle(theme.text2)
+                GeometryReader { geo in
+                    ZStack(alignment: .leading) {
+                        Capsule().fill(theme.track)
+                        Capsule()
+                            .fill(theme.accent)
+                            .frame(width: max(0, geo.size.width *
+                                CGFloat(min(store.todayPomodoros, store.preferences.dailyGoal)) /
+                                CGFloat(max(1, store.preferences.dailyGoal))))
+                    }
+                }
+                .frame(height: 4 * s)
+            }
+        }
+        .buttonStyle(.plain)
+        .help("点击修改每日目标")
+        .popover(isPresented: $showGoalPopover, arrowEdge: .bottom) {
+            goalEditor
+        }
+    }
+
+    private func recordsList(s: CGFloat) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            ForEach(store.recordGroups) { group in
+                Text(FocusViewLogic.dayLabel(for: group.day))
+                    .font(.system(size: 19, weight: .semibold))
+                    .tracking(4)
+                    .foregroundStyle(theme.text3)
+                    .padding(.top, 26)
+                    .padding(.bottom, 6)
+                ForEach(group.records) { record in
+                    recordRow(record)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func recordRow(_ record: PomodoroRecord) -> some View {
+        let isHovered = hoveredRecordID == record.id
+        return HStack(spacing: 16) {
+            Text(timeText(record.startedAt))
+                .font(.system(size: 21))
+                .monospacedDigit()
+                .foregroundStyle(theme.text3)
+                .frame(width: 92, alignment: .leading)
+            Text(recordTitle(for: record))
+                .font(.system(size: 23))
+                .foregroundStyle(theme.text)
+                .lineLimit(1)
+            Spacer(minLength: 16)
+            Text("\(record.minutes) 分钟")
+                .font(.system(size: 21))
+                .monospacedDigit()
+                .foregroundStyle(record.completed ? theme.text2 : theme.text3)
+            Circle()
+                .fill(record.completed ? theme.good : theme.warn)
+                .frame(width: 7, height: 7)
+            Button {
+                store.deleteRecord(record.id)
+            } label: {
+                Image(systemName: "trash")
+                    .font(.system(size: 13))
+                    .foregroundStyle(theme.text3)
+            }
+            .buttonStyle(.plain)
+            .opacity(isHovered ? 1 : 0)
+            .help("删除记录")
+        }
+        .padding(.vertical, 15)
+        .overlay(alignment: .bottom) {
+            Rectangle().fill(theme.hairline).frame(height: 1)
+        }
+        .contentShape(Rectangle())
+        .onTapGesture {
+            guard let taskID = record.taskID else { return }
+            workspace?.select(taskID)
+            environment.navigation.destination = .allTasks
+        }
+        .onHover { hovering in
+            if hovering {
+                hoveredRecordID = record.id
+            } else if hoveredRecordID == record.id {
+                hoveredRecordID = nil
+            }
+        }
+        .contextMenu {
+            Button("删除记录", role: .destructive) { store.deleteRecord(record.id) }
+        }
+    }
+
+    // MARK: - 节奏弹层
+
+    /// 节奏弹层：短/长休息与长休息间隔步进、自动开始开关（全部落 FocusStore）。
+    private func rhythmPopover(s: CGFloat) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text("节奏")
+                .font(.system(size: 24 * s, weight: .semibold))
+                .foregroundStyle(theme.text)
+                .padding(.bottom, 10 * s)
+            rhythmStepper("短休息", value: store.preferences.breakMinutes, unit: "分钟",
+                          range: 1...60, s: s) { store.setBreakMinutes($0) }
+            rhythmStepper("长休息", value: store.preferences.longBreakMinutes, unit: "分钟",
+                          range: 1...60, s: s) { store.setLongBreakMinutes($0) }
+            rhythmStepper("长休息间隔", value: store.preferences.longBreakInterval, unit: "番茄",
+                          range: 2...8, s: s) { store.setLongBreakInterval($0) }
+            HStack {
+                Text("休息结束自动开始下一番茄")
+                    .foregroundStyle(theme.text2)
+                Spacer(minLength: 12 * s)
+                SwitchView(isOn: Binding(
+                    get: { store.preferences.autoStartNextPomodoro },
+                    set: { store.setAutoStartNextPomodoro($0) }))
+            }
+            .font(.system(size: 21 * s))
+            .padding(.vertical, 15 * s)
+            .overlay(alignment: .bottom) {
+                Rectangle().fill(theme.hairline).frame(height: 1)
+            }
+            Text("开启后，休息结束时将用同一任务自动开始下一个番茄")
+                .font(.system(size: 18 * s))
+                .foregroundStyle(theme.text3)
+                .padding(.top, 14 * s)
+        }
+        .padding(28 * s)
+        .frame(width: 400 * s)
+    }
+
+    private func rhythmStepper(_ key: String, value: Int, unit: String, range: ClosedRange<Int>,
+                               s: CGFloat, setter: @escaping (Int) -> Bool) -> some View {
+        HStack(spacing: 14 * s) {
+            Text(key).foregroundStyle(theme.text2)
+            Spacer(minLength: 12 * s)
+            stepperButton("minus", s: s) {
+                if value > range.lowerBound { _ = setter(value - 1) }
+            }
+            Text("\(value) \(unit)")
+                .monospacedDigit()
+                .foregroundStyle(theme.text)
+                .frame(width: 110 * s)
+            stepperButton("plus", s: s) {
+                if value < range.upperBound { _ = setter(value + 1) }
+            }
+        }
+        .font(.system(size: 21 * s))
+        .padding(.vertical, 13 * s)
+        .overlay(alignment: .bottom) {
+            Rectangle().fill(theme.hairline).frame(height: 1)
+        }
+    }
+
+    private func stepperButton(_ symbol: String, s: CGFloat, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(.system(size: 14 * s, weight: .semibold))
+                .foregroundStyle(theme.text2)
+                .frame(width: 30 * s, height: 30 * s)
+                .background(Circle().fill(theme.chipBackground))
+        }
+        .buttonStyle(.plain)
+    }
+
+    // MARK: - 补记弹层
 
     /// 补记弹层：任务 + 时长，默认开始时间 = 此刻减去时长（即刚结束的一段）。
     private func addRecordPopover(s: CGFloat) -> some View {
@@ -739,131 +775,7 @@ struct FocusWorkspaceView: View {
         }
     }
 
-    private func bigStat(_ value: Int, label: String, s: CGFloat, valueColor: Color? = nil) -> some View {
-        VStack(alignment: .leading, spacing: 8 * s) {
-            Text("\(value)")
-                .font(.system(size: 46 * s, weight: .light))
-                .monospacedDigit()
-                .foregroundStyle(valueColor ?? theme.text)
-            Text(label)
-                .font(.system(size: 20 * s))
-                .foregroundStyle(theme.text2)
-        }
-    }
-
-    /// 今日目标进度：文字 + 细线，点击弹原有目标编辑器。
-    private func goalLine(s: CGFloat) -> some View {
-        Button { showGoalPopover = true } label: {
-            HStack(spacing: 16 * s) {
-                Text("今日目标 \(store.todayPomodoros) / \(store.preferences.dailyGoal)")
-                    .font(.system(size: 22 * s))
-                    .foregroundStyle(theme.text2)
-                GeometryReader { geo in
-                    ZStack(alignment: .leading) {
-                        Capsule().fill(theme.track)
-                        Capsule()
-                            .fill(theme.accent)
-                            .frame(width: max(0, geo.size.width *
-                                CGFloat(min(store.todayPomodoros, store.preferences.dailyGoal)) /
-                                CGFloat(max(1, store.preferences.dailyGoal))))
-                    }
-                }
-                .frame(height: 4 * s)
-            }
-        }
-        .buttonStyle(.plain)
-        .help("点击修改每日目标")
-        .popover(isPresented: $showGoalPopover, arrowEdge: .bottom) {
-            goalEditor
-        }
-    }
-
-    /// 近 7 天专注分钟迷你柱状图；最后一天（今天）用强调色。
-    private func sparkline(s: CGFloat) -> some View {
-        let stats = store.recentDailyStats()
-        let peak = max(stats.map(\.minutes).max() ?? 0, 1)
-        return HStack(alignment: .bottom, spacing: 14 * s) {
-            ForEach(stats.indices, id: \.self) { index in
-                let stat = stats[index]
-                Capsule()
-                    .fill(index == stats.count - 1 ? theme.accent : theme.track)
-                    .frame(height: max(6 * s, 72 * s * CGFloat(stat.minutes) / CGFloat(peak)))
-                    .help("\(stat.day.formatted(.dateTime.weekday(.abbreviated).locale(.appDate))) · \(stat.minutes) 分钟")
-            }
-        }
-        .frame(height: 74 * s, alignment: .bottom)
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    private func recordsList(s: CGFloat) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            ForEach(store.recordGroups) { group in
-                Text(FocusViewLogic.dayLabel(for: group.day))
-                    .font(.system(size: 19, weight: .semibold))
-                    .tracking(4)
-                    .foregroundStyle(theme.text3)
-                    .padding(.top, 26)
-                    .padding(.bottom, 6)
-                ForEach(group.records) { record in
-                    recordRow(record)
-                }
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    private func recordRow(_ record: PomodoroRecord) -> some View {
-        let isHovered = hoveredRecordID == record.id
-        return HStack(spacing: 16) {
-            Text(timeText(record.startedAt))
-                .font(.system(size: 21))
-                .monospacedDigit()
-                .foregroundStyle(theme.text3)
-                .frame(width: 92, alignment: .leading)
-            Text(recordTitle(for: record))
-                .font(.system(size: 23))
-                .foregroundStyle(theme.text)
-                .lineLimit(1)
-            Spacer(minLength: 16)
-            Text("\(record.minutes) 分钟")
-                .font(.system(size: 21))
-                .monospacedDigit()
-                .foregroundStyle(record.completed ? theme.text2 : theme.text3)
-            Circle()
-                .fill(record.completed ? theme.good : theme.warn)
-                .frame(width: 7, height: 7)
-            Button {
-                store.deleteRecord(record.id)
-            } label: {
-                Image(systemName: "trash")
-                    .font(.system(size: 13))
-                    .foregroundStyle(theme.text3)
-            }
-            .buttonStyle(.plain)
-            .opacity(isHovered ? 1 : 0)
-            .help("删除记录")
-        }
-        .padding(.vertical, 15)
-        .overlay(alignment: .bottom) {
-            Rectangle().fill(theme.hairline).frame(height: 1)
-        }
-        .contentShape(Rectangle())
-        .onTapGesture {
-            guard let taskID = record.taskID else { return }
-            workspace?.select(taskID)
-            environment.navigation.destination = .allTasks
-        }
-        .onHover { hovering in
-            if hovering {
-                hoveredRecordID = record.id
-            } else if hoveredRecordID == record.id {
-                hoveredRecordID = nil
-            }
-        }
-        .contextMenu {
-            Button("删除记录", role: .destructive) { store.deleteRecord(record.id) }
-        }
-    }
+    // MARK: - 目标编辑
 
     private var goalEditor: some View {
         VStack(alignment: .leading, spacing: WFSpace.md) {
@@ -880,14 +792,6 @@ struct FocusWorkspaceView: View {
         .frame(width: 190, alignment: .leading)
     }
 
-    private func recordTitle(for record: PomodoroRecord) -> String {
-        record.taskID.flatMap { taskTitle(for: $0) } ?? "未关联任务"
-    }
-
-    private func timeText(_ date: Date) -> String {
-        date.formatted(.dateTime.hour().minute())
-    }
-
     // MARK: - Helpers
 
     private func unfinishedTasks(in workspace: TaskWorkspaceModel) -> [Task] {
@@ -901,6 +805,18 @@ struct FocusWorkspaceView: View {
         return task.title.isEmpty ? "未命名任务" : task.title
     }
 
+    private func taskMenuTitle(_ task: Task) -> String {
+        task.title.isEmpty ? "未命名任务" : task.title
+    }
+
+    private func recordTitle(for record: PomodoroRecord) -> String {
+        record.taskID.flatMap { taskTitle(for: $0) } ?? "未关联任务"
+    }
+
+    private func timeText(_ date: Date) -> String {
+        date.formatted(.dateTime.hour().minute())
+    }
+
     /// 清单色点：来自侧栏清单元数据（TaskListMeta.colorARGB），无色回退强调色。
     private func listDotColor(for id: UUID?) -> Color {
         guard let id, let workspace, let task = workspace.task(for: id),
@@ -911,76 +827,14 @@ struct FocusWorkspaceView: View {
                      blue: Double(argb & 0xFF) / 255)
     }
 
-    /// 节奏弹层：短/长休息与长休息间隔步进、自动开始开关（全部落 FocusStore）。
-    private func rhythmPopover(s: CGFloat) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Text("节奏")
-                .font(.system(size: 24 * s, weight: .semibold))
-                .foregroundStyle(theme.text)
-                .padding(.bottom, 10 * s)
-            rhythmStepper("短休息", value: store.preferences.breakMinutes, unit: "分钟",
-                          range: 1...60, s: s) { store.setBreakMinutes($0) }
-            rhythmStepper("长休息", value: store.preferences.longBreakMinutes, unit: "分钟",
-                          range: 1...60, s: s) { store.setLongBreakMinutes($0) }
-            rhythmStepper("长休息间隔", value: store.preferences.longBreakInterval, unit: "番茄",
-                          range: 2...8, s: s) { store.setLongBreakInterval($0) }
-            HStack {
-                Text("休息结束自动开始下一番茄")
-                    .foregroundStyle(theme.text2)
-                Spacer(minLength: 12 * s)
-                SwitchView(isOn: Binding(
-                    get: { store.preferences.autoStartNextPomodoro },
-                    set: { store.setAutoStartNextPomodoro($0) }))
-            }
-            .font(.system(size: 21 * s))
-            .padding(.vertical, 15 * s)
-            .overlay(alignment: .bottom) {
-                Rectangle().fill(theme.hairline).frame(height: 1)
-            }
-            Text("开启后，休息结束时将用同一任务自动开始下一个番茄")
-                .font(.system(size: 18 * s))
-                .foregroundStyle(theme.text3)
-                .padding(.top, 14 * s)
-        }
-        .padding(28 * s)
-        .frame(width: 400 * s)
+    /// 绑定任务的安排日期早于今天即视为逾期，选择行整段标红提醒。
+    private func isDueOverdue(_ task: Task) -> Bool {
+        guard let workspace, let dueAt = task.schedule.dueAt else { return false }
+        return workspace.calendar.startOfDay(for: dueAt)
+            < workspace.calendar.startOfDay(for: workspace.clock())
     }
 
-    private func rhythmStepper(_ key: String, value: Int, unit: String, range: ClosedRange<Int>,
-                               s: CGFloat, setter: @escaping (Int) -> Bool) -> some View {
-        HStack(spacing: 14 * s) {
-            Text(key).foregroundStyle(theme.text2)
-            Spacer(minLength: 12 * s)
-            stepperButton("minus", s: s) {
-                if value > range.lowerBound { _ = setter(value - 1) }
-            }
-            Text("\(value) \(unit)")
-                .monospacedDigit()
-                .foregroundStyle(theme.text)
-                .frame(width: 110 * s)
-            stepperButton("plus", s: s) {
-                if value < range.upperBound { _ = setter(value + 1) }
-            }
-        }
-        .font(.system(size: 21 * s))
-        .padding(.vertical, 13 * s)
-        .overlay(alignment: .bottom) {
-            Rectangle().fill(theme.hairline).frame(height: 1)
-        }
-    }
-
-    private func stepperButton(_ symbol: String, s: CGFloat, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Image(systemName: symbol)
-                .font(.system(size: 14 * s, weight: .semibold))
-                .foregroundStyle(theme.text2)
-                .frame(width: 30 * s, height: 30 * s)
-                .background(Circle().fill(theme.chipBackground))
-        }
-        .buttonStyle(.plain)
-    }
-
-        private func syncLocalState() {
+    private func syncLocalState() {
         let minutes = store.preferences.focusMinutes
         if Self.presetMinutes.contains(minutes) {
             durationSelection = .preset(minutes)
@@ -994,10 +848,8 @@ struct FocusWorkspaceView: View {
     }
 }
 
-/// 专注页主题：与应用同一底色（WFColors.canvas），其余配色随系统外观切换——
-/// 深色外观下即是沉浸深色稿，浅色外观下为极简浅色稿。
+/// 专注页主题：与应用同一底色（WFColors.canvas），其余配色随系统外观切换。
 private struct FocusTheme {
-
     let canvas = WFColors.canvas
     let text: Color
     let text2: Color
@@ -1007,6 +859,8 @@ private struct FocusTheme {
     let accentSoft: Color
     let track: Color
     let chipBackground: Color
+    let cardBackground: Color
+    let segmentActive: Color
     let good: Color
     let goodSoft: Color
     let warn: Color
@@ -1021,6 +875,8 @@ private struct FocusTheme {
             accentSoft = Color(red: 0.757, green: 0.659, blue: 1.0)
             track = Color.white.opacity(0.09)
             chipBackground = Color.white.opacity(0.04)
+            cardBackground = Color.white.opacity(0.06)
+            segmentActive = Color.white.opacity(0.14)
             good = Color(red: 0.290, green: 0.871, blue: 0.502)
             goodSoft = Color(red: 0.545, green: 0.937, blue: 0.702)
             warn = Color(red: 0.973, green: 0.443, blue: 0.443)
@@ -1033,6 +889,8 @@ private struct FocusTheme {
             accentSoft = WFColors.accent.opacity(0.6)
             track = Color.primary.opacity(0.08)
             chipBackground = Color.primary.opacity(0.04)
+            cardBackground = Color.primary.opacity(0.045)
+            segmentActive = .white
             good = Color(red: 0.082, green: 0.686, blue: 0.427)
             goodSoft = Color(red: 0.220, green: 0.808, blue: 0.553)
             warn = .red

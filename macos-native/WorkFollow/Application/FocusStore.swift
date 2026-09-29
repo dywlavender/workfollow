@@ -265,6 +265,10 @@ final class FocusStore: ObservableObject, ModuleStoreFlushable {
     /// 正计时模式已走过的秒数（非正计时返回 0）。
     var elapsedSeconds: Int { engine.elapsedSeconds }
 
+    /// 全量累计（概览卡）：总番茄数与总专注分钟。
+    var allTimePomodoros: Int { records.filter(\.completed).count }
+    var allTimeMinutes: Int { records.reduce(0) { $0 + $1.minutes } }
+
     /// 最近 days 天按任务聚合的专注分钟（降序，前 limit 条）。
     func weeklyTaskTotals(days: Int = 7, limit: Int = 3) -> [TaskFocusTotal] {
         let cutoff = calendar.date(byAdding: .day, value: -days, to: clock()) ?? clock()
