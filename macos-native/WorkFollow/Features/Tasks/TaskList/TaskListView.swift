@@ -263,7 +263,7 @@ struct TaskListView: View {
                     }
                     .buttonStyle(.plain)
                     .help("安排日期、提醒和重复")
-                    .popover(isPresented: $showQuickAddSchedule, arrowEdge: .bottom) {
+                    .popover(isPresented: $showQuickAddSchedule) {
                         TaskDatePopoverV2(
                             task: quickAddScheduleTask(in: scope),
                             workspace: workspace,
@@ -289,7 +289,7 @@ struct TaskListView: View {
                     }
                     .buttonStyle(.plain)
                     .help("更多任务属性")
-                    .popover(isPresented: $showQuickAddProperties, arrowEdge: .bottom) {
+                    .popover(isPresented: $showQuickAddProperties) {
                         QuickAddPropertiesPopover(
                             workspace: workspace,
                             selectedPriority: quickAddPriorityOverride ?? quickAddResult.priority,
@@ -366,11 +366,14 @@ struct TaskListView: View {
         .frame(minHeight: 36, alignment: .center)
         .padding(.horizontal, WFSpace.md)
         .padding(.vertical, 4)
-        .background(WFColors.canvas, in: RoundedRectangle(cornerRadius: WFMetrics.corner))
+        // 滴答式两态：未选中是更灰一档的浅灰条、无描边；选中后底色提亮到
+        // 窗口底色、描边换「今天」同款强调色（WFColors.accent）。
+        .background(RoundedRectangle(cornerRadius: WFMetrics.corner)
+            .fill(quickAddExpanded ? WFColors.canvas : WFColors.hover))
         .overlay {
             if quickAddExpanded {
                 RoundedRectangle(cornerRadius: WFMetrics.corner)
-                    .stroke(WFColors.border, lineWidth: 1)
+                    .stroke(WFColors.accent, lineWidth: 1)
                     // 纯装饰层：必须放行点击，否则它会压在输入框上方把点击吃掉，
                     // 输入框拿不到第一响应者，展开也就无从触发。
                     .allowsHitTesting(false)
@@ -830,8 +833,11 @@ struct TaskListView: View {
     }
 
     private func currentQuickAddSchedule(for scope: TaskListScope) -> QuickAddScheduleDraft {
+        // 时间型视图（今天 / 最近 7 天）默认排期到当天，对齐 Flutter
+        // 「Time-based views keep the default-today behaviour」；收集箱不注入。
         QuickAddScheduleDraft(parsed: quickAddResult,
-                              defaultDueAt: scope == .today && !hasDismissedQuickAddScheduleToken
+                              defaultDueAt: (scope == .today || scope == .nextSevenDays)
+                                && !hasDismissedQuickAddScheduleToken
                                 ? workspace.dateFromToday(0) : nil)
     }
 
@@ -857,7 +863,8 @@ struct TaskListView: View {
             let timing = quickAddScheduleOverride
                 ?? (batch
                     ? QuickAddScheduleDraft(parsed: parsed,
-                                            defaultDueAt: scope == .today ? workspace.dateFromToday(0) : nil)
+                                            defaultDueAt: scope == .today || scope == .nextSevenDays
+                                                ? workspace.dateFromToday(0) : nil)
                     : currentQuickAddSchedule(for: scope))
             let priority = quickAddPriorityOverride ?? parsed.priority
             let list = quickAddListOverride ?? parsed.listName ?? workspace.activeList ?? TaskList.inbox.name
@@ -982,12 +989,12 @@ struct TaskRowView: View {
                                               onCustomDate: { showDatePopover = true })
             }
         }
-        .popover(isPresented: $showDatePopover, arrowEdge: .trailing) {
+        .popover(isPresented: $showDatePopover) {
             if let current = workspace.task(for: task.id) {
                 TaskDatePopoverV2(task: current, workspace: workspace) { showDatePopover = false }
             }
         }
-        .popover(isPresented: $showTagPicker, arrowEdge: .trailing) {
+        .popover(isPresented: $showTagPicker) {
             if let current = workspace.task(for: task.id) {
                 TaskTagPickerPopover(initialTags: current.tags, workspace: workspace,
                                      onCancel: { showTagPicker = false },
