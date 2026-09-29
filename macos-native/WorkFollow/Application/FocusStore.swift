@@ -79,9 +79,10 @@ final class FocusStore: ObservableObject, ModuleStoreFlushable {
         let minutes: Int
     }
 
-    /// 常用专注预设：命名计时器（番茄计时 N 分钟 或 正计时）。
+    /// 常用专注预设：emoji 头像 + 命名计时器（番茄计时 N 分钟 或 正计时）。
     struct TimerPreset: Codable, Equatable, Identifiable {
         let id: UUID
+        var emoji: String
         var name: String
         var stopwatch: Bool
         var minutes: Int
@@ -313,14 +314,14 @@ final class FocusStore: ObservableObject, ModuleStoreFlushable {
 
     /// 新建常用专注：名称必填、番茄计时需 5–180 分钟、上限 12 个（对齐滴答）。
     @discardableResult
-    func addTimer(name: String, stopwatch: Bool, minutes: Int) -> Bool {
+    func addTimer(name: String, emoji: String, stopwatch: Bool, minutes: Int) -> Bool {
         let trimmed = name.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { return false }
         if !stopwatch {
             guard PomodoroSettings.focusRange.contains(minutes) else { return false }
         }
         guard timers.count < 12 else { return false }
-        timers.append(TimerPreset(id: UUID(), name: trimmed, stopwatch: stopwatch,
+        timers.append(TimerPreset(id: UUID(), emoji: emoji, name: trimmed, stopwatch: stopwatch,
                                   minutes: stopwatch ? 0 : minutes))
         schedulePersistence()
         return true

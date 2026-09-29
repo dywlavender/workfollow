@@ -36,6 +36,8 @@ struct FocusWorkspaceView: View {
     @State private var addTimerStopwatch = false
     @State private var addTimerMinutes = "25"
     @State private var addTimerHint: String?
+    @State private var addTimerEmoji = "😀"
+    @State private var showEmojiPicker = false
     @State private var hoveredPresetID: UUID?
 
     init(store: FocusStore) {
@@ -191,6 +193,8 @@ struct FocusWorkspaceView: View {
                 addTimerMinutes = "25"
                 addTimerStopwatch = false
                 addTimerHint = nil
+                addTimerEmoji = "😀"
+                showEmojiPicker = false
                 showAddTimer = true
             } label: {
                 Image(systemName: "plus")
@@ -702,6 +706,8 @@ struct FocusWorkspaceView: View {
                     let active = store.preferences.stopwatchMode == preset.stopwatch
                         && (preset.stopwatch || store.preferences.focusMinutes == preset.minutes)
                     HStack(spacing: 8 * s) {
+                        Text(preset.emoji)
+                            .font(.system(size: 19 * s))
                         Text(preset.name)
                             .font(.system(size: 19 * s, weight: .medium))
                             .foregroundStyle(active ? theme.accent : theme.text)
@@ -738,24 +744,64 @@ struct FocusWorkspaceView: View {
         }
     }
 
-    /// 添加常用专注对话框：名称 + 计时模式（番茄计时 N 分钟 / 正计时）。
+    /// 添加常用专注对话框：emoji 头像 + 名称 + 计时模式（不压暗页面，对齐滴答）。
     private func addTimerDialog(s: CGFloat) -> some View {
-        ZStack {
-            Color.black.opacity(0.18)
+        let nameValid = !addTimerName.trimmingCharacters(in: .whitespaces).isEmpty
+        return ZStack {
+            Color.clear
                 .contentShape(Rectangle())
                 .onTapGesture { showAddTimer = false }
-            VStack(spacing: 26 * s) {
+            VStack(spacing: 24 * s) {
                 Text("添加常用专注")
                     .font(.system(size: 25 * s, weight: .semibold))
                     .foregroundStyle(theme.text)
-                TextField("名称", text: $addTimerName)
-                    .textFieldStyle(.plain)
-                    .font(.system(size: 22 * s))
-                    .foregroundStyle(theme.text)
-                    .padding(.horizontal, 14 * s)
-                    .padding(.vertical, 13 * s)
-                    .background(RoundedRectangle(cornerRadius: 10 * s)
-                        .stroke(theme.accent, lineWidth: 1.5))
+                HStack(spacing: 18 * s) {
+                    Button { showEmojiPicker.toggle() } label: {
+                        ZStack(alignment: .bottomTrailing) {
+                            Circle()
+                                .fill(theme.accentSoft)
+                                .frame(width: 56 * s, height: 56 * s)
+                            Text(addTimerEmoji)
+                                .font(.system(size: 30 * s))
+                            Circle()
+                                .fill(theme.canvas)
+                                .frame(width: 20 * s, height: 20 * s)
+                                .overlay(Image(systemName: "pencil")
+                                    .font(.system(size: 10 * s, weight: .semibold))
+                                    .foregroundStyle(theme.text2))
+                                .offset(x: 2 * s, y: 2 * s)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .help("选择表情")
+                    TextField("名称", text: $addTimerName)
+                        .textFieldStyle(.plain)
+                        .font(.system(size: 22 * s))
+                        .foregroundStyle(theme.text)
+                        .padding(.horizontal, 14 * s)
+                        .padding(.vertical, 13 * s)
+                        .background(RoundedRectangle(cornerRadius: 10 * s)
+                            .stroke(nameValid ? theme.accent : theme.hairline, lineWidth: 1.5))
+                }
+                if showEmojiPicker {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 10 * s) {
+                            ForEach(FocusTheme.emojiChoices, id: \.self) { emoji in
+                                Button {
+                                    addTimerEmoji = emoji
+                                    showEmojiPicker = false
+                                } label: {
+                                    Text(emoji)
+                                        .font(.system(size: 26 * s))
+                                        .frame(width: 44 * s, height: 44 * s)
+                                        .background(Circle().fill(
+                                            addTimerEmoji == emoji ? theme.accentSoft : theme.chipBackground))
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                    }
+                }
                 VStack(alignment: .leading, spacing: 16 * s) {
                     Text("计时模式")
                         .font(.system(size: 21 * s, weight: .semibold))
@@ -795,11 +841,6 @@ struct FocusWorkspaceView: View {
                     }
                     .buttonStyle(.plain)
                 }
-                if let addTimerHint {
-                    Text(addTimerHint)
-                        .font(.system(size: 19 * s))
-                        .foregroundStyle(theme.warn)
-                }
                 HStack {
                     Spacer()
                     Button { showAddTimer = false } label: {
@@ -815,15 +856,16 @@ struct FocusWorkspaceView: View {
                             .font(.system(size: 21 * s, weight: .semibold))
                             .foregroundStyle(.white)
                             .frame(width: 110 * s, height: 42 * s)
-                            .background(Capsule().fill(theme.accent))
+                            .background(Capsule().fill(theme.accent.opacity(nameValid ? 1 : 0.4)))
                     }
                     .buttonStyle(.plain)
+                    .disabled(!nameValid)
                 }
             }
             .padding(36 * s)
-            .frame(width: 520 * s)
+            .frame(width: 560 * s)
             .background(RoundedRectangle(cornerRadius: 16 * s).fill(theme.canvas)
-                .shadow(color: .black.opacity(0.18), radius: 34 * s))
+                .shadow(color: .black.opacity(0.16), radius: 30 * s))
             .overlay(RoundedRectangle(cornerRadius: 16 * s).stroke(theme.hairline, lineWidth: 1))
         }
     }
@@ -840,7 +882,8 @@ struct FocusWorkspaceView: View {
 
     private func submitAddTimer() {
         let minutes = Int(addTimerMinutes.trimmingCharacters(in: .whitespaces)) ?? 0
-        if store.addTimer(name: addTimerName, stopwatch: addTimerStopwatch, minutes: minutes) {
+        if store.addTimer(name: addTimerName, emoji: addTimerEmoji,
+                          stopwatch: addTimerStopwatch, minutes: minutes) {
             if let preset = store.timers.last { store.applyTimerPreset(preset) }
             showAddTimer = false
         } else {
@@ -1027,6 +1070,9 @@ struct FocusWorkspaceView: View {
 
 /// 专注页主题：与应用同一底色（WFColors.canvas），其余配色随系统外观切换。
 private struct FocusTheme {
+    /// 常用专注头像的可选 emoji。
+    static let emojiChoices = ["😀", "😎", "🥳", "🤔", "🍅", "⏰", "📚", "💼", "🏃", "🧘", "💻", "🎨"]
+
     let canvas = WFColors.canvas
     let text: Color
     let text2: Color

@@ -81,10 +81,10 @@ final class FocusStoreTests: XCTestCase {
 
     func testAddApplyAndDeleteTimers() {
         let store = FocusStore(clock: { self.base }, directory: makeDirectory())
-        XCTAssertTrue(store.addTimer(name: "晨间写作", stopwatch: false, minutes: 50))
-        XCTAssertTrue(store.addTimer(name: "随手记", stopwatch: true, minutes: 0))
-        XCTAssertFalse(store.addTimer(name: "   ", stopwatch: false, minutes: 25))   // 名称必填
-        XCTAssertFalse(store.addTimer(name: "越界", stopwatch: false, minutes: 999))  // 分钟越界
+        XCTAssertTrue(store.addTimer(name: "晨间写作", emoji: "📚", stopwatch: false, minutes: 50))
+        XCTAssertTrue(store.addTimer(name: "随手记", emoji: "😀", stopwatch: true, minutes: 0))
+        XCTAssertFalse(store.addTimer(name: "   ", emoji: "😀", stopwatch: false, minutes: 25))   // 名称必填
+        XCTAssertFalse(store.addTimer(name: "越界", emoji: "😀", stopwatch: false, minutes: 999))  // 分钟越界
 
         XCTAssertEqual(store.timers.count, 2)
         store.applyTimerPreset(store.timers[0])
