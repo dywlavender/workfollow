@@ -31,6 +31,12 @@ struct FocusWorkspaceView: View {
     @State private var addRecordMinutes = "25"
     @State private var addRecordHint: String?
     @State private var showRhythmPopover = false
+    @State private var showAddTimer = false
+    @State private var addTimerName = ""
+    @State private var addTimerStopwatch = false
+    @State private var addTimerMinutes = "25"
+    @State private var addTimerHint: String?
+    @State private var hoveredPresetID: UUID?
 
     init(store: FocusStore) {
         self.store = store
@@ -58,16 +64,16 @@ struct FocusWorkspaceView: View {
     // MARK: - 骨架
 
     private func content(scale s: CGFloat, width: CGFloat) -> some View {
-        let rightWidth = min(640 * s, max(380, width * 0.44))
+        let leftWidth = max(430, width * 0.40)
         return HStack(spacing: 0) {
-            timerPane(s: s, paneWidth: width - rightWidth)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            timerPane(s: s, paneWidth: leftWidth)
+                .frame(width: leftWidth)
+                .frame(maxHeight: .infinity)
             Rectangle()
                 .fill(theme.hairline)
                 .frame(width: 1)
             overviewPane(s: s)
-                .frame(width: rightWidth)
-                .frame(maxHeight: .infinity)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .background(theme.canvas)
         .background {
@@ -91,6 +97,11 @@ struct FocusWorkspaceView: View {
                 .opacity(0)
             }
         }
+        .overlay {
+            if showAddTimer {
+                addTimerDialog(s: s)
+            }
+        }
         .onAppear {
             store.refresh()
             syncLocalState()
@@ -102,6 +113,10 @@ struct FocusWorkspaceView: View {
     private func timerPane(s: CGFloat, paneWidth: CGFloat) -> some View {
         VStack(spacing: 0) {
             paneHeader(s: s)
+            if !store.timers.isEmpty {
+                presetChipsRow(s: s)
+                    .padding(.top, 12 * s)
+            }
             Spacer(minLength: 16 * s)
             selectorRow(s: s)
                 .padding(.bottom, 24 * s)
@@ -171,13 +186,19 @@ struct FocusWorkspaceView: View {
     /// 头部右侧：补记、铃声、节奏。
     private func headerIcons(s: CGFloat) -> some View {
         HStack(spacing: 24 * s) {
-            Button { showAddRecord = true } label: {
+            Button {
+                addTimerName = ""
+                addTimerMinutes = "25"
+                addTimerStopwatch = false
+                addTimerHint = nil
+                showAddTimer = true
+            } label: {
                 Image(systemName: "plus")
                     .font(.system(size: 21 * s, weight: .medium))
             }
             .buttonStyle(.plain)
             .foregroundStyle(theme.text2)
-            .help("补记专注")
+            .help("添加常用专注")
 
             Menu {
                 ForEach(FocusBell.allCases, id: \.self) { bell in
@@ -669,6 +690,162 @@ struct FocusWorkspaceView: View {
                 .background(Circle().fill(theme.chipBackground))
         }
         .buttonStyle(.plain)
+    }
+
+    // MARK: - 常用专注
+
+    /// 常用专注 chips：点击应用预设，悬浮出现删除。
+    private func presetChipsRow(s: CGFloat) -> some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 10 * s) {
+                ForEach(store.timers) { preset in
+                    let active = store.preferences.stopwatchMode == preset.stopwatch
+                        && (preset.stopwatch || store.preferences.focusMinutes == preset.minutes)
+                    HStack(spacing: 8 * s) {
+                        Text(preset.name)
+                            .font(.system(size: 19 * s, weight: .medium))
+                            .foregroundStyle(active ? theme.accent : theme.text)
+                            .lineLimit(1)
+                        Text(preset.stopwatch ? "正计时" : "\(preset.minutes) 分钟")
+                            .font(.system(size: 17 * s))
+                            .foregroundStyle(theme.text3)
+                        Button {
+                            store.deleteTimer(preset.id)
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .font(.system(size: 13 * s))
+                                .foregroundStyle(theme.text3)
+                        }
+                        .buttonStyle(.plain)
+                        .opacity(hoveredPresetID == preset.id ? 1 : 0)
+                        .help("删除常用专注")
+                    }
+                    .padding(.horizontal, 16 * s)
+                    .padding(.vertical, 9 * s)
+                    .background(Capsule().fill(active ? theme.accentSoft : theme.chipBackground))
+                    .contentShape(Capsule())
+                    .onTapGesture { store.applyTimerPreset(preset) }
+                    .onHover { hovering in
+                        if hovering {
+                            hoveredPresetID = preset.id
+                        } else if hoveredPresetID == preset.id {
+                            hoveredPresetID = nil
+                        }
+                    }
+                }
+            }
+            .padding(.horizontal, 4 * s)
+        }
+    }
+
+    /// 添加常用专注对话框：名称 + 计时模式（番茄计时 N 分钟 / 正计时）。
+    private func addTimerDialog(s: CGFloat) -> some View {
+        ZStack {
+            Color.black.opacity(0.18)
+                .contentShape(Rectangle())
+                .onTapGesture { showAddTimer = false }
+            VStack(spacing: 26 * s) {
+                Text("添加常用专注")
+                    .font(.system(size: 25 * s, weight: .semibold))
+                    .foregroundStyle(theme.text)
+                TextField("名称", text: $addTimerName)
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 22 * s))
+                    .foregroundStyle(theme.text)
+                    .padding(.horizontal, 14 * s)
+                    .padding(.vertical, 13 * s)
+                    .background(RoundedRectangle(cornerRadius: 10 * s)
+                        .stroke(theme.accent, lineWidth: 1.5))
+                VStack(alignment: .leading, spacing: 16 * s) {
+                    Text("计时模式")
+                        .font(.system(size: 21 * s, weight: .semibold))
+                        .foregroundStyle(theme.text)
+                    HStack(spacing: 14 * s) {
+                        Button { addTimerStopwatch = false } label: {
+                            HStack(spacing: 10 * s) {
+                                radioCircle(selected: !addTimerStopwatch, s: s)
+                                Text("番茄计时")
+                                    .font(.system(size: 21 * s))
+                                    .foregroundStyle(theme.text)
+                            }
+                        }
+                        .buttonStyle(.plain)
+                        if !addTimerStopwatch {
+                            TextField("25", text: $addTimerMinutes)
+                                .textFieldStyle(.plain)
+                                .font(.system(size: 21 * s))
+                                .monospacedDigit()
+                                .multilineTextAlignment(.center)
+                                .foregroundStyle(theme.text)
+                                .frame(width: 90 * s)
+                                .padding(.vertical, 8 * s)
+                                .background(RoundedRectangle(cornerRadius: 8 * s).fill(theme.chipBackground))
+                            Text("分钟")
+                                .font(.system(size: 20 * s))
+                                .foregroundStyle(theme.text2)
+                        }
+                    }
+                    Button { addTimerStopwatch = true } label: {
+                        HStack(spacing: 10 * s) {
+                            radioCircle(selected: addTimerStopwatch, s: s)
+                            Text("正计时")
+                                .font(.system(size: 21 * s))
+                                .foregroundStyle(theme.text)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                }
+                if let addTimerHint {
+                    Text(addTimerHint)
+                        .font(.system(size: 19 * s))
+                        .foregroundStyle(theme.warn)
+                }
+                HStack {
+                    Spacer()
+                    Button { showAddTimer = false } label: {
+                        Text("取消")
+                            .font(.system(size: 21 * s))
+                            .foregroundStyle(theme.text2)
+                            .frame(width: 110 * s, height: 42 * s)
+                            .background(Capsule().stroke(theme.hairline, lineWidth: 1.5))
+                    }
+                    .buttonStyle(.plain)
+                    Button { submitAddTimer() } label: {
+                        Text("确定")
+                            .font(.system(size: 21 * s, weight: .semibold))
+                            .foregroundStyle(.white)
+                            .frame(width: 110 * s, height: 42 * s)
+                            .background(Capsule().fill(theme.accent))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(36 * s)
+            .frame(width: 520 * s)
+            .background(RoundedRectangle(cornerRadius: 16 * s).fill(theme.canvas)
+                .shadow(color: .black.opacity(0.18), radius: 34 * s))
+            .overlay(RoundedRectangle(cornerRadius: 16 * s).stroke(theme.hairline, lineWidth: 1))
+        }
+    }
+
+    private func radioCircle(selected: Bool, s: CGFloat) -> some View {
+        ZStack {
+            Circle().stroke(selected ? theme.accent : theme.text3, lineWidth: 1.5)
+            if selected {
+                Circle().fill(theme.accent).padding(3.5 * s)
+            }
+        }
+        .frame(width: 19 * s, height: 19 * s)
+    }
+
+    private func submitAddTimer() {
+        let minutes = Int(addTimerMinutes.trimmingCharacters(in: .whitespaces)) ?? 0
+        if store.addTimer(name: addTimerName, stopwatch: addTimerStopwatch, minutes: minutes) {
+            if let preset = store.timers.last { store.applyTimerPreset(preset) }
+            showAddTimer = false
+        } else {
+            addTimerHint = "名称必填；番茄计时需 5–180 分钟；常用专注最多 12 个"
+        }
     }
 
     // MARK: - 补记弹层

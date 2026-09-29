@@ -70,11 +70,21 @@ final class FocusStore: ObservableObject, ModuleStoreFlushable {
         var preferences = FocusPreferences()
         /// 进行中的会话快照：重启后接续计时，空闲时为 nil（additive Codable）。
         var session: FocusSessionSnapshot?
+        /// 常用专注预设（additive Codable）。
+        var timers: [TimerPreset] = []
     }
 
     struct TaskFocusTotal: Equatable {
         let taskID: UUID?
         let minutes: Int
+    }
+
+    /// 常用专注预设：命名计时器（番茄计时 N 分钟 或 正计时）。
+    struct TimerPreset: Codable, Equatable, Identifiable {
+        let id: UUID
+        var name: String
+        var stopwatch: Bool
+        var minutes: Int
     }
 
     struct DailyFocusStats: Equatable {
@@ -100,6 +110,7 @@ final class FocusStore: ObservableObject, ModuleStoreFlushable {
     @Published private(set) var currentTaskID: UUID?
     @Published private(set) var todayPomodoros = 0
     @Published private(set) var todayMinutes = 0
+    @Published private(set) var timers: [TimerPreset] = []
     /// 阶段切换提醒（通知 + 铃声）；由 AppEnvironment 挂载，测试下为 nil。
     var notifier: FocusNotifier?
 
@@ -123,6 +134,7 @@ final class FocusStore: ObservableObject, ModuleStoreFlushable {
         records = loaded.records.sorted { $0.startedAt > $1.startedAt }
         preferences = loaded.preferences.normalized()
         engine.apply(preferences.pomodoroSettings)
+        timers = loaded.timers
         if let session = loaded.session {
             engine.restore(session)
         }
@@ -297,6 +309,35 @@ final class FocusStore: ObservableObject, ModuleStoreFlushable {
         return true
     }
 
+    // MARK: - 常用专注
+
+    /// 新建常用专注：名称必填、番茄计时需 5–180 分钟、上限 12 个（对齐滴答）。
+    @discardableResult
+    func addTimer(name: String, stopwatch: Bool, minutes: Int) -> Bool {
+        let trimmed = name.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return false }
+        if !stopwatch {
+            guard PomodoroSettings.focusRange.contains(minutes) else { return false }
+        }
+        guard timers.count < 12 else { return false }
+        timers.append(TimerPreset(id: UUID(), name: trimmed, stopwatch: stopwatch,
+                                  minutes: stopwatch ? 0 : minutes))
+        schedulePersistence()
+        return true
+    }
+
+    func deleteTimer(_ id: UUID) {
+        guard let index = timers.firstIndex(where: { $0.id == id }) else { return }
+        timers.remove(at: index)
+        schedulePersistence()
+    }
+
+    /// 应用一个常用专注预设到当前设置。
+    func applyTimerPreset(_ preset: TimerPreset) {
+        setStopwatchMode(preset.stopwatch)
+        if !preset.stopwatch { setFocusMinutes(preset.minutes) }
+    }
+
     // MARK: - 记录
 
     /// 手动补记一条过去的专注记录（对齐滴答）：只允许此刻之前、且落在最近
@@ -427,7 +468,7 @@ final class FocusStore: ObservableObject, ModuleStoreFlushable {
 
     private func schedulePersistence() {
         persistence.schedule(Archive(records: records, preferences: preferences,
-                                     session: engine.sessionSnapshot))
+                                     session: engine.sessionSnapshot, timers: timers))
     }
 
     private func startTimer() {

@@ -77,6 +77,27 @@ final class FocusStoreTests: XCTestCase {
         XCTAssertEqual(totals.count, 2)
     }
 
+    // MARK: 常用专注
+
+    func testAddApplyAndDeleteTimers() {
+        let store = FocusStore(clock: { base }, directory: makeDirectory())
+        XCTAssertTrue(store.addTimer(name: "晨间写作", stopwatch: false, minutes: 50))
+        XCTAssertTrue(store.addTimer(name: "随手记", stopwatch: true, minutes: 0))
+        XCTAssertFalse(store.addTimer(name: "   ", stopwatch: false, minutes: 25))   // 名称必填
+        XCTAssertFalse(store.addTimer(name: "越界", stopwatch: false, minutes: 999))  // 分钟越界
+
+        XCTAssertEqual(store.timers.count, 2)
+        store.applyTimerPreset(store.timers[0])
+        XCTAssertTrue(store.preferences.stopwatchMode == false)
+        XCTAssertEqual(store.preferences.focusMinutes, 50)
+        store.applyTimerPreset(store.timers[1])
+        XCTAssertTrue(store.preferences.stopwatchMode)
+
+        store.deleteTimer(store.timers[0].id)
+        XCTAssertEqual(store.timers.count, 1)
+        XCTAssertEqual(store.timers.first?.name, "随手记")
+    }
+
     // MARK: 正计时
 
     func testStopwatchRecordsElapsedMinutes() {
