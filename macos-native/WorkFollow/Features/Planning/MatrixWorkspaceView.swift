@@ -451,7 +451,7 @@ struct MatrixTaskRowView: View {
         .background(hovering ? WFColors.listRowHover : .clear,
                     in: RoundedRectangle(cornerRadius: hovering ? 12 : 0))
         .onHover { hovering = $0 }
-        .popover(isPresented: $showDatePopover, arrowEdge: .trailing) {
+        .popover(isPresented: $showDatePopover) {
             if let current = workspace.task(for: task.id) {
                 TaskDatePopoverV2(task: current, workspace: workspace) { showDatePopover = false }
             }

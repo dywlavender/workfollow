@@ -287,6 +287,27 @@ final class TaskDateDraftModel: ObservableObject {
             : calendar.date(bySettingHour: allDayAnchorHour, minute: 0, second: 0, of: calendar.startOfDay(for: due))
     }
 
+    /// 重复规则锚定的日期：时间段取开始日，否则取选中日（面板以它生成周/月/年
+    /// 规则与行文案）。
+    var recurrenceAnchorDate: Date {
+        (tab == .period ? periodStart : nil) ?? selectedDate
+    }
+
+    /// 子面板“确定”时批量替换提醒偏移（取消即不调用，语义同 Flutter 子菜单）。
+    func setReminderOffsets(_ minutes: Set<Int>) {
+        reminderOffsets = minutes
+        reminderOption = .none
+    }
+
+    /// 把周/月/年规则里的星期、日、月同步到锚定日（Flutter 选择日期时同步）。
+    func syncRecurrenceAnchor() {
+        let day = recurrenceAnchorDate
+        weekday = calendar.component(.weekday, from: day)
+        monthDay = calendar.component(.day, from: day)
+        month = calendar.component(.month, from: day)
+        recurrenceTouched = true
+    }
+
     // MARK: Recurrence
 
     func chooseFrequency(_ value: TaskRepeat) {
