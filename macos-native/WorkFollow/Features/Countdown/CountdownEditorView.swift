@@ -13,8 +13,11 @@ private func countdownEditorColor(_ index: Int) -> Color {
 /// 其下 日期 / 提醒 / 重复 / 类型 / 显示 五行（生日多一行「显示岁数」），
 /// 底部 取消 / 添加。
 ///
-/// 行内编辑器用**就地展开**而不是浮层：浮层套在 sheet 里在 macOS 上焦点容易丢，
-/// 而本项目的日程浮层（`TaskDatePopoverV2`）本来也是「行 + 就地展开」这一套。
+/// 五个下拉都是**浮层**（`overlayPreferenceValue` + `RowAnchorKey` 定位），
+/// 不是行内展开：行内展开会把面板撑高、把底部按钮推走，而参考图的面板是定高的。
+///
+/// 注意浮层必须留在面板内：macOS 的 sheet 就是一块真实窗口、会裁掉伸出去的内容，
+/// 所以「下方放不下就翻到上方」（见 `popupY`），而不是让浮层溢出面板。
 struct CountdownEditorView: View {
     @ObservedObject var store: CountdownStore
     /// nil = 新建。
@@ -36,11 +39,15 @@ struct CountdownEditorView: View {
     @State private var pickedFestival: CountdownFestival.Option?
     @State private var repeatSelection: CountdownRepeat
     @State private var reminders: Set<Int>
-    @State private var showsInSmartList: Bool
+    @State private var smartListDisplay: CountdownSmartListDisplay
     @State private var showsAge: Bool
     @State private var note: String
     @State private var noteExpanded: Bool
     @State private var openRow: Row?
+    /// 「提醒 → 自定义」里的提前天数。存量里已有的非预设值回填到这里。
+    @State private var customReminderDays: Int
+    /// 「重复 → 自定义」里的间隔天数。
+    @State private var customIntervalDays: Int
 
     private var calendar: Calendar { .current }
     private var isNew: Bool { original == nil }
@@ -54,6 +61,15 @@ struct CountdownEditorView: View {
     private static let rowHeight: CGFloat = 34
     private static let rowGap: CGFloat = 10
     private static let buttonWidth: CGFloat = 102
+    /// 下拉浮层里选项行的高度。
+    ///
+    /// 参考图的下拉行距是 34（跟面板行一样），但参考图里浮层是**伸出面板之外**画的，
+    /// 而 macOS 的 sheet 会把伸出去的部分裁掉。面板又不能变高（那正是要修的毛病），
+    /// 所以只能让行距小一点，把选项塞进面板里：
+    /// - 34 时「提醒」「重复」都放不下，被迫翻到行上方；
+    /// - 30 时能挂在行下方，但最底下的「自定义」会被面板下沿切掉一点；
+    /// - 28 时 7 行 = 208pt，稳稳落在可用高度（约 215pt）内，最后一行完整可见。
+    private static let popupRowHeight: CGFloat = 28
 
     init(store: CountdownStore, original: CountdownEvent?, defaultKind: CountdownKind = .anniversary) {
         self.store = store
@@ -87,10 +103,23 @@ struct CountdownEditorView: View {
         _repeatSelection = State(initialValue: original?.repeatValue ?? kind.defaultRepeat)
         _reminders = State(initialValue: Set(original?.reminderOffsets
             ?? CountdownEvent.defaultReminderOffsets))
-        _showsInSmartList = State(initialValue: original?.showsInSmartList ?? true)
+        _smartListDisplay = State(initialValue: original?.effectiveSmartListDisplay ?? .sameDay)
         _showsAge = State(initialValue: original?.showsAge ?? false)
         _note = State(initialValue: original?.note ?? "")
         _noteExpanded = State(initialValue: !(original?.note ?? "").isEmpty)
+        // 「自定义」两个输入框：存量里已经有非预设值的就回填，否则给 30。
+        let presetDays = Set(CountdownEvent.reminderChoices.map { $0 / CountdownEvent.minutesPerDay })
+        let existingCustomDays = (original?.reminderOffsets ?? [])
+            .map { $0 / CountdownEvent.minutesPerDay }
+            .first { !presetDays.contains($0) }
+        _customReminderDays = State(initialValue: existingCustomDays ?? 30)
+        let existingInterval: Int
+        if let rule = original?.rule, case .interval(let days, _, _) = rule {
+            existingInterval = days
+        } else {
+            existingInterval = 30
+        }
+        _customIntervalDays = State(initialValue: existingInterval)
     }
 
     var body: some View {
@@ -105,26 +134,132 @@ struct CountdownEditorView: View {
                     nameRow
                     if noteExpanded { noteField }
                     dateRow
-                    if openRow == .date { dateEditor }
                     reminderRow
-                    if openRow == .reminder { reminderEditor }
                     repeatRow
-                    if openRow == .recurrence { repeatEditor }
                     kindRow
-                    if openRow == .kind { kindEditor }
                     displayRow
-                    if openRow == .display { displayEditor }
                     if kind.hasAgeOption { ageRow }
                 }
                 .padding(.horizontal, Self.inset)
                 .padding(.vertical, WFSpace.xxl)
             }
-            .frame(maxHeight: 380)
+            // 固定高度：下拉是浮层，不再把面板撑高（参考图的面板就是固定大小）。
+            // 410 是「提醒」「重复」都能挂在行下方的最小高度（「显示」在最底下，
+            // 无论如何都要翻到上面）。
+            .frame(maxHeight: 410)
             Divider()
             footer
         }
         .frame(width: Self.panelWidth)
         .background(WFColors.canvas)
+        // 下拉浮层：浮在对应行的旁边、盖在面板内容之上，**不参与布局**。
+        .overlayPreferenceValue(RowAnchorKey.self) { anchors in
+            GeometryReader { proxy in
+                if let openRow, let anchor = anchors[openRow] {
+                    let rect = proxy[anchor]
+                    let height = popupHeight(for: openRow)
+                    let y = popupY(row: rect, height: height,
+                                   containerHeight: proxy.size.height)
+                    popup {
+                        popupBody(for: openRow,
+                                  maxHeight: popupRoom(row: rect, y: y,
+                                                       containerHeight: proxy.size.height))
+                    }
+                    .frame(width: rect.width)
+                    .offset(x: rect.minX, y: y)
+                }
+            }
+        }
+    }
+
+    /// 浮层的纵向落点。
+    ///
+    /// 默认挂在行的正下方；下方放不下就翻到行的上方（底边贴着行上沿）。
+    /// **必须留在面板里**：sheet 的边界就是面板边界，伸出去的部分会被裁掉
+    /// （表现成「浮层被编辑框挡住」）；而面板又不能在展开时变高——那正是要修的毛病。
+    private func popupY(row rect: CGRect, height: CGFloat, containerHeight: CGFloat) -> CGFloat {
+        let gap: CGFloat = 6
+        let top: CGFloat = 8
+        let bottom = containerHeight - 8
+        let below = rect.maxY + gap
+        if below + height <= bottom { return below }
+        let above = rect.minY - gap - height
+        if above >= top { return above }
+        // 两边都放不下（列表比面板还高）：贴着余量大的那一侧，超出的部分靠滚动。
+        return (bottom - below) >= (rect.minY - top) ? below : top
+    }
+
+    /// 浮层实际能占的高度。
+    private func popupRoom(row rect: CGRect, y: CGFloat, containerHeight: CGFloat) -> CGFloat {
+        max(120, containerHeight - 8 - y)
+    }
+
+    /// 浮层的高度。
+    ///
+    /// 选项行高是固定的，所以能算出来——**不去量**：浮层伸出面板时会被裁，
+    /// 量到的就是裁过之后的值，「放不下→翻上去」的判断会跟着反复横跳。
+    private func popupHeight(for row: Row) -> CGFloat {
+        // 上下内边距（WFSpace.xs × 2）+ 分隔线。估大了会让明明放得下的浮层翻上去。
+        let chrome: CGFloat = 12
+        switch row {
+        case .date:
+            // 节日目录是定高的滚动列表；其余是系统图形日历，给一个够大的估计值。
+            return kind.usesFestivalCatalog ? 188 : 330
+        case .reminder:
+            return CGFloat(7 + (isCustomReminder ? 1 : 0)) * Self.popupRowHeight + chrome
+        case .recurrence:
+            return CGFloat(6 + (repeatSelection == .custom ? 1 : 0)) * Self.popupRowHeight + chrome
+        case .kind:
+            return 4 * Self.popupRowHeight + chrome
+        case .display:
+            return 22 + 5 * Self.popupRowHeight + chrome
+        }
+    }
+
+    /// 放不下时给浮层套一层滚动，别把内容裁掉。
+    @ViewBuilder
+    private func popupBody(for row: Row, maxHeight: CGFloat) -> some View {
+        if popupHeight(for: row) > maxHeight {
+            ScrollView { editor(for: row) }.frame(height: maxHeight)
+        } else {
+            editor(for: row)
+        }
+    }
+
+    @ViewBuilder
+    private func editor(for row: Row) -> some View {
+        switch row {
+        case .date: dateEditor
+        case .reminder: reminderEditor
+        case .recurrence: repeatEditor
+        case .kind: kindEditor
+        case .display: displayEditor
+        }
+    }
+
+    /// 行 → 面板坐标系里的位置。下拉浮层要靠它定位。
+    private struct RowAnchorKey: PreferenceKey {
+        static let defaultValue: [Row: Anchor<CGRect>] = [:]
+        static func reduce(value: inout [Row: Anchor<CGRect>],
+                           nextValue: () -> [Row: Anchor<CGRect>]) {
+            value.merge(nextValue()) { _, new in new }
+        }
+    }
+
+    /// 弹层外壳。
+    ///
+    /// 参考图里下拉是**浮在面板上的弹框**：与行同宽、带圆角边框和投影，盖住下面的行。
+    /// 原来是行内展开（会把面板撑高、把底部按钮推走），用户明确指出「不是弹框、还把
+    /// 编辑框撑大了、边框也没有」，所以改成 overlay。
+    private func popup<Content: View>(@ViewBuilder content: () -> Content) -> some View {
+        content()
+            .padding(.vertical, WFSpace.xs)
+            .frame(maxWidth: .infinity)
+            .background(WFColors.content, in: RoundedRectangle(cornerRadius: 8))
+            .overlay {
+                RoundedRectangle(cornerRadius: 8).stroke(WFColors.border)
+            }
+            .shadow(color: .black.opacity(0.16), radius: 10, y: 4)
     }
 
     // MARK: 名称
@@ -138,6 +273,15 @@ struct CountdownEditorView: View {
                     .foregroundStyle(.white)
             }
             .frame(width: 38, height: 38)
+            .overlay(alignment: .bottomTrailing) {
+                // 参考图里图标右下角挂着一支小铅笔（表示「点它换图标/颜色」）。
+                Image(systemName: "pencil")
+                    .font(.system(size: 7, weight: .bold))
+                    .foregroundStyle(WFColors.secondaryText)
+                    .frame(width: 13, height: 13)
+                    .background(WFColors.canvas, in: Circle())
+                    .overlay { Circle().stroke(WFColors.border) }
+            }
 
             TextField(kind.namePlaceholder, text: $name)
                 .textFieldStyle(.plain)
@@ -212,6 +356,8 @@ struct CountdownEditorView: View {
             .buttonStyle(.plain)
             .accessibilityLabel("\(label)：\(value)")
         }
+        // 下拉浮层按这一行的位置定位。
+        .anchorPreference(key: RowAnchorKey.self, value: .bounds) { [row: $0] }
     }
 
     private var dateRow: some View {
@@ -252,34 +398,99 @@ struct CountdownEditorView: View {
         }
     }
 
+    /// 「提醒」行。参考图里空集显示的是黑色的「无」，不是灰色占位。
     private var reminderRow: some View {
         propertyRow(.reminder, label: "提醒",
-                    value: CountdownEvent.reminderText(Array(reminders)) ?? "选择提醒",
-                    isPlaceholder: reminders.isEmpty)
+                    value: CountdownEvent.reminderText(Array(reminders)) ?? "无",
+                    isPlaceholder: false)
     }
 
+    /// 「提醒」下拉，照参考图：
+    /// `无 / 当天 (09:00) / 提前 1 天 (09:00) / 提前 2 天 (09:00) /
+    ///  提前 3 天 (09:00) / 提前 1 周 (09:00)` ── `自定义`。
+    ///
+    /// 「无」= 空集；中间几项是**多选**（参考图的「添加」面板实测默认值是
+    /// `当天, 提前 3 天` 两条，所以不是单选）。
     private var reminderEditor: some View {
         VStack(spacing: 0) {
+            optionRow("无", checked: reminders.isEmpty) {
+                reminders.removeAll()
+                openRow = nil
+            }
             ForEach(CountdownEvent.reminderChoices, id: \.self) { minutes in
-                optionRow(CountdownEvent.reminderLabel(minutes), checked: reminders.contains(minutes)) {
+                optionRow(CountdownEvent.reminderOptionLabel(minutes),
+                          checked: reminders.contains(minutes)) {
                     if !reminders.insert(minutes).inserted { reminders.remove(minutes) }
+                }
+            }
+            optionSeparator
+            optionRow("自定义", checked: isCustomReminder) {
+                reminders = [customReminderDays * CountdownEvent.minutesPerDay]
+            }
+            if isCustomReminder {
+                Stepper(value: $customReminderDays, in: 1...365) {
+                    Text("提前 \(customReminderDays) 天 (\(CountdownEvent.reminderTimeText))")
+                        .font(WFType.supporting)
+                        .foregroundStyle(WFColors.text)
+                }
+                .font(WFType.supporting)
+                .padding(.horizontal, WFSpace.sm)
+                .frame(height: Self.popupRowHeight)
+                .onChange(of: customReminderDays) { _, days in
+                    reminders = [days * CountdownEvent.minutesPerDay]
                 }
             }
         }
         .background(WFColors.content, in: RoundedRectangle(cornerRadius: 6))
     }
 
-    private var repeatRow: some View {
-        propertyRow(.recurrence, label: "重复", value: repeatSelection.title, isPlaceholder: false)
+    /// 选中了预设项以外的整天提醒，就算「自定义」。
+    private var isCustomReminder: Bool {
+        let presets = Set(CountdownEvent.reminderChoices)
+        return reminders.contains { !presets.contains($0) }
     }
 
+    private var optionSeparator: some View {
+        Divider().padding(.vertical, 2)
+    }
+
+    /// 「重复」行。参考图里的值是带括注的：`每周（周二）` / `每月（初一）` / `每年（正月初一）`。
+    private var repeatRow: some View {
+        propertyRow(.recurrence, label: "重复",
+                    value: repeatLabel(repeatSelection),
+                    isPlaceholder: false)
+    }
+
+    /// 括注是算出来的（见 `CountdownRepeat.label`）。规则优先用面板里**当前**的
+    /// 选择，编辑时退回原记录——不然刚换完日期，括注还停在旧锚点上。
+    private func repeatLabel(_ value: CountdownRepeat) -> String {
+        CountdownRepeat.label(value, rule: resolvedRule ?? original?.rule,
+                              asOf: Date(), calendar: calendar)
+    }
+
+    /// 「重复」下拉，照参考图：
+    /// `无 / 每天 / 每周（周二）/ 每月（初一）/ 每年（正月初一）` ── `自定义`。
+    ///
+    /// 「自定义」在参考图里点开会是什么样**没有截图**，这里是自定的最小实现
+    /// （「每 N 天」的步进器），属于**取舍**，不是对齐结果。
     private var repeatEditor: some View {
         VStack(spacing: 0) {
             ForEach(CountdownRepeat.allCases) { option in
-                optionRow(option.title, checked: repeatSelection == option) {
+                if option == .custom { optionSeparator }
+                optionRow(repeatLabel(option), checked: repeatSelection == option) {
                     repeatSelection = option
                     openRow = nil
                 }
+            }
+            if repeatSelection == .custom {
+                Stepper(value: $customIntervalDays, in: 1...365) {
+                    Text("每 \(customIntervalDays) 天")
+                        .font(WFType.supporting)
+                        .foregroundStyle(WFColors.text)
+                }
+                .font(WFType.supporting)
+                .padding(.horizontal, WFSpace.sm)
+                .frame(height: Self.popupRowHeight)
             }
         }
         .background(WFColors.content, in: RoundedRectangle(cornerRadius: 6))
@@ -302,20 +513,25 @@ struct CountdownEditorView: View {
     }
 
     private var displayRow: some View {
-        propertyRow(.display, label: "显示",
-                    value: showsInSmartList ? "在智能清单中当天显示" : "不在智能清单中显示",
-                    isPlaceholder: false)
+        propertyRow(.display, label: "显示", value: smartListDisplay.rowText, isPlaceholder: false)
     }
 
+    /// 「显示」下拉：一个「在智能清单中」分组标题，下面五项
+    /// （当天显示 / 提前 3 天显示 / 提前 7 天显示 / 一直显示 / 不显示）。
     private var displayEditor: some View {
         VStack(spacing: 0) {
-            optionRow("在智能清单中当天显示", checked: showsInSmartList) {
-                showsInSmartList = true
-                openRow = nil
-            }
-            optionRow("不在智能清单中显示", checked: !showsInSmartList) {
-                showsInSmartList = false
-                openRow = nil
+            Text(CountdownSmartListDisplay.groupTitle)
+                .font(WFType.caption)
+                .foregroundStyle(WFColors.secondaryText)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, WFSpace.sm)
+                .padding(.top, WFSpace.sm)
+                .padding(.bottom, WFSpace.xs)
+            ForEach(CountdownSmartListDisplay.allCases) { option in
+                optionRow(option.title, checked: smartListDisplay == option) {
+                    smartListDisplay = option
+                    openRow = nil
+                }
             }
         }
         .background(WFColors.content, in: RoundedRectangle(cornerRadius: 6))
@@ -351,7 +567,7 @@ struct CountdownEditorView: View {
             }
             .foregroundStyle(WFColors.text)
             .padding(.horizontal, WFSpace.sm)
-            .frame(height: Self.rowHeight)
+            .frame(height: Self.popupRowHeight)
             .frame(maxWidth: .infinity)
             .contentShape(Rectangle())
         }
@@ -372,7 +588,8 @@ struct CountdownEditorView: View {
             .buttonStyle(.bordered)
             .controlSize(.large)
             Button { submit() } label: {
-                Text(isNew ? "添加" : "保存").frame(width: Self.buttonWidth - 24, height: 20)
+                // 参考图：新建面板的确认按钮是「添加」，编辑面板是「确定」。
+                Text(isNew ? "添加" : "确定").frame(width: Self.buttonWidth - 24, height: 20)
             }
             .buttonStyle(.borderedProminent)
             .controlSize(.large)
@@ -385,36 +602,84 @@ struct CountdownEditorView: View {
 
     // MARK: 派生
 
-    /// 「日期」行显示的文本。
+    /// 「日期」行显示的文本。节日取目录里那条规则的日期写法（`农历正月初一`），
+    /// 其余是公历日期——参考图里这一行写的是**日期**，不是节日名。
     private var dateText: String? {
-        if kind.usesFestivalCatalog { return pickedFestival?.name }
+        if kind.usesFestivalCatalog {
+            return pickedFestival.flatMap { $0.rule.dateText ?? $0.name }
+        }
         return pickedDate.map { CountdownEvent.solarText($0, calendar: calendar) }
     }
 
-    /// 提交时的规则。节日取目录里的规则；其余按「重复」把已选日期转成
-    /// 单次或每年。目录里认不出的农历规则（历史数据）原样保留，
-    /// 免得因为编辑器不认得就把日期丢了。
+    /// 提交时的规则：把「日期」与「重复」两行合成一条。
     private var resolvedRule: CountdownRule? {
         if kind.usesFestivalCatalog {
-            if let pickedFestival { return pickedFestival.rule }
+            if let pickedFestival {
+                return combinedRule(base: pickedFestival.rule, repeatSelection: repeatSelection)
+            }
+            // 目录里认不出的农历规则（历史数据）原样保留，免得因为编辑器不认得
+            // 就把日期丢了。
             if let rule = original?.rule, rule.isRepeating, CountdownFestival.name(for: rule) == nil {
                 return rule
             }
             return nil
         }
         guard let pickedDate else { return nil }
+        return combinedRule(base: .once(pickedDate), repeatSelection: repeatSelection)
+    }
+
+    /// 把「日期」（`base`）与「重复」合成一条规则。
+    ///
+    /// `重复 = 每年` 时**原样返回 base**：节日的 `.lunarEve`（除夕）这类规则没法
+    /// 从月/日重建，只能留着。其余节奏都要一个锚点——单次日期用日期本身，
+    /// 节日用目录规则的下一次落点。
+    private func combinedRule(base: CountdownRule, repeatSelection: CountdownRepeat) -> CountdownRule? {
+        let anchor: Date
+        let lunar: Bool
+        switch base {
+        case .once(let date):
+            anchor = date
+            lunar = false
+        case .lunarYearly, .lunarEve:
+            anchor = nextOccurrence(of: base)
+            lunar = true
+        default:
+            anchor = nextOccurrence(of: base)
+            lunar = false
+        }
         switch repeatSelection {
         case .never:
-            return .once(pickedDate)
+            return .once(anchor)
+        case .daily:
+            return .daily(lunar: lunar, anchor: anchor)
+        case .weekly:
+            // 参考图的括注也是「今天」的星期（见 `CountdownRepeat.label`），
+            // 这里让规则与括注指向同一天，免得两处各说各话。
+            return .weekly(weekday: calendar.component(.weekday, from: Date()),
+                           lunar: lunar, anchor: anchor)
+        case .monthly:
+            let day = lunar
+                ? (CountdownLunar.lunarComponents(of: anchor, calendar: calendar)?.day ?? 1)
+                : (calendar.dateComponents([.day], from: anchor).day ?? 1)
+            return .monthly(day: day, lunar: lunar, anchor: anchor)
         case .yearly:
-            let parts = calendar.dateComponents([.year, .month, .day], from: pickedDate)
-            guard let month = parts.month, let day = parts.day else { return .once(pickedDate) }
-            // 生日要把出生年一起带上，岁数才算得出来。
-            if kind == .birthday, let year = parts.year {
-                return .birthday(month: month, day: day, birthYear: year)
+            if case .once(let date) = base {
+                let parts = calendar.dateComponents([.year, .month, .day], from: date)
+                guard let month = parts.month, let day = parts.day else { return .once(date) }
+                // 生日要把出生年一起带上，岁数才算得出来。
+                if kind == .birthday, let year = parts.year {
+                    return .birthday(month: month, day: day, birthYear: year)
+                }
+                return .solarYearly(month: month, day: day)
             }
-            return .solarYearly(month: month, day: day)
+            return base
+        case .custom:
+            return .interval(days: customIntervalDays, lunar: lunar, anchor: anchor)
         }
+    }
+
+    private func nextOccurrence(of rule: CountdownRule) -> Date {
+        CountdownEvent.occurrence(of: rule, onOrAfter: Date(), calendar: calendar)
     }
 
     private var canSubmit: Bool {
@@ -443,13 +708,16 @@ struct CountdownEditorView: View {
             original.symbol = symbol
             original.colorIndex = colorIndex
             original.reminderOffsets = Array(reminders)
-            original.showsInSmartList = showsInSmartList
+            original.smartListDisplay = smartListDisplay
+            // 老字段跟着新字段走，存量读的是它。
+            original.showsInSmartList = smartListDisplay.showsInSmartList
             original.showsAge = showsAge
             original.note = note
             store.update(original)
         } else {
             store.add(name: trimmed, kind: kind, rule: rule, symbol: symbol, colorIndex: colorIndex,
-                      reminderOffsets: Array(reminders), showsInSmartList: showsInSmartList,
+                      reminderOffsets: Array(reminders),
+                      smartListDisplay: smartListDisplay,
                       showsAge: showsAge, note: note)
         }
         dismiss()

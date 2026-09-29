@@ -156,6 +156,167 @@ final class CountdownEventTests: XCTestCase {
         XCTAssertEqual(makeEvent("d", rule: .lunarEve).repeatValue, .yearly)
         XCTAssertEqual(makeEvent("e", rule: .birthday(month: 8, day: 20, birthYear: 2000)).repeatValue,
                        .yearly)
+        // 补的四种节奏也要能反查回下拉里的选项。
+        XCTAssertEqual(makeEvent("f", rule: .daily(lunar: false, anchor: today)).repeatValue, .daily)
+        XCTAssertEqual(makeEvent("g", rule: .weekly(weekday: 3, lunar: false,
+                                                    anchor: today)).repeatValue, .weekly)
+        XCTAssertEqual(makeEvent("h", rule: .monthly(day: 1, lunar: true,
+                                                     anchor: today)).repeatValue, .monthly)
+        XCTAssertEqual(makeEvent("i", rule: .interval(days: 10, lunar: false,
+                                                      anchor: today)).repeatValue, .custom)
+    }
+
+    // MARK: 重复下拉的六个选项（参考图）
+
+    /// 参考图的「重复」下拉：无 / 每天 / 每周（周二）/ 每月（初一）/ 每年（正月初一）/ 自定义。
+    /// 括注是算出来的——这一天是 2026-09-29（周二），日期是 农历正月初一。
+    func testRepeatLabelsMatchTheReferenceDropdown() {
+        let festival = CountdownRule.lunarYearly(month: 1, day: 1)
+        func label(_ value: CountdownRepeat, rule: CountdownRule? = nil) -> String {
+            CountdownRepeat.label(value, rule: rule, asOf: today, calendar: calendar)
+        }
+        XCTAssertEqual(label(.never), "无")
+        XCTAssertEqual(label(.daily), "每天")
+        XCTAssertEqual(label(.weekly), "每周（周二）", "2026-09-29 是周二")
+        XCTAssertEqual(label(.monthly, rule: festival), "每月（初一）")
+        XCTAssertEqual(label(.yearly, rule: festival), "每年（正月初一）")
+        XCTAssertEqual(label(.custom), "自定义")
+
+        // 顺序也要照参考图，`allCases` 直接驱动下拉的排列。
+        XCTAssertEqual(CountdownRepeat.allCases,
+                       [.never, .daily, .weekly, .monthly, .yearly, .custom])
+        // 没有锚点时只退化到没有括注，不能编一个出来。
+        XCTAssertEqual(label(.monthly), "每月")
+        XCTAssertEqual(label(.yearly), "每年")
+    }
+
+    func testWeekdayNamesCoverTheWholeWeek() {
+        XCTAssertEqual(CountdownRepeat.weekdayName(1), "周日")
+        XCTAssertEqual(CountdownRepeat.weekdayName(3), "周二")
+        XCTAssertEqual(CountdownRepeat.weekdayName(7), "周六")
+    }
+
+    // MARK: 提醒下拉（参考图）
+
+    /// 参考图的「提醒」下拉带提醒时刻：`当天 (09:00)` … `提前 1 周 (09:00)`。
+    func testReminderOptionLabelsMatchTheReferenceDropdown() {
+        XCTAssertEqual(CountdownEvent.reminderChoices,
+                       [0, 1440, 2880, 4320, 10080], "当天 / 1 天 / 2 天 / 3 天 / 1 周")
+        XCTAssertEqual(CountdownEvent.reminderOptionLabel(0), "当天 (09:00)")
+        XCTAssertEqual(CountdownEvent.reminderOptionLabel(1440), "提前 1 天 (09:00)")
+        XCTAssertEqual(CountdownEvent.reminderOptionLabel(2880), "提前 2 天 (09:00)")
+        XCTAssertEqual(CountdownEvent.reminderOptionLabel(4320), "提前 3 天 (09:00)")
+        XCTAssertEqual(CountdownEvent.reminderOptionLabel(10080), "提前 1 周 (09:00)")
+        // 行里不带时刻（参考图的「添加」面板是 `当天, 提前 3 天`）。
+        XCTAssertEqual(CountdownEvent.reminderLabel(10080), "提前 1 周")
+    }
+
+    /// 归一化改成「只收整天」之后，名单外的整天值不能再被静默吃掉。
+    func testReminderNormalizationKeepsWholeDayOffsets() {
+        XCTAssertEqual(CountdownEvent.normalizedReminderOffsets([30 * 1440]), [30 * 1440],
+                       "旧的「提前 30 天」不在预设名单里，但它是整天，要留着")
+        XCTAssertEqual(CountdownEvent.normalizedReminderOffsets([1440, 0, 1440]), [0, 1440])
+        XCTAssertEqual(CountdownEvent.normalizedReminderOffsets([-1440, 60]), [],
+                       "负值与不足一天的值丢掉")
+    }
+
+    // MARK: 显示下拉（参考图）
+
+    /// 参考图的「显示」下拉：标题「在智能清单中」+ 五项。
+    func testSmartListDisplayOptionsMatchTheReferenceDropdown() {
+        XCTAssertEqual(CountdownSmartListDisplay.groupTitle, "在智能清单中")
+        XCTAssertEqual(CountdownSmartListDisplay.allCases.map(\.title),
+                       ["当天显示", "提前 3 天显示", "提前 7 天显示", "一直显示", "不显示"])
+        XCTAssertEqual(CountdownSmartListDisplay.sameDay.rowText, "在智能清单中当天显示")
+        XCTAssertEqual(CountdownSmartListDisplay.sevenDaysBefore.rowText, "在智能清单中提前 7 天显示")
+        XCTAssertEqual(CountdownSmartListDisplay.never.rowText, "不在智能清单中显示")
+        XCTAssertFalse(CountdownSmartListDisplay.never.showsInSmartList)
+        XCTAssertTrue(CountdownSmartListDisplay.always.showsInSmartList)
+    }
+
+    // MARK: 新增的四种节奏
+
+    func testDailyLandsOnToday() {
+        let rule = CountdownRule.daily(lunar: false, anchor: date(9, 1))
+        XCTAssertEqual(CountdownEvent.occurrence(of: rule, onOrAfter: today, calendar: calendar),
+                       calendar.startOfDay(for: today))
+    }
+
+    /// 2026-09-29 是周二：要周二就是今天，要周四是两天后。
+    func testWeeklyLandsOnTheRequestedWeekday() {
+        let tuesday = CountdownEvent.occurrence(
+            of: .weekly(weekday: 3, lunar: false, anchor: today),
+            onOrAfter: today, calendar: calendar)
+        XCTAssertEqual(tuesday, calendar.startOfDay(for: today))
+
+        let thursday = CountdownEvent.occurrence(
+            of: .weekly(weekday: 5, lunar: false, anchor: today),
+            onOrAfter: today, calendar: calendar)
+        XCTAssertEqual(thursday, calendar.startOfDay(for: date(10, 1)))
+    }
+
+    func testSolarMonthlyLandsOnTheRequestedDayOfMonth() {
+        let rule = CountdownRule.monthly(day: 1, lunar: false, anchor: today)
+        let occurrence = CountdownEvent.occurrence(of: rule, onOrAfter: today, calendar: calendar)
+        XCTAssertEqual(occurrence, calendar.startOfDay(for: date(10, 1)))
+    }
+
+    func testLunarMonthlyLandsOnTheFirstDayOfALunarMonth() {
+        let rule = CountdownRule.monthly(day: 1, lunar: true, anchor: today)
+        let occurrence = CountdownEvent.occurrence(of: rule, onOrAfter: today, calendar: calendar)
+        XCTAssertGreaterThanOrEqual(occurrence, calendar.startOfDay(for: today))
+        XCTAssertEqual(CountdownLunar.lunarComponents(of: occurrence, calendar: calendar)?.day, 1)
+    }
+
+    /// 自定义间隔从锚点按整数倍前进：9/1 起每 10 天，9/29 之后的第一跳是 10/1。
+    func testCustomIntervalStepsFromTheAnchor() {
+        let rule = CountdownRule.interval(days: 10, lunar: false, anchor: date(9, 1))
+        XCTAssertEqual(CountdownEvent.occurrence(of: rule, onOrAfter: today, calendar: calendar),
+                       calendar.startOfDay(for: date(10, 1)))
+    }
+
+    // MARK: 「显示」字段的存量兼容
+
+    /// 加 `smartListDisplay` 之前落盘的 JSON 没有这个键，解出来要回退到老字段，
+    /// 不能把已有记录的「显示」读没。
+    ///
+    /// 注意 `Optional` 的合成编码用的是 `encodeIfPresent`——值为 nil 时**键直接不写**，
+    /// 所以「键不存在」这条路径不是要另外构造的，它就是没选过「显示」时的正常产物。
+    func testEventsWithoutTheDisplayFieldFallBackToTheLegacyFlag() throws {
+        func decode(_ event: CountdownEvent) throws -> CountdownEvent {
+            try JSONDecoder().decode(CountdownEvent.self, from: try JSONEncoder().encode(event))
+        }
+
+        let legacy = makeEvent("春节", kind: .festival, rule: .lunarYearly(month: 1, day: 1))
+        let object = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: try JSONEncoder().encode(legacy)) as? [String: Any])
+        XCTAssertNil(object["smartListDisplay"], "nil 不写进 JSON，旧文件天然兼容")
+        XCTAssertNotNil(object["showsInSmartList"], "老字段还在写，存量读的是它")
+
+        let shown = try decode(legacy)
+        XCTAssertNil(shown.smartListDisplay)
+        XCTAssertEqual(shown.effectiveSmartListDisplay, .sameDay)
+
+        var hidden = legacy
+        hidden.showsInSmartList = false
+        XCTAssertEqual(try decode(hidden).effectiveSmartListDisplay, .never)
+    }
+
+    /// 新字段本身要能往返，而且写入时把老字段同步过去。
+    func testDisplayFieldRoundTripsAndSyncsTheLegacyFlag() throws {
+        let event = CountdownEvent(name: "春节", kind: .festival,
+                                   rule: .lunarYearly(month: 1, day: 1),
+                                   smartListDisplay: .sevenDaysBefore)
+        XCTAssertTrue(event.showsInSmartList, "「提前 7 天显示」也是要显示的")
+        let decoded = try JSONDecoder().decode(CountdownEvent.self,
+                                               from: try JSONEncoder().encode(event))
+        XCTAssertEqual(decoded.smartListDisplay, .sevenDaysBefore)
+        XCTAssertEqual(decoded.effectiveSmartListDisplay, .sevenDaysBefore)
+
+        let hidden = CountdownEvent(name: "春节", kind: .festival,
+                                    rule: .lunarYearly(month: 1, day: 1),
+                                    smartListDisplay: .never)
+        XCTAssertFalse(hidden.showsInSmartList)
     }
 
     // MARK: 生日

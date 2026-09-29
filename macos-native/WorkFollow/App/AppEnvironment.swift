@@ -69,6 +69,7 @@ final class AppEnvironment: ObservableObject {
                                              folderMetadata: snapshot?.noteFolderMetadata ?? [],
                                              clock: clock)
         focusStore = FocusStore(clock: clock)
+        focusStore.notifier = FocusNotifier()
         habitStore = HabitStore(clock: clock)
         summaryStore = SummaryStore(clock: clock)
         countdownStore = CountdownStore(clock: clock)

@@ -158,7 +158,7 @@ extension NativeTextView {
         let invocation = SlashCommandInvocation(lineStart: paragraph.location, slashOffset: session.start)
         dismissSlash()
         breakUndoCoalescing()
-        // Remove only this session's /query; Escape deliberately leaves it intact.
+        // Remove only this session's trigger/query; Escape deliberately leaves it intact.
         undoManager?.beginUndoGrouping()
         insertText("", replacementRange: session.range)
         if let performSlash = command.performSlash {

@@ -68,4 +68,10 @@ final class TaskListViewDefaultsTests: XCTestCase {
             XCTAssertNil(TaskListViewDefaults.groupTrailingNote(for: kind))
         }
     }
+
+    func testReminderMetadataIncludesRelativeAndLegacyReminders() {
+        XCTAssertTrue(TaskListViewDefaults.hasReminder(reminderAt: nil, reminderOffsets: [-30, 0]))
+        XCTAssertTrue(TaskListViewDefaults.hasReminder(reminderAt: date(9, 26), reminderOffsets: nil))
+        XCTAssertFalse(TaskListViewDefaults.hasReminder(reminderAt: nil, reminderOffsets: []))
+    }
 }

@@ -78,7 +78,8 @@ final class MigrationSnapshotTests: XCTestCase {
             {"id": "task-01", "title": "写周报", "description": "周五整理",
              "contentJson": null, "status": "TODO", "priority": "HIGH",
              "dueAt": "2026-09-28T09:30:00", "dueEndAt": null, "deadlineAt": null,
-             "hasDueTime": true, "reminderAt": null, "recurrenceType": "WEEKLY",
+             "hasDueTime": true, "reminderAt": null, "reminderOffsets": [30, 60],
+             "recurrenceType": "WEEKLY",
              "recurrenceConfig": {"weekday": 2}, "listName": "读书", "tags": ["工作"],
              "parentTaskId": null, "childOrder": 0, "sourceNoteId": null,
              "attachments": ["a.txt"], "createdAt": "2026-09-25T08:00:00",
@@ -142,6 +143,7 @@ final class MigrationSnapshotTests: XCTestCase {
         XCTAssertTrue(parent.schedule.hasTime)
         XCTAssertEqual(parent.recurrence, .weekly)
         XCTAssertEqual(parent.recurrenceRule?.weekday, 2)
+        XCTAssertEqual(parent.reminderOffsets, [-60, -30], "Flutter 的正数是提前分钟，Native 用负偏移表示提前")
         XCTAssertEqual(parent.tags, ["工作"])
         XCTAssertEqual(parent.attachments.map(\.storedName), ["a.txt"])
         XCTAssertEqual(parent.attachments.first?.name, "a.txt")
@@ -165,7 +167,8 @@ final class MigrationSnapshotTests: XCTestCase {
         try FileManager.default.createDirectory(at: attachments, withIntermediateDirectories: true)
         try Data("hello".utf8).write(to: attachments.appendingPathComponent("a.txt"))
 
-        let parent = makeTask(id: MigrationSnapshot.uuid(forRawID: "task-01"), title: "写周报", list: "读书")
+        var parent = makeTask(id: MigrationSnapshot.uuid(forRawID: "task-01"), title: "写周报", list: "读书")
+        parent.reminderOffsets = [-60, -30]
         let child = makeTask(id: MigrationSnapshot.uuid(forRawID: "sub-1"), title: "收集数据",
                              list: "读书", status: .completed, parent: parent.id, childOrder: 1)
         let note = makeNote(id: MigrationSnapshot.uuid(forRawID: "note-01"), title: "读书笔记",
@@ -197,6 +200,7 @@ final class MigrationSnapshotTests: XCTestCase {
         XCTAssertEqual(reparsed.embeddedFiles["a.txt"], Data("hello".utf8).base64EncodedString())
         XCTAssertEqual(reparsed.tasks.count, 2)
         XCTAssertEqual(reparsed.notes.count, 1)
+        XCTAssertEqual(reparsed.tasks.first?.reminderOffsets, [30, 60])
         XCTAssertEqual(reparsed.lists.map(\.name), ["收集箱", "读书", "工作"])
         XCTAssertEqual(reparsed.folders.map(\.id), ["folder-parent", "folder-child"])
         XCTAssertEqual(reparsed.folders.last?.parentID, "folder-parent")
@@ -216,6 +220,8 @@ final class MigrationSnapshotTests: XCTestCase {
         XCTAssertTrue(parentRecord["dueEndAt"] is NSNull)
         XCTAssertTrue(parentRecord["contentJson"] is NSNull)
         XCTAssertNil(parentRecord["subtasks"])
+        XCTAssertEqual(parentRecord["reminderOffsets"] as? [Int], [30, 60],
+                       "导出 Flutter schema 时要还原正数提前分钟")
         let childRecord = try XCTUnwrap(
             records.first { ($0["id"] as? String) == MigrationSnapshot.uuid(forRawID: "sub-1").uuidString })
         XCTAssertEqual(childRecord["parentTaskId"] as? String, MigrationSnapshot.uuid(forRawID: "task-01").uuidString)
@@ -314,12 +320,11 @@ final class MigrationSnapshotTests: XCTestCase {
         XCTAssertTrue(bundle.lists.first { $0.name == "读书" }?.isPinned ?? false)
 
         let (snapshot, summary) = MigrationSnapshot.replaced(bundle, attachmentNames: [])
-        // 无对应字段被计数：bucket / timeLabel / contentJson 这类原生没有的键，
-        // 以及只做了降级映射的 reminderOffsets。`dueEndAt` 已迁入
-        // `TaskSchedule.dueEndAt`，不再计入。
-        for key in ["bucket", "timeLabel", "reminderOffsets"] {
+        // 无对应字段被计数：bucket / timeLabel；relative reminder 和 dueEndAt 均已映射。
+        for key in ["bucket", "timeLabel"] {
             XCTAssertEqual(summary.ignoredFieldCounts[key], 1, "字段 \(key) 应被计数一次")
         }
+        XCTAssertNil(summary.ignoredFieldCounts["reminderOffsets"])
         XCTAssertNil(summary.ignoredFieldCounts["dueEndAt"], "dueEndAt 已有对应字段，不该再算忽略")
         let task = try XCTUnwrap(snapshot.tasks.first)
         XCTAssertEqual(task.recurrence, .never)
@@ -327,6 +332,7 @@ final class MigrationSnapshotTests: XCTestCase {
         XCTAssertEqual(task.schedule.dueEndAt,
                        MigrationSnapshot.parseDate("2026-09-29T00:00:00"),
                        "时间段结束必须落进 schedule.dueEndAt，否则日历画不出色带")
+        XCTAssertEqual(task.reminderOffsets, [-60, -30])
         let importedListMeta = try XCTUnwrap(snapshot.taskListMeta?.first { $0.name == "读书" })
         XCTAssertEqual(importedListMeta.colorARGB, 0xFF123456)
         XCTAssertNil(importedListMeta.colorIndex)

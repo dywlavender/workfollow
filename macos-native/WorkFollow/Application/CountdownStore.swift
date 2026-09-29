@@ -47,7 +47,9 @@ final class CountdownStore: ObservableObject, ModuleStoreFlushable {
     func add(name: String, kind: CountdownKind, rule: CountdownRule,
              symbol: String? = nil, colorIndex: Int? = nil,
              reminderOffsets: [Int] = CountdownEvent.defaultReminderOffsets,
-             showsInSmartList: Bool = true, showsAge: Bool = false,
+             showsInSmartList: Bool = true,
+             smartListDisplay: CountdownSmartListDisplay? = nil,
+             showsAge: Bool = false,
              note: String = "") -> CountdownEvent {
         let event = CountdownEvent(
             id: UUID(),
@@ -58,6 +60,7 @@ final class CountdownStore: ObservableObject, ModuleStoreFlushable {
             colorIndex: colorIndex.map(normalizedColorIndex),
             reminderOffsets: reminderOffsets,
             showsInSmartList: showsInSmartList,
+            smartListDisplay: smartListDisplay,
             showsAge: kind.hasAgeOption && showsAge,
             note: note.trimmingCharacters(in: .whitespacesAndNewlines),
             sortOrder: (allEvents.map(\.sortOrder).max() ?? -1) + 1,
@@ -78,6 +81,9 @@ final class CountdownStore: ObservableObject, ModuleStoreFlushable {
             ? event.symbol : event.kind.defaultSymbol
         next.colorIndex = normalizedColorIndex(event.colorIndex)
         next.reminderOffsets = CountdownEvent.normalizedReminderOffsets(event.reminderOffsets)
+        next.smartListDisplay = event.smartListDisplay
+        // 老字段跟新字段保持同步：存量读的是它。
+        next.showsInSmartList = event.effectiveSmartListDisplay.showsInSmartList
         next.showsAge = event.kind.hasAgeOption && event.showsAge
         // 编辑面板不负责归档与排序，一律沿用原值。
         next.archivedAt = allEvents[index].archivedAt

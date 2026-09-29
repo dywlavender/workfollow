@@ -31,9 +31,9 @@ struct DocumentCommand: Identifiable {
     }
 }
 
-/// Offsets captured before `/query` is removed, in NSTextView's UTF-16 space.
-/// This mirrors Flutter's DocumentSlashInvocation and anchors block commands
-/// to the line where the user opened the palette.
+/// Offsets captured before the trigger/query is removed, in NSTextView's UTF-16
+/// space. This mirrors Flutter's DocumentSlashInvocation and anchors block
+/// commands to the line where the user opened the palette.
 struct SlashCommandInvocation {
     let lineStart: Int
     let slashOffset: Int
@@ -105,21 +105,29 @@ struct DocumentProfile {
 
 struct SlashSession {
     let start: Int
+    let trigger: String
     private(set) var range: NSRange
     private(set) var query = ""
     private(set) var selectedIndex = 0
 
-    init(start: Int) { self.start = start; range = NSRange(location: start, length: 1) }
+    init(start: Int, trigger: String = "/") {
+        self.start = start
+        self.trigger = trigger
+        range = NSRange(location: start, length: (trigger as NSString).length)
+    }
 
     mutating func update(text: String, selection: NSRange, allowsQuery: Bool = true) -> Bool {
         let text = text as NSString
-        guard selection.length == 0, selection.location > start,
+        let triggerLength = (trigger as NSString).length
+        guard selection.length == 0, selection.location >= start + triggerLength,
               selection.location <= text.length, start >= 0,
-              text.substring(with: NSRange(location: start, length: 1)) == "/" else { return false }
+              start + triggerLength <= text.length,
+              text.substring(with: NSRange(location: start, length: triggerLength)) == trigger else { return false }
         let range = NSRange(location: start, length: selection.location - start)
-        let query = String(text.substring(with: range).dropFirst())
+        let query = text.substring(with: NSRange(location: start + triggerLength,
+                                                 length: selection.location - start - triggerLength))
         guard allowsQuery || query.isEmpty else { return false }
-        guard !query.contains("\n"), !query.contains("/") else { return false }
+        guard !query.contains("\n"), !query.contains("/"), !query.contains("、") else { return false }
         if self.query != query { selectedIndex = 0 }
         self.query = query
         self.range = range

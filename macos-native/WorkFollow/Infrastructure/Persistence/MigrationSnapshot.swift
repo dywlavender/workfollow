@@ -96,8 +96,7 @@ struct MigrationTaskRecord: Equatable {
     let isPinned: Bool
     let abandonedAt: String?
     let convertedNoteId: String?
-    /// 原生模型没有对应字段的键（bucket/timeLabel/contentJson），或只做了降级
-    /// 映射的键（reminderOffsets），降级映射时计数。`dueEndAt` 已迁入
+    /// 原生模型没有对应字段的键（bucket/timeLabel/contentJson）。`dueEndAt` 已迁入
     /// `TaskSchedule.dueEndAt`，不再计入。
     let ignoredKeys: Set<String>
 }
@@ -235,7 +234,6 @@ enum MigrationSnapshot {
         for key in ["bucket", "timeLabel"] where json[key] != nil && !(json[key] is NSNull) {
             ignored.insert(key)
         }
-        if let offsets = json["reminderOffsets"] as? [Any], !offsets.isEmpty { ignored.insert("reminderOffsets") }
         if let content = json["contentJson"], !(content is NSNull) { ignored.insert("contentJson") }
 
         return MigrationTaskRecord(
@@ -643,6 +641,18 @@ enum MigrationSnapshot {
             : String(format: "#%08X", argb)
     }
 
+    /// Flutter stores positive values as minutes-before; Native stores signed
+    /// offsets where negative means early. Invert the sign at the file boundary.
+    private static func nativeReminderOffsets(fromFlutter values: [Int]) -> [Int]? {
+        let converted = sortedIntSet(values.map { -$0 })
+        return converted.isEmpty ? nil : converted
+    }
+
+    private static func flutterReminderOffsets(fromNative values: [Int]?) -> [Int]? {
+        guard let values, !values.isEmpty else { return nil }
+        return sortedIntSet(values.map { -$0 })
+    }
+
     private static func orderedListNames(_ raw: [String], metadata: [String: TaskListMeta]) -> [String] {
         normalizedListNames(raw).enumerated().sorted { left, right in
             if left.element == inboxListName { return right.element != inboxListName }
@@ -683,6 +693,7 @@ enum MigrationSnapshot {
             recurrence: recurrence(for: record.recurrenceType),
             recurrenceRule: recurrenceRule(for: record.recurrenceType, config: record.recurrenceConfig),
             reminderAt: parseDate(record.reminderAt),
+            reminderOffsets: nativeReminderOffsets(fromFlutter: record.reminderOffsets),
             attachments: attachments(named: record.attachments, in: attachmentNames),
             list: TaskList(name: record.listName),
             priority: priority(for: record.priority),
@@ -969,6 +980,9 @@ enum MigrationSnapshot {
         ]
         if let parentID = task.parentID { record["parentTaskId"] = parentID.uuidString }
         if task.childOrder > 0 { record["childOrder"] = task.childOrder }
+        if let reminderOffsets = flutterReminderOffsets(fromNative: task.reminderOffsets) {
+            record["reminderOffsets"] = reminderOffsets
+        }
         return record
     }
 

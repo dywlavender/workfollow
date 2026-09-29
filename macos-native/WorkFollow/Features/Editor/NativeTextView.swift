@@ -44,23 +44,35 @@ final class NativeTextView: NSTextView {
 
     override func insertText(_ insertString: Any, replacementRange: NSRange) {
         let wasComposing = hasMarkedText()
-        // 用 `/` 覆盖一段选中文本是普通编辑，不该开命令面板：原版按前后文本差异
-        // 判断"这是插入了一个 `/`"，选中内容被替换掉不算（`slash_command_session.dart:21-31`）。
+        // 覆盖一段选中文本输入触发字符是普通编辑，不该开命令面板。
         let target = replacementRange.location == NSNotFound ? selectedRange() : replacementRange
         let replacedSelection = target.length > 0
+        let insertedText = insertString as? String
+        let trigger: String? = insertedText.flatMap { inserted in
+            ["/", "、"].first { $0 == inserted }
+        }
         // 真有字进来了，段落样式就由字符承载，"文末待定级别"不再需要。
-        if let inserted = insertString as? String, !inserted.isEmpty { pendingTrailingBlock = nil }
+        if let insertedText, !insertedText.isEmpty { pendingTrailingBlock = nil }
         super.insertText(insertString, replacementRange: replacementRange)
-        guard !wasComposing, !replacedSelection, (insertString as? String) == "/" else {
+        // `、` is commonly committed by a Chinese IME. Accept that committed
+        // single-character insertion even if it replaces the IME's marked text;
+        // ordinary replacement of a user selection remains a normal edit.
+        let isIMETriggerCommit = wasComposing && trigger == "、"
+        guard let trigger,
+              (!wasComposing || isIMETriggerCommit),
+              (!replacedSelection || isIMETriggerCommit) else {
             refreshSlash()
             return
         }
         let location = selectedRange().location
-        guard location > 0 else { return }
-        // A slash in a URL/path is ordinary text, not a command trigger.
-        let prefix = (string as NSString).substring(to: location - 1)
-        guard profile.compactSlash || prefix.isEmpty || prefix.last?.isWhitespace == true else { return }
-        slashSession = SlashSession(start: location - 1)
+        let triggerLength = (trigger as NSString).length
+        guard location >= triggerLength else { return }
+        let triggerRange = NSRange(location: location - triggerLength, length: triggerLength)
+        guard (string as NSString).substring(with: triggerRange) == trigger else { return }
+        // A trigger attached to text (for example, a URL slash) is ordinary text.
+        let prefix = (string as NSString).substring(to: triggerRange.location)
+        guard prefix.isEmpty || prefix.last?.isWhitespace == true else { return }
+        slashSession = SlashSession(start: triggerRange.location, trigger: trigger)
         refreshSlash()
     }
 

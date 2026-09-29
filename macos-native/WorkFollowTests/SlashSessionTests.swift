@@ -4,16 +4,41 @@ import XCTest
 
 @MainActor
 final class SlashSessionTests: XCTestCase {
-    func testTaskSlashTriggersAfterTextAndClosesWhenTypingContinues() {
+    func testTaskSlashTriggersAfterWhitespaceAndClosesWhenTypingContinues() {
         let editor = NativeTextView(frame: .zero, textContainer: nil)
         editor.profile = DocumentProfile(taskSlash: true)
-        editor.insertText("正文", replacementRange: NSRange(location: 0, length: 0))
-        editor.insertText("/", replacementRange: NSRange(location: 2, length: 0))
+        editor.insertText("正文 ", replacementRange: NSRange(location: 0, length: 0))
+        editor.insertText("/", replacementRange: editor.selectedRange())
         XCTAssertNotNil(editor.slashSession)
         XCTAssertEqual(editor.profile.slashCommands.map(\.title), ["一级标题", "二级标题", "三级标题", "无序列表", "有序列表", "检查项", "引用", "水平分割线", "附件"])
-        editor.insertText("a", replacementRange: NSRange(location: 3, length: 0))
+        editor.insertText("a", replacementRange: editor.selectedRange())
         XCTAssertNil(editor.slashSession)
-        XCTAssertEqual(editor.string, "正文/a")
+        XCTAssertEqual(editor.string, "正文 /a")
+    }
+
+    func testSlashAndIdeographicCommaOpenTheSameFormatPaletteForTasksAndNotes() {
+        for profile in [DocumentProfile(taskSlash: true), DocumentProfile(noteSlash: true)] {
+            for trigger in ["/", "、"] {
+                let editor = NativeTextView(frame: .zero, textContainer: nil)
+                editor.profile = profile
+                editor.insertText("正文", replacementRange: NSRange(location: 0, length: 0))
+                editor.setSelectedRange(NSRange(location: 0, length: 0))
+                editor.insertText(trigger, replacementRange: editor.selectedRange())
+
+                XCTAssertEqual(editor.string, "\(trigger)正文")
+                var session = try! XCTUnwrap(editor.slashSession)
+                XCTAssertEqual(session.trigger, trigger)
+                XCTAssertTrue(session.update(text: editor.string, selection: editor.selectedRange(),
+                                             allowsQuery: false))
+                XCTAssertEqual(session.range, NSRange(location: 0, length: 1))
+
+                editor.executeSlash(at: 0)
+                XCTAssertEqual(editor.string, "正文", "the selected command removes only its trigger")
+                let formatted = DocumentTextCodec.decode(
+                    editor.attributedString(), preserving: NativeDocument(plainText: editor.string))
+                XCTAssertEqual(formatted.blocks.first?.kind, .heading(1))
+            }
+        }
     }
 
     func testUTF16RangeSearchAndKeyboardWrap() {
@@ -67,15 +92,15 @@ final class SlashSessionTests: XCTestCase {
         for (commandIndex, expectedKind) in cases {
             let editor = NativeTextView(frame: .zero, textContainer: nil)
             editor.profile = DocumentProfile(taskSlash: true)
-            let original = "前置\n目标内容\n后置"
+            let original = "前置\n目标 内容\n后置"
             editor.textStorage?.setAttributedString(DocumentTextCodec.render(NativeDocument(plainText: original)))
-            editor.setSelectedRange(NSRange(location: 5, length: 0))
+            editor.setSelectedRange(NSRange(location: 6, length: 0))
             editor.insertText("/", replacementRange: editor.selectedRange())
 
             editor.executeSlash(at: commandIndex)
 
             XCTAssertEqual(editor.string, original, "command \(commandIndex) must only remove its slash trigger")
-            XCTAssertEqual(editor.selectedRange(), NSRange(location: 5, length: 0), "command \(commandIndex) must preserve the caret")
+            XCTAssertEqual(editor.selectedRange(), NSRange(location: 6, length: 0), "command \(commandIndex) must preserve the caret")
             let document = DocumentTextCodec.decode(
                 editor.attributedString(), preserving: NativeDocument(plainText: editor.string))
             XCTAssertEqual(document.blocks.map(\.kind), [.paragraph, expectedKind, .paragraph],
@@ -84,7 +109,7 @@ final class SlashSessionTests: XCTestCase {
             editor.insertText("续", replacementRange: editor.selectedRange())
             let continued = DocumentTextCodec.decode(
                 editor.attributedString(), preserving: NativeDocument(plainText: editor.string))
-            XCTAssertEqual(editor.string, "前置\n目标续内容\n后置")
+            XCTAssertEqual(editor.string, "前置\n目标 续内容\n后置")
             XCTAssertEqual(continued.blocks.map(\.kind), [.paragraph, expectedKind, .paragraph],
                            "typing after command \(commandIndex) must retain the line format")
 
@@ -124,7 +149,8 @@ final class SlashSessionTests: XCTestCase {
             DocumentBlock(kind: .paragraph, runs: [DocumentRun(text: "后置")])
         ])
         editor.textStorage?.setAttributedString(DocumentTextCodec.render(document))
-        editor.setSelectedRange(NSRange(location: 9, length: 0))
+        editor.setSelectedRange(NSRange(location: 10, length: 0))
+        editor.insertText(" ", replacementRange: editor.selectedRange())
         editor.insertText("/", replacementRange: editor.selectedRange())
 
         editor.executeSlash(at: 4)
@@ -132,7 +158,7 @@ final class SlashSessionTests: XCTestCase {
         let rendered = editor.attributedString()
         XCTAssertEqual(DocumentTextCodec.ordinal(forOrderedParagraphAt: 3, in: rendered), 1)
         XCTAssertEqual(DocumentTextCodec.ordinal(forOrderedParagraphAt: 7, in: rendered), 2)
-        XCTAssertEqual(DocumentTextCodec.ordinal(forOrderedParagraphAt: 11, in: rendered), 3)
+        XCTAssertEqual(DocumentTextCodec.ordinal(forOrderedParagraphAt: 12, in: rendered), 3)
     }
 
     func testSlashInlineFormatAppliesToNextTypedText() {
@@ -153,9 +179,10 @@ final class SlashSessionTests: XCTestCase {
         divider.profile = DocumentProfile(taskSlash: true)
         divider.textStorage?.setAttributedString(DocumentTextCodec.render(NativeDocument(plainText: "前置内容")))
         divider.setSelectedRange(NSRange(location: 2, length: 0))
+        divider.insertText(" ", replacementRange: divider.selectedRange())
         divider.insertText("/", replacementRange: divider.selectedRange())
         divider.executeSlash(at: 7)
-        XCTAssertEqual(divider.string, "前置\n\u{FFFC}\n内容")
+        XCTAssertEqual(divider.string, "前置 \n\u{FFFC}\n内容")
         let dividerDocument = DocumentTextCodec.decode(
             divider.attributedString(), preserving: NativeDocument(plainText: divider.string))
         XCTAssertTrue(dividerDocument.blocks.contains { $0.kind == .divider })
@@ -197,16 +224,56 @@ final class SlashSessionTests: XCTestCase {
         XCTAssertNil(editor.slashSession, "替换选中文本不该开斜杠面板")
     }
 
-    /// 对照面：光标处插入 `/` 仍然要开面板。
-    func testTypingSlashAtTheCaretStillOpensThePalette() {
+    func testTypingEitherTriggerOverASelectionIsOrdinaryText() {
+        for trigger in ["/", "、"] {
+            let editor = NativeTextView(frame: .zero, textContainer: nil)
+            editor.profile = DocumentProfile(taskSlash: true)
+            editor.insertText("选中的文字", replacementRange: NSRange(location: 0, length: 0))
+            editor.setSelectedRange(NSRange(location: 0, length: 3))
+            editor.insertText(trigger, replacementRange: editor.selectedRange())
+
+            XCTAssertEqual(editor.string, "\(trigger)文字")
+            XCTAssertNil(editor.slashSession, "replacing selected text must not open the palette")
+        }
+    }
+
+    func testIdeographicCommaCommittedFromMarkedTextOpensPalette() {
         let editor = NativeTextView(frame: .zero, textContainer: nil)
         editor.profile = DocumentProfile(taskSlash: true)
-        editor.insertText("正文", replacementRange: NSRange(location: 0, length: 0))
-        editor.setSelectedRange(NSRange(location: 2, length: 0))
-        editor.insertText("/", replacementRange: editor.selectedRange())
+        editor.setMarkedText("、", selectedRange: NSRange(location: 1, length: 0),
+                             replacementRange: NSRange(location: NSNotFound, length: 0))
+        XCTAssertTrue(editor.hasMarkedText())
 
-        XCTAssertEqual(editor.string, "正文/")
+        editor.insertText("、", replacementRange: NSRange(location: NSNotFound, length: 0))
+
+        XCTAssertFalse(editor.hasMarkedText())
+        XCTAssertEqual(editor.string, "、")
         XCTAssertNotNil(editor.slashSession)
+    }
+
+    func testBothTriggersRequireDocumentStartOrPrecedingWhitespace() {
+        for profile in [DocumentProfile(taskSlash: true), DocumentProfile(noteSlash: true)] {
+            for trigger in ["/", "、"] {
+                for prefix in ["", "正文 ", "正文\n"] {
+                    let editor = NativeTextView(frame: .zero, textContainer: nil)
+                    editor.profile = profile
+                    editor.insertText(prefix, replacementRange: NSRange(location: 0, length: 0))
+                    editor.insertText(trigger, replacementRange: editor.selectedRange())
+
+                    XCTAssertNotNil(editor.slashSession,
+                                    "trigger \(trigger) should open after prefix \(prefix.debugDescription)")
+                }
+
+                let editor = NativeTextView(frame: .zero, textContainer: nil)
+                editor.profile = profile
+                editor.insertText("正文", replacementRange: NSRange(location: 0, length: 0))
+                editor.insertText(trigger, replacementRange: editor.selectedRange())
+
+                XCTAssertEqual(editor.string, "正文\(trigger)")
+                XCTAssertNil(editor.slashSession,
+                             "trigger \(trigger) must stay literal when attached to text")
+            }
+        }
     }
 
     func testURLDoesNotOpenSession() {

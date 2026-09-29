@@ -1,6 +1,6 @@
 # Native 产品对齐契约
 
-更新日期：2026-09-25
+更新日期：2026-09-29
 基准产品：仓库内 `desktop/` Flutter 当前行为。本文记录可从源码、测试和截图核对的事实；不把 Native 当前实现或历史迁移清单当成产品规范。
 
 ## 状态约定
@@ -14,6 +14,8 @@
 优先级：`P0` 是任务在当前范围内消失、计数与可见行矛盾或可能操作错对象；`P1` 是主流程语义、分组或操作路径不一致；`P2` 是辅助入口、排序和批量便利性差异。
 
 初版审计基于源码、既有测试和截图。2026-09-25 最新 Native XCTest 103/103；Flutter 日期解析、任务菜单、任务右键菜单和计划行为测试 34/34，另有任务动作与日期弹层测试 26/26。P0-012 有 Native Preview 真窗口点击/撤销验收；Today 完成后分组迁移和 Recent 新构建窗口分组也已真实操作/截图核对。逾期组目前由固定时钟投影测试覆盖，真实窗口尚无逾期样例，所以 P1-005 暂不标记 `PARITY VERIFIED`。
+
+2026-09-29 增量验收：当前 macOS 27.0 `xcodebuild test` 全量 479/479 通过，覆盖本轮日期失效通知与相对提醒映射/展示；它只证明代码和 XCTest，不代表真实窗口视觉验收。清单与文件夹迁移元数据也已补上往返用例。Native 仍写入 Preview 数据目录，未切换正式存储。
 
 ## P0：第一批纠偏目标
 
@@ -178,8 +180,22 @@
 - **Flutter 代码：** 右键 `clear-date` 走 [`workspace_controller.dart`](../desktop/lib/state/workspace_controller.dart#L1159) 的 `updateTaskDue(id, null)`，移除安排日期/日期范围与相对提醒，但保留重复和独立绝对提醒；日期面板底部“清除”返回空 `TaskScheduleSettings`，会一并清除安排日期、提醒与重复，截止日期是独立属性。
 - **Flutter 测试：** [`task_editor_popovers_test.dart`](../desktop/test/task_editor_popovers_test.dart#L308) 覆盖清理后撤销能还原日期范围、提醒和重复；右键清除对独立提醒/重复的完整组合无单测。
 - **Native 实现：** 右键清除走 `clearDueDate`，保留 `reminderAt`、截止日期和重复；日期面板清除走 `clearScheduledProperties`，清除安排日期、提醒和重复，但保留独立截止日期。两种路径均作为单步 Undo 操作。
-- **差异/限制：** Native 当前没有 Flutter 的 `reminderOffsets`/`dueEndAt` 数据字段，因此还不能表示多个相对提醒或安排日期区间；目前只保留单个绝对 `reminderAt`。代码已避免右键清除误删该独立提醒。
+- **差异/限制：** Native `TaskSchedule.dueEndAt` 和 `Task.reminderOffsets` 已有独立字段；迁移边界分别保留日期区间，并将 Flutter 的正数“提前分钟”转换成 Native 的负分钟偏移。右键清除仍保留独立绝对提醒与重复。弹层操作路径尚未完成真实窗口验收。
 - **验收：** `IMPLEMENTED / TESTS PASSED / PARTIAL REAL-WINDOW CHECK`；Native 对应清除和 Undo 回归包含在 XCTest 96/96 中，Flutter 日期弹层及 task action 测试 26/26 通过。真实窗口已打开日期弹层并用 Escape 关闭，未提交日期更改；各自清除按钮和撤销路径尚未真窗口验收，不能标记 `PARITY VERIFIED`。
+
+### TASK-DATE-002 — 日期派生视图随时钟推进刷新
+
+- **Flutter 代码：** [`app.dart`](../desktop/lib/app.dart#L283) 每分钟调用 [`WorkspaceController.refreshDates`](../desktop/lib/state/workspace_controller.dart#L2111)，使 Today、逾期组与日期徽标跨日更新。
+- **Native 实现：** [`AppEnvironment.swift`](../macos-native/WorkFollow/App/AppEnvironment.swift) 每分钟、收到系统日历换日通知及应用重新激活时调用 `TaskWorkspaceModel.refreshDates()`；独立 `dateRevision` 触发 SwiftUI 重新计算日期投影，不改变任务 `revision`，不触发持久化。
+- **Native 测试：** [`TaskWorkspaceModelTests.swift`](../macos-native/WorkFollowTests/TaskWorkspaceModelTests.swift) 将固定时钟推进一天，验证任务从 Today 组进入 overdue 组，同时任务数据修订号不变。
+- **验收：** `IMPLEMENTED / TESTS PASSED / EVENT WIRING CODE-REVIEWED`；当前全量 XCTest 479/479 通过。没有做跨午夜实时时间等待；计时器、系统日历换日和应用激活通知的接线已代码核对，但未做长时间窗口观察。
+
+### TASK-LIST-020 — 相对提醒必须显示行标记并保持迁移语义
+
+- **Flutter 代码：** [`task.dart`](../desktop/lib/models/task.dart#L72) 将正数 `reminderOffsets` 解释为提前分钟；[`task_metadata_trail.dart`](../desktop/lib/widgets/task_list/task_metadata_trail.dart#L96) 只要 `reminderTimes` 非空就显示提醒标记。
+- **Native 实现：** [`MigrationSnapshot.swift`](../macos-native/WorkFollow/Infrastructure/Persistence/MigrationSnapshot.swift) 在 Flutter/Native 边界反转分钟符号，导入的提前量成为负偏移，导出再转回 Flutter 正数；[`TaskListView.swift`](../macos-native/WorkFollow/Features/Tasks/TaskList/TaskListView.swift) 对绝对提醒与非空相对偏移都显示铃铛。
+- **Native 测试：** [`MigrationSnapshotTests.swift`](../macos-native/WorkFollowTests/MigrationSnapshotTests.swift) 覆盖导入偏移及导出 JSON 正数语义；[`TaskListViewDefaults.swift`](../macos-native/WorkFollowTests/TaskListViewDefaults.swift) 覆盖相对、绝对和无提醒三种标记条件。
+- **验收：** `IMPLEMENTED / TESTS PASSED / VISUAL NOT CHECKED`；当前全量 XCTest 479/479 通过。任务行铃铛未在真实窗口用仅含相对提醒的样例截图核验，不标记 `PARITY VERIFIED`。
 
 ### TASK-LIST-018 — 导航徽标和组标题计数的统计范围
 
@@ -207,6 +223,13 @@
 - **Native 当前行为：** `TaskListView` 暂无逾期整组顺延入口或同等排序菜单。
 - **差异：** 辅助批量入口缺失。
 - **验收：** `DIFF`；`NOT VERIFIED`。
+
+### EDITOR-001 — `/` 与中文顿号 `、` 都可唤起文字格式命令弹框
+
+- **Flutter 基准：** `SlashCommandSession` 仅识别新插入的 `/`。中文顿号触发器是用户新增的 Native 需求，不作为 Flutter parity 声明。
+- **Native 要求：** 在任务和笔记正文编辑器中，`/` 或 `、` 仅在文档首位或前一个字符为空白（空格、换行等）时打开现有文字格式命令弹框；紧贴普通文字时仅插入字符。中文输入法提交的单个 `、` 遵循同一边界。用任一触发符替换选中文本时仍按普通文本编辑，不弹框。选择命令只移除触发符/查询并执行原有格式动作；Escape 关闭弹框但保留输入文本。
+- **测试：** Native `SlashSessionTests` 覆盖任务/笔记两种 profile、两个触发符、首位/空格/换行边界、紧贴文字不触发、替换选区不触发、IME 标记文本提交及执行格式命令。
+- **验收：** `IMPLEMENTED / TESTS PASSED / REAL WINDOW NOT CHECKED`；macOS 27.0 全量 XCTest 546/546、SlashSession 定向测试 19/19 通过。测试覆盖标记文本提交路径，但尚未在真实中文输入法和窗口中确认弹框显示与位置；不宣称 Flutter parity。
 
 ## 本轮审计结论与施工顺序
 
