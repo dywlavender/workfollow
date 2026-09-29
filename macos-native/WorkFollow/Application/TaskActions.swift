@@ -518,6 +518,7 @@ final class TaskActions {
     func setListColor(_ name: String, _ colorIndex: Int?) -> Bool {
         commitListMeta(name) {
             $0.colorIndex = colorIndex.map { min(max($0, 0), WFListPalette.argb.count - 1) }
+            $0.colorARGB = nil
         }
     }
 

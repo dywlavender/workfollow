@@ -136,7 +136,7 @@ enum WFPlanningPalette {
     /// 清单在当前工作区里的最终颜色：显式选色优先，否则按清单名稳定折叠。
     /// 日历条、象限行的清单名与侧栏圆点因此永远同色。
     static func listColor(name: String, meta: TaskListMeta?) -> Color {
-        swatch(at: WFListPalette.colorIndex(for: name, explicit: meta?.colorIndex))
+        WFListPalette.color(for: name, meta: meta)
     }
 
     /// 序号圆上文字的颜色。它是切在实心圆里的一个洞，不是一行字，所以原版

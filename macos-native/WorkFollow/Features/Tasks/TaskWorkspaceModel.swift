@@ -16,6 +16,9 @@ final class TaskWorkspaceModel: ObservableObject {
     @Published private(set) var collapsedTaskIDs: Set<UUID> = []
     @Published private(set) var pendingChildTitleEditorID: UUID?
     @Published private(set) var revision = 0
+    /// Invalidates date-derived projections and labels without treating time
+    /// passing as a task mutation or scheduling a persistence write.
+    @Published private(set) var dateRevision = 0
     @Published private(set) var taskListPaneWidth = WFMetrics.listPreferred
     @Published var activeList: String?
     @Published var activeTag: String?
@@ -50,6 +53,11 @@ final class TaskWorkspaceModel: ObservableObject {
     var listNames: [String] {
         Array(Set(store.lists + allTasks.map { $0.list.name })).filter { $0 != TaskList.inbox.name }.sorted()
     }
+
+    func refreshDates() {
+        dateRevision += 1
+    }
+
     var allListNames: [String] { [TaskList.inbox.name] + listNames }
     var tagNames: [String] { Array(Set(allTasks.flatMap(\.tags))).sorted() }
 

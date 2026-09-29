@@ -113,7 +113,7 @@ final class MigrationSnapshotTests: XCTestCase {
         XCTAssertEqual(bundle.tasks.count, 2)
         XCTAssertEqual(bundle.notes.count, 1)
         XCTAssertEqual(bundle.lists.count, 2)
-        XCTAssertEqual(bundle.folders.count, 1)
+        XCTAssertEqual(bundle.folders.count, 2)
         XCTAssertEqual(bundle.embeddedFiles["a.txt"], "aGVsbG8=")
 
         let (snapshot, summary) = MigrationSnapshot.replaced(bundle, attachmentNames: ["a.txt"])

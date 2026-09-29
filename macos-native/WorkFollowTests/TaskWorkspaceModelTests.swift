@@ -37,6 +37,24 @@ final class TaskWorkspaceModelTests: XCTestCase {
         }
     }
 
+    func testDateRefreshInvalidatesTodayGroupingWithoutMutatingTasks() async {
+        await MainActor.run {
+            var current = self.now
+            let model = TaskWorkspaceModel(clock: { current }, calendar: self.calendar, seedDemoData: false)
+            let id = model.createTask(title: "跨日任务", in: .today).taskID!
+            let taskRevision = model.revision
+            let dateRevision = model.dateRevision
+            XCTAssertTrue(model.groups(for: .today).contains { $0.kind == .today && $0.tasks.contains { $0.id == id } })
+
+            current = self.calendar.date(byAdding: .day, value: 1, to: current)!
+            model.refreshDates()
+
+            XCTAssertEqual(model.revision, taskRevision, "时钟刷新不是任务写入，不应触发持久化变更")
+            XCTAssertEqual(model.dateRevision, dateRevision + 1)
+            XCTAssertTrue(model.groups(for: .today).contains { $0.kind == .overdue && $0.tasks.contains { $0.id == id } })
+        }
+    }
+
     func testTaskListPaneWidthIsSharedAndClampedToProductBounds() async {
         await MainActor.run {
             let model = TaskWorkspaceModel(seedDemoData: false)
