@@ -90,9 +90,7 @@ private struct SidebarListRowView: View {
     private var pinned: Bool { meta?.isPinned ?? false }
     private var selected: Bool { workspace.activeList == name }
     private var dotColor: Color {
-        WFListPalette.swatch(WFListPalette.argb[
-            WFListPalette.colorIndex(for: name, explicit: meta?.colorIndex)
-        ])
+        WFListPalette.color(for: name, meta: meta)
     }
     private var openCount: Int {
         workspace.allTasks.filter {
@@ -186,7 +184,9 @@ private struct ListColorPickerPopover: View {
     private let columns = Array(repeating: GridItem(.fixed(22), spacing: 10), count: 7)
 
     private var effectiveIndex: Int {
-        WFListPalette.colorIndex(for: name, explicit: workspace.listMeta(for: name)?.colorIndex)
+        let meta = workspace.listMeta(for: name)
+        guard meta?.colorARGB == nil else { return -1 }
+        return WFListPalette.colorIndex(for: name, explicit: meta?.colorIndex)
     }
 
     var body: some View {
@@ -224,7 +224,14 @@ extension WFListPalette {
     static func swatch(_ value: UInt32) -> Color {
         Color(red: Double((value >> 16) & 0xFF) / 255,
               green: Double((value >> 8) & 0xFF) / 255,
-              blue: Double(value & 0xFF) / 255)
+              blue: Double(value & 0xFF) / 255,
+              opacity: Double((value >> 24) & 0xFF) / 255)
+    }
+
+    static func color(for name: String, meta: TaskListMeta?) -> Color {
+        if let importedColor = meta?.colorARGB { return swatch(importedColor) }
+        let index = colorIndex(for: name, explicit: meta?.colorIndex)
+        return swatch(argb[index])
     }
 
     /// 色块上的勾选颜色：按亮度取黑/白（对齐 Flutter WorkFollowThemeContrast.foregroundOn）。

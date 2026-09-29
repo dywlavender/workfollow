@@ -53,12 +53,13 @@ final class ListMetaTests: XCTestCase {
         let metas = [
             TaskListMeta(name: "读书", colorIndex: 4, isPinned: true, sortOrder: 0),
             TaskListMeta(name: "工作", colorIndex: nil, isPinned: false, sortOrder: 1),
+            TaskListMeta(name: "旅行", sortOrder: 2, colorARGB: 0x80123456),
         ]
         try repository.save(NativeWorkspaceSnapshot(tasks: [], notes: [],
-                                                    taskLists: ["读书", "工作"], taskListMeta: metas))
+                                                    taskLists: ["读书", "工作", "旅行"], taskListMeta: metas))
         let loaded = try XCTUnwrap(repository.load())
         XCTAssertEqual(loaded.taskListMeta, metas)
-        XCTAssertEqual(loaded.taskLists, ["读书", "工作"])
+        XCTAssertEqual(loaded.taskLists, ["读书", "工作", "旅行"])
     }
 
     func testWorkspaceAcceptsInitialMetaAndKeepsListNamesCompatible() {

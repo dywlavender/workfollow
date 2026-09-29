@@ -38,24 +38,29 @@ struct TaskList: Equatable, Codable {
 /// 退回默认色板色与字典序。additive Codable：缺失键解码为中性值。
 struct TaskListMeta: Equatable, Codable {
     var name: String
-    /// WFListPalette 下标；nil = 未选色（视图按清单名推导稳定色）。
+    /// WFListPalette 下标；没有调色板色时再检查 colorARGB，否则按名称推导颜色。
     var colorIndex: Int?
+    /// Imported Flutter colors outside the built-in palette remain exact ARGB values.
+    var colorARGB: UInt32?
     var isPinned: Bool
     var sortOrder: Int
 
-    init(name: String, colorIndex: Int? = nil, isPinned: Bool = false, sortOrder: Int = 0) {
+    init(name: String, colorIndex: Int? = nil, isPinned: Bool = false, sortOrder: Int = 0,
+         colorARGB: UInt32? = nil) {
         self.name = name.trimmingCharacters(in: .whitespacesAndNewlines)
         self.colorIndex = colorIndex
+        self.colorARGB = colorARGB
         self.isPinned = isPinned
         self.sortOrder = sortOrder
     }
 
-    private enum CodingKeys: String, CodingKey { case name, colorIndex, isPinned, sortOrder }
+    private enum CodingKeys: String, CodingKey { case name, colorIndex, colorARGB, isPinned, sortOrder }
 
     init(from decoder: Decoder) throws {
         let values = try decoder.container(keyedBy: CodingKeys.self)
         name = try values.decode(String.self, forKey: .name)
         colorIndex = try values.decodeIfPresent(Int.self, forKey: .colorIndex)
+        colorARGB = try values.decodeIfPresent(UInt32.self, forKey: .colorARGB)
         isPinned = try values.decodeIfPresent(Bool.self, forKey: .isPinned) ?? false
         sortOrder = try values.decodeIfPresent(Int.self, forKey: .sortOrder) ?? 0
     }
@@ -64,6 +69,7 @@ struct TaskListMeta: Equatable, Codable {
         var values = encoder.container(keyedBy: CodingKeys.self)
         try values.encode(name, forKey: .name)
         try values.encodeIfPresent(colorIndex, forKey: .colorIndex)
+        try values.encodeIfPresent(colorARGB, forKey: .colorARGB)
         try values.encode(isPinned, forKey: .isPinned)
         try values.encode(sortOrder, forKey: .sortOrder)
     }
