@@ -60,7 +60,7 @@ struct FocusWorkspaceView: View {
 
     /// 设计基准高 1150：窗口更矮时按比例收缩，更高时最多放大 15%。
     static func scale(for size: CGSize) -> CGFloat {
-        min(1.15, max(0.55, min(size.height / 1150, size.width / 1400)))
+        min(1.2, max(0.6, min(size.height / 982, size.width / 1512)))
     }
 
     // MARK: - 骨架
@@ -119,44 +119,44 @@ struct FocusWorkspaceView: View {
                 presetChipsRow(s: s)
                     .padding(.top, 12 * s)
             }
-            Spacer(minLength: 16 * s)
+            Spacer(minLength: 10 * s)
             selectorRow(s: s)
-                .padding(.bottom, 24 * s)
+                .padding(.bottom, 18 * s)
             ringView(s: s, paneWidth: paneWidth)
             if store.phase != .idle {
                 runningStatus(s: s)
-                    .padding(.top, 24 * s)
+                    .padding(.top, 18 * s)
             }
             if store.phase == .breaking, store.preferences.autoStartNextPomodoro {
                 Text("下一番茄 \(nextAutoStartTime) 自动开始")
-                    .font(.system(size: 20 * s))
+                    .font(.system(size: 14 * s))
                     .foregroundStyle(theme.text3)
-                    .padding(.top, 12 * s)
+                    .padding(.top, 10 * s)
             }
-            Spacer(minLength: 16 * s)
+            Spacer(minLength: 10 * s)
             actionsColumn(s: s)
-            Spacer().frame(height: 44 * s)
+            Spacer().frame(height: 36 * s)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .padding(.horizontal, 44 * s)
+        .padding(.horizontal, 36 * s)
     }
 
     private func paneHeader(s: CGFloat) -> some View {
         HStack {
             Text("番茄专注")
-                .font(.system(size: 28 * s, weight: .bold))
+                .font(.system(size: 21 * s, weight: .bold))
                 .foregroundStyle(theme.text)
             Spacer()
             modeSegment(s: s)
             Spacer()
             headerIcons(s: s)
         }
-        .padding(.top, 26 * s)
+        .padding(.top, 18 * s)
     }
 
     /// 模式分段：番茄计时 / 正计时（会话进行中锁定）。
     private func modeSegment(s: CGFloat) -> some View {
-        HStack(spacing: 4 * s) {
+        HStack(spacing: 3 * s) {
             segmentItem("番茄计时",
                         selected: !store.preferences.stopwatchMode, s: s) {
                 store.setStopwatchMode(false)
@@ -166,7 +166,7 @@ struct FocusWorkspaceView: View {
                 store.setStopwatchMode(true)
             }
         }
-        .padding(5 * s)
+        .padding(4 * s)
         .background(Capsule().fill(theme.chipBackground))
         .opacity(store.phase == .idle ? 1 : 0.55)
         .help(store.phase != .idle ? "会话结束后可切换" : "")
@@ -176,10 +176,10 @@ struct FocusWorkspaceView: View {
                              action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(title)
-                .font(.system(size: 19 * s, weight: selected ? .semibold : .regular))
+                .font(.system(size: 14 * s, weight: selected ? .semibold : .regular))
                 .foregroundStyle(selected ? theme.text : theme.text2)
-                .padding(.horizontal, 20 * s)
-                .padding(.vertical, 8 * s)
+                .padding(.horizontal, 15 * s)
+                .padding(.vertical, 6 * s)
                 .background(Capsule().fill(selected ? theme.segmentActive : .clear))
         }
         .buttonStyle(.plain)
@@ -187,7 +187,7 @@ struct FocusWorkspaceView: View {
 
     /// 头部右侧：补记、铃声、节奏。
     private func headerIcons(s: CGFloat) -> some View {
-        HStack(spacing: 24 * s) {
+        HStack(spacing: 18 * s) {
             Button {
                 addTimerName = ""
                 addTimerMinutes = "25"
@@ -198,7 +198,7 @@ struct FocusWorkspaceView: View {
                 showAddTimer = true
             } label: {
                 Image(systemName: "plus")
-                    .font(.system(size: 21 * s, weight: .medium))
+                    .font(.system(size: 17 * s, weight: .medium))
             }
             .buttonStyle(.plain)
             .foregroundStyle(theme.text2)
@@ -210,7 +210,7 @@ struct FocusWorkspaceView: View {
                 }
             } label: {
                 Image(systemName: bellIcon)
-                    .font(.system(size: 19 * s))
+                    .font(.system(size: 16 * s))
             }
             .menuStyle(.button)
             .menuIndicator(.hidden)
@@ -219,7 +219,7 @@ struct FocusWorkspaceView: View {
 
             Button { showRhythmPopover = true } label: {
                 Image(systemName: "ellipsis")
-                    .font(.system(size: 21 * s, weight: .medium))
+                    .font(.system(size: 17 * s, weight: .medium))
             }
             .buttonStyle(.plain)
             .foregroundStyle(theme.text2)
@@ -263,19 +263,19 @@ struct FocusWorkspaceView: View {
                     }
                 }
             } label: {
-                HStack(spacing: 10 * s) {
+                HStack(spacing: 8 * s) {
                     if let boundTask {
                         Circle()
                             .fill(listDotColor(for: boundTask.id))
-                            .frame(width: 10 * s, height: 10 * s)
+                            .frame(width: 8 * s, height: 8 * s)
                     }
                     Text(title ?? "专注")
-                        .font(.system(size: 25 * s, weight: title == nil ? .regular : .semibold))
+                        .font(.system(size: 15 * s, weight: title == nil ? .regular : .semibold))
                         .foregroundStyle(title == nil ? theme.text3
                                          : (overdue ? theme.warn : theme.text))
                         .lineLimit(1)
                     Text("›")
-                        .font(.system(size: 23 * s))
+                        .font(.system(size: 14 * s))
                         .foregroundStyle(theme.text3)
                 }
                 .contentShape(Rectangle())
@@ -288,7 +288,7 @@ struct FocusWorkspaceView: View {
     }
 
     private func ringView(s: CGFloat, paneWidth: CGFloat) -> some View {
-        let size = min(430 * s, paneWidth * 0.66)
+        let size = min(240 * s, paneWidth * 0.42)
         let active = store.phase == .focusing || store.phase == .breaking
         let stopwatch = store.preferences.stopwatchMode
         return ZStack {
@@ -300,43 +300,43 @@ struct FocusWorkspaceView: View {
             Circle()
                 .trim(from: 0, to: progress)
                 .stroke(progressGradient,
-                        style: StrokeStyle(lineWidth: 8 * s, lineCap: .round))
+                        style: StrokeStyle(lineWidth: 6 * s, lineCap: .round))
                 .rotationEffect(.degrees(-90))
                 .animation(.linear(duration: 0.3), value: progress)
             ringCenter(s: s)
         }
         .frame(width: size, height: size)
-        .shadow(color: active ? theme.accent.opacity(0.20) : .clear, radius: 40 * s)
+        .shadow(color: active ? theme.accent.opacity(0.18) : .clear, radius: 30 * s)
     }
 
     /// 环心：剩余/已计时间 + 阶段文案 + 关联任务名。
     private func ringCenter(s: CGFloat) -> some View {
-        VStack(spacing: 16 * s) {
+        VStack(spacing: 10 * s) {
             Text(FocusViewLogic.clockText(displaySeconds))
-                .font(.system(size: 108 * s, weight: .regular))
+                .font(.system(size: 34 * s, weight: .regular))
                 .monospacedDigit()
                 .foregroundStyle(theme.text)
             Text(FocusViewLogic.phaseTitle(for: store.phase, isLongBreak: store.isLongBreak))
-                .font(.system(size: 22 * s))
+                .font(.system(size: 14 * s))
                 .foregroundStyle(theme.text2)
             if let title = ringTaskTitle, store.phase != .idle {
                 Text(title)
-                    .font(.system(size: 20 * s))
+                    .font(.system(size: 15 * s))
                     .foregroundStyle(theme.text3)
                     .lineLimit(2)
                     .multilineTextAlignment(.center)
-                    .padding(.horizontal, 50 * s)
+                    .padding(.horizontal, 40 * s)
             }
         }
     }
 
     private func runningStatus(s: CGFloat) -> some View {
-        HStack(spacing: 12 * s) {
+        HStack(spacing: 10 * s) {
             Circle()
                 .fill(statusDotColor)
-                .frame(width: 8 * s, height: 8 * s)
+                .frame(width: 7 * s, height: 7 * s)
             Text("专注中 · 已专注 \(store.elapsedSeconds / 60) 分钟 · 第 \(store.todayPomodoros + 1) 个番茄")
-                .font(.system(size: 21 * s))
+                .font(.system(size: 14 * s))
                 .foregroundStyle(theme.text2)
         }
     }
@@ -352,7 +352,7 @@ struct FocusWorkspaceView: View {
 
     @ViewBuilder
     private func actionsColumn(s: CGFloat) -> some View {
-        VStack(spacing: 18 * s) {
+        VStack(spacing: 14 * s) {
             switch store.phase {
             case .idle:
                 primaryButton("开始", s: s) { store.start(taskID: linkedTaskID) }
@@ -361,14 +361,14 @@ struct FocusWorkspaceView: View {
                 primaryButton(running ? "暂 停" : "继 续", s: s) {
                     if running { store.pause() } else { store.resume() }
                 }
-                HStack(spacing: 30 * s) {
+                HStack(spacing: 22 * s) {
                     linkButton("完成本番茄", s: s) { store.finishEarly() }
                     linkButton("放弃", s: s) { showGiveUpConfirmation = true }
                 }
             case .breaking:
                 primaryButton("跳过休息", s: s) { _ = store.giveUp() }
             case .pausedBreak:
-                HStack(spacing: 30 * s) {
+                HStack(spacing: 22 * s) {
                     primaryButton("继 续", s: s) { store.resume() }
                     linkButton("跳过休息", s: s) { _ = store.giveUp() }
                 }
@@ -387,10 +387,10 @@ struct FocusWorkspaceView: View {
     private func primaryButton(_ title: String, s: CGFloat, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(title)
-                .font(.system(size: 26 * s, weight: .semibold))
-                .tracking(2 * s)
+                .font(.system(size: 16 * s, weight: .semibold))
+                .tracking(1 * s)
                 .foregroundStyle(.white)
-                .frame(width: 220 * s, height: 62 * s)
+                .frame(width: 130 * s, height: 46 * s)
                 .background(Capsule().fill(theme.accent))
         }
         .buttonStyle(.plain)
@@ -399,9 +399,9 @@ struct FocusWorkspaceView: View {
     private func linkButton(_ title: String, s: CGFloat, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(title)
-                .font(.system(size: 23 * s))
+                .font(.system(size: 14 * s))
                 .foregroundStyle(theme.text2)
-                .padding(.vertical, 12 * s)
+                .padding(.vertical, 10 * s)
         }
         .buttonStyle(.plain)
     }
@@ -466,12 +466,12 @@ struct FocusWorkspaceView: View {
     private func overviewPane(s: CGFloat) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             Text("概览")
-                .font(.system(size: 26 * s, weight: .bold))
+                .font(.system(size: 20 * s, weight: .bold))
                 .foregroundStyle(theme.text)
-                .padding(.bottom, 24 * s)
-            LazyVGrid(columns: [GridItem(.flexible(), spacing: 20 * s),
-                                GridItem(.flexible(), spacing: 20 * s)],
-                      spacing: 20 * s) {
+                .padding(.bottom, 16 * s)
+            LazyVGrid(columns: [GridItem(.flexible(), spacing: 16 * s),
+                                GridItem(.flexible(), spacing: 16 * s)],
+                      spacing: 16 * s) {
                 statCard("今日番茄", value: "\(store.todayPomodoros)", s: s)
                 statCard("今日专注时长", value: "\(store.todayMinutes)m", s: s)
                 statCard("总番茄", value: "\(store.allTimePomodoros)", s: s)
@@ -481,27 +481,27 @@ struct FocusWorkspaceView: View {
                 .padding(.top, 20 * s)
             HStack(alignment: .firstTextBaseline) {
                 Text("专注记录")
-                    .font(.system(size: 26 * s, weight: .bold))
+                    .font(.system(size: 20 * s, weight: .bold))
                     .foregroundStyle(theme.text)
                 Spacer()
                 Button { showAddRecord = true } label: {
                     Image(systemName: "plus")
-                        .font(.system(size: 21 * s, weight: .medium))
+                        .font(.system(size: 18 * s, weight: .medium))
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(theme.text2)
                 .help("补记专注")
             }
-            .padding(.top, 44 * s)
+            .padding(.top, 32 * s)
             .padding(.bottom, 8 * s)
             if store.recordGroups.isEmpty {
                 Spacer(minLength: 20 * s)
                 VStack(spacing: 16 * s) {
                     Image(systemName: "timer")
-                        .font(.system(size: 60 * s))
+                        .font(.system(size: 46 * s))
                         .foregroundStyle(theme.text3.opacity(0.7))
                     Text("还没有专注记录")
-                        .font(.system(size: 21 * s))
+                        .font(.system(size: 17 * s))
                         .foregroundStyle(theme.text3)
                 }
                 .frame(maxWidth: .infinity)
@@ -512,24 +512,24 @@ struct FocusWorkspaceView: View {
                 }
             }
         }
-        .padding(.horizontal, 44 * s)
-        .padding(.vertical, 30 * s)
+        .padding(.horizontal, 42 * s)
+        .padding(.vertical, 24 * s)
     }
 
     private func statCard(_ label: String, value: String, s: CGFloat) -> some View {
-        VStack(alignment: .leading, spacing: 12 * s) {
+        VStack(alignment: .leading, spacing: 8 * s) {
             Text(label)
-                .font(.system(size: 20 * s))
+                .font(.system(size: 14 * s))
                 .foregroundStyle(theme.text2)
             Text(value)
-                .font(.system(size: 40 * s, weight: .medium))
+                .font(.system(size: 28 * s, weight: .medium))
                 .monospacedDigit()
                 .foregroundStyle(theme.text)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 26 * s)
-        .padding(.vertical, 22 * s)
-        .background(RoundedRectangle(cornerRadius: 14 * s).fill(theme.cardBackground))
+        .padding(.horizontal, 20 * s)
+        .padding(.vertical, 18 * s)
+        .background(RoundedRectangle(cornerRadius: 12 * s).fill(theme.cardBackground))
     }
 
     /// 今日目标进度：文字 + 细线，点击弹原有目标编辑器。
@@ -537,7 +537,7 @@ struct FocusWorkspaceView: View {
         Button { showGoalPopover = true } label: {
             HStack(spacing: 16 * s) {
                 Text("今日目标 \(store.todayPomodoros) / \(store.preferences.dailyGoal)")
-                    .font(.system(size: 21 * s))
+                    .font(.system(size: 15 * s))
                     .foregroundStyle(theme.text2)
                 GeometryReader { geo in
                     ZStack(alignment: .leading) {
@@ -549,7 +549,7 @@ struct FocusWorkspaceView: View {
                                 CGFloat(max(1, store.preferences.dailyGoal))))
                     }
                 }
-                .frame(height: 4 * s)
+                .frame(height: 3 * s)
             }
         }
         .buttonStyle(.plain)
@@ -563,11 +563,11 @@ struct FocusWorkspaceView: View {
         VStack(alignment: .leading, spacing: 0) {
             ForEach(store.recordGroups) { group in
                 Text(FocusViewLogic.dayLabel(for: group.day))
-                    .font(.system(size: 19, weight: .semibold))
-                    .tracking(4)
+                    .font(.system(size: 16, weight: .semibold))
+                    .tracking(3)
                     .foregroundStyle(theme.text3)
-                    .padding(.top, 26)
-                    .padding(.bottom, 6)
+                    .padding(.top, 20)
+                    .padding(.bottom, 4)
                 ForEach(group.records) { record in
                     recordRow(record)
                 }
@@ -578,36 +578,36 @@ struct FocusWorkspaceView: View {
 
     private func recordRow(_ record: PomodoroRecord) -> some View {
         let isHovered = hoveredRecordID == record.id
-        return HStack(spacing: 16) {
+        return HStack(spacing: 12) {
             Text(timeText(record.startedAt))
-                .font(.system(size: 21))
+                .font(.system(size: 15))
                 .monospacedDigit()
                 .foregroundStyle(theme.text3)
-                .frame(width: 92, alignment: .leading)
+                .frame(width: 76, alignment: .leading)
             Text(recordTitle(for: record))
-                .font(.system(size: 23))
+                .font(.system(size: 17))
                 .foregroundStyle(theme.text)
                 .lineLimit(1)
-            Spacer(minLength: 16)
+            Spacer(minLength: 12)
             Text("\(record.minutes) 分钟")
-                .font(.system(size: 21))
+                .font(.system(size: 15))
                 .monospacedDigit()
                 .foregroundStyle(record.completed ? theme.text2 : theme.text3)
             Circle()
                 .fill(record.completed ? theme.good : theme.warn)
-                .frame(width: 7, height: 7)
+                .frame(width: 6, height: 6)
             Button {
                 store.deleteRecord(record.id)
             } label: {
                 Image(systemName: "trash")
-                    .font(.system(size: 13))
+                    .font(.system(size: 12))
                     .foregroundStyle(theme.text3)
             }
             .buttonStyle(.plain)
             .opacity(isHovered ? 1 : 0)
             .help("删除记录")
         }
-        .padding(.vertical, 15)
+        .padding(.vertical, 12)
         .overlay(alignment: .bottom) {
             Rectangle().fill(theme.hairline).frame(height: 1)
         }
@@ -635,9 +635,9 @@ struct FocusWorkspaceView: View {
     private func rhythmPopover(s: CGFloat) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             Text("节奏")
-                .font(.system(size: 24 * s, weight: .semibold))
+                .font(.system(size: 20 * s, weight: .semibold))
                 .foregroundStyle(theme.text)
-                .padding(.bottom, 10 * s)
+                .padding(.bottom, 8 * s)
             rhythmStepper("短休息", value: store.preferences.breakMinutes, unit: "分钟",
                           range: 1...60, s: s) { store.setBreakMinutes($0) }
             rhythmStepper("长休息", value: store.preferences.longBreakMinutes, unit: "分钟",
@@ -652,23 +652,23 @@ struct FocusWorkspaceView: View {
                     get: { store.preferences.autoStartNextPomodoro },
                     set: { store.setAutoStartNextPomodoro($0) }))
             }
-            .font(.system(size: 21 * s))
-            .padding(.vertical, 15 * s)
+            .font(.system(size: 15 * s))
+            .padding(.vertical, 12 * s)
             .overlay(alignment: .bottom) {
                 Rectangle().fill(theme.hairline).frame(height: 1)
             }
             Text("开启后，休息结束时将用同一任务自动开始下一个番茄")
-                .font(.system(size: 18 * s))
+                .font(.system(size: 14 * s))
                 .foregroundStyle(theme.text3)
-                .padding(.top, 14 * s)
+                .padding(.top, 12 * s)
         }
-        .padding(28 * s)
-        .frame(width: 400 * s)
+        .padding(22 * s)
+        .frame(width: 360 * s)
     }
 
     private func rhythmStepper(_ key: String, value: Int, unit: String, range: ClosedRange<Int>,
                                s: CGFloat, setter: @escaping (Int) -> Bool) -> some View {
-        HStack(spacing: 14 * s) {
+        HStack(spacing: 10 * s) {
             Text(key).foregroundStyle(theme.text2)
             Spacer(minLength: 12 * s)
             stepperButton("minus", s: s) {
@@ -677,13 +677,13 @@ struct FocusWorkspaceView: View {
             Text("\(value) \(unit)")
                 .monospacedDigit()
                 .foregroundStyle(theme.text)
-                .frame(width: 110 * s)
+                .frame(width: 88 * s)
             stepperButton("plus", s: s) {
                 if value < range.upperBound { _ = setter(value + 1) }
             }
         }
-        .font(.system(size: 21 * s))
-        .padding(.vertical, 13 * s)
+        .font(.system(size: 15 * s))
+        .padding(.vertical, 11 * s)
         .overlay(alignment: .bottom) {
             Rectangle().fill(theme.hairline).frame(height: 1)
         }
@@ -692,9 +692,9 @@ struct FocusWorkspaceView: View {
     private func stepperButton(_ symbol: String, s: CGFloat, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: symbol)
-                .font(.system(size: 14 * s, weight: .semibold))
+                .font(.system(size: 12 * s, weight: .semibold))
                 .foregroundStyle(theme.text2)
-                .frame(width: 30 * s, height: 30 * s)
+                .frame(width: 26 * s, height: 26 * s)
                 .background(Circle().fill(theme.chipBackground))
         }
         .buttonStyle(.plain)
@@ -755,23 +755,23 @@ struct FocusWorkspaceView: View {
             Color.clear
                 .contentShape(Rectangle())
                 .onTapGesture { showAddTimer = false }
-            VStack(spacing: 24 * s) {
+            VStack(spacing: 16 * s) {
                 Text("添加常用专注")
-                    .font(.system(size: 25 * s, weight: .semibold))
+                    .font(.system(size: 20 * s, weight: .semibold))
                     .foregroundStyle(theme.text)
-                HStack(spacing: 18 * s) {
+                HStack(spacing: 14 * s) {
                     Button { showEmojiPicker.toggle() } label: {
                         ZStack(alignment: .bottomTrailing) {
                             Circle()
                                 .fill(theme.avatarBackground)
-                                .frame(width: 58 * s, height: 58 * s)
+                                .frame(width: 48 * s, height: 48 * s)
                             Text(addTimerEmoji)
-                                .font(.system(size: 34 * s))
+                                .font(.system(size: 26 * s))
                             Circle()
                                 .fill(theme.canvas)
-                                .frame(width: 20 * s, height: 20 * s)
+                                .frame(width: 16 * s, height: 16 * s)
                                 .overlay(Image(systemName: "pencil")
-                                    .font(.system(size: 10 * s, weight: .semibold))
+                                    .font(.system(size: 9 * s, weight: .semibold))
                                     .foregroundStyle(theme.text2))
                                 .offset(x: 2 * s, y: 2 * s)
                         }
@@ -780,10 +780,10 @@ struct FocusWorkspaceView: View {
                     .help("选择表情")
                     TextField("名称", text: $addTimerName)
                         .textFieldStyle(.plain)
-                        .font(.system(size: 22 * s))
+                        .font(.system(size: 16 * s))
                         .foregroundStyle(theme.text)
-                        .padding(.horizontal, 14 * s)
-                        .padding(.vertical, 13 * s)
+                        .padding(.horizontal, 12 * s)
+                        .padding(.vertical, 10 * s)
                         .background(RoundedRectangle(cornerRadius: 10 * s)
                             .stroke(theme.hairline, lineWidth: 1.5))
                 }
@@ -806,16 +806,16 @@ struct FocusWorkspaceView: View {
                         }
                     }
                 }
-                VStack(alignment: .leading, spacing: 16 * s) {
+                VStack(alignment: .leading, spacing: 12 * s) {
                     Text("计时模式")
-                        .font(.system(size: 21 * s, weight: .semibold))
+                        .font(.system(size: 16 * s, weight: .semibold))
                         .foregroundStyle(theme.text)
-                    HStack(spacing: 14 * s) {
+                    HStack(spacing: 12 * s) {
                         Button { addTimerStopwatch = false } label: {
-                            HStack(spacing: 10 * s) {
+                            HStack(spacing: 9 * s) {
                                 radioCircle(selected: !addTimerStopwatch, s: s)
                                 Text("番茄计时")
-                                    .font(.system(size: 21 * s))
+                                    .font(.system(size: 16 * s))
                                     .foregroundStyle(theme.text)
                             }
                         }
@@ -823,23 +823,23 @@ struct FocusWorkspaceView: View {
                         if !addTimerStopwatch {
                             TextField("25", text: $addTimerMinutes)
                                 .textFieldStyle(.plain)
-                                .font(.system(size: 21 * s))
+                                .font(.system(size: 16 * s))
                                 .monospacedDigit()
                                 .multilineTextAlignment(.center)
                                 .foregroundStyle(theme.text)
-                                .frame(width: 90 * s)
-                                .padding(.vertical, 8 * s)
-                                .background(RoundedRectangle(cornerRadius: 8 * s).fill(theme.chipBackground))
+                                .frame(width: 72 * s)
+                                .padding(.vertical, 7 * s)
+                                .background(RoundedRectangle(cornerRadius: 7 * s).fill(theme.chipBackground))
                             Text("分钟")
-                                .font(.system(size: 20 * s))
+                                .font(.system(size: 15 * s))
                                 .foregroundStyle(theme.text2)
                         }
                     }
                     Button { addTimerStopwatch = true } label: {
-                        HStack(spacing: 10 * s) {
+                        HStack(spacing: 9 * s) {
                             radioCircle(selected: addTimerStopwatch, s: s)
                             Text("正计时")
-                                .font(.system(size: 21 * s))
+                                .font(.system(size: 16 * s))
                                 .foregroundStyle(theme.text)
                         }
                     }
@@ -849,28 +849,28 @@ struct FocusWorkspaceView: View {
                     Spacer()
                     Button { showAddTimer = false } label: {
                         Text("取消")
-                            .font(.system(size: 21 * s))
+                            .font(.system(size: 15 * s))
                             .foregroundStyle(theme.text2)
-                            .frame(width: 110 * s, height: 42 * s)
-                            .background(RoundedRectangle(cornerRadius: 10 * s)
+                            .frame(width: 92 * s, height: 36 * s)
+                            .background(RoundedRectangle(cornerRadius: 8 * s)
                                 .fill(theme.canvas)
-                                .overlay(RoundedRectangle(cornerRadius: 10 * s)
+                                .overlay(RoundedRectangle(cornerRadius: 8 * s)
                                     .stroke(theme.hairline, lineWidth: 1.5)))
                     }
                     .buttonStyle(.plain)
                     Button { submitAddTimer() } label: {
                         Text("确定")
-                            .font(.system(size: 21 * s, weight: .semibold))
+                            .font(.system(size: 15 * s, weight: .semibold))
                             .foregroundStyle(.white)
-                            .frame(width: 110 * s, height: 42 * s)
-                            .background(RoundedRectangle(cornerRadius: 10 * s)
+                            .frame(width: 92 * s, height: 36 * s)
+                            .background(RoundedRectangle(cornerRadius: 8 * s)
                                 .fill(theme.accent.opacity(nameValid ? 1 : 0.45)))
                     }
                     .buttonStyle(.plain)
                     .disabled(!nameValid)
                 }
             }
-            .padding(36 * s)
+            .padding(28 * s)
             .frame(width: 560 * s)
             .background(RoundedRectangle(cornerRadius: 16 * s).fill(theme.canvas)
                 .shadow(color: .black.opacity(0.16), radius: 30 * s))
@@ -882,10 +882,10 @@ struct FocusWorkspaceView: View {
         ZStack {
             Circle().stroke(selected ? theme.accent : theme.text3, lineWidth: 1.5)
             if selected {
-                Circle().fill(theme.accent).padding(3.5 * s)
+                Circle().fill(theme.accent).padding(3 * s)
             }
         }
-        .frame(width: 19 * s, height: 19 * s)
+        .frame(width: 16 * s, height: 16 * s)
     }
 
     private func submitAddTimer() {
@@ -903,9 +903,9 @@ struct FocusWorkspaceView: View {
 
     /// 补记弹层：任务 + 时长，默认开始时间 = 此刻减去时长（即刚结束的一段）。
     private func addRecordPopover(s: CGFloat) -> some View {
-        VStack(alignment: .leading, spacing: 20 * s) {
+        VStack(alignment: .leading, spacing: 16 * s) {
             Text("补记专注")
-                .font(.system(size: 24 * s, weight: .semibold))
+                .font(.system(size: 20 * s, weight: .semibold))
                 .foregroundStyle(theme.text)
             Menu {
                 Button("不关联") { addRecordTaskID = nil }
@@ -921,46 +921,46 @@ struct FocusWorkspaceView: View {
                     }
                 }
             } label: {
-                HStack(spacing: 12 * s) {
+                HStack(spacing: 10 * s) {
                     Circle()
                         .fill(listDotColor(for: addRecordTaskID))
-                        .frame(width: 10 * s, height: 10 * s)
+                        .frame(width: 9 * s, height: 9 * s)
                     Text(addRecordTaskTitle)
-                        .font(.system(size: 22 * s))
+                        .font(.system(size: 16 * s))
                         .foregroundStyle(theme.text)
                         .lineLimit(1)
                     Spacer(minLength: 8 * s)
                     Image(systemName: "chevron.up.chevron.down")
-                        .font(.system(size: 15 * s))
+                        .font(.system(size: 13 * s))
                         .foregroundStyle(theme.text3)
                 }
-                .frame(width: 320 * s)
+                .frame(width: 280 * s)
             }
             .menuStyle(.button)
             .menuIndicator(.hidden)
             .fixedSize()
-            HStack(spacing: 14 * s) {
+            HStack(spacing: 12 * s) {
                 Text("时长")
-                    .font(.system(size: 21 * s))
+                    .font(.system(size: 15 * s))
                     .foregroundStyle(theme.text2)
                 TextField("分钟", text: $addRecordMinutes)
                     .textFieldStyle(.plain)
-                    .font(.system(size: 22 * s))
+                    .font(.system(size: 16 * s))
                     .monospacedDigit()
                     .multilineTextAlignment(.center)
                     .foregroundStyle(theme.text)
-                    .frame(width: 96 * s)
-                    .padding(.vertical, 8 * s)
+                    .frame(width: 76 * s)
+                    .padding(.vertical, 6 * s)
                     .background(Capsule().stroke(theme.hairline, lineWidth: 1.5))
                     .onSubmit(submitAddRecord)
             }
             if let addRecordHint {
                 Text(addRecordHint)
-                    .font(.system(size: 19 * s))
+                    .font(.system(size: 13 * s))
                     .foregroundStyle(theme.warn)
             }
             Text("仅支持补记最近 7 天内、此刻之前的专注")
-                .font(.system(size: 18 * s))
+                .font(.system(size: 13 * s))
                 .foregroundStyle(theme.text3)
             HStack {
                 Spacer()
@@ -968,16 +968,16 @@ struct FocusWorkspaceView: View {
                     submitAddRecord()
                 } label: {
                     Text("添 加")
-                        .font(.system(size: 22 * s, weight: .semibold))
+                        .font(.system(size: 15 * s, weight: .semibold))
                         .foregroundStyle(.white)
-                        .frame(width: 140 * s, height: 44 * s)
-                        .background(Capsule().fill(theme.accent))
+                        .frame(width: 110 * s, height: 36 * s)
+                        .background(RoundedRectangle(cornerRadius: 8 * s).fill(theme.accent))
                 }
                 .buttonStyle(.plain)
             }
         }
-        .padding(30 * s)
-        .frame(width: 380 * s)
+        .padding(22 * s)
+        .frame(width: 330 * s)
     }
 
     private var recordCandidates: [Task] {
@@ -1141,11 +1141,11 @@ private struct SwitchView: View {
         let theme = FocusTheme(colorScheme)
         Capsule()
             .fill(isOn ? theme.accent : theme.track)
-            .frame(width: 52, height: 30)
+            .frame(width: 44, height: 26)
             .overlay(alignment: isOn ? .trailing : .leading) {
                 Circle()
                     .fill(.white)
-                    .frame(width: 24, height: 24)
+                    .frame(width: 20, height: 20)
                     .padding(3)
             }
             .contentShape(Capsule())
