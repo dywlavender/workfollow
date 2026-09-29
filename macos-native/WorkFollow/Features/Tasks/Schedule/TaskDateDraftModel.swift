@@ -146,7 +146,7 @@ final class TaskDateDraftModel: ObservableObject {
         select(today)
         setHasTime(true)
         if let evening = calendar.date(bySettingHour: 20, minute: 0, second: 0, of: today) {
-            setTime(evening)
+            setStartTime(evening)
         }
     }
 
@@ -185,21 +185,45 @@ final class TaskDateDraftModel: ObservableObject {
 
     // MARK: Time
 
-    /// The draft the time controls edit: range start in 时间段 mode.
-    var timeAnchor: Date? {
+    /// 开始时间的编辑锚点：时间段取区间开始，日期取选中日。
+    var startTimeAnchor: Date? {
         tab == .period ? periodStart : selectedDate
     }
 
-    func setHasTime(_ on: Bool) {
-        hasTime = on
-        // Enabling time on an all-day draft would confirm as 00:00; default to 9:00.
-        if on, let anchor = timeAnchor,
-           calendar.component(.hour, from: anchor) == 0, calendar.component(.minute, from: anchor) == 0 {
-            setTime(calendar.date(bySettingHour: Self.allDayAnchorHour, minute: 0, second: 0, of: anchor) ?? anchor)
-        }
+    /// 结束时间的编辑锚点：区间结束。还没有结束日时落在区间开始那天，
+    /// 让半小时列表与行内输入框都有可锚定的日子（Flutter 的 `end` 恒有值，
+    /// 默认取开始 +1 小时；这里取开始那天，语义等价）。
+    var endTimeAnchor: Date? {
+        guard tab == .period, !deadline else { return nil }
+        return periodEnd ?? periodStart
     }
 
-    func setTime(_ value: Date) {
+    /// 结束时间是否已生效：时间段 + 定时 + 已选结束日。
+    /// 全天区间没有「结束时间」可言（Flutter: `timed ? '结束 …' : '结束时间'`）。
+    var hasEndTime: Bool {
+        tab == .period && hasTime && periodEnd != nil
+    }
+
+    /// 开关「定时」。只有**全天 → 定时**这一次跃迁才补一个 09:00 起点。
+    ///
+    /// 为什么必须限定在跃迁上：Flutter 的 09:00 来自 `initState`
+    /// （`time = timed ? TimeOfDay.fromDateTime(initial) : TimeOfDay(hour: 9)`），
+    /// 那是**初值**，不是每次置位都发生的改写；`editTime` 里更是只写 `isEnd`
+    /// 指定的那一个字段（`if (isEnd) endTime = …; else time = …;`），另一个字段
+    /// 一个字节都不碰。如果这里不判跃迁，「已定时、开始时间 00:00」的任务点一次
+    /// 结束时间，开始时间就会被悄悄改成 09:00 —— 用户没碰它，它却变了。
+    func setHasTime(_ on: Bool) {
+        let wasOn = hasTime
+        hasTime = on
+        // Enabling time on an all-day draft would confirm as 00:00; default to 9:00.
+        guard on, !wasOn, let anchor = startTimeAnchor,
+              calendar.component(.hour, from: anchor) == 0,
+              calendar.component(.minute, from: anchor) == 0 else { return }
+        setStartTime(calendar.date(bySettingHour: Self.allDayAnchorHour, minute: 0, second: 0, of: anchor) ?? anchor)
+    }
+
+    /// 改开始时间：只动区间开始（日期页签则动选中日），结束时间不受影响。
+    func setStartTime(_ value: Date) {
         if tab == .period {
             if let start = periodStart {
                 periodStart = Self.replacingTime(of: start, with: value, calendar: calendar)
@@ -210,6 +234,20 @@ final class TaskDateDraftModel: ObservableObject {
         } else {
             selectedDate = Self.replacingTime(of: selectedDate, with: value, calendar: calendar)
         }
+    }
+
+    /// 改结束时间：只动区间结束，开始时间与截止日期都不受影响。
+    /// 还没有结束日时把结束落到开始那天（单日定时区间）。
+    func setEndTime(_ value: Date) {
+        guard tab == .period, !deadline else { return }
+        let day = calendar.startOfDay(for: periodEnd ?? periodStart ?? value)
+        periodEnd = Self.replacingTime(of: day, with: value, calendar: calendar)
+    }
+
+    /// 清掉区间结束（回到「继续点选结束日期」）。开始时间与截止日期不动。
+    func clearEndTime() {
+        guard tab == .period, !deadline else { return }
+        periodEnd = nil
     }
 
     // MARK: Reminder
@@ -256,8 +294,7 @@ final class TaskDateDraftModel: ObservableObject {
     /// The due moment presets anchor to; nil when no start day is drafted yet.
     var dueAnchor: Date? {
         guard !deadline else { return nil }
-        let raw = tab == .period ? periodStart : selectedDate
-        guard let raw else { return nil }
+        guard let raw = startTimeAnchor else { return nil }
         return hasTime ? raw
             : calendar.date(bySettingHour: Self.allDayAnchorHour, minute: 0, second: 0, of: calendar.startOfDay(for: raw))
     }
@@ -267,7 +304,7 @@ final class TaskDateDraftModel: ObservableObject {
         case .none: return nil
         case .custom: return customReminder
         default:
-            guard let base = Self.reminderBase(for: dueDraft, hasTime: hasTime, calendar: calendar) else { return customReminder }
+            guard let base = Self.reminderBase(for: startTimeAnchor, hasTime: hasTime, calendar: calendar) else { return customReminder }
             let offset = Self.presetOffsets.first { $0.option == option }?.offset ?? 0
             return base.addingTimeInterval(offset)
         }
@@ -275,10 +312,6 @@ final class TaskDateDraftModel: ObservableObject {
 
     var reminderValue: Date? {
         reminderDate(for: reminderOption)
-    }
-
-    private var dueDraft: Date? {
-        tab == .period ? periodStart : selectedDate
     }
 
     private static func reminderBase(for due: Date?, hasTime: Bool, calendar: Calendar) -> Date? {
@@ -290,7 +323,7 @@ final class TaskDateDraftModel: ObservableObject {
     /// 重复规则锚定的日期：时间段取开始日，否则取选中日（面板以它生成周/月/年
     /// 规则与行文案）。
     var recurrenceAnchorDate: Date {
-        (tab == .period ? periodStart : nil) ?? selectedDate
+        startTimeAnchor ?? selectedDate
     }
 
     /// 子面板“确定”时批量替换提醒偏移（取消即不调用，语义同 Flutter 子菜单）。
@@ -323,6 +356,37 @@ final class TaskDateDraftModel: ObservableObject {
     func chooseRepeatCount(_ value: Int) { repeatCount = value; recurrenceTouched = true }
     func chooseRepeatEndDate(_ value: Date) { repeatEndDate = value; recurrenceTouched = true }
 
+    // MARK: Effective range
+
+    /// 生效的区间起点 —— 与 `commitPlan` 共用**同一处**映射，校验与提交不会
+    /// 各写一套而漂移（上一版 dueEndAt 掉时间，正是提交处单独写了一份）。
+    var effectiveStart: Date? {
+        guard !deadline else { return nil }
+        switch tab {
+        case .date:
+            return hasTime ? selectedDate : calendar.startOfDay(for: selectedDate)
+        case .period:
+            return periodStart.map { hasTime ? $0 : calendar.startOfDay(for: $0) }
+        }
+    }
+
+    /// 生效的区间终点。只有时间段页签有区间；日期页签**恒为 nil** ——
+    /// 这就是「切回日期必须清掉旧 dueEndAt」的判据。
+    /// 定时区间保留结束的时分（`dueEndAt` 不再被压成 startOfDay）。
+    var effectiveEnd: Date? {
+        guard !deadline, tab == .period else { return nil }
+        return periodEnd.map { hasTime ? $0 : calendar.startOfDay(for: $0) }
+    }
+
+    /// 结束早于开始 → 禁止确认。判据照抄 Flutter `apply()` 的 `to.isBefore(from)`：
+    /// **严格早于**，相等合法（09:00 → 09:00 可以提交）。不要自行改成 `<=`。
+    var rangeError: String? {
+        guard let start = effectiveStart, let end = effectiveEnd else { return nil }
+        return end < start ? "结束时间不能早于开始时间" : nil
+    }
+
+    var canCommit: Bool { rangeError == nil }
+
     // MARK: Commit
 
     func commitPlan(for current: Task) -> CommitPlan {
@@ -333,15 +397,11 @@ final class TaskDateDraftModel: ObservableObject {
                               reminderOffsets: current.reminderOffsets ?? [],
                               frequency: current.recurrence, recurrenceRule: current.recurrenceRule)
         }
-        switch tab {
-        case .date:
-            schedule.dueAt = hasTime ? selectedDate : calendar.startOfDay(for: selectedDate)
-            schedule.hasTime = hasTime
-        case .period:
-            schedule.dueAt = periodStart.map { hasTime ? $0 : calendar.startOfDay(for: $0) }
-            schedule.hasTime = periodStart != nil && hasTime
-            schedule.dueEndAt = periodEnd.map { calendar.startOfDay(for: $0) }
-        }
+        // 三个字段各归各的：dueAt（开始）/ dueEndAt（区间结束）/ deadlineAt（截止）。
+        // deadlineAt 在上面 deadline 分支之外**从不**被这段逻辑碰到。
+        schedule.dueAt = effectiveStart
+        schedule.hasTime = tab == .period ? (periodStart != nil && hasTime) : hasTime
+        schedule.dueEndAt = effectiveEnd
         // Offsets need a schedulable anchor; without a due they clear (Flutter
         // parity), and the legacy single reminder then applies again.
         var offsets = reminderOffsetsDraft

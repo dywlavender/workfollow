@@ -92,9 +92,9 @@ final class TaskDateDraftModelTests: XCTestCase {
 
     // MARK: Time
 
-    func testSetTimeKeepsTheDay() {
+    func testSetStartTimeKeepsTheDay() {
         let model = makeModel(task: makeTask(due: date(8, 22, 14, 0), hasTime: true))
-        model.setTime(date(8, 25, 8, 15))
+        model.setStartTime(date(8, 25, 8, 15))
         XCTAssertEqual(model.selectedDate, date(8, 22, 8, 15))
     }
 
@@ -188,6 +188,194 @@ final class TaskDateDraftModelTests: XCTestCase {
         XCTAssertFalse(plan.schedule.hasTime)
         XCTAssertEqual(plan.schedule.dueEndAt, calendar.startOfDay(for: date(8, 12)))
         XCTAssertNil(plan.schedule.deadlineAt, "时间段页签不碰截止日期")
+    }
+
+    // MARK: 时间段开始 / 结束时间（Flutter parity）
+
+    /// 定时区间提交：开始与结束**各留自己的时分**。
+    /// 这一条锁的是上一版的缺陷——`dueEndAt` 被压成 `startOfDay`，
+    /// 「9月30日 17:45」实际存成「9月30日 00:00」。
+    func testCommitTimedRangeKeepsBothTimesOfDay() {
+        let task = makeTask(due: date(9, 29))
+        let model = makeModel(task: task)
+        model.setTab(.period)
+        model.select(date(9, 30))
+        model.setHasTime(true)
+        model.setStartTime(date(9, 29, 9, 30))
+        model.setEndTime(date(9, 30, 17, 45))
+        let plan = model.commitPlan(for: task)
+        XCTAssertEqual(plan.schedule.dueAt, date(9, 29, 9, 30))
+        XCTAssertEqual(plan.schedule.dueEndAt, date(9, 30, 17, 45))
+        XCTAssertTrue(plan.schedule.hasTime)
+    }
+
+    /// 已有定时区间打开面板：开始与结束时间都要还原出来。
+    func testReopeningATimedRangeRestoresBothTimes() {
+        let model = makeModel(task: makeTask(due: date(9, 29, 9, 30), hasTime: true,
+                                             dueEnd: date(9, 30, 17, 45)))
+        XCTAssertEqual(model.tab, .period)
+        XCTAssertEqual(model.startTimeAnchor, date(9, 29, 9, 30))
+        XCTAssertEqual(model.endTimeAnchor, date(9, 30, 17, 45))
+        XCTAssertTrue(model.hasEndTime)
+    }
+
+    /// 只改结束时间：开始时间不动，`dueEndAt` 更新。
+    func testEditingOnlyTheEndTimeLeavesTheStartAlone() {
+        let task = makeTask(due: date(9, 29, 9, 30), hasTime: true, dueEnd: date(9, 30, 17, 45))
+        let model = makeModel(task: task)
+        model.setEndTime(date(9, 30, 11, 43))
+        let plan = model.commitPlan(for: task)
+        XCTAssertEqual(plan.schedule.dueAt, date(9, 29, 9, 30))
+        XCTAssertEqual(plan.schedule.dueEndAt, date(9, 30, 11, 43))
+    }
+
+    /// 分钟精度必须能存下来：半小时列表只是快捷选择，不是数据精度。
+    func testMinutePrecisionSurvivesCommit() {
+        let task = makeTask(due: date(9, 29), dueEnd: date(9, 30))
+        let model = makeModel(task: task)
+        model.setHasTime(true)
+        model.setStartTime(date(9, 29, 9, 17))
+        model.setEndTime(date(9, 30, 11, 43))
+        let plan = model.commitPlan(for: task)
+        XCTAssertEqual(plan.schedule.dueAt, date(9, 29, 9, 17))
+        XCTAssertEqual(plan.schedule.dueEndAt, date(9, 30, 11, 43))
+    }
+
+    /// 时间段 → 日期：旧的 `dueEndAt` 必须清掉，否则「日期」页签还留着区间。
+    func testSwitchingToTheDateTabClearsTheStaleRangeEnd() {
+        let task = makeTask(due: date(9, 29, 9, 30), hasTime: true, dueEnd: date(9, 30, 17, 45))
+        let model = makeModel(task: task)
+        XCTAssertEqual(model.tab, .period)
+        model.setTab(.date)
+        let plan = model.commitPlan(for: task)
+        XCTAssertEqual(plan.schedule.dueAt, date(9, 29, 9, 30))
+        XCTAssertNil(plan.schedule.dueEndAt, "日期页签没有区间")
+    }
+
+    /// 改安排区间不许碰截止日期：`dueAt` / `dueEndAt` / `deadlineAt` 三个概念独立。
+    func testRangeEditsNeverTouchTheDeadline() {
+        let task = makeTask(due: date(9, 29), dueEnd: date(9, 30), deadline: date(10, 3))
+        let model = makeModel(task: task)
+        model.setHasTime(true)
+        model.setStartTime(date(9, 29, 9, 30))
+        model.setEndTime(date(9, 30, 17, 45))
+        let plan = model.commitPlan(for: task)
+        XCTAssertEqual(plan.schedule.dueEndAt, date(9, 30, 17, 45))
+        XCTAssertEqual(plan.schedule.deadlineAt, task.schedule.deadlineAt,
+                       "改安排区间不许碰截止日期")
+    }
+
+    /// 清除安排：开始与区间结束都清掉，截止日期保留。
+    func testClearOnThePeriodTabKeepsTheDeadline() {
+        let task = makeTask(due: date(9, 29, 9, 30), hasTime: true,
+                            dueEnd: date(9, 30, 17, 45), deadline: date(10, 3))
+        let model = makeModel(task: task)
+        let plan = model.clearPlan(for: task)
+        XCTAssertNil(plan.schedule.dueAt)
+        XCTAssertNil(plan.schedule.dueEndAt)
+        XCTAssertEqual(plan.schedule.deadlineAt, task.schedule.deadlineAt)
+    }
+
+    /// 结束早于开始 → 禁止确认（Flutter `apply()` 的同一判据）。
+    func testEndBeforeStartBlocksCommit() {
+        let task = makeTask(due: date(9, 29))
+        let model = makeModel(task: task)
+        model.setTab(.period)
+        model.setHasTime(true)
+        model.setStartTime(date(9, 29, 17, 0))
+        model.setEndTime(date(9, 29, 9, 0))
+        XCTAssertEqual(model.rangeError, "结束时间不能早于开始时间")
+        XCTAssertFalse(model.canCommit)
+    }
+
+    /// Flutter 只判 `to.isBefore(from)`：**相等合法**，不要自己收紧成 `<=`。
+    func testEqualStartAndEndIsAllowed() {
+        let task = makeTask(due: date(9, 29))
+        let model = makeModel(task: task)
+        model.setTab(.period)
+        model.setHasTime(true)
+        model.setStartTime(date(9, 29, 9, 0))
+        model.setEndTime(date(9, 29, 9, 0))
+        XCTAssertNil(model.rangeError)
+        XCTAssertTrue(model.canCommit)
+    }
+
+    /// 全天区间没有时刻可比，不该报错（也不该被时间逻辑碰到）。
+    func testAllDayRangeHasNoRangeErrorAndStaysAllDay() {
+        let task = makeTask(due: date(9, 29))
+        let model = makeModel(task: task)
+        model.setTab(.period)
+        model.select(date(9, 30))
+        XCTAssertNil(model.rangeError)
+        let plan = model.commitPlan(for: task)
+        XCTAssertFalse(plan.schedule.hasTime)
+        XCTAssertEqual(plan.schedule.dueAt, calendar.startOfDay(for: date(9, 29)))
+        XCTAssertEqual(plan.schedule.dueEndAt, calendar.startOfDay(for: date(9, 30)))
+    }
+
+    /// 结束时间锚点只属于时间段页签；日期页签上写结束时间是空操作。
+    ///
+    /// 注意：切到日期页签时草稿**故意保留** `periodEnd`（切回时间段要还原区间），
+    /// 清掉它的是 `commitPlan`（见 `testSwitchingToTheDateTabClearsTheStaleRangeEnd`）。
+    func testEndTimeIsScopedToThePeriodTab() {
+        let model = makeModel(task: makeTask(due: date(9, 29), dueEnd: date(9, 30)))
+        XCTAssertEqual(model.tab, .period)
+        XCTAssertNotNil(model.endTimeAnchor)
+        model.setTab(.date)
+        XCTAssertNil(model.endTimeAnchor)
+        XCTAssertFalse(model.hasEndTime)
+        model.setEndTime(date(9, 30, 17, 45))
+        XCTAssertEqual(model.periodEnd, date(9, 30), "日期页签上不该改到结束时间")
+    }
+
+    /// 还没有结束日时改结束时间：落到开始那天，形成单日定时区间。
+    func testSettingAnEndTimeWithoutAnEndDayMaterialisesTheStartDay() {
+        let task = makeTask(due: date(9, 29))
+        let model = makeModel(task: task)
+        model.setTab(.period)
+        model.setHasTime(true)
+        model.setStartTime(date(9, 29, 9, 30))
+        XCTAssertNil(model.periodEnd)
+        model.setEndTime(date(9, 30, 17, 45))
+        XCTAssertEqual(model.periodEnd, date(9, 29, 17, 45), "结束落在开始那天")
+        let plan = model.commitPlan(for: task)
+        XCTAssertEqual(plan.schedule.dueEndAt, date(9, 29, 17, 45))
+    }
+
+    /// 回归：**已定时**的区间（开始恰好 00:00）改结束时间，开始时间必须一动不动。
+    ///
+    /// Flutter `editTime(isEnd: true)` 只写 `endTime`；而原生 `setHasTime` 里那句
+    /// 「全天 → 09:00」的兜底如果不判跃迁，就会被「点结束时间顺便置 timed = true」
+    /// 这条路带出来，把 00:00 悄悄改成 09:00。这条用例就是钉住那个边界的。
+    func testSettingAnEndTimeDoesNotMoveAnAlreadyTimedStart() {
+        let task = makeTask(due: allDay(9, 26), hasTime: true, dueEnd: allDay(9, 30))
+        let model = makeModel(task: task)
+        XCTAssertEqual(model.tab, .period)
+        XCTAssertEqual(model.startTimeAnchor, allDay(9, 26))
+
+        // 用户只做了「点结束时间 → 选 02:30」这一件事。
+        model.setHasTime(true)
+        model.setEndTime(date(9, 30, 2, 30))
+
+        XCTAssertEqual(model.periodStart, allDay(9, 26), "开始时间不该被结束时间的操作改写")
+        XCTAssertEqual(model.startTimeAnchor, allDay(9, 26))
+        let plan = model.commitPlan(for: task)
+        XCTAssertEqual(plan.schedule.dueAt, allDay(9, 26))
+        XCTAssertEqual(plan.schedule.dueEndAt, date(9, 30, 2, 30))
+    }
+
+    /// 兜底本身要留着：全天任务开定时仍然默认 09:00（Flutter `initState` 的初值；
+    /// 日期页签那一路由上面的 `testEnablingTimeOnAllDayDraftDefaultsToNine` 覆盖）。
+    /// 这里补的是**第二次置 true 必须是空操作**——否则每次置位都会重新搬动开始时间。
+    func testReEnablingTimeDoesNotMoveAnAlreadyTimedStart() {
+        let task = makeTask(due: allDay(9, 26), dueEnd: allDay(9, 30))
+        let model = makeModel(task: task)
+        XCTAssertFalse(model.hasTime)
+        model.setHasTime(true)
+        XCTAssertEqual(model.periodStart, date(9, 26, 9, 0), "全天 → 定时的跃迁仍补 09:00")
+        model.setStartTime(date(9, 26, 7, 15))
+        model.setHasTime(true)
+        XCTAssertEqual(model.periodStart, date(9, 26, 7, 15), "已定时后再置 true 不得改写开始时间")
     }
 
     // MARK: Clear

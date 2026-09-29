@@ -199,6 +199,23 @@ final class RecurrenceEngineTests: XCTestCase {
         XCTAssertEqual(spawn.recurrence, .weekly)
     }
 
+    /// 区间任务生成下一实例：`dueAt` 与 `dueEndAt` 按**同一 delta** 平移，
+    /// 区间长度与结束时刻都不变（只挪开始日会把区间压扁、把 17:45 丢成 00:00）。
+    func testCompletionShiftsTheWholeRangeByTheSameDelta() {
+        let (store, actions) = makeActions { self.date(2026, 1, 7, 10, 0) }
+        let id = actions.create(title: "ranged weekly",
+                                schedule: TaskSchedule(dueAt: date(2026, 1, 7, 9, 30), hasTime: true,
+                                                       dueEndAt: date(2026, 1, 8, 17, 45))).taskID!
+        actions.setRecurrence(id, frequency: .weekly, rule: RecurrenceRule(weekday: 6))
+
+        let spawn = store.task(actions.complete(id).taskID!)!
+        XCTAssertEqual(spawn.schedule.dueAt, date(2026, 1, 9, 9, 30))
+        XCTAssertEqual(spawn.schedule.dueEndAt, date(2026, 1, 10, 17, 45))
+        XCTAssertEqual(spawn.schedule.dueEndAt!.timeIntervalSince(spawn.schedule.dueAt!),
+                       date(2026, 1, 8, 17, 45).timeIntervalSince(date(2026, 1, 7, 9, 30)),
+                       "区间长度必须原样保留")
+    }
+
     func testCompletionCarriesChildrenIncompleteWithoutRepeatRules() {
         let (store, actions) = makeActions { self.date(2026, 1, 5, 12, 0) }
         let parent = actions.create(title: "daily parent", schedule: TaskSchedule(dueAt: date(2026, 1, 5, 9, 0), hasTime: true)).taskID!

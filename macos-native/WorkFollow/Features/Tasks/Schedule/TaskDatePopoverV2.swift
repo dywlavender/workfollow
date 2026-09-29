@@ -27,8 +27,9 @@ struct TaskDatePopoverV2: View {
     private let draftCommit: ((TaskDateDraftModel.CommitPlan) -> Void)?
 
     /// 子面板（Flutter 子菜单层）：贴着自己的属性行顶展开、覆盖该行往下。
+    /// `endTime` 只在时间段页签出现（Flutter: `if (range) _property('schedule-end-time' …)`）。
     enum InlineSheet: Hashable {
-        case time, reminder, `repeat`, repeatEnd
+        case time, endTime, reminder, `repeat`, repeatEnd
     }
 
     /// 重复二级页（Flutter: 工作日›/节假日›）。
@@ -51,6 +52,11 @@ struct TaskDatePopoverV2: View {
     @State private var hoveredSheet: InlineSheet?
     /// 时间行内编辑的文本（展开时可改，提交后回写草稿）。
     @State private var timeFieldText = ""
+    /// 结束时间行内编辑的文本（同上；分钟精度靠它，半小时列表只是快捷选择）。
+    @State private var endTimeFieldText = ""
+    /// 点过「确定」且区间非法时才显示错误（Flutter 的 `error` 同样是提交时才出现；
+    /// 区间改回合法后它自动消失，因为文案由草稿实时算）。
+    @State private var showRangeError = false
     /// 重复浮层的「自定义」区间编辑是否展开。
     @State private var repeatCustomOpen = false
     @State private var reminderDraft: Set<Int> = []
@@ -78,8 +84,10 @@ struct TaskDatePopoverV2: View {
             : initialPage == .recurrence ? .`repeat` : nil)
         _reminderDraft = State(initialValue: Set(draftModel.reminderOffsets))
         _timeFieldText = State(initialValue: draftModel.hasTime
-            ? Self.clockText(draftModel.timeAnchor ?? workspace.clock(), calendar: workspace.calendar)
+            ? Self.clockText(draftModel.startTimeAnchor ?? workspace.clock(), calendar: workspace.calendar)
             : Self.defaultClockText)
+        _endTimeFieldText = State(initialValue: draftModel.endTimeAnchor
+            .map { Self.clockText($0, calendar: workspace.calendar) } ?? Self.defaultClockText)
         _repeatCountText = State(initialValue: String(draftModel.repeatCount))
         _repeatEndDraftDate = State(initialValue: draftModel.repeatEndDate)
     }
@@ -127,6 +135,12 @@ struct TaskDatePopoverV2: View {
                 if !deadline {
                     propertyRows
                 }
+                if showRangeError, let message = model.rangeError {
+                    Text(message)
+                        .font(WFType.supporting)
+                        .foregroundStyle(WFColors.danger)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
                 footer
             }
         }
@@ -134,7 +148,8 @@ struct TaskDatePopoverV2: View {
         .frame(width: ScheduleMetrics.panelWidth)
         // macOS 27：`.popover` 不传 arrowEdge（默认 nil）就不画三角箭头，
         // 系统自带圆角卡片样式（对齐滴答/参考图），无需任何背景补丁。
-        .onChange(of: model.timeAnchor) { _, _ in syncTimeField() }
+        .onChange(of: model.startTimeAnchor) { _, _ in syncTimeField() }
+        .onChange(of: model.endTimeAnchor) { _, _ in syncTimeField() }
         .onChange(of: model.hasTime) { _, _ in syncTimeField() }
     }
 
@@ -142,12 +157,19 @@ struct TaskDatePopoverV2: View {
 
     private var propertyRows: some View {
         VStack(spacing: 0) {
-            sheetRow(.time, icon: "clock", title: timeRowTitle, active: model.hasTime,
+            sheetRow(.time, icon: "clock", title: "时间", active: model.hasTime,
                      editor: AnyView(timeRowEditor),
                      clear: model.hasTime ? {
                          model.setHasTime(false)
                          timeFieldText = Self.defaultClockText
                      } : nil) { timePanelBody }
+            // 结束时间：只在时间段页签出现（Flutter `if (range) _property('schedule-end-time' …)`），
+            // 紧跟在开始时间之后、提醒之前。
+            if model.tab == .period {
+                sheetRow(.endTime, icon: "clock", title: "结束时间", active: model.hasEndTime,
+                         editor: AnyView(endTimeRowEditor),
+                         clear: model.hasEndTime ? { model.clearEndTime() } : nil) { endTimePanelBody }
+            }
             sheetRow(.reminder, icon: "alarm", title: reminderRowLabel,
                      active: model.hasReminderDraft,
                      clear: model.hasReminderDraft ? { model.clearReminder() } : nil) {
@@ -241,21 +263,40 @@ struct TaskDatePopoverV2: View {
 
     /// 时间行的行内编辑（滴答：行即 HH:mm 输入框，列表给半点粒度、输入框给分钟）。
     private var timeRowEditor: AnyView {
+        AnyView(clockField(text: $timeFieldText, submit: submitTimeField))
+    }
+
+    /// 结束时间行的行内编辑：`结束` 前缀 + 同一个 HH:mm 输入框。
+    /// Flutter 该行文案是 `结束 17:45`（源码 `'结束 ${scheduleClock(endTime)}'`）；
+    /// 原生把值做成可编辑输入框，前缀保留——否则两行都只剩一个时刻、无法区分。
+    private var endTimeRowEditor: AnyView {
         AnyView(
-            TextField(Self.defaultClockText, text: $timeFieldText)
-                .textFieldStyle(.plain)
-                .font(WFType.body)
-                .foregroundStyle(WFColors.accent)
-                .frame(width: 52, alignment: .leading)
-                .onSubmit(submitTimeField)
+            HStack(spacing: 4) {
+                Text("结束")
+                    .font(WFType.body)
+                    .foregroundStyle(WFColors.accent)
+                clockField(text: $endTimeFieldText, submit: submitEndTimeField)
+            }
         )
     }
 
-    /// 时间值在别处变化（列表点选、日历改天、清除）后同步行内文本。
+    /// 两行共用的 HH:mm 输入框（固定宽度，行内不跳动）。
+    private func clockField(text: Binding<String>, submit: @escaping () -> Void) -> some View {
+        TextField(Self.defaultClockText, text: text)
+            .textFieldStyle(.plain)
+            .font(WFType.body)
+            .foregroundStyle(WFColors.accent)
+            .frame(width: 52, alignment: .leading)
+            .onSubmit(submit)
+    }
+
+    /// 时间值在别处变化（列表点选、日历改天、清除）后同步两行的行内文本。
     private func syncTimeField() {
         timeFieldText = model.hasTime
-            ? Self.clockText(model.timeAnchor ?? workspace.clock(), calendar: workspace.calendar)
+            ? Self.clockText(model.startTimeAnchor ?? workspace.clock(), calendar: workspace.calendar)
             : Self.defaultClockText
+        endTimeFieldText = model.endTimeAnchor
+            .map { Self.clockText($0, calendar: workspace.calendar) } ?? Self.defaultClockText
     }
 
     /// 未设置时间时的默认显示（滴答：全天任务按 09:00 起算）。
@@ -264,19 +305,31 @@ struct TaskDatePopoverV2: View {
     }
 
     private func submitTimeField() {
-        let parts = timeFieldText.split(separator: ":")
-        guard parts.count == 2, let hour = Int(parts[0]), let minute = Int(parts[1]),
-              (0...23).contains(hour), (0...59).contains(minute) else {
-            timeFieldText = model.hasTime
-                ? Self.clockText(model.timeAnchor ?? workspace.clock(), calendar: workspace.calendar)
-                : Self.defaultClockText
+        guard let value = parsedClock(timeFieldText, on: model.startTimeAnchor) else {
+            syncTimeField()
             return
         }
-        let calendar = workspace.calendar
-        let day = calendar.startOfDay(for: model.timeAnchor ?? workspace.clock())
-        guard let value = calendar.date(bySettingHour: hour, minute: minute, second: 0, of: day) else { return }
         model.setHasTime(true)
-        model.setTime(value)
+        model.setStartTime(value)
+    }
+
+    private func submitEndTimeField() {
+        guard let value = parsedClock(endTimeFieldText, on: model.endTimeAnchor) else {
+            syncTimeField()
+            return
+        }
+        model.setHasTime(true)
+        model.setEndTime(value)
+    }
+
+    /// 解析 `HH:mm` 并落到锚点那一天；非法输入返回 nil（调用方回滚文本）。
+    private func parsedClock(_ text: String, on anchor: Date?) -> Date? {
+        let parts = text.split(separator: ":")
+        guard parts.count == 2, let hour = Int(parts[0]), let minute = Int(parts[1]),
+              (0...23).contains(hour), (0...59).contains(minute) else { return nil }
+        let calendar = workspace.calendar
+        let day = calendar.startOfDay(for: anchor ?? workspace.clock())
+        return calendar.date(bySettingHour: hour, minute: minute, second: 0, of: day)
     }
 
     /// 浮层开关绑定：点行打开，点浮层外部（系统 dismiss）收起。
@@ -301,19 +354,44 @@ struct TaskDatePopoverV2: View {
     /// 时间浮层 = 半小时步进列表（当前值强调色 + ✓），点即选即用；
     /// 精确到分钟与清除都在行内（`timeRowEditor` / 行尾 ×）。
     private var timePanelBody: some View {
-        timeOptionsList
+        halfHourList(day: startTimeDay,
+                     selected: model.hasTime ? model.startTimeAnchor : nil,
+                     fallback: fallbackClock(for: nil)) { option in
+            model.setHasTime(true)
+            model.setStartTime(option)
+            closeSheet()
+        }
     }
 
-    private var timeOptionsList: some View {
-        ScrollViewReader { proxy in
+    /// 结束时间浮层：**同一个**半小时列表组件，只换锚定日与回写目标。
+    private var endTimePanelBody: some View {
+        halfHourList(day: endTimeDay,
+                     selected: model.hasEndTime ? model.endTimeAnchor : nil,
+                     fallback: fallbackClock(for: model.startTimeAnchor)) { option in
+            model.setHasTime(true)
+            model.setEndTime(option)
+            closeSheet()
+        }
+    }
+
+    /// 半小时步进列表（时间 / 结束时间共用一套，不复制第二份）。
+    /// 列表只是**快捷选择**：精确分钟由行内输入框提供（Flutter 同款分工，
+    /// 09:17 → 11:43 这类值必须能存下来）。
+    private func halfHourList(day: Date, selected: Date?, fallback: (hour: Int, minute: Int),
+                              onPick: @escaping (Date) -> Void) -> some View {
+        let calendar = workspace.calendar
+        let options = (0..<48).compactMap { calendar.date(byAdding: .minute, value: $0 * 30, to: day) }
+        func matches(_ option: Date, _ value: Date) -> Bool {
+            Self.isClock(option, hour: calendar.component(.hour, from: value),
+                         minute: calendar.component(.minute, from: value), calendar: calendar)
+        }
+        return ScrollViewReader { proxy in
             ScrollView {
                 VStack(spacing: 0) {
-                    ForEach(halfHourOptions, id: \.self) { option in
-                        optionsRow(Self.clockText(option, calendar: workspace.calendar),
-                                   checked: isDraftTime(option)) {
-                            model.setHasTime(true)
-                            model.setTime(option)
-                            closeSheet()
+                    ForEach(options, id: \.self) { option in
+                        optionsRow(Self.clockText(option, calendar: calendar),
+                                   checked: selected.map { matches(option, $0) } ?? false) {
+                            onPick(option)
                         }
                         .id(option)
                     }
@@ -321,27 +399,33 @@ struct TaskDatePopoverV2: View {
             }
             .frame(height: ScheduleMetrics.timeOptionsHeight)
             .onAppear {
-                if let target = halfHourOptions.first(where: { isDraftTime($0) })
-                    ?? halfHourOptions.first(where: { Self.isClock($0, hour: 9, minute: 0,
-                                                                  calendar: workspace.calendar) }) {
-                    proxy.scrollTo(target, anchor: .top)
-                }
+                let target = options.first { option in
+                    guard let selected else { return false }
+                    return matches(option, selected)
+                } ?? options.first { Self.isClock($0, hour: fallback.hour,
+                                                   minute: fallback.minute, calendar: calendar) }
+                if let target { proxy.scrollTo(target, anchor: .top) }
             }
         }
     }
 
-    /// 48 个半小时选项（00:00–23:30），锚在草稿那一天的零点上。
-    private var halfHourOptions: [Date] {
-        let calendar = workspace.calendar
-        let day = calendar.startOfDay(for: model.timeAnchor ?? workspace.clock())
-        return (0..<48).compactMap { calendar.date(byAdding: .minute, value: $0 * 30, to: day) }
+    /// 时间列表的锚定日：草稿那一天。
+    private var startTimeDay: Date {
+        workspace.calendar.startOfDay(for: model.startTimeAnchor ?? workspace.clock())
     }
 
-    private func isDraftTime(_ option: Date) -> Bool {
-        guard model.hasTime, let anchor = model.timeAnchor else { return false }
-        return Self.isClock(option, hour: workspace.calendar.component(.hour, from: anchor),
-                            minute: workspace.calendar.component(.minute, from: anchor),
-                            calendar: workspace.calendar)
+    /// 结束时间列表的锚定日：结束那天（还没有结束时落在开始那天）。
+    private var endTimeDay: Date {
+        workspace.calendar.startOfDay(for: model.endTimeAnchor ?? workspace.clock())
+    }
+
+    /// 列表打开时滚到的兜底时刻。开始时间无值 → 09:00（滴答全天起点）；
+    /// 结束时间无值 → 开始 +1 小时（Flutter `until = initial + 1h` 的同一默认）。
+    private func fallbackClock(for start: Date?) -> (hour: Int, minute: Int) {
+        guard let start else { return (TaskDateDraftModel.allDayAnchorHour, 0) }
+        let plus = start.addingTimeInterval(3600)
+        return (workspace.calendar.component(.hour, from: plus),
+                workspace.calendar.component(.minute, from: plus))
     }
 
     // MARK: 提醒子面板（Flutter ScheduleReminderOptions）
@@ -390,7 +474,7 @@ struct TaskDatePopoverV2: View {
     }
 
     private var reminderClockText: String {
-        if model.hasTime, let anchor = model.timeAnchor {
+        if model.hasTime, let anchor = model.startTimeAnchor {
             return Self.clockText(anchor, calendar: workspace.calendar)
         }
         return Self.defaultClockText
@@ -655,11 +739,6 @@ struct TaskDatePopoverV2: View {
 
     // MARK: 属性行文案
 
-    private var timeRowTitle: String {
-        guard model.hasTime, let anchor = model.timeAnchor else { return "时间" }
-        return Self.clockText(anchor, calendar: workspace.calendar)
-    }
-
     private var reminderRowLabel: String {
         let offsets = model.reminderOffsetsDraft
         if !offsets.isEmpty {
@@ -747,8 +826,11 @@ struct TaskDatePopoverV2: View {
         switch sheet {
         case .time:
             timeFieldText = model.hasTime
-                ? Self.clockText(model.timeAnchor ?? workspace.clock(), calendar: workspace.calendar)
+                ? Self.clockText(model.startTimeAnchor ?? workspace.clock(), calendar: workspace.calendar)
                 : Self.defaultClockText
+        case .endTime:
+            endTimeFieldText = model.endTimeAnchor
+                .map { Self.clockText($0, calendar: workspace.calendar) } ?? Self.defaultClockText
         case .reminder:
             reminderDraft = model.reminderOffsets
             reminderCustomOpen = false
@@ -886,6 +968,12 @@ struct TaskDatePopoverV2: View {
     // MARK: Commit
 
     private func save() {
+        // 结束早于开始 → 禁止确认（Flutter `apply()` 的同一判据；相等合法）。
+        if model.rangeError != nil {
+            showRangeError = true
+            return
+        }
+        showRangeError = false
         // 草稿宿主：把计划交给调用方（新建卡把它带回草稿状态），不碰工作区。
         if let draftCommit {
             draftCommit(model.commitPlan(for: task))

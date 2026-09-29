@@ -29,6 +29,19 @@ final class SchedulePopoverContractTests: XCTestCase {
         TaskWorkspaceModel(clock: { now }, calendar: calendar, seedDemoData: false)
     }
 
+    /// 定时区间任务：打开时落在时间段页签，属性区多出「结束时间」一行。
+    private func makeRangedTask() -> Task {
+        let due = calendar.date(from: DateComponents(year: 2026, month: 9, day: 28,
+                                                     hour: 9, minute: 30))!
+        let end = calendar.date(from: DateComponents(year: 2026, month: 9, day: 29,
+                                                     hour: 17, minute: 45))!
+        return Task(id: UUID(), title: "验收", tags: [], recurrence: .never,
+                    list: .inbox, priority: .none,
+                    schedule: TaskSchedule(dueAt: due, hasTime: true, dueEndAt: end),
+                    status: .active, parentID: nil, childOrder: 0,
+                    createdAt: due, updatedAt: due)
+    }
+
     private func size(of popover: TaskDatePopoverV2) -> CGSize {
         NSHostingController(rootView: AnyView(popover))
             .sizeThatFits(in: CGSize(width: 600, height: 900))
@@ -79,5 +92,16 @@ final class SchedulePopoverContractTests: XCTestCase {
                                                   deadline: true) {})
         // 截止日期面板没有属性行（时间/提醒/重复 + 重复结束隐藏）与分段。
         XCTAssertLessThan(deadline.height, base.height - ScheduleMetrics.rowHeight)
+    }
+
+    /// 时间段页签多出「结束时间」一行（Flutter `if (range)`），宽度契约不变。
+    func testPeriodTabAddsTheEndTimeRow() {
+        let now = calendar.date(from: DateComponents(year: 2026, month: 9, day: 28, hour: 10))!
+        let dateOnly = size(of: TaskDatePopoverV2(task: makeTask(), workspace: workspace(now: now)) {})
+        let ranged = size(of: TaskDatePopoverV2(task: makeRangedTask(),
+                                                workspace: workspace(now: now)) {})
+        XCTAssertEqual(ranged.width, ScheduleMetrics.panelWidth, accuracy: 0.5)
+        XCTAssertGreaterThanOrEqual(ranged.height - dateOnly.height, ScheduleMetrics.rowHeight,
+                                    "时间段页签至少多出「结束时间」一行")
     }
 }
