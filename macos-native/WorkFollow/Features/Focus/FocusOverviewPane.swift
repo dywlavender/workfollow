@@ -124,15 +124,16 @@ struct FocusOverviewPane: View {
     }
 
     private var emptyRecordsState: some View {
-        VStack(spacing: 8) {
-            Image(systemName: "timer")
-                .font(.system(size: FocusLayoutMetrics.recordEmptyIconSize))
-                .foregroundStyle(theme.text3.opacity(0.7))
+        VStack(spacing: FocusLayoutMetrics.recordEmptyContentGap) {
+            FocusEmptyRecordsIllustration(theme: theme)
+                .focusRenderAnchor(.emptyRecordsIllustration)
             Text("还没有专注记录")
                 .font(.system(size: FocusLayoutMetrics.recordEmptyFontSize))
                 .foregroundStyle(theme.text3)
         }
+        .focusRenderAnchor(.emptyRecordsContent)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .focusRenderAnchor(.emptyRecordsRegion)
         .offset(y: -FocusLayoutMetrics.recordEmptyVerticalOffset)
     }
 

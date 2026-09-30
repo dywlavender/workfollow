@@ -88,7 +88,9 @@ enum FocusLayoutMetrics {
     static let recordMinutesFontSize: CGFloat = 13
     static let recordStatusDotSize: CGFloat = 5
     static let recordEmptyFontSize: CGFloat = 13
-    static let recordEmptyIconSize: CGFloat = 22
+    static let recordEmptyIllustrationWidth: CGFloat = 110
+    static let recordEmptyIllustrationHeight: CGFloat = 90
+    static let recordEmptyContentGap: CGFloat = 12
     static let recordEmptyVerticalOffset: CGFloat = 20
 
     static var ringTop: CGFloat {

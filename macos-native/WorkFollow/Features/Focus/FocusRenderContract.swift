@@ -10,6 +10,9 @@ enum FocusRenderAnchor: Hashable {
     case primaryButton
     case overviewFirstCard
     case recordsHeader
+    case emptyRecordsIllustration
+    case emptyRecordsContent
+    case emptyRecordsRegion
 
     static let coordinateSpaceName = "focus-render-contract"
 }

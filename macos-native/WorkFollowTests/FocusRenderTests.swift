@@ -81,6 +81,23 @@ final class FocusRenderTests: XCTestCase {
                            "Overview card top edge moved from the rendered reference")
             XCTAssertEqual(recordsHeader.minY, 285.75, accuracy: 0.5,
                            "Records header moved from the rendered reference")
+            if renderCase.timerState == .idleWithoutRecords {
+                let illustration = try XCTUnwrap(frames[.emptyRecordsIllustration],
+                                                 "Empty records illustration missing")
+                let emptyContent = try XCTUnwrap(frames[.emptyRecordsContent],
+                                                 "Empty records content missing")
+                let emptyRegion = try XCTUnwrap(frames[.emptyRecordsRegion],
+                                                "Empty records region missing")
+                XCTAssertEqual(illustration.width, FocusLayoutMetrics.recordEmptyIllustrationWidth,
+                               accuracy: 0.5)
+                XCTAssertEqual(illustration.height, FocusLayoutMetrics.recordEmptyIllustrationHeight,
+                               accuracy: 0.5)
+                XCTAssertEqual(emptyContent.midY, emptyRegion.midY, accuracy: 0.5,
+                               "Empty state must center inside the records region")
+            } else {
+                XCTAssertNil(frames[.emptyRecordsIllustration],
+                             "An empty-state illustration must not render with records")
+            }
             XCTAssertTrue(result.screenshotExists)
         }
     }
@@ -157,7 +174,9 @@ final class FocusRenderTests: XCTestCase {
         XCTAssertEqual(Set(frames.keys), Set([
             .rail, .railSelectedHitArea, .railSelectedBackground,
             .divider, .timerRing, .primaryButton, .overviewFirstCard, .recordsHeader
-        ]), "Incomplete render anchors for \(name)")
+        ]).union(renderCase.timerState == .idleWithoutRecords
+                 ? [.emptyRecordsIllustration, .emptyRecordsContent, .emptyRecordsRegion]
+                 : []), "Incomplete render anchors for \(name)")
         return (frames, FileManager.default.fileExists(atPath: screenshotURL.path))
     }
 
