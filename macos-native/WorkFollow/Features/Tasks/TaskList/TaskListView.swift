@@ -788,7 +788,9 @@ struct TaskListView: View {
             )
         if node.depth == 0 {
             row
-                .draggable(node.task.id.uuidString)
+                .draggable(node.task.id.uuidString) {
+                    TaskDragPreview(title: node.task.title)
+                }
                 .modifier(TaskReorderDropModifier(workspace: workspace, targetID: node.task.id))
                 .id(rowIdentity(group: group, task: node.task))
         } else {
@@ -799,7 +801,7 @@ struct TaskListView: View {
         Rectangle()
             .fill(WFColors.hover)
             .frame(height: 1)
-            .padding(.leading, WFSpace.page)
+            .padding(.leading, TaskListMetrics.dividerLeading)
             .padding(.trailing, WFSpace.lg)
     }
 
@@ -899,15 +901,11 @@ struct TaskRowView: View {
     @State private var showDatePopover = false
     @State private var showTagPicker = false
 
-    /// 父行展开箭头区宽度：14 + WFSpace.sm 间距 = 22，是子行缩进与父复选框对齐的基准；
-    /// 子行缩进步进 44 = 22 + 22，让 depth=1 的子复选框落在父标题起点再偏右一点。
-    private var chevronZoneWidth: CGFloat { 14 }
-
     var body: some View {
         HStack(alignment: .top, spacing: WFSpace.sm) {
-            if depth == 0 {
+            HStack(alignment: .top, spacing: TaskListMetrics.disclosureTitleGap) {
                 ZStack(alignment: .leading) {
-                    if hasChildren {
+                    if depth == 0 && hasChildren {
                         Button(action: onToggleExpanded) {
                             Image(systemName: expanded ? "chevron.down" : "chevron.right")
                                 .font(.system(size: 10, weight: .semibold))
@@ -919,15 +917,17 @@ struct TaskRowView: View {
                         Color.clear
                     }
                 }
-                .frame(width: chevronZoneWidth)
+                .frame(width: TaskListMetrics.disclosureWidth, height: 18)
+                .taskTreeRenderAnchor(task.id, .disclosure)
+                Button(action: task.isClosed ? onRestore : onComplete) {
+                    TaskRowCompletionBox(task: task)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help(task.isClosed ? "恢复任务" : "完成任务")
+                .accessibilityLabel(task.isClosed ? "恢复：\(task.title)" : "完成：\(task.title)")
+                .taskTreeRenderAnchor(task.id, .checkbox)
             }
-            Button(action: task.isClosed ? onRestore : onComplete) {
-                TaskRowCompletionBox(task: task)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .help(task.isClosed ? "恢复任务" : "完成任务")
-            .accessibilityLabel(task.isClosed ? "恢复：\(task.title)" : "完成：\(task.title)")
 
             Button(action: onSelect) {
                 VStack(alignment: .leading, spacing: 1) {
@@ -938,6 +938,7 @@ struct TaskRowView: View {
                         Text(preview)
                             .font(WFType.listBody).lineLimit(1)
                             .foregroundStyle(WFColors.secondaryText)
+                            .taskTreeRenderAnchor(task.id, .preview)
                     }
                 }
                 // 内容区高度 = 行高 50 − 上下 11 内边距：点击区铺满内容区，
@@ -952,11 +953,10 @@ struct TaskRowView: View {
                                  showsListBadge: showsListBadge,
                                  onOpenDate: { showDatePopover = true })
         }
-        .padding(.horizontal, WFSpace.sm)
+        .padding(.horizontal, TaskListMetrics.rowHorizontalPadding)
         // 对齐 Flutter rowVerticalPadding = 11：内容顶对齐，勾选框贴标题首行。
         .padding(.vertical, WFMetrics.rowVerticalPadding)
-        // 子行每层缩进 44：父行 depth=0 不变；展开箭头区只挂在 depth=0 行上不受影响。
-        .padding(.leading, CGFloat(depth) * 44)
+        .padding(.leading, CGFloat(depth) * TaskListMetrics.hierarchyIndent)
         .frame(minHeight: WFMetrics.rowHeight)
         .background(selected ? WFColors.selection : hovering ? WFColors.hover : .clear,
                     in: RoundedRectangle(cornerRadius: WFMetrics.corner))
@@ -1000,22 +1000,9 @@ struct TaskRowView: View {
         }
     }
 
-    private var children: [Task] {
-        workspace.allTasks.filter {
-            $0.parentID == task.id && $0.deletedAt == nil && $0.skippedAt == nil &&
-                !$0.isAbandoned && !$0.isConverted
-        }.sorted { $0.childOrder < $1.childOrder }
-    }
-
-    /// 折叠时在标题下方显示灰色的"- [ ] 子任务"预览；展开后由子任务行呈现，不再重复。
-    private var subtaskPreview: String? {
-        guard hasChildren, !expanded else { return nil }
-        return TaskListViewDefaults.subtaskPreview(titles: children.map(\.title))
-    }
-
-    /// 标题下的灰色预览行：折叠且有子任务用子任务预览，否则正文有内容时用单行正文。
+    /// Folding hides children; only this task's own body supplies its preview.
     private var rowPreview: String? {
-        subtaskPreview ?? TaskListViewDefaults.bodyPreview(of: task.document.plainText)
+        TaskListViewDefaults.bodyPreview(of: task.document.plainText)
     }
 
 }
@@ -1084,10 +1071,7 @@ private struct TaskReorderDropModifier: ViewModifier {
             } isTargeted: { targeted = $0 }
             .overlay(alignment: .top) {
                 if targeted {
-                    Capsule()
-                        .fill(WFColors.accent)
-                        .frame(height: 2)
-                        .padding(.horizontal, WFSpace.sm)
+                    TaskDropMarker()
                         .transition(.opacity)
                 }
             }
@@ -1283,13 +1267,6 @@ enum TaskListViewDefaults {
         if day < today { return .overdue }
         if day == today { return .today }
         return .scheduled
-    }
-
-    /// TickTick 式子任务预览：`- [ ] 甲 - [ ] 乙`，取前 limit 条；无标题兜底"无标题"。
-    static func subtaskPreview(titles: [String], limit: Int = 3) -> String? {
-        let names = titles.map { $0.isEmpty ? "无标题" : $0 }.prefix(max(limit, 1))
-        guard !names.isEmpty else { return nil }
-        return names.map { "- [ ] " + $0 }.joined(separator: " ")
     }
 
     /// 行内正文预览：取纯文本第一个非空行；正文为空返回 nil（不占预览行）。

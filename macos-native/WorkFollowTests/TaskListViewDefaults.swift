@@ -46,14 +46,6 @@ final class TaskListViewDefaultsTests: XCTestCase {
             dueAt: date(9, 25), isClosed: true, now: now, calendar: calendar), .none)
     }
 
-    func testSubtaskPreviewJoinsChecklistPrefixLimitsAndFallsBack() {
-        XCTAssertNil(TaskListViewDefaults.subtaskPreview(titles: []))
-        XCTAssertEqual(TaskListViewDefaults.subtaskPreview(titles: ["甲"]), "- [ ] 甲")
-        XCTAssertEqual(
-            TaskListViewDefaults.subtaskPreview(titles: ["甲", "", "乙", "丙"]),
-            "- [ ] 甲 - [ ] 无标题 - [ ] 乙")
-    }
-
     func testEmptyStateMessageFollowsDestination() {
         XCTAssertEqual(TaskListViewDefaults.emptyStateMessage(destination: .today), "今天的事情都做完了")
         XCTAssertEqual(TaskListViewDefaults.emptyStateMessage(destination: .inbox),

@@ -233,6 +233,14 @@
 
 ## 本轮审计结论与施工顺序
 
+### Task List Round 3 — 树几何 / 折叠 / 拖拽（2026-09-30）
+
+- **Flutter 基准：** `desktop/lib/widgets/task_row.dart`、`widgets/task_list/task_list_row.dart` 和 `theme/workfollow_theme.dart`。所有行保留 disclosure 22pt + gap 2pt，子行右移 24pt；正文预览只取自身 document，折叠只停止输出 children。
+- **Native：** 移除原来的 14pt 根行槽、44pt 子行补偿与合成子任务预览。根任务独占 drag source/drop target，原生 pointer drag 保留；标题拖拽卡宽 360pt，插入条高 3pt。
+- **分隔线决定：** Flutter 现有 dividerLeftInset 实值是 6pt，与本轮“贴近 checkbox 列”的明确要求不同。Native 本轮按该要求从 rowHorizontalPadding + disclosureWidth + disclosureTitleGap 推导根 checkbox X = 32pt，dividerLeading = 30pt；父子行使用同一个起点，不随展开状态漂移。这是用户本轮指定的几何，不宣称与 Flutter 6pt 常量一致。
+- **自动验收：** `TaskTreeGeometryContractTests` 挂载真实 NSHostingView/NSWindow，验证父行与普通根行 checkbox X 一致、子行偏移 24pt、disclosure 22pt/gap 2pt、折叠无合成预览但自身正文保留、拖拽卡 360pt 和 marker 3pt。现有 `ListMetaTests.testReorderBoundariesFirstLastAndChildren` 验证 drop-before 得到 A/C/B，以及跨父子重排拒绝；TaskWorkspaceModelTests 与 TaskListViewDefaultsTests 同步回归。
+- **实机验收：** 已重新启动本轮构建，检查父任务折叠时子行隐藏而自身正文预览保留，截图见本次工具输出。自动鼠标拖拽未触发可观察到的重排；原生 drag preview/marker 的鼠标全过程与实际 drop 仍待人工验证，不能标记实机通过。
+
 ### Task List Round 2 — 分组 / Quick Add / 行焦点（2026-09-30）
 
 本轮需求中的 004/005/006 与上文既有业务契约编号重叠，因此以下按 Round 2 子项记录，不覆盖原契约。
