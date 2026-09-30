@@ -464,31 +464,3 @@ struct TaskComposer: View {
             .environment(\.calendar, workspace.calendar).environment(\.timeZone, workspace.calendar.timeZone)
     }
 }
-
-struct TaskBulkBar: View {
-    @ObservedObject var workspace: TaskWorkspaceModel
-    @State private var date = Date()
-    @State private var showDate = false
-    var body: some View {
-        HStack {
-            Text("已选 \(workspace.bulkSelection.count)")
-            Button("完成") { workspace.applyBulk(.complete) }
-            Button("日期") { date = workspace.dateFromToday(0); showDate = true }
-                .popover(isPresented: $showDate) {
-                    VStack(spacing: 12) {
-                        DatePicker("日期", selection: $date, displayedComponents: .date).datePickerStyle(.graphical)
-                        HStack {
-                            Button("清除") { workspace.applyBulk(.schedule(TaskSchedule())); showDate = false }
-                            Button("取消") { showDate = false }
-                            Button("确定") { workspace.applyBulk(.schedule(TaskSchedule(dueAt: workspace.calendar.startOfDay(for: date)))); showDate = false }
-                        }
-                    }.padding(16)
-                }
-            Menu("移动") {
-                ForEach(workspace.allListNames, id: \.self) { name in Button(name) { workspace.applyBulk(.move(name)) } }
-            }
-            Button("删除") { workspace.applyBulk(.delete) }
-            Button { workspace.clearBulkSelection() } label: { Image(systemName: "xmark") }.help("取消选择")
-        }.font(WFType.metaMedium).padding(10).background(WFColors.selection)
-    }
-}

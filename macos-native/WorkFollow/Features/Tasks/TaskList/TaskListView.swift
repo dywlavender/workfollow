@@ -38,7 +38,6 @@ struct TaskListView: View {
     /// `controlTextDidBegin/EndEditing` 都写它，`QuickAddTextField.updateNSView`
     /// 按它做程序化聚焦与交还。读写都可靠，那些守卫才恢复意义。
     @State private var quickAddFocused = false
-    @State private var selecting = false
     @State private var groupExpansion = TaskGroupExpansionState()
     @State private var sortMode = TaskListSortMode.manual
     @State private var seenCompletedGroupIDs: Set<String> = []
@@ -52,10 +51,6 @@ struct TaskListView: View {
     }
     private var groups: [TaskListGroup] { scope.map { workspace.groups(for: $0, query: query) } ?? [] }
     private var canAdd: Bool { scope == .today || scope == .inbox || scope == .allTasks || scope == .nextSevenDays }
-    private var visibleTaskIDs: [UUID] {
-        guard let scope else { return [] }
-        return groups.flatMap { displayedNodes(for: $0, scope: scope) }.map { $0.task.id }
-    }
     /// TickTick shows each row's owning list unless the view is already that list.
     private var showsListBadge: Bool { workspace.activeList == nil && scope != .inbox }
 
@@ -65,7 +60,6 @@ struct TaskListView: View {
             // 候选列表挂在快速添加条的 overlay 上，会画到任务列表上方；提升层级
             // 才能盖住后面那个兄弟视图（SwiftUI 默认后者在上）。
             if canAdd, let scope { quickAddBar(in: scope).zIndex(1) }
-            if !workspace.bulkSelection.isEmpty { TaskBulkBar(workspace: workspace) }
             taskListSection()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -125,9 +119,19 @@ struct TaskListView: View {
                         .frame(width: WFMetrics.navigationWidth, height: 440)
                     }
             }
-            Text(headerTitle)
-                .font(WFType.pageTitle)
-                .lineLimit(1)
+            HStack(spacing: 8) {
+                Image(systemName: TaskListViewDefaults.headerSymbol(
+                    destination: navigation.destination,
+                    activeList: workspace.activeList,
+                    activeTag: workspace.activeTag))
+                    .font(.system(size: 18))
+                    .foregroundStyle(WFColors.secondaryText)
+                    .frame(width: 18, height: 18)
+                    .accessibilityHidden(true)
+                Text(headerTitle)
+                    .font(WFType.pageTitle)
+                    .lineLimit(1)
+            }
             Spacer(minLength: 0)
             sortMenu
             moreMenu
@@ -165,7 +169,7 @@ struct TaskListView: View {
         .help("排序：\(sortMode.title)")
     }
 
-    /// 模板、撤销、多选等低频操作全部收进"更多"，保持顶栏只剩排序/更多两个小图标。
+    /// 模板、撤销等低频操作收进"更多"，保持顶栏只剩排序/更多两个小图标。
     private var moreMenu: some View {
         Menu {
             Menu("从模板添加", systemImage: "doc.badge.plus") {
@@ -179,13 +183,6 @@ struct TaskListView: View {
             Button("撤销", systemImage: "arrow.uturn.backward") { workspace.undo() }
                 .disabled(!workspace.canUndo)
             Divider()
-            Button(selecting ? "退出多选" : "多选任务") { selecting.toggle(); workspace.clearBulkSelection() }
-            Button("全选当前结果") {
-                selecting = true
-                let ids = groups.flatMap { displayedNodes(for: $0, scope: scope ?? .allTasks) }
-                    .map { $0.task.id }
-                workspace.setBulkSelection(in: ids)
-            }
             Button("展开/收起已完成", systemImage: "checkmark.circle") {
                 groupExpansion.toggleClosedGroups(in: groups)
             }
@@ -766,26 +763,22 @@ struct TaskListView: View {
 
     @ViewBuilder
     private func taskRow(group: TaskListGroup, node: TaskTreeNode) -> some View {
-        let row = HStack(spacing: 0) {
-            if selecting {
-                Toggle("选择", isOn: Binding(get: { workspace.bulkSelection.contains(node.task.id) }, set: { value in
-                    workspace.setBulkSelected(node.task.id, value)
-                })).labelsHidden()
-            }
-            TaskRowView(
+        let row = TaskRowView(
                 task: node.task,
                 workspace: workspace,
                 depth: node.depth,
                 hasChildren: node.hasChildren,
                 expanded: node.expanded,
-                selected: workspace.selectedTaskID == node.task.id || workspace.bulkSelection.contains(node.task.id),
+                selected: workspace.selectedTaskID == node.task.id,
                 showsListBadge: showsListBadge,
-                onSelect: { handleSelection(of: node.task.id) },
+                onSelect: {
+                    listFocused = true
+                    workspace.select(node.task.id)
+                },
                 onComplete: { _ = workspace.complete(node.task.id, in: scope) },
                 onRestore: { _ = workspace.restore(node.task.id, in: scope) },
                 onToggleExpanded: { workspace.toggleExpanded(node.task.id) }
             )
-        }
         if node.depth == 0 {
             row
                 .draggable(node.task.id.uuidString)
@@ -801,23 +794,6 @@ struct TaskListView: View {
             .frame(height: 1)
             .padding(.leading, WFSpace.page)
             .padding(.trailing, WFSpace.lg)
-    }
-
-    private func handleSelection(of taskID: UUID) {
-        listFocused = true
-        let modifiers = NSEvent.modifierFlags
-        if modifiers.contains(.command) || modifiers.contains(.control) {
-            selecting = true
-            workspace.toggleBulkSelection(taskID)
-        } else if modifiers.contains(.shift) {
-            selecting = true
-            workspace.extendBulkSelection(to: taskID, in: visibleTaskIDs)
-        } else if selecting {
-            workspace.toggleBulkSelection(taskID)
-        } else {
-            workspace.clearBulkSelection()
-            workspace.select(taskID)
-        }
     }
 
     private var quickAddResult: QuickAddParseResult {
@@ -956,9 +932,9 @@ struct TaskRowView: View {
                             .foregroundStyle(WFColors.secondaryText)
                     }
                 }
-                // 内容区高度 = 行高 55 − 上下 11 内边距：点击区铺满内容区，
+                // 内容区高度 = 行高 50 − 上下 11 内边距：点击区铺满内容区，
                 // 标题顶对齐（勾选框与标题首行同轴，对齐 Flutter 顶对齐行）。
-                .frame(maxWidth: .infinity, minHeight: 33, alignment: .topLeading)
+                .frame(maxWidth: .infinity, minHeight: WFMetrics.rowContentMinHeight, alignment: .topLeading)
                 .contentShape(Rectangle())
             }.buttonStyle(.plain)
 
@@ -970,16 +946,14 @@ struct TaskRowView: View {
         }
         .padding(.horizontal, WFSpace.sm)
         // 对齐 Flutter rowVerticalPadding = 11：内容顶对齐，勾选框贴标题首行。
-        .padding(.vertical, 11)
+        .padding(.vertical, WFMetrics.rowVerticalPadding)
         // 子行每层缩进 44：父行 depth=0 不变；展开箭头区只挂在 depth=0 行上不受影响。
         .padding(.leading, CGFloat(depth) * 44)
-        // 行高 55：在 Flutter rowMinHeight = 50 的基础上按使用习惯放宽。
-        .frame(minHeight: 55)
+        .frame(minHeight: WFMetrics.rowHeight)
         .background(selected ? WFColors.selection : hovering ? WFColors.hover : .clear,
                     in: RoundedRectangle(cornerRadius: WFMetrics.corner))
         // 整行可点（对齐 Flutter GestureDetector opaque）：标题旁的留白、行内
-        // 空隙、元数据区点下去也能选中打开编辑栏；Cmd/Shift 多选逻辑仍由
-        // handleSelection 统一读取修饰键，行内按钮（勾选框/日期）优先级更高。
+        // 空隙、元数据区点下去也能选中打开编辑栏；行内按钮（勾选框/日期）优先级更高。
         .contentShape(Rectangle())
         .onTapGesture { onSelect() }
         .onHover { hovering = $0 }
@@ -1171,9 +1145,13 @@ private struct TaskRowMetadataTrail: View {
     private var dateBadge: some View {
         Button { onOpenDate() } label: {
             HStack(spacing: 3) {
-                Image(systemName: "calendar").font(.system(size: 10))
-                Text(TaskDateLabel.text(task.schedule.dueAt ?? Date(), hasTime: task.schedule.hasTime,
-                                        now: workspace.clock(), calendar: workspace.calendar))
+                Image(systemName: TaskListViewDefaults.scheduleSymbol(hasTime: task.schedule.hasTime))
+                    .font(.system(size: 10))
+                Text(TaskListViewDefaults.scheduleLabel(
+                    dueAt: task.schedule.dueAt ?? Date(),
+                    hasTime: task.schedule.hasTime,
+                    now: workspace.clock(),
+                    calendar: workspace.calendar))
                     .lineLimit(1)
             }
         }
@@ -1194,6 +1172,11 @@ private struct TaskRowMetadataTrail: View {
 
     private var secondaryMetadata: [TaskRowSecondaryMetadata] {
         var items: [TaskRowSecondaryMetadata] = []
+        if let progress = TaskListViewDefaults.subtaskProgress(parentID: task.id,
+                                                               tasks: workspace.allTasks) {
+            items.append(.init(id: "subtasks", value: progress,
+                               accessibilityLabel: "子任务进度：\(progress)"))
+        }
         if task.recurrence != .never {
             items.append(.init(id: "repeat", symbol: "repeat", accessibilityLabel: "重复任务"))
         }
@@ -1235,6 +1218,37 @@ enum TaskListViewDefaults {
     /// or tag filter. With no explicit list selection, capture targets Inbox.
     static func quickAddTargetName(activeList: String?, inboxName: String) -> String {
         activeList ?? inboxName
+    }
+
+    static func headerSymbol(destination: NativeDestination, activeList: String?, activeTag: String?) -> String {
+        if activeList != nil { return "list.bullet" }
+        if activeTag != nil { return "tag" }
+        if destination == .nextSevenDays { return "line.3.horizontal" }
+        return destination.symbol
+    }
+
+    static func scheduleSymbol(hasTime: Bool) -> String {
+        hasTime ? "clock" : "calendar"
+    }
+
+    static func scheduleLabel(dueAt: Date, hasTime: Bool, now: Date, calendar: Calendar) -> String {
+        guard hasTime else {
+            return TaskDateLabel.text(dueAt, hasTime: false, now: now, calendar: calendar)
+        }
+        let time = calendar.dateComponents([.hour, .minute], from: dueAt)
+        return String(format: "%02d:%02d", time.hour ?? 0, time.minute ?? 0)
+    }
+
+    /// 子任务进度与 Flutter activeTasks 对齐：已完成子任务计入总数，已删除、跳过、
+    /// 放弃或已转换成笔记的子任务不计入。
+    static func subtaskProgress(parentID: UUID, tasks: [Task]) -> String? {
+        let children = tasks.filter {
+            $0.parentID == parentID && $0.deletedAt == nil && $0.skippedAt == nil &&
+                !$0.isAbandoned && !$0.isConverted
+        }
+        guard !children.isEmpty else { return nil }
+        let completed = children.filter { $0.status == .completed }.count
+        return "\(completed)/\(children.count)"
     }
 
     /// 列表为空时的文案，对齐滴答各视图的空状态。

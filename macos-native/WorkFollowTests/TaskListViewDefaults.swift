@@ -10,8 +10,9 @@ final class TaskListViewDefaultsTests: XCTestCase {
         return value
     }
 
-    private func date(_ month: Int, _ day: Int, hour: Int = 9) -> Date {
-        calendar.date(from: DateComponents(year: 2026, month: month, day: day, hour: hour))!
+    private func date(_ month: Int, _ day: Int, hour: Int = 9, minute: Int = 0) -> Date {
+        calendar.date(from: DateComponents(year: 2026, month: month, day: day,
+                                           hour: hour, minute: minute))!
     }
 
     private var now: Date { date(9, 26, hour: 12) }
@@ -73,5 +74,53 @@ final class TaskListViewDefaultsTests: XCTestCase {
         XCTAssertTrue(TaskListViewDefaults.hasReminder(reminderAt: nil, reminderOffsets: [-30, 0]))
         XCTAssertTrue(TaskListViewDefaults.hasReminder(reminderAt: date(9, 26), reminderOffsets: nil))
         XCTAssertFalse(TaskListViewDefaults.hasReminder(reminderAt: nil, reminderOffsets: []))
+    }
+
+    func testHeaderSymbolMatchesDestinationAndCustomFilters() {
+        XCTAssertEqual(TaskListViewDefaults.headerSymbol(destination: .today, activeList: nil, activeTag: nil), "sun.max")
+        XCTAssertEqual(TaskListViewDefaults.headerSymbol(destination: .nextSevenDays, activeList: nil, activeTag: nil), "line.3.horizontal")
+        XCTAssertEqual(TaskListViewDefaults.headerSymbol(destination: .today, activeList: "工作", activeTag: nil), "list.bullet")
+        XCTAssertEqual(TaskListViewDefaults.headerSymbol(destination: .today, activeList: nil, activeTag: "阅读"), "tag")
+    }
+
+    func testTimedScheduleShowsOnlyClockAndTimeWhileAllDayUsesDateLabel() {
+        XCTAssertEqual(TaskListViewDefaults.scheduleSymbol(hasTime: true), "clock")
+        XCTAssertEqual(TaskListViewDefaults.scheduleSymbol(hasTime: false), "calendar")
+        XCTAssertEqual(TaskListViewDefaults.scheduleLabel(
+            dueAt: date(9, 30, hour: 10, minute: 30), hasTime: true,
+            now: now, calendar: calendar), "10:30")
+        XCTAssertEqual(TaskListViewDefaults.scheduleLabel(
+            dueAt: date(9, 26), hasTime: false, now: now, calendar: calendar), "今天")
+        XCTAssertEqual(TaskListViewDefaults.scheduleLabel(
+            dueAt: date(9, 27), hasTime: false, now: now, calendar: calendar), "明天")
+        XCTAssertEqual(TaskListViewDefaults.scheduleLabel(
+            dueAt: date(9, 30), hasTime: false, now: now, calendar: calendar), "9月30日")
+    }
+
+    func testSubtaskProgressCountsCompletedAndActiveChildrenOnly() {
+        let parentID = UUID()
+        let children = [
+            makeTask("完成 1", parentID: parentID, status: .completed),
+            makeTask("完成 2", parentID: parentID, status: .completed),
+            makeTask("待办 1", parentID: parentID),
+            makeTask("待办 2", parentID: parentID),
+            makeTask("已删除", parentID: parentID, deletedAt: now)
+        ]
+        XCTAssertEqual(TaskListViewDefaults.subtaskProgress(parentID: parentID, tasks: children), "2/4")
+        XCTAssertNil(TaskListViewDefaults.subtaskProgress(parentID: UUID(), tasks: children))
+    }
+
+    func testTaskRowHeightContractIs50PointsWithExistingVerticalPadding() {
+        XCTAssertEqual(WFMetrics.rowHeight, 50)
+        XCTAssertEqual(WFMetrics.rowVerticalPadding, 11)
+        XCTAssertEqual(WFMetrics.rowContentMinHeight, 28)
+    }
+
+    private func makeTask(_ title: String, parentID: UUID?, status: TaskStatus = .active,
+                          deletedAt: Date? = nil) -> Task {
+        Task(id: UUID(), title: title, list: .inbox, priority: .none, schedule: TaskSchedule(),
+             status: status, parentID: parentID, childOrder: 0,
+             createdAt: now, updatedAt: now,
+             completedAt: status == .completed ? now : nil, deletedAt: deletedAt)
     }
 }

@@ -23,6 +23,8 @@ enum WFMetrics {
     static let splitMinimum = listMinimum + inspectorMinimum + divider
     static let navigationBreakpoint = railWidth + navigationWidth + splitMinimum + 2 * divider
     static let rowHeight: CGFloat = 50
+    static let rowVerticalPadding: CGFloat = 11
+    static var rowContentMinHeight: CGFloat { rowHeight - rowVerticalPadding * 2 }
     static let controlHeight: CGFloat = 34
     static let corner: CGFloat = 8
     static let icon: CGFloat = 18
