@@ -41,21 +41,22 @@ struct FocusTimerRing: View {
 
     var body: some View {
         let active = store.phase == .focusing || store.phase == .breaking
-        let stopwatch = store.preferences.stopwatchMode
 
         ZStack {
-            Circle()
-                .stroke(theme.track,
-                        style: stopwatch
-                            ? StrokeStyle(lineWidth: FocusLayoutMetrics.ringLineWidth, dash: [2.5, 5])
-                            : StrokeStyle(lineWidth: FocusLayoutMetrics.ringLineWidth))
-            Circle()
-                .trim(from: 0, to: progress)
-                .stroke(progressGradient,
-                        style: StrokeStyle(lineWidth: FocusLayoutMetrics.progressRingLineWidth,
-                                           lineCap: .round))
-                .rotationEffect(.degrees(-90))
-                .animation(.linear(duration: 0.3), value: progress)
+            if usesStopwatchDial {
+                FocusStopwatchDial(theme: theme)
+            } else {
+                Circle()
+                    .stroke(theme.track,
+                            style: StrokeStyle(lineWidth: FocusLayoutMetrics.ringLineWidth))
+                Circle()
+                    .trim(from: 0, to: progress)
+                    .stroke(progressGradient,
+                            style: StrokeStyle(lineWidth: FocusLayoutMetrics.progressRingLineWidth,
+                                               lineCap: .round))
+                    .rotationEffect(.degrees(-90))
+                    .animation(.linear(duration: 0.3), value: progress)
+            }
             ringCenter
         }
         .frame(width: FocusLayoutMetrics.ringSize, height: FocusLayoutMetrics.ringSize)
@@ -100,10 +101,17 @@ struct FocusTimerRing: View {
         }
     }
 
+    private var usesStopwatchDial: Bool {
+        guard store.preferences.stopwatchMode else { return false }
+        return store.phase == .idle || store.phase == .focusing || store.phase == .pausedFocus
+    }
+
     private var clockLabel: some View {
         Text(FocusViewLogic.clockText(displaySeconds))
             .font(.system(size: FocusLayoutMetrics.timerFontSize, weight: .regular))
             .monospacedDigit()
             .foregroundStyle(theme.text)
+            .accessibilityIdentifier("focus-timer-clock")
+            .focusRenderAnchor(.focusTimerDigits)
     }
 }

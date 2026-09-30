@@ -38,6 +38,9 @@ enum FocusLayoutMetrics {
     static let ringSize: CGFloat = 236
     static let ringLineWidth: CGFloat = 2.5
     static let progressRingLineWidth: CGFloat = 3
+    static let stopwatchTickCount = 96
+    static let stopwatchTickLength: CGFloat = 10
+    static let stopwatchTickLineWidth: CGFloat = 1
     static let timerFontSize: CGFloat = 42
     static let phaseFontSize: CGFloat = 14
     static let ringCenterSpacing: CGFloat = 10

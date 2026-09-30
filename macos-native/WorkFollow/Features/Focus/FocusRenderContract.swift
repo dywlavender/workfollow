@@ -7,6 +7,8 @@ enum FocusRenderAnchor: Hashable {
     case railSelectedBackground
     case divider
     case timerRing
+    case focusStopwatchDial
+    case focusTimerDigits
     case primaryButton
     case overviewFirstCard
     case recordsHeader

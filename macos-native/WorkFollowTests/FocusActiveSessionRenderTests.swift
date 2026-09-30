@@ -11,10 +11,17 @@ final class FocusActiveSessionRenderTests: XCTestCase {
         case running180mClipped
         case running25mDark
         case breakOverview
+        case stopwatchIdle
+        case stopwatchRunning
+        case stopwatchPaused
+
+        var isStopwatch: Bool {
+            self == .stopwatchIdle || self == .stopwatchRunning || self == .stopwatchPaused
+        }
     }
 
     func testActiveSessionTimelineNotesAndControlsRenderContracts() throws {
-        for state in RenderState.allCases {
+        for state in RenderState.allCases where !state.isStopwatch {
             let rendered = try render(state)
             XCTAssertTrue(rendered.screenshotExists, "Screenshot missing for \(state.rawValue)")
 
@@ -105,6 +112,57 @@ final class FocusActiveSessionRenderTests: XCTestCase {
         }
     }
 
+    func testStopwatchIdleRunningAndPausedRenderContracts() throws {
+        for state in [RenderState.stopwatchIdle, .stopwatchRunning, .stopwatchPaused] {
+            let rendered = try render(state)
+            let frames = rendered.frames
+            XCTAssertTrue(rendered.screenshotExists, "Screenshot missing for \(state.rawValue)")
+
+            let ring = try XCTUnwrap(frames[.timerRing])
+            let dial = try XCTUnwrap(frames[.focusStopwatchDial],
+                                     "Stopwatch mode must render radial ticks")
+            let digits = try XCTUnwrap(frames[.focusTimerDigits])
+            XCTAssertEqual(dial.size, CGSize(width: FocusLayoutMetrics.ringSize,
+                                              height: FocusLayoutMetrics.ringSize))
+            XCTAssertEqual(digits.midX, ring.midX, accuracy: 0.5)
+            XCTAssertNil(frames[.focusDurationTrigger],
+                         "Stopwatch digits are not a duration-edit trigger")
+
+            if state == .stopwatchIdle {
+                XCTAssertEqual(FocusViewLogic.clockText(rendered.elapsedSeconds), "00:00")
+                XCTAssertNotNil(frames[.focusModeSegment])
+                XCTAssertNotNil(frames[.focusAddTimerButton])
+                XCTAssertNil(frames[.activeTimeline],
+                             "Idle stopwatch reuses the existing Overview workspace")
+                continue
+            }
+
+            XCTAssertNotNil(frames[.activeTimeline])
+            XCTAssertNotNil(frames[.activeFocusNoteHeader])
+            XCTAssertNotNil(frames[.activeFocusNote])
+            XCTAssertNil(frames[.focusModeSegment])
+            XCTAssertNil(frames[.focusAddTimerButton])
+            XCTAssertNil(frames[.activeTimelineFocusFill],
+                         "An elapsed stopwatch session has no projected end block")
+            XCTAssertNil(rendered.projection?.endYRatio)
+            XCTAssertEqual(FocusViewLogic.clockText(rendered.elapsedSeconds), "00:42")
+
+            if state == .stopwatchRunning {
+                XCTAssertNotNil(frames[.focusPauseButton])
+                XCTAssertNil(frames[.focusResumeButton])
+                XCTAssertNil(frames[.focusEndButton])
+                XCTAssertNil(frames[.focusPausedTimerLabel])
+            } else {
+                XCTAssertNil(frames[.focusPauseButton])
+                let resume = try XCTUnwrap(frames[.focusResumeButton])
+                let end = try XCTUnwrap(frames[.focusEndButton])
+                XCTAssertEqual(resume.midX, end.midX, accuracy: 0.5)
+                XCTAssertLessThan(resume.maxY, end.minY)
+                XCTAssertNotNil(frames[.focusPausedTimerLabel])
+            }
+        }
+    }
+
     private var tickAnchors: [FocusRenderAnchor] {
         [.activeTimelineTick0, .activeTimelineTick1, .activeTimelineTick2,
          .activeTimelineTick3, .activeTimelineTick4]
@@ -139,11 +197,13 @@ final class FocusActiveSessionRenderTests: XCTestCase {
         let projection: FocusTimelineProjection? = fixture.store.sessionTiming.map {
             FocusTimelineProjection.make(timing: $0, now: fixture.now(), calendar: .current)
         }
+        let elapsedSeconds = fixture.store.elapsedSeconds
         let screenshotURL = try capture(window, state: state)
         window.orderOut(nil)
         flushAndRemove(fixture.store, directory: fixture.directory)
 
         return RenderedState(frames: frames, projection: projection,
+                             elapsedSeconds: elapsedSeconds,
                              screenshotExists: FileManager.default.fileExists(atPath: screenshotURL.path))
     }
 
@@ -159,6 +219,23 @@ final class FocusActiveSessionRenderTests: XCTestCase {
         let store = FocusStore(clock: { clockNow }, directory: directory)
 
         switch state {
+        case .stopwatchIdle:
+            precondition(store.setStopwatchMode(true))
+        case .stopwatchRunning:
+            precondition(store.setStopwatchMode(true))
+            precondition(store.start())
+            clockNow = initialNow.addingTimeInterval(42)
+            store.refresh()
+            store.updateCurrentSessionNote("正计时进行中")
+        case .stopwatchPaused:
+            precondition(store.setStopwatchMode(true))
+            precondition(store.start())
+            clockNow = initialNow.addingTimeInterval(42)
+            store.refresh()
+            precondition(store.pause())
+            clockNow = initialNow.addingTimeInterval(142)
+            store.refresh()
+            store.updateCurrentSessionNote("正计时暂停中")
         case .running25m, .running25mDark:
             precondition(store.start(minutes: 25))
             store.updateCurrentSessionNote("整理今天的优先事项")
@@ -211,6 +288,7 @@ final class FocusActiveSessionRenderTests: XCTestCase {
     private struct RenderedState {
         let frames: [FocusRenderAnchor: CGRect]
         let projection: FocusTimelineProjection?
+        let elapsedSeconds: Int
         let screenshotExists: Bool
     }
 }
