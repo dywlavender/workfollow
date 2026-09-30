@@ -11,6 +11,7 @@ struct FocusTimerPane: View {
     @Environment(\.colorScheme) private var colorScheme
     @State private var showRhythmPopover = false
     @State private var hoveredPresetID: UUID?
+    @StateObject private var durationEditor = FocusDurationEditorSession()
 
     private var theme: FocusTheme { FocusTheme(colorScheme) }
 
@@ -141,9 +142,16 @@ struct FocusTimerPane: View {
                 .frame(height: FocusLayoutMetrics.focusLabelHeight)
                 .padding(.top, FocusLayoutMetrics.selectorTopPadding(hasPresetChips: hasPresetChips))
 
-            FocusTimerRing(store: store, theme: theme, taskTitle: ringTaskTitle)
+            FocusTimerRing(store: store, theme: theme, taskTitle: ringTaskTitle,
+                           onEditDuration: {
+                               durationEditor.present(currentMinutes: store.preferences.focusMinutes)
+                           })
                 .focusRenderAnchor(.timerRing)
                 .padding(.top, FocusLayoutMetrics.ringTopGap)
+                .popover(isPresented: durationEditor.presentationBinding, arrowEdge: .bottom) {
+                    FocusDurationPopover(session: durationEditor,
+                                         onConfirm: { store.setFocusMinutes($0) })
+                }
 
             if store.phase != .idle {
                 runningStatus

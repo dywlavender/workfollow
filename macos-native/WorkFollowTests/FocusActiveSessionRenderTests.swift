@@ -22,10 +22,14 @@ final class FocusActiveSessionRenderTests: XCTestCase {
                 XCTAssertNotNil(rendered.frames[.overviewFirstCard],
                                 "Break phases retain the existing Overview pane")
                 XCTAssertNil(rendered.frames[.activeTimeline])
+                XCTAssertNil(rendered.frames[.focusDurationTrigger],
+                             "Duration editing is unavailable during breaks")
                 continue
             }
 
             let frames = rendered.frames
+            XCTAssertNil(frames[.focusDurationTrigger],
+                         "Duration editing is unavailable during an active focus session")
             let projection = try XCTUnwrap(rendered.projection)
             let timeline = try XCTUnwrap(frames[.activeTimeline])
             let line = try XCTUnwrap(frames[.activeTimelineCurrentLine])

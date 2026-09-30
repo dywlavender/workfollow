@@ -5,6 +5,7 @@ struct FocusTimerRing: View {
     @ObservedObject var store: FocusStore
     let theme: FocusTheme
     let taskTitle: String?
+    let onEditDuration: (() -> Void)?
 
     private var progress: CGFloat {
         guard store.phaseSeconds > 0 else { return 0 }
@@ -63,10 +64,19 @@ struct FocusTimerRing: View {
 
     private var ringCenter: some View {
         VStack(spacing: FocusLayoutMetrics.ringCenterSpacing) {
-            Text(FocusViewLogic.clockText(displaySeconds))
-                .font(.system(size: FocusLayoutMetrics.timerFontSize, weight: .regular))
-                .monospacedDigit()
-                .foregroundStyle(theme.text)
+            if FocusDurationEditorSession.canEditDuration(
+                phase: store.phase, stopwatchMode: store.preferences.stopwatchMode
+            ), let onEditDuration {
+                Button(action: onEditDuration) {
+                    clockLabel
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("focus-duration-trigger")
+                .help("点击调整专注时长")
+                .focusRenderAnchor(.focusDurationTrigger)
+            } else {
+                clockLabel
+            }
             if store.phase == .pausedFocus {
                 Text("已暂停")
                     .font(.system(size: FocusLayoutMetrics.phaseFontSize))
@@ -85,5 +95,12 @@ struct FocusTimerRing: View {
                 }
             }
         }
+    }
+
+    private var clockLabel: some View {
+        Text(FocusViewLogic.clockText(displaySeconds))
+            .font(.system(size: FocusLayoutMetrics.timerFontSize, weight: .regular))
+            .monospacedDigit()
+            .foregroundStyle(theme.text)
     }
 }

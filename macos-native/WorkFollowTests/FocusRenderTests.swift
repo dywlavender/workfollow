@@ -45,6 +45,8 @@ final class FocusRenderTests: XCTestCase {
                                                    "Selected Rail background missing")
             let divider = try XCTUnwrap(frames[.divider], "Focus divider frame missing")
             let ring = try XCTUnwrap(frames[.timerRing], "Timer ring frame missing")
+            let durationTrigger = try XCTUnwrap(frames[.focusDurationTrigger],
+                                                "Idle countdown duration trigger missing")
             let button = try XCTUnwrap(frames[.primaryButton], "Primary button frame missing")
             let card = try XCTUnwrap(frames[.overviewFirstCard], "First Overview card frame missing")
             let recordsHeader = try XCTUnwrap(frames[.recordsHeader], "Records header frame missing")
@@ -71,6 +73,8 @@ final class FocusRenderTests: XCTestCase {
             XCTAssertEqual(ring.midX, expectedCenterX, accuracy: 0.5)
             XCTAssertEqual(ring.midY, expectedCenterY, accuracy: 0.5)
             XCTAssertEqual(ring.width, FocusLayoutMetrics.ringSize, accuracy: 0.5)
+            XCTAssertTrue(ring.insetBy(dx: -0.5, dy: -0.5).contains(durationTrigger),
+                          "Duration trigger should stay centered inside the idle timer ring")
             XCTAssertEqual(button.midX, expectedCenterX, accuracy: 0.5)
             XCTAssertEqual(button.midY, expectedButtonY, accuracy: 0.5)
             XCTAssertEqual(card.minX, divider.maxX + FocusLayoutMetrics.overviewHorizontalPadding,
@@ -172,7 +176,7 @@ final class FocusRenderTests: XCTestCase {
         window.orderOut(nil)
         flushAndRemove(fixture.store, directory: fixture.directory)
         XCTAssertEqual(Set(frames.keys), Set([
-            .rail, .railSelectedHitArea, .railSelectedBackground,
+            .rail, .railSelectedHitArea, .railSelectedBackground, .focusDurationTrigger,
             .divider, .timerRing, .primaryButton, .overviewFirstCard, .recordsHeader
         ]).union(renderCase.timerState == .idleWithoutRecords
                  ? [.emptyRecordsIllustration, .emptyRecordsContent, .emptyRecordsRegion]
