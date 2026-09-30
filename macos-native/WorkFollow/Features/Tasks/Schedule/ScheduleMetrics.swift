@@ -2,8 +2,7 @@ import CoreGraphics
 
 /// 日程浮层的统一尺寸契约（对齐滴答 `TaskScheduleMetrics`）。
 ///
-/// 主面板 260pt 宽 × ~507pt 高（开启重复时 +30pt，出现「重复结束」行）；
-/// 打开「时间 / 提醒 / 重复 / 重复结束」子浮层时**主面板尺寸绝不变**（硬契约）。
+/// 主面板始终260pt宽；属性截断展开后，高度由可见内容自然决定。
 enum ScheduleMetrics {
     /// 主面板宽（pt）。
     static let panelWidth: CGFloat = 260

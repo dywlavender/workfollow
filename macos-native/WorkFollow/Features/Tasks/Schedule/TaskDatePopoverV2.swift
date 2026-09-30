@@ -1,12 +1,9 @@
 import SwiftUI
 
-/// 日程面板（Flutter `TaskSchedulePanel` 的原生对照）。
-///
-/// 结构照搬 Flutter 版：
-/// - 主面板 = 日期/时间段 tabs + 快捷日 + 日历 + 属性行（时间/提醒/重复/重复结束）+ 清除/确定；
-/// - 点属性行打开的是**独立子面板**（Flutter `showScheduleOptions`）：从该行顶部开始、
-///   盖住该行往下展开，宽度 = 行宽、无间隙、高度受限可滚动，永远浮在其它内容之上——
-///   因此子面板既不会被下方属性行遮住，也不会被弹框边界裁掉；
+/// TickTick 对齐的单窗口分层日程编辑器。
+/// - 主面板 = tabs + 快捷日 + 日历 + 属性行 + 清除/确定；
+/// - 展开属性属于同一面板的 presentation state：保留当前行及之前的行，
+///   下方替换为编辑内容，不创建第二个窗口，不把后续属性排到编辑器下面。
 /// - 时间 = 头部可编辑 HH:mm + 48 个半小时选项（滚到当前值）；提醒 = “准时/提前…”多选 +
 ///   自定义提前量 + 取消/确定；重复 = 规则列表 + 工作日/节假日二级页；重复结束 =
 ///   永不结束/按日期结束/按次数结束。
@@ -26,11 +23,7 @@ struct TaskDatePopoverV2: View {
     /// 调用方，不写工作区，也不动批量选择。
     private let draftCommit: ((TaskDateDraftModel.CommitPlan) -> Void)?
 
-    /// 子面板（Flutter 子菜单层）：贴着自己的属性行顶展开、覆盖该行往下。
-    /// `endTime` 只在时间段页签出现（Flutter: `if (range) _property('schedule-end-time' …)`）。
-    enum InlineSheet: Hashable {
-        case time, endTime, reminder, `repeat`, repeatEnd
-    }
+    typealias InlineSheet = ScheduleExpandedSection
 
     /// 重复二级页（Flutter: 工作日›/节假日›）。
     private enum RepeatGroup {
@@ -42,8 +35,7 @@ struct TaskDatePopoverV2: View {
         case date, count
     }
 
-    /// 尺寸契约统一走 `ScheduleMetrics`（主面板宽 260 / 行高 30 / 选项行 34 /
-    /// 时间列表 280 / 子浮层宽 232）。
+    /// 宽度恒定260；展开高度随内容变化，尺寸走 ScheduleMetrics。
     @StateObject private var model: TaskDateDraftModel
     @State private var inlineSheet: InlineSheet?
     @State private var repeatGroup: RepeatGroup?
@@ -143,7 +135,7 @@ struct TaskDatePopoverV2: View {
                         .foregroundStyle(WFColors.danger)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                footer
+                if inlineSheet == nil { footer }
             }
         }
         .padding(ScheduleMetrics.horizontalPadding)
@@ -154,13 +146,16 @@ struct TaskDatePopoverV2: View {
         .onChange(of: model.startTimeAnchor) { _, _ in syncTimeField() }
         .onChange(of: model.endTimeAnchor) { _, _ in syncTimeField() }
         .onChange(of: model.hasTime) { _, _ in syncTimeField() }
+        .onExitCommand {
+            if inlineSheet != nil { closeSheet() } else { onClose() }
+        }
     }
 
     // MARK: 属性行 + 子面板（Flutter `_property` / `showScheduleOptions`）
 
     private var propertyRows: some View {
         VStack(spacing: 0) {
-            sheetRow(.time, icon: "clock", title: "时间", active: model.hasTime,
+            propertyRow(.time, icon: "clock", title: "时间", active: model.hasTime,
                      editor: AnyView(timeRowEditor),
                      clear: model.hasTime ? {
                          model.setHasTime(false)
@@ -168,42 +163,57 @@ struct TaskDatePopoverV2: View {
                      } : nil) { timePanelBody }
             // 结束时间：只在时间段页签出现（Flutter `if (range) _property('schedule-end-time' …)`），
             // 紧跟在开始时间之后、提醒之前。
-            if model.tab == .period {
-                sheetRow(.endTime, icon: "clock", title: "结束时间", active: model.hasEndTime,
+            if visiblePropertyRows.contains(.endTime) {
+                propertyRow(.endTime, icon: "clock", title: "结束时间", active: model.hasEndTime,
                          editor: AnyView(endTimeRowEditor),
                          clear: model.hasEndTime ? { model.clearEndTime() } : nil) { endTimePanelBody }
             }
-            sheetRow(.reminder, icon: "alarm", title: reminderRowLabel,
+            if visiblePropertyRows.contains(.reminder) {
+            propertyRow(.reminder, icon: "alarm", title: reminderRowLabel,
                      active: model.hasReminderDraft,
                      clear: model.hasReminderDraft ? { model.clearReminder() } : nil) {
                 reminderPanelBody
             }
-            sheetRow(.repeat, icon: "repeat", title: repeatRowLabel,
+            }
+            if visiblePropertyRows.contains(.repeat) {
+            propertyRow(.repeat, icon: "repeat", title: repeatRowLabel,
                      active: model.frequency != .never,
                      clear: model.frequency != .never ? {
                          model.chooseFrequency(.never)
                      } : nil) { repeatPanelBody }
-            if model.frequency != .never {
-                sheetRow(.repeatEnd, icon: "repeat", title: endRowLabel, active: model.ending != .never) {
+            }
+            if visiblePropertyRows.contains(.repeatEnd) {
+                propertyRow(.repeatEnd, icon: "repeat", title: endRowLabel, active: model.ending != .never) {
                     repeatEndPanelBody
                 }
             }
         }
     }
 
-    /// 属性行 + 浮层子面板（滴答口径）。
-    ///
-    /// 子面板是**独立浮层**：点行弹出、浮在主面板之上，主面板尺寸与布局完全不动。
-    /// 行自己就是面板头部——展开时**变灰底、chevron 转 ˅**，按属性需要出现
-    /// 行内编辑（时间：可编辑 HH:mm）或清除（×）；浮层里只放选项，不重复当前值。
-    private func sheetRow<Body: View>(_ sheet: InlineSheet, icon: String, title: String,
+    private var visiblePropertyRows: [InlineSheet] {
+        InlineSheet.visibleRows(expanded: inlineSheet, period: model.tab == .period,
+                               repeating: model.frequency != .never)
+    }
+
+    @ViewBuilder
+    private func propertyRow<Body: View>(_ sheet: InlineSheet, icon: String, title: String,
+                                       active: Bool, editor: AnyView? = nil,
+                                       clear: (() -> Void)? = nil,
+                                       @ViewBuilder body: @escaping () -> Body) -> some View {
+        sheetRow(sheet, icon: icon, title: title, active: active, editor: editor, clear: clear)
+        if inlineSheet == sheet {
+            body().frame(width: ScheduleMetrics.optionPanelWidth)
+        }
+    }
+
+    /// 当前行一直保留；展开灰底与向下 chevron，后续内容由宿主截断。
+    private func sheetRow(_ sheet: InlineSheet, icon: String, title: String,
                                       active: Bool,
                                       editor: AnyView? = nil,
-                                      clear: (() -> Void)? = nil,
-                                      @ViewBuilder body: @escaping () -> Body) -> some View {
+                                      clear: (() -> Void)? = nil) -> some View {
         let open = inlineSheet == sheet
         // 行尾控件：未设值 = ›/˅；已设值且（悬浮或已展开）= ×（点击清除）。
-        let showClear = clear != nil && (open || hoveredSheet == sheet)
+        let showClear = clear != nil && !open && hoveredSheet == sheet
         return HStack(spacing: 8) {
             Image(systemName: icon)
                 .font(.system(size: 14))
@@ -239,9 +249,11 @@ struct TaskDatePopoverV2: View {
         // 整行开合的命中区放在**内容之下**：输入框与清除按钮在它前面，先拿到自己的
         // 点击；点行内其余任何位置都能开合（行上有输入框时也照常能展开）。
         .background {
-            Color.clear
-                .contentShape(Rectangle())
-                .onTapGesture { toggleSheet(sheet) }
+            Button { toggleSheet(sheet) } label: {
+                Color.clear.contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("展开\(propertyName(sheet))")
         }
         .onHover { inside in
             if inside {
@@ -249,9 +261,6 @@ struct TaskDatePopoverV2: View {
             } else if hoveredSheet == sheet {
                 hoveredSheet = nil
             }
-        }
-        .schedulePopover(isPresented: sheetBinding(sheet)) {
-            panel(body: body)
         }
     }
 
@@ -340,21 +349,14 @@ struct TaskDatePopoverV2: View {
         return calendar.date(bySettingHour: hour, minute: minute, second: 0, of: day)
     }
 
-    /// 浮层开关绑定：点行打开，点浮层外部（系统 dismiss）收起。
-    private func sheetBinding(_ sheet: InlineSheet) -> Binding<Bool> {
-        Binding(
-            get: { inlineSheet == sheet },
-            set: { presented in
-                if !presented, inlineSheet == sheet { closeSheet() }
-            })
-    }
-
-    /// 浮层内容 = 选项本身。Flutter 的子菜单把"属性行 + 当前值 + 清除"当头部，
-    /// 是因为菜单从行顶部展开、行即头部；原生弹窗浮在行下方，行本身已经显示
-    /// 当前值，再画一层头部就是重复，所以这里只放选项。
-    private func panel<Body: View>(@ViewBuilder body: () -> Body) -> some View {
-        body()
-            .frame(width: ScheduleMetrics.optionPanelWidth)
+    private func propertyName(_ sheet: InlineSheet) -> String {
+        switch sheet {
+        case .time: "时间"
+        case .endTime: "结束时间"
+        case .reminder: "提醒"
+        case .repeat: "重复"
+        case .repeatEnd: "重复结束"
+        }
     }
 
     // MARK: 时间子面板（Flutter ScheduleTimeOptions）
@@ -555,7 +557,7 @@ struct TaskDatePopoverV2: View {
                 }
                 if repeatCustomOpen { intervalEditor }
             }
-            Spacer(minLength: 8)
+            Color.clear.frame(height: 8)
         }
     }
 

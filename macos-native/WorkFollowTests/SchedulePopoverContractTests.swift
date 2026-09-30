@@ -2,11 +2,7 @@ import SwiftUI
 import XCTest
 @testable import WorkFollow
 
-/// 日程浮层尺寸契约测试（"开子浮层主面板尺寸绝不变"等硬约定）。
-///
-/// 实现上：把 `TaskDatePopoverV2` 本体放进 NSHostingController 取 fitting size，
-/// 不走系统 popover——子浮层（时间/提醒/重复）在架构上是独立弹窗，因此开子
-/// 浮层时主面板内容尺寸必须保持基础高度，重复开启时才允许 +一行高。
+/// 单面板截断展开：宽度固定，高度由内容自然决定。
 @MainActor
 final class SchedulePopoverContractTests: XCTestCase {
 
@@ -63,15 +59,14 @@ final class SchedulePopoverContractTests: XCTestCase {
         XCTAssertEqual(measured.width, ScheduleMetrics.panelWidth, accuracy: 0.5)
     }
 
-    func testOpeningSheetDoesNotChangeMainPanelSize() {
+    func testExpandingEditorChangesHeightButKeepsPanelWidth() {
         let now = calendar.date(from: DateComponents(year: 2026, month: 9, day: 28, hour: 10))!
         let task = makeTask()
         let base = size(of: TaskDatePopoverV2(task: task, workspace: workspace(now: now)) {})
-        // 分别打开时间 / 提醒 / 重复子浮层：主面板宽高都不许变（硬契约）。
         for page in [TaskDatePopoverV2.Page.time, .reminder, .recurrence] {
             let sheet = size(of: TaskDatePopoverV2(task: task, workspace: workspace(now: now),
                                                    initialPage: page) {})
-            XCTAssertEqual(sheet.height, base.height, accuracy: 0.5, "initialPage=\(page)")
+            XCTAssertGreaterThan(sheet.height, base.height, "initialPage=\(page)")
             XCTAssertEqual(sheet.width, base.width, accuracy: 0.5, "initialPage=\(page)")
         }
     }
