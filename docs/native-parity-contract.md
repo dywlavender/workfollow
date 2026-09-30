@@ -235,6 +235,8 @@
 
 ### Task Inspector Round 1 — 外框 / Header / 父级上下文（2026-09-30）
 
+> 以下为历史 Flutter 对齐记录。当前 Task surface 改用 [TickTick Task Surface Parity](ticktick-task-surface-parity.md)：Header 不显示 Reminder，空 Inspector 不显示操作文字；后续 breadcrumb/Footer 等按新契约分笔修正。
+
 - **Flutter 基准：** `desktop/lib/widgets/task_detail.dart` 的 Header、Footer 与父任务上下文。读取实际尺寸后，`TaskInspectorMetrics` 锁定 Header 58pt、Footer 52pt、水平 padding 20pt、竖分隔线 1×20pt；没有采用建议起点 54pt。Breadcrumb 高度 30pt 是本轮 Native 结构契约。
 - **TASK-INSPECTOR-001：** Header 为窄屏 Back、Completion、Divider、可横向滚动的 Schedule/Reminder/Repeat、固定右侧 Priority。提醒包含相对 offsets，重复包含 recurrenceRule；点击复用 `TaskDatePopoverV2` 对应页面。移除 Header 的 Focus/Pin，保留专注能力与 More 中的置顶；没有修改 More 内容、日期面板内部或 Shell breakpoint。
 - **TASK-INSPECTOR-002：** 子任务父级 breadcrumb 在标题之前，显示实际父任务名称，点击选择父任务。本轮按用户要求使用左 chevron，不将该方向声称为 Flutter 原样复刻。

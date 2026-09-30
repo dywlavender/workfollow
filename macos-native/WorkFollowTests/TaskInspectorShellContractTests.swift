@@ -13,7 +13,7 @@ final class TaskInspectorShellContractTests: XCTestCase {
         task.recurrence = .daily
         for width: CGFloat in [320, 760] {
             let header = TaskInspectorHeader(task: task, showBack: width == 320,
-                onBack: {}, onComplete: {}, onReminder: {}, onRepeat: {},
+                onBack: {}, onComplete: {}, onRepeat: {},
                 schedule: { Text(String(repeating: "很长的日期区间", count: 8)) },
                 priority: { Image(systemName: "flag").frame(width: 34, height: 34) })
             let frames = render(header, width: width, height: 58)
@@ -27,22 +27,21 @@ final class TaskInspectorShellContractTests: XCTestCase {
             XCTAssertEqual(divider.width, 1, accuracy: 0.5)
             XCTAssertEqual(divider.height, 20, accuracy: 0.5)
             XCTAssertLessThanOrEqual(viewport.maxX, priority.minX)
-            XCTAssertNotNil(frames[.reminder])
+            XCTAssertNil(frames[.reminder], "Reminder belongs inside the schedule panel, not the header")
             XCTAssertNotNil(frames[.repeatControl])
             XCTAssertEqual(frames[.back] != nil, width == 320)
         }
         task.reminderOffsets = nil
         task.recurrence = .never
         let plain = TaskInspectorHeader(task: task, showBack: false,
-            onBack: {}, onComplete: {}, onReminder: {}, onRepeat: {},
-            schedule: { Text("安排日期") }, priority: { Text("旗标") })
+            onBack: {}, onComplete: {}, onRepeat: {},
+            schedule: { Text("设置日期") }, priority: { Text("旗标") })
         let frames = render(plain, width: 320, height: 58)
         XCTAssertNil(frames[.reminder])
         XCTAssertNil(frames[.repeatControl])
         task.reminderAt = Date()
         task.recurrenceRule = RecurrenceRule()
         typealias Header = TaskInspectorHeader<Text, Text>
-        XCTAssertTrue(Header.showsReminder(task))
         XCTAssertTrue(Header.showsRepeat(task))
     }
 
@@ -60,10 +59,33 @@ final class TaskInspectorShellContractTests: XCTestCase {
     }
 
     func testEmptyInspectorContentCentersWithinThePane() throws {
-        let frames = render(TaskEmptyInspectorView(), width: 500, height: 600)
+        let workspace = TaskWorkspaceModel(seedDemoData: false)
+        let frames = render(TaskInspectorShell(workspace: workspace, showBack: false), width: 500, height: 600)
         let content = try XCTUnwrap(frames[.emptyContent])
+        XCTAssertNil(frames[.header])
+        XCTAssertNil(frames[.title])
+        XCTAssertEqual(content.width, 176, accuracy: 0.5)
         XCTAssertEqual(content.midX, 250, accuracy: 0.5)
         XCTAssertEqual(content.midY, 300, accuracy: 0.5)
+    }
+
+    func testInspectorScheduleLabelsAndColorsUseTickTickGrammar() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 8 * 3600)!
+        calendar.firstWeekday = 2
+        let now = calendar.date(from: DateComponents(year: 2026, month: 9, day: 30, hour: 12))!
+        let old = calendar.date(from: DateComponents(year: 2026, month: 9, day: 20, hour: 20, minute: 30))!
+        typealias Schedule = TaskInspectorSchedulePresentation
+        XCTAssertEqual(Schedule.label(date: nil, hasTime: false, now: now, calendar: calendar), "设置日期")
+        XCTAssertEqual(Schedule.label(date: now, hasTime: false, now: now, calendar: calendar), "今天, 9月30日")
+        XCTAssertEqual(Schedule.label(date: old, hasTime: true, now: now, calendar: calendar), "9月20日, 20:30")
+        let lastSunday = calendar.date(from: DateComponents(year: 2026, month: 9, day: 27, hour: 20, minute: 30))!
+        XCTAssertEqual(Schedule.label(date: lastSunday, hasTime: true, now: now, calendar: calendar), "上周日, 9月27日, 20:30")
+        XCTAssertEqual(Schedule.tone(date: nil, hasTime: false, now: now, calendar: calendar), .empty)
+        XCTAssertEqual(Schedule.tone(date: now, hasTime: false, now: now, calendar: calendar), .scheduled)
+        XCTAssertEqual(Schedule.tone(date: old, hasTime: true, now: now, calendar: calendar), .overdue)
+        let future = calendar.date(byAdding: .day, value: 2, to: now)!
+        XCTAssertEqual(Schedule.tone(date: future, hasTime: false, now: now, calendar: calendar), .scheduled)
     }
 
     private func render<V: View>(_ view: V, width: CGFloat,

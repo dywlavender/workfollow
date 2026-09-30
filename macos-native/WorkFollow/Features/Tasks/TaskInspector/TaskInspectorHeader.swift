@@ -5,14 +5,10 @@ struct TaskInspectorHeader<Schedule: View, Priority: View>: View {
     let showBack: Bool
     let onBack: () -> Void
     let onComplete: () -> Void
-    let onReminder: () -> Void
     let onRepeat: () -> Void
     @ViewBuilder let schedule: () -> Schedule
     @ViewBuilder let priority: () -> Priority
 
-    static func showsReminder(_ task: Task) -> Bool {
-        task.reminderAt != nil || !(task.reminderOffsets ?? []).isEmpty
-    }
     static func showsRepeat(_ task: Task) -> Bool {
         task.recurrence != .never || task.recurrenceRule != nil
     }
@@ -29,9 +25,14 @@ struct TaskInspectorHeader<Schedule: View, Priority: View>: View {
                 .inspectorRenderAnchor(.back)
             }
             Button(action: onComplete) {
-                Image(systemName: task.isAbandoned ? "circle.slash"
-                      : task.isClosed ? "checkmark.square.fill" : "square")
-                    .foregroundStyle(task.isClosed ? WFColors.tertiaryText : WFColors.secondaryText)
+                TaskCompletionBox(size: TaskInspectorMetrics.completionSize,
+                                  completed: task.isClosed)
+                    .overlay {
+                        if task.isAbandoned {
+                            Image(systemName: "xmark").font(.system(size: 10, weight: .semibold))
+                                .foregroundStyle(WFColors.secondaryText)
+                        }
+                    }
                     .frame(width: 24, height: WFMetrics.controlHeight)
                     .contentShape(Rectangle())
             }
@@ -48,10 +49,6 @@ struct TaskInspectorHeader<Schedule: View, Priority: View>: View {
                 HStack(spacing: 8) {
                     schedule().fixedSize(horizontal: true, vertical: false)
                         .inspectorRenderAnchor(.schedule)
-                    if Self.showsReminder(task) {
-                        propertyButton("提醒", symbol: "bell", action: onReminder)
-                            .inspectorRenderAnchor(.reminder)
-                    }
                     if Self.showsRepeat(task) {
                         propertyButton("重复", symbol: "repeat", action: onRepeat)
                             .inspectorRenderAnchor(.repeatControl)

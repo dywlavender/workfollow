@@ -117,15 +117,9 @@ struct TaskInspectorShell: View {
         TaskInspectorHeader(task: task, showBack: showBack,
                             onBack: { workspace.select(nil) },
                             onComplete: { _ = workspace.changeStatus(task) },
-                            onReminder: { presentation.activePopover = .reminder },
                             onRepeat: { presentation.activePopover = .recurrence },
                             schedule: { scheduleChip(task, field: .due) },
                             priority: { priorityMenu(task) })
-        .schedulePopover(isPresented: popoverBinding(.reminder)) {
-            TaskDatePopoverV2(task: task, workspace: workspace, initialPage: .reminder) {
-                presentation.activePopover = nil
-            }
-        }
         .schedulePopover(isPresented: popoverBinding(.recurrence)) {
             TaskDatePopoverV2(task: task, workspace: workspace, initialPage: .recurrence) {
                 presentation.activePopover = nil
@@ -284,29 +278,23 @@ struct TaskInspectorShell: View {
         .frame(maxWidth: .infinity, alignment: .topLeading)
     }
 
-    private func chipLabel<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
-        HStack(spacing: 4) { content() }
-            .font(WFType.control)
-            .lineLimit(1)
-            .padding(.horizontal, WFSpace.sm)
-            .frame(height: 26)
-            .background(WFColors.secondarySurface, in: Capsule())
-    }
-
     /// 顶部日期入口；点击仍使用现有日期 popover。
     private func scheduleChip(_ task: Task, field: ScheduleField) -> some View {
             Button {
                 presentation.activePopover = field.popover
             } label: {
-                chipLabel {
+                HStack(spacing: 6) {
                     Image(systemName: field.symbol)
                     Text(scheduleChipLabel(task, field: field))
                 }
+                .font(WFType.control).lineLimit(1)
+                .frame(height: WFMetrics.controlHeight)
+                .contentShape(Rectangle())
                 .foregroundStyle(scheduleChipColor(task, field: field))
             }
             .buttonStyle(.plain)
             .help(field.emptyLabel)
-            .accessibilityLabel(field.date(in: task).map { "\(field.emptyLabel)：\(dateLabel($0))" } ?? field.emptyLabel)
+            .accessibilityLabel(scheduleChipLabel(task, field: field))
         .schedulePopover(isPresented: popoverBinding(field.popover)) {
             TaskDatePopoverV2(task: task, workspace: workspace, deadline: field == .deadline) {
                 presentation.activePopover = nil
@@ -315,12 +303,12 @@ struct TaskInspectorShell: View {
     }
 
     private func scheduleChipColor(_ task: Task, field: ScheduleField) -> Color {
-        guard field == .due, !task.isClosed else { return WFColors.secondaryText }
-        switch TaskListViewDefaults.dateBadgeStyle(dueAt: task.schedule.dueAt, isClosed: task.isClosed,
-                                                   now: workspace.clock(), calendar: workspace.calendar) {
-        case .overdue: return .red
-        case .today, .scheduled: return WFColors.accent
-        case .none: return WFColors.secondaryText
+        switch TaskInspectorSchedulePresentation.tone(
+            date: field.date(in: task), hasTime: task.schedule.hasTime,
+            now: workspace.clock(), calendar: workspace.calendar) {
+        case .overdue: return WFColors.danger
+        case .scheduled: return WFColors.accent
+        case .empty: return WFColors.tertiaryText
         }
     }
 
@@ -666,22 +654,11 @@ struct TaskInspectorShell: View {
         )
     }
 
-    private func dateLabel(_ date: Date) -> String {
-        TaskDateLabel.text(date, hasTime: workspace.selectedTask?.schedule.hasTime == true && workspace.selectedTask?.schedule.dueAt == date,
-                           now: workspace.clock(), calendar: workspace.calendar)
-    }
-
-    /// 滴答式逾期上下文：日期 chip 里附带"延期 N 天"。
     private func scheduleChipLabel(_ task: Task, field: ScheduleField) -> String {
         guard let date = field.date(in: task) else { return field.emptyLabel }
-        var label = dateLabel(date)
-        if field == .due, let dueAt = task.schedule.dueAt, !task.isClosed {
-            let days = workspace.calendar.dateComponents([.day],
-                from: workspace.calendar.startOfDay(for: dueAt),
-                to: workspace.calendar.startOfDay(for: workspace.clock())).day ?? 0
-            if days > 0 { label += "，逾期 \(days) 天" }
-        }
-        return label
+        return TaskInspectorSchedulePresentation.label(date: date,
+            hasTime: field == .due && task.schedule.hasTime,
+            now: workspace.clock(), calendar: workspace.calendar)
     }
 
     private func priorityTitle(_ priority: TaskPriority) -> String {
@@ -708,7 +685,7 @@ private enum ScheduleField: Equatable {
     case deadline
 
     var popover: InspectorPopover { self == .due ? .schedule : .deadline }
-    var emptyLabel: String { self == .due ? "安排日期" : "截止日期" }
+    var emptyLabel: String { self == .due ? "设置日期" : "截止日期" }
     var title: String { self == .due ? "安排日期" : "截止日期" }
     var symbol: String { self == .due ? "calendar" : "calendar.badge.exclamationmark" }
 
