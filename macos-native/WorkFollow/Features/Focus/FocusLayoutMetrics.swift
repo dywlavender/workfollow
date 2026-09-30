@@ -10,6 +10,9 @@ enum FocusLayoutMetrics {
     static let focusPaneWidthRatio: CGFloat = 0.37
     static let overviewPaneMinWidth: CGFloat = 620
     static let dividerWidth: CGFloat = 1
+    static var minimumWorkspaceWidth: CGFloat {
+        focusPaneMinWidth + dividerWidth + overviewPaneMinWidth
+    }
 
     // Page
     static let horizontalPadding: CGFloat = 24
@@ -54,13 +57,39 @@ enum FocusLayoutMetrics {
 
     // Overview
     static let overviewHorizontalPadding: CGFloat = 24
+    static let overviewVerticalPadding: CGFloat = 24
+    static let overviewTitleFontSize: CGFloat = 18
+    static let overviewTitleBottom: CGFloat = 16
     static let overviewCardGap: CGFloat = 12
-    static let overviewCardHeight: CGFloat = 82
-    static let overviewCardRadius: CGFloat = 12
+    static let overviewCardHeight: CGFloat = 76
+    static let overviewCardRadius: CGFloat = 10
+    static let overviewCardHorizontalPadding: CGFloat = 14
+    static let overviewCardVerticalPadding: CGFloat = 12
+    static let overviewCardTextGap: CGFloat = 4
+    static let overviewLabelFontSize: CGFloat = 12
+    static let overviewValueFontSize: CGFloat = 24
+    static let overviewUnitFontSize: CGFloat = 12
+    static let overviewGoalTop: CGFloat = 16
+    static let overviewGoalFontSize: CGFloat = 12
+    static let overviewGoalContentGap: CGFloat = 13
+    static let overviewGoalProgressHeight: CGFloat = 3
 
     // Records
-    static let recordHeaderTop: CGFloat = 24
+    static let recordHeaderTop: CGFloat = 26
+    static let recordHeaderFontSize: CGFloat = 17
+    static let recordHeaderButtonSize: CGFloat = 28
+    static let recordHeaderIconSize: CGFloat = 16
+    static let recordHeaderBottom: CGFloat = 8
+    static let recordGroupTop: CGFloat = 12
+    static let recordGroupBottom: CGFloat = 4
     static let recordRowHeight: CGFloat = 48
+    static let recordTimeFontSize: CGFloat = 13
+    static let recordTitleFontSize: CGFloat = 14
+    static let recordMinutesFontSize: CGFloat = 13
+    static let recordStatusDotSize: CGFloat = 5
+    static let recordEmptyFontSize: CGFloat = 13
+    static let recordEmptyIconSize: CGFloat = 22
+    static let recordEmptyVerticalOffset: CGFloat = 20
 
     static var ringTop: CGFloat {
         focusLabelTop + focusLabelHeight + ringTopGap
@@ -75,8 +104,13 @@ enum FocusLayoutMetrics {
         max(0, paneHeight - footerHeight)
     }
 
-    /// Focus Pane 按可用内容宽度的 37% 取值；430pt 是窄窗下限，680pt 是宽窗上限。
+    /// Focus Pane 按可用内容宽度的 37% 取值，同时为 Overview 保留最低宽度。
     static func focusPaneWidth(availableWidth: CGFloat) -> CGFloat {
-        min(max(availableWidth * focusPaneWidthRatio, focusPaneMinWidth), focusPaneMaxWidth)
+        let overviewBoundedMaximum = availableWidth - dividerWidth - overviewPaneMinWidth
+        guard overviewBoundedMaximum >= focusPaneMinWidth else {
+            return focusPaneMinWidth
+        }
+        return min(max(availableWidth * focusPaneWidthRatio, focusPaneMinWidth),
+                   min(focusPaneMaxWidth, overviewBoundedMaximum))
     }
 }

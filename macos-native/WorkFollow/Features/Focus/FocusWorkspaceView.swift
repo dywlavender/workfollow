@@ -7,19 +7,12 @@ struct FocusWorkspaceView: View {
     @ObservedObject var store: FocusStore
     let workspace: TaskWorkspaceModel?
     @Environment(\.colorScheme) private var colorScheme
-    @EnvironmentObject private var environment: AppEnvironment
 
     /// 专注页主题：底色与整体一致，前后景随系统外观切换。
     private var theme: FocusTheme { FocusTheme(colorScheme) }
 
     @State private var linkedTaskID: UUID?
-    @State private var hoveredRecordID: UUID?
     @State private var showGiveUpConfirmation = false
-    @State private var showGoalPopover = false
-    @State private var showAddRecord = false
-    @State private var addRecordTaskID: UUID?
-    @State private var addRecordMinutes = "25"
-    @State private var addRecordHint: String?
     @State private var showAddTimer = false
     @State private var addTimerName = ""
     @State private var addTimerStopwatch = false
@@ -40,20 +33,21 @@ struct FocusWorkspaceView: View {
 
     var body: some View {
         GeometryReader { geo in
-            let overviewScale = Self.scale(for: geo.size)
-            content(scale: overviewScale, width: geo.size.width)
+            let dialogScale = Self.scale(for: geo.size)
+            content(dialogScale: dialogScale, width: geo.size.width)
                 .frame(width: geo.size.width, height: geo.size.height)
         }
+        .frame(minWidth: FocusLayoutMetrics.minimumWorkspaceWidth)
     }
 
-    /// Overview 与既有弹框暂保留原有比例；FocusTimerPane 的核心尺寸不使用该缩放值。
+    /// 仅保留常用专注创建弹框的既有缩放；左右 pane 尺寸均由固定 point 契约控制。
     static func scale(for size: CGSize) -> CGFloat {
         min(1.2, max(0.6, min(size.height / 982, size.width / 1512)))
     }
 
     // MARK: - 骨架
 
-    private func content(scale s: CGFloat, width: CGFloat) -> some View {
+    private func content(dialogScale s: CGFloat, width: CGFloat) -> some View {
         let leftWidth = FocusLayoutMetrics.focusPaneWidth(availableWidth: width)
         return HStack(spacing: 0) {
             FocusTimerPane(store: store,
@@ -66,7 +60,7 @@ struct FocusWorkspaceView: View {
             Rectangle()
                 .fill(theme.hairline)
                 .frame(width: FocusLayoutMetrics.dividerWidth)
-            overviewPane(s: s)
+            FocusOverviewPane(store: store, workspace: workspace)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .background(theme.canvas)
@@ -101,174 +95,6 @@ struct FocusWorkspaceView: View {
             if linkedTaskID == nil {
                 linkedTaskID = store.preferences.lastTaskID ?? workspace?.selectedTaskID
             }
-        }
-    }
-
-    // MARK: - 右栏 概览与记录
-
-    private func overviewPane(s: CGFloat) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Text("概览")
-                .font(.system(size: 20 * s, weight: .bold))
-                .foregroundStyle(theme.text)
-                .padding(.bottom, 16 * s)
-            LazyVGrid(columns: [GridItem(.flexible(), spacing: 16 * s),
-                                GridItem(.flexible(), spacing: 16 * s)],
-                      spacing: 16 * s) {
-                statCard("今日番茄", value: "\(store.todayPomodoros)", s: s)
-                statCard("今日专注时长", value: "\(store.todayMinutes)m", s: s)
-                statCard("总番茄", value: "\(store.allTimePomodoros)", s: s)
-                statCard("总专注时长", value: "\(store.allTimeMinutes)m", s: s)
-            }
-            goalLine(s: s)
-                .padding(.top, 20 * s)
-            HStack(alignment: .firstTextBaseline) {
-                Text("专注记录")
-                    .font(.system(size: 20 * s, weight: .bold))
-                    .foregroundStyle(theme.text)
-                Spacer()
-                Button { showAddRecord = true } label: {
-                    Image(systemName: "plus")
-                        .font(.system(size: 18 * s, weight: .medium))
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(theme.text2)
-                .help("补记专注")
-            }
-            .padding(.top, 32 * s)
-            .padding(.bottom, 8 * s)
-            if store.recordGroups.isEmpty {
-                Spacer(minLength: 20 * s)
-                VStack(spacing: 16 * s) {
-                    Image(systemName: "timer")
-                        .font(.system(size: 46 * s))
-                        .foregroundStyle(theme.text3.opacity(0.7))
-                    Text("还没有专注记录")
-                        .font(.system(size: 17 * s))
-                        .foregroundStyle(theme.text3)
-                }
-                .frame(maxWidth: .infinity)
-                Spacer(minLength: 20 * s)
-            } else {
-                ScrollView {
-                    recordsList(s: s)
-                }
-            }
-        }
-        .padding(.horizontal, 42 * s)
-        .padding(.vertical, 24 * s)
-    }
-
-    private func statCard(_ label: String, value: String, s: CGFloat) -> some View {
-        VStack(alignment: .leading, spacing: 8 * s) {
-            Text(label)
-                .font(.system(size: 14 * s))
-                .foregroundStyle(theme.text2)
-            Text(value)
-                .font(.system(size: 28 * s, weight: .medium))
-                .monospacedDigit()
-                .foregroundStyle(theme.text)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 20 * s)
-        .padding(.vertical, 18 * s)
-        .background(RoundedRectangle(cornerRadius: 12 * s).fill(theme.cardBackground))
-    }
-
-    /// 今日目标进度：文字 + 细线，点击弹原有目标编辑器。
-    private func goalLine(s: CGFloat) -> some View {
-        Button { showGoalPopover = true } label: {
-            HStack(spacing: 16 * s) {
-                Text("今日目标 \(store.todayPomodoros) / \(store.preferences.dailyGoal)")
-                    .font(.system(size: 15 * s))
-                    .foregroundStyle(theme.text2)
-                GeometryReader { geo in
-                    ZStack(alignment: .leading) {
-                        Capsule().fill(theme.track)
-                        Capsule()
-                            .fill(theme.accent)
-                            .frame(width: max(0, geo.size.width *
-                                CGFloat(min(store.todayPomodoros, store.preferences.dailyGoal)) /
-                                CGFloat(max(1, store.preferences.dailyGoal))))
-                    }
-                }
-                .frame(height: 3 * s)
-            }
-        }
-        .buttonStyle(.plain)
-        .help("点击修改每日目标")
-        .popover(isPresented: $showGoalPopover, arrowEdge: .bottom) {
-            goalEditor
-        }
-    }
-
-    private func recordsList(s: CGFloat) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            ForEach(store.recordGroups) { group in
-                Text(FocusViewLogic.dayLabel(for: group.day))
-                    .font(.system(size: 16, weight: .semibold))
-                    .tracking(3)
-                    .foregroundStyle(theme.text3)
-                    .padding(.top, 20)
-                    .padding(.bottom, 4)
-                ForEach(group.records) { record in
-                    recordRow(record)
-                }
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    private func recordRow(_ record: PomodoroRecord) -> some View {
-        let isHovered = hoveredRecordID == record.id
-        return HStack(spacing: 12) {
-            Text(timeText(record.startedAt))
-                .font(.system(size: 15))
-                .monospacedDigit()
-                .foregroundStyle(theme.text3)
-                .frame(width: 76, alignment: .leading)
-            Text(recordTitle(for: record))
-                .font(.system(size: 17))
-                .foregroundStyle(theme.text)
-                .lineLimit(1)
-            Spacer(minLength: 12)
-            Text("\(record.minutes) 分钟")
-                .font(.system(size: 15))
-                .monospacedDigit()
-                .foregroundStyle(record.completed ? theme.text2 : theme.text3)
-            Circle()
-                .fill(record.completed ? theme.good : theme.warn)
-                .frame(width: 6, height: 6)
-            Button {
-                store.deleteRecord(record.id)
-            } label: {
-                Image(systemName: "trash")
-                    .font(.system(size: 12))
-                    .foregroundStyle(theme.text3)
-            }
-            .buttonStyle(.plain)
-            .opacity(isHovered ? 1 : 0)
-            .help("删除记录")
-        }
-        .padding(.vertical, 12)
-        .overlay(alignment: .bottom) {
-            Rectangle().fill(theme.hairline).frame(height: 1)
-        }
-        .contentShape(Rectangle())
-        .onTapGesture {
-            guard let taskID = record.taskID else { return }
-            workspace?.select(taskID)
-            environment.navigation.destination = .allTasks
-        }
-        .onHover { hovering in
-            if hovering {
-                hoveredRecordID = record.id
-            } else if hoveredRecordID == record.id {
-                hoveredRecordID = nil
-            }
-        }
-        .contextMenu {
-            Button("删除记录", role: .destructive) { store.deleteRecord(record.id) }
         }
     }
 
@@ -431,162 +257,6 @@ struct FocusWorkspaceView: View {
         } else {
             addTimerHint = "名称必填；番茄计时需 5–180 分钟；常用专注最多 12 个"
         }
-    }
-
-    // MARK: - 补记弹层
-
-    /// 补记弹层：任务 + 时长，默认开始时间 = 此刻减去时长（即刚结束的一段）。
-    private func addRecordPopover(s: CGFloat) -> some View {
-        VStack(alignment: .leading, spacing: 16 * s) {
-            Text("补记专注")
-                .font(.system(size: 20 * s, weight: .semibold))
-                .foregroundStyle(theme.text)
-            Menu {
-                Button("不关联") { addRecordTaskID = nil }
-                ForEach(recordCandidates) { task in
-                    Button {
-                        addRecordTaskID = task.id
-                    } label: {
-                        if task.id == addRecordTaskID {
-                            Label(taskMenuTitle(task), systemImage: "checkmark")
-                        } else {
-                            Text(taskMenuTitle(task))
-                        }
-                    }
-                }
-            } label: {
-                HStack(spacing: 10 * s) {
-                    Circle()
-                        .fill(listDotColor(for: addRecordTaskID))
-                        .frame(width: 9 * s, height: 9 * s)
-                    Text(addRecordTaskTitle)
-                        .font(.system(size: 16 * s))
-                        .foregroundStyle(theme.text)
-                        .lineLimit(1)
-                    Spacer(minLength: 8 * s)
-                    Image(systemName: "chevron.up.chevron.down")
-                        .font(.system(size: 13 * s))
-                        .foregroundStyle(theme.text3)
-                }
-                .frame(width: 280 * s)
-            }
-            .menuStyle(.button)
-            .menuIndicator(.hidden)
-            .fixedSize()
-            HStack(spacing: 12 * s) {
-                Text("时长")
-                    .font(.system(size: 15 * s))
-                    .foregroundStyle(theme.text2)
-                TextField("分钟", text: $addRecordMinutes)
-                    .textFieldStyle(.plain)
-                    .font(.system(size: 16 * s))
-                    .monospacedDigit()
-                    .multilineTextAlignment(.center)
-                    .foregroundStyle(theme.text)
-                    .frame(width: 76 * s)
-                    .padding(.vertical, 6 * s)
-                    .background(Capsule().stroke(theme.hairline, lineWidth: 1.5))
-                    .onSubmit(submitAddRecord)
-            }
-            if let addRecordHint {
-                Text(addRecordHint)
-                    .font(.system(size: 13 * s))
-                    .foregroundStyle(theme.warn)
-            }
-            Text("仅支持补记最近 7 天内、此刻之前的专注")
-                .font(.system(size: 13 * s))
-                .foregroundStyle(theme.text3)
-            HStack {
-                Spacer()
-                Button {
-                    submitAddRecord()
-                } label: {
-                    Text("添 加")
-                        .font(.system(size: 15 * s, weight: .semibold))
-                        .foregroundStyle(.white)
-                        .frame(width: 110 * s, height: 36 * s)
-                        .background(RoundedRectangle(cornerRadius: 8 * s).fill(theme.accent))
-                }
-                .buttonStyle(.plain)
-            }
-        }
-        .padding(22 * s)
-        .frame(width: 330 * s)
-    }
-
-    private var recordCandidates: [Task] {
-        guard let workspace else { return [] }
-        return workspace.allTasks.filter { $0.deletedAt == nil && !$0.isAbandoned }
-    }
-
-    private var addRecordTaskTitle: String {
-        guard let id = addRecordTaskID, let title = taskTitle(for: id) else { return "不关联" }
-        return title
-    }
-
-    private func submitAddRecord() {
-        let minutes = Int(addRecordMinutes.trimmingCharacters(in: .whitespaces)) ?? 0
-        let endedNow = workspace?.clock() ?? Date()
-        let startedAt = endedNow.addingTimeInterval(TimeInterval(-minutes * 60))
-        if store.addRecord(taskID: addRecordTaskID, startedAt: startedAt, minutes: minutes) {
-            showAddRecord = false
-            addRecordHint = nil
-            addRecordMinutes = "25"
-        } else {
-            addRecordHint = "补记失败：时长需 1–180 分钟，且时间要在最近 7 天内"
-        }
-    }
-
-    // MARK: - 目标编辑
-
-    private var goalEditor: some View {
-        VStack(alignment: .leading, spacing: WFSpace.md) {
-            Text("每日专注目标")
-                .font(WFType.section)
-            Stepper(value: Binding(
-                get: { store.preferences.dailyGoal },
-                set: { store.setDailyGoal($0) }), in: 1...24) {
-                Text("\(store.preferences.dailyGoal) 个番茄/天")
-                    .font(WFType.body)
-            }
-        }
-        .padding(WFSpace.lg)
-        .frame(width: 190, alignment: .leading)
-    }
-
-    // MARK: - Helpers
-
-    private func unfinishedTasks(in workspace: TaskWorkspaceModel) -> [Task] {
-        workspace.allTasks.filter {
-            $0.status == .active && $0.deletedAt == nil && !$0.isAbandoned && $0.skippedAt == nil
-        }
-    }
-
-    private func taskTitle(for id: UUID?) -> String? {
-        guard let id, let workspace, let task = workspace.task(for: id) else { return nil }
-        return task.title.isEmpty ? "未命名任务" : task.title
-    }
-
-    private func taskMenuTitle(_ task: Task) -> String {
-        task.title.isEmpty ? "未命名任务" : task.title
-    }
-
-    private func recordTitle(for record: PomodoroRecord) -> String {
-        record.taskID.flatMap { taskTitle(for: $0) } ?? "未关联任务"
-    }
-
-    private func timeText(_ date: Date) -> String {
-        date.formatted(.dateTime.hour().minute())
-    }
-
-    /// 清单色点：来自侧栏清单元数据（TaskListMeta.colorARGB），无色回退强调色。
-    private func listDotColor(for id: UUID?) -> Color {
-        guard let id, let workspace, let task = workspace.task(for: id),
-              let argb = workspace.listMetas.first(where: { $0.name == task.list.name })?.colorARGB
-        else { return theme.accent }
-        return Color(red: Double((argb >> 16) & 0xFF) / 255,
-                     green: Double((argb >> 8) & 0xFF) / 255,
-                     blue: Double(argb & 0xFF) / 255)
     }
 
 }
