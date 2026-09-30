@@ -264,6 +264,7 @@ struct TaskInspectorShell: View {
                 .padding(.top, WFSpace.lg)
                 .padding(.bottom, WFSpace.md)
             documentEditor(task)
+                .inspectorRenderAnchor(.document)
                 .padding(.top, WFSpace.sm)
             // 子任务区只在**已经有子任务**时出现——新建的空任务不自动带上它。
             // 原版 `task_editor_profile.dart:149-153` 就是这么挂的：
@@ -271,7 +272,8 @@ struct TaskInspectorShell: View {
             // "空父任务保持整屏正文；第一个子任务从更多菜单、行右键菜单或 / 面板来"。
             if task.parentID == nil, !editorChildren(task.id).isEmpty {
                 subtaskSection(task)
-                    .padding(.top, WFSpace.xl)
+                    .inspectorRenderAnchor(.childSection)
+                    .padding(.top, TaskInspectorMetrics.childSectionTopGap)
             }
         }
         .padding(.bottom, WFSpace.xl)
@@ -313,27 +315,21 @@ struct TaskInspectorShell: View {
     }
 
     private func subtaskSection(_ task: Task) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            ForEach(editorChildren(task.id)) { child in
-                childRow(child)
-                Divider().padding(.leading, 27)
+        VStack(alignment: .leading, spacing: TaskInspectorMetrics.childAddGap) {
+            VStack(spacing: TaskInspectorMetrics.childRowGap) {
+                ForEach(editorChildren(task.id)) { child in
+                    childRow(child)
+                }
             }
             // 一级子任务不再给这个入口：原版 `_addChildTask` 对子任务直接 return，
             // 动作层也会以"子任务不能再建子任务"失败，留着它只是个点了没反应的入口。
             if task.parentID == nil { addChildRow(task) }
         }
-        .padding(.horizontal, WFSpace.xl)
-        .padding(.top, WFSpace.md)
+        .padding(.horizontal, TaskInspectorMetrics.horizontalPadding)
     }
 
-    /// 「添加子任务」整行。
-    ///
-    /// 与原版的 add row（`task_children_panel.dart` 里 `task-add-child` 那一段）
-    /// 逐项对齐：`＋` 图标 18、文字 14 medium、两者都用强调色，行高 42，悬停时整行
-    /// 染强调色最浅的一档（`accentFaint`）并收 `control` 圆角；文字与上面子任务行的
-    /// 标题列同一条竖线（原版注释：inset like the child rows above it）。
-    ///
-    /// 原先这里是一个 12pt 的 `Label`、行高 36、没有悬停反馈，点起来像一句静态说明。
+    /// Existing add-child action, separated from neutral child surfaces by the
+    /// Inspector childAddGap. Keep inline editing and focus behavior unchanged.
     private func addChildRow(_ task: Task) -> some View {
         Button {
             workspace.requestChildTitleEditor(for: task.id)
@@ -357,6 +353,7 @@ struct TaskInspectorShell: View {
         .onHover { hoveringAddChild = $0 }
         .help("添加子任务")
         .accessibilityLabel("添加子任务")
+        .inspectorRenderAnchor(.addChild)
     }
 
     // MARK: - 底部工具行：左清单选择，右正文格式与更多操作
@@ -364,6 +361,7 @@ struct TaskInspectorShell: View {
     private func bottomBar(_ task: Task) -> some View {
         HStack(spacing: WFSpace.xs) {
             listMenu(task)
+                .inspectorRenderAnchor(.footerList)
             Spacer(minLength: 0)
             Button {
                 let isOpening = !showFormattingToolbar
@@ -377,7 +375,9 @@ struct TaskInspectorShell: View {
             .buttonStyle(.plain)
             .foregroundStyle(showFormattingToolbar ? WFColors.accent : WFColors.secondaryText)
             .help("正文格式").accessibilityLabel("正文格式")
+            .inspectorRenderAnchor(.footerFormatting)
             moreMenu(task)
+                .inspectorRenderAnchor(.footerMore)
         }
         .font(WFType.body)
         .padding(.horizontal, TaskInspectorMetrics.horizontalPadding)
@@ -443,14 +443,10 @@ struct TaskInspectorShell: View {
     }
 
     private func childRow(_ child: Task) -> some View {
-        HStack(spacing: 10) {
-            Button { _ = workspace.changeStatus(child) } label: {
-                Image(systemName: child.isAbandoned ? "circle.slash" : child.isClosed ? "checkmark.square.fill" : "square")
-                    .font(.system(size: 15))
-                    .foregroundStyle(child.isClosed ? WFColors.tertiaryText : WFColors.secondaryText)
-            }
-            .help(child.isClosed ? "恢复任务" : "完成任务")
-            .accessibilityLabel(Text((child.isClosed ? "恢复子任务：" : "完成子任务：") + child.title))
+        TaskInspectorChildRow(child: child,
+            onComplete: { _ = workspace.changeStatus(child) },
+            onOpen: { if inlineChildEditorID != child.id { workspace.select(child.id) } },
+            title: {
             if inlineChildEditorID == child.id {
                 TextField("子任务名称", text: $inlineChildTitleDraft)
                     .textFieldStyle(.plain)
@@ -462,13 +458,10 @@ struct TaskInspectorShell: View {
                     .accessibilityLabel("子任务标题")
             } else {
                 Button(child.title.isEmpty ? "未命名子任务" : child.title) { workspace.select(child.id) }
-                    // 滴答式：未完成子任务标题灰显，与正文区分层级。
-                    .foregroundStyle(child.isClosed ? WFColors.tertiaryText : WFColors.secondaryText)
+                    .frame(maxWidth: .infinity, minHeight: TaskInspectorMetrics.childRowMinHeight, alignment: .leading)
+                    .contentShape(Rectangle())
             }
-            Spacer(minLength: 8)
-            TaskDateButton(task: child, workspace: workspace)
-        }.buttonStyle(.plain).font(WFType.listTitleMedium)
-            .frame(minHeight: 40)
+        }, metadata: { TaskDateButton(task: child, workspace: workspace) })
             .contextMenu { Button("删除子任务") { _ = workspace.delete(child.id) } }
     }
 
@@ -613,7 +606,14 @@ struct TaskInspectorShell: View {
         .accessibilityLabel("优先级：\(priorityTitle(task.priority))")
     }
 
+    @ViewBuilder
     private func listMenu(_ task: Task) -> some View {
+        if task.parentID != nil {
+            Label(task.list.name, systemImage: "tray")
+                .font(WFType.control).foregroundStyle(WFColors.text)
+                .help("子任务跟随父任务清单")
+                .accessibilityLabel("清单：\(task.list.name)，子任务跟随父任务")
+        } else {
         Menu {
             ForEach(workspace.allListNames, id: \.self) { name in
                 let list = TaskList(name: name)
@@ -637,8 +637,9 @@ struct TaskInspectorShell: View {
         .menuStyle(.borderlessButton)
         .menuIndicator(.hidden).fixedSize()
         .disabled(!workspace.canMoveToList(task.id))
-        .help(task.parentID == nil ? "移动到清单" : "子任务跟随父任务清单")
-        .accessibilityLabel(task.parentID == nil ? "清单：\(task.list.name)" : "清单：\(task.list.name)，子任务跟随父任务")
+        .help("移动到清单")
+        .accessibilityLabel("清单：\(task.list.name)")
+        }
     }
 
     private func popoverBinding(_ popover: InspectorPopover) -> Binding<Bool> {

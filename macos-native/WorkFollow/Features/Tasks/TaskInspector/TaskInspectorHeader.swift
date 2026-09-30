@@ -81,9 +81,9 @@ struct TaskParentBreadcrumbView: View {
     let onOpen: () -> Void
     var body: some View {
         Button(action: onOpen) {
-            HStack(spacing: 6) {
-                Image(systemName: "chevron.left")
+            HStack(spacing: 4) {
                 Text(title.isEmpty ? "无标题" : title).lineLimit(1)
+                Image(systemName: "chevron.right").font(.system(size: 9))
                 Spacer(minLength: 0)
             }
             .font(WFType.control).foregroundStyle(WFColors.secondaryText)

@@ -3,6 +3,8 @@ import SwiftUI
 enum InspectorRenderAnchor: Hashable {
     case header, back, completion, divider, schedule, scheduleViewport
     case reminder, repeatControl, priority, breadcrumb, title, emptyContent
+    case document, childSection, childRow(UUID), addChild
+    case footerList, footerFormatting, footerMore
 }
 struct InspectorFramesKey: PreferenceKey {
     static let defaultValue: [InspectorRenderAnchor: CGRect] = [:]

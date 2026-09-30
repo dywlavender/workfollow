@@ -33,9 +33,19 @@
 - 最新 App 由 `/tmp/workfollow-native-derived-data/Build/Products/Debug/WorkFollow.app` 构建，退出旧进程后重新启动；截图见本轮工具输出。
 - 真窗确认空态无文字；有 reminder/recurrence 的任务 Header 仅显示 Schedule/Repeat；日期点击打开原 panel，Escape 关闭后选择保留；无日期 child 显示“设置日期”。没有修改用户任务内容作截图夹具。
 
+## Commit 2：TI-003～TI-007 / 正文、父子结构与 Footer
+
+- **TI-003 自然正文流：** 保留 `DocumentEditor(contentSized: true)`，不改 Core；子任务区起点为 document.maxY + 20pt，移除旧的双重 top padding。空/单行/多行正文有独立窗口渲染断言，正文变高时 child 随内容下移，不占满剩余 Inspector。
+- **TI-004 子任务区：** 独立 `TaskInspectorChildRow`，统一 CompletionBox 16pt、行高42pt、半径8pt、水平内边距12pt。未完成标题用 primary，完成态仍弱化；neutral 灰底与 hover，无蓝色 selected 底。Child 之间不再插普通 Divider，行间与 Add 前间距6pt；无日期不创建尾栏。有日期沿用现有日期入口。不改变新增、inline edit 和子任务状态动作。
+- **TI-005 Breadcrumb：** 显示实际父名后跟9pt右 chevron，4pt gap；在 title 上方，点击选择 parent，同一个 Inspector 内导航。
+- **TI-006 Footer：** Parent 保留清单 Menu 及既有移动权限；Child 清单改成正常 primary 墨色的只读 Label，不使用 disabled Menu，不允许 child 独立移动清单。List 左边缘20pt，More 右边缘20pt，Formatting/More 仍靠右。
+- **TI-007 / TASK-INSPECTOR-GAP-COMMENTS：** 评论/活动能力未确认，继续保留 Gap，无假按钮。
+- **自动验收：** 新增 `TaskInspectorHierarchyRenderTests`，NSWindow + NSHostingView 固定880×900，渲染并保存 parent-no-child、parent-with-child（empty/single/multiline）、parent-multiple-children、selected-child；几何断言覆盖 breadcrumb/title、document/child、row/add gap、Footer endpoints。与 Shell/Presentation 定向测试一并通过。渲染 PNG 输出至 `/tmp/workfollow-inspector-hierarchy-renders`，测试不依赖用户数据。
+- **真实窗口：** 退出旧进程后启动本笔最新编译 App；点击子行背景打开 child，点 breadcrumb 回 parent；点击子行完成框不会跳转 Inspector，已完成后再恢复到原状态；parent 清单 Menu 可打开并 Escape 关闭；child Footer 显示正常清单 Label、不是 disabled Menu。父/子截图见本次工具输出。
+- **状态：IMPLEMENTED / TESTS PASSED / REAL WINDOW CHECKED。** 没有宣称等尺寸逐像素完全一致；未修改 Date Panel、Quick Add、Slash、More 内容、Tag Picker、Editor Core 或窄屏行为。
+
 ## 后续提交（未完成）
 
-1. **Commit 2 / TI-003～007：** 正文自然流、child section、`父名 >` breadcrumb、child Footer list。Comments/Activity 登记 `TASK-INSPECTOR-GAP-COMMENTS`，不做假按钮。
 2. **Commit 3 / DATE-001～003：** 同一 Draft Schedule Panel 的日期/时间段、Calendar、Time、Reminder、Repeat/End、Clear/Confirm；需要日期面板参考图最终锁视觉。
 3. **Commit 4 / QA-001～002：** 四枚 priority flags、List/Tags/Attachment/Template、独立输入框设置；需要属性菜单参考图。
 4. **Commit 5 / SLASH-TASK-001：** Task DocumentProfile 命令顺序/分组/图标，不把任务分支塞进 Editor Core；需要 Slash 参考图。
