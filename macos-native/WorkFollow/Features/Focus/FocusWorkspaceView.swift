@@ -6,6 +6,7 @@ import SwiftUI
 struct FocusWorkspaceView: View {
     @ObservedObject var store: FocusStore
     let workspace: TaskWorkspaceModel?
+    let onSelectRecordTask: ((UUID) -> Void)?
     @Environment(\.colorScheme) private var colorScheme
 
     /// 专注页主题：底色与整体一致，前后景随系统外观切换。
@@ -24,11 +25,14 @@ struct FocusWorkspaceView: View {
     init(store: FocusStore) {
         self.store = store
         self.workspace = nil
+        self.onSelectRecordTask = nil
     }
 
-    init(store: FocusStore, workspace: TaskWorkspaceModel?) {
+    init(store: FocusStore, workspace: TaskWorkspaceModel?,
+         onSelectRecordTask: ((UUID) -> Void)? = nil) {
         self.store = store
         self.workspace = workspace
+        self.onSelectRecordTask = onSelectRecordTask
     }
 
     var body: some View {
@@ -60,7 +64,9 @@ struct FocusWorkspaceView: View {
             Rectangle()
                 .fill(theme.hairline)
                 .frame(width: FocusLayoutMetrics.dividerWidth)
-            FocusOverviewPane(store: store, workspace: workspace)
+                .focusRenderAnchor(.divider)
+            FocusOverviewPane(store: store, workspace: workspace,
+                              onSelectRecordTask: onSelectRecordTask)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .background(theme.canvas)

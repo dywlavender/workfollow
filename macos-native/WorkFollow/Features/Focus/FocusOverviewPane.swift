@@ -4,8 +4,8 @@ import SwiftUI
 struct FocusOverviewPane: View {
     @ObservedObject var store: FocusStore
     let workspace: TaskWorkspaceModel?
+    let onSelectRecordTask: ((UUID) -> Void)?
     @Environment(\.colorScheme) private var colorScheme
-    @EnvironmentObject private var environment: AppEnvironment
 
     private var theme: FocusTheme { FocusTheme(colorScheme) }
 
@@ -27,6 +27,7 @@ struct FocusOverviewPane: View {
                                 GridItem(.flexible(), spacing: FocusLayoutMetrics.overviewCardGap)],
                       spacing: FocusLayoutMetrics.overviewCardGap) {
                 statCard("今日番茄", value: store.todayPomodoros)
+                    .focusRenderAnchor(.overviewFirstCard)
                 statCard("今日专注时长", value: store.todayMinutes, unit: "m")
                 statCard("总番茄", value: store.allTimePomodoros)
                 statCard("总专注时长", value: store.allTimeMinutes, unit: "m")
@@ -39,6 +40,7 @@ struct FocusOverviewPane: View {
                 Text("专注记录")
                     .font(.system(size: FocusLayoutMetrics.recordHeaderFontSize, weight: .semibold))
                     .foregroundStyle(theme.text)
+                    .focusRenderAnchor(.recordsHeader)
                 Spacer()
                 Button { showAddRecord = true } label: {
                     Image(systemName: "plus")
@@ -193,8 +195,7 @@ struct FocusOverviewPane: View {
         .contentShape(Rectangle())
         .onTapGesture {
             guard let taskID = record.taskID else { return }
-            workspace?.select(taskID)
-            environment.navigation.destination = .allTasks
+            onSelectRecordTask?(taskID)
         }
         .onHover { hovering in
             if hovering {

@@ -142,6 +142,7 @@ struct FocusTimerPane: View {
                 .padding(.top, FocusLayoutMetrics.selectorTopPadding(hasPresetChips: hasPresetChips))
 
             FocusTimerRing(store: store, theme: theme, taskTitle: ringTaskTitle)
+                .focusRenderAnchor(.timerRing)
                 .padding(.top, FocusLayoutMetrics.ringTopGap)
 
             if store.phase != .idle {
@@ -274,6 +275,7 @@ struct FocusTimerPane: View {
                 .background(Capsule().fill(theme.accent))
         }
         .buttonStyle(.plain)
+        .focusRenderAnchor(.primaryButton)
     }
 
     private func linkButton(_ title: String, action: @escaping () -> Void) -> some View {

@@ -3,7 +3,8 @@ import SwiftUI
 struct IconRailView: View {
     @ObservedObject var workspace: TaskWorkspaceModel
     @ObservedObject var navigation: AppNavigation
-    @EnvironmentObject private var environment: AppEnvironment
+    let onNavigate: (NativeDestination) -> Void
+    let onOpenQuickOpen: () -> Void
     @Environment(\.openSettings) private var openSettings
 
     var body: some View {
@@ -25,7 +26,7 @@ struct IconRailView: View {
             railButton(.summary, symbol: "square.and.pencil", title: "摘要",
                        selected: navigation.destination == .summary)
             Spacer()
-            Button { environment.commandPalettePresented = true } label: {
+            Button(action: onOpenQuickOpen) {
                 Image(systemName: "magnifyingglass")
                     .frame(width: WFMetrics.controlHeight, height: WFMetrics.controlHeight)
             }.help("快速打开（⌘K）").accessibilityLabel("快速打开")
@@ -40,11 +41,12 @@ struct IconRailView: View {
         .padding(.vertical, WFSpace.lg)
         .frame(width: WFMetrics.railWidth)
         .background(WFColors.canvas)
+        .focusRenderAnchor(.rail)
     }
 
     private func railButton(_ destination: NativeDestination, symbol: String,
                             title: String, selected: Bool) -> some View {
-        Button { environment.navigate(to: destination) } label: {
+        Button { onNavigate(destination) } label: {
             Image(systemName: symbol)
                 .foregroundStyle(selected ? WFColors.accent : WFColors.secondaryText)
                 .frame(width: WFMetrics.controlHeight, height: WFMetrics.controlHeight)
