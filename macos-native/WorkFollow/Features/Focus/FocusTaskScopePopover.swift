@@ -76,6 +76,7 @@ struct FocusTaskScopePopover: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .accessibilityIdentifier("focus-task-scope-\(scope.id)")
     }
 }
 

@@ -145,7 +145,7 @@ final class FocusTaskPickerProjectionTests: XCTestCase {
 }
 
 @MainActor
-final class FocusTaskPickerRenderTests: XCTestCase {
+final class FocusTaskPickerSizingTests: XCTestCase {
     func testTaskPickerPopoverRendersAtContractSizeAndWritesScreenshot() throws {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(secondsFromGMT: 0)!
@@ -161,6 +161,7 @@ final class FocusTaskPickerRenderTests: XCTestCase {
             scope: .constant(.today),
             query: .constant(""),
             isScopePickerPresented: .constant(false),
+            onSelectScope: { _ in },
             onSelectTask: { _ in }, onClearTask: {}, onDismiss: {}
         ).preferredColorScheme(.light)
 

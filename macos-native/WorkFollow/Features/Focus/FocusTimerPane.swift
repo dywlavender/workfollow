@@ -4,17 +4,13 @@ import SwiftUI
 struct FocusTimerPane: View {
     @ObservedObject var store: FocusStore
     let workspace: TaskWorkspaceModel?
-    @Binding var linkedTaskID: UUID?
+    @ObservedObject var taskPicker: FocusTaskPickerSession
     @Binding var showGiveUpConfirmation: Bool
     let onAddTimer: () -> Void
 
     @Environment(\.colorScheme) private var colorScheme
     @State private var showRhythmPopover = false
     @State private var hoveredPresetID: UUID?
-    @State private var showTaskPicker = false
-    @State private var showTaskScopePicker = false
-    @State private var taskPickerScope: FocusTaskPickerScope = .today
-    @State private var taskPickerQuery = ""
 
     private var theme: FocusTheme { FocusTheme(colorScheme) }
 
@@ -37,15 +33,6 @@ struct FocusTimerPane: View {
         }
         .padding(.horizontal, FocusLayoutMetrics.horizontalPadding)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .onChange(of: showTaskPicker) { _, presented in
-            if presented {
-                taskPickerScope = .today
-                taskPickerQuery = ""
-            } else {
-                showTaskScopePicker = false
-                taskPickerQuery = ""
-            }
-        }
     }
 
     private var paneHeader: some View {
@@ -178,13 +165,13 @@ struct FocusTimerPane: View {
     @ViewBuilder
     private var selectorRow: some View {
         if let workspace {
-            let linkID = store.phase == .idle ? linkedTaskID : store.currentTaskID
+            let linkID = store.phase == .idle ? taskPicker.linkedTaskID : store.currentTaskID
             let boundTask = linkID.flatMap { workspace.task(for: $0) }
             let title = boundTask.map { $0.title.isEmpty ? "未命名任务" : $0.title }
             let overdue = boundTask.map { isDueOverdue($0) } ?? false
 
             Button {
-                showTaskPicker = true
+                taskPicker.present()
             } label: {
                 HStack(spacing: 8) {
                     if let boundTask {
@@ -206,16 +193,17 @@ struct FocusTimerPane: View {
             .buttonStyle(.plain)
             .fixedSize()
             .help("选择一个任务并开始专注")
-            .popover(isPresented: $showTaskPicker) {
+            .popover(isPresented: taskPicker.presentationBinding) {
                 FocusTaskPickerPopover(
                     workspace: workspace,
                     selectedTaskID: linkID,
-                    scope: $taskPickerScope,
-                    query: $taskPickerQuery,
-                    isScopePickerPresented: $showTaskScopePicker,
+                    scope: $taskPicker.scope,
+                    query: $taskPicker.query,
+                    isScopePickerPresented: taskPicker.scopePickerBinding,
+                    onSelectScope: { taskPicker.selectScope($0) },
                     onSelectTask: { assignFocusTask($0.id) },
                     onClearTask: { assignFocusTask(nil) },
-                    onDismiss: { showTaskPicker = false }
+                    onDismiss: { taskPicker.handleEscape() }
                 )
             }
         }
@@ -223,11 +211,11 @@ struct FocusTimerPane: View {
 
     private func assignFocusTask(_ taskID: UUID?) {
         if store.phase == .idle {
-            linkedTaskID = taskID
+            taskPicker.selectTask(taskID)
         } else {
             _ = store.reattach(taskID: taskID)
+            taskPicker.dismiss()
         }
-        showTaskPicker = false
     }
 
     private var runningStatus: some View {
@@ -255,7 +243,7 @@ struct FocusTimerPane: View {
         VStack(spacing: 14) {
             switch store.phase {
             case .idle:
-                primaryButton("开始") { store.start(taskID: linkedTaskID) }
+                primaryButton("开始") { store.start(taskID: taskPicker.linkedTaskID) }
             case .focusing, .pausedFocus:
                 let running = store.phase == .focusing
                 primaryButton(running ? "暂停" : "继续") {
@@ -308,7 +296,7 @@ struct FocusTimerPane: View {
     }
 
     private var ringTaskTitle: String? {
-        let id = store.phase == .idle ? linkedTaskID : store.currentTaskID
+        let id = store.phase == .idle ? taskPicker.linkedTaskID : store.currentTaskID
         return taskTitle(for: id)
     }
 

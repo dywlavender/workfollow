@@ -12,7 +12,7 @@ struct FocusWorkspaceView: View {
     /// 专注页主题：底色与整体一致，前后景随系统外观切换。
     private var theme: FocusTheme { FocusTheme(colorScheme) }
 
-    @State private var linkedTaskID: UUID?
+    @StateObject private var taskPicker = FocusTaskPickerSession()
     @State private var showGiveUpConfirmation = false
     @State private var showAddTimer = false
     @State private var addTimerName = ""
@@ -56,7 +56,7 @@ struct FocusWorkspaceView: View {
         return HStack(spacing: 0) {
             FocusTimerPane(store: store,
                            workspace: workspace,
-                           linkedTaskID: $linkedTaskID,
+                           taskPicker: taskPicker,
                            showGiveUpConfirmation: $showGiveUpConfirmation,
                            onAddTimer: prepareAddTimer)
                 .frame(width: leftWidth)
@@ -98,8 +98,8 @@ struct FocusWorkspaceView: View {
         }
         .onAppear {
             store.refresh()
-            if linkedTaskID == nil {
-                linkedTaskID = store.preferences.lastTaskID ?? workspace?.selectedTaskID
+            if taskPicker.linkedTaskID == nil {
+                taskPicker.linkedTaskID = store.preferences.lastTaskID ?? workspace?.selectedTaskID
             }
         }
     }

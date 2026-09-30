@@ -1,5 +1,34 @@
 import SwiftUI
 
+struct FocusTaskPickerLayoutPreferenceKey: PreferenceKey {
+    static let defaultValue: [String: CGRect] = [:]
+
+    static func reduce(value: inout [String: CGRect], nextValue: () -> [String: CGRect]) {
+        value.merge(nextValue(), uniquingKeysWith: { _, newest in newest })
+    }
+}
+
+private struct FocusTaskPickerLayoutAnchor: ViewModifier {
+    let key: String
+
+    func body(content: Content) -> some View {
+        content.background {
+            GeometryReader { geometry in
+                Color.clear.preference(
+                    key: FocusTaskPickerLayoutPreferenceKey.self,
+                    value: [key: geometry.frame(in: .named("focus-task-picker"))]
+                )
+            }
+        }
+    }
+}
+
+private extension View {
+    func focusTaskPickerAnchor(_ key: String) -> some View {
+        modifier(FocusTaskPickerLayoutAnchor(key: key))
+    }
+}
+
 enum FocusTaskPickerMetrics {
     static let width: CGFloat = 312
     static let height: CGFloat = 460
@@ -24,12 +53,14 @@ struct FocusTaskPickerPopover: View {
     @Binding var scope: FocusTaskPickerScope
     @Binding var query: String
     @Binding var isScopePickerPresented: Bool
+    let onSelectScope: (FocusTaskPickerScope) -> Void
     let onSelectTask: (Task) -> Void
     let onClearTask: () -> Void
     let onDismiss: () -> Void
 
     @Environment(\.colorScheme) private var colorScheme
     @FocusState private var searchFocused: Bool
+    @State private var isScopeHovered = false
 
     private var theme: FocusTheme { FocusTheme(colorScheme) }
 
@@ -46,9 +77,11 @@ struct FocusTaskPickerPopover: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             searchField
+                .focusTaskPickerAnchor("search")
                 .padding(.bottom, 8)
 
             scopeButton
+                .focusTaskPickerAnchor("scope")
                 .padding(.bottom, 9)
 
             Divider()
@@ -92,15 +125,25 @@ struct FocusTaskPickerPopover: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .accessibilityIdentifier("focus-task-picker-clear")
             }
         }
         .padding(FocusTaskPickerMetrics.outerPadding)
         .frame(width: FocusTaskPickerMetrics.width, height: FocusTaskPickerMetrics.height,
                alignment: .topLeading)
+        .coordinateSpace(name: "focus-task-picker")
         .background(theme.canvas, in: RoundedRectangle(cornerRadius: FocusTaskPickerMetrics.cornerRadius))
         .overlay(RoundedRectangle(cornerRadius: FocusTaskPickerMetrics.cornerRadius)
             .stroke(theme.hairline, lineWidth: 1))
         .onAppear { searchFocused = true }
+        .onKeyPress(.escape) {
+            if isScopePickerPresented {
+                isScopePickerPresented = false
+            } else {
+                onDismiss()
+            }
+            return .handled
+        }
     }
 
     private var searchField: some View {
@@ -112,6 +155,7 @@ struct FocusTaskPickerPopover: View {
                 .textFieldStyle(.plain)
                 .font(.system(size: FocusTaskPickerMetrics.taskFontSize))
                 .focused($searchFocused)
+                .accessibilityIdentifier("focus-task-picker-search")
         }
         .padding(.horizontal, 10)
         .frame(height: FocusTaskPickerMetrics.searchHeight)
@@ -137,10 +181,13 @@ struct FocusTaskPickerPopover: View {
             .frame(maxWidth: .infinity,
                    minHeight: FocusTaskPickerMetrics.scopeRowHeight,
                    maxHeight: FocusTaskPickerMetrics.scopeRowHeight)
-            .background(RoundedRectangle(cornerRadius: 8).fill(theme.chipBackground))
+            .background(RoundedRectangle(cornerRadius: 8)
+                .fill(isScopeHovered ? theme.chipBackground : .clear))
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .accessibilityIdentifier("focus-task-picker-scope")
+        .onHover { isScopeHovered = $0 }
         .popover(isPresented: $isScopePickerPresented) {
             FocusTaskScopePopover(
                 selectedScope: scope,
@@ -148,7 +195,7 @@ struct FocusTaskPickerPopover: View {
                 listColor: { name in
                     WFPlanningPalette.listColor(name: name, meta: workspace.listMeta(for: name))
                 },
-                onSelect: { scope = $0; isScopePickerPresented = false },
+                onSelect: onSelectScope,
                 onDismiss: { isScopePickerPresented = false }
             )
         }
@@ -185,6 +232,7 @@ struct FocusTaskPickerPopover: View {
                         .foregroundStyle(dateIsOverdue(date) ? theme.warn : theme.text3)
                         .lineLimit(1)
                         .fixedSize()
+                        .focusTaskPickerAnchor("date-\(task.id.uuidString)")
                 }
             }
             .padding(.horizontal, 8)
@@ -195,7 +243,9 @@ struct FocusTaskPickerPopover: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .focusTaskPickerAnchor("task-\(task.id.uuidString)")
         .accessibilityLabel("选择专注任务：\(FocusTaskPickerProjection.displayTitle(for: task))")
+        .accessibilityIdentifier("focus-task-picker-task-\(task.id.uuidString)")
     }
 
     private func dateText(_ date: Date, task: Task) -> String {
