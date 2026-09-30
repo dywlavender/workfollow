@@ -130,7 +130,14 @@ enum TaskListProjection {
     /// Flutter keeps matching completed tasks in Today/Inbox, while their badge counts open tasks.
     static func matches(in scope: TaskListScope, store: WorkspaceStore,
                         now: Date, calendar: Calendar, query: TaskListQuery = TaskListQuery()) -> [Task] {
-        store.tasks.filter { task in
+        matches(in: scope, tasks: store.tasks, now: now, calendar: calendar, query: query)
+    }
+
+    /// Value-input overload for feature projections that need the exact same
+    /// scope/query membership rules without owning or mutating a WorkspaceStore.
+    static func matches(in scope: TaskListScope, tasks: [Task],
+                        now: Date, calendar: Calendar, query: TaskListQuery = TaskListQuery()) -> [Task] {
+        tasks.filter { task in
             guard task.deletedAt == nil && task.skippedAt == nil && !task.isConverted else { return false }
             guard query.matches(task) else { return false }
             switch scope {

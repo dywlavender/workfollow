@@ -11,6 +11,10 @@ struct FocusTimerPane: View {
     @Environment(\.colorScheme) private var colorScheme
     @State private var showRhythmPopover = false
     @State private var hoveredPresetID: UUID?
+    @State private var showTaskPicker = false
+    @State private var showTaskScopePicker = false
+    @State private var taskPickerScope: FocusTaskPickerScope = .today
+    @State private var taskPickerQuery = ""
 
     private var theme: FocusTheme { FocusTheme(colorScheme) }
 
@@ -33,6 +37,15 @@ struct FocusTimerPane: View {
         }
         .padding(.horizontal, FocusLayoutMetrics.horizontalPadding)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .onChange(of: showTaskPicker) { _, presented in
+            if presented {
+                taskPickerScope = .today
+                taskPickerQuery = ""
+            } else {
+                showTaskScopePicker = false
+                taskPickerQuery = ""
+            }
+        }
     }
 
     private var paneHeader: some View {
@@ -170,22 +183,8 @@ struct FocusTimerPane: View {
             let title = boundTask.map { $0.title.isEmpty ? "未命名任务" : $0.title }
             let overdue = boundTask.map { isDueOverdue($0) } ?? false
 
-            Menu {
-                Button("不关联") {
-                    if store.phase == .idle { linkedTaskID = nil } else { store.reattach(taskID: nil) }
-                }
-                ForEach(unfinishedTasks(in: workspace)) { task in
-                    Button {
-                        if store.phase == .idle { linkedTaskID = task.id }
-                        else { store.reattach(taskID: task.id) }
-                    } label: {
-                        if task.id == linkID {
-                            Label(taskMenuTitle(task), systemImage: "checkmark")
-                        } else {
-                            Text(taskMenuTitle(task))
-                        }
-                    }
-                }
+            Button {
+                showTaskPicker = true
             } label: {
                 HStack(spacing: 8) {
                     if let boundTask {
@@ -204,11 +203,31 @@ struct FocusTimerPane: View {
                 }
                 .contentShape(Rectangle())
             }
-            .menuStyle(.button)
-            .menuIndicator(.hidden)
+            .buttonStyle(.plain)
             .fixedSize()
             .help("选择一个任务并开始专注")
+            .popover(isPresented: $showTaskPicker) {
+                FocusTaskPickerPopover(
+                    workspace: workspace,
+                    selectedTaskID: linkID,
+                    scope: $taskPickerScope,
+                    query: $taskPickerQuery,
+                    isScopePickerPresented: $showTaskScopePicker,
+                    onSelectTask: { assignFocusTask($0.id) },
+                    onClearTask: { assignFocusTask(nil) },
+                    onDismiss: { showTaskPicker = false }
+                )
+            }
         }
+    }
+
+    private func assignFocusTask(_ taskID: UUID?) {
+        if store.phase == .idle {
+            linkedTaskID = taskID
+        } else {
+            _ = store.reattach(taskID: taskID)
+        }
+        showTaskPicker = false
     }
 
     private var runningStatus: some View {
@@ -409,28 +428,16 @@ struct FocusTimerPane: View {
         }
     }
 
-    private func unfinishedTasks(in workspace: TaskWorkspaceModel) -> [Task] {
-        workspace.allTasks.filter {
-            $0.status == .active && $0.deletedAt == nil && !$0.isAbandoned && $0.skippedAt == nil
-        }
-    }
-
     private func taskTitle(for id: UUID?) -> String? {
         guard let id, let workspace, let task = workspace.task(for: id) else { return nil }
         return task.title.isEmpty ? "未命名任务" : task.title
     }
 
-    private func taskMenuTitle(_ task: Task) -> String {
-        task.title.isEmpty ? "未命名任务" : task.title
-    }
-
     private func listDotColor(for id: UUID?) -> Color {
         guard let id, let workspace, let task = workspace.task(for: id),
-              let argb = workspace.listMetas.first(where: { $0.name == task.list.name })?.colorARGB
-        else { return theme.accent }
-        return Color(red: Double((argb >> 16) & 0xFF) / 255,
-                     green: Double((argb >> 8) & 0xFF) / 255,
-                     blue: Double(argb & 0xFF) / 255)
+              task.list.name != TaskList.inbox.name else { return theme.accent }
+        return WFPlanningPalette.listColor(name: task.list.name,
+                                           meta: workspace.listMeta(for: task.list.name))
     }
 
     private func isDueOverdue(_ task: Task) -> Bool {
