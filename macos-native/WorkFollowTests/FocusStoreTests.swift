@@ -14,6 +14,13 @@ final class FocusStoreTests: XCTestCase {
         return url
     }
 
+    private func date(_ year: Int, _ month: Int, _ day: Int, _ hour: Int, _ minute: Int) -> Date {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        return calendar.date(from: DateComponents(year: year, month: month, day: day,
+                                                  hour: hour, minute: minute))!
+    }
+
     private func flush(_ store: FocusStore) {
         let flushed = expectation(description: "flush")
         store.flush { _ in flushed.fulfill() }
@@ -56,6 +63,28 @@ final class FocusStoreTests: XCTestCase {
 
         let restored = FocusStore(clock: { now }, directory: directory)
         XCTAssertEqual(restored.phase, .idle)
+    }
+
+    func testSessionTimingPresentationTracksStartPauseAndResumedProjectedEnd() {
+        var now = date(2026, 9, 30, 13, 30)
+        let store = FocusStore(clock: { now }, directory: makeDirectory())
+
+        XCTAssertTrue(store.start(minutes: 25))
+        XCTAssertEqual(store.sessionTiming?.projectedEndAt, date(2026, 9, 30, 13, 55))
+
+        now = date(2026, 9, 30, 13, 35)
+        store.refresh()
+        XCTAssertTrue(store.pause())
+        XCTAssertEqual(store.sessionTiming?.phase, .pausedFocus)
+        XCTAssertEqual(store.sessionTiming?.pausedAt, now)
+        XCTAssertEqual(store.sessionTiming?.remainingSeconds, 20 * 60)
+
+        now = date(2026, 9, 30, 13, 45)
+        XCTAssertEqual(store.sessionTiming?.projectedEndAt, date(2026, 9, 30, 13, 55))
+        XCTAssertTrue(store.resume())
+        XCTAssertEqual(store.sessionTiming?.phase, .focusing)
+        XCTAssertEqual(store.sessionTiming?.remainingSeconds, 20 * 60)
+        XCTAssertEqual(store.sessionTiming?.projectedEndAt, date(2026, 9, 30, 14, 5))
     }
 
     // MARK: 补记与聚合

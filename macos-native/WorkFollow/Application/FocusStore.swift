@@ -9,6 +9,16 @@ struct PomodoroRecord: Identifiable, Codable, Equatable {
     var completed: Bool
 }
 
+/// Read-only timing data for Focus presentation. PomodoroEngine remains the owner
+/// of the session clock and state transitions.
+struct FocusSessionTiming: Equatable {
+    let phase: PomodoroPhase
+    let phaseStart: Date
+    let projectedEndAt: Date?
+    let pausedAt: Date?
+    let remainingSeconds: Int
+}
+
 /// 结束铃声选项：系统音效名，关闭 = 静默。
 enum FocusBell: String, CaseIterable {
     case crisp = "清脆"
@@ -277,6 +287,19 @@ final class FocusStore: ObservableObject, ModuleStoreFlushable {
 
     /// 正计时模式已走过的秒数（非正计时返回 0）。
     var elapsedSeconds: Int { engine.elapsedSeconds }
+
+    /// Read-only presentation snapshot; Views do not reach into PomodoroEngine.
+    var sessionTiming: FocusSessionTiming? {
+        guard let snapshot = engine.sessionSnapshot else { return nil }
+        return FocusSessionTiming(phase: snapshot.phase,
+                                  phaseStart: snapshot.phaseStart,
+                                  projectedEndAt: snapshot.phaseEnd,
+                                  pausedAt: snapshot.pausedAt,
+                                  remainingSeconds: remainingSeconds)
+    }
+
+    /// Injected clock exposed to projections. Published timer values invalidate Views each second.
+    var currentTime: Date { clock() }
 
     /// 全量累计（概览卡）：总番茄数与总专注分钟。
     var allTimePomodoros: Int { records.filter(\.completed).count }
