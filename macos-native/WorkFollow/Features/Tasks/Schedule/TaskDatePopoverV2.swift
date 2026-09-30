@@ -984,8 +984,8 @@ struct TaskDatePopoverV2: View {
         guard let current = workspace.task(for: taskID) else { onClose(); return }
         let plan = model.commitPlan(for: current)
         workspace.saveTiming(taskID, schedule: plan.schedule, reminder: plan.reminder,
-                             frequency: plan.frequency, recurrenceRule: plan.recurrenceRule)
-        persistReminderOffsets(plan.reminderOffsets, on: current)
+                             frequency: plan.frequency, recurrenceRule: plan.recurrenceRule,
+                             reminderOffsets: plan.reminderOffsets)
         onClose()
     }
 
@@ -998,19 +998,11 @@ struct TaskDatePopoverV2: View {
         guard let current = workspace.task(for: taskID) else { onClose(); return }
         let plan = model.clearPlan(for: current)
         workspace.saveTiming(taskID, schedule: plan.schedule, reminder: plan.reminder,
-                             frequency: plan.frequency, recurrenceRule: plan.recurrenceRule)
-        persistReminderOffsets(plan.reminderOffsets, on: current)
+                             frequency: plan.frequency, recurrenceRule: plan.recurrenceRule,
+                             reminderOffsets: plan.reminderOffsets)
         onClose()
     }
 
-    /// The workspace model has no direct offsets passthrough yet; the public
-    /// bulk channel carries the write (TaskActions.batch handles
-    /// .reminderOffsets). No-op when the stored offsets already match.
-    private func persistReminderOffsets(_ offsets: [Int], on current: Task) {
-        guard offsets != (current.reminderOffsets ?? []) else { return }
-        workspace.bulkSelection = [taskID]
-        workspace.applyBulk(.reminderOffsets(offsets))
-    }
 }
 
 /// Pixel-aligned marks over LunarMonthGridView: the overlay replicates the

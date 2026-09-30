@@ -252,9 +252,10 @@ final class TaskWorkspaceModel: ObservableObject {
         didMutate(actions.setRecurrence(id, frequency: frequency, rule: rule))
     }
     func saveTiming(_ id: UUID, schedule: TaskSchedule, reminder: Date?, frequency: TaskRepeat,
-                    recurrenceRule: RecurrenceRule? = nil) {
+                    recurrenceRule: RecurrenceRule? = nil, reminderOffsets: [Int]? = nil) {
         let result = actions.saveTiming(id, schedule: schedule, reminder: reminder,
-                                        frequency: frequency, recurrenceRule: recurrenceRule)
+                                        frequency: frequency, recurrenceRule: recurrenceRule,
+                                        reminderOffsets: reminderOffsets)
         didMutate(result)
     }
     var deletedTasks: [Task] {
