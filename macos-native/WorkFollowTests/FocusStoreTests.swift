@@ -87,6 +87,54 @@ final class FocusStoreTests: XCTestCase {
         XCTAssertEqual(store.sessionTiming?.projectedEndAt, date(2026, 9, 30, 14, 5))
     }
 
+    func testFocusNoteSurvivesReloadAndMovesToAbandonedRecord() {
+        var now = date(2026, 9, 30, 13, 30)
+        let directory = makeDirectory()
+        let store = FocusStore(clock: { now }, directory: directory)
+        XCTAssertTrue(store.start(minutes: 25))
+        store.updateCurrentSessionNote("  先整理评审要点  \n")
+        flush(store)
+
+        let restored = FocusStore(clock: { now }, directory: directory)
+        XCTAssertEqual(restored.currentSessionNote, "  先整理评审要点  \n")
+
+        now = date(2026, 9, 30, 13, 35)
+        restored.refresh()
+        let record = restored.giveUp()
+        XCTAssertEqual(record?.completed, false)
+        XCTAssertEqual(record?.note, "先整理评审要点")
+        XCTAssertEqual(restored.records.first?.note, "先整理评审要点")
+        XCTAssertEqual(restored.currentSessionNote, "")
+    }
+
+    func testNaturalCompletionArchivesSessionNoteOnCompletedRecord() {
+        var now = date(2026, 9, 30, 13, 30)
+        let store = FocusStore(clock: { now }, directory: makeDirectory())
+        XCTAssertTrue(store.start(minutes: 5))
+        store.updateCurrentSessionNote("完成后的笔记")
+
+        now = date(2026, 9, 30, 13, 35)
+        store.refresh()
+
+        XCTAssertEqual(store.phase, .breaking)
+        XCTAssertEqual(store.records.first?.completed, true)
+        XCTAssertEqual(store.records.first?.note, "完成后的笔记")
+        XCTAssertEqual(store.currentSessionNote, "")
+    }
+
+    func testShortAbandonedSessionDoesNotCreateRecordButClearsItsNote() {
+        var now = date(2026, 9, 30, 13, 30)
+        let store = FocusStore(clock: { now }, directory: makeDirectory())
+        XCTAssertTrue(store.start(minutes: 25))
+        store.updateCurrentSessionNote("短暂记录")
+        now = date(2026, 9, 30, 13, 32)
+        store.refresh()
+
+        XCTAssertNil(store.giveUp())
+        XCTAssertEqual(store.currentSessionNote, "")
+        XCTAssertTrue(store.records.isEmpty)
+    }
+
     // MARK: 补记与聚合
 
     func testManualRecordAndWeeklyTotals() {

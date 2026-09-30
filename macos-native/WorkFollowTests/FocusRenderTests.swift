@@ -7,7 +7,7 @@ import XCTest
 final class FocusRenderTests: XCTestCase {
     private enum TimerState: String, CaseIterable {
         case idleWithoutRecords
-        case pausedWithOneRecord
+        case idleWithOneRecord
     }
 
     private struct RenderCase {
@@ -192,9 +192,7 @@ final class FocusRenderTests: XCTestCase {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("FocusRenderTests-\(UUID().uuidString)", isDirectory: true)
         let store = FocusStore(clock: { now }, directory: directory)
-        if state == .pausedWithOneRecord {
-            precondition(store.start(minutes: 25))
-            precondition(store.pause())
+        if state == .idleWithOneRecord {
             precondition(store.addRecord(taskID: nil,
                                          startedAt: now.addingTimeInterval(-3_600), minutes: 25))
         }

@@ -65,9 +65,14 @@ struct FocusWorkspaceView: View {
                 .fill(theme.hairline)
                 .frame(width: FocusLayoutMetrics.dividerWidth)
                 .focusRenderAnchor(.divider)
-            FocusOverviewPane(store: store, workspace: workspace,
-                              onSelectRecordTask: onSelectRecordTask)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            if store.phase == .focusing || store.phase == .pausedFocus {
+                FocusActiveSessionPane(store: store)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                FocusOverviewPane(store: store, workspace: workspace,
+                                  onSelectRecordTask: onSelectRecordTask)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
         }
         .background(theme.canvas)
         .background {

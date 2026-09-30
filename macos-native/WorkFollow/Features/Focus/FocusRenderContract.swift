@@ -13,6 +13,20 @@ enum FocusRenderAnchor: Hashable {
     case emptyRecordsIllustration
     case emptyRecordsContent
     case emptyRecordsRegion
+    case activeTimeline
+    case activeTimelineTick0
+    case activeTimelineTick1
+    case activeTimelineTick2
+    case activeTimelineTick3
+    case activeTimelineTick4
+    case activeTimelineCurrentLine
+    case activeTimelineCurrentDot
+    case activeTimelineFocusFill
+    case activeFocusNoteHeader
+    case activeFocusNote
+    case focusPauseButton
+    case focusResumeButton
+    case focusEndButton
 
     static let coordinateSpaceName = "focus-render-contract"
 }

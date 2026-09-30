@@ -7,6 +7,7 @@ struct PomodoroRecord: Identifiable, Codable, Equatable {
     var startedAt: Date
     var minutes: Int
     var completed: Bool
+    var note: String? = nil
 }
 
 /// Read-only timing data for Focus presentation. PomodoroEngine remains the owner
@@ -82,6 +83,8 @@ final class FocusStore: ObservableObject, ModuleStoreFlushable {
         var session: FocusSessionSnapshot?
         /// 常用专注预设（additive Codable）。
         var timers: [TimerPreset] = []
+        /// 正在进行的专注笔记（additive Codable）。
+        var sessionNote: String? = nil
     }
 
     struct TaskFocusTotal: Equatable {
@@ -119,6 +122,7 @@ final class FocusStore: ObservableObject, ModuleStoreFlushable {
     @Published private(set) var remainingSeconds = 0
     @Published private(set) var phaseSeconds = 0
     @Published private(set) var currentTaskID: UUID?
+    @Published private(set) var currentSessionNote = ""
     @Published private(set) var todayPomodoros = 0
     @Published private(set) var todayMinutes = 0
     @Published private(set) var timers: [TimerPreset] = []
@@ -149,6 +153,9 @@ final class FocusStore: ObservableObject, ModuleStoreFlushable {
         if let session = loaded.session {
             engine.restore(session)
         }
+        if loaded.session?.phase == .focusing || loaded.session?.phase == .pausedFocus {
+            currentSessionNote = loaded.sessionNote ?? ""
+        }
         sync()
         if phase != .idle { startTimer() }
         refreshDailyStats()
@@ -172,6 +179,7 @@ final class FocusStore: ObservableObject, ModuleStoreFlushable {
         notifier?.requestAuthorizationIfNeeded()
         guard engine.start(taskID: taskID,
                            stopwatch: stopwatch ?? preferences.stopwatchMode) else { return false }
+        currentSessionNote = ""
         if let taskID {
             preferences.lastTaskID = taskID
             schedulePersistence()
@@ -200,24 +208,34 @@ final class FocusStore: ObservableObject, ModuleStoreFlushable {
     @discardableResult
     func giveUp() -> PomodoroRecord? {
         let record = engine.giveUp()
-        if let record { insert(record) }
+        let storedRecord = record.map { insert($0, sessionNote: currentSessionNote) }
+        currentSessionNote = ""
         sync()
         stopTimerIfNeeded()
-        return record
+        return storedRecord
     }
 
     /// 提前完成当前专注，随后进入休息。
     @discardableResult
     func finishEarly() -> PomodoroRecord? {
         let record = engine.finishEarly()
-        if let record { insert(record) }
+        let storedRecord = record.map { insert($0, sessionNote: currentSessionNote) }
+        if record != nil { currentSessionNote = "" }
         sync()
-        return record
+        return storedRecord
     }
 
     /// 立即同步引擎状态，到点阶段就地完成；Timer 与视图出现时都调用。
     func refresh() {
-        if let record = engine.handleCompletion() { insert(record) }
+        let previousPhase = engine.phase
+        if let record = engine.handleCompletion() {
+            let note = currentSessionNote
+            currentSessionNote = ""
+            insert(record, sessionNote: note)
+        }
+        if previousPhase == .breaking && engine.phase == .focusing {
+            currentSessionNote = ""
+        }
         sync()
         stopTimerIfNeeded()
     }
@@ -300,6 +318,14 @@ final class FocusStore: ObservableObject, ModuleStoreFlushable {
 
     /// Injected clock exposed to projections. Published timer values invalidate Views each second.
     var currentTime: Date { clock() }
+
+    /// Updates and debounces persistence of the active focus note.
+    func updateCurrentSessionNote(_ note: String) {
+        guard phase == .focusing || phase == .pausedFocus,
+              currentSessionNote != note else { return }
+        currentSessionNote = note
+        schedulePersistence()
+    }
 
     /// 全量累计（概览卡）：总番茄数与总专注分钟。
     var allTimePomodoros: Int { records.filter(\.completed).count }
@@ -424,10 +450,15 @@ final class FocusStore: ObservableObject, ModuleStoreFlushable {
 
     // MARK: - Private
 
-    private func insert(_ record: PomodoroRecord) {
-        records.insert(record, at: 0)
+    @discardableResult
+    private func insert(_ record: PomodoroRecord, sessionNote: String? = nil) -> PomodoroRecord {
+        var savedRecord = record
+        let trimmedNote = sessionNote?.trimmingCharacters(in: .whitespacesAndNewlines)
+        savedRecord.note = trimmedNote?.isEmpty == false ? trimmedNote : nil
+        records.insert(savedRecord, at: 0)
         refreshDailyStats()
         schedulePersistence()
+        return savedRecord
     }
 
     /// 把引擎状态镜像进 @Published 字段；值未变化时不重复发布。
@@ -492,7 +523,8 @@ final class FocusStore: ObservableObject, ModuleStoreFlushable {
 
     private func schedulePersistence() {
         persistence.schedule(Archive(records: records, preferences: preferences,
-                                     session: engine.sessionSnapshot, timers: timers))
+                                     session: engine.sessionSnapshot, timers: timers,
+                                     sessionNote: currentSessionNote.isEmpty ? nil : currentSessionNote))
     }
 
     private func startTimer() {

@@ -67,7 +67,11 @@ struct FocusTimerRing: View {
                 .font(.system(size: FocusLayoutMetrics.timerFontSize, weight: .regular))
                 .monospacedDigit()
                 .foregroundStyle(theme.text)
-            if store.phase != .idle {
+            if store.phase == .pausedFocus {
+                Text("已暂停")
+                    .font(.system(size: FocusLayoutMetrics.phaseFontSize))
+                    .foregroundStyle(theme.text2)
+            } else if store.phase == .breaking || store.phase == .pausedBreak {
                 Text(FocusViewLogic.phaseTitle(for: store.phase, isLongBreak: store.isLongBreak))
                     .font(.system(size: FocusLayoutMetrics.phaseFontSize))
                     .foregroundStyle(theme.text2)

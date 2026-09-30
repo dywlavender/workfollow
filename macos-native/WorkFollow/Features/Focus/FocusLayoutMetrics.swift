@@ -93,6 +93,20 @@ enum FocusLayoutMetrics {
     static let recordEmptyContentGap: CGFloat = 12
     static let recordEmptyVerticalOffset: CGFloat = 20
 
+    // Active session
+    static let timelineHorizontalPadding: CGFloat = 24
+    static let timelineTopPadding: CGFloat = 24
+    static let timelineHeaderHeight: CGFloat = 32
+    static let timelineHeight: CGFloat = 500
+    static let timelineLabelWidth: CGFloat = 26
+    static let timelineGridLineWidth: CGFloat = 1
+    static let timelineCurrentLineWidth: CGFloat = 1.5
+    static let timelineCurrentDotSize: CGFloat = 16
+    static let timelineFocusFillOpacity: CGFloat = 0.16
+    static let focusNoteTopGap: CGFloat = 28
+    static let focusNoteHeight: CGFloat = 122
+    static let focusNoteRadius: CGFloat = 6
+
     static var ringTop: CGFloat {
         focusLabelTop + focusLabelHeight + ringTopGap
     }

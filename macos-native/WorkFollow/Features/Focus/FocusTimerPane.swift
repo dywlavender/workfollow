@@ -244,14 +244,15 @@ struct FocusTimerPane: View {
             switch store.phase {
             case .idle:
                 primaryButton("开始") { store.start(taskID: taskPicker.linkedTaskID) }
-            case .focusing, .pausedFocus:
-                let running = store.phase == .focusing
-                primaryButton(running ? "暂停" : "继续") {
-                    if running { store.pause() } else { store.resume() }
-                }
-                HStack(spacing: 22) {
-                    linkButton("完成本番茄") { store.finishEarly() }
-                    linkButton("放弃") { showGiveUpConfirmation = true }
+            case .focusing:
+                outlineButton("暂停") { store.pause() }
+                    .focusRenderAnchor(.focusPauseButton)
+            case .pausedFocus:
+                HStack(spacing: 12) {
+                    primaryButton("继续") { store.resume() }
+                        .focusRenderAnchor(.focusResumeButton)
+                    outlineButton("结束") { _ = store.giveUp() }
+                        .focusRenderAnchor(.focusEndButton)
                 }
             case .breaking:
                 primaryButton("跳过休息") { _ = store.giveUp() }
@@ -283,6 +284,19 @@ struct FocusTimerPane: View {
         }
         .buttonStyle(.plain)
         .focusRenderAnchor(.primaryButton)
+    }
+
+    private func outlineButton(_ title: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title)
+                .font(.system(size: 16, weight: .medium))
+                .foregroundStyle(theme.accent)
+                .frame(width: FocusLayoutMetrics.primaryButtonWidth,
+                       height: FocusLayoutMetrics.primaryButtonHeight)
+                .background(Capsule().fill(theme.canvas))
+                .overlay(Capsule().stroke(theme.accent, lineWidth: 1.5))
+        }
+        .buttonStyle(.plain)
     }
 
     private func linkButton(_ title: String, action: @escaping () -> Void) -> some View {
