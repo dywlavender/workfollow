@@ -5,7 +5,7 @@ import XCTest
 
 @MainActor
 final class FocusDurationPopoverRenderTests: XCTestCase {
-    func testIdleDurationLayerIsArrowlessAndAnchoredToClockWithoutMovingRing() throws {
+    func testIdleDurationLayerIsArrowlessAndBelowClockWithoutMovingRing() throws {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("focus-duration-popover-\(UUID().uuidString)",
                                    isDirectory: true)
@@ -57,8 +57,8 @@ final class FocusDurationPopoverRenderTests: XCTestCase {
         XCTAssertEqual(panel.size, CGSize(width: 232, height: 104))
         XCTAssertEqual(panel.midX, clockFrame.midX, accuracy: 0.5,
                        "Duration layer should align with the timer digits")
-        XCTAssertLessThan(panel.maxY, clockFrame.minY,
-                          "Duration layer should sit above, without overlapping, the clock anchor")
+        XCTAssertEqual(panel.minY, clockFrame.maxY + 12, accuracy: 0.5,
+                       "Duration layer should sit 12 points below the clock anchor")
         XCTAssertNil(NSApp.windows.first { $0 !== hostWindow && $0.isVisible && $0.parent === hostWindow },
                      "Arrowless layer should not create a system popover window")
 

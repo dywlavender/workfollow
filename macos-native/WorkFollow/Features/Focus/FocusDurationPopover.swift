@@ -130,9 +130,10 @@ private struct FocusDurationPopoverPresenter: ViewModifier {
                     let panelWidth: CGFloat = 232
                     let panelHeight: CGFloat = 104
                     let gap: CGFloat = 12
-                    let proposedY = trigger.minY >= panelHeight + gap
-                        ? trigger.minY - gap - panelHeight / 2
-                        : trigger.maxY + gap + panelHeight / 2
+                    let belowY = trigger.maxY + gap + panelHeight / 2
+                    let aboveY = trigger.minY - gap - panelHeight / 2
+                    let fitsBelow = belowY + panelHeight / 2 <= geometry.size.height - 8
+                    let proposedY = fitsBelow ? belowY : aboveY
                     let centerY = min(max(proposedY, panelHeight / 2 + 8),
                                       geometry.size.height - panelHeight / 2 - 8)
                     let centerX = min(max(trigger.midX, panelWidth / 2 + 8),
