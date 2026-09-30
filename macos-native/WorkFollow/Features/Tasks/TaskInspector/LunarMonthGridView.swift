@@ -122,6 +122,14 @@ private struct GridDayCell: View {
     let action: () -> Void
 
     var body: some View {
+        Button(action: action) {
+            dayContent
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("\(day)日")
+    }
+
+    private var dayContent: some View {
         ZStack {
             if isSelected {
                 Circle().fill(WFColors.accent)
@@ -151,7 +159,6 @@ private struct GridDayCell: View {
         }
         .frame(maxWidth: .infinity, minHeight: 30)
         .contentShape(Rectangle())
-        .onTapGesture(perform: action)
     }
 
     private var numberColor: Color {

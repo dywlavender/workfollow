@@ -44,9 +44,18 @@
 - **真实窗口：** 退出旧进程后启动本笔最新编译 App；点击子行背景打开 child，点 breadcrumb 回 parent；点击子行完成框不会跳转 Inspector，已完成后再恢复到原状态；parent 清单 Menu 可打开并 Escape 关闭；child Footer 显示正常清单 Label、不是 disabled Menu。父/子截图见本次工具输出。
 - **状态：IMPLEMENTED / TESTS PASSED / REAL WINDOW CHECKED。** 没有宣称等尺寸逐像素完全一致；未修改 Date Panel、Quick Add、Slash、More 内容、Tag Picker、Editor Core 或窄屏行为。
 
+## DATE Round 1：原子提交与主面板定向校正
+
+- **原子保存：** Workspace `saveTiming` 直接透传 `reminderOffsets`。保存/清除不再借用 `bulkSelection/applyBulk`；schedule、reminder、repeat、offsets 同一事务写入，单次业务 undo 恢复全部字段。保留原 bulk selection、不产生 bulk feedback。
+- **DATE-001～004：** 主入口仅今天/明天/下周/周末四枚快捷图标；Tonight Domain 保留。定时 offset 0 显示“准时”，全天仍“当天”；计数结束显示“重复 N 次后结束”。已配置的重复结束值使用 accent。主面板260pt、属性行30pt，图标列及 trailing chevron 同轴；重复关闭不创建结束行。
+- **测试：** `TaskScheduleAtomicCommitTests`、`TaskSchedulePanelRenderTests`、既有 `SchedulePopoverContractTests` / `TaskDateDraftModelTests` 定向通过。NSWindow + NSHostingView 渲染 empty、20:30/准时、monthly22/count2 和全天场景，输出 `/tmp/workfollow-schedule-panel-renders`；子面板开关不改变主面板尺寸，丢弃 Draft 不写任务。
+- **真实窗口：** 重编译并退出旧进程后验收四个快捷入口、快捷日期修改后 Escape 丢弃、确定后 Header 更新。另发现月历 gesture 日期格未响应真实点击，将日期格包装为 plain Button 并给出日期辅助功能名称；选择日期与关闭子面板使用同一个回调，不改变月份/农历/假日/重复推演算法。重新点击26日、确定后 Header 更新为9月26日09:00；验收任务日期已恢复。
+- **验收边界：** 结构与保存合同通过，不宣称等尺寸逐像素完全一致。提醒/重复二级浮层保持原实现，未判为 TickTick parity verified。
+- **TASK-SCHEDULE-GAP-WORKSPACE-UNDO-SHORTCUT：** 单次工作区业务 undo 已由测试验证，但真实窗口 ⌘Z / Edit Undo 未接工作区撤销，快捷键撤销不判通过；留待独立输入路由修复，不混入本轮。
+
 ## 后续提交（未完成）
 
-2. **Commit 3 / DATE-001～003：** 同一 Draft Schedule Panel 的日期/时间段、Calendar、Time、Reminder、Repeat/End、Clear/Confirm；需要日期面板参考图最终锁视觉。
+2. **DATE Round 2：** 取得提醒/重复二级浮层参考图后，再逐项对齐其结构与定位；不扩展 Month Grid 业务。
 3. **Commit 4 / QA-001～002：** 四枚 priority flags、List/Tags/Attachment/Template、独立输入框设置；需要属性菜单参考图。
 4. **Commit 5 / SLASH-TASK-001：** Task DocumentProfile 命令顺序/分组/图标，不把任务分支塞进 Editor Core；需要 Slash 参考图。
 

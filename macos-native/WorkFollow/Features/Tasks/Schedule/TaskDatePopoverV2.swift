@@ -113,9 +113,11 @@ struct TaskDatePopoverV2: View {
                     today: workspace.dateFromToday(0),
                     selection: deadline || model.tab == .date ? model.selectedDate : nil,
                     range: !deadline && model.tab == .period ? model.periodRange : nil,
-                    onSelect: model.select
+                    onSelect: { day in
+                        model.select(day)
+                        closeSheet()
+                    }
                 )
-                .simultaneousGesture(TapGesture().onEnded { closeSheet() })
                 .overlay(alignment: .top) {
                     // Pale accent discs for future occurrences, plus 班/休 badges
                     // and statutory festival names from ChineseWorkCalendar.
@@ -146,6 +148,7 @@ struct TaskDatePopoverV2: View {
         }
         .padding(ScheduleMetrics.horizontalPadding)
         .frame(width: ScheduleMetrics.panelWidth)
+        .scheduleRenderAnchor(.panel)
         // macOS 27：`.popover` 不传 arrowEdge（默认 nil）就不画三角箭头，
         // 系统自带圆角卡片样式（对齐滴答/参考图），无需任何背景补丁。
         .onChange(of: model.startTimeAnchor) { _, _ in syncTimeField() }
@@ -181,7 +184,7 @@ struct TaskDatePopoverV2: View {
                          model.chooseFrequency(.never)
                      } : nil) { repeatPanelBody }
             if model.frequency != .never {
-                sheetRow(.repeatEnd, icon: "repeat", title: endRowLabel, active: false) {
+                sheetRow(.repeatEnd, icon: "repeat", title: endRowLabel, active: model.ending != .never) {
                     repeatEndPanelBody
                 }
             }
@@ -206,6 +209,7 @@ struct TaskDatePopoverV2: View {
                 .font(.system(size: 14))
                 .foregroundStyle(active || open ? WFColors.accent : WFColors.secondaryText)
                 .frame(width: 18)
+                .scheduleRenderAnchor(.icon(sheet))
             if let editor, active {
                 // 时间：设了时间就是行内 HH:mm 输入框（可精确到分钟）。
                 editor
@@ -223,10 +227,14 @@ struct TaskDatePopoverV2: View {
                     .font(.system(size: 10, weight: .semibold))
                     .foregroundStyle(WFColors.tertiaryText)
                     .frame(width: 18, height: 18)
+                    .scheduleRenderAnchor(.trailing(sheet))
             }
         }
         .padding(.horizontal, open ? 10 : 2)
         .frame(height: ScheduleMetrics.rowHeight)
+        .scheduleRenderAnchor(.row(sheet),
+            label: editor != nil && active ? (sheet == .endTime ? endTimeFieldText : timeFieldText) : title,
+            active: active)
         .background(open ? WFColors.hover : Color.clear, in: RoundedRectangle(cornerRadius: 8))
         // 整行开合的命中区放在**内容之下**：输入框与清除按钮在它前面，先拿到自己的
         // 点击；点行内其余任何位置都能开合（行上有输入框时也照常能展开）。
@@ -742,7 +750,7 @@ struct TaskDatePopoverV2: View {
     private var reminderRowLabel: String {
         let offsets = model.reminderOffsetsDraft
         if !offsets.isEmpty {
-            return offsets.map(reminderOffsetTitle).joined(separator: ", ")
+            return offsets.map { $0 == 0 && model.hasTime ? "准时" : reminderOffsetTitle($0) }.joined(separator: ", ")
         }
         guard model.reminderOption != .none else { return "提醒" }
         return reminderChipTitle
@@ -784,7 +792,7 @@ struct TaskDatePopoverV2: View {
             let components = calendar.dateComponents([.year, .month, .day], from: model.repeatEndDate)
             return "\(components.year ?? 0)年\(components.month ?? 0)月\(components.day ?? 0)日结束"
         case .count:
-            return "\(model.repeatCount)次后结束"
+            return "重复 \(model.repeatCount) 次后结束"
         case .never:
             return "永不结束"
         }
@@ -797,6 +805,8 @@ struct TaskDatePopoverV2: View {
         case .custom:
             return TaskDateLabel.text(model.customReminder, hasTime: true,
                                       now: workspace.clock(), calendar: workspace.calendar)
+        case .onTime:
+            return model.hasTime ? "准时" : "当天"
         default:
             return TaskDateDraftModel.presetOffsets
                 .first { $0.option == model.reminderOption }?.title ?? "准时"
@@ -932,7 +942,6 @@ struct TaskDatePopoverV2: View {
             shortcutButton("sunrise", "明天") { model.quick(1) }
             shortcutButton(badge: "+7", "下周") { model.quick(7) }
             shortcutButton("moon", "周末") { model.selectWeekend() }
-            shortcutButton("moon.stars", "今晚") { model.selectTonight() }
         }
     }
 
@@ -963,6 +972,7 @@ struct TaskDatePopoverV2: View {
         }
         .buttonStyle(.plain)
         .help(help)
+        .scheduleRenderAnchor(.shortcut(help))
     }
 
     // MARK: Commit
