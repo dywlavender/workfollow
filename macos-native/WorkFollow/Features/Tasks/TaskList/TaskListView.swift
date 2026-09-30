@@ -69,6 +69,12 @@ struct TaskListView: View {
             // 文本一变，「已被忽略」和候选高亮都作废：候选列表要按新的查询重开。
             candidate.textDidChange()
         }
+        .onChange(of: quickAddFocused) { _, focused in
+            if focused { listFocused = false }
+        }
+        .onChange(of: descriptionFocused) { _, focused in
+            if focused { listFocused = false }
+        }
         .onChange(of: showQuickAddSchedule) { _, isPresented in
             if !isPresented { quickAddFocused = true }
         }
@@ -273,14 +279,9 @@ struct TaskListView: View {
                         .environment(\.timeZone, workspace.calendar.timeZone)
                     }
                     Button { showQuickAddProperties = true } label: {
-                        Image(systemName: "ellipsis")
+                        Image(systemName: "chevron.down")
                             .foregroundStyle(WFColors.secondaryText)
-                            // 必须给足命中区域。少了这两行，纯 `Image` 标签的 `.plain`
-                            // 按钮命中区会塌缩到**图形的着墨范围**——省略号是横排的三个点，
-                            // 实测 AX 报出来的框是 `12x2`：一个两点高的缝。
-                            // 用户瞄着看得见的 `⋯` 点下去，绝大多数位置都落在缝外，
-                            // 表现就是「点了没反应」（实测 y=134 / y=140 均无效，只有 137–138 有效）。
-                            // 旁边那个日期按钮一直是这么写的，所以它有 41x34 的框。
+                            // Keep the whole control hit-testable, not just the glyph.
                             .frame(width: WFMetrics.controlHeight, height: WFMetrics.controlHeight)
                             .contentShape(Rectangle())
                     }
@@ -308,6 +309,7 @@ struct TaskListView: View {
                         .foregroundStyle(WFColors.secondaryText)
                 }
             }
+            .frame(height: TaskListMetrics.quickAddHeight)
             // Tab 进来的描述行（对齐滴答「敲击 Tab 添加任务描述」）。紧贴标题下方，
             // 这样 Tab 的落点就是「下一行」；描述是纯文本，不参与智能识别。
             if candidate.descriptionVisible || !descriptionDraft.isEmpty {
@@ -360,16 +362,14 @@ struct TaskListView: View {
                 }
             }
         }
-        .frame(minHeight: 36, alignment: .center)
         .padding(.horizontal, WFSpace.md)
-        .padding(.vertical, 4)
         // 滴答式两态：未选中是更灰一档的浅灰条、无描边；选中后底色提亮到
         // 窗口底色、描边换「今天」同款强调色（WFColors.accent）。
-        .background(RoundedRectangle(cornerRadius: WFMetrics.corner)
+        .background(RoundedRectangle(cornerRadius: TaskListMetrics.quickAddRadius)
             .fill(quickAddExpanded ? WFColors.canvas : WFColors.hover))
         .overlay {
             if quickAddExpanded {
-                RoundedRectangle(cornerRadius: WFMetrics.corner)
+                RoundedRectangle(cornerRadius: TaskListMetrics.quickAddRadius)
                     .stroke(WFColors.accent, lineWidth: 1)
                     // 纯装饰层：必须放行点击，否则它会压在输入框上方把点击吃掉，
                     // 输入框拿不到第一响应者，展开也就无从触发。
@@ -609,6 +609,7 @@ struct TaskListView: View {
         } else {
             quickAddEscapePrimed = true
             quickAddFocused = false
+            listFocused = true
         }
     }
 
@@ -630,14 +631,15 @@ struct TaskListView: View {
             Button { groupExpansion.toggle(group) } label: {
                 HStack(spacing: 6) {
                     Image(systemName: groupExpansion.isCollapsed(group) ? "chevron.right" : "chevron.down")
-                        .font(.system(size: 10, weight: .semibold))
+                        .font(.system(size: TaskListMetrics.groupChevronSize, weight: .semibold))
                         .foregroundStyle(WFColors.secondaryText)
+                        .frame(width: TaskListMetrics.groupChevronSize, height: TaskListMetrics.groupChevronSize)
                     Text(groupTitle(group)).font(WFType.sectionSemibold)
                     Text("\(group.tasks.count)").font(WFType.supporting)
                         .foregroundStyle(WFColors.secondaryText)
                     Spacer(minLength: 0)
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .frame(maxWidth: .infinity, minHeight: TaskListMetrics.groupHeaderHeight, alignment: .leading)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -652,8 +654,7 @@ struct TaskListView: View {
             }
         }
         .padding(.horizontal, WFSpace.sm)
-        .padding(.top, WFSpace.md)
-        .padding(.bottom, WFSpace.xs)
+        .frame(height: TaskListMetrics.groupHeaderHeight)
     }
 
     private func revealSelectedClosedTask() {
@@ -725,7 +726,11 @@ struct TaskListView: View {
                         .frame(maxWidth: .infinity).padding(.vertical, WFSpace.page)
                 }
                 ForEach(groups, id: \.id) { group in
-                    if group.kind != .plain { groupHeader(group) }
+                    if group.kind != .plain {
+                        Color.clear.frame(height: TaskListMetrics.groupTopGap)
+                            .accessibilityHidden(true)
+                        groupHeader(group)
+                    }
                     if group.kind == .plain || !groupExpansion.isCollapsed(group) {
                         ForEach(displayedNodes(for: group, scope: scope ?? .today),
                                 id: \.task.id) { node in
@@ -770,6 +775,8 @@ struct TaskListView: View {
                 hasChildren: node.hasChildren,
                 expanded: node.expanded,
                 selected: workspace.selectedTaskID == node.task.id,
+                focused: listFocused && !quickAddFocused && !descriptionFocused
+                    && workspace.selectedTaskID == node.task.id,
                 showsListBadge: showsListBadge,
                 onSelect: {
                     listFocused = true
@@ -882,6 +889,7 @@ struct TaskRowView: View {
     let hasChildren: Bool
     let expanded: Bool
     let selected: Bool
+    let focused: Bool
     var showsListBadge: Bool = true
     let onSelect: () -> Void
     let onComplete: () -> Void
@@ -952,6 +960,13 @@ struct TaskRowView: View {
         .frame(minHeight: WFMetrics.rowHeight)
         .background(selected ? WFColors.selection : hovering ? WFColors.hover : .clear,
                     in: RoundedRectangle(cornerRadius: WFMetrics.corner))
+        .overlay {
+            if focused {
+                RoundedRectangle(cornerRadius: WFMetrics.corner)
+                    .strokeBorder(WFColors.focusRing, lineWidth: 1)
+                    .allowsHitTesting(false)
+            }
+        }
         // 整行可点（对齐 Flutter GestureDetector opaque）：标题旁的留白、行内
         // 空隙、元数据区点下去也能选中打开编辑栏；行内按钮（勾选框/日期）优先级更高。
         .contentShape(Rectangle())

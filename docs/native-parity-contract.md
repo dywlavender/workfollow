@@ -233,6 +233,15 @@
 
 ## 本轮审计结论与施工顺序
 
+### Task List Round 2 — 分组 / Quick Add / 行焦点（2026-09-30）
+
+本轮需求中的 004/005/006 与上文既有业务契约编号重叠，因此以下按 Round 2 子项记录，不覆盖原契约。
+
+- **分组几何：** Flutter `desktop/lib/theme/workfollow_theme.dart` 与 `widgets/task_list/task_group_header.dart` 为基线。Native `TaskListMetrics` 独立定义 18pt group gap、30pt header、11pt chevron；标题与计数垂直居中，顺延靠右，标题及剩余空白点击折叠，顺延按钮保持独立操作。
+- **Quick Add：** Flutter `widgets/quick_add.dart` 的单行基线为 42pt、圆角 10pt。Native 标题行固定 42pt，不再叠加纵向 padding；未聚焦显示 ⌘N，展开后显示日期和 chevron-down。描述、识别结果继续按原逻辑增加高度。
+- **行焦点：** Flutter `theme/workfollow_theme.dart` 的 `focusRing = accent × .35` 为基线。Native 在选中背景之外单独描边；Quick Add/描述框持焦时不显示行描边，选中任务保留。Quick Add 的 Escape 收起后向列表交还焦点，随后 ↑↓ 可以导航。
+- **验证：** 最新构建通过 TaskListViewDefaultsTests、QuickAddCompositionTests。真实窗口已检查未展开/展开 Quick Add、行 focus ring、输入框持焦时行描边消失、Escape 后 ↓ 选择下一项与描边恢复、分组点击收起/再展开；截图在本次工具输出中。未新增自动像素差分测试，不据此声明整个 Task List 已完全对齐。
+
 1. P0-001 的产品决定已确认，代码和测试已补；P0-002 的 Native 修正和测试已补；P0-012 已完成 Native Preview 真窗口点击与撤销验收。
 2. P1-005 的投影实现和回归测试已完成；Recent 新分组的真实窗口截图仍待验收。P1-007 已删除 Native 独立“过期”目的地，保留 Today/Recent/All 内的逾期组；真实窗口检查待 Mac 解锁后补做。后续继续按优先级处理非待决策项；P1-004 已按页面作用域隔离完成项。
 3. P1-014 已按源码实现全局搜索与路由，并移除列表页搜索/筛选扩展；测试通过，真实窗口/键盘验收仍欠缺。只有对应契约的 Flutter 行为、Native 定向测试和真实 UI 验收都一致后，才把 Task List 标为 `PARITY VERIFIED`。

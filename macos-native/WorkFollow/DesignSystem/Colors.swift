@@ -17,6 +17,7 @@ enum WFColors {
     /// Hover emphasis used for time fragments in Flutter's smart Quick Add.
     static let accentHover = themed(rgb(0x4B4CD9), rgb(0x98A1FF))
     static let selection = accent.opacity(0.10)
+    static let focusRing = accent.opacity(0.35)
     static let hover = Color.primary.opacity(0.04)
 
     /// Flutter `WorkFollowTheme` 的浅/深两套值，按当前外观取其一。日历与四象限
