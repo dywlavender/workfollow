@@ -52,6 +52,12 @@ final class FocusDurationPopoverRenderTests: XCTestCase {
         RunLoop.current.run(until: Date().addingTimeInterval(0.2))
         hostWindow.contentView?.layoutSubtreeIfNeeded()
 
+        let fieldEditor = try XCTUnwrap(hostWindow.firstResponder as? NSTextView,
+                                        "Opening the editor should focus the minutes field")
+        XCTAssertEqual(fieldEditor.string, "25")
+        XCTAssertEqual(fieldEditor.selectedRange(), NSRange(location: 0, length: 2),
+                       "The existing duration should be selected so typing replaces it")
+
         let panel = try XCTUnwrap(frames[.focusDurationPopover],
                                   "Arrowless duration layer should render in the same window")
         XCTAssertEqual(panel.size, CGSize(width: 232, height: 104))

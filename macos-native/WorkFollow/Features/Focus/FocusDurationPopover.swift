@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 /// Draft state for the idle focus-duration editor. Changes reach FocusStore only on confirm.
@@ -90,7 +91,17 @@ struct FocusDurationPopover: View {
         .overlay(RoundedRectangle(cornerRadius: 12).stroke(theme.hairline, lineWidth: 1))
         .shadow(color: .black.opacity(colorScheme == .dark ? 0.30 : 0.14),
                 radius: 14, x: 0, y: 5)
-        .onAppear { minutesFieldFocused = true }
+        .onAppear {
+            // The timer digits open an editor prefilled with the current value.
+            // Select that value so typing a replacement doesn't append to it
+            // and silently leave the Confirm button disabled (for example 25 → 2530).
+            DispatchQueue.main.async {
+                minutesFieldFocused = true
+                DispatchQueue.main.async {
+                    (NSApp.keyWindow?.firstResponder as? NSTextView)?.selectAll(nil)
+                }
+            }
+        }
         .onExitCommand { session.cancel() }
     }
 
@@ -164,15 +175,18 @@ private struct FocusDurationPopoverPresenter: ViewModifier {
 private struct DurationButtonStyle: ButtonStyle {
     let theme: FocusTheme
     let isPrimary: Bool
+    @Environment(\.isEnabled) private var isEnabled
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.system(size: 13, weight: .medium))
-            .foregroundStyle(isPrimary ? Color.white : theme.text2)
+            .foregroundStyle(isPrimary ? Color.white.opacity(isEnabled ? 1 : 0.55) : theme.text2)
             .frame(width: 72, height: 30)
             .background {
                 RoundedRectangle(cornerRadius: 7)
-                    .fill(isPrimary ? theme.accent : theme.canvas)
+                    .fill(isPrimary
+                          ? (isEnabled ? theme.accent : theme.accent.opacity(0.35))
+                          : theme.canvas)
                     .overlay {
                         if !isPrimary {
                             RoundedRectangle(cornerRadius: 7)
