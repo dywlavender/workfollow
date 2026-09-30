@@ -39,6 +39,10 @@ final class FocusRenderTests: XCTestCase {
             let result = try render(renderCase)
             let frames = result.frames
             let rail = try XCTUnwrap(frames[.rail], "Icon Rail frame missing")
+            let selectedHitArea = try XCTUnwrap(frames[.railSelectedHitArea],
+                                                "Selected Rail hit area missing")
+            let selectedBackground = try XCTUnwrap(frames[.railSelectedBackground],
+                                                   "Selected Rail background missing")
             let divider = try XCTUnwrap(frames[.divider], "Focus divider frame missing")
             let ring = try XCTUnwrap(frames[.timerRing], "Timer ring frame missing")
             let button = try XCTUnwrap(frames[.primaryButton], "Primary button frame missing")
@@ -57,7 +61,11 @@ final class FocusRenderTests: XCTestCase {
                 - 2 * FocusLayoutMetrics.overviewHorizontalPadding - FocusLayoutMetrics.overviewCardGap) / 2
 
             XCTAssertEqual(rail.minX, 0, accuracy: 0.5)
-            XCTAssertEqual(rail.width, WFMetrics.railWidth, accuracy: 0.5)
+            XCTAssertEqual(rail.width, RailMetrics.width, accuracy: 0.5)
+            XCTAssertEqual(selectedHitArea.width, RailMetrics.hitSize, accuracy: 0.5)
+            XCTAssertEqual(selectedHitArea.height, RailMetrics.hitSize, accuracy: 0.5)
+            XCTAssertEqual(selectedBackground.width, RailMetrics.selectedSize, accuracy: 0.5)
+            XCTAssertEqual(selectedBackground.height, RailMetrics.selectedSize, accuracy: 0.5)
             XCTAssertEqual(divider.minX, expectedDividerX, accuracy: 0.5)
             XCTAssertEqual(divider.width, WFMetrics.divider, accuracy: 0.5)
             XCTAssertEqual(ring.midX, expectedCenterX, accuracy: 0.5)
@@ -147,7 +155,8 @@ final class FocusRenderTests: XCTestCase {
         window.orderOut(nil)
         flushAndRemove(fixture.store, directory: fixture.directory)
         XCTAssertEqual(Set(frames.keys), Set([
-            .rail, .divider, .timerRing, .primaryButton, .overviewFirstCard, .recordsHeader
+            .rail, .railSelectedHitArea, .railSelectedBackground,
+            .divider, .timerRing, .primaryButton, .overviewFirstCard, .recordsHeader
         ]), "Incomplete render anchors for \(name)")
         return (frames, FileManager.default.fileExists(atPath: screenshotURL.path))
     }

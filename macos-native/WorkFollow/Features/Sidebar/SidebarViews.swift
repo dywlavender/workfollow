@@ -8,7 +8,7 @@ struct IconRailView: View {
     @Environment(\.openSettings) private var openSettings
 
     var body: some View {
-        VStack(spacing: WFSpace.md) {
+        VStack(spacing: RailMetrics.itemGap) {
             railButton(.today, symbol: "checklist", title: "任务",
                        selected: navigation.destination.isTaskList)
             railButton(.notes, symbol: "text.alignleft", title: "笔记",
@@ -28,18 +28,19 @@ struct IconRailView: View {
             Spacer()
             Button(action: onOpenQuickOpen) {
                 Image(systemName: "magnifyingglass")
-                    .frame(width: WFMetrics.controlHeight, height: WFMetrics.controlHeight)
+                    .font(.system(size: RailMetrics.iconSize))
+                    .frame(width: RailMetrics.hitSize, height: RailMetrics.hitSize)
             }.help("快速打开（⌘K）").accessibilityLabel("快速打开")
             Button { openSettings() } label: {
                 Image(systemName: "slider.horizontal.3")
-                    .frame(width: WFMetrics.controlHeight, height: WFMetrics.controlHeight)
+                    .font(.system(size: RailMetrics.iconSize))
+                    .frame(width: RailMetrics.hitSize, height: RailMetrics.hitSize)
             }.help("设置（⌘,）").accessibilityLabel("设置")
         }
-        .font(.system(size: WFMetrics.icon))
         .buttonStyle(.plain)
         .foregroundStyle(WFColors.secondaryText)
-        .padding(.vertical, WFSpace.lg)
-        .frame(width: WFMetrics.railWidth)
+        .padding(.vertical, RailMetrics.topPadding)
+        .frame(width: RailMetrics.width)
         .background(WFColors.canvas)
         .focusRenderAnchor(.rail)
     }
@@ -48,10 +49,18 @@ struct IconRailView: View {
                             title: String, selected: Bool) -> some View {
         Button { onNavigate(destination) } label: {
             Image(systemName: symbol)
+                .font(.system(size: RailMetrics.iconSize))
                 .foregroundStyle(selected ? WFColors.accent : WFColors.secondaryText)
-                .frame(width: WFMetrics.controlHeight, height: WFMetrics.controlHeight)
-                .background(selected ? WFColors.selection : .clear,
-                            in: RoundedRectangle(cornerRadius: WFMetrics.corner))
+                .frame(width: RailMetrics.hitSize, height: RailMetrics.hitSize)
+                .focusRenderAnchor(.railSelectedHitArea)
+                .background {
+                    if selected {
+                        RoundedRectangle(cornerRadius: RailMetrics.selectedRadius)
+                            .fill(WFColors.selection)
+                            .frame(width: RailMetrics.selectedSize, height: RailMetrics.selectedSize)
+                            .focusRenderAnchor(.railSelectedBackground)
+                    }
+                }
         }.help(title).accessibilityLabel(title)
     }
 }

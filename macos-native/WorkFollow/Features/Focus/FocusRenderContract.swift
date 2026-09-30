@@ -3,6 +3,8 @@ import SwiftUI
 /// Geometry reported only in Debug builds so render tests can verify real SwiftUI layout.
 enum FocusRenderAnchor: Hashable {
     case rail
+    case railSelectedHitArea
+    case railSelectedBackground
     case divider
     case timerRing
     case primaryButton
