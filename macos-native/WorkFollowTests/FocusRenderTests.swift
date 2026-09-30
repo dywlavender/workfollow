@@ -47,6 +47,10 @@ final class FocusRenderTests: XCTestCase {
             let ring = try XCTUnwrap(frames[.timerRing], "Timer ring frame missing")
             let durationTrigger = try XCTUnwrap(frames[.focusDurationTrigger],
                                                 "Idle countdown duration trigger missing")
+            let modeSegment = try XCTUnwrap(frames[.focusModeSegment],
+                                            "Idle mode segment missing")
+            let addTimerButton = try XCTUnwrap(frames[.focusAddTimerButton],
+                                               "Idle add-timer button missing")
             let button = try XCTUnwrap(frames[.primaryButton], "Primary button frame missing")
             let card = try XCTUnwrap(frames[.overviewFirstCard], "First Overview card frame missing")
             let recordsHeader = try XCTUnwrap(frames[.recordsHeader], "Records header frame missing")
@@ -75,6 +79,10 @@ final class FocusRenderTests: XCTestCase {
             XCTAssertEqual(ring.width, FocusLayoutMetrics.ringSize, accuracy: 0.5)
             XCTAssertTrue(ring.insetBy(dx: -0.5, dy: -0.5).contains(durationTrigger),
                           "Duration trigger should stay centered inside the idle timer ring")
+            XCTAssertGreaterThan(modeSegment.width, 0)
+            XCTAssertGreaterThan(addTimerButton.width, 0)
+            XCTAssertNil(frames[.focusRunningStatus],
+                         "Idle mode must not show an active-session status line")
             XCTAssertEqual(button.midX, expectedCenterX, accuracy: 0.5)
             XCTAssertEqual(button.midY, expectedButtonY, accuracy: 0.5)
             XCTAssertEqual(card.minX, divider.maxX + FocusLayoutMetrics.overviewHorizontalPadding,
@@ -177,6 +185,7 @@ final class FocusRenderTests: XCTestCase {
         flushAndRemove(fixture.store, directory: fixture.directory)
         XCTAssertEqual(Set(frames.keys), Set([
             .rail, .railSelectedHitArea, .railSelectedBackground, .focusDurationTrigger,
+            .focusModeSegment, .focusAddTimerButton,
             .divider, .timerRing, .primaryButton, .overviewFirstCard, .recordsHeader
         ]).union(renderCase.timerState == .idleWithoutRecords
                  ? [.emptyRecordsIllustration, .emptyRecordsContent, .emptyRecordsRegion]

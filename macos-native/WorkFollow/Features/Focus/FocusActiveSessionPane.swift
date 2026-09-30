@@ -10,8 +10,8 @@ struct FocusActiveSessionPane: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 8) {
-                Text("🍅")
-                    .font(.system(size: 20))
+                FocusTomatoIcon(color: theme.accent)
+                    .focusRenderAnchor(.activeSessionTomatoIcon)
                 Text("番茄计时")
                     .font(.system(size: 18, weight: .semibold))
                     .foregroundStyle(theme.text)

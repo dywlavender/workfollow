@@ -5,60 +5,85 @@ import XCTest
 
 @MainActor
 final class FocusDurationPopoverRenderTests: XCTestCase {
-    func testIdleDurationPopoverOpensAtCompactSizeInARealWindow() throws {
+    func testIdleDurationLayerIsArrowlessAndAnchoredToClockWithoutMovingRing() throws {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("focus-duration-popover-\(UUID().uuidString)",
                                    isDirectory: true)
         let store = FocusStore(clock: Date.init, directory: directory)
         let session = FocusDurationEditorSession()
-        let root = DurationPopoverHost(session: session, store: store)
-            .frame(width: 220, height: 80)
-            .preferredColorScheme(.light)
-        let hostWindow = NSWindow(contentRect: NSRect(x: 160, y: 160, width: 280, height: 140),
+        var frames: [FocusRenderAnchor: CGRect] = [:]
+        let root = FocusTimerRing(
+            store: store,
+            durationEditor: session,
+            theme: FocusTheme(.light),
+            taskTitle: nil,
+            onEditDuration: {
+                session.present(currentMinutes: store.preferences.focusMinutes)
+            }
+        )
+        .focusRenderAnchor(.timerRing)
+        .frame(width: 260, height: 260)
+        .frame(width: 320, height: 320)
+        .preferredColorScheme(.light)
+        .coordinateSpace(name: FocusRenderAnchor.coordinateSpaceName)
+        .focusDurationPopover(session: session,
+                              onConfirm: { store.setFocusMinutes($0) })
+        .background(Color.white)
+        .onPreferenceChange(FocusRenderFramesPreferenceKey.self) { frames = $0 }
+
+        let hostWindow = NSWindow(contentRect: NSRect(x: 160, y: 160, width: 320, height: 320),
                                   styleMask: [.borderless], backing: .buffered, defer: false)
         hostWindow.isReleasedWhenClosed = false
         hostWindow.appearance = NSAppearance(named: .aqua)
-        hostWindow.backgroundColor = .clear
+        hostWindow.backgroundColor = .white
         hostWindow.hasShadow = false
-        let hostingView = NSHostingView(rootView: root)
-        hostWindow.contentView = hostingView
+        hostWindow.contentView = NSHostingView(rootView: root)
         hostWindow.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
-        hostingView.layoutSubtreeIfNeeded()
+        hostWindow.contentView?.layoutSubtreeIfNeeded()
         hostWindow.displayIfNeeded()
+        RunLoop.current.run(until: Date().addingTimeInterval(0.2))
 
-        RunLoop.current.run(until: Date().addingTimeInterval(0.5))
-        hostingView.layoutSubtreeIfNeeded()
+        let initialRingFrame = try XCTUnwrap(frames[.timerRing])
+        let clockFrame = try XCTUnwrap(frames[.focusDurationTrigger],
+                                       "Popover anchor must be the clock button, not the whole ring")
 
-        let popoverWindow = try XCTUnwrap(
-            NSApp.windows.first(where: { $0 !== hostWindow && $0.isVisible && $0.parent === hostWindow }),
-            "SwiftUI duration popover did not create a visible AppKit child window; windows: \(NSApp.windows.map { (String(describing: type(of: $0)), $0.frame, $0.isVisible) })"
-        )
-        let popoverContentSize = try XCTUnwrap(popoverWindow.contentView).bounds.size
+        session.present(currentMinutes: store.preferences.focusMinutes)
+        RunLoop.current.run(until: Date().addingTimeInterval(0.2))
+        hostWindow.contentView?.layoutSubtreeIfNeeded()
 
-        XCTAssertGreaterThanOrEqual(popoverContentSize.width, 232)
-        XCTAssertLessThanOrEqual(popoverContentSize.width, 280,
-                                 "Duration editor should remain compact, not span a large dialog")
-        XCTAssertGreaterThanOrEqual(popoverContentSize.height, 104)
-        XCTAssertLessThanOrEqual(popoverContentSize.height, 160,
-                                 "Duration editor should fit its controls without excess height")
+        let panel = try XCTUnwrap(frames[.focusDurationPopover],
+                                  "Arrowless duration layer should render in the same window")
+        XCTAssertEqual(panel.size, CGSize(width: 232, height: 104))
+        XCTAssertEqual(panel.midX, clockFrame.midX, accuracy: 0.5,
+                       "Duration layer should align with the timer digits")
+        XCTAssertLessThan(panel.maxY, clockFrame.minY,
+                          "Duration layer should sit above, without overlapping, the clock anchor")
+        XCTAssertNil(NSApp.windows.first { $0 !== hostWindow && $0.isVisible && $0.parent === hostWindow },
+                     "Arrowless layer should not create a system popover window")
 
-        let screenshotURL = try capture(popoverWindow)
+        let screenshotURL = try capture(hostWindow)
         XCTAssertTrue(FileManager.default.fileExists(atPath: screenshotURL.path))
 
-        popoverWindow.orderOut(nil)
+        session.cancel()
+        RunLoop.current.run(until: Date().addingTimeInterval(0.15))
+        hostWindow.contentView?.layoutSubtreeIfNeeded()
+        XCTAssertNil(frames[.focusDurationPopover], "Cancel should dismiss the duration editor")
+        XCTAssertEqual(try XCTUnwrap(frames[.timerRing]), initialRingFrame,
+                       "Showing and closing the popover must not move the timer ring")
+        XCTAssertEqual(try XCTUnwrap(frames[.focusDurationTrigger]), clockFrame,
+                       "Showing and closing the popover must not move the clock anchor")
+
         hostWindow.orderOut(nil)
         flush(store)
         try? FileManager.default.removeItem(at: directory)
     }
 
     private func capture(_ window: NSWindow) throws -> URL {
-        guard let content = window.contentView,
-              let bitmap = content.bitmapImageRepForCachingDisplay(in: content.bounds) else {
-            throw NSError(domain: "FocusDurationPopoverRender", code: 1,
-                          userInfo: [NSLocalizedDescriptionKey: "Popover content could not be rendered"])
-        }
-        content.cacheDisplay(in: content.bounds, to: bitmap)
+        let image = try XCTUnwrap(CGWindowListCreateImage(
+            .null, .optionIncludingWindow, CGWindowID(window.windowNumber), [.bestResolution]),
+            "Could not capture the actual system popover window")
+        let bitmap = NSBitmapImageRep(cgImage: image)
         let png = try XCTUnwrap(bitmap.representation(using: .png, properties: [:]))
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("focus-duration-popover-render", isDirectory: true)
@@ -72,22 +97,5 @@ final class FocusDurationPopoverRenderTests: XCTestCase {
         let flushed = expectation(description: "flush isolated duration popover fixture")
         store.flush { _ in flushed.fulfill() }
         wait(for: [flushed], timeout: 5)
-    }
-
-    private struct DurationPopoverHost: View {
-        @ObservedObject var session: FocusDurationEditorSession
-        @ObservedObject var store: FocusStore
-
-        var body: some View {
-            Text("25:00")
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .popover(isPresented: session.presentationBinding, arrowEdge: .bottom) {
-                    FocusDurationPopover(session: session,
-                                         onConfirm: { store.setFocusMinutes($0) })
-                }
-                .onAppear {
-                    session.present(currentMinutes: store.preferences.focusMinutes)
-                }
-        }
     }
 }

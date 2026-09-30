@@ -3,6 +3,7 @@ import SwiftUI
 /// Fixed-size timer face shared by idle, focus, pause and break phases.
 struct FocusTimerRing: View {
     @ObservedObject var store: FocusStore
+    @ObservedObject var durationEditor: FocusDurationEditorSession
     let theme: FocusTheme
     let taskTitle: String?
     let onEditDuration: (() -> Void)?
@@ -74,6 +75,7 @@ struct FocusTimerRing: View {
                 .accessibilityIdentifier("focus-duration-trigger")
                 .help("点击调整专注时长")
                 .focusRenderAnchor(.focusDurationTrigger)
+                .focusDurationTriggerAnchor()
             } else {
                 clockLabel
             }
@@ -81,6 +83,7 @@ struct FocusTimerRing: View {
                 Text("已暂停")
                     .font(.system(size: FocusLayoutMetrics.phaseFontSize))
                     .foregroundStyle(theme.text2)
+                    .focusRenderAnchor(.focusPausedTimerLabel)
             } else if store.phase == .breaking || store.phase == .pausedBreak {
                 Text(FocusViewLogic.phaseTitle(for: store.phase, isLongBreak: store.isLongBreak))
                     .font(.system(size: FocusLayoutMetrics.phaseFontSize))

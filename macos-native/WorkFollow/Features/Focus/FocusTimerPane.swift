@@ -14,6 +14,9 @@ struct FocusTimerPane: View {
     @StateObject private var durationEditor = FocusDurationEditorSession()
 
     private var theme: FocusTheme { FocusTheme(colorScheme) }
+    private var isActiveFocus: Bool {
+        store.phase == .focusing || store.phase == .pausedFocus
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -34,6 +37,8 @@ struct FocusTimerPane: View {
         }
         .padding(.horizontal, FocusLayoutMetrics.horizontalPadding)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .focusDurationPopover(session: durationEditor,
+                              onConfirm: { store.setFocusMinutes($0) })
     }
 
     private var paneHeader: some View {
@@ -46,7 +51,10 @@ struct FocusTimerPane: View {
                 headerIcons
             }
 
-            modeSegment
+            if !isActiveFocus {
+                modeSegment
+                    .focusRenderAnchor(.focusModeSegment)
+            }
         }
         .frame(height: FocusLayoutMetrics.headerHeight)
         .padding(.top, FocusLayoutMetrics.topPadding)
@@ -84,16 +92,19 @@ struct FocusTimerPane: View {
 
     private var headerIcons: some View {
         HStack(spacing: FocusLayoutMetrics.headerButtonSpacing) {
-            Button(action: onAddTimer) {
-                Image(systemName: "plus")
-                    .font(.system(size: FocusLayoutMetrics.headerIconSize, weight: .medium))
-                    .frame(width: FocusLayoutMetrics.headerButtonSize,
-                           height: FocusLayoutMetrics.headerButtonSize)
-                    .contentShape(Rectangle())
+            if !isActiveFocus {
+                Button(action: onAddTimer) {
+                    Image(systemName: "plus")
+                        .font(.system(size: FocusLayoutMetrics.headerIconSize, weight: .medium))
+                        .frame(width: FocusLayoutMetrics.headerButtonSize,
+                               height: FocusLayoutMetrics.headerButtonSize)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(theme.text2)
+                .help("添加常用专注")
+                .focusRenderAnchor(.focusAddTimerButton)
             }
-            .buttonStyle(.plain)
-            .foregroundStyle(theme.text2)
-            .help("添加常用专注")
 
             Menu {
                 ForEach(FocusBell.allCases, id: \.self) { bell in
@@ -142,18 +153,15 @@ struct FocusTimerPane: View {
                 .frame(height: FocusLayoutMetrics.focusLabelHeight)
                 .padding(.top, FocusLayoutMetrics.selectorTopPadding(hasPresetChips: hasPresetChips))
 
-            FocusTimerRing(store: store, theme: theme, taskTitle: ringTaskTitle,
+            FocusTimerRing(store: store, durationEditor: durationEditor,
+                           theme: theme, taskTitle: ringTaskTitle,
                            onEditDuration: {
                                durationEditor.present(currentMinutes: store.preferences.focusMinutes)
                            })
                 .focusRenderAnchor(.timerRing)
                 .padding(.top, FocusLayoutMetrics.ringTopGap)
-                .popover(isPresented: durationEditor.presentationBinding, arrowEdge: .bottom) {
-                    FocusDurationPopover(session: durationEditor,
-                                         onConfirm: { store.setFocusMinutes($0) })
-                }
 
-            if store.phase != .idle {
+            if store.phase != .idle && !isActiveFocus {
                 runningStatus
                     .padding(.top, FocusLayoutMetrics.statusTopGap)
             }
@@ -238,6 +246,7 @@ struct FocusTimerPane: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
         }
+        .focusRenderAnchor(.focusRunningStatus)
     }
 
     private var statusDotColor: Color {
@@ -256,7 +265,7 @@ struct FocusTimerPane: View {
                 outlineButton("暂停") { store.pause() }
                     .focusRenderAnchor(.focusPauseButton)
             case .pausedFocus:
-                HStack(spacing: 12) {
+                VStack(spacing: 14) {
                     primaryButton("继续") { store.resume() }
                         .focusRenderAnchor(.focusResumeButton)
                     outlineButton("结束") { _ = store.giveUp() }

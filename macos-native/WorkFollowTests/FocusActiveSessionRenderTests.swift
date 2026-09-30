@@ -24,14 +24,29 @@ final class FocusActiveSessionRenderTests: XCTestCase {
                 XCTAssertNil(rendered.frames[.activeTimeline])
                 XCTAssertNil(rendered.frames[.focusDurationTrigger],
                              "Duration editing is unavailable during breaks")
+                XCTAssertNotNil(rendered.frames[.focusModeSegment],
+                                "Breaks are not active focus sessions")
+                XCTAssertNotNil(rendered.frames[.focusAddTimerButton])
+                XCTAssertNotNil(rendered.frames[.focusRunningStatus],
+                                "Keep the existing break status line")
                 continue
             }
 
             let frames = rendered.frames
             XCTAssertNil(frames[.focusDurationTrigger],
                          "Duration editing is unavailable during an active focus session")
+            XCTAssertNil(frames[.focusModeSegment],
+                         "The mode switch is hidden while focus is running or paused")
+            XCTAssertNil(frames[.focusAddTimerButton],
+                         "Add-timer is hidden while focus is running or paused")
+            XCTAssertNil(frames[.focusRunningStatus],
+                         "Running and paused focus omit the extra status line")
+            let tomatoIcon = try XCTUnwrap(frames[.activeSessionTomatoIcon],
+                                           "Active header must use the fixed vector tomato icon")
+            XCTAssertEqual(tomatoIcon.size, CGSize(width: 20, height: 20))
             let projection = try XCTUnwrap(rendered.projection)
             let timeline = try XCTUnwrap(frames[.activeTimeline])
+            let ring = try XCTUnwrap(frames[.timerRing])
             let line = try XCTUnwrap(frames[.activeTimelineCurrentLine])
             let dot = try XCTUnwrap(frames[.activeTimelineCurrentDot])
             let noteHeader = try XCTUnwrap(frames[.activeFocusNoteHeader])
@@ -60,13 +75,27 @@ final class FocusActiveSessionRenderTests: XCTestCase {
             }
 
             if state == .running25m || state == .running25mDark || state == .running180mClipped {
-                XCTAssertNotNil(frames[.focusPauseButton])
+                let pause = try XCTUnwrap(frames[.focusPauseButton])
+                XCTAssertEqual(pause.midX, ring.midX, accuracy: 0.5,
+                               "Pause should be centered under the timer ring")
+                XCTAssertEqual(pause.width, FocusLayoutMetrics.primaryButtonWidth, accuracy: 0.5)
+                XCTAssertEqual(pause.height, FocusLayoutMetrics.primaryButtonHeight, accuracy: 0.5)
                 XCTAssertNil(frames[.focusResumeButton])
                 XCTAssertNil(frames[.focusEndButton])
+                XCTAssertNil(frames[.focusPausedTimerLabel])
             } else {
                 XCTAssertNil(frames[.focusPauseButton])
-                XCTAssertNotNil(frames[.focusResumeButton])
-                XCTAssertNotNil(frames[.focusEndButton])
+                let resume = try XCTUnwrap(frames[.focusResumeButton])
+                let end = try XCTUnwrap(frames[.focusEndButton])
+                XCTAssertEqual(resume.midX, end.midX, accuracy: 0.5)
+                XCTAssertLessThan(resume.maxY, end.minY,
+                                  "Continue and End should be vertically stacked")
+                XCTAssertEqual(resume.width, FocusLayoutMetrics.primaryButtonWidth, accuracy: 0.5)
+                XCTAssertEqual(end.width, FocusLayoutMetrics.primaryButtonWidth, accuracy: 0.5)
+                XCTAssertEqual(resume.height, FocusLayoutMetrics.primaryButtonHeight, accuracy: 0.5)
+                XCTAssertEqual(end.height, FocusLayoutMetrics.primaryButtonHeight, accuracy: 0.5)
+                XCTAssertNotNil(frames[.focusPausedTimerLabel],
+                                "Paused countdown retains the in-ring 已暂停 label")
             }
 
             if state == .running180mClipped {

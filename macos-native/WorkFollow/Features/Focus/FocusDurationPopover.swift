@@ -14,11 +14,6 @@ final class FocusDurationEditorSession: ObservableObject {
 
     var canConfirm: Bool { parsedMinutes != nil }
 
-    var presentationBinding: Binding<Bool> {
-        Binding(get: { self.isPresented },
-                set: { if !$0 { self.cancel() } })
-    }
-
     var stepperBinding: Binding<Int> {
         Binding(get: { self.parsedMinutes ?? PomodoroSettings.focusRange.lowerBound },
                 set: { self.draftText = String($0) })
@@ -50,6 +45,7 @@ struct FocusDurationPopover: View {
     @ObservedObject var session: FocusDurationEditorSession
     let onConfirm: (Int) -> Bool
     @Environment(\.colorScheme) private var colorScheme
+    @FocusState private var minutesFieldFocused: Bool
 
     private var theme: FocusTheme { FocusTheme(colorScheme) }
 
@@ -65,6 +61,7 @@ struct FocusDurationPopover: View {
                     .background(RoundedRectangle(cornerRadius: 6)
                         .stroke(theme.hairline, lineWidth: 1))
                     .accessibilityIdentifier("focus-duration-minutes")
+                    .focused($minutesFieldFocused)
 
                 Stepper("调整分钟", value: session.stepperBinding,
                         in: PomodoroSettings.focusRange)
@@ -90,11 +87,76 @@ struct FocusDurationPopover: View {
         .padding(12)
         .frame(width: 232, height: 104)
         .background(theme.canvas, in: RoundedRectangle(cornerRadius: 12))
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(theme.hairline, lineWidth: 1))
+        .shadow(color: .black.opacity(colorScheme == .dark ? 0.30 : 0.14),
+                radius: 14, x: 0, y: 5)
+        .onAppear { minutesFieldFocused = true }
         .onExitCommand { session.cancel() }
     }
 
     private func durationButtonStyle(isPrimary: Bool) -> some ButtonStyle {
         DurationButtonStyle(theme: theme, isPrimary: isPrimary)
+    }
+}
+
+private struct FocusDurationTriggerAnchorKey: PreferenceKey {
+    static var defaultValue: Anchor<CGRect>?
+
+    static func reduce(value: inout Anchor<CGRect>?, nextValue: () -> Anchor<CGRect>?) {
+        value = nextValue() ?? value
+    }
+}
+
+extension View {
+    func focusDurationTriggerAnchor() -> some View {
+        anchorPreference(key: FocusDurationTriggerAnchorKey.self, value: .bounds) { $0 }
+    }
+
+    func focusDurationPopover(session: FocusDurationEditorSession,
+                              onConfirm: @escaping (Int) -> Bool) -> some View {
+        modifier(FocusDurationPopoverPresenter(session: session, onConfirm: onConfirm))
+    }
+}
+
+private struct FocusDurationPopoverPresenter: ViewModifier {
+    @ObservedObject var session: FocusDurationEditorSession
+    let onConfirm: (Int) -> Bool
+
+    func body(content: Content) -> some View {
+        content.overlayPreferenceValue(FocusDurationTriggerAnchorKey.self) { anchor in
+            GeometryReader { geometry in
+                if session.isPresented, let anchor {
+                    let trigger = geometry[anchor]
+                    let panelWidth: CGFloat = 232
+                    let panelHeight: CGFloat = 104
+                    let gap: CGFloat = 12
+                    let proposedY = trigger.minY >= panelHeight + gap
+                        ? trigger.minY - gap - panelHeight / 2
+                        : trigger.maxY + gap + panelHeight / 2
+                    let centerY = min(max(proposedY, panelHeight / 2 + 8),
+                                      geometry.size.height - panelHeight / 2 - 8)
+                    let centerX = min(max(trigger.midX, panelWidth / 2 + 8),
+                                      geometry.size.width - panelWidth / 2 - 8)
+                    let panelFrame = CGRect(x: centerX - panelWidth / 2,
+                                            y: centerY - panelHeight / 2,
+                                            width: panelWidth, height: panelHeight)
+
+                    ZStack {
+                        Color.clear
+                            .contentShape(Rectangle())
+                            .onTapGesture { session.cancel() }
+                            .accessibilityHidden(true)
+
+                        FocusDurationPopover(session: session, onConfirm: onConfirm)
+                            .frame(width: panelWidth, height: panelHeight)
+                            .position(x: centerX, y: centerY)
+                            .preference(key: FocusRenderFramesPreferenceKey.self,
+                                        value: [.focusDurationPopover: panelFrame])
+                    }
+                    .frame(width: geometry.size.width, height: geometry.size.height)
+                }
+            }
+        }
     }
 }
 
