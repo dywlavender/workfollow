@@ -9,6 +9,8 @@ enum InspectorEditingTarget: Equatable {
 enum InspectorPopover: Equatable {
     case schedule
     case deadline
+    case reminder
+    case recurrence
 }
 
 enum InspectorEscapeEffect: Equatable {

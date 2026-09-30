@@ -233,6 +233,17 @@
 
 ## 本轮审计结论与施工顺序
 
+### Task Inspector Round 1 — 外框 / Header / 父级上下文（2026-09-30）
+
+- **Flutter 基准：** `desktop/lib/widgets/task_detail.dart` 的 Header、Footer 与父任务上下文。读取实际尺寸后，`TaskInspectorMetrics` 锁定 Header 58pt、Footer 52pt、水平 padding 20pt、竖分隔线 1×20pt；没有采用建议起点 54pt。Breadcrumb 高度 30pt 是本轮 Native 结构契约。
+- **TASK-INSPECTOR-001：** Header 为窄屏 Back、Completion、Divider、可横向滚动的 Schedule/Reminder/Repeat、固定右侧 Priority。提醒包含相对 offsets，重复包含 recurrenceRule；点击复用 `TaskDatePopoverV2` 对应页面。移除 Header 的 Focus/Pin，保留专注能力与 More 中的置顶；没有修改 More 内容、日期面板内部或 Shell breakpoint。
+- **TASK-INSPECTOR-002：** 子任务父级 breadcrumb 在标题之前，显示实际父任务名称，点击选择父任务。本轮按用户要求使用左 chevron，不将该方向声称为 Flutter 原样复刻。
+- **TASK-INSPECTOR-003：** `TaskEmptyInspectorView` 独立呈现居中图标、选择任务标题与说明。
+- **TASK-INSPECTOR-004：** 新增结构 Metrics；Footer 浮层 inset 从 Footer 高度推导，避免更高 Footer 遮住原有操作面板。正文、子任务区与富文本实现保持不变，细部垂直几何留待 Round 2。
+- **自动验收：** `TaskInspectorShellContractTests` 通过 NSWindow/NSHostingView 验证 320/760pt Header、长日期滚动区与固定 Priority、条件属性图标、窄屏 Back、Breadcrumb 先于标题及空状态居中；`TaskInspectorPresentationTests` 验证 Reminder/Repeat 的 Escape 先于编辑结束和窄屏返回。定向 XCTest 与构建通过。
+- **真实窗口：** 退出旧进程并重新启动本轮构建，宽屏选任务后列表保留；Reminder/Repeat 点击进入对应页面并可 Escape 关闭；子任务顶部显示父名，点击可回父任务；宽屏非编辑 Escape 保留 Inspector。未选任务显示新空状态说明。截图见本轮工具输出。
+- **验收状态：** `IMPLEMENTED / TESTS PASSED / WIDE WINDOW CHECKED`。窄屏真窗口返回与完整逐像素对照尚未验收，不标记整个 Inspector 为 `PARITY VERIFIED`。
+
 ### Task List Round 3 — 树几何 / 折叠 / 拖拽（2026-09-30）
 
 - **Flutter 基准：** `desktop/lib/widgets/task_row.dart`、`widgets/task_list/task_list_row.dart` 和 `theme/workfollow_theme.dart`。所有行保留 disclosure 22pt + gap 2pt，子行右移 24pt；正文预览只取自身 document，折叠只停止输出 children。

@@ -1,0 +1,100 @@
+import SwiftUI
+
+struct TaskInspectorHeader<Schedule: View, Priority: View>: View {
+    let task: Task
+    let showBack: Bool
+    let onBack: () -> Void
+    let onComplete: () -> Void
+    let onReminder: () -> Void
+    let onRepeat: () -> Void
+    @ViewBuilder let schedule: () -> Schedule
+    @ViewBuilder let priority: () -> Priority
+
+    static func showsReminder(_ task: Task) -> Bool {
+        task.reminderAt != nil || !(task.reminderOffsets ?? []).isEmpty
+    }
+    static func showsRepeat(_ task: Task) -> Bool {
+        task.recurrence != .never || task.recurrenceRule != nil
+    }
+
+    var body: some View {
+        HStack(spacing: 8) {
+            if showBack {
+                Button(action: onBack) {
+                    Image(systemName: "chevron.left")
+                        .frame(width: 24, height: WFMetrics.controlHeight)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain).help("返回列表").accessibilityLabel("返回列表")
+                .inspectorRenderAnchor(.back)
+            }
+            Button(action: onComplete) {
+                Image(systemName: task.isAbandoned ? "circle.slash"
+                      : task.isClosed ? "checkmark.square.fill" : "square")
+                    .foregroundStyle(task.isClosed ? WFColors.tertiaryText : WFColors.secondaryText)
+                    .frame(width: 24, height: WFMetrics.controlHeight)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help(task.isClosed ? "恢复任务" : "完成任务")
+            .accessibilityLabel(task.isClosed ? "恢复任务" : "完成任务")
+            .inspectorRenderAnchor(.completion)
+            Rectangle().fill(WFColors.border)
+                .frame(width: TaskInspectorMetrics.headerDividerWidth,
+                       height: TaskInspectorMetrics.headerDividerHeight)
+                .accessibilityHidden(true)
+                .inspectorRenderAnchor(.divider)
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    schedule().fixedSize(horizontal: true, vertical: false)
+                        .inspectorRenderAnchor(.schedule)
+                    if Self.showsReminder(task) {
+                        propertyButton("提醒", symbol: "bell", action: onReminder)
+                            .inspectorRenderAnchor(.reminder)
+                    }
+                    if Self.showsRepeat(task) {
+                        propertyButton("重复", symbol: "repeat", action: onRepeat)
+                            .inspectorRenderAnchor(.repeatControl)
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity)
+            .frame(height: WFMetrics.controlHeight)
+            .inspectorRenderAnchor(.scheduleViewport)
+            priority().fixedSize()
+                .inspectorRenderAnchor(.priority)
+        }
+        .padding(.horizontal, TaskInspectorMetrics.horizontalPadding)
+        .frame(height: TaskInspectorMetrics.headerHeight)
+        .inspectorRenderAnchor(.header)
+    }
+
+    private func propertyButton(_ title: String, symbol: String,
+                                action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: symbol).foregroundStyle(WFColors.accent)
+                .frame(width: 24, height: WFMetrics.controlHeight)
+                .contentShape(Rectangle())
+        }.buttonStyle(.plain).help(title).accessibilityLabel(title)
+    }
+}
+
+struct TaskParentBreadcrumbView: View {
+    let title: String
+    let onOpen: () -> Void
+    var body: some View {
+        Button(action: onOpen) {
+            HStack(spacing: 6) {
+                Image(systemName: "chevron.left")
+                Text(title.isEmpty ? "无标题" : title).lineLimit(1)
+                Spacer(minLength: 0)
+            }
+            .font(WFType.control).foregroundStyle(WFColors.secondaryText)
+            .frame(height: TaskInspectorMetrics.breadcrumbHeight)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain).help("返回父任务")
+        .accessibilityLabel("父任务：\(title.isEmpty ? "无标题" : title)")
+        .inspectorRenderAnchor(.breadcrumb)
+    }
+}

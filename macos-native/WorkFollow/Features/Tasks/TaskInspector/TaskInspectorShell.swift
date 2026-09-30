@@ -51,14 +51,7 @@ struct TaskInspectorShell: View {
                 Divider()
                 bottomBar(task)
             } else {
-                Spacer()
-                VStack(spacing: WFSpace.md) {
-                    Image(systemName: "hand.point.up.left").font(.title2)
-                    Text("选择一个任务").font(WFType.body)
-                }
-                .foregroundStyle(WFColors.secondaryText)
-                .frame(maxWidth: .infinity)
-                Spacer()
+                TaskEmptyInspectorView()
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -71,7 +64,7 @@ struct TaskInspectorShell: View {
                         .onTapGesture(perform: dismissFooterPopover)
                     footerPopover(task)
                         .padding(.trailing, WFSpace.xl)
-                        .padding(.bottom, 48)
+                        .padding(.bottom, TaskInspectorMetrics.footerOverlayInset)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .zIndex(20)
@@ -121,56 +114,23 @@ struct TaskInspectorShell: View {
     // MARK: - 顶部：状态框 + 日期 + 优先级
 
     private func headerBar(_ task: Task) -> some View {
-        HStack(spacing: WFSpace.sm) {
-            if showBack {
-                Button { workspace.select(nil) } label: {
-                    Image(systemName: "chevron.left")
-                        .frame(width: 24, height: WFMetrics.controlHeight)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .help("返回列表")
-                .accessibilityLabel("返回列表")
+        TaskInspectorHeader(task: task, showBack: showBack,
+                            onBack: { workspace.select(nil) },
+                            onComplete: { _ = workspace.changeStatus(task) },
+                            onReminder: { presentation.activePopover = .reminder },
+                            onRepeat: { presentation.activePopover = .recurrence },
+                            schedule: { scheduleChip(task, field: .due) },
+                            priority: { priorityMenu(task) })
+        .schedulePopover(isPresented: popoverBinding(.reminder)) {
+            TaskDatePopoverV2(task: task, workspace: workspace, initialPage: .reminder) {
+                presentation.activePopover = nil
             }
-            Button {
-                _ = workspace.changeStatus(task)
-            } label: {
-                Image(systemName: task.isAbandoned ? "circle.slash"
-                                 : task.isClosed ? "checkmark.square.fill" : "square")
-                    .foregroundStyle(task.isClosed ? WFColors.tertiaryText : WFColors.secondaryText)
-            }
-            .buttonStyle(.plain)
-            .help(task.isClosed ? "恢复任务" : "完成任务")
-            .accessibilityLabel(task.isClosed ? "恢复任务" : "完成任务")
-            scheduleChip(task, field: .due)
-            priorityMenu(task)
-            Spacer(minLength: 0)
-            // 滴答式：右上角专注与置顶常驻入口。
-            Button {
-                environment.startFocus(for: task.id)
-            } label: {
-                Image(systemName: "timer")
-                    .foregroundStyle(WFColors.secondaryText)
-                    .frame(width: 24, height: WFMetrics.controlHeight)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .help("开始专注")
-            .accessibilityLabel("开始专注")
-            Button {
-                _ = workspace.setPinned(task.id, !task.isPinned)
-            } label: {
-                Image(systemName: task.isPinned ? "pin.fill" : "pin")
-                    .foregroundStyle(task.isPinned ? WFColors.accent : WFColors.secondaryText)
-                    .frame(width: 24, height: WFMetrics.controlHeight)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .help(task.isPinned ? "取消置顶" : "置顶")
-            .accessibilityLabel(task.isPinned ? "取消置顶" : "置顶任务")
         }
-        .padding(.horizontal, WFSpace.xl)
-        .frame(height: 48)
+        .schedulePopover(isPresented: popoverBinding(.recurrence)) {
+            TaskDatePopoverV2(task: task, workspace: workspace, initialPage: .recurrence) {
+                presentation.activePopover = nil
+            }
+        }
     }
 
     private func moreMenu(_ task: Task) -> some View {
@@ -297,10 +257,16 @@ struct TaskInspectorShell: View {
 
     private func inspectorContent(_ task: Task) -> some View {
         VStack(alignment: .leading, spacing: 0) {
+            if let parentID = task.parentID, let parent = workspace.task(for: parentID) {
+                TaskParentBreadcrumbView(title: parent.title) { workspace.select(parentID) }
+                    .padding(.horizontal, TaskInspectorMetrics.horizontalPadding)
+                    .padding(.top, WFSpace.lg)
+            }
             TaskTitleField(task: task, workspace: workspace,
                            focused: $titleFocused, draft: $presentation.titleDraft)
                 .id(task.id)
-                .padding(.horizontal, WFSpace.xl)
+                .inspectorRenderAnchor(.title)
+                .padding(.horizontal, TaskInspectorMetrics.horizontalPadding)
                 .padding(.top, WFSpace.lg)
                 .padding(.bottom, WFSpace.md)
             documentEditor(task)
@@ -312,13 +278,6 @@ struct TaskInspectorShell: View {
             if task.parentID == nil, !editorChildren(task.id).isEmpty {
                 subtaskSection(task)
                     .padding(.top, WFSpace.xl)
-            } else if let parentID = task.parentID {
-                Button("返回父任务") { workspace.select(parentID) }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(WFColors.accent)
-                    .font(WFType.control)
-                    .padding(.horizontal, WFSpace.xl)
-                    .padding(.top, WFSpace.md)
             }
         }
         .padding(.bottom, WFSpace.xl)
@@ -433,11 +392,12 @@ struct TaskInspectorShell: View {
             moreMenu(task)
         }
         .font(WFType.body)
-        .padding(.horizontal, WFSpace.xl)
-        .frame(height: 44)
+        .padding(.horizontal, TaskInspectorMetrics.horizontalPadding)
+        .frame(height: TaskInspectorMetrics.footerHeight)
         .overlay(alignment: .bottom) {
             if showFormattingToolbar {
-                formattingToolbar.padding(.horizontal, 16).padding(.bottom, 48)
+                formattingToolbar.padding(.horizontal, 16)
+                    .padding(.bottom, TaskInspectorMetrics.footerOverlayInset)
             }
         }
     }

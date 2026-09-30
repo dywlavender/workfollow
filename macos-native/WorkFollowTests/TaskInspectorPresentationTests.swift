@@ -2,6 +2,15 @@ import XCTest
 @testable import WorkFollow
 
 final class TaskInspectorPresentationTests: XCTestCase {
+    func testReminderAndRepeatEscapeDismissBeforeEditingAndNarrowNavigation() {
+        for popover in [InspectorPopover.reminder, .recurrence] {
+            var state = TaskInspectorPresentationState(editingTarget: .title, activePopover: popover)
+            XCTAssertEqual(state.handleEscape(isNarrow: true), .dismissPopover)
+            XCTAssertEqual(state.editingTarget, .title)
+            XCTAssertEqual(state.handleEscape(isNarrow: true), .endEditing)
+            XCTAssertEqual(state.handleEscape(isNarrow: true), .returnToList)
+        }
+    }
     func testEscapeDismissesPopoverBeforeEndingTitleEditing() {
         var state = TaskInspectorPresentationState(editingTarget: .title, activePopover: .schedule)
 
