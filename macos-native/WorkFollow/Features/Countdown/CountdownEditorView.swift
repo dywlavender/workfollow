@@ -36,6 +36,8 @@ struct CountdownEditorView: View {
     @State private var symbol: String
     @State private var colorIndex: Int
     @State private var pickedDate: Date?
+    /// 日期浮层里月历当前显示的月份。与 `pickedDate` 分开存：翻月不改选中值。
+    @State private var displayedMonth: Date
     @State private var pickedFestival: CountdownFestival.Option?
     @State private var repeatSelection: CountdownRepeat
     @State private var reminders: Set<Int>
@@ -88,13 +90,16 @@ struct CountdownEditorView: View {
         // 「添加」按钮同时是禁用的——即日期属于必填，但初始不预设。
         let calendar = Calendar.current
         let today = Date()
-        _pickedDate = State(initialValue: original.map { event -> Date in
+        let initialDate = original.map { event -> Date in
             if case .birthday(let month, let day, let year) = event.rule,
                let birth = calendar.date(from: DateComponents(year: year, month: month, day: day)) {
                 return birth
             }
             return event.occurrence(onOrAfter: today, calendar: calendar)
-        })
+        }
+        _pickedDate = State(initialValue: initialDate)
+        // 月历从已选那天开屏；新建（还没选日期）就从今天。
+        _displayedMonth = State(initialValue: initialDate ?? today)
         _pickedFestival = State(initialValue: original.flatMap {
             $0.kind == .festival ? CountdownFestival.name(for: $0.rule).flatMap { name in
                 CountdownFestival.all.first { $0.name == name }
@@ -203,8 +208,10 @@ struct CountdownEditorView: View {
         let chrome: CGFloat = 12
         switch row {
         case .date:
-            // 节日目录是定高的滚动列表；其余是系统图形日历，给一个够大的估计值。
-            return kind.usesFestivalCatalog ? 188 : 330
+            // 节日目录是定高的滚动列表；其余是项目自己的月历（`LunarMonthGridView`）：
+            // 头部 18 + 星期行 15 + 6×30 网格 + 5 处 2pt 行距 + 2 处 4pt 间距 = 231，
+            // 再加浮层自身的内边距。`MonthGridCalculator.weeks` 固定 6，所以是个定值。
+            return kind.usesFestivalCatalog ? 188 : 243
         case .reminder:
             return CGFloat(7 + (isCustomReminder ? 1 : 0)) * Self.popupRowHeight + chrome
         case .recurrence:
@@ -332,7 +339,10 @@ struct CountdownEditorView: View {
                 .foregroundStyle(WFColors.secondaryText)
                 .frame(width: Self.labelWidth, alignment: .leading)
             Button {
-                openRow = openRow == row ? nil : row
+                let next: Row? = openRow == row ? nil : row
+                // 每次打开日期浮层都回到已选那天所在的月份，别停在上次翻到的地方。
+                if next == .date { displayedMonth = pickedDate ?? Date() }
+                openRow = next
             } label: {
                 HStack(spacing: WFSpace.xs) {
                     Text(value)
@@ -386,15 +396,23 @@ struct CountdownEditorView: View {
             }
             .frame(height: 180)
         } else {
-            // 图形日历的绑定要有值：还没选日期时以今天为默认落点，
-            // 用户一动它就写进 `pickedDate`（不动则保持「未选」）。
-            DatePicker("", selection: Binding(get: { pickedDate ?? Date() },
-                                             set: { pickedDate = $0 }),
-                       displayedComponents: .date)
-                .datePickerStyle(.graphical)
-                .labelsHidden()
-                .environment(\.locale, .appDate)
-                .frame(maxWidth: .infinity)
+            // 用**项目自己的月历**（`LunarMonthGridView`，任务面板的日期浮层也是它），
+            // 不用系统 `DatePicker`：系统那个不显示农历与节日，而倒数纪念日恰恰是
+            // 农历语义最重的地方（春节落在正月初一），两者对不上。月历还自带
+            // 今天圆环 / 选中实心点 / 月份导航，与任务侧是同一套观感。
+            LunarMonthGridView(
+                calendar: calendar,
+                displayedMonth: $displayedMonth,
+                today: calendar.startOfDay(for: Date()),
+                selection: pickedDate,
+                // 点一天即定案并收起浮层——与 `TaskDatePopoverV2` 里
+                // `model.select(day); closeSheet()` 同一口径。
+                onSelect: { date in
+                    pickedDate = date
+                    openRow = nil
+                }
+            )
+            .frame(maxWidth: .infinity)
         }
     }
 
