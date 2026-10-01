@@ -154,6 +154,7 @@ struct TaskInspectorShell: View {
                         workspace.setTags(task.id, tags)
                         actionPresentation.dismiss(.tags)
                     })
+                    .inspectorRenderAnchor(.tagPicker)
             } else if actionPresentation.panel == .attributes {
                 ScrollView {
                     TaskAttributesView(task: workspace.task(for: task.id) ?? task,
@@ -212,6 +213,7 @@ struct TaskInspectorShell: View {
                 }
                 .disabled(task.status == .completed)
                 moreAction("标签", symbol: "tag") { actionPresentation.open(.tags) }
+                    .inspectorRenderAnchor(.tagsMenuRow)
                 moreAction("上传附件", symbol: "paperclip") { addAttachments(to: task.id) }
                 focusSubmenuRow(task)
                 Divider().padding(.horizontal, 8).padding(.vertical, 4)

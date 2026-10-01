@@ -1,6 +1,6 @@
 # Task Inspector 外围操作层
 
-日期：2026-10-01。当前状态：ACTION PANEL STATE CONSOLIDATED；MORE PRIMARY ACTIONS + FOCUS SUBMENU + PARENT PICKER + DUPLICATE / RESOURCE LINKS IMPLEMENTED；完整菜单对标及外部URL实机验收仍待后续轮次。
+更新：2026-10-02。当前状态：ACTION PANEL STATE CONSOLIDATED；MORE PRIMARY ACTIONS + FOCUS SUBMENU + PARENT PICKER + DUPLICATE / RESOURCE LINKS IMPLEMENTED；TAG PICKER SESSION CONSOLIDATED。Tag/Relation完整视觉对标及外部URL实机验收仍待后续轮次。
 
 暂停Editor、Slash、日期、模板和Completed Row功能扩展。暂停不表示此前待验项已全部通过，原文档中的端到端/像素验收欠项继续保留。
 
@@ -71,3 +71,16 @@
 - 71项NativeResourceLink / TaskDuplicateAction / ActionPanel / TaskDomain / ParentPicker / FocusSubmenu / DocumentProfile / ListMeta回归通过，日志：`/tmp/workfollow-task-copy-link-tests.log`。构建后Bundle的URL声明已检查；隔离剪贴板验证同时写文本和URL类型（首轮发现NSURL单类型无法粘贴为普通文本，已修复）。
 - 实际Inspector窗口点击“创建副本”新增任务且关闭菜单，原任务仍被选中，撤销移除副本。菜单截图：`/tmp/render_task_more_duplicate_link.png`，已检查两入口及主分组可读；既有“其他操作”兼容分组继续在ScrollView中，不声称整张菜单已完全对标。
 - 路由测试确认筛选清理、父任务展开、关闭任务跳转、目标选择、重复同页打开不遗留导航token、Note兼容与冷启动队列；这不是外部应用/Launch Services端到端验收。未操作用户默认应用关联或通用剪贴板进行测试。
+
+## Tag Picker 状态收拢（2026-10-02）
+
+- Inspector/Slash、Quick Add及右键菜单已经共用TaskTagPickerPopover，本轮不另造Picker。缺少TickTick展开态证据，保留264 × 320pt、现有搜索/列表/创建/取消确定与入口布局，不把状态收拢当作视觉对标完成。
+- 将query、selectedTags、匹配/创建规则收敛到TaskTagPickerSession；View仅呈现与通知Host。保留大小写敏感标签身份、大小写不敏感搜索，不改全局标签或Task Domain语义。
+- 草稿目录独立于当前勾选集合，保留初始未保存标签与本次创建标签；取消勾选不应让标签行消失，仍可重新勾选。创建只改本地Session，确定才把值交给Host，Quick Add不直接写Task。
+- 每次呈现从Host的initialTags重新建立Session；取消、Escape、外部关闭均丢弃未提交草稿，再打开不能带回旧选择。提交维持已有Host策略：Inspector写任务、Quick Add写创建草稿。
+- 共享Picker接入既有PopupEscapeRouter，覆盖没有独立Host路由的入口；不会更改外层Popover布局或生成第二套Escape监听器。现有Host路由兼容保留。
+- 标签列表保持原排序，创建候选保持输入顺序。首轮审核发现Session返回目录顺序与原View排序不一致，已修正，不将这次状态重构当作重新排列UI的机会。
+- 83项TagPickerSession / TagPickerInteraction / ActionPanel / DocumentProfile / QuickAddTemplateRender / QuickAddComposition / TaskDomain / PopupEscapeRouting最终回归通过，日志：`/tmp/workfollow-task-tag-picker-tests.log`。
+- 实际Inspector窗口验收：More打开共享Picker；候选点击不写任务；外部关闭后重开确定不泄露旧草稿；正常确定写入、撤销恢复；Escape关闭且不提交。独立Picker模拟Quick Add输入，初始未保存标签反选后保留行、可再选，确定仅触发Host回调，不新增Task。
+- 截图：`/tmp/render_task_tag_picker.png`（实际测试NSWindow中的Inspector），已检查搜索/标签/底部按钮可读、264 × 320pt不变。交互测试锁反选后的行/按钮frame；未对TickTick像素差异做签收，也未把独立Picker测试当作日常Quick Add全流程验收。
+- 本轮只提交共享Picker、Inspector测试锚点与测试/文档；TaskListView/Workspace等并行修改不纳入提交。构建来自当前工作区，不代表干净远端checkout的完整应用验收。

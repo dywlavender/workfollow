@@ -3,9 +3,9 @@ import SwiftUI
 struct TaskTagPickerPopover: View {
     let onCancel: () -> Void
     let onApply: ([String]) -> Void
+    let initialTags: [String]
     @ObservedObject var workspace: TaskWorkspaceModel
-    @State private var query = ""
-    @State private var selectedTags: Set<String>
+    @State private var session: TaskTagPickerSession
     @FocusState private var searchFocused: Bool
 
     init(initialTags: [String], workspace: TaskWorkspaceModel,
@@ -13,28 +13,18 @@ struct TaskTagPickerPopover: View {
         self.workspace = workspace
         self.onCancel = onCancel
         self.onApply = onApply
-        _selectedTags = State(initialValue: Set(initialTags))
+        self.initialTags = initialTags
+        _session = State(initialValue: TaskTagPickerSession(initialTags: initialTags))
     }
 
-    private var allTags: [String] { Array(Set(workspace.tagNames).union(selectedTags)).sorted() }
-    private var normalizedQuery: String {
-        query.trimmingCharacters(in: .whitespacesAndNewlines)
-            .replacingOccurrences(of: "^#", with: "", options: .regularExpression)
-    }
-    private var matchingTags: [String] {
-        allTags.filter { normalizedQuery.isEmpty || $0.localizedCaseInsensitiveContains(normalizedQuery) }
-    }
-    private var creatableTags: [String] {
-        normalizedQuery.split(whereSeparator: { $0 == "," || $0 == "，" })
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines).replacingOccurrences(of: "^#", with: "", options: .regularExpression) }
-            .filter { !$0.isEmpty && !allTags.contains($0) }
-    }
+    private var matchingTags: [String] { session.matchingTags(availableTags: workspace.tagNames) }
+    private var creatableTags: [String] { session.creatableTags(availableTags: workspace.tagNames) }
 
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: WFSpace.sm) {
                 Image(systemName: "magnifyingglass").foregroundStyle(WFColors.secondaryText)
-                TextField("输入标签", text: $query)
+                TextField("输入标签", text: $session.query)
                     .textFieldStyle(.plain)
                     .focused($searchFocused)
                     .onKeyPress(.escape) {
@@ -54,11 +44,11 @@ struct TaskTagPickerPopover: View {
                         .frame(maxWidth: .infinity).padding(.vertical, WFSpace.xl)
                     }
                     ForEach(matchingTags, id: \.self) { tag in
-                        Button { toggle(tag) } label: {
+                        Button { session.toggle(tag) } label: {
                             HStack(spacing: WFSpace.md) {
                                 Image(systemName: "tag").foregroundStyle(WFColors.secondaryText)
                                 Text(tag).frame(maxWidth: .infinity, alignment: .leading)
-                                if selectedTags.contains(tag) {
+                                if session.selectedTags.contains(tag) {
                                     Image(systemName: "checkmark").foregroundStyle(WFColors.accent)
                                 }
                             }
@@ -66,11 +56,11 @@ struct TaskTagPickerPopover: View {
                             .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
+                        .tagPickerRenderAnchor(.tag(tag))
                     }
                     if !creatableTags.isEmpty {
                         Button {
-                            selectedTags.formUnion(creatableTags)
-                            query = ""
+                            session.createFromQuery(availableTags: workspace.tagNames)
                             searchFocused = true
                         } label: {
                             Label("创建「\(creatableTags.joined(separator: "、"))」", systemImage: "plus")
@@ -85,17 +75,20 @@ struct TaskTagPickerPopover: View {
             Divider()
             HStack(spacing: WFSpace.sm) {
                 Button("取消", action: onCancel).frame(maxWidth: .infinity)
-                Button("确定") { onApply(Array(selectedTags).sorted()) }
+                    .tagPickerRenderAnchor(.cancel)
+                Button("确定") { onApply(Array(session.selectedTags).sorted()) }
                     .buttonStyle(.borderedProminent).frame(maxWidth: .infinity)
+                    .tagPickerRenderAnchor(.confirm)
             }
             .padding(WFSpace.md)
         }
         .frame(width: 264, height: 320)
-        .onAppear { searchFocused = true }
+        .coordinateSpace(name: "task-tag-picker")
+        .onAppear {
+            session = TaskTagPickerSession(initialTags: initialTags)
+            searchFocused = true
+        }
+        .background(PopupEscapeRouter(depth: 2, onEscape: onCancel))
         .onExitCommand(perform: onCancel)
-    }
-
-    private func toggle(_ tag: String) {
-        if !selectedTags.insert(tag).inserted { selectedTags.remove(tag) }
     }
 }
