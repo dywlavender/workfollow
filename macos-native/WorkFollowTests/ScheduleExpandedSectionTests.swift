@@ -37,6 +37,7 @@ final class ScheduleExpandedSectionTests: XCTestCase {
         window.isReleasedWhenClosed = false
         window.contentView = NSHostingView(rootView: ScheduleEscapeRouter { calls += 1 })
         window.contentView?.layoutSubtreeIfNeeded()
+        window.orderFront(nil)
         let other = NSWindow(contentRect: .zero, styleMask: [.borderless], backing: .buffered, defer: false)
         other.isReleasedWhenClosed = false
         defer { window.contentView = nil; window.close(); other.close() }

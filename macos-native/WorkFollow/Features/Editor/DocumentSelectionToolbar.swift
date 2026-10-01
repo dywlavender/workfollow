@@ -102,8 +102,6 @@ struct DocumentFormatToolbarView: View {
     /// 指针在不在工具条上、在不在面板上——两者都不在就收起面板。
     @State private var toolbarHovered = false
     @State private var pickerHovered = false
-    /// 只覆盖"面板开着"这段窗口期的 Esc 监视器。
-    @State private var escapeMonitor: Any?
 
     private static let headingCommands = [DocumentBlockKind.paragraph, .heading(1), .heading(2), .heading(3)]
         .compactMap { kind in DocumentFormatCommand.commands.first { $0.block == kind } }
@@ -196,31 +194,12 @@ struct DocumentFormatToolbarView: View {
             }
         }
         .animation(.easeOut(duration: 0.08), value: overlay.hovered)
-        // 面板开着时就装一层 Esc 拦截（见 `updateEscapeMonitor`）：Esc 先关面板，
-        // 面板都关了才轮到"关掉整条工具条"。
-        .onChange(of: openPicker) { _, _ in updateEscapeMonitor() }
-        .onDisappear { removeEscapeMonitor() }
-    }
-
-    /// 原版的两个小面板是独立浮层，Esc 由浮层自己吃掉；工具条只在没有面板时才响应
-    /// Esc。这里的面板画在工具条内部、且工具条不持焦点，所以用一个只覆盖"面板开着"
-    /// 这段窗口期的本地监视器把它拦下来。
-    ///
-    /// （试过 `Button` + `keyboardShortcut(.cancelAction)`：隐藏按钮不会注册快捷键，
-    /// 实测 Esc 仍然直接关掉整条工具条。）
-    private func updateEscapeMonitor() {
-        guard openPicker != nil else { return removeEscapeMonitor() }
-        guard escapeMonitor == nil else { return }
-        escapeMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
-            guard event.keyCode == 53 else { return event }
-            openPicker = nil
-            return nil
+        // Register only while a child picker is open; scoped to this toolbar's window.
+        .background {
+            if openPicker != nil {
+                PopupEscapeRouter(depth: 2) { openPicker = nil }
+            }
         }
-    }
-
-    private func removeEscapeMonitor() {
-        if let escapeMonitor { NSEvent.removeMonitor(escapeMonitor) }
-        escapeMonitor = nil
     }
 
     /// 分组竖线：1 × 17，左右各 4（原版 `divider()`）。
