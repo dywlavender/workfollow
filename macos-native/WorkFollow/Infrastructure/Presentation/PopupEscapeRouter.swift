@@ -39,6 +39,11 @@ final class PopupEscapeRegistry {
     func route(eventWindow: NSWindow?) -> Bool {
         guard let eventWindow, NSApp.modalWindow == nil,
               eventWindow.attachedSheet == nil else { return false }
+        // A local event monitor runs before NSTextView.cancelOperation. Do not
+        // close a child picker while its presenter input method owns Escape.
+        if let input = eventWindow.firstResponder as? NSTextInputClient, input.hasMarkedText() {
+            return false
+        }
         let candidates = entries.enumerated().filter { _, pair in
             guard let view = pair.1.view, let owner = view.window,
                   owner.isVisible, owner.attachedSheet == nil,

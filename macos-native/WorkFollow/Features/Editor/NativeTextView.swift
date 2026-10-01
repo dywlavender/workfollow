@@ -42,6 +42,20 @@ final class NativeTextView: NSTextView {
     var documentIdentity = UUID()
     var needsHostCaretReveal = false
 
+    /// Both document rebind and teardown use the same owned-state boundary.
+    /// The coordinator must flush composition to the old document first.
+    func resetDocumentInteraction(for documentID: UUID) {
+        dismissSlash()
+        dismissSelectionToolbar()
+        lastSelectionToolbarRange = NSRange(location: NSNotFound, length: 0)
+        selectionAfterUndoRedo = nil
+        pendingTrailingBlock = nil
+        displayedTrailingBlock = nil
+        needsHostCaretReveal = false
+        documentIdentity = documentID
+        undoManager?.removeAllActions()
+    }
+
     override func insertText(_ insertString: Any, replacementRange: NSRange) {
         let wasComposing = hasMarkedText()
         // 覆盖一段选中文本输入触发字符是普通编辑，不该开命令面板。
@@ -580,16 +594,24 @@ final class NativeTextView: NSTextView {
     }
 
     override func cancelOperation(_ sender: Any?) {
-        // Escape belongs to the active input method before the inspector.
-        if hasMarkedText() {
+        switch DocumentEditorEscapeRoute.resolve(
+            composing: hasMarkedText(), slash: slashSession != nil,
+            selectionToolbar: selectionPanel != nil,
+            findBar: enclosingScrollView?.isFindBarVisible == true) {
+        case .inputMethod:
             super.cancelOperation(sender)
             return
-        }
-        if slashSession != nil { dismissSlash(); return }
-        if selectionPanel != nil { dismissSelectionToolbar(); return }
-        if enclosingScrollView?.isFindBarVisible == true {
+        case .slash:
+            dismissSlash()
+            return
+        case .selectionToolbar:
+            dismissSelectionToolbar()
+            return
+        case .findBar:
             enclosingScrollView?.isFindBarVisible = false
             return
+        case .host:
+            break
         }
         guard let onEscape else {
             super.cancelOperation(sender)

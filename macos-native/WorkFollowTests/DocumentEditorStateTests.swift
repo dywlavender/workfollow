@@ -2,6 +2,14 @@ import XCTest
 @testable import WorkFollow
 
 final class DocumentEditorStateTests: XCTestCase {
+    func testEscapeRoutesFromInputMethodThroughEditorLayersToHost() {
+        XCTAssertEqual(DocumentEditorEscapeRoute.resolve(composing: true, slash: false, selectionToolbar: false, findBar: false), .inputMethod)
+        XCTAssertEqual(DocumentEditorEscapeRoute.resolve(composing: false, slash: true, selectionToolbar: false, findBar: true), .slash)
+        XCTAssertEqual(DocumentEditorEscapeRoute.resolve(composing: false, slash: false, selectionToolbar: true, findBar: true), .selectionToolbar)
+        XCTAssertEqual(DocumentEditorEscapeRoute.resolve(composing: false, slash: false, selectionToolbar: false, findBar: true), .findBar)
+        XCTAssertEqual(DocumentEditorEscapeRoute.resolve(composing: false, slash: false, selectionToolbar: false, findBar: false), .host)
+    }
+
     func testSelectionIsRetainedForSameTaskAndResetWhenTaskChanges() {
         let firstTaskID = UUID()
         let secondTaskID = UUID()

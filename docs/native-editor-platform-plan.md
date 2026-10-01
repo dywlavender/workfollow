@@ -1,6 +1,6 @@
 # Native Editor 平台整合方案
 
-日期：2026-10-01。状态：EP-002 HOST PROFILES EXTRACTED / PLATFORM NOT FROZEN。
+日期：2026-10-01。状态：EP-003 LIFECYCLE CONTRACTS ESTABLISHED / PLATFORM NOT FROZEN。
 
 目标：保护当前编辑器优化，将 Slash、格式栏、选区浮条、右键与后续快捷键变成同一能力系统的入口；不是重写编辑器，也不是新增编辑能力。下面的审计表是整合前快照，后续变化以末尾执行记录为准。
 
@@ -188,3 +188,13 @@ Codec round-trip 按语义比较 blocks/runs/marks/附件 payload/空段，允�
 - 82 项回归通过，证据：`/tmp/workfollow-editor-profile-tests.log`。新增覆盖实际 factory 的父12项/子11项、回调路由、NoteHost 创建任务/保留既有关联/空文本不创建、任意宿主短标题、命名/未命名笔记引用文本与链接。
 - 本笔无新的真人输入法、Task/Note 完整 popup 链或像素级实机验收；既有格式工具条真实窗口测试仍通过。最新 App 已构建，不据此冻结平台。
 - 下一笔：EP-003 先核对编辑器/宿主关闭规则和文档切换状态归属，按现有行为增加组合合同；不直接改写 Escape 顺序或整体替换浮层实现。
+
+### EP-003 第一笔：文档生命周期与 Escape 决策合同
+
+- 文档切换和卸载统一调用 `NativeTextView.resetDocumentInteraction`：关闭 Slash/选区子窗口、移除 Slash 观察者、清除待定选区/文末 block/caret reveal、切换文档身份、清除本编辑器 Undo。不清理其他窗口或宿主业务状态。
+- Coordinator 负责先把未提交组词发布到旧文档，再重绑新文档；卸载走统一 `detach`，提交后断开 delegate、编辑/选区/Escape 回调与 Profile。新文档的文末段落级别仍由模型重新播种，不把清理等同于丢弃文档数据。
+- `DocumentEditorEscapeRoute` 显式保留既有优先级：输入法 → Slash → 选区浮条 → 查找栏 → 宿主。宿主内的格式栏/属性弹层/结束编辑/窄屏返回仍由原宿主合同决定，不在此处改变顺序。
+- 共享 Popup Escape monitor 在 firstResponder 正在组词时退让，不抢先关闭注册浮层。DocumentEditor 的工具条 style 刷新移到 Coordinator 重绑之后，避免读取旧文档样式。
+- 新增实际 NSWindow 下 Slash 子窗口/观察者清理、选区浮条卸载/回调断开测试；新增旧文档组词提交归属、Escape route、共享 router 组词退让测试。98 项 Editor/Note/Popup/Inspector 定向回归通过，证据：`/tmp/workfollow-editor-interaction-tests.log`；最新 App 已构建。
+- marked-text 测试是 AppKit 自动化模拟，不等同于真人中文输入法验收；本笔没有新做完整 Task/Note 连续 Escape 链或像素截图。工具条刷新时序修改没有单独的跨文档 SwiftUI 渲染断言，不扩大自动证据范围。
+- 后续仍需收拢宿主交互状态与浮层 placement adapter，并补实际入口的连续 Escape/切换文档验收。只完成生命周期第一笔，不宣称 Editor Platform 已冻结。

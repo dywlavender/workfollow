@@ -28,11 +28,7 @@ final class DocumentEditorCoordinator: NSObject, NSTextViewDelegate {
                 onEditingChanged: @escaping (Bool) -> Void) {
         if self.documentID != documentID {
             flushPendingComposition(in: textView)
-            textView.dismissSlash()
-            // 文档切换时压住选区浮条，等用户在新文档里重新选择（Flutter 对齐）。
-            textView.dismissSelectionToolbar()
-            textView.documentIdentity = documentID
-            textView.undoManager?.removeAllActions()
+            textView.resetDocumentInteraction(for: documentID)
             self.documentID = documentID
             editorState.bind(to: documentID)
             textView.typingAttributes = DocumentTextCodec.attributes(kind: .paragraph, marks: [])
@@ -96,6 +92,16 @@ final class DocumentEditorCoordinator: NSObject, NSTextViewDelegate {
             textView.unmarkText()
         }
         commit(textView, force: true)
+    }
+
+    func detach(_ textView: NativeTextView) {
+        flushPendingComposition(in: textView)
+        textView.resetDocumentInteraction(for: UUID())
+        textView.delegate = nil
+        textView.onEscape = nil
+        textView.onEditingChanged = nil
+        textView.onSelectionChanged = nil
+        textView.profile = DocumentProfile()
     }
 
     private func commit(_ textView: NSTextView, force: Bool) {

@@ -4,6 +4,29 @@ import XCTest
 
 @MainActor
 final class PopupEscapeRoutingTests: XCTestCase {
+    func testCompositionGetsEscapeBeforeRegisteredPopup() {
+        let registry = PopupEscapeRegistry()
+        let window = NSWindow(contentRect: NSRect(x: 100, y: 100, width: 400, height: 300),
+                              styleMask: [.titled], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        let editor = NativeTextView(frame: window.contentLayoutRect, textContainer: nil)
+        window.contentView = editor
+        window.orderFront(nil)
+        XCTAssertTrue(window.makeFirstResponder(editor))
+        XCTAssertTrue(window.firstResponder === editor)
+        var dismissals = 0
+        let id = registry.register(view: editor, depth: 2) { dismissals += 1 }
+        defer { registry.unregister(id); window.close() }
+        editor.setMarkedText("中文", selectedRange: NSRange(location: 2, length: 0),
+                             replacementRange: NSRange(location: NSNotFound, length: 0))
+        XCTAssertTrue(editor.hasMarkedText())
+        XCTAssertFalse(registry.route(eventWindow: window))
+        XCTAssertEqual(dismissals, 0)
+        editor.unmarkText()
+        XCTAssertTrue(registry.route(eventWindow: window))
+        XCTAssertEqual(dismissals, 1)
+    }
+
     func testExplicitPresenterRoutesEscapeWhenPopoverHasNoParentWindow() {
         let registry = PopupEscapeRegistry()
         let presenter = NSWindow(contentRect: NSRect(x: 100, y: 100, width: 300, height: 200),

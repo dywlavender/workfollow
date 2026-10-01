@@ -133,11 +133,12 @@ struct DocumentEditor: NSViewRepresentable {
         textView.profile = profile
         handle?.textView = textView
         textView.onSelectionChanged = { [weak handle] in handle?.refreshStyle() }
-        handle?.refreshStyle()
         context.coordinator.update(textView, documentID: documentID, document: document,
                                    onDocumentChange: onDocumentChange,
                                    onEscape: onEscape,
                                    onEditingChanged: onEditingChanged)
+        // Refresh after model/selection rebind, not from the outgoing document.
+        handle?.refreshStyle()
     }
 
     func sizeThatFits(_ proposal: ProposedViewSize, nsView: NSScrollView,
@@ -162,13 +163,6 @@ struct DocumentEditor: NSViewRepresentable {
 
     static func dismantleNSView(_ scrollView: NSScrollView, coordinator: DocumentEditorCoordinator) {
         guard let textView = scrollView.documentView as? NativeTextView else { return }
-        coordinator.flushPendingComposition(in: textView)
-        textView.delegate = nil
-        textView.onEscape = nil
-        textView.onEditingChanged = nil
-        textView.dismissSlash()
-        textView.dismissSelectionToolbar()
-        textView.documentIdentity = UUID()
-        textView.profile = DocumentProfile()
+        coordinator.detach(textView)
     }
 }
