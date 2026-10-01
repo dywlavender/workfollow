@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 
 /// TickTick 对齐的单窗口分层日程编辑器。
 /// - 主面板 = tabs + 快捷日 + 日历 + 属性行 + 清除/确定；
@@ -22,6 +23,7 @@ struct TaskDatePopoverV2: View {
     /// 草稿宿主（日历/四象限的新建卡）：任务还没被创建，确定与清除只把计划交回
     /// 调用方，不写工作区，也不动批量选择。
     private let draftCommit: ((TaskDateDraftModel.CommitPlan) -> Void)?
+    private let panelHeight: CGFloat
 
     typealias InlineSheet = ScheduleExpandedSection
 
@@ -33,7 +35,7 @@ struct TaskDatePopoverV2: View {
         case date, count
     }
 
-    /// 宽度恒定260；展开高度随内容变化，尺寸走 ScheduleMetrics。
+    /// 固定外框；展开内容只改变内部滚动区，不改变 Popover 尺寸。
     @StateObject private var model: TaskDateDraftModel
     @State private var presentation = SchedulePanelPresentationState()
     private var inlineSheet: InlineSheet? {
@@ -72,6 +74,7 @@ struct TaskDatePopoverV2: View {
         self.deadline = deadline
         self.initialPage = initialPage
         self.draftCommit = draftCommit
+        panelHeight = SchedulePopoverLayoutV2.height(availableHeight: NSScreen.main?.visibleFrame.height ?? 900)
         self.onClose = onClose
         let draftModel = TaskDateDraftModel(
             task: task, calendar: workspace.calendar, now: workspace.clock, deadline: deadline)
@@ -98,7 +101,7 @@ struct TaskDatePopoverV2: View {
     // MARK: Main page
 
     private var mainPage: some View {
-        ZStack(alignment: .top) {
+        SchedulePopoverContainer(height: panelHeight) {
             VStack(spacing: 12) {
                 if !deadline {
                     segmented
@@ -125,6 +128,9 @@ struct TaskDatePopoverV2: View {
                         showBadges: true)
                         .allowsHitTesting(false)
                 }
+            }
+        } propertyContent: {
+            VStack(spacing: 12) {
                 if !deadline && model.tab == .period {
                     Text(rangeCaption)
                         .font(.system(size: 11))
@@ -143,9 +149,6 @@ struct TaskDatePopoverV2: View {
                 if inlineSheet == nil { footer }
             }
         }
-        .padding(ScheduleMetrics.horizontalPadding)
-        .frame(width: ScheduleMetrics.panelWidth)
-        .scheduleRenderAnchor(.panel)
         .background {
             ScheduleEscapeRouter {
                 if inlineSheet != nil { closeSheet() } else { onClose() }

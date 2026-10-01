@@ -72,6 +72,14 @@
 - `SchedulePanelInteractionTests` 覆盖默认舍入、已有11:43不被覆盖、open/hover/clear/discard链、五种属性尾控件规则、提醒/重复清除和动态行渲染。与 DATE Draft / Atomic / Expanded / Render / Popover 定向测试一并通过。
 - 真实窗口确认：最新构建点击“时间”后显示默认09:30，时间列表同值勾选，原任务 Header 仍为“设置日期”；未点击主确定。后续 Mac 锁屏，**真实鼠标 Hover × 和点击 × 尚待验收**；不得以状态/渲染测试代替这项签收。前述 Escape Gap 不因本笔重构自动关闭。
 
+## DATE 容器纠偏：固定外框 / 内部滚动
+
+- 本契约替代 Round 2 的“展开后自然增高”策略。`SchedulePopoverContainer` 保留260pt宽、标准560pt高；打开时按屏幕可用高度确定外框，之后不随 expandedSection 改变。
+- 日期 Segment、快捷日期和月历属于固定顶部；属性行、展开编辑器、对应 Footer 属于下方有界 ScrollView。展开内容不再参与系统 Popover 的尺寸计算，不使用硬编码纵向 offset，也不隐藏日历。
+- `ScheduleContainerRenderTests` 使用 NSWindow + 真实 NSPopover，逐个切换 main/time/reminder/recurrence，断言窗口 X/Y/宽/高、日历 frame、滚动 viewport frame 不变。提醒内容滚到底部后确认 Footer 完整进入 viewport，日历与窗口仍不动；整个过程任务数据不变。
+- `SchedulePopoverContractTests` 的旧自然增高断言改为固定尺寸；Draft、Atomic Commit、Expanded Section、Interaction 和主面板 Render 定向回归通过。
+- 最新构建实机截图复核：时间、提醒、重复展开时 Segment / 月历位置保持不变；提醒内部滚到底部可看到取消/确定，取消后恢复属性区。外部点击丢弃测试草稿，原任务仍未设置日期。本轮没有关闭之前记录的真实 Hover / Escape 验收缺口。
+
 ## 后续提交（未完成）
 
 2. **DATE Round 2 剩余验收：** 复核真实键盘 Escape 与窗口激活的关系，再关闭上述实机 Gap。

@@ -2,7 +2,7 @@ import CoreGraphics
 
 /// 日程浮层的统一尺寸契约（对齐滴答 `TaskScheduleMetrics`）。
 ///
-/// 主面板始终260pt宽；属性截断展开后，高度由可见内容自然决定。
+/// 主面板始终260pt宽；容器高度由 SchedulePopoverLayoutV2 固定，属性在内部滚动。
 enum ScheduleMetrics {
     /// 主面板宽（pt）。
     static let panelWidth: CGFloat = 260

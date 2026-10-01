@@ -1,7 +1,7 @@
 import SwiftUI
 
 enum ScheduleRenderAnchor: Hashable {
-    case panel, shortcut(String)
+    case panel, calendarSection, propertyViewport, shortcut(String)
     case row(TaskDatePopoverV2.InlineSheet), icon(TaskDatePopoverV2.InlineSheet)
     case trailing(TaskDatePopoverV2.InlineSheet)
     case expandedRow(TaskDatePopoverV2.InlineSheet), expandedContent(TaskDatePopoverV2.InlineSheet)

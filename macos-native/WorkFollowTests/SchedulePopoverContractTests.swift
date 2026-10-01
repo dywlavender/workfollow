@@ -2,7 +2,7 @@ import SwiftUI
 import XCTest
 @testable import WorkFollow
 
-/// 单面板截断展开：宽度固定，高度由内容自然决定。
+/// 固定容器：属性截断展开仅改变内部滚动内容。
 @MainActor
 final class SchedulePopoverContractTests: XCTestCase {
 
@@ -59,34 +59,33 @@ final class SchedulePopoverContractTests: XCTestCase {
         XCTAssertEqual(measured.width, ScheduleMetrics.panelWidth, accuracy: 0.5)
     }
 
-    func testExpandingEditorChangesHeightButKeepsPanelWidth() {
+    func testExpandingEditorKeepsPanelSize() {
         let now = calendar.date(from: DateComponents(year: 2026, month: 9, day: 28, hour: 10))!
         let task = makeTask()
         let base = size(of: TaskDatePopoverV2(task: task, workspace: workspace(now: now)) {})
         for page in [TaskDatePopoverV2.Page.time, .reminder, .recurrence] {
             let sheet = size(of: TaskDatePopoverV2(task: task, workspace: workspace(now: now),
                                                    initialPage: page) {})
-            XCTAssertGreaterThan(sheet.height, base.height, "initialPage=\(page)")
+            XCTAssertEqual(sheet.height, base.height, accuracy: 0.5, "initialPage=\(page)")
             XCTAssertEqual(sheet.width, base.width, accuracy: 0.5, "initialPage=\(page)")
         }
     }
 
-    func testRepeatAddsExactlyOneRowHeight() {
+    func testRepeatEndDoesNotResizeContainer() {
         let now = calendar.date(from: DateComponents(year: 2026, month: 9, day: 28, hour: 10))!
         let base = size(of: TaskDatePopoverV2(task: makeTask(recurrence: .never),
                                               workspace: workspace(now: now)) {})
         let repeating = size(of: TaskDatePopoverV2(task: makeTask(recurrence: .daily),
                                                    workspace: workspace(now: now)) {})
-        XCTAssertEqual(repeating.height, base.height + ScheduleMetrics.rowHeight, accuracy: 1)
+        XCTAssertEqual(repeating.height, base.height, accuracy: 0.5)
     }
 
-    func testDeadlineVariantHidesPropertyRows() {
+    func testDeadlineUsesSameFixedContainer() {
         let now = calendar.date(from: DateComponents(year: 2026, month: 9, day: 28, hour: 10))!
         let base = size(of: TaskDatePopoverV2(task: makeTask(), workspace: workspace(now: now)) {})
         let deadline = size(of: TaskDatePopoverV2(task: makeTask(), workspace: workspace(now: now),
                                                   deadline: true) {})
-        // 截止日期面板没有属性行（时间/提醒/重复 + 重复结束隐藏）与分段。
-        XCTAssertLessThan(deadline.height, base.height - ScheduleMetrics.rowHeight)
+        XCTAssertEqual(deadline.height, base.height, accuracy: 0.5)
     }
 
     /// 时间段页签多出「结束时间」一行（Flutter `if (range)`），宽度契约不变。
@@ -96,7 +95,7 @@ final class SchedulePopoverContractTests: XCTestCase {
         let ranged = size(of: TaskDatePopoverV2(task: makeRangedTask(),
                                                 workspace: workspace(now: now)) {})
         XCTAssertEqual(ranged.width, ScheduleMetrics.panelWidth, accuracy: 0.5)
-        XCTAssertGreaterThanOrEqual(ranged.height - dateOnly.height, ScheduleMetrics.rowHeight,
-                                    "时间段页签至少多出「结束时间」一行")
+        XCTAssertEqual(ranged.height, dateOnly.height, accuracy: 0.5,
+                       "结束时间行不应改变宿主尺寸")
     }
 }
