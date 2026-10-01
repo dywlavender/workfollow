@@ -19,17 +19,10 @@ enum SlashGlyphKind: Equatable {
     /// 原版也用系统图标的项（附件）。
     case symbol(String)
 
-    /// 命令 id → 图形。这些 id 由 `DocumentProfile.slashCommands` 按固定顺序生成
-    /// （`task.format.0..6` = 三个标题、无序、有序、检查项、引用），映射与之一一对应。
+    /// Semantic format glyphs come from the catalog, never from a row index.
     static func forCommand(_ id: String) -> SlashGlyphKind {
+        if let format = EditorCommandCatalog.format(id) { return format.descriptor.glyph }
         switch id {
-        case "task.format.0": return .heading(1)
-        case "task.format.1": return .heading(2)
-        case "task.format.2": return .heading(3)
-        case "task.format.3": return .bullet
-        case "task.format.4": return .ordered
-        case "task.format.5": return .checklist
-        case "task.format.6": return .quote
         case "shared.divider": return .divider
         case "shared.attachment": return .symbol("paperclip")
         case "shared.link": return .symbol("link")

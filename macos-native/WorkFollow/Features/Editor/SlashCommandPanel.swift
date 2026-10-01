@@ -252,6 +252,6 @@ private struct SlashCommandList: View {
     private func glyph(_ command: DocumentCommand) -> some View {
         // 图形按原版手绘（见 `SlashMenuGlyph`）：面板这一栏是原版自己画的图标集，
         // SF Symbols 只有语义相近、笔画不同的替代品。
-        SlashMenuGlyph(kind: SlashGlyphKind.forCommand(command.id))
+        SlashMenuGlyph(kind: command.resolvedGlyph)
     }
 }

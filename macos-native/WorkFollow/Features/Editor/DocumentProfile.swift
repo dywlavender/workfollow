@@ -8,6 +8,8 @@ struct DocumentCommand: Identifiable {
     var keywords: String = ""
     let perform: (NativeTextView) -> Void
     var performSlash: ((NativeTextView, SlashCommandInvocation) -> Void)?
+    var glyph: SlashGlyphKind?
+    var resolvedGlyph: SlashGlyphKind { glyph ?? SlashGlyphKind.forCommand(id) }
 
     init(id: String, title: String, group: String, keywords: String = "",
          perform: @escaping (NativeTextView) -> Void) {
@@ -20,7 +22,7 @@ struct DocumentCommand: Identifiable {
     }
 
     init(id: String, title: String, group: String, keywords: String = "",
-         perform: @escaping (NativeTextView) -> Void,
+         glyph: SlashGlyphKind? = nil, perform: @escaping (NativeTextView) -> Void,
          slash: @escaping (NativeTextView, SlashCommandInvocation) -> Void) {
         self.id = id
         self.title = title
@@ -28,6 +30,7 @@ struct DocumentCommand: Identifiable {
         self.keywords = keywords
         self.perform = perform
         self.performSlash = slash
+        self.glyph = glyph
     }
 }
 
@@ -57,20 +60,10 @@ struct DocumentProfile {
             // 清单项与顺序取原版 `DocumentSlashCommand.sharedDocumentCommands()`：
             // 一级/二级/三级标题 → 无序 → 有序 → 检查项 → 引用。
             //
-            // **按段落类型取值，不按下标**：原先写的是 `[1, 2, 14, 5, 6, 7, 3]`，
-            // `DocumentFormatCommand.commands` 一旦重排，面板会静默错位。这里的顺序
-            // 同时是 `SlashCommandList` 图标映射（`task.format.0..6`）的契约。
-            let formats = [DocumentBlockKind.heading(1), .heading(2), .heading(3),
-                           .bullet, .ordered, .checklist(false), .quote]
-                .compactMap { block in
-                    DocumentFormatCommand.commands.first { $0.block == block }
-                }
-            return formats.enumerated().map { index, format in
-                DocumentCommand(id: "task.format.\(index)", title: format.title, group: "格式",
-                                perform: { $0.applyFormat(format) },
-                                slash: { view, invocation in
-                                    view.applyFormat(format, lineStart: invocation.lineStart)
-                                })
+            // Layout references stable capability IDs; descriptor supplies its glyph.
+            let formats = EditorCommandCatalog.compactSlashFormatIDs.compactMap(EditorCommandCatalog.format)
+            return formats.map { format in
+                format.slashCommand(group: "格式", useFormatGlyph: true)
             } + [
                 DocumentCommand(id: "shared.divider", title: "水平分割线", group: "格式",
                                 perform: { $0.insertDocumentDivider() },
@@ -84,14 +77,9 @@ struct DocumentProfile {
                                 })
             ] + commands
         }
-        return DocumentFormatCommand.commands.enumerated().map { index, format in
-            DocumentCommand(id: "format.\(index)", title: format.title,
-                            group: format.block == nil ? "文字格式" : "段落",
-                            keywords: format.keywords,
-                            perform: { $0.applyFormat(format) },
-                            slash: { view, invocation in
-                                view.applyFormat(format, lineStart: invocation.lineStart)
-                            })
+        return DocumentFormatCommand.commands.map { format in
+            format.slashCommand(group: format.block == nil ? "文字格式" : "段落",
+                                includeKeywords: true)
         } + [
             DocumentCommand(id: "shared.link", title: "编辑链接", group: "正文", keywords: "link url") { $0.editDocumentLink(nil) },
             DocumentCommand(id: "shared.attachment", title: "插入附件", group: "正文", keywords: "attachment file",

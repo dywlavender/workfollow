@@ -1,8 +1,8 @@
 # Native Editor 平台整合方案
 
-日期：2026-10-01。状态：DESIGN PROPOSED / IMPLEMENTATION NOT STARTED。
+日期：2026-10-01。状态：EP-001 FIRST SLICE IMPLEMENTED / PLATFORM NOT FROZEN。
 
-目标：保护当前编辑器优化，将 Slash、格式栏、选区浮条、右键与后续快捷键变成同一能力系统的入口；不是重写编辑器，也不是新增编辑能力。本轮仅源码审计和设计，无新的运行验收结论。
+目标：保护当前编辑器优化，将 Slash、格式栏、选区浮条、右键与后续快捷键变成同一能力系统的入口；不是重写编辑器，也不是新增编辑能力。下面的审计表是整合前快照，后续变化以末尾执行记录为准。
 
 ## 1. 当前事实与设计判断
 
@@ -153,4 +153,17 @@ Codec round-trip 按语义比较 blocks/runs/marks/附件 payload/空段，允�
 
 冻结标准：上述资产不退化；业务与文档边界成立；稳定 ID 无重复、所有 placement 解析到唯一执行目标；真实 Task/Note 窗口完成常用输入、格式、Slash、选区与 Esc 链，含中文输入。自动通过不能替代新构建实机验收。
 
-当前结论仅为方案成立，**Editor Platform 尚未实施或冻结**。不新增 Checklist、Slash 搜索、附件编辑器、评论等功能；不在此阶段同时改变 Task/Note 页面几何或主题。
+**Editor Platform 尚未整体完成或冻结**。不新增 Checklist、Slash 搜索、附件编辑器、评论等功能；不在此阶段同时改变 Task/Note 页面几何或主题。
+
+## 7. 执行记录
+
+### EP-001 第一笔：稳定格式命令身份与 Slash adapter
+
+- `DocumentFormatCommand.swift` 增加纯元数据 `EditorCommandDescriptor` 和 `EditorCommandCatalog`。16 个既有格式命令有稳定语义 ID；compact Slash 顺序使用显式 ID 清单，图标从格式语义得到，不依赖数组下标。
+- `DocumentProfile` 的 compact/generic Slash 统一经 `slashCommand` adapter 转换；仍调用原 `applyFormat`，保留 Slash 的 lineStart invocation。标题、分组、关键词和查询政策不变。
+- `DocumentCommand` 支持入口 glyph override。Task/Note compact 使用语义 glyph，generic 原来是正文图标的格式项仍保持正文图标；不借 ID 迁移改变外观。原 host/插入命令 ID 保留。
+- 移除 `task.format.0..6`、`format.9` 等位置身份及其测试依赖。没有修改生产持久文档格式、IME、Undo、popover 或 Escape 实现。
+- 62 项定向测试运行通过：DocumentProfile、SlashSession、DocumentContent、DocumentFormatStyle、NativeTextView、DocumentEditorState、DocumentDecorationRender。新增覆盖唯一 ID、逆序描述查找的图标一致性、Profile 身份与图标策略、16 项格式 adapter 和直调结果一致。
+- 证据：`/tmp/workfollow-editor-command-tests.log`。构建最新 App 已完成；本笔没有重新进行真人输入法、全部按钮实机截图或完整 popup 链验收，不据此冻结 Editor Platform。
+- 仍待迁移：格式栏/选区/右键入口的 descriptor 消费、统一 enabled/active 策略和 Host descriptors；当前 Catalog 仅覆盖格式能力，不声称已实现完整 Registry/Dispatcher。
+- 下一笔限定为格式栏与选区的描述消费（不改执行与布局）；通过后再推进 Host/Profile 与交互状态。

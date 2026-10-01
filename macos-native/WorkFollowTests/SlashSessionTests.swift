@@ -166,7 +166,7 @@ final class SlashSessionTests: XCTestCase {
         editor.textStorage?.setAttributedString(DocumentTextCodec.render(NativeDocument(plainText: "正文")))
         editor.setSelectedRange(NSRange(location: 0, length: 0))
         editor.insertText("/", replacementRange: editor.selectedRange())
-        let boldIndex = editor.profile.slashCommands.firstIndex { $0.id == "format.9" }!
+        let boldIndex = editor.profile.slashCommands.firstIndex { $0.id == "format.bold" }!
         editor.executeSlash(at: boldIndex)
         editor.insertText("加粗", replacementRange: editor.selectedRange())
         let boldDocument = DocumentTextCodec.decode(

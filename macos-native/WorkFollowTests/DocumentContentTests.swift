@@ -66,7 +66,7 @@ final class DocumentContentTests: XCTestCase {
         editor.textStorage?.setAttributedString(DocumentTextCodec.render(document))
         editor.setSelectedRange(NSRange(location: 4, length: 0))
 
-        editor.applyFormat(.init(title: "无序列表", block: .bullet, mark: nil), lineStart: 4)
+        editor.applyFormat(.init(id: "format.bullet", title: "无序列表", block: .bullet, mark: nil), lineStart: 4)
 
         XCTAssertEqual(editor.pendingTrailingBlock, .bullet, "文末空段应待定为无序列表")
         let decoded = DocumentTextCodec.decode(editor.attributedString(), preserving: document,
@@ -107,7 +107,7 @@ final class DocumentContentTests: XCTestCase {
             let original = NativeDocument(blocks: [DocumentBlock(kind: kind, runs: [DocumentRun(text: "正文")])])
             editor.textStorage?.setAttributedString(DocumentTextCodec.render(original))
             editor.setSelectedRange(NSRange(location: 0, length: 2))
-            editor.applyFormat(.init(title: "正文", block: .paragraph, mark: nil))
+            editor.applyFormat(.init(id: "format.paragraph", title: "正文", block: .paragraph, mark: nil))
             let converted = DocumentTextCodec.decode(editor.attributedString(), preserving: original)
             XCTAssertEqual(converted.blocks[0].kind, .paragraph)
             XCTAssertEqual(converted.blocks[0].runs[0].marks, [])
@@ -120,10 +120,10 @@ final class DocumentContentTests: XCTestCase {
     func testCaretFormatsComposeAndToggleWithoutChangingExistingText() {
         let editor = NativeTextView(frame: .zero, textContainer: nil)
         editor.typingAttributes = DocumentTextCodec.attributes(kind: .paragraph, marks: [])
-        editor.applyFormat(.init(title: "粗体", block: nil, mark: .bold))
-        editor.applyFormat(.init(title: "下划线", block: nil, mark: .underline))
+        editor.applyFormat(.init(id: "format.bold", title: "粗体", block: nil, mark: .bold))
+        editor.applyFormat(.init(id: "format.underline", title: "下划线", block: nil, mark: .underline))
         editor.insertText("甲", replacementRange: editor.selectedRange())
-        editor.applyFormat(.init(title: "粗体", block: nil, mark: .bold))
+        editor.applyFormat(.init(id: "format.bold", title: "粗体", block: nil, mark: .bold))
         editor.insertText("乙", replacementRange: editor.selectedRange())
         let runs = DocumentTextCodec.decode(editor.attributedString(), preserving: .empty).blocks[0].runs
         XCTAssertEqual(runs.map(\.text), ["甲", "乙"])
@@ -135,8 +135,8 @@ final class DocumentContentTests: XCTestCase {
         let editor = NativeTextView(frame: NSRect(x: 0, y: 0, width: 400, height: 300), textContainer: nil)
         editor.insertText("验收", replacementRange: NSRange(location: 0, length: 0))
         editor.setSelectedRange(NSRange(location: 0, length: 2))
-        editor.applyFormat(.init(title: "三级标题", block: .heading(3), mark: nil))
-        editor.applyFormat(.init(title: "行内代码", block: nil, mark: .code))
+        editor.applyFormat(.init(id: "format.heading3", title: "三级标题", block: .heading(3), mark: nil))
+        editor.applyFormat(.init(id: "format.inlineCode", title: "行内代码", block: nil, mark: .code))
         var document = DocumentTextCodec.decode(editor.attributedString(), preserving: .empty)
         XCTAssertEqual(document.blocks[0].kind, .heading(3))
         XCTAssertTrue(document.blocks[0].runs[0].marks.contains(.code))
@@ -248,12 +248,12 @@ final class DocumentContentTests: XCTestCase {
         XCTAssertTrue(editor.string.contains("\u{FFFC}"))
     }
 
-    func testFormattingPreservesEmbeddedFileReference() {
+    func testFormattingPreservesEmbeddedFileReference() throws {
         let editor = NativeTextView(frame: .zero, textContainer: nil)
         let file = NativeAttachment(id: UUID(), name: "test.txt", storedName: "test.txt")
         editor.insertAttachments([file])
         editor.setSelectedRange(NSRange(location: 0, length: 1))
-        editor.applyFormat(DocumentFormatCommand(title: "高亮", block: nil, mark: .highlight))
+        editor.applyFormat(try XCTUnwrap(EditorCommandCatalog.format("format.highlight")))
         let result = DocumentTextCodec.decode(editor.attributedString(), preserving: .empty)
         XCTAssertEqual(result.blocks[0].runs[0].attachment, file)
         XCTAssertTrue(result.blocks[0].runs[0].marks.contains(.highlight))

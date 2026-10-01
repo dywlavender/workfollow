@@ -1,9 +1,57 @@
 import AppKit
 
+/// Pure metadata; existing TextKit methods remain the execution boundary.
+struct EditorCommandDescriptor: Identifiable {
+    let id: String
+    let title: String
+    let keywords: String
+    let glyph: SlashGlyphKind
+}
+
+enum EditorCommandCatalog {
+    static var formats: [EditorCommandDescriptor] {
+        DocumentFormatCommand.commands.map(\.descriptor)
+    }
+
+    static func format(_ id: String) -> DocumentFormatCommand? {
+        DocumentFormatCommand.commands.first { $0.id == id }
+    }
+
+    // Product order is explicit, but identity is never derived from this order.
+    static let compactSlashFormatIDs = [
+        "format.heading1", "format.heading2", "format.heading3", "format.bullet",
+        "format.ordered", "format.checklist", "format.quote"
+    ]
+}
+
 struct DocumentFormatCommand {
+    let id: String
     let title: String
     let block: DocumentBlockKind?
     let mark: DocumentMark?
+    var descriptor: EditorCommandDescriptor {
+        let glyph: SlashGlyphKind
+        switch block {
+        case .heading(let level): glyph = .heading(level)
+        case .bullet: glyph = .bullet
+        case .ordered: glyph = .ordered
+        case .checklist: glyph = .checklist
+        case .quote: glyph = .quote
+        default: glyph = .symbol("text.alignleft")
+        }
+        return EditorCommandDescriptor(id: id, title: title, keywords: keywords, glyph: glyph)
+    }
+
+    func slashCommand(group: String, includeKeywords: Bool = false,
+                      useFormatGlyph: Bool = false) -> DocumentCommand {
+        DocumentCommand(id: descriptor.id, title: descriptor.title, group: group,
+                        keywords: includeKeywords ? descriptor.keywords : "",
+                        glyph: useFormatGlyph ? descriptor.glyph : .symbol("text.alignleft"),
+                        perform: { $0.applyFormat(self) },
+                        slash: { view, invocation in
+                            view.applyFormat(self, lineStart: invocation.lineStart)
+                        })
+    }
     var keywords: String {
         switch block {
         case .paragraph: return "paragraph text"
@@ -17,22 +65,22 @@ struct DocumentFormatCommand {
         }
     }
     static let commands: [Self] = [
-        .init(title: "正文", block: .paragraph, mark: nil),
-        .init(title: "一级标题", block: .heading(1), mark: nil),
-        .init(title: "二级标题", block: .heading(2), mark: nil),
-        .init(title: "引用", block: .quote, mark: nil),
-        .init(title: "代码块", block: .code, mark: nil),
-        .init(title: "无序列表", block: .bullet, mark: nil),
-        .init(title: "有序列表", block: .ordered, mark: nil),
-        .init(title: "检查项", block: .checklist(false), mark: nil),
-        .init(title: "勾选清单项", block: .checklist(true), mark: nil),
-        .init(title: "粗体", block: nil, mark: .bold),
-        .init(title: "斜体", block: nil, mark: .italic),
-        .init(title: "下划线", block: nil, mark: .underline),
-        .init(title: "删除线", block: nil, mark: .strikethrough),
-        .init(title: "高亮", block: nil, mark: .highlight),
-        .init(title: "三级标题", block: .heading(3), mark: nil),
-        .init(title: "行内代码", block: nil, mark: .code)
+        .init(id: "format.paragraph", title: "正文", block: .paragraph, mark: nil),
+        .init(id: "format.heading1", title: "一级标题", block: .heading(1), mark: nil),
+        .init(id: "format.heading2", title: "二级标题", block: .heading(2), mark: nil),
+        .init(id: "format.quote", title: "引用", block: .quote, mark: nil),
+        .init(id: "format.codeBlock", title: "代码块", block: .code, mark: nil),
+        .init(id: "format.bullet", title: "无序列表", block: .bullet, mark: nil),
+        .init(id: "format.ordered", title: "有序列表", block: .ordered, mark: nil),
+        .init(id: "format.checklist", title: "检查项", block: .checklist(false), mark: nil),
+        .init(id: "format.checkedChecklist", title: "勾选清单项", block: .checklist(true), mark: nil),
+        .init(id: "format.bold", title: "粗体", block: nil, mark: .bold),
+        .init(id: "format.italic", title: "斜体", block: nil, mark: .italic),
+        .init(id: "format.underline", title: "下划线", block: nil, mark: .underline),
+        .init(id: "format.strikethrough", title: "删除线", block: nil, mark: .strikethrough),
+        .init(id: "format.highlight", title: "高亮", block: nil, mark: .highlight),
+        .init(id: "format.heading3", title: "三级标题", block: .heading(3), mark: nil),
+        .init(id: "format.inlineCode", title: "行内代码", block: nil, mark: .code)
     ]
 }
 
