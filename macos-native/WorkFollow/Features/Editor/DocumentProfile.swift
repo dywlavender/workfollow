@@ -45,7 +45,9 @@ struct SlashCommandInvocation {
 struct DocumentSelectionAction: Identifiable {
     let id: String
     let title: String
+    var toolbarTitle: String? = nil
     let perform: (String) -> Void
+    var displayTitle: String { toolbarTitle ?? title }
 }
 
 struct DocumentProfile {
@@ -55,6 +57,11 @@ struct DocumentProfile {
     var noteSlash = false
     var compactSlash: Bool { taskSlash || noteSlash }
     var onOpenLink: ((String) -> Bool)?
+    // Explicit host policy. Nil preserves profiles constructed by older callers.
+    var selectionToolbarEnabled: Bool?
+    var supportsSelectionToolbar: Bool {
+        selectionToolbarEnabled ?? (!taskSlash && !selectionActions.isEmpty)
+    }
     var slashCommands: [DocumentCommand] {
         if compactSlash {
             // 清单项与顺序取原版 `DocumentSlashCommand.sharedDocumentCommands()`：

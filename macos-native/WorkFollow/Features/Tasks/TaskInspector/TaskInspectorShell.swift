@@ -413,7 +413,7 @@ struct TaskInspectorShell: View {
                     ForEach(notes) { note in
                         Button {
                             workspace.setSourceNote(task.id, note.id)
-                            editorHandle.insertNoteReference(note)
+                            editorHandle.insertReference(TaskDocumentProfile.reference(to: note))
                             showRelationsPopover = false
                         } label: {
                             HStack {
@@ -547,17 +547,15 @@ struct TaskInspectorShell: View {
                         presentation.editingTarget = .none
                     }
                 },
-                profile: DocumentProfile(commands: [
-                    DocumentCommand(id: "task.child", title: "子任务", group: "插入", keywords: "subtask child") { _ in
+                profile: TaskDocumentProfile.make(task: task, host: TaskEditorHostActions(
+                    createChild: {
                         workspace.requestChildTitleEditor(for: task.id)
-                    }
-                ].filter { _ in task.parentID == nil } + [
-                    DocumentCommand(id: "task.tags", title: "标签", group: "插入") { _ in showTagsPopover = true },
-                    DocumentCommand(id: "task.relation", title: "关联任务/笔记", group: "插入") { _ in
+                    },
+                    openTags: { showTagsPopover = true },
+                    openRelation: {
                         relationQuery = ""
                         showRelationsPopover = true
-                    }
-                ], taskSlash: true, onOpenLink: openDocumentLink),
+                    }, openLink: openDocumentLink)),
                 contentSized: true,
                 handle: editorHandle
             )

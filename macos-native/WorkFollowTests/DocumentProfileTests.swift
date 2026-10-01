@@ -5,6 +5,83 @@ import SwiftUI
 
 @MainActor
 final class DocumentProfileTests: XCTestCase {
+    func testTaskHostProfileRoutesOnlyAvailableBusinessActions() throws {
+        let workspace = TaskWorkspaceModel(seedDemoData: false)
+        let parentID = try XCTUnwrap(workspace.createTask(title: "父任务", in: .inbox).taskID)
+        let childID = try XCTUnwrap(workspace.createChild(parentID, title: "子任务").taskID)
+        var invoked: [String] = []
+        let host = TaskEditorHostActions(createChild: { invoked.append("child") },
+                                        openTags: { invoked.append("tags") },
+                                        openRelation: { invoked.append("relation") },
+                                        openLink: { invoked.append($0); return true })
+        let parent = TaskDocumentProfile.make(task: try XCTUnwrap(workspace.task(for: parentID)), host: host)
+        let child = TaskDocumentProfile.make(task: try XCTUnwrap(workspace.task(for: childID)), host: host)
+        XCTAssertEqual(parent.commands.map(\.id), ["task.child", "task.tags", "task.relation"])
+        XCTAssertEqual(child.commands.map(\.id), ["task.tags", "task.relation"])
+        XCTAssertEqual(parent.slashCommands.count, 12)
+        XCTAssertEqual(child.slashCommands.count, 11)
+        XCTAssertFalse(parent.supportsSelectionToolbar)
+        XCTAssertTrue(parent.selectionActions.isEmpty)
+        let view = NativeTextView(frame: .zero, textContainer: nil)
+        parent.commands.forEach { $0.perform(view) }
+        XCTAssertEqual(invoked, ["child", "tags", "relation"])
+        XCTAssertTrue(parent.onOpenLink?("workfollow://note/example") == true)
+        XCTAssertEqual(invoked.last, "workfollow://note/example")
+        XCTAssertEqual(workspace.allTasks.count, 2, "The editor delegates; it does not mutate business models itself")
+    }
+
+    func testNoteHostSelectionCreatesTrimmedInboxTaskAndPreservesLinks() throws {
+        let tasks = TaskWorkspaceModel(seedDemoData: false)
+        let notes = NotesWorkspaceModel()
+        notes.create()
+        let noteID = try XCTUnwrap(notes.selectedID)
+        let existingLink = UUID()
+        notes.edit(noteID) { $0.linkedTaskIDs = [existingLink] }
+        let profile = NoteDocumentProfile.make(host: .make(noteID: noteID, tasks: tasks, notes: notes))
+        let action = try XCTUnwrap(profile.selectionActions.first)
+        XCTAssertEqual(action.title, "用所选文字创建任务")
+        XCTAssertEqual(action.displayTitle, "创建任务")
+        XCTAssertTrue(profile.supportsSelectionToolbar)
+        XCTAssertEqual(profile.slashCommands.map(\.id), DocumentProfile(noteSlash: true).slashCommands.map(\.id))
+        action.perform(" \n 行动项 \n ")
+        let task = try XCTUnwrap(tasks.allTasks.first)
+        XCTAssertEqual(task.title, "行动项")
+        XCTAssertEqual(task.list, .inbox)
+        XCTAssertEqual(notes.notes.first { $0.id == noteID }?.linkedTaskIDs, [existingLink, task.id])
+        action.perform(" \n ")
+        XCTAssertEqual(tasks.allTasks.count, 1)
+        XCTAssertEqual(notes.notes.first { $0.id == noteID }?.linkedTaskIDs, [existingLink, task.id])
+    }
+
+    func testSelectionShortTitleIsMetadataNotBusinessIdentity() {
+        let custom = DocumentSelectionAction(id: "host.custom", title: "完整说明", toolbarTitle: "短标题", perform: { _ in })
+        XCTAssertEqual(custom.displayTitle, "短标题")
+        XCTAssertEqual(custom.title, "完整说明")
+        let fallback = DocumentSelectionAction(id: "note.createTask", title: "任意宿主标题", perform: { _ in })
+        XCTAssertEqual(fallback.displayTitle, "任意宿主标题", "Core must not special-case a business action ID")
+    }
+
+    func testHostReferencePayloadPreservesDocumentLink() throws {
+        let notes = NotesWorkspaceModel()
+        notes.create()
+        var note = try XCTUnwrap(notes.notes.first)
+        for title in ["关联笔记", ""] {
+            note.title = title
+            let reference = TaskDocumentProfile.reference(to: note)
+            let editor = NativeTextView(frame: .zero, textContainer: nil)
+            let handle = DocumentEditorHandle()
+            handle.textView = editor
+            handle.insertReference(reference)
+            let document = DocumentTextCodec.decode(editor.attributedString(), preserving: .empty)
+            XCTAssertEqual(document.plainText, title.isEmpty ? "📄 未命名笔记" : "📄 关联笔记")
+            XCTAssertTrue(document.blocks.flatMap(\.runs).contains {
+                $0.marks.contains(.link("workfollow://note/" + note.id.uuidString))
+            })
+            XCTAssertFalse(DocumentTextCodec.style(of: NSAttributedString(string: " ", attributes: editor.typingAttributes))
+                .marks.contains(.link(reference.target)))
+        }
+    }
+
     func testToolbarDescriptorsPreserveTitlesSymbolsAndActiveState() throws {
         let ids = EditorCommandCatalog.selectionFormatIDs
         let descriptors = try ids.map { try XCTUnwrap(EditorCommandCatalog.format($0)).descriptor }

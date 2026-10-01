@@ -339,7 +339,7 @@ final class NativeTextView: NSTextView {
             lastSelectionToolbarRange = range
             selectionToolbarSuppressed = false
         }
-        let eligible = window != nil && !hasMarkedText() && range.length > 0 && !profile.taskSlash
+        let eligible = window != nil && !hasMarkedText() && range.length > 0 && profile.supportsSelectionToolbar
             && !profile.selectionActions.isEmpty && NSMaxRange(range) <= (string as NSString).length
         guard eligible, !selectionToolbarSuppressed else {
             closeSelectionPanel()

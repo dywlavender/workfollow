@@ -23,6 +23,12 @@ struct DocumentSelectionStyle: Equatable {
     }
 }
 
+/// Host-produced content, deliberately independent of Task/Note models.
+struct EditorReference {
+    let title: String
+    let target: String
+}
+
 @MainActor
 final class DocumentEditorHandle: ObservableObject {
     weak var textView: NativeTextView?
@@ -68,12 +74,11 @@ final class DocumentEditorHandle: ObservableObject {
     func insertAttachment() { textView?.insertDocumentAttachment(nil); refreshStyle() }
     func insertTime(format: String) { textView?.window?.makeFirstResponder(textView); textView?.insertDocumentTime(format: format); refreshStyle() }
     func insertDivider() { textView?.window?.makeFirstResponder(textView); textView?.insertDocumentDivider(); refreshStyle() }
-    func insertNoteReference(_ note: Note) {
+    func insertReference(_ reference: EditorReference) {
         guard let textView else { return }
         textView.window?.makeFirstResponder(textView)
         let content = NativeDocument(blocks: [DocumentBlock(kind: .paragraph, runs: [
-            DocumentRun(text: "📄 " + (note.title.isEmpty ? "未命名笔记" : note.title),
-                        marks: [.link("workfollow://note/" + note.id.uuidString)])
+            DocumentRun(text: reference.title, marks: [.link(reference.target)])
         ])])
         textView.insertText(DocumentTextCodec.render(content), replacementRange: textView.selectedRange())
         textView.typingAttributes = DocumentTextCodec.attributes(kind: .paragraph, marks: [])

@@ -1,6 +1,6 @@
 # Native Editor 平台整合方案
 
-日期：2026-10-01。状态：EP-001 FORMAT DESCRIPTORS INTEGRATED / PLATFORM NOT FROZEN。
+日期：2026-10-01。状态：EP-002 HOST PROFILES EXTRACTED / PLATFORM NOT FROZEN。
 
 目标：保护当前编辑器优化，将 Slash、格式栏、选区浮条、右键与后续快捷键变成同一能力系统的入口；不是重写编辑器，也不是新增编辑能力。下面的审计表是整合前快照，后续变化以末尾执行记录为准。
 
@@ -177,3 +177,14 @@ Codec round-trip 按语义比较 blocks/runs/marks/附件 payload/空段，允�
 - 64 项编辑器回归通过，证据：`/tmp/workfollow-editor-toolbar-tests.log`。本笔未重新做真人输入法或完整 Task/Note 弹层实机截图，不宣称像素/交互全部验收。
 - 链接、附件、时间容器、Host 业务动作仍沿用旧通道；未将全部命令迁入 Dispatcher。`note.createTask` 短标题分支及 Task/Note 现场拼 Profile 留到 EP-002，不夹带本轮修改。
 - 下一笔：EP-002 提取 Task/Note Profile 与窄 Host Actions，保留能力资格、触发政策、业务关联和执行路径；随后再处理交互状态。
+
+### EP-002 第一笔：宿主 Profile 与业务模型边界
+
+- 新增 Tasks 模块 `TaskDocumentProfile / TaskEditorHostActions`，从 Inspector 迁出 child/tags/relation 的描述装配。View 仍负责页面状态与请求 child 编辑器；Profile 只提供资格、顺序和窄回调，不把 Workspace 注入 Editor。
+- 新增 Notes 模块 `NoteDocumentProfile / NoteEditorHostActions`，将 selection→task 的 trim、收集箱创建和 linkedTaskIDs 追加逻辑从页面迁到宿主 action factory，操作路径和业务 Undo 不变。
+- `DocumentSelectionAction` 增加可选 toolbarTitle；Core 直接消费元数据，移除 `note.createTask` 的短标题特判。完整标题继续用于 help/右键。Profile 提供显式 selectionToolbarEnabled；nil 为旧调用兼容策略，不在本笔删除 taskSlash/noteSlash 或改变查询行为。
+- 通用 `EditorReference(title,target)` 替代 Core `insertNoteReference(Note)`。宿主把 Note 变成相同的“📄 标题 + workfollow URL”值，再走原有富文本插入；真实 Task 的 sourceNote 关系仍由宿主原路径写入。
+- 定向源码检查：Editor 文件中没有 Task/Note/TaskWorkspaceModel/NotesWorkspaceModel 的业务类型调用，只有边界说明注释。现有 InspectorEscapeEffect 和业务 glyph 的兼容映射仍在，不声称已形成完全独立编译模块或完整 Dispatcher。
+- 82 项回归通过，证据：`/tmp/workfollow-editor-profile-tests.log`。新增覆盖实际 factory 的父12项/子11项、回调路由、NoteHost 创建任务/保留既有关联/空文本不创建、任意宿主短标题、命名/未命名笔记引用文本与链接。
+- 本笔无新的真人输入法、Task/Note 完整 popup 链或像素级实机验收；既有格式工具条真实窗口测试仍通过。最新 App 已构建，不据此冻结平台。
+- 下一笔：EP-003 先核对编辑器/宿主关闭规则和文档切换状态归属，按现有行为增加组合合同；不直接改写 Escape 顺序或整体替换浮层实现。

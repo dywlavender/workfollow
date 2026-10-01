@@ -24,7 +24,7 @@ struct DocumentSelectionToolbarView: View {
                 Button {
                     onInvoke(action)
                 } label: {
-                    Label(selectionTitle(action), systemImage: "text.badge.plus")
+                    Label(action.displayTitle, systemImage: "text.badge.plus")
                         .labelStyle(.titleAndIcon)
                         .padding(.horizontal, 6)
                         .frame(height: 26)
@@ -59,11 +59,6 @@ struct DocumentSelectionToolbarView: View {
         .overlay(RoundedRectangle(cornerRadius: 8).stroke(WFColors.border))
         .shadow(color: .black.opacity(0.12), radius: 8, y: 3)
         .coordinateSpace(name: "editor-selection-toolbar")
-    }
-
-    /// 右键菜单沿用 profile 的完整标题；浮动条上用短文案（对齐 Flutter “创建任务”）。
-    private func selectionTitle(_ action: DocumentSelectionAction) -> String {
-        action.id == "note.createTask" ? "创建任务" : action.title
     }
 
 }

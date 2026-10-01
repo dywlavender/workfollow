@@ -219,12 +219,7 @@ struct NotesWorkspaceView: View {
                                        return .endEditing
                                    },
                                    onEditingChanged: { _ in },
-                                   profile: DocumentProfile(selectionActions: [DocumentSelectionAction(id: "note.createTask", title: "用所选文字创建任务", perform: { text in
-                                       let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-                                       guard !trimmed.isEmpty,
-                                             let id = tasks.createTask(title: trimmed, in: .inbox).taskID else { return }
-                                       notes.edit(note.id) { $0.linkedTaskIDs.append(id) }
-                                   })], noteSlash: true),
+                                   profile: NoteDocumentProfile.make(host: .make(noteID: note.id, tasks: tasks, notes: notes)),
                                    contentSized: true, handle: editorHandle).id(note.id)
                         .overlay(alignment: .topLeading) {
                             if note.document.isEmpty {
