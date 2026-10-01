@@ -2,17 +2,17 @@ import SwiftUI
 
 enum SchedulePopoverLayoutV2 {
     static let panelWidth: CGFloat = ScheduleMetrics.panelWidth
-    static let panelHeight: CGFloat = 560
+    static let panelHeight: CGFloat = 506
     static let screenMargin: CGFloat = 32
 
     /// Resolve once when opening, never from expanded content's intrinsic size.
     static func height(availableHeight: CGFloat) -> CGFloat {
-        min(panelHeight, max(480, availableHeight - screenMargin))
+        min(panelHeight, max(440, availableHeight - screenMargin))
     }
 }
 
-/// Fixed calendar region and a bounded property viewport. Expanded editors may
-/// grow inside the viewport, but cannot resize or reposition the parent popover.
+/// Fixed calendar region and bounded property viewport. Child editors live in
+/// separate anchored windows, never in this viewport's layout.
 struct SchedulePopoverContainer<CalendarSection: View, PropertyContent: View>: View {
     let height: CGFloat
     @ViewBuilder let calendarSection: () -> CalendarSection

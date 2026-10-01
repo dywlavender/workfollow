@@ -1,10 +1,10 @@
 import SwiftUI
 import AppKit
 
-/// TickTick 对齐的单窗口分层日程编辑器。
+/// TickTick 对齐的固定主面板 + 锚定子卡片日程编辑器。
 /// - 主面板 = tabs + 快捷日 + 日历 + 属性行 + 清除/确定；
-/// - 展开属性属于同一面板的 presentation state：保留当前行及之前的行，
-///   下方替换为编辑内容，不创建第二个窗口，不把后续属性排到编辑器下面。
+/// - 属性编辑属于独立子卡片：主面板所有行与Footer保持原位，
+///   子卡片覆盖下方区域，并可越过主面板边界。
 /// - 时间 = 头部可编辑 HH:mm + 48 个半小时选项（滚到当前值）；提醒 = “准时/提前…”多选 +
 ///   自定义提前量 + 取消/确定；重复 = 规则列表 + 工作日/节假日二级页；重复结束 =
 ///   永不结束/按日期结束/按次数结束。
@@ -146,7 +146,7 @@ struct TaskDatePopoverV2: View {
                         .foregroundStyle(WFColors.danger)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                if inlineSheet == nil { footer }
+                footer
             }
         }
         .background {
@@ -169,6 +169,7 @@ struct TaskDatePopoverV2: View {
         .onExitCommand {
             if inlineSheet != nil { closeSheet() } else { onClose() }
         }
+        .onDisappear { closeSheet() }
     }
 
     // MARK: 属性行 + 子面板（Flutter `_property` / `showScheduleOptions`）
@@ -217,15 +218,18 @@ struct TaskDatePopoverV2: View {
                                        canClear: Bool = false,
                                        @ViewBuilder body: @escaping () -> Body) -> some View {
         sheetRow(sheet, icon: icon, title: title, active: active, editor: editor, canClear: canClear)
-        if inlineSheet == sheet {
-            body().frame(width: ScheduleMetrics.optionPanelWidth)
-                .background(WFColors.content, in: RoundedRectangle(cornerRadius: 12))
-                .shadow(color: .black.opacity(0.08), radius: 6, y: 2)
-                .scheduleRenderAnchor(.expandedContent(sheet))
-        }
+            .background {
+                AnchoredPropertyPanel(isPresented: Binding(
+                    get: { inlineSheet == sheet },
+                    set: { if !$0, inlineSheet == sheet { closeSheet() } }),
+                    width: ScheduleMetrics.optionPanelWidth,
+                    horizontalOutset: ScheduleMetrics.childHorizontalOutset) {
+                        body().scheduleRenderAnchor(.expandedContent(sheet))
+                    }
+            }
     }
 
-    /// 当前行一直保留；展开灰底与向下 chevron，后续内容由宿主截断。
+    /// 当前行一直保留；子卡片开启时灰底，主面板后续行不移除。
     private func sheetRow(_ sheet: InlineSheet, icon: String, title: String,
                                       active: Bool,
                                       editor: AnyView? = nil,

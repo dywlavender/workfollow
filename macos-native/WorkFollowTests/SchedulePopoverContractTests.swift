@@ -49,7 +49,9 @@ final class SchedulePopoverContractTests: XCTestCase {
         XCTAssertEqual(ScheduleMetrics.rowHeight, 30)
         XCTAssertEqual(ScheduleMetrics.optionRowHeight, 34)
         XCTAssertEqual(ScheduleMetrics.timeOptionsHeight, 280)
-        XCTAssertEqual(ScheduleMetrics.optionPanelWidth, 232)
+        XCTAssertEqual(ScheduleMetrics.optionPanelWidth, 252)
+        XCTAssertEqual(ScheduleMetrics.childInset, 4)
+        XCTAssertEqual(ScheduleMetrics.childHorizontalOutset, 10)
     }
 
     func testPanelWidthIsContract() {

@@ -1,4 +1,4 @@
-/// Single-panel presentation: retain rows up to the expanded editor and hide the rest.
+/// Child cards never remove rows from the underlying date panel.
 enum ScheduleExpandedSection: Hashable {
     case time, endTime, reminder, `repeat`, repeatEnd
 
@@ -7,7 +7,6 @@ enum ScheduleExpandedSection: Hashable {
         if period { rows.append(.endTime) }
         rows += [.reminder, .repeat]
         if repeating { rows.append(.repeatEnd) }
-        guard let expanded, let index = rows.firstIndex(of: expanded) else { return rows }
-        return Array(rows[...index])
+        return rows
     }
 }

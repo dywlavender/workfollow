@@ -20,13 +20,16 @@ final class ScheduleExpandedSectionTests: XCTestCase {
         return (workspace, workspace.task(for: id)!)
     }
 
-    func testRowsTruncateAtExpandedSectionAndRestoreWhenClosed() {
+    func testAllApplicableRowsRemainWhenAChildEditorIsOpen() {
         typealias Section = ScheduleExpandedSection
         XCTAssertEqual(Section.visibleRows(expanded: nil, period: false, repeating: true),
                        [.time, .reminder, .repeat, .repeatEnd])
-        XCTAssertEqual(Section.visibleRows(expanded: .reminder, period: false, repeating: true), [.time, .reminder])
-        XCTAssertEqual(Section.visibleRows(expanded: .repeat, period: false, repeating: true), [.time, .reminder, .repeat])
-        XCTAssertEqual(Section.visibleRows(expanded: .endTime, period: true, repeating: true), [.time, .endTime])
+        for expanded in [Section.time, .reminder, .repeat, .repeatEnd] {
+            XCTAssertEqual(Section.visibleRows(expanded: expanded, period: false, repeating: true),
+                           [.time, .reminder, .repeat, .repeatEnd])
+        }
+        XCTAssertEqual(Section.visibleRows(expanded: .endTime, period: true, repeating: true),
+                       [.time, .endTime, .reminder, .repeat, .repeatEnd])
         XCTAssertEqual(Section.visibleRows(expanded: nil, period: true, repeating: false), [.time, .endTime, .reminder, .repeat])
     }
 
@@ -87,36 +90,37 @@ final class ScheduleExpandedSectionTests: XCTestCase {
     func testExpandedPanelRenderingAndFooters() throws {
         let (workspace, task) = fixture()
         for page in [TaskDatePopoverV2.Page.main, .reminder, .recurrence] {
-            let values = try render(task, workspace: workspace, page: page, name: "\(page)")
+            let (values, childValues) = try render(task, workspace: workspace, page: page)
             XCTAssertEqual(values[.panel]?.frame.width, 260)
             XCTAssertNotNil(values[.row(.time)])
             XCTAssertNotNil(values[.row(.reminder)])
             XCTAssertNil(values[.row(.repeatEnd)])
+            XCTAssertNotNil(values[.row(.repeat)])
+            XCTAssertNotNil(values[.mainFooter])
+            XCTAssertNil(values[.expandedContent(.reminder)])
+            XCTAssertNil(values[.expandedContent(.repeat)])
+            XCTAssertNil(values[.editorFooter(.reminder)])
             if page == .main {
-                XCTAssertNotNil(values[.row(.repeat)])
-                XCTAssertNotNil(values[.mainFooter])
-                XCTAssertNil(values[.expandedContent(.reminder)])
+                XCTAssertTrue(childValues.isEmpty)
             } else {
                 let section: ScheduleExpandedSection = page == .reminder ? .reminder : .repeat
                 XCTAssertEqual(values[.expandedRow(section)]?.active, true)
-                let row = try XCTUnwrap(values[.row(section)])
-                let content = try XCTUnwrap(values[.expandedContent(section)])
-                XCTAssertEqual(content.frame.minY, row.frame.maxY, accuracy: 0.5)
-                XCTAssertNil(values[.mainFooter])
+                let content = try XCTUnwrap(childValues[.expandedContent(section)])
+                XCTAssertEqual(content.frame.width, ScheduleMetrics.optionPanelWidth, accuracy: 0.5)
+                XCTAssertNil(childValues[.mainFooter])
+                XCTAssertNil(childValues[.row(section)])
                 if page == .reminder {
-                    XCTAssertNil(values[.row(.repeat)])
-                    XCTAssertNotNil(values[.editorFooter(.reminder)])
+                    XCTAssertNotNil(childValues[.editorFooter(.reminder)])
                     for title in ["当天 (09:00)", "提前1天 (09:00)", "提前2天 (09:00)", "提前3天 (09:00)", "提前1周 (09:00)"] {
-                        XCTAssertEqual(values[.option(title)]?.frame.height, 34)
+                        XCTAssertEqual(childValues[.option(title)]?.frame.height, 34)
                     }
                 } else {
-                    XCTAssertNotNil(values[.row(.repeat)])
-                    XCTAssertNil(values[.editorFooter(.repeat)])
+                    XCTAssertNil(childValues[.editorFooter(.repeat)])
                     for title in ["每天", "每周 (周二)", "每月 (22日)", "每年 (9月22日)", "工作日", "节假日", "自定义"] {
-                        XCTAssertNotNil(values[.option(title)], title)
+                        XCTAssertNotNil(childValues[.option(title)], title)
                     }
-                    XCTAssertNil(values[.option("农历重复")])
-                    XCTAssertNil(values[.option("艾宾浩斯记忆法")])
+                    XCTAssertNil(childValues[.option("农历重复")])
+                    XCTAssertNil(childValues[.option("艾宾浩斯记忆法")])
                 }
             }
         }
@@ -125,12 +129,12 @@ final class ScheduleExpandedSectionTests: XCTestCase {
 
     func testTimedReminderOptionsUseScheduledClock() throws {
         let (workspace, task) = fixture(timed: true)
-        let values = try render(task, workspace: workspace, page: .reminder, name: "reminder-timed")
+        let (_, values) = try render(task, workspace: workspace, page: .reminder)
         XCTAssertNotNil(values[.option("当天 (20:30)")])
         XCTAssertNotNil(values[.option("提前1天 (20:30)")])
     }
 
-    func testEscapeCollapsesExpandedEditorBeforeClosingPanel() {
+    func testEscapeClosesChildEditorBeforeClosingPanel() throws {
         let (workspace, task) = fixture()
         var closed = false
         var values: [ScheduleRenderAnchor: ScheduleRenderValue] = [:]
@@ -149,7 +153,7 @@ final class ScheduleExpandedSectionTests: XCTestCase {
         let anchor = NSView(frame: NSRect(x: 0, y: 0, width: 800, height: 1000))
         window.contentView = anchor
         window.makeKeyAndOrderFront(nil)
-        popover.behavior = .transient
+        popover.behavior = .applicationDefined
         popover.contentViewController = controller
         popover.show(relativeTo: NSRect(x: 300, y: 900, width: 20, height: 20), of: anchor, preferredEdge: .minY)
         defer { popover.close(); window.contentView = nil; window.close() }
@@ -157,27 +161,36 @@ final class ScheduleExpandedSectionTests: XCTestCase {
             host.layoutSubtreeIfNeeded()
             RunLoop.main.run(until: Date().addingTimeInterval(0.1))
         }
-        func escape() {
+        func escape(in target: NSWindow) {
             NSApp.sendEvent(NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0,
-                windowNumber: window.windowNumber, context: nil, characters: "\u{1b}",
+                windowNumber: target.windowNumber, context: nil, characters: "\u{1b}",
                 charactersIgnoringModifiers: "\u{1b}", isARepeat: false, keyCode: 53)!)
             settle()
         }
         settle()
-        XCTAssertNotNil(values[.expandedContent(.repeat)])
-        escape()
+        let panelWindow = try XCTUnwrap(host.window)
+        let childWindow = try XCTUnwrap(panelWindow.childWindows?.first)
+        XCTAssertEqual(panelWindow.childWindows?.count, 1)
+        XCTAssertNil(values[.expandedContent(.repeat)])
+        XCTAssertEqual(values[.expandedRow(.repeat)]?.active, true)
+        escape(in: panelWindow)
         XCTAssertFalse(closed)
         XCTAssertTrue(popover.isShown)
         XCTAssertNil(values[.expandedContent(.repeat)])
+        XCTAssertTrue(panelWindow.childWindows?.isEmpty ?? true)
+        XCTAssertFalse(childWindow.isVisible)
+        XCTAssertNil(childWindow.parent)
+        XCTAssertEqual(values[.expandedRow(.repeat)]?.active, false)
         XCTAssertNotNil(values[.mainFooter])
-        escape()
+        escape(in: panelWindow)
         XCTAssertTrue(closed)
         XCTAssertEqual(workspace.task(for: task.id), task)
     }
 
-    private func render(_ task: Task, workspace: TaskWorkspaceModel, page: TaskDatePopoverV2.Page,
-                        name: String) throws -> [ScheduleRenderAnchor: ScheduleRenderValue] {
+    private func render(_ task: Task, workspace: TaskWorkspaceModel, page: TaskDatePopoverV2.Page)
+        throws -> ([ScheduleRenderAnchor: ScheduleRenderValue], [ScheduleRenderAnchor: ScheduleRenderValue]) {
         var values: [ScheduleRenderAnchor: ScheduleRenderValue] = [:]
+        var childValues: [ScheduleRenderAnchor: ScheduleRenderValue] = [:]
         let root = TaskDatePopoverV2(task: task, workspace: workspace, initialPage: page) {}
             .background(WFColors.content)
             .environment(\.colorScheme, .light)
@@ -188,18 +201,23 @@ final class ScheduleExpandedSectionTests: XCTestCase {
         host.appearance = NSAppearance(named: .aqua)
         let window = NSWindow(contentRect: NSRect(origin: .zero, size: size),
                               styleMask: [.borderless], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
         window.contentView = host
         window.orderFront(nil)
-        defer { window.orderOut(nil) }
+        defer { window.contentView = nil; window.close() }
         host.layoutSubtreeIfNeeded()
         RunLoop.main.run(until: Date().addingTimeInterval(0.1))
         host.layoutSubtreeIfNeeded()
-        let bitmap = try XCTUnwrap(host.bitmapImageRepForCachingDisplay(in: host.bounds))
-        host.cacheDisplay(in: host.bounds, to: bitmap)
-        let png = try XCTUnwrap(bitmap.representation(using: .png, properties: [:]))
-        let directory = URL(fileURLWithPath: "/tmp/workfollow-schedule-expanded-renders")
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        try png.write(to: directory.appendingPathComponent("\(name).png"))
-        return values
+        if page != .main {
+            let child = try XCTUnwrap(window.childWindows?.first)
+            let childHost = try XCTUnwrap(child.contentView as? NSHostingView<AnyView>)
+            childHost.rootView = AnyView(childHost.rootView
+                .coordinateSpace(name: "schedule-render")
+                .onPreferenceChange(ScheduleFramesKey.self) { childValues = $0 })
+            childHost.layoutSubtreeIfNeeded()
+            RunLoop.main.run(until: Date().addingTimeInterval(0.1))
+            childHost.layoutSubtreeIfNeeded()
+        }
+        return (values, childValues)
     }
 }

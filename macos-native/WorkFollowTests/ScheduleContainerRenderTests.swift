@@ -49,6 +49,7 @@ final class ScheduleContainerRenderTests: XCTestCase {
         let baseline = window.frame
         let calendarFrame = try XCTUnwrap(probe.frames[.calendarSection]).frame
         let viewport = try XCTUnwrap(probe.frames[.propertyViewport]).frame
+        let footerFrame = try XCTUnwrap(probe.frames[.mainFooter]).frame
         for index in 1...3 {
             probe.revision = index
             settle()
@@ -58,33 +59,37 @@ final class ScheduleContainerRenderTests: XCTestCase {
             XCTAssertEqual(window.frame.height, baseline.height, accuracy: 0.5)
             XCTAssertEqual(probe.frames[.calendarSection]?.frame, calendarFrame)
             XCTAssertEqual(probe.frames[.propertyViewport]?.frame, viewport)
+            XCTAssertEqual(probe.frames[.mainFooter]?.frame, footerFrame)
             XCTAssertEqual(probe.frames[.panel]?.frame.width, 260)
             XCTAssertEqual(probe.frames[.panel]?.frame.height, SchedulePopoverLayoutV2.height(availableHeight: NSScreen.main?.visibleFrame.height ?? 900))
-            if index == 2 {
-                let footer = try XCTUnwrap(probe.frames[.editorFooter(.reminder)])
-                XCTAssertGreaterThan(footer.frame.maxY, viewport.maxY, "长内容应留在内部滚动区，不能撑大外框")
-                func scrollView(in view: NSView) -> NSScrollView? {
-                    if let scroll = view as? NSScrollView { return scroll }
-                    return view.subviews.compactMap { scrollView(in: $0) }.first
-                }
-                let scroll = try XCTUnwrap(scrollView(in: controller.view))
-                let document = try XCTUnwrap(scroll.documentView)
-                XCTAssertGreaterThan(document.frame.height, scroll.contentView.bounds.height)
-                scroll.contentView.scroll(to: NSPoint(x: 0, y: document.frame.height - scroll.contentView.bounds.height))
-                scroll.reflectScrolledClipView(scroll.contentView)
-                settle()
-                let visibleFooter = try XCTUnwrap(probe.frames[.editorFooter(.reminder)]).frame
-                XCTAssertLessThanOrEqual(visibleFooter.maxY, viewport.maxY + 1)
-                XCTAssertGreaterThanOrEqual(visibleFooter.minY, viewport.minY - 1)
-                XCTAssertEqual(probe.frames[.calendarSection]?.frame, calendarFrame)
-                XCTAssertEqual(window.frame, baseline)
+            for section in [ScheduleExpandedSection.time, .reminder, .repeat] {
+                XCTAssertNotNil(probe.frames[.row(section)])
+                XCTAssertNil(probe.frames[.expandedContent(section)])
+                XCTAssertNil(probe.frames[.editorFooter(section)])
             }
+            let children = try XCTUnwrap(window.childWindows)
+            XCTAssertEqual(children.count, 1, "切换属性应卸载旧 childWindow")
+            let child = try XCTUnwrap(children.first as? NSPanel)
+            XCTAssertTrue(child.parent === window)
+            XCTAssertEqual(child.title, "日期属性")
+            let childHost = try XCTUnwrap(child.contentView as? NSHostingView<AnyView>)
+            childHost.layoutSubtreeIfNeeded()
+            XCTAssertEqual(child.frame.width, ScheduleMetrics.optionPanelWidth, accuracy: 0.5)
+            let screen = window.screen?.visibleFrame ?? NSScreen.main!.visibleFrame
+            XCTAssertEqual(child.frame.height, min(childHost.fittingSize.height, screen.height - 16), accuracy: 0.5)
         }
+        let child = try XCTUnwrap(window.childWindows?.first)
+        popover.close()
+        settle()
+        XCTAssertNil(child.parent)
+        XCTAssertFalse(child.isVisible)
         XCTAssertEqual(workspace.task(for: id), task)
     }
 
     func testHeightIsResolvedFromAvailableSpaceNotExpansion() {
-        XCTAssertEqual(SchedulePopoverLayoutV2.height(availableHeight: 900), 560)
-        XCTAssertEqual(SchedulePopoverLayoutV2.height(availableHeight: 550), 518)
+        XCTAssertEqual(SchedulePopoverLayoutV2.height(availableHeight: 900), 506)
+        XCTAssertEqual(SchedulePopoverLayoutV2.height(availableHeight: 550), 506)
+        XCTAssertEqual(SchedulePopoverLayoutV2.height(availableHeight: 500), 468)
+        XCTAssertEqual(SchedulePopoverLayoutV2.height(availableHeight: 450), 440)
     }
 }

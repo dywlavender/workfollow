@@ -16,7 +16,7 @@
 
 | 入口 | 实际宿主 / 状态 / 数据 | 当前约束与差异 |
 | --- | --- | --- |
-| Inspector Header、列表行、Quick Add、Matrix、TaskQuickComposer 日期 | `TaskDatePopoverV2` + `SchedulePopoverContainer`；通常 `.schedulePopover` | 260×标准560，日历固定、属性内滚动，Draft 确定后提交；已有真实 NSPopover frame 合同 |
+| Inspector Header、列表行、Quick Add、Matrix、TaskQuickComposer 日期 | `TaskDatePopoverV2` + `SchedulePopoverContainer`；通常 `.schedulePopover` | 审计基线曾为260×560、属性内部展开；本轮新截图纠正为260×506主卡片 + 独立252pt子卡片覆盖。Draft确定后提交；父/子分别测试，详见执行计划 |
 | 子任务行日期 | `TaskDateButton`，直接 `.popover` | 复用同一日期内容，但绕过共用呈现修饰符 |
 | Inspector 更多属性中的重复 | `TaskAttributesView` → `TaskRecurrenceEditor` → `RecurrenceDraftView` | 另一套 State、320宽、内容定高未约束、独立 `setRecurrence` 提交；不是新日期 Draft |
 | Quick Add 属性菜单 → 清单 / 标签 | 系统父 Popover + 行上的子 `.popover` | 父270宽、自适应高；子清单250×300、标签264×320；两个独立开关；清单选择即更新创建草稿，标签确定才应用 |
