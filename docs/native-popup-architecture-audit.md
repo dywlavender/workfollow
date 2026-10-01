@@ -122,6 +122,8 @@
 
 ## 建议提交序列
 
+逐阶段执行与验收进度见 [弹框优化执行计划](native-popup-optimization-plan.md)。审计中的发现保留为历史基线，不因为共享层已开始落地而把所有风险自动标为解决。
+
 1. POP-001：window-scoped Escape归属及topmost合同，只迁格式picker和日期Router。
 2. POP-002/003：workspace遮罩与viewport几何，只迁Focus时长和InspectorFooter，不改变Focus计时或Task业务。
 3. POP-004：统一Repeat编辑Session，保留两个入口各自提交边界。
