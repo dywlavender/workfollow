@@ -1,6 +1,8 @@
 import AppKit
 import SwiftUI
 
+enum AnchoredPropertyPanelPlacement { case vertical, submenu }
+
 /// A child card has its own window: it can cross the parent's bottom edge without
 /// contributing to the parent's fitting size. The row is the positioning anchor.
 struct AnchoredPropertyPanel<PanelContent: View>: NSViewRepresentable {
@@ -8,6 +10,7 @@ struct AnchoredPropertyPanel<PanelContent: View>: NSViewRepresentable {
     let width: CGFloat
     var horizontalOutset: CGFloat = 0
     var prefersAbove: Bool = false
+    var placement: AnchoredPropertyPanelPlacement = .vertical
     let content: () -> PanelContent
 
     final class AnchorView: NSView {
@@ -31,6 +34,8 @@ struct AnchoredPropertyPanel<PanelContent: View>: NSViewRepresentable {
         var width: CGFloat = 232
         var horizontalOutset: CGFloat = 0
         var prefersAbove = false
+        var placement: AnchoredPropertyPanelPlacement = .vertical
+        var geometryObservers: [NSObjectProtocol] = []
         var root: AnyView = AnyView(EmptyView())
         var presented = false
 
@@ -52,13 +57,25 @@ struct AnchoredPropertyPanel<PanelContent: View>: NSViewRepresentable {
                                      backing: .buffered, defer: false)
                 window.becomesKeyOnlyIfNeeded = true
                 window.isReleasedWhenClosed = false
-                window.title = "日期属性"
+                window.title = placement == .submenu ? "任务操作子菜单" : "日期属性"
                 window.isOpaque = false
                 window.backgroundColor = .clear
                 window.hasShadow = true
+                window.appearance = owner.effectiveAppearance
                 window.contentView = host
                 owner.addChildWindow(window, ordered: .above)
                 panel = window
+                if placement == .submenu {
+                    for name in [NSWindow.didMoveNotification, NSWindow.didResizeNotification] {
+                        geometryObservers.append(NotificationCenter.default.addObserver(forName: name, object: owner, queue: .main) { [weak self] _ in
+                            DispatchQueue.main.async {
+                                guard let self, self.presented else { return }
+                                self.anchor?.window?.contentView?.layoutSubtreeIfNeeded()
+                                self.update()
+                            }
+                        })
+                    }
+                }
                 ownerCloseObserver = NotificationCenter.default.addObserver(
                     forName: NSWindow.willCloseNotification, object: owner, queue: .main
                 ) { [weak self] _ in
@@ -107,13 +124,17 @@ struct AnchoredPropertyPanel<PanelContent: View>: NSViewRepresentable {
             let size = CGSize(width: width, height: min(host.fittingSize.height, screen.height - 16))
             let row = owner.convertToScreen(anchor.convert(anchor.bounds, to: nil))
                 .insetBy(dx: -horizontalOutset, dy: 0)
-            let frame = AnchoredPropertyPanelGeometry.frame(row: row, size: size, screen: screen, prefersAbove: prefersAbove)
+            let frame = placement == .submenu
+                ? AnchoredPropertyPanelGeometry.submenuFrame(row: row, size: size, bounds: owner.frame.intersection(screen))
+                : AnchoredPropertyPanelGeometry.frame(row: row, size: size, screen: screen, prefersAbove: prefersAbove)
             panel?.setFrame(frame, display: true)
             panel?.orderFront(nil)
             panel?.invalidateShadow()
         }
 
         func close() {
+            geometryObservers.forEach(NotificationCenter.default.removeObserver)
+            geometryObservers.removeAll()
             if let ownerCloseObserver { NotificationCenter.default.removeObserver(ownerCloseObserver) }
             ownerCloseObserver = nil
             if let ownerVisibilityObserver { NotificationCenter.default.removeObserver(ownerVisibilityObserver) }
@@ -141,6 +162,7 @@ struct AnchoredPropertyPanel<PanelContent: View>: NSViewRepresentable {
         coordinator.width = width
         coordinator.horizontalOutset = horizontalOutset
         coordinator.prefersAbove = prefersAbove
+        coordinator.placement = placement
         coordinator.root = AnyView(content().environment(\.self, context.environment))
         coordinator.dismiss = { isPresented = false }
         DispatchQueue.main.async { [weak coordinator] in coordinator?.update() }
@@ -153,6 +175,16 @@ struct AnchoredPropertyPanel<PanelContent: View>: NSViewRepresentable {
 }
 
 enum AnchoredPropertyPanelGeometry {
+    static func submenuFrame(row: CGRect, size: CGSize, bounds: CGRect, gap: CGFloat = 6) -> CGRect {
+        let safe = bounds.insetBy(dx: 8, dy: 8)
+        let width = min(size.width, safe.width)
+        let height = min(size.height, safe.height)
+        let right = row.maxX + gap
+        let proposedX = right + width <= safe.maxX ? right : row.minX - gap - width
+        return CGRect(x: min(max(proposedX, safe.minX), safe.maxX - width),
+                      y: min(max(row.maxY - height, safe.minY), safe.maxY - height),
+                      width: width, height: height)
+    }
     static func frame(row: CGRect, size: CGSize, screen: CGRect, prefersAbove: Bool = false) -> CGRect {
         let x = min(max(row.minX, screen.minX + 8), screen.maxX - size.width - 8)
         let below = row.minY - size.height

@@ -20,6 +20,7 @@ struct TaskInspectorShell: View {
     @State private var actionPresentation = TaskInspectorActionPresentationState()
     @State private var showFormattingToolbar = false
     @State private var relationQuery = ""
+    @State private var focusStartFailed = false
     /// 「添加子任务」整行的悬停态（原版 `InkWell.hoverColor`）。
     @State private var hoveringAddChild = false
     @StateObject private var editorHandle = DocumentEditorHandle()
@@ -103,6 +104,11 @@ struct TaskInspectorShell: View {
                 }
             }.disabled(newListName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         }
+        .alert("无法开始专注", isPresented: $focusStartFailed) {
+            Button("确定", role: .cancel) {}
+        } message: {
+            Text("请先结束当前专注会话，再尝试开始新的专注。")
+        }
     }
 
     // MARK: - 顶部：状态框 + 日期 + 优先级
@@ -166,6 +172,9 @@ struct TaskInspectorShell: View {
         .background(WFColors.content, in: RoundedRectangle(cornerRadius: 14))
         .overlay(RoundedRectangle(cornerRadius: 14).stroke(WFColors.border))
         .shadow(color: .black.opacity(0.16), radius: 18, y: 8)
+        .background(PopupEscapeRouter(depth: 2) {
+            if !actionPresentation.handleEscape() { dismissFooterPopover() }
+        })
     }
 
     private func dismissFooterPopover() {
@@ -186,35 +195,71 @@ struct TaskInspectorShell: View {
                 moreAction(task.isPinned ? "取消置顶" : "置顶", symbol: "pin") {
                     _ = workspace.setPinned(task.id, !task.isPinned)
                 }
-                moreAction("标签…", symbol: "tag") { actionPresentation.open(.tags) }
+                moreAction(task.isAbandoned ? "恢复任务" : "放弃", symbol: "xmark.square") {
+                    if task.isAbandoned { _ = workspace.restore(task.id) }
+                    else { _ = workspace.abandon(task.id) }
+                }
+                .disabled(task.status == .completed)
+                moreAction("标签", symbol: "tag") { actionPresentation.open(.tags) }
+                moreAction("上传附件", symbol: "paperclip") { addAttachments(to: task.id) }
+                focusSubmenuRow(task)
+                Divider().padding(.horizontal, 8).padding(.vertical, 4)
+                moreAction("保存为模板", symbol: "doc.badge.plus") { saveAsTemplate() }
+                moreAction("转换为笔记", symbol: "doc.text") { _ = environment.convertTaskToNote(task.id) }
+                moreAction("删除", symbol: "trash", destructive: true) { _ = workspace.delete(task.id) }
+                // Retain existing secondary capabilities until their product
+                // location is verified; do not silently drop them during parity.
+                Divider().padding(.horizontal, 8).padding(.vertical, 4)
+                Text("其他操作").font(WFType.supporting).foregroundStyle(WFColors.tertiaryText)
+                    .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 8)
                 moreAction("更多属性…", symbol: "slider.horizontal.3") { actionPresentation.open(.attributes) }
-                moreAction("添加附件…", symbol: "paperclip") { addAttachments(to: task.id) }
                 moreAction("截止日期…", symbol: "calendar.badge.exclamationmark") {
                     presentation.activePopover = .deadline
                 }
-                moreAction("转换为笔记", symbol: "doc.text") {
-                    _ = environment.convertTaskToNote(task.id)
-                }
-                moreAction("保存为模板…", symbol: "doc.badge.plus") { saveAsTemplate() }
                 if !task.isClosed && task.recurrence != .never {
                     moreAction("跳过本周期", symbol: "arrow.forward.end") {
                         workspace.skip(task.id)
                     }
                     .disabled(RecurrenceEngine.next(for: task, now: workspace.clock(), calendar: workspace.calendar) == nil)
                 }
-                Divider().padding(.horizontal, 8).padding(.vertical, 4)
-                moreAction(task.isAbandoned ? "恢复任务" : "放弃任务", symbol: "arrow.uturn.backward") {
-                    if task.isAbandoned { _ = workspace.restore(task.id) }
-                    else { _ = workspace.abandon(task.id) }
-                }
-                .disabled(task.status == .completed)
-                moreAction("删除任务", symbol: "trash", destructive: true) {
-                    _ = workspace.delete(task.id)
-                }
             }
             .padding(8)
         }
-        .frame(width: 208, height: 368)
+        .frame(width: 208, height: 456)
+        .inspectorRenderAnchor(.moreMenu)
+    }
+
+    private func focusSubmenuRow(_ task: Task) -> some View {
+        Button {
+            // A click after hover must keep the already-open submenu visible.
+            actionPresentation.openSubmenu(.focus)
+        } label: {
+            HStack {
+                Label("开始专注", systemImage: "circle.inset.filled")
+                Spacer(minLength: 4)
+                Image(systemName: "chevron.right").font(.system(size: 10))
+            }
+            .font(WFType.menu)
+            .frame(maxWidth: .infinity, minHeight: 32, alignment: .leading)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain).foregroundStyle(WFColors.text).padding(.horizontal, 8)
+        .inspectorRenderAnchor(.focusMenuRow)
+        // Leaving this row does NOT dismiss: the pointer can cross the gap.
+        // Entering another actionable row dismisses the submenu instead.
+        .onHover { if $0 { actionPresentation.openSubmenu(.focus) } }
+        .background(AnchoredPropertyPanel(
+            isPresented: Binding(get: { actionPresentation.submenu == .focus },
+                                 set: { if !$0 { actionPresentation.dismissSubmenu() } }),
+            width: 176, placement: .submenu) {
+                TaskFocusSubmenu { stopwatch in
+                    if !TaskInspectorFocusAction.start(taskID: task.id, stopwatch: stopwatch,
+                        store: environment.focusStore, presentation: &actionPresentation) {
+                        actionPresentation.dismiss()
+                        focusStartFailed = true
+                    }
+                }
+            })
     }
 
     private func moreAction(
@@ -235,6 +280,7 @@ struct TaskInspectorShell: View {
         .buttonStyle(.plain)
         .foregroundStyle(destructive ? Color.red : WFColors.text)
         .padding(.horizontal, 8)
+        .onHover { if $0 { actionPresentation.dismissSubmenu() } }
     }
 
     // MARK: - 主体：标题 → 正文 → 一级子任务
@@ -495,6 +541,10 @@ struct TaskInspectorShell: View {
 
     @discardableResult
     private func handleEscape() -> InspectorEscapeEffect {
+        if actionPresentation.submenu != nil {
+            actionPresentation.dismissSubmenu()
+            return .dismissPopover
+        }
         if hasFooterPopover {
             dismissFooterPopover()
             return .dismissPopover

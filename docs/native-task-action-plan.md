@@ -1,6 +1,6 @@
 # Task Inspector 外围操作层
 
-日期：2026-10-01。当前状态：ACTION PANEL STATE CONSOLIDATED；MORE / FOCUS SUBMENU PARITY PENDING。
+日期：2026-10-01。当前状态：ACTION PANEL STATE CONSOLIDATED；MORE PRIMARY ACTIONS + FOCUS SUBMENU IMPLEMENTED；完整菜单对标仍待后续轮次。
 
 暂停Editor、Slash、日期、模板和Completed Row功能扩展。暂停不表示此前待验项已全部通过，原文档中的端到端/像素验收欠项继续保留。
 
@@ -19,7 +19,7 @@
 5. **Tag Picker**：Quick Add/Inspector/Slash共享既有Picker，等待展开态截图锁搜索、创建、多选、确认和Esc，不复制新UI。
 6. **Relation**：补Task+Note真实语义前，保持已登记TASK-RELATION-GAP-TASK；混合结果/Tab结构等待参考，不临时造Domain。
 
-## Focus子层合同（下一笔）
+## Focus子层合同
 
 - 开始番茄专注：`FocusStore.start(taskID: task.id, stopwatch: false)`。
 - 开始正计时：`FocusStore.start(taskID: task.id, stopwatch: true)`。
@@ -28,10 +28,22 @@
 - TASK-FOCUS-GAP-ESTIMATE：暂不显示“预计番茄/时长”假入口，缺Task估算模型及展开态证据。
 - 不实现任务动态、便签、打印；也不把尚未实现的其他动作当可点击入口。已有属性/截止/跳过操作的去向应在菜单改造笔明确登记，不能在状态重构中顺手移除。
 
-## 本笔验收
+## 状态重构验收（上一笔）
 
 - 四Bool已从TaskInspectorShell移除，改用单一panel；日期的presentation.activePopover和正文格式栏不在本次合并范围。
 - 状态测试锁More→Tag→Relation→Attributes替换及关闭路径。More action只关闭More，Picker自己的完成回调关闭相应panel。
 - 33项ActionPanel / Inspector Presentation / Shell Contract / Hierarchy Render / DocumentProfile / PopupEscape回归通过，日志 `/tmp/workfollow-inspector-action-state-tests.log`。
 - 没有重新验收More真实窗口点击或二级层截图；未做二级层，不声称本阶段完成。
 - 本轮仅提交Inspector状态与文档/测试，工作区已有Task List/Countdown等修改保留。测试构建来自当前工作区，不作为独立干净远端checkout的全项目证明。
+
+## More / Focus 本笔交付与验收
+
+- 已有动作归位：添加子任务（根任务）、置顶、放弃、标签、上传附件、开始专注；分隔后保存模板、转换笔记、删除。关联主任务、副本、复制链接待后续轮次，不展示未接线入口。
+- 现有更多属性、截止日期、跳过本周期保留在“其他操作”兼容分组；这是明确的暂存差异，不声称菜单已完全对标。主菜单当前208 × 456pt，Focus子菜单宽176pt。
+- Focus采用独立NSPanel，复用AnchoredPropertyPanel并增加submenu定位模式；日期沿用原vertical定位。以所属窗口可见区域计算右侧优先、翻左与垂直限制，主菜单不随子层打开而增高。窗口移动/调整大小后重算子层位置。
+- 单一submenu状态只能附着More；打开其他panel清除子层。Hover进入打开，离开触发行不立即关闭，跨缝隙不会由mouseleave撤销；进入其他操作行关闭子层。物理鼠标连续跨越仍待人工验收。
+- 两种Focus启动复用FocusStore，成功绑定当前任务、关闭菜单、保持详情；已有会话不被覆盖，Shell显示失败提示。估算入口仍缺失并登记，不造假入口。
+- 40项FocusSubmenu / ActionPanel / AnchoredPropertyPanel / InspectorShell / InspectorPresentation / PopupEscape / FocusStore测试通过，日志：`/tmp/workfollow-task-focus-submenu-tests.log`。
+- 实际NSWindow + Inspector测试通过应用事件分发点击：子层向左翻转，主菜单frame不变；第一次Escape关闭子层、第二次关闭More；窗口内外部点击关闭全部。独立子层继承主窗口外观，修复截图发现的浅色主窗口/深色子层对比问题。
+- 截图：`/tmp/render_task_more_menu.png`（主窗口，不含独立子窗口）；`/tmp/render_task_focus_submenu.png`（独立子层）。已检查子层浅色背景及可读文字；这不是用户日常运行App的全流程像素验收。
+- 启动/忙碌保护由真实FocusStore与动作协调器集成测试覆盖；尚未用日常运行App点击按钮完整验收启动提示与鼠标跨层。工作区其他并行修改保留，不纳入此提交。

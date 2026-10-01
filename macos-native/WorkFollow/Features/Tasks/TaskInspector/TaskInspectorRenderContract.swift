@@ -5,6 +5,7 @@ enum InspectorRenderAnchor: Hashable {
     case reminder, repeatControl, priority, breadcrumb, title, emptyContent
     case document, childSection, childRow(UUID), addChild
     case footerList, footerFormatting, footerMore
+    case moreMenu, focusMenuRow
 }
 struct InspectorFramesKey: PreferenceKey {
     static let defaultValue: [InspectorRenderAnchor: CGRect] = [:]
