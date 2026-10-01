@@ -10,6 +10,8 @@ struct LunarMonthGridView: View {
     let today: Date
     var selection: Date?
     var range: ClosedRange<Date>?
+    var minimumDate: Date? = nil
+    var showsTodayButton: Bool = true
     let onSelect: (Date) -> Void
 
     private static let columns = Array(repeating: GridItem(.flexible(), spacing: 0), count: 7)
@@ -40,6 +42,8 @@ struct LunarMonthGridView: View {
                         isRangeMiddle: isRangeMiddle(cell.date),
                         action: { onSelect(cell.date) }
                     )
+                    .disabled(minimumDate.map { calendar.startOfDay(for: cell.date) < calendar.startOfDay(for: $0) } ?? false)
+                    .opacity(minimumDate.map { calendar.startOfDay(for: cell.date) < calendar.startOfDay(for: $0) } == true ? 0.4 : 1)
                 }
             }
         }
@@ -50,8 +54,10 @@ struct LunarMonthGridView: View {
             Text(title).font(.system(size: 14, weight: .semibold)).foregroundStyle(WFColors.text)
             Spacer()
             navButton("chevron.left", "上个月") { changeMonth(-1) }
-            navButton("circle", "回到今天") {
-                onSelect(calendar.startOfDay(for: today))
+            if showsTodayButton {
+                navButton("circle", "回到今天") {
+                    onSelect(calendar.startOfDay(for: today))
+                }
             }
             navButton("chevron.right", "下个月") { changeMonth(1) }
         }

@@ -6,17 +6,20 @@ enum SchedulePopoverLayoutV2 {
     static let screenMargin: CGFloat = 32
 
     /// Resolve once when opening, never from expanded content's intrinsic size.
-    static func height(availableHeight: CGFloat) -> CGFloat {
-        min(panelHeight, max(440, availableHeight - screenMargin))
+    static func height(availableHeight: CGFloat, repeating: Bool = false, period: Bool = false) -> CGFloat {
+        let contentHeight = panelHeight + (repeating ? ScheduleMetrics.rowHeight : 0)
+            + (period ? ScheduleMetrics.rowHeight + 24 : 0)
+        return min(contentHeight, max(440, availableHeight - screenMargin))
     }
 }
 
 /// Fixed calendar region and bounded property viewport. Child editors live in
 /// separate anchored windows, never in this viewport's layout.
-struct SchedulePopoverContainer<CalendarSection: View, PropertyContent: View>: View {
+struct SchedulePopoverContainer<CalendarSection: View, PropertyContent: View, Footer: View>: View {
     let height: CGFloat
     @ViewBuilder let calendarSection: () -> CalendarSection
     @ViewBuilder let propertyContent: () -> PropertyContent
+    @ViewBuilder let footer: () -> Footer
 
     var body: some View {
         VStack(spacing: 12) {
@@ -29,6 +32,8 @@ struct SchedulePopoverContainer<CalendarSection: View, PropertyContent: View>: V
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .scheduleRenderAnchor(.propertyViewport)
+            footer()
+                .fixedSize(horizontal: false, vertical: true)
         }
         .padding(ScheduleMetrics.horizontalPadding)
         .frame(width: SchedulePopoverLayoutV2.panelWidth, height: height, alignment: .top)

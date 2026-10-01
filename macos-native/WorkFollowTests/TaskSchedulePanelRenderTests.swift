@@ -32,6 +32,12 @@ final class TaskSchedulePanelRenderTests: XCTestCase {
             let (workspace, task) = fixture(timed: timed, repeating: repeating)
             let values = try render(task, workspace: workspace, name: name)
             XCTAssertEqual(values[.panel]?.frame.width, 260)
+            let panel = try XCTUnwrap(values[.panel]).frame
+            let footer = try XCTUnwrap(values[.mainFooter]).frame
+            XCTAssertLessThanOrEqual(footer.maxY, panel.maxY - ScheduleMetrics.horizontalPadding + 0.5,
+                "重复结束行不能把确认按钮裁掉")
+            XCTAssertEqual(panel.height, SchedulePopoverLayoutV2.height(
+                availableHeight: NSScreen.main?.visibleFrame.height ?? 900, repeating: repeating), accuracy: 0.5)
             let shortcuts = values.keys.filter { if case .shortcut = $0 { return true }; return false }
             XCTAssertEqual(shortcuts.count, 4)
             XCTAssertNotNil(values[.shortcut("今天")])

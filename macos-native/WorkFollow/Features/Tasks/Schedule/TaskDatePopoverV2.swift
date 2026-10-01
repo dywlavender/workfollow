@@ -23,7 +23,12 @@ struct TaskDatePopoverV2: View {
     /// 草稿宿主（日历/四象限的新建卡）：任务还没被创建，确定与清除只把计划交回
     /// 调用方，不写工作区，也不动批量选择。
     private let draftCommit: ((TaskDateDraftModel.CommitPlan) -> Void)?
-    private let panelHeight: CGFloat
+    private let availableHeight: CGFloat
+    private var panelHeight: CGFloat {
+        SchedulePopoverLayoutV2.height(availableHeight: availableHeight,
+            repeating: !deadline && model.frequency != .never,
+            period: !deadline && model.tab == .period)
+    }
 
     typealias InlineSheet = ScheduleExpandedSection
 
@@ -35,7 +40,7 @@ struct TaskDatePopoverV2: View {
         case date, count
     }
 
-    /// 固定外框；展开内容只改变内部滚动区，不改变 Popover 尺寸。
+    /// 主面板仅随属性行数量增高；打开子卡片不改变尺寸。
     @StateObject private var model: TaskDateDraftModel
     @State private var presentation = SchedulePanelPresentationState()
     private var inlineSheet: InlineSheet? {
@@ -64,6 +69,7 @@ struct TaskDatePopoverV2: View {
     @State private var customOffsetUnit = 1
     @State private var repeatCountText = ""
     @State private var repeatEndDraftDate = Date()
+    @State private var repeatEndDisplayedMonth = Date()
 
     init(task: Task, workspace: TaskWorkspaceModel, deadline: Bool = false, initialPage: Page = .main,
          draftCommit: ((TaskDateDraftModel.CommitPlan) -> Void)? = nil,
@@ -74,7 +80,7 @@ struct TaskDatePopoverV2: View {
         self.deadline = deadline
         self.initialPage = initialPage
         self.draftCommit = draftCommit
-        panelHeight = SchedulePopoverLayoutV2.height(availableHeight: NSScreen.main?.visibleFrame.height ?? 900)
+        availableHeight = NSScreen.main?.visibleFrame.height ?? 900
         self.onClose = onClose
         let draftModel = TaskDateDraftModel(
             task: task, calendar: workspace.calendar, now: workspace.clock, deadline: deadline)
@@ -90,6 +96,7 @@ struct TaskDatePopoverV2: View {
             .map { Self.clockText($0, calendar: workspace.calendar) } ?? Self.defaultClockText)
         _repeatCountText = State(initialValue: String(draftModel.repeatCount))
         _repeatEndDraftDate = State(initialValue: draftModel.repeatEndDate)
+        _repeatEndDisplayedMonth = State(initialValue: draftModel.repeatEndDate)
     }
 
     var body: some View {
@@ -146,8 +153,9 @@ struct TaskDatePopoverV2: View {
                         .foregroundStyle(WFColors.danger)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                footer
             }
+        } footer: {
+            footer
         }
         .background {
             ScheduleEscapeRouter {
@@ -223,7 +231,8 @@ struct TaskDatePopoverV2: View {
                     get: { inlineSheet == sheet },
                     set: { if !$0, inlineSheet == sheet { closeSheet() } }),
                     width: ScheduleMetrics.optionPanelWidth,
-                    horizontalOutset: ScheduleMetrics.childHorizontalOutset) {
+                    horizontalOutset: ScheduleMetrics.childHorizontalOutset,
+                    prefersAbove: sheet == .repeatEnd && repeatEndEdit == .date) {
                         body().scheduleRenderAnchor(.expandedContent(sheet))
                     }
             }
@@ -238,7 +247,7 @@ struct TaskDatePopoverV2: View {
         let value = active ? (editor != nil ? (sheet == .endTime ? "结束 \(endTimeFieldText)" : timeFieldText) : title) : nil
         return SchedulePropertyRow(
             property: sheet, icon: icon,
-            presentation: SchedulePropertyPresentation(title: propertyName(sheet), value: value,
+            presentation: SchedulePropertyPresentation(title: sheet == .repeatEnd ? title : propertyName(sheet), value: value,
                 isActive: active, isExpanded: open, isHovered: presentation.hoveredProperty == sheet,
                 canClear: canClear),
             editor: editor,
@@ -605,29 +614,35 @@ struct TaskDatePopoverV2: View {
     private var repeatEndPanelBody: some View {
         VStack(spacing: 0) {
             if let edit = repeatEndEdit {
-                optionsRow("‹ 返回") { repeatEndEdit = nil }
                 if edit == .date {
-                    DatePicker("", selection: $repeatEndDraftDate, displayedComponents: .date)
-                        .datePickerStyle(.graphical)
-                        .labelsHidden()
-                        .padding(.horizontal, 8)
+                    LunarMonthGridView(calendar: calendar, displayedMonth: $repeatEndDisplayedMonth,
+                        today: workspace.dateFromToday(0), selection: repeatEndDraftDate,
+                        minimumDate: model.selectedDate, showsTodayButton: false) { date in
+                            repeatEndDraftDate = date
+                            applyEndEdit(.date)
+                        }
+                        .padding(14)
+                        .scheduleRenderAnchor(.option("repeat-end-calendar"))
                 } else {
-                    VStack(spacing: 6) {
+                    HStack(spacing: 8) {
                         TextField("10", text: $repeatCountText)
                             .textFieldStyle(.plain)
-                            .font(.system(size: 12))
+                            .font(WFType.body)
                             .multilineTextAlignment(.center)
-                            .frame(width: 60)
-                            .padding(.vertical, 4)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 8)
                             .background(WFColors.hover, in: RoundedRectangle(cornerRadius: 5))
-                        Text("包含当前这一次任务")
-                            .font(WFType.supporting)
-                            .foregroundStyle(WFColors.tertiaryText)
+                            .scheduleRenderAnchor(.option("repeat-count-input"), label: repeatCountText)
+                        Stepper("", value: Binding(get: { Int(repeatCountText) ?? model.repeatCount },
+                            set: { repeatCountText = String($0) }), in: 1...Int.max)
+                            .labelsHidden().fixedSize()
+                            .scheduleRenderAnchor(.option("repeat-count-stepper"))
+                        Text("次重复").font(WFType.body).fixedSize()
                     }
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 12)
+                    .padding(12)
+                    panelButtons(cancel: { repeatEndEdit = nil }) { applyEndEdit(edit) }
                 }
-                panelButtons(cancel: { repeatEndEdit = nil }) { applyEndEdit(edit) }
             } else {
                 optionsRow("永不结束", checked: model.ending == .never) {
                     model.chooseEnding(.never)
@@ -635,6 +650,7 @@ struct TaskDatePopoverV2: View {
                 }
                 optionsRow("按日期结束", checked: model.ending == .untilDate) {
                     repeatEndDraftDate = model.repeatEndDate
+                    repeatEndDisplayedMonth = model.repeatEndDate
                     repeatEndEdit = .date
                 }
                 optionsRow("按次数结束", checked: model.ending == .count) {
@@ -773,7 +789,7 @@ struct TaskDatePopoverV2: View {
         switch model.ending {
         case .untilDate:
             let components = calendar.dateComponents([.year, .month, .day], from: model.repeatEndDate)
-            return "\(components.year ?? 0)年\(components.month ?? 0)月\(components.day ?? 0)日结束"
+            return "直到 \(components.year ?? 0)/\(components.month ?? 0)/\(components.day ?? 0)"
         case .count:
             return "重复 \(model.repeatCount) 次后结束"
         case .never:

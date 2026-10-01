@@ -97,6 +97,20 @@ final class AnchoredPropertyPanelTests: XCTestCase {
         XCTAssertEqual(owner.frame, baseline)
     }
 
+    func testRepeatEndCalendarPrefersAboveWithoutChangingParent() throws {
+        let owner = owner()
+        let baseline = owner.frame
+        let coordinator = coordinator(in: owner, row: CGRect(x: 14, y: 80, width: 232, height: 30), height: 240)
+        defer { coordinator.close(); owner.close() }
+        coordinator.prefersAbove = true
+        coordinator.update()
+        settle(coordinator.host)
+        let anchor = try XCTUnwrap(coordinator.anchor)
+        let row = owner.convertToScreen(anchor.convert(anchor.bounds, to: nil))
+        XCTAssertEqual(try XCTUnwrap(coordinator.panel).frame.minY, row.maxY, accuracy: 0.5)
+        XCTAssertEqual(owner.frame, baseline)
+    }
+
     func testChildCanExtendPastParentBottomWhileStayingBelowRow() throws {
         let owner = owner()
         let screen = try XCTUnwrap(owner.screen).visibleFrame

@@ -7,6 +7,7 @@ struct AnchoredPropertyPanel<PanelContent: View>: NSViewRepresentable {
     @Binding var isPresented: Bool
     let width: CGFloat
     var horizontalOutset: CGFloat = 0
+    var prefersAbove: Bool = false
     let content: () -> PanelContent
 
     final class AnchorView: NSView {
@@ -29,6 +30,7 @@ struct AnchoredPropertyPanel<PanelContent: View>: NSViewRepresentable {
         var dismiss: () -> Void = {}
         var width: CGFloat = 232
         var horizontalOutset: CGFloat = 0
+        var prefersAbove = false
         var root: AnyView = AnyView(EmptyView())
         var presented = false
 
@@ -105,7 +107,7 @@ struct AnchoredPropertyPanel<PanelContent: View>: NSViewRepresentable {
             let size = CGSize(width: width, height: min(host.fittingSize.height, screen.height - 16))
             let row = owner.convertToScreen(anchor.convert(anchor.bounds, to: nil))
                 .insetBy(dx: -horizontalOutset, dy: 0)
-            let frame = AnchoredPropertyPanelGeometry.frame(row: row, size: size, screen: screen)
+            let frame = AnchoredPropertyPanelGeometry.frame(row: row, size: size, screen: screen, prefersAbove: prefersAbove)
             panel?.setFrame(frame, display: true)
             panel?.orderFront(nil)
             panel?.invalidateShadow()
@@ -138,6 +140,7 @@ struct AnchoredPropertyPanel<PanelContent: View>: NSViewRepresentable {
         coordinator.presented = isPresented
         coordinator.width = width
         coordinator.horizontalOutset = horizontalOutset
+        coordinator.prefersAbove = prefersAbove
         coordinator.root = AnyView(content().environment(\.self, context.environment))
         coordinator.dismiss = { isPresented = false }
         DispatchQueue.main.async { [weak coordinator] in coordinator?.update() }
@@ -150,10 +153,12 @@ struct AnchoredPropertyPanel<PanelContent: View>: NSViewRepresentable {
 }
 
 enum AnchoredPropertyPanelGeometry {
-    static func frame(row: CGRect, size: CGSize, screen: CGRect) -> CGRect {
+    static func frame(row: CGRect, size: CGSize, screen: CGRect, prefersAbove: Bool = false) -> CGRect {
         let x = min(max(row.minX, screen.minX + 8), screen.maxX - size.width - 8)
         let below = row.minY - size.height
-        let y = below >= screen.minY + 8 ? below : min(row.maxY, screen.maxY - size.height - 8)
+        let above = row.maxY
+        let y = prefersAbove && above + size.height <= screen.maxY - 8 ? above
+            : below >= screen.minY + 8 ? below : min(above, screen.maxY - size.height - 8)
         return CGRect(x: x, y: max(y, screen.minY + 8), width: size.width, height: size.height)
     }
 }
