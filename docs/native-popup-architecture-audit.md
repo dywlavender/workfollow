@@ -98,6 +98,8 @@
 
 每个入口必须声明：policy、owner/target、anchorSpace、sizePolicy、placement、outsideScope、outsideEventDisposition、focusPolicy、dismissPolicy、commitPolicy。不是给每个入口复制一份实现。
 
+控件内部的状态几何另遵循 [Native 交互几何设计规范](native-interaction-geometry-contract.md)：hover/expanded/focus 不得通过条件 padding 使原有列漂移；弹层位置稳定不能替代属性行内部对齐验收。已登记日期属性行展开右移缺陷 GEO-BUG-001。
+
 ## 推荐共享层边界（待实现，不伪装成已有架构）
 
 1. **PopupContract**：上述声明及稳定contract ID；业务View只选择策略。定义在Shared/Presentation，不能依赖Task Domain。
