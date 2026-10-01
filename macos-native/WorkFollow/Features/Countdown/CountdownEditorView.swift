@@ -96,25 +96,29 @@ struct CountdownEditorView: View {
     private static let popupRowHeight: CGFloat = 28
 
     /// 「日期」浮层的几何。各段间距照参考图**分段**给，不是等距——参考图里
-    /// 分段控件与下拉行之间最松（22），下拉行与「忽略年份」之间最紧（18），
-    /// 「忽略年份」与按钮之间最松（28）。等距会让「忽略年份」看起来和下拉行
+    /// 分段控件与下拉行之间最松（26），下拉行与「忽略年份」之间最紧（19），
+    /// 「忽略年份」与按钮之间最松（31）。等距会让「忽略年份」看起来和下拉行
     /// 是一组、按钮是另一组，而参考图里它是独立的一行。
     ///
-    /// 单位都是 pt（参考图是 2× 截图，值已折半）。
-    private static let datePopupTopInset: CGFloat = 16
-    private static let datePopupBottomInset: CGFloat = 12
-    private static let dateSegmentGap: CGFloat = 22
-    private static let dateFieldGap: CGFloat = 18
-    private static let dateButtonGap: CGFloat = 28
+    /// 参考图是 2× 截图，值已折半。整卡实测 319×206：横向内边距 15、分段控件
+    /// 162×26 居中、下拉行 32 高、按钮 26 高。**卡宽由字段决定**，不是由整行决定
+    /// （见 `RowFrames`）——这是「比例」的关键，卡一宽就扁。
+    private static let datePopupTopInset: CGFloat = 15
+    private static let datePopupBottomInset: CGFloat = 15
+    private static let dateSegmentGap: CGFloat = 26
+    private static let dateFieldGap: CGFloat = 19
+    private static let dateButtonGap: CGFloat = 31
     /// 分段控件的宽度。参考图里它比内容窄、居中——不是撑满。
-    private static let dateSegmentWidth: CGFloat = 180
+    private static let dateSegmentWidth: CGFloat = 162
     /// 月/日/年下拉的高度。参考图的字段比面板行（34）矮一档。
-    private static let dateFieldHeight: CGFloat = 30
+    private static let dateFieldHeight: CGFloat = 32
     /// 「日期」浮层的内容高度（含自身内边距，不含浮层外壳的上下内边距）。
     ///
-    /// `16 + 24 + 22 + 30 + 18 + 18 + 28 + 28 + 12`，逐段对应上面几个常量：
+    /// `15 + 24 + 26 + 32 + 19 + 16 + 31 + 24 + 15`，逐段对应上面几个常量：
     /// 上内边距 / 分段控件 / 间距 / 下拉行 / 间距 / 忽略年份 / 间距 / 按钮 / 下内边距。
-    private static let datePopupContentHeight: CGFloat = 196
+    /// 其中分段控件与按钮用的是**系统控件的实测高度**（24），不是参考图的 26——
+    /// 这两颗是原生控件，硬掰高度会和系统外观打架。
+    private static let datePopupContentHeight: CGFloat = 202
 
     init(store: CountdownStore, original: CountdownEvent?, defaultKind: CountdownKind = .anniversary) {
         self.store = store
@@ -187,23 +191,36 @@ struct CountdownEditorView: View {
         .frame(width: Self.panelWidth)
         .background(WFColors.canvas)
         // 下拉浮层：浮在对应行的旁边、盖在面板内容之上，**不参与布局**。
-        .overlayPreferenceValue(RowAnchorKey.self) { anchors in
+        //
+        // 分两层读两个锚点 key（`.anchorPreference` 覆盖不合并，见 `FieldAnchorKey`）。
+        // 同一时刻只有一行是打开的，所以两层各自只渲染自己管的那几行，不会打架。
+        .overlayPreferenceValue(FieldAnchorKey.self) { anchors in
             GeometryReader { proxy in
-                if let openRow, let anchor = anchors[openRow] {
-                    let rect = proxy[anchor]
-                    let height = popupHeight(for: openRow)
-                    let y = popupY(row: rect, height: height,
-                                   containerHeight: proxy.size.height)
-                    popup {
-                        popupBody(for: openRow,
-                                  maxHeight: popupRoom(row: rect, y: y,
-                                                       containerHeight: proxy.size.height))
-                    }
-                    .frame(width: rect.width)
-                    .offset(x: rect.minX, y: y)
+                if let openRow, openRow == .date, let anchor = anchors[.date] {
+                    popupLayer(row: openRow, rect: proxy[anchor], container: proxy.size)
                 }
             }
         }
+        .overlayPreferenceValue(RowAnchorKey.self) { anchors in
+            GeometryReader { proxy in
+                if let openRow, openRow != .date, let anchor = anchors[openRow] {
+                    popupLayer(row: openRow, rect: proxy[anchor], container: proxy.size)
+                }
+            }
+        }
+    }
+
+    /// 一层浮层：按 `rect` 定宽、按上下余量定落点。
+    @ViewBuilder
+    private func popupLayer(row: Row, rect: CGRect, container: CGSize) -> some View {
+        let height = popupHeight(for: row)
+        let y = popupY(row: rect, height: height, containerHeight: container.height)
+        popup {
+            popupBody(for: row,
+                      maxHeight: popupRoom(row: rect, y: y, containerHeight: container.height))
+        }
+        .frame(width: rect.width)
+        .offset(x: rect.minX, y: y)
     }
 
     /// 浮层的纵向落点。
@@ -272,8 +289,25 @@ struct CountdownEditorView: View {
         }
     }
 
-    /// 行 → 面板坐标系里的位置。下拉浮层要靠它定位。
+    /// 行 → 面板坐标系里的位置（**整行**，含左侧标签列）。下拉浮层要靠它定位。
     private struct RowAnchorKey: PreferenceKey {
+        static let defaultValue: [Row: Anchor<CGRect>] = [:]
+        static func reduce(value: inout [Row: Anchor<CGRect>],
+                           nextValue: () -> [Row: Anchor<CGRect>]) {
+            value.merge(nextValue()) { _, new in new }
+        }
+    }
+
+    /// 行 → 面板坐标系里**字段**的位置（不含左侧标签列）。
+    ///
+    /// 必须另起一个 key，不能塞进 `RowAnchorKey`：`.anchorPreference` 是**覆盖**而不是
+    /// 合并——挂在 HStack 上的那份会把子树（含 Button）挂的同 key 值整个盖掉。
+    /// 实测：同一个 key 上给 HStack 和 Button 各挂一次、再在 `reduce` 里逐字段并，
+    /// Button 那份依然永远读不到（浮层宽度纹丝不动）。换独立 key 才对。
+    ///
+    /// 「日期」浮层照参考图与字段左右对齐；其余几行的参考图里浮层是**伸出面板之外**
+    /// 画的，比字段宽，继续用整行。
+    private struct FieldAnchorKey: PreferenceKey {
         static let defaultValue: [Row: Anchor<CGRect>] = [:]
         static func reduce(value: inout [Row: Anchor<CGRect>],
                            nextValue: () -> [Row: Anchor<CGRect>]) {
@@ -394,6 +428,8 @@ struct CountdownEditorView: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel("\(label)：\(value)")
+            // 字段自己也要一个锚点：「日期」浮层按它定宽（见 `FieldAnchorKey`）。
+            .anchorPreference(key: FieldAnchorKey.self, value: .bounds) { [row: $0] }
         }
         // 下拉浮层按这一行的位置定位。
         .anchorPreference(key: RowAnchorKey.self, value: .bounds) { [row: $0] }
