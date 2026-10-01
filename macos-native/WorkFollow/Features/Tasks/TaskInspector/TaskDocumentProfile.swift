@@ -9,6 +9,8 @@ struct TaskEditorHostActions {
 }
 
 enum TaskDocumentProfile {
+    static let slashFormatIDs = ["format.heading1", "format.heading2", "format.heading3",
+                                 "format.bullet", "format.ordered", "format.checklist", "format.quote"]
     static func make(task: Task, host: TaskEditorHostActions) -> DocumentProfile {
         var commands: [DocumentCommand] = []
         if task.parentID == nil {
@@ -18,7 +20,8 @@ enum TaskDocumentProfile {
         commands.append(DocumentCommand(id: "task.tags", title: "标签", group: "插入") { _ in host.openTags() })
         commands.append(DocumentCommand(id: "task.relation", title: "关联任务/笔记", group: "插入") { _ in host.openRelation() })
         return DocumentProfile(commands: commands, taskSlash: true, onOpenLink: host.openLink,
-                               selectionToolbarEnabled: false)
+                               selectionToolbarEnabled: false,
+                               slashCommandOverride: DocumentProfile.compactDocumentCommands(formatIDs: slashFormatIDs) + commands)
     }
 
     static func reference(to note: Note) -> EditorReference {

@@ -59,30 +59,17 @@ struct DocumentProfile {
     var onOpenLink: ((String) -> Bool)?
     // Explicit host policy. Nil preserves profiles constructed by older callers.
     var selectionToolbarEnabled: Bool?
+    /// Complete host-owned menu; nil keeps legacy/generic profile behavior.
+    var slashCommandOverride: [DocumentCommand]?
     var supportsSelectionToolbar: Bool {
         selectionToolbarEnabled ?? (!taskSlash && !selectionActions.isEmpty)
     }
     var slashCommands: [DocumentCommand] {
+        if let slashCommandOverride { return slashCommandOverride }
         if compactSlash {
-            // 清单项与顺序取原版 `DocumentSlashCommand.sharedDocumentCommands()`：
-            // 一级/二级/三级标题 → 无序 → 有序 → 检查项 → 引用。
-            //
-            // Layout references stable capability IDs; descriptor supplies its glyph.
-            let formats = EditorCommandCatalog.compactSlashFormatIDs.compactMap(EditorCommandCatalog.format)
-            return formats.map { format in
-                format.slashCommand(group: "格式", useFormatGlyph: true)
-            } + [
-                DocumentCommand(id: "shared.divider", title: "水平分割线", group: "格式",
-                                perform: { $0.insertDocumentDivider() },
-                                slash: { view, invocation in
-                                    view.insertDocumentDivider(at: invocation.slashOffset)
-                                }),
-                DocumentCommand(id: "shared.attachment", title: "附件", group: "插入",
-                                perform: { $0.insertDocumentAttachment(nil) },
-                                slash: { view, invocation in
-                                    view.insertDocumentAttachment(at: invocation.slashOffset)
-                                })
-            ] + commands
+            // Legacy compact profiles retain their menu; production hosts
+            // supply slashCommandOverride with their own ordering policy.
+            return Self.compactDocumentCommands(formatIDs: EditorCommandCatalog.compactSlashFormatIDs) + commands
         }
         return DocumentFormatCommand.commands.map { format in
             format.slashCommand(group: format.block == nil ? "文字格式" : "段落",
@@ -95,6 +82,25 @@ struct DocumentProfile {
                                 view.insertDocumentAttachment(at: invocation.slashOffset)
                             })
         ] + commands
+    }
+
+    /// Shared execution adapters, not a Task/Note product ordering policy.
+    static func compactDocumentCommands(formatIDs: [String]) -> [DocumentCommand] {
+        let formats = formatIDs.compactMap(EditorCommandCatalog.format)
+        return formats.map { format in
+            format.slashCommand(group: "格式", useFormatGlyph: true)
+        } + [
+            DocumentCommand(id: "shared.divider", title: "水平分割线", group: "格式",
+                            perform: { $0.insertDocumentDivider() },
+                            slash: { view, invocation in
+                                view.insertDocumentDivider(at: invocation.slashOffset)
+                            }),
+            DocumentCommand(id: "shared.attachment", title: "附件", group: "插入",
+                            perform: { $0.insertDocumentAttachment(nil) },
+                            slash: { view, invocation in
+                                view.insertDocumentAttachment(at: invocation.slashOffset)
+                            })
+        ]
     }
 }
 

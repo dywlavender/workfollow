@@ -20,6 +20,11 @@ final class DocumentProfileTests: XCTestCase {
         XCTAssertEqual(child.commands.map(\.id), ["task.tags", "task.relation"])
         XCTAssertEqual(parent.slashCommands.count, 12)
         XCTAssertEqual(child.slashCommands.count, 11)
+        let common = ["format.heading1", "format.heading2", "format.heading3", "format.bullet",
+                      "format.ordered", "format.checklist", "format.quote", "shared.divider", "shared.attachment"]
+        XCTAssertEqual(parent.slashCommands.map(\.id), common + ["task.child", "task.tags", "task.relation"])
+        XCTAssertEqual(child.slashCommands.map(\.id), common + ["task.tags", "task.relation"])
+        XCTAssertNotNil(parent.slashCommandOverride)
         XCTAssertFalse(parent.supportsSelectionToolbar)
         XCTAssertTrue(parent.selectionActions.isEmpty)
         let view = NativeTextView(frame: .zero, textContainer: nil)

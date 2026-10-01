@@ -206,3 +206,10 @@ Codec round-trip 按语义比较 blocks/runs/marks/附件 payload/空段，允�
 - `DocumentEditor` 统一前置20pt装饰区，由内部TextKit桥承载，宿主不用分别补padding。TextKit内部继续保留可绘制沟槽（避免裁剪标记），外层前置同宽区域补偿，不把它计入宿主正文宽度。默认输入属性与渲染段落统一；新建视图同步文末空段级别。
 - 新增NSWindow + NSHostingView几何测试：宿主40pt边距时正文起点45pt（包含TextKit原有5pt内衬），装饰视图从20pt开始；空行转H1的caret X保持不变。
 - 73项编辑器回归通过，证据：`/tmp/workfollow-heading-alignment-tests.log`。最新构建的窗口截图已目检：`/tmp/render_heading_host_alignment.png`；H1位于文字前方且可见。这是隔离编辑器窗口验收，不代称完整Task/Note页面实机验收。
+
+### Task Slash 行为与渲染第一轮
+
+- 生产Task/Note Profile显式提供自己的Slash清单；通用Profile保留兼容fallback，共享adapter只执行格式/分割线/附件。稳定ID、现有顺序、查询策略、业务回调与几何不变。
+- 补真实workspace的检查项/child区分、标签/关联调用前触发符消费、格式与分割线单次Undo、hover/键盘/Escape，以及NSPanel四状态截图和滚动/窗口跟随合同。
+- 修首次呈现读取尚未完成布局caret的问题，首轮布局后校正一次，绑定文档身份与当前面板。
+- 103项定向回归通过。完整证据、关系能力缺口与宿主端到端待验项见 [native-task-slash-contract.md](native-task-slash-contract.md)。Task Slash不提前冻结。

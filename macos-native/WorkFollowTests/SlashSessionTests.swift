@@ -4,6 +4,191 @@ import XCTest
 
 @MainActor
 final class SlashSessionTests: XCTestCase {
+    private func taskProfile(_ task: Task, workspace: TaskWorkspaceModel,
+                             tags: @escaping () -> Void = {}, relation: @escaping () -> Void = {}) -> DocumentProfile {
+        TaskDocumentProfile.make(task: task, host: TaskEditorHostActions(
+            createChild: { workspace.requestChildTitleEditor(for: task.id) },
+            openTags: tags, openRelation: relation, openLink: { _ in false }))
+    }
+
+    func testTaskSlashChecklistAndChildUseDifferentMutationChannels() throws {
+        let workspace = TaskWorkspaceModel(seedDemoData: false)
+        let parentID = try XCTUnwrap(workspace.createTask(title: "父任务", in: .inbox).taskID)
+        let editor = NativeTextView(frame: .zero, textContainer: nil)
+        editor.profile = taskProfile(try XCTUnwrap(workspace.task(for: parentID)), workspace: workspace)
+        editor.insertText("/", replacementRange: editor.selectedRange())
+        editor.executeSlash(at: try XCTUnwrap(editor.profile.slashCommands.firstIndex { $0.id == "format.checklist" }))
+        XCTAssertEqual(editor.string, "")
+        XCTAssertNil(editor.slashSession)
+        XCTAssertEqual(editor.pendingTrailingBlock, .checklist(false))
+        XCTAssertEqual(workspace.allTasks.count, 1)
+        XCTAssertNil(workspace.pendingChildTitleEditorID)
+
+        editor.insertText("/", replacementRange: editor.selectedRange())
+        editor.executeSlash(at: try XCTUnwrap(editor.profile.slashCommands.firstIndex { $0.id == "task.child" }))
+        XCTAssertEqual(editor.string, "")
+        XCTAssertNil(editor.slashSession)
+        let childID = try XCTUnwrap(workspace.pendingChildTitleEditorID)
+        XCTAssertEqual(workspace.task(for: childID)?.parentID, parentID)
+        XCTAssertEqual(workspace.allTasks.count, 2)
+        XCTAssertEqual(workspace.selectedTaskID, parentID)
+        let childProfile = taskProfile(try XCTUnwrap(workspace.task(for: childID)), workspace: workspace)
+        XCTAssertFalse(childProfile.slashCommands.contains { $0.id == "task.child" })
+    }
+
+    func testTaskSlashBusinessPickersConsumeTriggerBeforeCallingHost() throws {
+        let workspace = TaskWorkspaceModel(seedDemoData: false)
+        let parentID = try XCTUnwrap(workspace.createTask(title: "父任务", in: .inbox).taskID)
+        let task = try XCTUnwrap(workspace.task(for: parentID))
+        for id in ["task.tags", "task.relation"] {
+            let editor = NativeTextView(frame: .zero, textContainer: nil)
+            var routed: [String] = []
+            func opened(_ action: String) {
+                XCTAssertEqual(editor.string, "正文 ")
+                XCTAssertNil(editor.slashSession)
+                XCTAssertNil(editor.slashPanel)
+                routed.append(action)
+            }
+            editor.profile = taskProfile(task, workspace: workspace,
+                tags: { opened("task.tags") }, relation: { opened("task.relation") })
+            editor.insertText("正文 ", replacementRange: editor.selectedRange())
+            editor.insertText("、", replacementRange: editor.selectedRange())
+            editor.executeSlash(at: try XCTUnwrap(editor.profile.slashCommands.firstIndex { $0.id == id }))
+            XCTAssertEqual(routed, [id])
+            XCTAssertEqual(workspace.allTasks.count, 1)
+        }
+    }
+
+    func testTaskSlashFormatAndDividerAreSingleUndoOperations() throws {
+        let workspace = TaskWorkspaceModel(seedDemoData: false)
+        let parentID = try XCTUnwrap(workspace.createTask(title: "父任务", in: .inbox).taskID)
+        let task = try XCTUnwrap(workspace.task(for: parentID))
+        for id in ["format.heading1", "format.checklist", "shared.divider"] {
+            let editor = NativeTextView(frame: .zero, textContainer: nil)
+            editor.profile = taskProfile(task, workspace: workspace)
+            let original = NativeDocument(plainText: "前段\n\n后段")
+            editor.textStorage?.setAttributedString(DocumentTextCodec.render(original))
+            editor.setSelectedRange(NSRange(location: 3, length: 0))
+            let manager = try XCTUnwrap(editor.undoManager)
+            // Direct test calls have no separate AppKit input/click events.
+            // Use explicit groups to model those two event boundaries.
+            manager.groupsByEvent = false
+            manager.beginUndoGrouping()
+            editor.insertText("/", replacementRange: editor.selectedRange())
+            manager.endUndoGrouping()
+            let before = editor.attributedString().copy() as! NSAttributedString
+            editor.executeSlash(at: try XCTUnwrap(editor.profile.slashCommands.firstIndex { $0.id == id }))
+            XCTAssertFalse(editor.string.contains("/"), id)
+            editor.undo(nil)
+            XCTAssertEqual(editor.string, "前段\n/\n后段", id)
+            let restored = DocumentTextCodec.decode(editor.attributedString(), preserving: original)
+            let expected = DocumentTextCodec.decode(before, preserving: original)
+            XCTAssertEqual(restored.blocks.map(\.kind), expected.blocks.map(\.kind), id)
+        }
+    }
+
+    func testHoverKeyboardAndEscapeShareOneTaskSlashSelection() {
+        let editor = NativeTextView(frame: .zero, textContainer: nil)
+        editor.profile = DocumentProfile(taskSlash: true)
+        var hostEscapes = 0
+        editor.onEscape = { hostEscapes += 1; return .keepInspector }
+        editor.insertText("/", replacementRange: editor.selectedRange())
+        editor.hoverSlash(4)
+        XCTAssertEqual(editor.slashSession?.selectedIndex, 4)
+        editor.doCommand(by: #selector(NSTextView.moveDown(_:)))
+        XCTAssertEqual(editor.slashSession?.selectedIndex, 5)
+        editor.doCommand(by: #selector(NSTextView.moveUp(_:)))
+        XCTAssertEqual(editor.slashSession?.selectedIndex, 4)
+        editor.cancelOperation(nil)
+        XCTAssertNil(editor.slashSession)
+        XCTAssertEqual(editor.string, "/")
+        XCTAssertEqual(hostEscapes, 0)
+    }
+
+    func testTaskSlashWindowsRenderParentChildHoverAndBottomFlip() throws {
+        let workspace = TaskWorkspaceModel(seedDemoData: false)
+        let parentID = try XCTUnwrap(workspace.createTask(title: "父任务", in: .inbox).taskID)
+        let childID = try XCTUnwrap(workspace.createChild(parentID, title: "子任务").taskID)
+        for (name, taskID, nearBottom, hover) in [
+            ("parent", parentID, false, false), ("child", childID, false, false),
+            ("hover", parentID, false, true), ("bottom", parentID, true, false)
+        ] {
+            let window = NSWindow(contentRect: NSRect(x: 200, y: 100, width: 600, height: 700),
+                                  styleMask: [.borderless], backing: .buffered, defer: false)
+            window.isReleasedWhenClosed = false
+            window.appearance = NSAppearance(named: .aqua)
+            let editor = NativeTextView(frame: window.contentLayoutRect, textContainer: nil)
+            // This fixture is a fixed viewport, not the content-sized host.
+            // Prevent NSTextView's text insertion from resizing its root view.
+            editor.isVerticallyResizable = false
+            editor.profile = taskProfile(try XCTUnwrap(workspace.task(for: taskID)), workspace: workspace)
+            window.contentView = editor
+            window.orderFront(nil)
+            window.makeFirstResponder(editor)
+            defer { editor.dismissSlash(); window.close() }
+            if nearBottom {
+                editor.insertText(String(repeating: "正文\n", count: 20), replacementRange: editor.selectedRange())
+            }
+            let editorFrame = editor.frame
+            editor.insertText("/", replacementRange: editor.selectedRange())
+            if hover { editor.hoverSlash(4) }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.1))
+            let panel = try XCTUnwrap(editor.slashPanel)
+            XCTAssertTrue(panel.parent === window)
+            XCTAssertTrue(window.firstResponder === editor)
+            XCTAssertEqual(editor.frame, editorFrame, "Slash cannot push editor layout")
+            XCTAssertEqual(panel.frame.width, 160, accuracy: 0.5)
+            XCTAssertEqual(panel.frame.height, taskID == childID ? 391 : 425, accuracy: 0.5)
+            if hover { XCTAssertEqual(editor.slashSession?.selectedIndex, 4) }
+            let caret = editor.firstRect(forCharacterRange: editor.selectedRange(), actualRange: nil)
+            if nearBottom {
+                XCTAssertGreaterThanOrEqual(panel.frame.minY, caret.maxY, "Bottom caret must flip menu above")
+            } else {
+                XCTAssertLessThanOrEqual(panel.frame.maxY, caret.minY, "Prefer below caret")
+            }
+            XCTAssertTrue(window.frame.insetBy(dx: 11, dy: 11).contains(panel.frame))
+            let image = try XCTUnwrap(CGWindowListCreateImage(.null, .optionIncludingWindow,
+                CGWindowID(panel.windowNumber), [.bestResolution]))
+            try XCTUnwrap(NSBitmapImageRep(cgImage: image).representation(using: .png, properties: [:]))
+                .write(to: URL(fileURLWithPath: "/tmp/render_task_slash_\(name).png"))
+        }
+    }
+
+    func testSlashFollowsViewportAndWindowChanges() throws {
+        let window = NSWindow(contentRect: NSRect(x: 100, y: 100, width: 600, height: 900),
+                              styleMask: [.borderless], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        let scroll = NSScrollView(frame: window.contentLayoutRect)
+        scroll.autoresizingMask = [.width, .height]
+        let editor = NativeTextView(frame: NSRect(x: 0, y: 0, width: 600, height: 1400), textContainer: nil)
+        editor.isVerticallyResizable = false
+        editor.profile = DocumentProfile(taskSlash: true)
+        scroll.documentView = editor
+        window.contentView = scroll
+        window.orderFront(nil)
+        defer { editor.dismissSlash(); window.close() }
+        editor.insertText(String(repeating: "正文\n", count: 6), replacementRange: editor.selectedRange())
+        editor.insertText("/", replacementRange: editor.selectedRange())
+        let panel = try XCTUnwrap(editor.slashPanel)
+        func followsCaret(file: StaticString = #filePath, line: UInt = #line) {
+            RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+            let caret = editor.firstRect(forCharacterRange: editor.selectedRange(), actualRange: nil)
+            XCTAssertEqual(panel.frame.maxY, caret.minY - WFPlanningOverlayMetrics.gap,
+                           accuracy: 1, file: file, line: line)
+        }
+        followsCaret()
+        let before = panel.frame
+        scroll.contentView.scroll(to: NSPoint(x: 0, y: 60))
+        scroll.reflectScrolledClipView(scroll.contentView)
+        followsCaret()
+        XCTAssertNotEqual(panel.frame.origin.y, before.origin.y)
+        window.setFrameOrigin(NSPoint(x: 180, y: 150))
+        followsCaret()
+        window.setContentSize(NSSize(width: 660, height: 960))
+        followsCaret()
+        XCTAssertTrue(panel.parent === window)
+    }
+
     func testTaskSlashTriggersAfterWhitespaceAndClosesWhenTypingContinues() {
         let editor = NativeTextView(frame: .zero, textContainer: nil)
         editor.profile = DocumentProfile(taskSlash: true)

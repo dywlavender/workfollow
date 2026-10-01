@@ -1,12 +1,12 @@
 import AppKit
 import SwiftUI
 
-/// 斜杠面板的度量，逐项照抄原版 `DocumentSlashMenuMetrics`。
+/// 斜杠面板现有度量，最初来自 Flutter `DocumentSlashMenuMetrics`。
 ///
 /// 原版是一张 160 宽的命令卡：行高 34、上下各 4 内边距；行内是"左缩进 4 + 图标槽
 /// 14 + 图标与文字间距 11 + 标签 + 右 12"；两段之间一条全宽 1pt 细线（上下各 4，
 /// 共 9）；选中行是**中性灰**底 + 1pt 强调色细描边 + 6 圆角。12 项卡面高 425
-/// （12×34 + 9 + 8），与原版一字不差。
+/// （12×34 + 9 + 8）。保留此基线；TickTick 像素验收需独立截图证据。
 enum SlashMenuMetrics {
     static let width: CGFloat = 160
     static let rowHeight: CGFloat = 34
@@ -60,6 +60,7 @@ extension NativeTextView {
         slashSession = session
         guard let window else { return }
         let commands = session.results(in: profile.slashCommands)
+        let isFirstPresentation = slashPanel == nil
         let panel: NSPanel
         if let existing = slashPanel { panel = existing }
         else {
@@ -100,6 +101,17 @@ extension NativeTextView {
         panel.setFrame(NSRect(x: x, y: y, width: width, height: height), display: true)
         panel.orderFront(nil)
         startFollowingSlash()
+        if isFirstPresentation {
+            let identity = documentIdentity
+            // TextKit/clip-view caret reveal can finish after insertText returns.
+            // Re-anchor once after layout; never revive a closed/rebound session.
+            DispatchQueue.main.async { [weak self, weak panel] in
+                guard let self, let panel, self.slashPanel === panel,
+                      self.documentIdentity == identity, self.slashSession != nil else { return }
+                self.window?.contentView?.layoutSubtreeIfNeeded()
+                self.refreshSlash()
+            }
+        }
     }
 
     /// 面板要**跟着滚动与窗口变化走**：原版在滚动容器的 position 变化和窗口尺寸
