@@ -1,5 +1,13 @@
 import SwiftUI
 
+/// Real control geometry for render contracts; does not participate in sizing.
+struct EditorToolbarCommandFramesKey: PreferenceKey {
+    static let defaultValue: [String: CGRect] = [:]
+    static func reduce(value: inout [String: CGRect], nextValue: () -> [String: CGRect]) {
+        value.merge(nextValue(), uniquingKeysWith: { _, next in next })
+    }
+}
+
 /// 工具条悬停提示的状态：谁正被悬停，以及各控件在工具条坐标系里的矩形。
 ///
 /// 为什么要自己收矩形：SwiftUI 的 `ScrollView` 会裁掉超出边界的内容，所以提示卡不能
@@ -74,6 +82,15 @@ struct ToolbarTooltipCard: View {
 }
 
 extension View {
+    func editorCommandFrame(_ id: String, space: String) -> some View {
+        background {
+            GeometryReader { proxy in
+                Color.clear.preference(key: EditorToolbarCommandFramesKey.self,
+                                       value: [id: proxy.frame(in: .named(space))])
+            }
+        }
+    }
+
     /// 给工具条控件挂上"指针一放上去就在**上方**显示功能名称"的提示。
     func toolbarTooltip(_ title: String, state: ToolbarTooltipState) -> some View {
         modifier(ToolbarTooltipTarget(title: title, state: state))
@@ -111,7 +128,9 @@ enum DocumentToolbarPicker: Equatable {
 
     var titles: [String] {
         switch self {
-        case .heading: return ["正文", "一级标题", "二级标题", "三级标题"]
+        case .heading: return EditorCommandCatalog.headingPickerIDs.compactMap {
+            EditorCommandCatalog.format($0)?.descriptor.title
+        }
         case .time: return Self.timeValues()
         }
     }

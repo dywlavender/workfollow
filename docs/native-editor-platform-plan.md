@@ -1,6 +1,6 @@
 # Native Editor 平台整合方案
 
-日期：2026-10-01。状态：EP-001 FIRST SLICE IMPLEMENTED / PLATFORM NOT FROZEN。
+日期：2026-10-01。状态：EP-001 FORMAT DESCRIPTORS INTEGRATED / PLATFORM NOT FROZEN。
 
 目标：保护当前编辑器优化，将 Slash、格式栏、选区浮条、右键与后续快捷键变成同一能力系统的入口；不是重写编辑器，也不是新增编辑能力。下面的审计表是整合前快照，后续变化以末尾执行记录为准。
 
@@ -167,3 +167,13 @@ Codec round-trip 按语义比较 blocks/runs/marks/附件 payload/空段，允�
 - 证据：`/tmp/workfollow-editor-command-tests.log`。构建最新 App 已完成；本笔没有重新进行真人输入法、全部按钮实机截图或完整 popup 链验收，不据此冻结 Editor Platform。
 - 仍待迁移：格式栏/选区/右键入口的 descriptor 消费、统一 enabled/active 策略和 Host descriptors；当前 Catalog 仅覆盖格式能力，不声称已实现完整 Registry/Dispatcher。
 - 下一笔限定为格式栏与选区的描述消费（不改执行与布局）；通过后再推进 Host/Profile 与交互状态。
+
+### EP-001 第二笔：格式栏与选区工具条共享描述
+
+- Descriptor 增加格式目标、工具条 symbol、入口专属标题和 `isActive`。粗体/列表/引用等格式栏按钮、选区六个行内格式按钮消费同一描述；不再在选区 View 单独 switch 图标、在格式栏反复传标题+symbol+查找条件。
+- Selection 顺序和 Heading picker 顺序显式引用稳定 ID；标题菜单文字从相同描述读取。保留格式栏“代码”与选区“行内代码”的入口文案差异，高亮仍绘制 A 标签，通用 Slash 图标策略仍不变。
+- 格式栏既有 444×38pt 与 26×28pt 控件、选区 24×26pt 控件，以及按钮分组/顺序均保留。增加不参与 sizing 的控件 frame preference，供实际渲染验收使用。
+- 新增真实 NSWindow/NSHostingView 控件几何与顺序测试，并发送实际窗口鼠标事件点击两栏“粗体”：同一选区经过两入口 toggle 后恢复非粗体，range 保持。不是仅测试 Catalog 常量。
+- 64 项编辑器回归通过，证据：`/tmp/workfollow-editor-toolbar-tests.log`。本笔未重新做真人输入法或完整 Task/Note 弹层实机截图，不宣称像素/交互全部验收。
+- 链接、附件、时间容器、Host 业务动作仍沿用旧通道；未将全部命令迁入 Dispatcher。`note.createTask` 短标题分支及 Task/Note 现场拼 Profile 留到 EP-002，不夹带本轮修改。
+- 下一笔：EP-002 提取 Task/Note Profile 与窄 Host Actions，保留能力资格、触发政策、业务关联和执行路径；随后再处理交互状态。

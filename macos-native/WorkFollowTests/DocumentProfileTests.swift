@@ -1,8 +1,114 @@
 import XCTest
+import AppKit
+import SwiftUI
 @testable import WorkFollow
 
 @MainActor
 final class DocumentProfileTests: XCTestCase {
+    func testToolbarDescriptorsPreserveTitlesSymbolsAndActiveState() throws {
+        let ids = EditorCommandCatalog.selectionFormatIDs
+        let descriptors = try ids.map { try XCTUnwrap(EditorCommandCatalog.format($0)).descriptor }
+        XCTAssertEqual(descriptors.map(\.title), ["粗体", "斜体", "下划线", "删除线", "高亮", "行内代码"])
+        XCTAssertEqual(descriptors.map(\.toolbarSymbol),
+                       ["bold", "italic", "underline", "strikethrough", "highlighter", "chevron.left.forwardslash.chevron.right"])
+        XCTAssertEqual(descriptors.last?.formatToolbarTitle, "代码")
+        XCTAssertEqual(DocumentToolbarPicker.heading.titles, ["正文", "一级标题", "二级标题", "三级标题"])
+        for format in DocumentFormatCommand.commands {
+            for style in [DocumentSelectionStyle(),
+                          DocumentSelectionStyle(blockToken: DocumentTextCodec.blockToken(format.block ?? .paragraph),
+                                                 marks: format.mark.map { [$0] } ?? [])] {
+                XCTAssertEqual(format.descriptor.isActive(in: style),
+                               style.has(format.mark) || style.isBlock(format.block), format.id)
+            }
+        }
+    }
+
+    func testRealToolbarControlsKeepOrderAndGeometry() throws {
+        let handle = DocumentEditorHandle()
+        let editor = NativeTextView(frame: .zero, textContainer: nil)
+        editor.textStorage?.setAttributedString(DocumentTextCodec.render(NativeDocument(plainText: "正文")))
+        editor.setSelectedRange(NSRange(location: 0, length: 2))
+        handle.textView = editor
+        let formatIDs = ["format.bold", "format.highlight", "format.checklist", "format.bullet",
+                         "format.ordered", "format.italic", "format.underline", "format.strikethrough",
+                         "format.inlineCode", "format.quote"]
+        var formatFrames: [String: CGRect] = [:]
+        let formatRoot = DocumentFormatToolbarView(handle: handle)
+            .frame(width: 444, height: 38)
+            .onPreferenceChange(EditorToolbarCommandFramesKey.self) { formatFrames = $0 }
+        let formatWindow = renderToolbar(formatRoot, size: NSSize(width: 444, height: 38))
+        defer { formatWindow.orderOut(nil); formatWindow.contentView = nil; formatWindow.close() }
+        settleToolbar(formatWindow) { formatFrames.count == formatIDs.count }
+        XCTAssertEqual(Set(formatFrames.keys), Set(formatIDs))
+        for id in formatIDs {
+            let frame = try XCTUnwrap(formatFrames[id])
+            XCTAssertEqual(frame.width, 26, accuracy: 0.5, id)
+            XCTAssertEqual(frame.height, 28, accuracy: 0.5, id)
+        }
+        for (left, right) in zip(formatIDs, formatIDs.dropFirst()) {
+            XCTAssertLessThan(try XCTUnwrap(formatFrames[left]).midX,
+                              try XCTUnwrap(formatFrames[right]).midX)
+        }
+        try clickToolbarControl(try XCTUnwrap(formatFrames["format.bold"]), in: formatWindow)
+        XCTAssertTrue(handle.style.has(.bold), "The rendered format button must invoke the shared engine")
+        XCTAssertEqual(editor.selectedRange(), NSRange(location: 0, length: 2))
+
+        var selectionFrames: [String: CGRect] = [:]
+        var selectionCommands: [String] = []
+        let selectionRoot = DocumentSelectionToolbarView(actions: [], onInvoke: { _ in },
+                                                         onFormat: { command in
+                                                             selectionCommands.append(command.id)
+                                                             handle.format(command)
+                                                         }, onLink: {})
+            .onPreferenceChange(EditorToolbarCommandFramesKey.self) { selectionFrames = $0 }
+        let selectionWindow = renderToolbar(selectionRoot, size: NSSize(width: 200, height: 34))
+        defer { selectionWindow.orderOut(nil); selectionWindow.contentView = nil; selectionWindow.close() }
+        settleToolbar(selectionWindow) { selectionFrames.count == 6 }
+        XCTAssertEqual(Set(selectionFrames.keys), Set(EditorCommandCatalog.selectionFormatIDs))
+        for id in EditorCommandCatalog.selectionFormatIDs {
+            let frame = try XCTUnwrap(selectionFrames[id])
+            XCTAssertEqual(frame.width, 24, accuracy: 0.5, id)
+            XCTAssertEqual(frame.height, 26, accuracy: 0.5, id)
+        }
+        for (left, right) in zip(EditorCommandCatalog.selectionFormatIDs, EditorCommandCatalog.selectionFormatIDs.dropFirst()) {
+            XCTAssertLessThan(try XCTUnwrap(selectionFrames[left]).midX,
+                              try XCTUnwrap(selectionFrames[right]).midX)
+        }
+        try clickToolbarControl(try XCTUnwrap(selectionFrames["format.bold"]), in: selectionWindow)
+        XCTAssertEqual(selectionCommands, ["format.bold"])
+        XCTAssertFalse(handle.style.has(.bold), "Both entry points toggle the same format on the same selection")
+        XCTAssertEqual(editor.selectedRange(), NSRange(location: 0, length: 2))
+    }
+
+    private func clickToolbarControl(_ frame: CGRect, in window: NSWindow) throws {
+        let host = try XCTUnwrap(window.contentView)
+        let local = NSPoint(x: frame.midX, y: host.isFlipped ? frame.midY : host.bounds.height - frame.midY)
+        let point = host.convert(local, to: nil)
+        for type in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {
+            let event = try XCTUnwrap(NSEvent.mouseEvent(with: type, location: point, modifierFlags: [],
+                timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber,
+                context: nil, eventNumber: 0, clickCount: 1, pressure: 1))
+            window.sendEvent(event)
+        }
+    }
+
+    private func renderToolbar<Root: View>(_ root: Root, size: NSSize) -> NSWindow {
+        let window = NSWindow(contentRect: NSRect(origin: NSPoint(x: 100, y: 100), size: size),
+                              styleMask: [.borderless], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.contentView = NSHostingView(rootView: root.environment(\.colorScheme, .light))
+        window.orderFront(nil)
+        return window
+    }
+
+    private func settleToolbar(_ window: NSWindow, until ready: () -> Bool) {
+        for _ in 0..<20 {
+            window.contentView?.layoutSubtreeIfNeeded()
+            if ready() { break }
+            RunLoop.main.run(until: Date().addingTimeInterval(0.02))
+        }
+    }
+
     func testCatalogUsesUniqueSemanticIDsIndependentOfPresentationOrder() throws {
         let descriptors = EditorCommandCatalog.formats
         XCTAssertEqual(Set(descriptors.map(\.id)).count, 16)

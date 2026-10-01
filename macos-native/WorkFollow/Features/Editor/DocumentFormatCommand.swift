@@ -6,6 +6,33 @@ struct EditorCommandDescriptor: Identifiable {
     let title: String
     let keywords: String
     let glyph: SlashGlyphKind
+    let block: DocumentBlockKind?
+    let mark: DocumentMark?
+
+    // Entry-specific labels preserve the existing product language.
+    var formatToolbarTitle: String { id == "format.inlineCode" ? "代码" : title }
+    var toolbarSymbol: String {
+        switch mark {
+        case .bold: return "bold"
+        case .italic: return "italic"
+        case .underline: return "underline"
+        case .strikethrough: return "strikethrough"
+        case .highlight: return "highlighter"
+        case .code: return "chevron.left.forwardslash.chevron.right"
+        default:
+            switch block {
+            case .bullet: return "list.bullet"
+            case .ordered: return "list.number"
+            case .checklist: return "checklist"
+            case .quote: return "text.quote"
+            default: return "textformat"
+            }
+        }
+    }
+
+    func isActive(in style: DocumentSelectionStyle) -> Bool {
+        style.has(mark) || style.isBlock(block)
+    }
 }
 
 enum EditorCommandCatalog {
@@ -21,6 +48,11 @@ enum EditorCommandCatalog {
     static let compactSlashFormatIDs = [
         "format.heading1", "format.heading2", "format.heading3", "format.bullet",
         "format.ordered", "format.checklist", "format.quote"
+    ]
+    static let headingPickerIDs = ["format.paragraph", "format.heading1", "format.heading2", "format.heading3"]
+    static let selectionFormatIDs = [
+        "format.bold", "format.italic", "format.underline", "format.strikethrough",
+        "format.highlight", "format.inlineCode"
     ]
 }
 
@@ -39,7 +71,8 @@ struct DocumentFormatCommand {
         case .quote: glyph = .quote
         default: glyph = .symbol("text.alignleft")
         }
-        return EditorCommandDescriptor(id: id, title: title, keywords: keywords, glyph: glyph)
+        return EditorCommandDescriptor(id: id, title: title, keywords: keywords,
+                                       glyph: glyph, block: block, mark: mark)
     }
 
     func slashCommand(group: String, includeKeywords: Bool = false,

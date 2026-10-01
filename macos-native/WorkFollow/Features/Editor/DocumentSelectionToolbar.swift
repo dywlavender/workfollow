@@ -1,10 +1,8 @@
 import AppKit
 import SwiftUI
 
-/// Round B2 迁移说明：Flutter 侧的 document_selection_toolbar（选区工具条）与
-/// document_editor_toolbar（浮动格式工具条）在此合并落地——本次迁移只允许新增一个
-/// Editor 文件，且两者共用同一命令通道（DocumentFormatCommand / DocumentEditorHandle /
-/// DocumentProfile.selectionActions），不绕过现有命令层。
+/// Toolbar layouts keep their product order while shared descriptors supply
+/// format identity, labels, symbols and active state. Execution remains TextKit-owned.
 
 /// 选中文本时浮现在选区上方的小工具条（迁移自 Flutter DocumentSelectionToolbar）。
 /// 笔记 profile 提供“创建任务”，这里追加常用内联样式；Escape 或收起选区即关闭
@@ -17,9 +15,7 @@ struct DocumentSelectionToolbarView: View {
 
     /// 常用内联样式：粗体/斜体/下划线/删除线/高亮/行内代码。
     private var inlineCommands: [DocumentFormatCommand] {
-        [DocumentMark.bold, .italic, .underline, .strikethrough, .highlight, .code].compactMap { mark in
-            DocumentFormatCommand.commands.first { $0.mark == mark }
-        }
+        EditorCommandCatalog.selectionFormatIDs.compactMap(EditorCommandCatalog.format)
     }
 
     var body: some View {
@@ -39,14 +35,15 @@ struct DocumentSelectionToolbarView: View {
                 .help(action.title).accessibilityLabel(action.title)
             }
             Divider().frame(height: 16)
-            ForEach(inlineCommands, id: \.title) { command in
+            ForEach(inlineCommands, id: \.id) { command in
                 Button { onFormat(command) } label: {
-                    Image(systemName: symbol(for: command))
+                    Image(systemName: command.descriptor.toolbarSymbol)
                         .frame(width: 24, height: 26).contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(WFColors.text)
-                .help(command.title).accessibilityLabel(command.title)
+                .help(command.descriptor.title).accessibilityLabel(command.descriptor.title)
+                .editorCommandFrame(command.id, space: "editor-selection-toolbar")
             }
             Divider().frame(height: 16)
             Button { onLink() } label: {
@@ -61,6 +58,7 @@ struct DocumentSelectionToolbarView: View {
         .background(WFColors.content, in: RoundedRectangle(cornerRadius: 8))
         .overlay(RoundedRectangle(cornerRadius: 8).stroke(WFColors.border))
         .shadow(color: .black.opacity(0.12), radius: 8, y: 3)
+        .coordinateSpace(name: "editor-selection-toolbar")
     }
 
     /// 右键菜单沿用 profile 的完整标题；浮动条上用短文案（对齐 Flutter “创建任务”）。
@@ -68,17 +66,6 @@ struct DocumentSelectionToolbarView: View {
         action.id == "note.createTask" ? "创建任务" : action.title
     }
 
-    private func symbol(for command: DocumentFormatCommand) -> String {
-        switch command.mark {
-        case .bold: "bold"
-        case .italic: "italic"
-        case .underline: "underline"
-        case .strikethrough: "strikethrough"
-        case .highlight: "highlighter"
-        case .code: "chevron.left.forwardslash.chevron.right"
-        default: "textformat"
-        }
-    }
 }
 
 /// 笔记与任务正文共用的浮动格式工具条（迁移自 Flutter DocumentEditorToolbar 的全集）。
@@ -103,16 +90,7 @@ struct DocumentFormatToolbarView: View {
     @State private var toolbarHovered = false
     @State private var pickerHovered = false
 
-    private static let headingCommands = [DocumentBlockKind.paragraph, .heading(1), .heading(2), .heading(3)]
-        .compactMap { kind in DocumentFormatCommand.commands.first { $0.block == kind } }
-
-    private static func block(_ kind: DocumentBlockKind) -> DocumentFormatCommand? {
-        DocumentFormatCommand.commands.first { $0.block == kind }
-    }
-
-    private static func mark(_ mark: DocumentMark) -> DocumentFormatCommand? {
-        DocumentFormatCommand.commands.first { $0.mark == mark }
-    }
+    private static let headingCommands = EditorCommandCatalog.headingPickerIDs.compactMap(EditorCommandCatalog.format)
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
@@ -125,24 +103,26 @@ struct DocumentFormatToolbarView: View {
                               action: { togglePicker(.heading) }) {
                     Text("H").font(.system(size: 16))
                 }
-                formatButton("粗体", "bold", Self.mark(.bold))
+                formatButton("format.bold")
                 // 「A」底下永远垫一块高亮色（原版 `label: 'A', highlight: true`）。
-                ToolbarButton(title: "高亮", active: handle.style.has(.highlight), state: overlay,
-                              action: { if let command = Self.mark(.highlight) { handle.format(command) } }) {
+                ToolbarButton(title: highlightCommand.descriptor.formatToolbarTitle,
+                              active: highlightCommand.descriptor.isActive(in: handle.style), state: overlay,
+                              action: { handle.format(highlightCommand) }) {
                     Text("A")
                         .font(.system(size: 16))
                         .foregroundStyle(WFColors.text)
                         .padding(.horizontal, WFSpace.tight)
                         .background(WFColors.accentSoft, in: RoundedRectangle(cornerRadius: 4))
                 }
+                .editorCommandFrame(highlightCommand.id, space: DocumentToolbarTooltip.space)
                 toolbarDivider
-                formatButton("检查项", "checklist", Self.block(.checklist(false)))
-                formatButton("无序列表", "list.bullet", Self.block(.bullet))
-                formatButton("有序列表", "list.number", Self.block(.ordered))
+                formatButton("format.checklist")
+                formatButton("format.bullet")
+                formatButton("format.ordered")
                 toolbarDivider
-                formatButton("斜体", "italic", Self.mark(.italic))
-                formatButton("下划线", "underline", Self.mark(.underline))
-                formatButton("删除线", "strikethrough", Self.mark(.strikethrough))
+                formatButton("format.italic")
+                formatButton("format.underline")
+                formatButton("format.strikethrough")
                 ToolbarButton(title: "分割线", active: false, state: overlay,
                               action: { handle.insertDivider() }) {
                     Image(systemName: "minus")
@@ -156,8 +136,8 @@ struct DocumentFormatToolbarView: View {
                               action: { handle.editLink() }) {
                     Image(systemName: "link")
                 }
-                formatButton("代码", "chevron.left.forwardslash.chevron.right", Self.mark(.code))
-                formatButton("引用", "text.quote", Self.block(.quote))
+                formatButton("format.inlineCode")
+                formatButton("format.quote")
                 toolbarDivider
                 ToolbarButton(title: attachmentTitle, active: false, state: overlay,
                               action: { handle.insertAttachment() }) {
@@ -277,13 +257,20 @@ struct DocumentFormatToolbarView: View {
     }
 
     /// 工具条上的一个图标按钮：把激活态、悬停底、尺寸与提示一次装好。
-    private func formatButton(_ title: String, _ symbol: String, _ command: DocumentFormatCommand?) -> some View {
-        let active = handle.style.has(command?.mark) || handle.style.isBlock(command?.block)
-        return ToolbarButton(title: title, active: active, state: overlay,
+    private var highlightCommand: DocumentFormatCommand {
+        EditorCommandCatalog.format("format.highlight")!
+    }
+
+    private func formatButton(_ id: String) -> some View {
+        let command = EditorCommandCatalog.format(id)
+        let descriptor = command?.descriptor
+        let active = descriptor?.isActive(in: handle.style) ?? false
+        return ToolbarButton(title: descriptor?.formatToolbarTitle ?? id, active: active, state: overlay,
                              action: { if let command { handle.format(command) } }) {
-            Image(systemName: symbol)
+            Image(systemName: descriptor?.toolbarSymbol ?? "textformat")
         }
         .disabled(command == nil)
+        .editorCommandFrame(id, space: DocumentToolbarTooltip.space)
     }
 }
 
