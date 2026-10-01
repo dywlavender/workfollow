@@ -4,6 +4,30 @@ import XCTest
 
 @MainActor
 final class PopupEscapeRoutingTests: XCTestCase {
+    func testExplicitPresenterRoutesEscapeWhenPopoverHasNoParentWindow() {
+        let registry = PopupEscapeRegistry()
+        let presenter = NSWindow(contentRect: NSRect(x: 100, y: 100, width: 300, height: 200),
+                                 styleMask: [.borderless], backing: .buffered, defer: false)
+        let panel = NSWindow(contentRect: presenter.frame, styleMask: [.borderless], backing: .buffered, defer: false)
+        let unrelated = NSWindow(contentRect: presenter.frame, styleMask: [.borderless], backing: .buffered, defer: false)
+        for window in [presenter, panel, unrelated] { window.isReleasedWhenClosed = false }
+        let view = NSView(frame: panel.contentLayoutRect)
+        panel.contentView = view
+        panel.orderFront(nil)
+        XCTAssertNil(panel.parent)
+        var calls = 0
+        let id = registry.register(view: view, depth: 2, presentingWindow: { [weak presenter] in presenter }) { calls += 1 }
+        defer {
+            registry.unregister(id)
+            for window in [presenter, panel, unrelated] { window.close() }
+        }
+        XCTAssertTrue(registry.route(eventWindow: presenter))
+        XCTAssertEqual(calls, 1)
+        XCTAssertFalse(registry.route(eventWindow: unrelated))
+        panel.orderOut(nil)
+        XCTAssertFalse(registry.route(eventWindow: presenter))
+    }
+
     func testWindowOwnershipDepthAndCleanup() {
         let registry = PopupEscapeRegistry()
         let window = NSWindow(contentRect: NSRect(x: 100, y: 100, width: 300, height: 200),
