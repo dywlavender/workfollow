@@ -20,7 +20,7 @@
 ## 几何与输入规则
 
 - Gallery 属于模态选择工作区，不是 Quick Add 属性子菜单；关闭属性父层以后才呈现。
-- 主体首选 1000×700pt，按所属窗口 screen.visibleFrame 有界收缩；卡片数量与搜索结果不改变外框。
+- 主体首选 720×520pt（按最新参考图收敛为紧凑窗口），按所属窗口 screen.visibleFrame 有界收缩；卡片数量与搜索结果不改变外框。三列间距 12pt，卡片基础高度 220pt；不通过整体 scale 缩放控件。
 - 卡片使用静态正文预览，不嵌入可编辑 DocumentEditor。
 - 教育层380pt宽、内容自然高度，确认按钮42pt并铺满内部宽度；不参与 Gallery fitting size。首个 Escape 关闭教育/管理层，随后 Escape 关闭 Gallery；接入窗口级 PopupEscapeRouter，不能只依赖 View 的 onExitCommand。
 - Quick Add 保持既有解析与日期草稿能力，本轮不改变 Parser 或日期面板。

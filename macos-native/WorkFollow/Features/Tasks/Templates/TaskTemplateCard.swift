@@ -13,9 +13,9 @@ struct TaskTemplateCard: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: 10) {
             Text(template.name)
-                .font(.system(size: 17, weight: .semibold))
+                .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(WFColors.text)
                 .lineLimit(2)
                 .fixedSize(horizontal: false, vertical: true)
@@ -28,8 +28,8 @@ struct TaskTemplateCard: View {
 
             Spacer(minLength: 0)
         }
-        .padding(22)
-        .frame(maxWidth: .infinity, minHeight: 280, alignment: .topLeading)
+        .padding(16)
+        .frame(maxWidth: .infinity, minHeight: 220, alignment: .topLeading)
         .background(WFColors.secondarySurface.opacity(0.44))
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))

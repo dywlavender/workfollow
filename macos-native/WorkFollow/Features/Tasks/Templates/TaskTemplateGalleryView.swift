@@ -12,7 +12,7 @@ struct TaskTemplateGalleryView: View {
     @State private var visibleScreenSize: CGSize?
     @State private var applicationGate = TaskTemplateApplyGate()
 
-    private static let preferredSize = CGSize(width: 1000, height: 700)
+    private static let preferredSize = CGSize(width: 720, height: 520)
 
     init(workspace: TaskWorkspaceModel,
          templateStore: TemplateStore,
@@ -95,8 +95,8 @@ struct TaskTemplateGalleryView: View {
                         .frame(maxWidth: .infinity, minHeight: 360)
                 } else {
                     LazyVGrid(columns: Array(
-                        repeating: GridItem(.flexible(), spacing: 18, alignment: .top), count: 3
-                    ), alignment: .center, spacing: 18) {
+                        repeating: GridItem(.flexible(), spacing: 12, alignment: .top), count: 3
+                    ), alignment: .center, spacing: 12) {
                         ForEach(templates, id: \.template.id) { item in
                             Button {
                                 guard applicationGate.begin() else { return }
@@ -127,15 +127,14 @@ struct TaskTemplateGalleryView: View {
                 }
             }
             .scrollIndicators(.visible)
-            .padding(.top, 22)
+            .padding(.top, 18)
 
             Button("管理模板") {
                 showingManagement = true
             }
-            .font(.system(size: 17, weight: .medium))
+            .font(.system(size: 14, weight: .medium))
             .foregroundStyle(WFColors.accent)
             .buttonStyle(.plain)
-            .padding(.top, 18)
             .accessibilityIdentifier("task-template-management")
             .background {
                 GeometryReader { proxy in
@@ -145,26 +144,27 @@ struct TaskTemplateGalleryView: View {
                     )
                 }
             }
+            .padding(.top, 18)
         }
-        .padding(.horizontal, 32)
-        .padding(.top, 24)
+        .padding(.horizontal, 24)
+        .padding(.top, 18)
         .padding(.bottom, 20)
         .background(WFColors.content)
     }
 
     private var header: some View {
-        let slotWidth = min(276, max(132, contentSize.width * 0.28))
+        let slotWidth = min(190, max(132, contentSize.width * 0.28))
         return HStack(spacing: 0) {
             Color.clear.frame(width: slotWidth, height: 40)
             Spacer(minLength: 0)
             Text("任务模板")
-                .font(.system(size: 22, weight: .semibold))
+                .font(.system(size: 18, weight: .semibold))
                 .lineLimit(1)
                 .fixedSize()
             Spacer(minLength: 0)
             searchField.frame(width: slotWidth)
         }
-        .frame(height: 42)
+        .frame(height: 34)
     }
 
     private var searchField: some View {
@@ -179,7 +179,7 @@ struct TaskTemplateGalleryView: View {
                 .accessibilityIdentifier("task-template-search")
         }
         .padding(.horizontal, 14)
-        .frame(height: 40)
+        .frame(height: 32)
         .background(WFColors.content)
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         .overlay {

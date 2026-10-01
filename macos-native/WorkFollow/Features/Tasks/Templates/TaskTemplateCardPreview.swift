@@ -28,7 +28,7 @@ struct TaskTemplateCardPreview: View {
                     .font(WFType.supporting)
                     .foregroundStyle(WFColors.tertiaryText)
             } else {
-                VStack(alignment: .leading, spacing: 10) {
+                VStack(alignment: .leading, spacing: 7) {
                     ForEach(rows) { row in
                         previewRow(row)
                     }
@@ -50,14 +50,14 @@ struct TaskTemplateCardPreview: View {
                     .frame(width: 18, height: 20, alignment: .topLeading)
                     .accessibilityHidden(true)
                 Text(row.text)
-                    .font(.system(size: 14))
+                    .font(.system(size: 12))
                     .foregroundStyle(WFColors.secondaryText)
                     .lineLimit(1)
                     .fixedSize(horizontal: false, vertical: true)
             }
         default:
             Text(row.text)
-                .font(.system(size: 14))
+                .font(.system(size: 12))
                 .foregroundStyle(WFColors.secondaryText)
                 .lineLimit(2)
                 .fixedSize(horizontal: false, vertical: true)

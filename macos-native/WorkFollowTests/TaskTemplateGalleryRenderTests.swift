@@ -22,8 +22,8 @@ final class TaskTemplateGalleryRenderTests: XCTestCase {
                        "The default gallery should show the three built-in templates")
         XCTAssertTrue(defaultRender.screenFrame.insetBy(dx: -1, dy: -1).contains(defaultRender.window.frame),
                       "The gallery window must stay inside its screen's visible frame")
-        XCTAssertGreaterThan(defaultRender.imageSize.width, 800)
-        XCTAssertGreaterThan(defaultRender.imageSize.height, 500)
+        XCTAssertEqual(defaultRender.window.frame.width, 720, accuracy: 1)
+        XCTAssertEqual(defaultRender.window.frame.height, 520, accuracy: 1)
         XCTAssertTrue(FileManager.default.fileExists(atPath: defaultRender.screenshot.path))
 
         let searchRender = try renderGallery(
@@ -34,7 +34,8 @@ final class TaskTemplateGalleryRenderTests: XCTestCase {
         )
         XCTAssertEqual(searchRender.cardFrames.count, 1,
                        "Searching by a template name should render only the matching card")
-        XCTAssertTrue(searchRender.cardFrames.values.allSatisfy { $0.width > 200 && $0.height >= 280 })
+        XCTAssertTrue(searchRender.cardFrames.values.allSatisfy { $0.width > 200 && $0.height >= 220 })
+        XCTAssertEqual(searchRender.window.frame.size, defaultRender.window.frame.size)
         XCTAssertTrue(searchRender.screenFrame.insetBy(dx: -1, dy: -1).contains(searchRender.window.frame))
         XCTAssertTrue(FileManager.default.fileExists(atPath: searchRender.screenshot.path))
     }
@@ -186,8 +187,8 @@ final class TaskTemplateGalleryRenderTests: XCTestCase {
                                name: String) throws -> RenderedGallery {
         let screen = NSScreen.main ?? NSScreen.screens.first
         let visibleFrame = screen?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
-        let size = NSSize(width: max(1, min(1000, visibleFrame.width - 40)),
-                          height: max(1, min(700, visibleFrame.height - 40)))
+        let size = NSSize(width: max(1, min(720, visibleFrame.width - 40)),
+                          height: max(1, min(520, visibleFrame.height - 40)))
         let origin = NSPoint(x: visibleFrame.midX - size.width / 2,
                              y: visibleFrame.midY - size.height / 2)
 
@@ -236,8 +237,8 @@ final class TaskTemplateGalleryRenderTests: XCTestCase {
         let visibleFrame = NSScreen.main?.visibleFrame
             ?? NSScreen.screens.first?.visibleFrame
             ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
-        let size = NSSize(width: max(1, min(1000, visibleFrame.width - 40)),
-                          height: max(1, min(700, visibleFrame.height - 40)))
+        let size = NSSize(width: max(1, min(720, visibleFrame.width - 40)),
+                          height: max(1, min(520, visibleFrame.height - 40)))
         let origin = NSPoint(x: visibleFrame.midX - size.width / 2,
                              y: visibleFrame.midY - size.height / 2)
         let window = NSWindow(contentRect: NSRect(origin: origin, size: size),
