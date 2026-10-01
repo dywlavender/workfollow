@@ -60,6 +60,9 @@ enum WFColors {
     /// 菜单内部的分组细线（Flutter `menuDivider`）。比 `border` 更弱：细线是分隔，
     /// 不是给菜单镶边。
     static let menuDivider = themed(rgb(0xF2F3F3), rgb(0x3A3E47))
+    /// 下拉字段的底：日期浮层里的月/日/年。参考图里它是**中性浅灰、无描边**的字段，
+    /// 与 `content` 的白底靠明度分开，不靠描边——所以不能拿 `border` 去凑。
+    static let fieldFill = themed(rgb(0xF2F2F2), rgb(0x3A3E47))
     /// 画布：四象限棋盘背后的底色（Flutter `matrixBackdrop` 浅色取 neutral50，
     /// 深色取 canvas）。
     static let matrixBackdrop = themed(rgb(0xF7F8FA), rgb(0x1B1D22))

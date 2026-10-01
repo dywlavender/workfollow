@@ -98,7 +98,7 @@ struct CountdownEvent: Identifiable, Codable, Equatable {
     /// 两处必须一致，所以只留一份判断。
     var usesLunarCalendar: Bool {
         switch rule {
-        case .lunarYearly, .lunarEve:
+        case .lunarYearly, .lunarEve, .lunarOnce:
             return true
         case .daily(let lunar, _), .weekly(_, let lunar, _), .monthly(_, let lunar, _),
              .interval(_, let lunar, _):
@@ -172,9 +172,6 @@ enum CountdownKind: String, Codable, CaseIterable, Identifiable {
 
     /// 只有生日多出「显示岁数」一行。
     var hasAgeOption: Bool { self == .birthday }
-
-    /// 节日走农历节日目录，其余类型走公历日期选择。
-    var usesFestivalCatalog: Bool { self == .festival }
 }
 
 // MARK: - 重复
@@ -285,6 +282,12 @@ enum CountdownRule: Equatable, Codable {
     case solarYearly(month: Int, day: Int)
     /// 每年重复的农历月/日（春节、中秋……）。闰月不算。
     case lunarYearly(month: Int, day: Int)
+    /// 农历**某一年**的某月/某日，只发生一次。
+    ///
+    /// 与 `.lunarYearly` 的区别只在年份：编辑器的「忽略年份」勾掉时走这条，
+    /// 「农历 2027 年正月初一」要能原样回显成 `农历2027年正月初一`，而不是
+    /// 被折算成一个公历日期（折算后就再也回不到农历写法了）。
+    case lunarOnce(month: Int, day: Int, year: Int)
     /// 除夕：下一个正月初一的前一天。它的农历月/日随年份变（腊月廿九或三十），
     /// 所以不能写成固定的 `lunarYearly(12, 30)`。
     case lunarEve
@@ -301,14 +304,16 @@ enum CountdownRule: Equatable, Codable {
     case interval(days: Int, lunar: Bool, anchor: Date)
 
     var isRepeating: Bool {
-        if case .once = self { return false }
-        return true
+        switch self {
+        case .once, .lunarOnce: return false
+        default: return true
+        }
     }
 
     /// 「重复」行的选中项。
     var repeatValue: CountdownRepeat {
         switch self {
-        case .once: return .never
+        case .once, .lunarOnce: return .never
         case .daily: return .daily
         case .weekly: return .weekly
         case .monthly: return .monthly
@@ -330,6 +335,9 @@ enum CountdownRule: Equatable, Codable {
             return "\(month)月\(day)日"
         case .lunarYearly(let month, let day):
             return "农历" + CountdownLunar.label(month: month, day: day)
+        case .lunarOnce(let month, let day, let year):
+            // 「忽略年份」没勾时要把年份写出来——那正是它与 `.lunarYearly` 的可见差别。
+            return "农历\(year)年" + CountdownLunar.label(month: month, day: day)
         case .lunarEve:
             return "农历除夕"
         case .birthday(let month, let day, _):
@@ -358,7 +366,7 @@ extension CountdownRule {
     /// 「每月（…）」里的括注：农历规则给农历日名（`初一`），公历给 `3 日`。
     func monthlyAnchorLabel(calendar: Calendar) -> String? {
         switch self {
-        case .lunarYearly(_, let day):
+        case .lunarYearly(_, let day), .lunarOnce(_, let day, _):
             return CountdownLunar.dayName(day)
         case .solarYearly(_, let day), .birthday(_, let day, _):
             return "\(day) 日"
@@ -376,7 +384,7 @@ extension CountdownRule {
     /// 「每年（…）」里的括注：农历规则给 `正月初一`，公历给 `10 月 3 日`。
     func yearlyAnchorLabel(calendar: Calendar) -> String? {
         switch self {
-        case .lunarYearly(let month, let day):
+        case .lunarYearly(let month, let day), .lunarOnce(let month, let day, _):
             return CountdownLunar.label(month: month, day: day)
         case .lunarEve:
             return "除夕"
@@ -485,9 +493,13 @@ enum CountdownLunar {
     }
 
     static func dayName(_ day: Int) -> String {
+        // `digits` 只有 0…9 十个元素（下标 0 是空串）。「初十」不能写成
+        // `"初" + digits[10]`——那是越界，会直接 SIGTRAP 崩掉。日期浮层里
+        // 「日」下拉会把 1…30 逐个取名字，这条路径第一次被枚举到就炸了。
         let digits = ["", "一", "二", "三", "四", "五", "六", "七", "八", "九"]
         switch day {
-        case 1...10: return "初" + digits[day]
+        case 1...9: return "初" + digits[day]
+        case 10: return "初十"
         case 11...19: return "十" + digits[day - 10]
         case 20: return "二十"
         case 21...29: return "廿" + digits[day - 20]
@@ -600,6 +612,10 @@ extension CountdownEvent {
             return Self.nextSolarYearly(month: month, day: day, onOrAfter: start, calendar: calendar)
         case .lunarYearly(let month, let day):
             return Self.nextLunar(month: month, day: day, onOrAfter: start, calendar: calendar)
+        case .lunarOnce(let month, let day, let year):
+            // 一次性：落点就是那一天本身，哪怕已经过去——与 `.once` 同一口径，
+            // 卡片据此显示「已经 N 天」。
+            return Self.lunarDate(year: year, month: month, day: day, calendar: calendar) ?? start
         case .lunarEve:
             let newYear = Self.nextLunar(month: 1, day: 1, onOrAfter: start, calendar: calendar)
             return calendar.date(byAdding: .day, value: -1, to: newYear) ?? newYear
@@ -732,6 +748,30 @@ extension CountdownEvent {
             if normalized >= start { return normalized }
         }
         return start
+    }
+
+    /// 农历 `year` 年 `month` 月 `day` 日对应的公历日期；那一天不存在（如腊月三十
+    /// 落在只有廿九的年份）时返回 nil。
+    ///
+    /// 从**公历** `year` 年 1 月 1 日起向上扫，取第一个月/日匹配的日子：农历年
+    /// `year` 横跨公历 `year` 年 1 月到 `year+1` 年 2 月，所以第一个匹配就是它。
+    ///
+    /// 不能直接拿 `Calendar(identifier: .chinese)` 的 `.year` 组件去构造——那是
+    /// 60 年一轮的干支年号，不是公历年，`DateComponents(year: 2027, …)` 落不到 2027。
+    static func lunarDate(year: Int, month: Int, day: Int, calendar: Calendar) -> Date? {
+        guard let first = calendar.date(from: DateComponents(year: year, month: 1, day: 1)) else {
+            return nil
+        }
+        var cursor = calendar.startOfDay(for: first)
+        for _ in 0...800 {
+            if let parts = CountdownLunar.lunarComponents(of: cursor, calendar: calendar),
+               parts.month == month, parts.day == day {
+                return cursor
+            }
+            guard let next = calendar.date(byAdding: .day, value: 1, to: cursor) else { return nil }
+            cursor = next
+        }
+        return nil
     }
 
     /// 下一个不早于 `start` 的农历月/日（闰月跳过）。`month` 传 nil 表示只看日

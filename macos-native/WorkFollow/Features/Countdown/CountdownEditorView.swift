@@ -31,14 +31,36 @@ struct CountdownEditorView: View {
         var id: String { rawValue }
     }
 
+    /// 「日期」浮层里的草稿：公历还是农历、哪个月/日、带不带年份。
+    ///
+    /// 做成**一个值**而不是几个 `@State`，是为了能用一次 `==` 回答「用户动过没有」。
+    /// 这个判断不是洁癖：`除夕`（`.lunarEve`）的农历月/日是逐年变的（腊月廿九或
+    /// 三十），用「月/日」下拉重建一定会在某些年份落到不存在的日子上，所以没动过
+    /// 就必须原样保留原规则。
+    private struct DateDraft: Equatable {
+        /// 用户选过日期没有。新建时是 false：日期行显示灰色占位、「添加」禁用。
+        var isSet: Bool
+        var isLunar: Bool
+        var month: Int
+        var day: Int
+        var year: Int
+        /// 勾上 = 日期不带年份（每年重复）；勾掉 = 具体某一年的某一天。
+        var ignoresYear: Bool
+    }
+
     @State private var kind: CountdownKind
     @State private var name: String
     @State private var symbol: String
     @State private var colorIndex: Int
-    @State private var pickedDate: Date?
-    /// 日期浮层里月历当前显示的月份。与 `pickedDate` 分开存：翻月不改选中值。
-    @State private var displayedMonth: Date
-    @State private var pickedFestival: CountdownFestival.Option?
+    /// 已确定的日期。日期行、提交用的规则都看它。
+    @State private var draft: DateDraft
+    /// 浮层里正在编辑的那一份。打开浮层时从 `draft` 拷过来，「确定」才写回去——
+    /// 所以「取消」不必回滚，直接丢掉即可。
+    @State private var editing: DateDraft
+    /// 打开浮层时的初值。判断「用户到底动过日期没有」只要一次 `==`——`除夕`
+    /// （`.lunarEve`）这类规则的农历月/日是逐年变的，用「月/日」重建会失真，
+    /// 没动过就必须原样保留（见 `draftDeviates`）。
+    private let seed: DateDraft
     @State private var repeatSelection: CountdownRepeat
     @State private var reminders: Set<Int>
     @State private var smartListDisplay: CountdownSmartListDisplay
@@ -73,6 +95,27 @@ struct CountdownEditorView: View {
     /// - 28 时 7 行 = 208pt，稳稳落在可用高度（约 215pt）内，最后一行完整可见。
     private static let popupRowHeight: CGFloat = 28
 
+    /// 「日期」浮层的几何。各段间距照参考图**分段**给，不是等距——参考图里
+    /// 分段控件与下拉行之间最松（22），下拉行与「忽略年份」之间最紧（18），
+    /// 「忽略年份」与按钮之间最松（28）。等距会让「忽略年份」看起来和下拉行
+    /// 是一组、按钮是另一组，而参考图里它是独立的一行。
+    ///
+    /// 单位都是 pt（参考图是 2× 截图，值已折半）。
+    private static let datePopupTopInset: CGFloat = 16
+    private static let datePopupBottomInset: CGFloat = 12
+    private static let dateSegmentGap: CGFloat = 22
+    private static let dateFieldGap: CGFloat = 18
+    private static let dateButtonGap: CGFloat = 28
+    /// 分段控件的宽度。参考图里它比内容窄、居中——不是撑满。
+    private static let dateSegmentWidth: CGFloat = 180
+    /// 月/日/年下拉的高度。参考图的字段比面板行（34）矮一档。
+    private static let dateFieldHeight: CGFloat = 30
+    /// 「日期」浮层的内容高度（含自身内边距，不含浮层外壳的上下内边距）。
+    ///
+    /// `16 + 24 + 22 + 30 + 18 + 18 + 28 + 28 + 12`，逐段对应上面几个常量：
+    /// 上内边距 / 分段控件 / 间距 / 下拉行 / 间距 / 忽略年份 / 间距 / 按钮 / 下内边距。
+    private static let datePopupContentHeight: CGFloat = 196
+
     init(store: CountdownStore, original: CountdownEvent?, defaultKind: CountdownKind = .anniversary) {
         self.store = store
         self.original = original
@@ -81,30 +124,16 @@ struct CountdownEditorView: View {
         _name = State(initialValue: original?.name ?? "")
         _symbol = State(initialValue: original?.safeSymbol ?? kind.defaultSymbol)
         _colorIndex = State(initialValue: original?.colorIndex ?? kind.defaultColorIndex)
-        // 编辑时把规则摊回「一个具体日期」：重复规则取它的下一次发生日，
-        // 这样切换类型或改重复都不会把已选的日期丢掉。**生日例外**——它必须落回
-        // 出生那天，否则出生年在「编辑一次再保存」的往返里就被磨掉了，
-        // 「显示岁数」也就永远算不出来。
+        // 编辑时把规则摊回浮层草稿（公历还是农历、哪个月/日、带不带年份）。
         //
         // 新建时**故意留空**：参考图的「日期」行是灰色的「选择日期」占位，
         // 「添加」按钮同时是禁用的——即日期属于必填，但初始不预设。
         let calendar = Calendar.current
         let today = Date()
-        let initialDate = original.map { event -> Date in
-            if case .birthday(let month, let day, let year) = event.rule,
-               let birth = calendar.date(from: DateComponents(year: year, month: month, day: day)) {
-                return birth
-            }
-            return event.occurrence(onOrAfter: today, calendar: calendar)
-        }
-        _pickedDate = State(initialValue: initialDate)
-        // 月历从已选那天开屏；新建（还没选日期）就从今天。
-        _displayedMonth = State(initialValue: initialDate ?? today)
-        _pickedFestival = State(initialValue: original.flatMap {
-            $0.kind == .festival ? CountdownFestival.name(for: $0.rule).flatMap { name in
-                CountdownFestival.all.first { $0.name == name }
-            } : nil
-        })
+        let seedDraft = Self.makeDraft(for: original, kind: kind, calendar: calendar, today: today)
+        self.seed = seedDraft
+        _draft = State(initialValue: seedDraft)
+        _editing = State(initialValue: seedDraft)
         _repeatSelection = State(initialValue: original?.repeatValue ?? kind.defaultRepeat)
         _reminders = State(initialValue: Set(original?.reminderOffsets
             ?? CountdownEvent.defaultReminderOffsets))
@@ -208,10 +237,9 @@ struct CountdownEditorView: View {
         let chrome: CGFloat = 12
         switch row {
         case .date:
-            // 节日目录是定高的滚动列表；其余是项目自己的月历（`LunarMonthGridView`）：
-            // 头部 18 + 星期行 15 + 6×30 网格 + 5 处 2pt 行距 + 2 处 4pt 间距 = 231，
-            // 再加浮层自身的内边距。`MonthGridCalculator.weeks` 固定 6，所以是个定值。
-            return kind.usesFestivalCatalog ? 188 : 243
+            // 内容是定高的：分段控件、一行下拉（最多三个，仍在同一行里）、
+            // 忽略年份、按钮，逐段相加就是 `datePopupContentHeight`。
+            return Self.datePopupContentHeight + chrome
         case .reminder:
             return CGFloat(7 + (isCustomReminder ? 1 : 0)) * Self.popupRowHeight + chrome
         case .recurrence:
@@ -340,8 +368,9 @@ struct CountdownEditorView: View {
                 .frame(width: Self.labelWidth, alignment: .leading)
             Button {
                 let next: Row? = openRow == row ? nil : row
-                // 每次打开日期浮层都回到已选那天所在的月份，别停在上次翻到的地方。
-                if next == .date { displayedMonth = pickedDate ?? Date() }
+                // 每次打开日期浮层都从**已确定**的那份重新拷一份来编辑，
+                // 这样「取消」不需要回滚——没按确定就什么也没发生。
+                if next == .date { editing = draft }
                 openRow = next
             } label: {
                 HStack(spacing: WFSpace.xs) {
@@ -377,43 +406,246 @@ struct CountdownEditorView: View {
 
     @ViewBuilder
     private var dateEditor: some View {
-        if kind.usesFestivalCatalog {
-            // 节日走目录：选项自带农历/公历规则，不需要用户自己挑日子。
-            ScrollView {
-                VStack(spacing: 0) {
-                    ForEach(CountdownFestival.all) { option in
-                        optionRow(option.name, checked: pickedFestival?.name == option.name) {
-                            pickedFestival = option
-                            // 名称还空着就顺手填上节日名：选了「春节」再手打一遍
-                            // 「春节」是白费一次输入。只在空的时候填，不会覆盖用户写的。
-                            if name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                                name = option.name
-                            }
-                            openRow = nil
-                        }
-                    }
-                }
+        // 与其余几行的浮层不同，这里**不是「点一个就收起」**：「忽略年份」是个开关，
+        // 公历/农历切换后月/日的候选也跟着变，需要一个明确的提交动作。参考图里
+        // 这个浮层自己带一对「取消 / 确定」，照做。
+        //
+        // 用 `VStack(spacing: 0)` + 逐段 `.padding(.top,)` 而不是一个统一的 spacing：
+        // 参考图的段间距是不等的（见上面几个常量的注释），统一 spacing 表达不了。
+        VStack(spacing: 0) {
+            Picker("", selection: $editing.isLunar) {
+                Text("公历").tag(false)
+                Text("农历").tag(true)
             }
-            .frame(height: 180)
-        } else {
-            // 用**项目自己的月历**（`LunarMonthGridView`，任务面板的日期浮层也是它），
-            // 不用系统 `DatePicker`：系统那个不显示农历与节日，而倒数纪念日恰恰是
-            // 农历语义最重的地方（春节落在正月初一），两者对不上。月历还自带
-            // 今天圆环 / 选中实心点 / 月份导航，与任务侧是同一套观感。
-            LunarMonthGridView(
-                calendar: calendar,
-                displayedMonth: $displayedMonth,
-                today: calendar.startOfDay(for: Date()),
-                selection: pickedDate,
-                // 点一天即定案并收起浮层——与 `TaskDatePopoverV2` 里
-                // `model.select(day); closeSheet()` 同一口径。
-                onSelect: { date in
-                    pickedDate = date
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .frame(width: Self.dateSegmentWidth)
+            .frame(maxWidth: .infinity)
+            .padding(.top, Self.datePopupTopInset)
+
+            // 勾了「忽略年份」就只剩月/日两个字段，它们各自撑满一半——参考图里
+            // 字段是**等宽铺满**这一行的，不是各自缩到文字宽再居中。
+            HStack(spacing: WFSpace.control) {
+                if !editing.ignoresYear { yearMenu }
+                monthMenu
+                dayMenu
+            }
+            .padding(.top, Self.dateSegmentGap)
+
+            HStack {
+                Toggle("忽略年份", isOn: $editing.ignoresYear)
+                    .toggleStyle(.checkbox)
+                    .font(WFType.supporting)
+                Spacer(minLength: 0)
+            }
+            .padding(.top, Self.dateFieldGap)
+
+            // 参考图这里**没有分隔线**：按钮靠段间距（28）与上面分开，不靠线。
+            HStack(spacing: WFSpace.sm) {
+                Spacer(minLength: 0)
+                Button("取消") { openRow = nil }
+                    .buttonStyle(.bordered)
+                    .accessibilityLabel("取消日期")
+                Button("确定") {
+                    // 此刻才算数：日期行与「添加」的可用性都看 `draft`。
+                    // 新建时 `editing.isSet` 还是 false（浮层打开时从空草稿拷的），
+                    // 按下确定就等于「用户选好了日期」，补上。
+                    var confirmed = editing
+                    confirmed.isSet = true
+                    draft = confirmed
                     openRow = nil
                 }
-            )
-            .frame(maxWidth: .infinity)
+                .buttonStyle(.borderedProminent)
+                .accessibilityLabel("确定日期")
+            }
+            .padding(.top, Self.dateButtonGap)
+            .padding(.bottom, Self.datePopupBottomInset)
         }
+        // 浮层外壳只给上下内边距（其余几行的浮层是满宽的选项列表，贴边才对）。
+        // 日期浮层里是**字段**，字段贴到圆角边上会被切掉角——左右各让 16。
+        .padding(.horizontal, WFSpace.lg)
+        // 切公历/农历、换月份都会让原来的「日」越界（农历没有 31 日，
+        // 公历 2 月没有 30 日），夹一下。
+        .onChange(of: editing.isLunar) { _, _ in clampDraft() }
+        .onChange(of: editing.month) { _, _ in clampDraft() }
+        .onChange(of: editing.year) { _, _ in clampDraft() }
+        .onChange(of: editing.ignoresYear) { _, ignores in
+            // 「忽略年份」其实就是「每年重复」的另一面：勾上 = 不带年份（每年一次），
+            // 勾掉 = 具体某一年。跟着改，免得留下「每年 + 带年份」这种自相矛盾的组合。
+            if ignores, repeatSelection == .never { repeatSelection = .yearly }
+            if !ignores, repeatSelection == .yearly { repeatSelection = .never }
+        }
+    }
+
+    /// 浮层里的一个月/日/年下拉。
+    ///
+    /// 参考图里它是**中性灰底、无描边、文字左对齐、右端一个细箭头**的字段。
+    /// 不用 `Picker(.menu)`：原生那颗会被全局 `.tint(WFColors.accent)`（见
+    /// `WorkFollowApp`）染成强调色底 + 居中文字，与参考图差得远。所以用 `Menu`
+    /// 自绘 label，候选项交给内嵌的 `Picker(.inline)`——勾选态由它负责。
+    private func dateMenu<Options: View>(_ label: String, accessibility: String,
+                                         @ViewBuilder options: () -> Options) -> some View {
+        Menu {
+            options()
+        } label: {
+            HStack(spacing: WFSpace.xs) {
+                Text(label)
+                    .font(WFType.supporting)
+                    .foregroundStyle(WFColors.overlayText)
+                    .lineLimit(1)
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 8, weight: .semibold))
+                    .foregroundStyle(WFColors.overlayTertiaryText)
+            }
+            .padding(.horizontal, WFSpace.control)
+            .frame(maxWidth: .infinity)
+            .frame(height: Self.dateFieldHeight)
+            .background(WFColors.fieldFill, in: RoundedRectangle(cornerRadius: 8))
+            .contentShape(RoundedRectangle(cornerRadius: 8))
+        }
+        .menuStyle(.button)
+        .buttonStyle(.plain)
+        .menuIndicator(.hidden)
+        // `Menu` 自己那颗内部按钮不接 `.accessibilityLabel`（实测读到的 desc 是空的）。
+        // 用 `.combine` 而不是 `.ignore`：`.ignore` 会把元素降成 `AXUnknown`，
+        // 标签是出来了，但 `AXPress` 变成静默 no-op——VoiceOver 也就打不开它了。
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(accessibility)
+    }
+
+    private var monthMenu: some View {
+        dateMenu(Self.monthLabel(editing.month, lunar: editing.isLunar),
+                 accessibility: "月：\(Self.monthLabel(editing.month, lunar: editing.isLunar))") {
+            Picker("", selection: $editing.month) {
+                ForEach(1...12, id: \.self) { month in
+                    Text(Self.monthLabel(month, lunar: editing.isLunar)).tag(month)
+                }
+            }
+            .pickerStyle(.inline)
+            .labelsHidden()
+        }
+    }
+
+    private var dayMenu: some View {
+        dateMenu(Self.dayLabel(editing.day, lunar: editing.isLunar),
+                 accessibility: "日：\(Self.dayLabel(editing.day, lunar: editing.isLunar))") {
+            Picker("", selection: $editing.day) {
+                ForEach(1...Self.daysInDraftMonth(editing), id: \.self) { day in
+                    Text(Self.dayLabel(day, lunar: editing.isLunar)).tag(day)
+                }
+            }
+            .pickerStyle(.inline)
+            .labelsHidden()
+        }
+    }
+
+    /// 「忽略年份」没勾时才出现。往前 120 年够放生日，往后 50 年够放远期倒数日。
+    private var yearMenu: some View {
+        dateMenu("\(editing.year)年", accessibility: "年：\(editing.year)年") {
+            Picker("", selection: $editing.year) {
+                ForEach(Self.yearChoices, id: \.self) { year in
+                    Text("\(year)年").tag(year)
+                }
+            }
+            .pickerStyle(.inline)
+            .labelsHidden()
+        }
+    }
+
+    // MARK: 日期草稿
+
+    /// 把一条已有规则摊回浮层草稿；`event == nil`（新建）时给一个**未选中**的初值。
+    ///
+    /// 初值的「公历/农历」与「忽略年份」跟类型走：节日按农历、且不带年份（春节
+    /// 就是正月初一）；其余类型按公历、带年份——纪念日/倒数日要的是具体某一天，
+    /// 生日还得靠那个年份算岁数。
+    private static func makeDraft(for event: CountdownEvent?, kind: CountdownKind,
+                                  calendar: Calendar, today: Date) -> DateDraft {
+        let currentYear = calendar.component(.year, from: today)
+        guard let event else {
+            let lunar = kind == .festival
+            let lunarParts = CountdownLunar.lunarComponents(of: today, calendar: calendar)
+            return DateDraft(
+                isSet: false,
+                isLunar: lunar,
+                month: lunar ? (lunarParts?.month ?? 1) : calendar.component(.month, from: today),
+                day: lunar ? (lunarParts?.day ?? 1) : calendar.component(.day, from: today),
+                year: currentYear,
+                ignoresYear: lunar)
+        }
+        switch event.rule {
+        case .solarYearly(let month, let day):
+            return DateDraft(isSet: true, isLunar: false, month: month, day: day,
+                             year: currentYear, ignoresYear: true)
+        case .lunarYearly(let month, let day):
+            return DateDraft(isSet: true, isLunar: true, month: month, day: day,
+                             year: currentYear, ignoresYear: true)
+        case .lunarOnce(let month, let day, let year):
+            return DateDraft(isSet: true, isLunar: true, month: month, day: day,
+                             year: year, ignoresYear: false)
+        case .lunarEve:
+            // 除夕没有固定的农历月/日，草稿只能填它**下一次**的月/日；靠
+            // `draftDeviates` 保证没动过时保存回原规则。
+            let anchor = CountdownEvent.occurrence(of: event.rule, onOrAfter: today,
+                                                   calendar: calendar)
+            let parts = CountdownLunar.lunarComponents(of: anchor, calendar: calendar)
+                ?? (month: 12, day: 30)
+            return DateDraft(isSet: true, isLunar: true, month: parts.month, day: parts.day,
+                             year: calendar.component(.year, from: anchor), ignoresYear: true)
+        case .birthday(let month, let day, let year):
+            return DateDraft(isSet: true, isLunar: false, month: month, day: day,
+                             year: year, ignoresYear: false)
+        case .once(let date):
+            let parts = calendar.dateComponents([.year, .month, .day], from: date)
+            return DateDraft(isSet: true, isLunar: false,
+                             month: parts.month ?? 1, day: parts.day ?? 1,
+                             year: parts.year ?? currentYear, ignoresYear: false)
+        case .daily(let lunar, let anchor), .weekly(_, let lunar, let anchor),
+             .monthly(_, let lunar, let anchor), .interval(_, let lunar, let anchor):
+            // 这几种节奏的「日期」行显示的是锚点，草稿也照锚点填。
+            let solar = calendar.dateComponents([.year, .month, .day], from: anchor)
+            let lunarParts = CountdownLunar.lunarComponents(of: anchor, calendar: calendar)
+            return DateDraft(
+                isSet: true,
+                isLunar: lunar,
+                month: lunar ? (lunarParts?.month ?? 1) : (solar.month ?? 1),
+                day: lunar ? (lunarParts?.day ?? 1) : (solar.day ?? 1),
+                year: solar.year ?? currentYear,
+                ignoresYear: false)
+        }
+    }
+
+    /// 把草稿的月/日夹进当前模式的合法范围：农历没有 31 日，公历 2 月没有 30 日。
+    private func clampDraft() {
+        editing.month = min(max(editing.month, 1), 12)
+        editing.day = min(max(editing.day, 1), Self.daysInDraftMonth(editing))
+    }
+
+    /// 草稿当前模式下这个月有几天。农历按 30 天封顶（小月廿九、大月三十）——
+    /// 具体到某年某月有没有三十要查农历表，这里不细分，选了没有的日子由
+    /// `CountdownEvent.lunarDate` 返回 nil、卡片退回今天。
+    private static func daysInDraftMonth(_ draft: DateDraft) -> Int {
+        if draft.isLunar { return 30 }
+        let calendar = Calendar.current
+        guard let first = calendar.date(from: DateComponents(year: draft.year,
+                                                             month: draft.month, day: 1)),
+              let range = calendar.range(of: .day, in: .month, for: first) else { return 31 }
+        return range.count
+    }
+
+    private static func monthLabel(_ month: Int, lunar: Bool) -> String {
+        lunar ? CountdownLunar.monthName(month) : "\(month)月"
+    }
+
+    private static func dayLabel(_ day: Int, lunar: Bool) -> String {
+        lunar ? CountdownLunar.dayName(day) : "\(day)日"
+    }
+
+    /// 年份候选。往前 120 年够放生日，往后 50 年够放远期倒数日。
+    private static var yearChoices: [Int] {
+        let current = Calendar.current.component(.year, from: Date())
+        return Array((current - 120)...(current + 50))
     }
 
     /// 「提醒」行。参考图里空集显示的是黑色的「无」，不是灰色占位。
@@ -620,30 +852,44 @@ struct CountdownEditorView: View {
 
     // MARK: 派生
 
-    /// 「日期」行显示的文本。节日取目录里那条规则的日期写法（`农历正月初一`），
-    /// 其余是公历日期——参考图里这一行写的是**日期**，不是节日名。
+    /// 「日期」行显示的文本。
+    ///
+    /// 草稿没被动过时直接用原规则的写法：`除夕` 折成「腊月三十」再回显就失真了，
+    /// 而它恰恰是草稿表达不了的那一类。
     private var dateText: String? {
-        if kind.usesFestivalCatalog {
-            return pickedFestival.flatMap { $0.rule.dateText ?? $0.name }
+        guard draft.isSet else { return nil }
+        if !draftDeviates, let text = original?.rule.dateText { return text }
+        return draftBaseRule?.dateText
+    }
+
+    /// 草稿偏离打开时的初值没有。
+    private var draftDeviates: Bool { draft != seed }
+
+    /// 草稿本身对应的基准规则：勾了「忽略年份」就是每年重复的月/日，
+    /// 否则是具体某一天。「重复」再由 `combinedRule` 叠上去。
+    private var draftBaseRule: CountdownRule? {
+        guard draft.isSet else { return nil }
+        if draft.ignoresYear {
+            return draft.isLunar
+                ? .lunarYearly(month: draft.month, day: draft.day)
+                : .solarYearly(month: draft.month, day: draft.day)
         }
-        return pickedDate.map { CountdownEvent.solarText($0, calendar: calendar) }
+        if draft.isLunar {
+            return .lunarOnce(month: draft.month, day: draft.day, year: draft.year)
+        }
+        guard let date = calendar.date(from: DateComponents(
+            year: draft.year, month: draft.month, day: draft.day)) else { return nil }
+        return .once(calendar.startOfDay(for: date))
     }
 
     /// 提交时的规则：把「日期」与「重复」两行合成一条。
     private var resolvedRule: CountdownRule? {
-        if kind.usesFestivalCatalog {
-            if let pickedFestival {
-                return combinedRule(base: pickedFestival.rule, repeatSelection: repeatSelection)
-            }
-            // 目录里认不出的农历规则（历史数据）原样保留，免得因为编辑器不认得
-            // 就把日期丢了。
-            if let rule = original?.rule, rule.isRepeating, CountdownFestival.name(for: rule) == nil {
-                return rule
-            }
-            return nil
-        }
-        guard let pickedDate else { return nil }
-        return combinedRule(base: .once(pickedDate), repeatSelection: repeatSelection)
+        guard draft.isSet else { return nil }
+        // 没动过日期就沿用原规则——`除夕` 这类没法从月/日重建的规则只有这条路
+        // 才能原样活下来。
+        let base = (!draftDeviates ? original?.rule : nil) ?? draftBaseRule
+        guard let base else { return nil }
+        return combinedRule(base: base, repeatSelection: repeatSelection)
     }
 
     /// 把「日期」（`base`）与「重复」合成一条规则。
@@ -658,7 +904,7 @@ struct CountdownEditorView: View {
         case .once(let date):
             anchor = date
             lunar = false
-        case .lunarYearly, .lunarEve:
+        case .lunarYearly, .lunarEve, .lunarOnce:
             anchor = nextOccurrence(of: base)
             lunar = true
         default:
@@ -667,6 +913,9 @@ struct CountdownEditorView: View {
         }
         switch repeatSelection {
         case .never:
+            // 农历的具体某一天要**原样留着**：折成公历日期就再也回不到
+            // 「农历2027年正月初一」这个写法了（那正是 `.lunarOnce` 存在的理由）。
+            if case .lunarOnce = base { return base }
             return .once(anchor)
         case .daily:
             return .daily(lunar: lunar, anchor: anchor)
@@ -690,6 +939,10 @@ struct CountdownEditorView: View {
                 }
                 return .solarYearly(month: month, day: day)
             }
+            // 农历同理：「每年」= 不带年份，落回 `.lunarYearly`。
+            if case .lunarOnce(let month, let day, _) = base {
+                return .lunarYearly(month: month, day: day)
+            }
             return base
         case .custom:
             return .interval(days: customIntervalDays, lunar: lunar, anchor: anchor)
@@ -712,8 +965,11 @@ struct CountdownEditorView: View {
         symbol = next.defaultSymbol
         colorIndex = next.defaultColorIndex
         repeatSelection = next.defaultRepeat
-        pickedFestival = nil
-        pickedDate = nil
+        // 日期一律清空——参考图里换完类型「日期」仍是「选择日期」，
+        // 而且公历日期与农历节日本来就不是同一套落点，留着上一个只会误导。
+        let fresh = Self.makeDraft(for: nil, kind: next, calendar: calendar, today: Date())
+        draft = fresh
+        editing = fresh
     }
 
     private func submit() {

@@ -507,4 +507,79 @@ final class CountdownEventTests: XCTestCase {
         let names = CountdownFestival.all.map(\.name)
         XCTAssertEqual(Set(names).count, names.count)
     }
+
+    // MARK: 农历的某一年（编辑器里「忽略年份」没勾）
+
+    /// 农历日的名字要能覆盖 1…30。
+    ///
+    /// 这条是**回归测试**：`dayName` 原来把「初十」写成 `"初" + digits[10]`，
+    /// 而 `digits` 只有 0…9 十个元素——下标越界，直接 SIGTRAP 崩进程。
+    /// 之前没有界面会去枚举农历日名，所以一直没暴露；日期浮层的「日」下拉
+    /// 一打开就崩。
+    func testLunarDayNamesCoverTheWholeMonth() {
+        XCTAssertEqual(CountdownLunar.dayName(1), "初一")
+        XCTAssertEqual(CountdownLunar.dayName(9), "初九")
+        XCTAssertEqual(CountdownLunar.dayName(10), "初十")
+        XCTAssertEqual(CountdownLunar.dayName(11), "十一")
+        XCTAssertEqual(CountdownLunar.dayName(19), "十九")
+        XCTAssertEqual(CountdownLunar.dayName(20), "二十")
+        XCTAssertEqual(CountdownLunar.dayName(21), "廿一")
+        XCTAssertEqual(CountdownLunar.dayName(29), "廿九")
+        XCTAssertEqual(CountdownLunar.dayName(30), "三十")
+        // 逐个走一遍，越界就会崩在这里而不是在用户面前。
+        for day in 1...30 {
+            XCTAssertFalse(CountdownLunar.dayName(day).isEmpty, "第 \(day) 日")
+        }
+    }
+
+    /// 农历 2027 年正月初一 = 公历 2027/2/6——与 `.lunarYearly(1, 1)` 同一个落点，
+    /// 两处必须一致。
+    func testLunarOnceResolvesToThatLunarYear() {
+        let event = makeEvent("某年春节", rule: .lunarOnce(month: 1, day: 1, year: 2027))
+        XCTAssertEqual(
+            calendar.startOfDay(for: event.occurrence(onOrAfter: today, calendar: calendar)),
+            calendar.startOfDay(for: date(2, 6, 2027)))
+    }
+
+    /// 已经过去的那一天不该被推到下一次——`.lunarOnce` 与 `.once` 同一口径，
+    /// 卡片据此显示「已经 N 天」。
+    func testLunarOnceInThePastStaysInThePast() {
+        let event = makeEvent("过去的农历日", rule: .lunarOnce(month: 1, day: 1, year: 2026))
+        XCTAssertLessThan(event.occurrence(onOrAfter: today, calendar: calendar),
+                          calendar.startOfDay(for: today))
+    }
+
+    /// 落点必须真的落在它自称的那个农历月/日上。
+    ///
+    /// 这条钉的是 `lunarDate` 的实现路线：它从**公历**那年 1 月 1 日往上扫，
+    /// 不能拿 `Calendar(identifier: .chinese)` 的 `.year` 组件直接构造日期——
+    /// 那是 60 年一轮的干支年号，`DateComponents(year: 2027, …)` 根本落不到 2027 年。
+    func testLunarOnceOccurrenceLandsOnTheRequestedLunarDay() {
+        for (year, month, day) in [(2026, 8, 15), (2027, 1, 1), (2027, 5, 5), (2028, 12, 8)] {
+            guard let resolved = CountdownEvent.lunarDate(year: year, month: month, day: day,
+                                                          calendar: calendar) else {
+                XCTFail("农历 \(year) 年 \(month)/\(day) 应当存在")
+                continue
+            }
+            let parts = CountdownLunar.lunarComponents(of: resolved, calendar: calendar)
+            XCTAssertEqual(parts?.month, month, "农历 \(year) 年 \(month)/\(day)")
+            XCTAssertEqual(parts?.day, day, "农历 \(year) 年 \(month)/\(day)")
+        }
+    }
+
+    /// 一次性、不进「重复」；日期行要**写出年份**——那正是它与 `.lunarYearly` 的差别。
+    func testLunarOnceIsOneOffAndShowsItsYear() {
+        let rule = CountdownRule.lunarOnce(month: 1, day: 1, year: 2027)
+        XCTAssertFalse(rule.isRepeating)
+        XCTAssertEqual(rule.repeatValue, .never)
+        XCTAssertEqual(rule.dateText, "农历2027年正月初一")
+        XCTAssertTrue(makeEvent("某年春节", rule: rule).usesLunarCalendar)
+    }
+
+    /// 新 case 要能落盘再读回来（规则是直接 `Codable` 合成的）。
+    func testLunarOnceRoundTripsThroughCoding() throws {
+        let rule = CountdownRule.lunarOnce(month: 5, day: 5, year: 2027)
+        let data = try JSONEncoder().encode(rule)
+        XCTAssertEqual(try JSONDecoder().decode(CountdownRule.self, from: data), rule)
+    }
 }
