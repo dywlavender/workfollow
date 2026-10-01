@@ -53,9 +53,19 @@
 - **验收边界：** 结构与保存合同通过，不宣称等尺寸逐像素完全一致。提醒/重复二级浮层保持原实现，未判为 TickTick parity verified。
 - **TASK-SCHEDULE-GAP-WORKSPACE-UNDO-SHORTCUT：** 单次工作区业务 undo 已由测试验证，但真实窗口 ⌘Z / Edit Undo 未接工作区撤销，快捷键撤销不判通过；留待独立输入路由修复，不混入本轮。
 
+## DATE Round 2：提醒 / 重复原位展开
+
+- **结构：** 展开内容属于同一个日期面板；保留当前属性与之前的属性，隐藏其后属性和主 Clear/Confirm。提醒有自身取消/确定，重复预设直接选入日期草稿并收起；工作日/节假日二级页原位返回。宽度260pt固定，高度随内容自然变化，替代 Round 1 的“开子面板尺寸不变”合同。
+- **提醒草稿：** `ScheduleReminderDraft` 独立保存当前多选；取消不写日期草稿，内层确定只写日期草稿，主确定才原子提交任务。全天预设09:00，定时预设沿用安排时间。修复自定义提前数量输入后未纳入确认结果的问题。
+- **自动验收：** `ScheduleExpandedSectionTests` 覆盖截断行、双层确认、取消/重新打开、定时20:30预设、34pt选项行、单份 Footer；与原子提交、主面板渲染、Draft 和 Popover 合同测试一并通过。渲染图片输出 `/tmp/workfollow-schedule-expanded-renders`。
+- **真实窗口：** 使用本笔 `/tmp/workfollow-native-derived-data/Build/Products/Debug/WorkFollow.app`，退出旧进程后启动。已检查提醒展开、选择后取消、重开无选择、内层确定后主行更新而任务仍无日期；重复展开及工作日返回通过。没有点击主确定，用户任务未被修改。
+- **DATE-GAP-ESCAPE-REAL-WINDOW：** 原 SwiftUI exit command 被 NSPopover 的取消抢先处理，增加 AppKit 事件路由。NSWindow + 真实 NSPopover 键盘事件测试证明首个 Escape 收起、第二个关闭、任务不变；但电脑控制工具的 Escape 在最新 App 中仍关闭整个面板。尚不能确认是否输入工具激活窗口导致瞬态关闭，**此实机路径未验收通过，不标记 Round 2 全面通过**。
+- **DATE-GAP-LUNAR-RECURRENCE / DATE-GAP-EBBINGHAUS：** 尚无对应完整 Domain 支持，记录差异，不增加不能工作的菜单项。
+- **边界：** 不改月份、农历、假日、重复 occurrence 算法；不宣称逐像素一致。
+
 ## 后续提交（未完成）
 
-2. **DATE Round 2：** 取得提醒/重复二级浮层参考图后，再逐项对齐其结构与定位；不扩展 Month Grid 业务。
+2. **DATE Round 2 剩余验收：** 复核真实键盘 Escape 与窗口激活的关系，再关闭上述实机 Gap。
 3. **Commit 4 / QA-001～002：** 四枚 priority flags、List/Tags/Attachment/Template、独立输入框设置；需要属性菜单参考图。
 4. **Commit 5 / SLASH-TASK-001：** Task DocumentProfile 命令顺序/分组/图标，不把任务分支塞进 Editor Core；需要 Slash 参考图。
 

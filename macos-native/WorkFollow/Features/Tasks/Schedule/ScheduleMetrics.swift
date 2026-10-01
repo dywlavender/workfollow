@@ -10,10 +10,10 @@ enum ScheduleMetrics {
     static let horizontalPadding: CGFloat = 14
     /// 属性行高（时间 / 提醒 / 重复 / 重复结束）。
     static let rowHeight: CGFloat = 30
-    /// 子浮层选项行高。
+    /// 展开内容选项行高。
     static let optionRowHeight: CGFloat = 34
-    /// 时间子浮层列表高（约 8 个半点选项）。
+    /// 时间展开列表高（约 8 个半点选项）。
     static let timeOptionsHeight: CGFloat = 280
-    /// 子浮层宽 = 主面板内容宽（260 − 2×14）。
+    /// 展开内容宽 = 主面板内容宽（260 − 2×14）。
     static let optionPanelWidth: CGFloat = panelWidth - horizontalPadding * 2
 }

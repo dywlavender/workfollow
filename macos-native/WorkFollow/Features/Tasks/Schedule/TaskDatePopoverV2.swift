@@ -49,9 +49,10 @@ struct TaskDatePopoverV2: View {
     /// 点过「确定」且区间非法时才显示错误（Flutter 的 `error` 同样是提交时才出现；
     /// 区间改回合法后它自动消失，因为文案由草稿实时算）。
     @State private var showRangeError = false
-    /// 重复浮层的「自定义」区间编辑是否展开。
+    /// 重复展开内容的「自定义」区间编辑状态。
     @State private var repeatCustomOpen = false
-    @State private var reminderDraft: Set<Int> = []
+    @State private var reminderDraft = ScheduleReminderDraft(offsets: [])
+    @State private var reminderInputError = false
     @State private var reminderCustomOpen = false
     @State private var customOffsetAmount = ""
     @State private var customOffsetUnit = 1
@@ -74,7 +75,7 @@ struct TaskDatePopoverV2: View {
         _inlineSheet = State(initialValue: initialPage == .time ? .time
             : initialPage == .reminder ? .reminder
             : initialPage == .recurrence ? .`repeat` : nil)
-        _reminderDraft = State(initialValue: Set(draftModel.reminderOffsets))
+        _reminderDraft = State(initialValue: ScheduleReminderDraft(offsets: draftModel.reminderOffsets))
         _timeFieldText = State(initialValue: draftModel.hasTime
             ? Self.clockText(draftModel.startTimeAnchor ?? workspace.clock(), calendar: workspace.calendar)
             : Self.defaultClockText)
@@ -141,6 +142,11 @@ struct TaskDatePopoverV2: View {
         .padding(ScheduleMetrics.horizontalPadding)
         .frame(width: ScheduleMetrics.panelWidth)
         .scheduleRenderAnchor(.panel)
+        .background {
+            ScheduleEscapeRouter {
+                if inlineSheet != nil { closeSheet() } else { onClose() }
+            }
+        }
         // macOS 27：`.popover` 不传 arrowEdge（默认 nil）就不画三角箭头，
         // 系统自带圆角卡片样式（对齐滴答/参考图），无需任何背景补丁。
         .onChange(of: model.startTimeAnchor) { _, _ in syncTimeField() }
@@ -169,18 +175,18 @@ struct TaskDatePopoverV2: View {
                          clear: model.hasEndTime ? { model.clearEndTime() } : nil) { endTimePanelBody }
             }
             if visiblePropertyRows.contains(.reminder) {
-            propertyRow(.reminder, icon: "alarm", title: reminderRowLabel,
-                     active: model.hasReminderDraft,
-                     clear: model.hasReminderDraft ? { model.clearReminder() } : nil) {
-                reminderPanelBody
-            }
+                propertyRow(.reminder, icon: "alarm", title: reminderRowLabel,
+                            active: model.hasReminderDraft,
+                            clear: model.hasReminderDraft ? { model.clearReminder() } : nil) {
+                    reminderPanelBody
+                }
             }
             if visiblePropertyRows.contains(.repeat) {
-            propertyRow(.repeat, icon: "repeat", title: repeatRowLabel,
-                     active: model.frequency != .never,
-                     clear: model.frequency != .never ? {
-                         model.chooseFrequency(.never)
-                     } : nil) { repeatPanelBody }
+                propertyRow(.repeat, icon: "repeat", title: repeatRowLabel,
+                            active: model.frequency != .never,
+                            clear: model.frequency != .never ? {
+                                model.chooseFrequency(.never)
+                            } : nil) { repeatPanelBody }
             }
             if visiblePropertyRows.contains(.repeatEnd) {
                 propertyRow(.repeatEnd, icon: "repeat", title: endRowLabel, active: model.ending != .never) {
@@ -203,6 +209,9 @@ struct TaskDatePopoverV2: View {
         sheetRow(sheet, icon: icon, title: title, active: active, editor: editor, clear: clear)
         if inlineSheet == sheet {
             body().frame(width: ScheduleMetrics.optionPanelWidth)
+                .background(WFColors.content, in: RoundedRectangle(cornerRadius: 12))
+                .shadow(color: .black.opacity(0.08), radius: 6, y: 2)
+                .scheduleRenderAnchor(.expandedContent(sheet))
         }
     }
 
@@ -217,7 +226,7 @@ struct TaskDatePopoverV2: View {
         return HStack(spacing: 8) {
             Image(systemName: icon)
                 .font(.system(size: 14))
-                .foregroundStyle(active || open ? WFColors.accent : WFColors.secondaryText)
+                .foregroundStyle(active ? WFColors.accent : WFColors.secondaryText)
                 .frame(width: 18)
                 .scheduleRenderAnchor(.icon(sheet))
             if let editor, active {
@@ -245,6 +254,7 @@ struct TaskDatePopoverV2: View {
         .scheduleRenderAnchor(.row(sheet),
             label: editor != nil && active ? (sheet == .endTime ? endTimeFieldText : timeFieldText) : title,
             active: active)
+        .scheduleRenderAnchor(.expandedRow(sheet), active: open)
         .background(open ? WFColors.hover : Color.clear, in: RoundedRectangle(cornerRadius: 8))
         // 整行开合的命中区放在**内容之下**：输入框与清除按钮在它前面，先拿到自己的
         // 点击；点行内其余任何位置都能开合（行上有输入框时也照常能展开）。
@@ -361,7 +371,7 @@ struct TaskDatePopoverV2: View {
 
     // MARK: 时间子面板（Flutter ScheduleTimeOptions）
 
-    /// 时间浮层 = 半小时步进列表（当前值强调色 + ✓），点即选即用；
+    /// 时间展开内容 = 半小时步进列表（当前值强调色 + ✓），点选只写日程草稿；
     /// 精确到分钟与清除都在行内（`timeRowEditor` / 行尾 ×）。
     private var timePanelBody: some View {
         halfHourList(day: startTimeDay,
@@ -373,7 +383,7 @@ struct TaskDatePopoverV2: View {
         }
     }
 
-    /// 结束时间浮层：**同一个**半小时列表组件，只换锚定日与回写目标。
+    /// 结束时间展开内容：同一个半小时列表组件，只换锚定日与回写目标。
     private var endTimePanelBody: some View {
         halfHourList(day: endTimeDay,
                      selected: model.hasEndTime ? model.endTimeAnchor : nil,
@@ -444,17 +454,24 @@ struct TaskDatePopoverV2: View {
         VStack(spacing: 0) {
             ForEach(reminderOptionValues, id: \.self) { minutes in
                 optionsRow(reminderOptionLabel(minutes),
-                           checked: reminderDraft.contains(minutes)) {
-                    if !reminderDraft.insert(minutes).inserted {
-                        reminderDraft.remove(minutes)
-                    }
+                           checked: reminderDraft.offsets.contains(minutes)) {
+                    reminderDraft.toggle(minutes)
                 }
             }
             Divider()
             optionsRow("自定义") { reminderCustomOpen.toggle() }
             if reminderCustomOpen { customOffsetRow }
+            if reminderInputError {
+                Text("请输入有效的提前数量")
+                    .font(WFType.supporting).foregroundStyle(WFColors.danger)
+            }
             panelButtons(cancel: { closeSheet() }) {
-                model.setReminderOffsets(reminderDraft)
+                guard reminderDraft.confirm(into: model,
+                    customAmount: reminderCustomOpen ? customOffsetAmount : nil,
+                    unit: customOffsetUnit) else {
+                    reminderInputError = true
+                    return
+                }
                 closeSheet()
             }
         }
@@ -464,7 +481,7 @@ struct TaskDatePopoverV2: View {
     /// 外加草稿里已有的自定义提前量（降序 = 当天在最前）。
     private var reminderOptionValues: [Int] {
         Set([0, -1440, -2880, -4320, -10080])
-            .union(reminderDraft)
+            .union(reminderDraft.offsets)
             .union(model.reminderOffsets)
             .sorted(by: >)
     }
@@ -723,6 +740,7 @@ struct TaskDatePopoverV2: View {
         .buttonStyle(.plain)
         // 点选后不留系统焦点框（弹窗里的蓝色描边看起来像脏线）。
         .focusEffectDisabled()
+        .scheduleRenderAnchor(.option(title), label: title, active: checked)
     }
 
     private func panelButtons(cancel: @escaping () -> Void, confirm: @escaping () -> Void) -> some View {
@@ -732,6 +750,7 @@ struct TaskDatePopoverV2: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
+        .scheduleRenderAnchor(.editorFooter(inlineSheet ?? .reminder), label: "取消 / 确定")
     }
 
     private func sheetFooterButton(_ title: String, filled: Bool, action: @escaping () -> Void) -> some View {
@@ -844,7 +863,8 @@ struct TaskDatePopoverV2: View {
             endTimeFieldText = model.endTimeAnchor
                 .map { Self.clockText($0, calendar: workspace.calendar) } ?? Self.defaultClockText
         case .reminder:
-            reminderDraft = model.reminderOffsets
+            reminderDraft = ScheduleReminderDraft(offsets: model.reminderOffsets)
+            reminderInputError = false
             reminderCustomOpen = false
             customOffsetAmount = ""
             customOffsetUnit = 1
@@ -935,7 +955,9 @@ struct TaskDatePopoverV2: View {
             }
             .buttonStyle(.plain)
             .keyboardShortcut(.defaultAction)
+            .accessibilityIdentifier("schedule-confirm")
         }
+        .scheduleRenderAnchor(.mainFooter, label: "清除 / 确定")
     }
 
     private var shortcutRow: some View {
