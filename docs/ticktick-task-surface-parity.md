@@ -82,6 +82,8 @@
 
 ## 后续提交（未完成）
 
+弹框横向收敛先遵循 [Native 弹框架构审计与统一契约](native-popup-architecture-audit.md)；其中 POP-001～007 区分事实与风险，规定六类呈现策略及保留既有合同测试的迁移顺序。不得在后续 Task/Notes 重构中丢弃日期固定外框、Draft隔离、Focus锚点和编辑器焦点规则。
+
 2. **DATE Round 2 剩余验收：** 复核真实键盘 Escape 与窗口激活的关系，再关闭上述实机 Gap。
 3. **Commit 4 / QA-001～002：** 四枚 priority flags、List/Tags/Attachment/Template、独立输入框设置；需要属性菜单参考图。
 4. **Commit 5 / SLASH-TASK-001：** Task DocumentProfile 命令顺序/分组/图标，不把任务分支塞进 Editor Core；需要 Slash 参考图。
