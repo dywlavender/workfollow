@@ -14,6 +14,10 @@ enum TaskListMetrics {
     static var checkboxLeading: CGFloat { rowHorizontalPadding + disclosureWidth + disclosureTitleGap }
     // Keep every divider just left of the root checkbox column, including child rows.
     static var dividerLeading: CGFloat { checkboxLeading - disclosureTitleGap }
+    static var titleLeading: CGFloat { checkboxLeading + 18 + WFSpace.sm }
+    static func dividerLeading(completed: Bool, depth: Int) -> CGFloat {
+        completed ? titleLeading + CGFloat(depth) * hierarchyIndent : dividerLeading
+    }
     static let dragMarkerHeight: CGFloat = 3
     static let dragPreviewWidth: CGFloat = 360
 }

@@ -71,6 +71,12 @@ enum WFColors {
     /// 墨色里最浅的一档：勾是从 `content` 色切出来的，底越浅勾的对比也越弱，
     /// 两者必须同步移动。
     static let taskCompletedCheckbox = themed(rgb(0xE3E3E3), rgb(0x34383F))
+    /// Completed rows leave the active workflow: independently toned roles,
+    /// not an opacity applied to the entire interactive row.
+    static let taskCompletedTitle = themed(rgb(0xA6A6A6), rgb(0xA0A0A0))
+    static let taskCompletedPreview = themed(rgb(0xD0D0D0), rgb(0x858585))
+    static let taskCompletedMetadata = themed(rgb(0xE0E0E0), rgb(0x707070))
+    static let taskCompletedCount = themed(rgb(0xA6A6A6), rgb(0xA0A0A0))
 
     // MARK: 锚定浮层（日历/四象限的编辑器与新建卡）
 

@@ -633,7 +633,7 @@ struct TaskListView: View {
                         .frame(width: TaskListMetrics.groupChevronSize, height: TaskListMetrics.groupChevronSize)
                     Text(groupTitle(group)).font(WFType.sectionSemibold)
                     Text("\(group.tasks.count)").font(WFType.supporting)
-                        .foregroundStyle(WFColors.secondaryText)
+                        .foregroundStyle(group.kind == .completed ? WFColors.taskCompletedCount : WFColors.secondaryText)
                     Spacer(minLength: 0)
                 }
                 .frame(maxWidth: .infinity, minHeight: TaskListMetrics.groupHeaderHeight, alignment: .leading)
@@ -798,7 +798,7 @@ struct TaskListView: View {
         Rectangle()
             .fill(WFColors.hover)
             .frame(height: 1)
-            .padding(.leading, TaskListMetrics.dividerLeading)
+            .padding(.leading, TaskListMetrics.dividerLeading(completed: node.task.status == .completed, depth: node.depth))
             .padding(.trailing, WFSpace.lg)
     }
 
@@ -930,11 +930,11 @@ struct TaskRowView: View {
                 VStack(alignment: .leading, spacing: 1) {
                     Text(task.title.isEmpty ? "无标题" : task.title)
                         .font(WFType.listTitle).lineLimit(1)
-                        .foregroundStyle(task.isClosed ? WFColors.secondaryText : WFColors.text)
+                        .foregroundStyle(task.status == .completed ? WFColors.taskCompletedTitle : task.isClosed ? WFColors.secondaryText : WFColors.text)
                     if let preview = rowPreview {
                         Text(preview)
-                            .font(WFType.listBody).lineLimit(1)
-                            .foregroundStyle(WFColors.secondaryText)
+                            .font(task.status == .completed ? WFType.completedListBody : WFType.listBody).lineLimit(1)
+                            .foregroundStyle(task.status == .completed ? WFColors.taskCompletedPreview : WFColors.secondaryText)
                             .taskTreeRenderAnchor(task.id, .preview)
                     }
                 }
@@ -1026,7 +1026,7 @@ private enum TaskRowPriority {
 
 /// 勾选框对齐 Flutter：18×18 槽位（即点击区），描边盒按 completionBoxSize
 /// 14.58 绘制（圆角 4.5 × 缩放 0.81 ≈ 3.6），贴槽位左缘；完成/放弃图标居中。
-/// 描边按优先级着色（高红/中橙/低=强调色），完成后强调色填充。
+/// 描边按优先级着色；完成后中性灰填充，白勾，不再使用强调色。
 private struct TaskRowCompletionBox: View {
     let task: Task
 
@@ -1037,10 +1037,15 @@ private struct TaskRowCompletionBox: View {
                 .foregroundStyle(WFColors.secondaryText)
                 .frame(width: 18, height: 18)
         } else if task.isClosed {
-            Image(systemName: "checkmark.square.fill")
-                .font(.system(size: 14.5))
-                .foregroundStyle(WFColors.accent)
-                .frame(width: 18, height: 18)
+            RoundedRectangle(cornerRadius: 3.6)
+                .fill(WFColors.taskCompletedCheckbox)
+                .overlay {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundStyle(.white)
+                }
+                .frame(width: 14.58, height: 14.58)
+                .frame(width: 18, height: 18, alignment: .leading)
         } else {
             RoundedRectangle(cornerRadius: 3.6)
                 .stroke(TaskRowPriority.color(task.priority), lineWidth: 1.5)
@@ -1094,7 +1099,9 @@ private struct TaskRowMetadataTrail: View {
                                             now: workspace.clock(), calendar: workspace.calendar)
     }
 
-    private var muted: Color { task.isClosed ? WFColors.tertiaryText : WFColors.secondaryText }
+    private var muted: Color {
+        task.status == .completed ? WFColors.taskCompletedMetadata : task.isClosed ? WFColors.tertiaryText : WFColors.secondaryText
+    }
 
     var body: some View {
         HStack(spacing: WFSpace.xs) {
@@ -1152,7 +1159,7 @@ private struct TaskRowMetadataTrail: View {
             }
         }
         .buttonStyle(.plain)
-        .foregroundStyle(task.isClosed ? WFColors.tertiaryText : badgeColor)
+        .foregroundStyle(task.isClosed ? muted : badgeColor)
         .help("修改安排日期")
         .accessibilityLabel("安排日期：\(task.title.isEmpty ? "无标题" : task.title)")
     }

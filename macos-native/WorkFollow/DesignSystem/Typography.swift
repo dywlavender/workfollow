@@ -15,6 +15,7 @@ enum WFType {
     // 近似值。
     /// 列表正文：12.5，不是 13——它紧挨 14 的标题，取整会掉一整级。
     static let listBody = Font.system(size: 12.5, weight: .medium)
+    static let completedListBody = Font.system(size: 12.5, weight: .regular)
     /// 行元信息与日历小条标题。
     static let listMeta = Font.system(size: 12)
     /// 说明性文字、日历条上的时刻、象限空态。
