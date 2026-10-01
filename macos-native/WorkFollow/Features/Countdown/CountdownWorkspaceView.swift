@@ -271,11 +271,15 @@ struct CountdownCardView: View {
             VStack(spacing: 0) {
                 HStack(spacing: WFSpace.sm) {
                     iconBadge
+                    // 18pt 是量出来的（都是 2× 图、同一阈值）：参照物「春节」墨迹 69×35px，
+                    // 我们 15pt 只有 57×29px，18pt 是 68×34px——差 1px，已到字号能调的极限。
+                    // 墨迹密度参照物略高（0.561 vs 0.519），是它的中文字体笔画更粗，抄不了。
                     Text(event.displayName)
-                        .font(.system(size: 15, weight: .medium))
+                        .font(.system(size: 18, weight: .medium))
                         .foregroundStyle(WFColors.overlayText)
                         .lineLimit(1)
                     if let ageText {
+                        // 岁数没有参照样本（三张参照图里没有生日卡），维持 11pt 不动。
                         Text(ageText)
                             .font(WFType.caption)
                             .foregroundStyle(WFColors.overlayTertiaryText)
@@ -285,13 +289,18 @@ struct CountdownCardView: View {
                 Spacer(minLength: WFSpace.sm)
                 magnitudeRow
                 Spacer(minLength: WFSpace.sm)
+                // 12pt 而不是 `WFType.caption`（11）：参照物副标题墨迹带宽 353px、高 26px，
+                // 我们 11pt 是 309×22px、12pt 是 336×25px——按宽度线性外推参照物约 12.6pt，
+                // 12pt 把误差从 −12.5% 压到 −4.8%，且 `supporting` 本身就是 12pt 常规。
+                // 剩下的宽度差主要来自它的大数字字体（数字那簇 127px vs 我们 117px），补不平。
                 Text(projection.caption)
-                    .font(WFType.caption)
+                    .font(WFType.supporting)
                     .foregroundStyle(WFColors.overlayTertiaryText)
                     .lineLimit(1)
             }
-            // 参考图卡片内的竖向落点（卡片 193 高）：名称中心 ≈48、天数中心 ≈104、
-            // 文案中心 ≈156。上下不等距，所以分别给而不是 `.padding(.vertical,)`。
+            // 参考图卡片内的竖向落点（以卡片上沿为原点，2× 图墨迹带中心）：名称 ≈44.8、
+            // 数字 ≈101.3、文案 ≈154.8；我们实测 43.8 / 102.3 / 155，三项都在 1pt 内。
+            // 上下不等距，所以分别给而不是 `.padding(.vertical,)`。
             .padding(.horizontal, WFSpace.md)
             .padding(.top, 34)
             .padding(.bottom, 30)
@@ -304,6 +313,15 @@ struct CountdownCardView: View {
                     .stroke(hovering ? WFColors.accent.opacity(0.35) : WFColors.overlayBorder)
             }
             .contentShape(RoundedRectangle(cornerRadius: 12))
+            // 天数才是这张卡片的主信息，要进无障碍标签；`caption` 作为悬停提示另给。
+            //
+            // 必须挂在**按钮内部**：挂到外层会把 overlay 里的置顶 / 更多两个按钮一起并进
+            // 这个元素，它们各自的 `.accessibilityLabel` 就失效了——实测读到的会是整张卡片
+            // 的标签（"春节，还有 128 天"）而不是"置顶"。
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(
+                "\(event.displayName)\(ageText.map { "，\($0)" } ?? "")，"
+                + "\(projection.isFuture ? "还有" : "已经") \(magnitude.spokenText)")
         }
         .buttonStyle(.plain)
         .overlay(alignment: .topTrailing) {
@@ -313,10 +331,6 @@ struct CountdownCardView: View {
         }
         .onHover { hovering = $0 }
         .help(projection.caption)
-        // 天数才是这张卡片的主信息，要进无障碍标签；`caption` 作为悬停提示另给。
-        .accessibilityLabel(
-            "\(event.displayName)\(ageText.map { "，\($0)" } ?? "")，"
-            + "\(projection.isFuture ? "还有" : "已经") \(magnitude.spokenText)")
         .contextMenu {
             menuItems
         }
