@@ -37,4 +37,8 @@
 - 自动验收：`PopupEscapeRoutingTests`、`ScheduleExpandedSectionTests`、`ScheduleContainerRenderTests`、`TaskInspectorPresentationTests`、`DocumentEditorStateTests` 定向通过；覆盖同窗深层优先、不同窗口、隐藏/卸载、系统模态退让；真实NSPopover首Esc收起、第二个关闭的原有测试保留通过。
 - 实机：退出旧进程后启动`/tmp/workfollow-native-derived-data/Build/Products/Debug/WorkFollow.app`。格式标题picker首Esc仅关闭子菜单、第二个关闭格式栏，文本无改动。日期展开Repeat后，电脑控制工具的首Esc仍关闭整个Popover，与自动事件路径不同；**未验收通过，不关闭DATE-GAP-ESCAPE-REAL-WINDOW**。
 - 阶段1下一笔：确定实机Escape是否在发送前激活owner造成transient关闭，还是原生responder先关闭；再决定是否调整Popover adapter。禁止恢复“任意keyWindow都吞Escape”的兜底来掩盖问题。
-- 阶段2～6：未开始。不把计划当成完成记录。
+- 阶段1补充：日期Adapter显式捕获presenter window并传给共享Escape Router；不依赖系统Popover的`parent`关系。新增无parent的浮层向明确presenter路由、无关窗口不消费、隐藏后不消费测试。保留隐藏窗口退让规则。
+- 实机诊断：最新构建的Escape事件属于主窗口，日期`_NSPopoverWindow`在事件monitor执行时已经`isVisible=false`，不是nil event，也不是系统modal抢键。该证据符合电脑控制激活主窗口导致transient面板先隐藏的路径；仍不能据此声称真人键盘路径通过。自动NSPopover层级关闭测试通过，`DATE-GAP-ESCAPE-REAL-WINDOW`继续保留；不让隐藏面板吞键来适配自动化。
+- 阶段2第一批：Focus时长浮层移除TimerPane局部点击mask，改用实际浮层bounds与所属窗口观察鼠标事件。outside取消草稿、原事件透传；其他窗口不关闭；挂载/卸载清理监听。保持232×104与数字下方12pt，不改计时Domain。`FocusDurationOutsideClickTests`五项和`FocusDurationPopoverRenderTests`通过。
+- 阶段2实机：退出旧进程后启动本轮构建，打开25:00、将草稿改为60、点击右Overview空白，浮层消失、时间仍25:00；浮层数字下方位置未变。InspectorFooter viewport尚未处理。
+- 阶段3～6：未开始。不把计划当成完成记录。

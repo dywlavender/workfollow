@@ -153,22 +153,80 @@ private struct FocusDurationPopoverPresenter: ViewModifier {
                                             y: centerY - panelHeight / 2,
                                             width: panelWidth, height: panelHeight)
 
-                    ZStack {
-                        Color.clear
-                            .contentShape(Rectangle())
-                            .onTapGesture { session.cancel() }
-                            .accessibilityHidden(true)
-
-                        FocusDurationPopover(session: session, onConfirm: onConfirm)
-                            .frame(width: panelWidth, height: panelHeight)
-                            .position(x: centerX, y: centerY)
-                            .preference(key: FocusRenderFramesPreferenceKey.self,
-                                        value: [.focusDurationPopover: panelFrame])
-                    }
-                    .frame(width: geometry.size.width, height: geometry.size.height)
+                    FocusDurationPopover(session: session, onConfirm: onConfirm)
+                        .frame(width: panelWidth, height: panelHeight)
+                        .background {
+                            FocusDurationOutsideClickObserver { session.cancel() }
+                        }
+                        .position(x: centerX, y: centerY)
+                        .preference(key: FocusRenderFramesPreferenceKey.self,
+                                    value: [.focusDurationPopover: panelFrame])
                 }
             }
         }
+    }
+}
+
+/// The panel owns this observer; its AppKit window and bounds are the source of truth.
+/// It observes clicks across that window, including Overview, without consuming them.
+private struct FocusDurationOutsideClickObserver: NSViewRepresentable {
+    let onOutsideClick: () -> Void
+
+    func makeNSView(context: Context) -> FocusDurationOutsideClickView {
+        let view = FocusDurationOutsideClickView()
+        view.onOutsideClick = onOutsideClick
+        return view
+    }
+
+    func updateNSView(_ view: FocusDurationOutsideClickView, context: Context) {
+        view.onOutsideClick = onOutsideClick
+    }
+
+    static func dismantleNSView(_ view: FocusDurationOutsideClickView, coordinator: ()) {
+        view.invalidate()
+    }
+}
+
+@MainActor
+final class FocusDurationOutsideClickView: NSView {
+    var onOutsideClick: (() -> Void)?
+    private var monitor: Any?
+    var isMonitoring: Bool { monitor != nil }
+
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        stopMonitoring()
+        guard window != nil else { return }
+        monitor = NSEvent.addLocalMonitorForEvents(
+            matching: [.leftMouseDown, .rightMouseDown, .otherMouseDown]
+        ) { [weak self] event in
+            self?.routeMouseDown(event) ?? event
+        }
+    }
+
+    /// Always return the original event so the clicked control can act normally.
+    func routeMouseDown(_ event: NSEvent) -> NSEvent {
+        guard isMonitoring, let window, event.window === window,
+              !isHiddenOrHasHiddenAncestor, !bounds.isEmpty else { return event }
+        let point = convert(event.locationInWindow, from: nil)
+        if !bounds.contains(point) { onOutsideClick?() }
+        return event
+    }
+
+    func invalidate() {
+        stopMonitoring()
+        onOutsideClick = nil
+    }
+
+    private func stopMonitoring() {
+        if let monitor { NSEvent.removeMonitor(monitor) }
+        monitor = nil
+    }
+
+    deinit {
+        if let monitor { NSEvent.removeMonitor(monitor) }
     }
 }
 
