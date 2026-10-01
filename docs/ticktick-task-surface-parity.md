@@ -63,6 +63,15 @@
 - **DATE-GAP-LUNAR-RECURRENCE / DATE-GAP-EBBINGHAUS：** 尚无对应完整 Domain 支持，记录差异，不增加不能工作的菜单项。
 - **边界：** 不改月份、农历、假日、重复 occurrence 算法；不宣称逐像素一致。
 
+## DATE 交互状态：属性值 / 展开 / Hover / 清除
+
+- `SchedulePanelPresentationState` 只管理展开、悬浮和重复二级页；实际时间、提醒、重复仍属于 `TaskDateDraftModel`。不在 View 中维护假时间。
+- `SchedulePropertyPresentation` 推导尾控件：有可清除值 + Hover 优先显示 ×；否则展开显示向下箭头、收起显示向右箭头。`SchedulePropertyRow` 共用此规则，展开与清除为独立 Button；时间保留精确到分钟的行内输入。
+- 首次打开未设置时间的行，先设置日期草稿的默认时间再展开；已有时间原样保留。默认纯函数暂按最近半小时（15分取后一个半点），时钟跨午夜时保持选中的安排日。此为当前产品约定，尚非实测确认的 TickTick 舍入规则。
+- 点击 × 仅清除对应草稿并收起展开；清除重复同时回到“永不结束”。提醒层的独立多选草稿与主面板原子确认链保持不变。
+- `SchedulePanelInteractionTests` 覆盖默认舍入、已有11:43不被覆盖、open/hover/clear/discard链、五种属性尾控件规则、提醒/重复清除和动态行渲染。与 DATE Draft / Atomic / Expanded / Render / Popover 定向测试一并通过。
+- 真实窗口确认：最新构建点击“时间”后显示默认09:30，时间列表同值勾选，原任务 Header 仍为“设置日期”；未点击主确定。后续 Mac 锁屏，**真实鼠标 Hover × 和点击 × 尚待验收**；不得以状态/渲染测试代替这项签收。前述 Escape Gap 不因本笔重构自动关闭。
+
 ## 后续提交（未完成）
 
 2. **DATE Round 2 剩余验收：** 复核真实键盘 Escape 与窗口激活的关系，再关闭上述实机 Gap。

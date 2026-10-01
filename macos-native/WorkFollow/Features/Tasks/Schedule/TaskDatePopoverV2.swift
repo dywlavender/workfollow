@@ -26,9 +26,7 @@ struct TaskDatePopoverV2: View {
     typealias InlineSheet = ScheduleExpandedSection
 
     /// 重复二级页（Flutter: 工作日›/节假日›）。
-    private enum RepeatGroup {
-        case work, holiday
-    }
+    private typealias RepeatGroup = SchedulePanelPresentationState.RecurrencePage
 
     /// 重复结束二级页（Flutter: 按日期结束/按次数结束）。
     private enum RepeatEndEdit {
@@ -37,11 +35,17 @@ struct TaskDatePopoverV2: View {
 
     /// 宽度恒定260；展开高度随内容变化，尺寸走 ScheduleMetrics。
     @StateObject private var model: TaskDateDraftModel
-    @State private var inlineSheet: InlineSheet?
-    @State private var repeatGroup: RepeatGroup?
+    @State private var presentation = SchedulePanelPresentationState()
+    private var inlineSheet: InlineSheet? {
+        get { presentation.expandedProperty }
+        nonmutating set { presentation.expandedProperty = newValue }
+    }
+    private var repeatGroup: RepeatGroup? {
+        get { presentation.recurrencePage }
+        nonmutating set { presentation.recurrencePage = newValue }
+    }
     @State private var repeatEndEdit: RepeatEndEdit?
     /// 鼠标当前悬浮的属性行（已设值的行尾把 › 换成 ×）。
-    @State private var hoveredSheet: InlineSheet?
     /// 时间行内编辑的文本（展开时可改，提交后回写草稿）。
     @State private var timeFieldText = ""
     /// 结束时间行内编辑的文本（同上；分钟精度靠它，半小时列表只是快捷选择）。
@@ -72,9 +76,9 @@ struct TaskDatePopoverV2: View {
         let draftModel = TaskDateDraftModel(
             task: task, calendar: workspace.calendar, now: workspace.clock, deadline: deadline)
         _model = StateObject(wrappedValue: draftModel)
-        _inlineSheet = State(initialValue: initialPage == .time ? .time
+        _presentation = State(initialValue: SchedulePanelPresentationState(expandedProperty: initialPage == .time ? .time
             : initialPage == .reminder ? .reminder
-            : initialPage == .recurrence ? .`repeat` : nil)
+            : initialPage == .recurrence ? .`repeat` : nil))
         _reminderDraft = State(initialValue: ScheduleReminderDraft(offsets: draftModel.reminderOffsets))
         _timeFieldText = State(initialValue: draftModel.hasTime
             ? Self.clockText(draftModel.startTimeAnchor ?? workspace.clock(), calendar: workspace.calendar)
@@ -152,6 +156,13 @@ struct TaskDatePopoverV2: View {
         .onChange(of: model.startTimeAnchor) { _, _ in syncTimeField() }
         .onChange(of: model.endTimeAnchor) { _, _ in syncTimeField() }
         .onChange(of: model.hasTime) { _, _ in syncTimeField() }
+        .onAppear {
+            if inlineSheet == .time {
+                SchedulePanelInteraction.open(.time, state: &presentation, model: model,
+                                              now: workspace.clock(), calendar: workspace.calendar)
+                syncTimeField()
+            }
+        }
         .onExitCommand {
             if inlineSheet != nil { closeSheet() } else { onClose() }
         }
@@ -163,33 +174,29 @@ struct TaskDatePopoverV2: View {
         VStack(spacing: 0) {
             propertyRow(.time, icon: "clock", title: "时间", active: model.hasTime,
                      editor: AnyView(timeRowEditor),
-                     clear: model.hasTime ? {
-                         model.setHasTime(false)
-                         timeFieldText = Self.defaultClockText
-                     } : nil) { timePanelBody }
+                     canClear: model.hasTime) { timePanelBody }
             // 结束时间：只在时间段页签出现（Flutter `if (range) _property('schedule-end-time' …)`），
             // 紧跟在开始时间之后、提醒之前。
             if visiblePropertyRows.contains(.endTime) {
                 propertyRow(.endTime, icon: "clock", title: "结束时间", active: model.hasEndTime,
                          editor: AnyView(endTimeRowEditor),
-                         clear: model.hasEndTime ? { model.clearEndTime() } : nil) { endTimePanelBody }
+                         canClear: model.hasEndTime) { endTimePanelBody }
             }
             if visiblePropertyRows.contains(.reminder) {
                 propertyRow(.reminder, icon: "alarm", title: reminderRowLabel,
                             active: model.hasReminderDraft,
-                            clear: model.hasReminderDraft ? { model.clearReminder() } : nil) {
+                            canClear: model.hasReminderDraft) {
                     reminderPanelBody
                 }
             }
             if visiblePropertyRows.contains(.repeat) {
                 propertyRow(.repeat, icon: "repeat", title: repeatRowLabel,
                             active: model.frequency != .never,
-                            clear: model.frequency != .never ? {
-                                model.chooseFrequency(.never)
-                            } : nil) { repeatPanelBody }
+                            canClear: model.frequency != .never) { repeatPanelBody }
             }
             if visiblePropertyRows.contains(.repeatEnd) {
-                propertyRow(.repeatEnd, icon: "repeat", title: endRowLabel, active: model.ending != .never) {
+                propertyRow(.repeatEnd, icon: "repeat", title: endRowLabel, active: model.ending != .never,
+                            canClear: model.ending != .never) {
                     repeatEndPanelBody
                 }
             }
@@ -204,9 +211,9 @@ struct TaskDatePopoverV2: View {
     @ViewBuilder
     private func propertyRow<Body: View>(_ sheet: InlineSheet, icon: String, title: String,
                                        active: Bool, editor: AnyView? = nil,
-                                       clear: (() -> Void)? = nil,
+                                       canClear: Bool = false,
                                        @ViewBuilder body: @escaping () -> Body) -> some View {
-        sheetRow(sheet, icon: icon, title: title, active: active, editor: editor, clear: clear)
+        sheetRow(sheet, icon: icon, title: title, active: active, editor: editor, canClear: canClear)
         if inlineSheet == sheet {
             body().frame(width: ScheduleMetrics.optionPanelWidth)
                 .background(WFColors.content, in: RoundedRectangle(cornerRadius: 12))
@@ -219,73 +226,21 @@ struct TaskDatePopoverV2: View {
     private func sheetRow(_ sheet: InlineSheet, icon: String, title: String,
                                       active: Bool,
                                       editor: AnyView? = nil,
-                                      clear: (() -> Void)? = nil) -> some View {
+                                      canClear: Bool = false) -> some View {
         let open = inlineSheet == sheet
-        // 行尾控件：未设值 = ›/˅；已设值且（悬浮或已展开）= ×（点击清除）。
-        let showClear = clear != nil && !open && hoveredSheet == sheet
-        return HStack(spacing: 8) {
-            Image(systemName: icon)
-                .font(.system(size: 14))
-                .foregroundStyle(active ? WFColors.accent : WFColors.secondaryText)
-                .frame(width: 18)
-                .scheduleRenderAnchor(.icon(sheet))
-            if let editor, active {
-                // 时间：设了时间就是行内 HH:mm 输入框（可精确到分钟）。
-                editor
-            } else {
-                Text(title)
-                    .font(WFType.body)
-                    .foregroundStyle(active ? WFColors.accent : WFColors.text)
-                    .lineLimit(1)
-            }
-            Spacer(minLength: 4)
-            if showClear, let clear {
-                clearControl(clear)
-            } else {
-                Image(systemName: open ? "chevron.down" : "chevron.right")
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(WFColors.tertiaryText)
-                    .frame(width: 18, height: 18)
-                    .scheduleRenderAnchor(.trailing(sheet))
-            }
-        }
-        .padding(.horizontal, open ? 10 : 2)
-        .frame(height: ScheduleMetrics.rowHeight)
-        .scheduleRenderAnchor(.row(sheet),
-            label: editor != nil && active ? (sheet == .endTime ? endTimeFieldText : timeFieldText) : title,
-            active: active)
-        .scheduleRenderAnchor(.expandedRow(sheet), active: open)
-        .background(open ? WFColors.hover : Color.clear, in: RoundedRectangle(cornerRadius: 8))
-        // 整行开合的命中区放在**内容之下**：输入框与清除按钮在它前面，先拿到自己的
-        // 点击；点行内其余任何位置都能开合（行上有输入框时也照常能展开）。
-        .background {
-            Button { toggleSheet(sheet) } label: {
-                Color.clear.contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("展开\(propertyName(sheet))")
-        }
-        .onHover { inside in
-            if inside {
-                hoveredSheet = sheet
-            } else if hoveredSheet == sheet {
-                hoveredSheet = nil
-            }
-        }
-    }
-
-    /// 行尾清除（×）：清除本属性，不影响其它行。
-    private func clearControl(_ action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Image(systemName: "xmark")
-                .font(.system(size: 9, weight: .semibold))
-                .foregroundStyle(WFColors.tertiaryText)
-                .frame(width: 18, height: 18)
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .help("清除")
-        .accessibilityLabel("清除")
+        let value = active ? (editor != nil ? (sheet == .endTime ? "结束 \(endTimeFieldText)" : timeFieldText) : title) : nil
+        return SchedulePropertyRow(
+            property: sheet, icon: icon,
+            presentation: SchedulePropertyPresentation(title: propertyName(sheet), value: value,
+                isActive: active, isExpanded: open, isHovered: presentation.hoveredProperty == sheet,
+                canClear: canClear),
+            editor: editor,
+            onOpen: { toggleSheet(sheet) },
+            onClear: {
+                SchedulePanelInteraction.clear(sheet, state: &presentation, model: model)
+                syncTimeField()
+            },
+            onHover: { presentation.hover(sheet, inside: $0) })
     }
 
     /// 时间行的行内编辑（滴答：行即 HH:mm 输入框，列表给半点粒度、输入框给分钟）。
@@ -854,6 +809,8 @@ struct TaskDatePopoverV2: View {
     }
 
     private func openSheet(_ sheet: InlineSheet) {
+        SchedulePanelInteraction.open(sheet, state: &presentation, model: model,
+                                      now: workspace.clock(), calendar: workspace.calendar)
         switch sheet {
         case .time:
             timeFieldText = model.hasTime
