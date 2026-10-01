@@ -22,6 +22,9 @@ struct CountdownEvent: Identifiable, Codable, Equatable {
     /// 由 `effectiveSmartListDisplay` 回退到 `showsInSmartList`——加字段不能把
     /// 已有记录的「显示」读没了。
     var smartListDisplay: CountdownSmartListDisplay?
+    /// 卡片中间那个大数字的显示单位（天 / 月 / 周），点卡片轮换。
+    /// **可选**：存量 JSON 里没有这个键，解出来是 nil，由 `effectiveDisplayUnit` 回退到「天」。
+    var displayUnit: CountdownDisplayUnit?
     /// 对应「显示岁数」开关，只对生日有意义。
     var showsAge: Bool
     var note: String
@@ -41,6 +44,7 @@ struct CountdownEvent: Identifiable, Codable, Equatable {
         reminderOffsets: [Int] = CountdownEvent.defaultReminderOffsets,
         showsInSmartList: Bool = true,
         smartListDisplay: CountdownSmartListDisplay? = nil,
+        displayUnit: CountdownDisplayUnit? = nil,
         showsAge: Bool = false,
         note: String = "",
         pinned: Bool = false,
@@ -58,6 +62,7 @@ struct CountdownEvent: Identifiable, Codable, Equatable {
         self.smartListDisplay = smartListDisplay
         // 两个字段写的时候保持同步：新字段是准的，老字段是给存量读的。
         self.showsInSmartList = smartListDisplay?.showsInSmartList ?? showsInSmartList
+        self.displayUnit = displayUnit
         self.showsAge = showsAge
         self.note = note
         self.pinned = pinned
@@ -84,6 +89,23 @@ struct CountdownEvent: Identifiable, Codable, Equatable {
     /// 用老字段 `showsInSmartList` 推导，界面一律读这个。
     var effectiveSmartListDisplay: CountdownSmartListDisplay {
         smartListDisplay ?? (showsInSmartList ? .sameDay : .never)
+    }
+
+    /// 卡片主数字实际生效的单位。存量记录没有 `displayUnit` 这个键，回退到「天」。
+    var effectiveDisplayUnit: CountdownDisplayUnit { displayUnit ?? .day }
+
+    /// 这条记录的日期是否走农历。副标题的农历前缀与「按月」的月长都用它，
+    /// 两处必须一致，所以只留一份判断。
+    var usesLunarCalendar: Bool {
+        switch rule {
+        case .lunarYearly, .lunarEve:
+            return true
+        case .daily(let lunar, _), .weekly(_, let lunar, _), .monthly(_, let lunar, _),
+             .interval(_, let lunar, _):
+            return lunar
+        default:
+            return false
+        }
     }
 }
 
@@ -504,6 +526,47 @@ enum CountdownLunar {
     }
 }
 
+// MARK: - 卡片主数字的显示单位
+
+/// 卡片中间那个大数字的单位。参考实现里点卡片在三种之间轮换：
+/// `128` → `4月9天` → `18周2天`。**每张卡各记各的**（点一张只改那一张）。
+enum CountdownDisplayUnit: String, Codable, CaseIterable, Identifiable {
+    case day, month, week
+
+    var id: String { rawValue }
+
+    /// 点一下卡片轮到的下一个单位。顺序照参考图：天 → 月 → 周 → 天。
+    var next: CountdownDisplayUnit {
+        switch self {
+        case .day: return .month
+        case .month: return .week
+        case .week: return .day
+        }
+    }
+}
+
+/// 卡片主数字的分段。数字与单位分开存，界面才能把数字放大、单位缩小
+/// （参考图「4月9天」里 4 / 9 大，月 / 天 小）。
+struct CountdownMagnitude: Equatable {
+    struct Part: Equatable {
+        let value: Int
+        /// 空串 = 只有数字：按天那一档，以及不足一个更大单位时。
+        let unit: String
+    }
+
+    let parts: [Part]
+
+    /// `128` / `4月9天` / `18周2天`。无障碍标签与测试用。
+    var text: String { parts.map { "\($0.value)\($0.unit)" }.joined() }
+
+    /// 读屏用。按天那一档画面上只有光秃秃的数字（参考图就是 `128`），
+    /// 念出来得补一个「天」，否则是个没有单位的数。
+    var spokenText: String {
+        if parts.count == 1, parts[0].unit.isEmpty { return "\(parts[0].value) 天" }
+        return text
+    }
+}
+
 // MARK: - 发生日与倒数投影
 
 /// 一条记录在当前时刻的展示数据：天数、方向与副标题。纯值类型，便于测试。
@@ -570,22 +633,59 @@ extension CountdownEvent {
             caption: caption(occurrence: occurrence, isFuture: isFuture, calendar: calendar))
     }
 
+    /// 卡片主数字，按 `unit` 分解。
+    ///
+    /// - 天：原样。
+    /// - 周：固定 7 天一周，纯除法（128 天 → 18 周 2 天）。
+    /// - 月：**按事件自己的历法**取自然月——农历事件用农历月，公历事件用公历月。
+    ///   参考图实测：2026-10-01 → 正月初一（2027/2/6）共 128 天，显示「4月9天」；
+    ///   同区间的农历月差正是 4 个月 9 天，而公历月差是 4 个月 5 天——对不上。
+    func magnitude(asOf today: Date, unit: CountdownDisplayUnit,
+                   calendar: Calendar = .current) -> CountdownMagnitude {
+        let start = calendar.startOfDay(for: today)
+        let projection = projection(asOf: start, calendar: calendar)
+        let days = projection.days
+
+        switch unit {
+        case .day:
+            return CountdownMagnitude(parts: [.init(value: days, unit: "")])
+
+        case .week:
+            let weeks = days / 7
+            guard weeks > 0 else {
+                return CountdownMagnitude(parts: [.init(value: days, unit: "")])
+            }
+            return CountdownMagnitude(parts: [
+                .init(value: weeks, unit: "周"),
+                .init(value: days % 7, unit: "天"),
+            ])
+
+        case .month:
+            let monthCalendar = usesLunarCalendar
+                ? CountdownLunar.chineseCalendar(timeZone: calendar.timeZone)
+                : calendar
+            // 已过去的记录落点早于今天，两个方向都要能算，所以按时间先后取。
+            let earlier = min(start, projection.occurrence)
+            let later = max(start, projection.occurrence)
+            let parts = monthCalendar.dateComponents([.month, .day], from: earlier, to: later)
+            let months = parts.month ?? 0
+            guard months > 0 else {
+                return CountdownMagnitude(parts: [.init(value: days, unit: "")])
+            }
+            return CountdownMagnitude(parts: [
+                .init(value: months, unit: "月"),
+                .init(value: parts.day ?? 0, unit: "天"),
+            ])
+        }
+    }
+
     /// 副标题。农历节日在公历日期前补一段农历名（参考图：
     /// `距离 正月初一（2027/2/6）还有`），其余只有公历日期。
     private func caption(occurrence: Date, isFuture: Bool, calendar: Calendar) -> String {
         let solar = Self.solarText(occurrence, calendar: calendar)
         let tail = isFuture ? "还有" : "已经"
-        let isLunar: Bool
-        switch rule {
-        case .lunarYearly, .lunarEve:
-            isLunar = true
-        case .daily(let lunar, _), .weekly(_, let lunar, _), .monthly(_, let lunar, _),
-             .interval(_, let lunar, _):
-            isLunar = lunar
-        default:
-            isLunar = false
-        }
-        guard isLunar, let parts = CountdownLunar.lunarComponents(of: occurrence, calendar: calendar) else {
+        guard usesLunarCalendar,
+              let parts = CountdownLunar.lunarComponents(of: occurrence, calendar: calendar) else {
             return "距离 \(solar) \(tail)"
         }
         return "距离 \(CountdownLunar.label(month: parts.month, day: parts.day))（\(solar)）\(tail)"

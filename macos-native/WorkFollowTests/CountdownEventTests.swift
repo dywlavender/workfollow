@@ -377,6 +377,116 @@ final class CountdownEventTests: XCTestCase {
         XCTAssertEqual(noRepeat.ageText(asOf: today, calendar: calendar), "26 岁")
     }
 
+    // MARK: 主数字的单位（点卡片轮换）
+
+    /// 参考图那三张：同一天、同一张卡，只是单位不同——
+    /// `128` / `4月9天` / `18周2天`，而副标题三个都一样。
+    func testSpringFestivalMagnitudeMatchesTheThreeReferenceShots() {
+        let event = makeEvent("春节", kind: .festival, rule: .lunarYearly(month: 1, day: 1))
+        let october1 = date(10, 1)
+
+        let day = event.magnitude(asOf: october1, unit: .day, calendar: calendar)
+        XCTAssertEqual(day.text, "128")
+        XCTAssertEqual(day.parts.map(\.unit), [""], "按天只有数字，不带单位字")
+
+        let month = event.magnitude(asOf: october1, unit: .month, calendar: calendar)
+        XCTAssertEqual(month.text, "4月9天")
+        XCTAssertEqual(month.parts.map(\.value), [4, 9])
+
+        let week = event.magnitude(asOf: october1, unit: .week, calendar: calendar)
+        XCTAssertEqual(week.text, "18周2天")
+        XCTAssertEqual(week.parts.map(\.value), [18, 2])
+
+        // 换单位只动中间那个数字，副标题不动。
+        XCTAssertEqual(event.projection(asOf: october1, calendar: calendar).caption,
+                       "距离 正月初一（2027/2/6）还有")
+    }
+
+    /// 「按月」要按**事件自己的历法**取自然月。春节是农历事件，落点 2027/2/6：
+    /// 2026-10-01 → 2027-02-06 的农历差是 4 个月 9 天，公历差只有 4 个月 5 天。
+    /// 这里拿一个落在**同一天**的公历事件做对照，它必须给出 4月5天——
+    /// 两个数字不一样，才证明历法分支真的被走对了（都取公历会让这条挂掉）。
+    func testMonthUsesTheEventsOwnCalendar() {
+        let october1 = date(10, 1)
+
+        let lunar = makeEvent("春节", kind: .festival, rule: .lunarYearly(month: 1, day: 1))
+        XCTAssertEqual(lunar.magnitude(asOf: october1, unit: .month, calendar: calendar).text,
+                       "4月9天", "农历事件按农历月")
+
+        let solar = makeEvent("公历", kind: .anniversary, rule: .solarYearly(month: 2, day: 6))
+        XCTAssertEqual(solar.magnitude(asOf: october1, unit: .month, calendar: calendar).text,
+                       "4月5天", "公历事件按公历月")
+    }
+
+    /// 规则里带 `lunar: true` 的非节日也要走农历月。
+    func testLunarFlaggedRulesUseLunarMonths() {
+        let monthly = makeEvent("农历每月", kind: .countdown,
+                                rule: .monthly(day: 1, lunar: true, anchor: today))
+        XCTAssertTrue(monthly.usesLunarCalendar)
+        let solar = makeEvent("公历每月", kind: .countdown,
+                              rule: .monthly(day: 1, lunar: false, anchor: today))
+        XCTAssertFalse(solar.usesLunarCalendar)
+        // 春节/除夕这两个固定走农历。
+        XCTAssertTrue(makeEvent("春节", kind: .festival, rule: .lunarYearly(month: 1, day: 1))
+            .usesLunarCalendar)
+        XCTAssertTrue(makeEvent("除夕", kind: .festival, rule: .lunarEve).usesLunarCalendar)
+    }
+
+    /// 不足一个更大单位就退回纯天数——免得出现「0月2天」「0周2天」。
+    func testMagnitudeFallsBackToDaysBelowOneUnit() {
+        let weekend = makeEvent("周末", rule: .once(date(10, 3)))   // 2 天
+        XCTAssertEqual(weekend.magnitude(asOf: date(10, 1), unit: .day, calendar: calendar).text, "2")
+        XCTAssertEqual(weekend.magnitude(asOf: date(10, 1), unit: .week, calendar: calendar).text, "2")
+        XCTAssertEqual(weekend.magnitude(asOf: date(10, 1), unit: .month, calendar: calendar).text, "2")
+    }
+
+    /// 已过去的记录（落点在今天之前）也要能按月/按周算。
+    /// 这条同时钉住一个坑：`dateComponents(from:to:)` 的方向反过来会得到**负数**
+    /// （2026-10-01 → 2026-08-08 是 -1月-24天），所以实现里必须先排先后再算。
+    func testMagnitudeWorksForPastEvents() {
+        let past = makeEvent("使用滴答清单", rule: .once(date(8, 8)))
+        let october1 = date(10, 1)
+
+        XCTAssertEqual(past.magnitude(asOf: october1, unit: .day, calendar: calendar).text, "54")
+        XCTAssertEqual(past.magnitude(asOf: october1, unit: .week, calendar: calendar).text, "7周5天")
+        XCTAssertEqual(past.magnitude(asOf: october1, unit: .month, calendar: calendar).text, "1月23天")
+    }
+
+    /// 轮换顺序照参考图：天 → 月 → 周 → 天。
+    func testDisplayUnitCyclesDayMonthWeek() {
+        XCTAssertEqual(CountdownDisplayUnit.day.next, .month)
+        XCTAssertEqual(CountdownDisplayUnit.month.next, .week)
+        XCTAssertEqual(CountdownDisplayUnit.week.next, .day)
+        XCTAssertEqual(CountdownDisplayUnit.allCases, [.day, .month, .week])
+    }
+
+    /// 读屏时按天那一档要补「天」，否则念出来是个没有单位的数。
+    func testSpokenTextKeepsTheDayUnit() {
+        let event = makeEvent("春节", kind: .festival, rule: .lunarYearly(month: 1, day: 1))
+        XCTAssertEqual(event.magnitude(asOf: date(10, 1), unit: .day, calendar: calendar).spokenText,
+                       "128 天")
+        XCTAssertEqual(event.magnitude(asOf: date(10, 1), unit: .week, calendar: calendar).spokenText,
+                       "18周2天", "带单位的照原样念")
+    }
+
+    /// 存量存档里没有 `displayUnit` 这个键 → 解出来 nil → 回退「天」。
+    /// 用一个真实的编码结果删键来构造，免得手写 JSON 猜错 `CountdownRule` 的形状。
+    func testLegacyJSONWithoutDisplayUnitFallsBackToDay() throws {
+        var event = makeEvent("存量", kind: .festival, rule: .lunarYearly(month: 1, day: 1))
+        event.displayUnit = .week
+        let encoded = try JSONEncoder().encode(event)
+        var object = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+        XCTAssertNotNil(object.removeValue(forKey: "displayUnit"),
+                        "键名变了这条测试就没意义了")
+        let legacy = try JSONSerialization.data(withJSONObject: object)
+
+        let decoded = try JSONDecoder().decode(CountdownEvent.self, from: legacy)
+        XCTAssertNil(decoded.displayUnit)
+        XCTAssertEqual(decoded.effectiveDisplayUnit, .day)
+        XCTAssertEqual(decoded.name, "存量", "其余字段照常解出来")
+    }
+
     // MARK: 节日目录
 
     /// 目录里每一条都要能算出日期，且名字能被反查回来（编辑面板靠它回填）。

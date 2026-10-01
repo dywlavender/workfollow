@@ -205,7 +205,11 @@ struct CountdownWorkspaceView: View {
                         CountdownCardView(
                             event: event,
                             projection: event.projection(asOf: today, calendar: calendar),
+                            magnitude: event.magnitude(asOf: today,
+                                                       unit: event.effectiveDisplayUnit,
+                                                       calendar: calendar),
                             ageText: event.ageText(asOf: today, calendar: calendar),
+                            onCycleUnit: { store.cycleDisplayUnit(event.id) },
                             onOpen: { sheet = .edit(event) },
                             onStyle: { sheet = .style(event) },
                             onNote: { sheet = .note(event) },
@@ -247,8 +251,12 @@ struct CountdownWorkspaceView: View {
 struct CountdownCardView: View {
     let event: CountdownEvent
     let projection: CountdownProjection
+    /// 主数字按当前单位拆好的段：`128` / `4月9天` / `18周2天`。
+    let magnitude: CountdownMagnitude
     /// 生日开了「显示岁数」时才有值，跟在名字后面。
     let ageText: String?
+    /// 点卡片：轮换主数字单位（天 → 月 → 周）。编辑走悬停条里的「⋯ → 编辑」。
+    let onCycleUnit: () -> Void
     let onOpen: () -> Void
     let onStyle: () -> Void
     let onNote: () -> Void
@@ -259,7 +267,7 @@ struct CountdownCardView: View {
     @State private var hovering = false
 
     var body: some View {
-        Button(action: onOpen) {
+        Button(action: onCycleUnit) {
             VStack(spacing: 0) {
                 HStack(spacing: WFSpace.sm) {
                     iconBadge
@@ -275,11 +283,7 @@ struct CountdownCardView: View {
                     }
                 }
                 Spacer(minLength: WFSpace.sm)
-                Text("\(projection.days)")
-                    .font(.system(size: 44, weight: .semibold, design: .rounded))
-                    .foregroundStyle(WFColors.accent)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.5)
+                magnitudeRow
                 Spacer(minLength: WFSpace.sm)
                 Text(projection.caption)
                     .font(WFType.caption)
@@ -312,10 +316,57 @@ struct CountdownCardView: View {
         // 天数才是这张卡片的主信息，要进无障碍标签；`caption` 作为悬停提示另给。
         .accessibilityLabel(
             "\(event.displayName)\(ageText.map { "，\($0)" } ?? "")，"
-            + "\(projection.isFuture ? "还有" : "已经") \(projection.days) 天")
+            + "\(projection.isFuture ? "还有" : "已经") \(magnitude.spokenText)")
         .contextMenu {
             menuItems
         }
+    }
+
+    /// 主数字一行。数字大、单位字小，单位字约为数字的一半高。
+    ///
+    /// 对齐方式是**按基线**（`.lastTextBaseline`），不是居中：把参考图 `4月9天`
+    /// 的字形墨迹框量出来，四个字的**底边齐平**（442 / 444 / 444 / 444 px），
+    /// 而中心差了 18px（数字 408、单位 427）——居中会让单位字浮到数字腰上去。
+    ///
+    /// **字号按参照物的比例定**（都是 2 倍图的墨迹高，同一把尺子）：
+    /// 参照物 `128` 的数字 83px、`4月9天` / `18周2天` 的数字 68~71px、单位字 34~35px，
+    /// 也就是它**多段档会把数字缩到约 1/1.2**。我们自己的 44pt 给出 64px、
+    /// 22pt 单位字给出 37px，据此换算：单段 83px → 57pt、多段 69px → 47pt、单位字 → 21pt。
+    /// `spacing: 2` 补的是参考图里字与字之间那点缝（实测 14~18px，比字体自带的边距宽）。
+    ///
+    /// **字体层面做不到对齐**：参照物的大数字是它自带的商业字体
+    /// （`TickTick.app/Contents/Resources/Gulzar dida.ttf`，PostScript 名
+    /// `Gulzar-dida-Medium`，**只含 0-9**，所以单位字回落到系统字体）。
+    /// 我们只能用 SF Rounded，字形抄不了——能对齐的只有字号与对齐方式。
+    private var magnitudeRow: some View {
+        HStack(alignment: .lastTextBaseline, spacing: 2) {
+            ForEach(Array(magnitude.parts.enumerated()), id: \.offset) { _, part in
+                Text("\(part.value)")
+                    .font(.system(size: digitSize, weight: .semibold, design: .rounded))
+                if !part.unit.isEmpty {
+                    Text(part.unit)
+                        .font(.system(size: Self.unitGlyphSize, weight: .semibold,
+                                      design: .rounded))
+                }
+            }
+        }
+        .foregroundStyle(WFColors.accent)
+        // 放到 HStack 上靠环境传给每个 Text：`18周2天` 比 `128` 宽，窄卡片下要能缩。
+        .lineLimit(1)
+        .minimumScaleFactor(0.5)
+    }
+
+    /// 参照物 `128`：数字墨迹 83px。我们 44pt 是 64px，按比例换算得 57pt。
+    private static let singlePartDigitSize: CGFloat = 57
+    /// 参照物 `4月9天` / `18周2天`：数字墨迹 68~71px，比单段档小约 1/1.2 → 47pt。
+    private static let multiPartDigitSize: CGFloat = 47
+    /// 参照物单位字墨迹 34~35px；我们 22pt 是 37px → 21pt。
+    private static let unitGlyphSize: CGFloat = 21
+
+    /// 按**渲染出来的段数**选字号，而不是按单位：不足一个更大单位时会退回纯数字
+    /// （`0月2天` → `2`），那个形态和按天档长得一样，就该一样大。
+    private var digitSize: CGFloat {
+        magnitude.parts.count > 1 ? Self.multiPartDigitSize : Self.singlePartDigitSize
     }
 
     private var iconBadge: some View {

@@ -162,6 +162,68 @@ final class CountdownStoreTests: XCTestCase {
         XCTAssertEqual(store.event(for: event.id)?.note, "记一笔")
     }
 
+    // MARK: 主数字单位（点卡片轮换）
+
+    /// 点卡片轮换单位，且**每条记录各记各的**——点一张不该动到旁边那张。
+    /// 参考图里春节在 128 / 4月9天 / 18周2天 之间换，旁边的周末一直是 2。
+    func testCycleDisplayUnitIsPerRecord() {
+        let store = makeStore(directory: makeDirectory())
+        let festival = store.add(name: "春节", kind: .festival,
+                                 rule: .lunarYearly(month: 1, day: 1))
+        let other = store.add(name: "周末", kind: .countdown, rule: .once(fixedNow))
+
+        XCTAssertEqual(store.event(for: festival.id)?.effectiveDisplayUnit, .day, "默认按天")
+
+        store.cycleDisplayUnit(festival.id)
+        XCTAssertEqual(store.event(for: festival.id)?.effectiveDisplayUnit, .month)
+        XCTAssertEqual(store.event(for: other.id)?.effectiveDisplayUnit, .day, "另一张不受影响")
+
+        store.cycleDisplayUnit(festival.id)
+        XCTAssertEqual(store.event(for: festival.id)?.effectiveDisplayUnit, .week)
+        store.cycleDisplayUnit(festival.id)
+        XCTAssertEqual(store.event(for: festival.id)?.effectiveDisplayUnit, .day, "转回天")
+
+        store.cycleDisplayUnit(UUID())   // 不存在的 id 是空操作，不该崩
+        XCTAssertEqual(store.events.count, 2)
+    }
+
+    func testDisplayUnitSurvivesAReload() throws {
+        let directory = makeDirectory()
+        let store = makeStore(directory: directory)
+        let event = store.add(name: "春节", kind: .festival,
+                              rule: .lunarYearly(month: 1, day: 1))
+        store.cycleDisplayUnit(event.id)
+        store.cycleDisplayUnit(event.id)   // → 周
+        flush(store)
+
+        let reloaded = makeStore(directory: directory)
+        XCTAssertEqual(try XCTUnwrap(reloaded.event(for: event.id)).displayUnit, .week)
+    }
+
+    /// 编辑面板没有「单位」这一项，提交编辑不能把轮换出来的单位清掉。
+    func testUpdateKeepsTheDisplayUnit() throws {
+        let store = makeStore(directory: makeDirectory())
+        let event = store.add(name: "春节", kind: .festival,
+                              rule: .lunarYearly(month: 1, day: 1))
+        store.cycleDisplayUnit(event.id)   // → 月
+
+        var edited = try XCTUnwrap(store.event(for: event.id))
+        edited.name = "春节改名"
+        edited.displayUnit = nil           // 模拟一个不认识这个字段的编辑面板
+        store.update(edited)
+
+        XCTAssertEqual(store.event(for: event.id)?.effectiveDisplayUnit, .month)
+        XCTAssertEqual(store.event(for: event.id)?.name, "春节改名", "其余字段照常写进去")
+    }
+
+    /// `add` 也能直接带上单位。
+    func testAddAcceptsADisplayUnit() {
+        let store = makeStore(directory: makeDirectory())
+        let event = store.add(name: "春节", kind: .festival,
+                              rule: .lunarYearly(month: 1, day: 1), displayUnit: .week)
+        XCTAssertEqual(event.displayUnit, .week)
+    }
+
     // MARK: 筛选
 
     func testFilteringByKind() {

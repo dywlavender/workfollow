@@ -49,6 +49,7 @@ final class CountdownStore: ObservableObject, ModuleStoreFlushable {
              reminderOffsets: [Int] = CountdownEvent.defaultReminderOffsets,
              showsInSmartList: Bool = true,
              smartListDisplay: CountdownSmartListDisplay? = nil,
+             displayUnit: CountdownDisplayUnit? = nil,
              showsAge: Bool = false,
              note: String = "") -> CountdownEvent {
         let event = CountdownEvent(
@@ -61,6 +62,7 @@ final class CountdownStore: ObservableObject, ModuleStoreFlushable {
             reminderOffsets: reminderOffsets,
             showsInSmartList: showsInSmartList,
             smartListDisplay: smartListDisplay,
+            displayUnit: displayUnit,
             showsAge: kind.hasAgeOption && showsAge,
             note: note.trimmingCharacters(in: .whitespacesAndNewlines),
             sortOrder: (allEvents.map(\.sortOrder).max() ?? -1) + 1,
@@ -84,6 +86,8 @@ final class CountdownStore: ObservableObject, ModuleStoreFlushable {
         next.smartListDisplay = event.smartListDisplay
         // 老字段跟新字段保持同步：存量读的是它。
         next.showsInSmartList = event.effectiveSmartListDisplay.showsInSmartList
+        // 编辑面板没有「单位」这一项，点卡片轮换出来的值不能被编辑覆盖掉，沿用原值。
+        next.displayUnit = allEvents[index].displayUnit
         next.showsAge = event.kind.hasAgeOption && event.showsAge
         // 编辑面板不负责归档与排序，一律沿用原值。
         next.archivedAt = allEvents[index].archivedAt
@@ -123,6 +127,15 @@ final class CountdownStore: ObservableObject, ModuleStoreFlushable {
     func togglePin(_ id: UUID) {
         guard let index = allEvents.firstIndex(where: { $0.id == id }) else { return }
         allEvents[index].pinned.toggle()
+        persist()
+    }
+
+    /// 点卡片轮换主数字的单位：天 → 月 → 周 → 天。
+    /// 单位是**每条记录各自**的状态（参照实现里也是各卡独立），所以按 id 改单条。
+    /// 从 `effectiveDisplayUnit` 起算，存量记录（nil）第一次点就是从「天」跳到「月」。
+    func cycleDisplayUnit(_ id: UUID) {
+        guard let index = allEvents.firstIndex(where: { $0.id == id }) else { return }
+        allEvents[index].displayUnit = allEvents[index].effectiveDisplayUnit.next
         persist()
     }
 
