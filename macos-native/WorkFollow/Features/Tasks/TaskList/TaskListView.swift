@@ -11,7 +11,7 @@ struct TaskListView: View {
     @State private var showTemplatePicker = false
     @State private var showQuickAddSchedule = false
     @State private var quickAddSchedulePage: TaskDatePopoverV2.Page = .main
-    @State private var pendingQuickAddSchedulePage: TaskDatePopoverV2.Page?
+    @State private var pendingTemplatePicker = false
     @State private var showQuickAddProperties = false
     @State private var quickAddScheduleOverride: QuickAddScheduleDraft?
     @State private var quickAddPriorityOverride: TaskPriority?
@@ -80,12 +80,9 @@ struct TaskListView: View {
         }
         .onChange(of: showQuickAddProperties) { _, isPresented in
             guard !isPresented else { return }
-            if let page = pendingQuickAddSchedulePage {
-                pendingQuickAddSchedulePage = nil
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
-                    quickAddSchedulePage = page
-                    showQuickAddSchedule = true
-                }
+            if pendingTemplatePicker {
+                pendingTemplatePicker = false
+                DispatchQueue.main.async { showTemplatePicker = true }
             } else {
                 quickAddFocused = true
             }
@@ -93,7 +90,16 @@ struct TaskListView: View {
         .onChange(of: groupIDs) { _, _ in collapseNewCompletedGroups() }
         .sheet(isPresented: $showTemplatePicker) {
             TemplatePickerView(workspace: workspace, templateStore: templateStore,
-                               onDismiss: { showTemplatePicker = false })
+                               onDismiss: { showTemplatePicker = false },
+                               onApplied: { _ in
+                                   clearQuickAddDraft()
+                                   showQuickAddProperties = false
+                                   quickAddFocused = false
+                                   listFocused = true
+                               })
+        }
+        .onChange(of: showTemplatePicker) { _, presented in
+            if presented { quickAddFocused = false; descriptionFocused = false }
         }
         .onChange(of: workspace.selectedTaskID) { _, _ in revealSelectedClosedTask() }
         .onAppear {
@@ -178,14 +184,7 @@ struct TaskListView: View {
     /// 模板、撤销等低频操作收进"更多"，保持顶栏只剩排序/更多两个小图标。
     private var moreMenu: some View {
         Menu {
-            Menu("从模板添加", systemImage: "doc.badge.plus") {
-                if templateStore.templates.isEmpty {
-                    Button("还没有模板") {}
-                        .disabled(true)
-                } else {
-                    Button("选择模板…") { showTemplatePicker = true }
-                }
-            }
+            Button("从模板添加", systemImage: "doc.badge.plus") { showTemplatePicker = true }
             Button("撤销", systemImage: "arrow.uturn.backward") { workspace.undo() }
                 .disabled(!workspace.canUndo)
             Divider()
@@ -299,8 +298,11 @@ struct TaskListView: View {
                             },
                             onList: { quickAddListOverride = $0 },
                             onTags: { quickAddTagsOverride = $0 },
-                            onReminder: { openQuickAddSchedulePage(.reminder) },
-                            onRepeat: { openQuickAddSchedulePage(.recurrence) }
+                            onTemplate: {
+                                pendingTemplatePicker = true
+                                showQuickAddProperties = false
+                            },
+                            onDismiss: { showQuickAddProperties = false }
                         )
                     }
                 } else {
@@ -484,11 +486,6 @@ struct TaskListView: View {
             || descriptionFocused || candidate.descriptionVisible || !descriptionDraft.isEmpty
             || !draft.isEmpty || quickAddScheduleOverride != nil
             || showQuickAddSchedule || showQuickAddProperties
-    }
-
-    private func openQuickAddSchedulePage(_ page: TaskDatePopoverV2.Page) {
-        pendingQuickAddSchedulePage = page
-        showQuickAddProperties = false
     }
 
     private func quickAddScheduleTask(in scope: TaskListScope) -> Task {

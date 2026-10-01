@@ -14,11 +14,15 @@ struct QuickAddPropertiesPopover: View {
     let onPriority: (TaskPriority) -> Void
     let onList: (String) -> Void
     let onTags: ([String]) -> Void
-    let onReminder: () -> Void
-    let onRepeat: () -> Void
+    let onTemplate: () -> Void
+    let onDismiss: () -> Void
 
-    @State private var showingListPicker = false
-    @State private var showingTagPicker = false
+    private enum Child { case list, tags }
+    @State private var activeChild: Child?
+
+    private func presented(_ child: Child) -> Binding<Bool> {
+        Binding(get: { activeChild == child }, set: { if !$0, activeChild == child { activeChild = nil } })
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: WFSpace.sm) {
@@ -31,50 +35,62 @@ struct QuickAddPropertiesPopover: View {
             }
             Divider()
             Button {
-                showingListPicker = true
+                activeChild = .list
             } label: {
                 propertyRow(icon: selectedList == TaskList.inbox.name ? "tray" : "list.bullet",
-                            title: selectedList, detail: "清单")
+                            title: selectedList)
             }
             .buttonStyle(.plain)
-            .popover(isPresented: $showingListPicker, arrowEdge: .trailing) {
+            .quickAddRenderAnchor(.list)
+            .popover(isPresented: presented(.list)) {
                 QuickAddListPickerPopover(workspace: workspace, selectedList: selectedList,
-                    onCancel: { showingListPicker = false },
+                    onCancel: { activeChild = nil },
                     onSelect: { name in
                         onList(name)
-                        showingListPicker = false
+                        activeChild = nil
                     })
+                    .background(PopupEscapeRouter(depth: 2) { activeChild = nil })
             }
             Button {
-                showingTagPicker = true
+                activeChild = .tags
             } label: {
-                propertyRow(icon: "tag", title: selectedTags.isEmpty ? "标签" : selectedTags.map { "#\($0)" }.joined(separator: " "), detail: "标签")
+                propertyRow(icon: "tag", title: selectedTags.isEmpty ? "标签" : selectedTags.map { "#\($0)" }.joined(separator: " "))
             }
             .buttonStyle(.plain)
-            .popover(isPresented: $showingTagPicker, arrowEdge: .trailing) {
+            .quickAddRenderAnchor(.tags)
+            .popover(isPresented: presented(.tags)) {
                 TaskTagPickerPopover(initialTags: selectedTags, workspace: workspace,
-                    onCancel: { showingTagPicker = false },
+                    onCancel: { activeChild = nil },
                     onApply: { values in
                         onTags(values)
-                        showingTagPicker = false
+                        activeChild = nil
                     })
+                    .background(PopupEscapeRouter(depth: 2) { activeChild = nil })
             }
-            Button(action: onReminder) {
-                propertyRow(icon: "alarm", title: "提醒", detail: "提醒")
-            }
-            .buttonStyle(.plain)
-            Button(action: onRepeat) {
-                propertyRow(icon: "repeat", title: "重复", detail: "重复")
+            Button(action: onTemplate) {
+                propertyRow(icon: "doc.text", title: "从模板添加", hasChild: false)
             }
             .buttonStyle(.plain)
+            .quickAddRenderAnchor(.template)
         }
         .padding(WFSpace.md)
         .frame(width: 270)
+        .quickAddRenderAnchor(.properties)
+        .background(PopupEscapeRouter(depth: 1) {
+            if activeChild != nil { activeChild = nil }
+            else { onDismiss() }
+        })
+        .onDisappear { activeChild = nil }
+        .onExitCommand {
+            if activeChild != nil { activeChild = nil }
+            else { onDismiss() }
+        }
     }
 
     private func priorityButton(_ priority: TaskPriority, color: Color) -> some View {
         Button { onPriority(priority) } label: {
-            Image(systemName: "flag.fill")
+            Image(systemName: priority == .none ? "flag" : "flag.fill")
+                .font(.system(size: 20))
                 .foregroundStyle(color)
                 .frame(maxWidth: .infinity)
                 .frame(height: WFMetrics.controlHeight)
@@ -85,6 +101,7 @@ struct QuickAddPropertiesPopover: View {
         .buttonStyle(.plain)
         .help(priorityLabel(priority))
         .accessibilityLabel(priorityLabel(priority))
+        .quickAddRenderAnchor(.priority(priority))
     }
 
     private func priorityLabel(_ priority: TaskPriority) -> String {
@@ -96,12 +113,12 @@ struct QuickAddPropertiesPopover: View {
         }
     }
 
-    private func propertyRow(icon: String, title: String, detail: String) -> some View {
+    private func propertyRow(icon: String, title: String, hasChild: Bool = true) -> some View {
         HStack(spacing: WFSpace.md) {
             Image(systemName: icon).foregroundStyle(WFColors.secondaryText)
             Text(title).lineLimit(1).frame(maxWidth: .infinity, alignment: .leading)
-            Text(detail).font(WFType.supporting).foregroundStyle(WFColors.secondaryText)
             Image(systemName: "chevron.right").font(.caption2).foregroundStyle(WFColors.secondaryText)
+                .opacity(hasChild ? 1 : 0)
         }
         .padding(.horizontal, WFSpace.sm)
         .frame(height: WFMetrics.controlHeight)
