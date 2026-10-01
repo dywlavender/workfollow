@@ -1,4 +1,5 @@
 import XCTest
+import SwiftUI
 @testable import WorkFollow
 
 /// 活动行标记（标题角标 / 空行"+"）的离屏渲染验收。
@@ -10,6 +11,50 @@ import XCTest
 ///   正文与光标都画在 x≥25，所以"沟槽有墨"⇔"标记画出来了"。
 /// - 同时把 PNG 落到 /tmp 供人工目检几何位置。
 final class DocumentDecorationRenderTests: XCTestCase {
+    @MainActor
+    func testHeadingAndPlusLaneStayBeforeHostContentOrigin() throws {
+        let host = NSHostingView(rootView:
+            DocumentEditor(documentID: UUID(), document: .empty,
+                           onDocumentChange: { _ in }, onEscape: { .keepInspector },
+                           onEditingChanged: { _ in })
+                .padding(.horizontal, 40))
+        let window = NSWindow(contentRect: NSRect(x: 100, y: 100, width: 600, height: 300),
+                              styleMask: [.borderless], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.appearance = NSAppearance(named: .aqua)
+        window.backgroundColor = .white
+        window.contentView = host
+        window.orderFront(nil)
+        defer { window.close() }
+        host.layoutSubtreeIfNeeded()
+        RunLoop.current.run(until: Date().addingTimeInterval(0.2))
+        func editor(in view: NSView) -> NativeTextView? {
+            if let text = view as? NativeTextView { return text }
+            return view.subviews.lazy.compactMap { editor(in: $0) }.first
+        }
+        let text = try XCTUnwrap(editor(in: host))
+        window.makeFirstResponder(text)
+        func caretX() -> CGFloat {
+            let rect = text.firstRect(forCharacterRange: NSRange(location: 0, length: 0), actualRange: nil)
+            return host.convert(window.convertFromScreen(rect), from: nil).minX
+        }
+        let emptyX = caretX()
+        XCTAssertEqual(emptyX, 45, accuracy: 1, "正文起点应是宿主40pt加TextKit的5pt，不额外占20pt沟槽")
+        text.applyFormat(try XCTUnwrap(EditorCommandCatalog.format("format.heading1")))
+        text.insertText("一级标题", replacementRange: NSRange(location: 0, length: 0))
+        text.setSelectedRange(NSRange(location: 0, length: 0))
+        RunLoop.current.run(until: Date().addingTimeInterval(0.2))
+        XCTAssertEqual(caretX(), emptyX, accuracy: 1, "切换标题不能改变正文起点")
+        let viewOrigin = host.convert(.zero, from: text).x
+        XCTAssertEqual(viewOrigin, 20, accuracy: 1, "装饰沟槽前置于宿主40pt正文区域")
+        text.displayIfNeeded()
+        let image = try XCTUnwrap(CGWindowListCreateImage(.null, .optionIncludingWindow,
+            CGWindowID(window.windowNumber), [.bestResolution]))
+        let bitmap = NSBitmapImageRep(cgImage: image)
+        try XCTUnwrap(bitmap.representation(using: .png, properties: [:]))
+            .write(to: URL(fileURLWithPath: "/tmp/render_heading_host_alignment.png"))
+    }
+
     private let sample = NativeDocument(blocks: [
         DocumentBlock(kind: .heading(2), runs: [DocumentRun(text: "标题行")]),
         DocumentBlock(kind: .paragraph, runs: [DocumentRun(text: "正文")]),

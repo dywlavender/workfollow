@@ -85,7 +85,32 @@ final class DocumentEditorHandle: ObservableObject {
     }
 }
 
-struct DocumentEditor: NSViewRepresentable {
+/// The decoration lane lives before the host's content origin. TextKit needs
+/// it inside its drawable bounds, but it must not consume host text width.
+enum DocumentEditorGeometry {
+    static let decorationLane: CGFloat = 20
+}
+
+struct DocumentEditor: View {
+    let documentID: UUID
+    let document: NativeDocument
+    let onDocumentChange: (NativeDocument) -> Void
+    let onEscape: () -> InspectorEscapeEffect
+    let onEditingChanged: (Bool) -> Void
+    var profile = DocumentProfile()
+    var contentSized = false
+    var handle: DocumentEditorHandle?
+
+    var body: some View {
+        DocumentEditorContent(documentID: documentID, document: document,
+                              onDocumentChange: onDocumentChange, onEscape: onEscape,
+                              onEditingChanged: onEditingChanged, profile: profile,
+                              contentSized: contentSized, handle: handle)
+            .padding(.leading, -DocumentEditorGeometry.decorationLane)
+    }
+}
+
+private struct DocumentEditorContent: NSViewRepresentable {
     let documentID: UUID
     let document: NativeDocument
     let onDocumentChange: (NativeDocument) -> Void
@@ -117,6 +142,9 @@ struct DocumentEditor: NSViewRepresentable {
         textView.documentIdentity = documentID
         textView.delegate = context.coordinator
         textView.textStorage?.setAttributedString(DocumentTextCodec.render(document))
+        textView.seedTrailingParagraphKind(document.blocks.last.flatMap { block in
+            block.runs.allSatisfy { $0.text.isEmpty } ? block.kind : nil
+        })
         textView.onEscape = onEscape
         textView.onEditingChanged = onEditingChanged
         textView.onSelectionChanged = { [weak handle] in handle?.refreshStyle() }

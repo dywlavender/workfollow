@@ -198,3 +198,11 @@ Codec round-trip 按语义比较 blocks/runs/marks/附件 payload/空段，允�
 - 新增实际 NSWindow 下 Slash 子窗口/观察者清理、选区浮条卸载/回调断开测试；新增旧文档组词提交归属、Escape route、共享 router 组词退让测试。98 项 Editor/Note/Popup/Inspector 定向回归通过，证据：`/tmp/workfollow-editor-interaction-tests.log`；最新 App 已构建。
 - marked-text 测试是 AppKit 自动化模拟，不等同于真人中文输入法验收；本笔没有新做完整 Task/Note 连续 Escape 链或像素截图。工具条刷新时序修改没有单独的跨文档 SwiftUI 渲染断言，不扩大自动证据范围。
 - 后续仍需收拢宿主交互状态与浮层 placement adapter，并补实际入口的连续 Escape/切换文档验收。只完成生命周期第一笔，不宣称 Editor Platform 已冻结。
+
+### 编辑器几何纠偏：装饰沟槽不占正文宽度
+
+- 用户发现空行切换一级标题时右移。源码原因：渲染段落使用20pt沟槽，但初始空文档沿用NSTextView默认零缩进输入属性；此外宿主没有补偿沟槽宽度，编辑区正文相对placeholder整体右移。
+- 合同：H1/H2/H3与空行“+”属于正文前的装饰区，不改变输入内容起点或可用正文宽度。普通段落和标题共用正文基线；列表/引用自己的语义缩进保留。
+- `DocumentEditor` 统一前置20pt装饰区，由内部TextKit桥承载，宿主不用分别补padding。TextKit内部继续保留可绘制沟槽（避免裁剪标记），外层前置同宽区域补偿，不把它计入宿主正文宽度。默认输入属性与渲染段落统一；新建视图同步文末空段级别。
+- 新增NSWindow + NSHostingView几何测试：宿主40pt边距时正文起点45pt（包含TextKit原有5pt内衬），装饰视图从20pt开始；空行转H1的caret X保持不变。
+- 73项编辑器回归通过，证据：`/tmp/workfollow-heading-alignment-tests.log`。最新构建的窗口截图已目检：`/tmp/render_heading_host_alignment.png`；H1位于文字前方且可见。这是隔离编辑器窗口验收，不代称完整Task/Note页面实机验收。

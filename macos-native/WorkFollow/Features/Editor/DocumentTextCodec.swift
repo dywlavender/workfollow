@@ -98,7 +98,7 @@ enum DocumentTextCodec {
         // 所有段落统一留 20pt 行首沟槽：H 角标 / 空行"+"画在文字左侧的这段
         // 空白里（滴答同款视觉）。沟槽必须在文本容器**内**——NSTextView 把
         // 绘制裁剪到容器区域，靠 textContainerInset 留白会让装饰不可见。
-        let gutter: CGFloat = 20
+        let gutter = DocumentEditorGeometry.decorationLane
         if kind == .quote {
             // 引用是"行首缩进 + 3pt 左竖线"的结构表达（竖线由视图层绘制，
             // 画在正文起点处）。文字转灰是对齐滴答截图的有意选择。

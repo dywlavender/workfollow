@@ -576,6 +576,9 @@ final class NativeTextView: NSTextView {
         backgroundColor = .clear
         textColor = .labelColor
         font = .systemFont(ofSize: 15)
+        // Empty documents must begin at the same origin as rendered paragraphs
+        // and headings; NSTextView's default typing style has zero indent.
+        typingAttributes = DocumentTextCodec.attributes(kind: .paragraph, marks: [])
         // 行首沟槽（角标 / 空行"+" / 列表标记）由各段落的 headIndent 留出，
         // 而不是 textContainerInset：NSTextView 会把绘制裁剪到文本容器区域，
         // 画在容器左侧留白里的装饰（x < inset.width）一律不可见（实测）。
