@@ -1,6 +1,6 @@
 # Task Inspector 外围操作层
 
-日期：2026-10-01。当前状态：ACTION PANEL STATE CONSOLIDATED；MORE PRIMARY ACTIONS + FOCUS SUBMENU IMPLEMENTED；完整菜单对标仍待后续轮次。
+日期：2026-10-01。当前状态：ACTION PANEL STATE CONSOLIDATED；MORE PRIMARY ACTIONS + FOCUS SUBMENU + PARENT PICKER + DUPLICATE / RESOURCE LINKS IMPLEMENTED；完整菜单对标及外部URL实机验收仍待后续轮次。
 
 暂停Editor、Slash、日期、模板和Completed Row功能扩展。暂停不表示此前待验项已全部通过，原文档中的端到端/像素验收欠项继续保留。
 
@@ -58,3 +58,16 @@
 - 64项ParentAction / ParentPicker / ActionPanel / TaskDomain / WorkspaceModel / InspectorShell / FocusSubmenu测试通过，日志：`/tmp/workfollow-task-parent-tests.log`。Domain覆盖跨清单重挂、末尾顺序、字段保留、一次撤销、同parent无新增undo及一层限制。
 - 实际NSWindow点击验收：More→parent替换主菜单，尺寸280 × 340pt，外部点击关闭且任务未变；Picker候选点击仅更新草稿，确定提交；Escape通过与Inspector一致的PopupEscapeRouter取消。截图：`/tmp/render_task_parent_picker.png`，已检查底部按钮完整、标题/清单与搜索可读。尚未验收日常运行App与TickTick父选择器的像素差异。
 - Workspace已有其他并行修改，本笔仅收录assignParent方法，不连带提交批量选择/分组改动。构建基于当前工作区，不能当成干净远端checkout的全项目测试。
+
+## 副本 / 链接合同
+
+- More第二组新增“创建副本”“复制链接”，复用Workspace现有副本反馈与撤销，不改变复制后仍选中原任务的既有行为。
+- 副本沿用既有产品语义：新身份、创建/更新时间，恢复为未完成且不置顶；保留标题/正文/标签/优先级/日期/提醒（含reminderOffsets）/重复规则/附件引用/来源笔记。Root副本复制未删除、未跳过且未转换的children，新children指向新root；child单独复制留在原parent并追加顺序。一次commit、一次undo。附件仍引用既有文件，不额外复制物理文件。
+- 链接使用`workfollow://task/<UUID>`；它是当前Native本地数据引用，不是共享Web链接，不保证另一台机器有对应任务。复制只写剪贴板，不改任务或bulk状态。
+- `NativeResourceLink`解析task/note，`NativeResourceLinkRouter`统一导航。Task打开清除清单/标签/筛选/批量状态，必要时展开parent；活动任务去所有任务，关闭任务去已完成；缺失、已删除、已转换或跳过目标不切换选中任务，并由应用反馈不可用。
+- 保留原Note链接，通过同一路由打开。Editor平台命令/Slash不变，只替换Host提供的打开链接回调。
+- 主App声明URL scheme；NativeLifecycleDelegate接收系统URL，冷启动交由Receiver排队，主场景就绪后路由；激活已有主窗口，只有不存在主窗口时才创建。不会强行设置系统默认URL处理应用。
+- 多版本共存时Launch Services默认处理目标、日常运行App外部点击与冷启动仍需实机验收；不能把解析/路由测试当作默认应用注册验收。缺少TickTick副本选择策略截图，保留当前项目既有策略。
+- 71项NativeResourceLink / TaskDuplicateAction / ActionPanel / TaskDomain / ParentPicker / FocusSubmenu / DocumentProfile / ListMeta回归通过，日志：`/tmp/workfollow-task-copy-link-tests.log`。构建后Bundle的URL声明已检查；隔离剪贴板验证同时写文本和URL类型（首轮发现NSURL单类型无法粘贴为普通文本，已修复）。
+- 实际Inspector窗口点击“创建副本”新增任务且关闭菜单，原任务仍被选中，撤销移除副本。菜单截图：`/tmp/render_task_more_duplicate_link.png`，已检查两入口及主分组可读；既有“其他操作”兼容分组继续在ScrollView中，不声称整张菜单已完全对标。
+- 路由测试确认筛选清理、父任务展开、关闭任务跳转、目标选择、重复同页打开不遗留导航token、Note兼容与冷启动队列；这不是外部应用/Launch Services端到端验收。未操作用户默认应用关联或通用剪贴板进行测试。

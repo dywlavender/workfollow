@@ -3,6 +3,7 @@ import SwiftUI
 
 @main
 struct WorkFollowApp: App {
+    @Environment(\.openWindow) private var openWindow
     @NSApplicationDelegateAdaptor(NativeLifecycleDelegate.self) private var lifecycle
     @StateObject private var environment: AppEnvironment
     @StateObject private var quickAdd: GlobalQuickAddController
@@ -32,7 +33,19 @@ struct WorkFollowApp: App {
                 .frame(minWidth: WFMetrics.minimumWindow.width,
                        minHeight: WFMetrics.minimumWindow.height)
                 .background(WindowFramePersistence())
-                .onAppear { lifecycle.environment = environment }
+                .onAppear {
+                    lifecycle.environment = environment
+                    lifecycle.resourceLinks.configure(route: { [weak environment] url in
+                        environment?.openResourceLink(url) ?? false
+                    }, activate: {
+                        if let main = NSApp.windows.first(where: { $0.identifier?.rawValue == "WorkFollowNativeMain" }) {
+                            main.makeKeyAndOrderFront(nil)
+                        } else {
+                            openWindow(id: "main")
+                        }
+                        NSApp.activate(ignoringOtherApps: true)
+                    })
+                }
         }
         .defaultSize(width: WFMetrics.defaultWindow.width,
                      height: WFMetrics.defaultWindow.height)
@@ -51,6 +64,11 @@ struct WorkFollowApp: App {
 @MainActor
 final class NativeLifecycleDelegate: NSObject, NSApplicationDelegate {
     weak var environment: AppEnvironment?
+    let resourceLinks = NativeResourceLinkReceiver()
+
+    func application(_ application: NSApplication, open urls: [URL]) {
+        resourceLinks.receive(urls)
+    }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         guard let environment else { return .terminateNow }
@@ -86,6 +104,7 @@ private struct WindowFramePersistence: NSViewRepresentable {
             observers.forEach(NotificationCenter.default.removeObserver)
             observers.removeAll()
             configuredWindow = window
+            window.identifier = NSUserInterfaceItemIdentifier("WorkFollowNativeMain")
             window.minSize = NSSize(width: WFMetrics.minimumWindow.width,
                                     height: WFMetrics.minimumWindow.height)
             window.setFrameUsingName(frameName)

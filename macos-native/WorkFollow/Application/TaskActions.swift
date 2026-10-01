@@ -458,18 +458,39 @@ final class TaskActions {
 
     func duplicate(_ id: UUID) -> TaskActionResult {
         guard let task = store.task(id), task.deletedAt == nil else { return .failure(.missingTask) }
-        func copy(_ source: Task, parent: UUID?) -> Task {
-            var value = Task(id: UUID(), title: source.title, document: source.document,
-                             tags: source.tags, recurrence: source.recurrence, list: source.list,
-                             priority: source.priority, schedule: source.schedule, parentID: parent,
-                             childOrder: source.childOrder, createdAt: clock(), updatedAt: clock())
-            value.recurrenceRule = source.recurrenceRule
-            value.attachments = source.attachments
-            value.reminderAt = source.reminderAt
-            return value
+        guard !task.isConverted else { return .failure(.alreadyConverted) }
+        if let parentID = task.parentID {
+            guard let parent = store.task(parentID) else { return .failure(.missingTask) }
+            guard parent.deletedAt == nil else { return .failure(.deletedTask) }
+            guard !parent.isConverted else { return .failure(.alreadyConverted) }
         }
-        let value = copy(task, parent: task.parentID)
-        store.commit(store.tasks + [value] + store.children(of: id).map { copy($0, parent: value.id) })
+
+        let now = clock()
+        func copy(_ source: Task, parent: UUID?, childOrder: Int) -> Task {
+            Task(id: UUID(), title: source.title, document: source.document,
+                 tags: source.tags, recurrence: source.recurrence,
+                 recurrenceRule: source.recurrenceRule, reminderAt: source.reminderAt,
+                 reminderOffsets: source.reminderOffsets, attachments: source.attachments,
+                 list: source.list, priority: source.priority, schedule: source.schedule,
+                 status: .active, parentID: parent, childOrder: childOrder,
+                 createdAt: now, updatedAt: now, completedAt: nil, deletedAt: nil,
+                 isPinned: false, abandonedAt: nil, skippedAt: nil,
+                 convertedNoteID: nil, sourceNoteID: source.sourceNoteID)
+        }
+
+        let childOrder: Int
+        if let parentID = task.parentID {
+            childOrder = (store.tasks.filter { $0.parentID == parentID }
+                .map(\.childOrder).max() ?? -1) + 1
+        } else {
+            childOrder = task.childOrder
+        }
+        let value = copy(task, parent: task.parentID, childOrder: childOrder)
+        let copiedChildren = task.parentID == nil
+            ? store.children(of: id).filter { !$0.isConverted }
+                .map { copy($0, parent: value.id, childOrder: $0.childOrder) }
+            : []
+        store.commit(store.tasks + [value] + copiedChildren)
         return .success(value.id)
     }
 

@@ -216,6 +216,13 @@ struct TaskInspectorShell: View {
                 focusSubmenuRow(task)
                 Divider().padding(.horizontal, 8).padding(.vertical, 4)
                 moreAction("保存为模板", symbol: "doc.badge.plus") { saveAsTemplate() }
+                moreAction("创建副本", symbol: "square.on.square") { workspace.duplicate(task.id) }
+                    .inspectorRenderAnchor(.duplicateMenuRow)
+                moreAction("复制链接", symbol: "link") {
+                    let copied = TaskLinkClipboard.copy(task)
+                    environment.feedback.show(FeedbackEvent(kind: copied ? .success : .error,
+                        message: copied ? "已复制任务链接" : "无法复制任务链接"))
+                }
                 moreAction("转换为笔记", symbol: "doc.text") { _ = environment.convertTaskToNote(task.id) }
                 moreAction("删除", symbol: "trash", destructive: true) { _ = workspace.delete(task.id) }
                 // Retain existing secondary capabilities until their product
@@ -480,13 +487,8 @@ struct TaskInspectorShell: View {
     }
 
     private func openDocumentLink(_ link: String) -> Bool {
-        guard let url = URL(string: link), url.scheme == "workfollow", url.host == "note" else { return false }
-        if let id = UUID(uuidString: url.lastPathComponent),
-           environment.notesWorkspace.notes.contains(where: { $0.id == id && $0.deletedAt == nil }) {
-            environment.navigation.destination = .notes
-            environment.notesWorkspace.selectedID = id
-        }
-        return true
+        guard let url = URL(string: link) else { return false }
+        return environment.openResourceLink(url)
     }
 
     private func childRow(_ child: Task) -> some View {
