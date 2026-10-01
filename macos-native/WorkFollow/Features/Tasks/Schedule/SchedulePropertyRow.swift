@@ -23,7 +23,9 @@ struct SchedulePropertyRow: View {
             .buttonStyle(.plain)
             .accessibilityLabel("展开\(presentation.title)")
             if let editor, presentation.isActive {
-                editor.onTapGesture { if !presentation.isExpanded { onOpen() } }
+                editor
+                    .scheduleRenderAnchor(.value(property))
+                    .onTapGesture { if !presentation.isExpanded { onOpen() } }
                 Button(action: onOpen) { Color.clear.contentShape(Rectangle()) }
                     .buttonStyle(.plain)
                     .frame(maxWidth: .infinity)
@@ -33,6 +35,7 @@ struct SchedulePropertyRow: View {
                     HStack {
                         Text(presentation.value ?? presentation.title)
                             .font(WFType.body).foregroundStyle(foreground).lineLimit(1)
+                            .scheduleRenderAnchor(.value(property))
                         Spacer(minLength: 4)
                     }
                     .contentShape(Rectangle())
@@ -53,7 +56,7 @@ struct SchedulePropertyRow: View {
             .accessibilityLabel(presentation.trailingControl == .clear ? "清除\(presentation.title)" : "展开\(presentation.title)")
             .scheduleRenderAnchor(.trailing(property), label: trailingSymbol)
         }
-        .padding(.horizontal, presentation.isExpanded ? 10 : 2)
+        .padding(.horizontal, ScheduleMetrics.propertyRowHorizontalPadding)
         .frame(height: ScheduleMetrics.rowHeight)
         .scheduleRenderAnchor(.row(property), label: presentation.value ?? presentation.title, active: presentation.isActive)
         .scheduleRenderAnchor(.expandedRow(property), active: presentation.isExpanded)

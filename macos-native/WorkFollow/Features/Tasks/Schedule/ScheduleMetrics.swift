@@ -10,6 +10,8 @@ enum ScheduleMetrics {
     static let horizontalPadding: CGFloat = 14
     /// 属性行高（时间 / 提醒 / 重复 / 重复结束）。
     static let rowHeight: CGFloat = 30
+    /// 展开、悬浮只改变外观，不改变属性行的列位置。
+    static let propertyRowHorizontalPadding: CGFloat = 2
     /// 展开内容选项行高。
     static let optionRowHeight: CGFloat = 34
     /// 时间展开列表高（约 8 个半点选项）。

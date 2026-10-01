@@ -4,6 +4,7 @@ enum ScheduleRenderAnchor: Hashable {
     case panel, calendarSection, propertyViewport, shortcut(String)
     case row(TaskDatePopoverV2.InlineSheet), icon(TaskDatePopoverV2.InlineSheet)
     case trailing(TaskDatePopoverV2.InlineSheet)
+    case value(TaskDatePopoverV2.InlineSheet)
     case expandedRow(TaskDatePopoverV2.InlineSheet), expandedContent(TaskDatePopoverV2.InlineSheet)
     case mainFooter, editorFooter(TaskDatePopoverV2.InlineSheet), option(String)
 }

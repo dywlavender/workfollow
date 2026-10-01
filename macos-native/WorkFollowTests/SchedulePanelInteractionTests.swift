@@ -122,4 +122,46 @@ final class SchedulePanelInteractionTests: XCTestCase {
             window.close()
         }
     }
+
+    func testPropertyColumnsStayFixedWhenOpenedHoveredOrReplacedByTimeEditor() throws {
+        for property in [ScheduleProperty.time, .repeat] {
+            var baseline: [ScheduleRenderAnchor: ScheduleRenderValue]?
+            for state in 0..<4 {
+                var values: [ScheduleRenderAnchor: ScheduleRenderValue] = [:]
+                let active = state > 0
+                let presentation = SchedulePropertyPresentation(
+                    title: property == .time ? "时间" : "重复",
+                    value: active ? (property == .time ? "10:30" : "每周") : nil,
+                    isActive: active, isExpanded: state > 1, isHovered: state == 3, canClear: active)
+                let editor: AnyView? = property == .time && active
+                    ? AnyView(TextField("", text: .constant("10:30"))
+                        .textFieldStyle(.plain).font(WFType.body).frame(width: 52, alignment: .leading)) : nil
+                let root = SchedulePropertyRow(property: property, icon: "clock",
+                    presentation: presentation, editor: editor,
+                    onOpen: {}, onClear: {}, onHover: { _ in })
+                    .coordinateSpace(name: "schedule-render")
+                    .onPreferenceChange(ScheduleFramesKey.self) { values = $0 }
+                let host = NSHostingView(rootView: root)
+                let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 232, height: 30),
+                    styleMask: [.borderless], backing: .buffered, defer: false)
+                window.isReleasedWhenClosed = false
+                window.contentView = host
+                window.orderFront(nil)
+                host.layoutSubtreeIfNeeded()
+                RunLoop.main.run(until: Date().addingTimeInterval(0.1))
+                if let baseline {
+                    for anchor in [ScheduleRenderAnchor.icon(property), .value(property), .trailing(property)] {
+                        XCTAssertEqual(try XCTUnwrap(values[anchor]).frame.minX,
+                            try XCTUnwrap(baseline[anchor]).frame.minX, accuracy: 0.1,
+                            "\(property) state \(state): \(anchor) must not move")
+                    }
+                    XCTAssertEqual(values[.row(property)]?.frame, baseline[.row(property)]?.frame)
+                } else {
+                    baseline = values
+                }
+                window.contentView = nil
+                window.close()
+            }
+        }
+    }
 }
