@@ -13,8 +13,12 @@ private func countdownEditorColor(_ index: Int) -> Color {
 /// 其下 日期 / 提醒 / 重复 / 类型 / 显示 五行（生日多一行「显示岁数」），
 /// 底部 取消 / 添加。
 ///
-/// 五个下拉都是**浮层**（`overlayPreferenceValue` + `RowAnchorKey` 定位），
+/// 五个下拉都是**浮层**（`overlayPreferenceValue` + `FieldAnchorKey` 定位），
 /// 不是行内展开：行内展开会把面板撑高、把底部按钮推走，而参考图的面板是定高的。
+///
+/// 浮层贴的是**字段**（不含左侧标签列），不是整行——参考图里浮层与字段左右对齐。
+/// 早先按整行定位，浮层会宽出 60pt 并盖住标签；而日期浮层改贴字段之后，
+/// 同一面板里两种宽度、打开时还会左右横跳，所以统一到字段。
 ///
 /// 注意浮层必须留在面板内：macOS 的 sheet 就是一块真实窗口、会裁掉伸出去的内容，
 /// 所以「下方放不下就翻到上方」（见 `popupY`），而不是让浮层溢出面板。
@@ -191,19 +195,10 @@ struct CountdownEditorView: View {
         .frame(width: Self.panelWidth)
         .background(WFColors.canvas)
         // 下拉浮层：浮在对应行的旁边、盖在面板内容之上，**不参与布局**。
-        //
-        // 分两层读两个锚点 key（`.anchorPreference` 覆盖不合并，见 `FieldAnchorKey`）。
-        // 同一时刻只有一行是打开的，所以两层各自只渲染自己管的那几行，不会打架。
+        // 锚点挂在字段上（见 `FieldAnchorKey`），所以浮层与字段左右对齐。
         .overlayPreferenceValue(FieldAnchorKey.self) { anchors in
             GeometryReader { proxy in
-                if let openRow, openRow == .date, let anchor = anchors[.date] {
-                    popupLayer(row: openRow, rect: proxy[anchor], container: proxy.size)
-                }
-            }
-        }
-        .overlayPreferenceValue(RowAnchorKey.self) { anchors in
-            GeometryReader { proxy in
-                if let openRow, openRow != .date, let anchor = anchors[openRow] {
+                if let openRow, let anchor = anchors[openRow] {
                     popupLayer(row: openRow, rect: proxy[anchor], container: proxy.size)
                 }
             }
@@ -289,24 +284,14 @@ struct CountdownEditorView: View {
         }
     }
 
-    /// 行 → 面板坐标系里的位置（**整行**，含左侧标签列）。下拉浮层要靠它定位。
-    private struct RowAnchorKey: PreferenceKey {
-        static let defaultValue: [Row: Anchor<CGRect>] = [:]
-        static func reduce(value: inout [Row: Anchor<CGRect>],
-                           nextValue: () -> [Row: Anchor<CGRect>]) {
-            value.merge(nextValue()) { _, new in new }
-        }
-    }
-
-    /// 行 → 面板坐标系里**字段**的位置（不含左侧标签列）。
+    /// 行 → 面板坐标系里**字段**的位置（不含左侧标签列）。下拉浮层要靠它定位。
     ///
-    /// 必须另起一个 key，不能塞进 `RowAnchorKey`：`.anchorPreference` 是**覆盖**而不是
-    /// 合并——挂在 HStack 上的那份会把子树（含 Button）挂的同 key 值整个盖掉。
-    /// 实测：同一个 key 上给 HStack 和 Button 各挂一次、再在 `reduce` 里逐字段并，
-    /// Button 那份依然永远读不到（浮层宽度纹丝不动）。换独立 key 才对。
+    /// 刻意**不**用整行的 bounds：整行 = 54pt 标签 + 6pt 间距 + 字段，拿它定宽会让浮层
+    /// 宽出 60pt、左边还盖住标签。参考图里浮层与字段左右对齐。
     ///
-    /// 「日期」浮层照参考图与字段左右对齐；其余几行的参考图里浮层是**伸出面板之外**
-    /// 画的，比字段宽，继续用整行。
+    /// 另注（踩过的坑）：`.anchorPreference` 是**覆盖**而不是合并——同 key 挂在 HStack 上的
+    /// 那份会把子树（含 Button）挂的值整个盖掉，`reduce` 里逐字段并也没用（实测浮层宽度
+    /// 纹丝不动）。所以这个锚点只挂一处：字段 Button。
     private struct FieldAnchorKey: PreferenceKey {
         static let defaultValue: [Row: Anchor<CGRect>] = [:]
         static func reduce(value: inout [Row: Anchor<CGRect>],
@@ -317,9 +302,9 @@ struct CountdownEditorView: View {
 
     /// 弹层外壳。
     ///
-    /// 参考图里下拉是**浮在面板上的弹框**：与行同宽、带圆角边框和投影，盖住下面的行。
-    /// 原来是行内展开（会把面板撑高、把底部按钮推走），用户明确指出「不是弹框、还把
-    /// 编辑框撑大了、边框也没有」，所以改成 overlay。
+    /// 参考图里下拉是**浮在面板上的弹框**：带圆角边框和投影，盖住下面的行；左右与
+    /// **字段**对齐（不是与整行）。原来是行内展开（会把面板撑高、把底部按钮推走），
+    /// 用户明确指出「不是弹框、还把编辑框撑大了、边框也没有」，所以改成 overlay。
     private func popup<Content: View>(@ViewBuilder content: () -> Content) -> some View {
         content()
             .padding(.vertical, WFSpace.xs)
@@ -428,11 +413,9 @@ struct CountdownEditorView: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel("\(label)：\(value)")
-            // 字段自己也要一个锚点：「日期」浮层按它定宽（见 `FieldAnchorKey`）。
+            // 浮层按**字段**定位（见 `FieldAnchorKey`），不是按整行。
             .anchorPreference(key: FieldAnchorKey.self, value: .bounds) { [row: $0] }
         }
-        // 下拉浮层按这一行的位置定位。
-        .anchorPreference(key: RowAnchorKey.self, value: .bounds) { [row: $0] }
     }
 
     private var dateRow: some View {
