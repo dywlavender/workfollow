@@ -17,11 +17,8 @@ struct TaskInspectorShell: View {
     @State private var inlineChildEditorID: UUID?
     @State private var inlineChildTitleDraft = ""
     @State private var showNewList = false
-    @State private var showTagsPopover = false
-    @State private var showAttributesPopover = false
-    @State private var showMoreActionsPopover = false
+    @State private var actionPresentation = TaskInspectorActionPresentationState()
     @State private var showFormattingToolbar = false
-    @State private var showRelationsPopover = false
     @State private var relationQuery = ""
     /// 「添加子任务」整行的悬停态（原版 `InkWell.hoverColor`）。
     @State private var hoveringAddChild = false
@@ -83,11 +80,8 @@ struct TaskInspectorShell: View {
             titleFocused = false
             presentation.editingTarget = .none
             presentation.activePopover = nil
-            showTagsPopover = false
-            showAttributesPopover = false
-            showMoreActionsPopover = false
+            actionPresentation.dismiss()
             showFormattingToolbar = false
-            showRelationsPopover = false
         }
         .onChange(of: workspace.pendingChildTitleEditorID) { _, _ in beginPendingChildEditing() }
         .onExitCommand {
@@ -128,7 +122,7 @@ struct TaskInspectorShell: View {
     }
 
     private func moreMenu(_ task: Task) -> some View {
-        Button { showMoreActionsPopover = true } label: {
+        Button { actionPresentation.open(.more) } label: {
             Image(systemName: "ellipsis")
                 .frame(width: WFMetrics.controlHeight, height: WFMetrics.controlHeight)
                 .contentShape(Rectangle())
@@ -139,30 +133,29 @@ struct TaskInspectorShell: View {
     }
 
     private var hasFooterPopover: Bool {
-        showMoreActionsPopover || showTagsPopover || showAttributesPopover ||
-            showRelationsPopover || presentation.activePopover == .deadline
+        actionPresentation.panel != nil || presentation.activePopover == .deadline
     }
 
     @ViewBuilder
     private func footerPopover(_ task: Task) -> some View {
         Group {
-            if showMoreActionsPopover {
+            if actionPresentation.panel == .more {
                 moreActionsPopover(task)
-            } else if showTagsPopover {
+            } else if actionPresentation.panel == .tags {
                 TaskTagPickerPopover(initialTags: task.tags, workspace: workspace,
-                    onCancel: { showTagsPopover = false },
+                    onCancel: { actionPresentation.dismiss(.tags) },
                     onApply: { tags in
                         workspace.setTags(task.id, tags)
-                        showTagsPopover = false
+                        actionPresentation.dismiss(.tags)
                     })
-            } else if showAttributesPopover {
+            } else if actionPresentation.panel == .attributes {
                 ScrollView {
                     TaskAttributesView(task: workspace.task(for: task.id) ?? task,
                                        onEscape: dismissFooterPopover,
                                        workspace: workspace)
                 }
                 .frame(width: 320, height: 300)
-            } else if showRelationsPopover {
+            } else if actionPresentation.panel == .relation {
                 relationPicker(task)
             } else if presentation.activePopover == .deadline {
                 TaskDatePopoverV2(task: task, workspace: workspace, deadline: true) {
@@ -176,10 +169,7 @@ struct TaskInspectorShell: View {
     }
 
     private func dismissFooterPopover() {
-        showMoreActionsPopover = false
-        showTagsPopover = false
-        showAttributesPopover = false
-        showRelationsPopover = false
+        actionPresentation.dismiss()
         if presentation.activePopover == .deadline {
             presentation.activePopover = nil
         }
@@ -196,8 +186,8 @@ struct TaskInspectorShell: View {
                 moreAction(task.isPinned ? "取消置顶" : "置顶", symbol: "pin") {
                     _ = workspace.setPinned(task.id, !task.isPinned)
                 }
-                moreAction("标签…", symbol: "tag") { showTagsPopover = true }
-                moreAction("更多属性…", symbol: "slider.horizontal.3") { showAttributesPopover = true }
+                moreAction("标签…", symbol: "tag") { actionPresentation.open(.tags) }
+                moreAction("更多属性…", symbol: "slider.horizontal.3") { actionPresentation.open(.attributes) }
                 moreAction("添加附件…", symbol: "paperclip") { addAttachments(to: task.id) }
                 moreAction("截止日期…", symbol: "calendar.badge.exclamationmark") {
                     presentation.activePopover = .deadline
@@ -234,7 +224,7 @@ struct TaskInspectorShell: View {
         action: @escaping () -> Void
     ) -> some View {
         Button {
-            showMoreActionsPopover = false
+            actionPresentation.dismiss(.more)
             action()
         } label: {
             Label(title, systemImage: symbol)
@@ -414,7 +404,7 @@ struct TaskInspectorShell: View {
                         Button {
                             workspace.setSourceNote(task.id, note.id)
                             editorHandle.insertReference(TaskDocumentProfile.reference(to: note))
-                            showRelationsPopover = false
+                            actionPresentation.dismiss(.relation)
                         } label: {
                             HStack {
                                 Image(systemName: "doc.text")
@@ -551,10 +541,10 @@ struct TaskInspectorShell: View {
                     createChild: {
                         workspace.requestChildTitleEditor(for: task.id)
                     },
-                    openTags: { showTagsPopover = true },
+                    openTags: { actionPresentation.open(.tags) },
                     openRelation: {
                         relationQuery = ""
-                        showRelationsPopover = true
+                        actionPresentation.open(.relation)
                     }, openLink: openDocumentLink)),
                 contentSized: true,
                 handle: editorHandle
