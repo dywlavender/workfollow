@@ -223,6 +223,39 @@ final class TaskTemplateTests: XCTestCase {
 
     // MARK: - Persistence
 
+    func testTemplateApplicationIsOneRevisionAndOneUndoIncludingRealChildren() async throws {
+        try await MainActor.run {
+            let model = TaskWorkspaceModel(clock: { self.now }, seedDemoData: false)
+            let before = model.revision
+            let template = TaskTemplate(name: "整条创建", title: "父任务",
+                document: NativeDocument(plainText: "正文"), tags: ["工作"],
+                childTitles: ["子 A", "子 B"], createdAt: now)
+            let id = try XCTUnwrap(model.createFromTemplate(template))
+            XCTAssertEqual(model.revision, before + 1)
+            XCTAssertEqual(model.selectedTaskID, id)
+            XCTAssertEqual(model.allTasks.count, 3)
+            model.undo()
+            XCTAssertTrue(model.allTasks.isEmpty)
+            XCTAssertFalse(model.canUndo)
+        }
+    }
+
+    func testBuiltInChecklistCreatesOneTaskNotSevenChildren() async throws {
+        try await MainActor.run {
+            let model = TaskWorkspaceModel(clock: { self.now }, seedDemoData: false)
+            let template = try XCTUnwrap(BuiltInTaskTemplates.all.first)
+            let id = try XCTUnwrap(model.createFromTemplate(template))
+            let task = try XCTUnwrap(model.task(for: id))
+            XCTAssertEqual(model.allTasks.count, 1)
+            XCTAssertEqual(task.title, "每天工作前要做的几件事")
+            XCTAssertEqual(task.list, .inbox)
+            XCTAssertEqual(task.schedule.dueAt, model.calendar.startOfDay(for: now))
+            XCTAssertEqual(task.document.blocks.count, 7)
+            for block in task.document.blocks { XCTAssertEqual(block.kind, .checklist(false)) }
+            XCTAssertEqual(model.selectedTaskID, id)
+        }
+    }
+
     func testFlushPersistsArchiveToInjectedDirectory() async throws {
         let directory = Self.makeTemporaryDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }

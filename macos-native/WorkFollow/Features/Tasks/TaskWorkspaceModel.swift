@@ -239,6 +239,16 @@ final class TaskWorkspaceModel: ObservableObject {
         return result
     }
 
+    @discardableResult
+    func createFromTemplate(_ template: TaskTemplate) -> UUID? {
+        let listName = template.listName.flatMap { allListNames.contains($0) ? $0 : nil }
+            ?? TaskList.inbox.name
+        let result = actions.createFromTemplate(template, list: TaskList(name: listName))
+        didMutate(result)
+        if let id = result.taskID { select(id) }
+        return result.taskID
+    }
+
     var selectedTask: Task? {
         guard let selectedTaskID else { return nil }
         return store.task(selectedTaskID)

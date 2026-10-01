@@ -415,6 +415,25 @@ final class TaskActions {
         return result
     }
 
+    /// Construct the complete template snapshot before publishing it. One commit,
+    /// one undo step, and no intermediate parent lacking its document/children.
+    func createFromTemplate(_ template: TaskTemplate, list: TaskList) -> TaskActionResult {
+        let title = template.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !title.isEmpty else { return .failure(.invalidList) }
+        let now = clock()
+        let parent = Task(id: UUID(), title: title, document: template.document,
+                          tags: template.tags, list: list, priority: template.priority ?? .none,
+                          schedule: TaskSchedule(dueAt: template.schedule?.date(from: now, calendar: calendar)),
+                          parentID: nil, childOrder: 0, createdAt: now, updatedAt: now)
+        let children = template.childTitles.enumerated().map { index, title in
+            Task(id: UUID(), title: title.trimmingCharacters(in: .whitespacesAndNewlines),
+                 list: list, priority: .none, schedule: TaskSchedule(),
+                 parentID: parent.id, childOrder: index, createdAt: now, updatedAt: now)
+        }
+        store.commit(store.tasks + [parent] + children)
+        return .success(parent.id)
+    }
+
     func duplicate(_ id: UUID) -> TaskActionResult {
         guard let task = store.task(id), task.deletedAt == nil else { return .failure(.missingTask) }
         func copy(_ source: Task, parent: UUID?) -> Task {

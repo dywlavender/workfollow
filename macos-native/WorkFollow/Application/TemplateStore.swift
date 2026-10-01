@@ -61,8 +61,8 @@ final class TemplateStore: ObservableObject, ModuleStoreFlushable {
         return true
     }
 
-    /// Returns the data needed to instantiate `name`, or nil when missing.
-    /// Applying (task creation) happens in the view layer through TaskActions.
+    /// Returns a user blueprint, or nil when missing. Actual task creation is
+    /// owned by TaskWorkspaceModel.createFromTemplate / TaskActions.
     func apply(name: String) -> TaskTemplate? {
         template(named: name)
     }
