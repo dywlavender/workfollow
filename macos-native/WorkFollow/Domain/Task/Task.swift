@@ -115,7 +115,7 @@ struct Task: Identifiable, Equatable, Codable {
     var priority: TaskPriority
     var schedule: TaskSchedule
     var status: TaskStatus = .active
-    let parentID: UUID?
+    var parentID: UUID?
     var childOrder: Int
     let createdAt: Date
     var updatedAt: Date

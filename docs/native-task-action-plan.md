@@ -47,3 +47,14 @@
 - 实际NSWindow + Inspector测试通过应用事件分发点击：子层向左翻转，主菜单frame不变；第一次Escape关闭子层、第二次关闭More；窗口内外部点击关闭全部。独立子层继承主窗口外观，修复截图发现的浅色主窗口/深色子层对比问题。
 - 截图：`/tmp/render_task_more_menu.png`（主窗口，不含独立子窗口）；`/tmp/render_task_focus_submenu.png`（独立子层）。已检查子层浅色背景及可读文字；这不是用户日常运行App的全流程像素验收。
 - 启动/忙碌保护由真实FocusStore与动作协调器集成测试覆盖；尚未用日常运行App点击按钮完整验收启动提示与鼠标跨层。工作区其他并行修改保留，不纳入此提交。
+
+## 关联主任务合同
+
+- 这是已有任务的父子关系操作，不是Task/Note relation。遵守当前一层层级：目标必须是root；来源不能拥有子任务（包括已删除记录，避免恢复时破坏层级）。来源/目标均须未删除、未转换、未关闭且未跳过。
+- 允许已有child换到另一root；任务保留正文、日期、提醒等字段，清单跟随目标，childOrder追加到目标末尾。一次原子commit，一次撤销恢复；当前选中任务不切换，bulkSelection不参与。
+- Picker复用互斥actionPanel，More→parent替换More并关闭Focus子层。搜索任务标题或清单名，单选草稿；仅确定提交，取消/Escape/外部关闭不写任务。提交时Domain再次校验候选，失败保留面板并提示。
+- 没有TickTick父选择器展开态证据。280 × 340pt搜索/单选/取消确定是当前项目的暂定实现，不是已通过的TickTick视觉合同。暂不增加解除父关系入口，等待后续产品行为证据。
+- `Task.parentID`改为可修改属性；动作从任务值副本出发，仅修改父关系、清单、childOrder与updatedAt，避免后续新增字段在重建Task时遗漏。id/createdAt仍不可变。
+- 64项ParentAction / ParentPicker / ActionPanel / TaskDomain / WorkspaceModel / InspectorShell / FocusSubmenu测试通过，日志：`/tmp/workfollow-task-parent-tests.log`。Domain覆盖跨清单重挂、末尾顺序、字段保留、一次撤销、同parent无新增undo及一层限制。
+- 实际NSWindow点击验收：More→parent替换主菜单，尺寸280 × 340pt，外部点击关闭且任务未变；Picker候选点击仅更新草稿，确定提交；Escape通过与Inspector一致的PopupEscapeRouter取消。截图：`/tmp/render_task_parent_picker.png`，已检查底部按钮完整、标题/清单与搜索可读。尚未验收日常运行App与TickTick父选择器的像素差异。
+- Workspace已有其他并行修改，本笔仅收录assignParent方法，不连带提交批量选择/分组改动。构建基于当前工作区，不能当成干净远端checkout的全项目测试。

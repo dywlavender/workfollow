@@ -13,6 +13,8 @@ final class TaskInspectorActionPanelTests: XCTestCase {
         XCTAssertEqual(state.panel, .relation)
         state.open(.attributes)
         XCTAssertEqual(state.panel, .attributes)
+        state.open(.parent)
+        XCTAssertEqual(state.panel, .parent)
     }
 
     func testSubmenuEscapeAndPanelReplacementAreHierarchical() {
@@ -29,6 +31,13 @@ final class TaskInspectorActionPanelTests: XCTestCase {
         state.open(.tags)
         XCTAssertEqual(state.panel, .tags)
         XCTAssertNil(state.submenu)
+        state.open(.more)
+        state.openSubmenu(.focus)
+        state.open(.parent)
+        XCTAssertEqual(state.panel, .parent)
+        XCTAssertNil(state.submenu)
+        XCTAssertTrue(state.handleEscape())
+        XCTAssertNil(state.panel)
         state.dismiss()
         XCTAssertNil(state.panel)
         XCTAssertNil(state.submenu)

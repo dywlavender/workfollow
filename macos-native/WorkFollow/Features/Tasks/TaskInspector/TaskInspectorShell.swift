@@ -163,6 +163,11 @@ struct TaskInspectorShell: View {
                 .frame(width: 320, height: 300)
             } else if actionPresentation.panel == .relation {
                 relationPicker(task)
+            } else if actionPresentation.panel == .parent {
+                TaskParentPicker(taskID: task.id, workspace: workspace) {
+                    actionPresentation.dismiss(.parent)
+                }
+                .inspectorRenderAnchor(.parentPicker)
             } else if presentation.activePopover == .deadline {
                 TaskDatePopoverV2(task: task, workspace: workspace, deadline: true) {
                     presentation.activePopover = nil
@@ -192,6 +197,12 @@ struct TaskInspectorShell: View {
                         workspace.requestChildTitleEditor(for: task.id)
                     }
                 }
+                moreAction("关联主任务", symbol: "rectangle.3.group") {
+                    actionPresentation.open(.parent)
+                }
+                .disabled(task.isClosed || task.skippedAt != nil || task.convertedNoteID != nil ||
+                          workspace.allTasks.contains { $0.parentID == task.id })
+                .inspectorRenderAnchor(.parentMenuRow)
                 moreAction(task.isPinned ? "取消置顶" : "置顶", symbol: "pin") {
                     _ = workspace.setPinned(task.id, !task.isPinned)
                 }

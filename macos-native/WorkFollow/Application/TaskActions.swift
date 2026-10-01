@@ -39,6 +39,28 @@ final class TaskActions {
     }
 
     @discardableResult
+    func setParent(_ id: UUID, parentID: UUID) -> TaskActionResult {
+        guard let task = store.task(id), let parent = store.task(parentID) else {
+            return .failure(.missingTask)
+        }
+        if let rejection = TaskParentPolicy.rejection(task: task, parent: parent, tasks: store.tasks) {
+            return .failure(rejection)
+        }
+        guard task.parentID != parentID else { return .success(id) }
+
+        let lastSiblingOrder = store.tasks.filter { $0.parentID == parentID }
+            .map(\.childOrder).max() ?? -1
+        let childOrder = lastSiblingOrder + 1
+        var replacement = task
+        replacement.parentID = parentID
+        replacement.childOrder = childOrder
+        replacement.list = parent.list
+        replacement.updatedAt = clock()
+        store.commit(store.tasks.map { $0.id == id ? replacement : $0 })
+        return .success(id)
+    }
+
+    @discardableResult
     func complete(_ id: UUID) -> TaskActionResult {
         guard let task = store.task(id) else { return .failure(.missingTask) }
         guard task.deletedAt == nil else { return .failure(.deletedTask) }
