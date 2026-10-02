@@ -31,7 +31,12 @@ struct NotesWorkspaceView: View {
 
     var body: some View {
         GeometryReader { geometry in
-            let wide = geometry.size.width >= (trash ? WFMetrics.splitMinimum : 760)
+            // 双栏门槛与任务页/任务垃圾桶**共用同一个值**（原来非垃圾桶分支硬编码 760）。
+            // 两个页面是 RootShellView 同一个 HStack 的兄弟节点，读到的是同一个内容区宽度，
+            // 所以门槛可以直接比。各写各的时候，内容区宽度落在 [621,760) 这一段里
+            // （窗口 674–812pt 或 871–1009pt），任务页已经是双栏、笔记页却 `wide = false`
+            // → 列表铺满整页、检查器不渲染，切页时详情栏整个消失。
+            let wide = geometry.size.width >= WFMetrics.splitMinimum
             let maximum = max(WFMetrics.listMinimum, min(WFMetrics.listMaximum,
                 geometry.size.width - WFMetrics.inspectorMinimum - WFMetrics.divider))
             // 与任务列表列共用同一宽度（原来这里按窗口宽度硬编码 330 / 300）。

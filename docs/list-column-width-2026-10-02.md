@@ -83,7 +83,7 @@ min(max(workspace.taskListPaneWidth, WFMetrics.listMinimum), maximum)
 
 即导航栏在 871pt 宽就会显示（原来 951pt）。默认窗口 1280pt，两条都远在门槛之上。
 
-### 第三个连带效应：笔记页的双栏门槛没跟着走（**已引入，未修**）
+### 第三个连带效应：笔记页的双栏门槛没跟着走（**2026-10-03 已修**）
 
 上面那张表漏了一条。`splitMinimum` 不只用在自己身上——它同时是**任务页/任务垃圾桶的双栏判据**，
 而笔记页（非垃圾桶）用的是**另一个硬编码的数**：
@@ -120,9 +120,40 @@ min(max(workspace.taskListPaneWidth, WFMetrics.listMinimum), maximum)
 改前这段只有 59pt 宽（`C ∈ [701,760)`），改后 **139pt**——**是我这次下调 `splitMinimum` 顺带拉大的**。
 （`760` 本身是 `89334846`（2026-09-28）留下的，不是这次引入的；我引入的是**分叉变宽**。）
 
-⚠️ **没有修，也不该悄悄修。** 修法是一行（把 `NotesWorkspaceView:34` 的 `760` 换成
-`WFMetrics.splitMinimum`），但它改变的是「笔记页在 621–759 时是否折叠成单栏」——
-这是行为取舍，不是纯 bug 修复，要单独确认。**本轮到此为止，等确认。**
+**修法是一行**：把 `NotesWorkspaceView` 的 `(trash ? WFMetrics.splitMinimum : 760)`
+换成 `WFMetrics.splitMinimum`——垃圾桶分支本来就是 `splitMinimum`，合并后四个页面同一条判据。
+因为它改变的是「笔记页在 621–759 时是否折叠成单栏」，属于行为取舍，**2026-10-03 单独确认后**才动。
+
+### 修完的实测（2026-10-03）
+
+窗口固定为 **950×820**，则内容区 `C = 950 − 52(图标栏) − 1 − 196(导航栏) − 1 = 700`，
+落在 `[621, 760)` 正中。改前/改后各起一个实例，用 ⌘1/⌘5 切页，读 AX 的列框：
+
+| | 任务页 | 笔记页 |
+| --- | --- | --- |
+| **改前** | 列表 `@250,130 340x723` + 检查器 `@591,92 359x708` | **单块 `@260,127 680x710`** |
+| **改后** | 列表 `@250,130 340x723` + 右栏 | 列表 `@260,127 320x710` + 编辑区 `@591,78 359x730` |
+
+改前笔记页那一块 680pt 从 x=260 铺到 x=940，就是整个内容区（700 − 左右各 10 内边距），
+**编辑区根本没有渲染**——和上面按 `NotesWorkspaceView:42–46` 两个条件推出来的一致。
+改后列表停在 x=591，与任务页的分隔条位置**逐点相同**。
+
+（顺带对上了一条旧读数：笔记列表的 `AXScrollArea` 左右各缩进 10pt，所以列宽 340 报出来是
+`320`、起点从 250 变 260；任务列表没有这个内边距，报的就是 `340`。**两个数不一样不代表列宽不一样。**）
+
+截图：`docs/screenshots/list-column-width-2026-10-02/03-notes-breakpoint-before-after.png`
+（三联：改前笔记页 / 改后笔记页 / 改后任务页，同为 950pt 窗口；红色虚线是分隔条应在的
+`x=591pt`。改前那张的列表横跨红线，另两张正好停在红线上。）
+
+**两个操作上的坑，下次别再踩：**
+
+1. **窗口尺寸会被 autosave 弹回去。** `WorkFollowApp.swift:105` 的
+   `viewDidMoveToWindow` 会调 `setFrameUsingName`，切页重建视图时就把旧尺寸恢复了。
+   `resize → 切页` 的顺序会白做，必须**先切页、再 resize、立刻读**。
+2. **resize 会写进用户共用的 UserDefaults。** 三个构建的 bundle id 都是
+   `com.workfollow.native.preview`，`NSWindow Frame main-AppWindow-1` 被我从
+   `0 90 1512 859` 改成了 `0 129 950 820`，**测完已用 `defaults write` 还原**。
+   下次做这类测量要么先存原值，要么别用用户正在用的那个 bundle id。
 
 ## 验收
 
@@ -204,6 +235,37 @@ XCTAssertEqual(model.taskListPaneWidth, WFMetrics.listMinimum)
 **符号**（`TaskWorkspaceModelTests.swift:61-69`），所以它们只证明模型里的夹取逻辑自洽。
 宽度的真正判据是上面的 AX 读数与截图。
 
+### 2026-10-03 那一轮（笔记页双栏门槛）
+
+同一套 `scripts/run-tests.sh`，改前/改后各跑一遍，两边都从**冻结快照**构建
+（`WORKFOLLOW_DISABLE_SWIFT_SANDBOX=1`，见下）：
+
+| | 用例 | 失败 |
+| --- | --- | --- |
+| 改前（快照 + 回退那一行） | 879 | 9 |
+| 改后（快照） | 879 | 9 |
+
+失败**集合**逐条比对完全相同，仍是同 2 个用例的 9 条断言：
+`FocusRenderTests.testFocusWorkspaceGeometryAcrossReferenceRenderMatrix`（8 条——渲染锚点
+集合相同、**顺序不同**）与
+`NativeResourceLinkTests.testTaskAndNoteURLsRoundTripAndBuiltAppDeclaresScheme`（1 条 `XCTUnwrap`）。
+都是既有失败，与列宽无关 → **0 个新失败**。
+
+（用例总数 824→879、失败 12→9，是**另一个会话**同期加/修用例的结果，不是这次带来的。）
+
+**这个断点没有任何测试覆盖。** 测试里出现的 `760` 全是渲染用例的窗口尺寸
+（`NativeResourceLinkTests`、`TaskFocusSubmenuTests` 等），与 `NotesWorkspaceView` 的断点无关。
+所以这一轮的判据只能是 AX 读数 + 截图——测试在这件事上给不了证据。
+
+> ⚠️ **沙箱里构建会假性失败**：Swift 编译宏时要在子沙箱里跑 `swift-plugin-server`，
+> 当前进程树已被沙箱化时子沙箱套不上，报
+> `sandbox-exec: sandbox_apply: Operation not permitted`，然后连带报出上千条
+> `cannot find '$name' in scope` / `'self' is immutable` 的假错误。实测 4/4 次全败，
+> 且**换沙箱外、重跑都不管用**。`scripts/run-tests.sh` 已内置开关
+> `WORKFOLLOW_DISABLE_SWIFT_SANDBOX=1`；直接调 `xcodebuild` 时用
+> `OTHER_SWIFT_FLAGS='-disable-sandbox'`。判别方法一行：
+> `grep -c "sandbox_apply: Operation not permitted" <build.log>`，>0 就是这个原因。
+
 ## 一个实测到、但**没修**的问题：拖分隔条的位移只有鼠标的一半
 
 在验证"拖动"时量到的，**与本次改动无关**（任务页那段拖拽代码这次一行没动），
@@ -242,5 +304,4 @@ SwiftUI 拖拽目标**做对照（同一个 2× 屏、同一套合成事件）�
   位移比例是否也偏。
 - **列宽不持久化**：`taskListPaneWidth` 是纯内存的 `@Published`，重启回到 340。
   这是既有行为，本次没改。
-- **笔记页双栏门槛仍与任务页分叉**（见上面「第三个连带效应」）：窗口 674–812pt 或 871–1009pt 时，
-  从任务页切到笔记页，详情栏会整个消失。一行可修，但属于行为取舍，**等确认后再动**。
+- ~~笔记页双栏门槛仍与任务页分叉~~ —— **2026-10-03 已修并实测**，见上面「第三个连带效应」。
