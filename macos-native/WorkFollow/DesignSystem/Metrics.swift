@@ -7,21 +7,32 @@ enum RailMetrics {
     /// ——栏宽 62、每行 `62x48`（步长 48）、行内 `AXImage @15,131 32x32`
     /// （32 是图标**框**，左边距 15 = (62−32)/2，居中）。
     ///
-    /// 图标**墨迹**（不是框）要从截图量：滴答的日历与四宫格都是 42px @2x = 21pt。
-    /// 我们原来的日历是 33px = 16.5pt，所以字号 18 × 21/16.5 ≈ 23 才对得上。
-    /// ⚠️ 别拿滴答的 32pt「图标框」当目标——那是它的容器，不是画出来的大小。
+    /// 图标**墨迹**（不是框）要从截图量，而且**基准是栏里第 2 个元素**。
     ///
-    /// `itemGap` 从 12 降到 10 是为了凑 pitch：38 + 10 = 48，与滴答的行距一致。
+    /// ⚠️ 栏里**第 1 个不是图标，是用户头像**：实测 65x72px = 32.5x36pt，
+    /// 比图标大一截。拿它当基准会把我们的图标定得过大。真正的图标基准是
+    /// **第 2 个（任务）42x42px = 21pt**，其余图标 42~44px。
+    ///
+    /// 同理别拿 `AXImage 32x32` 当目标——那是滴答图标的**容器框**，不是画出来的大小。
+    ///
+    /// 第二轮校正（2026-10-03，用户指出「我们的比滴答的大」）：字号 23 时我们实测
+    /// 墨迹 41~52px（中位 46），比滴答的 42~44（中位 42）大约 10%；且选中底色
+    /// 34pt = 68px，是滴答选中态（42px，即图标自身填色）的 1.6 倍。
+    /// 故 `iconSize` 23 → 21（墨迹落到 37~47px、中位 42，与基准对齐），
+    /// `selectedSize` 34 → 26（52px，比滴答的 42px 大 24%，再小就贴住图标了）。
+    ///
+    /// `hitSize` 不动仍是 38：它是**不可见的点按区**，38 + `itemGap` 10 = pitch 48，
+    /// 与滴答行距一致；把它改小只会牺牲可点性、还会连带改 pitch。
     ///
     /// 连带效应：`WFMetrics.railWidth` 直接取这个 width，于是
     /// `navigationBreakpoint` 871 → 881（导航栏在 881pt 宽才出现）。
     /// 另外 `MainWindowChromeGeometry.trafficLightFrames` 按 railWidth 给红绿灯居中，
     /// 栏变宽后它们会自动散开（间距上限 6 会生效），**不需要单独改**。
     static let width: CGFloat = 62
-    static let iconSize: CGFloat = 23
+    static let iconSize: CGFloat = 21
     static let hitSize: CGFloat = 38
-    static let selectedSize: CGFloat = 34
-    static let selectedRadius: CGFloat = 10
+    static let selectedSize: CGFloat = 26
+    static let selectedRadius: CGFloat = 8
     static let itemGap: CGFloat = 10
     static let topPadding: CGFloat = 16
 }
