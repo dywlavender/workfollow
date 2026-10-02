@@ -620,4 +620,44 @@ final class CountdownEventTests: XCTestCase {
         let data = try JSONEncoder().encode(rule)
         XCTAssertEqual(try JSONDecoder().decode(CountdownRule.self, from: data), rule)
     }
+
+    // MARK: 节日目录
+
+    /// 目录里的规则必须两两不同。
+    ///
+    /// 重了的话两个节日名指向同一天，而 `name(for:)` 只返回第一个命中——
+    /// 后一个名字永远显示不出来，也不会报错。
+    func testFestivalCatalogueHasNoDuplicateRules() {
+        let rules = CountdownFestival.all.map(\.rule)
+        var unique: [CountdownRule] = []
+        for rule in rules where !unique.contains(rule) { unique.append(rule) }
+        XCTAssertEqual(unique.count, rules.count, "节日目录里有两条规则相同")
+    }
+
+    /// 目录不能是空的，而且每条都要能反查出名字。
+    func testEveryCatalogueEntryIsReachableByName() {
+        XCTAssertFalse(CountdownFestival.all.isEmpty)
+        for option in CountdownFestival.all {
+            XCTAssertEqual(CountdownFestival.name(for: option.rule), option.name)
+        }
+    }
+
+    /// **除夕必须在目录里。**
+    ///
+    /// 这是 `.lunarEve` 唯一的构造来源：编辑器的 `draftBaseRule` 只会用「农历/公历
+    /// 月/日」重建规则，而除夕的月/日是逐年变的（腊月廿九或三十），造不出来。
+    /// 目录一旦漏了它，域模型里那条分支、`combinedRule` 里那段保留逻辑、
+    /// 以及 `makeDraft` 里那个 case 就全都不可达了。
+    func testCatalogueIsTheOnlyWayToReachLunarEve() {
+        XCTAssertTrue(CountdownFestival.all.contains { $0.rule == .lunarEve },
+                      "目录里没有除夕，.lunarEve 就没有任何构造路径")
+        XCTAssertEqual(CountdownFestival.name(for: .lunarEve), "除夕")
+    }
+
+    /// 目录里的农历节日用 `.lunarYearly`，公历节日用 `.solarYearly`——
+    /// 混了会让「春节」这类日子算到错误的落点上。
+    func testCatalogueUsesTheMatchingCalendarForEachFestival() {
+        XCTAssertEqual(CountdownFestival.name(for: .lunarYearly(month: 1, day: 1)), "春节")
+        XCTAssertEqual(CountdownFestival.name(for: .solarYearly(month: 10, day: 1)), "国庆节")
+    }
 }

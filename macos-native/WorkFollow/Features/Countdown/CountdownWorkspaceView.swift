@@ -208,6 +208,7 @@ struct CountdownWorkspaceView: View {
                           alignment: .leading,
                           spacing: WFSpace.xl) {
                     ForEach(items) { event in
+                        let place = position(of: event)
                         CountdownCardView(
                             event: event,
                             projection: event.projection(asOf: today, calendar: calendar),
@@ -221,7 +222,11 @@ struct CountdownWorkspaceView: View {
                             onNote: { sheet = .note(event) },
                             onArchive: { store.archive(event.id) },
                             onDelete: { confirmDelete(event) },
-                            onTogglePin: { store.togglePin(event.id) })
+                            onTogglePin: { store.togglePin(event.id) },
+                            onMoveUp: { store.move(event.id, to: place.index - 1) },
+                            onMoveDown: { store.move(event.id, to: place.index + 1) },
+                            canMoveUp: place.index > 0,
+                            canMoveDown: place.index < place.count - 1)
                     }
                 }
                 .padding(.bottom, WFSpace.xl)
@@ -241,6 +246,16 @@ struct CountdownWorkspaceView: View {
         }
         .foregroundStyle(WFColors.secondaryText)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    /// 卡片在**未过滤**的完整列表里的位置，供上移/下移用。
+    ///
+    /// 用 `store.events` 而不是页面上过滤后的 `items`：`move(_:to:)` 操作的是完整
+    /// 列表，拿过滤后的下标去移，「只看纪念日」这类筛选下会跳到意料之外的位置——
+    /// 而且不会报错，只是顺序变得没法解释。
+    private func position(of event: CountdownEvent) -> (index: Int, count: Int) {
+        let order = store.events
+        return (order.firstIndex { $0.id == event.id } ?? 0, order.count)
     }
 
     private func confirmDelete(_ event: CountdownEvent) {
@@ -270,6 +285,11 @@ struct CountdownCardView: View {
     let onArchive: () -> Void
     let onDelete: () -> Void
     let onTogglePin: () -> Void
+    let onMoveUp: () -> Void
+    let onMoveDown: () -> Void
+    /// 已在首/末位时为假——菜单项据此禁用，比「点了没反应」清楚。
+    let canMoveUp: Bool
+    let canMoveDown: Bool
 
     @State private var hovering = false
 
@@ -443,11 +463,21 @@ struct CountdownCardView: View {
     }
 
     /// 卡片菜单：参考图里的 编辑 / 样式 / 备注 / 归档 / 删除，**每项带图标**。
+    ///
+    /// 上移/下移是加出来的两项：`CountdownStore.move(_:to:)` 早就写好、排序也一直
+    /// 按 `sortOrder` 走，但**没有任何入口**，所以顺序实际恒等于创建顺序。
+    /// 卡片在 3 列 `LazyVGrid` 里，网格拖拽重排又麻烦又容易做错，菜单两项是同样的
+    /// 能力、零布局风险。归档/删除仍靠分隔线隔开。
     @ViewBuilder
     private var menuItems: some View {
         Button { onOpen() } label: { Label("编辑", systemImage: "pencil") }
         Button { onStyle() } label: { Label("样式", systemImage: "paintpalette") }
         Button { onNote() } label: { Label("备注", systemImage: "note.text") }
+        Button { onMoveUp() } label: { Label("上移", systemImage: "arrow.up") }
+            .disabled(!canMoveUp)
+        Button { onMoveDown() } label: { Label("下移", systemImage: "arrow.down") }
+            .disabled(!canMoveDown)
+        Divider()
         Button { onArchive() } label: { Label("归档", systemImage: "archivebox") }
         Button { onDelete() } label: { Label("删除", systemImage: "trash") }
     }

@@ -76,6 +76,9 @@ final class AppEnvironment: ObservableObject {
         filterStore = FilterStore(clock: clock)
         taskWorkspace.attachFilterStore(filterStore)
         taskWorkspace.feedbackSink = feedback
+        // 倒计时的提醒也走同一个排程服务。偏移量语义与任务相反（非负整天，
+        // 锚在当天 09:00），由服务按来源分别映射；这里只把记录来源接上。
+        reminders.countdownStore = countdownStore
         moduleStores = [focusStore, habitStore, summaryStore, countdownStore, filterStore, TemplateStore.shared]
         persistence.onResult = { [weak self] error in
             DispatchQueue.main.async { self?.storageError = error.map { "预览数据保存失败：\($0.localizedDescription)" } }
@@ -111,6 +114,25 @@ final class AppEnvironment: ObservableObject {
             if let self, !self.loadFailed { self.reminders.reconcile(self.taskWorkspace.allTasks) }
         }.store(in: &subscriptions)
         notesWorkspace.$revision.dropFirst().sink { [weak self] _ in self?.savePreview() }.store(in: &subscriptions)
+        // 倒计时记录也要重排提醒。上面那条只跟着任务走——倒计时改了不触发任务
+        // revision，光靠那条订阅，新建一条带提醒的纪念日要等到下次动任务才排上。
+        //
+        // `receive(on:)` 这一拍**不能省**：`events` 是 `@Published`，它的发布发生在
+        // **willSet** 里，sink 直接跑的话读 `store.events` 拿到的还是旧数组，
+        // `reconcile` 会算出与上次相同的签名然后提前返回——新记录静默排不上。
+        // 实测就是这样：新建一条春节后那次 reconcile 读到的是 `countdowns=3`，
+        // 日志里 `changed=false`，而磁盘上已经是 4 条了。推迟到下一轮主队列，
+        // 属性才真的写完。
+        //
+        // 注意任务那条订阅不受影响：它读的是 `allTasks`，不是它订阅的 `revision`。
+        countdownStore.$events
+            .dropFirst()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                guard let self, !self.loadFailed else { return }
+                self.reminders.reconcile(self.taskWorkspace.allTasks)
+            }
+            .store(in: &subscriptions)
         if !loadFailed { reminders.reconcile(taskWorkspace.allTasks) }
     }
 

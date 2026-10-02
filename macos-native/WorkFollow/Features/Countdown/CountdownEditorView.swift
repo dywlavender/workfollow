@@ -52,6 +52,22 @@ struct CountdownEditorView: View {
         var ignoresYear: Bool
     }
 
+    /// 面板的**基准**：草稿初值，以及它对应的原始规则。
+    ///
+    /// 两者必须一起变，所以合成一个值。判断「用户到底动过日期没有」只要一次 `==`
+    /// ——`除夕`（`.lunarEve`）这类规则的农历月/日是逐年变的，用「月/日」重建会
+    /// 失真，没动过就必须原样保留（见 `draftDeviates`）。
+    ///
+    /// 拆成两个独立状态出过事：从节日目录选了「除夕」，只更新草稿、不更新基准，
+    /// `draftDeviates` 立刻为真，目录给的 `.lunarEve` 被旁路，规则按草稿的月/日
+    /// 重建成 `lunarYearly(12, 29)`——腊月若恰有三十天就早一天，界面也从
+    /// 「农历除夕」变成「农历腊月廿九」。合成一个值类型，让「一起变」成为结构上的
+    /// 必然，而不是靠记得。
+    private struct Baseline: Equatable {
+        var draft: DateDraft
+        var rule: CountdownRule?
+    }
+
     @State private var kind: CountdownKind
     @State private var name: String
     @State private var symbol: String
@@ -61,10 +77,8 @@ struct CountdownEditorView: View {
     /// 浮层里正在编辑的那一份。打开浮层时从 `draft` 拷过来，「确定」才写回去——
     /// 所以「取消」不必回滚，直接丢掉即可。
     @State private var editing: DateDraft
-    /// 打开浮层时的初值。判断「用户到底动过日期没有」只要一次 `==`——`除夕`
-    /// （`.lunarEve`）这类规则的农历月/日是逐年变的，用「月/日」重建会失真，
-    /// 没动过就必须原样保留（见 `draftDeviates`）。
-    private let seed: DateDraft
+    /// 打开面板时的基准；从节日目录选一条之后也跟着换成新基准。
+    @State private var baseline: Baseline
     @State private var repeatSelection: CountdownRepeat
     @State private var reminders: Set<Int>
     @State private var smartListDisplay: CountdownSmartListDisplay
@@ -139,7 +153,7 @@ struct CountdownEditorView: View {
         let calendar = Calendar.current
         let today = Date()
         let seedDraft = Self.makeDraft(for: original, kind: kind, calendar: calendar, today: today)
-        self.seed = seedDraft
+        _baseline = State(initialValue: Baseline(draft: seedDraft, rule: original?.rule))
         _draft = State(initialValue: seedDraft)
         _editing = State(initialValue: seedDraft)
         _repeatSelection = State(initialValue: original?.repeatValue ?? kind.defaultRepeat)
@@ -348,6 +362,17 @@ struct CountdownEditorView: View {
                 }
                 .onSubmit { if canSubmit { submit() } }
 
+            // 「节日」类型多一个目录入口：这一类的名称本来就是**从目录里挑**的，
+            // 而目录里的规则（尤其除夕的 `.lunarEve`）没法靠手选月/日复现——
+            // 在接上它之前，`CountdownFestival` 那 19 条谁都用不到。
+            //
+            // 做成名称框**旁边**的下拉而不是替换名称框：手输仍然可用。存量里可能
+            // 有目录之外的节日名（比如地方性节日），为了用上目录而被迫改成目录项
+            // 是净损失。
+            if kind == .festival {
+                festivalPicker
+            }
+
             // 参考图里输入框右端有个小方块图标按钮。它对应的行为在图上不可见，
             // 这里接成「备注」的展开开关——否则整页没有写备注的入口。
             Button {
@@ -375,6 +400,30 @@ struct CountdownEditorView: View {
             .overlay {
                 RoundedRectangle(cornerRadius: WFMetrics.corner).stroke(WFColors.border)
             }
+    }
+
+    /// 「节日」类型的目录下拉（19 条，农历/公历规则都已在域模型里备好）。
+    ///
+    /// 这是 `CountdownFestival.all` 唯一的消费点。之前它整张表没有任何调用方，
+    /// 连带 `.lunarEve`（除夕）也没有任何构造路径——域模型、投影、编辑器三处都在
+    /// 认真支持它，却没有一条路能造出来。
+    private var festivalPicker: some View {
+        Menu {
+            ForEach(CountdownFestival.all) { option in
+                Button(option.name) { applyFestival(option) }
+            }
+        } label: {
+            Image(systemName: "chevron.down")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(WFColors.secondaryText)
+                .frame(width: 26, height: 26)
+                .contentShape(Rectangle())
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .help("从节日目录选择")
+        .accessibilityLabel("选择节日")
     }
 
     // MARK: 属性行
@@ -587,8 +636,17 @@ struct CountdownEditorView: View {
     /// 生日还得靠那个年份算岁数。
     private static func makeDraft(for event: CountdownEvent?, kind: CountdownKind,
                                   calendar: Calendar, today: Date) -> DateDraft {
+        makeDraft(forRule: event?.rule, kind: kind, calendar: calendar, today: today)
+    }
+
+    /// 按规则填草稿；`rule == nil` = 新建、还没选日期。
+    ///
+    /// 单独抽出来是为了让「从节日目录选一条」也能走同一套映射——目录里给的是
+    /// `CountdownRule`，不是一个 `CountdownEvent`。两处各写一份映射，迟早会漂。
+    private static func makeDraft(forRule rule: CountdownRule?, kind: CountdownKind,
+                                  calendar: Calendar, today: Date) -> DateDraft {
         let currentYear = calendar.component(.year, from: today)
-        guard let event else {
+        guard let rule else {
             let lunar = kind == .festival
             let lunarParts = CountdownLunar.lunarComponents(of: today, calendar: calendar)
             return DateDraft(
@@ -599,7 +657,7 @@ struct CountdownEditorView: View {
                 year: currentYear,
                 ignoresYear: lunar)
         }
-        switch event.rule {
+        switch rule {
         case .solarYearly(let month, let day):
             return DateDraft(isSet: true, isLunar: false, month: month, day: day,
                              year: currentYear, ignoresYear: true)
@@ -612,7 +670,7 @@ struct CountdownEditorView: View {
         case .lunarEve:
             // 除夕没有固定的农历月/日，草稿只能填它**下一次**的月/日；靠
             // `draftDeviates` 保证没动过时保存回原规则。
-            let anchor = CountdownEvent.occurrence(of: event.rule, onOrAfter: today,
+            let anchor = CountdownEvent.occurrence(of: rule, onOrAfter: today,
                                                    calendar: calendar)
             let parts = CountdownLunar.lunarComponents(of: anchor, calendar: calendar)
                 ?? (month: 12, day: 30)
@@ -883,12 +941,12 @@ struct CountdownEditorView: View {
     /// 而它恰恰是草稿表达不了的那一类。
     private var dateText: String? {
         guard draft.isSet else { return nil }
-        if !draftDeviates, let text = original?.rule.dateText { return text }
+        if !draftDeviates, let text = baseline.rule?.dateText { return text }
         return draftBaseRule?.dateText
     }
 
     /// 草稿偏离打开时的初值没有。
-    private var draftDeviates: Bool { draft != seed }
+    private var draftDeviates: Bool { draft != baseline.draft }
 
     /// 草稿本身对应的基准规则：勾了「忽略年份」就是每年重复的月/日，
     /// 否则是具体某一天。「重复」再由 `combinedRule` 叠上去。
@@ -910,10 +968,10 @@ struct CountdownEditorView: View {
     /// 提交时的规则：把「日期」与「重复」两行合成一条。
     private var resolvedRule: CountdownRule? {
         guard draft.isSet else { return nil }
-        // 没动过日期就沿用原规则——`除夕` 这类没法从月/日重建的规则只有这条路
-        // 才能原样活下来。
-        let base = (!draftDeviates ? original?.rule : nil) ?? draftBaseRule
-        guard let base else { return nil }
+        // 没动过日期就沿用基准里的规则——`除夕` 这类没法从月/日重建的规则只有这条
+        // 路才能原样活下来。基准同时覆盖两种来源：打开面板时的 `original?.rule`，
+        // 以及刚从节日目录选中的那条（`applyFestival` 把两者一起换掉）。
+        guard let base = (!draftDeviates ? baseline.rule : nil) ?? draftBaseRule else { return nil }
         return combinedRule(base: base, repeatSelection: repeatSelection)
     }
 
@@ -993,8 +1051,31 @@ struct CountdownEditorView: View {
         // 日期一律清空——参考图里换完类型「日期」仍是「选择日期」，
         // 而且公历日期与农历节日本来就不是同一套落点，留着上一个只会误导。
         let fresh = Self.makeDraft(for: nil, kind: next, calendar: calendar, today: Date())
+        // 换类型要把目录选中的规则一起丢掉：留着它的话，从「节日→春节」换成
+        // 「倒数日」，名称与日期都清了，规则却还是农历正月初一。
+        baseline = Baseline(draft: fresh, rule: nil)
         draft = fresh
         editing = fresh
+    }
+
+    /// 从节日目录选一条：填名称，并把规则**原样**记进基准。
+    ///
+    /// 只把月/日填进草稿是不够的：除夕（`.lunarEve`）没有固定的农历月/日——它落在
+    /// 腊月廿九或三十，逐年不同。折成月/日再重建，某些年份会落到不存在的日子上，
+    /// 而且再也回不到「除夕」这个写法。
+    ///
+    /// 草稿照目录规则的落点填：日期行要有文本可显示，「添加」也要能点亮。
+    /// 用户在日期行手动改过之后 `draftDeviates` 变真，基准里的规则就让位给草稿。
+    private func applyFestival(_ option: CountdownFestival.Option) {
+        name = option.name
+        let filled = Self.makeDraft(forRule: option.rule, kind: kind,
+                                    calendar: calendar, today: Date())
+        // 基准与草稿**一起**换。只换草稿的话 `draftDeviates` 立刻为真，目录给的
+        // 规则会被旁路——除夕就是这么被折成腊月廿九的。
+        baseline = Baseline(draft: filled, rule: option.rule)
+        draft = filled
+        editing = filled
+        openRow = nil
     }
 
     private func submit() {
