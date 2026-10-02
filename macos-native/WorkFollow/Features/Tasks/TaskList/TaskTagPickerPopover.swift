@@ -86,7 +86,8 @@ struct TaskTagPickerPopover: View {
         .coordinateSpace(name: "task-tag-picker")
         .onAppear {
             session = TaskTagPickerSession(initialTags: initialTags)
-            searchFocused = true
+            // The hosting view appears before its native child window is attached.
+            DispatchQueue.main.async { searchFocused = true }
         }
         .background(PopupEscapeRouter(depth: 2, onEscape: onCancel))
         .onExitCommand(perform: onCancel)

@@ -4,6 +4,38 @@ import XCTest
 
 @MainActor
 final class PopupEscapeRoutingTests: XCTestCase {
+    func testNestedNativePanelsRouteFromMainWindowToDeepestChildFirst() {
+        let registry = PopupEscapeRegistry()
+        let windows = (0..<3).map { _ in
+            NSWindow(contentRect: NSRect(x: 100, y: 100, width: 300, height: 200),
+                     styleMask: [.borderless], backing: .buffered, defer: false)
+        }
+        for window in windows {
+            window.isReleasedWhenClosed = false
+            window.contentView = NSView(frame: window.contentLayoutRect)
+            window.orderFront(nil)
+        }
+        windows[0].addChildWindow(windows[1], ordered: .above)
+        windows[1].addChildWindow(windows[2], ordered: .above)
+        var parentCalls = 0
+        var childCalls = 0
+        // Both shared shells use depth 3; actual window nesting must break the tie.
+        let childID = registry.register(view: windows[2].contentView!, depth: 3) {
+            childCalls += 1
+            windows[2].orderOut(nil)
+        }
+        let parentID = registry.register(view: windows[1].contentView!, depth: 3) { parentCalls += 1 }
+        defer {
+            registry.unregister(childID); registry.unregister(parentID)
+            for window in windows.reversed() { window.parent?.removeChildWindow(window); window.close() }
+        }
+        XCTAssertTrue(registry.route(eventWindow: windows[0]))
+        XCTAssertEqual(childCalls, 1)
+        XCTAssertEqual(parentCalls, 0)
+        XCTAssertTrue(registry.route(eventWindow: windows[0]))
+        XCTAssertEqual(parentCalls, 1)
+    }
+
     func testCompositionGetsEscapeBeforeRegisteredPopup() {
         let registry = PopupEscapeRegistry()
         let window = NSWindow(contentRect: NSRect(x: 100, y: 100, width: 400, height: 300),

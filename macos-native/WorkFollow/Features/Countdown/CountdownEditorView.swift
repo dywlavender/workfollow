@@ -395,7 +395,9 @@ struct CountdownEditorView: View {
             .buttonStyle(.plain)
             .help("图标")
             .accessibilityLabel("图标")
-            .popover(isPresented: $symbolPickerOpen, arrowEdge: .bottom) { symbolPicker }
+            .background(AnchoredPropertyPanel(isPresented: $symbolPickerOpen, width: 240) {
+                symbolPicker
+            })
         }
     }
 

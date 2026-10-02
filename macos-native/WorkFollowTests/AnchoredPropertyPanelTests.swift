@@ -81,6 +81,31 @@ final class AnchoredPropertyPanelTests: XCTestCase {
         XCTAssertEqual(owner.frame, baseline)
     }
 
+    func testSearchPanelKeepsItsInputAndWindowAcrossLayoutRefresh() throws {
+        let owner = owner()
+        let coordinator = coordinator(in: owner)
+        defer { coordinator.close(); owner.close() }
+        XCTAssertFalse(try XCTUnwrap(coordinator.panel).isKeyWindow,
+                       "Default presentation must preserve the presenter focus")
+        coordinator.close()
+        coordinator.focusPolicy = .panel
+        var query = ""
+        coordinator.root = AnyView(TextField("搜索", text: Binding(get: { query }, set: { query = $0 }))
+            .textFieldStyle(.plain).frame(height: 32))
+        coordinator.update()
+        settle(coordinator.host)
+        let panel = try XCTUnwrap(coordinator.panel)
+        XCTAssertTrue(panel.isKeyWindow)
+        let editor = try XCTUnwrap(panel.firstResponder as? NSTextView)
+        editor.insertText("搜索内容", replacementRange: editor.selectedRange())
+        coordinator.update()
+        settle(coordinator.host)
+        XCTAssertTrue(coordinator.panel === panel)
+        XCTAssertTrue(panel.firstResponder === editor)
+        XCTAssertEqual(editor.string, "搜索内容")
+        XCTAssertEqual(query, "搜索内容")
+    }
+
     func testBottomRowFlipsRealChildAboveAnchor() throws {
         let owner = owner()
         let screen = try XCTUnwrap(owner.screen).visibleFrame

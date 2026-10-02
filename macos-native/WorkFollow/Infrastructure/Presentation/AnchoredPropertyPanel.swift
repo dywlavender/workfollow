@@ -2,6 +2,7 @@ import AppKit
 import SwiftUI
 
 enum AnchoredPropertyPanelPlacement { case vertical, submenu }
+enum AnchoredPropertyPanelFocusPolicy { case preservePresenter, panel }
 
 /// A child card has its own window: it can cross the parent's bottom edge without
 /// contributing to the parent's fitting size. The row is the positioning anchor.
@@ -11,6 +12,7 @@ struct AnchoredPropertyPanel<PanelContent: View>: NSViewRepresentable {
     var horizontalOutset: CGFloat = 0
     var prefersAbove: Bool = false
     var placement: AnchoredPropertyPanelPlacement = .vertical
+    var focusPolicy: AnchoredPropertyPanelFocusPolicy = .preservePresenter
     let content: () -> PanelContent
 
     final class AnchorView: NSView {
@@ -35,6 +37,7 @@ struct AnchoredPropertyPanel<PanelContent: View>: NSViewRepresentable {
         var horizontalOutset: CGFloat = 0
         var prefersAbove = false
         var placement: AnchoredPropertyPanelPlacement = .vertical
+        var focusPolicy: AnchoredPropertyPanelFocusPolicy = .preservePresenter
         var geometryObservers: [NSObjectProtocol] = []
         var root: AnyView = AnyView(EmptyView())
         var presented = false
@@ -56,7 +59,8 @@ struct AnchoredPropertyPanel<PanelContent: View>: NSViewRepresentable {
             if host == nil { host = NSHostingView(rootView: AnyView(card)) }
             else { host?.rootView = AnyView(card) }
             guard let host else { return }
-            if panel == nil {
+            let isOpening = panel == nil
+            if isOpening {
                 let window = PropertyPanelWindow(contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel],
                                      backing: .buffered, defer: false)
                 window.becomesKeyOnlyIfNeeded = true
@@ -134,8 +138,28 @@ struct AnchoredPropertyPanel<PanelContent: View>: NSViewRepresentable {
                 ? AnchoredPropertyPanelGeometry.submenuFrame(row: row, size: size, bounds: rootOwner.frame.intersection(screen))
                 : AnchoredPropertyPanelGeometry.frame(row: row, size: size, screen: screen, prefersAbove: prefersAbove)
             panel?.setFrame(frame, display: true)
-            panel?.orderFront(nil)
+            if isOpening { panel?.orderFront(nil) }
+            if isOpening, focusPolicy == .panel {
+                panel?.makeKey()
+                host.layoutSubtreeIfNeeded()
+                panel?.recalculateKeyViewLoop()
+                if let input = firstEditableInput(in: host) {
+                    panel?.makeFirstResponder(input)
+                } else {
+                    panel?.selectNextKeyView(nil)
+                }
+            }
             panel?.invalidateShadow()
+        }
+
+        private func firstEditableInput(in view: NSView) -> NSView? {
+            if let field = view as? NSTextField, field.isEditable, field.isEnabled {
+                return field
+            }
+            for child in view.subviews {
+                if let input = firstEditableInput(in: child) { return input }
+            }
+            return nil
         }
 
         func close() {
@@ -169,6 +193,7 @@ struct AnchoredPropertyPanel<PanelContent: View>: NSViewRepresentable {
         coordinator.horizontalOutset = horizontalOutset
         coordinator.prefersAbove = prefersAbove
         coordinator.placement = placement
+        coordinator.focusPolicy = focusPolicy
         coordinator.presentingWindow = context.environment.popupPresentingWindow
         coordinator.root = AnyView(content().environment(\.self, context.environment))
         coordinator.dismiss = { isPresented = false }

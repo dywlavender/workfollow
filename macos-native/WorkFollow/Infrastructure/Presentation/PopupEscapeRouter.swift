@@ -48,11 +48,24 @@ final class PopupEscapeRegistry {
             guard let view = pair.1.view, let owner = view.window,
                   owner.isVisible, owner.attachedSheet == nil,
                   !view.isHiddenOrHasHiddenAncestor else { return false }
-            return eventWindow === owner || eventWindow === owner.parent
-                || eventWindow === pair.1.presentingWindow()
+            var ancestor: NSWindow? = owner
+            while let window = ancestor {
+                if eventWindow === window { return true }
+                ancestor = window.parent
+            }
+            return eventWindow === pair.1.presentingWindow()
+        }
+        func windowDepth(_ view: NSView?) -> Int {
+            var depth = 0
+            var window = view?.window?.parent
+            while let owner = window { depth += 1; window = owner.parent }
+            return depth
         }
         let winner = candidates.max {
-            $0.element.1.depth == $1.element.1.depth
+            let lhsWindowDepth = windowDepth($0.element.1.view)
+            let rhsWindowDepth = windowDepth($1.element.1.view)
+            if lhsWindowDepth != rhsWindowDepth { return lhsWindowDepth < rhsWindowDepth }
+            return $0.element.1.depth == $1.element.1.depth
                 ? $0.offset < $1.offset : $0.element.1.depth < $1.element.1.depth
         }
         guard let winner else { return false }

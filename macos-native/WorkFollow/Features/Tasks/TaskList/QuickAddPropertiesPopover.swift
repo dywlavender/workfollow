@@ -42,15 +42,15 @@ struct QuickAddPropertiesPopover: View {
             }
             .buttonStyle(.plain)
             .quickAddRenderAnchor(.list)
-            .popover(isPresented: presented(.list)) {
+            .background(AnchoredPropertyPanel(isPresented: presented(.list), width: 250,
+                                              placement: .submenu, focusPolicy: .panel) {
                 QuickAddListPickerPopover(workspace: workspace, selectedList: selectedList,
                     onCancel: { activeChild = nil },
                     onSelect: { name in
                         onList(name)
                         activeChild = nil
                     })
-                    .background(PopupEscapeRouter(depth: 2) { activeChild = nil })
-            }
+            })
             Button {
                 activeChild = .tags
             } label: {
@@ -58,15 +58,15 @@ struct QuickAddPropertiesPopover: View {
             }
             .buttonStyle(.plain)
             .quickAddRenderAnchor(.tags)
-            .popover(isPresented: presented(.tags)) {
+            .background(AnchoredPropertyPanel(isPresented: presented(.tags), width: 264,
+                                              placement: .submenu, focusPolicy: .panel) {
                 TaskTagPickerPopover(initialTags: selectedTags, workspace: workspace,
                     onCancel: { activeChild = nil },
                     onApply: { values in
                         onTags(values)
                         activeChild = nil
                     })
-                    .background(PopupEscapeRouter(depth: 2) { activeChild = nil })
-            }
+            })
             Button(action: onTemplate) {
                 propertyRow(icon: "doc.text", title: "从模板添加", hasChild: false)
             }
@@ -174,7 +174,9 @@ private struct QuickAddListPickerPopover: View {
             }
         }
         .frame(width: 250, height: 300)
-        .onAppear { searchFocused = true }
+        .onAppear {
+            DispatchQueue.main.async { searchFocused = true }
+        }
         .onExitCommand(perform: onCancel)
     }
 }

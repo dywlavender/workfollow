@@ -286,7 +286,7 @@ struct TaskListView: View {
                     }
                     .buttonStyle(.plain)
                     .help("更多任务属性")
-                    .popover(isPresented: $showQuickAddProperties) {
+                    .background(AnchoredPropertyPanel(isPresented: $showQuickAddProperties, width: 270) {
                         QuickAddPropertiesPopover(
                             workspace: workspace,
                             selectedPriority: quickAddPriorityOverride ?? quickAddResult.priority,
@@ -304,7 +304,7 @@ struct TaskListView: View {
                             },
                             onDismiss: { showQuickAddProperties = false }
                         )
-                    }
+                    })
                 } else {
                     Text("⌘N")
                         .font(WFType.caption)
@@ -985,16 +985,18 @@ struct TaskRowView: View {
                 TaskDatePopoverV2(task: current, workspace: workspace) { showDatePopover = false }
             }
         }
-        .popover(isPresented: $showTagPicker) {
-            if let current = workspace.task(for: task.id) {
-                TaskTagPickerPopover(initialTags: current.tags, workspace: workspace,
-                                     onCancel: { showTagPicker = false },
-                                     onApply: { tags in
-                                         workspace.setTags(task.id, tags)
-                                         showTagPicker = false
-                                     })
+        .background(AnchoredPropertyPanel(isPresented: $showTagPicker, width: 264) {
+            Group {
+                if let current = workspace.task(for: task.id) {
+                    TaskTagPickerPopover(initialTags: current.tags, workspace: workspace,
+                                         onCancel: { showTagPicker = false },
+                                         onApply: { tags in
+                                             workspace.setTags(task.id, tags)
+                                             showTagPicker = false
+                                         })
+                }
             }
-        }
+        })
     }
 
     /// Folding hides children; only this task's own body supplies its preview.

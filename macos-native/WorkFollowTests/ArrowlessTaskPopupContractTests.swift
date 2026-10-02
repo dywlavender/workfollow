@@ -25,6 +25,18 @@ final class ArrowlessTaskPopupContractTests: XCTestCase {
                         + violations.joined(separator: ", "))
     }
 
+    func testQuickAddAndTaskRowPropertiesKeepArrowlessPresentation() throws {
+        let properties = try String(contentsOf: businessSourceRoot.appendingPathComponent(
+            "Features/Tasks/TaskList/QuickAddPropertiesPopover.swift"), encoding: .utf8)
+        XCTAssertEqual(try occurrenceCount(of: "\\.popover\\s*\\(", in: properties), 0)
+        let list = try String(contentsOf: businessSourceRoot.appendingPathComponent(
+            "Features/Tasks/TaskList/TaskListView.swift"), encoding: .utf8)
+        // The only remaining system popover is navigation, reserved for phase two.
+        XCTAssertEqual(try occurrenceCount(of: "\\.popover\\s*\\(", in: list), 1)
+        XCTAssertTrue(list.contains("AnchoredPropertyPanel(isPresented: $showQuickAddProperties"))
+        XCTAssertTrue(list.contains("AnchoredPropertyPanel(isPresented: $showTagPicker"))
+    }
+
     func testTaskContextMenuAndInspectorActionsDoNotSpecifyArrowEdge() throws {
         let files = try businessSourceFiles().filter { file in
             let path = relativePath(of: file)
