@@ -124,6 +124,12 @@ sink 直接跑的话，读 `countdownStore.events` 拿到的还是**旧数组**�
 避免两个进程写同一个 `countdowns.json`）；屏幕录制与辅助功能两个权限都在；
 `screenCaptureAccess=true postEventAccess=true`。
 
+截图在 `docs/screenshots/countdown-a-batch-2026-10-02/`：
+`01-festival-catalogue-19-items`（目录 19 项，含除夕）、
+`02-chuxi-dialog-lunar-eve-preserved`（修后：`日期 = 农历除夕`、`重复 = 每年（除夕）`）、
+`03-card-menu-move-up-disabled-at-first`（首位时「上移」灰）、
+`04-card-menu-move-down-disabled-at-last`（末位时「下移」灰）。
+
 ### (a) 节日目录 / 除夕
 
 | 证据 | 内容 |
@@ -214,3 +220,13 @@ pendingAfter=[…原有 7 条…, countdown.E80B13BC-…#0, countdown.E80B13BC-�
   已删除，并以主工作树为准覆盖后重新构建 + 重跑测试确认干净。
 - 验证产物在 `/tmp/wf-verify-abc`（工作树）与 `/tmp/wf-dd-verify3`（DerivedData），
   可随时删。
+- **共享工作树的一次险情（留个记录）**：`AppEnvironment.swift` 里混着另一会话的
+  `viewPreferences` 接线。为了让提交只含本批改动，做法是「备份工作树版本 →
+  `git show HEAD:<file>` 取干净版 → 只写我的改动 → `git add` → 把备份写回」。
+  但写回那一步疑似覆盖了对方最新的 `viewPreferences`。
+  发现方式是**另一处引用**：`TaskListView.swift` 仍引用 `environment.viewPreferences`，
+  工作树自相矛盾——据此判定这份声明是必需的，把对方那三处补回（未暂存）。
+  提交 `b95fd34` 里不含它们，对方的改动完好留在工作树里。
+  **教训：动共享文件前先把对方的改动 `git diff` 留档，动完立刻 grep 核对对方改动还在。**
+- 提交前 HEAD 已从 `f95da26` 前进到对方的 `791cdf4`（「remove remaining arrowed
+  task popovers」）。本批提交落在它之上，没有替对方 push、也没有整理对方的工作树。
