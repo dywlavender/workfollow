@@ -1,13 +1,7 @@
 import SwiftUI
 
-/// 固定色板；与 `CountdownWorkspaceView.swift` 的同名调色板必须同序同值
-/// （Domain 只存下标，颜色映射在界面侧）。
-private let countdownEditorPalette: [Color] = [.red, .orange, .yellow, .green, .blue, .purple]
-
-private func countdownEditorColor(_ index: Int) -> Color {
-    let count = max(countdownEditorPalette.count, 1)
-    return countdownEditorPalette[((index % count) + count) % count]
-}
+// 色板与取色函数已移到 `CountdownPaletteColors.swift`（界面侧唯一一份），
+// 本文件原先自带的 6 色板副本已删。
 
 /// 新建 / 编辑倒数纪念日。布局照参考图的「添加」面板：图标 + 名称输入框一行，
 /// 其下 日期 / 提醒 / 重复 / 类型 / 显示 五行（生日多一行「显示岁数」），
@@ -338,7 +332,7 @@ struct CountdownEditorView: View {
     private var nameRow: some View {
         HStack(spacing: WFSpace.lg) {
             ZStack {
-                Circle().fill(countdownEditorColor(colorIndex))
+                Circle().fill(countdownColor(colorIndex))
                 Image(systemName: symbol)
                     .font(.system(size: 17, weight: .semibold))
                     .foregroundStyle(.white)
@@ -1152,40 +1146,65 @@ struct CountdownStyleView: View {
     @State private var symbol: String
     @State private var colorIndex: Int
 
+    /// 预览卡用的「今天」。弹窗是短命的，开窗时算一次就够，不必每分钟跟着走。
+    private let today: Date
+
     init(store: CountdownStore, event: CountdownEvent) {
         self.store = store
         self.event = event
         _symbol = State(initialValue: event.safeSymbol)
         _colorIndex = State(initialValue: event.colorIndex)
+        today = Date()
     }
 
     private let columns = Array(repeating: GridItem(.fixed(34), spacing: WFSpace.sm), count: 6)
+
+    /// 预览卡：**与真卡片同一份渲染**（`CountdownCardFace`）+ 同一组尺寸，
+    /// 所以是 1:1 的「所见即所得」，不是缩略图。
+    ///
+    /// 参照实现的第二步也有一张预览卡，但它是**按比例缩小**的（约 202×137pt）。
+    /// 我们按原尺寸画，理由是卡片的内边距（上 34 / 下 30）与字号全是照参照图量出来的，
+    /// 缩小就得另配一套数，两套数迟早会漂——而预览卡一旦和真卡片不一样，就没有意义了。
+    /// 这是取舍，不是对齐。
+    ///
+    /// `symbol` / `colorIndex` 传的是**草稿值**，所以点颜色/图标时这里立刻跟着变。
+    private var preview: some View {
+        CountdownCardFace(event: event,
+                          symbol: symbol,
+                          colorIndex: colorIndex,
+                          projection: event.projection(asOf: today, calendar: .current),
+                          magnitude: event.magnitude(asOf: today,
+                                                     unit: event.effectiveDisplayUnit,
+                                                     calendar: .current),
+                          ageText: event.ageText(asOf: today, calendar: .current))
+            .padding(.horizontal, WFSpace.md)
+            .padding(.top, 34)
+            .padding(.bottom, 30)
+            .frame(maxWidth: .infinity)
+            .frame(height: 193)
+            .background(WFColors.overlay, in: RoundedRectangle(cornerRadius: 12))
+            .overlay {
+                RoundedRectangle(cornerRadius: 12).stroke(WFColors.overlayBorder)
+            }
+    }
 
     var body: some View {
         VStack(spacing: 0) {
             Text("样式").font(.system(size: 14, weight: .semibold)).padding(.vertical, WFSpace.md)
             Divider()
             VStack(alignment: .leading, spacing: WFSpace.md) {
-                HStack(spacing: WFSpace.sm) {
-                    ZStack {
-                        Circle().fill(countdownEditorColor(colorIndex))
-                        Image(systemName: symbol)
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundStyle(.white)
-                    }
-                    .frame(width: 30, height: 30)
-                    Text(event.displayName).font(WFType.body).lineLimit(1)
-                    Spacer(minLength: 0)
-                }
+                preview
                 Text("颜色").font(WFType.supporting).foregroundStyle(WFColors.secondaryText)
-                HStack(spacing: WFSpace.sm) {
+                // 12 格挤一行：间距取 `xs`（4）而不是 `sm`（8）。参照实现实测的格间距
+                // 约 3.3pt，`xs` 反而更接近它；`sm` 会撑到 352pt，这一行放不下。
+                HStack(spacing: WFSpace.xs) {
                     ForEach(0..<CountdownEvent.paletteSize, id: \.self) { index in
                         Button {
                             colorIndex = index
                             apply()
                         } label: {
                             ZStack {
-                                Circle().fill(countdownEditorColor(index)).frame(width: 22, height: 22)
+                                Circle().fill(countdownColor(index)).frame(width: 22, height: 22)
                                 if index == colorIndex {
                                     Image(systemName: "checkmark")
                                         .font(.system(size: 10, weight: .bold))
@@ -1227,7 +1246,9 @@ struct CountdownStyleView: View {
             }
             .padding(WFSpace.lg)
         }
-        .frame(width: 320)
+        // 350 = 左右内边距各 20 + 预览卡 310（**与真卡片同宽**，1:1）。
+        // 顺带让 12 格色板在 4pt 间距下正好排得下（12×22 + 11×4 = 308 ≤ 310）。
+        .frame(width: 350)
         .background(WFColors.canvas)
     }
 
@@ -1336,7 +1357,7 @@ struct ArchivedCountdownsView: View {
         let magnitude = event.magnitude(asOf: today, unit: event.effectiveDisplayUnit)
         return HStack(spacing: WFSpace.sm) {
             ZStack {
-                Circle().fill(countdownEditorColor(event.colorIndex))
+                Circle().fill(countdownColor(event.colorIndex))
                 Image(systemName: event.safeSymbol)
                     .font(.system(size: 10, weight: .semibold))
                     .foregroundStyle(.white)

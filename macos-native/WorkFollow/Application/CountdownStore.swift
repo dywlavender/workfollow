@@ -21,6 +21,9 @@ final class CountdownStore: ObservableObject, ModuleStoreFlushable {
 
     struct CountdownArchive: Codable {
         var events: [CountdownEvent] = []
+        /// 色板版本。老文件里没有这个键，解出来是 nil = 版本 1，载入时按
+        /// `CountdownPalette.legacyRemap` 把 `colorIndex` 搬一次。
+        var paletteVersion: Int? = nil
     }
 
     init(clock: @escaping () -> Date = Date.init, calendar: Calendar = .current,
@@ -34,9 +37,16 @@ final class CountdownStore: ObservableObject, ModuleStoreFlushable {
             store = JSONFileStore(filename: "countdowns.json")
         }
         persistence = store
-        allEvents = store.load()?.events ?? []
+        let archive = store.load()
+        allEvents = CountdownPalette.migrated(archive?.events ?? [], from: archive?.paletteVersion)
         lastRefreshDay = calendar.startOfDay(for: clock())
         refreshDerivedState()
+        // 老文件搬过一次就落盘，别每次启动都重搬一遍。搬迁本身幂等（表里是
+        // 老下标→新下标），但白写盘一次没有意义。
+        if let archive, archive.paletteVersion != CountdownPalette.version {
+            store.schedule(CountdownArchive(events: allEvents,
+                                            paletteVersion: CountdownPalette.version))
+        }
     }
 
     // MARK: - 增删改
@@ -212,7 +222,8 @@ final class CountdownStore: ObservableObject, ModuleStoreFlushable {
 
     private func persist() {
         refreshDerivedState()
-        persistence.schedule(CountdownArchive(events: allEvents))
+        persistence.schedule(CountdownArchive(events: allEvents,
+                                              paletteVersion: CountdownPalette.version))
     }
 
     /// 排序：置顶在前，其余按 sortOrder（同序号回落到创建时间），保证顺序稳定。

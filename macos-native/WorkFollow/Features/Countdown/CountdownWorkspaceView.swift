@@ -1,18 +1,9 @@
 import SwiftUI
 
-/// 固定色板：与 `CountdownEvent.paletteSize`（Domain 白名单约定）数量一致。
-/// 下标顺序同时被 `CountdownKind.defaultColorIndex` 依赖，改动要一起改。
-private let countdownPalette: [Color] = [.red, .orange, .yellow, .green, .blue, .purple]
-
-/// 色板下标安全取色（负数/越界自动回绕）。
-///
-/// **不是 private**：智能清单里的倒计时行（`CountdownSmartListRow`）也要画同一枚
-/// 徽章，两处必须取到同一个颜色，所以这里只留一份实现给两处调。
-/// 色板本身仍然是文件私有的，没有第二个出口。
-func countdownColor(_ index: Int) -> Color {
-    let count = max(countdownPalette.count, 1)
-    return countdownPalette[((index % count) + count) % count]
-}
+// 色板（`countdownPaletteColors`）与 `countdownColor(_:)` 已移到
+// `CountdownPaletteColors.swift`：这里是界面侧唯一一份，卡片 / 编辑器 / 样式弹窗 /
+// 智能清单小节都从那儿取。原先本文件与 `CountdownEditorView.swift` 各存了一份
+// 6 色板，靠注释约定同序同值。
 
 /// 页头的类型筛选。参考图的四个胶囊：所有 / 纪念日 / 倒数日 / 节日。
 ///
@@ -299,39 +290,12 @@ struct CountdownCardView: View {
 
     var body: some View {
         Button(action: onCycleUnit) {
-            VStack(spacing: 0) {
-                HStack(spacing: WFSpace.sm) {
-                    iconBadge
-                    // 18pt 是量出来的（都是 2× 图、同一阈值）：参照物「春节」墨迹 69×35px，
-                    // 我们 15pt 只有 57×29px，18pt 是 68×34px——差 1px，已到字号能调的极限。
-                    // 墨迹密度参照物略高（0.561 vs 0.519），是它的中文字体笔画更粗，抄不了。
-                    Text(event.displayName)
-                        .font(.system(size: 18, weight: .medium))
-                        .foregroundStyle(WFColors.overlayText)
-                        .lineLimit(1)
-                    if let ageText {
-                        // 岁数没有参照样本（三张参照图里没有生日卡），维持 11pt 不动。
-                        Text(ageText)
-                            .font(WFType.caption)
-                            .foregroundStyle(WFColors.overlayTertiaryText)
-                            .lineLimit(1)
-                    }
-                }
-                Spacer(minLength: WFSpace.sm)
-                magnitudeRow
-                Spacer(minLength: WFSpace.sm)
-                // 12pt 而不是 `WFType.caption`（11）：参照物副标题墨迹带宽 353px、高 26px，
-                // 我们 11pt 是 309×22px、12pt 是 336×25px——按宽度线性外推参照物约 12.6pt，
-                // 12pt 把误差从 −12.5% 压到 −4.8%，且 `supporting` 本身就是 12pt 常规。
-                // 剩下的宽度差主要来自它的大数字字体（数字那簇 127px vs 我们 117px），补不平。
-                // 这里用**前缀**而不是完整句：上面 `magnitudeRow` 已经把天数单独
-                // 放大显示了，两句并排会重复。**卡片是唯一该这么用的地方**，
-                // 别处要一句话请用 `projection.sentence(with:)`。
-                Text(projection.captionPrefix)
-                    .font(WFType.supporting)
-                    .foregroundStyle(WFColors.overlayTertiaryText)
-                    .lineLimit(1)
-            }
+            CountdownCardFace(event: event,
+                              symbol: event.safeSymbol,
+                              colorIndex: event.colorIndex,
+                              projection: projection,
+                              magnitude: magnitude,
+                              ageText: ageText)
             // 参考图卡片内的竖向落点（以卡片上沿为原点，2× 图墨迹带中心）：名称 ≈44.8、
             // 数字 ≈101.3、文案 ≈154.8；我们实测 43.8 / 102.3 / 155，三项都在 1pt 内。
             // 上下不等距，所以分别给而不是 `.padding(.vertical,)`。
@@ -369,63 +333,6 @@ struct CountdownCardView: View {
         .contextMenu {
             menuItems
         }
-    }
-
-    /// 主数字一行。数字大、单位字小，单位字约为数字的一半高。
-    ///
-    /// 对齐方式是**按基线**（`.lastTextBaseline`），不是居中：把参考图 `4月9天`
-    /// 的字形墨迹框量出来，四个字的**底边齐平**（442 / 444 / 444 / 444 px），
-    /// 而中心差了 18px（数字 408、单位 427）——居中会让单位字浮到数字腰上去。
-    ///
-    /// **字号按参照物的比例定**（都是 2 倍图的墨迹高，同一把尺子）：
-    /// 参照物 `128` 的数字 83px、`4月9天` / `18周2天` 的数字 68~71px、单位字 34~35px，
-    /// 也就是它**多段档会把数字缩到约 1/1.2**。我们自己的 44pt 给出 64px、
-    /// 22pt 单位字给出 37px，据此换算：单段 83px → 57pt、多段 69px → 47pt、单位字 → 21pt。
-    /// `spacing: 2` 补的是参考图里字与字之间那点缝（实测 14~18px，比字体自带的边距宽）。
-    ///
-    /// **字体层面做不到对齐**：参照物的大数字是它自带的商业字体
-    /// （`TickTick.app/Contents/Resources/Gulzar dida.ttf`，PostScript 名
-    /// `Gulzar-dida-Medium`，**只含 0-9**，所以单位字回落到系统字体）。
-    /// 我们只能用 SF Rounded，字形抄不了——能对齐的只有字号与对齐方式。
-    private var magnitudeRow: some View {
-        HStack(alignment: .lastTextBaseline, spacing: 2) {
-            ForEach(Array(magnitude.parts.enumerated()), id: \.offset) { _, part in
-                Text("\(part.value)")
-                    .font(.system(size: digitSize, weight: .semibold, design: .rounded))
-                if !part.unit.isEmpty {
-                    Text(part.unit)
-                        .font(.system(size: Self.unitGlyphSize, weight: .semibold,
-                                      design: .rounded))
-                }
-            }
-        }
-        .foregroundStyle(WFColors.accent)
-        // 放到 HStack 上靠环境传给每个 Text：`18周2天` 比 `128` 宽，窄卡片下要能缩。
-        .lineLimit(1)
-        .minimumScaleFactor(0.5)
-    }
-
-    /// 参照物 `128`：数字墨迹 83px。我们 44pt 是 64px，按比例换算得 57pt。
-    private static let singlePartDigitSize: CGFloat = 57
-    /// 参照物 `4月9天` / `18周2天`：数字墨迹 68~71px，比单段档小约 1/1.2 → 47pt。
-    private static let multiPartDigitSize: CGFloat = 47
-    /// 参照物单位字墨迹 34~35px；我们 22pt 是 37px → 21pt。
-    private static let unitGlyphSize: CGFloat = 21
-
-    /// 按**渲染出来的段数**选字号，而不是按单位：不足一个更大单位时会退回纯数字
-    /// （`0月2天` → `2`），那个形态和按天档长得一样，就该一样大。
-    private var digitSize: CGFloat {
-        magnitude.parts.count > 1 ? Self.multiPartDigitSize : Self.singlePartDigitSize
-    }
-
-    private var iconBadge: some View {
-        ZStack {
-            Circle().fill(countdownColor(event.colorIndex))
-            Image(systemName: event.safeSymbol)
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(.white)
-        }
-        .frame(width: 22, height: 22)
     }
 
     /// 悬停时出现的两个方块按钮：置顶与更多（参考图右上角）。
@@ -484,5 +391,119 @@ struct CountdownCardView: View {
         Divider()
         Button { onArchive() } label: { Label("归档", systemImage: "archivebox") }
         Button { onDelete() } label: { Label("删除", systemImage: "trash") }
+    }
+}
+
+// MARK: - 卡片的面子
+
+/// 卡片的**面子**：图标 + 名称（生日另挂岁数）/ 大数字 / 距离文案。
+///
+/// **不含**内边距、底色与描边——那是「真卡片」与「样式弹窗里的预览卡」各自的事。
+/// 抽出来的理由只有一个：预览卡的意义是「所见即所得」，另抄一份渲染迟早会漂，
+/// 所以两者共用这一份。
+///
+/// `symbol` / `colorIndex` 单独传、不从 `event` 取：预览要显示**还没保存**的草稿值
+/// ——用户在样式弹窗里点了某个颜色或图标，预览卡要立刻跟着变。
+struct CountdownCardFace: View {
+    let event: CountdownEvent
+    let symbol: String
+    let colorIndex: Int
+    let projection: CountdownProjection
+    /// 主数字按当前单位拆好的段：`128` / `4月9天` / `18周2天`。
+    let magnitude: CountdownMagnitude
+    /// 生日开了「显示岁数」时才有值，跟在名字后面。
+    let ageText: String?
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: WFSpace.sm) {
+                iconBadge
+                // 18pt 是量出来的（都是 2× 图、同一阈值）：参照物「春节」墨迹 69×35px，
+                // 我们 15pt 只有 57×29px，18pt 是 68×34px——差 1px，已到字号能调的极限。
+                // 墨迹密度参照物略高（0.561 vs 0.519），是它的中文字体笔画更粗，抄不了。
+                Text(event.displayName)
+                    .font(.system(size: 18, weight: .medium))
+                    .foregroundStyle(WFColors.overlayText)
+                    .lineLimit(1)
+                if let ageText {
+                    // 岁数没有参照样本（三张参照图里没有生日卡），维持 11pt 不动。
+                    Text(ageText)
+                        .font(WFType.caption)
+                        .foregroundStyle(WFColors.overlayTertiaryText)
+                        .lineLimit(1)
+                }
+            }
+            Spacer(minLength: WFSpace.sm)
+            magnitudeRow
+            Spacer(minLength: WFSpace.sm)
+            // 12pt 而不是 `WFType.caption`（11）：参照物副标题墨迹带宽 353px、高 26px，
+            // 我们 11pt 是 309×22px、12pt 是 336×25px——按宽度线性外推参照物约 12.6pt，
+            // 12pt 把误差从 −12.5% 压到 −4.8%，且 `supporting` 本身就是 12pt 常规。
+            // 剩下的宽度差主要来自它的大数字字体（数字那簇 127px vs 我们 117px），补不平。
+            // 这里用**前缀**而不是完整句：上面 `magnitudeRow` 已经把天数单独
+            // 放大显示了，两句并排会重复。**卡片是唯一该这么用的地方**，
+            // 别处要一句话请用 `projection.sentence(with:)`。
+            Text(projection.captionPrefix)
+                .font(WFType.supporting)
+                .foregroundStyle(WFColors.overlayTertiaryText)
+                .lineLimit(1)
+        }
+    }
+
+    /// 主数字一行。数字大、单位字小，单位字约为数字的一半高。
+    ///
+    /// 对齐方式是**按基线**（`.lastTextBaseline`），不是居中：把参考图 `4月9天`
+    /// 的字形墨迹框量出来，四个字的**底边齐平**（442 / 444 / 444 / 444 px），
+    /// 而中心差了 18px（数字 408、单位 427）——居中会让单位字浮到数字腰上去。
+    ///
+    /// **字号按参照物的比例定**（都是 2 倍图的墨迹高，同一把尺子）：
+    /// 参照物 `128` 的数字 83px、`4月9天` / `18周2天` 的数字 68~71px、单位字 34~35px，
+    /// 也就是它**多段档会把数字缩到约 1/1.2**。我们自己的 44pt 给出 64px、
+    /// 22pt 单位字给出 37px，据此换算：单段 83px → 57pt、多段 69px → 47pt、单位字 → 21pt。
+    /// `spacing: 2` 补的是参考图里字与字之间那点缝（实测 14~18px，比字体自带的边距宽）。
+    ///
+    /// **字体层面做不到对齐**：参照物的大数字是它自带的商业字体
+    /// （`TickTick.app/Contents/Resources/Gulzar dida.ttf`，PostScript 名
+    /// `Gulzar-dida-Medium`，**只含 0-9**，所以单位字回落到系统字体）。
+    /// 我们只能用 SF Rounded，字形抄不了——能对齐的只有字号与对齐方式。
+    private var magnitudeRow: some View {
+        HStack(alignment: .lastTextBaseline, spacing: 2) {
+            ForEach(Array(magnitude.parts.enumerated()), id: \.offset) { _, part in
+                Text("\(part.value)")
+                    .font(.system(size: digitSize, weight: .semibold, design: .rounded))
+                if !part.unit.isEmpty {
+                    Text(part.unit)
+                        .font(.system(size: Self.unitGlyphSize, weight: .semibold,
+                                      design: .rounded))
+                }
+            }
+        }
+        .foregroundStyle(WFColors.accent)
+        // 放到 HStack 上靠环境传给每个 Text：`18周2天` 比 `128` 宽，窄卡片下要能缩。
+        .lineLimit(1)
+        .minimumScaleFactor(0.5)
+    }
+
+    /// 参照物 `128`：数字墨迹 83px。我们 44pt 是 64px，按比例换算得 57pt。
+    private static let singlePartDigitSize: CGFloat = 57
+    /// 参照物 `4月9天` / `18周2天`：数字墨迹 68~71px，比单段档小约 1/1.2 → 47pt。
+    private static let multiPartDigitSize: CGFloat = 47
+    /// 参照物单位字墨迹 34~35px；我们 22pt 是 37px → 21pt。
+    private static let unitGlyphSize: CGFloat = 21
+
+    /// 按**渲染出来的段数**选字号，而不是按单位：不足一个更大单位时会退回纯数字
+    /// （`0月2天` → `2`），那个形态和按天档长得一样，就该一样大。
+    private var digitSize: CGFloat {
+        magnitude.parts.count > 1 ? Self.multiPartDigitSize : Self.singlePartDigitSize
+    }
+
+    private var iconBadge: some View {
+        ZStack {
+            Circle().fill(countdownColor(colorIndex))
+            Image(systemName: symbol)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(.white)
+        }
+        .frame(width: 22, height: 22)
     }
 }

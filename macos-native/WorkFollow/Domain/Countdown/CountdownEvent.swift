@@ -153,13 +153,19 @@ enum CountdownKind: String, Codable, CaseIterable, Identifiable {
         }
     }
 
-    /// 参考图的默认色板下标（见 CountdownWorkspaceView 的调色板顺序）。
+    /// 参考图的默认色板下标（顺序见 `countdownPaletteColors`）。
+    ///
+    /// 色板从 6 格扩到 12 格时，这四个值**必须跟着一起改**——下标是位置，
+    /// 位置变了颜色就变了，光改色板会让四种类型的默认色一起跑掉。
+    /// 新值就是 `CountdownPalette.legacyRemap` 作用在旧值上的结果
+    /// （纪念日橙 1→5、倒数日蓝 4→0、节日红 0→7、生日紫 5→8）。
+    /// 有测试钉住这个一致性：**新建的纪念日和存量的纪念日必须是同一个颜色**。
     var defaultColorIndex: Int {
         switch self {
-        case .anniversary: return 1  // 橙
-        case .countdown: return 4    // 蓝
-        case .festival: return 0     // 红
-        case .birthday: return 5     // 紫
+        case .anniversary: return 5  // 橙
+        case .countdown: return 0    // 蓝
+        case .festival: return 7     // 玫红
+        case .birthday: return 8     // 紫罗兰
         }
     }
 
@@ -415,9 +421,10 @@ extension CountdownEvent {
         "cross.case", "house",
     ]
 
-    /// 固定色板数量；具体颜色映射在界面侧（Domain 不依赖 SwiftUI），需与
-    /// `CountdownWorkspaceView.swift` 中的 `countdownPalette` 保持一致。
-    static let paletteSize = 6
+    /// 固定色板数量。颜色映射在界面侧（Domain 不依赖 SwiftUI）：界面侧那一份是
+    /// `countdownPaletteColors`，格数与搬迁表都在 `CountdownPalette`。
+    /// 两边数量必须相等，有测试盯着。
+    static let paletteSize = CountdownPalette.size
 
     /// 参考图里新建时的默认提醒：`当天, 提前 3 天`（**两条**，所以「提醒」是多选）。
     static let defaultReminderOffsets = [0, 3 * 24 * 60]
