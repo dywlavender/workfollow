@@ -1,12 +1,28 @@
 import Foundation
 
 enum RailMetrics {
-    static let width: CGFloat = 52
-    static let iconSize: CGFloat = 18
-    static let hitSize: CGFloat = 34
-    static let selectedSize: CGFloat = 30
-    static let selectedRadius: CGFloat = 9
-    static let itemGap: CGFloat = 12
+    /// 图标栏几何，按滴答清单的实测值对齐（2026-10-03）。
+    ///
+    /// 读数来源：滴答在跑，直接读它自己的 AX 树，`AXScrollArea @0,123 62x601`
+    /// ——栏宽 62、每行 `62x48`（步长 48）、行内 `AXImage @15,131 32x32`
+    /// （32 是图标**框**，左边距 15 = (62−32)/2，居中）。
+    ///
+    /// 图标**墨迹**（不是框）要从截图量：滴答的日历与四宫格都是 42px @2x = 21pt。
+    /// 我们原来的日历是 33px = 16.5pt，所以字号 18 × 21/16.5 ≈ 23 才对得上。
+    /// ⚠️ 别拿滴答的 32pt「图标框」当目标——那是它的容器，不是画出来的大小。
+    ///
+    /// `itemGap` 从 12 降到 10 是为了凑 pitch：38 + 10 = 48，与滴答的行距一致。
+    ///
+    /// 连带效应：`WFMetrics.railWidth` 直接取这个 width，于是
+    /// `navigationBreakpoint` 871 → 881（导航栏在 881pt 宽才出现）。
+    /// 另外 `MainWindowChromeGeometry.trafficLightFrames` 按 railWidth 给红绿灯居中，
+    /// 栏变宽后它们会自动散开（间距上限 6 会生效），**不需要单独改**。
+    static let width: CGFloat = 62
+    static let iconSize: CGFloat = 23
+    static let hitSize: CGFloat = 38
+    static let selectedSize: CGFloat = 34
+    static let selectedRadius: CGFloat = 10
+    static let itemGap: CGFloat = 10
     static let topPadding: CGFloat = 16
 }
 
