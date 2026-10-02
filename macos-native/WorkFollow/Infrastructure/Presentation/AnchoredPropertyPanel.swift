@@ -38,6 +38,9 @@ struct AnchoredPropertyPanel<PanelContent: View>: NSViewRepresentable {
         var geometryObservers: [NSObjectProtocol] = []
         var root: AnyView = AnyView(EmptyView())
         var presented = false
+        var escapeDepth = 3
+        var presentingWindow: PopupPresentingWindow?
+        var title: String?
 
         func update() {
             guard presented, let anchor, let owner = anchor.window, owner.isVisible else {
@@ -48,7 +51,8 @@ struct AnchoredPropertyPanel<PanelContent: View>: NSViewRepresentable {
                 .fixedSize(horizontal: false, vertical: true)
                 .background(WFColors.content, in: RoundedRectangle(cornerRadius: 12))
                 .clipShape(RoundedRectangle(cornerRadius: 12))
-                .background(PopupEscapeRouter(depth: 3) { [weak self] in self?.dismiss() })
+                .background(PopupEscapeRouter(depth: escapeDepth) { [weak self] in self?.dismiss() })
+                .environment(\.popupPresentingWindow, presentingWindow)
             if host == nil { host = NSHostingView(rootView: AnyView(card)) }
             else { host?.rootView = AnyView(card) }
             guard let host else { return }
@@ -57,7 +61,7 @@ struct AnchoredPropertyPanel<PanelContent: View>: NSViewRepresentable {
                                      backing: .buffered, defer: false)
                 window.becomesKeyOnlyIfNeeded = true
                 window.isReleasedWhenClosed = false
-                window.title = placement == .submenu ? "任务操作子菜单" : "日期属性"
+                window.title = title ?? (placement == .submenu ? "任务操作子菜单" : "日期属性")
                 window.isOpaque = false
                 window.backgroundColor = .clear
                 window.hasShadow = true
@@ -65,16 +69,14 @@ struct AnchoredPropertyPanel<PanelContent: View>: NSViewRepresentable {
                 window.contentView = host
                 owner.addChildWindow(window, ordered: .above)
                 panel = window
-                if placement == .submenu {
-                    for name in [NSWindow.didMoveNotification, NSWindow.didResizeNotification] {
-                        geometryObservers.append(NotificationCenter.default.addObserver(forName: name, object: owner, queue: .main) { [weak self] _ in
-                            DispatchQueue.main.async {
-                                guard let self, self.presented else { return }
-                                self.anchor?.window?.contentView?.layoutSubtreeIfNeeded()
-                                self.update()
-                            }
-                        })
-                    }
+                for name in [NSWindow.didMoveNotification, NSWindow.didResizeNotification] {
+                    geometryObservers.append(NotificationCenter.default.addObserver(forName: name, object: owner, queue: .main) { [weak self] _ in
+                        DispatchQueue.main.async {
+                            guard let self, self.presented else { return }
+                            self.anchor?.window?.contentView?.layoutSubtreeIfNeeded()
+                            self.update()
+                        }
+                    })
                 }
                 ownerCloseObserver = NotificationCenter.default.addObserver(
                     forName: NSWindow.willCloseNotification, object: owner, queue: .main
@@ -111,9 +113,11 @@ struct AnchoredPropertyPanel<PanelContent: View>: NSViewRepresentable {
                 monitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] event in
                     guard let self, let panel = self.panel, let parent = panel.parent else { return event }
                     if event.window === panel { return event }
-                    guard event.window === parent else { return event }
+                    var ancestor: NSWindow? = parent
+                    while let window = ancestor, window !== event.window { ancestor = window.parent }
+                    guard ancestor != nil else { return event }
                     // The anchor row handles toggle/clear itself; don't cancel then reopen it.
-                    if let anchor = self.anchor, anchor.bounds.contains(anchor.convert(event.locationInWindow, from: nil)) {
+                    if event.window === parent, let anchor = self.anchor, anchor.bounds.contains(anchor.convert(event.locationInWindow, from: nil)) {
                         return event
                     }
                     self.dismiss()
@@ -124,8 +128,10 @@ struct AnchoredPropertyPanel<PanelContent: View>: NSViewRepresentable {
             let size = CGSize(width: width, height: min(host.fittingSize.height, screen.height - 16))
             let row = owner.convertToScreen(anchor.convert(anchor.bounds, to: nil))
                 .insetBy(dx: -horizontalOutset, dy: 0)
+            var rootOwner = owner
+            while let parent = rootOwner.parent { rootOwner = parent }
             let frame = placement == .submenu
-                ? AnchoredPropertyPanelGeometry.submenuFrame(row: row, size: size, bounds: owner.frame.intersection(screen))
+                ? AnchoredPropertyPanelGeometry.submenuFrame(row: row, size: size, bounds: rootOwner.frame.intersection(screen))
                 : AnchoredPropertyPanelGeometry.frame(row: row, size: size, screen: screen, prefersAbove: prefersAbove)
             panel?.setFrame(frame, display: true)
             panel?.orderFront(nil)
@@ -163,6 +169,7 @@ struct AnchoredPropertyPanel<PanelContent: View>: NSViewRepresentable {
         coordinator.horizontalOutset = horizontalOutset
         coordinator.prefersAbove = prefersAbove
         coordinator.placement = placement
+        coordinator.presentingWindow = context.environment.popupPresentingWindow
         coordinator.root = AnyView(content().environment(\.self, context.environment))
         coordinator.dismiss = { isPresented = false }
         DispatchQueue.main.async { [weak coordinator] in coordinator?.update() }

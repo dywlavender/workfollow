@@ -1,51 +1,89 @@
 import AppKit
 import SwiftUI
 
-/// 以光标为锚呈现任务右键菜单，对齐 Flutter bottomStart 定位：面板顶部在
-/// 光标下方、左缘对齐光标。锚框中心放在光标右移半个面板宽处，NSPopover
-/// 在锚框下方水平居中，面板左缘即落在光标上；贴近屏幕边缘时自动翻转。
+/// A cursor-anchored borderless card. Child menus own independent windows
+/// and never contribute to the main menu's fitting size.
 @MainActor
 enum TaskContextMenuPresenter {
+    private(set) static var activeSession: Session?
+
     static func show(in rowView: NSView, at point: CGPoint,
                      environment: AppEnvironment, workspace: TaskWorkspaceModel,
                      task: Task, onCustomDate: @escaping () -> Void) {
-        let popover = NSPopover()
-        popover.behavior = .transient
-        // 菜单自身不再持有呈现状态：任何"关闭"动作都落到弹窗本身。
-        let isPresented = Binding<Bool>(
-            get: { false },
-            set: { _ in popover.performClose(nil) })
-        let host = NSHostingController(rootView: TaskContextMenuPopover(
+        activeSession?.close()
+        guard let owner = rowView.window else { return }
+        let session = Session(in: rowView, at: point)
+        activeSession = session
+        let presenter = PopupPresentingWindow()
+        presenter.window = owner
+        session.coordinator.presentingWindow = presenter
+        session.coordinator.root = AnyView(TaskContextMenuPopover(
             workspace: workspace,
-            isPresented: isPresented,
+            isPresented: Binding(get: { [weak session] in session?.coordinator.presented == true },
+                                 set: { [weak session] value in if !value { session?.close() } }),
             task: task,
-            onCustomDate: {
-                popover.performClose(nil)
+            onCustomDate: { [weak session] in
+                session?.close()
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { onCustomDate() }
             })
-            .environmentObject(environment))
-        host.sizingOptions = [.preferredContentSize]
-        popover.contentViewController = host
-
-        // 锚框宽 = 面板宽：面板在锚框下方居中后，左缘正好落在光标上；
-        // 锚框抬到光标上方 8pt，抵消箭头高度，面板顶缘落在光标下方约 6pt。
-        let anchor = NSView(frame: NSRect(
-            x: point.x + TaskContextMenuPopover.menuWidth / 2,
-            y: point.y + 8, width: 2, height: 2))
-        rowView.addSubview(anchor)
-        let delegate = CloseDelegate(anchor: anchor)
-        popover.delegate = delegate
-        objc_setAssociatedObject(popover, "wf-close-delegate", delegate,
-                                 .OBJC_ASSOCIATION_RETAIN)
-        popover.show(relativeTo: anchor.bounds, of: anchor, preferredEdge: .minY)
+            .environmentObject(environment)
+            .environment(\.popupPresentingWindow, presenter))
+        session.coordinator.update()
+        session.observeOutsideApplicationClicks()
     }
 
-    /// 关闭后释放锚点视图，避免每次右键都在行上残留子视图。
-    private final class CloseDelegate: NSObject, NSPopoverDelegate {
-        let anchor: NSView
-        init(anchor: NSView) { self.anchor = anchor }
-        func popoverDidClose(_ notification: Notification) {
+    @MainActor final class Session {
+        typealias Adapter = AnchoredPropertyPanel<AnyView>
+        let coordinator = Adapter.Coordinator()
+        let anchor: Adapter.AnchorView
+        private var outsideMonitor: Any?
+        private var localOutsideMonitor: Any?
+        private var deactivationObserver: NSObjectProtocol?
+
+        init(in rowView: NSView, at point: CGPoint) {
+            anchor = Adapter.AnchorView(frame: CGRect(origin: point, size: CGSize(width: 1, height: 1)))
+            rowView.addSubview(anchor)
+            coordinator.anchor = anchor
+            coordinator.width = TaskContextMenuPopover.menuWidth
+            coordinator.escapeDepth = 1
+            coordinator.title = "任务右键菜单"
+            coordinator.presented = true
+            coordinator.dismiss = { [weak self] in self?.close() }
+            anchor.moved = { [weak self] in
+                guard let self else { return }
+                if self.anchor.window == nil { self.close() }
+                else { self.coordinator.update() }
+            }
+        }
+
+        func observeOutsideApplicationClicks() {
+            localOutsideMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] event in
+                guard let self else { return event }
+                var window = event.window
+                while let current = window, current !== self.coordinator.panel { window = current.parent }
+                if window == nil { self.close() }
+                return event
+            }
+            outsideMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
+                self?.close()
+            }
+            deactivationObserver = NotificationCenter.default.addObserver(
+                forName: NSApplication.didResignActiveNotification, object: NSApp, queue: .main
+            ) { [weak self] _ in MainActor.assumeIsolated { self?.close() } }
+        }
+
+        func close() {
+            coordinator.presented = false
+            coordinator.close()
+            anchor.moved = nil
             anchor.removeFromSuperview()
+            if let outsideMonitor { NSEvent.removeMonitor(outsideMonitor) }
+            outsideMonitor = nil
+            if let localOutsideMonitor { NSEvent.removeMonitor(localOutsideMonitor) }
+            localOutsideMonitor = nil
+            if let deactivationObserver { NotificationCenter.default.removeObserver(deactivationObserver) }
+            deactivationObserver = nil
+            if TaskContextMenuPresenter.activeSession === self { TaskContextMenuPresenter.activeSession = nil }
         }
     }
 }

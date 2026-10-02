@@ -6,8 +6,8 @@ struct TaskContextMenuPopover: View {
     let task: Task
     let onCustomDate: () -> Void
     @EnvironmentObject private var environment: AppEnvironment
-    @State private var showingListPicker = false
-    @State private var showingTagPicker = false
+    private enum Submenu: Equatable { case list, tags }
+    @State private var activeSubmenu: Submenu?
     @State private var submenuHoverTimer: DispatchWorkItem?
 
     /// 面板宽度对齐 Flutter TaskMenuMetrics.width = 264。
@@ -20,10 +20,21 @@ struct TaskContextMenuPopover: View {
     /// `_openSubmenu` 的 `submenu != null` 守卫）。
     private func hoverOpensSubmenu(_ entering: Bool, open: @escaping () -> Void) {
         submenuHoverTimer?.cancel()
-        guard entering, !showingListPicker, !showingTagPicker else { return }
+        guard entering, activeSubmenu == nil else { return }
         let work = DispatchWorkItem { open() }
         submenuHoverTimer = work
         DispatchQueue.main.asyncAfter(deadline: .now() + Self.submenuIntent, execute: work)
+    }
+
+    private func submenuBinding(for submenu: Submenu) -> Binding<Bool> {
+        Binding(
+            get: { activeSubmenu == submenu },
+            set: { isPresented in
+                if !isPresented, activeSubmenu == submenu {
+                    activeSubmenu = nil
+                }
+            }
+        )
     }
 
     var body: some View {
@@ -113,39 +124,45 @@ struct TaskContextMenuPopover: View {
                     }
                 }
                 if task.parentID == nil {
-                    Button { showingListPicker = true } label: {
+                    Button { activeSubmenu = .list } label: {
                         menuRow("移动到清单", symbol: "tray.full", trailing: "chevron.right")
                     }
                     .buttonStyle(.plain)
                     .disabled(!workspace.canMoveToList(task.id))
                     // Flutter：子菜单挂到行右侧（gap 14），展开期间行保持选中底色。
-                    .background(showingListPicker ? WFColors.selection : .clear,
+                    .background(activeSubmenu == .list ? WFColors.selection : .clear,
                                 in: RoundedRectangle(cornerRadius: WFMetrics.corner))
-                    .onHover { hoverOpensSubmenu($0) { showingListPicker = true } }
-                    .popover(isPresented: $showingListPicker, arrowEdge: .trailing) {
+                    .onHover { hoverOpensSubmenu($0) { activeSubmenu = .list } }
+                    .background(AnchoredPropertyPanel(
+                        isPresented: submenuBinding(for: .list),
+                        width: 196, placement: .submenu
+                    ) {
                         TaskContextListPicker(workspace: workspace, selected: task.list.name,
-                            onCancel: { showingListPicker = false },
+                            onCancel: { activeSubmenu = nil },
                             onSelect: { name in
-                                showingListPicker = false
+                                activeSubmenu = nil
                                 perform { _ = workspace.moveToList(task.id, TaskList(name: name)) }
                             })
-                    }
+                    })
                 }
-                Button { showingTagPicker = true } label: {
+                Button { activeSubmenu = .tags } label: {
                     menuRow("标签", symbol: "tag", trailing: "chevron.right")
                 }
                 .buttonStyle(.plain)
-                .background(showingTagPicker ? WFColors.selection : .clear,
+                .background(activeSubmenu == .tags ? WFColors.selection : .clear,
                             in: RoundedRectangle(cornerRadius: WFMetrics.corner))
-                .onHover { hoverOpensSubmenu($0) { showingTagPicker = true } }
-                .popover(isPresented: $showingTagPicker, arrowEdge: .trailing) {
+                .onHover { hoverOpensSubmenu($0) { activeSubmenu = .tags } }
+                .background(AnchoredPropertyPanel(
+                    isPresented: submenuBinding(for: .tags),
+                    width: 264, placement: .submenu
+                ) {
                     TaskTagPickerPopover(initialTags: task.tags, workspace: workspace,
-                        onCancel: { showingTagPicker = false },
+                        onCancel: { activeSubmenu = nil },
                         onApply: { tags in
-                            showingTagPicker = false
+                            activeSubmenu = nil
                             perform { workspace.setTags(task.id, tags) }
                         })
-                }
+                })
             }
 
             Divider().padding(.vertical, WFSpace.xs)
@@ -159,6 +176,10 @@ struct TaskContextMenuPopover: View {
         .padding(.vertical, WFSpace.xs)
         .frame(width: Self.menuWidth)
         .onExitCommand { isPresented = false }
+        .onDisappear {
+            submenuHoverTimer?.cancel()
+            submenuHoverTimer = nil
+        }
     }
 
     private func dateAction(_ title: String, symbol: String, offset: Int) -> some View {
