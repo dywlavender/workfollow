@@ -34,8 +34,10 @@ struct NotesWorkspaceView: View {
             let wide = geometry.size.width >= (trash ? WFMetrics.splitMinimum : 760)
             let maximum = max(WFMetrics.listMinimum, min(WFMetrics.listMaximum,
                 geometry.size.width - WFMetrics.inspectorMinimum - WFMetrics.divider))
-            let paneWidth = trash ? min(max(tasks.taskListPaneWidth, WFMetrics.listMinimum), maximum)
-                : (geometry.size.width >= 1100 ? 330.0 : 300.0)
+            // 与任务列表列共用同一宽度（原来这里按窗口宽度硬编码 330 / 300）。
+            // 两个页面各写各的，用户在中栏之间切换就会看到忽宽忽窄；共用一个值之后，
+            // 在哪一边拖分隔条，另一边也跟着变——这才是「宽度一致」。
+            let paneWidth = min(max(tasks.taskListPaneWidth, WFMetrics.listMinimum), maximum)
             HStack(spacing: 0) {
                 if wide || !detailOnly || visibleNote == nil {
                     list.frame(width: wide ? paneWidth : nil)
@@ -43,20 +45,21 @@ struct NotesWorkspaceView: View {
                 }
                 if wide || (detailOnly && visibleNote != nil) {
                     if wide {
-                        if trash {
-                            Rectangle().fill(WFColors.border).frame(width: WFMetrics.divider)
-                                .overlay {
-                                    Color.clear.frame(width: 8).contentShape(Rectangle())
-                                        .onHover { inside in
-                                            if inside { NSCursor.resizeLeftRight.push() } else { NSCursor.pop() }
-                                        }
-                                        .gesture(DragGesture(minimumDistance: 1).onChanged { value in
-                                            if dragOrigin == nil { dragOrigin = paneWidth }
-                                            tasks.setTaskListPaneWidth(min(max((dragOrigin ?? paneWidth) + value.translation.width,
-                                                WFMetrics.listMinimum), maximum))
-                                        }.onEnded { _ in dragOrigin = nil })
-                                }
-                        } else { Divider() }
+                        // 任务页与笔记页（含笔记垃圾桶）用同一条可拖分隔条。
+                        // 原来非垃圾桶分支只放了个静态 `Divider()`，于是「共用一个宽度」
+                        // 却只有任务页能改它——在笔记页够不着，等于半个功能。
+                        Rectangle().fill(WFColors.border).frame(width: WFMetrics.divider)
+                            .overlay {
+                                Color.clear.frame(width: WFSpace.sm).contentShape(Rectangle())
+                                    .onHover { inside in
+                                        if inside { NSCursor.resizeLeftRight.push() } else { NSCursor.pop() }
+                                    }
+                                    .gesture(DragGesture(minimumDistance: 1).onChanged { value in
+                                        if dragOrigin == nil { dragOrigin = paneWidth }
+                                        tasks.setTaskListPaneWidth(min(max((dragOrigin ?? paneWidth) + value.translation.width,
+                                            WFMetrics.listMinimum), maximum))
+                                    }.onEnded { _ in dragOrigin = nil })
+                            }
                     }
                     inspector(compact: !wide)
                 }

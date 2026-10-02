@@ -60,7 +60,10 @@ final class TaskWorkspaceModelTests: XCTestCase {
             let model = TaskWorkspaceModel(seedDemoData: false)
             XCTAssertEqual(model.taskListPaneWidth, WFMetrics.listPreferred)
 
-            model.setTaskListPaneWidth(360)
+            // 这里原来写死 360。360 是「窗口最小宽度」那个数，不是列表最小宽度——
+            // 它当时只是「一个小于 listMinimum(380) 的值」。listMinimum 调到 300 之后，
+            // 360 落进了合法区间，断言就悄悄变成了在测「没有夹取」，所以改成显式小于。
+            model.setTaskListPaneWidth(WFMetrics.listMinimum - 40)
             XCTAssertEqual(model.taskListPaneWidth, WFMetrics.listMinimum)
 
             model.setTaskListPaneWidth(520)
