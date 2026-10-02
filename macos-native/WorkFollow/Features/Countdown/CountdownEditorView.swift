@@ -413,31 +413,55 @@ struct CountdownEditorView: View {
     /// 我们的域模型只存一个 SF Symbol 名（`symbol`），**没有「预设场景」这个概念**，
     /// 所以这里给的是符号网格——**这是取舍，不是对齐**。颜色仍在卡片菜单的
     /// 「样式」里改；面板里只挑图标，与参考图「点一下换个图标」的用法一致。
+    ///
+    /// **每格下面带中文名**（`CountdownSymbolNames`）。没有名字的纯图标网格只能靠
+    /// 图形猜用途（`cross.case` 是医疗箱、`party.popper` 是彩带），而「名字」正是
+    /// 参照图里用户据以挑选的那一层信息——它那边每个预设都写着「交房租」「保险缴费」。
     private var symbolPicker: some View {
         VStack(alignment: .leading, spacing: WFSpace.md) {
             Text("图标").font(WFType.supporting).foregroundStyle(WFColors.secondaryText)
-            LazyVGrid(columns: Array(repeating: GridItem(.fixed(30), spacing: WFSpace.sm), count: 6),
+            // 4 列而不是原来的 6 列：加了名字以后每格要放得下 2 个汉字
+            // （`WFType.caption` 11pt 约 22pt），原来 30pt 的窄格放不下。
+            // 4×44 + 3×8 = 200 ≤ 208（面板 240 − 左右内边距 2×16）。
+            LazyVGrid(columns: Array(repeating: GridItem(.fixed(44), spacing: WFSpace.sm), count: 4),
                       spacing: WFSpace.sm) {
                 ForEach(CountdownEvent.symbolOptions, id: \.self) { option in
                     Button {
                         symbol = option
                         symbolPickerOpen = false
                     } label: {
-                        Image(systemName: option)
-                            .font(.system(size: 14))
-                            .foregroundStyle(option == symbol ? WFColors.accent : WFColors.secondaryText)
-                            .frame(width: 30, height: 28)
-                            .background(option == symbol ? WFColors.selection : .clear,
-                                        in: RoundedRectangle(cornerRadius: 6))
-                            .contentShape(Rectangle())
+                        symbolCell(option)
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel(option)
+                    // 标签传**中文名**，不是符号名：原来传的是 `option` 本身，
+                    // 于是读屏念出 `party.popper` / `graduationcap` 这种英文符号名。
+                    .accessibilityLabel(CountdownSymbolNames.name(for: option))
                 }
             }
         }
         .padding(WFSpace.lg)
         .frame(width: 240)
+    }
+
+    /// 一个图标格：图标在上、中文名在下；选中时**图标和名字一起**染成强调色，
+    /// 免得只染图标时名字看起来像没选中。
+    private func symbolCell(_ option: String) -> some View {
+        let selected = option == symbol
+        return VStack(spacing: 2) {
+            Image(systemName: option)
+                .font(.system(size: 14))
+                .foregroundStyle(selected ? WFColors.accent : WFColors.secondaryText)
+                .frame(width: 30, height: 28)
+                .background(selected ? WFColors.selection : .clear,
+                            in: RoundedRectangle(cornerRadius: 6))
+            Text(CountdownSymbolNames.name(for: option))
+                .font(WFType.caption)
+                .foregroundStyle(selected ? WFColors.accent : WFColors.secondaryText)
+                .lineLimit(1)
+        }
+        .frame(width: 44)
+        // 命中区取整格（含名字），不然只有图标那 30×28 能点。
+        .contentShape(Rectangle())
     }
 
     /// 「节日」类型的目录下拉（19 条，农历/公历规则都已在域模型里备好）。
@@ -1234,16 +1258,27 @@ struct CountdownStyleView: View {
                             symbol = option
                             apply()
                         } label: {
-                            Image(systemName: option)
-                                .font(.system(size: 14))
-                                .foregroundStyle(option == symbol ? WFColors.accent : WFColors.secondaryText)
-                                .frame(width: 34, height: 30)
-                                .background(option == symbol ? WFColors.selection : .clear,
-                                            in: RoundedRectangle(cornerRadius: 6))
-                                .contentShape(Rectangle())
+                            // 图标下面带中文名，与编辑器面板那个选择器同口径
+                            // （名字表见 `CountdownSymbolNames`）。两处是同一批
+                            // 12 个图标，一处有名一处没有就会像 bug。
+                            VStack(spacing: 2) {
+                                Image(systemName: option)
+                                    .font(.system(size: 14))
+                                    .foregroundStyle(option == symbol ? WFColors.accent : WFColors.secondaryText)
+                                    .frame(width: 34, height: 30)
+                                    .background(option == symbol ? WFColors.selection : .clear,
+                                                in: RoundedRectangle(cornerRadius: 6))
+                                Text(CountdownSymbolNames.name(for: option))
+                                    .font(WFType.caption)
+                                    .foregroundStyle(option == symbol ? WFColors.accent : WFColors.secondaryText)
+                                    .lineLimit(1)
+                            }
+                            .frame(width: 34)
+                            .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
-                        .accessibilityLabel(option)
+                        // 中文名，不是符号名——同编辑器面板那处。
+                        .accessibilityLabel(CountdownSymbolNames.name(for: option))
                     }
                 }
             }
