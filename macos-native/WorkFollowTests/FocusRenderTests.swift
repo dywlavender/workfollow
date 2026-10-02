@@ -41,8 +41,6 @@ final class FocusRenderTests: XCTestCase {
             let rail = try XCTUnwrap(frames[.rail], "Icon Rail frame missing")
             let selectedHitArea = try XCTUnwrap(frames[.railSelectedHitArea],
                                                 "Selected Rail hit area missing")
-            let selectedBackground = try XCTUnwrap(frames[.railSelectedBackground],
-                                                   "Selected Rail background missing")
             let divider = try XCTUnwrap(frames[.divider], "Focus divider frame missing")
             let ring = try XCTUnwrap(frames[.timerRing], "Timer ring frame missing")
             let durationTrigger = try XCTUnwrap(frames[.focusDurationTrigger],
@@ -70,8 +68,6 @@ final class FocusRenderTests: XCTestCase {
             XCTAssertEqual(rail.width, RailMetrics.width, accuracy: 0.5)
             XCTAssertEqual(selectedHitArea.width, RailMetrics.hitSize, accuracy: 0.5)
             XCTAssertEqual(selectedHitArea.height, RailMetrics.hitSize, accuracy: 0.5)
-            XCTAssertEqual(selectedBackground.width, RailMetrics.selectedSize, accuracy: 0.5)
-            XCTAssertEqual(selectedBackground.height, RailMetrics.selectedSize, accuracy: 0.5)
             XCTAssertEqual(divider.minX, expectedDividerX, accuracy: 0.5)
             XCTAssertEqual(divider.width, WFMetrics.divider, accuracy: 0.5)
             XCTAssertEqual(ring.midX, expectedCenterX, accuracy: 0.5)
@@ -184,7 +180,7 @@ final class FocusRenderTests: XCTestCase {
         window.orderOut(nil)
         flushAndRemove(fixture.store, directory: fixture.directory)
         XCTAssertEqual(Set(frames.keys), Set([
-            .rail, .railSelectedHitArea, .railSelectedBackground, .focusDurationTrigger,
+            .rail, .railSelectedHitArea, .focusDurationTrigger,
             .focusModeSegment, .focusAddTimerButton,
             .divider, .timerRing, .primaryButton, .overviewFirstCard, .recordsHeader
         ]).union(renderCase.timerState == .idleWithoutRecords

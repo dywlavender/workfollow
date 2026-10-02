@@ -18,8 +18,14 @@ enum RailMetrics {
     /// 第二轮校正（2026-10-03，用户指出「我们的比滴答的大」）：字号 23 时我们实测
     /// 墨迹 41~52px（中位 46），比滴答的 42~44（中位 42）大约 10%；且选中底色
     /// 34pt = 68px，是滴答选中态（42px，即图标自身填色）的 1.6 倍。
-    /// 故 `iconSize` 23 → 21（墨迹落到 37~47px、中位 42，与基准对齐），
-    /// `selectedSize` 34 → 26（52px，比滴答的 42px 大 24%，再小就贴住图标了）。
+    /// 故 `iconSize` 23 → 21（墨迹落到 37~47px、中位 42，与基准对齐）。
+    ///
+    /// 第三轮（2026-10-03，用户指出「图标不一样，为什么选中后的颜色图案和滴答一样」）：
+    /// 复量滴答的选中态，确认那块蓝**就是图标本体**——`40x40px = 20pt`，与旁边
+    /// 灰图标墨迹同量级，背后**没有**底色块。我们原来抄了那块底、却留着描边图标，
+    /// 于是蓝块成了贴上去的色块。两头现已对齐：图标全部换实心（见 `SidebarViews`
+    /// 里 `IconRailView` 的注释），**选中态改为图标自己变蓝，`selectedSize` /
+    /// `selectedRadius` 与 `.railSelectedBackground` 锚点一并删除**。
     ///
     /// `hitSize` 不动仍是 38：它是**不可见的点按区**，38 + `itemGap` 10 = pitch 48，
     /// 与滴答行距一致；把它改小只会牺牲可点性、还会连带改 pitch。
@@ -31,8 +37,6 @@ enum RailMetrics {
     static let width: CGFloat = 62
     static let iconSize: CGFloat = 21
     static let hitSize: CGFloat = 38
-    static let selectedSize: CGFloat = 26
-    static let selectedRadius: CGFloat = 8
     static let itemGap: CGFloat = 10
     static let topPadding: CGFloat = 16
 }

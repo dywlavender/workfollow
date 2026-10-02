@@ -6,24 +6,43 @@ struct IconRailView: View {
     let onNavigate: (NativeDestination) -> Void
     let onOpenQuickOpen: () -> Void
     @Environment(\.openSettings) private var openSettings
+    @Environment(\.mainWindowRailInset) private var mainWindowRailInset
 
     var body: some View {
         VStack(spacing: RailMetrics.itemGap) {
-            railButton(.today, symbol: "checklist", title: "任务",
+            // 图标一律用**实心**（`.fill`）符号，对齐滴答清单的图标风格（2026-10-03 第三轮）。
+            //
+            // 为什么不是描边：滴答的「选中态」就是**图标本体变成蓝色实心**，它背后
+            // 没有任何底色块（实测选中蓝块 40x40px = 20pt，与旁边灰图标墨迹 42~44px 同量级）。
+            // 我们原来抄了那块蓝色圆角底、却留着描边图标，于是蓝块读起来像一张贴上去的
+            // 色块 —— 用户报「看起来很怪，图标不一样，为什么选中后的颜色图案和滴答一样」。
+            // 现在把两头对齐到同一套语言：**图标实心，选中＝图标自己变蓝，不再有底块**。
+            //
+            // ⚠️ SF Symbols 的实心覆盖是**部分**的，下面 6 个是换过的（隐喻有变）：
+            //   · 笔记  text.alignleft → text.document.fill（描边线条没有实心版）
+            //   · 日历  calendar       → calendar.circle.fill（**唯一的实心日历**，形状变圆）
+            //   · 倒数  hourglass      → hourglass.bottomhalf.filled（保留沙漏，做成半实心）
+            //   · 专注  timer          → timer.circle.fill（保留秒表，外面加实心圆）
+            //   · 习惯  checkmark.seal → star.square.fill（滴答的习惯就是这个形）
+            //   · 摘要  square.and.pencil → list.bullet.clipboard.fill
+            // 另两个是原形直接加 `.fill`：任务 checkmark.square.fill、四象限 square.grid.2x2.fill。
+            //
+            // 底部「搜索 / 设置」保持描边：滴答自己的搜索也是描边放大镜。
+            railButton(.today, symbol: "checkmark.square.fill", title: "任务",
                        selected: navigation.destination.isTaskList)
-            railButton(.notes, symbol: "text.alignleft", title: "笔记",
+            railButton(.notes, symbol: "text.document.fill", title: "笔记",
                        selected: navigation.destination.isNotes)
-            railButton(.calendar, symbol: "calendar", title: "日历",
+            railButton(.calendar, symbol: "calendar.circle.fill", title: "日历",
                        selected: navigation.destination == .calendar)
-            railButton(.matrix, symbol: "square.grid.2x2", title: "四象限",
+            railButton(.matrix, symbol: "square.grid.2x2.fill", title: "四象限",
                        selected: navigation.destination == .matrix)
-            railButton(.countdown, symbol: "hourglass", title: "倒数纪念日",
+            railButton(.countdown, symbol: "hourglass.bottomhalf.filled", title: "倒数纪念日",
                        selected: navigation.destination == .countdown)
-            railButton(.focus, symbol: "timer", title: "专注",
+            railButton(.focus, symbol: "timer.circle.fill", title: "专注",
                        selected: navigation.destination == .focus)
-            railButton(.habits, symbol: "checkmark.seal", title: "习惯",
+            railButton(.habits, symbol: "star.square.fill", title: "习惯",
                        selected: navigation.destination == .habits)
-            railButton(.summary, symbol: "square.and.pencil", title: "摘要",
+            railButton(.summary, symbol: "list.bullet.clipboard.fill", title: "摘要",
                        selected: navigation.destination == .summary)
             Spacer()
             Button(action: onOpenQuickOpen) {
@@ -39,7 +58,8 @@ struct IconRailView: View {
         }
         .buttonStyle(.plain)
         .foregroundStyle(WFColors.secondaryText)
-        .padding(.vertical, RailMetrics.topPadding)
+        .padding(.top, max(RailMetrics.topPadding, mainWindowRailInset))
+        .padding(.bottom, RailMetrics.topPadding)
         .frame(width: RailMetrics.width)
         .background(WFColors.canvas)
         .focusRenderAnchor(.rail)
@@ -53,14 +73,6 @@ struct IconRailView: View {
                 .foregroundStyle(selected ? WFColors.accent : WFColors.secondaryText)
                 .frame(width: RailMetrics.hitSize, height: RailMetrics.hitSize)
                 .focusRenderAnchor(.railSelectedHitArea)
-                .background {
-                    if selected {
-                        RoundedRectangle(cornerRadius: RailMetrics.selectedRadius)
-                            .fill(WFColors.selection)
-                            .frame(width: RailMetrics.selectedSize, height: RailMetrics.selectedSize)
-                            .focusRenderAnchor(.railSelectedBackground)
-                    }
-                }
         }.help(title).accessibilityLabel(title)
     }
 }

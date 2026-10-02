@@ -4,7 +4,6 @@ import SwiftUI
 enum FocusRenderAnchor: Hashable {
     case rail
     case railSelectedHitArea
-    case railSelectedBackground
     case divider
     case timerRing
     case focusStopwatchDial
