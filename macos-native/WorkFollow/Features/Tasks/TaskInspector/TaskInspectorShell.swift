@@ -19,7 +19,6 @@ struct TaskInspectorShell: View {
     @State private var showNewList = false
     @State private var actionPresentation = TaskInspectorActionPresentationState()
     @State private var showFormattingToolbar = false
-    @State private var relationQuery = ""
     @State private var focusStartFailed = false
     /// 「添加子任务」整行的悬停态（原版 `InkWell.hoverColor`）。
     @State private var hoveringAddChild = false
@@ -458,34 +457,14 @@ struct TaskInspectorShell: View {
     }
 
     private func relationPicker(_ task: Task) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            TextField("搜索笔记", text: $relationQuery).textFieldStyle(.roundedBorder)
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 0) {
-                    let notes = environment.notesWorkspace.notes.filter {
-                        $0.deletedAt == nil && (relationQuery.isEmpty || ($0.title + $0.folder).localizedCaseInsensitiveContains(relationQuery))
-                    }
-                    if notes.isEmpty { Text("没有匹配的笔记").foregroundStyle(.secondary).padding() }
-                    ForEach(notes) { note in
-                        Button {
-                            workspace.setSourceNote(task.id, note.id)
-                            editorHandle.insertReference(TaskDocumentProfile.reference(to: note))
-                            actionPresentation.dismiss(.relation)
-                        } label: {
-                            HStack {
-                                Image(systemName: "doc.text")
-                                VStack(alignment: .leading) {
-                                    Text(note.title.isEmpty ? "未命名笔记" : note.title).lineLimit(1)
-                                    Text(note.folder).font(.caption).foregroundStyle(.secondary)
-                                }
-                                Spacer()
-                                if task.sourceNoteID == note.id { Image(systemName: "checkmark") }
-                            }.padding(.vertical, 8).contentShape(Rectangle())
-                        }.buttonStyle(.plain)
-                    }
-                }
-            }
-        }.padding(16).frame(width: 320, height: 300)
+        TaskRelationPicker(sourceTaskID: task.id, tasks: workspace.allTasks,
+            notes: environment.notesWorkspace.notes, sourceNoteID: task.sourceNoteID,
+            onSelect: { target in
+                guard TaskRelationSelection.apply(target, sourceTaskID: task.id, workspace: workspace,
+                    notes: environment.notesWorkspace.notes, handle: editorHandle) else { return false }
+                actionPresentation.dismiss(.relation)
+                return true
+            }, onCancel: { actionPresentation.dismiss(.relation) })
     }
 
     private func openDocumentLink(_ link: String) -> Bool {
@@ -608,7 +587,6 @@ struct TaskInspectorShell: View {
                     },
                     openTags: { actionPresentation.open(.tags) },
                     openRelation: {
-                        relationQuery = ""
                         actionPresentation.open(.relation)
                     }, openLink: openDocumentLink)),
                 contentSized: true,

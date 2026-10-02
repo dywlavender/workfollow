@@ -17,7 +17,7 @@
 3. **关联主任务**：先核对现有Parent关系规则和可选对象，再实现TaskParentPicker；不得用现有Note relation冒充父关系。
 4. **副本/链接**：复用已有duplicate，但验收字段/child复制语义；task URL需真实路由闭环后再暴露复制链接入口。
 5. **Tag Picker**：Quick Add/Inspector/Slash共享既有Picker，等待展开态截图锁搜索、创建、多选、确认和Esc，不复制新UI。
-6. **Relation**：补Task+Note真实语义前，保持已登记TASK-RELATION-GAP-TASK；混合结果/Tab结构等待参考，不临时造Domain。
+6. **Relation**：TASK-RELATION-GAP-TASK已补齐正文Task引用；混合结果为暂定展示，Tab结构等待参考，不临时造关系图Domain。来源笔记与正文引用统一撤销另登记为TASK-RELATION-GAP-ATOMIC-UNDO。
 
 ## Focus子层合同
 
@@ -84,3 +84,14 @@
 - 实际Inspector窗口验收：More打开共享Picker；候选点击不写任务；外部关闭后重开确定不泄露旧草稿；正常确定写入、撤销恢复；Escape关闭且不提交。独立Picker模拟Quick Add输入，初始未保存标签反选后保留行、可再选，确定仅触发Host回调，不新增Task。
 - 截图：`/tmp/render_task_tag_picker.png`（实际测试NSWindow中的Inspector），已检查搜索/标签/底部按钮可读、264 × 320pt不变。交互测试锁反选后的行/按钮frame；未对TickTick像素差异做签收，也未把独立Picker测试当作日常Quick Add全流程验收。
 - 本轮只提交共享Picker、Inspector测试锚点与测试/文档；TaskListView/Workspace等并行修改不纳入提交。构建来自当前工作区，不代表干净远端checkout的完整应用验收。
+
+## Relation Task + Note 语义补齐（2026-10-02）
+
+- 原入口“关联任务/笔记”实际只搜Note。本轮沿用原320 × 300pt选择器，改为Task + Note混合结果；任务与笔记显示类型和清单/文件夹。混合列表是当前保守实现，不宣称已有TickTick截图确认，Tab/二级层定位继续待参考。
+- 关联Task只是正文内`workfollow://task/<UUID>`引用，不更改parentID或sourceNoteID，不建立新关系图。Note继续采用原正文引用 + 单一sourceNoteID行为；不能把单一来源字段当作多对多关系表。
+- 搜索标题及清单/文件夹，排除自身、删除/跳过/转换Task和删除Note。允许关闭Task作为历史引用；Child候选需父任务仍可打开，匹配当前URL路由能力。
+- `TaskRelationProjection`统一候选和类型化链接；Picker只负责查询和选择。`TaskRelationSelection`提交前重取目标并校验当前Task与编辑器documentIdentity，编辑器不可用时不先写sourceNoteID，保留Picker提示失败。
+- Selection成功后关闭现有relation panel；取消/Escape/外部关闭不调用Selection。搜索草稿归Picker本地，Shell不再另持relationQuery。Editor Core和Slash菜单结构不变，只改Host的关联选择路径。
+- TASK-RELATION-GAP-ATOMIC-UNDO：Note的sourceNoteID与正文插入仍沿用既有分别修改路径；Application undo与文本undo未统一。本轮不声称统一一次撤销或完整双向关系能力，后续须单独设计，不能用截图验收替代。
+- 31项RelationProjection / RelationInteraction / NativeResourceLink / DocumentProfile / ActionPanel / TagPickerInteraction / ParentPicker回归通过，日志：`/tmp/workfollow-task-relation-tests.log`。实际测试窗口点击候选插入Task链接，正文模型包含该链接；再经现有Router打开目标，父子关系及来源笔记不变。Note插入保留来源字段；无正文编辑器时不写Task。
+- 截图：`/tmp/render_task_relation_picker.png`，检查混合结果、类型说明及搜索可读，选择器仍为320 × 300pt；截图上方为空白正文测试宿主，并非Picker增加了留白。本轮不是日常运行App或TickTick Relation展开态的像素验收。构建来自当前工作区，其他并行改动不纳入提交。
