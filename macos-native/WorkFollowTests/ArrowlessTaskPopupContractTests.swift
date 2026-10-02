@@ -11,11 +11,6 @@ final class ArrowlessTaskPopupContractTests: XCTestCase {
                            "\(name) must keep its borderless presentation shell")
         }
     }
-    private static let arrowEdgeAllowlist = [
-        "Features/Tasks/TaskManagementViews.swift": 1,
-        "Features/Focus/FocusOverviewPane.swift": 2,
-        "Features/Focus/FocusTimerPane.swift": 1
-    ]
 
     func testBusinessSourceDoesNotConstructNSPopoverDirectly() throws {
         let violations = try businessSourceFiles().compactMap { file -> String? in
@@ -52,7 +47,7 @@ final class ArrowlessTaskPopupContractTests: XCTestCase {
                         + violations.joined(separator: ", "))
     }
 
-    func testGlobalArrowEdgeInventoryMatchesTheTemporaryAllowlist() throws {
+    func testGlobalArrowEdgeCountIsZero() throws {
         var actual: [String: Int] = [:]
         for file in try businessSourceFiles() {
             let source = try String(contentsOf: file, encoding: .utf8)
@@ -62,9 +57,8 @@ final class ArrowlessTaskPopupContractTests: XCTestCase {
             }
         }
 
-        XCTAssertEqual(actual, Self.arrowEdgeAllowlist,
-                       "arrowEdge inventory changed. Remove migrated entries or review any new file "
-                         + "and occurrence before updating the temporary allowlist.")
+        XCTAssertEqual(actual.values.reduce(0, +), 0,
+                       "Business UI must not request system popup arrows: \(actual)")
     }
 
     private var businessSourceRoot: URL {

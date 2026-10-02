@@ -52,9 +52,9 @@ struct FocusOverviewPane: View {
                 .buttonStyle(.plain)
                 .foregroundStyle(theme.text2)
                 .help("补记专注")
-                .popover(isPresented: $showAddRecord, arrowEdge: .bottom) {
+                .background(AnchoredPropertyPanel(isPresented: $showAddRecord, width: 330) {
                     addRecordPopover
-                }
+                })
             }
             .padding(.top, FocusLayoutMetrics.recordHeaderTop)
             .padding(.bottom, FocusLayoutMetrics.recordHeaderBottom)
@@ -118,9 +118,9 @@ struct FocusOverviewPane: View {
         }
         .buttonStyle(.plain)
         .help("点击修改每日目标")
-        .popover(isPresented: $showGoalPopover, arrowEdge: .bottom) {
+        .background(AnchoredPropertyPanel(isPresented: $showGoalPopover, width: 190) {
             goalEditor
-        }
+        })
     }
 
     private var emptyRecordsState: some View {

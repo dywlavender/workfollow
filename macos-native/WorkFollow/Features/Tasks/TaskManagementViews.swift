@@ -153,9 +153,10 @@ private struct SidebarListRowView: View {
             guard let id = values.first.flatMap(UUID.init(uuidString:)) else { return false }
             return workspace.moveToList(id, TaskList(name: name)).taskID != nil
         } isTargeted: { dragTargeted = $0 }
-        .popover(isPresented: $showColorPicker, arrowEdge: .trailing) {
+        .background(AnchoredPropertyPanel(isPresented: $showColorPicker,
+                                         width: ListColorPickerPopover.panelWidth, placement: .submenu) {
             ListColorPickerPopover(workspace: workspace, name: name) { showColorPicker = false }
-        }
+        })
     }
 
     @ViewBuilder
@@ -186,6 +187,8 @@ private struct SidebarListRowView: View {
 
 /// 14 色网格弹层（对齐 Flutter ListColorSwatch）：当前生效色打勾，点选即保存。
 private struct ListColorPickerPopover: View {
+    // Seven 22pt swatches, six 10pt gaps, and the existing content padding.
+    static let panelWidth: CGFloat = 7 * 22 + 6 * 10 + 2 * WFSpace.lg
     @ObservedObject var workspace: TaskWorkspaceModel
     let name: String
     let onDismiss: () -> Void
