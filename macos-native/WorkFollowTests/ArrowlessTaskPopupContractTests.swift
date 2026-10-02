@@ -31,10 +31,21 @@ final class ArrowlessTaskPopupContractTests: XCTestCase {
         XCTAssertEqual(try occurrenceCount(of: "\\.popover\\s*\\(", in: properties), 0)
         let list = try String(contentsOf: businessSourceRoot.appendingPathComponent(
             "Features/Tasks/TaskList/TaskListView.swift"), encoding: .utf8)
-        // The only remaining system popover is navigation, reserved for phase two.
-        XCTAssertEqual(try occurrenceCount(of: "\\.popover\\s*\\(", in: list), 1)
+        XCTAssertEqual(try occurrenceCount(of: "\\.popover\\s*\\(", in: list), 0)
         XCTAssertTrue(list.contains("AnchoredPropertyPanel(isPresented: $showQuickAddProperties"))
         XCTAssertTrue(list.contains("AnchoredPropertyPanel(isPresented: $showTagPicker"))
+    }
+
+    func testFocusAndNavigationKeepArrowlessPresentation() throws {
+        for path in ["Features/Focus/FocusTaskPickerPopover.swift",
+                     "Features/Focus/FocusTimerPane.swift",
+                     "Features/Shell/RootShellView.swift",
+                     "Features/Notes/NotesWorkspaceView.swift"] {
+            let source = try String(contentsOf: businessSourceRoot.appendingPathComponent(path),
+                                    encoding: .utf8)
+            XCTAssertEqual(try occurrenceCount(of: "\\.popover\\s*\\(", in: source), 0, path)
+            XCTAssertTrue(source.contains("AnchoredPropertyPanel"), path)
+        }
     }
 
     func testTaskContextMenuAndInspectorActionsDoNotSpecifyArrowEdge() throws {
@@ -71,6 +82,18 @@ final class ArrowlessTaskPopupContractTests: XCTestCase {
 
         XCTAssertEqual(actual.values.reduce(0, +), 0,
                        "Business UI must not request system popup arrows: \(actual)")
+    }
+
+    func testOnlyDeferredScheduleShellsUseSystemPopover() throws {
+        var actual: [String: Int] = [:]
+        for file in try businessSourceFiles() {
+            let count = try occurrenceCount(of: "\\.popover\\s*\\(",
+                                            in: String(contentsOf: file, encoding: .utf8))
+            if count > 0 { actual[relativePath(of: file)] = count }
+        }
+        XCTAssertEqual(actual, ["Features/Tasks/Schedule/SchedulePopoverModifier.swift": 1,
+                                "Features/Tasks/TaskInspector/TaskDatePopover.swift": 2],
+                       "Only the explicitly deferred schedule shells may retain system popovers")
     }
 
     private var businessSourceRoot: URL {

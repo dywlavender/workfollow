@@ -175,12 +175,13 @@ private struct ModuleShellView: View {
                     Button { showNavigation.toggle() } label: {
                         Image(systemName: "sidebar.left")
                     }.buttonStyle(.plain).help("显示导航")
-                        .popover(isPresented: $showNavigation) {
+                        .background(AnchoredPropertyPanel(isPresented: $showNavigation,
+                                                          width: WFMetrics.navigationWidth) {
                             NavigationColumnView(workspace: workspace, navigation: navigation,
                                                  filterStore: environment.filterStore,
                                                  onNavigate: { showNavigation = false })
                                 .frame(width: WFMetrics.navigationWidth, height: 260)
-                        }
+                        })
                 }
                 Label(navigation.destination.title, systemImage: navigation.destination.symbol)
                     .font(WFType.pageTitle)

@@ -123,13 +123,14 @@ struct TaskListView: View {
                         .frame(width: WFMetrics.controlHeight, height: WFMetrics.controlHeight)
                         .contentShape(Rectangle())
                 }.buttonStyle(.plain).help("显示导航")
-                    .popover(isPresented: $showNavigation) {
+                    .background(AnchoredPropertyPanel(isPresented: $showNavigation,
+                                                      width: WFMetrics.navigationWidth) {
                         NavigationColumnView(workspace: workspace, navigation: navigation,
                                              filterStore: environment.filterStore) {
                             showNavigation = false
                         }
                         .frame(width: WFMetrics.navigationWidth, height: 440)
-                    }
+                    })
             }
             HStack(spacing: 8) {
                 Image(systemName: TaskListViewDefaults.headerSymbol(

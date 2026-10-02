@@ -209,7 +209,11 @@ struct FocusTimerPane: View {
             .buttonStyle(.plain)
             .fixedSize()
             .help("选择一个任务并开始专注")
-            .popover(isPresented: taskPicker.presentationBinding) {
+            .background(AnchoredPropertyPanel(
+                isPresented: taskPicker.presentationBinding,
+                width: FocusTaskPickerMetrics.width,
+                focusPolicy: .panel
+            ) {
                 FocusTaskPickerPopover(
                     workspace: workspace,
                     selectedTaskID: linkID,
@@ -218,10 +222,9 @@ struct FocusTimerPane: View {
                     isScopePickerPresented: taskPicker.scopePickerBinding,
                     onSelectScope: { taskPicker.selectScope($0) },
                     onSelectTask: { assignFocusTask($0.id) },
-                    onClearTask: { assignFocusTask(nil) },
-                    onDismiss: { taskPicker.handleEscape() }
+                    onClearTask: { assignFocusTask(nil) }
                 )
-            }
+            })
         }
     }
 

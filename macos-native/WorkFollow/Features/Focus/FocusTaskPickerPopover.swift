@@ -56,7 +56,23 @@ struct FocusTaskPickerPopover: View {
     let onSelectScope: (FocusTaskPickerScope) -> Void
     let onSelectTask: (Task) -> Void
     let onClearTask: () -> Void
-    let onDismiss: () -> Void
+
+    init(workspace: TaskWorkspaceModel, selectedTaskID: UUID?,
+         scope: Binding<FocusTaskPickerScope>, query: Binding<String>,
+         isScopePickerPresented: Binding<Bool>,
+         onSelectScope: @escaping (FocusTaskPickerScope) -> Void,
+         onSelectTask: @escaping (Task) -> Void,
+         onClearTask: @escaping () -> Void,
+         onDismiss _: () -> Void = {}) {
+        self.workspace = workspace
+        self.selectedTaskID = selectedTaskID
+        self._scope = scope
+        self._query = query
+        self._isScopePickerPresented = isScopePickerPresented
+        self.onSelectScope = onSelectScope
+        self.onSelectTask = onSelectTask
+        self.onClearTask = onClearTask
+    }
 
     @Environment(\.colorScheme) private var colorScheme
     @FocusState private var searchFocused: Bool
@@ -135,15 +151,7 @@ struct FocusTaskPickerPopover: View {
         .background(theme.canvas, in: RoundedRectangle(cornerRadius: FocusTaskPickerMetrics.cornerRadius))
         .overlay(RoundedRectangle(cornerRadius: FocusTaskPickerMetrics.cornerRadius)
             .stroke(theme.hairline, lineWidth: 1))
-        .onAppear { searchFocused = true }
-        .onKeyPress(.escape) {
-            if isScopePickerPresented {
-                isScopePickerPresented = false
-            } else {
-                onDismiss()
-            }
-            return .handled
-        }
+        .onAppear { DispatchQueue.main.async { searchFocused = true } }
     }
 
     private var searchField: some View {
@@ -188,7 +196,11 @@ struct FocusTaskPickerPopover: View {
         .buttonStyle(.plain)
         .accessibilityIdentifier("focus-task-picker-scope")
         .onHover { isScopeHovered = $0 }
-        .popover(isPresented: $isScopePickerPresented) {
+        .background(AnchoredPropertyPanel(
+            isPresented: $isScopePickerPresented,
+            width: FocusTaskPickerMetrics.scopeWidth,
+            placement: .submenu
+        ) {
             FocusTaskScopePopover(
                 selectedScope: scope,
                 listNames: workspace.orderedListNames,
@@ -198,7 +210,7 @@ struct FocusTaskPickerPopover: View {
                 onSelect: onSelectScope,
                 onDismiss: { isScopePickerPresented = false }
             )
-        }
+        })
     }
 
     private func scopeIcon(_ value: FocusTaskPickerScope) -> some View {

@@ -26,24 +26,19 @@
 
 ## `.popover` 分阶段盘点
 
-第一批迁移后剩余 8 处 `.popover(`。验收发现并行新增的 Countdown 图标选择显式箭头后，也仅替换该入口的呈现壳并保留 240pt 内容宽度。下表按当前工作区盘点，不表示全局弹窗改造已经完成。
+第二批迁移后剩余 3 处 `.popover(`，全部属于延期处理的日期入口。验收发现并行新增的 Countdown 图标选择显式箭头后，也仅替换该入口的呈现壳并保留 240pt 内容宽度。下表按当前工作区盘点，不表示全局弹窗改造已经完成。
 
 | 文件 | 数量 | 当前入口 |
 | --- | ---: | --- |
-| `Features/Tasks/TaskList/TaskListView.swift` | 1 | 导航 |
-| `Features/Focus/FocusTaskPickerPopover.swift` | 1 | 专注任务范围选择 |
-| `Features/Focus/FocusTimerPane.swift` | 1 | 专注任务选择 |
 | `Features/Tasks/Schedule/SchedulePopoverModifier.swift` | 1 | 日程属性面板 |
-| `Features/Shell/RootShellView.swift` | 1 | 根导航弹层 |
-| `Features/Notes/NotesWorkspaceView.swift` | 1 | 笔记导航弹层 |
 | `Features/Tasks/TaskInspector/TaskDatePopover.swift` | 2 | 旧任务日期入口 |
-| **合计** | **8** | 按当前工作区源码字面调用盘点 |
+| **合计** | **3** | 按当前工作区源码字面调用盘点 |
 
 本批流程验收期间，门禁发现 `CountdownEditorView.swift` 新增 `arrowEdge:` 的回归。待该并行改动完成后，本轮仅迁移图标入口到共享面板；全局显式箭头重新为零，未放宽允许清单。
 
 ## 后续状态
 
-Quick Add、Focus scope / task picker、Schedule、RootShell/Notes 导航、旧 `TaskDatePopover` 仍列在上表，后续按阶段推进；不能据此宣称全局迁移完成。Schedule 最后处理，只换 presentation shell，不改日期 Draft 和提交逻辑。
+Quick Add、Focus scope / task picker、Task List、RootShell/Notes 导航呈现壳已迁移；剩余 Schedule 与旧 `TaskDatePopover` 按第三批推进，不能据此宣称全局迁移完成。Schedule 最后处理，只换 presentation shell，不改日期 Draft 和提交逻辑。
 
 ## 分批迁移与流程验收规则
 
@@ -72,3 +67,15 @@ Quick Add 属性主层、清单/标签子层已换共享 NSPanel，任务行标�
 Countdown 图标入口实机检查：打开、Esc 仅关闭图标层保留编辑 sheet、再次打开选择 heart 更新草稿、取消整个编辑后仍只有原来的两张卡片。窗口截图只截到子层落在编辑 sheet 内的部分，完整子层阴影与屏幕边界未获得完整截图，不能据此宣称全局像素验收通过。没有保存或修改已有倒数数据。
 
 本批功能流程可进入下一批；全项目迁移仍未完成。Focus Overview 两个隐藏入口和 Countdown 子层完整截图的视觉项继续保留，不以源码门禁替代。
+
+### 第二批实施与验收
+
+Focus 任务选择父面板、范围子菜单、任务列表导航、笔记导航、RootShell 历史导航统一使用共享 `AnchoredPropertyPanel`。仅替换呈现壳，保留原内容、回调和尺寸。Scope 为独立 submenu，不参与父面板测量；任务搜索初次打开获焦；Escape 由共享层级路由处理。
+
+最新构建成功，逐类 52 项测试通过：Focus 真实窗口流程 5、渲染 1（五种状态）、交互 6、Projection 6、共享面板 9、Escape 6、源码门禁 7、Quick Add 流程 5、Task Context 4、Focus submenu 3。真实窗口流程覆盖父框不移动、范围选择只关子层、两级 Escape、关闭后 query/scope 清理，以及仅打开不启动会话。渲染测试已从系统 Popover fixture 改为真实 NSPanel，并检查浅色、深色及范围菜单图像。
+
+2026-10-02 重启最新构建，窄屏实机验收：任务导航打开无箭头、Esc 关闭、再次打开切换收集箱、外部点击关闭；笔记导航打开无箭头、切换收藏、Esc 关闭。Focus 搜索自动获焦且输入可筛选；打开范围后父框保持，首次 Esc 关闭子层、再次 Esc 关闭父层；再次打开恢复今天和空搜索。已有专注会话始终保持 24:49 暂停，未选择任务或开始/结束会话。
+
+范围子窗口的日常 App 截图被父窗口捕获范围裁切，完整定位与选择流程由自动真实窗口测试覆盖，不标作完整实机视觉验收通过。Focus 外部点击及笔记导航外部点击本次未手工验收；前者由共享面板与真实窗口流程测试覆盖。
+
+RootShell 的 ModuleShell fallback 当前没有可达 destination，仅完成源码迁移与门禁，不宣称实机流程通过。Focus Overview 隐藏入口与 Countdown 完整子层截图仍待补证。剩余系统 `.popover` 门禁锁定为日期文件的 3 处，禁止其他业务文件新增。

@@ -13,13 +13,13 @@ final class FocusTaskPickerRenderTests: XCTestCase {
         case darkMode
     }
 
-    func testTaskPickerAndScopePickerRenderContractsInRealPopoverWindows() throws {
+    func testTaskPickerAndScopePickerRenderContractsInRealPanelWindows() throws {
         for state in RenderState.allCases {
             let rendered = try render(state)
             let picker = rendered.pickerWindow
-            XCTAssertEqual(picker.frame.width, FocusTaskPickerMetrics.width + 26, accuracy: 1.5,
+            XCTAssertEqual(picker.frame.width, FocusTaskPickerMetrics.width, accuracy: 1.5,
                            "Picker popover frame changed in \(state.rawValue)")
-            XCTAssertEqual(picker.frame.height, FocusTaskPickerMetrics.height + 26, accuracy: 1.5,
+            XCTAssertEqual(picker.frame.height, FocusTaskPickerMetrics.height, accuracy: 1.5,
                            "Picker popover frame changed in \(state.rawValue)")
             XCTAssertTrue(rendered.screenshots.allSatisfy { FileManager.default.fileExists(atPath: $0.path) })
             XCTAssertTrue(rendered.searchFocused,
@@ -45,20 +45,19 @@ final class FocusTaskPickerRenderTests: XCTestCase {
 
             if state == .scopePicker {
                 let scopeWindow = try XCTUnwrap(rendered.scopeWindow)
-                XCTAssertEqual(scopeWindow.frame.width, FocusTaskPickerMetrics.scopeWidth + 26,
+                XCTAssertEqual(scopeWindow.frame.width, FocusTaskPickerMetrics.scopeWidth,
                                accuracy: 1.5)
                 let expectedScopeContentHeight = 4 * FocusTaskPickerMetrics.scopeRowHeightCompact
                     + 9 + 2 * FocusTaskPickerMetrics.scopeRowHeightCompact + 16
-                XCTAssertEqual(scopeWindow.frame.height, expectedScopeContentHeight + 26,
+                XCTAssertEqual(scopeWindow.frame.height, expectedScopeContentHeight,
                                accuracy: 1.5)
                 XCTAssertTrue(rendered.screenVisibleFrame.insetBy(dx: -1, dy: -1).contains(scopeWindow.frame),
                               "Scope popover is clipped by the visible screen")
 
                 let scopeRow = try XCTUnwrap(rendered.layoutFrames["scope"])
-                let chromeInset = (picker.frame.height - FocusTaskPickerMetrics.height) / 2
-                let scopeRowScreenY = picker.frame.minY + chromeInset
+                let scopeRowScreenY = picker.frame.minY
                     + FocusTaskPickerMetrics.height - scopeRow.midY
-                XCTAssertEqual(scopeWindow.frame.minY, scopeRowScreenY + scopeRow.height / 2,
+                XCTAssertEqual(scopeWindow.frame.maxY, scopeRowScreenY + scopeRow.height / 2,
                                accuracy: 1.5,
                                "Second-level popover edge must align with the Scope row; row=\(scopeRow), picker=\(picker.frame), scopeWindow=\(scopeWindow.frame), expectedCenterY=\(scopeRowScreenY)")
 
@@ -68,6 +67,7 @@ final class FocusTaskPickerRenderTests: XCTestCase {
     }
 
     private func render(_ state: RenderState) throws -> RenderedPicker {
+        _ = NSApplication.shared
         let fixture = makeFixture()
         let session = FocusTaskPickerSession(
             linkedTaskID: state == .selectedTask ? fixture.todayTask.id : nil
@@ -104,8 +104,7 @@ final class FocusTaskPickerRenderTests: XCTestCase {
 
         var popovers = waitForPopoverWindows(excluding: priorWindows, rootWindow: rootWindow)
         let pickerWindow = try XCTUnwrap(popovers.first {
-            $0.className.contains("PopoverWindow")
-                && abs($0.frame.width - (FocusTaskPickerMetrics.width + 26)) < 4
+            $0 is NSPanel && abs($0.frame.width - FocusTaskPickerMetrics.width) < 4
         }, "The real task-picker popover window did not appear")
         let searchFocused = pickerWindow.firstResponder is NSTextView
         if state == .scopePicker {
@@ -115,7 +114,7 @@ final class FocusTaskPickerRenderTests: XCTestCase {
         }
         let scopeWindow = state == .scopePicker ? popovers.first {
             $0 !== pickerWindow && $0.isVisible
-                && abs($0.frame.width - (FocusTaskPickerMetrics.scopeWidth + 26)) < 4
+                && abs($0.frame.width - FocusTaskPickerMetrics.scopeWidth) < 4
         } : nil
         flushWindow(pickerWindow)
 
@@ -155,8 +154,7 @@ final class FocusTaskPickerRenderTests: XCTestCase {
                 $0 !== rootWindow && $0.isVisible && !priorWindows.contains($0.windowNumber)
             }
             if candidates.contains(where: {
-                $0.className.contains("PopoverWindow")
-                    && abs($0.frame.width - (FocusTaskPickerMetrics.width + 26)) < 4
+                $0 is NSPanel && abs($0.frame.width - FocusTaskPickerMetrics.width) < 4
             }) { break }
         } while Date() < deadline
         return candidates
@@ -223,8 +221,8 @@ private struct FocusTaskPickerPopoverHost: View {
     var body: some View {
         Button("选择专注任务") {}
             .frame(width: 220, height: 46)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .popover(isPresented: session.presentationBinding, arrowEdge: .trailing) {
+            .background(AnchoredPropertyPanel(isPresented: session.presentationBinding,
+                                              width: FocusTaskPickerMetrics.width, focusPolicy: .panel) {
                 FocusTaskPickerPopover(
                     workspace: workspace,
                     selectedTaskID: session.linkedTaskID,
@@ -234,9 +232,10 @@ private struct FocusTaskPickerPopoverHost: View {
                     onSelectScope: { session.selectScope($0) },
                     onSelectTask: { session.selectTask($0.id) },
                     onClearTask: { session.selectTask(nil) },
-                    onDismiss: { session.handleEscape() }
+                    onDismiss: { session.dismiss() }
                 )
                 .onPreferenceChange(FocusTaskPickerLayoutPreferenceKey.self, perform: onLayout)
-            }
+            })
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 }

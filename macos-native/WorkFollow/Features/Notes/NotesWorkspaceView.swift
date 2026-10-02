@@ -82,11 +82,12 @@ struct NotesWorkspaceView: View {
                 if !navigationVisible || !environment.sidebarVisible {
                     Button { showNavigation.toggle() } label: { Image(systemName: "sidebar.left") }
                         .buttonStyle(.plain).help("笔记导航")
-                        .popover(isPresented: $showNavigation) {
+                        .background(AnchoredPropertyPanel(isPresented: $showNavigation,
+                                                          width: WFMetrics.navigationWidth) {
                             NavigationColumnView(workspace: tasks, navigation: navigation,
                                 filterStore: environment.filterStore, onNavigate: { showNavigation = false })
                                 .frame(width: WFMetrics.navigationWidth, height: 480)
-                        }
+                        })
                 }
                 Text(trash ? "垃圾桶" : favorites ? "收藏笔记" : "笔记").font(WFType.pageTitle)
                 Spacer()
