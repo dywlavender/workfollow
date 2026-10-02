@@ -532,3 +532,44 @@ XCTAssertLessThanOrEqual failed: ("3") is greater than ("2")
   所以没并进来。
 - **三处图标网格仍是三份实现**，而且已经漂了（编辑器面板 44×44、样式弹窗 34×30、
   习惯页 28×28）。这一轮按用户的选择只加名字，没有合并——合并是独立的一轮。
+- **图标选择器用键盘够不着（已实测确认，未修）**。给图标加名字属于无障碍改造，
+  但同一件事的另一半没做完：浮层打开后按 Tab，焦点**始终在 sheet 里打转，
+  从不进入浮层**，浮层也一直开着。实测的 Tab 轨迹（`ax focused` 读数）：
+
+  ```
+  AXButton desc="图标"        @566,317  38x38
+  → AXTextField desc=""       @634,327  304x17     （名称框）
+  → AXButton desc="日期：选择日期" @626,365 320x34   （日期行）
+  ```
+
+  也就是说，想换图标**只能靠鼠标**；`Escape` 能关掉浮层（浮层窗口确实消失），
+  但关掉之后重新打开还是进不去。根因是 `AnchoredPropertyPanel` 的默认
+  `focusPolicy == .preservePresenter`——焦点刻意留在触发者身上，这是它的设计行为，
+  不是 bug。
+
+  **候选修法（据 `HEAD` 读到的定义，`AnchoredPropertyPanel.swift:5`）**：
+
+  ```swift
+  enum AnchoredPropertyPanelFocusPolicy { case preservePresenter, panel }
+  ```
+
+  即本分支上只有两档，`.panel` 看起来就是让浮层参与 Tab 链的那一档。
+
+  ⚠️ **两点必须说清楚，否则这行结论会被误当成「已修」。**
+
+  ① **这只是候选，不是已验证的修法。** 我**没有**把 `focusPolicy` 改成 `.panel`
+  试过——「换一档就能进 Tab 链」是从 API 形状推出来的，属于「应该怎样」而不是
+  「实际怎样」（见 `~/.workbuddy-ai/MEMORY.md` 第 9 条）。键盘路径只在运行时才成立，
+  落地时必须实测 Tab / Shift-Tab / Escape 三条。
+
+  ② **这个文件正在被另一个会话改。** 上面那行是 `HEAD` 的读数；**工作区里已经不是这样了**
+  ——`git diff` 显示他们正在往这个枚举里加 `case panelWindow`，并把
+  `if isOpening, focusPolicy == .panel` 改写成
+  `focusPolicy != .preservePresenter` + 内层 `if focusPolicy == .panelWindow`
+  （`AnchoredPropertyPanelPlacement` 也多了 `case schedule`）。
+  所以真正接手时，**先读当时的文件，不要引用本节这行代码**。
+
+  **没顺手改的原因**：改 `focusPolicy` 会一并改变 `Escape` 的处理路径，而
+  `AnchoredPropertyPanel.swift`、`SchedulePopoverModifier.swift`（本身引用了
+  `AnchoredPropertyPanel`）、`ScheduleEscapeRouter.swift` 这三个文件此刻都在另一会话
+  的在途改动里。留作独立一轮，等那边的改动落定再动。
