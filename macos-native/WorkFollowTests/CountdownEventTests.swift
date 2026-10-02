@@ -39,7 +39,7 @@ final class CountdownEventTests: XCTestCase {
                        calendar.startOfDay(for: date(2, 6, 2027)))
         XCTAssertEqual(projection.days, 130)
         XCTAssertTrue(projection.isFuture)
-        XCTAssertEqual(projection.caption, "距离 正月初一（2027/2/6）还有")
+        XCTAssertEqual(projection.captionPrefix, "距离 正月初一（2027/2/6）还有")
     }
 
     /// 已过去的一次性日期：`52` / `距离 2026/8/8 已经`。
@@ -48,7 +48,7 @@ final class CountdownEventTests: XCTestCase {
         let projection = event.projection(asOf: today, calendar: calendar)
         XCTAssertEqual(projection.days, 52)
         XCTAssertFalse(projection.isFuture, "已过去要显示「已经」")
-        XCTAssertEqual(projection.caption, "距离 2026/8/8 已经")
+        XCTAssertEqual(projection.captionPrefix, "距离 2026/8/8 已经")
     }
 
     /// 将来的一次性日期：`4` / `距离 2026/10/3 还有`。
@@ -57,7 +57,7 @@ final class CountdownEventTests: XCTestCase {
         let projection = event.projection(asOf: today, calendar: calendar)
         XCTAssertEqual(projection.days, 4)
         XCTAssertTrue(projection.isFuture)
-        XCTAssertEqual(projection.caption, "距离 2026/10/3 还有")
+        XCTAssertEqual(projection.captionPrefix, "距离 2026/10/3 还有")
     }
 
     // MARK: 公历每年
@@ -80,7 +80,7 @@ final class CountdownEventTests: XCTestCase {
         let projection = event.projection(asOf: today, calendar: calendar)
         XCTAssertEqual(projection.days, 0)
         XCTAssertTrue(projection.isFuture)
-        XCTAssertEqual(projection.caption, "距离 2026/9/29 还有")
+        XCTAssertEqual(projection.captionPrefix, "距离 2026/9/29 还有")
     }
 
     // MARK: 农历
@@ -97,7 +97,7 @@ final class CountdownEventTests: XCTestCase {
         let projection = event.projection(asOf: today, calendar: calendar)
         XCTAssertEqual(calendar.startOfDay(for: projection.occurrence),
                        calendar.startOfDay(for: date(2, 5, 2027)))
-        XCTAssertEqual(projection.caption, "距离 腊月廿九（2027/2/5）还有")
+        XCTAssertEqual(projection.captionPrefix, "距离 腊月廿九（2027/2/5）还有")
     }
 
     /// 农历规则扫不到时要退回「今天」而不是编一个日期出来。
@@ -329,7 +329,7 @@ final class CountdownEventTests: XCTestCase {
         XCTAssertEqual(calendar.startOfDay(for: projection.occurrence),
                        calendar.startOfDay(for: date(8, 20, 2027)))
         XCTAssertEqual(projection.days, 325)
-        XCTAssertEqual(projection.caption, "距离 2027/8/20 还有")
+        XCTAssertEqual(projection.captionPrefix, "距离 2027/8/20 还有")
     }
 
     /// 周岁：今年生日还没到就要减一。
@@ -398,8 +398,46 @@ final class CountdownEventTests: XCTestCase {
         XCTAssertEqual(week.parts.map(\.value), [18, 2])
 
         // 换单位只动中间那个数字，副标题不动。
-        XCTAssertEqual(event.projection(asOf: october1, calendar: calendar).caption,
+        XCTAssertEqual(event.projection(asOf: october1, calendar: calendar).captionPrefix,
                        "距离 正月初一（2027/2/6）还有")
+    }
+
+    // MARK: 完整句（只有一句话的位置用）
+
+    /// `sentence(with:)` = 前缀 + 天数。卡片 tooltip 与已归档列表行**只有一句话的位置**，
+    /// 必须用它；直接用前缀会断在「还有」，那两个落点当初就是这么坏的。
+    func testSentenceCompletesTheCaptionPrefix() {
+        let event = makeEvent("春节", kind: .festival, rule: .lunarYearly(month: 1, day: 1))
+        let october1 = date(10, 1)
+        let projection = event.projection(asOf: october1, calendar: calendar)
+
+        func sentence(_ unit: CountdownDisplayUnit) -> String {
+            projection.sentence(with: event.magnitude(asOf: october1, unit: unit, calendar: calendar))
+        }
+
+        // 按天：画面上只有光秃秃的 `128`，读成一句话得补「天」，否则「还有 128」不成句。
+        XCTAssertEqual(sentence(.day), "距离 正月初一（2027/2/6）还有 128 天")
+        // 换单位句尾跟着换，且**不是**再拼一遍天数——用的是同一份 magnitude。
+        XCTAssertEqual(sentence(.month), "距离 正月初一（2027/2/6）还有 4月9天")
+        XCTAssertEqual(sentence(.week), "距离 正月初一（2027/2/6）还有 18周2天")
+
+        // 完整句一定以前缀开头。断句缺陷的表现就是「前缀之后什么都没有」，
+        // 这条断言把「句子至少不比前缀短」钉住。
+        for unit in CountdownDisplayUnit.allCases {
+            XCTAssertTrue(sentence(unit).hasPrefix(projection.captionPrefix),
+                          "\(unit) 的完整句丢了前缀")
+            XCTAssertGreaterThan(sentence(unit).count, projection.captionPrefix.count,
+                                 "\(unit) 的完整句跟前缀一样长，说明天数没拼上")
+        }
+    }
+
+    /// 已过去的方向（`已经`）同样要成句——`已经 52 天`，不是「已经」就没了。
+    func testSentenceWorksForAPastDate() {
+        let event = makeEvent("使用滴答清单", rule: .once(date(8, 8)))
+        let projection = event.projection(asOf: today, calendar: calendar)
+        XCTAssertEqual(projection.captionPrefix, "距离 2026/8/8 已经")
+        XCTAssertEqual(projection.sentence(with: event.magnitude(asOf: today, unit: .day, calendar: calendar)),
+                       "距离 2026/8/8 已经 52 天")
     }
 
     /// 「按月」要按**事件自己的历法**取自然月。春节是农历事件，落点 2027/2/6：

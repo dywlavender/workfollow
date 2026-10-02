@@ -14,9 +14,16 @@ enum TaskNamePrompt {
         guard alert.runModal() == .alertFirstButtonReturn else { return nil }
         return field.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
     }
-    static func confirm(_ title: String, message: String) -> Bool {
+    /// 二次确认。`action` 是**确认按钮的文案**。
+    ///
+    /// 写动作名（「删除」「移除」「替换」），不要写「确定」：正文问的是
+    /// 「删除『X』？」，按钮再写「确定」，用户得自己把两句话对上才算看懂。
+    ///
+    /// 之所以不给默认值：默认值会让下一个新增的破坏性调用点悄悄拿到「确定」，
+    /// 缺陷重新长出来。没有默认值，漏写就编译不过。
+    static func confirm(_ title: String, message: String, action: String) -> Bool {
         let alert = NSAlert(); alert.messageText = title; alert.informativeText = message
-        alert.addButton(withTitle: "确定"); alert.addButton(withTitle: "取消")
+        alert.addButton(withTitle: action); alert.addButton(withTitle: "取消")
         return alert.runModal() == .alertFirstButtonReturn
     }
     static func invalidName() {
@@ -169,7 +176,8 @@ private struct SidebarListRowView: View {
         Divider()
         Button("删除清单…", role: .destructive) {
             if TaskNamePrompt.confirm("删除清单“\(name)”？",
-                                      message: "任务（含子任务）将移到收集箱，不删除任务。可撤销。") {
+                                      message: "任务（含子任务）将移到收集箱，不删除任务。可撤销。",
+                                      action: "删除") {
                 workspace.removeList(name)
             }
         }
@@ -290,7 +298,8 @@ struct TaskTagsSectionView: View {
                 if let value = TaskNamePrompt.ask("重命名标签", value: tag), !value.isEmpty { workspace.renameTag(tag, to: value) }
             }
             Button("移除标签…") {
-                if TaskNamePrompt.confirm("移除标签“\(tag)”？", message: "从所有任务移除此标签，不删除任务。可撤销。") { workspace.renameTag(tag, to: nil) }
+                if TaskNamePrompt.confirm("移除标签“\(tag)”？", message: "从所有任务移除此标签，不删除任务。可撤销。",
+                                          action: "移除") { workspace.renameTag(tag, to: nil) }
             }
         }
     }

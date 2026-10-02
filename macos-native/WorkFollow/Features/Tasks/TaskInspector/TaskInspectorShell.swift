@@ -527,7 +527,8 @@ struct TaskInspectorShell: View {
         }.sorted { $0.childOrder < $1.childOrder }
         if TemplateStore.shared.contains(name: name) {
             guard TaskNamePrompt.confirm("模板“\(name)”已存在",
-                                         message: "是否用当前任务替换这个模板？") else { return }
+                                         message: "是否用当前任务替换这个模板？",
+                                         action: "替换") else { return }
         }
         _ = TemplateStore.shared.save(name: name, from: task,
                                       includingChildren: children, forceReplace: true)

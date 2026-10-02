@@ -590,8 +590,30 @@ struct CountdownProjection: Equatable {
     let isFuture: Bool
     /// 用于计算的落点日期（当天零点）。
     let occurrence: Date
-    /// 副标题：`距离 正月初一（2027/2/6）还有` / `距离 2026/8/8 已经`。
-    let caption: String
+    /// 副标题的**前缀**：`距离 正月初一（2027/2/6）还有` / `距离 2026/8/8 已经`。
+    ///
+    /// 故意叫 `Prefix` 而不是 `caption`：它**不是一句完整的话**，句尾缺天数。
+    /// 卡片把天数单独放大显示在它上面（见 `CountdownCardView.magnitudeRow`），
+    /// 两者靠视觉拼起来才读得通——所以只有卡片能用它。
+    ///
+    /// **凡是只给一句话的地方（tooltip、已归档列表行），用 `sentence(with:)`。**
+    /// 这两个落点当初就是直接拿了 `caption`，屏幕上出现「距离 2026/10/2 还有」
+    /// 这种断在半句的文案；旧名字的注释里其实写了「这是前缀」，照样被误用两次，
+    /// 所以改成把前缀写进名字里。
+    let captionPrefix: String
+}
+
+extension CountdownProjection {
+    /// 副标题的**完整句**：`距离 正月初一（2027/2/6）还有 4月9天`。
+    ///
+    /// 这是「只给一句话」的场合唯一该用的出口。前缀 + 天数拼在一起的活儿只此一处，
+    /// 免得又有人自己拼一遍、拼漏了单位或空格。
+    ///
+    /// 用 `spokenText` 而不是 `text`：按天那一档画面上只有光秃秃的 `348`
+    /// （参考图就是如此），但**读成一句话**要补上「天」，否则「还有 348」不成句。
+    func sentence(with magnitude: CountdownMagnitude) -> String {
+        "\(captionPrefix) \(magnitude.spokenText)"
+    }
 }
 
 extension CountdownEvent {
@@ -647,7 +669,7 @@ extension CountdownEvent {
             days: abs(delta),
             isFuture: isFuture,
             occurrence: occurrence,
-            caption: caption(occurrence: occurrence, isFuture: isFuture, calendar: calendar))
+            captionPrefix: caption(occurrence: occurrence, isFuture: isFuture, calendar: calendar))
     }
 
     /// 卡片主数字，按 `unit` 分解。

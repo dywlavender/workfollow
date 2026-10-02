@@ -460,12 +460,19 @@ struct CountdownEditorView: View {
             .padding(.top, Self.dateFieldGap)
 
             // 参考图这里**没有分隔线**：按钮靠段间距（28）与上面分开，不靠线。
+            //
+            // 按钮文案带「日期」二字是有意的：浮层打开时，sheet 底部那对
+            // 「取消 / 确定」也在屏幕上，两对同名会让人分不清哪个撤的是日期、
+            // 哪个撤的是整条记录。
+            //
+            // 不再单独写 `.accessibilityLabel`：文案即标签，一处写就够了。
+            // 之前两处各写一份（读屏叫「取消日期」、眼睛看到「取消」），
+            // 正是这个漂移造成了同名歧义。
             HStack(spacing: WFSpace.sm) {
                 Spacer(minLength: 0)
-                Button("取消") { openRow = nil }
+                Button("取消日期") { openRow = nil }
                     .buttonStyle(.bordered)
-                    .accessibilityLabel("取消日期")
-                Button("确定") {
+                Button("确定日期") {
                     // 此刻才算数：日期行与「添加」的可用性都看 `draft`。
                     // 新建时 `editing.isSet` 还是 false（浮层打开时从空草稿拷的），
                     // 按下确定就等于「用户选好了日期」，补上。
@@ -475,7 +482,6 @@ struct CountdownEditorView: View {
                     openRow = nil
                 }
                 .buttonStyle(.borderedProminent)
-                .accessibilityLabel("确定日期")
             }
             .padding(.top, Self.dateButtonGap)
             .padding(.bottom, Self.datePopupBottomInset)
@@ -1208,6 +1214,9 @@ struct ArchivedCountdownsView: View {
 
     private func row(_ event: CountdownEvent) -> some View {
         let projection = event.projection(asOf: today)
+        // 这一行**只有一句话的位置**，没有卡片上那个大数字兜底，所以必须用完整句：
+        // 直接用 `captionPrefix` 会在屏幕上留下「距离 2026/10/2 还有」这种断句。
+        let magnitude = event.magnitude(asOf: today, unit: event.effectiveDisplayUnit)
         return HStack(spacing: WFSpace.sm) {
             ZStack {
                 Circle().fill(countdownEditorColor(event.colorIndex))
@@ -1218,7 +1227,7 @@ struct ArchivedCountdownsView: View {
             .frame(width: 20, height: 20)
             VStack(alignment: .leading, spacing: 1) {
                 Text(event.displayName).font(WFType.listTitle).lineLimit(1)
-                Text(projection.caption).font(WFType.caption)
+                Text(projection.sentence(with: magnitude)).font(WFType.caption)
                     .foregroundStyle(WFColors.secondaryText).lineLimit(1)
             }
             Spacer(minLength: WFSpace.sm)
@@ -1226,7 +1235,8 @@ struct ArchivedCountdownsView: View {
                 .buttonStyle(.bordered)
                 .controlSize(.small)
             Button("删除") {
-                if TaskNamePrompt.confirm("删除“\(event.displayName)”？", message: "删除后无法恢复。") {
+                if TaskNamePrompt.confirm("删除“\(event.displayName)”？", message: "删除后无法恢复。",
+                                          action: "删除") {
                     _ = store.hardDelete(event.id)
                 }
             }

@@ -88,7 +88,8 @@ struct TemplateManagementView: View {
     private func remove(_ template: TaskTemplate) {
         guard TaskNamePrompt.confirm(
             "删除模板“\(template.name)”？",
-            message: "删除后不可恢复，已创建的任务不受影响。"
+            message: "删除后不可恢复，已创建的任务不受影响。",
+            action: "删除"
         ) else { return }
         _ = templateStore.delete(template.id)
     }

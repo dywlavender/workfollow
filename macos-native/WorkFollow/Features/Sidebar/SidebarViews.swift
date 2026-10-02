@@ -187,7 +187,9 @@ private struct NotesNavigationSection: View {
                                        !notes.renameFolder(folder, to: name) { TaskNamePrompt.invalidName() }
                                 }
                                 Button("删除文件夹…") {
-                                    if TaskNamePrompt.confirm("删除文件夹“\(folder)”？", message: "其中的笔记会保留，并移到“未归档”。") { notes.removeFolder(folder) }
+                                    if TaskNamePrompt.confirm("删除文件夹“\(folder)”？",
+                                                              message: "其中的笔记会保留，并移到“未归档”。",
+                                                              action: "删除") { notes.removeFolder(folder) }
                                 }
                             }
                     }
@@ -307,7 +309,8 @@ private struct TaskFiltersSectionView: View {
             }
             Button("删除…") {
                 if TaskNamePrompt.confirm("删除过滤器“\(filter.name)”？",
-                                          message: "只删除过滤器本身，不会删除任务。") {
+                                          message: "只删除过滤器本身，不会删除任务。",
+                                          action: "删除") {
                     _ = workspace.deleteFilter(filter.id)
                 }
             }

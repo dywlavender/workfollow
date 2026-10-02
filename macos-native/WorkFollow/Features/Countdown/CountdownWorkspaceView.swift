@@ -244,7 +244,8 @@ struct CountdownWorkspaceView: View {
     }
 
     private func confirmDelete(_ event: CountdownEvent) {
-        if TaskNamePrompt.confirm("删除“\(event.displayName)”？", message: "删除后无法恢复。") {
+        if TaskNamePrompt.confirm("删除“\(event.displayName)”？", message: "删除后无法恢复。",
+                                  action: "删除") {
             _ = store.hardDelete(event.id)
         }
     }
@@ -299,7 +300,10 @@ struct CountdownCardView: View {
                 // 我们 11pt 是 309×22px、12pt 是 336×25px——按宽度线性外推参照物约 12.6pt，
                 // 12pt 把误差从 −12.5% 压到 −4.8%，且 `supporting` 本身就是 12pt 常规。
                 // 剩下的宽度差主要来自它的大数字字体（数字那簇 127px vs 我们 117px），补不平。
-                Text(projection.caption)
+                // 这里用**前缀**而不是完整句：上面 `magnitudeRow` 已经把天数单独
+                // 放大显示了，两句并排会重复。**卡片是唯一该这么用的地方**，
+                // 别处要一句话请用 `projection.sentence(with:)`。
+                Text(projection.captionPrefix)
                     .font(WFType.supporting)
                     .foregroundStyle(WFColors.overlayTertiaryText)
                     .lineLimit(1)
@@ -319,7 +323,8 @@ struct CountdownCardView: View {
                     .stroke(hovering ? WFColors.accent.opacity(0.35) : WFColors.overlayBorder)
             }
             .contentShape(RoundedRectangle(cornerRadius: 12))
-            // 天数才是这张卡片的主信息，要进无障碍标签；`caption` 作为悬停提示另给。
+            // 天数才是这张卡片的主信息，要进无障碍标签；悬停提示另给一整句
+            // （用 `sentence`，不是 `captionPrefix`——提示里没有那个大数字兜底）。
             //
             // 必须挂在**按钮内部**：挂到外层会把 overlay 里的置顶 / 更多两个按钮一起并进
             // 这个元素，它们各自的 `.accessibilityLabel` 就失效了——实测读到的会是整张卡片
@@ -336,7 +341,7 @@ struct CountdownCardView: View {
             }
         }
         .onHover { hovering = $0 }
-        .help(projection.caption)
+        .help(projection.sentence(with: magnitude))
         .contextMenu {
             menuItems
         }
