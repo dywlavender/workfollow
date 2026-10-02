@@ -15,6 +15,9 @@
 
 ## 一、确定是缺陷
 
+> **2026-10-02 更新：D1–D4 全部已修**（commit 见文末）。下面保留缺陷的原始描述，
+> 每条后面加一段「已修」说明改了什么、为什么这么改。
+
 ### D1. 已归档列表的副标题是残句，没有天数
 
 - 位置：`Features/Countdown/CountdownEditorView.swift:1221`
@@ -28,6 +31,13 @@
   所以单看没问题。归档行只渲染了 `caption`，没有那个数字伙伴，于是成了半句话。
 - 影响：一句话说不完自己。这是「读起来是 bug」而不是「看起来是 bug」。
 
+**已修**：`caption` 改名 `captionPrefix`，并新增唯一出口
+`CountdownProjection.sentence(with:)`（前缀 + 天数）。归档行改用它。
+
+**为什么是改名而不只是加方法**：旧名字的注释里其实**已经写了**「这是前缀」，
+照样被误用两次——注释挡不住手。把「前缀」写进名字，写错的时候自己会看见。
+卡片是唯一该用前缀的地方（它把天数单独放大显示在下面），那里留了一行注释说明。
+
 ### D2. 卡片 tooltip 是同一个残句
 
 - 位置：`Features/Countdown/CountdownWorkspaceView.swift:333` —— `.help(projection.caption)`
@@ -36,9 +46,8 @@
 - 根因：与 D1 同一处，caption 被单独拿去用了。
 - 备注：tooltip 是**唯一**只给这句话的地方，没有数字在旁边兜底，所以比 D1 更明显。
 
-> D1/D2 是同一个根因的两个落点。修法两种，取舍不同：
-> ①给 `CountdownProjection` 加一个「完整句」属性（`caption + 天数`），两处改用它；
-> ②两处各自把天数拼上。推荐 ①，因为拼法只有一处，以后不会再漏第三个落点。
+**已修**：改成 `.help(projection.sentence(with: magnitude))`——卡片本来就有
+`projection` 和 `magnitude` 两份数据，不用多算。
 
 ### D3. 日期浮层的「取消/确定」与 sheet 的「取消/确定」同名
 
@@ -50,9 +59,21 @@
 - 复现：新建/编辑 → 点日期行 → 看屏幕
 - 关键点：作者**已经知道要区分**——两处的 `accessibilityLabel` 就是
   `取消日期` / `确定日期`（`:467`、`:478`）。也就是说区分只做给了读屏，
-  没做给眼睛。把 `accessibilityLabel` 直接当可见文案用即可（或者浮层用
-  「取消」「确定」以外的措辞）。
+  没做给眼睛。
 - 严重度：中。不是坏，是会点错——而点错的代价是丢掉刚选的日期。
+
+**已修**：可见文案直接改成 `取消日期` / `确定日期`，并**删掉**那两行
+`.accessibilityLabel`——文案即标签，一处写就够了。之前两处各写一份，
+正是这个漂移造成了同名歧义。
+
+**真机复核**（`audit-fix-date-popup.png`，一次截图同时装下两对按钮）：
+
+```
+浮层内  AXButton desc="取消日期" @770,550   AXButton desc="确定日期" @854,550
+sheet 底 AXButton desc="取消"    @724,654   AXButton desc="确定"    @840,654
+```
+
+两对同名按钮**同时在屏幕上**的这一刻，就是 D3 的原始场景；现在眼睛能分清。
 
 ### D4. 删除确认的按钮叫「确定」，不叫「删除」
 
@@ -66,9 +87,21 @@
   `CountdownEditorView.swift:1229`、`TaskManagementViews.swift:171,293`、
   `TemplateManagementView.swift:89`、`TaskInspectorShell.swift:550`）。
   改这一个函数就全改了；同理，这个毛病现在也是全局的。
-- 备注：破坏性动作的按钮不写动作名，是 macOS 上比较常见的一条批评。
-  改法建议给 `confirm` 加一个 `confirmTitle:` 参数，默认仍是 `确定`，
-  破坏性调用点传 `删除`/`移除`。
+
+**已修**：加 `action:` 参数，**不给默认值**——默认值会让下一个新增的破坏性调用点
+悄悄拿到「确定」，缺陷重新长出来；没有默认值，漏写就编译不过。
+8 处调用点全部显式传了动作名：
+
+| 调用点 | action |
+| --- | --- |
+| 删除文件夹 / 删除过滤器（Sidebar） | `删除` |
+| 删除清单 / 移除标签（TaskManagementViews） | `删除` / `移除` |
+| 删除模板（TemplateManagementView） | `删除` |
+| 删除记录（倒数纪念日，卡片菜单与已归档列表） | `删除` |
+| 替换模板（TaskInspectorShell） | `替换` |
+
+`action:` 没有默认值这件事本身就是防线：以后再加破坏性确认，忘了写动作名
+编译不过，而不是默默又出一个「确定」。
 
 ---
 
@@ -185,12 +218,74 @@ AX 实测（同一个 sheet 内）：
 
 ---
 
-## 建议的处理顺序
+## 六、修复后的真机复核
 
-1. **D1 + D2**（同一根因，一处修好两个落点）—— 改 `CountdownProjection`，
-   加一个完整句属性。
-2. **D3** —— 把已有的 `accessibilityLabel` 提为可见文案，成本极低。
-3. **D4** —— 给 `TaskNamePrompt.confirm` 加 `confirmTitle:` 参数。
-4. **Q1 / Q2** —— 等你给一张编辑面板的参照图（或直接定夺），否则只能维持现状。
+复核用的是**独立工作树**里构建的应用（基线 `c00f5ff` + 本次 8 个改动文件），
+不是主工作树——主工作树当时有另一个会话的在途改动，混进去就说不清是谁的问题。
 
-**T1 已完成**：生日归「纪念日」，见上面 T1 节。
+| 项 | 复核方式 | 读数 |
+| --- | --- | --- |
+| D1 已归档行 | 造临时记录→归档→读该行文本 | `距离 2026/10/2 还有 0 天`（修前 `距离 2026/10/2 还有`） |
+| D2 卡片 tooltip | 读无障碍 `AXHelp` 属性 | `距离 2027/9/15 还有 348 天` |
+| D3 浮层按钮 | 开日期浮层，同一屏读两对按钮 | 浮层 `取消日期`/`确定日期`，sheet `取消`/`确定` |
+| D4 删除确认 | 开删除确认，读按钮文案 | `删除`（修前 `确定`） |
+| T1 生日归「纪念日」 | 依次点四个胶囊看卡片 | 纪念日→小美，节日→春节，倒数日→空，所有→两条 |
+
+证据：`audit-fix-archived.png`、`audit-fix-date-popup.png`、`audit-fix-delete-confirm.png`。
+
+复核完把临时记录删掉，数据与走查前的备份**逐键比对**，`语义一致: True`。
+
+### 测试结果，以及那 11 个红
+
+全量 749 个用例，**11 个失败**，全在三个套件里，**没有一个**和倒计时 / 过滤器 / 确认对话框相关：
+
+| 套件 | 失败数 | 症状 |
+| --- | --- | --- |
+| `FocusRenderTests` | 8 | 「Incomplete render anchors」，锚点集合渲染不全 |
+| `NativeResourceLinkTests` | 1 | 读构建产物 Info.plist 的 `CFBundleURLTypes` 取到 nil |
+| `SchedulePopoverContractTests` | 2 | 容器高度实测 560 / 536，期望 506 |
+
+**这 11 个不是本次改动引入的。** 判据是把验证树里的改动全部撤掉、回到干净的
+`c00f5ff` 重跑同样三个套件，失败数**一模一样**（8 / 1 / 2），用例名也一模一样：
+
+```
+基线 c00f5ff            SchedulePopoverContractTests  6 tests, 2 failures
+基线 c00f5ff            NativeResourceLinkTests       5 tests, 1 failure
+基线 c00f5ff            FocusRenderTests              2 tests, 8 failures
+```
+
+（这三条是既有问题，不是本次范围。`FocusRenderTests` 依赖真实渲染，
+在无头 `xctest` 进程里锚点收不全——和之前记过的「无头进程里承载 SwiftUI 视图会崩」
+是同一类环境敏感性；`NativeResourceLinkTests` 与 `SchedulePopoverContractTests`
+看起来是真缺陷，建议单独开一轮，别混在这次倒计时改动里。）
+
+倒计时相关的两个套件全绿：`CountdownEventTests` 47 个、`CountdownStoreTests` 21 个。
+
+**两点复核手法值得留档**：
+
+1. **tooltip 改用 `AXHelp` 读，不再追原生浮窗。** 原生 tooltip 是延迟弹出的独立窗口，
+   要求指针完全静止且应用在前台；试了几轮截图都抓不到。而 SwiftUI 的 `.help(_:)`
+   一定会写进无障碍的 `AXHelp` 属性，直接读既确定又快。工具里加了 `ax help <pid> <名字>`。
+2. **直接调 `xcodebuild` 时必须显式给 `OTHER_SWIFT_FLAGS='$(inherited) -Xfrontend -disable-sandbox'`。**
+   只设 `WORKFOLLOW_DISABLE_SWIFT_SANDBOX=1` 环境变量没用——那个变量只有 `scripts/run-tests.sh`
+   认。漏了它，沙箱里 `swift-plugin-server` 起不来，报的是
+   `external macro implementation type 'SwiftUIMacros.StateMacro' could not be found`，
+   然后每个 `@State` 级联出一千多条「找不到 `$xxx`」，看起来像代码炸了，其实一行没改错。
+
+---
+
+## 处理状态
+
+| 项 | 状态 |
+| --- | --- |
+| D1 / D2 残句 | 已修 |
+| D3 浮层按钮同名 | 已修 |
+| D4 删除确认不写动作名 | 已修（全应用 8 处） |
+| T1 生日归「纪念日」 | 已修 |
+| Q1 编辑 sheet 三套左边界 | **挂起** |
+| Q2 卡片数字不带「天」 | **挂起** |
+
+Q1 / Q2 是同一件事卡住的：手上**没有倒数纪念日页的参照图**
+（`docs/screenshots/ticktick-reference/` 那 7 张全是任务/日历/四象限/摘要/
+专注/习惯/菜单栏）。这两条都只是「像不像参照物」的问题，不是逻辑错，
+所以维持现状没有风险。拿到图存进 `docs/screenshots/` 就能一次收掉。
