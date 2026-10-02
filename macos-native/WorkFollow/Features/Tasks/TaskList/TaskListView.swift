@@ -41,6 +41,9 @@ struct TaskListView: View {
     @State private var groupExpansion = TaskGroupExpansionState()
     @State private var sortMode = TaskListSortMode.manual
     @State private var seenCompletedGroupIDs: Set<String> = []
+    /// 「倒数纪念日」小节的折叠状态。它与任务组的折叠是两套：任务组按 `id` 记，
+    /// 这里只有一个固定小节，用布尔就够。
+    @State private var countdownSectionCollapsed = false
     @FocusState private var descriptionFocused: Bool
     @FocusState private var listFocused: Bool
 
@@ -718,7 +721,24 @@ struct TaskListView: View {
     private func taskListSection() -> some View {
         ScrollView {
             LazyVStack(spacing: 0) {
-                if groups.isEmpty {
+                // 「倒数纪念日」小节：只有「今天」这一支——参照图
+                // （`docs/screenshots/ticktick-reference/18-countdown-in-today-group.png`）
+                // 观察到的就是「今天」清单里的形态，其余智能清单（最近 7 天等）
+                // 没观察过，不照猜出来的样子铺开（上一轮「备注入口」就是这么猜错的）。
+                //
+                // 空态一并交给它：任务组为空**且**本节也为空时才渲染插画，
+                // 否则会出现「倒数纪念日 1」下面紧跟着「今天没有任务」。
+                if scope == .today {
+                    CountdownSmartListSectionHost(
+                        store: environment.countdownStore,
+                        clock: workspace.clock,
+                        calendar: workspace.calendar,
+                        destination: navigation.destination,
+                        tasksAreEmpty: groups.isEmpty,
+                        collapsed: countdownSectionCollapsed,
+                        onToggle: { countdownSectionCollapsed.toggle() },
+                        onSelect: { _ in navigation.destination = .countdown })
+                } else if groups.isEmpty {
                     Text(TaskListViewDefaults.emptyStateMessage(destination: navigation.destination))
                         .font(WFType.body).foregroundStyle(WFColors.secondaryText)
                         .frame(maxWidth: .infinity).padding(.vertical, WFSpace.page)
@@ -1292,5 +1312,46 @@ enum TaskListViewDefaults {
 
     static func hasReminder(reminderAt: Date?, reminderOffsets: [Int]?) -> Bool {
         reminderAt != nil || !(reminderOffsets ?? []).isEmpty
+    }
+}
+
+
+/// 「倒数纪念日」小节的宿主。**只为一件事存在——订阅 `CountdownStore`。**
+///
+/// 为什么不直接在 `TaskListView` 里读 `environment.countdownStore.events`：
+/// `AppEnvironment` 只把自己 `@Published` 的变化发给 SwiftUI，**嵌套的 store 变了
+/// 它不知道**，`@EnvironmentObject` 也拿不到嵌套对象的订阅。所以让一个声明了
+/// `@ObservedObject` 的小视图去订阅——它自己建立订阅，**不需要额外的环境注入**，
+/// 也就不必去动注入链（那条链上还有别的会话在改）。
+///
+/// 空态也归它管：任务组为空**且**本节为空时才渲染插画。两件事放一起是因为它们
+/// 读的是同一个 `section`——分成两处就得算两遍，还可能算出不一致的结果
+/// （出现「倒数纪念日 1」下面紧跟着「今天没有任务」）。
+private struct CountdownSmartListSectionHost: View {
+    @ObservedObject var store: CountdownStore
+    let clock: () -> Date
+    let calendar: Calendar
+    let destination: NativeDestination
+    let tasksAreEmpty: Bool
+    let collapsed: Bool
+    let onToggle: () -> Void
+    let onSelect: (UUID) -> Void
+
+    private var section: CountdownSmartListSection {
+        CountdownSmartListProjection.section(events: store.events,
+                                             now: clock(), calendar: calendar)
+    }
+
+    var body: some View {
+        if !section.isEmpty {
+            Color.clear.frame(height: TaskListMetrics.groupTopGap)
+                .accessibilityHidden(true)
+            CountdownSmartListSectionView(section: section, collapsed: collapsed,
+                                          onToggle: onToggle, onSelect: onSelect)
+        } else if tasksAreEmpty {
+            Text(TaskListViewDefaults.emptyStateMessage(destination: destination))
+                .font(WFType.body).foregroundStyle(WFColors.secondaryText)
+                .frame(maxWidth: .infinity).padding(.vertical, WFSpace.page)
+        }
     }
 }

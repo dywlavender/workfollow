@@ -5,7 +5,11 @@ import SwiftUI
 private let countdownPalette: [Color] = [.red, .orange, .yellow, .green, .blue, .purple]
 
 /// 色板下标安全取色（负数/越界自动回绕）。
-private func countdownColor(_ index: Int) -> Color {
+///
+/// **不是 private**：智能清单里的倒计时行（`CountdownSmartListRow`）也要画同一枚
+/// 徽章，两处必须取到同一个颜色，所以这里只留一份实现给两处调。
+/// 色板本身仍然是文件私有的，没有第二个出口。
+func countdownColor(_ index: Int) -> Color {
     let count = max(countdownPalette.count, 1)
     return countdownPalette[((index % count) + count) % count]
 }
