@@ -218,8 +218,9 @@ pendingAfter=[…原有 7 条…, countdown.E80B13BC-…#0, countdown.E80B13BC-�
   如需恢复，重新构建启动即可。
 - 临时插桩（`WFProbe`，写在 `/tmp/wf-probe.log`）**只加在隔离工作树里**，
   已删除，并以主工作树为准覆盖后重新构建 + 重跑测试确认干净。
-- 验证产物在 `/tmp/wf-verify-abc`（工作树）与 `/tmp/wf-dd-verify3`（DerivedData），
-  可随时删。
+- 验证产物（隔离工作树 `/tmp/wf-verify-abc`、DerivedData `/tmp/wf-dd-verify3`、
+  插桩日志 `/tmp/wf-probe.log`）**已全部删除**，工作树也从 `git worktree list`
+  里注销了。报告里引用的截图存在 `docs/screenshots/countdown-a-batch-2026-10-02/`。
 - **共享工作树的一次险情（留个记录）**：`AppEnvironment.swift` 里混着另一会话的
   `viewPreferences` 接线。为了让提交只含本批改动，做法是「备份工作树版本 →
   `git show HEAD:<file>` 取干净版 → 只写我的改动 → `git add` → 把备份写回」。
