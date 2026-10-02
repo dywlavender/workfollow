@@ -83,8 +83,13 @@ struct CountdownEditorView: View {
     @State private var reminders: Set<Int>
     @State private var smartListDisplay: CountdownSmartListDisplay
     @State private var showsAge: Bool
-    @State private var note: String
-    @State private var noteExpanded: Bool
+    /// 名称框右端那个按钮的浮层开关。
+    ///
+    /// 参考图里它打开的是**图标选择器**（13 个预设：旅行 / 演唱会 / 发工资 /
+    /// 交房租 / 信用卡还款 …，每条带图标和名字）。原先这里被猜成了「备注」的
+    /// 展开开关——面板上因此多出一个参考图里根本没有的备注行。
+    /// 备注在滴答那边只有**卡片菜单 → 独立模态框**一个入口，不在添加/编辑面板里。
+    @State private var symbolPickerOpen: Bool
     @State private var openRow: Row?
     /// 「提醒 → 自定义」里的提前天数。存量里已有的非预设值回填到这里。
     @State private var customReminderDays: Int
@@ -161,8 +166,7 @@ struct CountdownEditorView: View {
             ?? CountdownEvent.defaultReminderOffsets))
         _smartListDisplay = State(initialValue: original?.effectiveSmartListDisplay ?? .sameDay)
         _showsAge = State(initialValue: original?.showsAge ?? false)
-        _note = State(initialValue: original?.note ?? "")
-        _noteExpanded = State(initialValue: !(original?.note ?? "").isEmpty)
+        _symbolPickerOpen = State(initialValue: false)
         // 「自定义」两个输入框：存量里已经有非预设值的就回填，否则给 30。
         let presetDays = Set(CountdownEvent.reminderChoices.map { $0 / CountdownEvent.minutesPerDay })
         let existingCustomDays = (original?.reminderOffsets ?? [])
@@ -188,7 +192,6 @@ struct CountdownEditorView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: Self.rowGap) {
                     nameRow
-                    if noteExpanded { noteField }
                     dateRow
                     reminderRow
                     repeatRow
@@ -373,33 +376,63 @@ struct CountdownEditorView: View {
                 festivalPicker
             }
 
-            // 参考图里输入框右端有个小方块图标按钮。它对应的行为在图上不可见，
-            // 这里接成「备注」的展开开关——否则整页没有写备注的入口。
+            // 参考图里名称框右端有一个「书签里嵌一颗星」的按钮，点开是**图标选择器**。
+            // 之前这里被猜成了备注的展开开关（图上确实看不出行为），代价是面板上凭空
+            // 多出一个参考图里没有的备注行。真机点开确认行为之后改成图标选择器。
+            //
+            // 字形取舍：参考图是「书签 + 星」，SF Symbols 没有这个组合
+            // （`bookmark.star` / `bookmark.star.fill` 都查过，不存在），
+            // 取形状最接近的 `bookmark`——丝带的形状一样，只是里面没有那颗星。
             Button {
-                noteExpanded.toggle()
+                symbolPickerOpen.toggle()
             } label: {
-                Image(systemName: "note.text")
+                Image(systemName: "bookmark")
                     .font(.system(size: 13))
-                    .foregroundStyle(noteExpanded ? WFColors.accent : WFColors.secondaryText)
+                    .foregroundStyle(symbolPickerOpen ? WFColors.accent : WFColors.secondaryText)
                     .frame(width: 26, height: 26)
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .help("备注")
-            .accessibilityLabel("备注")
+            .help("图标")
+            .accessibilityLabel("图标")
+            .popover(isPresented: $symbolPickerOpen, arrowEdge: .bottom) { symbolPicker }
         }
     }
 
-    private var noteField: some View {
-        TextField("备注", text: $note, axis: .vertical)
-            .textFieldStyle(.plain)
-            .font(WFType.supporting)
-            .lineLimit(2...4)
-            .padding(WFSpace.sm)
-            .background(WFColors.content, in: RoundedRectangle(cornerRadius: WFMetrics.corner))
-            .overlay {
-                RoundedRectangle(cornerRadius: WFMetrics.corner).stroke(WFColors.border)
+    /// 图标选择器（名称框右端按钮的浮层）。
+    ///
+    /// 参考图里它是一列**带名字的预设图标**（旅行 / 演唱会 / 发工资 / 交房租 /
+    /// 信用卡还款 / 房贷还款 / 保险缴费 / 定期体检 / 宠物体检 / 驾驶证到期 /
+    /// 签证到期 / 考试 / 开学），每个预设自带图形与配色。
+    ///
+    /// 我们的域模型只存一个 SF Symbol 名（`symbol`），**没有「预设场景」这个概念**，
+    /// 所以这里给的是符号网格——**这是取舍，不是对齐**。颜色仍在卡片菜单的
+    /// 「样式」里改；面板里只挑图标，与参考图「点一下换个图标」的用法一致。
+    private var symbolPicker: some View {
+        VStack(alignment: .leading, spacing: WFSpace.md) {
+            Text("图标").font(WFType.supporting).foregroundStyle(WFColors.secondaryText)
+            LazyVGrid(columns: Array(repeating: GridItem(.fixed(30), spacing: WFSpace.sm), count: 6),
+                      spacing: WFSpace.sm) {
+                ForEach(CountdownEvent.symbolOptions, id: \.self) { option in
+                    Button {
+                        symbol = option
+                        symbolPickerOpen = false
+                    } label: {
+                        Image(systemName: option)
+                            .font(.system(size: 14))
+                            .foregroundStyle(option == symbol ? WFColors.accent : WFColors.secondaryText)
+                            .frame(width: 30, height: 28)
+                            .background(option == symbol ? WFColors.selection : .clear,
+                                        in: RoundedRectangle(cornerRadius: 6))
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(option)
+                }
             }
+        }
+        .padding(WFSpace.lg)
+        .frame(width: 240)
     }
 
     /// 「节日」类型的目录下拉（19 条，农历/公历规则都已在域模型里备好）。
@@ -1092,13 +1125,14 @@ struct CountdownEditorView: View {
             // 老字段跟着新字段走，存量读的是它。
             original.showsInSmartList = smartListDisplay.showsInSmartList
             original.showsAge = showsAge
-            original.note = note
+            // 刻意**不**碰 `original.note`：面板里已经没有备注入口了，
+            // 这里若照旧写 `note` 就会把卡片菜单写进去的备注抹掉。
             store.update(original)
         } else {
             store.add(name: trimmed, kind: kind, rule: rule, symbol: symbol, colorIndex: colorIndex,
                       reminderOffsets: Array(reminders),
                       smartListDisplay: smartListDisplay,
-                      showsAge: showsAge, note: note)
+                      showsAge: showsAge)
         }
         dismiss()
     }
