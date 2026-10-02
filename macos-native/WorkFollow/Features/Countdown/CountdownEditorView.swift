@@ -99,6 +99,16 @@ struct CountdownEditorView: View {
     private static let panelWidth: CGFloat = 460
     private static let inset: CGFloat = 40
     private static let labelWidth: CGFloat = 54
+    /// 名称行的图标**槽**宽（不是图标本体宽度 38）。
+    ///
+    /// 名称框的左边界必须和属性字段**完全重合**。参照图 2× 特写实测：名称框与
+    /// 属性字段是**同一个矩形**——左边框都在 x=200、右边框都在 x=839。
+    ///
+    /// 属性字段的左边界 = `labelWidth` + `WFSpace.inline`；
+    /// 名称框的左边界 = 图标槽 + `WFSpace.lg`。差的这 6pt 只能由槽宽补上：
+    /// 改 `nameRow` 里 `HStack` 的 spacing 会把名称框到「图标」按钮的 16pt 一起改掉。
+    /// 54 + 6 - 16 = 44。
+    private static let nameBadgeSlot: CGFloat = labelWidth + WFSpace.inline - WFSpace.lg
     private static let rowHeight: CGFloat = 34
     private static let rowGap: CGFloat = 10
     private static let buttonWidth: CGFloat = 102
@@ -347,6 +357,9 @@ struct CountdownEditorView: View {
                     .background(WFColors.canvas, in: Circle())
                     .overlay { Circle().stroke(WFColors.border) }
             }
+            // 槽比图标宽，多出的 6pt 用来把名称框推到与属性字段同一条左边界上。
+            // 图标本身仍靠左贴 `inset`，位置不变。见 `nameBadgeSlot` 的注释。
+            .frame(width: Self.nameBadgeSlot, alignment: .leading)
 
             TextField(kind.namePlaceholder, text: $name)
                 .textFieldStyle(.plain)
