@@ -113,8 +113,9 @@ struct CountdownEvent: Identifiable, Codable, Equatable {
 
 enum CountdownKind: String, Codable, CaseIterable, Identifiable {
     /// 顺序即 `allCases` 的顺序，`+` 菜单和「类型」下拉都照它排。
-    /// 参考实现的 `+` 菜单实测是 纪念日 / 倒数日 / **生日** / **节日**（生日在节日前），
-    /// 注意这跟页头胶囊（所有 / 纪念日 / 倒数日 / 节日，没有生日）不是一套顺序。
+    /// 参考实现的 `+` 菜单实测是 纪念日 / 倒数日 / **生日** / **节日**（生日在节日前）。
+    /// 注意页头胶囊是**另一套**（所有 / 纪念日 / 倒数日 / 节日，没有生日）：
+    /// 胶囊里的「纪念日」把生日一起收了，映射见 `CountdownFilter.kinds`。
     case anniversary, countdown, birthday, festival
 
     var id: String { rawValue }

@@ -179,10 +179,13 @@ final class CountdownStore: ObservableObject, ModuleStoreFlushable {
         allEvents.first { $0.id == id }
     }
 
-    /// 未归档记录按类型过滤；`.all` 返回全部。
-    func events(matching kind: CountdownKind?) -> [CountdownEvent] {
-        guard let kind else { return events }
-        return events.filter { $0.kind == kind }
+    /// 未归档记录按类型过滤；传 nil 返回全部。
+    ///
+    /// 收的是集合而不是单个类型：页头「纪念日」胶囊要把生日一起收进来
+    /// （见 `CountdownFilter.kinds`），单类型签名表达不了这件事。
+    func events(matching kinds: Set<CountdownKind>?) -> [CountdownEvent] {
+        guard let kinds else { return events }
+        return events.filter { kinds.contains($0.kind) }
     }
 
     // MARK: - 跨天

@@ -234,9 +234,38 @@ final class CountdownStoreTests: XCTestCase {
         store.add(name: "生日", kind: .birthday, rule: .once(fixedNow))
 
         XCTAssertEqual(store.events(matching: nil).count, 4, "「所有」含生日")
-        XCTAssertEqual(store.events(matching: .anniversary).map(\.name), ["纪念"])
-        XCTAssertEqual(store.events(matching: .festival).map(\.name), ["节日"])
-        XCTAssertEqual(store.events(matching: .birthday).map(\.name), ["生日"])
+        XCTAssertEqual(store.events(matching: [.anniversary]).map(\.name), ["纪念"])
+        XCTAssertEqual(store.events(matching: [.festival]).map(\.name), ["节日"])
+        XCTAssertEqual(store.events(matching: [.birthday]).map(\.name), ["生日"])
+    }
+
+    /// 页头胶囊的收件范围。生日没有自己的胶囊，归「纪念日」。
+    func testAnniversaryChipAlsoCollectsBirthdays() {
+        let store = makeStore(directory: makeDirectory())
+        store.add(name: "纪念", kind: .anniversary, rule: .once(fixedNow))
+        store.add(name: "生日", kind: .birthday, rule: .once(fixedNow))
+        store.add(name: "倒数", kind: .countdown, rule: .once(fixedNow))
+        store.add(name: "节日", kind: .festival, rule: .lunarYearly(month: 1, day: 1))
+
+        XCTAssertEqual(store.events(matching: CountdownFilter.anniversary.kinds).map(\.name),
+                       ["纪念", "生日"], "纪念日胶囊要收下生日")
+        XCTAssertEqual(store.events(matching: CountdownFilter.countdown.kinds).map(\.name), ["倒数"])
+        XCTAssertEqual(store.events(matching: CountdownFilter.festival.kinds).map(\.name), ["节日"])
+        XCTAssertEqual(store.events(matching: CountdownFilter.all.kinds).count, 4)
+    }
+
+    /// 每个类型都要能被**恰好一个**胶囊收到。
+    ///
+    /// 这是这一版要修的缺陷的守卫：生日曾经谁的胶囊都进不去，只在「所有」下可见。
+    /// 以后加新类型时，忘了更新 `CountdownFilter.kinds` 会在这里挂掉，
+    /// 而不是等用户点了一圈发现少东西。
+    func testEveryKindIsReachableFromExactlyOneChip() {
+        let chips = CountdownFilter.allCases.filter { $0 != .all }
+        for kind in CountdownKind.allCases {
+            let owners = chips.filter { $0.kinds?.contains(kind) == true }
+            XCTAssertEqual(owners.count, 1,
+                           "\(kind.title) 应恰好被一个胶囊收下，实际是 \(owners.map(\.title))")
+        }
     }
 
     // MARK: 跨天

@@ -12,9 +12,13 @@ private func countdownColor(_ index: Int) -> Color {
 
 /// 页头的类型筛选。参考图的四个胶囊：所有 / 纪念日 / 倒数日 / 节日。
 ///
-/// 注意这里**没有「生日」**：参考图的胶囊行就只有这三个类型加「所有」，
-/// 生日记录只在「所有」下出现。这是照着图复刻的结果，不是漏写——要加的话
-/// 在 `CountdownFilter.allCases` 补一个 case 即可。
+/// 胶囊行**没有「生日」**（参考图就没有），所以生日记录归到「纪念日」下。
+/// 这不是凑合：纪念日和生日本来就是同一类——都是「某一天」的年度纪念，
+/// 差别只在生日多记一个出生年、卡片上多显示一个岁数。
+///
+/// 于是四个胶囊正好把四种 `CountdownKind` 分完（见 `kinds`），
+/// **不会有记录落在任何胶囊之外**。加类型时记得同步这张映射表，
+/// 漏了就会让新类型只在「所有」下可见。
 enum CountdownFilter: String, CaseIterable, Identifiable {
     case all, anniversary, countdown, festival
 
@@ -29,13 +33,15 @@ enum CountdownFilter: String, CaseIterable, Identifiable {
         }
     }
 
-    /// 对应的记录类型；「所有」为 nil。
-    var kind: CountdownKind? {
+    /// 这个胶囊收哪些记录类型；「所有」为 nil，表示不过滤。
+    ///
+    /// 是集合而不是单个类型，就是为了让「纪念日」能同时收下生日。
+    var kinds: Set<CountdownKind>? {
         switch self {
         case .all: return nil
-        case .anniversary: return .anniversary
-        case .countdown: return .countdown
-        case .festival: return .festival
+        case .anniversary: return [.anniversary, .birthday]
+        case .countdown: return [.countdown]
+        case .festival: return [.festival]
         }
     }
 }
@@ -181,7 +187,7 @@ struct CountdownWorkspaceView: View {
     // MARK: 卡片网格
 
     private var visibleEvents: [CountdownEvent] {
-        store.events(matching: filter.kind)
+        store.events(matching: filter.kinds)
     }
 
     @ViewBuilder
