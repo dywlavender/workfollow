@@ -11,10 +11,20 @@ enum TaskRelationSelection {
               handle.textView?.documentIdentity == sourceTaskID,
               let current = TaskRelationProjection.targets(sourceTaskID: sourceTaskID,
                   tasks: workspace.allTasks, notes: notes, query: "").first(where: { $0.id == target.id }) else { return false }
-        if case let .note(note) = current {
-            workspace.setSourceNote(sourceTaskID, note.id)
+        let previousNoteID = source.sourceNoteID
+        if case .task = current {
+            let commit: (NativeDocument) -> Void = { [weak workspace] document in
+                _ = workspace?.setDocument(sourceTaskID, document)
+            }
+            return handle.insertReference(current.reference, commit: commit, undoCommit: commit)
         }
-        handle.insertReference(current.reference)
-        return true
+        guard case let .note(note) = current else { return false }
+        let nextNoteID = note.id
+        return handle.insertReference(current.reference,
+            commit: { [weak workspace] document in
+                _ = workspace?.commitEditorReference(sourceTaskID, document: document, sourceNoteID: nextNoteID)
+            }, undoCommit: { [weak workspace] document in
+                _ = workspace?.commitEditorReference(sourceTaskID, document: document, sourceNoteID: previousNoteID)
+            })
     }
 }

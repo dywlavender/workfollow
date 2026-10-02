@@ -66,6 +66,29 @@ final class WorkspaceStore {
         if let lists { self.lists = lists }
         reconcileListMetas(committed: listMetas, listsCommitted: lists != nil)
     }
+
+    /// Commits an editor-owned document/source pair without recording a business undo.
+    /// Text keeps the usual `.skip` rebase; only this path rebases sourceNoteID too.
+    func commitEditorReference(_ id: UUID, document: NativeDocument, sourceNoteID: UUID?, updatedAt: Date) {
+        guard let index = tasks.firstIndex(where: { $0.id == id }) else { return }
+        var snapshot = tasks
+        snapshot[index].document = document
+        snapshot[index].sourceNoteID = sourceNoteID
+        snapshot[index].updatedAt = updatedAt
+        guard snapshot != tasks else { return }
+
+        commit(snapshot, undoPolicy: .skip)
+        undoSnapshots = undoSnapshots.map { previous in
+            previous.map { task in
+                guard task.id == id else { return task }
+                var rebased = task
+                rebased.sourceNoteID = sourceNoteID
+                rebased.updatedAt = updatedAt
+                return rebased
+            }
+        }
+    }
+
     func undo() {
         guard let previous = undoSnapshots.popLast() else { return }
         tasks = previous

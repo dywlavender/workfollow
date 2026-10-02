@@ -41,6 +41,20 @@ final class NativeTextView: NSTextView {
     var selectionPanel: NSPanel?
     var documentIdentity = UUID()
     var needsHostCaretReveal = false
+    /// A synchronous editor command may publish the document with host-owned
+    /// fields in one commit. Never retained beyond that mutation.
+    var documentCommandCommit: ((NativeDocument) -> Void)?
+    var hasHostDocumentCommands = false
+
+    /// Reopen the typing group only on actual input after an explicit command.
+    /// An empty group must not consume a user's Undo.
+    func prepareInputUndoGroup() {
+        guard hasHostDocumentCommands, allowsUndo, let manager = undoManager,
+              manager.isUndoRegistrationEnabled, manager.groupsByEvent,
+              !manager.isUndoing, !manager.isRedoing, manager.groupingLevel == 0 else { return }
+        manager.beginUndoGrouping()
+        if manager.groupingLevel > 1 { manager.endUndoGrouping() }
+    }
 
     /// Both document rebind and teardown use the same owned-state boundary.
     /// The coordinator must flush composition to the old document first.
@@ -52,8 +66,15 @@ final class NativeTextView: NSTextView {
         pendingTrailingBlock = nil
         displayedTrailingBlock = nil
         needsHostCaretReveal = false
+        documentCommandCommit = nil
+        hasHostDocumentCommands = false
         documentIdentity = documentID
         undoManager?.removeAllActions()
+    }
+
+    override func shouldChangeText(in affectedCharRange: NSRange, replacementString: String?) -> Bool {
+        prepareInputUndoGroup()
+        return super.shouldChangeText(in: affectedCharRange, replacementString: replacementString)
     }
 
     override func insertText(_ insertString: Any, replacementRange: NSRange) {
@@ -503,14 +524,23 @@ final class NativeTextView: NSTextView {
     @objc func undo(_ sender: Any?) {
         dismissSlash()
         breakUndoCoalescing()
+        if hasHostDocumentCommands, documentUndoManager.groupsByEvent,
+           documentUndoManager.groupingLevel == 1 {
+            documentUndoManager.endUndoGrouping()
+        }
         documentUndoManager.undo()
         applySelectionAfterUndoRedo()
+        // Native text undo changes storage without going through insertText.
+        // Publish the replayed document; command callbacks already synchronized
+        // by the coordinator are deduplicated there.
+        didChangeText()
     }
 
     @objc func redo(_ sender: Any?) {
         dismissSlash()
         documentUndoManager.redo()
         applySelectionAfterUndoRedo()
+        didChangeText()
     }
 
     private func applySelectionAfterUndoRedo() {

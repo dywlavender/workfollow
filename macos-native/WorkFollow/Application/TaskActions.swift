@@ -221,6 +221,15 @@ final class TaskActions {
         edit(id, undoPolicy: .skip) { $0.document = document }
     }
 
+    @discardableResult
+    func commitEditorReference(_ id: UUID, document: NativeDocument, sourceNoteID: UUID?) -> TaskActionResult {
+        guard let task = store.task(id) else { return .failure(.missingTask) }
+        guard task.deletedAt == nil else { return .failure(.deletedTask) }
+        guard task.document != document || task.sourceNoteID != sourceNoteID else { return .success(id) }
+        store.commitEditorReference(id, document: document, sourceNoteID: sourceNoteID, updatedAt: clock())
+        return .success(id)
+    }
+
     func setSourceNote(_ id: UUID, _ noteID: UUID) -> TaskActionResult {
         edit(id) { $0.sourceNoteID = noteID }
     }

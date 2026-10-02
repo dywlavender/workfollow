@@ -1,14 +1,14 @@
 # Task Relation 撤销合同与实施计划
 
-日期：2026-10-02。状态：边界审计与复现已建立，生产实现尚未迁移。
+日期：2026-10-02。状态：字段补丁、编辑事务和Relation接线已实现；自动回归通过，日常App实机验收待补。
 
 ## 已确认的问题
 
-`TaskRelationSelection.apply`对Note先调用`setSourceNote`，再调用`insertReference`。前者记录WorkspaceStore快照，后者由NativeTextView独立UndoManager处理，Coordinator通过`setDocument`保存正文。
+审计时的`TaskRelationSelection.apply`对Note先调用`setSourceNote`，再调用`insertReference`。前者记录WorkspaceStore快照，后者由NativeTextView独立UndoManager处理，Coordinator通过`setDocument`保存正文。
 
 `WorkspaceStore.commit(.skip)`会把最新正文更新到已有业务撤销快照。因此业务撤销恢复sourceNoteID，却保留引用。即使先把document/sourceNoteID合成一次快照提交，后续正文输入仍会覆盖该快照中的旧正文。单纯合并保存不等于统一撤销。
 
-证据：TaskRelationSelection.swift、DocumentEditor.swift、NativeTextView.swift、DocumentEditorCoordinator.swift、WorkspaceStore.swift。TaskRelationUndoBoundaryTests是现状刻画测试，明确不代表期望行为；迁移时必须替换其缺陷断言，不能把缺陷冻结成产品合同。
+证据：TaskRelationSelection.swift、DocumentEditor.swift、NativeTextView.swift、DocumentEditorCoordinator.swift、WorkspaceStore.swift。此前TaskRelationUndoBoundaryTests用刻画测试复现缺陷；本次已替换为期望的原子撤销/重做断言，不把缺陷冻结成产品合同。
 
 ## 目标合同
 
@@ -45,8 +45,19 @@
 
 阶段2和阶段3写集可分离，适合并行；阶段4由主代理整合，不让两个负责人同时修改Selection。阶段5主代理验收。未完成阶段3前，不把阶段2独立接入生产Relation路径。
 
-## 本轮边界
+## 阶段1审计记录
 
 本轮只建立审计依据和优化合同，不改生产撤销策略。没有滴答Relation截图，现有320 × 300展示保持。测试窗口不能替代日常App的Cmd-Z及重做实机验收。
 
 28项TaskRelationUndoBoundary / TaskRelationInteraction / TaskWorkspaceModel / DocumentEditorState测试通过，日志`/tmp/workfollow-task-relation-undo-boundary-tests.log`。其中两项UndoBoundary通过代表成功复现现状缺陷，不代表原子撤销已经实现。构建来自当前含其他并行修改的工作区，本轮提交不包含这些修改。
+
+## 阶段2～4实现记录
+
+- `TaskActions.commitEditorReference`与Store专用提交路径一次保存正文/来源，并把来源（包括nil）与updatedAt补到对应任务的业务历史。没有扩大普通`.skip`的字段范围，普通`setSourceNote`仍使用原业务撤销策略。
+- `DocumentContentTransaction`以一次选区替换记录文本及宿主正向/逆向提交回调。Coordinator仅在同步命令期间用该回调替代普通正文保存，保证一次完整提交；Editor不依赖Task/Note类型。
+- 自定义替换期间关闭原生替换的重复撤销登记，并显式管理命令分组。命令完成后保留原有自动分组设置，不预先建立空撤销记录；后续实际编辑在`shouldChangeText`入口准备输入组，撤销出口先结束它。参考[Apple UndoManager分组合同](https://developer.apple.com/documentation/foundation/undomanager/groupsbyevent)。
+- 原生文本历史回放后统一调用`didChangeText`同步模型；Coordinator去重已由宿主命令保存的文档。因此不仅屏幕文字恢复，保存的正文也恢复，不产生第二次关联提交。
+- Relation的Task目标只提交正文；Note目标同时提交来源。拒绝插入不改来源。undo回调绑定原taskID，解绑文档仍按原规则清空文本历史；未扩展跨文档永久历史。
+- UI尺寸、Overlay、Slash及Profile不改。测试宿主的编辑器操作与日常App快捷键端到端验收明确区分；桌面窗口截屏本轮返回黑图，不以其作视觉证据。
+- 124项Relation / 编辑事务 / 普通正文编辑 / Note / Profile / ResourceLink / Workspace / TaskDomain / ActionPanel / TagPicker回归通过，日志`/tmp/workfollow-relation-atomic-undo-regression.log`。包括非空选区恢复、一次提交、nil来源恢复、连续关联A/B、业务动作交错、前后输入独立撤销重做、关联后删除与拒绝插入。
+- `/tmp/render_task_relation_undo_redo.png`是实际测试NSWindow的编辑器宿主缓存渲染，不是桌面App截屏。测试经应用动作分发给窗口内编辑器验证undo/redo；没有把显式目标的sendAction当作日常App Cmd-Z全链路验收。当前工作区其他并行修改不纳入本轮提交。

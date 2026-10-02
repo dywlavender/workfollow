@@ -111,6 +111,11 @@ final class DocumentEditorCoordinator: NSObject, NSTextViewDelegate {
         let pending = (textView as? NativeTextView)?.pendingTrailingBlock
         let updated = DocumentTextCodec.decode(textView.attributedString(), preserving: document,
                                               trailing: pending ?? Self.trailingBlockKind(of: document))
+        if let commit = (textView as? NativeTextView)?.documentCommandCommit {
+            document = updated
+            commit(updated)
+            return
+        }
         guard updated != document else { return }
         document = updated
         onDocumentChange(updated)

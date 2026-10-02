@@ -531,6 +531,15 @@ final class TaskWorkspaceModel: ObservableObject {
 
     func setSourceNote(_ id: UUID, _ noteID: UUID) { didMutate(actions.setSourceNote(id, noteID)) }
 
+    /// The editor owns reference undo; persist its document/source pair without
+    /// adding a competing business undo record.
+    @discardableResult
+    func commitEditorReference(_ id: UUID, document: NativeDocument, sourceNoteID: UUID?) -> TaskActionResult {
+        let result = actions.commitEditorReference(id, document: document, sourceNoteID: sourceNoteID)
+        didMutate(result)
+        return result
+    }
+
     @discardableResult
     func setPriority(_ id: UUID, _ priority: TaskPriority) -> TaskActionResult {
         let result = actions.setPriority(id, priority)

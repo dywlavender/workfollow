@@ -83,6 +83,26 @@ final class DocumentEditorHandle: ObservableObject {
         textView.insertText(DocumentTextCodec.render(content), replacementRange: textView.selectedRange())
         textView.typingAttributes = DocumentTextCodec.attributes(kind: .paragraph, marks: [])
     }
+
+    /// Reference command with host fields sharing the document's undo/redo.
+    @discardableResult
+    func insertReference(_ reference: EditorReference,
+                         commit: @escaping (NativeDocument) -> Void,
+                         undoCommit: @escaping (NativeDocument) -> Void) -> Bool {
+        guard let textView else { return false }
+        textView.window?.makeFirstResponder(textView)
+        let range = textView.selectedRange()
+        let content = NativeDocument(blocks: [DocumentBlock(kind: .paragraph, runs: [
+            DocumentRun(text: reference.title, marks: [.link(reference.target)])
+        ])])
+        let value = DocumentTextCodec.render(content)
+        guard textView.replaceDocumentContent(value, range: range,
+            selection: NSRange(location: range.location + value.length, length: 0),
+            commit: commit, inverseCommit: undoCommit) else { return false }
+        textView.typingAttributes = DocumentTextCodec.attributes(kind: .paragraph, marks: [])
+        refreshStyle()
+        return true
+    }
 }
 
 /// The decoration lane lives before the host's content origin. TextKit needs

@@ -17,7 +17,7 @@
 3. **关联主任务**：先核对现有Parent关系规则和可选对象，再实现TaskParentPicker；不得用现有Note relation冒充父关系。
 4. **副本/链接**：复用已有duplicate，但验收字段/child复制语义；task URL需真实路由闭环后再暴露复制链接入口。
 5. **Tag Picker**：Quick Add/Inspector/Slash共享既有Picker，等待展开态截图锁搜索、创建、多选、确认和Esc，不复制新UI。
-6. **Relation**：TASK-RELATION-GAP-TASK已补齐正文Task引用；混合结果为暂定展示，Tab结构等待参考，不临时造关系图Domain。来源笔记与正文引用统一撤销另登记为TASK-RELATION-GAP-ATOMIC-UNDO。
+6. **Relation**：TASK-RELATION-GAP-TASK已补齐正文Task引用；混合结果为暂定展示，Tab结构等待参考，不临时造关系图Domain。TASK-RELATION-GAP-ATOMIC-UNDO已接入编辑器统一撤销/重做，日常App快捷键实机验收待补。
 
 ## Focus子层合同
 
@@ -92,7 +92,8 @@
 - 搜索标题及清单/文件夹，排除自身、删除/跳过/转换Task和删除Note。允许关闭Task作为历史引用；Child候选需父任务仍可打开，匹配当前URL路由能力。
 - `TaskRelationProjection`统一候选和类型化链接；Picker只负责查询和选择。`TaskRelationSelection`提交前重取目标并校验当前Task与编辑器documentIdentity，编辑器不可用时不先写sourceNoteID，保留Picker提示失败。
 - Selection成功后关闭现有relation panel；取消/Escape/外部关闭不调用Selection。搜索草稿归Picker本地，Shell不再另持relationQuery。Editor Core和Slash菜单结构不变，只改Host的关联选择路径。
-- TASK-RELATION-GAP-ATOMIC-UNDO：Note的sourceNoteID与正文插入仍沿用既有分别修改路径；Application undo与文本undo未统一。本轮不声称统一一次撤销或完整双向关系能力，后续须单独设计，不能用截图验收替代。
-- 撤销合同已单独建立：[Task Relation 撤销合同与实施计划](task-relation-undo-contract.md)。现状刻画测试证明业务撤销保留正文引用，以及仅合并快照提交仍被后续文本rebase打破；缺陷未修复，不将刻画断言作为最终产品合同。
+- TASK-RELATION-GAP-ATOMIC-UNDO：已接入编辑器拥有的正文/来源原子撤销和重做，业务历史通过专用字段补丁保持一致；不再分别登记来源和引用。未扩展完整关系图或跨文档永久撤销。
+- [Task Relation 撤销合同与实施计划](task-relation-undo-contract.md)的阶段2～4已实现，旧缺陷刻画断言已换成正确撤销/重做断言。日常运行App快捷键验收仍待补，不能以自动测试替代。
 - 31项RelationProjection / RelationInteraction / NativeResourceLink / DocumentProfile / ActionPanel / TagPickerInteraction / ParentPicker回归通过，日志：`/tmp/workfollow-task-relation-tests.log`。实际测试窗口点击候选插入Task链接，正文模型包含该链接；再经现有Router打开目标，父子关系及来源笔记不变。Note插入保留来源字段；无正文编辑器时不写Task。
 - 截图：`/tmp/render_task_relation_picker.png`，检查混合结果、类型说明及搜索可读，选择器仍为320 × 300pt；截图上方为空白正文测试宿主，并非Picker增加了留白。本轮不是日常运行App或TickTick Relation展开态的像素验收。构建来自当前工作区，其他并行改动不纳入提交。
+- 原子撤销后续实现的124项回归通过，日志`/tmp/workfollow-relation-atomic-undo-regression.log`。关联命令、前后输入、删除、选区及来源恢复已验；窗口内编辑器动作分发与缓存渲染已覆盖，日常App快捷键实机验收仍待补。

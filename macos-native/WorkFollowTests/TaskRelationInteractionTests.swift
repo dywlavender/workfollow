@@ -5,6 +5,46 @@ import XCTest
 
 @MainActor
 final class TaskRelationInteractionTests: XCTestCase {
+    func testWindowEditorUndoRedoRestoresDocumentAndSourceTogether() throws {
+        let workspace = TaskWorkspaceModel(seedDemoData: false)
+        let source = try XCTUnwrap(workspace.createTask(title: "来源", in: .inbox).taskID)
+        let original = NativeDocument(plainText: "原有正文 ")
+        _ = workspace.setDocument(source, original)
+        workspace.select(source)
+        let note = Note(id: UUID(), title: "关联笔记", document: .empty, folder: "资料", updatedAt: Date())
+        let handle = DocumentEditorHandle()
+        let host = NSHostingView(rootView: DocumentEditor(documentID: source, document: original,
+            onDocumentChange: { _ = workspace.setDocument(source, $0) },
+            onEscape: { .keepInspector }, onEditingChanged: { _ in }, handle: handle)
+            .frame(width: 360, height: 180).background(Color.white))
+        let window = NSWindow(contentRect: NSRect(x: 100, y: 100, width: 360, height: 180),
+                              styleMask: [.titled], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.appearance = NSAppearance(named: .aqua)
+        window.contentView = host
+        window.makeKeyAndOrderFront(nil)
+        defer { window.close() }
+        RunLoop.current.run(until: Date().addingTimeInterval(0.1))
+        let editor = try XCTUnwrap(handle.textView)
+        editor.setSelectedRange(NSRange(location: editor.attributedString().length, length: 0))
+        XCTAssertTrue(TaskRelationSelection.apply(.note(note), sourceTaskID: source,
+            workspace: workspace, notes: [note], handle: handle))
+        XCTAssertTrue(window.firstResponder === editor)
+        let linked = try XCTUnwrap(workspace.task(for: source)?.document)
+        XCTAssertEqual(workspace.task(for: source)?.sourceNoteID, note.id)
+        XCTAssertTrue(NSApp.sendAction(#selector(NativeTextView.undo(_:)), to: window.firstResponder, from: nil))
+        XCTAssertEqual(workspace.task(for: source)?.document, original)
+        XCTAssertNil(workspace.task(for: source)?.sourceNoteID)
+        XCTAssertTrue(NSApp.sendAction(#selector(NativeTextView.redo(_:)), to: window.firstResponder, from: nil))
+        XCTAssertEqual(workspace.task(for: source)?.document, linked)
+        XCTAssertEqual(workspace.task(for: source)?.sourceNoteID, note.id)
+        RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+        let bitmap = try XCTUnwrap(host.bitmapImageRepForCachingDisplay(in: host.bounds))
+        host.cacheDisplay(in: host.bounds, to: bitmap)
+        try XCTUnwrap(bitmap.representation(using: .png, properties: [:]))
+            .write(to: URL(fileURLWithPath: "/tmp/render_task_relation_undo_redo.png"))
+    }
+
     func testMixedPickerClickInsertsTaskReferenceWithoutChangingParentOrSourceNote() throws {
         let workspace = TaskWorkspaceModel(seedDemoData: false)
         let source = try XCTUnwrap(workspace.createTask(title: "来源任务", in: .inbox).taskID)
