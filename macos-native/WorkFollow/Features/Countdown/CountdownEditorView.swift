@@ -341,22 +341,41 @@ struct CountdownEditorView: View {
 
     private var nameRow: some View {
         HStack(spacing: WFSpace.lg) {
-            ZStack {
-                Circle().fill(countdownColor(colorIndex))
-                Image(systemName: symbol)
-                    .font(.system(size: 17, weight: .semibold))
-                    .foregroundStyle(.white)
+            // 图标本体就是**换图标的入口**：点它弹图标选择器。
+            //
+            // 参照图里图标右下角挂的那支小铅笔就是这个意思（「点它换图标」）。
+            // 早先这里只是张静态图，另在名称框右端放了个 `bookmark` 按钮当入口——
+            // 那是我方凭空多出来的**第二个**入口（用户指出滴答没有它），
+            // 副作用是名称框被挤窄 42pt（名称框 284.5 vs 属性字段 320）。
+            Button {
+                symbolPickerOpen.toggle()
+            } label: {
+                ZStack {
+                    Circle().fill(countdownColor(colorIndex))
+                    Image(systemName: symbol)
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(.white)
+                }
+                .frame(width: 38, height: 38)
+                .overlay(alignment: .bottomTrailing) {
+                    // 铅笔角标：参照图里就挂在图标右下角，表示「点它换图标」。
+                    Image(systemName: "pencil")
+                        .font(.system(size: 7, weight: .bold))
+                        .foregroundStyle(WFColors.secondaryText)
+                        .frame(width: 13, height: 13)
+                        .background(WFColors.canvas, in: Circle())
+                        .overlay { Circle().stroke(WFColors.border) }
+                }
+                // 命中区取整个 38×38 方块而不是圆：铅笔角标落在圆的边上，
+                // 用 `Circle()` 会把它切掉一半，点不中。
+                .contentShape(Rectangle())
             }
-            .frame(width: 38, height: 38)
-            .overlay(alignment: .bottomTrailing) {
-                // 参考图里图标右下角挂着一支小铅笔（表示「点它换图标/颜色」）。
-                Image(systemName: "pencil")
-                    .font(.system(size: 7, weight: .bold))
-                    .foregroundStyle(WFColors.secondaryText)
-                    .frame(width: 13, height: 13)
-                    .background(WFColors.canvas, in: Circle())
-                    .overlay { Circle().stroke(WFColors.border) }
-            }
+            .buttonStyle(.plain)
+            .help("图标")
+            .accessibilityLabel("图标")
+            .background(AnchoredPropertyPanel(isPresented: $symbolPickerOpen, width: 240) {
+                symbolPicker
+            })
             // 槽比图标宽，多出的 6pt 用来把名称框推到与属性字段同一条左边界上。
             // 图标本身仍靠左贴 `inset`，位置不变。见 `nameBadgeSlot` 的注释。
             .frame(width: Self.nameBadgeSlot, alignment: .leading)
@@ -382,33 +401,10 @@ struct CountdownEditorView: View {
             if kind == .festival {
                 festivalPicker
             }
-
-            // 参考图里名称框右端有一个「书签里嵌一颗星」的按钮，点开是**图标选择器**。
-            // 之前这里被猜成了备注的展开开关（图上确实看不出行为），代价是面板上凭空
-            // 多出一个参考图里没有的备注行。真机点开确认行为之后改成图标选择器。
-            //
-            // 字形取舍：参考图是「书签 + 星」，SF Symbols 没有这个组合
-            // （`bookmark.star` / `bookmark.star.fill` 都查过，不存在），
-            // 取形状最接近的 `bookmark`——丝带的形状一样，只是里面没有那颗星。
-            Button {
-                symbolPickerOpen.toggle()
-            } label: {
-                Image(systemName: "bookmark")
-                    .font(.system(size: 13))
-                    .foregroundStyle(symbolPickerOpen ? WFColors.accent : WFColors.secondaryText)
-                    .frame(width: 26, height: 26)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .help("图标")
-            .accessibilityLabel("图标")
-            .background(AnchoredPropertyPanel(isPresented: $symbolPickerOpen, width: 240) {
-                symbolPicker
-            })
         }
     }
 
-    /// 图标选择器（名称框右端按钮的浮层）。
+    /// 图标选择器（**点名称行左边的图标**弹出）。
     ///
     /// 参考图里它是一列**带名字的预设图标**（旅行 / 演唱会 / 发工资 / 交房租 /
     /// 信用卡还款 / 房贷还款 / 保险缴费 / 定期体检 / 宠物体检 / 驾驶证到期 /
