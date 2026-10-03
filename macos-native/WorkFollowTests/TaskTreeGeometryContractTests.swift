@@ -59,7 +59,7 @@ final class TaskTreeGeometryContractTests: XCTestCase {
                 let row = rows[index]
                 TaskRowView(task: workspace.task(for: row.0)!, workspace: workspace,
                             depth: row.1, hasChildren: row.2, expanded: row.3,
-                            selected: false, focused: false,
+                            selected: false,
                             onSelect: {}, onComplete: {}, onRestore: {}, onToggleExpanded: {})
             }
         }

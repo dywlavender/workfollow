@@ -17,7 +17,16 @@ enum WFColors {
     /// Hover emphasis used for time fragments in Flutter's smart Quick Add.
     static let accentHover = themed(rgb(0x4B4CD9), rgb(0x98A1FF))
     static let selection = accent.opacity(0.10)
-    static let focusRing = accent.opacity(0.35)
+    /// 第二栏（导航）与第三栏（任务/笔记列表）的**选中行底色**。滴答实测：导航栏
+    /// 选中 `(241,241,241)`、任务行选中 `(242,242,242)`——同一档中性灰，取 `#F2F2F2`。
+    ///
+    /// 这两栏原来用 `selection`（accent 10% ≈ `(239,239,252)`），用户反馈"太显眼"，
+    /// 要求照滴答改成灰。注意它比行分割线 `listRowSeparator`（`#F4F4F4`）只深 2 级
+    /// ——滴答也是这样，靠"选中行不画分割线"才分得开（见 `ListRowDivider` 的调用点）。
+    ///
+    /// 其余地方（菜单、浮层候选、日历格、习惯打卡）继续用 `selection`：那里是
+    /// 中性表面上的强调色，不是列表选中。深色未实测，取 `menuSelected` 同族的灰。
+    static let listSelection = themed(rgb(0xF2F2F2), rgb(0x363A42))
     static let hover = Color.primary.opacity(0.04)
 
     /// Flutter `WorkFollowTheme` 的浅/深两套值，按当前外观取其一。日历与四象限

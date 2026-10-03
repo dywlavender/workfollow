@@ -145,7 +145,7 @@ struct NotesWorkspaceView: View {
                             // 上下内边距 11、最小行高 50，内容超出时按内容长高。
                             }.padding(.horizontal, 12).padding(.vertical, WFMetrics.rowVerticalPadding)
                                 .frame(minHeight: WFMetrics.rowHeight)
-                                .background(visibleNote?.id == note.id ? WFColors.selection : .clear,
+                                .background(visibleNote?.id == note.id ? WFColors.listSelection : .clear,
                                             in: RoundedRectangle(cornerRadius: 8))
                                 .contentShape(Rectangle())
                         }.buttonStyle(.plain)

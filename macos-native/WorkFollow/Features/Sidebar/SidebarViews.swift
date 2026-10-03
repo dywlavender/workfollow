@@ -153,12 +153,13 @@ struct NavigationColumnView: View {
                 }
             }
             .font(WFType.navigation)
-            .foregroundStyle(navigation.destination == destination
-                             ? WFColors.accent : WFColors.text)
+            // 选中项的文字保持普通墨色（滴答实测：导航选中行只有灰底，字仍深色）。
+            // 原来这里切 `accent`，是"当前所在页"的强调，用户要求跟滴答一样去掉蓝。
+            .foregroundStyle(WFColors.text)
             .padding(.horizontal, WFSpace.sm)
             .frame(height: NavigationMetrics.rowHeight)
             .background(navigation.destination == destination
-                        ? WFColors.selection : .clear,
+                        ? WFColors.listSelection : .clear,
                         in: RoundedRectangle(cornerRadius: WFMetrics.corner))
             .contentShape(Rectangle())
         }
@@ -229,8 +230,8 @@ private struct NotesNavigationSection: View {
                 if count > 0 { Text("\(count)").font(WFType.supporting).foregroundStyle(WFColors.secondaryText) }
             }
             .font(WFType.navigation).padding(.horizontal, WFSpace.sm).frame(height: NavigationMetrics.rowHeight)
-            .foregroundStyle(selected ? WFColors.accent : WFColors.text)
-            .background(selected ? WFColors.selection : .clear, in: RoundedRectangle(cornerRadius: WFMetrics.corner))
+            .foregroundStyle(WFColors.text)
+            .background(selected ? WFColors.listSelection : .clear, in: RoundedRectangle(cornerRadius: WFMetrics.corner))
             .contentShape(Rectangle())
         }.buttonStyle(.plain)
     }
@@ -307,10 +308,10 @@ private struct TaskFiltersSectionView: View {
                 Text(filter.name).lineLimit(1)
                 Spacer(minLength: WFSpace.xs)
             }
-            .foregroundStyle(selected ? WFColors.accent : WFColors.text)
+            .foregroundStyle(WFColors.text)
             .padding(.horizontal, WFSpace.sm)
             .frame(height: NavigationMetrics.rowHeight)
-            .background(selected ? WFColors.selection : .clear,
+            .background(selected ? WFColors.listSelection : .clear,
                         in: RoundedRectangle(cornerRadius: WFMetrics.corner))
             .contentShape(Rectangle())
         }

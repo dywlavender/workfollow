@@ -170,7 +170,7 @@ private struct TrashTaskRow: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .background(workspace.selectedTaskID == task.id ? WFColors.selection : .clear,
+            .background(workspace.selectedTaskID == task.id ? WFColors.listSelection : .clear,
                         in: RoundedRectangle(cornerRadius: WFMetrics.corner))
             Button { workspace.restoreDeleted(task.id) } label: {
                 Image(systemName: "arrow.uturn.backward")

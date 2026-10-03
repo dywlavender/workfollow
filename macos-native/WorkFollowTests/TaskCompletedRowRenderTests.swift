@@ -44,7 +44,7 @@ final class TaskCompletedRowRenderTests: XCTestCase {
             var restored = false
             let root = VStack(spacing: 0) {
                 TaskRowView(task: task, workspace: workspace, depth: 0, hasChildren: false,
-                            expanded: false, selected: false, focused: false,
+                            expanded: false, selected: false,
                             onSelect: {}, onComplete: { XCTFail("Completed checkbox must restore") },
                             onRestore: { restored = true }, onToggleExpanded: {})
                 Rectangle().fill(WFColors.hover).frame(height: 1)

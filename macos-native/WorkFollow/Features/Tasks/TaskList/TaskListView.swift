@@ -794,8 +794,6 @@ struct TaskListView: View {
                 hasChildren: node.hasChildren,
                 expanded: node.expanded,
                 selected: isSelected,
-                focused: listFocused && !quickAddFocused && !descriptionFocused
-                    && workspace.selectedTaskID == node.task.id,
                 showsListBadge: showsListBadge,
                 onSelect: {
                     listFocused = true
@@ -921,7 +919,6 @@ struct TaskRowView: View {
     let hasChildren: Bool
     let expanded: Bool
     let selected: Bool
-    let focused: Bool
     var showsListBadge: Bool = true
     let onSelect: () -> Void
     let onComplete: () -> Void
@@ -988,15 +985,11 @@ struct TaskRowView: View {
         .padding(.vertical, WFMetrics.rowVerticalPadding)
         .padding(.leading, CGFloat(depth) * TaskListMetrics.hierarchyIndent)
         .frame(minHeight: WFMetrics.rowHeight)
-        .background(selected ? WFColors.selection : hovering ? WFColors.hover : .clear,
+        // 选中底色用中性灰（`listSelection`，滴答实测 #F2F2F2），不用强调色。
+        // 原来这里还叠一圈蓝色焦点环（`accent` 35%）：底色变灰之后它是最显眼的
+        // 一块蓝，用户选择直接去掉——滴答的选中行也没有任何描边。
+        .background(selected ? WFColors.listSelection : hovering ? WFColors.hover : .clear,
                     in: RoundedRectangle(cornerRadius: WFMetrics.corner))
-        .overlay {
-            if focused {
-                RoundedRectangle(cornerRadius: WFMetrics.corner)
-                    .strokeBorder(WFColors.focusRing, lineWidth: 1)
-                    .allowsHitTesting(false)
-            }
-        }
         // 整行可点（对齐 Flutter GestureDetector opaque）：标题旁的留白、行内
         // 空隙、元数据区点下去也能选中打开编辑栏；行内按钮（勾选框/日期）优先级更高。
         .contentShape(Rectangle())
