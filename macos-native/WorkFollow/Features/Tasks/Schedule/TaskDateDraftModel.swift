@@ -35,12 +35,9 @@ final class TaskDateDraftModel: ObservableObject {
     /// (minutes relative to the anchor; 0 = on time, negative = early).
     static let offsetChoices = [0, -5, -30, -60, -1440]
 
+    /// 文案实现只有一处：`ScheduleDisplay.reminderOffsetText(minutes:style: .preset)`。
     static func offsetTitle(_ minutes: Int) -> String {
-        guard minutes != 0 else { return "准时" }
-        let value = abs(minutes)
-        if value % 1440 == 0 { return "提前\(value / 1440)天" }
-        if value % 60 == 0 { return "提前\(value / 60)小时" }
-        return "提前\(value)分钟"
+        ScheduleDisplay.reminderOffsetText(minutes: minutes, style: .preset)
     }
 
     @Published var tab: Tab
@@ -59,6 +56,10 @@ final class TaskDateDraftModel: ObservableObject {
     @Published private(set) var weekday: Int
     @Published private(set) var monthDay: Int
     @Published private(set) var month: Int
+    /// 农历重复目标（农历每年/每月按它推进）。规则缺失时按锚定日换算。
+    @Published private(set) var lunarMonth: Int
+    @Published private(set) var lunarDay: Int
+    @Published private(set) var lunarIsLeapMonth: Bool
     @Published private(set) var ending: Ending
     @Published private(set) var repeatCount: Int
     @Published private(set) var repeatEndDate: Date
@@ -107,6 +108,12 @@ final class TaskDateDraftModel: ObservableObject {
         _weekday = Published(initialValue: rule?.weekday ?? calendar.component(.weekday, from: due ?? now()))
         _monthDay = Published(initialValue: rule?.monthDay ?? calendar.component(.day, from: due ?? now()))
         _month = Published(initialValue: rule?.month ?? calendar.component(.month, from: due ?? now()))
+        let lunarCalendar = ChineseWorkCalendar.lunarCalendar(matching: calendar)
+        let lunarAnchor = due ?? now()
+        let lunarComps = lunarCalendar.dateComponents([.month, .day], from: lunarAnchor)
+        _lunarMonth = Published(initialValue: rule?.lunarMonth ?? (lunarComps.month ?? 1))
+        _lunarDay = Published(initialValue: rule?.lunarDay ?? (lunarComps.day ?? 1))
+        _lunarIsLeapMonth = Published(initialValue: rule?.lunarIsLeapMonth ?? (lunarComps.isLeapMonth == true))
         _ending = Published(initialValue: rule?.endDate != nil ? .untilDate : rule?.remainingCount != nil ? .count : .never)
         _repeatCount = Published(initialValue: rule?.remainingCount ?? 10)
         _repeatEndDate = Published(initialValue: rule?.endDate ?? calendar.date(byAdding: .day, value: 30, to: today) ?? today)
@@ -317,11 +324,17 @@ final class TaskDateDraftModel: ObservableObject {
     }
 
     /// 把周/月/年规则里的星期、日、月同步到锚定日（Flutter 选择日期时同步）。
+    /// 农历目标同样取自锚定日：改期后农历重复跟随新的农历月/日。
     func syncRecurrenceAnchor() {
         let day = recurrenceAnchorDate
         weekday = calendar.component(.weekday, from: day)
         monthDay = calendar.component(.day, from: day)
         month = calendar.component(.month, from: day)
+        let lunar = ChineseWorkCalendar.lunarCalendar(matching: calendar)
+        let comps = lunar.dateComponents([.month, .day], from: day)
+        lunarMonth = comps.month ?? lunarMonth
+        lunarDay = comps.day ?? lunarDay
+        lunarIsLeapMonth = comps.isLeapMonth == true
         recurrenceTouched = true
     }
 
@@ -433,7 +446,8 @@ final class TaskDateDraftModel: ObservableObject {
             interval: max(1, interval),
             endDate: ending == .untilDate ? calendar.startOfDay(for: repeatEndDate) : nil,
             remainingCount: ending == .count ? max(1, repeatCount) : nil,
-            monthDay: monthDay, weekday: weekday, month: month)
+            monthDay: monthDay, weekday: weekday, month: month,
+            lunarMonth: lunarMonth, lunarDay: lunarDay, lunarIsLeapMonth: lunarIsLeapMonth)
     }
 
     private var builtRule: RecurrenceRule? {

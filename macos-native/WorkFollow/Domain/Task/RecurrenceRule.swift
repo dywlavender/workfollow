@@ -10,6 +10,11 @@ struct RecurrenceRule: Equatable, Codable {
     /// Gregorian weekday 1=Sunday … 7=Saturday.
     var weekday: Int?
     var month: Int?
+    /// 农历重复目标：月 1–12、日 1–30（每月最后一天按钳制取齐），
+    /// 闰月显式标记。additive Codable：旧快照缺失时为 nil，按锚定日换算。
+    var lunarMonth: Int?
+    var lunarDay: Int?
+    var lunarIsLeapMonth: Bool?
 }
 
 extension RecurrenceRule {
@@ -30,6 +35,8 @@ extension RecurrenceRule {
         if let weekday, !(1...7).contains(weekday) { return nil }
         if let monthDay, !(1...31).contains(monthDay) { return nil }
         if let month, !(1...12).contains(month) { return nil }
+        if let lunarMonth, !(1...12).contains(lunarMonth) { return nil }
+        if let lunarDay, !(1...30).contains(lunarDay) { return nil }
         var value = self
         value.interval = max(1, interval)
         if let remainingCount, remainingCount < 1 { value.remainingCount = nil }
@@ -78,6 +85,52 @@ extension RecurrenceRule {
                 if matches(candidate, frequency: frequency, calendar: calendar) { remaining -= 1 }
             }
             next = candidate
+        case .lunarYearly:
+            // 逐日扫描，用农历历匹配目标月/日。农历重复的钳制语义与公历
+            // monthly/yearly 一致：目标日超过月长时取当月最后一天（三十在
+            // 小月取廿九）。闰月策略：目标标了闰月只落在闰月 occurrence
+            // （无闰月的年份跳过，不落到平月）；目标为平月则永不落闰月。
+            var lunarCal = Calendar(identifier: .chinese)
+            lunarCal.timeZone = calendar.timeZone
+            let targetMonth = lunarMonth ?? lunarCal.component(.month, from: base)
+            let targetDay = lunarDay ?? lunarCal.component(.day, from: base)
+            let wantLeap = lunarIsLeapMonth ?? false
+            var candidate = base
+            var stepsLeft = interval
+            // 农历十九年七闰，闰月最大间隔约三年；1500 天覆盖任意目标。
+            for _ in 0..<1500 {
+                guard let day = calendar.date(byAdding: .day, value: 1, to: candidate) else { return nil }
+                candidate = day
+                let comps = lunarCal.dateComponents([.month, .day], from: candidate)
+                guard comps.month == targetMonth,
+                      (comps.isLeapMonth == true) == wantLeap else { continue }
+                let monthLength = lunarCal.range(of: .day, in: .month, for: candidate)?.count ?? 30
+                guard comps.day == min(targetDay, monthLength) else { continue }
+                stepsLeft -= 1
+                if stepsLeft == 0 {
+                    next = candidate
+                    break
+                }
+            }
+        case .lunarMonthly:
+            // 农历每月：只按农历日推进，每个月（含闰月）的该日都算一次。
+            var lunarCal = Calendar(identifier: .chinese)
+            lunarCal.timeZone = calendar.timeZone
+            let targetDay = lunarDay ?? lunarCal.component(.day, from: base)
+            var candidate = base
+            var stepsLeft = interval
+            for _ in 0..<200 {
+                guard let day = calendar.date(byAdding: .day, value: 1, to: candidate) else { return nil }
+                candidate = day
+                let comps = lunarCal.dateComponents([.month, .day], from: candidate)
+                let monthLength = lunarCal.range(of: .day, in: .month, for: candidate)?.count ?? 30
+                guard comps.day == min(targetDay, monthLength) else { continue }
+                stepsLeft -= 1
+                if stepsLeft == 0 {
+                    next = candidate
+                    break
+                }
+            }
         }
         guard let next else { return nil }
         // Rules above only move the day; rebuild so the clock survives exactly.

@@ -30,22 +30,13 @@ enum TaskPriority: Int, Equatable, Codable {
 enum TaskStatus: Equatable, Codable { case active, completed }
 enum TaskRepeat: String, CaseIterable, Equatable, Codable {
     case never, daily, weekly, monthly, yearly, weekdays, weekends, workdays, holidays
-    var title: String {
-        switch self {
-        case .never: "不重复"
-        case .daily: "每天"
-        case .weekly: "每周"
-        case .monthly: "每月"
-        case .yearly: "每年"
-        case .weekdays: "每周一至周五"
-        case .weekends: "每周六、周日"
-        case .workdays: "法定工作日"
-        case .holidays: "法定休息日"
-        }
-    }
+    /// 农历重复：按锚定日换算的农历月/日推进（滴答"农历重复"对齐）。
+    case lunarYearly, lunarMonthly
+    /// 文案定义在 `ScheduleDisplay.repeatTitle`（单一来源，菜单与摘要共用）。
+    var title: String { ScheduleDisplay.repeatTitle(self) }
     var component: Calendar.Component {
         switch self {
-        case .never, .daily, .weekdays, .weekends, .workdays, .holidays: .day
+        case .never, .daily, .weekdays, .weekends, .workdays, .holidays, .lunarYearly, .lunarMonthly: .day
         case .weekly: .weekOfYear
         case .monthly: .month
         case .yearly: .year

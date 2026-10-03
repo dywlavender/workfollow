@@ -464,11 +464,9 @@ struct TaskDatePopoverV2: View {
     }
 
     /// 提前量标题（滴答口径）：当天 / 提前1周 / 提前N天 / 分钟级自定义量。
+    /// 实现只有一处：`ScheduleDisplay.reminderOffsetText(minutes:style: .panel)`。
     private func reminderOffsetTitle(_ minutes: Int) -> String {
-        if minutes == 0 { return "当天" }
-        if minutes % 10080 == 0 { return "提前\(-minutes / 10080)周" }
-        if minutes % 1440 == 0 { return "提前\(-minutes / 1440)天" }
-        return TaskDateDraftModel.offsetTitle(minutes)
+        ScheduleDisplay.reminderOffsetText(minutes: minutes, style: .panel)
     }
 
     private var reminderClockText: String {
@@ -757,32 +755,34 @@ struct TaskDatePopoverV2: View {
 
     /// 重复行：按存储的周/日/月规则渲染（Flutter `scheduleRepeatLabel`）。
     private var repeatRowLabel: String {
-        repeatLabel(model.frequency, weekday: model.weekday, monthDay: model.monthDay, month: model.month)
+        repeatLabel(model.frequency,
+                    weekday: model.weekday, monthDay: model.monthDay, month: model.month,
+                    lunarName: ChineseWorkCalendar.lunarMonthName(model.lunarMonth, isLeapMonth: model.lunarIsLeapMonth)
+                        + ChineseWorkCalendar.lunarDayName(model.lunarDay),
+                    lunarDayText: ChineseWorkCalendar.lunarDayName(model.lunarDay))
     }
 
     /// 重复选项行：用锚定日渲染即将生效的规则。
     private func repeatOptionLabel(_ value: TaskRepeat) -> String {
         let day = model.recurrenceAnchorDate
+        let lunar = ChineseWorkCalendar.lunarCalendar(matching: calendar)
+        let lunarComps = lunar.dateComponents([.month, .day], from: day)
         return repeatLabel(value,
                            weekday: calendar.component(.weekday, from: day),
                            monthDay: calendar.component(.day, from: day),
-                           month: calendar.component(.month, from: day))
+                           month: calendar.component(.month, from: day),
+                           lunarName: ChineseWorkCalendar.lunarMonthName(lunarComps.month ?? 1,
+                                                                         isLeapMonth: lunarComps.isLeapMonth == true)
+                               + ChineseWorkCalendar.lunarDayName(lunarComps.day ?? 1),
+                           lunarDayText: ChineseWorkCalendar.lunarDayName(lunarComps.day ?? 1))
     }
 
-    private func repeatLabel(_ value: TaskRepeat, weekday: Int, monthDay: Int, month: Int) -> String {
-        let symbols = ["日", "一", "二", "三", "四", "五", "六"]
-        let index = max(1, min(7, weekday)) - 1
-        switch value {
-        case .never: return "重复"
-        case .daily: return "每天"
-        case .weekly: return "每周 (周\(symbols[index]))"
-        case .monthly: return "每月 (\(monthDay)日)"
-        case .yearly: return "每年 (\(month)月\(monthDay)日)"
-        case .weekdays: return "每周一至周五"
-        case .weekends: return "每周六、周日"
-        case .workdays: return "法定工作日"
-        case .holidays: return "法定休息日"
-        }
+    /// 实现只有一处：`ScheduleDisplay.repeatText(_:context:)`。
+    private func repeatLabel(_ value: TaskRepeat, weekday: Int, monthDay: Int, month: Int,
+                             lunarName: String? = nil, lunarDayText: String? = nil) -> String {
+        ScheduleDisplay.repeatText(value, context: .init(weekday: weekday, monthDay: monthDay,
+                                                         month: month, lunarName: lunarName,
+                                                         lunarDayText: lunarDayText))
     }
 
     private var endRowLabel: String {
@@ -903,9 +903,9 @@ struct TaskDatePopoverV2: View {
         return "\(dayText(range.lowerBound)) – \(dayText(range.upperBound))"
     }
 
+    /// 实现只有一处：`ScheduleDisplay.dayText(_:calendar:)`。
     private func dayText(_ date: Date) -> String {
-        let components = workspace.calendar.dateComponents([.month, .day], from: date)
-        return "\(components.month ?? 0)月\(components.day ?? 0)日"
+        ScheduleDisplay.dayText(date, calendar: workspace.calendar)
     }
 
     private var footer: some View {
