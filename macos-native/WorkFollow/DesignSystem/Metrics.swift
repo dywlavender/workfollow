@@ -55,6 +55,27 @@ enum NavigationMetrics {
     static let rowHeight: CGFloat = 35
 }
 
+/// 列表行（任务列表 / 笔记列表共用）的行分割线几何。
+///
+/// 两栏原来各画各的：任务列表是 `Rectangle().fill(WFColors.hover)`（4% 墨色，
+/// 左内缩 30、完成行 58 + depth×24，右内缩 16），笔记列表是系统 `Divider()`
+/// （深一档，左右各缩 12，且选中行不画）。同一个人在两栏之间来回切，看到的是
+/// 两种线。
+///
+/// 参照滴答清单实测（2026-10-03，AX 行框 + 分割线像素位置 + 勾选框中心距
+/// 三条路径互证）：分割线是 1pt、`#F4F4F4`，**落在行的最后一像素里**——它的
+/// 行距是 0，相邻两行的分割线正好压在上一行的底边上，不额外占高度。左端从
+/// 标题文字的左边缘起（跳过勾选框列），右端让开它那条常驻滚动条。
+///
+/// 我们沿用它的**规则**，不照抄绝对值：我们的滚动条是 overlay 式、不占宽度，
+/// 所以右内缩只留行自身的横向内边距；左内缩按各栏文字的实际左边缘给
+/// （任务行有勾选框列、笔记行没有，两者差 46pt）。
+enum ListRowMetrics {
+    static let dividerHeight: CGFloat = 1
+    /// 笔记行的文字左边缘：行内 `.padding(.horizontal, 12)`，没有勾选框列。
+    static let notesDividerLeading: CGFloat = 12
+}
+
 enum WFMetrics {
     static let minimumWindow = CGSize(width: 360, height: 480)
     static let defaultWindow = CGSize(width: 1280, height: 820)

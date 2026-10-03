@@ -119,7 +119,10 @@ struct NotesWorkspaceView: View {
                 }
             }.frame(height: 34) }
             ScrollView {
-                LazyVStack(spacing: 4) {
+                // 行距 0：与任务列表同口径，也与滴答一致（它的相邻行顶边 = 上一行底边）。
+                // 原来是 `spacing: 4`，再叠一条独立的 `Divider()`，于是带分割线的行
+                // pitch 变成 61+4+1+4 = 70、选中行（不画线）变成 65——同一栏两种行距。
+                LazyVStack(spacing: 0) {
                     if rows.isEmpty { Text(query.isEmpty ? (trash ? "笔记垃圾桶是空的" : "从一条新笔记开始") : "没有找到相关笔记").foregroundStyle(.secondary).padding() }
                     ForEach(rows) { note in
                         HStack(spacing: 4) {
@@ -138,7 +141,10 @@ struct NotesWorkspaceView: View {
                                 Text(note.folder)
                                 Text((note.deletedAt ?? note.updatedAt).formatted(.dateTime.month().day().locale(.appDate)) + (trash ? "删除" : ""))
                             }.font(.caption2).foregroundStyle(.secondary).lineLimit(1).frame(maxWidth: 96, alignment: .trailing)
-                            }.padding(.horizontal, 12).padding(.vertical, 10).frame(minHeight: 61)
+                            // 行几何与任务列表共用同一套常量（原来这里写死 10 / 61）：
+                            // 上下内边距 11、最小行高 50，内容超出时按内容长高。
+                            }.padding(.horizontal, 12).padding(.vertical, WFMetrics.rowVerticalPadding)
+                                .frame(minHeight: WFMetrics.rowHeight)
                                 .background(visibleNote?.id == note.id ? WFColors.selection : .clear,
                                             in: RoundedRectangle(cornerRadius: 8))
                                 .contentShape(Rectangle())
@@ -150,7 +156,13 @@ struct NotesWorkspaceView: View {
                                 .buttonStyle(.plain).help("永久删除笔记：\(note.title)")
                         }
                         }
-                        if visibleNote?.id != note.id { Divider().padding(.horizontal, 12) }
+                        // 行分割线：与任务列表同一条（`ListRowDivider`），画在行内底边
+                        // 所以不占行距。原来这里用系统 `Divider()`，比任务列表那条重一档，
+                        // 而且选中行不画——两栏切来切去看到的是两种线。
+                        .overlay(alignment: .bottom) {
+                            ListRowDivider(leading: ListRowMetrics.notesDividerLeading,
+                                           trailing: ListRowMetrics.notesDividerLeading)
+                        }
                     }
                 }
             }

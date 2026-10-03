@@ -41,6 +41,12 @@ enum WFColors {
     static let danger = themed(rgb(0xFF4D4F), rgb(0xFF6868))
     /// 中优先级。
     static let warning = themed(rgb(0xA15C08), rgb(0xF2B84B))
+    /// 列表行之间的细分割线。滴答实测 `#F4F4F4`（浅色）；深色取菜单分组线
+    /// `menuDivider` 的同族值（未实测，按同层级推断）。
+    ///
+    /// 它取代了原来两栏各写各的两种线：任务列用 `hover`（4% 墨 ≈ #F5F5F5，
+    /// 与滴答实测值几乎相同），笔记列用系统 `Divider()`（深一档，明显更重）。
+    static let listRowSeparator = themed(rgb(0xF4F4F4), rgb(0x3A3E47))
     /// 节假日名与完成态。
     static let success = themed(rgb(0x237A57), rgb(0x5BCE91))
     /// 强调色的浅底（周视图卡片投放高亮、导航选中）。

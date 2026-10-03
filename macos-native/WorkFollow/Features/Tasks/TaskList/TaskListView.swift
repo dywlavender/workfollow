@@ -804,6 +804,16 @@ struct TaskListView: View {
                 onRestore: { _ = workspace.restore(node.task.id, in: scope) },
                 onToggleExpanded: { workspace.toggleExpanded(node.task.id) }
             )
+            // 行分割线：画在行内底边，不给行距加高度（原来它是 LazyVStack 的
+            // 兄弟视图，每行多出 1pt，pitch 实测 51 而不是 50）。
+            // 左右内缩沿用既有规则：未完成行从勾选框列左侧起，完成行从标题起
+            // （完成行的勾选框是实心块，线压在下面会脏）；右端收进 WFSpace.lg。
+            .overlay(alignment: .bottom) {
+                ListRowDivider(
+                    leading: TaskListMetrics.dividerLeading(completed: node.task.status == .completed,
+                                                            depth: node.depth),
+                    trailing: WFSpace.lg)
+            }
         if node.depth == 0 {
             row
                 .draggable(node.task.id.uuidString) {
@@ -815,12 +825,6 @@ struct TaskListView: View {
             // 子任务不可拖、也不作为重排落点（对齐 Flutter）。
             row.id(rowIdentity(group: group, task: node.task))
         }
-        // 行分隔线：与行悬浮底色同色（WFColors.hover），右端收进一截。
-        Rectangle()
-            .fill(WFColors.hover)
-            .frame(height: 1)
-            .padding(.leading, TaskListMetrics.dividerLeading(completed: node.task.status == .completed, depth: node.depth))
-            .padding(.trailing, WFSpace.lg)
     }
 
     private var quickAddResult: QuickAddParseResult {
