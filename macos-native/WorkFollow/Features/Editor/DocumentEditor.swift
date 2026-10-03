@@ -109,16 +109,20 @@ final class DocumentEditorHandle: ObservableObject {
 /// it inside its drawable bounds, but it must not consume host text width.
 enum DocumentEditorGeometry {
     static let decorationLane: CGFloat = 20
-    /// 装饰标记（空行 `+`、标题角标 `H1/H2/H3`）距"宿主内可见边界"的最小间距。
-    /// 与 `task-inspector-content-alignment.md` 的"至少 4pt"同口径。
+    /// 装饰标记（空行 `+`、标题角标 `H1/H2/H3`）距"宿主内可见边界"的间距。
+    /// 基准是滴答实测：`+` **墨迹**起点距分栏线 5.5pt（2x 截图量得 11px）。
+    /// 抗锯齿会让墨迹比这里的几何值再向右约 0.5pt，所以几何值取 5.0pt。
+    static let decorationMarkerOffset: CGFloat = 5
+    /// 规范下限：任何宿主里标记都不允许比 4pt 更贴边界
+    /// （见 `task-inspector-content-alignment.md`）。
     static let decorationMinInset: CGFloat = 4
     /// 装饰标记在容器坐标里的 x。绘制、命中测试与测试断言共用这一处，
     /// 不再各自写 `max(5, …)` / `max(2, …)` 两个不同的下限。
     ///
     /// 注意：`visibleMinX` 是**宿主内可见的装饰槽宽度**（容器坐标），
-    /// 不是分栏线位置；标记在它基础上再向内让 `decorationMinInset`。
+    /// 不是分栏线位置；标记在它基础上再向内让 `decorationMarkerOffset`。
     static func decorationMarkerX(visibleMinX: CGFloat) -> CGFloat {
-        max(decorationMinInset, visibleMinX + decorationMinInset)
+        max(decorationMinInset, visibleMinX + decorationMarkerOffset)
     }
     static let listTextIndent: CGFloat = 16
     static let quoteTextIndent: CGFloat = 16

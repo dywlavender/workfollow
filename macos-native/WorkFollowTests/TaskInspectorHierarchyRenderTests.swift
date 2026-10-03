@@ -35,7 +35,12 @@ final class TaskInspectorHierarchyRenderTests: XCTestCase {
         let initialX = caretX()
         XCTAssertEqual(initialX, TaskInspectorMetrics.horizontalPadding, accuracy: 1)
         let origin = host.convert(.zero, from: text).x
-        XCTAssertGreaterThanOrEqual(origin + text.decorationVisibleMinX + 4, 4)
+        // 标记（空行 + / 标题角标）距 pane 左缘的**几何**位置：滴答实测墨迹起点 5.5pt（2x 截图里 11px），
+        // 扣掉抗锯齿的约 0.5pt → 几何值 5.0pt。替代原先"≥4"的弱断言，锁住宿主缩进 / 槽宽变化时的实际位置。
+        let expectedMarkerGeometryFromPaneEdge: CGFloat = 5.0
+        let markerX = origin + DocumentEditorGeometry.decorationMarkerX(visibleMinX: text.decorationVisibleMinX)
+        XCTAssertEqual(markerX, expectedMarkerGeometryFromPaneEdge, accuracy: 0.5,
+                       "装饰标记距 pane 左缘应为滴答实测值，当前 \(markerX)")
         let caret = text.convert(window.convertFromScreen(text.firstRect(forCharacterRange:
             NSRange(location: 0, length: 0), actualRange: nil)), from: nil)
         let before = text.string
