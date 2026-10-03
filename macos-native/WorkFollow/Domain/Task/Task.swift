@@ -1,6 +1,32 @@
 import Foundation
 
-enum TaskPriority: Int, Equatable, Codable { case none = 0, low, medium, high }
+enum TaskPriority: Int, Equatable, Codable {
+    case none = 0, low, medium, high
+
+    /// 菜单顺序：滴答实测为「高 → 中 → 低 → 无」（自上而下）。菜单按它渲染，
+    /// 不在视图里再手写一遍顺序。
+    static let menuOrder: [TaskPriority] = [.high, .medium, .low, .none]
+
+    /// 面向界面的名称，与任务列表 / 右键菜单同一套措辞。
+    var title: String {
+        switch self {
+        case .none: "无优先级"
+        case .low: "低优先级"
+        case .medium: "中优先级"
+        case .high: "高优先级"
+        }
+    }
+
+    /// 无障碍与 tooltip 用的短名（读作"优先级：低"）。
+    var shortTitle: String {
+        switch self {
+        case .none: "无优先级"
+        case .low: "低"
+        case .medium: "中"
+        case .high: "高"
+        }
+    }
+}
 enum TaskStatus: Equatable, Codable { case active, completed }
 enum TaskRepeat: String, CaseIterable, Equatable, Codable {
     case never, daily, weekly, monthly, yearly, weekdays, weekends, workdays, holidays

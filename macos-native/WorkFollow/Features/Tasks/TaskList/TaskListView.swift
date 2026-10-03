@@ -1033,14 +1033,8 @@ struct TaskRowView: View {
 }
 
 private enum TaskRowPriority {
-    static func title(_ priority: TaskPriority) -> String {
-        switch priority {
-        case .none: "无优先级"
-        case .low: "低优先级"
-        case .medium: "中优先级"
-        case .high: "高优先级"
-        }
-    }
+    /// 文案统一取领域类型的 `title`，不再在这里维护第二份表。
+    static func title(_ priority: TaskPriority) -> String { priority.title }
 
     static func color(_ priority: TaskPriority) -> Color {
         switch priority {

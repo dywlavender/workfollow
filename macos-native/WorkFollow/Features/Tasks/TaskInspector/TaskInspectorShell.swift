@@ -614,19 +614,19 @@ struct TaskInspectorShell: View {
             _ = workspace.setPriority(task.id, priority)
         } label: {
             if task.priority == priority {
-                Label(priorityTitle(priority), systemImage: "checkmark")
+                Label(priority.title, systemImage: "checkmark")
             } else {
-                Text(priorityTitle(priority))
+                Text(priority.title)
             }
         }
     }
 
     private func priorityMenu(_ task: Task) -> some View {
         Menu {
-            priorityItem(.none, task: task)
-            priorityItem(.low, task: task)
-            priorityItem(.medium, task: task)
-            priorityItem(.high, task: task)
+            // 顺序取 `TaskPriority.menuOrder`（滴答：高 → 中 → 低 → 无）。
+            ForEach(TaskPriority.menuOrder, id: \.self) { priority in
+                priorityItem(priority, task: task)
+            }
         } label: {
             Image(systemName: task.priority == .none ? "flag" : "flag.fill")
                 .foregroundStyle(priorityColor(task.priority))
@@ -636,7 +636,7 @@ struct TaskInspectorShell: View {
         .menuStyle(.borderlessButton)
         .menuIndicator(.hidden).fixedSize()
         .help("优先级")
-        .accessibilityLabel("优先级：\(priorityTitle(task.priority))")
+        .accessibilityLabel("优先级：\(task.priority.shortTitle)")
     }
 
     @ViewBuilder
@@ -693,15 +693,6 @@ struct TaskInspectorShell: View {
         return TaskInspectorSchedulePresentation.label(date: date,
             hasTime: field == .due && task.schedule.hasTime,
             now: workspace.clock(), calendar: workspace.calendar)
-    }
-
-    private func priorityTitle(_ priority: TaskPriority) -> String {
-        switch priority {
-        case .none: "无优先级"
-        case .low: "低"
-        case .medium: "中"
-        case .high: "高"
-        }
     }
 
     private func priorityColor(_ priority: TaskPriority) -> Color {
