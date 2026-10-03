@@ -159,7 +159,9 @@ struct TaskDatePopoverV2: View {
         }
         .background {
             ScheduleEscapeRouter {
-                if inlineSheet != nil { closeSheet() } else { onClose() }
+                // 一级返回交给导航 reducer：子页 → 二级页 → 属性子卡 → 宿主关面板，
+                // 视图不再自己判断"先关哪一层"。
+                if !presentation.back() { onClose() }
             }
         }
         // macOS 27：`.popover` 不传 arrowEdge（默认 nil）就不画三角箭头，
@@ -430,15 +432,19 @@ struct TaskDatePopoverV2: View {
                 }
             }
             Divider()
-            optionsRow("自定义") { reminderCustomOpen.toggle() }
-            if reminderCustomOpen { customOffsetRow }
+            optionsRow("自定义") {
+                // 子页开合走导航 reducer：Esc、×、再次点击用的是同一份判据。
+                if presentation.shows(.reminderCustom) { presentation.close(.reminderCustom) }
+                else { presentation.open(.reminderCustom) }
+            }
+            if presentation.shows(.reminderCustom) { customOffsetRow }
             if reminderInputError {
                 Text("请输入有效的提前数量")
                     .font(WFType.supporting).foregroundStyle(WFColors.danger)
             }
             panelButtons(cancel: { closeSheet() }) {
                 guard reminderDraft.confirm(into: model,
-                    customAmount: reminderCustomOpen ? customOffsetAmount : nil,
+                    customAmount: presentation.shows(.reminderCustom) ? customOffsetAmount : nil,
                     unit: customOffsetUnit) else {
                     reminderInputError = true
                     return
@@ -828,7 +834,8 @@ struct TaskDatePopoverV2: View {
     }
 
     private func closeSheet() {
-        inlineSheet = nil
+        // 收属性子卡时连同子页与二级页一起收，避免下次打开残留。
+        presentation.collapseProperty()
     }
 
     private func openSheet(_ sheet: InlineSheet) {
@@ -845,7 +852,7 @@ struct TaskDatePopoverV2: View {
         case .reminder:
             reminderDraft = ScheduleReminderDraft(offsets: model.reminderOffsets)
             reminderInputError = false
-            reminderCustomOpen = false
+            presentation.close(.reminderCustom)
             customOffsetAmount = ""
             customOffsetUnit = 1
         case .repeat:
