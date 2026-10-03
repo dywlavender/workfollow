@@ -55,7 +55,7 @@ struct CalendarWorkspaceView: View {
                     showCompleted: showCompleted,
                     calendar: calendar,
                     tasks: workspace.allTasks,
-                    listColor: listColor,
+                    barColor: barColor,
                     onSelectDay: select(day:),
                     onOpenTask: openTask,
                     onCreateTask: { day in presentComposer(on: day) },
@@ -68,7 +68,7 @@ struct CalendarWorkspaceView: View {
                     today: workspace.clock(),
                     calendar: calendar,
                     tasks: workspace.allTasks,
-                    listColor: listColor,
+                    barColor: barColor,
                     onSelectDay: select(day:),
                     onOpenTask: openTask,
                     onDropTask: { id, day in _ = workspace.moveDueDate(id, to: day) },
@@ -273,9 +273,14 @@ struct CalendarWorkspaceView: View {
         composerRequest = PlanningComposerRequest(fallback: schedule, preset: schedule, priority: .none)
     }
 
-    /// 清单色：显式选色优先，否则按清单名稳定折叠，与侧栏圆点、日历条、象限行同色。
-    private func listColor(_ name: String) -> Color {
-        WFPlanningPalette.listColor(name: name, meta: workspace.listMeta(for: name))
+    /// 日历条的颜色：按**任务**取色，不按清单。
+    ///
+    /// 这里曾经是 `listColor(task.list.name)`，与侧栏圆点同色。改掉的原因是「收集箱不可
+    /// 着色」（`setListColor` 明确拒绝它），而 35 条任务里 20 条都在收集箱——日历因此永远
+    /// 是一整片同色的蓝。代价：日历条不再告诉你任务在哪个清单。侧栏圆点、象限行、专注
+    /// 面板仍然按清单着色，没有跟着改。
+    private func barColor(_ id: UUID) -> Color {
+        WFPlanningPalette.taskColor(taskID: id)
     }
 }
 
@@ -370,7 +375,7 @@ struct CalendarMonthGridView: View {
     let showCompleted: Bool
     let calendar: Calendar
     let tasks: [Task]
-    let listColor: (String) -> Color
+    let barColor: (UUID) -> Color
     let onSelectDay: (Date) -> Void
     let onOpenTask: (UUID) -> Void
     let onCreateTask: (Date) -> Void
@@ -397,7 +402,7 @@ struct CalendarMonthGridView: View {
                         isLastRow: row == rows - 1,
                         calendar: calendar,
                         tasks: tasks,
-                        listColor: listColor,
+                        barColor: barColor,
                         onSelectDay: onSelectDay,
                         onOpenTask: onOpenTask,
                         onCreateTask: onCreateTask,
@@ -439,7 +444,7 @@ struct MonthWeekRow: View {
     let isLastRow: Bool
     let calendar: Calendar
     let tasks: [Task]
-    let listColor: (String) -> Color
+    let barColor: (UUID) -> Color
     let onSelectDay: (Date) -> Void
     let onOpenTask: (UUID) -> Void
     let onCreateTask: (Date) -> Void
@@ -495,7 +500,7 @@ struct MonthWeekRow: View {
             skipSlots: CalendarSpans.slotsOver(spans, column: column),
             tasks: showCompleted ? visible : visible.filter { $0.status != .completed },
             calendar: calendar,
-            listColor: listColor,
+            barColor: barColor,
             onSelect: { onSelectDay(day) },
             onOpenTask: onOpenTask,
             onCreate: { onCreateTask(day) },
@@ -513,7 +518,7 @@ struct MonthWeekRow: View {
         let width = max(0, CGFloat(span.columnCount) * columnWidth - startInset - endInset)
         let y = WFCalendarMetrics.cellTopPadding + WFCalendarMetrics.dayCellSize
             + WFCalendarMetrics.dayNumberGap + CGFloat(span.lane) * WFCalendarMetrics.slotStride
-        let color = listColor(span.task.list.name)
+        let color = barColor(span.task.id)
         return CalendarTaskSpanBar(span: span, listColor: color, calendar: calendar,
                                    onOpen: { onOpenTask(span.task.id) },
                                    onToggleTask: onToggleTask,
@@ -576,7 +581,7 @@ struct CalendarDayCellView: View {
     let skipSlots: Int
     let tasks: [Task]
     let calendar: Calendar
-    let listColor: (String) -> Color
+    let barColor: (UUID) -> Color
     let onSelect: () -> Void
     let onOpenTask: (UUID) -> Void
     let onCreate: () -> Void
@@ -700,7 +705,7 @@ struct CalendarDayCellView: View {
     }
 
     private func bar(_ task: Task) -> some View {
-        let color = listColor(task.list.name)
+        let color = barColor(task.id)
         return CalendarTaskBarView(task: task, listColor: color, calendar: calendar,
                                    onOpen: { onOpenTask(task.id) },
                                    onToggleTask: onToggleTask,
@@ -716,9 +721,11 @@ struct CalendarDayCellView: View {
 /// 月格里的一个任务。
 ///
 /// 它不是缩小版的 TaskRow。一格要在一条竖向窄缝里装下一天的工作，所以条是单行的
-/// ——勾选框、标题、时刻——满行会写成文字的东西在这里改为用颜色表达：底色就是任务
-/// 自己清单的颜色，与它在别的视图里的行完全同值，于是月份不用印清单名就能和产品
-/// 其余部分对同一件事给出同一个说法。
+/// ——勾选框、标题、时刻——满行会写成文字的东西在这里改为用颜色表达。
+///
+/// 底色**按任务取**，不按清单（见 `WFListPalette.taskColorIndex`）：它曾经是清单色、
+/// 与侧栏圆点同值，但「收集箱不可着色」而多数任务都在收集箱，日历因此永远是一整片
+/// 同色的蓝。代价是月份不再告诉你任务属于哪个清单；换来的是相邻的条彼此可分。
 ///
 /// 这个尺寸下底色深浅也是完成态除了标题墨色外唯一能改的东西，所以未完成的条拿满
 /// 一档、完成的退到浅档——就是 `WFCalendarMetrics` 里那一对，周视图的胶囊也取同一对。
@@ -939,7 +946,7 @@ struct CalendarWeekStripView: View {
     let today: Date
     let calendar: Calendar
     let tasks: [Task]
-    let listColor: (String) -> Color
+    let barColor: (UUID) -> Color
     let onSelectDay: (Date) -> Void
     let onOpenTask: (UUID) -> Void
     let onDropTask: (UUID, Date) -> Void
@@ -955,7 +962,7 @@ struct CalendarWeekStripView: View {
                     today: today,
                     calendar: calendar,
                     tasks: PlanningProjection.tasks(on: day, from: tasks, calendar: calendar),
-                    listColor: listColor,
+                    barColor: barColor,
                     onSelectDay: onSelectDay,
                     onOpenTask: onOpenTask,
                     onDropTask: onDropTask,
@@ -973,7 +980,7 @@ struct CalendarWeekDayColumn: View {
     let today: Date
     let calendar: Calendar
     let tasks: [Task]
-    let listColor: (String) -> Color
+    let barColor: (UUID) -> Color
     let onSelectDay: (Date) -> Void
     let onOpenTask: (UUID) -> Void
     let onDropTask: (UUID, Date) -> Void
@@ -1037,7 +1044,7 @@ struct CalendarWeekDayColumn: View {
 
     private func weekPill(_ task: Task) -> some View {
         CalendarWeekPillButton(task: task,
-                               color: listColor(task.list.name),
+                               color: barColor(task.id),
                                completed: task.status == .completed,
                                anchorSink: anchorSink,
                                onOpen: { onOpenTask(task.id) },

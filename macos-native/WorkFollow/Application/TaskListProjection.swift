@@ -309,7 +309,7 @@ enum WFListPalette {
     ///
     /// `argb` 表本身不动：它仍是与 Flutter 共享的 14 色契约表，**显式选色**照旧可以
     /// 选到那三个无彩色，只是"按名字自动推"这一步不选它们。
-    private static let chromaticSlotCount = 11
+    static let chromaticSlotCount = 11
     /// 落到无彩色槽位时折回的有彩色：11→0（红）、12→4（绿）、13→8（靛）。
     private static let chromaticFallback = [0, 4, 8]
 
@@ -324,6 +324,26 @@ enum WFListPalette {
         let slot = score % argb.count
         if slot < chromaticSlotCount { return slot }
         return chromaticFallback[slot - chromaticSlotCount]
+    }
+
+    /// **日历条**落在色板上的下标：按任务，不按清单。
+    ///
+    /// 起因是「收集箱不可着色」——`setListColor` 明确拒绝收集箱（见 `ListMetaTests`），
+    /// 而 35 条任务里 20 条都在收集箱，于是整屏只能是同一个蓝。清单色那条路被堵死，
+    /// 按任务取色绕开它。代价：日历条不再告诉你任务在哪个清单。
+    ///
+    /// 散列自己写是因为 `String.hashValue` **每次启动换种子**——用它定色，日历每次重开
+    /// 都换一套颜色。FNV-1a 是纯函数；实测在 35 个真实任务 id 上铺满全部 11 个有彩色槽位。
+    ///
+    /// 槽位只取有彩色（理由同 `chromaticSlotCount`：灰条会被读成「已完成」）。
+    /// 一天里偶尔两条同色是正常的：11 个槽抽 5 次只有 34% 不撞，参照图 5 日那格自己
+    /// 也有 3 条同色。
+    static func taskColorIndex(for taskID: UUID) -> Int {
+        var hash: UInt64 = 0xcbf2_9ce4_8422_2325              // FNV-1a 64 位偏移基数
+        for byte in taskID.uuidString.utf8 {
+            hash = (hash ^ UInt64(byte)) &* 0x0000_0100_0000_01b3
+        }
+        return Int(hash % UInt64(chromaticSlotCount))
     }
 }
 

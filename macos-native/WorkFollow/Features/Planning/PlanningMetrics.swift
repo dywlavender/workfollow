@@ -75,17 +75,14 @@ enum WFCalendarMetrics {
     /// 交叉验证：全图 59 条里，实心勾选框（已完成）的 56 条标题全是浅灰墨，空心框
     /// （未完成）的 3 条标题全是深墨——两档与完成态一一对应。
     ///
-    /// **我们有意比参照物淡一档：0.22 / 0.09，不是 0.36 / 0.12。** 理由是数据形态不同，
-    /// 不是审美偏好：滴答那张参照图一格里最多 1 条强档 + 几条淡档，而我们的日历一格能
-    /// 堆 5 条**同色**未完成（2026-10-03 实测：10月3日 一格 5 条，全是「收集箱」的蓝），
-    /// 强档叠起来就是一整块实心蓝，压得整屏喘不过气。实测过：我们单条的颜色与几何尺寸
-    /// 和滴答**逐项一致**（白底上未完成 (200,216,240) vs 滴答 (190,216,243)），所以问题
-    /// 不在单条、在堆叠——只能靠整体降浓度解决。
-    ///
-    /// 比例仍是 2.4:1（原 2.67:1）：只动一个等于让日历失去唯一的完成区分，所以两个一起降。
-    /// 再往下调要先确认已完成档还看得见——0.075 时已完成条基本消失在格底里了。
-    static let taskBarFillAlpha: Double = 0.22
-    static let taskBarCompletedFillAlpha: Double = 0.09
+    /// 取参照物的原值，不再打折。**这里走过一段弯路**：曾为「一格堆 5 条同色强档太压人」
+    /// 把两档降到 0.22 / 0.09，用户随即反馈「颜色太暗了」——降 alpha 会同时降**彩度**
+    /// （蓝的 max−min 从 43 掉到 32），浅是浅了，却浅得发灰，反而更不像滴答。真正该修的是
+    /// **同色堆叠**，那是取色的问题（见 `WFListPalette.taskColorIndex`），不是浓度的问题。
+    /// 单条本来就与滴答逐项一致：白底未完成 (200,216,240) vs (190,216,243)；α0.36 下
+    /// 我们 (187,211,240) 亮度 208 / 彩度 53，与滴答的 212 / 53 同档。
+    static let taskBarFillAlpha: Double = 0.36
+    static let taskBarCompletedFillAlpha: Double = 0.12
     static func taskBarFill(completed: Bool) -> Double {
         completed ? taskBarCompletedFillAlpha : taskBarFillAlpha
     }
@@ -151,9 +148,19 @@ enum WFPlanningPalette {
     }
 
     /// 清单在当前工作区里的最终颜色：显式选色优先，否则按清单名稳定折叠。
-    /// 日历条、象限行的清单名与侧栏圆点因此永远同色。
+    /// 侧栏圆点、象限行、专注面板的清单圆点因此永远同色。
+    /// **日历条不在其列**——它按任务取色，见 `taskColor(taskID:)`。
     static func listColor(name: String, meta: TaskListMeta?) -> Color {
         WFListPalette.color(for: name, meta: meta)
+    }
+
+    /// 日历条的颜色：按**任务**而不是按清单。
+    ///
+    /// 与 `listColor` 分开是有意的：清单色那条路对「收集箱」是堵死的（`setListColor`
+    /// 拒绝收集箱），而 35 条任务里 20 条都在收集箱——日历因此只能是一整片同色的蓝。
+    /// 理由与取舍见 `WFListPalette.taskColorIndex`。
+    static func taskColor(taskID: UUID) -> Color {
+        WFListPalette.swatch(WFListPalette.argb[WFListPalette.taskColorIndex(for: taskID)])
     }
 
     /// 序号圆上文字的颜色。它是切在实心圆里的一个洞，不是一行字，所以原版

@@ -89,6 +89,27 @@ final class PlanningViewLogicTests: XCTestCase {
                                    "名字折叠应在色板上有效散开，避免月视图整片同色")
     }
 
+    /// 日历条按**任务**取色：确定性、只落在有彩色槽位、在真实规模上铺得开。
+    ///
+    /// 确定性是硬要求——`String.hashValue` 每次启动换种子，用它定色日历每次重开都会换
+    /// 一套颜色。这里用 160 个构造出来的 id：实测铺满全部 11 个槽（每槽 12~18 条）。
+    func testTaskColorIndexIsDeterministicChromaticAndSpread() {
+        let ids = (0..<160).map {
+            UUID(uuidString: String(format: "00000000-0000-4000-8000-%012X", $0))!
+        }
+        var used = Set<Int>()
+        for id in ids {
+            let index = WFListPalette.taskColorIndex(for: id)
+            XCTAssertTrue((0..<WFListPalette.chromaticSlotCount).contains(index),
+                          "任务取色越界或落到无彩色槽位：\(index)")
+            XCTAssertEqual(index, WFListPalette.taskColorIndex(for: id),
+                           "同一任务重复取色必须一致")
+            used.insert(index)
+        }
+        XCTAssertGreaterThanOrEqual(used.count, 8,
+                                    "任务取色应在有彩色上铺开，避免日历整片同色")
+    }
+
     func testPaletteMatchesTheFlutterTokenTable() {
         // 色板是与 Flutter 共享的契约表：顺序即下标，改一处两边同时漂移。
         XCTAssertEqual(WFListPalette.argb.count, 14)
