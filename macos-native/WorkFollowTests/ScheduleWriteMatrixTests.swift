@@ -87,6 +87,17 @@ final class ScheduleWriteMatrixTests: XCTestCase {
         assertPlanLanded(plan, on: try XCTUnwrap(workspace.task(for: id)))
     }
 
+    /// 创建通道的 plan 版：新建对话框（`TaskComposer`）与共享面板之间的口径。
+    /// 此前对话框自己拼 `TaskSchedule`，时间段与多级提醒都进不去。
+    func testPlanBasedCreationLandsEveryField() throws {
+        let workspace = makeWorkspace()
+        let plan = makePlan(reference: Date(timeIntervalSince1970: 1_790_000_000))
+        let result = workspace.createDraft(title: "对话框创建", list: TaskList.inbox.name,
+                                           plan: plan, priority: .none, tags: [])
+        let id = try XCTUnwrap(result.taskID)
+        assertPlanLanded(plan, on: try XCTUnwrap(workspace.task(for: id)))
+    }
+
     /// 创建通道的**宿主侧投影**：面板产物 → 快速添加草稿，一个字段都不许漏。
     func testQuickAddDraftProjectionKeepsEveryField() {
         let plan = makePlan(reference: Date(timeIntervalSince1970: 1_790_000_000))

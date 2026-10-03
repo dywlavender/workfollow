@@ -316,24 +316,18 @@ struct TaskComposer: View {
     let initialProperties: QuickAddPropertiesOverrides
     @State var title: String
     @State var list: String
-    @State var scheduled: Bool
-    @State var date: Date
-    @State private var hasTime: Bool
+    /// 日程（日期 / 时间段 / 提醒 / 重复）只有**一个编辑器**：共享的 `TaskDatePopoverV2`。
+    /// 面板确定后整体带回，本地形状就是 application 层的 `SchedulePlan`——
+    /// 对话框不再自带第三套日期/提醒/重复控件（那套既漏 `dueEndAt` 也漏多级提醒）。
+    @State private var plan: SchedulePlan
+    /// 面板是否覆盖过解析结果：没覆盖时以标题解析为准（"明天 开会"仍按滴答语义生效）。
+    @State private var scheduleEdited = false
+    @State private var showSchedulePanel = false
     @State private var priority: TaskPriority
     @State private var tags: String
-    @State private var reminder: Bool
-    @State private var reminderDate: Date
-    @State private var frequency: TaskRepeat
-    @State private var deadlineEnabled = false
-    @State private var deadlineDate: Date
-    @State private var repeatInterval: Int
-    @State private var repeatEndEnabled: Bool
-    @State private var repeatEndDate: Date
-    @State private var repeatCountEnabled: Bool
-    @State private var repeatCount: Int
-    @State private var scheduleEdited: Bool
-    @State private var reminderEdited: Bool
-    @State private var frequencyEdited: Bool
+    /// 页面给的日期语义（打开时的"安排日期"与日期），未被面板覆盖时作为初值。
+    private let scheduled: Bool
+    private let presetDate: Date
     @State private var priorityEdited: Bool
     @State private var listEdited: Bool
     @State private var tagsEdited: Bool
@@ -352,28 +346,33 @@ struct TaskComposer: View {
         self.dismissedTokenIDs = dismissedTokenIDs
         self.initialSchedule = initialSchedule
         self.initialProperties = initialProperties
+        self.scheduled = scheduled
+        self.presetDate = date
         _title = State(initialValue: title)
         _list = State(initialValue: initialProperties.listName ?? parsed.listName ?? list)
-        _scheduled = State(initialValue: initialSchedule.map { $0.dueAt != nil } ?? scheduled)
-        _date = State(initialValue: initialSchedule?.dueAt ?? date)
-        _hasTime = State(initialValue: initialSchedule?.hasTime ?? false)
         _priority = State(initialValue: initialProperties.priority ?? parsed.priority)
         _tags = State(initialValue: initialProperties.tags?.joined(separator: ",") ?? "")
-        _reminder = State(initialValue: initialSchedule?.reminderAt != nil)
-        _reminderDate = State(initialValue: initialSchedule?.reminderAt ?? workspace.clock().addingTimeInterval(3600))
-        _frequency = State(initialValue: initialSchedule?.repeatFrequency ?? .never)
-        _deadlineDate = State(initialValue: workspace.dateFromToday(0))
-        _repeatInterval = State(initialValue: initialSchedule?.recurrenceRule?.interval ?? 1)
-        _repeatEndEnabled = State(initialValue: initialSchedule?.recurrenceRule?.endDate != nil)
-        _repeatEndDate = State(initialValue: initialSchedule?.recurrenceRule?.endDate ?? workspace.dateFromToday(30))
-        _repeatCountEnabled = State(initialValue: initialSchedule?.recurrenceRule?.remainingCount != nil)
-        _repeatCount = State(initialValue: initialSchedule?.recurrenceRule?.remainingCount ?? 10)
-        _scheduleEdited = State(initialValue: initialSchedule != nil)
-        _reminderEdited = State(initialValue: initialSchedule != nil)
-        _frequencyEdited = State(initialValue: initialSchedule != nil)
+        _plan = State(initialValue: Self.plan(parsed: parsed, initial: initialSchedule,
+                                             scheduled: scheduled, date: date,
+                                             calendar: workspace.calendar))
         _priorityEdited = State(initialValue: initialProperties.priority != nil)
         _listEdited = State(initialValue: initialProperties.listName != nil)
         _tagsEdited = State(initialValue: initialProperties.tags != nil)
+    }
+
+    /// 标题解析 + 页面预设 → `SchedulePlan`（创建与面板初值**共用这一处映射**）。
+    /// 优先级照旧：调用方给的草稿 > 标题解析 > 页面预设日期。
+    private static func plan(parsed: QuickAddParseResult, initial: QuickAddScheduleDraft?,
+                             scheduled: Bool, date: Date, calendar: Calendar) -> SchedulePlan {
+        let presetDue = scheduled ? (parsed.hasTime ? date : calendar.startOfDay(for: date)) : nil
+        return SchedulePlan(
+            schedule: TaskSchedule(dueAt: initial?.dueAt ?? parsed.dueAt ?? presetDue,
+                                   hasTime: initial?.hasTime ?? (parsed.dueAt != nil ? parsed.hasTime : false),
+                                   dueEndAt: initial?.dueEndAt),
+            reminder: initial?.reminderAt ?? parsed.reminderAt,
+            reminderOffsets: initial?.reminderOffsets ?? [],
+            frequency: initial?.repeatFrequency ?? parsed.recurrence,
+            recurrenceRule: initial?.recurrenceRule ?? parsed.recurrenceRule)
     }
 
     var body: some View {
@@ -384,22 +383,7 @@ struct TaskComposer: View {
                 ForEach(workspace.allListNames, id: \.self) { Text($0).tag($0) }
             }
             .onChange(of: list) { _, _ in listEdited = true }
-            Toggle("安排日期", isOn: $scheduled)
-                .onChange(of: scheduled) { _, _ in scheduleEdited = true }
-            if scheduled {
-                HStack {
-                    Button("今天") { date = workspace.dateFromToday(0) }
-                    Button("明天") { date = workspace.dateFromToday(1) }
-                    Button("下周") { date = workspace.dateFromToday(7) }
-                }
-                DatePicker("日期", selection: $date, displayedComponents: hasTime ? [.date, .hourAndMinute] : [.date])
-                Toggle("指定时间", isOn: $hasTime)
-                    .onChange(of: hasTime) { _, _ in scheduleEdited = true }
-            }
-            Toggle("截止日期", isOn: $deadlineEnabled)
-            if deadlineEnabled {
-                DatePicker("截止", selection: $deadlineDate, displayedComponents: .date)
-            }
+            scheduleRow
             Picker("优先级", selection: $priority) {
                 Text("无").tag(TaskPriority.none); Text("低").tag(TaskPriority.low)
                 Text("中").tag(TaskPriority.medium); Text("高").tag(TaskPriority.high)
@@ -407,24 +391,6 @@ struct TaskComposer: View {
             .onChange(of: priority) { _, _ in priorityEdited = true }
             TextField("标签（逗号分隔）", text: $tags)
                 .onChange(of: tags) { _, _ in tagsEdited = true }
-            Picker("重复", selection: $frequency) {
-                ForEach(TaskRepeat.allCases, id: \.self) { Text($0.title).tag($0) }
-            }
-            .onChange(of: frequency) { _, _ in frequencyEdited = true }
-            if frequency != .never {
-                Stepper("间隔：\(repeatInterval)", value: $repeatInterval, in: 1...99)
-                Toggle("设置结束日期", isOn: $repeatEndEnabled)
-                if repeatEndEnabled {
-                    DatePicker("重复至", selection: $repeatEndDate, displayedComponents: .date)
-                }
-                Toggle("限制次数", isOn: $repeatCountEnabled)
-                if repeatCountEnabled {
-                    Stepper("重复 \(repeatCount) 次（含本次）", value: $repeatCount, in: 1...999)
-                }
-            }
-            Toggle("提醒", isOn: $reminder)
-                .onChange(of: reminder) { _, _ in reminderEdited = true }
-            if reminder { DatePicker("提醒时间", selection: $reminderDate) }
             HStack {
                 Spacer()
                 Button("取消") { onClose(false) }.keyboardShortcut(.cancelAction)
@@ -433,46 +399,94 @@ struct TaskComposer: View {
                                                      knownLists: Set(workspace.allListNames),
                                                      dismissedTokenIDs: dismissedTokenIDs)
                     guard !parsed.title.isEmpty else { return }
-                    let dueAt = scheduleEdited
-                        ? (scheduled ? (hasTime ? date : workspace.calendar.startOfDay(for: date)) : nil)
-                        : parsed.dueAt ?? (scheduled ? (hasTime ? date : workspace.calendar.startOfDay(for: date)) : nil)
-                    let finalHasTime = scheduleEdited ? hasTime : parsed.dueAt != nil ? parsed.hasTime : hasTime
-                    let finalFrequency = frequencyEdited ? frequency : parsed.recurrence
-                    var rule = frequencyEdited
-                        ? (frequency == initialSchedule?.repeatFrequency ? initialSchedule?.recurrenceRule : nil)
-                        : parsed.recurrenceRule
-                    if frequency != .never {
-                        rule = rule ?? RecurrenceRule()
-                        rule?.interval = repeatInterval
-                        rule?.endDate = repeatEndEnabled ? workspace.calendar.startOfDay(for: repeatEndDate) : nil
-                        rule?.remainingCount = repeatCountEnabled ? repeatCount : nil
-                        if frequency == .weekly, rule?.weekday == nil { rule?.weekday = parsed.recurrenceRule?.weekday }
-                        if frequency == .monthly, rule?.monthDay == nil { rule?.monthDay = parsed.recurrenceRule?.monthDay }
-                    }
+                    // 面板没动过时按**当前标题**重新解析（用户可能打开后才在标题里打"明天"）；
+                    // 动过就以面板结果为准 —— 与快速添加条"草稿 > 解析"同一口径。
+                    let finalPlan = scheduleEdited
+                        ? plan
+                        : Self.plan(parsed: parsed, initial: initialSchedule,
+                                    scheduled: scheduled, date: presetDate,
+                                    calendar: workspace.calendar)
                     let parsedTags = tags.replacingOccurrences(of: "，", with: ",").components(separatedBy: ",")
                     let enteredTags = tagsEdited || initialProperties.tags != nil
                         ? parsedTags : parsedTags + parsed.tags
                     let finalTags = (workspace.activeTag.map { [$0] } ?? []) + enteredTags
                     let finalList = listEdited ? list : parsed.listName ?? list
                     let finalPriority = priorityEdited ? priority : parsed.priority
-                    let finalReminder = reminderEdited
-                        ? (reminder ? reminderDate : nil)
-                        : initialSchedule?.reminderAt ?? parsed.reminderAt
-                    let result = workspace.createDraft(title: parsed.title,
-                        list: finalList,
-                        schedule: TaskSchedule(dueAt: dueAt, hasTime: finalHasTime,
-                                               deadlineAt: deadlineEnabled ? workspace.calendar.startOfDay(for: deadlineDate) : nil),
-                        priority: finalPriority, tags: finalTags,
-                        reminder: finalReminder, repeatFrequency: finalFrequency,
-                        recurrenceRule: rule)
+                    // 创建也走唯一入口：日程 / 时间段 / 提醒 / 重复整体落地，不再逐字段拆参。
+                    let result = workspace.createDraft(title: parsed.title, list: finalList,
+                                                       plan: finalPlan, priority: finalPriority,
+                                                       tags: finalTags)
                     if result.taskID != nil { onClose(true) }
                 }.keyboardShortcut(.defaultAction).disabled(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
         }.padding(24).frame(width: 360)
-            .onAppear {
-                titleFocused = true
-                if initialSchedule?.reminderAt == nil { reminderDate = workspace.clock().addingTimeInterval(3600) }
+            // 日程唯一编辑器：与列表行 / 四象限 / 快速组合器同一个面板、同一份 plan。
+            .schedulePopover(isPresented: $showSchedulePanel) {
+                TaskDatePopoverV2(task: draftTask, workspace: workspace, initialPage: .main,
+                                  draftCommit: { plan = $0; scheduleEdited = true }) {
+                    showSchedulePanel = false
+                }
+                .environment(\.calendar, workspace.calendar)
+                .environment(\.timeZone, workspace.calendar.timeZone)
             }
+            .onAppear { titleFocused = true }
             .environment(\.calendar, workspace.calendar).environment(\.timeZone, workspace.calendar.timeZone)
+    }
+
+    // MARK: 日程入口（共享面板）
+
+    private var scheduleRow: some View {
+        Button {
+            showSchedulePanel = true
+        } label: {
+            HStack(spacing: WFSpace.sm) {
+                Image(systemName: "calendar").font(.system(size: 16))
+                Text(scheduleLabel).font(WFType.control)
+                Spacer(minLength: 0)
+            }
+            .foregroundStyle(plan.schedule.dueAt == nil ? WFColors.tertiaryText : WFColors.accent)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help("设置日期、时间段、提醒与重复")
+        .scheduleTrigger()
+        .accessibilityLabel("设置日期：\(scheduleLabel)")
+    }
+
+    /// 一行摘要：日期（含时间段）+ 提醒 + 重复。文案函数与列表行共用。
+    private var scheduleLabel: String {
+        var parts: [String] = []
+        if let due = plan.schedule.dueAt {
+            parts.append(TaskDateLabel.text(due, hasTime: plan.schedule.hasTime,
+                                            now: workspace.clock(), calendar: workspace.calendar))
+            if let end = plan.schedule.dueEndAt {
+                parts.append(TaskDateLabel.text(end, hasTime: plan.schedule.hasTime,
+                                                now: workspace.clock(), calendar: workspace.calendar))
+            }
+        }
+        if !plan.reminderOffsets.isEmpty || plan.reminder != nil { parts.append("提醒") }
+        if plan.frequency != .never { parts.append(plan.frequency.title) }
+        return parts.isEmpty ? "设置日期" : parts.joined(separator: " · ")
+    }
+
+    /// 面板要一个任务做初值：现拼一个只用于展示的草稿任务（同 `TaskQuickComposer`），
+    /// 确定后只回传 plan，不落库。
+    private static let draftTaskID = UUID(uuidString: "00000000-0000-0000-0000-0000000C0DE1")!
+    private var draftTask: Task {
+        let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let now = workspace.clock()
+        return Task(id: Self.draftTaskID,
+                    title: trimmed.isEmpty ? "准备做什么？" : trimmed,
+                    recurrence: plan.frequency,
+                    recurrenceRule: plan.recurrenceRule,
+                    reminderAt: plan.reminder,
+                    reminderOffsets: plan.reminderOffsets.isEmpty ? nil : plan.reminderOffsets,
+                    list: TaskList(name: list),
+                    priority: priority,
+                    schedule: plan.schedule,
+                    parentID: nil,
+                    childOrder: 0,
+                    createdAt: now,
+                    updatedAt: now)
     }
 }

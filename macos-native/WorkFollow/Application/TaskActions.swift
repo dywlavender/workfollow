@@ -354,6 +354,17 @@ final class TaskActions {
                           reminderOffsets: plan.reminderOffsets)
     }
 
+    /// 创建通道的 plan 版：宿主产出 `SchedulePlan`，不再逐字段拆参。
+    /// （新建对话框此前自己拼 `TaskSchedule`，既没有时间段也传不了多级提醒。）
+    func createDraft(title: String, list: String, plan: SchedulePlan, priority: TaskPriority,
+                     tags: [String], document: NativeDocument = .empty) -> TaskActionResult {
+        createDraft(title: title, list: list, schedule: plan.schedule, priority: priority,
+                    tags: tags, reminder: plan.reminder,
+                    reminderOffsets: plan.reminderOffsets,
+                    frequency: plan.frequency, recurrenceRule: plan.recurrenceRule,
+                    document: document)
+    }
+
     @discardableResult
     func setSchedule(_ id: UUID, _ schedule: TaskSchedule) -> TaskActionResult {
         edit(id) { $0.schedule = schedule }
@@ -462,7 +473,8 @@ final class TaskActions {
     }
 
     func createDraft(title: String, list: String, schedule: TaskSchedule, priority: TaskPriority,
-                     tags: [String], reminder: Date?, frequency: TaskRepeat,
+                     tags: [String], reminder: Date?, reminderOffsets: [Int]? = nil,
+                     frequency: TaskRepeat,
                      recurrenceRule: RecurrenceRule? = nil,
                      document: NativeDocument = .empty) -> TaskActionResult {
         guard !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return .failure(.invalidList) }
@@ -472,6 +484,9 @@ final class TaskActions {
             if let id = result.taskID {
                 _ = setTags(id, tags)
                 _ = setReminder(id, reminder)
+                // 多级提醒（面板里勾的「准时 / 提前…」）与旧式单点 `reminderAt` 是两个字段：
+                // 创建路径必须一起写，否则面板里设的提醒只活在草稿里。
+                _ = setReminderOffsets(id, reminderOffsets)
                 _ = setRecurrence(id, frequency: frequency, rule: recurrenceRule)
                 // 正文与其它属性同处一个事务：快速添加的 Tab 描述要么整条任务都建好，
                 // 要么一点都不留下。空正文跳过，避免写一个空段落。

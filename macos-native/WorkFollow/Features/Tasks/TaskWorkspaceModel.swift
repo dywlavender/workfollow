@@ -245,6 +245,17 @@ final class TaskWorkspaceModel: ObservableObject {
         return result
     }
 
+    /// 创建通道的 plan 版：新建对话框等宿主直接把面板产出的计划交过来。
+    @discardableResult
+    func createDraft(title: String, list: String, plan: SchedulePlan, priority: TaskPriority,
+                     tags: [String], document: NativeDocument = .empty) -> TaskActionResult {
+        let result = actions.createDraft(title: title, list: list, plan: plan, priority: priority,
+                                         tags: tags, document: document)
+        didMutate(result)
+        if let id = result.taskID { select(id) }
+        return result
+    }
+
     @discardableResult
     func createFromTemplate(_ template: TaskTemplate) -> UUID? {
         let listName = template.listName.flatMap { allListNames.contains($0) ? $0 : nil }
