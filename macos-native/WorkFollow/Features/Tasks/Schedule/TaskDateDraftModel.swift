@@ -19,15 +19,9 @@ final class TaskDateDraftModel: ObservableObject {
         case never, untilDate, count
     }
 
-    struct CommitPlan: Equatable {
-        var schedule: TaskSchedule
-        var reminder: Date?
-        /// Ascending offsets in minutes (0 = on time, negative = early); an
-        /// empty list clears stored offsets so the legacy reminder applies.
-        var reminderOffsets: [Int]
-        var frequency: TaskRepeat
-        var recurrenceRule: RecurrenceRule?
-    }
+    /// 面板产出的写入载荷 = application 层的 `SchedulePlan`。
+    /// 定义只有一处（`Application/Schedule/SchedulePlan.swift`），宿主不再各自拆字段。
+    typealias CommitPlan = SchedulePlan
 
     static let presetOffsets: [(option: ReminderOption, offset: TimeInterval, title: String)] = [
         (.onTime, 0, "准时"),
@@ -354,9 +348,9 @@ final class TaskDateDraftModel: ObservableObject {
         guard !deadline else { return nil }
         switch tab {
         case .date:
-            return hasTime ? selectedDate : calendar.startOfDay(for: selectedDate)
+            return ScheduleSemantics.normalized(selectedDate, hasTime: hasTime, calendar: calendar)
         case .period:
-            return periodStart.map { hasTime ? $0 : calendar.startOfDay(for: $0) }
+            return ScheduleSemantics.normalized(periodStart, hasTime: hasTime, calendar: calendar)
         }
     }
 

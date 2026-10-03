@@ -997,9 +997,7 @@ struct TaskDatePopoverV2: View {
         // Read current task here, so an open popover cannot overwrite other edits.
         guard let current = workspace.task(for: taskID) else { onClose(); return }
         let plan = model.commitPlan(for: current)
-        workspace.saveTiming(taskID, schedule: plan.schedule, reminder: plan.reminder,
-                             frequency: plan.frequency, recurrenceRule: plan.recurrenceRule,
-                             reminderOffsets: plan.reminderOffsets)
+        workspace.saveSchedule(plan, to: .task(taskID))
         onClose()
     }
 
@@ -1011,9 +1009,7 @@ struct TaskDatePopoverV2: View {
         }
         guard let current = workspace.task(for: taskID) else { onClose(); return }
         let plan = model.clearPlan(for: current)
-        workspace.saveTiming(taskID, schedule: plan.schedule, reminder: plan.reminder,
-                             frequency: plan.frequency, recurrenceRule: plan.recurrenceRule,
-                             reminderOffsets: plan.reminderOffsets)
+        workspace.saveSchedule(plan, to: .task(taskID))
         onClose()
     }
 

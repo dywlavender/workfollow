@@ -321,6 +321,39 @@ final class TaskActions {
         return .success(id)
     }
 
+    /// 日程写入的**唯一入口**：所有宿主（面板直写 / 批量 / 将来的创建通道）都构造同一个
+    /// `SchedulePlan`，plan → 字段的映射只在这里发生一次。
+    ///
+    /// `.tasks` 表示同一份 plan 应用到每个任务：字段全带（含 `dueEndAt` / offsets / rule），
+    /// 整批算一步撤销；个别任务缺失/已删除则跳过，其余照常写入。
+    @discardableResult
+    func saveSchedule(_ plan: SchedulePlan, to target: ScheduleTarget) -> TaskActionResult {
+        switch target {
+        case .task(let id):
+            return applySchedule(plan, to: id)
+        case .tasks(let ids):
+            guard let first = ids.first else { return .failure(.missingTask) }
+            var firstFailure: TaskActionResult?
+            store.transaction {
+                for id in ids {
+                    let result = applySchedule(plan, to: id)
+                    if case .failure = result, firstFailure == nil { firstFailure = result }
+                }
+            }
+            return firstFailure ?? .success(first)
+        }
+    }
+
+    /// plan → 一条任务的字段映射，只此一份。语义与 `saveTiming` 完全一致
+    /// （offsets 为空数组 = 清除多级提醒，旧式 `reminderAt` 重新生效）。
+    private func applySchedule(_ plan: SchedulePlan, to id: UUID) -> TaskActionResult {
+        guard let current = store.task(id) else { return .failure(.missingTask) }
+        guard current.deletedAt == nil else { return .failure(.deletedTask) }
+        return saveTiming(id, schedule: plan.schedule, reminder: plan.reminder,
+                          frequency: plan.frequency, recurrenceRule: plan.recurrenceRule,
+                          reminderOffsets: plan.reminderOffsets)
+    }
+
     @discardableResult
     func setSchedule(_ id: UUID, _ schedule: TaskSchedule) -> TaskActionResult {
         edit(id) { $0.schedule = schedule }

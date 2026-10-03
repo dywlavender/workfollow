@@ -38,4 +38,16 @@ struct QuickAddScheduleDraft: Equatable {
                   repeatFrequency: parsed.recurrence,
                   recurrenceRule: parsed.recurrenceRule)
     }
+
+    /// 直接由面板产出的 `SchedulePlan` 构造，宿主不再逐字段手抄
+    /// （手抄就是丢字段的地方：`dueEndAt` / `reminderOffsets` / `rule.month` 都丢过）。
+    init(_ plan: SchedulePlan) {
+        self.init(dueAt: plan.schedule.dueAt,
+                  dueEndAt: plan.schedule.dueEndAt,
+                  hasTime: plan.schedule.hasTime,
+                  reminderAt: plan.reminder,
+                  reminderOffsets: plan.reminderOffsets,
+                  repeatFrequency: plan.frequency,
+                  recurrenceRule: plan.recurrenceRule)
+    }
 }

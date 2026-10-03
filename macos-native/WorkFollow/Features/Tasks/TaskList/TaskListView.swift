@@ -518,14 +518,8 @@ struct TaskListView: View {
         UUID(uuidString: "00000000-0000-0000-0000-00000000ADD2")!
 
     private func applyQuickAddSchedulePlan(_ plan: TaskDateDraftModel.CommitPlan) {
-        quickAddScheduleOverride = QuickAddScheduleDraft(
-            dueAt: plan.schedule.dueAt,
-            dueEndAt: plan.schedule.dueEndAt,
-            hasTime: plan.schedule.hasTime,
-            reminderAt: plan.reminder,
-            repeatFrequency: plan.frequency,
-            recurrenceRule: plan.recurrenceRule
-        )
+        // 常量构造：宿主不再逐字段手抄，加字段时不会漏（见 `QuickAddScheduleDraft.init(_:)`）。
+        quickAddScheduleOverride = QuickAddScheduleDraft(plan)
     }
 
     private func quickAddSummary(for scope: TaskListScope) -> String {

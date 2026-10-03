@@ -274,6 +274,13 @@ final class TaskWorkspaceModel: ObservableObject {
                                         reminderOffsets: reminderOffsets)
         didMutate(result)
     }
+    /// 日程写入的唯一入口：宿主产出 `SchedulePlan`，不再逐字段拆参数。
+    @discardableResult
+    func saveSchedule(_ plan: SchedulePlan, to target: ScheduleTarget) -> TaskActionResult {
+        let result = actions.saveSchedule(plan, to: target)
+        didMutate(result)
+        return result
+    }
     var deletedTasks: [Task] {
         allTasks.filter { $0.deletedAt != nil }.sorted {
             if $0.deletedAt == $1.deletedAt { return $0.createdAt > $1.createdAt }
