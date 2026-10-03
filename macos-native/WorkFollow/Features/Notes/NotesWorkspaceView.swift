@@ -159,9 +159,15 @@ struct NotesWorkspaceView: View {
                         // 行分割线：与任务列表同一条（`ListRowDivider`），画在行内底边
                         // 所以不占行距。原来这里用系统 `Divider()`，比任务列表那条重一档，
                         // 而且选中行不画——两栏切来切去看到的是两种线。
+                        //
+                        // 但「选中行不画」这条保留：选中行有自己的圆角底色，`.overlay`
+                        // 画在 `.background` 之上，线会横穿底边（任务列表那边就是因此
+                        // 露出「下半截不是同一个蓝」）。
                         .overlay(alignment: .bottom) {
-                            ListRowDivider(leading: ListRowMetrics.notesDividerLeading,
-                                           trailing: ListRowMetrics.notesDividerLeading)
+                            if visibleNote?.id != note.id {
+                                ListRowDivider(leading: ListRowMetrics.notesDividerLeading,
+                                               trailing: ListRowMetrics.notesDividerLeading)
+                            }
                         }
                     }
                 }

@@ -786,13 +786,14 @@ struct TaskListView: View {
 
     @ViewBuilder
     private func taskRow(group: TaskListGroup, node: TaskTreeNode) -> some View {
+        let isSelected = workspace.selectedTaskID == node.task.id
         let row = TaskRowView(
                 task: node.task,
                 workspace: workspace,
                 depth: node.depth,
                 hasChildren: node.hasChildren,
                 expanded: node.expanded,
-                selected: workspace.selectedTaskID == node.task.id,
+                selected: isSelected,
                 focused: listFocused && !quickAddFocused && !descriptionFocused
                     && workspace.selectedTaskID == node.task.id,
                 showsListBadge: showsListBadge,
@@ -808,11 +809,18 @@ struct TaskListView: View {
             // 兄弟视图，每行多出 1pt，pitch 实测 51 而不是 50）。
             // 左右内缩沿用既有规则：未完成行从勾选框列左侧起，完成行从标题起
             // （完成行的勾选框是实心块，线压在下面会脏）；右端收进 WFSpace.lg。
+            //
+            // **选中行不画**：选中行有自己的圆角底色和一圈焦点环，而 `.overlay`
+            // 画在 `.background` 之上，这条线会横穿底边——实测底边只剩左右两个
+            // 圆角是蓝的、中间被 #F4F4F4 盖住，看着就像「下面一半不是同一个蓝」。
+            // 滴答在选中行上也不画它自己那条线（实测选中行上下都没有分割线）。
             .overlay(alignment: .bottom) {
-                ListRowDivider(
-                    leading: TaskListMetrics.dividerLeading(completed: node.task.status == .completed,
-                                                            depth: node.depth),
-                    trailing: WFSpace.lg)
+                if !isSelected {
+                    ListRowDivider(
+                        leading: TaskListMetrics.dividerLeading(completed: node.task.status == .completed,
+                                                                depth: node.depth),
+                        trailing: WFSpace.lg)
+                }
             }
         if node.depth == 0 {
             row
