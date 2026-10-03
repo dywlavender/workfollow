@@ -156,7 +156,7 @@ struct NavigationColumnView: View {
             .foregroundStyle(navigation.destination == destination
                              ? WFColors.accent : WFColors.text)
             .padding(.horizontal, WFSpace.sm)
-            .frame(height: 32)
+            .frame(height: NavigationMetrics.rowHeight)
             .background(navigation.destination == destination
                         ? WFColors.selection : .clear,
                         in: RoundedRectangle(cornerRadius: WFMetrics.corner))
@@ -228,7 +228,7 @@ private struct NotesNavigationSection: View {
                 Spacer(minLength: 4)
                 if count > 0 { Text("\(count)").font(WFType.supporting).foregroundStyle(WFColors.secondaryText) }
             }
-            .font(WFType.navigation).padding(.horizontal, WFSpace.sm).frame(height: 32)
+            .font(WFType.navigation).padding(.horizontal, WFSpace.sm).frame(height: NavigationMetrics.rowHeight)
             .foregroundStyle(selected ? WFColors.accent : WFColors.text)
             .background(selected ? WFColors.selection : .clear, in: RoundedRectangle(cornerRadius: WFMetrics.corner))
             .contentShape(Rectangle())
@@ -265,7 +265,7 @@ private struct TaskFiltersSectionView: View {
                 }
                 .foregroundStyle(WFColors.secondaryText)
                 .padding(.horizontal, WFSpace.sm)
-                .frame(height: 32)
+                .frame(height: NavigationMetrics.rowHeight)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .contentShape(Rectangle())
             }
@@ -309,7 +309,7 @@ private struct TaskFiltersSectionView: View {
             }
             .foregroundStyle(selected ? WFColors.accent : WFColors.text)
             .padding(.horizontal, WFSpace.sm)
-            .frame(height: 32)
+            .frame(height: NavigationMetrics.rowHeight)
             .background(selected ? WFColors.selection : .clear,
                         in: RoundedRectangle(cornerRadius: WFMetrics.corner))
             .contentShape(Rectangle())

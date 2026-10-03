@@ -41,6 +41,20 @@ enum RailMetrics {
     static let topPadding: CGFloat = 16
 }
 
+/// 导航栏（左起第二栏）的行几何。
+///
+/// 这一栏的行高 `32` 原来硬编码在 **6 处**：`SidebarViews` 里 4 处
+/// （智能清单行、笔记行、新建过滤器、过滤器行）+ `TaskManagementViews` 里 2 处
+/// （清单行、标签行）。2026-10-03 用户报「每一行间距太近」，要求 +10%，
+/// 顺手收成一个常量——下次调整只改这里，不会再出现只改一半、同一栏两种行距。
+///
+/// 取值：原 32 → **35**。严格 +10% 是 35.2，这里取整：macOS 上非整数行高会把
+/// 行内文字放到半像素上、渲染发虚，本项目度量一律用整数。35 = +9.4%，
+/// 与 +10% 视觉上无差别。
+enum NavigationMetrics {
+    static let rowHeight: CGFloat = 35
+}
+
 enum WFMetrics {
     static let minimumWindow = CGSize(width: 360, height: 480)
     static let defaultWindow = CGSize(width: 1280, height: 820)

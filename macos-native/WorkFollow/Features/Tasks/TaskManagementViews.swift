@@ -139,7 +139,7 @@ private struct SidebarListRowView: View {
             .help("清单操作")
         }
         .padding(.horizontal, WFSpace.sm)
-        .frame(height: 32)
+        .frame(height: NavigationMetrics.rowHeight)
         .background(selected || dragTargeted ? WFColors.selection : .clear,
                     in: RoundedRectangle(cornerRadius: WFMetrics.corner))
         // 拖拽悬停高亮描边（对齐 Flutter dragActive 的 accent 边框）。
@@ -291,7 +291,7 @@ struct TaskTagsSectionView: View {
                 Spacer(minLength: WFSpace.xs)
             }
             .padding(.horizontal, WFSpace.sm)
-            .frame(height: 32)
+            .frame(height: NavigationMetrics.rowHeight)
             .background(workspace.activeTag == tag ? WFColors.selection : .clear,
                         in: RoundedRectangle(cornerRadius: WFMetrics.corner))
             .contentShape(Rectangle())
