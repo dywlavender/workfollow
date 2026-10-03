@@ -28,6 +28,7 @@ final class AppEnvironment: ObservableObject {
     let notesWorkspace: NotesWorkspaceModel
     let reminders: NativeReminderService
     let focusStore: FocusStore
+    let taskActivityStore: TaskActivityStore
     let habitStore: HabitStore
     let summaryStore: SummaryStore
     let countdownStore: CountdownStore
@@ -69,6 +70,12 @@ final class AppEnvironment: ObservableObject {
                                              folderMetadata: snapshot?.noteFolderMetadata ?? [],
                                              clock: clock)
         focusStore = FocusStore(clock: clock)
+        taskActivityStore = TaskActivityStore(clock: clock)
+        taskWorkspace.attachActivityStore(taskActivityStore)
+        focusStore.onTaskFocusStarted = { [weak taskActivityStore, weak taskWorkspace] taskID, stopwatch in
+            guard taskWorkspace?.task(for: taskID) != nil else { return }
+            taskActivityStore?.recordFocusStart(taskID: taskID, stopwatch: stopwatch)
+        }
         focusStore.notifier = FocusNotifier()
         habitStore = HabitStore(clock: clock)
         summaryStore = SummaryStore(clock: clock)
@@ -79,7 +86,7 @@ final class AppEnvironment: ObservableObject {
         // 倒计时的提醒也走同一个排程服务。偏移量语义与任务相反（非负整天，
         // 锚在当天 09:00），由服务按来源分别映射；这里只把记录来源接上。
         reminders.countdownStore = countdownStore
-        moduleStores = [focusStore, habitStore, summaryStore, countdownStore, filterStore, TemplateStore.shared]
+        moduleStores = [focusStore, taskActivityStore, habitStore, summaryStore, countdownStore, filterStore, TemplateStore.shared]
         persistence.onResult = { [weak self] error in
             DispatchQueue.main.async { self?.storageError = error.map { "预览数据保存失败：\($0.localizedDescription)" } }
         }

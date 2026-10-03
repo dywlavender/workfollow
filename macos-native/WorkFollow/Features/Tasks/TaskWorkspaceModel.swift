@@ -117,6 +117,12 @@ final class TaskWorkspaceModel: ObservableObject {
     /// Called once by AppEnvironment after both stores exist. Resolves
     /// `activeFilterID` through the store, refreshes projections when filter
     /// contents change, and clears the active filter if it is deleted anywhere.
+    func attachActivityStore(_ activity: TaskActivityStore) {
+        store.onTasksChanged = { [weak activity] before, after in
+            activity?.recordChanges(from: before, to: after)
+        }
+    }
+
     func attachFilterStore(_ store: FilterStore) {
         filterStore = store
         filterCancellable = store.$filters.sink { [weak self] filters in

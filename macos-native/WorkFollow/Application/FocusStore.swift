@@ -76,6 +76,7 @@ struct FocusPreferences: Codable, Equatable {
 /// 专注模块 store：驱动 PomodoroEngine，持久化记录与偏好；剩余时间展示由本层 Timer 驱动。
 @MainActor
 final class FocusStore: ObservableObject, ModuleStoreFlushable {
+    var onTaskFocusStarted: ((UUID, Bool) -> Void)?
     struct Archive: Codable {
         var records: [PomodoroRecord] = []
         var preferences = FocusPreferences()
@@ -187,6 +188,7 @@ final class FocusStore: ObservableObject, ModuleStoreFlushable {
         sync()
         startTimer()
         schedulePersistence()
+        if let taskID { onTaskFocusStarted?(taskID, stopwatch ?? preferences.stopwatchMode) }
         return true
     }
 

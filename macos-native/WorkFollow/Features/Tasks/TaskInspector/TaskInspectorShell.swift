@@ -135,10 +135,22 @@ struct TaskInspectorShell: View {
         .buttonStyle(.plain)
         .help("更多操作")
         .accessibilityLabel("更多任务操作")
+        .background {
+            if actionPresentation.panel == .activity {
+                AnchoredPropertyPanel(
+                    isPresented: Binding(get: { actionPresentation.panel == .activity },
+                                         set: { if !$0 { actionPresentation.dismiss(.activity) } }),
+                    width: 320, prefersAbove: true, placement: .verticalInOwner) {
+                        TaskActivityPanel(taskID: task.id, store: environment.taskActivityStore) {
+                            actionPresentation.dismiss(.activity)
+                        }
+                    }
+            }
+        }
     }
 
     private var hasFooterPopover: Bool {
-        actionPresentation.panel != nil || presentation.activePopover == .deadline
+        (actionPresentation.panel != nil && actionPresentation.panel != .activity) || presentation.activePopover == .deadline
     }
 
     @ViewBuilder
@@ -206,7 +218,7 @@ struct TaskInspectorShell: View {
                 moreAction(task.isPinned ? "取消置顶" : "置顶", symbol: "pin") {
                     _ = workspace.setPinned(task.id, !task.isPinned)
                 }
-                moreAction(task.isAbandoned ? "恢复任务" : "放弃", symbol: "xmark.square") {
+                moreAction(task.isAbandoned ? "恢复" : "放弃", symbol: "xmark.square") {
                     if task.isAbandoned { _ = workspace.restore(task.id) }
                     else { _ = workspace.abandon(task.id) }
                 }
@@ -216,6 +228,8 @@ struct TaskInspectorShell: View {
                 moreAction("上传附件", symbol: "paperclip") { addAttachments(to: task.id) }
                 focusSubmenuRow(task)
                 Divider().padding(.horizontal, 8).padding(.vertical, 4)
+                moreAction("任务动态", symbol: "list.bullet.rectangle") { actionPresentation.open(.activity) }
+                    .inspectorRenderAnchor(.activityMenuRow)
                 moreAction("保存为模板", symbol: "doc.badge.plus") { saveAsTemplate() }
                 moreAction("创建副本", symbol: "square.on.square") { workspace.duplicate(task.id) }
                     .inspectorRenderAnchor(.duplicateMenuRow)
@@ -225,26 +239,11 @@ struct TaskInspectorShell: View {
                         message: copied ? "已复制任务链接" : "无法复制任务链接"))
                 }
                 moreAction("转换为笔记", symbol: "doc.text") { _ = environment.convertTaskToNote(task.id) }
-                moreAction("删除", symbol: "trash", destructive: true) { _ = workspace.delete(task.id) }
-                // Retain existing secondary capabilities until their product
-                // location is verified; do not silently drop them during parity.
-                Divider().padding(.horizontal, 8).padding(.vertical, 4)
-                Text("其他操作").font(WFType.supporting).foregroundStyle(WFColors.tertiaryText)
-                    .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 8)
-                moreAction("更多属性…", symbol: "slider.horizontal.3") { actionPresentation.open(.attributes) }
-                moreAction("截止日期…", symbol: "calendar.badge.exclamationmark") {
-                    presentation.activePopover = .deadline
-                }
-                if !task.isClosed && task.recurrence != .never {
-                    moreAction("跳过本周期", symbol: "arrow.forward.end") {
-                        workspace.skip(task.id)
-                    }
-                    .disabled(RecurrenceEngine.next(for: task, now: workspace.clock(), calendar: workspace.calendar) == nil)
-                }
+                moreAction("删除", symbol: "trash") { _ = workspace.delete(task.id) }
             }
             .padding(8)
         }
-        .frame(width: 208, height: 456)
+        .frame(width: 208, height: 490)
         .inspectorRenderAnchor(.moreMenu)
     }
 
@@ -284,7 +283,6 @@ struct TaskInspectorShell: View {
     private func moreAction(
         _ title: String,
         symbol: String,
-        destructive: Bool = false,
         action: @escaping () -> Void
     ) -> some View {
         Button {
@@ -297,7 +295,7 @@ struct TaskInspectorShell: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .foregroundStyle(destructive ? Color.red : WFColors.text)
+        .foregroundStyle(WFColors.text)
         .padding(.horizontal, 8)
         .onHover { if $0 { actionPresentation.dismissSubmenu() } }
     }

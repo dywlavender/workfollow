@@ -1,7 +1,7 @@
 import AppKit
 import SwiftUI
 
-enum AnchoredPropertyPanelPlacement { case vertical, submenu }
+enum AnchoredPropertyPanelPlacement { case vertical, verticalInOwner, submenu }
 enum AnchoredPropertyPanelFocusPolicy { case preservePresenter, panel }
 
 /// A child card has its own window: it can cross the parent's bottom edge without
@@ -134,9 +134,16 @@ struct AnchoredPropertyPanel<PanelContent: View>: NSViewRepresentable {
                 .insetBy(dx: -horizontalOutset, dy: 0)
             var rootOwner = owner
             while let parent = rootOwner.parent { rootOwner = parent }
-            let frame = placement == .submenu
-                ? AnchoredPropertyPanelGeometry.submenuFrame(row: row, size: size, bounds: rootOwner.frame.intersection(screen))
-                : AnchoredPropertyPanelGeometry.frame(row: row, size: size, screen: screen, prefersAbove: prefersAbove)
+            let frame: CGRect
+            switch placement {
+            case .submenu:
+                frame = AnchoredPropertyPanelGeometry.submenuFrame(row: row, size: size, bounds: rootOwner.frame.intersection(screen))
+            case .vertical:
+                frame = AnchoredPropertyPanelGeometry.frame(row: row, size: size, screen: screen, prefersAbove: prefersAbove)
+            case .verticalInOwner:
+                frame = AnchoredPropertyPanelGeometry.frame(row: row, size: size,
+                    screen: rootOwner.frame.intersection(screen), prefersAbove: prefersAbove)
+            }
             panel?.setFrame(frame, display: true)
             if isOpening { panel?.orderFront(nil) }
             if isOpening, focusPolicy == .panel {

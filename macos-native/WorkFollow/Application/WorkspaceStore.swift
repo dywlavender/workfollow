@@ -14,6 +14,8 @@ final class WorkspaceStore {
     private var transactionDepth = 0
     private var undoSnapshots: [[Task]] = []
     var canUndo: Bool { !undoSnapshots.isEmpty }
+    /// Observes only committed task snapshots, once per outer transaction.
+    var onTasksChanged: (([Task], [Task]) -> Void)?
 
     func task(_ id: UUID) -> Task? { tasks.first { $0.id == id } }
 
@@ -62,9 +64,11 @@ final class WorkspaceStore {
                 }
             }
         }
+        let previousTasks = tasks
         tasks = snapshot
         if let lists { self.lists = lists }
         reconcileListMetas(committed: listMetas, listsCommitted: lists != nil)
+        if transactionDepth == 0 { onTasksChanged?(previousTasks, tasks) }
     }
 
     /// Commits an editor-owned document/source pair without recording a business undo.
@@ -91,10 +95,12 @@ final class WorkspaceStore {
 
     func undo() {
         guard let previous = undoSnapshots.popLast() else { return }
+        let before = tasks
         tasks = previous
         lists = undoLists.removeLast()
         listMetas = undoListMetas.removeLast()
         if let compensation = undoCompensations.popLast() ?? nil { compensation() }
+        if transactionDepth == 0 { onTasksChanged?(before, tasks) }
     }
     func clearUndo() {
         undoSnapshots.removeAll()
@@ -119,6 +125,7 @@ final class WorkspaceStore {
                 undoListMetas.removeFirst()
                 undoCompensations.removeFirst()
             }
+            onTasksChanged?(before, tasks)
         }
     }
 
