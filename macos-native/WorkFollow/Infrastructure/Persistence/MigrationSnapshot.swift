@@ -1030,6 +1030,8 @@ enum MigrationSnapshot {
         case .weekends: return "WEEKENDS"
         case .workdays: return "WORKDAYS"
         case .holidays: return "HOLIDAYS"
+        case .lunarYearly: return "LUNAR_YEARLY"
+        case .lunarMonthly: return "LUNAR_MONTHLY"
         }
     }
 
