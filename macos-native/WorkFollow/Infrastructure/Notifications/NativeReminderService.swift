@@ -6,16 +6,13 @@ import Combine
 /// early; all-day tasks anchor to 09:00 of the due day, matching the schedule
 /// panel's all-day reminder hint).
 enum ReminderSchedule {
-    static let allDayAnchorHour = 9
 
     /// The moment offsets anchor to: the due clock, or 09:00 for all-day tasks.
+    /// 实现只有一处：`ScheduleSemantics.anchor`（面板预览 / 提交 / 排期共用）。
     static func reminderBase(for task: Task, calendar: Calendar) -> Date? {
-        guard let due = task.schedule.dueAt else { return nil }
-        guard task.schedule.hasTime else {
-            return calendar.date(bySettingHour: allDayAnchorHour, minute: 0, second: 0,
-                                 of: calendar.startOfDay(for: due))
-        }
-        return due
+        ScheduleSemantics.anchor(due: task.schedule.dueAt,
+                                 hasTime: task.schedule.hasTime,
+                                 calendar: calendar)
     }
 
     /// Ascending fire dates. Without stored offsets the legacy absolute
@@ -40,14 +37,13 @@ enum ReminderSchedule {
     /// 「推后 3 天」——而且因为偏移量本身合法，排程会安静地成功。
     ///
     /// 落点取**下一次发生日**的 09:00：与任务的全天提醒同一时刻
-    /// （`allDayAnchorHour`），也与编辑器「提醒」下拉里挂着的 `09:00` 一致。
+    /// （`ScheduleSemantics.allDayAnchorHour`），也与编辑器「提醒」下拉里挂着的 `09:00` 一致。
     static func fireDates(for event: CountdownEvent, calendar: Calendar, now: Date) -> [Date] {
         guard event.isActive else { return [] }
         let offsets = event.reminderOffsets
         guard !offsets.isEmpty else { return [] }
         let day = CountdownEvent.occurrence(of: event.rule, onOrAfter: now, calendar: calendar)
-        guard let anchor = calendar.date(bySettingHour: allDayAnchorHour, minute: 0, second: 0,
-                                         of: calendar.startOfDay(for: day)) else { return [] }
+        guard let anchor = ScheduleSemantics.allDayAnchor(on: day, calendar: calendar) else { return [] }
         return offsets.map { anchor.addingTimeInterval(-TimeInterval($0) * 60) }.sorted()
     }
 }

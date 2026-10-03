@@ -101,8 +101,10 @@ final class TaskActions {
         rule.monthDay = rule.monthDay ?? calendar.component(.day, from: base)
         guard let next = rule.nextOccurrence(after: base, frequency: task.recurrence, calendar: calendar) else { return nil }
         let days = calendar.dateComponents([.day], from: base, to: next).day ?? 0
+        // 平移规则只有一处实现（`ScheduleSemantics.shifted`）：due / dueEnd / deadline /
+        // reminder 用同一条，避免新实例的截止与提醒落到不同天。
         func shifted(_ date: Date?) -> Date? {
-            date.flatMap { calendar.date(byAdding: .day, value: days, to: $0) }
+            ScheduleSemantics.shifted(date, byDays: days, calendar: calendar)
         }
         let now = clock()
         var spawn = Task(id: UUID(), title: task.title, document: task.document,

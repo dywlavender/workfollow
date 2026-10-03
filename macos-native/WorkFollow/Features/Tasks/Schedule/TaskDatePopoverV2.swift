@@ -299,7 +299,7 @@ struct TaskDatePopoverV2: View {
 
     /// 未设置时间时的默认显示（滴答：全天任务按 09:00 起算）。
     private static var defaultClockText: String {
-        String(format: "%02d:00", TaskDateDraftModel.allDayAnchorHour)
+        String(format: "%02d:00", ScheduleSemantics.allDayAnchorHour)
     }
 
     private func submitTimeField() {
@@ -413,7 +413,7 @@ struct TaskDatePopoverV2: View {
     /// 列表打开时滚到的兜底时刻。开始时间无值 → 09:00（滴答全天起点）；
     /// 结束时间无值 → 开始 +1 小时（Flutter `until = initial + 1h` 的同一默认）。
     private func fallbackClock(for start: Date?) -> (hour: Int, minute: Int) {
-        guard let start else { return (TaskDateDraftModel.allDayAnchorHour, 0) }
+        guard let start else { return (ScheduleSemantics.allDayAnchorHour, 0) }
         let plus = start.addingTimeInterval(3600)
         return (workspace.calendar.component(.hour, from: plus),
                 workspace.calendar.component(.minute, from: plus))

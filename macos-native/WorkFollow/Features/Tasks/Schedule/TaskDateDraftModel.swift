@@ -37,9 +37,6 @@ final class TaskDateDraftModel: ObservableObject {
         (.hour1, -60 * 60, "提前1小时"),
         (.day1, -24 * 60 * 60, "提前1天"),
     ]
-    /// All-day tasks anchor presets to this hour of the scheduled day.
-    static let allDayAnchorHour = 9
-
     /// Flutter panel parity: the reminder row multi-selects these offsets
     /// (minutes relative to the anchor; 0 = on time, negative = early).
     static let offsetChoices = [0, -5, -30, -60, -1440]
@@ -100,7 +97,7 @@ final class TaskDateDraftModel: ObservableObject {
         _reminderOffsets = Published(initialValue: storedOffsets)
         if let reminderAt = task.reminderAt {
             _customReminder = Published(initialValue: reminderAt)
-            let base = Self.reminderBase(for: due, hasTime: task.schedule.hasTime, calendar: calendar)
+            let base = ScheduleSemantics.anchor(due: due, hasTime: task.schedule.hasTime, calendar: calendar)
             let preset = base.flatMap { base in Self.presetOffsets.first { base.addingTimeInterval($0.offset) == reminderAt }?.option }
             // With multi-offsets stored, the row shows the offsets and the
             // legacy single option stays out of the way.
@@ -219,7 +216,7 @@ final class TaskDateDraftModel: ObservableObject {
         guard on, !wasOn, let anchor = startTimeAnchor,
               calendar.component(.hour, from: anchor) == 0,
               calendar.component(.minute, from: anchor) == 0 else { return }
-        setStartTime(calendar.date(bySettingHour: Self.allDayAnchorHour, minute: 0, second: 0, of: anchor) ?? anchor)
+        setStartTime(ScheduleSemantics.allDayAnchor(on: anchor, calendar: calendar) ?? anchor)
     }
 
     /// 改开始时间：只动区间开始（日期页签则动选中日），结束时间不受影响。
@@ -295,8 +292,7 @@ final class TaskDateDraftModel: ObservableObject {
     var dueAnchor: Date? {
         guard !deadline else { return nil }
         guard let raw = startTimeAnchor else { return nil }
-        return hasTime ? raw
-            : calendar.date(bySettingHour: Self.allDayAnchorHour, minute: 0, second: 0, of: calendar.startOfDay(for: raw))
+        return ScheduleSemantics.anchor(due: raw, hasTime: hasTime, calendar: calendar)
     }
 
     func reminderDate(for option: ReminderOption) -> Date? {
@@ -304,7 +300,7 @@ final class TaskDateDraftModel: ObservableObject {
         case .none: return nil
         case .custom: return customReminder
         default:
-            guard let base = Self.reminderBase(for: startTimeAnchor, hasTime: hasTime, calendar: calendar) else { return customReminder }
+            guard let base = ScheduleSemantics.anchor(due: startTimeAnchor, hasTime: hasTime, calendar: calendar) else { return customReminder }
             let offset = Self.presetOffsets.first { $0.option == option }?.offset ?? 0
             return base.addingTimeInterval(offset)
         }
@@ -312,12 +308,6 @@ final class TaskDateDraftModel: ObservableObject {
 
     var reminderValue: Date? {
         reminderDate(for: reminderOption)
-    }
-
-    private static func reminderBase(for due: Date?, hasTime: Bool, calendar: Calendar) -> Date? {
-        guard let due else { return nil }
-        return hasTime ? due
-            : calendar.date(bySettingHour: allDayAnchorHour, minute: 0, second: 0, of: calendar.startOfDay(for: due))
     }
 
     /// 重复规则锚定的日期：时间段取开始日，否则取选中日（面板以它生成周/月/年
@@ -378,11 +368,9 @@ final class TaskDateDraftModel: ObservableObject {
         return periodEnd.map { hasTime ? $0 : calendar.startOfDay(for: $0) }
     }
 
-    /// 结束早于开始 → 禁止确认。判据照抄 Flutter `apply()` 的 `to.isBefore(from)`：
-    /// **严格早于**，相等合法（09:00 → 09:00 可以提交）。不要自行改成 `<=`。
+    /// 结束早于开始 → 禁止确认。判据在 `ScheduleSemantics.rangeError`（单一来源）。
     var rangeError: String? {
-        guard let start = effectiveStart, let end = effectiveEnd else { return nil }
-        return end < start ? "结束时间不能早于开始时间" : nil
+        ScheduleSemantics.rangeError(start: effectiveStart, end: effectiveEnd)
     }
 
     var canCommit: Bool { rangeError == nil }
@@ -409,7 +397,7 @@ final class TaskDateDraftModel: ObservableObject {
         let reminder: Date?
         if offsets.isEmpty {
             reminder = reminderValue
-        } else if let base = Self.reminderBase(for: schedule.dueAt, hasTime: schedule.hasTime, calendar: calendar) {
+        } else if let base = ScheduleSemantics.anchor(due: schedule.dueAt, hasTime: schedule.hasTime, calendar: calendar) {
             // The stored reminderAt mirrors the earliest fire date, matching
             // what Flutter persists alongside its offsets.
             reminder = base.addingTimeInterval(TimeInterval(offsets.first ?? 0) * 60)
