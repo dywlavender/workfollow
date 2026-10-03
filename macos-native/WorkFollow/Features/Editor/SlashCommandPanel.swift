@@ -1,12 +1,8 @@
 import AppKit
 import SwiftUI
 
-/// 斜杠面板现有度量，最初来自 Flutter `DocumentSlashMenuMetrics`。
-///
-/// 原版是一张 160 宽的命令卡：行高 34、上下各 4 内边距；行内是"左缩进 4 + 图标槽
-/// 14 + 图标与文字间距 11 + 标签 + 右 12"；两段之间一条全宽 1pt 细线（上下各 4，
-/// 共 9）；选中行是**中性灰**底 + 1pt 强调色细描边 + 6 圆角。12 项卡面高 425
-/// （12×34 + 9 + 8）。保留此基线；TickTick 像素验收需独立截图证据。
+/// Compact Task menu geometry. Row height and command order remain stable;
+/// TickTick reference selection is neutral fill without an accent outline.
 enum SlashMenuMetrics {
     static let width: CGFloat = 160
     static let rowHeight: CGFloat = 34
@@ -18,8 +14,8 @@ enum SlashMenuMetrics {
     static let itemTrailing: CGFloat = 12
     /// 4 above the hairline, 1 for the hairline, 4 below.
     static let dividerBlock: CGFloat = 9
-    static let radius: CGFloat = 12
-    static let rowRadius: CGFloat = 6
+    static let radius: CGFloat = 16
+    static let rowRadius: CGFloat = 8
     static let labelSize: CGFloat = 13
 
     /// 与原版 `DocumentSlashMenu.heightFor` 同一算法：行 × 34 + 分组细线 9 +
@@ -183,7 +179,7 @@ extension NativeTextView {
     }
 }
 
-private struct SlashCommandList: View {
+struct SlashCommandList: View {
     let commands: [DocumentCommand]
     let selected: Int
     let compact: Bool
@@ -208,12 +204,13 @@ private struct SlashCommandList: View {
         }
         .font(.system(size: compact ? SlashMenuMetrics.labelSize : 14))
         .foregroundStyle(WFColors.text)
-        // 卡面是浮层：底色 `overlay` + 描边 + 圆角 12（原版 `WorkFollowRadii.popover`），
-        // 阴影由面板自己画（`hasShadow`，原版是 level2 elevation）。
+        // Task compact cards have no hard outline; the panel owns their shadow.
         .background(WFColors.overlay, in: RoundedRectangle(cornerRadius: SlashMenuMetrics.radius))
         .overlay {
-            RoundedRectangle(cornerRadius: SlashMenuMetrics.radius)
-                .stroke(WFColors.border, lineWidth: 1)
+            if !compact {
+                RoundedRectangle(cornerRadius: SlashMenuMetrics.radius)
+                    .stroke(WFColors.border, lineWidth: 1)
+            }
         }
     }
 
@@ -246,11 +243,13 @@ private struct SlashCommandList: View {
             // 选中底是中性灰，不是强调色：菜单是中性表面，行不该在指针移过时"跳"一下。
             .background(active ? WFColors.menuSelected : Color.clear,
                         in: RoundedRectangle(cornerRadius: SlashMenuMetrics.rowRadius))
-            // 选中行除灰底之外还有一圈 1pt 强调色细描边（原版 `focusBorder`：
-            // `focusRing` = 强调色 35%）。
+            // Task compact menu selection uses a neutral fill, including keyboard
+            // navigation. Preserve the existing Note palette presentation.
             .overlay {
-                RoundedRectangle(cornerRadius: SlashMenuMetrics.rowRadius)
-                    .stroke(active ? WFColors.accent.opacity(0.35) : Color.clear, lineWidth: 1)
+                if !compact {
+                    RoundedRectangle(cornerRadius: SlashMenuMetrics.rowRadius)
+                        .stroke(active ? WFColors.accent.opacity(0.35) : Color.clear, lineWidth: 1)
+                }
             }
         }
         .buttonStyle(.plain)

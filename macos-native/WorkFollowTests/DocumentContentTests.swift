@@ -131,6 +131,133 @@ final class DocumentContentTests: XCTestCase {
         XCTAssertEqual(runs[1].marks, [.underline])
     }
 
+    func testEachInlineFormatAppliesAndTogglesOffForSelection() throws {
+        let formats: [(String, DocumentMark)] = [
+            ("format.bold", .bold), ("format.italic", .italic),
+            ("format.underline", .underline), ("format.strikethrough", .strikethrough),
+            ("format.highlight", .highlight), ("format.inlineCode", .code)
+        ]
+        for (id, mark) in formats {
+            let editor = NativeTextView(frame: .zero, textContainer: nil)
+            let original = NativeDocument(plainText: "保留文本")
+            let selection = NSRange(location: 0, length: ("保留文本" as NSString).length)
+            editor.textStorage?.setAttributedString(DocumentTextCodec.render(original))
+            editor.setSelectedRange(selection)
+            let command = try XCTUnwrap(EditorCommandCatalog.format(id))
+
+            editor.applyFormat(command)
+
+            var decoded = DocumentTextCodec.decode(editor.attributedString(), preserving: original)
+            XCTAssertEqual(editor.string, "保留文本", "\(id) 不应改动文本")
+            XCTAssertEqual(editor.selectedRange(), selection, "\(id) 应保留选区")
+            XCTAssertEqual(decoded.blocks[0].runs.map(\.marks), [Set([mark])], "\(id) 应加到整个选区")
+
+            editor.applyFormat(command)
+
+            decoded = DocumentTextCodec.decode(editor.attributedString(), preserving: original)
+            XCTAssertEqual(editor.string, "保留文本", "再次切换 \(id) 不应改动文本")
+            XCTAssertEqual(editor.selectedRange(), selection, "取消 \(id) 后应保留选区")
+            XCTAssertTrue(decoded.blocks[0].runs.allSatisfy { !$0.marks.contains(mark) }, "\(id) 应从选区移除")
+        }
+    }
+
+    func testCaretInlineFormatsStyleTypedTextOnBothSidesOfNewline() throws {
+        let formats: [(String, DocumentMark)] = [
+            ("format.bold", .bold), ("format.italic", .italic),
+            ("format.underline", .underline), ("format.strikethrough", .strikethrough),
+            ("format.highlight", .highlight), ("format.inlineCode", .code)
+        ]
+        for (id, mark) in formats {
+            let editor = NativeTextView(frame: .zero, textContainer: nil)
+            editor.typingAttributes = DocumentTextCodec.attributes(kind: .paragraph, marks: [])
+            editor.applyFormat(try XCTUnwrap(EditorCommandCatalog.format(id)))
+            let typingSample = NSAttributedString(string: " ", attributes: editor.typingAttributes)
+            XCTAssertTrue(DocumentTextCodec.style(of: typingSample).has(mark), "空选区应用 \(id) 后输入态应激活")
+
+            editor.insertText("甲", replacementRange: editor.selectedRange())
+            editor.insertNewline(nil)
+            editor.insertText("乙", replacementRange: editor.selectedRange())
+
+            let decoded = DocumentTextCodec.decode(editor.attributedString(), preserving: .empty)
+            XCTAssertEqual(decoded.blocks.map(\.plainText), ["甲", "乙"], "\(id) 的输入与换行应形成两行")
+            XCTAssertTrue(decoded.blocks.allSatisfy { block in
+                block.runs.contains { run in
+                    run.text.contains(where: { character in !character.isWhitespace })
+                        && run.marks.contains(mark)
+                }
+            }, "换行前后实际输入的文字都应保留 \(id)")
+        }
+    }
+
+    func testRemovingInlineFormatPreservesLinkAttachmentSelectionAndUndo() throws {
+        let link = "https://example.com"
+        let attachment = NativeAttachment(id: UUID(), name: "资料.pdf", storedName: "example.pdf")
+        let document = NativeDocument(blocks: [DocumentBlock(kind: .paragraph, runs: [
+            DocumentRun(text: "链接", marks: [.underline, .link(link)]),
+            DocumentRun(text: "\u{FFFC}", marks: [.underline], attachment: attachment)
+        ])])
+        let editor = NativeTextView(frame: .zero, textContainer: nil)
+        editor.textStorage?.setAttributedString(DocumentTextCodec.render(document))
+        let selection = NSRange(location: 0, length: 3)
+        editor.setSelectedRange(selection)
+
+        editor.applyFormat(try XCTUnwrap(EditorCommandCatalog.format("format.underline")))
+
+        XCTAssertEqual(editor.selectedRange(), selection)
+        let cleared = DocumentTextCodec.decode(editor.attributedString(), preserving: document)
+        let clearedRuns = try XCTUnwrap(cleared.blocks.first?.runs)
+        XCTAssertFalse(clearedRuns.contains { $0.marks.contains(.underline) })
+        XCTAssertTrue(clearedRuns[0].marks.contains(.link(link)))
+        XCTAssertEqual(clearedRuns[1].attachment, attachment)
+
+        editor.undo(nil)
+
+        let restored = DocumentTextCodec.decode(editor.attributedString(), preserving: document)
+        let restoredRuns = try XCTUnwrap(restored.blocks.first?.runs)
+        XCTAssertTrue(restoredRuns.allSatisfy { $0.marks.contains(.underline) })
+        XCTAssertTrue(restoredRuns[0].marks.contains(.link(link)))
+        XCTAssertEqual(restoredRuns[1].attachment, attachment)
+    }
+
+    func testMixedSelectionActivatesOnlyInlineFormatsSharedByEveryRun() throws {
+        let shared: Set<DocumentMark> = [.italic, .highlight, .code]
+        let document = NativeDocument(blocks: [DocumentBlock(kind: .paragraph, runs: [
+            DocumentRun(text: "甲", marks: [.bold, .italic, .underline, .strikethrough, .highlight, .code]),
+            DocumentRun(text: "乙", marks: shared)
+        ])])
+        let editor = NativeTextView(frame: .zero, textContainer: nil)
+        editor.textStorage?.setAttributedString(DocumentTextCodec.render(document))
+        editor.setSelectedRange(NSRange(location: 0, length: 2))
+        let selected = try XCTUnwrap(editor.textStorage).attributedSubstring(from: editor.selectedRange())
+        let style = DocumentTextCodec.style(of: selected)
+        let expected: [(String, Bool)] = [
+            ("format.bold", false), ("format.italic", true),
+            ("format.underline", false), ("format.strikethrough", false),
+            ("format.highlight", true), ("format.inlineCode", true)
+        ]
+
+        for (id, isActive) in expected {
+            let command = try XCTUnwrap(EditorCommandCatalog.format(id))
+            XCTAssertEqual(command.descriptor.isActive(in: style), isActive, "混合选区中的 \(id) 激活态")
+        }
+    }
+
+    func testInlineMarksAndLinkSurviveJSONAndTextCodecRoundTrips() throws {
+        let marks: Set<DocumentMark> = [
+            .bold, .italic, .underline, .strikethrough, .highlight, .code,
+            .link("https://example.com")
+        ]
+        let document = NativeDocument(blocks: [DocumentBlock(kind: .paragraph, runs: [
+            DocumentRun(text: "完整行内格式", marks: marks)
+        ])])
+
+        let restored = try JSONDecoder().decode(NativeDocument.self, from: JSONEncoder().encode(document))
+        XCTAssertEqual(restored, document, "JSON 往返应保留全部行内标记与链接")
+
+        let decoded = DocumentTextCodec.decode(DocumentTextCodec.render(restored), preserving: restored)
+        XCTAssertEqual(decoded, restored, "TextCodec render/decode 应保留全部行内标记与链接")
+    }
+
     func testEditorFormattingAdditionsPersistAndUndo() throws {
         let editor = NativeTextView(frame: NSRect(x: 0, y: 0, width: 400, height: 300), textContainer: nil)
         editor.insertText("验收", replacementRange: NSRange(location: 0, length: 0))
@@ -189,7 +316,7 @@ final class DocumentContentTests: XCTestCase {
             // 标记由视图层自绘：段落不挂 NSTextList，否则 TextKit 2（macOS 14+）
             // 会再画一份灰色标记并挤占行首空间。
             XCTAssertEqual(style?.textLists.isEmpty, true)
-            XCTAssertEqual(style?.firstLineHeadIndent, 42)
+            XCTAssertEqual(style?.firstLineHeadIndent, DocumentEditorGeometry.decorationLane + DocumentEditorGeometry.listTextIndent)
         }
     }
 

@@ -7,6 +7,22 @@ import XCTest
 /// **行内标记**按"选区里每个 run 都有才算激活"的口径读（与原版 `isActive` 一致，
 /// 也与"再点一次会取消"的判断同源——否则会出现按钮亮着却取消不掉的错位）。
 final class DocumentFormatStyleTests: XCTestCase {
+    func testStructuredParagraphsUseCompactGeometryWithoutMovingPlainText() throws {
+        func style(_ kind: DocumentBlockKind) throws -> NSParagraphStyle {
+            try XCTUnwrap(DocumentTextCodec.attributes(kind: kind, marks: [])[.paragraphStyle] as? NSParagraphStyle)
+        }
+        let plain = try style(.paragraph)
+        XCTAssertEqual(plain.headIndent, DocumentEditorGeometry.decorationLane)
+        XCTAssertEqual(try style(.heading(1)).headIndent, plain.headIndent)
+        for kind in [DocumentBlockKind.bullet, .ordered, .checklist(false), .quote] {
+            let structured = try style(kind)
+            XCTAssertEqual(structured.headIndent - plain.headIndent, 16)
+            XCTAssertEqual(structured.firstLineHeadIndent, structured.headIndent)
+            XCTAssertEqual(structured.paragraphSpacing, 2)
+            XCTAssertTrue(structured.textLists.isEmpty)
+        }
+        XCTAssertEqual(plain.paragraphSpacing, 8)
+    }
 
     @MainActor
     func testListFormattingOnlyChangesSelectedParagraphs() throws {

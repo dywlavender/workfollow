@@ -109,6 +109,11 @@ final class DocumentEditorHandle: ObservableObject {
 /// it inside its drawable bounds, but it must not consume host text width.
 enum DocumentEditorGeometry {
     static let decorationLane: CGFloat = 20
+    static let listTextIndent: CGFloat = 16
+    static let quoteTextIndent: CGFloat = 16
+    static let structuredParagraphSpacing: CGFloat = 2
+    static let quoteRuleInset: CGFloat = 4
+    static let quoteRuleWidth: CGFloat = 2
 }
 
 struct DocumentEditor: View {
@@ -120,12 +125,14 @@ struct DocumentEditor: View {
     var profile = DocumentProfile()
     var contentSized = false
     var handle: DocumentEditorHandle?
+    var decorationVisibleMinX: CGFloat = 0
 
     var body: some View {
         DocumentEditorContent(documentID: documentID, document: document,
                               onDocumentChange: onDocumentChange, onEscape: onEscape,
                               onEditingChanged: onEditingChanged, profile: profile,
-                              contentSized: contentSized, handle: handle)
+                                  contentSized: contentSized, handle: handle,
+                                  decorationVisibleMinX: decorationVisibleMinX)
             .padding(.leading, -DocumentEditorGeometry.decorationLane)
     }
 }
@@ -139,6 +146,7 @@ private struct DocumentEditorContent: NSViewRepresentable {
     var profile = DocumentProfile()
     var contentSized = false
     var handle: DocumentEditorHandle?
+    var decorationVisibleMinX: CGFloat = 0
 
     func makeCoordinator() -> DocumentEditorCoordinator {
         DocumentEditorCoordinator(documentID: documentID, document: document,
@@ -159,6 +167,7 @@ private struct DocumentEditorContent: NSViewRepresentable {
         scrollView.focusRingType = .none
 
         let textView = NativeTextView(frame: .zero, textContainer: nil)
+        textView.decorationVisibleMinX = decorationVisibleMinX
         textView.documentIdentity = documentID
         textView.delegate = context.coordinator
         textView.textStorage?.setAttributedString(DocumentTextCodec.render(document))
@@ -178,6 +187,7 @@ private struct DocumentEditorContent: NSViewRepresentable {
 
     func updateNSView(_ scrollView: NSScrollView, context: Context) {
         guard let textView = scrollView.documentView as? NativeTextView else { return }
+        textView.decorationVisibleMinX = decorationVisibleMinX
         textView.profile = profile
         handle?.textView = textView
         textView.onSelectionChanged = { [weak handle] in handle?.refreshStyle() }

@@ -1,6 +1,22 @@
 import AppKit
 import SwiftUI
 
+/// Component metrics from the live TickTick toolbar comparison. Keep hit areas
+/// and command order stable; visual glyph size is independent of interaction size.
+enum DocumentFormatToolbarMetrics {
+    static let iconSize: CGFloat = 14
+    static let controlWidth: CGFloat = 26
+    static let controlHeight: CGFloat = 28
+    static let height: CGFloat = 38
+    static let cornerRadius: CGFloat = 8
+    static let borderWidth: CGFloat = 0
+    static let horizontalInset: CGFloat = 5
+    static let dividerInset: CGFloat = 5
+    static let highlightFill = Color(nsColor: .systemYellow).opacity(0.45)
+    static let shadowRadius: CGFloat = 10
+    static let shadowOffset: CGFloat = 3
+}
+
 /// Toolbar layouts keep their product order while shared descriptors supply
 /// format identity, labels, symbols and active state. Execution remains TextKit-owned.
 
@@ -107,7 +123,7 @@ struct DocumentFormatToolbarView: View {
                         .font(.system(size: 16))
                         .foregroundStyle(WFColors.text)
                         .padding(.horizontal, WFSpace.tight)
-                        .background(WFColors.accentSoft, in: RoundedRectangle(cornerRadius: 4))
+                        .background(DocumentFormatToolbarMetrics.highlightFill, in: RoundedRectangle(cornerRadius: 4))
                 }
                 .editorCommandFrame(highlightCommand.id, space: DocumentToolbarTooltip.space)
                 toolbarDivider
@@ -120,11 +136,11 @@ struct DocumentFormatToolbarView: View {
                 formatButton("format.strikethrough")
                 ToolbarButton(title: "分割线", active: false, state: overlay,
                               action: { handle.insertDivider() }) {
-                    Image(systemName: "minus")
+                    SlashMenuGlyph(kind: .divider, color: WFColors.secondaryText)
                 }
                 ToolbarButton(title: "插入当前时间", active: openPicker == .time, state: overlay,
                               action: { togglePicker(.time) }) {
-                    Image(systemName: "clock")
+                    Image(systemName: "clock.arrow.circlepath")
                 }
                 toolbarDivider
                 ToolbarButton(title: "链接", active: false, state: overlay,
@@ -140,19 +156,22 @@ struct DocumentFormatToolbarView: View {
                 }
             }
             .buttonStyle(.plain)
-            // 图标 18（原版 `WorkFollowMetrics.toolbarIcon`）；字母标签在内部覆盖成 16。
-            .font(.system(size: WFMetrics.icon))
-            .padding(.horizontal, WFSpace.sm)   // 原版 `WorkFollowSpacing.toolbarItemGap` = 8
+            // Optical glyph size is separate from the unchanged hit target.
+            .font(.system(size: DocumentFormatToolbarMetrics.iconSize, weight: .regular))
+            .padding(.horizontal, DocumentFormatToolbarMetrics.horizontalInset)
         }
         .frame(maxWidth: maxWidth)
-        .frame(height: 38)
+        .frame(height: DocumentFormatToolbarMetrics.height)
         // 工具条本身在原版里就是一个浮层（`showTaskEditorPopover` 的卡面），所以取浮层
         // 底色/描边/阴影，而不是画布色。
-        .background(WFColors.overlay, in: RoundedRectangle(cornerRadius: 12))
+        .background(WFColors.overlay, in: RoundedRectangle(cornerRadius: DocumentFormatToolbarMetrics.cornerRadius))
         .overlay {
-            RoundedRectangle(cornerRadius: 12).stroke(WFColors.overlayBorder, lineWidth: 1)
+            RoundedRectangle(cornerRadius: DocumentFormatToolbarMetrics.cornerRadius)
+                .stroke(WFColors.overlayBorder, lineWidth: DocumentFormatToolbarMetrics.borderWidth)
         }
-        .shadow(color: WFColors.overlayShadow, radius: 18, y: 6)
+        .shadow(color: WFColors.overlayShadow,
+                radius: DocumentFormatToolbarMetrics.shadowRadius,
+                y: DocumentFormatToolbarMetrics.shadowOffset)
         .onHover { inside in
             toolbarHovered = inside
             dismissPickerIfPointerLeft()
@@ -182,7 +201,7 @@ struct DocumentFormatToolbarView: View {
         Rectangle()
             .fill(WFColors.border)
             .frame(width: 1, height: 17)
-            .padding(.horizontal, WFSpace.xs)
+            .padding(.horizontal, DocumentFormatToolbarMetrics.dividerInset)
     }
 
     /// 提示画在工具条**上方**：卡的中心落在被悬停控件的横中线上，底边离工具条顶 6pt。
@@ -262,7 +281,13 @@ struct DocumentFormatToolbarView: View {
         let active = descriptor?.isActive(in: handle.style) ?? false
         return ToolbarButton(title: descriptor?.formatToolbarTitle ?? id, active: active, state: overlay,
                              action: { if let command { handle.format(command) } }) {
-            Image(systemName: descriptor?.toolbarSymbol ?? "textformat")
+            if let descriptor, [.bullet, .ordered, .checklist, .quote].contains(descriptor.glyph) {
+                SlashMenuGlyph(kind: descriptor.glyph,
+                               color: active ? WFColors.accent : WFColors.secondaryText)
+            } else {
+                Image(systemName: descriptor?.toolbarSymbol ?? "textformat")
+                    .font(.system(size: id == "format.inlineCode" ? 13 : DocumentFormatToolbarMetrics.iconSize))
+            }
         }
         .disabled(command == nil)
         .editorCommandFrame(id, space: DocumentToolbarTooltip.space)
@@ -285,7 +310,8 @@ private struct ToolbarButton<Label: View>: View {
         Button(action: action) {
             label
                 .foregroundStyle(active ? WFColors.accent : WFColors.secondaryText)
-                .frame(width: 26, height: 28)
+                .frame(width: DocumentFormatToolbarMetrics.controlWidth,
+                       height: DocumentFormatToolbarMetrics.controlHeight)
                 .background(active ? WFColors.accentFaint
                             : hovering ? WFColors.listRowHover : Color.clear,
                             in: RoundedRectangle(cornerRadius: 4))

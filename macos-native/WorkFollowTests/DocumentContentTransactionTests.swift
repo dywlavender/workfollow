@@ -4,6 +4,33 @@ import XCTest
 
 @MainActor
 final class DocumentContentTransactionTests: XCTestCase {
+    func testInlineCancellationPublishesCorrectedAttributesAndReplaysThem() throws {
+        for id in ["format.underline", "format.strikethrough", "format.highlight", "format.inlineCode"] {
+            let command = try XCTUnwrap(EditorCommandCatalog.format(id))
+            let mark = try XCTUnwrap(command.mark)
+            let original = NativeDocument(blocks: [DocumentBlock(kind: .paragraph, runs: [
+                DocumentRun(text: "样式", marks: [mark, .link("https://example.com")])
+            ])])
+            let editor = NativeTextView(frame: .zero, textContainer: nil)
+            editor.textStorage?.setAttributedString(DocumentTextCodec.render(original))
+            var published: NativeDocument?
+            let coordinator = DocumentEditorCoordinator(documentID: UUID(), document: original,
+                onDocumentChange: { published = $0 }, onEscape: { .keepInspector },
+                onEditingChanged: { _ in })
+            defer { withExtendedLifetime(coordinator) {} }
+            editor.delegate = coordinator
+            editor.setSelectedRange(NSRange(location: 0, length: 2))
+
+            editor.applyFormat(command)
+            XCTAssertFalse(try XCTUnwrap(published?.blocks.first?.runs.first).marks.contains(mark), id)
+            XCTAssertTrue(try XCTUnwrap(published?.blocks.first?.runs.first).marks.contains(.link("https://example.com")), id)
+            editor.undo(nil)
+            XCTAssertTrue(try XCTUnwrap(published?.blocks.first?.runs.first).marks.contains(mark), id)
+            editor.redo(nil)
+            XCTAssertFalse(try XCTUnwrap(published?.blocks.first?.runs.first).marks.contains(mark), id)
+        }
+    }
+
     func testOrdinaryTypingUndoRedoPublishesReplayedDocument() {
         let editor = NativeTextView(frame: .zero, textContainer: nil)
         var documents: [NativeDocument] = []

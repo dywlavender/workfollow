@@ -3,6 +3,8 @@ import ImageIO
 import SwiftUI
 
 final class NativeTextView: NSTextView {
+    /// Leading boundary visible inside the host's narrower decoration space.
+    var decorationVisibleMinX: CGFloat = 0
     // An inspector is recreated for each document. Never share the window's
     // undo history with another task or its title field.
     private let documentUndoManager = UndoManager()
@@ -79,6 +81,14 @@ final class NativeTextView: NSTextView {
 
     override func insertText(_ insertString: Any, replacementRange: NSRange) {
         let wasComposing = hasMarkedText()
+        if !wasComposing,
+           typingAttributes[DocumentTextCodec.completedChecklistPresentationKey] as? Bool == true,
+           typingAttributes[DocumentTextCodec.blockKey] as? String != "checked" {
+            let sample = NSAttributedString(string: " ", attributes: typingAttributes)
+            let block = DocumentTextCodec.decode(sample, preserving: .empty).blocks.first
+            typingAttributes = DocumentTextCodec.attributes(kind: block?.kind ?? .paragraph,
+                                                            marks: block?.runs.first?.marks ?? [])
+        }
         // 覆盖一段选中文本输入触发字符是普通编辑，不该开命令面板。
         let target = replacementRange.location == NSNotFound ? selectedRange() : replacementRange
         let replacedSelection = target.length > 0
@@ -112,6 +122,7 @@ final class NativeTextView: NSTextView {
     }
 
     override func didChangeText() {
+        normalizeCompletedChecklistPresentation()
         // 先同步文末空段的待定级别，delegate 的 commit 解码才能带上正确类型
         // （标题行回车后新行延续级别靠这一步）。
         syncPendingTrailingBlock()
@@ -124,6 +135,26 @@ final class NativeTextView: NSTextView {
         // clip view has nothing to scroll; reveal the caret in the host after
         // SwiftUI has applied the new document height.
         needsHostCaretReveal = true
+    }
+
+    private func normalizeCompletedChecklistPresentation() {
+        guard let storage = textStorage else { return }
+        var inherited: [(NSRange, NSColor)] = []
+        storage.enumerateAttributes(in: NSRange(location: 0, length: storage.length)) { attributes, range, _ in
+            guard attributes[DocumentTextCodec.completedChecklistPresentationKey] as? Bool == true,
+                  attributes[DocumentTextCodec.blockKey] as? String != "checked" else { return }
+            let kind = DocumentTextCodec.kind(attributes[DocumentTextCodec.blockKey] as? String ?? "paragraph")
+            let color = DocumentTextCodec.attributes(kind: kind, marks: [])[.foregroundColor] as? NSColor ?? .labelColor
+            inherited.append((range, color))
+        }
+        guard !inherited.isEmpty else { return }
+        storage.beginEditing()
+        for (range, color) in inherited {
+            storage.removeAttribute(.strikethroughStyle, range: range)
+            storage.removeAttribute(DocumentTextCodec.completedChecklistPresentationKey, range: range)
+            storage.addAttribute(.foregroundColor, value: color, range: range)
+        }
+        storage.endEditing()
     }
 
     /// 光标停在文末空段时，把"接下来输入的类型"记进 `pendingTrailingBlock`
@@ -243,6 +274,7 @@ final class NativeTextView: NSTextView {
 
     override func mouseDown(with event: NSEvent) {
         dismissSlash()
+        if openEmptyBlockMenu(at: convert(event.locationInWindow, from: nil)) { return }
         // 文档复选框在任务与笔记两个面都可点（原版 `DocumentCheckboxBuilder` 挂在
         // 共享文档样式上，不分面）。
         if isEditable, let window, let storage = textStorage, storage.length > 0 {
@@ -250,9 +282,8 @@ final class NativeTextView: NSTextView {
             let offset = min(characterIndexForInsertion(at: point), storage.length - 1)
             let paragraph = (string as NSString).paragraphRange(for: NSRange(location: offset, length: 0))
             let token = storage.attribute(DocumentTextCodec.blockKey, at: paragraph.location, effectiveRange: nil) as? String
-            if token == "checklist" || token == "checked" {
-                let screenRect = firstRect(forCharacterRange: NSRange(location: paragraph.location, length: 0), actualRange: nil)
-                let caret = convert(window.convertFromScreen(screenRect), from: nil)
+            if (token == "checklist" || token == "checked"),
+               let caret = viewRect(forCharacterAt: paragraph.location) {
                 let marker = NSRect(x: caret.minX - 28, y: caret.minY, width: 28, height: caret.height)
                 if marker.contains(point) {
                     window.makeFirstResponder(self)
@@ -264,9 +295,8 @@ final class NativeTextView: NSTextView {
             // 点中标记区按它翻转（显示已支持，这里补点击）。
             let trailingKind = pendingTrailingBlock ?? displayedTrailingBlock
             if token != "checklist", token != "checked",
-               case .checklist(let checked) = trailingKind {
-                let screenRect = firstRect(forCharacterRange: NSRange(location: storage.length, length: 0), actualRange: nil)
-                let caret = convert(window.convertFromScreen(screenRect), from: nil)
+               case .checklist(let checked) = trailingKind,
+               let caret = viewRect(forCharacterAt: storage.length) {
                 let marker = NSRect(x: caret.minX - 28, y: caret.minY, width: 28, height: caret.height)
                 if marker.contains(point) {
                     window.makeFirstResponder(self)
@@ -276,6 +306,34 @@ final class NativeTextView: NSTextView {
             }
         }
         super.mouseDown(with: event)
+    }
+
+    /// The plus is a menu trigger, not document content. Reuse a zero-length
+    /// Slash session so selecting/cancelling never introduces a literal slash.
+    @discardableResult
+    func openEmptyBlockMenu(at point: NSPoint) -> Bool {
+        guard isEditable, let window, let storage = textStorage else { return false }
+        let source = storage.string as NSString
+        // The plus is drawn only on the active line. Hit-test that same line:
+        // gutter clicks on a characterless trailing paragraph may otherwise
+        // resolve to the previous paragraph in TextKit's insertion lookup.
+        let offset = min(max(selectedRange().location, 0), source.length)
+        let paragraph = source.paragraphRange(for: NSRange(location: offset, length: 0))
+        guard source.substring(with: paragraph).trimmingCharacters(in: .newlines).isEmpty else { return false }
+        let kind = paragraph.location < storage.length
+            ? DocumentTextCodec.kind(storage.attribute(DocumentTextCodec.blockKey,
+                at: paragraph.location, effectiveRange: nil) as? String ?? "paragraph")
+            : pendingTrailingBlock ?? displayedTrailingBlock ?? .paragraph
+        guard kind == .paragraph else { return false }
+        guard let caret = viewRect(forCharacterAt: paragraph.location) else { return false }
+        let hit = NSRect(x: max(5, decorationVisibleMinX + 4) - 2,
+                         y: caret.minY, width: 12, height: caret.height)
+        guard hit.contains(point) else { return false }
+        window.makeFirstResponder(self)
+        setSelectedRange(NSRange(location: paragraph.location, length: 0))
+        slashSession = SlashSession(start: paragraph.location, trigger: "")
+        refreshSlash()
+        return true
     }
 
     /// 文末空段的检查项翻转：无字符可改，直接改输入属性与待定级别并注册撤销；
@@ -309,8 +367,17 @@ final class NativeTextView: NSTextView {
         guard let first = document.blocks.first, case .checklist(let checked) = first.kind else { return }
         document.blocks[0].kind = .checklist(!checked)
         let selection = selectedRange()
+        let previousTyping = typingAttributes
+        let caretOutsideItem = selection.length == 0
+            && (selection.location < range.location || selection.location >= NSMaxRange(range))
         insertText(DocumentTextCodec.render(document), replacementRange: range)
         setSelectedRange(selection)
+        // Toggling another row must not seed the active empty paragraph with
+        // the checked item's decorative strike/gray input attributes.
+        if caretOutsideItem {
+            typingAttributes = previousTyping
+            didChangeText()
+        }
     }
 
     override func viewWillMove(toWindow newWindow: NSWindow?) {

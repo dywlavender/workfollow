@@ -12,6 +12,211 @@ import SwiftUI
 /// - 同时把 PNG 落到 /tmp 供人工目检几何位置。
 final class DocumentDecorationRenderTests: XCTestCase {
     @MainActor
+    func testCompletionPresentationIsRemovedFromNonChecklistDisplayWithoutRemovingExplicitStrike() {
+        let view = NativeTextView(frame: .zero, textContainer: nil)
+        var inherited = DocumentTextCodec.attributes(kind: .checklist(true), marks: [])
+        inherited[DocumentTextCodec.blockKey] = "h1"
+        let value = NSMutableAttributedString(string: "标题", attributes: inherited)
+        value.append(NSAttributedString(string: "显式删除线", attributes:
+            DocumentTextCodec.attributes(kind: .paragraph, marks: [.strikethrough])))
+        view.textStorage?.setAttributedString(value)
+        view.didChangeText()
+        XCTAssertNil(view.textStorage?.attribute(.strikethroughStyle, at: 0, effectiveRange: nil))
+        XCTAssertNil(view.textStorage?.attribute(DocumentTextCodec.completedChecklistPresentationKey, at: 0, effectiveRange: nil))
+        XCTAssertNotNil(view.textStorage?.attribute(.strikethroughStyle, at: 2, effectiveRange: nil))
+    }
+
+    @MainActor
+    func testTogglingEarlierChecklistDoesNotLeakStrikeIntoTrailingHeading() throws {
+        let view = NativeTextView(frame: NSRect(x: 0, y: 0, width: 400, height: 180), textContainer: nil)
+        let window = NSWindow(contentRect: view.frame, styleMask: [.borderless], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.contentView = view
+        window.orderFront(nil)
+        defer { window.close() }
+        let document = NativeDocument(blocks: [
+            DocumentBlock(kind: .checklist(false), runs: [DocumentRun(text: "事项")]),
+            DocumentBlock(kind: .paragraph, runs: [])
+        ])
+        view.textStorage?.setAttributedString(DocumentTextCodec.render(document))
+        view.setSelectedRange(NSRange(location: 3, length: 0))
+        view.typingAttributes = DocumentTextCodec.attributes(kind: .paragraph, marks: [])
+        window.makeFirstResponder(view)
+        view.toggleNoteChecklist(at: 0)
+        view.setSelectedRange(NSRange(location: 0, length: 0))
+        view.setSelectedRange(NSRange(location: 3, length: 0))
+        // Native caret relocation may retain checked presentation attributes
+        // even after the empty paragraph's block type has been restored.
+        var inherited = DocumentTextCodec.attributes(kind: .checklist(true), marks: [])
+        inherited[DocumentTextCodec.blockKey] = "paragraph"
+        view.typingAttributes = inherited
+        view.applyFormat(try XCTUnwrap(EditorCommandCatalog.format("format.heading1")))
+        view.insertText("新标题", replacementRange: view.selectedRange())
+        let decoded = DocumentTextCodec.decode(view.attributedString(), preserving: document,
+                                               trailing: view.pendingTrailingBlock)
+        XCTAssertEqual(decoded.blocks.first?.kind, .checklist(true))
+        XCTAssertEqual(decoded.blocks.last?.kind, .heading(1))
+        XCTAssertFalse(try XCTUnwrap(decoded.blocks.last?.runs.first).marks.contains(.strikethrough))
+    }
+
+    @MainActor
+    func testExistingHeadingAndQuoteGeometryIgnoresTrailingTypingStyle() throws {
+        for kind in [DocumentBlockKind.heading(1), .heading(2), .heading(3), .quote] {
+            let view = NativeTextView(frame: NSRect(x: 0, y: 0, width: 400, height: 180), textContainer: nil)
+            let window = NSWindow(contentRect: view.frame, styleMask: [.borderless], backing: .buffered, defer: false)
+            window.isReleasedWhenClosed = false
+            window.contentView = view
+            window.orderFront(nil)
+            defer { window.close() }
+            let document = NativeDocument(blocks: [DocumentBlock(kind: kind, runs: [DocumentRun(text: "标题或引用")])])
+            view.textStorage?.setAttributedString(DocumentTextCodec.render(document))
+            window.makeFirstResponder(view)
+            view.setSelectedRange(NSRange(location: 5, length: 0))
+            view.typingAttributes = DocumentTextCodec.attributes(kind: kind, marks: [])
+            view.insertNewline(nil)
+            RunLoop.current.run(until: Date().addingTimeInterval(0.1))
+            let original = try XCTUnwrap(view.viewRect(forCharacterAt: 0))
+            for typingKind in [DocumentBlockKind.paragraph, .bullet, .heading(1)] {
+                let command = try XCTUnwrap(DocumentFormatCommand.commands.first { $0.block == typingKind })
+                view.applyFormat(command)
+                RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+                let changed = try XCTUnwrap(view.viewRect(forCharacterAt: 0))
+                XCTAssertEqual(changed.minX, original.minX, accuracy: 0.5, "\(kind)")
+                XCTAssertEqual(changed.height, original.height, accuracy: 0.5, "\(kind)")
+                XCTAssertEqual(DocumentTextCodec.decode(view.attributedString(), preserving: document,
+                    trailing: view.pendingTrailingBlock).blocks.first?.kind, kind)
+            }
+        }
+    }
+
+    @MainActor
+    func testChecklistVisibleRightEdgeRemainsClickableAfterExitingList() throws {
+        let view = NativeTextView(frame: NSRect(x: 0, y: 0, width: 400, height: 180), textContainer: nil)
+        let window = NSWindow(contentRect: view.frame, styleMask: [.borderless], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.contentView = view
+        window.orderFront(nil)
+        defer { window.close() }
+        view.textStorage?.setAttributedString(DocumentTextCodec.render(NativeDocument(blocks: [
+            DocumentBlock(kind: .checklist(false), runs: [DocumentRun(text: "plp")])
+        ])))
+        window.makeFirstResponder(view)
+        view.setSelectedRange(NSRange(location: 3, length: 0))
+        view.typingAttributes = DocumentTextCodec.attributes(kind: .checklist(false), marks: [])
+        view.doCommand(by: #selector(NSTextView.insertNewline(_:)))
+        view.doCommand(by: #selector(NSTextView.insertNewline(_:)))
+        RunLoop.current.run(until: Date().addingTimeInterval(0.1))
+        let line = try XCTUnwrap(view.viewRect(forCharacterAt: 0))
+        // Inside the visible box's right edge, outside the stale hit rectangle.
+        let point = view.convert(NSPoint(x: line.minX - 9, y: line.midY), to: nil)
+        let event = try XCTUnwrap(NSEvent.mouseEvent(with: .leftMouseDown, location: point,
+            modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
+            windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1))
+        let release = try XCTUnwrap(NSEvent.mouseEvent(with: .leftMouseUp, location: point,
+            modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
+            windowNumber: window.windowNumber, context: nil, eventNumber: 1, clickCount: 1, pressure: 0))
+        NSApp.postEvent(release, atStart: true)
+        view.mouseDown(with: event)
+        XCTAssertEqual(view.textStorage?.attribute(DocumentTextCodec.blockKey, at: 0, effectiveRange: nil) as? String,
+                       "checked", "The displayed checkbox must toggle across its visible bounds")
+        XCTAssertEqual(view.string, "plp\n")
+    }
+
+    @MainActor
+    func testListMarkerStaysAnchoredWhenDoubleReturnExitsList() throws {
+        for kind in [DocumentBlockKind.bullet, .ordered, .checklist(false)] {
+            let view = NativeTextView(frame: NSRect(x: 0, y: 0, width: 400, height: 180), textContainer: nil)
+            let window = NSWindow(contentRect: view.frame, styleMask: [.borderless], backing: .buffered, defer: false)
+            window.isReleasedWhenClosed = false
+            window.hasShadow = false
+            window.contentView = view
+            window.orderFront(nil)
+            defer { window.close() }
+            view.textStorage?.setAttributedString(DocumentTextCodec.render(NativeDocument(blocks: [
+                DocumentBlock(kind: kind, runs: [DocumentRun(text: "plp")])
+            ])))
+            window.makeFirstResponder(view)
+            view.setSelectedRange(NSRange(location: 3, length: 0))
+            view.typingAttributes = DocumentTextCodec.attributes(kind: kind, marks: [])
+            func settle() {
+                window.contentView?.layoutSubtreeIfNeeded()
+                RunLoop.current.run(until: Date().addingTimeInterval(0.1))
+            }
+            settle()
+            let original = try XCTUnwrap(view.viewRect(forCharacterAt: 0))
+            view.insertNewline(nil)
+            settle()
+            XCTAssertEqual(try XCTUnwrap(view.viewRect(forCharacterAt: 0)).minX, original.minX, accuracy: 0.5)
+            XCTAssertTrue(view.exitEmptyBlockOnNewline())
+            settle()
+            let exited = try XCTUnwrap(view.viewRect(forCharacterAt: 0))
+            XCTAssertEqual(exited.minX, original.minX, accuracy: 0.5, "\(kind): exiting the trailing list must not move the preceding marker")
+            let emptyLine = try XCTUnwrap(view.viewRect(forCharacterAt: view.string.utf16.count))
+            XCTAssertTrue(view.openEmptyBlockMenu(at: NSPoint(x: max(5, view.decorationVisibleMinX + 4) + 3,
+                                                             y: emptyLine.midY)))
+            XCTAssertEqual(view.string, "plp\n", "The plus opens a menu without inserting content")
+            view.dismissSlash()
+            if kind == .bullet {
+                view.displayIfNeeded()
+                let image = try XCTUnwrap(CGWindowListCreateImage(.null, .optionIncludingWindow,
+                    CGWindowID(window.windowNumber), [.bestResolution]))
+                try XCTUnwrap(NSBitmapImageRep(cgImage: image).representation(using: .png, properties: [:]))
+                    .write(to: URL(fileURLWithPath: "/tmp/render_list_double_return.png"))
+            }
+            view.insertNewline(nil)
+            settle()
+            XCTAssertEqual(try XCTUnwrap(view.viewRect(forCharacterAt: 0)).minX, original.minX, accuracy: 0.5)
+        }
+    }
+
+    @MainActor
+    func testMixedListsAndContinuousQuoteRender() throws {
+        let view = NativeTextView(frame: NSRect(x: 0, y: 0, width: 400, height: 240), textContainer: nil)
+        let window = NSWindow(contentRect: view.frame, styleMask: [.borderless], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.hasShadow = false
+        window.appearance = NSAppearance(named: .aqua)
+        window.backgroundColor = .white
+        window.contentView = view
+        window.orderFront(nil)
+        defer { window.close() }
+        let document = NativeDocument(blocks: [
+            DocumentBlock(kind: .bullet, runs: [DocumentRun(text: "0")]),
+            DocumentBlock(kind: .ordered, runs: [DocumentRun(text: "1")]),
+            DocumentBlock(kind: .quote, runs: [DocumentRun(text: "按时")]),
+            DocumentBlock(kind: .quote, runs: [DocumentRun(text: "按时 d")]),
+            DocumentBlock(kind: .paragraph, runs: [DocumentRun(text: "正文")])
+        ])
+        view.textStorage?.setAttributedString(DocumentTextCodec.render(document))
+        window.makeFirstResponder(view)
+        view.setSelectedRange(NSRange(location: 0, length: 0))
+        RunLoop.current.run(until: Date().addingTimeInterval(0.2))
+        func rect(_ offset: Int) -> NSRect {
+            view.convert(window.convertFromScreen(view.firstRect(forCharacterRange:
+                NSRange(location: offset, length: 0), actualRange: nil)), from: nil)
+        }
+        XCTAssertEqual(rect(0).minX, rect(2).minX, accuracy: 0.5)
+        XCTAssertEqual(rect(4).minX, rect(0).minX, accuracy: 0.5)
+        XCTAssertEqual(rect(0).minX - rect(12).minX, 16, accuracy: 0.5)
+        view.displayIfNeeded()
+        let image = try XCTUnwrap(CGWindowListCreateImage(.null, .optionIncludingWindow,
+            CGWindowID(window.windowNumber), [.bestResolution]))
+        let bitmap = NSBitmapImageRep(cgImage: image)
+        let scale = CGFloat(bitmap.pixelsWide) / window.frame.width
+        let bridgeX = rect(4).minX - DocumentEditorGeometry.quoteTextIndent
+            + DocumentEditorGeometry.quoteRuleInset + DocumentEditorGeometry.quoteRuleWidth / 2
+        let bridgeY = (rect(4).maxY + rect(7).minY) / 2
+        // NSTextView may size itself to the document, so account for its frame
+        // within the window before sampling the top-down window capture.
+        let point = view.convert(NSPoint(x: bridgeX, y: bridgeY), to: nil)
+        let captureY = window.frame.height - point.y
+        let bridgeColor = try XCTUnwrap(bitmap.colorAt(x: Int(point.x * scale), y: Int(captureY * scale)))
+        XCTAssertLessThan(bridgeColor.redComponent, 0.95, "相邻引用之间的竖线不能断开")
+        try XCTUnwrap(bitmap.representation(using: .png, properties: [:]))
+            .write(to: URL(fileURLWithPath: "/tmp/render_mixed_list_quote.png"))
+    }
+
+    @MainActor
     func testHeadingAndPlusLaneStayBeforeHostContentOrigin() throws {
         let host = NSHostingView(rootView:
             DocumentEditor(documentID: UUID(), document: .empty,

@@ -180,7 +180,7 @@ extension NativeTextView {
         let plus = "+" as NSString
         let font = NSFont.systemFont(ofSize: 13)
         let size = plus.size(withAttributes: [.font: font])
-        let frame = NSRect(x: 5, y: centerY - size.height / 2, width: size.width, height: size.height)
+        let frame = NSRect(x: max(5, decorationVisibleMinX + 4), y: centerY - size.height / 2, width: size.width, height: size.height)
         guard frame.intersects(dirtyRect) else { return }
         plus.draw(at: frame.origin,
                   withAttributes: [.font: font, .foregroundColor: NSColor.tertiaryLabelColor])
@@ -192,10 +192,10 @@ extension NativeTextView {
     /// 标题文字与正文左对齐，角标不侵占文字起始位置。
     private func drawHeadingBadge(level: Int, lineRect: NSRect, dirtyRect: NSRect) {
         let badge = "H\(level)" as NSString
-        let font = NSFont.systemFont(ofSize: 10, weight: .medium)
+        let font = NSFont.systemFont(ofSize: decorationVisibleMinX > 0 ? 9 : 10, weight: .medium)
         let size = badge.size(withAttributes: [.font: font])
         let centerY = (lineRect.minY + lineRect.maxY) / 2
-        let frame = NSRect(x: 2, y: centerY - size.height / 2, width: size.width, height: size.height)
+        let frame = NSRect(x: max(2, decorationVisibleMinX + 4), y: centerY - size.height / 2, width: size.width, height: size.height)
         guard frame.intersects(dirtyRect) else { return }
         badge.draw(at: frame.origin,
                    withAttributes: [.font: font, .foregroundColor: NSColor.tertiaryLabelColor])
@@ -206,8 +206,19 @@ extension NativeTextView {
     private func drawQuoteRule(paragraph: NSRange, firstLine: NSRect, dirtyRect: NSRect) {
         let lastLocation = max(paragraph.location, NSMaxRange(paragraph) - 1)
         guard let last = viewRect(forCharacterAt: lastLocation) else { return }
-        let rule = NSRect(x: 25, y: firstLine.minY,
-                          width: 3, height: last.maxY - firstLine.minY)
+        var bottom = last.maxY
+        // Adjacent quote paragraphs form one visual block. Bridge their spacing
+        // without merging model blocks or changing Return/undo semantics.
+        let next = NSMaxRange(paragraph)
+        if let storage = textStorage, next < storage.length,
+           storage.attribute(DocumentTextCodec.blockKey, at: next, effectiveRange: nil) as? String == "quote",
+           let nextLine = viewRect(forCharacterAt: next) {
+            bottom = nextLine.minY
+        }
+        let rule = NSRect(x: firstLine.minX - DocumentEditorGeometry.quoteTextIndent
+                            + DocumentEditorGeometry.quoteRuleInset, y: firstLine.minY,
+                          width: DocumentEditorGeometry.quoteRuleWidth,
+                          height: bottom - firstLine.minY)
         guard rule.intersects(dirtyRect) else { return }
         NSColor(WFColors.borderStrong).setFill()
         rule.fill()
@@ -217,10 +228,15 @@ extension NativeTextView {
 
     /// 字符处的首行矩形（屏幕坐标 → 视图坐标）。
     /// location 允许等于全文长度：文末空段没有字符，但插入点矩形（光标位）有效。
-    private func viewRect(forCharacterAt location: Int) -> NSRect? {
+    func viewRect(forCharacterAt location: Int) -> NSRect? {
         guard let storage = textStorage, let window,
               location >= 0, location <= storage.length else { return nil }
-        let screen = firstRect(forCharacterRange: NSRange(location: location, length: 0), actualRange: nil)
+        // Existing paragraphs belong to their stored character style, not the
+        // current insertion style. A zero-length query can adopt the trailing
+        // paragraph's typing indent when Return exits a list (16pt jump).
+        // Only the characterless final paragraph needs an insertion rectangle.
+        let length = location < storage.length ? 1 : 0
+        let screen = firstRect(forCharacterRange: NSRange(location: location, length: length), actualRange: nil)
         guard screen.width > 0 || screen.height > 0 else { return nil }
         return convert(window.convertFromScreen(screen), from: nil)
     }

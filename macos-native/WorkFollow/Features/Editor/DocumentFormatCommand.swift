@@ -248,13 +248,47 @@ extension NativeTextView {
                 }
             }
         }
-        insertText(DocumentTextCodec.render(document), replacementRange: range)
+        if command.mark != nil {
+            // NSTextView may merge attributes omitted by the replacement string
+            // from typingAttributes. Rendered runs carry their own marks, so clear
+            // stale typing marks while replacing the selected attributed text.
+            var cleanTypingAttributes = DocumentTextCodec.attributes(
+                kind: document.blocks.first?.kind ?? .paragraph, marks: [])
+            cleanTypingAttributes.removeValue(forKey: DocumentTextCodec.completedChecklistPresentationKey)
+            typingAttributes = cleanTypingAttributes
+        }
+        let replacement = NSMutableAttributedString(attributedString: DocumentTextCodec.render(document))
+        if case .strikethrough? = command.mark, !remove, replacement.length > 0 {
+            // This deletion line now represents an explicit user mark, not just
+            // the checked checklist's derived presentation.
+            replacement.removeAttribute(DocumentTextCodec.completedChecklistPresentationKey,
+                                        range: NSRange(location: 0, length: replacement.length))
+        }
+        insertText(replacement, replacementRange: range)
+        if command.mark != nil,
+           let storage = textStorage,
+           range.location + replacement.length <= storage.length {
+            // Replacing text with an attributed string can retain old keys when
+            // the new run omits them. Reapply the rendered runs as exact attribute
+            // sets so removed marks and presentation-only keys cannot leak through.
+            replacement.enumerateAttributes(in: NSRange(location: 0, length: replacement.length)) {
+                attributes, localRange, _ in
+                let targetRange = NSRange(location: range.location + localRange.location,
+                                          length: localRange.length)
+                storage.setAttributes(attributes, range: targetRange)
+            }
+        }
         // Formatting expands to the paragraph, but must not replace the user's
         // caret/selection with that entire paragraph.
         let location = min(originalSelection.location, (string as NSString).length)
         let length = min(originalSelection.length, (string as NSString).length - location)
         setSelectedRange(NSRange(location: location, length: length))
         syncParagraphStyleAfterEdit(at: location)
+        if command.mark != nil {
+            // insertText publishes before the exact attribute correction above.
+            // Publish the final storage as well, or persistence retains removed marks.
+            didChangeText()
+        }
     }
 
     /// 编辑之后把光标所在段的字号/段落样式再落一次，并让"接着输入"继承它。

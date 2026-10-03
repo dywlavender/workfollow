@@ -6,6 +6,7 @@ enum DocumentTextCodec {
     static let attachmentKey = NSAttributedString.Key("WorkFollow.attachment")
     static let inlineCodeKey = NSAttributedString.Key("WorkFollow.inlineCode")
     static let explicitBoldKey = NSAttributedString.Key("WorkFollow.explicitBold")
+    static let completedChecklistPresentationKey = NSAttributedString.Key("WorkFollow.completedChecklistPresentation")
     static func blockToken(_ kind: DocumentBlockKind) -> String {
         switch kind {
         case .paragraph: "paragraph"
@@ -75,7 +76,8 @@ enum DocumentTextCodec {
 
     static func attributes(kind: DocumentBlockKind, marks: Set<DocumentMark>) -> [NSAttributedString.Key: Any] {
         let style = NSMutableParagraphStyle()
-        style.paragraphSpacing = 8
+        style.paragraphSpacing = kind == .quote || isListKind(kind)
+            ? DocumentEditorGeometry.structuredParagraphSpacing : 8
         // 正文 14 配 ~4pt 行距：原版 `lineBody` 是 1.50（14 × 1.5 = 21 的行盒，
         // 扣掉系统字体的自然行高约 17，多出来的就是这 4pt）。标题按原版的
         // `documentHeadingLine` 1.35 走，行距不动——它们是短行。
@@ -102,15 +104,15 @@ enum DocumentTextCodec {
         if kind == .quote {
             // 引用是"行首缩进 + 3pt 左竖线"的结构表达（竖线由视图层绘制，
             // 画在正文起点处）。文字转灰是对齐滴答截图的有意选择。
-            style.headIndent = gutter + 16
-            style.firstLineHeadIndent = gutter + 16
+            style.headIndent = gutter + DocumentEditorGeometry.quoteTextIndent
+            style.firstLineHeadIndent = style.headIndent
         } else if isListKind(kind) {
             // 列表缩进与标记**全部由视图层负责**：段落绝不挂 `textLists`——
             // macOS 14+ 的 TextKit 2 会自绘 NSTextList 标记并占用行首空间，
             // 与视图层画的强调色标记叠成"双点/1.1"（用户实测）。标记右缘
             // 距文字 7pt（由装饰层按 lineRect.minX 反推）。
-            style.firstLineHeadIndent = gutter + 22
-            style.headIndent = gutter + 22
+            style.firstLineHeadIndent = gutter + DocumentEditorGeometry.listTextIndent
+            style.headIndent = style.firstLineHeadIndent
         } else {
             style.firstLineHeadIndent = gutter
             style.headIndent = gutter
@@ -127,6 +129,7 @@ enum DocumentTextCodec {
         ]
         if kind == .checklist(true) {
             attrs[.strikethroughStyle] = NSUnderlineStyle.single.rawValue
+            attrs[completedChecklistPresentationKey] = true
         }
         if marks.contains(.code) { attrs[inlineCodeKey] = true }
         if marks.contains(.underline) { attrs[.underlineStyle] = NSUnderlineStyle.single.rawValue }
@@ -206,7 +209,8 @@ enum DocumentTextCodec {
                 // 已勾选检查项的删除线是展示层（原版 `completedChecklistText`），
                 // 不是用户标记：decode 时忽略，否则会写进 Delta 且勾选状态无法切换。
                 if let value = attrs[.strikethroughStyle] as? Int, value != 0,
-                   kind != .checklist(true) { marks.insert(.strikethrough) }
+                   kind != .checklist(true),
+                   attrs[completedChecklistPresentationKey] as? Bool != true { marks.insert(.strikethrough) }
                 if attrs[.backgroundColor] != nil { marks.insert(.highlight) }
                 if let link = attrs[.link] { marks.insert(.link(String(describing: link))) }
                 let attachment = (attrs[attachmentKey] as? Data).flatMap { try? JSONDecoder().decode(NativeAttachment.self, from: $0) }

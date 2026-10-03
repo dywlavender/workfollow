@@ -96,8 +96,8 @@ struct SlashMenuGlyph: View {
         case .symbol:
             break
         case .heading(let level):
-            text("H", SlashGlyphMetrics.headingText, .regular, x: 0.2, baseline: 11.25)
-            text("\(level)", SlashGlyphMetrics.headingIndexText, .medium, x: 9.8, baseline: 11.75)
+            text("H", SlashGlyphMetrics.headingText, .regular, x: 5, baseline: 11.25)
+            text("\(level)", SlashGlyphMetrics.headingIndexText, .regular, x: 12, baseline: 12.5)
         case .bullet:
             for y in SlashGlyphMetrics.rows {
                 dot(CGPoint(x: 2, y: y), 1)
@@ -118,21 +118,17 @@ struct SlashMenuGlyph: View {
             check.addLine(to: CGPoint(x: 9.7, y: 4))
             stroke(check)
         case .quote:
-            for origin in [CGPoint(x: 0.5, y: 1.6), CGPoint(x: 7.5, y: 7.1)] {
-                for offset in [CGFloat(0), 3.5] {
-                    let x = origin.x + offset
-                    dot(CGPoint(x: x + 1.25, y: origin.y + 1.2), 1.2)
-                    var tail = Path()
-                    tail.move(to: CGPoint(x: x + 2.4, y: origin.y + 1.2))
-                    tail.addLine(to: CGPoint(x: x + 0.2, y: origin.y + 4.5))
-                    tail.addLine(to: CGPoint(x: x + 2.4, y: origin.y + 4.5))
-                    tail.closeSubpath()
-                    context.fill(tail, with: ink)
-                }
-            }
+            text("“", 14, .regular, x: 3.5, baseline: 8)
+            text("”", 14, .regular, x: 10.5, baseline: 13)
         case .divider:
             for y in [CGFloat(1.6), 6.5, 11.3] {
-                segment(CGPoint(x: 1, y: y), CGPoint(x: 12.6, y: y))
+                if y == 6.5 {
+                    segment(CGPoint(x: 1, y: y), CGPoint(x: 12.6, y: y))
+                } else {
+                    for x in [CGFloat(1), 5.4, 9.8] {
+                        segment(CGPoint(x: x, y: y), CGPoint(x: x + 2.8, y: y))
+                    }
+                }
             }
         case .nestedItems:
             segment(CGPoint(x: 1.75, y: 0.75), CGPoint(x: 1.75, y: 11.75), trunk)

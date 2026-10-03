@@ -5,6 +5,38 @@ import SwiftUI
 
 @MainActor
 final class DocumentProfileTests: XCTestCase {
+    func testCompactSlashMenuRendersFullTaskActions() throws {
+        let workspace = TaskWorkspaceModel(seedDemoData: false)
+        let id = try XCTUnwrap(workspace.createTask(title: "菜单验收", in: .inbox).taskID)
+        let profile = TaskDocumentProfile.make(task: try XCTUnwrap(workspace.task(for: id)),
+            host: TaskEditorHostActions(createChild: {}, openTags: {}, openRelation: {}, openLink: { _ in true }))
+        let commands = profile.slashCommands
+        XCTAssertEqual(commands.count, 12)
+        XCTAssertEqual(commands[9].id, "task.child")
+        XCTAssertEqual(SlashMenuMetrics.height(for: commands), 425)
+        for (name, appearance) in [("light", NSAppearance.Name.aqua), ("dark", .darkAqua)] {
+            let host = NSHostingView(rootView: SlashCommandList(commands: commands, selected: 0,
+                compact: true, onSelect: { _ in }, onHover: { _ in }))
+            let window = NSWindow(contentRect: NSRect(x: 100, y: 100, width: SlashMenuMetrics.width,
+                height: SlashMenuMetrics.height(for: commands)), styleMask: [.borderless], backing: .buffered, defer: false)
+            window.isReleasedWhenClosed = false
+            window.hasShadow = false
+            window.backgroundColor = .clear
+            window.isOpaque = false
+            window.appearance = NSAppearance(named: appearance)
+            window.contentView = host
+            window.orderFront(nil)
+            host.layoutSubtreeIfNeeded()
+            RunLoop.current.run(until: Date().addingTimeInterval(0.2))
+            let image = try XCTUnwrap(CGWindowListCreateImage(.null, .optionIncludingWindow,
+                CGWindowID(window.windowNumber), [.bestResolution]))
+            let bitmap = NSBitmapImageRep(cgImage: image)
+            try XCTUnwrap(bitmap.representation(using: .png, properties: [:]))
+                .write(to: URL(fileURLWithPath: "/tmp/render_task_slash_\(name).png"))
+            window.close()
+        }
+    }
+
     func testTaskHostProfileRoutesOnlyAvailableBusinessActions() throws {
         let workspace = TaskWorkspaceModel(seedDemoData: false)
         let parentID = try XCTUnwrap(workspace.createTask(title: "父任务", in: .inbox).taskID)
@@ -105,6 +137,58 @@ final class DocumentProfileTests: XCTestCase {
         }
     }
 
+    func testTickTickToolbarPickerContracts() {
+        XCTAssertEqual(DocumentFormatToolbarMetrics.iconSize, 14)
+        XCTAssertEqual(DocumentFormatToolbarMetrics.dividerInset, 5)
+        XCTAssertEqual(DocumentFormatToolbarMetrics.borderWidth, 0)
+        XCTAssertEqual(DocumentToolbarPicker.timeFormats,
+                       ["yyyy年M月d日 HH:mm", "yyyy年M月d日", "yyyy/M/d", "HH:mm"])
+        XCTAssertEqual(DocumentToolbarPicker.time.height, 156)
+        XCTAssertEqual(DocumentToolbarPicker.heading.height, 156)
+        XCTAssertNil(DocumentToolbarPicker.heading.headingBadge(at: 0))
+        XCTAssertEqual((1...3).map { DocumentToolbarPicker.heading.headingBadge(at: $0) },
+                       ["H₁", "H₂", "H₃"])
+        XCTAssertNil(DocumentToolbarPicker.time.headingBadge(at: 1))
+        XCTAssertEqual(DocumentFormatToolbarMetrics.controlWidth, 26)
+        XCTAssertEqual(DocumentFormatToolbarMetrics.controlHeight, 28)
+        XCTAssertEqual(DocumentFormatToolbarMetrics.height, 38)
+    }
+
+    func testEachTimePickerValueMatchesInsertedDocumentText() {
+        let date = Date(timeIntervalSince1970: 1_791_000_000)
+        let values = DocumentToolbarPicker.timeValues(now: date)
+        for (index, format) in DocumentToolbarPicker.timeFormats.enumerated() {
+            let editor = NativeTextView(frame: .zero, textContainer: nil)
+            editor.insertDocumentTime(date, format: format)
+            XCTAssertEqual(editor.string, values[index])
+        }
+    }
+
+    func testTextStyleToolbarRendersInLightAndDark() throws {
+        for (name, appearance) in [("light", NSAppearance.Name.aqua), ("dark", .darkAqua)] {
+            let handle = DocumentEditorHandle()
+            let editor = NativeTextView(frame: .zero, textContainer: nil)
+            editor.textStorage?.setAttributedString(DocumentTextCodec.render(NativeDocument(plainText: "正文")))
+            handle.textView = editor
+            let root = DocumentFormatToolbarView(handle: handle).frame(width: 444, height: 38)
+                .padding(20)
+            let window = renderToolbar(root, size: NSSize(width: 484, height: 78),
+                                       colorScheme: name == "dark" ? .dark : .light)
+            window.appearance = NSAppearance(named: appearance)
+            window.backgroundColor = appearance == .aqua ? .white : .black
+            window.hasShadow = false
+            window.contentView?.layoutSubtreeIfNeeded()
+            RunLoop.current.run(until: Date().addingTimeInterval(0.2))
+            let image = try XCTUnwrap(CGWindowListCreateImage(.null, .optionIncludingWindow,
+                CGWindowID(window.windowNumber), [.bestResolution]))
+            try XCTUnwrap(NSBitmapImageRep(cgImage: image).representation(using: .png, properties: [:]))
+                .write(to: URL(fileURLWithPath: "/tmp/render_text_style_toolbar_\(name).png"))
+            window.orderOut(nil)
+            window.contentView = nil
+            window.close()
+        }
+    }
+
     func testRealToolbarControlsKeepOrderAndGeometry() throws {
         let handle = DocumentEditorHandle()
         let editor = NativeTextView(frame: .zero, textContainer: nil)
@@ -174,11 +258,12 @@ final class DocumentProfileTests: XCTestCase {
         }
     }
 
-    private func renderToolbar<Root: View>(_ root: Root, size: NSSize) -> NSWindow {
+    private func renderToolbar<Root: View>(_ root: Root, size: NSSize,
+                                         colorScheme: ColorScheme = .light) -> NSWindow {
         let window = NSWindow(contentRect: NSRect(origin: NSPoint(x: 100, y: 100), size: size),
                               styleMask: [.borderless], backing: .buffered, defer: false)
         window.isReleasedWhenClosed = false
-        window.contentView = NSHostingView(rootView: root.environment(\.colorScheme, .light))
+        window.contentView = NSHostingView(rootView: root.environment(\.colorScheme, colorScheme))
         window.orderFront(nil)
         return window
     }

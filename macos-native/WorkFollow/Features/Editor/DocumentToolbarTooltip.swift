@@ -136,7 +136,13 @@ enum DocumentToolbarPicker: Equatable {
     }
 
     /// 插入时的格式串；标题菜单则不需要。
-    static let timeFormats = ["yyyy年M月d日", "yyyy年M月d日 HH:mm", "HH:mm"]
+    static let timeFormats = ["yyyy年M月d日 HH:mm", "yyyy年M月d日", "yyyy/M/d", "HH:mm"]
+
+    /// Decorative labels never become document text or command identities.
+    func headingBadge(at index: Int) -> String? {
+        guard self == .heading, index > 0, index < titles.count else { return nil }
+        return ["H₁", "H₂", "H₃"][index - 1]
+    }
 
     /// 时间菜单显示的是**此刻的值**（原版把值当标签用：`2026年9月27日` /
     /// `2026年9月27日 21:05` / `21:05`），不是「日期 / 日期时间 / 时刻」这些词。
@@ -167,6 +173,7 @@ struct DocumentToolbarPickerCard: View {
         VStack(spacing: 0) {
             ForEach(Array(picker.titles.enumerated()), id: \.offset) { index, title in
                 DocumentToolbarPickerRow(title: title,
+                                         badge: picker.headingBadge(at: index),
                                          selected: selectedIndex == index) {
                     onPick(index)
                 }
@@ -185,6 +192,7 @@ struct DocumentToolbarPickerCard: View {
 /// （原版 `_PickerRow` + `WorkFollowInteractionStyles.overlay(menu: true)`）。
 struct DocumentToolbarPickerRow: View {
     let title: String
+    var badge: String? = nil
     let selected: Bool
     let action: () -> Void
 
@@ -193,6 +201,13 @@ struct DocumentToolbarPickerRow: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: 0) {
+                if let badge {
+                    Text(badge)
+                        .font(.system(size: 14, weight: .regular))
+                        .foregroundStyle(WFColors.secondaryText)
+                        .frame(width: 26, alignment: .leading)
+                        .accessibilityHidden(true)
+                }
                 Text(title)
                     .font(WFType.menu)
                     .foregroundStyle(selected ? WFColors.accent : WFColors.text)
