@@ -314,11 +314,10 @@ struct TaskInspectorShell: View {
                 .id(task.id)
                 .inspectorRenderAnchor(.title)
                 .padding(.horizontal, TaskInspectorMetrics.horizontalPadding)
-                .padding(.top, WFSpace.lg)
-                .padding(.bottom, WFSpace.md)
+                .padding(.top, TaskInspectorMetrics.titleTopPadding)
             documentEditor(task)
                 .inspectorRenderAnchor(.document)
-                .padding(.top, WFSpace.sm)
+                .padding(.top, TaskInspectorMetrics.titleDocumentGap)
             // 子任务区只在**已经有子任务**时出现——新建的空任务不自动带上它。
             // 原版 `task_editor_profile.dart:149-153` 就是这么挂的：
             // `if (!task.isChildTask && childrenOf(task.id).isNotEmpty)`，注释写着
@@ -589,7 +588,10 @@ struct TaskInspectorShell: View {
                         actionPresentation.open(.relation)
                     }, openLink: openDocumentLink)),
                 contentSized: true,
-                handle: editorHandle
+                handle: editorHandle,
+                // 传给编辑器的是"宿主内可见的装饰槽宽度"（容器坐标），不是分栏线位置；
+                // 标记再由 DocumentEditorGeometry.decorationMarkerX 向内让 4pt。
+                decorationVisibleMinX: max(0, DocumentEditorGeometry.decorationLane - TaskInspectorMetrics.documentLeadingPadding)
             )
             .id(task.id)
 
@@ -603,7 +605,8 @@ struct TaskInspectorShell: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .topLeading)
-        .padding(.horizontal, WFSpace.xl)
+        .padding(.leading, TaskInspectorMetrics.documentLeadingPadding)
+        .padding(.trailing, TaskInspectorMetrics.horizontalPadding)
     }
 
     private func priorityItem(_ priority: TaskPriority, task: Task) -> some View {

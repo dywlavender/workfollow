@@ -33,7 +33,10 @@ struct TaskInspectorHeader<Schedule: View, Priority: View>: View {
                                 .foregroundStyle(WFColors.secondaryText)
                         }
                     }
-                    .frame(width: 24, height: WFMetrics.controlHeight)
+                    // 可见墨迹（15pt 方框）单独打锚点：契约测试断言"渲染出来的框"，
+                    // 而不是只断言 `completionSize` 常量。
+                    .inspectorRenderAnchor(.completionInk)
+                    .frame(width: 24, height: WFMetrics.controlHeight, alignment: .leading)
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)

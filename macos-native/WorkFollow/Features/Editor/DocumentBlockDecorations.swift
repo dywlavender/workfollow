@@ -180,7 +180,8 @@ extension NativeTextView {
         let plus = "+" as NSString
         let font = NSFont.systemFont(ofSize: 13)
         let size = plus.size(withAttributes: [.font: font])
-        let frame = NSRect(x: max(5, decorationVisibleMinX + 4), y: centerY - size.height / 2, width: size.width, height: size.height)
+        let frame = NSRect(x: DocumentEditorGeometry.decorationMarkerX(visibleMinX: decorationVisibleMinX),
+                           y: centerY - size.height / 2, width: size.width, height: size.height)
         guard frame.intersects(dirtyRect) else { return }
         plus.draw(at: frame.origin,
                   withAttributes: [.font: font, .foregroundColor: NSColor.tertiaryLabelColor])
@@ -195,7 +196,8 @@ extension NativeTextView {
         let font = NSFont.systemFont(ofSize: decorationVisibleMinX > 0 ? 9 : 10, weight: .medium)
         let size = badge.size(withAttributes: [.font: font])
         let centerY = (lineRect.minY + lineRect.maxY) / 2
-        let frame = NSRect(x: max(2, decorationVisibleMinX + 4), y: centerY - size.height / 2, width: size.width, height: size.height)
+        let frame = NSRect(x: DocumentEditorGeometry.decorationMarkerX(visibleMinX: decorationVisibleMinX),
+                           y: centerY - size.height / 2, width: size.width, height: size.height)
         guard frame.intersects(dirtyRect) else { return }
         badge.draw(at: frame.origin,
                    withAttributes: [.font: font, .foregroundColor: NSColor.tertiaryLabelColor])

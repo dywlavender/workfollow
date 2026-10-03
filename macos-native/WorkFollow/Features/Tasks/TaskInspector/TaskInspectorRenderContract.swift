@@ -1,7 +1,7 @@
 import SwiftUI
 
 enum InspectorRenderAnchor: Hashable {
-    case header, back, completion, divider, schedule, scheduleViewport
+    case header, back, completion, completionInk, divider, schedule, scheduleViewport
     case reminder, repeatControl, priority, breadcrumb, title, emptyContent
     case document, childSection, childRow(UUID), addChild
     case footerList, footerFormatting, footerMore

@@ -22,7 +22,7 @@ final class TaskInspectorShellContractTests: XCTestCase {
             let divider = try XCTUnwrap(frames[.divider])
             let viewport = try XCTUnwrap(frames[.scheduleViewport])
             XCTAssertEqual(frames[.header]?.height, 58)
-            XCTAssertEqual(priority.maxX, width - 20, accuracy: 0.5)
+            XCTAssertEqual(priority.maxX, width - TaskInspectorMetrics.horizontalPadding, accuracy: 0.5)
             XCTAssertGreaterThanOrEqual(divider.minX, completion.maxX)
             XCTAssertEqual(divider.width, 1, accuracy: 0.5)
             XCTAssertEqual(divider.height, 20, accuracy: 0.5)
@@ -56,6 +56,25 @@ final class TaskInspectorShellContractTests: XCTestCase {
         let title = try XCTUnwrap(frames[.title])
         XCTAssertEqual(breadcrumb.height, 30, accuracy: 0.5)
         XCTAssertLessThanOrEqual(breadcrumb.maxY, title.minY)
+    }
+
+    func testTitleAndDocumentShareContentOriginAndCompactGap() throws {
+        let workspace = TaskWorkspaceModel(seedDemoData: false)
+        let id = workspace.createTask(title: "codex", in: .inbox).taskID!
+        workspace.select(id)
+        let frames = render(TaskInspectorShell(workspace: workspace, showBack: false), width: 500, height: 600)
+        let title = try XCTUnwrap(frames[.title])
+        let document = try XCTUnwrap(frames[.document])
+        XCTAssertEqual(title.minX, TaskInspectorMetrics.horizontalPadding, accuracy: 0.5)
+        XCTAssertEqual(document.minY - title.maxY, TaskInspectorMetrics.titleDocumentGap, accuracy: 0.5)
+        XCTAssertEqual(TaskInspectorMetrics.documentLeadingPadding + TaskInspectorMetrics.documentFragmentPadding,
+                       TaskInspectorMetrics.horizontalPadding)
+        XCTAssertEqual(TaskInspectorMetrics.completionSize, 15)
+        // 断言"渲染出来的框"，而不只是常量：可见墨迹 15pt、在 24pt 命中区内左对齐。
+        let ink = try XCTUnwrap(frames[.completionInk])
+        XCTAssertEqual(ink.width, TaskInspectorMetrics.completionSize, accuracy: 0.5)
+        XCTAssertEqual(ink.height, TaskInspectorMetrics.completionSize, accuracy: 0.5)
+        XCTAssertEqual(ink.minX, TaskInspectorMetrics.horizontalPadding, accuracy: 0.5)
     }
 
     func testEmptyInspectorContentCentersWithinThePane() throws {

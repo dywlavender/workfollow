@@ -152,7 +152,7 @@ final class DocumentDecorationRenderTests: XCTestCase {
             let exited = try XCTUnwrap(view.viewRect(forCharacterAt: 0))
             XCTAssertEqual(exited.minX, original.minX, accuracy: 0.5, "\(kind): exiting the trailing list must not move the preceding marker")
             let emptyLine = try XCTUnwrap(view.viewRect(forCharacterAt: view.string.utf16.count))
-            XCTAssertTrue(view.openEmptyBlockMenu(at: NSPoint(x: max(5, view.decorationVisibleMinX + 4) + 3,
+            XCTAssertTrue(view.openEmptyBlockMenu(at: NSPoint(x: DocumentEditorGeometry.decorationMarkerX(visibleMinX: view.decorationVisibleMinX) + 3,
                                                              y: emptyLine.midY)))
             XCTAssertEqual(view.string, "plp\n", "The plus opens a menu without inserting content")
             view.dismissSlash()

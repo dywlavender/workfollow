@@ -5,6 +5,62 @@ import XCTest
 
 @MainActor
 final class TaskInspectorHierarchyRenderTests: XCTestCase {
+    func testFocusedChildInspectorKeepsPlusAndHeadingInsidePane() throws {
+        let workspace = TaskWorkspaceModel(seedDemoData: false)
+        let parent = workspace.createTask(title: "父任务", in: .inbox).taskID!
+        let child = workspace.createChild(parent, title: "归纳高频问题").taskID!
+        workspace.select(child)
+        let host = NSHostingView(rootView: TaskInspectorShell(workspace: workspace, showBack: false)
+            .frame(width: 320, height: 600))
+        let window = NSWindow(contentRect: NSRect(x: 100, y: 100, width: 320, height: 600),
+            styleMask: [.borderless], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.hasShadow = false
+        window.appearance = NSAppearance(named: .aqua)
+        window.contentView = host
+        window.orderFront(nil)
+        defer { window.close() }
+        host.layoutSubtreeIfNeeded()
+        RunLoop.current.run(until: Date().addingTimeInterval(0.2))
+        func editor(_ view: NSView) -> NativeTextView? {
+            if let text = view as? NativeTextView { return text }
+            return view.subviews.lazy.compactMap { editor($0) }.first
+        }
+        let text = try XCTUnwrap(editor(host))
+        window.makeFirstResponder(text)
+        func caretX() -> CGFloat {
+            host.convert(window.convertFromScreen(text.firstRect(forCharacterRange:
+                NSRange(location: 0, length: 0), actualRange: nil)), from: nil).minX
+        }
+        let initialX = caretX()
+        XCTAssertEqual(initialX, TaskInspectorMetrics.horizontalPadding, accuracy: 1)
+        let origin = host.convert(.zero, from: text).x
+        XCTAssertGreaterThanOrEqual(origin + text.decorationVisibleMinX + 4, 4)
+        let caret = text.convert(window.convertFromScreen(text.firstRect(forCharacterRange:
+            NSRange(location: 0, length: 0), actualRange: nil)), from: nil)
+        let before = text.string
+        XCTAssertTrue(text.openEmptyBlockMenu(at: NSPoint(x: DocumentEditorGeometry.decorationMarkerX(visibleMinX: text.decorationVisibleMinX) + 2,
+                                                        y: caret.midY)))
+        XCTAssertNotNil(text.slashPanel)
+        XCTAssertEqual(text.slashSession?.range.length, 0)
+        XCTAssertEqual(text.string, before)
+        text.dismissSlash()
+        XCTAssertEqual(text.string, before)
+        for level in 0...3 {
+            if level > 0 {
+                text.applyFormat(try XCTUnwrap(EditorCommandCatalog.format("format.heading\(level)")))
+            }
+            text.setSelectedRange(NSRange(location: 0, length: 0))
+            RunLoop.current.run(until: Date().addingTimeInterval(0.15))
+            text.displayIfNeeded()
+            XCTAssertEqual(caretX(), initialX, accuracy: 1)
+            let image = try XCTUnwrap(CGWindowListCreateImage(.null, .optionIncludingWindow,
+                CGWindowID(window.windowNumber), [.bestResolution]))
+            try XCTUnwrap(NSBitmapImageRep(cgImage: image).representation(using: .png, properties: [:]))
+                .write(to: URL(fileURLWithPath: "/tmp/render_child_inspector_marker_\(level).png"))
+        }
+    }
+
     func testParentWithoutChildrenHasNoChildSectionAndKeepsFooterEdges() throws {
         let workspace = TaskWorkspaceModel(seedDemoData: false)
         let parent = workspace.createTask(title: "父任务", in: .inbox).taskID!
@@ -73,8 +129,8 @@ final class TaskInspectorHierarchyRenderTests: XCTestCase {
         let list = try XCTUnwrap(frames[.footerList])
         let formatting = try XCTUnwrap(frames[.footerFormatting])
         let more = try XCTUnwrap(frames[.footerMore])
-        XCTAssertEqual(list.minX, 20, accuracy: 0.5)
-        XCTAssertEqual(more.maxX, 880 - 20, accuracy: 0.5)
+        XCTAssertEqual(list.minX, TaskInspectorMetrics.horizontalPadding, accuracy: 0.5)
+        XCTAssertEqual(more.maxX, 880 - TaskInspectorMetrics.horizontalPadding, accuracy: 0.5)
         XCTAssertLessThan(list.maxX, formatting.minX)
         XCTAssertLessThan(formatting.maxX, more.minX)
         XCTAssertEqual(list.midY, more.midY, accuracy: 0.5)

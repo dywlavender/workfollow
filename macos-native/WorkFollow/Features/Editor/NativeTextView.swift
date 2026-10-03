@@ -326,7 +326,7 @@ final class NativeTextView: NSTextView {
             : pendingTrailingBlock ?? displayedTrailingBlock ?? .paragraph
         guard kind == .paragraph else { return false }
         guard let caret = viewRect(forCharacterAt: paragraph.location) else { return false }
-        let hit = NSRect(x: max(5, decorationVisibleMinX + 4) - 2,
+        let hit = NSRect(x: DocumentEditorGeometry.decorationMarkerX(visibleMinX: decorationVisibleMinX) - 2,
                          y: caret.minY, width: 12, height: caret.height)
         guard hit.contains(point) else { return false }
         window.makeFirstResponder(self)
