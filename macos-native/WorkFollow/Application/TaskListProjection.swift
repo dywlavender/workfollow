@@ -301,13 +301,29 @@ enum WFListPalette {
         0xFF8A909B, // grey
     ]
 
+    /// 参与**自动取色**的槽位：0…10 是 11 个有彩色，11/12/13 是暖灰 / 板岩 / 灰。
+    ///
+    /// 自动取色不再落在无彩色上。原因不是审美：灰的清单条会被读成"已完成"——日历
+    /// 的已完成档本来就是同一个清单色的淡版（α0.12），一条灰条和一个灰掉的任务在
+    /// 屏幕上是同一件事。参考图里也没有一条灰的清单条（实测 80 条，全部有彩）。
+    ///
+    /// `argb` 表本身不动：它仍是与 Flutter 共享的 14 色契约表，**显式选色**照旧可以
+    /// 选到那三个无彩色，只是"按名字自动推"这一步不选它们。
+    private static let chromaticSlotCount = 11
+    /// 落到无彩色槽位时折回的有彩色：11→0（红）、12→4（绿）、13→8（靛）。
+    private static let chromaticFallback = [0, 4, 8]
+
     /// 清单最终落在色板上的下标：显式 meta 优先（越界回退），未选色时按清单名
-    /// 做稳定字符折叠（Flutter listColorValueForName 同款），等名永远同色。
+    /// 做稳定字符折叠（Flutter `listColorValueForName` 同款算法，`% 14`），
+    /// 结果落在 11…13 三个无彩色上时折回有彩色（见 `chromaticFallback`）。
+    /// 等名永远同色，折叠本身仍与 Flutter 一致。
     static func colorIndex(for name: String, explicit: Int?) -> Int {
         if let explicit, explicit >= 0, explicit < argb.count { return explicit }
         guard !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return 0 }
         let score = name.unicodeScalars.reduce(0) { ($0 + Int($1.value)) & 0x7FFF_FFFF }
-        return score % argb.count
+        let slot = score % argb.count
+        if slot < chromaticSlotCount { return slot }
+        return chromaticFallback[slot - chromaticSlotCount]
     }
 }
 

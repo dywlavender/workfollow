@@ -30,15 +30,15 @@ final class PlanningViewLogicTests: XCTestCase {
 
     func testListColorIndexIsStableInRangeAndPinnedForKnownNames() {
         // 回归锚点：色板下标 = Unicode 标量和 % 14（Flutter `listColorValueForName`
-        // 同款算法）。换算法（或误用 String.hashValue，它在 Swift 里逐进程随机）
-        // 会立刻让这批值变红。
+        // 同款算法），落在 11…13 三个无彩色槽位时折回有彩色。换算法（或误用
+        // String.hashValue，它在 Swift 里逐进程随机）会立刻让这批值变红。
         let pinned = [
             "收集箱": 7,
             "工作": 1,
             "学习": 6,
-            "个人": 12,
+            "个人": 4,          // 标量和 % 14 = 12（板岩）→ 折回 4（绿）
             "欢迎": 8,
-            "验收-Native-0925": 13,
+            "验收-Native-0925": 8,   // 标量和 % 14 = 13（灰）→ 折回 8（靛）
             "去": 1,
             "项目A": 6,
         ]
@@ -49,6 +49,24 @@ final class PlanningViewLogicTests: XCTestCase {
             XCTAssertEqual(index, expected, "清单名 \(name) 的色板槽位必须稳定")
             XCTAssertEqual(index, WFListPalette.colorIndex(for: name, explicit: nil),
                            "同一清单名重复取色必须一致：\(name)")
+        }
+    }
+
+    /// 自动取色不许落在无彩色上：灰的清单条与"已完成"的淡条在屏幕上是同一件事
+    /// （见 `WFListPalette.chromaticSlotCount` 的说明）。表里那三个无彩色只留给
+    /// 显式选色。
+    func testAutoColorNeverLandsOnAchromaticSlots() {
+        let achromatic = [11, 12, 13]   // 暖灰 / 板岩 / 灰
+        let names = (0..<400).map { "清单\($0)" } + ["收集箱", "工作", "学习", "个人",
+                                                     "欢迎", "验收-Native-0925", "去", "项目A"]
+        for name in names {
+            let index = WFListPalette.colorIndex(for: name, explicit: nil)
+            XCTAssertFalse(achromatic.contains(index),
+                           "自动取色落到了无彩色槽位 \(index)：\(name)")
+        }
+        // 但显式选色仍然选得到它们。
+        for slot in achromatic {
+            XCTAssertEqual(WFListPalette.colorIndex(for: "个人", explicit: slot), slot)
         }
     }
 
