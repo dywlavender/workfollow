@@ -13,6 +13,8 @@ struct QuickAddScheduleDraft: Equatable {
     var dueEndAt: Date?
     var hasTime: Bool
     var reminderAt: Date?
+    /// 面板里的多级提醒（0 = 准时，负数 = 提前多少分钟）。空数组 = 未设。
+    var reminderOffsets: [Int] = []
     var repeatFrequency: TaskRepeat
     var recurrenceRule: RecurrenceRule?
 
@@ -20,13 +22,19 @@ struct QuickAddScheduleDraft: Equatable {
         TaskSchedule(dueAt: dueAt, hasTime: hasTime, dueEndAt: dueEndAt)
     }
 
+    /// 交给动作层的形状：空数组表示"没有多级提醒"，而不是"清空"。
+    var reminderOffsetsOrNil: [Int]? {
+        reminderOffsets.isEmpty ? nil : reminderOffsets
+    }
+
     init(dueAt: Date? = nil, dueEndAt: Date? = nil, hasTime: Bool = false,
-         reminderAt: Date? = nil,
+         reminderAt: Date? = nil, reminderOffsets: [Int] = [],
          repeatFrequency: TaskRepeat = .never, recurrenceRule: RecurrenceRule? = nil) {
         self.dueAt = dueAt
         self.dueEndAt = dueAt == nil ? nil : dueEndAt
         self.hasTime = dueAt != nil && hasTime
         self.reminderAt = reminderAt
+        self.reminderOffsets = reminderOffsets
         self.repeatFrequency = repeatFrequency
         self.recurrenceRule = recurrenceRule
     }

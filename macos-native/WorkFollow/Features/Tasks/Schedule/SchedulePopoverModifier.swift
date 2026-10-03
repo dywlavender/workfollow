@@ -1,6 +1,20 @@
 import SwiftUI
 
+enum ScheduleTrigger: Hashable { case date, recurrence }
+
+private struct ScheduleTriggerAnchors: PreferenceKey {
+    static var defaultValue: [ScheduleTrigger: Anchor<CGRect>] { [:] }
+    static func reduce(value: inout [ScheduleTrigger: Anchor<CGRect>],
+                       nextValue: () -> [ScheduleTrigger: Anchor<CGRect>]) {
+        value.merge(nextValue(), uniquingKeysWith: { _, latest in latest })
+    }
+}
+
 extension View {
+    /// Mark the actual control, not its row/header/container, as a popup trigger.
+    func scheduleTrigger(_ trigger: ScheduleTrigger = .date) -> some View {
+        anchorPreference(key: ScheduleTriggerAnchors.self, value: .bounds) { [trigger: $0] }
+    }
 
     /// 统一的「无箭头锚定日程浮层」（Arrowless Anchored Schedule Popover）。
     ///
