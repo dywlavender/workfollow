@@ -64,17 +64,22 @@ struct TaskListMeta: Equatable, Codable {
     var colorARGB: UInt32?
     var isPinned: Bool
     var sortOrder: Int
+    /// 清单图标（Emoji）。nil = 回落到色点（现有行为）。additive：旧快照缺键 → nil。
+    var icon: String?
 
     init(name: String, colorIndex: Int? = nil, isPinned: Bool = false, sortOrder: Int = 0,
-         colorARGB: UInt32? = nil) {
+         colorARGB: UInt32? = nil, icon: String? = nil) {
         self.name = name.trimmingCharacters(in: .whitespacesAndNewlines)
         self.colorIndex = colorIndex
         self.colorARGB = colorARGB
         self.isPinned = isPinned
         self.sortOrder = sortOrder
+        self.icon = icon
     }
 
-    private enum CodingKeys: String, CodingKey { case name, colorIndex, colorARGB, isPinned, sortOrder }
+    private enum CodingKeys: String, CodingKey {
+        case name, colorIndex, colorARGB, isPinned, sortOrder, icon
+    }
 
     init(from decoder: Decoder) throws {
         let values = try decoder.container(keyedBy: CodingKeys.self)
@@ -83,6 +88,7 @@ struct TaskListMeta: Equatable, Codable {
         colorARGB = try values.decodeIfPresent(UInt32.self, forKey: .colorARGB)
         isPinned = try values.decodeIfPresent(Bool.self, forKey: .isPinned) ?? false
         sortOrder = try values.decodeIfPresent(Int.self, forKey: .sortOrder) ?? 0
+        icon = try values.decodeIfPresent(String.self, forKey: .icon)
     }
 
     func encode(to encoder: Encoder) throws {
@@ -92,6 +98,7 @@ struct TaskListMeta: Equatable, Codable {
         try values.encodeIfPresent(colorARGB, forKey: .colorARGB)
         try values.encode(isPinned, forKey: .isPinned)
         try values.encode(sortOrder, forKey: .sortOrder)
+        try values.encodeIfPresent(icon, forKey: .icon)
     }
 }
 

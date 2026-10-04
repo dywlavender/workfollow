@@ -92,6 +92,7 @@ private struct SidebarListRowView: View {
     @State private var hovering = false
     @State private var dragTargeted = false
     @State private var showColorPicker = false
+    @State private var showIconPicker = false
 
     private var meta: TaskListMeta? { workspace.listMeta(for: name) }
     private var pinned: Bool { meta?.isPinned ?? false }
@@ -109,8 +110,15 @@ private struct SidebarListRowView: View {
         HStack(spacing: WFSpace.xs) {
             Button(action: onOpen) {
                 HStack(spacing: WFSpace.sm) {
-                    Circle().fill(dotColor).frame(width: 9, height: 9)
-                        .accessibilityLabel("清单颜色")
+                    // 有图标显示 Emoji，否则回落到色点（滴答：图标优先，颜色仍在）。
+                    if let icon = meta?.icon, !icon.isEmpty {
+                        Text(icon).font(.system(size: 12))
+                            .frame(width: 14)
+                            .accessibilityLabel("清单图标")
+                    } else {
+                        Circle().fill(dotColor).frame(width: 9, height: 9)
+                            .accessibilityLabel("清单颜色")
+                    }
                     Text(name).lineLimit(1)
                     Spacer(minLength: WFSpace.xs)
                     if openCount > 0 {
@@ -157,6 +165,10 @@ private struct SidebarListRowView: View {
                                          width: ListColorPickerPopover.panelWidth, placement: .submenu) {
             ListColorPickerPopover(workspace: workspace, name: name) { showColorPicker = false }
         })
+        .background(AnchoredPropertyPanel(isPresented: $showIconPicker,
+                                         width: ListIconPickerPopover.panelWidth, placement: .submenu) {
+            ListIconPickerPopover(workspace: workspace, name: name) { showIconPicker = false }
+        })
     }
 
     @ViewBuilder
@@ -173,6 +185,9 @@ private struct SidebarListRowView: View {
         // 菜单关闭后再弹色板，避免 macOS 菜单吞掉 popover 的呈现时机。
         Button("选择颜色") {
             DispatchQueue.main.async { showColorPicker = true }
+        }
+        Button("设置图标") {
+            DispatchQueue.main.async { showIconPicker = true }
         }
         Divider()
         Button("删除清单…", role: .destructive) {
@@ -224,6 +239,65 @@ private struct ListColorPickerPopover: View {
                     .buttonStyle(.plain)
                 }
             }
+        }
+        .padding(WFSpace.lg)
+        .onExitCommand(perform: onDismiss)
+    }
+}
+
+/// 清单图标（Emoji）网格弹层：内置常用集合（不引第三方图标库），选完即保存。
+/// 「无图标」清除后侧栏回落色点（用色板仍是独立一步，和滴答一样是两件事）。
+private struct ListIconPickerPopover: View {
+    static let panelWidth: CGFloat = 6 * 26 + 5 * 10 + 2 * WFSpace.lg
+    /// 常用清单图标：够覆盖"工作 / 生活 / 学习 / 兴趣"这类清单，不追求全量 Emoji。
+    static let choices = ["📋", "🚀", "💼", "📌", "🎯", "📚",
+                          "💡", "🧾", "🏠", "🛒", "🏃", "🍀",
+                          "❤️", "⭐️", "🎵", "✈️", "🧪", "🎨"]
+    @ObservedObject var workspace: TaskWorkspaceModel
+    let name: String
+    let onDismiss: () -> Void
+    private let columns = Array(repeating: GridItem(.fixed(26), spacing: 10), count: 6)
+
+    private var current: String? { workspace.listMeta(for: name)?.icon }
+
+    var body: some View {
+        VStack(spacing: WFSpace.sm) {
+            Text("选择清单图标").font(WFType.supporting).foregroundStyle(WFColors.secondaryText)
+            LazyVGrid(columns: columns, spacing: 10) {
+                ForEach(Self.choices, id: \.self) { emoji in
+                    Button {
+                        _ = workspace.setListIcon(name, emoji)
+                        onDismiss()
+                    } label: {
+                        ZStack {
+                            RoundedRectangle(cornerRadius: 6)
+                                .fill(WFColors.secondarySurface)
+                                .frame(width: 26, height: 26)
+                            Text(emoji).font(.system(size: 15))
+                            if emoji == current {
+                                RoundedRectangle(cornerRadius: 6)
+                                    .strokeBorder(WFColors.accent, lineWidth: 1.5)
+                                    .frame(width: 26, height: 26)
+                            }
+                        }
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            Divider()
+            Button {
+                _ = workspace.setListIcon(name, nil)
+                onDismiss()
+            } label: {
+                Text(current == nil ? "无图标（当前）" : "无图标")
+                    .font(WFType.supporting)
+                    .foregroundStyle(current == nil ? WFColors.tertiaryText : WFColors.text)
+                    .frame(maxWidth: .infinity)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .disabled(current == nil)
         }
         .padding(WFSpace.lg)
         .onExitCommand(perform: onDismiss)

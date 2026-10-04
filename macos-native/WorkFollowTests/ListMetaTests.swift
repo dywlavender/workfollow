@@ -41,6 +41,7 @@ final class ListMetaTests: XCTestCase {
         let json = #"{"name":"读书","colorIndex":2}"#
         let meta = try JSONDecoder().decode(TaskListMeta.self, from: Data(json.utf8))
         XCTAssertEqual(meta, TaskListMeta(name: "读书", colorIndex: 2, isPinned: false, sortOrder: 0))
+        XCTAssertNil(meta.icon, "旧快照缺 icon 键 → nil（回落色点）")
     }
 
     // MARK: - 持久化往返（颜色/置顶/排序）
@@ -105,6 +106,36 @@ final class ListMetaTests: XCTestCase {
         XCTAssertFalse(actions.setListPinned(TaskList.inbox.name, true))
         XCTAssertFalse(actions.setListColor("", 3))
         XCTAssertNil(store.listMeta(for: TaskList.inbox.name))
+    }
+
+    // MARK: - 清单图标（Emoji）
+
+    func testListIconPersistsClearsAndRejectsInbox() {
+        let store = WorkspaceStore(); let actions = TaskActions(store: store, clock: { self.now })
+        _ = actions.renameList(nil, to: "读书")
+        XCTAssertTrue(actions.setListIcon("读书", "📚"))
+        XCTAssertEqual(store.listMeta(for: "读书")?.icon, "📚")
+        XCTAssertTrue(actions.setListIcon("读书", "  "))
+        XCTAssertNil(store.listMeta(for: "读书")?.icon, "空白等于清除图标")
+        XCTAssertTrue(actions.setListIcon("读书", "🚀"))
+        actions.undo()
+        XCTAssertNil(store.listMeta(for: "读书")?.icon, "图标写入可撤销")
+        XCTAssertFalse(actions.setListIcon(TaskList.inbox.name, "📥"), "收集箱不可设置图标")
+        XCTAssertFalse(actions.setListIcon("", "📚"))
+    }
+
+    func testListIconPersistsThroughRepositoryRoundTrip() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("wf-listmeta-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let repository = NativePreviewRepository(directory: directory)
+        let metas = [TaskListMeta(name: "读书", colorIndex: 4, sortOrder: 0, icon: "📚"),
+                     TaskListMeta(name: "工作", sortOrder: 1)]
+        try repository.save(NativeWorkspaceSnapshot(tasks: [], notes: [],
+                                                    taskLists: ["读书", "工作"], taskListMeta: metas))
+        let loaded = try XCTUnwrap(repository.load())
+        XCTAssertEqual(loaded.taskListMeta, metas, "图标随快照往返")
+        XCTAssertNil(loaded.taskListMeta?[1].icon, "没设图标的清单仍是 nil")
     }
 
     func testMetaOnImplicitListRegistersTheList() {

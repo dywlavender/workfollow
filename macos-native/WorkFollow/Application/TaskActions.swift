@@ -691,6 +691,15 @@ final class TaskActions {
     func setListPinned(_ name: String, _ isPinned: Bool) -> Bool {
         commitListMeta(name) { $0.isPinned = isPinned }
     }
+
+    /// 设置清单图标（Emoji）。nil / 空串 = 清除图标，侧栏回落到色点。
+    @discardableResult
+    func setListIcon(_ name: String, _ icon: String?) -> Bool {
+        let trimmed = icon?.trimmingCharacters(in: .whitespacesAndNewlines)
+        return commitListMeta(name) {
+            $0.icon = (trimmed?.isEmpty ?? true) ? nil : trimmed
+        }
+    }
 }
 
 enum TaskBatchOperation {

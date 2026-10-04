@@ -99,6 +99,13 @@ final class TaskWorkspaceModel: ObservableObject {
         if changed { revision += 1 }
         return changed
     }
+    /// 清单图标（Emoji；nil 清除，侧栏回落到色点）。
+    @discardableResult
+    func setListIcon(_ name: String, _ icon: String?) -> Bool {
+        let changed = actions.setListIcon(name, icon)
+        if changed { revision += 1 }
+        return changed
+    }
 
     @discardableResult
     func saveList(_ raw: String, replacing old: String? = nil) -> Bool {
