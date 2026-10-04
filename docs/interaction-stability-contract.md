@@ -452,3 +452,30 @@ claimed as complete keyboard-dismissal acceptance.
   drag up/down, undo and post-drag selection on the final uninstrumented app.
   The physical closure gate has **not** passed; no speculative production
   fallback or reorder rewrite was added. No commit/push was performed.
+
+### IS-003 resumed physical verification — 2026-10-04
+
+The repository had advanced since the prior build. A new isolated snapshot at
+`/private/tmp/workfollow-is003-latest-O8eENb/source` passed 40 targeted tests with
+zero failures (Context, task row, Escape registry, Schedule and bulk selection).
+Log: `/private/tmp/workfollow-is003-latest-O8eENb/regression.log`.
+
+Native pointer input resumed. On the uninstrumented latest build, twenty actual
+right-click / Escape cycles preserved the reading task Inspector. The twentieth
+open and closed states were captured in the conversation. Manual sort was
+confirmed in its menu. **The Context Escape physical gate now passes.**
+
+The drag gate remains open. Pointer events reached the diagnostic window with
+zero modifier flags, but upward drag did not reorder. A scratch simultaneous
+selection gesture candidate failed checkbox/disclosure/date selection-isolation
+tests and was rejected. A scratch `onDrag` provider candidate was invoked by
+the drag, but no drop target callback or reordered projection was observed;
+it was also not adopted. This narrows observation to initiation/drop delivery,
+but does not establish that changing either API fixes the product.
+
+All diagnostic and candidate code was removed from the isolated source. The
+restored production source matches the repository. Before rewriting the drag
+shell, manually drag the quarterly task above the reading task in this isolated
+app to distinguish native user behavior from computer-use drag delivery. This
+round does not claim completed drag/undo/post-drag physical acceptance, does not
+change production drag behavior, and does not enter IS-004 or commit/push.
