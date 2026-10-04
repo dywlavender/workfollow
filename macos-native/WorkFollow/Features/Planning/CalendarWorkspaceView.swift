@@ -641,13 +641,34 @@ struct CalendarDayCellView: View {
             Text(CalendarDayLabels.label(date, calendar: calendar))
                 .font(WFType.listBody)
                 .foregroundStyle(dayNumberColor)
+                // 徽标挂在**文字自己**的右缘上，不是那个 24pt 的框上。
+                //
+                // 挂在框上时，一位数的墨迹只占框宽的三分之一，徽标被框的空档推开
+                // 约 6pt，读起来是「号旁边浮了个点」而不是上标。滴答 2026-10 实测是
+                // **紧贴墨迹**（间隙≈0，见 `workdayBadgeGap`），今天那格它甚至压住
+                // 蓝圆边缘——那是"上标"该有的关系，不是画错了。挂在这里才复现同一个
+                // 关系。
+                //
+                // 浮层要在 `padding` **之前**：1 日那格「10月1日」左右各垫 5pt 胶囊余量，
+                // 挂在 padding 之后徽标会跟着被推右 5pt（实测格内偏移 +66.3，滴答 +59.5）。
+                //
+                // 浮层不占布局宽度，所以日号框仍是 24pt、今天的蓝圆仍是 24pt 正圆；
+                // 徽标溢到框外也不裁——与滴答压住蓝圆边缘是同一件事。
+                .overlay(alignment: .trailing) {
+                    if let badge = workdayBadgeKind {
+                        WorkdayBadge(kind: badge)
+                            .offset(x: WorkdayBadgeMetrics.diameter + WFCalendarMetrics.workdayBadgeGap,
+                                    y: -WFCalendarMetrics.workdayBadgeRise)
+                    }
+                }
+                .padding(.horizontal, calendar.component(.day, from: date) == 1 ? WFSpace.dense : 0)
                 .frame(minWidth: WFCalendarMetrics.dayCellSize,
                        minHeight: WFCalendarMetrics.dayCellSize)
-                .padding(.horizontal, calendar.component(.day, from: date) == 1 ? WFSpace.dense : 0)
                 .background(isToday ? WFColors.accent : .clear,
                             in: RoundedRectangle(cornerRadius: WFCalendarMetrics.dayCellSize / 2))
             // 这一天"是什么"——有的话。绿色与原版日程面板给节假日的颜色一致。
-            if let festival = ChineseWorkCalendar.festivalName(date: date, calendar: calendar) {
+            if let festival = LunarCalendarService.festivalLabelIncludingStatutory(for: date,
+                                                                                  calendar: calendar) {
                 Text(festival)
                     .font(WFType.caption)
                     .foregroundStyle(WFColors.success)
@@ -659,6 +680,16 @@ struct CalendarDayCellView: View {
         }
         .frame(height: WFCalendarMetrics.dayCellSize)
         .allowsHitTesting(false)
+    }
+
+    /// 只有国务院公布的调休安排才给徽标：普通周末没有（它是常识，印成「休」会把
+    /// 真正要提醒的那几天淹掉），工作日也没有。
+    ///
+    /// **非本月的日子照样给。** 9 月 27 日是中秋假期最后一天，在 10 月的网格里虽然
+    /// 只是上月收尾的格子，可它就是放假——滴答在那里也画了绿徽标。日号退墨色说的是
+    /// 「不属于本月」，徽标说的是「这一天特殊」，两件事互不冲突。
+    private var workdayBadgeKind: WorkdayBadgeKind? {
+        WorkdayBadgeKind(ChineseWorkCalendar.override(for: date, calendar: calendar))
     }
 
     private var dayNumberColor: Color {

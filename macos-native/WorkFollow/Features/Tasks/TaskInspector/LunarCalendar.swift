@@ -23,6 +23,34 @@ enum LunarCalendarService {
         solarFestival(date, calendar: calendar) ?? lunarFestival(date, calendar: calendar)
     }
 
+    /// 月网格与日期弹层共用的「这一天叫什么」。
+    ///
+    /// 顺序是**先公历/农历节日、再退回法定节假日表**。两个来源覆盖面不同，谁也不能
+    /// 替掉谁：上面那张表有元宵、七夕、重阳、腊八这些**非法定**节日，法定表没有；
+    /// 而「清明节」是节气不是农历节日，上面那张表没有，只有法定表有。
+    ///
+    /// 合并只留这一处。原先月网格直接问 `ChineseWorkCalendar.festivalName`、日期弹层
+    /// 自己拼一遍回退，于是同一格在弹层里叫「重阳节」、在网格里什么都不叫——
+    /// 不是谁漏了一个分支，是同一件事有两个实现。
+    static func festivalLabelIncludingStatutory(for date: Date, calendar: Calendar) -> String? {
+        festivalLabel(for: date, calendar: calendar)
+            ?? ChineseWorkCalendar.festivalName(date: date, calendar: calendar)
+    }
+
+    /// **只**返回公历/农历节日表里没有的那几个——如「清明节」（它是节气，不在农历
+    /// 节日表里，只有法定表有）。
+    ///
+    /// 给叠在 `LunarMonthGridView` 上的 `CalendarAnnotationOverlay` 用：那个网格
+    /// 自己已经画了公历/农历节日，浮层只补它画不出的，两层合起来才是完整答案。
+    ///
+    /// ⚠️ 这里**不要**图省事换成 `festivalLabelIncludingStatutory`：两层各画一遍，
+    /// 同一格会把「国庆节」印两次。两个函数长得像，分工不同——一个回答「这一天叫
+    /// 什么」，另一个回答「还差什么没画」。
+    static func statutoryFestivalGapLabel(for date: Date, calendar: Calendar) -> String? {
+        guard festivalLabel(for: date, calendar: calendar) == nil else { return nil }
+        return ChineseWorkCalendar.festivalName(date: date, calendar: calendar)
+    }
+
     private static func solarFestival(_ date: Date, calendar: Calendar) -> String? {
         let month = calendar.component(.month, from: date)
         let day = calendar.component(.day, from: date)

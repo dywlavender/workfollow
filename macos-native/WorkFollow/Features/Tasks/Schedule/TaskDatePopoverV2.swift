@@ -1065,11 +1065,12 @@ private struct CalendarAnnotationOverlay: View {
 
     private func markCell(_ date: Date) -> some View {
         let day = calendar.startOfDay(for: date)
-        let override = showBadges ? ChineseWorkCalendar.override(for: day, calendar: calendar) : nil
-        // The grid already labels lunar/solar festivals; only fill the gaps
-        // (e.g. 清明节) from the statutory table to avoid double labels.
-        let festival = LunarCalendarService.festivalLabel(for: day, calendar: calendar) == nil
-            ? ChineseWorkCalendar.festivalName(date: day, calendar: calendar) : nil
+        let badge = showBadges
+            ? WorkdayBadgeKind(ChineseWorkCalendar.override(for: day, calendar: calendar)) : nil
+        // 底下那个网格自己已经画了公历/农历节日，这里只补它画不出的（如「清明节」）。
+        // 用 `festivalLabelIncludingStatutory` 会把节日印两遍——两个函数分工不同。
+        let festival = LunarCalendarService.statutoryFestivalGapLabel(for: day,
+                                                                     calendar: calendar)
         return ZStack {
             if occurrenceDays.contains(day) {
                 Circle().fill(WFColors.accent.opacity(0.30))
@@ -1086,13 +1087,8 @@ private struct CalendarAnnotationOverlay: View {
             }
         }
         .overlay(alignment: .topTrailing) {
-            if let override {
-                Text(override ? "班" : "休")
-                    .font(.system(size: 6, weight: .semibold))
-                    .foregroundStyle(Color.white)
-                    .frame(width: 10, height: 10)
-                    .background(Circle().fill(override ? Color(nsColor: .systemOrange)
-                                                       : Color(nsColor: .systemGreen)))
+            if let badge {
+                WorkdayBadge(kind: badge)
                     .offset(x: 3, y: -1)
             }
         }
