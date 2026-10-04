@@ -290,8 +290,11 @@ struct TaskBatchPanelView: View {
             actionTile("关联主任务", symbol: "arrow.triangle.branch", tint: WFColors.tileGreen) {
                 showParentPicker = true
             }
-            // 「合并」有意缺席：滴答里该入口点击即改任务（多任务并一）,语义
-            // 未实证前宁缺毋假,单独一轮验证后再实施。
+            // 滴答实测语义:所选任务全部变成子任务,父任务是新建的。少于 2 项置灰。
+            actionTile("合并", symbol: "square.stack.3d.up.forward", tint: WFColors.tileGreen,
+                       disabled: count < 2) {
+                workspace.mergeBulkTasks()
+            }
             actionTile("创建副本", symbol: "doc.on.doc", tint: WFColors.tileCyan) {
                 workspace.applyBulk(.duplicate)
             }
@@ -308,6 +311,7 @@ struct TaskBatchPanelView: View {
     }
 
     private func actionTile(_ title: String, symbol: String, tint: Color,
+                            disabled: Bool = false,
                             action: @escaping () -> Void) -> some View {
         Button(action: action) {
             VStack(spacing: WFSpace.xs) {

@@ -169,6 +169,23 @@ final class TaskWorkspaceModel: ObservableObject {
         if selectedTask?.deletedAt != nil { select(nil) }
     }
 
+    /// 批量合并（滴答对齐,用户实机验证:所选任务全部变成子任务,父任务新建）。
+    /// 返回新父任务 ID;少于 2 条可选时返回 nil,面板据此置灰瓦片。
+    @discardableResult
+    func mergeBulkTasks() -> UUID? {
+        let ids = bulkSelection
+        let result = actions.mergeTasks(ids)
+        clearBulkSelection()
+        revision += 1
+        if let parentID = result.taskID {
+            let parentTitle = store.task(parentID)?.title ?? "合并任务"
+            report(FeedbackEvent(kind: .undoable, message: "已合并 \(ids.count) 个任务到「\(parentTitle)」",
+                                 actionTitle: "撤销", action: undoStep()))
+            return parentID
+        }
+        return nil
+    }
+
     /// 批量转换笔记（补齐轮）：逐个走单任务转换链（含子任务随迁与撤销桥），
     /// 失败（已转换/已删除）跳过。返回成功数；有成功时导航到笔记列表。
     /// 不走 applyBulk——转换横跨任务与笔记两个 store，单任务链已各自成事务。

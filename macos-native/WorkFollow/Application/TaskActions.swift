@@ -421,6 +421,24 @@ final class TaskActions {
         store.clearUndo()
     }
 
+    /// 批量合并（滴答对齐,用户实机验证:所选任务全部变成子任务,父任务是
+    /// 新建的）。新父任务落在第一条所选任务的清单里,标题"合并任务";
+    /// 已关闭/已转换的任务被 setParent 策略自然跳过。单事务,一步撤销。
+    func mergeTasks(_ ids: Set<UUID>) -> TaskActionResult {
+        let ordered = store.tasks.filter { ids.contains($0.id) && $0.deletedAt == nil && $0.skippedAt == nil }
+        guard ordered.count >= 2 else { return .failure(.missingTask) }
+        var parentResult: TaskActionResult = .failure(.missingTask)
+        store.transaction {
+            parentResult = create(title: "合并任务", list: ordered[0].list,
+                                  schedule: TaskSchedule(), priority: .none)
+            guard let parentID = parentResult.taskID else { return }
+            for task in ordered {
+                _ = setParent(task.id, parentID: parentID)
+            }
+        }
+        return parentResult
+    }
+
     func renameList(_ old: String?, to name: String) {
         var lists = store.lists.filter { $0 != old }
         if !lists.contains(name) { lists.append(name) }

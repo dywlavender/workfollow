@@ -262,4 +262,39 @@ final class TaskBulkSelectionTests: XCTestCase {
                        "已有父的任务策略拒绝,保持原父不动")
         XCTAssertEqual(workspace.task(for: free.id)?.parentID, parent.id, "合法目标正常挂载")
     }
+
+// MARK: - 补齐轮:批量合并(滴答实测语义:所选任务全部变成子任务,父任务新建)
+
+func testApplyBulkMergeCreatesParentWithAllSelectedAsChildren() {
+    let a = makeTask("a"), b = makeTask("b"), c = makeTask("c")
+    let workspace = makeWorkspace([a, b, c])
+    workspace.setBulkSelection(in: [a.id, b.id, c.id])
+
+    workspace.mergeBulkTasks()
+
+    let parent = workspace.allTasks.first { $0.title == "合并任务" }
+    let parentID = parent?.id
+    XCTAssertNotNil(parent, "新建父任务")
+    XCTAssertEqual(workspace.task(for: a.id)?.parentID, parentID)
+    XCTAssertEqual(workspace.task(for: b.id)?.parentID, parentID)
+    XCTAssertEqual(workspace.task(for: c.id)?.parentID, parentID)
+    XCTAssertEqual(workspace.allTasks.filter { $0.parentID == parentID }.count, 3)
+    XCTAssertTrue(workspace.bulkSelection.isEmpty)
+
+    workspace.undo()
+    XCTAssertNil(workspace.task(for: a.id)?.parentID, "合并一步撤销")
+    XCTAssertNil(workspace.allTasks.first { $0.title == "合并任务" }, "撤销后父任务消失")
 }
+
+func testMergeBulkTasksBelowTwoReturnsNil() {
+    let a = makeTask("a")
+    let workspace = makeWorkspace([a])
+    workspace.setBulkSelection(in: [a.id])
+
+    let parentID = workspace.mergeBulkTasks()
+
+    XCTAssertNil(parentID, "少于 2 条不合并(滴答置灰语义)")
+    XCTAssertTrue(workspace.bulkSelection.isEmpty, "操作后集合清空")
+}
+}
+

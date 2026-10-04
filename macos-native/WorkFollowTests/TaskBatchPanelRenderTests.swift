@@ -35,8 +35,6 @@ final class TaskBatchPanelRenderTests: XCTestCase {
         // 清单行显示所选任务的共同值(fixture 全在收集箱→显示"收集箱"而非
         // 固定的"移动到清单");优先级行同理显示"无优先级"。
         XCTAssertTrue(rendered.contains("无优先级"), "优先级行应显示共同值")
-        XCTAssertFalse(rendered.contains("合并"),
-                       "「合并」不应出现在批量面板(未实证,宁缺毋假)")
 
         // 尺寸契约:布局常量与滴答实测值(2026-10 截图像素扫描)绑定,漂移即失败。
         // 进程内量不到 SwiftUI 渲染后的 frame(不落 NSTextField/NSButton),
