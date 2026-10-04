@@ -88,8 +88,8 @@ struct NavigationColumnView: View {
     var filterStore: FilterStore? = nil
     var onNavigate: () -> Void = {}
 
-    /// 智能清单顺序对齐滴答：所有 → 最近 7 天 → 今天 → 收集箱。
-    private let smartLists: [NativeDestination] = [.allTasks, .nextSevenDays, .today, .inbox]
+    /// 智能清单顺序对齐滴答：所有 → 最近 7 天 → 今天 → 明天 → 收集箱。
+    private let smartLists: [NativeDestination] = [.allTasks, .nextSevenDays, .today, .tomorrow, .inbox]
     private let bottomLists: [NativeDestination] = [.completed, .trash]
 
     private var destinations: [NativeDestination] {

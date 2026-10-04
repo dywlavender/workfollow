@@ -72,7 +72,10 @@ struct TaskListView: View {
     private var groups: [TaskListGroup] {
         scope.map { workspace.groups(for: $0, query: query, grouping: grouping) } ?? []
     }
-    private var canAdd: Bool { scope == .today || scope == .inbox || scope == .allTasks || scope == .nextSevenDays }
+    private var canAdd: Bool {
+        scope == .today || scope == .tomorrow || scope == .inbox
+            || scope == .allTasks || scope == .nextSevenDays
+    }
     /// TickTick shows each row's owning list unless the view is already that list.
     private var showsListBadge: Bool { workspace.activeList == nil && scope != .inbox }
 
@@ -948,12 +951,20 @@ struct TaskListView: View {
     }
 
     private func currentQuickAddSchedule(for scope: TaskListScope) -> QuickAddScheduleDraft {
-        // 时间型视图（今天 / 最近 7 天）默认排期到当天，对齐 Flutter
-        // 「Time-based views keep the default-today behaviour」；收集箱不注入。
+        // 时间型视图默认排期到"那一天"（今天 / 最近 7 天 = 当天，明天 = 次日），
+        // 对齐 Flutter「Time-based views keep the default-today behaviour」；收集箱不注入。
         QuickAddScheduleDraft(parsed: quickAddResult,
-                              defaultDueAt: (scope == .today || scope == .nextSevenDays)
-                                && !hasDismissedQuickAddScheduleToken
-                                ? workspace.dateFromToday(0) : nil)
+                              defaultDueAt: hasDismissedQuickAddScheduleToken
+                                ? nil : quickAddDefaultDue(for: scope))
+    }
+
+    /// 时间型视图的快速添加默认排期：今天 / 最近 7 天 = 当天，明天 = 次日，其余不注入。
+    private func quickAddDefaultDue(for scope: TaskListScope) -> Date? {
+        switch scope {
+        case .today, .nextSevenDays: return workspace.dateFromToday(0)
+        case .tomorrow: return workspace.dateFromToday(1)
+        default: return nil
+        }
     }
 
     private func addTask(in scope: TaskListScope) {
@@ -978,8 +989,7 @@ struct TaskListView: View {
             let timing = quickAddScheduleOverride
                 ?? (batch
                     ? QuickAddScheduleDraft(parsed: parsed,
-                                            defaultDueAt: scope == .today || scope == .nextSevenDays
-                                                ? workspace.dateFromToday(0) : nil)
+                                            defaultDueAt: quickAddDefaultDue(for: scope))
                     : currentQuickAddSchedule(for: scope))
             let priority = quickAddPriorityOverride ?? parsed.priority
             let list = quickAddListOverride ?? parsed.listName ?? workspace.activeList ?? TaskList.inbox.name

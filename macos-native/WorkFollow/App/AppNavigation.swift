@@ -2,15 +2,16 @@ import Combine
 import Foundation
 
 enum NativeDestination: String, CaseIterable, Identifiable {
-    case today, inbox, allTasks, nextSevenDays, completed, trash, notes, notesTrash, calendar, matrix
+    case today, tomorrow, inbox, allTasks, nextSevenDays, completed, trash, notes, notesTrash, calendar, matrix
     case focus, habits, summary, countdown
     static let taskDestinations: [NativeDestination] = [
-        .nextSevenDays, .today, .inbox, .allTasks, .completed, .trash
+        .nextSevenDays, .today, .tomorrow, .inbox, .allTasks, .completed, .trash
     ]
     var id: String { rawValue }
     var title: String {
         switch self {
         case .today: return "今天"
+        case .tomorrow: return "明天"
         case .inbox: return "收集箱"
         case .allTasks: return "所有任务"
         case .nextSevenDays: return "最近 7 天"
@@ -28,6 +29,7 @@ enum NativeDestination: String, CaseIterable, Identifiable {
     var symbol: String {
         switch self {
         case .today: return "sun.max"
+        case .tomorrow: return "sunrise"
         case .inbox: return "tray"
         case .allTasks: return "list.bullet.rectangle"
         case .nextSevenDays: return "calendar.badge.clock"

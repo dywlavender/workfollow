@@ -391,6 +391,7 @@ final class TaskWorkspaceModel: ObservableObject {
     static func scope(for destination: NativeDestination) -> TaskListScope? {
         switch destination {
         case .today: return .today
+        case .tomorrow: return .tomorrow
         case .inbox: return .inbox
         case .allTasks: return .allTasks
         case .nextSevenDays: return .nextSevenDays
@@ -427,7 +428,8 @@ final class TaskWorkspaceModel: ObservableObject {
                orderedRoots: [Task]? = nil) -> [TaskTreeNode] {
         _ = revision
         let matching = filteredMatches(in: scope, query: query)
-        let followsMatchedParent = (scope == .today || scope == .nextSevenDays) &&
+        let followsMatchedParent = (scope == .today || scope == .tomorrow
+                                    || scope == .nextSevenDays) &&
             query.search.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         let roots = Set(group.tasks.map(\.id))
         return TaskTreeProjection.nodes(roots: orderedRoots ?? group.tasks, store: store,
@@ -496,9 +498,16 @@ final class TaskWorkspaceModel: ObservableObject {
 
     @discardableResult
     func createTask(title: String, in scope: TaskListScope) -> TaskActionResult {
-        let schedule = scope == .today
-            ? TaskSchedule(dueAt: calendar.startOfDay(for: clock()))
-            : TaskSchedule()
+        let today = calendar.startOfDay(for: clock())
+        let schedule: TaskSchedule
+        switch scope {
+        case .today:
+            schedule = TaskSchedule(dueAt: today)
+        case .tomorrow:
+            schedule = TaskSchedule(dueAt: calendar.date(byAdding: .day, value: 1, to: today))
+        default:
+            schedule = TaskSchedule()
+        }
         let result = actions.create(title: title, list: .inbox, schedule: schedule)
         didMutate(result, scope: scope)
         if result.taskID != nil {

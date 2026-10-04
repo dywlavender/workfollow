@@ -136,8 +136,13 @@ enum CommandPaletteProjection {
                            navigation: AppNavigation) -> TaskActionResult {
         let title = title.trimmingCharacters(in: .whitespacesAndNewlines)
         let list = workspace.activeList ?? TaskList.inbox.name
-        let dueAt = navigation.destination == .today
-            ? workspace.calendar.startOfDay(for: workspace.clock()) : nil
+        let base = workspace.calendar.startOfDay(for: workspace.clock())
+        let dueAt: Date?
+        switch navigation.destination {
+        case .today: dueAt = base
+        case .tomorrow: dueAt = workspace.calendar.date(byAdding: .day, value: 1, to: base)
+        default: dueAt = nil
+        }
         // 空标题（空 query 的"新建任务"首项）落一个"无标题"任务，仍进当前上下文；
         // 行渲染对空标题本就显示"无标题"。
         return workspace.createDraft(

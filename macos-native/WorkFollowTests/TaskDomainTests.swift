@@ -39,6 +39,47 @@ final class TaskDomainTests: XCTestCase {
         XCTAssertEqual(TaskListProjection.count(in: .today, store: store, now: today, calendar: calendar), 1)
     }
 
+    func testTomorrowScopeOnlyHoldsNextDaysTasks() throws {
+        let store = WorkspaceStore()
+        let actions = TaskActions(store: store, clock: { self.today }, calendar: calendar)
+        let start = calendar.startOfDay(for: today)
+        let tomorrow = calendar.date(byAdding: .day, value: 1, to: start)!
+        _ = try XCTUnwrap(actions.create(title: "今天", schedule: TaskSchedule(dueAt: start)).taskID)
+        let next = try XCTUnwrap(actions.create(title: "明天", schedule: TaskSchedule(dueAt: tomorrow)).taskID)
+        _ = try XCTUnwrap(actions.create(title: "后天",
+                                         schedule: TaskSchedule(dueAt: calendar.date(byAdding: .day, value: 2,
+                                                                                     to: start)!)).taskID)
+        _ = try XCTUnwrap(actions.create(title: "无日期").taskID)
+
+        XCTAssertEqual(TaskListProjection.rows(in: .tomorrow, store: store, now: today,
+                                               calendar: calendar).map(\.id),
+                       [next], "明天只收「落在明天」的任务：今天/后天/无日期都不在")
+        XCTAssertEqual(TaskListProjection.count(in: .tomorrow, store: store, now: today,
+                                                calendar: calendar), 1)
+
+        let groups = TaskListProjection.groups(in: .tomorrow, store: store, now: today,
+                                               calendar: calendar)
+        XCTAssertEqual(groups.map(\.kind), [.day], "时间型视图只有一个日期桶")
+        XCTAssertEqual(groups.first?.day, tomorrow)
+        XCTAssertEqual(groups.flatMap(\.tasks).map(\.id), [next])
+    }
+
+    func testTomorrowScopeCountsDeadlineAndSkipsAbandoned() throws {
+        let store = WorkspaceStore()
+        let actions = TaskActions(store: store, clock: { self.today }, calendar: calendar)
+        let start = calendar.startOfDay(for: today)
+        let tomorrow = calendar.date(byAdding: .day, value: 1, to: start)!
+        let deadline = try XCTUnwrap(actions.create(title: "截止明天",
+                                                    schedule: TaskSchedule(deadlineAt: tomorrow)).taskID)
+        let abandoned = try XCTUnwrap(actions.create(title: "放弃",
+                                                     schedule: TaskSchedule(dueAt: tomorrow)).taskID)
+        _ = actions.abandon(abandoned)
+
+        XCTAssertEqual(TaskListProjection.rows(in: .tomorrow, store: store, now: today,
+                                               calendar: calendar).map(\.id),
+                       [deadline], "截止日落在明天也算；已放弃不算")
+    }
+
     func testTodayGroupsOverdueBeforeTodayAndKeepsCompletedInItsOwnGroup() throws {
         let store = WorkspaceStore()
         let actions = TaskActions(store: store, clock: { self.today }, calendar: calendar)

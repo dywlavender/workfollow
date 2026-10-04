@@ -1,6 +1,6 @@
 import Foundation
 
-enum TaskListScope { case today, inbox, allTasks, nextSevenDays, completed }
+enum TaskListScope { case today, tomorrow, inbox, allTasks, nextSevenDays, completed }
 enum TaskGroupKind: Equatable { case pinned, overdue, today, day, upcoming, later, undated, plain, completed }
 enum TaskListSortMode: String, CaseIterable, Codable {
     case manual, due, priority, title, createdAt, modified
@@ -115,7 +115,7 @@ struct TaskListGroup {
         }.map(\.element)
     }
 
-    /// 日期升序、无日期垫底，再按原有顺序稳定收尾（历史 due 模式的比较器）。
+    /// 日期序、**无日期永远垫底**（不论方向），再按原有顺序稳定收尾（历史 due 模式的比较器）。
     private static func orderedByDue(_ lhs: (offset: Int, element: Task),
                                      _ rhs: (offset: Int, element: Task),
                                      descending: Bool = false) -> Bool {
@@ -199,6 +199,14 @@ enum TaskListProjection {
                 let due = task.schedule.dueAt.map { calendar.startOfDay(for: $0) <= today } ?? false
                 let deadline = task.schedule.deadlineAt.map { $0 <= today } ?? false
                 return due || deadline
+            case .tomorrow:
+                // 与「今天」同构：只看"落在明天"的到期/截止日；逾期属于今天视图，不在这里。
+                guard !task.isAbandoned else { return false }
+                let tomorrow = calendar.date(byAdding: .day, value: 1,
+                                             to: calendar.startOfDay(for: now))!
+                let due = task.schedule.dueAt.map { calendar.startOfDay(for: $0) == tomorrow } ?? false
+                let deadline = task.schedule.deadlineAt.map { calendar.startOfDay(for: $0) == tomorrow } ?? false
+                return due || deadline
             }
         }
     }
@@ -276,6 +284,13 @@ enum TaskListProjection {
             let remaining = ordinary.filter { !overdueIDs.contains($0.id) }
             if !overdue.isEmpty { groups.append(TaskListGroup(kind: .overdue, day: nil, tasks: overdue)) }
             if !remaining.isEmpty { groups.append(TaskListGroup(kind: .today, day: today, tasks: remaining)) }
+        } else if scope == .tomorrow {
+            // 时间型视图的日期分组是视图本体：明天只有一个桶（逾期归今天视图）。
+            let tomorrow = calendar.date(byAdding: .day, value: 1,
+                                         to: calendar.startOfDay(for: now))!
+            if !ordinary.isEmpty {
+                groups.append(TaskListGroup(kind: .day, day: tomorrow, tasks: ordinary))
+            }
         } else if scope == .nextSevenDays {
             let today = calendar.startOfDay(for: now)
             let overdue = ordinary.filter { $0.schedule.dueAt.map { calendar.startOfDay(for: $0) < today } ?? false }

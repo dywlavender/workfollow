@@ -267,6 +267,13 @@ final class TaskViewPreferencesTests: XCTestCase {
 
     // MARK: - 分组菜单可用性矩阵
 
+    func testTomorrowDestinationMapsToTomorrowScope() {
+        XCTAssertEqual(TaskWorkspaceModel.scope(for: .tomorrow), .tomorrow)
+        XCTAssertEqual(NativeDestination.tomorrow.title, "明天")
+        XCTAssertTrue(NativeDestination.taskDestinations.contains(.tomorrow))
+        XCTAssertNil(TaskWorkspaceModel.scope(for: .calendar), "非任务视图不映射 scope")
+    }
+
     func testAvailableGroupingOptionsMatrix() {
         XCTAssertEqual(TaskListGrouping.availableOptions(destination: .allTasks, activeList: nil, activeTag: nil),
                        [.byDate, .none, .byPriority, .byList, .byTag, .byCreatedAt])
