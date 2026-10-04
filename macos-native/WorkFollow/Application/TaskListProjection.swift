@@ -485,7 +485,50 @@ enum WFListPalette {
 /// 侧栏清单显示顺序（对齐 Flutter WorkspaceController.orderedLists）：
 /// 置顶在前，其余按 meta sortOrder，再按名字；无 meta 的清单排在有 meta
 /// 之后、按字典序。纯函数，便于对排序语义做单测。
+/// 侧栏清单树节点（滴答层级：文件夹 → 清单；置顶清单仍单独在前）。
+enum TaskListSidebarNode: Equatable, Identifiable {
+    case list(String)
+    case folder(name: String, lists: [String])
+
+    var id: String {
+        switch self {
+        case .list(let name): "list:\(name)"
+        case .folder(let name, _): "folder:\(name)"
+        }
+    }
+}
+
 enum TaskListOrdering {
+    /// 侧栏清单树：在既有排序（置顶 → sortOrder → 名字）之上把带文件夹的清单收进文件夹节点。
+    ///
+    /// - 文件夹节点出现在**它第一个成员清单**的位置（文件夹不单独存储，也就不需要自己的排序字段）；
+    /// - 文件夹内成员保持既有顺序；
+    /// - 置顶清单永远单独排在前面（既有语义），不参与文件夹折叠。
+    static func sidebarTree(_ names: [String], metas: [TaskListMeta]) -> [TaskListSidebarNode] {
+        let ordered = ordered(names, metas: metas)
+        let byName = Dictionary(metas.map { ($0.name, $0) }, uniquingKeysWith: { current, _ in current })
+        var nodes: [TaskListSidebarNode] = []
+        var emitted = Set<String>()
+        for name in ordered {
+            let meta = byName[name]
+            guard meta?.isPinned != true else {
+                nodes.append(.list(name))
+                continue
+            }
+            guard let folder = meta?.folderName, !folder.isEmpty else {
+                nodes.append(.list(name))
+                continue
+            }
+            guard !emitted.contains(folder) else { continue }
+            emitted.insert(folder)
+            let members = ordered.filter {
+                byName[$0]?.folderName == folder && byName[$0]?.isPinned != true
+            }
+            nodes.append(.folder(name: folder, lists: members))
+        }
+        return nodes
+    }
+
     static func ordered(_ names: [String], metas: [TaskListMeta]) -> [String] {
         let byName = Dictionary(metas.map { ($0.name, $0) },
                                 uniquingKeysWith: { current, _ in current })

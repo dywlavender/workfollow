@@ -108,6 +108,82 @@ final class ListMetaTests: XCTestCase {
         XCTAssertNil(store.listMeta(for: TaskList.inbox.name))
     }
 
+    // MARK: - 清单文件夹（滴答层级：文件夹 → 清单）
+
+    func testSidebarTreePutsFolderAtFirstMemberPosition() {
+        let metas = [
+            TaskListMeta(name: "工作", sortOrder: 0, folderName: "公司"),
+            TaskListMeta(name: "生活", sortOrder: 1),
+            TaskListMeta(name: "项目 A", sortOrder: 2, folderName: "公司"),
+            TaskListMeta(name: "读书", sortOrder: 3),
+        ]
+        XCTAssertEqual(TaskListOrdering.sidebarTree(metas.map(\.name), metas: metas),
+                       [.folder(name: "公司", lists: ["工作", "项目 A"]),
+                        .list("生活"),
+                        .list("读书")],
+                       "文件夹出现在它第一个成员的位置，成员保持既有顺序")
+    }
+
+    func testSidebarTreeKeepsPinnedListsOutsideFolders() {
+        let metas = [
+            TaskListMeta(name: "收件", isPinned: true, sortOrder: 5, folderName: "公司"),
+            TaskListMeta(name: "工作", sortOrder: 0, folderName: "公司"),
+        ]
+        XCTAssertEqual(TaskListOrdering.sidebarTree(metas.map(\.name), metas: metas),
+                       [.list("收件"), .folder(name: "公司", lists: ["工作"])],
+                       "置顶清单仍单独在前，不参与文件夹折叠")
+    }
+
+    func testListFolderActionsRenameAndDissolveKeepLists() {
+        let store = WorkspaceStore(); let actions = TaskActions(store: store, clock: { self.now })
+        _ = actions.renameList(nil, to: "工作")
+        _ = actions.renameList(nil, to: "项目 A")
+        XCTAssertTrue(actions.setListFolder("工作", "公司"))
+        XCTAssertTrue(actions.setListFolder("项目 A", "公司"))
+        XCTAssertEqual(store.listMeta(for: "项目 A")?.folderName, "公司")
+
+        XCTAssertTrue(actions.renameListFolder(from: "公司", to: "公司 A"))
+        XCTAssertEqual(store.listMeta(for: "工作")?.folderName, "公司 A")
+        XCTAssertEqual(store.listMeta(for: "项目 A")?.folderName, "公司 A")
+
+        XCTAssertTrue(actions.dissolveListFolder("公司 A"))
+        XCTAssertNil(store.listMeta(for: "工作")?.folderName, "删除文件夹后清单回到顶层")
+        XCTAssertTrue(store.lists.contains("工作"), "删文件夹不删清单")
+        XCTAssertTrue(store.lists.contains("项目 A"))
+        actions.undo()
+        XCTAssertEqual(store.listMeta(for: "工作")?.folderName, "公司 A",
+                       "解散是一步撤销（回到改名后的状态）")
+    }
+
+    func testListFolderRejectsInboxAndBlankClears() {
+        let store = WorkspaceStore(); let actions = TaskActions(store: store, clock: { self.now })
+        _ = actions.renameList(nil, to: "工作")
+        XCTAssertFalse(actions.setListFolder(TaskList.inbox.name, "公司"), "收集箱不可归类")
+        XCTAssertTrue(actions.setListFolder("工作", "公司"))
+        XCTAssertTrue(actions.setListFolder("工作", "   "))
+        XCTAssertNil(store.listMeta(for: "工作")?.folderName, "空白等于移出文件夹")
+    }
+
+    func testListFolderDecodesMissingKeyAsNil() throws {
+        let json = #"{"name":"工作","sortOrder":0}"#
+        let meta = try JSONDecoder().decode(TaskListMeta.self, from: Data(json.utf8))
+        XCTAssertNil(meta.folderName, "旧快照缺 folderName 键 → 顶层")
+    }
+
+    func testListFolderPersistsThroughRepositoryRoundTrip() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("wf-listfolder-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let repository = NativePreviewRepository(directory: directory)
+        let metas = [TaskListMeta(name: "工作", sortOrder: 0, folderName: "公司"),
+                     TaskListMeta(name: "读书", sortOrder: 1)]
+        try repository.save(NativeWorkspaceSnapshot(tasks: [], notes: [],
+                                                    taskLists: ["工作", "读书"], taskListMeta: metas))
+        let loaded = try XCTUnwrap(repository.load())
+        XCTAssertEqual(loaded.taskListMeta, metas, "文件夹随快照往返")
+        XCTAssertNil(loaded.taskListMeta?[1].folderName)
+    }
+
     // MARK: - 清单图标（Emoji）
 
     func testListIconPersistsClearsAndRejectsInbox() {

@@ -66,7 +66,7 @@ final class MigrationSnapshotTests: XCTestCase {
           "lists": [
             {"id": null, "name": "收集箱", "sortOrder": 0, "protected": true},
             {"id": null, "name": "读书", "sortOrder": 1, "protected": false,
-             "color": "#4285D4", "pinned": true, "icon": "📚"}
+             "color": "#4285D4", "pinned": true, "icon": "📚", "folder": "学习"}
           ],
           "folders": [
             {"id": "folder-parent", "parentId": null, "name": "笔记", "sortOrder": 0,
@@ -125,6 +125,7 @@ final class MigrationSnapshotTests: XCTestCase {
         XCTAssertEqual(snapshot.taskLists, ["收集箱", "读书"])
         let readingListIconMeta = try XCTUnwrap(snapshot.taskListMeta?.first { $0.name == "读书" })
         XCTAssertEqual(readingListIconMeta.icon, "📚", "清单图标随导入落地")
+        XCTAssertEqual(readingListIconMeta.folderName, "学习", "清单文件夹随导入落地")
         XCTAssertNil(snapshot.taskListMeta?.first { $0.name == "收集箱" }?.icon, "没写图标的清单仍为 nil")
         XCTAssertEqual(snapshot.noteFolders, ["笔记", "工作笔记"])
         let folderMeta = try XCTUnwrap(snapshot.noteFolderMetadata?.first { $0.id == "folder-1" })
@@ -186,7 +187,8 @@ final class MigrationSnapshotTests: XCTestCase {
             tasks: [parent, child], notes: [note], taskLists: ["收集箱", "工作", "读书"],
             taskListMeta: [
                 TaskListMeta(name: "收集箱", sortOrder: 0),
-                TaskListMeta(name: "读书", colorIndex: 7, isPinned: true, sortOrder: 1, icon: "📚"),
+                TaskListMeta(name: "读书", colorIndex: 7, isPinned: true, sortOrder: 1, icon: "📚",
+                             folderName: "学习"),
                 TaskListMeta(name: "工作", sortOrder: 2),
             ], noteFolders: ["笔记", "工作笔记"], noteFolderMetadata: noteFolders)
 
@@ -215,6 +217,7 @@ final class MigrationSnapshotTests: XCTestCase {
         XCTAssertTrue(exportedReadingList.isPinned)
         XCTAssertEqual(exportedReadingList.sortOrder, 1)
         XCTAssertEqual(exportedReadingList.icon, "📚", "导出写回清单图标")
+        XCTAssertEqual(exportedReadingList.folderName, "学习", "导出写回清单文件夹")
 
         // 导出的 v3：id 为 UUID 字符串；dueEndAt/contentJson 置空；无 subtasks 键。
         let object = try XCTUnwrap(try JSONSerialization.jsonObject(with: data) as? [String: Any])

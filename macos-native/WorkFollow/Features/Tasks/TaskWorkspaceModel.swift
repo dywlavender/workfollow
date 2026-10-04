@@ -107,6 +107,47 @@ final class TaskWorkspaceModel: ObservableObject {
         return changed
     }
 
+    // MARK: 清单文件夹（滴答层级：文件夹 → 清单）
+
+    /// 侧栏清单树：置顶清单 + 顶层清单 + 文件夹（成员在节点里）。
+    var listTree: [TaskListSidebarNode] {
+        _ = revision
+        return TaskListOrdering.sidebarTree(listNames, metas: store.listMetas)
+    }
+
+    /// 已知文件夹名（按侧栏出现顺序），供"移动到文件夹"菜单与重名判断。
+    var listFolderNames: [String] {
+        listTree.compactMap { node in
+            if case .folder(let name, _) = node { return name }
+            return nil
+        }
+    }
+
+    func folderName(forList name: String) -> String? {
+        listMeta(for: name)?.folderName
+    }
+
+    @discardableResult
+    func setListFolder(_ name: String, _ folder: String?) -> Bool {
+        let changed = actions.setListFolder(name, folder)
+        if changed { revision += 1 }
+        return changed
+    }
+
+    @discardableResult
+    func renameListFolder(from old: String, to new: String) -> Bool {
+        let changed = actions.renameListFolder(from: old, to: new)
+        if changed { revision += 1 }
+        return changed
+    }
+
+    @discardableResult
+    func dissolveListFolder(_ folder: String) -> Bool {
+        let changed = actions.dissolveListFolder(folder)
+        if changed { revision += 1 }
+        return changed
+    }
+
     @discardableResult
     func saveList(_ raw: String, replacing old: String? = nil) -> Bool {
         let name = raw.trimmingCharacters(in: .whitespacesAndNewlines)

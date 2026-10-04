@@ -700,6 +700,50 @@ final class TaskActions {
             $0.icon = (trimmed?.isEmpty ?? true) ? nil : trimmed
         }
     }
+
+    /// 把清单放进文件夹（nil / 空串 = 移出文件夹回到顶层）。收集箱不可归类。
+    @discardableResult
+    func setListFolder(_ name: String, _ folder: String?) -> Bool {
+        let trimmed = folder?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let target = (trimmed?.isEmpty ?? true) ? nil : trimmed
+        return commitListMeta(name) { $0.folderName = target }
+    }
+
+    /// 重命名文件夹：归属它的清单一起改（一次提交、一步撤销）。
+    @discardableResult
+    func renameListFolder(from old: String, to new: String) -> Bool {
+        let target = new.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !target.isEmpty, target != old else { return false }
+        return commitAllListMetas { metas in
+            var changed = false
+            for index in metas.indices where metas[index].folderName == old {
+                metas[index].folderName = target
+                changed = true
+            }
+            return changed
+        }
+    }
+
+    /// 删除文件夹：清单**保留**并回到顶层（与笔记侧"删除文件夹保留笔记"同一口径）。
+    @discardableResult
+    func dissolveListFolder(_ folder: String) -> Bool {
+        commitAllListMetas { metas in
+            var changed = false
+            for index in metas.indices where metas[index].folderName == folder {
+                metas[index].folderName = nil
+                changed = true
+            }
+            return changed
+        }
+    }
+
+    /// 跨清单的 meta 批量写入（文件夹重命名/解散走它：一次提交 = 一步撤销）。
+    private func commitAllListMetas(_ mutation: (inout [TaskListMeta]) -> Bool) -> Bool {
+        var metas = store.listMetas
+        guard mutation(&metas) else { return false }
+        store.commit(store.tasks, listMetas: metas)
+        return true
+    }
 }
 
 enum TaskBatchOperation {

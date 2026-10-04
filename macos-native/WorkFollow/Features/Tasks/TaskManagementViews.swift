@@ -38,13 +38,67 @@ struct TaskCollectionsView: View {
     @ObservedObject var workspace: TaskWorkspaceModel
     @ObservedObject var navigation: AppNavigation
     var onNavigate: () -> Void = {}
+    /// 折叠的文件夹（视图内状态；本轮不持久化——登记在案）。
+    @State private var collapsedFolders: Set<String> = []
+    /// 文件夹下清单的缩进（与文件夹行的箭头列对齐）。
+    private static let folderIndent: CGFloat = 16
+
     var body: some View {
         VStack(alignment: .leading, spacing: WFSpace.xs) {
             sectionHeader("清单", trailing: newListBox)
-            ForEach(workspace.orderedListNames, id: \.self) { name in
-                SidebarListRowView(workspace: workspace, name: name) { openList(name) }
+            ForEach(workspace.listTree) { node in
+                switch node {
+                case .list(let name):
+                    SidebarListRowView(workspace: workspace, name: name) { openList(name) }
+                case .folder(let folder, let lists):
+                    folderRow(folder, count: lists.count)
+                    if !collapsedFolders.contains(folder) {
+                        ForEach(lists, id: \.self) { name in
+                            SidebarListRowView(workspace: workspace, name: name) { openList(name) }
+                                .padding(.leading, Self.folderIndent)
+                        }
+                    }
+                }
             }
         }.buttonStyle(.plain).font(WFType.navigation)
+    }
+
+    /// 文件夹行：展开箭头 + 名称 + 成员清单数；右键重命名 / 删除（清单保留，回到顶层）。
+    private func folderRow(_ folder: String, count: Int) -> some View {
+        let collapsed = collapsedFolders.contains(folder)
+        return Button {
+            if collapsed { collapsedFolders.remove(folder) } else { collapsedFolders.insert(folder) }
+        } label: {
+            HStack(spacing: WFSpace.xs) {
+                Image(systemName: collapsed ? "chevron.right" : "chevron.down")
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundStyle(WFColors.tertiaryText)
+                    .frame(width: 12)
+                Image(systemName: "folder")
+                    .font(.system(size: 12))
+                    .foregroundStyle(WFColors.secondaryText)
+                Text(folder).font(WFType.navigation).foregroundStyle(WFColors.secondaryText)
+                Spacer(minLength: 0)
+                Text("\(count)").font(WFType.supporting).foregroundStyle(WFColors.tertiaryText)
+            }
+            .padding(.horizontal, WFSpace.sm)
+            .frame(height: NavigationMetrics.rowHeight)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .contextMenu {
+            Button("重命名文件夹…") {
+                guard let value = TaskNamePrompt.ask("重命名文件夹", value: folder),
+                      value != folder else { return }
+                if !workspace.renameListFolder(from: folder, to: value) { TaskNamePrompt.invalidName() }
+            }
+            Button("删除文件夹（清单保留）…") {
+                guard TaskNamePrompt.confirm("删除文件夹“\(folder)”？",
+                                             message: "其中的清单会保留，并移到顶层。",
+                                             action: "删除") else { return }
+                _ = workspace.dissolveListFolder(folder)
+            }
+        }
     }
 
     /// 滴答式分组标题：小号灰字，"清单"标题右侧带新建按钮。
@@ -96,6 +150,10 @@ private struct SidebarListRowView: View {
 
     private var meta: TaskListMeta? { workspace.listMeta(for: name) }
     private var pinned: Bool { meta?.isPinned ?? false }
+    /// 当前所属文件夹（nil = 顶层）。
+    private var folder: String? { workspace.folderName(forList: name) }
+    /// 收集箱是任务中转站：不可归类、不可删除（滴答规则）。
+    private var isInbox: Bool { name == TaskList.inbox.name }
     private var selected: Bool { workspace.activeList == name }
     private var dotColor: Color {
         WFListPalette.color(for: name, meta: meta)
@@ -188,6 +246,23 @@ private struct SidebarListRowView: View {
         }
         Button("设置图标") {
             DispatchQueue.main.async { showIconPicker = true }
+        }
+        // 移动到文件夹（滴答层级：文件夹 → 清单）：现有文件夹 + 新建 + 移出；收集箱不参与。
+        if !isInbox {
+            Menu("移动到文件夹") {
+                ForEach(workspace.listFolderNames.filter { $0 != folder }, id: \.self) { target in
+                    Button(target) { _ = workspace.setListFolder(name, target) }
+                }
+                if !workspace.listFolderNames.filter({ $0 != folder }).isEmpty { Divider() }
+                Button("新建文件夹…") {
+                    guard let value = TaskNamePrompt.ask("新建文件夹") else { return }
+                    if !workspace.setListFolder(name, value) { TaskNamePrompt.invalidName() }
+                }
+                if folder != nil {
+                    Divider()
+                    Button("移出文件夹") { _ = workspace.setListFolder(name, nil) }
+                }
+            }
         }
         Divider()
         Button("删除清单…", role: .destructive) {

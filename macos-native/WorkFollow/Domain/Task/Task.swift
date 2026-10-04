@@ -66,19 +66,24 @@ struct TaskListMeta: Equatable, Codable {
     var sortOrder: Int
     /// 清单图标（Emoji）。nil = 回落到色点（现有行为）。additive：旧快照缺键 → nil。
     var icon: String?
+    /// 所属文件夹（滴答层级：文件夹 → 清单）。nil = 顶层。
+    /// additive：旧快照缺键 → nil；**文件夹本身不单独存**——存在 ⇔ 至少有一个清单指向它，
+    /// 位置 = 它第一个成员清单的位置。
+    var folderName: String?
 
     init(name: String, colorIndex: Int? = nil, isPinned: Bool = false, sortOrder: Int = 0,
-         colorARGB: UInt32? = nil, icon: String? = nil) {
+         colorARGB: UInt32? = nil, icon: String? = nil, folderName: String? = nil) {
         self.name = name.trimmingCharacters(in: .whitespacesAndNewlines)
         self.colorIndex = colorIndex
         self.colorARGB = colorARGB
         self.isPinned = isPinned
         self.sortOrder = sortOrder
         self.icon = icon
+        self.folderName = folderName
     }
 
     private enum CodingKeys: String, CodingKey {
-        case name, colorIndex, colorARGB, isPinned, sortOrder, icon
+        case name, colorIndex, colorARGB, isPinned, sortOrder, icon, folderName
     }
 
     init(from decoder: Decoder) throws {
@@ -89,6 +94,8 @@ struct TaskListMeta: Equatable, Codable {
         isPinned = try values.decodeIfPresent(Bool.self, forKey: .isPinned) ?? false
         sortOrder = try values.decodeIfPresent(Int.self, forKey: .sortOrder) ?? 0
         icon = try values.decodeIfPresent(String.self, forKey: .icon)
+        folderName = try values.decodeIfPresent(String.self, forKey: .folderName)
+            .flatMap { $0.isEmpty ? nil : $0 }
     }
 
     func encode(to encoder: Encoder) throws {
@@ -99,6 +106,7 @@ struct TaskListMeta: Equatable, Codable {
         try values.encode(isPinned, forKey: .isPinned)
         try values.encode(sortOrder, forKey: .sortOrder)
         try values.encodeIfPresent(icon, forKey: .icon)
+        try values.encodeIfPresent(folderName, forKey: .folderName)
     }
 }
 

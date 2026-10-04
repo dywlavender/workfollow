@@ -40,6 +40,8 @@ struct MigrationListRecord: Equatable {
     let isPinned: Bool
     /// 清单图标（Emoji）。旧包缺键 → nil（回落色点）。
     let icon: String?
+    /// 所属文件夹（滴答层级：文件夹 → 清单）。旧包缺键 → nil（顶层）。
+    let folderName: String?
 }
 
 struct MigrationFolderRecord: Equatable {
@@ -209,7 +211,8 @@ enum MigrationSnapshot {
             isProtected: tolerantBool(json["protected"]),
             color: nullableString(json["color"]),
             isPinned: tolerantBool(json["pinned"]),
-            icon: nullableString(json["icon"])
+            icon: nullableString(json["icon"]),
+            folderName: nullableString(json["folder"] ?? json["folderName"])
         )
     }
 
@@ -619,7 +622,8 @@ enum MigrationSnapshot {
                             isPinned: record.isPinned,
                             sortOrder: sortOrder,
                             colorARGB: colorIndex == nil ? argb : nil,
-                            icon: record.icon)
+                            icon: record.icon,
+                            folderName: record.folderName)
     }
 
     private static func listARGB(from raw: String?) -> UInt32? {
@@ -923,6 +927,7 @@ enum MigrationSnapshot {
                 if let color = listColorHex(for: meta) { record["color"] = color }
                 if meta?.isPinned == true { record["pinned"] = true }
                 if let icon = meta?.icon, !icon.isEmpty { record["icon"] = icon }
+                if let folder = meta?.folderName, !folder.isEmpty { record["folder"] = folder }
                 return record
             },
             "folders": folders,
