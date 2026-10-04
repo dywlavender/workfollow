@@ -78,6 +78,7 @@ struct RootShellView: View {
                 }
             }
         }
+        .ignoresSafeArea(.container, edges: .top)
         .sheet(isPresented: $environment.commandPalettePresented) {
             CommandPaletteView(navigation: navigation)
                 .environmentObject(environment)
@@ -148,9 +149,18 @@ private struct TaskWorkspaceView: View {
                                     }
                                     .onEnded { _ in dragOrigin = nil })
                         }
-                    TaskInspectorShell(workspace: workspace, showBack: false)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    // 右栏是选中状态的纯投影：批量选中非空 → 批量面板；否则详情。
+                    if workspace.bulkSelection.isEmpty {
+                        TaskInspectorShell(workspace: workspace, showBack: false)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    } else {
+                        TaskBatchPanelView(workspace: workspace)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    }
                 }
+            } else if !workspace.bulkSelection.isEmpty {
+                TaskBatchPanelView(workspace: workspace)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if workspace.selectedTask != nil {
                 TaskInspectorShell(workspace: workspace, showBack: true)
             } else {
