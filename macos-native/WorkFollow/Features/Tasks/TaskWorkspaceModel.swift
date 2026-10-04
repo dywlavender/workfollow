@@ -1,4 +1,5 @@
 import Combine
+import AppKit
 import Foundation
 
 /// Presentation adapter: owns view-only selection/expansion state and routes
@@ -16,6 +17,8 @@ final class TaskWorkspaceModel: ObservableObject {
     @Published private(set) var collapsedTaskIDs: Set<UUID> = []
     @Published private(set) var pendingChildTitleEditorID: UUID?
     @Published private(set) var revision = 0
+    /// Committed domain changes, separate from selection/filter/UI invalidation.
+    let taskChanges = PassthroughSubject<TaskChangeSet, Never>()
     /// Invalidates date-derived projections and labels without treating time
     /// passing as a task mutation or scheduling a persistence write.
     @Published private(set) var dateRevision = 0
@@ -32,6 +35,7 @@ final class TaskWorkspaceModel: ObservableObject {
     weak var feedbackSink: FeedbackCenter?
     private var filterStore: FilterStore?
     private var filterCancellable: AnyCancellable?
+    private var activityCancellable: AnyCancellable?
     let clock: () -> Date
     let calendar: Calendar
 
@@ -48,6 +52,9 @@ final class TaskWorkspaceModel: ObservableObject {
         else if seedDemoData { seed() }
         store.commit(store.tasks, lists: initialLists, listMetas: initialListMeta)
         store.clearUndo()
+        // Install after hydration: consumers see committed edits, not a replay
+        // of initial loading. The stream exists independently of Activity.
+        store.onTaskChanges = { [weak self] changes in self?.taskChanges.send(changes) }
     }
 
     var listNames: [String] {
@@ -118,8 +125,8 @@ final class TaskWorkspaceModel: ObservableObject {
     /// `activeFilterID` through the store, refreshes projections when filter
     /// contents change, and clears the active filter if it is deleted anywhere.
     func attachActivityStore(_ activity: TaskActivityStore) {
-        store.onTasksChanged = { [weak activity] before, after in
-            activity?.recordChanges(from: before, to: after)
+        activityCancellable = taskChanges.sink { [weak activity] changes in
+            activity?.recordChanges(changes)
         }
     }
 
@@ -162,14 +169,56 @@ final class TaskWorkspaceModel: ObservableObject {
         if selectedTask?.deletedAt != nil { select(nil) }
     }
 
+    /// 批量转换笔记（补齐轮）：逐个走单任务转换链（含子任务随迁与撤销桥），
+    /// 失败（已转换/已删除）跳过。返回成功数；有成功时导航到笔记列表。
+    /// 不走 applyBulk——转换横跨任务与笔记两个 store，单任务链已各自成事务。
+    @discardableResult
+    func convertBulkToNotes(environment: AppEnvironment) -> Int {
+        let ids = bulkSelection
+        clearBulkSelection()
+        var converted = 0
+        for id in ids where environment.convertTaskToNote(id) != nil { converted += 1 }
+        if converted > 0 {
+            report(FeedbackEvent(kind: .undoable, message: "已转换 \(converted) 个任务为笔记",
+                                 actionTitle: "撤销", action: undoStep()))
+        }
+        return converted
+    }
+
+    /// 批量复制文本（补齐轮）：所选任务标题逐行进剪贴板（列表手动排序的
+    /// 存储序）。只读操作,不动集合不产生撤销步。
+    func copyBulkTitlesToPasteboard() {
+        let titles = store.tasks
+            .filter { bulkSelection.contains($0.id) }
+            .map { $0.title.isEmpty ? "无标题" : $0.title }
+        guard !titles.isEmpty else { return }
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(titles.joined(separator: "\n"), forType: .string)
+        report(FeedbackEvent(kind: .success, message: "已复制 \(titles.count) 个任务标题"))
+    }
+
     func setBulkSelected(_ id: UUID, _ selected: Bool) {
         if selected { bulkSelection.insert(id) } else { bulkSelection.remove(id) }
         bulkAnchorTaskID = id
     }
 
-    func toggleBulkSelection(_ id: UUID) {
-        if !bulkSelection.insert(id).inserted { bulkSelection.remove(id) }
-        bulkAnchorTaskID = id
+    /// Cmd/普通点击行进入或切换批量选中（状态机 A：S2 内点击一律切换）。
+    /// `carryingSelection`：S1 上 Cmd+点击时，原选中行与点击行一并入集合；
+    /// 锚点永远停在点击行，后续 Shift 范围从最后点击处延伸。集合清空时锚点
+    /// 一并复位——空集合加残留锚点会让下一次 Shift 范围落空。
+    func toggleBulkSelection(_ id: UUID, carryingSelection: Bool = false) {
+        if carryingSelection, bulkSelection.isEmpty, let current = selectedTaskID, current != id {
+            bulkSelection = [current, id]
+            bulkAnchorTaskID = id
+            return
+        }
+        if !bulkSelection.insert(id).inserted {
+            bulkSelection.remove(id)
+            if bulkSelection.isEmpty { bulkAnchorTaskID = nil }
+        } else {
+            bulkAnchorTaskID = id
+        }
     }
 
     func setBulkSelection(in order: [UUID]) {
@@ -234,11 +283,13 @@ final class TaskWorkspaceModel: ObservableObject {
 
     @discardableResult
     func createDraft(title: String, list: String, schedule: TaskSchedule, priority: TaskPriority,
-                     tags: [String], reminder: Date?, repeatFrequency: TaskRepeat,
+                     tags: [String], reminder: Date?, reminderOffsets: [Int]? = nil,
+                     repeatFrequency: TaskRepeat,
                      recurrenceRule: RecurrenceRule? = nil,
                      document: NativeDocument = .empty) -> TaskActionResult {
         let result = actions.createDraft(title: title, list: list, schedule: schedule, priority: priority,
-                                         tags: tags, reminder: reminder, frequency: repeatFrequency,
+                                         tags: tags, reminder: reminder, reminderOffsets: reminderOffsets,
+                                         frequency: repeatFrequency,
                                          recurrenceRule: recurrenceRule, document: document)
         didMutate(result)
         if let id = result.taskID { select(id) }
@@ -325,10 +376,12 @@ final class TaskWorkspaceModel: ObservableObject {
         }
     }
 
-    func groups(for scope: TaskListScope, query: TaskListQuery = TaskListQuery()) -> [TaskListGroup] {
+    func groups(for scope: TaskListScope, query: TaskListQuery = TaskListQuery(),
+                grouping: TaskListGrouping = .byDate) -> [TaskListGroup] {
         _ = revision
         return applyingFilter(
-            TaskListProjection.groups(in: scope, store: store, now: clock(), calendar: calendar, query: query))
+            TaskListProjection.groups(in: scope, store: store, now: clock(), calendar: calendar,
+                                      query: query, grouping: grouping))
     }
 
     /// Count for the visible list; when a saved filter is active the header
@@ -759,6 +812,22 @@ final class TaskWorkspaceModel: ObservableObject {
             report(FeedbackEvent(kind: .success, message: "已更新 \(count) 个任务的优先级"))
         case .reminderOffsets:
             report(FeedbackEvent(kind: .success, message: "已更新 \(count) 个任务的提醒"))
+        case .pin(let isPinned):
+            report(FeedbackEvent(kind: .undoable,
+                                 message: isPinned ? "已置顶 \(count) 个任务" : "已取消置顶 \(count) 个任务",
+                                 actionTitle: "撤销", action: undoStep()))
+        case .duplicate:
+            report(FeedbackEvent(kind: .undoable, message: "已复制 \(count) 个任务",
+                                 actionTitle: "撤销", action: undoStep()))
+        case .abandon:
+            report(FeedbackEvent(kind: .undoable, message: "已放弃 \(count) 个任务",
+                                 actionTitle: "撤销", action: undoStep()))
+        case .tags(let picked):
+            report(FeedbackEvent(kind: .success,
+                                 message: "已为 \(count) 个任务添加标签「\(picked.joined(separator: "、"))」"))
+        case .linkParent:
+            report(FeedbackEvent(kind: .undoable, message: "已关联 \(count) 个任务到主任务",
+                                 actionTitle: "撤销", action: undoStep()))
         }
     }
 

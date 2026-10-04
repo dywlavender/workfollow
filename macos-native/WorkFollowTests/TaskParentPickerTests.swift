@@ -6,39 +6,31 @@ import XCTest
 @MainActor
 final class TaskParentPickerTests: XCTestCase {
     func testInspectorMoreOpensParentPickerAndOutsideClickCancels() throws {
+        let environment = AppEnvironment()
         let workspace = TaskWorkspaceModel(seedDemoData: false)
         let source = try XCTUnwrap(workspace.createTask(title: "待关联任务", in: .inbox).taskID)
         _ = workspace.createTask(title: "发布周报", in: .inbox)
         workspace.select(source)
         let before = workspace.task(for: source)
-        var frames: [InspectorRenderAnchor: CGRect] = [:]
-        let host = NSHostingView(rootView: TaskInspectorShell(workspace: workspace, showBack: false)
-            .frame(width: 760, height: 700).coordinateSpace(name: "inspector-render")
-            .onPreferenceChange(InspectorFramesKey.self) { frames = $0 })
-        let window = NSWindow(contentRect: NSRect(x: 100, y: 100, width: 760, height: 700),
-                              styleMask: [.borderless], backing: .buffered, defer: false)
-        window.isReleasedWhenClosed = false
-        window.appearance = NSAppearance(named: .aqua)
-        window.contentView = host
-        window.orderFront(nil)
+        let host = InspectorPanelTestSupport.inspectorHost(workspace: workspace, environment: environment)
+        let window = InspectorPanelTestSupport.ownerWindow(for: host)
         defer { window.close() }
-        RunLoop.current.run(until: Date().addingTimeInterval(0.2))
-        func click(_ rect: CGRect) throws {
-            let point = host.convert(NSPoint(x: rect.midX, y: host.isFlipped ? rect.midY : host.bounds.height - rect.midY), to: nil)
-            for type in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {
-                NSApp.sendEvent(try XCTUnwrap(NSEvent.mouseEvent(with: type, location: point, modifierFlags: [],
-                    timestamp: 0, windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1)))
-            }
-            RunLoop.current.run(until: Date().addingTimeInterval(0.15))
-        }
-        try click(try XCTUnwrap(frames[.footerMore]))
-        try click(try XCTUnwrap(frames[.parentMenuRow]))
-        XCTAssertNil(frames[.moreMenu])
-        let picker = try XCTUnwrap(frames[.parentPicker])
-        XCTAssertEqual(picker.width, 280, accuracy: 1)
-        XCTAssertEqual(picker.height, 340, accuracy: 1)
-        try click(CGRect(x: 40, y: 350, width: 20, height: 20))
-        XCTAssertNil(frames[.parentPicker])
+
+        try InspectorPanelTestSupport.clickButton(containing: "更多任务操作", in: window)
+        let more = try InspectorPanelTestSupport.actionPanel(in: window)
+        XCTAssertEqual(more.frame.width, 208, accuracy: 1)
+        try InspectorPanelTestSupport.clickButton(containing: "关联主任务", in: more)
+        XCTAssertFalse(more.isVisible)
+
+        let picker = try InspectorPanelTestSupport.actionPanel(in: window)
+        XCTAssertEqual(picker.frame.width, 280, accuracy: 1)
+        XCTAssertEqual(picker.frame.height, 340, accuracy: 1)
+        XCTAssertTrue(picker.parent === window)
+
+        // A real click outside the action panel both cancels its draft and reaches the
+        // inspector title field, which is a sibling in the owner window's AX tree.
+        try InspectorPanelTestSupport.clickElement(containing: "任务标题", in: window)
+        XCTAssertFalse(picker.isVisible)
         XCTAssertEqual(workspace.task(for: source), before)
     }
 

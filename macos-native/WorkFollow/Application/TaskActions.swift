@@ -462,9 +462,27 @@ final class TaskActions {
                     if !ids.contains(task.parentID ?? task.id) || task.parentID == nil { _ = complete(task.id) }
                 case .delete:
                     if !ids.contains(task.parentID ?? task.id) || task.parentID == nil { _ = delete(task.id) }
+                case .pin(let isPinned):
+                    _ = setPinned(task.id, isPinned)
+                case .duplicate:
+                    if !ids.contains(task.parentID ?? task.id) || task.parentID == nil { _ = duplicate(task.id) }
+                case .abandon:
+                    if !task.isClosed { _ = abandon(task.id) }
+                case .tags(let picked):
+                    // 追加去重:保留任务已有标签,只并入选中的新标签。
+                    var merged = task.tags
+                    for tag in picked where !merged.contains(tag) { merged.append(tag) }
+                    if merged != task.tags { _ = setTags(task.id, merged) }
+                case .linkParent(let parentID):
+                    if task.id != parentID { _ = setParent(task.id, parentID: parentID) }
                 case .move(let list):
                     if task.parentID == nil { _ = moveToList(task.id, TaskList(name: list)) }
-                case .schedule(let schedule): _ = setSchedule(task.id, TaskSchedule(dueAt: schedule.dueAt, hasTime: schedule.hasTime, deadlineAt: task.schedule.deadlineAt))
+                case .schedule(let schedule):
+                    // 面板可能是「时间段」模式提交的，`dueEndAt` 必须一起落地；
+                    // `deadlineAt` 不走批量通道，保留任务原值。
+                    _ = setSchedule(task.id, TaskSchedule(dueAt: schedule.dueAt, hasTime: schedule.hasTime,
+                                                          dueEndAt: schedule.dueEndAt,
+                                                          deadlineAt: task.schedule.deadlineAt))
                 case .priority(let priority): _ = setPriority(task.id, priority)
                 case .reminderOffsets(let offsets): _ = setReminderOffsets(task.id, offsets)
                 }
@@ -652,6 +670,18 @@ final class TaskActions {
 
 enum TaskBatchOperation {
     case complete, delete, move(String), schedule(TaskSchedule), priority(TaskPriority)
+    /// 置顶/取消置顶（阶段4）。子任务无置顶语义,跟随单任务右键菜单的口径:全部应用。
+    case pin(Bool)
+    /// 复制（阶段4）：父任务选中时子任务随父复制,批内子任务不再单独复制（避免双份）。
+    case duplicate
+    /// 放弃（阶段4）：已完成任务跳过（与单任务右键的禁用口径一致）。
+    case abandon
+    /// 批量添加标签（补齐轮）：picked 逐个并入所选任务的现有标签（去重），
+    /// 空数组无意义，面板侧不提供。
+    case tags([String])
+    /// 批量关联主任务（补齐轮）：所选任务挂到同一父下，逐个走 TaskParentPolicy
+    /// 校验（自环/已关闭/已是子任务等失败即跳过），父不得在批内由 UI 保证。
+    case linkParent(UUID)
     /// Reminder offsets in minutes (0 = on time, negative = early); an empty
     /// list clears the stored offsets.
     case reminderOffsets([Int])
