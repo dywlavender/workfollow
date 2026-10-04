@@ -267,6 +267,47 @@ final class TaskViewPreferencesTests: XCTestCase {
 
     // MARK: - 分组菜单可用性矩阵
 
+    // MARK: - 智能清单显示状态（显示 / 隐藏 / 有内容时显示）
+
+    func testVisibilityShowsMatrix() {
+        XCTAssertTrue(SmartListVisibility.visible.shows(hasContent: false))
+        XCTAssertFalse(SmartListVisibility.hidden.shows(hasContent: true))
+        XCTAssertTrue(SmartListVisibility.automatic.shows(hasContent: true))
+        XCTAssertFalse(SmartListVisibility.automatic.shows(hasContent: false),
+                       "有内容时显示 = 没内容就不出现")
+    }
+
+    func testVisibilityDefaultsToVisibleAndInboxIsNotConfigurable() {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("TaskViewPreferencesTests-\(UUID().uuidString)", isDirectory: true)
+        let store = TaskViewPreferenceStore(directory: directory)
+        XCTAssertEqual(store.visibility(for: .today), .visible, "未设过 = 显示")
+
+        store.setVisibility(.automatic, for: .today)
+        XCTAssertEqual(store.visibility(for: .today), .automatic)
+        store.setVisibility(.visible, for: .today)
+        XCTAssertEqual(store.visibility(for: .today), .visible, "回到显示会删键")
+        XCTAssertTrue(store.smartListVisibility.isEmpty)
+
+        store.setVisibility(.hidden, for: .inbox)
+        XCTAssertEqual(store.visibility(for: .inbox), .visible, "收集箱不可隐藏（滴答规则）")
+        XCTAssertFalse(SmartListVisibility.isConfigurable(.inbox))
+        XCTAssertTrue(SmartListVisibility.isConfigurable(.tomorrow))
+    }
+
+    func testVisibilityArchiveIsAdditiveAndRoundTrips() throws {
+        let old = #"{"preferences":{"scope:allTasks":{"sortMode":"due"}}}"#
+        let decoded = try JSONDecoder().decode(TaskViewPreferenceStore.Archive.self,
+                                               from: Data(old.utf8))
+        XCTAssertTrue(decoded.smartListVisibility.isEmpty, "旧档案缺键 → 空字典（= 全部显示）")
+        XCTAssertEqual(decoded.preferences["scope:allTasks"]?.sortMode, .due, "其余字段照旧")
+
+        let archive = TaskViewPreferenceStore.Archive(smartListVisibility: ["today": .automatic])
+        let data = try JSONEncoder().encode(archive)
+        let roundTrip = try JSONDecoder().decode(TaskViewPreferenceStore.Archive.self, from: data)
+        XCTAssertEqual(roundTrip.smartListVisibility["today"], .automatic)
+    }
+
     func testTomorrowDestinationMapsToTomorrowScope() {
         XCTAssertEqual(TaskWorkspaceModel.scope(for: .tomorrow), .tomorrow)
         XCTAssertEqual(NativeDestination.tomorrow.title, "明天")

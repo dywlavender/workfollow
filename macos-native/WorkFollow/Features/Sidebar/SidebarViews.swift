@@ -106,7 +106,14 @@ struct NavigationColumnView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             if navigation.destination.isTaskList {
-                ForEach(smartLists) { destinationRow($0) }
+                ForEach(visibleSmartLists) { destination in
+                    if SmartListVisibility.isConfigurable(destination) {
+                        destinationRow(destination)
+                            .contextMenu { visibilityMenu(for: destination) }
+                    } else {
+                        destinationRow(destination)
+                    }
+                }
                 ScrollView {
                     VStack(alignment: .leading, spacing: 0) {
                         TaskCollectionsView(workspace: workspace, navigation: navigation, onNavigate: onNavigate)
@@ -133,6 +140,27 @@ struct NavigationColumnView: View {
         .padding(.vertical, WFSpace.md)
         .frame(maxHeight: .infinity)
         .background(WFColors.content)
+    }
+
+    /// 按"显示状态"过滤后的智能清单：隐藏 → 不出现；有内容时显示 → 未完成数为 0 时不出现。
+    private var visibleSmartLists: [NativeDestination] {
+        smartLists.filter { destination in
+            environment.viewPreferences.visibility(for: destination)
+                .shows(hasContent: workspace.count(for: destination) > 0)
+        }
+    }
+
+    /// 智能清单行的右键：显示 / 隐藏 / 有内容时显示（收集箱除外，滴答不允许隐藏它）。
+    @ViewBuilder
+    private func visibilityMenu(for destination: NativeDestination) -> some View {
+        Picker("显示状态", selection: Binding(
+            get: { environment.viewPreferences.visibility(for: destination) },
+            set: { environment.viewPreferences.setVisibility($0, for: destination) })) {
+            ForEach(SmartListVisibility.allCases) { state in
+                Text(state.title).tag(state)
+            }
+        }
+        .pickerStyle(.inline)
     }
 
     private func destinationRow(_ destination: NativeDestination) -> some View {

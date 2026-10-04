@@ -39,6 +39,35 @@ enum TaskListGrouping: String, CaseIterable, Codable, Identifiable {
     }
 }
 
+/// 智能清单的显示状态（对齐滴答：显示 / 隐藏 / 有内容时显示）。
+enum SmartListVisibility: String, Codable, CaseIterable, Identifiable {
+    case visible, hidden, automatic
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .visible: "显示"
+        case .hidden: "隐藏"
+        case .automatic: "有内容时显示"
+        }
+    }
+
+    /// 该状态在当前内容量下是否显示（`automatic` = 有未完成任务才显示）。
+    func shows(hasContent: Bool) -> Bool {
+        switch self {
+        case .visible: return true
+        case .hidden: return false
+        case .automatic: return hasContent
+        }
+    }
+
+    /// 收集箱是任务中转站：滴答不允许隐藏，这里也不给开关。
+    static func isConfigurable(_ destination: NativeDestination) -> Bool {
+        destination != .inbox
+    }
+}
+
 /// 视图偏好的键：清单/标签视图按名字，智能视图按 destination。
 /// 清单改名后旧键失效、回落默认——排序是低价值偏好，不做改名迁移。
 enum TaskViewScopeKey {
@@ -80,9 +109,29 @@ struct TaskViewPreference: Equatable, Codable {
 final class TaskViewPreferenceStore: ObservableObject, ModuleStoreFlushable {
     struct Archive: Codable {
         var preferences: [String: TaskViewPreference] = [:]
+        /// 智能清单显示状态：键 = destination.rawValue。缺省（不在字典里）= 显示。
+        var smartListVisibility: [String: SmartListVisibility] = [:]
+
+        init(preferences: [String: TaskViewPreference] = [:],
+             smartListVisibility: [String: SmartListVisibility] = [:]) {
+            self.preferences = preferences
+            self.smartListVisibility = smartListVisibility
+        }
+
+        private enum CodingKeys: String, CodingKey { case preferences, smartListVisibility }
+
+        /// additive：旧 view-preferences.json 只有 `preferences` 键。
+        init(from decoder: Decoder) throws {
+            let values = try decoder.container(keyedBy: CodingKeys.self)
+            preferences = try values.decodeIfPresent([String: TaskViewPreference].self,
+                                                     forKey: .preferences) ?? [:]
+            smartListVisibility = try values.decodeIfPresent([String: SmartListVisibility].self,
+                                                             forKey: .smartListVisibility) ?? [:]
+        }
     }
 
     @Published private(set) var preferences: [String: TaskViewPreference]
+    @Published private(set) var smartListVisibility: [String: SmartListVisibility]
 
     private let persistence: JSONFileStore<Archive>
 
@@ -90,7 +139,26 @@ final class TaskViewPreferenceStore: ObservableObject, ModuleStoreFlushable {
         let store = JSONFileStore<Archive>(filename: "view-preferences.json",
                                            directory: directory ?? JSONFileStore<Archive>.moduleDirectory)
         persistence = store
-        preferences = store.load()?.preferences ?? [:]
+        let archive = store.load()
+        preferences = archive?.preferences ?? [:]
+        smartListVisibility = archive?.smartListVisibility ?? [:]
+    }
+
+    /// 未设过 = 显示（滴答默认）。
+    func visibility(for destination: NativeDestination) -> SmartListVisibility {
+        smartListVisibility[destination.rawValue] ?? .visible
+    }
+
+    /// 写显示状态。收集箱不可配置（滴答规则），`.visible` 是缺省值，直接删键不留垃圾。
+    func setVisibility(_ visibility: SmartListVisibility, for destination: NativeDestination) {
+        guard SmartListVisibility.isConfigurable(destination) else { return }
+        guard self.visibility(for: destination) != visibility else { return }
+        if visibility == .visible {
+            smartListVisibility.removeValue(forKey: destination.rawValue)
+        } else {
+            smartListVisibility[destination.rawValue] = visibility
+        }
+        persist()
     }
 
     /// 未选过 = 手动排序（滴答证实的"每个视图记忆排序"，缺省即旧行为）。
@@ -151,6 +219,7 @@ final class TaskViewPreferenceStore: ObservableObject, ModuleStoreFlushable {
     }
 
     private func persist() {
-        persistence.schedule(Archive(preferences: preferences))
+        persistence.schedule(Archive(preferences: preferences,
+                                     smartListVisibility: smartListVisibility))
     }
 }
