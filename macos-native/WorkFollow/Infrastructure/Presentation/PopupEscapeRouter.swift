@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+
 /// Esc 的注册名次：同一个窗口里"更具体"的处理者先拿到 Esc。
 ///
 /// 注意这个数字**不是层数**，而是同窗口内的竞争排序——子卡是独立 `NSPanel`，
@@ -14,6 +15,86 @@ enum PopupEscapeRank {
     static let schedule = 4
 }
 
+/// Presentation-only ownership. Mouse events are observed, never consumed.
+/// A child taking key focus is still inside its owner's window family.
+@MainActor
+final class PopupInteractionRegistry {
+    static let shared = PopupInteractionRegistry()
+    private struct Entry {
+        weak var window: NSWindow?
+        let contains: (NSEvent) -> Bool
+        let dismiss: () -> Void
+    }
+    private var entries: [UUID: Entry] = [:]
+    private var localMonitor: Any?
+    private var globalMonitor: Any?
+    private var observers: [NSObjectProtocol] = []
+
+    func register(window: NSWindow, contains: @escaping (NSEvent) -> Bool,
+                  dismiss: @escaping () -> Void) -> UUID {
+        let id = UUID()
+        entries[id] = Entry(window: window, contains: contains, dismiss: dismiss)
+        if localMonitor == nil {
+            localMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown, .otherMouseDown]) { [weak self] event in
+                self?.routeMouseDown(event) ?? event
+            }
+            globalMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown, .otherMouseDown]) { [weak self] _ in
+                self?.dismissAll()
+            }
+            observers.append(NotificationCenter.default.addObserver(forName: NSApplication.didResignActiveNotification,
+                object: NSApp, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated { self?.dismissAll() }
+            })
+            observers.append(NotificationCenter.default.addObserver(forName: NSWindow.didBecomeKeyNotification,
+                object: nil, queue: .main) { [weak self] notification in
+                MainActor.assumeIsolated {
+                    self?.dismissOutsideFamily(of: notification.object as? NSWindow)
+                }
+            })
+            observers.append(NotificationCenter.default.addObserver(forName: NSWindow.didResignKeyNotification,
+                object: nil, queue: .main) { [weak self] _ in
+                // Key transfer is not complete during didResignKey. Inspect the
+                // resulting key window, not the transient nil between siblings.
+                DispatchQueue.main.async { self?.dismissOutsideFamily(of: NSApp.keyWindow) }
+            })
+        }
+        return id
+    }
+
+    func unregister(_ id: UUID) {
+        entries.removeValue(forKey: id)
+        guard entries.isEmpty else { return }
+        if let localMonitor { NSEvent.removeMonitor(localMonitor) }
+        if let globalMonitor { NSEvent.removeMonitor(globalMonitor) }
+        localMonitor = nil; globalMonitor = nil
+        observers.forEach(NotificationCenter.default.removeObserver)
+        observers.removeAll()
+    }
+
+    func routeMouseDown(_ event: NSEvent) -> NSEvent {
+        let outside = entries.values.filter { $0.window != nil && !$0.contains(event) }
+        outside.forEach { $0.dismiss() }
+        return event
+    }
+
+    func dismissAll() {
+        let current = Array(entries.values)
+        current.forEach { $0.dismiss() }
+    }
+
+    func dismissOutsideFamily(of keyWindow: NSWindow?) {
+        func root(_ window: NSWindow) -> NSWindow {
+            var result = window
+            while let parent = result.parent { result = parent }
+            return result
+        }
+        let outside = entries.values.filter { entry in
+            guard let window = entry.window, let keyWindow else { return true }
+            return root(window) !== root(keyWindow)
+        }
+        outside.forEach { $0.dismiss() }
+    }
+}
 
 /// One event monitor, explicit window ownership, and deepest layer first.
 /// This routes presentation only; drafts and commit decisions remain in the caller.

@@ -1,8 +1,27 @@
 import AppKit
 import SwiftUI
 
-enum AnchoredPropertyPanelPlacement { case vertical, verticalInOwner, submenu }
-enum AnchoredPropertyPanelFocusPolicy { case preservePresenter, panel }
+#if DEBUG
+/// Render tests observe preferences inside the real child host, not a replica
+/// overlay in the owner. The transform is stable across host updates.
+private struct PopupContentObservationKey: EnvironmentKey {
+    static let defaultValue: ((AnyView) -> AnyView)? = nil
+}
+extension EnvironmentValues {
+    var popupContentObservation: ((AnyView) -> AnyView)? {
+        get { self[PopupContentObservationKey.self] }
+        set { self[PopupContentObservationKey.self] = newValue }
+    }
+}
+#endif
+
+enum AnchoredPropertyPanelPlacement { case vertical, verticalInOwner, submenu, schedule }
+enum AnchoredPropertyPanelFocusPolicy {
+    case preservePresenter
+    case panel
+    /// Accept keyboard events without selecting a calendar tab or other control.
+    case panelWindow
+}
 
 /// A child card has its own window: it can cross the parent's bottom edge without
 /// contributing to the parent's fitting size. The row is the positioning anchor.
@@ -13,6 +32,7 @@ struct AnchoredPropertyPanel<PanelContent: View>: NSViewRepresentable {
     var prefersAbove: Bool = false
     var placement: AnchoredPropertyPanelPlacement = .vertical
     var focusPolicy: AnchoredPropertyPanelFocusPolicy = .preservePresenter
+    var title: String? = nil
     let content: () -> PanelContent
 
     final class AnchorView: NSView {
@@ -23,12 +43,17 @@ struct AnchoredPropertyPanel<PanelContent: View>: NSViewRepresentable {
     final class PropertyPanelWindow: NSPanel {
         override var canBecomeKey: Bool { true }
         override var canBecomeMain: Bool { false }
+        override func cancelOperation(_ sender: Any?) {
+            if !PopupEscapeRegistry.shared.route(eventWindow: self) {
+                super.cancelOperation(sender)
+            }
+        }
     }
     final class Coordinator {
         weak var anchor: AnchorView?
         var panel: NSPanel?
         var host: NSHostingView<AnyView>?
-        var monitor: Any?
+        var interactionRegistration: UUID?
         var ownerCloseObserver: NSObjectProtocol?
         var ownerVisibilityObserver: NSObjectProtocol?
         var ownerPopoverObserver: NSObjectProtocol?
@@ -114,19 +139,21 @@ struct AnchoredPropertyPanel<PanelContent: View>: NSViewRepresentable {
                         self?.close()
                     }
                 }
-                monitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] event in
-                    guard let self, let panel = self.panel, let parent = panel.parent else { return event }
-                    if event.window === panel { return event }
-                    var ancestor: NSWindow? = parent
-                    while let window = ancestor, window !== event.window { ancestor = window.parent }
-                    guard ancestor != nil else { return event }
+                interactionRegistration = MainActor.assumeIsolated { PopupInteractionRegistry.shared.register(window: window, contains: { [weak self] event in
+                    guard let self, let panel = self.panel, let parent = panel.parent else { return false }
+                    // A descendant's event belongs to the child, not an outside
+                    // click on its parent. Parent clicks close only the child.
+                    var target = event.window
+                    while let current = target {
+                        if current === panel { return true }
+                        target = current.parent
+                    }
                     // The anchor row handles toggle/clear itself; don't cancel then reopen it.
                     if event.window === parent, let anchor = self.anchor, anchor.bounds.contains(anchor.convert(event.locationInWindow, from: nil)) {
-                        return event
+                        return true
                     }
-                    self.dismiss()
-                    return event
-                }
+                    return false
+                }, dismiss: { [weak self] in self?.dismiss() }) }
             }
             let screen = owner.screen?.visibleFrame ?? NSScreen.main?.visibleFrame ?? owner.frame
             let size = CGSize(width: width, height: min(host.fittingSize.height, screen.height - 16))
@@ -138,6 +165,8 @@ struct AnchoredPropertyPanel<PanelContent: View>: NSViewRepresentable {
             switch placement {
             case .submenu:
                 frame = AnchoredPropertyPanelGeometry.submenuFrame(row: row, size: size, bounds: rootOwner.frame.intersection(screen))
+            case .schedule:
+                frame = AnchoredPropertyPanelGeometry.scheduleFrame(anchor: row, size: size, bounds: screen)
             case .vertical:
                 frame = AnchoredPropertyPanelGeometry.frame(row: row, size: size, screen: screen, prefersAbove: prefersAbove)
             case .verticalInOwner:
@@ -146,14 +175,18 @@ struct AnchoredPropertyPanel<PanelContent: View>: NSViewRepresentable {
             }
             panel?.setFrame(frame, display: true)
             if isOpening { panel?.orderFront(nil) }
-            if isOpening, focusPolicy == .panel {
+            if isOpening, focusPolicy != .preservePresenter {
                 panel?.makeKey()
                 host.layoutSubtreeIfNeeded()
-                panel?.recalculateKeyViewLoop()
-                if let input = firstEditableInput(in: host) {
-                    panel?.makeFirstResponder(input)
+                if focusPolicy == .panelWindow {
+                    panel?.makeFirstResponder(nil)
                 } else {
-                    panel?.selectNextKeyView(nil)
+                    panel?.recalculateKeyViewLoop()
+                    if let input = firstEditableInput(in: host) {
+                        panel?.makeFirstResponder(input)
+                    } else {
+                        panel?.selectNextKeyView(nil)
+                    }
                 }
             }
             panel?.invalidateShadow()
@@ -178,9 +211,21 @@ struct AnchoredPropertyPanel<PanelContent: View>: NSViewRepresentable {
             ownerVisibilityObserver = nil
             if let ownerPopoverObserver { NotificationCenter.default.removeObserver(ownerPopoverObserver) }
             ownerPopoverObserver = nil
-            if let monitor { NSEvent.removeMonitor(monitor) }
-            monitor = nil
-            if let panel { panel.parent?.removeChildWindow(panel); panel.close() }
+            if let interactionRegistration {
+                MainActor.assumeIsolated { PopupInteractionRegistry.shared.unregister(interactionRegistration) }
+            }
+            interactionRegistration = nil
+            if let panel {
+                // Return key ownership within the family before detaching a
+                // focused child. Otherwise AppKit may choose an unrelated
+                // window and the shared focus-loss observer closes the parent.
+                if panel.isKeyWindow, NSApp.isActive,
+                   let owner = panel.parent, owner.isVisible {
+                    owner.makeKey()
+                }
+                panel.parent?.removeChildWindow(panel)
+                panel.close()
+            }
             panel = nil; host = nil
         }
     }
@@ -201,8 +246,14 @@ struct AnchoredPropertyPanel<PanelContent: View>: NSViewRepresentable {
         coordinator.prefersAbove = prefersAbove
         coordinator.placement = placement
         coordinator.focusPolicy = focusPolicy
+        coordinator.title = title
         coordinator.presentingWindow = context.environment.popupPresentingWindow
         coordinator.root = AnyView(content().environment(\.self, context.environment))
+        #if DEBUG
+        if let observe = context.environment.popupContentObservation {
+            coordinator.root = observe(coordinator.root)
+        }
+        #endif
         coordinator.dismiss = { isPresented = false }
         DispatchQueue.main.async { [weak coordinator] in coordinator?.update() }
     }
@@ -214,6 +265,24 @@ struct AnchoredPropertyPanel<PanelContent: View>: NSViewRepresentable {
 }
 
 enum AnchoredPropertyPanelGeometry {
+    static func scheduleFrame(anchor: CGRect, size: CGSize, bounds: CGRect, gap: CGFloat = 6) -> CGRect {
+        let safe = bounds.insetBy(dx: 8, dy: 8)
+        let width = min(size.width, safe.width)
+        let height = min(size.height, safe.height)
+        let below = anchor.minY - gap - height
+        let above = anchor.maxY + gap
+        let proposedY: CGFloat
+        if below >= safe.minY { proposedY = below }
+        else if above + height <= safe.maxY { proposedY = above }
+        else {
+            let belowSpace = anchor.minY - gap - safe.minY
+            let aboveSpace = safe.maxY - anchor.maxY - gap
+            proposedY = belowSpace >= aboveSpace ? below : above
+        }
+        return CGRect(x: min(max(anchor.minX, safe.minX), safe.maxX - width),
+                      y: min(max(proposedY, safe.minY), safe.maxY - height),
+                      width: width, height: height)
+    }
     static func submenuFrame(row: CGRect, size: CGSize, bounds: CGRect, gap: CGFloat = 6) -> CGRect {
         let safe = bounds.insetBy(dx: 8, dy: 8)
         let width = min(size.width, safe.width)

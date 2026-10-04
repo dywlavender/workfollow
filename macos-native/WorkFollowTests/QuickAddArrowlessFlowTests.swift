@@ -5,10 +5,19 @@ import XCTest
 
 @MainActor
 final class QuickAddArrowlessFlowTests: XCTestCase {
+    private final class OwnerWindow: NSWindow {
+        override var canBecomeKey: Bool { true }
+    }
+    private struct TargetFrameKey: PreferenceKey {
+        static let defaultValue = CGRect.zero
+        static func reduce(value: inout CGRect, nextValue: () -> CGRect) { value = nextValue() }
+    }
     private final class State: ObservableObject {
         @Published var showsProperties = true
         var listSelections: [String] = []
         var tagSelections: [[String]] = []
+        var targetClicks = 0
+        var targetFrame = CGRect.zero
         var quickAddFrames: [QuickAddRenderAnchor: CGRect] = [:]
         var tagPickerFrames: [TaskTagPickerAnchor: CGRect] = [:]
     }
@@ -19,7 +28,7 @@ final class QuickAddArrowlessFlowTests: XCTestCase {
 
         var body: some View {
             VStack(alignment: .leading, spacing: 0) {
-                Button("更多属性") {}
+                Button("更多属性") { state.showsProperties = true }
                     .buttonStyle(.plain)
                     .frame(width: 100, height: 32)
                     .background(AnchoredPropertyPanel(isPresented: $state.showsProperties, width: 270) {
@@ -38,9 +47,18 @@ final class QuickAddArrowlessFlowTests: XCTestCase {
                         .onPreferenceChange(QuickAddFramesKey.self) { state.quickAddFrames = $0 }
                     })
                 Spacer(minLength: 0)
+                Button("目标控件") { state.targetClicks += 1 }
+                    .buttonStyle(.plain)
+                    .frame(width: 100, height: 32)
+                    .background(GeometryReader { geometry in
+                        Color.clear.preference(key: TargetFrameKey.self,
+                            value: geometry.frame(in: .named("owner")))
+                    })
             }
             .padding(20)
             .frame(width: 760, height: 560, alignment: .topLeading)
+            .coordinateSpace(name: "owner")
+            .onPreferenceChange(TargetFrameKey.self) { state.targetFrame = $0 }
         }
     }
 
@@ -177,6 +195,35 @@ final class QuickAddArrowlessFlowTests: XCTestCase {
         XCTAssertEqual(fixture.state.listSelections, [])
     }
 
+    func testTwentyOutsideTargetClicksCloseFamilyAndExecuteTargetOnce() throws {
+        let fixture = makeFixture()
+        defer { close(fixture) }
+
+        for iteration in 0..<20 {
+            fixture.state.showsProperties = true
+            settle(fixture)
+            let parent = try XCTUnwrap(parentPanel(in: fixture.owner))
+            try click(iteration.isMultiple(of: 2) ? .list : .tags,
+                      in: parent, state: fixture.state)
+            settle(fixture)
+            let child = try XCTUnwrap(childPanel(in: parent))
+
+            // Bottom-left target is inside the owner, outside both panels.
+            let host = try XCTUnwrap(fixture.owner.contentView)
+            XCTAssertFalse(fixture.state.targetFrame.isEmpty)
+            try sendClick(in: host, frame: fixture.state.targetFrame,
+                          window: fixture.owner)
+            settle(fixture)
+
+            XCTAssertFalse(parent.isVisible, "Round \(iteration)")
+            XCTAssertFalse(child.isVisible, "Round \(iteration)")
+            XCTAssertEqual(fixture.state.targetClicks, iteration + 1,
+                           "Dismissal must preserve the same target click")
+            XCTAssertEqual(fixture.state.listSelections, [])
+            XCTAssertEqual(fixture.state.tagSelections, [])
+        }
+    }
+
     private func makeFixture(withTag tag: String? = nil) -> Fixture {
         let now = Date()
         var tasks: [Task] = []
@@ -191,12 +238,13 @@ final class QuickAddArrowlessFlowTests: XCTestCase {
                                            initialLists: ["工作", "个人"])
         let state = State()
         let host = NSHostingView(rootView: AnyView(Harness(workspace: workspace, state: state)))
-        let owner = NSWindow(contentRect: NSRect(x: 120, y: 100, width: 800, height: 600),
+        let owner = OwnerWindow(contentRect: NSRect(x: 120, y: 100, width: 800, height: 600),
                              styleMask: [.borderless], backing: .buffered, defer: false)
         owner.isReleasedWhenClosed = false
         owner.appearance = NSAppearance(named: .aqua)
         owner.contentView = host
         owner.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
         let fixture = Fixture(owner: owner, host: host, state: state)
         settle(fixture)
         return fixture

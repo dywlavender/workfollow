@@ -28,8 +28,8 @@ struct QuickAddPropertiesPopover: View {
         VStack(alignment: .leading, spacing: WFSpace.sm) {
             Text("优先级").font(WFType.supporting).foregroundStyle(WFColors.secondaryText)
             HStack(spacing: WFSpace.xs) {
-                priorityButton(.high, color: .red)
-                priorityButton(.medium, color: .orange)
+                priorityButton(.high, color: WFColors.flagHigh)
+                priorityButton(.medium, color: WFColors.flagMedium)
                 priorityButton(.low, color: WFColors.accent)
                 priorityButton(.none, color: WFColors.secondaryText)
             }

@@ -29,16 +29,12 @@ enum TaskContextMenuPresenter {
             .environmentObject(environment)
             .environment(\.popupPresentingWindow, presenter))
         session.coordinator.update()
-        session.observeOutsideApplicationClicks()
     }
 
     @MainActor final class Session {
         typealias Adapter = AnchoredPropertyPanel<AnyView>
         let coordinator = Adapter.Coordinator()
         let anchor: Adapter.AnchorView
-        private var outsideMonitor: Any?
-        private var localOutsideMonitor: Any?
-        private var deactivationObserver: NSObjectProtocol?
 
         init(in rowView: NSView, at point: CGPoint) {
             anchor = Adapter.AnchorView(frame: CGRect(origin: point, size: CGSize(width: 1, height: 1)))
@@ -56,33 +52,11 @@ enum TaskContextMenuPresenter {
             }
         }
 
-        func observeOutsideApplicationClicks() {
-            localOutsideMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] event in
-                guard let self else { return event }
-                var window = event.window
-                while let current = window, current !== self.coordinator.panel { window = current.parent }
-                if window == nil { self.close() }
-                return event
-            }
-            outsideMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
-                self?.close()
-            }
-            deactivationObserver = NotificationCenter.default.addObserver(
-                forName: NSApplication.didResignActiveNotification, object: NSApp, queue: .main
-            ) { [weak self] _ in MainActor.assumeIsolated { self?.close() } }
-        }
-
         func close() {
             coordinator.presented = false
             coordinator.close()
             anchor.moved = nil
             anchor.removeFromSuperview()
-            if let outsideMonitor { NSEvent.removeMonitor(outsideMonitor) }
-            outsideMonitor = nil
-            if let localOutsideMonitor { NSEvent.removeMonitor(localOutsideMonitor) }
-            localOutsideMonitor = nil
-            if let deactivationObserver { NotificationCenter.default.removeObserver(deactivationObserver) }
-            deactivationObserver = nil
             if TaskContextMenuPresenter.activeSession === self { TaskContextMenuPresenter.activeSession = nil }
         }
     }

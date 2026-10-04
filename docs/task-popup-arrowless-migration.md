@@ -1,6 +1,6 @@
 # 任务弹窗无箭头迁移记录
 
-记录日期：2026-10-02。进度定位：Task Context 三个入口已冻结；剩余四个显式箭头入口已迁移，全业务 `arrowEdge:` 为零。系统 `.popover` 全量迁移尚未完成。
+记录日期：2026-10-02。Task Context 与前两批迁移已提交；第三批日期呈现壳已在工作区完成迁移，业务系统 `.popover` 与 `arrowEdge:` 均为零，但实机 Escape 流程仍未验收通过，尚未提交。
 
 ## 本轮完成状态
 
@@ -26,19 +26,19 @@
 
 ## `.popover` 分阶段盘点
 
-第二批迁移后剩余 3 处 `.popover(`，全部属于延期处理的日期入口。验收发现并行新增的 Countdown 图标选择显式箭头后，也仅替换该入口的呈现壳并保留 240pt 内容宽度。下表按当前工作区盘点，不表示全局弹窗改造已经完成。
+第二批迁移后剩余 3 处 `.popover(`，第三批已在工作区迁移。下表是当前源码盘点，不代表全部实机验收完成。
 
 | 文件 | 数量 | 当前入口 |
 | --- | ---: | --- |
-| `Features/Tasks/Schedule/SchedulePopoverModifier.swift` | 1 | 日程属性面板 |
-| `Features/Tasks/TaskInspector/TaskDatePopover.swift` | 2 | 旧任务日期入口 |
-| **合计** | **3** | 按当前工作区源码字面调用盘点 |
+| `Features/Tasks/Schedule/SchedulePopoverModifier.swift` | 0 | 日程属性面板已换共享 NSPanel |
+| `Features/Tasks/TaskInspector/TaskDatePopover.swift` | 0 | 两个历史入口已换呈现壳 |
+| **合计** | **0** | 按当前工作区源码字面调用盘点 |
 
 本批流程验收期间，门禁发现 `CountdownEditorView.swift` 新增 `arrowEdge:` 的回归。待该并行改动完成后，本轮仅迁移图标入口到共享面板；全局显式箭头重新为零，未放宽允许清单。
 
 ## 后续状态
 
-Quick Add、Focus scope / task picker、Task List、RootShell/Notes 导航呈现壳已迁移；剩余 Schedule 与旧 `TaskDatePopover` 按第三批推进，不能据此宣称全局迁移完成。Schedule 最后处理，只换 presentation shell，不改日期 Draft 和提交逻辑。
+Quick Add、Focus scope / task picker、Task List、RootShell/Notes 导航呈现壳已迁移；Schedule 与旧日期呈现壳正在第三批验收，不能据此宣称全局验收完成。日期 Draft 与提交逻辑保持原样。
 
 ## 分批迁移与流程验收规则
 
@@ -79,3 +79,15 @@ Focus 任务选择父面板、范围子菜单、任务列表导航、笔记导�
 范围子窗口的日常 App 截图被父窗口捕获范围裁切，完整定位与选择流程由自动真实窗口测试覆盖，不标作完整实机视觉验收通过。Focus 外部点击及笔记导航外部点击本次未手工验收；前者由共享面板与真实窗口流程测试覆盖。
 
 RootShell 的 ModuleShell fallback 当前没有可达 destination，仅完成源码迁移与门禁，不宣称实机流程通过。Focus Overview 隐藏入口与 Countdown 完整子层截图仍待补证。剩余系统 `.popover` 门禁锁定为日期文件的 3 处，禁止其他业务文件新增。
+
+### 第三批实施与待验收项
+
+Schedule 主面板与历史 TaskDateButton / TaskRecurrenceEditor 已换共享锚定 NSPanel。两个历史控件没有当前业务调用点，不宣称其实机流程通过。静态门禁升级为全业务 `.popover(` 零允许，不再保留日期允许清单。
+
+时间输入采用原生 NSTextField 明确请求一次焦点，保留原 14pt 字号、52pt 宽度、草稿与提交动作；布局更新不重复抢焦。日程状态感知 Escape 的同窗优先级高于通用关闭，原生 cancelOperation 也走共享路由。
+
+新增真实窗口流程覆盖时间输入初始 responder、键盘事件与原生取消命令、父框和触发行不移动、提醒取消与外部关闭后重开无残留、重复后主面板增加一行且 Footer 完整、确定一次提交与 bulkSelection 不变。日期结构契约修正为重复增加 30pt、时间段增加 54pt，子卡片打开仍不改变父框。
+
+最新构建成功；逐类 88 项测试全部通过，包括新增真实窗口流程 6、结构契约 6、全局门禁 7，以及共享面板、Escape、日期草稿、原子提交和渲染回归。此数字仅为自动测试结果。
+
+实机截图已看到无箭头主框、时间自动赋值与输入选区。再次打开确认未提交草稿。但直接自动发送 Escape 仍关闭整套面板；先实际点击输入框后发送 Escape 仅关闭子层。自动窗口测试通过不能抹掉这一差异：首次 Esc 实机流程未通过，正在核实真实键盘与自动操作路径。未修改日常任务日期，未结束已有暂停专注会话。本批暂不提交推送，也不宣称全项目流程或像素验收通过。

@@ -3,6 +3,14 @@ import XCTest
 @testable import WorkFollow
 
 final class ArrowlessTaskPopupContractTests: XCTestCase {
+    func testInspectorActionsUseIndependentPanelInsteadOfDismissalShield() throws {
+        let source = try String(contentsOf: businessSourceRoot.appendingPathComponent(
+            "Features/Tasks/TaskInspector/TaskInspectorShell.swift"), encoding: .utf8)
+        XCTAssertTrue(source.contains("title: \"任务详情操作\""))
+        XCTAssertFalse(source.contains(".onTapGesture(perform: dismissFooterPopover)"),
+                       "Outside dismissal must return the original event, not intercept a pane-sized tap")
+    }
+
     func testMigratedTaskContextMenusDoNotUseSystemPopover() throws {
         for name in ["TaskContextMenuPresenter.swift", "TaskContextMenuPopover.swift"] {
             let file = businessSourceRoot.appendingPathComponent("Features/Tasks/TaskList/\(name)")
@@ -84,16 +92,31 @@ final class ArrowlessTaskPopupContractTests: XCTestCase {
                        "Business UI must not request system popup arrows: \(actual)")
     }
 
-    func testOnlyDeferredScheduleShellsUseSystemPopover() throws {
+    func testBusinessSourceDoesNotUseSystemPopover() throws {
         var actual: [String: Int] = [:]
         for file in try businessSourceFiles() {
             let count = try occurrenceCount(of: "\\.popover\\s*\\(",
                                             in: String(contentsOf: file, encoding: .utf8))
             if count > 0 { actual[relativePath(of: file)] = count }
         }
-        XCTAssertEqual(actual, ["Features/Tasks/Schedule/SchedulePopoverModifier.swift": 1,
-                                "Features/Tasks/TaskInspector/TaskDatePopover.swift": 2],
-                       "Only the explicitly deferred schedule shells may retain system popovers")
+        XCTAssertTrue(actual.isEmpty,
+                      "Business popups must use shared arrowless presentation: \(actual)")
+    }
+
+    func testContainerScheduleEntrypointsDeclareTheirControlAnchor() throws {
+        let paths = ["Features/Tasks/TaskList/TaskListView.swift",
+                     "Features/Tasks/TaskInspector/TaskInspectorHeader.swift",
+                     "Features/Tasks/TaskList/TaskBatchPanelView.swift",
+                     "Features/Planning/TaskQuickComposer.swift",
+                     "Features/Planning/MatrixWorkspaceView.swift"]
+        for path in paths {
+            let source = try String(contentsOf: businessSourceRoot.appendingPathComponent(path), encoding: .utf8)
+            XCTAssertTrue(source.contains(".scheduleTrigger("), "Missing control anchor: \(path)")
+        }
+        let list = try String(contentsOf: businessSourceRoot.appendingPathComponent(paths[0]), encoding: .utf8)
+        XCTAssertTrue(list.contains("explicitAnchor: contextDateAnchor"))
+        let inspector = try String(contentsOf: businessSourceRoot.appendingPathComponent("Features/Tasks/TaskInspector/TaskInspectorShell.swift"), encoding: .utf8)
+        XCTAssertTrue(inspector.contains("trigger: .recurrence"))
     }
 
     private var businessSourceRoot: URL {
@@ -114,9 +137,17 @@ final class ArrowlessTaskPopupContractTests: XCTestCase {
             "Could not enumerate business source at \(businessSourceRoot.path)"
         )
 
-        return enumerator.compactMap { $0 as? URL }
+        let files = enumerator.compactMap { $0 as? URL }
             .filter { $0.pathExtension == "swift" }
             .sorted { $0.path < $1.path }
+        // 防空转守卫:枚举因权限或路径故障返回空/残缺时,调用方的"零违规"
+        // 断言会静默通过(实测:测试宿主进程无文稿目录授权时即如此)。
+        // 金丝雀文件缺失必须响亮失败,而不是给出无效的绿灯。
+        try XCTUnwrap(!files.isEmpty,
+                      "Source enumeration returned no files; contract would pass vacuously")
+        _ = try XCTUnwrap(files.first { $0.lastPathComponent == "AppEnvironment.swift" },
+                          "Enumeration missed AppEnvironment.swift; source scan is incomplete")
+        return files
     }
 
     private func relativePath(of file: URL) -> String {

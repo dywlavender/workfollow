@@ -178,7 +178,7 @@ final class AnchoredPropertyPanelTests: XCTestCase {
         XCTAssertTrue(owner.received === outside)
         XCTAssertNil(coordinator.panel)
         XCTAssertNil(coordinator.host)
-        XCTAssertNil(coordinator.monitor)
+        XCTAssertNil(coordinator.interactionRegistration)
         XCTAssertNil(panel.parent)
         XCTAssertFalse(panel.isVisible)
     }
@@ -208,7 +208,7 @@ final class AnchoredPropertyPanelTests: XCTestCase {
             XCTAssertEqual(childCalls, 1)
             XCTAssertEqual(parentCalls, 0)
             XCTAssertNil(coordinator.panel)
-            XCTAssertNil(coordinator.monitor)
+            XCTAssertNil(coordinator.interactionRegistration)
             XCTAssertTrue(PopupEscapeRegistry.shared.route(eventWindow: owner))
             XCTAssertEqual(parentCalls, 1)
         }
@@ -220,18 +220,78 @@ final class AnchoredPropertyPanelTests: XCTestCase {
         let child = try XCTUnwrap(coordinator.panel)
         let anchor = try XCTUnwrap(coordinator.anchor)
         defer { coordinator.close(); owner.close() }
-        XCTAssertNotNil(coordinator.monitor)
+        XCTAssertNotNil(coordinator.interactionRegistration)
         Adapter.dismantleNSView(anchor, coordinator: coordinator)
         settle()
         XCTAssertFalse(coordinator.presented)
         XCTAssertNil(anchor.moved)
         XCTAssertNil(coordinator.panel)
         XCTAssertNil(coordinator.host)
-        XCTAssertNil(coordinator.monitor)
+        XCTAssertNil(coordinator.interactionRegistration)
         XCTAssertNil(child.parent)
         XCTAssertFalse(child.isVisible)
         XCTAssertTrue(owner.childWindows?.isEmpty ?? true)
         XCTAssertFalse(PopupEscapeRegistry.shared.route(eventWindow: owner))
+    }
+
+    func testDescendantClickRetainsParentAndParentClickClosesOnlyChild() throws {
+        let owner = owner()
+        let parent = coordinator(in: owner)
+        let parentWindow = try XCTUnwrap(parent.panel)
+        let child = coordinator(in: parentWindow)
+        var parentDismissals = 0
+        var childDismissals = 0
+        parent.dismiss = { parentDismissals += 1 }
+        child.dismiss = { childDismissals += 1 }
+        defer { child.close(); parent.close(); owner.close() }
+        let event = mouse(in: try XCTUnwrap(child.panel), at: CGPoint(x: 5, y: 5))
+        XCTAssertTrue(PopupInteractionRegistry.shared.routeMouseDown(event) === event)
+        XCTAssertEqual(parentDismissals, 0)
+        XCTAssertEqual(childDismissals, 0)
+        let parentClick = mouse(in: parentWindow, at: CGPoint(x: 5, y: 5))
+        XCTAssertTrue(PopupInteractionRegistry.shared.routeMouseDown(parentClick) === parentClick)
+        XCTAssertEqual(parentDismissals, 0)
+        XCTAssertEqual(childDismissals, 1)
+    }
+
+    func testUnrelatedWindowClickClosesPanelAndPreservesEvent() throws {
+        let owner = owner()
+        let other = self.owner()
+        let coordinator = coordinator(in: owner)
+        var calls = 0
+        coordinator.dismiss = { calls += 1 }
+        defer { coordinator.close(); owner.close(); other.close() }
+        let event = mouse(in: other, at: CGPoint(x: 5, y: 5))
+        XCTAssertTrue(PopupInteractionRegistry.shared.routeMouseDown(event) === event)
+        XCTAssertEqual(calls, 1)
+    }
+
+    func testKeyTransferWithinFamilyRetainsPanelButOtherWindowDismisses() throws {
+        let owner = owner()
+        let other = self.owner()
+        let coordinator = coordinator(in: owner)
+        var calls = 0
+        coordinator.dismiss = { calls += 1 }
+        defer { coordinator.close(); owner.close(); other.close() }
+        let child = try XCTUnwrap(coordinator.panel)
+        NotificationCenter.default.post(name: NSWindow.didBecomeKeyNotification, object: child)
+        NotificationCenter.default.post(name: NSWindow.didBecomeKeyNotification, object: owner)
+        XCTAssertEqual(calls, 0)
+        NotificationCenter.default.post(name: NSWindow.didBecomeKeyNotification, object: other)
+        XCTAssertEqual(calls, 1)
+    }
+
+    func testApplicationDeactivationClosesPanelAndUnregisters() throws {
+        let owner = owner()
+        let coordinator = coordinator(in: owner)
+        coordinator.dismiss = { [weak coordinator] in
+            coordinator?.presented = false
+            coordinator?.close()
+        }
+        defer { coordinator.close(); owner.close() }
+        NotificationCenter.default.post(name: NSApplication.didResignActiveNotification, object: NSApp)
+        XCTAssertNil(coordinator.panel)
+        XCTAssertNil(coordinator.interactionRegistration)
     }
 
     func testClosingParentUnloadsChildAndMonitorWithoutAnotherUpdate() throws {
@@ -243,7 +303,7 @@ final class AnchoredPropertyPanelTests: XCTestCase {
         settle()
         XCTAssertNil(coordinator.panel, "parent 关闭后应主动卸载 child，无需等待 SwiftUI update")
         XCTAssertNil(coordinator.host)
-        XCTAssertNil(coordinator.monitor)
+        XCTAssertNil(coordinator.interactionRegistration)
         XCTAssertNil(child.parent)
         XCTAssertFalse(child.isVisible)
     }

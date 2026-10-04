@@ -91,8 +91,8 @@ struct TaskContextMenuPopover: View {
                 .foregroundStyle(WFColors.secondaryText)
                 .padding(.horizontal, WFSpace.md)
             HStack(spacing: WFSpace.xs) {
-                priorityAction(.high, color: .red)
-                priorityAction(.medium, color: .orange)
+                priorityAction(.high, color: WFColors.flagHigh)
+                priorityAction(.medium, color: WFColors.flagMedium)
                 priorityAction(.low, color: WFColors.accent)
                 priorityAction(.none, color: WFColors.secondaryText)
             }
