@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import SwiftUI
 import XCTest
 @testable import WorkFollow
@@ -31,7 +32,9 @@ final class TaskActivityIntegrationTests: XCTestCase {
     func testOuterTransactionReportsFinalSnapshotAndUndoReportsRestore() {
         let store = WorkspaceStore()
         var snapshots: [([Task], [Task])] = []
+        var changes: [TaskChangeSet] = []
         store.onTasksChanged = { snapshots.append(($0, $1)) }
+        store.onTaskChanges = { changes.append($0) }
         store.transaction {
             var task = Task(id: UUID(), title: "初始", list: .inbox, priority: .none,
                             schedule: TaskSchedule(), parentID: nil, childOrder: 0,
@@ -42,9 +45,188 @@ final class TaskActivityIntegrationTests: XCTestCase {
         }
         XCTAssertEqual(snapshots.count, 1)
         XCTAssertEqual(snapshots[0].1.first?.title, "最终")
+        XCTAssertEqual(changes.count, 1)
+        XCTAssertEqual(changes[0].entries.map(\.operation), [.insert])
+        XCTAssertEqual(changes[0].entries.first?.after?.title, "最终")
         store.undo()
         XCTAssertEqual(snapshots.count, 2)
         XCTAssertTrue(snapshots[1].1.isEmpty)
+        XCTAssertEqual(changes.count, 2)
+        XCTAssertEqual(changes[1].entries.map(\.operation), [.delete])
+        XCTAssertEqual(changes[1].entries.first?.before?.title, "最终")
+    }
+
+    func testCommitAndUndoPublishBeforeAndAfterTaskValues() {
+        let store = WorkspaceStore()
+        var changes: [TaskChangeSet] = []
+        store.onTaskChanges = { changes.append($0) }
+        let stamp = Date(timeIntervalSince1970: 1_800_000_000)
+        let original = Task(id: UUID(), title: "原名", list: .inbox, priority: .none,
+                            schedule: TaskSchedule(), parentID: nil, childOrder: 0,
+                            createdAt: stamp, updatedAt: stamp)
+        store.commit([original])
+        var edited = original
+        edited.title = "修改名"
+        store.commit([edited])
+
+        XCTAssertEqual(changes.count, 2)
+        XCTAssertEqual(changes[1].entries.first?.operation, .update)
+        XCTAssertEqual(changes[1].entries.first?.before?.title, "原名")
+        XCTAssertEqual(changes[1].entries.first?.after?.title, "修改名")
+
+        store.undo()
+        XCTAssertEqual(changes.count, 3)
+        XCTAssertEqual(changes[2].entries.first?.operation, .update)
+        XCTAssertEqual(changes[2].entries.first?.before?.title, "修改名")
+        XCTAssertEqual(changes[2].entries.first?.after?.title, "原名")
+        XCTAssertTrue(store.canUndo)
+    }
+
+    func testWorkspacePublishesCommittedChangesWithoutActivityAttachment() throws {
+        let stamp = Date(timeIntervalSince1970: 1_800_000_000)
+        let workspace = TaskWorkspaceModel(clock: { stamp }, seedDemoData: false)
+        let taskID = try XCTUnwrap(workspace.createTask(title: "原任务", in: .inbox).taskID)
+        let filterStore = FilterStore(directory: FileManager.default.temporaryDirectory
+            .appendingPathComponent("filter-revision-\(UUID())", isDirectory: true))
+
+        var changes: [TaskChangeSet] = []
+        let cancellable = workspace.taskChanges.sink { changes.append($0) }
+        defer { cancellable.cancel() }
+
+        let revisionBeforeUIChanges = workspace.revision
+        workspace.select(taskID)
+        workspace.attachFilterStore(filterStore)
+        let filter = SavedFilter(name: "集成测试筛选")
+        XCTAssertTrue(filterStore.add(filter))
+        workspace.openFilter(filter.id)
+        XCTAssertGreaterThan(workspace.revision, revisionBeforeUIChanges)
+        XCTAssertTrue(changes.isEmpty)
+
+        _ = workspace.setTitle(taskID, "新标题")
+        XCTAssertEqual(changes.count, 1)
+        let titleEntry = try XCTUnwrap(changes[0].entries.first)
+        XCTAssertEqual(titleEntry.operation, .update)
+        XCTAssertEqual(titleEntry.before?.title, "原任务")
+        XCTAssertEqual(titleEntry.after?.title, "新标题")
+        XCTAssertEqual(titleEntry.changedFields, [.title])
+        XCTAssertTrue(changes[0].affectsReminders)
+
+        let document = NativeDocument(plainText: "正文")
+        _ = workspace.setDocument(taskID, document)
+        XCTAssertEqual(changes.count, 2)
+        let documentEntry = try XCTUnwrap(changes[1].entries.first)
+        XCTAssertEqual(documentEntry.changedFields, [.document])
+        XCTAssertFalse(changes[1].affectsReminders)
+
+        let unchangedCount = changes.count
+        _ = workspace.setTitle(taskID, "新标题")
+        _ = workspace.setDocument(taskID, document)
+        XCTAssertEqual(changes.count, unchangedCount)
+    }
+
+    func testTaskChangeSetReminderClassificationIncludesScheduleEligibilityAndConversion() {
+        let stamp = Date(timeIntervalSince1970: 1_800_000_000)
+        let original = Task(id: UUID(), title: "任务", list: .inbox, priority: .none,
+                            schedule: TaskSchedule(), parentID: nil, childOrder: 0,
+                            createdAt: stamp, updatedAt: stamp)
+        let mutations: [(String, (inout Task) -> Void)] = [
+            ("title", { task in task.title = "新标题" }),
+            ("list", { task in task.list = TaskList(name: "工作") }),
+            ("schedule", { task in task.schedule.dueAt = stamp }),
+            ("recurrence", { task in task.recurrence = .daily }),
+            ("recurrenceRule", { task in task.recurrenceRule = RecurrenceRule(interval: 2) }),
+            ("reminderAt", { task in task.reminderAt = stamp }),
+            ("reminderOffsets", { task in task.reminderOffsets = [-15] }),
+            ("status", { task in task.status = .completed }),
+            ("isAbandoned", { task in task.abandonedAt = stamp }),
+            ("deletedAt", { task in task.deletedAt = stamp }),
+            ("skippedAt", { task in task.skippedAt = stamp }),
+            ("convertedNoteID", { task in task.convertedNoteID = UUID() })
+        ]
+
+        for (field, mutate) in mutations {
+            var updated = original
+            mutate(&updated)
+            XCTAssertTrue(TaskChangeSet(before: [original], after: [updated]).affectsReminders,
+                          "Expected \(field) to trigger reminder reconciliation")
+        }
+
+        var bodyOnly = original
+        bodyOnly.document = NativeDocument(plainText: "正文")
+        XCTAssertFalse(TaskChangeSet(before: [original], after: [bodyOnly]).affectsReminders)
+        var sourceOnly = original
+        sourceOnly.sourceNoteID = UUID()
+        let sourceChanges = TaskChangeSet(before: [original], after: [sourceOnly])
+        XCTAssertEqual(sourceChanges.entries.first?.changedFields, [.sourceNoteID])
+        XCTAssertFalse(sourceChanges.affectsReminders)
+        XCTAssertTrue(TaskChangeSet(before: [], after: [original]).affectsReminders)
+        XCTAssertTrue(TaskChangeSet(before: [original], after: []).affectsReminders)
+    }
+
+    func testChangeSetSkipsEqualTasksAndClassifiesEveryPersistedTaskField() throws {
+        let stamp = Date(timeIntervalSince1970: 1_800_000_000)
+        let original = Task(id: UUID(), title: "原任务", list: .inbox, priority: .none,
+                            schedule: TaskSchedule(), parentID: nil, childOrder: 0,
+                            createdAt: stamp, updatedAt: stamp)
+        let untouched = Task(id: UUID(), title: "未变任务", list: .inbox, priority: .none,
+                             schedule: TaskSchedule(), parentID: nil, childOrder: 0,
+                             createdAt: stamp, updatedAt: stamp)
+        let updated = Task(
+            id: original.id,
+            title: "新标题",
+            document: NativeDocument(plainText: "新正文"),
+            tags: ["标签"],
+            recurrence: .weekly,
+            recurrenceRule: RecurrenceRule(interval: 2),
+            reminderAt: stamp.addingTimeInterval(60),
+            reminderOffsets: [-15],
+            attachments: [NativeAttachment(id: UUID(), name: "附件", storedName: "attachment")],
+            list: TaskList(name: "工作"),
+            priority: .high,
+            schedule: TaskSchedule(dueAt: stamp, hasTime: true,
+                                  dueEndAt: stamp.addingTimeInterval(3_600),
+                                  deadlineAt: stamp.addingTimeInterval(7_200)),
+            status: .completed,
+            parentID: UUID(),
+            childOrder: 1,
+            createdAt: stamp.addingTimeInterval(1),
+            updatedAt: stamp.addingTimeInterval(2),
+            completedAt: stamp.addingTimeInterval(3),
+            deletedAt: stamp.addingTimeInterval(4),
+            isPinned: true,
+            abandonedAt: stamp.addingTimeInterval(5),
+            skippedAt: stamp.addingTimeInterval(6),
+            convertedNoteID: UUID(),
+            sourceNoteID: UUID())
+
+        let changes = TaskChangeSet(before: [original, untouched], after: [updated, untouched])
+        XCTAssertEqual(changes.entries.count, 1)
+        let entry = try XCTUnwrap(changes.entries.first)
+        XCTAssertEqual(entry.taskID, original.id)
+        XCTAssertEqual(entry.operation, .update)
+        XCTAssertEqual(entry.before, original)
+        XCTAssertEqual(entry.after, updated)
+        let expectedFields: Set<TaskChangeSet.Field> = [
+            .title, .document, .tags, .recurrence, .recurrenceRule,
+            .reminderAt, .reminderOffsets, .attachments, .list, .priority,
+            .schedule, .status, .parentID, .childOrder, .createdAt,
+            .updatedAt, .completedAt, .deletedAt, .isPinned, .abandonedAt,
+            .isAbandoned, .skippedAt, .convertedNoteID, .sourceNoteID
+        ]
+        XCTAssertEqual(entry.changedFields, expectedFields)
+        XCTAssertTrue(changes.affectsReminders)
+
+        let unchanged = TaskChangeSet(before: [untouched], after: [untouched])
+        XCTAssertTrue(unchanged.entries.isEmpty)
+        XCTAssertFalse(unchanged.affectsReminders)
+
+        let replacementID = Task(id: UUID(), title: untouched.title, list: untouched.list,
+                                  priority: untouched.priority, schedule: untouched.schedule,
+                                  parentID: untouched.parentID, childOrder: untouched.childOrder,
+                                  createdAt: untouched.createdAt, updatedAt: untouched.updatedAt)
+        let identityChange = TaskChangeSet(before: [untouched], after: [replacementID])
+        XCTAssertEqual(identityChange.entries.map(\.operation), [.insert, .delete])
+        XCTAssertTrue(identityChange.affectsReminders)
     }
 
     func testOnlySuccessfulFocusStartNotifiesActivity() throws {
@@ -65,41 +247,23 @@ final class TaskActivityIntegrationTests: XCTestCase {
         let workspace = TaskWorkspaceModel(seedDemoData: false)
         let id = try XCTUnwrap(workspace.createTask(title: "动态浮层验收", in: .inbox).taskID)
         workspace.select(id)
-        var frames: [InspectorRenderAnchor: CGRect] = [:]
-        let host = NSHostingView(rootView: TaskInspectorShell(workspace: workspace, showBack: false)
-            .environmentObject(environment)
-            .frame(width: 760, height: 700)
-            .coordinateSpace(name: "inspector-render")
-            .onPreferenceChange(InspectorFramesKey.self) { frames = $0 })
-        let window = NSWindow(contentRect: NSRect(x: 100, y: 100, width: 760, height: 700),
-            styleMask: [.borderless], backing: .buffered, defer: false)
-        window.isReleasedWhenClosed = false
-        window.contentView = host
-        window.orderFront(nil)
+        let host = InspectorPanelTestSupport.inspectorHost(workspace: workspace, environment: environment)
+        let window = InspectorPanelTestSupport.ownerWindow(for: host)
         defer { window.close() }
-        func settle() {
-            host.layoutSubtreeIfNeeded()
-            RunLoop.current.run(until: Date().addingTimeInterval(0.15))
-        }
-        func click(_ rect: CGRect) throws {
-            let point = host.convert(NSPoint(x: rect.midX, y: host.isFlipped ? rect.midY : host.bounds.height - rect.midY), to: nil)
-            for type in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {
-                NSApp.sendEvent(try XCTUnwrap(NSEvent.mouseEvent(with: type, location: point, modifierFlags: [], timestamp: 0,
-                    windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1)))
-            }
-            settle()
-        }
-        settle()
-        try click(try XCTUnwrap(frames[.footerMore]))
-        try click(try XCTUnwrap(frames[.activityMenuRow]))
-        let panel = try XCTUnwrap(window.childWindows?.first { $0.isVisible })
+        try InspectorPanelTestSupport.clickButton(containing: "更多任务操作", in: window)
+        let more = try InspectorPanelTestSupport.actionPanel(in: window)
+        XCTAssertEqual(more.frame.width, 208, accuracy: 1)
+        try InspectorPanelTestSupport.clickButton(containing: "任务动态", in: more)
+        XCTAssertFalse(more.isVisible)
+
+        let panel = try InspectorPanelTestSupport.actionPanel(in: window)
         XCTAssertTrue(panel.styleMask.contains(.borderless))
-        XCTAssertNil(frames[.moreMenu])
+        XCTAssertEqual(panel.title, InspectorPanelTestSupport.actionPanelTitle)
         XCTAssertEqual(panel.frame.width, 320, accuracy: 1)
         XCTAssertTrue(window.frame.insetBy(dx: 8, dy: 8).contains(panel.frame),
                       "Footer activity must stay inside the owner even on a larger screen")
-        XCTAssertTrue(PopupEscapeRegistry.shared.route(eventWindow: panel))
-        settle()
+        try InspectorPanelTestSupport.sendEscape(to: panel)
         XCTAssertFalse(panel.isVisible)
     }
+
 }

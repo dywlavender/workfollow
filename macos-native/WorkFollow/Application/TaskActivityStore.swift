@@ -32,60 +32,76 @@ final class TaskActivityStore: ObservableObject, ModuleStoreFlushable {
             .map(\.element)
     }
 
-    func recordChanges(from before: [Task], to after: [Task]) {
-        let beforeByID = Dictionary(before.map { ($0.id, $0) }, uniquingKeysWith: { _, latest in latest })
+    func recordChanges(_ changes: TaskChangeSet) {
         var changed = false
 
-        for task in after {
-            guard beforeByID[task.id] == nil else { continue }
-            changed = append(event(taskID: task.id, kind: .created, afterValue: task.title)) || changed
-            if let parentID = task.parentID {
-                changed = append(event(taskID: parentID, kind: .childCreated,
-                                       afterValue: task.title)) || changed
-            }
-        }
+        for entry in changes.entries {
+            switch entry.operation {
+            case .insert:
+                guard let task = entry.after else { continue }
+                changed = append(event(taskID: task.id, kind: .created, afterValue: task.title)) || changed
+                if let parentID = task.parentID {
+                    changed = append(event(taskID: parentID, kind: .childCreated,
+                                           afterValue: task.title)) || changed
+                }
+            case .delete:
+                break
+            case .update:
+                guard let previous = entry.before, let task = entry.after else { continue }
+                let fields = entry.changedFields
 
-        for task in after {
-            guard let previous = beforeByID[task.id] else { continue }
+                if fields.contains(.title) {
+                    changed = append(event(taskID: task.id, kind: .titleChanged,
+                                           beforeValue: previous.title, afterValue: task.title)) || changed
+                }
 
-            if previous.title != task.title {
-                changed = append(event(taskID: task.id, kind: .titleChanged,
-                                       beforeValue: previous.title, afterValue: task.title)) || changed
-            }
+                if fields.contains(.schedule) || fields.contains(.recurrence)
+                    || fields.contains(.recurrenceRule) || fields.contains(.reminderAt)
+                    || fields.contains(.reminderOffsets) {
+                    let previousDates = TemporalState(previous)
+                    let currentDates = TemporalState(task)
+                    if previousDates != currentDates {
+                        changed = append(event(taskID: task.id, kind: .dateChanged,
+                                               beforeValue: previousDates.displayValue,
+                                               afterValue: currentDates.displayValue)) || changed
+                    }
+                }
 
-            let previousDates = TemporalState(previous)
-            let currentDates = TemporalState(task)
-            if previousDates != currentDates {
-                changed = append(event(taskID: task.id, kind: .dateChanged,
-                                       beforeValue: previousDates.displayValue,
-                                       afterValue: currentDates.displayValue)) || changed
-            }
+                if fields.contains(.list) {
+                    changed = append(event(taskID: task.id, kind: .listChanged,
+                                           beforeValue: previous.list.name, afterValue: task.list.name)) || changed
+                }
 
-            if previous.list.name != task.list.name {
-                changed = append(event(taskID: task.id, kind: .listChanged,
-                                       beforeValue: previous.list.name, afterValue: task.list.name)) || changed
-            }
+                if fields.contains(.priority) {
+                    changed = append(event(taskID: task.id, kind: .priorityChanged,
+                                           beforeValue: Self.priorityName(previous.priority),
+                                           afterValue: Self.priorityName(task.priority))) || changed
+                }
 
-            if previous.priority != task.priority {
-                changed = append(event(taskID: task.id, kind: .priorityChanged,
-                                       beforeValue: Self.priorityName(previous.priority),
-                                       afterValue: Self.priorityName(task.priority))) || changed
-            }
+                if fields.contains(.tags) {
+                    let previousTags = Self.canonicalTags(previous.tags)
+                    let currentTags = Self.canonicalTags(task.tags)
+                    if previousTags != currentTags {
+                        changed = append(event(taskID: task.id, kind: .tagsChanged,
+                                               beforeValue: previousTags.isEmpty ? nil : previousTags.joined(separator: ", "),
+                                               afterValue: currentTags.isEmpty ? nil : currentTags.joined(separator: ", "))) || changed
+                    }
+                }
 
-            let previousTags = Self.canonicalTags(previous.tags)
-            let currentTags = Self.canonicalTags(task.tags)
-            if previousTags != currentTags {
-                changed = append(event(taskID: task.id, kind: .tagsChanged,
-                                       beforeValue: previousTags.isEmpty ? nil : previousTags.joined(separator: ", "),
-                                       afterValue: currentTags.isEmpty ? nil : currentTags.joined(separator: ", "))) || changed
-            }
-
-            if let kind = Self.lifecycleChange(from: previous, to: task) {
-                changed = append(event(taskID: task.id, kind: kind)) || changed
+                if (fields.contains(.status) || fields.contains(.isAbandoned)
+                    || fields.contains(.abandonedAt)),
+                   let kind = Self.lifecycleChange(from: previous, to: task) {
+                    changed = append(event(taskID: task.id, kind: kind)) || changed
+                }
             }
         }
 
         if changed { persistence.schedule(events) }
+    }
+
+    /// Compatibility adapter for tests and callers that still hold snapshots.
+    func recordChanges(from before: [Task], to after: [Task]) {
+        recordChanges(TaskChangeSet(before: before, after: after))
     }
 
     func recordFocusStart(taskID: UUID, stopwatch: Bool) {

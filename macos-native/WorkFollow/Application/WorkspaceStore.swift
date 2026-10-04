@@ -14,8 +14,10 @@ final class WorkspaceStore {
     private var transactionDepth = 0
     private var undoSnapshots: [[Task]] = []
     var canUndo: Bool { !undoSnapshots.isEmpty }
-    /// Observes only committed task snapshots, once per outer transaction.
+    /// Compatibility callback for consumers that still need full snapshots.
     var onTasksChanged: (([Task], [Task]) -> Void)?
+    /// Emits the task-level diff once per commit, undo, or outer transaction.
+    var onTaskChanges: ((TaskChangeSet) -> Void)?
 
     func task(_ id: UUID) -> Task? { tasks.first { $0.id == id } }
 
@@ -68,7 +70,9 @@ final class WorkspaceStore {
         tasks = snapshot
         if let lists { self.lists = lists }
         reconcileListMetas(committed: listMetas, listsCommitted: lists != nil)
-        if transactionDepth == 0 { onTasksChanged?(previousTasks, tasks) }
+        if transactionDepth == 0 {
+            publishTaskChanges(from: previousTasks)
+        }
     }
 
     /// Commits an editor-owned document/source pair without recording a business undo.
@@ -100,7 +104,9 @@ final class WorkspaceStore {
         lists = undoLists.removeLast()
         listMetas = undoListMetas.removeLast()
         if let compensation = undoCompensations.popLast() ?? nil { compensation() }
-        if transactionDepth == 0 { onTasksChanged?(before, tasks) }
+        if transactionDepth == 0 {
+            publishTaskChanges(from: before)
+        }
     }
     func clearUndo() {
         undoSnapshots.removeAll()
@@ -125,8 +131,17 @@ final class WorkspaceStore {
                 undoListMetas.removeFirst()
                 undoCompensations.removeFirst()
             }
-            onTasksChanged?(before, tasks)
+            publishTaskChanges(from: before)
         }
+    }
+
+    /// One publication boundary for commands, outer transactions and undo.
+    /// Hydration without consumers needs no diff; list metadata alone is not
+    /// a task domain event. Keep the legacy snapshot observer compatible.
+    private func publishTaskChanges(from before: [Task]) {
+        let changes = onTaskChanges.map { _ in TaskChangeSet(before: before, after: tasks) }
+        onTasksChanged?(before, tasks)
+        if let changes, !changes.entries.isEmpty { onTaskChanges?(changes) }
     }
 
     // MARK: - 清单元数据对账（Round B1）

@@ -33,6 +33,8 @@ final class AppEnvironment: ObservableObject {
     let summaryStore: SummaryStore
     let countdownStore: CountdownStore
     let filterStore: FilterStore
+    /// 任务列表的排序/分组记忆（modules/view-preferences.json，独立于任务快照）。
+    let viewPreferences: TaskViewPreferenceStore
     /// 全应用唯一的瞬态结果通道：任务动作经 workspace.feedbackSink 上报到这里。
     let feedback: FeedbackCenter
     private let moduleStores: [ModuleStoreFlushable]
@@ -81,12 +83,13 @@ final class AppEnvironment: ObservableObject {
         summaryStore = SummaryStore(clock: clock)
         countdownStore = CountdownStore(clock: clock)
         filterStore = FilterStore(clock: clock)
+        viewPreferences = TaskViewPreferenceStore()
         taskWorkspace.attachFilterStore(filterStore)
         taskWorkspace.feedbackSink = feedback
         // 倒计时的提醒也走同一个排程服务。偏移量语义与任务相反（非负整天，
         // 锚在当天 09:00），由服务按来源分别映射；这里只把记录来源接上。
         reminders.countdownStore = countdownStore
-        moduleStores = [focusStore, taskActivityStore, habitStore, summaryStore, countdownStore, filterStore, TemplateStore.shared]
+        moduleStores = [focusStore, taskActivityStore, habitStore, summaryStore, countdownStore, filterStore, TemplateStore.shared, viewPreferences]
         persistence.onResult = { [weak self] error in
             DispatchQueue.main.async { self?.storageError = error.map { "预览数据保存失败：\($0.localizedDescription)" } }
         }
@@ -118,8 +121,17 @@ final class AppEnvironment: ObservableObject {
         applyAcceptanceDestination()
         taskWorkspace.$revision.dropFirst().sink { [weak self] _ in
             self?.savePreview()
-            if let self, !self.loadFailed { self.reminders.reconcile(self.taskWorkspace.allTasks) }
         }.store(in: &subscriptions)
+        // Reminders consume domain changes, not every UI revision. Body edits,
+        // selection and filter changes must not scan/rebuild notification state.
+        // Coalesce title typing before computing signatures; read the latest
+        // committed snapshot at delivery rather than retaining an old one.
+        taskWorkspace.taskChanges
+            .reminderInvalidations()
+            .sink { [weak self] _ in
+                guard let self, !self.loadFailed else { return }
+                self.reminders.reconcile(self.taskWorkspace.allTasks)
+            }.store(in: &subscriptions)
         notesWorkspace.$revision.dropFirst().sink { [weak self] _ in self?.savePreview() }.store(in: &subscriptions)
         // 倒计时记录也要重排提醒。上面那条只跟着任务走——倒计时改了不触发任务
         // revision，光靠那条订阅，新建一条带提醒的纪念日要等到下次动任务才排上。
