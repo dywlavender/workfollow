@@ -113,7 +113,6 @@ final class TaskContextPanelTests: XCTestCase {
         let session = TaskContextMenuPresenter.Session(in: owner.contentView!, at: CGPoint(x: 350, y: 500))
         session.coordinator.root = AnyView(Color.clear.frame(height: 350))
         session.coordinator.update()
-        session.observeOutsideApplicationClicks()
         settle()
         let main = try XCTUnwrap(session.coordinator.panel)
         let child = NSPanel(contentRect: CGRect(x: main.frame.maxX + 6, y: main.frame.minY, width: 196, height: 100),

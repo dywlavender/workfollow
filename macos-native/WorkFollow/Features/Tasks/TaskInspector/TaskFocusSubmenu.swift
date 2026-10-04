@@ -6,7 +6,9 @@ struct TaskFocusSubmenu: View {
     var body: some View {
         VStack(spacing: 2) {
             Button { onStart(false) } label: { row("开始番茄专注") }
+                .inspectorRenderAnchor(.focusPomodoro)
             Button { onStart(true) } label: { row("开始正计时") }
+                .inspectorRenderAnchor(.focusStopwatch)
         }
         .buttonStyle(.plain)
         .font(WFType.menu)

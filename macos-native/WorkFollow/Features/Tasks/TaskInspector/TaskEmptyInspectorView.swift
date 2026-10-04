@@ -1,30 +1,14 @@
 import SwiftUI
 
+/// 详情右栏空态（阶段3）：统一空态组件的线稿插画，替换原三个占位星形
+/// （原实现自认 "artwork remains pending"）。保持壳层既有契约：
+/// 纯装饰（不可交互、无引导文案），`.emptyContent` 锚点仍包住 176 宽的
+/// 插画本体——契约测试锁定宽度 176 与面板内居中，勿改组件的固定宽度。
 struct TaskEmptyInspectorView: View {
     var body: some View {
-        // Decorative only: no instruction, header or footer in the empty surface.
-        // Exact artwork remains pending an empty-state reference screenshot.
-        Canvas { context, size in
-            for (center, radius) in [(CGPoint(x: 38, y: 48), 15.0),
-                                     (CGPoint(x: 109, y: 20), 7.0),
-                                     (CGPoint(x: 138, y: 69), 10.0)] {
-                var path = Path()
-                for index in 0..<8 {
-                    let angle = Double(index) * .pi / 4 - .pi / 2
-                    let length = index.isMultiple(of: 2) ? radius : radius * 0.35
-                    let point = CGPoint(x: center.x + cos(angle) * length,
-                                        y: center.y + sin(angle) * length)
-                    if index == 0 { path.move(to: point) } else { path.addLine(to: point) }
-                }
-                path.closeSubpath()
-                context.fill(path, with: .color(WFColors.tertiaryText.opacity(0.08)))
-            }
-        }
-        .frame(width: 176, height: 96)
-        .accessibilityHidden(true)
-        .allowsHitTesting(false)
-        .inspectorRenderAnchor(.emptyContent)
-        .padding(.horizontal, TaskInspectorMetrics.horizontalPadding)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+        TaskEmptyStateView(style: .inspector)
+            .inspectorRenderAnchor(.emptyContent)
+            .padding(.horizontal, TaskInspectorMetrics.horizontalPadding)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
     }
 }

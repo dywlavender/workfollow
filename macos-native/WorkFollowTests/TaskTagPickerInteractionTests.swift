@@ -47,60 +47,53 @@ final class TaskTagPickerInteractionTests: XCTestCase {
     }
 
     func testInspectorCancelReopenApplyAndUndoUseSharedPicker() throws {
+        let environment = AppEnvironment()
         let workspace = TaskWorkspaceModel(seedDemoData: false)
         let source = try XCTUnwrap(workspace.createTask(title: "标签验收", in: .inbox).taskID)
         let other = try XCTUnwrap(workspace.createTask(title: "已有标签", in: .inbox).taskID)
         workspace.setTags(source, ["原标签"])
         workspace.setTags(other, ["工作"])
         workspace.select(source)
-        var inspector: [InspectorRenderAnchor: CGRect] = [:]
-        var picker: [TaskTagPickerAnchor: CGRect] = [:]
-        let host = NSHostingView(rootView: TaskInspectorShell(workspace: workspace, showBack: false)
-            .frame(width: 760, height: 700).coordinateSpace(name: "inspector-render")
-            .onPreferenceChange(InspectorFramesKey.self) { inspector = $0 }
-            .onPreferenceChange(TaskTagPickerFrames.self) { picker = $0 })
-        let window = window(for: host, width: 760, height: 700)
+        let host = InspectorPanelTestSupport.inspectorHost(workspace: workspace, environment: environment)
+        let window = InspectorPanelTestSupport.ownerWindow(for: host)
         defer { window.close() }
         func open() throws {
-            try click(try XCTUnwrap(inspector[.footerMore]), host: host, window: window)
-            try click(try XCTUnwrap(inspector[.tagsMenuRow]), host: host, window: window)
-            XCTAssertNil(inspector[.moreMenu])
+            try InspectorPanelTestSupport.clickButton(containing: "更多任务操作", in: window)
+            let more = try InspectorPanelTestSupport.actionPanel(in: window)
+            XCTAssertEqual(more.frame.width, 208, accuracy: 1)
+            try InspectorPanelTestSupport.clickButton(containing: "标签", in: more)
+            XCTAssertFalse(more.isVisible)
+            let picker = try InspectorPanelTestSupport.actionPanel(in: window)
+            XCTAssertEqual(picker.frame.width, 264, accuracy: 1)
+            XCTAssertEqual(picker.frame.height, 320, accuracy: 1)
         }
-        func pickerClick(_ anchor: TaskTagPickerAnchor) throws {
-            let panel = try XCTUnwrap(inspector[.tagPicker])
-            let rect = try XCTUnwrap(picker[anchor]).offsetBy(dx: panel.minX, dy: panel.minY)
-            try click(rect, host: host, window: window)
+        func pickerClick(_ label: String) throws {
+            try InspectorPanelTestSupport.clickButton(containing: label,
+                in: InspectorPanelTestSupport.actionPanel(in: window))
         }
         try open()
-        let panel = try XCTUnwrap(inspector[.tagPicker])
-        XCTAssertEqual(panel.width, 264, accuracy: 1)
-        XCTAssertEqual(panel.height, 320, accuracy: 1)
-        let image = try XCTUnwrap(CGWindowListCreateImage(.null, .optionIncludingWindow,
-            CGWindowID(window.windowNumber), [.bestResolution]))
-        try XCTUnwrap(NSBitmapImageRep(cgImage: image).representation(using: .png, properties: [:]))
-            .write(to: URL(fileURLWithPath: "/tmp/render_task_tag_picker.png"))
-        try pickerClick(.tag("工作"))
+        try pickerClick("工作")
         XCTAssertEqual(workspace.task(for: source)?.tags, ["原标签"])
-        try click(CGRect(x: 40, y: 350, width: 20, height: 20), host: host, window: window)
-        XCTAssertNil(inspector[.tagPicker])
+        let cancelledPicker = try InspectorPanelTestSupport.actionPanel(in: window)
+        try InspectorPanelTestSupport.clickElement(containing: "任务标题", in: window)
+        XCTAssertFalse(cancelledPicker.isVisible)
         XCTAssertEqual(workspace.task(for: source)?.tags, ["原标签"])
         try open()
-        try pickerClick(.confirm)
+        try pickerClick("确定")
         XCTAssertEqual(workspace.task(for: source)?.tags, ["原标签"], "Dismissed draft must not leak on reopen")
         try open()
-        try pickerClick(.tag("工作"))
-        try pickerClick(.confirm)
+        try pickerClick("工作")
+        try pickerClick("确定")
         XCTAssertEqual(workspace.task(for: source)?.tags, ["原标签", "工作"])
-        XCTAssertNil(inspector[.tagPicker])
+        XCTAssertFalse(InspectorPanelTestSupport.visibleWindows(below: window)
+            .contains { $0.title == InspectorPanelTestSupport.actionPanelTitle })
         workspace.undo()
         XCTAssertEqual(workspace.task(for: source)?.tags, ["原标签"])
         try open()
-        try pickerClick(.tag("工作"))
-        NSApp.sendEvent(try XCTUnwrap(NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [],
-            timestamp: 0, windowNumber: window.windowNumber, context: nil, characters: "\u{1b}",
-            charactersIgnoringModifiers: "\u{1b}", isARepeat: false, keyCode: 53)))
-        RunLoop.current.run(until: Date().addingTimeInterval(0.15))
-        XCTAssertNil(inspector[.tagPicker])
+        try pickerClick("工作")
+        let escapePicker = try InspectorPanelTestSupport.actionPanel(in: window)
+        try InspectorPanelTestSupport.sendEscape(to: escapePicker)
+        XCTAssertFalse(escapePicker.isVisible)
         XCTAssertEqual(workspace.task(for: source)?.tags, ["原标签"])
     }
 }

@@ -6,6 +6,7 @@ enum InspectorRenderAnchor: Hashable {
     case document, childSection, childRow(UUID), addChild
     case footerList, footerFormatting, footerMore
     case moreMenu, focusMenuRow, parentMenuRow, parentPicker, duplicateMenuRow, tagsMenuRow, tagPicker, activityMenuRow
+    case focusPomodoro, focusStopwatch
 }
 struct InspectorFramesKey: PreferenceKey {
     static let defaultValue: [InspectorRenderAnchor: CGRect] = [:]
@@ -23,6 +24,7 @@ extension View {
                 Color.clear.preference(key: InspectorFramesKey.self,
                     value: [anchor: geometry.frame(in: .named("inspector-render"))])
             }
+            .allowsHitTesting(false)
         }
         #else
         self

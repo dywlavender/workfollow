@@ -1,6 +1,6 @@
 import Foundation
 
-enum TaskInspectorActionPanel: Equatable, CaseIterable {
+enum TaskInspectorActionPanel: Hashable, CaseIterable {
     case more, tags, relation, parent, activity
 }
 

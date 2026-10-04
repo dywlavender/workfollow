@@ -18,7 +18,7 @@ struct TaskDateButton: View {
         }.buttonStyle(.plain).font(WFType.supporting)
             .foregroundStyle(task.isClosed ? WFColors.tertiaryText : isOverdue ? .red : WFColors.accent)
             .help("修改安排日期")
-            .popover(isPresented: $presented) {
+            .schedulePopover(isPresented: $presented) {
                 TaskDatePopoverV2(task: task, workspace: workspace) { presented = false }
             }
     }

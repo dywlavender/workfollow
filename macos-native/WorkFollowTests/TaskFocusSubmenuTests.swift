@@ -43,66 +43,108 @@ final class TaskFocusSubmenuTests: XCTestCase {
     }
 
     func testActualInspectorFocusChildDoesNotResizeMoreAndEscapeClosesChildFirst() throws {
+        let environment = AppEnvironment()
         let workspace = TaskWorkspaceModel(seedDemoData: false)
         let id = try XCTUnwrap(workspace.createTask(title: "任务操作验收", in: .inbox).taskID)
         workspace.select(id)
         var frames: [InspectorRenderAnchor: CGRect] = [:]
-        let root = TaskInspectorShell(workspace: workspace, showBack: false)
-            .frame(width: 760, height: 700)
-            .coordinateSpace(name: "inspector-render")
-            .onPreferenceChange(InspectorFramesKey.self) { frames = $0 }
-        let host = NSHostingView(rootView: root)
-        let window = NSWindow(contentRect: NSRect(x: 100, y: 100, width: 760, height: 700),
-                              styleMask: [.borderless], backing: .buffered, defer: false)
-        window.isReleasedWhenClosed = false
-        window.appearance = NSAppearance(named: .aqua)
-        window.contentView = host
-        window.orderFront(nil)
+        let host = InspectorPanelTestSupport.inspectorHost(workspace: workspace, environment: environment) {
+            frames = $0
+        }
+        let window = InspectorPanelTestSupport.ownerWindow(for: host)
         defer { window.close() }
-        func settle() {
-            host.layoutSubtreeIfNeeded()
-            RunLoop.current.run(until: Date().addingTimeInterval(0.15))
+        InspectorPanelTestSupport.settle(window)
+
+        try InspectorPanelTestSupport.clickButton(containing: "更多任务操作", in: window)
+        let more = try InspectorPanelTestSupport.actionPanel(in: window)
+        XCTAssertEqual(more.frame.width, 208, accuracy: 0.5)
+        XCTAssertEqual(more.title, InspectorPanelTestSupport.actionPanelTitle)
+        let originalFrame = more.frame
+
+        try InspectorPanelTestSupport.clickButton(containing: "开始专注", in: more)
+        let submenu = try InspectorPanelTestSupport.panel(
+            title: InspectorPanelTestSupport.focusSubmenuTitle, below: more)
+        XCTAssertTrue(submenu.parent === more, "Focus is a child of the action panel")
+        XCTAssertEqual(submenu.frame.width, 176, accuracy: 0.5)
+        XCTAssertEqual(submenu.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]), .aqua)
+        XCTAssertEqual(more.frame, originalFrame, "The focus child cannot resize or move More")
+
+        try InspectorPanelTestSupport.sendEscape(to: submenu)
+        XCTAssertFalse(submenu.isVisible, "The first Escape closes the nested Focus panel")
+        XCTAssertTrue(more.isVisible, "The first Escape leaves More open")
+        try InspectorPanelTestSupport.sendEscape(to: more)
+        XCTAssertFalse(more.isVisible, "The second Escape closes More")
+
+        try InspectorPanelTestSupport.clickButton(containing: "更多任务操作", in: window)
+        let reopenedMore = try InspectorPanelTestSupport.actionPanel(in: window)
+        try InspectorPanelTestSupport.clickButton(containing: "开始专注", in: reopenedMore)
+        let reopenedSubmenu = try InspectorPanelTestSupport.panel(
+            title: InspectorPanelTestSupport.focusSubmenuTitle, below: reopenedMore)
+        // Exercise child-window event ownership without starting a session in
+        // the user's real FocusStore. Domain actions use isolated stores above.
+        let childHost = try XCTUnwrap(reopenedSubmenu.contentView)
+        try InspectorPanelTestSupport.click(CGRect(x: 1, y: 1, width: 2, height: 2),
+                                           in: childHost, window: reopenedSubmenu)
+        XCTAssertTrue(reopenedSubmenu.isVisible)
+        XCTAssertTrue(reopenedMore.isVisible, "Child clicks must not dismiss More")
+        try InspectorPanelTestSupport.clickButton(containing: "设置日期", in: window)
+        XCTAssertFalse(reopenedSubmenu.isVisible)
+        XCTAssertFalse(reopenedMore.isVisible)
+        let date = try InspectorPanelTestSupport.panel(title: InspectorPanelTestSupport.datePanelTitle, below: window)
+        try InspectorPanelTestSupport.sendEscape(to: date)
+    }
+
+    func testMoreToDateUsesOneOutsideClickAndEscapeCancelsWithoutChangingScheduleTwentyTimes() throws {
+        let environment = AppEnvironment()
+        let workspace = TaskWorkspaceModel(seedDemoData: false)
+        let id = try XCTUnwrap(workspace.createTask(title: "日期单击回归", in: .inbox).taskID)
+        workspace.select(id)
+        var frames: [InspectorRenderAnchor: CGRect] = [:]
+        let host = InspectorPanelTestSupport.inspectorHost(workspace: workspace, environment: environment) {
+            frames = $0
         }
-        func click(_ rect: CGRect) throws {
-            let point = host.convert(NSPoint(x: rect.midX, y: host.isFlipped ? rect.midY : host.bounds.height - rect.midY), to: nil)
-            for type in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {
-                NSApp.sendEvent(try XCTUnwrap(NSEvent.mouseEvent(with: type, location: point, modifierFlags: [], timestamp: 0,
-                    windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1)))
-            }
-            settle()
+        let window = InspectorPanelTestSupport.ownerWindow(for: host)
+        defer { window.close() }
+        let originalSchedule = try XCTUnwrap(workspace.task(for: id)).schedule
+
+        for iteration in 0..<20 {
+            try InspectorPanelTestSupport.clickButton(containing: "更多任务操作", in: window)
+            let more = try InspectorPanelTestSupport.actionPanel(in: window)
+            XCTAssertEqual(more.frame.width, 208, accuracy: 0.5, "More round \(iteration + 1)")
+
+            // The main-window schedule anchor remains measurable; the button's AX frame
+            // supplies the screen point for one real mouse-down/mouse-up sequence.
+            XCTAssertNotNil(frames[.schedule])
+            try InspectorPanelTestSupport.clickButton(containing: "设置日期", in: window)
+            let date = try InspectorPanelTestSupport.panel(
+                title: InspectorPanelTestSupport.datePanelTitle, below: window)
+            XCTAssertFalse(more.isVisible, "The outside click closes More")
+            XCTAssertEqual(date.frame.width, ScheduleMetrics.panelWidth, accuracy: 1)
+
+            try InspectorPanelTestSupport.sendEscape(to: date)
+            XCTAssertFalse(date.isVisible, "Escape cancels the date draft")
+            XCTAssertEqual(workspace.task(for: id)?.schedule, originalSchedule,
+                           "Cancelled date draft changed the task in round \(iteration + 1)")
         }
-        settle()
-        try click(try XCTUnwrap(frames[.footerMore]))
-        let original = try XCTUnwrap(frames[.moreMenu])
-        try click(try XCTUnwrap(frames[.focusMenuRow]))
-        let panel = try XCTUnwrap(window.childWindows?.first { $0.title == "任务操作子菜单" })
-        XCTAssertEqual(panel.frame.width, 176, accuracy: 0.5)
-        XCTAssertEqual(panel.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]), .aqua)
-        XCTAssertEqual(frames[.moreMenu], original)
-        let row = try XCTUnwrap(frames[.focusMenuRow])
-        let rowWindow = host.convert(NSRect(x: row.minX, y: host.isFlipped ? row.minY : host.bounds.height - row.maxY,
-                                          width: row.width, height: row.height), to: nil)
-        XCTAssertLessThan(panel.frame.maxX, window.convertToScreen(rowWindow).minX)
-        let image = try XCTUnwrap(CGWindowListCreateImage(.null, .optionIncludingWindow,
-            CGWindowID(window.windowNumber), [.bestResolution]))
-        try XCTUnwrap(NSBitmapImageRep(cgImage: image).representation(using: .png, properties: [:]))
-            .write(to: URL(fileURLWithPath: "/tmp/render_task_more_menu.png"))
-        let childImage = try XCTUnwrap(CGWindowListCreateImage(.null, .optionIncludingWindow,
-            CGWindowID(panel.windowNumber), [.bestResolution]))
-        try XCTUnwrap(NSBitmapImageRep(cgImage: childImage).representation(using: .png, properties: [:]))
-            .write(to: URL(fileURLWithPath: "/tmp/render_task_focus_submenu.png"))
-        XCTAssertTrue(PopupEscapeRegistry.shared.route(eventWindow: window))
-        settle()
-        XCTAssertFalse(panel.isVisible)
-        XCTAssertNotNil(frames[.moreMenu])
-        XCTAssertTrue(PopupEscapeRegistry.shared.route(eventWindow: window))
-        settle()
-        XCTAssertNil(frames[.moreMenu])
-        try click(try XCTUnwrap(frames[.footerMore]))
-        try click(try XCTUnwrap(frames[.focusMenuRow]))
-        XCTAssertTrue(window.childWindows?.contains { $0.title == "任务操作子菜单" && $0.isVisible } == true)
-        try click(CGRect(x: 40, y: 350, width: 20, height: 20))
-        XCTAssertNil(frames[.moreMenu])
-        XCTAssertFalse(window.childWindows?.contains { $0.title == "任务操作子菜单" && $0.isVisible } == true)
+    }
+
+    func testMoreOutsideClickReachesTaskTitleFieldInOneEvent() throws {
+        let environment = AppEnvironment()
+        let workspace = TaskWorkspaceModel(seedDemoData: false)
+        let id = try XCTUnwrap(workspace.createTask(title: "标题事件接收", in: .inbox).taskID)
+        workspace.select(id)
+        let host = InspectorPanelTestSupport.inspectorHost(workspace: workspace, environment: environment)
+        let window = InspectorPanelTestSupport.ownerWindow(for: host)
+        defer { window.close() }
+
+        try InspectorPanelTestSupport.clickButton(containing: "更多任务操作", in: window)
+        let more = try InspectorPanelTestSupport.actionPanel(in: window)
+        let previousResponder = ObjectIdentifier(try XCTUnwrap(window.firstResponder))
+        try InspectorPanelTestSupport.clickElement(containing: "任务标题", in: window)
+
+        XCTAssertFalse(more.isVisible, "Clicking the owner window closes More")
+        XCTAssertNotEqual(ObjectIdentifier(try XCTUnwrap(window.firstResponder)), previousResponder,
+                          "The same outside click must focus the title field")
+        XCTAssertEqual(workspace.task(for: id)?.title, "标题事件接收")
     }
 }

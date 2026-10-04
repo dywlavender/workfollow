@@ -35,13 +35,6 @@ struct TaskInspectorShell: View {
                             .frame(minWidth: viewport.size.width,
                                    minHeight: viewport.size.height,
                                    alignment: .topLeading)
-                            .background {
-                                // 点击编辑栏空白处：光标送到最近的输入行（文末），
-                                // 与笔记页的空白点按行为一致；文字行上的点击仍由
-                                // 文本视图自己按就近字符定位。
-                                Color.clear.contentShape(Rectangle())
-                                    .onTapGesture { editorHandle.focusEnd() }
-                            }
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -53,20 +46,6 @@ struct TaskInspectorShell: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(WFColors.content)
-        .overlay {
-            if let task = workspace.selectedTask, hasFooterPopover {
-                ZStack(alignment: .bottomTrailing) {
-                    Color.clear
-                        .contentShape(Rectangle())
-                        .onTapGesture(perform: dismissFooterPopover)
-                    footerPopover(task)
-                        .padding(.trailing, WFSpace.xl)
-                        .padding(.bottom, TaskInspectorMetrics.footerOverlayInset)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .zIndex(20)
-            }
-        }
         .onChange(of: titleFocused) { _, focused in
             if focused {
                 presentation.editingTarget = .title
@@ -119,7 +98,7 @@ struct TaskInspectorShell: View {
                             onRepeat: { presentation.activePopover = .recurrence },
                             schedule: { scheduleChip(task, field: .due) },
                             priority: { priorityMenu(task) })
-        .schedulePopover(isPresented: popoverBinding(.recurrence)) {
+        .schedulePopover(isPresented: popoverBinding(.recurrence), trigger: .recurrence) {
             TaskDatePopoverV2(task: task, workspace: workspace, initialPage: .recurrence) {
                 presentation.activePopover = nil
             }
@@ -127,7 +106,10 @@ struct TaskInspectorShell: View {
     }
 
     private func moreMenu(_ task: Task) -> some View {
-        Button { actionPresentation.open(.more) } label: {
+        Button {
+            if actionPresentation.panel == .more { actionPresentation.dismiss() }
+            else { actionPresentation.open(.more) }
+        } label: {
             Image(systemName: "ellipsis")
                 .frame(width: WFMetrics.controlHeight, height: WFMetrics.controlHeight)
                 .contentShape(Rectangle())
@@ -136,27 +118,41 @@ struct TaskInspectorShell: View {
         .help("更多操作")
         .accessibilityLabel("更多任务操作")
         .background {
-            if actionPresentation.panel == .activity {
-                AnchoredPropertyPanel(
-                    isPresented: Binding(get: { actionPresentation.panel == .activity },
-                                         set: { if !$0 { actionPresentation.dismiss(.activity) } }),
-                    width: 320, prefersAbove: true, placement: .verticalInOwner) {
-                        TaskActivityPanel(taskID: task.id, store: environment.taskActivityStore) {
-                            actionPresentation.dismiss(.activity)
-                        }
-                    }
-            }
+            AnchoredPropertyPanel(
+                isPresented: Binding(get: { hasFooterPopover },
+                                     set: { if !$0 { dismissFooterPopover() } }),
+                width: footerPanelWidth, prefersAbove: true, placement: .verticalInOwner,
+                focusPolicy: actionPresentation.panel == .more ? .preservePresenter : .panel,
+                title: "任务详情操作") {
+                    footerPopover(task)
+                }
+                // A new action owns a fresh draft and keyboard focus, not the
+                // previous panel's search field or child-window lifecycle.
+                .id(actionPresentation.panel)
+        }
+    }
+
+    private var footerPanelWidth: CGFloat {
+        switch actionPresentation.panel {
+        case .more: 208
+        case .tags: 264
+        case .parent: 280
+        default: 320
         }
     }
 
     private var hasFooterPopover: Bool {
-        (actionPresentation.panel != nil && actionPresentation.panel != .activity) || presentation.activePopover == .deadline
+        actionPresentation.panel != nil || presentation.activePopover == .deadline
     }
 
     @ViewBuilder
     private func footerPopover(_ task: Task) -> some View {
         Group {
-            if actionPresentation.panel == .more {
+            if actionPresentation.panel == .activity {
+                TaskActivityPanel(taskID: task.id, store: environment.taskActivityStore) {
+                    actionPresentation.dismiss(.activity)
+                }
+            } else if actionPresentation.panel == .more {
                 moreActionsPopover(task)
             } else if actionPresentation.panel == .tags {
                 TaskTagPickerPopover(initialTags: task.tags, workspace: workspace,
@@ -181,7 +177,6 @@ struct TaskInspectorShell: View {
         }
         .background(WFColors.content, in: RoundedRectangle(cornerRadius: 14))
         .overlay(RoundedRectangle(cornerRadius: 14).stroke(WFColors.border))
-        .shadow(color: .black.opacity(0.16), radius: 18, y: 8)
         .background(PopupEscapeRouter(depth: 2) {
             if !actionPresentation.handleEscape() { dismissFooterPopover() }
         })
@@ -474,7 +469,7 @@ struct TaskInspectorShell: View {
                     .onChange(of: inlineChildTitleDraft) { _, value in
                         _ = workspace.setTitle(child.id, value)
                     }
-                    .onSubmit { finishInlineChildEditing() }
+                    .onSubmit { finishInlineChildEditing(createNext: true) }
                     .accessibilityLabel("子任务标题")
             } else {
                 Button(child.title.isEmpty ? "未命名子任务" : child.title) { workspace.select(child.id) }
@@ -492,9 +487,20 @@ struct TaskInspectorShell: View {
         DispatchQueue.main.async { childTitleFocused = true }
     }
 
-    private func finishInlineChildEditing() {
+    /// 结束子任务行内编辑。`createNext`：回车续加（对齐滴答"回车连续添加子
+    /// 任务"）——刚输入的标题非空才自动新建下一个子任务并把焦点接到新行
+    /// （接力由 onChange(pendingChildTitleEditorID) → beginPendingChildEditing
+    /// 完成）；空标题只结束，不产生连环空行。标题在输入过程中已实时保存，
+    /// Esc/点击别处结束也不会丢字。
+    private func finishInlineChildEditing(createNext: Bool = false) {
+        let hadTitle = !inlineChildTitleDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        let parentID = inlineChildEditorID.flatMap { workspace.task(for: $0)?.parentID }
+            ?? workspace.selectedTaskID
         childTitleFocused = false
         inlineChildEditorID = nil
+        if createNext, hadTitle, let parentID {
+            workspace.requestChildTitleEditor(for: parentID)
+        }
     }
 
     @MainActor

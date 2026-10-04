@@ -54,6 +54,7 @@ struct TaskInspectorHeader<Schedule: View, Priority: View>: View {
                         .inspectorRenderAnchor(.schedule)
                     if Self.showsRepeat(task) {
                         propertyButton("重复", symbol: "repeat", action: onRepeat)
+                            .scheduleTrigger(.recurrence)
                             .inspectorRenderAnchor(.repeatControl)
                     }
                 }
