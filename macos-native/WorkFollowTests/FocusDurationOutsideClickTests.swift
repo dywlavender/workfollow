@@ -33,7 +33,7 @@ final class FocusDurationOutsideClickTests: XCTestCase {
                      "The observation view must not intercept the editor controls")
     }
 
-    func testOtherWindowClickDoesNotDismissOrConsumeEvent() throws {
+    func testOtherWindowClickDismissesWithoutConsumingEvent() throws {
         let (owner, panel) = makePanel()
         let (other, _) = makePanel()
         defer { panel.invalidate(); owner.close(); other.close() }
@@ -43,7 +43,7 @@ final class FocusDurationOutsideClickTests: XCTestCase {
 
         XCTAssertTrue(panel.window === owner)
         XCTAssertTrue(panel.routeMouseDown(event) === event)
-        XCTAssertEqual(dismissals, 0)
+        XCTAssertEqual(dismissals, 1)
     }
 
     func testSecondaryClicksAlsoDismissWithoutConsumption() throws {
@@ -75,16 +75,16 @@ final class FocusDurationOutsideClickTests: XCTestCase {
         try XCTUnwrap(replacement.contentView).addSubview(panel)
         XCTAssertTrue(panel.isMonitoring)
         _ = panel.routeMouseDown(oldEvent)
-        XCTAssertEqual(dismissals, 0)
+        XCTAssertEqual(dismissals, 1)
         let newEvent = try mouseDown(in: replacement, at: NSPoint(x: 700, y: 150))
         _ = panel.routeMouseDown(newEvent)
-        XCTAssertEqual(dismissals, 1)
+        XCTAssertEqual(dismissals, 2)
 
         panel.invalidate()
         XCTAssertFalse(panel.isMonitoring)
         XCTAssertNil(panel.onOutsideClick)
         _ = panel.routeMouseDown(newEvent)
-        XCTAssertEqual(dismissals, 1)
+        XCTAssertEqual(dismissals, 2)
     }
 
     private func makePanel() -> (NSWindow, FocusDurationOutsideClickView) {

@@ -515,6 +515,7 @@ struct MatrixTaskRowView: View {
                 }
                 .buttonStyle(.plain)
                 .help("修改安排日期")
+                .scheduleTrigger()
             }
         }
         .lineLimit(1)

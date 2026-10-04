@@ -181,7 +181,7 @@ final class FocusRenderTests: XCTestCase {
         flushAndRemove(fixture.store, directory: fixture.directory)
         XCTAssertEqual(Set(frames.keys), Set([
             .rail, .railSelectedHitArea, .focusDurationTrigger,
-            .focusModeSegment, .focusAddTimerButton,
+            .focusModeSegment, .focusAddTimerButton, .focusTimerDigits,
             .divider, .timerRing, .primaryButton, .overviewFirstCard, .recordsHeader
         ]).union(renderCase.timerState == .idleWithoutRecords
                  ? [.emptyRecordsIllustration, .emptyRecordsContent, .emptyRecordsRegion]

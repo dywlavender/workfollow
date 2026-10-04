@@ -30,6 +30,8 @@ struct TaskQuickComposer: View {
     @State private var overridden: Bool
     @State private var priority: TaskPriority
     @State private var reminder: Date?
+    /// 面板里的多级提醒（0 = 准时，负数 = 提前多少分钟）。
+    @State private var reminderOffsets: [Int] = []
     @State private var frequency: TaskRepeat = .never
     @State private var recurrenceRule: RecurrenceRule?
     @State private var datePage: TaskDatePopoverV2.Page?
@@ -96,6 +98,7 @@ struct TaskQuickComposer: View {
             }
             .buttonStyle(.plain)
             .help("设置日期")
+            .scheduleTrigger()
             .accessibilityLabel("设置日期：\(scheduleLabel)")
 
             Spacer(minLength: 0)
@@ -225,6 +228,7 @@ struct TaskQuickComposer: View {
                     title: trimmed.isEmpty ? "准备做什么?" : trimmed,
                     recurrenceRule: recurrenceRule,
                     reminderAt: reminder,
+                    reminderOffsets: reminderOffsets.isEmpty ? nil : reminderOffsets,
                     list: TaskList(name: listName),
                     priority: priority,
                     schedule: overridden ? schedule : fallbackSchedule,
@@ -242,12 +246,13 @@ struct TaskQuickComposer: View {
                                   now: workspace.clock(), calendar: workspace.calendar)
     }
 
-    /// 面板确定后把计划带回草稿。原版只保留一个提醒时刻（取最近的提前量推出），
-    /// 这里同样只留 `reminder`。
+    /// 面板确定后把计划带回草稿：日程、提醒（单点 + 多级偏移）、重复一并保留，
+    /// 提交时原样写进任务。
     private func applyPlan(_ plan: TaskDateDraftModel.CommitPlan) {
         schedule = plan.schedule
         overridden = true
         reminder = plan.reminder
+        reminderOffsets = plan.reminderOffsets
         frequency = plan.frequency
         recurrenceRule = plan.recurrenceRule
     }
@@ -266,6 +271,7 @@ struct TaskQuickComposer: View {
                               priority: priority,
                               tags: [],
                               reminder: reminder,
+                              reminderOffsets: reminderOffsets.isEmpty ? nil : reminderOffsets,
                               repeatFrequency: frequency,
                               recurrenceRule: recurrenceRule)
         requestClose()

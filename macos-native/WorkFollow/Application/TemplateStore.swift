@@ -9,9 +9,9 @@ final class TemplateStore: ObservableObject, ModuleStoreFlushable {
         var templates: [TaskTemplate] = []
     }
 
-    /// App-wide shared instance. AppEnvironment's module store list cannot be
-    /// extended from the template module, so views reference this directly and
-    /// termination persistence relies on the debounced write below.
+    /// App-wide shared instance. Views reference this directly; termination
+    /// persistence works because AppEnvironment registers `shared` in its
+    /// moduleStores list, flushing the debounced write below on quit.
     static let shared = TemplateStore()
 
     @Published private(set) var templates: [TaskTemplate] = []

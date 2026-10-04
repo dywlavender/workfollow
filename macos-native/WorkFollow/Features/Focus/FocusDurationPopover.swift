@@ -102,6 +102,7 @@ struct FocusDurationPopover: View {
                 }
             }
         }
+        .background(PopupEscapeRouter(depth: 1) { session.cancel() })
         .onExitCommand { session.cancel() }
     }
 
@@ -156,7 +157,7 @@ private struct FocusDurationPopoverPresenter: ViewModifier {
                     FocusDurationPopover(session: session, onConfirm: onConfirm)
                         .frame(width: panelWidth, height: panelHeight)
                         .background {
-                            FocusDurationOutsideClickObserver { session.cancel() }
+                            FocusOutsideClickObserver { session.cancel() }
                         }
                         .position(x: centerX, y: centerY)
                         .preference(key: FocusRenderFramesPreferenceKey.self,
@@ -169,7 +170,7 @@ private struct FocusDurationPopoverPresenter: ViewModifier {
 
 /// The panel owns this observer; its AppKit window and bounds are the source of truth.
 /// It observes clicks across that window, including Overview, without consuming them.
-private struct FocusDurationOutsideClickObserver: NSViewRepresentable {
+struct FocusOutsideClickObserver: NSViewRepresentable {
     let onOutsideClick: () -> Void
 
     func makeNSView(context: Context) -> FocusDurationOutsideClickView {
@@ -190,29 +191,31 @@ private struct FocusDurationOutsideClickObserver: NSViewRepresentable {
 @MainActor
 final class FocusDurationOutsideClickView: NSView {
     var onOutsideClick: (() -> Void)?
-    private var monitor: Any?
-    var isMonitoring: Bool { monitor != nil }
+    private var registration: UUID?
+    var isMonitoring: Bool { registration != nil }
 
     override func hitTest(_ point: NSPoint) -> NSView? { nil }
 
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
         stopMonitoring()
-        guard window != nil else { return }
-        monitor = NSEvent.addLocalMonitorForEvents(
-            matching: [.leftMouseDown, .rightMouseDown, .otherMouseDown]
-        ) { [weak self] event in
-            self?.routeMouseDown(event) ?? event
-        }
+        guard let window else { return }
+        registration = PopupInteractionRegistry.shared.register(window: window, contains: { [weak self] event in
+            self?.containsMouseDown(event) ?? true
+        }, dismiss: { [weak self] in self?.onOutsideClick?() })
     }
 
     /// Always return the original event so the clicked control can act normally.
     func routeMouseDown(_ event: NSEvent) -> NSEvent {
-        guard isMonitoring, let window, event.window === window,
+        guard isMonitoring, window != nil,
               !isHiddenOrHasHiddenAncestor, !bounds.isEmpty else { return event }
-        let point = convert(event.locationInWindow, from: nil)
-        if !bounds.contains(point) { onOutsideClick?() }
+        if !containsMouseDown(event) { onOutsideClick?() }
         return event
+    }
+
+    private func containsMouseDown(_ event: NSEvent) -> Bool {
+        guard !isHiddenOrHasHiddenAncestor, !bounds.isEmpty else { return true }
+        return event.window === window && bounds.contains(convert(event.locationInWindow, from: nil))
     }
 
     func invalidate() {
@@ -221,12 +224,14 @@ final class FocusDurationOutsideClickView: NSView {
     }
 
     private func stopMonitoring() {
-        if let monitor { NSEvent.removeMonitor(monitor) }
-        monitor = nil
+        if let registration { PopupInteractionRegistry.shared.unregister(registration) }
+        registration = nil
     }
 
     deinit {
-        if let monitor { NSEvent.removeMonitor(monitor) }
+        if let registration {
+            MainActor.assumeIsolated { PopupInteractionRegistry.shared.unregister(registration) }
+        }
     }
 }
 

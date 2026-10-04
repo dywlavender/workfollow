@@ -8,6 +8,7 @@ struct WorkFollowApp: App {
     @StateObject private var environment: AppEnvironment
     @StateObject private var quickAdd: GlobalQuickAddController
     @StateObject private var statusItem: StatusItemController
+    @State private var mainWindowRailInset: CGFloat = 0
 
     init() {
         let environment = AppEnvironment()
@@ -28,11 +29,13 @@ struct WorkFollowApp: App {
             RootShellView(workspace: environment.taskWorkspace,
                           navigation: environment.navigation)
                 .environmentObject(environment)
+                .environment(\.mainWindowRailInset, mainWindowRailInset)
                 .preferredColorScheme(environment.appearance.colorScheme)
                 .tint(WFColors.accent)
                 .frame(minWidth: WFMetrics.minimumWindow.width,
                        minHeight: WFMetrics.minimumWindow.height)
                 .background(WindowFramePersistence())
+                .background(MainWindowChromeConfiguration(railInset: $mainWindowRailInset))
                 .onAppear {
                     lifecycle.environment = environment
                     lifecycle.resourceLinks.configure(route: { [weak environment] url in
@@ -49,6 +52,7 @@ struct WorkFollowApp: App {
         }
         .defaultSize(width: WFMetrics.defaultWindow.width,
                      height: WFMetrics.defaultWindow.height)
+        .windowStyle(.hiddenTitleBar)
         .windowResizability(.contentMinSize)
         .commands { AppCommands(environment: environment, quickAdd: quickAdd) }
 

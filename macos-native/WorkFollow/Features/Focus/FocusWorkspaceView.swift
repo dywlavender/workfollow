@@ -113,9 +113,6 @@ struct FocusWorkspaceView: View {
     private func addTimerDialog(s: CGFloat) -> some View {
         let nameValid = !addTimerName.trimmingCharacters(in: .whitespaces).isEmpty
         return ZStack {
-            Color.clear
-                .contentShape(Rectangle())
-                .onTapGesture { showAddTimer = false }
             VStack(spacing: 16 * s) {
                 Text("添加常用专注")
                     .font(.system(size: 20 * s, weight: .semibold))
@@ -236,6 +233,8 @@ struct FocusWorkspaceView: View {
             .background(RoundedRectangle(cornerRadius: 16 * s).fill(theme.canvas)
                 .shadow(color: .black.opacity(0.16), radius: 30 * s))
             .overlay(RoundedRectangle(cornerRadius: 16 * s).stroke(theme.hairline, lineWidth: 1))
+            .background(FocusOutsideClickObserver { showAddTimer = false })
+            .background(PopupEscapeRouter(depth: 1) { showAddTimer = false })
         }
     }
 
