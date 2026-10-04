@@ -15,12 +15,13 @@ final class TaskViewPreferencesTests: XCTestCase {
         calendar.date(from: DateComponents(year: 2026, month: 9, day: 25, hour: 10))!
     }
 
-    private func makeTask(_ title: String, createdAt: Date, priority: TaskPriority = .none,
+    private func makeTask(_ title: String, createdAt: Date, updatedAt: Date? = nil,
+                          priority: TaskPriority = .none,
                           dueAt: Date? = nil, list: TaskList = .inbox,
                           tags: [String] = [], isPinned: Bool = false) -> Task {
         var task = Task(id: UUID(), title: title, list: list, priority: priority,
                         schedule: TaskSchedule(dueAt: dueAt), parentID: nil, childOrder: 0,
-                        createdAt: createdAt, updatedAt: createdAt)
+                        createdAt: createdAt, updatedAt: updatedAt ?? createdAt)
         task.tags = tags
         task.isPinned = isPinned
         return task
@@ -86,6 +87,76 @@ final class TaskViewPreferencesTests: XCTestCase {
         let store = WorkspaceStore()
         let actions = TaskActions(store: store, clock: { self.now }, calendar: calendar)
         return (store, actions)
+    }
+
+    func testModifiedSortOrdersByUpdatedAtBothWays() {
+        let base = now
+        let early = makeTask("a", createdAt: base, updatedAt: base)
+        let late = makeTask("b", createdAt: base, updatedAt: base.addingTimeInterval(3_600))
+        let group = group([late, early])
+        XCTAssertEqual(group.orderedTasks(using: .modified, calendar: calendar).map(\.id),
+                       [early.id, late.id])
+        XCTAssertEqual(group.orderedTasks(using: .modified, descending: true, calendar: calendar).map(\.id),
+                       [late.id, early.id])
+    }
+
+    func testPrioritySortDefaultIsHighFirstAndDescendingFlips() {
+        let base = now
+        let high = makeTask("h", createdAt: base, priority: .high)
+        let low = makeTask("l", createdAt: base, priority: .low)
+        let group = group([low, high])
+        XCTAssertEqual(group.orderedTasks(using: .priority, calendar: calendar).map(\.id),
+                       [high.id, low.id], "默认高优先在前（历史行为，不是字面升序）")
+        XCTAssertEqual(group.orderedTasks(using: .priority, descending: true, calendar: calendar).map(\.id),
+                       [low.id, high.id], "降序整体翻转")
+    }
+
+    func testDescendingKeepsUndatedLastAndManualIgnoresDirection() {
+        let base = now
+        let day1 = makeTask("d1", createdAt: base, dueAt: base.addingTimeInterval(86_400))
+        let day3 = makeTask("d3", createdAt: base, dueAt: base.addingTimeInterval(86_400 * 3))
+        let undated = makeTask("u", createdAt: base)
+        let group = group([day1, day3, undated])
+        XCTAssertEqual(group.orderedTasks(using: .due, descending: true, calendar: calendar).map(\.id),
+                       [day3.id, day1.id, undated.id], "降序时无日期仍垫底")
+        XCTAssertEqual(group.orderedTasks(using: .manual, descending: true, calendar: calendar).map(\.id),
+                       [day1.id, day3.id, undated.id], "手动排序不受方向影响")
+    }
+
+    func testCreatedAtGroupingBucketsNewestDayFirst() throws {
+        let (store, _) = makeFixture()
+        let recent = makeTask("今天建的", createdAt: now)
+        let older = makeTask("三天前建的", createdAt: calendar.date(byAdding: .day, value: -3, to: now)!)
+        store.commit([older, recent], undoPolicy: .skip, lists: [TaskList.inbox.name])
+
+        let groups = TaskListProjection.groups(in: .allTasks, store: store, now: now,
+                                               calendar: calendar, grouping: .byCreatedAt)
+        XCTAssertEqual(groups.filter { $0.kind != .pinned }.flatMap(\.tasks).map(\.id),
+                       [recent.id, older.id], "按创建日倒序：今天在前，三天前在后")
+    }
+
+    func testResetSortClearsModeAndDirectionButKeepsGrouping() {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("TaskViewPreferencesTests-\(UUID().uuidString)", isDirectory: true)
+        let store = TaskViewPreferenceStore(directory: directory)
+        store.setSortMode(.due, for: "scope:allTasks")
+        store.setSortDescending(true, for: "scope:allTasks")
+        store.setGrouping(.byPriority, for: "scope:allTasks")
+
+        store.resetSort(for: "scope:allTasks")
+
+        XCTAssertEqual(store.sortMode(for: "scope:allTasks"), .manual, "恢复默认 = 手动排序")
+        XCTAssertFalse(store.sortDescending(for: "scope:allTasks"))
+        XCTAssertEqual(store.grouping(for: "scope:allTasks", allTasksRoot: true), .byPriority,
+                       "分组不受影响")
+    }
+
+    func testSortDescendingDefaultsToFalseForOldArchives() throws {
+        let json = #"{"preferences":{"scope:allTasks":{"sortMode":"due"}}}"#
+        let archive = try JSONDecoder().decode(TaskViewPreferenceStore.Archive.self,
+                                               from: Data(json.utf8))
+        XCTAssertNil(archive.preferences["scope:allTasks"]?.sortDescending)
+        XCTAssertEqual(archive.preferences["scope:allTasks"]?.sortMode, .due, "旧档案其余字段照旧")
     }
 
     func testPriorityGroupingBucketsInFixedOrderWithoutEmptyBuckets() throws {
@@ -198,12 +269,12 @@ final class TaskViewPreferencesTests: XCTestCase {
 
     func testAvailableGroupingOptionsMatrix() {
         XCTAssertEqual(TaskListGrouping.availableOptions(destination: .allTasks, activeList: nil, activeTag: nil),
-                       [.byDate, .none, .byPriority, .byList, .byTag])
+                       [.byDate, .none, .byPriority, .byList, .byTag, .byCreatedAt])
         XCTAssertEqual(TaskListGrouping.availableOptions(destination: .allTasks, activeList: "工作", activeTag: nil),
-                       [.none, .byDate, .byPriority, .byTag],
+                       [.none, .byDate, .byPriority, .byTag, .byCreatedAt],
                        "清单视图内按清单分组无意义，不出现")
         XCTAssertEqual(TaskListGrouping.availableOptions(destination: .allTasks, activeList: nil, activeTag: "验收"),
-                       [.none, .byDate, .byPriority, .byList])
+                       [.none, .byDate, .byPriority, .byList, .byCreatedAt])
         XCTAssertTrue(TaskListGrouping.availableOptions(destination: .today, activeList: nil, activeTag: nil).isEmpty,
                       "时间型视图不提供分组菜单")
         XCTAssertTrue(TaskListGrouping.availableOptions(destination: .inbox, activeList: nil, activeTag: nil).isEmpty)

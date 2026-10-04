@@ -3,7 +3,7 @@ import Foundation
 enum TaskListScope { case today, inbox, allTasks, nextSevenDays, completed }
 enum TaskGroupKind: Equatable { case pinned, overdue, today, day, upcoming, later, undated, plain, completed }
 enum TaskListSortMode: String, CaseIterable, Codable {
-    case manual, due, priority, title, createdAt
+    case manual, due, priority, title, createdAt, modified
 
     var title: String {
         switch self {
@@ -12,6 +12,7 @@ enum TaskListSortMode: String, CaseIterable, Codable {
         case .priority: "按优先级排序"
         case .title: "按标题排序"
         case .createdAt: "按创建时间排序"
+        case .modified: "按修改时间排序"
         }
     }
 }
@@ -75,26 +76,39 @@ struct TaskListGroup {
     /// 组内排序（阶段1扩到五种）。所有模式都只是视图投影，**从不改 childOrder**：
     /// 切走手动排序再切回来，拖拽排出的顺序原样恢复。completed 组永远按完成
     /// 时间倒序，任何排序模式都不得重排。
-    func orderedTasks(using mode: TaskListSortMode, calendar: Calendar) -> [Task] {
+    func orderedTasks(using mode: TaskListSortMode, descending: Bool = false,
+                      calendar: Calendar) -> [Task] {
         guard kind != .completed, mode != .manual else { return tasks }
         return tasks.enumerated().sorted { lhs, rhs in
             switch mode {
             case .manual:
-                return lhs.offset < rhs.offset
+                return descending ? lhs.offset > rhs.offset : lhs.offset < rhs.offset
             case .priority:
                 if lhs.element.priority != rhs.element.priority {
-                    return lhs.element.priority.rawValue > rhs.element.priority.rawValue
+                    // 默认（升序）＝ 高 → 中 → 低 → 无：历史行为就是 rawValue 降序，
+                    // 别把它改成字面意义的"升序"。降序时整体翻转。
+                    let highFirst = lhs.element.priority.rawValue > rhs.element.priority.rawValue
+                    return descending ? !highFirst : highFirst
                 }
-                return Self.orderedByDue(lhs, rhs)
+                return Self.orderedByDue(lhs, rhs, descending: descending)
             case .due:
-                return Self.orderedByDue(lhs, rhs)
+                return Self.orderedByDue(lhs, rhs, descending: descending)
             case .title:
                 let order = lhs.element.title.localizedCaseInsensitiveCompare(rhs.element.title)
-                if order != .orderedSame { return order == .orderedAscending }
+                if order != .orderedSame {
+                    return descending ? order == .orderedDescending : order == .orderedAscending
+                }
                 return lhs.offset < rhs.offset
             case .createdAt:
                 if lhs.element.createdAt != rhs.element.createdAt {
-                    return lhs.element.createdAt < rhs.element.createdAt
+                    let ascending = lhs.element.createdAt < rhs.element.createdAt
+                    return descending ? !ascending : ascending
+                }
+                return lhs.offset < rhs.offset
+            case .modified:
+                if lhs.element.updatedAt != rhs.element.updatedAt {
+                    let ascending = lhs.element.updatedAt < rhs.element.updatedAt
+                    return descending ? !ascending : ascending
                 }
                 return lhs.offset < rhs.offset
             }
@@ -103,10 +117,11 @@ struct TaskListGroup {
 
     /// 日期升序、无日期垫底，再按原有顺序稳定收尾（历史 due 模式的比较器）。
     private static func orderedByDue(_ lhs: (offset: Int, element: Task),
-                                     _ rhs: (offset: Int, element: Task)) -> Bool {
+                                     _ rhs: (offset: Int, element: Task),
+                                     descending: Bool = false) -> Bool {
         switch (lhs.element.schedule.dueAt, rhs.element.schedule.dueAt) {
         case let (left?, right?) where left != right:
-            return left < right
+            return descending ? left > right : left < right
         case (_?, nil):
             return true
         case (nil, _?):
@@ -251,6 +266,8 @@ enum TaskListProjection {
                 groups += listGroups(ordinary, knownLists: store.lists)
             case .byTag:
                 groups += tagGroups(ordinary)
+            case .byCreatedAt:
+                groups += createdAtGroups(ordinary, now: now, calendar: calendar)
             }
         } else if scope == .today {
             let today = calendar.startOfDay(for: now)
@@ -327,6 +344,17 @@ enum TaskListProjection {
     }
 
     // MARK: - 分组策略（阶段1）：纯函数，空桶不出现，组身份是标签文本
+
+    /// 创建时间分组：按创建日倒序（新→旧），同日内保持原顺序。
+    /// 标题沿用日期组渲染（今天 / 月日），分组身份 = 那一天。
+    private static func createdAtGroups(_ tasks: [Task], now: Date,
+                                        calendar: Calendar) -> [TaskListGroup] {
+        let today = calendar.startOfDay(for: now)
+        let byDay = Dictionary(grouping: tasks) { calendar.startOfDay(for: $0.createdAt) }
+        return byDay.keys.sorted(by: >).map { day in
+            TaskListGroup(kind: day == today ? .today : .day, day: day, tasks: byDay[day]!)
+        }
+    }
 
     /// 优先级分组：高/中/低/无固定顺序。
     private static func priorityGroups(_ tasks: [Task]) -> [TaskListGroup] {

@@ -200,6 +200,14 @@ struct TaskListView: View {
                 }
             }
             .pickerStyle(.inline)
+            if sortMode != .manual {
+                Picker("方向", selection: sortDescendingBinding) {
+                    Text("升序").tag(false)
+                    Text("降序").tag(true)
+                }
+                .pickerStyle(.inline)
+                Button("恢复默认排序", systemImage: "arrow.counterclockwise") { resetSort() }
+            }
         } label: {
             Image(systemName: "arrow.up.arrow.down")
                 .frame(width: WFMetrics.controlHeight, height: WFMetrics.controlHeight)
@@ -214,6 +222,19 @@ struct TaskListView: View {
     private var sortModeBinding: Binding<TaskListSortMode> {
         Binding(get: { environment.viewPreferences.sortMode(for: preferenceKey) },
                 set: { environment.viewPreferences.setSortMode($0, for: preferenceKey) })
+    }
+
+    private var sortDescending: Bool {
+        environment.viewPreferences.sortDescending(for: preferenceKey)
+    }
+
+    private var sortDescendingBinding: Binding<Bool> {
+        Binding(get: { sortDescending },
+                set: { environment.viewPreferences.setSortDescending($0, for: preferenceKey) })
+    }
+
+    private func resetSort() {
+        environment.viewPreferences.resetSort(for: preferenceKey)
     }
 
     private var groupingBinding: Binding<TaskListGrouping> {
@@ -711,7 +732,9 @@ struct TaskListView: View {
 
     private func displayedNodes(for group: TaskListGroup, scope: TaskListScope) -> [TaskTreeNode] {
         workspace.nodes(for: group, scope: scope, query: query,
-                        orderedRoots: group.orderedTasks(using: sortMode, calendar: workspace.calendar))
+                        orderedRoots: group.orderedTasks(using: sortMode,
+                                                         descending: sortDescending,
+                                                         calendar: workspace.calendar))
     }
 
     private func selectFiltered(_ offset: Int) {

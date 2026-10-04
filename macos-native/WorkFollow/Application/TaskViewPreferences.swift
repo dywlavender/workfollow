@@ -4,7 +4,7 @@ import Foundation
 /// 今天/最近 7 天/已完成的日期分组是视图本体，投影层会忽略这里的值（见
 /// TaskListProjection.groups 的分支条件）。
 enum TaskListGrouping: String, CaseIterable, Codable, Identifiable {
-    case byDate, none, byPriority, byList, byTag
+    case byDate, none, byPriority, byList, byTag, byCreatedAt
 
     var id: String { rawValue }
 
@@ -15,6 +15,7 @@ enum TaskListGrouping: String, CaseIterable, Codable, Identifiable {
         case .byPriority: "按优先级分组"
         case .byList: "按清单分组"
         case .byTag: "按标签分组"
+        case .byCreatedAt: "按创建时间分组"
         }
     }
 
@@ -24,10 +25,10 @@ enum TaskListGrouping: String, CaseIterable, Codable, Identifiable {
                                  activeList: String?, activeTag: String?) -> [TaskListGrouping] {
         guard destination == .allTasks else { return [] }
         switch (activeList != nil, activeTag != nil) {
-        case (false, false): return [.byDate, .none, .byPriority, .byList, .byTag]
-        case (true, false): return [.none, .byDate, .byPriority, .byTag]
-        case (false, true): return [.none, .byDate, .byPriority, .byList]
-        case (true, true): return [.none, .byDate, .byPriority]
+        case (false, false): return [.byDate, .none, .byPriority, .byList, .byTag, .byCreatedAt]
+        case (true, false): return [.none, .byDate, .byPriority, .byTag, .byCreatedAt]
+        case (false, true): return [.none, .byDate, .byPriority, .byList, .byCreatedAt]
+        case (true, true): return [.none, .byDate, .byPriority, .byCreatedAt]
         }
     }
 
@@ -52,18 +53,23 @@ enum TaskViewScopeKey {
 struct TaskViewPreference: Equatable, Codable {
     var sortMode: TaskListSortMode?
     var grouping: TaskListGrouping?
+    /// 排序方向：false / 缺键 = 升序（旧档案的既有行为）。
+    var sortDescending: Bool?
 
-    init(sortMode: TaskListSortMode? = nil, grouping: TaskListGrouping? = nil) {
+    init(sortMode: TaskListSortMode? = nil, grouping: TaskListGrouping? = nil,
+         sortDescending: Bool? = nil) {
         self.sortMode = sortMode
         self.grouping = grouping
+        self.sortDescending = sortDescending
     }
 
-    private enum CodingKeys: String, CodingKey { case sortMode, grouping }
+    private enum CodingKeys: String, CodingKey { case sortMode, grouping, sortDescending }
 
     init(from decoder: Decoder) throws {
         let values = try decoder.container(keyedBy: CodingKeys.self)
         sortMode = try values.decodeIfPresent(TaskListSortMode.self, forKey: .sortMode)
         grouping = try values.decodeIfPresent(TaskListGrouping.self, forKey: .grouping)
+        sortDescending = try values.decodeIfPresent(Bool.self, forKey: .sortDescending)
     }
 }
 
@@ -96,6 +102,11 @@ final class TaskViewPreferenceStore: ObservableObject, ModuleStoreFlushable {
         preferences[key]?.grouping ?? TaskListGrouping.fallback(allTasksRoot: allTasksRoot)
     }
 
+    /// 未选过 = 升序（旧档案与本工程历史行为）。
+    func sortDescending(for key: String) -> Bool {
+        preferences[key]?.sortDescending ?? false
+    }
+
     func setSortMode(_ mode: TaskListSortMode, for key: String) {
         var entry = preferences[key] ?? TaskViewPreference()
         guard entry.sortMode != mode else { return }
@@ -109,6 +120,29 @@ final class TaskViewPreferenceStore: ObservableObject, ModuleStoreFlushable {
         guard entry.grouping != grouping else { return }
         entry.grouping = grouping
         preferences[key] = entry
+        persist()
+    }
+
+    func setSortDescending(_ descending: Bool, for key: String) {
+        var entry = preferences[key] ?? TaskViewPreference()
+        guard entry.sortDescending != descending else { return }
+        entry.sortDescending = descending
+        preferences[key] = entry
+        persist()
+    }
+
+    /// 「恢复默认排序」：清掉该视图的排序与方向，回落 `.manual`
+    /// （对齐滴答的"恢复默认时间顺序"）。
+    func resetSort(for key: String) {
+        guard var entry = preferences[key],
+              entry.sortMode != nil || entry.sortDescending != nil else { return }
+        entry.sortMode = nil
+        entry.sortDescending = nil
+        if entry.grouping == nil {
+            preferences.removeValue(forKey: key)
+        } else {
+            preferences[key] = entry
+        }
         persist()
     }
 
