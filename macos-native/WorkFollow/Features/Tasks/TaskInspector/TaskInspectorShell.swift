@@ -166,13 +166,6 @@ struct TaskInspectorShell: View {
                         actionPresentation.dismiss(.tags)
                     })
                     .inspectorRenderAnchor(.tagPicker)
-            } else if actionPresentation.panel == .attributes {
-                ScrollView {
-                    TaskAttributesView(task: workspace.task(for: task.id) ?? task,
-                                       onEscape: dismissFooterPopover,
-                                       workspace: workspace)
-                }
-                .frame(width: 320, height: 300)
             } else if actionPresentation.panel == .relation {
                 relationPicker(task)
             } else if actionPresentation.panel == .parent {

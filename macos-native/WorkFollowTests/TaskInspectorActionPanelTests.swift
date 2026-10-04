@@ -11,8 +11,6 @@ final class TaskInspectorActionPanelTests: XCTestCase {
         XCTAssertEqual(state.panel, .tags)
         state.open(.relation)
         XCTAssertEqual(state.panel, .relation)
-        state.open(.attributes)
-        XCTAssertEqual(state.panel, .attributes)
         state.open(.parent)
         XCTAssertEqual(state.panel, .parent)
     }
