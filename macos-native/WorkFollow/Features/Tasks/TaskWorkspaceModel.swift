@@ -42,7 +42,8 @@ final class TaskWorkspaceModel: ObservableObject {
     init(clock: @escaping () -> Date = Date.init,
          calendar: Calendar = .current,
          seedDemoData: Bool = true, initialTasks: [Task]? = nil, initialLists: [String] = [],
-         initialListMeta: [TaskListMeta]? = nil) {
+         initialListMeta: [TaskListMeta]? = nil,
+         initialListFolders: [TaskListFolder]? = nil) {
         self.clock = clock
         self.calendar = calendar
         let store = WorkspaceStore()
@@ -50,7 +51,8 @@ final class TaskWorkspaceModel: ObservableObject {
         self.actions = TaskActions(store: store, clock: clock, calendar: calendar)
         if let initialTasks { store.commit(initialTasks); store.clearUndo() }
         else if seedDemoData { seed() }
-        store.commit(store.tasks, lists: initialLists, listMetas: initialListMeta)
+        store.commit(store.tasks, lists: initialLists, listMetas: initialListMeta,
+                     listFolders: initialListFolders)
         store.clearUndo()
         // Install after hydration: consumers see committed edits, not a replay
         // of initial loading. The stream exists independently of Activity.
@@ -109,10 +111,16 @@ final class TaskWorkspaceModel: ObservableObject {
 
     // MARK: 清单文件夹（滴答层级：文件夹 → 清单）
 
-    /// 侧栏清单树：置顶清单 + 顶层清单 + 文件夹（成员在节点里）。
+    /// 侧栏清单树：置顶清单 + 顶层清单 + 文件夹（成员在节点里，空文件夹也出现）。
     var listTree: [TaskListSidebarNode] {
         _ = revision
-        return TaskListOrdering.sidebarTree(listNames, metas: store.listMetas)
+        return TaskListOrdering.sidebarTree(listNames, metas: store.listMetas, folders: store.listFolders)
+    }
+
+    /// 清单文件夹（含空文件夹），按自身 sortOrder。
+    var listFolders: [TaskListFolder] {
+        _ = revision
+        return store.listFolders
     }
 
     /// 已知文件夹名（按侧栏出现顺序），供"移动到文件夹"菜单与重名判断。
@@ -125,6 +133,22 @@ final class TaskWorkspaceModel: ObservableObject {
 
     func folderName(forList name: String) -> String? {
         listMeta(for: name)?.folderName
+    }
+
+    /// 新建空文件夹（滴答「清单编辑页 → 添加文件夹」路径）。
+    @discardableResult
+    func saveListFolder(_ name: String) -> Bool {
+        let changed = actions.saveListFolder(name)
+        if changed { revision += 1 }
+        return changed
+    }
+
+    /// 拖拽建夹：把两个清单放进同一文件夹（文件夹不存在则建），一步撤销。
+    @discardableResult
+    func combineListsIntoFolder(_ first: String, _ second: String, folder: String) -> Bool {
+        let changed = actions.combineListsIntoFolder(first, second, folder: folder)
+        if changed { revision += 1 }
+        return changed
     }
 
     @discardableResult

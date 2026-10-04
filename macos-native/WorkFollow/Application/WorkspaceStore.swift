@@ -8,8 +8,12 @@ final class WorkspaceStore {
     /// 侧栏清单元数据（Round B1）：与 lists 一一对应、顺序一致，sortOrder 即数组下标。
     /// 只覆盖 store 注册过的清单；随 commit/undo/transaction 与 lists 同步进退。
     private(set) var listMetas: [TaskListMeta] = []
+    /// 清单文件夹（滴答层级第一级）。**独立于 lists**：允许空文件夹，
+    /// 随 commit/undo/transaction 与清单同进同退。
+    private(set) var listFolders: [TaskListFolder] = []
     private var undoLists: [[String]] = []
     private var undoListMetas: [[TaskListMeta]] = []
+    private var undoListFolders: [[TaskListFolder]] = []
     private var undoCompensations: [(() -> Void)?] = []
     private var transactionDepth = 0
     private var undoSnapshots: [[Task]] = []
@@ -30,22 +34,30 @@ final class WorkspaceStore {
         listMetas.first { $0.name == name }
     }
 
+    func listFolder(named name: String) -> TaskListFolder? {
+        listFolders.first { $0.name == name }
+    }
+
     // Only application commands commit snapshots; readers receive value copies.
     func commit(_ snapshot: [Task], undoPolicy: UndoPolicy = .record,
                 lists: [String]? = nil, listMetas: [TaskListMeta]? = nil,
+                listFolders: [TaskListFolder]? = nil,
                 undoCompensation: (() -> Void)? = nil) {
         let listsChanged = lists != nil && lists != self.lists
         let metasChanged = listMetas != nil && listMetas != self.listMetas
-        guard snapshot != tasks || listsChanged || metasChanged else { return }
+        let foldersChanged = listFolders != nil && listFolders != self.listFolders
+        guard snapshot != tasks || listsChanged || metasChanged || foldersChanged else { return }
         if undoPolicy == .record && transactionDepth == 0 {
             undoSnapshots.append(tasks)
             undoLists.append(self.lists)
             undoListMetas.append(self.listMetas)
+            undoListFolders.append(self.listFolders)
             undoCompensations.append(undoCompensation)
             if undoSnapshots.count > 50 {
                 undoSnapshots.removeFirst()
                 undoLists.removeFirst()
                 undoListMetas.removeFirst()
+                undoListFolders.removeFirst()
                 undoCompensations.removeFirst()
             }
         } else if undoPolicy == .skip {
@@ -69,6 +81,7 @@ final class WorkspaceStore {
         let previousTasks = tasks
         tasks = snapshot
         if let lists { self.lists = lists }
+        if let listFolders { self.listFolders = listFolders }
         reconcileListMetas(committed: listMetas, listsCommitted: lists != nil)
         if transactionDepth == 0 {
             publishTaskChanges(from: previousTasks)
@@ -103,6 +116,7 @@ final class WorkspaceStore {
         tasks = previous
         lists = undoLists.removeLast()
         listMetas = undoListMetas.removeLast()
+        listFolders = undoListFolders.removeLast()
         if let compensation = undoCompensations.popLast() ?? nil { compensation() }
         if transactionDepth == 0 {
             publishTaskChanges(from: before)
@@ -112,6 +126,7 @@ final class WorkspaceStore {
         undoSnapshots.removeAll()
         undoLists.removeAll()
         undoListMetas.removeAll()
+        undoListFolders.removeAll()
         undoCompensations.removeAll()
     }
 
@@ -119,16 +134,20 @@ final class WorkspaceStore {
         let before = tasks
         let beforeLists = lists
         let beforeMetas = listMetas
+        let beforeFolders = listFolders
         transactionDepth += 1
         body()
         transactionDepth -= 1
-        if transactionDepth == 0 && (before != tasks || beforeLists != lists || beforeMetas != listMetas) {
+        if transactionDepth == 0 && (before != tasks || beforeLists != lists || beforeMetas != listMetas
+                                     || beforeFolders != listFolders) {
             undoSnapshots.append(before); undoLists.append(beforeLists); undoListMetas.append(beforeMetas)
+            undoListFolders.append(beforeFolders)
             undoCompensations.append(nil)
             if undoSnapshots.count > 50 {
                 undoSnapshots.removeFirst()
                 undoLists.removeFirst()
                 undoListMetas.removeFirst()
+                undoListFolders.removeFirst()
                 undoCompensations.removeFirst()
             }
             publishTaskChanges(from: before)

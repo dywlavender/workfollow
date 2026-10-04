@@ -110,6 +110,32 @@ struct TaskListMeta: Equatable, Codable {
     }
 }
 
+/// 清单文件夹（滴答层级第一级：文件夹 → 清单 → 分组 → 任务 → 子任务）。
+///
+/// **独立实体**：滴答有两条创建路径——① 拖清单叠清单；②
+/// 「清单编辑页 → 更多设置 → 文件夹 → 添加文件夹」，第二条会先建出**空文件夹**
+/// 再把清单放进去。所以文件夹不能只靠清单上的 `folderName` 派生，必须自带存储。
+/// `sortOrder` 决定它与顶层清单在侧栏的相对位置（同名合并时以显式记录为准）。
+struct TaskListFolder: Equatable, Codable, Identifiable {
+    var id: String { name }
+    var name: String
+    var sortOrder: Int
+
+    init(name: String, sortOrder: Int = 0) {
+        self.name = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        self.sortOrder = sortOrder
+    }
+
+    private enum CodingKeys: String, CodingKey { case name, sortOrder }
+
+    init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        name = (try values.decode(String.self, forKey: .name))
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        sortOrder = try values.decodeIfPresent(Int.self, forKey: .sortOrder) ?? 0
+    }
+}
+
 /// Schedule, period end and deadline are three different things and stay
 /// separate, exactly as in the Flutter baseline:
 ///

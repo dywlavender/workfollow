@@ -184,6 +184,56 @@ final class ListMetaTests: XCTestCase {
         XCTAssertNil(loaded.taskListMeta?[1].folderName)
     }
 
+    // MARK: - 空文件夹 / 位置 / 拖拽建夹
+
+    func testEmptyFolderKeepsItsOwnPosition() {
+        let store = WorkspaceStore(); let actions = TaskActions(store: store, clock: { self.now })
+        _ = actions.renameList(nil, to: "工作")
+        XCTAssertTrue(actions.saveListFolder("公司"), "可以先建空文件夹（滴答「添加文件夹」路径）")
+        XCTAssertFalse(actions.saveListFolder("公司"), "重名被拒")
+        XCTAssertFalse(actions.saveListFolder("   "), "空名被拒")
+        XCTAssertEqual(TaskListOrdering.sidebarTree(store.lists, metas: store.listMetas,
+                                                    folders: store.listFolders),
+                       [.list("工作"), .folder(name: "公司", lists: [])],
+                       "空文件夹也出现在侧栏")
+        XCTAssertTrue(actions.setListFolder("工作", "公司"))
+        XCTAssertEqual(TaskListOrdering.sidebarTree(store.lists, metas: store.listMetas,
+                                                    folders: store.listFolders),
+                       [.folder(name: "公司", lists: ["工作"])],
+                       "放清单后位置不变（文件夹位置由自己决定，不再靠成员派生）")
+    }
+
+    func testCombineListsIntoFolderIsOneUndoStep() {
+        let store = WorkspaceStore(); let actions = TaskActions(store: store, clock: { self.now })
+        _ = actions.renameList(nil, to: "工作")
+        _ = actions.renameList(nil, to: "项目 A")
+        XCTAssertTrue(actions.combineListsIntoFolder("工作", "项目 A", folder: "公司"))
+        XCTAssertEqual(store.listMeta(for: "工作")?.folderName, "公司")
+        XCTAssertEqual(store.listMeta(for: "项目 A")?.folderName, "公司")
+        XCTAssertNotNil(store.listFolder(named: "公司"))
+        actions.undo()
+        XCTAssertNil(store.listMeta(for: "工作")?.folderName, "拖拽是一个动作：一步撤销")
+        XCTAssertNil(store.listMeta(for: "项目 A")?.folderName)
+        XCTAssertNil(store.listFolder(named: "公司"), "文件夹实体一起回滚")
+    }
+
+    func testCombineRejectsInboxAndSelf() {
+        let store = WorkspaceStore(); let actions = TaskActions(store: store, clock: { self.now })
+        _ = actions.renameList(nil, to: "工作")
+        XCTAssertFalse(actions.combineListsIntoFolder(TaskList.inbox.name, "工作", folder: "公司"))
+        XCTAssertFalse(actions.combineListsIntoFolder("工作", "工作", folder: "公司"))
+        XCTAssertNil(store.listFolder(named: "公司"), "被拒时不留下空文件夹")
+    }
+
+    func testSidebarDragPayloadRoundTrip() {
+        let id = UUID()
+        XCTAssertEqual(SidebarDragPayload.decode(SidebarDragPayload.encode(.task(id))), .task(id))
+        XCTAssertEqual(SidebarDragPayload.decode(SidebarDragPayload.encode(.list("工作 2"))),
+                       .list("工作 2"))
+        XCTAssertNil(SidebarDragPayload.decode("随便一段文字"))
+        XCTAssertNil(SidebarDragPayload.decode(SidebarDragPayload.listPrefix), "空前缀不是有效清单名")
+    }
+
     // MARK: - 清单图标（Emoji）
 
     func testListIconPersistsClearsAndRejectsInbox() {

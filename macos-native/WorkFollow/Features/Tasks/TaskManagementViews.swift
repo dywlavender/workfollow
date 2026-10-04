@@ -118,17 +118,28 @@ struct TaskCollectionsView: View {
         .padding(.bottom, WFSpace.xs)
     }
 
+    /// 滴答桌面端是「光标覆盖"清单"区 → 点 +」：一个入口，两种新建（清单 / 文件夹）。
     private var newListBox: some View {
-        Button {
-            if let value = TaskNamePrompt.ask("新建清单") {
-                if workspace.saveList(value) { openList(value) } else { TaskNamePrompt.invalidName() }
+        Menu {
+            Button("新建清单…") {
+                if let value = TaskNamePrompt.ask("新建清单") {
+                    if workspace.saveList(value) { openList(value) } else { TaskNamePrompt.invalidName() }
+                }
+            }
+            Button("新建文件夹…") {
+                guard let value = TaskNamePrompt.ask("新建文件夹") else { return }
+                if !workspace.saveListFolder(value) { TaskNamePrompt.invalidName() }
             }
         } label: {
             Image(systemName: "plus").font(.system(size: 12))
                 .foregroundStyle(WFColors.secondaryText)
                 .frame(width: 20, height: 20)
                 .contentShape(Rectangle())
-        }.help("新建清单")
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .help("新建清单 / 文件夹")
     }
 
     private func openList(_ name: String) {
@@ -154,6 +165,14 @@ private struct SidebarListRowView: View {
     private var folder: String? { workspace.folderName(forList: name) }
     /// 收集箱是任务中转站：不可归类、不可删除（滴答规则）。
     private var isInbox: Bool { name == TaskList.inbox.name }
+
+    /// 滴答主手势：把一个清单拖到另一个清单上 → 建文件夹并把两者放进去。
+    /// 本行已在某文件夹里就直接跟随（不弹窗）；否则弹一次命名。
+    private func combine(_ moved: String, into target: String) -> Bool {
+        guard moved != target, !isInbox, moved != TaskList.inbox.name else { return false }
+        guard let title = folder ?? TaskNamePrompt.ask("新建文件夹"), !title.isEmpty else { return false }
+        return workspace.combineListsIntoFolder(moved, target, folder: title)
+    }
     private var selected: Bool { workspace.activeList == name }
     private var dotColor: Color {
         WFListPalette.color(for: name, meta: meta)
@@ -214,10 +233,17 @@ private struct SidebarListRowView: View {
         .contentShape(Rectangle())
         .onHover { hovering = $0 }
         .contextMenu { menuItems }
-        // 任务行拖来的负载是任务 id 字符串：drop 即移入本清单（HUD 由 workspace 自动上报）。
+        // 拖拽：任务拖进来 = 移入本清单（HUD 由 workspace 自动上报）；
+        // 清单拖进来 = 建文件夹（滴答主手势：拖动一个清单到另一个清单上方）。
+        .draggable(SidebarDragPayload.encode(.list(name)))
         .dropDestination(for: String.self) { values, _ in
-            guard let id = values.first.flatMap(UUID.init(uuidString:)) else { return false }
-            return workspace.moveToList(id, TaskList(name: name)).taskID != nil
+            guard let raw = values.first, let payload = SidebarDragPayload.decode(raw) else { return false }
+            switch payload {
+            case .task(let id):
+                return workspace.moveToList(id, TaskList(name: name)).taskID != nil
+            case .list(let moved):
+                return combine(moved, into: name)
+            }
         } isTargeted: { dragTargeted = $0 }
         .background(AnchoredPropertyPanel(isPresented: $showColorPicker,
                                          width: ListColorPickerPopover.panelWidth, placement: .submenu) {

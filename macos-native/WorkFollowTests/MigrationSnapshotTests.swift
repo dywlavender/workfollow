@@ -252,6 +252,22 @@ final class MigrationSnapshotTests: XCTestCase {
         XCTAssertEqual(rebuiltNote.document.plainText, "读书笔记")
     }
 
+    func testListFolderEntitiesSurviveExportAndParseIncludingEmpty() throws {
+        let snapshot = NativeWorkspaceSnapshot(
+            tasks: [], notes: [], taskLists: ["工作"],
+            taskListMeta: [TaskListMeta(name: "工作", folderName: "公司")],
+            taskListFolders: [TaskListFolder(name: "公司", sortOrder: 0),
+                              TaskListFolder(name: "待定", sortOrder: 1)])
+        let data = try MigrationSnapshot.exportJSON(from: snapshot, attachmentDirectory: nil, now: fixedDate)
+        let parsed = try MigrationSnapshot.parse(data)
+        XCTAssertEqual(parsed.listFolders, ["公司", "待定"], "空文件夹「待定」也要进包")
+        let (imported, _) = MigrationSnapshot.replaced(parsed, attachmentNames: [])
+        XCTAssertEqual(imported.taskListFolders?.map(\.name), ["公司", "待定"],
+                       "导入后文件夹实体（含空文件夹）仍在")
+        XCTAssertEqual(imported.taskListMeta?.first { $0.name == "工作" }?.folderName, "公司",
+                       "清单归属随导入落地")
+    }
+
     // MARK: v1/v2 旧格式读取 + legacy 子任务展开
 
     func testParseV1ExpandsLegacySubtasksToDeterministicRealTasks() throws {

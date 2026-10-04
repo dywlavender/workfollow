@@ -127,6 +127,9 @@ struct MigrationBundle: Equatable {
     let schemaVersion: Int
     let exportedAt: String?
     let lists: [MigrationListRecord]
+    /// 清单文件夹名（滴答第一级：文件夹 → 清单）。**空文件夹也要活下来**，故单独存名字表；
+    /// 键名是本机格式自有（滴答自身导出的键名未核实）。旧包缺键 → 空数组。
+    let listFolders: [String]
     let folders: [MigrationFolderRecord]
     let tasks: [MigrationTaskRecord]
     let notes: [MigrationNoteRecord]
@@ -196,6 +199,7 @@ enum MigrationSnapshot {
             schemaVersion: schemaVersion,
             exportedAt: nullableString(object["exportedAt"]),
             lists: try records(object["lists"], listRecord),
+            listFolders: (object["listFolders"] as? [Any])?.compactMap { nullableString($0) } ?? [],
             folders: try records(object["folders"], folderRecord),
             tasks: try records(object["tasks"], taskRecord),
             notes: try records(object["notes"], noteRecord),
@@ -534,6 +538,8 @@ enum MigrationSnapshot {
             notes: importedNotes + local.notes,
             taskLists: orderedNames,
             taskListMeta: listMetas,
+            taskListFolders: listFolderEntities(bundle.listFolders, metas: listMetas,
+                                                local: local.taskListFolders ?? []),
             noteFolders: savedFolderNames,
             noteFolderMetadata: orderedFolderRecords)
         summary.importedTasks = importedTasks.count + legacyChildren.count
@@ -594,12 +600,32 @@ enum MigrationSnapshot {
         let listMetas = normalizedListMetas(orderedNames, metadata: listMetaByName)
         let snapshot = NativeWorkspaceSnapshot(tasks: tasks, notes: notes,
                                                taskLists: orderedNames, taskListMeta: listMetas,
+                                               taskListFolders: listFolderEntities(bundle.listFolders,
+                                                                                   metas: listMetas),
                                                noteFolders: uniqueFolderNames(folderRecords.map(\.name)),
                                                noteFolderMetadata: folderRecords)
         summary.importedTasks = tasks.count
         summary.importedNotes = notes.count
         summary.importedLists = lists.count
         return (snapshot, summary)
+    }
+
+    /// 清单文件夹实体：本机已排好的顺序优先，随后是包里显式列出的名字，
+    /// 最后补上被清单隐式引用的名字（旧包只有清单上的 `folder` 字段）。
+    /// 返回顺序即侧栏顺序。
+    static func listFolderEntities(_ names: [String], metas: [TaskListMeta],
+                                   local: [TaskListFolder] = []) -> [TaskListFolder] {
+        var orders: [String: Int] = [:]
+        func claim(_ raw: String?) {
+            guard let name = raw?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  !name.isEmpty, orders[name] == nil else { return }
+            orders[name] = orders.count
+        }
+        for folder in local.sorted(by: { $0.sortOrder < $1.sortOrder }) { claim(folder.name) }
+        for name in uniqueFolderNames(names) { claim(name) }
+        for meta in metas { claim(meta.folderName) }
+        return orders.sorted { ($0.value, $0.key) < ($1.value, $1.key) }
+            .map { TaskListFolder(name: $0.key, sortOrder: $0.value) }
     }
 
     /// 收集箱永远在最前，其余按出现顺序去重。
@@ -931,6 +957,9 @@ enum MigrationSnapshot {
                 return record
             },
             "folders": folders,
+            // 清单文件夹（空文件夹也写出来，否则导入后消失）。
+            "listFolders": listFolderEntities([], metas: snapshot.taskListMeta ?? [],
+                                              local: snapshot.taskListFolders ?? []).map(\.name),
             "tasks": snapshot.tasks.map(taskRecord),
             "notes": snapshot.notes.map { noteRecord($0, folderIDsByName: folderIDsByName) },
         ]

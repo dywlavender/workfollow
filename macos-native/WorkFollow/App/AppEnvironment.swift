@@ -66,7 +66,7 @@ final class AppEnvironment: ObservableObject {
             completionSoundEnabled: preferences.object(forKey: "completionSoundEnabled") as? Bool ?? true,
             playSound: { Self.playFeedbackSound($0) })
         self.feedback = feedback
-        taskWorkspace = TaskWorkspaceModel(clock: clock, calendar: calendar, initialTasks: snapshot?.tasks, initialLists: snapshot?.taskLists ?? [], initialListMeta: snapshot?.taskListMeta)
+        taskWorkspace = TaskWorkspaceModel(clock: clock, calendar: calendar, initialTasks: snapshot?.tasks, initialLists: snapshot?.taskLists ?? [], initialListMeta: snapshot?.taskListMeta, initialListFolders: snapshot?.taskListFolders)
         StickyNoteWindowController.shared.attach(workspace: taskWorkspace)
         notesWorkspace = NotesWorkspaceModel(initialNotes: snapshot?.notes ?? [],
                                              folders: snapshot?.noteFolders ?? [],
@@ -187,6 +187,7 @@ final class AppEnvironment: ObservableObject {
                                                      notes: notesWorkspace.notes,
                                                      taskLists: taskWorkspace.listNames,
                                                      taskListMeta: taskWorkspace.listMetas,
+                                                     taskListFolders: taskWorkspace.listFolders,
                                                      noteFolders: notesWorkspace.folders,
                                                      noteFolderMetadata: notesWorkspace.folderMetadataForPersistence))
     }

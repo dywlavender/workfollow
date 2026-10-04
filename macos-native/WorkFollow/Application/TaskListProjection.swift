@@ -485,6 +485,31 @@ enum WFListPalette {
 /// 侧栏清单显示顺序（对齐 Flutter WorkspaceController.orderedLists）：
 /// 置顶在前，其余按 meta sortOrder，再按名字；无 meta 的清单排在有 meta
 /// 之后、按字典序。纯函数，便于对排序语义做单测。
+/// 侧栏拖放负载：任务（UUID）或**清单**（滴答拖清单叠清单 = 建文件夹）。
+///
+/// 侧栏原本只有"任务拖到清单 = 移入清单"，加清单互拖后同一个 `String` 传输里
+/// 必须能区分两者：清单名带前缀编码，避免引入自定义 UTType。
+enum SidebarDragPayload: Equatable {
+    static let listPrefix = "wf-list:"
+    case task(UUID)
+    case list(String)
+
+    static func encode(_ payload: SidebarDragPayload) -> String {
+        switch payload {
+        case .task(let id): id.uuidString
+        case .list(let name): listPrefix + name
+        }
+    }
+
+    static func decode(_ raw: String) -> SidebarDragPayload? {
+        if raw.hasPrefix(listPrefix) {
+            let name = String(raw.dropFirst(listPrefix.count))
+            return name.isEmpty ? nil : .list(name)
+        }
+        return UUID(uuidString: raw).map(SidebarDragPayload.task)
+    }
+}
+
 /// 侧栏清单树节点（滴答层级：文件夹 → 清单；置顶清单仍单独在前）。
 enum TaskListSidebarNode: Equatable, Identifiable {
     case list(String)
@@ -499,34 +524,46 @@ enum TaskListSidebarNode: Equatable, Identifiable {
 }
 
 enum TaskListOrdering {
-    /// 侧栏清单树：在既有排序（置顶 → sortOrder → 名字）之上把带文件夹的清单收进文件夹节点。
+    /// 侧栏清单树：置顶清单在前，随后是「顶层清单 + 文件夹」按 sortOrder 合并排序。
     ///
-    /// - 文件夹节点出现在**它第一个成员清单**的位置（文件夹不单独存储，也就不需要自己的排序字段）；
-    /// - 文件夹内成员保持既有顺序；
-    /// - 置顶清单永远单独排在前面（既有语义），不参与文件夹折叠。
-    static func sidebarTree(_ names: [String], metas: [TaskListMeta]) -> [TaskListSidebarNode] {
+    /// - 文件夹是**独立实体**（`TaskListFolder`），位置由它自己的 `sortOrder` 决定，
+    ///   所以**空文件夹也有位置**（对齐滴答「先添加文件夹，再放清单」）；
+    /// - 清单引用了未登记的文件夹（导入数据的兼容路径）时，按隐式文件夹处理，
+    ///   落在它第一个成员的位置；
+    /// - 文件夹内成员保持既有顺序；置顶清单永远单独排在前面，不参与折叠。
+    static func sidebarTree(_ names: [String], metas: [TaskListMeta],
+                            folders: [TaskListFolder] = []) -> [TaskListSidebarNode] {
         let ordered = ordered(names, metas: metas)
         let byName = Dictionary(metas.map { ($0.name, $0) }, uniquingKeysWith: { current, _ in current })
-        var nodes: [TaskListSidebarNode] = []
-        var emitted = Set<String>()
+
+        var folderOrders: [String: Int] = [:]
+        for folder in folders { folderOrders[folder.name] = folder.sortOrder }
+        for (index, name) in ordered.enumerated() {
+            guard byName[name]?.isPinned != true,
+                  let folder = byName[name]?.folderName, !folder.isEmpty else { continue }
+            if folderOrders[folder] == nil { folderOrders[folder] = index }
+        }
+
+        var pinned: [TaskListSidebarNode] = []
+        var rest: [(order: Int, name: String, node: TaskListSidebarNode)] = []
         for name in ordered {
             let meta = byName[name]
-            guard meta?.isPinned != true else {
-                nodes.append(.list(name))
+            if meta?.isPinned == true {
+                pinned.append(.list(name))
                 continue
             }
-            guard let folder = meta?.folderName, !folder.isEmpty else {
-                nodes.append(.list(name))
-                continue
-            }
-            guard !emitted.contains(folder) else { continue }
-            emitted.insert(folder)
+            if let folder = meta?.folderName, !folder.isEmpty { continue }  // 收进文件夹节点
+            rest.append((meta?.sortOrder ?? Int.max, name, .list(name)))
+        }
+        for (folder, order) in folderOrders {
             let members = ordered.filter {
                 byName[$0]?.folderName == folder && byName[$0]?.isPinned != true
             }
-            nodes.append(.folder(name: folder, lists: members))
+            rest.append((order, folder, .folder(name: folder, lists: members)))
         }
-        return nodes
+        return pinned + rest
+            .sorted { ($0.order, $0.name) < ($1.order, $1.name) }
+            .map(\.node)
     }
 
     static func ordered(_ names: [String], metas: [TaskListMeta]) -> [String] {

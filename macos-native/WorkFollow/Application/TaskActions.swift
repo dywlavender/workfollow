@@ -658,7 +658,8 @@ final class TaskActions {
 
     /// 对一个清单的 meta 做变更并提交；隐式清单（快速添加里 @新清单 产生、尚未注册的）
     /// 首次从侧栏管理时注册进 store.lists，使颜色/置顶与清单本身一起持久化、可删除。
-    private func commitListMeta(_ raw: String, mutation: (inout TaskListMeta) -> Void) -> Bool {
+    private func commitListMeta(_ raw: String, ensureFolder: String? = nil,
+                                mutation: (inout TaskListMeta) -> Void) -> Bool {
         let name = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         guard canManageList(name) else { return false }
         var metas = store.listMetas
@@ -669,10 +670,17 @@ final class TaskActions {
             mutation(&fresh)
             metas.append(fresh)
         }
+        // 目标文件夹不存在就顺手建出来：与 meta 同一次提交 = 一步撤销。
+        var folders: [TaskListFolder]? = nil
+        if let ensureFolder, store.listFolder(named: ensureFolder) == nil {
+            folders = store.listFolders + [TaskListFolder(
+                name: ensureFolder,
+                sortOrder: nextListFolderOrder(metas: metas, folders: store.listFolders))]
+        }
         if store.lists.contains(name) {
-            store.commit(store.tasks, listMetas: metas)
+            store.commit(store.tasks, listMetas: metas, listFolders: folders)
         } else {
-            store.commit(store.tasks, lists: store.lists + [name], listMetas: metas)
+            store.commit(store.tasks, lists: store.lists + [name], listMetas: metas, listFolders: folders)
         }
         return true
     }
@@ -701,47 +709,96 @@ final class TaskActions {
         }
     }
 
+    /// 新建文件夹（滴答「清单编辑页 → 更多设置 → 文件夹 → 添加文件夹」路径）：
+    /// **允许空文件夹**，随后再往里放清单。空名或重名 → false。
+    @discardableResult
+    func saveListFolder(_ name: String) -> Bool {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, store.listFolder(named: trimmed) == nil else { return false }
+        let folder = TaskListFolder(name: trimmed,
+                                    sortOrder: nextListFolderOrder(metas: store.listMetas,
+                                                                   folders: store.listFolders))
+        var folders = store.listFolders
+        folders.append(folder)
+        store.commit(store.tasks, listFolders: folders)
+        return true
+    }
+
+    /// 新文件夹排在**现有清单与文件夹之后**，避免与清单的 sortOrder 撞车（撞车就只能按名字比大小）。
+    private func nextListFolderOrder(metas: [TaskListMeta], folders: [TaskListFolder]) -> Int {
+        max(metas.map(\.sortOrder).max() ?? -1, folders.map(\.sortOrder).max() ?? -1) + 1
+    }
+
+    /// 把两个清单放进同一个文件夹（滴答拖拽路径：把一个清单拖到另一个上方）。
+    /// 文件夹不存在则建；**一次提交 = 一步撤销**（拖拽是一个用户动作，不该产生两步历史）。
+    @discardableResult
+    func combineListsIntoFolder(_ first: String, _ second: String, folder: String) -> Bool {
+        let target = folder.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !target.isEmpty, first != second,
+              canManageList(first), canManageList(second) else { return false }
+        var metas = store.listMetas
+        var folders = store.listFolders
+        var changed = false
+        for name in [first, second] {
+            guard let index = metas.firstIndex(where: { $0.name == name }) else { continue }
+            if metas[index].folderName != target {
+                metas[index].folderName = target
+                changed = true
+            }
+        }
+        if !folders.contains(where: { $0.name == target }) {
+            folders.append(TaskListFolder(name: target,
+                                          sortOrder: nextListFolderOrder(metas: metas, folders: folders)))
+            changed = true
+        }
+        guard changed else { return false }
+        store.commit(store.tasks, listMetas: metas, listFolders: folders)
+        return true
+    }
+
     /// 把清单放进文件夹（nil / 空串 = 移出文件夹回到顶层）。收集箱不可归类。
+    /// 目标文件夹不存在时顺手建出来（「移动到文件夹 → 新建文件夹…」这条路径）。
     @discardableResult
     func setListFolder(_ name: String, _ folder: String?) -> Bool {
         let trimmed = folder?.trimmingCharacters(in: .whitespacesAndNewlines)
         let target = (trimmed?.isEmpty ?? true) ? nil : trimmed
-        return commitListMeta(name) { $0.folderName = target }
+        return commitListMeta(name, ensureFolder: target) { $0.folderName = target }
     }
 
-    /// 重命名文件夹：归属它的清单一起改（一次提交、一步撤销）。
+    /// 重命名文件夹：**文件夹记录与归属它的清单一起改**（一次提交、一步撤销）。
     @discardableResult
     func renameListFolder(from old: String, to new: String) -> Bool {
         let target = new.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !target.isEmpty, target != old else { return false }
-        return commitAllListMetas { metas in
-            var changed = false
-            for index in metas.indices where metas[index].folderName == old {
-                metas[index].folderName = target
-                changed = true
-            }
-            return changed
+        var metas = store.listMetas
+        var folders = store.listFolders
+        var changed = false
+        for index in metas.indices where metas[index].folderName == old {
+            metas[index].folderName = target
+            changed = true
         }
+        if let index = folders.firstIndex(where: { $0.name == old }) {
+            folders[index].name = target
+            changed = true
+        }
+        guard changed else { return false }
+        store.commit(store.tasks, listMetas: metas, listFolders: folders)
+        return true
     }
 
-    /// 删除文件夹：清单**保留**并回到顶层（与笔记侧"删除文件夹保留笔记"同一口径）。
+    /// 解散文件夹：清单**保留**并回到顶层（官方 MCP 语义 dissolve + ungroup，与笔记侧同口径）。
     @discardableResult
     func dissolveListFolder(_ folder: String) -> Bool {
-        commitAllListMetas { metas in
-            var changed = false
-            for index in metas.indices where metas[index].folderName == folder {
-                metas[index].folderName = nil
-                changed = true
-            }
-            return changed
-        }
-    }
-
-    /// 跨清单的 meta 批量写入（文件夹重命名/解散走它：一次提交 = 一步撤销）。
-    private func commitAllListMetas(_ mutation: (inout [TaskListMeta]) -> Bool) -> Bool {
         var metas = store.listMetas
-        guard mutation(&metas) else { return false }
-        store.commit(store.tasks, listMetas: metas)
+        var changed = false
+        for index in metas.indices where metas[index].folderName == folder {
+            metas[index].folderName = nil
+            changed = true
+        }
+        let folders = store.listFolders.filter { $0.name != folder }
+        if folders != store.listFolders { changed = true }
+        guard changed else { return false }
+        store.commit(store.tasks, listMetas: metas, listFolders: folders)
         return true
     }
 }
