@@ -1,5 +1,19 @@
 import AppKit
 import SwiftUI
+/// Esc 的注册名次：同一个窗口里"更具体"的处理者先拿到 Esc。
+///
+/// 注意这个数字**不是层数**，而是同窗口内的竞争排序——子卡是独立 `NSPanel`，
+/// 各自在自己的窗口注册，不参与父窗口的排名。以前这里散着裸数字（1 / 2 / 4），
+/// 谁也说不清为什么是 4；现在改成有名字的名次。
+enum PopupEscapeRank {
+    /// 呈现壳自己的兜底关闭。
+    static let shell = 1
+    /// 嵌在壳里的面板（标签选择、属性面板等）。
+    static let embedded = 2
+    /// 日程面板的状态机：它知道"先弹哪一层"，必须压过壳的兜底关闭。
+    static let schedule = 4
+}
+
 
 /// One event monitor, explicit window ownership, and deepest layer first.
 /// This routes presentation only; drafts and commit decisions remain in the caller.

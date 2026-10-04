@@ -11,7 +11,9 @@ struct SchedulePanelPresentationState {
     enum SubPage: Equatable {
         case reminderCustom      // 自定义提前量
         case repeatCustom        // 自定义重复
-        case repeatEnd           // 重复结束条件
+        case repeatEnd(Edit)     // 重复结束条件（日期 / 次数两种编辑，互斥）
+
+        enum Edit: Equatable { case date, count }
     }
 
     var expandedProperty: ScheduleProperty?
@@ -25,10 +27,22 @@ struct SchedulePanelPresentationState {
 
     func shows(_ page: SubPage) -> Bool { subPages.contains(page) }
 
-    /// 打开子页（重复打开同一页不叠加）。
+    /// 重复结束当前在编辑哪一种（日期 / 次数）。
+    var repeatEndEdit: SubPage.Edit? {
+        if case .repeatEnd(let edit) = subPage { return edit }
+        return nil
+    }
+
+    /// 打开子页（重复打开同一页不叠加）。重复结束的两种编辑互斥：切过去而不是叠加。
     mutating func open(_ page: SubPage) {
+        if case .repeatEnd = page { closeRepeatEnd() }
         guard subPages.last != page else { return }
         subPages.append(page)
+    }
+
+    /// 收起重复结束层（不论当前是日期还是次数编辑）。
+    mutating func closeRepeatEnd() {
+        subPages.removeAll { if case .repeatEnd = $0 { return true } else { return false } }
     }
 
     /// 收起指定子页，连同它更深的所有层。
@@ -51,7 +65,7 @@ struct SchedulePanelPresentationState {
         case .time, .endTime: break
         case .reminder: close(.reminderCustom)
         case .repeat: close(.repeatCustom)
-        case .repeatEnd: close(.repeatEnd)
+        case .repeatEnd: closeRepeatEnd()
         }
     }
 

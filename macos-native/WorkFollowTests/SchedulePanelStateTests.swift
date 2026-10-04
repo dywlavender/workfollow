@@ -55,10 +55,23 @@ final class SchedulePanelStateTests: XCTestCase {
         XCTAssertFalse(state.shows(.reminderCustom), "清提醒要收掉自定义提前量")
 
         state.open(.repeatCustom)
-        state.open(.repeatEnd)
+        state.open(.repeatEnd(.date))
         state.propertyCleared(.repeat)
         XCTAssertFalse(state.shows(.repeatCustom))
-        XCTAssertFalse(state.shows(.repeatEnd), "清重复要收掉重复结束页")
+        XCTAssertFalse(state.shows(.repeatEnd(.date)), "清重复要收掉重复结束页")
+    }
+
+    func testRepeatEndVariantsReplaceEachOther() {
+        var state = SchedulePanelPresentationState()
+        state.expandedProperty = .repeatEnd
+        state.open(.repeatEnd(.date))
+        XCTAssertEqual(state.repeatEndEdit, .date)
+        state.open(.repeatEnd(.count))
+        XCTAssertEqual(state.repeatEndEdit, .count)
+        XCTAssertEqual(state.subPages.count, 1, "两种编辑互斥，切换而不是叠加")
+        state.closeRepeatEnd()
+        XCTAssertFalse(state.shows(.repeatEnd(.count)))
+        XCTAssertNil(state.repeatEndEdit)
     }
 
     func testCollapsePropertyDropsEveryDeeperLayer() {

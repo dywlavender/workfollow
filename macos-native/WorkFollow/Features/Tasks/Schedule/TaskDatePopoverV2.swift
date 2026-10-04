@@ -36,9 +36,8 @@ struct TaskDatePopoverV2: View {
     private typealias RepeatGroup = SchedulePanelPresentationState.RecurrencePage
 
     /// 重复结束二级页（Flutter: 按日期结束/按次数结束）。
-    private enum RepeatEndEdit {
-        case date, count
-    }
+    /// 定义只有一处：导航 reducer 的子页变体。
+    private typealias RepeatEndEdit = SchedulePanelPresentationState.SubPage.Edit
 
     /// 主面板仅随属性行数量增高；打开子卡片不改变尺寸。
     @StateObject private var model: TaskDateDraftModel
@@ -51,7 +50,6 @@ struct TaskDatePopoverV2: View {
         get { presentation.recurrencePage }
         nonmutating set { presentation.recurrencePage = newValue }
     }
-    @State private var repeatEndEdit: RepeatEndEdit?
     /// 鼠标当前悬浮的属性行（已设值的行尾把 › 换成 ×）。
     /// 时间行内编辑的文本（展开时可改，提交后回写草稿）。
     @State private var timeFieldText = ""
@@ -60,8 +58,6 @@ struct TaskDatePopoverV2: View {
     /// 点过「确定」且区间非法时才显示错误（Flutter 的 `error` 同样是提交时才出现；
     /// 区间改回合法后它自动消失，因为文案由草稿实时算）。
     @State private var showRangeError = false
-    /// 重复展开内容的「自定义」区间编辑状态。
-    @State private var repeatCustomOpen = false
     @State private var reminderDraft = ScheduleReminderDraft(offsets: [])
     @State private var reminderInputError = false
     @State private var reminderCustomOpen = false
@@ -234,7 +230,7 @@ struct TaskDatePopoverV2: View {
                     set: { if !$0, inlineSheet == sheet { closeSheet() } }),
                     width: ScheduleMetrics.optionPanelWidth,
                     horizontalOutset: ScheduleMetrics.childHorizontalOutset,
-                    prefersAbove: sheet == .repeatEnd && repeatEndEdit == .date) {
+                    prefersAbove: sheet == .repeatEnd && presentation.repeatEndEdit == .date) {
                         body().scheduleRenderAnchor(.expandedContent(sheet))
                     }
             }
@@ -539,15 +535,16 @@ struct TaskDatePopoverV2: View {
                 optionsRow("工作日", arrow: true) { repeatGroup = .work }
                 optionsRow("节假日", arrow: true) { repeatGroup = .holiday }
                 Divider()
-                optionsRow("自定义", checked: repeatCustomOpen) {
+                optionsRow("自定义", checked: presentation.shows(.repeatCustom)) {
                     if !Self.frequencyUsesInterval(model.frequency) {
                         // 滴答的「自定义」是一套自己的规则：从"每天"起步再调间隔。
                         model.syncRecurrenceAnchor()
                         model.chooseFrequency(.daily)
                     }
-                    repeatCustomOpen.toggle()
+                    if presentation.shows(.repeatCustom) { presentation.close(.repeatCustom) }
+                    else { presentation.open(.repeatCustom) }
                 }
-                if repeatCustomOpen { intervalEditor }
+                if presentation.shows(.repeatCustom) { intervalEditor }
             }
             Color.clear.frame(height: 8)
         }
@@ -617,7 +614,7 @@ struct TaskDatePopoverV2: View {
 
     private var repeatEndPanelBody: some View {
         VStack(spacing: 0) {
-            if let edit = repeatEndEdit {
+            if let edit = presentation.repeatEndEdit {
                 if edit == .date {
                     LunarMonthGridView(calendar: calendar, displayedMonth: $repeatEndDisplayedMonth,
                         today: workspace.dateFromToday(0), selection: repeatEndDraftDate,
@@ -645,7 +642,7 @@ struct TaskDatePopoverV2: View {
                     }
                     .frame(maxWidth: .infinity)
                     .padding(12)
-                    panelButtons(cancel: { repeatEndEdit = nil }) { applyEndEdit(edit) }
+                    panelButtons(cancel: { presentation.closeRepeatEnd() }) { applyEndEdit(edit) }
                 }
             } else {
                 optionsRow("永不结束", checked: model.ending == .never) {
@@ -655,11 +652,11 @@ struct TaskDatePopoverV2: View {
                 optionsRow("按日期结束", checked: model.ending == .untilDate) {
                     repeatEndDraftDate = model.repeatEndDate
                     repeatEndDisplayedMonth = model.repeatEndDate
-                    repeatEndEdit = .date
+                    presentation.open(.repeatEnd(.date))
                 }
                 optionsRow("按次数结束", checked: model.ending == .count) {
                     repeatCountText = String(model.repeatCount)
-                    repeatEndEdit = .count
+                    presentation.open(.repeatEnd(.count))
                 }
                 Spacer(minLength: 10)
             }
@@ -857,9 +854,9 @@ struct TaskDatePopoverV2: View {
             customOffsetUnit = 1
         case .repeat:
             repeatGroup = nil
-            repeatCustomOpen = false
+            presentation.close(.repeatCustom)
         case .repeatEnd:
-            repeatEndEdit = nil
+            presentation.closeRepeatEnd()
             repeatEndDraftDate = model.repeatEndDate
             repeatCountText = String(model.repeatCount)
         }
