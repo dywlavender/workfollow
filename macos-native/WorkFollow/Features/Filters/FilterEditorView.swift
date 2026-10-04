@@ -17,6 +17,8 @@ struct FilterEditorView: View {
     @State private var selectedTags: Set<String>
     @State private var selectedPriorities: Set<TaskPriority>
     @State private var dateRange: SavedFilterDateRange
+    /// 关键词输入原文（空格 / 逗号分隔），保存时解析成 token 列表。
+    @State private var keywordText: String
     @State private var conflict = false
 
     init(store: FilterStore, workspace: TaskWorkspaceModel,
@@ -30,6 +32,7 @@ struct FilterEditorView: View {
         _selectedTags = State(initialValue: Set(initial?.tags ?? []))
         _selectedPriorities = State(initialValue: Set(initial?.priorities ?? []))
         _dateRange = State(initialValue: initial?.dateRange ?? .any)
+        _keywordText = State(initialValue: (initial?.keywords ?? []).joined(separator: " "))
     }
 
     private var trimmedName: String { name.trimmingCharacters(in: .whitespacesAndNewlines) }
@@ -63,6 +66,11 @@ struct FilterEditorView: View {
                 }
                 .frame(maxHeight: 150)
             }
+
+            sectionLabel("关键词")
+            TextField("在标题与正文中匹配，空格或逗号分隔", text: $keywordText)
+                .textFieldStyle(.roundedBorder)
+                .help("多个关键词需全部命中（AND）；匹配标题与正文纯文本，忽略大小写")
 
             sectionLabel("优先级")
             HStack(spacing: WFSpace.sm) {
@@ -109,6 +117,7 @@ struct FilterEditorView: View {
         filter.tags = selectedTags.sorted()
         filter.priorities = Self.priorityOrder.filter { selectedPriorities.contains($0) }
         filter.dateRange = dateRange
+        filter.keywords = SavedFilter.parseKeywords(keywordText)
         let saved = initial == nil ? store.add(filter) : store.update(filter)
         if saved {
             onDismiss()

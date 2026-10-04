@@ -37,6 +37,48 @@ struct SavedFilter: Identifiable, Codable, Equatable {
     var tags: [String] = []
     var priorities: [TaskPriority] = []
     var dateRange: SavedFilterDateRange = .any
+    /// 关键词（滴答「普通筛选」的"按关键词做内容筛选"）：**全部包含**才算命中，
+    /// 匹配范围是标题 + 正文纯文本，大小写不敏感。空数组 = 该维度关闭。
+    var keywords: [String] = []
+
+    init(id: UUID = UUID(), name: String, listNames: [String] = [], tags: [String] = [],
+         priorities: [TaskPriority] = [], dateRange: SavedFilterDateRange = .any,
+         keywords: [String] = []) {
+        self.id = id
+        self.name = name
+        self.listNames = listNames
+        self.tags = tags
+        self.priorities = priorities
+        self.dateRange = dateRange
+        self.keywords = keywords
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, name, listNames, tags, priorities, dateRange, keywords
+    }
+
+    /// additive Codable：旧 `filters.json` 缺 `keywords` 键时解码为空数组
+    /// （属性默认值不会让合成解码器宽容缺键，所以显式写出来）。
+    init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        id = try values.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        name = try values.decode(String.self, forKey: .name)
+        listNames = try values.decodeIfPresent([String].self, forKey: .listNames) ?? []
+        tags = try values.decodeIfPresent([String].self, forKey: .tags) ?? []
+        priorities = try values.decodeIfPresent([TaskPriority].self, forKey: .priorities) ?? []
+        dateRange = try values.decodeIfPresent(SavedFilterDateRange.self, forKey: .dateRange) ?? .any
+        keywords = try values.decodeIfPresent([String].self, forKey: .keywords) ?? []
+    }
+
+    /// 关键词原文 → token 列表：空格 / 半角逗号 / 中文逗号 / 顿号 / 换行分隔，
+    /// 去重且保持输入顺序。编辑器与测试共用这一处解析。
+    static func parseKeywords(_ text: String) -> [String] {
+        let separators = CharacterSet(charactersIn: " ,，、\t\n")
+        var seen = Set<String>()
+        return text.components(separatedBy: separators)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty && seen.insert($0).inserted }
+    }
 }
 
 /// Pure predicate: does `task` pass every enabled dimension of `filter`?
@@ -54,6 +96,13 @@ enum FilterEvaluator {
         }
         if !filter.priorities.isEmpty && !filter.priorities.contains(task.priority) {
             return false
+        }
+        if !filter.keywords.isEmpty {
+            // 只在真有关键词时才拼正文，避免没有该维度时每个任务都拼一次。
+            let haystack = task.title + "\n" + task.document.plainText
+            guard filter.keywords.allSatisfy({ haystack.localizedCaseInsensitiveContains($0) }) else {
+                return false
+            }
         }
         let today = calendar.startOfDay(for: now)
         switch filter.dateRange {

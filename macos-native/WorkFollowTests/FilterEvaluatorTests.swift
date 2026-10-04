@@ -21,16 +21,18 @@ final class FilterEvaluatorTests: XCTestCase {
                             listNames: [String] = [],
                             tags: [String] = [],
                             priorities: [TaskPriority] = [],
-                            dateRange: SavedFilterDateRange = .any) -> SavedFilter {
+                            dateRange: SavedFilterDateRange = .any,
+                            keywords: [String] = []) -> SavedFilter {
         SavedFilter(name: name, listNames: listNames, tags: tags,
-                    priorities: priorities, dateRange: dateRange)
+                    priorities: priorities, dateRange: dateRange, keywords: keywords)
     }
 
-    private func makeTask(list: String = "收集箱", tags: [String] = [],
+    private func makeTask(title: String = "任务", list: String = "收集箱", tags: [String] = [],
                           priority: TaskPriority = .none,
                           dueAt: Date? = nil, deadlineAt: Date? = nil,
+                          document: NativeDocument = .empty,
                           completed: Bool = false, parent: Task? = nil) -> Task {
-        Task(id: UUID(), title: "任务", tags: tags, list: TaskList(name: list),
+        Task(id: UUID(), title: title, document: document, tags: tags, list: TaskList(name: list),
              priority: priority, schedule: TaskSchedule(dueAt: dueAt, deadlineAt: deadlineAt),
              status: completed ? .completed : .active, parentID: parent?.id,
              childOrder: 0, createdAt: now, updatedAt: now)
@@ -63,6 +65,61 @@ final class FilterEvaluatorTests: XCTestCase {
         for task in samples {
             XCTAssertTrue(matches(task, filter), "未启用任何维度时应匹配所有任务")
         }
+    }
+
+    // MARK: - 关键词维度（滴答「普通筛选」的按关键词做内容筛选）
+
+    func testKeywordMatchesTitleCaseInsensitively() {
+        let task = makeTask(title: "季度报告 Review")
+        XCTAssertTrue(matches(task, makeFilter(keywords: ["报告"])))
+        XCTAssertTrue(matches(task, makeFilter(keywords: ["review"])), "大小写不敏感")
+        XCTAssertFalse(matches(task, makeFilter(keywords: ["周报"])))
+    }
+
+    func testKeywordMatchesDocumentPlainText() {
+        let task = makeTask(document: NativeDocument(plainText: "会议纪要：下周三之前给财务留底"))
+        XCTAssertTrue(matches(task, makeFilter(keywords: ["财务"])))
+        XCTAssertTrue(matches(task, makeFilter(keywords: ["会议纪要"])))
+        XCTAssertFalse(matches(task, makeFilter(keywords: ["法务"])))
+    }
+
+    func testMultipleKeywordsAreAllRequired() {
+        let task = makeTask(document: NativeDocument(plainText: "报告 财务 复核"))
+        XCTAssertTrue(matches(task, makeFilter(keywords: ["报告", "财务"])))
+        XCTAssertFalse(matches(task, makeFilter(keywords: ["报告", "法务"])), "多关键词是 AND")
+    }
+
+    func testKeywordCombinesWithOtherDimensions() {
+        let task = makeTask(tags: ["工作"], document: NativeDocument(plainText: "报告"))
+        XCTAssertTrue(matches(task, makeFilter(tags: ["工作"], keywords: ["报告"])))
+        XCTAssertFalse(matches(task, makeFilter(tags: ["私人"], keywords: ["报告"])), "跨维度 AND")
+    }
+
+    func testEmptyKeywordListDoesNotFilter() {
+        XCTAssertTrue(matches(makeTask(), makeFilter(keywords: [])))
+    }
+
+    func testParseKeywordsSplitsOnSpacesCommasAndDeduplicates() {
+        XCTAssertEqual(SavedFilter.parseKeywords("报告 财务，法务、复核"), ["报告", "财务", "法务", "复核"])
+        XCTAssertEqual(SavedFilter.parseKeywords("  报告   报告 "), ["报告"], "去重且忽略空 token")
+        XCTAssertEqual(SavedFilter.parseKeywords(""), [])
+    }
+
+    func testOldArchiveWithoutKeywordsDecodesToEmpty() throws {
+        let json = """
+        [{"id":"11111111-1111-1111-1111-111111111111","name":"旧过滤器",
+          "listNames":["收集箱"],"tags":["紧急"],"priorities":[],"dateRange":"any"}]
+        """
+        let decoded = try JSONDecoder().decode([SavedFilter].self, from: Data(json.utf8))
+        XCTAssertEqual(decoded.first?.keywords, [], "旧 filters.json 缺 keywords 键必须能解码")
+        XCTAssertEqual(decoded.first?.listNames, ["收集箱"], "其余维度照旧")
+    }
+
+    func testKeywordsRoundTripThroughCodable() throws {
+        let filter = makeFilter(keywords: ["报告", "财务"])
+        let data = try JSONEncoder().encode([filter])
+        let decoded = try JSONDecoder().decode([SavedFilter].self, from: data)
+        XCTAssertEqual(decoded, [filter])
     }
 
     // MARK: - 日期维度（对齐 TaskListProjection 口径）
