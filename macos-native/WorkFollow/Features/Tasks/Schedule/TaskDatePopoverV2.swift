@@ -1,6 +1,62 @@
 import SwiftUI
 import AppKit
 
+/// Native focus ownership is explicit: opening a time card focuses its input once,
+/// while subsequent draft updates must not steal focus from another control.
+private struct ScheduleClockInput: NSViewRepresentable {
+    @Binding var text: String
+    let requestsFocus: Bool
+    let onSubmit: () -> Void
+
+    func makeCoordinator() -> Coordinator { Coordinator(self) }
+
+    func makeNSView(context: Context) -> NSTextField {
+        let field = NSTextField(string: text)
+        field.isBordered = false
+        field.drawsBackground = false
+        field.placeholderString = "09:00"
+        field.font = .systemFont(ofSize: 14)
+        field.textColor = NSColor(WFColors.accent)
+        field.delegate = context.coordinator
+        field.target = context.coordinator
+        field.action = #selector(Coordinator.submit)
+        return field
+    }
+
+    func updateNSView(_ field: NSTextField, context: Context) {
+        let coordinator = context.coordinator
+        coordinator.input = self
+        if field.stringValue != text { field.stringValue = text }
+        let shouldFocus = requestsFocus && !coordinator.requested
+        coordinator.requested = requestsFocus
+        if shouldFocus {
+            DispatchQueue.main.async { [weak field, weak coordinator] in
+                guard let field, coordinator?.input.requestsFocus == true,
+                      let window = field.window else { return }
+                window.makeKey()
+                window.makeFirstResponder(field)
+                field.selectText(nil)
+            }
+        }
+    }
+
+    final class Coordinator: NSObject, NSTextFieldDelegate {
+        var input: ScheduleClockInput
+        var requested = false
+        init(_ input: ScheduleClockInput) { self.input = input }
+        func controlTextDidChange(_ notification: Notification) {
+            guard let field = notification.object as? NSTextField else { return }
+            input.text = field.stringValue
+        }
+        func control(_ control: NSControl, textView: NSTextView,
+                     doCommandBy commandSelector: Selector) -> Bool {
+            guard commandSelector == #selector(NSResponder.cancelOperation(_:)) else { return false }
+            return PopupEscapeRegistry.shared.route(eventWindow: control.window)
+        }
+        @objc func submit() { input.onSubmit() }
+    }
+}
+
 /// TickTick 对齐的固定主面板 + 锚定子卡片日程编辑器。
 /// - 主面板 = tabs + 快捷日 + 日历 + 属性行 + 清除/确定；
 /// - 属性编辑属于独立子卡片：主面板所有行与Footer保持原位，
@@ -58,9 +114,10 @@ struct TaskDatePopoverV2: View {
     /// 点过「确定」且区间非法时才显示错误（Flutter 的 `error` 同样是提交时才出现；
     /// 区间改回合法后它自动消失，因为文案由草稿实时算）。
     @State private var showRangeError = false
+    /// 农历自选日期的月份步进位置（未来 24 个农历月里的下标）。
+    @State private var lunarPickerIndex = 0
     @State private var reminderDraft = ScheduleReminderDraft(offsets: [])
     @State private var reminderInputError = false
-    @State private var reminderCustomOpen = false
     @State private var customOffsetAmount = ""
     @State private var customOffsetUnit = 1
     @State private var repeatCountText = ""
@@ -160,8 +217,7 @@ struct TaskDatePopoverV2: View {
                 if !presentation.back() { onClose() }
             }
         }
-        // macOS 27：`.popover` 不传 arrowEdge（默认 nil）就不画三角箭头，
-        // 系统自带圆角卡片样式（对齐滴答/参考图），无需任何背景补丁。
+        // 主面板的圆角和窗口生命周期由共享无箭头呈现壳负责。
         .onChange(of: model.startTimeAnchor) { _, _ in syncTimeField() }
         .onChange(of: model.endTimeAnchor) { _, _ in syncTimeField() }
         .onChange(of: model.hasTime) { _, _ in syncTimeField() }
@@ -171,9 +227,6 @@ struct TaskDatePopoverV2: View {
                                               now: workspace.clock(), calendar: workspace.calendar)
                 syncTimeField()
             }
-        }
-        .onExitCommand {
-            if inlineSheet != nil { closeSheet() } else { onClose() }
         }
         .onDisappear { closeSheet() }
     }
@@ -259,7 +312,7 @@ struct TaskDatePopoverV2: View {
 
     /// 时间行的行内编辑（滴答：行即 HH:mm 输入框，列表给半点粒度、输入框给分钟）。
     private var timeRowEditor: AnyView {
-        AnyView(clockField(text: $timeFieldText, submit: submitTimeField))
+        AnyView(clockField(.time, text: $timeFieldText, submit: submitTimeField))
     }
 
     /// 结束时间行的行内编辑：`结束` 前缀 + 同一个 HH:mm 输入框。
@@ -271,19 +324,15 @@ struct TaskDatePopoverV2: View {
                 Text("结束")
                     .font(WFType.body)
                     .foregroundStyle(WFColors.accent)
-                clockField(text: $endTimeFieldText, submit: submitEndTimeField)
+                clockField(.endTime, text: $endTimeFieldText, submit: submitEndTimeField)
             }
         )
     }
 
     /// 两行共用的 HH:mm 输入框（固定宽度，行内不跳动）。
-    private func clockField(text: Binding<String>, submit: @escaping () -> Void) -> some View {
-        TextField(Self.defaultClockText, text: text)
-            .textFieldStyle(.plain)
-            .font(WFType.body)
-            .foregroundStyle(WFColors.accent)
+    private func clockField(_ property: ScheduleProperty, text: Binding<String>, submit: @escaping () -> Void) -> some View {
+        ScheduleClockInput(text: text, requestsFocus: inlineSheet == property, onSubmit: submit)
             .frame(width: 52, alignment: .leading)
-            .onSubmit(submit)
     }
 
     /// 时间值在别处变化（列表点选、日历改天、清除）后同步两行的行内文本。
@@ -509,21 +558,25 @@ struct TaskDatePopoverV2: View {
         VStack(spacing: 0) {
             if let group = repeatGroup {
                 optionsRow("‹ 返回") { repeatGroup = nil }
-                ForEach(group == .work
-                    ? [TaskRepeat.weekdays, TaskRepeat.workdays]
-                    : [TaskRepeat.weekends, TaskRepeat.holidays], id: \.self) { value in
-                    optionsRow(repeatOptionLabel(value), checked: model.frequency == value) {
-                        applyFrequency(value)
+                if group == .lunar {
+                    lunarRepeatPage
+                } else {
+                    ForEach(group == .work
+                        ? [TaskRepeat.weekdays, TaskRepeat.workdays]
+                        : [TaskRepeat.weekends, TaskRepeat.holidays], id: \.self) { value in
+                        optionsRow(repeatOptionLabel(value), checked: model.frequency == value) {
+                            applyFrequency(value)
+                        }
                     }
+                    Text(ChineseWorkCalendar.hasYear(calendar.component(.year, from: model.recurrenceAnchorDate))
+                         ? "法定选项包含周末与调休安排。"
+                         : "该年份尚无调休数据，法定选项暂按周一至周五／周末计算。")
+                        .font(WFType.supporting)
+                        .foregroundStyle(WFColors.tertiaryText)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
                 }
-                Text(ChineseWorkCalendar.hasYear(calendar.component(.year, from: model.recurrenceAnchorDate))
-                     ? "法定选项包含周末与调休安排。"
-                     : "该年份尚无调休数据，法定选项暂按周一至周五／周末计算。")
-                    .font(WFType.supporting)
-                    .foregroundStyle(WFColors.tertiaryText)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
             } else {
                 ForEach([TaskRepeat.daily, TaskRepeat.weekly, TaskRepeat.monthly, TaskRepeat.yearly],
                         id: \.self) { value in
@@ -534,6 +587,7 @@ struct TaskDatePopoverV2: View {
                 Divider()
                 optionsRow("工作日", arrow: true) { repeatGroup = .work }
                 optionsRow("节假日", arrow: true) { repeatGroup = .holiday }
+                optionsRow("农历重复", arrow: true) { repeatGroup = .lunar }
                 Divider()
                 optionsRow("自定义", checked: presentation.shows(.repeatCustom)) {
                     if !Self.frequencyUsesInterval(model.frequency) {
@@ -548,6 +602,139 @@ struct TaskDatePopoverV2: View {
             }
             Color.clear.frame(height: 8)
         }
+    }
+
+    /// 农历重复二级页的说明文案：闰月锚定日说明跳过策略，平月锚定日
+    /// 回显换算出的农历日期。
+    private var lunarAnchorNote: String {
+        if model.lunarIsLeapMonth {
+            let monthName = ChineseWorkCalendar.lunarMonthName(model.lunarMonth, isLeapMonth: true)
+            return "锚定日为闰\(monthName)，无闰月的年份跳过，不落到平月。"
+        }
+        let lunarName = ChineseWorkCalendar.lunarDateName(for: model.recurrenceAnchorDate, calendar: calendar)
+            ?? "未知"
+        return "农历日期取自当前截止日（\(lunarName)），改期后跟随新日期。"
+    }
+
+    /// 农历重复二级页：锚定日快捷行（选中即生效）+ 未来 24 个农历月的
+    /// 自选器。自选 = 把截止日跳到该农历日的下一次 occurrence 再按锚定日
+    /// 应用农历每年——真值源仍只有草稿日期一处（syncRecurrenceAnchor 从
+    /// 新锚定日推导农历字段）。要"农历每月的第 X 日"：先自选再点农历每月行。
+    private var lunarRepeatPage: some View {
+        VStack(spacing: 0) {
+            optionsRow(repeatOptionLabel(.lunarYearly), checked: model.frequency == .lunarYearly) {
+                applyFrequency(.lunarYearly)
+            }
+            optionsRow(repeatOptionLabel(.lunarMonthly), checked: model.frequency == .lunarMonthly) {
+                applyFrequency(.lunarMonthly)
+            }
+            Divider()
+            lunarPickerHeader
+            lunarDayGrid
+            Text(lunarAnchorNote)
+                .font(WFType.supporting)
+                .foregroundStyle(WFColors.tertiaryText)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+        }
+    }
+
+    private var lunarPickerMonths: [ChineseWorkCalendar.LunarMonthInfo] {
+        ChineseWorkCalendar.upcomingLunarMonths(after: workspace.clock(), calendar: calendar, count: 24)
+    }
+
+    private var lunarPickerHeader: some View {
+        let months = lunarPickerMonths
+        let index = min(lunarPickerIndex, max(0, months.count - 1))
+        let title = months.isEmpty ? "" : ChineseWorkCalendar.lunarMonthName(
+            months[index].month, isLeapMonth: months[index].isLeapMonth)
+        return HStack(spacing: 10) {
+            Button {
+                if lunarPickerIndex > 0 { lunarPickerIndex -= 1 }
+            } label: {
+                Image(systemName: "chevron.left")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(WFColors.secondaryText)
+                    .frame(width: 22, height: 22)
+                    .background(WFColors.hover, in: RoundedRectangle(cornerRadius: 6))
+            }
+            .buttonStyle(.plain)
+            .disabled(lunarPickerIndex == 0)
+            Spacer()
+            Text(title.isEmpty ? "农历" : "农历\(title)")
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(WFColors.text)
+            Spacer()
+            Button {
+                if lunarPickerIndex < months.count - 1 { lunarPickerIndex += 1 }
+            } label: {
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(WFColors.secondaryText)
+                    .frame(width: 22, height: 22)
+                    .background(WFColors.hover, in: RoundedRectangle(cornerRadius: 6))
+            }
+            .buttonStyle(.plain)
+            .disabled(index >= months.count - 1)
+        }
+        .padding(.horizontal, 12)
+        .frame(height: ScheduleMetrics.optionRowHeight)
+    }
+
+    private var lunarDayGrid: some View {
+        let months = lunarPickerMonths
+        let info = months.isEmpty ? nil : months[min(lunarPickerIndex, months.count - 1)]
+        let columns = Array(repeating: GridItem(.flexible(), spacing: 0), count: 7)
+        return LazyVGrid(columns: columns, spacing: 2) {
+            ForEach(1...(info?.dayCount ?? 30), id: \.self) { day in
+                lunarDayCell(day, info: info)
+            }
+        }
+        .padding(.horizontal, 10)
+        .padding(.bottom, 4)
+    }
+
+    private func lunarDayCell(_ day: Int, info: ChineseWorkCalendar.LunarMonthInfo?) -> some View {
+        let isSelected = model.frequency == .lunarYearly
+            && model.lunarDay == day
+            && info.map { model.lunarMonth == $0.month && model.lunarIsLeapMonth == $0.isLeapMonth } == true
+        return Button {
+            applyLunarPick(day: day, info: info)
+        } label: {
+            Text(ChineseWorkCalendar.lunarDayName(day))
+                .font(.system(size: 12))
+                .foregroundStyle(isSelected ? Color.white : WFColors.text)
+                .frame(maxWidth: .infinity)
+                .frame(height: 26)
+                .background(isSelected ? WFColors.accent : WFColors.hover,
+                            in: RoundedRectangle(cornerRadius: 6))
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    /// 自选落地：把截止日跳到该农历日的下一次 occurrence（就是今天就落在
+    /// 今天），随后走既有的 applyFrequency——syncRecurrenceAnchor 从新锚定
+    /// 日推导出所选农历字段，规则与日期不会各写一套。
+    private func applyLunarPick(day: Int, info: ChineseWorkCalendar.LunarMonthInfo?) {
+        guard let info else { return }
+        let now = workspace.clock()
+        let lunar = ChineseWorkCalendar.lunarCalendar(matching: calendar)
+        let today = lunar.dateComponents([.month, .day], from: now)
+        let isToday = today.month == info.month && today.day == day
+            && (today.isLeapMonth == true) == info.isLeapMonth
+        let target: Date
+        if isToday {
+            target = now
+        } else {
+            let rule = RecurrenceRule(lunarMonth: info.month, lunarDay: day,
+                                      lunarIsLeapMonth: info.isLeapMonth)
+            target = rule.nextOccurrence(after: calendar.startOfDay(for: now),
+                                         frequency: .lunarYearly, calendar: calendar) ?? now
+        }
+        model.select(target)
+        applyFrequency(.lunarYearly)
     }
 
     /// 自定义区间：`每 [−] N [天/周/月/年] [+]`，直接写草稿的 interval。
