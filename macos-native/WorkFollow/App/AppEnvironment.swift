@@ -67,6 +67,7 @@ final class AppEnvironment: ObservableObject {
             playSound: { Self.playFeedbackSound($0) })
         self.feedback = feedback
         taskWorkspace = TaskWorkspaceModel(clock: clock, calendar: calendar, initialTasks: snapshot?.tasks, initialLists: snapshot?.taskLists ?? [], initialListMeta: snapshot?.taskListMeta)
+        StickyNoteWindowController.shared.attach(workspace: taskWorkspace)
         notesWorkspace = NotesWorkspaceModel(initialNotes: snapshot?.notes ?? [],
                                              folders: snapshot?.noteFolders ?? [],
                                              folderMetadata: snapshot?.noteFolderMetadata ?? [],

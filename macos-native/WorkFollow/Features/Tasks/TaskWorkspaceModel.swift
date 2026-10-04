@@ -204,6 +204,12 @@ final class TaskWorkspaceModel: ObservableObject {
 
     /// 批量复制文本（补齐轮）：所选任务标题逐行进剪贴板（列表手动排序的
     /// 存储序）。只读操作,不动集合不产生撤销步。
+
+    /// 批量打开便签（滴答对齐）：每个所选任务各开一个浮窗,重复打开置前。
+    func openBulkStickyNotes() {
+        let ids = bulkSelection
+        for id in ids { StickyNoteWindowController.shared.open(taskID: id) }
+    }
     func copyBulkTitlesToPasteboard() {
         let titles = store.tasks
             .filter { bulkSelection.contains($0.id) }
@@ -596,6 +602,7 @@ final class TaskWorkspaceModel: ObservableObject {
         let result = actions.delete(id)
         guard result.taskID != nil else { return result }
         if selectedTaskID == id { selectedTaskID = nil }
+        StickyNoteWindowController.shared.close(taskID: id)
         didMutate(result)
         report(FeedbackEvent(kind: .undoable, message: "已删除\(quotedTitle(id))",
                              actionTitle: "撤销", action: undoStep()))

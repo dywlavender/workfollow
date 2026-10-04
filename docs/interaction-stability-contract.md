@@ -409,3 +409,46 @@ Inspector controls from the observed accessibility tree. A subsequent single
 row click restored the expected Inspector. Context Escape propagation therefore
 needs a targeted repeat alongside the drag gate; context opening alone is not
 claimed as complete keyboard-dismissal acceptance.
+
+### IS-003 closure plan — 2026-10-04
+
+1. Reproduce context Escape on a current isolated build and observe event-window,
+   key-window and routing result. Add a regression covering the failed delivery
+   path, then ensure one Escape dismisses only the deepest menu.
+2. Observe drag mouse events, drag initiation, drop targeting, decoded payload,
+   reorder action and list projection. Compare the prior behavior where needed;
+   change only the first broken boundary, preserving the reorder domain.
+3. Verify native-window tests and actual UI sequences on the final build: context
+   Escape twenty times, upward/downward reorder and undo, post-drag click,
+   selection, completion/restore and Schedule regressions.
+4. Record passed and unresolved gates separately. No IS-004 changes, new features,
+   visual changes or automatic commit/push are included in this implementation.
+
+### IS-003 closure evidence — 2026-10-04
+
+- Added a native-window Context regression: twenty open/Escape cycles never
+  reach the presenter responder; after the final menu closes, a subsequent
+  Escape reaches that responder normally. Context child/parent dismissal now
+  uses dispatched key events rather than direct registry calls.
+- Added twenty upward/downward reorder operations with undo. Store-backed list
+  projection updates correctly and the selected task remains unchanged. This
+  verifies the action/projection boundary, not drag initiation or drop delivery.
+- The current uninstrumented source snapshot passed 100 selected interaction
+  regressions with zero failures, including Schedule, Quick Add, Focus, task
+  rows, popup ownership, tags and completed presentation. Production sources
+  were compared with the tested snapshot and had no differences.
+  Log: `/private/tmp/workfollow-is003-closure-HQfku9/regression-final.log`.
+- A separate diagnostic build, with temporary event logging only, passed twenty
+  More/Escape cycles through accessibility activation and keyboard input. Each
+  Escape was consumed by the popup registry; the same Inspector stayed visible.
+  Earlier attempts with concurrent test/acceptance windows produced inconsistent
+  results and are not counted as passing final-build acceptance.
+- Coordinate left/right clicks and drag did not enter the diagnostic app's
+  local mouse-event monitor, even after re-binding the bundle and raising its
+  window. Accessibility activation and key events did arrive. Therefore the
+  current unchanged order cannot identify a production drag/drop defect.
+  Log: `/private/tmp/workfollow-is003-closure-HQfku9/events.log`.
+- Open gate: restore native pointer delivery and repeat Context opening/Escape,
+  drag up/down, undo and post-drag selection on the final uninstrumented app.
+  The physical closure gate has **not** passed; no speculative production
+  fallback or reorder rewrite was added. No commit/push was performed.

@@ -78,6 +78,8 @@ final class NativeLifecycleDelegate: NSObject, NSApplicationDelegate {
         guard let environment else { return .terminateNow }
         // End editing first so title fields and marked text reach the model.
         for window in sender.windows { window.makeFirstResponder(nil) }
+        // 便签浮窗正文也走防抖,先冲刷再随 flush 落盘。
+        StickyNoteWindowController.shared.closeAll()
         environment.flush { error in
             if let error {
                 let alert = NSAlert()

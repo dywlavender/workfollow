@@ -304,6 +304,9 @@ struct TaskBatchPanelView: View {
             actionTile("复制文本", symbol: "doc.plaintext", tint: WFColors.tileBlue) {
                 workspace.copyBulkTitlesToPasteboard()
             }
+            actionTile("打开便签", symbol: "note", tint: WFColors.tileYellow) {
+                workspace.openBulkStickyNotes()
+            }
             actionTile("删除", symbol: "trash", tint: WFColors.flagHigh) {
                 workspace.applyBulk(.delete)
             }

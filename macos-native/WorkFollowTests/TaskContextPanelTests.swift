@@ -7,6 +7,37 @@ import XCTest
 final class TaskContextPanelTests: XCTestCase {
     private typealias Adapter = AnchoredPropertyPanel<AnyView>
 
+    private final class EscapeProbeView: NSView {
+        var escapes = 0
+        override var acceptsFirstResponder: Bool { true }
+        override func keyDown(with event: NSEvent) {
+            if event.keyCode == 53 { escapes += 1 }
+            else { super.keyDown(with: event) }
+        }
+    }
+
+    func testRepeatedEscapeClosesContextWithoutReachingPresenterResponder() throws {
+        let probe = EscapeProbeView(frame: CGRect(x: 0, y: 0, width: 700, height: 600))
+        let owner = InspectorPanelTestSupport.ownerWindow(for: probe, width: 700, height: 600)
+        defer { owner.close() }
+        XCTAssertTrue(owner.makeFirstResponder(probe))
+
+        for _ in 0..<20 {
+            let session = TaskContextMenuPresenter.Session(in: probe, at: CGPoint(x: 300, y: 400))
+            session.coordinator.root = AnyView(Color.clear.frame(height: 250))
+            session.coordinator.update()
+            settle()
+            XCTAssertNotNil(session.coordinator.panel)
+            try InspectorPanelTestSupport.sendEscape(to: owner)
+            XCTAssertNil(session.coordinator.panel)
+            XCTAssertEqual(probe.escapes, 0, "关闭菜单的 Esc 不能继续落到任务列表")
+            session.close()
+        }
+
+        try InspectorPanelTestSupport.sendEscape(to: owner)
+        XCTAssertEqual(probe.escapes, 1, "没有浮层时底层仍应收到 Esc")
+    }
+
     private func owner() -> NSWindow {
         let screen = NSScreen.main!.visibleFrame
         let window = NSWindow(contentRect: CGRect(x: screen.minX + 40, y: screen.minY + 40,
@@ -82,10 +113,10 @@ final class TaskContextPanelTests: XCTestCase {
         XCTAssertEqual(panel.frame.width, 196, accuracy: 0.5)
         XCTAssertTrue(panel.frame.minX >= main.frame.maxX || panel.frame.maxX <= main.frame.minX)
         XCTAssertEqual(main.frame, frame)
-        XCTAssertTrue(PopupEscapeRegistry.shared.route(eventWindow: owner))
+        try InspectorPanelTestSupport.sendEscape(to: owner)
         XCTAssertNil(child.panel)
         XCTAssertNotNil(session.coordinator.panel)
-        XCTAssertTrue(PopupEscapeRegistry.shared.route(eventWindow: owner))
+        try InspectorPanelTestSupport.sendEscape(to: owner)
         XCTAssertNil(session.coordinator.panel)
     }
 

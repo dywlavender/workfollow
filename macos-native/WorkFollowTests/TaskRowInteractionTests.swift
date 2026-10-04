@@ -5,6 +5,35 @@ import XCTest
 
 @MainActor
 final class TaskRowInteractionTests: XCTestCase {
+    func testReorderProjectionAndUndoPreserveSelectedTaskAcrossBothDirections() throws {
+        let workspace = TaskWorkspaceModel(seedDemoData: false)
+        let ids = try (0..<3).map { index in
+            try XCTUnwrap(workspace.createTask(title: "排序验收 \(index)", in: .inbox).taskID)
+        }
+        let original = workspace.groups(for: .inbox).flatMap(\.tasks).map(\.id)
+        XCTAssertEqual(Set(original), Set(ids))
+        workspace.select(ids[1])
+        let first = try XCTUnwrap(original.first)
+        let last = try XCTUnwrap(original.last)
+
+        for _ in 0..<10 {
+            workspace.reorder(last, before: first)
+            XCTAssertEqual(workspace.groups(for: .inbox).flatMap(\.tasks).map(\.id),
+                           [last] + original.filter { $0 != last })
+            XCTAssertEqual(workspace.selectedTask?.id, ids[1])
+            workspace.undo()
+            XCTAssertEqual(workspace.groups(for: .inbox).flatMap(\.tasks).map(\.id), original)
+            workspace.reorder(first, before: last)
+            var downward = original.filter { $0 != first }
+            downward.insert(first, at: try XCTUnwrap(downward.firstIndex(of: last)))
+            XCTAssertEqual(workspace.groups(for: .inbox).flatMap(\.tasks).map(\.id), downward)
+            XCTAssertEqual(workspace.selectedTask?.id, ids[1])
+            workspace.undo()
+            XCTAssertEqual(workspace.groups(for: .inbox).flatMap(\.tasks).map(\.id), original)
+            XCTAssertEqual(workspace.selectedTask?.id, ids[1])
+        }
+    }
+
     private final class Probe {
         var frames: [TaskTreeRenderAnchor: CGRect] = [:]
         var selections = 0
