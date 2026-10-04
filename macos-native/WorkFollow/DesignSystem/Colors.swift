@@ -50,6 +50,18 @@ enum WFColors {
     static let danger = themed(rgb(0xFF4D4F), rgb(0xFF6868))
     /// 中优先级。
     static let warning = themed(rgb(0xA15C08), rgb(0xF2B84B))
+    /// 优先级旗（滴答实测色,2026-10 截图取色):高 #FF393C、中 #FF8D29、
+    /// 低=accent(#5B5CEB,与 accent 浅色值一致故不另立)。旗子是图形不是
+    /// 文字,用饱和图形色;danger/warning 是文字语义色,饱和度不同,不混用。
+    static let flagHigh = themed(rgb(0xFF393C), rgb(0xFF5B5E))
+    static let flagMedium = themed(rgb(0xFF8D29), rgb(0xFFA14D))
+    /// 批量瓦片图标色（滴答实测,2026-10 截图取色):完成/复制文本蓝 #4672FB、
+    /// 置顶黄 #FFCC00、关联主任务/转换笔记绿 #04CF9C、创建副本青 #08C4EF。
+    /// 滴答每个动作一个色,扫一眼可分辨;删除用红。
+    static let tileBlue = themed(rgb(0x4672FB), rgb(0x6B8CFF))
+    static let tileYellow = themed(rgb(0xF5B800), rgb(0xFFCC2E))
+    static let tileGreen = themed(rgb(0x04CF9C), rgb(0x2BDDB0))
+    static let tileCyan = themed(rgb(0x08C4EF), rgb(0x35D2FF))
     /// 列表行之间的细分割线。滴答实测 `#F4F4F4`（浅色）；深色取菜单分组线
     /// `menuDivider` 的同族值（未实测，按同层级推断）。
     ///

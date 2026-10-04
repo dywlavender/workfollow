@@ -2,14 +2,16 @@ import Foundation
 
 enum TaskListScope { case today, inbox, allTasks, nextSevenDays, completed }
 enum TaskGroupKind: Equatable { case pinned, overdue, today, day, upcoming, later, undated, plain, completed }
-enum TaskListSortMode: String, CaseIterable {
-    case manual, due, priority
+enum TaskListSortMode: String, CaseIterable, Codable {
+    case manual, due, priority, title, createdAt
 
     var title: String {
         switch self {
         case .manual: "手动排序"
         case .due: "按日期排序"
         case .priority: "按优先级排序"
+        case .title: "按标题排序"
+        case .createdAt: "按创建时间排序"
         }
     }
 }
@@ -41,7 +43,10 @@ struct TaskListGroup {
         case .upcoming: "upcoming"
         case .later: "later"
         case .undated: "undated"
-        case .plain: "plain"
+        case .plain:
+            // 带标签的 plain 组（按优先级/清单/标签分组产生）各有身份，折叠状态
+            // 互不串；无标签的 plain 组（平铺视图）沿用历史单一身份。
+            if let label { "plain:\(label)" } else { "plain" }
         case .day:
             if let day { Self.dayGroupID(day) }
             else { "day-undated" }
@@ -67,23 +72,48 @@ struct TaskListGroup {
         self.label = label
     }
 
+    /// 组内排序（阶段1扩到五种）。所有模式都只是视图投影，**从不改 childOrder**：
+    /// 切走手动排序再切回来，拖拽排出的顺序原样恢复。completed 组永远按完成
+    /// 时间倒序，任何排序模式都不得重排。
     func orderedTasks(using mode: TaskListSortMode, calendar: Calendar) -> [Task] {
         guard kind != .completed, mode != .manual else { return tasks }
         return tasks.enumerated().sorted { lhs, rhs in
-            if mode == .priority, lhs.element.priority != rhs.element.priority {
-                return lhs.element.priority.rawValue > rhs.element.priority.rawValue
-            }
-            switch (lhs.element.schedule.dueAt, rhs.element.schedule.dueAt) {
-            case let (left?, right?) where left != right:
-                return left < right
-            case (_?, nil):
-                return true
-            case (nil, _?):
-                return false
-            default:
+            switch mode {
+            case .manual:
+                return lhs.offset < rhs.offset
+            case .priority:
+                if lhs.element.priority != rhs.element.priority {
+                    return lhs.element.priority.rawValue > rhs.element.priority.rawValue
+                }
+                return Self.orderedByDue(lhs, rhs)
+            case .due:
+                return Self.orderedByDue(lhs, rhs)
+            case .title:
+                let order = lhs.element.title.localizedCaseInsensitiveCompare(rhs.element.title)
+                if order != .orderedSame { return order == .orderedAscending }
+                return lhs.offset < rhs.offset
+            case .createdAt:
+                if lhs.element.createdAt != rhs.element.createdAt {
+                    return lhs.element.createdAt < rhs.element.createdAt
+                }
                 return lhs.offset < rhs.offset
             }
         }.map(\.element)
+    }
+
+    /// 日期升序、无日期垫底，再按原有顺序稳定收尾（历史 due 模式的比较器）。
+    private static func orderedByDue(_ lhs: (offset: Int, element: Task),
+                                     _ rhs: (offset: Int, element: Task)) -> Bool {
+        switch (lhs.element.schedule.dueAt, rhs.element.schedule.dueAt) {
+        case let (left?, right?) where left != right:
+            return left < right
+        case (_?, nil):
+            return true
+        case (nil, _?):
+            return false
+        default:
+            return lhs.offset < rhs.offset
+        }
     }
 }
 
@@ -172,7 +202,8 @@ enum TaskListProjection {
     }
 
     static func groups(in scope: TaskListScope, store: WorkspaceStore,
-                       now: Date, calendar: Calendar, query: TaskListQuery = TaskListQuery()) -> [TaskListGroup] {
+                       now: Date, calendar: Calendar, query: TaskListQuery = TaskListQuery(),
+                       grouping: TaskListGrouping = .byDate) -> [TaskListGroup] {
         let rows = rows(in: scope, store: store, now: now, calendar: calendar, query: query)
         let closed = rows.filter(\.isClosed).sorted {
             ($0.closedAt ?? .distantPast) > ($1.closedAt ?? .distantPast)
@@ -200,11 +231,26 @@ enum TaskListProjection {
         if !pinned.isEmpty {
             groups.append(TaskListGroup(kind: .pinned, day: nil, tasks: pinned))
         }
+        // 分组方式只作用于"所有任务"（含清单/标签过滤视图）；今天/最近 7 天/已完成
+        // 的日期分组是视图本体，传进来的 grouping 一律忽略。
         if scope == .allTasks {
-            if query.list == nil && query.tag == nil {
-                groups += allTaskDateGroups(ordinary, now: now, calendar: calendar)
-            } else if !ordinary.isEmpty {
-                groups.append(TaskListGroup(kind: .plain, day: nil, tasks: ordinary))
+            switch grouping {
+            case .byDate:
+                if query.list == nil && query.tag == nil {
+                    groups += allTaskDateGroups(ordinary, now: now, calendar: calendar)
+                } else if !ordinary.isEmpty {
+                    groups.append(TaskListGroup(kind: .plain, day: nil, tasks: ordinary))
+                }
+            case .none:
+                if !ordinary.isEmpty {
+                    groups.append(TaskListGroup(kind: .plain, day: nil, tasks: ordinary))
+                }
+            case .byPriority:
+                groups += priorityGroups(ordinary)
+            case .byList:
+                groups += listGroups(ordinary, knownLists: store.lists)
+            case .byTag:
+                groups += tagGroups(ordinary)
             }
         } else if scope == .today {
             let today = calendar.startOfDay(for: now)
@@ -277,6 +323,52 @@ enum TaskListProjection {
             groups.append(TaskListGroup(kind: .later, day: nil, tasks: sortedByDueDay(later)))
         }
         if !undated.isEmpty { groups.append(TaskListGroup(kind: .undated, day: nil, tasks: undated)) }
+        return groups
+    }
+
+    // MARK: - 分组策略（阶段1）：纯函数，空桶不出现，组身份是标签文本
+
+    /// 优先级分组：高/中/低/无固定顺序。
+    private static func priorityGroups(_ tasks: [Task]) -> [TaskListGroup] {
+        let buckets: [(TaskPriority, String)] = [
+            (.high, "高优先级"), (.medium, "中优先级"), (.low, "低优先级"), (.none, "无优先级")
+        ]
+        return buckets.compactMap { priority, label in
+            let bucket = tasks.filter { $0.priority == priority }
+            guard !bucket.isEmpty else { return nil }
+            return TaskListGroup(kind: .plain, day: nil, tasks: bucket, label: label)
+        }
+    }
+
+    /// 清单分组：收集箱在最前，随后按 store.lists 的保存顺序，任务里多出来的
+    /// 清单按名字排在最后。
+    private static func listGroups(_ tasks: [Task], knownLists: [String]) -> [TaskListGroup] {
+        var order = [TaskList.inbox.name]
+        order.append(contentsOf: knownLists.filter { $0 != TaskList.inbox.name })
+        order.append(contentsOf: Set(tasks.map(\.list.name)).subtracting(order).sorted())
+        return order.compactMap { name in
+            let bucket = tasks.filter { $0.list.name == name }
+            guard !bucket.isEmpty else { return nil }
+            return TaskListGroup(kind: .plain, day: nil, tasks: bucket, label: name)
+        }
+    }
+
+    /// 标签分组：一个任务只落进**第一个**标签组——列表以 task.id 为 SwiftUI 身份，
+    /// 同一任务跨组出现会撞 ForEach 的 ID（滴答跨组重复显示，这里明确不做）。
+    /// 无标签任务收进最后的"无标签"组。
+    private static func tagGroups(_ tasks: [Task]) -> [TaskListGroup] {
+        var buckets: [String: [Task]] = [:]
+        var untagged: [Task] = []
+        for task in tasks {
+            if let first = task.tags.first { buckets[first, default: []].append(task) }
+            else { untagged.append(task) }
+        }
+        var groups = buckets.keys.sorted().map { name in
+            TaskListGroup(kind: .plain, day: nil, tasks: buckets[name]!, label: name)
+        }
+        if !untagged.isEmpty {
+            groups.append(TaskListGroup(kind: .plain, day: nil, tasks: untagged, label: "无标签"))
+        }
         return groups
     }
 }

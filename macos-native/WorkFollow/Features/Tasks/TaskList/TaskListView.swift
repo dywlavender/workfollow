@@ -39,7 +39,6 @@ struct TaskListView: View {
     /// 按它做程序化聚焦与交还。读写都可靠，那些守卫才恢复意义。
     @State private var quickAddFocused = false
     @State private var groupExpansion = TaskGroupExpansionState()
-    @State private var sortMode = TaskListSortMode.manual
     @State private var seenCompletedGroupIDs: Set<String> = []
     /// 「倒数纪念日」小节的折叠状态。它与任务组的折叠是两套：任务组按 `id` 记，
     /// 这里只有一个固定小节，用布尔就够。
@@ -52,7 +51,27 @@ struct TaskListView: View {
         guard scope == .allTasks else { return TaskListQuery() }
         return TaskListQuery(list: workspace.activeList, tag: workspace.activeTag)
     }
-    private var groups: [TaskListGroup] { scope.map { workspace.groups(for: $0, query: query) } ?? [] }
+    /// 视图偏好的唯一真值源是 TaskViewPreferenceStore（持久化）；视图只读不存，
+    /// 避免历史上 @FocusState/@State 双真值导致守卫静默失效的那类问题。
+    private var preferenceKey: String {
+        TaskViewScopeKey.key(destination: navigation.destination,
+                             activeList: workspace.activeList, activeTag: workspace.activeTag)
+    }
+    private var sortMode: TaskListSortMode { environment.viewPreferences.sortMode(for: preferenceKey) }
+    /// 分组只对"所有任务"（含清单/标签过滤）生效；时间型视图的日期分组是视图本体。
+    private var grouping: TaskListGrouping {
+        guard scope == .allTasks else { return .byDate }
+        let allTasksRoot = workspace.activeList == nil && workspace.activeTag == nil
+        return environment.viewPreferences.grouping(for: preferenceKey, allTasksRoot: allTasksRoot)
+    }
+    private var availableGroupings: [TaskListGrouping] {
+        TaskListGrouping.availableOptions(destination: navigation.destination,
+                                          activeList: workspace.activeList,
+                                          activeTag: workspace.activeTag)
+    }
+    private var groups: [TaskListGroup] {
+        scope.map { workspace.groups(for: $0, query: query, grouping: grouping) } ?? []
+    }
     private var canAdd: Bool { scope == .today || scope == .inbox || scope == .allTasks || scope == .nextSevenDays }
     /// TickTick shows each row's owning list unless the view is already that list.
     private var showsListBadge: Bool { workspace.activeList == nil && scope != .inbox }
@@ -149,7 +168,7 @@ struct TaskListView: View {
                     .lineLimit(1)
             }
             Spacer(minLength: 0)
-            sortMenu
+            viewMenu
             moreMenu
         }
         .padding(.horizontal, WFSpace.xl)
@@ -161,19 +180,26 @@ struct TaskListView: View {
         workspace.activeList ?? workspace.activeTag.map { "#" + $0 } ?? navigation.destination.title
     }
 
-    private var sortMenu: some View {
+    /// 分组 + 排序合一菜单（对齐滴答证实的三段式）。用 Picker(.inline) 桥接成
+    /// 原生单选菜单项——选中勾标由 NSMenu 渲染。不能用 Label(systemImage:)
+    /// 手画勾标：实测在该菜单样式下 image 会被桥接丢掉，勾选态就不可见了。
+    private var viewMenu: some View {
         Menu {
-            ForEach(TaskListSortMode.allCases, id: \.self) { mode in
-                Button {
-                    sortMode = mode
-                } label: {
-                    if sortMode == mode {
-                        Label(mode.title, systemImage: "checkmark")
-                    } else {
-                        Text(mode.title)
+            if !availableGroupings.isEmpty {
+                Picker("分组", selection: groupingBinding) {
+                    ForEach(availableGroupings) { option in
+                        Text(option.title).tag(option)
                     }
                 }
+                .pickerStyle(.inline)
+                Divider()
             }
+            Picker("排序", selection: sortModeBinding) {
+                ForEach(TaskListSortMode.allCases, id: \.self) { mode in
+                    Text(mode.title).tag(mode)
+                }
+            }
+            .pickerStyle(.inline)
         } label: {
             Image(systemName: "arrow.up.arrow.down")
                 .frame(width: WFMetrics.controlHeight, height: WFMetrics.controlHeight)
@@ -182,7 +208,17 @@ struct TaskListView: View {
         .menuStyle(.borderlessButton)
         .menuIndicator(.hidden)
         .fixedSize()
-        .help("排序：\(sortMode.title)")
+        .help("分组与排序")
+    }
+
+    private var sortModeBinding: Binding<TaskListSortMode> {
+        Binding(get: { environment.viewPreferences.sortMode(for: preferenceKey) },
+                set: { environment.viewPreferences.setSortMode($0, for: preferenceKey) })
+    }
+
+    private var groupingBinding: Binding<TaskListGrouping> {
+        Binding(get: { grouping },
+                set: { environment.viewPreferences.setGrouping($0, for: preferenceKey) })
     }
 
     /// 模板、撤销等低频操作收进"更多"，保持顶栏只剩排序/更多两个小图标。
@@ -537,7 +573,9 @@ struct TaskListView: View {
                 parts.append(start)
             }
         }
-        if timing.reminderAt != nil { parts.append("提醒") }
+        // 提醒可能来自旧式单点（`reminderAt`）或面板的多级偏移（`reminderOffsets`），
+        // 两者都算"已设提醒"，摘要都要提示。
+        if timing.reminderAt != nil || !timing.reminderOffsets.isEmpty { parts.append("提醒") }
         switch timing.repeatFrequency {
         case .never: break
         case .daily: parts.append("每天")
@@ -685,6 +723,11 @@ struct TaskListView: View {
         workspace.selectFromKeyboard(nodes[index].task.id)
     }
 
+    /// 当前视图的可见行顺序（含子任务）——Shift 范围选择与键盘移动共用这一份顺序。
+    private func visibleRowOrder() -> [UUID] {
+        groups.flatMap { displayedNodes(for: $0, scope: scope ?? .today) }.map(\.task.id)
+    }
+
     private func groupTitle(_ group: TaskListGroup) -> String {
         switch group.kind {
         case .pinned: return "置顶"
@@ -698,7 +741,8 @@ struct TaskListView: View {
         case .day:
             guard let day = group.day else { return "" }
             return day.formatted(.dateTime.month(.abbreviated).day().weekday(.abbreviated).locale(.appDate))
-        case .plain: return ""
+        case .plain:
+            return group.label ?? ""
         case .completed:
             guard let day = group.day else { return group.label ?? "已完成" }
             return day.formatted(.dateTime.month(.abbreviated).day().locale(.appDate))
@@ -733,17 +777,22 @@ struct TaskListView: View {
                         onToggle: { countdownSectionCollapsed.toggle() },
                         onSelect: { _ in navigation.destination = .countdown })
                 } else if groups.isEmpty {
-                    Text(TaskListViewDefaults.emptyStateMessage(destination: navigation.destination))
-                        .font(WFType.body).foregroundStyle(WFColors.secondaryText)
-                        .frame(maxWidth: .infinity).padding(.vertical, WFSpace.page)
+                    // 列表空态（阶段3）：统一插画 + 既有分视图文案（文案规则不改）。
+                    TaskEmptyStateView(style: .list,
+                                       message: TaskListViewDefaults.emptyStateMessage(
+                                           destination: navigation.destination))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, WFSpace.page)
                 }
                 ForEach(groups, id: \.id) { group in
-                    if group.kind != .plain {
+                    // 无标签的 plain 组是平铺视图本体（历史行为），不渲染组头；
+                    // 带标签的 plain 组（按优先级/清单/标签分组产生）渲染组头。
+                    if group.kind != .plain || group.label != nil {
                         Color.clear.frame(height: TaskListMetrics.groupTopGap)
                             .accessibilityHidden(true)
                         groupHeader(group)
                     }
-                    if group.kind == .plain || !groupExpansion.isCollapsed(group) {
+                    if (group.kind == .plain && group.label == nil) || !groupExpansion.isCollapsed(group) {
                         ForEach(displayedNodes(for: group, scope: scope ?? .today),
                                 id: \.task.id) { node in
                             taskRow(group: group, node: node)
@@ -768,19 +817,35 @@ struct TaskListView: View {
             return .handled
         }
         .onKeyPress(.return) {
-            guard !quickAddFocused, scope != nil else { return .ignored }
+            // 批量态下回车/空格一律无效（状态机 A 不变量）——回车只服务单选。
+            guard !quickAddFocused, scope != nil, workspace.bulkSelection.isEmpty else { return .ignored }
             if workspace.selectedTaskID == nil { selectFiltered(1) }
             return .handled
         }
         .onKeyPress(.space) {
-            guard !quickAddFocused, let task = workspace.selectedTask else { return .ignored }
+            guard !quickAddFocused, workspace.bulkSelection.isEmpty,
+                  let task = workspace.selectedTask else { return .ignored }
             _ = workspace.changeStatus(task, in: scope); return .handled
+        }
+        .onKeyPress(.escape) {
+            // Esc 阶梯最外层：先退批量（S2→S0），再退单选（S1→S0）。
+            // 详情面板自己持有焦点时由 TaskInspectorShell 接管，两条路语义一致。
+            if !workspace.bulkSelection.isEmpty {
+                workspace.clearBulkSelection()
+                return .handled
+            }
+            if workspace.selectedTaskID != nil {
+                workspace.select(nil)
+                return .handled
+            }
+            return .ignored
         }
     }
 
     @ViewBuilder
     private func taskRow(group: TaskListGroup, node: TaskTreeNode) -> some View {
         let isSelected = workspace.selectedTaskID == node.task.id
+            || workspace.bulkSelection.contains(node.task.id)
         let row = TaskRowView(
                 task: node.task,
                 workspace: workspace,
@@ -792,6 +857,19 @@ struct TaskListView: View {
                 onSelect: {
                     listFocused = true
                     workspace.select(node.task.id)
+                },
+                onBulkToggle: { id in
+                    listFocused = true
+                    workspace.toggleBulkSelection(id, carryingSelection: true)
+                },
+                onRangeSelect: { id in
+                    listFocused = true
+                    if workspace.bulkSelection.isEmpty {
+                        // S0 上的 Shift 等价普通点击：没有锚点就没有范围可言。
+                        workspace.select(id)
+                    } else {
+                        workspace.extendBulkSelection(to: id, in: visibleRowOrder())
+                    }
                 },
                 onComplete: { _ = workspace.complete(node.task.id, in: scope) },
                 onRestore: { _ = workspace.restore(node.task.id, in: scope) },
@@ -815,12 +893,19 @@ struct TaskListView: View {
                 }
             }
         if node.depth == 0 {
-            row
-                .draggable(node.task.id.uuidString) {
-                    TaskDragPreview(title: node.task.title)
-                }
-                .modifier(TaskReorderDropModifier(workspace: workspace, targetID: node.task.id))
-                .id(rowIdentity(group: group, task: node.task))
+            // 拖拽排序只在手动排序下可用：手动顺序就是手动排序的数据本体，其它
+            // 排序模式下拖了也不可见，只会让人以为功能坏了。
+            if sortMode == .manual {
+                row
+                    .draggable(node.task.id.uuidString) {
+                        TaskDragPreview(title: node.task.title)
+                    }
+                    .modifier(TaskReorderDropModifier(workspace: workspace, targetID: node.task.id))
+                    .id(rowIdentity(group: group, task: node.task))
+            } else {
+                row
+                    .id(rowIdentity(group: group, task: node.task))
+            }
         } else {
             // 子任务不可拖、也不作为重排落点（对齐 Flutter）。
             row.id(rowIdentity(group: group, task: node.task))
@@ -884,6 +969,7 @@ struct TaskListView: View {
                                                schedule: timing.schedule,
                                                priority: priority, tags: tags,
                                                reminder: timing.reminderAt,
+                                               reminderOffsets: timing.reminderOffsetsOrNil,
                                                repeatFrequency: timing.repeatFrequency,
                                                recurrenceRule: timing.recurrenceRule,
                                                // 批量创建时每一行各自成任务，共享同一段
@@ -915,11 +1001,16 @@ struct TaskRowView: View {
     let selected: Bool
     var showsListBadge: Bool = true
     let onSelect: () -> Void
+    /// Cmd+点击（进入/切换批量选中）。nil 时（渲染契约等宿主）退回普通选中。
+    var onBulkToggle: ((UUID) -> Void)? = nil
+    /// Shift+点击（从锚点延伸范围）。nil 时退回普通选中。
+    var onRangeSelect: ((UUID) -> Void)? = nil
     let onComplete: () -> Void
     let onRestore: () -> Void
     let onToggleExpanded: () -> Void
     @State private var hovering = false
     @State private var showDatePopover = false
+    @State private var contextDateAnchor: CGRect?
     @State private var showTagPicker = false
 
     var body: some View {
@@ -950,29 +1041,29 @@ struct TaskRowView: View {
                 .taskTreeRenderAnchor(task.id, .checkbox)
             }
 
-            Button(action: onSelect) {
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(task.title.isEmpty ? "无标题" : task.title)
-                        .font(WFType.listTitle).lineLimit(1)
-                        .foregroundStyle(task.status == .completed ? WFColors.taskCompletedTitle : task.isClosed ? WFColors.secondaryText : WFColors.text)
-                    if let preview = rowPreview {
-                        Text(preview)
-                            .font(task.status == .completed ? WFType.completedListBody : WFType.listBody).lineLimit(1)
-                            .foregroundStyle(task.status == .completed ? WFColors.taskCompletedPreview : WFColors.secondaryText)
-                            .taskTreeRenderAnchor(task.id, .preview)
-                    }
+            VStack(alignment: .leading, spacing: 1) {
+                Text(task.title.isEmpty ? "无标题" : task.title)
+                    .font(WFType.listTitle).lineLimit(1)
+                    .foregroundStyle(task.status == .completed ? WFColors.taskCompletedTitle : task.isClosed ? WFColors.secondaryText : WFColors.text)
+                    .taskTreeRenderAnchor(task.id, .title)
+                if let preview = rowPreview {
+                    Text(preview)
+                        .font(task.status == .completed ? WFType.completedListBody : WFType.listBody).lineLimit(1)
+                        .foregroundStyle(task.status == .completed ? WFColors.taskCompletedPreview : WFColors.secondaryText)
+                        .taskTreeRenderAnchor(task.id, .preview)
                 }
-                // 内容区高度 = 行高 50 − 上下 11 内边距：点击区铺满内容区，
-                // 标题顶对齐（勾选框与标题首行同轴，对齐 Flutter 顶对齐行）。
-                .frame(maxWidth: .infinity, minHeight: WFMetrics.rowContentMinHeight, alignment: .topLeading)
-                .contentShape(Rectangle())
-            }.buttonStyle(.plain)
+            }
+            .frame(maxWidth: .infinity, minHeight: WFMetrics.rowContentMinHeight, alignment: .topLeading)
+            // Mouse selection belongs to the row, not a nested title button.
+            // Keep an explicit assistive action without another mouse surface.
+            .accessibilityElement(children: .combine)
+            .accessibilityAction { onSelect() }
 
             // 与 Flutter 行一致：元数据尾栏常驻，悬浮只做行背景高亮，不浮现
             // 任何快捷按钮（日期走尾栏日期徽章，优先级走右键菜单/检查器）。
             TaskRowMetadataTrail(task: task, workspace: workspace,
                                  showsListBadge: showsListBadge,
-                                 onOpenDate: { showDatePopover = true })
+                                 onOpenDate: { contextDateAnchor = nil; showDatePopover = true })
         }
         .padding(.horizontal, TaskListMetrics.rowHorizontalPadding)
         // 对齐 Flutter rowVerticalPadding = 11：内容顶对齐，勾选框贴标题首行。
@@ -987,20 +1078,25 @@ struct TaskRowView: View {
         // 整行可点（对齐 Flutter GestureDetector opaque）：标题旁的留白、行内
         // 空隙、元数据区点下去也能选中打开编辑栏；行内按钮（勾选框/日期）优先级更高。
         .contentShape(Rectangle())
-        .onTapGesture { onSelect() }
+        .gesture(selectionGesture)
+        .modifier(TaskRowActivationPolicy())
+        .taskTreeRenderAnchor(task.id, .row)
         .onHover { hovering = $0 }
         .overlay {
-            // 右键菜单走 AppKit NSPopover 显式定位（对齐 Flutter bottomStart：
-            // 面板顶部在光标下方、左缘对齐光标），见 TaskContextMenuPresenter。
+            // Context-origin scheduling is anchored to this click, including
+            // tasks without a date badge. It must not borrow the whole row.
             SecondaryClickCapture { rowView, point in
                 guard let current = workspace.task(for: task.id) else { return }
                 TaskContextMenuPresenter.show(in: rowView, at: point,
                                               environment: environment,
                                               workspace: workspace, task: current,
-                                              onCustomDate: { showDatePopover = true })
+                                              onCustomDate: {
+                                                  contextDateAnchor = CGRect(origin: point, size: CGSize(width: 1, height: 1))
+                                                  showDatePopover = true
+                                              })
             }
         }
-        .schedulePopover(isPresented: $showDatePopover) {
+        .schedulePopover(isPresented: $showDatePopover, explicitAnchor: contextDateAnchor) {
             if let current = workspace.task(for: task.id) {
                 TaskDatePopoverV2(task: current, workspace: workspace) { showDatePopover = false }
             }
@@ -1019,11 +1115,34 @@ struct TaskRowView: View {
         })
     }
 
+    /// Each recognizer owns the modifiers of its own click. Do not infer them
+    /// from NSApp.currentEvent after SwiftUI has completed the gesture.
+    private var selectionGesture: some Gesture {
+        TapGesture().modifiers(.command).onEnded {
+            if let onBulkToggle { onBulkToggle(task.id) } else { onSelect() }
+        }
+        .exclusively(before: TapGesture().modifiers(.shift).onEnded {
+            if let onRangeSelect { onRangeSelect(task.id) } else { onSelect() }
+        })
+        .exclusively(before: TapGesture().onEnded { onSelect() })
+    }
+
     /// Folding hides children; only this task's own body supplies its preview.
     private var rowPreview: String? {
         TaskListViewDefaults.bodyPreview(of: task.document.plainText)
     }
 
+}
+
+private struct TaskRowActivationPolicy: ViewModifier {
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if #available(macOS 15.0, *) {
+            content.allowsWindowActivationEvents()
+        } else {
+            content
+        }
+    }
 }
 
 private enum TaskRowPriority {
@@ -1178,6 +1297,8 @@ private struct TaskRowMetadataTrail: View {
         .foregroundStyle(task.isClosed ? muted : badgeColor)
         .help("修改安排日期")
         .accessibilityLabel("安排日期：\(task.title.isEmpty ? "无标题" : task.title)")
+        .taskTreeRenderAnchor(task.id, .date)
+        .scheduleTrigger()
     }
 
     private var badgeColor: Color {
@@ -1308,7 +1429,6 @@ enum TaskListViewDefaults {
     }
 }
 
-
 /// 「倒数纪念日」小节的宿主。**只为一件事存在——订阅 `CountdownStore`。**
 ///
 /// 为什么不直接在 `TaskListView` 里读 `environment.countdownStore.events`：
@@ -1342,9 +1462,10 @@ private struct CountdownSmartListSectionHost: View {
             CountdownSmartListSectionView(section: section, collapsed: collapsed,
                                           onToggle: onToggle, onSelect: onSelect)
         } else if tasksAreEmpty {
-            Text(TaskListViewDefaults.emptyStateMessage(destination: destination))
-                .font(WFType.body).foregroundStyle(WFColors.secondaryText)
-                .frame(maxWidth: .infinity).padding(.vertical, WFSpace.page)
+            TaskEmptyStateView(style: .list,
+                               message: TaskListViewDefaults.emptyStateMessage(destination: destination))
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, WFSpace.page)
         }
     }
 }
