@@ -170,17 +170,7 @@ private struct DocumentEditorContent: NSViewRepresentable {
                                   onEditingChanged: onEditingChanged)
     }
 
-    func makeNSView(context: Context) -> NSScrollView {
-        let scrollView = NSScrollView()
-        scrollView.drawsBackground = false
-        scrollView.hasVerticalScroller = !contentSized
-        scrollView.hasHorizontalScroller = false
-        scrollView.autohidesScrollers = true
-        // NSScrollView draws the system focus ring around the whole editor
-        // while its text view is first responder; the design keeps editing
-        // affordances to the caret and selection only.
-        scrollView.focusRingType = .none
-
+    func makeNSView(context: Context) -> NSView {
         let textView = NativeTextView(frame: .zero, textContainer: nil)
         textView.decorationVisibleMinX = decorationVisibleMinX
         textView.documentIdentity = documentID
@@ -194,14 +184,32 @@ private struct DocumentEditorContent: NSViewRepresentable {
         textView.onSelectionChanged = { [weak handle] in handle?.refreshStyle() }
         textView.profile = profile
         textView.autoresizingMask = [.width]
-        scrollView.documentView = textView
         handle?.textView = textView
         handle?.refreshStyle()
+        // Content-sized editors belong to their host's scroll view. A second
+        // scroll viewport is unnecessary and competes for input ownership.
+        if contentSized {
+            textView.usesHostScrollView = true
+            textView.isVerticallyResizable = false
+            textView.minSize.height = 48
+            return textView
+        }
+        let scrollView = NSScrollView()
+        scrollView.drawsBackground = false
+        scrollView.hasVerticalScroller = true
+        scrollView.hasHorizontalScroller = false
+        scrollView.autohidesScrollers = true
+        scrollView.focusRingType = .none
+        scrollView.documentView = textView
         return scrollView
     }
 
-    func updateNSView(_ scrollView: NSScrollView, context: Context) {
-        guard let textView = scrollView.documentView as? NativeTextView else { return }
+    private static func editor(in view: NSView) -> NativeTextView? {
+        (view as? NativeTextView) ?? ((view as? NSScrollView)?.documentView as? NativeTextView)
+    }
+
+    func updateNSView(_ view: NSView, context: Context) {
+        guard let textView = Self.editor(in: view) else { return }
         textView.decorationVisibleMinX = decorationVisibleMinX
         textView.profile = profile
         handle?.textView = textView
@@ -210,14 +218,15 @@ private struct DocumentEditorContent: NSViewRepresentable {
                                    onDocumentChange: onDocumentChange,
                                    onEscape: onEscape,
                                    onEditingChanged: onEditingChanged)
+        if contentSized { textView.invalidateIntrinsicContentSize() }
         // Refresh after model/selection rebind, not from the outgoing document.
         handle?.refreshStyle()
     }
 
-    func sizeThatFits(_ proposal: ProposedViewSize, nsView: NSScrollView,
+    func sizeThatFits(_ proposal: ProposedViewSize, nsView: NSView,
                       context: Context) -> CGSize? {
         guard contentSized, let width = proposal.width, width > 0,
-              let textView = nsView.documentView as? NativeTextView,
+              let textView = Self.editor(in: nsView),
               let container = textView.textContainer,
               let layout = textView.textLayoutManager else { return nil }
         textView.setFrameSize(NSSize(width: width, height: textView.frame.height))
@@ -230,12 +239,13 @@ private struct DocumentEditorContent: NSViewRepresentable {
         layout.ensureLayout(for: NSRect(origin: .zero, size: container.containerSize))
         let bottom = layout.usageBoundsForTextContainer.maxY
         let height = max(48, ceil(bottom + textView.textContainerInset.height * 2 + 8))
+        textView.setFrameSize(NSSize(width: width, height: height))
         textView.revealCaretInHostAfterLayout()
         return CGSize(width: width, height: height)
     }
 
-    static func dismantleNSView(_ scrollView: NSScrollView, coordinator: DocumentEditorCoordinator) {
-        guard let textView = scrollView.documentView as? NativeTextView else { return }
+    static func dismantleNSView(_ view: NSView, coordinator: DocumentEditorCoordinator) {
+        guard let textView = editor(in: view) else { return }
         coordinator.detach(textView)
     }
 }

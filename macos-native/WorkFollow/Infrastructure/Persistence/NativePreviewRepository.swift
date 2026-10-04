@@ -23,7 +23,15 @@ struct SnapshotBackupInfo: Equatable {
 /// Native-only storage; never reads or writes the Flutter WorkFollow directory.
 final class NativePreviewRepository {
     static var directory: URL {
-        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        #if DEBUG
+        // Dedicated acceptance builds can use a separate bundle identity and
+        // scratch data without replacing a user's active Focus session.
+        if let path = Bundle.main.object(forInfoDictionaryKey: "WorkFollowAcceptanceStorageRoot") as? String,
+           !path.isEmpty {
+            return URL(fileURLWithPath: path, isDirectory: true)
+        }
+        #endif
+        return FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("WorkFollowNativePreview", isDirectory: true)
     }
     static let snapshotFileName = "workspace.json"

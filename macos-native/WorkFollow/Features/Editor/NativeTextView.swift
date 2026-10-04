@@ -3,6 +3,8 @@ import ImageIO
 import SwiftUI
 
 final class NativeTextView: NSTextView {
+    /// A content-sized editor delegates scrolling to its surrounding host.
+    var usesHostScrollView = false
     /// Leading boundary visible inside the host's narrower decoration space.
     var decorationVisibleMinX: CGFloat = 0
     // An inspector is recreated for each document. Never share the window's
@@ -245,9 +247,15 @@ final class NativeTextView: NSTextView {
         guard needsHostCaretReveal else { return }
         DispatchQueue.main.async { [weak self] in
             guard let self, self.window?.firstResponder === self,
-                  let inner = self.enclosingScrollView, !inner.hasVerticalScroller,
+                  let inner = self.enclosingScrollView,
                   let window = self.window else { return }
             window.contentView?.layoutSubtreeIfNeeded()
+            if self.usesHostScrollView {
+                self.scrollRangeToVisible(self.selectedRange())
+                self.needsHostCaretReveal = false
+                return
+            }
+            guard !inner.hasVerticalScroller else { return }
             var ancestor = inner.superview
             while let view = ancestor {
                 if let outer = view as? NSScrollView, let document = outer.documentView {
@@ -260,6 +268,17 @@ final class NativeTextView: NSTextView {
                 ancestor = view.superview
             }
         }
+    }
+
+    override func scrollRangeToVisible(_ range: NSRange) {
+        guard usesHostScrollView, let window,
+              let document = enclosingScrollView?.documentView else {
+            super.scrollRangeToVisible(range)
+            return
+        }
+        let screenRect = firstRect(forCharacterRange: range, actualRange: nil)
+        let rect = document.convert(window.convertFromScreen(screenRect), from: nil)
+        document.scrollToVisible(rect.insetBy(dx: 0, dy: -12))
     }
 
     func invalidateDocumentLayout(for range: NSRange) {
@@ -305,6 +324,10 @@ final class NativeTextView: NSTextView {
                 }
             }
         }
+        // Explicitly own editable clicks when hosted beside SwiftUI fields.
+        // NSTextView's tracking/selection must run with this view as responder,
+        // not the outgoing SwiftUI field editor.
+        if isEditable { window?.makeFirstResponder(self) }
         super.mouseDown(with: event)
     }
 
