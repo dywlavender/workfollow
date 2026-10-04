@@ -189,4 +189,34 @@ final class TaskLunarRepeatTests: XCTestCase {
         // 时刻保留 9:00(原锚定日时刻),日期跳到 2027-06-09。
         XCTAssertEqual(model.recurrenceAnchorDate, date(2027, 6, 9, 9))
     }
+
+// MARK: - 艾宾浩斯记忆法（阶段 2,标准曲线 1/2/4/7/15/30,滴答实测后校正常量）
+
+/// 第 N 次完成(interval=N)→ 下一实例 = 到期日 + 序列[N-1];走完循环。
+func testEbbinghausIntervalSequence() {
+    var anchor = date(2026, 10, 4)
+    let expected = ["2026-10-05", "2026-10-07", "2026-10-11", "2026-10-18", "2026-11-02", "2026-12-02"]
+    for (index, _) in RecurrenceRule.ebbinghausIntervals.enumerated() {
+        var stepRule = RecurrenceRule()
+        stepRule.interval = index + 1  // TaskActions:第 N 次完成时 interval=N
+        let next = stepRule.nextOccurrence(after: anchor, frequency: .ebbinghaus,
+                                           calendar: calendar)
+        XCTAssertNotNil(next, "step \(index)")
+        let comps = calendar.dateComponents([.year, .month, .day], from: next!)
+        let got = String(format: "%04d-%02d-%02d", comps.year!, comps.month!, comps.day!)
+        XCTAssertEqual(got, expected[index], "step \(index+1) (interval=\(index+1))")
+        anchor = next!  // 真实完成流:从当前到期日继续推进
+    }
+    // 走完循环:第 7 次(interval=7)→ 序列[0] = +1
+    var rule7 = RecurrenceRule()
+    rule7.interval = 7
+    let next = rule7.nextOccurrence(after: date(2026, 10, 4), frequency: .ebbinghaus, calendar: calendar)
+    XCTAssertEqual(next, date(2026, 10, 5), "序列走完循环回 +1")
+}
+
+func testEbbinghausMigrationRoundTrip() throws {
+    let data = try JSONEncoder().encode(TaskRepeat.ebbinghaus)
+    let decoded = try JSONDecoder().decode(TaskRepeat.self, from: data)
+    XCTAssertEqual(decoded, .ebbinghaus)
+}
 }

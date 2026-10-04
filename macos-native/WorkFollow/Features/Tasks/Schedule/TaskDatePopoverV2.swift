@@ -588,6 +588,9 @@ struct TaskDatePopoverV2: View {
                 optionsRow("工作日", arrow: true) { repeatGroup = .work }
                 optionsRow("节假日", arrow: true) { repeatGroup = .holiday }
                 optionsRow("农历重复", arrow: true) { repeatGroup = .lunar }
+                optionsRow("艾宾浩斯记忆法", checked: model.frequency == .ebbinghaus) {
+                    applyFrequency(.ebbinghaus)
+                }
                 Divider()
                 optionsRow("自定义", checked: presentation.shows(.repeatCustom)) {
                     if !Self.frequencyUsesInterval(model.frequency) {

@@ -26,6 +26,10 @@ extension RecurrenceRule {
         return value
     }
 
+    /// 艾宾浩斯记忆曲线间隔（天）。滴答 scratch 实测校正前用标准序列；
+    /// 校正后只改这里（引擎与测试金标联动）。
+    static let ebbinghausIntervals = [1, 2, 4, 7, 15, 30]
+
     /// Validates and repairs the rule; nil marks a structurally invalid rule
     /// (out-of-range weekday/month fields) that must not drive a recurrence —
     /// mirroring Flutter's RecurrenceDraft.normalized. A count below 1 is
@@ -131,6 +135,13 @@ extension RecurrenceRule {
                     break
                 }
             }
+        case .ebbinghaus:
+            // 艾宾浩斯记忆法：完成后按记忆曲线间隔推进。interval 承载"已完成
+            // 次数"（TaskActions.makeNextOccurrence 每次完成时递增），第 N 次
+            // 完成取序列[N-1]；走完从头循环（滴答实测校正前先用标准曲线）。
+            let intervals = Self.ebbinghausIntervals
+            let step = (max(1, interval) - 1) % intervals.count
+            next = calendar.date(byAdding: .day, value: intervals[step], to: base)
         }
         guard let next else { return nil }
         // Rules above only move the day; rebuild so the clock survives exactly.

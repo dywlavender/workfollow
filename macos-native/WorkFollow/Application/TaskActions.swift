@@ -119,6 +119,13 @@ final class TaskActions {
         spawn.reminderOffsets = task.reminderOffsets
         spawn.attachments = task.attachments
         spawn.recurrenceRule = rule.following
+        // 艾宾浩斯：interval 承载"已完成次数",spawn 带着递增后的值,引擎据此
+        // 取记忆曲线的下一段间隔（RecurrenceRule.nextOccurrence .ebbinghaus）。
+        if task.recurrence == .ebbinghaus {
+            var ebbingRule = spawn.recurrenceRule ?? RecurrenceRule()
+            ebbingRule.interval = max(1, ebbingRule.interval) + 1
+            spawn.recurrenceRule = ebbingRule
+        }
         spawn.sourceNoteID = task.sourceNoteID
         let children = store.children(of: task.id).enumerated().map { order, child -> Task in
             var value = Task(id: UUID(), title: child.title, document: child.document,

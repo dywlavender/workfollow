@@ -32,11 +32,14 @@ enum TaskRepeat: String, CaseIterable, Equatable, Codable {
     case never, daily, weekly, monthly, yearly, weekdays, weekends, workdays, holidays
     /// 农历重复：按锚定日换算的农历月/日推进（滴答"农历重复"对齐）。
     case lunarYearly, lunarMonthly
+    /// 艾宾浩斯记忆法（滴答对齐）：完成后按记忆曲线间隔推进，
+    /// 序列走完再循环（间隔序列见 RecurrenceEngine.ebbinghausIntervals）。
+    case ebbinghaus
     /// 文案定义在 `ScheduleDisplay.repeatTitle`（单一来源，菜单与摘要共用）。
     var title: String { ScheduleDisplay.repeatTitle(self) }
     var component: Calendar.Component {
         switch self {
-        case .never, .daily, .weekdays, .weekends, .workdays, .holidays, .lunarYearly, .lunarMonthly: .day
+        case .never, .daily, .weekdays, .weekends, .workdays, .holidays, .lunarYearly, .lunarMonthly, .ebbinghaus: .day
         case .weekly: .weekOfYear
         case .monthly: .month
         case .yearly: .year

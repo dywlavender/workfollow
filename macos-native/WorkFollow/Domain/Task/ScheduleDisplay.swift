@@ -28,6 +28,7 @@ enum ScheduleDisplay {
         case .holidays: return "法定休息日"
         case .lunarYearly: return "农历每年"
         case .lunarMonthly: return "农历每月"
+        case .ebbinghaus: return "艾宾浩斯记忆法"
         }
     }
 
@@ -67,6 +68,7 @@ enum ScheduleDisplay {
         case .holidays: return "法定休息日"
         case .lunarYearly: return "农历每年 (\(context.lunarName ?? ""))"
         case .lunarMonthly: return "农历每月 (\(context.lunarDayText ?? ""))"
+        case .ebbinghaus: return "艾宾浩斯记忆法"
         }
     }
 

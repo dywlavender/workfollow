@@ -814,6 +814,7 @@ enum MigrationSnapshot {
         case "WEEKENDS": return .weekends
         case "WORKDAYS": return .workdays
         case "HOLIDAYS": return .holidays
+        case "EBBINGHAUS": return .ebbinghaus
         default: return .never
         }
     }
@@ -1032,6 +1033,7 @@ enum MigrationSnapshot {
         case .holidays: return "HOLIDAYS"
         case .lunarYearly: return "LUNAR_YEARLY"
         case .lunarMonthly: return "LUNAR_MONTHLY"
+        case .ebbinghaus: return "EBBINGHAUS"
         }
     }
 
