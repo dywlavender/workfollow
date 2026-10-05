@@ -41,6 +41,28 @@ struct AppCommands: Commands {
         // 任务菜单：作用于当前选中任务；完成/恢复经 changeStatus，
         // 走与行点击相同的反馈通道（含提示音与撤销）。
         CommandMenu("任务") {
+            // 任务 → 分组归属（滴答：分组是任务的**结构性归属**）。
+            //
+            // 分组此前只有"添加/重命名/删除/排序"，唯独缺"把任务放进分组"——
+            // 数据层 `setTaskSection` 早已就绪，这里补上入口。
+            // 行内右键与"拖到分组之间"是滴答的主手势，登记为下一步（本轮先给可用入口）。
+            if let list = environment.taskWorkspace.activeList,
+               let taskID = environment.taskWorkspace.selectedTaskID {
+                let sections = environment.taskWorkspace.listSections(forList: list)
+                if !sections.isEmpty {
+                    Menu("移动到分组") {
+                        Button("未分组") {
+                            _ = environment.taskWorkspace.setTaskSection(taskID, sectionID: nil)
+                        }
+                        Divider()
+                        ForEach(sections) { section in
+                            Button(section.title) {
+                                _ = environment.taskWorkspace.setTaskSection(taskID, sectionID: section.id)
+                            }
+                        }
+                    }
+                }
+            }
             Button("完成当前任务") { completeSelected() }
             Button("清除当前日期") { clearSelectedDate() }
             Divider()
