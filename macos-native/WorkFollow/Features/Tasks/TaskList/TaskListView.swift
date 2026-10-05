@@ -234,6 +234,7 @@ struct TaskListView: View {
                 }
             }
             .pickerStyle(.inline)
+            Button("打印…", systemImage: "printer") { printCurrentView() }
             Toggle("隐藏已完成", isOn: hidesCompletedBinding)
             Toggle("隐藏详细", isOn: hidesDetailsBinding)
             Menu("显示设置") {
@@ -285,6 +286,18 @@ struct TaskListView: View {
         .menuIndicator(.hidden)
         .fixedSize()
         .help("分组与排序")
+    }
+
+    /// 打印当前视图（滴答清单页 ··· → 打印）：文本由 `TaskPrintDocument` 纯函数生成，
+    /// 这里只管标题与交给系统打印面板。
+    private func printCurrentView() {
+        let title = workspace.activeList
+            ?? workspace.activeTag.map { "#" + $0 }
+            ?? navigation.destination.title
+        TaskPrintService.printDocument(title: title,
+                                       text: TaskPrintDocument.text(title: title, groups: groups,
+                                                                    now: workspace.clock(),
+                                                                    calendar: workspace.calendar))
     }
 
     private var viewMode: TaskListViewMode {
