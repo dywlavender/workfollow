@@ -14,6 +14,9 @@ final class WorkspaceStore {
     private var undoLists: [[String]] = []
     private var undoListMetas: [[TaskListMeta]] = []
     private var undoListFolders: [[TaskListFolder]] = []
+    /// 清单内自定义分组（滴答第三级）。与清单/文件夹一样随 commit/undo 同步进退。
+    private(set) var listSections: [TaskListSection] = []
+    private var undoListSections: [[TaskListSection]] = []
     private var undoCompensations: [(() -> Void)?] = []
     private var transactionDepth = 0
     private var undoSnapshots: [[Task]] = []
@@ -38,29 +41,38 @@ final class WorkspaceStore {
         listFolders.first { $0.name == name }
     }
 
+    func listSection(_ id: String) -> TaskListSection? {
+        listSections.first { $0.id == id }
+    }
+
     // Only application commands commit snapshots; readers receive value copies.
     func commit(_ snapshot: [Task], undoPolicy: UndoPolicy = .record,
                 lists: [String]? = nil, listMetas: [TaskListMeta]? = nil,
                 listFolders: [TaskListFolder]? = nil,
+                listSections: [TaskListSection]? = nil,
                 undoCompensation: (() -> Void)? = nil) {
         let listsChanged = lists != nil && lists != self.lists
         let metasChanged = listMetas != nil && listMetas != self.listMetas
         let foldersChanged = listFolders != nil && listFolders != self.listFolders
-        guard snapshot != tasks || listsChanged || metasChanged || foldersChanged else { return }
+        let sectionsChanged = listSections != nil && listSections != self.listSections
+        guard snapshot != tasks || listsChanged || metasChanged || foldersChanged || sectionsChanged else { return }
         if undoPolicy == .record && transactionDepth == 0 {
             undoSnapshots.append(tasks)
             undoLists.append(self.lists)
             undoListMetas.append(self.listMetas)
             undoListFolders.append(self.listFolders)
+            undoListSections.append(self.listSections)
             undoCompensations.append(undoCompensation)
             if undoSnapshots.count > 50 {
                 undoSnapshots.removeFirst()
                 undoLists.removeFirst()
                 undoListMetas.removeFirst()
                 undoListFolders.removeFirst()
+                undoListSections.removeFirst()
                 undoCompensations.removeFirst()
             }
         } else if undoPolicy == .skip {
+
             // Rebase text-only edits through history so undoing a business
             // command cannot revert later text input (including another task).
             let old = Dictionary(uniqueKeysWithValues: tasks.map { ($0.id, $0) })
@@ -82,6 +94,7 @@ final class WorkspaceStore {
         tasks = snapshot
         if let lists { self.lists = lists }
         if let listFolders { self.listFolders = listFolders }
+        if let listSections { self.listSections = listSections }
         reconcileListMetas(committed: listMetas, listsCommitted: lists != nil)
         if transactionDepth == 0 {
             publishTaskChanges(from: previousTasks)
@@ -117,6 +130,7 @@ final class WorkspaceStore {
         lists = undoLists.removeLast()
         listMetas = undoListMetas.removeLast()
         listFolders = undoListFolders.removeLast()
+        listSections = undoListSections.removeLast()
         if let compensation = undoCompensations.popLast() ?? nil { compensation() }
         if transactionDepth == 0 {
             publishTaskChanges(from: before)
@@ -127,6 +141,7 @@ final class WorkspaceStore {
         undoLists.removeAll()
         undoListMetas.removeAll()
         undoListFolders.removeAll()
+        undoListSections.removeAll()
         undoCompensations.removeAll()
     }
 
@@ -135,19 +150,23 @@ final class WorkspaceStore {
         let beforeLists = lists
         let beforeMetas = listMetas
         let beforeFolders = listFolders
+        let beforeSections = listSections
         transactionDepth += 1
         body()
         transactionDepth -= 1
         if transactionDepth == 0 && (before != tasks || beforeLists != lists || beforeMetas != listMetas
-                                     || beforeFolders != listFolders) {
+                                     || beforeFolders != listFolders
+                                     || beforeSections != listSections) {
             undoSnapshots.append(before); undoLists.append(beforeLists); undoListMetas.append(beforeMetas)
             undoListFolders.append(beforeFolders)
+            undoListSections.append(beforeSections)
             undoCompensations.append(nil)
             if undoSnapshots.count > 50 {
                 undoSnapshots.removeFirst()
                 undoLists.removeFirst()
                 undoListMetas.removeFirst()
                 undoListFolders.removeFirst()
+                undoListSections.removeFirst()
                 undoCompensations.removeFirst()
             }
             publishTaskChanges(from: before)

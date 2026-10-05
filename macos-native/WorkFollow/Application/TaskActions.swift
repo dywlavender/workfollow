@@ -801,6 +801,61 @@ final class TaskActions {
         store.commit(store.tasks, listMetas: metas, listFolders: folders)
         return true
     }
+
+    // MARK: 清单内自定义分组（滴答第三级）
+
+    /// 添加分组（排在清单末尾）。空名 / 同清单重名 → false。
+    @discardableResult
+    func addListSection(_ list: String, title: String) -> Bool {
+        let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, canManageList(list) else { return false }
+        guard !store.listSections.contains(where: { $0.listName == list && $0.title == trimmed }) else {
+            return false
+        }
+        let order = (store.listSections.filter { $0.listName == list }.map(\.sortOrder).max() ?? -1) + 1
+        var sections = store.listSections
+        sections.append(TaskListSection(listName: list, title: trimmed, sortOrder: order))
+        store.commit(store.tasks, listSections: sections)
+        return true
+    }
+
+    /// 重命名分组：**id 不变**，任务归属不受影响。
+    @discardableResult
+    func renameListSection(_ id: String, title: String) -> Bool {
+        let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return false }
+        var sections = store.listSections
+        guard let index = sections.firstIndex(where: { $0.id == id }),
+              sections[index].title != trimmed else { return false }
+        sections[index].title = trimmed
+        store.commit(store.tasks, listSections: sections)
+        return true
+    }
+
+    /// 删除分组：任务**保留**并回到"未分组"（与文件夹同口径；官方未写明）。
+    @discardableResult
+    func removeListSection(_ id: String) -> Bool {
+        let sections = store.listSections.filter { $0.id != id }
+        guard sections.count != store.listSections.count else { return false }
+        var tasks = store.tasks
+        for index in tasks.indices where tasks[index].sectionID == id {
+            tasks[index].sectionID = nil
+        }
+        store.commit(tasks, listSections: sections)
+        return true
+    }
+
+    /// 任务改归属（nil = 移出分组）。一次提交 = 一步撤销。
+    @discardableResult
+    func setTaskSection(_ id: UUID, sectionID: String?) -> TaskActionResult {
+        guard let index = store.tasks.firstIndex(where: { $0.id == id }) else { return .failure(.missingTask) }
+        guard store.tasks[index].deletedAt == nil else { return .failure(.deletedTask) }
+        guard store.tasks[index].sectionID != sectionID else { return .success(id) }
+        var tasks = store.tasks
+        tasks[index].sectionID = sectionID
+        store.commit(tasks)
+        return .success(id)
+    }
 }
 
 enum TaskBatchOperation {

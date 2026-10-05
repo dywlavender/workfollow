@@ -111,7 +111,31 @@ struct TaskContextMenuPopover: View {
                         perform { _ = workspace.requestChildTitleEditor(for: task.id) }
                     }
                 }
-                actionRow(task.isPinned ? "取消置顶" : "置顶", symbol: "pin") {
+                if task.list.name != TaskList.inbox.name {
+            Menu("移动到分组") {
+                ForEach(workspace.listSections(forList: task.list.name)) { section in
+                    Button(section.title) {
+                        perform { _ = workspace.setTaskSection(task.id, sectionID: section.id) }
+                    }
+                }
+                if !workspace.listSections(forList: task.list.name).isEmpty { Divider() }
+                Button("添加分组…") {
+                    guard let title = TaskNamePrompt.ask("添加分组"),
+                          workspace.addListSection(task.list.name, title: title),
+                          let section = workspace.listSections(forList: task.list.name)
+                            .first(where: { $0.title == title }) else { return }
+                    perform { _ = workspace.setTaskSection(task.id, sectionID: section.id) }
+                }
+                if task.sectionID != nil {
+                    Divider()
+                    Button("移出分组") {
+                        perform { _ = workspace.setTaskSection(task.id, sectionID: nil) }
+                    }
+                }
+            }
+            Divider()
+        }
+        actionRow(task.isPinned ? "取消置顶" : "置顶", symbol: "pin") {
                     perform { _ = workspace.setPinned(task.id, !task.isPinned) }
                 }
                 // 复制任务（Round B1，对齐 Flutter）：连同子任务生成副本，HUD 自动带撤销。

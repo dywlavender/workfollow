@@ -256,7 +256,12 @@ enum TaskListProjection {
         }
         // 分组方式只作用于"所有任务"（含清单/标签过滤视图）；今天/最近 7 天/已完成
         // 的日期分组是视图本体，传进来的 grouping 一律忽略。
-        if scope == .allTasks {
+        if scope == .allTasks, let list = query.list,
+           let sectionGroups = TaskListSectionProjection.groups(ordinary, list: list,
+                                                                sections: store.listSections) {
+            // 清单自定义分组优先于"分组方式"：分组是**归属**，不是展示规则。
+            groups += sectionGroups
+        } else if scope == .allTasks {
             switch grouping {
             case .byDate:
                 if query.list == nil && query.tag == nil {
@@ -507,6 +512,36 @@ enum SidebarDragPayload: Equatable {
             return name.isEmpty ? nil : .list(name)
         }
         return UUID(uuidString: raw).map(SidebarDragPayload.task)
+    }
+}
+
+/// 清单内自定义分组的投影（滴答第三级）。
+enum TaskListSectionProjection {
+    /// 当前清单有自定义分组时按它分桶；没有分组 → nil（调用方沿用用户选的分组方式）。
+    ///
+    /// - 未分组任务排在最前（分组是**归属**，没归属的先列出来）；
+    /// - 空分组也保留（分组是结构，不是"有内容的桶"）；
+    /// - 组身份沿用 `.plain` 的标签身份 → 折叠状态按分组互不串。
+    static func groups(_ tasks: [Task], list: String,
+                       sections: [TaskListSection]) -> [TaskListGroup]? {
+        let ordered = sections.filter { $0.listName == list }
+            .sorted { ($0.sortOrder, $0.title) < ($1.sortOrder, $1.title) }
+        guard !ordered.isEmpty else { return nil }
+        let ids = Set(ordered.map(\.id))
+        var groups: [TaskListGroup] = []
+        let unsectioned = tasks.filter { task in
+            guard let id = task.sectionID else { return true }
+            return !ids.contains(id)
+        }
+        if !unsectioned.isEmpty {
+            groups.append(TaskListGroup(kind: .plain, day: nil, tasks: unsectioned, label: "未分组"))
+        }
+        for section in ordered {
+            groups.append(TaskListGroup(kind: .plain, day: nil,
+                                        tasks: tasks.filter { $0.sectionID == section.id },
+                                        label: section.title))
+        }
+        return groups
     }
 }
 

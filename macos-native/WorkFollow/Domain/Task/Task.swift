@@ -136,6 +136,26 @@ struct TaskListFolder: Equatable, Codable, Identifiable {
     }
 }
 
+
+/// 清单内自定义分组（滴答层级第三级：文件夹 → 清单 → 分组 → 任务 → 子任务）。
+///
+/// 官方：**仅普通清单**支持自定义分组（智能清单不支持）；分组是任务的**结构性归属**，
+/// 与"按优先级/时间分组"这类**系统智能分组**正交；看板视图以分组为列。
+/// `id` 稳定（重命名不换身份），任务只认 id。
+struct TaskListSection: Equatable, Codable, Identifiable {
+    var id: String
+    var listName: String
+    var title: String
+    var sortOrder: Int
+
+    init(id: String = UUID().uuidString, listName: String, title: String, sortOrder: Int = 0) {
+        self.id = id
+        self.listName = listName.trimmingCharacters(in: .whitespacesAndNewlines)
+        self.title = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        self.sortOrder = sortOrder
+    }
+}
+
 /// Schedule, period end and deadline are three different things and stay
 /// separate, exactly as in the Flutter baseline:
 ///
@@ -187,6 +207,8 @@ struct Task: Identifiable, Equatable, Codable {
     var skippedAt: Date? = nil
     var convertedNoteID: UUID? = nil
     var sourceNoteID: UUID? = nil
+    /// 所属清单分组（`TaskListSection.id`）。nil = 未分组。
+    var sectionID: String? = nil
 
     var isAbandoned: Bool { abandonedAt != nil }
     var isClosed: Bool { status == .completed || isAbandoned }
@@ -202,7 +224,7 @@ extension Task {
         case id, title, document, tags, recurrence, recurrenceRule, reminderAt, reminderOffsets
         case attachments, list, priority, schedule, status, parentID, childOrder
         case createdAt, updatedAt, completedAt, deletedAt, isPinned, abandonedAt, skippedAt, convertedNoteID
-        case sourceNoteID
+        case sourceNoteID, sectionID
     }
 
     init(from decoder: Decoder) throws {
@@ -231,12 +253,14 @@ extension Task {
         skippedAt = try values.decodeIfPresent(Date.self, forKey: .skippedAt)
         convertedNoteID = try values.decodeIfPresent(UUID.self, forKey: .convertedNoteID)
         sourceNoteID = try values.decodeIfPresent(UUID.self, forKey: .sourceNoteID)
+        sectionID = try values.decodeIfPresent(String.self, forKey: .sectionID)
     }
 
     func encode(to encoder: Encoder) throws {
         var values = encoder.container(keyedBy: CodingKeys.self)
         try values.encode(id, forKey: .id)
         try values.encodeIfPresent(sourceNoteID, forKey: .sourceNoteID)
+        try values.encodeIfPresent(sectionID, forKey: .sectionID)
         try values.encode(title, forKey: .title)
         try values.encode(document, forKey: .document)
         try values.encode(tags, forKey: .tags)

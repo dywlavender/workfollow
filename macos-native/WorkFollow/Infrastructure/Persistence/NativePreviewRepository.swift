@@ -9,6 +9,8 @@ struct NativeWorkspaceSnapshot: Codable {
     var taskListMeta: [TaskListMeta]? = nil
     /// 清单文件夹（滴答层级第一级）。独立存储：允许空文件夹。
     var taskListFolders: [TaskListFolder]? = nil
+    /// 清单内自定义分组（滴答第三级：清单 → 分组 → 任务）。
+    var taskListSections: [TaskListSection]? = nil
     var noteFolders: [String]? = nil
     /// Full stable folder records; additive so older preview snapshots still decode.
     var noteFolderMetadata: [NoteFolderMeta]? = nil

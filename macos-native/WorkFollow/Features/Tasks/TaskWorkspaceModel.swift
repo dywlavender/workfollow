@@ -43,7 +43,8 @@ final class TaskWorkspaceModel: ObservableObject {
          calendar: Calendar = .current,
          seedDemoData: Bool = true, initialTasks: [Task]? = nil, initialLists: [String] = [],
          initialListMeta: [TaskListMeta]? = nil,
-         initialListFolders: [TaskListFolder]? = nil) {
+         initialListFolders: [TaskListFolder]? = nil,
+         initialListSections: [TaskListSection]? = nil) {
         self.clock = clock
         self.calendar = calendar
         let store = WorkspaceStore()
@@ -52,7 +53,8 @@ final class TaskWorkspaceModel: ObservableObject {
         if let initialTasks { store.commit(initialTasks); store.clearUndo() }
         else if seedDemoData { seed() }
         store.commit(store.tasks, lists: initialLists, listMetas: initialListMeta,
-                     listFolders: initialListFolders)
+                     listFolders: initialListFolders,
+                     listSections: initialListSections)
         store.clearUndo()
         // Install after hydration: consumers see committed edits, not a replay
         // of initial loading. The stream exists independently of Activity.
@@ -170,6 +172,48 @@ final class TaskWorkspaceModel: ObservableObject {
         let changed = actions.dissolveListFolder(folder)
         if changed { revision += 1 }
         return changed
+    }
+
+    // MARK: 清单内自定义分组（滴答第三级；官方：仅普通清单支持）
+
+    var listSections: [TaskListSection] {
+        _ = revision
+        return store.listSections
+    }
+
+    /// 当前清单的分组（按 sortOrder）。
+    func listSections(forList name: String) -> [TaskListSection] {
+        listSections.filter { $0.listName == name }
+            .sorted { ($0.sortOrder, $0.title) < ($1.sortOrder, $1.title) }
+    }
+
+    @discardableResult
+    func addListSection(_ list: String, title: String) -> Bool {
+        let changed = actions.addListSection(list, title: title)
+        if changed { revision += 1 }
+        return changed
+    }
+
+    @discardableResult
+    func renameListSection(_ id: String, title: String) -> Bool {
+        let changed = actions.renameListSection(id, title: title)
+        if changed { revision += 1 }
+        return changed
+    }
+
+    @discardableResult
+    func removeListSection(_ id: String) -> Bool {
+        let changed = actions.removeListSection(id)
+        if changed { revision += 1 }
+        return changed
+    }
+
+    /// 任务改归属（nil = 移出分组）。
+    @discardableResult
+    func setTaskSection(_ id: UUID, sectionID: String?) -> TaskActionResult {
+        let result = actions.setTaskSection(id, sectionID: sectionID)
+        didMutate(result)
+        return result
     }
 
     @discardableResult
