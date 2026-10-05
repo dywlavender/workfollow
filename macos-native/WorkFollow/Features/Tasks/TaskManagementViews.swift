@@ -172,6 +172,8 @@ private struct SidebarListRowView: View {
     let name: String
     let onOpen: () -> Void
     @State private var hovering = false
+    @EnvironmentObject private var environment: AppEnvironment
+    @State private var showActivity = false
     @State private var dragTargeted = false
     @State private var showColorPicker = false
     @State private var showIconPicker = false
@@ -182,6 +184,15 @@ private struct SidebarListRowView: View {
     private var folder: String? { workspace.folderName(forList: name) }
     /// 收集箱是任务中转站：不可归类、不可删除（滴答规则）。
     private var isInbox: Bool { name == TaskList.inbox.name }
+
+    /// 清单动态弹层（事件模型与任务动态共用 `TaskActivityStore`）。
+    @ViewBuilder
+    private var activitySheet: some View {
+        ListActivitySheet(listName: name, workspace: workspace,
+                          activity: environment.taskActivityStore) {
+            showActivity = false
+        }
+    }
 
     /// 滴答主手势：把一个清单拖到另一个清单上 → 建文件夹并把两者放进去。
     /// 本行已在某文件夹里就直接跟随（不弹窗）；否则弹一次命名。
@@ -270,6 +281,7 @@ private struct SidebarListRowView: View {
                                          width: ListIconPickerPopover.panelWidth, placement: .submenu) {
             ListIconPickerPopover(workspace: workspace, name: name) { showIconPicker = false }
         })
+        .sheet(isPresented: $showActivity) { activitySheet }
     }
 
     @ViewBuilder
@@ -289,6 +301,10 @@ private struct SidebarListRowView: View {
         }
         Button("设置图标") {
             DispatchQueue.main.async { showIconPicker = true }
+        }
+        // 清单动态（滴答清单页 ··· → 清单动态）：事件模型与任务动态共用同一份存储。
+        Button("清单动态…", systemImage: "clock.arrow.circlepath") {
+            DispatchQueue.main.async { showActivity = true }
         }
         // 移动到文件夹（滴答层级：文件夹 → 清单）：现有文件夹 + 新建 + 移出；收集箱不参与。
         if !isInbox {

@@ -20,6 +20,14 @@ final class TaskActivityStore: ObservableObject, ModuleStoreFlushable {
         events = store.load() ?? []
     }
 
+    /// 清单动态：该清单内任务的事件（新→旧）。
+    /// 任务 → 清单的映射由调用方注入（store 不认识任务），所以被删掉的任务不会出现在这里。
+    func events(forList listName: String,
+                listNameOfTask: (UUID) -> String?) -> [TaskActivityEvent] {
+        events.filter { listNameOfTask($0.taskID) == listName }
+            .sorted { $0.occurredAt > $1.occurredAt }
+    }
+
     func events(for taskID: UUID) -> [TaskActivityEvent] {
         events.enumerated()
             .filter { $0.element.taskID == taskID }
