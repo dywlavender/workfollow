@@ -118,44 +118,61 @@ struct FocusWorkspaceShellView: View {
 
 private struct TaskWorkspaceView: View {
     @ObservedObject var workspace: TaskWorkspaceModel
-    let navigation: AppNavigation
+    @ObservedObject var navigation: AppNavigation
     let navigationVisible: Bool
+    @EnvironmentObject private var environment: AppEnvironment
     @State private var dragOrigin: CGFloat?
+
+    /// 视图偏好的键（与 TaskListView 同一套派生，真值源唯一）。
+    private var preferenceKey: String {
+        TaskViewScopeKey.key(destination: navigation.destination,
+                             activeList: workspace.activeList, activeTag: workspace.activeTag)
+    }
 
     var body: some View {
         GeometryReader { geometry in
             let wide = geometry.size.width >= WFMetrics.splitMinimum
+            // 看板/时间线是**宽视图**：滴答里它们占满内容区，不该被"列表列"的上限
+            // （listMaximum = 470）夹住——实测截图里那会让时间线只剩左边一条窄栏。
+            let wideView = environment.viewPreferences.viewMode(for: preferenceKey) != .list
+            // 宽视图下详情面板**按需出现**：没选中任务时（本来只显示空态插画）
+            // 整块让给时间线/看板。
+            let showsInspector = !wideView || workspace.selectedTaskID != nil
+            let reserved = showsInspector ? WFMetrics.inspectorMinimum + WFMetrics.divider : 0
             let maximum = max(WFMetrics.listMinimum,
-                              min(WFMetrics.listMaximum,
-                                  geometry.size.width - WFMetrics.inspectorMinimum - WFMetrics.divider))
+                              min(wideView ? geometry.size.width : WFMetrics.listMaximum,
+                                  geometry.size.width - reserved))
             let boundedWidth = min(max(workspace.taskListPaneWidth, WFMetrics.listMinimum), maximum)
             if wide {
                 HStack(spacing: 0) {
                     TaskListView(workspace: workspace, navigation: navigation,
                                  navigationVisible: navigationVisible)
-                        .frame(width: boundedWidth)
-                    Rectangle().fill(WFColors.border).frame(width: WFMetrics.divider)
-                        .overlay {
-                            Color.clear.frame(width: WFSpace.sm).contentShape(Rectangle())
-                                .onHover { inside in
-                                    if inside { NSCursor.resizeLeftRight.push() }
-                                    else { NSCursor.pop() }
-                                }
-                                .gesture(DragGesture(minimumDistance: 1)
-                                    .onChanged { value in
-                                        if dragOrigin == nil { dragOrigin = boundedWidth }
-                                        workspace.setTaskListPaneWidth(min(max((dragOrigin ?? boundedWidth)
-                                            + value.translation.width, WFMetrics.listMinimum), maximum))
+                        // 宽视图吃满剩余宽度；列表模式沿用用户拖拽的宽度。
+                        .frame(width: wideView ? maximum : boundedWidth)
+                    if showsInspector {
+                        Rectangle().fill(WFColors.border).frame(width: WFMetrics.divider)
+                            .overlay {
+                                Color.clear.frame(width: WFSpace.sm).contentShape(Rectangle())
+                                    .onHover { inside in
+                                        if inside { NSCursor.resizeLeftRight.push() }
+                                        else { NSCursor.pop() }
                                     }
-                                    .onEnded { _ in dragOrigin = nil })
+                                    .gesture(DragGesture(minimumDistance: 1)
+                                        .onChanged { value in
+                                            if dragOrigin == nil { dragOrigin = boundedWidth }
+                                            workspace.setTaskListPaneWidth(min(max((dragOrigin ?? boundedWidth)
+                                                + value.translation.width, WFMetrics.listMinimum), maximum))
+                                        }
+                                        .onEnded { _ in dragOrigin = nil })
+                            }
+                        // 右栏是选中状态的纯投影：批量选中非空 → 批量面板；否则详情。
+                        if workspace.bulkSelection.isEmpty {
+                            TaskInspectorShell(workspace: workspace, showBack: false)
+                                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        } else {
+                            TaskBatchPanelView(workspace: workspace)
+                                .frame(maxWidth: .infinity, maxHeight: .infinity)
                         }
-                    // 右栏是选中状态的纯投影：批量选中非空 → 批量面板；否则详情。
-                    if workspace.bulkSelection.isEmpty {
-                        TaskInspectorShell(workspace: workspace, showBack: false)
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    } else {
-                        TaskBatchPanelView(workspace: workspace)
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
                     }
                 }
             } else if !workspace.bulkSelection.isEmpty {
