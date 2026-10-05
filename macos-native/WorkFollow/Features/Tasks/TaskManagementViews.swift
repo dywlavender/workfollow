@@ -274,7 +274,7 @@ private struct SidebarListRowView: View {
 
     @ViewBuilder
     private var menuItems: some View {
-        Button(pinned ? "取消置顶" : "置顶清单") {
+        Button(pinned ? "取消置顶" : "置顶") {
             _ = workspace.setListPinned(name, !pinned)
         }
         Button("重命名") {
