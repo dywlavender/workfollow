@@ -258,7 +258,8 @@ enum TaskListProjection {
         // 的日期分组是视图本体，传进来的 grouping 一律忽略。
         if scope == .allTasks, let list = query.list,
            let sectionGroups = TaskListSectionProjection.groups(ordinary, list: list,
-                                                                sections: store.listSections) {
+                                                                sections: store.listSections,
+                                                                sort: store.listMeta(for: list)?.sectionTaskSort) {
             // 清单自定义分组优先于"分组方式"：分组是**归属**，不是展示规则。
             groups += sectionGroups
         } else if scope == .allTasks {
@@ -522,8 +523,10 @@ enum TaskListSectionProjection {
     /// - 未分组任务排在最前（分组是**归属**，没归属的先列出来）；
     /// - 空分组也保留（分组是结构，不是"有内容的桶"）；
     /// - 组身份沿用 `.plain` 的标签身份 → 折叠状态按分组互不串。
+
     static func groups(_ tasks: [Task], list: String,
-                       sections: [TaskListSection]) -> [TaskListGroup]? {
+                       sections: [TaskListSection],
+                       sort: TaskSectionSort? = nil) -> [TaskListGroup]? {
         let ordered = sections.filter { $0.listName == list }
             .sorted { ($0.sortOrder, $0.title) < ($1.sortOrder, $1.title) }
         guard !ordered.isEmpty else { return nil }
@@ -534,14 +537,61 @@ enum TaskListSectionProjection {
             return !ids.contains(id)
         }
         if !unsectioned.isEmpty {
-            groups.append(TaskListGroup(kind: .plain, day: nil, tasks: unsectioned, label: "未分组"))
+            groups.append(TaskListGroup(kind: .plain, day: nil,
+                                        tasks: arranged(unsectioned, by: sort), label: "未分组"))
         }
         for section in ordered {
             groups.append(TaskListGroup(kind: .plain, day: nil,
-                                        tasks: tasks.filter { $0.sectionID == section.id },
+                                        tasks: arranged(tasks.filter { $0.sectionID == section.id },
+                                                        by: sort),
                                         label: section.title))
         }
         return groups
+    }
+
+    /// 分组内排序：nil = 默认（跟随上游视图排序，保持传入顺序）。
+    static func arranged(_ tasks: [Task], by sort: TaskSectionSort?) -> [Task] {
+        guard let sort else { return tasks }
+        switch sort {
+        case .dueDate:
+            return stable(tasks) { lhs, rhs in
+                switch (lhs.schedule.dueAt, rhs.schedule.dueAt) {
+                case let (left?, right?): return left < right
+                case (nil, _?): return false
+                case (_?, nil): return true
+                default: return false
+                }
+            }
+        case .priority:
+            return stable(tasks) { priorityRank($0.priority) < priorityRank($1.priority) }
+        case .createdNewest:
+            return stable(tasks) { $0.createdAt > $1.createdAt }
+        case .createdOldest:
+            return stable(tasks) { $0.createdAt < $1.createdAt }
+        case .modifiedNewest:
+            return stable(tasks) { $0.updatedAt > $1.updatedAt }
+        case .modifiedOldest:
+            return stable(tasks) { $0.updatedAt < $1.updatedAt }
+        }
+    }
+
+    /// 高 → 中 → 低 → 无（与 `priorityGroups` 同一顺序）。
+    static func priorityRank(_ priority: TaskPriority) -> Int {
+        switch priority {
+        case .high: 0
+        case .medium: 1
+        case .low: 2
+        case .none: 3
+        }
+    }
+
+    /// 稳定排序：同键任务保持原有相对顺序（否则"恢复默认"会抖动）。
+    private static func stable(_ tasks: [Task], less: (Task, Task) -> Bool) -> [Task] {
+        tasks.enumerated().sorted { lhs, rhs in
+            if less(lhs.element, rhs.element) { return true }
+            if less(rhs.element, lhs.element) { return false }
+            return lhs.offset < rhs.offset
+        }.map(\.element)
     }
 }
 

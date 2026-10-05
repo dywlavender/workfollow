@@ -862,6 +862,14 @@ final class TaskActions {
         return true
     }
 
+
+    /// 分组内排序（清单级设置；nil = 恢复默认，跟随视图排序）。
+    @discardableResult
+    func setListSectionSort(_ list: String, _ sort: TaskSectionSort?) -> Bool {
+        guard store.listMeta(for: list)?.sectionTaskSort != sort else { return false }
+        return commitListMeta(list) { $0.sectionTaskSort = sort }
+    }
+
     // MARK: 清单内自定义分组（滴答第三级）
 
     /// 添加分组（排在清单末尾）。空名 / 同清单重名 → false。

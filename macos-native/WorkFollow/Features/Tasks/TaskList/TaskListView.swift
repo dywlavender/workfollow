@@ -211,13 +211,20 @@ struct TaskListView: View {
                 }
                 .pickerStyle(.inline)
                 Button("恢复默认排序", systemImage: "arrow.counterclockwise") { resetSort() }
-
+            }
             if let list = workspace.activeList, list != TaskList.inbox.name {
                 Divider()
                 Button("添加分组…", systemImage: "plus") {
                     guard let title = TaskNamePrompt.ask("添加分组") else { return }
                     if !workspace.addListSection(list, title: title) { TaskNamePrompt.invalidName() }
                 }
+                Picker("分组排序", selection: sectionSortBinding(list)) {
+                    Text("默认（跟随视图排序）").tag(TaskSectionSort?.none)
+                    ForEach(TaskSectionSort.allCases, id: \.self) { option in
+                        Text(option.title).tag(TaskSectionSort?.some(option))
+                    }
+                }
+                .pickerStyle(.inline)
                 if !workspace.listSections(forList: list).isEmpty {
                     Menu("管理分组") {
                         ForEach(workspace.listSections(forList: list)) { section in
@@ -240,7 +247,6 @@ struct TaskListView: View {
                     }
                 }
             }
-            }
         } label: {
             Image(systemName: "arrow.up.arrow.down")
                 .frame(width: WFMetrics.controlHeight, height: WFMetrics.controlHeight)
@@ -250,6 +256,12 @@ struct TaskListView: View {
         .menuIndicator(.hidden)
         .fixedSize()
         .help("分组与排序")
+    }
+
+    /// 分组排序是**清单级**设置：写进清单 meta（nil = 恢复默认）。
+    private func sectionSortBinding(_ list: String) -> Binding<TaskSectionSort?> {
+        Binding(get: { workspace.sectionSort(forList: list) },
+                set: { _ = workspace.setListSectionSort(list, $0) })
     }
 
     private var sortModeBinding: Binding<TaskListSortMode> {

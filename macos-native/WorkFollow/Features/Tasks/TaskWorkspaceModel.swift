@@ -216,6 +216,18 @@ final class TaskWorkspaceModel: ObservableObject {
         return result
     }
 
+    /// 分组内排序（清单级；nil = 恢复默认）。
+    func sectionSort(forList name: String) -> TaskSectionSort? {
+        listMeta(for: name)?.sectionTaskSort
+    }
+
+    @discardableResult
+    func setListSectionSort(_ list: String, _ sort: TaskSectionSort?) -> Bool {
+        let changed = actions.setListSectionSort(list, sort)
+        if changed { revision += 1 }
+        return changed
+    }
+
     @discardableResult
     func saveList(_ raw: String, replacing old: String? = nil) -> Bool {
         let name = raw.trimmingCharacters(in: .whitespacesAndNewlines)
