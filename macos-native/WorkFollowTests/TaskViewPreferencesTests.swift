@@ -378,6 +378,48 @@ final class TaskViewPreferencesTests: XCTestCase {
                       "已完成视图是视图本体，不受「隐藏已完成」影响")
     }
 
+    // MARK: - 视图形态（列表 / 看板）
+
+    func testViewModeDefaultsToListAndPrunesWhenReset() {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("TaskViewPreferencesTests-\(UUID().uuidString)", isDirectory: true)
+        let store = TaskViewPreferenceStore(directory: directory)
+        let key = "list:工作"
+        XCTAssertEqual(store.viewMode(for: key), .list, "未设过 = 列表（滴答默认）")
+        store.setViewMode(.kanban, for: key)
+        XCTAssertEqual(store.viewMode(for: key), .kanban)
+        store.setViewMode(.list, for: key)
+        XCTAssertEqual(store.viewMode(for: key), .list)
+        XCTAssertNil(store.preferences[key], "回到列表 = 删键，不留垃圾")
+    }
+
+    func testViewModeArchiveIsAdditive() throws {
+        let archive = TaskViewPreferenceStore.Archive(
+            preferences: ["list:工作": TaskViewPreference(viewMode: .kanban)])
+        let data = try JSONEncoder().encode(archive)
+        let roundTrip = try JSONDecoder().decode(TaskViewPreferenceStore.Archive.self, from: data)
+        XCTAssertEqual(roundTrip.preferences["list:工作"]?.viewMode, .kanban, "视图形态随档案往返")
+
+        let old = #"{"preferences":{"scope:allTasks":{"sortMode":"due"}}}"#
+        let decoded = try JSONDecoder().decode(TaskViewPreferenceStore.Archive.self,
+                                               from: Data(old.utf8))
+        XCTAssertNil(decoded.preferences["scope:allTasks"]?.viewMode, "旧档案缺键 → 列表")
+    }
+
+    func testGroupTitleIsSingleSourceForListAndKanban() {
+        XCTAssertEqual(TaskGroupDisplay.title(group([], kind: .pinned), now: now), "置顶")
+        XCTAssertEqual(TaskGroupDisplay.title(group([], kind: .overdue), now: now), "已过期")
+        XCTAssertEqual(TaskGroupDisplay.title(group([], kind: .upcoming), now: now), "最近 7 天")
+        XCTAssertEqual(TaskGroupDisplay.title(group([], kind: .later), now: now), "更远")
+        XCTAssertEqual(TaskGroupDisplay.title(group([], kind: .undated), now: now), "无日期")
+        XCTAssertEqual(TaskGroupDisplay.title(group([], kind: .plain, label: "进行中"), now: now),
+                       "进行中", "自定义分组 = plain 组标签（看板列头与列表组头同一份）")
+        XCTAssertEqual(TaskGroupDisplay.title(group([], kind: .completed, label: "已完成"), now: now),
+                       "已完成")
+        XCTAssertTrue(TaskGroupDisplay.title(group([], kind: .today), now: now).hasPrefix("今天,"),
+                      "今天组带星期上下文")
+    }
+
     func testTomorrowDestinationMapsToTomorrowScope() {
         XCTAssertEqual(TaskWorkspaceModel.scope(for: .tomorrow), .tomorrow)
         XCTAssertEqual(NativeDestination.tomorrow.title, "明天")

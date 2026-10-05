@@ -93,7 +93,14 @@ struct TaskListView: View {
             // 候选列表挂在快速添加条的 overlay 上，会画到任务列表上方；提升层级
             // 才能盖住后面那个兄弟视图（SwiftUI 默认后者在上）。
             if canAdd, let scope { quickAddBar(in: scope).zIndex(1) }
-            taskListSection()
+            if viewMode == .kanban {
+                // 看板：列 = 投影分组（清单内有自定义分组时即分组本身）。
+                TaskKanbanView(groups: groups, workspace: workspace) { id in
+                    workspace.select(id)
+                }
+            } else {
+                taskListSection()
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(WFColors.content)
@@ -221,6 +228,12 @@ struct TaskListView: View {
                 .pickerStyle(.inline)
                 Button("恢复默认排序", systemImage: "arrow.counterclockwise") { resetSort() }
             }
+            Picker("视图", selection: viewModeBinding) {
+                ForEach(TaskListViewMode.allCases) { mode in
+                    Text(mode.title).tag(mode)
+                }
+            }
+            .pickerStyle(.inline)
             Toggle("隐藏已完成", isOn: hidesCompletedBinding)
             Toggle("隐藏详细", isOn: hidesDetailsBinding)
             Menu("显示设置") {
@@ -272,6 +285,15 @@ struct TaskListView: View {
         .menuIndicator(.hidden)
         .fixedSize()
         .help("分组与排序")
+    }
+
+    private var viewMode: TaskListViewMode {
+        environment.viewPreferences.viewMode(for: preferenceKey)
+    }
+
+    private var viewModeBinding: Binding<TaskListViewMode> {
+        Binding(get: { environment.viewPreferences.viewMode(for: preferenceKey) },
+                set: { environment.viewPreferences.setViewMode($0, for: preferenceKey) })
     }
 
     /// 显示设置（按视图记忆；缺省全显示）。
@@ -832,24 +854,8 @@ struct TaskListView: View {
     }
 
     private func groupTitle(_ group: TaskListGroup) -> String {
-        switch group.kind {
-        case .pinned: return "置顶"
-        case .overdue: return "已过期"
-        // 滴答式组标题带星期上下文："今天, 周六"。
-        case .today:
-            return "今天, " + workspace.clock().formatted(.dateTime.weekday(.abbreviated).locale(.appDate))
-        case .upcoming: return "最近 7 天"
-        case .later: return "更远"
-        case .undated: return "无日期"
-        case .day:
-            guard let day = group.day else { return "" }
-            return day.formatted(.dateTime.month(.abbreviated).day().weekday(.abbreviated).locale(.appDate))
-        case .plain:
-            return group.label ?? ""
-        case .completed:
-            guard let day = group.day else { return group.label ?? "已完成" }
-            return day.formatted(.dateTime.month(.abbreviated).day().locale(.appDate))
-        }
+        // 文案单一来源：`TaskGroupDisplay.title`（看板列头共用同一份）。
+        TaskGroupDisplay.title(group, now: workspace.clock())
     }
 
     private func rowIdentity(group: TaskListGroup, task: Task) -> String {
@@ -1284,7 +1290,8 @@ private struct TaskRowActivationPolicy: ViewModifier {
     }
 }
 
-private enum TaskRowPriority {
+/// 优先级配色（列表行的旗子与看板卡片共用同一份）。
+enum TaskRowPriority {
     /// 文案统一取领域类型的 `title`，不再在这里维护第二份表。
     static func title(_ priority: TaskPriority) -> String { priority.title }
 

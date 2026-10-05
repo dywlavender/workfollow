@@ -518,6 +518,30 @@ enum SidebarDragPayload: Equatable {
     }
 }
 
+/// 分组标题的**单一来源**（列表视图与看板视图共用，避免两处各写一套文案）。
+enum TaskGroupDisplay {
+    static func title(_ group: TaskListGroup, now: Date) -> String {
+        switch group.kind {
+        case .pinned: "置顶"
+        case .overdue: "已过期"
+        // 滴答式组标题带星期上下文："今天, 周六"。
+        case .today:
+            "今天, " + now.formatted(.dateTime.weekday(.abbreviated).locale(.appDate))
+        case .upcoming: "最近 7 天"
+        case .later: "更远"
+        case .undated: "无日期"
+        case .day:
+            group.day?.formatted(.dateTime.month(.abbreviated).day().weekday(.abbreviated)
+                .locale(.appDate)) ?? ""
+        case .plain:
+            group.label ?? ""
+        case .completed:
+            group.day?.formatted(.dateTime.month(.abbreviated).day().locale(.appDate))
+                ?? group.label ?? "已完成"
+        }
+    }
+}
+
 /// 清单内自定义分组的投影（滴答第三级）。
 enum TaskListSectionProjection {
     /// 当前清单有自定义分组时按它分桶；没有分组 → nil（调用方沿用用户选的分组方式）。

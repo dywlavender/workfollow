@@ -39,6 +39,22 @@ enum TaskListGrouping: String, CaseIterable, Codable, Identifiable {
     }
 }
 
+/// 视图形态（滴答清单页 ··· → 视图：列表 / 看板 / 时间线）。
+/// 本轮落**列表 / 看板**两态；时间线未做（登记）。
+enum TaskListViewMode: String, CaseIterable, Codable, Identifiable {
+    case list
+    case kanban
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .list: "列表"
+        case .kanban: "看板"
+        }
+    }
+}
+
 /// 智能清单的显示状态（对齐滴答：显示 / 隐藏 / 有内容时显示）。
 enum SmartListVisibility: String, Codable, CaseIterable, Identifiable {
     case visible, hidden, automatic
@@ -112,26 +128,31 @@ struct TaskViewPreference: Equatable, Codable {
     var hidesDetails: Bool?
     /// 详细行里被关掉的字段。空 = 全显示。
     var hiddenFields: [TaskRowDetailField]?
+    /// 视图形态。nil = 列表（滴答默认）。
+    var viewMode: TaskListViewMode?
 
     init(sortMode: TaskListSortMode? = nil, grouping: TaskListGrouping? = nil,
          sortDescending: Bool? = nil, hidesCompleted: Bool? = nil,
-         hidesDetails: Bool? = nil, hiddenFields: [TaskRowDetailField]? = nil) {
+         hidesDetails: Bool? = nil, hiddenFields: [TaskRowDetailField]? = nil,
+         viewMode: TaskListViewMode? = nil) {
         self.sortMode = sortMode
         self.grouping = grouping
         self.sortDescending = sortDescending
         self.hidesCompleted = hidesCompleted
         self.hidesDetails = hidesDetails
         self.hiddenFields = hiddenFields
+        self.viewMode = viewMode
     }
 
     /// 全是默认值 → 该视图不必留档案（与 resetSort 的"不留垃圾"同一口径）。
     var isDefault: Bool {
         sortMode == nil && grouping == nil && sortDescending == nil
             && hidesCompleted != true && hidesDetails != true && (hiddenFields ?? []).isEmpty
+            && viewMode == nil
     }
 
     private enum CodingKeys: String, CodingKey {
-        case sortMode, grouping, sortDescending, hidesCompleted, hidesDetails, hiddenFields
+        case sortMode, grouping, sortDescending, hidesCompleted, hidesDetails, hiddenFields, viewMode
     }
 
     init(from decoder: Decoder) throws {
@@ -142,6 +163,7 @@ struct TaskViewPreference: Equatable, Codable {
         hidesCompleted = try values.decodeIfPresent(Bool.self, forKey: .hidesCompleted)
         hidesDetails = try values.decodeIfPresent(Bool.self, forKey: .hidesDetails)
         hiddenFields = try values.decodeIfPresent([TaskRowDetailField].self, forKey: .hiddenFields)
+        viewMode = try values.decodeIfPresent(TaskListViewMode.self, forKey: .viewMode)
     }
 }
 
@@ -254,6 +276,15 @@ final class TaskViewPreferenceStore: ObservableObject, ModuleStoreFlushable {
 
     func hiddenDetailFields(for key: String) -> [TaskRowDetailField] {
         preferences[key]?.hiddenFields ?? []
+    }
+
+    /// 未设过 = 列表（滴答默认）。
+    func viewMode(for key: String) -> TaskListViewMode {
+        preferences[key]?.viewMode ?? .list
+    }
+
+    func setViewMode(_ mode: TaskListViewMode, for key: String) {
+        update(key) { $0.viewMode = mode == .list ? nil : mode }
     }
 
     func setHidesCompleted(_ hides: Bool, for key: String) {
