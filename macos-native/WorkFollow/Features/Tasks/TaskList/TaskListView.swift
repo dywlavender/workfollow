@@ -100,6 +100,11 @@ struct TaskListView: View {
                 TaskKanbanView(groups: groups, workspace: workspace) { id in
                     workspace.select(id)
                 }
+            } else if viewMode == .timeline {
+                // 时间线：按天分栏的跨天条（结构照滴答 TimelineContentBlock）。
+                TaskTimelineView(groups: groups, workspace: workspace) { id in
+                    workspace.select(id)
+                }
             } else {
                 taskListSection()
             }

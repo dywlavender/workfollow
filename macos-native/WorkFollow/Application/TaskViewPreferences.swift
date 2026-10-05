@@ -44,6 +44,7 @@ enum TaskListGrouping: String, CaseIterable, Codable, Identifiable {
 enum TaskListViewMode: String, CaseIterable, Codable, Identifiable {
     case list
     case kanban
+    case timeline
 
     var id: String { rawValue }
 
@@ -51,6 +52,7 @@ enum TaskListViewMode: String, CaseIterable, Codable, Identifiable {
         switch self {
         case .list: "列表"
         case .kanban: "看板"
+        case .timeline: "时间线"
         }
     }
 }
