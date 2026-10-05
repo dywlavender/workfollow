@@ -664,9 +664,15 @@ struct TaskListView: View {
         DispatchQueue.main.async { quickAddFocused = true }
     }
 
+    /// 快速添加的**落点**（与 `addTask` 的判定同源：override → 文本解析 → 当前清单 → 收集箱）。
+    ///
+    /// 实测出现过"清单页占位写收集箱、实际却落到学习"的不一致：占位此前只读
+    /// `activeList ?? 收集箱`，忽略了另外两条更靠前的来源。这里让**文案与落点同源**，
+    /// 从结构上消掉二者跑偏的可能（落点判定本身没有动）。
     private var quickAddTargetName: String {
-        TaskListViewDefaults.quickAddTargetName(activeList: workspace.activeList,
-                                                inboxName: TaskList.inbox.name)
+        quickAddListOverride ?? quickAddResult.listName
+            ?? TaskListViewDefaults.quickAddTargetName(activeList: workspace.activeList,
+                                                       inboxName: TaskList.inbox.name)
     }
 
     /// 快速添加条是否展开（露出日期与「更多」两个槽位、识别 chip 行与摘要行）。
@@ -1530,16 +1536,12 @@ private struct TaskRowMetadataTrail: View {
 
     private var dateBadge: some View {
         Button { onOpenDate() } label: {
-            HStack(spacing: 3) {
-                Image(systemName: TaskListViewDefaults.scheduleSymbol(hasTime: task.schedule.hasTime))
-                    .font(.system(size: 10))
-                Text(TaskListViewDefaults.scheduleLabel(
-                    dueAt: task.schedule.dueAt ?? Date(),
-                    hasTime: task.schedule.hasTime,
-                    now: workspace.clock(),
-                    calendar: workspace.calendar))
-                    .lineLimit(1)
-            }
+            Text(TaskListViewDefaults.scheduleLabel(
+                dueAt: task.schedule.dueAt ?? Date(),
+                hasTime: task.schedule.hasTime,
+                now: workspace.clock(),
+                calendar: workspace.calendar))
+                .lineLimit(1)
         }
         .buttonStyle(.plain)
         .foregroundStyle(task.isClosed ? muted : badgeColor)
@@ -1613,10 +1615,6 @@ enum TaskListViewDefaults {
         if activeTag != nil { return "tag" }
         if destination == .nextSevenDays { return "line.3.horizontal" }
         return destination.symbol
-    }
-
-    static func scheduleSymbol(hasTime: Bool) -> String {
-        hasTime ? "clock" : "calendar"
     }
 
     static func scheduleLabel(dueAt: Date, hasTime: Bool, now: Date, calendar: Calendar) -> String {
