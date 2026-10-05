@@ -94,7 +94,15 @@ struct TaskListView: View {
             headerBar
             // 候选列表挂在快速添加条的 overlay 上，会画到任务列表上方；提升层级
             // 才能盖住后面那个兄弟视图（SwiftUI 默认后者在上）。
-            if canAdd, let scope { quickAddBar(in: scope).zIndex(1) }
+            if canAdd, let scope {
+                quickAddBar(in: scope)
+                    .zIndex(1)
+                    // 占位文案实测过"清单已经是学习、却仍写着收集箱"：内容按 activeList
+                    // 过滤是对的（看板只有一列即证），所以问题是这条 bar 没有随目标变化
+                    // 重建。`.id` 绑到**落点名字**上，目标一变就换一个身份重建
+                    // （这是刻意为之的钝器：根因是这条子树的失效边界，不是取值逻辑）。
+                    .id(quickAddTargetName)
+            }
             if viewMode == .kanban {
                 // 看板：列 = 投影分组（清单内有自定义分组时即分组本身）。
                 TaskKanbanView(groups: groups, workspace: workspace) { id in
