@@ -9,6 +9,9 @@ final class DocumentEditorCoordinator: NSObject, NSTextViewDelegate {
     private var onDocumentChange: (NativeDocument) -> Void
     private var onEscape: () -> InspectorEscapeEffect
     private var onEditingChanged: (Bool) -> Void
+    private var committedStorageRevision: Int?
+    private var committedTrailingBlock: DocumentBlockKind?
+    private(set) var decodeCount = 0
 
     init(documentID: UUID, document: NativeDocument,
          onDocumentChange: @escaping (NativeDocument) -> Void,
@@ -28,6 +31,9 @@ final class DocumentEditorCoordinator: NSObject, NSTextViewDelegate {
                 onEditingChanged: @escaping (Bool) -> Void) {
         if self.documentID != documentID {
             flushPendingComposition(in: textView)
+            if textView.window?.firstResponder === textView {
+                textView.window?.makeFirstResponder(nil)
+            }
             textView.resetDocumentInteraction(for: documentID)
             self.documentID = documentID
             editorState.bind(to: documentID)
@@ -38,6 +44,7 @@ final class DocumentEditorCoordinator: NSObject, NSTextViewDelegate {
             // 文末空段落的级别只能从模型带回输入属性（它的样式在文档里没有字符可承载），
             // 否则切回来接着在文末输入会退回正文。
             textView.seedTrailingParagraphKind(Self.trailingBlockKind(of: document))
+            didLoadDocument(in: textView)
         } else if self.document != document,
                   !textView.hasMarkedText() {
             let selection = textView.selectedRange()
@@ -46,6 +53,7 @@ final class DocumentEditorCoordinator: NSObject, NSTextViewDelegate {
             let location = min(selection.location, (document.plainText as NSString).length)
             let length = min(selection.length, (document.plainText as NSString).length - location)
             textView.setSelectedRange(NSRange(location: location, length: length))
+            didLoadDocument(in: textView)
         }
         self.onDocumentChange = onDocumentChange
         self.onEscape = onEscape
@@ -88,10 +96,19 @@ final class DocumentEditorCoordinator: NSObject, NSTextViewDelegate {
     }
 
     func flushPendingComposition(in textView: NativeTextView) {
+        let trailing = textView.pendingTrailingBlock ?? Self.trailingBlockKind(of: document)
+        if !textView.hasMarkedText(), textView.documentCommandCommit == nil,
+           committedStorageRevision == textView.storageRevision,
+           committedTrailingBlock == trailing { return }
         if textView.hasMarkedText() {
             textView.unmarkText()
         }
         commit(textView, force: true)
+    }
+
+    func didLoadDocument(in textView: NativeTextView) {
+        committedStorageRevision = textView.storageRevision
+        committedTrailingBlock = textView.pendingTrailingBlock ?? Self.trailingBlockKind(of: document)
     }
 
     func detach(_ textView: NativeTextView) {
@@ -109,8 +126,13 @@ final class DocumentEditorCoordinator: NSObject, NSTextViewDelegate {
         // 文末空段的级别：优先用输入待定（光标在行上的最新意图），光标不在时
         // 回退到模型当前值——否则在别处编辑一次，文末列表就会丢级别。
         let pending = (textView as? NativeTextView)?.pendingTrailingBlock
+        decodeCount += 1
         let updated = DocumentTextCodec.decode(textView.attributedString(), preserving: document,
                                               trailing: pending ?? Self.trailingBlockKind(of: document))
+        if let native = textView as? NativeTextView {
+            committedStorageRevision = native.storageRevision
+            committedTrailingBlock = pending ?? Self.trailingBlockKind(of: updated)
+        }
         if let commit = (textView as? NativeTextView)?.documentCommandCommit {
             document = updated
             commit(updated)

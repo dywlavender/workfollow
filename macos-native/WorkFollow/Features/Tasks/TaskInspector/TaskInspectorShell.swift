@@ -592,7 +592,6 @@ struct TaskInspectorShell: View {
                 // 标记再由 DocumentEditorGeometry.decorationMarkerX 向内让 4pt。
                 decorationVisibleMinX: max(0, DocumentEditorGeometry.decorationLane - TaskInspectorMetrics.documentLeadingPadding)
             )
-            .id(task.id)
 
             if task.document.isEmpty {
                 Text("添加描述…")

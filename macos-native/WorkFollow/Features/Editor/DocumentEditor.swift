@@ -179,6 +179,7 @@ private struct DocumentEditorContent: NSViewRepresentable {
         textView.seedTrailingParagraphKind(document.blocks.last.flatMap { block in
             block.runs.allSatisfy { $0.text.isEmpty } ? block.kind : nil
         })
+        context.coordinator.didLoadDocument(in: textView)
         textView.onEscape = onEscape
         textView.onEditingChanged = onEditingChanged
         textView.onSelectionChanged = { [weak handle] in handle?.refreshStyle() }
@@ -211,13 +212,14 @@ private struct DocumentEditorContent: NSViewRepresentable {
     func updateNSView(_ view: NSView, context: Context) {
         guard let textView = Self.editor(in: view) else { return }
         textView.decorationVisibleMinX = decorationVisibleMinX
-        textView.profile = profile
         handle?.textView = textView
         textView.onSelectionChanged = { [weak handle] in handle?.refreshStyle() }
         context.coordinator.update(textView, documentID: documentID, document: document,
                                    onDocumentChange: onDocumentChange,
                                    onEscape: onEscape,
                                    onEditingChanged: onEditingChanged)
+        // Flush the outgoing document with its own host actions before rebinding.
+        textView.profile = profile
         if contentSized { textView.invalidateIntrinsicContentSize() }
         // Refresh after model/selection rebind, not from the outgoing document.
         handle?.refreshStyle()

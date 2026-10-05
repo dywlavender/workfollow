@@ -7,10 +7,12 @@ final class NativeTextView: NSTextView {
     var usesHostScrollView = false
     /// Leading boundary visible inside the host's narrower decoration space.
     var decorationVisibleMinX: CGFloat = 0
-    // An inspector is recreated for each document. Never share the window's
-    // undo history with another task or its title field.
+    // The editor can rebind documents; reset clears its owned history.
+    // Never share the window's undo history with another task or title field.
     private let documentUndoManager = UndoManager()
     private var ownedTextContentStorage: NSTextContentStorage?
+    private(set) var storageRevision = 0
+    private var storageObserver: Any?
     override var undoManager: UndoManager? { documentUndoManager }
 
     var onEscape: (() -> InspectorEscapeEffect)?
@@ -683,6 +685,11 @@ final class NativeTextView: NSTextView {
         }
         super.init(frame: frameRect, textContainer: container)
         ownedTextContentStorage = ownedContentStorage
+        storageObserver = NotificationCenter.default.addObserver(
+            forName: NSTextStorage.didProcessEditingNotification, object: textStorage, queue: nil
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.storageRevision += 1 }
+        }
         focusRingType = .none
         isRichText = true
         usesRuler = false
@@ -714,6 +721,10 @@ final class NativeTextView: NSTextView {
 
     required init?(coder: NSCoder) {
         fatalError("NativeTextView is created programmatically")
+    }
+
+    deinit {
+        if let storageObserver { NotificationCenter.default.removeObserver(storageObserver) }
     }
 
     override func cancelOperation(_ sender: Any?) {

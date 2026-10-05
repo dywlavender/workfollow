@@ -907,6 +907,14 @@ struct TaskListView: View {
         }
         .padding(.horizontal, WFSpace.sm)
         .frame(height: TaskListMetrics.groupHeaderHeight)
+        // 把任务拖到**分组标题**上 = 改归属（滴答主手势）。
+        // 列表行拖的是任务 UUID 字符串；侧栏清单拖拽带 `wf-list:` 前缀，UUID 解析失败即忽略。
+        .dropDestination(for: String.self) { values, _ in
+            guard let sectionID = group.sectionID,
+                  let raw = values.first,
+                  let taskID = UUID(uuidString: raw) else { return false }
+            return workspace.setTaskSection(taskID, sectionID: sectionID).taskID != nil
+        } isTargeted: { _ in }
     }
 
     private func revealSelectedClosedTask() {
