@@ -71,6 +71,8 @@ struct TaskTimelineView: View {
                         .foregroundStyle(WFColors.tertiaryText)
                 }
                 .frame(width: Self.dayWidth)
+                // 今天那一列整体加底色：只有表头文字变色，一整列是空的会看不出"今天"。
+                .background(day == today ? WFColors.accent.opacity(0.08) : Color.clear)
                 .overlay(alignment: .leading) {
                     Rectangle().fill(WFColors.listSelection.opacity(0.5)).frame(width: 1)
                 }
@@ -98,6 +100,12 @@ struct TaskTimelineView: View {
                             }
                     }
                 }
+                // 今天基线（每行一段，与表头的今天底色连成一条）。
+                if let offset = todayOffset(rangeStart) {
+                    Rectangle().fill(WFColors.accent.opacity(0.55))
+                        .frame(width: 1.5)
+                        .offset(x: CGFloat(offset) * Self.dayWidth)
+                }
                 bar(row.task)
                     .frame(width: CGFloat(row.span) * Self.dayWidth - 6, height: 20)
                     .offset(x: CGFloat(max(0, row.start)) * Self.dayWidth + 3)
@@ -118,11 +126,21 @@ struct TaskTimelineView: View {
                 .lineLimit(1)
                 .padding(.horizontal, 6)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(barColor(task), in: RoundedRectangle(cornerRadius: 4))
-                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        // 底色必须画在 Button **外层**：SwiftUI 给 label 的宽度提议是"未指定"，
+        // 画在 label 里就只有文字固有宽度（实测 1 天的条只画了 55pt，而不是 88-6）。
+        .background(barColor(task), in: RoundedRectangle(cornerRadius: 4))
+        .contentShape(Rectangle())
     }
+
+    /// 今天在 21 天视野里的列号；不在视野内 → nil。
+    private func todayOffset(_ rangeStart: Date) -> Int? {
+        let today = workspace.calendar.startOfDay(for: workspace.clock())
+        let days = workspace.calendar.dateComponents([.day], from: rangeStart, to: today).day ?? 0
+        return (0..<Self.dayCount).contains(days) ? days : nil
+    }
+
 
     private func title(of task: Task) -> String {
         task.title.isEmpty ? "无标题" : task.title
