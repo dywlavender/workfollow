@@ -17,40 +17,21 @@ struct TaskTimelineView: View {
     private static let labelWidth: CGFloat = 208
     private static let dayCount = 21
 
-    /// 时间线的行：有日期的任务（时间段按 `dueEndAt` 拉长）。无日期任务不进时间线。
-    private var rows: [(task: Task, start: Int, span: Int)] {
-        let calendar = workspace.calendar
-        let rangeStart = startDay(calendar)
-        var seen = Set<UUID>()
-        var result: [(Task, Int, Int)] = []
-        for group in groups {
-            for task in group.tasks where seen.insert(task.id).inserted {
-                guard let due = task.schedule.dueAt else { continue }
-                let start = dayOffset(from: rangeStart, to: calendar.startOfDay(for: due))
-                let endDay = task.schedule.dueEndAt.map { calendar.startOfDay(for: $0) } ?? due
-                let span = max(1, dayOffset(from: calendar.startOfDay(for: due),
-                                            to: calendar.startOfDay(for: endDay)) + 1)
-                result.append((task, start, span))
-            }
-        }
-        return result.sorted { ($0.1, $0.0.title) < ($1.1, $1.0.title) }
+    /// 时间线的行（几何见 `TaskTimelineLayout`，此处只做取值与排序）。
+    private var rows: [TaskTimelineRow] {
+        let tasks = groups.flatMap(\.tasks)
+        return TaskTimelineLayout.rows(tasks: tasks, now: workspace.clock(),
+                                       calendar: workspace.calendar)
     }
 
-    private func startDay(_ calendar: Calendar) -> Date {
-        let today = calendar.startOfDay(for: workspace.clock())
-        let earliest = groups.flatMap(\.tasks).compactMap { $0.schedule.dueAt }
-            .map { calendar.startOfDay(for: $0) }.min()
-        guard let earliest, earliest < today else { return today }
-        return earliest
-    }
-
-    private func dayOffset(from start: Date, to day: Date) -> Int {
-        workspace.calendar.dateComponents([.day], from: start, to: day).day ?? 0
+    private var rangeStart: Date {
+        TaskTimelineLayout.rangeStart(tasks: groups.flatMap(\.tasks),
+                                      now: workspace.clock(), calendar: workspace.calendar)
     }
 
     var body: some View {
         let rows = self.rows
-        let rangeStart = startDay(workspace.calendar)
+        let rangeStart = self.rangeStart
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
                 headerRow(rangeStart)
@@ -101,10 +82,9 @@ struct TaskTimelineView: View {
         .overlay(alignment: .bottom) { Divider() }
     }
 
-    private func timelineRow(_ row: (task: Task, start: Int, span: Int),
-                             rangeStart: Date) -> some View {
+    private func timelineRow(_ row: TaskTimelineRow, rangeStart: Date) -> some View {
         HStack(spacing: 0) {
-            Text(row.task.title.isEmpty ? "无标题" : row.task.title)
+            Text(title(of: row.task))
                 .font(WFType.listBody)
                 .foregroundStyle(row.task.isClosed ? WFColors.taskCompletedPreview : WFColors.text)
                 .lineLimit(1)
@@ -154,5 +134,45 @@ struct TaskTimelineView: View {
         case .low: return TaskRowPriority.color(.low).opacity(0.28)
         case .none: return WFColors.accent.opacity(0.22)
         }
+    }
+}
+
+
+/// 时间线的**纯几何**：范围起点、每条任务的起点偏移与跨度天数。
+/// 抽出来是为了可单测——视图只负责按它画，不再自己算。
+/// 口径：起点 = `min(今天, 最早到期日)`（逾期任务也在视野里）；
+/// 跨度 = `dueEndAt` 拉长的天数（无 `dueEndAt` 即 1 天）；无日期任务不进时间线。
+struct TaskTimelineRow: Equatable {
+    let task: Task
+    let start: Int
+    let span: Int
+}
+
+enum TaskTimelineLayout {
+    static let dayCount = 21
+
+    static func rangeStart(tasks: [Task], now: Date, calendar: Calendar) -> Date {
+        let today = calendar.startOfDay(for: now)
+        let earliest = tasks.compactMap { $0.schedule.dueAt }
+            .map { calendar.startOfDay(for: $0) }.min()
+        guard let earliest, earliest < today else { return today }
+        return earliest
+    }
+
+    static func rows(tasks: [Task], now: Date, calendar: Calendar) -> [TaskTimelineRow] {
+        let start = rangeStart(tasks: tasks, now: now, calendar: calendar)
+        var seen = Set<UUID>()
+        var rows: [TaskTimelineRow] = []
+        for task in tasks where seen.insert(task.id).inserted {
+            guard let due = task.schedule.dueAt else { continue }
+            let dueDay = calendar.startOfDay(for: due)
+            let endDay = task.schedule.dueEndAt.map { calendar.startOfDay(for: $0) } ?? due
+            let span = max(1, (calendar.dateComponents([.day], from: dueDay, to: endDay).day ?? 0) + 1)
+            rows.append(TaskTimelineRow(task: task,
+                                        start: calendar.dateComponents([.day], from: start,
+                                                                       to: dueDay).day ?? 0,
+                                        span: span))
+        }
+        return rows.sorted { ($0.start, $0.task.id.uuidString) < ($1.start, $1.task.id.uuidString) }
     }
 }
