@@ -870,6 +870,26 @@ final class TaskActions {
         return commitListMeta(list) { $0.sectionTaskSort = sort }
     }
 
+    /// 侧栏拖拽排序：把清单移到 `target` 之前（nil = 移到末尾）。
+    /// 顺序本体是 `store.lists`（meta.sortOrder 由 store 归一化为下标），
+    /// 一次提交 = 一步撤销；颜色/置顶/文件夹归属都随名字继承，不受影响。
+    @discardableResult
+    func moveList(_ name: String, before target: String?) -> Bool {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let name_ = trimmed
+        guard store.lists.contains(name_), canManageList(name_), target != name_ else { return false }
+        var lists = store.lists.filter { $0 != name_ }
+        if let target {
+            guard let index = lists.firstIndex(of: target) else { return false }
+            lists.insert(name_, at: index)
+        } else {
+            lists.append(name_)
+        }
+        guard lists != store.lists else { return false }
+        store.commit(store.tasks, lists: lists)
+        return true
+    }
+
     // MARK: 清单内自定义分组（滴答第三级）
 
     /// 添加分组（排在清单末尾）。空名 / 同清单重名 → false。

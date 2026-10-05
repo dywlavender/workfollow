@@ -216,6 +216,14 @@ final class TaskWorkspaceModel: ObservableObject {
         return result
     }
 
+    /// 侧栏拖拽排序：把清单移到 target 之前（nil = 末尾）。
+    @discardableResult
+    func moveList(_ name: String, before target: String?) -> Bool {
+        let changed = actions.moveList(name, before: target)
+        if changed { revision += 1 }
+        return changed
+    }
+
     /// 分组内排序（清单级；nil = 恢复默认）。
     func sectionSort(forList name: String) -> TaskSectionSort? {
         listMeta(for: name)?.sectionTaskSort

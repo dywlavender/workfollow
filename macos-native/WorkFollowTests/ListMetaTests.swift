@@ -184,6 +184,42 @@ final class ListMetaTests: XCTestCase {
         XCTAssertNil(loaded.taskListMeta?[1].folderName)
     }
 
+    // MARK: - 清单拖动排序（侧栏行间拖放带）
+
+    func testMoveListReordersAndIsOneUndoStep() {
+        let store = WorkspaceStore(); let actions = TaskActions(store: store, clock: { self.now })
+        _ = actions.renameList(nil, to: "A")
+        _ = actions.renameList(nil, to: "B")
+        _ = actions.renameList(nil, to: "C")
+        XCTAssertEqual(store.lists, ["A", "B", "C"])
+
+        XCTAssertTrue(actions.moveList("C", before: "A"))
+        XCTAssertEqual(store.lists, ["C", "A", "B"], "移到目标之前")
+        actions.undo()
+        XCTAssertEqual(store.lists, ["A", "B", "C"], "排序是一步撤销")
+
+        XCTAssertFalse(actions.moveList("A", before: "A"), "自己到自己不算改动")
+        XCTAssertFalse(actions.moveList(TaskList.inbox.name, before: "B"), "收集箱不参与排序")
+        XCTAssertFalse(actions.moveList("A", before: "不存在"), "目标不存在则拒绝")
+    }
+
+    func testMoveListToEndKeepsMetaAndFolder() {
+        let store = WorkspaceStore(); let actions = TaskActions(store: store, clock: { self.now })
+        _ = actions.renameList(nil, to: "A")
+        _ = actions.renameList(nil, to: "B")
+        XCTAssertTrue(actions.setListColor("A", 3))
+        XCTAssertTrue(actions.setListFolder("A", "公司"))
+
+        XCTAssertTrue(actions.moveList("A", before: nil))
+        XCTAssertEqual(store.lists, ["B", "A"], "nil = 移到末尾")
+        XCTAssertEqual(store.listMeta(for: "A")?.colorIndex, 3, "颜色随名字继承")
+        XCTAssertEqual(store.listMeta(for: "A")?.folderName, "公司", "文件夹归属不受排序影响")
+        XCTAssertEqual(TaskListOrdering.sidebarTree(store.lists, metas: store.listMetas,
+                                                    folders: store.listFolders),
+                       [.list("B"), .folder(name: "公司", lists: ["A"])],
+                       "侧栏树按新顺序渲染")
+    }
+
     // MARK: - 空文件夹 / 位置 / 拖拽建夹
 
     func testEmptyFolderKeepsItsOwnPosition() {

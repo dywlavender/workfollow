@@ -49,18 +49,35 @@ struct TaskCollectionsView: View {
             ForEach(workspace.listTree) { node in
                 switch node {
                 case .list(let name):
+                    insertionStrip(before: name)
                     SidebarListRowView(workspace: workspace, name: name) { openList(name) }
                 case .folder(let folder, let lists):
+                    insertionStrip(before: lists.first)
                     folderRow(folder, count: lists.count)
                     if !collapsedFolders.contains(folder) {
                         ForEach(lists, id: \.self) { name in
+                            insertionStrip(before: name)
                             SidebarListRowView(workspace: workspace, name: name) { openList(name) }
                                 .padding(.leading, Self.folderIndent)
                         }
                     }
                 }
             }
+            insertionStrip(before: nil)
         }.buttonStyle(.plain).font(WFType.navigation)
+    }
+
+    /// 行间拖放带：清单拖到这里 = **排序**（拖到行上才是"建文件夹"，滴答同一手势两种结果）。
+    /// 本轮只做改顺序：归属（拖出文件夹）仍走 ⋯ → 移动到文件夹，已登记。
+    private func insertionStrip(before target: String?) -> some View {
+        Color.clear
+            .frame(height: 6)
+            .contentShape(Rectangle())
+            .dropDestination(for: String.self) { values, _ in
+                guard let raw = values.first,
+                      case .list(let moved)? = SidebarDragPayload.decode(raw) else { return false }
+                return workspace.moveList(moved, before: target)
+            }
     }
 
     /// 文件夹行：展开箭头 + 名称 + 成员清单数；右键重命名 / 删除（清单保留，回到顶层）。
