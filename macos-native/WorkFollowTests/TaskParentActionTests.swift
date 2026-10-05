@@ -2,6 +2,40 @@ import XCTest
 @testable import WorkFollow
 
 final class TaskParentActionTests: XCTestCase {
+    func testDragMovesChildBetweenParentsAndPromotesToRootWithSingleUndo() throws {
+        let oldParent = makeTask("旧父任务", list: TaskList(name: "工作"))
+        let newParent = makeTask("新父任务", list: TaskList(name: "个人"))
+        var child = makeTask("拖动的子任务", parentID: oldParent.id, list: oldParent.list)
+        child.document = NativeDocument(plainText: "保留正文")
+        let sibling = makeTask("已有子任务", parentID: newParent.id, list: newParent.list)
+        let before = [oldParent, child, newParent, sibling]
+        let store = WorkspaceStore()
+        store.commit(before, undoPolicy: .skip)
+        store.clearUndo()
+        let actions = TaskActions(store: store)
+
+        XCTAssertEqual(actions.move(child.id, to: .childOf(newParent.id)), .success(child.id))
+        XCTAssertEqual(store.task(child.id)?.parentID, newParent.id)
+        XCTAssertEqual(store.task(child.id)?.list, newParent.list)
+        XCTAssertEqual(store.task(child.id)?.document, child.document)
+        XCTAssertEqual(store.children(of: newParent.id).map(\.id), [sibling.id, child.id])
+        actions.undo()
+        XCTAssertEqual(store.tasks, before)
+        XCTAssertFalse(store.canUndo)
+
+        XCTAssertEqual(actions.move(child.id, to: .rootAfter(oldParent.id)), .success(child.id))
+        XCTAssertNil(store.task(child.id)?.parentID)
+        XCTAssertEqual(store.task(child.id)?.list, oldParent.list)
+        actions.undo()
+        XCTAssertEqual(store.tasks, before)
+        XCTAssertFalse(store.canUndo)
+
+        XCTAssertEqual(actions.move(child.id, to: .before(sibling.id)), .success(child.id))
+        XCTAssertEqual(store.children(of: newParent.id).map(\.id), [child.id, sibling.id])
+        actions.undo()
+        XCTAssertEqual(store.tasks, before)
+    }
+
     private let now = Date(timeIntervalSince1970: 1_800_000_000)
 
     private func makeTask(_ title: String, parentID: UUID? = nil,

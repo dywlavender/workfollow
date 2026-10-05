@@ -1,5 +1,15 @@
 import Foundation
 
+enum TaskDropPlacement: Equatable {
+    case before(UUID), after(UUID), childOf(UUID), rootBefore(UUID), rootAfter(UUID)
+
+    var targetID: UUID {
+        switch self {
+        case let .before(id), let .after(id), let .childOf(id), let .rootBefore(id), let .rootAfter(id): id
+        }
+    }
+}
+
 final class TaskActions {
     private let store: WorkspaceStore
     private let clock: () -> Date
@@ -646,6 +656,56 @@ final class TaskActions {
             }
         }
         store.commit(values)
+    }
+
+    /// Reparenting and order changes form one operation, including one undo step.
+    @discardableResult
+    func move(_ id: UUID, to placement: TaskDropPlacement) -> TaskActionResult {
+        guard let source = store.task(id), let target = store.task(placement.targetID) else {
+            return .failure(.missingTask)
+        }
+        guard source.id != target.id else { return .failure(.cannotParentToSelf) }
+        guard source.deletedAt == nil, target.deletedAt == nil else { return .failure(.deletedTask) }
+        let parentID: UUID?
+        switch placement {
+        case .childOf: parentID = target.id
+        case .rootBefore, .rootAfter: parentID = nil
+        case .before, .after: parentID = target.parentID
+        }
+        if let parentID, let parent = store.task(parentID) {
+            if let rejection = TaskParentPolicy.rejection(task: source, parent: parent, tasks: store.tasks) {
+                return .failure(rejection)
+            }
+        }
+        var moved = source
+        moved.parentID = parentID
+        if let parentID, let parent = store.task(parentID) { moved.list = parent.list }
+        moved.updatedAt = clock()
+        var values = store.tasks.filter { $0.id != id }
+        guard let targetIndex = values.firstIndex(where: { $0.id == target.id }) else {
+            return .failure(.missingTask)
+        }
+        let insertion: Int
+        switch placement {
+        case .childOf:
+            insertion = (values.lastIndex { $0.parentID == parentID } ?? targetIndex) + 1
+        case .before, .rootBefore:
+            insertion = targetIndex
+        case .after, .rootAfter:
+            insertion = targetIndex + 1
+        }
+        values.insert(moved, at: insertion)
+        // Child order, not array position alone, drives the tree projection.
+        for parent in Set([source.parentID, parentID].compactMap { $0 }) {
+            var order = 0
+            for i in values.indices where values[i].parentID == parent {
+                values[i].childOrder = order
+                order += 1
+            }
+        }
+        if parentID == nil, let i = values.firstIndex(where: { $0.id == id }) { values[i].childOrder = 0 }
+        store.commit(values)
+        return .success(id)
     }
 
     // MARK: - 清单元数据（Round B1 加法：颜色/置顶只走 store 的 meta 通道，不碰任务数据）

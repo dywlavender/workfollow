@@ -479,3 +479,56 @@ shell, manually drag the quarterly task above the reading task in this isolated
 app to distinguish native user behavior from computer-use drag delivery. This
 round does not claim completed drag/undo/post-drag physical acceptance, does not
 change production drag behavior, and does not enter IS-004 or commit/push.
+
+### Task reorder affordance / move semantics — 2026-10-05
+
+This initial model is superseded by the handle-only / inline-title / hierarchy
+contract below; row dragging and root-only handles are not the current target.
+
+The user confirmed that manual dragging reorders tasks successfully. The prior
+automated unchanged-order observation therefore must not be treated as proof of
+a production reorder failure. The remaining reported issue is the copy badge
+(`+`) during a move, plus the missing hover affordance.
+
+- Keep the existing row drag recognizer and workspace reorder/undo action.
+- On macOS 26+, configure in-app dragging as move-only and disallow export of
+  the internal identifier. On earlier supported systems, retain the existing
+  source and explicitly propose move at the reorder drop destination.
+- Show a neutral handle in the existing left gutter only for manually sortable
+  root tasks. The handle has its own drag source; title/row dragging remains.
+  Handle visibility never changes checkbox, title, preview or disclosure layout.
+- Native-window regression coverage includes independent completion, disclosure,
+  date, selection and modifier-click actions, move proposal, identity-preserving
+  reorder and undo, plus identical content geometry with/without the handle.
+  The final-build run passed 13 tests with no failures.
+  Log: `/private/tmp/workfollow-drag-move-final-tests.log`.
+- The isolated application was opened and manual sort verified. Computer-use
+  pointer operations did not demonstrate hover/drag delivery; neither visible
+  handle appearance nor the in-flight cursor badge is claimed as physically
+  accepted. These require a manual check on the modified build, including handle
+  dragging and row dragging. Earlier macOS source-cursor behavior is unverified.
+
+### Corrected task-row ownership and hierarchy contract — 2026-10-05
+
+The user clarified that only the move handle initiates task dragging. Clicking
+the task title enters inline editing, not dragging. Child tasks must also be
+movable between parents and promotable to independent tasks.
+
+- Remove the row-wide drag source. Root and child move handles are the only drag
+  sources in manual order; checkbox, disclosure and date keep independent actions.
+- Native single-click title editing commits on Return or outside click and
+  cancels on Escape. Modifier clicks remain row bulk/range selection. Title
+  editing does not request list keyboard focus. Outside-click observation
+  relinquishes the field editor and returns the original event unchanged.
+- Edge drop zones reorder siblings; a root-row center accepts a child; the left
+  gutter at a child row promotes the dragged task to root order. These zones are
+  implementation choices, not independently verified TickTick reference behavior.
+- Preserve the existing two-level domain rule. Reparent and order mutations use
+  one workspace snapshot and one undo step. A reparented child follows the new
+  parent's list; becoming independent preserves its existing list. Selected task
+  identity stays unchanged and the destination parent is expanded.
+- Native-window and domain regressions cover inline edit/submit/cancel, click
+  isolation, move proposals/zones, reparenting, promotion, ordering and undo.
+  Log: `/private/tmp/workfollow-hierarchy-final-tests.log`.
+- Physical drag/cursor/hover closure is still separate from these regressions;
+  do not mark it accepted based only on source or a synthetic reorder action.

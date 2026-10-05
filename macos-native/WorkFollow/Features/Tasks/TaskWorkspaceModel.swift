@@ -659,6 +659,16 @@ final class TaskWorkspaceModel: ObservableObject {
         return result
     }
 
+    @discardableResult
+    func moveTask(_ id: UUID, to placement: TaskDropPlacement) -> TaskActionResult {
+        let result = actions.move(id, to: placement)
+        didMutate(result)
+        if result.taskID != nil, let parentID = task(for: id)?.parentID {
+            collapsedTaskIDs.remove(parentID)
+        }
+        return result
+    }
+
     func consumePendingChildTitleEditor() -> UUID? {
         defer { pendingChildTitleEditorID = nil }
         return pendingChildTitleEditorID

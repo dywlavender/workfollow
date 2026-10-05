@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct TaskListView: View {
     @ObservedObject var workspace: TaskWorkspaceModel
@@ -909,6 +910,14 @@ struct TaskListView: View {
                 expanded: node.expanded,
                 selected: isSelected,
                 showsListBadge: showsListBadge,
+                allowsReordering: sortMode == .manual && !node.task.isClosed,
+                onEditTitle: {
+                    // Native field editing owns keyboard focus, not the list.
+                    quickAddFocused = false
+                    descriptionFocused = false
+                    listFocused = false
+                    workspace.select(node.task.id)
+                },
                 onSelect: {
                     listFocused = true
                     workspace.select(node.task.id)
@@ -947,22 +956,12 @@ struct TaskListView: View {
                         trailing: WFSpace.lg)
                 }
             }
-        if node.depth == 0 {
-            // 拖拽排序只在手动排序下可用：手动顺序就是手动排序的数据本体，其它
-            // 排序模式下拖了也不可见，只会让人以为功能坏了。
-            if sortMode == .manual {
-                row
-                    .draggable(node.task.id.uuidString) {
-                        TaskDragPreview(title: node.task.title)
-                    }
-                    .modifier(TaskReorderDropModifier(workspace: workspace, targetID: node.task.id))
-                    .id(rowIdentity(group: group, task: node.task))
-            } else {
-                row
-                    .id(rowIdentity(group: group, task: node.task))
-            }
+        if sortMode == .manual && !node.task.isClosed {
+            row
+                .modifier(TaskReorderDropModifier(workspace: workspace, targetID: node.task.id,
+                                                  depth: node.depth))
+                .id(rowIdentity(group: group, task: node.task))
         } else {
-            // 子任务不可拖、也不作为重排落点（对齐 Flutter）。
             row.id(rowIdentity(group: group, task: node.task))
         }
     }
@@ -1062,6 +1061,8 @@ struct TaskRowView: View {
     let expanded: Bool
     let selected: Bool
     var showsListBadge: Bool = true
+    var allowsReordering: Bool = false
+    var onEditTitle: (() -> Void)? = nil
     let onSelect: () -> Void
     /// Cmd+点击（进入/切换批量选中）。nil 时（渲染契约等宿主）退回普通选中。
     var onBulkToggle: ((UUID) -> Void)? = nil
@@ -1071,6 +1072,7 @@ struct TaskRowView: View {
     let onRestore: () -> Void
     let onToggleExpanded: () -> Void
     @State private var hovering = false
+    @State private var hoveringReorderHandle = false
     @State private var showDatePopover = false
     @State private var contextDateAnchor: CGRect?
     @State private var showTagPicker = false
@@ -1104,9 +1106,11 @@ struct TaskRowView: View {
             }
 
             VStack(alignment: .leading, spacing: 1) {
-                Text(task.title.isEmpty ? "无标题" : task.title)
-                    .font(WFType.listTitle).lineLimit(1)
-                    .foregroundStyle(task.status == .completed ? WFColors.taskCompletedTitle : task.isClosed ? WFColors.secondaryText : WFColors.text)
+                TaskRowTitleField(title: task.title,
+                                  color: task.status == .completed ? WFColors.taskCompletedTitle : task.isClosed ? WFColors.secondaryText : WFColors.text,
+                                  onSelect: onEditTitle ?? onSelect,
+                                  onCommit: { _ = workspace.setTitle(task.id, $0) })
+                    .frame(height: 18)
                     .taskTreeRenderAnchor(task.id, .title)
                 if let preview = rowPreview {
                     Text(preview)
@@ -1116,10 +1120,6 @@ struct TaskRowView: View {
                 }
             }
             .frame(maxWidth: .infinity, minHeight: WFMetrics.rowContentMinHeight, alignment: .topLeading)
-            // Mouse selection belongs to the row, not a nested title button.
-            // Keep an explicit assistive action without another mouse surface.
-            .accessibilityElement(children: .combine)
-            .accessibilityAction { onSelect() }
 
             // 与 Flutter 行一致：元数据尾栏常驻，悬浮只做行背景高亮，不浮现
             // 任何快捷按钮（日期走尾栏日期徽章，优先级走右键菜单/检查器）。
@@ -1144,6 +1144,25 @@ struct TaskRowView: View {
         .modifier(TaskRowActivationPolicy())
         .taskTreeRenderAnchor(task.id, .row)
         .onHover { hovering = $0 }
+        .overlay(alignment: .topLeading) {
+            if allowsReordering {
+                Image(systemName: "line.3.horizontal")
+                    .font(.system(size: 10, weight: .regular))
+                    .foregroundStyle(WFColors.secondaryText)
+                    .frame(width: 16, height: 18)
+                    .contentShape(Rectangle())
+                    .opacity(hovering || hoveringReorderHandle ? 1 : 0)
+                    .onHover { hoveringReorderHandle = $0 }
+                    .help("拖动调整任务顺序")
+                    .accessibilityLabel("拖动调整任务顺序")
+                    .draggable(task.id.uuidString) {
+                        TaskDragPreview(title: task.title)
+                    }
+                    .modifier(TaskReorderDragPolicy())
+                    .offset(x: -14 + CGFloat(depth) * TaskListMetrics.hierarchyIndent,
+                            y: WFMetrics.rowVerticalPadding)
+            }
+        }
         .overlay {
             // Context-origin scheduling is anchored to this click, including
             // tasks without a date badge. It must not borrow the whole row.
@@ -1252,27 +1271,43 @@ private struct TaskRowCompletionBox: View {
     }
 }
 
-/// 手动排序的拖放目标（Round B1，对齐 Flutter moveTaskBefore）：拖行悬停时在
-/// 目标行上缘显示插入条，drop → workspace.reorder(id, before:)。只挂在根任务
-/// 行上（见 taskRow），子任务不可拖也不作为落点。
+/// Edge drops reorder; root centers accept children; the left gutter promotes
+/// a child to a root. The feedback distinguishes ordering from hierarchy changes.
 private struct TaskReorderDropModifier: ViewModifier {
     @ObservedObject var workspace: TaskWorkspaceModel
     let targetID: UUID
-    @State private var targeted = false
+    let depth: Int
+    @State private var rowHeight: CGFloat = WFMetrics.rowHeight
+    @State private var placement: TaskDropPlacement?
 
     func body(content: Content) -> some View {
         content
-            .dropDestination(for: String.self) { values, _ in
-                guard let id = values.first.flatMap(UUID.init(uuidString:)),
-                      id != targetID else { return false }
-                workspace.reorder(id, before: targetID)
-                return true
-            } isTargeted: { targeted = $0 }
-            .overlay(alignment: .top) {
-                if targeted {
-                    TaskDropMarker()
-                        .transition(.opacity)
+            .background(GeometryReader { geometry in
+                Color.clear.onAppear { rowHeight = geometry.size.height }
+                    .onChange(of: geometry.size.height) { _, height in rowHeight = height }
+            })
+            .onDrop(of: [UTType.utf8PlainText], delegate: TaskReorderDropDelegate(
+                workspace: workspace, targetID: targetID, depth: depth,
+                rowHeight: rowHeight, placement: $placement))
+            .overlay {
+                Group {
+                switch placement {
+                case .childOf:
+                    RoundedRectangle(cornerRadius: WFMetrics.corner)
+                        .stroke(WFColors.accent, lineWidth: 1)
+                        .background(WFColors.accent.opacity(0.08), in: RoundedRectangle(cornerRadius: WFMetrics.corner))
+                        .overlay(alignment: .bottomTrailing) {
+                            Text("作为子任务").font(.system(size: 10)).foregroundStyle(WFColors.accent).padding(3)
+                        }
+                case .before, .rootBefore:
+                    VStack { TaskDropMarker(); Spacer(minLength: 0) }
+                case .after, .rootAfter:
+                    VStack { Spacer(minLength: 0); TaskDropMarker() }
+                case nil:
+                    EmptyView()
                 }
+                }
+                .allowsHitTesting(false)
             }
     }
 }
