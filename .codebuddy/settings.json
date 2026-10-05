@@ -1,0 +1,39 @@
+{
+  "permissions": {
+    "allow": [
+      "Read",
+      "Grep",
+      "Glob",
+      "Bash(rg:*)",
+      "Bash(sed -n:*)",
+      "Bash(xcodebuild build:*)",
+      "Bash(xcodebuild test:*)",
+      "Bash(python3 /tmp/*.py)",
+      "Bash(git status:*)",
+      "Bash(git log:*)",
+      "Bash(git diff:*)",
+      "Bash(git show:*)",
+      "Bash(git rev-parse:*)",
+      "Bash(git worktree list:*)"
+    ],
+    "ask": [
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git reset:*)",
+      "Bash(git restore:*)",
+      "Bash(git worktree add:*)",
+      "Bash(git worktree remove:*)",
+      "Bash(python3:*)",
+      "Bash(pkill:*)",
+      "Bash(osascript:*)",
+      "Bash(open -a:*)",
+      "Bash(rm:*)"
+    ],
+    "deny": [
+      "Bash(git push:*)",
+      "Bash(git config:*)",
+      "Bash(sudo:*)",
+      "Bash(rm -rf /:*)"
+    ]
+  }
+}

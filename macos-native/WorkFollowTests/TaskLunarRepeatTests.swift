@@ -219,4 +219,12 @@ func testEbbinghausMigrationRoundTrip() throws {
     let decoded = try JSONDecoder().decode(TaskRepeat.self, from: data)
     XCTAssertEqual(decoded, .ebbinghaus)
 }
+
+    /// AC-2.1 机器等效:重复选项全集含艾宾浩斯入口,标题唯一。
+    func testEbbinghausAppearsInRepeatOptions() {
+        let titles = TaskRepeat.allCases.map { $0.title }
+        XCTAssertTrue(titles.contains("艾宾浩斯记忆法"), "重复选项缺少艾宾浩斯入口")
+        XCTAssertEqual(Set(titles).count, titles.count, "重复选项标题有重复")
+    }
+
 }
