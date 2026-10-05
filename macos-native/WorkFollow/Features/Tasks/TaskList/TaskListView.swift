@@ -10,6 +10,8 @@ struct TaskListView: View {
     @State private var draft = ""
     @State private var showNavigation = false
     @State private var showTemplatePicker = false
+    /// 清单动态弹层（事件模型与任务动态共用 `TaskActivityStore`）。
+    @State private var showListActivity = false
     @State private var showQuickAddSchedule = false
     @State private var quickAddSchedulePage: TaskDatePopoverV2.Page = .main
     @State private var pendingTemplatePicker = false
@@ -138,6 +140,14 @@ struct TaskListView: View {
                                    listFocused = true
                                })
         }
+        .sheet(isPresented: $showListActivity) {
+            if let list = workspace.activeList {
+                ListActivitySheet(listName: list, workspace: workspace,
+                                  activity: environment.taskActivityStore) {
+                    showListActivity = false
+                }
+            }
+        }
         .onChange(of: showTemplatePicker) { _, presented in
             if presented { quickAddFocused = false; descriptionFocused = false }
         }
@@ -234,7 +244,6 @@ struct TaskListView: View {
                 }
             }
             .pickerStyle(.inline)
-            Button("打印…", systemImage: "printer") { printCurrentView() }
             Toggle("隐藏已完成", isOn: hidesCompletedBinding)
             Toggle("隐藏详细", isOn: hidesDetailsBinding)
             Menu("显示设置") {
@@ -363,6 +372,12 @@ struct TaskListView: View {
             Button("从模板添加", systemImage: "doc.badge.plus") { showTemplatePicker = true }
             Button("撤销", systemImage: "arrow.uturn.backward") { workspace.undo() }
                 .disabled(!workspace.canUndo)
+            Divider()
+            Button("清单动态…", systemImage: "clock.arrow.circlepath") {
+                DispatchQueue.main.async { showListActivity = true }
+            }
+            .disabled(workspace.activeList == nil)
+            Button("打印…", systemImage: "printer") { printCurrentView() }
             Divider()
             Button("展开/收起已完成", systemImage: "checkmark.circle") {
                 groupExpansion.toggleClosedGroups(in: groups)
