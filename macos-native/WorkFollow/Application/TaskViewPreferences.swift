@@ -55,6 +55,14 @@ enum TaskListViewMode: String, CaseIterable, Codable, Identifiable {
         case .timeline: "时间线"
         }
     }
+
+    /// 界面上**暴露**的视图。
+    ///
+    /// `.timeline` 留在 `allCases` 里是因为几何/投影有测试固定、将来补"排期闭环"
+    /// （左列钉住 + 拖拽改期 + 未排期池）时会复用；但按自测结论它现在**不进 UI**：
+    /// 缺了拖拽改期，它就只是个比列表视图没有任何优势的只读表格，
+    /// 1 条有日期的任务撑起 21 天空网格，看起来像页面坏了。
+    static let exposedCases: [TaskListViewMode] = [.list, .kanban]
 }
 
 /// 智能清单的显示状态（对齐滴答：显示 / 隐藏 / 有内容时显示）。
@@ -281,7 +289,14 @@ final class TaskViewPreferenceStore: ObservableObject, ModuleStoreFlushable {
     }
 
     /// 未设过 = 列表（滴答默认）。
+    /// 存量的 `timeline` 偏好读回时回落到列表：入口收起后如果照样返回时间线，
+    /// 用户会"看不见入口却一直停在那一个视图里"。
     func viewMode(for key: String) -> TaskListViewMode {
+        let stored = storedViewMode(for: key)
+        return TaskListViewMode.exposedCases.contains(stored) ? stored : .list
+    }
+
+    func storedViewMode(for key: String) -> TaskListViewMode {
         preferences[key]?.viewMode ?? .list
     }
 

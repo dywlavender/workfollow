@@ -330,7 +330,7 @@ struct TaskListView: View {
             Button("撤销", systemImage: "arrow.uturn.backward") { workspace.undo() }
                 .disabled(!workspace.canUndo)
             Picker("视图", selection: viewModeBinding) {
-                ForEach(TaskListViewMode.allCases) { mode in
+                ForEach(TaskListViewMode.exposedCases) { mode in
                     Text(mode.title).tag(mode)
                 }
             }
