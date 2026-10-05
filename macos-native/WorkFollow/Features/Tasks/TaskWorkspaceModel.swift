@@ -529,11 +529,13 @@ final class TaskWorkspaceModel: ObservableObject {
     }
 
     func groups(for scope: TaskListScope, query: TaskListQuery = TaskListQuery(),
-                grouping: TaskListGrouping = .byDate) -> [TaskListGroup] {
+                grouping: TaskListGrouping = .byDate,
+                hidesCompleted: Bool = false) -> [TaskListGroup] {
         _ = revision
         return applyingFilter(
             TaskListProjection.groups(in: scope, store: store, now: clock(), calendar: calendar,
-                                      query: query, grouping: grouping))
+                                      query: query, grouping: grouping,
+                                      hidesCompleted: hidesCompleted))
     }
 
     /// Count for the visible list; when a saved filter is active the header

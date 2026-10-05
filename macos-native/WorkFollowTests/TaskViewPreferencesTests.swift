@@ -308,6 +308,76 @@ final class TaskViewPreferencesTests: XCTestCase {
         XCTAssertEqual(roundTrip.smartListVisibility["today"], .automatic)
     }
 
+    // MARK: - 显示设置（隐藏已完成 / 隐藏详细 / 详细行字段开关）
+
+    func testDisplayTogglesDefaultOffAndPruneBackToDefault() {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("TaskViewPreferencesTests-\(UUID().uuidString)", isDirectory: true)
+        let store = TaskViewPreferenceStore(directory: directory)
+        let key = "list:工作"
+        XCTAssertFalse(store.hidesCompleted(for: key), "未设过 = 显示已完成")
+        XCTAssertFalse(store.hidesDetails(for: key), "未设过 = 显示详细")
+        XCTAssertTrue(store.hiddenDetailFields(for: key).isEmpty)
+
+        store.setHidesCompleted(true, for: key)
+        store.setHidesDetails(true, for: key)
+        store.setDetailField(.date, hidden: true, for: key)
+        store.setDetailField(.tags, hidden: true, for: key)
+        XCTAssertTrue(store.hidesCompleted(for: key))
+        XCTAssertTrue(store.hidesDetails(for: key))
+        XCTAssertEqual(store.hiddenDetailFields(for: key).sorted { $0.rawValue < $1.rawValue },
+                       [.date, .tags])
+
+        store.setDetailField(.date, hidden: true, for: key)
+        XCTAssertEqual(store.hiddenDetailFields(for: key).count, 2, "重复勾选不叠加")
+
+        store.setHidesCompleted(false, for: key)
+        store.setHidesDetails(false, for: key)
+        store.setDetailField(.date, hidden: false, for: key)
+        store.setDetailField(.tags, hidden: false, for: key)
+        XCTAssertNil(store.preferences[key], "全部回默认 → 档案清掉，不留垃圾")
+    }
+
+    func testDisplayTogglesArchiveIsAdditiveAndRoundTrips() throws {
+        let key = "scope:allTasks"
+        let archive = TaskViewPreferenceStore.Archive(
+            preferences: [key: TaskViewPreference(hidesCompleted: true, hidesDetails: true,
+                                                  hiddenFields: [.priority])])
+        let data = try JSONEncoder().encode(archive)
+        let roundTrip = try JSONDecoder().decode(TaskViewPreferenceStore.Archive.self, from: data)
+        let entry = try XCTUnwrap(roundTrip.preferences[key])
+        XCTAssertTrue(entry.hidesCompleted ?? false, "隐藏已完成随档案往返")
+        XCTAssertTrue(entry.hidesDetails ?? false)
+        XCTAssertEqual(entry.hiddenFields, [.priority], "字段开关随档案往返")
+
+        let old = #"{"preferences":{"scope:allTasks":{"sortMode":"due"}}}"#
+        let decoded = try JSONDecoder().decode(TaskViewPreferenceStore.Archive.self,
+                                               from: Data(old.utf8))
+        let oldEntry = try XCTUnwrap(decoded.preferences["scope:allTasks"])
+        XCTAssertNil(oldEntry.hidesCompleted, "旧档案缺键 → 显示已完成")
+        XCTAssertNil(oldEntry.hiddenFields, "旧档案缺键 → 字段全显示")
+    }
+
+    func testHidesCompletedDropsClosedGroupButCompletedScopeKeepsIt() throws {
+        let (store, actions) = makeFixture()
+        let open = try XCTUnwrap(actions.create(title: "进行中").taskID)
+        let done = try XCTUnwrap(actions.create(title: "已完成").taskID)
+        _ = actions.complete(done)
+
+        let shown = TaskListProjection.groups(in: .allTasks, store: store, now: now,
+                                              calendar: calendar)
+        XCTAssertEqual(shown.last?.kind, .completed, "默认显示已完成组")
+        let hidden = TaskListProjection.groups(in: .allTasks, store: store, now: now,
+                                               calendar: calendar, hidesCompleted: true)
+        XCTAssertFalse(hidden.contains { $0.kind == .completed }, "隐藏已完成")
+        XCTAssertTrue(hidden.flatMap(\.tasks).contains { $0.id == open }, "未完成任务不受影响")
+
+        let completedScope = TaskListProjection.groups(in: .completed, store: store, now: now,
+                                                       calendar: calendar, hidesCompleted: true)
+        XCTAssertTrue(completedScope.flatMap(\.tasks).contains { $0.id == done },
+                      "已完成视图是视图本体，不受「隐藏已完成」影响")
+    }
+
     func testTomorrowDestinationMapsToTomorrowScope() {
         XCTAssertEqual(TaskWorkspaceModel.scope(for: .tomorrow), .tomorrow)
         XCTAssertEqual(NativeDestination.tomorrow.title, "明天")

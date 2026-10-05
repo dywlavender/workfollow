@@ -78,27 +78,70 @@ enum TaskViewScopeKey {
     }
 }
 
-/// 单个视图的偏好。两个键都可缺：旧档案缺键解码为 nil，读取时回落默认。
+/// 行内"详细"行的字段开关（滴答「清单页 → … → 显示设置」）。
+/// 每一档都对应行内一个真实渲染分支，不做没有对应物的开关。
+enum TaskRowDetailField: String, CaseIterable, Codable, Identifiable {
+    case date
+    case list
+    case priority
+    case tags
+    case indicators
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .date: "日期"
+        case .list: "所属清单"
+        case .priority: "优先级"
+        case .tags: "标签"
+        case .indicators: "其他标记（子任务/重复/提醒/描述/附件）"
+        }
+    }
+}
+
+/// 单个视图的偏好。所有键都可缺：旧档案缺键解码为 nil，读取时回落默认。
 struct TaskViewPreference: Equatable, Codable {
     var sortMode: TaskListSortMode?
     var grouping: TaskListGrouping?
     /// 排序方向：false / 缺键 = 升序（旧档案的既有行为）。
     var sortDescending: Bool?
+    /// 隐藏已完成（滴答「清单页 → … → 隐藏已完成」）。nil / false = 显示。
+    var hidesCompleted: Bool?
+    /// 隐藏详细（整行元信息栏）。nil / false = 显示。
+    var hidesDetails: Bool?
+    /// 详细行里被关掉的字段。空 = 全显示。
+    var hiddenFields: [TaskRowDetailField]?
 
     init(sortMode: TaskListSortMode? = nil, grouping: TaskListGrouping? = nil,
-         sortDescending: Bool? = nil) {
+         sortDescending: Bool? = nil, hidesCompleted: Bool? = nil,
+         hidesDetails: Bool? = nil, hiddenFields: [TaskRowDetailField]? = nil) {
         self.sortMode = sortMode
         self.grouping = grouping
         self.sortDescending = sortDescending
+        self.hidesCompleted = hidesCompleted
+        self.hidesDetails = hidesDetails
+        self.hiddenFields = hiddenFields
     }
 
-    private enum CodingKeys: String, CodingKey { case sortMode, grouping, sortDescending }
+    /// 全是默认值 → 该视图不必留档案（与 resetSort 的"不留垃圾"同一口径）。
+    var isDefault: Bool {
+        sortMode == nil && grouping == nil && sortDescending == nil
+            && hidesCompleted != true && hidesDetails != true && (hiddenFields ?? []).isEmpty
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case sortMode, grouping, sortDescending, hidesCompleted, hidesDetails, hiddenFields
+    }
 
     init(from decoder: Decoder) throws {
         let values = try decoder.container(keyedBy: CodingKeys.self)
         sortMode = try values.decodeIfPresent(TaskListSortMode.self, forKey: .sortMode)
         grouping = try values.decodeIfPresent(TaskListGrouping.self, forKey: .grouping)
         sortDescending = try values.decodeIfPresent(Bool.self, forKey: .sortDescending)
+        hidesCompleted = try values.decodeIfPresent(Bool.self, forKey: .hidesCompleted)
+        hidesDetails = try values.decodeIfPresent(Bool.self, forKey: .hidesDetails)
+        hiddenFields = try values.decodeIfPresent([TaskRowDetailField].self, forKey: .hiddenFields)
     }
 }
 
@@ -199,7 +242,50 @@ final class TaskViewPreferenceStore: ObservableObject, ModuleStoreFlushable {
         persist()
     }
 
-    /// 「恢复默认排序」：清掉该视图的排序与方向，回落 `.manual`
+    /// 未设过 = 显示已完成（滴答默认显示）。
+    func hidesCompleted(for key: String) -> Bool {
+        preferences[key]?.hidesCompleted ?? false
+    }
+
+    /// 未设过 = 显示详细。
+    func hidesDetails(for key: String) -> Bool {
+        preferences[key]?.hidesDetails ?? false
+    }
+
+    func hiddenDetailFields(for key: String) -> [TaskRowDetailField] {
+        preferences[key]?.hiddenFields ?? []
+    }
+
+    func setHidesCompleted(_ hides: Bool, for key: String) {
+        update(key) { $0.hidesCompleted = hides ? true : nil }
+    }
+
+    func setHidesDetails(_ hides: Bool, for key: String) {
+        update(key) { $0.hidesDetails = hides ? true : nil }
+    }
+
+    func setDetailField(_ field: TaskRowDetailField, hidden: Bool, for key: String) {
+        update(key) { entry in
+            var fields = entry.hiddenFields ?? []
+            if hidden {
+                if !fields.contains(field) { fields.append(field) }
+            } else {
+                fields.removeAll { $0 == field }
+            }
+            entry.hiddenFields = fields.isEmpty ? nil : fields
+        }
+    }
+
+    /// 单点写入口：改完归一（回默认就删键）+ 落盘。
+    private func update(_ key: String, _ mutation: (inout TaskViewPreference) -> Void) {
+        var entry = preferences[key] ?? TaskViewPreference()
+        mutation(&entry)
+        guard entry != preferences[key] else { return }
+        if entry.isDefault { preferences.removeValue(forKey: key) } else { preferences[key] = entry }
+        persist()
+    }
+
+    /// 「恢复默认排序」：清掉该视图的排序与方向，回落 `.manual`    /// 「恢复默认排序」：清掉该视图的排序与方向，回落 `.manual`
     /// （对齐滴答的"恢复默认时间顺序"）。
     func resetSort(for key: String) {
         guard var entry = preferences[key],
