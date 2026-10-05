@@ -135,11 +135,9 @@ struct TaskDragPreview: View {
             .font(WFType.listTitle)
             .foregroundStyle(WFColors.text)
             .lineLimit(1)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(12)
-            .frame(width: TaskListMetrics.dragPreviewWidth)
-            .background(WFColors.content, in: RoundedRectangle(cornerRadius: 10))
-            .shadow(color: .black.opacity(0.12), radius: 6, y: 2)
+            .truncationMode(.tail)
+            .frame(maxWidth: TaskListMetrics.dragPreviewMaxWidth, alignment: .leading)
+            .fixedSize(horizontal: true, vertical: true)
     }
 }
 

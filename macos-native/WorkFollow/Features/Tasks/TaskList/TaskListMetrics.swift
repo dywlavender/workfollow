@@ -22,5 +22,5 @@ enum TaskListMetrics {
     /// 任务行要容下副标题与日期，倒计时行只有图标 + 名称 + 右侧标签，没有第二行。
     static let countdownRowHeight: CGFloat = 36
     static let dragMarkerHeight: CGFloat = 1
-    static let dragPreviewWidth: CGFloat = 360
+    static let dragPreviewMaxWidth: CGFloat = 220
 }

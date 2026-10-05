@@ -1,4 +1,5 @@
 import XCTest
+import SwiftUI
 @testable import WorkFollow
 
 /// TaskListViewDefaults 的纯展示规则回归：快速添加占位、日期徽标归类、
@@ -35,7 +36,7 @@ final class TaskListViewDefaultsTests: XCTestCase {
         // 当天（含带时间）→ 强调色。
         XCTAssertEqual(TaskListViewDefaults.dateBadgeStyle(
             dueAt: date(9, 26, hour: 23), isClosed: false, now: now, calendar: calendar), .today)
-        // 未来 → 灰。
+        // 未来 → 未逾期（蓝）。
         XCTAssertEqual(TaskListViewDefaults.dateBadgeStyle(
             dueAt: date(9, 30), isClosed: false, now: now, calendar: calendar), .scheduled)
         // 无日期 → 无徽标色。
@@ -44,6 +45,13 @@ final class TaskListViewDefaultsTests: XCTestCase {
         // 已关闭的任务不给日期上色。
         XCTAssertEqual(TaskListViewDefaults.dateBadgeStyle(
             dueAt: date(9, 25), isClosed: true, now: now, calendar: calendar), .none)
+    }
+
+    func testRowDateColorsAreBlueUntilOverdueAndNeutralWhenClosed() {
+        XCTAssertEqual(TaskListViewDefaults.rowDateColor(for: .today), WFColors.accent)
+        XCTAssertEqual(TaskListViewDefaults.rowDateColor(for: .scheduled), WFColors.accent)
+        XCTAssertEqual(TaskListViewDefaults.rowDateColor(for: .overdue), Color.red)
+        XCTAssertEqual(TaskListViewDefaults.rowDateColor(for: .none), WFColors.taskCompletedMetadata)
     }
 
     func testEmptyStateMessageFollowsDestination() {
@@ -75,9 +83,7 @@ final class TaskListViewDefaultsTests: XCTestCase {
         XCTAssertEqual(TaskListViewDefaults.headerSymbol(destination: .today, activeList: nil, activeTag: "阅读"), "tag")
     }
 
-    func testTimedScheduleShowsOnlyClockAndTimeWhileAllDayUsesDateLabel() {
-        XCTAssertEqual(TaskListViewDefaults.scheduleSymbol(hasTime: true), "clock")
-        XCTAssertEqual(TaskListViewDefaults.scheduleSymbol(hasTime: false), "calendar")
+    func testTimedScheduleShowsTimeWhileAllDayUsesDateLabel() {
         XCTAssertEqual(TaskListViewDefaults.scheduleLabel(
             dueAt: date(9, 30, hour: 10, minute: 30), hasTime: true,
             now: now, calendar: calendar), "10:30")

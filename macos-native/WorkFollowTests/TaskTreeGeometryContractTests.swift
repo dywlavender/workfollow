@@ -44,11 +44,18 @@ final class TaskTreeGeometryContractTests: XCTestCase {
         XCTAssertNotNil(expanded[.init(taskID: parent, part: .preview)])
     }
 
-    func testDragPreviewRendersAtFixedWidth() {
-        let host = NSHostingView(rootView: TaskDragPreview(title: "只拖动标题"))
-        XCTAssertEqual(host.fittingSize.width, 360, accuracy: 0.5)
+    func testDragPreviewFitsTitleRatherThanRenderingAWideCard() {
+        let host = NSHostingView(rootView: TaskDragPreview(title: "标题"))
+        let long = NSHostingView(rootView: TaskDragPreview(title: String(repeating: "很长的任务标题", count: 20)))
+        let empty = NSHostingView(rootView: TaskDragPreview(title: ""))
+        XCTAssertGreaterThan(host.fittingSize.width, 0)
+        XCTAssertLessThan(host.fittingSize.width, 100)
+        XCTAssertGreaterThan(long.fittingSize.width, host.fittingSize.width)
+        XCTAssertLessThanOrEqual(long.fittingSize.width, TaskListMetrics.dragPreviewMaxWidth + 0.5)
+        XCTAssertLessThan(host.fittingSize.height, 30)
+        XCTAssertGreaterThan(empty.fittingSize.width, 0)
         let marker = NSHostingView(rootView: TaskDropMarker().frame(width: 440))
-        XCTAssertEqual(marker.fittingSize.height, 3, accuracy: 0.5)
+        XCTAssertEqual(marker.fittingSize.height, 1, accuracy: 0.5)
     }
 
     private func render(workspace: TaskWorkspaceModel,

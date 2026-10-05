@@ -254,17 +254,6 @@ struct TaskListView: View {
         .help("分组与排序")
     }
 
-    /// 打印当前视图（滴答清单页 ··· → 打印）：文本由 `TaskPrintDocument` 纯函数生成，
-    /// 这里只管标题与交给系统打印面板。
-    private func printCurrentView() {
-        let title = workspace.activeList
-            ?? workspace.activeTag.map { "#" + $0 }
-            ?? navigation.destination.title
-        TaskPrintService.printDocument(title: title,
-                                       text: TaskPrintDocument.text(title: title, groups: groups,
-                                                                    now: workspace.clock(),
-                                                                    calendar: workspace.calendar))
-    }
 
     private var viewMode: TaskListViewMode {
         environment.viewPreferences.viewMode(for: preferenceKey)
@@ -383,7 +372,6 @@ struct TaskListView: View {
                 DispatchQueue.main.async { showListActivity = true }
             }
             .disabled(workspace.activeList == nil)
-            Button("打印…", systemImage: "printer") { printCurrentView() }
             Divider()
             Button("展开/收起已完成", systemImage: "checkmark.circle") {
                 groupExpansion.toggleClosedGroups(in: groups)
@@ -1552,12 +1540,7 @@ private struct TaskRowMetadataTrail: View {
     }
 
     private var badgeColor: Color {
-        switch dateStyle {
-        case .overdue: .red
-        case .today: WFColors.accent
-        case .scheduled: WFColors.secondaryText
-        case .none: WFColors.secondaryText
-        }
+        TaskListViewDefaults.rowDateColor(for: dateStyle)
     }
 
     private var secondaryMetadata: [TaskRowSecondaryMetadata] {
@@ -1654,6 +1637,14 @@ enum TaskListViewDefaults {
         if day < today { return .overdue }
         if day == today { return .today }
         return .scheduled
+    }
+
+    static func rowDateColor(for style: DateBadgeStyle) -> Color {
+        switch style {
+        case .overdue: .red
+        case .today, .scheduled: WFColors.accent
+        case .none: WFColors.taskCompletedMetadata
+        }
     }
 
     /// 行内正文预览：取纯文本第一个非空行；正文为空返回 nil（不占预览行）。
