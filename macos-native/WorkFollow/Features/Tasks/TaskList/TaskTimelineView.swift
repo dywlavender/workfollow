@@ -32,7 +32,9 @@ struct TaskTimelineView: View {
     var body: some View {
         let rows = self.rows
         let rangeStart = self.rangeStart
-        ScrollView {
+        // 表头与行必须躺在**同一个**滚动容器里：分成两个滚动视图时表头会被容器裁掉、
+        // 且与行的横向偏移各滚各的（实测截图：时间线只剩左边一条窄栏）。
+        ScrollView([.horizontal, .vertical], showsIndicators: true) {
             VStack(alignment: .leading, spacing: 0) {
                 headerRow(rangeStart)
                 if rows.isEmpty {
@@ -41,12 +43,8 @@ struct TaskTimelineView: View {
                         .foregroundStyle(WFColors.secondaryText)
                         .padding(WFSpace.md)
                 } else {
-                    ScrollView(.horizontal, showsIndicators: true) {
-                        VStack(alignment: .leading, spacing: 0) {
-                            ForEach(rows, id: \.task.id) { row in
-                                timelineRow(row, rangeStart: rangeStart)
-                            }
-                        }
+                    ForEach(rows, id: \.task.id) { row in
+                        timelineRow(row, rangeStart: rangeStart)
                     }
                 }
             }
@@ -124,6 +122,10 @@ struct TaskTimelineView: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+    }
+
+    private func title(of task: Task) -> String {
+        task.title.isEmpty ? "无标题" : task.title
     }
 
     private func barColor(_ task: Task) -> Color {
