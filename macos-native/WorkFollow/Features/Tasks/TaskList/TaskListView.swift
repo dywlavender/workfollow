@@ -811,6 +811,36 @@ struct TaskListView: View {
 
     @ViewBuilder
     private func groupHeader(_ group: TaskListGroup) -> some View {
+        if group.sectionID != nil {
+            // 分组标题本身就是交互点（滴答词表里同时有 `分组标题` 与 `删除分组`）：
+            // 就地重命名/删除，不用绕到顶栏菜单。其它分组（按日期/优先级…）没有归属可改，
+            // 不给菜单，避免"看着能改其实不能"。
+            headerContent(group).contextMenu { sectionMenu(group) }
+        } else {
+            headerContent(group)
+        }
+    }
+
+    @ViewBuilder
+    private func sectionMenu(_ group: TaskListGroup) -> some View {
+        if let sectionID = group.sectionID {
+            Button("重命名分组…") {
+                guard let title = TaskNamePrompt.ask("重命名分组", value: group.label ?? ""),
+                      title != group.label else { return }
+                if !workspace.renameListSection(sectionID, title: title) {
+                    TaskNamePrompt.invalidName()
+                }
+            }
+            Button("删除分组（任务保留）…") {
+                guard TaskNamePrompt.confirm("删除分组“\(group.label ?? "")”？",
+                                             message: "其中的任务会保留，并回到未分组。",
+                                             action: "删除") else { return }
+                _ = workspace.removeListSection(sectionID)
+            }
+        }
+    }
+
+    private func headerContent(_ group: TaskListGroup) -> some View {
         HStack(spacing: WFSpace.sm) {
             Button { groupExpansion.toggle(group) } label: {
                 HStack(spacing: 6) {
