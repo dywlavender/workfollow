@@ -920,6 +920,49 @@ final class TaskActions {
     }
 
     /// 重命名分组：**id 不变**，任务归属不受影响。
+    /// 在某个分组的**上方**插入新分组（`above == nil` 即追加到末尾）。
+    /// 滴答分组标题菜单：「在上方添加分组 / 在下方添加分组」。
+    @discardableResult
+    func insertListSection(_ list: String, title: String, above id: String?) -> Bool {
+        let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, canManageList(list) else { return false }
+        guard !store.listSections.contains(where: { $0.listName == list && $0.title == trimmed }) else {
+            return false
+        }
+        var ordered = store.listSections.filter { $0.listName == list }
+            .sorted { ($0.sortOrder, $0.title) < ($1.sortOrder, $1.title) }
+        let index = id.flatMap { target in ordered.firstIndex { $0.id == target } } ?? ordered.count
+        ordered.insert(TaskListSection(listName: list, title: trimmed), at: index)
+        var merged = store.listSections.filter { $0.listName != list }
+        for (offset, section) in ordered.enumerated() {
+            var copy = section
+            copy.sortOrder = offset
+            merged.append(copy)
+        }
+        store.commit(store.tasks, listSections: merged)
+        return true
+    }
+
+    /// 把分组**连同其中的任务**移动到另一个清单（滴答分组标题菜单：「移动到 ▸ 清单」）。
+    /// 分组是任务的归属，只搬分组会把任务落在没有分组的清单里，所以两者一起搬、一次撤销。
+    @discardableResult
+    func moveListSection(_ id: String, to list: String) -> Bool {
+        let target = list.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !target.isEmpty, canManageList(target),
+              let section = store.listSection(id), section.listName != target else { return false }
+        var sections = store.listSections
+        guard let index = sections.firstIndex(where: { $0.id == id }) else { return false }
+        sections[index].listName = target
+        sections[index].sortOrder = (sections.filter { $0.listName == target && $0.id != id }
+            .map(\.sortOrder).max() ?? -1) + 1
+        var tasks = store.tasks
+        for taskIndex in tasks.indices where tasks[taskIndex].sectionID == id {
+            tasks[taskIndex].list = TaskList(name: target)
+        }
+        store.commit(tasks, listSections: sections)
+        return true
+    }
+
     @discardableResult
     func renameListSection(_ id: String, title: String) -> Bool {
         let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)

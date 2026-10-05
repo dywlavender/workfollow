@@ -824,11 +824,19 @@ struct TaskListView: View {
     @ViewBuilder
     private func sectionMenu(_ group: TaskListGroup) -> some View {
         if let sectionID = group.sectionID {
-            Button("编辑分组…") {
+            Button("重命名…") {
                 guard let title = TaskNamePrompt.ask("重命名分组", value: group.label ?? ""),
                       title != group.label else { return }
                 if !workspace.renameListSection(sectionID, title: title) {
                     TaskNamePrompt.invalidName()
+                }
+            }
+            // 滴答分组标题菜单的其余三项：上/下方添加分组 + 移动到另一个清单。
+            Button("在上方添加分组…") { addSection(above: sectionID) }
+            Button("在下方添加分组…") { addSection(below: sectionID) }
+            Menu("移动到") {
+                ForEach(workspace.listNames.filter { $0 != workspace.activeList }, id: \.self) { list in
+                    Button(list) { _ = workspace.moveListSection(sectionID, to: list) }
                 }
             }
             Button("删除分组（任务保留）…") {
@@ -838,6 +846,21 @@ struct TaskListView: View {
                 _ = workspace.removeListSection(sectionID)
             }
         }
+    }
+
+    /// 在分组上/下方插入新分组（滴答分组标题菜单的两项）。
+    /// "在下方" = 插到**下一个分组之前**；没有下一个就追加到末尾。
+    private func addSection(above id: String?) {
+        guard let list = workspace.activeList,
+              let title = TaskNamePrompt.ask("添加分组") else { return }
+        if !workspace.insertListSection(list, title: title, above: id) { TaskNamePrompt.invalidName() }
+    }
+
+    private func addSection(below id: String) {
+        guard let list = workspace.activeList else { return }
+        let ordered = workspace.listSections(forList: list)
+        let next = ordered.firstIndex { $0.id == id }.flatMap { $0 + 1 < ordered.count ? ordered[$0 + 1].id : nil }
+        addSection(above: next)
     }
 
     private func headerContent(_ group: TaskListGroup) -> some View {
@@ -857,6 +880,21 @@ struct TaskListView: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            // 分组标题上的可见 ⋯（滴答是 hover 显示）：右键之外再给一个看得见的入口，
+            // 否则"就地能改分组"只有知道要右键的人才用得上。
+            if group.sectionID != nil {
+                Menu { sectionMenu(group) } label: {
+                    Image(systemName: "ellipsis")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(WFColors.secondaryText)
+                        .frame(width: 18, height: 18)
+                        .contentShape(Rectangle())
+                }
+                .menuStyle(.borderlessButton)
+                .menuIndicator(.hidden)
+                .fixedSize()
+                .help("分组操作")
+            }
             if let note = TaskListViewDefaults.groupTrailingNote(for: group.kind) {
                 Button(note) {
                     workspace.postponeOverdue(Set(group.tasks.map(\.id)))

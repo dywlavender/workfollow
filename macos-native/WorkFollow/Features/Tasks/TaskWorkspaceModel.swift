@@ -188,6 +188,20 @@ final class TaskWorkspaceModel: ObservableObject {
     }
 
     @discardableResult
+    func insertListSection(_ list: String, title: String, above id: String?) -> Bool {
+        let changed = actions.insertListSection(list, title: title, above: id)
+        if changed { revision += 1 }
+        return changed
+    }
+
+    @discardableResult
+    func moveListSection(_ id: String, to list: String) -> Bool {
+        let changed = actions.moveListSection(id, to: list)
+        if changed { revision += 1 }
+        return changed
+    }
+
+    @discardableResult
     func addListSection(_ list: String, title: String) -> Bool {
         let changed = actions.addListSection(list, title: title)
         if changed { revision += 1 }
