@@ -92,6 +92,14 @@ struct TaskChangeSet: Equatable {
         self.entries = entries
     }
 
+    /// The command already knows the one task it updated. Reuse the same field
+    /// comparison without constructing workspace-wide dictionaries.
+    init(updatedFrom before: Task, to after: Task) {
+        let fields = Self.changedFields(from: before, to: after)
+        entries = fields.isEmpty ? [] : [Entry(operation: .update, before: before,
+                                             after: after, changedFields: fields)]
+    }
+
     private static func changedFields(from before: Task, to after: Task) -> Set<Field> {
         var fields = Set<Field>()
         if before.title != after.title { fields.insert(.title) }

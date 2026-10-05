@@ -46,6 +46,10 @@ struct TaskInspectorShell: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(WFColors.content)
+        .onReceive(workspace.selectionWillChange) { nextID in
+            guard editorHandle.textView?.documentIdentity != nextID else { return }
+            editorHandle.prepareForDocumentChange()
+        }
         .onChange(of: titleFocused) { _, focused in
             if focused {
                 presentation.editingTarget = .title
@@ -95,7 +99,7 @@ struct TaskInspectorShell: View {
         TaskInspectorHeader(task: task, showBack: showBack,
                             onBack: { workspace.select(nil) },
                             onComplete: { _ = workspace.changeStatus(task) },
-                            onRepeat: { presentation.activePopover = .recurrence },
+                            onRepeat: { openSchedulePanel(.recurrence) },
                             schedule: { scheduleChip(task, field: .due) },
                             priority: { priorityMenu(task) })
         .schedulePopover(isPresented: popoverBinding(.recurrence), trigger: .recurrence) {
@@ -187,6 +191,13 @@ struct TaskInspectorShell: View {
         if presentation.activePopover == .deadline {
             presentation.activePopover = nil
         }
+    }
+
+    /// Opening a date entry also works through accessibility/keyboard actions,
+    /// which do not necessarily generate an outside mouse-down for the footer.
+    private func openSchedulePanel(_ popover: InspectorPopover) {
+        actionPresentation.dismiss()
+        presentation.activePopover = popover
     }
 
     private func moreActionsPopover(_ task: Task) -> some View {
@@ -323,7 +334,7 @@ struct TaskInspectorShell: View {
     /// 顶部日期入口；点击仍使用现有日期 popover。
     private func scheduleChip(_ task: Task, field: ScheduleField) -> some View {
             Button {
-                presentation.activePopover = field.popover
+                openSchedulePanel(field.popover)
             } label: {
                 HStack(spacing: 6) {
                     Image(systemName: field.symbol)
@@ -678,7 +689,7 @@ struct TaskInspectorShell: View {
             get: { presentation.activePopover == popover },
             set: { presented in
                 if presented {
-                    presentation.activePopover = popover
+                    openSchedulePanel(popover)
                 } else if presentation.activePopover == popover {
                     presentation.activePopover = nil
                 }

@@ -232,12 +232,20 @@ final class TaskActions {
 
     @discardableResult
     func setTitle(_ id: UUID, _ title: String) -> TaskActionResult {
-        edit(id, undoPolicy: .skip) { $0.title = title.trimmingCharacters(in: .whitespacesAndNewlines) }
+        editText(id, title: title.trimmingCharacters(in: .whitespacesAndNewlines))
     }
 
     @discardableResult
     func setDocument(_ id: UUID, _ document: NativeDocument) -> TaskActionResult {
-        edit(id, undoPolicy: .skip) { $0.document = document }
+        editText(id, document: document)
+    }
+
+    private func editText(_ id: UUID, title: String? = nil,
+                          document: NativeDocument? = nil) -> TaskActionResult {
+        guard let task = store.task(id) else { return .failure(.missingTask) }
+        guard task.deletedAt == nil else { return .failure(.deletedTask) }
+        store.commitText(id, title: title, document: document, updatedAt: clock())
+        return .success(id)
     }
 
     @discardableResult

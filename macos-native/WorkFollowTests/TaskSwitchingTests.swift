@@ -5,6 +5,39 @@ import XCTest
 
 @MainActor
 final class TaskSwitchingTests: XCTestCase {
+    func testFullShellChildrenUpdateWithoutRootTaskSubscription() throws {
+        let environment = AppEnvironment()
+        let workspace = TaskWorkspaceModel(seedDemoData: false)
+        let first = try XCTUnwrap(workspace.createTask(title: "Shell 第一任务", in: .inbox).taskID)
+        let second = try XCTUnwrap(workspace.createTask(title: "Shell 第二任务", in: .inbox).taskID)
+        let navigation = AppNavigation()
+        navigation.destination = .inbox
+        let host = NSHostingView(rootView: RootShellView(workspace: workspace, navigation: navigation)
+            .environmentObject(environment).frame(width: 1280, height: 800))
+        let window = InspectorPanelTestSupport.ownerWindow(for: host, width: 1280, height: 800)
+        defer { window.close() }
+        workspace.select(first)
+        InspectorPanelTestSupport.settle(window)
+        let original = try XCTUnwrap(editor(in: host))
+        _ = workspace.setDocument(first, NativeDocument(plainText: "第一任务即时更新"))
+        InspectorPanelTestSupport.settle(window)
+        XCTAssertEqual(original.string, "第一任务即时更新")
+        _ = workspace.setDocument(second, NativeDocument(plainText: "第二任务正文"))
+        workspace.select(second)
+        InspectorPanelTestSupport.settle(window)
+        XCTAssertTrue(editor(in: host) === original)
+        XCTAssertEqual(original.documentIdentity, second)
+        XCTAssertEqual(original.string, "第二任务正文")
+        navigation.destination = .tomorrow
+        InspectorPanelTestSupport.settle(window)
+        XCTAssertNil(workspace.selectedTaskID, "Navigation still clears the outgoing task selection")
+        navigation.destination = .inbox
+        InspectorPanelTestSupport.settle(window)
+        workspace.select(first)
+        InspectorPanelTestSupport.settle(window)
+        XCTAssertEqual(try XCTUnwrap(editor(in: host)).string, "第一任务即时更新")
+    }
+
     func testFullShellSwitchesLoadedTasksWithoutStaleDocument() throws {
         let environment = AppEnvironment()
         let workspace = environment.taskWorkspace
@@ -20,14 +53,26 @@ final class TaskSwitchingTests: XCTestCase {
         InspectorPanelTestSupport.settle(window)
         let original = try XCTUnwrap(editor(in: host))
         var samples: [Double] = []
+        var selectionSamples: [Double] = []
+        var firstLayoutSamples: [Double] = []
+        var deferredSamples: [Double] = []
+        var finalLayoutSamples: [Double] = []
         for iteration in 0..<30 {
             let id = ids[(iteration + 1) % 2]
             let start = ProcessInfo.processInfo.systemUptime
             workspace.select(id)
+            let selected = ProcessInfo.processInfo.systemUptime
             host.layoutSubtreeIfNeeded()
+            let laidOut = ProcessInfo.processInfo.systemUptime
             RunLoop.main.run(until: Date().addingTimeInterval(0.001))
+            let deferred = ProcessInfo.processInfo.systemUptime
             host.layoutSubtreeIfNeeded()
-            samples.append((ProcessInfo.processInfo.systemUptime - start) * 1000)
+            let finished = ProcessInfo.processInfo.systemUptime
+            samples.append((finished - start) * 1000)
+            selectionSamples.append((selected - start) * 1000)
+            firstLayoutSamples.append((laidOut - selected) * 1000)
+            deferredSamples.append((deferred - laidOut) * 1000)
+            finalLayoutSamples.append((finished - deferred) * 1000)
             let current = try XCTUnwrap(editor(in: host))
             XCTAssertTrue(current === original)
             XCTAssertEqual(current.documentIdentity, id)
@@ -35,6 +80,11 @@ final class TaskSwitchingTests: XCTestCase {
         }
         samples.sort()
         print("TASK_FULL_SHELL_SWITCH tasks=\(workspace.allTasks.count) p50_ms=\(samples[15]) p95_ms=\(samples[28]) switches=30")
+        for (stage, values) in [("selection", selectionSamples), ("first_layout", firstLayoutSamples),
+                                ("deferred_runloop", deferredSamples), ("final_layout", finalLayoutSamples)] {
+            let sorted = values.sorted()
+            print("TASK_SWITCH_STAGE stage=\(stage) p50_ms=\(sorted[15]) p95_ms=\(sorted[28])")
+        }
     }
 
     private func editor(in view: NSView) -> NativeTextView? {
@@ -96,6 +146,10 @@ final class TaskSwitchingTests: XCTestCase {
         original.setMarkedText("中文", selectedRange: NSRange(location: 2, length: 0),
                                replacementRange: NSRange(location: NSNotFound, length: 0))
         workspace.select(second)
+        XCTAssertEqual(workspace.task(for: first)?.document.plainText, "第一正文中文",
+                       "Outgoing input must be committed before the next SwiftUI render")
+        XCTAssertFalse(original.hasMarkedText())
+        XCTAssertFalse(window.firstResponder === original)
         InspectorPanelTestSupport.settle(window)
         let rebound = try XCTUnwrap(editor(in: host))
         XCTAssertTrue(rebound === original)
@@ -112,6 +166,54 @@ final class TaskSwitchingTests: XCTestCase {
         rebound.insertText("新", replacementRange: NSRange(location: 0, length: 0))
         XCTAssertEqual(workspace.task(for: second)?.document.plainText, "新第二正文")
         XCTAssertEqual(workspace.task(for: first)?.document.plainText, "第一正文中文")
+    }
+
+    func testRapidSelectionRoundTripCommitsMarkedTextBeforeRendering() throws {
+        let workspace = TaskWorkspaceModel(seedDemoData: false)
+        let first = try XCTUnwrap(workspace.createTask(title: "中文输入任务", in: .inbox).taskID)
+        let second = try XCTUnwrap(workspace.createTask(title: "另一个任务", in: .inbox).taskID)
+        _ = workspace.setDocument(second, NativeDocument(plainText: "保留第二正文"))
+        workspace.select(first)
+        let host = NSHostingView(rootView: TaskInspectorShell(workspace: workspace, showBack: false)
+            .environmentObject(AppEnvironment()).frame(width: 520, height: 650))
+        let window = InspectorPanelTestSupport.ownerWindow(for: host, width: 520, height: 650)
+        defer { window.close() }
+        let original = try XCTUnwrap(editor(in: host))
+        window.makeFirstResponder(original)
+        original.setMarkedText("未提交中文", selectedRange: NSRange(location: 5, length: 0),
+                               replacementRange: NSRange(location: NSNotFound, length: 0))
+        workspace.select(second)
+        XCTAssertEqual(workspace.task(for: first)?.document.plainText, "未提交中文")
+        workspace.select(first)
+        InspectorPanelTestSupport.settle(window)
+        XCTAssertTrue(editor(in: host) === original)
+        XCTAssertEqual(original.documentIdentity, first)
+        XCTAssertEqual(original.string, "未提交中文")
+        XCTAssertEqual(workspace.task(for: second)?.document.plainText, "保留第二正文")
+        workspace.select(nil)
+        XCTAssertFalse(window.firstResponder === original)
+        InspectorPanelTestSupport.settle(window)
+        XCTAssertNil(editor(in: host))
+    }
+
+    func testDeletingSelectedTaskCommitsCompositionBeforeUndoSnapshot() throws {
+        let workspace = TaskWorkspaceModel(seedDemoData: false)
+        let id = try XCTUnwrap(workspace.createTask(title: "删除撤销输入验收", in: .inbox).taskID)
+        workspace.select(id)
+        let host = NSHostingView(rootView: TaskInspectorShell(workspace: workspace, showBack: false)
+            .environmentObject(AppEnvironment()).frame(width: 520, height: 650))
+        let window = InspectorPanelTestSupport.ownerWindow(for: host, width: 520, height: 650)
+        defer { window.close() }
+        let text = try XCTUnwrap(editor(in: host))
+        window.makeFirstResponder(text)
+        text.setMarkedText("删除前的中文", selectedRange: NSRange(location: 6, length: 0),
+                           replacementRange: NSRange(location: NSNotFound, length: 0))
+        XCTAssertNotNil(workspace.delete(id).taskID)
+        XCTAssertNil(workspace.selectedTaskID)
+        InspectorPanelTestSupport.settle(window)
+        workspace.undo()
+        XCTAssertNil(workspace.task(for: id)?.deletedAt)
+        XCTAssertEqual(workspace.task(for: id)?.document.plainText, "删除前的中文")
     }
 
     func testSplitViewSwitchLatencyUnderTaskVolume() throws {

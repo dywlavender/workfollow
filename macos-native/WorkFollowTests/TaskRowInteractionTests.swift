@@ -297,4 +297,22 @@ final class TaskRowInteractionTests: XCTestCase {
         XCTAssertEqual(fixture.probe.selections, 1)
         XCTAssertEqual(fixture.probe.bulkToggles, 1)
     }
+
+    func testNonKeyWindowFirstClickDoesNotEnterBulkSelection() throws {
+        let fixture = try fixture(modifierRouting: true)
+        defer { fixture.window.close() }
+        let other = InspectorPanelTestSupport.ownerWindow(for: NSView(), width: 200, height: 100)
+        defer { other.close() }
+        for part: TaskTreeRenderPart in [.title, .preview] {
+            other.makeKeyAndOrderFront(nil)
+            InspectorPanelTestSupport.settle(other)
+            XCTAssertFalse(fixture.window.isKeyWindow)
+            let previous = fixture.probe.selections
+            try fixture.click(try fixture.frame(part))
+            XCTAssertEqual(fixture.probe.selections, previous + 1,
+                           "The activation click must also perform ordinary selection")
+            XCTAssertEqual(fixture.probe.bulkToggles, 0)
+            XCTAssertEqual(fixture.probe.rangeSelections, 0)
+        }
+    }
 }

@@ -11,6 +11,8 @@ final class WorkspaceStore {
         }
     }
     private(set) var readRevision = 0
+    private(set) var readIndexBuildCount = 0
+    private(set) var fullDiffBuildCount = 0
     private var taskOffsets: [UUID: Int]?
     private var childOffsets: [UUID: [Int]]?
     private(set) var lists: [String] = []
@@ -29,6 +31,34 @@ final class WorkspaceStore {
     private var undoCompensations: [(() -> Void)?] = []
     private var transactionDepth = 0
     private var undoSnapshots: [[Task]] = []
+    private struct TextRebase {
+        var title: String
+        var document: NativeDocument
+        var updatedAt: Date
+        var rebasesText = false
+        var rebasesSourceNote = false
+        var sourceNoteID: UUID?
+
+        init(_ task: Task) {
+            title = task.title
+            document = task.document
+            updatedAt = task.updatedAt
+        }
+
+        func applying(to task: Task) -> Task {
+            var value = task
+            if rebasesText {
+                value.title = title
+                value.document = document
+            }
+            value.updatedAt = updatedAt
+            if rebasesSourceNote { value.sourceNoteID = sourceNoteID }
+            return value
+        }
+    }
+    /// Per-step overlays preserve text without copying every historical array
+    /// on each keystroke. New business steps start with an empty overlay.
+    private var undoTextRebases: [[UUID: TextRebase]] = []
     var canUndo: Bool { !undoSnapshots.isEmpty }
     /// Compatibility callback for consumers that still need full snapshots.
     var onTasksChanged: (([Task], [Task]) -> Void)?
@@ -37,6 +67,7 @@ final class WorkspaceStore {
 
     private func prepareReadIndex() {
         guard taskOffsets == nil else { return }
+        readIndexBuildCount += 1
         var byID: [UUID: Int] = [:]
         var byParent: [UUID: [Int]] = [:]
         for (offset, task) in tasks.enumerated() {
@@ -84,6 +115,7 @@ final class WorkspaceStore {
         guard snapshot != tasks || listsChanged || metasChanged || foldersChanged || sectionsChanged else { return }
         if undoPolicy == .record && transactionDepth == 0 {
             undoSnapshots.append(tasks)
+            undoTextRebases.append([:])
             undoLists.append(self.lists)
             undoListMetas.append(self.listMetas)
             undoListFolders.append(self.listFolders)
@@ -91,6 +123,7 @@ final class WorkspaceStore {
             undoCompensations.append(undoCompensation)
             if undoSnapshots.count > 50 {
                 undoSnapshots.removeFirst()
+                undoTextRebases.removeFirst()
                 undoLists.removeFirst()
                 undoListMetas.removeFirst()
                 undoListFolders.removeFirst()
@@ -105,16 +138,7 @@ final class WorkspaceStore {
             let changed = Dictionary(uniqueKeysWithValues: snapshot.filter {
                 old[$0.id]?.title != $0.title || old[$0.id]?.document != $0.document
             }.map { ($0.id, $0) })
-            undoSnapshots = undoSnapshots.map { previous in
-                previous.map { task in
-                    guard let latest = changed[task.id] else { return task }
-                    var value = task
-                    value.title = latest.title
-                    value.document = latest.document
-                    value.updatedAt = latest.updatedAt
-                    return value
-                }
-            }
+            rebaseTextHistory(changed)
         }
         let previousTasks = tasks
         tasks = snapshot
@@ -124,6 +148,47 @@ final class WorkspaceStore {
         reconcileListMetas(committed: listMetas, listsCommitted: lists != nil)
         if transactionDepth == 0 {
             publishTaskChanges(from: previousTasks)
+        }
+    }
+
+    /// Text-only commands preserve task IDs, positions and parent membership.
+    /// Publish one exact entry; outer transactions retain their aggregate diff.
+    func commitText(_ id: UUID, title: String? = nil, document: NativeDocument? = nil,
+                    updatedAt: Date) {
+        prepareReadIndex()
+        guard let index = taskOffsets?[id] else { return }
+        let before = tasks[index]
+        var after = before
+        if let title { after.title = title }
+        if let document { after.document = document }
+        guard before.title != after.title || before.document != after.document else { return }
+        after.updatedAt = updatedAt
+        let previousTasks = transactionDepth == 0 && onTasksChanged != nil ? tasks : nil
+        let byID = taskOffsets
+        let byParent = childOffsets
+        tasks[index] = after
+        // Assignment still advances readRevision so value projections refresh;
+        // only the structurally unchanged lookup indexes are retained.
+        taskOffsets = byID
+        childOffsets = byParent
+        rebaseTextHistory([id: after])
+        if transactionDepth == 0 {
+            let changes = onTaskChanges.map { _ in TaskChangeSet(updatedFrom: before, to: after) }
+            if let previousTasks { onTasksChanged?(previousTasks, tasks) }
+            if let changes { onTaskChanges?(changes) }
+        }
+    }
+
+    private func rebaseTextHistory(_ changed: [UUID: Task]) {
+        for index in undoTextRebases.indices {
+            for (id, latest) in changed {
+                var rebase = undoTextRebases[index][id] ?? TextRebase(latest)
+                rebase.title = latest.title
+                rebase.document = latest.document
+                rebase.updatedAt = latest.updatedAt
+                rebase.rebasesText = true
+                undoTextRebases[index][id] = rebase
+            }
         }
     }
 
@@ -138,21 +203,22 @@ final class WorkspaceStore {
         guard snapshot != tasks else { return }
 
         commit(snapshot, undoPolicy: .skip)
-        undoSnapshots = undoSnapshots.map { previous in
-            previous.map { task in
-                guard task.id == id else { return task }
-                var rebased = task
-                rebased.sourceNoteID = sourceNoteID
-                rebased.updatedAt = updatedAt
-                return rebased
-            }
+        for historyIndex in undoTextRebases.indices {
+            var rebase = undoTextRebases[historyIndex][id] ?? TextRebase(snapshot[index])
+            rebase.rebasesSourceNote = true
+            rebase.sourceNoteID = sourceNoteID
+            rebase.updatedAt = updatedAt
+            undoTextRebases[historyIndex][id] = rebase
         }
     }
 
     func undo() {
         guard let previous = undoSnapshots.popLast() else { return }
+        let textRebases = undoTextRebases.removeLast()
         let before = tasks
-        tasks = previous
+        tasks = textRebases.isEmpty ? previous : previous.map { task in
+            textRebases[task.id]?.applying(to: task) ?? task
+        }
         lists = undoLists.removeLast()
         listMetas = undoListMetas.removeLast()
         listFolders = undoListFolders.removeLast()
@@ -164,6 +230,7 @@ final class WorkspaceStore {
     }
     func clearUndo() {
         undoSnapshots.removeAll()
+        undoTextRebases.removeAll()
         undoLists.removeAll()
         undoListMetas.removeAll()
         undoListFolders.removeAll()
@@ -184,11 +251,13 @@ final class WorkspaceStore {
                                      || beforeFolders != listFolders
                                      || beforeSections != listSections) {
             undoSnapshots.append(before); undoLists.append(beforeLists); undoListMetas.append(beforeMetas)
+            undoTextRebases.append([:])
             undoListFolders.append(beforeFolders)
             undoListSections.append(beforeSections)
             undoCompensations.append(nil)
             if undoSnapshots.count > 50 {
                 undoSnapshots.removeFirst()
+                undoTextRebases.removeFirst()
                 undoLists.removeFirst()
                 undoListMetas.removeFirst()
                 undoListFolders.removeFirst()
@@ -203,7 +272,10 @@ final class WorkspaceStore {
     /// Hydration without consumers needs no diff; list metadata alone is not
     /// a task domain event. Keep the legacy snapshot observer compatible.
     private func publishTaskChanges(from before: [Task]) {
-        let changes = onTaskChanges.map { _ in TaskChangeSet(before: before, after: tasks) }
+        let changes = onTaskChanges.map { _ in
+            fullDiffBuildCount += 1
+            return TaskChangeSet(before: before, after: tasks)
+        }
         onTasksChanged?(before, tasks)
         if let changes, !changes.entries.isEmpty { onTaskChanges?(changes) }
     }

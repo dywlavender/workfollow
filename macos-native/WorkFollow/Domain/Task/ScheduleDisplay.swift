@@ -128,9 +128,9 @@ enum ScheduleDisplay {
                                         calendar: Calendar) -> String {
         let distance = dayDistance(from: now, to: date, calendar: calendar)
         let day = distance == 0 ? "今天" : distance == 1 ? "明天" : distance == -1 ? "昨天"
-            : dateFormatter(calendar: calendar, now: now, date: date).string(from: date)
+            : absoluteDateText(date, now: now, calendar: calendar)
         guard hasTime else { return day }
-        return day + " " + clockFormatter(calendar: calendar).string(from: date)
+        return day + " " + clockText(date, calendar: calendar)
     }
 
     private static func fullDateText(_ date: Date, hasTime: Bool, now: Date,
@@ -154,14 +154,34 @@ enum ScheduleDisplay {
                 parts.append("\(prefix)周\(weekday)")
             }
         }
-        parts.append(dateFormatter(calendar: calendar, now: now, date: date).string(from: date))
-        if hasTime { parts.append(clockFormatter(calendar: calendar).string(from: date)) }
+        parts.append(absoluteDateText(date, now: now, calendar: calendar))
+        if hasTime { parts.append(clockText(date, calendar: calendar)) }
         return parts.joined(separator: ", ")
     }
 
     private static func dayDistance(from now: Date, to date: Date, calendar: Calendar) -> Int {
         calendar.dateComponents([.day], from: calendar.startOfDay(for: now),
                                 to: calendar.startOfDay(for: date)).day ?? 0
+    }
+
+    // These fixed Chinese numeric labels do not need ICU formatter setup on
+    // every row redraw. Keep formatter semantics for other calendar systems.
+    private static func absoluteDateText(_ date: Date, now: Date, calendar: Calendar) -> String {
+        guard calendar.identifier == .gregorian else {
+            return dateFormatter(calendar: calendar, now: now, date: date).string(from: date)
+        }
+        let components = calendar.dateComponents([.year, .month, .day], from: date)
+        let day = "\(components.month ?? 0)月\(components.day ?? 0)日"
+        guard components.year != calendar.component(.year, from: now) else { return day }
+        return String(format: "%04d年", components.year ?? 0) + day
+    }
+
+    private static func clockText(_ date: Date, calendar: Calendar) -> String {
+        guard calendar.identifier == .gregorian else {
+            return clockFormatter(calendar: calendar).string(from: date)
+        }
+        let components = calendar.dateComponents([.hour, .minute], from: date)
+        return String(format: "%02d:%02d", components.hour ?? 0, components.minute ?? 0)
     }
 
     /// 同年不带年、跨年带年（`M月d日` / `yyyy年M月d日`）。

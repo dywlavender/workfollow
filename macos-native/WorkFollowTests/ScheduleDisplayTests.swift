@@ -91,6 +91,28 @@ final class ScheduleDisplayTests: XCTestCase {
         XCTAssertEqual(ScheduleDisplay.dayText(date(2026, 9, 26), calendar: calendar), "9月26日")
     }
 
+    func testNumericDateLabelsKeepFormatterOutputAcrossTimeZones() {
+        let now = date(2026, 10, 3, 9)
+        let dates = [date(2026, 9, 27, 0, 5), date(2025, 12, 31, 23, 59), date(2027, 1, 1, 0, 0)]
+        for zone in ["Asia/Shanghai", "America/Los_Angeles", "UTC"] {
+            var local = calendar
+            local.timeZone = TimeZone(identifier: zone)!
+            for due in dates {
+                let formatter = DateFormatter()
+                formatter.locale = Locale(identifier: "zh_CN")
+                formatter.calendar = local
+                formatter.timeZone = local.timeZone
+                formatter.dateFormat = local.component(.year, from: due) == local.component(.year, from: now)
+                    ? "M月d日" : "yyyy年M月d日"
+                let day = formatter.string(from: due)
+                formatter.dateFormat = "HH:mm"
+                let expected = day + " " + formatter.string(from: due)
+                XCTAssertEqual(ScheduleDisplay.dateText(due, hasTime: true, now: now,
+                    calendar: local, style: .compact), expected)
+            }
+        }
+    }
+
     // MARK: - 各宿主共用同一实现（防漂移）
 
     func testHostsDelegateToTheSameImplementation() {

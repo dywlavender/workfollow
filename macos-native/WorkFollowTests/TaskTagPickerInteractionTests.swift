@@ -5,6 +5,25 @@ import XCTest
 
 @MainActor
 final class TaskTagPickerInteractionTests: XCTestCase {
+    func testInspectorMoreToDateClosesOldPanelWithOneClick() throws {
+        let workspace = TaskWorkspaceModel(seedDemoData: false)
+        let taskID = try XCTUnwrap(workspace.createTask(title: "日期入口切换", in: .inbox).taskID)
+        workspace.select(taskID)
+        let host = InspectorPanelTestSupport.inspectorHost(workspace: workspace, environment: AppEnvironment())
+        let window = InspectorPanelTestSupport.ownerWindow(for: host)
+        defer { window.close() }
+        for _ in 0..<3 {
+            try InspectorPanelTestSupport.clickButton(containing: "更多任务操作", in: window)
+            let more = try InspectorPanelTestSupport.actionPanel(in: window)
+            try InspectorPanelTestSupport.clickElement(containing: "设置日期", in: window)
+            let date = try InspectorPanelTestSupport.panel(title: "日期属性", below: window)
+            XCTAssertFalse(more.isVisible, "Date must replace More rather than coexist with it")
+            try InspectorPanelTestSupport.sendEscape(to: date)
+            XCTAssertFalse(date.isVisible)
+            XCTAssertEqual(workspace.selectedTaskID, taskID)
+        }
+    }
+
     private func click(_ rect: CGRect, host: NSView, window: NSWindow) throws {
         let point = host.convert(NSPoint(x: rect.midX, y: host.isFlipped ? rect.midY : host.bounds.height - rect.midY), to: nil)
         for type in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {

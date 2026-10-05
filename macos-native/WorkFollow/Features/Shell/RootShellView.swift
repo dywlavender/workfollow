@@ -2,7 +2,9 @@ import AppKit
 import SwiftUI
 
 struct RootShellView: View {
-    @ObservedObject var workspace: TaskWorkspaceModel
+    // The shell routes the model to independently observing features; its
+    // layout depends on navigation/window geometry, not task mutations.
+    let workspace: TaskWorkspaceModel
     @ObservedObject var navigation: AppNavigation
     @EnvironmentObject private var environment: AppEnvironment
 

@@ -55,6 +55,8 @@ final class TaskWorkspaceModel: ObservableObject {
     }
     /// Committed domain changes, separate from selection/filter/UI invalidation.
     let taskChanges = PassthroughSubject<TaskChangeSet, Never>()
+    /// Editors finish their outgoing input before selection publishes a new host.
+    let selectionWillChange = PassthroughSubject<UUID?, Never>()
     /// Invalidates date-derived projections and labels without treating time
     /// passing as a task mutation or scheduling a persistence write.
     @Published private(set) var dateRevision = 0
@@ -63,7 +65,9 @@ final class TaskWorkspaceModel: ObservableObject {
     @Published var activeTag: String?
     @Published var activeFilterID: UUID?
     @Published var bulkSelection: Set<UUID> = []
-    @Published private(set) var bulkAnchorTaskID: UUID?
+    /// Range-selection bookkeeping, not displayed state. Publishing this would
+    /// invalidate every workspace observer a second time on a plain selection.
+    private(set) var bulkAnchorTaskID: UUID?
 
     private let store: WorkspaceStore
     private let actions: TaskActions
@@ -455,7 +459,7 @@ final class TaskWorkspaceModel: ObservableObject {
     }
 
     func clearBulkSelection() {
-        bulkSelection.removeAll()
+        if !bulkSelection.isEmpty { bulkSelection.removeAll() }
         bulkAnchorTaskID = nil
     }
 
@@ -699,7 +703,10 @@ final class TaskWorkspaceModel: ObservableObject {
     }
 
     func select(_ id: UUID?) {
-        selectedTaskID = id
+        if selectedTaskID != id {
+            selectionWillChange.send(id)
+            selectedTaskID = id
+        }
         bulkAnchorTaskID = id
     }
 
@@ -840,9 +847,14 @@ final class TaskWorkspaceModel: ObservableObject {
 
     @discardableResult
     func delete(_ id: UUID) -> TaskActionResult {
+        // Finish input before the task becomes non-editable; undo must restore
+        // the committed text, not the snapshot before its IME composition.
+        if selectedTaskID == id, task(for: id)?.deletedAt == nil {
+            selectionWillChange.send(nil)
+        }
         let result = actions.delete(id)
         guard result.taskID != nil else { return result }
-        if selectedTaskID == id { selectedTaskID = nil }
+        if selectedTaskID == id { select(nil) }
         StickyNoteWindowController.shared.close(taskID: id)
         didMutate(result)
         report(FeedbackEvent(kind: .undoable, message: "已删除\(quotedTitle(id))",
@@ -1102,7 +1114,7 @@ final class TaskWorkspaceModel: ObservableObject {
         if let scope, let selectedTaskID,
            !TaskListProjection.matches(in: scope, store: store, now: clock(), calendar: calendar)
             .contains(where: { $0.id == selectedTaskID }) {
-            self.selectedTaskID = nil
+            select(nil)
         }
     }
 

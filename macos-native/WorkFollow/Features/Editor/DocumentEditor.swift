@@ -32,8 +32,22 @@ struct EditorReference {
 @MainActor
 final class DocumentEditorHandle: ObservableObject {
     weak var textView: NativeTextView?
+    weak var coordinator: DocumentEditorCoordinator?
     /// 工具条据此显示激活态；选区变化与每次格式化后都会重算。
     @Published private(set) var style = DocumentSelectionStyle()
+    private var viewUpdateDepth = 0
+    private var styleRefreshScheduled = false
+
+    // AppKit emits selection callbacks while SwiftUI installs/rebinds storage.
+    // Publish the final toolbar style after that update, not its transient styles.
+    func beginViewUpdate() { viewUpdateDepth += 1 }
+    func endViewUpdate() { viewUpdateDepth -= 1 }
+
+    func prepareForDocumentChange() {
+        guard let textView, let coordinator,
+              textView.documentIdentity == coordinator.documentID else { return }
+        coordinator.prepareForDocumentChange(in: textView)
+    }
 
     func format(_ command: DocumentFormatCommand) {
         guard let textView else { return }
@@ -45,8 +59,18 @@ final class DocumentEditorHandle: ObservableObject {
     /// 从当前选区重算样式。空选区读 `typingAttributes`——那正是"接下来输入会是什么
     /// 样式"，所以空文档里点段落格式也能在工具条上看到反馈（原版同理）。
     func refreshStyle() {
+        if viewUpdateDepth > 0 {
+            guard !styleRefreshScheduled else { return }
+            styleRefreshScheduled = true
+            DispatchQueue.main.async { [weak self] in
+                guard let self else { return }
+                self.styleRefreshScheduled = false
+                self.refreshStyle()
+            }
+            return
+        }
         guard let textView, let storage = textView.textStorage else {
-            style = DocumentSelectionStyle()
+            if style != DocumentSelectionStyle() { style = DocumentSelectionStyle() }
             return
         }
         let range = textView.selectedRange()
@@ -171,6 +195,8 @@ private struct DocumentEditorContent: NSViewRepresentable {
     }
 
     func makeNSView(context: Context) -> NSView {
+        handle?.beginViewUpdate()
+        defer { handle?.endViewUpdate() }
         let textView = NativeTextView(frame: .zero, textContainer: nil)
         textView.decorationVisibleMinX = decorationVisibleMinX
         textView.documentIdentity = documentID
@@ -186,6 +212,7 @@ private struct DocumentEditorContent: NSViewRepresentable {
         textView.profile = profile
         textView.autoresizingMask = [.width]
         handle?.textView = textView
+        handle?.coordinator = context.coordinator
         handle?.refreshStyle()
         // Content-sized editors belong to their host's scroll view. A second
         // scroll viewport is unnecessary and competes for input ownership.
@@ -211,8 +238,11 @@ private struct DocumentEditorContent: NSViewRepresentable {
 
     func updateNSView(_ view: NSView, context: Context) {
         guard let textView = Self.editor(in: view) else { return }
+        handle?.beginViewUpdate()
+        defer { handle?.endViewUpdate() }
         textView.decorationVisibleMinX = decorationVisibleMinX
         handle?.textView = textView
+        handle?.coordinator = context.coordinator
         textView.onSelectionChanged = { [weak handle] in handle?.refreshStyle() }
         context.coordinator.update(textView, documentID: documentID, document: document,
                                    onDocumentChange: onDocumentChange,

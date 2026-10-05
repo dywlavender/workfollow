@@ -558,3 +558,433 @@ destinations, stale exits and release cleanup, plus existing row/parent tests.
 The final isolated-source run passed 19 tests with zero failures.
 Log: `/private/tmp/workfollow-drop-feedback-BxqCQM/regression.log`.
 Physical drag screenshots remain a separate acceptance gate.
+
+### Lightweight drag title — 2026-10-05
+
+The user's physical screenshot exposed the oversized floating drag card.
+`TaskDragPreview` now renders only a single-line title: no card background,
+shadow or 12pt card padding. Width follows the title up to 220pt, then truncates.
+The preview does not alter drop targeting or hierarchy semantics. Native
+hosting-view geometry tests cover short, long and empty titles, plus the 1pt
+insertion marker. Physical in-flight cursor appearance remains separately gated.
+The final isolated-source run passed 22 tests with zero failures.
+Log: `/private/tmp/workfollow-drag-preview-f8eN6a/regression.log`.
+
+### Text-only task-row date — 2026-10-05
+
+Task-row schedule badges no longer render calendar/clock icons. Date/time text,
+tone, accessibility labels and schedule-trigger behavior are unchanged. Quick
+Add and the Inspector schedule header retain their icons. Remove the obsolete
+row-only schedule-symbol helper and its icon assertions.
+
+Task-row scheduled dates (today and future) use accent blue; overdue dates
+use red; completed rows retain their neutral metadata tone. Quick Add and
+Inspector presentation are unchanged. Date-tone and date-click regressions
+passed 11 tests: `/private/tmp/workfollow-task-date-color-tests.log`.
+
+### Task-switch responsiveness — 2026-10-05
+
+An isolated Debug native-window baseline switched between two tasks twenty
+times each for empty, 20-line and 200-line documents. Selection-to-layout p50
+was 14.64 / 21.00 / 49.03ms, p95 16.62 / 24.44 / 52.37ms. Each switch recreated
+the native editor (20/20 in each case). These numbers are not full-app user
+click latency; the fixture contains Inspector content, not a production list.
+Baseline: `/private/tmp/workfollow-task-switch-5IB7uK/baseline.log`.
+
+Keep the Inspector body editor mounted and rebind it via its existing
+coordinator. Title-field identity is unchanged. Rebinding relinquishes body
+focus and flushes the old document with its old callback/profile, clears editor
+undo/Slash/selection overlays and resets selection before loading the new
+document. The incoming host profile is assigned only after that boundary.
+
+Track actual text-storage edits and the effective trailing empty-block kind.
+Already committed storage with unchanged trailing kind does not need a second
+full decode when switching away. IME composition, external storage mutations,
+pending empty-block formatting and host-owned document commands still flush.
+No speculative layout-height cache or partial document rendering was added.
+
+Tests cover sixty native-window switches, editor identity reuse, document text
+binding, real Inspector composition handoff, focus/undo isolation, subsequent
+edits to the new task, and existing formatting/row/relation behavior. Final log:
+`/private/tmp/workfollow-task-switch-5IB7uK/final.log`. Physical full-app click
+latency with the user's task volume remains a separate acceptance gate.
+
+Final Debug native-window run: 48 tests passed. Empty/20-line/200-line switch
+p50 was 10.39 / 18.43 / 30.40ms; p95 17.91 / 20.39 / 34.78ms. All sixty switches
+reused the same editor. The composition integration test caught storage-replace
+selection callbacks overwriting the reset range; capture the incoming selection
+before storage replacement to preserve the task boundary. No commits or pushes
+were executed by this chat during this work.
+
+### List + Inspector selection scaling — 2026-10-05
+
+Measure a native split fixture containing the real TaskListView and Inspector
+plus four sidebar destination counts. This is broader than the Inspector-only
+fixture, but still not the full production shell. Twenty alternating selections
+with 100 / 500 tasks had baseline p50 58.10 / 372.88ms, p95 63.96 / 384.19ms.
+Log: `/private/tmp/workfollow-split-switch-SjAMo1/baseline.log`.
+
+WorkspaceStore lazily builds task-ID and parent-child read indexes once per
+snapshot; commits and undo invalidate them, including intermediate transaction
+reads. Child deletion/skipping and childOrder rules are unchanged. The indexed
+500-task fixture measured p50 89.87ms (indexed.log).
+
+TaskWorkspaceModel reuses bounded group/tree projections and sidebar counts
+across pure selection changes. Keys include store/model/date revisions, day,
+saved filter, query, grouping, hidden-completed setting, ordered roots and
+expanded IDs. Cache capacity is eight group variants and sixteen tree variants.
+Domain mutation, undo, filter/query changes and day rollover cannot retain stale
+results; folding and sort-order changes have their own tree keys.
+
+Final run passed 101 tests. Split-switch p50 was 37.91 / 54.59ms for 100 / 500
+tasks; p95 41.70 / 56.33ms. An additional native mouse-event test alternates
+task-title clicks ten times and verifies selection and Inspector document bind
+on each first click. Read-cache tests cover warm selection reuse, title changes,
+folding, queries, reparent/undo, day rollover and transaction index invalidation.
+Log: `/private/tmp/workfollow-split-switch-SjAMo1/final.log`.
+Physical full-app user-click latency remains a separate gate; these Debug
+fixture measurements are not a claim that every app interaction is smooth.
+
+### Full Shell and physical switch acceptance — 2026-10-05
+
+Frozen source build and copied preview data:
+`/private/tmp/workfollow-full-switch-9VXH49/`. The acceptance bundle uses its
+own storage directory; the original workspace and active Focus session were
+not edited. Focus session data was excluded from the copy.
+
+`TaskSwitchingTests.testFullShellSwitchesLoadedTasksWithoutStaleDocument`
+hosts RootShellView with the loaded AppEnvironment, real navigation/sidebar,
+list and Inspector. Thirty alternating selections with 43 loaded tasks measured
+p50 72.59ms and p95 82.43ms. Each switch retained the editor instance and matched
+both document identity and plain text. All five TaskSwitchingTests passed.
+Log: `/private/tmp/workfollow-full-switch-9VXH49/regression.log`.
+
+Physical CUA clicks in the isolated app, after window activation, alternated
+two visible tasks thirty times: every click displayed the expected Inspector
+title, the final twenty also checked the accessibility body text, and none
+entered bulk selection. A screenshot confirmed the selected row and matching
+formatted body. Automation round-trip duration is not app click latency.
+
+Unresolved acceptance finding: the first two clicks while the window appeared
+inactive entered bulk selection rather than opening the Inspector. Clearing
+selection and pressing Escape preceded the successful thirty-click run. The
+cause (activation, modifier state or input automation) is not established;
+do not declare inactive-window first-click acceptance passed. Initial app
+binding also suffered a very long CUA call, which is not evidence of app latency.
+
+Other concurrent workspace edits appeared during this run (section-header
+hover and section rename validation). The measured build is the frozen source
+above, not a claim of acceptance for those later edits.
+
+### Activation-click finding resolved — 2026-10-05
+
+A temporary local mouseDown observer in the isolated Debug app captured the
+actual event behind the CUA background click: app inactive, window non-key,
+Command present, Shift absent. The same title click after activating the app
+captured app active, window key, no modifiers; it opened the correct Inspector.
+Thus the observed bulk selection is consistent with the incoming Command-click,
+not proof of ordinary-click misrouting in the app. Do not weaken Command/Shift
+selection to compensate for automation input. The temporary observer was removed.
+
+Added `testNonKeyWindowFirstClickDoesNotEnterBulkSelection`: a second native
+window takes key status before clicking the real task row title and preview.
+Both plain clicks select exactly once without bulk/range actions. The existing
+Command → plain → Shift routing test remains enabled. Initial run passed all
+15 TaskRowInteractionTests. Evidence log:
+`/private/tmp/workfollow-full-switch-9VXH49/activation.log`.
+This proves native non-key-window event routing, not a human cross-application
+click trial: the latter cannot be represented by CUA's observed background input.
+
+Final build without the diagnostic observer passed all 20 task-row and task-switch
+tests. Full-shell 43-task/30-switch p50 was 64.73ms, p95 81.81ms. Final log:
+`/private/tmp/workfollow-full-switch-9VXH49/activation-final.log`.
+
+### Toolbar publication boundary — 2026-10-05
+
+DocumentEditorHandle previously published toolbar style synchronously from
+makeNSView/updateNSView and the selection callbacks emitted by storage rebind.
+The handle now brackets those representable updates and coalesces style refresh
+onto the next main-queue turn. It reads the current editor at execution time,
+not an outgoing document's captured style. User selection/formatting outside
+representable updates still publishes synchronously. Document commits and IME
+flush callbacks were deliberately not deferred by this change.
+
+Added an observer regression: no style publication inside the update boundary,
+one final publication using the rebound editor, and immediate publication for
+ordinary user-driven style changes afterwards.
+
+All 30 selected tests passed: editor state, document format style, document
+transactions and task switching. The full-shell 43-task/30-switch test had zero
+view-update publication warnings (77 matching log entries in the previous run).
+p50 63.82ms, p95 74.40ms; this small latency difference is not proof of a material
+speedup. Log: `/private/tmp/workfollow-full-switch-9VXH49/style-publication.log`.
+
+The outgoing marked-text composition switch test still reports two runtime
+publication warnings while committing the old task and releasing focus. The
+saved text, incoming document identity, focus and undo isolation assertions pass,
+but this host-mutation boundary remains follow-up work; do not claim all editor
+publication warnings are gone.
+
+### Commit outgoing task input before selection publication — 2026-10-05
+
+TaskWorkspaceModel now emits a synchronous selectionWillChange signal before
+publishing a different selectedTaskID. The Inspector's editor handle asks its
+weak coordinator to commit pending input and release the outgoing responder.
+The coordinator retains its rebind fallback for other hosts, but the ordinary
+task selection path no longer saves old-task text from updateNSView. No delayed
+document saves or async host commits were introduced.
+
+Direct selection clearing after scope changes/deletion now uses select(nil).
+Deleting the selected task prepares its editor before making the task non-editable,
+so the deletion undo snapshot contains the final composed text.
+
+Regression assertions check saved text immediately after select returns, before
+layout or run-loop settling; a rapid A → B → A round trip also preserves composed
+text. Deletion + undo restores the text that was still marked at deletion time.
+Existing document identity, responder, selection-range and undo isolation checks
+remain enabled.
+
+Final selected run passed 56 tests (task switching, editor state, content
+transactions, model, task-row interactions and read-cache invalidation). There
+were zero view-update publication warnings in that run, including the marked-text
+switch and deletion tests. Full-shell 43-task/30-switch p50 was 57.38ms, p95 67.38ms.
+Log: `/private/tmp/workfollow-full-switch-9VXH49/selection-boundary-final.log`.
+These are actual native-window tests using NSTextView marked text, not a claim
+that a human system-IME session or every app interaction has been physically
+accepted. No user preview data was edited; no commit or push performed here.
+
+### Coalesce snapshot construction before persistence — 2026-10-05
+
+Previously every revision called savePreview and constructed a complete
+NativeWorkspaceSnapshot on the main actor, including list/folder metadata
+projections, before the persistence queue's write debounce. Disk coalescing
+did not remove that per-edit construction cost.
+
+WorkspaceSnapshotDebouncer now holds a latest-state provider and constructs
+one snapshot after the existing 400ms quiet interval. AppEnvironment's serial
+persistence delay is zero to avoid a second debounce; encoding, atomic writes,
+daily backups, error handling and queue ordering remain in PersistenceCoordinator.
+AppEnvironment.flush first materializes pending state synchronously on the main
+actor, then invokes the serial persistence flush barrier. In-memory document
+edits remain synchronous; only persistence snapshot construction is coalesced.
+
+Four persistence regressions pass: 100 burst requests build once from the latest
+state; termination flush saves immediately and cancels the timer; latest writes
+follow earlier queued writes; the real AppEnvironment saves the twentieth edit
+when flushed before the debounce deadline. The application integration test only
+runs with an explicit acceptance storage root and removes its own disposable task.
+
+All 43 selected tests passed, covering persistence plus task switching, reminder
+invalidation, activity integration and workspace behavior. Log:
+`/private/tmp/workfollow-full-switch-9VXH49/snapshot-debounce-final.log`.
+This verifies reduced snapshot construction work, not a measured global input
+latency improvement. Full-store task diff/history rebasing and list projection
+invalidation per document edit remain separate performance work.
+
+### Lazy text rebase of business undo history — 2026-10-05
+
+TaskTextMutationTests measures 100 synchronous document commits with 100/500
+tasks and 0/50 existing business undo steps; task-change delivery is enabled.
+Baseline median cost for 500 tasks was 3.98ms without history and 22.07ms with
+50 steps. The hot path rebuilt every task array in every historical snapshot
+after each text edit. Baseline performance log:
+`/private/tmp/workfollow-full-switch-9VXH49/text-history-baseline.log`.
+
+WorkspaceStore now stores task-ID text overlays alongside each existing undo
+step. Text edits update these small overlays; undo applies them only when that
+step is restored. New steps start with empty overlays so earlier text overrides
+cannot leak into later recorded business commands. Transactions, the 50-step
+limit and clearUndo maintain overlays with their owning snapshots. Editor-owned
+sourceNoteID rebasing remains distinct from title/document rebasing.
+
+The final measured 500-task/50-step median was 3.98ms, p95 4.24ms; without history
+it was 3.87ms, p95 4.13ms. At 100 tasks/50 steps the median was 0.84ms (baseline
+4.45ms). This removes history-length amplification of text commits, not all
+linear store diff/index/projection work or UI input latency.
+
+All 108 selected tests passed, including cross-task text preservation during
+business undo, subsequent business snapshots, reference undo/redo, transactions,
+list metadata/sections, templates, read caches and task switching. No view-update
+publication warnings appeared in this run. Final log:
+`/private/tmp/workfollow-full-switch-9VXH49/text-history-final.log`.
+
+### Single-task title/document commits — 2026-10-05
+
+TaskActions title/document commands now use WorkspaceStore.commitText rather
+than copying/comparing a full workspace and discovering the changed task again.
+The command validates the task as before; the store compares that task's text,
+updates its timestamp and lazy undo overlays, and emits one exact TaskChangeSet.
+TaskChangeSet's single-update constructor uses the same changed-field comparator
+as the full snapshot path. No-op equality still uses the full NativeDocument
+value (including stable block IDs), not just its plain text.
+
+Task-ID/parent membership indexes remain valid for text-only edits. readRevision
+still advances, so list value projections/queries cannot retain stale text.
+Existing full-snapshot observers remain supported. During a transaction, per-task
+publication is suppressed and the outer aggregate commit/undo diff remains.
+Structural/batch/reference commands continue using their existing full path.
+
+Regression counters verify that 100 text commits do not rebuild read indexes or
+whole-workspace diffs. Single events equal the full before/after snapshot diff;
+legacy observers receive the matching snapshots; title changes invalidate reminders
+while document-only changes do not; transactions publish once. The no-op test
+reuses the same document value rather than creating new block IDs with identical text.
+
+Final 500-task/50-history-step median was 0.064ms, p95 0.071ms (previous median
+3.98ms). Without history median was 0.008ms. These measurements are synchronous
+model commits, excluding TextKit, full UI projection/layout and persistence work.
+All 114 selected tests passed, including undo/reference, activity, reminders,
+read caches, application saving, workspace behavior, list/section/template and
+native-window switching. Log:
+`/private/tmp/workfollow-full-switch-9VXH49/text-single-commit-final.log`.
+
+### Current-build UI flow acceptance — 2026-10-05
+
+The isolated application was rebuilt from the current working source, using a
+copy of workspace data, not the user's live storage. Thirty alternating single
+clicks on two list previews all showed the matching Inspector title and body;
+no second click was issued. A dedicated acceptance task's title and two-line
+body survived quitting and reopening the application. More → title and More →
+body accepted editing on the same click (verified by appending text).
+
+This flow exposed a separate ownership gap: opening the header date through
+an accessibility action left More visible behind the new date panel. Header
+date/repeat and schedule binding activation now explicitly dismiss the footer
+action state before opening the schedule panel, independent of outside-click
+monitors. The rebuilt application was visually rechecked: the date panel opened
+with no More panel remaining. Date content/draft logic was not changed.
+
+A native-window regression repeats More → date → Escape three times and checks
+the old panel is hidden, the new panel opens on one click, and task selection
+is retained. All 26 selected popup, editor and switching tests passed:
+`/private/tmp/workfollow-full-switch-9VXH49/date-entry-flow.log`.
+CUA round-trip duration is not an application latency measurement. These flow
+results establish click correctness and persistence, not a blanket claim that
+every operation in the application is now smooth.
+
+### Selection publication and shell ownership — 2026-10-05
+
+The publication-count baseline showed two objectWillChange notifications for
+one plain selection, and three for reselecting the same task followed by clearing
+an already-empty bulk selection. bulkAnchorTaskID is only range-selection
+bookkeeping: no production view reads it. It is no longer @Published. Empty
+clearBulkSelection still resets the anchor but does not mutate the published set.
+The regression now requires one notification for a changed selection, zero for
+the no-op sequence, and one for clearing a real bulk selection; existing Cmd/Shift
+range selection tests remain unchanged.
+
+RootShellView now passes the workspace as a plain reference. It reads navigation
+and window geometry for layout, while sidebar/list/Inspector feature hosts retain
+their own observation. A real-window full-shell test checks document mutation,
+task switching with the same editor instance, navigation clearing selection and
+returning to the previous document. This does not remove the observation from
+TaskWorkspaceView, whose narrow/wide presentation actually depends on selection.
+
+All 75 selected tests passed, covering bulk selection, workspace behavior, native
+row events, tag/date popup transitions, read caches, window chrome and switching.
+The newly rebuilt isolated app also passed 30 single-click preview switches with
+the expected Inspector title and body every time. Formal user storage was untouched.
+
+The full-shell measured median was 54.78ms, p95 77.15ms (44 loaded tasks, 30
+switches). The preceding notification-only run was 53.30ms, p95 58.79ms. These
+runs do not establish a latency improvement from removing root observation;
+the defensible result is fewer redundant invalidations and preserved behavior.
+Remaining layout/rendering cost needs separate profiling rather than claiming
+the application is completely smooth. Logs:
+`/private/tmp/workfollow-full-switch-9VXH49/selection-publication-baseline.log`
+and `/private/tmp/workfollow-full-switch-9VXH49/shell-observation-final.log`.
+
+### Layout profiling and fixed numeric date labels — 2026-10-05
+
+Full-shell switching now reports separate selection, first-layout, deferred
+run-loop and final-layout durations. The baseline (44 tasks, 30 switches) measured
+selection median 0.132ms, first layout 55.65ms, deferred callbacks 6.52ms and final
+layout 0.106ms; total median 62.08ms, p95 80.89ms. These stages distinguish model
+work from the SwiftUI/AppKit update, not GPU display latency.
+
+A geometry-probe hypothesis was tested and rejected. A single off/on run looked
+faster, but alternating modes in one window (60 switches per mode) measured
+55.29ms with probes and 54.92ms without them. The experimental probe switch and
+its harness were removed from working source; existing screenshot geometry
+contracts were left intact. An earlier multi-window comparison was contaminated
+by retained test hosts and is not used as performance evidence.
+
+Sampling was restricted to the isolated acceptance process and gated on the
+switching test starting (startup-only samples were discarded). The active sample
+showed TaskRowMetadataTrail → scheduleLabel → ScheduleDisplay constructing date
+formatters and initializing ICU during redraw. Gregorian fixed Chinese numeric
+labels now use calendar year/month/day/hour/minute components instead. Relative
+day/week rules remain unchanged; non-Gregorian calendars keep their formatter
+path. No global mutable formatter cache or date-panel draft changes were added.
+
+Regression compares the numeric output with the previous DateFormatter output
+in Shanghai, Los Angeles and UTC, including zero-padded minutes and cross-year
+labels. The final full-shell median was 51.79ms, p95 61.46ms; first layout median
+44.93ms. This run is lower than the stage baseline, but does not prove all app
+operations are smooth. Native-window and geometry regressions passed in
+`/private/tmp/workfollow-full-switch-9VXH49/date-format-layout-final.log`.
+The active stack sample is
+`/private/tmp/workfollow-full-switch-9VXH49/switch-active.sample.txt`.
+
+Post-build CUA manual-flow replay was blocked by the Mac lock screen. The newest
+date-format change has automated native-window coverage, but must not be reported
+as having completed an additional unlocked physical/UI replay. Live user data
+was not modified, and no commit or push was performed.
+
+### Post-unlock UI replay — 2026-10-05
+
+The lock-screen blocker was cleared and the date-format build was replayed.
+The tested ScheduleDisplay, Inspector shell and switching test sources were
+compared directly with the current working files and matched. Thirty alternating
+single-click list-preview selections all showed the expected title and body.
+Ten further More → another task single-click flows also switched correctly,
+without a second click. More → header date opened the date panel on one click;
+the screenshot showed no old More menu behind it. Escape returned to the task.
+
+The actual task screenshot retained text-only row dates, a calendar icon on the
+Inspector date and red overdue dates; the time label remained zero-padded.
+This completes the previously blocked replay for this change, not a claim of
+global latency or all-module acceptance. The application used only the isolated
+acceptance data; no task content, production data, commit or remote state was
+changed during this replay. Tool round-trip timing was not used for performance.
+
+### Reintegration with current grouping and move-menu code — 2026-10-05
+
+Restored the previously verified text-mutation, undo-text rebase, snapshot
+debouncing, editor switching, selection publication, root observation and numeric
+date-label changes into the current working source. The new TaskListView grouping
+and move-menu implementation was not overwritten or modified. Restoration used
+targeted diffs, not a checkout replacement.
+
+Acceptance used a newly frozen source and isolated build at
+`/private/tmp/workfollow-reintegrate-jz8fnC`, with bundle identifier
+`com.workfollow.native.acceptance.reintegrate`. The generated app's storage root
+was verified as `/private/tmp/workfollow-reintegrate-jz8fnC/data`; production
+storage was not used. Two targeted test batches passed: 149 and 31 tests, zero
+failures. They cover grouping/move-menu behavior, row click ownership, bulk
+selection, editor state, text mutations, undo boundaries, document transactions,
+reminder invalidation, delayed persistence, templates and More Menu structure.
+Logs are `reintegration-tests.log` and `integration-boundaries.log` in that
+acceptance directory.
+
+The new full-shell benchmark (44 tasks, 30 switches) measured median 53.45ms and
+p95 60.45ms. Model-only text commits with 500 tasks and 50 business undo entries
+measured median 0.0635ms and p95 0.0703ms. These are benchmark stages, not physical
+pointer-to-display latency and not proof of global application smoothness.
+
+The rebuilt app passed 30 alternating single-click task-preview selections with
+the expected Inspector title and body. Ten More-open → another-task single-click
+flows selected the target directly. More → Inspector date opened the date panel
+on one click; its screenshot showed the panel adjacent to the header date and no
+old More menu. The More overlay is visible in screenshots but not exposed as
+menu items in the main-window accessibility tree, so that tree alone was not
+used as evidence of menu visibility. Row dates remained text-only; overdue dates
+were red and the Inspector retained its calendar icon and zero-padded time.
+
+A disposable task was created through the command palette in isolated data.
+Actual key entry into its document survived switching away and searching back.
+An additional title edit was preserved on app-menu Quit, verified in the isolated
+workspace JSON, then confirmed with the document after launching the same build
+again. This replay does not claim physical Chinese IME coverage; marked-text
+flush and deletion/undo are covered by the native-window automated tests.
+No commit or push was performed.

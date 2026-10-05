@@ -1,3 +1,4 @@
+import Combine
 import XCTest
 @testable import WorkFollow
 
@@ -5,6 +6,32 @@ import XCTest
 /// （状态机 B：单事务、HUD 撤销、空集合幂等、complete/delete 子任务结转）。
 @MainActor
 final class TaskBulkSelectionTests: XCTestCase {
+    func testPlainSelectionPublishesOnlyVisibleChanges() throws {
+        let workspace = TaskWorkspaceModel(seedDemoData: false)
+        let first = try XCTUnwrap(workspace.createTask(title: "第一项", in: .inbox).taskID)
+        let second = try XCTUnwrap(workspace.createTask(title: "第二项", in: .inbox).taskID)
+        workspace.select(first)
+        var publications = 0
+        let subscription = workspace.objectWillChange.sink { publications += 1 }
+        defer { subscription.cancel() }
+
+        workspace.select(second)
+        XCTAssertEqual(publications, 1, "One visible selection change needs one publication")
+        XCTAssertEqual(workspace.bulkAnchorTaskID, second)
+        publications = 0
+        workspace.select(second)
+        workspace.clearBulkSelection()
+        XCTAssertEqual(publications, 0, "Same selection and already-empty bulk state are not UI changes")
+        workspace.selectFromKeyboard(first)
+        XCTAssertEqual(publications, 1)
+        XCTAssertEqual(workspace.bulkAnchorTaskID, first)
+        workspace.setBulkSelection(in: [first, second])
+        publications = 0
+        workspace.clearBulkSelection()
+        XCTAssertEqual(publications, 1, "Clearing a real bulk selection still refreshes the UI")
+        XCTAssertNil(workspace.bulkAnchorTaskID)
+    }
+
     private let calendar: Calendar = {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(secondsFromGMT: 0)!
@@ -297,4 +324,3 @@ func testMergeBulkTasksBelowTwoReturnsNil() {
     XCTAssertTrue(workspace.bulkSelection.isEmpty, "操作后集合清空")
 }
 }
-

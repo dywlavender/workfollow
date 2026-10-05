@@ -30,10 +30,7 @@ final class DocumentEditorCoordinator: NSObject, NSTextViewDelegate {
                 onEscape: @escaping () -> InspectorEscapeEffect,
                 onEditingChanged: @escaping (Bool) -> Void) {
         if self.documentID != documentID {
-            if textView.window?.firstResponder === textView {
-                textView.window?.makeFirstResponder(nil)
-            }
-            flushPendingComposition(in: textView)
+            prepareForDocumentChange(in: textView)
             textView.resetDocumentInteraction(for: documentID)
             self.documentID = documentID
             editorState.bind(to: documentID)
@@ -107,6 +104,13 @@ final class DocumentEditorCoordinator: NSObject, NSTextViewDelegate {
             textView.unmarkText()
         }
         commit(textView, force: true)
+    }
+
+    func prepareForDocumentChange(in textView: NativeTextView) {
+        flushPendingComposition(in: textView)
+        if textView.window?.firstResponder === textView {
+            textView.window?.makeFirstResponder(nil)
+        }
     }
 
     func didLoadDocument(in textView: NativeTextView) {

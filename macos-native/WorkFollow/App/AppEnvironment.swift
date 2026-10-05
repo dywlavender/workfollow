@@ -41,7 +41,10 @@ final class AppEnvironment: ObservableObject {
     @Published private(set) var storageError: String?
     @Published var sidebarVisible = true
     private let repository = NativePreviewRepository()
-    private let persistence = PersistenceCoordinator()
+    // The 400ms debounce now happens before snapshot construction; do not add
+    // a second 400ms delay on the serial encoding/writing queue.
+    private let persistence = PersistenceCoordinator(delay: 0)
+    private lazy var snapshotDebouncer = WorkspaceSnapshotDebouncer(persistence: persistence)
     private var subscriptions = Set<AnyCancellable>()
     private var loadFailed = false
     @Published var commandPalettePresented = false
@@ -183,14 +186,19 @@ final class AppEnvironment: ObservableObject {
 
     private func savePreview() {
         guard !loadFailed else { return }
-        persistence.schedule(NativeWorkspaceSnapshot(tasks: taskWorkspace.allTasks,
-                                                     notes: notesWorkspace.notes,
-                                                     taskLists: taskWorkspace.listNames,
-                                                     taskListMeta: taskWorkspace.listMetas,
-                                                     taskListFolders: taskWorkspace.listFolders,
-                                                     taskListSections: taskWorkspace.listSections,
-                                                     noteFolders: notesWorkspace.folders,
-                                                     noteFolderMetadata: notesWorkspace.folderMetadataForPersistence))
+        snapshotDebouncer.schedule { [weak self] in self?.makePreviewSnapshot() }
+    }
+
+    private func makePreviewSnapshot() -> NativeWorkspaceSnapshot? {
+        guard !loadFailed else { return nil }
+        return NativeWorkspaceSnapshot(tasks: taskWorkspace.allTasks,
+                                       notes: notesWorkspace.notes,
+                                       taskLists: taskWorkspace.listNames,
+                                       taskListMeta: taskWorkspace.listMetas,
+                                       taskListFolders: taskWorkspace.listFolders,
+                                       taskListSections: taskWorkspace.listSections,
+                                       noteFolders: notesWorkspace.folders,
+                                       noteFolderMetadata: notesWorkspace.folderMetadataForPersistence)
     }
 
     /// ⌘\ 显示或隐藏侧栏。
@@ -208,6 +216,7 @@ final class AppEnvironment: ObservableObject {
     }
 
     func flush(completion: @escaping (Error?) -> Void) {
+        snapshotDebouncer.flushPendingSnapshot()
         persistence.flush { first in
             // Module stores flush on their own queues; aggregate the errors.
             let group = DispatchGroup()
