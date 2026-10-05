@@ -46,6 +46,8 @@ struct TaskListView: View {
     @State private var countdownSectionCollapsed = false
     @FocusState private var descriptionFocused: Bool
     @FocusState private var listFocused: Bool
+    @State private var editingRowTitle = false
+    @StateObject private var dropFeedback = TaskDropFeedback()
 
     private var scope: TaskListScope? { TaskWorkspaceModel.scope(for: navigation.destination) }
     private var query: TaskListQuery {
@@ -71,11 +73,16 @@ struct TaskListView: View {
                                           activeTag: workspace.activeTag)
     }
     private var groups: [TaskListGroup] {
-        scope.map { workspace.groups(for: $0, query: query, grouping: grouping) } ?? []
+        scope.map { workspace.groups(for: $0, query: query, grouping: grouping,
+                                     hidesCompleted: environment.viewPreferences
+                                        .hidesCompleted(for: preferenceKey)) } ?? []
     }
     private var canAdd: Bool {
         scope == .today || scope == .tomorrow || scope == .inbox
             || scope == .allTasks || scope == .nextSevenDays
+    }
+    private var nativeTextEditing: Bool {
+        editingRowTitle || NSApp.keyWindow?.firstResponder is NSTextView
     }
     /// TickTick shows each row's owning list unless the view is already that list.
     private var showsListBadge: Bool { workspace.activeList == nil && scope != .inbox }
@@ -128,6 +135,8 @@ struct TaskListView: View {
             if presented { quickAddFocused = false; descriptionFocused = false }
         }
         .onChange(of: workspace.selectedTaskID) { _, _ in revealSelectedClosedTask() }
+        .onChange(of: navigation.destination) { _, _ in dropFeedback.clear() }
+        .onDisappear { dropFeedback.clear() }
         .onAppear {
             if environment.quickAddRequest > 0 { quickAddFocused = true }
             else { listFocused = true }
@@ -212,6 +221,13 @@ struct TaskListView: View {
                 .pickerStyle(.inline)
                 Button("恢复默认排序", systemImage: "arrow.counterclockwise") { resetSort() }
             }
+            Toggle("隐藏已完成", isOn: hidesCompletedBinding)
+            Toggle("隐藏详细", isOn: hidesDetailsBinding)
+            Menu("显示设置") {
+                ForEach(TaskRowDetailField.allCases) { field in
+                    Toggle(field.title, isOn: detailFieldBinding(field))
+                }
+            }
             if let list = workspace.activeList, list != TaskList.inbox.name {
                 Divider()
                 Button("添加分组…", systemImage: "plus") {
@@ -256,6 +272,25 @@ struct TaskListView: View {
         .menuIndicator(.hidden)
         .fixedSize()
         .help("分组与排序")
+    }
+
+    /// 显示设置（按视图记忆；缺省全显示）。
+    private var hidesCompletedBinding: Binding<Bool> {
+        Binding(get: { environment.viewPreferences.hidesCompleted(for: preferenceKey) },
+                set: { environment.viewPreferences.setHidesCompleted($0, for: preferenceKey) })
+    }
+
+    private var hidesDetailsBinding: Binding<Bool> {
+        Binding(get: { environment.viewPreferences.hidesDetails(for: preferenceKey) },
+                set: { environment.viewPreferences.setHidesDetails($0, for: preferenceKey) })
+    }
+
+    private func detailFieldBinding(_ field: TaskRowDetailField) -> Binding<Bool> {
+        Binding(get: {
+            !environment.viewPreferences.hiddenDetailFields(for: preferenceKey).contains(field)
+        }, set: {
+            environment.viewPreferences.setDetailField(field, hidden: !$0, for: preferenceKey)
+        })
     }
 
     /// 分组排序是**清单级**设置：写进清单 meta（nil = 恢复默认）。
@@ -871,31 +906,32 @@ struct TaskListView: View {
             .padding(.horizontal, WFSpace.md)
             .padding(.bottom, WFSpace.xl)
         }
-        .focusable()
+        .focusable(!editingRowTitle)
         .focused($listFocused)
         .focusEffectDisabled()
         .onKeyPress(.upArrow) {
-            guard !quickAddFocused, scope != nil else { return .ignored }
+            guard !nativeTextEditing, !quickAddFocused, scope != nil else { return .ignored }
             selectFiltered(-1)
             return .handled
         }
         .onKeyPress(.downArrow) {
-            guard !quickAddFocused, scope != nil else { return .ignored }
+            guard !nativeTextEditing, !quickAddFocused, scope != nil else { return .ignored }
             selectFiltered(1)
             return .handled
         }
         .onKeyPress(.return) {
             // 批量态下回车/空格一律无效（状态机 A 不变量）——回车只服务单选。
-            guard !quickAddFocused, scope != nil, workspace.bulkSelection.isEmpty else { return .ignored }
+            guard !nativeTextEditing, !quickAddFocused, scope != nil, workspace.bulkSelection.isEmpty else { return .ignored }
             if workspace.selectedTaskID == nil { selectFiltered(1) }
             return .handled
         }
         .onKeyPress(.space) {
-            guard !quickAddFocused, workspace.bulkSelection.isEmpty,
+            guard !nativeTextEditing, !quickAddFocused, workspace.bulkSelection.isEmpty,
                   let task = workspace.selectedTask else { return .ignored }
             _ = workspace.changeStatus(task, in: scope); return .handled
         }
         .onKeyPress(.escape) {
+            guard !nativeTextEditing else { return .ignored }
             // Esc 阶梯最外层：先退批量（S2→S0），再退单选（S1→S0）。
             // 详情面板自己持有焦点时由 TaskInspectorShell 接管，两条路语义一致。
             if !workspace.bulkSelection.isEmpty {
@@ -922,14 +958,17 @@ struct TaskListView: View {
                 expanded: node.expanded,
                 selected: isSelected,
                 showsListBadge: showsListBadge,
+                hidesDetails: environment.viewPreferences.hidesDetails(for: preferenceKey),
+                hiddenFields: environment.viewPreferences.hiddenDetailFields(for: preferenceKey),
                 allowsReordering: sortMode == .manual && !node.task.isClosed,
                 onEditTitle: {
-                    // Native field editing owns keyboard focus, not the list.
+                    editingRowTitle = true
                     quickAddFocused = false
                     descriptionFocused = false
                     listFocused = false
                     workspace.select(node.task.id)
                 },
+                onTitleEditingEnded: { editingRowTitle = false },
                 onSelect: {
                     listFocused = true
                     workspace.select(node.task.id)
@@ -971,7 +1010,7 @@ struct TaskListView: View {
         if sortMode == .manual && !node.task.isClosed {
             row
                 .modifier(TaskReorderDropModifier(workspace: workspace, targetID: node.task.id,
-                                                  depth: node.depth))
+                                                  depth: node.depth, feedback: dropFeedback))
                 .id(rowIdentity(group: group, task: node.task))
         } else {
             row.id(rowIdentity(group: group, task: node.task))
@@ -1073,8 +1112,12 @@ struct TaskRowView: View {
     let expanded: Bool
     let selected: Bool
     var showsListBadge: Bool = true
+    /// 隐藏详细 / 详细行里被关掉的字段（滴答「显示设置」）。
+    var hidesDetails: Bool = false
+    var hiddenFields: [TaskRowDetailField] = []
     var allowsReordering: Bool = false
     var onEditTitle: (() -> Void)? = nil
+    var onTitleEditingEnded: (() -> Void)? = nil
     let onSelect: () -> Void
     /// Cmd+点击（进入/切换批量选中）。nil 时（渲染契约等宿主）退回普通选中。
     var onBulkToggle: ((UUID) -> Void)? = nil
@@ -1121,6 +1164,7 @@ struct TaskRowView: View {
                 TaskRowTitleField(title: task.title,
                                   color: task.status == .completed ? WFColors.taskCompletedTitle : task.isClosed ? WFColors.secondaryText : WFColors.text,
                                   onSelect: onEditTitle ?? onSelect,
+                                  onEditingEnded: { onTitleEditingEnded?() },
                                   onCommit: { _ = workspace.setTitle(task.id, $0) })
                     .frame(height: 18)
                     .taskTreeRenderAnchor(task.id, .title)
@@ -1137,6 +1181,8 @@ struct TaskRowView: View {
             // 任何快捷按钮（日期走尾栏日期徽章，优先级走右键菜单/检查器）。
             TaskRowMetadataTrail(task: task, workspace: workspace,
                                  showsListBadge: showsListBadge,
+                                 hidesDetails: hidesDetails,
+                                 hiddenFields: hiddenFields,
                                  onOpenDate: { contextDateAnchor = nil; showDatePopover = true })
         }
         .padding(.horizontal, TaskListMetrics.rowHorizontalPadding)
@@ -1289,8 +1335,12 @@ private struct TaskReorderDropModifier: ViewModifier {
     @ObservedObject var workspace: TaskWorkspaceModel
     let targetID: UUID
     let depth: Int
+    @ObservedObject var feedback: TaskDropFeedback
     @State private var rowHeight: CGFloat = WFMetrics.rowHeight
-    @State private var placement: TaskDropPlacement?
+
+    private var placement: TaskDropPlacement? {
+        feedback.target?.rowID == targetID ? feedback.target?.placement : nil
+    }
 
     func body(content: Content) -> some View {
         content
@@ -1300,16 +1350,16 @@ private struct TaskReorderDropModifier: ViewModifier {
             })
             .onDrop(of: [UTType.utf8PlainText], delegate: TaskReorderDropDelegate(
                 workspace: workspace, targetID: targetID, depth: depth,
-                rowHeight: rowHeight, placement: $placement))
+                rowHeight: rowHeight, feedback: feedback))
+            .onDisappear { feedback.exit(rowID: targetID) }
             .overlay {
                 Group {
                 switch placement {
                 case .childOf:
                     RoundedRectangle(cornerRadius: WFMetrics.corner)
-                        .stroke(WFColors.accent, lineWidth: 1)
-                        .background(WFColors.accent.opacity(0.08), in: RoundedRectangle(cornerRadius: WFMetrics.corner))
+                        .stroke(WFColors.accent.opacity(0.45), lineWidth: 1)
                         .overlay(alignment: .bottomTrailing) {
-                            Text("作为子任务").font(.system(size: 10)).foregroundStyle(WFColors.accent).padding(3)
+                            Text("作为子任务").font(.system(size: 10)).foregroundStyle(WFColors.secondaryText).padding(3)
                         }
                 case .before, .rootBefore:
                     VStack { TaskDropMarker(); Spacer(minLength: 0) }
@@ -1331,6 +1381,9 @@ private struct TaskRowMetadataTrail: View {
     let task: Task
     @ObservedObject var workspace: TaskWorkspaceModel
     var showsListBadge: Bool
+    /// 「隐藏详细」整行隐藏；`hiddenFields` 在此基础上逐字段关闭。
+    var hidesDetails: Bool = false
+    var hiddenFields: [TaskRowDetailField] = []
     let onOpenDate: () -> Void
 
     private var deadlineOverdue: Bool {
@@ -1348,6 +1401,20 @@ private struct TaskRowMetadataTrail: View {
     }
 
     var body: some View {
+        if hidesDetails {
+            EmptyView()
+        } else {
+            trail
+        }
+    }
+
+    /// 某条元信息是否被「显示设置」关掉（tags 单列一档，其余图标归 indicators）。
+    private func isHidden(_ id: String) -> Bool {
+        id == "tags" ? hiddenFields.contains(.tags) : hiddenFields.contains(.indicators)
+    }
+
+    @ViewBuilder
+    private var trail: some View {
         HStack(spacing: WFSpace.xs) {
             if task.isPinned {
                 Image(systemName: "pin.fill")
@@ -1355,17 +1422,18 @@ private struct TaskRowMetadataTrail: View {
                     .accessibilityLabel("已置顶")
             }
             if task.isAbandoned { Text("已放弃").foregroundStyle(muted) }
-            if showsListBadge, task.list.name != TaskList.inbox.name {
+            if showsListBadge, !hiddenFields.contains(.list), task.list.name != TaskList.inbox.name {
                 // 清单名最先被压缩：低优先级 + 40pt 上限，把宽度让给日期。
                 Text(task.list.name).lineLimit(1)
                     .frame(maxWidth: 40).foregroundStyle(muted).layoutPriority(-1)
             }
-            if task.priority != .none {
+            if !hiddenFields.contains(.priority), task.priority != .none {
                 Image(systemName: "flag.fill")
                     .foregroundStyle(task.isClosed ? muted : TaskRowPriority.color(task.priority))
                     .accessibilityLabel(TaskRowPriority.title(task.priority))
             }
-            ForEach(Array(secondaryMetadata.prefix(WFMetrics.secondaryMetadataLimit))) { item in
+            ForEach(Array(secondaryMetadata.filter { !isHidden($0.id) }
+                .prefix(WFMetrics.secondaryMetadataLimit))) { item in
                 if let value = item.value {
                     Text(value).foregroundStyle(muted).accessibilityLabel(item.accessibilityLabel)
                 } else if let symbol = item.symbol {
@@ -1373,13 +1441,13 @@ private struct TaskRowMetadataTrail: View {
                         .accessibilityLabel(item.accessibilityLabel)
                 }
             }
-            if let deadline = task.schedule.deadlineAt {
+            if !hiddenFields.contains(.date), let deadline = task.schedule.deadlineAt {
                 Text(TaskDateLabel.text(deadline, hasTime: false,
                                         now: workspace.clock(), calendar: workspace.calendar) + "截止")
                     .foregroundStyle(task.isClosed ? muted : deadlineOverdue ? .red : muted)
                     .layoutPriority(0)
             }
-            if task.schedule.dueAt != nil {
+            if !hiddenFields.contains(.date), task.schedule.dueAt != nil {
                 // 日期是行内最重要的元信息：固定尺寸不被压缩。
                 dateBadge.fixedSize().layoutPriority(2)
             }

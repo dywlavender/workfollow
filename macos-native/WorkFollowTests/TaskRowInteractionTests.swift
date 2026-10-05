@@ -5,6 +5,35 @@ import XCTest
 
 @MainActor
 final class TaskRowInteractionTests: XCTestCase {
+    func testDropFeedbackHasOnlyOneTargetAndIgnoresStaleExit() {
+        let feedback = TaskDropFeedback()
+        defer { feedback.clear() }
+        let first = UUID(), second = UUID()
+        feedback.update(rowID: first, placement: .before(first))
+        feedback.update(rowID: second, placement: .childOf(second))
+        XCTAssertEqual(feedback.target, .init(rowID: second, placement: .childOf(second)))
+        feedback.exit(rowID: first)
+        XCTAssertEqual(feedback.target?.rowID, second)
+        feedback.exit(rowID: second)
+        XCTAssertNil(feedback.target)
+    }
+
+    func testDropFeedbackClearsOnReleaseAndNeverRetainsInsertionAndParentHintsTogether() {
+        let feedback = TaskDropFeedback()
+        let id = UUID()
+        feedback.update(rowID: id, placement: .before(id))
+        feedback.update(rowID: id, placement: .childOf(id))
+        XCTAssertEqual(feedback.target?.placement, .childOf(id))
+        feedback.clearIfReleased(pressedButtons: 1)
+        XCTAssertNotNil(feedback.target)
+        feedback.clearIfReleased(pressedButtons: 0)
+        XCTAssertNil(feedback.target)
+        feedback.update(rowID: id, placement: .after(id))
+        feedback.clear()
+        XCTAssertNil(feedback.target)
+        XCTAssertEqual(TaskListMetrics.dragMarkerHeight, 1)
+    }
+
     func testReorderDropProposesMoveAndPreservesTaskIdentity() throws {
         XCTAssertEqual(TaskReorderDropDelegate.moveProposal.operation, .move)
         let workspace = TaskWorkspaceModel(seedDemoData: false)
@@ -173,9 +202,21 @@ final class TaskRowInteractionTests: XCTestCase {
         let editor = try XCTUnwrap(window.firstResponder as? NSTextView,
                                   "List focus must not steal the title field editor")
         editor.selectAll(nil)
-        editor.insertText("完整列表修改已提交", replacementRange: editor.selectedRange())
-        editor.doCommand(by: #selector(NSResponder.insertNewline(_:)))
-        XCTAssertEqual(workspace.task(for: id)?.title, "完整列表修改已提交")
+        func sendKey(_ characters: String, code: UInt16) throws {
+            let event = try XCTUnwrap(NSEvent.keyEvent(with: .keyDown, location: .zero,
+                modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
+                windowNumber: window.windowNumber, context: nil, characters: characters,
+                charactersIgnoringModifiers: characters, isARepeat: false, keyCode: code))
+            NSApp.sendEvent(event)
+            InspectorPanelTestSupport.settle(window)
+        }
+        try sendKey("t", code: 17)
+        try sendKey(" ", code: 49)
+        try sendKey("x", code: 7)
+        XCTAssertFalse(try XCTUnwrap(workspace.task(for: id)).isClosed,
+                       "Space in the title must not complete the selected task")
+        try sendKey("\r", code: 36)
+        XCTAssertEqual(workspace.task(for: id)?.title, "t x")
         XCTAssertEqual(workspace.selectedTaskID, id)
     }
 

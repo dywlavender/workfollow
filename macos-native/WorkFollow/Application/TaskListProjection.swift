@@ -226,7 +226,8 @@ enum TaskListProjection {
 
     static func groups(in scope: TaskListScope, store: WorkspaceStore,
                        now: Date, calendar: Calendar, query: TaskListQuery = TaskListQuery(),
-                       grouping: TaskListGrouping = .byDate) -> [TaskListGroup] {
+                       grouping: TaskListGrouping = .byDate,
+                       hidesCompleted: Bool = false) -> [TaskListGroup] {
         let rows = rows(in: scope, store: store, now: now, calendar: calendar, query: query)
         let closed = rows.filter(\.isClosed).sorted {
             ($0.closedAt ?? .distantPast) > ($1.closedAt ?? .distantPast)
@@ -313,7 +314,8 @@ enum TaskListProjection {
         } else if !ordinary.isEmpty {
             groups.append(TaskListGroup(kind: .plain, day: nil, tasks: ordinary))
         }
-        if !closed.isEmpty {
+        // 「隐藏已完成」只作用于普通视图；`.completed` 视图本身在上面已提前返回。
+        if !hidesCompleted, !closed.isEmpty {
             let hasCompleted = closed.contains { $0.status == .completed }
             let hasAbandoned = closed.contains { $0.isAbandoned }
             let label = hasCompleted && hasAbandoned ? "已完成&已放弃"

@@ -21,6 +21,6 @@ enum TaskListMetrics {
     /// 「倒数纪念日」小节里那行的高度。比任务行（`WFMetrics.rowHeight` = 50）矮一档：
     /// 任务行要容下副标题与日期，倒计时行只有图标 + 名称 + 右侧标签，没有第二行。
     static let countdownRowHeight: CGFloat = 36
-    static let dragMarkerHeight: CGFloat = 3
+    static let dragMarkerHeight: CGFloat = 1
     static let dragPreviewWidth: CGFloat = 360
 }

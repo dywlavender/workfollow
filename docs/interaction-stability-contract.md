@@ -529,6 +529,32 @@ movable between parents and promotable to independent tasks.
   identity stays unchanged and the destination parent is expanded.
 - Native-window and domain regressions cover inline edit/submit/cancel, click
   isolation, move proposals/zones, reparenting, promotion, ordering and undo.
-  Log: `/private/tmp/workfollow-hierarchy-final-tests.log`.
+  Full-list coverage sends actual window key events, including a space, after
+  one title click. During an explicit native editing session the list stops
+  accepting focus/shortcuts; the field restores its editor after container
+  focus updates. Return/outside click commit and Escape cancels.
+  The latest isolated-source run passed 22 tests with zero failures.
+  Log: `/private/tmp/workfollow-title-keyboard-Mj1NNa/regression.log`.
 - Physical drag/cursor/hover closure is still separate from these regressions;
   do not mark it accepted based only on source or a synthetic reorder action.
+  The latest isolated build was opened. Computer-use clicks/typing did not
+  reliably enter the title editor (bulk selection appeared instead), so that
+  attempt is not counted as successful physical editing or drag acceptance.
+
+### Exclusive, subdued drag feedback — 2026-10-05
+
+The user's physical screenshot showed multiple parent-target cards and an
+insertion marker retained simultaneously. Replace per-row placement state with
+one list-owned `TaskDropFeedback` destination. Exit events clear only their own
+row, so a late exit cannot erase a newer destination. Drop, mouse release,
+Escape, row disappearance and list navigation clear feedback; a tracking-mode
+release watcher covers drag cancellation/outside release without a drop callback.
+All event observation returns the original event unchanged.
+
+Insertion markers are 1pt instead of 3pt. Parent targets have a subdued 1pt
+outline and secondary-text hint, with no accent background. Hierarchy/drop
+zones, mutations and undo are unchanged. Regression gates include switching
+destinations, stale exits and release cleanup, plus existing row/parent tests.
+The final isolated-source run passed 19 tests with zero failures.
+Log: `/private/tmp/workfollow-drop-feedback-BxqCQM/regression.log`.
+Physical drag screenshots remain a separate acceptance gate.

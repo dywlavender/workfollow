@@ -1,6 +1,61 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
+/// One drop destination per list, not one retained destination per row.
+@MainActor
+final class TaskDropFeedback: ObservableObject {
+    struct Target: Equatable {
+        let rowID: UUID
+        let placement: TaskDropPlacement
+    }
+    @Published private(set) var target: Target?
+    private var releaseTimer: Timer?
+    private var endMonitor: Any?
+
+    func update(rowID: UUID, placement: TaskDropPlacement) {
+        let next = Target(rowID: rowID, placement: placement)
+        if target != next { target = next }
+        guard releaseTimer == nil else { return }
+        endMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseUp, .keyDown]) { [weak self] event in
+            MainActor.assumeIsolated {
+                if event.type == .leftMouseUp || event.keyCode == 53 { self?.clear() }
+            }
+            return event
+        }
+        // Drag tracking can omit dropExited when cancelled or released outside
+        // the list. Watch only while feedback exists, including tracking mode.
+        let timer = Timer(timeInterval: 0.1, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated {
+                self?.clearIfReleased(pressedButtons: NSEvent.pressedMouseButtons)
+            }
+        }
+        releaseTimer = timer
+        RunLoop.main.add(timer, forMode: .common)
+    }
+
+    func exit(rowID: UUID) {
+        // A late exit from A must not erase the newer destination B.
+        if target?.rowID == rowID { clear() }
+    }
+
+    func clear() {
+        target = nil
+        releaseTimer?.invalidate()
+        releaseTimer = nil
+        if let endMonitor { NSEvent.removeMonitor(endMonitor) }
+        endMonitor = nil
+    }
+
+    func clearIfReleased(pressedButtons: Int) {
+        if pressedButtons & 1 == 0 { clear() }
+    }
+
+    deinit {
+        releaseTimer?.invalidate()
+        if let endMonitor { NSEvent.removeMonitor(endMonitor) }
+    }
+}
+
 /// Reordering is a move, never a copy/export of the internal task identifier.
 struct TaskReorderDragPolicy: ViewModifier {
     func body(content: Content) -> some View {
@@ -19,7 +74,7 @@ struct TaskReorderDropDelegate: DropDelegate {
     let targetID: UUID
     let depth: Int
     let rowHeight: CGFloat
-    @Binding var placement: TaskDropPlacement?
+    let feedback: TaskDropFeedback
 
     private func destination(at point: CGPoint) -> TaskDropPlacement {
         Self.destination(at: point, rowHeight: rowHeight, depth: depth,
@@ -36,17 +91,17 @@ struct TaskReorderDropDelegate: DropDelegate {
         return depth == 0 ? .childOf(targetID) : .after(targetID)
     }
 
-    func dropEntered(info: DropInfo) { placement = destination(at: info.location) }
-    func dropExited(info: DropInfo) { placement = nil }
+    func dropEntered(info: DropInfo) { feedback.update(rowID: targetID, placement: destination(at: info.location)) }
+    func dropExited(info: DropInfo) { feedback.exit(rowID: targetID) }
     func dropUpdated(info: DropInfo) -> DropProposal? {
-        placement = destination(at: info.location)
+        feedback.update(rowID: targetID, placement: destination(at: info.location))
         return Self.moveProposal
     }
     static var moveProposal: DropProposal { DropProposal(operation: .move) }
 
     func performDrop(info: DropInfo) -> Bool {
         let destination = destination(at: info.location)
-        placement = nil
+        feedback.clear()
         guard let provider = info.itemProviders(for: [UTType.utf8PlainText]).first,
               provider.canLoadObject(ofClass: NSString.self) else { return false }
         provider.loadObject(ofClass: NSString.self) { value, _ in
