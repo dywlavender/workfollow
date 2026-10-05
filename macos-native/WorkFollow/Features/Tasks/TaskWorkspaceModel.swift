@@ -216,10 +216,11 @@ final class TaskWorkspaceModel: ObservableObject {
         return result
     }
 
-    /// 侧栏拖拽排序：把清单移到 target 之前（nil = 末尾）。
+    /// 侧栏拖拽排序：把清单移到 target 之前（nil = 末尾）；
+    /// `clearsFolder` = 落点在顶层空档，顺便移出文件夹。
     @discardableResult
-    func moveList(_ name: String, before target: String?) -> Bool {
-        let changed = actions.moveList(name, before: target)
+    func moveList(_ name: String, before target: String?, clearsFolder: Bool = false) -> Bool {
+        let changed = actions.moveList(name, before: target, clearsFolder: clearsFolder)
         if changed { revision += 1 }
         return changed
     }

@@ -184,6 +184,32 @@ final class ListMetaTests: XCTestCase {
         XCTAssertNil(loaded.taskListMeta?[1].folderName)
     }
 
+    func testMoveListToTopLevelClearsFolderInOneUndo() {
+        let store = WorkspaceStore(); let actions = TaskActions(store: store, clock: { self.now })
+        _ = actions.renameList(nil, to: "A")
+        _ = actions.renameList(nil, to: "B")
+        XCTAssertTrue(actions.combineListsIntoFolder("A", "B", folder: "公司"))
+        XCTAssertEqual(store.listMeta(for: "A")?.folderName, "公司")
+
+        XCTAssertTrue(actions.moveList("A", before: nil, clearsFolder: true))
+        XCTAssertNil(store.listMeta(for: "A")?.folderName, "拖到顶层空档 = 移出文件夹")
+        XCTAssertEqual(store.lists.last, "A", "顺序也一起落定")
+        XCTAssertEqual(store.listMeta(for: "B")?.folderName, "公司", "另一个成员留在文件夹里")
+
+        actions.undo()
+        XCTAssertEqual(store.listMeta(for: "A")?.folderName, "公司", "顺序与归属一次撤销全复原")
+        XCTAssertEqual(store.lists, ["A", "B"])
+    }
+
+    func testMoveListInsideFolderKeepsMembership() {
+        let store = WorkspaceStore(); let actions = TaskActions(store: store, clock: { self.now })
+        _ = actions.renameList(nil, to: "A")
+        _ = actions.renameList(nil, to: "B")
+        XCTAssertTrue(actions.combineListsIntoFolder("A", "B", folder: "公司"))
+        XCTAssertTrue(actions.moveList("B", before: "A", clearsFolder: false))
+        XCTAssertEqual(store.listMeta(for: "B")?.folderName, "公司", "夹内换位不改归属")
+    }
+
     // MARK: - 清单拖动排序（侧栏行间拖放带）
 
     func testMoveListReordersAndIsOneUndoStep() {

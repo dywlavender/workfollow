@@ -872,9 +872,14 @@ final class TaskActions {
 
     /// 侧栏拖拽排序：把清单移到 `target` 之前（nil = 移到末尾）。
     /// 顺序本体是 `store.lists`（meta.sortOrder 由 store 归一化为下标），
-    /// 一次提交 = 一步撤销；颜色/置顶/文件夹归属都随名字继承，不受影响。
+    /// 一次提交 = 一步撤销；颜色/置顶随名字继承。
+    ///
+    /// `clearsFolder = true` 时**同时移出文件夹**（落点在顶层空档）。滴答的
+    /// "清单 ↔ 文件夹"归属只有拖拽一条路径（其前端无 moveProject/移出 之类文案，
+    /// 见提交记录），所以"拖到顶层 = 移出"是对它行为的推断实现——顺序与归属
+    /// 在同一次提交里落定，撤销一次全复原。
     @discardableResult
-    func moveList(_ name: String, before target: String?) -> Bool {
+    func moveList(_ name: String, before target: String?, clearsFolder: Bool = false) -> Bool {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         let name_ = trimmed
         guard store.lists.contains(name_), canManageList(name_), target != name_ else { return false }
@@ -885,8 +890,15 @@ final class TaskActions {
         } else {
             lists.append(name_)
         }
-        guard lists != store.lists else { return false }
-        store.commit(store.tasks, lists: lists)
+        var metas = store.listMetas
+        var metaChanged = false
+        if clearsFolder, let index = metas.firstIndex(where: { $0.name == name_ }),
+           metas[index].folderName != nil {
+            metas[index].folderName = nil
+            metaChanged = true
+        }
+        guard lists != store.lists || metaChanged else { return false }
+        store.commit(store.tasks, lists: lists, listMetas: metaChanged ? metas : nil)
         return true
     }
 

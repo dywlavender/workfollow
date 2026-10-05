@@ -49,34 +49,36 @@ struct TaskCollectionsView: View {
             ForEach(workspace.listTree) { node in
                 switch node {
                 case .list(let name):
-                    insertionStrip(before: name)
+                    // 顶层空档：落这里 = 排序 + **移出文件夹**（滴答的归属只有拖拽一条路）。
+                    insertionStrip(before: name, clearsFolder: true)
                     SidebarListRowView(workspace: workspace, name: name) { openList(name) }
                 case .folder(let folder, let lists):
-                    insertionStrip(before: lists.first)
+                    // 文件夹前的空档落在"文件夹第一个成员"位置 → 仍属文件夹内，别误删归属。
+                    insertionStrip(before: lists.first, clearsFolder: false)
                     folderRow(folder, count: lists.count)
                     if !collapsedFolders.contains(folder) {
                         ForEach(lists, id: \.self) { name in
-                            insertionStrip(before: name)
+                            insertionStrip(before: name, clearsFolder: false)
                             SidebarListRowView(workspace: workspace, name: name) { openList(name) }
                                 .padding(.leading, Self.folderIndent)
                         }
                     }
                 }
             }
-            insertionStrip(before: nil)
+            insertionStrip(before: nil, clearsFolder: true)
         }.buttonStyle(.plain).font(WFType.navigation)
     }
 
     /// 行间拖放带：清单拖到这里 = **排序**（拖到行上才是"建文件夹"，滴答同一手势两种结果）。
     /// 本轮只做改顺序：归属（拖出文件夹）仍走 ⋯ → 移动到文件夹，已登记。
-    private func insertionStrip(before target: String?) -> some View {
+    private func insertionStrip(before target: String?, clearsFolder: Bool) -> some View {
         Color.clear
             .frame(height: 6)
             .contentShape(Rectangle())
             .dropDestination(for: String.self) { values, _ in
                 guard let raw = values.first,
                       case .list(let moved)? = SidebarDragPayload.decode(raw) else { return false }
-                return workspace.moveList(moved, before: target)
+                return workspace.moveList(moved, before: target, clearsFolder: clearsFolder)
             }
     }
 
