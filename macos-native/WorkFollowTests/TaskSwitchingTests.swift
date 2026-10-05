@@ -5,6 +5,38 @@ import XCTest
 
 @MainActor
 final class TaskSwitchingTests: XCTestCase {
+    func testFullShellSwitchesLoadedTasksWithoutStaleDocument() throws {
+        let environment = AppEnvironment()
+        let workspace = environment.taskWorkspace
+        environment.navigation.destination = .allTasks
+        let ids = Array(workspace.allTasks.filter { $0.deletedAt == nil }.prefix(2).map(\.id))
+        guard ids.count == 2 else { throw XCTSkip("Requires at least two loaded tasks") }
+        let host = NSHostingView(rootView: RootShellView(workspace: workspace,
+            navigation: environment.navigation).environmentObject(environment)
+            .frame(width: 1280, height: 800))
+        let window = InspectorPanelTestSupport.ownerWindow(for: host, width: 1280, height: 800)
+        defer { window.close() }
+        workspace.select(ids[0])
+        InspectorPanelTestSupport.settle(window)
+        let original = try XCTUnwrap(editor(in: host))
+        var samples: [Double] = []
+        for iteration in 0..<30 {
+            let id = ids[(iteration + 1) % 2]
+            let start = ProcessInfo.processInfo.systemUptime
+            workspace.select(id)
+            host.layoutSubtreeIfNeeded()
+            RunLoop.main.run(until: Date().addingTimeInterval(0.001))
+            host.layoutSubtreeIfNeeded()
+            samples.append((ProcessInfo.processInfo.systemUptime - start) * 1000)
+            let current = try XCTUnwrap(editor(in: host))
+            XCTAssertTrue(current === original)
+            XCTAssertEqual(current.documentIdentity, id)
+            XCTAssertEqual(current.string, workspace.task(for: id)?.document.plainText)
+        }
+        samples.sort()
+        print("TASK_FULL_SHELL_SWITCH tasks=\(workspace.allTasks.count) p50_ms=\(samples[15]) p95_ms=\(samples[28]) switches=30")
+    }
+
     private func editor(in view: NSView) -> NativeTextView? {
         if let text = view as? NativeTextView { return text }
         return view.subviews.lazy.compactMap { self.editor(in: $0) }.first

@@ -14,6 +14,9 @@ struct TaskListView: View {
     @State private var showListActivity = false
     @State private var showQuickAddSchedule = false
     @State private var quickAddSchedulePage: TaskDatePopoverV2.Page = .main
+    /// 光标落在哪个分组标题上（滴答的 `+` / `⋯` 是 hover 才出现的，未悬停时标题行
+    /// 只有箭头 + 标题 + 计数——这是对着本机滴答实测出来的）。
+    @State private var hoveredSectionID: String?
     @State private var pendingTemplatePicker = false
     @State private var showQuickAddProperties = false
     @State private var quickAddScheduleOverride: QuickAddScheduleDraft?
@@ -893,7 +896,7 @@ struct TaskListView: View {
             .buttonStyle(.plain)
             // 分组标题上的 +（滴答：直接在这个分组里建任务）。弹一次标题而不是
             // 造空任务进编辑态——我们的行内编辑状态机比滴答薄，先给可靠的那条路。
-            if let sectionID = group.sectionID {
+            if let sectionID = group.sectionID, hoveredSectionID == sectionID {
                 Button {
                     guard let list = workspace.activeList,
                           let title = TaskNamePrompt.ask("在此分组新建任务"),
@@ -913,7 +916,7 @@ struct TaskListView: View {
             }
             // 分组标题上的可见 ⋯（滴答是 hover 显示）：右键之外再给一个看得见的入口，
             // 否则"就地能改分组"只有知道要右键的人才用得上。
-            if group.sectionID != nil {
+            if let sectionID = group.sectionID, hoveredSectionID == sectionID {
                 Menu { sectionMenu(group) } label: {
                     Image(systemName: "ellipsis")
                         .font(.system(size: 11, weight: .semibold))
@@ -939,6 +942,11 @@ struct TaskListView: View {
         }
         .padding(.horizontal, WFSpace.sm)
         .frame(height: TaskListMetrics.groupHeaderHeight)
+        .onHover { inside in
+            guard let sectionID = group.sectionID else { return }
+            if inside { hoveredSectionID = sectionID }
+            else if hoveredSectionID == sectionID { hoveredSectionID = nil }
+        }
         // 把任务拖到**分组标题**上 = 改归属（滴答主手势）。
         // 列表行拖的是任务 UUID 字符串；侧栏清单拖拽带 `wf-list:` 前缀，UUID 解析失败即忽略。
         .dropDestination(for: String.self) { values, _ in

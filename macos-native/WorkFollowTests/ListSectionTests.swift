@@ -213,6 +213,38 @@ final class ListSectionTests: XCTestCase {
         XCTAssertNil(TaskSectionDropTarget.taskID(for: ""))
     }
 
+    func testSectionSortIsStoredAndPassedToProjection() throws {
+        let store = WorkspaceStore()
+        let actions = TaskActions(store: store, clock: { self.now })
+        _ = actions.renameList(nil, to: "工作")
+        guard let option = TaskSectionSort.allCases.first else { return XCTFail("没有可选排序") }
+        XCTAssertTrue(actions.setListSectionSort("工作", option))
+        XCTAssertEqual(store.listMeta(for: "工作")?.sectionTaskSort, option, "组内排序存进清单 meta")
+
+        // 接通检查：投影调用点必须真的把它读出来传进去——"有能力但没接线"是这轮
+        // 自查出来的教训（那一轮我凭记忆误判过一次，这里就用测试钉住它）。
+        var url = URL(fileURLWithPath: #filePath)
+        url.deleteLastPathComponent()
+        url.deleteLastPathComponent()
+        let source = try String(contentsOf: url.appendingPathComponent(
+            "WorkFollow/Application/TaskListProjection.swift"), encoding: .utf8)
+        XCTAssertTrue(source.contains("sort: store.listMeta(for: list)?.sectionTaskSort"),
+                      "投影调用点没把组内排序传进去（UI 会变成按了没反应）")
+    }
+
+    func testRenameListSectionRejectsDuplicateTitle() {
+        let store = WorkspaceStore()
+        let actions = TaskActions(store: store, clock: { self.now })
+        _ = actions.renameList(nil, to: "工作")
+        XCTAssertTrue(actions.addListSection("工作", title: "甲"))
+        XCTAssertTrue(actions.addListSection("工作", title: "乙"))
+        guard let second = store.listSections.first(where: { $0.title == "乙" }) else {
+            return XCTFail("乙 未建出")
+        }
+        XCTAssertFalse(actions.renameListSection(second.id, title: "甲"), "同清单重名拒绝")
+        XCTAssertEqual(store.listSection(second.id)?.title, "乙", "被拒后原样不动")
+    }
+
     @MainActor
     func testWorkspaceHydratesSections() {
         let (store, actions) = makeActions()

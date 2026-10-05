@@ -990,6 +990,10 @@ final class TaskActions {
         var sections = store.listSections
         guard let index = sections.firstIndex(where: { $0.id == id }),
               sections[index].title != trimmed else { return false }
+        // 同清单重名拒绝：添加时会查重，重命名漏了就能造出两个同名分组。
+        guard !sections.contains(where: { $0.id != id
+                                          && $0.listName == sections[index].listName
+                                          && $0.title == trimmed }) else { return false }
         sections[index].title = trimmed
         store.commit(store.tasks, listSections: sections)
         return true
