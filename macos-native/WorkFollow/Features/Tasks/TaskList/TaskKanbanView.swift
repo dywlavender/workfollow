@@ -52,6 +52,13 @@ struct TaskKanbanView: View {
         .frame(width: Self.columnWidth, alignment: .topLeading)
         .background(WFColors.listSelection.opacity(0.35),
                     in: RoundedRectangle(cornerRadius: WFMetrics.corner))
+        // 换列 = 改归属：只有"列 = 自定义分组"时才接拖放（其它分组方式没有可写的归属字段）。
+        .dropDestination(for: String.self) { values, _ in
+            guard let sectionID = group.sectionID,
+                  let raw = values.first,
+                  case .task(let id)? = SidebarDragPayload.decode(raw) else { return false }
+            return workspace.setTaskSection(id, sectionID: sectionID).taskID != nil
+        }
     }
 
     /// 卡片：标题两行 + 日期 / 优先级 / 标签三枚轻标记（点一下 = 选中该任务）。
@@ -92,5 +99,6 @@ struct TaskKanbanView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .draggable(SidebarDragPayload.encode(.task(task.id)))
     }
 }

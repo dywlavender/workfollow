@@ -128,6 +128,15 @@ final class ListSectionTests: XCTestCase {
                        "组身份按标签互不串（折叠状态不串）")
     }
 
+    func testSectionGroupsCarrySectionIDForKanbanDrops() {
+        let first = TaskListSection(id: "s1", listName: "工作", title: "进行中", sortOrder: 0)
+        let tasks = [makeTask(title: "无归属"), makeTask(title: "在 s1", sectionID: "s1")]
+        let groups = TaskListSectionProjection.groups(tasks, list: "工作", sections: [first])
+        XCTAssertEqual(groups?.first { $0.label == "进行中" }?.sectionID, "s1",
+                       "列 = 分组时带出分组 id，看板才能把卡片落进来")
+        XCTAssertNil(groups?.first { $0.label == "未分组" }?.sectionID, "未分组不是可落列")
+    }
+
     func testSectionProjectionIsInertWithoutSections() {
         let tasks = [makeTask(title: "普通任务", sectionID: nil)]
         XCTAssertNil(TaskListSectionProjection.groups(tasks, list: "工作", sections: []),

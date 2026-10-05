@@ -33,6 +33,9 @@ struct TaskListGroup {
     let day: Date?
     let tasks: [Task]
     let label: String?
+    /// 这一组对应的**自定义分组 id**（只有"列 = 分组"时有值）。
+    /// 看板换列靠它定位落点：拖到某列 = `setTaskSection(任务, 该列的分组 id)`。
+    let sectionID: String?
 
     /// Stable across sorting and heading changes so a folded group does not
     /// accidentally transfer to another group or reopen after its label shifts.
@@ -66,11 +69,13 @@ struct TaskListGroup {
         "closed:\(Int64(day.timeIntervalSince1970))"
     }
 
-    init(kind: TaskGroupKind, day: Date?, tasks: [Task], label: String? = nil) {
+    init(kind: TaskGroupKind, day: Date?, tasks: [Task], label: String? = nil,
+         sectionID: String? = nil) {
         self.kind = kind
         self.day = day
         self.tasks = tasks
         self.label = label
+        self.sectionID = sectionID
     }
 
     /// 组内排序（阶段1扩到五种）。所有模式都只是视图投影，**从不改 childOrder**：
@@ -570,7 +575,7 @@ enum TaskListSectionProjection {
             groups.append(TaskListGroup(kind: .plain, day: nil,
                                         tasks: arranged(tasks.filter { $0.sectionID == section.id },
                                                         by: sort),
-                                        label: section.title))
+                                        label: section.title, sectionID: section.id))
         }
         return groups
     }
