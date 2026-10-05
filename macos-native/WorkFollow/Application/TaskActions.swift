@@ -920,6 +920,26 @@ final class TaskActions {
     }
 
     /// 重命名分组：**id 不变**，任务归属不受影响。
+    /// 在某个分组里新建任务（滴答分组标题的 `+`）。
+    /// 建任务与归入分组放在**一个事务**里：对用户是一个动作，就该是一步撤销。
+    @discardableResult
+    func createTaskInSection(_ sectionID: String, list: String, title: String) -> Bool {
+        let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, canManageList(list),
+              store.listSection(sectionID) != nil else { return false }
+        var created = false
+        store.transaction {
+            let result = createDraft(title: trimmed, list: list, schedule: TaskSchedule(),
+                                     priority: .none, tags: [], reminder: nil,
+                                     frequency: TaskRepeat.never)
+            if let id = result.taskID {
+                _ = setTaskSection(id, sectionID: sectionID)
+                created = true
+            }
+        }
+        return created
+    }
+
     /// 在某个分组的**上方**插入新分组（`above == nil` 即追加到末尾）。
     /// 滴答分组标题菜单：「在上方添加分组 / 在下方添加分组」。
     @discardableResult

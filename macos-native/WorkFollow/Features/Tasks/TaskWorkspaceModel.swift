@@ -223,6 +223,14 @@ final class TaskWorkspaceModel: ObservableObject {
             .sorted { ($0.sortOrder, $0.title) < ($1.sortOrder, $1.title) }
     }
 
+    /// 在分组里新建任务（滴答分组标题的 `+`）。
+    @discardableResult
+    func createTaskInSection(_ sectionID: String, list: String, title: String) -> Bool {
+        let changed = actions.createTaskInSection(sectionID, list: list, title: title)
+        if changed { revision += 1 }
+        return changed
+    }
+
     @discardableResult
     func insertListSection(_ list: String, title: String, above id: String?) -> Bool {
         let changed = actions.insertListSection(list, title: title, above: id)

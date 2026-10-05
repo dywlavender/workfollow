@@ -880,6 +880,26 @@ struct TaskListView: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            // 分组标题上的 +（滴答：直接在这个分组里建任务）。弹一次标题而不是
+            // 造空任务进编辑态——我们的行内编辑状态机比滴答薄，先给可靠的那条路。
+            if let sectionID = group.sectionID {
+                Button {
+                    guard let list = workspace.activeList,
+                          let title = TaskNamePrompt.ask("在此分组新建任务"),
+                          !title.isEmpty else { return }
+                    if !workspace.createTaskInSection(sectionID, list: list, title: title) {
+                        TaskNamePrompt.invalidName()
+                    }
+                } label: {
+                    Image(systemName: "plus")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(WFColors.secondaryText)
+                        .frame(width: 18, height: 18)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help("在此分组新建任务")
+            }
             // 分组标题上的可见 ⋯（滴答是 hover 显示）：右键之外再给一个看得见的入口，
             // 否则"就地能改分组"只有知道要右键的人才用得上。
             if group.sectionID != nil {

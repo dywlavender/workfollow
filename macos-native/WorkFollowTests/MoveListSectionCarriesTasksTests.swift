@@ -6,6 +6,26 @@ import XCTest
 final class MoveListSectionCarriesTasksTests: XCTestCase {
     private let now = Date(timeIntervalSince1970: 1_700_000_000)
 
+    func testCreateTaskInSectionIsOneUndoStep() {
+        let store = WorkspaceStore()
+        let actions = TaskActions(store: store, clock: { self.now })
+        _ = actions.renameList(nil, to: "工作")
+        XCTAssertTrue(actions.addListSection("工作", title: "阶段一"))
+        guard let section = store.listSections.first(where: { $0.title == "阶段一" }) else {
+            return XCTFail("分组未建出")
+        }
+        XCTAssertTrue(actions.createTaskInSection(section.id, list: "工作", title: "任务 B"))
+        let created = store.tasks.first { $0.title == "任务 B" }
+        XCTAssertEqual(created?.sectionID, section.id, "任务直接落在分组里")
+        XCTAssertEqual(created?.list.name, "工作")
+        XCTAssertFalse(actions.createTaskInSection(section.id, list: "工作", title: "   "), "空标题被拒")
+        XCTAssertFalse(actions.createTaskInSection("不存在", list: "工作", title: "任务 C"),
+                       "分组不存在被拒")
+        actions.undo()
+        XCTAssertNil(store.tasks.first { $0.title == "任务 B" },
+                     "建任务 + 归入分组是一个动作 = 一步撤销")
+    }
+
     func testMoveListSectionCarriesItsTasksAndIsOneUndoStep() {
         let store = WorkspaceStore()
         let actions = TaskActions(store: store, clock: { self.now })
