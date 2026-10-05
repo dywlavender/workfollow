@@ -3,7 +3,16 @@ import Foundation
 /// Single in-memory authority for Phase 2. UI integration and Repository come later.
 final class WorkspaceStore {
     enum UndoPolicy { case record, skip }
-    private(set) var tasks: [Task] = []
+    private(set) var tasks: [Task] = [] {
+        didSet {
+            readRevision += 1
+            taskOffsets = nil
+            childOffsets = nil
+        }
+    }
+    private(set) var readRevision = 0
+    private var taskOffsets: [UUID: Int]?
+    private var childOffsets: [UUID: [Int]]?
     private(set) var lists: [String] = []
     /// 侧栏清单元数据（Round B1）：与 lists 一一对应、顺序一致，sortOrder 即数组下标。
     /// 只覆盖 store 注册过的清单；随 commit/undo/transaction 与 lists 同步进退。
@@ -26,10 +35,27 @@ final class WorkspaceStore {
     /// Emits the task-level diff once per commit, undo, or outer transaction.
     var onTaskChanges: ((TaskChangeSet) -> Void)?
 
-    func task(_ id: UUID) -> Task? { tasks.first { $0.id == id } }
+    private func prepareReadIndex() {
+        guard taskOffsets == nil else { return }
+        var byID: [UUID: Int] = [:]
+        var byParent: [UUID: [Int]] = [:]
+        for (offset, task) in tasks.enumerated() {
+            if byID[task.id] == nil { byID[task.id] = offset }
+            if let parent = task.parentID { byParent[parent, default: []].append(offset) }
+        }
+        taskOffsets = byID
+        childOffsets = byParent
+    }
+
+    func task(_ id: UUID) -> Task? {
+        prepareReadIndex()
+        return taskOffsets?[id].map { tasks[$0] }
+    }
 
     func children(of id: UUID, includingDeleted: Bool = false) -> [Task] {
-        tasks.filter { $0.parentID == id && $0.skippedAt == nil && (includingDeleted || $0.deletedAt == nil) }
+        prepareReadIndex()
+        return (childOffsets?[id] ?? []).map { tasks[$0] }
+            .filter { $0.skippedAt == nil && (includingDeleted || $0.deletedAt == nil) }
             .sorted { $0.childOrder < $1.childOrder }
     }
 

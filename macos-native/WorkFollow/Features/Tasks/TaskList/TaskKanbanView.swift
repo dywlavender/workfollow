@@ -54,9 +54,8 @@ struct TaskKanbanView: View {
                     in: RoundedRectangle(cornerRadius: WFMetrics.corner))
         // 换列 = 改归属：只有"列 = 自定义分组"时才接拖放（其它分组方式没有可写的归属字段）。
         .dropDestination(for: String.self) { values, _ in
-            guard let sectionID = group.sectionID,
-                  let raw = values.first,
-                  case .task(let id)? = SidebarDragPayload.decode(raw) else { return false }
+            guard let sectionID = TaskSectionDropTarget.sectionID(for: values.first, target: group.sectionID),
+                  let id = TaskSectionDropTarget.taskID(for: values.first) else { return false }
             return workspace.setTaskSection(id, sectionID: sectionID).taskID != nil
         }
     }

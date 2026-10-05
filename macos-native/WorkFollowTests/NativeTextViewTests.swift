@@ -4,6 +4,38 @@ import XCTest
 
 @MainActor
 final class NativeTextViewTests: XCTestCase {
+    func testCleanDocumentSwitchSkipsDecodeButExternalStorageChangesStillFlush() {
+        let editor = NativeTextView(frame: .zero, textContainer: nil)
+        let original = NativeDocument(plainText: "原正文")
+        var outgoing: [NativeDocument] = []
+        let coordinator = DocumentEditorCoordinator(documentID: UUID(), document: original,
+            onDocumentChange: { outgoing.append($0) }, onEscape: { .keepInspector }, onEditingChanged: { _ in })
+        editor.textStorage?.setAttributedString(DocumentTextCodec.render(original))
+        coordinator.didLoadDocument(in: editor)
+        coordinator.flushPendingComposition(in: editor)
+        XCTAssertEqual(coordinator.decodeCount, 0)
+        editor.textStorage?.setAttributedString(DocumentTextCodec.render(NativeDocument(plainText: "未提交正文")))
+        coordinator.update(editor, documentID: UUID(), document: NativeDocument(plainText: "新正文"),
+            onDocumentChange: { _ in XCTFail("Outgoing text must not commit to the new task") },
+            onEscape: { .keepInspector }, onEditingChanged: { _ in })
+        XCTAssertEqual(outgoing.last?.plainText, "未提交正文")
+        XCTAssertEqual(coordinator.decodeCount, 1)
+        coordinator.flushPendingComposition(in: editor)
+        XCTAssertEqual(coordinator.decodeCount, 1)
+    }
+
+    func testCleanFlushStillCommitsPendingEmptyHeading() {
+        let editor = NativeTextView(frame: .zero, textContainer: nil)
+        var changes: [NativeDocument] = []
+        let coordinator = DocumentEditorCoordinator(documentID: UUID(), document: .empty,
+            onDocumentChange: { changes.append($0) }, onEscape: { .keepInspector }, onEditingChanged: { _ in })
+        coordinator.didLoadDocument(in: editor)
+        editor.seedTrailingParagraphKind(.heading(1))
+        coordinator.flushPendingComposition(in: editor)
+        XCTAssertEqual(changes.last?.blocks.last?.kind, .heading(1))
+        XCTAssertEqual(coordinator.decodeCount, 1)
+    }
+
     func testRebindFlushesCompositionToOldDocumentOnly() {
         let editor = NativeTextView(frame: .zero, textContainer: nil)
         var oldChanges: [NativeDocument] = []

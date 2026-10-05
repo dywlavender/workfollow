@@ -30,17 +30,20 @@ final class DocumentEditorCoordinator: NSObject, NSTextViewDelegate {
                 onEscape: @escaping () -> InspectorEscapeEffect,
                 onEditingChanged: @escaping (Bool) -> Void) {
         if self.documentID != documentID {
-            flushPendingComposition(in: textView)
             if textView.window?.firstResponder === textView {
                 textView.window?.makeFirstResponder(nil)
             }
+            flushPendingComposition(in: textView)
             textView.resetDocumentInteraction(for: documentID)
             self.documentID = documentID
             editorState.bind(to: documentID)
+            // Replacing storage emits selection callbacks synchronously; do
+            // not let that transient end-of-document range replace the reset.
+            let incomingSelection = editorState.selectedRange
             textView.typingAttributes = DocumentTextCodec.attributes(kind: .paragraph, marks: [])
             self.document = document
             textView.textStorage?.setAttributedString(DocumentTextCodec.render(document))
-            textView.setSelectedRange(editorState.selectedRange)
+            textView.setSelectedRange(incomingSelection)
             // 文末空段落的级别只能从模型带回输入属性（它的样式在文档里没有字符可承载），
             // 否则切回来接着在文末输入会退回正文。
             textView.seedTrailingParagraphKind(Self.trailingBlockKind(of: document))

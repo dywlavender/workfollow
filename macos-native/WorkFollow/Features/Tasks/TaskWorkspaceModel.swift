@@ -17,6 +17,42 @@ final class TaskWorkspaceModel: ObservableObject {
     @Published private(set) var collapsedTaskIDs: Set<UUID> = []
     @Published private(set) var pendingChildTitleEditorID: UUID?
     @Published private(set) var revision = 0
+    private struct ProjectionStamp: Equatable {
+        let revision: Int
+        let storeRevision: Int
+        let dateRevision: Int
+        let day: Date
+        let filter: SavedFilter?
+    }
+    private struct GroupCacheEntry {
+        let scope: TaskListScope
+        let query: TaskListQuery
+        let grouping: TaskListGrouping
+        let hidesCompleted: Bool
+        let groups: [TaskListGroup]
+    }
+    private struct NodeCacheEntry {
+        let scope: TaskListScope
+        let query: TaskListQuery
+        let roots: [UUID]
+        let expanded: Set<UUID>
+        let nodes: [TaskTreeNode]
+    }
+    private var projectionStamp: ProjectionStamp?
+    private var groupCache: [GroupCacheEntry] = []
+    private var nodeCache: [NodeCacheEntry] = []
+    private var sidebarCountCache: [NativeDestination: Int] = [:]
+    private(set) var projectionBuildCount = 0
+
+    private func prepareProjectionCache() {
+        let stamp = ProjectionStamp(revision: revision, storeRevision: store.readRevision, dateRevision: dateRevision,
+                                    day: calendar.startOfDay(for: clock()), filter: activeFilter)
+        guard projectionStamp != stamp else { return }
+        projectionStamp = stamp
+        groupCache.removeAll(keepingCapacity: true)
+        nodeCache.removeAll(keepingCapacity: true)
+        sidebarCountCache.removeAll(keepingCapacity: true)
+    }
     /// Committed domain changes, separate from selection/filter/UI invalidation.
     let taskChanges = PassthroughSubject<TaskChangeSet, Never>()
     /// Invalidates date-derived projections and labels without treating time
@@ -555,10 +591,19 @@ final class TaskWorkspaceModel: ObservableObject {
                 grouping: TaskListGrouping = .byDate,
                 hidesCompleted: Bool = false) -> [TaskListGroup] {
         _ = revision
-        return applyingFilter(
+        prepareProjectionCache()
+        if let cached = groupCache.first(where: {
+            $0.scope == scope && $0.query == query && $0.grouping == grouping && $0.hidesCompleted == hidesCompleted
+        }) { return cached.groups }
+        projectionBuildCount += 1
+        let result = applyingFilter(
             TaskListProjection.groups(in: scope, store: store, now: clock(), calendar: calendar,
                                       query: query, grouping: grouping,
                                       hidesCompleted: hidesCompleted))
+        if groupCache.count >= 8 { groupCache.removeFirst() }
+        groupCache.append(GroupCacheEntry(scope: scope, query: query, grouping: grouping,
+                                         hidesCompleted: hidesCompleted, groups: result))
+        return result
     }
 
     /// Count for the visible list; when a saved filter is active the header
@@ -574,20 +619,36 @@ final class TaskWorkspaceModel: ObservableObject {
     func count(for destination: NativeDestination) -> Int {
         if destination == .trash { return deletedTasks.count }
         guard let scope = Self.scope(for: destination) else { return 0 }
-        return TaskListProjection.count(in: scope, store: store, now: clock(), calendar: calendar)
+        prepareProjectionCache()
+        if let cached = sidebarCountCache[destination] { return cached }
+        projectionBuildCount += 1
+        let result = TaskListProjection.count(in: scope, store: store, now: clock(), calendar: calendar)
+        sidebarCountCache[destination] = result
+        return result
     }
 
     func nodes(for group: TaskListGroup, scope: TaskListScope, query: TaskListQuery = TaskListQuery(),
                orderedRoots: [Task]? = nil) -> [TaskTreeNode] {
         _ = revision
-        let matching = filteredMatches(in: scope, query: query)
+        prepareProjectionCache()
+        let rootTasks = orderedRoots ?? group.tasks
+        let roots = Set(group.tasks.map(\.id))
+        let expanded = query.isFiltering ? roots : roots.subtracting(collapsedTaskIDs)
+        let rootIDs = rootTasks.map(\.id)
+        if let cached = nodeCache.first(where: {
+            $0.scope == scope && $0.query == query && $0.roots == rootIDs && $0.expanded == expanded
+        }) { return cached.nodes }
         let followsMatchedParent = (scope == .today || scope == .tomorrow
                                     || scope == .nextSevenDays) &&
             query.search.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        let roots = Set(group.tasks.map(\.id))
-        return TaskTreeProjection.nodes(roots: orderedRoots ?? group.tasks, store: store,
-                                        expanded: query.isFiltering ? roots : roots.subtracting(collapsedTaskIDs),
-                                        matchingTaskIDs: followsMatchedParent ? nil : Set(matching.map(\.id)))
+        let matching = followsMatchedParent ? nil : Set(filteredMatches(in: scope, query: query).map(\.id))
+        projectionBuildCount += 1
+        let result = TaskTreeProjection.nodes(roots: rootTasks, store: store,
+                                             expanded: expanded, matchingTaskIDs: matching)
+        if nodeCache.count >= 16 { nodeCache.removeFirst() }
+        nodeCache.append(NodeCacheEntry(scope: scope, query: query, roots: rootIDs,
+                                       expanded: expanded, nodes: result))
+        return result
     }
 
     func visibleNodes(for scope: TaskListScope, query: TaskListQuery = TaskListQuery()) -> [TaskTreeNode] {

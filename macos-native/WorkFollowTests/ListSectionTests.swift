@@ -197,6 +197,22 @@ final class ListSectionTests: XCTestCase {
         XCTAssertEqual(store.listSection(section.id)?.listName, "工作", "一步撤销归位")
     }
 
+    func testSectionDropDecisionIsPure() {
+        let id = UUID()
+        XCTAssertEqual(TaskSectionDropTarget.sectionID(for: id.uuidString, target: "sec-1"), "sec-1",
+                       "列表行拖的任务 UUID 被接受")
+        XCTAssertEqual(TaskSectionDropTarget.sectionID(
+            for: SidebarDragPayload.encode(.task(id)), target: "sec-1"), "sec-1",
+                       "看板的负载形式同样被接受")
+        XCTAssertNil(TaskSectionDropTarget.sectionID(
+            for: SidebarDragPayload.encode(.list("工作")), target: "sec-1"),
+                     "侧栏清单不是任务，不该被接受")
+        XCTAssertNil(TaskSectionDropTarget.sectionID(for: "随便一段文字", target: "sec-1"))
+        XCTAssertNil(TaskSectionDropTarget.sectionID(for: id.uuidString, target: nil),
+                     "按日期/优先级那种标题没有归属字段 → 不给出假目标")
+        XCTAssertNil(TaskSectionDropTarget.taskID(for: ""))
+    }
+
     @MainActor
     func testWorkspaceHydratesSections() {
         let (store, actions) = makeActions()
