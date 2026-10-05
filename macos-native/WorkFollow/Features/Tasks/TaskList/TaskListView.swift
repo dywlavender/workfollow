@@ -268,7 +268,7 @@ struct TaskListView: View {
                     Menu("管理分组") {
                         ForEach(workspace.listSections(forList: list)) { section in
                             Menu(section.title) {
-                                Button("重命名分组…") {
+                                Button("编辑分组…") {
                                     guard let title = TaskNamePrompt.ask("重命名分组", value: section.title),
                                           title != section.title else { return }
                                     if !workspace.renameListSection(section.id, title: title) {
@@ -824,7 +824,7 @@ struct TaskListView: View {
     @ViewBuilder
     private func sectionMenu(_ group: TaskListGroup) -> some View {
         if let sectionID = group.sectionID {
-            Button("重命名分组…") {
+            Button("编辑分组…") {
                 guard let title = TaskNamePrompt.ask("重命名分组", value: group.label ?? ""),
                       title != group.label else { return }
                 if !workspace.renameListSection(sectionID, title: title) {

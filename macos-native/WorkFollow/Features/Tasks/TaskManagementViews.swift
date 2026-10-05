@@ -109,10 +109,10 @@ struct TaskCollectionsView: View {
                       value != folder else { return }
                 if !workspace.renameListFolder(from: folder, to: value) { TaskNamePrompt.invalidName() }
             }
-            Button("删除文件夹（清单保留）…") {
-                guard TaskNamePrompt.confirm("删除文件夹“\(folder)”？",
-                                             message: "其中的清单会保留，并移到顶层。",
-                                             action: "删除") else { return }
+            Button("解散文件夹…") {
+                guard TaskNamePrompt.confirm("解散文件夹“\(folder)”？",
+                                             message: "清单会保留，并移到顶层。",
+                                             action: "解散") else { return }
                 _ = workspace.dissolveListFolder(folder)
             }
         }
