@@ -154,6 +154,49 @@ final class ListSectionTests: XCTestCase {
         XCTAssertNil(legacy.sectionID, "旧快照缺 sectionID → 未分组")
     }
 
+    // MARK: - 滴答分组标题菜单的"上/下方添加分组"
+
+    func testInsertListSectionAboveAndBelowKeepsOrder() {
+        let store = WorkspaceStore()
+        let actions = TaskActions(store: store, clock: { self.now })
+        _ = actions.renameList(nil, to: "工作")
+        XCTAssertTrue(actions.addListSection("工作", title: "乙"))
+        let second = try? XCTUnwrap(store.listSections.first { $0.title == "乙" })
+        guard let second else { return XCTFail("乙 未建出") }
+
+        XCTAssertTrue(actions.insertListSection("工作", title: "甲", above: second.id),
+                      "在上方添加")
+        XCTAssertEqual(store.listSections.filter { $0.listName == "工作" }.sorted { $0.sortOrder < $1.sortOrder }.map(\.title), ["甲", "乙"])
+        XCTAssertEqual(store.listSections.filter { $0.listName == "工作" }.sorted { $0.sortOrder < $1.sortOrder }.map(\.sortOrder), [0, 1],
+                       "插入后序号要重排，否则位置会漂")
+
+        XCTAssertTrue(actions.insertListSection("工作", title: "丙", above: nil), "追加到末尾")
+        XCTAssertEqual(store.listSections.filter { $0.listName == "工作" }.sorted { $0.sortOrder < $1.sortOrder }.map(\.title), ["甲", "乙", "丙"])
+
+        XCTAssertFalse(actions.insertListSection("工作", title: "甲", above: nil), "同清单重名被拒")
+        actions.undo()
+        XCTAssertEqual(store.listSections.filter { $0.listName == "工作" }.sorted { $0.sortOrder < $1.sortOrder }.map(\.title), ["甲", "乙"],
+                       "一次插入 = 一步撤销")
+    }
+
+    func testMoveListSectionGuards() {
+        let store = WorkspaceStore()
+        let actions = TaskActions(store: store, clock: { self.now })
+        _ = actions.renameList(nil, to: "工作")
+        _ = actions.renameList(nil, to: "生活")
+        XCTAssertTrue(actions.addListSection("工作", title: "阶段一"))
+        guard let section = store.listSections.first(where: { $0.title == "阶段一" }) else {
+            return XCTFail("分组未建出")
+        }
+        XCTAssertFalse(actions.moveListSection(section.id, to: "工作"), "移到自己所在的清单被拒")
+        XCTAssertFalse(actions.moveListSection(section.id, to: "   "), "空清单名被拒")
+        XCTAssertTrue(actions.moveListSection(section.id, to: "生活"))
+        XCTAssertEqual(store.listSection(section.id)?.listName, "生活")
+        XCTAssertEqual(store.listSections.filter { $0.listName == "工作" }.sorted { $0.sortOrder < $1.sortOrder }.count, 0, "原清单不再有该分组")
+        actions.undo()
+        XCTAssertEqual(store.listSection(section.id)?.listName, "工作", "一步撤销归位")
+    }
+
     @MainActor
     func testWorkspaceHydratesSections() {
         let (store, actions) = makeActions()
