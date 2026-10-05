@@ -17,6 +17,8 @@ struct TaskListView: View {
     /// 光标落在哪个分组标题上（滴答的 `+` / `⋯` 是 hover 才出现的，未悬停时标题行
     /// 只有箭头 + 标题 + 计数——这是对着本机滴答实测出来的）。
     @State private var hoveredSectionID: String?
+    /// 正在为哪个分组挑目标清单（非 nil 时弹出自绘卡片 MoveTargetPickerCard）。
+    @State private var moveTargetSectionID: String?
     @State private var pendingTemplatePicker = false
     @State private var showQuickAddProperties = false
     @State private var quickAddScheduleOverride: QuickAddScheduleDraft?
@@ -845,11 +847,9 @@ struct TaskListView: View {
             // 滴答分组标题菜单的其余三项：上/下方添加分组 + 移动到另一个清单。
             Button("在上方添加分组", systemImage: "arrow.up.square") { addSection(above: sectionID) }
             Button("在下方添加分组", systemImage: "arrow.down.square") { addSection(below: sectionID) }
-            Menu("移动到", systemImage: "folder") {
-                ForEach(workspace.listNames.filter { $0 != workspace.activeList }, id: \.self) { list in
-                    Button(list) { _ = workspace.moveListSection(sectionID, to: list) }
-                }
-            }
+            // 这一项不再开系统子菜单：滴答那版带搜索框 + 当前清单打勾，系统菜单做不到，
+            // 改成弹出自绘卡片（MoveTargetPickerCard，过滤/高亮逻辑在 MoveTargetPicker）。
+            Button("移动到", systemImage: "folder") { moveTargetSectionID = sectionID }
             Button("删除", systemImage: "trash") {
                 guard TaskNamePrompt.confirm("删除分组“\(group.label ?? "")”？",
                                              message: "其中的任务会保留，并回到未分组。",
@@ -942,6 +942,21 @@ struct TaskListView: View {
         }
         .padding(.horizontal, WFSpace.sm)
         .frame(height: TaskListMetrics.groupHeaderHeight)
+        .popover(isPresented: Binding(get: { moveTargetSectionID == group.sectionID },
+                                      set: { if !$0 { moveTargetSectionID = nil } })) {
+            if let sectionID = group.sectionID {
+                MoveTargetPickerCard(
+                    sectionTitle: group.label ?? "",
+                    targets: workspace.listNames.filter { $0 != workspace.activeList }.map {
+                        MoveTarget(name: $0, isCurrent: false)
+                    },
+                    onPick: { list in
+                        _ = workspace.moveListSection(sectionID, to: list)
+                        moveTargetSectionID = nil
+                    },
+                    onCancel: { moveTargetSectionID = nil })
+            }
+        }
         .onHover { inside in
             guard let sectionID = group.sectionID else { return }
             if inside { hoveredSectionID = sectionID }
