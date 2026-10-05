@@ -27,7 +27,7 @@ final class SectionMenuMatchesTickTickTests: XCTestCase {
         }
         let menu = String(tail[..<end.lowerBound])
         var cursor = menu.startIndex
-        for entry in ["重命名", "在上方添加分组", "在下方添加分组", "移动到", "删除分组"] {
+        for entry in ["重命名", "在上方添加分组", "在下方添加分组", "移动到", "删除"] {
             guard let range = menu.range(of: entry, range: cursor..<menu.endIndex) else {
                 return XCTFail("分组菜单缺少条目或顺序不对: \(entry)")
             }

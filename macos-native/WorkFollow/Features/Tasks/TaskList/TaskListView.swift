@@ -824,7 +824,7 @@ struct TaskListView: View {
     @ViewBuilder
     private func sectionMenu(_ group: TaskListGroup) -> some View {
         if let sectionID = group.sectionID {
-            Button("重命名…") {
+            Button("重命名", systemImage: "pencil") {
                 guard let title = TaskNamePrompt.ask("重命名分组", value: group.label ?? ""),
                       title != group.label else { return }
                 if !workspace.renameListSection(sectionID, title: title) {
@@ -832,14 +832,14 @@ struct TaskListView: View {
                 }
             }
             // 滴答分组标题菜单的其余三项：上/下方添加分组 + 移动到另一个清单。
-            Button("在上方添加分组…") { addSection(above: sectionID) }
-            Button("在下方添加分组…") { addSection(below: sectionID) }
-            Menu("移动到") {
+            Button("在上方添加分组", systemImage: "arrow.up.square") { addSection(above: sectionID) }
+            Button("在下方添加分组", systemImage: "arrow.down.square") { addSection(below: sectionID) }
+            Menu("移动到", systemImage: "folder") {
                 ForEach(workspace.listNames.filter { $0 != workspace.activeList }, id: \.self) { list in
                     Button(list) { _ = workspace.moveListSection(sectionID, to: list) }
                 }
             }
-            Button("删除分组（任务保留）…") {
+            Button("删除", systemImage: "trash") {
                 guard TaskNamePrompt.confirm("删除分组“\(group.label ?? "")”？",
                                              message: "其中的任务会保留，并回到未分组。",
                                              action: "删除") else { return }
@@ -871,12 +871,15 @@ struct TaskListView: View {
                         .font(.system(size: TaskListMetrics.groupChevronSize, weight: .semibold))
                         .foregroundStyle(WFColors.secondaryText)
                         .frame(width: TaskListMetrics.groupChevronSize, height: TaskListMetrics.groupChevronSize)
-                    Text(groupTitle(group)).font(WFType.sectionSemibold)
+                    // 自定义分组是"小节标题"，滴答比日期/优先级这类系统分组明显更重更大；
+                    // 后者沿用原来的轻样式（同一张对照图里两者差别很清楚）。
+                    Text(groupTitle(group))
+                        .font(group.sectionID == nil ? WFType.sectionSemibold
+                                                     : .system(size: 15, weight: .semibold))
                     Text("\(group.tasks.count)").font(WFType.supporting)
                         .foregroundStyle(group.kind == .completed ? WFColors.taskCompletedCount : WFColors.secondaryText)
-                    Spacer(minLength: 0)
                 }
-                .frame(maxWidth: .infinity, minHeight: TaskListMetrics.groupHeaderHeight, alignment: .leading)
+                .frame(minHeight: TaskListMetrics.groupHeaderHeight, alignment: .leading)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -915,6 +918,7 @@ struct TaskListView: View {
                 .fixedSize()
                 .help("分组操作")
             }
+            Spacer(minLength: 0)
             if let note = TaskListViewDefaults.groupTrailingNote(for: group.kind) {
                 Button(note) {
                     workspace.postponeOverdue(Set(group.tasks.map(\.id)))
