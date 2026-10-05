@@ -950,9 +950,17 @@ struct TaskListView: View {
         // 把任务拖到**分组标题**上 = 改归属（滴答主手势）。
         // 列表行拖的是任务 UUID 字符串；侧栏清单拖拽带 `wf-list:` 前缀，UUID 解析失败即忽略。
         .dropDestination(for: String.self) { values, _ in
-            guard let sectionID = TaskSectionDropTarget.sectionID(for: values.first, target: group.sectionID),
-                  let taskID = TaskSectionDropTarget.taskID(for: values.first) else { return false }
-            return workspace.setTaskSection(taskID, sectionID: sectionID).taskID != nil
+            guard let taskID = TaskSectionDropTarget.taskID(for: values.first),
+                  let intent = TaskSectionDropTarget.intent(
+                      for: values.first,
+                      target: .of(sectionID: group.sectionID,
+                                  isUnsectionedBucket: group.isUnsectionedBucket)) else { return false }
+            switch intent {
+            case .assign(let sectionID):
+                return workspace.setTaskSection(taskID, sectionID: sectionID).taskID != nil
+            case .clear:
+                return workspace.setTaskSection(taskID, sectionID: nil).taskID != nil
+            }
         } isTargeted: { _ in }
     }
 

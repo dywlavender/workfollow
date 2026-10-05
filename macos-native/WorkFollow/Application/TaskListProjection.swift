@@ -37,6 +37,13 @@ struct TaskListGroup {
     /// 看板换列靠它定位落点：拖到某列 = `setTaskSection(任务, 该列的分组 id)`。
     let sectionID: String?
 
+    /// 是否是「未分组」桶：它 `sectionID == nil`，与"按日期/优先级"那类系统分组标题
+    /// 在数据上无法区分，而拖放语义正好相反（落上去 = **移出**分组）。
+    /// 不存字段：判定只用投影里唯一的那份标题常量，避免再造一处要同步的真值。
+    var isUnsectionedBucket: Bool {
+        sectionID == nil && kind == .plain && label == TaskListSectionProjection.unsectionedTitle
+    }
+
     /// Stable across sorting and heading changes so a folded group does not
     /// accidentally transfer to another group or reopen after its label shifts.
     var id: String {
@@ -554,6 +561,10 @@ enum TaskListSectionProjection {
     /// - 未分组任务排在最前（分组是**归属**，没归属的先列出来）；
     /// - 空分组也保留（分组是结构，不是"有内容的桶"）；
     /// - 组身份沿用 `.plain` 的标签身份 → 折叠状态按分组互不串。
+
+    /// 「未分组」桶的标题。**唯一真值**：构造点用它，`TaskListGroup.isUnsectionedBucket`
+    /// 也靠它判定，两边不会漂。
+    static let unsectionedTitle = "未分组"
 
     static func groups(_ tasks: [Task], list: String,
                        sections: [TaskListSection],

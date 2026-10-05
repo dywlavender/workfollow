@@ -197,19 +197,25 @@ final class ListSectionTests: XCTestCase {
         XCTAssertEqual(store.listSection(section.id)?.listName, "工作", "一步撤销归位")
     }
 
-    func testSectionDropDecisionIsPure() {
+    func testSectionDropIntentIsPure() {
         let id = UUID()
-        XCTAssertEqual(TaskSectionDropTarget.sectionID(for: id.uuidString, target: "sec-1"), "sec-1",
+        let section = SectionDropTargetKind.section("sec-1")
+        XCTAssertEqual(TaskSectionDropTarget.intent(for: id.uuidString, target: section), .assign("sec-1"),
                        "列表行拖的任务 UUID 被接受")
-        XCTAssertEqual(TaskSectionDropTarget.sectionID(
-            for: SidebarDragPayload.encode(.task(id)), target: "sec-1"), "sec-1",
+        XCTAssertEqual(TaskSectionDropTarget.intent(
+            for: SidebarDragPayload.encode(.task(id)), target: section), .assign("sec-1"),
                        "看板的负载形式同样被接受")
-        XCTAssertNil(TaskSectionDropTarget.sectionID(
-            for: SidebarDragPayload.encode(.list("工作")), target: "sec-1"),
+        XCTAssertEqual(TaskSectionDropTarget.intent(for: id.uuidString, target: .unsectioned), .clear,
+                       "拖到「未分组」= 移出分组（此前对 nil 目标一律拒绝，任务拖得进、拖不出）")
+        XCTAssertNil(TaskSectionDropTarget.intent(
+            for: SidebarDragPayload.encode(.list("工作")), target: section),
                      "侧栏清单不是任务，不该被接受")
-        XCTAssertNil(TaskSectionDropTarget.sectionID(for: "随便一段文字", target: "sec-1"))
-        XCTAssertNil(TaskSectionDropTarget.sectionID(for: id.uuidString, target: nil),
+        XCTAssertNil(TaskSectionDropTarget.intent(for: "随便一段文字", target: section))
+        XCTAssertNil(TaskSectionDropTarget.intent(for: id.uuidString, target: .none),
                      "按日期/优先级那种标题没有归属字段 → 不给出假目标")
+        XCTAssertEqual(SectionDropTargetKind.of(sectionID: nil, isUnsectionedBucket: true), .unsectioned)
+        XCTAssertEqual(SectionDropTargetKind.of(sectionID: nil, isUnsectionedBucket: false), .none)
+        XCTAssertEqual(SectionDropTargetKind.of(sectionID: "sec-1", isUnsectionedBucket: false), section)
         XCTAssertNil(TaskSectionDropTarget.taskID(for: ""))
     }
 
