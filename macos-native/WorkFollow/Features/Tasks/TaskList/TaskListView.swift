@@ -238,19 +238,6 @@ struct TaskListView: View {
                 .pickerStyle(.inline)
                 Button("恢复默认排序", systemImage: "arrow.counterclockwise") { resetSort() }
             }
-            Picker("视图", selection: viewModeBinding) {
-                ForEach(TaskListViewMode.allCases) { mode in
-                    Text(mode.title).tag(mode)
-                }
-            }
-            .pickerStyle(.inline)
-            Toggle("隐藏已完成", isOn: hidesCompletedBinding)
-            Toggle("隐藏详细", isOn: hidesDetailsBinding)
-            Menu("显示设置") {
-                ForEach(TaskRowDetailField.allCases) { field in
-                    Toggle(field.title, isOn: detailFieldBinding(field))
-                }
-            }
             if let list = workspace.activeList, list != TaskList.inbox.name {
                 Divider()
                 Button("添加分组…", systemImage: "plus") {
@@ -372,6 +359,19 @@ struct TaskListView: View {
             Button("从模板添加", systemImage: "doc.badge.plus") { showTemplatePicker = true }
             Button("撤销", systemImage: "arrow.uturn.backward") { workspace.undo() }
                 .disabled(!workspace.canUndo)
+            Picker("视图", selection: viewModeBinding) {
+                ForEach(TaskListViewMode.allCases) { mode in
+                    Text(mode.title).tag(mode)
+                }
+            }
+            .pickerStyle(.inline)
+            Toggle("隐藏已完成", isOn: hidesCompletedBinding)
+            Toggle("隐藏详细", isOn: hidesDetailsBinding)
+            Menu("显示设置") {
+                ForEach(TaskRowDetailField.allCases) { field in
+                    Toggle(field.title, isOn: detailFieldBinding(field))
+                }
+            }
             Divider()
             Button("清单动态…", systemImage: "clock.arrow.circlepath") {
                 DispatchQueue.main.async { showListActivity = true }
