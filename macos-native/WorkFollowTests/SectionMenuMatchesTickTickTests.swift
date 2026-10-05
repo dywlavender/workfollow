@@ -1,4 +1,5 @@
 import XCTest
+@testable import WorkFollow
 
 /// 分组标题菜单必须与滴答一致（以用户提供的三张截图为准）：
 /// 重命名 / 在上方添加分组 / 在下方添加分组 / 移动到 ▸ 清单 / 删除；
@@ -32,6 +33,32 @@ final class SectionMenuMatchesTickTickTests: XCTestCase {
                 return XCTFail("分组菜单缺少条目或顺序不对: \(entry)")
             }
             cursor = range.upperBound
+        }
+    }
+
+    func testEntryTableMatchesViewOrder() throws {
+        XCTAssertEqual(SectionMenuEntry.ordered.map(\.title),
+                       ["重命名", "在上方添加分组", "在下方添加分组", "移动到", "删除"],
+                       "条目表顺序以对照图为准")
+
+        let src = try listViewSource()
+        guard let start = src.range(of: "private func sectionMenu(_ group: TaskListGroup)") else {
+            return XCTFail("sectionMenu 不存在")
+        }
+        let tail = src[start.lowerBound...]
+        guard let end = tail.range(of: "\n    private func headerContent") else {
+            return XCTFail("sectionMenu 的边界找不到")
+        }
+        let menu = String(tail[..<end.lowerBound])
+        var cursor = menu.startIndex
+        for entry in SectionMenuEntry.ordered {
+            guard let range = menu.range(of: entry.title, range: cursor..<menu.endIndex) else {
+                return XCTFail("视图没按条目表渲染或顺序不同: \(entry.title)")
+            }
+            cursor = range.upperBound
+            XCTAssertTrue(menu.contains("systemImage: \"\(entry.symbol)\"") ||
+                          menu.contains("systemImage: \"\(entry.symbol)\""),
+                          "\(entry.title) 少了图标")
         }
     }
 
