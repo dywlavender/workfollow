@@ -243,41 +243,6 @@ struct TaskListView: View {
                 .pickerStyle(.inline)
                 Button("恢复默认排序", systemImage: "arrow.counterclockwise") { resetSort() }
             }
-            if let list = workspace.activeList, list != TaskList.inbox.name {
-                Divider()
-                Button("添加分组…", systemImage: "plus") {
-                    guard let title = TaskNamePrompt.ask("添加分组") else { return }
-                    if !workspace.addListSection(list, title: title) { TaskNamePrompt.invalidName() }
-                }
-                Picker("分组排序", selection: sectionSortBinding(list)) {
-                    Text("默认（跟随视图排序）").tag(TaskSectionSort?.none)
-                    ForEach(TaskSectionSort.allCases, id: \.self) { option in
-                        Text(option.title).tag(TaskSectionSort?.some(option))
-                    }
-                }
-                .pickerStyle(.inline)
-                if !workspace.listSections(forList: list).isEmpty {
-                    Menu("管理分组") {
-                        ForEach(workspace.listSections(forList: list)) { section in
-                            Menu(section.title) {
-                                Button("编辑分组…") {
-                                    guard let title = TaskNamePrompt.ask("重命名分组", value: section.title),
-                                          title != section.title else { return }
-                                    if !workspace.renameListSection(section.id, title: title) {
-                                        TaskNamePrompt.invalidName()
-                                    }
-                                }
-                                Button("删除分组（任务保留）…") {
-                                    guard TaskNamePrompt.confirm("删除分组“\(section.title)”？",
-                                                                 message: "其中的任务会保留，并回到未分组。",
-                                                                 action: "删除") else { return }
-                                    _ = workspace.removeListSection(section.id)
-                                }
-                            }
-                        }
-                    }
-                }
-            }
         } label: {
             Image(systemName: "arrow.up.arrow.down")
                 .frame(width: WFMetrics.controlHeight, height: WFMetrics.controlHeight)
@@ -375,6 +340,42 @@ struct TaskListView: View {
             Menu("显示设置") {
                 ForEach(TaskRowDetailField.allCases) { field in
                     Toggle(field.title, isOn: detailFieldBinding(field))
+                }
+            }
+            Divider()
+            if let list = workspace.activeList, list != TaskList.inbox.name {
+                Divider()
+                Button("添加分组…", systemImage: "plus") {
+                    guard let title = TaskNamePrompt.ask("添加分组") else { return }
+                    if !workspace.addListSection(list, title: title) { TaskNamePrompt.invalidName() }
+                }
+                Picker("分组排序", selection: sectionSortBinding(list)) {
+                    Text("默认（跟随视图排序）").tag(TaskSectionSort?.none)
+                    ForEach(TaskSectionSort.allCases, id: \.self) { option in
+                        Text(option.title).tag(TaskSectionSort?.some(option))
+                    }
+                }
+                .pickerStyle(.inline)
+                if !workspace.listSections(forList: list).isEmpty {
+                    Menu("管理分组") {
+                        ForEach(workspace.listSections(forList: list)) { section in
+                            Menu(section.title) {
+                                Button("编辑分组…") {
+                                    guard let title = TaskNamePrompt.ask("重命名分组", value: section.title),
+                                          title != section.title else { return }
+                                    if !workspace.renameListSection(section.id, title: title) {
+                                        TaskNamePrompt.invalidName()
+                                    }
+                                }
+                                Button("删除分组（任务保留）…") {
+                                    guard TaskNamePrompt.confirm("删除分组“\(section.title)”？",
+                                                                 message: "其中的任务会保留，并回到未分组。",
+                                                                 action: "删除") else { return }
+                                    _ = workspace.removeListSection(section.id)
+                                }
+                            }
+                        }
+                    }
                 }
             }
             Divider()
