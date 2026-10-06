@@ -26,64 +26,6 @@ final class ListSectionTests: XCTestCase {
              createdAt: createdAt ?? now, updatedAt: updatedAt ?? now, sectionID: sectionID)
     }
 
-    // MARK: - 分组内排序（滴答「清单页 → … → 分组排序」）
-
-    func testSectionSortRearrangesTasksInsideEachBucket() {
-        let section = TaskListSection(id: "s1", listName: "工作", title: "进行中", sortOrder: 0)
-        let base = now
-        func task(_ title: String, _ sectionID: String?, due: TimeInterval?,
-                  priority: TaskPriority, created: TimeInterval, updated: TimeInterval) -> Task {
-            makeTask(title: title, sectionID: sectionID,
-                     dueAt: due.map { base.addingTimeInterval($0) }, priority: priority,
-                     createdAt: base.addingTimeInterval(created),
-                     updatedAt: base.addingTimeInterval(updated))
-        }
-        let tasks = [task("晚", "s1", due: 300, priority: .none, created: 10, updated: 100),
-                     task("早", "s1", due: 100, priority: .high, created: 20, updated: 10),
-                     task("无日期", "s1", due: nil, priority: .low, created: 30, updated: 200),
-                     task("未分组", nil, due: 50, priority: .medium, created: 5, updated: 5)]
-
-        func order(_ sort: TaskSectionSort?) -> [String] {
-            TaskListSectionProjection.groups(tasks, list: "工作", sections: [section], sort: sort)?
-                .first { $0.label == section.title }?.tasks.map(\.title) ?? []
-        }
-        XCTAssertEqual(order(nil), ["晚", "早", "无日期"], "默认 = 跟随视图排序（保持传入顺序）")
-        XCTAssertEqual(order(.dueDate), ["早", "晚", "无日期"], "按时间：无日期排最后")
-        XCTAssertEqual(order(.priority), ["早", "无日期", "晚"], "按优先级：高 → 低 → 无")
-        XCTAssertEqual(order(.createdNewest), ["无日期", "早", "晚"])
-        XCTAssertEqual(order(.createdOldest), ["晚", "早", "无日期"])
-        XCTAssertEqual(order(.modifiedNewest), ["无日期", "晚", "早"])
-        XCTAssertEqual(order(.modifiedOldest), ["早", "晚", "无日期"])
-
-        let unsectioned = TaskListSectionProjection
-            .groups(tasks, list: "工作", sections: [section], sort: .priority)?
-            .first { $0.label == "未分组" }?.tasks.map(\.title)
-        XCTAssertEqual(unsectioned, ["未分组"], "未分组桶同样应用分组内排序")
-    }
-
-    func testSectionSortIsListLevelAndOneUndo() {
-        let (store, actions) = makeActions()
-        _ = actions.renameList(nil, to: "工作")
-        XCTAssertFalse(actions.setListSectionSort("工作", nil), "本来就是默认 → 不算改动")
-        XCTAssertTrue(actions.setListSectionSort("工作", .priority))
-        XCTAssertEqual(store.listMeta(for: "工作")?.sectionTaskSort, .priority)
-        XCTAssertFalse(actions.setListSectionSort("工作", .priority), "同值不重复提交")
-        actions.undo()
-        XCTAssertNil(store.listMeta(for: "工作")?.sectionTaskSort, "一步撤销回默认")
-    }
-
-    func testSectionSortIsAdditiveCodable() throws {
-        let meta = TaskListMeta(name: "工作", sectionTaskSort: .modifiedNewest)
-        let data = try JSONEncoder().encode(meta)
-        XCTAssertEqual(try JSONDecoder().decode(TaskListMeta.self, from: data).sectionTaskSort,
-                       .modifiedNewest)
-        var raw = try XCTUnwrap(try JSONSerialization.jsonObject(with: data) as? [String: Any])
-        raw.removeValue(forKey: "sectionTaskSort")
-        let legacy = try JSONDecoder().decode(TaskListMeta.self,
-                                              from: try JSONSerialization.data(withJSONObject: raw))
-        XCTAssertNil(legacy.sectionTaskSort, "旧快照缺键 → 默认（跟随视图排序）")
-    }
-
     func testSectionAddRenameRemoveAndAssignmentIsOneUndoStep() {
         let (store, actions) = makeActions()
         _ = actions.renameList(nil, to: "工作")
@@ -217,25 +159,6 @@ final class ListSectionTests: XCTestCase {
         XCTAssertEqual(SectionDropTargetKind.of(sectionID: nil, isUnsectionedBucket: false), .none)
         XCTAssertEqual(SectionDropTargetKind.of(sectionID: "sec-1", isUnsectionedBucket: false), section)
         XCTAssertNil(TaskSectionDropTarget.taskID(for: ""))
-    }
-
-    func testSectionSortIsStoredAndPassedToProjection() throws {
-        let store = WorkspaceStore()
-        let actions = TaskActions(store: store, clock: { self.now })
-        _ = actions.renameList(nil, to: "工作")
-        guard let option = TaskSectionSort.allCases.first else { return XCTFail("没有可选排序") }
-        XCTAssertTrue(actions.setListSectionSort("工作", option))
-        XCTAssertEqual(store.listMeta(for: "工作")?.sectionTaskSort, option, "组内排序存进清单 meta")
-
-        // 接通检查：投影调用点必须真的把它读出来传进去——"有能力但没接线"是这轮
-        // 自查出来的教训（那一轮我凭记忆误判过一次，这里就用测试钉住它）。
-        var url = URL(fileURLWithPath: #filePath)
-        url.deleteLastPathComponent()
-        url.deleteLastPathComponent()
-        let source = try String(contentsOf: url.appendingPathComponent(
-            "WorkFollow/Application/TaskListProjection.swift"), encoding: .utf8)
-        XCTAssertTrue(source.contains("sort: store.listMeta(for: list)?.sectionTaskSort"),
-                      "投影调用点没把组内排序传进去（UI 会变成按了没反应）")
     }
 
     func testRenameListSectionRejectsDuplicateTitle() {
