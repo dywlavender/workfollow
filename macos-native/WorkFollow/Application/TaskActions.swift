@@ -872,12 +872,6 @@ final class TaskActions {
 
 
     /// 分组内排序（清单级设置；nil = 恢复默认，跟随视图排序）。
-    @discardableResult
-    func setListSectionSort(_ list: String, _ sort: TaskSectionSort?) -> Bool {
-        guard store.listMeta(for: list)?.sectionTaskSort != sort else { return false }
-        return commitListMeta(list) { $0.sectionTaskSort = sort }
-    }
-
     /// 侧栏拖拽排序：把清单移到 `target` 之前（nil = 移到末尾）。
     /// 顺序本体是 `store.lists`（meta.sortOrder 由 store 归一化为下标），
     /// 一次提交 = 一步撤销；颜色/置顶随名字继承。

@@ -53,33 +53,6 @@ struct TaskList: Equatable, Codable {
     static let inbox = TaskList(name: "收集箱")
 }
 
-/// 侧栏清单元数据（对齐 Flutter MigrationListRecord 的 color/pinned/sortOrder）。
-/// 按清单名关联、随快照单独存取，不写进任务本身；旧快照没有 meta 的清单
-/// 退回默认色板色与字典序。additive Codable：缺失键解码为中性值。
-/// 分组内排序（滴答「清单页 → … → 分组排序」）。
-///
-/// 官方口径：按时间 / 按优先级 / 按创建时间（新→旧、旧→新）/ 按修改时间（新→旧、旧→新），
-/// 外加"恢复默认时间顺序"。它是**清单级**设置（不是每个分组各一份），nil = 默认（跟随视图排序）。
-enum TaskSectionSort: String, CaseIterable, Codable {
-    case dueDate
-    case priority
-    case createdNewest
-    case createdOldest
-    case modifiedNewest
-    case modifiedOldest
-
-    var title: String {
-        switch self {
-        case .dueDate: "按时间"
-        case .priority: "按优先级"
-        case .createdNewest: "按创建时间（新→旧）"
-        case .createdOldest: "按创建时间（旧→新）"
-        case .modifiedNewest: "按修改时间（新→旧）"
-        case .modifiedOldest: "按修改时间（旧→新）"
-        }
-    }
-}
-
 struct TaskListMeta: Equatable, Codable {
     var name: String
     /// WFListPalette 下标；没有调色板色时再检查 colorARGB，否则按名称推导颜色。
@@ -95,10 +68,9 @@ struct TaskListMeta: Equatable, Codable {
     /// 位置 = 它第一个成员清单的位置。
     var folderName: String?
     /// 分组内排序。nil = 默认（跟随视图排序）。additive：旧快照缺键 → nil。
-    var sectionTaskSort: TaskSectionSort?
 
     init(name: String, colorIndex: Int? = nil, isPinned: Bool = false, sortOrder: Int = 0,
-         colorARGB: UInt32? = nil, icon: String? = nil, folderName: String? = nil, sectionTaskSort: TaskSectionSort? = nil) {
+         colorARGB: UInt32? = nil, icon: String? = nil, folderName: String? = nil) {
         self.name = name.trimmingCharacters(in: .whitespacesAndNewlines)
         self.colorIndex = colorIndex
         self.colorARGB = colorARGB
@@ -106,11 +78,10 @@ struct TaskListMeta: Equatable, Codable {
         self.sortOrder = sortOrder
         self.icon = icon
         self.folderName = folderName
-        self.sectionTaskSort = sectionTaskSort
     }
 
     private enum CodingKeys: String, CodingKey {
-        case name, colorIndex, colorARGB, isPinned, sortOrder, icon, folderName, sectionTaskSort
+        case name, colorIndex, colorARGB, isPinned, sortOrder, icon, folderName
     }
 
     init(from decoder: Decoder) throws {
@@ -123,7 +94,6 @@ struct TaskListMeta: Equatable, Codable {
         icon = try values.decodeIfPresent(String.self, forKey: .icon)
         folderName = try values.decodeIfPresent(String.self, forKey: .folderName)
             .flatMap { $0.isEmpty ? nil : $0 }
-        sectionTaskSort = try values.decodeIfPresent(TaskSectionSort.self, forKey: .sectionTaskSort)
     }
 
     func encode(to encoder: Encoder) throws {
@@ -135,7 +105,6 @@ struct TaskListMeta: Equatable, Codable {
         try values.encode(sortOrder, forKey: .sortOrder)
         try values.encodeIfPresent(icon, forKey: .icon)
         try values.encodeIfPresent(folderName, forKey: .folderName)
-        try values.encodeIfPresent(sectionTaskSort, forKey: .sectionTaskSort)
     }
 }
 

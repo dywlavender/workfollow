@@ -296,12 +296,6 @@ struct TaskListView: View {
         })
     }
 
-    /// 分组排序是**清单级**设置：写进清单 meta（nil = 恢复默认）。
-    private func sectionSortBinding(_ list: String) -> Binding<TaskSectionSort?> {
-        Binding(get: { workspace.sectionSort(forList: list) },
-                set: { _ = workspace.setListSectionSort(list, $0) })
-    }
-
     private var sortModeBinding: Binding<TaskListSortMode> {
         Binding(get: { environment.viewPreferences.sortMode(for: preferenceKey) },
                 set: { environment.viewPreferences.setSortMode($0, for: preferenceKey) })
