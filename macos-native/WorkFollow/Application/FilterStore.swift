@@ -2,7 +2,7 @@ import Combine
 import Foundation
 
 /// Store for saved smart filters (Wave 1 F5): persisted as `filters.json`
-/// through `JSONFileStore`, following the HabitStore/SummaryStore pattern.
+/// through `JSONFileStore`, following the SummaryStore pattern.
 /// `filters` is always sorted by name. add/update/rename reject empty names
 /// and case-insensitive duplicates by returning `false` without mutating.
 /// Clearing `TaskWorkspaceModel.activeFilterID` after a deletion is handled on

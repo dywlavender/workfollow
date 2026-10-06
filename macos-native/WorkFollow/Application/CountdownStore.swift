@@ -2,7 +2,7 @@ import Combine
 import Foundation
 
 /// 倒数纪念日模块的 Store：记录经 `JSONFileStore` 持久化为 `countdowns.json`，
-/// 写入走防抖 `schedule`，终止时由 `flush` 兜底。形状与 `HabitStore` 一致。
+/// 写入走防抖 `schedule`，终止时由 `flush` 兜底。
 @MainActor
 final class CountdownStore: ObservableObject, ModuleStoreFlushable {
     /// 未归档的记录：置顶在前，其余按 sortOrder（新建追加到末尾）。
@@ -123,7 +123,7 @@ final class CountdownStore: ObservableObject, ModuleStoreFlushable {
         persist()
     }
 
-    /// 彻底删除。与 `HabitStore.hardDelete` 不同，这里不要求先归档——参考实现的
+    /// 彻底删除。这里不要求先归档——参考实现的
     /// 卡片菜单在未归档状态下也直接给「删除」，删除前由界面确认。
     @discardableResult
     func hardDelete(_ id: UUID) -> Bool {

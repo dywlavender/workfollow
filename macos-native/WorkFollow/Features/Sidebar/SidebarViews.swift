@@ -23,7 +23,6 @@ struct IconRailView: View {
             //   · 日历  calendar       → calendar.circle.fill（**唯一的实心日历**，形状变圆）
             //   · 倒数  hourglass      → hourglass.bottomhalf.filled（保留沙漏，做成半实心）
             //   · 专注  timer          → timer.circle.fill（保留秒表，外面加实心圆）
-            //   · 习惯  checkmark.seal → star.square.fill（滴答的习惯就是这个形）
             //   · 摘要  square.and.pencil → list.bullet.clipboard.fill
             // 另两个是原形直接加 `.fill`：任务 checkmark.square.fill、四象限 square.grid.2x2.fill。
             //

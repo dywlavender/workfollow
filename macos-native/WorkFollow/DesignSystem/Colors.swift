@@ -24,7 +24,7 @@ enum WFColors {
     /// 要求照滴答改成灰。注意它比行分割线 `listRowSeparator`（`#F4F4F4`）只深 2 级
     /// ——滴答也是这样，靠"选中行不画分割线"才分得开（见 `ListRowDivider` 的调用点）。
     ///
-    /// 其余地方（菜单、浮层候选、日历格、习惯打卡）继续用 `selection`：那里是
+    /// 其余地方（菜单、浮层候选、日历格）继续用 `selection`：那里是
     /// 中性表面上的强调色，不是列表选中。深色未实测，取 `menuSelected` 同族的灰。
     static let listSelection = themed(rgb(0xF2F2F2), rgb(0x363A42))
     static let hover = Color.primary.opacity(0.04)
