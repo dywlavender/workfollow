@@ -21,7 +21,7 @@
 		};
 		A00000000000000000000002 = {
 			isa = PBXGroup;
-			children = (A00000000000000000000003, B00000000000000000000002, A00000000000000000000004);
+			children = (A00000000000000000000003, B00000000000000000000002, A00000000000000000000004, C00000000000000000000001);
 			sourceTree = "<group>";
 		};
 		A00000000000000000000003 = {
@@ -57,7 +57,9 @@
 		};
 		A00000000000000000000008 = { isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
 		A00000000000000000000009 = { isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
-		A00000000000000000000010 = { isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+		A00000000000000000000010 = { isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (C00000000000000000000002); runOnlyForDeploymentPostprocessing = 0; };
+		C00000000000000000000001 = { isa = PBXFileReference; lastKnownFileType = text; name = "Meeting Minutes Skill"; path = "../.pi/skills/meeting-minutes/SKILL.md"; sourceTree = "<group>"; };
+		C00000000000000000000002 = { isa = PBXBuildFile; fileRef = C00000000000000000000001; };
 		A00000000000000000000011 = {
 			isa = XCConfigurationList;
 			buildConfigurations = (A00000000000000000000013, A00000000000000000000014);

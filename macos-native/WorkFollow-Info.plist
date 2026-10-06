@@ -2,6 +2,8 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+    <key>NSMicrophoneUsageDescription</key>
+    <string>采集本地会议声音用于转写，音频仅在内存中处理、不保存录音文件；通过 Pi 发送至配置的模型服务。</string>
     <key>WorkFollowAcceptanceStorageRoot</key>
     <string>$(WF_ACCEPTANCE_STORAGE_ROOT)</string>
     <key>CFBundleURLTypes</key>

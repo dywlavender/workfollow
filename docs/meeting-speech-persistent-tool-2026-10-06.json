@@ -1,0 +1,221 @@
+{
+  "version": 1,
+  "kind": "synthetic-two-voice-ASR",
+  "createdAt": "2026-10-06T12:46:49.153Z",
+  "recordingSaved": false,
+  "realHumanMeeting": false,
+  "persistentContext": true,
+  "expected": [
+    {
+      "speaker": "A",
+      "voice": "Tingting",
+      "text": "今天讨论项目交付。我建议下周五提交方案，预算暂定三千元。"
+    },
+    {
+      "speaker": "B",
+      "voice": "Eddy",
+      "text": "周五来不及，我建议改为下周一，预算改成两千五百元。"
+    },
+    {
+      "speaker": "A",
+      "voice": "Tingting",
+      "text": "同意，下周一提交，预算两千五百元。请小李整理清单。"
+    },
+    {
+      "speaker": "B",
+      "voice": "Eddy",
+      "text": "确认，我负责校对，小李整理清单，截止日期都是下周一。"
+    },
+    {
+      "speaker": "A",
+      "voice": "Tingting",
+      "text": "今天讨论项目交付。我建议下周五提交方案，预算暂定三千元。"
+    },
+    {
+      "speaker": "B",
+      "voice": "Eddy",
+      "text": "周五来不及，我建议改为下周一，预算改成两千五百元。"
+    },
+    {
+      "speaker": "A",
+      "voice": "Tingting",
+      "text": "同意，下周一提交，预算两千五百元。请小李整理清单。"
+    },
+    {
+      "speaker": "B",
+      "voice": "Eddy",
+      "text": "确认，我负责校对，小李整理清单，截止日期都是下周一。"
+    },
+    {
+      "speaker": "A",
+      "voice": "Tingting",
+      "text": "今天讨论项目交付。我建议下周五提交方案，预算暂定三千元。"
+    },
+    {
+      "speaker": "B",
+      "voice": "Eddy",
+      "text": "周五来不及，我建议改为下周一，预算改成两千五百元。"
+    },
+    {
+      "speaker": "A",
+      "voice": "Tingting",
+      "text": "同意，下周一提交，预算两千五百元。请小李整理清单。"
+    },
+    {
+      "speaker": "B",
+      "voice": "Eddy",
+      "text": "确认，我负责校对，小李整理清单，截止日期都是下周一。"
+    }
+  ],
+  "chunks": [
+    {
+      "offset": 0,
+      "duration": 10.67,
+      "expectedSpeakers": [
+        "A",
+        "B"
+      ],
+      "latencyMs": 1606,
+      "segments": [
+        {
+          "text": "今天讨论项目交付，我建议下周五提交方案，预算暂定三千元。",
+          "start": 0,
+          "speaker": "会话暂定讲话人1"
+        },
+        {
+          "text": "周五来不及，我建议改为下周一。",
+          "start": 7.6,
+          "speaker": "会话暂定讲话人2"
+        }
+      ],
+      "experiment": {
+        "persistent": true,
+        "toolOutput": true,
+        "connections": 1,
+        "requestCount": 1,
+        "serverSessionID": "sess_YEG9ld41cLaqyvku8oV6d"
+      }
+    },
+    {
+      "offset": 10.67,
+      "duration": 10,
+      "expectedSpeakers": [
+        "B",
+        "A"
+      ],
+      "latencyMs": 1213,
+      "segments": [
+        {
+          "text": "预算改成两千五百元。",
+          "start": 0.08,
+          "speaker": "会话暂定讲话人2"
+        },
+        {
+          "text": "同意，下周一提交，预算两千五百元，请小李整理清单。",
+          "start": 3.04,
+          "speaker": "会话暂定讲话人1"
+        }
+      ],
+      "experiment": {
+        "persistent": true,
+        "toolOutput": true,
+        "connections": 1,
+        "requestCount": 2,
+        "serverSessionID": "sess_YEG9ld41cLaqyvku8oV6d"
+      }
+    },
+    {
+      "offset": 20.67,
+      "duration": 11.61,
+      "expectedSpeakers": [
+        "B",
+        "A"
+      ],
+      "latencyMs": 1288,
+      "segments": [
+        {
+          "text": "确认，我负责校对，小李整理清单，截止日期都是下周一。",
+          "start": 0.16,
+          "speaker": "会话暂定讲话人2"
+        },
+        {
+          "text": "今天讨论项目交付，我建议下周五提交方案。",
+          "start": 6.56,
+          "speaker": "会话暂定讲话人1"
+        }
+      ],
+      "experiment": {
+        "persistent": true,
+        "toolOutput": true,
+        "connections": 1,
+        "requestCount": 3,
+        "serverSessionID": "sess_YEG9ld41cLaqyvku8oV6d"
+      }
+    }
+  ],
+  "duration": 81.2829375,
+  "voiceRanges": [
+    {
+      "speaker": "A",
+      "start": 0,
+      "end": 7.4328125
+    },
+    {
+      "speaker": "B",
+      "start": 7.6828125,
+      "end": 13.351624999999999
+    },
+    {
+      "speaker": "A",
+      "start": 13.601624999999999,
+      "end": 20.474625
+    },
+    {
+      "speaker": "B",
+      "start": 20.724625,
+      "end": 26.844375
+    },
+    {
+      "speaker": "A",
+      "start": 27.094375,
+      "end": 34.5271875
+    },
+    {
+      "speaker": "B",
+      "start": 34.7771875,
+      "end": 40.446
+    },
+    {
+      "speaker": "A",
+      "start": 40.696,
+      "end": 47.568999999999996
+    },
+    {
+      "speaker": "B",
+      "start": 47.818999999999996,
+      "end": 53.93875
+    },
+    {
+      "speaker": "A",
+      "start": 54.18875,
+      "end": 61.621562499999996
+    },
+    {
+      "speaker": "B",
+      "start": 61.871562499999996,
+      "end": 67.540375
+    },
+    {
+      "speaker": "A",
+      "start": 67.790375,
+      "end": 74.663375
+    },
+    {
+      "speaker": "B",
+      "start": 74.913375,
+      "end": 81.0329375
+    }
+  ],
+  "segmentation": "native-quiet-boundary-10-to-20s",
+  "error": "Pi 常驻音频实验失败，阶段=response。未自动重连或合并身份。"
+}

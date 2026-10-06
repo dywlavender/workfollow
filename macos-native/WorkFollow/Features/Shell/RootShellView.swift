@@ -31,7 +31,7 @@ struct RootShellView: View {
                         Divider()
                         if navigationVisible, environment.sidebarVisible,
                            navigation.destination != .calendar, navigation.destination != .matrix,
-                           navigation.destination != .countdown {
+                           navigation.destination != .countdown, navigation.destination != .meetings {
                             NavigationColumnView(workspace: workspace, navigation: navigation,
                                                  filterStore: environment.filterStore)
                                 .frame(width: WFMetrics.navigationWidth)
@@ -43,6 +43,8 @@ struct RootShellView: View {
                             SummaryWorkspaceView(store: environment.summaryStore, workspace: workspace)
                         } else if navigation.destination == .countdown {
                             CountdownWorkspaceView(store: environment.countdownStore)
+                        } else if navigation.destination == .meetings {
+                            MeetingWorkspaceView(store: environment.meetingStore)
                         } else if navigation.destination.isNotes {
                             NotesWorkspaceView(notes: environment.notesWorkspace, navigation: navigation, tasks: workspace,
                                                navigationVisible: navigationVisible)

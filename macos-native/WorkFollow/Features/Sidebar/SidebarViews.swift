@@ -7,6 +7,8 @@ struct IconRailView: View {
     let onOpenQuickOpen: () -> Void
     @Environment(\.openSettings) private var openSettings
     @Environment(\.mainWindowRailInset) private var mainWindowRailInset
+    @FocusState private var focusedDestination: NativeDestination?
+    @State private var focusRequest = UUID()
 
     var body: some View {
         VStack(spacing: RailMetrics.itemGap) {
@@ -41,6 +43,8 @@ struct IconRailView: View {
                        selected: navigation.destination == .focus)
 railButton(.summary, symbol: "list.bullet.clipboard.fill", title: "摘要",
                        selected: navigation.destination == .summary)
+            railButton(.meetings, symbol: "mic.fill", title: "会议纪要",
+                       selected: navigation.destination == .meetings)
             Spacer()
             Button(action: onOpenQuickOpen) {
                 Image(systemName: "magnifyingglass")
@@ -64,13 +68,47 @@ railButton(.summary, symbol: "list.bullet.clipboard.fill", title: "摘要",
 
     private func railButton(_ destination: NativeDestination, symbol: String,
                             title: String, selected: Bool) -> some View {
-        Button { onNavigate(destination) } label: {
+        Button {
+            activate(destination, eventType: NSApp.currentEvent?.type)
+        } label: {
             Image(systemName: symbol)
                 .font(.system(size: RailMetrics.iconSize))
                 .foregroundStyle(selected ? WFColors.accent : WFColors.secondaryText)
                 .frame(width: RailMetrics.hitSize, height: RailMetrics.hitSize)
                 .focusRenderAnchor(.railSelectedHitArea)
-        }.help(title).accessibilityLabel(title)
+        }
+        .focused($focusedDestination, equals: destination)
+        .onKeyPress(.return) {
+            activate(destination, eventType: .keyDown)
+            return .handled
+        }
+        .help(title).accessibilityLabel(title)
+    }
+
+    private func activate(_ destination: NativeDestination, eventType: NSEvent.EventType?) {
+        let keyboard = eventType == .keyDown || eventType == .keyUp
+        let pointer = eventType == .leftMouseDown || eventType == .leftMouseUp
+        let window = NSApp.currentEvent?.window ?? NSApp.keyWindow
+        let request = UUID()
+        focusRequest = request
+        if keyboard { focusedDestination = nil }
+        RailNavigationFocus.activate(eventType: eventType,
+                                     window: window,
+                                     clearRailFocus: { focusedDestination = nil },
+                                     navigate: { onNavigate(destination) })
+        guard keyboard || pointer else { return }
+        // Navigation can rebuild the destination's key-view loop. Reapply
+        // keyboard focus after that update; a later activation cancels it.
+        DispatchQueue.main.async {
+            guard focusRequest == request,
+                  navigation.destination == destination else { return }
+            if keyboard {
+                focusedDestination = destination
+            } else {
+                focusedDestination = nil
+                window?.makeFirstResponder(nil)
+            }
+        }
     }
 }
 

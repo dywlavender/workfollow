@@ -31,6 +31,7 @@ final class AppEnvironment: ObservableObject {
     let taskActivityStore: TaskActivityStore
     let summaryStore: SummaryStore
     let countdownStore: CountdownStore
+    let meetingStore: MeetingStore
     let filterStore: FilterStore
     /// 任务列表的排序/分组记忆（modules/view-preferences.json，独立于任务快照）。
     let viewPreferences: TaskViewPreferenceStore
@@ -84,6 +85,7 @@ final class AppEnvironment: ObservableObject {
         focusStore.notifier = FocusNotifier()
         summaryStore = SummaryStore(clock: clock)
         countdownStore = CountdownStore(clock: clock)
+        meetingStore = MeetingStore()
         filterStore = FilterStore(clock: clock)
         viewPreferences = TaskViewPreferenceStore()
         taskWorkspace.attachFilterStore(filterStore)
@@ -91,7 +93,7 @@ final class AppEnvironment: ObservableObject {
         // 倒计时的提醒也走同一个排程服务。偏移量语义与任务相反（非负整天，
         // 锚在当天 09:00），由服务按来源分别映射；这里只把记录来源接上。
         reminders.countdownStore = countdownStore
-        moduleStores = [focusStore, taskActivityStore, summaryStore, countdownStore, filterStore, TemplateStore.shared, viewPreferences]
+        moduleStores = [focusStore, taskActivityStore, summaryStore, countdownStore, meetingStore, filterStore, TemplateStore.shared, viewPreferences]
         persistence.onResult = { [weak self] error in
             DispatchQueue.main.async { self?.storageError = error.map { "预览数据保存失败：\($0.localizedDescription)" } }
         }
@@ -214,6 +216,7 @@ final class AppEnvironment: ObservableObject {
     }
 
     func flush(completion: @escaping (Error?) -> Void) {
+        meetingStore.stopRecording()
         snapshotDebouncer.flushPendingSnapshot()
         persistence.flush { first in
             // Module stores flush on their own queues; aggregate the errors.

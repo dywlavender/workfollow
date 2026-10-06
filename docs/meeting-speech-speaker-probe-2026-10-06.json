@@ -1,0 +1,103 @@
+{
+  "version": 1,
+  "kind": "synthetic-two-voice-ASR",
+  "createdAt": "2026-10-06T12:11:23.721Z",
+  "recordingSaved": false,
+  "realHumanMeeting": false,
+  "expected": [
+    {
+      "speaker": "A",
+      "voice": "Tingting",
+      "text": "今天讨论项目交付。我建议下周五提交方案，预算暂定三千元。"
+    },
+    {
+      "speaker": "B",
+      "voice": "Eddy",
+      "text": "周五来不及，我建议改为下周一，预算改成两千五百元。"
+    },
+    {
+      "speaker": "A",
+      "voice": "Tingting",
+      "text": "同意，下周一提交，预算两千五百元。请小李整理清单。"
+    },
+    {
+      "speaker": "B",
+      "voice": "Eddy",
+      "text": "确认，我负责校对，小李整理清单，截止日期都是下周一。"
+    }
+  ],
+  "chunks": [
+    {
+      "offset": 0,
+      "duration": 27.094375,
+      "expectedSpeakers": [
+        "A",
+        "B"
+      ],
+      "latencyMs": 2176,
+      "segments": [
+        {
+          "text": "今天讨论项目交付，我建议下周五提交方案，预算暂定三千元。",
+          "start": 0,
+          "speaker": "片段 0.0s · 讲话人1"
+        },
+        {
+          "text": "周五来不及，我建议改为下周一，预算改成两千五百元。",
+          "start": 7.52,
+          "speaker": "片段 0.0s · 讲话人2"
+        },
+        {
+          "text": "同意，下周一提交，预算两千五百元，请小李整理清单。",
+          "start": 13.44,
+          "speaker": "片段 0.0s · 讲话人1"
+        },
+        {
+          "text": "确认，我负责校对，小李整理清单，截止日期都是下周一。",
+          "start": 20.64,
+          "speaker": "片段 0.0s · 讲话人3"
+        }
+      ]
+    }
+  ],
+  "duration": 27.094375,
+  "voiceRanges": [
+    {
+      "speaker": "A",
+      "start": 0,
+      "end": 7.4328125
+    },
+    {
+      "speaker": "B",
+      "start": 7.6828125,
+      "end": 13.351624999999999
+    },
+    {
+      "speaker": "A",
+      "start": 13.601624999999999,
+      "end": 20.474625
+    },
+    {
+      "speaker": "B",
+      "start": 20.724625,
+      "end": 26.844375
+    }
+  ],
+  "segmentation": "single-audio-speaker-probe",
+  "transcript": "今天讨论项目交付，我建议下周五提交方案，预算暂定三千元。周五来不及，我建议改为下周一，预算改成两千五百元。同意，下周一提交，预算两千五百元，请小李整理清单。确认，我负责校对，小李整理清单，截止日期都是下周一。",
+  "characterErrorRate": 0,
+  "speakerLabels": [
+    "片段 0.0s · 讲话人1",
+    "片段 0.0s · 讲话人2",
+    "片段 0.0s · 讲话人3"
+  ],
+  "crossChunkSpeakerConsistencyVerified": false,
+  "minutes": "# 会议纪要\n\n## 最终确认\n- **期限/截止日期**：下周一。\n  - 依据：`片段 0.0s · 讲话人2`（start=7.52, offset=7.52）建议改为下周一；`片段 0.0s · 讲话人1`（start=13.44, offset=13.44）同意下周一提交；`片段 0.0s · 讲话人3`（start=20.64, offset=20.64）确认截止日期都是下周一。\n- **预算**：两千五百元。\n  - 依据：`片段 0.0s · 讲话人2`（start=7.52, offset=7.52）建议预算改成两千五百元；`片段 0.0s · 讲话人1`（start=13.44, offset=13.44）同意预算两千五百元；`片段 0.0s · 讲话人3`（start=20.64, offset=20.64）确认。初始“三千元”不作为最终预算。\n- **方案提交**：下周一提交。\n  - 负责人：待确认。\n  - 依据：`片段 0.0s · 讲话人1`（start=13.44, offset=13.44）。\n\n## 行动项\n| 行动项 | 负责人 | 截止日期 | 来源 |\n|---|---|---|---|\n| 整理清单 | 小李 | 下周一 | `片段 0.0s · 讲话人1`（start=13.44, offset=13.44）；`片段 0.0s · 讲话人3`（start=20.64, offset=20.64） |\n| 校对 | `片段 0.0s · 讲话人3`（start=20.64, offset=20.64） | 下周一 | `片段 0.0s · 讲话人3`（start=20.64, offset=20.64） |\n| 提交方案 | 待确认 | 下周一 | `片段 0.0s · 讲话人1`（start=13.44, offset=13.44） |\n\n## 原始转写（保留说话人标签及片段前缀）\n- `片段 0.0s · 讲话人1`（start=0, offset=0）：今天讨论项目交付，我建议下周五提交方案，预算暂定三千元。\n- `片段 0.0s · 讲话人2`（start=7.52, offset=7.52）：周五来不及，我建议改为下周一，预算改成两千五百元。\n- `片段 0.0s · 讲话人1`（start=13.44, offset=13.44）：同意，下周一提交，预算两千五百元，请小李整理清单。\n- `片段 0.0s · 讲话人3`（start=20.64, offset=20.64）：确认，我负责校对，小李整理清单，截止日期都是下周一。",
+  "checks": {
+    "transcriptCERBelow10Percent": true,
+    "finalDeadlinePreserved": true,
+    "finalBudgetPreserved": true,
+    "timestampsWithinAudio": true,
+    "withinChunkSpeakerCountFitsFixture": false,
+    "withinChunkObservedSpeakerMappingsDoNotConflict": false
+  }
+}

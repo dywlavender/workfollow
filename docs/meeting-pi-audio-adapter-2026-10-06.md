@@ -1,0 +1,56 @@
+# Pi 会议音频扩展接入
+
+> 后续语音实测与分段修正见 [语音验收](meeting-speech-acceptance-2026-10-06.md)。生产采集已由固定15秒调整为约10～20秒寻找静音边界；下面固定15秒及讲话人标签描述是本次初始接入时的状态。
+
+## 调用边界
+
+WorkFollow → 本机 Pi RPC → 内置会议扩展 → Qwen realtime。
+
+Native 仅采集内存 PCM、发送本地 RPC 命令、接收文字；不持有模型密钥，不连接模型端点。WebSocket、认证解析和模型协议都在 **Pi 进程内** 的扩展运行。Pi 的文字/图片消息不会因为模型名称带 omni 就自动支持音频，因此音频协议由扩展适配。
+
+`WorkFollow/Resources/wf-meeting-audio.mjs` 随应用打包；扩展路径留空即使用内置版本，无需复制到 `~/.pi`。显式自定义路径仍可覆盖音频扩展。录音不保存，Pi 使用 `--no-session`。
+
+## 配置
+
+1. 在 Pi 中配置 `qwen3.8-omni-flash-realtime`、对应业务空间 HTTPS baseUrl 和认证。
+2. 会议设置里 Pi 路径保持本机可执行文件；扩展路径留空。模型留空沿用 Pi 当前选择，也可指定已配置的模型。
+3. 内置扩展通过 `ctx.modelRegistry.getApiKeyAndHeaders()` 解析 Pi 认证与端点，不读写应用里的密钥配置。
+4. 当前模型为 Qwen realtime 时，纪要也经扩展发送文本给同一 realtime 服务，避免错误地用普通 chat-completions 调它。当前模型是普通文字模型时，纪要通过 Pi ModelRegistry 的 complete 调用。显式自定义音频扩展仍使用原先普通 Pi 文字纪要路径。
+
+Qwen3.8 realtime 必须使用业务空间 WebSocket 地址；扩展从 Pi 的业务空间 HTTPS baseUrl 派生它。见 [官方 realtime 指南](https://www.alibabacloud.com/help/en/model-studio/realtime)。
+
+## 协议与行为
+
+- `/wf-meeting-audio`：接受内存协议 v2，PCM16 / 16 kHz / mono。会话配置完成后 append → commit → committed → response.create；只请求文本输出，不播放音频、不调用工具。
+- `/wf-meeting-minutes`：接受 `{version:1,prompt:"..."}`，返回更新后的完整 Markdown。
+- `/wf-meeting-check`：只验证认证和 session.update，不发送录音或会议文字。
+- 等 response.done 成功才提交最终结果，避免 delta + done 重复；失败、提前关闭、超时、非完整结果不当作空成功。
+- 模型错误只返回有界提示，不输出原始供应商事件、密钥或音频。
+- 全零数字静音直接返回空发言，不进入生成模型。它不是通用 VAD，也不能防止背景噪声被模型误识别。
+- 模型返回的发言时间必须位于当前分段内；缺失说话人显示「未区分」。
+
+## 当前限制
+
+仍是连续采集、15 秒分段转写。每次请求独立 Pi/模型会话；尚不是常驻流式会话，延迟包括分段等待和模型请求。
+
+讲话人标签加当前片段前缀，不暗示跨片段为同一人。要稳定区分整场会议的同一人，需要后续跨片段识别/常驻上下文方案，并用真实多人发言验收；不能从模型支持音频推导为它已提供稳定声纹。
+
+## 本轮验收
+
+- 真实安装的 Pi + 本机 WebSocket 服务跑实际扩展：音频请求、纪要请求和连接检查通过。测试数据合成、认证为假值，只在 loopback 通信。
+- 10 项 Node 测试通过：格式/端点/时间验证、静音过滤、错误提示、消息顺序、关闭/超时/不完整响应、本机真实 Pi 集成。
+- 最新应用 build-for-testing 成功，14 项 Swift 会议测试通过，无跳过。新增 Native 不直连模型的静态边界测试。资源确认包含于应用 Contents/Resources。
+- 真实服务：通过 **Pi 扩展** 读取现有 Qwen 配置，认证及 session.update 成功；未使用麦克风。
+- 真实服务接收 1 秒合成静音、返回可解析转写格式；收到 1 条发言，故 **不通过静音 ASR 质量验收**。随后已加全零静音本地过滤与回归测试。
+- 真实服务的合成会议文字纪要请求成功，返回结果包含明确确认的「周五」期限。
+- 最新应用隔离数据 `/private/tmp/wf-meeting-pi-adapter-data`：扩展路径留空，实际使用打包扩展。手动录入虚构发言，自动滚动纪要成功返回「周五提交方案」，未指定负责人标注待确认。录音未启动、目录只有 meetings.json，audio 数组为空。
+- 继续补入「取消周五，最终改为下周一」的合成发言：同一份纪要经 Pi 自动更新，明确决议/行动项改为下周一，旧期限在备注标明已取消，2 条发言均确认进入纪要。实机未手动改写模型结果。
+- 不上传真实会议录音；真实语音准确率、多人识别和跨片段一致性仍未验收。
+
+复现（会访问真实服务，使用 Pi 配置）：
+
+```sh
+node macos-native/scripts/check-meeting-pi.mjs
+```
+
+`--synthetic` 会额外发送一秒合成测试音及虚构会议文字，验证协议，不作为语音识别质量验收。
