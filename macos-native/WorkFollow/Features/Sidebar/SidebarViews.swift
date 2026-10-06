@@ -96,7 +96,6 @@ struct NavigationColumnView: View {
         if navigation.destination == .matrix { return [.matrix] }
         if navigation.destination == .countdown { return [.countdown] }
         if navigation.destination == .focus { return [.focus] }
-        if navigation.destination == .habits { return [.habits] }
         if navigation.destination == .summary { return [.summary] }
         return NativeDestination.taskDestinations
     }
