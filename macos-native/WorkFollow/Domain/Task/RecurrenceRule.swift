@@ -164,6 +164,10 @@ extension RecurrenceRule {
             guard let next = rule.nextOccurrence(after: cursor, frequency: frequency, calendar: calendar) else { break }
             days.insert(calendar.startOfDay(for: next))
             rule = rule.following
+            // 艾宾浩斯的步数由 interval 承载（完成路径每次完成 +1），预览推进
+            // 必须同步递增，否则退化成"每天重复"（完成路径与预览路径共用同一
+            // 引擎，两边必须同语义）。
+            if frequency == .ebbinghaus { rule.interval += 1 }
             cursor = next
         }
         return days

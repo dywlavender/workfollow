@@ -227,4 +227,29 @@ func testEbbinghausMigrationRoundTrip() throws {
         XCTAssertEqual(Set(titles).count, titles.count, "重复选项标题有重复")
     }
 
+    /// AC-2.2 预览等效:艾宾浩斯的 occurrenceDays 预览必须稀疏(记忆曲线),
+    /// 不能退化成"每天重复"(该 bug 曾在日期面板预览中被实机发现)。
+    func testEbbinghausPreviewDaysAreSparseNotDaily() {
+        var rule = RecurrenceRule()
+        rule.interval = 1
+        let anchor = date(2026, 10, 6)
+        let days = rule.occurrenceDays(after: anchor, frequency: .ebbinghaus,
+                                       calendar: calendar, limit: 12)
+        // 12 次发生跨度过倒 12 个月(曲线走完循环),若连续则必是 bug。
+        let sorted = days.sorted()
+        XCTAssertEqual(sorted.first, calendar.startOfDay(for: date(2026, 10, 7)), "首次完成 +1 天")
+        let span = calendar.dateComponents([.day], from: sorted.first!,
+                                           to: sorted.last!).day ?? 0
+        XCTAssertGreaterThanOrEqual(span, 100,
+            "艾宾浩斯预览应跨月(曲线稀疏),实得连续天数说明退化成每日重复")
+        // 相邻预览日的间隔必须命中序列。预览不含锚点日本身：锚点 → 首次
+        // 完成的 +1（序列第 1 段）不在相邻对里，所以间隔从第 2 段开始循环。
+        let intervals = RecurrenceRule.ebbinghausIntervals
+        for (index, pair) in zip(sorted, sorted.dropFirst()).enumerated() {
+            let gap = calendar.dateComponents([.day], from: pair.0, to: pair.1).day ?? 0
+            XCTAssertEqual(gap, intervals[(index + 1) % intervals.count],
+                           "第 \(index+1) 段间隔应为 \(intervals[(index + 1) % intervals.count])")
+        }
+    }
+
 }
