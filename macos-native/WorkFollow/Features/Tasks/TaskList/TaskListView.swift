@@ -328,68 +328,36 @@ struct TaskListView: View {
     /// 模板、撤销等低频操作收进"更多"，保持顶栏只剩排序/更多两个小图标。
     private var moreMenu: some View {
         Menu {
-            Button("从模板添加", systemImage: "doc.badge.plus") { showTemplatePicker = true }
-            Button("撤销", systemImage: "arrow.uturn.backward") { workspace.undo() }
-                .disabled(!workspace.canUndo)
+            // 菜单按滴答（本机截图）精简：滴答这张菜单里只有
+            // 视图 / 隐藏已完成 / 隐藏详细 / 显示设置 / 添加分组 / 共享 / 清单动态 / 打印。
+            // 我们多塞了 5 项（从模板添加、撤销、分组排序 7 行、管理分组、展开/收起已完成），
+            // 一屏塞不下——用户明确反馈"功能太多、不实用"，这里按对照图收掉。
+            // 未安置的入口（待按滴答取证后再放）：模板、分组排序、全局展开已完成。
             Picker("视图", selection: viewModeBinding) {
                 ForEach(TaskListViewMode.exposedCases) { mode in
                     Text(mode.title).tag(mode)
                 }
             }
             .pickerStyle(.inline)
-            Toggle("隐藏已完成", isOn: hidesCompletedBinding)
-            Toggle("隐藏详细", isOn: hidesDetailsBinding)
-            Menu("显示设置") {
+            Toggle("隐藏已完成", systemImage: "checkmark.circle", isOn: hidesCompletedBinding)
+            Toggle("隐藏详细", systemImage: "text.alignleft", isOn: hidesDetailsBinding)
+            Menu("显示设置", systemImage: "slider.horizontal.3") {
                 ForEach(TaskRowDetailField.allCases) { field in
                     Toggle(field.title, isOn: detailFieldBinding(field))
                 }
             }
             Divider()
             if let list = workspace.activeList, list != TaskList.inbox.name {
-                Divider()
-                Button("添加分组…", systemImage: "plus") {
+                Button("添加分组", systemImage: "plus") {
                     guard let title = TaskNamePrompt.ask("添加分组") else { return }
                     if !workspace.addListSection(list, title: title) { TaskNamePrompt.invalidName() }
                 }
-                Picker("分组排序", selection: sectionSortBinding(list)) {
-                    Text("默认（跟随视图排序）").tag(TaskSectionSort?.none)
-                    ForEach(TaskSectionSort.allCases, id: \.self) { option in
-                        Text(option.title).tag(TaskSectionSort?.some(option))
-                    }
-                }
-                .pickerStyle(.inline)
-                if !workspace.listSections(forList: list).isEmpty {
-                    Menu("管理分组") {
-                        ForEach(workspace.listSections(forList: list)) { section in
-                            Menu(section.title) {
-                                Button("编辑分组…") {
-                                    guard let title = TaskNamePrompt.ask("重命名分组", value: section.title),
-                                          title != section.title else { return }
-                                    if !workspace.renameListSection(section.id, title: title) {
-                                        TaskNamePrompt.invalidName()
-                                    }
-                                }
-                                Button("删除分组（任务保留）…") {
-                                    guard TaskNamePrompt.confirm("删除分组“\(section.title)”？",
-                                                                 message: "其中的任务会保留，并回到未分组。",
-                                                                 action: "删除") else { return }
-                                    _ = workspace.removeListSection(section.id)
-                                }
-                            }
-                        }
-                    }
-                }
             }
             Divider()
-            Button("清单动态…", systemImage: "clock.arrow.circlepath") {
+            Button("清单动态", systemImage: "clock.arrow.circlepath") {
                 DispatchQueue.main.async { showListActivity = true }
             }
             .disabled(workspace.activeList == nil)
-            Divider()
-            Button("展开/收起已完成", systemImage: "checkmark.circle") {
-                groupExpansion.toggleClosedGroups(in: groups)
-            }
-            .disabled(!groups.contains { $0.kind == .completed && !$0.tasks.isEmpty })
         } label: {
             Image(systemName: "ellipsis")
                 .frame(width: WFMetrics.controlHeight, height: WFMetrics.controlHeight)
