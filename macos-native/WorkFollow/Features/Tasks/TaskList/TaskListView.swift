@@ -326,7 +326,9 @@ struct TaskListView: View {
             // 视图 / 隐藏已完成 / 隐藏详细 / 显示设置 / 添加分组 / 共享 / 清单动态 / 打印。
             // 我们多塞了 5 项（从模板添加、撤销、分组排序 7 行、管理分组、展开/收起已完成），
             // 一屏塞不下——用户明确反馈"功能太多、不实用"，这里按对照图收掉。
-            // 未安置的入口（待按滴答取证后再放）：模板、分组排序、全局展开已完成。
+            // 模板入口（此前"降噪"时误删——它是模板功能的**唯一入口**，
+            // 删掉等于全应用再也没法用模板；这里放回原位）。
+            Button("从模板添加", systemImage: "doc.badge.plus") { showTemplatePicker = true }
             Picker("视图", selection: viewModeBinding) {
                 ForEach(TaskListViewMode.exposedCases) { mode in
                     Text(mode.title).tag(mode)
