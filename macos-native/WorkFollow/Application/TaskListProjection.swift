@@ -423,24 +423,43 @@ enum TaskListProjection {
     }
 }
 
-/// 清单 14 色板（照搬 Flutter list_color.dart 的 ARGB 值），加清单色的
-/// 稳定推导与侧栏排序两条纯规则，保持可单测、不依赖 SwiftUI。
+/// 清单 14 色板（与 Flutter `desktop/lib/models/list_color.dart` 的
+/// `listColorPalette` 逐条同值，**两端必须一起改**），加清单色的稳定推导与
+/// 侧栏排序两条纯规则，保持可单测、不依赖 SwiftUI。
+///
+/// ## 0…10 十一个彩色槽：2026-10-06「提艳」一次
+///
+/// 起因是用户反馈日历页的任务条「不够亮」。根因不在色板，在**画法**：条是
+/// `基色.opacity(0.36)` 叠在近白格底上（格底实测 rgb(242,244,248)），
+/// **六成四是底色**，任何颜色都被稀释成粉彩。
+///
+/// 而白底上「更浅（L↑）」与「更艳（彩度↑）」是**反向**的：想更艳只能更深，
+/// 想更浅只能更灰。合同 COLOR-005 记的那次失败正是这条路——降 α 后 L 208→218
+/// 但彩度 43→32，用户仍说「太暗了」。**这反过来证明用户说的「暗」= 不鲜艳，
+/// 不是亮度低。** 所以这里选「不动 α、只抬基色饱和度」：
+/// HSL 里 S×1.55、L 不变，屏幕上的亮度几乎不位移（红 L200→195），
+/// 彩度 +45%（47→67）。四个方案（只加浓 α / 提艳 / 提艳+微浓 / 强浓）里，
+/// 这是唯一「更艳但不变深」的一档。
+///
+/// 11/12/13 三个无彩色**没动**：它们是「显式选色」才用得到的槽，
+/// 不在自动取色范围内（见 `chromaticSlotCount`）。
 enum WFListPalette {
+    /// 槽 0…10 为提艳后的值，括号内是提艳前的原值。
     static let argb: [UInt32] = [
-        0xFFE35D6A, // red
-        0xFFE8793F, // orange
-        0xFFD7A62B, // yellow
-        0xFF9AA63A, // olive
-        0xFF42A66A, // green
-        0xFF38A89D, // mint
-        0xFF2F9FB5, // cyan
-        0xFF4285D4, // blue
-        0xFF5865C8, // indigo
-        0xFF8056C7, // purple
-        0xFFC04D9A, // magenta
-        0xFF9A756A, // warm grey
-        0xFF66758A, // slate
-        0xFF8A909B, // grey
+        0xFFFF4153, // red      (原 0xFFE35D6A)
+        0xFFFF7228, // orange   (原 0xFFE8793F)
+        0xFFFFB703, // yellow   (原 0xFFD7A62B)
+        0xFFB1C41C, // olive    (原 0xFF9AA63A)
+        0xFF27C264, // green    (原 0xFF42A66A)
+        0xFF19C7B6, // mint     (原 0xFF38A89D)
+        0xFF0AB8DA, // cyan     (原 0xFF2F9FB5)
+        0xFF1A82FC, // blue     (原 0xFF4285D4)
+        0xFF394DE7, // indigo   (原 0xFF5865C8)
+        0xFF7837E6, // purple   (原 0xFF8056C7)
+        0xFFE02DA5, // magenta  (原 0xFFC04D9A)
+        0xFF9A756A, // warm grey  —— 无彩色，未动
+        0xFF66758A, // slate      —— 无彩色，未动
+        0xFF8A909B, // grey       —— 无彩色，未动
     ]
 
     /// 参与**自动取色**的槽位：0…10 是 11 个有彩色，11/12/13 是暖灰 / 板岩 / 灰。

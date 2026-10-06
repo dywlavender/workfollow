@@ -112,8 +112,11 @@ final class PlanningViewLogicTests: XCTestCase {
 
     func testPaletteMatchesTheFlutterTokenTable() {
         // 色板是与 Flutter 共享的契约表：顺序即下标，改一处两边同时漂移。
+        // 首尾两个值是金丝雀——它们变了就说明这张表被整体动过。
+        // 2026-10-06 十一个彩色槽做过一次「提艳」（详见 WFListPalette.argb 的注释），
+        // 首色随之从 #E35D6A 换成 #FF4153；Flutter 侧 list_color.dart 同步改了。
         XCTAssertEqual(WFListPalette.argb.count, 14)
-        XCTAssertEqual(WFListPalette.argb.first, 0xFFE35D6A)   // red
+        XCTAssertEqual(WFListPalette.argb.first, 0xFFFF4153)   // red
         XCTAssertEqual(WFListPalette.argb.last, 0xFF8A909B)    // grey
     }
 

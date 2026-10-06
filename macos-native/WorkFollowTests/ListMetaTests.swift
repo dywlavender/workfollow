@@ -396,7 +396,9 @@ final class ListMetaTests: XCTestCase {
     func testPaletteHasStableFourteenColorsWithDeterministicFallback() {
         XCTAssertEqual(WFListPalette.argb.count, 14)
         XCTAssertEqual(Set(WFListPalette.argb).count, 14)
-        XCTAssertEqual(WFListPalette.argb.first, 0xFFE35D6A)
+        // 首色金丝雀。2026-10-06 十一个彩色槽「提艳」后由 #E35D6A 换成 #FF4153
+        // （原因见 WFListPalette.argb 的注释；Flutter 侧 list_color.dart 同步）。
+        XCTAssertEqual(WFListPalette.argb.first, 0xFFFF4153)
         // 显式色优先；越界回退到按名推导；同名永远同色。
         XCTAssertEqual(WFListPalette.colorIndex(for: "工作", explicit: 5), 5)
         XCTAssertEqual(WFListPalette.colorIndex(for: "工作", explicit: 99),

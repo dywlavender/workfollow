@@ -57,6 +57,12 @@ final class MigrationSnapshotTests: XCTestCase {
     }
 
     /// 一份最小 v3 数据：父任务 + 子任务 + 笔记 + 清单 + 文件夹 + base64 附件。
+    ///
+    /// ⚠️ 「读书」的 `color` 必须是**当前**色板里的值（`WFListPalette.argb`）。
+    /// `taskListMeta(from:)` 用 `firstIndex(of:)` 把 hex 换回下标，认不出来时
+    /// colorIndex 落到 nil、色值改走 `colorARGB` 原样保留——下面几处
+    /// `readingMeta.colorIndex == 7` 就会挂。2026-10-06 槽 7 由 `#4285D4` 换成
+    /// `#1A82FC`，这里随之更新。**JSON 里不能写注释**，说明放在这里。
     private var v3JSON: String {
         """
         {
@@ -66,7 +72,7 @@ final class MigrationSnapshotTests: XCTestCase {
           "lists": [
             {"id": null, "name": "收集箱", "sortOrder": 0, "protected": true},
             {"id": null, "name": "读书", "sortOrder": 1, "protected": false,
-             "color": "#4285D4", "pinned": true, "icon": "📚", "folder": "学习"}
+             "color": "#1A82FC", "pinned": true, "icon": "📚", "folder": "学习"}
           ],
           "folders": [
             {"id": "folder-parent", "parentId": null, "name": "笔记", "sortOrder": 0,
@@ -213,7 +219,7 @@ final class MigrationSnapshotTests: XCTestCase {
         XCTAssertEqual(reparsed.folders.last?.createdAt, "2026-09-22T10:00:00")
         XCTAssertEqual(reparsed.notes.first?.folderId, "folder-child")
         let exportedReadingList = try XCTUnwrap(reparsed.lists.first { $0.name == "读书" })
-        XCTAssertEqual(exportedReadingList.color, "#4285D4")
+        XCTAssertEqual(exportedReadingList.color, "#1A82FC")
         XCTAssertTrue(exportedReadingList.isPinned)
         XCTAssertEqual(exportedReadingList.sortOrder, 1)
         XCTAssertEqual(exportedReadingList.icon, "📚", "导出写回清单图标")
