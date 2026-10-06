@@ -93,7 +93,9 @@ final class AppEnvironment: ObservableObject {
         // 倒计时的提醒也走同一个排程服务。偏移量语义与任务相反（非负整天，
         // 锚在当天 09:00），由服务按来源分别映射；这里只把记录来源接上。
         reminders.countdownStore = countdownStore
-        moduleStores = [focusStore, taskActivityStore, habitStore, summaryStore, countdownStore, filterStore, TemplateStore.shared, viewPreferences]
+        // habitStore 已从持久化列表摘除：习惯功能正在按步骤删除（侧栏入口已摘），
+        // 摘掉这一项后 **habits.json 不会再被写回**（用户已删除该数据文件）。
+        moduleStores = [focusStore, taskActivityStore, summaryStore, countdownStore, filterStore, TemplateStore.shared, viewPreferences]
         persistence.onResult = { [weak self] error in
             DispatchQueue.main.async { self?.storageError = error.map { "预览数据保存失败：\($0.localizedDescription)" } }
         }
