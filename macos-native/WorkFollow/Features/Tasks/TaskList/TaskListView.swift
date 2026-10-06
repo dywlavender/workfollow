@@ -329,6 +329,10 @@ struct TaskListView: View {
             // 模板入口（此前"降噪"时误删——它是模板功能的**唯一入口**，
             // 删掉等于全应用再也没法用模板；这里放回原位）。
             Button("从模板添加", systemImage: "doc.badge.plus") { showTemplatePicker = true }
+            // 撤销：这是 `workspace.undo()` 的**唯一调用点**（应用里没有 ⌘Z、编辑菜单里也没有），
+            // 降噪时删掉它等于全应用无法撤销——已放回。
+            Button("撤销", systemImage: "arrow.uturn.backward") { workspace.undo() }
+                .disabled(!workspace.canUndo)
             Picker("视图", selection: viewModeBinding) {
                 ForEach(TaskListViewMode.exposedCases) { mode in
                     Text(mode.title).tag(mode)
