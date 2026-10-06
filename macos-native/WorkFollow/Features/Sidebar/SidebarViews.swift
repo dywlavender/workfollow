@@ -40,9 +40,7 @@ struct IconRailView: View {
                        selected: navigation.destination == .countdown)
             railButton(.focus, symbol: "timer.circle.fill", title: "专注",
                        selected: navigation.destination == .focus)
-            railButton(.habits, symbol: "star.square.fill", title: "习惯",
-                       selected: navigation.destination == .habits)
-            railButton(.summary, symbol: "list.bullet.clipboard.fill", title: "摘要",
+railButton(.summary, symbol: "list.bullet.clipboard.fill", title: "摘要",
                        selected: navigation.destination == .summary)
             Spacer()
             Button(action: onOpenQuickOpen) {
