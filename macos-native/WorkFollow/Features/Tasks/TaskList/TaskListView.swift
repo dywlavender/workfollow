@@ -910,7 +910,14 @@ struct TaskListView: View {
         }
         .padding(.horizontal, WFSpace.sm)
         .frame(height: TaskListMetrics.groupHeaderHeight)
-        .popover(isPresented: Binding(get: { moveTargetSectionID == group.sectionID },
+        // ⚠️ `moveTargetSectionID != nil` 这个前置条件不能省。
+        // 两边都是 `String?`，而「未分组」分组的 `sectionID` 就是 nil——静息态下
+        // `nil == nil` 成立，于是**每个没有分组的标题都自认在弹出状态**，
+        // 又因为下面 `if let` 拿不到 sectionID、内容为空，SwiftUI 就会挂出一个
+        // 26×26 的空 popover 窗口（实测：`_NSPopoverWindow`，level 0，常驻可见，
+        // 就是任务列表上那颗白圆）。加上非空判断后，只有用户真的点过
+        // 「移动到」的哪个分组才匹配得上。
+        .popover(isPresented: Binding(get: { moveTargetSectionID != nil && moveTargetSectionID == group.sectionID },
                                       set: { if !$0 { moveTargetSectionID = nil } })) {
             if let sectionID = group.sectionID {
                 MoveTargetPickerCard(
