@@ -19,6 +19,18 @@
 #   scripts/run-tests.sh                  # 跑全部用例
 #   scripts/run-tests.sh QuickAddCompositionTests
 #   scripts/run-tests.sh QuickAddCompositionTests GlobalQuickAddTests
+#   scripts/run-tests.sh "QuickAddCompositionTests,GlobalQuickAddTests"   # 等价
+#
+# ⚠️ 类名是**子串匹配**（`-XCTest` 的语义），所以写 `MeetingStore` 会把
+# `MeetingStoreTests` 一并选中；想精确到某个类，用完整类名。
+#
+# ⚠️ `NativeResourceLinkTests` 在 `xcrun xctest` 宿主下会 `Abort trap: 6`
+# （`bundleProxyForCurrentProcess is nil: mainBundle.bundleURL .../usr/bin/`），
+# **一个用例崩掉会带走整轮**——排在它后面的 suite 静默不执行，且没有最终汇总。
+# 要完整跑，把它排除掉再单独补跑：
+#   CLASSES=$(cd WorkFollowTests && grep -hoE '^final class [A-Za-z0-9_]+' *.swift \
+#     | awk '{print $NF}' | sort -u | grep -v '^NativeResourceLinkTests$' | paste -sd, -)
+#   scripts/run-tests.sh "$CLASSES"
 #
 set -euo pipefail
 
@@ -93,11 +105,11 @@ ln -s "$XCTEST_SUPPORT" "$BUNDLE/Contents/Frameworks/libXCTestSwiftSupport.dylib
 echo "==> 执行用例"
 # macOS 自带 bash 3.2：`set -u` 下展开空数组会报 unbound variable，所以分两支写。
 if [[ $# -gt 0 ]]; then
-  ARGS=()
-  for filter in "$@"; do
-    ARGS+=(-XCTest "$filter")
-  done
-  xcrun xctest "${ARGS[@]}" "$BUNDLE"
+  # ⚠️ `-XCTest` 只认**一个**逗号分隔的参数。写成多个 `-XCTest` 不会报错，
+  # 而是**静默执行 0 个用例**（"Executed 0 tests" 且 exit 0，看起来像全绿）。
+  # 所以这里把多个参数用逗号拼起来——空格分隔与逗号分隔两种写法都能用。
+  JOINED="$(IFS=,; echo "$*")"
+  xcrun xctest -XCTest "$JOINED" "$BUNDLE"
 else
   xcrun xctest "$BUNDLE"
 fi
