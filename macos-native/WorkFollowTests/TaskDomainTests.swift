@@ -328,41 +328,6 @@ final class TaskDomainTests: XCTestCase {
         XCTAssertEqual(allClosed.tasks.map(\.id), [nextDayID, abandonedID, completedID])
     }
 
-    func testTaskGroupFoldingIsStableAndClosedGroupsCanBeToggledTogether() throws {
-        let store = WorkspaceStore()
-        var now = calendar.startOfDay(for: today).addingTimeInterval(8 * 60 * 60)
-        let actions = TaskActions(store: store, clock: { now }, calendar: calendar)
-        let firstID = try XCTUnwrap(actions.create(title: "first closed").taskID)
-        _ = actions.complete(firstID)
-        now = now.addingTimeInterval(24 * 60 * 60)
-        let secondID = try XCTUnwrap(actions.create(title: "second closed").taskID)
-        _ = actions.complete(secondID)
-
-        let groups = TaskListProjection.groups(in: .completed, store: store,
-                                               now: now, calendar: calendar)
-        XCTAssertEqual(groups.count, 2)
-        XCTAssertNotEqual(groups[0].id, groups[1].id)
-        XCTAssertTrue(groups.allSatisfy { !$0.id.isEmpty })
-        let relabeledGroup = TaskListGroup(kind: groups[0].kind, day: groups[0].day,
-                                           tasks: groups[0].tasks, label: "改过的日期标题")
-        XCTAssertEqual(groups[0].id, relabeledGroup.id)
-
-        var state = TaskGroupExpansionState()
-        XCTAssertTrue(groups.allSatisfy { !state.isCollapsed($0) })
-        state.toggle(groups[0])
-        XCTAssertTrue(state.isCollapsed(groups[0]))
-        XCTAssertFalse(state.isCollapsed(groups[1]))
-
-        state.toggleClosedGroups(in: groups)
-        XCTAssertTrue(groups.allSatisfy(state.isCollapsed))
-        state.toggleClosedGroups(in: groups)
-        XCTAssertTrue(groups.allSatisfy { !state.isCollapsed($0) })
-
-        state.toggle(groups[0])
-        state.reveal(try XCTUnwrap(groups[0].tasks.first), in: .completed, calendar: calendar)
-        XCTAssertFalse(state.isCollapsed(groups[0]))
-    }
-
     func testAllTasksGroupsPinnedThenDateBucketsWithStableOrder() throws {
         let store = WorkspaceStore()
         let actions = TaskActions(store: store, clock: { self.today }, calendar: calendar)

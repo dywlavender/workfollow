@@ -158,18 +158,6 @@ struct TaskGroupExpansionState: Equatable {
         }
     }
 
-    mutating func toggleClosedGroups(in groups: [TaskListGroup]) {
-        let ids = groups
-            .filter { $0.kind == .completed && !$0.tasks.isEmpty }
-            .map(\.id)
-        guard !ids.isEmpty else { return }
-        if ids.allSatisfy(collapsedIDs.contains) {
-            collapsedIDs.subtract(ids)
-        } else {
-            collapsedIDs.formUnion(ids)
-        }
-    }
-
     mutating func reveal(_ task: Task, in scope: TaskListScope, calendar: Calendar) {
         guard task.isClosed else { return }
         if scope == .completed {
