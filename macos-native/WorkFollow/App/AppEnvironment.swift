@@ -29,7 +29,6 @@ final class AppEnvironment: ObservableObject {
     let reminders: NativeReminderService
     let focusStore: FocusStore
     let taskActivityStore: TaskActivityStore
-    let habitStore: HabitStore
     let summaryStore: SummaryStore
     let countdownStore: CountdownStore
     let filterStore: FilterStore
@@ -83,7 +82,6 @@ final class AppEnvironment: ObservableObject {
             taskActivityStore?.recordFocusStart(taskID: taskID, stopwatch: stopwatch)
         }
         focusStore.notifier = FocusNotifier()
-        habitStore = HabitStore(clock: clock)
         summaryStore = SummaryStore(clock: clock)
         countdownStore = CountdownStore(clock: clock)
         filterStore = FilterStore(clock: clock)

@@ -39,8 +39,6 @@ struct RootShellView: View {
                         }
                         if navigation.destination == .trash {
                             TaskTrashView(workspace: workspace)
-                        } else if navigation.destination == .habits {
-                            HabitsWorkspaceView(store: environment.habitStore)
                         } else if navigation.destination == .summary {
                             SummaryWorkspaceView(store: environment.summaryStore, workspace: workspace)
                         } else if navigation.destination == .countdown {
