@@ -417,15 +417,68 @@ struct CalendarMonthGridView: View {
     /// 浮层锚的落脚点：格与条在点击时把「自己是哪一块」写进去。
     let anchorSink: PlanningAnchorRef
 
+    // 滚动性能三件套（2026-10-07，用户报"不够流畅"）：周行流、每日任务、
+    // 每周色带全部预计算进 State——滚动期间的网格重估**零任务过滤/布局**，
+    // 行级 Equatable 跳过未变行。重建只在 tasks/showCompleted 变化时发生。
+    @State private var weeks: [Date]
+    @State private var daysByWeek: [Date: [Date]]
+    @State private var dayTasks: [Date: [Task]]
+    @State private var spansByWeek: [Date: [CalendarSpan]]
+
+    init(topWeek: Binding<Date>, month: Date, today: Date, selectedDay: Date,
+         showCompleted: Bool, calendar: Calendar, tasks: [Task],
+         barColor: @escaping (UUID) -> Color, onSelectDay: @escaping (Date) -> Void,
+         onOpenTask: @escaping (UUID) -> Void, onCreateTask: @escaping (Date) -> Void,
+         onDropTask: @escaping (UUID, Date) -> Void, onToggleTask: @escaping (UUID) -> Void,
+         anchorSink: PlanningAnchorRef) {
+        _topWeek = topWeek
+        self.month = month; self.today = today; self.selectedDay = selectedDay
+        self.showCompleted = showCompleted; self.calendar = calendar; self.tasks = tasks
+        self.barColor = barColor
+        self.onSelectDay = onSelectDay; self.onOpenTask = onOpenTask
+        self.onCreateTask = onCreateTask; self.onDropTask = onDropTask
+        self.onToggleTask = onToggleTask; self.anchorSink = anchorSink
+        let weeks = Self.buildWeeks(today: today, calendar: calendar)
+        _weeks = State(initialValue: weeks)
+        let caches = Self.buildCaches(weeks: weeks, tasks: tasks,
+                                      showCompleted: showCompleted, calendar: calendar)
+        _daysByWeek = State(initialValue: caches.days)
+        _dayTasks = State(initialValue: caches.dayTasks)
+        _spansByWeek = State(initialValue: caches.spans)
+    }
+
     /// 以今天所在周为原点 ±30 周的周起点。**刻意不用 LazyVStack**：
     /// scrollPosition(id:) 在懒加载内容上会被未实体化的 id 卡住（快速滚动时
     /// 绑定停在最后已实体化的行，标题与网格脱节——2026-10-07 实测）。61 行
     /// ×7 格全部实体化，绑定才可靠；±30 周（约 7 个月）对日历足够。
-    private var weeks: [Date] {
-        let origin = Self.startOfWeek(containing: today, calendar: calendar)
+    private static func buildWeeks(today: Date, calendar: Calendar) -> [Date] {
+        let origin = startOfWeek(containing: today, calendar: calendar)
         return (-30...30).compactMap {
             calendar.date(byAdding: .weekOfYear, value: $0, to: origin)
         }
+    }
+
+    private static func buildCaches(weeks: [Date], tasks: [Task], showCompleted: Bool,
+                                    calendar: Calendar)
+        -> (days: [Date: [Date]], dayTasks: [Date: [Task]], spans: [Date: [CalendarSpan]]) {
+        var days: [Date: [Date]] = [:]
+        var dayTasks: [Date: [Task]] = [:]
+        var spans: [Date: [CalendarSpan]] = [:]
+        for weekStart in weeks {
+            let weekDays = (0..<7).compactMap { calendar.date(byAdding: .day, value: $0, to: weekStart) }
+            days[weekStart] = weekDays
+            for day in weekDays {
+                let visible = PlanningProjection.singleDayTasks(on: day, from: tasks, calendar: calendar)
+                dayTasks[day] = showCompleted ? visible : visible.filter { $0.status != .completed }
+            }
+            let multiDay = PlanningProjection.multiDayTasks(from: tasks,
+                                                            first: weekDays.first ?? weekStart,
+                                                            last: weekDays.last ?? weekStart,
+                                                            calendar: calendar)
+            spans[weekStart] = CalendarSpans.lanes(for: weekDays, tasks: multiDay, calendar: calendar)
+                .filter { showCompleted || $0.task.status != .completed }
+        }
+        return (days, dayTasks, spans)
     }
 
     var body: some View {
@@ -440,15 +493,16 @@ struct CalendarMonthGridView: View {
                     // scrollPosition）——2026-10-07 实测顶行停在半行。
                     VStack(spacing: 0) {
                         ForEach(weeks, id: \.self) { weekStart in
+                            let weekDays = daysByWeek[weekStart] ?? []
                             MonthWeekRow(
-                                days: Self.weekDays(from: weekStart, calendar: calendar),
+                                days: weekDays,
                                 month: month,
                                 today: today,
                                 selectedDay: selectedDay,
-                                showCompleted: showCompleted,
                                 isLastRow: false,
                                 calendar: calendar,
-                                tasks: tasks,
+                                spans: spansByWeek[weekStart] ?? [],
+                                dayTasks: weekDays.map { dayTasks[$0] ?? [] },
                                 barColor: barColor,
                                 onSelectDay: onSelectDay,
                                 onOpenTask: onOpenTask,
@@ -472,14 +526,24 @@ struct CalendarMonthGridView: View {
                 }
             }
         }
+        .onChange(of: tasks) { _, newValue in
+            rebuildCaches(tasks: newValue)
+        }
+        .onChange(of: showCompleted) { _, newValue in
+            rebuildCaches(tasks: tasks)
+        }
+    }
+
+    private func rebuildCaches(tasks: [Task]) {
+        let caches = Self.buildCaches(weeks: weeks, tasks: tasks,
+                                      showCompleted: showCompleted, calendar: calendar)
+        daysByWeek = caches.days
+        dayTasks = caches.dayTasks
+        spansByWeek = caches.spans
     }
 
     private var positionBinding: Binding<Date?> {
         Binding(get: { topWeek }, set: { if let value = $0 { topWeek = value } })
-    }
-
-    private static func weekDays(from weekStart: Date, calendar: Calendar) -> [Date] {
-        (0..<7).compactMap { calendar.date(byAdding: .day, value: $0, to: weekStart) }
     }
 
     static func startOfWeek(containing date: Date, calendar: Calendar) -> Date {
@@ -506,15 +570,23 @@ struct CalendarMonthGridView: View {
 }
 
 /// 网格的一周：格子 + 跨天色带 + 今天的洗色 + 细线。
-struct MonthWeekRow: View {
+///
+/// **性能契约（2026-10-07，用户报"不够流畅"）**：`spans` 与 `dayTasks` 是
+/// 网格级缓存的预计算结果，行内**不做任何任务过滤/布局**；本视图遵守
+/// `Equatable`（忽略回调与引用类型锚——它们捕获的 workspace 变化时 tasks
+/// 必然变化，相等性不会漏更新）。滚动中每次行经过触发的网格重估，未变的
+/// 行在这里被 SwiftUI 整行跳过，滚动只剩纯合成。
+struct MonthWeekRow: View, Equatable {
     let days: [Date]
     let month: Date
     let today: Date
     let selectedDay: Date
-    let showCompleted: Bool
     let isLastRow: Bool
     let calendar: Calendar
-    let tasks: [Task]
+    /// 预计算：本周的跨天色带（已按 lane 摆放、已按 showCompleted 过滤）。
+    let spans: [CalendarSpan]
+    /// 预计算：按列索引的单日任务（已按 showCompleted 过滤）。
+    let dayTasks: [[Task]]
     let barColor: (UUID) -> Color
     let onSelectDay: (Date) -> Void
     let onOpenTask: (UUID) -> Void
@@ -523,15 +595,11 @@ struct MonthWeekRow: View {
     let onToggleTask: (UUID) -> Void
     let anchorSink: PlanningAnchorRef
 
-    /// 与本周有交集的跨天任务，已按原版口径排序（开始早优先、同日时长优先），
-    /// 再按列区间摆进条位。
-    private var spans: [CalendarSpan] {
-        let multiDay = PlanningProjection.multiDayTasks(from: tasks,
-                                                        first: days.first ?? month,
-                                                        last: days.last ?? month,
-                                                        calendar: calendar)
-        return CalendarSpans.lanes(for: days, tasks: multiDay, calendar: calendar)
-            .filter { showCompleted || $0.task.status != .completed }
+    static func == (lhs: MonthWeekRow, rhs: MonthWeekRow) -> Bool {
+        lhs.days == rhs.days && lhs.month == rhs.month && lhs.today == rhs.today
+            && lhs.selectedDay == rhs.selectedDay && lhs.isLastRow == rhs.isLastRow
+            && lhs.calendar == rhs.calendar
+            && lhs.spans == rhs.spans && lhs.dayTasks == rhs.dayTasks
     }
 
     var body: some View {
@@ -560,7 +628,6 @@ struct MonthWeekRow: View {
     }
 
     private func dayCell(_ day: Date, column: Int, height: CGFloat) -> some View {
-        let visible = PlanningProjection.singleDayTasks(on: day, from: tasks, calendar: calendar)
         return CalendarDayCellView(
             date: day,
             height: height,
@@ -569,7 +636,7 @@ struct MonthWeekRow: View {
             isToday: calendar.isDate(day, inSameDayAs: today),
             selected: calendar.isDate(day, inSameDayAs: selectedDay),
             skipSlots: CalendarSpans.slotsOver(spans, column: column),
-            tasks: showCompleted ? visible : visible.filter { $0.status != .completed },
+            tasks: column < dayTasks.count ? dayTasks[column] : [],
             calendar: calendar,
             barColor: barColor,
             onSelect: { onSelectDay(day) },
