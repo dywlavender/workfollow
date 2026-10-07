@@ -76,6 +76,10 @@ railButton(.summary, symbol: "list.bullet.clipboard.fill", title: "摘要",
             railIcon(symbol, selected: selected)
                 .foregroundStyle(selected ? WFColors.accent : WFColors.secondaryText)
                 .frame(width: RailMetrics.hitSize, height: RailMetrics.hitSize)
+                // Path.fill 的命中区域只是墨迹本身——日历 glyph 中间的镂空区
+                // （2026-10-07 用户实测"点击没反应"）不吃点击。整个 hitSize
+                // 方块声明为可点区，对 Image 图标也无害。
+                .contentShape(Rectangle())
                 .focusRenderAnchor(.railSelectedHitArea)
         }
         .focused($focusedDestination, equals: destination)
