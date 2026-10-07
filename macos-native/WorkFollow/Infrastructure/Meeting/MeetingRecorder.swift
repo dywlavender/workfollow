@@ -11,11 +11,11 @@ final class MeetingRecorder {
     var onError: ((Error) -> Void)?
     var currentDuration: TimeInterval { capture?.duration ?? 0 }
 
-    func start(offset: TimeInterval) throws {
+    func start(offset: TimeInterval, streaming: Bool = false) throws {
         let engine = AVAudioEngine()
         let input = engine.inputNode
         let format = input.outputFormat(forBus: 0)
-        let capture = try MeetingPCMCapture(format: format, offset: offset)
+        let capture = try MeetingPCMCapture(format: format, offset: offset, streaming: streaming)
         let token = UUID()
         generation = token
         input.installTap(onBus: 0, bufferSize: 4096, format: format) { [weak self] buffer, _ in
@@ -58,7 +58,7 @@ final class MeetingPCMCapture: @unchecked Sendable {
     private var closed = false
     var duration: TimeInterval { lock.withLock { accumulator.duration } }
 
-    init(format: AVAudioFormat, offset: TimeInterval) throws {
+    init(format: AVAudioFormat, offset: TimeInterval, streaming: Bool = false) throws {
         guard format.sampleRate > 0, format.channelCount > 0,
               let output = AVAudioFormat(commonFormat: .pcmFormatInt16, sampleRate: 16_000,
                                          channels: 1, interleaved: true),
@@ -66,7 +66,10 @@ final class MeetingPCMCapture: @unchecked Sendable {
             throw CocoaError(.coderInvalidValue)
         }
         self.converter = converter; outputFormat = output
-        accumulator = MeetingPCMAccumulator(offset: offset, preferSpeechBoundaries: true)
+        // Keep the existing capture policy until the shorter candidate passes
+        // real-model acceptance; its protocol failures currently stop recording.
+        accumulator = MeetingPCMAccumulator(offset: offset, segmentSeconds: streaming ? 0.25 : 15,
+                                            preferSpeechBoundaries: !streaming)
     }
     func consume(_ input: AVAudioPCMBuffer) throws -> Bool {
         try lock.withLock {
@@ -103,25 +106,34 @@ final class MeetingPCMCapture: @unchecked Sendable {
 }
 
 /// Continuous capture, bounded memory-only segmentation; no stop/start gap.
+enum MeetingSpeechBoundaryPolicy {
+    case contextual, responsive
+    var minimumBytes: Int { (self == .responsive ? 2 : 10) * 32_000 }
+    var maximumBytes: Int { (self == .responsive ? 5 : 20) * 32_000 }
+}
+
 struct MeetingPCMAccumulator {
     private var bytes = Data()
     private var delivered: TimeInterval = 0
     private let offset: TimeInterval
     private let segmentBytes: Int
     private let preferSpeechBoundaries: Bool
+    private let speechBoundaryPolicy: MeetingSpeechBoundaryPolicy
     private var scannedBytes = 0
     private var quietBytes = 0
     var duration: TimeInterval { delivered + Double(bytes.count) / 32_000 }
-    init(offset: TimeInterval = 0, segmentSeconds: Int = 15, preferSpeechBoundaries: Bool = false) {
-        self.offset = offset; segmentBytes = max(1, segmentSeconds) * 32_000
+    init(offset: TimeInterval = 0, segmentSeconds: Double = 15, preferSpeechBoundaries: Bool = false,
+         speechBoundaryPolicy: MeetingSpeechBoundaryPolicy = .contextual) {
+        self.offset = offset; segmentBytes = max(2, Int(segmentSeconds * 32_000) / 2 * 2)
         self.preferSpeechBoundaries = preferSpeechBoundaries
+        self.speechBoundaryPolicy = speechBoundaryPolicy
     }
     mutating func append(_ data: Data) -> [MeetingAudioPacket] {
         bytes.append(data)
         var packets: [MeetingAudioPacket] = []
         if preferSpeechBoundaries {
-            // 10ms PCM frames. Prefer a 300ms quiet boundary after ~10s;
-            // hard cap ~20s when background noise/continuous speech has no pause.
+            // 10ms PCM frames. Prefer a 300ms quiet boundary after the minimum;
+            // the experimental responsive policy has a 2s minimum and 5s cap.
             // Conservative energy gate, not a speaker recognition/VAD model.
             while bytes.count - scannedBytes >= 320 {
                 let quiet = bytes.withUnsafeBytes { raw -> Bool in
@@ -134,8 +146,8 @@ struct MeetingPCMAccumulator {
                 }
                 scannedBytes += 320
                 quietBytes = quiet ? quietBytes + 320 : 0
-                if (scannedBytes >= segmentBytes * 2 / 3 && quietBytes >= 9_600) ||
-                    scannedBytes >= segmentBytes * 4 / 3 {
+                if (scannedBytes >= speechBoundaryPolicy.minimumBytes && quietBytes >= 9_600) ||
+                    scannedBytes >= speechBoundaryPolicy.maximumBytes {
                     packets.append(packet(Data(bytes.prefix(scannedBytes))))
                     bytes.removeFirst(scannedBytes)
                     scannedBytes = 0; quietBytes = 0

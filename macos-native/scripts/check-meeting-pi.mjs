@@ -2,8 +2,13 @@
 import {spawn} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 const extension = fileURLToPath(new URL('../WorkFollow/Resources/wf-meeting-audio.mjs', import.meta.url));
-const pi = spawn('/opt/homebrew/bin/pi', ['--mode','rpc','--no-session','--no-tools','--no-extensions',
-  '--no-skills','--no-prompt-templates','--no-context-files','--offline','--extension',extension],
+// 2026-10-06 起扩展不再内置模型 id：用 WF_MEETING_MODEL 或位置参数指定实时模型，
+// 未指定则沿用 Pi 当前模型（它必须是百炼业务空间的实时模型）。
+const model = process.env.WF_MEETING_MODEL ?? process.argv.slice(2).find(a => !a.startsWith('--')) ?? '';
+const args = ['--mode','rpc','--no-session','--no-tools','--no-extensions',
+  '--no-skills','--no-prompt-templates','--no-context-files','--offline','--extension',extension];
+if (model) args.push('--model', model);
+const pi = spawn('/opt/homebrew/bin/pi', args,
   {cwd:'/private/tmp',stdio:['pipe','pipe','ignore']});
 const synthetic = process.argv.includes('--synthetic');
 let buffer='', done=false, phase='check';

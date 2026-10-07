@@ -22,8 +22,6 @@ struct MeetingWorkspaceView: View {
     @ObservedObject var store: MeetingStore
 
     @State private var settingsPresented = false
-    @State private var manualText = ""
-    @State private var speaker = "手动记录"
     /// 窄窗口下只显示一栏时的「当前在哪一栏」。宽窗口下恒为 false（两栏都在）。
     @State private var detailOnly = false
 
@@ -33,8 +31,35 @@ struct MeetingWorkspaceView: View {
 
     // 详情栏内部那条线：横向时是左栏宽度占比，纵向时是上栏高度占比
     @State private var splitDragOrigin: CGFloat?
-    @State private var transcriptFraction: CGFloat = 0.5
+    /// 用户自己拖出来的转写栏占比。`nil` = 还没拖过，按相位取默认值。
+    /// **不落盘、不加字段**——所以回看时天然回到「对半」。
+    @State private var userTranscriptFraction: CGFloat?
     @State private var minutesFraction: CGFloat = 0.45
+
+    // 对话记录的自动跟随。**贴底才跟随**：用内容底边与视口底边的距离判断，
+    // 用户上翻回看历史时不能拽人，滚回底部后恢复跟随（聊天 App 的标准做法）。
+    @State private var transcriptPinned = true
+    @State private var transcriptContentBottom: CGFloat = 0
+    @State private var transcriptViewportHeight: CGFloat = 0
+
+    private static let transcriptSpace = "meeting-transcript-scroll"
+    private static let bottomAnchorID = "meeting-transcript-bottom"
+    /// 贴底判定余量：一行转写的高度以内都算「还在底部」。
+    private static let autoFollowThreshold: CGFloat = 60
+
+    /// 转写栏实际占比：**录制中把大栏让给转写**（用户原话：「过程中是转写重要，
+    /// 右边显示纪要」），其余时候（暂停 / 回看）回到对半。
+    ///
+    /// 「相位」是**算出来的，不是存下来的**——只由 `recordingID` 决定，所以不用给
+    /// `MeetingRecord` 加字段（用户明确不要），也不必手动切。代价是按下暂停时布局
+    /// 会回到对半，这是「不加字段」的必然结果，已与用户确认过。
+    /// 用户一旦自己拖过，就一律用他的值，不再被相位改动。
+    private var transcriptFraction: CGFloat {
+        if let userTranscriptFraction { return userTranscriptFraction }
+        return store.recordingID == nil
+            ? MeetingMetrics.idleTranscriptFraction
+            : MeetingMetrics.recordingTranscriptFraction
+    }
 
     var body: some View {
         GeometryReader { geometry in
@@ -269,9 +294,13 @@ struct MeetingWorkspaceView: View {
                 HStack(spacing: 0) {
                     transcriptColumn(meeting).frame(width: left)
                     splitDivider(vertical: true, span: size.width,
-                                 fraction: $transcriptFraction)
+                                 fraction: Binding(get: { transcriptFraction },
+                                                   set: { userTranscriptFraction = $0 }))
                     minutesColumn(meeting).frame(maxWidth: .infinity)
                 }
+                // 只给「相位切换」这一件事加动画：拖分割线时不走这条，
+                // 否则拖动会带上 0.22s 的滞后，手感变糊。
+                .animation(.easeInOut(duration: 0.22), value: store.recordingID)
             } else {
                 let top = min(max(size.height * minutesFraction,
                                   size.height * MeetingMetrics.minFraction),
@@ -303,7 +332,7 @@ struct MeetingWorkspaceView: View {
             }
             if store.requestingPermission {
                 ProgressView().controlSize(.small)
-                Text("等待麦克风授权").font(WFType.supporting).foregroundStyle(WFColors.secondaryText)
+                Text("正在准备录音").font(WFType.supporting).foregroundStyle(WFColors.secondaryText)
                 Button("取消等待") { store.stopRecording() }.controlSize(.small)
             }
             TimelineView(.periodic(from: .now, by: 1)) { _ in
@@ -334,7 +363,7 @@ struct MeetingWorkspaceView: View {
                 .dateTime.year().month().day().hour().minute().locale(.appDate)))
                 .font(WFType.caption).foregroundStyle(WFColors.secondaryText)
             Text(store.audioConfigured
-                 ? "音频仅在内存缓冲，经 Pi 分段转写；约每 25 秒更新纪要。模型讲话人标签为暂定，未验证身份一致性。"
+                 ? "内置 Pi 扩展支持流式转写：草稿实时修正，定稿后进入纪要。讲话人暂未区分。自定义扩展继续使用分段转写；音频均不保存。"
                  : "尚未配置 Pi 音频扩展，不能开始采集。只保存文字和纪要，不保存录音。")
                 .font(WFType.caption).foregroundStyle(WFColors.secondaryText)
                 .padding(.top, WFSpace.xs)
@@ -363,13 +392,73 @@ struct MeetingWorkspaceView: View {
             Divider()
             // 自己一条滚动条。原来整页共用一条外层 `ScrollView`，
             // 分栏之后两栏必须各滚各的，否则一边滚另一边跟着动。
-            ScrollView {
-                transcript(meeting)
-                    .padding(.vertical, WFSpace.xs)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+            //
+            // 贴底自动跟随：录音过程中新行、草稿更新不断追加，不滚的话最新
+            // 内容永远在折叠线以下（用户反馈 #4）。贴底判断靠底部哨兵与视口
+            // 两个 preference 相减；用户上翻超过阈值就停止跟随。
+            ScrollViewReader { proxy in
+                ScrollView {
+                    transcript(meeting)
+                        .padding(.vertical, WFSpace.xs)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .overlay(alignment: .bottom) { bottomSentinel }
+                }
+                .coordinateSpace(name: Self.transcriptSpace)
+                .background(viewportProbe)
+                .onPreferenceChange(TranscriptBottomKey.self) {
+                    transcriptContentBottom = $0
+                    syncPinned()
+                }
+                .onPreferenceChange(TranscriptViewportKey.self) {
+                    transcriptViewportHeight = $0
+                    syncPinned()
+                }
+                .onAppear {
+                    proxy.scrollTo(Self.bottomAnchorID, anchor: .bottom)
+                }
+                .onChange(of: meeting.id) { _, _ in
+                    // 换会议：无条件回底部并恢复跟随；等新内容布完局再跳。
+                    transcriptPinned = true
+                    DispatchQueue.main.async {
+                        proxy.scrollTo(Self.bottomAnchorID, anchor: .bottom)
+                    }
+                }
+                .onChange(of: transcriptTail(meeting)) { _, _ in
+                    guard transcriptPinned else { return }
+                    withAnimation(.easeOut(duration: 0.18)) {
+                        proxy.scrollTo(Self.bottomAnchorID, anchor: .bottom)
+                    }
+                }
             }
-            Divider()
-            transcriptFooter
+        }
+    }
+
+    private func syncPinned() {
+        transcriptPinned = transcriptContentBottom
+            <= transcriptViewportHeight + Self.autoFollowThreshold
+    }
+
+    /// 触发指纹：行数 + 最后一行身份 + 草稿文本。草稿每条 delta 都在变，
+    /// 直接拿字典当 onChange 值既要求 Equatable 又太重，拼个轻量字符串足够。
+    private func transcriptTail(_ meeting: MeetingRecord) -> String {
+        let drafts = store.streamDrafts[meeting.id]?.values
+            .map(\.text).sorted().joined(separator: "\u{1}") ?? ""
+        return "\(meeting.transcript.count)|\(meeting.transcript.last?.id.uuidString ?? "")|\(drafts)"
+    }
+
+    private var bottomSentinel: some View {
+        Color.clear
+            .frame(height: 1)
+            .id(Self.bottomAnchorID)
+            .background(GeometryReader { geo in
+                Color.clear.preference(key: TranscriptBottomKey.self,
+                                       value: geo.frame(in: .named(Self.transcriptSpace)).maxY)
+            })
+    }
+
+    private var viewportProbe: some View {
+        GeometryReader { geo in
+            Color.clear.preference(key: TranscriptViewportKey.self, value: geo.size.height)
         }
     }
 
@@ -393,8 +482,8 @@ struct MeetingWorkspaceView: View {
             ? nil
             : meeting.transcript.firstIndex { !done.contains($0.id) }
         return VStack(alignment: .leading, spacing: 0) {
-            if meeting.transcript.isEmpty {
-                Text("尚无对话文字。录音不会被当作已转写；也可以先手动补充记录。")
+            if meeting.transcript.isEmpty && (store.streamDrafts[meeting.id]?.isEmpty ?? true) {
+                Text("尚无对话文字。录音不会被当作已转写。")
                     .font(WFType.body).foregroundStyle(WFColors.secondaryText)
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.horizontal, WFSpace.md)
@@ -405,21 +494,40 @@ struct MeetingWorkspaceView: View {
                 if index == boundary, let boundary, boundary > 0 {
                     pendingBoundary(meeting.transcript.count - meeting.summarizedLineCount)
                 }
-                transcriptRow(line)
+                transcriptRow(line,
+                              showsSpeaker: index == 0
+                                  || meeting.transcript[index - 1].speaker != line.speaker,
+                              inMinutes: done.contains(line.id))
+            }
+            ForEach((store.streamDrafts[meeting.id]?.values.map { $0 } ?? []).sorted { $0.offset < $1.offset }) { line in
+                VStack(alignment: .leading, spacing: WFSpace.xs) {
+                    Text("正在转写 · 草稿").font(WFType.caption).foregroundStyle(WFColors.secondaryText)
+                    transcriptRow(line)
+                }
+                .opacity(0.7)
+                .accessibilityLabel("实时转写草稿：\(line.text)")
             }
         }
     }
 
     /// 一条转写。时间与说话人各占一列、正文一列——分栏之后每栏只有一半宽，
     /// 「说话人+时刻」再单独占一行会把每条都撑成两行，扫读也看不出谁在什么时候说的。
-    /// 说话人为空时该列留空，读者靠留白就能看出「还是他」。
-    private func transcriptRow(_ line: MeetingTranscriptLine) -> some View {
+    ///
+    /// - `showsSpeaker`：**连续同一个人说话时，后面几行不再重复写名字**。列宽照占，
+    ///   所以正文仍然对齐，读者靠留白就能看出「还是他」。原来每条都写「李工」，
+    ///   连说四句就是四个「李工」，很吵。
+    /// - `inMinutes`：这一行**已经进了纪要**，左侧画一条 2pt 强调色竖线。
+    ///   原来只有那条横向分界线，一滚出屏幕就失了锚——这条竖线跟着行走，
+    ///   所以不靠滚动位置也能看出哪些进了纪要。
+    private func transcriptRow(_ line: MeetingTranscriptLine,
+                               showsSpeaker: Bool = true,
+                               inMinutes: Bool = false) -> some View {
         HStack(alignment: .top, spacing: WFSpace.sm) {
             Text(timestamp(line.offset))
                 .font(WFType.caption).foregroundStyle(WFColors.tertiaryText)
                 .monospacedDigit()
                 .frame(width: MeetingMetrics.timeColumn, alignment: .trailing)
-            Text(line.speaker)
+            Text(showsSpeaker ? line.speaker : "")
                 .font(WFType.caption).foregroundStyle(WFColors.secondaryText)
                 .lineLimit(1).truncationMode(.tail)
                 .frame(width: MeetingMetrics.speakerColumn, alignment: .leading)
@@ -431,6 +539,11 @@ struct MeetingWorkspaceView: View {
         }
         .padding(.horizontal, WFSpace.md)
         .padding(.vertical, WFSpace.xs)
+        .overlay(alignment: .leading) {
+            Rectangle()
+                .fill(inMinutes ? WFColors.accent : Color.clear)
+                .frame(width: MeetingMetrics.inMinutesBar)
+        }
     }
 
     /// 「以下 N 段尚未进入纪要」的分界线。
@@ -451,24 +564,6 @@ struct MeetingWorkspaceView: View {
         }
         .padding(.horizontal, WFSpace.md)
         .padding(.vertical, WFSpace.sm)
-    }
-
-    private var transcriptFooter: some View {
-        HStack(spacing: WFSpace.sm) {
-            TextField("记录者", text: $speaker)
-                .textFieldStyle(.roundedBorder).controlSize(.small)
-                .frame(width: MeetingMetrics.speakerField)
-                .accessibilityLabel("手动记录者")
-            TextField("手动补充对话（不是自动转写）", text: $manualText)
-                .textFieldStyle(.roundedBorder).controlSize(.small)
-                .onSubmit(appendManual)
-                .accessibilityLabel("手动补充对话")
-            Button("添加记录", action: appendManual)
-                .buttonStyle(.borderedProminent).controlSize(.small)
-                .disabled(manualText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-        }
-        .padding(.horizontal, WFSpace.md)
-        .frame(height: MeetingMetrics.columnFooterHeight)
     }
 
     // MARK: - 右栏：滚动纪要
@@ -552,6 +647,14 @@ struct MeetingWorkspaceView: View {
     // MARK: - 共用小件
 
     /// 两栏各自的表头：标题在左、进度在右，30pt。
+    ///
+    /// **不加底色。** 试过 `WFColors.secondarySurface`，两处都不成立，已回退：
+    /// ① 它是 `NSColor.controlBackgroundColor`，浅色外观下解出来就是**纯白**，
+    ///    和 `content` 的白底没有明度差——实测表头带像素 `(255,255,255)`，等于没加；
+    /// ② 全项目没有任何一页给表头带填色（侧栏/任务管理面板的 `sectionHeader` 都是
+    ///    纯文字 + 内边距），加了反而和自家不一致；
+    /// ③ 而且这一条本来就是我的误判——表头下面**已经有** `Divider()`（实测表头带
+    ///    下沿 y=212 处有一条 1px 灰线），并不「与正文糊在一起」。
     private func columnHeader(_ title: String, trailing: String? = nil) -> some View {
         HStack(spacing: WFSpace.sm) {
             Text(title).font(WFType.sectionSemibold)
@@ -571,28 +674,23 @@ struct MeetingWorkspaceView: View {
         return "\(total / 60):\(String(format: "%02d", total % 60))"
     }
 
-    private func appendManual() {
-        store.appendManual(manualText, speaker: speaker)
-        manualText = ""
-    }
-
     // MARK: - Pi 接入设置
 
     private var settings: some View {
         VStack(alignment: .leading, spacing: WFSpace.lg) {
             Text("Pi 会议接入").font(WFType.detailTitle)
-            Text("所有 AI 调用经过本机 Pi。更换模型不等于自动获得音频能力：还需要兼容的 Pi 音频扩展。")
+            Text("所有 AI 调用经过本机 Pi。转写与纪要共用下面这一个模型，因此它必须是百炼业务空间的实时模型。")
                 .font(WFType.body).foregroundStyle(WFColors.secondaryText)
             VStack(alignment: .leading, spacing: WFSpace.lg) {
                 settingField("Pi 可执行文件", placeholder: "Pi 可执行文件",
                              text: $store.configuration.executable)
-                settingField("模型标识（留空沿用 Pi 设置）", placeholder: "模型（留空使用 Pi 当前模型）",
+                settingField("模型标识（须为百炼实时模型）", placeholder: "留空沿用 Pi 当前模型",
                              text: $store.configuration.model)
                 settingField("Pi 音频扩展（可选覆盖）", placeholder: "留空使用内置 Pi 音频扩展",
                              text: $store.configuration.audioExtension)
             }
             .disabled(store.transcribing || store.updatingMinutes || store.recordingID != nil)
-            Text("默认使用内置 Pi 扩展，读取 Pi 中的 Qwen 实时模型和认证。可填写自定义扩展路径替换。音频不保存；讲话人标签仅在当前片段内区分，不保证跨片段为同一人。")
+            Text("默认使用内置 Pi 扩展：转写与纪要共用上面这一个模型，端点与认证由 Pi 提供；留空则沿用 Pi 当前模型，它同样必须是实时模型。可填写自定义扩展路径替换。音频不保存；讲话人标签仅在当前片段内区分，不保证跨片段为同一人。")
                 .font(WFType.caption).foregroundStyle(WFColors.secondaryText)
             HStack {
                 Spacer()
@@ -611,4 +709,16 @@ struct MeetingWorkspaceView: View {
             TextField(placeholder, text: text).accessibilityLabel(label)
         }
     }
+}
+
+/// 对话记录贴底跟随的两个量：内容底边在滚动区坐标里的位置，和视口高度。
+/// 相减小于阈值即视为贴底（见 `MeetingWorkspaceView.transcriptColumn`）。
+private struct TranscriptBottomKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
+}
+
+private struct TranscriptViewportKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
 }

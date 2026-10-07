@@ -30,7 +30,7 @@ final class MeetingStoreTests: XCTestCase {
     func testAlreadySummarizedLinesDoNotTriggerAnotherUpdate() async throws {
         let ai = MeetingAITestDouble()
         let store = MeetingStore(directory: try directory(), ai: ai, automaticallyUpdate: false)
-        store.create(); store.appendManual("已确认决定", speaker: "A")
+        store.create(); store.appendTranscriptForTesting("已确认决定", speaker: "A")
         store.updateMinutesNow(); try await waitForSummary(store)
         let previous = store.selected?.minutes
         store.updateMinutesNow(); try await waitForSummary(store)
@@ -57,13 +57,13 @@ final class MeetingStoreTests: XCTestCase {
     func testRollingMinutesOnlySendNewLinesAndKeepExistingMinutes() async throws {
         let ai = MeetingAITestDouble()
         let store = MeetingStore(directory: try directory(), ai: ai, automaticallyUpdate: false)
-        store.create(); store.appendManual("明确下周提交", speaker: "A")
+        store.create(); store.appendTranscriptForTesting("明确下周提交", speaker: "A")
         store.updateMinutesNow()
         for _ in 0..<100 {
             if await ai.calls().count > 0 { break }
             try await _Concurrency.Task.sleep(nanoseconds: 1_000_000)
         }
-        store.appendManual("期限改为周五", speaker: "B")
+        store.appendTranscriptForTesting("期限改为周五", speaker: "B")
         store.updateMinutesNow() // coalesces while first request is in flight
         try await waitForSummary(store)
         let calls = await ai.calls()
@@ -77,7 +77,7 @@ final class MeetingStoreTests: XCTestCase {
     func testSelectionChangeDoesNotWriteMinutesIntoAnotherMeeting() async throws {
         let store = MeetingStore(directory: try directory(), ai: MeetingAITestDouble(), automaticallyUpdate: false)
         store.create(); let first = try XCTUnwrap(store.selectedID)
-        store.appendManual("会议一的决议", speaker: "A"); store.updateMinutesNow()
+        store.appendTranscriptForTesting("会议一的决议", speaker: "A"); store.updateMinutesNow()
         store.create(); let second = try XCTUnwrap(store.selectedID)
         try await waitForSummary(store)
         XCTAssertTrue(store.meetings.first { $0.id == first }?.minutes.contains("会议一") == true)
@@ -87,11 +87,11 @@ final class MeetingStoreTests: XCTestCase {
     func testFailureKeepsOldMinutesAndRetryDoesNotLoseNewSpeech() async throws {
         let ai = MeetingAITestDouble()
         let store = MeetingStore(directory: try directory(), ai: ai, automaticallyUpdate: false)
-        store.create(); store.appendManual("旧决议", speaker: "A"); store.updateMinutesNow()
+        store.create(); store.appendTranscriptForTesting("旧决议", speaker: "A"); store.updateMinutesNow()
         try await waitForSummary(store)
         let previous = store.selected?.minutes
         await ai.failNext()
-        store.appendManual("新决议", speaker: "B"); store.updateMinutesNow()
+        store.appendTranscriptForTesting("新决议", speaker: "B"); store.updateMinutesNow()
         try await waitForSummary(store)
         XCTAssertEqual(store.selected?.minutes, previous)
         XCTAssertEqual(store.selected?.summarizedLineCount, 1)
@@ -107,7 +107,7 @@ final class MeetingStoreTests: XCTestCase {
         let ai = MeetingAITestDouble()
         let store = MeetingStore(directory: try directory(), ai: ai, automaticallyUpdate: false)
         store.create()
-        store.appendManual("原始发言", speaker: "A")
+        store.appendTranscriptForTesting("原始发言", speaker: "A")
 
         store.editMinutes("我手写的纪要")
         XCTAssertEqual(store.selected?.minutes, "我手写的纪要")
@@ -147,7 +147,7 @@ final class MeetingStoreTests: XCTestCase {
     func testPersistenceAndEmptyExtensionAreExplicit() async throws {
         let root = try directory()
         let store = MeetingStore(directory: root, ai: MeetingAITestDouble(), automaticallyUpdate: false)
-        store.create(); store.rename("项目例会"); store.appendManual("讨论预算", speaker: "手动记录")
+        store.create(); store.rename("项目例会"); store.appendTranscriptForTesting("讨论预算", speaker: "手动记录")
         await store.startRecording()
         XCTAssertFalse(store.audioConfigured)
         XCTAssertNotNil(store.error)

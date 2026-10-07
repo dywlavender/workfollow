@@ -23,6 +23,16 @@ enum MeetingMetrics {
     static let minFraction: CGFloat = 0.28
     static let maxFraction: CGFloat = 0.72
 
+    /// 转写栏的两种默认占比。**这是「相位」唯一的体现——只翻一个数字，不加控件、不加字段。**
+    ///
+    /// 用户原话：「过程中是转写重要，右边显示纪要」。所以：
+    /// - 录制中 `0.62`：转写是主角，纪要退到右侧持续积累；
+    /// - 其余时候 `0.5`：两栏对半（暂停与回看都走这一档）。
+    ///
+    /// 刻意**没做**「回看时反转为纪要为主」——用户明确要求回看保持现状（对半、可拖）。
+    static let recordingTranscriptFraction: CGFloat = 0.62
+    static let idleTranscriptFraction: CGFloat = 0.5
+
     /// 两栏各自的表头 / 底部操作行高度。与列表列的头部 44 分开算——
     /// 那一条横跨整页，这两条只在自己栏内。
     static let columnHeaderHeight: CGFloat = 30
@@ -33,6 +43,6 @@ enum MeetingMetrics {
     static let timeColumn: CGFloat = 34
     static let speakerColumn: CGFloat = 46
 
-    /// 底栏「记录者」输入框的宽度。四个汉字 + 内边距。
-    static let speakerField: CGFloat = 56
+    /// 已进纪要的转写行，左侧那条强调色竖线的宽度。跟着行走，所以滚出屏幕也不失锚。
+    static let inMinutesBar: CGFloat = 2
 }

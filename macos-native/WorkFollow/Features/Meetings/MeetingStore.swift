@@ -14,6 +14,7 @@ final class MeetingStore: ObservableObject, ModuleStoreFlushable {
     @Published private(set) var requestingPermission = false
     @Published private(set) var transcribing = false
     @Published private(set) var updatingMinutes = false
+    @Published private(set) var streamDrafts: [UUID: [String: MeetingTranscriptLine]] = [:]
     @Published var error: String?
     @Published var configuration = MeetingPiConfiguration() { didSet { save() } }
     private let persistence: JSONFileStore<Snapshot>
@@ -21,6 +22,10 @@ final class MeetingStore: ObservableObject, ModuleStoreFlushable {
     private let recorder = MeetingRecorder()
     private var permissionGeneration = 0
     private var audioTask: _Concurrency.Task<Void, Never>?
+    private var inputStream: (meetingID: UUID, session: any MeetingAudioStream)?
+    private var streamStopping = false
+    private var streamToken = UUID()
+    private var streamFinalIDs: Set<String> = []
     private var minutesTask: _Concurrency.Task<Void, Never>?
     private var pendingAudio: [(UUID, MeetingAudioPacket)] = []
     private var recordingOffset: TimeInterval = 0
@@ -80,7 +85,7 @@ final class MeetingStore: ObservableObject, ModuleStoreFlushable {
     func startRecording() async {
         guard recordingID == nil, !requestingPermission, let id = selectedID else { return }
         guard audioConfigured else { error = MeetingPiError.audioNotConfigured.localizedDescription; return }
-        guard audioTask == nil else { error = "正在处理最后一段音频，请稍后继续。"; return }
+        guard audioTask == nil, inputStream == nil else { error = "正在处理最后一段音频，请稍后继续。"; return }
         permissionGeneration += 1
         let generation = permissionGeneration
         requestingPermission = true; error = nil
@@ -101,30 +106,87 @@ final class MeetingStore: ObservableObject, ModuleStoreFlushable {
         do {
             blockedAudio.remove(id)
             recordingOffset = meeting.duration
-            try recorder.start(offset: recordingOffset)
+            requestingPermission = true
+            let streaming = try await connectInputStream(for: id, offset: recordingOffset)
+            guard generation == permissionGeneration else { closeInputStream(); return }
+            requestingPermission = false
+            try recorder.start(offset: recordingOffset, streaming: streaming)
             recordingID = id
-        } catch { self.error = "无法开始录音：\(error.localizedDescription)" }
+        } catch {
+            guard generation == permissionGeneration else { return }
+            requestingPermission = false; closeInputStream(); self.error = "无法开始录音：\(error.localizedDescription)"
+        }
     }
 
     func stopRecording() {
+        if requestingPermission && inputStream == nil { streamToken = UUID() }
         permissionGeneration += 1; requestingPermission = false
         let id = recordingID
         recordingID = nil
         recorder.stop()
+        if inputStream != nil { streamStopping = true; pumpAudio(); return }
         if let id, !blockedMinutes.contains(id) { pendingMinutes.insert(id); pumpMinutes() }
     }
 
-    /// Explicit manual notes are useful even before an audio-capable model is configured.
-    /// They are labelled as manual, never presented as automatic transcription.
-    func appendManual(_ text: String, speaker: String) {
+    /// Separate connection lifecycle from microphone capture; also permits deterministic transport tests.
+    func connectInputStream(for id: UUID, offset: Double) async throws -> Bool {
+        guard configuration.audioExtension.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              let client = ai as? any MeetingStreamingAIClient else { return false }
+        let token = UUID(); streamToken = token
+        let session = try await client.openStream(configuration: configuration, offset: offset) { [weak self] event in
+            guard let self, self.streamToken == token else { return }
+            self.receiveStreamEvent(event, meetingID: id)
+        }
+        guard streamToken == token else { session.cancel(); throw CancellationError() }
+        inputStream = (id, session); streamStopping = false; streamFinalIDs.removeAll(); transcribing = true
+        return true
+    }
+
+    private func closeInputStream() {
+        if let stream = inputStream { streamDrafts.removeValue(forKey: stream.meetingID); stream.session.cancel() }
+        inputStream = nil; streamToken = UUID(); streamStopping = false
+        if audioTask == nil { transcribing = false }
+    }
+
+    func receiveStreamEvent(_ event: MeetingStreamEvent, meetingID: UUID) {
+        guard inputStream?.meetingID == meetingID else { return }
+        if event.kind == "error" {
+            error = event.message ?? "Pi 流式转写失败。"
+            blockedAudio.insert(meetingID); pendingAudio.removeAll(); closeInputStream(); stopRecording(); return
+        }
+        guard let item = event.itemID, let text = event.text,
+              let offset = event.offset, offset.isFinite, offset >= 0, !streamFinalIDs.contains(item) else { return }
+        let previous = streamDrafts[meetingID]?[item]
+        let line = MeetingTranscriptLine(id: previous?.id ?? UUID(), speaker: "未区分", text: text, offset: offset)
+        if event.kind == "preview" {
+            streamDrafts[meetingID, default: [:]][item] = line
+        } else if event.kind == "final" {
+            streamFinalIDs.insert(item); streamDrafts[meetingID]?.removeValue(forKey: item)
+            if !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                change(meetingID) { $0.transcript.append(line); $0.transcript.sort { $0.offset < $1.offset } }
+            }
+        }
+    }
+
+    #if DEBUG
+    /// 测试缝：往当前会议塞一行转写。
+    ///
+    /// 原来这里是个产品能力 `appendManual`，给转写栏底部的「手动补充对话」输入框用。
+    /// 2026-10-06 用户明确不要这条路——**不录音就不该让 Pi 组织文字**，UI 与能力一并删掉。
+    ///
+    /// 之所以还留着这个方法：`change(_:_:)` 是 `private`、`meetings` 是 `private(set)`，
+    /// 测试没有别的入口造出转写数据，而「Pi 只总结新增行」这类行为必须喂进真实转写才测得动。
+    /// 只进 Debug 构建，不随发布版出去。
+    func appendTranscriptForTesting(_ text: String, speaker: String) {
         let value = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !value.isEmpty, let id = selectedID else { return }
         change(id) { meeting in
             meeting.transcript.append(MeetingTranscriptLine(
-                speaker: speaker.isEmpty ? "手动记录" : speaker, text: value,
+                speaker: speaker, text: value,
                 offset: TimeInterval(recordedSeconds(meeting))))
         }
     }
+    #endif
 
     func updateMinutesNow() {
         guard let id = selectedID else { return }
@@ -165,7 +227,7 @@ final class MeetingStore: ObservableObject, ModuleStoreFlushable {
     func receiveChunk(_ packet: MeetingAudioPacket, meetingID: UUID) {
         guard meetings.contains(where: { $0.id == meetingID }) else { return }
         change(meetingID) { $0.capturedDuration = max($0.duration, packet.offset + packet.duration) }
-        guard audioConfigured, !blockedAudio.contains(meetingID) else { return }
+        guard (inputStream?.meetingID == meetingID || audioConfigured), !blockedAudio.contains(meetingID) else { return }
         guard bufferedAudioBytes + packet.pcm.count <= Self.maximumAudioBytes else {
             blockedAudio.insert(meetingID)
             pendingAudio.removeAll()
@@ -177,16 +239,21 @@ final class MeetingStore: ObservableObject, ModuleStoreFlushable {
     }
 
     private func pumpAudio() {
-        guard audioTask == nil, !pendingAudio.isEmpty else { return }
+        guard audioTask == nil, !pendingAudio.isEmpty || streamStopping else { return }
         transcribing = true
         audioTask = _Concurrency.Task { [weak self] in
             guard let self else { return }
-            defer { self.audioTask = nil; self.transcribing = false; self.inFlightBytes = 0 }
+            defer { self.audioTask = nil; self.transcribing = self.inputStream != nil; self.inFlightBytes = 0 }
             while !self.pendingAudio.isEmpty {
                 let (id, packet) = self.pendingAudio.removeFirst()
                 self.inFlightBytes = packet.pcm.count
                 guard let meeting = self.meetings.first(where: { $0.id == id }) else { continue }
                 do {
+                    if let stream = self.inputStream, stream.meetingID == id {
+                        try await stream.session.append(packet)
+                        self.inFlightBytes = 0
+                        continue
+                    }
                     let lines = try await self.ai.transcribe(configuration: self.configuration,
                         packet: packet,
                         speakers: Array(Set(meeting.transcript.map(\.speaker))).sorted())
@@ -201,10 +268,20 @@ final class MeetingStore: ObservableObject, ModuleStoreFlushable {
                     self.error = error.localizedDescription
                     self.blockedAudio.insert(id)
                     self.pendingAudio.removeAll()
+                    self.closeInputStream()
                     self.stopRecording()
                     return
                 }
                 self.inFlightBytes = 0
+            }
+            if self.streamStopping, let stream = self.inputStream {
+                do {
+                    try await stream.session.finish()
+                    self.closeInputStream()
+                    if !self.blockedMinutes.contains(stream.meetingID) {
+                        self.pendingMinutes.insert(stream.meetingID); self.pumpMinutes()
+                    }
+                } catch { self.error = error.localizedDescription; self.closeInputStream() }
             }
         }
     }
@@ -248,5 +325,13 @@ final class MeetingStore: ObservableObject, ModuleStoreFlushable {
         mutation(&meetings[index]); save()
     }
     private func save() { persistence.schedule(Snapshot(meetings: meetings, configuration: configuration)) }
-    func flush(_ completion: @escaping (Error?) -> Void) { persistence.flush(completion) }
+    func flush(_ completion: @escaping (Error?) -> Void) {
+        if recordingID != nil { stopRecording() }
+        _Concurrency.Task { [self] in
+            while audioTask != nil || inputStream != nil {
+                try? await _Concurrency.Task.sleep(nanoseconds: 20_000_000)
+            }
+            persistence.flush(completion)
+        }
+    }
 }

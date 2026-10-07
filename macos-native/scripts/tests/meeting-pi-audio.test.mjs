@@ -6,7 +6,7 @@ import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {spawn} from 'node:child_process';
 import {once} from 'node:events';
-import extension, {validateAudio, realtimeURL, parseTranscript, runRealtime, meetingMinutesRules}
+import extension, {validateAudio, realtimeURL, parseTranscript, runRealtime, meetingMinutesRules, audioModel}
   from '../../WorkFollow/Resources/wf-meeting-audio.mjs';
 
 const moduleURL = new URL('../../WorkFollow/Resources/wf-meeting-audio.mjs', import.meta.url).href;
@@ -19,8 +19,8 @@ test('memory protocol rejects paths, malformed audio and mismatched duration', (
   for (const overrides of [{file:'/tmp/audio'}, {audio:'not base64!'}, {duration:10}, {channels:2}, {version:1}]) {
     assert.throws(() => validateAudio({...audio, ...overrides}));
   }
-  assert.equal(realtimeURL('https://test.cn-beijing.maas.aliyuncs.com/v1', 'qwen3.8-omni-flash-realtime'),
-    'wss://test.cn-beijing.maas.aliyuncs.com/api-ws/v1/realtime?model=qwen3.8-omni-flash-realtime');
+  assert.equal(realtimeURL('https://test.cn-beijing.maas.aliyuncs.com/v1', 'configured-realtime'),
+    'wss://test.cn-beijing.maas.aliyuncs.com/api-ws/v1/realtime?model=configured-realtime');
   assert.throws(() => realtimeURL('https://dashscope.aliyuncs.com', 'test'));
 });
 
@@ -50,25 +50,43 @@ test('digital silence returns no speech without calling a model', async () => {
   assert.equal(JSON.parse(notices[0][0].slice('WF_MEETING_RESULT '.length)).segments.length,0);
 });
 
-test('both minutes model paths load the canonical skill and preserve data input', async () => {
+test('minutes reuse the single configured model through the realtime text channel', async () => {
   const expected = meetingMinutesRules();
-  for (const realtimeModel of [true,false]) {
-    const commands=new Map(),notices=[];
-    extension({registerCommand:(name,command)=>commands.set(name,command)}, {
-      resolveAudioModel:async()=>({}),
-      realtime:async input=>{
-        assert.equal(input.instructions,expected);assert.equal(input.text,'fictional meeting data');return '# minutes';
+  const commands=new Map(),notices=[];
+  extension({registerCommand:(name,command)=>commands.set(name,command)}, {
+    resolveAudioModel:async()=>({}),
+    realtime:async input=>{
+      assert.equal(input.instructions,expected);assert.equal(input.text,'fictional meeting data');return '# minutes';
+    }
+  });
+  await commands.get('wf-meeting-minutes').handler(JSON.stringify({version:1,prompt:'fictional meeting data'}),{
+    model:{id:'configured-realtime'},
+    modelRegistry:{complete:async()=>assert.fail('Minutes must not fall back to chat-completions')},
+    ui:{notify:(...args)=>notices.push(args)}
+  });
+  assert.deepEqual(notices,[['WF_MEETING_MINUTES # minutes','info']]);
+});
+
+test('audio model follows the configured Pi model instead of a hardcoded id', async () => {
+  const asked=[];
+  const connection=await audioModel({
+    model:{id:'configured-realtime'},
+    modelRegistry:{
+      getAvailable:()=>assert.fail('Must not enumerate the registry for a hardcoded id'),
+      getApiKeyAndHeaders:async model=>{
+        asked.push(model.id);
+        return {ok:true,apiKey:'synthetic-key',headers:{},baseUrl:'https://test.cn-beijing.maas.aliyuncs.com/v1'};
       }
-    });
-    await commands.get('wf-meeting-minutes').handler(JSON.stringify({version:1,prompt:'fictional meeting data'}),{
-      model:{id:realtimeModel?'qwen3.8-omni-flash-realtime':'text-model'},
-      modelRegistry:{complete:async(_,input)=>{
-        assert.equal(input.systemPrompt,expected);assert.equal(input.messages[0].content[0].text,'fictional meeting data');
-        return {stopReason:'stop',content:[{type:'text',text:'# minutes'}]};
-      }},ui:{notify:(...args)=>notices.push(args)}
-    });
-    assert.deepEqual(notices,[['WF_MEETING_MINUTES # minutes','info']]);
-  }
+    }
+  });
+  assert.deepEqual(asked,['configured-realtime']);
+  assert.equal(connection.modelID,'configured-realtime');
+  assert.equal(connection.url,'wss://test.cn-beijing.maas.aliyuncs.com/api-ws/v1/realtime?model=configured-realtime');
+});
+
+test('a missing Pi model is an actionable error, not a silent fallback', async () => {
+  await assert.rejects(audioModel({modelRegistry:{getAvailable:()=>assert.fail('no hardcoded fallback')}}),
+    /Pi 未选择模型/);
 });
 
 const require = createRequire('/opt/homebrew/lib/node_modules/@earendil-works/pi-coding-agent/package.json');
@@ -139,7 +157,7 @@ test('installed Pi loads actual extension: PCM + realtime minutes through local 
   await writeFile(fixture, `import extension from ${JSON.stringify(moduleURL)};
     export default function(pi) {
       const wrapped = {registerCommand(name, command) {
-        pi.registerCommand(name, {...command, handler:(args,ctx)=>command.handler(args,{...ctx,model:{id:'qwen3.8-omni-flash-realtime'}})});
+        pi.registerCommand(name, {...command, handler:(args,ctx)=>command.handler(args,{...ctx,model:{id:'configured-realtime'}})});
       }};
       extension(wrapped, {resolveAudioModel:async()=>({url:${JSON.stringify(server.url)},apiKey:'synthetic-local-key'})});
     }`);

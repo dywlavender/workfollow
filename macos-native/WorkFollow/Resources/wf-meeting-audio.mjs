@@ -3,7 +3,6 @@ import { createRequire } from 'node:module';
 import { realpathSync, readFileSync, existsSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 
-const AUDIO_MODEL = 'qwen3.8-omni-flash-realtime';
 const MAX_BYTES = 60 * 32000;
 
 export function meetingMinutesRules() {
@@ -131,12 +130,21 @@ export function runRealtime({url, apiKey, headers = {}, pcm, instructions, text,
   });
 }
 
+/**
+ * 唯一模型来源：Pi 的当前模型（由 `--model` 指定，或 Pi 自己已选的那个）。
+ *
+ * 2026-10-06 用户决定「纪要和转写用同一个模型」：原先这里按硬编码 id
+ * `qwen3.8-omni-flash-realtime` 去注册表里找模型，现已删掉——模型改由会议设置里的
+ * 「模型标识」决定。代价是**该模型必须是百炼业务空间的实时模型**，否则
+ * `realtimeURL` 会直接拒绝，不再有内置兜底。
+ */
 export async function audioModel(ctx) {
-  const model = ctx.model?.id === AUDIO_MODEL ? ctx.model : ctx.modelRegistry.getAvailable().find(m => m.id === AUDIO_MODEL);
-  if (!model) throw new Error('Pi 中未配置 qwen3.8-omni-flash-realtime。');
+  const model = ctx.model;
+  if (!model?.id) throw new Error('Pi 未选择模型，请在会议设置里填写模型标识。');
   const auth = await ctx.modelRegistry.getApiKeyAndHeaders(model);
-  if (!auth.ok || !auth.apiKey) throw new Error('Pi 音频模型认证未配置。');
-  return {url: realtimeURL(auth.baseUrl ?? model.baseUrl, model.id), apiKey: auth.apiKey, headers: auth.headers};
+  if (!auth.ok || !auth.apiKey) throw new Error('Pi 模型认证未配置。');
+  return {url: realtimeURL(auth.baseUrl ?? model.baseUrl, model.id),
+    apiKey: auth.apiKey, headers: auth.headers, modelID: model.id};
 }
 
 export default function meetingAudioExtension(pi, {resolveAudioModel = audioModel, realtime = runRealtime} = {}) {
@@ -180,19 +188,12 @@ export default function meetingAudioExtension(pi, {resolveAudioModel = audioMode
         if (input.version !== 1 || typeof input.prompt !== 'string' || !input.prompt.trim()) {
           throw new Error('纪要请求无效。');
         }
-        let output;
         const rules = meetingMinutesRules();
-        if (!ctx.model || ctx.model.id === AUDIO_MODEL) {
-          output = await realtime({...await resolveAudioModel(ctx), text: input.prompt,
-            instructions: rules});
-        } else {
-          const result = await ctx.modelRegistry.complete(ctx.model, {
-            systemPrompt: rules,
-            messages: [{role: 'user', content: [{type: 'text', text: input.prompt}], timestamp: Date.now()}]
-          });
-          if (['error', 'aborted'].includes(result.stopReason)) throw new Error('Pi 纪要模型调用失败。');
-          output = result.content.filter(c => c.type === 'text').map(c => c.text).join('');
-        }
+        // 转写与纪要共用同一个模型，而它必须是实时模型；普通 chat-completions
+        // 调不动实时模型，所以纪要固定走同一实时会话的文本通道。
+        // 2026-10-06 起不再有 `modelRegistry.complete` 分支。
+        const output = await realtime({...await resolveAudioModel(ctx), text: input.prompt,
+          instructions: rules});
         if (!output.trim()) throw new Error('Pi 返回空纪要。');
         ctx.ui.notify('WF_MEETING_MINUTES ' + output, 'info');
       } catch (error) { ctx.ui.notify('WF_MEETING_ERROR ' + safeError(error), 'error'); }

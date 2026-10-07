@@ -1,0 +1,141 @@
+{
+  "version": 1,
+  "kind": "synthetic-two-voice-ASR",
+  "createdAt": "2026-10-06T14:05:48.340Z",
+  "recordingSaved": false,
+  "realHumanMeeting": false,
+  "persistentContext": false,
+  "expected": [
+    {
+      "speaker": "A",
+      "voice": "Tingting",
+      "text": "今天讨论项目交付。我建议下周五提交方案，预算暂定三千元。"
+    },
+    {
+      "speaker": "B",
+      "voice": "Eddy",
+      "text": "周五来不及，我建议改为下周一，预算改成两千五百元。"
+    },
+    {
+      "speaker": "A",
+      "voice": "Tingting",
+      "text": "同意，下周一提交，预算两千五百元。请小李整理清单。"
+    },
+    {
+      "speaker": "B",
+      "voice": "Eddy",
+      "text": "确认，我负责校对，小李整理清单，截止日期都是下周一。"
+    }
+  ],
+  "chunks": [
+    {
+      "offset": 0,
+      "duration": 5,
+      "expectedSpeakers": [
+        "A"
+      ],
+      "latencyMs": 1176,
+      "segments": [
+        {
+          "text": "今天讨论项目交付，我建议下周五提交方案。",
+          "start": 0.08,
+          "speaker": "片段 0.0s · 暂定讲话人1"
+        }
+      ]
+    },
+    {
+      "offset": 5,
+      "duration": 2.52,
+      "expectedSpeakers": [
+        "A"
+      ],
+      "latencyMs": 982,
+      "segments": [
+        {
+          "text": "预算暂定三千元。",
+          "start": 0.16,
+          "speaker": "片段 5.0s · 暂定讲话人1"
+        }
+      ]
+    },
+    {
+      "offset": 7.52,
+      "duration": 3.15,
+      "expectedSpeakers": [
+        "B"
+      ],
+      "latencyMs": 1086,
+      "segments": [
+        {
+          "text": "周五来不及，我建议改为下周一。",
+          "start": 0.16,
+          "speaker": "片段 7.5s · 暂定讲话人1"
+        }
+      ]
+    },
+    {
+      "offset": 10.67,
+      "duration": 2.39,
+      "expectedSpeakers": [
+        "B"
+      ],
+      "latencyMs": 940,
+      "segments": [
+        {
+          "text": "预算改成2500元。",
+          "start": 0.08,
+          "speaker": "片段 10.7s · 暂定讲话人1"
+        }
+      ]
+    },
+    {
+      "offset": 13.06,
+      "duration": 3.07,
+      "expectedSpeakers": [
+        "B",
+        "A"
+      ],
+      "latencyMs": 1067,
+      "segments": [
+        {
+          "text": "同意，下周一提交。",
+          "start": 0.48,
+          "speaker": "片段 13.1s · 暂定讲话人1"
+        }
+      ]
+    }
+  ],
+  "duration": 27.094375,
+  "voiceRanges": [
+    {
+      "speaker": "A",
+      "start": 0,
+      "end": 7.4328125
+    },
+    {
+      "speaker": "B",
+      "start": 7.6828125,
+      "end": 13.351624999999999
+    },
+    {
+      "speaker": "A",
+      "start": 13.601624999999999,
+      "end": 20.474625
+    },
+    {
+      "speaker": "B",
+      "start": 20.724625,
+      "end": 26.844375
+    }
+  ],
+  "segmentation": "native-quiet-boundary-2-to-5s",
+  "syntheticModelText": [
+    "{\"version\":1,\"segments\":[{\"speaker\":\"讲话人1\",\"text\":\"今天讨论项目交付，我建议下周五提交方案。\",\"start\":0.08}]}",
+    "{\"version\": 1, \"segments\": [{\"speaker\": \"讲话人1\", \"text\": \"预算暂定三千元。\", \"start\": 0.16}]}",
+    "{\"version\": 1, \"segments\": [{\"speaker\": \"讲话人1\", \"text\": \"周五来不及，我建议改为下周一。\", \"start\": 0.16}]}",
+    "{\"version\": 1, \"segments\": [{\"speaker\": \"讲话人1\", \"text\": \"预算改成2500元。\", \"start\": 0.08}]}",
+    "{\"version\": 1, \"segments\": [{\"speaker\": \"讲话人1\", \"text\": \"同意，下周一提交。\", \"start\": 0.48}]}",
+    "{\"version\": 1, \"segments\": [{\"speaker\": \"讲话人1\", \"text\": \"预算两千五百元，请小李整理清单。\"}]}"
+  ],
+  "error": "转写结果不符合会议协议。"
+}

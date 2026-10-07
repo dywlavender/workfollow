@@ -57,7 +57,8 @@ private struct MeetingSpeechFixture {
     @MainActor static func main() async throws {
         if CommandLine.arguments.contains("--segment") {
             let pcm = FileHandle.standardInput.readDataToEndOfFile()
-            var accumulator = MeetingPCMAccumulator(preferSpeechBoundaries: true)
+            var accumulator = MeetingPCMAccumulator(preferSpeechBoundaries: true,
+                speechBoundaryPolicy: CommandLine.arguments.contains("--responsive") ? .responsive : .contextual)
             var packets = accumulator.append(pcm)
             if let tail = accumulator.finish() { packets.append(tail) }
             let result = packets.map { PacketResult(offset: $0.offset, duration: $0.duration, audio: $0.pcm.base64EncodedString()) }

@@ -21,8 +21,10 @@
 #   scripts/run-tests.sh QuickAddCompositionTests GlobalQuickAddTests
 #   scripts/run-tests.sh "QuickAddCompositionTests,GlobalQuickAddTests"   # 等价
 #
-# ⚠️ 类名是**子串匹配**（`-XCTest` 的语义），所以写 `MeetingStore` 会把
-# `MeetingStoreTests` 一并选中；想精确到某个类，用完整类名。
+# ⚠️ 类名**必须写全**——`-XCTest` 不认子串，也不认前缀。2026-10-07 实测：
+# `Meeting`、`MeetingStore` 两种写法都得到 "Executed 0 tests" 且 exit 0
+# （**看起来像全绿**），只有 `MeetingStoreTests` 才真的跑起来。别用简称。
+# （本文件上一版这里写的是「子串匹配」，是错的，已改。）
 #
 # ⚠️ `NativeResourceLinkTests` 在 `xcrun xctest` 宿主下会 `Abort trap: 6`
 # （`bundleProxyForCurrentProcess is nil: mainBundle.bundleURL .../usr/bin/`），

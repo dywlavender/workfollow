@@ -89,7 +89,7 @@ private final class MeetingPiProcess: @unchecked Sendable {
         child.executableURL = URL(fileURLWithPath: configuration.executable)
         child.arguments = ["--mode", "rpc", "--no-session", "--no-tools", "--no-extensions",
                            "--no-skills", "--no-prompt-templates", "--no-context-files", "--offline"]
-        if !configuration.model.isEmpty { child.arguments! += ["--model", configuration.model] }
+        if !configuration.resolvedModel.isEmpty { child.arguments! += ["--model", configuration.resolvedModel] }
         if audio { child.arguments! += ["--extension", configuration.resolvedAudioExtension] }
         else {
             guard let skill = Bundle.main.url(forResource: "SKILL", withExtension: "md") else {

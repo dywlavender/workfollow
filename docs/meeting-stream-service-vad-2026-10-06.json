@@ -1,0 +1,349 @@
+{
+  "kind": "Pi-paced-input-stream",
+  "synthetic": true,
+  "audioSaved": false,
+  "expected": [
+    {
+      "speaker": "A",
+      "voice": "Tingting",
+      "text": "今天讨论项目交付，确认下周一提交。"
+    },
+    {
+      "speaker": "B",
+      "voice": "Eddy",
+      "text": "同意，预算两千五百元，我负责校对。"
+    }
+  ],
+  "duration": 10.335125,
+  "events": [
+    {
+      "kind": "preview",
+      "itemID": "item_Gbtoj7PoRYfADPBnIc6pM",
+      "text": "今天",
+      "offset": 0,
+      "elapsedMs": 490
+    },
+    {
+      "kind": "preview",
+      "itemID": "item_Gbtoj7PoRYfADPBnIc6pM",
+      "text": "今天。",
+      "offset": 0,
+      "elapsedMs": 497
+    },
+    {
+      "kind": "preview",
+      "itemID": "item_Gbtoj7PoRYfADPBnIc6pM",
+      "text": "今天讨论",
+      "offset": 0,
+      "elapsedMs": 1490
+    },
+    {
+      "kind": "preview",
+      "itemID": "item_Gbtoj7PoRYfADPBnIc6pM",
+      "text": "今天讨论像",
+      "offset": 0,
+      "elapsedMs": 1495
+    },
+    {
+      "kind": "preview",
+      "itemID": "item_Gbtoj7PoRYfADPBnIc6pM",
+      "text": "今天讨论像。",
+      "offset": 0,
+      "elapsedMs": 1501
+    },
+    {
+      "kind": "preview",
+      "itemID": "item_Gbtoj7PoRYfADPBnIc6pM",
+      "text": "今天讨论项目",
+      "offset": 0,
+      "elapsedMs": 2277
+    },
+    {
+      "kind": "preview",
+      "itemID": "item_Gbtoj7PoRYfADPBnIc6pM",
+      "text": "今天讨论项目交付",
+      "offset": 0,
+      "elapsedMs": 2285
+    },
+    {
+      "kind": "preview",
+      "itemID": "item_Gbtoj7PoRYfADPBnIc6pM",
+      "text": "今天讨论项目交付。",
+      "offset": 0,
+      "elapsedMs": 2289
+    },
+    {
+      "kind": "preview",
+      "itemID": "item_Gbtoj7PoRYfADPBnIc6pM",
+      "text": "今天讨论项目交付，",
+      "offset": 0,
+      "elapsedMs": 4294
+    },
+    {
+      "kind": "preview",
+      "itemID": "item_Gbtoj7PoRYfADPBnIc6pM",
+      "text": "今天讨论项目交付，确认",
+      "offset": 0,
+      "elapsedMs": 4298
+    },
+    {
+      "kind": "preview",
+      "itemID": "item_Gbtoj7PoRYfADPBnIc6pM",
+      "text": "今天讨论项目交付，确认下",
+      "offset": 0,
+      "elapsedMs": 4304
+    },
+    {
+      "kind": "preview",
+      "itemID": "item_Gbtoj7PoRYfADPBnIc6pM",
+      "text": "今天讨论项目交付，确认下周一",
+      "offset": 0,
+      "elapsedMs": 4310
+    },
+    {
+      "kind": "preview",
+      "itemID": "item_Gbtoj7PoRYfADPBnIc6pM",
+      "text": "今天讨论项目交付，确认下周一提",
+      "offset": 0,
+      "elapsedMs": 4316
+    },
+    {
+      "kind": "preview",
+      "itemID": "item_Gbtoj7PoRYfADPBnIc6pM",
+      "text": "今天讨论项目交付，确认下周一提。",
+      "offset": 0,
+      "elapsedMs": 4321
+    },
+    {
+      "kind": "preview",
+      "itemID": "item_Gbtoj7PoRYfADPBnIc6pM",
+      "text": "今天讨论项目交付，确认下周一提交",
+      "offset": 0,
+      "elapsedMs": 5317
+    },
+    {
+      "kind": "preview",
+      "itemID": "item_Gbtoj7PoRYfADPBnIc6pM",
+      "text": "今天讨论项目交付，确认下周一提交。",
+      "offset": 0,
+      "elapsedMs": 5320
+    },
+    {
+      "kind": "final",
+      "itemID": "item_Gbtoj7PoRYfADPBnIc6pM",
+      "text": "今天讨论项目交付，确认下周一提交。",
+      "offset": 0,
+      "elapsedMs": 5326
+    },
+    {
+      "kind": "preview",
+      "itemID": "item_OfFWJELwvJ9zlsbQG3iG8",
+      "text": "从",
+      "offset": 5.1,
+      "elapsedMs": 5750
+    },
+    {
+      "kind": "preview",
+      "itemID": "item_OfFWJELwvJ9zlsbQG3iG8",
+      "text": "从。",
+      "offset": 5.1,
+      "elapsedMs": 5754
+    },
+    {
+      "kind": "preview",
+      "itemID": "item_OfFWJELwvJ9zlsbQG3iG8",
+      "text": "从一",
+      "offset": 5.1,
+      "elapsedMs": 6503
+    },
+    {
+      "kind": "preview",
+      "itemID": "item_OfFWJELwvJ9zlsbQG3iG8",
+      "text": "从一运输",
+      "offset": 5.1,
+      "elapsedMs": 6508
+    },
+    {
+      "kind": "preview",
+      "itemID": "item_OfFWJELwvJ9zlsbQG3iG8",
+      "text": "从一运输。",
+      "offset": 5.1,
+      "elapsedMs": 6513
+    },
+    {
+      "kind": "preview",
+      "itemID": "item_OfFWJELwvJ9zlsbQG3iG8",
+      "text": "同意",
+      "offset": 5.1,
+      "elapsedMs": 7271
+    },
+    {
+      "kind": "preview",
+      "itemID": "item_OfFWJELwvJ9zlsbQG3iG8",
+      "text": "同意预算",
+      "offset": 5.1,
+      "elapsedMs": 7276
+    },
+    {
+      "kind": "preview",
+      "itemID": "item_OfFWJELwvJ9zlsbQG3iG8",
+      "text": "同意预算两千",
+      "offset": 5.1,
+      "elapsedMs": 7281
+    },
+    {
+      "kind": "preview",
+      "itemID": "item_OfFWJELwvJ9zlsbQG3iG8",
+      "text": "同意预算两千。",
+      "offset": 5.1,
+      "elapsedMs": 7287
+    },
+    {
+      "kind": "preview",
+      "itemID": "item_OfFWJELwvJ9zlsbQG3iG8",
+      "text": "同意预算两千五百",
+      "offset": 5.1,
+      "elapsedMs": 9280
+    },
+    {
+      "kind": "preview",
+      "itemID": "item_OfFWJELwvJ9zlsbQG3iG8",
+      "text": "同意预算两千五百元",
+      "offset": 5.1,
+      "elapsedMs": 9283
+    },
+    {
+      "kind": "preview",
+      "itemID": "item_OfFWJELwvJ9zlsbQG3iG8",
+      "text": "同意预算两千五百元，",
+      "offset": 5.1,
+      "elapsedMs": 9287
+    },
+    {
+      "kind": "preview",
+      "itemID": "item_OfFWJELwvJ9zlsbQG3iG8",
+      "text": "同意预算两千五百元，我",
+      "offset": 5.1,
+      "elapsedMs": 9293
+    },
+    {
+      "kind": "preview",
+      "itemID": "item_OfFWJELwvJ9zlsbQG3iG8",
+      "text": "同意预算两千五百元，我负责",
+      "offset": 5.1,
+      "elapsedMs": 9299
+    },
+    {
+      "kind": "preview",
+      "itemID": "item_OfFWJELwvJ9zlsbQG3iG8",
+      "text": "同意预算两千五百元，我负责校",
+      "offset": 5.1,
+      "elapsedMs": 9307
+    },
+    {
+      "kind": "preview",
+      "itemID": "item_OfFWJELwvJ9zlsbQG3iG8",
+      "text": "同意预算两千五百元，我负责校对",
+      "offset": 5.1,
+      "elapsedMs": 9314
+    },
+    {
+      "kind": "preview",
+      "itemID": "item_OfFWJELwvJ9zlsbQG3iG8",
+      "text": "同意预算两千五百元，我负责校对。",
+      "offset": 5.1,
+      "elapsedMs": 9316
+    },
+    {
+      "kind": "preview",
+      "itemID": "item_OfFWJELwvJ9zlsbQG3iG8",
+      "text": "同意，",
+      "offset": 5.1,
+      "elapsedMs": 9999
+    },
+    {
+      "kind": "preview",
+      "itemID": "item_OfFWJELwvJ9zlsbQG3iG8",
+      "text": "同意，预算",
+      "offset": 5.1,
+      "elapsedMs": 10005
+    },
+    {
+      "kind": "preview",
+      "itemID": "item_OfFWJELwvJ9zlsbQG3iG8",
+      "text": "同意，预算两千",
+      "offset": 5.1,
+      "elapsedMs": 10010
+    },
+    {
+      "kind": "preview",
+      "itemID": "item_OfFWJELwvJ9zlsbQG3iG8",
+      "text": "同意，预算两千五百",
+      "offset": 5.1,
+      "elapsedMs": 10016
+    },
+    {
+      "kind": "preview",
+      "itemID": "item_OfFWJELwvJ9zlsbQG3iG8",
+      "text": "同意，预算两千五百元",
+      "offset": 5.1,
+      "elapsedMs": 10023
+    },
+    {
+      "kind": "preview",
+      "itemID": "item_OfFWJELwvJ9zlsbQG3iG8",
+      "text": "同意，预算两千五百元，",
+      "offset": 5.1,
+      "elapsedMs": 10028
+    },
+    {
+      "kind": "preview",
+      "itemID": "item_OfFWJELwvJ9zlsbQG3iG8",
+      "text": "同意，预算两千五百元，我",
+      "offset": 5.1,
+      "elapsedMs": 10034
+    },
+    {
+      "kind": "preview",
+      "itemID": "item_OfFWJELwvJ9zlsbQG3iG8",
+      "text": "同意，预算两千五百元，我负责",
+      "offset": 5.1,
+      "elapsedMs": 10042
+    },
+    {
+      "kind": "preview",
+      "itemID": "item_OfFWJELwvJ9zlsbQG3iG8",
+      "text": "同意，预算两千五百元，我负责校",
+      "offset": 5.1,
+      "elapsedMs": 10045
+    },
+    {
+      "kind": "preview",
+      "itemID": "item_OfFWJELwvJ9zlsbQG3iG8",
+      "text": "同意，预算两千五百元，我负责校对",
+      "offset": 5.1,
+      "elapsedMs": 10051
+    },
+    {
+      "kind": "preview",
+      "itemID": "item_OfFWJELwvJ9zlsbQG3iG8",
+      "text": "同意，预算两千五百元，我负责校对。",
+      "offset": 5.1,
+      "elapsedMs": 10057
+    },
+    {
+      "kind": "final",
+      "itemID": "item_OfFWJELwvJ9zlsbQG3iG8",
+      "text": "同意，预算两千五百元，我负责校对。",
+      "offset": 5.1,
+      "elapsedMs": 10065
+    }
+  ],
+  "firstPreviewMs": 490,
+  "finalText": "今天讨论项目交付，确认下周一提交。同意，预算两千五百元，我负责校对。",
+  "checks": {
+    "previewBeforeCaptureEnds": true,
+    "hasFinalText": true,
+    "noModelResponseJSONRequired": true
+  }
+}

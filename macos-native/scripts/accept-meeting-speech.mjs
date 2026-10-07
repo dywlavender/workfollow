@@ -31,7 +31,7 @@ async function render(args=[], input=JSON.stringify(lines)) {
 
 class PiAcceptance {
   constructor() {
-    const extension=fileURLToPath(new URL(persistent?'./tests/meeting-persistent-experiment.mjs':
+    const extension=fileURLToPath(new URL(process.argv.includes('--diagnostic')?'./tests/meeting-speech-diagnostic.mjs':persistent?'./tests/meeting-persistent-experiment.mjs':
       '../WorkFollow/Resources/wf-meeting-audio.mjs',import.meta.url));
     this.child=spawn('/opt/homebrew/bin/pi',['--mode','rpc','--no-session','--no-tools','--no-extensions',
       '--no-skills','--no-prompt-templates','--no-context-files','--offline','--extension',extension],
@@ -42,6 +42,9 @@ class PiAcceptance {
       while((end=this.buffer.indexOf('\n'))>=0){
         const line=this.buffer.slice(0,end);this.buffer=this.buffer.slice(end+1);
         let event;try{event=JSON.parse(line);}catch{continue;}
+        if(event.type==='extension_ui_request'&&event.message?.startsWith('WF_MEETING_SYNTHETIC_OUTPUT ')) {
+          (report.syntheticModelText??=[]).push(event.message.slice('WF_MEETING_SYNTHETIC_OUTPUT '.length));
+        }
         const pending=this.pending;if(!pending)continue;
         if(event.type==='extension_ui_request'&&event.message?.startsWith(pending.prefix)){
           this.settle(null,event.message.slice(pending.prefix.length));
@@ -96,11 +99,12 @@ try{
   });
   const fixed=process.argv.includes('--fixed');
   const single=process.argv.includes('--single');
-  report.segmentation=single?'single-audio-speaker-probe':fixed?'fixed-15s':'native-quiet-boundary-10-to-20s';
+  const responsive=process.argv.includes('--responsive');
+  report.segmentation=single?'single-audio-speaker-probe':fixed?'fixed-15s':responsive?'native-quiet-boundary-2-to-5s':'native-quiet-boundary-10-to-20s';
   const packets=single?[{offset:0,duration:pcm.length/32000,audio:pcm.toString('base64')}]:fixed?Array.from({length:Math.ceil(pcm.length/(15*32000))},(_,i)=>{
     const packet=pcm.subarray(i*15*32000,(i+1)*15*32000);
     return {offset:i*15,duration:packet.length/32000,audio:packet.toString('base64')};
-  }):await render(['--segment'],pcm);
+  }):await render(['--segment',...(responsive?['--responsive']:[])],pcm);
   console.log('内存双声线测试音已生成：'+report.duration.toFixed(2)+' 秒。');
   pi=new PiAcceptance();
   await pi.request('/wf-meeting-check','WF_MEETING_READY ');

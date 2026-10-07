@@ -1,0 +1,218 @@
+{
+  "version": 1,
+  "kind": "synthetic-two-voice-ASR",
+  "createdAt": "2026-10-06T14:03:43.200Z",
+  "recordingSaved": false,
+  "realHumanMeeting": false,
+  "persistentContext": false,
+  "expected": [
+    {
+      "speaker": "A",
+      "voice": "Tingting",
+      "text": "今天讨论项目交付。我建议下周五提交方案，预算暂定三千元。"
+    },
+    {
+      "speaker": "B",
+      "voice": "Eddy",
+      "text": "周五来不及，我建议改为下周一，预算改成两千五百元。"
+    },
+    {
+      "speaker": "A",
+      "voice": "Tingting",
+      "text": "同意，下周一提交，预算两千五百元。请小李整理清单。"
+    },
+    {
+      "speaker": "B",
+      "voice": "Eddy",
+      "text": "确认，我负责校对，小李整理清单，截止日期都是下周一。"
+    }
+  ],
+  "chunks": [
+    {
+      "offset": 0,
+      "duration": 5,
+      "expectedSpeakers": [
+        "A"
+      ],
+      "latencyMs": 1149,
+      "segments": [
+        {
+          "text": "今天讨论项目交付，我建议下周五提交方案。",
+          "start": 0,
+          "speaker": "片段 0.0s · 暂定讲话人1"
+        }
+      ]
+    },
+    {
+      "offset": 5,
+      "duration": 2.52,
+      "expectedSpeakers": [
+        "A"
+      ],
+      "latencyMs": 978,
+      "segments": [
+        {
+          "text": "预算暂定三千元。",
+          "start": 0.16,
+          "speaker": "片段 5.0s · 暂定讲话人1"
+        }
+      ]
+    },
+    {
+      "offset": 7.52,
+      "duration": 3.15,
+      "expectedSpeakers": [
+        "B"
+      ],
+      "latencyMs": 1047,
+      "segments": [
+        {
+          "text": "周五来不及，我建议改为下周一。",
+          "start": 0.16,
+          "speaker": "片段 7.5s · 暂定讲话人1"
+        }
+      ]
+    },
+    {
+      "offset": 10.67,
+      "duration": 2.39,
+      "expectedSpeakers": [
+        "B"
+      ],
+      "latencyMs": 978,
+      "segments": [
+        {
+          "text": "预算改成2500元。",
+          "start": 0.08,
+          "speaker": "片段 10.7s · 暂定讲话人1"
+        }
+      ]
+    },
+    {
+      "offset": 13.06,
+      "duration": 3.07,
+      "expectedSpeakers": [
+        "B",
+        "A"
+      ],
+      "latencyMs": 1040,
+      "segments": [
+        {
+          "text": "同意，下周一提交。",
+          "start": 0.48,
+          "speaker": "片段 13.1s · 暂定讲话人1"
+        }
+      ]
+    },
+    {
+      "offset": 16.13,
+      "duration": 4.43,
+      "expectedSpeakers": [
+        "A"
+      ],
+      "latencyMs": 1024,
+      "segments": [
+        {
+          "text": "预算两千五百元，请小李整理清单。",
+          "start": 0,
+          "speaker": "片段 16.1s · 暂定讲话人1"
+        }
+      ]
+    },
+    {
+      "offset": 20.56,
+      "duration": 2.17,
+      "expectedSpeakers": [
+        "B"
+      ],
+      "latencyMs": 995,
+      "segments": [
+        {
+          "text": "确认。我负责校对。",
+          "start": 0.16,
+          "speaker": "片段 20.6s · 暂定讲话人1"
+        }
+      ]
+    },
+    {
+      "offset": 22.729999999999997,
+      "duration": 3.85,
+      "expectedSpeakers": [
+        "B"
+      ],
+      "latencyMs": 1003,
+      "segments": [
+        {
+          "text": "小雨整理清单，截止日期都是下周一。",
+          "start": 0.08,
+          "speaker": "片段 22.7s · 暂定讲话人1"
+        }
+      ]
+    },
+    {
+      "offset": 26.58,
+      "duration": 0.514375,
+      "expectedSpeakers": [
+        "B"
+      ],
+      "latencyMs": 1,
+      "segments": []
+    }
+  ],
+  "duration": 27.094375,
+  "voiceRanges": [
+    {
+      "speaker": "A",
+      "start": 0,
+      "end": 7.4328125
+    },
+    {
+      "speaker": "B",
+      "start": 7.6828125,
+      "end": 13.351624999999999
+    },
+    {
+      "speaker": "A",
+      "start": 13.601624999999999,
+      "end": 20.474625
+    },
+    {
+      "speaker": "B",
+      "start": 20.724625,
+      "end": 26.844375
+    }
+  ],
+  "segmentation": "native-quiet-boundary-2-to-5s",
+  "syntheticModelText": [
+    "{\"version\": 1, \"segments\": [{\"speaker\": \"讲话人1\", \"text\": \"今天讨论项目交付，我建议下周五提交方案。\", \"start\": 0.0}]}",
+    "{\"version\": 1, \"segments\": [{\"speaker\": \"讲话人1\", \"text\": \"预算暂定三千元。\", \"start\": 0.16}]}",
+    "{\"version\": 1, \"segments\": [{\"speaker\": \"讲话人1\", \"text\": \"周五来不及，我建议改为下周一。\", \"start\": 0.16}]}",
+    "{\"version\": 1, \"segments\": [{\"speaker\": \"讲话人1\", \"text\": \"预算改成2500元。\", \"start\": 0.08}]}",
+    "{\"version\": 1, \"segments\": [{\"speaker\": \"讲话人1\", \"text\": \"同意，下周一提交。\", \"start\": 0.48}]}",
+    "{\"version\": 1, \"segments\": [{\"speaker\": \"讲话人1\", \"text\": \"预算两千五百元，请小李整理清单。\", \"start\": 0.0}]}",
+    "{\"version\": 1, \"segments\": [{\"speaker\": \"讲话人1\", \"text\": \"确认。我负责校对。\", \"start\": 0.16}]}",
+    "{\"version\": 1, \"segments\": [{\"speaker\": \"讲话人1\", \"text\": \"小雨整理清单，截止日期都是下周一。\", \"start\": 0.08}]}"
+  ],
+  "transcript": "今天讨论项目交付，我建议下周五提交方案。预算暂定三千元。周五来不及，我建议改为下周一。预算改成2500元。同意，下周一提交。预算两千五百元，请小李整理清单。确认。我负责校对。小雨整理清单，截止日期都是下周一。",
+  "characterErrorRate": 0.010869565217391304,
+  "speakerLabels": [
+    "片段 0.0s · 暂定讲话人1",
+    "片段 5.0s · 暂定讲话人1",
+    "片段 7.5s · 暂定讲话人1",
+    "片段 10.7s · 暂定讲话人1",
+    "片段 13.1s · 暂定讲话人1",
+    "片段 16.1s · 暂定讲话人1",
+    "片段 20.6s · 暂定讲话人1",
+    "片段 22.7s · 暂定讲话人1"
+  ],
+  "crossChunkSpeakerConsistencyVerified": false,
+  "minutes": "# 滚动会议纪要\n\n## 讨论要点\n- 片段 0.0s · 暂定讲话人1：建议下周五提交方案。\n- 片段 5.0s · 暂定讲话人1：预算暂定三千元。\n- 片段 7.5s · 暂定讲话人1：认为周五来不及，建议改为下周一。\n- 片段 10.7s · 暂定讲话人1：提出预算改成2500元。\n- 片段 13.1s · 暂定讲话人1：同意下周一提交。\n- 片段 16.1s · 暂定讲话人1：确认预算两千五百元，并请小李整理清单。\n- 片段 20.6s · 暂定讲话人1：确认，并自称负责校对。\n- 片段 22.7s · 暂定讲话人1：小雨整理清单，截止日期都是下周一。\n\n## 已确认决定\n- 提交时间：下周一提交。来源：片段 13.1s · 暂定讲话人1。\n- 预算：2500元（两千五百元）。来源：片段 10.7s · 暂定讲话人1、片段 16.1s · 暂定讲话人1。\n- 清单整理：由小雨负责，截止下周一。来源：片段 22.7s · 暂定讲话人1。该结论更新片段 16.1s · 暂定讲话人1 中“请小李整理清单”的旧表述。\n- 校对：片段 20.6s · 暂定讲话人1 表示“我负责校对”；该“我”的真实身份待确认。\n\n## 行动项\n| 事项 | 负责人 | 期限 | 来源 |\n|---|---|---|---|\n| 提交方案 | 待确认 | 下周一 | 片段 13.1s · 暂定讲话人1 |\n| 整理清单 | 小雨 | 下周一 | 片段 22.7s · 暂定讲话人1 |\n| 校对 | 待确认（片段 20.6s · 暂定讲话人1 自称“我负责校对”，真实身份未明确） | 待确认 | 片段 20.6s · 暂定讲话人1 |\n\n## 待确认事项\n- 方案提交的负责人待确认。\n- 校对的负责人真实身份及期限待确认。\n- “下周一”的具体日历日期未在转写中明确。",
+  "checks": {
+    "transcriptCERBelow10Percent": true,
+    "finalDeadlinePreserved": true,
+    "finalBudgetPreserved": true,
+    "timestampsWithinAudio": true,
+    "withinChunkSpeakerCountFitsFixture": false,
+    "withinChunkObservedSpeakerMappingsDoNotConflict": false
+  }
+}

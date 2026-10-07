@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>会议纪要页 · 布局候选 2026-10-06</title>
+<style>
+:root{
+  --color-background-primary:#FFFFFF;
+  --color-background-secondary:#F7F7F7;
+  --color-background-tertiary:#F2F2F2;
+  --color-text-primary:#1C1C1E;
+  --color-text-secondary:#6E6E73;
+  --color-text-tertiary:#9A9A9E;
+  --color-border-tertiary:rgba(0,0,0,0.15);
+}
+*{box-sizing:border-box}
+body{margin:0;padding:30px 24px 40px;background:#FBFBFC;
+  font-family:-apple-system,"SF Pro Text","PingFang SC",system-ui,sans-serif;
+  color:#1C1C1E;-webkit-font-smoothing:antialiased}
+.wrap{max-width:680px;margin:0 auto}
+h1{font-size:15px;font-weight:500;margin:0 0 6px}
+.sub{font-size:12px;color:#6E6E73;line-height:1.6;margin:0 0 30px}
+h2{font-size:14px;font-weight:500;margin:30px 0 6px}
+h2:first-of-type{margin-top:0}
+.note{font-size:11px;color:#9A9A9E;line-height:1.65;margin:8px 0 0}
+.lab{font-size:12px;color:#6E6E73;margin:0 0 8px}
+.panel{background:#fff;border:0.5px solid #E8E8E8;border-radius:10px;padding:5px}
+.panel-hi{background:#fff;border:1.5px solid #5B5CEB;border-radius:10px;padding:5px}
+.row{padding:8px 10px;border-radius:6px}
+.row-sel{background:#F2F2F2}
+.rline{height:0.5px;background:#F4F4F4;margin:0 10px}
+.t{font-size:12px;font-weight:500;color:#1C1C1E;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.m{font-size:11px;color:#808080;white-space:nowrap}
+.two{display:flex;gap:6px;align-items:baseline;margin-top:3px}
+.grow{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dur{font-size:11px;color:#808080;white-space:nowrap;font-variant-numeric:tabular-nums}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>会议纪要页 · 布局候选</h1>
+<p class="sub">三处可以分开决定。每一处的左图是现在的样子，右图是改法。可以只取其中一处，也可以全取。<br>
+所有尺寸与颜色都取自项目自己的 token（WFType / WFSpace / WFColors），没有引入新刻度。</p>
+
+<h2>1 · 会议列表的行式</h2>
+<p class="note">现在一行只有标题和时间，右半边整块空着；而同一个 app 里的笔记列表是「标题 + 摘要」两行、元信息右对齐。同一份数据，两个页面长得不像一家人。</p>
+<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin-top:12px">
+
+  <div>
+    <p class="lab">现状</p>
+    <div class="panel">
+      <div class="row row-sel">
+        <div class="t">产品评审 · 录音转写联调</div>
+        <div class="m" style="margin-top:3px">10月6日 10:00</div>
+      </div>
+      <div class="rline"></div>
+      <div class="row">
+        <div class="t">周会</div>
+        <div class="m" style="margin-top:3px">10月6日 09:00</div>
+      </div>
+      <div class="rline"></div>
+      <div class="row">
+        <div class="t">客户沟通 · 需求澄清</div>
+        <div class="m" style="margin-top:3px">10月3日 17:00</div>
+      </div>
+    </div>
+    <p class="note">标题 + 时间，两行都左对齐</p>
+  </div>
+
+  <div>
+    <p class="lab">笔记列表（项目里的现成范式）</p>
+    <div class="panel">
+      <div class="row row-sel">
+        <div class="two" style="margin-top:0">
+          <span class="t grow">笔记编辑器流程验收 1003</span>
+          <span class="m">未归档</span>
+        </div>
+        <div class="two">
+          <span class="m grow">笔记检查源 · 隔离后的标题 · 笔记无序项</span>
+          <span class="m">10月3日</span>
+        </div>
+      </div>
+      <div class="rline"></div>
+      <div class="row">
+        <div class="two" style="margin-top:0">
+          <span class="t grow">未命名笔记</span>
+          <span class="m">未归档</span>
+        </div>
+        <div class="two">
+          <span class="m grow">1. 背景 2. 收录 结果，打通团队</span>
+          <span class="m">10月3日</span>
+        </div>
+      </div>
+      <div class="rline"></div>
+      <div class="row">
+        <div class="two" style="margin-top:0">
+          <span class="t grow">笔记迁移验收 0927</span>
+          <span class="m">未归档</span>
+        </div>
+        <div class="two">
+          <span class="m grow">会议记录 演练笔记迁移，下一步…</span>
+          <span class="m">9月28日</span>
+        </div>
+      </div>
+    </div>
+    <p class="note">两行结构，右侧一列元信息</p>
+  </div>
+
+  <div>
+    <p class="lab">建议</p>
+    <div class="panel-hi">
+      <div class="row row-sel">
+        <div class="two" style="margin-top:0">
+          <span class="t grow">产品评审 · 录音转写联调</span>
+          <span class="dur">5:30</span>
+        </div>
+        <div class="two">
+          <span class="m grow">讨论录音转写的联调节奏，以及纪要自动更新的边界</span>
+          <span class="m">10月6日</span>
+        </div>
+      </div>
+      <div class="rline"></div>
+      <div class="row">
+        <div class="two" style="margin-top:0">
+          <span class="t grow">周会</span>
+          <span class="dur">18:20</span>
+        </div>
+        <div class="two">
+          <span class="m grow">本周进度与下周计划，卡点两条</span>
+          <span class="m">10月6日</span>
+        </div>
+      </div>
+      <div class="rline"></div>
+      <div class="row">
+        <div class="two" style="margin-top:0">
+          <span class="t grow">客户沟通 · 需求澄清</span>
+          <span class="dur">42:05</span>
+        </div>
+        <div class="two">
+          <span class="m grow">确认首期范围与验收口径，报价下周给</span>
+          <span class="m">10月3日</span>
+        </div>
+      </div>
+    </div>
+    <p class="note">补一行摘要（取自首条转写），右侧收成元信息列；没有转写时右列只显示时长</p>
+  </div>
+
+</div>
+
+<h2>2 · 详情首屏</h2>
+<p class="note">标题下面现在挂着三行灰字，其中两行是「Pi 怎么工作」的说明书。它把正文整体推下去，而且每次开会都要读一遍同样的说明。</p>
+<div style="display:grid;grid-template-columns:1fr;gap:14px;margin-top:12px">
+
+  <div>
+    <p class="lab">现状 · 三行灰字</p>
+    <div class="panel" style="padding:0;overflow:hidden">
+      <div style="height:38px;display:flex;align-items:center;gap:10px;padding:0 16px;border-bottom:0.5px solid #ECECEC">
+        <span style="font-size:11px;font-weight:500;color:#fff;background:#5B5CEB;border-radius:6px;padding:4px 11px">继续录音</span>
+        <span class="m">已保存 330 秒</span>
+        <span class="m" style="margin-left:auto">在访达中打开</span>
+      </div>
+      <div style="padding:16px 18px 18px">
+        <div style="font-size:14px;font-weight:500">产品评审 · 录音转写联调</div>
+        <div class="m" style="margin-top:7px">2026年10月6日 10:00</div>
+        <div class="m" style="margin-top:5px">通过 Pi 分段转写；约每 25 秒更新纪要。说话人区分取决于音频模型/扩展。</div>
+        <div style="height:0.5px;background:#ECECEC;margin:15px 0 13px"></div>
+        <div style="display:flex;gap:4px">
+          <span style="font-size:11px;font-weight:500;background:#F2F2F2;border-radius:6px;padding:4px 11px">对话记录</span>
+          <span class="m" style="padding:4px 11px">滚动纪要</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div>
+    <p class="lab">建议 · 一行元信息</p>
+    <div class="panel-hi" style="padding:0;overflow:hidden">
+      <div style="height:38px;display:flex;align-items:center;gap:10px;padding:0 16px;border-bottom:0.5px solid #ECECEC">
+        <span style="font-size:11px;font-weight:500;color:#fff;background:#5B5CEB;border-radius:6px;padding:4px 11px">继续录音</span>
+        <span class="m">已保存 5:30</span>
+        <span class="m" style="margin-left:auto">在访达中打开</span>
+      </div>
+      <div style="padding:16px 18px 18px">
+        <div style="font-size:14px;font-weight:500">产品评审 · 录音转写联调</div>
+        <div class="m" style="margin-top:7px">2026年10月6日 10:00 · 5分30秒 · 12 段 · 未转写</div>
+        <div style="height:0.5px;background:#ECECEC;margin:15px 0 13px"></div>
+        <div style="display:flex;gap:4px">
+          <span style="font-size:11px;font-weight:500;background:#F2F2F2;border-radius:6px;padding:4px 11px">对话记录</span>
+          <span class="m" style="padding:4px 11px">滚动纪要</span>
+        </div>
+      </div>
+    </div>
+    <p class="note">日期、时长、片段数、转写状态收成一行；「Pi 怎么工作」只在设置面板里说一次</p>
+  </div>
+
+</div>
+
+<h2>3 · 转写区</h2>
+<p class="note">现在每条是「说话人 + 时刻」一行、正文一行，读起来像一段段小作文，扫不出谁在什么时候说的。改成时间、说话人各占一列。</p>
+<div style="display:grid;grid-template-columns:1fr;gap:14px;margin-top:12px">
+
+  <div>
+    <p class="lab">现状 · 块状</p>
+    <div class="panel" style="padding:14px 16px">
+      <div style="font-size:11px;color:#808080">主持&nbsp;&nbsp;<span style="color:#BDBDBD">0:12</span></div>
+      <div style="font-size:12px;margin-top:2px">今天主要过一下录音转写的联调节奏，以及纪要自动更新的边界。</div>
+      <div style="height:14px"></div>
+      <div style="font-size:11px;color:#808080">李工&nbsp;&nbsp;<span style="color:#BDBDBD">0:38</span></div>
+      <div style="font-size:12px;margin-top:2px">音频分片现在是每 25 秒一个文件，落盘之后立刻交给 Pi 转写。</div>
+      <div style="height:14px"></div>
+      <div style="font-size:11px;color:#808080">李工&nbsp;&nbsp;<span style="color:#BDBDBD">1:36</span></div>
+      <div style="font-size:12px;margin-top:2px">说话人区分依赖模型，我们只把已知的说话人列表传过去，不猜身份。</div>
+    </div>
+  </div>
+
+  <div>
+    <p class="lab">建议 · 三列字幕式</p>
+    <div class="panel-hi" style="padding:0;overflow:hidden">
+      <div style="display:flex;gap:10px;padding:9px 14px">
+        <span class="dur" style="width:34px;text-align:right">0:12</span>
+        <span style="font-size:11px;color:#808080;width:44px;flex:none">主持</span>
+        <span style="font-size:12px;flex:1">今天主要过一下录音转写的联调节奏，以及纪要自动更新的边界。</span>
+      </div>
+      <div style="height:0.5px;background:#F4F4F4"></div>
+      <div style="display:flex;gap:10px;padding:9px 14px">
+        <span class="dur" style="width:34px;text-align:right">0:38</span>
+        <span style="font-size:11px;color:#808080;width:44px;flex:none">李工</span>
+        <span style="font-size:12px;flex:1">音频分片现在是每 25 秒一个文件，落盘之后立刻交给 Pi 转写。</span>
+      </div>
+      <div style="height:0.5px;background:#F4F4F4"></div>
+      <div style="display:flex;gap:10px;padding:9px 14px">
+        <span class="dur" style="width:34px;text-align:right">1:36</span>
+        <span style="width:44px;flex:none"></span>
+        <span style="font-size:12px;flex:1">说话人区分依赖模型，我们只把已知的说话人列表传过去，不猜身份。</span>
+      </div>
+      <div style="height:0.5px;background:#F4F4F4"></div>
+      <div style="display:flex;gap:10px;padding:9px 14px">
+        <span class="dur" style="width:34px;text-align:right">2:30</span>
+        <span style="font-size:11px;color:#808080;width:44px;flex:none">主持</span>
+        <span style="font-size:12px;flex:1">纪要更新的触发条件再确认一下：只送新增且没被总结过的行，对吧。</span>
+      </div>
+    </div>
+    <p class="note">同一人连续发言时说话人留空，读者靠留白就能看出「还是他」；每行一条细分隔线</p>
+  </div>
+
+</div>
+
+<h2>4 · 三处合起来的样子</h2>
+<p class="note">下面这张是结构示意（不是像素级还原）：左边是建议版列表，右边是建议版详情。</p>
+<div style="margin-top:12px;border:0.5px solid #E8E8E8;border-radius:12px;overflow:hidden;background:#fff">
+  <div style="height:26px;background:#F5F5F5;border-bottom:0.5px solid #E8E8E8;display:flex;align-items:center;gap:6px;padding-left:12px">
+    <span style="width:9px;height:9px;border-radius:50%;background:#FF5F57"></span>
+    <span style="width:9px;height:9px;border-radius:50%;background:#FEBC2E"></span>
+    <span style="width:9px;height:9px;border-radius:50%;background:#28C840"></span>
+    <span style="font-size:11px;color:#8A8A8E;margin-left:8px">会议纪要</span>
+  </div>
+  <div style="display:flex;height:372px">
+
+    <div style="width:34px;background:#F7F7F7;border-right:0.5px solid #ECECEC;display:flex;flex-direction:column;align-items:center;padding-top:14px;gap:13px">
+      <span style="width:13px;height:13px;border-radius:4px;background:#C9C9CE"></span>
+      <span style="width:13px;height:13px;border-radius:4px;background:#C9C9CE"></span>
+      <span style="width:13px;height:13px;border-radius:4px;background:#C9C9CE"></span>
+      <span style="width:13px;height:13px;border-radius:4px;background:#5B5CEB"></span>
+      <span style="width:13px;height:13px;border-radius:4px;background:#C9C9CE"></span>
+      <span style="width:13px;height:13px;border-radius:4px;background:#C9C9CE"></span>
+    </div>
+
+    <div style="width:190px;border-right:0.5px solid #ECECEC;display:flex;flex-direction:column">
+      <div style="height:38px;display:flex;align-items:center;padding:0 10px">
+        <span style="font-size:14px;font-weight:500">会议纪要</span>
+        <span style="margin-left:auto;width:22px;height:22px;border-radius:6px;background:#5B5CEB;color:#fff;font-size:13px;display:flex;align-items:center;justify-content:center">+</span>
+      </div>
+      <div style="padding:0 10px 8px">
+        <div style="height:24px;border-radius:6px;background:#F2F2F2;display:flex;align-items:center;padding:0 8px;font-size:11px;color:#9A9A9E">搜索会议</div>
+      </div>
+      <div style="flex:1;padding:0 5px">
+        <div class="row row-sel">
+          <div class="two" style="margin-top:0">
+            <span class="t grow">产品评审 · 录音转写联调</span>
+            <span class="dur">5:30</span>
+          </div>
+          <div class="two">
+            <span class="m grow">讨论录音转写的联调节奏，以及…</span>
+            <span class="m">10月6日</span>
+          </div>
+        </div>
+        <div class="rline"></div>
+        <div class="row">
+          <div class="two" style="margin-top:0">
+            <span class="t grow">周会</span>
+            <span class="dur">18:20</span>
+          </div>
+          <div class="two">
+            <span class="m grow">本周进度与下周计划，卡点两条</span>
+            <span class="m">10月6日</span>
+          </div>
+        </div>
+        <div class="rline"></div>
+        <div class="row">
+          <div class="two" style="margin-top:0">
+            <span class="t grow">客户沟通 · 需求澄清</span>
+            <span class="dur">42:05</span>
+          </div>
+          <div class="two">
+            <span class="m grow">确认首期范围与验收口径</span>
+            <span class="m">10月3日</span>
+          </div>
+        </div>
+      </div>
+      <div style="border-top:0.5px solid #F4F4F4;height:30px;display:flex;align-items:center;padding:0 10px;gap:6px">
+        <span style="width:11px;height:11px;border-radius:3px;background:#B5B5B8"></span>
+        <span style="font-size:11px;color:#808080">Pi 接入设置</span>
+      </div>
+    </div>
+
+    <div style="flex:1;display:flex;flex-direction:column;min-width:0">
+      <div style="height:38px;display:flex;align-items:center;gap:10px;padding:0 14px;border-bottom:0.5px solid #ECECEC">
+        <span style="font-size:11px;font-weight:500;color:#fff;background:#5B5CEB;border-radius:6px;padding:4px 11px">继续录音</span>
+        <span class="m">已保存 5:30</span>
+        <span class="m" style="margin-left:auto">在访达中打开</span>
+      </div>
+      <div style="flex:1;padding:14px 16px;overflow:hidden">
+        <div style="font-size:14px;font-weight:500">产品评审 · 录音转写联调</div>
+        <div class="m" style="margin-top:6px">2026年10月6日 10:00 · 5分30秒 · 12 段 · 未转写</div>
+        <div style="height:0.5px;background:#ECECEC;margin:13px 0 11px"></div>
+        <div style="display:flex;gap:4px;margin-bottom:11px">
+          <span style="font-size:11px;font-weight:500;background:#F2F2F2;border-radius:6px;padding:4px 11px">对话记录</span>
+          <span class="m" style="padding:4px 11px">滚动纪要</span>
+        </div>
+        <div style="display:flex;gap:10px;padding:7px 0">
+          <span class="dur" style="width:34px;text-align:right">0:12</span>
+          <span style="font-size:11px;color:#808080;width:44px;flex:none">主持</span>
+          <span style="font-size:12px;flex:1">今天主要过一下录音转写的联调节奏，以及纪要自动更新的边界。</span>
+        </div>
+        <div style="height:0.5px;background:#F4F4F4"></div>
+        <div style="display:flex;gap:10px;padding:7px 0">
+          <span class="dur" style="width:34px;text-align:right">0:38</span>
+          <span style="font-size:11px;color:#808080;width:44px;flex:none">李工</span>
+          <span style="font-size:12px;flex:1">音频分片现在是每 25 秒一个文件，落盘之后立刻交给 Pi 转写。</span>
+        </div>
+        <div style="height:0.5px;background:#F4F4F4"></div>
+        <div style="display:flex;gap:10px;padding:7px 0">
+          <span class="dur" style="width:34px;text-align:right">1:36</span>
+          <span style="width:44px;flex:none"></span>
+          <span style="font-size:12px;flex:1">说话人区分依赖模型，我们只把已知的说话人列表传过去，不猜身份。</span>
+        </div>
+      </div>
+      <div style="height:42px;border-top:0.5px solid #ECECEC;display:flex;align-items:center;gap:10px;padding:0 14px">
+        <span style="font-size:11px;color:#9A9A9E">手动补充对话（不是自动转写）</span>
+        <span style="margin-left:auto;font-size:11px;font-weight:500;color:#fff;background:#5B5CEB;border-radius:6px;padding:4px 11px">添加记录</span>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+</div>
+</body>
+</html>

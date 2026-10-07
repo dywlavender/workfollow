@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>会议纪要页 · 纪要与转写同页 2026-10-06</title>
+<style>
+:root{
+  --color-background-primary:#FFFFFF;
+  --color-background-secondary:#F7F7F7;
+  --color-text-primary:#1C1C1E;
+  --color-text-secondary:#6E6E73;
+  --color-text-tertiary:#9A9A9E;
+  --color-border-tertiary:rgba(0,0,0,0.15);
+}
+*{box-sizing:border-box}
+body{margin:0;padding:30px 24px 40px;background:#FBFBFC;
+  font-family:-apple-system,"SF Pro Text","PingFang SC",system-ui,sans-serif;
+  color:#1C1C1E;-webkit-font-smoothing:antialiased}
+.wrap{max-width:680px;margin:0 auto}
+h1{font-size:15px;font-weight:500;margin:0 0 6px}
+.sub{font-size:12px;color:#6E6E73;line-height:1.65;margin:0 0 28px}
+h2{font-size:14px;font-weight:500;margin:30px 0 6px}
+h2:first-of-type{margin-top:0}
+.note{font-size:11px;color:#9A9A9E;line-height:1.65;margin:8px 0 0}
+.lab{font-size:12px;color:#6E6E73;margin:0 0 8px}
+.frame{background:#fff;border:0.5px solid #E8E8E8;border-radius:12px;overflow:hidden}
+.frame-hi{background:#fff;border:1.5px solid #5B5CEB;border-radius:12px;overflow:hidden}
+.bar{height:38px;display:flex;align-items:center;gap:10px;padding:0 14px;border-bottom:0.5px solid #ECECEC}
+.pill{font-size:11px;font-weight:500;color:#fff;background:#5B5CEB;border-radius:6px;padding:4px 11px}
+.m{font-size:11px;color:#808080}
+.colhead{height:30px;display:flex;align-items:center;gap:8px;padding:0 12px;border-bottom:0.5px solid #ECECEC}
+.colhead b{font-size:12px;font-weight:500;color:#1C1C1E}
+.tl{display:flex;gap:8px;padding:6px 12px}
+.tl .tm{font-size:11px;color:#808080;width:30px;text-align:right;flex:none;font-variant-numeric:tabular-nums}
+.tl .sp{font-size:11px;color:#808080;width:34px;flex:none}
+.tl .tx{font-size:11.5px;color:#1C1C1E;flex:1;min-width:0;line-height:1.5}
+.rule{height:0.5px;background:#F4F4F4}
+.foot{height:38px;display:flex;align-items:center;gap:8px;padding:0 12px;border-top:0.5px solid #ECECEC}
+.md-h{font-size:12px;font-weight:500;color:#1C1C1E;margin:10px 0 4px}
+.md-h:first-child{margin-top:0}
+.md-b{font-size:11.5px;color:#1C1C1E;line-height:1.6;display:flex;gap:7px;margin:3px 0}
+.md-b span:first-child{color:#9A9A9E}
+.gap{height:14px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>会议纪要页 · 纪要和转写放同一个页面</h1>
+<p class="sub">现在是「对话记录 / 滚动纪要」两个 tab，一次只能看一个。但这两样东西的关系是<b>摘要 ↔ 依据</b>——纪要就是转写的浓缩，核对的时候要<b>对着看</b>，而 tab 恰恰强制你二选一。<br>
+下面三种排法都能让它们同时在场，区别只在「往哪个方向分」。</p>
+
+<h2>方案 A · 左右并排（转写在左 · 纪要在右）</h2>
+<p class="note">详情栏里再分两栏，中间一条可拖拽的线，两栏各有自己的滚动条和底部操作行。主流会议记录工具（飞书妙记等）都是这个排法。</p>
+<div class="gap"></div>
+<div class="frame-hi">
+  <div class="bar">
+    <span class="pill">继续录音</span><span class="m">已保存 5:30</span>
+    <span class="m" style="margin-left:auto">在访达中打开</span>
+  </div>
+  <div style="display:flex;height:322px">
+    <div style="width:50%;border-right:0.5px solid #ECECEC;display:flex;flex-direction:column;min-width:0">
+      <div class="colhead"><b>对话记录</b><span class="m">12 段 · 3 段未进纪要</span></div>
+      <div style="flex:1;padding:5px 0;overflow:hidden">
+        <div class="tl"><span class="tm">0:12</span><span class="sp">主持</span><span class="tx">今天主要过一下录音转写的联调节奏。</span></div>
+        <div class="tl"><span class="tm">0:38</span><span class="sp">李工</span><span class="tx">音频分片现在是每 25 秒一个文件。</span></div>
+        <div class="tl"><span class="tm">1:36</span><span class="sp"></span><span class="tx">说话人区分依赖模型，我们只传已知列表。</span></div>
+        <div class="tl"><span class="tm">2:30</span><span class="sp">主持</span><span class="tx">纪要只送新增且没被总结过的行。</span></div>
+        <div style="display:flex;align-items:center;gap:8px;padding:7px 12px">
+          <span style="flex:1;height:0.5px;background:#E4E4E8"></span>
+          <span style="font-size:11px;color:#9A9A9E;white-space:nowrap">以下 3 段尚未进入纪要</span>
+          <span style="flex:1;height:0.5px;background:#E4E4E8"></span>
+        </div>
+        <div class="tl" style="opacity:0.72"><span class="tm">3:02</span><span class="sp">李工</span><span class="tx">阈值是不是该做成可配的？</span></div>
+        <div class="tl" style="opacity:0.72"><span class="tm">3:20</span><span class="sp">主持</span><span class="tx">先写死，等有真实反馈再说。</span></div>
+        <div class="tl" style="opacity:0.72"><span class="tm">3:44</span><span class="sp">李工</span><span class="tx">行，那我先把并排门槛定下来。</span></div>
+      </div>
+      <div class="foot">
+        <span style="font-size:11px;color:#9A9A9E;flex:1;overflow:hidden;white-space:nowrap">手动补充对话</span>
+        <span style="font-size:11px;font-weight:500;color:#fff;background:#5B5CEB;border-radius:6px;padding:4px 11px">添加记录</span>
+      </div>
+    </div>
+    <div style="width:50%;display:flex;flex-direction:column;min-width:0">
+      <div class="colhead"><b>滚动纪要</b><span class="m">更新于 10:24</span></div>
+      <div style="flex:1;padding:10px 12px;overflow:hidden">
+        <div class="md-h">结论</div>
+        <div class="md-b"><span>·</span><span>音频分片 25 秒一个，落盘即交给 Pi</span></div>
+        <div class="md-b"><span>·</span><span>纪要只送「新增且未总结」的行</span></div>
+        <div class="md-h">待办</div>
+        <div class="md-b"><span>·</span><span>李工：确认模型是否支持说话人区分</span></div>
+        <div class="md-b"><span>·</span><span>我：把并排门槛写成常量</span></div>
+        <div class="md-h">待确认</div>
+        <div class="md-b"><span>·</span><span>转写与纪要要不要点选联动</span></div>
+      </div>
+      <div class="foot">
+        <span style="font-size:11px;font-weight:500;color:#fff;background:#5B5CEB;border-radius:6px;padding:4px 11px">更新纪要</span>
+        <span class="m" style="padding:4px 9px">复制纪要</span>
+      </div>
+    </div>
+  </div>
+</div>
+<p class="note">两栏各有自己的底部操作行——现在这一行是随 tab 换内容的，同页之后各归各的。<br>
+转写里用一条细线标出「尚未进入纪要」的分界（数据里已经有 <code>summarizedLineIDs</code>，不用新加字段）。</p>
+
+<h2>方案 B · 上下堆叠（纪要在上 · 转写在下）</h2>
+<p class="note">同样两栏、同样可拖拽，只是改成上下分。好处是<b>任何窗口宽度都能用</b>，不需要为窄窗口准备退路。</p>
+<div class="gap"></div>
+<div class="frame-hi">
+  <div class="bar">
+    <span class="pill">继续录音</span><span class="m">已保存 5:30</span>
+    <span class="m" style="margin-left:auto">在访达中打开</span>
+  </div>
+  <div style="display:flex;flex-direction:column;height:322px">
+    <div style="height:142px;display:flex;flex-direction:column">
+      <div class="colhead"><b>滚动纪要</b><span class="m">更新于 10:24</span>
+        <span style="margin-left:auto;font-size:11px;color:#808080">更新纪要</span></div>
+      <div style="flex:1;padding:10px 14px;overflow:hidden">
+        <div class="md-h">结论</div>
+        <div class="md-b"><span>·</span><span>音频分片 25 秒一个文件，落盘之后立刻交给 Pi 转写</span></div>
+        <div class="md-b"><span>·</span><span>纪要只送「新增且未被总结」的行，不重复送</span></div>
+        <div class="md-h">待办</div>
+        <div class="md-b"><span>·</span><span>李工：确认模型是否支持说话人区分</span></div>
+      </div>
+    </div>
+    <div style="height:7px;background:#F5F5F7;display:flex;align-items:center;justify-content:center">
+      <span style="width:26px;height:2px;border-radius:1px;background:#C9C9CE"></span>
+    </div>
+    <div style="flex:1;display:flex;flex-direction:column;min-height:0">
+      <div class="colhead"><b>对话记录</b><span class="m">12 段 · 3 段未进纪要</span>
+        <span style="margin-left:auto;font-size:11px;color:#808080">添加记录</span></div>
+      <div style="flex:1;padding:5px 0;overflow:hidden">
+        <div class="tl"><span class="tm">0:12</span><span class="sp">主持</span><span class="tx">今天主要过一下录音转写的联调节奏，以及纪要自动更新的边界。</span></div>
+        <div class="tl"><span class="tm">0:38</span><span class="sp">李工</span><span class="tx">音频分片现在是每 25 秒一个文件，落盘之后立刻交给 Pi 转写。</span></div>
+        <div class="tl"><span class="tm">1:36</span><span class="sp"></span><span class="tx">说话人区分依赖模型，我们只把已知的说话人列表传过去。</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+<p class="note">滚轮会滚「指针落在哪一栏」——这是 macOS 的默认行为，不用额外处理</p>
+
+<h2>方案 C · 单一长页（纪要在上，转写紧随其下）</h2>
+<p class="note">不分栏，共用一个滚动条：先读完纪要，继续往下就是原始转写。实现最省事，字面上也最像「一个页面」。</p>
+<div class="gap"></div>
+<div class="frame">
+  <div class="bar">
+    <span class="pill">继续录音</span><span class="m">已保存 5:30</span>
+    <span class="m" style="margin-left:auto">在访达中打开</span>
+  </div>
+  <div style="height:322px;padding:14px 16px;overflow:hidden">
+    <div class="md-h">结论</div>
+    <div class="md-b"><span>·</span><span>音频分片 25 秒一个文件，落盘之后立刻交给 Pi 转写</span></div>
+    <div class="md-b"><span>·</span><span>纪要只送「新增且未被总结」的行，不重复送</span></div>
+    <div class="md-h">待办</div>
+    <div class="md-b"><span>·</span><span>李工：确认模型是否支持说话人区分</span></div>
+    <div style="display:flex;align-items:center;gap:8px;margin:16px 0 10px">
+      <span style="flex:1;height:0.5px;background:#E4E4E8"></span>
+      <span style="font-size:11px;color:#9A9A9E;white-space:nowrap">对话记录 · 12 段</span>
+      <span style="flex:1;height:0.5px;background:#E4E4E8"></span>
+    </div>
+    <div class="tl" style="padding-left:0;padding-right:0"><span class="tm">0:12</span><span class="sp">主持</span><span class="tx">今天主要过一下录音转写的联调节奏，以及纪要自动更新的边界。</span></div>
+    <div class="tl" style="padding-left:0;padding-right:0"><span class="tm">0:38</span><span class="sp">李工</span><span class="tx">音频分片现在是每 25 秒一个文件，落盘之后立刻交给 Pi 转写。</span></div>
+    <div class="tl" style="padding-left:0;padding-right:0"><span class="tm">1:36</span><span class="sp"></span><span class="tx">说话人区分依赖模型，我们只把已知的说话人列表传过去。</span></div>
+  </div>
+</div>
+<p class="note">缺点：转写很长的时候，想核对某句总结要一路滚下去再滚回来——两边<b>没法同时看见</b>，而「同时看见」正是这一页最需要的</p>
+
+<h2>取舍</h2>
+<div style="background:#fff;border:0.5px solid #E8E8E8;border-radius:10px;padding:14px 16px;font-size:11.5px;line-height:1.85;color:#1C1C1E">
+<div><b>A 左右并排</b> — 两栏各自滚动，可对照；需要详情栏够宽（约 ≥760pt），窄了要准备退路</div>
+<div><b>B 上下堆叠</b> — 任何宽度都能用，不需要退路；上下两栏共用一条竖轴，扫读时视线要来回跳</div>
+<div><b>C 单一长页</b> — 实现最省事，但没法同时看见两边的同一段，对照要来回滚</div>
+<div style="margin-top:10px;padding-top:10px;border-top:0.5px solid #ECECEC;color:#5B5CEB">
+<b>建议 A + B 组合</b>：宽窗口左右并排，详情栏窄于门槛时自动变成上下堆叠。两种形态都同时看得见两样东西，tab 彻底去掉。
+</div>
+</div>
+
+</div>
+</body>
+</html>

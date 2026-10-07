@@ -64,6 +64,28 @@ final class MeetingMemoryAudioTests: XCTestCase {
         XCTAssertEqual(tail?.duration, 1)
         XCTAssertEqual((packets.first?.pcm.count ?? 0) + (tail?.pcm.count ?? 0), input.count)
     }
+    func testResponsivePolicyPublishesAtShortPause() {
+        var capture = MeetingPCMAccumulator(preferSpeechBoundaries: true, speechBoundaryPolicy: .responsive)
+        XCTAssertTrue(capture.append(Data(repeating: 1, count: 2 * 32_000)).isEmpty)
+        XCTAssertTrue(capture.append(Data(repeating: 0, count: 8_000)).isEmpty)
+        let packets = capture.append(Data(repeating: 0, count: 1_600))
+        XCTAssertEqual(packets.count, 1)
+        XCTAssertEqual(packets.first?.duration ?? 0, 2.3, accuracy: 0.001)
+    }
+    func testResponsiveContinuousSpeechHasFiveSecondCapAndExactTail() {
+        var capture = MeetingPCMAccumulator(offset: 7, preferSpeechBoundaries: true,
+                                            speechBoundaryPolicy: .responsive)
+        let input = Data(repeating: 1, count: 11 * 32_000 + 160)
+        let packets = capture.append(input)
+        let tail = capture.finish()
+        XCTAssertEqual(packets.map(\.duration), [5, 5])
+        XCTAssertEqual(packets.map(\.offset), [7, 12])
+        XCTAssertEqual(tail?.offset, 17)
+        var output = packets.reduce(into: Data()) { $0.append($1.pcm) }
+        output.append(tail?.pcm ?? Data())
+        XCTAssertEqual(output, input)
+        XCTAssertNil(capture.finish())
+    }
     func testNativeConverterProcessesSyntheticStereoAndFlushesOnce() throws {
         let format = try XCTUnwrap(AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: 48_000,
                                                 channels: 2, interleaved: false))
@@ -109,7 +131,7 @@ final class MeetingMemoryAudioTests: XCTestCase {
         let ai = MemoryAudioAI(fail: true)
         let store = MeetingStore(directory: try root(), ai: ai, automaticallyUpdate: false)
         store.create(); store.configuration.audioExtension = "synthetic-fixture"
-        store.appendManual("保留的文字", speaker: "B")
+        store.appendTranscriptForTesting("保留的文字", speaker: "B")
         let id = try XCTUnwrap(store.selectedID)
         for i in 0..<3 {
             store.receiveChunk(MeetingAudioPacket(pcm: Data(repeating: 0, count: 32_000), offset: Double(i)), meetingID: id)

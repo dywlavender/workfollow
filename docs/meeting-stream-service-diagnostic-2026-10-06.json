@@ -1,0 +1,337 @@
+{
+  "kind": "Pi-paced-input-stream",
+  "synthetic": true,
+  "audioSaved": false,
+  "expected": [
+    {
+      "speaker": "A",
+      "voice": "Tingting",
+      "text": "今天讨论项目交付，确认下周一提交。"
+    },
+    {
+      "speaker": "B",
+      "voice": "Eddy",
+      "text": "同意，预算两千五百元，我负责校对。"
+    }
+  ],
+  "duration": 10.335125,
+  "events": [
+    {
+      "kind": "preview",
+      "itemID": "item_U1HwGBoghwE5phW76o9r2",
+      "text": "今天",
+      "offset": 0,
+      "elapsedMs": 533
+    },
+    {
+      "kind": "preview",
+      "itemID": "item_U1HwGBoghwE5phW76o9r2",
+      "text": "今天。",
+      "offset": 0,
+      "elapsedMs": 533
+    },
+    {
+      "kind": "preview",
+      "itemID": "item_U1HwGBoghwE5phW76o9r2",
+      "text": "今天讨论",
+      "offset": 0,
+      "elapsedMs": 1493
+    },
+    {
+      "kind": "preview",
+      "itemID": "item_U1HwGBoghwE5phW76o9r2",
+      "text": "今天讨论项",
+      "offset": 0,
+      "elapsedMs": 1502
+    },
+    {
+      "kind": "preview",
+      "itemID": "item_U1HwGBoghwE5phW76o9r2",
+      "text": "今天讨论项。",
+      "offset": 0,
+      "elapsedMs": 1502
+    },
+    {
+      "kind": "preview",
+      "itemID": "item_U1HwGBoghwE5phW76o9r2",
+      "text": "今天讨论项目",
+      "offset": 0,
+      "elapsedMs": 2273
+    },
+    {
+      "kind": "preview",
+      "itemID": "item_U1HwGBoghwE5phW76o9r2",
+      "text": "今天讨论项目交付",
+      "offset": 0,
+      "elapsedMs": 2280
+    },
+    {
+      "kind": "preview",
+      "itemID": "item_U1HwGBoghwE5phW76o9r2",
+      "text": "今天讨论项目交付。",
+      "offset": 0,
+      "elapsedMs": 2285
+    },
+    {
+      "kind": "final",
+      "itemID": "item_U1HwGBoghwE5phW76o9r2",
+      "text": "今天讨论项目交付。",
+      "offset": 0,
+      "elapsedMs": 2932
+    },
+    {
+      "kind": "preview",
+      "itemID": "item_GXxWQ9krE34cdfpdcKuXD",
+      "text": "现任",
+      "offset": 2.36,
+      "elapsedMs": 3234
+    },
+    {
+      "kind": "preview",
+      "itemID": "item_GXxWQ9krE34cdfpdcKuXD",
+      "text": "现任。",
+      "offset": 2.36,
+      "elapsedMs": 3236
+    },
+    {
+      "kind": "preview",
+      "itemID": "item_GXxWQ9krE34cdfpdcKuXD",
+      "text": "确认",
+      "offset": 2.36,
+      "elapsedMs": 3489
+    },
+    {
+      "kind": "preview",
+      "itemID": "item_GXxWQ9krE34cdfpdcKuXD",
+      "text": "确认下",
+      "offset": 2.36,
+      "elapsedMs": 3489
+    },
+    {
+      "kind": "preview",
+      "itemID": "item_GXxWQ9krE34cdfpdcKuXD",
+      "text": "确认下。",
+      "offset": 2.36,
+      "elapsedMs": 3491
+    },
+    {
+      "kind": "preview",
+      "itemID": "item_GXxWQ9krE34cdfpdcKuXD",
+      "text": "确认下周一",
+      "offset": 2.36,
+      "elapsedMs": 4250
+    },
+    {
+      "kind": "preview",
+      "itemID": "item_GXxWQ9krE34cdfpdcKuXD",
+      "text": "确认下周一提",
+      "offset": 2.36,
+      "elapsedMs": 4250
+    },
+    {
+      "kind": "preview",
+      "itemID": "item_GXxWQ9krE34cdfpdcKuXD",
+      "text": "确认下周一提。",
+      "offset": 2.36,
+      "elapsedMs": 4258
+    },
+    {
+      "kind": "preview",
+      "itemID": "item_GXxWQ9krE34cdfpdcKuXD",
+      "text": "确认下周一提交",
+      "offset": 2.36,
+      "elapsedMs": 5041
+    },
+    {
+      "kind": "preview",
+      "itemID": "item_GXxWQ9krE34cdfpdcKuXD",
+      "text": "确认下周一提交。",
+      "offset": 2.36,
+      "elapsedMs": 5045
+    },
+    {
+      "kind": "final",
+      "itemID": "item_GXxWQ9krE34cdfpdcKuXD",
+      "text": "确认下周一提交。",
+      "offset": 2.36,
+      "elapsedMs": 5051
+    },
+    {
+      "kind": "preview",
+      "itemID": "item_O8USU2BEObNeXLEZKeTa2",
+      "text": "从",
+      "offset": 5.1,
+      "elapsedMs": 5764
+    },
+    {
+      "kind": "preview",
+      "itemID": "item_O8USU2BEObNeXLEZKeTa2",
+      "text": "从。",
+      "offset": 5.1,
+      "elapsedMs": 5764
+    },
+    {
+      "kind": "preview",
+      "itemID": "item_O8USU2BEObNeXLEZKeTa2",
+      "text": "同意",
+      "offset": 5.1,
+      "elapsedMs": 6482
+    },
+    {
+      "kind": "preview",
+      "itemID": "item_O8USU2BEObNeXLEZKeTa2",
+      "text": "同意。",
+      "offset": 5.1,
+      "elapsedMs": 6483
+    },
+    {
+      "kind": "final",
+      "itemID": "item_O8USU2BEObNeXLEZKeTa2",
+      "text": "同意。",
+      "offset": 5.1,
+      "elapsedMs": 6487
+    },
+    {
+      "kind": "preview",
+      "itemID": "item_YJofgPKusd4dGtM1HnlMP",
+      "text": "李",
+      "offset": 5.98,
+      "elapsedMs": 6992
+    },
+    {
+      "kind": "preview",
+      "itemID": "item_YJofgPKusd4dGtM1HnlMP",
+      "text": "李安",
+      "offset": 5.98,
+      "elapsedMs": 6992
+    },
+    {
+      "kind": "preview",
+      "itemID": "item_YJofgPKusd4dGtM1HnlMP",
+      "text": "李安。",
+      "offset": 5.98,
+      "elapsedMs": 6992
+    },
+    {
+      "kind": "preview",
+      "itemID": "item_YJofgPKusd4dGtM1HnlMP",
+      "text": "两千",
+      "offset": 5.98,
+      "elapsedMs": 7238
+    },
+    {
+      "kind": "preview",
+      "itemID": "item_YJofgPKusd4dGtM1HnlMP",
+      "text": "两千。",
+      "offset": 5.98,
+      "elapsedMs": 7242
+    },
+    {
+      "kind": "preview",
+      "itemID": "item_YJofgPKusd4dGtM1HnlMP",
+      "text": "两千五百",
+      "offset": 5.98,
+      "elapsedMs": 7997
+    },
+    {
+      "kind": "preview",
+      "itemID": "item_YJofgPKusd4dGtM1HnlMP",
+      "text": "两千五百元",
+      "offset": 5.98,
+      "elapsedMs": 8003
+    },
+    {
+      "kind": "preview",
+      "itemID": "item_YJofgPKusd4dGtM1HnlMP",
+      "text": "两千五百元。",
+      "offset": 5.98,
+      "elapsedMs": 8012
+    },
+    {
+      "kind": "final",
+      "itemID": "item_YJofgPKusd4dGtM1HnlMP",
+      "text": "两千五百元。",
+      "offset": 5.98,
+      "elapsedMs": 8287
+    },
+    {
+      "kind": "preview",
+      "itemID": "item_LCec6qahvVNF8Kb3fLfS1",
+      "text": "我",
+      "offset": 7.92,
+      "elapsedMs": 8541
+    },
+    {
+      "kind": "preview",
+      "itemID": "item_LCec6qahvVNF8Kb3fLfS1",
+      "text": "我父",
+      "offset": 7.92,
+      "elapsedMs": 8542
+    },
+    {
+      "kind": "preview",
+      "itemID": "item_LCec6qahvVNF8Kb3fLfS1",
+      "text": "我父。",
+      "offset": 7.92,
+      "elapsedMs": 8542
+    },
+    {
+      "kind": "preview",
+      "itemID": "item_LCec6qahvVNF8Kb3fLfS1",
+      "text": "我负责",
+      "offset": 7.92,
+      "elapsedMs": 8749
+    },
+    {
+      "kind": "preview",
+      "itemID": "item_LCec6qahvVNF8Kb3fLfS1",
+      "text": "我负责。",
+      "offset": 7.92,
+      "elapsedMs": 8753
+    },
+    {
+      "kind": "preview",
+      "itemID": "item_LCec6qahvVNF8Kb3fLfS1",
+      "text": "我负责校",
+      "offset": 7.92,
+      "elapsedMs": 9768
+    },
+    {
+      "kind": "preview",
+      "itemID": "item_LCec6qahvVNF8Kb3fLfS1",
+      "text": "我负责校对",
+      "offset": 7.92,
+      "elapsedMs": 9772
+    },
+    {
+      "kind": "preview",
+      "itemID": "item_LCec6qahvVNF8Kb3fLfS1",
+      "text": "我负责校对。",
+      "offset": 7.92,
+      "elapsedMs": 9777
+    },
+    {
+      "kind": "final",
+      "itemID": "item_LCec6qahvVNF8Kb3fLfS1",
+      "text": "我负责校对。",
+      "offset": 7.92,
+      "elapsedMs": 9787
+    },
+    {
+      "kind": "diagnostic",
+      "diagnostic": {
+        "type": "error",
+        "code": "",
+        "param": "",
+        "message": "Error committing input audio buffer: buffer too small, or have no audio."
+      },
+      "elapsedMs": 10407
+    },
+    {
+      "kind": "error",
+      "message": "Pi 输入音频转写失败。",
+      "elapsedMs": 10407
+    }
+  ],
+  "error": "Pi 输入音频转写失败。"
+}

@@ -56,6 +56,17 @@ struct MeetingPiConfiguration: Codable, Equatable {
         let override = audioExtension.trimmingCharacters(in: .whitespacesAndNewlines)
         return override.isEmpty ? (Bundle.main.url(forResource: "wf-meeting-audio", withExtension: "mjs")?.path ?? "") : override
     }
+    /// Pi 的 `--model` 只认单个模型 id，多行会让 Pi 直接 `Error: Model "…" not found` 退出。
+    ///
+    /// 2026-10-07 实测：设置框里粘成三行重复值（从聊天记录里连选带粘很容易发生），
+    /// 界面只报「Pi 调用失败，请检查 Pi 中的模型、登录和音频扩展配置。」——
+    /// 把矛头指向 Pi 的配置，而真正要改的是本应用自己的设置框。这里统一取第一行非空内容，
+    /// 让「粘多行」不再致命；`model` 本身保持原样，不偷偷改写用户输入。
+    var resolvedModel: String {
+        model.split(whereSeparator: \.isNewline)
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .first { !$0.isEmpty } ?? ""
+    }
 }
 
 enum MeetingPiError: LocalizedError {

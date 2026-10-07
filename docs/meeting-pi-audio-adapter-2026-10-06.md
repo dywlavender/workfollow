@@ -12,10 +12,12 @@ Native 仅采集内存 PCM、发送本地 RPC 命令、接收文字；不持有�
 
 ## 配置
 
-1. 在 Pi 中配置 `qwen3.8-omni-flash-realtime`、对应业务空间 HTTPS baseUrl 和认证。
-2. 会议设置里 Pi 路径保持本机可执行文件；扩展路径留空。模型留空沿用 Pi 当前选择，也可指定已配置的模型。
+1. 在 Pi 中配置**一个**百炼业务空间的实时模型、对应业务空间 HTTPS baseUrl 和认证。
+2. 会议设置里 Pi 路径保持本机可执行文件；扩展路径留空。模型标识留空则沿用 Pi 当前模型，也可指定已配置的模型——**转写与纪要共用这一个模型**。
 3. 内置扩展通过 `ctx.modelRegistry.getApiKeyAndHeaders()` 解析 Pi 认证与端点，不读写应用里的密钥配置。
-4. 当前模型为 Qwen realtime 时，纪要也经扩展发送文本给同一 realtime 服务，避免错误地用普通 chat-completions 调它。当前模型是普通文字模型时，纪要通过 Pi ModelRegistry 的 complete 调用。显式自定义音频扩展仍使用原先普通 Pi 文字纪要路径。
+4. 纪要固定经扩展发送文本给同一实时服务：普通 chat-completions 调不动实时模型。显式自定义音频扩展仍使用原先普通 Pi 文字纪要路径。
+
+> 2026-10-06 起模型来源改为设置里的「模型标识」：原先扩展按硬编码 id `qwen3.8-omni-flash-realtime` 去注册表查找，现已删除，不再有内置兜底。留空且 Pi 当前模型不是实时模型时会直接报错（`realtimeURL` 只接受百炼业务空间端点）。
 
 Qwen3.8 realtime 必须使用业务空间 WebSocket 地址；扩展从 Pi 的业务空间 HTTPS baseUrl 派生它。见 [官方 realtime 指南](https://www.alibabacloud.com/help/en/model-studio/realtime)。
 
