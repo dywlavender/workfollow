@@ -19,6 +19,10 @@ struct CalendarWorkspaceView: View {
     /// 月网格顶行的周起始日（周日）——**滚动位置单一事实源**：用户上下滚动
     /// 实时回写，横扫/前后按钮/goToday 写入它驱动网格滚动（带动画）。
     @State private var topWeek: Date
+    /// 程序化跳转的去重哨：跳转前先记目标，网格据此区分"父级要跳"与"用户
+    /// 滚动的回写"——只对前者执行 scrollTo，用户惯性滚动不被 scrollTo 打断
+    /// （打断惯性正是"滚动一顿一顿"的感受来源之一）。
+    @State private var programmaticScrollTarget: Date?
     /// 页面的当前日：网格上被标出的那天、周视图的锚点、工具条加号落款的日期。
     @State private var selectedDay: Date
     @State private var mode: CalendarViewMode = .month
@@ -58,6 +62,7 @@ struct CalendarWorkspaceView: View {
             if mode == .month {
                 CalendarMonthGridView(
                     topWeek: $topWeek,
+                    programmaticTarget: $programmaticScrollTarget,
                     month: month,
                     today: workspace.clock(),
                     selectedDay: selectedDay,
@@ -236,23 +241,19 @@ struct CalendarWorkspaceView: View {
     private func step(_ direction: Int) {
         if mode == .month {
             let target = firstOfMonth(calendar.date(byAdding: .month, value: direction, to: month) ?? month)
-            withAnimation(.easeOut(duration: 0.25)) {
-                topWeek = Self.startOfWeek(containing: target, calendar: calendar)
-            }
+            jump(to: Self.startOfWeek(containing: target, calendar: calendar))
             return
         }
         // 周模式移动的是当前日；同步滚动锚，离开周模式时月网格落在最后看的那个月。
         guard let moved = calendar.date(byAdding: .day, value: 7 * direction, to: selectedDay) else { return }
         selectedDay = moved
-        topWeek = Self.startOfWeek(containing: firstOfMonth(moved), calendar: calendar)
+        jump(to: Self.startOfWeek(containing: firstOfMonth(moved), calendar: calendar))
     }
 
     private func goToday() {
         let today = calendar.startOfDay(for: workspace.clock())
         selectedDay = today
-        withAnimation(.easeOut(duration: 0.25)) {
-            topWeek = Self.startOfWeek(containing: firstOfMonth(today), calendar: calendar)
-        }
+        jump(to: Self.startOfWeek(containing: firstOfMonth(today), calendar: calendar))
     }
 
     /// 点一天：网格显示邻月收尾与开头的日子，所以点击可能落在屏幕之外的月份上；
@@ -261,10 +262,14 @@ struct CalendarWorkspaceView: View {
         selectedDay = day
         if calendar.component(.month, from: day) != calendar.component(.month, from: month)
             || calendar.component(.year, from: day) != calendar.component(.year, from: month) {
-            withAnimation(.easeOut(duration: 0.2)) {
-                topWeek = Self.startOfWeek(containing: firstOfMonth(day), calendar: calendar)
-            }
+            jump(to: Self.startOfWeek(containing: firstOfMonth(day), calendar: calendar))
         }
+    }
+
+    /// 程序化跳月：记哨 + 写锚（网格的 onChange 据哨执行 scrollTo）。
+    private func jump(to week: Date) {
+        programmaticScrollTarget = week
+        withAnimation(.easeOut(duration: 0.25)) { topWeek = week }
     }
 
     private func firstOfMonth(_ date: Date) -> Date {
@@ -424,21 +429,32 @@ struct CalendarMonthGridView: View {
     @State private var daysByWeek: [Date: [Date]]
     @State private var dayTasks: [Date: [Task]]
     @State private var spansByWeek: [Date: [CalendarSpan]]
+    /// 父级程序化跳转哨（见 CalendarWorkspaceView.programmaticScrollTarget）。
+    @Binding var programmaticTarget: Date?
 
-    init(topWeek: Binding<Date>, month: Date, today: Date, selectedDay: Date,
+    init(topWeek: Binding<Date>, programmaticTarget: Binding<Date?>,
+         month: Date, today: Date, selectedDay: Date,
          showCompleted: Bool, calendar: Calendar, tasks: [Task],
          barColor: @escaping (UUID) -> Color, onSelectDay: @escaping (Date) -> Void,
          onOpenTask: @escaping (UUID) -> Void, onCreateTask: @escaping (Date) -> Void,
          onDropTask: @escaping (UUID, Date) -> Void, onToggleTask: @escaping (UUID) -> Void,
          anchorSink: PlanningAnchorRef) {
         _topWeek = topWeek
+        _programmaticTarget = programmaticTarget
         self.month = month; self.today = today; self.selectedDay = selectedDay
         self.showCompleted = showCompleted; self.calendar = calendar; self.tasks = tasks
         self.barColor = barColor
         self.onSelectDay = onSelectDay; self.onOpenTask = onOpenTask
         self.onCreateTask = onCreateTask; self.onDropTask = onDropTask
         self.onToggleTask = onToggleTask; self.anchorSink = anchorSink
-        let weeks = Self.buildWeeks(today: today, calendar: calendar)
+        // 周行流**从初始 topWeek 起旋转排序**：内容顶行 = topWeek，初始定位
+        // 不再依赖 scrollTo（lazy 内容上 scrollTo 远处目标在本环境实测不可靠，
+        // 双拍重试也失败——2026-10-07）。时间顺序：先未来后过去，向上滚越过
+        // -30 周边界会回到内容起点（present），边界情形可接受。
+        let initialTop = topWeek.wrappedValue
+        let straight = Self.buildWeeks(today: today, calendar: calendar)
+        let weeks = Array(straight.drop { $0 < initialTop })
+            + Array(straight.filter { $0 < initialTop })
         _weeks = State(initialValue: weeks)
         let caches = Self.buildCaches(weeks: weeks, tasks: tasks,
                                       showCompleted: showCompleted, calendar: calendar)
@@ -486,43 +502,54 @@ struct CalendarMonthGridView: View {
             weekHeader
             GeometryReader { geo in
                 let rowHeight = geo.size.height / 5 // 视口固定露出 5 行
-                ScrollViewReader { proxy in
-                ScrollView {
-                    // scrollTargetLayout：把周行标记为 viewAligned 的对齐目标。
-                    // 缺了它 viewAligned 退化成自由滚动（不 snap、不回写
-                    // scrollPosition）——2026-10-07 实测顶行停在半行。
-                    VStack(spacing: 0) {
-                        ForEach(weeks, id: \.self) { weekStart in
-                            let weekDays = daysByWeek[weekStart] ?? []
-                            MonthWeekRow(
-                                days: weekDays,
-                                month: month,
-                                today: today,
-                                selectedDay: selectedDay,
-                                isLastRow: false,
-                                calendar: calendar,
-                                spans: spansByWeek[weekStart] ?? [],
-                                dayTasks: weekDays.map { dayTasks[$0] ?? [] },
-                                barColor: barColor,
-                                onSelectDay: onSelectDay,
-                                onOpenTask: onOpenTask,
-                                onCreateTask: onCreateTask,
-                                onDropTask: onDropTask,
-                                onToggleTask: onToggleTask,
-                                anchorSink: anchorSink)
-                            .id(weekStart)
-                            .frame(height: rowHeight)
+                if #available(macOS 15.0, *) {
+                    // **视口化挂载（用户方案"邻近提前合成、远处按需"）**：
+                    // LazyVStack 只挂载可视 ±预热行，滚动中锚探针/日号/任务条
+                    // 从 61 行常驻降到 ~10 行——探针的逐帧坐标写回（427 → ~35）
+                    // 是比图层合成更大的滚动 CPU 项。回写走 onScrollGeometry
+                    // Change（offset→顶行），绕开 scrollPosition 在懒内容上
+                    // 回写失灵的坑；程序化跳转走 scrollTo + 跳转哨。
+                    ScrollViewReader { proxy in
+                        lazyColumn(rowHeight: rowHeight)
+                            .scrollTargetLayout()
+                            .scrollTargetBehavior(.viewAligned)
+                            .onScrollGeometryChange(for: CGFloat.self) { geometry in
+                                geometry.contentOffset.y
+                            } action: { _, offset in
+                                syncTopWeek(fromOffset: offset, rowHeight: rowHeight)
+                            }
+                            .onAppear {
+                                // 内容顶行即初始 topWeek（周行流旋转排序），初始
+                                // 无需定位；这里幂等归位一次作兜底。
+                                DispatchQueue.main.async {
+                                    proxy.scrollTo(topWeek, anchor: .top)
+                                }
+                            }
+                            .onChange(of: topWeek) { _, target in
+                                // 只跳"父级程序化跳转"（哨匹配）；用户滚动的
+                                // 回写不匹配哨，不会打断惯性。
+                                guard programmaticTarget == target else { return }
+                                programmaticTarget = nil
+                                withAnimation(.easeOut(duration: 0.25)) {
+                                    proxy.scrollTo(target, anchor: .top)
+                                }
+                            }
+                    }
+                } else {
+                    // macOS 14 回退：非 lazy（scrollPosition 绑定在懒内容上会
+                    // 回写停住，标题脱节——2026-10-07 实测），回写靠绑定。
+                    ScrollViewReader { proxy in
+                        ScrollView {
+                            solidColumn(rowHeight: rowHeight)
+                        }
+                        .scrollTargetLayout()
+                        .scrollPosition(id: positionBinding, anchor: .top)
+                        .scrollTargetBehavior(.viewAligned)
+                        .onAppear {
+                            // scrollPosition 初值不驱动初始定位，补一次 scrollTo。
+                            DispatchQueue.main.async { proxy.scrollTo(topWeek, anchor: .top) }
                         }
                     }
-                }
-                .scrollTargetLayout()
-                .scrollPosition(id: positionBinding, anchor: .top)
-                .scrollTargetBehavior(.viewAligned)
-                .onAppear {
-                    // scrollPosition 的初值不驱动初始定位（实测停在内容起点），
-                    // 初始定位补一次 scrollTo；跳转路径靠绑定变化驱动滚动。
-                    DispatchQueue.main.async { proxy.scrollTo(topWeek, anchor: .top) }
-                }
                 }
             }
         }
@@ -534,16 +561,72 @@ struct CalendarMonthGridView: View {
         }
     }
 
+    // MARK: 列内容（两分支共用一行构造）
+
+    @ViewBuilder
+    private func weekRow(_ weekStart: Date, rowHeight: CGFloat) -> some View {
+        let weekDays = daysByWeek[weekStart] ?? []
+        MonthWeekRow(
+            days: weekDays,
+            month: month,
+            today: today,
+            selectedDay: selectedDay,
+            isLastRow: false,
+            calendar: calendar,
+            spans: spansByWeek[weekStart] ?? [],
+            dayTasks: weekDays.map { dayTasks[$0] ?? [] },
+            barColor: barColor,
+            onSelectDay: onSelectDay,
+            onOpenTask: onOpenTask,
+            onCreateTask: onCreateTask,
+            onDropTask: onDropTask,
+            onToggleTask: onToggleTask,
+            anchorSink: anchorSink)
+        .id(weekStart)
+        .frame(height: rowHeight)
+    }
+
+    @ViewBuilder
+    private func lazyColumn(rowHeight: CGFloat) -> some View {
+        ScrollView {
+            LazyVStack(spacing: 0) {
+                ForEach(weeks, id: \.self) { weekStart in
+                    weekRow(weekStart, rowHeight: rowHeight)
+                }
+            }
+        }
+    }
+
+    private func solidColumn(rowHeight: CGFloat) -> some View {
+        ScrollView {
+            VStack(spacing: 0) {
+                ForEach(weeks, id: \.self) { weekStart in
+                    weekRow(weekStart, rowHeight: rowHeight)
+                }
+            }
+        }
+    }
+
+    /// 14- 回退分支的 scrollPosition 回写绑定（非 lazy 内容上可靠）。
+    private var positionBinding: Binding<Date?> {
+        Binding(get: { topWeek }, set: { if let value = $0 { topWeek = value } })
+    }
+
+    /// 滚动偏移 → 顶行周。snap 对齐后 offset 恰为行高整倍数；半行容差取整。
+    private func syncTopWeek(fromOffset offset: CGFloat, rowHeight: CGFloat) {
+        guard rowHeight > 0 else { return }
+        let index = min(max(Int((offset + rowHeight / 2) / rowHeight), 0), weeks.count - 1)
+        let target = weeks[index]
+        if programmaticTarget == target { programmaticTarget = nil }
+        if topWeek != target { topWeek = target }
+    }
+
     private func rebuildCaches(tasks: [Task]) {
         let caches = Self.buildCaches(weeks: weeks, tasks: tasks,
                                       showCompleted: showCompleted, calendar: calendar)
         daysByWeek = caches.days
         dayTasks = caches.dayTasks
         spansByWeek = caches.spans
-    }
-
-    private var positionBinding: Binding<Date?> {
-        Binding(get: { topWeek }, set: { if let value = $0 { topWeek = value } })
     }
 
     static func startOfWeek(containing date: Date, calendar: Calendar) -> Date {
