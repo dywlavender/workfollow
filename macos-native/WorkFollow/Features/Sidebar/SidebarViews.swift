@@ -20,12 +20,14 @@ struct IconRailView: View {
             // 色块 —— 用户报「看起来很怪，图标不一样，为什么选中后的颜色图案和滴答一样」。
             // 现在把两头对齐到同一套语言：**图标实心，选中＝图标自己变蓝，不再有底块**。
             //
-            // ⚠️ SF Symbols 的实心覆盖是**部分**的，下面 6 个是换过的（隐喻有变）：
+            // ⚠️ SF Symbols 的实心覆盖是**部分**的，下面 5 个是换过的（隐喻有变）：
             //   · 笔记  text.alignleft → text.document.fill（描边线条没有实心版）
-            //   · 日历  calendar       → calendar.circle.fill（**唯一的实心日历**，形状变圆）
             //   · 倒数  hourglass      → hourglass.bottomhalf.filled（保留沙漏，做成半实心）
             //   · 专注  timer          → timer.circle.fill（保留秒表，外面加实心圆）
             //   · 摘要  square.and.pencil → list.bullet.clipboard.fill
+            //   · 日历  calendar.circle.fill → **自绘 glyph**（SF 没有实心 calendar 变体，
+            //     circle.fill 是整列唯一圆底、小尺寸糊成一团，2026-10-07 用户报"丑"；
+            //     见 `RailCalendarGlyph`，几何与 docs/design/calendar-rail-icon.svg 同源）
             // 另两个是原形直接加 `.fill`：任务 checkmark.square.fill、四象限 square.grid.2x2.fill。
             //
             // 底部「搜索 / 设置」保持描边：滴答自己的搜索也是描边放大镜。
@@ -71,8 +73,7 @@ railButton(.summary, symbol: "list.bullet.clipboard.fill", title: "摘要",
         Button {
             activate(destination, eventType: NSApp.currentEvent?.type)
         } label: {
-            Image(systemName: symbol)
-                .font(.system(size: RailMetrics.iconSize))
+            railIcon(symbol, selected: selected)
                 .foregroundStyle(selected ? WFColors.accent : WFColors.secondaryText)
                 .frame(width: RailMetrics.hitSize, height: RailMetrics.hitSize)
                 .focusRenderAnchor(.railSelectedHitArea)
@@ -83,6 +84,21 @@ railButton(.summary, symbol: "list.bullet.clipboard.fill", title: "摘要",
             return .handled
         }
         .help(title).accessibilityLabel(title)
+    }
+
+    /// 日历的实心 glyph 不存在于 SF Symbols（circle.fill 是整列唯一圆底，2026-10-07
+    /// 用户报"丑"并两版否掉自创几何后，改用 Google Material Symbols `calendar_month`
+    /// 的官方几何）。960 坐标系换算到 24 单位设计空间：本体 3..21、吊耳 2..4.8、
+    /// 页眉白线 6..8、日期点阵 2×3（r=1，x 7/12/16，y 13/17）。镂空用 even-odd，
+    /// 任意着色（含选中蓝）都成立。
+    @ViewBuilder
+    private func railIcon(_ symbol: String, selected: Bool) -> some View {
+        if symbol == "calendar.circle.fill" {
+            RailCalendarGlyph(selected: selected)
+        } else {
+            Image(systemName: symbol)
+                .font(.system(size: RailMetrics.iconSize))
+        }
     }
 
     private func activate(_ destination: NativeDestination, eventType: NSEvent.EventType?) {
@@ -109,6 +125,43 @@ railButton(.summary, symbol: "list.bullet.clipboard.fill", title: "摘要",
                 window?.makeFirstResponder(nil)
             }
         }
+    }
+}
+
+/// 日历 rail 图标：Material Symbols「calendar_month」官方几何的 SwiftUI 原生实现
+/// （用户选定 B 方案，2026-10-07）。用 Path even-odd 镂空——横线与日期点在任何
+/// 着色（含选中蓝）下都成立；几何换算见 `railIcon` 注释，SVG 对照件在
+/// docs/design/calendar-icon-candidates.svg。
+private struct RailCalendarGlyph: View {
+    let selected: Bool
+
+    var body: some View {
+        // 24 单位设计空间；墨迹高 20 单位（2..22），缩放到与 SF Symbol 21pt 同量级。
+        let scale = RailMetrics.iconSize / 20
+        let shell = Path { path in
+            path.addRoundedRect(in: CGRect(x: 3, y: 4, width: 18, height: 18),
+                                cornerSize: CGSize(width: 2, height: 2))
+            path.addRect(CGRect(x: 5, y: 10, width: 14, height: 10)) // 内腔镂空
+            path.addRect(CGRect(x: 5, y: 6, width: 14, height: 2))   // 页眉白线镂空
+            for y in [13.0, 17.0] {
+                for x in [7.0, 12.0, 16.0] {
+                    path.addEllipse(in: CGRect(x: x - 1, y: y - 1, width: 2, height: 2))
+                }
+            }
+        }
+        let tabs = Path { path in
+            path.addRoundedRect(in: CGRect(x: 6, y: 2, width: 2, height: 2.8),
+                                cornerSize: CGSize(width: 0.7, height: 0.7))
+            path.addRoundedRect(in: CGRect(x: 15, y: 2, width: 2, height: 2.8),
+                                cornerSize: CGSize(width: 0.7, height: 0.7))
+        }
+        let color = selected ? WFColors.accent : WFColors.secondaryText
+        return ZStack {
+            shell.fill(color, style: FillStyle(eoFill: true))
+            tabs.fill(color)
+        }
+        .frame(width: 24 * scale, height: 24 * scale)
+        .frame(width: RailMetrics.hitSize, height: RailMetrics.hitSize)
     }
 }
 
