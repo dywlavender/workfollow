@@ -78,11 +78,10 @@ struct CalendarWorkspaceView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(WFColors.content)
-        // 触控板/滚轮手势翻页（2026-10-07 用户需求"左右切换或上下滑动"）：
-        // 双指横扫/纵扫 = 前后翻周期（月模式翻月，周模式翻周——纵向在周模式
-        // 留给日期格内的任务列表滚动）。累积/阈值/冷却与 NSEvent 桥接在
+        // 触控板/滚轮手势翻页（2026-10-07 用户需求"左右切换"；纵向不翻月，
+        // 留给内容滚动——周格任务列表）。累积/阈值/冷却与 NSEvent 桥接在
         // CalendarSwipeGestureModifier；方向反了改它的 directionSign。
-        .modifier(CalendarSwipeGestureModifier { direction, _ in
+        .modifier(CalendarSwipeGestureModifier { direction in
             withAnimation(.easeOut(duration: 0.2)) { step(direction) }
         })
         // 浮层的坐标基准：锚点矩形与弹框位置都在这一个坐标系里算。
