@@ -1,6 +1,41 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
+private struct TaskOutlineRowState: Equatable {
+    let task: Task
+    let depth: Int
+    let hasChildren: Bool
+    let expanded: Bool
+    let selected: Bool
+    let showsListBadge: Bool
+    let hidesDetails: Bool
+    let hiddenFields: [TaskRowDetailField]
+    let allowsReordering: Bool
+    let progress: String?
+    let day: Date
+    let dateRevision: Int
+}
+
+private struct TaskOutlineRowLayout: Equatable {
+    let hasPreview: Bool
+    let completed: Bool
+    let depth: Int
+}
+
+private struct TaskOutlineHeaderState: Equatable {
+    let revision: Int
+    let title: String
+    let count: Int
+    let collapsed: Bool
+    let hovered: Bool
+    let moveTarget: String?
+}
+
+private struct TaskOutlineCountdownState: Equatable {
+    let section: CountdownSmartListSection
+    let collapsed: Bool
+}
+
 struct TaskListView: View {
     @ObservedObject var workspace: TaskWorkspaceModel
     @ObservedObject var navigation: AppNavigation
@@ -1005,92 +1040,95 @@ struct TaskListView: View {
         return group.id + ":" + task.id.uuidString + ":" + status + ":" + abandoned
     }
 
-    @ViewBuilder
-    private func taskListSection() -> some View {
-        ScrollView {
-            LazyVStack(spacing: 0) {
-                // 「倒数纪念日」小节：只有「今天」这一支——参照图
-                // （`docs/screenshots/ticktick-reference/18-countdown-in-today-group.png`）
-                // 观察到的就是「今天」清单里的形态，其余智能清单（最近 7 天等）
-                // 没观察过，不照猜出来的样子铺开（上一轮「备注入口」就是这么猜错的）。
-                //
-                // 空态一并交给它：任务组为空**且**本节也为空时才渲染插画，
-                // 否则会出现「倒数纪念日 1」下面紧跟着「今天没有任务」。
-                if scope == .today {
-                    CountdownSmartListSectionHost(
-                        store: environment.countdownStore,
-                        clock: workspace.clock,
-                        calendar: workspace.calendar,
-                        destination: navigation.destination,
-                        tasksAreEmpty: groups.isEmpty,
-                        collapsed: countdownSectionCollapsed,
-                        onToggle: { countdownSectionCollapsed.toggle() },
-                        onSelect: { _ in navigation.destination = .countdown })
-                } else if groups.isEmpty {
-                    // 列表空态（阶段3）：统一插画 + 既有分视图文案（文案规则不改）。
-                    TaskEmptyStateView(style: .list,
-                                       message: TaskListViewDefaults.emptyStateMessage(
-                                           destination: navigation.destination))
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, WFSpace.page)
-                }
-                ForEach(groups, id: \.id) { group in
-                    // 无标签的 plain 组是平铺视图本体（历史行为），不渲染组头；
-                    // 带标签的 plain 组（按优先级/清单/标签分组产生）渲染组头。
-                    if group.kind != .plain || group.label != nil {
+    private var taskOutlineRows: [NativeTaskOutline.Row] {
+        var rows: [NativeTaskOutline.Row] = []
+        let currentGroups = groups
+        if scope != .today && currentGroups.isEmpty {
+            rows.append(.init(id: "empty", state: navigation.destination.rawValue, layout: "empty") {
+                TaskEmptyStateView(style: .list,
+                                   message: TaskListViewDefaults.emptyStateMessage(destination: navigation.destination))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, WFSpace.page)
+            })
+        }
+        for group in currentGroups {
+            if group.kind != .plain || group.label != nil {
+                let header = TaskOutlineHeaderState(revision: workspace.revision, title: groupTitle(group),
+                    count: group.tasks.count, collapsed: groupExpansion.isCollapsed(group),
+                    hovered: hoveredSectionID == group.sectionID, moveTarget: moveTargetSectionID)
+                rows.append(.init(id: "header:" + group.id, state: header, layout: "header") {
+                    VStack(spacing: 0) {
                         Color.clear.frame(height: TaskListMetrics.groupTopGap)
                             .accessibilityHidden(true)
                         groupHeader(group)
-                    }
-                    if (group.kind == .plain && group.label == nil) || !groupExpansion.isCollapsed(group) {
-                        ForEach(displayedNodes(for: group, scope: scope ?? .today),
-                                id: \.task.id) { node in
-                            taskRow(group: group, node: node)
-                        }
-                    }
+                    }.environmentObject(environment)
+                })
+            }
+            if (group.kind == .plain && group.label == nil) || !groupExpansion.isCollapsed(group) {
+                for node in displayedNodes(for: group, scope: scope ?? .today) {
+                    let preview = TaskListViewDefaults.bodyPreview(of: node.task.document)
+                    let state = TaskOutlineRowState(task: node.task, depth: node.depth,
+                        hasChildren: node.hasChildren, expanded: node.expanded,
+                        selected: workspace.selectedTaskID == node.task.id || workspace.bulkSelection.contains(node.task.id),
+                        showsListBadge: showsListBadge,
+                        hidesDetails: environment.viewPreferences.hidesDetails(for: preferenceKey),
+                        hiddenFields: environment.viewPreferences.hiddenDetailFields(for: preferenceKey),
+                        allowsReordering: sortMode == .manual && !node.task.isClosed,
+                        progress: workspace.subtaskProgress(for: node.task.id),
+                        day: workspace.calendar.startOfDay(for: workspace.clock()), dateRevision: workspace.dateRevision)
+                    let layout = TaskOutlineRowLayout(hasPreview: preview != nil,
+                        completed: node.task.status == .completed, depth: node.depth)
+                    rows.append(.init(id: rowIdentity(group: group, task: node.task), state: state, layout: layout) {
+                        taskRow(group: group, node: node).environmentObject(environment)
+                    })
                 }
             }
-            .padding(.horizontal, WFSpace.md)
-            .padding(.bottom, WFSpace.xl)
         }
+        rows.append(.init(id: "bottom-inset", state: "inset", layout: "inset") {
+            Color.clear.frame(height: WFSpace.xl).accessibilityHidden(true)
+        })
+        return rows
+    }
+
+    private func taskListSection() -> some View {
+        TaskOutlineHost(store: environment.countdownStore,
+                        clock: workspace.clock, calendar: workspace.calendar,
+                        destination: navigation.destination,
+                        includesCountdown: scope == .today,
+                        tasksAreEmpty: groups.isEmpty,
+                        collapsed: countdownSectionCollapsed,
+                        onToggle: { countdownSectionCollapsed.toggle() },
+                        onSelect: { _ in navigation.destination = .countdown },
+                        rows: taskOutlineRows, scopeKey: preferenceKey, onKey: handleOutlineKey)
         .focusable(!editingRowTitle)
         .focused($listFocused)
         .focusEffectDisabled()
-        .onKeyPress(.upArrow) {
-            guard !nativeTextEditing, !quickAddFocused, scope != nil else { return .ignored }
-            selectFiltered(-1)
-            return .handled
-        }
-        .onKeyPress(.downArrow) {
-            guard !nativeTextEditing, !quickAddFocused, scope != nil else { return .ignored }
-            selectFiltered(1)
-            return .handled
-        }
-        .onKeyPress(.return) {
-            // 批量态下回车/空格一律无效（状态机 A 不变量）——回车只服务单选。
-            guard !nativeTextEditing, !quickAddFocused, scope != nil, workspace.bulkSelection.isEmpty else { return .ignored }
+        .onKeyPress(.upArrow) { handleOutlineKey(.up) ? .handled : .ignored }
+        .onKeyPress(.downArrow) { handleOutlineKey(.down) ? .handled : .ignored }
+        .onKeyPress(.return) { handleOutlineKey(.enter) ? .handled : .ignored }
+        .onKeyPress(.space) { handleOutlineKey(.space) ? .handled : .ignored }
+        .onKeyPress(.escape) { handleOutlineKey(.escape) ? .handled : .ignored }
+    }
+
+    private func handleOutlineKey(_ key: TaskOutlineKey) -> Bool {
+        guard !nativeTextEditing else { return false }
+        switch key {
+        case .up, .down:
+            guard !quickAddFocused, scope != nil else { return false }
+            selectFiltered(key == .up ? -1 : 1)
+        case .enter:
+            guard !quickAddFocused, scope != nil, workspace.bulkSelection.isEmpty else { return false }
             if workspace.selectedTaskID == nil { selectFiltered(1) }
-            return .handled
+        case .space:
+            guard !quickAddFocused, workspace.bulkSelection.isEmpty,
+                  let task = workspace.selectedTask else { return false }
+            _ = workspace.changeStatus(task, in: scope)
+        case .escape:
+            if !workspace.bulkSelection.isEmpty { workspace.clearBulkSelection() }
+            else if workspace.selectedTaskID != nil { workspace.select(nil) }
+            else { return false }
         }
-        .onKeyPress(.space) {
-            guard !nativeTextEditing, !quickAddFocused, workspace.bulkSelection.isEmpty,
-                  let task = workspace.selectedTask else { return .ignored }
-            _ = workspace.changeStatus(task, in: scope); return .handled
-        }
-        .onKeyPress(.escape) {
-            guard !nativeTextEditing else { return .ignored }
-            // Esc 阶梯最外层：先退批量（S2→S0），再退单选（S1→S0）。
-            // 详情面板自己持有焦点时由 TaskInspectorShell 接管，两条路语义一致。
-            if !workspace.bulkSelection.isEmpty {
-                workspace.clearBulkSelection()
-                return .handled
-            }
-            if workspace.selectedTaskID != nil {
-                workspace.select(nil)
-                return .handled
-            }
-            return .ignored
-        }
+        return true
     }
 
     @ViewBuilder
@@ -1253,7 +1291,8 @@ struct TaskListView: View {
 struct TaskRowView: View {
     @EnvironmentObject private var environment: AppEnvironment
     let task: Task
-    @ObservedObject var workspace: TaskWorkspaceModel
+    // The owning list supplies row changes; actions still use the shared model.
+    let workspace: TaskWorkspaceModel
     let depth: Int
     let hasChildren: Bool
     let expanded: Bool
@@ -1308,29 +1347,31 @@ struct TaskRowView: View {
             }
 
             VStack(alignment: .leading, spacing: 1) {
-                TaskRowTitleField(title: task.title,
-                                  color: task.status == .completed ? WFColors.taskCompletedTitle : task.isClosed ? WFColors.secondaryText : WFColors.text,
-                                  onSelect: onEditTitle ?? onSelect,
-                                  onEditingEnded: { onTitleEditingEnded?() },
-                                  onCommit: { _ = workspace.setTitle(task.id, $0) })
-                    .frame(height: 18)
-                    .taskTreeRenderAnchor(task.id, .title)
+                HStack(alignment: .top, spacing: WFSpace.sm) {
+                    TaskRowTitleField(title: task.title,
+                                      color: task.status == .completed ? WFColors.taskCompletedTitle : task.isClosed ? WFColors.secondaryText : WFColors.text,
+                                      onSelect: onEditTitle ?? onSelect,
+                                      onEditingEnded: { onTitleEditingEnded?() },
+                                      onCommit: { _ = workspace.setTitle(task.id, $0) })
+                        .frame(minWidth: 96, maxWidth: .infinity)
+                        .frame(height: 18)
+                        .taskTreeRenderAnchor(task.id, .title)
+                    TaskRowMetadataTrail(task: task, workspace: workspace,
+                                         showsListBadge: showsListBadge,
+                                         hidesDetails: hidesDetails,
+                                         hiddenFields: hiddenFields,
+                                         onOpenDate: { contextDateAnchor = nil; showDatePopover = true })
+                }
                 if let preview = rowPreview {
                     Text(preview)
-                        .font(task.status == .completed ? WFType.completedListBody : WFType.listBody).lineLimit(1)
+                        .font(task.status == .completed ? WFType.completedListBody : WFType.listBody)
+                        .lineLimit(1)
                         .foregroundStyle(task.status == .completed ? WFColors.taskCompletedPreview : WFColors.secondaryText)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                         .taskTreeRenderAnchor(task.id, .preview)
                 }
             }
             .frame(maxWidth: .infinity, minHeight: WFMetrics.rowContentMinHeight, alignment: .topLeading)
-
-            // 与 Flutter 行一致：元数据尾栏常驻，悬浮只做行背景高亮，不浮现
-            // 任何快捷按钮（日期走尾栏日期徽章，优先级走右键菜单/检查器）。
-            TaskRowMetadataTrail(task: task, workspace: workspace,
-                                 showsListBadge: showsListBadge,
-                                 hidesDetails: hidesDetails,
-                                 hiddenFields: hiddenFields,
-                                 onOpenDate: { contextDateAnchor = nil; showDatePopover = true })
         }
         .padding(.horizontal, TaskListMetrics.rowHorizontalPadding)
         // 对齐 Flutter rowVerticalPadding = 11：内容顶对齐，勾选框贴标题首行。
@@ -1415,7 +1456,7 @@ struct TaskRowView: View {
 
     /// Folding hides children; only this task's own body supplies its preview.
     private var rowPreview: String? {
-        TaskListViewDefaults.bodyPreview(of: task.document.plainText)
+        TaskListViewDefaults.bodyPreview(of: task.document)
     }
 
 }
@@ -1480,7 +1521,7 @@ private struct TaskRowCompletionBox: View {
 /// Edge drops reorder; root centers accept children; the left gutter promotes
 /// a child to a root. The feedback distinguishes ordering from hierarchy changes.
 private struct TaskReorderDropModifier: ViewModifier {
-    @ObservedObject var workspace: TaskWorkspaceModel
+    let workspace: TaskWorkspaceModel
     let targetID: UUID
     let depth: Int
     @ObservedObject var feedback: TaskDropFeedback
@@ -1527,7 +1568,7 @@ private struct TaskReorderDropModifier: ViewModifier {
 /// 日期徽标颜色：今天=强调色、过期=红色、其余=灰色。
 private struct TaskRowMetadataTrail: View {
     let task: Task
-    @ObservedObject var workspace: TaskWorkspaceModel
+    let workspace: TaskWorkspaceModel
     var showsListBadge: Bool
     /// 「隐藏详细」整行隐藏；`hiddenFields` 在此基础上逐字段关闭。
     var hidesDetails: Bool = false
@@ -1602,7 +1643,8 @@ private struct TaskRowMetadataTrail: View {
         }
         .font(WFType.supporting)
         .lineLimit(1)
-        .frame(maxWidth: 200, alignment: .trailing)
+        .frame(maxWidth: 140, alignment: .trailing)
+        .fixedSize(horizontal: true, vertical: false)
     }
 
     private var dateBadge: some View {
@@ -1628,8 +1670,7 @@ private struct TaskRowMetadataTrail: View {
 
     private var secondaryMetadata: [TaskRowSecondaryMetadata] {
         var items: [TaskRowSecondaryMetadata] = []
-        if let progress = TaskListViewDefaults.subtaskProgress(parentID: task.id,
-                                                               tasks: workspace.allTasks) {
+        if let progress = workspace.subtaskProgress(for: task.id) {
             items.append(.init(id: "subtasks", value: progress,
                                accessibilityLabel: "子任务进度：\(progress)"))
         }
@@ -1739,6 +1780,14 @@ enum TaskListViewDefaults {
         return nil
     }
 
+    /// Stop at the first nonempty block/line instead of joining the whole document.
+    static func bodyPreview(of document: NativeDocument) -> String? {
+        for block in document.blocks {
+            if let preview = bodyPreview(of: block.plainText) { return preview }
+        }
+        return nil
+    }
+
     /// 分组标题右侧的小字尾注；只有"已过期"组显示"顺延"。
     static func groupTrailingNote(for kind: TaskGroupKind) -> String? {
         kind == .overdue ? "顺延" : nil
@@ -1760,32 +1809,43 @@ enum TaskListViewDefaults {
 /// 空态也归它管：任务组为空**且**本节为空时才渲染插画。两件事放一起是因为它们
 /// 读的是同一个 `section`——分成两处就得算两遍，还可能算出不一致的结果
 /// （出现「倒数纪念日 1」下面紧跟着「今天没有任务」）。
-private struct CountdownSmartListSectionHost: View {
+private struct TaskOutlineHost: View {
     @ObservedObject var store: CountdownStore
     let clock: () -> Date
     let calendar: Calendar
     let destination: NativeDestination
+    let includesCountdown: Bool
     let tasksAreEmpty: Bool
     let collapsed: Bool
     let onToggle: () -> Void
     let onSelect: (UUID) -> Void
-
-    private var section: CountdownSmartListSection {
-        CountdownSmartListProjection.section(events: store.events,
-                                             now: clock(), calendar: calendar)
-    }
+    let rows: [NativeTaskOutline.Row]
+    let scopeKey: String
+    let onKey: (TaskOutlineKey) -> Bool
 
     var body: some View {
-        if !section.isEmpty {
-            Color.clear.frame(height: TaskListMetrics.groupTopGap)
-                .accessibilityHidden(true)
-            CountdownSmartListSectionView(section: section, collapsed: collapsed,
-                                          onToggle: onToggle, onSelect: onSelect)
-        } else if tasksAreEmpty {
-            TaskEmptyStateView(style: .list,
-                               message: TaskListViewDefaults.emptyStateMessage(destination: destination))
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, WFSpace.page)
+        let section = includesCountdown
+            ? CountdownSmartListProjection.section(events: store.events, now: clock(), calendar: calendar)
+            : .empty
+        var prefix: [NativeTaskOutline.Row] = []
+        if includesCountdown && !section.isEmpty {
+            let state = TaskOutlineCountdownState(section: section, collapsed: collapsed)
+            prefix.append(.init(id: "countdown-section", state: state, layout: state) {
+                VStack(spacing: 0) {
+                    Color.clear.frame(height: TaskListMetrics.groupTopGap)
+                        .accessibilityHidden(true)
+                    CountdownSmartListSectionView(section: section, collapsed: collapsed,
+                                                  onToggle: onToggle, onSelect: onSelect)
+                }
+            })
+        } else if includesCountdown && tasksAreEmpty {
+            prefix.append(.init(id: "today-empty", state: destination.rawValue, layout: "empty") {
+                TaskEmptyStateView(style: .list,
+                                   message: TaskListViewDefaults.emptyStateMessage(destination: destination))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, WFSpace.page)
+            })
         }
+        return NativeTaskOutline(rows: prefix + rows, scopeKey: scopeKey, onKey: onKey)
     }
 }

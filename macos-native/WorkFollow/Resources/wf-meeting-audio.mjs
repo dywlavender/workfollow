@@ -2,6 +2,7 @@
 import { createRequire } from 'node:module';
 import { realpathSync, readFileSync, existsSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
+import {httpASRModel,transcribeHTTP} from './wf-meeting-http.mjs';
 
 const MAX_BYTES = 60 * 32000;
 
@@ -135,24 +136,32 @@ export function runRealtime({url, apiKey, headers = {}, pcm, instructions, text,
  *
  * 2026-10-06 用户决定「纪要和转写用同一个模型」：原先这里按硬编码 id
  * `qwen3.8-omni-flash-realtime` 去注册表里找模型，现已删掉——模型改由会议设置里的
- * 「模型标识」决定。代价是**该模型必须是百炼业务空间的实时模型**，否则
- * `realtimeURL` 会直接拒绝，不再有内置兜底。
+ * 「模型标识」决定。实时模型走 WebSocket，已适配的 ASR 模型走 HTTP；
+ * 两者端点与认证都只从 Pi 获取，不隐式更换模型。
  */
 export async function audioModel(ctx) {
   const model = ctx.model;
   if (!model?.id) throw new Error('Pi 未选择模型，请在会议设置里填写模型标识。');
   const auth = await ctx.modelRegistry.getApiKeyAndHeaders(model);
   if (!auth.ok || !auth.apiKey) throw new Error('Pi 模型认证未配置。');
+  if(model.id===httpASRModel) {
+    const url=new URL(realtimeURL(auth.baseUrl??model.baseUrl,model.id));
+    url.protocol='https:';url.pathname='/api/v1/services/aigc/multimodal-generation/generation';url.search='';
+    return {url:url.toString(),apiKey:auth.apiKey,headers:auth.headers,modelID:model.id,transport:'http'};
+  }
   return {url: realtimeURL(auth.baseUrl ?? model.baseUrl, model.id),
     apiKey: auth.apiKey, headers: auth.headers, modelID: model.id};
 }
 
-export default function meetingAudioExtension(pi, {resolveAudioModel = audioModel, realtime = runRealtime} = {}) {
+export default function meetingAudioExtension(pi, {resolveAudioModel = audioModel, realtime = runRealtime, http = transcribeHTTP} = {}) {
   pi.registerCommand('wf-meeting-check', {
     description: 'Verify Pi audio authentication/session without sending audio',
     handler: async (_, ctx) => {
       try {
-        await realtime({...await resolveAudioModel(ctx), probe: true, timeoutMs: 15000,
+        const connection=await resolveAudioModel(ctx);
+        // HTTP has no persistent session handshake. This verifies Pi model/auth only.
+        if(connection.transport==='http') { ctx.ui.notify('WF_MEETING_READY http-configured','info');return; }
+        await realtime({...connection, probe: true, timeoutMs: 15000,
           instructions: '仅检查会话配置，不执行推理。'});
         ctx.ui.notify('WF_MEETING_READY connected', 'info');
       } catch (error) { ctx.ui.notify('WF_MEETING_ERROR ' + safeError(error), 'error'); }
@@ -170,11 +179,12 @@ export default function meetingAudioExtension(pi, {resolveAudioModel = audioMode
           return;
         }
         const connection = await resolveAudioModel(ctx);
-        const output = await realtime({...connection, pcm, instructions: transcriptionInstructions(input.duration)});
-        const result = parseTranscript(output, input.duration);
+        const result = connection.transport==='http'
+          ? await http({...connection,pcm})
+          : parseTranscript(await realtime({...connection, pcm, instructions: transcriptionInstructions(input.duration)}),input.duration);
         // These are segment-local labels, not a verified cross-segment voiceprint.
         for (const segment of result.segments) if (segment.speaker) {
-          segment.speaker = `片段 ${input.offset.toFixed(1)}s · 暂定${segment.speaker}`;
+          segment.speaker = `片段 ${input.offset.toFixed(1)}s · ${connection.transport==='http'?'':'暂定'}${segment.speaker}`;
         }
         ctx.ui.notify('WF_MEETING_RESULT ' + JSON.stringify(result), 'info');
       } catch (error) { ctx.ui.notify('WF_MEETING_ERROR ' + safeError(error), 'error'); }
@@ -189,10 +199,11 @@ export default function meetingAudioExtension(pi, {resolveAudioModel = audioMode
           throw new Error('纪要请求无效。');
         }
         const rules = meetingMinutesRules();
-        // 转写与纪要共用同一个模型，而它必须是实时模型；普通 chat-completions
-        // 调不动实时模型，所以纪要固定走同一实时会话的文本通道。
+        const connection=await resolveAudioModel(ctx);
+        if(connection.transport==='http')throw new Error('当前 ASR 模型只支持音频转写，不能生成纪要；可手动编辑纪要，或另行配置文本生成模型。');
+        // 实时模型的纪要走同一会话的文本通道；HTTP ASR 不支持纪要生成。
         // 2026-10-06 起不再有 `modelRegistry.complete` 分支。
-        const output = await realtime({...await resolveAudioModel(ctx), text: input.prompt,
+        const output = await realtime({...connection, text: input.prompt,
           instructions: rules});
         if (!output.trim()) throw new Error('Pi 返回空纪要。');
         ctx.ui.notify('WF_MEETING_MINUTES ' + output, 'info');
@@ -203,6 +214,6 @@ export default function meetingAudioExtension(pi, {resolveAudioModel = audioMode
 
 function safeError(error) {
   // Parse/SDK errors may contain payloads; only expose our own bounded messages.
-  return error instanceof Error && /^(Pi|音频|转写|纪要|无法创建)/.test(error.message) && error.message.length < 160
+  return error instanceof Error && /^(Pi|HTTP 转写|当前 ASR 模型|音频|转写|纪要|无法创建)/.test(error.message) && error.message.length < 160
     ? error.message : 'Pi 会议扩展请求失败，请检查配置与返回格式。';
 }

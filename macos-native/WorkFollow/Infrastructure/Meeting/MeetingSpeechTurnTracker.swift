@@ -84,21 +84,36 @@ final class MeetingSpeechTurnTracker: @unchecked Sendable {
         }
     }
 
+    /// 单个 turn 的生产延迟检查；Final 已到或已判缺失时不做修改。
+    func expireFinal(itemID: String) {
+        lock.withLock {
+            guard let index = indexByID[itemID], turns[index].status == .awaitingFinal,
+                  let stopped = stoppedAt[itemID],
+                  clock().timeIntervalSince(stopped) >= MeetingAudioReliabilityPolicy.finalGracePeriod
+            else { return }
+            turns[index].status = .missingFinal
+            stoppedAt[itemID] = nil
+        }
+    }
+
     /// 把超过宽限仍未完成的 awaitingFinal 标记为 missingFinal。
-    /// `force = true` 用于会话已关闭：不会再有 final，全部 awaitingFinal 直接判缺失。
+    /// `force = true` 用于会话已关闭：recording / awaitingFinal 都不可能再完成。
     func sweep(force: Bool = false) {
         lock.withLock {
             let now = clock()
             for (itemID, index) in indexByID {
-                guard turns[index].status == .awaitingFinal else { continue }
                 if force {
+                    guard turns[index].status == .recording || turns[index].status == .awaitingFinal else { continue }
                     turns[index].status = .missingFinal
+                    stoppedAt[itemID] = nil
                     continue
                 }
+                guard turns[index].status == .awaitingFinal else { continue }
                 guard let stopped = stoppedAt[itemID],
-                      now.timeIntervalSince(stopped) > MeetingAudioReliabilityPolicy.finalGracePeriod
+                      now.timeIntervalSince(stopped) >= MeetingAudioReliabilityPolicy.finalGracePeriod
                 else { continue }
                 turns[index].status = .missingFinal
+                stoppedAt[itemID] = nil
             }
         }
     }

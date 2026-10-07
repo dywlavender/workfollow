@@ -1,0 +1,134 @@
+{
+  "kind": "Pi-HTTP-speaker-diarization-probe",
+  "model": "qwen-audio-3.1-asr-flash",
+  "synthetic": true,
+  "audioSaved": false,
+  "liveMicrophoneTest": false,
+  "continuousStreamingTest": false,
+  "expected": [
+    {
+      "speaker": "A",
+      "voice": "Tingting",
+      "text": "今天讨论项目交付。我建议下周五提交方案，预算暂定三千元。"
+    },
+    {
+      "speaker": "B",
+      "voice": "Eddy",
+      "text": "周五来不及，我建议改为下周一，预算改成两千五百元。"
+    },
+    {
+      "speaker": "A",
+      "voice": "Tingting",
+      "text": "同意，下周一提交，预算两千五百元。请小李整理清单。"
+    },
+    {
+      "speaker": "B",
+      "voice": "Eddy",
+      "text": "确认，我负责校对，小李整理清单，截止日期都是下周一。"
+    }
+  ],
+  "voiceRanges": [
+    {
+      "speaker": "A",
+      "start": 0,
+      "end": 7.4328125
+    },
+    {
+      "speaker": "B",
+      "start": 8.1828125,
+      "end": 13.851625
+    },
+    {
+      "speaker": "A",
+      "start": 14.601625,
+      "end": 21.474625
+    },
+    {
+      "speaker": "B",
+      "start": 22.224625,
+      "end": 28.344375
+    }
+  ],
+  "duration": 29.094375,
+  "result": {
+    "model": "qwen-audio-3.1-asr-flash",
+    "elapsedMs": 1725,
+    "text": "今天讨论项目交付，我建议下周五提交方案，预算暂定3000元。周五来不及，我建议改为下周一，预算改成2500元。同意，下周一提交，预算2500元，请小李整理清单。确认，我负责校对，小李整理清单，截止日期都是下周一。",
+    "sentences": [
+      {
+        "speaker_id": 0,
+        "sentence_id": 1,
+        "begin_time": 0,
+        "end_time": 7280,
+        "sentence_end": true,
+        "text": "今天讨论项目交付，我建议下周五提交方案，预算暂定3000元。"
+      },
+      {
+        "speaker_id": 1,
+        "sentence_id": 2,
+        "begin_time": 8160,
+        "end_time": 13360,
+        "sentence_end": true,
+        "text": "周五来不及，我建议改为下周一，预算改成2500元。"
+      },
+      {
+        "speaker_id": 0,
+        "sentence_id": 3,
+        "begin_time": 14560,
+        "end_time": 21280,
+        "sentence_end": true,
+        "text": "同意，下周一提交，预算2500元，请小李整理清单。"
+      },
+      {
+        "speaker_id": 1,
+        "sentence_id": 4,
+        "begin_time": 22160,
+        "end_time": 27840,
+        "sentence_end": true,
+        "text": "确认，我负责校对，小李整理清单，截止日期都是下周一。"
+      }
+    ],
+    "outputKeys": [
+      "sentence",
+      "text",
+      "request_id",
+      "sentences"
+    ]
+  },
+  "turnLabels": [
+    {
+      "expectedSpeaker": "A",
+      "providerLabel": 0,
+      "overlappingLabels": [
+        0
+      ]
+    },
+    {
+      "expectedSpeaker": "B",
+      "providerLabel": 1,
+      "overlappingLabels": [
+        1
+      ]
+    },
+    {
+      "expectedSpeaker": "A",
+      "providerLabel": 0,
+      "overlappingLabels": [
+        0
+      ]
+    },
+    {
+      "expectedSpeaker": "B",
+      "providerLabel": 1,
+      "overlappingLabels": [
+        1
+      ]
+    }
+  ],
+  "checks": {
+    "speakerLabelsReturned": true,
+    "exactlyTwoSpeakers": true,
+    "alternatingIdentityStable": true,
+    "transcriptMatchesFixture": true
+  }
+}

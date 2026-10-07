@@ -83,6 +83,10 @@ struct MeetingPiConfiguration: Codable, Equatable {
             .map { $0.trimmingCharacters(in: .whitespaces) }
             .first { !$0.isEmpty } ?? ""
     }
+    var usesHTTPTranscription: Bool {
+        audioExtension.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+            resolvedModel.split(separator: "/").last == "qwen-audio-3.1-asr-flash"
+    }
 }
 
 enum MeetingPiError: LocalizedError {

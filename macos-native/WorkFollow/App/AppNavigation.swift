@@ -51,5 +51,7 @@ enum NativeDestination: String, CaseIterable, Identifiable {
 @MainActor
 final class AppNavigation: ObservableObject {
     @Published var destination: NativeDestination = .today
+    init(destination: NativeDestination = .today) { self.destination = destination }
+
     var taskSelectionToPreserveOnNextNavigation: UUID?
 }

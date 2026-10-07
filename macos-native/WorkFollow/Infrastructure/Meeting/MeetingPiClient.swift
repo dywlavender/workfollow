@@ -1,14 +1,23 @@
 import Foundation
 
 protocol MeetingAIClient {
+    func prepareTranscription(configuration: MeetingPiConfiguration) async throws
     func updateMinutes(configuration: MeetingPiConfiguration, minutes: String,
                        lines: [MeetingTranscriptLine]) async throws -> String
     func transcribe(configuration: MeetingPiConfiguration, packet: MeetingAudioPacket,
                     speakers: [String]) async throws -> [MeetingTranscriptLine]
 }
 
+extension MeetingAIClient {
+    func prepareTranscription(configuration: MeetingPiConfiguration) async throws {}
+}
+
 /// Native never calls a model endpoint. Both paths launch Pi with tools disabled.
 struct MeetingPiClient: MeetingAIClient {
+    func prepareTranscription(configuration: MeetingPiConfiguration) async throws {
+        guard configuration.usesHTTPTranscription else { return }
+        _ = try await request(configuration: configuration, prompt: "/wf-meeting-check", audio: true)
+    }
     func updateMinutes(configuration: MeetingPiConfiguration, minutes: String,
                        lines: [MeetingTranscriptLine]) async throws -> String {
         guard !lines.isEmpty else { return minutes }
@@ -144,6 +153,10 @@ private final class MeetingPiProcess: @unchecked Sendable {
                         throw MeetingPiError.extensionFailure(String(message.dropFirst("WF_MEETING_ERROR ".count)).prefix(240).description)
                     }
                     throw MeetingPiError.failed
+                }
+                if audio, type == "extension_ui_request", event["method"] as? String == "notify",
+                   let message = event["message"] as? String, message.hasPrefix("WF_MEETING_READY ") {
+                    return String(message.dropFirst("WF_MEETING_READY ".count))
                 }
                 if audio, type == "extension_ui_request", event["method"] as? String == "notify",
                    let message = event["message"] as? String, message.hasPrefix("WF_MEETING_RESULT ") {

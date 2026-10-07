@@ -6,6 +6,26 @@ import XCTest
 /// 这里主动制造故障：主线程卡顿、ACK 慢、队列超限、发送失败、账本缺口，
 /// 验证的都是同一件事：**采集过的 PCM 不静默丢失，状态不撒谎**。
 final class MeetingAudioTransportTests: XCTestCase {
+    func testBatchStopDrainsWithoutStreamFinisher() async throws {
+        let transport = MeetingAudioTransport(maximumBytes: 32_000) { _ in
+            try await _Concurrency.Task.sleep(nanoseconds: 20_000_000)
+        }
+        transport.enqueue([packet(0, offset: 0)])
+        transport.stopAccepting()
+        for _ in 0..<200 {
+            if !transport.isBusy { break }
+            try await _Concurrency.Task.sleep(nanoseconds: 10_000_000)
+        }
+        XCTAssertFalse(transport.isBusy)
+        XCTAssertEqual(transport.snapshot().acknowledgedUntil, 0.25)
+        let empty = MeetingAudioTransport(maximumBytes: 32_000) { _ in }
+        empty.stopAccepting()
+        for _ in 0..<200 {
+            if !empty.isBusy { break }
+            try await _Concurrency.Task.sleep(nanoseconds: 10_000_000)
+        }
+        XCTAssertFalse(empty.isBusy)
+    }
     private func packet(_ sequence: UInt64, bytes: Int = 8_000, offset: TimeInterval) -> MeetingAudioPacket {
         MeetingAudioPacket(pcm: Data(repeating: UInt8(sequence % 127 + 1), count: bytes),
                            offset: offset, sequence: sequence)
@@ -94,7 +114,29 @@ final class MeetingAudioTransportTests: XCTestCase {
                        "账本明确指出 0.75s 之后的内容没有被确认")
     }
 
-    /// 发送失败：排队包清空（与旧行为一致），但账本保留 captured/acknowledged 差额。
+    /// 同批 overflow 后还有包时，结果和回调都必须保留首次超限。
+    @MainActor
+    func testOverflowWinsOverLaterRejectionsInTheSameBatch() async throws {
+        let overflow = expectation(description: "同批 overflow 必须通知 Store")
+        overflow.assertForOverFulfill = true
+        let sent = SendableCounter()
+        let transport = MeetingAudioTransport(maximumBytes: 8_000) { _ in
+            sent.increment()
+        }
+        transport.onOverflow = { overflow.fulfill() }
+        // enqueue 持锁处理整批，因此泵不能在 0/1/2 之间腾出空间。
+        XCTAssertEqual(transport.enqueue([packet(0, offset: 0), packet(1, offset: 0.25),
+                                          packet(2, offset: 0.5)]), .overflow)
+        await fulfillment(of: [overflow], timeout: 1)
+        await waitForAcknowledgement(transport, atLeast: 0.25)
+        XCTAssertEqual(transport.enqueue([packet(3, offset: 0.75)]), .rejectedAfterFailure)
+        XCTAssertEqual(sent.value, 1)
+        let snapshot = transport.snapshot()
+        XCTAssertEqual(snapshot.entries.map(\.sequence), [0, 1, 2, 3])
+        XCTAssertEqual(snapshot.entries.map(\.state), [.acknowledged, .captured, .captured, .captured])
+    }
+
+    /// 发送失败：排队包清空，但账本保留 captured/acknowledged 差额。
     func testSendFailureStopsTransportButKeepsTheLossVisible() async throws {
         struct Exploded: Error {}
         let transport = MeetingAudioTransport(maximumBytes: 60 * 32_000) { packet in
@@ -139,7 +181,7 @@ final class MeetingAudioLedgerTests: XCTestCase {
         }
         for _ in 0..<3 { record(seconds: 0.25) }
 
-        ledger.markSent(1); ledger.markAcknowledged(1)
+        ledger.markSent(1)
         var snapshot = ledger.snapshot()
         XCTAssertEqual(snapshot.sentUntil, 0, "前面还有未发送的包，水位不能跳")
         XCTAssertEqual(snapshot.acknowledgedUntil, 0)
@@ -148,10 +190,10 @@ final class MeetingAudioLedgerTests: XCTestCase {
         snapshot = ledger.snapshot()
         XCTAssertEqual(snapshot.sentUntil, 0.5, "补上 0 之后水位推进到 1（2 还没发）")
 
-        ledger.markSent(2); ledger.markAcknowledged(0); ledger.markAcknowledged(2)
+        ledger.markSent(2); ledger.markAcknowledged(2); ledger.markAcknowledged(0)
         snapshot = ledger.snapshot()
         XCTAssertEqual(snapshot.sentUntil, 0.75)
-        XCTAssertEqual(snapshot.acknowledgedUntil, 0.5, "acknowledged 水位卡在未确认的 1")
+        XCTAssertEqual(snapshot.acknowledgedUntil, 0.25, "seq 1 未确认：连续前缀只有 seq 0")
         ledger.markAcknowledged(1)
         snapshot = ledger.snapshot()
         XCTAssertEqual(snapshot.acknowledgedUntil, 0.75)

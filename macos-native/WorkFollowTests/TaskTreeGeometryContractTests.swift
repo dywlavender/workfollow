@@ -5,6 +5,25 @@ import XCTest
 
 @MainActor
 final class TaskTreeGeometryContractTests: XCTestCase {
+    func testPreviewUsesWidthBelowMetadataAndTitleKeepsReadableSpace() throws {
+        let workspace = TaskWorkspaceModel(seedDemoData: false)
+        let id = try XCTUnwrap(workspace.createTask(title: "需要展示更多文字的任务标题", in: .inbox).taskID)
+        _ = workspace.setDocument(id, NativeDocument(plainText: String(repeating: "正文预览应使用整行空间", count: 8)))
+        _ = workspace.setDueDate(id, Date())
+        _ = workspace.setPriority(id, .high)
+        for width: CGFloat in [340, 470] {
+            let frames = render(workspace: workspace, rows: [(id, 0, false, false)], width: width)
+            let title = try XCTUnwrap(frames[.init(taskID: id, part: .title)])
+            let preview = try XCTUnwrap(frames[.init(taskID: id, part: .preview)])
+            let date = try XCTUnwrap(frames[.init(taskID: id, part: .date)])
+            XCTAssertEqual(preview.minX, title.minX, accuracy: 0.5)
+            XCTAssertGreaterThan(preview.width, title.width + 30)
+            XCTAssertEqual(preview.maxX, width - TaskListMetrics.rowHorizontalPadding, accuracy: 0.5)
+            XCTAssertGreaterThanOrEqual(title.width, 96)
+            XCTAssertLessThanOrEqual(title.maxX, date.minX)
+        }
+    }
+
     func testRenderedParentRootAndChildReserveTheSameDisclosureGutter() throws {
         let workspace = TaskWorkspaceModel(seedDemoData: false)
         let parent = workspace.createTask(title: "父任务", in: .inbox).taskID!
@@ -59,7 +78,7 @@ final class TaskTreeGeometryContractTests: XCTestCase {
     }
 
     private func render(workspace: TaskWorkspaceModel,
-                        rows: [(UUID, Int, Bool, Bool)]) -> [TaskTreeRenderAnchor: CGRect] {
+                        rows: [(UUID, Int, Bool, Bool)], width: CGFloat = 440) -> [TaskTreeRenderAnchor: CGRect] {
         var frames: [TaskTreeRenderAnchor: CGRect] = [:]
         let view = VStack(spacing: 0) {
             ForEach(rows.indices, id: \.self) { index in
@@ -70,10 +89,10 @@ final class TaskTreeGeometryContractTests: XCTestCase {
                             onSelect: {}, onComplete: {}, onRestore: {}, onToggleExpanded: {})
             }
         }
-        .frame(width: 440, alignment: .topLeading)
+        .frame(width: width, alignment: .topLeading)
         .coordinateSpace(name: "task-tree-render")
         .onPreferenceChange(TaskTreeFramesKey.self) { frames = $0 }
-        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 440, height: 240),
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: width, height: 240),
                               styleMask: [.borderless], backing: .buffered, defer: false)
         let host = NSHostingView(rootView: view)
         window.contentView = host

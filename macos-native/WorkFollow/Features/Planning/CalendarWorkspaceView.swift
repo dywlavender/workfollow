@@ -425,10 +425,21 @@ struct CalendarMonthGridView: View {
     // 滚动性能三件套（2026-10-07，用户报"不够流畅"）：周行流、每日任务、
     // 每周色带全部预计算进 State——滚动期间的网格重估**零任务过滤/布局**，
     // 行级 Equatable 跳过未变行。重建只在 tasks/showCompleted 变化时发生。
-    @State private var weeks: [Date]
-    @State private var daysByWeek: [Date: [Date]]
-    @State private var dayTasks: [Date: [Task]]
-    @State private var spansByWeek: [Date: [CalendarSpan]]
+    @StateObject private var cache: GridCache
+    private var weeks: [Date] { cache.weeks }
+    private var daysByWeek: [Date: [Date]] { cache.values.days }
+    private var dayTasks: [Date: [Task]] { cache.values.dayTasks }
+    private var spansByWeek: [Date: [CalendarSpan]] { cache.values.spans }
+
+    private final class GridCache: ObservableObject {
+        let weeks: [Date]
+        @Published var values: (days: [Date: [Date]], dayTasks: [Date: [Task]], spans: [Date: [CalendarSpan]])
+        init(today: Date, tasks: [Task], showCompleted: Bool, calendar: Calendar) {
+            weeks = CalendarMonthGridView.buildWeeks(today: today, calendar: calendar)
+            values = CalendarMonthGridView.buildCaches(weeks: weeks, tasks: tasks,
+                                                       showCompleted: showCompleted, calendar: calendar)
+        }
+    }
     /// 父级程序化跳转哨（见 CalendarWorkspaceView.programmaticScrollTarget）。
     @Binding var programmaticTarget: Date?
 
@@ -452,13 +463,10 @@ struct CalendarMonthGridView: View {
         // 周，自动挂载其±预热行）+ onAppear 近距 scrollTo 微调到月首周——
         // scrollTo 只对**已挂载附近**的目标可靠（横扫跳月 4-5 行实测成功；
         // 首帧前跳 30 行远距实测失败，见 git 历史），微调 1-2 行在预热集内。
-        let weeks = Self.buildWeeks(today: today, calendar: calendar)
-        _weeks = State(initialValue: weeks)
-        let caches = Self.buildCaches(weeks: weeks, tasks: tasks,
-                                      showCompleted: showCompleted, calendar: calendar)
-        _daysByWeek = State(initialValue: caches.days)
-        _dayTasks = State(initialValue: caches.dayTasks)
-        _spansByWeek = State(initialValue: caches.spans)
+        // StateObject defers creation until mounting; subsequent View values
+        // must not rebuild the 61-week projection only to discard it.
+        _cache = StateObject(wrappedValue: GridCache(today: today, tasks: tasks,
+                                                   showCompleted: showCompleted, calendar: calendar))
     }
 
     /// 以今天所在周为原点 ±30 周的周起点。**刻意不用 LazyVStack**：
@@ -623,9 +631,7 @@ struct CalendarMonthGridView: View {
     private func rebuildCaches(tasks: [Task]) {
         let caches = Self.buildCaches(weeks: weeks, tasks: tasks,
                                       showCompleted: showCompleted, calendar: calendar)
-        daysByWeek = caches.days
-        dayTasks = caches.dayTasks
-        spansByWeek = caches.spans
+        cache.values = caches
     }
 
     static func startOfWeek(containing date: Date, calendar: Calendar) -> Date {

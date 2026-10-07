@@ -73,6 +73,7 @@ final class MeetingAudioTransport: @unchecked Sendable {
     @discardableResult
     func enqueue(_ packets: [MeetingAudioPacket]) -> EnqueueResult {
         var result = EnqueueResult.accepted
+        var didOverflow = false
         var capturedUntil: TimeInterval = 0
         lock.withLock {
             for packet in packets {
@@ -86,6 +87,7 @@ final class MeetingAudioTransport: @unchecked Sendable {
                     // 显式失败：同步 latch 接收（见 accepting 注释），只拒绝
                     // 超限包本身；已排队包在停止流程里照常送完。
                     accepting = false
+                    didOverflow = true
                     result = .overflow
                 } else {
                     pending.append(packet)
@@ -94,6 +96,8 @@ final class MeetingAudioTransport: @unchecked Sendable {
             }
             if !pending.isEmpty { startPumpIfNeeded() }
         }
+        // 同批后续拒收不能覆盖首次 overflow，否则采集侧和 Store 都不会停录。
+        if didOverflow { result = .overflow }
         if capturedUntil > 0 { notify(onCapture, capturedUntil) }
         if result == .overflow { notify(onOverflow) }
         return result
@@ -104,6 +108,7 @@ final class MeetingAudioTransport: @unchecked Sendable {
     func stopAccepting() {
         var startSettle = false
         lock.withLock {
+            accepting = false
             stopping = true
             if !pumping && !settleStarted { startSettle = true }
         }
@@ -178,15 +183,15 @@ final class MeetingAudioTransport: @unchecked Sendable {
     }
 
     private func settleAfterDrain() async {
-        let finish: Sender? = lock.withLock {
-            guard !settleStarted else { return nil }
+        let state: (Bool, Sender?) = lock.withLock {
+            guard !settleStarted else { return (false,nil) }
             settleStarted = true
             pumping = false
-            return finisher
+            return (true,finisher)
         }
-        guard let finish else { return }
+        guard state.0 else { return }
         do {
-            try await finish(MeetingAudioPacket(pcm: Data(), offset: 0))
+            if let finish=state.1 { try await finish(MeetingAudioPacket(pcm: Data(), offset: 0)) }
         } catch {
             notify(onError, error)
         }

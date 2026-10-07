@@ -19,6 +19,87 @@ private actor MeetingAITestDouble: MeetingAIClient {
 
 @MainActor
 final class MeetingStoreTests: XCTestCase {
+    func testPiHTTPBatchAndStopTailStayInOriginalMeeting() async throws {
+        guard ProcessInfo.processInfo.environment["MEETING_PI_INTEGRATION"] == "1" else {
+            throw XCTSkip("Enable MEETING_PI_INTEGRATION=1")
+        }
+        let root = try directory()
+        let fixture = root.appendingPathComponent("http-fixture.mjs")
+        let module = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .appendingPathComponent("../WorkFollow/Resources/wf-meeting-audio.mjs").standardizedFileURL
+        try """
+        import extension from '\(module.absoluteString)';
+        export default function(pi) {
+          extension(pi, {resolveAudioModel:async()=>({transport:'http'}),
+            realtime:()=>{throw new Error('Pi must not use WebSocket');},
+            http:async({pcm})=>({version:1,segments:[{text:pcm.length===32000?'完整段':'停止尾段',start:0.1,speaker:'讲话人1'}]})});
+        }
+        """.write(to: fixture, atomically: true, encoding: .utf8)
+        let store = MeetingStore(directory: root, ai: MeetingPiClient(), automaticallyUpdate: false)
+        store.configuration.audioExtension = fixture.path
+        store.create(); let original = try XCTUnwrap(store.selectedID)
+        store.receiveChunk(MeetingAudioPacket(pcm: Data(repeating: 1, count: 32000), offset: 0, sequence: 0), meetingID: original)
+        store.receiveChunk(MeetingAudioPacket(pcm: Data(repeating: 1, count: 8000), offset: 1, sequence: 1), meetingID: original)
+        store.create()
+        store.stopRecording()
+        await withCheckedContinuation { (c: CheckedContinuation<Void, Never>) in store.flush { _ in c.resume() } }
+        XCTAssertNil(store.error)
+        XCTAssertFalse(store.transcribing)
+        let meeting = try XCTUnwrap(store.meetings.first { $0.id == original })
+        XCTAssertEqual(meeting.transcript.map(\.text), ["完整段", "停止尾段"])
+        XCTAssertEqual(meeting.transcript.map(\.offset), [0.1, 1.1])
+        XCTAssertEqual(meeting.transcript.map(\.speaker), ["片段 0.0s · 讲话人1", "片段 1.0s · 讲话人1"])
+        XCTAssertEqual(meeting.minutes, "")
+        XCTAssertTrue(store.selected?.transcript.isEmpty == true)
+        XCTAssertTrue(store.canDelete(original))
+    }
+    func testHTTPModelRoutingIsExplicitAndCustomAdaptersKeepOwnership() {
+        var configuration = MeetingPiConfiguration()
+        configuration.model = "ali-Pi/qwen-audio-3.1-asr-flash"
+        XCTAssertTrue(configuration.usesHTTPTranscription)
+        configuration.audioExtension = "/custom/adapter.mjs"
+        XCTAssertFalse(configuration.usesHTTPTranscription)
+        configuration.audioExtension = ""
+        configuration.model = "qwen3.8-omni-flash-realtime"
+        XCTAssertFalse(configuration.usesHTTPTranscription)
+    }
+    func testDeleteSelectionNeighborsAndPersistence() async throws {
+        let root = try directory()
+        let ai = MeetingAITestDouble()
+        let store = MeetingStore(directory: root, ai: ai, automaticallyUpdate: false)
+        store.create(); let oldest = try XCTUnwrap(store.selectedID)
+        store.create(); let middle = try XCTUnwrap(store.selectedID)
+        store.create(); let newest = try XCTUnwrap(store.selectedID)
+        XCTAssertTrue(store.delete(middle))
+        XCTAssertEqual(store.selectedID, newest, "删除未选中记录不应切换详情")
+        XCTAssertTrue(store.delete(newest))
+        XCTAssertEqual(store.selectedID, oldest, "选中记录删除后选相邻记录")
+        await withCheckedContinuation { (c: CheckedContinuation<Void, Never>) in store.flush { _ in c.resume() } }
+        let restored = MeetingStore(directory: root, ai: ai, automaticallyUpdate: false)
+        XCTAssertEqual(restored.meetings.map(\.id), [oldest])
+        XCTAssertTrue(store.delete(oldest))
+        XCTAssertNil(store.selectedID)
+        XCTAssertTrue(store.meetings.isEmpty)
+        await withCheckedContinuation { (c: CheckedContinuation<Void, Never>) in store.flush { _ in c.resume() } }
+        XCTAssertTrue(MeetingStore(directory: root, ai: ai, automaticallyUpdate: false).meetings.isEmpty)
+    }
+
+    func testInFlightMinutesCannotRecreateDeletedMeeting() async throws {
+        let ai = MeetingAITestDouble()
+        let store = MeetingStore(directory: try directory(), ai: ai, automaticallyUpdate: false)
+        store.create(); let id = try XCTUnwrap(store.selectedID)
+        store.appendTranscriptForTesting("测试决议", speaker: "A")
+        store.updateMinutesNow()
+        for _ in 0..<100 {
+            if await ai.calls().count > 0 { break }
+            try await _Concurrency.Task.sleep(nanoseconds: 1_000_000)
+        }
+        let calls = await ai.calls()
+        XCTAssertEqual(calls.count, 1, "必须等请求实际开始，再验证删除后的迟到响应")
+        XCTAssertTrue(store.delete(id))
+        try await waitForSummary(store)
+        XCTAssertTrue(store.meetings.isEmpty)
+    }
     func testNoNewTranscriptPreservesMinutesWithoutStartingPi() async throws {
         var configuration = MeetingPiConfiguration()
         configuration.executable = "/nonexistent-pi"

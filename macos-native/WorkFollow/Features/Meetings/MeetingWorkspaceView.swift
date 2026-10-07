@@ -24,6 +24,7 @@ struct MeetingWorkspaceView: View {
     @State private var settingsPresented = false
     /// 窄窗口下只显示一栏时的「当前在哪一栏」。宽窗口下恒为 false（两栏都在）。
     @State private var detailOnly = false
+    @State private var hoveredMeetingID: UUID?
 
     // 列表列与详情栏之间那条线
     @State private var listDragOrigin: CGFloat?
@@ -196,7 +197,8 @@ struct MeetingWorkspaceView: View {
 
     private func row(_ meeting: MeetingRecord) -> some View {
         let selected = store.selectedID == meeting.id
-        return Button {
+        return HStack(spacing: 0) {
+          Button {
             store.selectedID = meeting.id
             detailOnly = true
         } label: {
@@ -220,11 +222,34 @@ struct MeetingWorkspaceView: View {
             .padding(.vertical, WFMetrics.rowVerticalPadding)
             .frame(minHeight: WFMetrics.rowHeight, alignment: .leading)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(selected ? WFColors.listSelection : .clear,
-                        in: RoundedRectangle(cornerRadius: WFMetrics.corner))
             .contentShape(Rectangle())
+          }
+          .buttonStyle(.plain)
+          Button {
+              if store.delete(meeting.id) { hoveredMeetingID = nil }
+          } label: {
+              Image(systemName: "trash")
+                  .font(WFType.supporting)
+                  .frame(width: 28, height: 28)
+                  .contentShape(Rectangle())
+          }
+          .buttonStyle(.plain)
+          .foregroundStyle(WFColors.secondaryText)
+          .disabled(!store.canDelete(meeting.id))
+          .opacity(hoveredMeetingID == meeting.id ? (store.canDelete(meeting.id) ? 1 : 0.4) : 0)
+          .allowsHitTesting(hoveredMeetingID == meeting.id)
+          .accessibilityHidden(hoveredMeetingID != meeting.id)
+          .accessibilityLabel("删除会议记录：\(meeting.title.isEmpty ? "未命名会议" : meeting.title)")
+          .help(store.canDelete(meeting.id) ? "删除会议记录" : "请结束录音及转写后再删除")
+          .padding(.trailing, WFSpace.md)
         }
-        .buttonStyle(.plain)
+        .background(selected ? WFColors.listSelection : .clear,
+                    in: RoundedRectangle(cornerRadius: WFMetrics.corner))
+        .contentShape(Rectangle())
+        .onHover { inside in
+            if inside { hoveredMeetingID = meeting.id }
+            else if hoveredMeetingID == meeting.id { hoveredMeetingID = nil }
+        }
         // 选中行不画分割线：选中行有自己的圆角底色，线会横穿底边。
         // 与笔记列表同一条线、同一个左右内缩。
         .overlay(alignment: .bottom) {
@@ -363,7 +388,9 @@ struct MeetingWorkspaceView: View {
                 .dateTime.year().month().day().hour().minute().locale(.appDate)))
                 .font(WFType.caption).foregroundStyle(WFColors.secondaryText)
             Text(store.audioConfigured
-                 ? "内置 Pi 扩展支持流式转写：草稿实时修正，定稿后进入纪要。讲话人暂未区分。自定义扩展继续使用分段转写；音频均不保存。"
+                 ? (store.configuration.usesHTTPTranscription
+                    ? "Pi HTTP 分段转写：约 10–20 秒提交一次，停止时补发尾段。讲话人标签仅在当前片段内有效；音频不保存，纪要手动编辑。"
+                    : "内置 Pi 扩展支持流式转写：草稿实时修正，定稿后进入对话记录。讲话人暂未区分。自定义扩展使用分段转写；音频均不保存。")
                  : "尚未配置 Pi 音频扩展，不能开始采集。只保存文字和纪要，不保存录音。")
                 .font(WFType.caption).foregroundStyle(WFColors.secondaryText)
                 .padding(.top, WFSpace.xs)
@@ -679,18 +706,18 @@ struct MeetingWorkspaceView: View {
     private var settings: some View {
         VStack(alignment: .leading, spacing: WFSpace.lg) {
             Text("Pi 会议接入").font(WFType.detailTitle)
-            Text("所有 AI 调用经过本机 Pi。转写与纪要共用下面这一个模型，因此它必须是百炼业务空间的实时模型。")
+            Text("所有 AI 调用经过本机 Pi。百炼实时模型走流式转写；qwen-audio-3.1-asr-flash 走 HTTP 分段转写。ASR 模型不能生成纪要，可手动编辑。")
                 .font(WFType.body).foregroundStyle(WFColors.secondaryText)
             VStack(alignment: .leading, spacing: WFSpace.lg) {
                 settingField("Pi 可执行文件", placeholder: "Pi 可执行文件",
                              text: $store.configuration.executable)
-                settingField("模型标识（须为百炼实时模型）", placeholder: "留空沿用 Pi 当前模型",
+                settingField("模型标识（百炼实时或 HTTP ASR）", placeholder: "留空沿用 Pi 当前实时模型",
                              text: $store.configuration.model)
                 settingField("Pi 音频扩展（可选覆盖）", placeholder: "留空使用内置 Pi 音频扩展",
                              text: $store.configuration.audioExtension)
             }
             .disabled(store.transcribing || store.updatingMinutes || store.recordingID != nil)
-            Text("默认使用内置 Pi 扩展：转写与纪要共用上面这一个模型，端点与认证由 Pi 提供；留空则沿用 Pi 当前模型，它同样必须是实时模型。可填写自定义扩展路径替换。音频不保存；讲话人标签仅在当前片段内区分，不保证跨片段为同一人。")
+            Text("默认使用内置 Pi 扩展，端点与认证由 Pi 提供。使用 HTTP ASR 时请明确填写模型标识；自定义扩展路径可替换内置接入。音频不保存；讲话人标签仅在当前片段内区分，不保证跨片段为同一人。")
                 .font(WFType.caption).foregroundStyle(WFColors.secondaryText)
             HStack {
                 Spacer()

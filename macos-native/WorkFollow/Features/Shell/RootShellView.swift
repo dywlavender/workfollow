@@ -7,63 +7,64 @@ struct RootShellView: View {
     let workspace: TaskWorkspaceModel
     @ObservedObject var navigation: AppNavigation
     @EnvironmentObject private var environment: AppEnvironment
+    @Environment(\.mainWindowRailInset) private var railInset
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.popupContentObservation) private var popupObservation
+    @StateObject private var pageCache = WorkspacePageCache()
+    private var pageKey: String {
+        if navigation.destination.isNotes { return "notes" }
+        return navigation.destination.rawValue
+    }
+
+    private func pageContent(destination: NativeDestination, navigationVisible: Bool) -> AnyView {
+        switch destination {
+        case .focus:
+            return AnyView(FocusWorkspaceView(store: environment.focusStore, workspace: workspace,
+                onSelectRecordTask: { [workspace, navigation] id in
+                    workspace.select(id)
+                    navigation.destination = .allTasks
+                }))
+        case .trash: return AnyView(TaskTrashView(workspace: workspace))
+        case .summary: return AnyView(SummaryWorkspaceView(store: environment.summaryStore, workspace: workspace))
+        case .countdown: return AnyView(CountdownWorkspaceView(store: environment.countdownStore))
+        case .meetings: return AnyView(MeetingWorkspaceView(store: environment.meetingStore))
+        case .notes, .notesTrash:
+            return AnyView(NotesWorkspaceView(notes: environment.notesWorkspace, navigation: pageCache.navigation(for: "notes", appNavigation: navigation, belongsToPage: { $0.isNotes }),
+                                             tasks: workspace, navigationVisible: navigationVisible))
+        case .calendar: return AnyView(CalendarWorkspaceView(workspace: workspace))
+        case .matrix: return AnyView(MatrixWorkspaceView(workspace: workspace))
+        default:
+            return AnyView(TaskWorkspaceView(workspace: workspace, navigation: pageCache.navigation(for: destination.rawValue, appNavigation: navigation, belongsToPage: { $0 == destination }),
+                                            navigationVisible: navigationVisible))
+        }
+    }
 
     var body: some View {
         GeometryReader { geometry in
             let navigationVisible = geometry.size.width >= WFMetrics.navigationBreakpoint
-            Group {
-                if navigation.destination == .focus {
-                    FocusWorkspaceShellView(
-                        workspace: workspace,
-                        navigation: navigation,
-                        store: environment.focusStore,
-                        onNavigate: environment.navigate,
-                        onOpenQuickOpen: { environment.commandPalettePresented = true },
-                        onSelectRecordTask: { id in
-                            workspace.select(id)
-                            navigation.destination = .allTasks
-                        })
-                } else {
-                    HStack(spacing: 0) {
-                        IconRailView(workspace: workspace, navigation: navigation,
-                                     onNavigate: environment.navigate,
-                                     onOpenQuickOpen: { environment.commandPalettePresented = true })
-                        Divider()
-                        if navigationVisible, environment.sidebarVisible,
-                           navigation.destination != .calendar, navigation.destination != .matrix,
-                           navigation.destination != .countdown, navigation.destination != .meetings {
-                            NavigationColumnView(workspace: workspace, navigation: navigation,
-                                                 filterStore: environment.filterStore)
-                                .frame(width: WFMetrics.navigationWidth)
-                            Divider()
-                        }
-                        if navigation.destination == .trash {
-                            TaskTrashView(workspace: workspace)
-                        } else if navigation.destination == .summary {
-                            SummaryWorkspaceView(store: environment.summaryStore, workspace: workspace)
-                        } else if navigation.destination == .countdown {
-                            CountdownWorkspaceView(store: environment.countdownStore)
-                        } else if navigation.destination == .meetings {
-                            MeetingWorkspaceView(store: environment.meetingStore)
-                        } else if navigation.destination.isNotes {
-                            NotesWorkspaceView(notes: environment.notesWorkspace, navigation: navigation, tasks: workspace,
-                                               navigationVisible: navigationVisible)
-                        } else if navigation.destination == .calendar {
-                            CalendarWorkspaceView(workspace: workspace)
-                                .id(navigation.destination)
-                        } else if navigation.destination == .matrix {
-                            MatrixWorkspaceView(workspace: workspace)
-                                .id(navigation.destination)
-                        } else if navigation.destination.isTaskList {
-                            TaskWorkspaceView(workspace: workspace,
-                                              navigation: navigation,
-                                              navigationVisible: navigationVisible)
-                        } else {
-                            ModuleShellView(workspace: workspace, navigation: navigation,
-                                            navigationVisible: navigationVisible)
-                        }
-                    }
+            let destination = navigation.destination
+            HStack(spacing: 0) {
+                IconRailView(workspace: workspace, navigation: navigation,
+                             onNavigate: environment.navigate,
+                             onOpenQuickOpen: { environment.commandPalettePresented = true })
+                Divider()
+                if navigationVisible, environment.sidebarVisible,
+                   navigation.destination != .calendar, navigation.destination != .matrix,
+                   navigation.destination != .countdown, navigation.destination != .meetings,
+                   navigation.destination != .focus {
+                    NavigationColumnView(workspace: workspace, navigation: navigation,
+                                         filterStore: environment.filterStore)
+                        .frame(width: WFMetrics.navigationWidth)
+                    Divider()
                 }
+                WorkspacePageHost(cache: pageCache, pageKey: pageKey,
+                                  content: AnyView(pageContent(destination: destination,
+                                                            navigationVisible: navigationVisible)
+                                    .environmentObject(environment)
+                                    .environment(\.mainWindowRailInset, railInset)
+                                    .environment(\.colorScheme, colorScheme)
+                                    .environment(\.popupContentObservation, popupObservation)
+                                    .tint(WFColors.accent)))
             }
             .background(WFColors.content)
             .onChange(of: navigation.destination) { _, destination in
@@ -72,7 +73,7 @@ struct RootShellView: View {
                 if routedTaskID != workspace.selectedTaskID { workspace.select(nil) }
                 workspace.clearBulkSelection()
 
-                if !destination.isNotes {
+                if !destination.isNotes && environment.notesWorkspace.selectedID != nil {
                     environment.notesWorkspace.selectedID = nil
                 } else if let selected = environment.notesWorkspace.selected,
                           (selected.deletedAt != nil) != (destination == .notesTrash) {

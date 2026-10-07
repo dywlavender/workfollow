@@ -256,9 +256,9 @@ final class AppEnvironment: ObservableObject {
     }
 
     func navigate(to destination: NativeDestination) {
-        taskWorkspace.activeList = nil
-        taskWorkspace.activeTag = nil
-        navigation.destination = destination
+        if taskWorkspace.activeList != nil { taskWorkspace.activeList = nil }
+        if taskWorkspace.activeTag != nil { taskWorkspace.activeTag = nil }
+        if navigation.destination != destination { navigation.destination = destination }
         taskWorkspace.select(nil)
     }
 

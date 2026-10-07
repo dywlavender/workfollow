@@ -42,6 +42,8 @@ final class TaskWorkspaceModel: ObservableObject {
     private var groupCache: [GroupCacheEntry] = []
     private var nodeCache: [NodeCacheEntry] = []
     private var sidebarCountCache: [NativeDestination: Int] = [:]
+    private var subtaskProgressRevision: Int?
+    private var subtaskProgressCache: [UUID: String] = [:]
     private(set) var projectionBuildCount = 0
 
     private func prepareProjectionCache() {
@@ -533,6 +535,24 @@ final class TaskWorkspaceModel: ObservableObject {
     }
 
     var allTasks: [Task] { _ = revision; return store.tasks }
+
+    /// Parent badges depend on child changes, but not on selection or pane width.
+    func subtaskProgress(for parentID: UUID) -> String? {
+        if subtaskProgressRevision != revision {
+            var counts: [UUID: (completed: Int, total: Int)] = [:]
+            for task in store.tasks where task.deletedAt == nil && task.skippedAt == nil &&
+                !task.isAbandoned && !task.isConverted {
+                guard let parent = task.parentID else { continue }
+                var count = counts[parent] ?? (0, 0)
+                count.total += 1
+                if task.status == .completed { count.completed += 1 }
+                counts[parent] = count
+            }
+            subtaskProgressCache = counts.mapValues { "\($0.completed)/\($0.total)" }
+            subtaskProgressRevision = revision
+        }
+        return subtaskProgressCache[parentID]
+    }
     var canUndo: Bool { _ = revision; return store.canUndo }
     func undo() { actions.undo(); revision += 1; if selectedTask == nil { select(nil) } }
     func setRepeat(_ id: UUID, _ value: TaskRepeat) { didMutate(actions.setRepeat(id, value)) }

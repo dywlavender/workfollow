@@ -32,6 +32,7 @@ final class MeetingStore: ObservableObject, ModuleStoreFlushable {
     private var streamFinalIDs: Set<String> = []
     /// VAD turn 状态机（MEETING-AUDIO-002）："有讲话但没有 Final"的检测层。
     private let turnTracker = MeetingSpeechTurnTracker()
+    private var finalDeadlineTasks: [String: _Concurrency.Task<Void, Never>] = [:]
     private var minutesTask: _Concurrency.Task<Void, Never>?
     private var recordingOffset: TimeInterval = 0
     /// At most 60 seconds, including the request currently being processed.
@@ -85,6 +86,24 @@ final class MeetingStore: ObservableObject, ModuleStoreFlushable {
         meetings.insert(meeting, at: 0); selectedID = meeting.id; save()
     }
 
+    func canDelete(_ id: UUID) -> Bool {
+        meetings.contains { $0.id == id } && !requestingPermission && recordingID != id &&
+            inputStream?.meetingID != id && !(transportMeetingID == id && transport?.isBusy == true)
+    }
+
+    @discardableResult
+    func delete(_ id: UUID) -> Bool {
+        guard let index = meetings.firstIndex(where: { $0.id == id }), canDelete(id) else { return false }
+        meetings.remove(at: index)
+        streamDrafts.removeValue(forKey: id)
+        pendingMinutes.remove(id); blockedMinutes.remove(id); blockedAudio.remove(id)
+        if selectedID == id {
+            selectedID = meetings.isEmpty ? nil : meetings[min(index, meetings.count - 1)].id
+        }
+        save()
+        return true
+    }
+
     func rename(_ title: String) {
         guard let id = selectedID else { return }
         change(id) { $0.title = title }
@@ -115,7 +134,11 @@ final class MeetingStore: ObservableObject, ModuleStoreFlushable {
             recordingOffset = meeting.duration
             requestingPermission = true
             let streaming = try await connectInputStream(for: id, offset: recordingOffset)
-            if !streaming { createBatchTransport(for: id) }
+            if !streaming {
+                try await ai.prepareTranscription(configuration: configuration)
+                guard generation == permissionGeneration else { return }
+                createBatchTransport(for: id)
+            }
             guard generation == permissionGeneration, let transport else {
                 closeInputStream(); return
             }
@@ -135,6 +158,7 @@ final class MeetingStore: ObservableObject, ModuleStoreFlushable {
         _ = id // 恢复自动纪要时此绑定重新被下面的注释块使用
         recordingID = nil
         recorder.stop()
+        transport?.stopAccepting()
         if inputStream != nil { streamStopping = true; transport?.stopAccepting(); return }
         // 产品决定：停止录音不再自动生成纪要（见 init 里的心跳断开说明）。
         // if let id, !blockedMinutes.contains(id) { pendingMinutes.insert(id); pumpMinutes() }
@@ -143,6 +167,7 @@ final class MeetingStore: ObservableObject, ModuleStoreFlushable {
     /// Separate connection lifecycle from microphone capture; also permits deterministic transport tests.
     func connectInputStream(for id: UUID, offset: Double) async throws -> Bool {
         guard configuration.audioExtension.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              !configuration.usesHTTPTranscription,
               let client = ai as? any MeetingStreamingAIClient else { return false }
         let token = UUID(); streamToken = token
         let session = try await client.openStream(configuration: configuration, offset: offset) { [weak self] event in
@@ -151,6 +176,7 @@ final class MeetingStore: ObservableObject, ModuleStoreFlushable {
         }
         guard streamToken == token else { session.cancel(); throw CancellationError() }
         inputStream = (id, session); streamStopping = false; streamFinalIDs.removeAll(); transcribing = true
+        cancelFinalDeadlines()
         turnTracker.reset()
         createStreamingTransport(meetingID: id, session: session)
         return true
@@ -159,10 +185,31 @@ final class MeetingStore: ObservableObject, ModuleStoreFlushable {
     /// 当前流的 turn 快照（按讲话开始顺序）。003 的 Repair 输入与失败段 UI 用。
     var speechTurns: [MeetingSpeechTurn] { turnTracker.snapshot }
 
+    private func cancelFinalDeadlines() {
+        for task in finalDeadlineTasks.values { task.cancel() }
+        finalDeadlineTasks.removeAll()
+    }
+
+    private func scheduleFinalDeadline(itemID: String) {
+        guard finalDeadlineTasks[itemID] == nil,
+              turnTracker.snapshot.contains(where: { $0.id == itemID && $0.status == .awaitingFinal })
+        else { return }
+        let token = streamToken
+        finalDeadlineTasks[itemID] = _Concurrency.Task { @MainActor [weak self] in
+            do {
+                try await _Concurrency.Task.sleep(nanoseconds: UInt64(MeetingAudioReliabilityPolicy.finalGracePeriod * 1_000_000_000))
+            } catch { return }
+            guard let self, self.streamToken == token, self.inputStream != nil else { return }
+            self.finalDeadlineTasks[itemID] = nil
+            self.turnTracker.expireFinal(itemID: itemID)
+        }
+    }
+
     private func closeInputStream() {
+        cancelFinalDeadlines()
         if let stream = inputStream { streamDrafts.removeValue(forKey: stream.meetingID); stream.session.cancel() }
         inputStream = nil; streamToken = UUID(); streamStopping = false
-        // 会话关闭后不会再有 final：仍未完成的 turn 直接判缺失（002 检测层）。
+        // 会话关闭后不会再有 final：包含缺少 stopped 的讲话中 turn。
         turnTracker.sweep(force: true)
         if transport?.isBusy != true { transcribing = false }
     }
@@ -180,12 +227,16 @@ final class MeetingStore: ObservableObject, ModuleStoreFlushable {
                 turnTracker.speechStarted(itemID: event.itemID ?? "", at: event.offset ?? 0)
             } else {
                 turnTracker.speechStopped(itemID: event.itemID ?? "", at: event.offset ?? 0)
+                scheduleFinalDeadline(itemID: event.itemID ?? "")
             }
             return
         }
         guard let item = event.itemID, let text = event.text,
               let offset = event.offset, offset.isFinite, offset >= 0, !streamFinalIDs.contains(item) else { return }
-        if event.kind == MeetingStreamKind.finalText { turnTracker.finalize(itemID: item) }
+        if event.kind == MeetingStreamKind.finalText {
+            finalDeadlineTasks.removeValue(forKey: item)?.cancel()
+            turnTracker.finalize(itemID: item)
+        }
         let previous = streamDrafts[meetingID]?[item]
         let line = MeetingTranscriptLine(id: previous?.id ?? UUID(), speaker: "未区分", text: text, offset: offset)
         if event.kind == MeetingStreamKind.preview {
@@ -280,10 +331,11 @@ final class MeetingStore: ObservableObject, ModuleStoreFlushable {
     // MARK: - 传输总线组装（MEETING-AUDIO-001）
 
     private func wireTransportCallbacks(_ transport: MeetingAudioTransport, meetingID: UUID) {
-        transport.onCapture = { [weak self] until in
-            _Concurrency.Task { @MainActor [weak self] in
-                guard let self, self.transportMeetingID == meetingID else { return }
+        transport.onCapture = { [weak self, weak transport] until in
+            _Concurrency.Task { @MainActor [weak self, weak transport] in
+                guard let self, let transport, self.transport === transport else { return }
                 self.change(meetingID) { $0.capturedDuration = max($0.duration, until) }
+                self.transcribing = self.inputStream != nil || self.transport?.isBusy == true
             }
         }
         transport.onOverflow = { [weak self] in
@@ -292,25 +344,29 @@ final class MeetingStore: ObservableObject, ModuleStoreFlushable {
         transport.onError = { [weak self] error in
             _Concurrency.Task { @MainActor [weak self] in self?.handleTransportError(meetingID: meetingID, error) }
         }
-        transport.onIdle = { [weak self] in
-            _Concurrency.Task { @MainActor [weak self] in
-                guard let self else { return }
+        transport.onIdle = { [weak self, weak transport] in
+            _Concurrency.Task { @MainActor [weak self, weak transport] in
+                guard let self, let transport, self.transport === transport else { return }
                 self.transcribing = self.inputStream != nil
             }
         }
-        transport.onSettled = { [weak self] in
-            _Concurrency.Task { @MainActor [weak self] in self?.transcribing = false }
+        transport.onSettled = { [weak self, weak transport] in
+            _Concurrency.Task { @MainActor [weak self, weak transport] in
+                guard let self, let transport, self.transport === transport else { return }
+                self.transcribing = false
+            }
         }
     }
 
     private func createStreamingTransport(meetingID: UUID, session: any MeetingAudioStream) {
+        let token = streamToken
         let transport = MeetingAudioTransport(maximumBytes: Self.maximumAudioBytes) { packet in
             try await session.append(packet)
         }
         transport.bindFinisher { [weak self] _ in
             try await session.finish()
             await MainActor.run { [weak self] in
-                guard let self else { return }
+                guard let self, self.streamToken == token else { return }
                 self.closeInputStream()
                 // 产品决定：流式收尾不再自动生成纪要（见 init 里的心跳断开说明）。
                 // if !self.blockedMinutes.contains(meetingID) {
