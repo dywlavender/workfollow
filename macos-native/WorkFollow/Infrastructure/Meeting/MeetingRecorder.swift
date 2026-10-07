@@ -2,28 +2,41 @@ import AVFoundation
 import Foundation
 
 /// No file writer or recording URL. Only in-memory PCM packets leave capture.
+///
+/// 采集 → 传输的关键路径**不经过 MainActor**（MEETING-AUDIO-001）：tap 在音频
+/// 渲染线程上转码、分段后直接 enqueue 进 `MeetingAudioTransport`，主线程卡多久
+/// 都不影响已采集的 PCM。主线程只通过 `onError` 收罕见错误（采集器损坏等），
+/// 那是通知、不是关键路径。
 @MainActor
 final class MeetingRecorder {
     private var engine: AVAudioEngine?
     private var capture: MeetingPCMCapture?
+    private var transport: MeetingAudioTransport?
     private var generation = UUID()
-    var onChunk: ((MeetingAudioPacket) -> Void)?
     var onError: ((Error) -> Void)?
     var currentDuration: TimeInterval { capture?.duration ?? 0 }
 
-    func start(offset: TimeInterval, streaming: Bool = false) throws {
+    func start(offset: TimeInterval, streaming: Bool = false,
+               transport: MeetingAudioTransport) throws {
         let engine = AVAudioEngine()
         let input = engine.inputNode
         let format = input.outputFormat(forBus: 0)
         let capture = try MeetingPCMCapture(format: format, offset: offset, streaming: streaming)
         let token = UUID()
         generation = token
+        self.transport = transport
         input.installTap(onBus: 0, bufferSize: 4096, format: format) { [weak self] buffer, _ in
+            // 音频渲染线程：转码 → 分段 → 入队。这里不能等待 SwiftUI / 主线程 /
+            // 网络 / Pi / ASR 中的任何一个。
             do {
-                if try capture.consume(buffer) {
+                _ = try capture.consume(buffer)
+                let packets = capture.drain()
+                guard !packets.isEmpty else { return }
+                let result = transport.enqueue(packets)
+                if result == .overflow {
                     _Concurrency.Task { @MainActor [weak self] in
                         guard let self, self.generation == token else { return }
-                        capture.drain().forEach { self.onChunk?($0) }
+                        self.stop()
                     }
                 }
             } catch {
@@ -45,7 +58,8 @@ final class MeetingRecorder {
         self.engine = nil; self.capture = nil
         generation = UUID()
         // Includes undelivered complete packets and the final partial packet.
-        capture.finish().forEach { onChunk?($0) }
+        transport?.enqueue(capture.finish())
+        transport = nil
     }
 }
 
@@ -55,6 +69,7 @@ final class MeetingPCMCapture: @unchecked Sendable {
     private let outputFormat: AVAudioFormat
     private var accumulator: MeetingPCMAccumulator
     private var pending: [MeetingAudioPacket] = []
+    private var nextSequence: UInt64 = 0
     private var closed = false
     var duration: TimeInterval { lock.withLock { accumulator.duration } }
 
@@ -87,7 +102,7 @@ final class MeetingPCMCapture: @unchecked Sendable {
             }
             if let error { throw error }
             if let bytes = output.int16ChannelData?.pointee, output.frameLength > 0 {
-                pending.append(contentsOf: accumulator.append(Data(bytes: bytes, count: Int(output.frameLength) * 2)))
+                pending.append(contentsOf: numbered(accumulator.append(Data(bytes: bytes, count: Int(output.frameLength) * 2))))
             }
             guard pending.count <= 4 else { closed = true; throw MeetingPiError.audioBackpressure }
             return wasEmpty && !pending.isEmpty
@@ -99,9 +114,19 @@ final class MeetingPCMCapture: @unchecked Sendable {
     func finish() -> [MeetingAudioPacket] {
         lock.withLock {
             closed = true
-            if let tail = accumulator.finish() { pending.append(tail) }
+            if let tail = accumulator.finish() { pending.append(contentsOf: numbered([tail])) }
             let result = pending; pending.removeAll(); return result
         }
+    }
+    /// 包从这里出采集器，sequence 在这里连续分配（每次录音从 0 起）。
+    /// 中断/丢包检测（102→103→105 立刻知道 104 丢）依赖这条不变量。
+    private func numbered(_ packets: [MeetingAudioPacket]) -> [MeetingAudioPacket] {
+        var result = packets
+        for index in result.indices {
+            result[index].sequence = nextSequence
+            nextSequence += 1
+        }
+        return result
     }
 }
 

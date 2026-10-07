@@ -8,6 +8,10 @@ export class MeetingInputStream {
   constructor({url,apiKey,headers={},modelID,socketFactory,emit,offset=0,timeoutMs=20000}) {
     this.emit=emit;this.offset=offset;this.timeoutMs=timeoutMs;
     this.starts=new Map();this.pending=new Set();this.completed=new Set();this.bytesSinceCommit=0;this.closed=false;
+    // 幂等接收（MEETING-AUDIO-001）：sequence 由采集侧从 0 单调连续递增，
+    // 所以高水位即可判重——迟到重发的旧包必然 <= 水位，直接 ACK 不再 append。
+    // 这样 Native 才能安全重试：at-least-once 传输 + 幂等接收 = 不丢也不重。
+    this.lastSequence=-1;
     if(!socketFactory){const require=createRequire(realpathSync(process.argv[1]));const {WebSocket}=require('undici');socketFactory=(u,o)=>new WebSocket(u,o);}
     this.socket=socketFactory(url,{headers:{...headers,Authorization:`Bearer ${apiKey}`}});
     this.ready=new Promise((resolve,reject)=>{this.readyResolve=resolve;this.readyReject=reject;});
@@ -59,11 +63,21 @@ export class MeetingInputStream {
   async append(input){
     await this.ready;
     if(this.closed||this.stopping)throw new Error('Pi 流式会话已停止。');
-    const pcm=validateAudio(input);
-    if(this.socket.bufferedAmount>60*32000){this.fail('Pi 流式音频发送积压。');throw new Error('Pi 流式音频发送积压。');}
-    this.bytesSinceCommit+=pcm.length;
-    this.hasAudio=true;
-    for(let i=0;i<pcm.length;i+=3200)this.send({type:'input_audio_buffer.append',audio:pcm.subarray(i,i+3200).toString('base64')});
+    let duplicate=false;
+    const sequence=Number(input.sequence);
+    if(Number.isFinite(sequence)&&sequence>=0){
+      if(sequence<=this.lastSequence)duplicate=true;
+      else this.lastSequence=sequence;
+    }
+    // sequence 缺省（旧调用方）退化为不去重，保持向后兼容。
+    if(!duplicate){
+      const pcm=validateAudio(input);
+      if(this.socket.bufferedAmount>60*32000){this.fail('Pi 流式音频发送积压。');throw new Error('Pi 流式音频发送积压。');}
+      this.bytesSinceCommit+=pcm.length;
+      this.hasAudio=true;
+      for(let i=0;i<pcm.length;i+=3200)this.send({type:'input_audio_buffer.append',audio:pcm.subarray(i,i+3200).toString('base64')});
+    }
+    return duplicate;
   }
   async finish(){
     await this.ready;
@@ -103,7 +117,8 @@ export default function extension(pi){
           emit:event=>ctx.ui.notify('WF_MEETING_STREAM_EVENT '+JSON.stringify(event),event.kind==='error'?'error':'info')});
         await stream.ready;
       }else if(input.op==='append'){
-        if(!stream)throw new Error();await stream.append(input);
+        if(!stream)throw new Error();const duplicate=await stream.append(input);
+        ctx.ui.notify('WF_MEETING_STREAM_ACK '+JSON.stringify({id:input.id,op:input.op,sequence:input.sequence,duplicate}),'info');
       }else if(input.op==='stop'){
         if(!stream)throw new Error();await stream.finish();stream=null;
       }else throw new Error();

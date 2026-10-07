@@ -61,8 +61,11 @@ final class MeetingPiStreamingSession: MeetingAudioStream, @unchecked Sendable {
     }
 
     func append(_ packet: MeetingAudioPacket) async throws {
+        // sequence 随包透传：扩展按它幂等去重（同一 seq 只 append 一次），
+        // ACK 原样带回 sequence——Native 侧将来据此做"ACK 丢失安全重试"。
         try await command(["op": "append", "version": 2, "format": "pcm16", "sampleRate": 16_000,
                            "channels": 1, "offset": packet.offset, "duration": packet.duration,
+                           "sequence": Int(clamping: Int64(bitPattern: packet.sequence)),
                            "audio": packet.pcm.base64EncodedString()])
     }
     func finish() async throws {

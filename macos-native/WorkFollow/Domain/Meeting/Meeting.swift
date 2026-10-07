@@ -19,7 +19,12 @@ struct MeetingAudioChunk: Codable, Equatable, Identifiable {
 struct MeetingAudioPacket: Equatable, Sendable {
     var pcm: Data
     var offset: TimeInterval
+    /// 采集侧分配的单调序号（每次录音从 0 连续递增）。传输与 Pi 扩展靠它做幂等
+    /// 去重与缺口检测（MEETING-AUDIO-001）：出现 102/103/105 立刻知道 104 丢了，
+    /// 而不是等用户听感上觉得"少了一句话"。缺省 0 只供测试直接构造。
+    var sequence: UInt64 = 0
     var duration: TimeInterval { Double(pcm.count) / 32_000 }
+    var endOffset: TimeInterval { offset + duration }
 }
 
 struct MeetingRecord: Codable, Equatable, Identifiable {

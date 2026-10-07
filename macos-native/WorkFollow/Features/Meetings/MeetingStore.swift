@@ -21,18 +21,20 @@ final class MeetingStore: ObservableObject, ModuleStoreFlushable {
     private let ai: MeetingAIClient
     private let recorder = MeetingRecorder()
     private var permissionGeneration = 0
-    private var audioTask: _Concurrency.Task<Void, Never>?
+    /// 音频传输总线（MEETING-AUDIO-001）：采集线程 → transport → Pi/ASR，
+    /// 全程不经过 MainActor。每次录音会话建一个新实例；批量路径（自定义扩展）
+    /// 在首次收包时建。`pendingAudio`/`audioTask`/`pumpAudio` 由此取代。
+    private var transport: MeetingAudioTransport?
+    private var transportMeetingID: UUID?
     private var inputStream: (meetingID: UUID, session: any MeetingAudioStream)?
     private var streamStopping = false
     private var streamToken = UUID()
     private var streamFinalIDs: Set<String> = []
     private var minutesTask: _Concurrency.Task<Void, Never>?
-    private var pendingAudio: [(UUID, MeetingAudioPacket)] = []
     private var recordingOffset: TimeInterval = 0
-    private var inFlightBytes = 0
     /// At most 60 seconds, including the request currently being processed.
     static let maximumAudioBytes = 60 * 32_000
-    var bufferedAudioBytes: Int { inFlightBytes + pendingAudio.reduce(0) { $0 + $1.1.pcm.count } }
+    var bufferedAudioBytes: Int { transport?.pendingByteCount ?? 0 }
     private var pendingMinutes: Set<UUID> = []
     private var blockedMinutes: Set<UUID> = []
     private var blockedAudio: Set<UUID> = []
@@ -49,7 +51,6 @@ final class MeetingStore: ObservableObject, ModuleStoreFlushable {
         selectedID = meetings.first?.id
         recorder.onError = { [weak self] error in
             self?.stopRecording()
-            self?.pendingAudio.removeAll()
             self?.error = "录音中断：\(error.localizedDescription)"
         }
         if automaticallyUpdate {
@@ -85,7 +86,7 @@ final class MeetingStore: ObservableObject, ModuleStoreFlushable {
     func startRecording() async {
         guard recordingID == nil, !requestingPermission, let id = selectedID else { return }
         guard audioConfigured else { error = MeetingPiError.audioNotConfigured.localizedDescription; return }
-        guard audioTask == nil, inputStream == nil else { error = "正在处理最后一段音频，请稍后继续。"; return }
+        guard transport?.isBusy != true, inputStream == nil else { error = "正在处理最后一段音频，请稍后继续。"; return }
         permissionGeneration += 1
         let generation = permissionGeneration
         requestingPermission = true; error = nil
@@ -102,15 +103,17 @@ final class MeetingStore: ObservableObject, ModuleStoreFlushable {
         requestingPermission = false
         guard allowed else { error = "麦克风权限未开启，请在系统设置 → 隐私与安全性 → 麦克风中允许 WorkFollow。"; return }
         guard let meeting = meetings.first(where: { $0.id == id }) else { return }
-        recorder.onChunk = { [weak self] chunk in self?.receiveChunk(chunk, meetingID: id) }
         do {
             blockedAudio.remove(id)
             recordingOffset = meeting.duration
             requestingPermission = true
             let streaming = try await connectInputStream(for: id, offset: recordingOffset)
-            guard generation == permissionGeneration else { closeInputStream(); return }
+            if !streaming { createBatchTransport(for: id) }
+            guard generation == permissionGeneration, let transport else {
+                closeInputStream(); return
+            }
             requestingPermission = false
-            try recorder.start(offset: recordingOffset, streaming: streaming)
+            try recorder.start(offset: recordingOffset, streaming: streaming, transport: transport)
             recordingID = id
         } catch {
             guard generation == permissionGeneration else { return }
@@ -124,7 +127,7 @@ final class MeetingStore: ObservableObject, ModuleStoreFlushable {
         let id = recordingID
         recordingID = nil
         recorder.stop()
-        if inputStream != nil { streamStopping = true; pumpAudio(); return }
+        if inputStream != nil { streamStopping = true; transport?.stopAccepting(); return }
         if let id, !blockedMinutes.contains(id) { pendingMinutes.insert(id); pumpMinutes() }
     }
 
@@ -139,20 +142,21 @@ final class MeetingStore: ObservableObject, ModuleStoreFlushable {
         }
         guard streamToken == token else { session.cancel(); throw CancellationError() }
         inputStream = (id, session); streamStopping = false; streamFinalIDs.removeAll(); transcribing = true
+        createStreamingTransport(meetingID: id, session: session)
         return true
     }
 
     private func closeInputStream() {
         if let stream = inputStream { streamDrafts.removeValue(forKey: stream.meetingID); stream.session.cancel() }
         inputStream = nil; streamToken = UUID(); streamStopping = false
-        if audioTask == nil { transcribing = false }
+        if transport?.isBusy != true { transcribing = false }
     }
 
     func receiveStreamEvent(_ event: MeetingStreamEvent, meetingID: UUID) {
         guard inputStream?.meetingID == meetingID else { return }
         if event.kind == "error" {
             error = event.message ?? "Pi 流式转写失败。"
-            blockedAudio.insert(meetingID); pendingAudio.removeAll(); closeInputStream(); stopRecording(); return
+            blockedAudio.insert(meetingID); closeInputStream(); stopRecording(); return
         }
         guard let item = event.itemID, let text = event.text,
               let offset = event.offset, offset.isFinite, offset >= 0, !streamFinalIDs.contains(item) else { return }
@@ -224,66 +228,119 @@ final class MeetingStore: ObservableObject, ModuleStoreFlushable {
         }
     }
 
+    /// 测试注入缝与批量路径入口。实时录音的采集数据**不经过这里**——
+    /// tap 直接 enqueue 进 transport（不经主线程，见 `MeetingRecorder`）。
     func receiveChunk(_ packet: MeetingAudioPacket, meetingID: UUID) {
         guard meetings.contains(where: { $0.id == meetingID }) else { return }
-        change(meetingID) { $0.capturedDuration = max($0.duration, packet.offset + packet.duration) }
-        guard (inputStream?.meetingID == meetingID || audioConfigured), !blockedAudio.contains(meetingID) else { return }
-        guard bufferedAudioBytes + packet.pcm.count <= Self.maximumAudioBytes else {
-            blockedAudio.insert(meetingID)
-            pendingAudio.removeAll()
-            stopRecording()
-            error = MeetingPiError.audioBackpressure.localizedDescription
-            return
+        change(meetingID) { $0.capturedDuration = max($0.duration, packet.endOffset) }
+        guard (inputStream?.meetingID == meetingID || audioConfigured),
+              !blockedAudio.contains(meetingID) else { return }
+        if transport == nil || transportMeetingID != meetingID {
+            if inputStream?.meetingID == meetingID {
+                guard let stream = inputStream else { return }
+                createStreamingTransport(meetingID: meetingID, session: stream.session)
+            } else {
+                createBatchTransport(for: meetingID)
+            }
         }
-        pendingAudio.append((meetingID, packet)); pumpAudio()
+        transcribing = true
+        guard let transport, transport.enqueue([packet]) != .overflow else {
+            // 超限包被拒：没有东西入队就谈不上"转写中"，按传输实际忙闲复位。
+            transcribing = transport?.isBusy ?? false
+            handleTransportOverflow(meetingID: meetingID); return
+        }
     }
 
-    private func pumpAudio() {
-        guard audioTask == nil, !pendingAudio.isEmpty || streamStopping else { return }
-        transcribing = true
-        audioTask = _Concurrency.Task { [weak self] in
-            guard let self else { return }
-            defer { self.audioTask = nil; self.transcribing = self.inputStream != nil; self.inFlightBytes = 0 }
-            while !self.pendingAudio.isEmpty {
-                let (id, packet) = self.pendingAudio.removeFirst()
-                self.inFlightBytes = packet.pcm.count
-                guard let meeting = self.meetings.first(where: { $0.id == id }) else { continue }
-                do {
-                    if let stream = self.inputStream, stream.meetingID == id {
-                        try await stream.session.append(packet)
-                        self.inFlightBytes = 0
-                        continue
-                    }
-                    let lines = try await self.ai.transcribe(configuration: self.configuration,
-                        packet: packet,
-                        speakers: Array(Set(meeting.transcript.map(\.speaker))).sorted())
-                    self.change(id) {
-                        $0.transcript.append(contentsOf: lines)
-                        $0.transcript.sort { $0.offset < $1.offset }
-                    }
-                    if self.recordingID != id, !self.blockedMinutes.contains(id) {
-                        self.pendingMinutes.insert(id); self.pumpMinutes()
-                    }
-                } catch {
-                    self.error = error.localizedDescription
-                    self.blockedAudio.insert(id)
-                    self.pendingAudio.removeAll()
-                    self.closeInputStream()
-                    self.stopRecording()
-                    return
-                }
-                self.inFlightBytes = 0
-            }
-            if self.streamStopping, let stream = self.inputStream {
-                do {
-                    try await stream.session.finish()
-                    self.closeInputStream()
-                    if !self.blockedMinutes.contains(stream.meetingID) {
-                        self.pendingMinutes.insert(stream.meetingID); self.pumpMinutes()
-                    }
-                } catch { self.error = error.localizedDescription; self.closeInputStream() }
+    // MARK: - 传输总线组装（MEETING-AUDIO-001）
+
+    private func wireTransportCallbacks(_ transport: MeetingAudioTransport, meetingID: UUID) {
+        transport.onCapture = { [weak self] until in
+            _Concurrency.Task { @MainActor [weak self] in
+                guard let self, self.transportMeetingID == meetingID else { return }
+                self.change(meetingID) { $0.capturedDuration = max($0.duration, until) }
             }
         }
+        transport.onOverflow = { [weak self] in
+            _Concurrency.Task { @MainActor [weak self] in self?.handleTransportOverflow(meetingID: meetingID) }
+        }
+        transport.onError = { [weak self] error in
+            _Concurrency.Task { @MainActor [weak self] in self?.handleTransportError(meetingID: meetingID, error) }
+        }
+        transport.onIdle = { [weak self] in
+            _Concurrency.Task { @MainActor [weak self] in
+                guard let self else { return }
+                self.transcribing = self.inputStream != nil
+            }
+        }
+        transport.onSettled = { [weak self] in
+            _Concurrency.Task { @MainActor [weak self] in self?.transcribing = false }
+        }
+    }
+
+    private func createStreamingTransport(meetingID: UUID, session: any MeetingAudioStream) {
+        let transport = MeetingAudioTransport(maximumBytes: Self.maximumAudioBytes) { packet in
+            try await session.append(packet)
+        }
+        transport.bindFinisher { [weak self] _ in
+            try await session.finish()
+            await MainActor.run { [weak self] in
+                guard let self else { return }
+                self.closeInputStream()
+                if !self.blockedMinutes.contains(meetingID) {
+                    self.pendingMinutes.insert(meetingID); self.pumpMinutes()
+                }
+            }
+        }
+        wireTransportCallbacks(transport, meetingID: meetingID)
+        self.transport = transport
+        transportMeetingID = meetingID
+    }
+
+    private func createBatchTransport(for meetingID: UUID) {
+        let ai = self.ai
+        let configuration = self.configuration
+        let transport = MeetingAudioTransport(maximumBytes: Self.maximumAudioBytes) { [weak self] packet in
+            let speakers = await MainActor.run { [weak self] () -> [String] in
+                guard let meeting = self?.meetings.first(where: { $0.id == meetingID }) else { return [] }
+                return Array(Set(meeting.transcript.map(\.speaker))).sorted()
+            }
+            let lines = try await ai.transcribe(configuration: configuration, packet: packet, speakers: speakers)
+            await MainActor.run { [weak self] in
+                self?.receiveTranscribed(lines: lines, packet: packet, meetingID: meetingID)
+            }
+        }
+        wireTransportCallbacks(transport, meetingID: meetingID)
+        self.transport = transport
+        transportMeetingID = meetingID
+    }
+
+    /// 批量路径：一次性转写返回的文字行落进对话记录（原 pumpAudio 成功分支）。
+    private func receiveTranscribed(lines: [MeetingTranscriptLine], packet: MeetingAudioPacket,
+                                    meetingID: UUID) {
+        change(meetingID) {
+            $0.transcript.append(contentsOf: lines)
+            $0.transcript.sort { $0.offset < $1.offset }
+        }
+        if recordingID != meetingID, !blockedMinutes.contains(meetingID) {
+            pendingMinutes.insert(meetingID); pumpMinutes()
+        }
+    }
+
+    /// 队列超限：显式失败（原 backpressure 分支）。已排队的包照常送完。
+    private func handleTransportOverflow(meetingID: UUID) {
+        guard !blockedAudio.contains(meetingID) else { return }
+        blockedAudio.insert(meetingID)
+        stopRecording()
+        error = MeetingPiError.audioBackpressure.localizedDescription
+    }
+
+    /// 发送失败：与原 pumpAudio catch 同语义（错误 + 停采集），ledger 已留下
+    /// captured/acknowledged 差额，损失可观测。
+    private func handleTransportError(meetingID: UUID, _ error: Error) {
+        blockedAudio.insert(meetingID)
+        closeInputStream()
+        stopRecording()
+        self.error = error.localizedDescription
     }
 
     private func pumpMinutes() {
@@ -328,7 +385,7 @@ final class MeetingStore: ObservableObject, ModuleStoreFlushable {
     func flush(_ completion: @escaping (Error?) -> Void) {
         if recordingID != nil { stopRecording() }
         _Concurrency.Task { [self] in
-            while audioTask != nil || inputStream != nil {
+            while transport?.isBusy == true || inputStream != nil {
                 try? await _Concurrency.Task.sleep(nanoseconds: 20_000_000)
             }
             persistence.flush(completion)

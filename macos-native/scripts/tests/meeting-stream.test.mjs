@@ -59,3 +59,34 @@ test('transcription failure is surfaced and a closed stream cannot accept audio'
   assert.ok(events.some(e=>e.kind==='error'));
   await assert.rejects(stream.append(input));
 });
+
+test('append is idempotent per sequence: duplicates are ACKed but never re-appended',async t=>{
+  const server=await service(t),events=[];
+  const stream=new MeetingInputStream({url:server.url,apiKey:'test',modelID:'configured-realtime',offset:0,emit:e=>events.push(e),socketFactory:(u,o)=>new WebSocket(u,o)});
+  await stream.ready;
+  const audio=Buffer.alloc(8000,1).toString('base64');
+  const appended=()=>server.received.filter(e=>e.type==='input_audio_buffer.append').length;
+  const waitForAppends=async target=>{for(let i=0;i<200&&appended()<target;i++)await new Promise(r=>setTimeout(r,5));return appended();};
+  // 首次 seq 0：正常 append。
+  let dup=await stream.append({version:2,format:'pcm16',sampleRate:16000,channels:1,offset:0,duration:0.25,sequence:0,audio});
+  assert.equal(dup,false);
+  const afterFirst=await waitForAppends(1);
+  assert.ok(afterFirst>0);
+  // ACK 丢失后原样重发 seq 0：必须去重（不再 append），但仍返回成功。
+  dup=await stream.append({version:2,format:'pcm16',sampleRate:16000,channels:1,offset:0,duration:0.25,sequence:0,audio});
+  assert.equal(dup,true);
+  assert.equal(appended(),afterFirst,'重发旧 sequence 不得产生第二次 append');
+  // 迟到的更旧 seq（重排到达）：同样去重。
+  // seq 1 正常前进水位，再重发 seq 0。
+  await stream.append({version:2,format:'pcm16',sampleRate:16000,channels:1,offset:0.25,duration:0.25,sequence:1,audio});
+  const afterSecond=await waitForAppends(afterFirst+1);
+  dup=await stream.append({version:2,format:'pcm16',sampleRate:16000,channels:1,offset:0,duration:0.25,sequence:0,audio});
+  assert.equal(dup,true);
+  await new Promise(r=>setTimeout(r,20));
+  assert.equal(appended(),afterSecond,'重发迟到旧包不得再 append');
+  // 不带 sequence 的旧调用方：保持原行为（不去重）。
+  dup=await stream.append({version:2,format:'pcm16',sampleRate:16000,channels:1,offset:0.5,duration:0.25,audio});
+  assert.equal(dup,false);
+  assert.ok((await waitForAppends(afterSecond+1))>afterSecond);
+  await stream.finish();
+});
