@@ -86,7 +86,8 @@ final class MeetingAudioLedger: @unchecked Sendable {
             let acknowledged = acknowledgedWatermark > 0 ? entries[acknowledgedWatermark - 1].end : 0
             var gap: UInt64?
             for (index, entry) in entries.enumerated() where entry.sequence != UInt64(index) {
-                gap = entry.sequence
+                // 缺的是"应该在的那个序号"：entries [0, 2] → 缺 1（验收修正 P1）。
+                gap = UInt64(index)
                 break
             }
             return Snapshot(entries: entries, capturedUntil: captured, sentUntil: sent,

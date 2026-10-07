@@ -33,6 +33,12 @@ final class MeetingAudioTransport: @unchecked Sendable {
     private var pendingBytes = 0
     private var inFlightBytes = 0
     private var pumping = false
+    /// 验收修正（P0）：overflow 必须**同步** latch——不等 MainActor 回调链
+    /// （onOverflow → Store → stopRecording）回来才停。否则泵消化出空间的窗口
+    /// 里，后续包会重新入队，形成"100、[101 丢]、102、103"的中间缺口。latch
+    /// 之后：新包只记账（captured but rejected）不再入队；pending 照常送完。
+    /// 与 `failed`（发送失败，清队列停泵）是两个独立状态。
+    private var accepting = true
     private var stopping = false
     private var failed = false
     private var settleStarted = false
@@ -72,11 +78,14 @@ final class MeetingAudioTransport: @unchecked Sendable {
             for packet in packets {
                 ledger.recordCaptured(packet)
                 capturedUntil = packet.endOffset
-                if failed {
+                if failed || !accepting {
+                    // 失败态或超限已 latch：包只记账（captured but rejected），
+                    // 不再入队——缺口之后不允许再有音频进入 Pi。
                     result = .rejectedAfterFailure
                 } else if pendingBytes + packet.pcm.count > maximumBytes {
-                    // 显式失败：只拒绝超限包本身（不入队、不丢弃已排队包）；
-                    // Store 收到通知后停止录音，已排队包在停止流程里照常送完。
+                    // 显式失败：同步 latch 接收（见 accepting 注释），只拒绝
+                    // 超限包本身；已排队包在停止流程里照常送完。
+                    accepting = false
                     result = .overflow
                 } else {
                     pending.append(packet)

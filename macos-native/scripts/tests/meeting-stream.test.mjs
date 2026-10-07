@@ -90,3 +90,23 @@ test('append is idempotent per sequence: duplicates are ACKed but never re-appen
   assert.ok((await waitForAppends(afterSecond+1))>afterSecond);
   await stream.finish();
 });
+
+test('forward sequence gaps are rejected instead of silently advancing the watermark',async t=>{
+  const server=await service(t),events=[];
+  const stream=new MeetingInputStream({url:server.url,apiKey:'test',modelID:'configured-realtime',offset:0,emit:e=>events.push(e),socketFactory:(u,o)=>new WebSocket(u,o)});
+  await stream.ready;
+  const audio=Buffer.alloc(8000,1).toString('base64');
+  // seq 0 正常。
+  await stream.append({version:2,format:'pcm16',sampleRate:16000,channels:1,offset:0,duration:0.25,sequence:0,audio});
+  // seq 2 跳号（缺 1）：必须显式失败，不允许接受 2。
+  await assert.rejects(
+    stream.append({version:2,format:'pcm16',sampleRate:16000,channels:1,offset:0.5,duration:0.25,sequence:2,audio}),
+    /sequence 缺口|已停止/);
+  // 缺口触发 fail 后会话关闭：后续 append 一律拒绝。
+  await assert.rejects(
+    stream.append({version:2,format:'pcm16',sampleRate:16000,channels:1,offset:0.75,duration:0.25,sequence:3,audio}));
+  // 服务端只收到 seq 0 的音频（等异步投递落地）。
+  let appended=0;
+  for(let i=0;i<200;i++){appended=server.received.filter(e=>e.type==='input_audio_buffer.append').length;if(appended>0)break;await new Promise(r=>setTimeout(r,5));}
+  assert.ok(appended>0);
+});

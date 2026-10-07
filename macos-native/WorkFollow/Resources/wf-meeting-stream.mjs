@@ -67,7 +67,13 @@ export class MeetingInputStream {
     const sequence=Number(input.sequence);
     if(Number.isFinite(sequence)&&sequence>=0){
       if(sequence<=this.lastSequence)duplicate=true;
-      else this.lastSequence=sequence;
+      else if(sequence===this.lastSequence+1)this.lastSequence=sequence;
+      else{
+        // 序列完整性（验收修正）：不允许向前跳号——0→2 意味着中间必有丢失，
+        // 显式失败而不是静默接受 2。串行 sender 下这是传输层 bug 的信号。
+        this.fail(`Pi 流式 sequence 缺口：期望 ${this.lastSequence+1}，收到 ${sequence}。`);
+        throw new Error('Pi 流式 sequence 缺口。');
+      }
     }
     // sequence 缺省（旧调用方）退化为不去重，保持向后兼容。
     if(!duplicate){

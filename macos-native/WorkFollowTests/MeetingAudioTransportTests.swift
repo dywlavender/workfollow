@@ -69,6 +69,8 @@ final class MeetingAudioTransportTests: XCTestCase {
     }
 
     /// 队列超限：超限包显式拒绝（不入队、不静默丢），已排队包照常送完。
+    /// 验收修正（P0）：overflow 之后 transport 立即 latch 拒收——后续包哪怕
+    /// 泵已消化出空间也不得再入队，杜绝"100、[101 丢]、102、103"式中间缺口。
     func testOverflowRejectsOnlyTheOverflowingPacketAndDrainsTheRest() async throws {
         var overflowed = false
         let transport = MeetingAudioTransport(maximumBytes: 3 * 8_000) { _ in
@@ -78,14 +80,18 @@ final class MeetingAudioTransportTests: XCTestCase {
         transport.enqueue([packet(0, offset: 0), packet(1, offset: 0.25), packet(2, offset: 0.5)])
         let rejected = transport.enqueue([packet(3, offset: 0.75)])
         XCTAssertEqual(rejected, .overflow)
+        // latch 之后的包：全部拒收，只进账本。
+        let afterLatch = transport.enqueue([packet(4, offset: 1.0), packet(5, offset: 1.25)])
+        XCTAssertEqual(afterLatch, .rejectedAfterFailure)
         await waitForAcknowledgement(transport, atLeast: 0.75)
         XCTAssertTrue(overflowed, "超限必须显式通知，不能悄悄吞掉")
         let snapshot = transport.snapshot()
-        XCTAssertEqual(snapshot.entries.count, 4, "被拒的包也进账本（captured 但未发送）")
+        XCTAssertEqual(snapshot.entries.count, 6, "被拒的包也进账本（captured but rejected）")
         XCTAssertEqual(snapshot.entries.last?.state, .captured)
         XCTAssertEqual(snapshot.acknowledgedUntil, 0.75, "已排队的包照常送完")
-        XCTAssertEqual(snapshot.acknowledgedLag, 0.25, accuracy: 0.0001,
-                       "账本明确指出最后一段没有被确认")
+        XCTAssertEqual(snapshot.capturedUntil, 1.5, "latch 后的包仍被采集账本如实记录")
+        XCTAssertEqual(snapshot.acknowledgedLag, 0.75, accuracy: 0.0001,
+                       "账本明确指出 0.75s 之后的内容没有被确认")
     }
 
     /// 发送失败：排队包清空（与旧行为一致），但账本保留 captured/acknowledged 差额。
@@ -159,7 +165,8 @@ final class MeetingAudioLedgerTests: XCTestCase {
         ledger.recordCaptured(MeetingAudioPacket(pcm: Data(repeating: 1, count: 8),
                                                  offset: 0.5, sequence: 2))
         let snapshot = ledger.snapshot()
-        XCTAssertEqual(snapshot.firstMissingSequence, 2, "102→103→105 必须立刻知道 104 丢了")
+        // entries [0, 2]：缺的是 1 本身（验收修正 P1），不是实际收到的 2。
+        XCTAssertEqual(snapshot.firstMissingSequence, 1, "102→103→105 必须报出缺失的 104")
     }
 }
 
