@@ -16,12 +16,9 @@ import SwiftUI
 struct CalendarWorkspaceView: View {
     @ObservedObject var workspace: TaskWorkspaceModel
 
-    /// 屏幕上这个月的第一天。周模式下它跟着当前日走。
-    @State private var month: Date
-    /// 月网格顶行的周起始日（周日）。**上下滚动按周移动它**（Apple 日历式
-    /// 连续滚动，2026-10-07 用户纠正"纵向不该整月跳"），`month` 由它推导；
-    /// 横扫/前后按钮才是整月跳转，跳转时重置到目标月网格首周。
-    @State private var anchorWeek: Date
+    /// 月网格顶行的周起始日（周日）——**滚动位置单一事实源**：用户上下滚动
+    /// 实时回写，横扫/前后按钮/goToday 写入它驱动网格滚动（带动画）。
+    @State private var topWeek: Date
     /// 页面的当前日：网格上被标出的那天、周视图的锚点、工具条加号落款的日期。
     @State private var selectedDay: Date
     @State private var mode: CalendarViewMode = .month
@@ -42,19 +39,25 @@ struct CalendarWorkspaceView: View {
         let now = workspace.clock()
         let today = calendar.startOfDay(for: now)
         let firstDay = calendar.date(from: calendar.dateComponents([.year, .month], from: now)) ?? today
-        _month = State(initialValue: firstDay)
-        _anchorWeek = State(initialValue: Self.startOfWeek(containing: firstDay, calendar: calendar))
+        _topWeek = State(initialValue: Self.startOfWeek(containing: firstDay, calendar: calendar))
         _selectedDay = State(initialValue: today)
     }
 
     private var calendar: Calendar { PlanningProjection.sundayFirstWeek(workspace.calendar) }
+
+    /// 标题月 = 可见窗口中点（顶行 +14 天）所在月。由 topWeek **单一派生**，
+    /// 用户连续滚动时实时跟随，跨月边界不抖动；不独立存储，消除同步 bug 类。
+    private var month: Date {
+        let middle = calendar.date(byAdding: .day, value: 14, to: topWeek) ?? topWeek
+        return firstOfMonth(middle)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             toolbar
             if mode == .month {
                 CalendarMonthGridView(
-                    firstWeek: anchorWeek,
+                    topWeek: $topWeek,
                     month: month,
                     today: workspace.clock(),
                     selectedDay: selectedDay,
@@ -84,15 +87,10 @@ struct CalendarWorkspaceView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(WFColors.content)
-        // 触控板/滚轮手势（2026-10-07，对齐正常日历——Apple 日历式）：
-        // 横扫 = 前后翻整月（周模式翻周）；上下扫 = **按周连续滚动**月网格，
-        // 标题月跟随可见窗口，不是整月跳转。周模式的纵向留给日期格任务列表。
-        .modifier(CalendarSwipeGestureModifier { direction, horizontal in
-            if horizontal {
-                withAnimation(.easeOut(duration: 0.2)) { step(direction) }
-            } else if mode == .month {
-                withAnimation(.easeOut(duration: 0.15)) { scrollWeeks(direction) }
-            }
+        // 横扫 = 前后翻整月（周模式翻周）。**纵向滚动已由月网格的 ScrollView
+        // 原生接管**（连续、带惯性、按周对齐），监听器只处理横向。
+        .modifier(CalendarSwipeGestureModifier { direction in
+            withAnimation(.easeOut(duration: 0.2)) { step(direction) }
         })
         // 浮层的坐标基准：锚点矩形与弹框位置都在这一个坐标系里算。
         .coordinateSpace(name: PlanningCoordinateSpace.name)
@@ -237,34 +235,24 @@ struct CalendarWorkspaceView: View {
 
     private func step(_ direction: Int) {
         if mode == .month {
-            guard let moved = calendar.date(byAdding: .month, value: direction, to: month) else { return }
-            month = firstOfMonth(moved)
-            anchorWeek = Self.startOfWeek(containing: firstOfMonth(moved), calendar: calendar)
+            let target = firstOfMonth(calendar.date(byAdding: .month, value: direction, to: month) ?? month)
+            withAnimation(.easeOut(duration: 0.25)) {
+                topWeek = Self.startOfWeek(containing: target, calendar: calendar)
+            }
             return
         }
-        // 周模式移动的是当前日，月份跟着走，这样离开周模式会落在最后看的那个月。
+        // 周模式移动的是当前日；同步滚动锚，离开周模式时月网格落在最后看的那个月。
         guard let moved = calendar.date(byAdding: .day, value: 7 * direction, to: selectedDay) else { return }
         selectedDay = moved
-        month = firstOfMonth(moved)
-        anchorWeek = Self.startOfWeek(containing: firstOfMonth(moved), calendar: calendar)
-    }
-
-    /// 上下滚动：网格按周平移（Apple 日历式），标题月跟随可见窗口的中点。
-    /// 周模式不走这里——纵向留给日期格内的任务列表滚动。
-    private func scrollWeeks(_ direction: Int) {
-        guard let moved = calendar.date(byAdding: .day, value: 7 * direction, to: anchorWeek) else { return }
-        anchorWeek = moved
-        // 可见 6 周窗口的中点（第 17~24 天）所在的月份就是标题月；
-        // 用中点而不是首行，避免跨月边界上标题来回抖动。
-        let middle = calendar.date(byAdding: .day, value: 17, to: moved) ?? moved
-        month = firstOfMonth(middle)
+        topWeek = Self.startOfWeek(containing: firstOfMonth(moved), calendar: calendar)
     }
 
     private func goToday() {
         let today = calendar.startOfDay(for: workspace.clock())
         selectedDay = today
-        month = firstOfMonth(today)
-        anchorWeek = Self.startOfWeek(containing: firstOfMonth(today), calendar: calendar)
+        withAnimation(.easeOut(duration: 0.25)) {
+            topWeek = Self.startOfWeek(containing: firstOfMonth(today), calendar: calendar)
+        }
     }
 
     /// 点一天：网格显示邻月收尾与开头的日子，所以点击可能落在屏幕之外的月份上；
@@ -273,8 +261,9 @@ struct CalendarWorkspaceView: View {
         selectedDay = day
         if calendar.component(.month, from: day) != calendar.component(.month, from: month)
             || calendar.component(.year, from: day) != calendar.component(.year, from: month) {
-            month = firstOfMonth(day)
-            anchorWeek = Self.startOfWeek(containing: firstOfMonth(day), calendar: calendar)
+            withAnimation(.easeOut(duration: 0.2)) {
+                topWeek = Self.startOfWeek(containing: firstOfMonth(day), calendar: calendar)
+            }
         }
     }
 
@@ -395,20 +384,23 @@ struct ToolbarPill<Content: View>: View {
 
 // MARK: - 月网格
 
-/// 月网格。它是一个连续的日期面，不是摆在页面上的卡片墙。
+/// 月网格 = **真正的滚动容器**（2026-10-07，用户要"连续性，滑顺自然"）：
+/// 一条以今天所在周为原点 ±2 年的周行流装进 `ScrollView`，视口露出 5 行，
+/// 松手按行对齐（`viewAligned`）——手指带多少内容走多少、带惯性和回弹，
+/// 这是 Apple 日历的手感。手指滑动时 `topWeek` 被实时回写，标题月跟随。
 ///
 /// 月从它开始的那一天开始，所以网格开头是上月收尾的日子、结尾是下月开头的日子。
-/// 那些日子是真的格子：有自己的任务、也能被投放。行数跟着月份走而不补齐六行，
-/// 五周装得下的月份就画五周。
+/// 那些日子是真的格子：有自己的任务、也能被投放。
 ///
 /// 每一行是三层的叠放，顺序就是设计：格子（带自己的小条）在最下；本行的跨天色带
 /// 压在格子底色之上，色带才读得成一整块颜色而不是被六格底色切碎的漆；今天的洗色
 /// 随后，穿过今天的那条色带也要被这一天染一层；细线最后，于是它穿过色带而不是
 /// 止步于色带。
 struct CalendarMonthGridView: View {
-    /// 顶行周的起始日（周日）：滚动锚。上下滚动移动它，网格连续按周平移。
-    let firstWeek: Date
-    /// 标题月：邻月日期置灰的基准、点击邻月日期时的跳转目标。
+    /// 顶行周的起始日（周日）：滚动位置双向绑定。横扫/按钮跳月时由父级
+    /// 更新（带动画），用户手指滚动时被实时回写。
+    @Binding var topWeek: Date
+    /// 标题月：邻月日期置灰的基准。
     let month: Date
     let today: Date
     let selectedDay: Date
@@ -425,38 +417,73 @@ struct CalendarMonthGridView: View {
     /// 浮层锚的落脚点：格与条在点击时把「自己是哪一块」写进去。
     let anchorSink: PlanningAnchorRef
 
-    /// 42 天（6 周）从顶行周起算——滚动锚移动时整个网格按周平移，
-    /// 而不是按月重建（Apple 日历式连续滚动）。
-    private var days: [Date] {
-        (0..<42).compactMap { calendar.date(byAdding: .day, value: $0, to: firstWeek) }
+    /// 以今天所在周为原点 ±30 周的周起点。**刻意不用 LazyVStack**：
+    /// scrollPosition(id:) 在懒加载内容上会被未实体化的 id 卡住（快速滚动时
+    /// 绑定停在最后已实体化的行，标题与网格脱节——2026-10-07 实测）。61 行
+    /// ×7 格全部实体化，绑定才可靠；±30 周（约 7 个月）对日历足够。
+    private var weeks: [Date] {
+        let origin = Self.startOfWeek(containing: today, calendar: calendar)
+        return (-30...30).compactMap {
+            calendar.date(byAdding: .weekOfYear, value: $0, to: origin)
+        }
     }
-    private var rows: Int { max(days.count / 7, 1) }
 
     var body: some View {
         VStack(spacing: 0) {
             weekHeader
-            VStack(spacing: 0) {
-                ForEach(0..<rows, id: \.self) { row in
-                    MonthWeekRow(
-                        days: Array(days[(row * 7)..<min(row * 7 + 7, days.count)]),
-                        month: month,
-                        today: today,
-                        selectedDay: selectedDay,
-                        showCompleted: showCompleted,
-                        isLastRow: row == rows - 1,
-                        calendar: calendar,
-                        tasks: tasks,
-                        barColor: barColor,
-                        onSelectDay: onSelectDay,
-                        onOpenTask: onOpenTask,
-                        onCreateTask: onCreateTask,
-                        onDropTask: onDropTask,
-                        onToggleTask: onToggleTask,
-                        anchorSink: anchorSink)
-                    .frame(maxHeight: .infinity)
+            GeometryReader { geo in
+                let rowHeight = geo.size.height / 5 // 视口固定露出 5 行
+                ScrollViewReader { proxy in
+                ScrollView {
+                    // scrollTargetLayout：把周行标记为 viewAligned 的对齐目标。
+                    // 缺了它 viewAligned 退化成自由滚动（不 snap、不回写
+                    // scrollPosition）——2026-10-07 实测顶行停在半行。
+                    VStack(spacing: 0) {
+                        ForEach(weeks, id: \.self) { weekStart in
+                            MonthWeekRow(
+                                days: Self.weekDays(from: weekStart, calendar: calendar),
+                                month: month,
+                                today: today,
+                                selectedDay: selectedDay,
+                                showCompleted: showCompleted,
+                                isLastRow: false,
+                                calendar: calendar,
+                                tasks: tasks,
+                                barColor: barColor,
+                                onSelectDay: onSelectDay,
+                                onOpenTask: onOpenTask,
+                                onCreateTask: onCreateTask,
+                                onDropTask: onDropTask,
+                                onToggleTask: onToggleTask,
+                                anchorSink: anchorSink)
+                            .id(weekStart)
+                            .frame(height: rowHeight)
+                        }
+                    }
+                }
+                .scrollTargetLayout()
+                .scrollPosition(id: positionBinding, anchor: .top)
+                .scrollTargetBehavior(.viewAligned)
+                .onAppear {
+                    // scrollPosition 的初值不驱动初始定位（实测停在内容起点），
+                    // 初始定位补一次 scrollTo；跳转路径靠绑定变化驱动滚动。
+                    DispatchQueue.main.async { proxy.scrollTo(topWeek, anchor: .top) }
+                }
                 }
             }
         }
+    }
+
+    private var positionBinding: Binding<Date?> {
+        Binding(get: { topWeek }, set: { if let value = $0 { topWeek = value } })
+    }
+
+    private static func weekDays(from weekStart: Date, calendar: Calendar) -> [Date] {
+        (0..<7).compactMap { calendar.date(byAdding: .day, value: $0, to: weekStart) }
+    }
+
+    static func startOfWeek(containing date: Date, calendar: Calendar) -> Date {
+        calendar.dateInterval(of: .weekOfYear, for: date)?.start ?? date
     }
 
     /// 周日在前，与网格的列偏移同源。两者必须一致：表头顺序与首列偏移不一致不

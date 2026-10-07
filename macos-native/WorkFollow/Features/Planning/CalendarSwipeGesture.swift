@@ -1,10 +1,9 @@
 import AppKit
 import SwiftUI
 
-/// 日历页的触控板/滚轮手势（2026-10-07，对齐正常日历行为）：
-/// **横扫 = 前后翻整月**（周模式翻周）；**上下扫 = 按周连续滚动月网格**
-/// （Apple 日历式，纵向不跳整月——用户明确纠正过）。周模式的纵向事件
-/// 原样放行给日期格内的任务列表滚动。
+/// 日历页的触控板/滚轮手势（2026-10-07）：**横扫 = 前后翻整月**（周模式
+/// 翻周）。**纵向已由月网格的 ScrollView 原生接管**——按周连续滚动、带
+/// 惯性、松手按行对齐（Apple 日历式），监听器只处理横向。
 ///
 /// 实现走 `NSEvent` 本地监听器而非 SwiftUI 手势：部署目标 14.0 没有
 /// `onScrollGesture`（15+ 才有），而 `DragGesture` 不响应触控板双指滚动。
@@ -20,8 +19,9 @@ import SwiftUI
 /// 时改 `directionSign` 一行。累积/阈值/冷却：触控板一个手势会连发几十个
 /// 事件，累积到阈值才翻一页，冷却防止一次长扫连翻多页。
 struct CalendarSwipeGestureModifier: ViewModifier {
-    /// ±1；`horizontal` = 主轴是否横向（纵向 = 按周滚动，横向 = 翻整月）。
-    let onSwipe: (_ direction: Int, _ horizontal: Bool) -> Void
+    /// ±1 翻到下/上一周期。**仅横向**：纵向滚动已由月网格的 ScrollView 原生
+    /// 接管（连续、惯性、按周对齐），监听器不再掺和纵向，避免双重移动。
+    let onSwipe: (_ direction: Int) -> Void
 
     /// 方向校正位：实测与预期相反时改 -1。
     private static let directionSign = 1
@@ -65,14 +65,14 @@ struct CalendarSwipeGestureModifier: ViewModifier {
             #endif
             return
         }
-        // 主轴判定：横扫与纵扫都翻页，方向语义不同（横=整月，纵=单周）。
-        let horizontal = abs(dx) > abs(dy)
+        // 仅横向：纵向事件原样放行（月网格原生滚动 / 周格任务列表滚动）。
+        guard abs(dx) > abs(dy) else { return }
         guard Date() >= cooldownUntil else { return }
-        accumulation += horizontal ? dx : dy
+        accumulation += dx
         guard abs(accumulation) >= Self.threshold else { return }
         let direction = accumulation > 0 ? Self.directionSign : -Self.directionSign
         accumulation = 0
         cooldownUntil = Date().addingTimeInterval(Self.cooldown)
-        onSwipe(direction, horizontal)
+        onSwipe(direction)
     }
 }
