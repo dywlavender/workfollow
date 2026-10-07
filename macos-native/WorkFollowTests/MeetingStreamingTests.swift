@@ -63,6 +63,47 @@ final class MeetingStreamingTests: XCTestCase {
         XCTAssertEqual(updates.map(\.kind), ["preview", "final"])
         XCTAssertEqual(updates.last?.text, "最终文字")
     }
+
+    /// ACK 丢失注入（MEETING-AUDIO-002）：fixture 吞掉 seq 0 的第一次命令
+    /// （不 ACK、不 append），Native 必须自动重试；扩展幂等保证只 append 一次。
+    /// 快超时参数让用例秒级完成，真实节奏由 appendTimeout=12s 兜底。
+    func testLostAcknowledgementIsRetriedWithoutDuplicateAppend() async throws {
+        guard ProcessInfo.processInfo.environment["MEETING_PI_INTEGRATION"] == "1" else {
+            throw XCTSkip("Enable MEETING_PI_INTEGRATION=1")
+        }
+        let root = try directory()
+        let fixture = root.appendingPathComponent("ack-drop-fixture.mjs")
+        try """
+        export default function(pi) {
+          let dropped = false; const appended = new Set();
+          pi.registerCommand('wf-meeting-stream', {description:'ACK-drop fixture',handler:async(args,ctx)=>{
+            const input=JSON.parse(args);
+            if(input.op==='append'){
+              if(!dropped){dropped=true;return;}
+              if(!appended.has(input.sequence)){
+                appended.add(input.sequence);
+                ctx.ui.notify('WF_MEETING_STREAM_EVENT '+JSON.stringify({kind:'preview',itemID:'one',text:'草稿'+input.sequence,offset:0}),'info');
+              }
+            }
+            ctx.ui.notify('WF_MEETING_STREAM_ACK '+JSON.stringify({id:input.id,op:input.op,sequence:input.sequence??null}),'info');
+          }});
+        }
+        """.write(to: fixture, atomically: true, encoding: .utf8)
+        var updates: [MeetingStreamEvent] = []
+        let session = try MeetingPiStreamingSession(configuration: MeetingPiConfiguration(),
+                                                    extensionPath: fixture.path,
+                                                    onEvent: { updates.append($0) },
+                                                    appendAttempts: 3, appendTimeout: 0.5)
+        defer { session.cancel() }
+        try await session.command(["op": "start", "offset": 0])
+        // 第一次 append 的 ACK 被 fixture 吞掉：session 内部重试后成功。
+        try await session.append(MeetingAudioPacket(pcm: Data(repeating: 1, count: 8000), offset: 0, sequence: 0))
+        try await session.append(MeetingAudioPacket(pcm: Data(repeating: 2, count: 8000), offset: 0.25, sequence: 1))
+        try await _Concurrency.Task.sleep(nanoseconds: 200_000_000)
+        XCTAssertEqual(updates.filter { $0.kind == MeetingStreamKind.preview }.map(\.text),
+                       ["草稿0", "草稿1"],
+                       "重试必须成功，且扩展幂等保证同一包只 append 一次")
+    }
     private func directory() throws -> URL {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent("meeting-stream-tests-" + UUID().uuidString)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)

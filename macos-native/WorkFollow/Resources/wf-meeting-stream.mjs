@@ -4,6 +4,13 @@ import {realpathSync} from 'node:fs';
 import {randomUUID} from 'node:crypto';
 import {audioModel,validateAudio} from './wf-meeting-audio.mjs';
 
+// 语义化常量（MEETING-AUDIO-002）：停止时补的静音必须**长于** VAD 静音门限，
+// 否则最后一句话可能因 VAD 未闭合而丢失（旧实现补 700ms < 门限 800ms）。
+// 测试锁死 finishSilenceMs > vadSilenceDurationMs，改 VAD 参数不会再次失配。
+export const finishSilenceMs = 1200;
+export const vadSilenceDurationMs = 800;
+export const bytesPerSecond = 32000;
+
 export class MeetingInputStream {
   constructor({url,apiKey,headers={},modelID,socketFactory,emit,offset=0,timeoutMs=20000}) {
     this.emit=emit;this.offset=offset;this.timeoutMs=timeoutMs;
@@ -20,7 +27,7 @@ export class MeetingInputStream {
       modalities:['text'],instructions:'只进行输入音频转写，不自行回答或调用工具。',
       // 转写与纪要共用同一个模型；ASR 子模型不再写死 qwen3-asr-flash-realtime。
       input_audio_transcription:{model:modelID},
-      turn_detection:{type:'server_vad',threshold:0.2,prefix_padding_ms:500,silence_duration_ms:800,create_response:false,interrupt_response:false},
+      turn_detection:{type:'server_vad',threshold:0.2,prefix_padding_ms:500,silence_duration_ms:vadSilenceDurationMs,create_response:false,interrupt_response:false},
       audio:{input:{format:{type:'pcm',sample_rate:16000,sample_format:'s16le',channels:1,packing:'interleaved',channel_layout:'mono'}}}
     }}));
     this.socket.addEventListener('message',event=>{
@@ -43,8 +50,12 @@ export class MeetingInputStream {
     if(event.type==='input_audio_buffer.speech_started'){
       this.activeItem=id;
       this.starts.set(id,this.offset+(event.audio_start_ms??0)/1000);this.pending.add(id);
+      // VAD 生命周期（MEETING-AUDIO-002）：把讲话段的开始/结束原样交给 Native，
+      // Native 的 turn 状态机据此检测"有讲话但没有 Final"。
+      this.emit({kind:'speechStarted',itemID:id,text:null,offset:this.starts.get(id)??this.offset});
     }else if(event.type==='input_audio_buffer.speech_stopped'){
       if(this.activeItem===id)this.activeItem=null;
+      this.emit({kind:'speechStopped',itemID:id,text:null,offset:this.offset+(event.audio_end_ms??0)/1000});
     }else if(event.type==='input_audio_buffer.committed'){
       this.bytesSinceCommit=0;
       if(!this.completed.has(id))this.pending.add(id);
@@ -94,7 +105,9 @@ export class MeetingInputStream {
       this.timer=setTimeout(()=>this.fail('Pi 流式转写尾段超时。'),this.timeoutMs);
       // VAD may already have committed the last turn. A second manual commit
       // rejects an empty buffer. Supply end silence and await VAD/final events.
-      if(this.hasAudio)this.send({type:'input_audio_buffer.append',audio:Buffer.alloc(22400).toString('base64')});
+      // 尾静音按语义常量补足（> VAD 门限，见文件头说明），不再写死字节数。
+      if(this.hasAudio)this.send({type:'input_audio_buffer.append',
+        audio:Buffer.alloc(Math.ceil(finishSilenceMs/1000*bytesPerSecond)).toString('base64')});
       this.settleTimer=setTimeout(()=>{this.finishSettled=true;this.tryFinish();},this.hasAudio?1500:0);
     });
   }

@@ -21,7 +21,7 @@ prefix 500ms / silence 800ms 先原样观测）。任何内存策略的失败都
 | Commit | 内容 | 状态 |
 |---|---|---|
 | `MEETING-AUDIO-001` | Capture 脱离 MainActor + packet sequence + Pending Queue + AudioLedger + 扩展幂等去重 | ✅ 已完成 |
-| `MEETING-AUDIO-002` | 幂等 ACK 丢失安全重试（会话级韧性）+ speech start/stop 生命周期事件（VAD turn 状态机）+ 尾静音修复（finish 补 700ms < silence 800ms 的不一致，语义化 `finishSilenceMs` 并加测试锁死） | 待做 |
+| `MEETING-AUDIO-002` | ACK 丢失安全重试（会话超时存活 + 扩展幂等去重）+ speech start/stop 生命周期事件（VAD turn 状态机 `MeetingSpeechTurnTracker`，宽限期判 missingFinal）+ 尾静音修复（语义化 `finishSilenceMs=1200 > vadSilenceDurationMs=800`，node 测试锁死） | ✅ 已完成 |
 | `MEETING-AUDIO-003` | Repair Buffer（最近 120s 已 ACK PCM 保留供漏转写重试）+ missing-final 检测与自动补转写 + Stop Drain 生命周期（Recording→StoppingCapture→完成转写→结束）+ 失败段 UI（`⚠ 此处检测到讲话，但转写失败 [重试]`） | 待做 |
 
 ## 001 已落地的事实

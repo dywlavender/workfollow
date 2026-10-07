@@ -30,6 +30,8 @@ final class MeetingStore: ObservableObject, ModuleStoreFlushable {
     private var streamStopping = false
     private var streamToken = UUID()
     private var streamFinalIDs: Set<String> = []
+    /// VAD turn 状态机（MEETING-AUDIO-002）："有讲话但没有 Final"的检测层。
+    private let turnTracker = MeetingSpeechTurnTracker()
     private var minutesTask: _Concurrency.Task<Void, Never>?
     private var recordingOffset: TimeInterval = 0
     /// At most 60 seconds, including the request currently being processed.
@@ -149,13 +151,19 @@ final class MeetingStore: ObservableObject, ModuleStoreFlushable {
         }
         guard streamToken == token else { session.cancel(); throw CancellationError() }
         inputStream = (id, session); streamStopping = false; streamFinalIDs.removeAll(); transcribing = true
+        turnTracker.reset()
         createStreamingTransport(meetingID: id, session: session)
         return true
     }
 
+    /// 当前流的 turn 快照（按讲话开始顺序）。003 的 Repair 输入与失败段 UI 用。
+    var speechTurns: [MeetingSpeechTurn] { turnTracker.snapshot }
+
     private func closeInputStream() {
         if let stream = inputStream { streamDrafts.removeValue(forKey: stream.meetingID); stream.session.cancel() }
         inputStream = nil; streamToken = UUID(); streamStopping = false
+        // 会话关闭后不会再有 final：仍未完成的 turn 直接判缺失（002 检测层）。
+        turnTracker.sweep(force: true)
         if transport?.isBusy != true { transcribing = false }
     }
 
@@ -165,13 +173,24 @@ final class MeetingStore: ObservableObject, ModuleStoreFlushable {
             error = event.message ?? "Pi 流式转写失败。"
             blockedAudio.insert(meetingID); closeInputStream(); stopRecording(); return
         }
+        // VAD 生命周期（MEETING-AUDIO-002）：start/stop 不带文字，先进 turn
+        // 状态机；"有讲话但没有 Final"由 tracker 按宽限期判定 missingFinal。
+        if event.kind == MeetingStreamKind.speechStarted || event.kind == MeetingStreamKind.speechStopped {
+            if event.kind == MeetingStreamKind.speechStarted {
+                turnTracker.speechStarted(itemID: event.itemID ?? "", at: event.offset ?? 0)
+            } else {
+                turnTracker.speechStopped(itemID: event.itemID ?? "", at: event.offset ?? 0)
+            }
+            return
+        }
         guard let item = event.itemID, let text = event.text,
               let offset = event.offset, offset.isFinite, offset >= 0, !streamFinalIDs.contains(item) else { return }
+        if event.kind == MeetingStreamKind.finalText { turnTracker.finalize(itemID: item) }
         let previous = streamDrafts[meetingID]?[item]
         let line = MeetingTranscriptLine(id: previous?.id ?? UUID(), speaker: "未区分", text: text, offset: offset)
-        if event.kind == "preview" {
+        if event.kind == MeetingStreamKind.preview {
             streamDrafts[meetingID, default: [:]][item] = line
-        } else if event.kind == "final" {
+        } else if event.kind == MeetingStreamKind.finalText {
             streamFinalIDs.insert(item); streamDrafts[meetingID]?.removeValue(forKey: item)
             if !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 change(meetingID) { $0.transcript.append(line); $0.transcript.sort { $0.offset < $1.offset } }

@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createRequire} from 'node:module';
 import {once} from 'node:events';
-import {MeetingInputStream} from '../../WorkFollow/Resources/wf-meeting-stream.mjs';
+import {MeetingInputStream,finishSilenceMs,vadSilenceDurationMs,bytesPerSecond} from '../../WorkFollow/Resources/wf-meeting-stream.mjs';
 const require=createRequire('/opt/homebrew/lib/node_modules/@earendil-works/pi-coding-agent/package.json');
 const {WebSocketServer}=require('ws'),{WebSocket}=require('undici');
 
@@ -45,9 +45,34 @@ test('input stream replaces text+stash, finalizes once, and drains without extra
   await stream.append({version:2,format:'pcm16',sampleRate:16000,channels:1,offset:7,duration:0.25,audio:pcm.toString('base64')});
   await stream.finish();
   assert.deepEqual(events.filter(e=>e.kind==='preview').map(e=>e.text),['预算三千','预算两千五百']);
+  // VAD 生命周期（MEETING-AUDIO-002）：started/stopped 原样交给 Native。
+  assert.equal(events.filter(e=>e.kind==='speechStarted').length,1);
+  const started=events.find(e=>e.kind==='speechStarted');
+  assert.equal(started.offset,7.1,'speechStarted 带绝对偏移（offset+audio_start_ms）');
+  assert.equal(events.filter(e=>e.kind==='speechStopped').length,1);
   assert.equal(events.filter(e=>e.kind==='final').length,1);
   assert.equal(events.find(e=>e.kind==='final').offset,7.1);
   assert.ok(!server.received.some(e=>['input_audio_buffer.commit','response.create'].includes(e.type)));
+});
+
+test('finish silence is semantic and strictly longer than the VAD gate',async t=>{
+  // MEETING-AUDIO-002：旧实现补 700ms 静音 < VAD 门限 800ms，最后一句话
+  // 可能因 VAD 未闭合而丢失。这里锁死 finishSilenceMs > vadSilenceDurationMs。
+  assert.ok(finishSilenceMs>vadSilenceDurationMs,
+    `补静音(${finishSilenceMs}ms)必须长于 VAD 门限(${vadSilenceDurationMs}ms)`);
+  const server=await service(t),events=[];
+  const stream=new MeetingInputStream({url:server.url,apiKey:'test',modelID:'configured-realtime',offset:0,emit:e=>events.push(e),socketFactory:(u,o)=>new WebSocket(u,o)});
+  await stream.ready;
+  await stream.append({version:2,format:'pcm16',sampleRate:16000,channels:1,offset:0,duration:0.25,sequence:0,audio:Buffer.alloc(8000,1).toString('base64')});
+  // 等首包的全部分片（ceil(8000/3200)=3 个事件）落地，再拍快照。
+  let before=0;
+  for(let i=0;i<200;i++){before=server.received.filter(e=>e.type==='input_audio_buffer.append').length;if(before>=3)break;await new Promise(r=>setTimeout(r,5));}
+  await stream.finish();
+  const appended=server.received.filter(e=>e.type==='input_audio_buffer.append');
+  const silence=appended.slice(before)
+    .reduce((sum,e)=>sum+Buffer.from(e.audio,'base64').length,0);
+  assert.equal(silence,Math.ceil(finishSilenceMs/1000*bytesPerSecond),
+    '停止时补的静音字节数必须由 finishSilenceMs 语义推导');
 });
 test('transcription failure is surfaced and a closed stream cannot accept audio',async t=>{
   const server=await service(t,{fail:true}),events=[];

@@ -44,8 +44,21 @@ final class MeetingPiStreamingSession: MeetingAudioStream, @unchecked Sendable {
     private var timeout: DispatchWorkItem?
     private var closed = false
 
+    /// append 重试（MEETING-AUDIO-002）：ACK 丢失时同一包原样重发。扩展按
+    /// sequence 幂等去重（重发不产生第二次 append），迟到 ACK 因命令 id 不同
+    /// 被忽略——所以重试是安全的。超时后**会话存活**（旧实现一次超时即杀会话）。
+    /// 注入便于测试（ACK 丢失用例不必等 12 秒）。
+    private static let defaultAppendAttempts = 3
+    private static let defaultAppendTimeout: TimeInterval = 12
+    private let appendTimeout: TimeInterval
+    private let appendAttempts: Int
+
     init(configuration: MeetingPiConfiguration, extensionPath: String,
-         onEvent: @escaping @MainActor @Sendable (MeetingStreamEvent) -> Void) throws {
+         onEvent: @escaping @MainActor @Sendable (MeetingStreamEvent) -> Void,
+         appendAttempts: Int = MeetingPiStreamingSession.defaultAppendAttempts,
+         appendTimeout: TimeInterval = MeetingPiStreamingSession.defaultAppendTimeout) throws {
+        self.appendAttempts = max(1, appendAttempts)
+        self.appendTimeout = appendTimeout
         self.onEvent = onEvent
         guard FileManager.default.isExecutableFile(atPath: configuration.executable) else { throw MeetingPiError.unavailable }
         child.executableURL = URL(fileURLWithPath: configuration.executable)
@@ -62,17 +75,29 @@ final class MeetingPiStreamingSession: MeetingAudioStream, @unchecked Sendable {
 
     func append(_ packet: MeetingAudioPacket) async throws {
         // sequence 随包透传：扩展按它幂等去重（同一 seq 只 append 一次），
-        // ACK 原样带回 sequence——Native 侧将来据此做"ACK 丢失安全重试"。
-        try await command(["op": "append", "version": 2, "format": "pcm16", "sampleRate": 16_000,
-                           "channels": 1, "offset": packet.offset, "duration": packet.duration,
-                           "sequence": Int(clamping: Int64(bitPattern: packet.sequence)),
-                           "audio": packet.pcm.base64EncodedString()])
+        // ACK 原样带回 sequence。
+        let payload: [String: Any] = ["op": "append", "version": 2, "format": "pcm16",
+                                      "sampleRate": 16_000, "channels": 1,
+                                      "offset": packet.offset, "duration": packet.duration,
+                                      "sequence": Int(clamping: Int64(bitPattern: packet.sequence)),
+                                      "audio": packet.pcm.base64EncodedString()]
+        // ACK 丢失安全重试：同一包原样重发（扩展幂等），最后一次仍失败才上抛。
+        var lastError: Error = MeetingPiError.timeout
+        for _ in 0..<max(1, appendAttempts) {
+            do { try await command(payload, timeoutSeconds: appendTimeout); return }
+            catch is CancellationError { throw CancellationError() }
+            catch { lastError = error }
+        }
+        throw lastError
     }
     func finish() async throws {
         defer { cancel() }
         try await command(["op": "stop"])
     }
-    func command(_ payload: [String: Any]) async throws {
+    /// `timeout` 内未收到 ACK 时，命令以超时失败结束但**会话保持存活**
+    /// （MEETING-AUDIO-002）：迟到 ACK 因 id 不匹配被忽略，重试命令安全。
+    /// 会话级失败（extension_error / 流关闭 / cancel）仍走 `fail`。
+    func command(_ payload: [String: Any], timeoutSeconds: TimeInterval = 30) async throws {
         let id = UUID().uuidString
         var payload = payload; payload["id"] = id
         let message = "/wf-meeting-stream " + String(decoding: try JSONSerialization.data(withJSONObject: payload), as: UTF8.self)
@@ -81,9 +106,9 @@ final class MeetingPiStreamingSession: MeetingAudioStream, @unchecked Sendable {
             let accepted = lock.withLock {
                 guard !closed, pending == nil else { return false }
                 pending = (id, continuation)
-                let timer = DispatchWorkItem { [weak self] in self?.fail(MeetingPiError.timeout) }
+                let timer = DispatchWorkItem { [weak self] in self?.commandTimedOut() }
                 timeout = timer
-                DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + 30, execute: timer)
+                DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + timeoutSeconds, execute: timer)
                 return true
             }
             guard accepted else { continuation.resume(throwing: MeetingPiError.failed); return }
@@ -92,6 +117,15 @@ final class MeetingPiStreamingSession: MeetingAudioStream, @unchecked Sendable {
                 catch { fail(MeetingPiError.failed) }
             }
         }
+    }
+    /// 命令超时：只作废当前命令（恢复其 continuation），会话与泵保持存活。
+    private func commandTimedOut() {
+        let continuation = lock.withLock { () -> CheckedContinuation<Void, Error>? in
+            guard let request = pending else { return nil }
+            pending = nil; timeout?.cancel(); timeout = nil
+            return request.1
+        }
+        continuation?.resume(throwing: MeetingPiError.timeout)
     }
     private func settle(_ error: Error? = nil, id: String? = nil) {
         let continuation = lock.withLock { () -> CheckedContinuation<Void, Error>? in

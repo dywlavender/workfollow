@@ -15,6 +15,17 @@ struct MeetingAudioChunk: Codable, Equatable, Identifiable {
     var transcribed = false
 }
 
+/// 流式事件 kind 的常量（Native 与 `wf-meeting-stream.mjs` 双端约定，字符串
+/// 保持同步）。单一事实源在这里，扩展侧没有 import 能力，靠 node 测试对齐。
+enum MeetingStreamKind {
+    static let preview = "preview"
+    static let finalText = "final"
+    static let speechStarted = "speechStarted"
+    static let speechStopped = "speechStopped"
+    static let error = "error"
+    static let diagnostic = "diagnostic"
+}
+
 /// Deliberately not Codable: audio must never enter the persisted snapshot.
 struct MeetingAudioPacket: Equatable, Sendable {
     var pcm: Data
