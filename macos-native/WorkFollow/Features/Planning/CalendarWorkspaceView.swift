@@ -447,14 +447,12 @@ struct CalendarMonthGridView: View {
         self.onSelectDay = onSelectDay; self.onOpenTask = onOpenTask
         self.onCreateTask = onCreateTask; self.onDropTask = onDropTask
         self.onToggleTask = onToggleTask; self.anchorSink = anchorSink
-        // 周行流**从初始 topWeek 起旋转排序**：内容顶行 = topWeek，初始定位
-        // 不再依赖 scrollTo（lazy 内容上 scrollTo 远处目标在本环境实测不可靠，
-        // 双拍重试也失败——2026-10-07）。时间顺序：先未来后过去，向上滚越过
-        // -30 周边界会回到内容起点（present），边界情形可接受。
-        let initialTop = topWeek.wrappedValue
-        let straight = Self.buildWeeks(today: today, calendar: calendar)
-        let weeks = Array(straight.drop { $0 < initialTop })
-            + Array(straight.filter { $0 < initialTop })
+        // 周行流**时间正序**（过去 → 今天 → 未来，±30 周对称）：两个方向都
+        // 能滚。初始定位 = defaultScrollAnchor(.center)（内容几何中心 ≈ 今天
+        // 周，自动挂载其±预热行）+ onAppear 近距 scrollTo 微调到月首周——
+        // scrollTo 只对**已挂载附近**的目标可靠（横扫跳月 4-5 行实测成功；
+        // 首帧前跳 30 行远距实测失败，见 git 历史），微调 1-2 行在预热集内。
+        let weeks = Self.buildWeeks(today: today, calendar: calendar)
         _weeks = State(initialValue: weeks)
         let caches = Self.buildCaches(weeks: weeks, tasks: tasks,
                                       showCompleted: showCompleted, calendar: calendar)
@@ -513,14 +511,15 @@ struct CalendarMonthGridView: View {
                         lazyColumn(rowHeight: rowHeight)
                             .scrollTargetLayout()
                             .scrollTargetBehavior(.viewAligned)
+                            .defaultScrollAnchor(.center)
                             .onScrollGeometryChange(for: CGFloat.self) { geometry in
                                 geometry.contentOffset.y
                             } action: { _, offset in
                                 syncTopWeek(fromOffset: offset, rowHeight: rowHeight)
                             }
                             .onAppear {
-                                // 内容顶行即初始 topWeek（周行流旋转排序），初始
-                                // 无需定位；这里幂等归位一次作兜底。
+                                // center 锚把今天周带到视口中央并挂载其邻近行，
+                                // 这里近距 scrollTo 微调 1-2 行到月首周在顶。
                                 DispatchQueue.main.async {
                                     proxy.scrollTo(topWeek, anchor: .top)
                                 }
