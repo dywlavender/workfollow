@@ -122,6 +122,11 @@ enum WFColors {
     /// 页面底色的浅灰再深一档，日号退到三级墨色——两件事一起才说明这不属于本
     /// 月，只退墨色会让它看起来像被禁用。
     static let calendarCanvas = themed(rgb(0xF2F4F8), rgb(0x1B1D22))
+    /// 月网格细线的**预混合不透明色**。原用 separator.opacity(0.5)——半透明
+    /// 意味着滚动时每条线都要与底色实时混合（每行 7 条 ×61 行 ≈ 420 个混合
+    /// 层），是月网格滚动顿挫的主要合成成本。按 content 底色预先混好：
+    /// 亮 = 50% separator on 白，暗 = 50% separator on textBackgroundColor。
+    static let gridHairline = themed(rgb(0xEBEBED), rgb(0x333338))
     /// 完成任务的勾选框填充（Flutter `taskCompletedCheckbox`）。它是完成态四级
     /// 墨色里最浅的一档：勾是从 `content` 色切出来的，底越浅勾的对比也越弱，
     /// 两者必须同步移动。

@@ -606,6 +606,7 @@ struct MonthWeekRow: View, Equatable {
         GeometryReader { geometry in
             let columnWidth = geometry.size.width / 7
             ZStack(alignment: .topLeading) {
+                backgroundLayer(columnWidth: columnWidth, height: geometry.size.height)
                 HStack(spacing: 0) {
                     ForEach(Array(days.enumerated()), id: \.offset) { column, day in
                         dayCell(day, column: column, height: geometry.size.height)
@@ -625,6 +626,27 @@ struct MonthWeekRow: View, Equatable {
                 hairlines(columnWidth: columnWidth, height: geometry.size.height)
             }
         }
+        // ⚠️ 不要加 .drawingGroup()：本环境实测整行 GPU 栅格化失败，渲染出
+        // macOS 的"禁止"占位图（2026-10-07 截图实锤）。图层合并与不透明化
+        // （backgroundLayer / hairlines 单 Path / gridHairline 预混合色）已
+        // 把每行图层从 ~15 降到 ~6，滚动合成成本大幅下降，足够。
+    }
+
+    /// 邻月灰底：一笔 Path 画齐（原在每格 ZStack 里各画一层）。
+    private func backgroundLayer(columnWidth: CGFloat, height: CGFloat) -> some View {
+        Path { path in
+            for (column, day) in days.enumerated() {
+                let inMonth = calendar.component(.month, from: day) == calendar.component(.month, from: month)
+                    && calendar.component(.year, from: day) == calendar.component(.year, from: month)
+                if !inMonth {
+                    path.addRect(CGRect(x: CGFloat(column) * columnWidth, y: 0,
+                                        width: columnWidth, height: height))
+                }
+            }
+        }
+        .fill(WFColors.calendarCanvas)
+        .frame(width: columnWidth * 7, height: height)
+        .allowsHitTesting(false)
     }
 
     private func dayCell(_ day: Date, column: Int, height: CGFloat) -> some View {
@@ -674,22 +696,20 @@ struct MonthWeekRow: View, Equatable {
     }
 
     /// 细线画在这里而不是各格自己的边框上：色带横跨列间，画在格子上的线会停在
-    /// 每条色带处。最后一列与最后一行不画，网格的外缘才是一条线而不是两条。
+    /// 每条色带处。合并为**一个 Path**（原 6 竖 + 1 横共 7 个独立图层/行），
+    /// 颜色用预混合不透明的 `WFColors.gridHairline`（原 separator.opacity(0.5)
+    /// 的半透明混合是滚动顿挫的主要成本之一）。isLastRow 参数保留（周视图
+    /// 复用同一形态），月网格恒为 false——横向线照画，连续滚动中行间需要线。
     private func hairlines(columnWidth: CGFloat, height: CGFloat) -> some View {
-        ZStack(alignment: .topLeading) {
-            ForEach(1..<7, id: \.self) { index in
-                Rectangle()
-                    .fill(WFColors.border)
-                    .frame(width: 1, height: height)
-                    .offset(x: CGFloat(index) * columnWidth - 1)
+        Path { path in
+            for index in 1..<7 {
+                path.addRect(CGRect(x: CGFloat(index) * columnWidth - 1, y: 0,
+                                    width: 1, height: height))
             }
-            if !isLastRow {
-                Rectangle()
-                    .fill(WFColors.border)
-                    .frame(width: columnWidth * 7, height: 1)
-                    .offset(y: height - 1)
-            }
+            path.addRect(CGRect(x: 0, y: height - 1, width: columnWidth * 7, height: 1))
         }
+        .fill(WFColors.gridHairline)
+        .frame(width: columnWidth * 7, height: height)
         .allowsHitTesting(false)
     }
 }
@@ -739,7 +759,8 @@ struct CalendarDayCellView: View {
 
     var body: some View {
         ZStack(alignment: .topLeading) {
-            (inMonth ? WFColors.content : WFColors.calendarCanvas)
+            // 格底不再各画各的（2026-10-07 性能）：当月透出页面底色，邻月
+            // 灰底由 MonthWeekRow 的 backgroundLayer 一笔画——省 7 层/行。
             // 日面在最下。落在任务条上的按击由上层接走，永远到不了这里。
             Color.clear
                 .contentShape(Rectangle())
