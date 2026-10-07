@@ -99,6 +99,10 @@ final class MeetingStreamingTests: XCTestCase {
         XCTAssertEqual(record.transcript.first?.speaker, "未区分")
         XCTAssertTrue(store.meetings.first { $0.id == second }!.transcript.isEmpty)
         XCTAssertTrue(store.streamDrafts[first]?.isEmpty ?? true)
+        // 产品决定：纪要改为按钮点击生成，停止录音不再自动触发——
+        // 用户选回这条会议再点按钮（updateMinutesNow 走 selectedID）。
+        store.selectedID = first
+        store.updateMinutesNow()
         try await wait { !store.updatingMinutes }
         let summaries = await ai.summaries()
         XCTAssertEqual(summaries.flatMap { $0 }.map(\.text), ["预算两千五百元。"])

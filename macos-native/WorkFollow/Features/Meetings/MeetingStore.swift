@@ -54,16 +54,21 @@ final class MeetingStore: ObservableObject, ModuleStoreFlushable {
             self?.error = "录音中断：\(error.localizedDescription)"
         }
         if automaticallyUpdate {
-            heartbeat = Timer.publish(every: 25, on: .main, in: .common).autoconnect()
-                .sink { [weak self] _ in
-                    guard let self else { return }
-                    for meeting in self.meetings where !meeting.minutesIsManual &&
-                        meeting.summarizedLineCount < meeting.transcript.count &&
-                        !self.blockedMinutes.contains(meeting.id) {
-                        self.pendingMinutes.insert(meeting.id)
-                    }
-                    self.pumpMinutes()
-                }
+            // 产品决定（验收评审）：纪要不再自动生成，改为**按钮点击生成**
+            // （`updateMinutesNow`）。25 秒心跳的自动触发在此断开——长录可靠
+            // 性测试（MEETING-AUDIO-RELIABILITY）之前，录音中额外启动 Pi/模型
+            // 请求会造成资源竞争，也不再符合产品定义。心跳代码保留在此，
+            // 恢复自动生成时从这里接回；纪要 UI 与历史数据不动。
+            // heartbeat = Timer.publish(every: 25, on: .main, in: .common).autoconnect()
+            //     .sink { [weak self] _ in
+            //         guard let self else { return }
+            //         for meeting in self.meetings where !meeting.minutesIsManual &&
+            //             meeting.summarizedLineCount < meeting.transcript.count &&
+            //             !self.blockedMinutes.contains(meeting.id) {
+            //             self.pendingMinutes.insert(meeting.id)
+            //         }
+            //         self.pumpMinutes()
+            //     }
         }
     }
 
@@ -125,10 +130,12 @@ final class MeetingStore: ObservableObject, ModuleStoreFlushable {
         if requestingPermission && inputStream == nil { streamToken = UUID() }
         permissionGeneration += 1; requestingPermission = false
         let id = recordingID
+        _ = id // 恢复自动纪要时此绑定重新被下面的注释块使用
         recordingID = nil
         recorder.stop()
         if inputStream != nil { streamStopping = true; transport?.stopAccepting(); return }
-        if let id, !blockedMinutes.contains(id) { pendingMinutes.insert(id); pumpMinutes() }
+        // 产品决定：停止录音不再自动生成纪要（见 init 里的心跳断开说明）。
+        // if let id, !blockedMinutes.contains(id) { pendingMinutes.insert(id); pumpMinutes() }
     }
 
     /// Separate connection lifecycle from microphone capture; also permits deterministic transport tests.
@@ -286,9 +293,10 @@ final class MeetingStore: ObservableObject, ModuleStoreFlushable {
             await MainActor.run { [weak self] in
                 guard let self else { return }
                 self.closeInputStream()
-                if !self.blockedMinutes.contains(meetingID) {
-                    self.pendingMinutes.insert(meetingID); self.pumpMinutes()
-                }
+                // 产品决定：流式收尾不再自动生成纪要（见 init 里的心跳断开说明）。
+                // if !self.blockedMinutes.contains(meetingID) {
+                //     self.pendingMinutes.insert(meetingID); self.pumpMinutes()
+                // }
             }
         }
         wireTransportCallbacks(transport, meetingID: meetingID)
@@ -321,9 +329,10 @@ final class MeetingStore: ObservableObject, ModuleStoreFlushable {
             $0.transcript.append(contentsOf: lines)
             $0.transcript.sort { $0.offset < $1.offset }
         }
-        if recordingID != meetingID, !blockedMinutes.contains(meetingID) {
-            pendingMinutes.insert(meetingID); pumpMinutes()
-        }
+        // 产品决定：转写完成不再自动触发纪要（见 init 里的心跳断开说明）。
+        // if recordingID != meetingID, !blockedMinutes.contains(meetingID) {
+        //     pendingMinutes.insert(meetingID); pumpMinutes()
+        // }
     }
 
     /// 队列超限：显式失败（原 backpressure 分支）。已排队的包照常送完。
