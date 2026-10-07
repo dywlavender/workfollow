@@ -1203,7 +1203,13 @@ struct CalendarTaskDragPreview: View {
             in: RoundedRectangle(cornerRadius: WFCalendarMetrics.taskBarRadius))
         .padding(WFSpace.hairline)
         .background(WFColors.content, in: RoundedRectangle(cornerRadius: WFSpace.tight))
-        .shadow(color: .black.opacity(0.18), radius: 6, y: 2)
+        // 滴答对齐（2026-10-07，用户拍板）：色带扁平化——不画投影（真投影每条
+        // 每帧一次离屏高斯模糊，滚动时是最大的单点合成成本），改一圈预混合不
+        // 透明浅描边与格底区分。格内单日任务条本来就是平的，两种条就此一致。
+        .overlay {
+            RoundedRectangle(cornerRadius: WFSpace.tight)
+                .strokeBorder(WFColors.gridHairline, lineWidth: 1)
+        }
     }
 }
 
