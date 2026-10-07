@@ -18,6 +18,10 @@ struct CalendarWorkspaceView: View {
 
     /// 屏幕上这个月的第一天。周模式下它跟着当前日走。
     @State private var month: Date
+    /// 月网格顶行的周起始日（周日）。**上下滚动按周移动它**（Apple 日历式
+    /// 连续滚动，2026-10-07 用户纠正"纵向不该整月跳"），`month` 由它推导；
+    /// 横扫/前后按钮才是整月跳转，跳转时重置到目标月网格首周。
+    @State private var anchorWeek: Date
     /// 页面的当前日：网格上被标出的那天、周视图的锚点、工具条加号落款的日期。
     @State private var selectedDay: Date
     @State private var mode: CalendarViewMode = .month
@@ -37,8 +41,9 @@ struct CalendarWorkspaceView: View {
         let calendar = PlanningProjection.sundayFirstWeek(workspace.calendar)
         let now = workspace.clock()
         let today = calendar.startOfDay(for: now)
-        _month = State(initialValue: calendar.date(
-            from: calendar.dateComponents([.year, .month], from: now)) ?? today)
+        let firstDay = calendar.date(from: calendar.dateComponents([.year, .month], from: now)) ?? today
+        _month = State(initialValue: firstDay)
+        _anchorWeek = State(initialValue: Self.startOfWeek(containing: firstDay, calendar: calendar))
         _selectedDay = State(initialValue: today)
     }
 
@@ -49,6 +54,7 @@ struct CalendarWorkspaceView: View {
             toolbar
             if mode == .month {
                 CalendarMonthGridView(
+                    firstWeek: anchorWeek,
                     month: month,
                     today: workspace.clock(),
                     selectedDay: selectedDay,
@@ -78,11 +84,15 @@ struct CalendarWorkspaceView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(WFColors.content)
-        // 触控板/滚轮手势翻页（2026-10-07 用户需求"左右切换"；纵向不翻月，
-        // 留给内容滚动——周格任务列表）。累积/阈值/冷却与 NSEvent 桥接在
-        // CalendarSwipeGestureModifier；方向反了改它的 directionSign。
-        .modifier(CalendarSwipeGestureModifier { direction in
-            withAnimation(.easeOut(duration: 0.2)) { step(direction) }
+        // 触控板/滚轮手势（2026-10-07，对齐正常日历——Apple 日历式）：
+        // 横扫 = 前后翻整月（周模式翻周）；上下扫 = **按周连续滚动**月网格，
+        // 标题月跟随可见窗口，不是整月跳转。周模式的纵向留给日期格任务列表。
+        .modifier(CalendarSwipeGestureModifier { direction, horizontal in
+            if horizontal {
+                withAnimation(.easeOut(duration: 0.2)) { step(direction) }
+            } else if mode == .month {
+                withAnimation(.easeOut(duration: 0.15)) { scrollWeeks(direction) }
+            }
         })
         // 浮层的坐标基准：锚点矩形与弹框位置都在这一个坐标系里算。
         .coordinateSpace(name: PlanningCoordinateSpace.name)
@@ -227,19 +237,34 @@ struct CalendarWorkspaceView: View {
 
     private func step(_ direction: Int) {
         if mode == .month {
-            month = calendar.date(byAdding: .month, value: direction, to: month) ?? month
+            guard let moved = calendar.date(byAdding: .month, value: direction, to: month) else { return }
+            month = firstOfMonth(moved)
+            anchorWeek = Self.startOfWeek(containing: firstOfMonth(moved), calendar: calendar)
             return
         }
         // 周模式移动的是当前日，月份跟着走，这样离开周模式会落在最后看的那个月。
         guard let moved = calendar.date(byAdding: .day, value: 7 * direction, to: selectedDay) else { return }
         selectedDay = moved
         month = firstOfMonth(moved)
+        anchorWeek = Self.startOfWeek(containing: firstOfMonth(moved), calendar: calendar)
+    }
+
+    /// 上下滚动：网格按周平移（Apple 日历式），标题月跟随可见窗口的中点。
+    /// 周模式不走这里——纵向留给日期格内的任务列表滚动。
+    private func scrollWeeks(_ direction: Int) {
+        guard let moved = calendar.date(byAdding: .day, value: 7 * direction, to: anchorWeek) else { return }
+        anchorWeek = moved
+        // 可见 6 周窗口的中点（第 17~24 天）所在的月份就是标题月；
+        // 用中点而不是首行，避免跨月边界上标题来回抖动。
+        let middle = calendar.date(byAdding: .day, value: 17, to: moved) ?? moved
+        month = firstOfMonth(middle)
     }
 
     private func goToday() {
         let today = calendar.startOfDay(for: workspace.clock())
         selectedDay = today
         month = firstOfMonth(today)
+        anchorWeek = Self.startOfWeek(containing: firstOfMonth(today), calendar: calendar)
     }
 
     /// 点一天：网格显示邻月收尾与开头的日子，所以点击可能落在屏幕之外的月份上；
@@ -249,11 +274,17 @@ struct CalendarWorkspaceView: View {
         if calendar.component(.month, from: day) != calendar.component(.month, from: month)
             || calendar.component(.year, from: day) != calendar.component(.year, from: month) {
             month = firstOfMonth(day)
+            anchorWeek = Self.startOfWeek(containing: firstOfMonth(day), calendar: calendar)
         }
     }
 
     private func firstOfMonth(_ date: Date) -> Date {
         calendar.date(from: calendar.dateComponents([.year, .month], from: date)) ?? date
+    }
+
+    /// 周日起始的整周起点（周日first 与网格列偏移同源）。
+    private static func startOfWeek(containing date: Date, calendar: Calendar) -> Date {
+        calendar.dateInterval(of: .weekOfYear, for: date)?.start ?? date
     }
 
     private func openTask(_ id: UUID) {
@@ -375,6 +406,9 @@ struct ToolbarPill<Content: View>: View {
 /// 随后，穿过今天的那条色带也要被这一天染一层；细线最后，于是它穿过色带而不是
 /// 止步于色带。
 struct CalendarMonthGridView: View {
+    /// 顶行周的起始日（周日）：滚动锚。上下滚动移动它，网格连续按周平移。
+    let firstWeek: Date
+    /// 标题月：邻月日期置灰的基准、点击邻月日期时的跳转目标。
     let month: Date
     let today: Date
     let selectedDay: Date
@@ -391,7 +425,11 @@ struct CalendarMonthGridView: View {
     /// 浮层锚的落脚点：格与条在点击时把「自己是哪一块」写进去。
     let anchorSink: PlanningAnchorRef
 
-    private var days: [Date] { PlanningProjection.monthGridDays(containing: month, calendar: calendar) }
+    /// 42 天（6 周）从顶行周起算——滚动锚移动时整个网格按周平移，
+    /// 而不是按月重建（Apple 日历式连续滚动）。
+    private var days: [Date] {
+        (0..<42).compactMap { calendar.date(byAdding: .day, value: $0, to: firstWeek) }
+    }
     private var rows: Int { max(days.count / 7, 1) }
 
     var body: some View {

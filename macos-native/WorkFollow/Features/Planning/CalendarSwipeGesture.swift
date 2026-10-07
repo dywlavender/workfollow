@@ -1,13 +1,15 @@
 import AppKit
 import SwiftUI
 
-/// 日历页的触控板/滚轮手势翻页（2026-10-07，用户需求"左右切换"，随后纠正：
-/// **仅横向**——纵向翻月反直觉，纵向滚动留给内容本身，比如周格里的任务列表）。
+/// 日历页的触控板/滚轮手势（2026-10-07，对齐正常日历行为）：
+/// **横扫 = 前后翻整月**（周模式翻周）；**上下扫 = 按周连续滚动月网格**
+/// （Apple 日历式，纵向不跳整月——用户明确纠正过）。周模式的纵向事件
+/// 原样放行给日期格内的任务列表滚动。
 ///
 /// 实现走 `NSEvent` 本地监听器而非 SwiftUI 手势：部署目标 14.0 没有
 /// `onScrollGesture`（15+ 才有），而 `DragGesture` 不响应触控板双指滚动。
-/// 监听器**从不吞事件**：纵向事件原样放行给内容滚动；弹窗/浮层是独立
-/// NSWindow，天然不在监听范围。
+/// 监听器**从不吞事件**：纵向事件原样放行；弹窗/浮层是独立 NSWindow，
+/// 天然不在监听范围。
 ///
 /// ⚠️ 命中判定用 **AppKit 主窗口框**，不用 SwiftUI `.global` 框——实测
 /// `.global` 在这套宿主里给出零矩形（`{{0,982},{0,0}}`，2026-10-07 探针
@@ -18,8 +20,8 @@ import SwiftUI
 /// 时改 `directionSign` 一行。累积/阈值/冷却：触控板一个手势会连发几十个
 /// 事件，累积到阈值才翻一页，冷却防止一次长扫连翻多页。
 struct CalendarSwipeGestureModifier: ViewModifier {
-    /// ±1 翻到下/上一周期。
-    let onSwipe: (_ direction: Int) -> Void
+    /// ±1；`horizontal` = 主轴是否横向（纵向 = 按周滚动，横向 = 翻整月）。
+    let onSwipe: (_ direction: Int, _ horizontal: Bool) -> Void
 
     /// 方向校正位：实测与预期相反时改 -1。
     private static let directionSign = 1
@@ -51,25 +53,26 @@ struct CalendarSwipeGestureModifier: ViewModifier {
     }
 
     private func handle(_ event: NSEvent) {
-        // 仅横向：纵向事件（dx=0）原样放行，周格任务列表的滚动不受影响。
-        let dx = event.scrollingDeltaX
-        guard dx != 0 else { return }
+        let dx = event.scrollingDeltaX, dy = event.scrollingDeltaY
+        guard dx != 0 || dy != 0 else { return }
         // 只认主窗口：弹窗/浮层是独立 NSWindow 天然排除；光标须落在主窗口内。
         guard let window = event.window, window === NSApp.mainWindow,
               window.frame.contains(NSEvent.mouseLocation) else {
             #if DEBUG
-            NSLog("wf-swipe skip: dx=%f mouse=%@ mainWindow=%@",
-                  dx, NSStringFromPoint(NSEvent.mouseLocation),
+            NSLog("wf-swipe skip: dx=%f dy=%f mouse=%@ mainWindow=%@",
+                  dx, dy, NSStringFromPoint(NSEvent.mouseLocation),
                   NSApp.mainWindow.map { NSStringFromRect($0.frame) } ?? "nil")
             #endif
             return
         }
+        // 主轴判定：横扫与纵扫都翻页，方向语义不同（横=整月，纵=单周）。
+        let horizontal = abs(dx) > abs(dy)
         guard Date() >= cooldownUntil else { return }
-        accumulation += dx
+        accumulation += horizontal ? dx : dy
         guard abs(accumulation) >= Self.threshold else { return }
         let direction = accumulation > 0 ? Self.directionSign : -Self.directionSign
         accumulation = 0
         cooldownUntil = Date().addingTimeInterval(Self.cooldown)
-        onSwipe(direction)
+        onSwipe(direction, horizontal)
     }
 }
