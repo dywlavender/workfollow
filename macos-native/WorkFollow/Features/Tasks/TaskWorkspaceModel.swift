@@ -853,6 +853,31 @@ final class TaskWorkspaceModel: ObservableObject {
         return task.parentID == nil && task.deletedAt == nil
     }
 
+    /// 换清单并**同时**指定分组——「移动到清单 → 某个清单 → 某个分组」走这条。
+    ///
+    /// 必须是**一次**提交：分成 `moveToList` + `setTaskSection` 两次提交的话，
+    /// 撤销栈上就是两步，用户按一次 ⌘Z 只退回一半。
+    /// 反馈文案把分组带上，否则跟单纯换清单的提示长得一样，看不出区别。
+    @discardableResult
+    func moveToList(_ id: UUID, _ list: TaskList, sectionID: String?) -> TaskActionResult {
+        let listBefore = task(for: id)?.list.name
+        let result = actions.moveToList(id, list, sectionID: sectionID)
+        didMutate(result)
+        if result.taskID != nil {
+            let destination = task(for: id)?.list.name ?? list.name
+            let sectionTitle = sectionID.flatMap { sid in
+                listSections(forList: destination).first { $0.id == sid }?.title
+            }
+            if listBefore != list.name || sectionTitle != nil {
+                let place = sectionTitle.map { "\(destination) / \($0)" } ?? destination
+                report(FeedbackEvent(kind: .undoable,
+                                     message: "已移动到「\(place)」",
+                                     actionTitle: "撤销", action: undoStep()))
+            }
+        }
+        return result
+    }
+
     @discardableResult
     func delete(_ id: UUID) -> TaskActionResult {
         // Finish input before the task becomes non-editable; undo must restore

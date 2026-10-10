@@ -427,8 +427,13 @@ struct CountdownEditorView: View {
                       spacing: WFSpace.sm) {
                 ForEach(CountdownEvent.symbolOptions, id: \.self) { option in
                     Button {
+                        // 点完**不关面板**：换图标本身不提交任何东西（`symbol` 只是
+                        // 这张表单的草稿，仍要按「确定」才落盘），所以连试几个再定
+                        // 才是自然用法——关掉的话每次都要重新点开图标。
+                        // 选中态读的是 `symbol` 这个活值，会自己跟上。
+                        // 关闭：Esc（子面板比宿主窗口先拿到）、点面板外、
+                        // 或再点一次图标按钮（上面是 `toggle()`）。
                         symbol = option
-                        symbolPickerOpen = false
                     } label: {
                         symbolCell(option)
                     }

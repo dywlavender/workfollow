@@ -212,22 +212,61 @@ final class TaskActions {
         return .success(id)
     }
 
+    /// 换清单。清单变了就**清掉 `sectionID`**。
+    ///
+    /// ⚠️ 这是 2026-10-08 实测出来的缺陷，不是洁癖：分组只在自己清单里有意义，
+    /// 而 `TaskListProjection.groups` 把「sectionID 不在本清单分组表里」的任务
+    /// 归进「未分组」——所以移走之后界面上看不出任何异常，可一旦把任务移回原清单，
+    /// 它会**突然回到旧分组**。用户找不到任何线索，只会觉得分组乱了。
     @discardableResult
     func moveToList(_ id: UUID, _ list: TaskList) -> TaskActionResult {
+        moveTask(id, to: list, section: .clearIfListChanged)
+    }
+
+    /// 换清单并**同时**指定分组。
+    ///
+    /// ⚠️ 必须一次提交。调用方若写成 `moveToList` + `setTaskSection` 两次提交，
+    /// 撤销栈上就是两步（`WorkspaceStore.undo` 每次 `commit` 压一份快照），
+    /// 用户按一次 ⌘Z 只退回一半：清单回来了、分组还留在新值。
+    @discardableResult
+    func moveToList(_ id: UUID, _ list: TaskList, sectionID: String?) -> TaskActionResult {
+        moveTask(id, to: list, section: .assign(sectionID))
+    }
+
+    /// `moveToList` 两个入口的共同实现。
+    private func moveTask(_ id: UUID, to list: TaskList,
+                          section: SectionAssignment) -> TaskActionResult {
         guard !list.name.isEmpty else { return .failure(.invalidList) }
         guard let task = store.task(id) else { return .failure(.missingTask) }
         guard task.deletedAt == nil else { return .failure(.deletedTask) }
         guard task.parentID == nil else { return .failure(.childListMoveNotSupported) }
         let now = clock()
+        let listChanged = task.list.name != list.name
         store.commit(store.tasks.map { original in
             var value = original
-            if (value.id == id || value.parentID == id), value.deletedAt == nil {
-                value.list = list
-                value.updatedAt = now
+            guard (value.id == id || value.parentID == id), value.deletedAt == nil else { return value }
+            value.list = list
+            if value.id == id {
+                switch section {
+                case .clearIfListChanged: if listChanged { value.sectionID = nil }
+                case .assign(let sectionID): value.sectionID = sectionID
+                }
+            } else if listChanged {
+                // 子任务跟着父任务换清单，但**分组不跟随**——留着就是跨清单的孤儿分组。
+                value.sectionID = nil
             }
+            value.updatedAt = now
             return value
         })
         return .success(id)
+    }
+
+    /// 换清单时怎么处置分组。
+    private enum SectionAssignment {
+        /// 清单真的变了才清（没变则原样保留）。
+        case clearIfListChanged
+        /// 直接写成给定值（nil = 不分组）。
+        case assign(String?)
     }
 
     @discardableResult

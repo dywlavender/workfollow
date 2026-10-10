@@ -185,4 +185,67 @@ final class ListSectionTests: XCTestCase {
         XCTAssertEqual(model.listSections(forList: "工作").map(\.title), ["进行中"])
         XCTAssertTrue(model.listSections(forList: "生活").isEmpty)
     }
+
+    // MARK: - 换清单与分组的相互作用（右键菜单「移动到清单 → 分组」的领域前置）
+
+    /// ⚠️ 这条盯的是一个**看不见的**缺陷：移走后界面把任务显示成「未分组」，
+    /// 于是看不出任何异常；真正的问题要等移回原清单才暴露——它会突然回到旧分组。
+    func testMoveToListClearsSectionLeftOverFromAnotherList() {
+        let (store, actions) = makeActions()
+        _ = actions.renameList(nil, to: "工作")
+        _ = actions.renameList(nil, to: "生活")
+        XCTAssertTrue(actions.addListSection("工作", title: "进行中"))
+        guard let section = store.listSections.first(where: { $0.title == "进行中" }) else {
+            return XCTFail("分组未建出")
+        }
+        let id = addTask(actions, title: "写周报", list: "工作")
+        _ = actions.setTaskSection(id, sectionID: section.id)
+        XCTAssertEqual(store.task(id)?.sectionID, section.id)
+
+        _ = actions.moveToList(id, TaskList(name: "生活"))
+        XCTAssertNil(store.task(id)?.sectionID, "换清单必须清掉旧分组——分组只在自己清单里有意义")
+
+        _ = actions.moveToList(id, TaskList(name: "工作"))
+        XCTAssertNil(store.task(id)?.sectionID, "移回原清单不能突然回到旧分组")
+
+        let groups = TaskListSectionProjection.groups(store.tasks, list: "工作",
+                                                      sections: store.listSections)
+        XCTAssertEqual(groups?.first?.label, "未分组", "回来时应该落在未分组")
+        XCTAssertEqual(groups?.first?.tasks.map(\.title), ["写周报"])
+    }
+
+    func testMoveToListKeepsSectionWhenListDoesNotChange() {
+        let (store, actions) = makeActions()
+        _ = actions.renameList(nil, to: "工作")
+        XCTAssertTrue(actions.addListSection("工作", title: "进行中"))
+        guard let section = store.listSections.first(where: { $0.title == "进行中" }) else {
+            return XCTFail("分组未建出")
+        }
+        let id = addTask(actions, title: "写周报", list: "工作")
+        _ = actions.setTaskSection(id, sectionID: section.id)
+
+        _ = actions.moveToList(id, TaskList(name: "工作"))
+        XCTAssertEqual(store.task(id)?.sectionID, section.id,
+                       "清单没变就不该动分组（否则同清单重排会把分组洗掉）")
+    }
+
+    func testMoveToListWithSectionIsOneUndoStep() {
+        let (store, actions) = makeActions()
+        _ = actions.renameList(nil, to: "工作")
+        _ = actions.renameList(nil, to: "生活")
+        XCTAssertTrue(actions.addListSection("生活", title: "阶段一"))
+        guard let section = store.listSections.first(where: { $0.title == "阶段一" }) else {
+            return XCTFail("分组未建出")
+        }
+        let id = addTask(actions, title: "写周报", list: "工作")
+
+        _ = actions.moveToList(id, TaskList(name: "生活"), sectionID: section.id)
+        XCTAssertEqual(store.task(id)?.list.name, "生活")
+        XCTAssertEqual(store.task(id)?.sectionID, section.id)
+
+        actions.undo()
+        XCTAssertEqual(store.task(id)?.list.name, "工作", "一次撤销就该把清单退回")
+        XCTAssertNil(store.task(id)?.sectionID,
+                     "不能只退回一半：清单回来了、分组还挂在别的清单的分组上")
+    }
 }

@@ -341,8 +341,15 @@ private struct ListColorPickerPopover: View {
             LazyVGrid(columns: columns, spacing: 10) {
                 ForEach(WFListPalette.argb.indices, id: \.self) { index in
                     Button {
+                        // 点完**不关面板**：颜色是「可反复改的属性」，想换个色得
+                        // 重新打开一遍面板是净损失（同右键菜单的日期/优先级）。
+                        // 不关的前提是打勾能**就地**跟上——`effectiveIndex` 读的是
+                        // `workspace.listMeta(for:)` 活值，`setListColor` 会 bump
+                        // `revision`，所以这里不需要额外做什么。
+                        // 关闭走三条既有通道：Esc（`PopupEscapeRegistry` 按键名次、
+                        // 子面板压过宿主）、点面板外（`PopupInteractionRegistry`）、
+                        // 或点「⋯」菜单里的其他项。
                         _ = workspace.setListColor(name, colorIndex: index)
-                        onDismiss()
                     } label: {
                         ZStack {
                             Circle()
@@ -386,8 +393,9 @@ private struct ListIconPickerPopover: View {
             LazyVGrid(columns: columns, spacing: 10) {
                 ForEach(Self.choices, id: \.self) { emoji in
                     Button {
+                        // 同色板：点完留着，可以连着换几个看看。选中描边读的是
+                        // `current` 活值（`listMeta` → `revision`），会自己跟上。
                         _ = workspace.setListIcon(name, emoji)
-                        onDismiss()
                     } label: {
                         ZStack {
                             RoundedRectangle(cornerRadius: 6)
@@ -407,8 +415,10 @@ private struct ListIconPickerPopover: View {
             }
             Divider()
             Button {
+                // 「无图标」同样留着：清除之后它自己会变成「无图标（当前）」并置灰
+                // （`current == nil` 是活值），用户能看见这一步确实生效了。
+                // 这也是「不关面板」的额外好处——关掉的话这层反馈根本看不到。
                 _ = workspace.setListIcon(name, nil)
-                onDismiss()
             } label: {
                 Text(current == nil ? "无图标（当前）" : "无图标")
                     .font(WFType.supporting)
