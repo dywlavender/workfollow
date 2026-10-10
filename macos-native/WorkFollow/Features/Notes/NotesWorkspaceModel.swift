@@ -7,6 +7,7 @@ final class NotesWorkspaceModel: ObservableObject {
     private let clock: () -> Date
     private var savedFolders: [String]
     private var folderRecords: [NoteFolderMeta]
+    let persistenceChanges = PassthroughSubject<NotePersistenceChange, Never>()
 
     init(initialNotes: [Note] = [], folders: [String] = [],
          folderMetadata: [NoteFolderMeta] = [], clock: @escaping () -> Date = Date.init) {
@@ -21,6 +22,7 @@ final class NotesWorkspaceModel: ObservableObject {
                                                 name: name, sortOrder: folderRecords.count,
                                                 createdAt: nil, updatedAt: nil))
         }
+        store.onChange = { [weak self] change in self?.persistenceChanges.send(change) }
     }
     @Published var selectedID: UUID?
     @Published var folderFilter: String?
@@ -92,7 +94,7 @@ final class NotesWorkspaceModel: ObservableObject {
             ($0.deletedAt != nil) == trash &&
             (trash || folder == nil || $0.folder == folder) &&
             (trash || !favorites || $0.favorite) &&
-            (query.isEmpty || ($0.title + $0.document.plainText).localizedCaseInsensitiveContains(query))
+            (query.isEmpty || $0.document.matches(query, prefix: $0.title))
         }
         return trash ? filtered.sorted { $0.deletedAt! > $1.deletedAt! } : filtered
     }
@@ -180,7 +182,7 @@ final class NotesWorkspaceModel: ObservableObject {
     @discardableResult
     func createPlainTextCopy(_ id: UUID) -> UUID? {
         guard let source = notes.first(where: { $0.id == id }),
-              source.hasPreservedRichContent else { return nil }
+              source.hasPreservedRichContent, (try? source.document.materialized()) != nil else { return nil }
         let copy = Note(id: UUID(),
                         title: notePlainTextCopyTitle(source.title),
                         document: NativeDocument(plainText: notePlainTextBody(source.document)),

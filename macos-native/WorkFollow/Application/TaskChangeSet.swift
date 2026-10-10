@@ -45,6 +45,7 @@ struct TaskChangeSet: Equatable {
     }
 
     let entries: [Entry]
+    let order: [UUID]?
 
     /// These fields can change reminder content, fire dates, or eligibility.
     /// Inserts and deletes also require a reminder reconciliation.
@@ -90,6 +91,9 @@ struct TaskChangeSet: Equatable {
                                  changedFields: []))
         }
         self.entries = entries
+        let previousOrder = before.map(\.id)
+        let nextOrder = after.map(\.id)
+        order = previousOrder == nextOrder ? nil : nextOrder
     }
 
     /// The command already knows the one task it updated. Reuse the same field
@@ -98,6 +102,7 @@ struct TaskChangeSet: Equatable {
         let fields = Self.changedFields(from: before, to: after)
         entries = fields.isEmpty ? [] : [Entry(operation: .update, before: before,
                                              after: after, changedFields: fields)]
+        order = nil
     }
 
     private static func changedFields(from before: Task, to after: Task) -> Set<Field> {

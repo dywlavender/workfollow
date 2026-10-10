@@ -52,6 +52,7 @@ final class TaskCompletedRowRenderTests: XCTestCase {
                 Spacer()
             }
             .frame(width: 600, height: 130, alignment: .topLeading)
+            .environment(\.recordsTaskTreeFrames, true)
             .coordinateSpace(name: "task-tree-render")
             .onPreferenceChange(TaskTreeFramesKey.self) { frames = $0 }
             .environment(\.colorScheme, dark ? .dark : .light)

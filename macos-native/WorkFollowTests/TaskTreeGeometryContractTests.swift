@@ -90,6 +90,7 @@ final class TaskTreeGeometryContractTests: XCTestCase {
             }
         }
         .frame(width: width, alignment: .topLeading)
+        .environment(\.recordsTaskTreeFrames, true)
         .coordinateSpace(name: "task-tree-render")
         .onPreferenceChange(TaskTreeFramesKey.self) { frames = $0 }
         let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: width, height: 240),

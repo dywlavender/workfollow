@@ -6,6 +6,11 @@ import SwiftUI
 /// 两个挂载点：详情右栏（无文案，保持壳层"纯装饰"既有契约，锚点宽度 176 由
 /// 契约测试锁定）；列表空态（带 `TaskListViewDefaults.emptyStateMessage` 的
 /// 分视图文案）。构图对齐滴答空态的气质：摊开的笔记本 + 咖啡杯 + 稀疏星点。
+///
+/// 定位由**调用方**决定，组件本身不含对齐：列表空态是 `TaskListView` 里挂在
+/// 滚动视图上的 `.overlay`（默认居中，落点＝列表可视区中心）；详情右栏那份由
+/// `TaskEmptyInspectorView` 居中。⚠️ 别再把它塞进 outline 的某一行——行高来自
+/// `NSHostingView.intrinsicContentSize`，行内没有"剩余高度"可用，结果只能贴顶。
 struct TaskEmptyStateView: View {
     enum Style { case list, inspector }
 

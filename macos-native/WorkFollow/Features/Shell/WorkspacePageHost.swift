@@ -51,6 +51,9 @@ final class WorkspacePageCache: ObservableObject {
             return host
         }
         let host = NSHostingView(rootView: content)
+        // The outer shell owns window safe areas and the traffic-light inset.
+        // A nested host would otherwise add the titlebar inset again.
+        host.safeAreaRegions = []
         host.sizingOptions = []
         hosts[key] = host
         return host

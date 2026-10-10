@@ -248,12 +248,17 @@ struct AnchoredPropertyPanel<PanelContent: View>: NSViewRepresentable {
         coordinator.focusPolicy = focusPolicy
         coordinator.title = title
         coordinator.presentingWindow = context.environment.popupPresentingWindow
-        coordinator.root = AnyView(content().environment(\.self, context.environment))
-        #if DEBUG
-        if let observe = context.environment.popupContentObservation {
-            coordinator.root = observe(coordinator.root)
+        // Closed anchors do not need to construct or retain panel content.
+        if isPresented {
+            coordinator.root = AnyView(content().environment(\.self, context.environment))
+            #if DEBUG
+            if let observe = context.environment.popupContentObservation {
+                coordinator.root = observe(coordinator.root)
+            }
+            #endif
+        } else {
+            coordinator.root = AnyView(EmptyView())
         }
-        #endif
         coordinator.dismiss = { isPresented = false }
         DispatchQueue.main.async { [weak coordinator] in coordinator?.update() }
     }

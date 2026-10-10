@@ -48,8 +48,8 @@ enum CommandPaletteProjection {
         let taskResults = tasks.lazy
             .filter { $0.deletedAt == nil && $0.skippedAt == nil && !$0.isAbandoned && !$0.isConverted }
             .filter {
-                ($0.title + " " + $0.list.name + " " + $0.document.plainText + " " + $0.tags.joined(separator: " "))
-                    .localizedLowercase.contains(loweredQuery)
+                $0.document.matches(loweredQuery, prefix: $0.title + " " + $0.list.name + " ",
+                                    suffix: " " + $0.tags.joined(separator: " "), lowercase: true)
             }
             .prefix(7)
             .map { task in
@@ -66,8 +66,7 @@ enum CommandPaletteProjection {
         let noteResults = notes.lazy
             .filter { $0.deletedAt == nil }
             .filter {
-                ($0.title + " " + $0.document.plainText + " " + $0.folder)
-                    .localizedLowercase.contains(loweredQuery)
+                $0.document.matches(loweredQuery, prefix: $0.title + " ", suffix: " " + $0.folder, lowercase: true)
             }
             .prefix(5)
             .map { note in

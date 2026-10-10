@@ -160,9 +160,97 @@ final class TaskActivityStoreTests: XCTestCase {
         await fulfillment(of: [done], timeout: 5)
 
         XCTAssertTrue(FileManager.default.fileExists(
-            atPath: directory.appendingPathComponent("task-activity.json").path))
+            atPath: directory.appendingPathComponent("task-activity.sqlite").path))
         let reloaded = TaskActivityStore(clock: { instant }, directory: directory)
         XCTAssertEqual(reloaded.events(for: taskID).map(\.detail), ["正计时"])
+    }
+
+    func testLargeHistoryStartupAndPanelsOnlyHydrateRequestedPages() async throws {
+        let directory = temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let id = UUID(), other = UUID()
+        let instant = Date(timeIntervalSince1970: 1_800_000_000)
+        let records = (0..<10_000).map { index in
+            TaskActivityEvent(taskID: index % 2 == 0 ? id : other,
+                              occurredAt: instant, kind: .focusStarted,
+                              afterValue: String(index))
+        }
+        try JSONEncoder().encode(records).write(to: directory.appendingPathComponent("task-activity.json"))
+        // First launch performs the one-time legacy import; subsequent launches
+        // must not decode the imported history again.
+        _ = TaskActivityStore(directory: directory)
+        let store = TaskActivityStore(clock: { instant }, directory: directory)
+        XCTAssertEqual(store.hydratedEventCount, 1)
+        let history = TaskActivityPageModel()
+        await history.reset(store: store, taskIDs: [id])
+        XCTAssertEqual(history.events.count, 50)
+        XCTAssertEqual(history.events.first?.afterValue, "9998")
+        XCTAssertTrue(history.hasMore)
+        XCTAssertEqual(store.hydratedEventCount, 52)
+        await history.loadMore(store: store, taskIDs: [id])
+        XCTAssertEqual(history.events.count, 100)
+        XCTAssertEqual(Set(history.events.map(\.id)).count, 100)
+        XCTAssertEqual(history.events.last?.afterValue, "9800")
+
+        // New events reset pagination, avoiding shifted offsets and duplicates.
+        store.recordFocusStart(taskID: id, stopwatch: true)
+        await history.reset(store: store, taskIDs: [id])
+        XCTAssertEqual(history.events.first?.detail, "正计时")
+        XCTAssertEqual(history.events.count, 50)
+        let reloaded = TaskActivityStore(directory: directory)
+        let newestPage = try await reloaded.page(taskIDs: [id], limit: 1)
+        XCTAssertEqual(newestPage.first?.detail, "正计时")
+        XCTAssertEqual(store.events.count, 10_001, "A delta append must preserve history outside loaded pages")
+    }
+
+    func testTitleMergeSurvivesReloadWithoutLoadingWholeHistory() async throws {
+        let directory = temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        var now = Date(timeIntervalSince1970: 1_800_000_000)
+        let original = makeTask(title: "初始")
+        var edited = original; edited.title = "中间"
+        let first = TaskActivityStore(clock: { now }, directory: directory)
+        first.recordChanges(from: [original], to: [edited])
+        let initialPage = try await first.page(taskIDs: [original.id])
+        let originalEvent = try XCTUnwrap(initialPage.first)
+        now = now.addingTimeInterval(1)
+        let reloaded = TaskActivityStore(clock: { now }, directory: directory)
+        var final = edited; final.title = "最终"
+        reloaded.recordChanges(from: [edited], to: [final])
+        let merged = try await reloaded.page(taskIDs: [original.id])
+        XCTAssertEqual(merged.count, 1)
+        XCTAssertEqual(merged.first?.id, originalEvent.id)
+        XCTAssertEqual(merged.first?.beforeValue, "初始")
+        XCTAssertEqual(merged.first?.afterValue, "最终")
+        now = now.addingTimeInterval(1)
+        reloaded.recordChanges(from: [final], to: [original])
+        let empty = try await reloaded.page(taskIDs: [original.id])
+        XCTAssertTrue(empty.isEmpty)
+        XCTAssertTrue(TaskActivityStore(directory: directory).events.isEmpty)
+    }
+
+    func testPageExhaustionAndEmptyListDoNotRepeatOrReadOtherTasks() async throws {
+        let directory = temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = TaskActivityStore(directory: directory)
+        let taskID = UUID()
+        for _ in 0..<103 { store.recordFocusStart(taskID: taskID, stopwatch: false) }
+        store.recordFocusStart(taskID: UUID(), stopwatch: true)
+        let history = TaskActivityPageModel()
+        await history.reset(store: store, taskIDs: [taskID])
+        await history.loadMore(store: store, taskIDs: [taskID])
+        await history.loadMore(store: store, taskIDs: [taskID])
+        XCTAssertEqual(history.events.count, 103)
+        XCTAssertEqual(Set(history.events.map(\.id)).count, 103)
+        XCTAssertFalse(history.hasMore)
+        let readCount = store.hydratedEventCount
+        await history.loadMore(store: store, taskIDs: [taskID])
+        XCTAssertEqual(store.hydratedEventCount, readCount)
+        await history.reset(store: store, taskIDs: [])
+        XCTAssertTrue(history.events.isEmpty)
+        XCTAssertFalse(history.hasMore)
+        XCTAssertEqual(store.hydratedEventCount, readCount)
     }
 
     private func makeTask(id: UUID = UUID(), title: String, tags: [String] = [],

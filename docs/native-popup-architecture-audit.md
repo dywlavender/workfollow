@@ -20,7 +20,7 @@
 | 子任务行日期 | `TaskDateButton`，直接 `.popover` | 复用同一日期内容，但绕过共用呈现修饰符 |
 | Inspector 更多属性中的重复 | `TaskAttributesView` → `TaskRecurrenceEditor` → `RecurrenceDraftView` | 另一套 State、320宽、内容定高未约束、独立 `setRecurrence` 提交；不是新日期 Draft |
 | Quick Add 属性菜单 → 清单 / 标签 | 系统父 Popover + 行上的子 `.popover` | 父270宽、自适应高；子清单250×300、标签264×320；两个独立开关；清单选择即更新创建草稿，标签确定才应用 |
-| 任务右键 → 清单 / 标签 | `TaskContextMenuPresenter` 的 transient NSPopover + SwiftUI 子 Popover | 光标锚点、父264宽；局部220ms hover延迟；选择即动作或标签确认；父高度随任务菜单项不同 |
+| 任务右键 → 清单 / 标签 | `TaskContextMenuPresenter` 的 transient NSPopover + SwiftUI 子 Popover | 光标锚点、父220宽；局部220ms hover延迟；选择即动作或标签确认；父高度随任务菜单项不同 |
 | Inspector Footer 更多 / 属性 / 标签 / 关联 / 截止 | Inspector内部 bottomTrailing Overlay | 遮罩仅覆盖 Inspector；用多个 Bool + 日期 enum组合；尺寸208×368、320×300或日期固定容器；无统一窗口安全区定位 |
 | Calendar / Matrix 任务编辑与创建 | `PlanningWorkspaceChrome` → `PlanningOverlayLayer` | 页面坐标系、几何纯函数、页面遮罩、固定卡尺寸；锚点随布局更新 |
 | Focus 任务选择 / Scope | 系统双层 Popover + `FocusTaskPickerSession` | 主312×460；Scope172宽、高度按清单数量上限420；已有真实双层窗口 Render 测试 |

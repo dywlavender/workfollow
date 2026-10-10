@@ -9,7 +9,9 @@ struct RootShellView: View {
     @EnvironmentObject private var environment: AppEnvironment
     @Environment(\.mainWindowRailInset) private var railInset
     @Environment(\.colorScheme) private var colorScheme
+    #if DEBUG
     @Environment(\.popupContentObservation) private var popupObservation
+    #endif
     @StateObject private var pageCache = WorkspacePageCache()
     private var pageKey: String {
         if navigation.destination.isNotes { return "notes" }
@@ -39,6 +41,19 @@ struct RootShellView: View {
         }
     }
 
+    private func hostedPage(destination: NativeDestination, navigationVisible: Bool) -> AnyView {
+        let content = pageContent(destination: destination, navigationVisible: navigationVisible)
+            .environmentObject(environment)
+            .environment(\.mainWindowRailInset, railInset)
+            .environment(\.colorScheme, colorScheme)
+            .disabled(environment.storageNeedsReload)
+        #if DEBUG
+        return AnyView(content.environment(\.popupContentObservation, popupObservation).tint(WFColors.accent))
+        #else
+        return AnyView(content.tint(WFColors.accent))
+        #endif
+    }
+
     var body: some View {
         GeometryReader { geometry in
             let navigationVisible = geometry.size.width >= WFMetrics.navigationBreakpoint
@@ -58,15 +73,11 @@ struct RootShellView: View {
                     Divider()
                 }
                 WorkspacePageHost(cache: pageCache, pageKey: pageKey,
-                                  content: AnyView(pageContent(destination: destination,
-                                                            navigationVisible: navigationVisible)
-                                    .environmentObject(environment)
-                                    .environment(\.mainWindowRailInset, railInset)
-                                    .environment(\.colorScheme, colorScheme)
-                                    .environment(\.popupContentObservation, popupObservation)
-                                    .tint(WFColors.accent)))
+                                  content: hostedPage(destination: destination,
+                                                      navigationVisible: navigationVisible))
             }
             .background(WFColors.content)
+            .disabled(environment.storageNeedsReload)
             .onChange(of: navigation.destination) { _, destination in
                 let routedTaskID = navigation.taskSelectionToPreserveOnNextNavigation
                 navigation.taskSelectionToPreserveOnNextNavigation = nil
@@ -92,6 +103,10 @@ struct RootShellView: View {
                 FeedbackHostView(center: environment.feedback)
                 if let error = environment.storageError {
                     Text(error).font(.caption).foregroundStyle(.red).padding(8)
+                }
+                if environment.storageNeedsReload {
+                    Text("数据已更新，请重新打开应用以加载。")
+                        .font(.caption).foregroundStyle(.secondary).padding(8)
                 }
             }
         }

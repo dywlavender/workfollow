@@ -5,6 +5,11 @@ struct MeetingTranscriptLine: Codable, Equatable, Identifiable {
     var speaker: String
     var text: String
     var offset: TimeInterval
+    /// Presentation only: preserve the persisted segment scope and identity.
+    var speakerDisplayName: String {
+        guard speaker.hasPrefix("片段 "), let separator = speaker.range(of: " · ") else { return speaker }
+        return String(speaker[separator.upperBound...])
+    }
 }
 
 struct MeetingAudioChunk: Codable, Equatable, Identifiable {

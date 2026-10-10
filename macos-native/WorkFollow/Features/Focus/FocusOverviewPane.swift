@@ -59,7 +59,7 @@ struct FocusOverviewPane: View {
             .padding(.top, FocusLayoutMetrics.recordHeaderTop)
             .padding(.bottom, FocusLayoutMetrics.recordHeaderBottom)
 
-            if store.recordGroups.isEmpty {
+            if store.recordGroups.isEmpty && !store.historyLoading && store.historyError == nil {
                 emptyRecordsState
             } else {
                 ScrollView { recordsList }
@@ -70,6 +70,7 @@ struct FocusOverviewPane: View {
         .frame(minWidth: FocusLayoutMetrics.overviewPaneMinWidth, maxWidth: .infinity,
                maxHeight: .infinity, alignment: .topLeading)
         .background(theme.canvas)
+        .task(id: store.historyRevision) { await store.resetHistory() }
     }
 
     private func statCard(_ label: String, value: Int, unit: String? = nil) -> some View {
@@ -138,7 +139,7 @@ struct FocusOverviewPane: View {
     }
 
     private var recordsList: some View {
-        VStack(alignment: .leading, spacing: 0) {
+        LazyVStack(alignment: .leading, spacing: 0) {
             ForEach(store.recordGroups) { group in
                 Text(FocusViewLogic.dayLabel(for: group.day))
                     .font(.system(size: 13, weight: .semibold))
@@ -146,6 +147,15 @@ struct FocusOverviewPane: View {
                     .padding(.top, FocusLayoutMetrics.recordGroupTop)
                     .padding(.bottom, FocusLayoutMetrics.recordGroupBottom)
                 ForEach(group.records) { record in recordRow(record) }
+            }
+            if store.historyLoading {
+                ProgressView().controlSize(.small).padding()
+            } else if let error = store.historyError {
+                Text("读取记录失败：\(error)").font(.caption).foregroundStyle(theme.text3)
+                Button("重试") { _Concurrency.Task { await store.loadMoreHistory() } }
+            } else if store.historyHasMore {
+                Button("加载更多") { _Concurrency.Task { await store.loadMoreHistory() } }
+                    .buttonStyle(.plain).padding()
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)

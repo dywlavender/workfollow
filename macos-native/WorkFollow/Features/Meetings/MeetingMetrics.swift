@@ -41,7 +41,7 @@ enum MeetingMetrics {
     /// 转写行的两个固定列宽。时间列按 `0:00` 的最宽形（四位数字）给，
     /// 说话人列按四个汉字给——超出就截断，不换行，否则一行的行高会被最长的名字带跑。
     static let timeColumn: CGFloat = 34
-    static let speakerColumn: CGFloat = 46
+    static let speakerColumn: CGFloat = 72
 
     /// 已进纪要的转写行，左侧那条强调色竖线的宽度。跟着行走，所以滚出屏幕也不失锚。
     static let inMinutesBar: CGFloat = 2

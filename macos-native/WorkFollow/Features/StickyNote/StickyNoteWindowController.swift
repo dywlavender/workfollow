@@ -104,7 +104,9 @@ final class StickyNoteWindowController {
         suppressEcho.insert(taskID)
         let before = suppressedEchoFeedthrough
         workspace.setDocument(taskID, NativeDocument(plainText: text))
+        #if DEBUG
         suppressedCountDuringLastWriteBack += 1
+        #endif
         _ = before
         suppressEcho.remove(taskID)
     }

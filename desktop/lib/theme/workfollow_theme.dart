@@ -259,7 +259,9 @@ class TaskPickerMetrics {
 class TaskMenuMetrics {
   const TaskMenuMetrics._();
 
-  static const double width = 264;
+  /// 与 macOS `TaskContextMenuPopover.menuWidth` 同步（264 → 220）。
+  /// 日期行与优先级行的按钮都用 `Expanded` 自适应，收窄后会自动重排。
+  static const double width = 220;
   static const double rowHeight = WorkFollowMetrics.menuRowHeight;
 
   /// Divider height includes the quiet vertical breathing room around the

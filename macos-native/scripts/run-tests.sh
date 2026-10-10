@@ -6,7 +6,7 @@
 # before establishing connection"），一个用例都不会执行。这不是代码问题——构建出来的
 # 应用能正常启动并常驻。挂住的是 xcodebuild 与 testmanagerd 之间的 IPC 那一层。
 #
-# 绕法：直接拿构建产物里的 .xctest 包，用 `xcrun xctest` 进程内加载并执行。这样走的
+# 绕法：直接拿构建产物里的 .xctest 包，用 Xcode 的 `xctest` 临时宿主进程加载并执行。这样走的
 # 是 XCTest 自己的执行路径，断言、失败信息、用例计数都是真的，只是绕开了 xcodebuild
 # 的 runner 编排。
 #
@@ -26,13 +26,8 @@
 # （**看起来像全绿**），只有 `MeetingStoreTests` 才真的跑起来。别用简称。
 # （本文件上一版这里写的是「子串匹配」，是错的，已改。）
 #
-# ⚠️ `NativeResourceLinkTests` 在 `xcrun xctest` 宿主下会 `Abort trap: 6`
-# （`bundleProxyForCurrentProcess is nil: mainBundle.bundleURL .../usr/bin/`），
-# **一个用例崩掉会带走整轮**——排在它后面的 suite 静默不执行，且没有最终汇总。
-# 要完整跑，把它排除掉再单独补跑：
-#   CLASSES=$(cd WorkFollowTests && grep -hoE '^final class [A-Za-z0-9_]+' *.swift \
-#     | awk '{print $NF}' | sort -u | grep -v '^NativeResourceLinkTests$' | paste -sd, -)
-#   scripts/run-tests.sh "$CLASSES"
+# 通知相关测试需要有效 App bundle，下面会创建临时 XCTest 宿主，
+# 并将默认数据目录重定向到临时目录。构建失败和零用例均返回非零状态。
 #
 set -euo pipefail
 
@@ -65,12 +60,22 @@ if [[ -n "${WORKFOLLOW_DISABLE_SWIFT_SANDBOX:-}" ]]; then
   EXTRA_BUILD_ARGS=(OTHER_SWIFT_FLAGS='$(inherited) -Xfrontend -disable-sandbox')
 fi
 
+WORK="$(mktemp -d "${TMPDIR:-/tmp}/workfollow-tests.XXXXXX")"
+trap 'rm -rf "$WORK"' EXIT
+
+# Check the producer itself, not grep's exit status; never run old build products.
 echo "==> 构建测试产物"
-xcodebuild build-for-testing \
-  -project "$PROJECT" -scheme "$SCHEME" -destination 'platform=macOS' \
+if xcodebuild build-for-testing \
+  -project "$PROJECT" -scheme "$SCHEME" -destination "platform=macOS,arch=$(uname -m)" \
   "${DERIVED_DATA_ARGS[@]+"${DERIVED_DATA_ARGS[@]}"}" \
   "${EXTRA_BUILD_ARGS[@]+"${EXTRA_BUILD_ARGS[@]}"}" \
-  2>&1 | grep -E "error:|TEST BUILD" || true
+  > "$WORK/build.log" 2>&1; then
+  grep -E "error:|TEST BUILD" "$WORK/build.log" || true
+else
+  BUILD_STATUS=$?
+  cat "$WORK/build.log" >&2
+  exit "$BUILD_STATUS"
+fi
 
 if [[ ${#DERIVED_DATA_ARGS[@]} -gt 0 ]]; then
   BUILT_PRODUCTS="$WORKFOLLOW_DERIVED_DATA/Build/Products/Debug"
@@ -94,9 +99,6 @@ DEVELOPER_DIR_PATH="$(xcode-select -p)"
 XCTEST_FRAMEWORK="$DEVELOPER_DIR_PATH/Platforms/MacOSX.platform/Developer/Library/Frameworks/XCTest.framework"
 XCTEST_SUPPORT="$DEVELOPER_DIR_PATH/Platforms/MacOSX.platform/Developer/usr/lib/libXCTestSwiftSupport.dylib"
 
-WORK="$(mktemp -d "${TMPDIR:-/tmp}/workfollow-tests.XXXXXX")"
-trap 'rm -rf "$WORK"' EXIT
-
 BUNDLE="$WORK/WorkFollowTests.xctest"
 cp -R "$SRC_BUNDLE" "$BUNDLE"
 mkdir -p "$BUNDLE/Contents/Frameworks"
@@ -104,14 +106,40 @@ ln -s "$APP/Contents/MacOS/WorkFollow.debug.dylib" "$BUNDLE/Contents/Frameworks/
 ln -s "$XCTEST_FRAMEWORK" "$BUNDLE/Contents/Frameworks/XCTest.framework"
 ln -s "$XCTEST_SUPPORT" "$BUNDLE/Contents/Frameworks/libXCTestSwiftSupport.dylib"
 
-echo "==> 执行用例"
-# macOS 自带 bash 3.2：`set -u` 下展开空数组会报 unbound variable，所以分两支写。
+# A bundled host is required by UNUserNotificationCenter. Keep default test
+# storage separate from the user's app; explicitly supplied fixture paths still work.
+RUNNER="$WORK/WorkFollowTestsRunner.app"
+mkdir -p "$RUNNER/Contents/MacOS" "$WORK/storage"
+cp "$(xcrun --find xctest)" "$RUNNER/Contents/MacOS/xctest"
+# Preserve the built app's declarations so tests can verify its URL schemes.
+cp "$APP/Contents/Info.plist" "$RUNNER/Contents/Info.plist"
+plutil -replace CFBundleExecutable -string xctest "$RUNNER/Contents/Info.plist"
+plutil -replace CFBundleIdentifier -string com.workfollow.native.tests.runner "$RUNNER/Contents/Info.plist"
+plutil -replace CFBundlePackageType -string APPL "$RUNNER/Contents/Info.plist"
+plutil -replace WorkFollowAcceptanceStorageRoot -string "$WORK/storage" "$RUNNER/Contents/Info.plist"
+export DYLD_FRAMEWORK_PATH="$DEVELOPER_DIR_PATH/Platforms/MacOSX.platform/Developer/Library/Frameworks:$DEVELOPER_DIR_PATH/SharedFrameworks${DYLD_FRAMEWORK_PATH:+:$DYLD_FRAMEWORK_PATH}"
+export DYLD_LIBRARY_PATH="$DEVELOPER_DIR_PATH/Platforms/MacOSX.platform/Developer/usr/lib${DYLD_LIBRARY_PATH:+:$DYLD_LIBRARY_PATH}"
+TEST_ARGS=()
 if [[ $# -gt 0 ]]; then
-  # ⚠️ `-XCTest` 只认**一个**逗号分隔的参数。写成多个 `-XCTest` 不会报错，
-  # 而是**静默执行 0 个用例**（"Executed 0 tests" 且 exit 0，看起来像全绿）。
-  # 所以这里把多个参数用逗号拼起来——空格分隔与逗号分隔两种写法都能用。
   JOINED="$(IFS=,; echo "$*")"
-  xcrun xctest -XCTest "$JOINED" "$BUNDLE"
+  TEST_ARGS=(-XCTest "$JOINED")
+fi
+
+echo "==> 执行用例（隔离存储）"
+if "$RUNNER/Contents/MacOS/xctest" "${TEST_ARGS[@]+"${TEST_ARGS[@]}"}" "$BUNDLE" > "$WORK/tests.log" 2>&1; then
+  cat "$WORK/tests.log"
 else
-  xcrun xctest "$BUNDLE"
+  TEST_STATUS=$?
+  cat "$WORK/tests.log" >&2
+  exit "$TEST_STATUS"
+fi
+if ! awk '
+  /Executed [0-9]+ tests?,/ {
+    skipped = /tests? skipped/ ? $5 : 0
+    if ($2 > skipped && /(^|[[:space:]])0 failures/) passed = 1
+  }
+  END { exit passed ? 0 : 1 }
+' "$WORK/tests.log"; then
+  echo "没有执行任何测试或全部跳过；检查完整的类名/方法名，不能把零用例当作通过。" >&2
+  exit 1
 fi

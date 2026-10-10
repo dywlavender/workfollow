@@ -99,8 +99,7 @@ enum FilterEvaluator {
         }
         if !filter.keywords.isEmpty {
             // 只在真有关键词时才拼正文，避免没有该维度时每个任务都拼一次。
-            let haystack = task.title + "\n" + task.document.plainText
-            guard filter.keywords.allSatisfy({ haystack.localizedCaseInsensitiveContains($0) }) else {
+            guard filter.keywords.allSatisfy({ task.document.matches($0, prefix: task.title + "\n") }) else {
                 return false
             }
         }

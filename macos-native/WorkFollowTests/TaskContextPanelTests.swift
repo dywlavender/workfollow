@@ -71,7 +71,7 @@ final class TaskContextPanelTests: XCTestCase {
         XCTAssertTrue(panel.styleMask.contains(.nonactivatingPanel))
         XCTAssertFalse(panel.styleMask.contains(.titled))
         XCTAssertTrue(panel.parent === owner)
-        XCTAssertEqual(panel.frame.width, 264, accuracy: 0.5)
+        XCTAssertEqual(panel.frame.width, 220, accuracy: 0.5)
         let anchor = owner.convertToScreen(session.anchor.convert(session.anchor.bounds, to: nil))
         XCTAssertEqual(panel.frame.minX, anchor.minX, accuracy: 0.5)
         XCTAssertEqual(panel.frame.maxY, anchor.minY, accuracy: 0.5)

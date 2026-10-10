@@ -127,6 +127,7 @@ final class TaskRowInteractionTests: XCTestCase {
             Spacer(minLength: 0)
         }
         .frame(width: 600, height: 180, alignment: .topLeading)
+        .environment(\.recordsTaskTreeFrames, true)
         .coordinateSpace(name: "task-tree-render")
         .onPreferenceChange(TaskTreeFramesKey.self) { probe.frames = $0 }
         .environmentObject(AppEnvironment())
@@ -190,6 +191,7 @@ final class TaskRowInteractionTests: XCTestCase {
         let probe = Probe()
         let root = TaskListView(workspace: workspace, navigation: navigation, navigationVisible: true)
             .frame(width: 600, height: 600)
+            .environment(\.recordsTaskTreeFrames, true)
             .coordinateSpace(name: "task-tree-render")
             .onPreferenceChange(TaskTreeFramesKey.self) { probe.frames = $0 }
             .environmentObject(AppEnvironment())

@@ -1,25 +1,66 @@
 import Foundation
 
 struct NativeDocument: Equatable, Codable {
-    var blocks: [DocumentBlock]
+    private var storedBlocks: [DocumentBlock]
+    private var deferred: DeferredDocument?
+    var blocks: [DocumentBlock] {
+        get { deferred?.displayBlocks() ?? storedBlocks }
+        set {
+            if let deferred, (try? deferred.resolve()) == nil { return }
+            storedBlocks = newValue; deferred = nil
+        }
+    }
+    var isLoaded: Bool { deferred?.isLoaded ?? true }
+    var loadError: Error? { deferred?.loadError }
+    var firstLinePreview: String? { deferred?.summary.firstLine }
+    var previewText: String { deferred?.summary.head ?? String(plainText.prefix(160)) }
+
+    init(deferred: DeferredDocument) { storedBlocks = []; self.deferred = deferred }
+    func materialized() throws -> NativeDocument { try deferred?.resolve() ?? self }
+    private enum CodingKeys: String, CodingKey { case blocks }
+    init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        storedBlocks = try values.decode([DocumentBlock].self, forKey: .blocks)
+    }
+    func encode(to encoder: Encoder) throws {
+        let document = try materialized()
+        var values = encoder.container(keyedBy: CodingKeys.self)
+        try values.encode(document.storedBlocks, forKey: .blocks)
+    }
+    static func == (lhs: NativeDocument, rhs: NativeDocument) -> Bool {
+        if let left = lhs.deferred, left === rhs.deferred { return true }
+        guard let left = try? lhs.materialized(), let right = try? rhs.materialized() else { return false }
+        return left.storedBlocks == right.storedBlocks
+    }
+    func matches(_ query: String, prefix: String = "", suffix: String = "", lowercase: Bool = false) -> Bool {
+        func contains(_ text: String) -> Bool {
+            lowercase ? text.localizedLowercase.contains(query) : text.localizedCaseInsensitiveContains(query)
+        }
+        guard let deferred, !deferred.isLoaded, query.count <= 160 else {
+            return contains(prefix + plainText + suffix)
+        }
+        let summary = deferred.summary
+        if summary.length <= 160 { return contains(prefix + summary.head + suffix) }
+        return contains(prefix + summary.head) || contains(summary.tail + suffix) || deferred.matches(query, lowercase: lowercase)
+    }
 
     static var empty: NativeDocument { NativeDocument(plainText: "") }
 
     init(blocks: [DocumentBlock]) {
-        self.blocks = blocks.isEmpty ? [DocumentBlock(kind: .paragraph)] : blocks
+        self.storedBlocks = blocks.isEmpty ? [DocumentBlock(kind: .paragraph)] : blocks
     }
 
     init(plainText: String) {
         let normalized = plainText
             .replacingOccurrences(of: "\r\n", with: "\n")
             .replacingOccurrences(of: "\r", with: "\n")
-        self.blocks = normalized.components(separatedBy: "\n").map {
+        self.storedBlocks = normalized.components(separatedBy: "\n").map {
             DocumentBlock(kind: .paragraph, runs: [DocumentRun(text: $0)])
         }
     }
 
     var plainText: String { blocks.map(\.plainText).joined(separator: "\n") }
-    var isEmpty: Bool { blocks.count == 1 && blocks[0].plainText.isEmpty }
+    var isEmpty: Bool { deferred?.summary.isEmpty ?? (blocks.count == 1 && blocks[0].plainText.isEmpty) }
 
     /// Rebuilds the first-version paragraph model while retaining IDs for lines
     /// that stayed in place or moved outside the edited span.

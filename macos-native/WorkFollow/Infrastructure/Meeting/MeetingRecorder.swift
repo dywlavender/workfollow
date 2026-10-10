@@ -81,10 +81,9 @@ final class MeetingPCMCapture: @unchecked Sendable {
             throw CocoaError(.coderInvalidValue)
         }
         self.converter = converter; outputFormat = output
-        // Keep the existing capture policy until the shorter candidate passes
-        // real-model acceptance; its protocol failures currently stop recording.
-        accumulator = MeetingPCMAccumulator(offset: offset, segmentSeconds: streaming ? 0.25 : 15,
-                                            preferSpeechBoundaries: !streaming)
+        // HTTP/custom batch paths publish every three seconds; streaming keeps
+        // quarter-second packets. Stop flushes the remaining partial packet.
+        accumulator = MeetingPCMAccumulator(offset: offset, segmentSeconds: streaming ? 0.25 : 3)
     }
     func consume(_ input: AVAudioPCMBuffer) throws -> Bool {
         try lock.withLock {

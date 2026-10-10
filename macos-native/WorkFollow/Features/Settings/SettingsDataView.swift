@@ -37,14 +37,22 @@ enum DataInventory {
                 var isDirectory: ObjCBool = false
                 let url = modulesDirectory.appendingPathComponent(name)
                 if FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory),
-                   !isDirectory.boolValue, name.lowercased().hasSuffix(".json") {
+                   !isDirectory.boolValue, (name.lowercased().hasSuffix(".json") || name.lowercased().hasSuffix(".sqlite")) {
                     present.insert(name)
                 }
             }
         }
-        var names = [workspaceFileName]
-        names.append(contentsOf: moduleFileNames.map { modulesDirectoryName + "/" + $0 })
-        names.append(contentsOf: present.subtracting(moduleFileNames)
+        let databaseName = SQLiteWorkspaceRepository.filename
+        var names = [FileManager.default.fileExists(atPath: directory.appendingPathComponent(databaseName).path)
+                     ? databaseName : workspaceFileName]
+        if FileManager.default.fileExists(atPath: directory.appendingPathComponent(databaseName + "-wal").path) {
+            names.append(databaseName + "-wal")
+        }
+        names.append(contentsOf: moduleFileNames.map { name in
+            let sqlite = URL(fileURLWithPath: name).deletingPathExtension().lastPathComponent + ".sqlite"
+            return modulesDirectoryName + "/" + (present.contains(sqlite) ? sqlite : name)
+        })
+        names.append(contentsOf: present.subtracting(moduleFileNames + ["focus.sqlite"])
             .sorted()
             .map { modulesDirectoryName + "/" + $0 })
         return names.map { entry(named: $0, in: directory, dateFormatter: dateFormatter) }
@@ -116,9 +124,23 @@ enum DataBackup {
         try fileManager.createDirectory(at: target, withIntermediateDirectories: true)
         let children = try fileManager.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
         for child in children where child.lastPathComponent != backupsDirectoryName {
-            try fileManager.copyItem(at: child, to: target.appendingPathComponent(child.lastPathComponent))
+            try copyForBackup(child, to: target.appendingPathComponent(child.lastPathComponent))
         }
         return target
+    }
+
+    private static func copyForBackup(_ source: URL, to target: URL) throws {
+        let name = source.lastPathComponent
+        // SQLite backup API includes committed WAL contents in one snapshot.
+        if name.hasSuffix(".sqlite-wal") || name.hasSuffix(".sqlite-shm") { return }
+        if source.pathExtension == "sqlite" {
+            try SQLiteDatabase(url: source, readOnly: true).backup(to: target)
+        } else if (try source.resourceValues(forKeys: [.isDirectoryKey])).isDirectory == true {
+            try FileManager.default.createDirectory(at: target, withIntermediateDirectories: true)
+            for child in try FileManager.default.contentsOfDirectory(at: source, includingPropertiesForKeys: nil) {
+                try copyForBackup(child, to: target.appendingPathComponent(child.lastPathComponent))
+            }
+        } else { try FileManager.default.copyItem(at: source, to: target) }
     }
 
     /// Newest backup directory name; zero-padded names sort chronologically.
@@ -140,8 +162,8 @@ enum DataBackup {
                 var isDirectory: ObjCBool = false
                 guard FileManager.default.fileExists(atPath: candidate.path, isDirectory: &isDirectory),
                       isDirectory.boolValue,
-                      FileManager.default.fileExists(
-                          atPath: candidate.appendingPathComponent(DataInventory.workspaceFileName).path)
+                      (FileManager.default.fileExists(atPath: candidate.appendingPathComponent(DataInventory.workspaceFileName).path)
+                       || FileManager.default.fileExists(atPath: candidate.appendingPathComponent(SQLiteWorkspaceRepository.filename).path))
                 else { return nil }
                 return candidate
             }
@@ -176,7 +198,12 @@ enum DataExporter {
         ]
 
         let workspaceURL = directory.appendingPathComponent(DataInventory.workspaceFileName)
-        if FileManager.default.fileExists(atPath: workspaceURL.path) {
+        if FileManager.default.fileExists(atPath: directory.appendingPathComponent(SQLiteWorkspaceRepository.filename).path) {
+            let snapshot = try NativePreviewRepository(directory: directory).load()
+            payload["workspace"] = try snapshot.map {
+                try JSONSerialization.jsonObject(with: JSONEncoder().encode($0))
+            } ?? NSNull()
+        } else if FileManager.default.fileExists(atPath: workspaceURL.path) {
             do {
                 let raw = try Data(contentsOf: workspaceURL)
                 payload["workspace"] = try JSONSerialization.jsonObject(with: raw, options: [.fragmentsAllowed])
@@ -198,6 +225,9 @@ enum DataExporter {
                 }
             }
         }
+        for (name, data) in try SQLiteModuleExport.export(directory: modulesDirectory) {
+            modules[name] = try JSONSerialization.jsonObject(with: data)
+        }
         payload["modules"] = modules
 
         return try JSONSerialization.data(withJSONObject: payload, options: [.prettyPrinted, .sortedKeys])
@@ -207,6 +237,7 @@ enum DataExporter {
 // MARK: - View
 
 struct SettingsDataView: View {
+    @EnvironmentObject private var environment: AppEnvironment
     private enum FeedbackKind { case copiedPath, backup, restore, export, importData }
     private enum ImportMode { case merge, replace }
 
@@ -284,7 +315,7 @@ struct SettingsDataView: View {
                     Button("导出工作区快照…") { runExport() }
                         .buttonStyle(.bordered)
                         .controlSize(.small)
-                    Text("旧入口：仅合并 workspace.json 与模块 JSON，不含附件。")
+                    Text("旧入口：导出工作区与模块记录，不含附件。")
                         .font(WFType.supporting)
                         .foregroundStyle(WFColors.tertiaryText)
                 }
@@ -304,7 +335,7 @@ struct SettingsDataView: View {
                         .font(WFType.supporting)
                         .foregroundStyle(WFColors.secondaryText)
                 }
-                Text("每天首次修改会自动把 workspace.json 快照到 backups/，保留最近 7 天；恢复前会先备份当前内容。")
+                Text("每天首次修改会自动备份工作区数据库，保留最近 7 天；恢复前会先备份当前内容。")
                     .font(WFType.supporting)
                     .foregroundStyle(WFColors.tertiaryText)
                 feedbackLine(.backup)
@@ -545,53 +576,62 @@ struct SettingsDataView: View {
         guard let bundle = pendingImport else { return }
         importBusy = true
         let repository = repository
-        DispatchQueue.global(qos: .userInitiated).async {
-            var message: String?
-            var failure: String?
-            do {
-                // 与 Flutter 一致：导入（合并或清空）前先自动备份当前内容。
-                _ = try repository.backupNow()
-                let restored = try MigrationSnapshot.restoreEmbeddedFiles(bundle.embeddedFiles,
-                                                                         into: NativeAttachmentFiles.directory)
-                let attachmentNames = MigrationSnapshot.attachmentNames(in: NativeAttachmentFiles.directory)
-
-                let result: (snapshot: NativeWorkspaceSnapshot, summary: MigrationImportSummary)
-                switch mode {
-                case .merge:
-                    let local: NativeWorkspaceSnapshot
-                    do {
-                        local = try repository.load() ?? NativeWorkspaceSnapshot(tasks: [], notes: [], taskLists: nil)
-                    } catch {
-                        throw NSError(domain: "MigrationImport", code: 2, userInfo: [NSLocalizedDescriptionKey:
-                            "本地 workspace.json 无法读取（可能已损坏），请改用「清空后导入」。"])
-                    }
-                    result = MigrationSnapshot.merged(bundle, into: local, attachmentNames: attachmentNames)
-                case .replace:
-                    result = MigrationSnapshot.replaced(bundle, attachmentNames: attachmentNames)
-                }
-                try repository.save(result.snapshot)
-
-                let summary = result.summary
-                let skipped = summary.skippedTasks + summary.skippedNotes
-                var text = mode == .replace
-                    ? "已清空本机并导入 \(summary.importedTasks) 个任务、\(summary.importedNotes) 条笔记。"
-                    : "已导入 \(summary.importedTasks) 个任务、\(summary.importedNotes) 条笔记（跳过 \(skipped) 条同 ID）。"
-                if summary.importedLists > 0 { text += " 新建清单 \(summary.importedLists) 个。" }
-                if summary.importedLegacyChildren > 0 { text += " 展开旧版子任务 \(summary.importedLegacyChildren) 条。" }
-                if restored > 0 { text += " 还原附件 \(restored) 个。" }
-                text += "重启应用后生效。"
-                message = text
-            } catch {
-                failure = "导入失败：\(error.localizedDescription)"
-            }
-            DispatchQueue.main.async {
+        environment.prepareStorageReplacement { error in
+            if let error {
+                environment.finishStorageReplacement(succeeded: false)
                 importBusy = false
-                if let message {
-                    pendingImport = nil
-                    showFeedback(.importData, message, isError: false)
-                    refresh()
-                } else if let failure {
-                    showFeedback(.importData, failure, isError: true)
+                showFeedback(.importData, "保存当前数据失败：\(error.localizedDescription)", isError: true)
+                return
+            }
+            DispatchQueue.global(qos: .userInitiated).async {
+                var message: String?
+                var failure: String?
+                do {
+                    // 与 Flutter 一致：导入（合并或清空）前先自动备份当前内容。
+                    _ = try repository.backupNow()
+                    let restored = try MigrationSnapshot.restoreEmbeddedFiles(bundle.embeddedFiles,
+                                                                             into: NativeAttachmentFiles.directory)
+                    let attachmentNames = MigrationSnapshot.attachmentNames(in: NativeAttachmentFiles.directory)
+
+                    let result: (snapshot: NativeWorkspaceSnapshot, summary: MigrationImportSummary)
+                    switch mode {
+                    case .merge:
+                        let local: NativeWorkspaceSnapshot
+                        do {
+                            local = try repository.load() ?? NativeWorkspaceSnapshot(tasks: [], notes: [], taskLists: nil)
+                        } catch {
+                            throw NSError(domain: "MigrationImport", code: 2, userInfo: [NSLocalizedDescriptionKey:
+                                "本地工作区无法读取（可能已损坏），请改用「清空后导入」。"])
+                        }
+                        result = MigrationSnapshot.merged(bundle, into: local, attachmentNames: attachmentNames)
+                    case .replace:
+                        result = MigrationSnapshot.replaced(bundle, attachmentNames: attachmentNames)
+                    }
+                    try repository.save(result.snapshot)
+
+                    let summary = result.summary
+                    let skipped = summary.skippedTasks + summary.skippedNotes
+                    var text = mode == .replace
+                        ? "已清空本机并导入 \(summary.importedTasks) 个任务、\(summary.importedNotes) 条笔记。"
+                        : "已导入 \(summary.importedTasks) 个任务、\(summary.importedNotes) 条笔记（跳过 \(skipped) 条同 ID）。"
+                    if summary.importedLists > 0 { text += " 新建清单 \(summary.importedLists) 个。" }
+                    if summary.importedLegacyChildren > 0 { text += " 展开旧版子任务 \(summary.importedLegacyChildren) 条。" }
+                    if restored > 0 { text += " 还原附件 \(restored) 个。" }
+                    text += "重启应用后生效。"
+                    message = text
+                } catch {
+                    failure = "导入失败：\(error.localizedDescription)"
+                }
+                DispatchQueue.main.async {
+                    importBusy = false
+                    environment.finishStorageReplacement(succeeded: message != nil)
+                    if let message {
+                        pendingImport = nil
+                        showFeedback(.importData, message, isError: false)
+                        refresh()
+                    } else if let failure {
+                        showFeedback(.importData, failure, isError: true)
+                    }
                 }
             }
         }
@@ -600,27 +640,30 @@ struct SettingsDataView: View {
     // MARK: 导出
 
     /// 新入口：workfollow-personal-migration v3，含附件 base64。
+
     private func runMigrationExport() {
-        let now = Date()
-        importBusy = true
-        let repository = repository
-        DispatchQueue.global(qos: .userInitiated).async {
-            var data: Data?
-            var failure: String?
-            do {
-                let snapshot = try repository.load() ?? NativeWorkspaceSnapshot(tasks: [], notes: [], taskLists: nil)
-                data = try MigrationSnapshot.exportJSON(from: snapshot,
-                                                        attachmentDirectory: NativeAttachmentFiles.directory,
-                                                        now: now)
-            } catch {
-                failure = "导出失败：workspace.json 读取失败，请先修复本机数据。"
-            }
-            DispatchQueue.main.async {
-                importBusy = false
-                if let data {
-                    presentMigrationSavePanel(data, now: now)
-                } else if let failure {
-                    showFeedback(.export, failure, isError: true)
+        afterStorageFlush(.export) {
+            let now = Date()
+            importBusy = true
+            let repository = repository
+            DispatchQueue.global(qos: .userInitiated).async {
+                var data: Data?
+                var failure: String?
+                do {
+                    let snapshot = try repository.load() ?? NativeWorkspaceSnapshot(tasks: [], notes: [], taskLists: nil)
+                    data = try MigrationSnapshot.exportJSON(from: snapshot,
+                                                            attachmentDirectory: NativeAttachmentFiles.directory,
+                                                            now: now)
+                } catch {
+                    failure = "导出失败：工作区读取失败，请先修复本机数据。"
+                }
+                DispatchQueue.main.async {
+                    importBusy = false
+                    if let data {
+                        presentMigrationSavePanel(data, now: now)
+                    } else if let failure {
+                        showFeedback(.export, failure, isError: true)
+                    }
                 }
             }
         }
@@ -654,33 +697,35 @@ struct SettingsDataView: View {
 
     /// 旧入口：合并 workspace.json 与模块 JSON（不含附件）。
     private func runExport() {
-        let now = Date()
-        DispatchQueue.global(qos: .userInitiated).async {
-            var data: Data?
-            var failure: String?
-            do {
-                data = try DataExporter.combinedExport(directory: dataDirectory, now: now)
-            } catch {
-                failure = "导出失败：\(error.localizedDescription)"
-            }
-            DispatchQueue.main.async {
-                if let data {
-                    let panel = NSSavePanel()
-                    panel.title = "导出工作区快照"
-                    panel.prompt = "导出"
-                    panel.nameFieldStringValue = DataExporter.suggestedFileName(for: now)
-                    panel.allowedContentTypes = [.json]
-                    panel.begin { response in
-                        guard response == .OK, let url = panel.url else { return }
-                        do {
-                            try data.write(to: url, options: .atomic)
-                            showFeedback(.export, "已导出到 \(url.lastPathComponent)", isError: false)
-                        } catch {
-                            showFeedback(.export, "导出失败：\(error.localizedDescription)", isError: true)
+        afterStorageFlush(.export) {
+            let now = Date()
+            DispatchQueue.global(qos: .userInitiated).async {
+                var data: Data?
+                var failure: String?
+                do {
+                    data = try DataExporter.combinedExport(directory: dataDirectory, now: now)
+                } catch {
+                    failure = "导出失败：\(error.localizedDescription)"
+                }
+                DispatchQueue.main.async {
+                    if let data {
+                        let panel = NSSavePanel()
+                        panel.title = "导出工作区快照"
+                        panel.prompt = "导出"
+                        panel.nameFieldStringValue = DataExporter.suggestedFileName(for: now)
+                        panel.allowedContentTypes = [.json]
+                        panel.begin { response in
+                            guard response == .OK, let url = panel.url else { return }
+                            do {
+                                try data.write(to: url, options: .atomic)
+                                showFeedback(.export, "已导出到 \(url.lastPathComponent)", isError: false)
+                            } catch {
+                                showFeedback(.export, "导出失败：\(error.localizedDescription)", isError: true)
+                            }
                         }
+                    } else if let failure {
+                        showFeedback(.export, failure, isError: true)
                     }
-                } else if let failure {
-                    showFeedback(.export, failure, isError: true)
                 }
             }
         }
@@ -689,23 +734,25 @@ struct SettingsDataView: View {
     // MARK: 备份与恢复
 
     private func runBackup() {
-        let repository = repository
-        DispatchQueue.global(qos: .userInitiated).async {
-            var message: String?
-            var failure: String?
-            do {
-                if let target = try repository.backupNow() {
-                    message = "已创建备份：\(target.lastPathComponent)"
-                } else {
-                    message = "还没有 workspace.json，先使用应用产生数据后再备份。"
+        afterStorageFlush(.backup) {
+            let repository = repository
+            DispatchQueue.global(qos: .userInitiated).async {
+                var message: String?
+                var failure: String?
+                do {
+                    if let target = try repository.backupNow() {
+                        message = "已创建备份：\(target.lastPathComponent)"
+                    } else {
+                        message = "还没有工作区数据，先使用应用产生数据后再备份。"
+                    }
+                } catch {
+                    failure = "备份失败：\(error.localizedDescription)"
                 }
-            } catch {
-                failure = "备份失败：\(error.localizedDescription)"
-            }
-            DispatchQueue.main.async {
-                if let message { showFeedback(.backup, message, isError: false) }
-                if let failure { showFeedback(.backup, failure, isError: true) }
-                refresh()
+                DispatchQueue.main.async {
+                    if let message { showFeedback(.backup, message, isError: false) }
+                    if let failure { showFeedback(.backup, failure, isError: true) }
+                    refresh()
+                }
             }
         }
     }
@@ -726,22 +773,37 @@ struct SettingsDataView: View {
     private func performRestore(_ entry: SnapshotRestoreEntry) {
         let repository = repository
         let url = entry.url
-        DispatchQueue.global(qos: .userInitiated).async {
-            var failure: String?
-            do {
-                try repository.restoreBackup(at: url)
-            } catch {
-                failure = "无法恢复这份备份：\(error.localizedDescription)"
+        environment.prepareStorageReplacement { error in
+            if let error {
+                environment.finishStorageReplacement(succeeded: false)
+                showFeedback(.restore, "保存当前数据失败：\(error.localizedDescription)", isError: true)
+                return
             }
-            DispatchQueue.main.async {
-                restoreCandidate = nil
-                if let failure {
-                    showFeedback(.restore, failure, isError: true)
-                } else {
-                    showFeedback(.restore, "已恢复所选备份。重启应用后生效。", isError: false)
+            DispatchQueue.global(qos: .userInitiated).async {
+                var failure: String?
+                do {
+                    try repository.restoreBackup(at: url)
+                } catch {
+                    failure = "无法恢复这份备份：\(error.localizedDescription)"
                 }
-                refresh()
+                DispatchQueue.main.async {
+                    restoreCandidate = nil
+                    environment.finishStorageReplacement(succeeded: failure == nil)
+                    if let failure {
+                        showFeedback(.restore, failure, isError: true)
+                    } else {
+                        showFeedback(.restore, "已恢复所选备份。重启应用后生效。", isError: false)
+                    }
+                    refresh()
+                }
             }
+        }
+    }
+
+    private func afterStorageFlush(_ kind: FeedbackKind, operation: @escaping () -> Void) {
+        environment.flush { error in
+            if let error { showFeedback(kind, "保存当前数据失败：\(error.localizedDescription)", isError: true) }
+            else { operation() }
         }
     }
 

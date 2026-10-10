@@ -108,6 +108,11 @@ final class WorkspaceStore {
                 listFolders: [TaskListFolder]? = nil,
                 listSections: [TaskListSection]? = nil,
                 undoCompensation: (() -> Void)? = nil) {
+        let survivingIDs = Set(snapshot.map(\.id))
+        for task in tasks where !survivingIDs.contains(task.id) {
+            // A cascade delete must not invalidate document references in undo.
+            guard (try? task.document.materialized()) != nil else { return }
+        }
         let listsChanged = lists != nil && lists != self.lists
         let metasChanged = listMetas != nil && listMetas != self.listMetas
         let foldersChanged = listFolders != nil && listFolders != self.listFolders
@@ -158,6 +163,7 @@ final class WorkspaceStore {
         prepareReadIndex()
         guard let index = taskOffsets?[id] else { return }
         let before = tasks[index]
+        if document != nil, (try? before.document.materialized()) == nil { return }
         var after = before
         if let title { after.title = title }
         if let document { after.document = document }
@@ -197,6 +203,7 @@ final class WorkspaceStore {
     func commitEditorReference(_ id: UUID, document: NativeDocument, sourceNoteID: UUID?, updatedAt: Date) {
         guard let index = tasks.firstIndex(where: { $0.id == id }) else { return }
         var snapshot = tasks
+        guard (try? tasks[index].document.materialized()) != nil else { return }
         snapshot[index].document = document
         snapshot[index].sourceNoteID = sourceNoteID
         snapshot[index].updatedAt = updatedAt
@@ -277,7 +284,7 @@ final class WorkspaceStore {
             return TaskChangeSet(before: before, after: tasks)
         }
         onTasksChanged?(before, tasks)
-        if let changes, !changes.entries.isEmpty { onTaskChanges?(changes) }
+        if let changes, !changes.entries.isEmpty || changes.order != nil { onTaskChanges?(changes) }
     }
 
     // MARK: - 清单元数据对账（Round B1）

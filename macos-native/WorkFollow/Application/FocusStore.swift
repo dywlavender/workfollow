@@ -116,7 +116,24 @@ final class FocusStore: ObservableObject, ModuleStoreFlushable {
         var id: String { dayKey }
     }
 
-    @Published private(set) var records: [PomodoroRecord] = []  // 最新在前
+    @Published private(set) var visibleRecords: [PomodoroRecord] = []
+    @Published private(set) var historyRevision = 0
+    @Published private(set) var historyLoading = false
+    @Published private(set) var historyHasMore = false
+    @Published private(set) var historyError: String?
+    @Published private(set) var allTimePomodoros = 0
+    @Published private(set) var allTimeMinutes = 0
+    private var recordCount = 0
+    private var historyGeneration = 0
+    private var statsDay: String?
+    private let historyPageSize = 50
+
+    // Full history remains available for explicit compatibility access.
+    var records: [PomodoroRecord] {
+        read(fallback: []) { try persistence.history(limit: Int.max) }
+    }
+    var hydratedRecordCount: Int { persistence.decodedRecordCount }
+    var statisticsQueryCount: Int { persistence.aggregateQueryCount }
     @Published private(set) var preferences = FocusPreferences()
     @Published private(set) var phase: PomodoroPhase = .idle
     @Published private(set) var isLongBreak = false
@@ -131,7 +148,7 @@ final class FocusStore: ObservableObject, ModuleStoreFlushable {
     var notifier: FocusNotifier?
 
     private let engine: PomodoroEngine
-    private let persistence: JSONFileStore<Archive>
+    private let persistence: SQLiteRecordStore<PomodoroRecord, Archive>
     private let clock: () -> Date
     private let calendar = Calendar.current
     private var timer: Timer?
@@ -139,15 +156,20 @@ final class FocusStore: ObservableObject, ModuleStoreFlushable {
     init(clock: @escaping () -> Date = Date.init, directory: URL? = nil) {
         self.clock = clock
         engine = PomodoroEngine(clock: clock)
-        let store: JSONFileStore<Archive>
-        if let directory {
-            store = JSONFileStore(filename: "focus.json", directory: directory)
-        } else {
-            store = JSONFileStore(filename: "focus.json")
-        }
+        let store = SQLiteRecordStore<PomodoroRecord, Archive>(
+            filename: "focus", directory: directory ?? JSONFileStore<Archive>.moduleDirectory, newestFirst: true,
+            timestamp: { $0.startedAt }, taskID: { $0.taskID }, metrics: { ($0.minutes, $0.completed ? 1 : 0) }, migrate: { data in
+                var archive = try JSONDecoder().decode(Archive.self, from: data)
+                let records = archive.records
+                archive.records = []
+                return .init(records: records, metadata: archive)
+            })
         persistence = store
-        let loaded = store.load() ?? Archive()
-        records = loaded.records.sorted { $0.startedAt > $1.startedAt }
+        let saved = store.load(recentLimit: 0)
+        let loaded = saved?.metadata ?? Archive()
+        let totals = read(fallback: SQLiteRecordStore<PomodoroRecord, Archive>.Totals()) { try store.totals() }
+        allTimePomodoros = totals.count; allTimeMinutes = totals.value; recordCount = totals.records
+        historyHasMore = recordCount > 0
         preferences = loaded.preferences.normalized()
         engine.apply(preferences.pomodoroSettings)
         timers = loaded.timers
@@ -161,6 +183,8 @@ final class FocusStore: ObservableObject, ModuleStoreFlushable {
         if phase != .idle { startTimer() }
         refreshDailyStats()
     }
+
+    var storageError: Error? { persistence.readError }
 
     deinit { timer?.invalidate() }
 
@@ -329,21 +353,11 @@ final class FocusStore: ObservableObject, ModuleStoreFlushable {
         schedulePersistence()
     }
 
-    /// 全量累计（概览卡）：总番茄数与总专注分钟。
-    var allTimePomodoros: Int { records.filter(\.completed).count }
-    var allTimeMinutes: Int { records.reduce(0) { $0 + $1.minutes } }
-
-    /// 最近 days 天按任务聚合的专注分钟（降序，前 limit 条）。
+    /// Aggregate over the full database, independently of visible history pages.
     func weeklyTaskTotals(days: Int = 7, limit: Int = 3) -> [TaskFocusTotal] {
         let cutoff = calendar.date(byAdding: .day, value: -days, to: clock()) ?? clock()
-        var byTask: [UUID?: Int] = [:]
-        for record in records where record.startedAt >= cutoff {
-            byTask[record.taskID, default: 0] += record.minutes
-        }
-        return byTask
-            .sorted { $0.value > $1.value }
-            .prefix(limit)
-            .map { TaskFocusTotal(taskID: $0.key, minutes: $0.value) }
+        return read(fallback: []) { try persistence.taskTotals(from: cutoff, limit: limit) }
+            .map { TaskFocusTotal(taskID: $0.0, minutes: $0.1) }
     }
 
     @discardableResult
@@ -403,18 +417,44 @@ final class FocusStore: ObservableObject, ModuleStoreFlushable {
               days < 7 else { return false }
         let record = PomodoroRecord(id: UUID(), taskID: taskID, startedAt: startedAt,
                                     minutes: minutes, completed: true)
-        records.append(record)
-        records.sort { $0.startedAt > $1.startedAt }
-        refreshDailyStats()
-        schedulePersistence()
+        accept(record)
         return true
     }
 
     func deleteRecord(_ id: UUID) {
-        guard let index = records.firstIndex(where: { $0.id == id }) else { return }
-        records.remove(at: index)
+        guard let record = read(fallback: Optional<PomodoroRecord>.none, {
+            try persistence.record(id: id)
+        }) else { return }
         refreshDailyStats()
-        schedulePersistence()
+        updateTotals(record, direction: -1)
+        visibleRecords.removeAll { $0.id == id }
+        historyGeneration += 1
+        historyRevision += 1
+        historyHasMore = recordCount > visibleRecords.count
+        persistence.schedule(deleted: [id], metadata: archive())
+    }
+
+    func resetHistory() async {
+        historyGeneration += 1
+        visibleRecords = []; historyLoading = false; historyHasMore = recordCount > 0; historyError = nil
+        await loadMoreHistory()
+    }
+
+    func loadMoreHistory() async {
+        guard !historyLoading, historyHasMore else { return }
+        let request = historyGeneration
+        historyLoading = true; historyError = nil
+        do {
+            let page = try await persistence.historyAsync(limit: historyPageSize + 1, offset: visibleRecords.count)
+            guard request == historyGeneration, !_Concurrency.Task.isCancelled else { return }
+            visibleRecords.append(contentsOf: page.prefix(historyPageSize))
+            historyHasMore = page.count > historyPageSize
+            historyLoading = false
+        } catch {
+            guard request == historyGeneration, !_Concurrency.Task.isCancelled else { return }
+            historyError = error.localizedDescription
+            historyLoading = false
+        }
     }
 
     /// 最近 days 天逐日统计，旧→新；每天都会出现，便于看空档。
@@ -423,17 +463,18 @@ final class FocusStore: ObservableObject, ModuleStoreFlushable {
         return (0..<days).reversed().compactMap { offset in
             guard let day = calendar.date(byAdding: .day, value: -offset, to: today) else { return nil }
             let key = dayKey(day)
-            let dayRecords = records.filter { dayKey($0.startedAt) == key }
-            return DailyFocusStats(dayKey: key, day: day,
-                                   minutes: dayRecords.reduce(0) { $0 + $1.minutes },
-                                   pomodoros: dayRecords.filter(\.completed).count)
+            let end = calendar.date(byAdding: .day, value: 1, to: day) ?? day
+            let totals = read(fallback: SQLiteRecordStore<PomodoroRecord, Archive>.Totals()) {
+                try persistence.totals(from: day, to: end)
+            }
+            return DailyFocusStats(dayKey: key, day: day, minutes: totals.value, pomodoros: totals.count)
         }
     }
 
     /// 记录按天分组，新→旧。
     var recordGroups: [RecordDayGroup] {
         var groups: [RecordDayGroup] = []
-        for record in records {
+        for record in visibleRecords {
             let key = dayKey(record.startedAt)
             if groups.last?.dayKey == key {
                 groups[groups.count - 1].records.append(record)
@@ -457,9 +498,7 @@ final class FocusStore: ObservableObject, ModuleStoreFlushable {
         var savedRecord = record
         let trimmedNote = sessionNote?.trimmingCharacters(in: .whitespacesAndNewlines)
         savedRecord.note = trimmedNote?.isEmpty == false ? trimmedNote : nil
-        records.insert(savedRecord, at: 0)
-        refreshDailyStats()
-        schedulePersistence()
+        accept(savedRecord)
         return savedRecord
     }
 
@@ -490,11 +529,41 @@ final class FocusStore: ObservableObject, ModuleStoreFlushable {
 
     private func refreshDailyStats() {
         let key = dayKey(clock())
-        let today = records.filter { dayKey($0.startedAt) == key }
-        let pomodoros = today.filter(\.completed).count
-        let minutes = today.reduce(0) { $0 + $1.minutes }
-        if todayPomodoros != pomodoros { todayPomodoros = pomodoros }
-        if todayMinutes != minutes { todayMinutes = minutes }
+        guard statsDay != key else { return }
+        let day = calendar.startOfDay(for: clock())
+        let end = calendar.date(byAdding: .day, value: 1, to: day) ?? day
+        do {
+            let totals = try persistence.totals(from: day, to: end)
+            todayPomodoros = totals.count; todayMinutes = totals.value
+            statsDay = key
+        } catch { historyError = error.localizedDescription }
+    }
+
+    private func updateTotals(_ record: PomodoroRecord, direction: Int) {
+        allTimeMinutes += direction * record.minutes
+        allTimePomodoros += direction * (record.completed ? 1 : 0)
+        recordCount += direction
+        if dayKey(record.startedAt) == statsDay {
+            todayMinutes += direction * record.minutes
+            todayPomodoros += direction * (record.completed ? 1 : 0)
+        }
+    }
+
+    private func accept(_ record: PomodoroRecord) {
+        refreshDailyStats()
+        updateTotals(record, direction: 1)
+        visibleRecords.insert(record, at: 0)
+        visibleRecords.sort { $0.startedAt > $1.startedAt }
+        visibleRecords = Array(visibleRecords.prefix(historyPageSize))
+        historyGeneration += 1
+        historyRevision += 1
+        historyHasMore = recordCount > visibleRecords.count
+        persistence.schedule(upserts: [record], metadata: archive())
+    }
+
+    private func read<T>(fallback: T, _ operation: () throws -> T) -> T {
+        do { return try operation() }
+        catch { historyError = error.localizedDescription; return fallback }
     }
 
     private var lastSessionSave = Date.distantPast
@@ -523,10 +592,13 @@ final class FocusStore: ObservableObject, ModuleStoreFlushable {
         return String(format: "%04d-%02d-%02d", parts.year ?? 0, parts.month ?? 0, parts.day ?? 0)
     }
 
+    private func archive() -> Archive {
+        Archive(records: [], preferences: preferences, session: engine.sessionSnapshot, timers: timers,
+                sessionNote: currentSessionNote.isEmpty ? nil : currentSessionNote)
+    }
+
     private func schedulePersistence() {
-        persistence.schedule(Archive(records: records, preferences: preferences,
-                                     session: engine.sessionSnapshot, timers: timers,
-                                     sessionNote: currentSessionNote.isEmpty ? nil : currentSessionNote))
+        persistence.schedule(metadata: archive())
     }
 
     private func startTimer() {

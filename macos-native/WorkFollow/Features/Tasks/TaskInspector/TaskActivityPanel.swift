@@ -4,6 +4,7 @@ struct TaskActivityPanel: View {
     let taskID: UUID
     @ObservedObject var store: TaskActivityStore
     let onClose: () -> Void
+    @StateObject private var history = TaskActivityPageModel()
 
     var body: some View {
         VStack(spacing: 0) {
@@ -16,17 +17,22 @@ struct TaskActivityPanel: View {
             }
             .padding(16)
             Divider()
-            let events = store.events(for: taskID)
+            let events = history.events
             if events.isEmpty {
-                VStack(spacing: 8) {
-                    Text("暂无任务动态").foregroundStyle(WFColors.text)
-                    Text("仅记录启用后的任务变更，不补造历史记录。")
-                        .font(.caption).foregroundStyle(WFColors.secondaryText)
+                if !history.isLoading && history.error == nil {
+                    VStack(spacing: 8) {
+                        Text("暂无任务动态").foregroundStyle(WFColors.text)
+                        Text("仅记录启用后的任务变更，不补造历史记录。")
+                            .font(.caption).foregroundStyle(WFColors.secondaryText)
+                    }
+                    .padding(24)
                 }
-                .padding(24)
+                TaskActivityPageControls(history: history) {
+                    await history.loadMore(store: store, taskIDs: [taskID])
+                }
             } else {
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 16) {
+                    LazyVStack(alignment: .leading, spacing: 16) {
                         ForEach(events) { event in
                             VStack(alignment: .leading, spacing: 4) {
                                 Text(event.title).foregroundStyle(WFColors.text)
@@ -40,12 +46,20 @@ struct TaskActivityPanel: View {
                             }
                             .frame(maxWidth: .infinity, alignment: .leading)
                         }
+                        TaskActivityPageControls(history: history) {
+                            await history.loadMore(store: store, taskIDs: [taskID])
+                        }
                     }
                     .padding(16)
                 }
                 .frame(height: 340)
             }
         }
+        // Keep the child window geometry stable across async loading states.
+        .frame(height: 396, alignment: .top)
         .accessibilityIdentifier("task-activity-panel")
+        .task(id: "\(taskID)-\(store.revision)") {
+            await history.reset(store: store, taskIDs: [taskID])
+        }
     }
 }

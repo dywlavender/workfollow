@@ -22,7 +22,7 @@ void main() {
       theme: WorkFollowThemeData.light(),
       home: Scaffold(
         body: SizedBox(
-          width: 264,
+          width: 220,
           child: TaskContextMenuPanel(task: _task()),
         ),
       ),
@@ -50,7 +50,7 @@ void main() {
       theme: WorkFollowThemeData.light(),
       home: Scaffold(
         body: SizedBox(
-          width: 264,
+          width: 220,
           child: TaskContextMenuPanel(task: _task(recurrenceType: 'DAILY')),
         ),
       ),

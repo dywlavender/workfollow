@@ -25,7 +25,7 @@ struct TaskListQuery: Equatable {
         let text = search.trimmingCharacters(in: .whitespacesAndNewlines)
         return (list == nil || task.list.name == list) &&
             (tag == nil || task.tags.contains(tag!)) &&
-            (text.isEmpty || (task.title + "\n" + task.document.plainText).localizedCaseInsensitiveContains(text))
+            (text.isEmpty || task.document.matches(text, prefix: task.title + "\n"))
     }
 }
 struct TaskListGroup {

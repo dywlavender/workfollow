@@ -2,7 +2,7 @@ import SwiftUI
 
 /// 清单动态（滴答清单页 ··· → 清单动态）：**按清单聚合**的任务变更时间线。
 ///
-/// 事件模型、记录逻辑、"任务动态"三件事都归 `TaskActivityStore`（已存在，本轮不改），
+/// 事件模型、记录逻辑、"任务动态"三件事都归 `TaskActivityStore`，
 /// 本页只做"按清单筛选 + 展示"，因此**不引入新的存储**。
 /// 任务标题在渲染时解析——事件本身不冗余存名字；被删除的任务会从清单动态里消失
 /// （当前口径，已登记）。
@@ -12,8 +12,13 @@ struct ListActivitySheet: View {
     @ObservedObject var activity: TaskActivityStore
     let onClose: () -> Void
 
-    private var events: [TaskActivityEvent] {
-        activity.events(forList: listName) { workspace.task(for: $0)?.list.name }
+    @StateObject private var history = TaskActivityPageModel()
+    private var taskIDs: [UUID] {
+        workspace.allTasks.filter { $0.list.name == listName }.map(\.id)
+    }
+    private var events: [TaskActivityEvent] { history.events }
+    private var queryKey: ActivityPageQueryKey {
+        ActivityPageQueryKey(taskIDs: taskIDs, revision: activity.revision)
     }
 
     var body: some View {
@@ -28,15 +33,20 @@ struct ListActivitySheet: View {
             .padding(16)
             Divider()
             if events.isEmpty {
-                VStack(spacing: 8) {
-                    Text("暂无清单动态").foregroundStyle(WFColors.text)
-                    Text("仅记录启用后的任务变更，不补造历史记录。")
-                        .font(.caption).foregroundStyle(WFColors.secondaryText)
+                if !history.isLoading && history.error == nil {
+                    VStack(spacing: 8) {
+                        Text("暂无清单动态").foregroundStyle(WFColors.text)
+                        Text("仅记录启用后的任务变更，不补造历史记录。")
+                            .font(.caption).foregroundStyle(WFColors.secondaryText)
+                    }
+                    .padding(24)
                 }
-                .padding(24)
+                TaskActivityPageControls(history: history) {
+                    await history.loadMore(store: activity, taskIDs: taskIDs)
+                }
             } else {
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 16) {
+                    LazyVStack(alignment: .leading, spacing: 16) {
                         ForEach(events) { event in
                             VStack(alignment: .leading, spacing: 4) {
                                 Text(workspace.task(for: event.taskID)?.title ?? "该任务")
@@ -54,11 +64,15 @@ struct ListActivitySheet: View {
                             }
                             .frame(maxWidth: .infinity, alignment: .leading)
                         }
+                        TaskActivityPageControls(history: history) {
+                            await history.loadMore(store: activity, taskIDs: taskIDs)
+                        }
                     }
                     .padding(16)
                 }
             }
         }
+        .task(id: queryKey) { await history.reset(store: activity, taskIDs: taskIDs) }
         .frame(width: 360, height: 420)
         .environment(\.calendar, workspace.calendar)
         .environment(\.timeZone, workspace.calendar.timeZone)

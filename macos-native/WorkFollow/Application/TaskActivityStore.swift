@@ -3,22 +3,31 @@ import Foundation
 
 @MainActor
 final class TaskActivityStore: ObservableObject, ModuleStoreFlushable {
-    @Published private(set) var events: [TaskActivityEvent] = []
+    @Published private(set) var revision = 0
+    @Published private(set) var queryError: String?
+    private var latestEvent: TaskActivityEvent?
 
-    private let persistence: JSONFileStore<[TaskActivityEvent]>
+    // Compatibility access is intentionally explicit and outside panel rendering.
+    var events: [TaskActivityEvent] {
+        read { try persistence.history(limit: Int.max, insertionOrder: true) }
+    }
+    var hydratedEventCount: Int { persistence.decodedRecordCount }
+
+    private let persistence: SQLiteRecordStore<TaskActivityEvent, EmptyHistoryMetadata>
     private let clock: () -> Date
 
     init(clock: @escaping () -> Date = Date.init, directory: URL? = nil) {
         self.clock = clock
-        let store: JSONFileStore<[TaskActivityEvent]>
-        if let directory {
-            store = JSONFileStore(filename: "task-activity.json", directory: directory)
-        } else {
-            store = JSONFileStore(filename: "task-activity.json")
-        }
+        let store = SQLiteRecordStore<TaskActivityEvent, EmptyHistoryMetadata>(
+            filename: "task-activity", directory: directory ?? JSONFileStore<[TaskActivityEvent]>.moduleDirectory,
+            timestamp: { $0.occurredAt }, taskID: { $0.taskID }, migrate: { data in
+                .init(records: try JSONDecoder().decode([TaskActivityEvent].self, from: data), metadata: nil)
+            })
         persistence = store
-        events = store.load() ?? []
+        latestEvent = store.load(recentLimit: 1)?.records.first
     }
+
+    var storageError: Error? { persistence.readError }
 
     /// 清单动态：该清单内任务的事件（新→旧）。
     /// 任务 → 清单的映射由调用方注入（store 不认识任务），所以被删掉的任务不会出现在这里。
@@ -29,15 +38,23 @@ final class TaskActivityStore: ObservableObject, ModuleStoreFlushable {
     }
 
     func events(for taskID: UUID) -> [TaskActivityEvent] {
-        events.enumerated()
-            .filter { $0.element.taskID == taskID }
-            .sorted {
-                if $0.element.occurredAt != $1.element.occurredAt {
-                    return $0.element.occurredAt > $1.element.occurredAt
-                }
-                return $0.offset > $1.offset
-            }
-            .map(\.element)
+        read { try persistence.history(taskID: taskID, limit: Int.max) }
+    }
+
+    func page(taskIDs: [UUID], limit: Int = 51, offset: Int = 0) async throws -> [TaskActivityEvent] {
+        do {
+            let result = try await persistence.historyAsync(taskIDs: taskIDs, limit: limit, offset: offset)
+            queryError = nil
+            return result
+        } catch {
+            queryError = error.localizedDescription
+            throw error
+        }
+    }
+
+    private func read(_ operation: () throws -> [TaskActivityEvent]) -> [TaskActivityEvent] {
+        do { return try operation() }
+        catch { queryError = error.localizedDescription; return [] }
     }
 
     func recordChanges(_ changes: TaskChangeSet) {
@@ -104,7 +121,7 @@ final class TaskActivityStore: ObservableObject, ModuleStoreFlushable {
             }
         }
 
-        if changed { persistence.schedule(events) }
+        if changed { revision += 1 }
     }
 
     /// Compatibility adapter for tests and callers that still hold snapshots.
@@ -115,7 +132,7 @@ final class TaskActivityStore: ObservableObject, ModuleStoreFlushable {
     func recordFocusStart(taskID: UUID, stopwatch: Bool) {
         _ = append(event(taskID: taskID, kind: .focusStarted,
                          afterValue: stopwatch ? "正计时" : "番茄计时"))
-        persistence.schedule(events)
+        revision += 1
     }
 
     func flush(_ completion: @escaping (Error?) -> Void) {
@@ -124,27 +141,32 @@ final class TaskActivityStore: ObservableObject, ModuleStoreFlushable {
 
     @discardableResult
     private func append(_ event: TaskActivityEvent) -> Bool {
-        guard let previous = events.last,
+        guard let previous = latestEvent,
               previous.kind == .titleChanged,
               event.kind == .titleChanged,
               previous.taskID == event.taskID,
               let originalTitle = previous.beforeValue else {
-            events.append(event)
+            latestEvent = event
+            persistence.schedule(upserts: [event])
             return true
         }
 
         let elapsed = event.occurredAt.timeIntervalSince(previous.occurredAt)
         guard elapsed >= 0, elapsed <= 2 else {
-            events.append(event)
+            latestEvent = event
+            persistence.schedule(upserts: [event])
             return true
         }
 
         if originalTitle == event.afterValue {
-            events.removeLast()
+            persistence.schedule(deleted: [previous.id])
+            latestEvent = nil
         } else {
-            events[events.count - 1] = TaskActivityEvent(
+            let merged = TaskActivityEvent(
                 id: previous.id, taskID: previous.taskID, occurredAt: previous.occurredAt,
                 kind: .titleChanged, beforeValue: originalTitle, afterValue: event.afterValue)
+            latestEvent = merged
+            persistence.schedule(upserts: [merged])
         }
         return true
     }

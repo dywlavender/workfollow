@@ -945,28 +945,25 @@ struct TaskListView: View {
         }
         .padding(.horizontal, WFSpace.sm)
         .frame(height: TaskListMetrics.groupHeaderHeight)
-        // ⚠️ `moveTargetSectionID != nil` 这个前置条件不能省。
-        // 两边都是 `String?`，而「未分组」分组的 `sectionID` 就是 nil——静息态下
-        // `nil == nil` 成立，于是**每个没有分组的标题都自认在弹出状态**，
-        // 又因为下面 `if let` 拿不到 sectionID、内容为空，SwiftUI 就会挂出一个
-        // 26×26 的空 popover 窗口（实测：`_NSPopoverWindow`，level 0，常驻可见，
-        // 就是任务列表上那颗白圆）。加上非空判断后，只有用户真的点过
-        // 「移动到」的哪个分组才匹配得上。
-        .popover(isPresented: Binding(get: { moveTargetSectionID != nil && moveTargetSectionID == group.sectionID },
-                                      set: { if !$0 { moveTargetSectionID = nil } })) {
-            if let sectionID = group.sectionID {
-                MoveTargetPickerCard(
-                    sectionTitle: group.label ?? "",
-                    targets: workspace.listNames.filter { $0 != workspace.activeList }.map {
-                        MoveTarget(name: $0, isCurrent: false)
-                    },
-                    onPick: { list in
-                        _ = workspace.moveListSection(sectionID, to: list)
-                        moveTargetSectionID = nil
-                    },
-                    onCancel: { moveTargetSectionID = nil })
+        // nil sections must remain closed; the shared panel builds content on demand.
+        .background(AnchoredPropertyPanel(isPresented: Binding(get: { moveTargetSectionID != nil && moveTargetSectionID == group.sectionID },
+                                      set: { if !$0 { moveTargetSectionID = nil } }),
+                                         width: 230, focusPolicy: .panel) {
+            Group {
+                if let sectionID = group.sectionID {
+                    MoveTargetPickerCard(
+                        sectionTitle: group.label ?? "",
+                        targets: workspace.listNames.filter { $0 != workspace.activeList }.map {
+                            MoveTarget(name: $0, isCurrent: false)
+                        },
+                        onPick: { list in
+                            _ = workspace.moveListSection(sectionID, to: list)
+                            moveTargetSectionID = nil
+                        },
+                        onCancel: { moveTargetSectionID = nil })
+                }
             }
-        }
+        })
         .onHover { inside in
             guard let sectionID = group.sectionID else { return }
             if inside { hoveredSectionID = sectionID }
@@ -1043,14 +1040,10 @@ struct TaskListView: View {
     private var taskOutlineRows: [NativeTaskOutline.Row] {
         var rows: [NativeTaskOutline.Row] = []
         let currentGroups = groups
-        if scope != .today && currentGroups.isEmpty {
-            rows.append(.init(id: "empty", state: navigation.destination.rawValue, layout: "empty") {
-                TaskEmptyStateView(style: .list,
-                                   message: TaskListViewDefaults.emptyStateMessage(destination: navigation.destination))
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, WFSpace.page)
-            })
-        }
+        // 空态**不在这里占行**。原来它是 outline 的第一行，于是跟着列表顶部走：
+        // 实测整块墨迹 y 162..297pt、中心 229.5pt，而列表可视区（y 130..892）中心
+        // 是 511pt——高了 281pt，不是"没调好"而是"排错位置"。现在由
+        // `TaskOutlineHost` 以覆盖层画在列表区正中，见那里的注释。
         for group in currentGroups {
             if group.kind != .plain || group.label != nil {
                 let header = TaskOutlineHeaderState(revision: workspace.revision, title: groupTitle(group),
@@ -1316,7 +1309,6 @@ struct TaskRowView: View {
     @State private var hoveringReorderHandle = false
     @State private var showDatePopover = false
     @State private var contextDateAnchor: CGRect?
-    @State private var showTagPicker = false
 
     var body: some View {
         HStack(alignment: .top, spacing: WFSpace.sm) {
@@ -1428,18 +1420,6 @@ struct TaskRowView: View {
                 TaskDatePopoverV2(task: current, workspace: workspace) { showDatePopover = false }
             }
         }
-        .background(AnchoredPropertyPanel(isPresented: $showTagPicker, width: 264) {
-            Group {
-                if let current = workspace.task(for: task.id) {
-                    TaskTagPickerPopover(initialTags: current.tags, workspace: workspace,
-                                         onCancel: { showTagPicker = false },
-                                         onApply: { tags in
-                                             workspace.setTags(task.id, tags)
-                                             showTagPicker = false
-                                         })
-                }
-            }
-        })
     }
 
     /// Each recognizer owns the modifiers of its own click. Do not infer them
@@ -1782,6 +1762,7 @@ enum TaskListViewDefaults {
 
     /// Stop at the first nonempty block/line instead of joining the whole document.
     static func bodyPreview(of document: NativeDocument) -> String? {
+        if !document.isLoaded { return document.firstLinePreview }
         for block in document.blocks {
             if let preview = bodyPreview(of: block.plainText) { return preview }
         }
@@ -1827,8 +1808,9 @@ private struct TaskOutlineHost: View {
         let section = includesCountdown
             ? CountdownSmartListProjection.section(events: store.events, now: clock(), calendar: calendar)
             : .empty
+        let showsCountdown = includesCountdown && !section.isEmpty
         var prefix: [NativeTaskOutline.Row] = []
-        if includesCountdown && !section.isEmpty {
+        if showsCountdown {
             let state = TaskOutlineCountdownState(section: section, collapsed: collapsed)
             prefix.append(.init(id: "countdown-section", state: state, layout: state) {
                 VStack(spacing: 0) {
@@ -1838,14 +1820,20 @@ private struct TaskOutlineHost: View {
                                                   onToggle: onToggle, onSelect: onSelect)
                 }
             })
-        } else if includesCountdown && tasksAreEmpty {
-            prefix.append(.init(id: "today-empty", state: destination.rawValue, layout: "empty") {
-                TaskEmptyStateView(style: .list,
-                                   message: TaskListViewDefaults.emptyStateMessage(destination: destination))
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, WFSpace.page)
-            })
         }
+        // 空态走 `.overlay` 而不是 outline 的一行：行高由 `NSHostingView` 的
+        // intrinsicContentSize 决定（`usesAutomaticRowHeights`），行内拿不到"剩余高度"，
+        // 想靠 `.frame(maxHeight: .infinity)` 居中会得到一个和内容一样高的框——
+        // 这也是它原先只能贴顶的原因。覆盖层的尺寸跟着主视图（滚动视图＝列表可视区），
+        // 默认 `.center` 对齐，于是插画+文案天然落在列表区正中。
+        // 今天页多一个前提：倒数纪念日小节非空时优先显示小节，不显示空态
+        // （原来这两支是 if/else if，合成 `!showsCountdown` 后语义不变）。
         return NativeTaskOutline(rows: prefix + rows, scopeKey: scopeKey, onKey: onKey)
+            .overlay {
+                if tasksAreEmpty && !showsCountdown {
+                    TaskEmptyStateView(style: .list,
+                                       message: TaskListViewDefaults.emptyStateMessage(destination: destination))
+                }
+            }
     }
 }

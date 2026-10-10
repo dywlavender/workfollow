@@ -7,8 +7,44 @@ import XCTest
 final class AnchoredPropertyPanelTests: XCTestCase {
     private typealias Adapter = AnchoredPropertyPanel<AnyView>
 
+    private final class LazyContentProbe: ObservableObject {
+        @Published var presented = false
+        var builds = 0
+    }
+    private struct LazyPanelHost: View {
+        @ObservedObject var probe: LazyContentProbe
+        var body: some View {
+            Color.clear.frame(width: 260, height: 100)
+                .background(AnchoredPropertyPanel(isPresented: $probe.presented, width: 232) {
+                    probe.builds += 1
+                    return Text("Panel").frame(height: 100)
+                })
+        }
+    }
+    func testClosedPanelSkipsContentAndReopeningBuildsAgain() {
+        let probe = LazyContentProbe()
+        let host = NSHostingView(rootView: LazyPanelHost(probe: probe))
+        let window = InspectorPanelTestSupport.ownerWindow(for: host, width: 260, height: 100)
+        defer { window.close() }
+        XCTAssertEqual(probe.builds, 0)
+        probe.presented = true
+        settle(host)
+        XCTAssertGreaterThan(probe.builds, 0)
+        probe.presented = false
+        settle(host)
+        let closedBuilds = probe.builds
+        settle(host)
+        XCTAssertEqual(probe.builds, closedBuilds)
+        probe.presented = true
+        settle(host)
+        XCTAssertGreaterThan(probe.builds, closedBuilds)
+        probe.presented = false
+        settle(host)
+    }
+
     // Capture native event dispatch after local monitors have returned the event.
     private final class EventWindow: NSWindow {
+        override var canBecomeKey: Bool { true }
         var received: NSEvent?
         override func sendEvent(_ event: NSEvent) { received = event }
     }
@@ -81,6 +117,29 @@ final class AnchoredPropertyPanelTests: XCTestCase {
         XCTAssertEqual(owner.frame, baseline)
     }
 
+    func testSearchPanelTakesKeyFocusInActiveApplication() throws {
+        let previousPolicy = NSApp.activationPolicy()
+        NSApp.setActivationPolicy(.regular)
+        defer { NSApp.setActivationPolicy(previousPolicy) }
+        NSApp.activate(ignoringOtherApps: true)
+        settle()
+        guard NSApp.isActive else {
+            throw XCTSkip("Temporary XCTest host could not become the active application; requires foreground app validation")
+        }
+        let owner = owner()
+        owner.makeKeyAndOrderFront(nil)
+        let coordinator = coordinator(in: owner)
+        defer { coordinator.close(); owner.close() }
+        coordinator.close()
+        coordinator.focusPolicy = .panel
+        coordinator.root = AnyView(TextField("搜索", text: .constant(""))
+            .textFieldStyle(.plain).frame(height: 32))
+        coordinator.update()
+        settle(coordinator.host)
+        XCTAssertTrue(try XCTUnwrap(coordinator.panel).isKeyWindow)
+        XCTAssertNotNil(coordinator.panel?.firstResponder as? NSTextView)
+    }
+
     func testSearchPanelKeepsItsInputAndWindowAcrossLayoutRefresh() throws {
         let owner = owner()
         let coordinator = coordinator(in: owner)
@@ -95,7 +154,6 @@ final class AnchoredPropertyPanelTests: XCTestCase {
         coordinator.update()
         settle(coordinator.host)
         let panel = try XCTUnwrap(coordinator.panel)
-        XCTAssertTrue(panel.isKeyWindow)
         let editor = try XCTUnwrap(panel.firstResponder as? NSTextView)
         editor.insertText("搜索内容", replacementRange: editor.selectedRange())
         coordinator.update()

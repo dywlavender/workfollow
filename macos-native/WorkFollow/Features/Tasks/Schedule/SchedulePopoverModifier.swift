@@ -45,21 +45,23 @@ private struct SchedulePopoverPresentation<Panel: View>: ViewModifier {
         content
             .background(PopupPresentingWindowReader(owner: owner).allowsHitTesting(false))
             .overlayPreferenceValue(ScheduleTriggerAnchors.self) { anchors in
-                GeometryReader { geometry in
-                    // Direct-button hosts need no marker. Container hosts must
-                    // mark their trigger or supply the context-click rectangle.
-                    let rect = explicitAnchor ?? anchors[trigger].map { geometry[$0] }
-                        ?? CGRect(origin: .zero, size: geometry.size)
-                    AnchoredPropertyPanel(isPresented: $isPresented,
-                                          width: ScheduleMetrics.panelWidth,
-                                          placement: .schedule,
-                                          focusPolicy: .panelWindow) {
-                        panel().environment(\.popupPresentingWindow, owner)
+                if isPresented {
+                    GeometryReader { geometry in
+                        // Direct-button hosts need no marker. Container hosts must
+                        // mark their trigger or supply the context-click rectangle.
+                        let rect = explicitAnchor ?? anchors[trigger].map { geometry[$0] }
+                            ?? CGRect(origin: .zero, size: geometry.size)
+                        AnchoredPropertyPanel(isPresented: $isPresented,
+                                              width: ScheduleMetrics.panelWidth,
+                                              placement: .schedule,
+                                              focusPolicy: .panelWindow) {
+                            panel().environment(\.popupPresentingWindow, owner)
+                        }
+                        .frame(width: rect.width, height: rect.height)
+                        .offset(x: rect.minX, y: rect.minY)
                     }
-                    .frame(width: rect.width, height: rect.height)
-                    .offset(x: rect.minX, y: rect.minY)
+                    .allowsHitTesting(false)
                 }
-                .allowsHitTesting(false)
             }
     }
 }

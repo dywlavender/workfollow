@@ -175,6 +175,117 @@ final class FocusStoreTests: XCTestCase {
         XCTAssertEqual(store.timers.first?.name, "随手记")
     }
 
+    func testLargeHistoryPagesKeepCompleteStatisticsAndPreserveUnloadedRecords() async throws {
+        let directory = makeDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let taskID = UUID()
+        let records = (0..<10_000).map { index in
+            PomodoroRecord(id: UUID(), taskID: taskID,
+                           startedAt: base.addingTimeInterval(-Double(index + 1)),
+                           minutes: 2, completed: index % 2 == 0, note: "记录\(index)")
+        }
+        var archive = FocusStore.Archive(records: records)
+        archive.preferences.dailyGoal = 12
+        try JSONEncoder().encode(archive).write(to: directory.appendingPathComponent("focus.json"))
+        // One-time migration; steady startup must hydrate metadata, not payloads.
+        _ = FocusStore(clock: { self.base }, directory: directory)
+        let store = FocusStore(clock: { self.base }, directory: directory)
+        XCTAssertEqual(store.hydratedRecordCount, 0)
+        XCTAssertEqual(store.allTimeMinutes, 20_000)
+        XCTAssertEqual(store.allTimePomodoros, 5_000)
+        XCTAssertEqual(store.preferences.dailyGoal, 12)
+        XCTAssertEqual(store.weeklyTaskTotals().first?.minutes, 20_000)
+        await store.resetHistory()
+        XCTAssertEqual(store.visibleRecords.count, 50)
+        XCTAssertEqual(store.visibleRecords.first?.id, records.first?.id)
+        XCTAssertEqual(store.hydratedRecordCount, 51)
+        await store.loadMoreHistory()
+        XCTAssertEqual(store.visibleRecords.count, 100)
+        XCTAssertEqual(Set(store.visibleRecords.map(\.id)).count, 100)
+        XCTAssertEqual(store.allTimeMinutes, 20_000)
+
+        // Delete an ID outside visible pages; totals must still update correctly.
+        store.deleteRecord(records[9_998].id)
+        XCTAssertEqual(store.allTimeMinutes, 19_998)
+        XCTAssertEqual(store.allTimePomodoros, 4_999)
+        XCTAssertTrue(store.addRecord(taskID: taskID, startedAt: base.addingTimeInterval(-30), minutes: 10))
+        XCTAssertEqual(store.allTimeMinutes, 20_008)
+        XCTAssertEqual(store.allTimePomodoros, 5_000)
+        XCTAssertTrue(store.setDailyGoal(9))
+        flush(store)
+        let reloaded = FocusStore(clock: { self.base }, directory: directory)
+        XCTAssertEqual(reloaded.hydratedRecordCount, 0)
+        XCTAssertEqual(reloaded.allTimeMinutes, 20_008)
+        XCTAssertEqual(reloaded.allTimePomodoros, 5_000)
+        XCTAssertEqual(reloaded.preferences.dailyGoal, 9)
+        XCTAssertEqual(reloaded.records.count, 10_000)
+        XCTAssertFalse(reloaded.records.contains { $0.id == records[9_998].id })
+    }
+
+    func testDailyStatisticsIncludeUnloadedHistoryAndRefreshOnlyAcrossDays() throws {
+        var now = base
+        let directory = makeDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: base)
+        let yesterday = try XCTUnwrap(calendar.date(byAdding: .day, value: -1, to: today))
+        let records = [
+            PomodoroRecord(id: UUID(), startedAt: today, minutes: 25, completed: true),
+            PomodoroRecord(id: UUID(), startedAt: yesterday, minutes: 10, completed: false)
+        ]
+        try JSONEncoder().encode(FocusStore.Archive(records: records))
+            .write(to: directory.appendingPathComponent("focus.json"))
+        let store = FocusStore(clock: { now }, directory: directory)
+        XCTAssertEqual(store.todayMinutes, 25)
+        XCTAssertEqual(store.todayPomodoros, 1)
+        XCTAssertEqual(store.recentDailyStats(days: 2).map(\.minutes), [10, 25])
+        let queries = store.statisticsQueryCount
+        XCTAssertTrue(store.start(minutes: 5))
+        for second in 1...100 {
+            now = base.addingTimeInterval(Double(second))
+            store.refresh()
+        }
+        _ = store.giveUp()
+        XCTAssertEqual(store.statisticsQueryCount, queries, "Timer refresh must not query history each second")
+        XCTAssertEqual(store.hydratedRecordCount, 0)
+        now = try XCTUnwrap(calendar.date(byAdding: .day, value: 1, to: today))
+        store.refresh()
+        XCTAssertEqual(store.todayMinutes, 0)
+        XCTAssertEqual(store.todayPomodoros, 0)
+        XCTAssertEqual(store.statisticsQueryCount, queries + 1)
+        XCTAssertEqual(store.allTimeMinutes, 35)
+    }
+
+    func testSQLiteVersionTwoUpgradeBackfillsMetricsWithoutChangingPayloadOrPreferences() throws {
+        let directory = makeDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let url = directory.appendingPathComponent("focus.sqlite")
+        let db = try SQLiteDatabase(url: url)
+        let record = PomodoroRecord(id: UUID(), startedAt: base.addingTimeInterval(-60),
+                                    minutes: 35, completed: true, note: "旧数据库正文")
+        let payload = try JSONEncoder().encode(record)
+        var archive = FocusStore.Archive()
+        archive.preferences.dailyGoal = 11
+        try db.execute("CREATE TABLE records(id TEXT PRIMARY KEY,position INTEGER NOT NULL,occurred_at REAL NOT NULL,task_id TEXT,payload BLOB NOT NULL)")
+        try db.execute("CREATE TABLE state(key TEXT PRIMARY KEY,value BLOB NOT NULL)")
+        try db.execute("INSERT INTO records VALUES (?,0,?,NULL,?)",
+                       [.text(record.id.uuidString), .real(record.startedAt.timeIntervalSince1970), .blob(payload)])
+        try db.execute("INSERT INTO state VALUES ('initialized',X'01')")
+        try db.execute("INSERT INTO state VALUES ('metadata',?)", [.blob(try JSONEncoder().encode(archive))])
+        try db.execute("PRAGMA user_version=2")
+        let store = FocusStore(clock: { self.base }, directory: directory)
+        XCTAssertNil(store.storageError)
+        XCTAssertEqual(store.allTimeMinutes, 35)
+        XCTAssertEqual(store.allTimePomodoros, 1)
+        XCTAssertEqual(store.preferences.dailyGoal, 11)
+        XCTAssertEqual(try db.rows("SELECT payload FROM records").first?[0], payload)
+        XCTAssertEqual(try db.rows("PRAGMA user_version").first?[0], Data("3".utf8))
+        XCTAssertEqual(store.records, [record])
+        let reloaded = FocusStore(clock: { self.base }, directory: directory)
+        XCTAssertEqual(reloaded.hydratedRecordCount, 0)
+        XCTAssertEqual(reloaded.allTimeMinutes, 35)
+    }
+
     // MARK: 正计时
 
     func testStopwatchRecordsElapsedMinutes() {

@@ -261,6 +261,7 @@ final class TaskSwitchingTests: XCTestCase {
         workspace.select(first)
         let host = NSHostingView(rootView: TaskSwitchSplitFixture(workspace: workspace, navigation: navigation)
             .environmentObject(AppEnvironment()).frame(width: 1050, height: 650)
+            .environment(\.recordsTaskTreeFrames, true)
             .coordinateSpace(name: "task-tree-render")
             .onPreferenceChange(TaskTreeFramesKey.self) { probe.frames = $0 })
         let window = InspectorPanelTestSupport.ownerWindow(for: host, width: 1050, height: 650)

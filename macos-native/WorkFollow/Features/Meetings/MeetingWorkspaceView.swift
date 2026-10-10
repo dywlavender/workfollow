@@ -389,7 +389,7 @@ struct MeetingWorkspaceView: View {
                 .font(WFType.caption).foregroundStyle(WFColors.secondaryText)
             Text(store.audioConfigured
                  ? (store.configuration.usesHTTPTranscription
-                    ? "Pi HTTP 分段转写：约 10–20 秒提交一次，停止时补发尾段。讲话人标签仅在当前片段内有效；音频不保存，纪要手动编辑。"
+                    ? "Pi HTTP 分段转写：每 3 秒提交一段，停止时补发尾段。返回还需模型处理时间；讲话人标签仅在当前片段内有效，音频不保存，纪要手动编辑。"
                     : "内置 Pi 扩展支持流式转写：草稿实时修正，定稿后进入对话记录。讲话人暂未区分。自定义扩展使用分段转写；音频均不保存。")
                  : "尚未配置 Pi 音频扩展，不能开始采集。只保存文字和纪要，不保存录音。")
                 .font(WFType.caption).foregroundStyle(WFColors.secondaryText)
@@ -521,10 +521,7 @@ struct MeetingWorkspaceView: View {
                 if index == boundary, let boundary, boundary > 0 {
                     pendingBoundary(meeting.transcript.count - meeting.summarizedLineCount)
                 }
-                transcriptRow(line,
-                              showsSpeaker: index == 0
-                                  || meeting.transcript[index - 1].speaker != line.speaker,
-                              inMinutes: done.contains(line.id))
+                transcriptRow(line, inMinutes: done.contains(line.id))
             }
             ForEach((store.streamDrafts[meeting.id]?.values.map { $0 } ?? []).sorted { $0.offset < $1.offset }) { line in
                 VStack(alignment: .leading, spacing: WFSpace.xs) {
@@ -540,24 +537,23 @@ struct MeetingWorkspaceView: View {
     /// 一条转写。时间与说话人各占一列、正文一列——分栏之后每栏只有一半宽，
     /// 「说话人+时刻」再单独占一行会把每条都撑成两行，扫读也看不出谁在什么时候说的。
     ///
-    /// - `showsSpeaker`：**连续同一个人说话时，后面几行不再重复写名字**。列宽照占，
-    ///   所以正文仍然对齐，读者靠留白就能看出「还是他」。原来每条都写「李工」，
-    ///   连说四句就是四个「李工」，很吵。
+    /// 每行显示简短说话人标签；完整片段作用域保留在悬浮提示中。
     /// - `inMinutes`：这一行**已经进了纪要**，左侧画一条 2pt 强调色竖线。
     ///   原来只有那条横向分界线，一滚出屏幕就失了锚——这条竖线跟着行走，
     ///   所以不靠滚动位置也能看出哪些进了纪要。
     private func transcriptRow(_ line: MeetingTranscriptLine,
-                               showsSpeaker: Bool = true,
                                inMinutes: Bool = false) -> some View {
         HStack(alignment: .top, spacing: WFSpace.sm) {
             Text(timestamp(line.offset))
                 .font(WFType.caption).foregroundStyle(WFColors.tertiaryText)
                 .monospacedDigit()
                 .frame(width: MeetingMetrics.timeColumn, alignment: .trailing)
-            Text(showsSpeaker ? line.speaker : "")
+            Text(line.speakerDisplayName)
                 .font(WFType.caption).foregroundStyle(WFColors.secondaryText)
-                .lineLimit(1).truncationMode(.tail)
+                .fixedSize(horizontal: false, vertical: true)
                 .frame(width: MeetingMetrics.speakerColumn, alignment: .leading)
+                .help(line.speaker)
+                .accessibilityLabel(line.speaker)
             Text(line.text)
                 .font(WFType.body)
                 .textSelection(.enabled)

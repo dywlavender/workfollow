@@ -44,23 +44,20 @@ final class NativePreviewRepository {
     static let backupRetentionDays = 7
 
     private let directory: URL
-    private var file: URL { directory.appendingPathComponent(Self.snapshotFileName) }
-    init(directory: URL = NativePreviewRepository.directory) { self.directory = directory }
-    func load() throws -> NativeWorkspaceSnapshot? {
-        guard FileManager.default.fileExists(atPath: file.path) else { return nil }
-        let snapshot = try JSONDecoder().decode(NativeWorkspaceSnapshot.self, from: Data(contentsOf: file))
-        guard snapshot.version == 1 else {
-            throw NSError(domain: "NativePreview", code: 1,
-                          userInfo: [NSLocalizedDescriptionKey: "预览数据版本不兼容，已停止自动保存，原文件未改动。"])
-        }
-        return snapshot
+    init(directory: URL = NativePreviewRepository.directory) {
+        self.directory = directory; database = SQLiteWorkspaceRepository(directory: directory)
     }
-    func save(_ snapshot: NativeWorkspaceSnapshot) throws {
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.sortedKeys]
-        try encoder.encode(snapshot).write(to: file, options: .atomic)
+    private let database: SQLiteWorkspaceRepository
+    var documentReadCount: Int { database.documentReadCount }
+    var originalContentReadCount: Int { database.originalContentReadCount }
+    var onDocumentFailure: ((Error) -> Void)? {
+        get { database.onDocumentFailure }
+        set { database.onDocumentFailure = newValue }
     }
+    func loadDeferred() throws -> NativeWorkspaceSnapshot? { try database.load(deferred: true) }
+    func load() throws -> NativeWorkspaceSnapshot? { try database.load() }
+    func save(_ snapshot: NativeWorkspaceSnapshot) throws { try database.replace(snapshot) }
+    func apply(_ batch: SQLiteWorkspaceRepository.Batch) throws { try database.apply(batch) }
 
     // MARK: 快照备份（对齐 Flutter LocalWorkspaceStore：每日备份 + 立即备份 + 恢复）
 
@@ -71,7 +68,7 @@ final class NativePreviewRepository {
     private static let backupStampFormatter: DateFormatter = posixFormatter("yyyy-MM-dd")
     private static let backupTimeFormatter: DateFormatter = posixFormatter("HHmmss")
     /// 匹配 `workspace-YYYY-MM-DD.json` 与 `workspace-YYYY-MM-DD-HHmmss.json`。
-    private static let backupStampRegex = try! NSRegularExpression(pattern: #"^workspace-(\d{4}-\d{2}-\d{2})(?:-\d{6})?\.json$"#)
+    private static let backupStampRegex = try! NSRegularExpression(pattern: #"^workspace-(\d{4}-\d{2}-\d{2})(?:-\d{6})?\.(?:json|sqlite)$"#)
 
     static func posixFormatter(_ format: String) -> DateFormatter {
         let formatter = DateFormatter()
@@ -94,17 +91,17 @@ final class NativePreviewRepository {
         return String(name[stampRange])
     }
 
-    /// 立即备份：workspace.json 复制为 backups/workspace-<日期>-<时刻>.json。
+    /// 立即备份：用 SQLite backup API 生成包含已提交 WAL 的独立数据库。
     @discardableResult
     func backupNow(now: Date = Date()) throws -> URL? {
-        guard FileManager.default.fileExists(atPath: file.path) else { return nil }
+        guard try database.hasWorkspace() else { return nil }
         try FileManager.default.createDirectory(at: backupsDirectory, withIntermediateDirectories: true)
         let target = backupsDirectory.appendingPathComponent(
-            "workspace-\(Self.dayStamp(for: now))-\(Self.backupTimeFormatter.string(from: now)).json")
+            "workspace-\(Self.dayStamp(for: now))-\(Self.backupTimeFormatter.string(from: now)).sqlite")
         if FileManager.default.fileExists(atPath: target.path) {
             try FileManager.default.removeItem(at: target)
         }
-        try FileManager.default.copyItem(at: file, to: target)
+        try database.backup(to: target)
         return target
     }
 
@@ -112,7 +109,7 @@ final class NativePreviewRepository {
     func listBackups() -> [URL] {
         guard let names = try? FileManager.default.contentsOfDirectory(atPath: backupsDirectory.path) else { return [] }
         return names
-            .filter { $0.lowercased().hasSuffix(".json") && backupDateStamp(of: backupsDirectory.appendingPathComponent($0)) != nil }
+            .filter { ($0.lowercased().hasSuffix(".json") || $0.lowercased().hasSuffix(".sqlite")) && backupDateStamp(of: backupsDirectory.appendingPathComponent($0)) != nil }
             .sorted()
             .map { backupsDirectory.appendingPathComponent($0) }
     }
@@ -125,18 +122,16 @@ final class NativePreviewRepository {
                                   latestDateStamp: backupDateStamp(of: latest))
     }
 
-    /// 每天首次成功写入后把 workspace.json 复制为 backups/workspace-<日期>.json，
+    /// 每天首次成功写入后生成 backups/workspace-<日期>.sqlite，
     /// 并只保留最近 7 份。备份簿记失败绝不影响保存本身。
     func maintainDailyBackup(now: Date = Date(), retentionLimit: Int? = nil) {
         let retentionDays = retentionLimit ?? Self.backupRetentionDays
         do {
             let stamp = Self.dayStamp(for: now)
-            if FileManager.default.fileExists(atPath: file.path),
+            if try database.hasWorkspace(),
                !listBackups().contains(where: { backupDateStamp(of: $0) == stamp }) {
                 try FileManager.default.createDirectory(at: backupsDirectory, withIntermediateDirectories: true)
-                try FileManager.default.copyItem(
-                    at: file,
-                    to: backupsDirectory.appendingPathComponent("workspace-\(stamp).json"))
+                try database.backup(to: backupsDirectory.appendingPathComponent("workspace-\(stamp).sqlite"))
             }
             let all = listBackups()
             if all.count > retentionDays {
@@ -149,18 +144,27 @@ final class NativePreviewRepository {
         }
     }
 
-    /// 恢复备份：先校验目标文件能解码为快照，再备份当前内容，最后原子写入。
+    /// 恢复备份：先校验目标文件能解码为快照，再备份当前内容，最后用事务替换工作区。
     func restoreBackup(at url: URL, now: Date = Date()) throws {
-        let data = try Data(contentsOf: url)
-        let snapshot = try JSONDecoder().decode(NativeWorkspaceSnapshot.self, from: data)
+        if (try? url.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true {
+            let sqlite = url.appendingPathComponent(SQLiteWorkspaceRepository.filename)
+            try restoreBackup(at: FileManager.default.fileExists(atPath: sqlite.path)
+                ? sqlite : url.appendingPathComponent(Self.snapshotFileName), now: now)
+            return
+        }
+        let snapshot: NativeWorkspaceSnapshot
+        if url.pathExtension == "sqlite" {
+            // Read the backup directly; do not mutate it or create sidecar files.
+            let source = SQLiteWorkspaceRepository(directory: url.deletingLastPathComponent())
+            snapshot = try source.readBackup(at: url)
+        } else {
+            snapshot = try JSONDecoder().decode(NativeWorkspaceSnapshot.self, from: Data(contentsOf: url))
+        }
         guard snapshot.version == 1 else {
             throw NSError(domain: "NativePreview", code: 1,
                           userInfo: [NSLocalizedDescriptionKey: "备份版本不兼容，无法恢复。"])
         }
-        if FileManager.default.fileExists(atPath: file.path) {
-            try backupNow(now: now)
-        }
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        try data.write(to: file, options: .atomic)
+        if try database.hasWorkspace() { try backupNow(now: now) }
+        try database.replace(snapshot)
     }
 }

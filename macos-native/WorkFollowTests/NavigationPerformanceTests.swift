@@ -5,6 +5,52 @@ import XCTest
 
 @MainActor
 final class NavigationPerformanceTests: XCTestCase {
+    func testFirstTaskPageWithFixedFixtures() throws {
+        let now = Date(timeIntervalSince1970: 1_791_324_000)
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        for count in [43, 200] {
+            let tasks = (0..<count).map { index in
+                Task(id: UUID(uuidString: String(format: "00000000-0000-0000-0000-%012d", index + 1))!, title: "Fixture task \(index)",
+                     document: NativeDocument(plainText: index.isMultiple(of: 2) ? "Preview\nBody" : ""),
+                     list: .inbox, priority: .none, schedule: TaskSchedule(),
+                     childOrder: index, createdAt: now, updatedAt: now)
+            }
+            let environment = AppEnvironment(clock: { now }, calendar: calendar)
+            let workspace = TaskWorkspaceModel(clock: { now }, calendar: calendar,
+                                               seedDemoData: false, initialTasks: tasks)
+            let navigation = AppNavigation(destination: .today)
+            let host = NSHostingView(rootView: RootShellView(workspace: workspace, navigation: navigation)
+                .environmentObject(environment).frame(width: 1280, height: 800))
+            let window = InspectorPanelTestSupport.ownerWindow(for: host, width: 1280, height: 800)
+            defer { window.close() }
+            for pass in 0..<3 {
+                NativeTaskOutline.Diagnostics.reset()
+                let projectionCount = workspace.projectionBuildCount
+                let start = ProcessInfo.processInfo.systemUptime
+                navigation.destination = .inbox
+                host.layoutSubtreeIfNeeded()
+                let firstLayout = ProcessInfo.processInfo.systemUptime
+                RunLoop.main.run(until: Date().addingTimeInterval(0.005))
+                host.layoutSubtreeIfNeeded()
+                let end = ProcessInfo.processInfo.systemUptime
+                print("FIRST_TASK_PAGE count=\(count) pass=\(pass) layout_ms=\((firstLayout-start)*1000) total_ms=\((end-start)*1000) containers=\(NativeTaskOutline.Diagnostics.containers) cells=\(NativeTaskOutline.Diagnostics.createdCells) configure=\(NativeTaskOutline.Diagnostics.configurations) configure_ms=\(NativeTaskOutline.Diagnostics.configurationTime*1000) update_ms=\(NativeTaskOutline.Diagnostics.updateTime*1000) reload_ms=\(NativeTaskOutline.Diagnostics.reloadTime*1000) sizing_ms=\(NativeTaskOutline.Diagnostics.sizingTime*1000) sizing_calls=\(NativeTaskOutline.Diagnostics.sizingCalls) row_layout_ms=\(NativeTaskOutline.Diagnostics.rowLayoutTime*1000) projections=\(workspace.projectionBuildCount-projectionCount)")
+                XCTAssertEqual(workspace.allTasks.count, count)
+                if pass == 0 {
+                    XCTAssertEqual(NativeTaskOutline.Diagnostics.containers, 1)
+                    XCTAssertGreaterThan(NativeTaskOutline.Diagnostics.createdCells, 0)
+                    XCTAssertLessThan(NativeTaskOutline.Diagnostics.createdCells, count,
+                                      "The initial viewport must not instantiate every task")
+                } else {
+                    XCTAssertEqual(NativeTaskOutline.Diagnostics.createdCells, 0)
+                    XCTAssertEqual(workspace.projectionBuildCount, projectionCount)
+                }
+                navigation.destination = .today
+                InspectorPanelTestSupport.settle(window)
+            }
+        }
+    }
+
     func testCollapsedParentProgressUpdatesWithoutReplacingItsRow() throws {
         let environment = AppEnvironment()
         let workspace = TaskWorkspaceModel(seedDemoData: false)

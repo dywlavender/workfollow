@@ -469,17 +469,17 @@ final class MigrationSnapshotTests: XCTestCase {
         let snapshot = NativeWorkspaceSnapshot(
             tasks: [makeTask(id: UUID(), title: "宝贵数据")], notes: [], taskLists: ["收集箱"])
         try repository.save(snapshot)
-        let original = try read("workspace.json")
+        let original = try XCTUnwrap(try repository.load())
 
         // 损坏的导入文件：解析报错即可，绝不写盘。
         XCTAssertThrowsError(try MigrationSnapshot.parse(Data("nope".utf8)))
-        XCTAssertEqual(try read("workspace.json"), original)
+        XCTAssertEqual(try repository.load()?.tasks, original.tasks)
 
         // 损坏的备份文件：恢复报错，workspace.json 原样保留。
         try write("garbage", to: "backups/workspace-bad.json")
         XCTAssertThrowsError(try repository.restoreBackup(
             at: directory.appendingPathComponent("backups/workspace-bad.json")))
-        XCTAssertEqual(try read("workspace.json"), original)
+        XCTAssertEqual(try repository.load()?.tasks, original.tasks)
         let stillIntact = try XCTUnwrap(try repository.load())
         XCTAssertEqual(stillIntact.tasks.first?.title, "宝贵数据")
     }
@@ -547,7 +547,7 @@ final class MigrationSnapshotTests: XCTestCase {
         let day1 = stampFormatter.date(from: "2026-09-20 10:00:00")!
         repository.maintainDailyBackup(now: day1)
         var backups = repository.listBackups()
-        XCTAssertEqual(backups.map(\.lastPathComponent), ["workspace-2026-09-20.json"])
+        XCTAssertEqual(backups.map(\.lastPathComponent), ["workspace-2026-09-20.sqlite"])
 
         // 同一天再次写入不再复制。
         try repository.save(snapshot)
@@ -561,11 +561,11 @@ final class MigrationSnapshotTests: XCTestCase {
         repository.maintainDailyBackup(now: stampFormatter.date(from: "2026-09-21 09:00:00")!)
         backups = repository.listBackups()
         XCTAssertEqual(backups.count, NativePreviewRepository.backupRetentionDays)
-        XCTAssertEqual(backups.last?.lastPathComponent, "workspace-2026-09-21.json")
+        XCTAssertEqual(backups.last?.lastPathComponent, "workspace-2026-09-21.sqlite")
 
         let info = repository.backupInfo()
         XCTAssertEqual(info.count, 7)
-        XCTAssertEqual(info.latestName, "workspace-2026-09-21.json")
+        XCTAssertEqual(info.latestName, "workspace-2026-09-21.sqlite")
         XCTAssertEqual(info.latestDateStamp, "2026-09-21")
     }
 
@@ -576,7 +576,7 @@ final class MigrationSnapshotTests: XCTestCase {
 
         let now = stampFormatter.date(from: "2026-09-26 14:30:25")!
         let backup = try XCTUnwrap(repository.backupNow(now: now))
-        XCTAssertEqual(backup.lastPathComponent, "workspace-2026-09-26-143025.json")
+        XCTAssertEqual(backup.lastPathComponent, "workspace-2026-09-26-143025.sqlite")
         XCTAssertEqual(repository.backupDateStamp(of: backup), "2026-09-26")
 
         // 当前内容变化后恢复，恢复前会先把"当前内容"备份一份。
@@ -589,11 +589,11 @@ final class MigrationSnapshotTests: XCTestCase {
         XCTAssertEqual(restored.tasks.first?.title, "第一版")
         let backups = repository.listBackups()
         XCTAssertEqual(backups.count, 2)
-        XCTAssertEqual(backups.last?.lastPathComponent, "workspace-2026-09-26-143125.json",
+        XCTAssertEqual(backups.last?.lastPathComponent, "workspace-2026-09-26-143125.sqlite",
                        "恢复前自动备份当前内容（时刻戳命名）")
 
         // 没有 workspace.json 时立即备份是空操作。
-        try FileManager.default.removeItem(at: directory.appendingPathComponent("workspace.json"))
+        try FileManager.default.removeItem(at: directory.appendingPathComponent("workspace.sqlite"))
         XCTAssertNil(try repository.backupNow(now: now))
     }
 }

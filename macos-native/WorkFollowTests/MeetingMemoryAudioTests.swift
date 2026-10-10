@@ -20,6 +20,49 @@ private actor MemoryAudioAI: MeetingAIClient {
 
 @MainActor
 final class MeetingMemoryAudioTests: XCTestCase {
+    func testBatchCapturePublishesEveryThreeSecondsAndFlushesExactTail() throws {
+        let format = try XCTUnwrap(AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: 48_000,
+                                                channels: 2, interleaved: false))
+        let capture = try MeetingPCMCapture(format: format, offset: 7)
+        let input = try XCTUnwrap(AVAudioPCMBuffer(pcmFormat: format, frameCapacity: 4_800))
+        input.frameLength = 4_800
+        for channel in 0..<2 {
+            for frame in 0..<4_800 { input.floatChannelData![channel][frame] = 0.1 }
+        }
+        var packets: [MeetingAudioPacket] = []
+        for _ in 0..<95 {
+            _ = try capture.consume(input)
+            packets.append(contentsOf: capture.drain())
+        }
+        XCTAssertEqual(packets.map(\.duration), [3, 3, 3])
+        XCTAssertEqual(packets.map(\.offset), [7, 10, 13])
+        // AVAudioConverter retains a small resampling delay. Verify segmentation
+        // against PCM actually emitted, not the input hardware frame count.
+        let capturedDuration = capture.duration
+        let tail = try XCTUnwrap(capture.finish().first)
+        XCTAssertEqual(tail.duration, capturedDuration - 9, accuracy: 0.001)
+        XCTAssertEqual(tail.offset, 16)
+        XCTAssertEqual((packets + [tail]).map(\.sequence), [0, 1, 2, 3])
+        XCTAssertEqual((packets + [tail]).reduce(0) { $0 + $1.pcm.count }, Int((capturedDuration * 32_000).rounded()))
+        XCTAssertTrue(capture.finish().isEmpty)
+    }
+    func testThreeSecondSegmentationPreservesEveryByte() {
+        var capture = MeetingPCMAccumulator(offset: 7, segmentSeconds: 3)
+        let input = Data((0..<304_000).map { UInt8($0 % 251) })
+        let packets = capture.append(input)
+        let tail = capture.finish()
+        XCTAssertEqual(packets.map(\.duration), [3, 3, 3])
+        XCTAssertEqual(tail?.duration, 0.5)
+        var combined = packets.reduce(into: Data()) { $0.append($1.pcm) }
+        combined.append(tail?.pcm ?? Data())
+        XCTAssertEqual(combined, input)
+    }
+    func testSpeakerPresentationKeepsFullScopedIdentity() {
+        let line = MeetingTranscriptLine(speaker: "片段 123.0s · 讲话人12", text: "测试", offset: 123)
+        XCTAssertEqual(line.speakerDisplayName, "讲话人12")
+        XCTAssertEqual(line.speaker, "片段 123.0s · 讲话人12")
+        XCTAssertEqual(MeetingTranscriptLine(speaker: "未区分", text: "", offset: 0).speakerDisplayName, "未区分")
+    }
     private func root() throws -> URL {
         let url = FileManager.default.temporaryDirectory.appendingPathComponent("meeting-memory-" + UUID().uuidString)
         try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)

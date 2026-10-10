@@ -167,12 +167,16 @@ struct DocumentEditor: View {
     var decorationVisibleMinX: CGFloat = 0
 
     var body: some View {
-        DocumentEditorContent(documentID: documentID, document: document,
+        if let ready = try? document.materialized() {
+        DocumentEditorContent(documentID: documentID, document: ready,
                               onDocumentChange: onDocumentChange, onEscape: onEscape,
                               onEditingChanged: onEditingChanged, profile: profile,
                                   contentSized: contentSized, handle: handle,
                                   decorationVisibleMinX: decorationVisibleMinX)
             .padding(.leading, -DocumentEditorGeometry.decorationLane)
+        } else {
+            Text("正文读取失败，暂时无法编辑").foregroundStyle(.secondary)
+        }
     }
 }
 

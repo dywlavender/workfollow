@@ -6,6 +6,24 @@ enum TaskOutlineKey { case up, down, enter, space, escape }
 /// AppKit owns scrolling and row reuse. The existing projection owns the
 /// visible hierarchy, so expansion and task selection still have one owner.
 struct NativeTaskOutline: NSViewRepresentable {
+#if DEBUG
+    @MainActor enum Diagnostics {
+        static var containers = 0
+        static var createdCells = 0
+        static var configurations = 0
+        static var configurationTime: Double = 0
+        static var updateTime: Double = 0
+        static var reloadTime: Double = 0
+        static var sizingTime: Double = 0
+        static var sizingCalls = 0
+        static var rowLayoutTime: Double = 0
+        static func reset() {
+            containers = 0; createdCells = 0; configurations = 0
+            configurationTime = 0; updateTime = 0; reloadTime = 0
+            sizingTime = 0; sizingCalls = 0; rowLayoutTime = 0
+        }
+    }
+#endif
     struct Row {
         let id: String
         let makeContent: () -> AnyView
@@ -57,6 +75,9 @@ struct NativeTaskOutline: NSViewRepresentable {
     }
 
     static func makeScrollView(coordinator: Coordinator) -> NSScrollView {
+#if DEBUG
+        Diagnostics.containers += 1
+#endif
         let scroll = NSScrollView()
         scroll.borderType = .noBorder
         scroll.drawsBackground = false
@@ -128,8 +149,26 @@ struct NativeTaskOutline: NSViewRepresentable {
         init(_ row: Row) { id = row.id; self.row = row }
     }
 
+#if DEBUG
+    final class RowHostingView: NSHostingView<AnyView> {
+        override var intrinsicContentSize: NSSize {
+            let start = ProcessInfo.processInfo.systemUptime
+            defer { Diagnostics.sizingTime += ProcessInfo.processInfo.systemUptime - start }
+            Diagnostics.sizingCalls += 1
+            return super.intrinsicContentSize
+        }
+        override func layout() {
+            let start = ProcessInfo.processInfo.systemUptime
+            defer { Diagnostics.rowLayoutTime += ProcessInfo.processInfo.systemUptime - start }
+            super.layout()
+        }
+    }
+#else
+    typealias RowHostingView = NSHostingView<AnyView>
+#endif
+
     final class Cell: NSTableCellView {
-        let host = NSHostingView(rootView: AnyView(EmptyView()))
+        let host = RowHostingView(rootView: AnyView(EmptyView()))
         var itemID: String?
 #if DEBUG
         private(set) var configurationCount = 0
@@ -137,6 +176,9 @@ struct NativeTaskOutline: NSViewRepresentable {
 
         override init(frame frameRect: NSRect) {
             super.init(frame: frameRect)
+#if DEBUG
+            Diagnostics.createdCells += 1
+#endif
             host.translatesAutoresizingMaskIntoConstraints = false
             host.sizingOptions = [.intrinsicContentSize]
             addSubview(host)
@@ -152,6 +194,9 @@ struct NativeTaskOutline: NSViewRepresentable {
 
         func configure(_ item: Item) {
 #if DEBUG
+            let started = ProcessInfo.processInfo.systemUptime
+            defer { Diagnostics.configurationTime += ProcessInfo.processInfo.systemUptime - started }
+            Diagnostics.configurations += 1
             configurationCount += 1
 #endif
             itemID = item.id
@@ -174,7 +219,11 @@ struct NativeTaskOutline: NSViewRepresentable {
         private(set) var heightInvalidationCount = 0
 #endif
 
-        func update(_ rows: [Row], in scroll: NSScrollView, scopeKey: String? = nil) {
+        @MainActor func update(_ rows: [Row], in scroll: NSScrollView, scopeKey: String? = nil) {
+#if DEBUG
+            let started = ProcessInfo.processInfo.systemUptime
+            defer { Diagnostics.updateTime += ProcessInfo.processInfo.systemUptime - started }
+#endif
             guard let outline else { return }
             let scopeChanged = self.scopeKey != scopeKey
             self.scopeKey = scopeKey
@@ -197,8 +246,14 @@ struct NativeTaskOutline: NSViewRepresentable {
             }
 
             if structureChanged {
+#if DEBUG
+                let reloadStart = ProcessInfo.processInfo.systemUptime
+#endif
                 outline.reloadData()
                 outline.layoutSubtreeIfNeeded()
+#if DEBUG
+                Diagnostics.reloadTime += ProcessInfo.processInfo.systemUptime - reloadStart
+#endif
                 // Insertion/removal above the viewport should not move the
                 // task the person is reading out from under the pointer.
                 if scopeChanged {

@@ -40,13 +40,14 @@ final class AppEnvironment: ObservableObject {
     private let moduleStores: [ModuleStoreFlushable]
     @Published private(set) var storageError: String?
     @Published var sidebarVisible = true
-    private let repository = NativePreviewRepository()
-    // The 400ms debounce now happens before snapshot construction; do not add
-    // a second 400ms delay on the serial encoding/writing queue.
-    private let persistence = PersistenceCoordinator(delay: 0)
-    private lazy var snapshotDebouncer = WorkspaceSnapshotDebouncer(persistence: persistence)
+    private let repository: NativePreviewRepository
+    private let persistence: PersistenceCoordinator
+    @Published private(set) var storageNeedsReload = false
+    private var storageReplacementPending = false
     private var subscriptions = Set<AnyCancellable>()
     private var loadFailed = false
+    var documentReadCount: Int { repository.documentReadCount }
+    var originalContentReadCount: Int { repository.originalContentReadCount }
     @Published var commandPalettePresented = false
     @Published private(set) var quickAddRequest = 0
     @Published var appearance: NativeAppearance {
@@ -56,7 +57,10 @@ final class AppEnvironment: ObservableObject {
     // Only the separate WorkFollowNativePreview directory is opened.
     private let preferences: UserDefaults
 
-    init(clock: @escaping () -> Date = Date.init, calendar: Calendar = .current) {
+    init(clock: @escaping () -> Date = Date.init, calendar: Calendar = .current,
+         directory: URL = NativePreviewRepository.directory) {
+        repository = NativePreviewRepository(directory: directory)
+        persistence = PersistenceCoordinator(repository: repository)
         reminders = NativeReminderService(clock: clock, calendar: calendar)
         let preferences = UserDefaults.standard
         self.preferences = preferences
@@ -64,7 +68,7 @@ final class AppEnvironment: ObservableObject {
             preferences.string(forKey: "appearance") ?? "system") ?? .system
         var snapshot: NativeWorkspaceSnapshot?
         var failure: Error?
-        do { snapshot = try repository.load() } catch { failure = error }
+        do { snapshot = try repository.loadDeferred() } catch { failure = error }
         let feedback = FeedbackCenter(
             completionSoundEnabled: preferences.object(forKey: "completionSoundEnabled") as? Bool ?? true,
             playSound: { Self.playFeedbackSound($0) })
@@ -75,8 +79,8 @@ final class AppEnvironment: ObservableObject {
                                              folders: snapshot?.noteFolders ?? [],
                                              folderMetadata: snapshot?.noteFolderMetadata ?? [],
                                              clock: clock)
-        focusStore = FocusStore(clock: clock)
-        taskActivityStore = TaskActivityStore(clock: clock)
+        focusStore = FocusStore(clock: clock, directory: directory.appendingPathComponent("modules"))
+        taskActivityStore = TaskActivityStore(clock: clock, directory: directory.appendingPathComponent("modules"))
         taskWorkspace.attachActivityStore(taskActivityStore)
         focusStore.onTaskFocusStarted = { [weak taskActivityStore, weak taskWorkspace] taskID, stopwatch in
             guard taskWorkspace?.task(for: taskID) != nil else { return }
@@ -94,10 +98,27 @@ final class AppEnvironment: ObservableObject {
         // 锚在当天 09:00），由服务按来源分别映射；这里只把记录来源接上。
         reminders.countdownStore = countdownStore
         moduleStores = [focusStore, taskActivityStore, summaryStore, countdownStore, meetingStore, filterStore, TemplateStore.shared, viewPreferences]
+        repository.onDocumentFailure = { [weak self] error in
+            DispatchQueue.main.async {
+                guard let self else { return }
+                self.loadFailed = true
+                self.storageError = "正文读取失败，自动保存已停用：\(error.localizedDescription)"
+            }
+        }
         persistence.onResult = { [weak self] error in
-            DispatchQueue.main.async { self?.storageError = error.map { "预览数据保存失败：\($0.localizedDescription)" } }
+            DispatchQueue.main.async {
+                guard let self else { return }
+                if self.storageNeedsReload || self.loadFailed { return }
+                if let error { self.storageError = "数据保存失败：\(error.localizedDescription)" }
+                else if let error = self.focusStore.storageError ?? self.taskActivityStore.storageError {
+                    self.storageError = "历史记录读取失败，该模块保存已停用：\(error.localizedDescription)"
+                } else { self.storageError = nil }
+            }
         }
         if let failure { loadFailed = true; storageError = "预览数据读取失败，自动保存已停用：\(failure.localizedDescription)" }
+        else if let failure = focusStore.storageError ?? taskActivityStore.storageError {
+            storageError = "历史记录读取失败，该模块保存已停用：\(failure.localizedDescription)"
+        }
         Timer.publish(every: 60, on: .main, in: .common)
             .autoconnect()
             .sink { [weak self] _ in
@@ -136,6 +157,14 @@ final class AppEnvironment: ObservableObject {
                 guard let self, !self.loadFailed else { return }
                 self.reminders.reconcile(self.taskWorkspace.allTasks)
             }.store(in: &subscriptions)
+        taskWorkspace.taskChanges.sink { [weak self] changes in
+            guard let self, !self.loadFailed, !self.storageReplacementPending, !self.storageNeedsReload else { return }
+            self.persistence.schedule(changes: changes)
+        }.store(in: &subscriptions)
+        notesWorkspace.persistenceChanges.sink { [weak self] changes in
+            guard let self, !self.loadFailed, !self.storageReplacementPending, !self.storageNeedsReload else { return }
+            self.persistence.schedule(notes: changes)
+        }.store(in: &subscriptions)
         notesWorkspace.$revision.dropFirst().sink { [weak self] _ in self?.savePreview() }.store(in: &subscriptions)
         // 倒计时记录也要重排提醒。上面那条只跟着任务走——倒计时改了不触发任务
         // revision，光靠那条订阅，新建一条带提醒的纪念日要等到下次动任务才排上。
@@ -156,7 +185,10 @@ final class AppEnvironment: ObservableObject {
                 self.reminders.reconcile(self.taskWorkspace.allTasks)
             }
             .store(in: &subscriptions)
-        if !loadFailed { reminders.reconcile(taskWorkspace.allTasks) }
+        if !loadFailed {
+            reminders.reconcile(taskWorkspace.allTasks)
+            if snapshot == nil, let initial = makePreviewSnapshot() { persistence.schedule(initial) }
+        }
     }
 
     /// 从任务侧发起专注：跳到专注页并直接开始该任务的番茄；已有进行中会话
@@ -184,9 +216,16 @@ final class AppEnvironment: ObservableObject {
         if let pick { taskWorkspace.select(pick.id) }
     }
 
-    private func savePreview() {
-        guard !loadFailed else { return }
-        snapshotDebouncer.schedule { [weak self] in self?.makePreviewSnapshot() }
+    private func savePreview() { flushMetadata() }
+
+    private func flushMetadata() {
+        guard !loadFailed, !storageReplacementPending, !storageNeedsReload else { return }
+        let metadata = NativeWorkspaceSnapshot(tasks: [], notes: [],
+            taskLists: taskWorkspace.listNames, taskListMeta: taskWorkspace.listMetas,
+            taskListFolders: taskWorkspace.listFolders, taskListSections: taskWorkspace.listSections,
+            noteFolders: notesWorkspace.folders,
+            noteFolderMetadata: notesWorkspace.folderMetadataForPersistence)
+        persistence.schedule(metadata: metadata)
     }
 
     private func makePreviewSnapshot() -> NativeWorkspaceSnapshot? {
@@ -217,7 +256,7 @@ final class AppEnvironment: ObservableObject {
 
     func flush(completion: @escaping (Error?) -> Void) {
         meetingStore.stopRecording()
-        snapshotDebouncer.flushPendingSnapshot()
+        flushMetadata()
         persistence.flush { first in
             // Module stores flush on their own queues; aggregate the errors.
             let group = DispatchGroup()
@@ -232,6 +271,24 @@ final class AppEnvironment: ObservableObject {
             group.notify(queue: .main) {
                 completion(first ?? box.error)
             }
+        }
+    }
+
+    /// Drain the old in-memory state before import/restore. After replacement,
+    /// disable workspace autosave until restart so termination cannot overwrite it.
+    func prepareStorageReplacement(completion: @escaping (Error?) -> Void) {
+        flushMetadata()
+        storageReplacementPending = true
+        flush(completion: completion)
+    }
+
+    func finishStorageReplacement(succeeded: Bool) {
+        storageReplacementPending = false
+        storageNeedsReload = succeeded
+        if succeeded {
+            storageError = nil
+        } else if let snapshot = makePreviewSnapshot() {
+            persistence.schedule(snapshot)
         }
     }
 
@@ -268,6 +325,7 @@ final class AppEnvironment: ObservableObject {
         let children = taskWorkspace.allTasks
             .filter { $0.parentID == id && $0.deletedAt == nil && $0.skippedAt == nil }
             .sorted { $0.childOrder < $1.childOrder }
+        guard (try? task.document.materialized()) != nil else { return nil }
         let noteID = notesWorkspace.createFromTask(task, children: children, clock: taskWorkspace.clock)
         let result = taskWorkspace.convertToNote(id, noteID: noteID) { [weak notes = notesWorkspace] in
             MainActor.assumeIsolated { notes?.discardCreatedNoteForUndo(noteID) }

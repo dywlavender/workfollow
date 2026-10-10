@@ -66,6 +66,48 @@ final class FocusTaskPickerPanelFlowTests: XCTestCase {
         XCTAssertEqual(picker.frame, parentFrame)
     }
 
+    func testTypingSearchKeepsPanelAndEditorAcrossQueryUpdates() throws {
+        let fixture = try makeFixture()
+        defer { close(fixture) }
+        let picker = try openPicker(in: fixture)
+        let editor = try XCTUnwrap(picker.firstResponder as? NSTextView)
+        let frame = picker.frame
+
+        for character in ["a", "b"] {
+            let event = try XCTUnwrap(NSEvent.keyEvent(with: .keyDown, location: .zero,
+                modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
+                windowNumber: picker.windowNumber, context: nil, characters: character,
+                charactersIgnoringModifiers: character, isARepeat: false, keyCode: 0))
+            NSApp.sendEvent(event)
+            settle(fixture)
+            XCTAssertTrue(fixture.session.isPresented)
+            XCTAssertTrue(parentPanel(in: fixture.owner) === picker)
+            XCTAssertTrue(picker.firstResponder === editor)
+            XCTAssertEqual(picker.frame, frame)
+        }
+        XCTAssertEqual(fixture.session.query, "ab")
+        XCTAssertEqual(editor.string, "ab")
+    }
+
+    func testTextInputCommitKeepsSearchOpenAndDismissalResetsQuery() throws {
+        let fixture = try makeFixture()
+        defer { close(fixture) }
+        let picker = try openPicker(in: fixture)
+        let editor = try XCTUnwrap(picker.firstResponder as? NSTextView)
+
+        editor.insertText("今日", replacementRange: NSRange(location: NSNotFound, length: 0))
+        settle(fixture)
+        XCTAssertEqual(fixture.session.query, "今日")
+        XCTAssertTrue(fixture.session.isPresented)
+        XCTAssertTrue(picker.firstResponder === editor)
+        XCTAssertTrue(picker.isVisible)
+
+        sendEscape(to: picker)
+        settle(fixture)
+        XCTAssertFalse(fixture.session.isPresented)
+        XCTAssertEqual(fixture.session.query, "")
+    }
+
     func testEscapeClosesScopeThenPickerAcrossRealPanelWindows() throws {
         let fixture = try makeFixture()
         defer { close(fixture) }

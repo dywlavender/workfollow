@@ -134,7 +134,7 @@ struct NotesWorkspaceView: View {
                                     Text(note.title.isEmpty ? "未命名笔记" : note.title).lineLimit(1).strikethrough(trash)
                                     Spacer()
                                 }
-                                Text(note.document.isEmpty ? "还没有内容" : note.document.plainText.replacingOccurrences(of: "\n", with: " "))
+                                Text(note.document.isEmpty ? "还没有内容" : note.document.previewText.replacingOccurrences(of: "\n", with: " "))
                                     .font(.caption).foregroundStyle(.secondary).lineLimit(1)
                             }.frame(maxWidth: .infinity, alignment: .leading)
                             VStack(alignment: .trailing, spacing: 4) {
