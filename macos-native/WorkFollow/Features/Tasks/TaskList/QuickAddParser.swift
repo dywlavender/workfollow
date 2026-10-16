@@ -209,8 +209,8 @@ enum QuickAddParser {
             if let explicitDay, calendar.isDate(explicitDay, inSameDayAs: today), due <= now {
                 due = calendar.date(byAdding: .day, value: 1, to: due) ?? due
             }
-            let isDateTime = explicitDay != nil || capture(match, 2) != nil ||
-                ["今晚", "今早", "明早", "明晨", "明晚"].contains(dayWord ?? "")
+            // A period such as 上午 is a clock qualifier, not a separate day.
+            let isDateTime = explicitDay != nil
             return Candidate(token: token(match, kind: isDateTime ? .date : .time,
                                            label: formatted(due, time: true)),
                              dueAt: due, hasTime: true)
@@ -250,8 +250,12 @@ enum QuickAddParser {
             let todayWeekday = calendar.component(.weekday, from: today)
             var delta = (calendarWeekday - todayWeekday + 7) % 7
             let prefix = capture(match, 1)
-            if prefix == "下" { delta += 7 }
-            if prefix == "下下" { delta += 14 }
+            // 下周 is the following natural Monday–Sunday week, not another
+            // seven days added to the next matching weekday.
+            let elapsedSinceMonday = (todayWeekday + 5) % 7
+            if prefix == "下" { delta = 7 - elapsedSinceMonday + index }
+            if prefix == "下下" { delta = 14 - elapsedSinceMonday + index }
+            if prefix == "本" { delta = index - elapsedSinceMonday }
             let date = calendar.date(byAdding: .day, value: delta, to: today) ?? today
             return Candidate(token: token(match, kind: .date, label: formatted(date, time: false)), dueAt: date)
         }
@@ -275,16 +279,18 @@ enum QuickAddParser {
             return Candidate(token: token(match, kind: .date, label: formatted(date, time: false)), dueAt: date)
         }
 
-        append("每天|每日|每(周|星期|礼拜)([一二三四五六日天])|每月\\s*(\\d{1,2})\\s*[日号]?") { match in
+        append("每天|每日|每(周|星期|礼拜)([一二三四五六日天]+)|每月\\s*(\\d{1,2})\\s*[日号]?") { match in
             let raw = source.substring(with: match.range)
             if raw == "每天" || raw == "每日" {
                 return Candidate(token: token(match, kind: .recurrence, label: "每天"), recurrence: .daily)
             }
             if let weekdayText = capture(match, 2) {
                 let map = ["一": 2, "二": 3, "三": 4, "四": 5, "五": 6, "六": 7, "日": 1, "天": 1]
-                guard let weekday = map[weekdayText] else { return nil }
-                return Candidate(token: token(match, kind: .recurrence, label: "每周\(weekdayText == "天" ? "日" : weekdayText)"),
-                                 recurrence: .weekly, recurrenceRule: RecurrenceRule(weekday: weekday))
+                let weekdays = Array(Set(weekdayText.compactMap { map[String($0)] })).sorted()
+                guard let weekday = weekdays.first else { return nil }
+                return Candidate(token: token(match, kind: .recurrence, label: "每周\(weekdayText.replacingOccurrences(of: "天", with: "日"))"),
+                                 recurrence: .weekly, recurrenceRule: RecurrenceRule(weekday: weekday,
+                                     weekdays: weekdays.count > 1 ? weekdays : nil))
             }
             if let day = Int(capture(match, 3) ?? ""), (1...31).contains(day) {
                 return Candidate(token: token(match, kind: .recurrence, label: "每月\(day)号"),
@@ -333,6 +339,16 @@ enum QuickAddParser {
         var accepted: [Candidate] = []
         var end = 0
         for candidate in ordered where candidate.token.range.location >= end {
+            // The observed desktop parser recognizes the first clock in a
+            // range string; the trailing clock stays as ordinary task text.
+            if candidate.hasTime, let prior = accepted.last(where: { $0.hasTime }),
+               NSMaxRange(prior.token.range) <= candidate.token.range.location {
+                let between = source.substring(with: NSRange(location: NSMaxRange(prior.token.range),
+                    length: candidate.token.range.location - NSMaxRange(prior.token.range)))
+                if between.trimmingCharacters(in: .whitespaces).range(of: "^[-–—~～至]+$", options: .regularExpression) != nil {
+                    continue
+                }
+            }
             accepted.append(candidate)
             end = NSMaxRange(candidate.token.range)
         }
@@ -372,7 +388,8 @@ enum QuickAddParser {
             dueAt = result; hasTime = true; reminderAt = result
         } else if let timeOnly, recurrence == .weekly, let weekday = recurrenceRule?.weekday {
             let current = calendar.component(.weekday, from: now)
-            let delta = (weekday - current + 7) % 7
+            let targets = recurrenceRule?.weekdays ?? [weekday]
+            let delta = targets.map { ($0 - current + 7) % 7 }.min() ?? 0
             var target = calendar.date(byAdding: .day, value: delta, to: today) ?? today
             let parts = calendar.dateComponents([.hour, .minute], from: timeOnly)
             var dayParts = calendar.dateComponents([.year, .month, .day], from: target)

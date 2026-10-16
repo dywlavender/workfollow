@@ -11,17 +11,22 @@ struct FocusOverviewPane: View {
 
     @State private var hoveredRecordID: UUID?
     @State private var showGoalPopover = false
-    @State private var showAddRecord = false
-    @State private var addRecordTaskID: UUID?
-    @State private var addRecordMinutes = "25"
-    @State private var addRecordHint: String?
+    @State private var recordDraft: FocusRecordDraft?
+    @State private var selectedRecord: PomodoroRecord?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("概览")
-                .font(.system(size: FocusLayoutMetrics.overviewTitleFontSize, weight: .semibold))
-                .foregroundStyle(theme.text)
-                .padding(.bottom, FocusLayoutMetrics.overviewTitleBottom)
+            HStack {
+                Text(store.contentRoute == .records ? "专注记录" : "概览")
+                    .font(.system(size: FocusLayoutMetrics.overviewTitleFontSize, weight: .semibold))
+                    .foregroundStyle(theme.text)
+                Spacer()
+                if store.contentRoute == .records {
+                    Button("清除筛选") { store.showOverview() }.buttonStyle(.plain)
+                }
+                Button("更多统计") { store.showStatistics() }.buttonStyle(.plain)
+                    .accessibilityIdentifier("focus-show-statistics")
+            }.padding(.bottom, FocusLayoutMetrics.overviewTitleBottom)
 
             LazyVGrid(columns: [GridItem(.flexible(), spacing: FocusLayoutMetrics.overviewCardGap),
                                 GridItem(.flexible(), spacing: FocusLayoutMetrics.overviewCardGap)],
@@ -42,7 +47,7 @@ struct FocusOverviewPane: View {
                     .foregroundStyle(theme.text)
                     .focusRenderAnchor(.recordsHeader)
                 Spacer()
-                Button { showAddRecord = true } label: {
+                Button { recordDraft = FocusRecordDraft(now: store.currentTime) } label: {
                     Image(systemName: "plus")
                         .font(.system(size: FocusLayoutMetrics.recordHeaderIconSize, weight: .medium))
                         .frame(width: FocusLayoutMetrics.recordHeaderButtonSize,
@@ -52,14 +57,12 @@ struct FocusOverviewPane: View {
                 .buttonStyle(.plain)
                 .foregroundStyle(theme.text2)
                 .help("补记专注")
-                .background(AnchoredPropertyPanel(isPresented: $showAddRecord, width: 330) {
-                    addRecordPopover
-                })
+                .accessibilityIdentifier("focus-add-record")
             }
             .padding(.top, FocusLayoutMetrics.recordHeaderTop)
             .padding(.bottom, FocusLayoutMetrics.recordHeaderBottom)
 
-            if store.recordGroups.isEmpty && !store.historyLoading && store.historyError == nil {
+            if store.recordGroups.isEmpty && !store.historyLoading && !store.historyHasMore && store.historyError == nil {
                 emptyRecordsState
             } else {
                 ScrollView { recordsList }
@@ -71,6 +74,10 @@ struct FocusOverviewPane: View {
                maxHeight: .infinity, alignment: .topLeading)
         .background(theme.canvas)
         .task(id: store.historyRevision) { await store.resetHistory() }
+        .sheet(item: $recordDraft) { draft in FocusRecordEditor(store: store, workspace: workspace, draft: draft) }
+        .sheet(item: $selectedRecord) { record in
+            FocusRecordDetail(store: store, recordID: record.id, workspace: workspace, onSelectTask: onSelectRecordTask)
+        }
     }
 
     private func statCard(_ label: String, value: Int, unit: String? = nil) -> some View {
@@ -141,7 +148,7 @@ struct FocusOverviewPane: View {
     private var recordsList: some View {
         LazyVStack(alignment: .leading, spacing: 0) {
             ForEach(store.recordGroups) { group in
-                Text(FocusViewLogic.dayLabel(for: group.day))
+                Text(FocusViewLogic.dayLabel(for: group.day, now: store.currentTime, calendar: store.presentationCalendar))
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(theme.text3)
                     .padding(.top, FocusLayoutMetrics.recordGroupTop)
@@ -205,8 +212,7 @@ struct FocusOverviewPane: View {
         }
         .contentShape(Rectangle())
         .onTapGesture {
-            guard let taskID = record.taskID else { return }
-            onSelectRecordTask?(taskID)
+            selectedRecord = record
         }
         .onHover { hovering in
             if hovering {
@@ -215,101 +221,12 @@ struct FocusOverviewPane: View {
                 hoveredRecordID = nil
             }
         }
+        .accessibilityIdentifier("focus-record-\(record.id.uuidString)")
         .contextMenu {
+            Button("查看详情") { selectedRecord = record }
+            Button("编辑") { recordDraft = FocusRecordDraft(record: record) }
+            if let taskID = record.taskID { Button("打开任务") { onSelectRecordTask?(taskID) } }
             Button("删除记录", role: .destructive) { store.deleteRecord(record.id) }
-        }
-    }
-
-    private var addRecordPopover: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("补记专注")
-                .font(.system(size: 20, weight: .semibold))
-                .foregroundStyle(theme.text)
-            Menu {
-                Button("不关联") { addRecordTaskID = nil }
-                ForEach(recordCandidates) { task in
-                    Button {
-                        addRecordTaskID = task.id
-                    } label: {
-                        if task.id == addRecordTaskID {
-                            Label(taskMenuTitle(task), systemImage: "checkmark")
-                        } else {
-                            Text(taskMenuTitle(task))
-                        }
-                    }
-                }
-            } label: {
-                HStack(spacing: 10) {
-                    Circle().fill(listDotColor(for: addRecordTaskID)).frame(width: 9, height: 9)
-                    Text(addRecordTaskTitle)
-                        .font(.system(size: 16))
-                        .foregroundStyle(theme.text)
-                        .lineLimit(1)
-                    Spacer(minLength: 8)
-                    Image(systemName: "chevron.up.chevron.down")
-                        .font(.system(size: 13))
-                        .foregroundStyle(theme.text3)
-                }
-                .frame(width: 280)
-            }
-            .menuStyle(.button)
-            .menuIndicator(.hidden)
-            .fixedSize()
-            HStack(spacing: 12) {
-                Text("时长").font(.system(size: 15)).foregroundStyle(theme.text2)
-                TextField("分钟", text: $addRecordMinutes)
-                    .textFieldStyle(.plain)
-                    .font(.system(size: 16))
-                    .monospacedDigit()
-                    .multilineTextAlignment(.center)
-                    .foregroundStyle(theme.text)
-                    .frame(width: 76)
-                    .padding(.vertical, 6)
-                    .background(Capsule().stroke(theme.hairline, lineWidth: 1.5))
-                    .onSubmit(submitAddRecord)
-            }
-            if let addRecordHint {
-                Text(addRecordHint).font(.system(size: 13)).foregroundStyle(theme.warn)
-            }
-            Text("仅支持补记最近 7 天内、此刻之前的专注")
-                .font(.system(size: 13))
-                .foregroundStyle(theme.text3)
-            HStack {
-                Spacer()
-                Button(action: submitAddRecord) {
-                    Text("添 加")
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(.white)
-                        .frame(width: 110, height: 36)
-                        .background(RoundedRectangle(cornerRadius: 8).fill(theme.accent))
-                }
-                .buttonStyle(.plain)
-            }
-        }
-        .padding(22)
-        .frame(width: 330)
-    }
-
-    private var recordCandidates: [Task] {
-        guard let workspace else { return [] }
-        return workspace.allTasks.filter { $0.deletedAt == nil && !$0.isAbandoned }
-    }
-
-    private var addRecordTaskTitle: String {
-        guard let addRecordTaskID, let title = taskTitle(for: addRecordTaskID) else { return "不关联" }
-        return title
-    }
-
-    private func submitAddRecord() {
-        let minutes = Int(addRecordMinutes.trimmingCharacters(in: .whitespaces)) ?? 0
-        let endedNow = workspace?.clock() ?? Date()
-        let startedAt = endedNow.addingTimeInterval(TimeInterval(-minutes * 60))
-        if store.addRecord(taskID: addRecordTaskID, startedAt: startedAt, minutes: minutes) {
-            showAddRecord = false
-            addRecordHint = nil
-            addRecordMinutes = "25"
-        } else {
-            addRecordHint = "补记失败：时长需 1–180 分钟，且时间要在最近 7 天内"
         }
     }
 
@@ -340,7 +257,7 @@ struct FocusOverviewPane: View {
     }
 
     private func timeText(_ date: Date) -> String {
-        date.formatted(.dateTime.hour().minute())
+        FocusViewLogic.timeLabel(for: date, calendar: store.presentationCalendar)
     }
 
     private func listDotColor(for id: UUID?) -> Color {

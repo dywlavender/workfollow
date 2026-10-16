@@ -12,6 +12,7 @@ final class FilterStore: ObservableObject, ModuleStoreFlushable {
     @Published private(set) var filters: [SavedFilter] = []
     private let persistence: JSONFileStore<[SavedFilter]>
     private let clock: () -> Date
+    var organizationResolver: (([String], [String]) -> ([UUID], [UUID]))?
 
     init(clock: @escaping () -> Date = Date.init, directory: URL? = nil) {
         self.clock = clock
@@ -67,6 +68,31 @@ final class FilterStore: ObservableObject, ModuleStoreFlushable {
         return true
     }
 
+    func resolveOrganizationReferences() {
+        guard let resolver = organizationResolver else { return }
+        let resolved = filters.map { filter -> SavedFilter in
+            var value = filter
+            let (lists, tags) = resolver(value.listNames, value.tags)
+            value.listIDs = lists.isEmpty ? nil : lists
+            value.tagIDs = tags.isEmpty ? nil : tags
+            return value
+        }
+        if filters != resolved { filters = resolved; persist() }
+    }
+
+    func renameReference(_ change: TaskOrganizationRename) {
+        let resolved = filters.map { filter -> SavedFilter in
+            var value = filter
+            if change.kind == .list {
+                value.listNames = value.listNames.map { $0 == change.oldName ? change.newName : $0 }
+            } else {
+                value.tags = value.tags.map { $0 == change.oldName ? change.newName : $0 }
+            }
+            return value
+        }
+        if filters != resolved { filters = resolved; persist() }
+    }
+
     func flush(_ completion: @escaping (Error?) -> Void) {
         persistence.flush(completion)
     }
@@ -80,6 +106,11 @@ final class FilterStore: ObservableObject, ModuleStoreFlushable {
               }) else { return nil }
         var value = filter
         value.name = name
+        if let resolver = organizationResolver {
+            let (lists, tags) = resolver(value.listNames, value.tags)
+            value.listIDs = lists.isEmpty ? nil : lists
+            value.tagIDs = tags.isEmpty ? nil : tags
+        }
         return value
     }
 

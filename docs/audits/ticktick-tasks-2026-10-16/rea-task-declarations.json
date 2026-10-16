@@ -1,0 +1,106 @@
+{
+  "date": "2026-10-16",
+  "client": "TickTick 8.0.80",
+  "tool": "REA inspect-native-dispatch-metadata",
+  "evidence_id": "ev_c09e22417bc2251d083ebc585aa68d06b3a3cf42cecc7327d6e63127917e60a8",
+  "selected_declarations": [
+    {
+      "class": "_TtC8TickTick16TTColumnTaskCell",
+      "selectors": [
+        "contentLabel",
+        "setContentLabel:",
+        "miniIconsContainer",
+        "setMiniIconsContainer:",
+        "singleClick:",
+        "doubleClick:",
+        "rightMouseDown:"
+      ]
+    },
+    {
+      "class": "_TtC8TickTick32TTSingleTaskDetailViewController",
+      "selectors": [
+        "subtaskCellHeight",
+        "setSubtaskCellHeight:",
+        "heightForSubtaskCell",
+        "showSubtasks",
+        "containsCollapsedSubtasks",
+        "updateSubtaskCell:",
+        "addNewSubtask",
+        "linkParent",
+        "refreshForSubtasks",
+        "noteHeightChangedForSubtasks",
+        "tagNames",
+        "setTagNames:",
+        "orderedTagDisplayNames",
+        "manageTagsFrom:",
+        "addFromTemplate",
+        "saveAsTemplate",
+        "markdownTextViewSelectedTagNames",
+        "markdownCellDidTriggerAddSubTask",
+        "toggleAbandon",
+        "bottomActionViewDidClickAddSubtask:",
+        "bottomActionViewDidClickLinkParent:",
+        "bottomActionViewDidClickAbandon:",
+        "bottomActionViewDidClickConvertTaskAndNotes:",
+        "bottomActionViewDidClickSaveAsTemplate:",
+        "bottomActionViewDidClickAddFromTemplate:",
+        "updateProgress:save:"
+      ]
+    }
+  ],
+  "limitations": [
+    "Static declarations establish controls and action entry points only, not their runtime semantics.",
+    "max_records=20000; metadata coverage is partial."
+  ],
+  "coverage": [
+    {
+      "facet": "objc_class_method_ivar_metadata",
+      "status": "partial",
+      "reason": "Unresolved ivar offset pointer 0x1013a93c0; Unresolved ivar offset pointer 0x1013a93d0; Unresolved ivar offset pointer 0x1013a93d8; Unresolved ivar offset pointer 0x1013a93f0; Unresolved ivar offset pointer 0x1013a9400; Unresolved ivar offset pointer 0x1013a9408; Unresolved ivar offset pointer 0x1013a9410; Unresolved ivar offset pointer 0x1013a9418; Unresolved ivar offset pointer 0x1013a9420; Unresolved ivar offset pointer 0x1013a9428; Unresolved ivar offset pointer 0x1013a9430; Unresolved ivar offset pointer 0x1013a9438; Unresolved ivar offset pointer 0x1013a9440; Unresolved ivar offset pointer 0x1013a9448; Unresolved ivar offset pointer 0x1013a9450; Unresolved ivar offset pointer 0x1013a9458; Unresolved ivar offset pointer 0x1013a9460; Unresolved ivar offset pointer 0x1013a9468; Unresolved ivar offset pointer 0x1013a9490; Unresolved ivar offset pointer 0x1013a9498; Unresolved ivar offset pointer 0x1013a94a0; Unresolved ivar offset pointer 0x1013a94a8; Unresolved ivar offset pointer 0x1013a94b0; Unresolved ivar offset pointer 0x1013a94b8; Unresolved ivar offset pointer 0x1013a94c0; Unresolved ivar offset pointer 0x1013a94c8; Unresolved ivar offset pointer 0x1013a94d0; Unresolved ivar offset pointer 0x1013a94d8; Unresolved ivar offset pointer 0x1013a94e0; Unresolved ivar offset pointer 0x1013a94e8; Unresolved ivar offset pointer 0x1013a94f0; Unresolved ivar offset pointer 0x1013a94f8; Unresolved ivar offset pointer 0x1013a9500; Unresolved ivar offset pointer 0x1013a9508; Unresolved ivar offset pointer 0x1013a9510; Unresolved ivar offset pointer 0x1013a9518; Unresolved ivar offset pointer 0x1013a9520; Unresolved ivar offset pointer 0x1013a9528; Unresolved ivar offset pointer 0x1013a9530; Unresolved ivar offset pointer 0x1013a9538; Unresolved ivar offset pointer 0x1013a9540; Unresolved ivar offset pointer 0x1013a9548; Unresolved ivar offset pointer 0x1013a9550; Unresolved ivar offset pointer 0x1013a9558; Unresolved ivar offset pointer 0x1013a9560; Unresolved ivar offset pointer 0x1013a9568; Unresolved ivar offset pointer 0x1013a9570; Unresolved ivar offset pointer 0x1013a9578; Unresolved ivar offset pointer 0x1013a9580; Unresolved ivar offset pointer 0x1013a9588; Unresolved ivar offset pointer 0x1013a9590; Unresolved ivar offset pointer 0x1013a9598; Unresolved ivar offset pointer 0x1013a95a0; Unresolved ivar offset pointer 0x1013a95a8; Unresolved ivar offset pointer 0x1013a95b0; Unresolved ivar offset pointer 0x1013a95b8; Unresolved ivar offset pointer 0x1013a95c0; Unresolved ivar offset pointer 0x1013a95c8; Unresolved ivar offset pointer 0x1013a95d0; Unresolved ivar offset pointer 0x1013a95d8; Unresolved ivar offset pointer 0x1013a95e0; Unresolved ivar offset pointer 0x1013a95e8; Unresolved ivar offset pointer 0x1013a95f0; Unresolved ivar offset pointer 0x1013a95f8; Unresolved ivar offset pointer 0x1013a9600; Unresolved ivar offset pointer 0x1013a9608; Unresolved ivar offset pointer 0x1013a9610; Unresolved ivar offset pointer 0x1013a9618; Unresolved ivar offset pointer 0x1013a9620; Unresolved ivar offset pointer 0x1013a9628; Unresolved ivar offset pointer 0x1013a9630; Unresolved ivar offset pointer 0x1013a9638; Unresolved ivar offset pointer 0x1013a9648; Unresolved ivar offset pointer 0x1013a9650; Unresolved ivar offset pointer 0x1013a9658; Unresolved ivar offset pointer 0x1013a9660; Unresolved ivar offset pointer 0x1013a9668; Unresolved ivar offset pointer 0x1013a9670; Unresolved ivar offset pointer 0x1013a9678; Unresolved ivar offset pointer 0x1013a9688; Unresolved ivar offset pointer 0x1013a9690; Unresolved ivar offset pointer 0x1013a9698; Unresolved ivar offset pointer 0x1013a96a0; Unresolved ivar offset pointer 0x1013a96a8; Unresolved ivar offset pointer 0x1013a96b0; Unresolved ivar offset pointer 0x1013a96b8; Unresolved ivar offset pointer 0x1013a96c0; Unresolved ivar offset pointer 0x1013a96c8; Unresolved ivar offset pointer 0x1013a96d0; Unresolved ivar offset pointer 0x1013a96d8; Unresolved ivar offset pointer 0x1013a96e0; Unresolved ivar offset pointer 0x1013a96e8; Unresolved ivar offset pointer 0x1013a96f0; Unresolved ivar offset pointer 0x1013a9720; Unresolved ivar offset pointer 0x1013a9728; Unresolved ivar offset pointer 0x1013a9730; Unresolved ivar offset pointer 0x1013a9738; Unresolved ivar offset pointer 0x1013a9740; Unresolved ivar offset pointer 0x1013a9748; Unresolved ivar offset pointer 0x1013a9750; Unresolved ivar offset pointer 0x1013a9758; Unresolved ivar offset pointer 0x1013a9760; Unresolved ivar offset pointer 0x1013a9768; Unresolved ivar offset pointer 0x1013a9770; Unresolved ivar offset pointer 0x1013a98d8; Unresolved ivar offset pointer 0x1013a98e8; Unresolved ivar offset pointer 0x1013a98f0; Unresolved ivar offset pointer 0x1013a98f8; Unresolved ivar offset pointer 0x1013a9940; Unresolved ivar offset pointer 0x1013a9950; Unresolved ivar offset pointer 0x1013a9960; Unresolved ivar offset pointer 0x1013a9978; Unresolved ivar offset pointer 0x1013a9980; Unresolved ivar offset pointer 0x1013a9988; Unresolved ivar offset pointer 0x1013a9990; Unresolved ivar offset pointer 0x1013a9998; Unresolved ivar offset pointer 0x1013a99b0; Unresolved ivar offset pointer 0x1013a99d0; Unresolved ivar offset pointer 0x1013a99d8; Unresolved ivar offset pointer 0x1013a99e0; Unresolved ivar offset pointer 0x1013a9a00; Unresolved ivar offset pointer 0x1013a9a08; Unresolved ivar offset pointer 0x1013a9a10; Unresolved ivar offset pointer 0x1013a9a18; Unresolved ivar offset pointer 0x1013a9a20; Unresolved ivar offset pointer 0x1013a9a28; Unresolved ivar offset pointer 0x1013a9a30; Unresolved ivar offset pointer 0x1013a9a38; Unresolved ivar offset pointer 0x1013a9a40; Unresolved ivar offset pointer 0x1013a9a48; Unresolved ivar offset pointer 0x1013a9a60; Unresolved ivar offset pointer 0x1013a9a68; Unresolved ivar offset pointer 0x1013a9a70; Unresolved ivar offset pointer 0x1013a9a78; Unresolved ivar offset pointer 0x1013a9a80; Unresolved ivar offset pointer 0x1013a9a88; Unresolved ivar offset pointer 0x1013a9a90; Unresolved ivar offset pointer 0x1013a9a98; Unresolved ivar offset pointer 0x1013a9aa0; Unresolved ivar offset pointer 0x1013a9aa8; Unresolved ivar offset pointer 0x1013a9ab0; Unresolved ivar offset pointer 0x1013a9ab8; Unresolved ivar offset pointer 0x1013a9ac0; Unresolved ivar offset pointer 0x1013a9ac8; Unresolved ivar offset pointer 0x1013a9ad0; Unresolved ivar offset pointer 0x1013a9ae0; Unresolved ivar offset pointer 0x1013a9ae8; Unresolved ivar offset pointer 0x1013a9af0; Unresolved ivar offset pointer 0x1013a9af8; Unresolved ivar offset pointer 0x1013a9b08; Unresolved ivar offset pointer 0x1013a9b10; Unresolved ivar offset pointer 0x1013a9b18; Unresolved ivar offset pointer 0x1013a9b20; Unresolved ivar offset pointer 0x1013a9b28; Unresolved ivar offset pointer 0x1013a9b30; Unresolved ivar offset pointer 0x1013a9b38; Unresolved ivar offset pointer 0x1013a9b40; Unresolved ivar offset pointer 0x1013a9b48; Unresolved ivar offset pointer 0x1013a9b50; Unresolved ivar offset pointer 0x1013a9b58; Unresolved ivar offset pointer 0x1013a9b60; Unresolved ivar offset pointer 0x1013a9b68; Unresolved ivar offset pointer 0x1013a9b70; Unresolved ivar offset pointer 0x1013a9b78; Unresolved ivar offset pointer 0x1013a9b80; Unresolved ivar offset pointer 0x1013a9b88; Unresolved ivar offset pointer 0x1013a9b90; Unresolved ivar offset pointer 0x1013a9b98; Unresolved ivar offset pointer 0x1013a9bb0; Unresolved ivar offset pointer 0x1013a9be8; Unresolved ivar offset pointer 0x1013a9c08; Unresolved ivar offset pointer 0x1013a9c10; Unresolved ivar offset pointer 0x1013a9c18; Unresolved ivar offset pointer 0x1013a9c20; Unresolved ivar offset pointer 0x1013a9c28; Unresolved ivar offset pointer 0x1013a9c30; Superclass of _TtC8TickTick24TTAttachmentURLVideoView requires external binding resolution; Unresolved ivar offset pointer 0x1013a9c60; Unresolved ivar offset pointer 0x1013a9c68; Unresolved ivar offset pointer 0x1013a9c70; Unresolved ivar offset pointer 0x1013a9c78; Unresolved ivar offset pointer 0x1013a9c80; Unresolved ivar offset pointer 0x1013a9c88; Unresolved ivar offset pointer 0x1013a9c90; Unresolved ivar offset pointer 0x1013a9c98; Unresolved ivar offset pointer 0x1013a9ca0; Unresolved ivar offset pointer 0x1013a9ca8; Unresolved ivar offset pointer 0x1013a9cb0; Unresolved ivar offset pointer 0x1013a9cb8; Unresolved ivar offset pointer 0x1013a9cc0; Unresolved ivar offset pointer 0x1013a9cc8; Unresolved ivar offset pointer 0x1013a9cd0; Unresolved ivar offset pointer 0x1013a9cd8; Unresolved ivar offset pointer 0x1013a9ce0; Unresolved ivar offset pointer 0x1013a9cf0; Unresolved ivar offset pointer 0x1013a9cf8; Unresolved ivar offset pointer 0x1013a9d00; Unresolved ivar offset pointer 0x1013a9d08; Unresolved ivar offset pointer 0x1013a9d10; Unresolved ivar offset pointer 0x1013a9d18; Unresolved ivar offset pointer 0x1013a9d20; Unresolved ivar offset pointer 0x1013a9d28; Unresolved ivar offset pointer 0x1013a9d30; Unresolved ivar offset pointer 0x1013a9d38; Unresolved ivar offset pointer 0x1013a9d40; Unresolved ivar offset pointer 0x1013a9d68; Unresolved ivar offset pointer 0x1013a9d70; Superclass of _TtC8TickTick24TTMonthCalMonthTitleView requires external binding resolution; Unresolved ivar offset pointer 0x1013a9d78; Unresolved ivar offset pointer 0x1013a9d98; Unresolved ivar offset pointer 0x1013a9da0; Unresolved ivar offset pointer 0x1013a9da8; max_records_reached",
+      "examined": 320,
+      "decoded": 639
+    },
+    {
+      "facet": "binary_relative_pointers",
+      "status": "partial",
+      "reason": "max_records_reached",
+      "examined": 9647,
+      "decoded": 9647
+    },
+    {
+      "facet": "objc_properties_categories",
+      "status": "partial",
+      "reason": "max_records_reached",
+      "examined": 0,
+      "decoded": 0
+    },
+    {
+      "facet": "pointer_fixups",
+      "status": "partial",
+      "reason": "LC_DYLD_INFO rebase opcodes were not decoded (57560 bytes); LC_DYLD_INFO bind opcodes",
+      "examined": 3,
+      "decoded": 3
+    },
+    {
+      "facet": "swift_generic_resilient_witnesses_overrides_async_coroutines",
+      "status": "unsupported",
+      "reason": "This reader admits simple Swift conformance/static witness records and non-generic, non-resilient class vtables; generic/resilient tables and other Swift metadata families are not decoded",
+      "examined": 0,
+      "decoded": 0
+    },
+    {
+      "facet": "swift_conformances_static_witness_slots",
+      "status": "partial",
+      "reason": "max_records_reached",
+      "examined": 0,
+      "decoded": 0
+    },
+    {
+      "facet": "swift_class_vtable_descriptors",
+      "status": "partial",
+      "reason": "record_budget_exhausted at 0x1011a6278: max_records_reached; max_records_reached",
+      "examined": 0,
+      "decoded": 0
+    }
+  ]
+}

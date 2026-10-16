@@ -15,6 +15,14 @@ struct RecurrenceRule: Equatable, Codable {
     var lunarMonth: Int?
     var lunarDay: Int?
     var lunarIsLeapMonth: Bool?
+    /// Multiple selected weekdays; absent keeps the legacy single weekday.
+    var weekdays: [Int]?
+    var base: RecurrenceBase?
+    var selectedDates: [Date]?
+    /// 1…4 or -1 (last), used together with weekday for monthly rules.
+    var monthlyOrdinal: Int?
+    /// Progress is independent of the ordinary repeat interval.
+    var ebbinghausStep: Int?
 }
 
 extension RecurrenceRule {
@@ -37,14 +45,18 @@ extension RecurrenceRule {
     /// the start of its day so the whole day stays inside the boundary.
     func normalized(calendar: Calendar = .current) -> RecurrenceRule? {
         if let weekday, !(1...7).contains(weekday) { return nil }
+        if let weekdays, weekdays.contains(where: { !(1...7).contains($0) }) { return nil }
+        if let monthlyOrdinal, ![1, 2, 3, 4, -1].contains(monthlyOrdinal) { return nil }
         if let monthDay, !(1...31).contains(monthDay) { return nil }
         if let month, !(1...12).contains(month) { return nil }
         if let lunarMonth, !(1...12).contains(lunarMonth) { return nil }
         if let lunarDay, !(1...30).contains(lunarDay) { return nil }
         var value = self
         value.interval = max(1, interval)
+        value.weekdays = weekdays.flatMap { $0.isEmpty ? nil : Array(Set($0)).sorted() }
         if let remainingCount, remainingCount < 1 { value.remainingCount = nil }
         value.endDate = endDate.map { calendar.startOfDay(for: $0) }
+        value.selectedDates = selectedDates.map { Array(Set($0.map { calendar.startOfDay(for: $0) })).sorted() }
         return value
     }
 
@@ -57,6 +69,14 @@ extension RecurrenceRule {
         guard remainingCount.map({ $0 > 1 }) ?? true else { return nil }
         let interval = max(1, self.interval)
         let time = calendar.dateComponents([.hour, .minute, .second], from: base)
+        if self.base == .selectedDates {
+            guard let day = selectedDates?.sorted().first(where: {
+                calendar.startOfDay(for: $0) > calendar.startOfDay(for: base)
+            }) else { return nil }
+            let result = TaskDateDraft.movingDay(base, to: day, calendar: calendar)
+            if let endDate, calendar.startOfDay(for: result) > calendar.startOfDay(for: endDate) { return nil }
+            return result
+        }
         var next: Date?
         switch frequency {
         case .never:
@@ -65,9 +85,17 @@ extension RecurrenceRule {
             next = calendar.date(byAdding: .day, value: interval, to: base)
         case .weekly:
             let current = calendar.component(.weekday, from: base)
-            let target = weekday ?? current
-            let distance = (target - current + 7) % 7
-            next = calendar.date(byAdding: .day, value: (distance == 0 ? 7 : distance) + 7 * (interval - 1), to: base)
+            if let weekdays, !weekdays.isEmpty {
+                let mondayIndex = (current + 5) % 7
+                let positions = weekdays.map { ($0 + 5) % 7 }.sorted()
+                let distance = positions.first(where: { $0 > mondayIndex }).map { $0 - mondayIndex }
+                    ?? (7 * interval - mondayIndex + positions[0])
+                next = calendar.date(byAdding: .day, value: distance, to: base)
+            } else {
+                let target = weekday ?? current
+                let distance = (target - current + 7) % 7
+                next = calendar.date(byAdding: .day, value: (distance == 0 ? 7 : distance) + 7 * (interval - 1), to: base)
+            }
         case .monthly, .yearly:
             // Advance from the first day, then clamp the original target day.
             // Jan 31 → Feb 28 → Mar 31, not Mar 28.
@@ -78,7 +106,19 @@ extension RecurrenceRule {
             if let first = calendar.date(from: parts),
                let anchor = calendar.date(byAdding: frequency == .yearly ? .year : .month, value: interval, to: first),
                let days = calendar.range(of: .day, in: .month, for: anchor) {
-                next = calendar.date(byAdding: .day, value: min(max(1, target), days.count) - 1, to: anchor)
+                if let ordinal = monthlyOrdinal, frequency == .monthly {
+                    let targetWeekday = weekday ?? calendar.component(.weekday, from: base)
+                    if ordinal == -1,
+                       let last = calendar.date(byAdding: .day, value: days.count - 1, to: anchor) {
+                        let distance = (calendar.component(.weekday, from: last) - targetWeekday + 7) % 7
+                        next = calendar.date(byAdding: .day, value: -distance, to: last)
+                    } else {
+                        let offset = (targetWeekday - calendar.component(.weekday, from: anchor) + 7) % 7
+                        next = calendar.date(byAdding: .day, value: offset + 7 * (max(1, ordinal) - 1), to: anchor)
+                    }
+                } else {
+                    next = calendar.date(byAdding: .day, value: min(max(1, target), days.count) - 1, to: anchor)
+                }
             }
         case .weekdays, .weekends, .workdays, .holidays:
             var candidate = base
@@ -140,7 +180,7 @@ extension RecurrenceRule {
             // 次数"（TaskActions.makeNextOccurrence 每次完成时递增），第 N 次
             // 完成取序列[N-1]；走完从头循环（滴答实测校正前先用标准曲线）。
             let intervals = Self.ebbinghausIntervals
-            let step = (max(1, interval) - 1) % intervals.count
+            let step = (ebbinghausStep ?? (max(1, interval) - 1)) % intervals.count
             next = calendar.date(byAdding: .day, value: intervals[step], to: base)
         }
         guard let next else { return nil }
@@ -167,7 +207,7 @@ extension RecurrenceRule {
             // 艾宾浩斯的步数由 interval 承载（完成路径每次完成 +1），预览推进
             // 必须同步递增，否则退化成"每天重复"（完成路径与预览路径共用同一
             // 引擎，两边必须同语义）。
-            if frequency == .ebbinghaus { rule.interval += 1 }
+            if frequency == .ebbinghaus { rule.ebbinghausStep = (rule.ebbinghausStep ?? (max(1, rule.interval) - 1)) + 1 }
             cursor = next
         }
         return days
@@ -194,7 +234,10 @@ enum RecurrenceEngine {
     static func next(for task: Task, now: Date, calendar: Calendar) -> Date? {
         guard task.recurrence != .never else { return nil }
         let rule = task.recurrenceRule ?? RecurrenceRule()
-        return rule.nextOccurrence(after: task.schedule.dueAt ?? calendar.startOfDay(for: now),
+        let anchor = rule.base == .completionDate
+            ? TaskDateDraft.movingDay(task.schedule.dueAt ?? now, to: now, calendar: calendar)
+            : task.occurrenceKey?.nominalDate ?? task.schedule.dueAt ?? calendar.startOfDay(for: now)
+        return rule.nextOccurrence(after: anchor,
                                    frequency: task.recurrence, calendar: calendar)
     }
 }

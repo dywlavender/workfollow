@@ -86,4 +86,16 @@ final class FocusViewLogicTests: XCTestCase {
         XCTAssertNotEqual(label, "今天")
         XCTAssertNotEqual(label, "昨天")
     }
+    func testDayLabelsUseFixtureClockAndCalendarInsteadOfSystemToday() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "Asia/Shanghai")!
+        let now = calendar.date(from: DateComponents(year: 2026, month: 10, day: 13, hour: 12))!
+        let today = calendar.startOfDay(for: now)
+        let yesterday = calendar.date(byAdding: .day, value: -1, to: today)!
+        XCTAssertEqual(FocusViewLogic.dayLabel(for: today, now: now, calendar: calendar), "今天")
+        XCTAssertEqual(FocusViewLogic.dayLabel(for: yesterday, now: now, calendar: calendar), "昨天")
+        let nextDay = calendar.date(byAdding: .day, value: 1, to: now)!
+        XCTAssertEqual(FocusViewLogic.dayLabel(for: today, now: nextDay, calendar: calendar), "昨天")
+    }
+
 }

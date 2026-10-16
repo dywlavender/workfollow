@@ -7,7 +7,7 @@ import Combine
 @MainActor
 final class StatusItemController: NSObject, ObservableObject {
     private enum FocusAction: Int {
-        case pauseResume, finishEarly, giveUp, openFocus
+        case start, pause, resume, end, abandon, startBreak, skipBreak, openFocus
     }
 
     private let quickAdd: GlobalQuickAddController
@@ -43,13 +43,13 @@ final class StatusItemController: NSObject, ObservableObject {
     /// 专注进行中：按钮换成等宽剩余时间；空闲恢复默认图标。菜单随阶段重建。
     private func refresh() {
         guard let button = statusItem?.button else { return }
-        if focusStore.phase == .idle {
+        if focusStore.phase == .idle && focusStore.completionContext?.extraTimeStartedAt == nil {
             button.title = ""
             button.image = NSImage(systemSymbolName: "checkmark.circle",
                                    accessibilityDescription: "打勾菜单栏")
         } else {
             button.image = nil
-            button.title = FocusViewLogic.clockText(focusStore.remainingSeconds)
+            button.title = FocusViewLogic.clockText(focusStore.presentation.displaySeconds)
             button.font = NSFont.monospacedDigitSystemFont(ofSize: 13, weight: .medium)
         }
         rebuildMenu()
@@ -59,23 +59,13 @@ final class StatusItemController: NSObject, ObservableObject {
         guard let item = statusItem else { return }
         let menu = NSMenu()
 
-        if focusStore.phase != .idle {
-            let sessionTitle: String
-            switch focusStore.phase {
-            case .focusing: sessionTitle = "专注中"
-            case .breaking: sessionTitle = focusStore.isLongBreak ? "长休息中" : "休息中"
-            case .pausedFocus: sessionTitle = "已暂停"
-            case .pausedBreak: sessionTitle = "休息已暂停"
-            case .idle: sessionTitle = ""
+        if focusStore.phase != .idle || focusStore.pendingBreak || focusStore.completionContext?.extraTimeStartedAt != nil {
+            let presentation = focusStore.presentation
+            let entry = menu.addItem(withTitle: presentation.phaseTitle, action: nil, keyEquivalent: "")
+            entry.isEnabled = false
+            for command in presentation.availableActions {
+                if let action = focusAction(command) { menu.addItem(actionItem(command.title, action)) }
             }
-            let sessionEntry = menu.addItem(withTitle: sessionTitle, action: nil, keyEquivalent: "")
-            sessionEntry.isEnabled = false
-            menu.addItem(actionItem(focusStore.phase == .focusing ? "暂停" : "继续",
-                                    .pauseResume))
-            if focusStore.phase == .focusing {
-                menu.addItem(actionItem("完成本番茄", .finishEarly))
-            }
-            menu.addItem(actionItem("放弃专注", .giveUp))
             menu.addItem(.separator())
         }
 
@@ -114,14 +104,16 @@ final class StatusItemController: NSObject, ObservableObject {
     @objc private func performFocusAction(_ sender: NSMenuItem) {
         guard let action = FocusAction(rawValue: sender.tag) else { return }
         switch action {
-        case .pauseResume:
-            if focusStore.phase == .focusing { focusStore.pause() } else { focusStore.resume() }
-        case .finishEarly:
-            _ = focusStore.finishEarly()
-        case .giveUp:
-            _ = focusStore.giveUp()
-        case .openFocus:
-            onOpenFocus()
+        case .openFocus: onOpenFocus()
+        default:
+            if let command = FocusCommand(rawValue: String(describing: action)) { _ = focusStore.perform(command) }
+        }
+    }
+
+    private func focusAction(_ command: FocusCommand) -> FocusAction? {
+        switch command {
+        case .start: .start; case .pause: .pause; case .resume: .resume; case .end: .end
+        case .abandon: .abandon; case .startBreak: .startBreak; case .skipBreak: .skipBreak
         }
     }
 

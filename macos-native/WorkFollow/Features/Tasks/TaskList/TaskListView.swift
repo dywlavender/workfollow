@@ -67,6 +67,8 @@ struct TaskListView: View {
     @State private var descriptionDraft = ""
     /// `#`/`@` 候选与描述行的界面状态；与全局快速添加面板共用同一套状态机。
     @State private var candidate = QuickAddCandidateState()
+    @State private var inputSelection: NSRange?
+    @State private var requestedInputSelection: NSRange?
     /// 快速添加输入框是否持有焦点。**两个方向共用的唯一真值。**
     ///
     /// 这里曾经是 `@FocusState` + 另一个 `@State fieldFocused` 并存：
@@ -117,10 +119,11 @@ struct TaskListView: View {
     private var groups: [TaskListGroup] {
         scope.map { workspace.groups(for: $0, query: query, grouping: grouping,
                                      hidesCompleted: environment.viewPreferences
-                                        .hidesCompleted(for: preferenceKey)) } ?? []
+                                        .hidesCompleted(for: preferenceKey), viewMode: viewMode) } ?? []
     }
     private var canAdd: Bool {
-        scope == .today || scope == .tomorrow || scope == .inbox
+        if let list = workspace.activeList, scope == .allTasks, workspace.isListArchived(list) { return false }
+        return scope == .today || scope == .tomorrow || scope == .inbox
             || scope == .allTasks || scope == .nextSevenDays
     }
     private var nativeTextEditing: Bool {
@@ -132,6 +135,19 @@ struct TaskListView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             headerBar
+            if scope == .allTasks, let list = workspace.activeList, workspace.isListArchived(list) {
+                HStack(spacing: WFSpace.sm) {
+                    Image(systemName: "archivebox")
+                    Text("清单已归档，任务不在智能清单中显示，到期不提醒。")
+                        .font(WFType.supporting)
+                    Spacer(minLength: 0)
+                    Button("恢复清单") { _ = workspace.setListArchived(list, false) }
+                        .buttonStyle(.plain).foregroundStyle(WFColors.accent)
+                }
+                .foregroundStyle(WFColors.secondaryText)
+                .padding(.horizontal, WFSpace.xl).padding(.vertical, WFSpace.sm)
+                .background(WFColors.secondarySurface)
+            }
             // 候选列表挂在快速添加条的 overlay 上，会画到任务列表上方；提升层级
             // 才能盖住后面那个兄弟视图（SwiftUI 默认后者在上）。
             if canAdd, let scope {
@@ -145,9 +161,14 @@ struct TaskListView: View {
             }
             if viewMode == .kanban {
                 // 看板：列 = 投影分组（清单内有自定义分组时即分组本身）。
-                TaskKanbanView(groups: groups, workspace: workspace) { id in
+                TaskKanbanView(groups: groups, workspace: workspace, onSelect: { id in
                     workspace.select(id)
-                }
+                }, sortMode: sortMode, sortDescending: sortDescending,
+                               showsListBadge: showsListBadge,
+                               hidesCompleted: environment.viewPreferences.hidesCompleted(for: preferenceKey),
+                               hidesDetails: environment.viewPreferences.hidesDetails(for: preferenceKey),
+                               hiddenFields: environment.viewPreferences.hiddenDetailFields(for: preferenceKey),
+                               scope: scope ?? .allTasks, allowsCreation: canAdd)
             } else if viewMode == .timeline {
                 // 时间线：按天分栏的跨天条（结构照滴答 TimelineContentBlock）。
                 TaskTimelineView(groups: groups, workspace: workspace) { id in
@@ -260,7 +281,8 @@ struct TaskListView: View {
     }
 
     private var headerTitle: String {
-        workspace.activeList ?? workspace.activeTag.map { "#" + $0 } ?? navigation.destination.title
+        workspace.activeFilter?.name ?? workspace.activeList
+            ?? workspace.activeTag.map { "#" + $0 } ?? navigation.destination.title
     }
 
     /// 分组 + 排序合一菜单（对齐滴答证实的三段式）。用 Picker(.inline) 桥接成
@@ -364,6 +386,7 @@ struct TaskListView: View {
             // 模板入口（此前"降噪"时误删——它是模板功能的**唯一入口**，
             // 删掉等于全应用再也没法用模板；这里放回原位）。
             Button("从模板添加", systemImage: "doc.badge.plus") { showTemplatePicker = true }
+                .disabled(!canAdd)
             // 撤销：这是 `workspace.undo()` 的**唯一调用点**（应用里没有 ⌘Z、编辑菜单里也没有），
             // 降噪时删掉它等于全应用无法撤销——已放回。
             Button("撤销", systemImage: "arrow.uturn.backward") { workspace.undo() }
@@ -382,7 +405,7 @@ struct TaskListView: View {
                 }
             }
             Divider()
-            if let list = workspace.activeList, list != TaskList.inbox.name {
+            if canAdd, let list = workspace.activeList, list != TaskList.inbox.name {
                 Button("添加分组", systemImage: "plus") {
                     guard let title = TaskNamePrompt.ask("添加分组") else { return }
                     if !workspace.addListSection(list, title: title) { TaskNamePrompt.invalidName() }
@@ -435,7 +458,9 @@ struct TaskListView: View {
                     onShiftReturn: openQuickAddDescription,
                     onMoveUp: { moveCandidateSelection(by: -1) },
                     onMoveDown: { moveCandidateSelection(by: 1) },
-                    onFieldFocusChange: { quickAddFocused = $0 }
+                    onFieldFocusChange: { quickAddFocused = $0 },
+                    onSelectionChange: { if inputSelection != $0 { inputSelection = $0 } },
+                    requestedSelection: $requestedInputSelection
                 )
                 .frame(maxWidth: .infinity)
                 if quickAddExpanded {
@@ -610,12 +635,12 @@ struct TaskListView: View {
     /// 输入末尾的标记片段，且没被 Esc 忽略过。
     /// 焦点判据就是输入框的聚焦真值：不聚焦时不该弹候选列表（对齐滴答的输入态）。
     private var activeMarkerQuery: QuickAddComposition.MarkerQuery? {
-        candidate.marker(in: draft, isFocused: quickAddFocused)
+        candidate.marker(in: draft, isFocused: quickAddFocused, selection: inputSelection)
     }
 
     /// 候选来源：`#` 查已有标签、`@` 查已有清单。
     private func candidateSource(_ kind: QuickAddComposition.MarkerQuery.Kind) -> [String] {
-        kind == .tag ? workspace.tagNames : workspace.allListNames
+        kind == .tag ? workspace.tagNames : workspace.availableListNames
     }
 
     private var candidateNames: [String] {
@@ -652,14 +677,17 @@ struct TaskListView: View {
     }
 
     private func commitCandidate(_ name: String) {
-        draft = QuickAddComposition.replacingTrailingMarker(in: draft, with: name)
+        let result = QuickAddComposition.replacingMarker(in: draft, selection: inputSelection, with: name)
+        draft = result.text
+        inputSelection = result.selection
+        requestedInputSelection = result.selection
         candidate.textDidChange()
         quickAddFocused = true
     }
 
     /// 一次 Esc 只收掉候选列表这一层，不清空草稿。
     private func dismissCandidateList() {
-        candidate.dismiss(draft: draft)
+        candidate.dismiss(draft: draft, selection: inputSelection)
     }
 
     private func closeDescriptionRow() {
@@ -953,7 +981,7 @@ struct TaskListView: View {
                 if let sectionID = group.sectionID {
                     MoveTargetPickerCard(
                         sectionTitle: group.label ?? "",
-                        targets: workspace.listNames.filter { $0 != workspace.activeList }.map {
+                        targets: workspace.activeListNames.filter { $0 != workspace.activeList }.map {
                             MoveTarget(name: $0, isCurrent: false)
                         },
                         onPick: { list in
@@ -996,7 +1024,7 @@ struct TaskListView: View {
     private var groupIDs: [String] { groups.map(\.id) }
 
     private func collapseNewCompletedGroups() {
-        guard scope != .completed else { return }
+        guard scope?.isClosedScope != true else { return }
         for group in groups where group.kind == .completed {
             if seenCompletedGroupIDs.insert(group.id).inserted,
                !groupExpansion.isCollapsed(group) {
@@ -1197,13 +1225,13 @@ struct TaskListView: View {
 
     private var quickAddResult: QuickAddParseResult {
         QuickAddParser.parse(draft, now: workspace.clock(), calendar: workspace.calendar,
-                             knownLists: Set(workspace.allListNames),
+                             knownLists: Set(workspace.availableListNames),
                              dismissedTokenIDs: dismissedQuickAddTokens)
     }
 
     private var hasDismissedQuickAddScheduleToken: Bool {
         QuickAddParser.hasDismissedScheduleToken(in: draft, now: workspace.clock(),
-            calendar: workspace.calendar, knownLists: Set(workspace.allListNames),
+            calendar: workspace.calendar, knownLists: Set(workspace.availableListNames),
             dismissedTokenIDs: dismissedQuickAddTokens)
     }
 
@@ -1225,49 +1253,11 @@ struct TaskListView: View {
     }
 
     private func addTask(in scope: TaskListScope) {
-        // 换行批量添加（对齐滴答「换行可添加多个任务」）：粘贴进来的多行文本按行
-        // 各自成一个任务，行内仍然走同一套智能识别。
-        let lines = QuickAddComposition.batchLines(in: draft)
-        guard !lines.isEmpty else { return }
-        let batch = lines.count > 1
-        let description = descriptionDraft.trimmingCharacters(in: .whitespacesAndNewlines)
-        var created = 0
-
-        for line in lines {
-            // 单行时沿用整条草稿的解析结果——只有它带着 chip 删除的忽略状态；
-            // 批量时每一行独立解析，行与行之间不互相污染。
-            let parsed = batch
-                ? QuickAddParser.parse(line, now: workspace.clock(),
-                                       calendar: workspace.calendar,
-                                       knownLists: Set(workspace.allListNames))
-                : quickAddResult
-            guard !parsed.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { continue }
-
-            let timing = quickAddScheduleOverride
-                ?? (batch
-                    ? QuickAddScheduleDraft(parsed: parsed,
-                                            defaultDueAt: quickAddDefaultDue(for: scope))
-                    : currentQuickAddSchedule(for: scope))
-            let priority = quickAddPriorityOverride ?? parsed.priority
-            let list = quickAddListOverride ?? parsed.listName ?? workspace.activeList ?? TaskList.inbox.name
-            let selectedTags = quickAddTagsOverride ?? parsed.tags
-            var tags = workspace.activeTag.map { [$0] } ?? []
-            tags.append(contentsOf: selectedTags)
-            tags = tags.reduce(into: []) { values, tag in if !values.contains(tag) { values.append(tag) } }
-            let result = workspace.createDraft(title: parsed.title,
-                                               list: list,
-                                               schedule: timing.schedule,
-                                               priority: priority, tags: tags,
-                                               reminder: timing.reminderAt,
-                                               reminderOffsets: timing.reminderOffsetsOrNil,
-                                               repeatFrequency: timing.repeatFrequency,
-                                               recurrenceRule: timing.recurrenceRule,
-                                               // 批量创建时每一行各自成任务，共享同一段
-                                               // 描述没有意义，描述只跟随单条创建。
-                                               document: batch ? NativeDocument.empty
-                                                               : NativeDocument(plainText: description))
-            if result.taskID != nil { created += 1 }
-        }
+        let capture = QuickCaptureSession(text: draft, description: descriptionDraft,
+            dismissedTokenIDs: dismissedQuickAddTokens, scheduleOverride: quickAddScheduleOverride,
+            priorityOverride: quickAddPriorityOverride, listOverride: quickAddListOverride,
+            tagsOverride: quickAddTagsOverride)
+        let created = workspace.submitCapture(capture, defaultDueAt: quickAddDefaultDue(for: scope)).count
 
         // Keep the draft available if creation is rejected; Flutter follows
         // the same rule and only resets after TaskCreator reports success.
@@ -1441,7 +1431,7 @@ struct TaskRowView: View {
 
 }
 
-private struct TaskRowActivationPolicy: ViewModifier {
+struct TaskRowActivationPolicy: ViewModifier {
     @ViewBuilder
     func body(content: Content) -> some View {
         if #available(macOS 15.0, *) {
@@ -1470,7 +1460,7 @@ enum TaskRowPriority {
 /// 勾选框对齐 Flutter：18×18 槽位（即点击区），描边盒按 completionBoxSize
 /// 14.58 绘制（圆角 4.5 × 缩放 0.81 ≈ 3.6），贴槽位左缘；完成/放弃图标居中。
 /// 描边按优先级着色；完成后中性灰填充，白勾，不再使用强调色。
-private struct TaskRowCompletionBox: View {
+struct TaskRowCompletionBox: View {
     let task: Task
 
     var body: some View {
@@ -1648,37 +1638,9 @@ private struct TaskRowMetadataTrail: View {
         TaskListViewDefaults.rowDateColor(for: dateStyle)
     }
 
-    private var secondaryMetadata: [TaskRowSecondaryMetadata] {
-        var items: [TaskRowSecondaryMetadata] = []
-        if let progress = workspace.subtaskProgress(for: task.id) {
-            items.append(.init(id: "subtasks", value: progress,
-                               accessibilityLabel: "子任务进度：\(progress)"))
-        }
-        if task.recurrence != .never {
-            items.append(.init(id: "repeat", symbol: "repeat", accessibilityLabel: "重复任务"))
-        }
-        if TaskListViewDefaults.hasReminder(reminderAt: task.reminderAt,
-                                            reminderOffsets: task.reminderOffsets) {
-            items.append(.init(id: "reminder", symbol: "bell", accessibilityLabel: "有提醒"))
-        }
-        if !task.tags.isEmpty {
-            items.append(.init(id: "tags", symbol: "tag", accessibilityLabel: "有标签"))
-        }
-        if !task.document.isEmpty {
-            items.append(.init(id: "description", symbol: "text.alignleft", accessibilityLabel: "有描述"))
-        }
-        if !task.attachments.isEmpty {
-            items.append(.init(id: "attachments", symbol: "paperclip", accessibilityLabel: "有附件"))
-        }
-        return items
+    private var secondaryMetadata: [TaskSecondaryMetadata] {
+        TaskSecondaryMetadata.items(for: task, subtaskProgress: workspace.subtaskProgress(for: task.id))
     }
-}
-
-private struct TaskRowSecondaryMetadata: Identifiable {
-    let id: String
-    var symbol: String? = nil
-    var value: String? = nil
-    let accessibilityLabel: String
 }
 
 // MARK: - 纯展示规则（Foundation 逻辑，供 WorkFollowTests/TaskListViewDefaults.swift 覆盖）

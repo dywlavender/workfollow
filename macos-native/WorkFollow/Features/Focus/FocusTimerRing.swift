@@ -7,6 +7,7 @@ struct FocusTimerRing: View {
     let theme: FocusTheme
     let taskTitle: String?
     let onEditDuration: (() -> Void)?
+    @State private var isHovering = false
 
     private var progress: CGFloat {
         guard store.phaseSeconds > 0 else { return 0 }
@@ -14,16 +15,7 @@ struct FocusTimerRing: View {
         return min(max(value, 0), 1)
     }
 
-    private var displaySeconds: Int {
-        if store.phase == .idle {
-            return store.preferences.stopwatchMode ? 0 : store.preferences.focusMinutes * 60
-        }
-        if store.preferences.stopwatchMode,
-           store.phase == .focusing || store.phase == .pausedFocus {
-            return store.elapsedSeconds
-        }
-        return store.remainingSeconds
-    }
+    private var displaySeconds: Int { store.presentation.displaySeconds }
 
     private var progressColors: (Color, Color) {
         let isBreak = store.phase == .breaking || store.phase == .pausedBreak
@@ -60,6 +52,21 @@ struct FocusTimerRing: View {
             ringCenter
         }
         .frame(width: FocusLayoutMetrics.ringSize, height: FocusLayoutMetrics.ringSize)
+        .onHover { isHovering = $0 }
+        .overlay(alignment: .bottom) {
+            if store.currentMode == .pomodoro, store.phase == .focusing || store.phase == .pausedFocus {
+                HStack(spacing: 12) {
+                    Button { _ = store.adjustCurrentTarget(byMinutes: -5) } label: { Image(systemName: "minus") }
+                        .accessibilityIdentifier("focus-current-minus")
+                    Text("本次时长").font(.caption)
+                    Button { _ = store.adjustCurrentTarget(byMinutes: 5) } label: { Image(systemName: "plus") }
+                        .accessibilityIdentifier("focus-current-plus")
+                }.buttonStyle(.plain).foregroundStyle(theme.text2)
+                    .padding(10).background(theme.canvas, in: Capsule())
+                    .opacity(isHovering ? 1 : 0)
+                    .focusRenderAnchor(.currentDurationAdjustment)
+            }
+        }
         .shadow(color: active ? theme.accent.opacity(0.18) : .clear,
                 radius: FocusLayoutMetrics.ringShadowRadius)
     }
@@ -67,7 +74,7 @@ struct FocusTimerRing: View {
     private var ringCenter: some View {
         VStack(spacing: FocusLayoutMetrics.ringCenterSpacing) {
             if FocusDurationEditorSession.canEditDuration(
-                phase: store.phase, stopwatchMode: store.preferences.stopwatchMode
+                phase: store.phase, stopwatchMode: store.presentation.mode == .stopwatch
             ), let onEditDuration {
                 Button(action: onEditDuration) {
                     clockLabel
@@ -102,7 +109,7 @@ struct FocusTimerRing: View {
     }
 
     private var usesStopwatchDial: Bool {
-        guard store.preferences.stopwatchMode else { return false }
+        guard store.presentation.mode == .stopwatch else { return false }
         return store.phase == .idle || store.phase == .focusing || store.phase == .pausedFocus
     }
 

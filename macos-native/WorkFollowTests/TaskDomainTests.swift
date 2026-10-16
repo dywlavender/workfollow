@@ -280,12 +280,13 @@ final class TaskDomainTests: XCTestCase {
         XCTAssertTrue(abandoned.isClosed)
         XCTAssertEqual(TaskListProjection.count(in: .today, store: store, now: now, calendar: calendar), 0)
         XCTAssertTrue(TaskListProjection.groups(in: .today, store: store, now: now, calendar: calendar).isEmpty)
-        XCTAssertEqual(TaskListProjection.count(in: .completed, store: store, now: now, calendar: calendar), 1)
+        XCTAssertEqual(TaskListProjection.count(in: .abandoned, store: store, now: now, calendar: calendar), 1)
 
-        let completedGroups = TaskListProjection.groups(in: .completed, store: store,
+        let abandonedGroups = TaskListProjection.groups(in: .abandoned, store: store,
                                                         now: now, calendar: calendar)
-        XCTAssertEqual(completedGroups.compactMap(\.day), [now])
-        XCTAssertEqual(completedGroups.flatMap(\.tasks).map(\.id), [id])
+        XCTAssertEqual(abandonedGroups.compactMap(\.day), [now])
+        XCTAssertEqual(abandonedGroups.flatMap(\.tasks).map(\.id), [id])
+        XCTAssertTrue(TaskListProjection.groups(in: .completed, store: store, now: now, calendar: calendar).isEmpty)
         let allClosed = try XCTUnwrap(TaskListProjection.groups(
             in: .allTasks, store: store, now: now, calendar: calendar)
             .first { $0.kind == .completed })
@@ -296,7 +297,7 @@ final class TaskDomainTests: XCTestCase {
         XCTAssertFalse(try XCTUnwrap(store.task(id)).isClosed)
         XCTAssertNil(store.task(id)?.abandonedAt)
         XCTAssertEqual(TaskListProjection.count(in: .today, store: store, now: now, calendar: calendar), 1)
-        XCTAssertEqual(TaskListProjection.count(in: .completed, store: store, now: now, calendar: calendar), 0)
+        XCTAssertEqual(TaskListProjection.count(in: .abandoned, store: store, now: now, calendar: calendar), 0)
     }
 
     func testCompletedAndAbandonedGroupsUseTheirCloseTimesAndMixedLabel() throws {
@@ -319,7 +320,11 @@ final class TaskDomainTests: XCTestCase {
         let completedGroups = TaskListProjection.groups(in: .completed, store: store,
                                                         now: now, calendar: calendar)
         XCTAssertEqual(completedGroups.compactMap(\.day), [dayTwo, dayOne])
-        XCTAssertEqual(completedGroups[1].tasks.map(\.id), [abandonedID, completedID])
+        XCTAssertEqual(completedGroups[1].tasks.map(\.id), [completedID])
+        let abandonedGroups = TaskListProjection.groups(in: .abandoned, store: store,
+                                                        now: now, calendar: calendar)
+        XCTAssertEqual(abandonedGroups.compactMap(\.day), [dayOne])
+        XCTAssertEqual(abandonedGroups.flatMap(\.tasks).map(\.id), [abandonedID])
 
         let allClosed = try XCTUnwrap(TaskListProjection.groups(
             in: .allTasks, store: store, now: now, calendar: calendar)
@@ -370,7 +375,7 @@ final class TaskDomainTests: XCTestCase {
         XCTAssertEqual(groups[6].tasks.map(\.id), [completedID])
     }
 
-    func testAllTasksListAndTagFiltersKeepManualPlainGroupingAfterPinned() throws {
+    func testAllTasksListAndTagFiltersRespectDateGroupingAndExplicitPlainGrouping() throws {
         let store = WorkspaceStore()
         let actions = TaskActions(store: store, clock: { self.today }, calendar: calendar)
         let overdue = calendar.date(byAdding: .day, value: -1, to: calendar.startOfDay(for: today))!
@@ -383,13 +388,17 @@ final class TaskDomainTests: XCTestCase {
 
         let listGroups = TaskListProjection.groups(in: .allTasks, store: store, now: today,
                                                    calendar: calendar, query: TaskListQuery(list: "工作"))
-        XCTAssertEqual(listGroups.map(\.kind), [.pinned, .plain])
+        XCTAssertEqual(listGroups.map(\.kind), [.pinned, .today])
         XCTAssertEqual(listGroups.flatMap(\.tasks).map(\.id), [pinnedID, ordinaryID])
 
         let tagGroups = TaskListProjection.groups(in: .allTasks, store: store, now: today,
                                                   calendar: calendar, query: TaskListQuery(tag: "focus"))
-        XCTAssertEqual(tagGroups.map(\.kind), [.plain])
+        XCTAssertEqual(tagGroups.map(\.kind), [.today])
         XCTAssertEqual(tagGroups.flatMap(\.tasks).map(\.id), [ordinaryID])
+        let manualGroups = TaskListProjection.groups(in: .allTasks, store: store, now: today,
+            calendar: calendar, query: TaskListQuery(list: "工作"), grouping: .none)
+        XCTAssertEqual(manualGroups.map(\.kind), [.pinned, .plain])
+        XCTAssertEqual(manualGroups.flatMap(\.tasks).map(\.id), [pinnedID, ordinaryID])
     }
 
     func testPinnedTasksLeadTodayAndInboxBeforeTheirOrdinaryGroups() throws {

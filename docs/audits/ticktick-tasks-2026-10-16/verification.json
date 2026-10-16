@@ -1,0 +1,58 @@
+{
+  "date": "2026-10-16",
+  "branch": "experiment/macos-native",
+  "reference_client": "TickTick 8.0.80",
+  "build": "passed",
+  "new_task_tests": 20,
+  "full_regression": {
+    "total": 1318,
+    "passed": 1313,
+    "skipped": 5,
+    "failures": 0,
+    "seconds": 152.774,
+    "log": "/private/tmp/workfollow-tasks-alignment-verified-tests-2026-10-16.log",
+    "includes_final_filter_title_and_context_panel_test": true
+  },
+  "skip_reasons": [
+    "Four meeting integrations require explicitly enabled real Pi services.",
+    "One focus test requires the temporary XCTest host to become the active app; native parent picker search focus was separately verified through CUA."
+  ],
+  "resolved_verification_issues": [
+    {
+      "issue": "Three existing editor screenshot assertions failed during the locked-desktop run.",
+      "resolution": "All three passed in both unlocked full regressions, including the final run."
+    },
+    {
+      "issue": "The new context-menu test could not access SwiftUI AX children in the in-process host.",
+      "resolution": "The final test verifies the real Session transition, draft-only selection, Escape, confirmation and undo with rendered coordinates. The actual menu-button wiring was also verified through CUA."
+    }
+  ],
+  "native_acceptance": {
+    "status": "passed_for_implemented_phase",
+    "app": "/private/tmp/workfollow-tasks-qa-2026-10-16/WorkFollowReplicaQA.app",
+    "bundle": "com.workfollow.native.tasks.alignment.qa",
+    "data": "12 isolated tasks and a named QA filter",
+    "verified_flows": 13,
+    "details": "native-acceptance.json",
+    "signing_verification": "passed"
+  },
+  "reference_restoration": {
+    "client": "TickTick 8.0.80",
+    "all_view": "restored from kanban to list",
+    "temporary_tasks": [
+      "REA 任务对齐 10-16",
+      "REA 看板列创建验收"
+    ],
+    "ordinary_tasks_modified": false
+  },
+  "remaining_gaps": [
+    "Closed kanban tasks remain in a combined closed column instead of original-column subsections.",
+    "Inline subtask expansion and exact cross-column drag rules are not yet aligned.",
+    "Multi-tag tasks currently appear in their first tag column only.",
+    "List archive, independent hierarchical tags, advanced filter expressions and timeline remain planned.",
+    "Real assignment, sharing, comments and collaboration require service support."
+  ],
+  "manual_scope_limit": "The shared custom-date panel was opened and canceled. Custom-date confirm/save was not exercised in the manual flow; the kanban Tomorrow shortcut and its undo were verified.",
+  "scope": "First task-alignment batch before kanban hierarchy alignment",
+  "superseded_by": "kanban-hierarchy/verification.json"
+}

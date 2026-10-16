@@ -82,10 +82,12 @@ final class ListMetaTests: XCTestCase {
     func testListColorAndPinnedPersistAndUndo() {
         let store = WorkspaceStore(); let actions = TaskActions(store: store, clock: { self.now })
         _ = actions.renameList(nil, to: "读书")
+        let referenceID = store.listMeta(for: "读书")?.referenceID
+        XCTAssertNotNil(referenceID, "新清单具有稳定身份")
         _ = actions.setListColor("读书", 3)
         _ = actions.setListPinned("读书", true)
         XCTAssertEqual(store.listMeta(for: "读书"),
-                       TaskListMeta(name: "读书", colorIndex: 3, isPinned: true, sortOrder: 0))
+                       TaskListMeta(name: "读书", colorIndex: 3, isPinned: true, sortOrder: 0, referenceID: referenceID))
         _ = actions.setListColor("读书", 7)
         XCTAssertEqual(store.listMeta(for: "读书")?.colorIndex, 7)
         actions.undo()
@@ -93,6 +95,7 @@ final class ListMetaTests: XCTestCase {
         XCTAssertEqual(store.listMeta(for: "读书")?.isPinned, true)
         actions.undo()
         XCTAssertFalse(store.listMeta(for: "读书")?.isPinned ?? true)
+        XCTAssertEqual(store.listMeta(for: "读书")?.referenceID, referenceID)
     }
 
     func testSetListColorClampsToPaletteAndRejectsInbox() {

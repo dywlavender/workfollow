@@ -1,0 +1,1284 @@
+{
+  "source": "REA observe-native-ui",
+  "client": "TickTick macOS 8.0.80",
+  "nodes": [
+    {
+      "path": [],
+      "role": "AXWindow",
+      "title": "滴答清单",
+      "value": null,
+      "actions": [
+        "AXRaise"
+      ]
+    },
+    {
+      "path": [
+        0
+      ],
+      "role": "AXButton",
+      "title": "",
+      "value": null,
+      "actions": [
+        "AXPress"
+      ]
+    },
+    {
+      "path": [
+        1
+      ],
+      "role": "AXImage",
+      "title": null,
+      "value": null,
+      "actions": []
+    },
+    {
+      "path": [
+        2
+      ],
+      "role": "AXScrollArea",
+      "title": null,
+      "value": null,
+      "actions": [
+        "AXScrollLeftByPage",
+        "AXScrollRightByPage",
+        "AXScrollUpByPage",
+        "AXScrollDownByPage"
+      ]
+    },
+    {
+      "path": [
+        2,
+        0
+      ],
+      "role": "AXTable",
+      "title": null,
+      "value": null,
+      "actions": []
+    },
+    {
+      "path": [
+        2,
+        0,
+        0
+      ],
+      "role": "AXRow",
+      "title": null,
+      "value": null,
+      "actions": []
+    },
+    {
+      "path": [
+        2,
+        0,
+        0,
+        0
+      ],
+      "role": "AXCell",
+      "title": null,
+      "value": null,
+      "actions": []
+    },
+    {
+      "path": [
+        2,
+        0,
+        0,
+        0,
+        0
+      ],
+      "role": "AXImage",
+      "title": null,
+      "value": null,
+      "actions": []
+    },
+    {
+      "path": [
+        2,
+        0,
+        1
+      ],
+      "role": "AXRow",
+      "title": null,
+      "value": null,
+      "actions": []
+    },
+    {
+      "path": [
+        2,
+        0,
+        1,
+        0
+      ],
+      "role": "AXCell",
+      "title": null,
+      "value": null,
+      "actions": []
+    },
+    {
+      "path": [
+        2,
+        0,
+        1,
+        0,
+        0
+      ],
+      "role": "AXImage",
+      "title": null,
+      "value": null,
+      "actions": []
+    },
+    {
+      "path": [
+        2,
+        0,
+        2
+      ],
+      "role": "AXRow",
+      "title": null,
+      "value": null,
+      "actions": []
+    },
+    {
+      "path": [
+        2,
+        0,
+        2,
+        0
+      ],
+      "role": "AXCell",
+      "title": null,
+      "value": null,
+      "actions": []
+    },
+    {
+      "path": [
+        2,
+        0,
+        2,
+        0,
+        0
+      ],
+      "role": "AXImage",
+      "title": null,
+      "value": null,
+      "actions": []
+    },
+    {
+      "path": [
+        2,
+        0,
+        3
+      ],
+      "role": "AXRow",
+      "title": null,
+      "value": null,
+      "actions": []
+    },
+    {
+      "path": [
+        2,
+        0,
+        3,
+        0
+      ],
+      "role": "AXCell",
+      "title": null,
+      "value": null,
+      "actions": []
+    },
+    {
+      "path": [
+        2,
+        0,
+        4
+      ],
+      "role": "AXRow",
+      "title": null,
+      "value": null,
+      "actions": []
+    },
+    {
+      "path": [
+        2,
+        0,
+        4,
+        0
+      ],
+      "role": "AXCell",
+      "title": null,
+      "value": null,
+      "actions": []
+    },
+    {
+      "path": [
+        2,
+        0,
+        4,
+        0,
+        0
+      ],
+      "role": "AXImage",
+      "title": null,
+      "value": null,
+      "actions": []
+    },
+    {
+      "path": [
+        2,
+        0,
+        5
+      ],
+      "role": "AXRow",
+      "title": null,
+      "value": null,
+      "actions": []
+    },
+    {
+      "path": [
+        2,
+        0,
+        5,
+        0
+      ],
+      "role": "AXCell",
+      "title": null,
+      "value": null,
+      "actions": []
+    },
+    {
+      "path": [
+        2,
+        0,
+        5,
+        0,
+        0
+      ],
+      "role": "AXImage",
+      "title": null,
+      "value": null,
+      "actions": []
+    },
+    {
+      "path": [
+        2,
+        0,
+        6
+      ],
+      "role": "AXRow",
+      "title": null,
+      "value": null,
+      "actions": []
+    },
+    {
+      "path": [
+        2,
+        0,
+        6,
+        0
+      ],
+      "role": "AXCell",
+      "title": null,
+      "value": null,
+      "actions": []
+    },
+    {
+      "path": [
+        2,
+        0,
+        6,
+        0,
+        0
+      ],
+      "role": "AXImage",
+      "title": null,
+      "value": null,
+      "actions": []
+    },
+    {
+      "path": [
+        2,
+        0,
+        7
+      ],
+      "role": "AXColumn",
+      "title": null,
+      "value": null,
+      "actions": []
+    },
+    {
+      "path": [
+        3
+      ],
+      "role": "AXButton",
+      "title": "",
+      "value": null,
+      "actions": [
+        "AXPress"
+      ]
+    },
+    {
+      "path": [
+        4
+      ],
+      "role": "AXButton",
+      "title": "",
+      "value": null,
+      "actions": [
+        "AXPress"
+      ]
+    },
+    {
+      "path": [
+        5
+      ],
+      "role": "AXButton",
+      "title": "",
+      "value": null,
+      "actions": [
+        "AXPress"
+      ]
+    },
+    {
+      "path": [
+        6
+      ],
+      "role": "AXStaticText",
+      "title": null,
+      "value": "番茄专注",
+      "actions": []
+    },
+    {
+      "path": [
+        7
+      ],
+      "role": "AXButton",
+      "title": "",
+      "value": null,
+      "actions": [
+        "AXPress"
+      ]
+    },
+    {
+      "path": [
+        8
+      ],
+      "role": "AXButton",
+      "title": "",
+      "value": null,
+      "actions": [
+        "AXPress"
+      ]
+    },
+    {
+      "path": [
+        9
+      ],
+      "role": "AXButton",
+      "title": "",
+      "value": null,
+      "actions": [
+        "AXPress"
+      ]
+    },
+    {
+      "path": [
+        10
+      ],
+      "role": "AXButton",
+      "title": "",
+      "value": null,
+      "actions": [
+        "AXPress"
+      ]
+    },
+    {
+      "path": [
+        11
+      ],
+      "role": "AXScrollArea",
+      "title": null,
+      "value": null,
+      "actions": [
+        "AXScrollLeftByPage",
+        "AXScrollRightByPage",
+        "AXScrollUpByPage",
+        "AXScrollDownByPage"
+      ]
+    },
+    {
+      "path": [
+        11,
+        0
+      ],
+      "role": "AXOutline",
+      "title": null,
+      "value": null,
+      "actions": []
+    },
+    {
+      "path": [
+        11,
+        0,
+        0
+      ],
+      "role": "AXRow",
+      "title": null,
+      "value": null,
+      "actions": [
+        "AXShowDefaultUI",
+        "AXShowAlternateUI"
+      ]
+    },
+    {
+      "path": [
+        11,
+        0,
+        0,
+        0
+      ],
+      "role": "AXCell",
+      "title": null,
+      "value": null,
+      "actions": []
+    },
+    {
+      "path": [
+        11,
+        0,
+        0,
+        0,
+        0
+      ],
+      "role": "AXImage",
+      "title": null,
+      "value": null,
+      "actions": []
+    },
+    {
+      "path": [
+        11,
+        0,
+        0,
+        0,
+        1
+      ],
+      "role": "AXButton",
+      "title": "",
+      "value": null,
+      "actions": [
+        "AXPress"
+      ]
+    },
+    {
+      "path": [
+        11,
+        0,
+        0,
+        0,
+        2
+      ],
+      "role": "AXStaticText",
+      "title": null,
+      "value": "10m",
+      "actions": []
+    },
+    {
+      "path": [
+        11,
+        0,
+        0,
+        0,
+        3
+      ],
+      "role": "AXStaticText",
+      "title": null,
+      "value": "REA 复刻验收 10-15 · 提前结束",
+      "actions": []
+    },
+    {
+      "path": [
+        11,
+        0,
+        1
+      ],
+      "role": "AXRow",
+      "title": null,
+      "value": null,
+      "actions": [
+        "AXShowDefaultUI",
+        "AXShowAlternateUI"
+      ]
+    },
+    {
+      "path": [
+        11,
+        0,
+        1,
+        0
+      ],
+      "role": "AXCell",
+      "title": null,
+      "value": null,
+      "actions": []
+    },
+    {
+      "path": [
+        11,
+        0,
+        1,
+        0,
+        0
+      ],
+      "role": "AXImage",
+      "title": null,
+      "value": null,
+      "actions": []
+    },
+    {
+      "path": [
+        11,
+        0,
+        1,
+        0,
+        1
+      ],
+      "role": "AXButton",
+      "title": "",
+      "value": null,
+      "actions": [
+        "AXPress"
+      ]
+    },
+    {
+      "path": [
+        11,
+        0,
+        1,
+        0,
+        2
+      ],
+      "role": "AXStaticText",
+      "title": null,
+      "value": "5m",
+      "actions": []
+    },
+    {
+      "path": [
+        11,
+        0,
+        1,
+        0,
+        3
+      ],
+      "role": "AXStaticText",
+      "title": null,
+      "value": "REA 复刻验收 10-15 · 5分钟",
+      "actions": []
+    },
+    {
+      "path": [
+        11,
+        0,
+        2
+      ],
+      "role": "AXColumn",
+      "title": null,
+      "value": null,
+      "actions": []
+    },
+    {
+      "path": [
+        12
+      ],
+      "role": "AXImage",
+      "title": null,
+      "value": null,
+      "actions": []
+    },
+    {
+      "path": [
+        13
+      ],
+      "role": "AXStaticText",
+      "title": null,
+      "value": "180:00",
+      "actions": []
+    },
+    {
+      "path": [
+        14
+      ],
+      "role": "AXStaticText",
+      "title": null,
+      "value": "准备做什么？",
+      "actions": []
+    },
+    {
+      "path": [
+        15
+      ],
+      "role": "AXButton",
+      "title": "",
+      "value": null,
+      "actions": [
+        "AXPress"
+      ]
+    },
+    {
+      "path": [
+        16
+      ],
+      "role": "AXScrollArea",
+      "title": null,
+      "value": null,
+      "actions": [
+        "AXScrollLeftByPage",
+        "AXScrollRightByPage",
+        "AXScrollUpByPage",
+        "AXScrollDownByPage"
+      ]
+    },
+    {
+      "path": [
+        16,
+        0
+      ],
+      "role": "AXOutline",
+      "title": null,
+      "value": null,
+      "actions": []
+    },
+    {
+      "path": [
+        16,
+        0,
+        0
+      ],
+      "role": "AXRow",
+      "title": null,
+      "value": null,
+      "actions": [
+        "AXShowDefaultUI",
+        "AXShowAlternateUI"
+      ]
+    },
+    {
+      "path": [
+        16,
+        0,
+        0,
+        0
+      ],
+      "role": "AXCell",
+      "title": null,
+      "value": null,
+      "actions": []
+    },
+    {
+      "path": [
+        16,
+        0,
+        1
+      ],
+      "role": "AXRow",
+      "title": null,
+      "value": null,
+      "actions": [
+        "AXShowDefaultUI",
+        "AXShowAlternateUI"
+      ]
+    },
+    {
+      "path": [
+        16,
+        0,
+        1,
+        0
+      ],
+      "role": "AXCell",
+      "title": null,
+      "value": null,
+      "actions": []
+    },
+    {
+      "path": [
+        16,
+        0,
+        1,
+        0,
+        0
+      ],
+      "role": "AXStaticText",
+      "title": null,
+      "value": "概览",
+      "actions": []
+    },
+    {
+      "path": [
+        16,
+        0,
+        2
+      ],
+      "role": "AXRow",
+      "title": null,
+      "value": null,
+      "actions": [
+        "AXShowDefaultUI",
+        "AXShowAlternateUI"
+      ]
+    },
+    {
+      "path": [
+        16,
+        0,
+        2,
+        0
+      ],
+      "role": "AXCell",
+      "title": null,
+      "value": null,
+      "actions": []
+    },
+    {
+      "path": [
+        16,
+        0,
+        2,
+        0,
+        0
+      ],
+      "role": "AXStaticText",
+      "title": null,
+      "value": "今日番茄",
+      "actions": []
+    },
+    {
+      "path": [
+        16,
+        0,
+        2,
+        0,
+        1
+      ],
+      "role": "AXStaticText",
+      "title": null,
+      "value": "3",
+      "actions": []
+    },
+    {
+      "path": [
+        16,
+        0,
+        2,
+        0,
+        2
+      ],
+      "role": "AXStaticText",
+      "title": null,
+      "value": "今日专注时长",
+      "actions": []
+    },
+    {
+      "path": [
+        16,
+        0,
+        2,
+        0,
+        3
+      ],
+      "role": "AXStaticText",
+      "title": null,
+      "value": "22m",
+      "actions": []
+    },
+    {
+      "path": [
+        16,
+        0,
+        2,
+        0,
+        4
+      ],
+      "role": "AXStaticText",
+      "title": null,
+      "value": "总番茄",
+      "actions": []
+    },
+    {
+      "path": [
+        16,
+        0,
+        2,
+        0,
+        5
+      ],
+      "role": "AXStaticText",
+      "title": null,
+      "value": "3",
+      "actions": []
+    },
+    {
+      "path": [
+        16,
+        0,
+        2,
+        0,
+        6
+      ],
+      "role": "AXStaticText",
+      "title": null,
+      "value": "总专注时长",
+      "actions": []
+    },
+    {
+      "path": [
+        16,
+        0,
+        2,
+        0,
+        7
+      ],
+      "role": "AXStaticText",
+      "title": null,
+      "value": "22m",
+      "actions": []
+    },
+    {
+      "path": [
+        16,
+        0,
+        3
+      ],
+      "role": "AXRow",
+      "title": null,
+      "value": null,
+      "actions": [
+        "AXShowDefaultUI",
+        "AXShowAlternateUI"
+      ]
+    },
+    {
+      "path": [
+        16,
+        0,
+        3,
+        0
+      ],
+      "role": "AXCell",
+      "title": null,
+      "value": null,
+      "actions": []
+    },
+    {
+      "path": [
+        16,
+        0,
+        4
+      ],
+      "role": "AXRow",
+      "title": null,
+      "value": null,
+      "actions": [
+        "AXShowDefaultUI",
+        "AXShowAlternateUI"
+      ]
+    },
+    {
+      "path": [
+        16,
+        0,
+        4,
+        0
+      ],
+      "role": "AXCell",
+      "title": null,
+      "value": null,
+      "actions": []
+    },
+    {
+      "path": [
+        16,
+        0,
+        4,
+        0,
+        0
+      ],
+      "role": "AXStaticText",
+      "title": null,
+      "value": "专注记录",
+      "actions": []
+    },
+    {
+      "path": [
+        16,
+        0,
+        4,
+        0,
+        1
+      ],
+      "role": "AXButton",
+      "title": "",
+      "value": null,
+      "actions": [
+        "AXPress"
+      ]
+    },
+    {
+      "path": [
+        16,
+        0,
+        4,
+        0,
+        2
+      ],
+      "role": "AXButton",
+      "title": "",
+      "value": null,
+      "actions": [
+        "AXPress"
+      ]
+    },
+    {
+      "path": [
+        16,
+        0,
+        5
+      ],
+      "role": "AXRow",
+      "title": null,
+      "value": null,
+      "actions": [
+        "AXShowDefaultUI",
+        "AXShowAlternateUI"
+      ]
+    },
+    {
+      "path": [
+        16,
+        0,
+        5,
+        0
+      ],
+      "role": "AXCell",
+      "title": null,
+      "value": null,
+      "actions": []
+    },
+    {
+      "path": [
+        16,
+        0,
+        5,
+        0,
+        0
+      ],
+      "role": "AXStaticText",
+      "title": null,
+      "value": "10月15日",
+      "actions": []
+    },
+    {
+      "path": [
+        16,
+        0,
+        6
+      ],
+      "role": "AXRow",
+      "title": null,
+      "value": null,
+      "actions": [
+        "AXShowDefaultUI",
+        "AXShowAlternateUI"
+      ]
+    },
+    {
+      "path": [
+        16,
+        0,
+        6,
+        0
+      ],
+      "role": "AXCell",
+      "title": null,
+      "value": null,
+      "actions": []
+    },
+    {
+      "path": [
+        16,
+        0,
+        6,
+        0,
+        0
+      ],
+      "role": "AXImage",
+      "title": null,
+      "value": null,
+      "actions": []
+    },
+    {
+      "path": [
+        16,
+        0,
+        6,
+        0,
+        1
+      ],
+      "role": "AXStaticText",
+      "title": null,
+      "value": "16:29 - 16:34",
+      "actions": []
+    },
+    {
+      "path": [
+        16,
+        0,
+        6,
+        0,
+        2
+      ],
+      "role": "AXStaticText",
+      "title": null,
+      "value": "7m",
+      "actions": []
+    },
+    {
+      "path": [
+        16,
+        0,
+        6,
+        0,
+        3
+      ],
+      "role": "AXStaticText",
+      "title": null,
+      "value": "REA 复刻验收 10-15：达到5分钟后的结束计数测试。",
+      "actions": []
+    },
+    {
+      "path": [
+        16,
+        0,
+        7
+      ],
+      "role": "AXRow",
+      "title": null,
+      "value": null,
+      "actions": [
+        "AXShowDefaultUI",
+        "AXShowAlternateUI"
+      ]
+    },
+    {
+      "path": [
+        16,
+        0,
+        7,
+        0
+      ],
+      "role": "AXCell",
+      "title": null,
+      "value": null,
+      "actions": []
+    },
+    {
+      "path": [
+        16,
+        0,
+        7,
+        0,
+        0
+      ],
+      "role": "AXImage",
+      "title": null,
+      "value": null,
+      "actions": []
+    },
+    {
+      "path": [
+        16,
+        0,
+        7,
+        0,
+        1
+      ],
+      "role": "AXStaticText",
+      "title": null,
+      "value": "15:02 - 15:12",
+      "actions": []
+    },
+    {
+      "path": [
+        16,
+        0,
+        7,
+        0,
+        2
+      ],
+      "role": "AXStaticText",
+      "title": null,
+      "value": "10m",
+      "actions": []
+    },
+    {
+      "path": [
+        16,
+        0,
+        7,
+        0,
+        3
+      ],
+      "role": "AXStaticText",
+      "title": null,
+      "value": "REA 复刻验收 10-15 · 提前结束",
+      "actions": []
+    },
+    {
+      "path": [
+        16,
+        0,
+        8
+      ],
+      "role": "AXRow",
+      "title": null,
+      "value": null,
+      "actions": [
+        "AXShowDefaultUI",
+        "AXShowAlternateUI"
+      ]
+    },
+    {
+      "path": [
+        16,
+        0,
+        8,
+        0
+      ],
+      "role": "AXCell",
+      "title": null,
+      "value": null,
+      "actions": []
+    },
+    {
+      "path": [
+        16,
+        0,
+        8,
+        0,
+        0
+      ],
+      "role": "AXImage",
+      "title": null,
+      "value": null,
+      "actions": []
+    },
+    {
+      "path": [
+        16,
+        0,
+        8,
+        0,
+        1
+      ],
+      "role": "AXStaticText",
+      "title": null,
+      "value": "08:51 - 08:56",
+      "actions": []
+    },
+    {
+      "path": [
+        16,
+        0,
+        8,
+        0,
+        2
+      ],
+      "role": "AXStaticText",
+      "title": null,
+      "value": "5m",
+      "actions": []
+    },
+    {
+      "path": [
+        16,
+        0,
+        8,
+        0,
+        3
+      ],
+      "role": "AXStaticText",
+      "title": null,
+      "value": "REA 复刻验收 10-15 · 5分钟",
+      "actions": []
+    },
+    {
+      "path": [
+        16,
+        0,
+        8,
+        0,
+        4
+      ],
+      "role": "AXStaticText",
+      "title": null,
+      "value": "REA 验收：5分钟自然完成与额外时间",
+      "actions": []
+    },
+    {
+      "path": [
+        16,
+        0,
+        9
+      ],
+      "role": "AXColumn",
+      "title": null,
+      "value": null,
+      "actions": []
+    },
+    {
+      "path": [
+        17
+      ],
+      "role": "AXButton",
+      "title": null,
+      "value": null,
+      "actions": [
+        "AXPress"
+      ]
+    },
+    {
+      "path": [
+        18
+      ],
+      "role": "AXButton",
+      "title": null,
+      "value": null,
+      "actions": [
+        "AXPress",
+        "AXZoomWindow",
+        "AXShowMenu"
+      ]
+    },
+    {
+      "path": [
+        18,
+        0
+      ],
+      "role": "AXGroup",
+      "title": null,
+      "value": null,
+      "actions": []
+    },
+    {
+      "path": [
+        19
+      ],
+      "role": "AXButton",
+      "title": null,
+      "value": null,
+      "actions": [
+        "AXPress"
+      ]
+    }
+  ]
+}

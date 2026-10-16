@@ -1,0 +1,45 @@
+{
+  "client": "TickTick 8.0.80",
+  "evidence_id": "ev_ecea26a6533e463c3949d3714e015c47c517c53555fc002b4493c8be2861c7d8",
+  "nodes": [
+    {
+      "path": [
+        7,
+        0,
+        14,
+        0,
+        1
+      ],
+      "role": "AXStaticText",
+      "title": null,
+      "value": "已归档的清单",
+      "actions": []
+    }
+  ],
+  "runtime_observations": [
+    {
+      "source": "CUA live task context menu",
+      "result": "Date shortcuts, priorities, add subtask, link parent, pin, abandon, move, tag, focus, duplicate, copy link, sticky note, convert to note, delete."
+    },
+    {
+      "source": "CUA disposable task REA 任务对齐 10-16",
+      "result": "After abandon, All retains the task in the closed group; global Completed does not include it. The task was restored via 重新开始."
+    },
+    {
+      "source": "CUA All kanban view",
+      "result": "Each date column exposes add. Creating REA 看板列创建验收 in Today adds it to Today without date text in its title."
+    },
+    {
+      "source": "CUA All kanban view",
+      "result": "A closed task appears in its date column under a completed subsection. This remains a project gap."
+    },
+    {
+      "source": "CUA drag attempt",
+      "result": "Dragging the named QA task from Today onto the undated header did not change it. Exact drag semantics remain unverified."
+    },
+    {
+      "source": "CUA visibility observation",
+      "result": "The Abandoned and Archived Lists nodes exist in AX but are not visible with the current client settings; clicking a hidden AX row does not establish its runtime destination."
+    }
+  ]
+}

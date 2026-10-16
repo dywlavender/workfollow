@@ -1,0 +1,21 @@
+{
+  "accepted_native_callbacks": [
+    {
+      "count": 1,
+      "event": "matrix.drop",
+      "quadrant": 0
+    },
+    {
+      "accepted": true,
+      "count": 1,
+      "day": 1791907200,
+      "event": "timeline.drop",
+      "minute": 722.8125
+    },
+    {
+      "accepted": true,
+      "day": 1791907200,
+      "event": "all-day.drop"
+    }
+  ]
+}

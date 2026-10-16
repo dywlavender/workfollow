@@ -1,0 +1,40 @@
+{
+  "presets": [
+    {
+      "id": "B0E5894C-B424-411D-9748-89BAF2BE351E",
+      "name": "需求评审",
+      "minutes": 25,
+      "stopwatch": false,
+      "archived": false
+    },
+    {
+      "id": "53EE96B5-E68D-4A52-9E3A-C59D547C12F6",
+      "name": "方案写作",
+      "minutes": 0,
+      "stopwatch": true,
+      "archived": false
+    },
+    {
+      "id": "4FA69935-CA46-4501-A2CA-D3EA177FBBE8",
+      "name": "阅读计划",
+      "minutes": 30,
+      "stopwatch": false,
+      "archived": true
+    }
+  ],
+  "records": [
+    {
+      "id": "CC039522-B398-4FA0-9E7D-F74D04B31AF4",
+      "seconds": 1500,
+      "preset_id": "B0E5894C-B424-411D-9748-89BAF2BE351E",
+      "note": "完成议程准备。"
+    },
+    {
+      "id": "E2F418FE-CDA8-4AC4-B29A-BFF14C5AFB72",
+      "seconds": 2400,
+      "preset_id": "53EE96B5-E68D-4A52-9E3A-C59D547C12F6",
+      "note": "集中梳理交互。"
+    }
+  ],
+  "default_focus_minutes": 25
+}

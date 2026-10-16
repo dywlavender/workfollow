@@ -143,9 +143,9 @@ final class FocusStoreTests: XCTestCase {
         let a = UUID(), b = UUID()
         XCTAssertTrue(store.addRecord(taskID: a, startedAt: base.addingTimeInterval(-3600), minutes: 25))
         XCTAssertTrue(store.addRecord(taskID: b, startedAt: base.addingTimeInterval(-7200), minutes: 10))
-        XCTAssertFalse(store.addRecord(taskID: nil,
-                                       startedAt: base.addingTimeInterval(-400 * 24 * 3600),
-                                       minutes: 10))  // 超出最近 7 天拒绝
+        XCTAssertTrue(store.addRecord(taskID: nil,
+                                      startedAt: base.addingTimeInterval(-400 * 24 * 3600),
+                                      minutes: 10))  // 完整补记允许选择历史日期
         XCTAssertFalse(store.addRecord(taskID: nil, startedAt: base, minutes: 0))  // 分钟越界拒绝
 
         let totals = store.weeklyTaskTotals()
@@ -208,7 +208,7 @@ final class FocusStoreTests: XCTestCase {
         store.deleteRecord(records[9_998].id)
         XCTAssertEqual(store.allTimeMinutes, 19_998)
         XCTAssertEqual(store.allTimePomodoros, 4_999)
-        XCTAssertTrue(store.addRecord(taskID: taskID, startedAt: base.addingTimeInterval(-30), minutes: 10))
+        XCTAssertTrue(store.addRecord(taskID: taskID, startedAt: base.addingTimeInterval(-600), minutes: 10))
         XCTAssertEqual(store.allTimeMinutes, 20_008)
         XCTAssertEqual(store.allTimePomodoros, 5_000)
         XCTAssertTrue(store.setDailyGoal(9))
@@ -302,7 +302,10 @@ final class FocusStoreTests: XCTestCase {
         let record = store.finishEarly()
         XCTAssertEqual(record?.minutes, 2)  // ceil(90 / 60)
         XCTAssertEqual(record?.taskID, taskID)
-        XCTAssertEqual(store.phase, .breaking)
+        XCTAssertEqual(store.phase, .idle)
+        XCTAssertEqual(record?.mode, .stopwatch)
+        XCTAssertEqual(record?.activeSeconds, 90)
+        XCTAssertEqual(store.todayPomodoros, 0)
     }
 
     // MARK: 运行中换绑

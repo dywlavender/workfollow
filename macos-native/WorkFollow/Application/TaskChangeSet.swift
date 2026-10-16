@@ -33,6 +33,9 @@ struct TaskChangeSet: Equatable {
         case skippedAt
         case convertedNoteID
         case sourceNoteID
+        case sectionID
+        case focusEstimate
+        case occurrence
     }
 
     struct Entry: Equatable {
@@ -109,13 +112,13 @@ struct TaskChangeSet: Equatable {
         var fields = Set<Field>()
         if before.title != after.title { fields.insert(.title) }
         if before.document != after.document { fields.insert(.document) }
-        if before.tags != after.tags { fields.insert(.tags) }
+        if before.tags != after.tags || before.tagReferences != after.tagReferences { fields.insert(.tags) }
         if before.recurrence != after.recurrence { fields.insert(.recurrence) }
         if before.recurrenceRule != after.recurrenceRule { fields.insert(.recurrenceRule) }
         if before.reminderAt != after.reminderAt { fields.insert(.reminderAt) }
         if before.reminderOffsets != after.reminderOffsets { fields.insert(.reminderOffsets) }
         if before.attachments != after.attachments { fields.insert(.attachments) }
-        if before.list != after.list { fields.insert(.list) }
+        if before.list != after.list || before.listID != after.listID { fields.insert(.list) }
         if before.priority != after.priority { fields.insert(.priority) }
         if before.schedule != after.schedule { fields.insert(.schedule) }
         if before.status != after.status { fields.insert(.status) }
@@ -131,6 +134,11 @@ struct TaskChangeSet: Equatable {
         if before.skippedAt != after.skippedAt { fields.insert(.skippedAt) }
         if before.convertedNoteID != after.convertedNoteID { fields.insert(.convertedNoteID) }
         if before.sourceNoteID != after.sourceNoteID { fields.insert(.sourceNoteID) }
+        if before.sectionID != after.sectionID { fields.insert(.sectionID) }
+        if before.focusEstimate != after.focusEstimate { fields.insert(.focusEstimate) }
+        if before.series != after.series || before.occurrenceKey != after.occurrenceKey || before.occurrenceOverride != after.occurrenceOverride {
+            fields.insert(.occurrence)
+        }
         return fields
     }
 }

@@ -119,7 +119,7 @@ final class ScheduleExpandedSectionTests: XCTestCase {
                     for title in ["每天", "每周 (周二)", "每月 (22日)", "每年 (9月22日)", "工作日", "节假日", "农历重复", "自定义"] {
                         XCTAssertNotNil(childValues[.option(title)], title)
                     }
-                    XCTAssertNil(childValues[.option("艾宾浩斯记忆法")])
+                    XCTAssertNotNil(childValues[.option("艾宾浩斯记忆法")])
                 }
             }
         }

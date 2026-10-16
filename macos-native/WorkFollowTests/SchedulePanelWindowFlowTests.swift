@@ -295,10 +295,18 @@ final class SchedulePanelWindowFlowTests: XCTestCase {
         try repository.save(NativeWorkspaceSnapshot(tasks: [task, otherTask], notes: [],
                                                     taskLists: [TaskList.inbox.name]))
         let snapshot = try XCTUnwrap(repository.load())
-        let isolatedTask = try XCTUnwrap(snapshot.tasks.first)
+        let loadedTask = try XCTUnwrap(snapshot.tasks.first)
         let workspace = TaskWorkspaceModel(clock: { now }, calendar: calendar,
                                            seedDemoData: false, initialTasks: snapshot.tasks,
                                            initialLists: snapshot.taskLists ?? [])
+        let isolatedTask = try XCTUnwrap(workspace.task(for: loadedTask.id))
+        // Capture the complete post-hydration baseline. Identity migration is
+        // not a popup write; every confirm/cancel comparison still uses a full Task.
+        XCTAssertNotNil(isolatedTask.listID)
+        var expectedHydration = loadedTask
+        expectedHydration.listID = isolatedTask.listID
+        expectedHydration.tagReferences = []
+        XCTAssertEqual(isolatedTask, expectedHydration)
         workspace.bulkSelection = [otherTask.id]
         let layout = LayoutState()
         let root = Harness(task: isolatedTask, workspace: workspace, layout: layout)

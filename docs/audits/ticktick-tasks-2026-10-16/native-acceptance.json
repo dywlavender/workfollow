@@ -1,0 +1,82 @@
+{
+  "date": "2026-10-16",
+  "source": "CUA live native interactions; isolated fixture data",
+  "app": "WorkFollowTaskAlignmentQA",
+  "bundle": "com.workfollow.native.tasks.alignment.qa",
+  "passed": [
+    {
+      "flow": "Kanban column creation and undo",
+      "observed": "Today column created 看板列内创建验收 with Today date; a single undo removed it and restored the column count."
+    },
+    {
+      "flow": "Kanban context menu priority",
+      "observed": "Right-clicking 联调与回归 and choosing Medium changed its visible priority flag."
+    },
+    {
+      "flow": "Kanban shared date panel",
+      "observed": "Card date opened the shared date dialog; Escape canceled the draft without changing the stored schedule. Date confirmation was not exercised in this manual flow."
+    },
+    {
+      "flow": "Kanban display preferences",
+      "observed": "Hide details removed metadata while preserving body preview; restoring details showed it again. Hiding and restoring Tags removed and restored actual tag text."
+    },
+    {
+      "flow": "Abandoned navigation and restore",
+      "observed": "Abandoned showed only 取消旧计划. Restore removed it; one undo restored the abandoned task and count. Completed showed only 整理上周笔记."
+    },
+    {
+      "flow": "Filter editor Inbox and draft cancellation",
+      "observed": "Selecting Inbox reduced the preview from 10 unfinished tasks to 收集箱对齐验收 only. Cancel did not create a filter."
+    },
+    {
+      "flow": "Saved filter and navigation cleanup",
+      "observed": "Saved 收集箱过滤验收 showed the same one unfinished match. Navigating to Completed showed its completed task rather than retaining the Inbox filter."
+    },
+    {
+      "flow": "Context menu parent assignment and copy link",
+      "observed": "The actual menu opened a focused, searchable parent picker. Confirming 完善本周方案 under 需求评审 changed child progress from 0/2 to 0/3; one undo restored 0/2. Copy Link produced a workfollow://task/ link, verified by pasting into an unsubmitted QA draft and clearing it."
+    },
+    {
+      "flow": "Batch merge availability",
+      "observed": "The merge action was disabled with one selected item and enabled with two."
+    },
+    {
+      "flow": "Batch parent assignment",
+      "observed": "整理交付检查项 and 补充旅行计划 both became children of 需求评审. Progress changed 0/2 to 0/4; one undo restored both tasks and their original Work/Life lists."
+    },
+    {
+      "flow": "Batch note conversion, undo and redo",
+      "observed": "Two selected tasks generated two notes. One Cmd+Z removed both notes; one Cmd+Shift+Z restored both. A final undo restored both source tasks and removed the generated notes."
+    },
+    {
+      "flow": "Final build filter title",
+      "observed": "Opening 收集箱过滤验收 showed the saved name as the page title and one unfinished matching task."
+    },
+    {
+      "flow": "Final build kanban menu and date shortcut",
+      "observed": "The kanban context menu visibly included Link Parent and Copy Link. Choosing Tomorrow moved 联调与回归 out of Today into the upcoming column; one undo restored Today and the prior column counts."
+    }
+  ],
+  "reference_restoration": {
+    "client": "TickTick 8.0.80",
+    "all_view": "restored from kanban to list",
+    "temporary_tasks": [
+      "REA 任务对齐 10-16",
+      "REA 看板列创建验收"
+    ],
+    "ordinary_tasks_modified": false
+  },
+  "remaining_manual_checks": [],
+  "captures": [
+    {
+      "file": "workfollow-batch-parent.png",
+      "source": "REA observe-native-ui after CUA batch assignment",
+      "visually_checked": true
+    },
+    {
+      "file": "workfollow-task-board.png",
+      "source": "REA observe-native-ui after final-build date shortcut and undo",
+      "visually_checked": true
+    }
+  ]
+}

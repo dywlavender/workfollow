@@ -13,7 +13,7 @@ struct GlobalQuickAddComposer {
     /// 重解析要忽略那一段，否则「点掉」只是视觉上消失、任务上仍然带着它。
     func parse(_ text: String, dismissedTokenIDs: Set<String> = []) -> QuickAddParseResult {
         QuickAddParser.parse(text, now: workspace.clock(), calendar: workspace.calendar,
-                             knownLists: Set(workspace.allListNames),
+                             knownLists: Set(workspace.availableListNames),
                              dismissedTokenIDs: dismissedTokenIDs)
     }
 
@@ -35,37 +35,8 @@ struct GlobalQuickAddComposer {
     @discardableResult
     func submit(text: String, description: String = "",
                 dismissedTokenIDs: Set<String> = []) -> UUID? {
-        let lines = QuickAddComposition.batchLines(in: text)
-        guard !lines.isEmpty else { return nil }
-        let batch = lines.count > 1
-        let note = description.trimmingCharacters(in: .whitespacesAndNewlines)
-        var firstID: UUID?
-
-        for line in lines {
-            // 单行时沿用整条草稿的解析结果（只有它带着 chip 点掉的忽略状态）；
-            // 批量时逐行独立解析，行与行之间不互相污染。
-            let parsed = batch ? parse(line) : parse(text, dismissedTokenIDs: dismissedTokenIDs)
-            guard !parsed.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { continue }
-            let timing = QuickAddScheduleDraft(parsed: parsed, defaultDueAt: nil)
-            let list = parsed.listName ?? workspace.activeList ?? TaskList.inbox.name
-            var tags = workspace.activeTag.map { [$0] } ?? []
-            tags.append(contentsOf: parsed.tags)
-            tags = tags.reduce(into: []) { values, tag in
-                if !values.contains(tag) { values.append(tag) }
-            }
-            let result = workspace.createDraft(title: parsed.title,
-                                               list: list,
-                                               schedule: timing.schedule,
-                                               priority: parsed.priority,
-                                               tags: tags,
-                                               reminder: timing.reminderAt,
-                                               repeatFrequency: timing.repeatFrequency,
-                                               recurrenceRule: timing.recurrenceRule,
-                                               document: batch ? NativeDocument.empty
-                                                               : NativeDocument(plainText: note))
-            if let id = result.taskID, firstID == nil { firstID = id }
-        }
-        return firstID
+        workspace.submitCapture(QuickCaptureSession(text: text, description: description,
+            dismissedTokenIDs: dismissedTokenIDs)).first
     }
 }
 
@@ -196,6 +167,10 @@ final class GlobalQuickAddController: NSObject, ObservableObject {
         if created != nil { hidePanel() }
     }
 
+    func submit(_ session: QuickCaptureSession) {
+        if !composer.workspace.submitCapture(session).isEmpty { hidePanel() }
+    }
+
     /// SwiftUI 内容实测高度回传：只改高度，顶边不动，避免面板「跳一下」。
     private func resizePanel(toHeight height: CGFloat) {
         guard let panel else { return }
@@ -223,9 +198,7 @@ final class GlobalQuickAddController: NSObject, ObservableObject {
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         let hosting = FirstResponderHostingView(rootView: GlobalQuickAddPanelView(
             composer: composer,
-            submit: { [weak self] text, description, dismissed in
-                self?.submit(text, description: description, dismissedTokenIDs: dismissed)
-            },
+            submit: { [weak self] session in self?.submit(session) },
             close: { [weak self] in self?.hidePanel() },
             onHeightChange: { [weak self] height in
                 // 偏好回调发生在布局过程中，改窗口尺寸要等这一帧排完。
@@ -260,7 +233,7 @@ private struct GlobalPanelHeightKey: PreferenceKey {
 @MainActor
 private struct GlobalQuickAddPanelView: View {
     let composer: GlobalQuickAddComposer
-    let submit: (String, String, Set<String>) -> Void
+    let submit: (QuickCaptureSession) -> Void
     let close: () -> Void
     let onHeightChange: (CGFloat) -> Void
 
@@ -269,8 +242,18 @@ private struct GlobalQuickAddPanelView: View {
     @State private var descriptionDraft = ""
     /// 与列表快速添加条共用同一套候选/描述状态机：同一串按键在两个入口必须同解。
     @State private var candidate = QuickAddCandidateState()
+    @State private var inputSelection: NSRange?
+    @State private var requestedInputSelection: NSRange?
     /// 被点掉的识别 chip。与列表条同源：点掉后重解析要忽略那一段。
     @State private var dismissedTokens: Set<String> = []
+    @State private var scheduleOverride: QuickAddScheduleDraft?
+    @State private var priorityOverride: TaskPriority?
+    @State private var listOverride: String?
+    @State private var tagsOverride: [String]?
+    @State private var showSchedule = false
+    @State private var showProperties = false
+    @State private var showTemplates = false
+    @State private var scheduleDraftID = UUID()
     /// 输入框是否持有焦点。**两个方向共用的唯一真值。**
     ///
     /// 这里曾经是 `@FocusState`（死信号，见 `QuickAddTextField.focused` 的说明）
@@ -283,6 +266,38 @@ private struct GlobalQuickAddPanelView: View {
     private var parsed: QuickAddParseResult {
         composer.parse(text, dismissedTokenIDs: dismissedTokens)
     }
+    private var capture: QuickCaptureSession {
+        QuickCaptureSession(text: text, description: descriptionDraft, selection: inputSelection,
+            dismissedTokenIDs: dismissedTokens, scheduleOverride: scheduleOverride,
+            priorityOverride: priorityOverride, listOverride: listOverride, tagsOverride: tagsOverride)
+    }
+
+    private var timing: QuickAddScheduleDraft { scheduleOverride ?? QuickAddScheduleDraft(parsed: parsed, defaultDueAt: nil) }
+
+    private var scheduleDraftTask: Task {
+        var task = Task(id: scheduleDraftID, title: parsed.title,
+            tags: tagsOverride ?? parsed.tags, recurrence: timing.repeatFrequency,
+            recurrenceRule: timing.recurrenceRule, reminderAt: timing.reminderAt,
+            reminderOffsets: timing.reminderOffsetsOrNil,
+            list: TaskList(name: listOverride ?? parsed.listName ?? composer.workspace.activeList ?? TaskList.inbox.name),
+            priority: priorityOverride ?? parsed.priority, schedule: timing.schedule,
+            childOrder: 0, createdAt: composer.workspace.clock(), updatedAt: composer.workspace.clock())
+        task.document = NativeDocument(plainText: descriptionDraft)
+        return task
+    }
+
+    private var manualSummary: String {
+        var values: [String] = []
+        if let scheduleOverride, let due = scheduleOverride.dueAt {
+            values.append(TaskDateLabel.text(due, hasTime: scheduleOverride.hasTime,
+                now: composer.workspace.clock(), calendar: composer.workspace.calendar))
+        }
+        if let listOverride { values.append("@" + listOverride) }
+        if let priorityOverride { values.append(priorityOverride.title) }
+        if let tagsOverride { values.append(contentsOf: tagsOverride.map { "#" + $0 }) }
+        return values.joined(separator: " · ")
+    }
+
     /// 粘贴进来的多行草稿会按行拆成多个任务；>1 时给出明确提示。
     private var batchCount: Int { QuickAddComposition.batchLines(in: text).count }
 
@@ -298,6 +313,10 @@ private struct GlobalQuickAddPanelView: View {
             }
             if isCandidateListVisible { candidateList }
             if !parsed.tokens.isEmpty { tokenStrip }
+            if !manualSummary.isEmpty {
+                Text(manualSummary).font(WFType.supporting).foregroundStyle(WFColors.secondaryText)
+                    .padding(.leading, 24)
+            }
         }
         .padding(WFSpace.lg)
         .frame(width: GlobalQuickAddController.panelWidth, alignment: .topLeading)
@@ -319,6 +338,10 @@ private struct GlobalQuickAddPanelView: View {
         // 面板弹出来焦点还停在宿主视图上，打字没反应。
         .onAppear { DispatchQueue.main.async { inputFocused = true } }
         .onExitCommand(perform: handleEscape)
+        .sheet(isPresented: $showTemplates) {
+            TaskTemplateGalleryView(workspace: composer.workspace, templateStore: TemplateStore.shared,
+                onDismiss: { showTemplates = false }, onApplied: { _ in close() })
+        }
     }
 
     // MARK: 输入行
@@ -335,16 +358,47 @@ private struct GlobalQuickAddPanelView: View {
                 placeholder: "新建任务：明天下午3点 开会 @工作 !! #周报",
                 tokens: parsed.tokens,
                 focused: $inputFocused,
-                onSubmit: { submit(text, descriptionDraft, dismissedTokens) },
+                onSubmit: { submit(capture) },
                 onEscape: handleEscape,
                 onTab: handleTab,
                 onShiftReturn: openDescription,
                 onMoveUp: { moveSelection(by: -1) },
                 onMoveDown: { moveSelection(by: 1) },
                 onFieldFocusChange: { inputFocused = $0 },
-                fontSize: 14
+                fontSize: 14,
+                onSelectionChange: { if inputSelection != $0 { inputSelection = $0 } },
+                requestedSelection: $requestedInputSelection
             )
             .frame(maxWidth: .infinity)
+            Button { showSchedule = true } label: {
+                Image(systemName: "calendar")
+                    .foregroundStyle(timing.dueAt == nil ? WFColors.secondaryText : WFColors.accent)
+                    .frame(width: WFMetrics.controlHeight, height: WFMetrics.controlHeight)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain).help("安排日期、提醒和重复")
+            .accessibilityLabel("安排日期、提醒和重复")
+            .schedulePopover(isPresented: $showSchedule) {
+                TaskDatePopoverV2(task: scheduleDraftTask, workspace: composer.workspace,
+                    draftCommit: { scheduleOverride = QuickAddScheduleDraft($0) }) { showSchedule = false }
+            }
+            Button { showProperties = true } label: {
+                Image(systemName: "chevron.down")
+                    .foregroundStyle(WFColors.secondaryText)
+                    .frame(width: WFMetrics.controlHeight, height: WFMetrics.controlHeight)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain).help("更多任务属性").accessibilityLabel("更多任务属性")
+            .background(AnchoredPropertyPanel(isPresented: $showProperties, width: 270) {
+                QuickAddPropertiesPopover(workspace: composer.workspace,
+                    selectedPriority: priorityOverride ?? parsed.priority,
+                    selectedList: listOverride ?? parsed.listName ?? composer.workspace.activeList ?? TaskList.inbox.name,
+                    selectedTags: tagsOverride ?? parsed.tags,
+                    onPriority: { priorityOverride = $0; showProperties = false },
+                    onList: { listOverride = $0 }, onTags: { tagsOverride = $0 },
+                    onTemplate: { showProperties = false; showTemplates = true },
+                    onDismiss: { showProperties = false })
+            })
         }
     }
 
@@ -359,7 +413,7 @@ private struct GlobalQuickAddPanelView: View {
                 .font(WFType.control)
                 .foregroundStyle(WFColors.text)
                 .focused($descriptionFocused)
-                .onSubmit { submit(text, descriptionDraft, dismissedTokens) }
+                .onSubmit { submit(capture) }
                 .onExitCommand { closeDescriptionRow() }
         }
         .padding(.leading, 24)
@@ -412,12 +466,12 @@ private struct GlobalQuickAddPanelView: View {
     /// 输入末尾的标记片段，且没被 Esc 忽略过。
     /// 焦点判据就是输入框的聚焦真值，与列表条同一套。
     private var activeMarker: QuickAddComposition.MarkerQuery? {
-        candidate.marker(in: text, isFocused: inputFocused)
+        candidate.marker(in: text, isFocused: inputFocused, selection: inputSelection)
     }
 
     /// 候选来源：`#` 查已有标签、`@` 查已有清单。
     private func candidateSource(_ kind: QuickAddComposition.MarkerQuery.Kind) -> [String] {
-        kind == .tag ? composer.workspace.tagNames : composer.workspace.allListNames
+        kind == .tag ? composer.workspace.tagNames : composer.workspace.availableListNames
     }
 
     private var candidateNames: [String] {
@@ -440,7 +494,7 @@ private struct GlobalQuickAddPanelView: View {
 
     /// Shift+↩︎：按字面意思就是「加描述」，不参与候选提交；候选列表让位收起。
     private func openDescription() {
-        if isCandidateListVisible { candidate.dismiss(draft: text) }
+        if isCandidateListVisible { candidate.dismiss(draft: text, selection: inputSelection) }
         candidate.descriptionVisible = true
         DispatchQueue.main.async { descriptionFocused = true }
     }
@@ -452,7 +506,10 @@ private struct GlobalQuickAddPanelView: View {
     }
 
     private func commitCandidate(_ name: String) {
-        text = QuickAddComposition.replacingTrailingMarker(in: text, with: name)
+        let result = QuickAddComposition.replacingMarker(in: text, selection: inputSelection, with: name)
+        text = result.text
+        inputSelection = result.selection
+        requestedInputSelection = result.selection
         candidate.textDidChange()
         inputFocused = true
     }
@@ -470,7 +527,7 @@ private struct GlobalQuickAddPanelView: View {
     /// 所以「先收起再清空」两级在这里没有可承载的中间态。参照物也没有全局入口可比。
     private func handleEscape() {
         if isCandidateListVisible {
-            candidate.dismiss(draft: text)
+            candidate.dismiss(draft: text, selection: inputSelection)
             return
         }
         if candidate.descriptionVisible || descriptionFocused {

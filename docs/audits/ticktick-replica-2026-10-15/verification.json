@@ -1,0 +1,203 @@
+{
+  "date": "2026-10-15",
+  "build": "TEST BUILD SUCCEEDED",
+  "status": "passed; native follow-up acceptance completed for the stated flows",
+  "tests_total": 1281,
+  "tests_executed": 1276,
+  "tests_passed": 1276,
+  "tests_skipped": 5,
+  "failures": 0,
+  "source_log": "/private/tmp/workfollow-replica-final-unlocked-full-tests.log",
+  "changed_feature_suites": {
+    "CalendarInteractionTests": {
+      "tests": 4,
+      "skipped": 0,
+      "failures": 0,
+      "status": "passed"
+    },
+    "CalendarPlanningTests": {
+      "tests": 8,
+      "skipped": 0,
+      "failures": 0,
+      "status": "passed"
+    },
+    "FocusActiveSessionRenderTests": {
+      "tests": 3,
+      "skipped": 0,
+      "failures": 0,
+      "status": "passed"
+    },
+    "FocusDurationInteractionTests": {
+      "tests": 4,
+      "skipped": 0,
+      "failures": 0,
+      "status": "passed"
+    },
+    "FocusDurationOutsideClickTests": {
+      "tests": 5,
+      "skipped": 0,
+      "failures": 0,
+      "status": "passed"
+    },
+    "FocusLayoutMetricsTests": {
+      "tests": 6,
+      "skipped": 0,
+      "failures": 0,
+      "status": "passed"
+    },
+    "FocusOverviewLayoutContractTests": {
+      "tests": 4,
+      "skipped": 0,
+      "failures": 0,
+      "status": "passed"
+    },
+    "FocusRenderTests": {
+      "tests": 2,
+      "skipped": 0,
+      "failures": 0,
+      "status": "passed"
+    },
+    "FocusReplicaFlowTests": {
+      "tests": 20,
+      "skipped": 0,
+      "failures": 0,
+      "status": "passed"
+    },
+    "FocusStoreTests": {
+      "tests": 13,
+      "skipped": 0,
+      "failures": 0,
+      "status": "passed"
+    },
+    "FocusTaskPickerInteractionTests": {
+      "tests": 6,
+      "skipped": 0,
+      "failures": 0,
+      "status": "passed"
+    },
+    "FocusTaskPickerPanelFlowTests": {
+      "tests": 7,
+      "skipped": 0,
+      "failures": 0,
+      "status": "passed"
+    },
+    "FocusTaskPickerProjectionTests": {
+      "tests": 6,
+      "skipped": 0,
+      "failures": 0,
+      "status": "passed"
+    },
+    "FocusTaskPickerSizingTests": {
+      "tests": 2,
+      "skipped": 0,
+      "failures": 0,
+      "status": "passed"
+    },
+    "FocusTimelineProjectionTests": {
+      "tests": 5,
+      "skipped": 0,
+      "failures": 0,
+      "status": "passed"
+    },
+    "FocusTimerLayoutContractTests": {
+      "tests": 3,
+      "skipped": 0,
+      "failures": 0,
+      "status": "passed"
+    },
+    "FocusViewLogicTests": {
+      "tests": 10,
+      "skipped": 0,
+      "failures": 0,
+      "status": "passed"
+    },
+    "MatrixConfigurationTests": {
+      "tests": 8,
+      "skipped": 0,
+      "failures": 0,
+      "status": "passed"
+    },
+    "ReplicaWorkflowTests": {
+      "tests": 5,
+      "skipped": 0,
+      "failures": 0,
+      "status": "passed"
+    },
+    "TaskReplicaContractTests": {
+      "tests": 22,
+      "skipped": 0,
+      "failures": 0,
+      "status": "passed"
+    },
+    "FocusDurationPopoverRenderTests": {
+      "tests": 1,
+      "skipped": 0,
+      "failures": 0,
+      "status": "passed"
+    },
+    "FocusTaskPickerRenderTests": {
+      "tests": 1,
+      "skipped": 0,
+      "failures": 0,
+      "status": "passed"
+    },
+    "FocusWindowAppearanceTests": {
+      "tests": 1,
+      "skipped": 0,
+      "failures": 0,
+      "status": "passed"
+    },
+    "DocumentDecorationRenderTests": {
+      "tests": 11,
+      "skipped": 0,
+      "failures": 0,
+      "status": "passed"
+    }
+  },
+  "skip_reasons": [
+    "/Users/dongyangwei/Documents/学习/代办笔记/workfollow-macos-native/macos-native/WorkFollowTests/AnchoredPropertyPanelTests.swift:127: -[WorkFollowTests.AnchoredPropertyPanelTests testSearchPanelTakesKeyFocusInActiveApplication] : Test skipped - Temporary XCTest host could not become the active application; requires foreground app validation",
+    "/Users/dongyangwei/Documents/学习/代办笔记/workfollow-macos-native/macos-native/WorkFollowTests/MeetingPiBridgeIntegrationTests.swift:10: -[WorkFollowTests.MeetingPiBridgeIntegrationTests testInstalledPiDispatchesAudioCommandAndReturnsStructuredNotification] : Test skipped - Enable MEETING_PI_INTEGRATION=1 with Pi installed to verify the transport",
+    "/Users/dongyangwei/Documents/学习/代办笔记/workfollow-macos-native/macos-native/WorkFollowTests/MeetingStoreTests.swift:24: -[WorkFollowTests.MeetingStoreTests testPiHTTPBatchAndStopTailStayInOriginalMeeting] : Test skipped - Enable MEETING_PI_INTEGRATION=1",
+    "/Users/dongyangwei/Documents/学习/代办笔记/workfollow-macos-native/macos-native/WorkFollowTests/MeetingStreamingTests.swift:42: -[WorkFollowTests.MeetingStreamingTests testInstalledPiStreamDeliversFinalBeforeStopReturns] : Test skipped - Enable MEETING_PI_INTEGRATION=1",
+    "/Users/dongyangwei/Documents/学习/代办笔记/workfollow-macos-native/macos-native/WorkFollowTests/MeetingStreamingTests.swift:72: -[WorkFollowTests.MeetingStreamingTests testLostAcknowledgementIsRetriedWithoutDuplicateAppend] : Test skipped - Enable MEETING_PI_INTEGRATION=1"
+  ],
+  "previous_focused_run": {
+    "tests": 39,
+    "failures": 0,
+    "source_log": "/private/tmp/workfollow-replica-followup-focus-tests.log",
+    "scope": "focus completion, duration precision, layout and window appearance before the final short-end change"
+  },
+  "reference_runtime_ledger": "runtime-findings.json",
+  "acceptance_package": {
+    "path": "/private/tmp/workfollow-replica-qa-2026-10-15/WorkFollowReplicaQA.app",
+    "bundle_id": "com.workfollow.native.replica.followup.qa",
+    "signature_verification": "passed",
+    "fixture": "8 parent tasks, 2 checklist children, 2 focus records in new isolated storage",
+    "native_window_acceptance": "completed for stated flows; idle on light focus overview",
+    "latest_build_installed": true,
+    "record_state": "Three preserved existing records plus one prepared-snapshot early-end record, 4520 active seconds and three credited pomodoros",
+    "clock_note": "Only the isolated Debug QA app uses a declared acceptance date; normal production app uses real time."
+  },
+  "test_started_at": "2026-10-15T20:40:52+08:00",
+  "test_finished_at": "2026-10-15T20:43:18+08:00",
+  "duration_seconds": 145.963,
+  "portable_test_summary": "test-summary.txt",
+  "historical_capture_failures": {
+    "earlier_run": "1278 total with three DocumentDecorationRenderTests pixel assertion failures during a locked desktop; the saved image was black.",
+    "resolution": "After unlock the complete render class passed 11 tests, then all 11 also passed in the final full suite. No render assertions were changed.",
+    "isolated_rerun_log": "/private/tmp/workfollow-replica-unlocked-render-tests.log",
+    "evidence": "blocked-editor-render.png"
+  },
+  "manual_acceptance_completed": [
+    "Real five-minute natural completion with auto-break off; edit completed note and saved duration; 5→6→restart→5 keeps record identity and note",
+    "Native Tasks, Calendar and Matrix in dark; completion light/dark; existing Mini light→dark; immersive dark",
+    "Native early-end three-choice alert from prepared 320-second paused fixture; cancel retains pause, save returns to overview; same-ID 320-second record, credit one, previous records preserved",
+    "Reference 320-second early end: three choices, save goes directly to overview and adds one pomodoro; default theme restored and no active timer"
+  ],
+  "remaining_replica_coverage": [
+    "Exact reference 300-second boundary and early-end duration display accounting",
+    "Reference future recurrence range effects on exceptions: free account calendar unavailable for named task",
+    "Full state-by-state and multi-size visual comparison; current named screens do not establish universal pixel identity",
+    "Reference current-duration adjustment step and automatic cycle rules"
+  ]
+}

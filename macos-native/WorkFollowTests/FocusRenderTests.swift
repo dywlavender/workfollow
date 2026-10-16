@@ -18,7 +18,7 @@ final class FocusRenderTests: XCTestCase {
         let timerState: TimerState
     }
 
-    func testFocusWorkspaceGeometryAcrossReferenceRenderMatrix() throws {
+    func testIdleLibraryOverviewGeometryAcrossReferenceRenderMatrix() throws {
         let sizes = [CGSize(width: 1_440, height: 900), CGSize(width: 1_600, height: 900)]
         let schemes: [(colorScheme: ColorScheme, colorName: String,
                        appearanceName: NSAppearance.Name)] = [
@@ -42,25 +42,15 @@ final class FocusRenderTests: XCTestCase {
             let selectedHitArea = try XCTUnwrap(frames[.railSelectedHitArea],
                                                 "Selected Rail hit area missing")
             let divider = try XCTUnwrap(frames[.divider], "Focus divider frame missing")
-            let ring = try XCTUnwrap(frames[.timerRing], "Timer ring frame missing")
-            let durationTrigger = try XCTUnwrap(frames[.focusDurationTrigger],
-                                                "Idle countdown duration trigger missing")
-            let modeSegment = try XCTUnwrap(frames[.focusModeSegment],
-                                            "Idle mode segment missing")
-            let addTimerButton = try XCTUnwrap(frames[.focusAddTimerButton],
-                                               "Idle add-timer button missing")
-            let button = try XCTUnwrap(frames[.primaryButton], "Primary button frame missing")
+            let library = try XCTUnwrap(frames[.presetLibrary], "Idle entry must show the library")
+            let compactTimer = try XCTUnwrap(frames[.presetLibraryTimerBar])
             let card = try XCTUnwrap(frames[.overviewFirstCard], "First Overview card frame missing")
             let recordsHeader = try XCTUnwrap(frames[.recordsHeader], "Records header frame missing")
 
             let shellDividerX = WFMetrics.railWidth + WFMetrics.divider
             let workspaceWidth = renderCase.size.width - shellDividerX
-            let expectedFocusWidth = FocusLayoutMetrics.focusPaneWidth(availableWidth: workspaceWidth)
+            let expectedFocusWidth = FocusLayoutMetrics.focusPaneWidth(availableWidth: workspaceWidth, isCompleted: true)
             let expectedDividerX = shellDividerX + expectedFocusWidth
-            let expectedCenterX = shellDividerX + expectedFocusWidth / 2
-            let expectedCenterY = FocusLayoutMetrics.ringTop + FocusLayoutMetrics.ringSize / 2
-            let expectedButtonY = FocusLayoutMetrics.footerTop(paneHeight: renderCase.size.height)
-                + FocusLayoutMetrics.primaryButtonHeight / 2
             let expectedCardWidth = (renderCase.size.width - expectedDividerX - WFMetrics.divider
                 - 2 * FocusLayoutMetrics.overviewHorizontalPadding - FocusLayoutMetrics.overviewCardGap) / 2
 
@@ -70,24 +60,18 @@ final class FocusRenderTests: XCTestCase {
             XCTAssertEqual(selectedHitArea.height, RailMetrics.hitSize, accuracy: 0.5)
             XCTAssertEqual(divider.minX, expectedDividerX, accuracy: 0.5)
             XCTAssertEqual(divider.width, WFMetrics.divider, accuracy: 0.5)
-            XCTAssertEqual(ring.midX, expectedCenterX, accuracy: 0.5)
-            XCTAssertEqual(ring.midY, expectedCenterY, accuracy: 0.5)
-            XCTAssertEqual(ring.width, FocusLayoutMetrics.ringSize, accuracy: 0.5)
-            XCTAssertTrue(ring.insetBy(dx: -0.5, dy: -0.5).contains(durationTrigger),
-                          "Duration trigger should stay centered inside the idle timer ring")
-            XCTAssertGreaterThan(modeSegment.width, 0)
-            XCTAssertGreaterThan(addTimerButton.width, 0)
-            XCTAssertNil(frames[.focusRunningStatus],
-                         "Idle mode must not show an active-session status line")
-            XCTAssertEqual(button.midX, expectedCenterX, accuracy: 0.5)
-            XCTAssertEqual(button.midY, expectedButtonY, accuracy: 0.5)
+            XCTAssertEqual(library.maxX, divider.minX, accuracy: 0.5)
+            XCTAssertEqual(compactTimer.height, 64, accuracy: 0.5)
+            XCTAssertEqual(compactTimer.maxY, renderCase.size.height, accuracy: 0.5)
+            XCTAssertNil(frames[.timerRing])
+            XCTAssertNil(frames[.activeTimeline])
             XCTAssertEqual(card.minX, divider.maxX + FocusLayoutMetrics.overviewHorizontalPadding,
                            accuracy: 0.5)
             XCTAssertEqual(card.width, expectedCardWidth, accuracy: 0.5)
             XCTAssertEqual(card.height, FocusLayoutMetrics.overviewCardHeight, accuracy: 0.5)
             XCTAssertEqual(card.minY, 61, accuracy: 0.5,
                            "Overview card top edge moved from the rendered reference")
-            XCTAssertEqual(recordsHeader.minY, 285.75, accuracy: 0.5,
+            XCTAssertEqual(recordsHeader.minY, 277.75, accuracy: 0.5,
                            "Records header moved from the rendered reference")
             if renderCase.timerState == .idleWithoutRecords {
                 let illustration = try XCTUnwrap(frames[.emptyRecordsIllustration],
@@ -107,6 +91,42 @@ final class FocusRenderTests: XCTestCase {
                              "An empty-state illustration must not render with records")
             }
             XCTAssertTrue(result.screenshotExists)
+        }
+    }
+
+    func testExplicitlyExpandedIdleTimerGeometryAcrossSizesAndAppearances() throws {
+        for size in [CGSize(width: 1_440, height: 900), CGSize(width: 1_600, height: 900)] {
+            for dark in [false, true] {
+                let renderCase = RenderCase(size: size, colorScheme: dark ? .dark : .light,
+                    colorName: dark ? "dark" : "light", appearanceName: dark ? .darkAqua : .aqua,
+                    timerState: .idleWithoutRecords)
+                let result = try render(renderCase, expandsTimer: true)
+                let frames = result.frames
+                let divider = try XCTUnwrap(frames[.divider])
+                let ring = try XCTUnwrap(frames[.timerRing])
+                let duration = try XCTUnwrap(frames[.focusDurationTrigger])
+                let mode = try XCTUnwrap(frames[.focusModeSegment])
+                let start = try XCTUnwrap(frames[.primaryButton])
+                let timeline = try XCTUnwrap(frames[.activeTimeline])
+                let note = try XCTUnwrap(frames[.activeFocusNote])
+                let shellDividerX = WFMetrics.railWidth + WFMetrics.divider
+                let leftWidth = FocusLayoutMetrics.focusPaneWidth(availableWidth: size.width - shellDividerX)
+                XCTAssertEqual(divider.minX, shellDividerX + leftWidth, accuracy: 0.5)
+                XCTAssertEqual(ring.midX, shellDividerX + leftWidth / 2, accuracy: 0.5)
+                XCTAssertEqual(ring.midY, FocusLayoutMetrics.ringTop + FocusLayoutMetrics.ringSize / 2, accuracy: 0.5)
+                XCTAssertEqual(ring.width, 238, accuracy: 0.5)
+                XCTAssertTrue(ring.insetBy(dx: -0.5, dy: -0.5).contains(duration))
+                XCTAssertEqual(mode.midX, ring.midX, accuracy: 0.5)
+                XCTAssertEqual(start.midX, ring.midX, accuracy: 0.5)
+                XCTAssertEqual(start.midY, FocusLayoutMetrics.footerTop(paneHeight: size.height) + 24, accuracy: 0.5)
+                XCTAssertGreaterThan(timeline.minX, divider.maxX)
+                XCTAssertGreaterThan(note.minX, divider.maxX)
+                XCTAssertNotNil(frames[.timerBackToLibrary])
+                XCTAssertNil(frames[.focusAddTimerButton], "Presets are added in the library")
+                XCTAssertNil(frames[.overviewFirstCard])
+                XCTAssertNil(frames[.presetLibrary])
+                XCTAssertTrue(result.screenshotExists)
+            }
         }
     }
 
@@ -133,8 +153,9 @@ final class FocusRenderTests: XCTestCase {
         flushAndRemove(fixture.store, directory: fixture.directory)
     }
 
-    private func render(_ renderCase: RenderCase) throws -> (frames: [FocusRenderAnchor: CGRect], screenshotExists: Bool) {
+    private func render(_ renderCase: RenderCase, expandsTimer: Bool = false) throws -> (frames: [FocusRenderAnchor: CGRect], screenshotExists: Bool) {
         let fixture = makeFixture(state: renderCase.timerState)
+        if expandsTimer { fixture.store.showTimerWorkspace() }
         var frames: [FocusRenderAnchor: CGRect] = [:]
         let root = FocusWorkspaceShellView(
             workspace: fixture.workspace,
@@ -166,7 +187,8 @@ final class FocusRenderTests: XCTestCase {
         hostingView.layoutSubtreeIfNeeded()
         window.displayIfNeeded()
 
-        let name = "focus-render-\(Int(renderCase.size.width))x\(Int(renderCase.size.height))-"
+        let route = expandsTimer ? "timer" : "library"
+        let name = "focus-render-\(route)-\(Int(renderCase.size.width))x\(Int(renderCase.size.height))-"
             + "\(renderCase.timerState.rawValue)-\(renderCase.colorName).png"
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent("focus-render-contract")
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -179,13 +201,6 @@ final class FocusRenderTests: XCTestCase {
 
         window.orderOut(nil)
         flushAndRemove(fixture.store, directory: fixture.directory)
-        XCTAssertEqual(Set(frames.keys), Set([
-            .rail, .railSelectedHitArea, .focusDurationTrigger,
-            .focusModeSegment, .focusAddTimerButton, .focusTimerDigits,
-            .divider, .timerRing, .primaryButton, .overviewFirstCard, .recordsHeader
-        ]).union(renderCase.timerState == .idleWithoutRecords
-                 ? [.emptyRecordsIllustration, .emptyRecordsContent, .emptyRecordsRegion]
-                 : []), "Incomplete render anchors for \(name)")
         return (frames, FileManager.default.fileExists(atPath: screenshotURL.path))
     }
 

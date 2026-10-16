@@ -10,6 +10,9 @@ struct PlanningComposerRequest: Equatable {
     var preset: TaskSchedule?
     /// 打开时的优先级：四象限用象限默认值，日历为无。
     var priority: TaskPriority
+    var list: TaskList? = nil
+    var tags: [String] = []
+    var matrixConfiguration: MatrixConfiguration? = nil
 }
 
 /// 日历与四象限共用的浮层宿主：把「正在新建什么 / 正在编辑哪个任务」变成贴着被点
@@ -49,6 +52,9 @@ struct PlanningWorkspaceChrome: View {
                                       fallbackSchedule: request.fallback,
                                       presetSchedule: request.preset,
                                       presetPriority: request.priority,
+                                      presetList: request.list,
+                                      presetTags: request.tags,
+                                      matrixConfiguration: request.matrixConfiguration,
                                       requestClose: closeComposer)
                         .environmentObject(environment)
                 }

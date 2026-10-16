@@ -82,7 +82,7 @@ struct FocusTaskPickerPopover: View {
 
     private var groups: [FocusTaskPickerGroup] {
         FocusTaskPickerProjection.groups(
-            tasks: workspace.allTasks,
+            tasks: workspace.tasksInActiveLists,
             scope: scope,
             query: query,
             now: workspace.clock(),

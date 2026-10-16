@@ -1,0 +1,5 @@
+下周一开会 => 2026-10-26 00:00 hasTime= false repeat= never title= 开会 tokens= ["下周一"]
+下周一上午9点开会 => 2026-10-14 09:00 hasTime= true repeat= never title= 开会 tokens= ["下周一", "上午9点"]
+本周一开会 => 2026-10-19 00:00 hasTime= false repeat= never title= 开会 tokens= ["本周一"]
+明天9:00-10:00开会 => 2026-10-14 10:00 hasTime= true repeat= never title= 开会 tokens= ["明天9:00", "10:00"]
+每周一三五9点锻炼 => 2026-10-19 09:00 hasTime= true repeat= weekly title= 三五 锻炼 tokens= ["每周一", "9点"]

@@ -5,6 +5,7 @@ import SwiftUI
 struct TaskInspectorShell: View {
     @ObservedObject var workspace: TaskWorkspaceModel
     @EnvironmentObject private var environment: AppEnvironment
+    @Environment(\.taskFocusStore) private var taskFocusStore
     let showBack: Bool
     /// 浮层里的详情（日历/四象限点任务条打开的那个）：Esc 要关掉浮层，而不是
     /// 把选中项清掉后留在原地不动——对齐 Flutter `TaskInspector._escape()` 的
@@ -270,10 +271,14 @@ struct TaskInspectorShell: View {
                                  set: { if !$0 { actionPresentation.dismissSubmenu() } }),
             width: 176, placement: .submenu) {
                 TaskFocusSubmenu { stopwatch in
-                    if !TaskInspectorFocusAction.start(taskID: task.id, stopwatch: stopwatch,
+                    guard let taskID = workspace.resolveTaskForAction(task.id) else { return }
+                    if !TaskInspectorFocusAction.start(taskID: taskID, stopwatch: stopwatch,
                         store: environment.focusStore, presentation: &actionPresentation) {
                         actionPresentation.dismiss()
                         focusStartFailed = true
+                    } else {
+                        environment.navigation.taskSelectionToPreserveOnNextNavigation = taskID
+                        environment.navigate(to: .focus)
                     }
                 }
             })
@@ -326,9 +331,25 @@ struct TaskInspectorShell: View {
                     .inspectorRenderAnchor(.childSection)
                     .padding(.top, TaskInspectorMetrics.childSectionTopGap)
             }
+            focusSummaryRow(task)
+                .padding(.horizontal, TaskInspectorMetrics.horizontalPadding)
+                .padding(.top, 12)
         }
         .padding(.bottom, WFSpace.xl)
         .frame(maxWidth: .infinity, alignment: .topLeading)
+    }
+
+    @ViewBuilder
+    private func focusSummaryRow(_ task: Task) -> some View {
+        if let focusStore = taskFocusStore {
+            TaskFocusSummaryRow(task: task, workspace: workspace, focusStore: focusStore) {
+                focusStore.showRecords(taskID: task.id)
+                environment.navigation.taskSelectionToPreserveOnNextNavigation = task.id
+                environment.navigate(to: .focus)
+            }
+        } else {
+            TaskFocusEstimateControl(task: task, workspace: workspace)
+        }
     }
 
     /// 顶部日期入口；点击仍使用现有日期 popover。
@@ -657,7 +678,7 @@ struct TaskInspectorShell: View {
                 .accessibilityLabel("清单：\(task.list.name)，子任务跟随父任务")
         } else {
         Menu {
-            ForEach(workspace.allListNames, id: \.self) { name in
+            ForEach(workspace.availableListNames, id: \.self) { name in
                 let list = TaskList(name: name)
                 Button {
                     _ = workspace.moveToList(task.id, list)

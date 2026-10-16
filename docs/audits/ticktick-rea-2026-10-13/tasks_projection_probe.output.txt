@@ -1,0 +1,5 @@
+byDate root: ["overdue", "today", "upcoming"] byDate list: ["plain"]
+raw group: ["ZZZ", "AAA", "BBB"] ordered group by title: ["AAA", "BBB", "ZZZ"]
+A+B task tag group: [("A", ["ZZZ"]), ("无标签", ["AAA", "BBB"])]
+filter before list rename: true
+filter after list rename: false

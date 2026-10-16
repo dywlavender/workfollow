@@ -12,6 +12,8 @@ struct WorkFollowApp: App {
 
     init() {
         let environment = AppEnvironment()
+        FocusPresentationWindows.attachAppearance(environment)
+        FocusEndConfirmationPresenter.attach(to: environment.focusStore)
         let quickAdd = GlobalQuickAddController(workspace: environment.taskWorkspace)
         _environment = StateObject(wrappedValue: environment)
         _quickAdd = StateObject(wrappedValue: quickAdd)
@@ -101,6 +103,7 @@ private struct WindowFramePersistence: NSViewRepresentable {
 
     final class FrameView: NSView {
         private var observers: [NSObjectProtocol] = []
+        private var acceptanceMouseMonitor: Any?
         private weak var configuredWindow: NSWindow?
         private let frameName = "WorkFollowNativePreview.MainWindow"
 
@@ -109,11 +112,33 @@ private struct WindowFramePersistence: NSViewRepresentable {
             guard let window, configuredWindow !== window else { return }
             observers.forEach(NotificationCenter.default.removeObserver)
             observers.removeAll()
+            if let acceptanceMouseMonitor { NSEvent.removeMonitor(acceptanceMouseMonitor) }
+            acceptanceMouseMonitor = nil
             configuredWindow = window
+            if NativeAcceptanceInteractionTrace.enabled {
+                acceptanceMouseMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .leftMouseDragged, .leftMouseUp]) { [weak window] event in
+                    MainActor.assumeIsolated {
+                        if event.window === window {
+                            NativeAcceptanceInteractionTrace.record(String(describing: event.type), [
+                                "x": event.locationInWindow.x, "y": event.locationInWindow.y,
+                                "active": NSApp.isActive, "keyWindow": window?.isKeyWindow ?? false
+                            ])
+                        }
+                    }
+                    return event
+                }
+            }
             window.identifier = NSUserInterfaceItemIdentifier("WorkFollowNativeMain")
             window.minSize = NSSize(width: WFMetrics.minimumWindow.width,
                                     height: WFMetrics.minimumWindow.height)
-            window.setFrameUsingName(frameName)
+            if let size = NativeAcceptanceConfiguration.windowSize {
+                let screen = (window.screen ?? NSScreen.main)?.visibleFrame
+                let origin = screen.map { CGPoint(x: $0.minX, y: max($0.minY, $0.maxY - size.height)) }
+                    ?? window.frame.origin
+                window.setFrame(NSRect(origin: origin, size: size), display: false)
+            } else {
+                window.setFrameUsingName(frameName)
+            }
             window.setFrameAutosaveName(frameName)
             for name in [NSWindow.didResizeNotification, NSWindow.didMoveNotification] {
                 observers.append(NotificationCenter.default.addObserver(
@@ -125,6 +150,9 @@ private struct WindowFramePersistence: NSViewRepresentable {
             }
         }
 
-        deinit { observers.forEach(NotificationCenter.default.removeObserver) }
+        deinit {
+            observers.forEach(NotificationCenter.default.removeObserver)
+            if let acceptanceMouseMonitor { NSEvent.removeMonitor(acceptanceMouseMonitor) }
+        }
     }
 }

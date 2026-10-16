@@ -9,6 +9,13 @@ struct TaskBatchPanelTextKey: PreferenceKey {
     }
 }
 
+struct TaskBatchPanelActionFrames: PreferenceKey {
+    static let defaultValue: [String: CGRect] = [:]
+    static func reduce(value: inout [String: CGRect], nextValue: () -> [String: CGRect]) {
+        value.merge(nextValue(), uniquingKeysWith: { _, new in new })
+    }
+}
+
 extension View {
     @ViewBuilder
     func batchPanelTextProbe(_ text: String) -> some View {
@@ -18,6 +25,18 @@ extension View {
                 Color.clear.preference(key: TaskBatchPanelTextKey.self, value: [text])
             }
         )
+        #else
+        self
+        #endif
+    }
+
+    @ViewBuilder
+    func batchPanelActionProbe(_ title: String) -> some View {
+        #if DEBUG
+        background(GeometryReader { geometry in
+            Color.clear.preference(key: TaskBatchPanelActionFrames.self,
+                value: [title: geometry.frame(in: .named("task-batch-panel"))])
+        })
         #else
         self
         #endif
@@ -67,6 +86,7 @@ struct TaskBatchPanelView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(WFColors.content)
+        .coordinateSpace(name: "task-batch-panel")
         // Esc 阶梯最外层：批量态下 Esc = 退出批量（面板持有焦点时由此接）。
         .onExitCommand { workspace.clearBulkSelection() }
         .schedulePopover(isPresented: $showSchedule) {
@@ -89,8 +109,9 @@ struct TaskBatchPanelView: View {
                                      showTagPicker = false
                                  })
         })
-        .background(AnchoredPropertyPanel(isPresented: $showParentPicker, width: 280) {
-            TaskParentPicker(taskID: workspace.bulkSelection.first ?? UUID(),
+        .background(AnchoredPropertyPanel(isPresented: $showParentPicker, width: 280,
+                                          title: "批量关联主任务") {
+            TaskParentPicker(taskIDs: workspace.bulkSelection,
                              workspace: workspace,
                              onClose: { showParentPicker = false })
         })
@@ -231,7 +252,7 @@ struct TaskBatchPanelView: View {
 
     private var listValueRow: some View {
         Menu {
-            ForEach(workspace.allListNames, id: \.self) { name in
+            ForEach(workspace.availableListNames, id: \.self) { name in
                 Button { workspace.applyBulk(.move(name)) } label: { Text(name) }
             }
         } label: {
@@ -335,7 +356,10 @@ struct TaskBatchPanelView: View {
             .batchPanelTextProbe(title)
         }
         .buttonStyle(.plain)
+        .disabled(disabled)
+        .opacity(disabled ? 0.45 : 1)
         .frame(maxWidth: .infinity, minHeight: BatchPanelLayout.tileHeight)
+        .batchPanelActionProbe(title)
         .help("批量\(title)")
         .accessibilityLabel("批量\(title)")
     }

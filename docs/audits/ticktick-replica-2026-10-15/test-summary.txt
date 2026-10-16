@@ -1,0 +1,33 @@
+Date: 2026-10-15 (Asia/Shanghai)
+Build for testing: succeeded
+Final full suite: 1281 total; 1276 executed and passed; 5 skipped; 0 failures
+Started 20:40:52; finished 20:43:18; elapsed 145.963 seconds
+Source: /private/tmp/workfollow-replica-final-unlocked-full-tests.log
+
+CalendarInteractionTests: 4 tests, 0 skipped, 0 failures
+CalendarPlanningTests: 8 tests, 0 skipped, 0 failures
+DocumentDecorationRenderTests: 11 tests, 0 skipped, 0 failures
+FocusActiveSessionRenderTests: 3 tests, 0 skipped, 0 failures
+FocusDurationInteractionTests: 4 tests, 0 skipped, 0 failures
+FocusDurationOutsideClickTests: 5 tests, 0 skipped, 0 failures
+FocusDurationPopoverRenderTests: 1 tests, 0 skipped, 0 failures
+FocusLayoutMetricsTests: 6 tests, 0 skipped, 0 failures
+FocusOverviewLayoutContractTests: 4 tests, 0 skipped, 0 failures
+FocusRenderTests: 2 tests, 0 skipped, 0 failures
+FocusReplicaFlowTests: 20 tests, 0 skipped, 0 failures
+FocusStoreTests: 13 tests, 0 skipped, 0 failures
+FocusTaskPickerInteractionTests: 6 tests, 0 skipped, 0 failures
+FocusTaskPickerPanelFlowTests: 7 tests, 0 skipped, 0 failures
+FocusTaskPickerProjectionTests: 6 tests, 0 skipped, 0 failures
+FocusTaskPickerRenderTests: 1 tests, 0 skipped, 0 failures
+FocusTaskPickerSizingTests: 2 tests, 0 skipped, 0 failures
+FocusTimelineProjectionTests: 5 tests, 0 skipped, 0 failures
+FocusTimerLayoutContractTests: 3 tests, 0 skipped, 0 failures
+FocusViewLogicTests: 10 tests, 0 skipped, 0 failures
+FocusWindowAppearanceTests: 1 tests, 0 skipped, 0 failures
+MatrixConfigurationTests: 8 tests, 0 skipped, 0 failures
+ReplicaWorkflowTests: 5 tests, 0 skipped, 0 failures
+TaskReplicaContractTests: 22 tests, 0 skipped, 0 failures
+
+Skipped: four opt-in local Pi meeting integration tests and one foreground-host-dependent panel test.
+Earlier locked-desktop render failures: resolved by unlocked 11-test class rerun and the final full suite.

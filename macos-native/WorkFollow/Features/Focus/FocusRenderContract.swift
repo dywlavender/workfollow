@@ -34,6 +34,26 @@ enum FocusRenderAnchor: Hashable {
     case focusAddTimerButton
     case focusRunningStatus
     case focusPausedTimerLabel
+    case recordEditor
+    case recordDetail
+    case completionSummary
+    case completionFigure
+    case completionTitle
+    case completionActions
+    case completionStartBreak
+    case completionSkipBreak
+    case completionExit
+    case completedDurationPopover
+    case presetLibrary
+    case presetLibraryFirstRow
+    case presetLibraryTimerBar
+    case presetDetail
+    case presetDetailCards
+    case presetDetailChart
+    case timerBackToLibrary
+    case editCompletedDuration
+    case currentDurationAdjustment
+    case statistics
     case activeSessionTomatoIcon
 
     static let coordinateSpaceName = "focus-render-contract"

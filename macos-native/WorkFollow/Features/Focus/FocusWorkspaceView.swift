@@ -19,6 +19,7 @@ struct FocusWorkspaceView: View {
     @State private var addTimerStopwatch = false
     @State private var addTimerMinutes = "25"
     @State private var addTimerHint: String?
+    @State private var addTimerTaskID: UUID?
     @State private var addTimerEmoji = "😀"
     @State private var showEmojiPicker = false
 
@@ -42,6 +43,8 @@ struct FocusWorkspaceView: View {
                 .frame(width: geo.size.width, height: geo.size.height)
         }
         .frame(minWidth: FocusLayoutMetrics.minimumWorkspaceWidth)
+        .environment(\.calendar, store.presentationCalendar)
+        .environment(\.timeZone, store.presentationCalendar.timeZone)
     }
 
     /// 仅保留常用专注创建弹框的既有缩放；左右 pane 尺寸均由固定 point 契约控制。
@@ -52,27 +55,41 @@ struct FocusWorkspaceView: View {
     // MARK: - 骨架
 
     private func content(dialogScale s: CGFloat, width: CGFloat) -> some View {
-        let leftWidth = FocusLayoutMetrics.focusPaneWidth(availableWidth: width)
+        let leftWidth = FocusLayoutMetrics.focusPaneWidth(availableWidth: width,
+            isCompleted: store.completionContext != nil || store.workspacePage == .library)
         return HStack(spacing: 0) {
-            FocusTimerPane(store: store,
-                           workspace: workspace,
-                           taskPicker: taskPicker,
-                           showGiveUpConfirmation: $showGiveUpConfirmation,
-                           onAddTimer: prepareAddTimer)
+            Group {
+                if store.workspacePage == .library {
+                    FocusPresetLibraryPane(store: store, workspace: workspace, onAddTimer: prepareAddTimer)
+                } else {
+                    FocusTimerPane(store: store,
+                                   workspace: workspace,
+                                   taskPicker: taskPicker,
+                                   showGiveUpConfirmation: $showGiveUpConfirmation)
+                }
+            }
                 .frame(width: leftWidth)
                 .frame(maxHeight: .infinity)
             Rectangle()
                 .fill(theme.hairline)
                 .frame(width: FocusLayoutMetrics.dividerWidth)
                 .focusRenderAnchor(.divider)
-            if store.phase == .focusing || store.phase == .pausedFocus {
-                FocusActiveSessionPane(store: store)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else {
-                FocusOverviewPane(store: store, workspace: workspace,
-                                  onSelectRecordTask: onSelectRecordTask)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            }
+            Group {
+                if store.contentRoute == .statistics {
+                    FocusStatisticsPane(store: store, workspace: workspace)
+                } else if store.contentRoute == .records {
+                    FocusOverviewPane(store: store, workspace: workspace, onSelectRecordTask: onSelectRecordTask)
+                } else if store.workspacePage == .library {
+                    if let id = store.browsedPresetID {
+                        FocusPresetDetailPane(store: store, workspace: workspace, presetID: id,
+                                              onSelectRecordTask: onSelectRecordTask)
+                    } else {
+                        FocusOverviewPane(store: store, workspace: workspace, onSelectRecordTask: onSelectRecordTask)
+                    }
+                } else {
+                    FocusActiveSessionPane(store: store, workspace: workspace, onAssociate: { taskPicker.present() })
+                }
+            }.frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .background(theme.canvas)
         .background {
@@ -82,7 +99,7 @@ struct FocusWorkspaceView: View {
                         switch store.phase {
                         case .focusing: store.pause()
                         case .pausedFocus, .pausedBreak: store.resume()
-                        case .breaking: _ = store.giveUp()
+                        case .breaking: store.pause()
                         case .idle: break
                         }
                     }
@@ -144,6 +161,14 @@ struct FocusWorkspaceView: View {
                         .padding(.vertical, 10 * s)
                         .background(RoundedRectangle(cornerRadius: 10 * s)
                             .stroke(theme.hairline, lineWidth: 1.5))
+                }
+                if let workspace {
+                    Picker("关联任务", selection: $addTimerTaskID) {
+                        Text("不关联").tag(Optional<UUID>.none)
+                        ForEach(workspace.allTasks.filter { $0.deletedAt == nil && !$0.isAbandoned }) { task in
+                            Text(task.title.isEmpty ? "未命名任务" : task.title).tag(Optional(task.id))
+                        }
+                    }
                 }
                 if showEmojiPicker {
                     ScrollView(.horizontal, showsIndicators: false) {
@@ -254,6 +279,7 @@ struct FocusWorkspaceView: View {
         addTimerStopwatch = false
         addTimerHint = nil
         addTimerEmoji = "😀"
+        addTimerTaskID = taskPicker.linkedTaskID
         showEmojiPicker = false
         showAddTimer = true
     }
@@ -261,8 +287,8 @@ struct FocusWorkspaceView: View {
     private func submitAddTimer() {
         let minutes = Int(addTimerMinutes.trimmingCharacters(in: .whitespaces)) ?? 0
         if store.addTimer(name: addTimerName, emoji: addTimerEmoji,
-                          stopwatch: addTimerStopwatch, minutes: minutes) {
-            if let preset = store.timers.last { store.applyTimerPreset(preset) }
+                          stopwatch: addTimerStopwatch, minutes: minutes, taskID: addTimerTaskID) {
+            if let preset = store.timers.last { store.selectPresetForDetails(preset.id) }
             showAddTimer = false
         } else {
             addTimerHint = "名称必填；番茄计时需 5–180 分钟；常用专注最多 12 个"
@@ -330,6 +356,7 @@ struct FocusTheme {
 /// 迷你开关：专注页节奏弹层用的胶囊式 Switch。
 struct SwitchView: View {
     @Binding var isOn: Bool
+    var accessibilityTitle = "自动开始下一番茄"
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
@@ -346,7 +373,7 @@ struct SwitchView: View {
             .contentShape(Capsule())
             .onTapGesture { isOn.toggle() }
             .animation(.easeInOut(duration: 0.15), value: isOn)
-            .accessibilityLabel("自动开始下一番茄")
+            .accessibilityLabel(accessibilityTitle)
             .accessibilityAddTraits(.isButton)
     }
 }
@@ -396,9 +423,24 @@ enum FocusViewLogic {
     }
 
     /// 记录日期分组头：今天/昨天，其余给月日星期。
-    static func dayLabel(for day: Date, calendar: Calendar = .current) -> String {
-        if calendar.isDateInToday(day) { return "今天" }
-        if calendar.isDateInYesterday(day) { return "昨天" }
-        return day.formatted(.dateTime.month().day().weekday(.abbreviated))
+    static func dayLabel(for day: Date, now: Date = Date(), calendar: Calendar = .current) -> String {
+        if calendar.isDate(day, inSameDayAs: now) { return "今天" }
+        if let yesterday = calendar.date(byAdding: .day, value: -1, to: calendar.startOfDay(for: now)),
+           calendar.isDate(day, inSameDayAs: yesterday) { return "昨天" }
+        var style = Date.FormatStyle.dateTime.month().day().weekday(.abbreviated)
+        style.calendar = calendar; style.timeZone = calendar.timeZone
+        return day.formatted(style)
+    }
+
+    static func timeLabel(for date: Date, calendar: Calendar = .current) -> String {
+        var style = Date.FormatStyle.dateTime.hour().minute()
+        style.calendar = calendar; style.timeZone = calendar.timeZone
+        return date.formatted(style)
+    }
+
+    static func dateTimeLabel(for date: Date, calendar: Calendar = .current) -> String {
+        var style = Date.FormatStyle.dateTime.year().month().day().hour().minute()
+        style.calendar = calendar; style.timeZone = calendar.timeZone
+        return date.formatted(style)
     }
 }

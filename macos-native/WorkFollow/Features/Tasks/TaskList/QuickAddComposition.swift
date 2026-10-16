@@ -49,35 +49,27 @@ enum QuickAddComposition {
         }
     }
 
-    /// 取出输入**末尾**那个 `#`/`@` 片段；末尾不是标记片段时返回 nil。
-    ///
-    /// 只认末尾片段是有意的取舍：输入框是单行控件，用户几乎总是在行尾继续输入，
-    /// 而行尾判定不需要跟踪 `NSTextField` 的插入点——那是 AppKit 里最容易失同步的
-    /// 状态，一旦漂移就会出现「候选列表锚在错误的位置」这种难查的问题。
-    /// 代价是：把光标移回句子中间编辑 `#标签` 时不会弹出候选，需要重新输入该片段。
-    static func markerQuery(in input: String) -> MarkerQuery? {
-        guard !input.isEmpty else { return nil }
-
-        let wordStart: String.Index
-        if let whitespace = input.lastIndex(where: { $0.isWhitespace }) {
-            wordStart = input.index(after: whitespace)
-        } else {
-            wordStart = input.startIndex
+    /// Reads the marker at the actual UTF-16 caret, including a marker in the
+    /// middle of a title. The full token range is replaced without touching its suffix.
+    static func markerQuery(in input: String, selection: NSRange? = nil) -> MarkerQuery? {
+        let source = input as NSString
+        let caret = min(source.length, max(0, selection?.location ?? source.length))
+        guard selection?.length ?? 0 == 0, caret > 0 else { return nil }
+        var start = caret
+        while start > 0, source.substring(with: NSRange(location: start - 1, length: 1)).rangeOfCharacter(from: .whitespacesAndNewlines) == nil {
+            start -= 1
         }
-        guard wordStart < input.endIndex else { return nil }
-
-        let word = String(input[wordStart...])
-        guard let marker = word.first, marker == "#" || marker == "@" else { return nil }
-
-        let name = String(word.dropFirst())
-        // 片段里再出现标记符，说明它已经不是「正在输入的名字」。
-        guard !name.contains("#"), !name.contains("@") else { return nil }
-
-        let offset = input.utf16.distance(from: input.utf16.startIndex, to: wordStart)
-        return MarkerQuery(kind: marker == "#" ? .tag : .list,
-                           query: name,
-                           range: NSRange(location: offset, length: (word as NSString).length),
-                           raw: word)
+        var end = caret
+        while end < source.length, source.substring(with: NSRange(location: end, length: 1)).rangeOfCharacter(from: .whitespacesAndNewlines) == nil {
+            end += 1
+        }
+        guard start < caret else { return nil }
+        let raw = source.substring(with: NSRange(location: start, length: end - start))
+        guard let symbol = raw.first, symbol == "#" || symbol == "@" else { return nil }
+        let prefix = source.substring(with: NSRange(location: start + 1, length: caret - start - 1))
+        guard !prefix.contains("#"), !prefix.contains("@") else { return nil }
+        return MarkerQuery(kind: symbol == "#" ? .tag : .list, query: prefix,
+            range: NSRange(location: start, length: end - start), raw: raw)
     }
 
     /// 候选过滤：空查询返回全部（刚敲下 `#` 时先列出已有名字）；否则不区分大小写包含匹配。
@@ -95,12 +87,19 @@ enum QuickAddComposition {
     /// 补空格是必要的：候选名一旦落进正文，末尾就不再是标记片段，候选列表自动收起，
     /// 用户可以直接接着输入下一个字段（`@清单`、`!!!` 等）。
     static func replacingTrailingMarker(in input: String, with name: String) -> String {
-        guard let marker = markerQuery(in: input) else { return input }
+        replacingMarker(in: input, selection: nil, with: name).text
+    }
+
+    static func replacingMarker(in input: String, selection: NSRange?, with name: String) -> (text: String, selection: NSRange) {
+        guard let marker = markerQuery(in: input, selection: selection) else {
+            return (input, selection ?? NSRange(location: (input as NSString).length, length: 0))
+        }
         let text = NSMutableString(string: input)
-        guard marker.range.location >= 0, NSMaxRange(marker.range) <= text.length else { return input }
         let symbol = marker.kind == .tag ? "#" : "@"
-        text.replaceCharacters(in: marker.range, with: "\(symbol)\(name) ")
-        return text as String
+        let suffixSpace = NSMaxRange(marker.range) == text.length ? " " : ""
+        let replacement = "\(symbol)\(name)" + suffixSpace
+        text.replaceCharacters(in: marker.range, with: replacement)
+        return (text as String, NSRange(location: marker.range.location + (replacement as NSString).length, length: 0))
     }
 }
 
@@ -126,8 +125,8 @@ struct QuickAddCandidateState: Equatable {
     }
 
     /// 当前应当被候选列表服务的标记片段；输入框没聚焦时一律返回 nil。
-    func marker(in draft: String, isFocused: Bool) -> QuickAddComposition.MarkerQuery? {
-        guard isFocused, let marker = QuickAddComposition.markerQuery(in: draft) else { return nil }
+    func marker(in draft: String, isFocused: Bool, selection: NSRange? = nil) -> QuickAddComposition.MarkerQuery? {
+        guard isFocused, let marker = QuickAddComposition.markerQuery(in: draft, selection: selection) else { return nil }
         guard marker.raw != suppressedMarker else { return nil }
         return marker
     }
@@ -150,8 +149,8 @@ struct QuickAddCandidateState: Equatable {
     }
 
     /// 一次 Esc 只收掉候选列表这一层，不清空草稿。
-    mutating func dismiss(draft: String) {
-        guard let marker = QuickAddComposition.markerQuery(in: draft) else { return }
+    mutating func dismiss(draft: String, selection: NSRange? = nil) {
+        guard let marker = QuickAddComposition.markerQuery(in: draft, selection: selection) else { return }
         suppressedMarker = marker.raw
     }
 

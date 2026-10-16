@@ -1,3 +1,4 @@
+import Combine
 import Foundation
 
 /// 任务列表的分组方式（阶段1）。`byDate` 是"所有任务"的默认并保持历史行为；
@@ -95,7 +96,7 @@ enum SmartListVisibility: String, Codable, CaseIterable, Identifiable {
 }
 
 /// 视图偏好的键：清单/标签视图按名字，智能视图按 destination。
-/// 清单改名后旧键失效、回落默认——排序是低价值偏好，不做改名迁移。
+/// 改名时迁移兼容名称键，保留排序、分组及看板选择。
 enum TaskViewScopeKey {
     static func key(destination: NativeDestination, activeList: String?, activeTag: String?) -> String {
         if let activeList { return "list:" + activeList }
@@ -209,6 +210,7 @@ final class TaskViewPreferenceStore: ObservableObject, ModuleStoreFlushable {
     @Published private(set) var smartListVisibility: [String: SmartListVisibility]
 
     private let persistence: JSONFileStore<Archive>
+    private var organizationCancellable: AnyCancellable?
 
     init(directory: URL? = nil) {
         let store = JSONFileStore<Archive>(filename: "view-preferences.json",
@@ -217,6 +219,21 @@ final class TaskViewPreferenceStore: ObservableObject, ModuleStoreFlushable {
         let archive = store.load()
         preferences = archive?.preferences ?? [:]
         smartListVisibility = archive?.smartListVisibility ?? [:]
+        organizationCancellable = NotificationCenter.default.publisher(for: .workspaceOrganizationRenamed)
+            .sink { [weak self] note in
+                guard let kind = note.userInfo?["kind"] as? String,
+                      let old = note.userInfo?["old"] as? String,
+                      let new = note.userInfo?["new"] as? String else { return }
+                self?.renameScope(kind: kind, from: old, to: new)
+            }
+    }
+
+    func renameScope(kind: String, from old: String, to new: String) {
+        let oldKey = kind + ":" + old
+        let newKey = kind + ":" + new
+        guard oldKey != newKey, let preference = preferences.removeValue(forKey: oldKey) else { return }
+        preferences[newKey] = preference
+        persist()
     }
 
     /// 未设过 = 显示（滴答默认）。
@@ -340,11 +357,8 @@ final class TaskViewPreferenceStore: ObservableObject, ModuleStoreFlushable {
               entry.sortMode != nil || entry.sortDescending != nil else { return }
         entry.sortMode = nil
         entry.sortDescending = nil
-        if entry.grouping == nil {
-            preferences.removeValue(forKey: key)
-        } else {
-            preferences[key] = entry
-        }
+        if entry.isDefault { preferences.removeValue(forKey: key) }
+        else { preferences[key] = entry }
         persist()
     }
 

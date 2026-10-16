@@ -1,0 +1,13 @@
+{
+  "captured_application": "WorkFollow Replica QA",
+  "frame_points": {
+    "width": 1512,
+    "height": 859
+  },
+  "image_pixels": {
+    "width": 1512,
+    "height": 859
+  },
+  "source": "REA observe-native-ui exact selected QA window",
+  "screenshot": "native-tasks.png"
+}

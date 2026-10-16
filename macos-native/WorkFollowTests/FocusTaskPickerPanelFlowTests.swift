@@ -16,7 +16,7 @@ final class FocusTaskPickerPanelFlowTests: XCTestCase {
 
         var body: some View {
             FocusTimerPane(store: store, workspace: workspace, taskPicker: session,
-                           showGiveUpConfirmation: .constant(false), onAddTimer: {})
+                           showGiveUpConfirmation: .constant(false))
                 .frame(width: 560, height: 640)
         }
     }

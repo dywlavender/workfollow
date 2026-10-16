@@ -1,17 +1,6 @@
 import Combine
 import Foundation
 
-struct PomodoroRecord: Identifiable, Codable, Equatable {
-    let id: UUID
-    var taskID: UUID?
-    var startedAt: Date
-    var minutes: Int
-    var completed: Bool
-    var note: String? = nil
-}
-
-/// Read-only timing data for Focus presentation. PomodoroEngine remains the owner
-/// of the session clock and state transitions.
 struct FocusSessionTiming: Equatable {
     let phase: PomodoroPhase
     let phaseStart: Date
@@ -20,48 +9,40 @@ struct FocusSessionTiming: Equatable {
     let remainingSeconds: Int
 }
 
-/// 结束铃声选项：系统音效名，关闭 = 静默。
 enum FocusBell: String, CaseIterable {
-    case crisp = "清脆"
-    case soft = "温和"
-    case chime = "灵动"
-    case off = "关闭"
-
+    case crisp = "清脆", soft = "温和", chime = "灵动", off = "关闭"
+    var identifier: String {
+        switch self { case .crisp: "glass"; case .soft: "ping"; case .chime: "tink"; case .off: "off" }
+    }
     var soundName: String? {
-        switch self {
-        case .crisp: "Glass"
-        case .soft: "Ping"
-        case .chime: "Tink"
-        case .off: nil
-        }
+        switch self { case .crisp: "Glass"; case .soft: "Ping"; case .chime: "Tink"; case .off: nil }
+    }
+    static func resolve(_ value: String?) -> FocusBell {
+        allCases.first { $0.identifier == value || $0.rawValue == value || $0.soundName == value } ?? .off
     }
 }
 
-/// 番茄偏好，与记录一起持久化到 focus.json。
 struct FocusPreferences: Codable, Equatable {
     var focusMinutes = 25
     var breakMinutes = 5
     var longBreakMinutes = 15
     var longBreakInterval = 4
     var dailyGoal = 8
-    /// 上一次专注绑定的任务：进入专注页时默认带上（additive Codable）。
     var lastTaskID: UUID?
-    /// 休息结束自动开始下一番茄（additive Codable）。
     var autoStartNextPomodoro = false
-    /// 正计时模式（tab 切换；additive Codable）。
     var stopwatchMode = false
-    /// 结束铃声：FocusBell rawValue，nil/关闭 = 静默（additive Codable）。
     var bellSound: String?
-
+    var bellID: String? = nil
+    var autoStartBreak = true
+    var automaticCycleLimit = 0
     static let dailyGoalRange = 1...24
-
+    var bell: FocusBell { FocusBell.resolve(bellID ?? bellSound) }
     var pomodoroSettings: PomodoroSettings {
         PomodoroSettings(focusMinutes: focusMinutes, breakMinutes: breakMinutes,
-                         longBreakMinutes: longBreakMinutes, longBreakInterval: longBreakInterval,
-                         autoStartNextPomodoro: autoStartNextPomodoro)
+            longBreakMinutes: longBreakMinutes, longBreakInterval: longBreakInterval,
+            autoStartNextPomodoro: autoStartNextPomodoro, autoStartBreak: autoStartBreak,
+            automaticCycleLimit: automaticCycleLimit)
     }
-
-    /// 越界值回退默认，避免损坏或手改的存档影响会话。
     func normalized() -> FocusPreferences {
         var value = self
         if !PomodoroSettings.focusRange.contains(value.focusMinutes) { value.focusMinutes = 25 }
@@ -69,52 +50,66 @@ struct FocusPreferences: Codable, Equatable {
         if !PomodoroSettings.longBreakRange.contains(value.longBreakMinutes) { value.longBreakMinutes = 15 }
         if !PomodoroSettings.intervalRange.contains(value.longBreakInterval) { value.longBreakInterval = 4 }
         if !Self.dailyGoalRange.contains(value.dailyGoal) { value.dailyGoal = 8 }
+        if !(0...12).contains(value.automaticCycleLimit) { value.automaticCycleLimit = 0 }
+        value.bellID = value.bell.identifier
         return value
     }
 }
 
-/// 专注模块 store：驱动 PomodoroEngine，持久化记录与偏好；剩余时间展示由本层 Timer 驱动。
+extension FocusPreferences {
+    private enum CodingKeys: String, CodingKey {
+        case focusMinutes, breakMinutes, longBreakMinutes, longBreakInterval, dailyGoal, lastTaskID
+        case autoStartNextPomodoro, stopwatchMode, bellSound, bellID, autoStartBreak, automaticCycleLimit
+    }
+    init(from decoder: Decoder) throws {
+        self.init(); let c = try decoder.container(keyedBy: CodingKeys.self)
+        focusMinutes = try c.decodeIfPresent(Int.self, forKey: .focusMinutes) ?? 25
+        breakMinutes = try c.decodeIfPresent(Int.self, forKey: .breakMinutes) ?? 5
+        longBreakMinutes = try c.decodeIfPresent(Int.self, forKey: .longBreakMinutes) ?? 15
+        longBreakInterval = try c.decodeIfPresent(Int.self, forKey: .longBreakInterval) ?? 4
+        dailyGoal = try c.decodeIfPresent(Int.self, forKey: .dailyGoal) ?? 8
+        lastTaskID = try c.decodeIfPresent(UUID.self, forKey: .lastTaskID)
+        autoStartNextPomodoro = try c.decodeIfPresent(Bool.self, forKey: .autoStartNextPomodoro) ?? false
+        stopwatchMode = try c.decodeIfPresent(Bool.self, forKey: .stopwatchMode) ?? false
+        bellSound = try c.decodeIfPresent(String.self, forKey: .bellSound)
+        bellID = try c.decodeIfPresent(String.self, forKey: .bellID)
+        autoStartBreak = try c.decodeIfPresent(Bool.self, forKey: .autoStartBreak) ?? true
+        automaticCycleLimit = try c.decodeIfPresent(Int.self, forKey: .automaticCycleLimit) ?? 0
+    }
+}
+
 @MainActor
 final class FocusStore: ObservableObject, ModuleStoreFlushable {
     var onTaskFocusStarted: ((UUID, Bool) -> Void)?
     struct Archive: Codable {
         var records: [PomodoroRecord] = []
         var preferences = FocusPreferences()
-        /// 进行中的会话快照：重启后接续计时，空闲时为 nil（additive Codable）。
         var session: FocusSessionSnapshot?
-        /// 常用专注预设（additive Codable）。
         var timers: [TimerPreset] = []
-        /// 正在进行的专注笔记（additive Codable）。
         var sessionNote: String? = nil
+        var sessionV2: FocusSessionSnapshot? = nil
+        var completionContext: FocusCompletionContext? = nil
+        var cycleProgress: FocusCycleProgress? = nil
+        var selectedPresetID: UUID? = nil
     }
-
-    struct TaskFocusTotal: Equatable {
-        let taskID: UUID?
-        let minutes: Int
-    }
-
-    /// 常用专注预设：emoji 头像 + 命名计时器（番茄计时 N 分钟 或 正计时）。
     struct TimerPreset: Codable, Equatable, Identifiable {
         let id: UUID
         var emoji: String
         var name: String
         var stopwatch: Bool
         var minutes: Int
+        var taskID: UUID? = nil
+        var archivedAt: Date? = nil
+        var sortOrder: Int? = nil
     }
-
-    struct DailyFocusStats: Equatable {
-        let dayKey: String
-        let day: Date  // 当天 0 点，供视图格式化标题。
-        let minutes: Int
-        let pomodoros: Int
-    }
-
+    struct TaskFocusTotal: Equatable { let taskID: UUID?; let minutes: Int }
+    struct DailyFocusStats: Equatable { let dayKey: String; let day: Date; let minutes: Int; let pomodoros: Int }
     struct RecordDayGroup: Identifiable, Equatable {
-        let dayKey: String
-        let day: Date
-        var records: [PomodoroRecord]
+        let dayKey: String; let day: Date; var records: [PomodoroRecord]
         var id: String { dayKey }
     }
+    struct FilteredStats: Equatable { var seconds = 0; var pomodoros = 0; var records = 0 }
+    enum ContentRoute: Equatable { case automatic, records, statistics }
 
     @Published private(set) var visibleRecords: [PomodoroRecord] = []
     @Published private(set) var historyRevision = 0
@@ -123,497 +118,763 @@ final class FocusStore: ObservableObject, ModuleStoreFlushable {
     @Published private(set) var historyError: String?
     @Published private(set) var allTimePomodoros = 0
     @Published private(set) var allTimeMinutes = 0
-    private var recordCount = 0
-    private var historyGeneration = 0
-    private var statsDay: String?
-    private let historyPageSize = 50
-
-    // Full history remains available for explicit compatibility access.
-    var records: [PomodoroRecord] {
-        read(fallback: []) { try persistence.history(limit: Int.max) }
-    }
-    var hydratedRecordCount: Int { persistence.decodedRecordCount }
-    var statisticsQueryCount: Int { persistence.aggregateQueryCount }
+    @Published private(set) var allTimeActiveSeconds = 0
+    @Published private(set) var todayPomodoros = 0
+    @Published private(set) var todayMinutes = 0
+    @Published private(set) var todayActiveSeconds = 0
     @Published private(set) var preferences = FocusPreferences()
     @Published private(set) var phase: PomodoroPhase = .idle
     @Published private(set) var isLongBreak = false
     @Published private(set) var remainingSeconds = 0
     @Published private(set) var phaseSeconds = 0
+    @Published private(set) var elapsedSeconds = 0
+    @Published private(set) var currentMode: FocusMode = .pomodoro
     @Published private(set) var currentTaskID: UUID?
     @Published private(set) var currentSessionNote = ""
-    @Published private(set) var todayPomodoros = 0
-    @Published private(set) var todayMinutes = 0
+    @Published private(set) var completedSessionNote = ""
     @Published private(set) var timers: [TimerPreset] = []
-    /// 阶段切换提醒（通知 + 铃声）；由 AppEnvironment 挂载，测试下为 nil。
+    @Published private(set) var pendingBreak = false
+    @Published private(set) var completionContext: FocusCompletionContext?
+    @Published private(set) var pendingEndConfirmation: FocusEndConfirmation?
+    @Published private(set) var selectedPresetID: UUID?
+    @Published private(set) var contentRoute: ContentRoute = .automatic
+    @Published private(set) var workspacePage: FocusWorkspacePage = .library
+    @Published private(set) var presetLibrarySection: FocusPresetLibrarySection = .active
+    @Published private(set) var browsedPresetID: UUID?
+    @Published private(set) var recordFilter = FocusRecordFilter()
     var notifier: FocusNotifier?
 
+    private var recordCount = 0
+    private var historyGeneration = 0
+    private var statsDay: String?
+    private let historyPageSize = 50
     private let engine: PomodoroEngine
     private let persistence: SQLiteRecordStore<PomodoroRecord, Archive>
     private let clock: () -> Date
-    private let calendar = Calendar.current
+    private let calendar: Calendar
     private var timer: Timer?
+    private var lastSessionSave = Date.distantPast
+    private var completionRecordCache: PomodoroRecord?
 
-    init(clock: @escaping () -> Date = Date.init, directory: URL? = nil) {
-        self.clock = clock
-        engine = PomodoroEngine(clock: clock)
-        let store = SQLiteRecordStore<PomodoroRecord, Archive>(
-            filename: "focus", directory: directory ?? JSONFileStore<Archive>.moduleDirectory, newestFirst: true,
-            timestamp: { $0.startedAt }, taskID: { $0.taskID }, metrics: { ($0.minutes, $0.completed ? 1 : 0) }, migrate: { data in
+    var records: [PomodoroRecord] { read(fallback: []) { try persistence.history(limit: Int.max) } }
+    var hydratedRecordCount: Int { persistence.decodedRecordCount }
+    var statisticsQueryCount: Int { persistence.aggregateQueryCount }
+    var storageError: Error? { persistence.readError }
+    var currentTime: Date { clock() }
+    var presentationCalendar: Calendar { calendar }
+    var activeTimers: [TimerPreset] {
+        timers.filter { $0.archivedAt == nil }.sorted { ($0.sortOrder ?? 0) < ($1.sortOrder ?? 0) }
+    }
+    var archivedTimers: [TimerPreset] {
+        timers.filter { $0.archivedAt != nil }.sorted { ($0.sortOrder ?? 0) < ($1.sortOrder ?? 0) }
+    }
+    var canStartTimerPreset: Bool {
+        phase == .idle && !pendingBreak && completionContext?.extraTimeStartedAt == nil && pendingEndConfirmation == nil
+    }
+    var currentSessionPresetID: UUID? { engine.currentPresetID }
+    var sessionTiming: FocusSessionTiming? {
+        guard let s = engine.sessionSnapshot, s.phase != .idle else { return nil }
+        return FocusSessionTiming(phase: s.phase, phaseStart: s.phaseStart,
+            projectedEndAt: s.phaseEnd, pausedAt: s.pausedAt, remainingSeconds: remainingSeconds)
+    }
+    var displayedSessionTiming: FocusSessionTiming? {
+        if phase == .focusing || phase == .pausedFocus { return sessionTiming }
+        if let record = completedRecord {
+            return FocusSessionTiming(phase: .focusing, phaseStart: record.startedAt,
+                projectedEndAt: nil, pausedAt: nil, remainingSeconds: 0)
+        }
+        return sessionTiming ?? FocusSessionTiming(phase: .idle, phaseStart: clock(),
+            projectedEndAt: nil, pausedAt: nil, remainingSeconds: 0)
+    }
+    var presentation: FocusPresentation {
+        let active = phase == .focusing || phase == .pausedFocus
+        let hasSession = phase != .idle || pendingBreak || completionContext != nil
+        let mode = hasSession ? currentMode : (preferences.stopwatchMode ? .stopwatch : .pomodoro)
+        let seconds = completionContext?.extraTimeStartedAt != nil ? availableExtraSeconds : (phase == .idle ? (completedDisplaySeconds ?? (mode == .stopwatch ? 0 : preferences.focusMinutes * 60))
+            : (active && mode == .stopwatch ? elapsedSeconds : remainingSeconds))
+        let actions: [FocusCommand]
+        switch phase {
+        case .idle: actions = completionContext?.extraTimeStartedAt != nil ? [.end, .abandon]
+            : (pendingBreak ? [.startBreak, .skipBreak] : [.start])
+        case .focusing: actions = [.pause, .end, .abandon]
+        case .pausedFocus: actions = [.resume, .end, .abandon]
+        case .breaking: actions = [.pause, .skipBreak]
+        case .pausedBreak: actions = [.resume, .skipBreak]
+        }
+        let title: String
+        switch phase {
+        case .idle: title = completionContext?.extraTimeStartedAt != nil ? "追加专注中" : (pendingBreak ? "准备休息" : "就绪")
+        case .focusing: title = "\(mode.title)中"
+        case .pausedFocus: title = "已暂停"
+        case .breaking: title = isLongBreak ? "长休息中" : "休息中"
+        case .pausedBreak: title = "休息已暂停"
+        }
+        return FocusPresentation(mode: mode, phase: phase, phaseTitle: title, displaySeconds: seconds,
+            elapsedSeconds: elapsedSeconds, targetSeconds: active && mode == .pomodoro ? phaseSeconds : nil,
+            progress: phaseSeconds > 0 ? min(1, max(0, Double(phaseSeconds - remainingSeconds) / Double(phaseSeconds))) : 0,
+            isPaused: phase == .pausedFocus || phase == .pausedBreak, taskID: currentTaskID,
+            availableActions: actions, completion: completionContext)
+    }
+
+    init(clock: @escaping () -> Date = Date.init, calendar: Calendar = .current, directory: URL? = nil) {
+        self.clock = clock; self.calendar = calendar; engine = PomodoroEngine(clock: clock)
+        let store = SQLiteRecordStore<PomodoroRecord, Archive>(filename: "focus",
+            directory: directory ?? JSONFileStore<Archive>.moduleDirectory, newestFirst: true,
+            timestamp: { $0.startedAt }, taskID: { $0.taskID },
+            metrics: { ($0.activeSeconds, $0.creditedPomodoros) }, metricsVersion: "focus-seconds-v1",
+            migrate: { data in
                 var archive = try JSONDecoder().decode(Archive.self, from: data)
-                let records = archive.records
-                archive.records = []
+                let records = archive.records; archive.records = []
                 return .init(records: records, metadata: archive)
             })
         persistence = store
-        let saved = store.load(recentLimit: 0)
-        let loaded = saved?.metadata ?? Archive()
+        let loaded = store.load(recentLimit: 0)?.metadata ?? Archive()
         let totals = read(fallback: SQLiteRecordStore<PomodoroRecord, Archive>.Totals()) { try store.totals() }
-        allTimePomodoros = totals.count; allTimeMinutes = totals.value; recordCount = totals.records
-        historyHasMore = recordCount > 0
-        preferences = loaded.preferences.normalized()
+        allTimeActiveSeconds = totals.value; allTimeMinutes = FocusAccountingPolicy.aggregatedMinutes(seconds: totals.value)
+        allTimePomodoros = totals.count; recordCount = totals.records; historyHasMore = recordCount > 0
+        preferences = loaded.preferences.normalized(); timers = loaded.timers; selectedPresetID = loaded.selectedPresetID
+        completionContext = loaded.completionContext
         engine.apply(preferences.pomodoroSettings)
-        timers = loaded.timers
-        if let session = loaded.session {
-            engine.restore(session)
-        }
-        if loaded.session?.phase == .focusing || loaded.session?.phase == .pausedFocus {
+        if let cycle = loaded.cycleProgress { engine.restoreCycle(cycle) }
+        if let session = loaded.sessionV2 ?? loaded.session { engine.restore(session) }
+        if engine.phase == .focusing || engine.phase == .pausedFocus || (engine.phase == .idle && completionContext == nil) {
             currentSessionNote = loaded.sessionNote ?? ""
         }
         sync()
-        if phase != .idle { startTimer() }
-        refreshDailyStats()
+        workspacePage = phase != .idle || pendingBreak || completionContext != nil ? .timer : .library
+        if phase != .idle || hasExtraTimeClock { startTimer() }
     }
-
-    var storageError: Error? { persistence.readError }
-
     deinit { timer?.invalidate() }
 
-    // MARK: - 会话控制
-
-    /// 开始专注；minutes 越界（合法范围 5–180）或已有会话时拒绝，成功后记忆为默认时长。
-    /// 正计时模式（stopwatchMode）忽略 minutes。
+    // MARK: Shared commands
+    @discardableResult
+    func perform(_ command: FocusCommand, taskID: UUID? = nil) -> Bool {
+        switch command {
+        case .start: start(taskID: taskID ?? preferences.lastTaskID)
+        case .pause: pause()
+        case .resume: resume()
+        case .end: endFromUserAction()
+        case .abandon: completionContext?.extraTimeStartedAt != nil ? cancelCompletionExtraTime() : abandon()
+        case .startBreak: startBreak()
+        case .skipBreak: skipBreak()
+        }
+    }
     @discardableResult
     func start(taskID: UUID? = nil, minutes: Int? = nil, stopwatch: Bool? = nil) -> Bool {
-        guard engine.phase == .idle else { return false }
-        if let minutes {
+        guard engine.phase == .idle, completionContext?.extraTimeStartedAt == nil else { return false }
+        let mode = stopwatch ?? preferences.stopwatchMode
+        if let minutes, !mode {
             guard PomodoroSettings.focusRange.contains(minutes) else { return false }
             preferences.focusMinutes = minutes
-            engine.apply(preferences.pomodoroSettings)
-            schedulePersistence()
         }
+        preferences.stopwatchMode = mode; preferences.lastTaskID = taskID
+        engine.apply(preferences.pomodoroSettings)
         notifier?.requestAuthorizationIfNeeded()
-        guard engine.start(taskID: taskID,
-                           stopwatch: stopwatch ?? preferences.stopwatchMode) else { return false }
-        currentSessionNote = ""
-        if let taskID {
-            preferences.lastTaskID = taskID
-            schedulePersistence()
-        }
-        sync()
-        startTimer()
-        schedulePersistence()
-        if let taskID { onTaskFocusStarted?(taskID, stopwatch ?? preferences.stopwatchMode) }
+        guard engine.start(taskID: taskID, stopwatch: mode, presetID: selectedPresetID) else { return false }
+        let preparedNote = completionContext == nil ? currentSessionNote : ""
+        completionContext = nil; currentSessionNote = preparedNote; showTimerWorkspace()
+        sync(); startTimer(); schedulePersistence()
+        if let taskID { onTaskFocusStarted?(taskID, mode) }
         return true
     }
-
     @discardableResult
     func pause() -> Bool {
-        guard engine.pause() else { return false }
-        sync()
-        return true
+        guard engine.pause() else { return false }; sync(); schedulePersistence(); return true
     }
-
     @discardableResult
     func resume() -> Bool {
-        guard engine.resume() else { return false }
-        sync()
-        return true
+        guard engine.resume() else { return false }; sync(); startTimer(); schedulePersistence(); return true
     }
-
-    /// 放弃当前阶段；专注满 5 分钟会保留一条未完成记录。
     @discardableResult
-    func giveUp() -> PomodoroRecord? {
-        let record = engine.giveUp()
-        let storedRecord = record.map { insert($0, sessionNote: currentSessionNote) }
-        currentSessionNote = ""
-        sync()
-        stopTimerIfNeeded()
-        return storedRecord
+    func adjustCurrentTarget(byMinutes delta: Int) -> Bool {
+        guard engine.adjustCurrentTarget(bySeconds: delta * 60) else { return false }
+        sync(); schedulePersistence(); return true
     }
-
-    /// 提前完成当前专注，随后进入休息。
-    @discardableResult
-    func finishEarly() -> PomodoroRecord? {
-        let record = engine.finishEarly()
-        let storedRecord = record.map { insert($0, sessionNote: currentSessionNote) }
-        if record != nil { currentSessionNote = "" }
-        sync()
-        return storedRecord
-    }
-
-    /// 立即同步引擎状态，到点阶段就地完成；Timer 与视图出现时都调用。
-    func refresh() {
-        let previousPhase = engine.phase
-        if let record = engine.handleCompletion() {
-            let note = currentSessionNote
-            currentSessionNote = ""
-            insert(record, sessionNote: note)
-        }
-        if previousPhase == .breaking && engine.phase == .focusing {
-            currentSessionNote = ""
-        }
-        sync()
-        stopTimerIfNeeded()
-    }
-
-    // MARK: - 偏好
-
-    @discardableResult
-    func setFocusMinutes(_ minutes: Int) -> Bool {
-        guard PomodoroSettings.focusRange.contains(minutes) else { return false }
-        preferences.focusMinutes = minutes
-        engine.apply(preferences.pomodoroSettings)
-        schedulePersistence()
-        return true
-    }
-
-    @discardableResult
-    func setBreakMinutes(_ minutes: Int) -> Bool {
-        guard PomodoroSettings.breakRange.contains(minutes) else { return false }
-        preferences.breakMinutes = minutes
-        engine.apply(preferences.pomodoroSettings)
-        schedulePersistence()
-        return true
-    }
-
-    @discardableResult
-    func setLongBreakMinutes(_ minutes: Int) -> Bool {
-        guard PomodoroSettings.longBreakRange.contains(minutes) else { return false }
-        preferences.longBreakMinutes = minutes
-        engine.apply(preferences.pomodoroSettings)
-        schedulePersistence()
-        return true
-    }
-
-    @discardableResult
-    func setLongBreakInterval(_ count: Int) -> Bool {
-        guard PomodoroSettings.intervalRange.contains(count) else { return false }
-        preferences.longBreakInterval = count
-        engine.apply(preferences.pomodoroSettings)
-        schedulePersistence()
-        return true
-    }
-
-    @discardableResult
-    func setAutoStartNextPomodoro(_ enabled: Bool) -> Bool {
-        preferences.autoStartNextPomodoro = enabled
-        engine.apply(preferences.pomodoroSettings)
-        schedulePersistence()
-        return true
-    }
-
-    @discardableResult
-    func setDailyGoal(_ count: Int) -> Bool {
-        guard FocusPreferences.dailyGoalRange.contains(count) else { return false }
-        preferences.dailyGoal = count
-        schedulePersistence()
-        return true
-    }
-
-    /// 运行中换绑当前专注的任务。
     @discardableResult
     func reattach(taskID: UUID?) -> Bool {
+        guard phase == .focusing || phase == .pausedFocus else { return false }
+        engine.reattach(taskID: taskID); preferences.lastTaskID = taskID; sync(); schedulePersistence(); return true
+    }
+    @discardableResult
+    func abandon() -> Bool {
+        guard phase == .focusing || phase == .pausedFocus else { return false }
+        _ = giveUp(); return true
+    }
+    @discardableResult
+    func giveUp() -> PomodoroRecord? {
+        if phase == .breaking || phase == .pausedBreak || pendingBreak { _ = skipBreak(); return nil }
+        let record = engine.giveUp().map { insert($0, sessionNote: currentSessionNote) }
+        completionContext = nil; currentSessionNote = ""; showPresetLibrary(); sync(); stopTimerIfNeeded(); schedulePersistence()
+        return record
+    }
+    @discardableResult
+    func finishEarly() -> PomodoroRecord? {
+        guard let value = engine.finishEarly() else { return nil }
+        let record = insert(value, sessionNote: currentSessionNote)
+        currentSessionNote = ""; setCompletion(record); sync(); stopTimerIfNeeded(); schedulePersistence()
+        return record
+    }
+    private func endFromUserAction() -> Bool {
+        guard pendingEndConfirmation == nil else { return false }
+        if completionContext?.extraTimeStartedAt != nil { return appendCompletionExtraTime() }
         guard engine.phase == .focusing || engine.phase == .pausedFocus else { return false }
-        engine.reattach(taskID: taskID)
-        schedulePersistence()
-        return true
-    }
-
-    /// 正计时模式已走过的秒数（非正计时返回 0）。
-    var elapsedSeconds: Int { engine.elapsedSeconds }
-
-    /// Read-only presentation snapshot; Views do not reach into PomodoroEngine.
-    var sessionTiming: FocusSessionTiming? {
-        guard let snapshot = engine.sessionSnapshot else { return nil }
-        return FocusSessionTiming(phase: snapshot.phase,
-                                  phaseStart: snapshot.phaseStart,
-                                  projectedEndAt: snapshot.phaseEnd,
-                                  pausedAt: snapshot.pausedAt,
-                                  remainingSeconds: remainingSeconds)
-    }
-
-    /// Injected clock exposed to projections. Published timer values invalidate Views each second.
-    var currentTime: Date { clock() }
-
-    /// Updates and debounces persistence of the active focus note.
-    func updateCurrentSessionNote(_ note: String) {
-        guard phase == .focusing || phase == .pausedFocus,
-              currentSessionNote != note else { return }
-        currentSessionNote = note
-        schedulePersistence()
-    }
-
-    /// Aggregate over the full database, independently of visible history pages.
-    func weeklyTaskTotals(days: Int = 7, limit: Int = 3) -> [TaskFocusTotal] {
-        let cutoff = calendar.date(byAdding: .day, value: -days, to: clock()) ?? clock()
-        return read(fallback: []) { try persistence.taskTotals(from: cutoff, limit: limit) }
-            .map { TaskFocusTotal(taskID: $0.0, minutes: $0.1) }
-    }
-
-    @discardableResult
-    func setBell(_ rawValue: String) -> Bool {
-        preferences.bellSound = rawValue
-        schedulePersistence()
-        return true
-    }
-
-    @discardableResult
-    func setStopwatchMode(_ enabled: Bool) -> Bool {
-        guard engine.phase == .idle else { return false }
-        preferences.stopwatchMode = enabled
-        schedulePersistence()
-        return true
-    }
-
-    // MARK: - 常用专注
-
-    /// 新建常用专注：名称必填、番茄计时需 5–180 分钟、上限 12 个（对齐滴答）。
-    @discardableResult
-    func addTimer(name: String, emoji: String, stopwatch: Bool, minutes: Int) -> Bool {
-        let trimmed = name.trimmingCharacters(in: .whitespaces)
-        guard !trimmed.isEmpty else { return false }
-        if !stopwatch {
-            guard PomodoroSettings.focusRange.contains(minutes) else { return false }
+        if engine.currentMode != .pomodoro { return finishEarly() != nil }
+        if FocusAccountingPolicy.discardsUserEndedSession(mode: engine.currentMode, activeSeconds: engine.elapsedSeconds) {
+            _ = engine.discardCurrentFocus(); returnToOverviewAfterUserEnd(); return true
         }
-        guard timers.count < 12 else { return false }
-        timers.append(TimerPreset(id: UUID(), emoji: emoji, name: trimmed, stopwatch: stopwatch,
-                                  minutes: stopwatch ? 0 : minutes))
-        schedulePersistence()
+        guard let sessionID = engine.sessionSnapshot?.sessionID else { return false }
+        pendingEndConfirmation = FocusEndConfirmation(sessionID: sessionID, activeSeconds: engine.elapsedSeconds)
         return true
     }
+    @discardableResult
+    func resolveEndConfirmation(_ choice: FocusEndConfirmationChoice) -> Bool {
+        guard let request = pendingEndConfirmation,
+              request.sessionID == engine.sessionSnapshot?.sessionID else { return false }
+        switch choice {
+        case .cancel:
+            pendingEndConfirmation = nil
+        case .save:
+            guard let value = engine.finishEarlyWithoutBreak() else { return false }
+            _ = insert(value, sessionNote: currentSessionNote)
+            returnToOverviewAfterUserEnd()
+        case .discard:
+            guard engine.discardCurrentFocus() else { return false }
+            returnToOverviewAfterUserEnd()
+        }
+        return true
+    }
+    private func returnToOverviewAfterUserEnd() {
+        pendingEndConfirmation = nil
+        completionContext = nil; completionRecordCache = nil
+        currentSessionNote = ""; completedSessionNote = ""
+        showPresetLibrary(); showOverview(); sync(); stopTimerIfNeeded(); schedulePersistence()
+    }
+    @discardableResult
+    func startBreak() -> Bool {
+        guard engine.startBreak() else { return false }
+        stopPendingExtraClock()
+        sync(); startTimer(); schedulePersistence(); return true
+    }
+    @discardableResult
+    func skipBreak() -> Bool {
+        guard engine.skipBreak() else { return false }
+        stopPendingExtraClock()
+        afterAutomaticStart(); sync(); stopTimerIfNeeded(); schedulePersistence(); return true
+    }
+    func refresh() {
+        let oldPhase = engine.phase
+        if let value = engine.handleCompletion() {
+            let record = insert(value, sessionNote: currentSessionNote); currentSessionNote = ""; setCompletion(record)
+            notifier?.announce(bell: preferences.bell.soundName, title: "番茄完成", body: "本次专注已保存")
+        } else if oldPhase == .breaking, engine.phase != .breaking {
+            afterAutomaticStart()
+            notifier?.announce(bell: preferences.bell.soundName, title: "休息结束",
+                body: engine.phase == .focusing ? "下一个番茄已开始" : "准备好了就开始下一个番茄")
+        }
+        sync(); stopTimerIfNeeded()
+    }
+    private func afterAutomaticStart() {
+        guard engine.phase == .focusing else { return }
+        completionContext = nil; currentSessionNote = ""; contentRoute = .automatic
+        if let taskID = engine.currentTaskID { onTaskFocusStarted?(taskID, false) }
+    }
+    func updateCurrentSessionNote(_ note: String) {
+        let canEdit = phase == .focusing || phase == .pausedFocus
+            || (phase == .idle && completionContext == nil && !pendingBreak)
+        guard canEdit, currentSessionNote != note else { return }
+        currentSessionNote = note; schedulePersistence()
+    }
+    private func setCompletion(_ record: PomodoroRecord) {
+        completionRecordCache = record; completedSessionNote = record.note ?? ""
+        let completedAt = record.endedAt ?? clock()
+        let tracksPending = record.mode == .pomodoro && record.details?.termination == .targetReached
+            && engine.phase == .idle && engine.pendingBreak
+        completionContext = FocusCompletionContext(recordID: record.id, completedAt: completedAt,
+            extraTimeAnchor: clock(), pendingExtraSeconds: max(0, Int(clock().timeIntervalSince(completedAt))),
+            tracksPendingExtraTime: tracksPending, pendingExtraStartedAt: tracksPending ? clock() : nil,
+            recordActiveSeconds: record.activeSeconds)
+    }
+    func dismissCompletion() {
+        if engine.pendingBreak { _ = engine.giveUp() }
+        completionContext = nil; showPresetLibrary(); sync(); stopTimerIfNeeded(); schedulePersistence()
+    }
+    var completedRecord: PomodoroRecord? {
+        guard let context = completionContext else { return nil }
+        if completionRecordCache?.id != context.recordID {
+            completionRecordCache = record(id: context.recordID)
+        }
+        return completionRecordCache
+    }
+    func prepareCompletedSessionNote() {
+        completedSessionNote = completedRecord?.note ?? ""
+    }
+    func updateCompletedSessionNote(_ note: String) {
+        guard var value = completedRecord, completedSessionNote != note else { return }
+        completedSessionNote = note; value.note = trimmedNote(note)
+        completionRecordCache = value
+        if let index = visibleRecords.firstIndex(where: { $0.id == value.id }) { visibleRecords[index] = value }
+        invalidateHistory(); persistence.schedule(upserts: [value], metadata: archive())
+    }
+    var completedDisplaySeconds: Int? {
+        guard let context = completionContext, let seconds = context.recordActiveSeconds else { return nil }
+        return context.tracksPendingExtraTime == true && context.extraTimeWasAppended == true
+            ? seconds / 60 * 60 : seconds
+    }
+    var isTrackingPendingExtraTime: Bool { completionContext?.pendingExtraStartedAt != nil }
+    private var hasExtraTimeClock: Bool {
+        completionContext?.extraTimeStartedAt != nil || isTrackingPendingExtraTime
+    }
+    var availableExtraSeconds: Int {
+        guard let context = completionContext else { return 0 }
+        let running = context.extraTimeStartedAt.map { max(0, Int(clock().timeIntervalSince($0))) } ?? 0
+        let pending = context.pendingExtraStartedAt.map { max(0, Int(clock().timeIntervalSince($0))) } ?? 0
+        return (context.pendingExtraSeconds ?? 0) + running + pending
+    }
+    private func stopPendingExtraClock() {
+        guard var context = completionContext, let startedAt = context.pendingExtraStartedAt else { return }
+        context.pendingExtraSeconds = (context.pendingExtraSeconds ?? 0) + max(0, Int(clock().timeIntervalSince(startedAt)))
+        context.pendingExtraStartedAt = nil; completionContext = context
+    }
+    @discardableResult
+    func startCompletionExtraTime() -> Bool {
+        guard var context = completionContext, context.extraTimeStartedAt == nil,
+              context.tracksPendingExtraTime != true,
+              phase != .focusing && phase != .pausedFocus else { return false }
+        if phase == .breaking || phase == .pausedBreak || pendingBreak { _ = engine.giveUp() }
+        context.extraTimeStartedAt = clock(); context.extraTimeAnchor = clock(); completionContext = context
+        sync(); startTimer(); schedulePersistence(); return true
+    }
+    @discardableResult
+    func appendCompletionExtraTime() -> Bool {
+        guard var context = completionContext, var value = record(id: context.recordID), var details = value.details,
+              context.tracksPendingExtraTime != true || context.pendingExtraStartedAt != nil,
+              availableExtraSeconds > 0 else { return false }
+        let extra = availableExtraSeconds
+        // 两个有效专注段之间的间隔保持为暂停，休息不会进入有效时长。
+        if let extraStart = context.extraTimeStartedAt, let previousEnd = details.endedAt, extraStart > previousEnd {
+            let gap = FocusPauseRange(startedAt: min(extraStart, previousEnd.addingTimeInterval(TimeInterval(context.pendingExtraSeconds ?? 0))), endedAt: extraStart)
+            details.pauseRanges.append(gap); details.pausedSeconds += gap.seconds
+        }
+        details.activeSeconds += extra
+        details.endedAt = context.extraTimeStartedAt != nil || context.pendingExtraStartedAt != nil ? clock()
+            : (details.endedAt?.addingTimeInterval(TimeInterval(extra)) ?? clock())
+        details.durationCorrectionSeconds = (details.durationCorrectionSeconds ?? 0) + extra
+        value.details = details; value.minutes = FocusAccountingPolicy.displayedMinutes(seconds: details.activeSeconds)
+        context.extraTimeAnchor = clock(); context.pendingExtraSeconds = 0
+        context.extraTimeStartedAt = nil; context.pendingExtraStartedAt = nil; context.extraTimeWasAppended = true
+        completionContext = context; replace(value)
+        stopTimerIfNeeded(); schedulePersistence(); return true
+    }
 
-    func deleteTimer(_ id: UUID) {
-        guard let index = timers.firstIndex(where: { $0.id == id }) else { return }
-        timers.remove(at: index)
+    @discardableResult
+    func cancelCompletionExtraTime() -> Bool {
+        guard var context = completionContext, context.extraTimeStartedAt != nil else { return false }
+        context.extraTimeStartedAt = nil; completionContext = context
+        stopTimerIfNeeded(); schedulePersistence(); return true
+    }
+
+    // MARK: Next-session preferences
+    @discardableResult func setFocusMinutes(_ value: Int) -> Bool {
+        guard PomodoroSettings.focusRange.contains(value) else { return false }
+        preferences.focusMinutes = value; updateSettings(); return true
+    }
+    @discardableResult func setBreakMinutes(_ value: Int) -> Bool {
+        guard PomodoroSettings.breakRange.contains(value) else { return false }
+        preferences.breakMinutes = value; updateSettings(); return true
+    }
+    @discardableResult func setLongBreakMinutes(_ value: Int) -> Bool {
+        guard PomodoroSettings.longBreakRange.contains(value) else { return false }
+        preferences.longBreakMinutes = value; updateSettings(); return true
+    }
+    @discardableResult func setLongBreakInterval(_ value: Int) -> Bool {
+        guard PomodoroSettings.intervalRange.contains(value) else { return false }
+        preferences.longBreakInterval = value; updateSettings(); return true
+    }
+    @discardableResult func setAutoStartNextPomodoro(_ enabled: Bool) -> Bool {
+        preferences.autoStartNextPomodoro = enabled; updateSettings(); return true
+    }
+    @discardableResult func setAutoStartBreak(_ enabled: Bool) -> Bool {
+        preferences.autoStartBreak = enabled; updateSettings(); return true
+    }
+    @discardableResult func setAutomaticCycleLimit(_ value: Int) -> Bool {
+        guard (0...12).contains(value) else { return false }
+        preferences.automaticCycleLimit = value; updateSettings(); return true
+    }
+    @discardableResult func setDailyGoal(_ value: Int) -> Bool {
+        guard FocusPreferences.dailyGoalRange.contains(value) else { return false }
+        preferences.dailyGoal = value; schedulePersistence(); return true
+    }
+    @discardableResult func setStopwatchMode(_ enabled: Bool) -> Bool {
+        preferences.stopwatchMode = enabled; schedulePersistence(); return true
+    }
+    @discardableResult func setBell(_ value: String) -> Bool {
+        let bell = FocusBell.resolve(value); preferences.bellID = bell.identifier; preferences.bellSound = bell.rawValue
+        schedulePersistence(); notifier?.preview(bell: bell.soundName); return true
+    }
+    private func updateSettings() { engine.apply(preferences.pomodoroSettings); schedulePersistence() }
+
+    // MARK: Presets
+    func showPresetLibrary() {
+        workspacePage = .library; contentRoute = .automatic
+    }
+    func showLibraryOverview() {
+        browsedPresetID = nil; showPresetLibrary()
+    }
+    func showTimerWorkspace() {
+        workspacePage = .timer; contentRoute = .automatic
+    }
+    func selectPresetForDetails(_ id: UUID) {
+        guard let preset = timers.first(where: { $0.id == id }) else { return }
+        presetLibrarySection = preset.archivedAt == nil ? .active : .archived
+        browsedPresetID = id; showPresetLibrary()
+    }
+    func closePresetDetails() { browsedPresetID = nil }
+    func setPresetLibrarySection(_ section: FocusPresetLibrarySection) {
+        presetLibrarySection = section
+        if let id = browsedPresetID, let preset = timers.first(where: { $0.id == id }),
+           (preset.archivedAt == nil) != (section == .active) { browsedPresetID = nil }
+    }
+    @discardableResult
+    func startTimerPreset(_ id: UUID) -> Bool {
+        guard canStartTimerPreset, let preset = activeTimers.first(where: { $0.id == id }) else { return false }
+        engine.apply(preferences.pomodoroSettings)
+        notifier?.requestAuthorizationIfNeeded()
+        guard engine.start(taskID: preset.taskID, focusMinutes: preset.stopwatch ? nil : preset.minutes,
+                           stopwatch: preset.stopwatch, presetID: preset.id) else { return false }
+        let preparedNote = completionContext == nil ? currentSessionNote : ""
+        completionContext = nil; currentSessionNote = preparedNote
+        browsedPresetID = id; showTimerWorkspace()
+        sync(); startTimer(); schedulePersistence()
+        if let taskID = preset.taskID { onTaskFocusStarted?(taskID, preset.stopwatch) }
+        return true
+    }
+    @discardableResult
+    func addTimer(name: String, emoji: String, stopwatch: Bool, minutes: Int, taskID: UUID? = nil) -> Bool {
+        let name = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty, stopwatch || PomodoroSettings.focusRange.contains(minutes), activeTimers.count < 12 else { return false }
+        timers.append(TimerPreset(id: UUID(), emoji: emoji, name: name, stopwatch: stopwatch,
+            minutes: stopwatch ? 0 : minutes, taskID: taskID, sortOrder: timers.count))
+        schedulePersistence(); return true
+    }
+    @discardableResult
+    func updateTimer(_ preset: TimerPreset) -> Bool {
+        guard let index = timers.firstIndex(where: { $0.id == preset.id }),
+              !preset.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              preset.stopwatch || PomodoroSettings.focusRange.contains(preset.minutes) else { return false }
+        timers[index] = preset; schedulePersistence(); return true
+    }
+    func archiveTimer(_ id: UUID) {
+        guard let i = timers.firstIndex(where: { $0.id == id }) else { return }
+        timers[i].archivedAt = clock(); if selectedPresetID == id { selectedPresetID = nil }
+        if browsedPresetID == id { browsedPresetID = nil }
         schedulePersistence()
     }
-
-    /// 应用一个常用专注预设到当前设置。
+    @discardableResult
+    func restoreTimer(_ id: UUID) -> Bool {
+        guard activeTimers.count < 12, let i = timers.firstIndex(where: { $0.id == id && $0.archivedAt != nil }) else { return false }
+        timers[i].archivedAt = nil
+        if browsedPresetID == id && presetLibrarySection == .archived { browsedPresetID = nil }
+        schedulePersistence(); return true
+    }
+    func deleteTimer(_ id: UUID) {
+        timers.removeAll { $0.id == id }; if selectedPresetID == id { selectedPresetID = nil }
+        if browsedPresetID == id { browsedPresetID = nil }
+        schedulePersistence()
+    }
     func applyTimerPreset(_ preset: TimerPreset) {
-        setStopwatchMode(preset.stopwatch)
-        if !preset.stopwatch { setFocusMinutes(preset.minutes) }
+        selectedPresetID = preset.id; preferences.lastTaskID = preset.taskID
+        preferences.stopwatchMode = preset.stopwatch
+        if !preset.stopwatch { preferences.focusMinutes = preset.minutes }
+        updateSettings()
     }
 
-    // MARK: - 记录
-
-    /// 手动补记一条过去的专注记录（对齐滴答）：只允许此刻之前、且落在最近
-    /// 7 天内的时段，分钟数 1–180；记录按开始时间归位排序。
+    // MARK: History and edits
+    func record(id: UUID) -> PomodoroRecord? { read(fallback: nil) { try persistence.record(id: id) } }
+    func recordsForTask(_ taskID: UUID) -> [PomodoroRecord] {
+        read(fallback: []) { try persistence.history(taskID: taskID, limit: Int.max) }
+    }
+    func taskTotalActiveSeconds(taskID: UUID) -> Int {
+        read(fallback: SQLiteRecordStore<PomodoroRecord, Archive>.Totals()) { try persistence.totals(taskID: taskID) }.value
+    }
+    func taskTotalPomodoros(taskID: UUID) -> Int {
+        read(fallback: SQLiteRecordStore<PomodoroRecord, Archive>.Totals()) { try persistence.totals(taskID: taskID) }.count
+    }
+    func showRecords(taskID: UUID? = nil, presetID: UUID? = nil) {
+        recordFilter = FocusRecordFilter(taskID: taskID, presetID: presetID); contentRoute = .records
+        historyRevision += 1
+    }
+    func showStatistics() { contentRoute = .statistics }
+    func showOverview() { contentRoute = .automatic; recordFilter = FocusRecordFilter(); historyRevision += 1 }
+    func setRecordFilter(_ filter: FocusRecordFilter) { recordFilter = filter; historyRevision += 1 }
+    func filteredRecords(_ filter: FocusRecordFilter? = nil) -> [PomodoroRecord] {
+        let filter = filter ?? recordFilter
+        return read(fallback: []) { try persistence.history(taskID: filter.taskID, from: filter.from, to: filter.to, limit: Int.max) }
+            .filter { matches($0, filter: filter) }
+    }
+    func filteredStatistics(_ filter: FocusRecordFilter? = nil) -> FilteredStats {
+        filteredRecords(filter).reduce(into: FilteredStats()) {
+            $0.seconds += $1.activeSeconds; $0.pomodoros += $1.creditedPomodoros; $0.records += 1
+        }
+    }
+    /// 常用项详情始终按全库 presetID 查询；概览的分页、任务筛选不会截断详情数据。
+    func presetStatistics(presetID: UUID, period: FocusPresetStatisticsPeriod = .week,
+                          anchor: Date? = nil) -> FocusPresetStatistics {
+        let all = filteredRecords(FocusRecordFilter(presetID: presetID))
+        let today = calendar.startOfDay(for: clock())
+        let interval = calendar.dateInterval(of: period.calendarComponent, for: anchor ?? clock())
+            ?? DateInterval(start: today, duration: 86_400)
+        let grouped = Dictionary(grouping: all, by: { calendar.startOfDay(for: $0.startedAt) })
+        var days: [FocusPresetDayTotal] = []
+        var day = interval.start
+        while day < interval.end {
+            days.append(FocusPresetDayTotal(day: day,
+                activeSeconds: grouped[day, default: []].reduce(0) { $0 + $1.activeSeconds }))
+            guard let next = calendar.date(byAdding: .day, value: 1, to: day) else { break }
+            day = next
+        }
+        let records = all.filter { $0.startedAt >= interval.start && $0.startedAt < interval.end }
+            .sorted { $0.startedAt > $1.startedAt }
+        return FocusPresetStatistics(focusDays: grouped.values.filter { $0.contains { $0.activeSeconds > 0 } }.count,
+            todayActiveSeconds: grouped[today, default: []].reduce(0) { $0 + $1.activeSeconds },
+            totalActiveSeconds: all.reduce(0) { $0 + $1.activeSeconds },
+            periodActiveSeconds: records.reduce(0) { $0 + $1.activeSeconds }, periodInterval: interval,
+            days: days, records: records)
+    }
+    private func matches(_ record: PomodoroRecord, filter: FocusRecordFilter) -> Bool {
+        (filter.mode == nil || filter.mode == record.mode)
+            && (filter.source == nil || filter.source == record.source)
+            && (filter.presetID == nil || filter.presetID == record.details?.presetID)
+            && (filter.associated == nil || filter.associated == (record.taskID != nil))
+            && (filter.from == nil || record.startedAt >= filter.from!)
+            && (filter.to == nil || record.startedAt < filter.to!)
+    }
+    /// 旧分钟入口也复用完整编辑草稿，结束时间必须已经发生。
     @discardableResult
     func addRecord(taskID: UUID?, startedAt: Date, minutes: Int) -> Bool {
-        guard (1...180).contains(minutes) else { return false }
-        let now = clock()
-        guard startedAt < now else { return false }
-        guard let days = calendar.dateComponents([.day], from: startedAt, to: now).day,
-              days < 7 else { return false }
-        let record = PomodoroRecord(id: UUID(), taskID: taskID, startedAt: startedAt,
-                                    minutes: minutes, completed: true)
-        accept(record)
+        guard minutes > 0, startedAt < clock() else { return false }
+        var draft = FocusRecordDraft(now: clock(), taskID: taskID)
+        draft.creditedPomodoros = 1 // 原分钟API保留其一次补记的兼容语义。
+        draft.startedAt = startedAt; draft.endedAt = startedAt.addingTimeInterval(TimeInterval(minutes * 60))
+        return saveRecordDraft(draft)
+    }
+    @discardableResult
+    func saveRecordDraft(_ draft: FocusRecordDraft) -> Bool {
+        if draft.preservesLegacyTiming, var old = record(id: draft.id), old.details == nil {
+            guard draft.durationMinutes > 0, draft.startedAt <= clock() else { return false }
+            old.taskID = draft.taskID; old.startedAt = draft.startedAt
+            old.note = trimmedNote(draft.note); old.minutes = draft.durationMinutes
+            replace(old); return true
+        }
+        guard draft.mode != .legacy, draft.creditedPomodoros >= 0, draft.startedAt < draft.endedAt, draft.endedAt <= clock() else { return false }
+        let old = draft.isNew ? nil : record(id: draft.id)
+        guard draft.isNew || old != nil else { return false }
+        let pauses = old?.details?.pauseRanges.compactMap { range -> FocusPauseRange? in
+            let start = max(range.startedAt, draft.startedAt); let end = min(range.endedAt, draft.endedAt)
+            return start < end ? FocusPauseRange(startedAt: start, endedAt: end) : nil
+        } ?? []
+        let paused = pauses.reduce(0) { $0 + $1.seconds }
+        let unchangedInterval = old?.startedAt == draft.startedAt && old?.endedAt == draft.endedAt
+        let seconds = unchangedInterval ? (old?.activeSeconds ?? 0)
+            : max(0, Int(draft.endedAt.timeIntervalSince(draft.startedAt)) - paused)
+        guard seconds > 0 else { return false }
+        let termination = old?.details?.termination ?? .manualEntry
+        let details = FocusRecordDetails(mode: draft.mode, source: old?.details?.source ?? .manual,
+            termination: termination, endedAt: draft.endedAt, activeSeconds: seconds, pausedSeconds: paused,
+            pauseRanges: pauses, targetSeconds: old?.details?.targetSeconds, presetID: old?.details?.presetID ?? draft.presetID,
+            creditedPomodoros: draft.mode == .pomodoro ? draft.creditedPomodoros : 0,
+            accountingPolicyVersion: FocusAccountingPolicy.version, precision: .second,
+            durationCorrectionSeconds: unchangedInterval ? old?.details?.durationCorrectionSeconds : nil)
+        let value = PomodoroRecord(id: draft.id, taskID: draft.taskID, startedAt: draft.startedAt,
+            minutes: FocusAccountingPolicy.displayedMinutes(seconds: seconds), completed: termination != .abandoned,
+            note: trimmedNote(draft.note), details: details)
+        if draft.isNew { accept(value) } else { replace(value) }
         return true
     }
-
+    @discardableResult
+    func saveRecordDurationDraft(_ draft: FocusRecordDurationDraft) -> Bool {
+        guard draft.minutes > 0 else { return false }
+        guard draft.hasChanges else { return record(id: draft.recordID) != nil }
+        return correctRecordDuration(draft.recordID, seconds: draft.minutes * 60,
+                                     alignsEndWithDuration: draft.alignsEndWithDuration)
+    }
+    @discardableResult
+    func correctRecordDuration(_ id: UUID, seconds: Int, alignsEndWithDuration: Bool = false) -> Bool {
+        guard seconds > 0, var value = record(id: id) else { return false }
+        if var details = value.details {
+            if alignsEndWithDuration {
+                let end = value.startedAt.addingTimeInterval(TimeInterval(seconds))
+                details.endedAt = end
+                details.pauseRanges = details.pauseRanges.compactMap { range in
+                    let pauseEnd = min(range.endedAt, end)
+                    return range.startedAt < pauseEnd ? FocusPauseRange(startedAt: range.startedAt, endedAt: pauseEnd) : nil
+                }
+                details.pausedSeconds = details.pauseRanges.reduce(0) { $0 + $1.seconds }
+                details.durationCorrectionSeconds = details.pausedSeconds == 0 ? nil : details.pausedSeconds
+            } else {
+                details.durationCorrectionSeconds = seconds - details.activeSeconds
+            }
+            details.activeSeconds = seconds; value.details = details
+        }
+        value.minutes = FocusAccountingPolicy.displayedMinutes(seconds: seconds); replace(value); return true
+    }
     func deleteRecord(_ id: UUID) {
-        guard let record = read(fallback: Optional<PomodoroRecord>.none, {
-            try persistence.record(id: id)
-        }) else { return }
-        refreshDailyStats()
-        updateTotals(record, direction: -1)
-        visibleRecords.removeAll { $0.id == id }
-        historyGeneration += 1
-        historyRevision += 1
-        historyHasMore = recordCount > visibleRecords.count
-        persistence.schedule(deleted: [id], metadata: archive())
+        guard let value = record(id: id) else { return }
+        refreshDailyStats(); updateTotals(value, direction: -1); visibleRecords.removeAll { $0.id == id }
+        if completionContext?.recordID == id { completionContext = nil }
+        invalidateHistory(); persistence.schedule(deleted: [id], metadata: archive())
     }
-
+    private func replace(_ value: PomodoroRecord) {
+        let isCompleted = completionContext?.recordID == value.id
+        guard let old = (isCompleted ? completionRecordCache : nil) ?? record(id: value.id) else { return }
+        if isCompleted {
+            completionRecordCache = value
+            if completedSessionNote != (value.note ?? "") { completedSessionNote = value.note ?? "" }
+            completionContext?.recordActiveSeconds = value.activeSeconds
+        }
+        refreshDailyStats(); updateTotals(old, direction: -1); updateTotals(value, direction: 1)
+        visibleRecords.removeAll { $0.id == value.id }; visibleRecords.append(value)
+        sortVisibleRecords(); invalidateHistory(); persistence.schedule(upserts: [value], metadata: archive())
+    }
     func resetHistory() async {
-        historyGeneration += 1
-        visibleRecords = []; historyLoading = false; historyHasMore = recordCount > 0; historyError = nil
-        await loadMoreHistory()
+        historyGeneration += 1; visibleRecords = []; historyOffset = 0; historyLoading = false
+        historyHasMore = recordCount > 0; historyError = nil; await loadMoreHistory()
     }
-
+    private var historyOffset = 0
     func loadMoreHistory() async {
         guard !historyLoading, historyHasMore else { return }
-        let request = historyGeneration
-        historyLoading = true; historyError = nil
+        let request = historyGeneration; historyLoading = true; historyError = nil
         do {
-            let page = try await persistence.historyAsync(limit: historyPageSize + 1, offset: visibleRecords.count)
+            let page = try await persistence.historyAsync(taskIDs: recordFilter.taskID.map { [$0] },
+                limit: historyPageSize + 1, offset: historyOffset)
             guard request == historyGeneration, !_Concurrency.Task.isCancelled else { return }
-            visibleRecords.append(contentsOf: page.prefix(historyPageSize))
-            historyHasMore = page.count > historyPageSize
-            historyLoading = false
+            visibleRecords.append(contentsOf: page.prefix(historyPageSize).filter { matches($0, filter: recordFilter) })
+            historyOffset += min(historyPageSize, page.count)
+            historyHasMore = page.count > historyPageSize; historyLoading = false
         } catch {
             guard request == historyGeneration, !_Concurrency.Task.isCancelled else { return }
-            historyError = error.localizedDescription
-            historyLoading = false
+            historyError = error.localizedDescription; historyLoading = false
         }
     }
-
-    /// 最近 days 天逐日统计，旧→新；每天都会出现，便于看空档。
     func recentDailyStats(days: Int = 7) -> [DailyFocusStats] {
         let today = calendar.startOfDay(for: clock())
-        return (0..<days).reversed().compactMap { offset in
+        return (0..<max(0, days)).reversed().compactMap { offset in
             guard let day = calendar.date(byAdding: .day, value: -offset, to: today) else { return nil }
-            let key = dayKey(day)
             let end = calendar.date(byAdding: .day, value: 1, to: day) ?? day
-            let totals = read(fallback: SQLiteRecordStore<PomodoroRecord, Archive>.Totals()) {
-                try persistence.totals(from: day, to: end)
-            }
-            return DailyFocusStats(dayKey: key, day: day, minutes: totals.value, pomodoros: totals.count)
+            let totals = read(fallback: SQLiteRecordStore<PomodoroRecord, Archive>.Totals()) { try persistence.totals(from: day, to: end) }
+            return DailyFocusStats(dayKey: dayKey(day), day: day,
+                minutes: FocusAccountingPolicy.aggregatedMinutes(seconds: totals.value), pomodoros: totals.count)
         }
     }
-
-    /// 记录按天分组，新→旧。
+    func weeklyTaskTotals(days: Int = 7, limit: Int = 3) -> [TaskFocusTotal] {
+        let cutoff = calendar.date(byAdding: .day, value: -(max(1, days) - 1), to: calendar.startOfDay(for: clock())) ?? clock()
+        return read(fallback: []) { try persistence.taskTotals(from: cutoff, limit: limit) }
+            .map { TaskFocusTotal(taskID: $0.0, minutes: FocusAccountingPolicy.aggregatedMinutes(seconds: $0.1)) }
+    }
     var recordGroups: [RecordDayGroup] {
         var groups: [RecordDayGroup] = []
-        for record in visibleRecords {
-            let key = dayKey(record.startedAt)
-            if groups.last?.dayKey == key {
-                groups[groups.count - 1].records.append(record)
-            } else {
-                groups.append(RecordDayGroup(dayKey: key,
-                                             day: calendar.startOfDay(for: record.startedAt),
-                                             records: [record]))
-            }
+        for value in visibleRecords {
+            let key = dayKey(value.startedAt)
+            if groups.last?.dayKey == key { groups[groups.count - 1].records.append(value) }
+            else { groups.append(RecordDayGroup(dayKey: key, day: calendar.startOfDay(for: value.startedAt), records: [value])) }
         }
         return groups
     }
-
-    func flush(_ completion: @escaping (Error?) -> Void) {
-        persistence.flush(completion)
+    func flush(_ completion: @escaping (Error?) -> Void) { persistence.flush(completion) }
+    private func trimmedNote(_ value: String?) -> String? {
+        let note = value?.trimmingCharacters(in: .whitespacesAndNewlines)
+        return note?.isEmpty == false ? note : nil
     }
-
-    // MARK: - Private
-
-    @discardableResult
-    private func insert(_ record: PomodoroRecord, sessionNote: String? = nil) -> PomodoroRecord {
-        var savedRecord = record
-        let trimmedNote = sessionNote?.trimmingCharacters(in: .whitespacesAndNewlines)
-        savedRecord.note = trimmedNote?.isEmpty == false ? trimmedNote : nil
-        accept(savedRecord)
-        return savedRecord
+    @discardableResult private func insert(_ value: PomodoroRecord, sessionNote: String? = nil) -> PomodoroRecord {
+        var value = value; value.note = trimmedNote(sessionNote); accept(value); return value
     }
-
-    /// 把引擎状态镜像进 @Published 字段；值未变化时不重复发布。
-    /// 阶段切换时发提醒；会话进行中每 5 秒落一次快照供重启接续。
+    private func accept(_ value: PomodoroRecord) {
+        refreshDailyStats(); updateTotals(value, direction: 1); visibleRecords.insert(value, at: 0)
+        sortVisibleRecords(); invalidateHistory(); persistence.schedule(upserts: [value], metadata: archive())
+    }
+    private func sortVisibleRecords() {
+        visibleRecords.sort { $0.startedAt > $1.startedAt }; visibleRecords = Array(visibleRecords.prefix(historyPageSize))
+    }
+    private func invalidateHistory() {
+        historyGeneration += 1; historyRevision += 1; historyHasMore = recordCount > visibleRecords.count
+    }
+    private func updateTotals(_ value: PomodoroRecord, direction: Int) {
+        allTimeActiveSeconds += direction * value.activeSeconds
+        allTimeMinutes = FocusAccountingPolicy.aggregatedMinutes(seconds: allTimeActiveSeconds)
+        allTimePomodoros += direction * value.creditedPomodoros; recordCount += direction
+        if dayKey(value.startedAt) == statsDay {
+            todayActiveSeconds += direction * value.activeSeconds
+            todayMinutes = FocusAccountingPolicy.aggregatedMinutes(seconds: todayActiveSeconds)
+            todayPomodoros += direction * value.creditedPomodoros
+        }
+    }
     private func sync() {
-        let previousPhase = phase
+        let changed = phase != engine.phase
         if phase != engine.phase { phase = engine.phase }
-        notifyTransitions(from: previousPhase, to: phase)
-        if previousPhase != phase {
-            // 阶段切换即落盘：会话快照与记录状态不因后续崩溃/退出丢失。
-            schedulePersistence()
-        }
-        if engine.phase != .idle {
-            let now = clock()
-            if now.timeIntervalSince(lastSessionSave) > 5 {
-                lastSessionSave = now
-                schedulePersistence()
-            }
-        }
         if isLongBreak != engine.isLongBreak { isLongBreak = engine.isLongBreak }
         if currentTaskID != engine.currentTaskID { currentTaskID = engine.currentTaskID }
         if phaseSeconds != engine.phaseSeconds { phaseSeconds = engine.phaseSeconds }
-        let remaining = engine.remainingSeconds
-        if remainingSeconds != remaining { remainingSeconds = remaining }
+        if remainingSeconds != engine.remainingSeconds { remainingSeconds = engine.remainingSeconds }
+        if elapsedSeconds != engine.elapsedSeconds { elapsedSeconds = engine.elapsedSeconds }
+        if currentMode != engine.currentMode { currentMode = engine.currentMode }
+        if pendingBreak != engine.pendingBreak { pendingBreak = engine.pendingBreak }
+        if engine.phase != .focusing && engine.phase != .pausedFocus && pendingEndConfirmation != nil {
+            pendingEndConfirmation = nil
+        }
+        if hasExtraTimeClock { objectWillChange.send() }
         refreshDailyStats()
+        if changed || ((engine.phase != .idle || hasExtraTimeClock) && clock().timeIntervalSince(lastSessionSave) > 5) {
+            lastSessionSave = clock(); schedulePersistence()
+        }
     }
-
     private func refreshDailyStats() {
-        let key = dayKey(clock())
-        guard statsDay != key else { return }
-        let day = calendar.startOfDay(for: clock())
-        let end = calendar.date(byAdding: .day, value: 1, to: day) ?? day
+        let key = dayKey(clock()); guard statsDay != key else { return }
+        let day = calendar.startOfDay(for: clock()); let end = calendar.date(byAdding: .day, value: 1, to: day) ?? day
         do {
             let totals = try persistence.totals(from: day, to: end)
-            todayPomodoros = totals.count; todayMinutes = totals.value
-            statsDay = key
+            todayActiveSeconds = totals.value; todayMinutes = FocusAccountingPolicy.aggregatedMinutes(seconds: totals.value)
+            todayPomodoros = totals.count; statsDay = key
         } catch { historyError = error.localizedDescription }
     }
-
-    private func updateTotals(_ record: PomodoroRecord, direction: Int) {
-        allTimeMinutes += direction * record.minutes
-        allTimePomodoros += direction * (record.completed ? 1 : 0)
-        recordCount += direction
-        if dayKey(record.startedAt) == statsDay {
-            todayMinutes += direction * record.minutes
-            todayPomodoros += direction * (record.completed ? 1 : 0)
-        }
-    }
-
-    private func accept(_ record: PomodoroRecord) {
-        refreshDailyStats()
-        updateTotals(record, direction: 1)
-        visibleRecords.insert(record, at: 0)
-        visibleRecords.sort { $0.startedAt > $1.startedAt }
-        visibleRecords = Array(visibleRecords.prefix(historyPageSize))
-        historyGeneration += 1
-        historyRevision += 1
-        historyHasMore = recordCount > visibleRecords.count
-        persistence.schedule(upserts: [record], metadata: archive())
-    }
-
     private func read<T>(fallback: T, _ operation: () throws -> T) -> T {
-        do { return try operation() }
-        catch { historyError = error.localizedDescription; return fallback }
+        do { return try operation() } catch { historyError = error.localizedDescription; return fallback }
     }
-
-    private var lastSessionSave = Date.distantPast
-
-    /// 阶段切换提醒：番茄完成 / 休息结束 / 自动开始（放弃与手动跳过不打扰）。
-    private func notifyTransitions(from old: PomodoroPhase, to new: PomodoroPhase) {
-        guard let notifier else { return }
-        switch (old, new) {
-        case (.focusing, .breaking):
-            notifier.announce(bell: preferences.bellSound, title: "番茄完成",
-                              body: (isLongBreak ? "长休息 \(preferences.longBreakMinutes) 分钟开始"
-                                     : "休息 \(preferences.breakMinutes) 分钟开始"))
-        case (.breaking, .focusing):
-            notifier.announce(bell: preferences.bellSound, title: "休息结束",
-                              body: "已用同一任务自动开始下一个番茄")
-        case (.breaking, .idle):
-            notifier.announce(bell: preferences.bellSound, title: "休息结束",
-                              body: "准备好了就开始下一个番茄")
-        default:
-            break
-        }
-    }
-
     private func dayKey(_ date: Date) -> String {
         let parts = calendar.dateComponents([.year, .month, .day], from: date)
         return String(format: "%04d-%02d-%02d", parts.year ?? 0, parts.month ?? 0, parts.day ?? 0)
     }
-
     private func archive() -> Archive {
-        Archive(records: [], preferences: preferences, session: engine.sessionSnapshot, timers: timers,
-                sessionNote: currentSessionNote.isEmpty ? nil : currentSessionNote)
+        Archive(preferences: preferences, session: engine.sessionSnapshot, timers: timers,
+            sessionNote: currentSessionNote.isEmpty ? nil : currentSessionNote,
+            sessionV2: engine.sessionSnapshot, completionContext: completionContext,
+            cycleProgress: engine.cycleProgress, selectedPresetID: selectedPresetID)
     }
-
-    private func schedulePersistence() {
-        persistence.schedule(metadata: archive())
-    }
-
+    private func schedulePersistence() { persistence.schedule(metadata: archive()) }
     private func startTimer() {
         guard timer == nil else { return }
         let scheduled = Timer(timeInterval: 1, repeats: true) { [weak self] value in
-            guard let self else { value.invalidate(); return }
-            MainActor.assumeIsolated { self.refresh() }
+            guard let self else { value.invalidate(); return }; MainActor.assumeIsolated { self.refresh() }
         }
-        RunLoop.main.add(scheduled, forMode: .common)
-        timer = scheduled
+        RunLoop.main.add(scheduled, forMode: .common); timer = scheduled
     }
-
     private func stopTimerIfNeeded() {
-        guard engine.phase == .idle, let scheduled = timer else { return }
-        scheduled.invalidate()
-        timer = nil
+        guard engine.phase == .idle, !hasExtraTimeClock, let timer else { return }; timer.invalidate(); self.timer = nil
+    }
+}
+
+extension FocusStore.Archive {
+    private enum CodingKeys: String, CodingKey {
+        case records, preferences, session, timers, sessionNote, sessionV2, completionContext, cycleProgress, selectedPresetID
+    }
+    init(from decoder: Decoder) throws {
+        self.init(); let c = try decoder.container(keyedBy: CodingKeys.self)
+        records = try c.decodeIfPresent([PomodoroRecord].self, forKey: .records) ?? []
+        preferences = try c.decodeIfPresent(FocusPreferences.self, forKey: .preferences) ?? FocusPreferences()
+        session = try c.decodeIfPresent(FocusSessionSnapshot.self, forKey: .session)
+        timers = try c.decodeIfPresent([FocusStore.TimerPreset].self, forKey: .timers) ?? []
+        sessionNote = try c.decodeIfPresent(String.self, forKey: .sessionNote)
+        sessionV2 = try c.decodeIfPresent(FocusSessionSnapshot.self, forKey: .sessionV2)
+        completionContext = try c.decodeIfPresent(FocusCompletionContext.self, forKey: .completionContext)
+        cycleProgress = try c.decodeIfPresent(FocusCycleProgress.self, forKey: .cycleProgress)
+        selectedPresetID = try c.decodeIfPresent(UUID.self, forKey: .selectedPresetID)
     }
 }

@@ -57,14 +57,14 @@ final class AppEnvironment: ObservableObject {
     // Only the separate WorkFollowNativePreview directory is opened.
     private let preferences: UserDefaults
 
-    init(clock: @escaping () -> Date = Date.init, calendar: Calendar = .current,
+    init(clock: @escaping () -> Date = NativeAcceptanceConfiguration.makeClock(), calendar: Calendar = .current,
          directory: URL = NativePreviewRepository.directory) {
         repository = NativePreviewRepository(directory: directory)
         persistence = PersistenceCoordinator(repository: repository)
         reminders = NativeReminderService(clock: clock, calendar: calendar)
         let preferences = UserDefaults.standard
         self.preferences = preferences
-        appearance = NativeAppearance(rawValue:
+        appearance = NativeAcceptanceConfiguration.appearance ?? NativeAppearance(rawValue:
             preferences.string(forKey: "appearance") ?? "system") ?? .system
         var snapshot: NativeWorkspaceSnapshot?
         var failure: Error?
@@ -79,7 +79,7 @@ final class AppEnvironment: ObservableObject {
                                              folders: snapshot?.noteFolders ?? [],
                                              folderMetadata: snapshot?.noteFolderMetadata ?? [],
                                              clock: clock)
-        focusStore = FocusStore(clock: clock, directory: directory.appendingPathComponent("modules"))
+        focusStore = FocusStore(clock: clock, calendar: calendar, directory: directory.appendingPathComponent("modules"))
         taskActivityStore = TaskActivityStore(clock: clock, directory: directory.appendingPathComponent("modules"))
         taskWorkspace.attachActivityStore(taskActivityStore)
         focusStore.onTaskFocusStarted = { [weak taskActivityStore, weak taskWorkspace] taskID, stopwatch in
@@ -140,9 +140,7 @@ final class AppEnvironment: ObservableObject {
             .store(in: &subscriptions)
         // B2 笔记↔任务联动：笔记详情展示/勾选/打开 sourceNoteID 关联的任务。
         notesWorkspace.taskProvider = { [weak taskWorkspace] in taskWorkspace?.allTasks ?? [] }
-        notesWorkspace.openTask = { [weak self] id in
-            self?.taskWorkspace.select(id)
-        }
+        notesWorkspace.openTask = { [weak self] id in self?.openTask(id) }
         applyAcceptanceDestination()
         taskWorkspace.$revision.dropFirst().sink { [weak self] _ in
             self?.savePreview()
@@ -155,8 +153,12 @@ final class AppEnvironment: ObservableObject {
             .reminderInvalidations()
             .sink { [weak self] _ in
                 guard let self, !self.loadFailed else { return }
-                self.reminders.reconcile(self.taskWorkspace.allTasks)
+                self.reminders.reconcile(self.taskWorkspace.tasksInActiveLists)
             }.store(in: &subscriptions)
+        taskWorkspace.listArchiveChanges.sink { [weak self] _ in
+            guard let self, !self.loadFailed else { return }
+            self.reminders.reconcile(self.taskWorkspace.tasksInActiveLists)
+        }.store(in: &subscriptions)
         taskWorkspace.taskChanges.sink { [weak self] changes in
             guard let self, !self.loadFailed, !self.storageReplacementPending, !self.storageNeedsReload else { return }
             self.persistence.schedule(changes: changes)
@@ -182,11 +184,11 @@ final class AppEnvironment: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
                 guard let self, !self.loadFailed else { return }
-                self.reminders.reconcile(self.taskWorkspace.allTasks)
+                self.reminders.reconcile(self.taskWorkspace.tasksInActiveLists)
             }
             .store(in: &subscriptions)
         if !loadFailed {
-            reminders.reconcile(taskWorkspace.allTasks)
+            reminders.reconcile(taskWorkspace.tasksInActiveLists)
             if snapshot == nil, let initial = makePreviewSnapshot() { persistence.schedule(initial) }
         }
     }
@@ -194,21 +196,35 @@ final class AppEnvironment: ObservableObject {
     /// 从任务侧发起专注：跳到专注页并直接开始该任务的番茄；已有进行中会话
     /// 时只做跳转，不打断当前计时。
     func startFocus(for taskID: UUID) {
-        taskWorkspace.select(taskID)
+        guard let resolvedID = taskWorkspace.resolveTaskForAction(taskID) else { return }
+        navigation.taskSelectionToPreserveOnNextNavigation = resolvedID
+        taskWorkspace.select(resolvedID)
         navigation.destination = .focus
-        _ = focusStore.start(taskID: taskID)
+        _ = focusStore.start(taskID: resolvedID)
+    }
+
+    /// Record, note and cross-module links open the same task editor context.
+    func openTask(_ taskID: UUID) {
+        guard let task = taskWorkspace.task(for: taskID) else { return }
+        taskWorkspace.activeList = taskWorkspace.isListArchived(task.list.name) ? task.list.name : nil
+        taskWorkspace.activeTag = nil
+        taskWorkspace.activeFilterID = nil
+        navigation.taskSelectionToPreserveOnNextNavigation = taskID
+        taskWorkspace.select(taskID)
+        navigation.destination = .allTasks
     }
 
     /// Acceptance harness: `--wf-destination <rawValue>` opens that view directly
     /// so screenshots can be taken without UI automation.
     private func applyAcceptanceDestination() {
         let arguments = ProcessInfo.processInfo.arguments
-        guard let index = arguments.firstIndex(of: "--wf-destination"),
-              arguments.indices.contains(index + 1),
-              let destination = NativeDestination(rawValue: arguments[index + 1]) else { return }
+        let argumentDestination = arguments.firstIndex(of: "--wf-destination").flatMap { index in
+            arguments.indices.contains(index + 1) ? NativeDestination(rawValue: arguments[index + 1]) : nil
+        }
+        guard let destination = argumentDestination ?? NativeAcceptanceConfiguration.destination else { return }
         navigation.destination = destination
         // `--wf-select-first`：程序化选中一个任务，验收检查器时不需要点击。
-        guard arguments.contains("--wf-select-first") else { return }
+        guard arguments.contains("--wf-select-first") || NativeAcceptanceConfiguration.selectsFirstTask else { return }
         let pool = taskWorkspace.allTasks.filter { $0.deletedAt == nil && $0.skippedAt == nil }
         let pick = pool.first { $0.title.contains("编辑栏主控验收") }
             ?? pool.first { !$0.isClosed && !$0.title.isEmpty }
@@ -313,6 +329,7 @@ final class AppEnvironment: ObservableObject {
     }
 
     func navigate(to destination: NativeDestination) {
+        taskWorkspace.openFilter(nil)
         if taskWorkspace.activeList != nil { taskWorkspace.activeList = nil }
         if taskWorkspace.activeTag != nil { taskWorkspace.activeTag = nil }
         if navigation.destination != destination { navigation.destination = destination }
@@ -327,9 +344,12 @@ final class AppEnvironment: ObservableObject {
             .sorted { $0.childOrder < $1.childOrder }
         guard (try? task.document.materialized()) != nil else { return nil }
         let noteID = notesWorkspace.createFromTask(task, children: children, clock: taskWorkspace.clock)
-        let result = taskWorkspace.convertToNote(id, noteID: noteID) { [weak notes = notesWorkspace] in
+        guard let createdNote = notesWorkspace.notes.first(where: { $0.id == noteID }) else { return nil }
+        let result = taskWorkspace.convertToNote(id, noteID: noteID, undoNote: { [weak notes = notesWorkspace] in
             MainActor.assumeIsolated { notes?.discardCreatedNoteForUndo(noteID) }
-        }
+        }, redoNote: { [weak notes = notesWorkspace] in
+            MainActor.assumeIsolated { notes?.restoreCreatedNoteForRedo(createdNote) }
+        })
         guard result.taskID != nil else {
             notesWorkspace.discardCreatedNoteForUndo(noteID)
             return nil
@@ -337,5 +357,48 @@ final class AppEnvironment: ObservableObject {
         navigation.destination = .notes
         notesWorkspace.selectedID = noteID
         return noteID
+    }
+
+    /// Prepare notes in task order, then save the entire conversion with one
+    /// paired undo/redo operation. A selected child travels with its parent.
+    @discardableResult
+    func convertTasksToNotes(_ ids: Set<UUID>) -> [UUID] {
+        let selected = taskWorkspace.allTasks.filter {
+            ids.contains($0.id) && $0.deletedAt == nil && $0.skippedAt == nil && !$0.isConverted
+        }
+        let selectedIDs = Set(selected.map(\.id))
+        let roots = selected.filter { task in
+            task.parentID.map { !selectedIDs.contains($0) } ?? true
+        }
+        var created: [(taskID: UUID, note: Note)] = []
+        for task in roots {
+            guard (try? task.document.materialized()) != nil else { continue }
+            let children = taskWorkspace.allTasks
+                .filter { $0.parentID == task.id && $0.deletedAt == nil && $0.skippedAt == nil }
+                .sorted { $0.childOrder < $1.childOrder }
+            let noteID = notesWorkspace.createFromTask(task, children: children, clock: taskWorkspace.clock)
+            if let note = notesWorkspace.notes.first(where: { $0.id == noteID }) {
+                created.append((task.id, note))
+            }
+        }
+        guard !created.isEmpty else { return [] }
+        let noteIDs = Dictionary(uniqueKeysWithValues: created.map { ($0.taskID, $0.note.id) })
+        let notes = created.map(\.note)
+        let converted = taskWorkspace.convertToNotes(noteIDs, undoNotes: { [weak workspace = notesWorkspace] in
+            MainActor.assumeIsolated {
+                for note in notes.reversed() { workspace?.discardCreatedNoteForUndo(note.id) }
+            }
+        }, redoNotes: { [weak workspace = notesWorkspace] in
+            MainActor.assumeIsolated {
+                for note in notes { workspace?.restoreCreatedNoteForRedo(note) }
+            }
+        })
+        guard converted.count == created.count else {
+            for note in notes { notesWorkspace.discardCreatedNoteForUndo(note.id) }
+            return []
+        }
+        navigation.destination = .notes
+        notesWorkspace.selectedID = notes.last?.id
+        return notes.map(\.id)
     }
 }

@@ -25,6 +25,12 @@ enum TaskContextMenuPresenter {
             onCustomDate: { [weak session] in
                 session?.close()
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { onCustomDate() }
+            },
+            onChooseParent: { [weak session] in
+                DispatchQueue.main.async {
+                    session?.showParentPicker(taskID: task.id, workspace: workspace,
+                                              environment: environment)
+                }
             })
             .environmentObject(environment)
             .environment(\.popupPresentingWindow, presenter))
@@ -50,6 +56,20 @@ enum TaskContextMenuPresenter {
                 if self.anchor.window == nil { self.close() }
                 else { self.coordinator.update() }
             }
+        }
+
+        func showParentPicker(taskID: UUID, workspace: TaskWorkspaceModel,
+                              environment: AppEnvironment) {
+            guard coordinator.presented else { return }
+            // 换成独立选择面板，保留原鼠标锚点和同一个关闭生命周期。
+            coordinator.close()
+            coordinator.width = 280
+            coordinator.title = "关联主任务"
+            coordinator.focusPolicy = .panel
+            coordinator.root = AnyView(TaskParentPicker(taskID: taskID, workspace: workspace) { [weak self] in
+                self?.close()
+            }.environmentObject(environment))
+            coordinator.update()
         }
 
         func close() {

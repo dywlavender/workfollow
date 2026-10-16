@@ -129,7 +129,8 @@ final class PomodoroEngineTests: XCTestCase {
         advance(12 * 60 + 30)
         let record = engine.giveUp()
         XCTAssertEqual(record?.startedAt, base)
-        XCTAssertEqual(record?.minutes, 12)
+        XCTAssertEqual(record?.minutes, 13)
+        XCTAssertEqual(record?.activeSeconds, 12 * 60 + 30)
         XCTAssertEqual(record?.completed, false)
         XCTAssertEqual(engine.phase, .idle)
     }
@@ -225,14 +226,16 @@ final class PomodoroEngineTests: XCTestCase {
         XCTAssertEqual(store.finishEarly()?.minutes, 5)
         XCTAssertEqual(store.phase, .breaking)
         XCTAssertEqual(store.todayPomodoros, 2)
-        XCTAssertEqual(store.todayMinutes, 10)
+        XCTAssertEqual(store.todayMinutes, 9)
+        XCTAssertEqual(store.todayActiveSeconds, 9 * 60 + 30)
         XCTAssertEqual(store.records.count, 2)
 
         let deletedID = try XCTUnwrap(store.records.last?.id)
         store.deleteRecord(deletedID)
         XCTAssertEqual(store.records.count, 1)
         XCTAssertEqual(store.todayPomodoros, 1)
-        XCTAssertEqual(store.todayMinutes, 5)
+        XCTAssertEqual(store.todayMinutes, 4)
+        XCTAssertEqual(store.todayActiveSeconds, 4 * 60 + 30)
 
         let done = expectation(description: "flush")
         store.flush { error in

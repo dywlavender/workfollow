@@ -40,6 +40,7 @@ struct TaskCollectionsView: View {
     var onNavigate: () -> Void = {}
     /// 折叠的文件夹（视图内状态；本轮不持久化——登记在案）。
     @State private var collapsedFolders: Set<String> = []
+    @State private var archivedExpanded = true
     /// 文件夹下清单的缩进（与文件夹行的箭头列对齐）。
     private static let folderIndent: CGFloat = 16
 
@@ -66,7 +67,55 @@ struct TaskCollectionsView: View {
                 }
             }
             insertionStrip(before: nil, clearsFolder: true)
+            if !workspace.archivedListNames.isEmpty {
+                archivedLists
+            }
         }.buttonStyle(.plain).font(WFType.navigation)
+    }
+
+    private var archivedLists: some View {
+        VStack(spacing: WFSpace.xs) {
+            Button {
+                archivedExpanded.toggle()
+            } label: {
+                HStack(spacing: WFSpace.xs) {
+                    Image(systemName: archivedExpanded ? "chevron.down" : "chevron.right")
+                        .font(.system(size: 9, weight: .semibold)).frame(width: 12)
+                    Image(systemName: "archivebox").font(.system(size: 12))
+                    Text("已归档的清单")
+                    Spacer(minLength: 0)
+                    Text("\(workspace.archivedListNames.count)").font(WFType.supporting)
+                }
+                .foregroundStyle(WFColors.secondaryText)
+                .padding(.horizontal, WFSpace.sm)
+                .frame(height: NavigationMetrics.rowHeight)
+                .contentShape(Rectangle())
+            }
+            .accessibilityLabel((archivedExpanded ? "收起" : "展开") + "已归档的清单")
+            if archivedExpanded {
+                ForEach(workspace.archivedListNames, id: \.self) { name in
+                    Button { openList(name) } label: {
+                        HStack(spacing: WFSpace.sm) {
+                            Circle().fill(WFListPalette.color(for: name, meta: workspace.listMeta(for: name)))
+                                .frame(width: 9, height: 9)
+                            Text(name).lineLimit(1)
+                            Spacer(minLength: 0)
+                        }
+                        .foregroundStyle(WFColors.secondaryText)
+                        .padding(.horizontal, WFSpace.sm)
+                        .frame(height: NavigationMetrics.rowHeight)
+                        .contentShape(Rectangle())
+                        .background(workspace.activeList == name ? WFColors.listSelection : .clear,
+                                    in: RoundedRectangle(cornerRadius: WFMetrics.corner))
+                    }
+                    .padding(.leading, Self.folderIndent)
+                    .accessibilityLabel("已归档清单：" + name)
+                    .contextMenu {
+                        Button("恢复清单") { _ = workspace.setListArchived(name, false) }
+                    }
+                }
+            }
+        }
     }
 
     /// 行间拖放带：清单拖到这里 = **排序**（拖到行上才是"建文件夹"，滴答同一手势两种结果）。
@@ -162,6 +211,7 @@ struct TaskCollectionsView: View {
     }
 
     private func openList(_ name: String) {
+        workspace.openFilter(nil)
         navigation.destination = .allTasks; workspace.activeList = name; workspace.activeTag = nil
         workspace.select(nil); workspace.clearBulkSelection(); onNavigate()
     }
@@ -310,6 +360,14 @@ private struct SidebarListRowView: View {
             }
         }
         Divider()
+        if !isInbox {
+            Button("归档清单…") {
+                guard TaskNamePrompt.confirm("归档清单“\(name)”？",
+                    message: "归档后，该清单将放入“已归档的清单”中。清单中的任务不在智能清单中显示，到期也不提醒。可以随时恢复。",
+                    action: "归档") else { return }
+                _ = workspace.setListArchived(name, true)
+            }
+        }
         Button("删除清单…", role: .destructive) {
             if TaskNamePrompt.confirm("删除清单“\(name)”？",
                                       message: "任务（含子任务）将移到收集箱，不删除任务。可撤销。",
@@ -543,7 +601,7 @@ struct TaskComposer: View {
          initialProperties: QuickAddPropertiesOverrides = QuickAddPropertiesOverrides(
             priority: nil, listName: nil, tags: nil)) {
         let parsed = QuickAddParser.parse(title, now: workspace.clock(), calendar: workspace.calendar,
-                                          knownLists: Set(workspace.allListNames),
+                                          knownLists: Set(workspace.availableListNames),
                                           dismissedTokenIDs: dismissedTokenIDs)
         self.workspace = workspace
         self.onClose = onClose
@@ -584,7 +642,7 @@ struct TaskComposer: View {
             Text("新建任务").font(WFType.detailTitle)
             TextField("准备做什么？", text: $title).focused($titleFocused)
             Picker("清单", selection: $list) {
-                ForEach(workspace.allListNames, id: \.self) { Text($0).tag($0) }
+                ForEach(workspace.availableListNames, id: \.self) { Text($0).tag($0) }
             }
             .onChange(of: list) { _, _ in listEdited = true }
             scheduleRow
@@ -600,7 +658,7 @@ struct TaskComposer: View {
                 Button("取消") { onClose(false) }.keyboardShortcut(.cancelAction)
                 Button("创建") {
                     let parsed = QuickAddParser.parse(title, now: workspace.clock(), calendar: workspace.calendar,
-                                                     knownLists: Set(workspace.allListNames),
+                                                     knownLists: Set(workspace.availableListNames),
                                                      dismissedTokenIDs: dismissedTokenIDs)
                     guard !parsed.title.isEmpty else { return }
                     // 面板没动过时按**当前标题**重新解析（用户可能打开后才在标题里打"明天"）；

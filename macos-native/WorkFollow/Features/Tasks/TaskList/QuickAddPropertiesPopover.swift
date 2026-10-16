@@ -135,7 +135,7 @@ private struct QuickAddListPickerPopover: View {
     @FocusState private var searchFocused: Bool
 
     private var matches: [String] {
-        workspace.allListNames.filter { query.isEmpty || $0.localizedCaseInsensitiveContains(query) }
+        workspace.availableListNames.filter { query.isEmpty || $0.localizedCaseInsensitiveContains(query) }
     }
 
     var body: some View {

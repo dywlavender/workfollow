@@ -12,24 +12,24 @@ final class FocusTimerLayoutContractTests: XCTestCase {
         XCTAssertEqual(FocusLayoutMetrics.headerButtonSize, 28)
         XCTAssertEqual(FocusLayoutMetrics.headerButtonSpacing, 9)
 
-        XCTAssertEqual(FocusLayoutMetrics.ringSize, 236)
+        XCTAssertEqual(FocusLayoutMetrics.ringSize, 238)
         XCTAssertEqual(FocusLayoutMetrics.ringLineWidth, 2.5)
         XCTAssertEqual(FocusLayoutMetrics.progressRingLineWidth, 3)
         XCTAssertEqual(FocusLayoutMetrics.stopwatchTickCount, 96)
         XCTAssertEqual(FocusLayoutMetrics.stopwatchTickLength, 10)
         XCTAssertEqual(FocusLayoutMetrics.stopwatchTickLineWidth, 1)
         XCTAssertEqual(FocusLayoutMetrics.timerFontSize, 42)
-        XCTAssertEqual(FocusLayoutMetrics.primaryButtonWidth, 120)
-        XCTAssertEqual(FocusLayoutMetrics.primaryButtonHeight, 42)
+        XCTAssertEqual(FocusLayoutMetrics.primaryButtonWidth, 123)
+        XCTAssertEqual(FocusLayoutMetrics.primaryButtonHeight, 48)
     }
 
     func testTimerCoreDimensionsStayFixedAtDesktopWindowHeights() {
         for windowHeight: CGFloat in [820, 900, 1_000] {
-            XCTAssertEqual(FocusLayoutMetrics.ringSize, 236)
+            XCTAssertEqual(FocusLayoutMetrics.ringSize, 238)
             XCTAssertEqual(FocusLayoutMetrics.ringLineWidth, 2.5)
             XCTAssertEqual(FocusLayoutMetrics.timerFontSize, 42)
-            XCTAssertEqual(FocusLayoutMetrics.primaryButtonWidth, 120)
-            XCTAssertEqual(FocusLayoutMetrics.primaryButtonHeight, 42)
+            XCTAssertEqual(FocusLayoutMetrics.primaryButtonWidth, 123)
+            XCTAssertEqual(FocusLayoutMetrics.primaryButtonHeight, 48)
             XCTAssertEqual(FocusLayoutMetrics.footerTop(paneHeight: windowHeight), windowHeight - 180)
         }
     }

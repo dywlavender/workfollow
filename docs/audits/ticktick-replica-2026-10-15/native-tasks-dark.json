@@ -1,0 +1,1394 @@
+{
+  "source": "REA observe-native-ui",
+  "client": "WorkFollow Replica Followup QA",
+  "nodes": [
+    {
+      "path": [],
+      "role": "AXWindow",
+      "title": "WorkFollow Native",
+      "value": null,
+      "actions": [
+        "AXRaise"
+      ]
+    },
+    {
+      "path": [
+        0
+      ],
+      "role": "AXGroup",
+      "title": null,
+      "value": null,
+      "actions": []
+    },
+    {
+      "path": [
+        0,
+        0
+      ],
+      "role": "AXButton",
+      "title": null,
+      "value": null,
+      "actions": [
+        "AXShowMenu",
+        "AXPress"
+      ]
+    },
+    {
+      "path": [
+        0,
+        1
+      ],
+      "role": "AXButton",
+      "title": null,
+      "value": null,
+      "actions": [
+        "AXPress"
+      ]
+    },
+    {
+      "path": [
+        0,
+        2
+      ],
+      "role": "AXButton",
+      "title": null,
+      "value": null,
+      "actions": [
+        "AXShowMenu",
+        "AXPress"
+      ]
+    },
+    {
+      "path": [
+        0,
+        3
+      ],
+      "role": "AXButton",
+      "title": null,
+      "value": null,
+      "actions": [
+        "AXPress"
+      ]
+    },
+    {
+      "path": [
+        0,
+        4
+      ],
+      "role": "AXButton",
+      "title": null,
+      "value": null,
+      "actions": [
+        "AXShowMenu",
+        "AXPress"
+      ]
+    },
+    {
+      "path": [
+        0,
+        5
+      ],
+      "role": "AXButton",
+      "title": null,
+      "value": null,
+      "actions": [
+        "AXPress"
+      ]
+    },
+    {
+      "path": [
+        0,
+        6
+      ],
+      "role": "AXButton",
+      "title": null,
+      "value": null,
+      "actions": [
+        "AXShowMenu",
+        "AXPress"
+      ]
+    },
+    {
+      "path": [
+        0,
+        7
+      ],
+      "role": "AXButton",
+      "title": null,
+      "value": null,
+      "actions": [
+        "AXPress"
+      ]
+    },
+    {
+      "path": [
+        0,
+        8
+      ],
+      "role": "AXButton",
+      "title": null,
+      "value": null,
+      "actions": [
+        "AXPress"
+      ]
+    },
+    {
+      "path": [
+        0,
+        9
+      ],
+      "role": "AXButton",
+      "title": null,
+      "value": null,
+      "actions": [
+        "AXPress"
+      ]
+    },
+    {
+      "path": [
+        0,
+        10
+      ],
+      "role": "AXButton",
+      "title": null,
+      "value": null,
+      "actions": [
+        "AXPress"
+      ]
+    },
+    {
+      "path": [
+        0,
+        11
+      ],
+      "role": "AXButton",
+      "title": null,
+      "value": null,
+      "actions": [
+        "AXPress"
+      ]
+    },
+    {
+      "path": [
+        0,
+        12
+      ],
+      "role": "AXButton",
+      "title": null,
+      "value": null,
+      "actions": [
+        "AXPress"
+      ]
+    },
+    {
+      "path": [
+        0,
+        13
+      ],
+      "role": "AXScrollArea",
+      "title": null,
+      "value": null,
+      "actions": [
+        "AXScrollLeftByPage",
+        "AXScrollRightByPage",
+        "AXScrollUpByPage",
+        "AXScrollDownByPage"
+      ]
+    },
+    {
+      "path": [
+        0,
+        13,
+        0
+      ],
+      "role": "AXStaticText",
+      "title": null,
+      "value": "清单",
+      "actions": []
+    },
+    {
+      "path": [
+        0,
+        13,
+        1
+      ],
+      "role": "AXMenuButton",
+      "title": "Add",
+      "value": null,
+      "actions": [
+        "AXPress"
+      ]
+    },
+    {
+      "path": [
+        0,
+        13,
+        2
+      ],
+      "role": "AXButton",
+      "title": null,
+      "value": null,
+      "actions": [
+        "AXShowMenu",
+        "AXPress"
+      ]
+    },
+    {
+      "path": [
+        0,
+        13,
+        3
+      ],
+      "role": "AXButton",
+      "title": null,
+      "value": null,
+      "actions": [
+        "AXShowMenu",
+        "AXPress"
+      ]
+    },
+    {
+      "path": [
+        0,
+        13,
+        4
+      ],
+      "role": "AXStaticText",
+      "title": null,
+      "value": "过滤器",
+      "actions": []
+    },
+    {
+      "path": [
+        0,
+        13,
+        5
+      ],
+      "role": "AXButton",
+      "title": null,
+      "value": null,
+      "actions": [
+        "AXPress"
+      ]
+    },
+    {
+      "path": [
+        0,
+        13,
+        6
+      ],
+      "role": "AXStaticText",
+      "title": null,
+      "value": "标签",
+      "actions": []
+    },
+    {
+      "path": [
+        0,
+        13,
+        7
+      ],
+      "role": "AXButton",
+      "title": null,
+      "value": null,
+      "actions": [
+        "AXShowMenu",
+        "AXPress"
+      ]
+    },
+    {
+      "path": [
+        0,
+        14
+      ],
+      "role": "AXButton",
+      "title": null,
+      "value": null,
+      "actions": [
+        "AXPress"
+      ]
+    },
+    {
+      "path": [
+        0,
+        15
+      ],
+      "role": "AXButton",
+      "title": null,
+      "value": null,
+      "actions": [
+        "AXPress"
+      ]
+    },
+    {
+      "path": [
+        0,
+        16
+      ],
+      "role": "AXButton",
+      "title": null,
+      "value": null,
+      "actions": [
+        "AXPress"
+      ]
+    },
+    {
+      "path": [
+        0,
+        17
+      ],
+      "role": "AXButton",
+      "title": null,
+      "value": null,
+      "actions": [
+        "AXPress"
+      ]
+    },
+    {
+      "path": [
+        0,
+        18
+      ],
+      "role": "AXGroup",
+      "title": null,
+      "value": null,
+      "actions": []
+    },
+    {
+      "path": [
+        0,
+        18,
+        0
+      ],
+      "role": "AXStaticText",
+      "title": null,
+      "value": "今天",
+      "actions": []
+    },
+    {
+      "path": [
+        0,
+        18,
+        1
+      ],
+      "role": "AXMenuButton",
+      "title": "Sort",
+      "value": null,
+      "actions": [
+        "AXPress"
+      ]
+    },
+    {
+      "path": [
+        0,
+        18,
+        2
+      ],
+      "role": "AXMenuButton",
+      "title": "More",
+      "value": null,
+      "actions": [
+        "AXPress"
+      ]
+    },
+    {
+      "path": [
+        0,
+        18,
+        3
+      ],
+      "role": "AXButton",
+      "title": null,
+      "value": null,
+      "actions": [
+        "AXPress"
+      ]
+    },
+    {
+      "path": [
+        0,
+        18,
+        4
+      ],
+      "role": "AXScrollArea",
+      "title": null,
+      "value": null,
+      "actions": [
+        "AXScrollLeftByPage",
+        "AXScrollRightByPage",
+        "AXScrollUpByPage",
+        "AXScrollDownByPage"
+      ]
+    },
+    {
+      "path": [
+        0,
+        18,
+        4,
+        0
+      ],
+      "role": "AXButton",
+      "title": null,
+      "value": null,
+      "actions": [
+        "AXPress"
+      ]
+    },
+    {
+      "path": [
+        0,
+        18,
+        5
+      ],
+      "role": "AXMenuButton",
+      "title": "Flag",
+      "value": null,
+      "actions": [
+        "AXPress"
+      ]
+    },
+    {
+      "path": [
+        0,
+        18,
+        6
+      ],
+      "role": "AXImage",
+      "title": null,
+      "value": null,
+      "actions": []
+    },
+    {
+      "path": [
+        0,
+        18,
+        7
+      ],
+      "role": "AXTextField",
+      "title": null,
+      "value": "",
+      "actions": [
+        "AXShowMenu",
+        "AXConfirm"
+      ]
+    },
+    {
+      "path": [
+        0,
+        18,
+        8
+      ],
+      "role": "AXStaticText",
+      "title": null,
+      "value": "⌘N",
+      "actions": []
+    },
+    {
+      "path": [
+        0,
+        18,
+        9
+      ],
+      "role": "AXScrollArea",
+      "title": null,
+      "value": null,
+      "actions": [
+        "AXScrollLeftByPage",
+        "AXScrollRightByPage",
+        "AXScrollUpByPage",
+        "AXScrollDownByPage"
+      ]
+    },
+    {
+      "path": [
+        0,
+        18,
+        9,
+        0
+      ],
+      "role": "AXOutline",
+      "title": null,
+      "value": null,
+      "actions": []
+    },
+    {
+      "path": [
+        0,
+        18,
+        9,
+        0,
+        0
+      ],
+      "role": "AXRow",
+      "title": null,
+      "value": null,
+      "actions": [
+        "AXShowDefaultUI",
+        "AXShowAlternateUI"
+      ]
+    },
+    {
+      "path": [
+        0,
+        18,
+        9,
+        0,
+        0,
+        0
+      ],
+      "role": "AXCell",
+      "title": null,
+      "value": null,
+      "actions": []
+    },
+    {
+      "path": [
+        0,
+        18,
+        9,
+        0,
+        0,
+        0,
+        0
+      ],
+      "role": "AXGroup",
+      "title": null,
+      "value": null,
+      "actions": []
+    },
+    {
+      "path": [
+        0,
+        18,
+        9,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "role": "AXButton",
+      "title": null,
+      "value": null,
+      "actions": [
+        "AXPress"
+      ]
+    },
+    {
+      "path": [
+        0,
+        18,
+        9,
+        0,
+        1
+      ],
+      "role": "AXRow",
+      "title": null,
+      "value": null,
+      "actions": [
+        "AXShowDefaultUI",
+        "AXShowAlternateUI"
+      ]
+    },
+    {
+      "path": [
+        0,
+        18,
+        9,
+        0,
+        1,
+        0
+      ],
+      "role": "AXCell",
+      "title": null,
+      "value": null,
+      "actions": []
+    },
+    {
+      "path": [
+        0,
+        18,
+        9,
+        0,
+        1,
+        0,
+        0
+      ],
+      "role": "AXGroup",
+      "title": null,
+      "value": null,
+      "actions": []
+    },
+    {
+      "path": [
+        0,
+        18,
+        9,
+        0,
+        1,
+        0,
+        0,
+        0
+      ],
+      "role": "AXButton",
+      "title": null,
+      "value": null,
+      "actions": [
+        "AXPress"
+      ]
+    },
+    {
+      "path": [
+        0,
+        18,
+        9,
+        0,
+        1,
+        0,
+        0,
+        1
+      ],
+      "role": "AXButton",
+      "title": null,
+      "value": null,
+      "actions": [
+        "AXPress"
+      ]
+    },
+    {
+      "path": [
+        0,
+        18,
+        9,
+        0,
+        1,
+        0,
+        0,
+        2
+      ],
+      "role": "AXTextField",
+      "title": null,
+      "value": "需求评审",
+      "actions": [
+        "AXShowMenu",
+        "AXConfirm"
+      ]
+    },
+    {
+      "path": [
+        0,
+        18,
+        9,
+        0,
+        1,
+        0,
+        0,
+        3
+      ],
+      "role": "AXStaticText",
+      "title": null,
+      "value": "工作",
+      "actions": []
+    },
+    {
+      "path": [
+        0,
+        18,
+        9,
+        0,
+        1,
+        0,
+        0,
+        4
+      ],
+      "role": "AXImage",
+      "title": null,
+      "value": null,
+      "actions": []
+    },
+    {
+      "path": [
+        0,
+        18,
+        9,
+        0,
+        1,
+        0,
+        0,
+        5
+      ],
+      "role": "AXStaticText",
+      "title": null,
+      "value": "子任务进度：0/2",
+      "actions": []
+    },
+    {
+      "path": [
+        0,
+        18,
+        9,
+        0,
+        1,
+        0,
+        0,
+        6
+      ],
+      "role": "AXImage",
+      "title": null,
+      "value": null,
+      "actions": []
+    },
+    {
+      "path": [
+        0,
+        18,
+        9,
+        0,
+        1,
+        0,
+        0,
+        7
+      ],
+      "role": "AXImage",
+      "title": null,
+      "value": null,
+      "actions": []
+    },
+    {
+      "path": [
+        0,
+        18,
+        9,
+        0,
+        1,
+        0,
+        0,
+        8
+      ],
+      "role": "AXButton",
+      "title": null,
+      "value": null,
+      "actions": [
+        "AXPress"
+      ]
+    },
+    {
+      "path": [
+        0,
+        18,
+        9,
+        0,
+        1,
+        0,
+        0,
+        9
+      ],
+      "role": "AXStaticText",
+      "title": null,
+      "value": "确认交互与验收范围",
+      "actions": []
+    },
+    {
+      "path": [
+        0,
+        18,
+        9,
+        0,
+        2
+      ],
+      "role": "AXRow",
+      "title": null,
+      "value": null,
+      "actions": [
+        "AXShowDefaultUI",
+        "AXShowAlternateUI"
+      ]
+    },
+    {
+      "path": [
+        0,
+        18,
+        9,
+        0,
+        2,
+        0
+      ],
+      "role": "AXCell",
+      "title": null,
+      "value": null,
+      "actions": []
+    },
+    {
+      "path": [
+        0,
+        18,
+        9,
+        0,
+        2,
+        0,
+        0
+      ],
+      "role": "AXGroup",
+      "title": null,
+      "value": null,
+      "actions": []
+    },
+    {
+      "path": [
+        0,
+        18,
+        9,
+        0,
+        2,
+        0,
+        0,
+        0
+      ],
+      "role": "AXButton",
+      "title": null,
+      "value": null,
+      "actions": [
+        "AXPress"
+      ]
+    },
+    {
+      "path": [
+        0,
+        18,
+        9,
+        0,
+        2,
+        0,
+        0,
+        1
+      ],
+      "role": "AXTextField",
+      "title": null,
+      "value": "准备议程",
+      "actions": [
+        "AXShowMenu",
+        "AXConfirm"
+      ]
+    },
+    {
+      "path": [
+        0,
+        18,
+        9,
+        0,
+        2,
+        0,
+        0,
+        2
+      ],
+      "role": "AXStaticText",
+      "title": null,
+      "value": "工作",
+      "actions": []
+    },
+    {
+      "path": [
+        0,
+        18,
+        9,
+        0,
+        3
+      ],
+      "role": "AXRow",
+      "title": null,
+      "value": null,
+      "actions": [
+        "AXShowDefaultUI",
+        "AXShowAlternateUI"
+      ]
+    },
+    {
+      "path": [
+        0,
+        18,
+        9,
+        0,
+        3,
+        0
+      ],
+      "role": "AXCell",
+      "title": null,
+      "value": null,
+      "actions": []
+    },
+    {
+      "path": [
+        0,
+        18,
+        9,
+        0,
+        3,
+        0,
+        0
+      ],
+      "role": "AXGroup",
+      "title": null,
+      "value": null,
+      "actions": []
+    },
+    {
+      "path": [
+        0,
+        18,
+        9,
+        0,
+        3,
+        0,
+        0,
+        0
+      ],
+      "role": "AXButton",
+      "title": null,
+      "value": null,
+      "actions": [
+        "AXPress"
+      ]
+    },
+    {
+      "path": [
+        0,
+        18,
+        9,
+        0,
+        3,
+        0,
+        0,
+        1
+      ],
+      "role": "AXTextField",
+      "title": null,
+      "value": "检查演示材料",
+      "actions": [
+        "AXShowMenu",
+        "AXConfirm"
+      ]
+    },
+    {
+      "path": [
+        0,
+        18,
+        9,
+        0,
+        3,
+        0,
+        0,
+        2
+      ],
+      "role": "AXStaticText",
+      "title": null,
+      "value": "工作",
+      "actions": []
+    },
+    {
+      "path": [
+        0,
+        18,
+        9,
+        0,
+        4
+      ],
+      "role": "AXRow",
+      "title": null,
+      "value": null,
+      "actions": [
+        "AXShowDefaultUI",
+        "AXShowAlternateUI"
+      ]
+    },
+    {
+      "path": [
+        0,
+        18,
+        9,
+        0,
+        4,
+        0
+      ],
+      "role": "AXCell",
+      "title": null,
+      "value": null,
+      "actions": []
+    },
+    {
+      "path": [
+        0,
+        18,
+        9,
+        0,
+        4,
+        0,
+        0
+      ],
+      "role": "AXGroup",
+      "title": null,
+      "value": null,
+      "actions": []
+    },
+    {
+      "path": [
+        0,
+        18,
+        9,
+        0,
+        4,
+        0,
+        0,
+        0
+      ],
+      "role": "AXButton",
+      "title": null,
+      "value": null,
+      "actions": [
+        "AXPress"
+      ]
+    },
+    {
+      "path": [
+        0,
+        18,
+        9,
+        0,
+        5
+      ],
+      "role": "AXRow",
+      "title": null,
+      "value": null,
+      "actions": [
+        "AXShowDefaultUI",
+        "AXShowAlternateUI"
+      ]
+    },
+    {
+      "path": [
+        0,
+        18,
+        9,
+        0,
+        5,
+        0
+      ],
+      "role": "AXCell",
+      "title": null,
+      "value": null,
+      "actions": []
+    },
+    {
+      "path": [
+        0,
+        18,
+        9,
+        0,
+        5,
+        0,
+        0
+      ],
+      "role": "AXGroup",
+      "title": null,
+      "value": null,
+      "actions": []
+    },
+    {
+      "path": [
+        0,
+        18,
+        9,
+        0,
+        6
+      ],
+      "role": "AXColumn",
+      "title": null,
+      "value": null,
+      "actions": []
+    },
+    {
+      "path": [
+        0,
+        18,
+        10
+      ],
+      "role": "AXScrollArea",
+      "title": null,
+      "value": null,
+      "actions": [
+        "AXScrollLeftByPage",
+        "AXScrollRightByPage",
+        "AXScrollUpByPage",
+        "AXScrollDownByPage"
+      ]
+    },
+    {
+      "path": [
+        0,
+        18,
+        10,
+        0
+      ],
+      "role": "AXTextField",
+      "title": null,
+      "value": "需求评审",
+      "actions": [
+        "AXShowMenu",
+        "AXConfirm"
+      ]
+    },
+    {
+      "path": [
+        0,
+        18,
+        10,
+        1
+      ],
+      "role": "AXTextArea",
+      "title": null,
+      "value": "确认交互与验收范围\n整理待决事项，评审后同步结论。",
+      "actions": [
+        "AXShowMenu"
+      ]
+    },
+    {
+      "path": [
+        0,
+        18,
+        10,
+        2
+      ],
+      "role": "AXButton",
+      "title": null,
+      "value": null,
+      "actions": [
+        "AXShowMenu",
+        "AXPress"
+      ]
+    },
+    {
+      "path": [
+        0,
+        18,
+        10,
+        3
+      ],
+      "role": "AXButton",
+      "title": null,
+      "value": null,
+      "actions": [
+        "AXShowMenu",
+        "AXPress"
+      ]
+    },
+    {
+      "path": [
+        0,
+        18,
+        10,
+        4
+      ],
+      "role": "AXButton",
+      "title": null,
+      "value": null,
+      "actions": [
+        "AXShowMenu",
+        "AXPress"
+      ]
+    },
+    {
+      "path": [
+        0,
+        18,
+        10,
+        5
+      ],
+      "role": "AXButton",
+      "title": null,
+      "value": null,
+      "actions": [
+        "AXShowMenu",
+        "AXPress"
+      ]
+    },
+    {
+      "path": [
+        0,
+        18,
+        10,
+        6
+      ],
+      "role": "AXButton",
+      "title": null,
+      "value": null,
+      "actions": [
+        "AXShowMenu",
+        "AXPress"
+      ]
+    },
+    {
+      "path": [
+        0,
+        18,
+        10,
+        7
+      ],
+      "role": "AXButton",
+      "title": null,
+      "value": null,
+      "actions": [
+        "AXShowMenu",
+        "AXPress"
+      ]
+    },
+    {
+      "path": [
+        0,
+        18,
+        10,
+        8
+      ],
+      "role": "AXButton",
+      "title": null,
+      "value": null,
+      "actions": [
+        "AXPress"
+      ]
+    },
+    {
+      "path": [
+        0,
+        18,
+        10,
+        9
+      ],
+      "role": "AXImage",
+      "title": null,
+      "value": null,
+      "actions": []
+    },
+    {
+      "path": [
+        0,
+        18,
+        10,
+        10
+      ],
+      "role": "AXButton",
+      "title": null,
+      "value": null,
+      "actions": [
+        "AXPress"
+      ]
+    },
+    {
+      "path": [
+        0,
+        18,
+        10,
+        11
+      ],
+      "role": "AXStaticText",
+      "title": null,
+      "value": "·",
+      "actions": []
+    },
+    {
+      "path": [
+        0,
+        18,
+        10,
+        12
+      ],
+      "role": "AXButton",
+      "title": null,
+      "value": null,
+      "actions": [
+        "AXPress"
+      ]
+    },
+    {
+      "path": [
+        0,
+        18,
+        11
+      ],
+      "role": "AXMenuButton",
+      "title": "工作",
+      "value": null,
+      "actions": [
+        "AXPress"
+      ]
+    },
+    {
+      "path": [
+        0,
+        18,
+        12
+      ],
+      "role": "AXButton",
+      "title": null,
+      "value": null,
+      "actions": [
+        "AXPress"
+      ]
+    },
+    {
+      "path": [
+        0,
+        18,
+        13
+      ],
+      "role": "AXButton",
+      "title": null,
+      "value": null,
+      "actions": [
+        "AXPress"
+      ]
+    },
+    {
+      "path": [
+        1
+      ],
+      "role": "AXButton",
+      "title": null,
+      "value": null,
+      "actions": [
+        "AXPress"
+      ]
+    },
+    {
+      "path": [
+        2
+      ],
+      "role": "AXButton",
+      "title": null,
+      "value": null,
+      "actions": [
+        "AXPress",
+        "AXZoomWindow",
+        "AXShowMenu"
+      ]
+    },
+    {
+      "path": [
+        2,
+        0
+      ],
+      "role": "AXGroup",
+      "title": null,
+      "value": null,
+      "actions": []
+    },
+    {
+      "path": [
+        3
+      ],
+      "role": "AXButton",
+      "title": null,
+      "value": null,
+      "actions": [
+        "AXPress"
+      ]
+    }
+  ]
+}

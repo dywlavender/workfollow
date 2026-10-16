@@ -22,10 +22,7 @@ struct RootShellView: View {
         switch destination {
         case .focus:
             return AnyView(FocusWorkspaceView(store: environment.focusStore, workspace: workspace,
-                onSelectRecordTask: { [workspace, navigation] id in
-                    workspace.select(id)
-                    navigation.destination = .allTasks
-                }))
+                onSelectRecordTask: { id in environment.openTask(id) }))
         case .trash: return AnyView(TaskTrashView(workspace: workspace))
         case .summary: return AnyView(SummaryWorkspaceView(store: environment.summaryStore, workspace: workspace))
         case .countdown: return AnyView(CountdownWorkspaceView(store: environment.countdownStore))
@@ -44,6 +41,7 @@ struct RootShellView: View {
     private func hostedPage(destination: NativeDestination, navigationVisible: Bool) -> AnyView {
         let content = pageContent(destination: destination, navigationVisible: navigationVisible)
             .environmentObject(environment)
+            .environment(\.taskFocusStore, environment.focusStore)
             .environment(\.mainWindowRailInset, railInset)
             .environment(\.colorScheme, colorScheme)
             .disabled(environment.storageNeedsReload)
@@ -155,7 +153,7 @@ private struct TaskWorkspaceView: View {
             let wideView = environment.viewPreferences.viewMode(for: preferenceKey) != .list
             // 宽视图下详情面板**按需出现**：没选中任务时（本来只显示空态插画）
             // 整块让给时间线/看板。
-            let showsInspector = !wideView || workspace.selectedTaskID != nil
+            let showsInspector = !wideView || workspace.selectedTaskID != nil || !workspace.bulkSelection.isEmpty
             let reserved = showsInspector ? WFMetrics.inspectorMinimum + WFMetrics.divider : 0
             let maximum = max(WFMetrics.listMinimum,
                               min(wideView ? geometry.size.width : WFMetrics.listMaximum,

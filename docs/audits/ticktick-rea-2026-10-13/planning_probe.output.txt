@@ -1,0 +1,8 @@
+deadline-only quadrant: 1
+span on start day: 1
+span on next day: 0
+daily recurring tomorrow: 0
+calendar order: ["下午 4 点", "上午 9 点"]
+last Thursday label: 周四
+five spans lanes: [0, 1, 2, 3, 4]
+five span last bottom pt: 122

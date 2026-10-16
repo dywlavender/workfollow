@@ -148,6 +148,12 @@ final class NotesWorkspaceModel: ObservableObject {
         if selectedID == id { selectedID = nil }
         revision += 1
     }
+    func restoreCreatedNoteForRedo(_ note: Note) {
+        guard !notes.contains(where: { $0.id == note.id }) else { return }
+        store.insert(note)
+        selectedID = note.id
+        revision += 1
+    }
     func edit(_ id: UUID, _ mutation: (inout Note) -> Void) { store.edit(id, mutation); revision += 1 }
     func delete(_ id: UUID) { store.delete(id); selectedID = nil; revision += 1 }
     func restore(_ id: UUID) { store.restore(id); selectedID = nil; revision += 1 }

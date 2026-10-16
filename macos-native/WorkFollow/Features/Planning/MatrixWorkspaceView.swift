@@ -11,10 +11,19 @@ import SwiftUI
 /// 见 `PlanningWorkspaceChrome`。
 struct MatrixWorkspaceView: View {
     @ObservedObject var workspace: TaskWorkspaceModel
+    @ObservedObject var settings: PlanningSettingsStore
 
     /// 已完成的任务默认在棋盘里，与原版参考图一致。可选的开关放在页面菜单里，
     /// 不占页头。
-    @State private var showCompleted = true
+    private var showCompleted: Bool { settings.matrix.showCompleted }
+    @State private var editingRule: MatrixQuadrantConfiguration?
+    @State private var dropProposal: MatrixDropProposal?
+
+    @MainActor
+    init(workspace: TaskWorkspaceModel, settings: PlanningSettingsStore? = nil) {
+        let settings = settings ?? PlanningSettingsStore.shared
+        self.workspace = workspace; self.settings = settings
+    }
     /// 折叠的分组 id。按 id 记：两个象限里可能有同名清单。
     @State private var collapsedGroups: Set<String> = []
     @State private var editingTaskID: UUID?
@@ -25,11 +34,12 @@ struct MatrixWorkspaceView: View {
 
     private var quadrants: [MatrixQuadrantViewModel] {
         MatrixProjection.project(
-            tasks: workspace.allTasks,
+            tasks: workspace.tasksInActiveLists,
             now: workspace.clock(),
             listOrder: workspace.orderedListNames,
             includeCompleted: showCompleted,
             calendar: workspace.calendar,
+            configuration: settings.matrix,
             hasChildren: { workspace.hasChildren($0) })
     }
 
@@ -52,6 +62,9 @@ struct MatrixWorkspaceView: View {
                     collapsedGroups.formUnion(model.groups.map(\.id))
                 },
                 onAddTask: addTask,
+                onEditRule: { editingRule = settings.matrix.configuration(for: $0) },
+                onDropTask: proposeDrop,
+                onMoveQuadrant: { source, target in settings.updateMatrix { $0.move(source, before: target) } },
                 onOpenTask: openTask,
                 listColor: listColor,
                 anchorSink: anchorSink)
@@ -60,6 +73,26 @@ struct MatrixWorkspaceView: View {
         .background(WFColors.matrixBackdrop)
         // 浮层的坐标基准：锚点矩形与弹框位置都在这一个坐标系里算。
         .coordinateSpace(name: PlanningCoordinateSpace.name)
+        .sheet(item: $editingRule) { value in
+            MatrixRuleEditor(value: value, tasks: workspace.tasksInActiveLists, lists: workspace.availableListNames,
+                             tags: workspace.tagNames, now: workspace.clock(), calendar: workspace.calendar) { updated in
+                settings.updateMatrix { $0.update(updated) }
+                editingRule = nil
+            } onCancel: { editingRule = nil }
+        }
+        .sheet(item: $dropProposal) { proposal in
+            MatrixDropConfirmation(proposal: proposal, targetTitle: settings.matrix.configuration(for: proposal.target).title,
+                                   onChoose: { list, tag in
+                guard let task = workspace.task(for: proposal.taskID) else { return }
+                dropProposal = MatrixDropPlanner.propose(task: task, target: proposal.target,
+                    configuration: settings.matrix, now: workspace.clock(), calendar: workspace.calendar,
+                    chosenList: list, chosenTag: tag)
+            }, onCommit: {
+                _ = workspace.updateAttributes(proposal.taskID, priority: proposal.priority, schedule: proposal.schedule,
+                                               list: proposal.list, tags: proposal.tags)
+                dropProposal = nil
+            }, onCancel: { dropProposal = nil })
+        }
         .overlay {
             PlanningWorkspaceChrome(workspace: workspace,
                                     anchor: anchorSink,
@@ -77,8 +110,16 @@ struct MatrixWorkspaceView: View {
                 .foregroundStyle(WFColors.text)
             Spacer(minLength: 0)
             Menu {
+                ForEach([MatrixPreset.priority, .timeAndPriority, .legacyThreeDays], id: \.self) { preset in
+                    Button(preset.title) { settings.updateMatrix { $0 = .makePreset(preset) } }
+                }
+            } label: { Label(settings.matrix.preset.title, systemImage: "slider.horizontal.3") }
+            .menuStyle(.borderlessButton)
+            .fixedSize()
+            Spacer().frame(width: WFSpace.sm)
+            Menu {
                 Button {
-                    showCompleted.toggle()
+                    settings.updateMatrix { $0.showCompleted.toggle() }
                 } label: {
                     if showCompleted {
                         Label("显示已完成任务", systemImage: "checkmark")
@@ -86,6 +127,9 @@ struct MatrixWorkspaceView: View {
                         Text("显示已完成任务")
                     }
                 }
+                Divider()
+                Button("撤销配置修改") { settings.undoConfiguration() }.disabled(!settings.canUndoConfiguration)
+                Button("重做配置修改") { settings.redoConfiguration() }.disabled(!settings.canRedoConfiguration)
                 Divider()
                 Button("展开全部分组") { collapsedGroups.removeAll() }
                 Button("折叠全部分组") {
@@ -114,7 +158,7 @@ struct MatrixWorkspaceView: View {
     /// 状态（对齐 Flutter `__toggle-completed__`）。
     private func toggleGroup(_ group: MatrixGroupViewModel) {
         if group.id == MatrixQuadrantViewModel.completedToggleID {
-            showCompleted.toggle()
+            settings.updateMatrix { $0.showCompleted.toggle() }
             return
         }
         if collapsedGroups.remove(group.id) == nil { collapsedGroups.insert(group.id) }
@@ -125,15 +169,40 @@ struct MatrixWorkspaceView: View {
     /// 卡上因此没有预置日期（显示「设置日期」），用户选的日期会覆盖这个 fallback。
     private func addTask(_ quadrant: MatrixQuadrant) {
         workspace.select(nil)
-        let fallback: TaskSchedule
-        if let offset = quadrant.defaultScheduleOffset {
-            fallback = TaskSchedule(dueAt: workspace.dateFromToday(offset))
-        } else {
-            fallback = TaskSchedule()
+        let now = workspace.clock()
+        let blank = Task(id: UUID(), title: "", list: .inbox, priority: .none, schedule: TaskSchedule(),
+                         parentID: nil, childOrder: 0, createdAt: now, updatedAt: now)
+        let proposal = MatrixDropPlanner.propose(task: blank, target: quadrant,
+                                                 configuration: settings.matrix, now: now, calendar: workspace.calendar)
+        let schedule = proposal.schedule ?? blank.schedule
+        composerRequest = PlanningComposerRequest(fallback: schedule, preset: schedule,
+            priority: proposal.priority ?? blank.priority, list: proposal.list, tags: proposal.tags ?? [],
+            matrixConfiguration: settings.matrix)
+    }
+
+    private func proposeDrop(_ id: UUID, _ target: MatrixQuadrant, _ before: UUID?) {
+        guard let task = workspace.task(for: id) else { return }
+        let source = settings.matrix.quadrant(for: task, now: workspace.clock(), calendar: workspace.calendar)
+        if source == target {
+            guard settings.matrix.configuration(for: target).sort == .manual else { return }
+            guard id != before else { return }
+            let groups = quadrants.first { $0.quadrant == target }?.groups ?? []
+            guard let group = groups.first(where: { $0.tasks.contains { $0.id == id } }) else { return }
+            let rows = group.tasks.map(\.id)
+            if let before, !rows.contains(before) { return }
+            var reordered = rows.filter { $0 != id }
+            let position = before.flatMap { reordered.firstIndex(of: $0) } ?? reordered.count
+            reordered.insert(id, at: position)
+            guard reordered != rows else { return }
+            settings.updateMatrix { configuration in
+                guard let index = configuration.quadrants.firstIndex(where: { $0.quadrant == target }) else { return }
+                let old = configuration.quadrants[index].manualOrder
+                configuration.quadrants[index].manualOrder = old.filter { !rows.contains($0) } + reordered
+            }
+            return
         }
-        composerRequest = PlanningComposerRequest(fallback: fallback,
-                                                  preset: nil,
-                                                  priority: quadrant.defaultPriority)
+        dropProposal = MatrixDropPlanner.propose(task: task, target: target, configuration: settings.matrix,
+                                                 now: workspace.clock(), calendar: workspace.calendar)
     }
 
     private func openTask(_ id: UUID) {
@@ -160,14 +229,17 @@ struct MatrixBoardView: View {
     let onExpandAll: (MatrixQuadrant) -> Void
     let onCollapseAll: (MatrixQuadrant) -> Void
     let onAddTask: (MatrixQuadrant) -> Void
+    let onEditRule: (MatrixQuadrant) -> Void
+    let onDropTask: (UUID, MatrixQuadrant, UUID?) -> Void
+    let onMoveQuadrant: (MatrixQuadrant, MatrixQuadrant) -> Void
     let onOpenTask: (UUID) -> Void
     let listColor: (String) -> Color
     let anchorSink: PlanningAnchorRef
 
     var body: some View {
         VStack(spacing: WFSpace.control) {
-            row([.doNow, .schedule])
-            row([.delegate, .later])
+            row(Array(quadrants.prefix(2).map(\.quadrant)))
+            row(Array(quadrants.dropFirst(2).prefix(2).map(\.quadrant)))
         }
         .padding(.leading, WFSpace.cardInset)
         .padding(.trailing, WFSpace.cardInset)
@@ -187,6 +259,9 @@ struct MatrixBoardView: View {
                         onExpandAll: { onExpandAll(quadrant) },
                         onCollapseAll: { onCollapseAll(quadrant) },
                         onAddTask: { onAddTask(quadrant) },
+                        onEditRule: { onEditRule(quadrant) },
+                        onDropTask: { id, before in onDropTask(id, quadrant, before) },
+                        onMoveQuadrant: { onMoveQuadrant($0, quadrant) },
                         onOpenTask: onOpenTask,
                         listColor: listColor,
                         anchorSink: anchorSink)
@@ -212,6 +287,9 @@ struct MatrixQuadrantCard: View {
     let onExpandAll: () -> Void
     let onCollapseAll: () -> Void
     let onAddTask: () -> Void
+    let onEditRule: () -> Void
+    let onDropTask: (UUID, UUID?) -> Void
+    let onMoveQuadrant: (MatrixQuadrant) -> Void
     let onOpenTask: (UUID) -> Void
     let listColor: (String) -> Color
     let anchorSink: PlanningAnchorRef
@@ -222,7 +300,8 @@ struct MatrixQuadrantCard: View {
     @State private var anchor = PlanningAnchorRef()
 
     private var style: MatrixQuadrant { model.quadrant }
-    private var color: Color { WFPlanningPalette.quadrant[style.rawValue] }
+    private var color: Color { WFPlanningPalette.quadrant[model.configuration?.colorIndex ?? style.rawValue] }
+    private var title: String { model.configuration?.title ?? style.title }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -244,6 +323,7 @@ struct MatrixQuadrantCard: View {
                                 expanded: isExpanded(group),
                                 onToggle: { onToggleGroup(group) },
                                 onOpenTask: onOpenTask,
+                                onReorder: model.configuration?.sort == .manual ? onDropTask : nil,
                                 listColor: listColor,
                                 anchorSink: anchorSink)
                         }
@@ -267,10 +347,17 @@ struct MatrixQuadrantCard: View {
         .onHover { hovering = $0 }
         .background(PlanningAnchorProbe(ref: anchor))
         .dropDestination(for: String.self) { values, _ in
-            guard let id = values.first.flatMap(UUID.init(uuidString:)) else { return false }
-            _ = workspace.moveTaskToMatrix(id, style)
+            NativeAcceptanceInteractionTrace.record("matrix.drop", ["count": values.count, "quadrant": style.rawValue])
+            guard let value = values.first else { return false }
+            if value.hasPrefix("matrix-quadrant:"), let number = Int(value.dropFirst("matrix-quadrant:".count)),
+               let quadrant = MatrixQuadrant(rawValue: number) { onMoveQuadrant(quadrant); return true }
+            guard let id = UUID(uuidString: value) else { return false }
+            onDropTask(id, nil)
             return true
-        } isTargeted: { dropping = $0 }
+        } isTargeted: {
+            dropping = $0
+            NativeAcceptanceInteractionTrace.record("matrix.target", ["targeted": $0, "quadrant": style.rawValue])
+        }
     }
 
     private var header: some View {
@@ -282,7 +369,7 @@ struct MatrixQuadrantCard: View {
                        height: WFMatrixMetrics.quadrantHeaderMarkerSize)
                 .background(color, in: Circle())
             Spacer().frame(width: WFSpace.sm)
-            Text(style.title)
+            Text(title)
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(color)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -294,6 +381,7 @@ struct MatrixQuadrantCard: View {
                         })
             quadrantMenu
         }
+        .draggable("matrix-quadrant:\(style.rawValue)")
     }
 
     /// 象限自己的动作只在指针停上来时出现；离开时不接收点击，也不被读屏念出来。
@@ -330,6 +418,7 @@ struct MatrixQuadrantCard: View {
                                                    completedGroup: true, tasks: []))
             }
             Divider()
+            Button("编辑名称与规则…") { onEditRule() }
             Button("展开全部分组") { onExpandAll() }
             Button("折叠全部分组") { onCollapseAll() }
         } label: {
@@ -359,6 +448,7 @@ struct MatrixGroupView: View {
     let expanded: Bool
     let onToggle: () -> Void
     let onOpenTask: (UUID) -> Void
+    var onReorder: ((UUID, UUID?) -> Void)? = nil
     let listColor: (String) -> Color
     let anchorSink: PlanningAnchorRef
 
@@ -392,6 +482,7 @@ struct MatrixGroupView: View {
                         workspace: workspace,
                         listColor: listColor,
                         onOpen: { onOpenTask(row.task.id) },
+                        onReorder: onReorder,
                         anchorSink: anchorSink)
                 }
             }
@@ -401,6 +492,15 @@ struct MatrixGroupView: View {
 
 // MARK: - 任务行
 
+struct MatrixTaskRowLayout: Equatable {
+    let showsSecondaryIcons: Bool
+    let listNameWidth: Double
+    init(width: Double) {
+        showsSecondaryIcons = width >= 480
+        listNameWidth = width < 280 ? 0 : min(showsSecondaryIcons ? 96 : 64, width * 0.16)
+    }
+}
+
 /// 一张扁平的四象限行。象限本身已经用位置表达了重要性，所以行不再额外挂优先级
 /// 色条或卡片边框。
 struct MatrixTaskRowView: View {
@@ -409,15 +509,18 @@ struct MatrixTaskRowView: View {
     @ObservedObject var workspace: TaskWorkspaceModel
     let listColor: (String) -> Color
     let onOpen: () -> Void
+    var onReorder: ((UUID, UUID?) -> Void)? = nil
     let anchorSink: PlanningAnchorRef
 
     @State private var hovering = false
     @State private var showDatePopover = false
+    @State private var rowWidth: CGFloat = 0
     /// 这一行自己的锚：编辑器贴着被点的这一行弹出来。
     @State private var anchor = PlanningAnchorRef()
 
     private var task: Task { model.task }
     private var completed: Bool { task.status == .completed }
+    private var metadataLayout: MatrixTaskRowLayout { MatrixTaskRowLayout(width: Double(rowWidth)) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -438,8 +541,10 @@ struct MatrixTaskRowView: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .layoutPriority(1)
                 Spacer().frame(width: WFSpace.control)
                 metadata
+                    .layoutPriority(2)
             }
             .padding(.vertical, WFSpace.inline)
             // 行分隔线：左端收进一截，让行读成一组而不是一张表。
@@ -447,6 +552,13 @@ struct MatrixTaskRowView: View {
                 .fill(WFColors.border.opacity(0.65))
                 .frame(height: WFMatrixMetrics.taskRowDividerHeight)
                 .padding(.leading, WFSpace.nestedContentIndent)
+        }
+        .frame(maxWidth: .infinity)
+        .background {
+            GeometryReader { geometry in
+                Color.clear.onAppear { rowWidth = geometry.size.width }
+                    .onChange(of: geometry.size.width) { _, width in rowWidth = width }
+            }
         }
         .background(hovering ? WFColors.listRowHover : .clear,
                     in: RoundedRectangle(cornerRadius: hovering ? 12 : 0))
@@ -467,8 +579,14 @@ struct MatrixTaskRowView: View {
                 .background(WFColors.content,
                             in: RoundedRectangle(cornerRadius: WFMatrixMetrics.taskRowDragPreviewRadius))
                 .shadow(color: .black.opacity(0.18), radius: 10, y: 3)
+                .onAppear { NativeAcceptanceInteractionTrace.record("matrix.drag-preview") }
         }
-        .help(task.title)
+        .dropDestination(for: String.self) { values, _ in
+            guard let onReorder, let id = values.first.flatMap(UUID.init(uuidString:)) else { return false }
+            onReorder(id, task.id)
+            return true
+        }
+        .help(([task.title, model.listName] + metadataDescriptions).joined(separator: " · "))
         .background(PlanningAnchorProbe(ref: anchor))
     }
 
@@ -496,14 +614,20 @@ struct MatrixTaskRowView: View {
     /// 日期是唯一有颜色的文字：过期红、其余强调色；已完成的行整条退墨。
     private var metadata: some View {
         HStack(spacing: WFSpace.inline) {
-            Text(model.listName)
-                .font(WFType.listMeta)
-                .foregroundStyle(WFColors.tertiaryText)
-                .lineLimit(1)
-            if model.recurring { metadataIcon("repeat", "重复任务") }
-            if model.hasNote { metadataIcon("text.alignleft", "有备注") }
-            if model.hasSubtasks { metadataIcon("list.bullet.indent", "有子任务") }
-            if model.hasReminder { metadataIcon("bell", "有提醒") }
+            if metadataLayout.listNameWidth > 0 {
+                Text(model.listName)
+                    .font(WFType.listMeta)
+                    .foregroundStyle(WFColors.tertiaryText)
+                    .lineLimit(1).truncationMode(.tail)
+                    .frame(maxWidth: CGFloat(metadataLayout.listNameWidth), alignment: .trailing)
+                    .help(model.listName)
+            }
+            if metadataLayout.showsSecondaryIcons {
+                if model.recurring { metadataIcon("repeat", "重复任务") }
+                if model.hasNote { metadataIcon("text.alignleft", "有备注") }
+                if model.hasSubtasks { metadataIcon("list.bullet.indent", "有子任务") }
+                if model.hasReminder { metadataIcon("bell", "有提醒") }
+            }
             if let label = model.dateLabel {
                 Button {
                     showDatePopover = true
@@ -511,6 +635,7 @@ struct MatrixTaskRowView: View {
                     Text(label)
                         .font(WFType.listMeta)
                         .foregroundStyle(dateColor)
+                        .fixedSize(horizontal: true, vertical: false)
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
@@ -519,7 +644,12 @@ struct MatrixTaskRowView: View {
             }
         }
         .lineLimit(1)
-        .fixedSize()
+        .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private var metadataDescriptions: [String] {
+        [(model.recurring, "重复任务"), (model.hasNote, "有备注"),
+         (model.hasSubtasks, "有子任务"), (model.hasReminder, "有提醒")].compactMap { $0.0 ? $0.1 : nil }
     }
 
     private var dateColor: Color {

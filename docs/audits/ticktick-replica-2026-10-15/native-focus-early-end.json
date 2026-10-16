@@ -1,0 +1,68 @@
+{
+  "scenario": "Owned paused snapshot with 320 active seconds; main window cancel then end-and-save",
+  "preparation": "The owned QA app was quit before preparing this snapshot through FocusStore. This is a prepared normal paused state, not another live five-minute timer run.",
+  "fixture_session_id": "7AC7674A-4C9A-4239-9741-960C2F800E07",
+  "records": [
+    {
+      "id": "43C37723-7A5A-429C-B20E-F8116AC70579",
+      "active_seconds": 1500,
+      "credited_pomodoros": 1,
+      "mode": "pomodoro",
+      "note": "完成议程准备。",
+      "started_at": "2026-10-13T08:30:00+08:00",
+      "ended_at": "2026-10-13T08:55:00+08:00",
+      "paused_seconds": 0,
+      "termination": "manualEntry",
+      "metric_seconds": 1500,
+      "metric_count": 1
+    },
+    {
+      "id": "D50A4570-2DCD-42C6-9A9E-5BC8752DE63D",
+      "active_seconds": 2400,
+      "credited_pomodoros": 0,
+      "mode": "stopwatch",
+      "note": "集中梳理交互。",
+      "started_at": "2026-10-13T10:00:00+08:00",
+      "ended_at": "2026-10-13T10:40:00+08:00",
+      "paused_seconds": 0,
+      "termination": "manualEntry",
+      "metric_seconds": 2400,
+      "metric_count": 0
+    },
+    {
+      "id": "C10201A7-C6E6-47C5-A553-3568EDCF7E55",
+      "active_seconds": 300,
+      "credited_pomodoros": 1,
+      "mode": "pomodoro",
+      "note": "REA 完成页验收：已在完成后修改同条记录笔记。",
+      "started_at": "2026-10-13T12:02:40.704495+08:00",
+      "ended_at": "2026-10-13T12:07:40.704495+08:00",
+      "paused_seconds": 0,
+      "termination": "targetReached",
+      "metric_seconds": 300,
+      "metric_count": 1
+    },
+    {
+      "id": "7AC7674A-4C9A-4239-9741-960C2F800E07",
+      "active_seconds": 320,
+      "credited_pomodoros": 1,
+      "mode": "pomodoro",
+      "note": "REA 提前结束交互验收：预置320有效秒暂停会话。",
+      "started_at": "2026-10-13T12:14:40+08:00",
+      "ended_at": "2026-10-13T12:22:43.548201+08:00",
+      "paused_seconds": 163,
+      "termination": "manuallyEnded",
+      "metric_seconds": 320,
+      "metric_count": 1
+    }
+  ],
+  "record_count": 4,
+  "total_active_seconds": 4520,
+  "total_credited_pomodoros": 3,
+  "previous_three_records_preserved": true,
+  "new_record_has_same_session_identity": true,
+  "final_session_snapshot": null,
+  "completion_context": null,
+  "ui_result": "Three choices visible. Cancel retains 04:40 paused. Save returns directly to overview; today and total show 3 pomodoros and 75 minutes.",
+  "display_policy": "The ordinary record row shows the existing whole-minute ceiling (320 seconds displays as 6 minutes); the aggregate uses precise stored seconds (4520 seconds displays as 75 minutes). This is not evidence of the reference storage precision."
+}

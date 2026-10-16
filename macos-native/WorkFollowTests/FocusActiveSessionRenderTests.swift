@@ -11,31 +11,56 @@ final class FocusActiveSessionRenderTests: XCTestCase {
         case running180mClipped
         case running25mDark
         case breakOverview
+        case naturalCompletion
         case stopwatchIdle
         case stopwatchRunning
         case stopwatchPaused
+        case stopwatchCompleted
+        case presetLibraryDetail
+        case expandedIdle
 
         var isStopwatch: Bool {
-            self == .stopwatchIdle || self == .stopwatchRunning || self == .stopwatchPaused
+            self == .stopwatchIdle || self == .stopwatchRunning || self == .stopwatchPaused || self == .stopwatchCompleted
         }
+        var isCompleted: Bool { self == .breakOverview || self == .naturalCompletion || self == .stopwatchCompleted }
+        var isNavigationFixture: Bool { self == .presetLibraryDetail || self == .expandedIdle }
     }
 
     func testActiveSessionTimelineNotesAndControlsRenderContracts() throws {
-        for state in RenderState.allCases where !state.isStopwatch {
+        for state in RenderState.allCases where !state.isStopwatch && !state.isNavigationFixture {
             let rendered = try render(state)
             XCTAssertTrue(rendered.screenshotExists, "Screenshot missing for \(state.rawValue)")
 
-            if state == .breakOverview {
-                XCTAssertNotNil(rendered.frames[.overviewFirstCard],
-                                "Break phases retain the existing Overview pane")
-                XCTAssertNil(rendered.frames[.activeTimeline])
+            if state.isCompleted {
+                let divider = try XCTUnwrap(rendered.frames[.divider])
+                let summary = try XCTUnwrap(rendered.frames[.completionSummary])
+                let figure = try XCTUnwrap(rendered.frames[.completionFigure])
+                let timeline = try XCTUnwrap(rendered.frames[.activeTimeline])
+                let note = try XCTUnwrap(rendered.frames[.activeFocusNote])
+                XCTAssertLessThanOrEqual(summary.maxX, divider.minX + 0.5)
+                XCTAssertGreaterThan(timeline.minX, divider.maxX)
+                XCTAssertGreaterThan(note.minX, divider.maxX)
+                XCTAssertEqual(divider.minX, 567, accuracy: 0.75)
+                XCTAssertEqual(figure.size, CGSize(width: 180, height: 180))
+                XCTAssertEqual(figure.midX, 283.5, accuracy: 0.75)
+                XCTAssertEqual(figure.midY, 280, accuracy: 0.75)
+                XCTAssertEqual(timeline.height, 410, accuracy: 0.75)
+                XCTAssertEqual(note.height, 106, accuracy: 0.75)
                 XCTAssertNil(rendered.frames[.focusDurationTrigger],
-                             "Duration editing is unavailable during breaks")
-                XCTAssertNotNil(rendered.frames[.focusModeSegment],
-                                "Breaks are not active focus sessions")
-                XCTAssertNotNil(rendered.frames[.focusAddTimerButton])
-                XCTAssertNotNil(rendered.frames[.focusRunningStatus],
-                                "Keep the existing break status line")
+                             "The completed record has its own duration editor")
+                XCTAssertNotNil(rendered.frames[.editCompletedDuration])
+                XCTAssertNil(rendered.frames[.focusModeSegment])
+                XCTAssertNil(rendered.frames[.focusAddTimerButton])
+                XCTAssertNil(rendered.frames[.focusRunningStatus])
+                if state == .naturalCompletion {
+                    let start = try XCTUnwrap(rendered.frames[.completionStartBreak])
+                    let skip = try XCTUnwrap(rendered.frames[.completionSkipBreak])
+                    let exit = try XCTUnwrap(rendered.frames[.completionExit])
+                    XCTAssertEqual(start.size, CGSize(width: 123, height: 48))
+                    XCTAssertEqual(start.minY, 525, accuracy: 0.75)
+                    XCTAssertEqual(skip.minY - start.maxY, 16, accuracy: 0.75)
+                    XCTAssertEqual(exit.minY - skip.maxY, 16, accuracy: 0.75)
+                }
                 continue
             }
 
@@ -131,9 +156,11 @@ final class FocusActiveSessionRenderTests: XCTestCase {
             if state == .stopwatchIdle {
                 XCTAssertEqual(FocusViewLogic.clockText(rendered.elapsedSeconds), "00:00")
                 XCTAssertNotNil(frames[.focusModeSegment])
-                XCTAssertNotNil(frames[.focusAddTimerButton])
-                XCTAssertNil(frames[.activeTimeline],
-                             "Idle stopwatch reuses the existing Overview workspace")
+                XCTAssertNil(frames[.focusAddTimerButton])
+                XCTAssertNotNil(frames[.activeTimeline],
+                                "Expanded idle stopwatch keeps the same timeline workspace")
+                XCTAssertNotNil(frames[.activeFocusNote])
+                XCTAssertNil(frames[.overviewFirstCard])
                 continue
             }
 
@@ -163,6 +190,51 @@ final class FocusActiveSessionRenderTests: XCTestCase {
         }
     }
 
+    func testStopwatchCompletionUsesCompletedRecordOnLeftAndEditableNotesOnRight() throws {
+        let rendered = try render(.stopwatchCompleted)
+        let summary = try XCTUnwrap(rendered.frames[.completionSummary])
+        let divider = try XCTUnwrap(rendered.frames[.divider])
+        let timeline = try XCTUnwrap(rendered.frames[.activeTimeline])
+        let note = try XCTUnwrap(rendered.frames[.activeFocusNote])
+        XCTAssertLessThanOrEqual(summary.maxX, divider.minX + 0.5)
+        XCTAssertGreaterThan(timeline.minX, divider.maxX)
+        XCTAssertGreaterThan(note.minX, divider.maxX)
+        XCTAssertNotNil(rendered.frames[.editCompletedDuration])
+        XCTAssertNil(rendered.frames[.completionStartBreak])
+        XCTAssertNil(rendered.frames[.activeTimelineFocusFill])
+        XCTAssertNil(rendered.frames[.timerRing])
+    }
+
+    func testPresetLibraryDetailAndCompactTimerUseSeparatePanelsAtReferenceSize() throws {
+        let rendered = try render(.presetLibraryDetail)
+        let divider = try XCTUnwrap(rendered.frames[.divider])
+        let library = try XCTUnwrap(rendered.frames[.presetLibrary])
+        let row = try XCTUnwrap(rendered.frames[.presetLibraryFirstRow])
+        let compactTimer = try XCTUnwrap(rendered.frames[.presetLibraryTimerBar])
+        let detail = try XCTUnwrap(rendered.frames[.presetDetail])
+        let cards = try XCTUnwrap(rendered.frames[.presetDetailCards])
+        XCTAssertEqual(divider.minX, 567, accuracy: 0.75)
+        XCTAssertLessThanOrEqual(library.maxX, divider.minX + 0.5)
+        XCTAssertGreaterThanOrEqual(detail.minX, divider.maxX - 0.5)
+        XCTAssertEqual(row.height, 54, accuracy: 0.75)
+        XCTAssertEqual(compactTimer.height, 64, accuracy: 0.75)
+        XCTAssertEqual(compactTimer.maxY, 859, accuracy: 0.75)
+        XCTAssertEqual(cards.height, 72, accuracy: 0.75)
+        XCTAssertNotNil(rendered.frames[.presetDetailChart])
+        XCTAssertNil(rendered.frames[.timerRing])
+    }
+
+    func testExplicitlyExpandedIdleTimerHasTimelineAndNotesInsteadOfOverview() throws {
+        let rendered = try render(.expandedIdle)
+        XCTAssertNotNil(rendered.frames[.timerRing])
+        XCTAssertNotNil(rendered.frames[.timerBackToLibrary])
+        XCTAssertNotNil(rendered.frames[.focusModeSegment])
+        XCTAssertNotNil(rendered.frames[.activeTimeline])
+        XCTAssertNotNil(rendered.frames[.activeFocusNote])
+        XCTAssertNil(rendered.frames[.overviewFirstCard])
+        XCTAssertNil(rendered.frames[.activeTimelineFocusFill])
+    }
+
     private var tickAnchors: [FocusRenderAnchor] {
         [.activeTimelineTick0, .activeTimelineTick1, .activeTimelineTick2,
          .activeTimelineTick3, .activeTimelineTick4]
@@ -173,7 +245,8 @@ final class FocusActiveSessionRenderTests: XCTestCase {
         var frames: [FocusRenderAnchor: CGRect] = [:]
         let colorScheme: ColorScheme = state == .running25mDark ? .dark : .light
         let appearance: NSAppearance.Name = state == .running25mDark ? .darkAqua : .aqua
-        let size = CGSize(width: 1_600, height: 900)
+        let size = state.isCompleted || state == .presetLibraryDetail
+            ? CGSize(width: 1_450, height: 859) : CGSize(width: 1_600, height: 900)
         let root = FocusWorkspaceView(store: fixture.store, workspace: nil)
             .frame(width: size.width, height: size.height)
             .preferredColorScheme(colorScheme)
@@ -194,7 +267,7 @@ final class FocusActiveSessionRenderTests: XCTestCase {
         hostingView.layoutSubtreeIfNeeded()
         window.displayIfNeeded()
 
-        let projection: FocusTimelineProjection? = fixture.store.sessionTiming.map {
+        let projection: FocusTimelineProjection? = fixture.store.displayedSessionTiming.map {
             FocusTimelineProjection.make(timing: $0, now: fixture.now(), calendar: .current)
         }
         let elapsedSeconds = fixture.store.elapsedSeconds
@@ -221,6 +294,7 @@ final class FocusActiveSessionRenderTests: XCTestCase {
         switch state {
         case .stopwatchIdle:
             precondition(store.setStopwatchMode(true))
+            store.showTimerWorkspace()
         case .stopwatchRunning:
             precondition(store.setStopwatchMode(true))
             precondition(store.start())
@@ -236,6 +310,23 @@ final class FocusActiveSessionRenderTests: XCTestCase {
             clockNow = initialNow.addingTimeInterval(142)
             store.refresh()
             store.updateCurrentSessionNote("正计时暂停中")
+        case .stopwatchCompleted:
+            precondition(store.start(stopwatch: true))
+            store.updateCurrentSessionNote("正计时完成笔记")
+            clockNow = initialNow.addingTimeInterval(90)
+            precondition(store.finishEarly() != nil)
+        case .presetLibraryDetail:
+            precondition(store.setFocusMinutes(180))
+            precondition(store.addTimer(name: "阅读", emoji: "📚", stopwatch: false, minutes: 10))
+            precondition(store.addTimer(name: "五分钟", emoji: "🍅", stopwatch: false, minutes: 5))
+            let preset = store.timers[0]
+            var draft = FocusRecordDraft(now: clockNow, presetID: preset.id)
+            draft.startedAt = clockNow.addingTimeInterval(-600); draft.creditedPomodoros = 1
+            precondition(store.saveRecordDraft(draft))
+            store.selectPresetForDetails(preset.id)
+        case .expandedIdle:
+            store.showPresetLibrary(); store.showTimerWorkspace()
+            store.updateCurrentSessionNote("开始前的笔记")
         case .running25m, .running25mDark:
             precondition(store.start(minutes: 25))
             store.updateCurrentSessionNote("整理今天的优先事项")
@@ -258,6 +349,13 @@ final class FocusActiveSessionRenderTests: XCTestCase {
             clockNow = initialNow.addingTimeInterval(5 * 60)
             store.refresh()
             precondition(store.phase == .breaking)
+        case .naturalCompletion:
+            precondition(store.setAutoStartBreak(false))
+            precondition(store.start(minutes: 5))
+            store.updateCurrentSessionNote("五分钟完成笔记")
+            clockNow = initialNow.addingTimeInterval(300)
+            store.refresh()
+            precondition(store.pendingBreak)
         }
         return (store, { clockNow }, directory)
     }

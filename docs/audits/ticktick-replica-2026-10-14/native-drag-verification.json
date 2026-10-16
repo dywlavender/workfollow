@@ -1,0 +1,77 @@
+{
+  "verification_date": "2026-10-15",
+  "status": "verified",
+  "application": "WorkFollow Replica QA",
+  "fixture_clock_date": "2026-10-13",
+  "window_points": {
+    "width": 1512,
+    "height": 859
+  },
+  "input_method": "CUA native mouse gestures; REA native observation; read-only checks against acceptance SQLite storage",
+  "tool_observation": {
+    "initial_window_unavailable_resolved": true,
+    "source_and_target_events_received": true,
+    "some_cua_drags_required_a_target_click_to_complete_the_existing_native_drag_session": true,
+    "timing_explanation": "The initial down/move/up sequence took about 28 milliseconds. The target click completed native drop callbacks. SwiftUI callback timestamps alone do not establish when the underlying drag session started."
+  },
+  "matrix": {
+    "task": "整理交付检查项",
+    "preset": "按优先级",
+    "from_quadrant": "IV",
+    "to_quadrant": "I",
+    "proposal": "优先级改为高优先级",
+    "priority_before": 0,
+    "priority_after": 3,
+    "date_remained_absent": true,
+    "list_tags_parent_order_estimate_preserved": true,
+    "single_undo_restored_all_task_fields_and_document": true,
+    "screenshot": "native-matrix-drop.png"
+  },
+  "calendar_timeline": {
+    "due": "2026-10-14T12:00:00+08:00",
+    "has_time": true,
+    "end_absent": true,
+    "different_fields": [
+      "updatedAt",
+      "schedule"
+    ],
+    "all_non_schedule_fields_preserved": true,
+    "single_undo_restored_all_task_fields_and_document": true,
+    "screenshot": "native-calendar-drop.png"
+  },
+  "calendar_all_day": {
+    "due": "2026-10-14T00:00:00+08:00",
+    "has_time": false,
+    "end_absent": true,
+    "all_non_schedule_fields_preserved": true,
+    "single_undo_restored_all_task_fields_and_document": true,
+    "screenshot": "native-calendar-all-day-drop.png",
+    "fixed_blank_column_target_coverage": true
+  },
+  "calendar_month": {
+    "due": "2026-10-22T00:00:00+08:00",
+    "has_time": false,
+    "end_absent": true,
+    "all_non_schedule_fields_preserved": true,
+    "single_undo_restored_all_task_fields_and_document": true,
+    "screenshot": "native-calendar-month-drop.png"
+  },
+  "calendar_resize": {
+    "start": "2026-10-14T10:00:00+08:00",
+    "end": "2026-10-14T12:00:00+08:00",
+    "start_preserved": true,
+    "end_change_minutes": 30.0,
+    "all_non_schedule_fields_preserved": true,
+    "single_undo_restored_all_task_fields_and_document": true,
+    "screenshot": "native-calendar-resize.png"
+  },
+  "final_storage_check": {
+    "tasks_count": 10,
+    "all_tasks_and_documents_restored": true
+  },
+  "regression": {
+    "tests_executed": 74,
+    "failures": 0,
+    "source_log": "/private/tmp/workfollow-replica-all-day-hit-tests.log"
+  }
+}

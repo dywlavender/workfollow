@@ -80,7 +80,10 @@ enum WFMetrics {
     static let minimumWindow = CGSize(width: 360, height: 480)
     static let defaultWindow = CGSize(width: 1280, height: 820)
     static let railWidth: CGFloat = RailMetrics.width
-    static let navigationWidth: CGFloat = 196
+    /// Fixed navigation column: 212pt in the 8.0.80 runtime reference.
+    /// The task column remains independently resizable; its observed width is
+    /// not a replacement for the user's saved list width.
+    static let navigationWidth: CGFloat = 212
     /// 列表列宽度：任务列表与笔记列表**共用同一个值**（笔记页原来自己硬编码 330/300，
     /// 见 `NotesWorkspaceView`）。两处各写各的，用户在中栏来回切就会看到忽宽忽窄。
     ///

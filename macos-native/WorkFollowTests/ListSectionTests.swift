@@ -66,8 +66,8 @@ final class ListSectionTests: XCTestCase {
         XCTAssertEqual(groups?.map(\.label), ["未分组", "进行中", "待办"],
                        "未分组在最前；只画本清单的分组；空分组也保留")
         XCTAssertEqual(groups?.map { $0.tasks.count }, [2, 2, 0])
-        XCTAssertEqual(groups?.map(\.id), ["plain:未分组", "plain:进行中", "plain:待办"],
-                       "组身份按标签互不串（折叠状态不串）")
+        XCTAssertEqual(groups?.map(\.id), ["plain:未分组", "section:s1", "section:s2"],
+                       "自定义分组以稳定ID区分，改名不会改变折叠身份")
     }
 
     func testSectionGroupsCarrySectionIDForKanbanDrops() {

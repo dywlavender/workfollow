@@ -121,6 +121,9 @@ struct TaskDatePopoverV2: View {
     @State private var customOffsetAmount = ""
     @State private var customOffsetUnit = 1
     @State private var repeatCountText = ""
+    @State private var pendingRecurrencePlan: SchedulePlan?
+    @State private var showRecurrenceScope = false
+    @State private var selectedRepeatDraftDate = Date()
     @State private var repeatEndDraftDate = Date()
     @State private var repeatEndDisplayedMonth = Date()
 
@@ -147,6 +150,7 @@ struct TaskDatePopoverV2: View {
             : Self.defaultClockText)
         _endTimeFieldText = State(initialValue: draftModel.endTimeAnchor
             .map { Self.clockText($0, calendar: workspace.calendar) } ?? Self.defaultClockText)
+        _selectedRepeatDraftDate = State(initialValue: draftModel.recurrenceAnchorDate)
         _repeatCountText = State(initialValue: String(draftModel.repeatCount))
         _repeatEndDraftDate = State(initialValue: draftModel.repeatEndDate)
         _repeatEndDisplayedMonth = State(initialValue: draftModel.repeatEndDate)
@@ -156,6 +160,18 @@ struct TaskDatePopoverV2: View {
         mainPage
             .environment(\.calendar, workspace.calendar)
             .environment(\.timeZone, workspace.calendar.timeZone)
+            .confirmationDialog("修改重复任务", isPresented: $showRecurrenceScope, titleVisibility: .visible) {
+                ForEach(RecurrenceEditScope.allCases) { scope in
+                    Button(scope.title) {
+                        guard let plan = pendingRecurrencePlan,
+                              let current = workspace.task(for: taskID) else { onClose(); return }
+                        _ = workspace.saveOccurrenceSchedule(plan, occurrence: workspace.occurrence(for: current), scope: scope)
+                        pendingRecurrencePlan = nil
+                        onClose()
+                    }
+                }
+                Button("取消", role: .cancel) { pendingRecurrencePlan = nil }
+            }
     }
 
     // MARK: Main page
@@ -601,7 +617,7 @@ struct TaskDatePopoverV2: View {
                     if presentation.shows(.repeatCustom) { presentation.close(.repeatCustom) }
                     else { presentation.open(.repeatCustom) }
                 }
-                if presentation.shows(.repeatCustom) { intervalEditor }
+                if presentation.shows(.repeatCustom) { customRecurrenceEditor }
             }
             Color.clear.frame(height: 8)
         }
@@ -741,6 +757,61 @@ struct TaskDatePopoverV2: View {
     }
 
     /// 自定义区间：`每 [−] N [天/周/月/年] [+]`，直接写草稿的 interval。
+    private var customRecurrenceEditor: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Picker("起算方式", selection: Binding(get: { model.recurrenceBase }, set: model.chooseBase)) {
+                ForEach(RecurrenceBase.allCases, id: \.self) { value in Text(value.title).tag(value) }
+            }
+            if model.recurrenceBase == .selectedDates {
+                HStack {
+                    DatePicker("日期", selection: $selectedRepeatDraftDate, displayedComponents: .date).labelsHidden()
+                    Button("添加") { model.chooseSelectedDates(model.selectedRepeatDates + [selectedRepeatDraftDate]) }
+                }
+                ForEach(model.selectedRepeatDates, id: \.self) { day in
+                    HStack {
+                        Text(day.formatted(.dateTime.month().day().locale(.appDate)))
+                        Spacer()
+                        Button { model.chooseSelectedDates(model.selectedRepeatDates.filter { $0 != day }) } label: {
+                            Image(systemName: "xmark")
+                        }.buttonStyle(.plain).accessibilityLabel("移除重复日期")
+                    }
+                }
+            } else {
+                intervalEditor.padding(.horizontal, -12)
+                if model.frequency == .weekly {
+                    HStack(spacing: 4) {
+                        ForEach([(2,"一"),(3,"二"),(4,"三"),(5,"四"),(6,"五"),(7,"六"),(1,"日")], id: \.0) { value, label in
+                            Button { model.toggleWeekday(value) } label: {
+                                Text(label).frame(maxWidth: .infinity).frame(height: 26)
+                                    .background(model.selectedWeekdays.contains(value) ? WFColors.accentFaint : WFColors.hover,
+                                        in: RoundedRectangle(cornerRadius: 4))
+                                    .foregroundStyle(model.selectedWeekdays.contains(value) ? WFColors.accent : WFColors.text)
+                            }.buttonStyle(.plain).accessibilityLabel("每周" + label)
+                        }
+                    }
+                }
+                if model.frequency == .monthly {
+                    Picker("每月", selection: Binding(get: { model.monthlyOrdinal }, set: model.chooseMonthlyOrdinal)) {
+                        Text("指定日").tag(0)
+                        Text("第一个").tag(1); Text("第二个").tag(2); Text("第三个").tag(3); Text("第四个").tag(4); Text("最后一个").tag(-1)
+                    }
+                    if model.monthlyOrdinal == 0 {
+                        Stepper("每月\(model.monthDay)日", value: Binding(get: { model.monthDay }, set: model.chooseMonthDay), in: 1...31)
+                    } else {
+                        Picker("星期", selection: Binding(get: { model.weekday }, set: model.chooseWeekday)) {
+                            ForEach([(2,"一"),(3,"二"),(4,"三"),(5,"四"),(6,"五"),(7,"六"),(1,"日")], id: \.0) { value, label in
+                                Text("星期" + label).tag(value)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        .font(WFType.control)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+    }
+
     private var intervalEditor: some View {
         HStack(spacing: 10) {
             Text("每")
@@ -948,11 +1019,25 @@ struct TaskDatePopoverV2: View {
 
     /// 重复行：按存储的周/日/月规则渲染（Flutter `scheduleRepeatLabel`）。
     private var repeatRowLabel: String {
-        repeatLabel(model.frequency,
-                    weekday: model.weekday, monthDay: model.monthDay, month: model.month,
-                    lunarName: ChineseWorkCalendar.lunarMonthName(model.lunarMonth, isLeapMonth: model.lunarIsLeapMonth)
-                        + ChineseWorkCalendar.lunarDayName(model.lunarDay),
-                    lunarDayText: ChineseWorkCalendar.lunarDayName(model.lunarDay))
+        if model.frequency == .never { return "重复" }
+        if model.recurrenceBase == .selectedDates { return "自选 \(model.selectedRepeatDates.count) 个日期" }
+        let label: String
+        let weekdayNames = [1: "日", 2: "一", 3: "二", 4: "三", 5: "四", 6: "五", 7: "六"]
+        if model.frequency == .weekly, model.selectedWeekdays.count > 1 {
+            let days = [2, 3, 4, 5, 6, 7, 1].filter { model.selectedWeekdays.contains($0) }
+                .compactMap { weekdayNames[$0] }.joined(separator: "、")
+            label = (model.interval == 1 ? "每周" : "每\(model.interval)周") + days
+        } else if model.frequency == .monthly, model.monthlyOrdinal != 0 {
+            let ordinal = model.monthlyOrdinal == -1 ? "最后一个" : "第\(model.monthlyOrdinal)个"
+            label = "每月" + ordinal + "星期" + (weekdayNames[model.weekday] ?? "一")
+        } else {
+            label = repeatLabel(model.frequency,
+                weekday: model.weekday, monthDay: model.monthDay, month: model.month,
+                lunarName: ChineseWorkCalendar.lunarMonthName(model.lunarMonth, isLeapMonth: model.lunarIsLeapMonth)
+                    + ChineseWorkCalendar.lunarDayName(model.lunarDay),
+                lunarDayText: ChineseWorkCalendar.lunarDayName(model.lunarDay))
+        }
+        return model.recurrenceBase == .completionDate ? label + "（完成日起算）" : label
     }
 
     /// 重复选项行：用锚定日渲染即将生效的规则。
@@ -1191,8 +1276,17 @@ struct TaskDatePopoverV2: View {
         // Read current task here, so an open popover cannot overwrite other edits.
         guard let current = workspace.task(for: taskID) else { onClose(); return }
         let plan = model.commitPlan(for: current)
-        workspace.saveSchedule(plan, to: .task(taskID))
-        onClose()
+        saveConfirmed(plan, current: current)
+    }
+
+    private func saveConfirmed(_ plan: SchedulePlan, current: Task) {
+        if current.recurrence != .never && !deadline {
+            pendingRecurrencePlan = plan
+            showRecurrenceScope = true
+        } else {
+            _ = workspace.saveSchedule(plan, to: .task(taskID))
+            onClose()
+        }
     }
 
     private func clear() {
@@ -1203,8 +1297,7 @@ struct TaskDatePopoverV2: View {
         }
         guard let current = workspace.task(for: taskID) else { onClose(); return }
         let plan = model.clearPlan(for: current)
-        workspace.saveSchedule(plan, to: .task(taskID))
-        onClose()
+        saveConfirmed(plan, current: current)
     }
 
 }

@@ -1,7 +1,7 @@
 import Foundation
 
 /// 四象限的四个分类。顺序即棋盘顺序，数值即归类结果的下标。
-enum MatrixQuadrant: Int, CaseIterable, Identifiable {
+enum MatrixQuadrant: Int, CaseIterable, Identifiable, Codable {
     case doNow = 0
     case schedule = 1
     case delegate = 2
@@ -86,6 +86,7 @@ struct MatrixGroupViewModel: Identifiable, Equatable {
 struct MatrixQuadrantViewModel: Identifiable, Equatable {
     let quadrant: MatrixQuadrant
     let groups: [MatrixGroupViewModel]
+    var configuration: MatrixQuadrantConfiguration?
 
     var id: Int { quadrant.rawValue }
     var taskCount: Int { groups.reduce(0) { $0 + $1.count } }
@@ -118,6 +119,7 @@ enum MatrixProjection {
                         listOrder: [String],
                         includeCompleted: Bool = true,
                         calendar: Calendar = .current,
+                        configuration: MatrixConfiguration = .legacy,
                         hasChildren: (UUID) -> Bool = { _ in false })
         -> [MatrixQuadrantViewModel] {
         var order: [String] = []
@@ -139,8 +141,7 @@ enum MatrixProjection {
                 continue
             }
             if !includeCompleted, task.status == .completed { continue }
-            let quadrant = MatrixQuadrant(
-                rawValue: PlanningProjection.quadrant(task, now: now, calendar: calendar)) ?? .later
+            guard let quadrant = configuration.quadrant(for: task, now: now, calendar: calendar) else { continue }
             if task.status == .completed {
                 completed[quadrant, default: []].append(task)
                 continue
@@ -150,11 +151,15 @@ enum MatrixProjection {
             if seen.insert(listName).inserted { order.append(listName) }
         }
 
-        return MatrixQuadrant.allCases.map { quadrant in
+        return configuration.displayOrder.map { quadrant in
+            let settings = configuration.configuration(for: quadrant)
             let groups = active[quadrant] ?? [:]
             var viewModels: [MatrixGroupViewModel] = []
-            for listName in order {
-                guard let tasks = groups[listName], !tasks.isEmpty else { continue }
+            let visibleOrder = settings.grouping == .list ? order : ["所有任务"]
+            for listName in visibleOrder {
+                let grouped = settings.grouping == .list ? groups[listName] ?? [] : order.flatMap { groups[$0] ?? [] }
+                let tasks = sorted(grouped, settings: settings)
+                guard !tasks.isEmpty else { continue }
                 viewModels.append(MatrixGroupViewModel(
                     id: listGroupID(quadrant, listName),
                     title: listName,
@@ -162,7 +167,7 @@ enum MatrixProjection {
                     completedGroup: false,
                     tasks: tasks.map { row($0, now: now, calendar: calendar, hasChildren: hasChildren) }))
             }
-            let done = completed[quadrant] ?? []
+            let done = sorted(completed[quadrant] ?? [], settings: settings)
             if !done.isEmpty {
                 viewModels.append(MatrixGroupViewModel(
                     id: completedGroupID(quadrant),
@@ -171,8 +176,29 @@ enum MatrixProjection {
                     completedGroup: true,
                     tasks: done.map { row($0, now: now, calendar: calendar, hasChildren: hasChildren) }))
             }
-            return MatrixQuadrantViewModel(quadrant: quadrant, groups: viewModels)
+            return MatrixQuadrantViewModel(quadrant: quadrant, groups: viewModels, configuration: settings)
         }
+    }
+
+    private static func sorted(_ tasks: [Task], settings: MatrixQuadrantConfiguration) -> [Task] {
+        let positions = Dictionary(settings.manualOrder.enumerated().map { ($0.element, $0.offset) }, uniquingKeysWith: min)
+        return tasks.enumerated().sorted { left, right in
+            let lhs = left.element, rhs = right.element
+            switch settings.sort {
+            case .manual:
+                let a = positions[lhs.id] ?? (settings.manualOrder.count + left.offset)
+                let b = positions[rhs.id] ?? (settings.manualOrder.count + right.offset)
+                return a < b
+            case .date: return CalendarProjection.taskOrder(lhs, rhs)
+            case .priority:
+                if lhs.priority != rhs.priority { return lhs.priority.rawValue > rhs.priority.rawValue }
+            case .title:
+                if lhs.title != rhs.title { return lhs.title.localizedStandardCompare(rhs.title) == .orderedAscending }
+            case .created:
+                if lhs.createdAt != rhs.createdAt { return lhs.createdAt < rhs.createdAt }
+            }
+            return left.offset < right.offset
+        }.map(\.element)
     }
 
     /// 空清单名落到收集箱，和列表页一致。

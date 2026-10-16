@@ -35,6 +35,8 @@ struct SavedFilter: Identifiable, Codable, Equatable {
     var name: String
     var listNames: [String] = []
     var tags: [String] = []
+    var listIDs: [UUID]?
+    var tagIDs: [UUID]?
     var priorities: [TaskPriority] = []
     var dateRange: SavedFilterDateRange = .any
     /// 关键词（滴答「普通筛选」的"按关键词做内容筛选"）：**全部包含**才算命中，
@@ -54,7 +56,7 @@ struct SavedFilter: Identifiable, Codable, Equatable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, name, listNames, tags, priorities, dateRange, keywords
+        case id, name, listNames, tags, listIDs, tagIDs, priorities, dateRange, keywords
     }
 
     /// additive Codable：旧 `filters.json` 缺 `keywords` 键时解码为空数组
@@ -65,6 +67,8 @@ struct SavedFilter: Identifiable, Codable, Equatable {
         name = try values.decode(String.self, forKey: .name)
         listNames = try values.decodeIfPresent([String].self, forKey: .listNames) ?? []
         tags = try values.decodeIfPresent([String].self, forKey: .tags) ?? []
+        listIDs = try values.decodeIfPresent([UUID].self, forKey: .listIDs)
+        tagIDs = try values.decodeIfPresent([UUID].self, forKey: .tagIDs)
         priorities = try values.decodeIfPresent([TaskPriority].self, forKey: .priorities) ?? []
         dateRange = try values.decodeIfPresent(SavedFilterDateRange.self, forKey: .dateRange) ?? .any
         keywords = try values.decodeIfPresent([String].self, forKey: .keywords) ?? []
@@ -88,12 +92,12 @@ struct SavedFilter: Identifiable, Codable, Equatable {
 enum FilterEvaluator {
     static func matches(_ task: Task, filter: SavedFilter,
                         now: Date, calendar: Calendar) -> Bool {
-        if !filter.listNames.isEmpty && !filter.listNames.contains(task.list.name) {
-            return false
-        }
-        if !filter.tags.isEmpty && !filter.tags.contains(where: { task.tags.contains($0) }) {
-            return false
-        }
+        if let ids = filter.listIDs, !ids.isEmpty, let taskID = task.listID {
+            if !ids.contains(taskID) { return false }
+        } else if !filter.listNames.isEmpty && !filter.listNames.contains(task.list.name) { return false }
+        if let ids = filter.tagIDs, !ids.isEmpty, let references = task.tagReferences {
+            if !references.contains(where: { ids.contains($0.id) }) { return false }
+        } else if !filter.tags.isEmpty && !filter.tags.contains(where: { task.tags.contains($0) }) { return false }
         if !filter.priorities.isEmpty && !filter.priorities.contains(task.priority) {
             return false
         }

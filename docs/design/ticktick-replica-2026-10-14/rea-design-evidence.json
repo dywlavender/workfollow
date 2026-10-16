@@ -1,0 +1,3620 @@
+{
+  "client_version": "8.0.80",
+  "rea_version": "6.4.0",
+  "branch": "experiment/macos-native",
+  "compiled_ui_archives": [
+    {
+      "source": "/Applications/TickTick.app/Contents/Resources/TTAddTaskBarViewController.nib",
+      "outlets": [
+        "addButton",
+        "dateButton",
+        "inputContainerHeightLC",
+        "listButton",
+        "priorityButton",
+        "textField",
+        "textFieldContainer",
+        "view"
+      ],
+      "actions": [
+        "addButtonClicked:",
+        "dateButtonClicked:",
+        "listButtonClicked:",
+        "priorityButtonClicked:"
+      ],
+      "saved_frame_examples": [
+        {
+          "class": "_TtC8TickTick13TTThemeButton",
+          "saved_geometry": {
+            "NSFrame": "{{520, 16}, {60, 24}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick13TTThemeButton",
+          "saved_geometry": {
+            "NSFrame": "{{20, 16}, {67, 24}}"
+          }
+        },
+        {
+          "class": "NSView",
+          "saved_geometry": {
+            "NSFrame": "{{20, 60}, {560, 38}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick18TTNewTaskTextField",
+          "saved_geometry": {
+            "NSFrame": "{{6, 11}, {548, 16}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick13TTThemeButton",
+          "saved_geometry": {
+            "NSFrame": "{{123, 16}, {389, 24}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick13TTThemeButton",
+          "saved_geometry": {
+            "NSFrame": "{{93, 16}, {24, 24}}"
+          }
+        },
+        {
+          "class": "NSView",
+          "saved_geometry": {
+            "NSFrameSize": "{600, 114}"
+          }
+        }
+      ]
+    },
+    {
+      "source": "/Applications/TickTick.app/Contents/Resources/TTCalendarArrangeCell.nib",
+      "outlets": [
+        "arrowButton",
+        "arrowButtonTrailing",
+        "arrowWidthLC",
+        "dateLabel",
+        "iconImageView",
+        "iconLeadingLC",
+        "iconLeadingToTitleLC",
+        "iconWidthLC",
+        "titleLabel"
+      ],
+      "actions": [
+        "arrowButtonClicked:"
+      ],
+      "saved_frame_examples": [
+        {
+          "class": "_TtC8TickTick21TTCalendarArrangeCell",
+          "saved_geometry": {
+            "NSFrameSize": "{306, 28}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick13TTThemeButton",
+          "saved_geometry": {
+            "NSFrame": "{{288, 7}, {14, 14}}"
+          }
+        }
+      ]
+    },
+    {
+      "source": "/Applications/TickTick.app/Contents/Resources/TTCalendarArrangeHeaderCell.nib",
+      "outlets": [
+        "arrowImageView",
+        "countLabel",
+        "titleLabel"
+      ],
+      "actions": [],
+      "saved_frame_examples": [
+        {
+          "class": "_TtC8TickTick27TTCalendarArrangeHeaderCell",
+          "saved_geometry": {
+            "NSFrameSize": "{188, 34}"
+          }
+        }
+      ]
+    },
+    {
+      "source": "/Applications/TickTick.app/Contents/Resources/TTCalendarArrangeViewController.nib",
+      "outlets": [
+        "closeButton",
+        "emptyHolder",
+        "filterButton",
+        "outlineView",
+        "outlineViewTopLC",
+        "segmentedControl",
+        "titleLabel",
+        "typeButton",
+        "view",
+        "dataSource",
+        "delegate"
+      ],
+      "actions": [
+        "closeButtonClicked:",
+        "filterButtonClicked:",
+        "arrangeTypeButtonClicked:"
+      ],
+      "saved_frame_examples": [
+        {
+          "class": "_TtC8TickTick13TTThemeButton",
+          "saved_geometry": {
+            "NSFrame": "{{211, 506}, {24, 24}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick25TTTaskListEmptyHolderView",
+          "saved_geometry": {
+            "NSFrameSize": "{245, 493}"
+          }
+        },
+        {
+          "class": "NSView",
+          "saved_geometry": {
+            "NSFrame": "{{48, 202}, {150, 150}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick13TTThemeButton",
+          "saved_geometry": {
+            "NSFrame": "{{16, 419}, {213, 32}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick28TTCalendarArrangeOutlineView",
+          "saved_geometry": {
+            "NSFrameSize": "{213, 407}"
+          }
+        },
+        {
+          "class": "_NSCornerView",
+          "saved_geometry": {
+            "NSFrameSize": "{17, 28}"
+          }
+        },
+        {
+          "class": "NSScrollView",
+          "saved_geometry": {
+            "NSFrame": "{{0, 8}, {245, 407}}"
+          }
+        },
+        {
+          "class": "NSClipView",
+          "saved_geometry": {
+            "NSFrameSize": "{245, 407}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick23TTSlideSegmentedControl",
+          "saved_geometry": {
+            "NSFrame": "{{16, 463}, {213, 30}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick13TTThemeButton",
+          "saved_geometry": {
+            "NSFrame": "{{183, 506}, {24, 24}}"
+          }
+        },
+        {
+          "class": "NSView",
+          "saved_geometry": {
+            "NSFrameSize": "{245, 534}"
+          }
+        },
+        {
+          "class": "NSView",
+          "saved_geometry": {
+            "NSFrame": "{{0, 502}, {245, 32}}"
+          }
+        }
+      ]
+    },
+    {
+      "source": "/Applications/TickTick.app/Contents/Resources/TTCalendarDisplayOptionsViewController.nib",
+      "outlets": [
+        "checkitemLabel",
+        "checkitemSwitch",
+        "colorArrowImageView",
+        "colorLabel",
+        "completedLabel",
+        "completedSwitch",
+        "countdownLabel",
+        "countdownRowView",
+        "countdownSwitch",
+        "courseLabel",
+        "courseRowView",
+        "courseSwitch",
+        "cyclesLabel",
+        "cyclesSwitch",
+        "focusHelpImageView",
+        "focusLabel",
+        "focusSwitch",
+        "habitLabel",
+        "habitSwitch",
+        "styleArrowImageView",
+        "styleLabel",
+        "timeZoneHelpImageView",
+        "timeZoneLabel",
+        "timeZoneRowHeightLC",
+        "timeZoneSettingsButton",
+        "timeZoneSwitch",
+        "view",
+        "weekendLabel",
+        "weekendRowView",
+        "weekendSwitch"
+      ],
+      "actions": [
+        "switchButtonClicked:",
+        "timeZoneSettingsButtonClicked:"
+      ],
+      "saved_frame_examples": [
+        {
+          "class": "NSStackView",
+          "saved_geometry": {
+            "NSFrameSize": "{516, 496}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick17TTSettingsBoxView",
+          "saved_geometry": {
+            "NSFrame": "{{0, 380}, {516, 116}}"
+          }
+        },
+        {
+          "class": "NSStackView",
+          "saved_geometry": {
+            "NSFrameSize": "{516, 116}"
+          }
+        },
+        {
+          "class": "NSView",
+          "saved_geometry": {
+            "NSFrame": "{{0, 76}, {516, 36}}"
+          }
+        },
+        {
+          "class": "NSView",
+          "saved_geometry": {
+            "NSFrame": "{{0, 40}, {516, 36}}"
+          }
+        },
+        {
+          "class": "NSView",
+          "saved_geometry": {
+            "NSFrame": "{{0, 4}, {516, 36}}"
+          }
+        },
+        {
+          "class": "NSStackViewContainer",
+          "saved_geometry": {
+            "NSFrameSize": "{0, 0}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick17TTSettingsBoxView",
+          "saved_geometry": {
+            "NSFrame": "{{0, 248}, {516, 116}}"
+          }
+        },
+        {
+          "class": "NSStackView",
+          "saved_geometry": {
+            "NSFrameSize": "{516, 116}"
+          }
+        },
+        {
+          "class": "NSView",
+          "saved_geometry": {
+            "NSFrame": "{{0, 76}, {516, 36}}"
+          }
+        },
+        {
+          "class": "NSView",
+          "saved_geometry": {
+            "NSFrame": "{{0, 40}, {516, 36}}"
+          }
+        },
+        {
+          "class": "NSView",
+          "saved_geometry": {
+            "NSFrame": "{{0, 4}, {516, 36}}"
+          }
+        }
+      ]
+    },
+    {
+      "source": "/Applications/TickTick.app/Contents/Resources/TTCalendarDisplayOptionsWindowController.nib",
+      "outlets": [
+        "scrollView",
+        "titleLabel",
+        "window"
+      ],
+      "actions": [],
+      "saved_frame_examples": [
+        {
+          "class": "NSView",
+          "saved_geometry": {
+            "NSFrameSize": "{440, 554}"
+          }
+        },
+        {
+          "class": "NSScrollView",
+          "saved_geometry": {
+            "NSFrame": "{{28, 28}, {384, 464}}"
+          }
+        },
+        {
+          "class": "NSClipView",
+          "saved_geometry": {
+            "NSFrameSize": "{384, 464}"
+          }
+        },
+        {
+          "class": "NSView",
+          "saved_geometry": {
+            "NSFrameSize": "{369, 449}"
+          }
+        }
+      ]
+    },
+    {
+      "source": "/Applications/TickTick.app/Contents/Resources/TTCalendarTimeZoneSettingsViewController.nib",
+      "outlets": [
+        "addButton",
+        "cancelButton",
+        "saveButton",
+        "scrollViewBottomLC",
+        "scrollViewHeightLC",
+        "tableView",
+        "titleLabel",
+        "view",
+        "descContainer",
+        "descDivider",
+        "descTextField",
+        "dragIndicator",
+        "emojiButton",
+        "removeButton",
+        "timezoneButton"
+      ],
+      "actions": [
+        "addButtonClicked:",
+        "cancelButtonClicked:",
+        "saveButtonClicked:",
+        "emojiButtonClicked:",
+        "deleteButtonClicked:",
+        "timezoneButtonClicked:"
+      ],
+      "saved_frame_examples": [
+        {
+          "class": "_TtC8TickTick13TTThemeButton",
+          "saved_geometry": {
+            "NSFrame": "{{30, 96}, {116, 18}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick13TTThemeButton",
+          "saved_geometry": {
+            "NSFrame": "{{280, 16}, {76, 30}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick13TTThemeButton",
+          "saved_geometry": {
+            "NSFrame": "{{372, 16}, {76, 30}}"
+          }
+        },
+        {
+          "class": "NSScrollView",
+          "saved_geometry": {
+            "NSFrame": "{{0, 122}, {472, 135}}"
+          }
+        },
+        {
+          "class": "NSClipView",
+          "saved_geometry": {
+            "NSFrameSize": "{472, 135}"
+          }
+        },
+        {
+          "class": "NSTableView",
+          "saved_geometry": {
+            "NSFrameSize": "{472, 135}"
+          }
+        },
+        {
+          "class": "_NSCornerView",
+          "saved_geometry": {
+            "NSFrameSize": "{17, 28}"
+          }
+        },
+        {
+          "class": "NSView",
+          "saved_geometry": {
+            "NSFrameSize": "{472, 315}"
+          }
+        },
+        {
+          "class": "NSView",
+          "saved_geometry": {
+            "NSFrame": "{{0, 259}, {472, 56}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick30TTCalendarTimeZoneSettingsCell",
+          "saved_geometry": {
+            "NSFrameSize": "{472, 44}"
+          }
+        },
+        {
+          "class": "NSView",
+          "saved_geometry": {
+            "NSFrame": "{{298, 6}, {150, 32}}"
+          }
+        },
+        {
+          "class": "NSView",
+          "saved_geometry": {
+            "NSFrame": "{{32, 0}, {1, 32}}"
+          }
+        }
+      ]
+    },
+    {
+      "source": "/Applications/TickTick.app/Contents/Resources/TTCalendarTypePickerVC.nib",
+      "outlets": [
+        "tableView",
+        "view",
+        "adjustView",
+        "checkImageView",
+        "minusButton",
+        "plusButton",
+        "subtitleLabel",
+        "titleLabel",
+        "valueLabel"
+      ],
+      "actions": [
+        "plusButtonClicked:",
+        "minusButtonClicked:"
+      ],
+      "saved_frame_examples": [
+        {
+          "class": "NSStackView",
+          "saved_geometry": {
+            "NSFrame": "{{89, 9}, {87, 16}}"
+          }
+        },
+        {
+          "class": "NSView",
+          "saved_geometry": {
+            "NSFrameSize": "{56, 16}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick13TTThemeButton",
+          "saved_geometry": {
+            "NSFrame": "{{40, 0}, {16, 16}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick13TTThemeButton",
+          "saved_geometry": {
+            "NSFrameSize": "{16, 16}"
+          }
+        },
+        {
+          "class": "NSStackViewContainer",
+          "saved_geometry": {
+            "NSFrameSize": "{0, 0}"
+          }
+        },
+        {
+          "class": "NSTableView",
+          "saved_geometry": {
+            "NSFrameSize": "{192, 247}"
+          }
+        },
+        {
+          "class": "_NSCornerView",
+          "saved_geometry": {
+            "NSFrameSize": "{17, 28}"
+          }
+        },
+        {
+          "class": "NSView",
+          "saved_geometry": {
+            "NSFrameSize": "{192, 255}"
+          }
+        },
+        {
+          "class": "NSScrollView",
+          "saved_geometry": {
+            "NSFrame": "{{0, 4}, {192, 247}}"
+          }
+        },
+        {
+          "class": "NSClipView",
+          "saved_geometry": {
+            "NSFrameSize": "{192, 247}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick24TTCalendarTypePickerCell",
+          "saved_geometry": {
+            "NSFrameSize": "{192, 34}"
+          }
+        }
+      ]
+    },
+    {
+      "source": "/Applications/TickTick.app/Contents/Resources/TTCalendarViewController.nib",
+      "outlets": [
+        "addButton",
+        "addButtonTrailling",
+        "addButtonWithLC",
+        "calendarContainer",
+        "calendarContainerWidth",
+        "calendarTopGridLine",
+        "calendarViewContainer",
+        "leftSidebarContainer",
+        "leftSidebarLeadingLC",
+        "leftSidebarWidthLC",
+        "monthTitleArrowImageView",
+        "monthTitleBorderView",
+        "monthTitleLabel",
+        "moreButton",
+        "navContainer",
+        "navContainerInCompact",
+        "navDivider1",
+        "navDivider2",
+        "nextButton",
+        "nextButtonInCompact",
+        "prevButton",
+        "prevButtonInCompact",
+        "rightSidebarContainer",
+        "rightSidebarTraillingLC",
+        "rightSidebarWidthLC",
+        "sidebarButton",
+        "theSplitView",
+        "todayButton",
+        "todayButtonInCompact",
+        "typeButton",
+        "typeButton2CompactNavTraillingLC",
+        "typeButton2NavTraillingLC",
+        "typeButtonHeightLC",
+        "view"
+      ],
+      "actions": [
+        "sidebarButtonClicked:"
+      ],
+      "saved_frame_examples": [
+        {
+          "class": "_TtC8TickTick13TTThemeButton",
+          "saved_geometry": {
+            "NSFrame": "{{792, 9}, {30, 30}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick13TTThemeButton",
+          "saved_geometry": {
+            "NSFrame": "{{838, 9}, {43, 30}}"
+          }
+        },
+        {
+          "class": "NSView",
+          "saved_geometry": {
+            "NSFrame": "{{124, 0}, {1062, 581}}"
+          }
+        },
+        {
+          "class": "NSView",
+          "saved_geometry": {
+            "NSFrame": "{{0, 525}, {1062, 48}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick13TTThemeButton",
+          "saved_geometry": {
+            "NSFrame": "{{15, 10}, {28, 28}}"
+          }
+        },
+        {
+          "class": "NSView",
+          "saved_geometry": {
+            "NSFrame": "{{897, 9}, {111, 30}}"
+          }
+        },
+        {
+          "class": "NSView",
+          "saved_geometry": {
+            "NSFrame": "{{34, 1}, {1, 28}}"
+          }
+        },
+        {
+          "class": "NSView",
+          "saved_geometry": {
+            "NSFrame": "{{76, 1}, {1, 28}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick13TTThemeButton",
+          "saved_geometry": {
+            "NSFrameSize": "{34, 30}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick13TTThemeButton",
+          "saved_geometry": {
+            "NSFrame": "{{35, 0}, {41, 30}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick13TTThemeButton",
+          "saved_geometry": {
+            "NSFrame": "{{77, 0}, {34, 30}}"
+          }
+        },
+        {
+          "class": "NSView",
+          "saved_geometry": {
+            "NSFrame": "{{937, 10}, {76, 28}}"
+          }
+        }
+      ]
+    },
+    {
+      "source": "/Applications/TickTick.app/Contents/Resources/TTDatePickerCustomRepeatVC.nib",
+      "outlets": [
+        "FreqPopButton",
+        "cancelButton",
+        "everyLabel",
+        "freqContainerHeight",
+        "freqContainerTop",
+        "freqContainerView",
+        "freqcyTextContainerView",
+        "freqcyTextField",
+        "monthOrdinalPopButton",
+        "monthRepeatTypeContainerHeight",
+        "monthRepeatTypeContainerTop",
+        "monthRepeatTypeContainerView",
+        "monthRepeatTypeSegmentedControl",
+        "okButton",
+        "okButtonTopLC",
+        "onTheOrdinalPopButton",
+        "onTheOrdinalPopButtonHeight",
+        "onTheOrdinalPopButtonTop",
+        "onTheWeekdayPopButton",
+        "proIconView",
+        "skipHolidayContainer",
+        "skipHolidaySwitchButton",
+        "skipHolidayTopLC",
+        "skipWeekendContainer",
+        "skipWeekendSwitchButton",
+        "skipWeekendTopLC",
+        "titleLabel",
+        "typeButtonTopLC",
+        "typePopButton",
+        "view",
+        "workDayOrdinalPopButton",
+        "workDayOrdinalPopButtonHeight",
+        "workDayOrdinalPopButtonTop",
+        "delegate"
+      ],
+      "actions": [
+        "freqPopButtonClicked:",
+        "cancelButtonClicked:",
+        "monthOrdinalPopButtonClicked:",
+        "okButtonClicked:",
+        "onTheOrdinalPopButtonClicked:",
+        "onTheWeekdayPopButtonClicked:",
+        "workDayOrdinalPopButtonClicked:",
+        "repeatTypeClicked:"
+      ],
+      "saved_frame_examples": [
+        {
+          "class": "_TtC8TickTick13TTThemeButton",
+          "saved_geometry": {
+            "NSFrame": "{{112, 252}, {88, 24}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick13TTThemeButton",
+          "saved_geometry": {
+            "NSFrame": "{{16, 12}, {88, 24}}"
+          }
+        },
+        {
+          "class": "NSView",
+          "saved_geometry": {
+            "NSFrame": "{{10, 184}, {196, 24}}"
+          }
+        },
+        {
+          "class": "NSView",
+          "saved_geometry": {
+            "NSFrame": "{{16, 216}, {184, 26}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick23TTSlideSegmentedControl",
+          "saved_geometry": {
+            "NSFrameSize": "{184, 26}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick14TTBorderedView",
+          "saved_geometry": {
+            "NSFrame": "{{16, 252}, {88, 24}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick11TTTextField",
+          "saved_geometry": {
+            "NSFrame": "{{40, 4}, {42, 16}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick13TTThemeButton",
+          "saved_geometry": {
+            "NSFrame": "{{16, 188}, {184, 24}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick13TTThemeButton",
+          "saved_geometry": {
+            "NSFrame": "{{112, 12}, {88, 24}}"
+          }
+        },
+        {
+          "class": "NSView",
+          "saved_geometry": {
+            "NSFrame": "{{16, 56}, {184, 24}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick13TTThemeButton",
+          "saved_geometry": {
+            "NSFrameSize": "{45, 24}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick13TTThemeButton",
+          "saved_geometry": {
+            "NSFrame": "{{16, 152}, {88, 24}}"
+          }
+        }
+      ]
+    },
+    {
+      "source": "/Applications/TickTick.app/Contents/Resources/TTDatePickerViewController.nib",
+      "outlets": [
+        "buttonsContainer",
+        "cancelButton",
+        "dateView",
+        "okButton",
+        "view",
+        "calendarView",
+        "chooseMonthTitleView",
+        "chooseMonthView",
+        "titleView",
+        "nextButton",
+        "prevButton",
+        "titleButton",
+        "todayButton",
+        "centerButton",
+        "leftButton",
+        "rightButton",
+        "yearLabel"
+      ],
+      "actions": [
+        "leftButtonAction:",
+        "todayButtonAction:",
+        "rightButtonAction:",
+        "cancelButtonClicked:",
+        "okButtonClicked:",
+        "titleButtonAction:",
+        "centerButtonAction:"
+      ],
+      "saved_frame_examples": [
+        {
+          "class": "NSStackView",
+          "saved_geometry": {
+            "NSFrame": "{{124, 0}, {72, 24}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick13TTThemeButton",
+          "saved_geometry": {
+            "NSFrameSize": "{24, 24}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick13TTThemeButton",
+          "saved_geometry": {
+            "NSFrame": "{{24, 0}, {24, 24}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick13TTThemeButton",
+          "saved_geometry": {
+            "NSFrame": "{{48, 0}, {24, 24}}"
+          }
+        },
+        {
+          "class": "NSStackViewContainer",
+          "saved_geometry": {
+            "NSFrameSize": "{0, 0}"
+          }
+        },
+        {
+          "class": "NSView",
+          "saved_geometry": {
+            "NSFrame": "{{10, 10}, {196, 28}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick13TTThemeButton",
+          "saved_geometry": {
+            "NSFrameSize": "{93, 28}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick13TTThemeButton",
+          "saved_geometry": {
+            "NSFrame": "{{103, 0}, {93, 28}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick26TTDueDatePickerSetDateView",
+          "saved_geometry": {
+            "NSFrame": "{{10, 46}, {196, 236}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick25TTDueDateSetDateTitleView",
+          "saved_geometry": {
+            "NSFrame": "{{0, 212}, {196, 24}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick13TTThemeButton",
+          "saved_geometry": {
+            "NSFrame": "{{6, 0}, {31, 24}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick28TTDueDateSetDateCalendarView",
+          "saved_geometry": {
+            "NSFrame": "{{0, 2}, {196, 210}}"
+          }
+        }
+      ]
+    },
+    {
+      "source": "/Applications/TickTick.app/Contents/Resources/TTDueDatePickerCustomReminderController.nib",
+      "outlets": [
+        "allDayContainer",
+        "allday_daysBorderView",
+        "allday_daysLabel",
+        "allday_daysOrWeeksButton",
+        "allday_daysTextField",
+        "allday_timeBorderView",
+        "allday_timeLabel",
+        "allday_timePickView",
+        "buttonsTopLC",
+        "cancelButton",
+        "confirmButton",
+        "descLabel",
+        "timeOffsetLabel",
+        "timingContainer",
+        "timingErrorLabel",
+        "timingErrorTopLC",
+        "timing_numBorderView",
+        "timing_numTextField",
+        "timing_unitButton",
+        "view",
+        "timePicker"
+      ],
+      "actions": [
+        "datePickerValueChanged:",
+        "daysOrWeekButtonClicked:",
+        "cancelButtonClicked:",
+        "confirmButtonClicked:"
+      ],
+      "saved_frame_examples": [
+        {
+          "class": "NSStackView",
+          "saved_geometry": {
+            "NSFrame": "{{12, 92}, {204, 138}}"
+          }
+        },
+        {
+          "class": "NSView",
+          "saved_geometry": {
+            "NSFrame": "{{0, 98}, {204, 40}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick14TTBorderedView",
+          "saved_geometry": {
+            "NSFrame": "{{0, 16}, {98, 24}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick18TTIntegerTextField",
+          "saved_geometry": {
+            "NSFrame": "{{4, 4}, {90, 16}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick13TTPopUpButton",
+          "saved_geometry": {
+            "NSFrame": "{{106, 16}, {98, 24}}"
+          }
+        },
+        {
+          "class": "NSView",
+          "saved_geometry": {
+            "NSFrameSize": "{204, 88}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick14TTBorderedView",
+          "saved_geometry": {
+            "NSFrame": "{{106, 32}, {98, 24}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick18TTIntegerTextField",
+          "saved_geometry": {
+            "NSFrame": "{{0, 4}, {98, 16}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick14TTBorderedView",
+          "saved_geometry": {
+            "NSFrame": "{{106, 0}, {98, 24}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick13TTSetTimeView",
+          "saved_geometry": {
+            "NSFrameSize": "{98, 24}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick13TTThemeButton",
+          "saved_geometry": {
+            "NSFrame": "{{0, 64}, {204, 24}}"
+          }
+        },
+        {
+          "class": "NSStackViewContainer",
+          "saved_geometry": {
+            "NSFrameSize": "{0, 0}"
+          }
+        }
+      ]
+    },
+    {
+      "source": "/Applications/TickTick.app/Contents/Resources/TTDueDatePickerSetDateView.nib",
+      "outlets": [
+        "nextButton",
+        "prevButton",
+        "titleButton",
+        "todayButton",
+        "centerButton",
+        "leftButton",
+        "rightButton",
+        "yearLabel",
+        "calendarView",
+        "chooseMonthTitleView",
+        "chooseMonthView",
+        "titleView"
+      ],
+      "actions": [
+        "rightButtonAction:",
+        "leftButtonAction:",
+        "titleButtonAction:",
+        "todayButtonAction:",
+        "centerButtonAction:"
+      ],
+      "saved_frame_examples": [
+        {
+          "class": "_TtC8TickTick25TTDueDateSetDateTitleView",
+          "saved_geometry": {
+            "NSFrame": "{{0, 212}, {196, 24}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick13TTThemeButton",
+          "saved_geometry": {
+            "NSFrame": "{{172, 0}, {24, 24}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick13TTThemeButton",
+          "saved_geometry": {
+            "NSFrame": "{{124, 0}, {24, 24}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick13TTThemeButton",
+          "saved_geometry": {
+            "NSFrameSize": "{124, 24}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick13TTThemeButton",
+          "saved_geometry": {
+            "NSFrame": "{{148, 0}, {24, 24}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick29TTDueDateChooseMonthTitleView",
+          "saved_geometry": {
+            "NSFrame": "{{0, 212}, {196, 24}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick13TTThemeButton",
+          "saved_geometry": {
+            "NSFrame": "{{172, 0}, {24, 24}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick13TTThemeButton",
+          "saved_geometry": {
+            "NSFrame": "{{148, 0}, {24, 24}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick13TTThemeButton",
+          "saved_geometry": {
+            "NSFrame": "{{124, 0}, {24, 24}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick26TTDueDatePickerSetDateView",
+          "saved_geometry": {
+            "NSFrameSize": "{196, 236}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick28TTDueDateSetDateCalendarView",
+          "saved_geometry": {
+            "NSFrame": "{{0, 2}, {196, 210}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick24TTDueDatechooseMonthView",
+          "saved_geometry": {
+            "NSFrame": "{{0, 92}, {196, 116}}"
+          }
+        }
+      ]
+    },
+    {
+      "source": "/Applications/TickTick.app/Contents/Resources/TTDueDatePickerSetReminderController.nib",
+      "outlets": [
+        "cancelButton",
+        "confirmButton",
+        "tableView",
+        "view",
+        "dataSource",
+        "delegate",
+        "imageView",
+        "textField"
+      ],
+      "actions": [
+        "cancelAction:",
+        "confirmAction:"
+      ],
+      "saved_frame_examples": [
+        {
+          "class": "_TtC8TickTick13TTThemeButton",
+          "saved_geometry": {
+            "NSFrame": "{{18, 12}, {75, 24}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick13TTThemeButton",
+          "saved_geometry": {
+            "NSFrame": "{{101, 12}, {75, 24}}"
+          }
+        },
+        {
+          "class": "NSTableView",
+          "saved_geometry": {
+            "NSFrameSize": "{194, 160}"
+          }
+        },
+        {
+          "class": "_NSCornerView",
+          "saved_geometry": {
+            "NSFrameSize": "{17, 28}"
+          }
+        },
+        {
+          "class": "NSView",
+          "saved_geometry": {
+            "NSFrameSize": "{194, 226}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick12TTScrollView",
+          "saved_geometry": {
+            "NSFrame": "{{0, 46}, {194, 160}}"
+          }
+        },
+        {
+          "class": "NSClipView",
+          "saved_geometry": {
+            "NSFrameSize": "{194, 160}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick24TTDueDateSetReminderCell",
+          "saved_geometry": {
+            "NSFrameSize": "{194, 28}"
+          }
+        },
+        {
+          "class": "NSTextField",
+          "saved_geometry": {
+            "NSFrame": "{{16, 7}, {152, 15}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick25TTTaskMenuDividerCellView",
+          "saved_geometry": {
+            "NSFrame": "{{0, 28}, {194, 17}}"
+          }
+        }
+      ]
+    },
+    {
+      "source": "/Applications/TickTick.app/Contents/Resources/TTEisenhowerMatrixQuadrantEditViewController.nib",
+      "outlets": [
+        "cancelButton",
+        "contentView",
+        "emojiButton",
+        "nameBar",
+        "nameBorderedView",
+        "nameInvalidationLabel",
+        "nameInvalidationLabelHeightLC",
+        "proIconView",
+        "resetButton",
+        "sampleButton",
+        "saveButton",
+        "titleBar",
+        "titleLabel",
+        "view"
+      ],
+      "actions": [
+        "cancelButtonClicked:",
+        "emojiButtonClicked:",
+        "resetButtonClicked:",
+        "sampleButtonClicked:",
+        "saveButtonClicked:"
+      ],
+      "saved_frame_examples": [
+        {
+          "class": "_TtC8TickTick13TTThemeButton",
+          "saved_geometry": {
+            "NSFrame": "{{296, 16}, {90, 26}}"
+          }
+        },
+        {
+          "class": "NSView",
+          "saved_geometry": {
+            "NSFrameSize": "{516, 322}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick13TTThemeButton",
+          "saved_geometry": {
+            "NSFrame": "{{31, 24}, {24, 24}}"
+          }
+        },
+        {
+          "class": "NSView",
+          "saved_geometry": {
+            "NSFrame": "{{0, 322}, {516, 62}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick23TTBorderedTextFieldView",
+          "saved_geometry": {
+            "NSFrame": "{{24, 18}, {468, 36}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick13TTThemeButton",
+          "saved_geometry": {
+            "NSFrame": "{{24, 21}, {39, 16}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick13TTThemeButton",
+          "saved_geometry": {
+            "NSFrame": "{{193, 21}, {93, 16}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick13TTThemeButton",
+          "saved_geometry": {
+            "NSFrame": "{{402, 16}, {90, 26}}"
+          }
+        },
+        {
+          "class": "NSView",
+          "saved_geometry": {
+            "NSFrame": "{{0, 384}, {516, 56}}"
+          }
+        },
+        {
+          "class": "NSView",
+          "saved_geometry": {
+            "NSFrameSize": "{516, 440}"
+          }
+        }
+      ]
+    },
+    {
+      "source": "/Applications/TickTick.app/Contents/Resources/TTEisenhowerMatrixQuadrantViewController.nib",
+      "outlets": [
+        "addButton",
+        "emojiIconLabel",
+        "emptyHolderLabel",
+        "iconImageView",
+        "moreButton",
+        "outlineView",
+        "titleBar",
+        "titleLabel",
+        "view",
+        "dataSource",
+        "delegate",
+        "quadrantView",
+        "headerView"
+      ],
+      "actions": [
+        "addButtonClicked:",
+        "moreButtonClicked:"
+      ],
+      "saved_frame_examples": [
+        {
+          "class": "_TtC8TickTick13TTThemeButton",
+          "saved_geometry": {
+            "NSFrame": "{{470, 8}, {24, 24}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick13TTThemeButton",
+          "saved_geometry": {
+            "NSFrame": "{{500, 8}, {24, 24}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick27TTMatrixQuadrantOutlineView",
+          "saved_geometry": {
+            "NSFrameSize": "{533, 381}"
+          }
+        },
+        {
+          "class": "_NSCornerView",
+          "saved_geometry": {
+            "NSFrameSize": "{17, 28}"
+          }
+        },
+        {
+          "class": "NSView",
+          "saved_geometry": {
+            "NSFrame": "{{0, 385}, {533, 40}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick30TTEisenhowerMatrixQuadrantView",
+          "saved_geometry": {
+            "NSFrameSize": "{533, 425}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick18TTColumnScrollView",
+          "saved_geometry": {
+            "NSFrameSize": "{533, 385}"
+          }
+        },
+        {
+          "class": "NSClipView",
+          "saved_geometry": {
+            "NSFrameSize": "{533, 385}"
+          }
+        }
+      ]
+    },
+    {
+      "source": "/Applications/TickTick.app/Contents/Resources/TTEisenhowerMatrixViewController.nib",
+      "outlets": [
+        "containerView",
+        "moreButton",
+        "titleLabel",
+        "view"
+      ],
+      "actions": [
+        "moreButtonClicked:"
+      ],
+      "saved_frame_examples": [
+        {
+          "class": "_TtC8TickTick31TTEisenhowerMatrixContainerView",
+          "saved_geometry": {
+            "NSFrame": "{{20, 20}, {714, 478}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick13TTThemeButton",
+          "saved_geometry": {
+            "NSFrame": "{{711, 510}, {28, 28}}"
+          }
+        },
+        {
+          "class": "NSView",
+          "saved_geometry": {
+            "NSFrameSize": "{754, 556}"
+          }
+        },
+        {
+          "class": "NSView",
+          "saved_geometry": {
+            "NSFrame": "{{20, 506}, {60, 36}}"
+          }
+        }
+      ]
+    },
+    {
+      "source": "/Applications/TickTick.app/Contents/Resources/TTFocusAssociationSearchVC.nib",
+      "outlets": [
+        "clearButton",
+        "outlineView",
+        "returnButton",
+        "searchTextFieldView",
+        "view"
+      ],
+      "actions": [
+        "clearButtonClicked:",
+        "returnButtonClicked:"
+      ],
+      "saved_frame_examples": [
+        {
+          "class": "_TtC8TickTick13TTThemeButton",
+          "saved_geometry": {
+            "NSFrame": "{{264, 383}, {14, 14}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick18TTPlainOutlineView",
+          "saved_geometry": {
+            "NSFrameSize": "{302, 360}"
+          }
+        },
+        {
+          "class": "_NSCornerView",
+          "saved_geometry": {
+            "NSFrameSize": "{17, 28}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick13TTThemeButton",
+          "saved_geometry": {
+            "NSFrame": "{{22, 381}, {18, 18}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick23TTBorderedTextFieldView",
+          "saved_geometry": {
+            "NSFrame": "{{16, 374}, {270, 32}}"
+          }
+        },
+        {
+          "class": "NSView",
+          "saved_geometry": {
+            "NSFrameSize": "{302, 420}"
+          }
+        },
+        {
+          "class": "NSScrollView",
+          "saved_geometry": {
+            "NSFrame": "{{0, 6}, {302, 360}}"
+          }
+        },
+        {
+          "class": "NSClipView",
+          "saved_geometry": {
+            "NSFrameSize": "{302, 360}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick29TTFocusAssociationSectionCell",
+          "saved_geometry": {
+            "NSFrameSize": "{302, 24}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick26TTFocusAssociationItemCell",
+          "saved_geometry": {
+            "NSFrame": "{{0, 24}, {302, 24}}"
+          }
+        }
+      ]
+    },
+    {
+      "source": "/Applications/TickTick.app/Contents/Resources/TTFocusAssociationViewController.nib",
+      "outlets": [
+        "emptyHolder",
+        "listArrowImageView",
+        "listButton",
+        "listContainer",
+        "listTopLC",
+        "outlineView",
+        "searchButton",
+        "segmentTopLC",
+        "segmentView",
+        "view"
+      ],
+      "actions": [
+        "listButtonClicked:",
+        "searchButtonClicked:"
+      ],
+      "saved_frame_examples": [
+        {
+          "class": "_TtC8TickTick25TTTaskListEmptyHolderView",
+          "saved_geometry": {
+            "NSFrame": "{{0, 26}, {302, 325}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick13TTThemeButton",
+          "saved_geometry": {
+            "NSFrameSize": "{91, 24}"
+          }
+        },
+        {
+          "class": "NSView",
+          "saved_geometry": {
+            "NSFrame": "{{16, 318}, {107, 24}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick13TTThemeButton",
+          "saved_geometry": {
+            "NSFrame": "{{16, 350}, {270, 32}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick18TTPlainOutlineView",
+          "saved_geometry": {
+            "NSFrameSize": "{302, 312}"
+          }
+        },
+        {
+          "class": "_NSCornerView",
+          "saved_geometry": {
+            "NSFrameSize": "{17, 28}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick22TTFlatSegmentedControl",
+          "saved_geometry": {
+            "NSFrame": "{{61, 396}, {180, 28}}"
+          }
+        },
+        {
+          "class": "NSView",
+          "saved_geometry": {
+            "NSFrameSize": "{302, 440}"
+          }
+        },
+        {
+          "class": "NSScrollView",
+          "saved_geometry": {
+            "NSFrame": "{{0, 6}, {302, 312}}"
+          }
+        },
+        {
+          "class": "NSClipView",
+          "saved_geometry": {
+            "NSFrameSize": "{302, 312}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick26TTFocusAssociationItemCell",
+          "saved_geometry": {
+            "NSFrameSize": "{302, 24}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick29TTFocusAssociationSectionCell",
+          "saved_geometry": {
+            "NSFrame": "{{0, 24}, {302, 24}}"
+          }
+        }
+      ]
+    },
+    {
+      "source": "/Applications/TickTick.app/Contents/Resources/TTFocusBatchFilterDurationViewController.nib",
+      "outlets": [
+        "cancelButton",
+        "dashLine",
+        "endTextField",
+        "messageLabel",
+        "okButton",
+        "startTextField",
+        "view"
+      ],
+      "actions": [
+        "cancelButtonClicked:",
+        "okButtonClicked:"
+      ],
+      "saved_frame_examples": [
+        {
+          "class": "_TtC8TickTick13TTThemeButton",
+          "saved_geometry": {
+            "NSFrame": "{{16, 16}, {77, 24}}"
+          }
+        },
+        {
+          "class": "NSView",
+          "saved_geometry": {
+            "NSFrame": "{{94, 68}, {8, 1}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick11TTTextField",
+          "saved_geometry": {
+            "NSFrame": "{{-2, 4}, {76, 16}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick13TTThemeButton",
+          "saved_geometry": {
+            "NSFrame": "{{103, 16}, {76, 24}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick11TTTextField",
+          "saved_geometry": {
+            "NSFrame": "{{-2, 4}, {76, 16}}"
+          }
+        },
+        {
+          "class": "NSView",
+          "saved_geometry": {
+            "NSFrameSize": "{195, 134}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick14TTBorderedView",
+          "saved_geometry": {
+            "NSFrame": "{{16, 56}, {72, 24}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick14TTBorderedView",
+          "saved_geometry": {
+            "NSFrame": "{{107, 56}, {72, 24}}"
+          }
+        }
+      ]
+    },
+    {
+      "source": "/Applications/TickTick.app/Contents/Resources/TTFocusBatchManagementViewController.nib",
+      "outlets": [
+        "buttonScrollView",
+        "buttonScrollViewWidthLC",
+        "clearFilterButton",
+        "dateButton",
+        "deleteButton",
+        "durationButton",
+        "emptyHolder",
+        "outlineView",
+        "scrollGrandientView",
+        "selectButton",
+        "statusButton",
+        "titleLabel",
+        "view",
+        "dataSource",
+        "delegate"
+      ],
+      "actions": [
+        "dateButtonClicked:",
+        "statusButtonClicked:",
+        "durationButtonClicked:",
+        "clearFilterButtonClicked:",
+        "deleteButtonClicked:",
+        "selectButtonClicked:"
+      ],
+      "saved_frame_examples": [
+        {
+          "class": "_TtC8TickTick24HorizontalOnlyScrollView",
+          "saved_geometry": {
+            "NSFrame": "{{24, 338}, {408, 26}}"
+          }
+        },
+        {
+          "class": "NSClipView",
+          "saved_geometry": {
+            "NSFrameSize": "{408, 26}"
+          }
+        },
+        {
+          "class": "NSView",
+          "saved_geometry": {
+            "NSFrameSize": "{408, 26}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick13TTThemeButton",
+          "saved_geometry": {
+            "NSFrameSize": "{33, 26}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick13TTThemeButton",
+          "saved_geometry": {
+            "NSFrame": "{{82, 0}, {33, 26}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick13TTThemeButton",
+          "saved_geometry": {
+            "NSFrame": "{{41, 0}, {33, 26}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick13TTThemeButton",
+          "saved_geometry": {
+            "NSFrame": "{{442, 342}, {18, 18}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick13TTThemeButton",
+          "saved_geometry": {
+            "NSFrame": "{{412, 19}, {44, 16}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick25TTTaskListEmptyHolderView",
+          "saved_geometry": {
+            "NSFrame": "{{24, 54}, {452, 274}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick18TTPlainOutlineView",
+          "saved_geometry": {
+            "NSFrameSize": "{452, 274}"
+          }
+        },
+        {
+          "class": "_NSCornerView",
+          "saved_geometry": {
+            "NSFrameSize": "{17, 28}"
+          }
+        },
+        {
+          "class": "NSView",
+          "saved_geometry": {
+            "NSFrame": "{{416, 338}, {16, 26}}"
+          }
+        }
+      ]
+    },
+    {
+      "source": "/Applications/TickTick.app/Contents/Resources/TTFocusDetailContainerViewController.nib",
+      "outlets": [
+        "view"
+      ],
+      "actions": [],
+      "saved_frame_examples": [
+        {
+          "class": "NSView",
+          "saved_geometry": {
+            "NSFrameSize": "{480, 272}"
+          }
+        }
+      ]
+    },
+    {
+      "source": "/Applications/TickTick.app/Contents/Resources/TTFocusDetailRecordsDateCell.nib",
+      "outlets": [
+        "checkboxButton",
+        "dateLabel",
+        "leadingLC"
+      ],
+      "actions": [
+        "checkboxClicked:"
+      ],
+      "saved_frame_examples": [
+        {
+          "class": "_TtC8TickTick28TTFocusDetailRecordsDateCell",
+          "saved_geometry": {
+            "NSFrameSize": "{445, 57}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick13TTThemeButton",
+          "saved_geometry": {
+            "NSFrame": "{{1, -39}, {128, 128}}"
+          }
+        }
+      ]
+    },
+    {
+      "source": "/Applications/TickTick.app/Contents/Resources/TTFocusDetailRecordsFocusCell.nib",
+      "outlets": [
+        "checkboxButton",
+        "durationLabel",
+        "iconBackgroundView",
+        "iconContainerWidthLC",
+        "iconImageView",
+        "iconLeadingLC",
+        "iconWidthLC",
+        "leadingLC",
+        "stackView",
+        "timeLabel"
+      ],
+      "actions": [
+        "checkboxClicked:"
+      ],
+      "saved_frame_examples": [
+        {
+          "class": "_TtC8TickTick29TTFocusDetailRecordsFocusCell",
+          "saved_geometry": {
+            "NSFrameSize": "{445, 92}"
+          }
+        },
+        {
+          "class": "NSView",
+          "saved_geometry": {
+            "NSFrame": "{{20, 64}, {24, 24}}"
+          }
+        },
+        {
+          "class": "NSStackView",
+          "saved_geometry": {
+            "NSFrame": "{{60, 56}, {365, 0}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick13TTThemeButton",
+          "saved_geometry": {
+            "NSFrame": "{{1, 64}, {24, 24}}"
+          }
+        }
+      ]
+    },
+    {
+      "source": "/Applications/TickTick.app/Contents/Resources/TTFocusDetailRecordsLoadMoreCell.nib",
+      "outlets": [
+        "textLabel"
+      ],
+      "actions": [],
+      "saved_frame_examples": [
+        {
+          "class": "_TtC8TickTick32TTFocusDetailRecordsLoadMoreCell",
+          "saved_geometry": {
+            "NSFrameSize": "{445, 36}"
+          }
+        }
+      ]
+    },
+    {
+      "source": "/Applications/TickTick.app/Contents/Resources/TTFocusDetailRecordsViewController.nib",
+      "outlets": [
+        "emptyView",
+        "outlineView",
+        "view",
+        "dataSource",
+        "delegate",
+        "conentLabel",
+        "titleLabel",
+        "returnButton",
+        "itemView1",
+        "itemView2",
+        "itemView3",
+        "itemView4",
+        "addButton",
+        "moreButton"
+      ],
+      "actions": [
+        "addButtonClicked:",
+        "moreButtonClicked:",
+        "returnButtonClicked:"
+      ],
+      "saved_frame_examples": [
+        {
+          "class": "NSStackView",
+          "saved_geometry": {
+            "NSFrame": "{{370, 8}, {56, 24}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick13TTThemeButton",
+          "saved_geometry": {
+            "NSFrameSize": "{24, 24}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick13TTThemeButton",
+          "saved_geometry": {
+            "NSFrame": "{{32, 0}, {24, 24}}"
+          }
+        },
+        {
+          "class": "NSStackViewContainer",
+          "saved_geometry": {
+            "NSFrameSize": "{0, 0}"
+          }
+        },
+        {
+          "class": "NSStackView",
+          "saved_geometry": {
+            "NSFrame": "{{20, 8}, {77, 24}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick13TTThemeButton",
+          "saved_geometry": {
+            "NSFrameSize": "{24, 24}"
+          }
+        },
+        {
+          "class": "NSStackViewContainer",
+          "saved_geometry": {
+            "NSFrameSize": "{0, 0}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick25TTTaskListEmptyHolderView",
+          "saved_geometry": {
+            "NSFrameSize": "{446, 372}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick18TTPlainOutlineView",
+          "saved_geometry": {
+            "NSFrameSize": "{446, 672}"
+          }
+        },
+        {
+          "class": "_NSCornerView",
+          "saved_geometry": {
+            "NSFrameSize": "{17, 28}"
+          }
+        },
+        {
+          "class": "NSView",
+          "saved_geometry": {
+            "NSFrameSize": "{445, 697}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick12TTScrollView",
+          "saved_geometry": {
+            "NSFrameSize": "{446, 672}"
+          }
+        }
+      ]
+    },
+    {
+      "source": "/Applications/TickTick.app/Contents/Resources/TTFocusDetailTimelineItemView.nib",
+      "outlets": [
+        "iconView",
+        "timeLabel",
+        "titleLabel"
+      ],
+      "actions": [],
+      "saved_frame_examples": [
+        {
+          "class": "_TtC8TickTick29TTFocusDetailTimelineItemView",
+          "saved_geometry": {
+            "NSFrameSize": "{198, 212}"
+          }
+        }
+      ]
+    },
+    {
+      "source": "/Applications/TickTick.app/Contents/Resources/TTFocusDetailViewController.nib",
+      "outlets": [
+        "associateButton",
+        "container",
+        "focusTimelineView",
+        "iconImageView",
+        "noteContentView",
+        "noteCountLabel",
+        "noteHeightLC",
+        "noteLabel",
+        "noteTextView",
+        "timelineHeightLC",
+        "titleButton",
+        "view"
+      ],
+      "actions": [
+        "associateButtonClicked:",
+        "titleButtonClicked:"
+      ],
+      "saved_frame_examples": [
+        {
+          "class": "_TtC8TickTick13TTThemeButton",
+          "saved_geometry": {
+            "NSFrame": "{{335, 652}, {28, 28}}"
+          }
+        },
+        {
+          "class": "NSView",
+          "saved_geometry": {
+            "NSFrameSize": "{383, 718}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick25TTFocusDetailTimelineView",
+          "saved_geometry": {
+            "NSFrame": "{{0, 388}, {363, 216}}"
+          }
+        },
+        {
+          "class": "NSView",
+          "saved_geometry": {
+            "NSFrame": "{{20, 183}, {343, 124}}"
+          }
+        },
+        {
+          "class": "NSScrollView",
+          "saved_geometry": {
+            "NSFrame": "{{12, 27}, {319, 85}}"
+          }
+        },
+        {
+          "class": "NSClipView",
+          "saved_geometry": {
+            "NSFrameSize": "{319, 85}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick18TTFocusingTextView",
+          "saved_geometry": {
+            "NSFrameSize": "{319, 85}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick13TTThemeButton",
+          "saved_geometry": {
+            "NSFrame": "{{55, 658}, {45, 16}}"
+          }
+        },
+        {
+          "class": "NSView",
+          "saved_geometry": {
+            "NSFrameSize": "{383, 718}"
+          }
+        }
+      ]
+    },
+    {
+      "source": "/Applications/TickTick.app/Contents/Resources/TTFocusDurationEditViewController.nib",
+      "outlets": [
+        "cancelButton",
+        "durationLabel",
+        "saveButton",
+        "selectButton",
+        "unitLabel",
+        "view"
+      ],
+      "actions": [
+        "cancelButtonClicked:",
+        "saveButtonClicked:",
+        "selectButtonClicked:"
+      ],
+      "saved_frame_examples": [
+        {
+          "class": "_TtC8TickTick13TTThemeButton",
+          "saved_geometry": {
+            "NSFrame": "{{20, 16}, {86, 30}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick13TTThemeButton",
+          "saved_geometry": {
+            "NSFrame": "{{118, 16}, {86, 30}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick13TTThemeButton",
+          "saved_geometry": {
+            "NSFrame": "{{20, 102}, {147, 24}}"
+          }
+        },
+        {
+          "class": "NSView",
+          "saved_geometry": {
+            "NSFrameSize": "{224, 146}"
+          }
+        }
+      ]
+    },
+    {
+      "source": "/Applications/TickTick.app/Contents/Resources/TTFocusEditTypeViewController.nib",
+      "outlets": [
+        "cancelButton",
+        "confirmButton",
+        "hrsBorderView",
+        "hrsLabel",
+        "hrsTextField",
+        "minsBorderView",
+        "minsLabel",
+        "minsTextField",
+        "pomoBorderView",
+        "pomoStepper",
+        "pomoTextField",
+        "pomoUnitLabel",
+        "typeSegmentControl",
+        "view"
+      ],
+      "actions": [
+        "cancelButtonClicked:",
+        "confirmButtonClicked:",
+        "pomoGoalStepperValueChanged:"
+      ],
+      "saved_frame_examples": [
+        {
+          "class": "_TtC8TickTick13TTThemeButton",
+          "saved_geometry": {
+            "NSFrame": "{{12, 13}, {78, 24}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick13TTThemeButton",
+          "saved_geometry": {
+            "NSFrame": "{{102, 13}, {78, 24}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick14TTBorderedView",
+          "saved_geometry": {
+            "NSFrame": "{{12, 53}, {41, 24}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick18TTIntegerTextField",
+          "saved_geometry": {
+            "NSFrame": "{{0, 4}, {41, 16}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick14TTBorderedView",
+          "saved_geometry": {
+            "NSFrame": "{{105, 53}, {40, 24}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick18TTIntegerTextField",
+          "saved_geometry": {
+            "NSFrame": "{{0, 4}, {40, 16}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick14TTBorderedView",
+          "saved_geometry": {
+            "NSFrame": "{{12, 53}, {52, 24}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick18TTIntegerTextField",
+          "saved_geometry": {
+            "NSFrame": "{{-2, 4}, {56, 16}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick18TTSegmentedControl",
+          "saved_geometry": {
+            "NSFrame": "{{22, 89}, {148, 24}}"
+          }
+        },
+        {
+          "class": "NSView",
+          "saved_geometry": {
+            "NSFrameSize": "{192, 125}"
+          }
+        }
+      ]
+    },
+    {
+      "source": "/Applications/TickTick.app/Contents/Resources/TTFocusEstimateViewController.nib",
+      "outlets": [
+        "cancelButton",
+        "confirmButton",
+        "hrsBorderView",
+        "hrsLabel",
+        "hrsTextField",
+        "minsBorderView",
+        "minsLabel",
+        "minsTextField",
+        "pomoGoalBorderView",
+        "pomoGoalStepper",
+        "pomoGoalTextField",
+        "pomoGoalUnitLabel",
+        "typePopUpButton",
+        "view"
+      ],
+      "actions": [
+        "cancelButtonClicked:",
+        "confirmButtonClicked:",
+        "pomoGoalStepperValueChanged:"
+      ],
+      "saved_frame_examples": [
+        {
+          "class": "_TtC8TickTick13TTThemeButton",
+          "saved_geometry": {
+            "NSFrame": "{{12, 13}, {78, 24}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick13TTThemeButton",
+          "saved_geometry": {
+            "NSFrame": "{{102, 13}, {78, 24}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick14TTBorderedView",
+          "saved_geometry": {
+            "NSFrame": "{{12, 56}, {43, 24}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick18TTIntegerTextField",
+          "saved_geometry": {
+            "NSFrame": "{{0, 4}, {43, 16}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick14TTBorderedView",
+          "saved_geometry": {
+            "NSFrame": "{{102, 56}, {43, 24}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick18TTIntegerTextField",
+          "saved_geometry": {
+            "NSFrame": "{{0, 4}, {43, 16}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick14TTBorderedView",
+          "saved_geometry": {
+            "NSFrame": "{{12, 56}, {52, 24}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick18TTIntegerTextField",
+          "saved_geometry": {
+            "NSFrame": "{{-2, 4}, {56, 16}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick13TTPopUpButton",
+          "saved_geometry": {
+            "NSFrame": "{{12, 88}, {168, 24}}"
+          }
+        },
+        {
+          "class": "NSView",
+          "saved_geometry": {
+            "NSFrameSize": "{192, 125}"
+          }
+        }
+      ]
+    },
+    {
+      "source": "/Applications/TickTick.app/Contents/Resources/TTFocusImmersiveViewController.nib",
+      "outlets": [
+        "buttonsTopLC",
+        "centerActionButton",
+        "countDownLabel",
+        "exitButton",
+        "harvestClickView",
+        "harvestContainer",
+        "harvestInfoLabel",
+        "harvestLabel",
+        "leftActionButton",
+        "rightActionButton",
+        "subtitleLabel",
+        "view"
+      ],
+      "actions": [
+        "actionButtonClicked:",
+        "exitButtonClicked:"
+      ],
+      "saved_frame_examples": [
+        {
+          "class": "_TtC8TickTick13TTThemeButton",
+          "saved_geometry": {
+            "NSFrame": "{{462, 180}, {150, 44}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick13TTThemeButton",
+          "saved_geometry": {
+            "NSFrame": "{{990, 60}, {24, 24}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick27TTFocusPomoHarvestClickView",
+          "saved_geometry": {
+            "NSFrame": "{{428, 146}, {133, 132}}"
+          }
+        },
+        {
+          "class": "NSView",
+          "saved_geometry": {
+            "NSFrame": "{{37, 230}, {1000, 326}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick13TTThemeButton",
+          "saved_geometry": {
+            "NSFrame": "{{381, 180}, {150, 44}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick13TTThemeButton",
+          "saved_geometry": {
+            "NSFrame": "{{543, 180}, {150, 44}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick19TTPomoImmersiveView",
+          "saved_geometry": {
+            "NSFrameSize": "{1074, 625}"
+          }
+        }
+      ]
+    },
+    {
+      "source": "/Applications/TickTick.app/Contents/Resources/TTFocusListContainerViewController.nib",
+      "outlets": [
+        "view"
+      ],
+      "actions": [],
+      "saved_frame_examples": [
+        {
+          "class": "NSView",
+          "saved_geometry": {
+            "NSFrameSize": "{480, 272}"
+          }
+        }
+      ]
+    },
+    {
+      "source": "/Applications/TickTick.app/Contents/Resources/TTFocusRecordDetailCell.nib",
+      "outlets": [
+        "associatedButton",
+        "durationIcon",
+        "durationLabel",
+        "timeRangeIcon",
+        "timeRangeLabel",
+        "titleButton",
+        "titleImageView"
+      ],
+      "actions": [
+        "itemTitleButtonClicked:",
+        "associatedButtonClicked:"
+      ],
+      "saved_frame_examples": [
+        {
+          "class": "_TtC8TickTick23TTFocusRecordDetailCell",
+          "saved_geometry": {
+            "NSFrameSize": "{440, 108}"
+          }
+        },
+        {
+          "class": "NSView",
+          "saved_geometry": {
+            "NSFrame": "{{0, 60}, {440, 48}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick13TTThemeButton",
+          "saved_geometry": {
+            "NSFrame": "{{48, 15}, {52, 19}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick13TTThemeButton",
+          "saved_geometry": {
+            "NSFrame": "{{399, 12}, {24, 24}}"
+          }
+        },
+        {
+          "class": "NSView",
+          "saved_geometry": {
+            "NSFrame": "{{0, 30}, {440, 30}}"
+          }
+        },
+        {
+          "class": "NSView",
+          "saved_geometry": {
+            "NSFrameSize": "{440, 30}"
+          }
+        }
+      ]
+    },
+    {
+      "source": "/Applications/TickTick.app/Contents/Resources/TTFocusRecordDetailNoteCell.nib",
+      "outlets": [
+        "contentView",
+        "countLabel",
+        "textView"
+      ],
+      "actions": [],
+      "saved_frame_examples": [
+        {
+          "class": "_TtC8TickTick27TTFocusRecordDetailNoteCell",
+          "saved_geometry": {
+            "NSFrameSize": "{291, 247}"
+          }
+        },
+        {
+          "class": "NSView",
+          "saved_geometry": {
+            "NSFrame": "{{24, 21}, {243, 211}}"
+          }
+        },
+        {
+          "class": "NSScrollView",
+          "saved_geometry": {
+            "NSFrame": "{{12, 27}, {219, 172}}"
+          }
+        },
+        {
+          "class": "NSClipView",
+          "saved_geometry": {
+            "NSFrameSize": "{219, 172}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick18TTFocusingTextView",
+          "saved_geometry": {
+            "NSFrameSize": "{219, 172}"
+          }
+        }
+      ]
+    },
+    {
+      "source": "/Applications/TickTick.app/Contents/Resources/TTFocusRecordDetailViewController.nib",
+      "outlets": [
+        "bottomDivider",
+        "deleteButton",
+        "tableView",
+        "view"
+      ],
+      "actions": [
+        "deleteButtonClicked:"
+      ],
+      "saved_frame_examples": [
+        {
+          "class": "NSView",
+          "saved_geometry": {
+            "NSFrame": "{{0, 43}, {400, 1}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick13TTThemeButton",
+          "saved_geometry": {
+            "NSFrame": "{{359, 10}, {24, 24}}"
+          }
+        },
+        {
+          "class": "NSTableView",
+          "saved_geometry": {
+            "NSFrameSize": "{400, 222}"
+          }
+        },
+        {
+          "class": "_NSCornerView",
+          "saved_geometry": {
+            "NSFrameSize": "{17, 28}"
+          }
+        },
+        {
+          "class": "NSView",
+          "saved_geometry": {
+            "NSFrameSize": "{400, 272}"
+          }
+        },
+        {
+          "class": "NSView",
+          "saved_geometry": {
+            "NSFrameSize": "{400, 44}"
+          }
+        },
+        {
+          "class": "NSScrollView",
+          "saved_geometry": {
+            "NSFrame": "{{0, 44}, {400, 222}}"
+          }
+        },
+        {
+          "class": "NSClipView",
+          "saved_geometry": {
+            "NSFrameSize": "{400, 222}"
+          }
+        }
+      ]
+    },
+    {
+      "source": "/Applications/TickTick.app/Contents/Resources/TTFocusRecordEditViewController.nib",
+      "outlets": [
+        "cancelButton",
+        "endDateButton",
+        "endDateLabel",
+        "noteContentView",
+        "noteCountLabel",
+        "noteLabel",
+        "noteTextView",
+        "saveButton",
+        "startDateButton",
+        "startDateLabel",
+        "taskButton",
+        "taskLabel",
+        "titleBar",
+        "titleLabel",
+        "typeButton",
+        "typeLabel",
+        "view"
+      ],
+      "actions": [
+        "cancelButtonClicked:",
+        "endDateButtonClicked:",
+        "saveButtonClicked:",
+        "startDateButtonClicked:",
+        "taskButtonClicked:",
+        "typeButtonClicked:"
+      ],
+      "saved_frame_examples": [
+        {
+          "class": "_TtC8TickTick13TTThemeButton",
+          "saved_geometry": {
+            "NSFrame": "{{208, 16}, {100, 30}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick13TTThemeButton",
+          "saved_geometry": {
+            "NSFrame": "{{106, 262}, {314, 32}}"
+          }
+        },
+        {
+          "class": "NSView",
+          "saved_geometry": {
+            "NSFrame": "{{106, 82}, {314, 124}}"
+          }
+        },
+        {
+          "class": "NSScrollView",
+          "saved_geometry": {
+            "NSFrame": "{{12, 27}, {290, 85}}"
+          }
+        },
+        {
+          "class": "NSClipView",
+          "saved_geometry": {
+            "NSFrameSize": "{290, 85}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick18TTFocusingTextView",
+          "saved_geometry": {
+            "NSFrameSize": "{290, 85}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick13TTThemeButton",
+          "saved_geometry": {
+            "NSFrame": "{{320, 16}, {100, 30}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick13TTThemeButton",
+          "saved_geometry": {
+            "NSFrame": "{{106, 306}, {314, 32}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick13TTThemeButton",
+          "saved_geometry": {
+            "NSFrame": "{{106, 350}, {314, 32}}"
+          }
+        },
+        {
+          "class": "NSView",
+          "saved_geometry": {
+            "NSFrame": "{{0, 390}, {440, 56}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick13TTThemeButton",
+          "saved_geometry": {
+            "NSFrame": "{{106, 218}, {314, 32}}"
+          }
+        },
+        {
+          "class": "NSView",
+          "saved_geometry": {
+            "NSFrameSize": "{440, 446}"
+          }
+        }
+      ]
+    },
+    {
+      "source": "/Applications/TickTick.app/Contents/Resources/TTFocusSettingsPopWindowController.nib",
+      "outlets": [
+        "scrollView",
+        "titleLabel",
+        "window",
+        "delegate"
+      ],
+      "actions": [],
+      "saved_frame_examples": [
+        {
+          "class": "NSView",
+          "saved_geometry": {
+            "NSFrameSize": "{472, 420}"
+          }
+        },
+        {
+          "class": "NSScrollView",
+          "saved_geometry": {
+            "NSFrame": "{{28, 28}, {416, 330}}"
+          }
+        },
+        {
+          "class": "NSClipView",
+          "saved_geometry": {
+            "NSFrameSize": "{416, 330}"
+          }
+        },
+        {
+          "class": "NSView",
+          "saved_geometry": {
+            "NSFrameSize": "{401, 315}"
+          }
+        }
+      ]
+    },
+    {
+      "source": "/Applications/TickTick.app/Contents/Resources/TTFocusViewController.nib",
+      "outlets": [
+        "actionButton1",
+        "actionButton2",
+        "actionButton3",
+        "addTimerButton",
+        "buttonsWidthLC",
+        "closeButton",
+        "countDownToButtonsLC",
+        "countDownToTitleLC",
+        "countDownView",
+        "countDownViewWidthLC",
+        "durationAdjustContainer",
+        "harvestClickView",
+        "harvestContainer",
+        "harvestInfoLabel",
+        "harvestLabel",
+        "modeButtonView",
+        "moreButton",
+        "ringsButton",
+        "taskArrowButton",
+        "taskTitleButton",
+        "titleLabel",
+        "view",
+        "durationLabel",
+        "minusButton",
+        "plusButton"
+      ],
+      "actions": [
+        "actionButtonClicked:",
+        "addTimerButtonClicked:",
+        "closeButtonClicked:",
+        "associateTitleClicked:",
+        "minusButtonClicked:",
+        "plusButtonClicked:",
+        "moreButtonClicked:",
+        "ringsButtonClicked:",
+        "associateArrowClicked:"
+      ],
+      "saved_frame_examples": [
+        {
+          "class": "NSStackView",
+          "saved_geometry": {
+            "NSFrame": "{{147, 47}, {140, 176}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick13TTThemeButton",
+          "saved_geometry": {
+            "NSFrame": "{{0, 128}, {140, 48}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick13TTThemeButton",
+          "saved_geometry": {
+            "NSFrame": "{{0, 64}, {140, 48}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick13TTThemeButton",
+          "saved_geometry": {
+            "NSFrameSize": "{140, 48}"
+          }
+        },
+        {
+          "class": "NSStackViewContainer",
+          "saved_geometry": {
+            "NSFrameSize": "{0, 0}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick13TTThemeButton",
+          "saved_geometry": {
+            "NSFrame": "{{323, 4}, {28, 28}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick13TTThemeButton",
+          "saved_geometry": {
+            "NSFrame": "{{20, 4}, {28, 28}}"
+          }
+        },
+        {
+          "class": "_TtC9AppestKit19APFocusProgressView",
+          "saved_geometry": {
+            "NSFrame": "{{87, 271}, {260, 260}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick13TTThemeButton",
+          "saved_geometry": {
+            "NSFrame": "{{191, 579}, {41, 24}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick25TTFocusDurationAdjustView",
+          "saved_geometry": {
+            "NSFrame": "{{87, 271}, {260, 260}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick13TTThemeButton",
+          "saved_geometry": {
+            "NSFrame": "{{32, 118}, {24, 24}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick13TTThemeButton",
+          "saved_geometry": {
+            "NSFrame": "{{204, 118}, {24, 24}}"
+          }
+        }
+      ]
+    },
+    {
+      "source": "/Applications/TickTick.app/Contents/Resources/TTMatrixQuadrantTaskCell.nib",
+      "outlets": [
+        "assigneeAvatarLeading",
+        "assigneeButton",
+        "attachmentIcon",
+        "attachmentIconLeading",
+        "checkboxButton",
+        "checkboxLeadingLC",
+        "commentIcon",
+        "commentIconLeading",
+        "contentIcon",
+        "contentIconLeading",
+        "dateLabel",
+        "dateLabelLeading",
+        "listNameLeading",
+        "listNameView",
+        "progressIcon",
+        "progressIconLeading",
+        "reminderIcon",
+        "reminderIconLeading",
+        "repeatIcon",
+        "repeatIconLeading",
+        "subtaskIcon",
+        "subtaskIconLeading",
+        "tagsView",
+        "tagsViewLeading",
+        "titleTextField",
+        "titleTextFieldLeading",
+        "triangleImageView"
+      ],
+      "actions": [
+        "checkButtonClicked:",
+        "assigneeButtonClicked:"
+      ],
+      "saved_frame_examples": [
+        {
+          "class": "_TtC8TickTick24TTMatrixQuadrantTaskCell",
+          "saved_geometry": {
+            "NSFrameSize": "{618, 75}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick8TTButton",
+          "saved_geometry": {
+            "NSFrame": "{{32, 29}, {17, 17}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick23TTTaskListCellTextField",
+          "saved_geometry": {
+            "NSFrame": "{{53, 30}, {224, 17}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick17TTToolTipNSButton",
+          "saved_geometry": {
+            "NSFrame": "{{580, 29}, {18, 18}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick14TTListNameView",
+          "saved_geometry": {
+            "NSFrame": "{{385, 28}, {40, 20}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick18TTTaskListTagsView",
+          "saved_geometry": {
+            "NSFrame": "{{281, 29}, {100, 18}}"
+          }
+        }
+      ]
+    },
+    {
+      "source": "/Applications/TickTick.app/Contents/Resources/TTPomoPreferenceViewController.nib",
+      "outlets": [
+        "autoBreakSwitchButton",
+        "autoBreakSwitchLabel",
+        "autoFocusCycleBottomLC",
+        "autoFocusCycleLabel",
+        "autoFocusCycleTextField",
+        "autoFocusCycleUnitLabel",
+        "autoOptionsLabel",
+        "autoPomoSwitchButton",
+        "autoPomoSwitchLabel",
+        "focusSyncDetailLabel",
+        "focusSyncLabel",
+        "focusSyncSwitchButton",
+        "longBreakDurationLabel",
+        "longBreakDurationTextField",
+        "longBreakDurationUnitLabel",
+        "longBreakIntervalLabel",
+        "longBreakIntervalTextField",
+        "longBreakIntervalUnitLabel",
+        "pomoDurationLabel",
+        "pomoDurationTextField",
+        "pomoDurationUnitLabel",
+        "shortBreakDurationLabel",
+        "shortBreakDurationTextField",
+        "shortBreakDurationUnitLabel",
+        "timerOptionLabel",
+        "view"
+      ],
+      "actions": [
+        "autoBreakSwitchButtonClicked:",
+        "autoPomoSwitchButtonClicked:",
+        "focusSyncSwitchButtonClicked:"
+      ],
+      "saved_frame_examples": [
+        {
+          "class": "_TtC8TickTick14TTBorderedView",
+          "saved_geometry": {
+            "NSFrame": "{{397, 14}, {87, 20}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick18TTIntegerTextField",
+          "saved_geometry": {
+            "NSFrame": "{{2, 2}, {83, 16}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick14TTBorderedView",
+          "saved_geometry": {
+            "NSFrame": "{{397, 134}, {70, 20}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick18TTIntegerTextField",
+          "saved_geometry": {
+            "NSFrame": "{{2, 2}, {66, 16}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick14TTBorderedView",
+          "saved_geometry": {
+            "NSFrame": "{{397, 54}, {70, 20}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick18TTIntegerTextField",
+          "saved_geometry": {
+            "NSFrame": "{{2, 2}, {66, 16}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick14TTBorderedView",
+          "saved_geometry": {
+            "NSFrame": "{{414, 14}, {70, 20}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick18TTIntegerTextField",
+          "saved_geometry": {
+            "NSFrame": "{{2, 2}, {66, 16}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick14TTBorderedView",
+          "saved_geometry": {
+            "NSFrame": "{{397, 94}, {70, 20}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick18TTIntegerTextField",
+          "saved_geometry": {
+            "NSFrame": "{{2, 2}, {66, 16}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick17TTSettingsBoxView",
+          "saved_geometry": {
+            "NSFrame": "{{0, 96}, {516, 128}}"
+          }
+        },
+        {
+          "class": "NSView",
+          "saved_geometry": {
+            "NSFrameSize": "{516, 579}"
+          }
+        }
+      ]
+    },
+    {
+      "source": "/Applications/TickTick.app/Contents/Resources/TTPomoStatisticsViewController.nib",
+      "outlets": [
+        "view"
+      ],
+      "actions": [],
+      "saved_frame_examples": [
+        {
+          "class": "NSView",
+          "saved_geometry": {
+            "NSFrameSize": "{700, 500}"
+          }
+        }
+      ]
+    },
+    {
+      "source": "/Applications/TickTick.app/Contents/Resources/TTRepeatChangeAlertViewController.nib",
+      "outlets": [
+        "allNotCompletedButton",
+        "cancelButton",
+        "descriptionLabel",
+        "lastButtonTopLC",
+        "okButton",
+        "onlyThisButton",
+        "secondButtonTopLC",
+        "thisAndFutureButton",
+        "titleLabel",
+        "view"
+      ],
+      "actions": [
+        "buttonClicked:",
+        "cancelButtonClicked:",
+        "okButtonClicked:"
+      ],
+      "saved_frame_examples": [
+        {
+          "class": "_TtC8TickTick13TTThemeButton",
+          "saved_geometry": {
+            "NSFrame": "{{24, 70}, {47, 17}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick13TTThemeButton",
+          "saved_geometry": {
+            "NSFrame": "{{178, 20}, {100, 32}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick13TTThemeButton",
+          "saved_geometry": {
+            "NSFrame": "{{24, 95}, {47, 17}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick13TTThemeButton",
+          "saved_geometry": {
+            "NSFrame": "{{290, 20}, {100, 32}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick13TTThemeButton",
+          "saved_geometry": {
+            "NSFrame": "{{24, 120}, {47, 17}}"
+          }
+        },
+        {
+          "class": "NSView",
+          "saved_geometry": {
+            "NSFrameSize": "{410, 229}"
+          }
+        }
+      ]
+    },
+    {
+      "source": "/Applications/TickTick.app/Contents/Resources/TTTaskDetailBottomActionView.nib",
+      "outlets": [
+        "commentButton",
+        "commentButtonLeading",
+        "deleteButton",
+        "deleteButtonLeading",
+        "deleteForeverButton",
+        "deleteForeverButtonLeading",
+        "mdEditButton",
+        "mdEditButtonLeading",
+        "mergeButton",
+        "mergeButtonLeading",
+        "moreButton",
+        "moreButtonLeading",
+        "projectButton",
+        "tagButton",
+        "tagButtonLeading"
+      ],
+      "actions": [
+        "moveToProjectButtonClicked:",
+        "tagButtonClicked:",
+        "commentButtonClicked:",
+        "deleteTaskButtonClicked:",
+        "moreButtonClicked:",
+        "mergeButtonClicked:",
+        "mdEditButtonClicked:",
+        "deleteForeverButtonClicked:"
+      ],
+      "saved_frame_examples": [
+        {
+          "class": "_TtC8TickTick28TTTaskDetailBottomActionView",
+          "saved_geometry": {
+            "NSFrameSize": "{480, 40}"
+          }
+        },
+        {
+          "class": "NSView",
+          "saved_geometry": {
+            "NSFrameSize": "{480, 40}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick13TTThemeButton",
+          "saved_geometry": {
+            "NSFrame": "{{17, 8}, {63, 24}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick13TTThemeButton",
+          "saved_geometry": {
+            "NSFrame": "{{311, 8}, {24, 24}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick13TTThemeButton",
+          "saved_geometry": {
+            "NSFrame": "{{343, 8}, {24, 24}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick13TTThemeButton",
+          "saved_geometry": {
+            "NSFrame": "{{375, 8}, {24, 24}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick13TTThemeButton",
+          "saved_geometry": {
+            "NSFrame": "{{439, 8}, {24, 24}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick13TTThemeButton",
+          "saved_geometry": {
+            "NSFrame": "{{279, 8}, {24, 24}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick13TTThemeButton",
+          "saved_geometry": {
+            "NSFrame": "{{247, 8}, {24, 24}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick13TTThemeButton",
+          "saved_geometry": {
+            "NSFrame": "{{407, 8}, {24, 24}}"
+          }
+        }
+      ]
+    },
+    {
+      "source": "/Applications/TickTick.app/Contents/Resources/TTTaskDetailBottomView.nib",
+      "outlets": [
+        "subContainer1",
+        "subContainer2",
+        "subContainer3",
+        "subContainer4",
+        "subContainerHeightConstraint1",
+        "subContainerHeightConstraint2",
+        "subContainerHeightConstraint3",
+        "subContainerHeightConstraint4"
+      ],
+      "actions": [],
+      "saved_frame_examples": [
+        {
+          "class": "_TtC8TickTick22TTTaskDetailBottomView",
+          "saved_geometry": {
+            "NSFrameSize": "{480, 272}"
+          }
+        },
+        {
+          "class": "NSView",
+          "saved_geometry": {
+            "NSFrameSize": "{480, 50}"
+          }
+        },
+        {
+          "class": "NSView",
+          "saved_geometry": {
+            "NSFrame": "{{0, 50}, {480, 50}}"
+          }
+        },
+        {
+          "class": "NSView",
+          "saved_geometry": {
+            "NSFrame": "{{0, 100}, {480, 50}}"
+          }
+        },
+        {
+          "class": "NSView",
+          "saved_geometry": {
+            "NSFrame": "{{0, 150}, {480, 50}}"
+          }
+        }
+      ]
+    },
+    {
+      "source": "/Applications/TickTick.app/Contents/Resources/TTTaskDetailFocusSummaryCell.nib",
+      "outlets": [],
+      "actions": [],
+      "saved_frame_examples": [
+        {
+          "class": "_TtC8TickTick28TTTaskDetailFocusSummaryCell",
+          "saved_geometry": {
+            "NSFrameSize": "{461, 32}"
+          }
+        }
+      ]
+    },
+    {
+      "source": "/Applications/TickTick.app/Contents/Resources/TTTaskDetailTitleCell.nib",
+      "outlets": [
+        "checkboxButton",
+        "kindButton"
+      ],
+      "actions": [
+        "kindButtonClicked:",
+        "checkboxButtonClicked:"
+      ],
+      "saved_frame_examples": [
+        {
+          "class": "_TtC8TickTick21TTTaskDetailTitleCell",
+          "saved_geometry": {
+            "NSFrameSize": "{362, 70}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick13TTThemeButton",
+          "saved_geometry": {
+            "NSFrame": "{{321, 35}, {24, 24}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick13TTThemeButton",
+          "saved_geometry": {
+            "NSFrame": "{{12, 49}, {16, 16}}"
+          }
+        }
+      ]
+    },
+    {
+      "source": "/Applications/TickTick.app/Contents/Resources/TTTaskDetailTopView.nib",
+      "outlets": [
+        "assigneeAvatarButton",
+        "assigneeIconButton",
+        "assigneeLeadingLC",
+        "checkButton",
+        "checkboxLeadingLC",
+        "checkboxTopLC",
+        "dateButton",
+        "iconDivider",
+        "noteInfoButton",
+        "noteInfoLeadingLC",
+        "priorityButton",
+        "priorityLeadingLC",
+        "progressView",
+        "repeatIcon",
+        "repeatIconTrailingLC",
+        "returnButton",
+        "returnButtonTailingLC",
+        "secondaryDateLabel"
+      ],
+      "actions": [
+        "checkboxButtonClicked:",
+        "returnButtonClicked:",
+        "dateButtonClicked:",
+        "assigneeButtonClicked:",
+        "priorityButtonClicked:",
+        "notesInfoButtonClicked:"
+      ],
+      "saved_frame_examples": [
+        {
+          "class": "_TtC8TickTick19TTTaskDetailTopView",
+          "saved_geometry": {
+            "NSFrameSize": "{766, 145}"
+          }
+        },
+        {
+          "class": "NSView",
+          "saved_geometry": {
+            "NSFrameSize": "{766, 145}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick13TTThemeButton",
+          "saved_geometry": {
+            "NSFrame": "{{44, 114}, {17, 17}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick13TTThemeButton",
+          "saved_geometry": {
+            "NSFrame": "{{12, 111}, {24, 24}}"
+          }
+        },
+        {
+          "class": "NSView",
+          "saved_geometry": {
+            "NSFrame": "{{72, 115}, {1, 16}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick13TTThemeButton",
+          "saved_geometry": {
+            "NSFrame": "{{80, 111}, {77, 24}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick17TTToolTipNSButton",
+          "saved_geometry": {
+            "NSFrame": "{{664, 113}, {20, 20}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick13TTThemeButton",
+          "saved_geometry": {
+            "NSFrame": "{{660, 109}, {28, 28}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick13TTThemeButton",
+          "saved_geometry": {
+            "NSFrame": "{{694, 109}, {28, 28}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick24TTTaskDetailProgressView",
+          "saved_geometry": {
+            "NSFrameSize": "{766, 40}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick13TTThemeButton",
+          "saved_geometry": {
+            "NSFrame": "{{728, 109}, {28, 28}}"
+          }
+        }
+      ]
+    },
+    {
+      "source": "/Applications/TickTick.app/Contents/Resources/TTTaskListDetailedCell.nib",
+      "outlets": [
+        "assigneeAvatarLeading",
+        "assigneeButton",
+        "attachmentIcon",
+        "attachmentIconLeading",
+        "checkboxButton",
+        "checkboxLeadingLC",
+        "checkboxTopLC",
+        "commentIcon",
+        "commentIconLeading",
+        "contentIcon",
+        "contentIconLeading",
+        "dateLabel",
+        "dateLabelLeading",
+        "dragIndicator",
+        "listNameLeading",
+        "listNameView",
+        "noteDateLabel",
+        "progressIcon",
+        "progressIconLeading",
+        "reminderIcon",
+        "reminderIconLeading",
+        "repeatIcon",
+        "repeatIconLeading",
+        "secondarySearchContainerView",
+        "secondarySearchContainerViewHeightLC",
+        "secondarySearchImageView",
+        "secondarySearchLabel",
+        "subtaskIcon",
+        "subtaskIconLeading",
+        "subtaskProgressLabel",
+        "subtitleLabel",
+        "subtitleTopLC",
+        "tagsView",
+        "tagsViewBottomLC",
+        "titleTextField",
+        "titleTextFieldLeading",
+        "triangleImageView"
+      ],
+      "actions": [
+        "checkButtonClicked:",
+        "assigneeButtonClicked:"
+      ],
+      "saved_frame_examples": [
+        {
+          "class": "_TtC8TickTick22TTTaskListDetailedCell",
+          "saved_geometry": {
+            "NSFrameSize": "{691, 295}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick8TTButton",
+          "saved_geometry": {
+            "NSFrame": "{{32, 267}, {17, 17}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick23TTTaskListCellTextField",
+          "saved_geometry": {
+            "NSFrame": "{{53, 267}, {401, 17}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick17TTToolTipNSButton",
+          "saved_geometry": {
+            "NSFrame": "{{653, 267}, {18, 18}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick14TTListNameView",
+          "saved_geometry": {
+            "NSFrame": "{{458, 266}, {40, 20}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick18TTTaskListTagsView",
+          "saved_geometry": {
+            "NSFrame": "{{53, 34}, {618, 18}}"
+          }
+        },
+        {
+          "class": "NSView",
+          "saved_geometry": {
+            "NSFrame": "{{53, 8}, {618, 18}}"
+          }
+        }
+      ]
+    },
+    {
+      "source": "/Applications/TickTick.app/Contents/Resources/TTTaskListInputMenuViewController.nib",
+      "outlets": [
+        "tableView",
+        "view",
+        "dataSource",
+        "delegate"
+      ],
+      "actions": [],
+      "saved_frame_examples": [
+        {
+          "class": "NSTableView",
+          "saved_geometry": {
+            "NSFrameSize": "{180, 292}"
+          }
+        },
+        {
+          "class": "_NSCornerView",
+          "saved_geometry": {
+            "NSFrameSize": "{17, 28}"
+          }
+        },
+        {
+          "class": "NSView",
+          "saved_geometry": {
+            "NSFrameSize": "{180, 300}"
+          }
+        },
+        {
+          "class": "NSScrollView",
+          "saved_geometry": {
+            "NSFrame": "{{0, 4}, {180, 292}}"
+          }
+        },
+        {
+          "class": "NSClipView",
+          "saved_geometry": {
+            "NSFrameSize": "{180, 292}"
+          }
+        }
+      ]
+    },
+    {
+      "source": "/Applications/TickTick.app/Contents/Resources/TTTaskListStandardCell.nib",
+      "outlets": [
+        "assigneeAvatarLeading",
+        "assigneeButton",
+        "attachmentIcon",
+        "attachmentIconLeading",
+        "checkboxButton",
+        "checkboxLeadingLC",
+        "checkboxWidthLC",
+        "commentIcon",
+        "commentIconLeading",
+        "contentIcon",
+        "contentIconLeading",
+        "dateLabel",
+        "dateLabelLeading",
+        "dragIndicator",
+        "listNameLeading",
+        "listNameView",
+        "progressIcon",
+        "progressIconLeading",
+        "reminderIcon",
+        "reminderIconLeading",
+        "repeatIcon",
+        "repeatIconLeading",
+        "subtaskIcon",
+        "subtaskIconLeading",
+        "tagsView",
+        "tagsViewLeading",
+        "titleTextField",
+        "titleTextFieldLeading",
+        "triangleImageView"
+      ],
+      "actions": [
+        "checkButtonClicked:",
+        "assigneeButtonClicked:"
+      ],
+      "saved_frame_examples": [
+        {
+          "class": "_TtC8TickTick22TTTaskListStandardCell",
+          "saved_geometry": {
+            "NSFrameSize": "{618, 74}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick8TTButton",
+          "saved_geometry": {
+            "NSFrame": "{{32, 29}, {17, 17}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick23TTTaskListCellTextField",
+          "saved_geometry": {
+            "NSFrame": "{{53, 29}, {224, 17}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick17TTToolTipNSButton",
+          "saved_geometry": {
+            "NSFrame": "{{580, 28}, {18, 18}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick14TTListNameView",
+          "saved_geometry": {
+            "NSFrame": "{{385, 27}, {40, 20}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick18TTTaskListTagsView",
+          "saved_geometry": {
+            "NSFrame": "{{281, 28}, {100, 18}}"
+          }
+        }
+      ]
+    },
+    {
+      "source": "/Applications/TickTick.app/Contents/Resources/TTTaskMenuButtonCellView.nib",
+      "outlets": [
+        "titleLabel"
+      ],
+      "actions": [
+        "buttonsAction:"
+      ],
+      "saved_frame_examples": [
+        {
+          "class": "_TtC8TickTick24TTTaskMenuButtonCellView",
+          "saved_geometry": {
+            "NSFrameSize": "{258, 56}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick13TTThemeButton",
+          "saved_geometry": {
+            "NSFrame": "{{10, 6}, {30, 30}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick13TTThemeButton",
+          "saved_geometry": {
+            "NSFrame": "{{48, 6}, {30, 30}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick13TTThemeButton",
+          "saved_geometry": {
+            "NSFrame": "{{84, 6}, {30, 30}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick13TTThemeButton",
+          "saved_geometry": {
+            "NSFrame": "{{120, 6}, {30, 30}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick13TTThemeButton",
+          "saved_geometry": {
+            "NSFrame": "{{156, 6}, {30, 30}}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick13TTThemeButton",
+          "saved_geometry": {
+            "NSFrame": "{{192, 6}, {30, 30}}"
+          }
+        }
+      ]
+    },
+    {
+      "source": "/Applications/TickTick.app/Contents/Resources/TTTaskMenuDividerCellView.nib",
+      "outlets": [],
+      "actions": [],
+      "saved_frame_examples": [
+        {
+          "class": "_TtC8TickTick25TTTaskMenuDividerCellView",
+          "saved_geometry": {
+            "NSFrameSize": "{206, 13}"
+          }
+        }
+      ]
+    },
+    {
+      "source": "/Applications/TickTick.app/Contents/Resources/TTTaskMenuLabelCellView.nib",
+      "outlets": [
+        "imageView",
+        "rightImageTrailingLC",
+        "rightImageView",
+        "textField"
+      ],
+      "actions": [],
+      "saved_frame_examples": [
+        {
+          "class": "_TtC8TickTick23TTTaskMenuLabelCellView",
+          "saved_geometry": {
+            "NSFrameSize": "{206, 34}"
+          }
+        }
+      ]
+    },
+    {
+      "source": "/Applications/TickTick.app/Contents/Resources/TTTaskMenuViewController.nib",
+      "outlets": [
+        "tableView",
+        "view",
+        "dataSource",
+        "delegate"
+      ],
+      "actions": [],
+      "saved_frame_examples": [
+        {
+          "class": "NSTableView",
+          "saved_geometry": {
+            "NSFrameSize": "{194, 284}"
+          }
+        },
+        {
+          "class": "_NSCornerView",
+          "saved_geometry": {
+            "NSFrameSize": "{17, 28}"
+          }
+        },
+        {
+          "class": "_TtC8TickTick14TTTaskMenuView",
+          "saved_geometry": {
+            "NSFrameSize": "{194, 300}"
+          }
+        },
+        {
+          "class": "NSScrollView",
+          "saved_geometry": {
+            "NSFrame": "{{0, 4}, {194, 284}}"
+          }
+        },
+        {
+          "class": "NSClipView",
+          "saved_geometry": {
+            "NSFrameSize": "{194, 284}"
+          }
+        }
+      ]
+    },
+    {
+      "source": "/Applications/TickTick.app/Contents/Resources/TTWeekCalTimelineViewItem.nib",
+      "outlets": [
+        "view"
+      ],
+      "actions": [],
+      "saved_frame_examples": [
+        {
+          "class": "_TtC8TickTick29TTWeekCalTimelineViewItemView",
+          "saved_geometry": {
+            "NSFrameSize": "{105, 230}"
+          }
+        }
+      ]
+    }
+  ],
+  "capture": {
+    "source": "REA observe-native-ui, existing TickTick main window",
+    "screenshot_width": 1512,
+    "screenshot_height": 859,
+    "window_points": {
+      "width": 1512,
+      "height": 859
+    },
+    "actions": []
+  },
+  "observed_task_layout": {
+    "rail_right": 61,
+    "navigation_right": 273,
+    "task_pane_right": 643,
+    "rail_width_approximately": 62,
+    "navigation_width": 212,
+    "task_pane_width": 370,
+    "unit": "logical point, matching 1x selected-window capture",
+    "scope": "a single current task-window arrangement; other sizes need calibration"
+  },
+  "limitations": [
+    "nib saved frames are archive-time values and not running Auto Layout measurements",
+    "action selectors identify wiring and do not establish algorithm semantics",
+    "main task-window capture is a runtime observation; paid calendar write flows were not exercised"
+  ]
+}

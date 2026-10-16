@@ -42,6 +42,7 @@ struct MigrationListRecord: Equatable {
     let icon: String?
     /// 所属文件夹（滴答层级：文件夹 → 清单）。旧包缺键 → nil（顶层）。
     let folderName: String?
+    var archivedAt: String? = nil
 }
 
 struct MigrationFolderRecord: Equatable {
@@ -216,7 +217,8 @@ enum MigrationSnapshot {
             color: nullableString(json["color"]),
             isPinned: tolerantBool(json["pinned"]),
             icon: nullableString(json["icon"]),
-            folderName: nullableString(json["folder"] ?? json["folderName"])
+            folderName: nullableString(json["folder"] ?? json["folderName"]),
+            archivedAt: nullableString(json["archivedAt"])
         )
     }
 
@@ -649,7 +651,8 @@ enum MigrationSnapshot {
                             sortOrder: sortOrder,
                             colorARGB: colorIndex == nil ? argb : nil,
                             icon: record.icon,
-                            folderName: record.folderName)
+                            folderName: record.folderName,
+                            archivedAt: parseDate(record.archivedAt))
     }
 
     private static func listARGB(from raw: String?) -> UInt32? {
@@ -954,6 +957,7 @@ enum MigrationSnapshot {
                 if meta?.isPinned == true { record["pinned"] = true }
                 if let icon = meta?.icon, !icon.isEmpty { record["icon"] = icon }
                 if let folder = meta?.folderName, !folder.isEmpty { record["folder"] = folder }
+                if let archivedAt = meta?.archivedAt { record["archivedAt"] = formatDate(archivedAt) }
                 return record
             },
             "folders": folders,

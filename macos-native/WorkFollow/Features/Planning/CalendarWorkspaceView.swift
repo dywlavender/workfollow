@@ -1,318 +1,265 @@
 import AppKit
 import SwiftUI
 
-/// 日历页。
-///
-/// 一眼读完的一个月，并且就地可改：任务就在日期格里，所以页面下面不需要再来
-/// 一份日程表；打开任务与新建任务都发生在贴着被点那一格的浮层里，而不是换掉
-/// 整个网格的面板。
-///
-/// 页面只保留四份状态——屏幕上是哪个月、当前是哪一天、时间怎么呈现、以及哪个
-/// 任务正被编辑。工具条、月网格、周视图各自是独立的视图：一个既算网格又画格子
-/// 的屏幕，会成为这些东西唯一能被读到的地方。
-///
-/// 与 Flutter `screens/calendar_screen.dart` 逐项对齐；唯一的差异是编辑器的呈现
-/// 方式，见 `PlanningWorkspaceChrome`。
+/// One viewport and one display configuration drive every calendar mode.
+/// Shared task details and date drafts remain the same as the task workspace.
 struct CalendarWorkspaceView: View {
     @ObservedObject var workspace: TaskWorkspaceModel
-
-    /// 月网格顶行的周起始日（周日）——**滚动位置单一事实源**：用户上下滚动
-    /// 实时回写，横扫/前后按钮/goToday 写入它驱动网格滚动（带动画）。
+    @ObservedObject var settings: PlanningSettingsStore
+    @State private var viewport: CalendarViewport
     @State private var topWeek: Date
-    /// 程序化跳转的去重哨：跳转前先记目标，网格据此区分"父级要跳"与"用户
-    /// 滚动的回写"——只对前者执行 scrollTo，用户惯性滚动不被 scrollTo 打断
-    /// （打断惯性正是"滚动一顿一顿"的感受来源之一）。
     @State private var programmaticScrollTarget: Date?
-    /// 页面的当前日：网格上被标出的那天、周视图的锚点、工具条加号落款的日期。
-    @State private var selectedDay: Date
-    @State private var mode: CalendarViewMode = .month
-    @State private var showCompleted = true
-
-    /// 浮层正在编辑的任务，避免同页叠开第二个编辑器。
     @State private var editingTaskID: UUID?
-    /// 正在开着的新建卡；nil 表示没有。
     @State private var composerRequest: PlanningComposerRequest?
-    /// 浮层的锚：被点的那一条任务/那一格/工具条加号，在点击时把宿主视图写进来。
+    @State private var agendaDay: Date?
+    @State private var showDisplayOptions = false
     @State private var anchorSink = PlanningAnchorRef()
-    /// 工具条加号自己的锚（其余锚由网格与周视图里的元素提供）。
     @State private var addAnchor = PlanningAnchorRef()
+    @State private var occurrenceCache = CalendarOccurrenceCache()
+    @State private var pendingOccurrenceSchedule: CalendarOccurrenceScheduleRequest?
 
-    init(workspace: TaskWorkspaceModel) {
-        self.workspace = workspace
-        let calendar = PlanningProjection.sundayFirstWeek(workspace.calendar)
+    @MainActor
+    init(workspace: TaskWorkspaceModel, settings: PlanningSettingsStore? = nil) {
+        let settings = settings ?? PlanningSettingsStore.shared
+        self.workspace = workspace; self.settings = settings
+        let calendar = settings.calendar.configuredCalendar(workspace.calendar)
         let now = workspace.clock()
-        let today = calendar.startOfDay(for: now)
-        let firstDay = calendar.date(from: calendar.dateComponents([.year, .month], from: now)) ?? today
-        _topWeek = State(initialValue: Self.startOfWeek(containing: firstDay, calendar: calendar))
-        _selectedDay = State(initialValue: today)
+        _viewport = State(initialValue: CalendarViewport(date: now, mode: settings.calendar.mode, calendar: calendar))
+        let first = calendar.date(from: calendar.dateComponents([.year, .month], from: now)) ?? now
+        let firstWeek = PlanningProjection.weekStart(containing: first, calendar: calendar)
+        _topWeek = State(initialValue: firstWeek)
+        _programmaticScrollTarget = State(initialValue: firstWeek)
     }
-
-    private var calendar: Calendar { PlanningProjection.sundayFirstWeek(workspace.calendar) }
-
-    /// 标题月 = 可见窗口中点（顶行 +14 天）所在月。由 topWeek **单一派生**，
-    /// 用户连续滚动时实时跟随，跨月边界不抖动；不独立存储，消除同步 bug 类。
+    private var calendar: Calendar { settings.calendar.configuredCalendar(workspace.calendar) }
+    private var mode: CalendarViewMode { settings.calendar.mode }
+    private var selectedDay: Date { viewport.selectedDate }
     private var month: Date {
-        let middle = calendar.date(byAdding: .day, value: 14, to: topWeek) ?? topWeek
-        return firstOfMonth(middle)
+        firstOfMonth(mode == .month ? calendar.date(byAdding: .day, value: 14, to: topWeek) ?? topWeek : selectedDay)
+    }
+    private var occurrenceWindow: DateInterval {
+        let first: Date
+        let last: Date
+        if mode == .month {
+            let days = PlanningProjection.monthGridDays(containing: month, calendar: calendar)
+            first = calendar.date(byAdding: .weekOfYear, value: -2, to: days.first ?? topWeek)!
+            last = calendar.date(byAdding: .weekOfYear, value: 2, to: days.last ?? topWeek)!
+        } else {
+            first = mode == .day ? selectedDay : PlanningProjection.weekStart(containing: selectedDay, calendar: calendar)
+            last = calendar.date(byAdding: .day, value: mode == .day ? 1 : 7, to: first)!
+        }
+        return DateInterval(start: first, end: last)
+    }
+    private var occurrences: [TaskOccurrence] {
+        occurrenceCache.occurrences(tasks: workspace.tasksInActiveLists, in: occurrenceWindow, revision: workspace.revision,
+                                    dateRevision: workspace.dateRevision, calendar: calendar)
+    }
+    private var visibleTasks: [Task] {
+        occurrenceCache.visibleTasks(tasks: workspace.tasksInActiveLists, preferences: settings.calendar, in: occurrenceWindow,
+            revision: workspace.revision, dateRevision: workspace.dateRevision, calendar: calendar)
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            toolbar
-            if mode == .month {
-                CalendarMonthGridView(
-                    topWeek: $topWeek,
-                    programmaticTarget: $programmaticScrollTarget,
-                    month: month,
-                    today: workspace.clock(),
-                    selectedDay: selectedDay,
-                    showCompleted: showCompleted,
-                    calendar: calendar,
-                    tasks: workspace.allTasks,
-                    barColor: barColor,
-                    onSelectDay: select(day:),
-                    onOpenTask: openTask,
-                    onCreateTask: { day in presentComposer(on: day) },
-                    onDropTask: { id, day in _ = workspace.moveDueDate(id, to: day) },
-                    onToggleTask: toggleTask,
-                    anchorSink: anchorSink)
-            } else {
-                CalendarWeekStripView(
-                    anchor: selectedDay,
-                    today: workspace.clock(),
-                    calendar: calendar,
-                    tasks: workspace.allTasks,
-                    barColor: barColor,
-                    onSelectDay: select(day:),
-                    onOpenTask: openTask,
-                    onDropTask: { id, day in _ = workspace.moveDueDate(id, to: day) },
-                    onToggleTask: toggleTask,
-                    anchorSink: anchorSink)
+        GeometryReader { geometry in
+            let paneWidth = settings.calendar.showArrangePane ? WFCalendarTimelineMetrics.arrangeWidth : 0
+            VStack(alignment: .leading, spacing: 0) {
+                toolbar.frame(width: geometry.size.width)
+                HStack(spacing: 0) {
+                    calendarContent
+                        .frame(width: max(0, geometry.size.width - paneWidth - (paneWidth > 0 ? 1 : 0)), alignment: .topLeading)
+                    if paneWidth > 0 {
+                        Divider().frame(width: 1)
+                        CalendarArrangePane(tasks: CalendarProjection.arrangePool(tasks: workspace.tasksInActiveLists, preferences: settings.calendar),
+                                            onOpen: openTask, onArrange: { id in
+                            _ = handleDrop([id.uuidString], .allDay(selectedDay))
+                        }, anchorSink: anchorSink)
+                        .frame(width: paneWidth)
+                    }
+                }
+                .frame(width: geometry.size.width, alignment: .topLeading)
+                .frame(maxHeight: .infinity, alignment: .topLeading)
             }
+            .frame(width: geometry.size.width, height: geometry.size.height, alignment: .topLeading)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(WFColors.content)
-        // 横扫 = 前后翻整月（周模式翻周）。**纵向滚动已由月网格的 ScrollView
-        // 原生接管**（连续、带惯性、按周对齐），监听器只处理横向。
-        .modifier(CalendarSwipeGestureModifier { direction in
-            withAnimation(.easeOut(duration: 0.2)) { step(direction) }
-        })
-        // 浮层的坐标基准：锚点矩形与弹框位置都在这一个坐标系里算。
+        .modifier(CalendarSwipeGestureModifier { direction in step(direction) })
         .coordinateSpace(name: PlanningCoordinateSpace.name)
-        .overlay {
-            PlanningWorkspaceChrome(workspace: workspace,
-                                    anchor: anchorSink,
-                                    request: $composerRequest,
-                                    editingTaskID: $editingTaskID)
+        .sheet(isPresented: $showDisplayOptions) {
+            CalendarDisplayOptions(settings: settings, lists: workspace.availableListNames, tags: workspace.tagNames)
         }
-    }
-
-    /// 页面没有自己的标题：年月**就是**标题，在它上面再印一行「日历」等于把页面
-    /// 命名两遍、白占一行。工具条上其余每一项都对应页面能做的一件事。
-    private var toolbar: some View {
-        HStack(spacing: 0) {
-            Image(systemName: "calendar")
-                .font(.system(size: 20))
-                .foregroundStyle(WFColors.secondaryText)
-            Spacer().frame(width: WFSpace.compact)
-            Text(CalendarDayLabels.monthTitle(month, calendar: calendar))
-                .font(WFType.pageTitle)
-                .foregroundStyle(WFColors.text)
-            Spacer(minLength: 0)
-            Button {
-                anchorSink.rect = addAnchor.rect
-                presentComposer(on: selectedDay)
-            } label: {
-                Image(systemName: "plus")
-                    .frame(width: 32, height: 32)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .background(PlanningAnchorProbe(ref: addAnchor))
-            .help("新建任务")
-            Spacer().frame(width: WFSpace.xs)
-            viewModeControl
-            Spacer().frame(width: WFSpace.xs)
-            rangeControl
-            Spacer().frame(width: WFSpace.xs)
-            calendarMenu
-        }
-        .padding(.horizontal, WFSpace.pageHorizontal)
-        .padding(.top, WFSpace.pageTop)
-        .frame(height: WFCalendarMetrics.toolbarHeight, alignment: .bottom)
-    }
-
-    // MARK: - 工具条控件
-
-    /// 月 / 周。用「显示当前值、点开换一个」的控件，而不是分段控件：分段控件
-    /// 拿两个可见槽位去说一个词已经说完的事。
-    private var viewModeControl: some View {
-        ToolbarPill {
-            HStack(spacing: 0) {
-                Text(mode.label).font(WFType.control).foregroundStyle(WFColors.text)
-                Spacer().frame(width: WFSpace.dense)
-                Image(systemName: "chevron.down")
-                    .font(.system(size: 15))
-                    .foregroundStyle(WFColors.tertiaryText)
-            }
-            .padding(.horizontal, WFSpace.sm)
-        }
-        .overlay {
-            Menu {
-                ForEach(CalendarViewMode.allCases, id: \.self) { value in
-                    Button {
-                        mode = value
-                    } label: {
-                        if value == mode {
-                            Label(value.label, systemImage: "checkmark")
-                        } else {
-                            Text(value.label)
-                        }
+        .confirmationDialog("修改重复任务", isPresented: Binding(get: { pendingOccurrenceSchedule != nil },
+            set: { if !$0 { pendingOccurrenceSchedule = nil } }), titleVisibility: .visible) {
+            if let request = pendingOccurrenceSchedule {
+                ForEach(RecurrenceEditScope.allCases) { scope in
+                    Button(scope.title) {
+                        _ = workspace.saveOccurrenceSchedule(request.plan, occurrence: request.occurrence, scope: scope)
+                        pendingOccurrenceSchedule = nil
                     }
                 }
-            } label: {
-                Color.clear.contentShape(Rectangle())
-            }
-            .menuStyle(.borderlessButton)
-            .menuIndicator(.hidden)
-        }
-        .fixedSize()
-        .help("视图：\(mode.label)")
-    }
-
-    /// 后退、今天、前进——一组，因为「今天」只在两个离开它的方向之间才有意义。
-    private var rangeControl: some View {
-        ToolbarPill {
-            HStack(spacing: 0) {
-                toolbarSegment(icon: "chevron.left", tooltip: mode.previousLabel) { step(-1) }
-                toolbarSegment(label: "今天", tooltip: "回到今天") { goToday() }
-                toolbarSegment(icon: "chevron.right", tooltip: mode.nextLabel) { step(1) }
+                Button("取消", role: .cancel) { pendingOccurrenceSchedule = nil }
             }
         }
-        .fixedSize()
-    }
-
-    /// 页面自己的设置。今天只有一项——已完成的任务要不要显示在网格里。
-    private var calendarMenu: some View {
-        Menu {
-            Button {
-                showCompleted.toggle()
-            } label: {
-                if showCompleted {
-                    Label("显示已完成任务", systemImage: "checkmark")
-                } else {
-                    Text("显示已完成任务")
+        .overlay {
+            if let agendaDay {
+                PlanningOverlayLayer(anchor: anchorSink, placement: .bottomEnd,
+                                     size: CGSize(width: 330, height: 380), onDismiss: { self.agendaDay = nil }) {
+                    CalendarDayAgenda(day: agendaDay,
+                        tasks: CalendarProjection.agenda(on: agendaDay, tasks: visibleTasks, preferences: settings.calendar, calendar: calendar),
+                        calendar: calendar, color: barColor, onOpen: { id in
+                            self.agendaDay = nil; openTask(id)
+                        }, onToggle: toggleTask, onCreate: {
+                            self.agendaDay = nil; presentComposer(on: agendaDay)
+                        })
                 }
+            } else {
+                PlanningWorkspaceChrome(workspace: workspace, anchor: anchorSink,
+                                        request: $composerRequest, editingTaskID: $editingTaskID)
             }
-        } label: {
-            Image(systemName: "ellipsis")
-                .frame(width: 32, height: 32)
-                .contentShape(Rectangle())
         }
-        .menuStyle(.borderlessButton)
-        .menuIndicator(.hidden)
-        .fixedSize()
-        .help("日历设置")
-    }
-
-    /// 胶囊里的一个命中目标：图标或一个词，不会两者都有。
-    @ViewBuilder
-    private func toolbarSegment(icon: String? = nil, label: String? = nil,
-                               tooltip: String, onTap: @escaping () -> Void) -> some View {
-        Button(action: onTap) {
-            Group {
-                if let icon {
-                    Image(systemName: icon).font(.system(size: 15))
-                        .foregroundStyle(WFColors.secondaryText)
-                } else {
-                    Text(label ?? "").font(WFType.control).foregroundStyle(WFColors.text)
-                }
+        .onChange(of: topWeek) { _, _ in
+            guard mode == .month else { return }
+            if !calendar.isDate(viewport.browseDate, equalTo: month, toGranularity: .month) {
+                viewport.browseMonth(month, calendar: calendar)
             }
-            .padding(.horizontal, WFSpace.sm)
-            .frame(height: WFCalendarMetrics.chipHeight)
-            .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
-        .help(tooltip)
+        .onChange(of: settings.calendar.mode) { _, value in viewport.mode = value }
+        .onChange(of: settings.calendar.firstWeekday) { _, _ in jumpToMonth(viewport.browseDate) }
     }
-
-    // MARK: - 交互
-
-    private func step(_ direction: Int) {
+    @ViewBuilder private var calendarContent: some View {
         if mode == .month {
-            let target = firstOfMonth(calendar.date(byAdding: .month, value: direction, to: month) ?? month)
-            jump(to: Self.startOfWeek(containing: target, calendar: calendar))
-            return
-        }
-        // 周模式移动的是当前日；同步滚动锚，离开周模式时月网格落在最后看的那个月。
-        guard let moved = calendar.date(byAdding: .day, value: 7 * direction, to: selectedDay) else { return }
-        selectedDay = moved
-        jump(to: Self.startOfWeek(containing: firstOfMonth(moved), calendar: calendar))
-    }
-
-    private func goToday() {
-        let today = calendar.startOfDay(for: workspace.clock())
-        selectedDay = today
-        jump(to: Self.startOfWeek(containing: firstOfMonth(today), calendar: calendar))
-    }
-
-    /// 点一天：网格显示邻月收尾与开头的日子，所以点击可能落在屏幕之外的月份上；
-    /// 跟着它走，选中的格子才会留在页内而不是挂在页边。
-    private func select(day: Date) {
-        selectedDay = day
-        if calendar.component(.month, from: day) != calendar.component(.month, from: month)
-            || calendar.component(.year, from: day) != calendar.component(.year, from: month) {
-            jump(to: Self.startOfWeek(containing: firstOfMonth(day), calendar: calendar))
+            CalendarMonthGridView(topWeek: $topWeek, programmaticTarget: $programmaticScrollTarget,
+                month: month, today: workspace.clock(), selectedDay: selectedDay,
+                showCompleted: settings.calendar.showCompleted, calendar: calendar, tasks: visibleTasks,
+                barColor: barColor, onSelectDay: select, onOpenTask: openTask,
+                onCreateTask: presentComposer, onDropTask: moveToDay,
+                onToggleTask: toggleTask, onShowAgenda: showAgenda, anchorSink: anchorSink)
+        } else {
+            CalendarTimelineView(workspace: workspace, days: mode == .day ? [selectedDay] : PlanningProjection.weekDays(containing: selectedDay, calendar: calendar),
+                tasks: visibleTasks, preferences: settings.calendar, calendar: calendar,
+                color: barColor, onSelectDay: select, onOpenTask: openTask, onCreate: presentComposer,
+                onMove: applySchedule,
+                onDrop: handleDrop,
+                onToggle: toggleTask,
+                onHourHeightChange: { value in settings.updateCalendar { $0.hourHeight = value } },
+                onAllDayHeightChange: { value in settings.updateCalendar { $0.allDayHeight = value } },
+                anchorSink: anchorSink)
         }
     }
-
-    /// 程序化跳月：记哨 + 写锚（网格的 onChange 据哨执行 scrollTo）。
-    private func jump(to week: Date) {
+    private var toolbar: some View {
+        HStack(spacing: 8) {
+            Text(CalendarDayLabels.monthTitle(month, calendar: calendar)).font(WFType.pageTitle).foregroundStyle(WFColors.text).lineLimit(1)
+            if mode == .day { Text(String(calendar.component(.day, from: selectedDay)) + "日").font(WFType.pageTitle) }
+            Spacer(minLength: 0)
+            Button {
+                anchorSink.rect = addAnchor.rect; presentComposer(on: selectedDay)
+            } label: { Image(systemName: "plus").frame(width: 32, height: 32) }
+            .buttonStyle(.plain).background(PlanningAnchorProbe(ref: addAnchor)).help("新建任务")
+            Menu {
+                ForEach(CalendarViewMode.allCases, id: \.self) { value in
+                    Button { settings.updateCalendar { $0.mode = value } } label: {
+                        if value == mode { Label(value.label, systemImage: "checkmark") } else { Text(value.label) }
+                    }
+                }
+            } label: { Text(mode.label).font(WFType.control).frame(minWidth: 38, minHeight: 30) }
+            .menuStyle(.borderlessButton).fixedSize().help("日历视图")
+            ToolbarPill {
+                HStack(spacing: 0) {
+                    rangeButton("chevron.left", help: mode.previousLabel) { step(-1) }
+                    Button("今天", action: goToday).buttonStyle(.plain).padding(.horizontal, 10)
+                    rangeButton("chevron.right", help: mode.nextLabel) { step(1) }
+                }
+            }
+            Button { settings.updateCalendar { $0.showArrangePane.toggle() } } label: {
+                Image(systemName: "sidebar.right").frame(width: 30, height: 30)
+                    .foregroundStyle(settings.calendar.showArrangePane ? WFColors.accent : WFColors.secondaryText)
+            }.buttonStyle(.plain).help("安排任务")
+            Menu {
+                Toggle("显示已完成任务", isOn: preference(\.showCompleted))
+                Toggle("显示未来重复周期", isOn: preference(\.showFutureOccurrences))
+                Toggle("显示子任务", isOn: preference(\.showSubtasks))
+                Divider()
+                Button("显示设置…") { showDisplayOptions = true }
+            } label: { Image(systemName: "ellipsis").frame(width: 30, height: 30) }
+            .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize().help("日历设置")
+        }
+        .padding(.horizontal, WFSpace.pageHorizontal)
+        .frame(height: WFCalendarMetrics.toolbarHeight)
+    }
+    private func preference(_ path: WritableKeyPath<CalendarPreferences, Bool>) -> Binding<Bool> {
+        Binding(get: { settings.calendar[keyPath: path] }, set: { value in settings.updateCalendar { $0[keyPath: path] = value } })
+    }
+    private func rangeButton(_ icon: String, help: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) { Image(systemName: icon).frame(width: 30, height: 30) }.buttonStyle(.plain).help(help)
+    }
+    private func step(_ direction: Int) {
+        viewport.mode = mode; viewport.step(direction, calendar: calendar)
+        jumpToMonth(viewport.browseDate)
+    }
+    private func goToday() { viewport.select(workspace.clock(), calendar: calendar); jumpToMonth(viewport.browseDate) }
+    private func select(_ day: Date) {
+        viewport.select(day, calendar: calendar)
+        if !calendar.isDate(day, equalTo: month, toGranularity: .month) { jumpToMonth(day) }
+    }
+    private func jumpToMonth(_ date: Date) {
+        let week = PlanningProjection.weekStart(containing: firstOfMonth(date), calendar: calendar)
         programmaticScrollTarget = week
-        withAnimation(.easeOut(duration: 0.25)) { topWeek = week }
+        withAnimation(.easeOut(duration: 0.2)) { topWeek = week }
     }
-
-    private func firstOfMonth(_ date: Date) -> Date {
-        calendar.date(from: calendar.dateComponents([.year, .month], from: date)) ?? date
-    }
-
-    /// 周日起始的整周起点（周日first 与网格列偏移同源）。
-    private static func startOfWeek(containing date: Date, calendar: Calendar) -> Date {
-        calendar.dateInterval(of: .weekOfYear, for: date)?.start ?? date
-    }
-
+    private func firstOfMonth(_ date: Date) -> Date { calendar.date(from: calendar.dateComponents([.year, .month], from: date)) ?? date }
     private func openTask(_ id: UUID) {
         guard editingTaskID == nil else { return }
-        editingTaskID = id
-        workspace.select(id)
+        if let occurrence = occurrences.first(where: { $0.task.id == id }), occurrence.isVirtual {
+            workspace.selectOccurrence(occurrence)
+            editingTaskID = occurrence.task.id
+        } else { editingTaskID = id; workspace.select(id) }
     }
-
-    /// 条/胶囊上的勾选框：点一下完成或恢复（原版里这个框只报状态，见
-    /// `CalendarTaskBarView` 的说明）。走的是与象限行同一个动作入口。
     private func toggleTask(_ id: UUID) {
-        guard let task = workspace.task(for: id) else { return }
-        _ = workspace.changeStatus(task)
+        if let occurrence = occurrences.first(where: { $0.task.id == id }), occurrence.isVirtual {
+            _ = workspace.completeOccurrence(occurrence)
+        } else if let task = workspace.task(for: id) { _ = workspace.changeStatus(task) }
     }
-
-    /// 打开新建卡：日期预置成被点的那一天（原版 `TaskScheduleDraft.forDay(day)`），
-    /// 用户清空日期也仍然是他的决定——所以 fallback 同样是这一天，只有卡上真的没有
-    /// 日期时才用得上。
-    private func presentComposer(on day: Date) {
-        workspace.select(nil)
-        let target = calendar.startOfDay(for: day)
-        let schedule = TaskSchedule(dueAt: target)
+    private func moveToDay(_ id: UUID, _ day: Date) {
+        _ = handleDrop([id.uuidString], .day(day))
+    }
+    private func applySchedule(_ id: UUID, _ schedule: TaskSchedule) {
+        consume(interaction.apply(id, schedule: schedule))
+    }
+    private var interaction: CalendarInteractionController {
+        CalendarInteractionController(workspace: workspace, occurrences: occurrences, calendar: calendar)
+    }
+    private func handleDrop(_ values: [String], _ destination: CalendarDropDestination) -> Bool {
+        let result = interaction.drop(values, at: destination)
+        consume(result)
+        return result.acceptsDrop
+    }
+    private func consume(_ result: CalendarInteractionOutcome) {
+        if case .requiresScope(let occurrence, let plan) = result {
+            pendingOccurrenceSchedule = CalendarOccurrenceScheduleRequest(occurrence: occurrence, plan: plan)
+        }
+    }
+    private func showAgenda(_ day: Date) { select(day); agendaDay = day }
+    private func presentComposer(on day: Date) { presentComposer(TaskSchedule(dueAt: calendar.startOfDay(for: day))) }
+    private func presentComposer(_ schedule: TaskSchedule) {
+        workspace.select(nil); editingTaskID = nil
         composerRequest = PlanningComposerRequest(fallback: schedule, preset: schedule, priority: .none)
     }
-
-    /// 日历条的颜色：按**任务**取色，不按清单。
-    ///
-    /// 这里曾经是 `listColor(task.list.name)`，与侧栏圆点同色。改掉的原因是「收集箱不可
-    /// 着色」（`setListColor` 明确拒绝它），而 35 条任务里 20 条都在收集箱——日历因此永远
-    /// 是一整片同色的蓝。代价：日历条不再告诉你任务在哪个清单。侧栏圆点、象限行、专注
-    /// 面板仍然按清单着色，没有跟着改。
     private func barColor(_ id: UUID) -> Color {
-        WFPlanningPalette.taskColor(taskID: id)
+        _ = visibleTasks
+        guard let task = occurrenceCache.task(for: id) else { return WFColors.accent }
+        switch settings.calendar.colorSource {
+        case .task: return WFPlanningPalette.taskColor(taskID: id)
+        case .list: return WFPlanningPalette.listColor(name: task.list.name, meta: workspace.listMeta(for: task.list.name))
+        case .tag: return WFPlanningPalette.listColor(name: task.tags.first ?? task.list.name, meta: nil)
+        case .priority:
+            let index = switch task.priority { case .high: 0; case .medium: 1; case .low: 2; case .none: 3 }
+            return WFPlanningPalette.quadrant[index]
+        }
     }
+}
+
+private struct CalendarOccurrenceScheduleRequest {
+    var occurrence: TaskOccurrence
+    var plan: SchedulePlan
 }
 
 // MARK: - 纯展示规则（可单测）
@@ -419,6 +366,7 @@ struct CalendarMonthGridView: View {
     let onDropTask: (UUID, Date) -> Void
     /// 条上勾选框的动作：点一下完成或恢复。
     let onToggleTask: (UUID) -> Void
+    let onShowAgenda: (Date) -> Void
     /// 浮层锚的落脚点：格与条在点击时把「自己是哪一块」写进去。
     let anchorSink: PlanningAnchorRef
 
@@ -426,17 +374,19 @@ struct CalendarMonthGridView: View {
     // 每周色带全部预计算进 State——滚动期间的网格重估**零任务过滤/布局**，
     // 行级 Equatable 跳过未变行。重建只在 tasks/showCompleted 变化时发生。
     @StateObject private var cache: GridCache
+    @State private var mountingTarget: Date?
     private var weeks: [Date] { cache.weeks }
     private var daysByWeek: [Date: [Date]] { cache.values.days }
     private var dayTasks: [Date: [Task]] { cache.values.dayTasks }
     private var spansByWeek: [Date: [CalendarSpan]] { cache.values.spans }
 
     private final class GridCache: ObservableObject {
-        let weeks: [Date]
+        @Published var weeks: [Date]
         @Published var values: (days: [Date: [Date]], dayTasks: [Date: [Task]], spans: [Date: [CalendarSpan]])
         init(today: Date, tasks: [Task], showCompleted: Bool, calendar: Calendar) {
-            weeks = CalendarMonthGridView.buildWeeks(today: today, calendar: calendar)
-            values = CalendarMonthGridView.buildCaches(weeks: weeks, tasks: tasks,
+            let initialWeeks = CalendarMonthGridView.buildWeeks(today: today, calendar: calendar)
+            weeks = initialWeeks
+            values = CalendarMonthGridView.buildCaches(weeks: initialWeeks, tasks: tasks,
                                                        showCompleted: showCompleted, calendar: calendar)
         }
     }
@@ -449,15 +399,17 @@ struct CalendarMonthGridView: View {
          barColor: @escaping (UUID) -> Color, onSelectDay: @escaping (Date) -> Void,
          onOpenTask: @escaping (UUID) -> Void, onCreateTask: @escaping (Date) -> Void,
          onDropTask: @escaping (UUID, Date) -> Void, onToggleTask: @escaping (UUID) -> Void,
+         onShowAgenda: @escaping (Date) -> Void,
          anchorSink: PlanningAnchorRef) {
         _topWeek = topWeek
+        _mountingTarget = State(initialValue: topWeek.wrappedValue)
         _programmaticTarget = programmaticTarget
         self.month = month; self.today = today; self.selectedDay = selectedDay
         self.showCompleted = showCompleted; self.calendar = calendar; self.tasks = tasks
         self.barColor = barColor
         self.onSelectDay = onSelectDay; self.onOpenTask = onOpenTask
         self.onCreateTask = onCreateTask; self.onDropTask = onDropTask
-        self.onToggleTask = onToggleTask; self.anchorSink = anchorSink
+        self.onToggleTask = onToggleTask; self.onShowAgenda = onShowAgenda; self.anchorSink = anchorSink
         // 周行流**时间正序**（过去 → 今天 → 未来，±30 周对称）：两个方向都
         // 能滚。初始定位 = defaultScrollAnchor(.center)（内容几何中心 ≈ 今天
         // 周，自动挂载其±预热行）+ onAppear 近距 scrollTo 微调到月首周——
@@ -465,7 +417,7 @@ struct CalendarMonthGridView: View {
         // 首帧前跳 30 行远距实测失败，见 git 历史），微调 1-2 行在预热集内。
         // StateObject defers creation until mounting; subsequent View values
         // must not rebuild the 61-week projection only to discard it.
-        _cache = StateObject(wrappedValue: GridCache(today: today, tasks: tasks,
+        _cache = StateObject(wrappedValue: GridCache(today: topWeek.wrappedValue, tasks: tasks,
                                                    showCompleted: showCompleted, calendar: calendar))
     }
 
@@ -493,12 +445,12 @@ struct CalendarMonthGridView: View {
                 let visible = PlanningProjection.singleDayTasks(on: day, from: tasks, calendar: calendar)
                 dayTasks[day] = showCompleted ? visible : visible.filter { $0.status != .completed }
             }
-            let multiDay = PlanningProjection.multiDayTasks(from: tasks,
+            let filtered = showCompleted ? tasks : tasks.filter { $0.status != .completed }
+            let multiDay = PlanningProjection.multiDayTasks(from: filtered,
                                                             first: weekDays.first ?? weekStart,
                                                             last: weekDays.last ?? weekStart,
                                                             calendar: calendar)
             spans[weekStart] = CalendarSpans.lanes(for: weekDays, tasks: multiDay, calendar: calendar)
-                .filter { showCompleted || $0.task.status != .completed }
         }
         return (days, dayTasks, spans)
     }
@@ -536,9 +488,12 @@ struct CalendarMonthGridView: View {
                                 // 只跳"父级程序化跳转"（哨匹配）；用户滚动的
                                 // 回写不匹配哨，不会打断惯性。
                                 guard programmaticTarget == target else { return }
-                                programmaticTarget = nil
-                                withAnimation(.easeOut(duration: 0.25)) {
-                                    proxy.scrollTo(target, anchor: .top)
+                                ensureWindow(containing: target)
+                                DispatchQueue.main.async {
+                                    programmaticTarget = nil
+                                    withAnimation(.easeOut(duration: 0.25)) {
+                                        proxy.scrollTo(target, anchor: .top)
+                                    }
                                 }
                             }
                     }
@@ -553,8 +508,13 @@ struct CalendarMonthGridView: View {
                         .scrollPosition(id: positionBinding, anchor: .top)
                         .scrollTargetBehavior(.viewAligned)
                         .onAppear {
-                            // scrollPosition 初值不驱动初始定位，补一次 scrollTo。
                             DispatchQueue.main.async { proxy.scrollTo(topWeek, anchor: .top) }
+                        }
+                        .onChange(of: programmaticTarget) { _, target in
+                            guard let target else { return }
+                            ensureWindow(containing: target)
+                            programmaticTarget = nil
+                            DispatchQueue.main.async { proxy.scrollTo(target, anchor: .top) }
                         }
                     }
                 }
@@ -563,7 +523,9 @@ struct CalendarMonthGridView: View {
         .onChange(of: tasks) { _, newValue in
             rebuildCaches(tasks: newValue)
         }
-        .onChange(of: showCompleted) { _, newValue in
+        .onChange(of: showCompleted) { _, _ in rebuildCaches(tasks: tasks) }
+        .onChange(of: calendar) { _, _ in
+            cache.weeks = Self.buildWeeks(today: topWeek, calendar: calendar)
             rebuildCaches(tasks: tasks)
         }
     }
@@ -588,6 +550,7 @@ struct CalendarMonthGridView: View {
             onCreateTask: onCreateTask,
             onDropTask: onDropTask,
             onToggleTask: onToggleTask,
+            onShowAgenda: onShowAgenda,
             anchorSink: anchorSink)
         .id(weekStart)
         .frame(height: rowHeight)
@@ -624,8 +587,19 @@ struct CalendarMonthGridView: View {
         guard rowHeight > 0 else { return }
         let index = min(max(Int((offset + rowHeight / 2) / rowHeight), 0), weeks.count - 1)
         let target = weeks[index]
+        if let initial = mountingTarget {
+            guard target == initial else { return }
+            mountingTarget = nil
+        }
+        if let pending = programmaticTarget, pending != target { return }
         if programmaticTarget == target { programmaticTarget = nil }
         if topWeek != target { topWeek = target }
+    }
+
+    private func ensureWindow(containing target: Date) {
+        guard !weeks.contains(target) else { return }
+        cache.weeks = Self.buildWeeks(today: target, calendar: calendar)
+        rebuildCaches(tasks: tasks)
     }
 
     private func rebuildCaches(tasks: [Task]) {
@@ -642,7 +616,7 @@ struct CalendarMonthGridView: View {
     /// 只是标错一列，而是把这个月的每个日期都挪到错误的星期上。
     private var weekHeader: some View {
         HStack(spacing: 0) {
-            ForEach(CalendarWeekHeaderLabels.all, id: \.self) { label in
+            ForEach((0..<7).map { CalendarWeekHeaderLabels.all[(calendar.firstWeekday - 1 + $0) % 7] }, id: \.self) { label in
                 Text(label)
                     .font(WFType.listMeta)
                     .foregroundStyle(WFColors.tertiaryText)
@@ -681,6 +655,7 @@ struct MonthWeekRow: View, Equatable {
     let onCreateTask: (Date) -> Void
     let onDropTask: (UUID, Date) -> Void
     let onToggleTask: (UUID) -> Void
+    let onShowAgenda: (Date) -> Void
     let anchorSink: PlanningAnchorRef
 
     static func == (lhs: MonthWeekRow, rhs: MonthWeekRow) -> Bool {
@@ -701,7 +676,7 @@ struct MonthWeekRow: View, Equatable {
                             .frame(width: columnWidth, height: geometry.size.height)
                     }
                 }
-                ForEach(spans) { span in
+                ForEach(visibleSpans(height: geometry.size.height)) { span in
                     spanBand(span, columnWidth: columnWidth)
                 }
                 if let todayColumn {
@@ -712,7 +687,7 @@ struct MonthWeekRow: View, Equatable {
                         .allowsHitTesting(false)
                 }
                 hairlines(columnWidth: columnWidth, height: geometry.size.height)
-            }
+            }.clipped()
         }
         // ⚠️ 不要加 .drawingGroup()：本环境实测整行 GPU 栅格化失败，渲染出
         // macOS 的"禁止"占位图（2026-10-07 截图实锤）。图层合并与不透明化
@@ -737,7 +712,20 @@ struct MonthWeekRow: View, Equatable {
         .allowsHitTesting(false)
     }
 
+    private func visibleSpans(height: CGFloat) -> [CalendarSpan] {
+        let area = height - WFCalendarMetrics.cellTopPadding - WFCalendarMetrics.cellBottomPadding
+            - WFCalendarMetrics.dayCellSize - WFCalendarMetrics.dayNumberGap
+        let capacity = max(0, Int((area + WFCalendarMetrics.taskBarGap) / WFCalendarMetrics.slotStride))
+        let overflowing = (0..<days.count).contains { column in
+            let singles = column < dayTasks.count ? dayTasks[column].count : 0
+            return CalendarSpans.slotsOver(spans, column: column) + singles > capacity
+        }
+        return spans.filter { $0.lane < max(0, capacity - (overflowing ? 1 : 0)) }
+    }
+
     private func dayCell(_ day: Date, column: Int, height: CGFloat) -> some View {
+        let visible = visibleSpans(height: height)
+        let hidden = spans.filter { $0.fromColumn <= column && column <= $0.toColumn && !visible.contains($0) }.count
         return CalendarDayCellView(
             date: day,
             height: height,
@@ -745,7 +733,8 @@ struct MonthWeekRow: View, Equatable {
                 && calendar.component(.year, from: day) == calendar.component(.year, from: month),
             isToday: calendar.isDate(day, inSameDayAs: today),
             selected: calendar.isDate(day, inSameDayAs: selectedDay),
-            skipSlots: CalendarSpans.slotsOver(spans, column: column),
+            skipSlots: CalendarSpans.slotsOver(visible, column: column),
+            hiddenSpanCount: hidden,
             tasks: column < dayTasks.count ? dayTasks[column] : [],
             calendar: calendar,
             barColor: barColor,
@@ -754,6 +743,7 @@ struct MonthWeekRow: View, Equatable {
             onCreate: { onCreateTask(day) },
             onDropTask: { id in onDropTask(id, day) },
             onToggleTask: onToggleTask,
+            onShowAgenda: { onShowAgenda(day) },
             anchorSink: anchorSink)
     }
 
@@ -825,6 +815,7 @@ struct CalendarDayCellView: View {
     let isToday: Bool
     let selected: Bool
     let skipSlots: Int
+    var hiddenSpanCount: Int = 0
     let tasks: [Task]
     let calendar: Calendar
     let barColor: (UUID) -> Color
@@ -833,6 +824,7 @@ struct CalendarDayCellView: View {
     let onCreate: () -> Void
     let onDropTask: (UUID) -> Void
     let onToggleTask: (UUID) -> Void
+    let onShowAgenda: () -> Void
     let anchorSink: PlanningAnchorRef
 
     @State private var dropping = false
@@ -952,33 +944,21 @@ struct CalendarDayCellView: View {
     /// 槽位吃掉、让这一天看起来是空的，所以一格一条时显示第一条、不显示计数。
     @ViewBuilder
     private var bars: some View {
-        if tasks.isEmpty {
-            Spacer(minLength: 0)
-        } else {
-            let capacity = Int(floor((barAreaHeight + WFCalendarMetrics.taskBarGap)
-                                     / WFCalendarMetrics.slotStride)) - skipSlots
-            if capacity < 1 {
-                Spacer(minLength: 0)
-            } else {
-                let overflowing = tasks.count > capacity
-                let counting = overflowing && capacity > 1
-                let visibleCount = overflowing ? (counting ? capacity - 1 : capacity) : tasks.count
-                VStack(alignment: .leading, spacing: 0) {
-                    if skipSlots > 0 {
-                        Spacer().frame(height: CGFloat(skipSlots) * WFCalendarMetrics.slotStride)
-                    }
-                    ForEach(0..<visibleCount, id: \.self) { index in
-                        if index > 0 { Spacer().frame(height: WFCalendarMetrics.taskBarGap) }
-                        bar(tasks[index])
-                    }
-                    if counting {
-                        Spacer().frame(height: WFCalendarMetrics.taskBarGap)
-                        CalendarTaskOverflowView(hiddenCount: tasks.count - visibleCount,
-                                                 onTap: onSelect)
-                    }
-                    Spacer(minLength: 0)
-                }
+        let totalCapacity = max(0, Int(floor((barAreaHeight + WFCalendarMetrics.taskBarGap) / WFCalendarMetrics.slotStride)))
+        let capacity = max(0, totalCapacity - skipSlots)
+        let overflowing = tasks.count + hiddenSpanCount > capacity
+        let counting = overflowing && capacity > 0
+        let visibleCount = min(tasks.count, max(0, capacity - (counting ? 1 : 0)))
+        VStack(alignment: .leading, spacing: WFCalendarMetrics.taskBarGap) {
+            if skipSlots > 0 { Spacer().frame(height: CGFloat(skipSlots) * WFCalendarMetrics.slotStride - WFCalendarMetrics.taskBarGap) }
+            ForEach(Array(tasks.prefix(visibleCount))) { task in bar(task) }
+            if counting {
+                CalendarTaskOverflowView(hiddenCount: tasks.count - visibleCount + hiddenSpanCount, onTap: {
+                    anchorSink.rect = anchor.rect
+                    onShowAgenda()
+                })
             }
+            Spacer(minLength: 0)
         }
     }
 
@@ -1397,34 +1377,5 @@ struct CalendarWeekPillButton: View {
                 pill.frame(width: 200)
             }
             .background(PlanningAnchorProbe(ref: anchor))
-    }
-}
-
-// MARK: - 视图模式
-
-/// 日历怎么呈现时间。
-enum CalendarViewMode: String, CaseIterable {
-    case month, week
-
-    var label: String {
-        switch self {
-        case .month: "月"
-        case .week: "周"
-        }
-    }
-
-    /// 这个模式下后退一步是什么意思，给范围控件的提示用。控件本身只报告移动。
-    var previousLabel: String {
-        switch self {
-        case .month: "上个月"
-        case .week: "上一周"
-        }
-    }
-
-    var nextLabel: String {
-        switch self {
-        case .month: "下个月"
-        case .week: "下一周"
-        }
     }
 }

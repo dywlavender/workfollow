@@ -6,6 +6,7 @@ struct TaskContextMenuPopover: View {
     /// `show()` 那一刻的快照。只当身份用（`id` 不会变），可变字段一律读 `task`。
     private let snapshot: Task
     let onCustomDate: () -> Void
+    let onChooseParent: () -> Void
     @EnvironmentObject private var environment: AppEnvironment
 
     /// 菜单内容跟着工作区走，不是打开那一刻的快照。
@@ -17,11 +18,13 @@ struct TaskContextMenuPopover: View {
     private var task: Task { workspace.task(for: snapshot.id) ?? snapshot }
 
     init(workspace: TaskWorkspaceModel, isPresented: Binding<Bool>,
-         task: Task, onCustomDate: @escaping () -> Void) {
+         task: Task, onCustomDate: @escaping () -> Void,
+         onChooseParent: @escaping () -> Void) {
         self.workspace = workspace
         self._isPresented = isPresented
         self.snapshot = task
         self.onCustomDate = onCustomDate
+        self.onChooseParent = onChooseParent
     }
 
     private enum Submenu: Equatable { case list, tags, group }
@@ -213,15 +216,28 @@ struct TaskContextMenuPopover: View {
 
             Divider().padding(.vertical, WFSpace.xs)
             VStack(spacing: 2) {
-                actionRow("开始专注", symbol: "timer") {
-                    perform { environment.startFocus(for: task.id) }
-                }
-                actionRow("打开便签", symbol: "note") {
-                    perform { StickyNoteWindowController.shared.open(taskID: task.id) }
-                }
                 if task.parentID == nil {
                     actionRow("添加子任务", symbol: "plus.square.on.square") {
                         perform { _ = workspace.requestChildTitleEditor(for: task.id) }
+                    }
+                }
+                actionRow("关联主任务", symbol: "rectangle.3.group",
+                          disabled: TaskParentPickerProjection.candidates(
+                            for: task.id, tasks: workspace.allTasks, query: "").isEmpty) {
+                    cancelPendingSubmenu()
+                    activeSubmenu = nil
+                    onChooseParent()
+                }
+                .accessibilityLabel("关联主任务")
+                actionRow(task.isPinned ? "取消置顶" : "置顶", symbol: "pin") {
+                    perform { _ = workspace.setPinned(task.id, !task.isPinned) }
+                }
+                actionRow(task.isAbandoned ? "重新开始" : "放弃",
+                          symbol: task.isAbandoned ? "arrow.uturn.backward" : "xmark.circle",
+                          disabled: task.status == .completed && !task.isAbandoned) {
+                    perform {
+                        if task.isAbandoned { _ = workspace.restore(task.id) }
+                        else { _ = workspace.abandon(task.id) }
                     }
                 }
                 // 「分组」现在是「移动到清单」里的二级菜单（清单 → 分组），见下面的 `.list` 分支。
@@ -254,26 +270,10 @@ struct TaskContextMenuPopover: View {
                                 apply { _ = workspace.setTaskSection(task.id, sectionID: sectionID) }
                             })
                     })
-                    Divider()
-                }
-        actionRow(task.isPinned ? "取消置顶" : "置顶", symbol: "pin") {
-                    perform { _ = workspace.setPinned(task.id, !task.isPinned) }
-                }
-                // 复制任务（Round B1，对齐 Flutter）：连同子任务生成副本，HUD 自动带撤销。
-                actionRow("复制任务", symbol: "doc.on.doc") {
-                    perform { workspace.duplicate(task.id) }
-                }
-                actionRow(task.isAbandoned ? "恢复任务" : "放弃任务",
-                          symbol: task.isAbandoned ? "arrow.uturn.backward" : "xmark.circle",
-                          disabled: task.status == .completed && !task.isAbandoned) {
-                    perform {
-                        if task.isAbandoned { _ = workspace.restore(task.id) }
-                        else { _ = workspace.abandon(task.id) }
-                    }
                 }
                 if task.parentID == nil {
                     Button { activeSubmenu = .list } label: {
-                        menuRow("移动到清单", symbol: "tray.full", trailing: "chevron.right")
+                        menuRow("移动到", symbol: "tray.full", trailing: "chevron.right")
                     }
                     .buttonStyle(.plain)
                     .disabled(!workspace.canMoveToList(task.id))
@@ -330,13 +330,29 @@ struct TaskContextMenuPopover: View {
                             perform { workspace.setTags(task.id, tags) }
                         })
                 })
+                actionRow("开始专注", symbol: "timer") {
+                    perform { environment.startFocus(for: task.id) }
+                }
+                actionRow("创建副本", symbol: "doc.on.doc") {
+                    perform { workspace.duplicate(task.id) }
+                }
+                actionRow("复制链接", symbol: "link") {
+                    perform {
+                        let copied = TaskLinkClipboard.copy(task)
+                        environment.feedback.show(FeedbackEvent(kind: copied ? .success : .error,
+                            message: copied ? "已复制任务链接" : "无法复制任务链接"))
+                    }
+                }
+                actionRow("打开便签", symbol: "note") {
+                    perform { StickyNoteWindowController.shared.open(taskID: task.id) }
+                }
             }
 
             Divider().padding(.vertical, WFSpace.xs)
             actionRow("转换为笔记", symbol: "doc.text") {
                 perform { _ = environment.convertTaskToNote(task.id) }
             }
-            actionRow("删除任务", symbol: "trash", destructive: true) {
+            actionRow("删除", symbol: "trash", destructive: true) {
                 perform { _ = workspace.delete(task.id) }
             }
         }
@@ -478,7 +494,7 @@ private struct TaskContextListPicker: View {
     @FocusState private var searchFocused: Bool
 
     private var matches: [String] {
-        workspace.allListNames.filter { query.isEmpty || $0.localizedCaseInsensitiveContains(query) }
+        workspace.availableListNames.filter { query.isEmpty || $0.localizedCaseInsensitiveContains(query) }
     }
 
     var body: some View {

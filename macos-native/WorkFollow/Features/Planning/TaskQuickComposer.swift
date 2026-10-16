@@ -20,10 +20,12 @@ struct TaskQuickComposer: View {
     let presetSchedule: TaskSchedule?
     /// 打开时的优先级（四象限的象限默认值；日历为无）。
     let presetPriority: TaskPriority
+    let matrixConfiguration: MatrixConfiguration?
     let requestClose: () -> Void
 
     @State private var title = ""
     @State private var listName = TaskList.inbox.name
+    @State private var tags: [String]
     @State private var schedule: TaskSchedule
     /// 用户是否对日期做过决定。原版用它区分"页面给的日期"和"用户清空了日期"：
     /// 两者都不能再被 fallback 覆盖。
@@ -41,15 +43,21 @@ struct TaskQuickComposer: View {
          fallbackSchedule: TaskSchedule,
          presetSchedule: TaskSchedule?,
          presetPriority: TaskPriority,
+         presetList: TaskList? = nil,
+         presetTags: [String] = [],
+         matrixConfiguration: MatrixConfiguration? = nil,
          requestClose: @escaping () -> Void) {
         self.workspace = workspace
         self.fallbackSchedule = fallbackSchedule
         self.presetSchedule = presetSchedule
         self.presetPriority = presetPriority
+        self.matrixConfiguration = matrixConfiguration
         self.requestClose = requestClose
         _schedule = State(initialValue: presetSchedule ?? TaskSchedule())
         _overridden = State(initialValue: presetSchedule?.dueAt != nil)
         _priority = State(initialValue: presetPriority)
+        _listName = State(initialValue: presetList?.name ?? TaskList.inbox.name)
+        _tags = State(initialValue: presetTags)
     }
 
     var body: some View {
@@ -88,6 +96,7 @@ struct TaskQuickComposer: View {
                         .foregroundStyle(WFColors.overlaySecondaryText)
                     Text(scheduleLabel)
                         .font(.system(size: 14))
+                        .lineLimit(1)
                         .foregroundStyle(schedule.dueAt == nil
                                          ? WFColors.overlayTertiaryText
                                          : WFColors.accent)
@@ -125,24 +134,31 @@ struct TaskQuickComposer: View {
     /// 第二行：标题输入，高 126。原版是 4 行的输入框但回车即提交，所以这里是
     /// 单行输入铺在 126 高的槽位里，文字贴左上。
     private var titleField: some View {
-        TextField("", text: $title, prompt: Text("准备做什么？")
+        VStack(alignment: .leading, spacing: 8) {
+            TextField("", text: $title, prompt: Text("准备做什么？")
             .foregroundStyle(WFColors.overlayTertiaryText))
             .textFieldStyle(.plain)
             .font(.system(size: 18))
             .foregroundStyle(WFColors.overlayText)
             .focused($titleFocused)
             .onSubmit(submit)
-            .padding(.horizontal, WFSpace.lg)
-            .padding(.vertical, WFSpace.relaxed)
-            .frame(height: WFPlanningOverlayMetrics.composerBodyHeight, alignment: .topLeading)
             .accessibilityLabel("任务标题")
+            if let configuration = matrixConfiguration {
+                let target = configuration.quadrant(for: draftTask, now: workspace.clock(), calendar: workspace.calendar)
+                Text(target.map { "创建到“\(configuration.configuration(for: $0).title)”" } ?? "当前属性未命中象限")
+                    .font(WFType.caption).foregroundStyle(WFColors.overlaySecondaryText)
+            }
+        }
+        .padding(.horizontal, WFSpace.lg)
+        .padding(.vertical, WFSpace.relaxed)
+        .frame(height: WFPlanningOverlayMetrics.composerBodyHeight, alignment: .topLeading)
     }
 
     /// 第三行：清单胶囊（左）与更多（右），高 42、左右内边距 10。
     private var listRow: some View {
         HStack(spacing: 0) {
             Menu {
-                ForEach(workspace.allListNames, id: \.self) { name in
+                ForEach(workspace.availableListNames, id: \.self) { name in
                     Button {
                         listName = name
                     } label: {
@@ -204,7 +220,7 @@ struct TaskQuickComposer: View {
 
     @ViewBuilder
     private var priorityItems: some View {
-        ForEach([TaskPriority.none, .low, .medium, .high], id: \.self) { value in
+        ForEach(TaskPriority.menuOrder, id: \.self) { value in
             Button {
                 priority = value
             } label: {
@@ -226,6 +242,7 @@ struct TaskQuickComposer: View {
         let now = workspace.clock()
         return Task(id: Self.draftTaskID,
                     title: trimmed.isEmpty ? "准备做什么?" : trimmed,
+                    tags: tags,
                     recurrenceRule: recurrenceRule,
                     reminderAt: reminder,
                     reminderOffsets: reminderOffsets.isEmpty ? nil : reminderOffsets,
@@ -242,8 +259,12 @@ struct TaskQuickComposer: View {
 
     private var scheduleLabel: String {
         guard overridden, let due = schedule.dueAt else { return "设置日期" }
-        return TaskDateLabel.text(due, hasTime: schedule.hasTime,
-                                  now: workspace.clock(), calendar: workspace.calendar)
+        let start = TaskDateLabel.text(due, hasTime: schedule.hasTime, now: workspace.clock(), calendar: workspace.calendar)
+        guard let end = schedule.dueEndAt else { return start }
+        let endText = workspace.calendar.isDate(due, inSameDayAs: end) && schedule.hasTime
+            ? calendarClock(end, hasTime: true, calendar: workspace.calendar) ?? ""
+            : TaskDateLabel.text(end, hasTime: schedule.hasTime, now: workspace.clock(), calendar: workspace.calendar)
+        return start + "–" + endText
     }
 
     /// 面板确定后把计划带回草稿：日程、提醒（单点 + 多级偏移）、重复一并保留，
@@ -269,7 +290,7 @@ struct TaskQuickComposer: View {
                               list: listName,
                               schedule: overridden ? schedule : fallbackSchedule,
                               priority: priority,
-                              tags: [],
+                              tags: tags,
                               reminder: reminder,
                               reminderOffsets: reminderOffsets.isEmpty ? nil : reminderOffsets,
                               repeatFrequency: frequency,

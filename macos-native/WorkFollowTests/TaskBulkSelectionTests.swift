@@ -32,6 +32,27 @@ final class TaskBulkSelectionTests: XCTestCase {
         XCTAssertNil(workspace.bulkAnchorTaskID)
     }
 
+    func testVirtualSelectionPublishesOnceAndRepeatedSelectionIsSilent() throws {
+        var task = makeTask("每日复盘", dueAt: now)
+        task.recurrence = .daily
+        let workspace = makeWorkspace([task])
+        let window = DateInterval(start: calendar.startOfDay(for: now),
+            end: calendar.date(byAdding: .day, value: 3, to: now)!)
+        let future = try XCTUnwrap(TaskOccurrenceProjection.occurrences(
+            tasks: workspace.allTasks, in: window, calendar: calendar).first { $0.isVirtual })
+        var publications = 0
+        let subscription = workspace.objectWillChange.sink { publications += 1 }
+        defer { subscription.cancel() }
+        workspace.selectOccurrence(future)
+        XCTAssertEqual(publications, 1)
+        publications = 0
+        workspace.selectOccurrence(future)
+        XCTAssertEqual(publications, 0)
+        workspace.select(task.id)
+        XCTAssertEqual(publications, 1)
+        XCTAssertNil(workspace.selectedOccurrence)
+    }
+
     private let calendar: Calendar = {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(secondsFromGMT: 0)!
@@ -321,6 +342,6 @@ func testMergeBulkTasksBelowTwoReturnsNil() {
     let parentID = workspace.mergeBulkTasks()
 
     XCTAssertNil(parentID, "少于 2 条不合并(滴答置灰语义)")
-    XCTAssertTrue(workspace.bulkSelection.isEmpty, "操作后集合清空")
+    XCTAssertEqual(workspace.bulkSelection, [a.id], "失败不退出批量选择")
 }
 }

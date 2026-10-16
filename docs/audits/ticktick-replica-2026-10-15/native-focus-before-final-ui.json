@@ -1,0 +1,26 @@
+[
+  {
+    "id": "43C37723-7A5A-429C-B20E-F8116AC70579",
+    "activeSeconds": 1500,
+    "creditedPomodoros": 1,
+    "note": "完成议程准备。",
+    "metricSeconds": 1500,
+    "metricCount": 1
+  },
+  {
+    "id": "D50A4570-2DCD-42C6-9A9E-5BC8752DE63D",
+    "activeSeconds": 2400,
+    "creditedPomodoros": 0,
+    "note": "集中梳理交互。",
+    "metricSeconds": 2400,
+    "metricCount": 0
+  },
+  {
+    "id": "C10201A7-C6E6-47C5-A553-3568EDCF7E55",
+    "activeSeconds": 360,
+    "creditedPomodoros": 1,
+    "note": "REA 完成页验收：已在完成后修改同条记录笔记。",
+    "metricSeconds": 360,
+    "metricCount": 1
+  }
+]

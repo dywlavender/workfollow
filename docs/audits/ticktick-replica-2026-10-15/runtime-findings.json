@@ -1,0 +1,173 @@
+{
+  "date": "2026-10-15",
+  "reference": "TickTick macOS 8.0.80",
+  "method": "REA native observations and CUA interactions with named acceptance fixtures",
+  "findings": [
+    {
+      "id": "FOCUS-NATURAL-01",
+      "evidenceType": "runtime",
+      "status": "observed",
+      "fixture": "REA 复刻验收 10-15 · 5分钟",
+      "action": "Run a five-minute pomodoro to its natural end with automatic break off.",
+      "result": "The completion screen says one pomodoro was harvested and offers start break, skip break and exit. It continues accumulating pending extra seconds without another start action.",
+      "evidence": [
+        "reference-focus-natural.png",
+        "reference-focus-natural.json"
+      ]
+    },
+    {
+      "id": "FOCUS-APPEND-01",
+      "evidenceType": "runtime",
+      "status": "observed",
+      "action": "Hover over the completion tomato and click its extra-time capsule.",
+      "result": "The capsule has a dashed border and the hint 点击即可添加到专注时长. Clicking +43:14 changed 05:00 to 48:00 and showed 已保存 with an undo control. The capsule disappeared and did not restart. This is one explicit append to the existing record.",
+      "limitation": "The displayed whole-minute value does not prove the reference client's internal storage precision.",
+      "evidence": [
+        "reference-focus-extra.png",
+        "reference-focus-extra.json"
+      ]
+    },
+    {
+      "id": "FOCUS-DURATION-01",
+      "evidenceType": "runtime",
+      "status": "observed",
+      "action": "Click the tomato's saved duration, select five minutes and save.",
+      "result": "A compact popover contains a minute picker, a start/end preview, cancel and save. In this session the selectable range was 5 through 48. Changing the draft from 48 to 5 immediately changed its preview from 08:51–09:39 to 08:51–08:56. Saving changed the same record back to five minutes.",
+      "limitation": "The upper bound has only been observed in this completed 48-minute example; a universal bound is not established."
+    },
+    {
+      "id": "FOCUS-STATS-01",
+      "evidenceType": "runtime",
+      "status": "observed",
+      "result": "After the duration correction and exit, today's and lifetime statistics both show one pomodoro and five minutes. There is one named 08:51–08:56 record with the acceptance note.",
+      "evidence": [
+        "reference-focus-stats.png",
+        "reference-focus-stats.json"
+      ]
+    },
+    {
+      "id": "FOCUS-SHORT-END-01",
+      "evidenceType": "runtime",
+      "status": "observed",
+      "action": "Start the five-minute preset, pause after 15 active seconds, then click 结束.",
+      "result": "The client exits to overview without saving a second record. Counts stay at one pomodoro and five minutes.",
+      "limitation": "The short run measured 15 active seconds; the longer early-end run measured 320 active seconds. The exact reference boundary is not established. WorkFollow reuses its existing 300-second minimum."
+    },
+    {
+      "id": "REPEAT-HEAD-01",
+      "evidenceType": "runtime",
+      "status": "observed",
+      "fixture": "REA 复刻验收 10-15",
+      "action": "Set the named inbox task to daily repeat on October 15, then use the date panel's tomorrow shortcut.",
+      "result": "The current task moved to October 16 immediately and retained the repeat marker; this shortcut did not open a three-scope dialog."
+    },
+    {
+      "id": "REPEAT-COMPLETE-01",
+      "evidenceType": "runtime",
+      "status": "observed",
+      "action": "Add an acceptance description and complete the October 16 occurrence.",
+      "result": "The client creates the October 17 occurrence with the same description. The October 16 record appears under completed tasks. Deleting the active test occurrence later moved it to trash without a scope dialog; no active test series remains."
+    },
+    {
+      "id": "REPEAT-RANGE-01",
+      "evidenceType": "coverage boundary",
+      "status": "unresolved",
+      "result": "The current free account's calendar opens an upgrade prompt and example data. Future occurrences of the named test series cannot be edited there, so range edits against existing exceptions have not been established in the reference client. The three-scope behavior in WorkFollow remains its implemented contract, not a verified identical client rule."
+    },
+    {
+      "id": "APPEARANCE-01",
+      "evidenceType": "runtime and source inspection",
+      "status": "observed in stated states",
+      "result": "The reference was observed with its night theme and then restored to 默认, flat style, system dark-theme switching off. WorkFollow Tasks, Calendar, Matrix and completion were inspected in dark appearance; completion was also inspected in light. The same Mini controller changed from light to dark with saved app appearance. Immersive focus was observed in dark.",
+      "limitation": "This covers the named states, not every popup, size, hover or focus state. Mini and immersive were inspected directly through CUA; a REA image of the floating Mini window was unavailable.",
+      "evidence": [
+        "reference-focus-completion-dark.png",
+        "native-tasks-dark.png",
+        "native-calendar-dark.png",
+        "native-matrix-dark.png",
+        "native-focus-completion-light.png",
+        "native-focus-completion-dark.png"
+      ]
+    },
+    {
+      "id": "FOCUS-LOCKED-RUN-01",
+      "evidenceType": "runtime",
+      "status": "observed after unlock",
+      "fixture": "REA 复刻验收 10-15 · 提前结束",
+      "result": "The ten-minute run reached its target naturally while the desktop was locked. On unlock it showed 10:00 completion with pending extra time. It was exited without appending; the record remains ten minutes. Its name does not establish an early-end result.",
+      "evidence": [
+        "reference-focus-completion-dark.png",
+        "reference-focus-completion-dark.json"
+      ]
+    },
+    {
+      "id": "FOCUS-EARLY-END-01",
+      "evidenceType": "runtime",
+      "status": "observed",
+      "action": "Start a pomodoro, pause at 174:40 remaining on a 180-minute target (320 active seconds), click 结束, then 结束并保存.",
+      "result": "The alert offers 结束并保存, 放弃, 取消. Saving returns directly to overview without harvest or break. Both final today and lifetime counts increase from two pomodoros to three.",
+      "timing_limitation": "The saved row displays seven minutes with a 16:29–16:34 interval, differing from the measured 320 active seconds before pause. Pause/wait timing and internal precision are not established; this display is not copied as an accounting algorithm. The exact minimum boundary and reference discard branch were not measured.",
+      "evidence": [
+        "reference-focus-early-paused.png",
+        "reference-focus-early-paused.json",
+        "reference-focus-early-result.png",
+        "reference-focus-early-result.json"
+      ]
+    }
+  ],
+  "fixtureState": {
+    "focus": "Three authorized QA records remain: the first natural five-minute record, a natural ten-minute record, and an early-ended record displaying seven minutes. Final today and lifetime show three pomodoros and 22 minutes. Two named QA common-focus presets remain. No reference timer is running.",
+    "tasks": "The named completed occurrence and named trashed active occurrence remain recoverable. The manually created item was an Inbox task, not a list. No ordinary task was changed.",
+    "theme": "Restored to 默认; flat interface and automatic system-dark switching off remain as originally observed."
+  },
+  "implementationContracts": [
+    {
+      "area": "completion",
+      "result": "Natural target reached with automatic break off tracks pending extra seconds separately; one explicit append updates the same record and stops the pending clock, preserving the pomodoro count. Whole-minute completion display does not round persisted seconds.",
+      "basis": "runtime observation; internal reference storage precision is unknown"
+    },
+    {
+      "area": "duration editor",
+      "result": "Unchanged minute draft keeps exact saved seconds and timing. An explicitly changed pomodoro minute draft updates the same record, end preview and aggregates.",
+      "basis": "runtime UI observation and WorkFollow precision contract"
+    },
+    {
+      "area": "completion layout",
+      "result": "Left pane has self-drawn tomato, duration editor and completion actions. Right pane keeps timeline and editable same-record note.",
+      "basis": "Reference UI observation and rebuilt native light/dark completion acceptance. Buttons are 123×48pt capsules with a local completion color."
+    },
+    {
+      "area": "recurrence range fields",
+      "result": "Date range edits preserve each stored occurrence content and organization. Future virtual periods use the existing projection template rather than promoting a selected middle occurrence body. Current head text-edit inheritance stays as before.",
+      "basis": "WorkFollow contract; exact reference range behavior remains blocked by the free-account calendar"
+    },
+    {
+      "area": "recurrence exclusions",
+      "result": "Completion skips terminal occupied periods, including an occurrence deleted after a range edit.",
+      "basis": "WorkFollow regression contract"
+    },
+    {
+      "area": "shortening recurrence",
+      "result": "Stored periods beyond a shortened count/end keep their content and dates and become ordinary tasks. Disabling repetition changes the selected date only and detaches other affected stored tasks without flattening their dates.",
+      "basis": "explicit WorkFollow design choice; not claimed as a verified reference rule"
+    },
+    {
+      "area": "user end confirmation",
+      "result": "The shared user-end command discards short pomodoros; at the existing 300-second project boundary it asks save/discard/cancel. Save persists exact active seconds and pause facts under the same session identity, credits one and returns idle without completion/break. Discard writes no record; cancel retains the session. Stopwatch end retains its existing precise-seconds behavior.",
+      "basis": "Reference 15-second and 320-second observations establish these two paths, not the exact boundary. Save/cancel were accepted through native UI with an owned paused fixture; all three choices are covered by store flow tests."
+    }
+  ],
+  "nativeAcceptance": {
+    "naturalCompletion": "A real owned five-minute timer reached natural completion with automatic break disabled. The note was edited after completion; a 5→6→restart→5 minute edit kept the same record identity and note.",
+    "appearance": "Tasks, Calendar, Matrix dark; completion light and dark; existing Mini light→dark; immersive dark.",
+    "earlyEnd": "Prepared owned 320-active-second paused snapshot, cancel then end-and-save; four records total, 4520 active seconds, three credited pomodoros, prior records unchanged.",
+    "finalState": "Owned QA is idle on its light focus overview; reference is idle with original default theme.",
+    "evidence": [
+      "native-focus-before-final-ui.json",
+      "native-focus-after-duration-edit.json",
+      "native-focus-early-confirm.json",
+      "native-focus-early-end.json",
+      "native-focus-early-result.png"
+    ]
+  }
+}

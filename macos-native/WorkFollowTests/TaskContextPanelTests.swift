@@ -55,7 +55,8 @@ final class TaskContextPanelTests: XCTestCase {
         let owner = owner()
         let view = try XCTUnwrap(owner.contentView)
         let originalCount = view.subviews.count
-        let session = TaskContextMenuPresenter.Session(in: view, at: CGPoint(x: 350, y: 500))
+        let session = TaskContextMenuPresenter.Session(in: view,
+            at: CGPoint(x: 350, y: view.bounds.maxY - 12))
         let workspace = TaskWorkspaceModel(seedDemoData: false)
         let id = try XCTUnwrap(workspace.createTask(title: "无箭头菜单验收", in: .inbox).taskID)
         let task = try XCTUnwrap(workspace.allTasks.first { $0.id == id })
@@ -63,7 +64,7 @@ final class TaskContextPanelTests: XCTestCase {
             workspace: workspace,
             isPresented: Binding(get: { [weak session] in session?.coordinator.presented == true },
                                  set: { [weak session] value in if !value { session?.close() } }),
-            task: task, onCustomDate: {}))
+            task: task, onCustomDate: {}, onChooseParent: {}))
         session.coordinator.update()
         settle()
         defer { session.close(); owner.close() }
@@ -79,6 +80,63 @@ final class TaskContextPanelTests: XCTestCase {
         XCTAssertNil(session.coordinator.panel)
         XCTAssertEqual(view.subviews.count, originalCount)
         XCTAssertFalse(panel.isVisible)
+    }
+
+    func testContextSessionReplacesMenuWithParentPickerAndKeepsSelectionDraftUntilConfirm() throws {
+        let workspace = TaskWorkspaceModel(seedDemoData: false)
+        let source = try XCTUnwrap(workspace.createTask(title: "待关联任务", in: .inbox).taskID)
+        let parent = try XCTUnwrap(workspace.createTask(title: "目标主任务", in: .inbox).taskID)
+        let environment = AppEnvironment()
+        let view = NSView(frame: CGRect(x: 0, y: 0, width: 700, height: 700))
+        let owner = InspectorPanelTestSupport.ownerWindow(for: view, width: 700, height: 700)
+        defer { TaskContextMenuPresenter.activeSession?.close(); owner.close() }
+        var parentFrames: [TaskParentPickerAnchor: CGRect] = [:]
+
+        func openPicker() throws -> NSPanel {
+            TaskContextMenuPresenter.show(in: view, at: CGPoint(x: 300, y: 680),
+                environment: environment, workspace: workspace,
+                task: try XCTUnwrap(workspace.task(for: source)), onCustomDate: {})
+            InspectorPanelTestSupport.settle(owner)
+            let menu = try InspectorPanelTestSupport.panel(title: "任务右键菜单", below: owner)
+            let session = try XCTUnwrap(TaskContextMenuPresenter.activeSession)
+            // This component test exercises the production Session transition;
+            // the menu button's wiring is covered by native acceptance. The
+            // in-process host does not expose this menu's SwiftUI AX children.
+            session.showParentPicker(taskID: source, workspace: workspace, environment: environment)
+            parentFrames = [:]
+            let content = session.coordinator.root
+            session.coordinator.root = AnyView(content.onPreferenceChange(TaskParentPickerFrames.self) {
+                parentFrames = $0
+            })
+            session.coordinator.update()
+            InspectorPanelTestSupport.settle(owner)
+            let picker = try InspectorPanelTestSupport.panel(title: "关联主任务", below: owner)
+            XCTAssertFalse(menu.isVisible)
+            XCTAssertEqual(picker.frame.width, 280, accuracy: 1)
+            XCTAssertEqual(picker.frame.height, 340, accuracy: 1)
+            return picker
+        }
+
+        let canceled = try openPicker()
+        try InspectorPanelTestSupport.click(try XCTUnwrap(parentFrames[.candidate(parent)]),
+            in: try XCTUnwrap(canceled.contentView), window: canceled)
+        XCTAssertNil(workspace.task(for: source)?.parentID)
+        try InspectorPanelTestSupport.sendEscape(to: owner)
+        XCTAssertFalse(canceled.isVisible)
+        XCTAssertNil(TaskContextMenuPresenter.activeSession)
+        XCTAssertNil(workspace.task(for: source)?.parentID)
+
+        let confirmed = try openPicker()
+        try InspectorPanelTestSupport.click(try XCTUnwrap(parentFrames[.candidate(parent)]),
+            in: try XCTUnwrap(confirmed.contentView), window: confirmed)
+        XCTAssertNil(workspace.task(for: source)?.parentID)
+        try InspectorPanelTestSupport.click(try XCTUnwrap(parentFrames[.confirm]),
+            in: try XCTUnwrap(confirmed.contentView), window: confirmed)
+        XCTAssertEqual(workspace.task(for: source)?.parentID, parent)
+        XCTAssertFalse(confirmed.isVisible)
+        XCTAssertNil(TaskContextMenuPresenter.activeSession)
+        workspace.undo()
+        XCTAssertNil(workspace.task(for: source)?.parentID)
     }
 
     func testSubmenuUsesRootBoundsNotSmallMenuBoundsAndEscapeIsHierarchical() throws {

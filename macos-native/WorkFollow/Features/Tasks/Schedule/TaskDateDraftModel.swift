@@ -54,6 +54,11 @@ final class TaskDateDraftModel: ObservableObject {
     @Published private(set) var frequency: TaskRepeat
     @Published private(set) var interval: Int
     @Published private(set) var weekday: Int
+    @Published private(set) var selectedWeekdays: Set<Int>
+    @Published private(set) var recurrenceBase: RecurrenceBase
+    @Published private(set) var selectedRepeatDates: [Date]
+    @Published private(set) var monthlyOrdinal: Int
+    private var ebbinghausStep: Int?
     @Published private(set) var monthDay: Int
     @Published private(set) var month: Int
     /// 农历重复目标（农历每年/每月按它推进）。规则缺失时按锚定日换算。
@@ -105,7 +110,13 @@ final class TaskDateDraftModel: ObservableObject {
         let rule = task.recurrenceRule
         _frequency = Published(initialValue: task.recurrence)
         _interval = Published(initialValue: rule?.interval ?? 1)
-        _weekday = Published(initialValue: rule?.weekday ?? calendar.component(.weekday, from: due ?? now()))
+        let anchorWeekday = rule?.weekday ?? calendar.component(.weekday, from: due ?? now())
+        _weekday = Published(initialValue: anchorWeekday)
+        _selectedWeekdays = Published(initialValue: Set(rule?.weekdays ?? [anchorWeekday]))
+        _recurrenceBase = Published(initialValue: rule?.base ?? .dueDate)
+        _selectedRepeatDates = Published(initialValue: rule?.selectedDates ?? [])
+        _monthlyOrdinal = Published(initialValue: rule?.monthlyOrdinal ?? 0)
+        ebbinghausStep = rule?.ebbinghausStep
         _monthDay = Published(initialValue: rule?.monthDay ?? calendar.component(.day, from: due ?? now()))
         _month = Published(initialValue: rule?.month ?? calendar.component(.month, from: due ?? now()))
         let lunarCalendar = ChineseWorkCalendar.lunarCalendar(matching: calendar)
@@ -328,6 +339,7 @@ final class TaskDateDraftModel: ObservableObject {
     func syncRecurrenceAnchor() {
         let day = recurrenceAnchorDate
         weekday = calendar.component(.weekday, from: day)
+        if selectedWeekdays.count <= 1 { selectedWeekdays = [weekday] }
         monthDay = calendar.component(.day, from: day)
         month = calendar.component(.month, from: day)
         let lunar = ChineseWorkCalendar.lunarCalendar(matching: calendar)
@@ -346,7 +358,29 @@ final class TaskDateDraftModel: ObservableObject {
     }
 
     func chooseInterval(_ value: Int) { interval = value; recurrenceTouched = true }
-    func chooseWeekday(_ value: Int) { weekday = value; recurrenceTouched = true }
+    func chooseWeekday(_ value: Int) { weekday = value; selectedWeekdays = [value]; recurrenceTouched = true }
+    func toggleWeekday(_ value: Int) {
+        if selectedWeekdays.contains(value) {
+            if selectedWeekdays.count > 1 { selectedWeekdays.remove(value) }
+        } else { selectedWeekdays.insert(value) }
+        weekday = selectedWeekdays.sorted().first ?? value
+        recurrenceTouched = true
+    }
+    func chooseBase(_ value: RecurrenceBase) {
+        recurrenceBase = value
+        if value == .selectedDates, selectedRepeatDates.isEmpty {
+            selectedRepeatDates = [calendar.startOfDay(for: recurrenceAnchorDate)]
+        }
+        recurrenceTouched = true
+    }
+    func chooseSelectedDates(_ values: [Date]) {
+        selectedRepeatDates = Array(Set(values.map { calendar.startOfDay(for: $0) })).sorted()
+        if recurrenceBase == .selectedDates, let first = selectedRepeatDates.first {
+            selectedDate = TaskDateDraft.movingDay(selectedDate, to: first, calendar: calendar)
+        }
+        recurrenceTouched = true
+    }
+    func chooseMonthlyOrdinal(_ value: Int) { monthlyOrdinal = value; recurrenceTouched = true }
     func chooseMonthDay(_ value: Int) { monthDay = value; recurrenceTouched = true }
     func chooseMonth(_ value: Int) { month = value; recurrenceTouched = true }
     func chooseEnding(_ value: Ending) { ending = value; recurrenceTouched = true }
@@ -377,7 +411,10 @@ final class TaskDateDraftModel: ObservableObject {
 
     /// 结束早于开始 → 禁止确认。判据在 `ScheduleSemantics.rangeError`（单一来源）。
     var rangeError: String? {
-        ScheduleSemantics.rangeError(start: effectiveStart, end: effectiveEnd)
+        if frequency != .never, recurrenceBase == .selectedDates, selectedRepeatDates.isEmpty {
+            return "请选择至少一个重复日期"
+        }
+        return ScheduleSemantics.rangeError(start: effectiveStart, end: effectiveEnd)
     }
 
     var canCommit: Bool { rangeError == nil }
@@ -447,7 +484,10 @@ final class TaskDateDraftModel: ObservableObject {
             endDate: ending == .untilDate ? calendar.startOfDay(for: repeatEndDate) : nil,
             remainingCount: ending == .count ? max(1, repeatCount) : nil,
             monthDay: monthDay, weekday: weekday, month: month,
-            lunarMonth: lunarMonth, lunarDay: lunarDay, lunarIsLeapMonth: lunarIsLeapMonth)
+            lunarMonth: lunarMonth, lunarDay: lunarDay, lunarIsLeapMonth: lunarIsLeapMonth,
+            weekdays: selectedWeekdays.count > 1 ? selectedWeekdays.sorted() : nil,
+            base: recurrenceBase, selectedDates: recurrenceBase == .selectedDates ? selectedRepeatDates : nil,
+            monthlyOrdinal: monthlyOrdinal == 0 ? nil : monthlyOrdinal, ebbinghausStep: ebbinghausStep)
     }
 
     private var builtRule: RecurrenceRule? {
@@ -457,7 +497,7 @@ final class TaskDateDraftModel: ObservableObject {
     /// Future occurrence days for the calendar preview (pale accent discs),
     /// anchored on the drafted start day.
     func occurrencePreviewDays(limit: Int = 12) -> Set<Date> {
-        guard let rule = draftRule else { return [] }
+        guard let rule = draftRule, rule.base != .completionDate else { return [] }
         let base = (tab == .period ? periodStart : selectedDate) ?? selectedDate
         return rule.occurrenceDays(after: base, frequency: frequency, calendar: calendar, limit: limit)
     }

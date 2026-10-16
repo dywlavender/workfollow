@@ -1,0 +1,101 @@
+{
+  "date": "2026-10-16",
+  "branch": "experiment/macos-native",
+  "phase": "Kanban hierarchy alignment",
+  "reference_client": "TickTick 8.0.80",
+  "reference_evidence": {
+    "file": "../ticktick-task-board.png",
+    "type": "Previously captured REA runtime screenshot of the same installed client version",
+    "observations": [
+      "Column header counts open tasks; completed tasks are in a foldable subsection of the original column.",
+      "Subtasks expand inside the parent card with their own checkbox, content and schedule."
+    ],
+    "reference_task_data_modified_in_this_phase": false
+  },
+  "implementation": [
+    "Keep closed roots in their original kanban columns and sort the column closed subsection by close time.",
+    "Preserve list and dedicated closed-page projections; cache groups by view mode.",
+    "Render parent and child rows in one card with shared task identities, actions and folding state.",
+    "Apply Hide Completed to closed roots and inline children."
+  ],
+  "build": "passed",
+  "new_tests": 5,
+  "targeted_regression": {
+    "total": 112,
+    "passed": 112,
+    "failures": 0,
+    "skipped": 0,
+    "log": "/private/tmp/workfollow-kanban-hierarchy-targeted-final-2026-10-16.log"
+  },
+  "full_regression": {
+    "total": 1323,
+    "passed": 1318,
+    "skipped": 5,
+    "failures": 0,
+    "seconds": 156.478,
+    "log": "/private/tmp/workfollow-kanban-hierarchy-full-2026-10-16.log"
+  },
+  "skip_reasons": [
+    "Four meeting integrations require explicitly enabled real Pi services.",
+    "One focus test requires the temporary XCTest host to become the active app."
+  ],
+  "native_acceptance": {
+    "status": "passed",
+    "app": "WorkFollowTaskAlignmentQA",
+    "bundle": "com.workfollow.native.tasks.alignment.qa",
+    "signing_verification": "passed",
+    "flows": [
+      {
+        "name": "Inline expansion",
+        "observed": "Collapsing 需求评审 removed both child rows; expanding restored both original tasks."
+      },
+      {
+        "name": "Child completion and restore",
+        "observed": "准备议程 completed and restored from its own checkbox; parent stayed active and progress changed 0/2 → 1/2 → 0/2."
+      },
+      {
+        "name": "Child selection",
+        "observed": "Clicking the child title opened 准备议程 details with the 需求评审 parent link."
+      },
+      {
+        "name": "Child menu, date panel and undo",
+        "observed": "The child context menu set Tomorrow, and its own date text opened the shared date panel. Selecting Oct 18 and confirming updated the child; two separate undo actions restored Oct 17 and then the original undated state. The parent remained in its original date column."
+      },
+      {
+        "name": "Last open root completion",
+        "observed": "Completing 联调与回归 changed Today open count 1 → 0, and Today closed subsection 1 → 2. The column and creation entry remained visible."
+      },
+      {
+        "name": "Closed subsection folding",
+        "observed": "Folding Today hid both closed tasks, while its count remained 2; expanding made both accessible."
+      },
+      {
+        "name": "Root restore and history",
+        "observed": "Restoring 联调与回归 returned it to the same column open area. Undoing restore and then completion returned the original state."
+      },
+      {
+        "name": "Hide Completed",
+        "observed": "With one completed child, Hide Completed removed that child and both root closed subsections, preserving the unfinished child. Restoring the preference and undoing child completion restored the prior visible state."
+      }
+    ],
+    "final_state": "Display preference restored; named QA roots retain original status, children active, temporary child dates cleared; expanded kanban remains open for review.",
+    "captures": [
+      {
+        "file": "closed-in-original-column.png",
+        "source": "REA observe-native-ui after completing the last open Today root",
+        "visually_checked": true
+      },
+      {
+        "file": "hierarchy-restored.png",
+        "source": "REA observe-native-ui after restoring display preference and task status",
+        "visually_checked": true
+      }
+    ]
+  },
+  "remaining_gaps": [
+    "Exact cross-column drag rules.",
+    "Displaying a task in every matching tag column.",
+    "List archive, independent tag hierarchy, advanced filtering, timeline and collaboration services."
+  ],
+  "superseded_by": "../list-archive/verification.json"
+}

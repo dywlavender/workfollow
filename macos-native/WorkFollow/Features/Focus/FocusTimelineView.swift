@@ -7,9 +7,9 @@ struct FocusTimelineView: View {
 
     var body: some View {
         GeometryReader { geometry in
-            if let timing = store.sessionTiming {
+            if let timing = store.displayedSessionTiming {
                 let projection = FocusTimelineProjection.make(
-                    timing: timing, now: store.currentTime, calendar: .current
+                    timing: timing, now: store.currentTime, calendar: store.presentationCalendar
                 )
                 let currentY = projection.currentYRatio * geometry.size.height
                 let axisWidth = max(0, geometry.size.width - FocusLayoutMetrics.timelineLabelWidth)
@@ -54,12 +54,13 @@ struct FocusTimelineView: View {
                 Color.clear
             }
         }
-        .frame(height: FocusLayoutMetrics.timelineHeight)
+        .frame(height: store.completionContext != nil
+               ? FocusLayoutMetrics.completionTimelineHeight : FocusLayoutMetrics.timelineHeight)
     }
 
     private func tickRow(_ date: Date, axisWidth: CGFloat) -> some View {
         HStack(spacing: 0) {
-            Text("\(Calendar.current.component(.hour, from: date))")
+            Text("\(store.presentationCalendar.component(.hour, from: date))")
                 .font(.system(size: 13))
                 .monospacedDigit()
                 .foregroundStyle(theme.text3)

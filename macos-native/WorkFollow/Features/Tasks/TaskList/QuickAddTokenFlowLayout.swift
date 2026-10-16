@@ -56,6 +56,8 @@ struct QuickAddTextField: NSViewRepresentable {
     let onFieldFocusChange: (Bool) -> Void
     /// 列表快速添加条与全局面板的字号不同（13 / 14），其余排版保持一致。
     var fontSize: CGFloat = 13
+    var onSelectionChange: ((NSRange) -> Void)?
+    var requestedSelection: Binding<NSRange?>?
 
     private var font: NSFont { NSFont.systemFont(ofSize: fontSize, weight: .regular) }
 
@@ -112,6 +114,11 @@ struct QuickAddTextField: NSViewRepresentable {
     func updateNSView(_ field: NSTextField, context: Context) {
         context.coordinator.parent = self
         syncTextAndStyling(field)
+        if let requested = requestedSelection?.wrappedValue,
+           let editor = field.currentEditor() as? NSTextView, !editor.hasMarkedText() {
+            editor.setSelectedRange(Self.clamped(requested, to: (text as NSString).length))
+            DispatchQueue.main.async { requestedSelection?.wrappedValue = nil }
+        }
 
         guard let window = field.window else { return }
         let editor = field.currentEditor()
@@ -230,6 +237,11 @@ struct QuickAddTextField: NSViewRepresentable {
 
     final class Coordinator: NSObject, NSTextFieldDelegate {
         var parent: QuickAddTextField
+        private var selectionObserver: NSObjectProtocol?
+
+        deinit {
+            if let selectionObserver { NotificationCenter.default.removeObserver(selectionObserver) }
+        }
 
         init(parent: QuickAddTextField) {
             self.parent = parent
@@ -237,7 +249,9 @@ struct QuickAddTextField: NSViewRepresentable {
 
         func controlTextDidChange(_ notification: Notification) {
             guard let field = notification.object as? NSTextField else { return }
+            guard (field.currentEditor() as? NSTextView)?.hasMarkedText() != true else { return }
             parent.text = field.stringValue
+            if let editor = field.currentEditor() as? NSTextView { parent.onSelectionChange?(editor.selectedRange()) }
         }
 
         /// 编辑开始/结束都是**可靠的**聚焦信号，前提是 `focused` 是普通 `Binding`。
@@ -245,15 +259,27 @@ struct QuickAddTextField: NSViewRepresentable {
         func controlTextDidBeginEditing(_ notification: Notification) {
             parent.focused.wrappedValue = true
             parent.onFieldFocusChange(true)
+            if let field = notification.object as? NSTextField, let editor = field.currentEditor() as? NSTextView {
+                if let selectionObserver { NotificationCenter.default.removeObserver(selectionObserver) }
+                parent.onSelectionChange?(editor.selectedRange())
+                selectionObserver = NotificationCenter.default.addObserver(
+                    forName: NSTextView.didChangeSelectionNotification, object: editor, queue: .main) { [weak self, weak editor] _ in
+                        guard let self, let editor, !editor.hasMarkedText() else { return }
+                        self.parent.onSelectionChange?(editor.selectedRange())
+                    }
+            }
         }
 
         func controlTextDidEndEditing(_ notification: Notification) {
             parent.focused.wrappedValue = false
             parent.onFieldFocusChange(false)
+            if let selectionObserver { NotificationCenter.default.removeObserver(selectionObserver) }
+            selectionObserver = nil
         }
 
         func control(_ control: NSControl, textView: NSTextView,
                      doCommandBy commandSelector: Selector) -> Bool {
+            guard !textView.hasMarkedText() else { return false }
             if commandSelector == #selector(NSResponder.insertNewline(_:)) {
                 parent.onSubmit()
                 return true

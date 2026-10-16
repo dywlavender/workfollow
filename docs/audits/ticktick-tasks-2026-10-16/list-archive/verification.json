@@ -1,0 +1,128 @@
+{
+  "date": "2026-10-16",
+  "branch": "experiment/macos-native",
+  "phase": "List archive and multi-tag kanban",
+  "reference_client": "TickTick 8.0.80",
+  "reference_evidence": {
+    "archive_confirmation": {
+      "file": "ticktick-archive-confirmation.png",
+      "source": "REA observe-native-ui and CUA dialog text",
+      "observed": "归档后，该清单将放入文件夹“已归档的清单”中。清单中的任务或笔记将不在智能清单中显示，到期也不提醒。",
+      "normal_reference_list_archived": false,
+      "dialog_cancelled": true,
+      "visually_checked": true
+    },
+    "multiple_tags": {
+      "observed": "Named disposable reference task displays multiple tag chips; two formal test tags appear in the sidebar.",
+      "official_documentation": "https://help.dida365.com/articles/6950652964327391232",
+      "current_reference_tag_board_duplication_rule": "Not dynamically confirmed; cross-column duplication is the implemented design, verified in WorkFollow."
+    },
+    "remaining_reference_checks": [
+      "Editing permissions inside an archived list.",
+      "Exact tag-grouping duplication and cross-column drag rules."
+    ]
+  },
+  "implementation": [
+    "Add optional archive date to list metadata and preserve identity, organization, tasks and existing reminder settings.",
+    "Archive/restore through one undoable metadata commit, including undo/redo reminder eligibility notifications.",
+    "Show a foldable archived list group and direct browsing with restore controls; exclude archive from active projections and target pickers.",
+    "Persist all list names, including empty archives, through SQLite and migration export/import.",
+    "Clear stale saved-filter selection when navigating into a normal or archived list.",
+    "Project multi-tag tasks into each kanban tag column with one shared task identity, hierarchy and action stream; preserve unique flat-list rows."
+  ],
+  "new_tests": 7,
+  "targeted_regression": {
+    "total": 72,
+    "passed": 72,
+    "failures": 0,
+    "skipped": 0,
+    "log": "/private/tmp/workfollow-task-archive-targeted-2026-10-16.log"
+  },
+  "final_full_regression": {
+    "status": "passed",
+    "total": 1330,
+    "passed": 1325,
+    "skipped": 5,
+    "failures": 0,
+    "seconds": 163.474,
+    "log": "/private/tmp/workfollow-task-archive-final-full-2026-10-16.log"
+  },
+  "skip_reasons": [
+    "Four meeting integrations require explicitly enabled real Pi services.",
+    "One anchored property-panel focus test requires the temporary XCTest host to become the active app."
+  ],
+  "native_acceptance": {
+    "app": "WorkFollowTaskAlignmentQA",
+    "bundle": "com.workfollow.native.tasks.alignment.qa",
+    "signing_verification": "passed",
+    "flows": [
+      {
+        "name": "Archive confirmation and active-list membership",
+        "observed": "工作 moved from ordinary lists to 已归档的清单; All badge changed 10 to 3, Today 4 to 1."
+      },
+      {
+        "name": "Archived-list browsing",
+        "observed": "Parent 需求评审 and both children remain visible; archive explanation and Restore control appear; quick-add is absent."
+      },
+      {
+        "name": "Archive folder folding",
+        "observed": "Collapse removes the archived-list row and expand restores it."
+      },
+      {
+        "name": "Restart persistence",
+        "observed": "After quitting and reopening, 工作 remains archived, All remains 3, and all 12 task records remain in SQLite."
+      },
+      {
+        "name": "Restore and undo",
+        "observed": "Sidebar context restore returns 工作 to normal lists; undo returns it to archive; the browse-page Restore button restores the list and creation input."
+      },
+      {
+        "name": "Multi-tag projection",
+        "observed": "REA 多标签联动验收 appears under 本周 and 验收; SQLite contains exactly one record for this task."
+      },
+      {
+        "name": "Completion from one column",
+        "observed": "Completing in 验收 changes 本周 6 to 5 and 验收 2 to 1; the task appears in both original closed subsections."
+      },
+      {
+        "name": "Restore from the other column",
+        "observed": "Restoring in 本周 returns both cards to open areas and restores both column counts."
+      },
+      {
+        "name": "Shared undo",
+        "observed": "More > Undo reverses restore in both columns; restoring in 验收 returns the shared task to active."
+      },
+      {
+        "name": "Saved-filter to archive navigation",
+        "observed": "Final build clears the Inbox-only filter when entering archived 工作; the archive header and its parent/child tasks appear normally."
+      }
+    ],
+    "final_state": "工作 restored; multi-tag QA task active in two tag columns; one corresponding task record; 13 isolated task records total; ordinary reference task data unchanged.",
+    "captures": [
+      {
+        "file": "workfollow-archived-list.png",
+        "source": "REA observe-native-ui",
+        "visually_checked": true
+      },
+      {
+        "file": "workfollow-multitag-closed.png",
+        "source": "REA observe-native-ui",
+        "visually_checked": true
+      },
+      {
+        "file": "workfollow-multitag-active.png",
+        "source": "REA observe-native-ui",
+        "visually_checked": true
+      }
+    ],
+    "final_filter_navigation_check": "passed: Entered 收集箱过滤验收, then opened archived 工作. Header changed to 工作; 需求评审, 准备议程 and 联调与回归 were visible. Restored 工作 and returned to the tag board.",
+    "final_database_check": {
+      "task_records": 13,
+      "multi_tag_records": 1,
+      "multi_tag_active": true,
+      "archived_lists": 0
+    },
+    "status": "passed"
+  },
+  "build": "passed"
+}

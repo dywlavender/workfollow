@@ -1,0 +1,9 @@
+preset-change: original-plan=25, saved-minutes=50, phase=breaking
+stopwatch-refresh: elapsed=90, remaining=0, change-events=0
+explicit-stopwatch: preference=false, actual-no-end=true, plan=0
+restored-stopwatch: preference=false, actual-no-end=true, phase=focusing
+paused-end: 2-minute-record=false, 10-minute-completed=false, today-pomodoros=0, today-minutes=10
+stopwatch-finish: minutes=2, completed=true, tomato-count=1, phase=breaking
+manual-focus: minutes=60, tomato-count=1
+unlinked-auto-start: enabled=true, after-break=idle
+bell-names: selected-raw-resolves=false, selected-system-name-resolves=true

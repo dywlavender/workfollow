@@ -23,12 +23,18 @@ private extension View {
 
 enum TaskParentPickerProjection {
     static func candidates(for taskID: UUID, tasks: [Task], query: String) -> [Task] {
-        guard let source = tasks.first(where: { $0.id == taskID }) else { return [] }
+        candidates(for: Set([taskID]), tasks: tasks, query: query)
+    }
+
+    static func candidates(for taskIDs: Set<UUID>, tasks: [Task], query: String) -> [Task] {
+        let sources = tasks.filter { taskIDs.contains($0.id) }
+        guard !sources.isEmpty, sources.count == taskIDs.count else { return [] }
         let text = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        return tasks.filter {
-            TaskParentPolicy.canAssign(task: source, parent: $0, tasks: tasks) &&
-            (text.isEmpty || $0.title.localizedCaseInsensitiveContains(text) ||
-             $0.list.name.localizedCaseInsensitiveContains(text))
+        return tasks.filter { candidate in
+            !taskIDs.contains(candidate.id) &&
+            sources.allSatisfy({ TaskParentPolicy.canAssign(task: $0, parent: candidate, tasks: tasks) }) &&
+            (text.isEmpty || candidate.title.localizedCaseInsensitiveContains(text) ||
+             candidate.list.name.localizedCaseInsensitiveContains(text))
         }.sorted {
             if $0.title != $1.title { return $0.title.localizedStandardCompare($1.title) == .orderedAscending }
             return $0.createdAt < $1.createdAt
@@ -36,9 +42,11 @@ enum TaskParentPickerProjection {
     }
 }
 
-/// Single-selection draft: browsing/searching never changes task hierarchy.
+/// Browsing/searching is draft-only. A batch uses the complete source selection
+/// for both candidate validation and its one-step assignment command.
 struct TaskParentPicker: View {
-    let taskID: UUID
+    private let taskIDs: Set<UUID>
+    private let isBulkAssignment: Bool
     @ObservedObject var workspace: TaskWorkspaceModel
     let onClose: () -> Void
     @State private var query = ""
@@ -46,8 +54,23 @@ struct TaskParentPicker: View {
     @State private var failed = false
     @FocusState private var searchFocused: Bool
 
+    init(taskID: UUID, workspace: TaskWorkspaceModel, onClose: @escaping () -> Void) {
+        self.taskIDs = [taskID]
+        self.isBulkAssignment = false
+        self.workspace = workspace
+        self.onClose = onClose
+    }
+
+    init(taskIDs: Set<UUID>, workspace: TaskWorkspaceModel, onClose: @escaping () -> Void) {
+        self.taskIDs = taskIDs
+        self.isBulkAssignment = true
+        self.workspace = workspace
+        self.onClose = onClose
+    }
+
     private var candidates: [Task] {
-        TaskParentPickerProjection.candidates(for: taskID, tasks: workspace.allTasks, query: query)
+        TaskParentPickerProjection.candidates(for: taskIDs, tasks: workspace.allTasks, query: query)
+            .filter { !workspace.isListArchived($0.list.name) }
     }
 
     var body: some View {
@@ -88,7 +111,13 @@ struct TaskParentPicker: View {
                 Button("取消", action: onClose).frame(maxWidth: .infinity)
                 Button("确定") {
                     guard let selectedID else { return }
-                    if workspace.assignParent(taskID, parentID: selectedID).taskID != nil { onClose() }
+                    let result: TaskActionResult
+                    if isBulkAssignment {
+                        result = workspace.assignBulkParent(taskIDs, parentID: selectedID)
+                    } else if let taskID = taskIDs.first {
+                        result = workspace.assignParent(taskID, parentID: selectedID)
+                    } else { return }
+                    if result.taskID != nil { onClose() }
                     else { failed = true; self.selectedID = nil }
                 }.buttonStyle(.borderedProminent).frame(maxWidth: .infinity)
                     .disabled(!candidates.contains { $0.id == selectedID })
@@ -96,7 +125,12 @@ struct TaskParentPicker: View {
             }.padding(12)
         }.frame(width: 280, height: 340)
             .coordinateSpace(name: "parent-picker")
-            .onAppear { searchFocused = true; selectedID = workspace.task(for: taskID)?.parentID }
+            .onAppear {
+                searchFocused = true
+                if !isBulkAssignment, let taskID = taskIDs.first {
+                    selectedID = workspace.task(for: taskID)?.parentID
+                }
+            }
             .onExitCommand(perform: onClose)
             .onKeyPress(.escape) { onClose(); return .handled }
     }

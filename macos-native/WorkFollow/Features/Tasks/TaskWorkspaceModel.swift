@@ -14,6 +14,10 @@ final class TaskWorkspaceModel: ObservableObject {
     ]
 
     @Published private(set) var selectedTaskID: UUID?
+    // The occurrence is selection context, not a second visible selection.
+    // selectedTaskID publishes the change once; updating the same preview
+    // explicitly invalidates the presentation only when its value changes.
+    private(set) var selectedOccurrence: TaskOccurrence?
     @Published private(set) var collapsedTaskIDs: Set<UUID> = []
     @Published private(set) var pendingChildTitleEditorID: UUID?
     @Published private(set) var revision = 0
@@ -29,6 +33,7 @@ final class TaskWorkspaceModel: ObservableObject {
         let query: TaskListQuery
         let grouping: TaskListGrouping
         let hidesCompleted: Bool
+        let viewMode: TaskListViewMode
         let groups: [TaskListGroup]
     }
     private struct NodeCacheEntry {
@@ -57,6 +62,7 @@ final class TaskWorkspaceModel: ObservableObject {
     }
     /// Committed domain changes, separate from selection/filter/UI invalidation.
     let taskChanges = PassthroughSubject<TaskChangeSet, Never>()
+    let listArchiveChanges = PassthroughSubject<Set<String>, Never>()
     /// Editors finish their outgoing input before selection publishes a new host.
     let selectionWillChange = PassthroughSubject<UUID?, Never>()
     /// Invalidates date-derived projections and labels without treating time
@@ -97,10 +103,21 @@ final class TaskWorkspaceModel: ObservableObject {
         store.commit(store.tasks, lists: initialLists, listMetas: initialListMeta,
                      listFolders: initialListFolders,
                      listSections: initialListSections)
+        actions.hydrateOrganization()
+        actions.hydrateSeries()
         store.clearUndo()
         // Install after hydration: consumers see committed edits, not a replay
         // of initial loading. The stream exists independently of Activity.
         store.onTaskChanges = { [weak self] changes in self?.taskChanges.send(changes) }
+        store.onListArchiveChange = { [weak self] names in self?.listArchiveChanges.send(names) }
+        store.onOrganizationRename = { [weak self] change in
+            guard let self else { return }
+            if change.kind == .list, self.activeList == change.oldName { self.activeList = change.newName }
+            if change.kind == .tag, self.activeTag == change.oldName { self.activeTag = change.newName }
+            self.filterStore?.renameReference(change)
+            NotificationCenter.default.post(name: .workspaceOrganizationRenamed, object: nil,
+                userInfo: ["kind": change.kind.rawValue, "old": change.oldName, "new": change.newName])
+        }
     }
 
     var listNames: [String] {
@@ -111,7 +128,22 @@ final class TaskWorkspaceModel: ObservableObject {
         dateRevision += 1
     }
 
+    func listReferenceID(for name: String) -> UUID { actions.listReferenceID(name) }
+    func tagReferenceID(for name: String) -> UUID { actions.tagReferences([name])[0].id }
+
     var allListNames: [String] { [TaskList.inbox.name] + listNames }
+    var activeListNames: [String] { listNames.filter { !isListArchived($0) } }
+    /// 创建、移动和范围选择器只提供未归档清单；持久化始终使用 listNames 全集。
+    var availableListNames: [String] { [TaskList.inbox.name] + activeListNames }
+    var archivedListNames: [String] {
+        TaskListOrdering.ordered(listNames.filter { isListArchived($0) }, metas: store.listMetas)
+    }
+    func isListArchived(_ name: String) -> Bool { store.archivedListNames.contains(name) }
+    var tasksInActiveLists: [Task] {
+        _ = revision
+        let archived = store.archivedListNames
+        return store.tasks.filter { !archived.contains($0.list.name) }
+    }
     var tagNames: [String] { Array(Set(allTasks.flatMap(\.tags))).sorted() }
 
     // MARK: 清单元数据（Round B1 加法）
@@ -120,7 +152,7 @@ final class TaskWorkspaceModel: ObservableObject {
     /// sortOrder、再按名字；未注册/无 meta 的清单按字典序排在后面。
     var orderedListNames: [String] {
         _ = revision
-        return TaskListOrdering.ordered(listNames, metas: store.listMetas)
+        return TaskListOrdering.ordered(activeListNames, metas: store.listMetas)
     }
     func listMeta(for name: String) -> TaskListMeta? {
         _ = revision
@@ -145,6 +177,17 @@ final class TaskWorkspaceModel: ObservableObject {
         if changed { revision += 1 }
         return changed
     }
+    @discardableResult
+    func setListArchived(_ name: String, _ archived: Bool) -> Bool {
+        guard actions.setListArchived(name, archived) else { return false }
+        clearBulkSelection()
+        if selectedTask?.list.name == name { select(nil) }
+        revision += 1
+        report(FeedbackEvent(kind: .undoable,
+            message: archived ? "已归档清单「\(name)」" : "已恢复清单「\(name)」",
+            actionTitle: "撤销", action: undoStep()))
+        return true
+    }
     /// 清单图标（Emoji；nil 清除，侧栏回落到色点）。
     @discardableResult
     func setListIcon(_ name: String, _ icon: String?) -> Bool {
@@ -158,7 +201,7 @@ final class TaskWorkspaceModel: ObservableObject {
     /// 侧栏清单树：置顶清单 + 顶层清单 + 文件夹（成员在节点里，空文件夹也出现）。
     var listTree: [TaskListSidebarNode] {
         _ = revision
-        return TaskListOrdering.sidebarTree(listNames, metas: store.listMetas, folders: store.listFolders)
+        return TaskListOrdering.sidebarTree(activeListNames, metas: store.listMetas, folders: store.listFolders)
     }
 
     /// 清单文件夹（含空文件夹），按自身 sortOrder。
@@ -275,7 +318,7 @@ final class TaskWorkspaceModel: ObservableObject {
     /// 任务改归属（nil = 移出分组）。
     @discardableResult
     func setTaskSection(_ id: UUID, sectionID: String?) -> TaskActionResult {
-        let result = actions.setTaskSection(id, sectionID: sectionID)
+        let result = withMaterializedTask(id) { actions.setTaskSection($0, sectionID: sectionID) }
         didMutate(result)
         return result
     }
@@ -321,6 +364,11 @@ final class TaskWorkspaceModel: ObservableObject {
 
     func attachFilterStore(_ store: FilterStore) {
         filterStore = store
+        store.organizationResolver = { [weak self] lists, tags in
+            guard let self else { return ([], []) }
+            return (lists.map { self.actions.listReferenceID($0) }, self.actions.tagReferences(tags).map(\.id))
+        }
+        store.resolveOrganizationReferences()
         filterCancellable = store.$filters.sink { [weak self] filters in
             guard let self else { return }
             self.revision += 1
@@ -364,31 +412,22 @@ final class TaskWorkspaceModel: ObservableObject {
     func mergeBulkTasks() -> UUID? {
         let ids = bulkSelection
         let result = actions.mergeTasks(ids)
+        guard let parentID = result.taskID else { return nil }
         clearBulkSelection()
         revision += 1
-        if let parentID = result.taskID {
-            let parentTitle = store.task(parentID)?.title ?? "合并任务"
-            report(FeedbackEvent(kind: .undoable, message: "已合并 \(ids.count) 个任务到「\(parentTitle)」",
-                                 actionTitle: "撤销", action: undoStep()))
-            return parentID
-        }
-        return nil
+        let parentTitle = store.task(parentID)?.title ?? "合并任务"
+        report(FeedbackEvent(kind: .undoable, message: "已合并 \(ids.count) 个任务到「\(parentTitle)」",
+                             actionTitle: "撤销", action: undoStep()))
+        return parentID
     }
 
-    /// 批量转换笔记（补齐轮）：逐个走单任务转换链（含子任务随迁与撤销桥），
-    /// 失败（已转换/已删除）跳过。返回成功数；有成功时导航到笔记列表。
-    /// 不走 applyBulk——转换横跨任务与笔记两个 store，单任务链已各自成事务。
+    /// The application prepares all note snapshots, then commits their task
+    /// relations together with matching undo/redo callbacks in one history step.
     @discardableResult
     func convertBulkToNotes(environment: AppEnvironment) -> Int {
-        let ids = bulkSelection
-        clearBulkSelection()
-        var converted = 0
-        for id in ids where environment.convertTaskToNote(id) != nil { converted += 1 }
-        if converted > 0 {
-            report(FeedbackEvent(kind: .undoable, message: "已转换 \(converted) 个任务为笔记",
-                                 actionTitle: "撤销", action: undoStep()))
-        }
-        return converted
+        let converted = environment.convertTasksToNotes(bulkSelection)
+        if !converted.isEmpty { clearBulkSelection() }
+        return converted.count
     }
 
     /// 批量复制文本（补齐轮）：所选任务标题逐行进剪贴板（列表手动排序的
@@ -466,14 +505,14 @@ final class TaskWorkspaceModel: ObservableObject {
     }
     /// 复制任务（Flutter 的"复制任务"）：连同子任务生成副本，HUD 带一步撤销。
     func duplicate(_ id: UUID) {
-        let result = actions.duplicate(id)
+        let result = withMaterializedTask(id) { actions.duplicate($0) }
         didMutate(result)
         if result.taskID != nil {
             report(FeedbackEvent(kind: .success, message: "已复制\(quotedTitle(id))",
                                  actionTitle: "撤销", action: undoStep()))
         }
     }
-    func skip(_ id: UUID) { didMutate(actions.skipOccurrence(id)); select(nil) }
+    func skip(_ id: UUID) { didMutate(withMaterializedTask(id) { actions.skipOccurrence($0) }); select(nil) }
     func reorder(_ id: UUID, before target: UUID) { actions.reorder(id, before: target); revision += 1 }
     /// 已过期组头"顺延"（对齐 Flutter _postponeOverdue）：逐任务保留各自时钟，
     /// 整组动作是单条事务，一次撤销整组生效；HUD 报告顺延数量。
@@ -520,8 +559,90 @@ final class TaskWorkspaceModel: ObservableObject {
     }
 
     @discardableResult
+    func submitCapture(_ session: QuickCaptureSession, defaultDueAt: Date? = nil) -> [UUID] {
+        let drafts = session.drafts(now: clock(), calendar: calendar, knownLists: Set(availableListNames),
+            contextList: activeList.flatMap { isListArchived($0) ? nil : $0 },
+            contextTag: activeTag, defaultDueAt: defaultDueAt)
+        let ids = actions.createCaptures(drafts)
+        if let last = ids.last { didMutate(.success(last)); select(last) }
+        return ids
+    }
+
+    /// 看板列内创建与列属性写入是一个事务，撤销不会留下未归列的中间任务。
+    @discardableResult
+    func createKanbanTask(title: String, target: TaskKanbanCreationTarget,
+                          in scope: TaskListScope = .allTasks) -> UUID? {
+        guard !scope.isClosedScope else { return nil }
+        if case let .section(list, sectionID?) = target {
+            guard store.listSection(sectionID)?.listName == list else { return nil }
+        }
+        let today = calendar.startOfDay(for: clock())
+        let defaultDueAt: Date?
+        switch scope {
+        case .today, .nextSevenDays: defaultDueAt = today
+        case .tomorrow: defaultDueAt = calendar.date(byAdding: .day, value: 1, to: today)
+        default: defaultDueAt = nil
+        }
+        let parsedInputs = QuickAddComposition.batchLines(in: title).map {
+            QuickCaptureSession(text: $0).parse(now: clock(), calendar: calendar, knownLists: Set(availableListNames))
+        }.filter { !$0.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+        var drafts = QuickCaptureSession(text: title).drafts(
+            now: clock(), calendar: calendar, knownLists: Set(availableListNames),
+            contextList: activeList, contextTag: activeTag, defaultDueAt: defaultDueAt)
+        for index in drafts.indices {
+            switch target {
+            case .currentContext: break
+            case .schedule(let day):
+                // The column supplies a default; explicit capture fields keep
+                // the same precedence as the list and global quick-add.
+                if parsedInputs[index].tokens.contains(where: { $0.kind == .date }) { continue }
+                if let day {
+                    let old = drafts[index].plan.schedule.dueAt
+                    let moved = old.map {
+                        TaskDateDraft.movingDay($0, to: day, calendar: calendar)
+                    } ?? calendar.startOfDay(for: day)
+                    let start = drafts[index].plan.schedule.hasTime ? moved : calendar.startOfDay(for: moved)
+                    if let old {
+                        let delta = calendar.dateComponents([.day],
+                            from: calendar.startOfDay(for: old), to: calendar.startOfDay(for: day)).day ?? 0
+                        drafts[index].plan.schedule.dueEndAt = ScheduleSemantics.shifted(
+                            drafts[index].plan.schedule.dueEndAt, byDays: delta, calendar: calendar)
+                        drafts[index].plan.reminder = ScheduleSemantics.shifted(
+                            drafts[index].plan.reminder, byDays: delta, calendar: calendar)
+                    }
+                    drafts[index].plan.schedule.dueAt = start
+                } else {
+                    drafts[index].plan.schedule = TaskSchedule()
+                    drafts[index].plan.reminder = nil
+                    drafts[index].plan.reminderOffsets = []
+                }
+            case .priority(let priority):
+                if !parsedInputs[index].tokens.contains(where: { $0.kind == .priority }) {
+                    drafts[index].priority = priority
+                }
+            case .list(let list):
+                if parsedInputs[index].listName == nil { drafts[index].list = list }
+            case .tag(let tag):
+                if let tag { drafts[index].tags = [tag] + drafts[index].tags.filter { $0 != tag } }
+                else { drafts[index].tags = [] }
+            case .section(let list, _): drafts[index].list = list
+            }
+        }
+        guard !drafts.isEmpty else { return nil }
+        var ids: [UUID] = []
+        store.transaction {
+            ids = actions.createCaptures(drafts)
+            if case let .section(_, sectionID) = target {
+                for id in ids { _ = actions.setTaskSection(id, sectionID: sectionID) }
+            }
+        }
+        if let last = ids.last { didMutate(.success(last)); select(last) }
+        return ids.last
+    }
+
+    @discardableResult
     func createFromTemplate(_ template: TaskTemplate) -> UUID? {
-        let listName = template.listName.flatMap { allListNames.contains($0) ? $0 : nil }
+        let listName = template.listName.flatMap { availableListNames.contains($0) ? $0 : nil }
             ?? TaskList.inbox.name
         let result = actions.createFromTemplate(template, list: TaskList(name: listName))
         didMutate(result)
@@ -531,7 +652,7 @@ final class TaskWorkspaceModel: ObservableObject {
 
     var selectedTask: Task? {
         guard let selectedTaskID else { return nil }
-        return store.task(selectedTaskID)
+        return store.task(selectedTaskID) ?? (selectedOccurrence?.task.id == selectedTaskID ? selectedOccurrence?.task : nil)
     }
 
     var allTasks: [Task] { _ = revision; return store.tasks }
@@ -555,21 +676,104 @@ final class TaskWorkspaceModel: ObservableObject {
     }
     var canUndo: Bool { _ = revision; return store.canUndo }
     func undo() { actions.undo(); revision += 1; if selectedTask == nil { select(nil) } }
-    func setRepeat(_ id: UUID, _ value: TaskRepeat) { didMutate(actions.setRepeat(id, value)) }
+    var canRedo: Bool { _ = revision; return store.canRedo }
+    func redo() { actions.redo(); revision += 1; if selectedTask == nil { select(nil) } }
+
+    @discardableResult
+    func updateAttributes(_ id: UUID, priority: TaskPriority? = nil,
+                          schedule: TaskSchedule? = nil, list: TaskList? = nil,
+                          tags: [String]? = nil) -> TaskActionResult {
+        let result = withMaterializedTask(id) { actions.updateAttributes($0, priority: priority, schedule: schedule, list: list, tags: tags) }
+        didMutate(result)
+        return result
+    }
+
+    @discardableResult
+    func setFocusEstimate(_ id: UUID, _ estimate: TaskFocusEstimate?) -> TaskActionResult {
+        let result = withMaterializedTask(id) { actions.setFocusEstimate($0, estimate) }
+        didMutate(result)
+        return result
+    }
+
+    func occurrence(for task: Task) -> TaskOccurrence {
+        let series = task.series ?? (task.recurrence == .never ? nil : TaskSeries(task: task, calendar: calendar, now: clock()))
+        var value = task
+        value.series = series
+        let key = task.occurrenceKey ?? series?.initialKey
+            ?? OccurrenceKey(seriesID: task.id, nominalDate: task.schedule.dueAt ?? task.createdAt, ordinal: 0)
+        let virtual = store.task(task.id) == nil && selectedOccurrence?.key == key
+        return TaskOccurrence(key: key, task: value, isVirtual: virtual,
+            sourceTaskID: virtual ? (selectedOccurrence?.sourceTaskID ?? task.id) : task.id)
+    }
+
+    @discardableResult
+    func materializeOccurrence(_ occurrence: TaskOccurrence) -> TaskActionResult {
+        let result = actions.materializeOccurrence(occurrence)
+        didMutate(result)
+        return result
+    }
+
+    @discardableResult
+    func completeOccurrence(_ occurrence: TaskOccurrence) -> TaskActionResult {
+        let result = actions.completeOccurrence(occurrence)
+        didMutate(result)
+        if let id = result.taskID { select(id) }
+        return result
+    }
+
+    @discardableResult
+    func saveOccurrenceSchedule(_ plan: SchedulePlan, occurrence: TaskOccurrence,
+                                scope: RecurrenceEditScope = .onlyThis) -> TaskActionResult {
+        let result = actions.saveOccurrenceSchedule(plan, occurrence: occurrence, scope: scope)
+        didMutate(result)
+        if let id = result.taskID { select(id) }
+        return result
+    }
+
+    /// Calendar movement keeps the complete interval and its absolute reminder.
+    @discardableResult
+    func moveSchedule(_ id: UUID, to start: Date, hasTime: Bool? = nil) -> TaskActionResult {
+        guard let task = task(for: id) else { return .failure(.missingTask) }
+        var next = task.schedule
+        let exact = hasTime ?? next.hasTime
+        let normalizedStart = exact ? start : calendar.startOfDay(for: start)
+        if let oldStart = next.dueAt, let end = next.dueEndAt {
+            next.dueEndAt = end.addingTimeInterval(normalizedStart.timeIntervalSince(oldStart))
+        }
+        next.dueAt = normalizedStart
+        next.hasTime = exact
+        return updateAttributes(id, schedule: next)
+    }
+
+    @discardableResult
+    func resizeSchedule(_ id: UUID, start: Date? = nil, end: Date? = nil) -> TaskActionResult {
+        guard let task = task(for: id) else { return .failure(.missingTask) }
+        var next = task.schedule
+        if let start { next.dueAt = next.hasTime ? start : calendar.startOfDay(for: start) }
+        if let end { next.dueEndAt = next.hasTime ? end : calendar.startOfDay(for: end) }
+        if let first = next.dueAt, let last = next.dueEndAt, last < first {
+            return .failure(.invalidSchedule)
+        }
+        return updateAttributes(id, schedule: next)
+    }
+    func setRepeat(_ id: UUID, _ value: TaskRepeat) { didMutate(withMaterializedTask(id) { actions.setRepeat($0, value) }) }
     func setRecurrence(_ id: UUID, frequency: TaskRepeat, rule: RecurrenceRule?) {
-        didMutate(actions.setRecurrence(id, frequency: frequency, rule: rule))
+        didMutate(withMaterializedTask(id) { actions.setRecurrence($0, frequency: frequency, rule: rule) })
     }
     func saveTiming(_ id: UUID, schedule: TaskSchedule, reminder: Date?, frequency: TaskRepeat,
                     recurrenceRule: RecurrenceRule? = nil, reminderOffsets: [Int]? = nil) {
-        let result = actions.saveTiming(id, schedule: schedule, reminder: reminder,
+        let result = withMaterializedTask(id) { actions.saveTiming($0, schedule: schedule, reminder: reminder,
                                         frequency: frequency, recurrenceRule: recurrenceRule,
-                                        reminderOffsets: reminderOffsets)
+                                        reminderOffsets: reminderOffsets) }
         didMutate(result)
     }
     /// 日程写入的唯一入口：宿主产出 `SchedulePlan`，不再逐字段拆参数。
     @discardableResult
     func saveSchedule(_ plan: SchedulePlan, to target: ScheduleTarget) -> TaskActionResult {
-        let result = actions.saveSchedule(plan, to: target)
+        let result: TaskActionResult
+        if case .task(let id) = target, let selectedOccurrence, selectedOccurrence.task.id == id, store.task(id) == nil {
+            result = actions.saveOccurrenceSchedule(plan, occurrence: selectedOccurrence, scope: .onlyThis)
+        } else { result = actions.saveSchedule(plan, to: target) }
         didMutate(result)
         return result
     }
@@ -592,7 +796,7 @@ final class TaskWorkspaceModel: ObservableObject {
 
     func task(for id: UUID) -> Task? {
         _ = revision
-        return store.task(id)
+        return store.task(id) ?? (selectedOccurrence?.task.id == id ? selectedOccurrence?.task : nil)
     }
 
     static func scope(for destination: NativeDestination) -> TaskListScope? {
@@ -603,27 +807,42 @@ final class TaskWorkspaceModel: ObservableObject {
         case .allTasks: return .allTasks
         case .nextSevenDays: return .nextSevenDays
         case .completed: return .completed
+        case .abandoned: return .abandoned
         default: return nil
         }
     }
 
     func groups(for scope: TaskListScope, query: TaskListQuery = TaskListQuery(),
                 grouping: TaskListGrouping = .byDate,
-                hidesCompleted: Bool = false) -> [TaskListGroup] {
+                hidesCompleted: Bool = false,
+                viewMode: TaskListViewMode = .list) -> [TaskListGroup] {
         _ = revision
         prepareProjectionCache()
         if let cached = groupCache.first(where: {
-            $0.scope == scope && $0.query == query && $0.grouping == grouping && $0.hidesCompleted == hidesCompleted
+            $0.scope == scope && $0.query == query && $0.grouping == grouping
+                && $0.hidesCompleted == hidesCompleted && $0.viewMode == viewMode
         }) { return cached.groups }
         projectionBuildCount += 1
         let result = applyingFilter(
             TaskListProjection.groups(in: scope, store: store, now: clock(), calendar: calendar,
                                       query: query, grouping: grouping,
-                                      hidesCompleted: hidesCompleted))
+                                      hidesCompleted: hidesCompleted, viewMode: viewMode))
         if groupCache.count >= 8 { groupCache.removeFirst() }
         groupCache.append(GroupCacheEntry(scope: scope, query: query, grouping: grouping,
-                                         hidesCompleted: hidesCompleted, groups: result))
+                                         hidesCompleted: hidesCompleted, viewMode: viewMode, groups: result))
         return result
+    }
+
+    /// 卡片内的子任务跟随父卡片，折叠使用同一任务身份；显示偏好也覆盖已关闭子任务。
+    func kanbanNodes(for task: Task, hidesCompleted: Bool = false) -> [TaskTreeNode] {
+        _ = revision
+        let root = self.task(for: task.id) ?? task
+        let visibleChildren = Set(store.children(of: task.id).filter {
+            !$0.isConverted && (!hidesCompleted || !$0.isClosed)
+        }.map(\.id))
+        let expanded: Set<UUID> = collapsedTaskIDs.contains(task.id) ? [] : [task.id]
+        return TaskTreeProjection.nodes(roots: [root], store: store, expanded: expanded,
+                                        matchingTaskIDs: visibleChildren)
     }
 
     /// Count for the visible list; when a saved filter is active the header
@@ -631,7 +850,7 @@ final class TaskWorkspaceModel: ObservableObject {
     func count(for scope: TaskListScope) -> Int {
         _ = revision
         return filteredMatches(in: scope, query: TaskListQuery())
-            .filter { scope == .completed || !$0.isClosed }.count
+            .filter { scope.isClosedScope || !$0.isClosed }.count
     }
 
     /// Sidebar badge count: intentionally ignores the saved filter (and the
@@ -695,7 +914,8 @@ final class TaskWorkspaceModel: ObservableObject {
             }
             guard !tasks.isEmpty else { return nil }
             guard tasks.count != group.tasks.count else { return group }
-            return TaskListGroup(kind: group.kind, day: group.day, tasks: tasks, label: group.label)
+            return TaskListGroup(kind: group.kind, day: group.day, tasks: tasks, label: group.label,
+                                 sectionID: group.sectionID, creationTarget: group.creationTarget)
         }
     }
 
@@ -710,9 +930,45 @@ final class TaskWorkspaceModel: ObservableObject {
             .filter { filterMatches($0) }
     }
 
+    func selectOccurrence(_ occurrence: TaskOccurrence) {
+        if !occurrence.isVirtual { select(occurrence.task.id); return }
+        if selectedTaskID != occurrence.task.id {
+            selectionWillChange.send(occurrence.task.id)
+            selectedOccurrence = occurrence
+            selectedTaskID = occurrence.task.id
+        } else if selectedOccurrence != occurrence {
+            objectWillChange.send()
+            selectedOccurrence = occurrence
+        }
+        bulkAnchorTaskID = occurrence.task.id
+    }
+
+    /// Browsing a projected period is read-only. Starting focus and other
+    /// actions that need a durable relation resolve it at this boundary.
+    func resolveTaskForAction(_ id: UUID) -> UUID? {
+        if store.task(id) != nil { return id }
+        guard let occurrence = selectedOccurrence, occurrence.task.id == id else { return nil }
+        let result = actions.materializeOccurrence(occurrence)
+        didMutate(result)
+        return result.taskID
+    }
+
+    private func withMaterializedTask(_ id: UUID, _ mutation: (UUID) -> TaskActionResult) -> TaskActionResult {
+        guard store.task(id) == nil, let occurrence = selectedOccurrence,
+              occurrence.task.id == id else { return mutation(id) }
+        var result: TaskActionResult = .failure(.missingTask)
+        store.transaction {
+            result = actions.materializeOccurrence(occurrence)
+            if let realID = result.taskID { result = mutation(realID) }
+        }
+        return result
+    }
+
     func select(_ id: UUID?) {
         if selectedTaskID != id {
+            // Finish the outgoing editor while its occurrence context exists.
             selectionWillChange.send(id)
+            if id != selectedOccurrence?.task.id { selectedOccurrence = nil }
             selectedTaskID = id
         }
         bulkAnchorTaskID = id
@@ -780,6 +1036,25 @@ final class TaskWorkspaceModel: ObservableObject {
         return result
     }
 
+    /// A parent picked for a batch must accept every selected task. Revalidate
+    /// before applying so a stale picker cannot silently edit only part of it.
+    @discardableResult
+    func assignBulkParent(_ ids: Set<UUID>, parentID: UUID) -> TaskActionResult {
+        guard !ids.isEmpty, ids == bulkSelection,
+              let parent = store.task(parentID) else { return .failure(.missingTask) }
+        guard !ids.contains(parentID) else { return .failure(.cannotParentToSelf) }
+        let sources = store.tasks.filter { ids.contains($0.id) }
+        guard sources.count == ids.count else { return .failure(.missingTask) }
+        for source in sources {
+            if let rejection = TaskParentPolicy.rejection(task: source, parent: parent, tasks: store.tasks) {
+                return .failure(rejection)
+            }
+        }
+        applyBulk(.linkParent(parentID))
+        collapsedTaskIDs.remove(parentID)
+        return .success(parentID)
+    }
+
     @discardableResult
     func moveTask(_ id: UUID, to placement: TaskDropPlacement) -> TaskActionResult {
         let result = actions.move(id, to: placement)
@@ -797,7 +1072,7 @@ final class TaskWorkspaceModel: ObservableObject {
 
     @discardableResult
     func complete(_ id: UUID, in scope: TaskListScope? = nil) -> TaskActionResult {
-        let result = actions.complete(id)
+        let result = withMaterializedTask(id) { actions.complete($0) }
         didMutate(result, scope: scope)
         if result.taskID != nil {
             report(FeedbackEvent(kind: .completion, message: "已完成\(quotedTitle(id))",
@@ -810,7 +1085,7 @@ final class TaskWorkspaceModel: ObservableObject {
 
     @discardableResult
     func restore(_ id: UUID, in scope: TaskListScope? = nil) -> TaskActionResult {
-        let result = actions.restore(id)
+        let result = withMaterializedTask(id) { actions.restore($0) }
         didMutate(result, scope: scope)
         if result.taskID != nil {
             report(FeedbackEvent(kind: .completion, message: "已恢复\(quotedTitle(id))",
@@ -826,7 +1101,7 @@ final class TaskWorkspaceModel: ObservableObject {
 
     @discardableResult
     func abandon(_ id: UUID, in scope: TaskListScope? = nil) -> TaskActionResult {
-        let result = actions.abandon(id)
+        let result = withMaterializedTask(id) { actions.abandon($0) }
         didMutate(result, scope: scope)
         if result.taskID != nil {
             report(FeedbackEvent(kind: .undoable, message: "已放弃\(quotedTitle(id))",
@@ -838,7 +1113,7 @@ final class TaskWorkspaceModel: ObservableObject {
     @discardableResult
     func moveToList(_ id: UUID, _ list: TaskList) -> TaskActionResult {
         let listBefore = task(for: id)?.list.name
-        let result = actions.moveToList(id, list)
+        let result = withMaterializedTask(id) { actions.moveToList($0, list) }
         didMutate(result)
         if result.taskID != nil, listBefore != list.name {
             report(FeedbackEvent(kind: .undoable,
@@ -861,7 +1136,7 @@ final class TaskWorkspaceModel: ObservableObject {
     @discardableResult
     func moveToList(_ id: UUID, _ list: TaskList, sectionID: String?) -> TaskActionResult {
         let listBefore = task(for: id)?.list.name
-        let result = actions.moveToList(id, list, sectionID: sectionID)
+        let result = withMaterializedTask(id) { actions.moveToList($0, list, sectionID: sectionID) }
         didMutate(result)
         if result.taskID != nil {
             let destination = task(for: id)?.list.name ?? list.name
@@ -885,7 +1160,7 @@ final class TaskWorkspaceModel: ObservableObject {
         if selectedTaskID == id, task(for: id)?.deletedAt == nil {
             selectionWillChange.send(nil)
         }
-        let result = actions.delete(id)
+        let result = withMaterializedTask(id) { actions.delete($0) }
         guard result.taskID != nil else { return result }
         if selectedTaskID == id { select(nil) }
         StickyNoteWindowController.shared.close(taskID: id)
@@ -897,39 +1172,39 @@ final class TaskWorkspaceModel: ObservableObject {
 
     @discardableResult
     func setSchedule(_ id: UUID, _ schedule: TaskSchedule) -> TaskActionResult {
-        let result = actions.setSchedule(id, schedule)
+        let result = withMaterializedTask(id) { actions.setSchedule($0, schedule) }
         didMutate(result)
         return result
     }
 
     @discardableResult
     func setTitle(_ id: UUID, _ title: String) -> TaskActionResult {
-        let result = actions.setTitle(id, title)
+        let result = withMaterializedTask(id) { actions.setTitle($0, title) }
         didMutate(result)
         return result
     }
 
     @discardableResult
     func setDocument(_ id: UUID, _ document: NativeDocument) -> TaskActionResult {
-        let result = actions.setDocument(id, document)
+        let result = withMaterializedTask(id) { actions.setDocument($0, document) }
         didMutate(result)
         return result
     }
 
-    func setSourceNote(_ id: UUID, _ noteID: UUID) { didMutate(actions.setSourceNote(id, noteID)) }
+    func setSourceNote(_ id: UUID, _ noteID: UUID) { didMutate(withMaterializedTask(id) { actions.setSourceNote($0, noteID) }) }
 
     /// The editor owns reference undo; persist its document/source pair without
     /// adding a competing business undo record.
     @discardableResult
     func commitEditorReference(_ id: UUID, document: NativeDocument, sourceNoteID: UUID?) -> TaskActionResult {
-        let result = actions.commitEditorReference(id, document: document, sourceNoteID: sourceNoteID)
+        let result = withMaterializedTask(id) { actions.commitEditorReference($0, document: document, sourceNoteID: sourceNoteID) }
         didMutate(result)
         return result
     }
 
     @discardableResult
     func setPriority(_ id: UUID, _ priority: TaskPriority) -> TaskActionResult {
-        let result = actions.setPriority(id, priority)
+        let result = withMaterializedTask(id) { actions.setPriority($0, priority) }
         didMutate(result)
         return result
     }
@@ -937,7 +1212,7 @@ final class TaskWorkspaceModel: ObservableObject {
     @discardableResult
     func setPinned(_ id: UUID, _ isPinned: Bool) -> TaskActionResult {
         let pinnedBefore = task(for: id)?.isPinned
-        let result = actions.setPinned(id, isPinned)
+        let result = withMaterializedTask(id) { actions.setPinned($0, isPinned) }
         didMutate(result)
         if result.taskID != nil, pinnedBefore != isPinned {
             report(FeedbackEvent(kind: .success, message: isPinned ? "已置顶" : "已取消置顶"))
@@ -947,7 +1222,12 @@ final class TaskWorkspaceModel: ObservableObject {
 
     @discardableResult
     func convertToNote(_ id: UUID, noteID: UUID, undoNote: @escaping () -> Void) -> TaskActionResult {
-        let result = actions.convertToNote(id, noteID: noteID, undoNote: undoNote)
+        convertToNote(id, noteID: noteID, undoNote: undoNote, redoNote: nil)
+    }
+
+    func convertToNote(_ id: UUID, noteID: UUID, undoNote: @escaping () -> Void,
+                       redoNote: (() -> Void)?) -> TaskActionResult {
+        let result = withMaterializedTask(id) { actions.convertToNote($0, noteID: noteID, undoNote: undoNote, redoNote: redoNote) }
         didMutate(result)
         if result.taskID != nil { select(nil) }
         if result.taskID != nil {
@@ -957,9 +1237,21 @@ final class TaskWorkspaceModel: ObservableObject {
         return result
     }
 
-    func setTags(_ id: UUID, _ tags: [String]) { didMutate(actions.setTags(id, tags)) }
-    func setReminder(_ id: UUID, _ date: Date?) { didMutate(actions.setReminder(id, date)) }
-    func setAttachments(_ id: UUID, _ values: [NativeAttachment]) { didMutate(actions.setAttachments(id, values)) }
+    @discardableResult
+    func convertToNotes(_ noteIDs: [UUID: UUID], undoNotes: @escaping () -> Void,
+                        redoNotes: @escaping () -> Void) -> [UUID] {
+        let converted = actions.convertToNotes(noteIDs, undoNotes: undoNotes, redoNotes: redoNotes)
+        guard let first = converted.first else { return [] }
+        didMutate(.success(first))
+        select(nil)
+        report(FeedbackEvent(kind: .undoable, message: "已转换 \(converted.count) 个任务为笔记",
+                             actionTitle: "撤销", action: undoStep()))
+        return converted
+    }
+
+    func setTags(_ id: UUID, _ tags: [String]) { didMutate(withMaterializedTask(id) { actions.setTags($0, tags) }) }
+    func setReminder(_ id: UUID, _ date: Date?) { didMutate(withMaterializedTask(id) { actions.setReminder($0, date) }) }
+    func setAttachments(_ id: UUID, _ values: [NativeAttachment]) { didMutate(withMaterializedTask(id) { actions.setAttachments($0, values) }) }
 
     func dateFromToday(_ offset: Int) -> Date {
         let start = calendar.startOfDay(for: clock())
@@ -983,9 +1275,9 @@ final class TaskWorkspaceModel: ObservableObject {
         schedule.dueAt = nil
         schedule.hasTime = false
         schedule.dueEndAt = nil
-        let result = actions.saveTiming(id, schedule: schedule, reminder: task.reminderAt,
+        let result = withMaterializedTask(id) { actions.saveTiming($0, schedule: schedule, reminder: task.reminderAt,
                                         frequency: task.recurrence,
-                                        recurrenceRule: task.recurrenceRule)
+                                        recurrenceRule: task.recurrenceRule) }
         didMutate(result)
         return result
     }
@@ -997,8 +1289,8 @@ final class TaskWorkspaceModel: ObservableObject {
         schedule.dueAt = nil
         schedule.hasTime = false
         schedule.dueEndAt = nil
-        let result = actions.saveTiming(id, schedule: schedule, reminder: nil,
-                                        frequency: .never, recurrenceRule: nil)
+        let result = withMaterializedTask(id) { actions.saveTiming($0, schedule: schedule, reminder: nil,
+                                        frequency: .never, recurrenceRule: nil) }
         didMutate(result)
         return result
     }
@@ -1068,22 +1360,23 @@ final class TaskWorkspaceModel: ObservableObject {
             return next
         }
 
-        var result = TaskActionResult.success(id)
+        var priority: TaskPriority?
+        var schedule: TaskSchedule?
         switch quadrant {
         case .doNow:
-            if !important { result = setPriority(id, .high) }
-            result = setSchedule(id, onDay(0))
+            if !important { priority = .high }
+            if !urgent { schedule = onDay(0) }
         case .schedule:
-            if !important { result = setPriority(id, .high) }
-            if urgent { result = setSchedule(id, onDay(7)) }
+            if !important { priority = .high }
+            if urgent { schedule = onDay(7) }
         case .delegate:
-            if !urgent { result = setSchedule(id, onDay(0)) }
-            if important { result = setPriority(id, .low) }
+            if important { priority = .low }
+            if !urgent { schedule = onDay(0) }
         case .later:
-            if important { result = setPriority(id, .none) }
-            if urgent { result = setSchedule(id, onDay(7)) }
+            if important { priority = TaskPriority.none }
+            if urgent { schedule = onDay(7) }
         }
-        return result
+        return updateAttributes(id, priority: priority, schedule: schedule)
     }
 
     // MARK: 反馈上报（A3 加法：动作层只声明发生了什么；显示、时长与仲裁归 FeedbackCenter）

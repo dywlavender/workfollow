@@ -1,0 +1,24 @@
+{
+  "source": "CUA native AX and screenshot observation",
+  "role": "dialog",
+  "message": "提前结束番茄？ 当前番茄尚未结束，确定要提前结束并保存专注记录吗？",
+  "buttons": [
+    {
+      "title": "结束并保存",
+      "identifier": "focus-end-confirm-save"
+    },
+    {
+      "title": "放弃",
+      "identifier": "focus-end-confirm-discard"
+    },
+    {
+      "title": "取消",
+      "identifier": "focus-end-confirm-cancel"
+    }
+  ],
+  "observed_actions": [
+    "Cancel keeps 04:40 paused",
+    "End and save returns to overview without completion or break"
+  ],
+  "capture_limitation": "REA could not capture this layer-8 alert; the dialog was observed directly with CUA."
+}

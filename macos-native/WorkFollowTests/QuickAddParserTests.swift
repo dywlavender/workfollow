@@ -40,7 +40,7 @@ final class QuickAddParserTests: XCTestCase {
         XCTAssertEqual(result.reminderAt, result.dueAt)
     }
 
-    func testWeekdayDateTokensMatchFlutterWeekdayRules() {
+    func testWeekdayDateTokensUseNaturalWeekForExplicitNextWeek() {
         let sunday = calendar.date(from: DateComponents(year: 2026, month: 9, day: 13, hour: 16))!
         func parse(_ input: String) -> Date? {
             QuickAddParser.parse(input, now: sunday, calendar: calendar,
@@ -49,7 +49,7 @@ final class QuickAddParserTests: XCTestCase {
 
         XCTAssertEqual(parse("周一开会"), calendar.date(from: DateComponents(year: 2026, month: 9, day: 14)))
         XCTAssertEqual(parse("周五理账"), calendar.date(from: DateComponents(year: 2026, month: 9, day: 18)))
-        XCTAssertEqual(parse("下周三提交"), calendar.date(from: DateComponents(year: 2026, month: 9, day: 23)))
+        XCTAssertEqual(parse("下周三提交"), calendar.date(from: DateComponents(year: 2026, month: 9, day: 16)))
         XCTAssertEqual(parse("周日休息"), calendar.date(from: DateComponents(year: 2026, month: 9, day: 13)))
     }
 

@@ -11,6 +11,14 @@ struct AppCommands: Commands {
             Button("新建任务") { environment.newTask() }
                 .keyboardShortcut("n", modifiers: .command)
         }
+        CommandGroup(replacing: .undoRedo) {
+            Button("撤销") { routeHistory(redo: false) }
+                .keyboardShortcut("z", modifiers: .command)
+                .disabled(!canUndo)
+            Button("重做") { routeHistory(redo: true) }
+                .keyboardShortcut("z", modifiers: [.command, .shift])
+                .disabled(!canRedo)
+        }
         CommandGroup(after: .textEditing) {
             Button("查找正文…") {
                 let item = NSMenuItem()
@@ -88,6 +96,28 @@ struct AppCommands: Commands {
             Button("显示或隐藏侧栏") { environment.toggleSidebar() }
                 .keyboardShortcut("\\", modifiers: .command)
         }
+    }
+
+    /// Text first responders keep their native history; business commands use
+    /// the workspace history only after editing has ended.
+    private var textUndoManager: UndoManager? {
+        guard let responder = NSApp.keyWindow?.firstResponder,
+              responder is NSTextView || responder is NSTextField else { return nil }
+        return responder.undoManager
+    }
+
+    private var canUndo: Bool {
+        textUndoManager?.canUndo ?? environment.taskWorkspace.canUndo
+    }
+    private var canRedo: Bool {
+        textUndoManager?.canRedo ?? environment.taskWorkspace.canRedo
+    }
+
+    private func routeHistory(redo: Bool) {
+        if let manager = textUndoManager {
+            if redo { manager.redo() } else { manager.undo() }
+        } else if redo { environment.taskWorkspace.redo() }
+        else { environment.taskWorkspace.undo() }
     }
 
     // MARK: 任务菜单动作

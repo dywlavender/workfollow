@@ -1,0 +1,1012 @@
+{
+  "date": "2026-10-13",
+  "timezone": "Asia/Shanghai",
+  "branch": "experiment/macos-native",
+  "rea_version": "6.4.0",
+  "ticktick_version": "8.0.80",
+  "installed_app": "/Applications/TickTick.app",
+  "method": "REA 原生 dispatch 元数据读取、选定 Interface Builder 资源解码、客户端草稿观察、当前项目源码与独立 Swift 复现。",
+  "scope": "UI 解码输入为从原安装包复制的37份未修改 nib及用于标识的可执行文件，副本未启动。函数体未反编译；类和属性名是静态结构证据。",
+  "ui_archives": [
+    {
+      "original_file": "/Applications/TickTick.app/Contents/Resources/TTCalendarArrangeCell.nib",
+      "objects": 36,
+      "connections": 10,
+      "outlets": [
+        "arrowButton",
+        "arrowButtonTrailing",
+        "arrowWidthLC",
+        "dateLabel",
+        "iconImageView",
+        "iconLeadingLC",
+        "iconLeadingToTitleLC",
+        "iconWidthLC",
+        "titleLabel"
+      ],
+      "actions": [
+        "arrowButtonClicked:"
+      ]
+    },
+    {
+      "original_file": "/Applications/TickTick.app/Contents/Resources/TTCalendarArrangeHeaderCell.nib",
+      "objects": 27,
+      "connections": 3,
+      "outlets": [
+        "arrowImageView",
+        "countLabel",
+        "titleLabel"
+      ],
+      "actions": []
+    },
+    {
+      "original_file": "/Applications/TickTick.app/Contents/Resources/TTCalendarArrangeViewController.nib",
+      "objects": 107,
+      "connections": 14,
+      "outlets": [
+        "closeButton",
+        "emptyHolder",
+        "filterButton",
+        "outlineView",
+        "outlineViewTopLC",
+        "segmentedControl",
+        "titleLabel",
+        "typeButton",
+        "view",
+        "dataSource",
+        "delegate"
+      ],
+      "actions": [
+        "closeButtonClicked:",
+        "filterButtonClicked:",
+        "arrangeTypeButtonClicked:"
+      ]
+    },
+    {
+      "original_file": "/Applications/TickTick.app/Contents/Resources/TTCalendarDisplayOptionsViewController.nib",
+      "objects": 185,
+      "connections": 45,
+      "outlets": [
+        "checkitemLabel",
+        "checkitemSwitch",
+        "colorArrowImageView",
+        "colorLabel",
+        "completedLabel",
+        "completedSwitch",
+        "countdownLabel",
+        "countdownRowView",
+        "countdownSwitch",
+        "courseLabel",
+        "courseRowView",
+        "courseSwitch",
+        "cyclesLabel",
+        "cyclesSwitch",
+        "focusHelpImageView",
+        "focusLabel",
+        "focusSwitch",
+        "habitLabel",
+        "habitSwitch",
+        "styleArrowImageView",
+        "styleLabel",
+        "timeZoneHelpImageView",
+        "timeZoneLabel",
+        "timeZoneRowHeightLC",
+        "timeZoneSettingsButton",
+        "timeZoneSwitch",
+        "view",
+        "weekendLabel",
+        "weekendRowView",
+        "weekendSwitch"
+      ],
+      "actions": [
+        "switchButtonClicked:",
+        "timeZoneSettingsButtonClicked:"
+      ]
+    },
+    {
+      "original_file": "/Applications/TickTick.app/Contents/Resources/TTCalendarDisplayOptionsWindowController.nib",
+      "objects": 29,
+      "connections": 3,
+      "outlets": [
+        "scrollView",
+        "titleLabel",
+        "window"
+      ],
+      "actions": []
+    },
+    {
+      "original_file": "/Applications/TickTick.app/Contents/Resources/TTCalendarTimeZoneSettingsViewController.nib",
+      "objects": 116,
+      "connections": 21,
+      "outlets": [
+        "addButton",
+        "cancelButton",
+        "saveButton",
+        "scrollViewBottomLC",
+        "scrollViewHeightLC",
+        "tableView",
+        "titleLabel",
+        "view",
+        "descContainer",
+        "descDivider",
+        "descTextField",
+        "dragIndicator",
+        "emojiButton",
+        "removeButton",
+        "timezoneButton"
+      ],
+      "actions": [
+        "addButtonClicked:",
+        "cancelButtonClicked:",
+        "saveButtonClicked:",
+        "emojiButtonClicked:",
+        "deleteButtonClicked:",
+        "timezoneButtonClicked:"
+      ]
+    },
+    {
+      "original_file": "/Applications/TickTick.app/Contents/Resources/TTCalendarTypePickerVC.nib",
+      "objects": 82,
+      "connections": 12,
+      "outlets": [
+        "tableView",
+        "view",
+        "adjustView",
+        "checkImageView",
+        "minusButton",
+        "plusButton",
+        "subtitleLabel",
+        "titleLabel",
+        "valueLabel"
+      ],
+      "actions": [
+        "plusButtonClicked:",
+        "minusButtonClicked:"
+      ]
+    },
+    {
+      "original_file": "/Applications/TickTick.app/Contents/Resources/TTCalendarViewController.nib",
+      "objects": 169,
+      "connections": 35,
+      "outlets": [
+        "addButton",
+        "addButtonTrailling",
+        "addButtonWithLC",
+        "calendarContainer",
+        "calendarContainerWidth",
+        "calendarTopGridLine",
+        "calendarViewContainer",
+        "leftSidebarContainer",
+        "leftSidebarLeadingLC",
+        "leftSidebarWidthLC",
+        "monthTitleArrowImageView",
+        "monthTitleBorderView",
+        "monthTitleLabel",
+        "moreButton",
+        "navContainer",
+        "navContainerInCompact",
+        "navDivider1",
+        "navDivider2",
+        "nextButton",
+        "nextButtonInCompact",
+        "prevButton",
+        "prevButtonInCompact",
+        "rightSidebarContainer",
+        "rightSidebarTraillingLC",
+        "rightSidebarWidthLC",
+        "sidebarButton",
+        "theSplitView",
+        "todayButton",
+        "todayButtonInCompact",
+        "typeButton",
+        "typeButton2CompactNavTraillingLC",
+        "typeButton2NavTraillingLC",
+        "typeButtonHeightLC",
+        "view"
+      ],
+      "actions": [
+        "sidebarButtonClicked:"
+      ]
+    },
+    {
+      "original_file": "/Applications/TickTick.app/Contents/Resources/TTDatePickerCustomRepeatVC.nib",
+      "objects": 127,
+      "connections": 42,
+      "outlets": [
+        "FreqPopButton",
+        "cancelButton",
+        "everyLabel",
+        "freqContainerHeight",
+        "freqContainerTop",
+        "freqContainerView",
+        "freqcyTextContainerView",
+        "freqcyTextField",
+        "monthOrdinalPopButton",
+        "monthRepeatTypeContainerHeight",
+        "monthRepeatTypeContainerTop",
+        "monthRepeatTypeContainerView",
+        "monthRepeatTypeSegmentedControl",
+        "okButton",
+        "okButtonTopLC",
+        "onTheOrdinalPopButton",
+        "onTheOrdinalPopButtonHeight",
+        "onTheOrdinalPopButtonTop",
+        "onTheWeekdayPopButton",
+        "proIconView",
+        "skipHolidayContainer",
+        "skipHolidaySwitchButton",
+        "skipHolidayTopLC",
+        "skipWeekendContainer",
+        "skipWeekendSwitchButton",
+        "skipWeekendTopLC",
+        "titleLabel",
+        "typeButtonTopLC",
+        "typePopButton",
+        "view",
+        "workDayOrdinalPopButton",
+        "workDayOrdinalPopButtonHeight",
+        "workDayOrdinalPopButtonTop",
+        "delegate"
+      ],
+      "actions": [
+        "freqPopButtonClicked:",
+        "cancelButtonClicked:",
+        "monthOrdinalPopButtonClicked:",
+        "okButtonClicked:",
+        "onTheOrdinalPopButtonClicked:",
+        "onTheWeekdayPopButtonClicked:",
+        "workDayOrdinalPopButtonClicked:",
+        "repeatTypeClicked:"
+      ]
+    },
+    {
+      "original_file": "/Applications/TickTick.app/Contents/Resources/TTEisenhowerMatrixQuadrantEditViewController.nib",
+      "objects": 80,
+      "connections": 19,
+      "outlets": [
+        "cancelButton",
+        "contentView",
+        "emojiButton",
+        "nameBar",
+        "nameBorderedView",
+        "nameInvalidationLabel",
+        "nameInvalidationLabelHeightLC",
+        "proIconView",
+        "resetButton",
+        "sampleButton",
+        "saveButton",
+        "titleBar",
+        "titleLabel",
+        "view"
+      ],
+      "actions": [
+        "cancelButtonClicked:",
+        "emojiButtonClicked:",
+        "resetButtonClicked:",
+        "sampleButtonClicked:",
+        "saveButtonClicked:"
+      ]
+    },
+    {
+      "original_file": "/Applications/TickTick.app/Contents/Resources/TTEisenhowerMatrixQuadrantViewController.nib",
+      "objects": 76,
+      "connections": 15,
+      "outlets": [
+        "addButton",
+        "emojiIconLabel",
+        "emptyHolderLabel",
+        "iconImageView",
+        "moreButton",
+        "outlineView",
+        "titleBar",
+        "titleLabel",
+        "view",
+        "dataSource",
+        "delegate",
+        "quadrantView",
+        "headerView"
+      ],
+      "actions": [
+        "addButtonClicked:",
+        "moreButtonClicked:"
+      ]
+    },
+    {
+      "original_file": "/Applications/TickTick.app/Contents/Resources/TTEisenhowerMatrixViewController.nib",
+      "objects": 35,
+      "connections": 5,
+      "outlets": [
+        "containerView",
+        "moreButton",
+        "titleLabel",
+        "view"
+      ],
+      "actions": [
+        "moreButtonClicked:"
+      ]
+    },
+    {
+      "original_file": "/Applications/TickTick.app/Contents/Resources/TTFocusAssociationSearchVC.nib",
+      "objects": 63,
+      "connections": 7,
+      "outlets": [
+        "clearButton",
+        "outlineView",
+        "returnButton",
+        "searchTextFieldView",
+        "view"
+      ],
+      "actions": [
+        "clearButtonClicked:",
+        "returnButtonClicked:"
+      ]
+    },
+    {
+      "original_file": "/Applications/TickTick.app/Contents/Resources/TTFocusAssociationViewController.nib",
+      "objects": 74,
+      "connections": 12,
+      "outlets": [
+        "emptyHolder",
+        "listArrowImageView",
+        "listButton",
+        "listContainer",
+        "listTopLC",
+        "outlineView",
+        "searchButton",
+        "segmentTopLC",
+        "segmentView",
+        "view"
+      ],
+      "actions": [
+        "listButtonClicked:",
+        "searchButtonClicked:"
+      ]
+    },
+    {
+      "original_file": "/Applications/TickTick.app/Contents/Resources/TTFocusDetailContainerViewController.nib",
+      "objects": 5,
+      "connections": 1,
+      "outlets": [
+        "view"
+      ],
+      "actions": []
+    },
+    {
+      "original_file": "/Applications/TickTick.app/Contents/Resources/TTFocusDetailRecordsDateCell.nib",
+      "objects": 22,
+      "connections": 4,
+      "outlets": [
+        "checkboxButton",
+        "dateLabel",
+        "leadingLC"
+      ],
+      "actions": [
+        "checkboxClicked:"
+      ]
+    },
+    {
+      "original_file": "/Applications/TickTick.app/Contents/Resources/TTFocusDetailRecordsFocusCell.nib",
+      "objects": 41,
+      "connections": 11,
+      "outlets": [
+        "checkboxButton",
+        "durationLabel",
+        "iconBackgroundView",
+        "iconContainerWidthLC",
+        "iconImageView",
+        "iconLeadingLC",
+        "iconWidthLC",
+        "leadingLC",
+        "stackView",
+        "timeLabel"
+      ],
+      "actions": [
+        "checkboxClicked:"
+      ]
+    },
+    {
+      "original_file": "/Applications/TickTick.app/Contents/Resources/TTFocusDetailRecordsLoadMoreCell.nib",
+      "objects": 15,
+      "connections": 1,
+      "outlets": [
+        "textLabel"
+      ],
+      "actions": []
+    },
+    {
+      "original_file": "/Applications/TickTick.app/Contents/Resources/TTFocusDetailRecordsViewController.nib",
+      "objects": 145,
+      "connections": 27,
+      "outlets": [
+        "emptyView",
+        "outlineView",
+        "view",
+        "dataSource",
+        "delegate",
+        "conentLabel",
+        "titleLabel",
+        "returnButton",
+        "itemView1",
+        "itemView2",
+        "itemView3",
+        "itemView4",
+        "addButton",
+        "moreButton"
+      ],
+      "actions": [
+        "addButtonClicked:",
+        "moreButtonClicked:",
+        "returnButtonClicked:"
+      ]
+    },
+    {
+      "original_file": "/Applications/TickTick.app/Contents/Resources/TTFocusDetailTimelineItemView.nib",
+      "objects": 21,
+      "connections": 3,
+      "outlets": [
+        "iconView",
+        "timeLabel",
+        "titleLabel"
+      ],
+      "actions": []
+    },
+    {
+      "original_file": "/Applications/TickTick.app/Contents/Resources/TTFocusDetailViewController.nib",
+      "objects": 83,
+      "connections": 14,
+      "outlets": [
+        "associateButton",
+        "container",
+        "focusTimelineView",
+        "iconImageView",
+        "noteContentView",
+        "noteCountLabel",
+        "noteHeightLC",
+        "noteLabel",
+        "noteTextView",
+        "timelineHeightLC",
+        "titleButton",
+        "view"
+      ],
+      "actions": [
+        "associateButtonClicked:",
+        "titleButtonClicked:"
+      ]
+    },
+    {
+      "original_file": "/Applications/TickTick.app/Contents/Resources/TTFocusDurationEditViewController.nib",
+      "objects": 41,
+      "connections": 9,
+      "outlets": [
+        "cancelButton",
+        "durationLabel",
+        "saveButton",
+        "selectButton",
+        "unitLabel",
+        "view"
+      ],
+      "actions": [
+        "cancelButtonClicked:",
+        "saveButtonClicked:",
+        "selectButtonClicked:"
+      ]
+    },
+    {
+      "original_file": "/Applications/TickTick.app/Contents/Resources/TTFocusEstimateViewController.nib",
+      "objects": 82,
+      "connections": 17,
+      "outlets": [
+        "cancelButton",
+        "confirmButton",
+        "hrsBorderView",
+        "hrsLabel",
+        "hrsTextField",
+        "minsBorderView",
+        "minsLabel",
+        "minsTextField",
+        "pomoGoalBorderView",
+        "pomoGoalStepper",
+        "pomoGoalTextField",
+        "pomoGoalUnitLabel",
+        "typePopUpButton",
+        "view"
+      ],
+      "actions": [
+        "cancelButtonClicked:",
+        "confirmButtonClicked:",
+        "pomoGoalStepperValueChanged:"
+      ]
+    },
+    {
+      "original_file": "/Applications/TickTick.app/Contents/Resources/TTFocusImmersiveViewController.nib",
+      "objects": 75,
+      "connections": 16,
+      "outlets": [
+        "buttonsTopLC",
+        "centerActionButton",
+        "countDownLabel",
+        "exitButton",
+        "harvestClickView",
+        "harvestContainer",
+        "harvestInfoLabel",
+        "harvestLabel",
+        "leftActionButton",
+        "rightActionButton",
+        "subtitleLabel",
+        "view"
+      ],
+      "actions": [
+        "actionButtonClicked:",
+        "exitButtonClicked:"
+      ]
+    },
+    {
+      "original_file": "/Applications/TickTick.app/Contents/Resources/TTFocusRecordDetailCell.nib",
+      "objects": 70,
+      "connections": 9,
+      "outlets": [
+        "associatedButton",
+        "durationIcon",
+        "durationLabel",
+        "timeRangeIcon",
+        "timeRangeLabel",
+        "titleButton",
+        "titleImageView"
+      ],
+      "actions": [
+        "itemTitleButtonClicked:",
+        "associatedButtonClicked:"
+      ]
+    },
+    {
+      "original_file": "/Applications/TickTick.app/Contents/Resources/TTFocusRecordDetailNoteCell.nib",
+      "objects": 46,
+      "connections": 3,
+      "outlets": [
+        "contentView",
+        "countLabel",
+        "textView"
+      ],
+      "actions": []
+    },
+    {
+      "original_file": "/Applications/TickTick.app/Contents/Resources/TTFocusRecordDetailViewController.nib",
+      "objects": 52,
+      "connections": 5,
+      "outlets": [
+        "bottomDivider",
+        "deleteButton",
+        "tableView",
+        "view"
+      ],
+      "actions": [
+        "deleteButtonClicked:"
+      ]
+    },
+    {
+      "original_file": "/Applications/TickTick.app/Contents/Resources/TTFocusRecordEditViewController.nib",
+      "objects": 121,
+      "connections": 23,
+      "outlets": [
+        "cancelButton",
+        "endDateButton",
+        "endDateLabel",
+        "noteContentView",
+        "noteCountLabel",
+        "noteLabel",
+        "noteTextView",
+        "saveButton",
+        "startDateButton",
+        "startDateLabel",
+        "taskButton",
+        "taskLabel",
+        "titleBar",
+        "titleLabel",
+        "typeButton",
+        "typeLabel",
+        "view"
+      ],
+      "actions": [
+        "cancelButtonClicked:",
+        "endDateButtonClicked:",
+        "saveButtonClicked:",
+        "startDateButtonClicked:",
+        "taskButtonClicked:",
+        "typeButtonClicked:"
+      ]
+    },
+    {
+      "original_file": "/Applications/TickTick.app/Contents/Resources/TTFocusSettingsPopWindowController.nib",
+      "objects": 29,
+      "connections": 4,
+      "outlets": [
+        "scrollView",
+        "titleLabel",
+        "window",
+        "delegate"
+      ],
+      "actions": []
+    },
+    {
+      "original_file": "/Applications/TickTick.app/Contents/Resources/TTFocusViewController.nib",
+      "objects": 148,
+      "connections": 37,
+      "outlets": [
+        "actionButton1",
+        "actionButton2",
+        "actionButton3",
+        "addTimerButton",
+        "buttonsWidthLC",
+        "closeButton",
+        "countDownToButtonsLC",
+        "countDownToTitleLC",
+        "countDownView",
+        "countDownViewWidthLC",
+        "durationAdjustContainer",
+        "harvestClickView",
+        "harvestContainer",
+        "harvestInfoLabel",
+        "harvestLabel",
+        "modeButtonView",
+        "moreButton",
+        "ringsButton",
+        "taskArrowButton",
+        "taskTitleButton",
+        "titleLabel",
+        "view",
+        "durationLabel",
+        "minusButton",
+        "plusButton"
+      ],
+      "actions": [
+        "actionButtonClicked:",
+        "addTimerButtonClicked:",
+        "closeButtonClicked:",
+        "associateTitleClicked:",
+        "minusButtonClicked:",
+        "plusButtonClicked:",
+        "moreButtonClicked:",
+        "ringsButtonClicked:",
+        "associateArrowClicked:"
+      ]
+    },
+    {
+      "original_file": "/Applications/TickTick.app/Contents/Resources/TTMatrixQuadrantTaskCell.nib",
+      "objects": 109,
+      "connections": 29,
+      "outlets": [
+        "assigneeAvatarLeading",
+        "assigneeButton",
+        "attachmentIcon",
+        "attachmentIconLeading",
+        "checkboxButton",
+        "checkboxLeadingLC",
+        "commentIcon",
+        "commentIconLeading",
+        "contentIcon",
+        "contentIconLeading",
+        "dateLabel",
+        "dateLabelLeading",
+        "listNameLeading",
+        "listNameView",
+        "progressIcon",
+        "progressIconLeading",
+        "reminderIcon",
+        "reminderIconLeading",
+        "repeatIcon",
+        "repeatIconLeading",
+        "subtaskIcon",
+        "subtaskIconLeading",
+        "tagsView",
+        "tagsViewLeading",
+        "titleTextField",
+        "titleTextFieldLeading",
+        "triangleImageView"
+      ],
+      "actions": [
+        "checkButtonClicked:",
+        "assigneeButtonClicked:"
+      ]
+    },
+    {
+      "original_file": "/Applications/TickTick.app/Contents/Resources/TTPomoPreferenceViewController.nib",
+      "objects": 178,
+      "connections": 29,
+      "outlets": [
+        "autoBreakSwitchButton",
+        "autoBreakSwitchLabel",
+        "autoFocusCycleBottomLC",
+        "autoFocusCycleLabel",
+        "autoFocusCycleTextField",
+        "autoFocusCycleUnitLabel",
+        "autoOptionsLabel",
+        "autoPomoSwitchButton",
+        "autoPomoSwitchLabel",
+        "focusSyncDetailLabel",
+        "focusSyncLabel",
+        "focusSyncSwitchButton",
+        "longBreakDurationLabel",
+        "longBreakDurationTextField",
+        "longBreakDurationUnitLabel",
+        "longBreakIntervalLabel",
+        "longBreakIntervalTextField",
+        "longBreakIntervalUnitLabel",
+        "pomoDurationLabel",
+        "pomoDurationTextField",
+        "pomoDurationUnitLabel",
+        "shortBreakDurationLabel",
+        "shortBreakDurationTextField",
+        "shortBreakDurationUnitLabel",
+        "timerOptionLabel",
+        "view"
+      ],
+      "actions": [
+        "autoBreakSwitchButtonClicked:",
+        "autoPomoSwitchButtonClicked:",
+        "focusSyncSwitchButtonClicked:"
+      ]
+    },
+    {
+      "original_file": "/Applications/TickTick.app/Contents/Resources/TTPomoStatisticsViewController.nib",
+      "objects": 5,
+      "connections": 1,
+      "outlets": [
+        "view"
+      ],
+      "actions": []
+    },
+    {
+      "original_file": "/Applications/TickTick.app/Contents/Resources/TTRepeatChangeAlertViewController.nib",
+      "objects": 47,
+      "connections": 15,
+      "outlets": [
+        "allNotCompletedButton",
+        "cancelButton",
+        "descriptionLabel",
+        "lastButtonTopLC",
+        "okButton",
+        "onlyThisButton",
+        "secondButtonTopLC",
+        "thisAndFutureButton",
+        "titleLabel",
+        "view"
+      ],
+      "actions": [
+        "buttonClicked:",
+        "cancelButtonClicked:",
+        "okButtonClicked:"
+      ]
+    },
+    {
+      "original_file": "/Applications/TickTick.app/Contents/Resources/TTTaskDetailFocusSummaryCell.nib",
+      "objects": 5,
+      "connections": 0,
+      "outlets": [],
+      "actions": []
+    },
+    {
+      "original_file": "/Applications/TickTick.app/Contents/Resources/TTTaskDetailTopView.nib",
+      "objects": 95,
+      "connections": 25,
+      "outlets": [
+        "assigneeAvatarButton",
+        "assigneeIconButton",
+        "assigneeLeadingLC",
+        "checkButton",
+        "checkboxLeadingLC",
+        "checkboxTopLC",
+        "dateButton",
+        "iconDivider",
+        "noteInfoButton",
+        "noteInfoLeadingLC",
+        "priorityButton",
+        "priorityLeadingLC",
+        "progressView",
+        "repeatIcon",
+        "repeatIconTrailingLC",
+        "returnButton",
+        "returnButtonTailingLC",
+        "secondaryDateLabel"
+      ],
+      "actions": [
+        "checkboxButtonClicked:",
+        "returnButtonClicked:",
+        "dateButtonClicked:",
+        "assigneeButtonClicked:",
+        "priorityButtonClicked:",
+        "notesInfoButtonClicked:"
+      ]
+    },
+    {
+      "original_file": "/Applications/TickTick.app/Contents/Resources/TTWeekCalTimelineViewItem.nib",
+      "objects": 5,
+      "connections": 1,
+      "outlets": [
+        "view"
+      ],
+      "actions": []
+    }
+  ],
+  "native_declarations": [
+    {
+      "name": "_TtC8TickTick29TTFocusEstimateViewController",
+      "properties": [
+        "typePopUpButton",
+        "hrsBorderView",
+        "hrsTextField",
+        "hrsLabel",
+        "minsBorderView",
+        "minsTextField",
+        "minsLabel",
+        "pomoGoalBorderView",
+        "pomoGoalTextField",
+        "pomoGoalStepper",
+        "pomoGoalUnitLabel",
+        "cancelButton",
+        "confirmButton"
+      ],
+      "actions": [
+        "pomoGoalStepperValueChanged:",
+        "cancelButtonClicked:",
+        "confirmButtonClicked:"
+      ]
+    },
+    {
+      "name": "_TtC8TickTick40TTEisenhowerMatrixQuadrantViewController",
+      "properties": [
+        "titleBar",
+        "iconImageView",
+        "emojiIconLabel",
+        "titleLabel",
+        "addButton",
+        "moreButton",
+        "outlineView",
+        "emptyHolderLabel"
+      ],
+      "actions": [
+        "addButtonClicked:",
+        "moreButtonClicked:",
+        "sortOptionChanged:",
+        "optionKeyHoldingStateChanged:"
+      ]
+    },
+    {
+      "name": "_TtC8TickTick31TTCalendarArrangeViewController",
+      "properties": [
+        "titleLabel",
+        "typeButton",
+        "closeButton",
+        "segmentedControl",
+        "outlineView",
+        "emptyHolder",
+        "filterButton",
+        "outlineViewTopLC"
+      ],
+      "actions": [
+        "delayDeleteStatusChanged:",
+        "filterButtonClicked:",
+        "calendarZoomLevelChanged",
+        "arrangeTypeButtonClicked:",
+        "closeButtonClicked:"
+      ]
+    },
+    {
+      "name": "_TtC8TickTick33TTFocusDurationEditViewController",
+      "properties": [
+        "selectButton",
+        "unitLabel",
+        "durationLabel",
+        "cancelButton",
+        "saveButton"
+      ],
+      "actions": [
+        "selectButtonClicked:",
+        "cancelButtonClicked:",
+        "saveButtonClicked:"
+      ]
+    },
+    {
+      "name": "_TtC8TickTick21TTFocusViewController",
+      "properties": [
+        "titleLabel",
+        "closeButton",
+        "addTimerButton",
+        "ringsButton",
+        "moreButton",
+        "modeButtonView",
+        "taskTitleButton",
+        "taskArrowButton",
+        "countDownView",
+        "countDownViewWidthLC",
+        "countDownToTitleLC",
+        "countDownToButtonsLC",
+        "buttonsWidthLC",
+        "actionButton1",
+        "actionButton2",
+        "actionButton3",
+        "harvestContainer",
+        "harvestLabel",
+        "harvestInfoLabel",
+        "harvestClickView",
+        "durationAdjustContainer"
+      ],
+      "actions": [
+        "focusTaskChanged:",
+        "focusTypeChanged:",
+        "focusStateChanged:",
+        "focusTimeIntervalChanged:",
+        "pomoEstimateDurationChanged",
+        "pomoRingtoneChanged",
+        "focusDurationChanged:",
+        "focusRecordChanged:",
+        "countDownViewClicked:",
+        "closeButtonClicked:",
+        "addTimerButtonClicked:",
+        "ringsButtonClicked:",
+        "moreButtonClicked:",
+        "actionButtonClicked:",
+        "associateTitleClicked:",
+        "associateArrowClicked:"
+      ]
+    }
+  ],
+  "recurrence_interfaces": [
+    {
+      "name": "_TtC11TTModelsPod20TaskRecurringAdapter",
+      "properties": [
+        "recurrenceRuleStringAsRecurringObject",
+        "recurrenceFromAsRecurringObject",
+        "startDateAsRecurringObject",
+        "completionDateAsRecurringObject",
+        "excludedOccurrenceDatesAsRecurringObject",
+        "timeZoneAsRecurringObject",
+        "isTickTickSpecialRepeatCount",
+        "isLunarLeapMonthRepeat"
+      ]
+    },
+    {
+      "name": "_TtC11TTModelsPod36TaskDateTimeReminderRecurringAdapter",
+      "properties": [
+        "recurrenceRuleStringAsRecurringObject",
+        "recurrenceFromAsRecurringObject",
+        "startDateAsRecurringObject",
+        "completionDateAsRecurringObject",
+        "excludedOccurrenceDatesAsRecurringObject",
+        "timeZoneAsRecurringObject",
+        "isTickTickSpecialRepeatCount",
+        "isLunarLeapMonthRepeat"
+      ]
+    }
+  ],
+  "runtime_observations": [
+    {
+      "scenario": "下周一上午9点 REA日期比较",
+      "submitted": false,
+      "observed": "10月13日输入，日期预览显示19、下周一09:00。"
+    },
+    {
+      "scenario": "明天9:00-10:00 REA时间段比较",
+      "submitted": false,
+      "observed": "只识别明天9:00，预览明天09:00，后半10:00未被识别。"
+    },
+    {
+      "scenario": "四象限",
+      "observed": "实际客户端有过期任务显示在IV，不能假设默认规则由到期日共同决定。"
+    },
+    {
+      "scenario": "日历",
+      "observed": "当前账号显示会员演示和示例数据，未完整实测真实任务拖动与日历付费设置。"
+    },
+    {
+      "scenario": "草稿清理",
+      "observed": "测试后快速添加框恢复为空，两个输入均未提交。"
+    }
+  ],
+  "sources": [
+    "https://github.com/morluto/rea/",
+    "https://help.dida365.com/articles/6950381682822217728",
+    "https://help.dida365.com/articles/6950660365923385344",
+    "https://help.dida365.com/articles/6950641140068515840",
+    "https://help.dida365.com/articles/6950408124297641984",
+    "https://help.dida365.com/articles/6950670128287580160"
+  ]
+}

@@ -3,11 +3,11 @@ import XCTest
 
 final class FocusOverviewLayoutContractTests: XCTestCase {
     func testOverviewPointSizesAreFixedRatherThanWindowScaled() {
-        XCTAssertEqual(FocusLayoutMetrics.overviewHorizontalPadding, 24)
+        XCTAssertEqual(FocusLayoutMetrics.overviewHorizontalPadding, 21)
         XCTAssertEqual(FocusLayoutMetrics.overviewVerticalPadding, 24)
         XCTAssertEqual(FocusLayoutMetrics.overviewTitleFontSize, 18)
         XCTAssertEqual(FocusLayoutMetrics.overviewCardGap, 12)
-        XCTAssertEqual(FocusLayoutMetrics.overviewCardHeight, 76)
+        XCTAssertEqual(FocusLayoutMetrics.overviewCardHeight, 72)
         XCTAssertEqual(FocusLayoutMetrics.overviewCardRadius, 10)
         XCTAssertEqual(FocusLayoutMetrics.recordHeaderTop, 26)
         XCTAssertEqual(FocusLayoutMetrics.recordRowHeight, 48)

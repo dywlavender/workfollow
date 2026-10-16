@@ -13,6 +13,7 @@ final class SQLiteRecordStore<Record: Codable & Equatable & Identifiable, Metada
     private let timestamp: (Record) -> Date
     private let taskID: (Record) -> UUID?
     private let metrics: ((Record) -> (value: Int, count: Int))?
+    private let metricsVersion: String?
     private var deltaMetadata: Metadata?
     private let encoder = JSONEncoder()
     private let decoder = JSONDecoder()
@@ -30,11 +31,11 @@ final class SQLiteRecordStore<Record: Codable & Equatable & Identifiable, Metada
     private(set) var encodedRecordCount = 0
 
     init(filename: String, directory: URL, newestFirst: Bool = false, timestamp: @escaping (Record) -> Date,
-         taskID: @escaping (Record) -> UUID?, metrics: ((Record) -> (value: Int, count: Int))? = nil, migrate: @escaping (Data) throws -> Snapshot) {
+         taskID: @escaping (Record) -> UUID?, metrics: ((Record) -> (value: Int, count: Int))? = nil, metricsVersion: String? = nil, migrate: @escaping (Data) throws -> Snapshot) {
         url = directory.appendingPathComponent(filename + ".sqlite")
         legacyURL = directory.appendingPathComponent(filename + ".json")
         self.timestamp = timestamp; self.taskID = taskID; self.migrate = migrate
-        self.newestFirst = newestFirst; self.metrics = metrics
+        self.newestFirst = newestFirst; self.metrics = metrics; self.metricsVersion = metricsVersion
         encoder.outputFormatting = [.sortedKeys]
     }
 
@@ -71,16 +72,24 @@ final class SQLiteRecordStore<Record: Codable & Equatable & Identifiable, Metada
                 try db.execute("PRAGMA user_version=3")
             }
         }
-        if let metrics, try db.rows("SELECT value FROM state WHERE key='metrics_initialized'").isEmpty {
+        let storedMetricsVersion = try db.rows("SELECT value FROM state WHERE key='metrics_version'").first?[0]
+            .flatMap { String(data: $0, encoding: .utf8) }
+        let needsMetricsUpgrade = metricsVersion.map { storedMetricsVersion != $0 } ?? false
+        let metricsUninitialized = try db.rows("SELECT value FROM state WHERE key='metrics_initialized'").isEmpty
+        if let metrics, needsMetricsUpgrade || metricsUninitialized {
             try db.transaction {
-                for row in try db.rows("SELECT id,payload FROM records WHERE metric_value IS NULL") {
+                let rows = needsMetricsUpgrade ? "SELECT id,payload FROM records" : "SELECT id,payload FROM records WHERE metric_value IS NULL"
+                for row in try db.rows(rows) {
                     let record = try decoder.decode(Record.self, from: row[1]!)
                     let totals = metrics(record)
                     try db.execute("UPDATE records SET metric_value=?,metric_count=? WHERE id=?",
                                    [.integer(Int64(totals.value)), .integer(Int64(totals.count)), .text(record.id.uuidString)])
                 }
                 try db.execute("CREATE INDEX IF NOT EXISTS records_metrics ON records(metric_value,metric_count)")
-                try db.execute("INSERT INTO state(key,value) VALUES ('metrics_initialized',X'01')")
+                try db.execute("INSERT OR REPLACE INTO state(key,value) VALUES ('metrics_initialized',X'01')")
+                if let metricsVersion {
+                    try db.execute("INSERT OR REPLACE INTO state(key,value) VALUES ('metrics_version',?)", [.blob(Data(metricsVersion.utf8))])
+                }
             }
         }
         return db
@@ -235,10 +244,11 @@ final class SQLiteRecordStore<Record: Codable & Equatable & Identifiable, Metada
         } ?? nil
     }
 
-    func totals(from: Date? = nil, to: Date? = nil) throws -> Totals {
+    func totals(from: Date? = nil, to: Date? = nil, taskID: UUID? = nil) throws -> Totals {
         try query { db in
             aggregateQueries += 1
             var filters: [String] = []; var values: [SQLiteDatabase.Value] = []
+            if let taskID { filters.append("task_id=?"); values.append(.text(taskID.uuidString)) }
             if let from { filters.append("occurred_at>=?"); values.append(.real(from.timeIntervalSince1970)) }
             if let to { filters.append("occurred_at<?"); values.append(.real(to.timeIntervalSince1970)) }
             let clause = filters.isEmpty ? "" : " WHERE " + filters.joined(separator: " AND ")

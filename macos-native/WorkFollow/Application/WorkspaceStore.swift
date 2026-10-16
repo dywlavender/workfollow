@@ -19,6 +19,10 @@ final class WorkspaceStore {
     /// 侧栏清单元数据（Round B1）：与 lists 一一对应、顺序一致，sortOrder 即数组下标。
     /// 只覆盖 store 注册过的清单；随 commit/undo/transaction 与 lists 同步进退。
     private(set) var listMetas: [TaskListMeta] = []
+    var archivedListNames: Set<String> {
+        Set(listMetas.filter { $0.isArchived && $0.name != TaskList.inbox.name }.map(\.name))
+    }
+    var onListArchiveChange: ((Set<String>) -> Void)?
     /// 清单文件夹（滴答层级第一级）。**独立于 lists**：允许空文件夹，
     /// 随 commit/undo/transaction 与清单同进同退。
     private(set) var listFolders: [TaskListFolder] = []
@@ -29,6 +33,7 @@ final class WorkspaceStore {
     private(set) var listSections: [TaskListSection] = []
     private var undoListSections: [[TaskListSection]] = []
     private var undoCompensations: [(() -> Void)?] = []
+    private var undoRedoCompensations: [(() -> Void)?] = []
     private var transactionDepth = 0
     private var undoSnapshots: [[Task]] = []
     private struct TextRebase {
@@ -50,6 +55,8 @@ final class WorkspaceStore {
             if rebasesText {
                 value.title = title
                 value.document = document
+                value.series?.template.title = title
+                value.series?.template.document = document
             }
             value.updatedAt = updatedAt
             if rebasesSourceNote { value.sourceNoteID = sourceNoteID }
@@ -59,11 +66,24 @@ final class WorkspaceStore {
     /// Per-step overlays preserve text without copying every historical array
     /// on each keystroke. New business steps start with an empty overlay.
     private var undoTextRebases: [[UUID: TextRebase]] = []
+    private struct RedoFrame {
+        var tasks: [Task]
+        var lists: [String]
+        var listMetas: [TaskListMeta]
+        var listFolders: [TaskListFolder]
+        var listSections: [TaskListSection]
+        var textRebases: [UUID: TextRebase]
+        var undoCompensation: (() -> Void)?
+        var redoCompensation: (() -> Void)?
+    }
+    private var redoFrames: [RedoFrame] = []
     var canUndo: Bool { !undoSnapshots.isEmpty }
+    var canRedo: Bool { !redoFrames.isEmpty }
     /// Compatibility callback for consumers that still need full snapshots.
     var onTasksChanged: (([Task], [Task]) -> Void)?
     /// Emits the task-level diff once per commit, undo, or outer transaction.
     var onTaskChanges: ((TaskChangeSet) -> Void)?
+    var onOrganizationRename: ((TaskOrganizationRename) -> Void)?
 
     private func prepareReadIndex() {
         guard taskOffsets == nil else { return }
@@ -107,7 +127,8 @@ final class WorkspaceStore {
                 lists: [String]? = nil, listMetas: [TaskListMeta]? = nil,
                 listFolders: [TaskListFolder]? = nil,
                 listSections: [TaskListSection]? = nil,
-                undoCompensation: (() -> Void)? = nil) {
+                undoCompensation: (() -> Void)? = nil,
+                redoCompensation: (() -> Void)? = nil) {
         let survivingIDs = Set(snapshot.map(\.id))
         for task in tasks where !survivingIDs.contains(task.id) {
             // A cascade delete must not invalidate document references in undo.
@@ -119,6 +140,7 @@ final class WorkspaceStore {
         let sectionsChanged = listSections != nil && listSections != self.listSections
         guard snapshot != tasks || listsChanged || metasChanged || foldersChanged || sectionsChanged else { return }
         if undoPolicy == .record && transactionDepth == 0 {
+            redoFrames.removeAll()
             undoSnapshots.append(tasks)
             undoTextRebases.append([:])
             undoLists.append(self.lists)
@@ -126,6 +148,7 @@ final class WorkspaceStore {
             undoListFolders.append(self.listFolders)
             undoListSections.append(self.listSections)
             undoCompensations.append(undoCompensation)
+            undoRedoCompensations.append(redoCompensation)
             if undoSnapshots.count > 50 {
                 undoSnapshots.removeFirst()
                 undoTextRebases.removeFirst()
@@ -134,6 +157,7 @@ final class WorkspaceStore {
                 undoListFolders.removeFirst()
                 undoListSections.removeFirst()
                 undoCompensations.removeFirst()
+                undoRedoCompensations.removeFirst()
             }
         } else if undoPolicy == .skip {
 
@@ -146,11 +170,13 @@ final class WorkspaceStore {
             rebaseTextHistory(changed)
         }
         let previousTasks = tasks
+        let previousMetas = self.listMetas
         tasks = snapshot
         if let lists { self.lists = lists }
         if let listFolders { self.listFolders = listFolders }
         if let listSections { self.listSections = listSections }
         reconcileListMetas(committed: listMetas, listsCommitted: lists != nil)
+        publishOrganizationChanges(from: previousTasks, metas: previousMetas)
         if transactionDepth == 0 {
             publishTaskChanges(from: previousTasks)
         }
@@ -165,8 +191,8 @@ final class WorkspaceStore {
         let before = tasks[index]
         if document != nil, (try? before.document.materialized()) == nil { return }
         var after = before
-        if let title { after.title = title }
-        if let document { after.document = document }
+        if let title { after.title = title; after.series?.template.title = title }
+        if let document { after.document = document; after.series?.template.document = document }
         guard before.title != after.title || before.document != after.document else { return }
         after.updatedAt = updatedAt
         let previousTasks = transactionDepth == 0 && onTasksChanged != nil ? tasks : nil
@@ -196,6 +222,16 @@ final class WorkspaceStore {
                 undoTextRebases[index][id] = rebase
             }
         }
+        for index in redoFrames.indices {
+            for (id, latest) in changed {
+                var rebase = redoFrames[index].textRebases[id] ?? TextRebase(latest)
+                rebase.title = latest.title
+                rebase.document = latest.document
+                rebase.updatedAt = latest.updatedAt
+                rebase.rebasesText = true
+                redoFrames[index].textRebases[id] = rebase
+            }
+        }
     }
 
     /// Commits an editor-owned document/source pair without recording a business undo.
@@ -217,12 +253,30 @@ final class WorkspaceStore {
             rebase.updatedAt = updatedAt
             undoTextRebases[historyIndex][id] = rebase
         }
+        for historyIndex in redoFrames.indices {
+            var rebase = redoFrames[historyIndex].textRebases[id] ?? TextRebase(snapshot[index])
+            rebase.rebasesSourceNote = true
+            rebase.sourceNoteID = sourceNoteID
+            rebase.updatedAt = updatedAt
+            redoFrames[historyIndex].textRebases[id] = rebase
+        }
     }
 
     func undo() {
         guard let previous = undoSnapshots.popLast() else { return }
         let textRebases = undoTextRebases.removeLast()
         let before = tasks
+        let beforeMetas = listMetas
+        let compensation = undoCompensations.popLast() ?? nil
+        let redoCompensation = undoRedoCompensations.popLast() ?? nil
+        // Commands with an external side effect need a matching redo callback;
+        // regular task commands replay the saved after state and identities.
+        if compensation == nil || redoCompensation != nil {
+            redoFrames.append(RedoFrame(tasks: tasks, lists: lists, listMetas: listMetas,
+                                        listFolders: listFolders, listSections: listSections,
+                                        textRebases: textRebases, undoCompensation: compensation,
+                                        redoCompensation: redoCompensation))
+        } else { redoFrames.removeAll() }
         tasks = textRebases.isEmpty ? previous : previous.map { task in
             textRebases[task.id]?.applying(to: task) ?? task
         }
@@ -230,12 +284,36 @@ final class WorkspaceStore {
         listMetas = undoListMetas.removeLast()
         listFolders = undoListFolders.removeLast()
         listSections = undoListSections.removeLast()
-        if let compensation = undoCompensations.popLast() ?? nil { compensation() }
+        compensation?()
+        publishOrganizationChanges(from: before, metas: beforeMetas)
         if transactionDepth == 0 {
             publishTaskChanges(from: before)
         }
     }
+    func redo() {
+        guard let next = redoFrames.popLast() else { return }
+        let before = tasks
+        let beforeMetas = listMetas
+        undoSnapshots.append(tasks)
+        undoTextRebases.append(next.textRebases)
+        undoLists.append(lists)
+        undoListMetas.append(listMetas)
+        undoListFolders.append(listFolders)
+        undoListSections.append(listSections)
+        undoCompensations.append(next.undoCompensation)
+        undoRedoCompensations.append(next.redoCompensation)
+        next.redoCompensation?()
+        tasks = next.tasks.map { next.textRebases[$0.id]?.applying(to: $0) ?? $0 }
+        lists = next.lists
+        listMetas = next.listMetas
+        listFolders = next.listFolders
+        listSections = next.listSections
+        publishOrganizationChanges(from: before, metas: beforeMetas)
+        if transactionDepth == 0 { publishTaskChanges(from: before) }
+    }
+
     func clearUndo() {
+        redoFrames.removeAll()
         undoSnapshots.removeAll()
         undoTextRebases.removeAll()
         undoLists.removeAll()
@@ -243,6 +321,7 @@ final class WorkspaceStore {
         undoListFolders.removeAll()
         undoListSections.removeAll()
         undoCompensations.removeAll()
+        undoRedoCompensations.removeAll()
     }
 
     func transaction(_ body: () -> Void) {
@@ -257,11 +336,13 @@ final class WorkspaceStore {
         if transactionDepth == 0 && (before != tasks || beforeLists != lists || beforeMetas != listMetas
                                      || beforeFolders != listFolders
                                      || beforeSections != listSections) {
+            redoFrames.removeAll()
             undoSnapshots.append(before); undoLists.append(beforeLists); undoListMetas.append(beforeMetas)
             undoTextRebases.append([:])
             undoListFolders.append(beforeFolders)
             undoListSections.append(beforeSections)
             undoCompensations.append(nil)
+            undoRedoCompensations.append(nil)
             if undoSnapshots.count > 50 {
                 undoSnapshots.removeFirst()
                 undoTextRebases.removeFirst()
@@ -270,6 +351,7 @@ final class WorkspaceStore {
                 undoListFolders.removeFirst()
                 undoListSections.removeFirst()
                 undoCompensations.removeFirst()
+                undoRedoCompensations.removeFirst()
             }
             publishTaskChanges(from: before)
         }
@@ -285,6 +367,34 @@ final class WorkspaceStore {
         }
         onTasksChanged?(before, tasks)
         if let changes, !changes.entries.isEmpty || changes.order != nil { onTaskChanges?(changes) }
+    }
+
+    private func publishOrganizationChanges(from previous: [Task], metas previousMetas: [TaskListMeta]) {
+        let previousArchived = Set(previousMetas.filter {
+            $0.isArchived && $0.name != TaskList.inbox.name
+        }.map(\.name))
+        if previousArchived != archivedListNames { onListArchiveChange?(archivedListNames) }
+        func listNames(_ tasks: [Task], _ metas: [TaskListMeta]) -> [UUID: String] {
+            var names: [UUID: String] = [:]
+            for task in tasks { if let id = task.listID { names[id] = task.list.name } }
+            for meta in metas { if let id = meta.referenceID { names[id] = meta.name } }
+            return names
+        }
+        func tagNames(_ tasks: [Task]) -> [UUID: String] {
+            var names: [UUID: String] = [:]
+            for reference in tasks.flatMap({ $0.tagReferences ?? [] }) { names[reference.id] = reference.name }
+            return names
+        }
+        let pairs: [(TaskOrganizationRename.Kind, [UUID: String], [UUID: String])] = [
+            (.list, listNames(previous, previousMetas), listNames(tasks, listMetas)),
+            (.tag, tagNames(previous), tagNames(tasks))
+        ]
+        for (kind, before, after) in pairs {
+            for (id, old) in before {
+                guard let new = after[id], old != new else { continue }
+                onOrganizationRename?(TaskOrganizationRename(kind: kind, id: id, oldName: old, newName: new))
+            }
+        }
     }
 
     // MARK: - 清单元数据对账（Round B1）

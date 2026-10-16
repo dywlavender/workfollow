@@ -54,6 +54,7 @@ struct TaskList: Equatable, Codable {
 }
 
 struct TaskListMeta: Equatable, Codable {
+    var referenceID: UUID?
     var name: String
     /// WFListPalette 下标；没有调色板色时再检查 colorARGB，否则按名称推导颜色。
     var colorIndex: Int?
@@ -67,10 +68,14 @@ struct TaskListMeta: Equatable, Codable {
     /// additive：旧快照缺键 → nil；**文件夹本身不单独存**——存在 ⇔ 至少有一个清单指向它，
     /// 位置 = 它第一个成员清单的位置。
     var folderName: String?
-    /// 分组内排序。nil = 默认（跟随视图排序）。additive：旧快照缺键 → nil。
+    /// 归档只改变清单的可见性与提醒资格，保留任务和原有组织属性。
+    var archivedAt: Date?
+    var isArchived: Bool { archivedAt != nil }
 
     init(name: String, colorIndex: Int? = nil, isPinned: Bool = false, sortOrder: Int = 0,
-         colorARGB: UInt32? = nil, icon: String? = nil, folderName: String? = nil) {
+         colorARGB: UInt32? = nil, icon: String? = nil, folderName: String? = nil,
+         referenceID: UUID? = nil, archivedAt: Date? = nil) {
+        self.referenceID = referenceID
         self.name = name.trimmingCharacters(in: .whitespacesAndNewlines)
         self.colorIndex = colorIndex
         self.colorARGB = colorARGB
@@ -78,14 +83,16 @@ struct TaskListMeta: Equatable, Codable {
         self.sortOrder = sortOrder
         self.icon = icon
         self.folderName = folderName
+        self.archivedAt = archivedAt
     }
 
     private enum CodingKeys: String, CodingKey {
-        case name, colorIndex, colorARGB, isPinned, sortOrder, icon, folderName
+        case name, colorIndex, colorARGB, isPinned, sortOrder, icon, folderName, referenceID, archivedAt
     }
 
     init(from decoder: Decoder) throws {
         let values = try decoder.container(keyedBy: CodingKeys.self)
+        referenceID = try values.decodeIfPresent(UUID.self, forKey: .referenceID)
         name = try values.decode(String.self, forKey: .name)
         colorIndex = try values.decodeIfPresent(Int.self, forKey: .colorIndex)
         colorARGB = try values.decodeIfPresent(UInt32.self, forKey: .colorARGB)
@@ -94,10 +101,12 @@ struct TaskListMeta: Equatable, Codable {
         icon = try values.decodeIfPresent(String.self, forKey: .icon)
         folderName = try values.decodeIfPresent(String.self, forKey: .folderName)
             .flatMap { $0.isEmpty ? nil : $0 }
+        archivedAt = try values.decodeIfPresent(Date.self, forKey: .archivedAt)
     }
 
     func encode(to encoder: Encoder) throws {
         var values = encoder.container(keyedBy: CodingKeys.self)
+        try values.encodeIfPresent(referenceID, forKey: .referenceID)
         try values.encode(name, forKey: .name)
         try values.encodeIfPresent(colorIndex, forKey: .colorIndex)
         try values.encodeIfPresent(colorARGB, forKey: .colorARGB)
@@ -105,6 +114,7 @@ struct TaskListMeta: Equatable, Codable {
         try values.encode(sortOrder, forKey: .sortOrder)
         try values.encodeIfPresent(icon, forKey: .icon)
         try values.encodeIfPresent(folderName, forKey: .folderName)
+        try values.encodeIfPresent(archivedAt, forKey: .archivedAt)
     }
 }
 
@@ -176,6 +186,18 @@ struct TaskSchedule: Equatable, Codable {
     }
 }
 
+/// A task keeps the unit chosen by the user; nil means no estimate.
+struct TaskFocusEstimate: Equatable, Codable {
+    var minutes: Int?
+    var pomodoros: Int?
+
+    var normalized: TaskFocusEstimate? {
+        if let minutes, minutes > 0 { return TaskFocusEstimate(minutes: minutes, pomodoros: nil) }
+        if let pomodoros, pomodoros > 0 { return TaskFocusEstimate(minutes: nil, pomodoros: pomodoros) }
+        return nil
+    }
+}
+
 /// Value entity, independent of SwiftUI, AppKit, persistence and preview fixtures.
 struct Task: Identifiable, Equatable, Codable {
     let id: UUID
@@ -191,6 +213,8 @@ struct Task: Identifiable, Equatable, Codable {
     var reminderOffsets: [Int]? = nil
     var attachments: [NativeAttachment] = []
     var list: TaskList
+    var listID: UUID? = nil
+    var tagReferences: [TaskTagReference]? = nil
     var priority: TaskPriority
     var schedule: TaskSchedule
     var status: TaskStatus = .active
@@ -207,6 +231,10 @@ struct Task: Identifiable, Equatable, Codable {
     var sourceNoteID: UUID? = nil
     /// 所属清单分组（`TaskListSection.id`）。nil = 未分组。
     var sectionID: String? = nil
+    var focusEstimate: TaskFocusEstimate? = nil
+    var series: TaskSeries? = nil
+    var occurrenceKey: OccurrenceKey? = nil
+    var occurrenceOverride: OccurrenceOverride? = nil
 
     var isAbandoned: Bool { abandonedAt != nil }
     var isClosed: Bool { status == .completed || isAbandoned }
@@ -220,9 +248,9 @@ struct Task: Identifiable, Equatable, Codable {
 extension Task {
     private enum CodingKeys: String, CodingKey {
         case id, title, document, tags, recurrence, recurrenceRule, reminderAt, reminderOffsets
-        case attachments, list, priority, schedule, status, parentID, childOrder
+        case attachments, list, listID, tagReferences, priority, schedule, status, parentID, childOrder
         case createdAt, updatedAt, completedAt, deletedAt, isPinned, abandonedAt, skippedAt, convertedNoteID
-        case sourceNoteID, sectionID
+        case sourceNoteID, sectionID, focusEstimate, series, occurrenceKey, occurrenceOverride
     }
 
     init(from decoder: Decoder) throws {
@@ -237,6 +265,8 @@ extension Task {
         reminderOffsets = try values.decodeIfPresent([Int].self, forKey: .reminderOffsets)
         attachments = try values.decodeIfPresent([NativeAttachment].self, forKey: .attachments) ?? []
         list = try values.decode(TaskList.self, forKey: .list)
+        listID = try values.decodeIfPresent(UUID.self, forKey: .listID)
+        tagReferences = try values.decodeIfPresent([TaskTagReference].self, forKey: .tagReferences)
         priority = try values.decode(TaskPriority.self, forKey: .priority)
         schedule = try values.decode(TaskSchedule.self, forKey: .schedule)
         status = try values.decodeIfPresent(TaskStatus.self, forKey: .status) ?? .active
@@ -252,6 +282,10 @@ extension Task {
         convertedNoteID = try values.decodeIfPresent(UUID.self, forKey: .convertedNoteID)
         sourceNoteID = try values.decodeIfPresent(UUID.self, forKey: .sourceNoteID)
         sectionID = try values.decodeIfPresent(String.self, forKey: .sectionID)
+        focusEstimate = try values.decodeIfPresent(TaskFocusEstimate.self, forKey: .focusEstimate)
+        series = try values.decodeIfPresent(TaskSeries.self, forKey: .series)
+        occurrenceKey = try values.decodeIfPresent(OccurrenceKey.self, forKey: .occurrenceKey)
+        occurrenceOverride = try values.decodeIfPresent(OccurrenceOverride.self, forKey: .occurrenceOverride)
     }
 
     func encode(to encoder: Encoder) throws {
@@ -259,6 +293,10 @@ extension Task {
         try values.encode(id, forKey: .id)
         try values.encodeIfPresent(sourceNoteID, forKey: .sourceNoteID)
         try values.encodeIfPresent(sectionID, forKey: .sectionID)
+        try values.encodeIfPresent(focusEstimate, forKey: .focusEstimate)
+        try values.encodeIfPresent(series, forKey: .series)
+        try values.encodeIfPresent(occurrenceKey, forKey: .occurrenceKey)
+        try values.encodeIfPresent(occurrenceOverride, forKey: .occurrenceOverride)
         try values.encode(title, forKey: .title)
         try values.encode(document, forKey: .document)
         try values.encode(tags, forKey: .tags)
@@ -268,6 +306,8 @@ extension Task {
         try values.encodeIfPresent(reminderOffsets, forKey: .reminderOffsets)
         try values.encode(attachments, forKey: .attachments)
         try values.encode(list, forKey: .list)
+        try values.encodeIfPresent(listID, forKey: .listID)
+        try values.encodeIfPresent(tagReferences, forKey: .tagReferences)
         try values.encode(priority, forKey: .priority)
         try values.encode(schedule, forKey: .schedule)
         try values.encode(status, forKey: .status)

@@ -1,6 +1,9 @@
 import Foundation
 
-enum TaskListScope { case today, tomorrow, inbox, allTasks, nextSevenDays, completed }
+enum TaskListScope {
+    case today, tomorrow, inbox, allTasks, nextSevenDays, completed, abandoned
+    var isClosedScope: Bool { self == .completed || self == .abandoned }
+}
 enum TaskGroupKind: Equatable { case pinned, overdue, today, day, upcoming, later, undated, plain, completed }
 enum TaskListSortMode: String, CaseIterable, Codable {
     case manual, due, priority, title, createdAt, modified
@@ -28,6 +31,18 @@ struct TaskListQuery: Equatable {
             (text.isEmpty || task.document.matches(text, prefix: task.title + "\n"))
     }
 }
+
+/// 列内添加的属性来自投影类型，不从显示标题反推。
+/// 创建时间、过期和一段时间范围的分组不提供创建目标。
+enum TaskKanbanCreationTarget: Equatable {
+    case currentContext
+    case schedule(Date?)
+    case priority(TaskPriority)
+    case list(String)
+    case tag(String?)
+    case section(list: String, sectionID: String?)
+}
+
 struct TaskListGroup {
     let kind: TaskGroupKind
     let day: Date?
@@ -36,6 +51,7 @@ struct TaskListGroup {
     /// 这一组对应的**自定义分组 id**（只有"列 = 分组"时有值）。
     /// 看板换列靠它定位落点：拖到某列 = `setTaskSection(任务, 该列的分组 id)`。
     let sectionID: String?
+    let creationTarget: TaskKanbanCreationTarget?
 
     /// 是否是「未分组」桶：它 `sectionID == nil`，与"按日期/优先级"那类系统分组标题
     /// 在数据上无法区分，而拖放语义正好相反（落上去 = **移出**分组）。
@@ -48,23 +64,24 @@ struct TaskListGroup {
     /// accidentally transfer to another group or reopen after its label shifts.
     var id: String {
         switch kind {
-        case .pinned: "pinned"
-        case .overdue: "overdue"
-        case .today: "today"
-        case .upcoming: "upcoming"
-        case .later: "later"
-        case .undated: "undated"
+        case .pinned: return "pinned"
+        case .overdue: return "overdue"
+        case .today: return "today"
+        case .upcoming: return "upcoming"
+        case .later: return "later"
+        case .undated: return "undated"
         case .plain:
+            if let sectionID { return "section:\(sectionID)" }
             // 带标签的 plain 组（按优先级/清单/标签分组产生）各有身份，折叠状态
             // 互不串；无标签的 plain 组（平铺视图）沿用历史单一身份。
-            if let label { "plain:\(label)" } else { "plain" }
+            if let label { return "plain:\(label)" } else { return "plain" }
         case .day:
-            if let day { Self.dayGroupID(day) }
-            else { "day-undated" }
+            if let day { return Self.dayGroupID(day) }
+            else { return "day-undated" }
         case .completed:
-            if let day { Self.closedDayGroupID(day) }
-            else if label == "无日期" { "closed-undated" }
-            else { "closed" }
+            if let day { return Self.closedDayGroupID(day) }
+            else if label == "无日期" { return "closed-undated" }
+            else { return "closed" }
         }
     }
 
@@ -76,13 +93,21 @@ struct TaskListGroup {
         "closed:\(Int64(day.timeIntervalSince1970))"
     }
 
+    static func closedTitle(for tasks: [Task]) -> String {
+        let hasCompleted = tasks.contains { $0.status == .completed }
+        let hasAbandoned = tasks.contains(where: \.isAbandoned)
+        return hasCompleted && hasAbandoned ? "已完成&已放弃"
+            : hasAbandoned ? "已放弃" : "已完成"
+    }
+
     init(kind: TaskGroupKind, day: Date?, tasks: [Task], label: String? = nil,
-         sectionID: String? = nil) {
+         sectionID: String? = nil, creationTarget: TaskKanbanCreationTarget? = nil) {
         self.kind = kind
         self.day = day
         self.tasks = tasks
         self.label = label
         self.sectionID = sectionID
+        self.creationTarget = creationTarget
     }
 
     /// 组内排序（阶段1扩到五种）。所有模式都只是视图投影，**从不改 childOrder**：
@@ -160,7 +185,7 @@ struct TaskGroupExpansionState: Equatable {
 
     mutating func reveal(_ task: Task, in scope: TaskListScope, calendar: Calendar) {
         guard task.isClosed else { return }
-        if scope == .completed {
+        if scope.isClosedScope {
             let id = task.closedAt.map {
                 TaskListGroup.closedDayGroupID(calendar.startOfDay(for: $0))
             } ?? "closed-undated"
@@ -175,15 +200,19 @@ enum TaskListProjection {
     /// Flutter keeps matching completed tasks in Today/Inbox, while their badge counts open tasks.
     static func matches(in scope: TaskListScope, store: WorkspaceStore,
                         now: Date, calendar: Calendar, query: TaskListQuery = TaskListQuery()) -> [Task] {
-        matches(in: scope, tasks: store.tasks, now: now, calendar: calendar, query: query)
+        matches(in: scope, tasks: store.tasks, now: now, calendar: calendar, query: query,
+                archivedLists: store.archivedListNames)
     }
 
     /// Value-input overload for feature projections that need the exact same
     /// scope/query membership rules without owning or mutating a WorkspaceStore.
     static func matches(in scope: TaskListScope, tasks: [Task],
-                        now: Date, calendar: Calendar, query: TaskListQuery = TaskListQuery()) -> [Task] {
+                        now: Date, calendar: Calendar, query: TaskListQuery = TaskListQuery(),
+                        archivedLists: Set<String> = []) -> [Task] {
         tasks.filter { task in
             guard task.deletedAt == nil && task.skippedAt == nil && !task.isConverted else { return false }
+            guard !archivedLists.contains(task.list.name)
+                || (scope == .allTasks && query.list == task.list.name) else { return false }
             guard query.matches(task) else { return false }
             switch scope {
             case .allTasks: return true
@@ -192,7 +221,8 @@ enum TaskListProjection {
                 let end = calendar.date(byAdding: .day, value: 7, to: start)!
                 return task.schedule.dueAt.map { calendar.startOfDay(for: $0) < end } ?? false
             case .inbox: return task.list == .inbox
-            case .completed: return task.isClosed
+            case .completed: return task.status == .completed && !task.isAbandoned
+            case .abandoned: return task.isAbandoned
             case .today:
                 guard !task.isAbandoned else { return false }
                 let today = calendar.startOfDay(for: now)
@@ -221,18 +251,19 @@ enum TaskListProjection {
     static func count(in scope: TaskListScope, store: WorkspaceStore,
                       now: Date, calendar: Calendar) -> Int {
         matches(in: scope, store: store, now: now, calendar: calendar)
-            .filter { scope == .completed || !$0.isClosed }.count
+            .filter { scope.isClosedScope || !$0.isClosed }.count
     }
 
     static func groups(in scope: TaskListScope, store: WorkspaceStore,
                        now: Date, calendar: Calendar, query: TaskListQuery = TaskListQuery(),
                        grouping: TaskListGrouping = .byDate,
-                       hidesCompleted: Bool = false) -> [TaskListGroup] {
+                       hidesCompleted: Bool = false,
+                       viewMode: TaskListViewMode = .list) -> [TaskListGroup] {
         let rows = rows(in: scope, store: store, now: now, calendar: calendar, query: query)
         let closed = rows.filter(\.isClosed).sorted {
             ($0.closedAt ?? .distantPast) > ($1.closedAt ?? .distantPast)
         }
-        if scope == .completed {
+        if scope.isClosedScope {
             let dated = closed.filter { $0.closedAt != nil }
             let undated = closed.filter { $0.closedAt == nil }
             let days = Dictionary(grouping: dated) {
@@ -248,9 +279,10 @@ enum TaskListProjection {
             }
             return groups
         }
-        let open = rows.filter { !$0.isClosed }
-        let pinned = open.filter(\.isPinned)
-        let ordinary = open.filter { !$0.isPinned }
+        // 看板按任务的原有属性归列，关闭状态只决定列内位置；列表仍保留底部关闭组。
+        let grouped = viewMode == .kanban && !hidesCompleted ? rows : rows.filter { !$0.isClosed }
+        let pinned = grouped.filter(\.isPinned)
+        let ordinary = grouped.filter { !$0.isPinned }
         var groups: [TaskListGroup] = []
         if !pinned.isEmpty {
             groups.append(TaskListGroup(kind: .pinned, day: nil, tasks: pinned))
@@ -265,21 +297,18 @@ enum TaskListProjection {
         } else if scope == .allTasks {
             switch grouping {
             case .byDate:
-                if query.list == nil && query.tag == nil {
-                    groups += allTaskDateGroups(ordinary, now: now, calendar: calendar)
-                } else if !ordinary.isEmpty {
-                    groups.append(TaskListGroup(kind: .plain, day: nil, tasks: ordinary))
-                }
+                groups += allTaskDateGroups(ordinary, now: now, calendar: calendar)
             case .none:
                 if !ordinary.isEmpty {
-                    groups.append(TaskListGroup(kind: .plain, day: nil, tasks: ordinary))
+                    groups.append(TaskListGroup(kind: .plain, day: nil, tasks: ordinary,
+                                                creationTarget: .currentContext))
                 }
             case .byPriority:
                 groups += priorityGroups(ordinary)
             case .byList:
                 groups += listGroups(ordinary, knownLists: store.lists)
             case .byTag:
-                groups += tagGroups(ordinary)
+                groups += tagGroups(ordinary, repeatsAcrossTags: viewMode == .kanban)
             case .byCreatedAt:
                 groups += createdAtGroups(ordinary, now: now, calendar: calendar)
             }
@@ -289,13 +318,17 @@ enum TaskListProjection {
             let overdueIDs = Set(overdue.map(\.id))
             let remaining = ordinary.filter { !overdueIDs.contains($0.id) }
             if !overdue.isEmpty { groups.append(TaskListGroup(kind: .overdue, day: nil, tasks: overdue)) }
-            if !remaining.isEmpty { groups.append(TaskListGroup(kind: .today, day: today, tasks: remaining)) }
+            if !remaining.isEmpty {
+                groups.append(TaskListGroup(kind: .today, day: today, tasks: remaining,
+                                            creationTarget: .schedule(today)))
+            }
         } else if scope == .tomorrow {
             // 时间型视图的日期分组是视图本体：明天只有一个桶（逾期归今天视图）。
             let tomorrow = calendar.date(byAdding: .day, value: 1,
                                          to: calendar.startOfDay(for: now))!
             if !ordinary.isEmpty {
-                groups.append(TaskListGroup(kind: .day, day: tomorrow, tasks: ordinary))
+                groups.append(TaskListGroup(kind: .day, day: tomorrow, tasks: ordinary,
+                                            creationTarget: .schedule(tomorrow)))
             }
         } else if scope == .nextSevenDays {
             let today = calendar.startOfDay(for: now)
@@ -308,18 +341,17 @@ enum TaskListProjection {
             }
             for day in byDay.keys.sorted() {
                 groups.append(TaskListGroup(kind: day == today ? .today : .day,
-                                            day: day, tasks: byDay[day]!))
+                                            day: day, tasks: byDay[day]!,
+                                            creationTarget: .schedule(day)))
             }
         } else if !ordinary.isEmpty {
-            groups.append(TaskListGroup(kind: .plain, day: nil, tasks: ordinary))
+            groups.append(TaskListGroup(kind: .plain, day: nil, tasks: ordinary,
+                                        creationTarget: .currentContext))
         }
         // 「隐藏已完成」只作用于普通视图；`.completed` 视图本身在上面已提前返回。
-        if !hidesCompleted, !closed.isEmpty {
-            let hasCompleted = closed.contains { $0.status == .completed }
-            let hasAbandoned = closed.contains { $0.isAbandoned }
-            let label = hasCompleted && hasAbandoned ? "已完成&已放弃"
-                : hasAbandoned ? "已放弃" : "已完成"
-            groups.append(TaskListGroup(kind: .completed, day: nil, tasks: closed, label: label))
+        if viewMode != .kanban, !hidesCompleted, !closed.isEmpty {
+            groups.append(TaskListGroup(kind: .completed, day: nil, tasks: closed,
+                                        label: TaskListGroup.closedTitle(for: closed)))
         }
         return groups
     }
@@ -354,14 +386,20 @@ enum TaskListProjection {
 
         var groups: [TaskListGroup] = []
         if !overdue.isEmpty { groups.append(TaskListGroup(kind: .overdue, day: nil, tasks: overdue)) }
-        if !onToday.isEmpty { groups.append(TaskListGroup(kind: .today, day: today, tasks: onToday)) }
+        if !onToday.isEmpty {
+            groups.append(TaskListGroup(kind: .today, day: today, tasks: onToday,
+                                        creationTarget: .schedule(today)))
+        }
         if !upcoming.isEmpty {
             groups.append(TaskListGroup(kind: .upcoming, day: nil, tasks: sortedByDueDay(upcoming)))
         }
         if !later.isEmpty {
             groups.append(TaskListGroup(kind: .later, day: nil, tasks: sortedByDueDay(later)))
         }
-        if !undated.isEmpty { groups.append(TaskListGroup(kind: .undated, day: nil, tasks: undated)) }
+        if !undated.isEmpty {
+            groups.append(TaskListGroup(kind: .undated, day: nil, tasks: undated,
+                                        creationTarget: .schedule(nil)))
+        }
         return groups
     }
 
@@ -386,7 +424,8 @@ enum TaskListProjection {
         return buckets.compactMap { priority, label in
             let bucket = tasks.filter { $0.priority == priority }
             guard !bucket.isEmpty else { return nil }
-            return TaskListGroup(kind: .plain, day: nil, tasks: bucket, label: label)
+            return TaskListGroup(kind: .plain, day: nil, tasks: bucket, label: label,
+                                 creationTarget: .priority(priority))
         }
     }
 
@@ -399,25 +438,28 @@ enum TaskListProjection {
         return order.compactMap { name in
             let bucket = tasks.filter { $0.list.name == name }
             guard !bucket.isEmpty else { return nil }
-            return TaskListGroup(kind: .plain, day: nil, tasks: bucket, label: name)
+            return TaskListGroup(kind: .plain, day: nil, tasks: bucket, label: name,
+                                 creationTarget: .list(name))
         }
     }
 
-    /// 标签分组：一个任务只落进**第一个**标签组——列表以 task.id 为 SwiftUI 身份，
-    /// 同一任务跨组出现会撞 ForEach 的 ID（滴答跨组重复显示，这里明确不做）。
-    /// 无标签任务收进最后的"无标签"组。
-    private static func tagGroups(_ tasks: [Task]) -> [TaskListGroup] {
+    /// 看板的卡片身份位于列内部，同一任务可同时出现在多个标签列。
+    /// 平铺的原生列表仍使用唯一 task.id；无标签任务收进最后一组。
+    private static func tagGroups(_ tasks: [Task], repeatsAcrossTags: Bool) -> [TaskListGroup] {
         var buckets: [String: [Task]] = [:]
         var untagged: [Task] = []
         for task in tasks {
-            if let first = task.tags.first { buckets[first, default: []].append(task) }
-            else { untagged.append(task) }
+            let tags = repeatsAcrossTags ? Array(Set(task.tags)).sorted() : Array(task.tags.prefix(1))
+            if tags.isEmpty { untagged.append(task) }
+            else { for tag in tags { buckets[tag, default: []].append(task) } }
         }
         var groups = buckets.keys.sorted().map { name in
-            TaskListGroup(kind: .plain, day: nil, tasks: buckets[name]!, label: name)
+            TaskListGroup(kind: .plain, day: nil, tasks: buckets[name]!, label: name,
+                          creationTarget: .tag(name))
         }
         if !untagged.isEmpty {
-            groups.append(TaskListGroup(kind: .plain, day: nil, tasks: untagged, label: "无标签"))
+            groups.append(TaskListGroup(kind: .plain, day: nil, tasks: untagged, label: "无标签",
+                                        creationTarget: .tag(nil)))
         }
         return groups
     }
@@ -585,12 +627,14 @@ enum TaskListSectionProjection {
         }
         if !unsectioned.isEmpty {
             groups.append(TaskListGroup(kind: .plain, day: nil,
-                                        tasks: unsectioned, label: "未分组"))
+                                        tasks: unsectioned, label: "未分组",
+                                        creationTarget: .section(list: list, sectionID: nil)))
         }
         for section in ordered {
             groups.append(TaskListGroup(kind: .plain, day: nil,
                                         tasks: tasks.filter { $0.sectionID == section.id },
-                                        label: section.title, sectionID: section.id))
+                                        label: section.title, sectionID: section.id,
+                                        creationTarget: .section(list: list, sectionID: section.id)))
         }
         return groups
     }

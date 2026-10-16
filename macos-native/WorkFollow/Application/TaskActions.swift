@@ -14,6 +14,8 @@ final class TaskActions {
     private let store: WorkspaceStore
     private let clock: () -> Date
     private let calendar: Calendar
+    private var knownListIDs: [String: UUID] = [:]
+    private var knownTagIDs: [String: UUID] = [:]
 
     init(store: WorkspaceStore, clock: @escaping () -> Date = Date.init, calendar: Calendar = .current) {
         self.store = store
@@ -25,13 +27,26 @@ final class TaskActions {
     func create(title: String, list: TaskList = .inbox,
                 schedule: TaskSchedule = TaskSchedule(),
                 priority: TaskPriority = .none) -> TaskActionResult {
-        guard !list.name.isEmpty else { return .failure(.invalidList) }
+        guard !list.name.isEmpty, !store.archivedListNames.contains(list.name) else { return .failure(.invalidList) }
         let now = clock()
-        let task = Task(id: UUID(), title: title.trimmingCharacters(in: .whitespacesAndNewlines),
+        var task = Task(id: UUID(), title: title.trimmingCharacters(in: .whitespacesAndNewlines),
                         list: list, priority: priority, schedule: schedule,
                         parentID: nil, childOrder: 0, createdAt: now, updatedAt: now)
+        task.listID = listReferenceID(list.name)
         store.commit(store.tasks + [task])
         return .success(task.id)
+    }
+
+    func createCaptures(_ drafts: [QuickCaptureDraft]) -> [UUID] {
+        var ids: [UUID] = []
+        store.transaction {
+            for draft in drafts {
+                let result = createDraft(title: draft.title, list: draft.list, plan: draft.plan,
+                    priority: draft.priority, tags: draft.tags, document: draft.document)
+                if let id = result.taskID { ids.append(id) }
+            }
+        }
+        return ids
     }
 
     @discardableResult
@@ -41,9 +56,10 @@ final class TaskActions {
         guard parent.parentID == nil else { return .failure(.childCannotHaveChildren) }
         let now = clock()
         let order = (store.children(of: parentID, includingDeleted: true).map(\.childOrder).max() ?? -1) + 1
-        let child = Task(id: UUID(), title: title.trimmingCharacters(in: .whitespacesAndNewlines),
+        var child = Task(id: UUID(), title: title.trimmingCharacters(in: .whitespacesAndNewlines),
                          list: parent.list, priority: .none, schedule: TaskSchedule(),
                          parentID: parentID, childOrder: order, createdAt: now, updatedAt: now)
+        child.listID = parent.listID
         store.commit(store.tasks + [child])
         return .success(child.id)
     }
@@ -65,6 +81,7 @@ final class TaskActions {
         replacement.parentID = parentID
         replacement.childOrder = childOrder
         replacement.list = parent.list
+        replacement.listID = parent.listID
         replacement.updatedAt = clock()
         store.commit(store.tasks.map { $0.id == id ? replacement : $0 })
         return .success(id)
@@ -80,7 +97,15 @@ final class TaskActions {
             var value = original
             if (value.id == id || value.parentID == id), value.deletedAt == nil,
                !value.isClosed && value.skippedAt == nil {
+                if value.id == id, value.recurrence != .never, value.series == nil {
+                    value.series = TaskSeries(task: value, calendar: calendar, now: now)
+                    value.occurrenceKey = value.series?.initialKey
+                }
                 value.status = .completed
+                if let key = value.occurrenceKey {
+                    value.occurrenceOverride = OccurrenceOverride(occurrence: key,
+                        actualSchedule: value.occurrenceOverride?.actualSchedule, outcome: .completed)
+                }
                 value.completedAt = now
                 value.updatedAt = now
             }
@@ -91,7 +116,7 @@ final class TaskActions {
         var resultID = id
         if task.recurrence != .never,
            let occurrence = makeNextOccurrence(of: task, completedAt: now) {
-            snapshot.append(occurrence.spawn)
+            if !snapshot.contains(where: { $0.id == occurrence.spawn.id }) { snapshot.append(occurrence.spawn) }
             snapshot += occurrence.children
             resultID = occurrence.spawn.id
         }
@@ -106,10 +131,36 @@ final class TaskActions {
     /// recurrence delta, the count boundary is consumed, and the children come
     /// along as a fresh incomplete checklist whose own repeat rules are cleared.
     private func makeNextOccurrence(of task: Task, completedAt: Date) -> (spawn: Task, children: [Task])? {
-        let base = task.schedule.dueAt ?? calendar.startOfDay(for: completedAt)
-        var rule = task.recurrenceRule ?? RecurrenceRule()
+        let series = task.series ?? TaskSeries(task: task, calendar: calendar, now: completedAt)
+        let key = task.occurrenceKey ?? series.initialKey
+        let dueBase = key.nominalDate
+        var rule = task.recurrenceRule ?? series.rule
+        let base = rule.base == .completionDate
+            ? TaskDateDraft.movingDay(task.schedule.dueAt ?? dueBase, to: completedAt, calendar: calendar)
+            : dueBase
         rule.monthDay = rule.monthDay ?? calendar.component(.day, from: base)
-        guard let next = rule.nextOccurrence(after: base, frequency: task.recurrence, calendar: calendar) else { return nil }
+        guard var next = rule.nextOccurrence(after: base, frequency: task.recurrence, calendar: calendar) else { return nil }
+        var nextOrdinal = key.ordinal + 1
+        let excludedOrdinals = Set(series.excludedOrdinals ?? []).union(store.tasks.compactMap { value -> Int? in
+            guard let occurrence = value.occurrenceKey, occurrence.seriesID == series.id,
+                  !value.isActiveSeriesOccurrence else { return nil }
+            return occurrence.ordinal
+        })
+        while excludedOrdinals.contains(nextOrdinal) {
+            rule = rule.following
+            if task.recurrence == .ebbinghaus {
+                rule.ebbinghausStep = (rule.ebbinghausStep ?? max(0, rule.interval - 1)) + 1
+                rule.interval += 1
+            }
+            guard let following = rule.nextOccurrence(after: next, frequency: task.recurrence, calendar: calendar) else { return nil }
+            next = following
+            nextOrdinal += 1
+        }
+        guard series.endBeforeOrdinal.map({ nextOrdinal < $0 }) ?? true else { return nil }
+        let nextKey = OccurrenceKey(seriesID: series.id, nominalDate: next, ordinal: nextOrdinal)
+        if let existing = store.tasks.first(where: { $0.occurrenceKey == nextKey && $0.isActiveSeriesOccurrence }) {
+            return (existing, [])
+        }
         let days = calendar.dateComponents([.day], from: base, to: next).day ?? 0
         // 平移规则只有一处实现（`ScheduleSemantics.shifted`）：due / dueEnd / deadline /
         // reminder 用同一条，避免新实例的截止与提醒落到不同天。
@@ -133,15 +184,30 @@ final class TaskActions {
         // 取记忆曲线的下一段间隔（RecurrenceRule.nextOccurrence .ebbinghaus）。
         if task.recurrence == .ebbinghaus {
             var ebbingRule = spawn.recurrenceRule ?? RecurrenceRule()
+            ebbingRule.ebbinghausStep = (ebbingRule.ebbinghausStep ?? max(0, ebbingRule.interval - 1)) + 1
+            // Keep the legacy interval value readable for older archives.
             ebbingRule.interval = max(1, ebbingRule.interval) + 1
             spawn.recurrenceRule = ebbingRule
         }
+        spawn.series = series
+        spawn.occurrenceKey = nextKey
+        if task.occurrenceOverride?.actualSchedule != nil, rule.base != .completionDate {
+            let nominal = series.template.task(id: spawn.id, at: next, series: series, key: nextKey)
+            spawn.schedule = nominal.schedule
+            spawn.reminderAt = nominal.reminderAt
+        }
+        spawn.listID = task.listID
+        spawn.tagReferences = task.tagReferences
+        spawn.sectionID = task.sectionID
+        spawn.focusEstimate = task.focusEstimate
         spawn.sourceNoteID = task.sourceNoteID
         let children = store.children(of: task.id).enumerated().map { order, child -> Task in
             var value = Task(id: UUID(), title: child.title, document: child.document,
                              tags: child.tags, list: child.list, priority: child.priority,
                              schedule: child.schedule, parentID: spawn.id, childOrder: order,
                              createdAt: now, updatedAt: now)
+            value.listID = child.listID
+            value.tagReferences = child.tagReferences
             value.schedule.dueAt = shifted(child.schedule.dueAt)
             value.schedule.dueEndAt = shifted(child.schedule.dueEndAt)
             value.schedule.deadlineAt = shifted(child.schedule.deadlineAt)
@@ -236,7 +302,7 @@ final class TaskActions {
     /// `moveToList` 两个入口的共同实现。
     private func moveTask(_ id: UUID, to list: TaskList,
                           section: SectionAssignment) -> TaskActionResult {
-        guard !list.name.isEmpty else { return .failure(.invalidList) }
+        guard !list.name.isEmpty, !store.archivedListNames.contains(list.name) else { return .failure(.invalidList) }
         guard let task = store.task(id) else { return .failure(.missingTask) }
         guard task.deletedAt == nil else { return .failure(.deletedTask) }
         guard task.parentID == nil else { return .failure(.childListMoveNotSupported) }
@@ -246,6 +312,9 @@ final class TaskActions {
             var value = original
             guard (value.id == id || value.parentID == id), value.deletedAt == nil else { return value }
             value.list = list
+            value.listID = listReferenceID(list.name)
+            value.series?.template.list = list
+            value.series?.template.listID = value.listID
             if value.id == id {
                 switch section {
                 case .clearIfListChanged: if listChanged { value.sectionID = nil }
@@ -311,24 +380,45 @@ final class TaskActions {
     }
 
     @discardableResult
+    func convertToNote(_ id: UUID, noteID: UUID, undoNote: @escaping () -> Void) -> TaskActionResult {
+        convertToNote(id, noteID: noteID, undoNote: undoNote, redoNote: nil)
+    }
+
     func convertToNote(_ id: UUID, noteID: UUID,
-                       undoNote: @escaping () -> Void) -> TaskActionResult {
+                       undoNote: @escaping () -> Void, redoNote: (() -> Void)?) -> TaskActionResult {
         guard let task = store.task(id) else { return .failure(.missingTask) }
         guard task.deletedAt == nil else { return .failure(.deletedTask) }
         guard !task.isConverted else { return .failure(.alreadyConverted) }
+        commitNoteConversions([id: noteID], undoNotes: undoNote, redoNotes: redoNote)
+        return .success(id)
+    }
+
+    /// All prepared notes and their task relations share one history frame.
+    /// A generic transaction would discard the external note compensations.
+    func convertToNotes(_ noteIDs: [UUID: UUID], undoNotes: @escaping () -> Void,
+                        redoNotes: @escaping () -> Void) -> [UUID] {
+        let targets = store.tasks.filter { noteIDs[$0.id] != nil && $0.deletedAt == nil && !$0.isConverted }
+        guard !targets.isEmpty, targets.count == noteIDs.count else { return [] }
+        commitNoteConversions(noteIDs, undoNotes: undoNotes, redoNotes: redoNotes)
+        return targets.map(\.id)
+    }
+
+    private func commitNoteConversions(_ noteIDs: [UUID: UUID], undoNotes: @escaping () -> Void,
+                                       redoNotes: (() -> Void)?) {
         let now = clock()
         var snapshot = store.tasks
-        guard let parentIndex = snapshot.firstIndex(where: { $0.id == id }) else {
-            return .failure(.missingTask)
+        for index in snapshot.indices {
+            if let noteID = noteIDs[snapshot[index].id] {
+                snapshot[index].convertedNoteID = noteID
+                snapshot[index].updatedAt = now
+            }
+            if let parentID = snapshot[index].parentID,
+               noteIDs[parentID] != nil, snapshot[index].deletedAt == nil {
+                snapshot[index].deletedAt = now
+                snapshot[index].updatedAt = now
+            }
         }
-        snapshot[parentIndex].convertedNoteID = noteID
-        snapshot[parentIndex].updatedAt = now
-        for index in snapshot.indices where snapshot[index].parentID == id && snapshot[index].deletedAt == nil {
-            snapshot[index].deletedAt = now
-            snapshot[index].updatedAt = now
-        }
-        store.commit(snapshot, undoCompensation: undoNote)
-        return .success(id)
+        store.commit(snapshot, undoCompensation: undoNotes, redoCompensation: redoNotes)
     }
 
     @discardableResult
@@ -336,7 +426,12 @@ final class TaskActions {
         var seen = Set<String>()
         let values = tags.map { $0.trimmingCharacters(in: .whitespacesAndNewlines).trimmingCharacters(in: CharacterSet(charactersIn: "#")) }
             .filter { !$0.isEmpty && seen.insert($0).inserted }
-        return edit(id) { $0.tags = values }
+        return edit(id) { task in
+            task.tags = values
+            task.tagReferences = tagReferences(values)
+            task.series?.template.tags = values
+            task.series?.template.tagReferences = task.tagReferences
+        }
     }
 
     @discardableResult
@@ -351,6 +446,18 @@ final class TaskActions {
             // Normalization drops out-of-range calendar fields and zero counts
             // (never-ending), mirroring Flutter's RecurrenceDraft.normalized.
             task.recurrenceRule = frequency == .never ? nil : rule?.normalized(calendar: calendar)
+            if frequency == .never {
+                task.series = nil
+                task.occurrenceKey = nil
+                task.occurrenceOverride = nil
+            } else {
+                var series = task.series ?? TaskSeries(task: task, calendar: calendar, now: clock())
+                series.frequency = frequency
+                series.rule = task.recurrenceRule ?? RecurrenceRule()
+                series.template = TaskSeriesTemplate(task)
+                task.series = series
+                task.occurrenceKey = task.occurrenceKey ?? series.initialKey
+            }
         }
     }
 
@@ -365,6 +472,58 @@ final class TaskActions {
     }
 
     func undo() { store.undo() }
+    func redo() { store.redo() }
+
+    /// One user action updates all attributes, including descendant list membership.
+    @discardableResult
+    func updateAttributes(_ id: UUID, priority: TaskPriority? = nil,
+                          schedule: TaskSchedule? = nil, list: TaskList? = nil,
+                          tags: [String]? = nil) -> TaskActionResult {
+        guard let current = store.task(id) else { return .failure(.missingTask) }
+        guard current.deletedAt == nil else { return .failure(.deletedTask) }
+        if let list {
+            guard !list.name.isEmpty else { return .failure(.invalidList) }
+            guard current.parentID == nil || list == current.list else {
+                return .failure(.childListMoveNotSupported)
+            }
+        }
+        let now = clock()
+        var snapshot = store.tasks
+        for index in snapshot.indices {
+            if snapshot[index].id == id {
+                if let priority { snapshot[index].priority = priority }
+                if let schedule {
+                    if let key = current.occurrenceKey, schedule != current.schedule {
+                        snapshot[index].occurrenceOverride = OccurrenceOverride(occurrence: key,
+                            actualSchedule: schedule, outcome: current.occurrenceOverride?.outcome ?? .active)
+                    }
+                    if let oldStart = current.schedule.dueAt, let newStart = schedule.dueAt,
+                       let reminder = current.reminderAt {
+                        snapshot[index].reminderAt = reminder.addingTimeInterval(newStart.timeIntervalSince(oldStart))
+                    }
+                    snapshot[index].schedule = schedule
+                }
+                if let tags {
+                    snapshot[index].tags = Array(NSOrderedSet(array: tags)) as? [String] ?? tags
+                    snapshot[index].tagReferences = tagReferences(snapshot[index].tags)
+                }
+            }
+            if let list, snapshot[index].id == id || snapshot[index].parentID == id {
+                snapshot[index].list = list
+                snapshot[index].listID = listReferenceID(list.name)
+                if list != current.list { snapshot[index].sectionID = nil }
+            }
+            if snapshot[index] != store.tasks[index] { snapshot[index].updatedAt = now }
+        }
+        store.commit(snapshot)
+        return .success(id)
+    }
+
+    @discardableResult
+    func setFocusEstimate(_ id: UUID, _ estimate: TaskFocusEstimate?) -> TaskActionResult {
+        edit(id) { $0.focusEstimate = estimate?.normalized; $0.series?.template.focusEstimate = estimate?.normalized }
+    }
+
     @discardableResult
     func saveTiming(_ id: UUID, schedule: TaskSchedule, reminder: Date?, frequency: TaskRepeat,
                     recurrenceRule: RecurrenceRule? = nil, reminderOffsets: [Int]? = nil) -> TaskActionResult {
@@ -418,6 +577,220 @@ final class TaskActions {
                           reminderOffsets: plan.reminderOffsets)
     }
 
+    func listReferenceID(_ name: String) -> UUID {
+        if let id = store.listMeta(for: name)?.referenceID ?? store.tasks.first(where: { $0.list.name == name })?.listID {
+            knownListIDs[name] = id; return id
+        }
+        if let id = knownListIDs[name] { return id }
+        let id = UUID(); knownListIDs[name] = id; return id
+    }
+
+    func tagReferences(_ names: [String]) -> [TaskTagReference] {
+        let references = store.tasks.flatMap { $0.tagReferences ?? [] }
+        return names.map { name in
+            let id = references.first(where: { $0.name == name })?.id ?? knownTagIDs[name] ?? UUID()
+            knownTagIDs[name] = id
+            return TaskTagReference(id: id, name: name)
+        }
+    }
+
+    func hydrateOrganization() {
+        var metas = store.listMetas
+        for index in metas.indices { metas[index].referenceID = metas[index].referenceID ?? listReferenceID(metas[index].name) }
+        let values = store.tasks.map { task -> Task in
+            var value = task
+            value.listID = task.listID ?? listReferenceID(task.list.name)
+            value.tagReferences = task.tagReferences ?? tagReferences(task.tags)
+            return value
+        }
+        store.commit(values, undoPolicy: .skip, listMetas: metas)
+    }
+
+    /// Additive migration keeps the current UUID and leaves old completed
+    /// history ungrouped; similar titles never establish a series relationship.
+    func hydrateSeries() {
+        let values = store.tasks.map { task -> Task in
+            guard task.recurrence != .never, task.isActiveSeriesOccurrence,
+                  task.series == nil else { return task }
+            var value = task
+            if value.recurrence == .ebbinghaus {
+                var rule = value.recurrenceRule ?? RecurrenceRule()
+                rule.ebbinghausStep = rule.ebbinghausStep ?? max(0, rule.interval - 1)
+                value.recurrenceRule = rule
+            }
+            let series = TaskSeries(task: value, calendar: calendar, now: clock())
+            value.series = series
+            value.occurrenceKey = series.initialKey
+            return value
+        }
+        store.commit(values, undoPolicy: .skip)
+    }
+
+    @discardableResult
+    func materializeOccurrence(_ occurrence: TaskOccurrence) -> TaskActionResult {
+        if let existing = store.tasks.first(where: { $0.occurrenceKey == occurrence.key && $0.deletedAt == nil }) {
+            return .success(existing.id)
+        }
+        if !occurrence.isVirtual, store.task(occurrence.task.id) != nil { return .success(occurrence.task.id) }
+        guard occurrence.task.series != nil else { return .failure(.missingTask) }
+        var value = occurrence.task
+        value = cloneOccurrence(value, id: occurrence.task.id)
+        value.updatedAt = clock()
+        let delta = (value.schedule.dueAt ?? occurrence.key.nominalDate).timeIntervalSince(
+            store.task(occurrence.sourceTaskID)?.schedule.dueAt ?? occurrence.key.nominalDate)
+        let children = store.children(of: occurrence.sourceTaskID).map { child -> Task in
+            var next = cloneOccurrence(child, id: UUID())
+            next.parentID = value.id; next.list = value.list; next.listID = value.listID
+            next.recurrence = .never; next.recurrenceRule = nil
+            next.series = nil; next.occurrenceKey = nil; next.occurrenceOverride = nil
+            next.schedule.dueAt = child.schedule.dueAt?.addingTimeInterval(delta)
+            next.schedule.dueEndAt = child.schedule.dueEndAt?.addingTimeInterval(delta)
+            next.schedule.deadlineAt = child.schedule.deadlineAt?.addingTimeInterval(delta)
+            next.reminderAt = child.reminderAt?.addingTimeInterval(delta)
+            return next
+        }
+        store.commit(store.tasks + [value] + children)
+        return .success(value.id)
+    }
+
+    @discardableResult
+    func completeOccurrence(_ occurrence: TaskOccurrence) -> TaskActionResult {
+        var result: TaskActionResult = .failure(.missingTask)
+        store.transaction {
+            result = materializeOccurrence(occurrence)
+            if let id = result.taskID { result = complete(id) }
+        }
+        return result
+    }
+
+    @discardableResult
+    func saveOccurrenceSchedule(_ plan: SchedulePlan, occurrence: TaskOccurrence,
+                                scope: RecurrenceEditScope) -> TaskActionResult {
+        guard let originalSeries = occurrence.task.series else {
+            return saveSchedule(plan, to: .task(occurrence.task.id))
+        }
+        var result: TaskActionResult = .failure(.missingTask)
+        store.transaction {
+            result = materializeOccurrence(occurrence)
+            guard let id = result.taskID, let current = store.task(id) else { return }
+            let key = current.occurrenceKey ?? occurrence.key
+            var values = store.tasks
+            guard let targetIndex = values.firstIndex(where: { $0.id == id }) else { return }
+            func apply(_ plan: SchedulePlan, to value: inout Task) {
+                value.schedule = plan.schedule
+                value.reminderAt = plan.reminder
+                value.reminderOffsets = Self.normalizedOffsets(plan.reminderOffsets)
+                value.recurrence = plan.frequency
+                value.recurrenceRule = plan.recurrenceRule?.normalized(calendar: calendar)
+                value.updatedAt = clock()
+            }
+            if scope == .onlyThis {
+                apply(plan, to: &values[targetIndex])
+                values[targetIndex].occurrenceOverride = OccurrenceOverride(occurrence: key,
+                    actualSchedule: plan.schedule, outcome: .active)
+                // A single exception preserves the shared repeat rule, even if
+                // its date panel clears the repeat UI for this one instance.
+                values[targetIndex].series = originalSeries
+                values[targetIndex].recurrence = originalSeries.frequency
+                values[targetIndex].recurrenceRule = current.recurrenceRule ?? originalSeries.rule
+            } else {
+                let delta = (plan.schedule.dueAt ?? key.nominalDate).timeIntervalSince(key.nominalDate)
+                let sourceTemplate = values.filter {
+                    $0.series?.id == originalSeries.id && $0.parentID == nil &&
+                        $0.recurrence != .never && $0.isActiveSeriesOccurrence
+                }.min {
+                    ($0.occurrenceKey?.ordinal ?? 0) < ($1.occurrenceKey?.ordinal ?? 0)
+                }?.series?.template ?? originalSeries.template
+                var templateTask = sourceTemplate.task(id: current.id, at: key.nominalDate,
+                    series: originalSeries, key: key, createdAt: current.createdAt)
+                apply(plan, to: &templateTask)
+                func detach(_ value: inout Task) {
+                    value.recurrence = .never
+                    value.recurrenceRule = nil
+                    value.series = nil
+                    value.occurrenceKey = nil
+                    value.occurrenceOverride = nil
+                    value.updatedAt = clock()
+                }
+                var changed = originalSeries
+                let excludedOrdinals = Set(originalSeries.excludedOrdinals ?? []).union(values.compactMap { value -> Int? in
+                    guard value.series?.id == originalSeries.id, !value.isActiveSeriesOccurrence else { return nil }
+                    return value.occurrenceKey?.ordinal
+                })
+                if scope == .thisAndFuture {
+                    changed = TaskSeries(task: templateTask, calendar: calendar, now: clock(), id: UUID())
+                    changed.excludedOrdinals = excludedOrdinals.filter { $0 >= key.ordinal }.map { $0 - key.ordinal }.sorted()
+                    for index in values.indices where values[index].series?.id == originalSeries.id && values[index].isActiveSeriesOccurrence {
+                        if values[index].occurrenceKey?.ordinal ?? 0 < key.ordinal {
+                            values[index].series?.endBeforeOrdinal = key.ordinal
+                        }
+                    }
+                } else {
+                    changed.excludedOrdinals = excludedOrdinals.sorted()
+                    changed.frequency = plan.frequency
+                    changed.rule = plan.recurrenceRule?.normalized(calendar: calendar) ?? RecurrenceRule()
+                    if let remaining = changed.rule.remainingCount { changed.rule.remainingCount = remaining + key.ordinal }
+                    changed.anchorDate = originalSeries.anchorDate.addingTimeInterval(delta)
+                    let templateDate = changed.anchorDate
+                    let shift = templateDate.timeIntervalSince(plan.schedule.dueAt ?? templateDate)
+                    templateTask.schedule.dueAt = templateDate
+                    templateTask.schedule.dueEndAt = plan.schedule.dueEndAt?.addingTimeInterval(shift)
+                    templateTask.schedule.deadlineAt = plan.schedule.deadlineAt?.addingTimeInterval(shift)
+                    templateTask.reminderAt = plan.reminder?.addingTimeInterval(shift)
+                    changed.template = TaskSeriesTemplate(templateTask)
+                }
+                for index in values.indices where values[index].series?.id == originalSeries.id && values[index].isActiveSeriesOccurrence {
+                    guard let oldKey = values[index].occurrenceKey,
+                          scope != .thisAndFuture || oldKey.ordinal >= key.ordinal else { continue }
+                    if plan.frequency == .never {
+                        if index == targetIndex { apply(plan, to: &values[index]) }
+                        detach(&values[index])
+                        continue
+                    }
+                    let ordinal = scope == .thisAndFuture ? oldKey.ordinal - key.ordinal : oldKey.ordinal
+                    guard let cursor = changed.nominalDate(for: ordinal, calendar: calendar) else {
+                        // An already stored task survives a shorter rule at its
+                        // existing date, as an independent non-repeating task.
+                        detach(&values[index])
+                        continue
+                    }
+                    let nextKey = OccurrenceKey(seriesID: changed.id, nominalDate: cursor, ordinal: ordinal)
+                    let timing = changed.template.task(id: values[index].id, at: cursor, series: changed, key: nextKey)
+                    // A range date edit replaces timing, not each occurrence's
+                    // independent content, organization or other attributes.
+                    var next = values[index]
+                    next.schedule = timing.schedule
+                    next.reminderAt = timing.reminderAt
+                    next.reminderOffsets = timing.reminderOffsets
+                    next.recurrence = timing.recurrence
+                    next.recurrenceRule = timing.recurrenceRule
+                    next.series = changed
+                    next.occurrenceKey = nextKey
+                    next.occurrenceOverride = nil
+                    next.updatedAt = clock()
+                    values[index] = next
+                }
+            }
+            store.commit(values)
+            result = .success(id)
+        }
+        return result
+    }
+
+    private func cloneOccurrence(_ source: Task, id: UUID) -> Task {
+        var value = Task(id: id, title: source.title, document: source.document, tags: source.tags,
+            recurrence: source.recurrence, recurrenceRule: source.recurrenceRule,
+            reminderAt: source.reminderAt, reminderOffsets: source.reminderOffsets,
+            attachments: source.attachments, list: source.list, priority: source.priority,
+            schedule: source.schedule, parentID: source.parentID, childOrder: source.childOrder,
+            createdAt: clock(), updatedAt: clock())
+        value.listID = source.listID; value.tagReferences = source.tagReferences
+        value.sectionID = source.sectionID; value.focusEstimate = source.focusEstimate
+        value.sourceNoteID = source.sourceNoteID; value.series = source.series
+        value.occurrenceKey = source.occurrenceKey; value.occurrenceOverride = source.occurrenceOverride
+        return value
+    }
+
     /// 创建通道的 plan 版：宿主产出 `SchedulePlan`，不再逐字段拆参。
     /// （新建对话框此前自己拼 `TaskSchedule`，既没有时间段也传不了多级提醒。）
     func createDraft(title: String, list: String, plan: SchedulePlan, priority: TaskPriority,
@@ -431,7 +804,13 @@ final class TaskActions {
 
     @discardableResult
     func setSchedule(_ id: UUID, _ schedule: TaskSchedule) -> TaskActionResult {
-        edit(id) { $0.schedule = schedule }
+        edit(id) { task in
+            if let key = task.occurrenceKey, schedule != task.schedule {
+                task.occurrenceOverride = OccurrenceOverride(occurrence: key,
+                    actualSchedule: schedule, outcome: task.occurrenceOverride?.outcome ?? .active)
+            }
+            task.schedule = schedule
+        }
     }
 
     /// Move an overdue group to today while preserving each task's timed/all-day
@@ -506,18 +885,32 @@ final class TaskActions {
     func renameList(_ old: String?, to name: String) {
         var lists = store.lists.filter { $0 != old }
         if !lists.contains(name) { lists.append(name) }
+        let referenceID = listReferenceID(old ?? name)
+        knownListIDs[name] = referenceID
+        var metas = store.listMetas.filter { $0.name != old && $0.name != name }
+        var meta = old.flatMap { store.listMeta(for: $0) } ?? store.listMeta(for: name) ?? TaskListMeta(name: name)
+        meta.name = name; meta.referenceID = referenceID
+        metas.append(meta)
         store.commit(store.tasks.map { task in
             var value = task
-            if task.list.name == old { value.list = TaskList(name: name); value.updatedAt = clock() }
+            if task.list.name == old { value.list = TaskList(name: name); value.listID = referenceID; value.updatedAt = clock() }
+            if value.series?.template.list.name == old {
+                value.series?.template.list = TaskList(name: name)
+                value.series?.template.listID = referenceID
+            }
             return value
-        }, lists: lists)
+        }, lists: lists, listMetas: metas, listSections: store.listSections.map { section in
+            var value = section
+            if value.listName == old { value.listName = name }
+            return value
+        })
     }
 
     func removeList(_ name: String) {
         guard name != TaskList.inbox.name else { return }
         store.commit(store.tasks.map { task in
             var value = task
-            if task.list.name == name { value.list = .inbox; value.updatedAt = clock() }
+            if task.list.name == name { value.list = .inbox; value.listID = listReferenceID(TaskList.inbox.name); value.sectionID = nil; value.updatedAt = clock() }
             return value
         }, lists: store.lists.filter { $0 != name })
     }
@@ -529,6 +922,14 @@ final class TaskActions {
             guard value.tags.contains(old) else { return value }
             value.tags.removeAll { $0 == old }
             if let name, !name.isEmpty, !value.tags.contains(name) { value.tags.append(name) }
+            if let index = value.tagReferences?.firstIndex(where: { $0.name == old }) {
+                if let name, !name.isEmpty { value.tagReferences?[index].name = name }
+                else { value.tagReferences?.remove(at: index) }
+            }
+            if let series = value.series {
+                value.series?.template.tags = series.template.tags.map { $0 == old ? (name ?? "") : $0 }.filter { !$0.isEmpty }
+                value.series?.template.tagReferences = value.tagReferences
+            }
             value.updatedAt = clock()
             return value
         })
@@ -600,7 +1001,7 @@ final class TaskActions {
     /// one undo step, and no intermediate parent lacking its document/children.
     func createFromTemplate(_ template: TaskTemplate, list: TaskList) -> TaskActionResult {
         let title = template.title.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !title.isEmpty else { return .failure(.invalidList) }
+        guard !title.isEmpty, !store.archivedListNames.contains(list.name) else { return .failure(.invalidList) }
         let now = clock()
         let parent = Task(id: UUID(), title: title, document: template.document,
                           tags: template.tags, list: list, priority: template.priority ?? .none,
@@ -666,9 +1067,17 @@ final class TaskActions {
         guard let occurrence = makeNextOccurrence(of: task, completedAt: now) else { return .failure(.missingTask) }
         var snapshot = store.tasks
         guard let index = snapshot.firstIndex(where: { $0.id == id }) else { return .failure(.missingTask) }
+        if snapshot[index].series == nil {
+            snapshot[index].series = TaskSeries(task: task, calendar: calendar, now: now)
+            snapshot[index].occurrenceKey = snapshot[index].series?.initialKey
+        }
+        if let key = snapshot[index].occurrenceKey {
+            snapshot[index].occurrenceOverride = OccurrenceOverride(occurrence: key,
+                actualSchedule: snapshot[index].occurrenceOverride?.actualSchedule, outcome: .skipped)
+        }
         snapshot[index].skippedAt = now
         snapshot[index].updatedAt = now
-        snapshot.append(occurrence.spawn)
+        if !snapshot.contains(where: { $0.id == occurrence.spawn.id }) { snapshot.append(occurrence.spawn) }
         snapshot += occurrence.children
         store.commit(snapshot)
         return .success(occurrence.spawn.id)
@@ -805,6 +1214,14 @@ final class TaskActions {
     @discardableResult
     func setListPinned(_ name: String, _ isPinned: Bool) -> Bool {
         commitListMeta(name) { $0.isPinned = isPinned }
+    }
+
+    @discardableResult
+    func setListArchived(_ name: String, _ archived: Bool) -> Bool {
+        guard canManageList(name),
+              store.lists.contains(name) || store.tasks.contains(where: { $0.list.name == name }),
+              (store.listMeta(for: name)?.isArchived ?? false) != archived else { return false }
+        return commitListMeta(name) { $0.archivedAt = archived ? clock() : nil }
     }
 
     /// 设置清单图标（Emoji）。nil / 空串 = 清除图标，侧栏回落到色点。

@@ -1,0 +1,24 @@
+{
+  "build": "TEST BUILD SUCCEEDED",
+  "tests_total": 1261,
+  "tests_skipped": 5,
+  "failures": 0,
+  "tests_executed": 1256,
+  "skip_reasons": [
+    "/Users/dongyangwei/Documents/学习/代办笔记/workfollow-macos-native/macos-native/WorkFollowTests/AnchoredPropertyPanelTests.swift:127: -[WorkFollowTests.AnchoredPropertyPanelTests testSearchPanelTakesKeyFocusInActiveApplication] : Test skipped - Temporary XCTest host could not become the active application; requires foreground app validation",
+    "/Users/dongyangwei/Documents/学习/代办笔记/workfollow-macos-native/macos-native/WorkFollowTests/MeetingPiBridgeIntegrationTests.swift:10: -[WorkFollowTests.MeetingPiBridgeIntegrationTests testInstalledPiDispatchesAudioCommandAndReturnsStructuredNotification] : Test skipped - Enable MEETING_PI_INTEGRATION=1 with Pi installed to verify the transport",
+    "/Users/dongyangwei/Documents/学习/代办笔记/workfollow-macos-native/macos-native/WorkFollowTests/MeetingStoreTests.swift:24: -[WorkFollowTests.MeetingStoreTests testPiHTTPBatchAndStopTailStayInOriginalMeeting] : Test skipped - Enable MEETING_PI_INTEGRATION=1",
+    "/Users/dongyangwei/Documents/学习/代办笔记/workfollow-macos-native/macos-native/WorkFollowTests/MeetingStreamingTests.swift:42: -[WorkFollowTests.MeetingStreamingTests testInstalledPiStreamDeliversFinalBeforeStopReturns] : Test skipped - Enable MEETING_PI_INTEGRATION=1",
+    "/Users/dongyangwei/Documents/学习/代办笔记/workfollow-macos-native/macos-native/WorkFollowTests/MeetingStreamingTests.swift:72: -[WorkFollowTests.MeetingStreamingTests testLostAcknowledgementIsRetriedWithoutDuplicateAppend] : Test skipped - Enable MEETING_PI_INTEGRATION=1"
+  ],
+  "scope": "complete native XCTest suite",
+  "runner": "isolated XCTest host, temporary storage",
+  "source_log": "/private/tmp/workfollow-replica-full-tests-third.log",
+  "last_change_regression": {
+    "scope": "all-day calendar columns cover their visible and scrollable drop area; passive acceptance diagnostics",
+    "tests_executed": 74,
+    "failures": 0,
+    "source_log": "/private/tmp/workfollow-replica-all-day-hit-tests.log"
+  },
+  "native_drag_verification": "native-drag-verification.json"
+}
