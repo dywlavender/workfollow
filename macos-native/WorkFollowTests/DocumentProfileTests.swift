@@ -13,7 +13,8 @@ final class DocumentProfileTests: XCTestCase {
         let commands = profile.slashCommands
         XCTAssertEqual(commands.count, 12)
         XCTAssertEqual(commands[9].id, "task.child")
-        XCTAssertEqual(SlashMenuMetrics.height(for: commands), 425)
+        // 12 行 × 34 + 3 条分节细线 × 9 + 上下 8（分节对齐滴答 2026-10-16）。
+        XCTAssertEqual(SlashMenuMetrics.height(for: commands), 443)
         for (name, appearance) in [("light", NSAppearance.Name.aqua), ("dark", .darkAqua)] {
             let host = NSHostingView(rootView: SlashCommandList(commands: commands, selected: 0,
                 compact: true, onSelect: { _ in }, onHover: { _ in }))
@@ -49,13 +50,14 @@ final class DocumentProfileTests: XCTestCase {
         let parent = TaskDocumentProfile.make(task: try XCTUnwrap(workspace.task(for: parentID)), host: host)
         let child = TaskDocumentProfile.make(task: try XCTUnwrap(workspace.task(for: childID)), host: host)
         XCTAssertEqual(parent.commands.map(\.id), ["task.child", "task.tags", "task.relation"])
-        XCTAssertEqual(child.commands.map(\.id), ["task.tags", "task.relation"])
+        // 放开嵌套（2026-10-17）：子任务正文同样有"子任务"命令，可建孙任务。
+        XCTAssertEqual(child.commands.map(\.id), ["task.child", "task.tags", "task.relation"])
         XCTAssertEqual(parent.slashCommands.count, 12)
-        XCTAssertEqual(child.slashCommands.count, 11)
+        XCTAssertEqual(child.slashCommands.count, 12)
         let common = ["format.heading1", "format.heading2", "format.heading3", "format.bullet",
                       "format.ordered", "format.checklist", "format.quote", "shared.divider", "shared.attachment"]
         XCTAssertEqual(parent.slashCommands.map(\.id), common + ["task.child", "task.tags", "task.relation"])
-        XCTAssertEqual(child.slashCommands.map(\.id), common + ["task.tags", "task.relation"])
+        XCTAssertEqual(child.slashCommands.map(\.id), common + ["task.child", "task.tags", "task.relation"])
         XCTAssertNotNil(parent.slashCommandOverride)
         XCTAssertFalse(parent.supportsSelectionToolbar)
         XCTAssertTrue(parent.selectionActions.isEmpty)

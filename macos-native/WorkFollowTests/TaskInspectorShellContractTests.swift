@@ -21,7 +21,7 @@ final class TaskInspectorShellContractTests: XCTestCase {
             let completion = try XCTUnwrap(frames[.completion])
             let divider = try XCTUnwrap(frames[.divider])
             let viewport = try XCTUnwrap(frames[.scheduleViewport])
-            XCTAssertEqual(frames[.header]?.height, 58)
+            XCTAssertEqual(frames[.header]?.height, TaskInspectorMetrics.headerHeight)
             XCTAssertEqual(priority.maxX, width - TaskInspectorMetrics.horizontalPadding, accuracy: 0.5)
             XCTAssertGreaterThanOrEqual(divider.minX, completion.maxX)
             XCTAssertEqual(divider.width, 1, accuracy: 0.5)

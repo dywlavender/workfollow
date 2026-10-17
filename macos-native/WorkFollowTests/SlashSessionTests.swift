@@ -33,7 +33,8 @@ final class SlashSessionTests: XCTestCase {
         XCTAssertEqual(workspace.allTasks.count, 2)
         XCTAssertEqual(workspace.selectedTaskID, parentID)
         let childProfile = taskProfile(try XCTUnwrap(workspace.task(for: childID)), workspace: workspace)
-        XCTAssertFalse(childProfile.slashCommands.contains { $0.id == "task.child" })
+        // 放开嵌套（2026-10-17）：子任务正文同样可插入"子任务"（孙任务）。
+        XCTAssertTrue(childProfile.slashCommands.contains { $0.id == "task.child" })
     }
 
     func testTaskSlashBusinessPickersConsumeTriggerBeforeCallingHost() throws {
@@ -138,7 +139,8 @@ final class SlashSessionTests: XCTestCase {
             XCTAssertTrue(window.firstResponder === editor)
             XCTAssertEqual(editor.frame, editorFrame, "Slash cannot push editor layout")
             XCTAssertEqual(panel.frame.width, 160, accuracy: 0.5)
-            XCTAssertEqual(panel.frame.height, taskID == childID ? 391 : 425, accuracy: 0.5)
+            // 放开嵌套（2026-10-17）：父/子均 12 行，各 3 条分节细线。
+            XCTAssertEqual(panel.frame.height, 443, accuracy: 0.5)
             if hover { XCTAssertEqual(editor.slashSession?.selectedIndex, 4) }
             let caret = editor.firstRect(forCharacterRange: editor.selectedRange(), actualRange: nil)
             if nearBottom {

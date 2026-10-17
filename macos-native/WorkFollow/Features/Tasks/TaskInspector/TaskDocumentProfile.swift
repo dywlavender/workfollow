@@ -13,10 +13,9 @@ enum TaskDocumentProfile {
                                  "format.bullet", "format.ordered", "format.checklist", "format.quote"]
     static func make(task: Task, host: TaskEditorHostActions) -> DocumentProfile {
         var commands: [DocumentCommand] = []
-        if task.parentID == nil {
-            commands.append(DocumentCommand(id: "task.child", title: "子任务", group: "插入",
-                                             keywords: "subtask child") { _ in host.createChild() })
-        }
+        // 放开嵌套（2026-10-17）：子任务正文同样可插入"子任务"（孙任务）。
+        commands.append(DocumentCommand(id: "task.child", title: "子任务", group: "插入",
+                                         keywords: "subtask child") { _ in host.createChild() })
         commands.append(DocumentCommand(id: "task.tags", title: "标签", group: "插入") { _ in host.openTags() })
         commands.append(DocumentCommand(id: "task.relation", title: "关联任务/笔记", group: "插入") { _ in host.openRelation() })
         return DocumentProfile(commands: commands, taskSlash: true, onOpenLink: host.openLink,

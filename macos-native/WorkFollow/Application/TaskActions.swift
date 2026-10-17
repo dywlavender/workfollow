@@ -53,7 +53,6 @@ final class TaskActions {
     func createChild(_ parentID: UUID, title: String = "") -> TaskActionResult {
         guard let parent = store.task(parentID) else { return .failure(.missingTask) }
         guard parent.deletedAt == nil else { return .failure(.deletedTask) }
-        guard parent.parentID == nil else { return .failure(.childCannotHaveChildren) }
         let now = clock()
         let order = (store.children(of: parentID, includingDeleted: true).map(\.childOrder).max() ?? -1) + 1
         var child = Task(id: UUID(), title: title.trimmingCharacters(in: .whitespacesAndNewlines),
@@ -880,6 +879,39 @@ final class TaskActions {
             }
         }
         return parentResult
+    }
+
+    /// 合并子任务到正文（滴答详情底栏 mergeButton 语义）：把子任务标题逐行拼入
+    /// 父任务正文，随后软删这些子任务。单事务一步撤销。正文为空时直接写子任务
+    /// 标题，否则按行追加到现有正文之后。
+    ///
+    /// 不走 `setDocument`（其 `commitText` 在正文 deferred 且 resolve 失败时静默
+    /// 返回——空正文任务在 `task_documents` 里没有记录，正是这种状态）；这里用
+    /// `commit` 直接落快照，把缺失正文按空正文处理。
+    func mergeChildrenIntoDocument(_ id: UUID) -> TaskActionResult {
+        guard let task = store.task(id), task.deletedAt == nil else { return .failure(.missingTask) }
+        let children = store.children(of: id)
+        guard !children.isEmpty else { return .failure(.missingTask) }
+        let existing = (try? task.document.materialized())?.plainText ?? ""
+        let lines = children.map(\.title)
+        let mergedText = existing.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            ? lines.joined(separator: "\n")
+            : existing + "\n" + lines.joined(separator: "\n")
+        let now = clock()
+        store.transaction {
+            store.commit(store.tasks.map { original in
+                var value = original
+                if value.id == id {
+                    value.document = NativeDocument(plainText: mergedText)
+                    value.updatedAt = now
+                } else if value.parentID == id, value.deletedAt == nil {
+                    value.deletedAt = now
+                    value.updatedAt = now
+                }
+                return value
+            })
+        }
+        return .success(id)
     }
 
     func renameList(_ old: String?, to name: String) {

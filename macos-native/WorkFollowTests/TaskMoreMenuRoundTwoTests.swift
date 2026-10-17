@@ -11,7 +11,6 @@ final class TaskMoreMenuRoundTwoTests: XCTestCase {
         )
 
         let orderedRows = [
-            #"if task.parentID == nil {"#,
             #"moreAction("添加子任务", symbol: "list.bullet.indent")"#,
             #"moreAction("关联主任务", symbol: "rectangle.3.group")"#,
             #"moreAction(task.isPinned ? "取消置顶" : "置顶", symbol: "pin")"#,
@@ -24,6 +23,9 @@ final class TaskMoreMenuRoundTwoTests: XCTestCase {
             #"moreAction("保存为模板", symbol: "doc.badge.plus")"#,
             #"moreAction("创建副本", symbol: "square.on.square")"#,
             #"moreAction("复制链接", symbol: "link")"#,
+            // 2026-10-17 按滴答实测补入：滴答「…」菜单第 12 项为「打开便签」，
+            // 本地已有 StickyNoteWindowController 能力，不再作为"已移除入口"。
+            #"moreAction("打开便签", symbol: "note")"#,
             #"moreAction("转换为笔记", symbol: "doc.text")"#,
             #"moreAction("删除", symbol: "trash")"#
         ]
@@ -37,8 +39,8 @@ final class TaskMoreMenuRoundTwoTests: XCTestCase {
             cursor = range.upperBound
         }
 
-        for removedEntry in ["其他操作", "更多属性", "截止日期", "跳过本周期",
-                             "便签", "打印"] {
+        // 「打印」仍缺席：本地没有打印能力，按"无假按钮"处理（滴答有该项，属能力缺口）。
+        for removedEntry in ["其他操作", "更多属性", "截止日期", "跳过本周期", "打印"] {
             XCTAssertFalse(menu.contains(removedEntry), "Unexpected more menu entry: \(removedEntry)")
         }
     }

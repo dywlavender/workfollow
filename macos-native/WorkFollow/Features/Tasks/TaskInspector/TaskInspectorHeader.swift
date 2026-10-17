@@ -16,17 +16,19 @@ struct TaskInspectorHeader<Schedule: View, Priority: View>: View {
     var body: some View {
         HStack(spacing: 8) {
             if showBack {
-                Button(action: onBack) {
-                    Image(systemName: "chevron.left")
-                        .frame(width: 24, height: WFMetrics.controlHeight)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain).help("返回列表").accessibilityLabel("返回列表")
-                .inspectorRenderAnchor(.back)
+                AppKitIconButton(symbol: "chevron.left", pointSize: 14,
+                                 tint: .inspectorPrimary, accessibilityLabel: "返回列表",
+                                 action: onBack)
+                    .frame(width: 24, height: WFMetrics.controlHeight)
+                    .inspectorRenderAnchor(.back)
             }
             Button(action: onComplete) {
-                TaskCompletionBox(size: TaskInspectorMetrics.completionSize,
-                                  completed: task.isClosed)
+                AppKitCompletionBox(size: TaskInspectorMetrics.completionSize,
+                                    completed: task.isClosed)
+                    // 显式固定墨迹尺寸：AppKit 视图的布局尺寸由这里决定，
+                    // 锚点才能测到 15×15 而不是外层 24×34 的命中区。
+                    .frame(width: TaskInspectorMetrics.completionSize,
+                           height: TaskInspectorMetrics.completionSize)
                     .overlay {
                         if task.isAbandoned {
                             Image(systemName: "xmark").font(.system(size: 10, weight: .semibold))
@@ -72,11 +74,10 @@ struct TaskInspectorHeader<Schedule: View, Priority: View>: View {
 
     private func propertyButton(_ title: String, symbol: String,
                                 action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Image(systemName: symbol).foregroundStyle(WFColors.accent)
-                .frame(width: 24, height: WFMetrics.controlHeight)
-                .contentShape(Rectangle())
-        }.buttonStyle(.plain).help(title).accessibilityLabel(title)
+        AppKitIconButton(symbol: symbol, pointSize: 14,
+                         tint: NSColor(WFColors.accent), accessibilityLabel: title,
+                         action: action)
+            .frame(width: 24, height: WFMetrics.controlHeight)
     }
 }
 

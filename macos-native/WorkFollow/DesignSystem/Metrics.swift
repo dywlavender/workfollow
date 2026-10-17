@@ -30,8 +30,8 @@ enum RailMetrics {
     /// `hitSize` 不动仍是 38：它是**不可见的点按区**，38 + `itemGap` 10 = pitch 48，
     /// 与滴答行距一致；把它改小只会牺牲可点性、还会连带改 pitch。
     ///
-    /// 连带效应：`WFMetrics.railWidth` 直接取这个 width，于是
-    /// `navigationBreakpoint` 871 → 881（导航栏在 881pt 宽才出现）。
+    /// 连带效应：`WFMetrics.railWidth` 直接取这个 width，`navigationBreakpoint`
+    /// 随之变大（导航栏需要更宽的窗口才出现；具体值见 `WFMetrics` 里的公式）。
     /// 另外 `MainWindowChromeGeometry.trafficLightFrames` 按 railWidth 给红绿灯居中，
     /// 栏变宽后它们会自动散开（间距上限 6 会生效），**不需要单独改**。
     static let width: CGFloat = 62
@@ -48,11 +48,11 @@ enum RailMetrics {
 /// （清单行、标签行）。2026-10-03 用户报「每一行间距太近」，要求 +10%，
 /// 顺手收成一个常量——下次调整只改这里，不会再出现只改一半、同一栏两种行距。
 ///
-/// 取值：原 32 → **35**。严格 +10% 是 35.2，这里取整：macOS 上非整数行高会把
-/// 行内文字放到半像素上、渲染发虚，本项目度量一律用整数。35 = +9.4%，
-/// 与 +10% 视觉上无差别。
+/// 取值：原 32 → 35（+9.4%，来自"行距太近、加 10%"的要求）→ **38**。
+/// 2026-10-17 同窗口 AX 实测滴答导航行：`AXRow @62,45 212x38`，连续行 y=45/83/121
+/// 步长 38、行间无额外间距，故本地统一改为 38，与滴答行高一致。
 enum NavigationMetrics {
-    static let rowHeight: CGFloat = 35
+    static let rowHeight: CGFloat = 38
 }
 
 /// 列表行（任务列表 / 笔记列表共用）的行分割线几何。
@@ -87,24 +87,26 @@ enum WFMetrics {
     /// 列表列宽度：任务列表与笔记列表**共用同一个值**（笔记页原来自己硬编码 330/300，
     /// 见 `NotesWorkspaceView`）。两处各写各的，用户在中栏来回切就会看到忽宽忽窄。
     ///
-    /// `listPreferred` = 340 来自滴答清单的实测默认值，两个独立来源互证：
-    /// ① 读它自己的 AX 树：`AXOutline @273,136 340x753`（`AXScrollArea` 338，
-    ///    差额是左右边框）；② 用户给的截图在 2× 下量到面板边框 x=34..713 = 680px ÷ 2 = 340。
-    /// 同一张截图里 62(图标栏) + 212(导航栏) + 338(任务列) + 900(详情) = 1512，
-    /// 正好等于滴答窗口宽度，说明这条读法没漏掉任何一栏。
+    /// `listPreferred` = 360 来自 2026-10-17 同窗口 AX 实测：滴答 `AXOutline @273,136 360×2684`
+    /// （任务行宽 360，列表列 273..633），本地同窗口为 340（276..616）→ 据此把默认值从 340 调到 360。
+    /// 早前记录的 340 来自另一状态/旧布局的 `AXOutline @273,136 340x753`，已在本次复核中更正。
+    /// 导航列两侧原用 `Divider()` 在 `HStack` 里各占 1pt，列表列因此从 276 起；改为
+    /// `ShellColumnSeparator` 覆盖绘制后列表列起于 274，与滴答 `AXScrollArea @274,137` 对齐
+    /// （滴答列表 outline 的 1pt 边框压在导航列最后一像素上）。
     ///
     /// `listMinimum` 必须跟着下调：默认值会被 `min(max(值, listMinimum), …)` 夹住，
     /// 若最小值还留在 380，340 会被顶回 380，改默认值等于白改。
     /// 300 不是新拍的数——笔记页在窄窗口下原本就用 300，是个已经跑过的宽度。
-    /// 连带效应：`splitMinimum` 701→621、`navigationBreakpoint` 951→871，
-    /// 即导航栏在更窄的窗口就会显示（默认窗口 1280，两条都远在门槛之上）。
+    /// 连带效应：`splitMinimum` 由 `listMinimum` 派生（现为 621），`navigationBreakpoint`
+    /// 随之变小，即导航栏在更窄的窗口就会显示（默认窗口 1280，两者都远在门槛之上）。
     static let listMinimum: CGFloat = 300
-    static let listPreferred: CGFloat = 340
+    static let listPreferred: CGFloat = 360
     static let listMaximum: CGFloat = 470
     static let inspectorMinimum: CGFloat = 320
     static let divider: CGFloat = 1
     static let splitMinimum = listMinimum + inspectorMinimum + divider
-    static let navigationBreakpoint = railWidth + navigationWidth + splitMinimum + 2 * divider
+    /// 两处列分隔线改为覆盖绘制，不再占布局，断点里也不再计入两个 `divider`。
+    static let navigationBreakpoint = railWidth + navigationWidth + splitMinimum
     static let rowHeight: CGFloat = 50
     static let rowVerticalPadding: CGFloat = 11
     static var rowContentMinHeight: CGFloat { rowHeight - rowVerticalPadding * 2 }

@@ -3,8 +3,8 @@ import SwiftUI
 enum InspectorRenderAnchor: Hashable {
     case header, back, completion, completionInk, divider, schedule, scheduleViewport
     case reminder, repeatControl, priority, breadcrumb, title, emptyContent
-    case document, childSection, childRow(UUID), addChild
-    case footerList, footerFormatting, footerMore
+    case document, childSection, addChild
+    case footerList, footerFormatting, footerMore, footerTag, footerMerge, footerComment
     case moreMenu, focusMenuRow, parentMenuRow, parentPicker, duplicateMenuRow, tagsMenuRow, tagPicker, activityMenuRow
     case focusPomodoro, focusStopwatch
 }

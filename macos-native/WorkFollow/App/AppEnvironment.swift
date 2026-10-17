@@ -29,6 +29,7 @@ final class AppEnvironment: ObservableObject {
     let reminders: NativeReminderService
     let focusStore: FocusStore
     let taskActivityStore: TaskActivityStore
+    let taskCommentStore: TaskCommentStore
     let summaryStore: SummaryStore
     let countdownStore: CountdownStore
     let meetingStore: MeetingStore
@@ -81,6 +82,7 @@ final class AppEnvironment: ObservableObject {
                                              clock: clock)
         focusStore = FocusStore(clock: clock, calendar: calendar, directory: directory.appendingPathComponent("modules"))
         taskActivityStore = TaskActivityStore(clock: clock, directory: directory.appendingPathComponent("modules"))
+        taskCommentStore = TaskCommentStore(clock: clock, directory: directory.appendingPathComponent("modules"))
         taskWorkspace.attachActivityStore(taskActivityStore)
         focusStore.onTaskFocusStarted = { [weak taskActivityStore, weak taskWorkspace] taskID, stopwatch in
             guard taskWorkspace?.task(for: taskID) != nil else { return }
@@ -97,7 +99,7 @@ final class AppEnvironment: ObservableObject {
         // 倒计时的提醒也走同一个排程服务。偏移量语义与任务相反（非负整天，
         // 锚在当天 09:00），由服务按来源分别映射；这里只把记录来源接上。
         reminders.countdownStore = countdownStore
-        moduleStores = [focusStore, taskActivityStore, summaryStore, countdownStore, meetingStore, filterStore, TemplateStore.shared, viewPreferences]
+        moduleStores = [focusStore, taskActivityStore, taskCommentStore, summaryStore, countdownStore, meetingStore, filterStore, TemplateStore.shared, viewPreferences]
         repository.onDocumentFailure = { [weak self] error in
             DispatchQueue.main.async {
                 guard let self else { return }

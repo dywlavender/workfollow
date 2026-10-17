@@ -151,12 +151,14 @@ final class TaskDomainTests: XCTestCase {
                                                 now: today, calendar: calendar), 3)
     }
 
-    func testChildCannotCreateGrandchildAndHasIndependentFields() throws {
+    func testChildCanCreateGrandchildAndHasIndependentFields() throws {
         let store = WorkspaceStore()
         let actions = TaskActions(store: store)
         let parent = try XCTUnwrap(actions.create(title: "parent", schedule: TaskSchedule(dueAt: today), priority: .high).taskID)
         let child = try XCTUnwrap(actions.createChild(parent, title: "child").taskID)
-        XCTAssertEqual(actions.createChild(child), .failure(.childCannotHaveChildren))
+        // 放开嵌套（2026-10-17）：子任务可再有子任务（孙任务）。
+        let grandchild = try XCTUnwrap(actions.createChild(child, title: "grandchild").taskID)
+        XCTAssertEqual(store.task(grandchild)?.parentID, child)
         XCTAssertNil(store.task(child)?.schedule.dueAt)
         XCTAssertEqual(store.task(child)?.priority, TaskPriority.none)
         _ = actions.setTitle(child, "independent")

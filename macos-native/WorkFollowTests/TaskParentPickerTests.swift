@@ -34,7 +34,7 @@ final class TaskParentPickerTests: XCTestCase {
         XCTAssertEqual(workspace.task(for: source), before)
     }
 
-    func testCandidateSearchExcludesSourceChildrenAndClosedTargets() throws {
+    func testCandidateSearchIncludesNestedChildAndExcludesClosedTargets() throws {
         let workspace = TaskWorkspaceModel(seedDemoData: false)
         let source = try XCTUnwrap(workspace.createTask(title: "来源", in: .inbox).taskID)
         let parent = try XCTUnwrap(workspace.createTask(title: "周报", in: .inbox).taskID)
@@ -42,8 +42,9 @@ final class TaskParentPickerTests: XCTestCase {
         let closed = try XCTUnwrap(workspace.createTask(title: "完成", in: .inbox).taskID)
         _ = workspace.complete(closed)
         let result = TaskParentPickerProjection.candidates(for: source, tasks: workspace.allTasks, query: "")
-        XCTAssertEqual(result.map(\.id), [parent])
-        XCTAssertFalse(result.contains { $0.id == child })
+        // 放开嵌套（2026-10-17）：子任务也可作为父候选；按标题排序（步骤 < 周报）。
+        XCTAssertEqual(result.map(\.id), [child, parent])
+        XCTAssertFalse(result.contains { $0.id == closed })
         XCTAssertEqual(TaskParentPickerProjection.candidates(for: source, tasks: workspace.allTasks, query: "周报").map(\.id), [parent])
         XCTAssertTrue(TaskParentPickerProjection.candidates(for: source, tasks: workspace.allTasks, query: "不存在").isEmpty)
     }

@@ -90,13 +90,15 @@ final class TaskInspectorHierarchyRenderTests: XCTestCase {
             let frames = try render(workspace, name: "parent-with-child-\(name)")
             let document = try XCTUnwrap(frames[.document])
             let section = try XCTUnwrap(frames[.childSection])
-            let row = try XCTUnwrap(frames[.childRow(child)])
             let add = try XCTUnwrap(frames[.addChild])
             XCTAssertEqual(section.minY - document.maxY, TaskInspectorMetrics.childSectionTopGap, accuracy: 0.5)
-            XCTAssertEqual(row.height, 42, accuracy: 0.5)
-            XCTAssertEqual(add.minY - row.maxY, TaskInspectorMetrics.childAddGap, accuracy: 0.5)
+            // NSOutlineView 行紧贴（无行间 gap），单行 = childRowMinHeight；
+            // 子任务区 = 1 行 + 添加行 gap。
+            XCTAssertEqual(add.minY - section.minY,
+                           TaskInspectorMetrics.childRowMinHeight + TaskInspectorMetrics.childAddGap,
+                           accuracy: 0.5)
             XCTAssertLessThan(document.height, 400, "Body must not fill the inspector viewport")
-            XCTAssertLessThan(row.maxY, 600, "Children stay near the body, not the footer")
+            XCTAssertLessThan(section.maxY, 600, "Children stay near the body, not the footer")
             heights.append(document.height)
             try assertFooter(frames)
         }
@@ -121,13 +123,16 @@ final class TaskInspectorHierarchyRenderTests: XCTestCase {
     func testMultipleChildSurfacesUseSmallGapsWithoutDividers() throws {
         let workspace = TaskWorkspaceModel(seedDemoData: false)
         let parent = workspace.createTask(title: "父任务", in: .inbox).taskID!
-        let first = workspace.createChild(parent, title: "子任务 A").taskID!
-        let second = workspace.createChild(parent, title: "子任务 B").taskID!
+        _ = workspace.createChild(parent, title: "子任务 A")
+        _ = workspace.createChild(parent, title: "子任务 B")
         workspace.select(parent)
         let frames = try render(workspace, name: "parent-multiple-children")
-        let firstRow = try XCTUnwrap(frames[.childRow(first)])
-        let secondRow = try XCTUnwrap(frames[.childRow(second)])
-        XCTAssertEqual(secondRow.minY - firstRow.maxY, TaskInspectorMetrics.childRowGap, accuracy: 0.5)
+        let section = try XCTUnwrap(frames[.childSection])
+        let add = try XCTUnwrap(frames[.addChild])
+        // NSOutlineView 内两行紧贴（无行间 gap）：子任务区 = 2 行 + 添加行 gap。
+        XCTAssertEqual(add.minY - section.minY,
+                       2 * TaskInspectorMetrics.childRowMinHeight + TaskInspectorMetrics.childAddGap,
+                       accuracy: 0.5)
     }
 
     private func assertFooter(_ frames: [InspectorRenderAnchor: CGRect]) throws {

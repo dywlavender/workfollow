@@ -125,28 +125,27 @@ final class TaskParentActionTests: XCTestCase {
         XCTAssertFalse(store.canUndo)
     }
 
-    func testSetParentRejectsSelfChildTargetAndSourceWithDeletedChild() {
+    func testSetParentAllowsNestingAndRejectsCircularReference() {
         let source = makeTask("来源")
         let targetRoot = makeTask("目标根任务")
         let childTargetRoot = makeTask("子目标的父任务")
         let childTarget = makeTask("子目标", parentID: childTargetRoot.id)
-        let sourceWithChild = makeTask("已有子任务的来源")
-        var deletedChild = makeTask("已删除子任务", parentID: sourceWithChild.id)
-        deletedChild.deletedAt = now
         let store = WorkspaceStore()
-        store.commit([source, targetRoot, childTargetRoot, childTarget,
-                      sourceWithChild, deletedChild], undoPolicy: .skip)
+        store.commit([source, targetRoot, childTargetRoot, childTarget], undoPolicy: .skip)
         let actions = TaskActions(store: store, clock: { self.now })
 
         XCTAssertEqual(actions.setParent(source.id, parentID: source.id),
                        .failure(.cannotParentToSelf))
-        XCTAssertEqual(actions.setParent(source.id, parentID: childTarget.id),
-                       .failure(.childCannotHaveChildren))
-        XCTAssertEqual(actions.setParent(sourceWithChild.id, parentID: targetRoot.id),
-                       .failure(.taskHasChildren), "已删除子任务仍阻止来源成为 child")
+        // 放开嵌套（2026-10-17）：来源可成为"子目标"（本身是子任务）的子任务，形成二层。
+        XCTAssertEqual(actions.setParent(source.id, parentID: childTarget.id), .success(source.id))
+        XCTAssertEqual(store.task(source.id)?.parentID, childTarget.id)
+
+        // 循环检测：把"子目标的父任务"设为其后代的子任务会形成环，应被拒绝。
+        XCTAssertEqual(actions.setParent(childTargetRoot.id, parentID: childTarget.id),
+                       .failure(.circularReference))
     }
 
-    func testTaskParentPolicyRequiresEligibleSourceAndTargetAndChildlessSource() {
+    func testTaskParentPolicyRequiresEligibleSourceAndTarget() {
         let task = makeTask("来源")
         let parent = makeTask("目标")
         let eligibleTasks = [task, parent]
@@ -192,8 +191,9 @@ final class TaskParentActionTests: XCTestCase {
         XCTAssertFalse(TaskParentPolicy.canAssign(task: task, parent: deletedTarget,
                                                   tasks: [task, deletedTarget]))
 
+        // 放开嵌套（2026-10-17）：有子任务的来源现在仍可作为别人的子任务。
         let child = makeTask("已有的子任务", parentID: task.id)
-        XCTAssertFalse(TaskParentPolicy.canAssign(task: task, parent: parent,
-                                                  tasks: [task, parent, child]))
+        XCTAssertTrue(TaskParentPolicy.canAssign(task: task, parent: parent,
+                                                 tasks: [task, parent, child]))
     }
 }

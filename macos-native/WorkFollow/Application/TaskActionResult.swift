@@ -1,9 +1,9 @@
 import Foundation
 
 enum TaskActionError: Error, Equatable {
-    case missingTask, deletedTask, childCannotHaveChildren, childListMoveNotSupported, invalidList
+    case missingTask, deletedTask, circularReference, childListMoveNotSupported, invalidList
     case alreadyCompleted, alreadyActive, alreadyConverted, notDeleted
-    case cannotParentToSelf, taskHasChildren, skippedTask, invalidSchedule
+    case cannotParentToSelf, skippedTask, invalidSchedule
 }
 
 enum TaskActionResult: Equatable {

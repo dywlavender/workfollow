@@ -216,10 +216,9 @@ struct TaskContextMenuPopover: View {
 
             Divider().padding(.vertical, WFSpace.xs)
             VStack(spacing: 2) {
-                if task.parentID == nil {
-                    actionRow("添加子任务", symbol: "plus.square.on.square") {
-                        perform { _ = workspace.requestChildTitleEditor(for: task.id) }
-                    }
+                // 放开嵌套（2026-10-17）：子任务右键同样可添加子任务（孙任务）。
+                actionRow("添加子任务", symbol: "plus.square.on.square") {
+                    perform { _ = workspace.requestChildTitleEditor(for: task.id) }
                 }
                 actionRow("关联主任务", symbol: "rectangle.3.group",
                           disabled: TaskParentPickerProjection.candidates(

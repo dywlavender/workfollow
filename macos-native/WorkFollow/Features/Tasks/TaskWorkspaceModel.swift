@@ -1191,6 +1191,14 @@ final class TaskWorkspaceModel: ObservableObject {
         return result
     }
 
+    /// 合并子任务到正文（底栏 mergeButton）：子任务标题并入正文后软删子任务。
+    @discardableResult
+    func mergeChildrenIntoDocument(_ id: UUID) -> TaskActionResult {
+        let result = withMaterializedTask(id) { actions.mergeChildrenIntoDocument($0) }
+        didMutate(result)
+        return result
+    }
+
     func setSourceNote(_ id: UUID, _ noteID: UUID) { didMutate(withMaterializedTask(id) { actions.setSourceNote($0, noteID) }) }
 
     /// The editor owns reference undo; persist its document/source pair without

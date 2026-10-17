@@ -344,4 +344,50 @@ func testMergeBulkTasksBelowTwoReturnsNil() {
     XCTAssertNil(parentID, "少于 2 条不合并(滴答置灰语义)")
     XCTAssertEqual(workspace.bulkSelection, [a.id], "失败不退出批量选择")
 }
+
+// MARK: - 合并子任务到正文（底栏 mergeButton）
+
+func testMergeChildrenIntoDocumentAppendsTitlesAndDeletesChildren() {
+    let parent = makeTask("父任务")
+    let childA = makeTask("子A")
+    let childB = makeTask("子B")
+    let workspace = makeWorkspace([parent, childA, childB])
+    _ = workspace.assignParent(childA.id, parentID: parent.id)
+    _ = workspace.assignParent(childB.id, parentID: parent.id)
+
+    let result = workspace.mergeChildrenIntoDocument(parent.id)
+    XCTAssertEqual(result, .success(parent.id))
+
+    XCTAssertEqual(workspace.task(for: parent.id)?.document.plainText, "子A\n子B",
+                   "子任务标题按行并入父任务正文")
+    XCTAssertNotNil(workspace.task(for: childA.id)?.deletedAt, "合并后子任务软删")
+    XCTAssertNotNil(workspace.task(for: childB.id)?.deletedAt)
+
+    workspace.undo()
+    XCTAssertEqual(workspace.task(for: parent.id)?.document.plainText, "", "一步撤销恢复正文")
+    XCTAssertNil(workspace.task(for: childA.id)?.deletedAt, "一步撤销恢复子任务")
+    XCTAssertNil(workspace.task(for: childB.id)?.deletedAt)
+}
+
+func testMergeChildrenAppendsAfterExistingBody() {
+    var parent = makeTask("父任务")
+    parent.document = NativeDocument(plainText: "已有正文")
+    let child = makeTask("子任务")
+    let workspace = makeWorkspace([parent, child])
+    _ = workspace.assignParent(child.id, parentID: parent.id)
+
+    _ = workspace.mergeChildrenIntoDocument(parent.id)
+
+    XCTAssertEqual(workspace.task(for: parent.id)?.document.plainText, "已有正文\n子任务")
+}
+
+func testMergeChildrenWithoutChildrenFails() {
+    let parent = makeTask("无子任务")
+    let workspace = makeWorkspace([parent])
+
+    let result = workspace.mergeChildrenIntoDocument(parent.id)
+
+    XCTAssertEqual(result, .failure(.missingTask))
+    XCTAssertEqual(workspace.task(for: parent.id)?.document.plainText, "")
+}
 }
