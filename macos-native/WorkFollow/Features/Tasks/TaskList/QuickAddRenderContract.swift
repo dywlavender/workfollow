@@ -1,7 +1,7 @@
 import SwiftUI
 
 enum QuickAddRenderAnchor: Hashable {
-    case priority(TaskPriority), list, tags, template, properties
+    case priority(TaskPriority), list, tags, attachment, template, displayMode, properties
 }
 
 struct QuickAddFramesKey: PreferenceKey {

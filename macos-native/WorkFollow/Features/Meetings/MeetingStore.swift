@@ -14,10 +14,12 @@ final class MeetingStore: ObservableObject, ModuleStoreFlushable {
     @Published private(set) var requestingPermission = false
     @Published private(set) var transcribing = false
     @Published private(set) var updatingMinutes = false
+    @Published private(set) var savingRecordingIDs: Set<UUID> = []
     @Published private(set) var streamDrafts: [UUID: [String: MeetingTranscriptLine]] = [:]
     @Published var error: String?
     @Published var configuration = MeetingPiConfiguration() { didSet { save() } }
     private let persistence: JSONFileStore<Snapshot>
+    private let storageDirectory: URL
     private let ai: MeetingAIClient
     private let recorder = MeetingRecorder()
     private var permissionGeneration = 0
@@ -35,6 +37,7 @@ final class MeetingStore: ObservableObject, ModuleStoreFlushable {
     private var finalDeadlineTasks: [String: _Concurrency.Task<Void, Never>] = [:]
     private var minutesTask: _Concurrency.Task<Void, Never>?
     private var recordingOffset: TimeInterval = 0
+    private var localRecording: (meetingID: UUID, chunkID: UUID)?
     /// At most 60 seconds, including the request currently being processed.
     static let maximumAudioBytes = 60 * 32_000
     var bufferedAudioBytes: Int { transport?.pendingByteCount ?? 0 }
@@ -46,6 +49,7 @@ final class MeetingStore: ObservableObject, ModuleStoreFlushable {
     init(directory: URL = JSONFileStore<MeetingRecord>.moduleDirectory,
          ai: MeetingAIClient = MeetingPiClient(), automaticallyUpdate: Bool = true) {
         self.ai = ai
+        storageDirectory = directory
         persistence = JSONFileStore(filename: "meetings.json", directory: directory)
         if let snapshot = persistence.load() {
             meetings = snapshot.meetings
@@ -55,6 +59,10 @@ final class MeetingStore: ObservableObject, ModuleStoreFlushable {
         recorder.onError = { [weak self] error in
             self?.stopRecording()
             self?.error = "录音中断：\(error.localizedDescription)"
+        }
+        recorder.onTranscriptionError = { [weak self] error in
+            guard let self, let id = self.recordingID else { return }
+            self.pauseTranscription(meetingID: id, message: error.localizedDescription)
         }
         if automaticallyUpdate {
             // 产品决定（验收评审）：纪要不再自动生成，改为**按钮点击生成**
@@ -76,6 +84,11 @@ final class MeetingStore: ObservableObject, ModuleStoreFlushable {
     }
 
     var selected: MeetingRecord? { meetings.first { $0.id == selectedID } }
+    func recordingFiles(for meeting: MeetingRecord) -> [URL] {
+        meeting.audio.flatMap { chunk in [chunk.filename, chunk.transcriptionFilename].compactMap { $0 } }
+            .map { storageDirectory.appendingPathComponent($0).standardizedFileURL }
+            .filter { $0.path.hasPrefix(storageDirectory.standardizedFileURL.path + "/") && FileManager.default.fileExists(atPath: $0.path) }
+    }
     var audioConfigured: Bool { !configuration.resolvedAudioExtension.isEmpty }
     func recordedSeconds(_ meeting: MeetingRecord) -> Int {
         Int(recordingID == meeting.id ? max(meeting.duration, recordingOffset + recorder.currentDuration) : meeting.duration)
@@ -87,7 +100,7 @@ final class MeetingStore: ObservableObject, ModuleStoreFlushable {
     }
 
     func canDelete(_ id: UUID) -> Bool {
-        meetings.contains { $0.id == id } && !requestingPermission && recordingID != id &&
+        meetings.contains { $0.id == id } && !requestingPermission && recordingID != id && !savingRecordingIDs.contains(id) &&
             inputStream?.meetingID != id && !(transportMeetingID == id && transport?.isBusy == true)
     }
 
@@ -111,7 +124,7 @@ final class MeetingStore: ObservableObject, ModuleStoreFlushable {
 
     func startRecording() async {
         guard recordingID == nil, !requestingPermission, let id = selectedID else { return }
-        guard audioConfigured else { error = MeetingPiError.audioNotConfigured.localizedDescription; return }
+        guard savingRecordingIDs.isEmpty else { error = "正在保存本地录音，请稍后继续。"; return }
         guard transport?.isBusy != true, inputStream == nil else { error = "正在处理最后一段音频，请稍后继续。"; return }
         permissionGeneration += 1
         let generation = permissionGeneration
@@ -133,31 +146,66 @@ final class MeetingStore: ObservableObject, ModuleStoreFlushable {
             blockedAudio.remove(id)
             recordingOffset = meeting.duration
             requestingPermission = true
-            let streaming = try await connectInputStream(for: id, offset: recordingOffset)
-            if !streaming {
-                try await ai.prepareTranscription(configuration: configuration)
+            var streaming = false
+            do {
+                guard audioConfigured else { throw MeetingPiError.audioNotConfigured }
+                streaming = try await connectInputStream(for: id, offset: recordingOffset)
+                if !streaming {
+                    try await ai.prepareTranscription(configuration: configuration)
+                    guard generation == permissionGeneration else { return }
+                    createBatchTransport(for: id)
+                }
+            } catch {
                 guard generation == permissionGeneration else { return }
-                createBatchTransport(for: id)
+                closeInputStream(); transport?.cancel(); transport = nil; transportMeetingID = nil
+                self.error = "转写未连接，将仅保存本地录音：\(error.localizedDescription)"
             }
-            guard generation == permissionGeneration, let transport else {
+            guard generation == permissionGeneration else {
                 closeInputStream(); return
             }
             requestingPermission = false
-            try recorder.start(offset: recordingOffset, streaming: streaming, transport: transport)
+            let chunkID = UUID()
+            let base = "meeting-audio/\(id.uuidString)/\(chunkID.uuidString)"
+            let chunk = MeetingAudioChunk(id: chunkID, filename: base + ".caf", offset: recordingOffset,
+                                          duration: 0, transcriptionFilename: base + "-asr.wav",
+                                          transcriptionModel: configuration.resolvedTranscriptionModel)
+            try recorder.start(offset: recordingOffset, streaming: streaming, transport: transport,
+                               sourceURL: storageDirectory.appendingPathComponent(chunk.filename),
+                               transcriptionURL: storageDirectory.appendingPathComponent(chunk.transcriptionFilename!))
+            localRecording = (id, chunkID)
+            change(id) { $0.audio.append(chunk) }
             recordingID = id
         } catch {
             guard generation == permissionGeneration else { return }
-            requestingPermission = false; closeInputStream(); self.error = "无法开始录音：\(error.localizedDescription)"
+            requestingPermission = false; closeInputStream(); transport?.cancel(); transport = nil; transportMeetingID = nil
+            self.error = "无法开始录音：\(error.localizedDescription)"
         }
     }
 
     func stopRecording() {
         if requestingPermission && inputStream == nil { streamToken = UUID() }
         permissionGeneration += 1; requestingPermission = false
-        let id = recordingID
-        _ = id // 恢复自动纪要时此绑定重新被下面的注释块使用
+        let saved = localRecording; localRecording = nil
+        let duration = recorder.currentDuration
         recordingID = nil
-        recorder.stop()
+        if let writer = recorder.stop(), let saved {
+            savingRecordingIDs.insert(saved.meetingID)
+            change(saved.meetingID) { meeting in
+                meeting.capturedDuration = max(meeting.duration, recordingOffset + duration)
+                if let index = meeting.audio.firstIndex(where: { $0.id == saved.chunkID }) { meeting.audio[index].duration = duration }
+            }
+            _Concurrency.Task { [self] in
+                defer { savingRecordingIDs.remove(saved.meetingID) }
+                do {
+                    let result = try await writer.finish()
+                    change(saved.meetingID) { meeting in
+                        if let index = meeting.audio.firstIndex(where: { $0.id == saved.chunkID }) {
+                            meeting.audio[index].duration = result.sourceDuration
+                        }
+                    }
+                } catch { self.error = "本地录音保存失败：\(error.localizedDescription)" }
+            }
+        }
         transport?.stopAccepting()
         if inputStream != nil { streamStopping = true; transport?.stopAccepting(); return }
         // 产品决定：停止录音不再自动生成纪要（见 init 里的心跳断开说明）。
@@ -217,8 +265,7 @@ final class MeetingStore: ObservableObject, ModuleStoreFlushable {
     func receiveStreamEvent(_ event: MeetingStreamEvent, meetingID: UUID) {
         guard inputStream?.meetingID == meetingID else { return }
         if event.kind == "error" {
-            error = event.message ?? "Pi 流式转写失败。"
-            blockedAudio.insert(meetingID); closeInputStream(); stopRecording(); return
+            pauseTranscription(meetingID: meetingID, message: event.message ?? "Pi 流式转写失败。"); return
         }
         // VAD 生命周期（MEETING-AUDIO-002）：start/stop 不带文字，先进 turn
         // 状态机；"有讲话但没有 Final"由 tracker 按宽限期判定 missingFinal。
@@ -338,11 +385,13 @@ final class MeetingStore: ObservableObject, ModuleStoreFlushable {
                 self.transcribing = self.inputStream != nil || self.transport?.isBusy == true
             }
         }
-        transport.onOverflow = { [weak self] in
-            _Concurrency.Task { @MainActor [weak self] in self?.handleTransportOverflow(meetingID: meetingID) }
+        transport.onOverflow = { [weak self, weak transport] in
+            guard let self, let transport, self.transport === transport else { return }
+            self.handleTransportOverflow(meetingID: meetingID)
         }
-        transport.onError = { [weak self] error in
-            _Concurrency.Task { @MainActor [weak self] in self?.handleTransportError(meetingID: meetingID, error) }
+        transport.onError = { [weak self, weak transport] error in
+            guard let self, let transport, self.transport === transport else { return }
+            self.handleTransportError(meetingID: meetingID, error)
         }
         transport.onIdle = { [weak self, weak transport] in
             _Concurrency.Task { @MainActor [weak self, weak transport] in
@@ -413,18 +462,21 @@ final class MeetingStore: ObservableObject, ModuleStoreFlushable {
     /// 队列超限：显式失败（原 backpressure 分支）。已排队的包照常送完。
     private func handleTransportOverflow(meetingID: UUID) {
         guard !blockedAudio.contains(meetingID) else { return }
-        blockedAudio.insert(meetingID)
-        stopRecording()
-        error = MeetingPiError.audioBackpressure.localizedDescription
+        pauseTranscription(meetingID: meetingID, message: MeetingPiError.audioBackpressure.localizedDescription)
     }
 
     /// 发送失败：与原 pumpAudio catch 同语义（错误 + 停采集），ledger 已留下
     /// captured/acknowledged 差额，损失可观测。
     private func handleTransportError(meetingID: UUID, _ error: Error) {
+        pauseTranscription(meetingID: meetingID, message: error.localizedDescription)
+    }
+
+    private func pauseTranscription(meetingID: UUID, message: String) {
         blockedAudio.insert(meetingID)
+        recorder.detachTranscription()
         closeInputStream()
-        stopRecording()
-        self.error = error.localizedDescription
+        transport?.cancel(); transport = nil; transportMeetingID = nil; transcribing = false
+        error = recordingID == meetingID ? "实时转写已暂停，本地录音继续保存。\(message)" : message
     }
 
     private func pumpMinutes() {
@@ -469,7 +521,7 @@ final class MeetingStore: ObservableObject, ModuleStoreFlushable {
     func flush(_ completion: @escaping (Error?) -> Void) {
         if recordingID != nil { stopRecording() }
         _Concurrency.Task { [self] in
-            while transport?.isBusy == true || inputStream != nil {
+            while transport?.isBusy == true || inputStream != nil || !savingRecordingIDs.isEmpty {
                 try? await _Concurrency.Task.sleep(nanoseconds: 20_000_000)
             }
             persistence.flush(completion)

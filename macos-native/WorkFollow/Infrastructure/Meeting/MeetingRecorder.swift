@@ -1,66 +1,70 @@
 import AVFoundation
 import Foundation
 
-/// No file writer or recording URL. Only in-memory PCM packets leave capture.
-///
-/// 采集 → 传输的关键路径**不经过 MainActor**（MEETING-AUDIO-001）：tap 在音频
-/// 渲染线程上转码、分段后直接 enqueue 进 `MeetingAudioTransport`，主线程卡多久
-/// 都不影响已采集的 PCM。主线程只通过 `onError` 收罕见错误（采集器损坏等），
-/// 那是通知、不是关键路径。
+/// The source and ASR input are saved locally; file I/O and networking stay off
+/// MainActor. A failed transcription connection does not stop local recording.
 @MainActor
 final class MeetingRecorder {
     private var engine: AVAudioEngine?
-    private var capture: MeetingPCMCapture?
-    private var transport: MeetingAudioTransport?
+    private var capture: MeetingRecordingCapture?
     private var generation = UUID()
     var onError: ((Error) -> Void)?
-    var currentDuration: TimeInterval { capture?.duration ?? 0 }
+    var onTranscriptionError: ((Error) -> Void)?
+    var currentDuration: TimeInterval { capture?.writer.currentDuration ?? 0 }
 
     func start(offset: TimeInterval, streaming: Bool = false,
-               transport: MeetingAudioTransport) throws {
+               transport: MeetingAudioTransport?, sourceURL: URL, transcriptionURL: URL) throws {
         let engine = AVAudioEngine()
         let input = engine.inputNode
         let format = input.outputFormat(forBus: 0)
-        let capture = try MeetingPCMCapture(format: format, offset: offset, streaming: streaming)
+        let writer = try MeetingRecordingWriter(sourceURL: sourceURL, transcriptionURL: transcriptionURL, format: format)
+        let capture = try MeetingRecordingCapture(writer: writer, format: format, offset: offset,
+                                                 streaming: streaming, transport: transport)
         let token = UUID()
         generation = token
-        self.transport = transport
+        writer.onError = { [weak self] error in
+            _Concurrency.Task { @MainActor [weak self] in
+                guard let self, self.generation == token else { return }
+                self.onError?(error)
+            }
+        }
         input.installTap(onBus: 0, bufferSize: 4096, format: format) { [weak self] buffer, _ in
             // 音频渲染线程：转码 → 分段 → 入队。这里不能等待 SwiftUI / 主线程 /
             // 网络 / Pi / ASR 中的任何一个。
             do {
-                _ = try capture.consume(buffer)
-                let packets = capture.drain()
-                guard !packets.isEmpty else { return }
-                let result = transport.enqueue(packets)
-                if result == .overflow {
+                if let error = try capture.consume(buffer) {
                     _Concurrency.Task { @MainActor [weak self] in
                         guard let self, self.generation == token else { return }
-                        self.stop()
+                        self.onTranscriptionError?(error)
                     }
                 }
             } catch {
                 _Concurrency.Task { @MainActor [weak self] in
                     guard let self, self.generation == token else { return }
-                    self.stop(); self.onError?(error)
+                    self.onError?(error)
                 }
             }
         }
         do { try engine.start() }
-        catch { input.removeTap(onBus: 0); throw error }
+        catch {
+            input.removeTap(onBus: 0)
+            _Concurrency.Task { _ = try? await writer.finish() }
+            throw error
+        }
         self.engine = engine; self.capture = capture
     }
 
-    func stop() {
-        guard let engine, let capture else { return }
+    @discardableResult
+    func stop() -> MeetingRecordingWriter? {
+        guard let engine, let capture else { return nil }
         engine.inputNode.removeTap(onBus: 0)
         engine.stop()
         self.engine = nil; self.capture = nil
         generation = UUID()
-        // Includes undelivered complete packets and the final partial packet.
-        transport?.enqueue(capture.finish())
-        transport = nil
+        capture.finishCapture()
+        return capture.writer
     }
+    func detachTranscription() { capture?.detachTranscription() }
 }
 
 final class MeetingPCMCapture: @unchecked Sendable {

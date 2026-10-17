@@ -44,7 +44,7 @@ final class DocumentEditorCoordinator: NSObject, NSTextViewDelegate {
             // 文末空段落的级别只能从模型带回输入属性（它的样式在文档里没有字符可承载），
             // 否则切回来接着在文末输入会退回正文。
             textView.seedTrailingParagraphKind(Self.trailingBlockKind(of: document))
-            didLoadDocument(in: textView)
+            didLoadDocument(in: textView, reparseInline: true)
         } else if self.document != document,
                   !textView.hasMarkedText() {
             let selection = textView.selectedRange()
@@ -113,9 +113,17 @@ final class DocumentEditorCoordinator: NSObject, NSTextViewDelegate {
         }
     }
 
-    func didLoadDocument(in textView: NativeTextView) {
+    func didLoadDocument(in textView: NativeTextView, reparseInline: Bool = false) {
         committedStorageRevision = textView.storageRevision
         committedTrailingBlock = textView.pendingTrailingBlock ?? Self.trailingBlockKind(of: document)
+        guard reparseInline else { return }
+        // 渲染期解析（2026-10-17 口径）：加载/切换文档后把已有字面标记渲染成富文本。
+        // 放到下一轮 runloop，避免在 SwiftUI update 过程中改模型。
+        let identity = textView.documentIdentity
+        DispatchQueue.main.async { [weak textView] in
+            guard let textView, textView.documentIdentity == identity else { return }
+            textView.reparseInlineMarkdown(registeringUndo: false)
+        }
     }
 
     func detach(_ textView: NativeTextView) {

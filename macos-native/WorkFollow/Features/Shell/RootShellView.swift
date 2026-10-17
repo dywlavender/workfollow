@@ -60,7 +60,7 @@ struct RootShellView: View {
                 IconRailView(workspace: workspace, navigation: navigation,
                              onNavigate: environment.navigate,
                              onOpenQuickOpen: { environment.commandPalettePresented = true })
-                Divider()
+                    .overlay(alignment: .trailing) { ShellColumnSeparator() }
                 if navigationVisible, environment.sidebarVisible,
                    navigation.destination != .calendar, navigation.destination != .matrix,
                    navigation.destination != .countdown, navigation.destination != .meetings,
@@ -68,7 +68,7 @@ struct RootShellView: View {
                     NavigationColumnView(workspace: workspace, navigation: navigation,
                                          filterStore: environment.filterStore)
                         .frame(width: WFMetrics.navigationWidth)
-                    Divider()
+                        .overlay(alignment: .trailing) { ShellColumnSeparator() }
                 }
                 WorkspacePageHost(cache: pageCache, pageKey: pageKey,
                                   content: hostedPage(destination: destination,
@@ -124,11 +124,29 @@ struct FocusWorkspaceShellView: View {
         HStack(spacing: 0) {
             IconRailView(workspace: workspace, navigation: navigation,
                          onNavigate: onNavigate, onOpenQuickOpen: onOpenQuickOpen)
+            // 焦点页保留原来的占位 Divider：它的渲染基准按含 1pt 分隔线的布局标定，
+            // 本次只把任务页的列起点对齐滴答，不对焦点页重标定。
             Divider()
             FocusWorkspaceView(store: store, workspace: workspace,
                                onSelectRecordTask: onSelectRecordTask)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
+    }
+}
+
+/// 外壳列分隔线：覆盖在列的右边缘绘制，**不参与布局**。
+///
+/// 原来用 `Divider()` 在 `HStack` 里占 1pt，两处叠加后列表列从 276pt 起，
+/// 滴答同窗口实测为 274pt（`AXScrollArea @274,137 358x751`，列表 outline 的
+/// 1pt 边框压在导航列最后一像素上）。改成 overlay 后列宽分配与滴答一致，
+/// 线仍然可见、不可命中。
+private struct ShellColumnSeparator: View {
+    var body: some View {
+        Rectangle()
+            .fill(Color(nsColor: .separatorColor))
+            .frame(width: WFMetrics.divider)
+            .frame(maxHeight: .infinity)
+            .allowsHitTesting(false)
     }
 }
 

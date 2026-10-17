@@ -55,12 +55,12 @@ final class MeetingStoreTests: XCTestCase {
     }
     func testHTTPModelRoutingIsExplicitAndCustomAdaptersKeepOwnership() {
         var configuration = MeetingPiConfiguration()
-        configuration.model = "ali-Pi/qwen-audio-3.1-asr-flash"
+        configuration.transcriptionModel = "ali-Pi/qwen-audio-3.1-asr-flash"
         XCTAssertTrue(configuration.usesHTTPTranscription)
         configuration.audioExtension = "/custom/adapter.mjs"
         XCTAssertFalse(configuration.usesHTTPTranscription)
         configuration.audioExtension = ""
-        configuration.model = "qwen3.8-omni-flash-realtime"
+        configuration.transcriptionModel = "qwen3.8-omni-flash-realtime"
         XCTAssertFalse(configuration.usesHTTPTranscription)
     }
     func testDeleteSelectionNeighborsAndPersistence() async throws {
@@ -225,13 +225,13 @@ final class MeetingStoreTests: XCTestCase {
         XCTAssertFalse(record.minutesIsManual)
     }
 
-    func testPersistenceAndEmptyExtensionAreExplicit() async throws {
+    func testPersistenceAndBundledAdapterAreAvailable() async throws {
         let root = try directory()
         let store = MeetingStore(directory: root, ai: MeetingAITestDouble(), automaticallyUpdate: false)
         store.create(); store.rename("项目例会"); store.appendTranscriptForTesting("讨论预算", speaker: "手动记录")
-        await store.startRecording()
-        XCTAssertFalse(store.audioConfigured)
-        XCTAssertNotNil(store.error)
+        XCTAssertTrue(store.audioConfigured)
+        XCTAssertNotNil(Bundle.main.url(forResource: "wf-meeting-asr-stream", withExtension: "mjs"))
+        XCTAssertEqual(store.configuration.resolvedTranscriptionModel, MeetingPiConfiguration.defaultTranscriptionModel)
         await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
             store.flush { _ in continuation.resume() }
         }

@@ -12,9 +12,8 @@ import SwiftUI
 /// 更新纪要的），核对时要对着看，tab 强制你来回切。数据里的 `summarizedLineIDs`
 /// 还让「哪些行还没进纪要」本来就可识别——分栏之后这条信息才用得上。
 ///
-/// 右栏的纪要是**可编辑的**（同日稍后，用户要求）：不再有「更新纪要」按钮，
-/// 直接改就行。第一笔输入会把这条会议标成「手动」，Pi 随即停止覆盖它
-/// （见 `MeetingStore.editMinutes`）；底栏留一条「交回自动更新」的退路。
+/// 右栏纪要可直接编辑。Pi 仅在点击生成/更新时整理定稿文字；
+/// 手动修改作为下一次明确请求整理时的基础，不自动覆盖。
 ///
 /// 这一页在 `RootShellView` 里是 **rail-only 目的地**（和日历 / 四象限 / 倒数一样，
 /// 不挂导航栏），所以它自带列表列是合理的；不合理的只是那一列的实现方式。
@@ -277,7 +276,7 @@ struct MeetingWorkspaceView: View {
             VStack(spacing: WFSpace.md) {
                 Image(systemName: NativeDestination.meetings.symbol).font(.largeTitle)
                 Text("记录对话，持续整理同一份纪要").font(WFType.body)
-                Text("音频不保存；实时采集与转写需要 Pi 音频扩展。").font(WFType.supporting)
+                Text("录音保存在本地；配置 Pi 可同时进行实时转写。").font(WFType.supporting)
             }
             .foregroundStyle(WFColors.secondaryText)
             Button("新建会议") { store.create() }
@@ -353,7 +352,7 @@ struct MeetingWorkspaceView: View {
                     _Concurrency.Task { await store.startRecording() }
                 }
                 .buttonStyle(.borderedProminent)
-                .disabled(store.recordingID != nil || store.requestingPermission || store.transcribing)
+                .disabled(store.recordingID != nil || store.requestingPermission || store.transcribing || !store.savingRecordingIDs.isEmpty)
             }
             if store.requestingPermission {
                 ProgressView().controlSize(.small)
@@ -366,9 +365,21 @@ struct MeetingWorkspaceView: View {
                     .monospacedDigit()
             }
             Spacer(minLength: WFSpace.sm)
+            if !store.recordingFiles(for: meeting).isEmpty {
+                Button("录音文件") { NSWorkspace.shared.activateFileViewerSelecting(store.recordingFiles(for: meeting)) }
+                    .controlSize(.small)
+                    .disabled(store.recordingID == meeting.id || store.savingRecordingIDs.contains(meeting.id))
+                    .help("在 Finder 中查看麦克风原始录音和转写输入 WAV")
+            }
+            if store.savingRecordingIDs.contains(meeting.id) {
+                ProgressView().controlSize(.small)
+                Text("正在保存录音").font(WFType.supporting).foregroundStyle(WFColors.secondaryText)
+            }
             if store.transcribing {
                 ProgressView().controlSize(.small)
-                Text("Pi 转写中").font(WFType.supporting).foregroundStyle(WFColors.secondaryText)
+                Text(store.recordingID == nil ? "正在完成最后一段转写"
+                     : (store.configuration.usesHTTPTranscription ? "分段转写中" : "转写中"))
+                    .font(WFType.supporting).foregroundStyle(WFColors.secondaryText)
             }
             if store.updatingMinutes {
                 ProgressView().controlSize(.small)
@@ -389,9 +400,11 @@ struct MeetingWorkspaceView: View {
                 .font(WFType.caption).foregroundStyle(WFColors.secondaryText)
             Text(store.audioConfigured
                  ? (store.configuration.usesHTTPTranscription
-                    ? "Pi HTTP 分段转写：每 3 秒提交一段，停止时补发尾段。返回还需模型处理时间；讲话人标签仅在当前片段内有效，音频不保存，纪要手动编辑。"
-                    : "内置 Pi 扩展支持流式转写：草稿实时修正，定稿后进入对话记录。讲话人暂未区分。自定义扩展使用分段转写；音频均不保存。")
-                 : "尚未配置 Pi 音频扩展，不能开始采集。只保存文字和纪要，不保存录音。")
+                    ? "分段转写：每 3 秒提交音频，等待整段识别结果。讲话人标签仅在当前片段内有效；纪要使用独立模型生成。"
+                    : (!store.configuration.audioExtension.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                       ? "使用自定义音频扩展进行分段转写。原始录音及转写输入 WAV 保存在本地，纪要按按钮生成。"
+                       : "实时转写：文字随讲话更新，定稿后保存。原始录音及转写输入 WAV 保存在本地；讲话人暂未区分。"))
+                 : "本地录音可用。配置 Pi 音频扩展后可同时转写；录音文件可用于回放和复测。")
                 .font(WFType.caption).foregroundStyle(WFColors.secondaryText)
                 .padding(.top, WFSpace.xs)
         }
@@ -630,7 +643,7 @@ struct MeetingWorkspaceView: View {
             // `TextEditor` 没有 placeholder，按项目里既有的做法自己叠一层
             // （`SummaryWorkspaceView` 的日记/周报两处都是这个写法）。
             if meeting.minutes.isEmpty {
-                Text("有对话文字后，Pi 会持续更新这里的纪要；也可以直接在这里写。")
+                Text("有定稿文字后，点击“生成纪要”整理会议内容；也可以直接在这里写。")
                     .font(WFType.body).foregroundStyle(WFColors.tertiaryText)
                     .padding(.top, WFSpace.sm)
                     .padding(.leading, WFSpace.xs)
@@ -641,10 +654,16 @@ struct MeetingWorkspaceView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    /// 底栏。原来这里是「更新纪要 + 复制纪要」——纪要可直接编辑之后，
-    /// 那个按钮就没有存在意义了，删掉。留下的是「复制」和一条退路。
+    /// Generation is explicit; only finalized, unsummarized speech is consumed.
     private func minutesFooter(_ meeting: MeetingRecord) -> some View {
         HStack(spacing: WFSpace.sm) {
+            Button(meeting.minutes.isEmpty ? "生成纪要" : "更新纪要") {
+                if meeting.minutesIsManual { store.resumeAutomaticMinutes() }
+                else { store.updateMinutesNow() }
+            }
+            .controlSize(.small)
+            .disabled(store.updatingMinutes || meeting.summarizedLineCount >= meeting.transcript.count)
+            .help("使用已有纪要和新增定稿文字整理内容；手动修改会作为本次整理的基础")
             Button("复制纪要") {
                 NSPasteboard.general.clearContents()
                 NSPasteboard.general.setString(meeting.minutes, forType: .string)
@@ -652,16 +671,6 @@ struct MeetingWorkspaceView: View {
             .controlSize(.small)
             .disabled(meeting.minutes.isEmpty)
             Spacer(minLength: WFSpace.sm)
-            // 手动接管是**单向**的：不给人退路的话，误敲一个字就永远失去自动更新。
-            // 所以只在接管状态下露出这一条，不常驻无效操作——
-            // 只在真能做点什么的时候出现。
-            if meeting.minutesIsManual {
-                Text("Pi 已停止自动更新")
-                    .font(WFType.caption).foregroundStyle(WFColors.secondaryText)
-                Button("交回自动更新") { store.resumeAutomaticMinutes() }
-                    .controlSize(.small)
-                    .help("把这份纪要交回给 Pi 继续维护；你写的内容会保留，作为下次更新的基础")
-            }
         }
         .padding(.horizontal, WFSpace.md)
         .frame(height: MeetingMetrics.columnFooterHeight)
@@ -702,18 +711,22 @@ struct MeetingWorkspaceView: View {
     private var settings: some View {
         VStack(alignment: .leading, spacing: WFSpace.lg) {
             Text("Pi 会议接入").font(WFType.detailTitle)
-            Text("所有 AI 调用经过本机 Pi。百炼实时模型走流式转写；qwen-audio-3.1-asr-flash 走 HTTP 分段转写。ASR 模型不能生成纪要，可手动编辑。")
+            Text("转写模型负责持续识别语音，纪要模型负责整理定稿文字。两个模型的连接与认证均由本机 Pi 管理。")
                 .font(WFType.body).foregroundStyle(WFColors.secondaryText)
             VStack(alignment: .leading, spacing: WFSpace.lg) {
                 settingField("Pi 可执行文件", placeholder: "Pi 可执行文件",
                              text: $store.configuration.executable)
-                settingField("模型标识（百炼实时或 HTTP ASR）", placeholder: "留空沿用 Pi 当前实时模型",
-                             text: $store.configuration.model)
+                settingField("转写模型", placeholder: MeetingPiConfiguration.defaultTranscriptionModel,
+                             text: Binding(get: { store.configuration.transcriptionModel ?? store.configuration.resolvedTranscriptionModel },
+                                           set: { store.configuration.transcriptionModel = $0 }))
+                settingField("纪要模型", placeholder: "留空使用 Pi 当前文字模型",
+                             text: Binding(get: { store.configuration.minutesModel ?? store.configuration.resolvedMinutesModel },
+                                           set: { store.configuration.minutesModel = $0 }))
                 settingField("Pi 音频扩展（可选覆盖）", placeholder: "留空使用内置 Pi 音频扩展",
                              text: $store.configuration.audioExtension)
             }
             .disabled(store.transcribing || store.updatingMinutes || store.recordingID != nil)
-            Text("默认使用内置 Pi 扩展，端点与认证由 Pi 提供。使用 HTTP ASR 时请明确填写模型标识；自定义扩展路径可替换内置接入。音频不保存；讲话人标签仅在当前片段内区分，不保证跨片段为同一人。")
+            Text("推荐转写模型为 qwen-audio-3.1-asr-flash-streaming，需在 Pi 注册并配置百炼认证。原始录音及转写输入 WAV 保存在本地；转写失败时仍继续录音。实时转写暂不区分讲话人。")
                 .font(WFType.caption).foregroundStyle(WFColors.secondaryText)
             HStack {
                 Spacer()

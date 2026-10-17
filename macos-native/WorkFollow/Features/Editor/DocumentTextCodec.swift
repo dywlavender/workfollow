@@ -76,27 +76,32 @@ enum DocumentTextCodec {
 
     static func attributes(kind: DocumentBlockKind, marks: Set<DocumentMark>) -> [NSAttributedString.Key: Any] {
         let style = NSMutableParagraphStyle()
-        style.paragraphSpacing = kind == .quote || isListKind(kind)
-            ? DocumentEditorGeometry.structuredParagraphSpacing : 8
-        // 正文 14 配 ~4pt 行距：原版 `lineBody` 是 1.50（14 × 1.5 = 21 的行盒，
-        // 扣掉系统字体的自然行高约 17，多出来的就是这 4pt）。标题按原版的
-        // `documentHeadingLine` 1.35 走，行距不动——它们是短行。
-        style.lineSpacing = 4
+        let structured = kind == .quote || isListKind(kind)
+        style.paragraphSpacing = structured ? DocumentEditorGeometry.structuredParagraphSpacing : 8
+        // 字阶按滴答实测（2026-10-16，截图 1px = 1pt）：标题三级 18 / 16 / 14，正文 14。
+        // 滴答的标题 3 到 6 是**同一个字号**（实测三级到六级墨水质量完全相同），
+        // 只靠字重与段间距和正文区分，所以这里不再按级别继续收窄。
         var size: CGFloat = 14
-        if case .heading(let level) = kind { size = level == 1 ? 22 : level == 2 ? 19 : 16 }
+        if case .heading(let level) = kind { size = level == 1 ? 18 : level == 2 ? 16 : 14 }
         let isHeading: Bool = { if case .heading = kind { return true }; return false }()
         var font: NSFont
         if kind == .code || marks.contains(.code) {
             font = NSFont.monospacedSystemFont(ofSize: size, weight: .regular)
         } else if isHeading {
-            // 标题是**半粗**、不是粗体：原版 `WorkFollowMacWeight.semibold` 是这套字阶
-            // 的上限（`document_styles.dart:114` "中文一上粗体就发闷"）。
-            font = NSFont.systemFont(ofSize: size, weight: .semibold)
+            // 标题是**粗体**：滴答实测标题笔画宽/字高比 0.20（Bold 0.20、Medium 0.158），
+            // 整行墨水质量也对上 Bold（18pt「H1」预测 102、实测 105）。
+            font = NSFont.systemFont(ofSize: size, weight: .bold)
         } else {
             font = NSFont.systemFont(ofSize: size)
         }
         if marks.contains(.bold) { font = NSFontManager.shared.convert(font, toHaveTrait: .boldFontMask) }
         if marks.contains(.italic) { font = NSFontManager.shared.convert(font, toHaveTrait: .italicFontMask) }
+        // 行盒按滴答实测：标题 1.6 倍字号（H1 28.8 / H2 25.6 / H3–H6 22.4，配 8pt 段间距
+        // 得到段落基线间距 35 / 32 / 30）；列表与引用 18（配 2pt 段间距得 20）；正文 21
+        // （1.5 倍字号，与原版 `lineBody` 一致）。系统字体的默认行高只有约 1.18 倍字号，
+        // 缺口用 lineSpacing 补，避免把默认行高写死成某个系统版本的具体数字。
+        let lineBox: CGFloat = isHeading ? 1.6 * size : (structured ? 18 : 21)
+        style.lineSpacing = max(0, lineBox - (font.ascender - font.descender + font.leading))
         // 所有段落统一留 20pt 行首沟槽：H 角标 / 空行"+"画在文字左侧的这段
         // 空白里（滴答同款视觉）。沟槽必须在文本容器**内**——NSTextView 把
         // 绘制裁剪到容器区域，靠 textContainerInset 留白会让装饰不可见。
@@ -109,8 +114,8 @@ enum DocumentTextCodec {
         } else if isListKind(kind) {
             // 列表缩进与标记**全部由视图层负责**：段落绝不挂 `textLists`——
             // macOS 14+ 的 TextKit 2 会自绘 NSTextList 标记并占用行首空间，
-            // 与视图层画的强调色标记叠成"双点/1.1"（用户实测）。标记右缘
-            // 距文字 7pt（由装饰层按 lineRect.minX 反推）。
+            // 与视图层画的强调色标记叠成"双点/1.1"（用户实测）。标记与段落
+            // 文字左缘对齐（滴答实测，装饰层按 `lineRect.minX` 反推）。
             style.firstLineHeadIndent = gutter + DocumentEditorGeometry.listTextIndent
             style.headIndent = style.firstLineHeadIndent
         } else {

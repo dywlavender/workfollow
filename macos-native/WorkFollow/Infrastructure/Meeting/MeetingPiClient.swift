@@ -16,21 +16,26 @@ extension MeetingAIClient {
 struct MeetingPiClient: MeetingAIClient {
     func prepareTranscription(configuration: MeetingPiConfiguration) async throws {
         guard configuration.usesHTTPTranscription else { return }
-        _ = try await request(configuration: configuration, prompt: "/wf-meeting-check", audio: true)
+        _ = try await request(configuration: configuration.forTranscription(), prompt: "/wf-meeting-check", audio: true)
     }
     func updateMinutes(configuration: MeetingPiConfiguration, minutes: String,
                        lines: [MeetingTranscriptLine]) async throws -> String {
         guard !lines.isEmpty else { return minutes }
+        guard !configuration.minutesUsesASR else {
+            throw MeetingPiError.extensionFailure("纪要模型需要支持文字生成，请在会议设置中选择文字模型，或留空使用 Pi 当前文字模型。")
+        }
         let prompt = MeetingMinutesPrompt.make(minutes: minutes, lines: lines)
-        // Built-in adapter also supports text through Qwen realtime. Other custom
-        // audio extensions keep the normal Pi text-model summary path.
-        if configuration.audioExtension.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+        let minutesConfiguration = configuration.forMinutes()
+        // Explicit Omni selections retain their realtime text adapter. Dedicated
+        // ASR is independent; ordinary text models use Pi's normal completion.
+        if configuration.minutesUsesRealtimeOmni,
+           configuration.audioExtension.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
            !configuration.resolvedAudioExtension.isEmpty {
             let payload = try JSONSerialization.data(withJSONObject: ["version": 1, "prompt": prompt])
-            return try await request(configuration: configuration,
+            return try await request(configuration: minutesConfiguration,
                 prompt: "/wf-meeting-minutes " + String(decoding: payload, as: UTF8.self), audio: true)
         }
-        return try await request(configuration: configuration,
+        return try await request(configuration: minutesConfiguration,
                                  prompt: "/skill:meeting-minutes " + prompt, audio: false)
     }
 
@@ -43,7 +48,7 @@ struct MeetingPiClient: MeetingAIClient {
             "format": "pcm16", "sampleRate": 16_000, "channels": 1,
             "offset": packet.offset, "duration": packet.duration, "knownSpeakers": speakers]
         let data = try JSONSerialization.data(withJSONObject: payload)
-        let result = try await request(configuration: configuration,
+        let result = try await request(configuration: configuration.forTranscription(),
             prompt: "/wf-meeting-audio " + String(decoding: data, as: UTF8.self), audio: true)
         return try Self.decodeAudioResult(result, offset: packet.offset)
     }

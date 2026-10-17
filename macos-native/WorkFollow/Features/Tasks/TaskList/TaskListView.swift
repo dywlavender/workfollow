@@ -60,6 +60,10 @@ struct TaskListView: View {
     @State private var quickAddPriorityOverride: TaskPriority?
     @State private var quickAddListOverride: String?
     @State private var quickAddTagsOverride: [String]?
+    /// 属性菜单里选好的附件（创建成功后挂到新任务，对齐滴答属性菜单的「附件」）。
+    @State private var quickAddAttachments: [NativeAttachment] = []
+    /// 输入框显示模式（滴答「输入框设置」的简洁 / 详细）。
+    @AppStorage(QuickAddDisplayMode.defaultsKey) private var quickAddDisplayModeRaw = QuickAddDisplayMode.compact.rawValue
     @State private var dismissedQuickAddTokens: Set<String> = []
     @State private var quickAddEscapePrimed = false
     /// Tab 进入的任务描述草稿（对齐滴答「敲击 Tab 添加任务描述」）。只在创建
@@ -518,6 +522,8 @@ struct TaskListView: View {
                             selectedPriority: quickAddPriorityOverride ?? quickAddResult.priority,
                             selectedList: quickAddListOverride ?? quickAddResult.listName ?? workspace.activeList ?? TaskList.inbox.name,
                             selectedTags: quickAddTagsOverride ?? quickAddResult.tags,
+                            attachments: quickAddAttachments,
+                            displayMode: quickAddDisplayMode,
                             onPriority: { value in
                                 quickAddPriorityOverride = value
                                 showQuickAddProperties = false
@@ -528,6 +534,8 @@ struct TaskListView: View {
                                 pendingTemplatePicker = true
                                 showQuickAddProperties = false
                             },
+                            onAttachments: { quickAddAttachments = $0 },
+                            onDisplayMode: { quickAddDisplayModeRaw = $0.rawValue },
                             onDismiss: { showQuickAddProperties = false }
                         )
                     })
@@ -717,10 +725,16 @@ struct TaskListView: View {
     /// `_propertiesOpen`↔`showQuickAddProperties`、`_scheduleOpen`↔`showQuickAddSchedule`。
     /// 多出的 `description*` 三项对应原生独有的描述行。
     private var quickAddExpanded: Bool {
-        quickAddFocused
+        // 「输入框设置：详细」时始终露出日期与属性图标（滴答「详细」模式）。
+        quickAddDisplayMode == .detailed
+            || quickAddFocused
             || descriptionFocused || candidate.descriptionVisible || !descriptionDraft.isEmpty
             || !draft.isEmpty || quickAddScheduleOverride != nil
             || showQuickAddSchedule || showQuickAddProperties
+    }
+
+    private var quickAddDisplayMode: QuickAddDisplayMode {
+        QuickAddDisplayMode(rawValue: quickAddDisplayModeRaw) ?? .compact
     }
 
     private func quickAddScheduleTask(in scope: TaskListScope) -> Task {
@@ -848,6 +862,7 @@ struct TaskListView: View {
         quickAddPriorityOverride = nil
         quickAddListOverride = nil
         quickAddTagsOverride = nil
+        quickAddAttachments.removeAll()
         descriptionDraft = ""
         descriptionFocused = false
         candidate.reset()
@@ -1257,11 +1272,15 @@ struct TaskListView: View {
             dismissedTokenIDs: dismissedQuickAddTokens, scheduleOverride: quickAddScheduleOverride,
             priorityOverride: quickAddPriorityOverride, listOverride: quickAddListOverride,
             tagsOverride: quickAddTagsOverride)
-        let created = workspace.submitCapture(capture, defaultDueAt: quickAddDefaultDue(for: scope)).count
+        let createdIDs = workspace.submitCapture(capture, defaultDueAt: quickAddDefaultDue(for: scope))
 
         // Keep the draft available if creation is rejected; Flutter follows
         // the same rule and only resets after TaskCreator reports success.
-        guard created > 0 else { return }
+        guard let firstID = createdIDs.first else { return }
+        // 属性菜单里选的附件在创建成功后挂到新任务（批量时其余行不带附件）。
+        if !quickAddAttachments.isEmpty, let task = workspace.task(for: firstID) {
+            workspace.setAttachments(firstID, task.attachments + quickAddAttachments)
+        }
         clearQuickAddDraft()
         quickAddEscapePrimed = false
         // 描述行也能提交，提交后焦点必须回到标题，否则下一次输入无处可去。

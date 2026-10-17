@@ -110,6 +110,7 @@ ln -s "$XCTEST_SUPPORT" "$BUNDLE/Contents/Frameworks/libXCTestSwiftSupport.dylib
 # storage separate from the user's app; explicitly supplied fixture paths still work.
 RUNNER="$WORK/WorkFollowTestsRunner.app"
 mkdir -p "$RUNNER/Contents/MacOS" "$WORK/storage"
+ln -s "$APP/Contents/Resources" "$RUNNER/Contents/Resources"
 cp "$(xcrun --find xctest)" "$RUNNER/Contents/MacOS/xctest"
 # Preserve the built app's declarations so tests can verify its URL schemes.
 cp "$APP/Contents/Info.plist" "$RUNNER/Contents/Info.plist"

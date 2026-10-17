@@ -51,13 +51,15 @@ extension NativeTextView {
                                 storage: NSAttributedString, dirtyRect: NSRect) {
         let accent = NSColor(WFColors.accent)
         let centerY = (lineRect.minY + lineRect.maxY) / 2
-        // 三种标记统一在文字左侧 7pt 处右对齐（lineRect.minX 是首字形的起点），
-        // 住在列表段落自己的缩进沟槽里，不再留出大段空白。
-        let markerRightEdge = lineRect.minX - 7
+        // 三种标记与段落文字**左对齐**：滴答实测圆点墨迹 x19..24、有序编号 x19..28.5、
+        // 列表文字 x34，正文与标题文字也起于 x19——标记对齐的是文字左缘，不是右对齐成一列。
+        // 段落文字起点 = 首字形起点 − 列表文字缩进（lineRect.minX 是首字形起点）。
+        let markerOrigin = lineRect.minX - DocumentEditorGeometry.listTextIndent
+            + DocumentEditorGeometry.listMarkerOpticalOffset
         switch kind {
         case .bullet:
             let radius: CGFloat = 2.6
-            let dot = NSRect(x: markerRightEdge - radius * 2, y: centerY - radius, width: radius * 2, height: radius * 2)
+            let dot = NSRect(x: markerOrigin, y: centerY - radius, width: radius * 2, height: radius * 2)
             guard dot.intersects(dirtyRect), let context = NSGraphicsContext.current?.cgContext else { return }
             context.setFillColor(accent.cgColor)
             context.fillEllipse(in: dot)
@@ -66,12 +68,12 @@ extension NativeTextView {
             let marker = "\(ordinal)." as NSString
             let font = NSFont.systemFont(ofSize: 14)
             let size = marker.size(withAttributes: [.font: font])
-            let frame = NSRect(x: markerRightEdge - size.width, y: lineRect.minY + (lineRect.height - size.height) / 2,
+            let frame = NSRect(x: markerOrigin, y: lineRect.minY + (lineRect.height - size.height) / 2,
                                width: size.width, height: size.height)
             guard frame.intersects(dirtyRect) else { return }
             marker.draw(at: frame.origin, withAttributes: [.font: font, .foregroundColor: accent])
         case .checklist(let checked):
-            let frame = NSRect(x: markerRightEdge - 12.96, y: centerY - 6.5, width: 12.96, height: 12.96)
+            let frame = NSRect(x: markerOrigin, y: centerY - 6.5, width: 12.96, height: 12.96)
             guard frame.intersects(dirtyRect) else { return }
             drawCheckbox(checked: checked, frame: frame)
         default:

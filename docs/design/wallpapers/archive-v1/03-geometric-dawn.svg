@@ -1,0 +1,80 @@
+<svg width="1600" height="1000" viewBox="0 0 1600 1000" xmlns="http://www.w3.org/2000/svg">
+  <!-- WorkFollow 动态壁纸 · 晨山几何 (Geometric Dawn)
+       设计语言：几何化的同心山峦（紫系递进）+ 琥珀朝阳缓升 + 青色薄云横移
+       + 星点呼吸。安静、有纵深，和 app 的圆角几何语言同源。 -->
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#F6F7FF"/>
+      <stop offset="55%" stop-color="#EEF0FF"/>
+      <stop offset="100%" stop-color="#FDF4E3"/>
+    </linearGradient>
+    <radialGradient id="sunGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#F5B800" stop-opacity="0.85"/>
+      <stop offset="45%" stop-color="#F5B800" stop-opacity="0.30"/>
+      <stop offset="100%" stop-color="#F5B800" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="sunCore" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#FFCC2E"/>
+      <stop offset="100%" stop-color="#F5B800"/>
+    </radialGradient>
+  </defs>
+
+  <rect width="1600" height="1000" fill="url(#sky)"/>
+
+  <!-- 星点：上缘散布，呼吸闪烁（错峰） -->
+  <g fill="#5B5CEB">
+    <circle cx="210" cy="150" r="2.6" opacity="0.35">
+      <animate attributeName="opacity" values="0.15;0.75;0.15" dur="7s" begin="0s" repeatCount="indefinite"/>
+    </circle>
+    <circle cx="540" cy="90" r="2.2" opacity="0.3">
+      <animate attributeName="opacity" values="0.1;0.6;0.1" dur="9s" begin="-3s" repeatCount="indefinite"/>
+    </circle>
+    <circle cx="1030" cy="120" r="2.8" opacity="0.3">
+      <animate attributeName="opacity" values="0.12;0.7;0.12" dur="8s" begin="-5s" repeatCount="indefinite"/>
+    </circle>
+    <circle cx="1370" cy="200" r="2.2" opacity="0.3">
+      <animate attributeName="opacity" values="0.1;0.55;0.1" dur="10s" begin="-2s" repeatCount="indefinite"/>
+    </circle>
+    <circle cx="860" cy="180" r="2" opacity="0.3">
+      <animate attributeName="opacity" values="0.12;0.6;0.12" dur="11s" begin="-7s" repeatCount="indefinite"/>
+    </circle>
+  </g>
+
+  <!-- 朝阳：缓升 + 光晕呼吸 -->
+  <g>
+    <circle cx="800" cy="520" r="340" fill="url(#sunGlow)">
+      <animate attributeName="opacity" values="0.85;1;0.85" dur="14s" repeatCount="indefinite"/>
+    </circle>
+    <circle cx="800" cy="520" r="88" fill="url(#sunCore)">
+      <animateTransform attributeName="transform" type="translate"
+        values="0 26; 0 -10; 0 26" dur="26s" repeatCount="indefinite"/>
+    </circle>
+  </g>
+
+  <!-- 青云：两道薄带反向横移 -->
+  <g opacity="0.5">
+    <rect x="180" y="300" width="360" height="16" rx="8" fill="#08C4EF" opacity="0.45">
+      <animateTransform attributeName="transform" type="translate"
+        values="0 0; 160 0; 0 0" dur="34s" repeatCount="indefinite"/>
+    </rect>
+    <rect x="1050" y="380" width="300" height="14" rx="7" fill="#08C4EF" opacity="0.35">
+      <animateTransform attributeName="transform" type="translate"
+        values="0 0; -140 0; 0 0" dur="40s" repeatCount="indefinite"/>
+    </rect>
+  </g>
+
+  <!-- 山峦四层：由远及近，紫系递进 -->
+  <path d="M0 640 Q 260 470 520 620 Q 700 720 900 610 Q 1150 470 1400 620 Q 1510 690 1600 650 L1600 1000 L0 1000 Z"
+        fill="#E0E2F9"/>
+  <path d="M0 720 Q 300 560 640 700 Q 880 800 1120 680 Q 1330 580 1600 720 L1600 1000 L0 1000 Z"
+        fill="#BFC1F4"/>
+  <path d="M0 820 Q 340 660 700 790 Q 980 880 1240 770 Q 1440 690 1600 800 L1600 1000 L0 1000 Z"
+        fill="#8A8CEA"/>
+  <path d="M0 910 Q 380 780 780 880 Q 1080 950 1320 870 Q 1480 820 1600 880 L1600 1000 L0 1000 Z"
+        fill="#5B5CEB"/>
+
+  <!-- 前缘平线：绿意一笔（呼应 tileGreen），极缓呼吸 -->
+  <rect x="0" y="962" width="1600" height="8" fill="#04CF9C" opacity="0.55">
+    <animate attributeName="opacity" values="0.4;0.62;0.4" dur="18s" repeatCount="indefinite"/>
+  </rect>
+</svg>

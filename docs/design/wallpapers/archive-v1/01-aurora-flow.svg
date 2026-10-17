@@ -1,0 +1,71 @@
+<svg width="1600" height="1000" viewBox="0 0 1600 1000" xmlns="http://www.w3.org/2000/svg">
+  <!-- WorkFollow 动态壁纸 · 极光流 (Aurora Flow)
+       设计语言：app 配色（主紫 #5B5CEB / 青 #08C4EF / 绿 #04CF9C / 琥珀 #F5B800），
+       大半径柔光斑缓慢漂移、呼吸——安静不抢内容，适合做工作区背景。
+       动画为 SVG SMIL，浏览器直接打开即见；静态预览（首帧）也是完整构图。 -->
+  <defs>
+    <radialGradient id="gA" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#5B5CEB" stop-opacity="0.50"/>
+      <stop offset="60%" stop-color="#5B5CEB" stop-opacity="0.16"/>
+      <stop offset="100%" stop-color="#5B5CEB" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="gB" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#08C4EF" stop-opacity="0.55"/>
+      <stop offset="65%" stop-color="#08C4EF" stop-opacity="0.12"/>
+      <stop offset="100%" stop-color="#08C4EF" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="gC" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#04CF9C" stop-opacity="0.38"/>
+      <stop offset="65%" stop-color="#04CF9C" stop-opacity="0.10"/>
+      <stop offset="100%" stop-color="#04CF9C" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="gD" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#F5B800" stop-opacity="0.38"/>
+      <stop offset="70%" stop-color="#F5B800" stop-opacity="0.07"/>
+      <stop offset="100%" stop-color="#F5B800" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="veil" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#F6F7FF" stop-opacity="0.9"/>
+      <stop offset="75%" stop-color="#F6F7FF" stop-opacity="0.35"/>
+      <stop offset="100%" stop-color="#F6F7FF" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <rect width="1600" height="1000" fill="#F6F7FF"/>
+
+  <!-- 主紫：左上方，缓慢漂移 + 呼吸 -->
+  <g>
+    <circle cx="380" cy="300" r="430" fill="url(#gA)">
+      <animateTransform attributeName="transform" type="translate"
+        values="0 0; 150 90; 40 150; 0 0" dur="26s" repeatCount="indefinite"/>
+      <animate attributeName="opacity" values="0.95;0.72;0.9;0.95" dur="26s" repeatCount="indefinite"/>
+    </circle>
+  </g>
+
+  <!-- 青：右上方，反向漂移 -->
+  <g>
+    <circle cx="1180" cy="320" r="400" fill="url(#gB)">
+      <animateTransform attributeName="transform" type="translate"
+        values="0 0; -140 110; -40 -60; 0 0" dur="32s" repeatCount="indefinite"/>
+    </circle>
+  </g>
+
+  <!-- 绿：下方中部 -->
+  <g>
+    <circle cx="820" cy="830" r="360" fill="url(#gC)">
+      <animateTransform attributeName="transform" type="translate"
+        values="0 0; 130 -90; -70 -40; 0 0" dur="30s" repeatCount="indefinite"/>
+    </circle>
+  </g>
+
+  <!-- 琥珀：右下角，最慢 -->
+  <g>
+    <circle cx="1440" cy="800" r="340" fill="url(#gD)">
+      <animateTransform attributeName="transform" type="translate"
+        values="0 0; -110 -70; 60 -30; 0 0" dur="38s" repeatCount="indefinite"/>
+    </circle>
+  </g>
+
+  <!-- 中央柔纱：让画面中区保持安静（工作区文字放得下） -->
+  <circle cx="760" cy="470" r="430" fill="url(#veil)"/>
+</svg>

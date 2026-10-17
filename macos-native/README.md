@@ -30,6 +30,16 @@ open /private/tmp/workfollow-native-build/Build/Products/Debug/WorkFollow.app
 
 `TaskWorkspaceModel` 通过 `TaskActions` 操作 `WorkspaceStore`，列表来自 Domain 投影。首次启动无快照时载入示例任务；后续编辑同步原子保存至独立 `Application Support/WorkFollowNativePreview/workspace.json`，重启重载，读取失败会停止自动保存并提示。附件副本也存于该独立目录。不读取 Flutter 正式任务、笔记或附件。
 
+## 会议实时转写
+
+内置会议扩展使用 `qwen-audio-3.1-asr-flash-streaming` 持续转写；Pi 管理音频连接与认证。会议设置分别选择转写模型和纪要文字模型，纪要模型留空沿用 Pi 当前文字模型。点击“生成/更新纪要”只处理新增定稿，讲话人暂未区分。
+
+录音保存在模块数据目录的 `meeting-audio/<会议ID>/`：原始麦克风音频为 CAF，转写输入为 16kHz 单声道 PCM16 WAV。停止后点击“录音文件”在 Finder 查看。转写连接失败或积压时仅暂停转写，本地录音继续；暂停/继续分别保存新文件。复测工具与验收见 [本地录音方案](../docs/meeting-local-recording-2026-10-13.md)。
+
+在已有百炼 provider 注册实时模型：`node macos-native/scripts/register-meeting-asr.mjs --provider <名称> --apply`。旧内置 `qwen-audio-3.1-asr-flash` 配置读取时迁移到同 provider 的 Streaming 模型；如需继续使用 HTTP 分段转写，在新转写模型字段中明确选择旧模型。
+
+实现及验证范围见 [实施计划](../docs/meeting-realtime-plan-2026-10-13.md) 和 [验收记录](../docs/meeting-realtime-acceptance-2026-10-13.md)。
+
 后续范围与验收记录见 [迁移计划](../docs/native-migration-plan.md) 和 [行为基线](../docs/ticktick-parity-matrix.md)。
 
 ## Domain / Task List 与测试

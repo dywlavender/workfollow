@@ -80,12 +80,28 @@
 - `SchedulePopoverContractTests` 的旧自然增高断言改为固定尺寸；Draft、Atomic Commit、Expanded Section、Interaction 和主面板 Render 定向回归通过。
 - 旧内部展开截图记录仅作历史，不再表示当前合同通过。本轮新构建实机验证时间子卡片位于属性行下方、覆盖后续属性并越过父框底边；选择12:00只更新Draft并关闭子卡片。此前真实Hover/Escape缺口不自动关闭。
 
+## LIST 列几何对齐（2026-10-17）
+
+- 同窗口 AX 实测：滴答导航 `AXScrollArea @62,45 212x839`，列表 `AXScrollArea @274,137 358x751`、`AXOutline @273,136 360x2684`；本地列表原为 340 宽、起点 276（任务页两处 `Divider()` 在 `HStack` 各占 1pt）。
+- 改动：`WFMetrics.listPreferred` 340 → 360；任务页两处列分隔线改为 `ShellColumnSeparator` 覆盖绘制，不参与布局。
+- 结果：本地 `AXOutline @274,130 360x762`，起点与宽度均与滴答一致；分隔线像素落在 273..274，压在导航列最后一像素上。
+- 焦点页仍保留原 `Divider()`：其渲染矩阵按含 1pt 分隔线的布局标定，本笔不重标定。
+- 回归：全量 1381 tests / 5 skipped / 0 failures；`TaskTreeGeometryContractTests`、`TaskInspectorShellContractTests`、`TaskInspectorHierarchyRenderTests` 定向通过。
+
+## 导航列行内几何（2026-10-17）
+
+- 滴答 AX 实测（同窗口）：行 `@62` 宽 212；智能清单图标框 `@81,53 22x22`、文字 `@109`；清单行色点框 `@69 14x14`、文字 `@81`；计数右缘约 257；选中底色像素范围 70..265.5（行内缩进 8，宽 195.5）。
+- 本地改动：智能清单图标框 18 → 22（字号 14 → 16）、间距 8 → 6、左内缩 8 → 11；清单行色点框 10、间距 2、去掉额外左内缩；标签/过滤器/新建过滤器行统一为 12 图标框、零间距。
+- 截图像素复核：图标框 81..103（墨迹 83..101）、文字起 110.5（滴答 109）；清单色点 70..80、文字 82（滴答 81）；选中底 70..266（滴答 70..265.5）。
+- 行高 35 → 38（`NavigationMetrics.rowHeight`），与滴答 `AXRow 212x38` 一致；清单、标签、过滤器分组去掉 4pt 额外行间距改为紧邻，智能清单行步长回到 38。清单行步长 44（38+6），多出的 6pt 是拖拽插入条，保留可命中高度未压到 0。
+- 归档行、文件夹行保留各自层级符号与缩进，未按本规则改动。
+
 ## 后续提交（未完成）
 
 弹框横向收敛先遵循 [Native 弹框架构审计与统一契约](native-popup-architecture-audit.md)；其中 POP-001～007 区分事实与风险，规定六类呈现策略及保留既有合同测试的迁移顺序。不得在后续 Task/Notes 重构中丢弃日期固定外框、Draft隔离、Focus锚点和编辑器焦点规则。
 
 2. **DATE Round 2 剩余验收：** 复核真实键盘 Escape 与窗口激活的关系，再关闭上述实机 Gap。
-3. **Commit 4 / QA-001～002：** 四枚 priority flags、List/Tags/Attachment/Template、独立输入框设置；需要属性菜单参考图。
-4. **Commit 5 / SLASH-TASK-001：** Task DocumentProfile 命令顺序/分组/图标，不把任务分支塞进 Editor Core；需要 Slash 参考图。
+3. **Commit 4 / QA-001～002：** 属性菜单参考已采（`docs/audits/ticktick-rea-2026-10-16/inspector-evidence-plan.md` A1：触发路径、优先级四枚横排、清单/标签子菜单、模板面板、输入框设置两种模式）。本地"添加任务行"已有属性浮层（`QuickAddPropertiesPopover`：优先级/清单/标签/模板），已补齐「附件」与「输入框设置」（简洁/详细）。2026-10-17 同窗口实测项序：优先级 → 收集箱 › → 标签 › → 附件（无 ›，直接选文件）→ 从模板添加 › → 输入框设置 ›（齿轮图标，位于菜单最底部）；附件经系统文件面板进入草稿、提交后挂到首个任务，输入框设置以 `@AppStorage("quickAddDisplayMode")` 持久化、详细模式常显日期与属性入口。
+4. **Commit 5 / SLASH-TASK-001：** 已收口——命令清单/顺序/文案/图标/分节/几何均与滴答实测对齐（[native-task-slash-contract](native-task-slash-contract.md) 状态行）；像素级 1–4pt 精调与子任务级菜单仍未签。
 
 这份契约替代 `native-parity-contract.md` 中旧 Inspector Round 1 的 Header Reminder/文字空态要求；历史记录保留，不将旧结论继续当作当前目标。

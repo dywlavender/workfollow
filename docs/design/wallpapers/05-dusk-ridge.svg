@@ -1,0 +1,117 @@
+<svg width="1600" height="1000" viewBox="0 0 1600 1000" xmlns="http://www.w3.org/2000/svg">
+  <!-- WorkFollow 动态壁纸 · 暮色山脊 v2
+       macOS Sonoma 式层叠山峦暮色。构图：落日半沉在远山后，七层渐变山，
+       水面倒影与波光。动画：光晕呼吸、星点闪烁、云带缓移、波光错峰。 -->
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#2B2244"/>
+      <stop offset="26%" stop-color="#5C3F7E"/>
+      <stop offset="48%" stop-color="#A85E85"/>
+      <stop offset="64%" stop-color="#E08A6E"/>
+      <stop offset="78%" stop-color="#F7B26B"/>
+      <stop offset="100%" stop-color="#FFD9A0"/>
+    </linearGradient>
+    <radialGradient id="sunHalo" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#FFE9C4" stop-opacity="0.85"/>
+      <stop offset="35%" stop-color="#FFC97E" stop-opacity="0.42"/>
+      <stop offset="100%" stop-color="#FFB347" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="sunCore" cx="50%" cy="45%" r="55%">
+      <stop offset="0%" stop-color="#FFF6DE"/>
+      <stop offset="70%" stop-color="#FFC964"/>
+      <stop offset="100%" stop-color="#FFAE45"/>
+    </radialGradient>
+    <linearGradient id="r1" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#9A6BAE"/><stop offset="100%" stop-color="#7A5492"/>
+    </linearGradient>
+    <linearGradient id="r2" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#7A5492"/><stop offset="100%" stop-color="#5D3F76"/>
+    </linearGradient>
+    <linearGradient id="r3" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#5D3F76"/><stop offset="100%" stop-color="#452F5C"/>
+    </linearGradient>
+    <linearGradient id="r4" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#3A2A50"/><stop offset="100%" stop-color="#291E3C"/>
+    </linearGradient>
+    <linearGradient id="r5" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#221A38"/><stop offset="100%" stop-color="#151024"/>
+    </linearGradient>
+    <linearGradient id="water" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#4A3560"/>
+      <stop offset="40%" stop-color="#33254A"/>
+      <stop offset="100%" stop-color="#191228"/>
+    </linearGradient>
+    <linearGradient id="reflect" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#FFC964" stop-opacity="0.55"/>
+      <stop offset="100%" stop-color="#FFAE45" stop-opacity="0"/>
+    </linearGradient>
+    <clipPath id="waterClip"><rect x="0" y="862" width="1600" height="138"/></clipPath>
+  </defs>
+
+  <rect width="1600" height="1000" fill="url(#sky)"/>
+
+  <!-- 星点（深空区） -->
+  <g fill="#FFF6DE">
+    <circle cx="150" cy="80" r="2.4"><animate attributeName="opacity" values="0.2;0.9;0.2" dur="6s" begin="-1s" repeatCount="indefinite"/></circle>
+    <circle cx="330" cy="140" r="1.8"><animate attributeName="opacity" values="0.15;0.7;0.15" dur="8s" begin="-4s" repeatCount="indefinite"/></circle>
+    <circle cx="520" cy="60" r="2.2"><animate attributeName="opacity" values="0.2;0.8;0.2" dur="7s" begin="-2s" repeatCount="indefinite"/></circle>
+    <circle cx="620" cy="150" r="1.6"><animate attributeName="opacity" values="0.15;0.6;0.15" dur="9s" begin="-6s" repeatCount="indefinite"/></circle>
+    <circle cx="980" cy="70" r="2.4"><animate attributeName="opacity" values="0.2;0.85;0.2" dur="7.5s" begin="-3s" repeatCount="indefinite"/></circle>
+    <circle cx="1240" cy="120" r="1.8"><animate attributeName="opacity" values="0.15;0.65;0.15" dur="8.5s" begin="-5s" repeatCount="indefinite"/></circle>
+    <circle cx="1430" cy="80" r="2.2"><animate attributeName="opacity" values="0.2;0.8;0.2" dur="6.5s" begin="-2.5s" repeatCount="indefinite"/></circle>
+    <circle cx="1555" cy="180" r="1.6"><animate attributeName="opacity" values="0.12;0.55;0.12" dur="10s" begin="-7s" repeatCount="indefinite"/></circle>
+  </g>
+
+  <!-- 薄云：细长柔和，缓移 -->
+  <g>
+    <ellipse cx="430" cy="330" rx="260" ry="9" fill="#FFD9A0" opacity="0.16">
+      <animateTransform attributeName="transform" type="translate" values="0 0; 110 5; 0 0" dur="32s" repeatCount="indefinite"/>
+    </ellipse>
+    <ellipse cx="1230" cy="400" rx="220" ry="8" fill="#FFC97E" opacity="0.13">
+      <animateTransform attributeName="transform" type="translate" values="0 0; -90 6; 0 0" dur="38s" repeatCount="indefinite"/>
+    </ellipse>
+    <ellipse cx="770" cy="230" rx="180" ry="7" fill="#E08A6E" opacity="0.20">
+      <animateTransform attributeName="transform" type="translate" values="0 0; 80 -4; 0 0" dur="35s" repeatCount="indefinite"/>
+    </ellipse>
+  </g>
+
+  <!-- 落日：半沉在远山后，光晕呼吸 -->
+  <circle cx="830" cy="560" r="300" fill="url(#sunHalo)">
+    <animate attributeName="opacity" values="0.85;1;0.85" dur="13s" repeatCount="indefinite"/>
+  </circle>
+  <circle cx="830" cy="545" r="105" fill="url(#sunCore)"/>
+
+  <!-- 山峦（由远及近） -->
+  <path d="M0 610 Q 200 545 430 600 Q 640 650 830 595 Q 1060 530 1280 600 Q 1450 655 1600 600 L1600 1000 L0 1000 Z" fill="url(#r1)"/>
+  <path d="M0 675 Q 260 595 520 665 Q 760 725 980 655 Q 1200 590 1420 665 Q 1520 695 1600 668 L1600 1000 L0 1000 Z" fill="url(#r2)"/>
+  <path d="M0 745 Q 300 660 600 735 Q 860 795 1100 718 Q 1330 650 1600 740 L1600 1000 L0 1000 Z" fill="url(#r3)"/>
+
+  <!-- 水面 -->
+  <rect x="0" y="860" width="1600" height="140" fill="url(#water)"/>
+
+  <!-- 太阳倒影 + 波光（裁进水域） -->
+  <g clip-path="url(#waterClip)">
+  <!-- 倒影光柱：上宽下窄，消掉椭圆弧边 -->
+  <path d="M 715 862 L 945 862 L 893 1000 L 767 1000 Z" fill="url(#reflect)"/>
+  <g fill="#FFC964">
+    <rect x="780" y="872" width="200" height="4" rx="2" opacity="0.5">
+      <animate attributeName="opacity" values="0.3;0.65;0.3" dur="5s" begin="0s" repeatCount="indefinite"/>
+      <animateTransform attributeName="transform" type="translate" values="0 0; 14 0; 0 0" dur="9s" repeatCount="indefinite"/>
+    </rect>
+    <rect x="812" y="906" width="140" height="3.5" rx="1.75" opacity="0.4">
+      <animate attributeName="opacity" values="0.25;0.55;0.25" dur="6s" begin="-2s" repeatCount="indefinite"/>
+      <animateTransform attributeName="transform" type="translate" values="0 0; -16 0; 0 0" dur="11s" repeatCount="indefinite"/>
+    </rect>
+    <rect x="755" y="944" width="225" height="3" rx="1.5" fill="#FFAE45" opacity="0.3">
+      <animate attributeName="opacity" values="0.2;0.45;0.2" dur="7s" begin="-4s" repeatCount="indefinite"/>
+      <animateTransform attributeName="transform" type="translate" values="0 0; 20 0; 0 0" dur="13s" repeatCount="indefinite"/>
+    </rect>
+    <rect x="825" y="978" width="115" height="3" rx="1.5" fill="#FFAE45" opacity="0.22">
+      <animate attributeName="opacity" values="0.15;0.4;0.15" dur="8s" begin="-1s" repeatCount="indefinite"/>
+    </rect>
+  </g>
+  </g>
+
+  <!-- 最近一层暗山：窄条压底 -->
+  <path d="M0 958 Q 360 928 720 954 Q 1000 972 1260 950 Q 1440 936 1600 952 L1600 1000 L0 1000 Z" fill="url(#r5)"/>
+</svg>

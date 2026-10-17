@@ -85,10 +85,11 @@ struct DocumentProfile {
     }
 
     /// Shared execution adapters, not a Task/Note product ordering policy.
+    /// 分节对齐滴答实测（2026-10-16）：标题｜列表｜格式（引用/分割线）｜插入。
     static func compactDocumentCommands(formatIDs: [String]) -> [DocumentCommand] {
         let formats = formatIDs.compactMap(EditorCommandCatalog.format)
         return formats.map { format in
-            format.slashCommand(group: "格式", useFormatGlyph: true)
+            format.slashCommand(group: slashSection(forFormatID: format.id), useFormatGlyph: true)
         } + [
             DocumentCommand(id: "shared.divider", title: "水平分割线", group: "格式",
                             perform: { $0.insertDocumentDivider() },
@@ -101,6 +102,19 @@ struct DocumentProfile {
                                 view.insertDocumentAttachment(at: invocation.slashOffset)
                             })
         ]
+    }
+
+    /// Slash 菜单分节名：只决定分隔线位置与非 compact 的组文本；
+    /// 与滴答实测的四节（标题｜列表｜格式｜插入）对应（2026-10-16）。
+    private static func slashSection(forFormatID id: String) -> String {
+        switch id {
+        case "format.heading1", "format.heading2", "format.heading3":
+            return "标题"
+        case "format.bullet", "format.ordered", "format.checklist":
+            return "列表"
+        default:
+            return "格式"
+        }
     }
 }
 

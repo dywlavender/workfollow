@@ -99,7 +99,7 @@ final class DocumentFormatStyleTests: XCTestCase {
             XCTAssertTrue(view.undoManager?.canUndo == true)
             view.undo(nil)
             XCTAssertEqual(kinds()[1], .heading(2))
-            XCTAssertEqual((view.typingAttributes[.font] as? NSFont)?.pointSize, 19)
+            XCTAssertEqual((view.typingAttributes[.font] as? NSFont)?.pointSize, 16)
             view.redo(nil)
             XCTAssertEqual(kinds()[1], .paragraph)
             XCTAssertEqual(view.selectedRange(), NSRange(location: 3, length: 0))
@@ -154,13 +154,15 @@ final class DocumentFormatStyleTests: XCTestCase {
         XCTAssertTrue(style.isBlock(.paragraph))
     }
 
-    // MARK: - 标题字阶：22 / 19 / 16，半粗
+    // MARK: - 标题字阶：18 / 16 / 14，粗体
 
-    /// 原版 `WorkFollowMacTypography.documentH1/H2/H3` = 22 / 19 / 16，正文 14；
-    /// 字重是 `semibold`（`document_styles.dart:114`），不是粗体。
-    func testHeadingLevelsRenderAtTheirOwnSizeAndSemiboldWeight() throws {
+    /// 滴答实测（2026-10-16，截图 1px = 1pt）：标题三级 18 / 16 / 14，正文 14；
+    /// 滴答的三级到六级标题是同一字号，所以这里一并锁住 H4 / H6。
+    /// 字重是 **bold**：标题笔画宽/字高比实测 0.20（Bold 0.20、Medium 0.158）。
+    func testHeadingLevelsRenderAtTheirOwnSizeAndBoldWeight() throws {
         let expectations: [(DocumentBlockKind, CGFloat)] = [
-            (.paragraph, 14), (.heading(1), 22), (.heading(2), 19), (.heading(3), 16)
+            (.paragraph, 14), (.heading(1), 18), (.heading(2), 16),
+            (.heading(3), 14), (.heading(4), 14), (.heading(6), 14)
         ]
         for (kind, size) in expectations {
             let rendered = DocumentTextCodec.render(NativeDocument(blocks: [
@@ -172,10 +174,47 @@ final class DocumentFormatStyleTests: XCTestCase {
             let isHeading: Bool = { if case .heading = kind { return true }; return false }()
             if isHeading {
                 XCTAssertEqual(font.fontName,
-                               NSFont.systemFont(ofSize: size, weight: .semibold).fontName,
-                               "\(kind) 应是半粗字面")
+                               NSFont.systemFont(ofSize: size, weight: .bold).fontName,
+                               "\(kind) 应是粗体字面")
             }
         }
+    }
+
+    // MARK: - 段落度量：滴答实测的间距
+
+    /// 行盒由「字体默认行高 + lineSpacing」合成，恒等于目标值，不受字体版本影响；
+    /// 段落基线间距再叠加段间距与相邻两段上伸部差（字号不同时 CoreText 会把下一段的
+    /// ascent 计入），用 ±1pt 容差对齐滴答截图量得的 35 / 32 / 29–30，列表与引用 20。
+    func testParagraphLineBoxesAndPitchesMatchMeasuredTickTickSpacing() throws {
+        func metrics(_ kind: DocumentBlockKind) throws -> (lineBox: CGFloat, spacing: CGFloat, ascent: CGFloat) {
+            let attrs = DocumentTextCodec.attributes(kind: kind, marks: [])
+            let style = try XCTUnwrap(attrs[.paragraphStyle] as? NSParagraphStyle)
+            let font = try XCTUnwrap(attrs[.font] as? NSFont)
+            let natural = font.ascender - font.descender + font.leading
+            return (natural + style.lineSpacing, style.paragraphSpacing, font.ascender)
+        }
+        func pitch(_ from: DocumentBlockKind, _ to: DocumentBlockKind) throws -> CGFloat {
+            let a = try metrics(from), b = try metrics(to)
+            return a.lineBox + a.spacing + (b.ascent - a.ascent)
+        }
+        func lineBox(_ kind: DocumentBlockKind) throws -> CGFloat { try metrics(kind).lineBox }
+
+        XCTAssertEqual(try lineBox(.heading(1)), 1.6 * 18, accuracy: 0.01, "一级标题行盒 28.8")
+        XCTAssertEqual(try lineBox(.heading(2)), 1.6 * 16, accuracy: 0.01, "二级标题行盒 25.6")
+        XCTAssertEqual(try lineBox(.heading(3)), 1.6 * 14, accuracy: 0.01, "三级标题行盒 22.4")
+        XCTAssertEqual(try lineBox(.heading(6)), 1.6 * 14, accuracy: 0.01, "六级标题与三级同盒")
+        XCTAssertEqual(try lineBox(.paragraph), 21, accuracy: 0.01, "正文行盒 1.5 倍字号")
+        for kind in [DocumentBlockKind.bullet, .ordered, .checklist(false), .quote] {
+            XCTAssertEqual(try lineBox(kind), 18, accuracy: 0.01, "\(kind) 行盒 18，配 2pt 段间距得 20")
+        }
+
+        XCTAssertEqual(try pitch(.heading(1), .heading(2)), 35, accuracy: 1, "滴答 35")
+        XCTAssertEqual(try pitch(.heading(2), .heading(3)), 32, accuracy: 1, "滴答 32")
+        // 滴答同一对（14pt 标题之间）两次量得 29（H3→H4）与 30（H4→H5），
+        // 差 1px 是墨迹下边缘抗锯齿的取整噪声，按 30 对齐。
+        XCTAssertEqual(try pitch(.heading(3), .heading(4)), 30, accuracy: 1, "滴答 29–30")
+        XCTAssertEqual(try pitch(.bullet, .ordered), 20, accuracy: 1, "滴答列表 20")
+        XCTAssertEqual(try pitch(.quote, .bullet), 20, accuracy: 1, "滴答引用 20")
     }
 
     /// 用户报的问题：空行上选完标题，**当场**就该按该级别重排，且接着输入的字也
@@ -197,13 +236,13 @@ final class DocumentFormatStyleTests: XCTestCase {
                                                              effectiveRange: nil) as? String)
         XCTAssertEqual(token, "h1", "空行设标题后，文档里那一行当场就该是 h1")
         let font = try XCTUnwrap(view.textStorage?.attribute(.font, at: 6, effectiveRange: nil) as? NSFont)
-        XCTAssertEqual(font.pointSize, 22, "空行那一行当场就该按 22pt 重排")
+        XCTAssertEqual(font.pointSize, 18, "空行那一行当场就该按 18pt 重排")
         let typing = try XCTUnwrap(view.typingAttributes[.font] as? NSFont)
-        XCTAssertEqual(typing.pointSize, 22, "接着输入的字也必须继承标题字号")
+        XCTAssertEqual(typing.pointSize, 18, "接着输入的字也必须继承标题字号")
 
         view.insertText("标题内容", replacementRange: view.selectedRange())
         let typed = try XCTUnwrap(view.textStorage?.attribute(.font, at: 6, effectiveRange: nil) as? NSFont)
-        XCTAssertEqual(typed.pointSize, 22, "实际敲进去的字是 22pt")
+        XCTAssertEqual(typed.pointSize, 18, "实际敲进去的字是 18pt")
     }
 
     /// 文末那个"一个字符都没有"的空段落：级别只存在于输入属性里，模型必须能收到它，
@@ -247,27 +286,11 @@ final class DocumentFormatStyleTests: XCTestCase {
                            onEditingChanged: { _ in })
 
         XCTAssertEqual(view.pendingTrailingBlock, .heading(2))
-        XCTAssertEqual((view.typingAttributes[.font] as? NSFont)?.pointSize, 19)
+        XCTAssertEqual((view.typingAttributes[.font] as? NSFont)?.pointSize, 16)
     }
 
-    /// Markdown 快捷输入：敲完前缀（光标紧跟其后）自动成块，触发串从正文里移除，
-    /// 随后输入的内容落在新块里——与真实打字顺序一致。
-    @MainActor
-    /// Markdown 符号触发已按产品要求移除：段落格式只通过"/"菜单与工具条修改，
-    /// 输入 `# `/`- `/`---` 等前缀必须保持普通文本。
-    func testTypedMarkdownPrefixesStayPlain() {
-        for prefix in ["# ", "## ", "- ", "1. ", "[] ", "> ", "---"] {
-            let view = NativeTextView(frame: .zero, textContainer: nil)
-            view.profile = DocumentProfile(taskSlash: true)
-            view.insertText(prefix, replacementRange: NSRange(location: 0, length: 0))
-            XCTAssertNil(view.pendingTrailingBlock, "\(prefix) 不应触发任何段落类型")
-            let decoded = DocumentTextCodec.decode(view.attributedString(),
-                                                   preserving: NativeDocument(plainText: view.string))
-            XCTAssertEqual(decoded.blocks.map(\.kind), [.paragraph],
-                           "\(prefix) 应保持普通文本，不做格式转换")
-            XCTAssertTrue(view.string.contains(prefix), "\(prefix) 应原样保留在文本里")
-        }
-    }
+    // 键入 `# `/`- [ ] ` 等前缀的行为已按 2026-10-16 口径修订为**输入期转换**
+    // （对齐滴答 8.0.80）：用例见 `MarkdownInputTriggerTests`。
 
     /// 已勾选检查项的置灰与删除线是**展示层**：渲染时写入，解码时不成为用户标记。
     @MainActor
@@ -286,12 +309,12 @@ final class DocumentFormatStyleTests: XCTestCase {
     }
 
     /// "输入的字号"这条链：空段落上设标题走的是 `typingAttributes` 分支，之后真正
-    /// 敲进去的字必须继承该级别字号（三级标题各不相同）。
+    /// 敲进去的字必须继承该级别字号（18 / 16 / 14 各不相同）。
     @MainActor
     func testTypingAfterApplyingAHeadingUsesThatLevelsSize() throws {
         let view = NativeTextView(frame: .zero, textContainer: nil)
         view.profile = DocumentProfile(taskSlash: true)
-        for (level, size) in [(1, CGFloat(22)), (2, CGFloat(19)), (3, CGFloat(16))] {
+        for (level, size) in [(1, CGFloat(18)), (2, CGFloat(16)), (3, CGFloat(14))] {
             view.textStorage?.setAttributedString(DocumentTextCodec.render(NativeDocument(plainText: "")))
             view.setSelectedRange(NSRange(location: 0, length: 0))
             let command = try XCTUnwrap(DocumentFormatCommand.commands.first { $0.block == .heading(level) })

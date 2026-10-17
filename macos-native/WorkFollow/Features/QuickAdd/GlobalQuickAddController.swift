@@ -167,8 +167,14 @@ final class GlobalQuickAddController: NSObject, ObservableObject {
         if created != nil { hidePanel() }
     }
 
-    func submit(_ session: QuickCaptureSession) {
-        if !composer.workspace.submitCapture(session).isEmpty { hidePanel() }
+    func submit(_ session: QuickCaptureSession, attachments: [NativeAttachment] = []) {
+        let ids = composer.workspace.submitCapture(session)
+        guard let first = ids.first else { return }
+        // 属性菜单里选的附件在创建成功后挂到新任务（与列表条同一口径）。
+        if !attachments.isEmpty, let task = composer.workspace.task(for: first) {
+            composer.workspace.setAttachments(first, task.attachments + attachments)
+        }
+        hidePanel()
     }
 
     /// SwiftUI 内容实测高度回传：只改高度，顶边不动，避免面板「跳一下」。
@@ -198,7 +204,9 @@ final class GlobalQuickAddController: NSObject, ObservableObject {
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         let hosting = FirstResponderHostingView(rootView: GlobalQuickAddPanelView(
             composer: composer,
-            submit: { [weak self] session in self?.submit(session) },
+            submit: { [weak self] session, attachments in
+                self?.submit(session, attachments: attachments)
+            },
             close: { [weak self] in self?.hidePanel() },
             onHeightChange: { [weak self] height in
                 // 偏好回调发生在布局过程中，改窗口尺寸要等这一帧排完。
@@ -233,7 +241,7 @@ private struct GlobalPanelHeightKey: PreferenceKey {
 @MainActor
 private struct GlobalQuickAddPanelView: View {
     let composer: GlobalQuickAddComposer
-    let submit: (QuickCaptureSession) -> Void
+    let submit: (QuickCaptureSession, [NativeAttachment]) -> Void
     let close: () -> Void
     let onHeightChange: (CGFloat) -> Void
 
@@ -250,6 +258,10 @@ private struct GlobalQuickAddPanelView: View {
     @State private var priorityOverride: TaskPriority?
     @State private var listOverride: String?
     @State private var tagsOverride: [String]?
+    /// 属性菜单里选好的附件（创建成功后挂到新任务）。
+    @State private var attachmentsOverride: [NativeAttachment] = []
+    /// 输入框显示模式：与列表条共用同一持久化键（「输入框设置」在两端同值）。
+    @AppStorage(QuickAddDisplayMode.defaultsKey) private var displayModeRaw = QuickAddDisplayMode.compact.rawValue
     @State private var showSchedule = false
     @State private var showProperties = false
     @State private var showTemplates = false
@@ -358,7 +370,7 @@ private struct GlobalQuickAddPanelView: View {
                 placeholder: "新建任务：明天下午3点 开会 @工作 !! #周报",
                 tokens: parsed.tokens,
                 focused: $inputFocused,
-                onSubmit: { submit(capture) },
+                onSubmit: { submit(capture, attachmentsOverride) },
                 onEscape: handleEscape,
                 onTab: handleTab,
                 onShiftReturn: openDescription,
@@ -394,9 +406,13 @@ private struct GlobalQuickAddPanelView: View {
                     selectedPriority: priorityOverride ?? parsed.priority,
                     selectedList: listOverride ?? parsed.listName ?? composer.workspace.activeList ?? TaskList.inbox.name,
                     selectedTags: tagsOverride ?? parsed.tags,
+                    attachments: attachmentsOverride,
+                    displayMode: QuickAddDisplayMode(rawValue: displayModeRaw) ?? .compact,
                     onPriority: { priorityOverride = $0; showProperties = false },
                     onList: { listOverride = $0 }, onTags: { tagsOverride = $0 },
                     onTemplate: { showProperties = false; showTemplates = true },
+                    onAttachments: { attachmentsOverride = $0 },
+                    onDisplayMode: { displayModeRaw = $0.rawValue },
                     onDismiss: { showProperties = false })
             })
         }
@@ -413,7 +429,7 @@ private struct GlobalQuickAddPanelView: View {
                 .font(WFType.control)
                 .foregroundStyle(WFColors.text)
                 .focused($descriptionFocused)
-                .onSubmit { submit(capture) }
+                .onSubmit { submit(capture, attachmentsOverride) }
                 .onExitCommand { closeDescriptionRow() }
         }
         .padding(.leading, 24)

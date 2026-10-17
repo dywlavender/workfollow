@@ -5,7 +5,7 @@ import XCTest
 
 @MainActor
 final class QuickAddTemplateRenderTests: XCTestCase {
-    func testPropertiesOnlyExposeFourPrioritiesAndListTagsTemplateAndDispatchOnce() throws {
+    func testPropertiesExposePrioritiesListTagsAttachmentTemplateDisplayModeAndDispatchOnce() throws {
         let workspace = TaskWorkspaceModel(seedDemoData: false)
         var frames: [QuickAddRenderAnchor: CGRect] = [:]
         var applies = 0
@@ -24,13 +24,19 @@ final class QuickAddTemplateRenderTests: XCTestCase {
         window.orderFront(nil)
         defer { window.orderOut(nil) }
         settle(host)
-        XCTAssertEqual(frames.count, 8)
+        // 4 优先级 + 清单 + 标签 + 附件 + 从模板添加 + 输入框设置 + properties。
+        XCTAssertEqual(frames.count, 10)
         XCTAssertEqual(try XCTUnwrap(frames[.properties]).width, 270, accuracy: 0.5)
         let list = try XCTUnwrap(frames[.list])
         let tags = try XCTUnwrap(frames[.tags])
+        let attachment = try XCTUnwrap(frames[.attachment])
+        let displayMode = try XCTUnwrap(frames[.displayMode])
         let template = try XCTUnwrap(frames[.template])
         XCTAssertLessThan(list.maxY, tags.maxY)
-        XCTAssertLessThan(tags.maxY, template.maxY)
+        XCTAssertLessThan(tags.maxY, attachment.maxY)
+        // 滴答实测（2026-10-17）：附件之后是「从模板添加」，输入框设置排在菜单最底部。
+        XCTAssertLessThan(attachment.maxY, template.maxY)
+        XCTAssertLessThan(template.maxY, displayMode.maxY)
         XCTAssertEqual(list.minX, tags.minX, accuracy: 0.1)
         XCTAssertEqual(tags.minX, template.minX, accuracy: 0.1)
         try export(host, name: "quick-add-properties")

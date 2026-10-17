@@ -35,6 +35,9 @@ final class NativeTextView: NSTextView {
     /// 主循环装饰看不见它；列表标记的常驻绘制靠这个级别——光标不在行上时
     /// 项目符号/复选框也要显示。
     var displayedTrailingBlock: DocumentBlockKind?
+    /// 输入期 Markdown 转换（块级/分割线/行内）的重入护栏：`applyFormat` 的
+    /// 替换文本可能再次以触发字符结尾，不能让触发逻辑在替换过程中二次进入。
+    var isApplyingTypedMarkdownInput = false
 
     /// 绑定文档时把模型里的文末级别带回输入属性（由协调器调用），这样切走再回来
     /// 接着在文末输入时，字号与级别都还在。
@@ -97,12 +100,25 @@ final class NativeTextView: NSTextView {
         let target = replacementRange.location == NSNotFound ? selectedRange() : replacementRange
         let replacedSelection = target.length > 0
         let insertedText = insertString as? String
+        // 粘贴的富文本走 `NSAttributedString`：输入期转换按纯文本内容参与
+        // （整串写入口径与块级一致，2026-10-16）；Slash 触发仍只认纯字符串输入。
+        let inputText = insertedText ?? (insertString as? NSAttributedString)?.string
         let trigger: String? = insertedText.flatMap { inserted in
             ["/", "、"].first { $0 == inserted }
         }
         // 真有字进来了，段落样式就由字符承载，"文末待定级别"不再需要。
-        if let insertedText, !insertedText.isEmpty { pendingTrailingBlock = nil }
+        if let inputText, !inputText.isEmpty { pendingTrailingBlock = nil }
         super.insertText(insertString, replacementRange: replacementRange)
+        // 滴答同款 Markdown 输入期转换：块级前缀（空格结尾）与分割线
+        // （2026-10-16 产品口径修订，实现见 `DocumentMarkdownInput.swift`）。
+        if !wasComposing, !replacedSelection, let inputText, !inputText.isEmpty {
+            applyTypedMarkdownInput(inputText)
+        }
+        // 渲染期重解析（2026-10-17 口径）：本次编辑所在段落里的历史字面一并渲染，
+        // 不只"本次输入刚好补全"的那一处。
+        if !wasComposing {
+            reparseInlineMarkdown(paragraphs: [selectedRange()])
+        }
         // `、` is commonly committed by a Chinese IME. Accept that committed
         // single-character insertion even if it replaces the IME's marked text;
         // ordinary replacement of a user selection remains a normal edit.
@@ -178,8 +194,8 @@ final class NativeTextView: NSTextView {
         }
     }
 
-    /// 空的标题/列表行上按回车 → 退回正文（滴答/Quill 同款：再按一次回车退出格式），
-    /// 返回是否已处理。有内容的行回车会延续格式，不走这里。
+    /// 空的标题/列表/代码行上按回车 → 退回正文（滴答/Quill 同款：再按一次回车
+    /// 退出格式），返回是否已处理。有内容的行回车会延续格式，不走这里。
     func exitEmptyBlockOnNewline() -> Bool {
         guard isEditable, !hasMarkedText(), let storage = textStorage else { return false }
         let source = storage.string as NSString
@@ -187,10 +203,10 @@ final class NativeTextView: NSTextView {
         let trailingEmpty = source.length == 0
             || (caret == source.length && source.character(at: source.length - 1) == 0x0A)
         let plain = DocumentTextCodec.attributes(kind: .paragraph, marks: [])
-        // 可退出的块：标题与三类列表（有序/无序/检查项）。
+        // 可退出的块：标题、三类列表（有序/无序/检查项）与代码块。
         func isExitable(_ kind: DocumentBlockKind) -> Bool {
             switch kind {
-            case .heading, .bullet, .ordered, .checklist: return true
+            case .heading, .bullet, .ordered, .checklist, .code: return true
             default: return false
             }
         }
@@ -553,8 +569,16 @@ final class NativeTextView: NSTextView {
 
     override func paste(_ sender: Any?) {
         if insertPastedImage() { return }
+        // NSTextView 默认 `paste` 不经过 `insertText`，输入期 Markdown 转换与 Slash
+        // 触发都会绕过；纯文本粘贴改走 `insertText`，与逐键输入同一条路径
+        // （整串写入口径：以标记字符结尾时转最近一处闭合）。富文本按纯文本粘贴。
+        if let text = NSPasteboard.general.string(forType: .string), !text.isEmpty {
+            insertText(text, replacementRange: selectedRange())
+            return
+        }
         super.paste(sender)
     }
+
 
     /// 剪贴板带位图（且不是 Finder 文件）时转 data URL 附件块插入；返回是否已处理。
     /// NativeDocument 没有独立图片块类型，按迁移决策用附件 run 承载 data URL

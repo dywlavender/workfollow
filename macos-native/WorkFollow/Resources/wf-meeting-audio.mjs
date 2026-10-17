@@ -43,6 +43,12 @@ export function realtimeURL(baseUrl, model) {
   return url.toString();
 }
 
+export function asrStreamingURL(baseUrl) {
+  const url = new URL(realtimeURL(baseUrl, ''));
+  url.pathname = '/api-ws/v1/inference'; url.search = '';
+  return url.toString();
+}
+
 export function parseTranscript(text, duration) {
   const cleaned = text.trim().replace(/^```(?:json)?\s*/, '').replace(/\s*```$/, '');
   let result;
@@ -132,18 +138,18 @@ export function runRealtime({url, apiKey, headers = {}, pcm, instructions, text,
 }
 
 /**
- * 唯一模型来源：Pi 的当前模型（由 `--model` 指定，或 Pi 自己已选的那个）。
- *
- * 2026-10-06 用户决定「纪要和转写用同一个模型」：原先这里按硬编码 id
- * `qwen3.8-omni-flash-realtime` 去注册表里找模型，现已删掉——模型改由会议设置里的
- * 「模型标识」决定。实时模型走 WebSocket，已适配的 ASR 模型走 HTTP；
- * 两者端点与认证都只从 Pi 获取，不隐式更换模型。
+ * Native selects the transcription model for this Pi process. Endpoint and
+ * authentication come from Pi's registry; minutes run in a separate process.
  */
 export async function audioModel(ctx) {
   const model = ctx.model;
   if (!model?.id) throw new Error('Pi 未选择模型，请在会议设置里填写模型标识。');
   const auth = await ctx.modelRegistry.getApiKeyAndHeaders(model);
   if (!auth.ok || !auth.apiKey) throw new Error('Pi 模型认证未配置。');
+  if(/^qwen-audio-3\.[01]-asr-flash-streaming$/.test(model.id)) {
+    return {url:asrStreamingURL(auth.baseUrl??model.baseUrl),apiKey:auth.apiKey,
+      headers:auth.headers,modelID:model.id,transport:'asr-stream'};
+  }
   if(model.id===httpASRModel) {
     const url=new URL(realtimeURL(auth.baseUrl??model.baseUrl,model.id));
     url.protocol='https:';url.pathname='/api/v1/services/aigc/multimodal-generation/generation';url.search='';
@@ -161,6 +167,12 @@ export default function meetingAudioExtension(pi, {resolveAudioModel = audioMode
         const connection=await resolveAudioModel(ctx);
         // HTTP has no persistent session handshake. This verifies Pi model/auth only.
         if(connection.transport==='http') { ctx.ui.notify('WF_MEETING_READY http-configured','info');return; }
+        if(connection.transport==='asr-stream') {
+          const {MeetingASRInputStream}=await import('./wf-meeting-asr-stream.mjs');
+          const stream=new MeetingASRInputStream({...connection,emit:()=>{},timeoutMs:15000});
+          try{await stream.ready;await stream.finish();}finally{stream.cancel();}
+          ctx.ui.notify('WF_MEETING_READY connected','info');return;
+        }
         await realtime({...connection, probe: true, timeoutMs: 15000,
           instructions: '仅检查会话配置，不执行推理。'});
         ctx.ui.notify('WF_MEETING_READY connected', 'info');
@@ -179,6 +191,7 @@ export default function meetingAudioExtension(pi, {resolveAudioModel = audioMode
           return;
         }
         const connection = await resolveAudioModel(ctx);
+        if(connection.transport==='asr-stream')throw new Error('Pi 专用实时 ASR 需要常驻流式通道，请使用内置实时转写。');
         const result = connection.transport==='http'
           ? await http({...connection,pcm})
           : parseTranscript(await realtime({...connection, pcm, instructions: transcriptionInstructions(input.duration)}),input.duration);
@@ -200,7 +213,7 @@ export default function meetingAudioExtension(pi, {resolveAudioModel = audioMode
         }
         const rules = meetingMinutesRules();
         const connection=await resolveAudioModel(ctx);
-        if(connection.transport==='http')throw new Error('当前 ASR 模型只支持音频转写，不能生成纪要；可手动编辑纪要，或另行配置文本生成模型。');
+        if(connection.transport==='http'||connection.transport==='asr-stream')throw new Error('当前 ASR 模型只支持音频转写，不能生成纪要；请单独配置纪要文字模型。');
         // 实时模型的纪要走同一会话的文本通道；HTTP ASR 不支持纪要生成。
         // 2026-10-06 起不再有 `modelRegistry.complete` 分支。
         const output = await realtime({...connection, text: input.prompt,

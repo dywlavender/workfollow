@@ -3,6 +3,7 @@ import {createRequire} from 'node:module';
 import {realpathSync} from 'node:fs';
 import {randomUUID} from 'node:crypto';
 import {audioModel,validateAudio} from './wf-meeting-audio.mjs';
+import {MeetingASRInputStream} from './wf-meeting-asr-stream.mjs';
 
 // 语义化常量（MEETING-AUDIO-002）：停止时补的静音必须**长于** VAD 静音门限，
 // 否则最后一句话可能因 VAD 未闭合而丢失（旧实现补 700ms < 门限 800ms）。
@@ -25,7 +26,7 @@ export class MeetingInputStream {
     this.timer=setTimeout(()=>this.fail('Pi 流式转写连接超时。'),timeoutMs);
     this.socket.addEventListener('open',()=>this.send({type:'session.update',session:{
       modalities:['text'],instructions:'只进行输入音频转写，不自行回答或调用工具。',
-      // 转写与纪要共用同一个模型；ASR 子模型不再写死 qwen3-asr-flash-realtime。
+      // This process owns only transcription; minutes select their own model.
       input_audio_transcription:{model:modelID},
       turn_detection:{type:'server_vad',threshold:0.2,prefix_padding_ms:500,silence_duration_ms:vadSilenceDurationMs,create_response:false,interrupt_response:false},
       audio:{input:{format:{type:'pcm',sample_rate:16000,sample_format:'s16le',channels:1,packing:'interleaved',channel_layout:'mono'}}}
@@ -59,7 +60,8 @@ export class MeetingInputStream {
     }else if(event.type==='input_audio_buffer.committed'){
       this.bytesSinceCommit=0;
       if(!this.completed.has(id))this.pending.add(id);
-    }else if(event.type==='conversation.item.input_audio_transcription.delta'){
+    }else if(event.type==='conversation.item.input_audio_transcription.delta'||
+             event.type==='conversation.item.input_audio_transcription.text'){
       if(this.completed.has(id))return;
       this.pending.add(id);
       this.emit({kind:'preview',itemID:id,text:(event.text??'')+(event.stash??''),offset:this.starts.get(id)??this.offset});
@@ -125,14 +127,17 @@ export class MeetingInputStream {
   cancel(){this.fail('Pi 流式会话已取消。');}
 }
 
-export default function extension(pi){
+export default function extension(pi,{resolveAudioModel=audioModel,socketFactory}={}){
   let stream;
   pi.registerCommand('wf-meeting-stream',{description:'Memory-only streaming input transcription',handler:async(args,ctx)=>{
     try{
       const input=JSON.parse(args);
       if(input.op==='start'){
         stream?.cancel();
-        stream=new MeetingInputStream({...await audioModel(ctx),offset:input.offset??0,
+        const connection=await resolveAudioModel(ctx);
+        if(connection.transport==='http')throw new Error('Pi HTTP ASR 不支持持续音频流。');
+        const Stream=connection.transport==='asr-stream'?MeetingASRInputStream:MeetingInputStream;
+        stream=new Stream({...connection,socketFactory,offset:input.offset??0,parameters:input.parameters??{},
           emit:event=>ctx.ui.notify('WF_MEETING_STREAM_EVENT '+JSON.stringify(event),event.kind==='error'?'error':'info')});
         await stream.ready;
       }else if(input.op==='append'){

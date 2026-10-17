@@ -26,7 +26,7 @@ extension MeetingPiClient: MeetingStreamingAIClient {
             throw MeetingPiError.extensionFailure("Pi 流式扩展未打包，请重新构建应用。")
         }
         let session = try await _Concurrency.Task.detached(priority: .utility) {
-            try MeetingPiStreamingSession(configuration: configuration, extensionPath: resource.path, onEvent: onEvent)
+            try MeetingPiStreamingSession(configuration: configuration.forTranscription(), extensionPath: resource.path, onEvent: onEvent)
         }.value
         do { try await session.command(["op": "start", "offset": offset]); return session }
         catch { session.cancel(); throw error }

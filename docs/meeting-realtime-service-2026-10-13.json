@@ -1,0 +1,174 @@
+{
+  "kind": "Pi-paced-input-stream",
+  "synthetic": true,
+  "audioSaved": false,
+  "model": "ali-Pi/qwen-audio-3.1-asr-flash-streaming",
+  "latencyOrigin": "session ready to first nonempty preview; excludes microphone and UI rendering",
+  "expected": [
+    {
+      "speaker": "A",
+      "voice": "Tingting",
+      "text": "今天讨论项目交付，确认下周一提交。"
+    },
+    {
+      "speaker": "B",
+      "voice": "Eddy",
+      "text": "同意，预算两千五百元，我负责校对。"
+    }
+  ],
+  "duration": 10.335125,
+  "events": [
+    {
+      "kind": "speechStarted",
+      "itemID": "e53c3655-54ed-4a76-97ee-ecb4ee59bf11:1",
+      "offset": 0,
+      "elapsedMs": 70
+    },
+    {
+      "kind": "preview",
+      "itemID": "e53c3655-54ed-4a76-97ee-ecb4ee59bf11:1",
+      "text": "",
+      "offset": 0,
+      "elapsedMs": 70
+    },
+    {
+      "kind": "preview",
+      "itemID": "e53c3655-54ed-4a76-97ee-ecb4ee59bf11:1",
+      "text": "",
+      "offset": 0,
+      "elapsedMs": 250
+    },
+    {
+      "kind": "preview",
+      "itemID": "e53c3655-54ed-4a76-97ee-ecb4ee59bf11:1",
+      "text": "今天",
+      "offset": 0,
+      "elapsedMs": 494
+    },
+    {
+      "kind": "preview",
+      "itemID": "e53c3655-54ed-4a76-97ee-ecb4ee59bf11:1",
+      "text": "今天淘",
+      "offset": 0.12,
+      "elapsedMs": 927
+    },
+    {
+      "kind": "preview",
+      "itemID": "e53c3655-54ed-4a76-97ee-ecb4ee59bf11:1",
+      "text": "今天淘论项目",
+      "offset": 0.16,
+      "elapsedMs": 1803
+    },
+    {
+      "kind": "preview",
+      "itemID": "e53c3655-54ed-4a76-97ee-ecb4ee59bf11:1",
+      "text": "今天讨论项目交付",
+      "offset": 0.16,
+      "elapsedMs": 2321
+    },
+    {
+      "kind": "preview",
+      "itemID": "e53c3655-54ed-4a76-97ee-ecb4ee59bf11:1",
+      "text": "今天讨论项目交付，确认",
+      "offset": 0.16,
+      "elapsedMs": 2965
+    },
+    {
+      "kind": "preview",
+      "itemID": "e53c3655-54ed-4a76-97ee-ecb4ee59bf11:1",
+      "text": "今天讨论项目交付，确认下周一",
+      "offset": 0.16,
+      "elapsedMs": 3927
+    },
+    {
+      "kind": "preview",
+      "itemID": "e53c3655-54ed-4a76-97ee-ecb4ee59bf11:1",
+      "text": "今天讨论项目交付，确认下周一提交",
+      "offset": 0.16,
+      "elapsedMs": 4851
+    },
+    {
+      "kind": "speechStopped",
+      "itemID": "e53c3655-54ed-4a76-97ee-ecb4ee59bf11:1",
+      "offset": 4.48,
+      "elapsedMs": 5746
+    },
+    {
+      "kind": "final",
+      "itemID": "e53c3655-54ed-4a76-97ee-ecb4ee59bf11:1",
+      "text": "今天讨论项目交付，确认下周一提交。",
+      "offset": 0.16,
+      "elapsedMs": 5746
+    },
+    {
+      "kind": "speechStarted",
+      "itemID": "e53c3655-54ed-4a76-97ee-ecb4ee59bf11:2",
+      "offset": 5,
+      "elapsedMs": 5746
+    },
+    {
+      "kind": "preview",
+      "itemID": "e53c3655-54ed-4a76-97ee-ecb4ee59bf11:2",
+      "text": "",
+      "offset": 5,
+      "elapsedMs": 5746
+    },
+    {
+      "kind": "preview",
+      "itemID": "e53c3655-54ed-4a76-97ee-ecb4ee59bf11:2",
+      "text": "โ",
+      "offset": 5,
+      "elapsedMs": 5779
+    },
+    {
+      "kind": "preview",
+      "itemID": "e53c3655-54ed-4a76-97ee-ecb4ee59bf11:2",
+      "text": "从以",
+      "offset": 5.36,
+      "elapsedMs": 5840
+    },
+    {
+      "kind": "preview",
+      "itemID": "e53c3655-54ed-4a76-97ee-ecb4ee59bf11:2",
+      "text": "从以预算",
+      "offset": 5.36,
+      "elapsedMs": 6635
+    },
+    {
+      "kind": "preview",
+      "itemID": "e53c3655-54ed-4a76-97ee-ecb4ee59bf11:2",
+      "text": "同意，预算2500",
+      "offset": 5.36,
+      "elapsedMs": 7269
+    },
+    {
+      "kind": "preview",
+      "itemID": "e53c3655-54ed-4a76-97ee-ecb4ee59bf11:2",
+      "text": "通义，预算2500元，我负责校对",
+      "offset": 5.36,
+      "elapsedMs": 9581
+    },
+    {
+      "kind": "speechStopped",
+      "itemID": "e53c3655-54ed-4a76-97ee-ecb4ee59bf11:2",
+      "offset": 9.16,
+      "elapsedMs": 10278
+    },
+    {
+      "kind": "final",
+      "itemID": "e53c3655-54ed-4a76-97ee-ecb4ee59bf11:2",
+      "text": "通义，预算2500元，我负责校对。",
+      "offset": 5.36,
+      "elapsedMs": 10278
+    }
+  ],
+  "stopDurationMs": 120,
+  "firstPreviewMs": 494,
+  "finalText": "今天讨论项目交付，确认下周一提交。通义，预算2500元，我负责校对。",
+  "checks": {
+    "previewBeforeCaptureEnds": true,
+    "hasFinalText": true,
+    "transcriptMatchesFixture": false,
+    "noModelResponseJSONRequired": true
+  }
+}

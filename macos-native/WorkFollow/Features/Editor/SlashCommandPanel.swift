@@ -18,13 +18,14 @@ enum SlashMenuMetrics {
     static let rowRadius: CGFloat = 8
     static let labelSize: CGFloat = 13
 
-    /// 与原版 `DocumentSlashMenu.heightFor` 同一算法：行 × 34 + 分组细线 9 +
-    /// 上下内边距 8。
+    /// 与原版 `DocumentSlashMenu.heightFor` 同一算法：行 × 34 + 分组细线 × 9 +
+    /// 上下内边距 8。分节对齐滴答（2026-10-16）：标题｜列表｜格式｜插入，共 3 条细线
+    /// （搜索过滤后按实际分组变化数计算）。
     static func height(for commands: [DocumentCommand]) -> CGFloat {
         guard !commands.isEmpty else { return 0 }
-        let hasDivider = commands.contains { $0.group != commands[0].group }
+        let dividerCount = zip(commands.dropFirst(), commands).filter { $0.group != $1.group }.count
         return CGFloat(commands.count) * rowHeight
-            + (hasDivider ? dividerBlock : 0)
+            + CGFloat(dividerCount) * dividerBlock
             + padding * 2
     }
 }

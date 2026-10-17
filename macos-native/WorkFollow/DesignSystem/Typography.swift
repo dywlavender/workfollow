@@ -3,6 +3,10 @@ import SwiftUI
 enum WFType {
     static let pageTitle = Font.system(size: 19, weight: .semibold)
     static let detailTitle = Font.system(size: 18, weight: .semibold)
+    /// 任务标题输入框（任务详情）：滴答实测 19pt Medium。从滴答任务详情面板的
+    /// 富文本导出直读（`\fs38` = 19pt、HelveticaNeue-Medium，2026-10-16）。
+    /// 它与 `detailTitle` 只差 1pt 但字重不同，所以单列一个角色，不改共享令牌。
+    static let taskTitle = Font.system(size: 19, weight: .medium)
     static let navigation = Font.system(size: 14)
     static let listTitle = Font.system(size: 14)
     static let body = Font.system(size: 14)

@@ -1,7 +1,7 @@
 import Foundation
 
 enum TaskInspectorActionPanel: Hashable, CaseIterable {
-    case more, tags, relation, parent, activity
+    case more, tags, relation, parent, activity, comments
 }
 
 enum TaskActionSubmenu: Equatable { case focus }

@@ -259,10 +259,12 @@ struct NavigationColumnView: View {
             environment.navigate(to: destination)
             onNavigate()
         } label: {
-            HStack(spacing: WFSpace.sm) {
+            // 图标列与文字位置按滴答 AX 实测（2026-10-17）：图标框 22pt 起于行内 19pt，
+            // 图标右缘到文字 6pt —— 得到图标 `@81`、文字 `@109`（行从 62 起）。
+            HStack(spacing: 6) {
                 Image(systemName: destination.symbol)
-                    .font(.system(size: 14))
-                    .frame(width: 18)
+                    .font(.system(size: 16))
+                    .frame(width: 22)
                 Text(destination.title).lineLimit(1)
                 Spacer(minLength: WFSpace.xs)
                 let count = workspace.count(for: destination)
@@ -275,7 +277,9 @@ struct NavigationColumnView: View {
             // 选中项的文字保持普通墨色（滴答实测：导航选中行只有灰底，字仍深色）。
             // 原来这里切 `accent`，是"当前所在页"的强调，用户要求跟滴答一样去掉蓝。
             .foregroundStyle(WFColors.text)
-            .padding(.horizontal, WFSpace.sm)
+            // 左侧 11 + 容器 8 = 行内 19，与滴答图标起点一致；底色块宽度保持 196（滴答 195.5）。
+            .padding(.leading, 11)
+            .padding(.trailing, WFSpace.sm)
             .frame(height: NavigationMetrics.rowHeight)
             .background(navigation.destination == destination
                         ? WFColors.listSelection : .clear,
@@ -370,7 +374,7 @@ private struct TaskFiltersSectionView: View {
     @State private var editingFilter: SavedFilter?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: WFSpace.xs) {
+        VStack(alignment: .leading, spacing: 0) {
             sectionHeader("过滤器")
             ForEach(filterStore.filters) { filter in
                 filterRow(filter)
@@ -379,8 +383,8 @@ private struct TaskFiltersSectionView: View {
                 editingFilter = nil
                 showEditor = true
             } label: {
-                HStack(spacing: WFSpace.sm) {
-                    Image(systemName: "plus").font(.system(size: 13))
+                HStack(spacing: 0) {
+                    Image(systemName: "plus").font(.system(size: 13)).frame(width: 12)
                     Text("新建过滤器").lineLimit(1)
                 }
                 .foregroundStyle(WFColors.secondaryText)
@@ -420,10 +424,10 @@ private struct TaskFiltersSectionView: View {
                 onNavigate()
             }
         } label: {
-            HStack(spacing: WFSpace.sm) {
+            HStack(spacing: 0) {
                 Image(systemName: "line.3.horizontal.decrease")
                     .font(.system(size: 13))
-                    .frame(width: 18)
+                    .frame(width: 12)
                 Text(filter.name).lineLimit(1)
                 Spacer(minLength: WFSpace.xs)
             }

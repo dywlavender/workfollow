@@ -133,7 +133,7 @@ NativeDocument / Block / Run / Mark
 
 矩阵每行记录：能力 ID、Task/Note availability、各 placement、active/mixed、目标范围、Undo owner、codec fixture、自动证据、实机证据。未出现的入口记“产品不提供”，不是待补功能。
 
-保护能力：空文档/文末空 block、标题即时字号、连续有序编号、无重复 TextKit marker、自绘 checklist/quote/gutter/空行 +、toolbar active/tooltip/picker、Slash 双触发/hover/滚动/flip、selection 抑制、链接/附件/图片粘贴、IME、独立 Undo、文档切换、Esc。保留“Markdown 符号作为普通文本”的已有产品规则，不引入自动格式转换。
+保护能力：空文档/文末空 block、标题即时字号、连续有序编号、无重复 TextKit marker、自绘 checklist/quote/gutter/空行 +、toolbar active/tooltip/picker、Slash 双触发/hover/滚动/flip、selection 抑制、链接/附件/图片粘贴、IME、独立 Undo、文档切换、Esc。Markdown 解析为 **渲染期**（2026-10-17 口径，见[文档块装饰口径](document-editor-decorations-2026-09-28.md) 第一节）：块级前缀/分割线/围栏按输入时机触发，行内标记在**文档加载与每次编辑后按段落重解析**（历史字面、粘贴中段、编辑揭示的闭合都会渲染）；原“符号一律是普通文本、不引入自动格式转换”的表述已作废。
 
 复用当前 `NativeDocumentTests / DocumentContentTests / NativeTextViewTests / DocumentFormatStyleTests / DocumentDecorationRenderTests / DocumentProfileTests / SlashSessionTests / DocumentEditorStateTests / PopupEscapeRoutingTests`；不为了命名整齐批量移动或删除已有测试。新增的是跨入口 capability cases 和窗口级链路。
 

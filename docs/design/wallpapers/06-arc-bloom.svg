@@ -1,0 +1,179 @@
+<svg width="1600" height="1000" viewBox="0 0 1600 1000" xmlns="http://www.w3.org/2000/svg">
+  <!-- WorkFollow 动态壁纸 · 弧光绽放 v3
+       双层细瓣光花：外层 10 瓣淡、内层 10 瓣错 18°，整体缓旋（90s/圈），
+       半透明层叠出深浅。中心光核呼吸，左下光斑平衡。深色款。 -->
+  <defs>
+    <radialGradient id="deep" cx="55%" cy="45%" r="80%">
+      <stop offset="0%" stop-color="#241C4A"/>
+      <stop offset="55%" stop-color="#171233"/>
+      <stop offset="100%" stop-color="#0C0A1E"/>
+    </radialGradient>
+    <radialGradient id="cornerGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#4B3A8C" stop-opacity="0.5"/>
+      <stop offset="100%" stop-color="#4B3A8C" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="petalOuter" x1="0" y1="1" x2="0" y2="0">
+      <stop offset="0%" stop-color="#E894B8"/>
+      <stop offset="45%" stop-color="#9B5CEB"/>
+      <stop offset="100%" stop-color="#3E3AAE"/>
+    </linearGradient>
+    <linearGradient id="petalInner" x1="0" y1="1" x2="0" y2="0">
+      <stop offset="0%" stop-color="#FFE3B8"/>
+      <stop offset="35%" stop-color="#E86BB0"/>
+      <stop offset="100%" stop-color="#6D4AD8"/>
+    </linearGradient>
+    <radialGradient id="core" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#FFF6DE" stop-opacity="0.95"/>
+      <stop offset="35%" stop-color="#FFC97E" stop-opacity="0.45"/>
+      <stop offset="100%" stop-color="#E86BB0" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <rect width="1600" height="1000" fill="url(#deep)"/>
+
+  <circle cx="220" cy="880" r="480" fill="url(#cornerGlow)"/>
+  <circle cx="1530" cy="80" r="320" fill="url(#cornerGlow)" opacity="0.6"/>
+
+  <g fill="#CDC6F2">
+    <circle cx="150" cy="120" r="2"><animate attributeName="opacity" values="0.15;0.8;0.15" dur="7s" begin="-1s" repeatCount="indefinite"/></circle>
+    <circle cx="380" cy="300" r="1.6"><animate attributeName="opacity" values="0.1;0.6;0.1" dur="9s" begin="-4s" repeatCount="indefinite"/></circle>
+    <circle cx="280" cy="600" r="1.8"><animate attributeName="opacity" values="0.12;0.65;0.12" dur="8s" begin="-3s" repeatCount="indefinite"/></circle>
+    <circle cx="520" cy="860" r="2"><animate attributeName="opacity" values="0.15;0.7;0.15" dur="7.5s" begin="-5s" repeatCount="indefinite"/></circle>
+    <circle cx="1490" cy="260" r="1.8"><animate attributeName="opacity" values="0.12;0.6;0.12" dur="8.5s" begin="-2s" repeatCount="indefinite"/></circle>
+    <circle cx="1540" cy="640" r="2"><animate attributeName="opacity" values="0.15;0.65;0.15" dur="9.5s" begin="-6s" repeatCount="indefinite"/></circle>
+    <circle cx="820" cy="950" r="1.6"><animate attributeName="opacity" values="0.1;0.55;0.1" dur="10s" begin="-8s" repeatCount="indefinite"/></circle>
+    <circle cx="640" cy="90" r="1.6"><animate attributeName="opacity" values="0.1;0.6;0.1" dur="8s" begin="-7s" repeatCount="indefinite"/></circle>
+  </g>
+
+  <g>
+    <animateTransform attributeName="transform" type="rotate"
+      values="0 1120 480; 360 1120 480" dur="90s" repeatCount="indefinite"/>
+    <g transform="translate(1120 480) rotate(0.0)" opacity="0.45">
+      <path d="M 0 0 C -56 -168.0, -56 -403.2, 0 -560 C 56 -403.2, 56 -168.0, 0 0"
+            fill="url(#petalOuter)"/>
+    </g>
+    <g transform="translate(1120 480) rotate(36.0)" opacity="0.45">
+      <path d="M 0 0 C -56 -168.0, -56 -403.2, 0 -560 C 56 -403.2, 56 -168.0, 0 0"
+            fill="url(#petalOuter)"/>
+    </g>
+    <g transform="translate(1120 480) rotate(72.0)" opacity="0.45">
+      <path d="M 0 0 C -56 -168.0, -56 -403.2, 0 -560 C 56 -403.2, 56 -168.0, 0 0"
+            fill="url(#petalOuter)"/>
+    </g>
+    <g transform="translate(1120 480) rotate(108.0)" opacity="0.45">
+      <path d="M 0 0 C -56 -168.0, -56 -403.2, 0 -560 C 56 -403.2, 56 -168.0, 0 0"
+            fill="url(#petalOuter)"/>
+    </g>
+    <g transform="translate(1120 480) rotate(144.0)" opacity="0.45">
+      <path d="M 0 0 C -56 -168.0, -56 -403.2, 0 -560 C 56 -403.2, 56 -168.0, 0 0"
+            fill="url(#petalOuter)"/>
+    </g>
+    <g transform="translate(1120 480) rotate(180.0)" opacity="0.45">
+      <path d="M 0 0 C -56 -168.0, -56 -403.2, 0 -560 C 56 -403.2, 56 -168.0, 0 0"
+            fill="url(#petalOuter)"/>
+    </g>
+    <g transform="translate(1120 480) rotate(216.0)" opacity="0.45">
+      <path d="M 0 0 C -56 -168.0, -56 -403.2, 0 -560 C 56 -403.2, 56 -168.0, 0 0"
+            fill="url(#petalOuter)"/>
+    </g>
+    <g transform="translate(1120 480) rotate(252.0)" opacity="0.45">
+      <path d="M 0 0 C -56 -168.0, -56 -403.2, 0 -560 C 56 -403.2, 56 -168.0, 0 0"
+            fill="url(#petalOuter)"/>
+    </g>
+    <g transform="translate(1120 480) rotate(288.0)" opacity="0.45">
+      <path d="M 0 0 C -56 -168.0, -56 -403.2, 0 -560 C 56 -403.2, 56 -168.0, 0 0"
+            fill="url(#petalOuter)"/>
+    </g>
+    <g transform="translate(1120 480) rotate(324.0)" opacity="0.45">
+      <path d="M 0 0 C -56 -168.0, -56 -403.2, 0 -560 C 56 -403.2, 56 -168.0, 0 0"
+            fill="url(#petalOuter)"/>
+    </g>
+    <g transform="translate(1120 480) rotate(18.0)" opacity="0.6">
+      <path d="M 0 0 C -46 -120.0, -46 -288.0, 0 -400 C 46 -288.0, 46 -120.0, 0 0"
+            fill="url(#petalInner)"/>
+    </g>
+    <g transform="translate(1120 480) rotate(54.0)" opacity="0.6">
+      <path d="M 0 0 C -46 -120.0, -46 -288.0, 0 -400 C 46 -288.0, 46 -120.0, 0 0"
+            fill="url(#petalInner)"/>
+    </g>
+    <g transform="translate(1120 480) rotate(90.0)" opacity="0.6">
+      <path d="M 0 0 C -46 -120.0, -46 -288.0, 0 -400 C 46 -288.0, 46 -120.0, 0 0"
+            fill="url(#petalInner)"/>
+    </g>
+    <g transform="translate(1120 480) rotate(126.0)" opacity="0.6">
+      <path d="M 0 0 C -46 -120.0, -46 -288.0, 0 -400 C 46 -288.0, 46 -120.0, 0 0"
+            fill="url(#petalInner)"/>
+    </g>
+    <g transform="translate(1120 480) rotate(162.0)" opacity="0.6">
+      <path d="M 0 0 C -46 -120.0, -46 -288.0, 0 -400 C 46 -288.0, 46 -120.0, 0 0"
+            fill="url(#petalInner)"/>
+    </g>
+    <g transform="translate(1120 480) rotate(198.0)" opacity="0.6">
+      <path d="M 0 0 C -46 -120.0, -46 -288.0, 0 -400 C 46 -288.0, 46 -120.0, 0 0"
+            fill="url(#petalInner)"/>
+    </g>
+    <g transform="translate(1120 480) rotate(234.0)" opacity="0.6">
+      <path d="M 0 0 C -46 -120.0, -46 -288.0, 0 -400 C 46 -288.0, 46 -120.0, 0 0"
+            fill="url(#petalInner)"/>
+    </g>
+    <g transform="translate(1120 480) rotate(270.0)" opacity="0.6">
+      <path d="M 0 0 C -46 -120.0, -46 -288.0, 0 -400 C 46 -288.0, 46 -120.0, 0 0"
+            fill="url(#petalInner)"/>
+    </g>
+    <g transform="translate(1120 480) rotate(306.0)" opacity="0.6">
+      <path d="M 0 0 C -46 -120.0, -46 -288.0, 0 -400 C 46 -288.0, 46 -120.0, 0 0"
+            fill="url(#petalInner)"/>
+    </g>
+    <g transform="translate(1120 480) rotate(342.0)" opacity="0.6">
+      <path d="M 0 0 C -46 -120.0, -46 -288.0, 0 -400 C 46 -288.0, 46 -120.0, 0 0"
+            fill="url(#petalInner)"/>
+    </g>
+    <g transform="translate(1120 480) rotate(36.0)" opacity="0.55">
+      <path d="M 0 0 C -34 -75.0, -34 -180.0, 0 -250 C 34 -180.0, 34 -75.0, 0 0"
+            fill="url(#petalInner)"/>
+    </g>
+    <g transform="translate(1120 480) rotate(72.0)" opacity="0.55">
+      <path d="M 0 0 C -34 -75.0, -34 -180.0, 0 -250 C 34 -180.0, 34 -75.0, 0 0"
+            fill="url(#petalInner)"/>
+    </g>
+    <g transform="translate(1120 480) rotate(108.0)" opacity="0.55">
+      <path d="M 0 0 C -34 -75.0, -34 -180.0, 0 -250 C 34 -180.0, 34 -75.0, 0 0"
+            fill="url(#petalInner)"/>
+    </g>
+    <g transform="translate(1120 480) rotate(144.0)" opacity="0.55">
+      <path d="M 0 0 C -34 -75.0, -34 -180.0, 0 -250 C 34 -180.0, 34 -75.0, 0 0"
+            fill="url(#petalInner)"/>
+    </g>
+    <g transform="translate(1120 480) rotate(180.0)" opacity="0.55">
+      <path d="M 0 0 C -34 -75.0, -34 -180.0, 0 -250 C 34 -180.0, 34 -75.0, 0 0"
+            fill="url(#petalInner)"/>
+    </g>
+    <g transform="translate(1120 480) rotate(216.0)" opacity="0.55">
+      <path d="M 0 0 C -34 -75.0, -34 -180.0, 0 -250 C 34 -180.0, 34 -75.0, 0 0"
+            fill="url(#petalInner)"/>
+    </g>
+    <g transform="translate(1120 480) rotate(252.0)" opacity="0.55">
+      <path d="M 0 0 C -34 -75.0, -34 -180.0, 0 -250 C 34 -180.0, 34 -75.0, 0 0"
+            fill="url(#petalInner)"/>
+    </g>
+    <g transform="translate(1120 480) rotate(288.0)" opacity="0.55">
+      <path d="M 0 0 C -34 -75.0, -34 -180.0, 0 -250 C 34 -180.0, 34 -75.0, 0 0"
+            fill="url(#petalInner)"/>
+    </g>
+    <g transform="translate(1120 480) rotate(324.0)" opacity="0.55">
+      <path d="M 0 0 C -34 -75.0, -34 -180.0, 0 -250 C 34 -180.0, 34 -75.0, 0 0"
+            fill="url(#petalInner)"/>
+    </g>
+    <g transform="translate(1120 480) rotate(360.0)" opacity="0.55">
+      <path d="M 0 0 C -34 -75.0, -34 -180.0, 0 -250 C 34 -180.0, 34 -75.0, 0 0"
+            fill="url(#petalInner)"/>
+    </g>
+  </g>
+
+  <circle cx="1120" cy="480" r="250" fill="url(#core)">
+    <animate attributeName="opacity" values="0.8;1;0.8" dur="11s" repeatCount="indefinite"/>
+  </circle>
+  <circle cx="1120" cy="480" r="44" fill="#FFF2D9">
+    <animate attributeName="r" values="40;48;40" dur="11s" repeatCount="indefinite"/>
+  </circle>
+</svg>

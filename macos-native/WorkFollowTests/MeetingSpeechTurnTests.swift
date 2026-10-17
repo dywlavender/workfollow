@@ -68,7 +68,7 @@ final class MeetingSpeechTurnStoreWiringTests: XCTestCase {
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         addTeardownBlock { try? FileManager.default.removeItem(at: root) }
         let store = MeetingStore(directory: root, ai: TurnFixture(), automaticallyUpdate: false)
-        store.configuration.model = "qwen-audio-3.1-asr-flash"
+        store.configuration.transcriptionModel = "qwen-audio-3.1-asr-flash"
         store.create()
         let opened = try await store.connectInputStream(for: try XCTUnwrap(store.selectedID), offset: 0)
         XCTAssertFalse(opened)

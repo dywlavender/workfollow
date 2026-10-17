@@ -1,5 +1,26 @@
 import SwiftUI
 
+/// 输入框显示模式（对齐滴答「输入框设置」的简洁 / 详细）。
+enum QuickAddDisplayMode: String, CaseIterable {
+    case compact, detailed
+
+    static let defaultsKey = "quickAddDisplayMode"
+
+    var title: String {
+        switch self {
+        case .compact: "简洁"
+        case .detailed: "详细"
+        }
+    }
+
+    var detail: String {
+        switch self {
+        case .compact: "单行输入，属性在菜单"
+        case .detailed: "常显日期与属性图标"
+        }
+    }
+}
+
 struct QuickAddPropertiesOverrides: Equatable {
     var priority: TaskPriority?
     var listName: String?
@@ -11,13 +32,17 @@ struct QuickAddPropertiesPopover: View {
     let selectedPriority: TaskPriority
     let selectedList: String
     let selectedTags: [String]
+    var attachments: [NativeAttachment] = []
+    var displayMode: QuickAddDisplayMode = .compact
     let onPriority: (TaskPriority) -> Void
     let onList: (String) -> Void
     let onTags: ([String]) -> Void
     let onTemplate: () -> Void
+    var onAttachments: ([NativeAttachment]) -> Void = { _ in }
+    var onDisplayMode: (QuickAddDisplayMode) -> Void = { _ in }
     let onDismiss: () -> Void
 
-    private enum Child { case list, tags }
+    private enum Child { case list, tags, displayMode }
     @State private var activeChild: Child?
 
     private func presented(_ child: Child) -> Binding<Bool> {
@@ -67,11 +92,40 @@ struct QuickAddPropertiesPopover: View {
                         activeChild = nil
                     })
             })
+            // 滴答属性菜单第 5 项（实测 2026-10-16）：附件（文件选择器）。
+            Button {
+                pickAttachments()
+            } label: {
+                propertyRow(icon: "paperclip",
+                            title: attachments.isEmpty ? "附件" : "附件 \(attachments.count)",
+                            hasChild: false)
+            }
+            .buttonStyle(.plain)
+            .quickAddRenderAnchor(.attachment)
+            // 滴答属性菜单第 6 项（实测 2026-10-17）：从模板添加（带右 chevron，打开模板选择器）。
             Button(action: onTemplate) {
-                propertyRow(icon: "doc.text", title: "从模板添加", hasChild: false)
+                propertyRow(icon: "doc.text", title: "从模板添加", hasChild: true)
             }
             .buttonStyle(.plain)
             .quickAddRenderAnchor(.template)
+            // 滴答属性菜单第 7 项（实测 2026-10-17）：输入框设置（简洁 / 详细）。
+            // 滴答这一行在菜单最底部，图标是齿轮，不是滑杆。
+            Button {
+                activeChild = .displayMode
+            } label: {
+                propertyRow(icon: "gearshape", title: "输入框设置：\(displayMode.title)")
+            }
+            .buttonStyle(.plain)
+            .quickAddRenderAnchor(.displayMode)
+            .background(AnchoredPropertyPanel(isPresented: presented(.displayMode), width: 250,
+                                              placement: .submenu, focusPolicy: .panel) {
+                QuickAddDisplayModePopover(selected: displayMode,
+                    onCancel: { activeChild = nil },
+                    onSelect: { mode in
+                        onDisplayMode(mode)
+                        activeChild = nil
+                    })
+            })
         }
         .padding(WFSpace.md)
         .frame(width: 270)
@@ -113,6 +167,13 @@ struct QuickAddPropertiesPopover: View {
         }
     }
 
+    private func pickAttachments() {
+        NativeAttachmentFiles.choose { result in
+            guard case .success(let picked) = result, !picked.isEmpty else { return }
+            onAttachments(attachments + picked)
+        }
+    }
+
     private func propertyRow(icon: String, title: String, hasChild: Bool = true) -> some View {
         HStack(spacing: WFSpace.md) {
             Image(systemName: icon).foregroundStyle(WFColors.secondaryText)
@@ -123,6 +184,42 @@ struct QuickAddPropertiesPopover: View {
         .padding(.horizontal, WFSpace.sm)
         .frame(height: WFMetrics.controlHeight)
         .contentShape(Rectangle())
+    }
+}
+
+private struct QuickAddDisplayModePopover: View {
+    let selected: QuickAddDisplayMode
+    let onCancel: () -> Void
+    let onSelect: (QuickAddDisplayMode) -> Void
+
+    var body: some View {
+        VStack(spacing: WFSpace.xs) {
+            ForEach(QuickAddDisplayMode.allCases, id: \.self) { mode in
+                Button { onSelect(mode) } label: {
+                    HStack(spacing: WFSpace.md) {
+                        Image(systemName: mode == .compact ? "rectangle" : "rectangle.split.1x2")
+                            .foregroundStyle(WFColors.secondaryText)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(mode.title).font(WFType.menu)
+                            Text(mode.detail).font(WFType.supporting)
+                                .foregroundStyle(WFColors.secondaryText)
+                        }
+                        Spacer(minLength: 4)
+                        if selected == mode {
+                            Image(systemName: "checkmark").foregroundStyle(WFColors.accent)
+                        }
+                    }
+                    .padding(.horizontal, WFSpace.sm)
+                    .frame(height: 48)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(WFColors.text)
+            }
+        }
+        .padding(WFSpace.sm)
+        .frame(width: 250)
+        .onExitCommand(perform: onCancel)
     }
 }
 

@@ -180,10 +180,16 @@ extension NativeTextView {
         applyFormat(command)
     }
 
-    func applyFormat(_ command: DocumentFormatCommand, lineStart: Int? = nil) {
+    /// - Parameter inlineRange: 行内输入期 Markdown 转换的内容范围（闭合片段删除
+    ///   标记后的内容段）。非 nil 时：mark 按**设值**处理（只加不减）、替换范围取
+    ///   该范围、光标落内容末尾、输入属性继承内容标记（2026-10-16 口径）。
+    func applyFormat(_ command: DocumentFormatCommand, lineStart: Int? = nil,
+                     inlineRange: NSRange? = nil) {
         let originalSelection = selectedRange()
         var range = originalSelection
-        if command.block != nil {
+        if let inlineRange {
+            range = inlineRange
+        } else if command.block != nil {
             let source = string as NSString
             // 文末空段（光标在末尾、文档以换行结尾）：它没有字符可定位，
             // 必须走"无字符段落"分支（输入属性 + 待定级别）。若按常规钳制到
@@ -228,7 +234,10 @@ extension NativeTextView {
         // 不能参与“全部已是此格式”的判断，否则再次点击列表按钮无法取消。
         let selectedBlocks = selected.string.hasSuffix("\n")
             ? Array(document.blocks.dropLast()) : document.blocks
-        let remove = command.mark.map { mark in document.blocks.flatMap(\.runs).allSatisfy { $0.marks.contains(mark) } } ?? false
+        // 输入期 Markdown（inlineRange）是**设值**：只加不减；工具条与选区浮条是切换。
+        let remove = inlineRange == nil && (command.mark.map { mark in
+            document.blocks.flatMap(\.runs).allSatisfy { $0.marks.contains(mark) }
+        } ?? false)
         // 段落类型：工具条与选区浮条（无 lineStart）是**切换**，斜杠面板带 lineStart 是**设值**。
         // 原版就是这么分的（`_toggleBlock` vs `_formatLine`，`document_commands.dart:242-279`）。
         let targetBlock = command.block.map { block in
@@ -248,7 +257,7 @@ extension NativeTextView {
                 }
             }
         }
-        if command.mark != nil {
+        if command.mark != nil, inlineRange == nil {
             // NSTextView may merge attributes omitted by the replacement string
             // from typingAttributes. Rendered runs carry their own marks, so clear
             // stale typing marks while replacing the selected attributed text.
@@ -265,12 +274,15 @@ extension NativeTextView {
                                         range: NSRange(location: 0, length: replacement.length))
         }
         insertText(replacement, replacementRange: range)
-        if command.mark != nil,
-           let storage = textStorage,
+        if let storage = textStorage,
            range.location + replacement.length <= storage.length {
             // Replacing text with an attributed string can retain old keys when
-            // the new run omits them. Reapply the rendered runs as exact attribute
-            // sets so removed marks and presentation-only keys cannot leak through.
+            // the new run omits them, and TextKit merges **font traits** with the
+            // replaced text (a heading applied to a 14pt line kept 14pt while
+            // taking the bold trait——实测 2026-10-16，工具条与输入期 Markdown
+            // 两条路都中招)。Reapply the rendered runs as exact attribute sets so
+            // the storage matches the render: no leaked removed marks,
+            // presentation-only keys, or stale font sizes.
             replacement.enumerateAttributes(in: NSRange(location: 0, length: replacement.length)) {
                 attributes, localRange, _ in
                 let targetRange = NSRange(location: range.location + localRange.location,
@@ -278,12 +290,22 @@ extension NativeTextView {
                 storage.setAttributes(attributes, range: targetRange)
             }
         }
-        // Formatting expands to the paragraph, but must not replace the user's
-        // caret/selection with that entire paragraph.
-        let location = min(originalSelection.location, (string as NSString).length)
-        let length = min(originalSelection.length, (string as NSString).length - location)
-        setSelectedRange(NSRange(location: location, length: length))
-        syncParagraphStyleAfterEdit(at: location)
+        if let inlineRange {
+            // 行内输入期：光标落内容末尾；输入属性继承内容标记（接着输入延续样式）。
+            let caret = min(NSMaxRange(range), (string as NSString).length)
+            setSelectedRange(NSRange(location: caret, length: 0))
+            syncParagraphStyleAfterEdit(at: caret)
+            typingAttributes = DocumentTextCodec.attributes(
+                kind: document.blocks.first?.kind ?? .paragraph,
+                marks: document.blocks.first?.runs.first?.marks ?? [])
+        } else {
+            // Formatting expands to the paragraph, but must not replace the user's
+            // caret/selection with that entire paragraph.
+            let location = min(originalSelection.location, (string as NSString).length)
+            let length = min(originalSelection.length, (string as NSString).length - location)
+            setSelectedRange(NSRange(location: location, length: length))
+            syncParagraphStyleAfterEdit(at: location)
+        }
         if command.mark != nil {
             // insertText publishes before the exact attribute correction above.
             // Publish the final storage as well, or persistence retains removed marks.

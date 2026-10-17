@@ -150,6 +150,9 @@ enum DocumentEditorGeometry {
     }
     static let listTextIndent: CGFloat = 16
     static let quoteTextIndent: CGFloat = 16
+    /// 列表标记左缘的光学补偿：滴答的圆点墨迹与正文文字墨迹齐平（都在 x19），
+    /// 而首字形起点比它的墨迹早约 1pt（字形自带左侧边距），所以几何起点再补 1pt。
+    static let listMarkerOpticalOffset: CGFloat = 1
     static let structuredParagraphSpacing: CGFloat = 2
     static let quoteRuleInset: CGFloat = 4
     static let quoteRuleWidth: CGFloat = 2
@@ -209,7 +212,7 @@ private struct DocumentEditorContent: NSViewRepresentable {
         textView.seedTrailingParagraphKind(document.blocks.last.flatMap { block in
             block.runs.allSatisfy { $0.text.isEmpty } ? block.kind : nil
         })
-        context.coordinator.didLoadDocument(in: textView)
+        context.coordinator.didLoadDocument(in: textView, reparseInline: true)
         textView.onEscape = onEscape
         textView.onEditingChanged = onEditingChanged
         textView.onSelectionChanged = { [weak handle] in handle?.refreshStyle() }

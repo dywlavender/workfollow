@@ -22,7 +22,7 @@ async function service(t,{fail=false}={}){
         if(!began){began=true;
           send({type:'input_audio_buffer.speech_started',item_id:'turn',audio_start_ms:100});
           send({type:'conversation.item.input_audio_transcription.delta',item_id:'turn',text:'预算',stash:'三千'});
-          send({type:'conversation.item.input_audio_transcription.delta',item_id:'turn',text:'预算',stash:'两千五百'});
+          send({type:'conversation.item.input_audio_transcription.text',item_id:'turn',text:'预算',stash:'两千五百'});
         }else if(Buffer.from(event.audio,'base64').every(byte=>byte===0)){
           send({type:'input_audio_buffer.speech_stopped',item_id:'turn'});
           send({type:'input_audio_buffer.committed',item_id:'turn'});

@@ -33,6 +33,7 @@ final class MeetingAudioTransport: @unchecked Sendable {
     private var pendingBytes = 0
     private var inFlightBytes = 0
     private var pumping = false
+    private var pumpTask: _Concurrency.Task<Void, Never>?
     /// 验收修正（P0）：overflow 必须**同步** latch——不等 MainActor 回调链
     /// （onOverflow → Store → stopRecording）回来才停。否则泵消化出空间的窗口
     /// 里，后续包会重新入队，形成"100、[101 丢]、102、103"的中间缺口。latch
@@ -115,6 +116,16 @@ final class MeetingAudioTransport: @unchecked Sendable {
         if startSettle { _Concurrency.Task { await self.settleAfterDrain() } }
     }
 
+    /// Local files retain the audio when the live transcription path is detached.
+    func cancel() {
+        let task = lock.withLock { () -> _Concurrency.Task<Void, Never>? in
+            failed = true; accepting = false; pending.removeAll(); pendingBytes = 0
+            stopping = false; settled = true
+            return pumpTask
+        }
+        task?.cancel()
+    }
+
     /// 等待发送的字节数（排队 + 在途）。Store 的 bufferedAudioBytes 用它。
     var pendingByteCount: Int {
         lock.withLock { pendingBytes + inFlightBytes }
@@ -137,7 +148,9 @@ final class MeetingAudioTransport: @unchecked Sendable {
     private func startPumpIfNeeded() {
         guard !pumping, !failed else { return }
         pumping = true
-        _Concurrency.Task { [weak self] in await self?.pumpLoop() }
+        pumpTask = _Concurrency.Task { [weak self] in
+            guard let self else { return }; await self.pumpLoop()
+        }
     }
 
     private func pumpLoop() async {

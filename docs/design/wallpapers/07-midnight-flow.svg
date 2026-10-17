@@ -1,0 +1,82 @@
+<svg width="1600" height="1000" viewBox="0 0 1600 1000" xmlns="http://www.w3.org/2000/svg">
+  <!-- WorkFollow 动态壁纸 · 午夜流光 (Midnight Flow)
+       深空底 + 三团高饱和柔光（主紫/青/玫粉）大半径漂移 + 星点闪烁。
+       与浅色极光的区别：底色深、光浓、对比强，暗色模式桌面首选。 -->
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="42%" r="85%">
+      <stop offset="0%" stop-color="#1B1740"/>
+      <stop offset="60%" stop-color="#120F2E"/>
+      <stop offset="100%" stop-color="#0A0820"/>
+    </radialGradient>
+    <radialGradient id="mPurple" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#7B6BFF" stop-opacity="0.75"/>
+      <stop offset="45%" stop-color="#5B5CEB" stop-opacity="0.35"/>
+      <stop offset="100%" stop-color="#5B5CEB" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="mCyan" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#35D2FF" stop-opacity="0.6"/>
+      <stop offset="50%" stop-color="#08C4EF" stop-opacity="0.22"/>
+      <stop offset="100%" stop-color="#08C4EF" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="mRose" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#F070B8" stop-opacity="0.55"/>
+      <stop offset="50%" stop-color="#E86BB0" stop-opacity="0.2"/>
+      <stop offset="100%" stop-color="#E86BB0" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="mGreen" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#2BDDB0" stop-opacity="0.4"/>
+      <stop offset="60%" stop-color="#04CF9C" stop-opacity="0.12"/>
+      <stop offset="100%" stop-color="#04CF9C" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <rect width="1600" height="1000" fill="url(#bg)"/>
+
+  <!-- 星点：疏密两簇 -->
+  <g fill="#E8E4FF">
+    <circle cx="120" cy="90" r="2.2"><animate attributeName="opacity" values="0.2;0.9;0.2" dur="6s" begin="-1s" repeatCount="indefinite"/></circle>
+    <circle cx="300" cy="200" r="1.6"><animate attributeName="opacity" values="0.15;0.7;0.15" dur="8s" begin="-4s" repeatCount="indefinite"/></circle>
+    <circle cx="480" cy="70" r="2"><animate attributeName="opacity" values="0.2;0.8;0.2" dur="7s" begin="-2s" repeatCount="indefinite"/></circle>
+    <circle cx="700" cy="150" r="1.4"><animate attributeName="opacity" values="0.15;0.6;0.15" dur="9s" begin="-6s" repeatCount="indefinite"/></circle>
+    <circle cx="920" cy="60" r="2.2"><animate attributeName="opacity" values="0.2;0.85;0.2" dur="7.5s" begin="-3s" repeatCount="indefinite"/></circle>
+    <circle cx="1150" cy="140" r="1.6"><animate attributeName="opacity" values="0.15;0.65;0.15" dur="8.5s" begin="-5s" repeatCount="indefinite"/></circle>
+    <circle cx="1380" cy="90" r="2"><animate attributeName="opacity" values="0.2;0.8;0.2" dur="6.5s" begin="-2.5s" repeatCount="indefinite"/></circle>
+    <circle cx="1540" cy="200" r="1.5"><animate attributeName="opacity" values="0.12;0.55;0.12" dur="10s" begin="-7s" repeatCount="indefinite"/></circle>
+    <circle cx="220" cy="880" r="1.8"><animate attributeName="opacity" values="0.15;0.7;0.15" dur="8s" begin="-3.5s" repeatCount="indefinite"/></circle>
+    <circle cx="1450" cy="840" r="1.6"><animate attributeName="opacity" values="0.12;0.6;0.12" dur="9.5s" begin="-6.5s" repeatCount="indefinite"/></circle>
+  </g>
+
+  <!-- 主紫：左侧，大而缓 -->
+  <circle cx="420" cy="380" r="520" fill="url(#mPurple)">
+    <animateTransform attributeName="transform" type="translate"
+      values="0 0; 160 110; 50 170; 0 0" dur="28s" repeatCount="indefinite"/>
+  </circle>
+
+  <!-- 青：右上 -->
+  <circle cx="1230" cy="260" r="420" fill="url(#mCyan)">
+    <animateTransform attributeName="transform" type="translate"
+      values="0 0; -150 130; -40 -70; 0 0" dur="33s" repeatCount="indefinite"/>
+  </circle>
+
+  <!-- 玫粉：右下 -->
+  <circle cx="1350" cy="790" r="400" fill="url(#mRose)">
+    <animateTransform attributeName="transform" type="translate"
+      values="0 0; -120 -90; 60 -40; 0 0" dur="31s" repeatCount="indefinite"/>
+  </circle>
+
+  <!-- 绿：左下，最小最淡 -->
+  <circle cx="320" cy="850" r="330" fill="url(#mGreen)">
+    <animateTransform attributeName="transform" type="translate"
+      values="0 0; 110 -70; -60 -30; 0 0" dur="36s" repeatCount="indefinite"/>
+  </circle>
+
+  <!-- 一道细极光弧：横贯上空，轻摆 -->
+  <path d="M0 240 Q 400 190 800 235 Q 1200 280 1600 210" fill="none"
+        stroke="#8F7BFF" stroke-width="2.5" opacity="0.4">
+    <animate attributeName="opacity" values="0.25;0.55;0.25" dur="12s" repeatCount="indefinite"/>
+    <animate attributeName="d" values="M0 240 Q 400 190 800 235 Q 1200 280 1600 210;
+                                       M0 240 Q 400 230 800 210 Q 1200 240 1600 230;
+                                       M0 240 Q 400 190 800 235 Q 1200 280 1600 210"
+             dur="18s" repeatCount="indefinite"/>
+  </path>
+</svg>

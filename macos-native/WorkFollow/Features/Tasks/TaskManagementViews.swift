@@ -45,7 +45,9 @@ struct TaskCollectionsView: View {
     private static let folderIndent: CGFloat = 16
 
     var body: some View {
-        VStack(alignment: .leading, spacing: WFSpace.xs) {
+        // 行间不再额外放宽：滴答导航行步长就是行高 38（连续行 y=45/83/121）。
+        // 分组标题自带上下内边距，去掉 spacing 不会贴行。
+        VStack(alignment: .leading, spacing: 0) {
             sectionHeader("清单", trailing: newListBox)
             ForEach(workspace.listTree) { node in
                 switch node {
@@ -255,14 +257,17 @@ private struct SidebarListRowView: View {
     var body: some View {
         HStack(spacing: WFSpace.xs) {
             Button(action: onOpen) {
-                HStack(spacing: WFSpace.sm) {
+                // 滴答 AX 实测（2026-10-17）：色点框 14x14 起于行内 7，文字紧贴色点右缘（行内 19）。
+                // 这里用 10 的框 + 2 的间距，落到同一文字起点，同时不让 9pt 色点被视觉压扁。
+                HStack(spacing: 2) {
                     // 有图标显示 Emoji，否则回落到色点（滴答：图标优先，颜色仍在）。
                     if let icon = meta?.icon, !icon.isEmpty {
                         Text(icon).font(.system(size: 12))
-                            .frame(width: 14)
+                            .frame(width: 10)
                             .accessibilityLabel("清单图标")
                     } else {
                         Circle().fill(dotColor).frame(width: 9, height: 9)
+                            .frame(width: 10)
                             .accessibilityLabel("清单颜色")
                     }
                     Text(name).lineLimit(1)
@@ -292,7 +297,9 @@ private struct SidebarListRowView: View {
             .disabled(!hovering)
             .help("清单操作")
         }
-        .padding(.horizontal, WFSpace.sm)
+        // 容器本身已有 8 的横向内边距；清单行的色点比智能清单图标再靠左 12pt，
+        // 所以这里不再加 leading，落到行内 8（滴答 7，差 1pt 由色点框宽吸收）。
+        .padding(.trailing, WFSpace.sm)
         .frame(height: NavigationMetrics.rowHeight)
         .background(selected || dragTargeted ? WFColors.listSelection : .clear,
                     in: RoundedRectangle(cornerRadius: WFMetrics.corner))
@@ -521,7 +528,7 @@ struct TaskTagsSectionView: View {
     var onNavigate: () -> Void = {}
 
     var body: some View {
-        VStack(alignment: .leading, spacing: WFSpace.xs) {
+        VStack(alignment: .leading, spacing: 0) {
             sectionHeader("标签")
             if workspace.tagNames.isEmpty {
                 Text("在任务属性中添加标签").font(.caption).foregroundStyle(.tertiary)
@@ -547,8 +554,9 @@ struct TaskTagsSectionView: View {
         Button {
             navigation.destination = .allTasks; workspace.activeList = nil; workspace.activeTag = tag; onNavigate()
         } label: {
-            HStack(spacing: WFSpace.sm) {
-                Image(systemName: "tag").font(.system(size: 12)).frame(width: 18)
+            // 与清单行同一套几何（滴答实测）：行内 8 起图标框、图标右缘即文字起点。
+            HStack(spacing: 0) {
+                Image(systemName: "tag").font(.system(size: 12)).frame(width: 12)
                 Text(tag).lineLimit(1)
                 Spacer(minLength: WFSpace.xs)
             }
