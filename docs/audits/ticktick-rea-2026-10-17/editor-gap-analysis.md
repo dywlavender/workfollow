@@ -213,6 +213,7 @@
 | TI2-15 | 笔记信息（字数/创建/修改） | `TTTaskDetailNoteInfoViewController`（128×148） | 无 | 缺 | P2 | S |
 | TI2-16 | H4–H6、工具条「更多」 | `md_header1..6`、`md_more` | `heading(1...3)`，无溢出菜单 | 部分 | P2 | S |
 | TI2-17 | 容器形态（侧栏/弹窗） | `containerType`、`detail_side_peek`/`detail_popup`、`TTTaskLinkDetailWindow` | 右栏 + 规划浮层 + 回收站 | 部分 | P2 | L |
+| TI2-17 | **部分完成** | 宽布局顶栏加「在独立窗口打开」（`arrow.up.forward.app`）：复用同一个 `TaskInspectorShell` 与工作区，重复点击只前置；窗口关掉即销毁。**未做**：滴答的"侧栏 ↔ 弹窗"容器切换与卡片形态 `{}` | `TaskDetailWindowTests` 2 项（宽/窄入口显隐 + 控制器复用同一窗口） |
 | TI2-18 | 多选详情面板 | `TTMultiTaskDetailViewController` + `TTMultiTaskDetailItemView` | `TaskBatchPanelView`（已有） | 差异 | P2 | M |
 | TI2-19 | 动态 WebView | `TTTaskDetailActivitiesCell` + WebView | 原生列表 | 有意不同 | 不做 | — |
 | TI2-20 | Notion / 模板推广行 | `TTTaskDetailNotionBlockCell`、`PresetTaskActionCell` | 无 | 生态集成 | 不做 | — |
@@ -407,7 +408,7 @@
 - 新增的渲染契约锚点：`InspectorRenderAnchor.deadlineLabel / attachments / tagStrip / focusEstimate`、`ScheduleRenderAnchor.deadlineRow`（测试与实现共用同一套锚点，不另建口径）。
 - 回归（第一批，截至 TI2-12）：全量 **1431 项：1424 通过 / 6 跳过 / 1 个与本轮无关的 flaky**（`FocusTaskPickerPanelFlowTests`，单独复跑通过）。
 - 回归（第二批，TI2-21 / TI2-07）：全量套件在本次会话后段被**测试宿主的源码读取门控**拖慢（读 `#filePath` 的契约测试单次约 2 分钟，与代码无关；沙箱/TCC 行为），改为**分组回归**并全部通过：inspector 组 32 项、子任务/专注/进度组逐个类通过（10 + 6 + 2 + 3）、文档组 23 项（块菜单 4 + 装饰 11 + 层级 5 + 进度 3）；`TaskMoreMenuRoundTwoTests` 2 项在门控下 138s 后通过。
-- 新增测试累计 **58** 个方法（截止 8 + 属性行 6 + 专注入口 1 + 排序折叠 10 + 行标记 2 + 角标 1 + 块菜单 4 + 进度 3 + 标题级别 3 + 打印 2 + 检查项整项 5 + 标签补全 6 + 链接悬停 5 + 内联评论 2），另反转 1 条既有断言（非空正文行沟槽从"必须干净"改为"必须有块手柄"）、扩充 1 条移除清单、1 处测试支撑锚点映射、2 处选择器/目录计数断言随 H4–H6 更新。
+- 新增测试累计 **60** 个方法（截止 8 + 属性行 6 + 专注入口 1 + 排序折叠 10 + 行标记 2 + 角标 1 + 块菜单 4 + 进度 3 + 标题级别 3 + 打印 2 + 检查项整项 5 + 标签补全 6 + 链接悬停 5 + 内联评论 2 + 独立窗口 2），另反转 1 条既有断言（非空正文行沟槽从"必须干净"改为"必须有块手柄"）、扩充 1 条移除清单、1 处测试支撑锚点映射、2 处选择器/目录计数断言随 H4–H6 更新。
 - 测试环境注意：`AppEnvironment` + 承载 `NSHostingView` 的窗口在 XCTest 内存检查里"关窗后释放"会过释放（与本轮功能无关，最简 `Text` 复现）；内联评论的渲染断言因此不关窗，真机关窗路径未自动化复核。
 - 真机路径已由测试覆盖面板切换与写回（`testDeadlineRowSwitchesPanelAndWritesDeadlineThroughTheRealInspector`）；仍未做的是**视觉像素级复核**（AX 不可用），下次开 app 时按第 7 节顺手看一眼即可。
 

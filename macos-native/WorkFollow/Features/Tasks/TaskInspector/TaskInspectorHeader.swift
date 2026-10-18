@@ -6,6 +6,8 @@ struct TaskInspectorHeader<Schedule: View, Priority: View>: View {
     let onBack: () -> Void
     let onComplete: () -> Void
     let onRepeat: () -> Void
+    /// 在独立窗口打开（TI2-17）：宿主不传就不渲染入口。
+    var onDetach: (() -> Void)? = nil
     @ViewBuilder let schedule: () -> Schedule
     @ViewBuilder let priority: () -> Priority
 
@@ -64,6 +66,14 @@ struct TaskInspectorHeader<Schedule: View, Priority: View>: View {
             .frame(maxWidth: .infinity)
             .frame(height: WFMetrics.controlHeight)
             .inspectorRenderAnchor(.scheduleViewport)
+            if let onDetach {
+                AppKitIconButton(symbol: "arrow.up.forward.app", pointSize: 13,
+                                 tint: .inspectorSecondary, accessibilityLabel: "在独立窗口打开",
+                                 action: onDetach)
+                    .frame(width: 24, height: WFMetrics.controlHeight)
+                    .help("在独立窗口打开")
+                    .inspectorRenderAnchor(.detach)
+            }
             priority().fixedSize()
                 .inspectorRenderAnchor(.priority)
         }

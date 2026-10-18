@@ -113,6 +113,10 @@ struct TaskInspectorShell: View {
                             onBack: { workspace.select(nil) },
                             onComplete: { _ = workspace.changeStatus(task) },
                             onRepeat: { openSchedulePanel(.recurrence) },
+                            onDetach: showBack ? nil : {
+                                TaskDetailWindowController.shared.show(workspace: workspace,
+                                                                       environment: environment)
+                            },
                             schedule: { scheduleChip(task, field: .due) },
                             priority: { priorityMenu(task) })
         // 子任务进度条（TI2-07）：贴在顶栏下沿，不改变 Header 高度/内容几何。
