@@ -1146,6 +1146,41 @@ final class TaskActions {
         store.commit(values)
     }
 
+    /// 子任务拖拽落点：把 `id` 放到**同一父级**移除自己之后的第 `index` 个位置。
+    /// 与 `reorder(_:before:)` 同一套 `childOrder` 重排规则，区别是支持"拖到末尾"
+    /// （`index == 剩余兄弟数`）和任意落点。跨父级移动仍走 `move(_:to:)`。
+    @discardableResult
+    func reorder(_ id: UUID, toSiblingIndex index: Int) -> Bool {
+        guard let source = store.task(id) else { return false }
+        let parentID = source.parentID
+        var values = store.tasks
+        let siblings = values.filter { $0.parentID == parentID }
+        guard let oldIndex = siblings.firstIndex(where: { $0.id == id }),
+              let sourceIndex = values.firstIndex(where: { $0.id == id }) else { return false }
+        let remaining = siblings.filter { $0.id != id }
+        let clamped = max(0, min(index, remaining.count))
+        guard clamped != oldIndex else { return false }
+        values.remove(at: sourceIndex)
+        let insertion: Int
+        if clamped < remaining.count {
+            let targetID = remaining[clamped].id
+            insertion = values.firstIndex(where: { $0.id == targetID }) ?? values.count
+        } else if let lastIndex = values.lastIndex(where: { $0.parentID == parentID }) {
+            insertion = lastIndex + 1
+        } else {
+            insertion = values.count
+        }
+        values.insert(source, at: min(insertion, values.count))
+        if parentID != nil {
+            var order = 0
+            for i in values.indices where values[i].parentID == parentID {
+                values[i].childOrder = order; order += 1
+            }
+        }
+        store.commit(values)
+        return true
+    }
+
     /// Reparenting and order changes form one operation, including one undo step.
     @discardableResult
     func move(_ id: UUID, to placement: TaskDropPlacement) -> TaskActionResult {

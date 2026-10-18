@@ -40,7 +40,7 @@ final class TaskMoreMenuRoundTwoTests: XCTestCase {
         }
 
         // 「打印」仍缺席：本地没有打印能力，按"无假按钮"处理（滴答有该项，属能力缺口）。
-        for removedEntry in ["其他操作", "更多属性", "截止日期", "跳过本周期", "打印"] {
+        for removedEntry in ["其他操作", "更多属性", "截止日期", "跳过本周期", "打印", "设置预计专注"] {
             XCTAssertFalse(menu.contains(removedEntry), "Unexpected more menu entry: \(removedEntry)")
         }
     }

@@ -19,9 +19,13 @@ struct AppKitSubtaskOutlineView: NSViewRepresentable {
     let onComplete: (UUID) -> Void
     let onOpen: (UUID) -> Void
     let onRename: (UUID, String) -> Void
+    /// 拖拽落点：`(被拖任务, 移除自己之后的兄弟下标)`；等于兄弟数即拖到末尾。
+    let onReorder: (UUID, Int) -> Void
+    /// 折叠状态持久化（按子任务 id）。
+    var foldStore = SubtaskFoldStore()
 
     func makeCoordinator() -> Coordinator {
-        Coordinator()
+        Coordinator(foldStore: foldStore)
     }
 
     func makeNSView(context: Context) -> NSView {
@@ -39,6 +43,8 @@ struct AppKitSubtaskOutlineView: NSViewRepresentable {
         coordinator.onComplete = onComplete
         coordinator.onOpen = onOpen
         coordinator.onRename = onRename
+        coordinator.onReorder = onReorder
+        coordinator.foldStore = foldStore
         coordinator.reload()
         // 仅在"添加子任务"触发的自动编辑 id 变化时聚焦一次，避免每次刷新重复打断输入。
         if let inlineEditingID, inlineEditingID != coordinator.autoEditingID {
@@ -66,13 +72,18 @@ struct AppKitSubtaskOutlineView: NSViewRepresentable {
         var onComplete: (UUID) -> Void = { _ in }
         var onOpen: (UUID) -> Void = { _ in }
         var onRename: (UUID, String) -> Void = { _, _ in }
+        var onReorder: (UUID, Int) -> Void = { _, _ in }
+        var foldStore = SubtaskFoldStore()
 
         private var tasksByID: [UUID: Task] = [:]
         private var childrenByParent: [UUID: [Task]] = [:]
         private var lastRootTasks: [Task] = []
         private var lastAllTasks: [Task] = []
 
-        override init() {
+        static let subtaskDragType = NSPasteboard.PasteboardType("com.workfollow.subtask-id")
+
+        init(foldStore: SubtaskFoldStore) {
+            self.foldStore = foldStore
             super.init()
             let column = NSTableColumn(identifier: .init("subtask"))
             column.resizingMask = .autoresizingMask
@@ -88,7 +99,20 @@ struct AppKitSubtaskOutlineView: NSViewRepresentable {
             outlineView.doubleAction = #selector(doubleClicked(_:))
             // 单击打开详情：手势挂在 NSOutlineView 上，不会被 cell 子视图拦截。
             let click = NSClickGestureRecognizer(target: self, action: #selector(outlineClicked(_:)))
+            // 不延迟主键事件：行拖拽（TI2-04）要能立刻进入 NSOutlineView 自己的拖拽跟踪，
+            // 否则首帧 mouseDown 被手势吃掉，拖拽会话起不来。
+            click.delaysPrimaryMouseButtonEvents = false
             outlineView.addGestureRecognizer(click)
+            // 子任务拖拽排序（同父级内）。跨父级移动不在这里做。
+            outlineView.registerForDraggedTypes([Self.subtaskDragType])
+            outlineView.setDraggingSourceOperationMask(.move, forLocal: true)
+            outlineView.setDraggingSourceOperationMask(.move, forLocal: false)
+            NotificationCenter.default.addObserver(
+                self, selector: #selector(itemDidCollapse(_:)),
+                name: NSOutlineView.itemDidCollapseNotification, object: outlineView)
+            NotificationCenter.default.addObserver(
+                self, selector: #selector(itemDidExpand(_:)),
+                name: NSOutlineView.itemDidExpandNotification, object: outlineView)
         }
 
         func reload() {
@@ -105,17 +129,33 @@ struct AppKitSubtaskOutlineView: NSViewRepresentable {
                 childrenByParent[key]?.sort { $0.childOrder < $1.childOrder }
             }
             outlineView.reloadData()
-            // 默认展开所有层级（多级子任务可见；用户可手动折叠）。
-            expandAll(item: nil)
+            // 默认展开；用户折叠过的节点按 `SubtaskFoldStore` 恢复（TI2-04）。
+            applyFoldState(item: nil)
         }
 
-        private func expandAll(item: Any?) {
+        private func applyFoldState(item: Any?) {
             let count = outlineView.numberOfChildren(ofItem: item)
             for index in 0..<count {
                 let child = outlineView.child(index, ofItem: item) as AnyObject
-                outlineView.expandItem(child)
-                expandAll(item: child)
+                guard let task = child as? Task else { continue }
+                guard outlineView.isExpandable(child) else { continue }
+                if foldStore.isCollapsed(task.id) {
+                    outlineView.collapseItem(child, collapseChildren: false)
+                } else {
+                    outlineView.expandItem(child)
+                }
+                applyFoldState(item: child)
             }
+        }
+
+        @objc private func itemDidCollapse(_ notification: Notification) {
+            guard let task = notification.userInfo?["NSObject"] as? Task else { return }
+            foldStore.setCollapsed(true, for: task.id)
+        }
+
+        @objc private func itemDidExpand(_ notification: Notification) {
+            guard let task = notification.userInfo?["NSObject"] as? Task else { return }
+            foldStore.setCollapsed(false, for: task.id)
         }
 
         // MARK: Data source
@@ -135,6 +175,58 @@ struct AppKitSubtaskOutlineView: NSViewRepresentable {
         func outlineView(_ outlineView: NSOutlineView, isItemExpandable item: Any) -> Bool {
             guard let task = item as? Task else { return false }
             return !(childrenByParent[task.id]?.isEmpty ?? true)
+        }
+
+        // MARK: 拖拽排序（同父级）
+
+        func outlineView(_ outlineView: NSOutlineView,
+                         pasteboardWriterForItem item: Any) -> NSPasteboardWriting? {
+            guard let task = item as? Task else { return nil }
+            let pasteboardItem = NSPasteboardItem()
+            pasteboardItem.setString(task.id.uuidString, forType: Self.subtaskDragType)
+            return pasteboardItem
+        }
+
+        private func draggedTaskID(_ info: NSDraggingInfo) -> UUID? {
+            guard let value = info.draggingPasteboard.string(forType: Self.subtaskDragType) else {
+                return nil
+            }
+            return UUID(uuidString: value)
+        }
+
+        /// 落点判定：只允许同父级、行与行之间（`index >= 0`）。
+        /// -1 表示"落在某行上"（会变成它的子任务），本视图不支持；
+        /// 跨父级移动走「关联主任务」等显式入口，拖拽只做排序。
+        func acceptsDrop(of id: UUID, into parentID: UUID?, at index: Int) -> Bool {
+            guard let source = tasksByID[id] else { return false }
+            return source.parentID == parentID && index >= 0
+        }
+
+        /// NSOutlineView 给的下标包含被拖行；换算成"移除自己之后"的下标。
+        static func adjustedDropIndex(proposed: Int, currentIndex: Int) -> Int {
+            proposed - (currentIndex < proposed ? 1 : 0)
+        }
+
+        func outlineView(_ outlineView: NSOutlineView, validateDrop info: NSDraggingInfo,
+                         proposedItem item: Any?, proposedChildIndex index: Int) -> NSDragOperation {
+            guard let id = draggedTaskID(info),
+                  acceptsDrop(of: id, into: (item as? Task)?.id, at: index) else { return [] }
+            return .move
+        }
+
+        func outlineView(_ outlineView: NSOutlineView, acceptDrop info: NSDraggingInfo,
+                         item: Any?, childIndex index: Int) -> Bool {
+            guard let id = draggedTaskID(info),
+                  let source = tasksByID[id],
+                  acceptsDrop(of: id, into: (item as? Task)?.id, at: index) else { return false }
+            let siblings = source.parentID.flatMap { childrenByParent[$0] } ?? rootTasks
+            guard let currentIndex = siblings.firstIndex(where: { $0.id == id }) else { return false }
+            onReorder(id, Self.adjustedDropIndex(proposed: index, currentIndex: currentIndex))
+            return true
+        }
+
+        deinit {
+            NotificationCenter.default.removeObserver(self)
         }
 
         // MARK: Delegate
@@ -220,6 +312,19 @@ final class SubtaskTitleField: NSTextField {
     }
 }
 
+/// 子任务行的迷你标记（TI2-12）。
+///
+/// 滴答 `TTSubtasksCell` 有 `shouldShowTags` / `shouldShowMiniIcons` / `shouldShowAssignee`；
+/// 本地先取"有数据才显示"的那部分，数据源与列表行完全同构（`TaskSecondaryMetadata`），
+/// 不新增第二套规则。标签仍由详情里的 chips 行承载，不在行内重复。
+enum SubtaskRowMetadata {
+    static func indicatorSymbols(for task: Task) -> [String] {
+        TaskSecondaryMetadata.items(for: task, subtaskProgress: nil)
+            .filter { $0.id != "tags" }
+            .compactMap(\.symbol)
+    }
+}
+
 /// 子任务行 cell：完成框 + 标题（可编辑）+ 日期。
 final class SubtaskRowView: NSTableCellView {
     weak var coordinator: AppKitSubtaskOutlineView.Coordinator?
@@ -231,7 +336,10 @@ final class SubtaskRowView: NSTableCellView {
     private let titleField = SubtaskTitleField()
     private let dateField = NSTextField(labelWithString: "")
     private let completionButton = NSButton()
+    private let indicatorStack = NSStackView()
     private var trackingArea: NSTrackingArea?
+    /// 供测试断言：当前行渲染了几个迷你标记。
+    var indicatorCount: Int { indicatorStack.arrangedSubviews.count }
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -259,10 +367,16 @@ final class SubtaskRowView: NSTableCellView {
         dateField.isBordered = false
         dateField.drawsBackground = false
 
+        indicatorStack.orientation = .horizontal
+        indicatorStack.spacing = 4
+        indicatorStack.alignment = .centerY
+        indicatorStack.setAccessibilityLabel("任务标记")
+
         addSubview(completionBox)
         // completionButton 盖在完成框之上接收点击（完成/取消完成）。
         addSubview(completionButton)
         addSubview(titleField)
+        addSubview(indicatorStack)
         addSubview(dateField)
     }
 
@@ -320,7 +434,29 @@ final class SubtaskRowView: NSTableCellView {
         } else {
             dateField.isHidden = true
         }
+        configureIndicators(symbols: SubtaskRowMetadata.indicatorSymbols(for: task))
         needsLayout = true
+    }
+
+    /// 迷你标记：重复 / 提醒 / 描述 / 附件（有才画，图标 10pt、4pt 间距）。
+    private func configureIndicators(symbols: [String]) {
+        indicatorStack.arrangedSubviews.forEach {
+            indicatorStack.removeArrangedSubview($0)
+            $0.removeFromSuperview()
+        }
+        for symbol in symbols {
+            let image = NSImageView()
+            image.image = NSImage(systemSymbolName: symbol, accessibilityDescription: symbol)
+            image.contentTintColor = .tertiaryLabelColor
+            image.symbolConfiguration = NSImage.SymbolConfiguration(pointSize: 10, weight: .regular)
+            image.translatesAutoresizingMaskIntoConstraints = false
+            NSLayoutConstraint.activate([
+                image.widthAnchor.constraint(equalToConstant: 14),
+                image.heightAnchor.constraint(equalToConstant: 14)
+            ])
+            indicatorStack.addArrangedSubview(image)
+        }
+        indicatorStack.isHidden = symbols.isEmpty
     }
 
     func beginEditing() {
@@ -358,11 +494,19 @@ final class SubtaskRowView: NSTableCellView {
                                      width: completionSize, height: completionSize)
         let titleX: CGFloat = 34
         let dateWidth: CGFloat = dateField.isHidden ? 0 : 90
-        let titleWidth = max(40, bounds.width - titleX - dateWidth - 12)
+        let indicatorCount = indicatorStack.isHidden ? 0 : indicatorStack.arrangedSubviews.count
+        let indicatorWidth: CGFloat = indicatorCount == 0
+            ? 0 : CGFloat(indicatorCount) * 14 + CGFloat(indicatorCount - 1) * 4
+        let indicatorsX = max(titleX + 40, bounds.width - 12 - dateWidth
+            - (dateWidth > 0 ? 8 : 0) - indicatorWidth)
+        let titleWidth = max(40, indicatorsX - titleX - 8)
         titleField.frame = NSRect(x: titleX, y: (bounds.height - 20) / 2,
                                   width: titleWidth, height: 20)
+        indicatorStack.frame = NSRect(x: indicatorsX, y: (bounds.height - 14) / 2,
+                                      width: indicatorWidth, height: 14)
         if !dateField.isHidden {
-            dateField.frame = NSRect(x: titleX + titleWidth + 8, y: (bounds.height - 18) / 2,
+            dateField.frame = NSRect(x: bounds.width - 12 - dateWidth,
+                                     y: (bounds.height - 18) / 2,
                                      width: dateWidth, height: 18)
         }
         updateTrackingAreas()

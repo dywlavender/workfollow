@@ -1,0 +1,801 @@
+{
+  "contract": {
+    "topview": {
+      "expected_outlets": 18,
+      "actual_outlets": 18,
+      "expected_actions": 6,
+      "actual_outlet_connectors": 18,
+      "actual_control_connectors": 7,
+      "actual_distinct_actions": 6,
+      "duplicate_action_connectors": [
+        {
+          "selector": "assigneeButtonClicked:",
+          "count": 2
+        }
+      ],
+      "outlets": [
+        "assigneeAvatarButton",
+        "assigneeIconButton",
+        "assigneeLeadingLC",
+        "checkButton",
+        "checkboxLeadingLC",
+        "checkboxTopLC",
+        "dateButton",
+        "iconDivider",
+        "noteInfoButton",
+        "noteInfoLeadingLC",
+        "priorityButton",
+        "priorityLeadingLC",
+        "progressView",
+        "repeatIcon",
+        "repeatIconTrailingLC",
+        "returnButton",
+        "returnButtonTailingLC",
+        "secondaryDateLabel"
+      ],
+      "distinct_actions": [
+        "checkboxButtonClicked:",
+        "assigneeButtonClicked:",
+        "notesInfoButtonClicked:",
+        "priorityButtonClicked:",
+        "returnButtonClicked:",
+        "dateButtonClicked:"
+      ],
+      "ok": true
+    },
+    "bottom_action_view": {
+      "expected_outlets": [
+        "commentButton",
+        "commentButtonLeading",
+        "deleteButton",
+        "deleteButtonLeading",
+        "deleteForeverButton",
+        "deleteForeverButtonLeading",
+        "mdEditButton",
+        "mdEditButtonLeading",
+        "mergeButton",
+        "mergeButtonLeading",
+        "moreButton",
+        "moreButtonLeading",
+        "projectButton",
+        "tagButton",
+        "tagButtonLeading"
+      ],
+      "missing_outlets": [],
+      "extra_outlets": [],
+      "expected_actions": [
+        "tagButtonClicked:",
+        "moreButtonClicked:",
+        "mergeButtonClicked:",
+        "deleteTaskButtonClicked:",
+        "mdEditButtonClicked:",
+        "moveToProjectButtonClicked:",
+        "commentButtonClicked:",
+        "deleteForeverButtonClicked:"
+      ],
+      "missing_actions": [],
+      "extra_actions": [],
+      "duplicates": [],
+      "ok": true
+    }
+  },
+  "evidence_cross_check": {
+    "evidence_file": "/Users/dongyangwei/Documents/学习/代办笔记/workfollow-macos-native/docs/audits/ticktick-rea-2026-10-13/rea-selected-evidence.json",
+    "entries": 37,
+    "comparable": 37,
+    "outlets_all_match": true,
+    "actions_all_match": true,
+    "outlet_mismatches": [],
+    "action_mismatches": [],
+    "outlet_metric_note": "evidence['outlets'] is a de-duplicated *name* list, not one row per NSNibOutletConnector (TTFocusDetailRecordsViewController has 22 connectors but 14 distinct names; it matches once de-duped). Per-nib connector counts are kept in parsed_outlets.",
+    "object_metric_note": "evidence['objects'] has no documented counting rule; it does not equal archive object_count (Python parser) nor views+cells+connectors+constraints, so only outlet/action/connection counts are treated as contractual.",
+    "rows": [
+      {
+        "file": "TTCalendarArrangeCell.nib",
+        "in_detail_scope": false,
+        "evidence_objects": 36,
+        "evidence_connections": 10,
+        "evidence_outlets": 9,
+        "evidence_actions": 1,
+        "evidence_action_set": [
+          "arrowButtonClicked:"
+        ],
+        "parsed_objects": 140,
+        "parsed_outlets": 9,
+        "parsed_actions": 1,
+        "parsed_distinct_actions": 1,
+        "outlets_match": true,
+        "actions_match": true
+      },
+      {
+        "file": "TTCalendarArrangeHeaderCell.nib",
+        "in_detail_scope": false,
+        "evidence_objects": 27,
+        "evidence_connections": 3,
+        "evidence_outlets": 3,
+        "evidence_actions": 0,
+        "evidence_action_set": [],
+        "parsed_objects": 99,
+        "parsed_outlets": 3,
+        "parsed_actions": 0,
+        "parsed_distinct_actions": 0,
+        "outlets_match": true,
+        "actions_match": true
+      },
+      {
+        "file": "TTCalendarArrangeViewController.nib",
+        "in_detail_scope": false,
+        "evidence_objects": 107,
+        "evidence_connections": 14,
+        "evidence_outlets": 11,
+        "evidence_actions": 3,
+        "evidence_action_set": [
+          "arrangeTypeButtonClicked:",
+          "closeButtonClicked:",
+          "filterButtonClicked:"
+        ],
+        "parsed_objects": 326,
+        "parsed_outlets": 11,
+        "parsed_actions": 3,
+        "parsed_distinct_actions": 3,
+        "outlets_match": true,
+        "actions_match": true
+      },
+      {
+        "file": "TTCalendarDisplayOptionsViewController.nib",
+        "in_detail_scope": false,
+        "evidence_objects": 185,
+        "evidence_connections": 45,
+        "evidence_outlets": 30,
+        "evidence_actions": 2,
+        "evidence_action_set": [
+          "switchButtonClicked:",
+          "timeZoneSettingsButtonClicked:"
+        ],
+        "parsed_objects": 617,
+        "parsed_outlets": 30,
+        "parsed_actions": 10,
+        "parsed_distinct_actions": 2,
+        "outlets_match": true,
+        "actions_match": true
+      },
+      {
+        "file": "TTCalendarDisplayOptionsWindowController.nib",
+        "in_detail_scope": false,
+        "evidence_objects": 29,
+        "evidence_connections": 3,
+        "evidence_outlets": 3,
+        "evidence_actions": 0,
+        "evidence_action_set": [],
+        "parsed_objects": 103,
+        "parsed_outlets": 3,
+        "parsed_actions": 0,
+        "parsed_distinct_actions": 0,
+        "outlets_match": true,
+        "actions_match": true
+      },
+      {
+        "file": "TTCalendarTimeZoneSettingsViewController.nib",
+        "in_detail_scope": false,
+        "evidence_objects": 116,
+        "evidence_connections": 21,
+        "evidence_outlets": 15,
+        "evidence_actions": 6,
+        "evidence_action_set": [
+          "addButtonClicked:",
+          "cancelButtonClicked:",
+          "deleteButtonClicked:",
+          "emojiButtonClicked:",
+          "saveButtonClicked:",
+          "timezoneButtonClicked:"
+        ],
+        "parsed_objects": 372,
+        "parsed_outlets": 15,
+        "parsed_actions": 6,
+        "parsed_distinct_actions": 6,
+        "outlets_match": true,
+        "actions_match": true
+      },
+      {
+        "file": "TTCalendarTypePickerVC.nib",
+        "in_detail_scope": false,
+        "evidence_objects": 82,
+        "evidence_connections": 12,
+        "evidence_outlets": 9,
+        "evidence_actions": 2,
+        "evidence_action_set": [
+          "minusButtonClicked:",
+          "plusButtonClicked:"
+        ],
+        "parsed_objects": 263,
+        "parsed_outlets": 9,
+        "parsed_actions": 2,
+        "parsed_distinct_actions": 2,
+        "outlets_match": true,
+        "actions_match": true
+      },
+      {
+        "file": "TTCalendarViewController.nib",
+        "in_detail_scope": false,
+        "evidence_objects": 169,
+        "evidence_connections": 35,
+        "evidence_outlets": 34,
+        "evidence_actions": 1,
+        "evidence_action_set": [
+          "sidebarButtonClicked:"
+        ],
+        "parsed_objects": 533,
+        "parsed_outlets": 34,
+        "parsed_actions": 1,
+        "parsed_distinct_actions": 1,
+        "outlets_match": true,
+        "actions_match": true
+      },
+      {
+        "file": "TTDatePickerCustomRepeatVC.nib",
+        "in_detail_scope": false,
+        "evidence_objects": 127,
+        "evidence_connections": 42,
+        "evidence_outlets": 34,
+        "evidence_actions": 8,
+        "evidence_action_set": [
+          "cancelButtonClicked:",
+          "freqPopButtonClicked:",
+          "monthOrdinalPopButtonClicked:",
+          "okButtonClicked:",
+          "onTheOrdinalPopButtonClicked:",
+          "onTheWeekdayPopButtonClicked:",
+          "repeatTypeClicked:",
+          "workDayOrdinalPopButtonClicked:"
+        ],
+        "parsed_objects": 467,
+        "parsed_outlets": 34,
+        "parsed_actions": 8,
+        "parsed_distinct_actions": 8,
+        "outlets_match": true,
+        "actions_match": true
+      },
+      {
+        "file": "TTEisenhowerMatrixQuadrantEditViewController.nib",
+        "in_detail_scope": false,
+        "evidence_objects": 80,
+        "evidence_connections": 19,
+        "evidence_outlets": 14,
+        "evidence_actions": 5,
+        "evidence_action_set": [
+          "cancelButtonClicked:",
+          "emojiButtonClicked:",
+          "resetButtonClicked:",
+          "sampleButtonClicked:",
+          "saveButtonClicked:"
+        ],
+        "parsed_objects": 278,
+        "parsed_outlets": 14,
+        "parsed_actions": 5,
+        "parsed_distinct_actions": 5,
+        "outlets_match": true,
+        "actions_match": true
+      },
+      {
+        "file": "TTEisenhowerMatrixQuadrantViewController.nib",
+        "in_detail_scope": false,
+        "evidence_objects": 76,
+        "evidence_connections": 15,
+        "evidence_outlets": 13,
+        "evidence_actions": 2,
+        "evidence_action_set": [
+          "addButtonClicked:",
+          "moreButtonClicked:"
+        ],
+        "parsed_objects": 261,
+        "parsed_outlets": 13,
+        "parsed_actions": 2,
+        "parsed_distinct_actions": 2,
+        "outlets_match": true,
+        "actions_match": true
+      },
+      {
+        "file": "TTEisenhowerMatrixViewController.nib",
+        "in_detail_scope": false,
+        "evidence_objects": 35,
+        "evidence_connections": 5,
+        "evidence_outlets": 4,
+        "evidence_actions": 1,
+        "evidence_action_set": [
+          "moreButtonClicked:"
+        ],
+        "parsed_objects": 117,
+        "parsed_outlets": 4,
+        "parsed_actions": 1,
+        "parsed_distinct_actions": 1,
+        "outlets_match": true,
+        "actions_match": true
+      },
+      {
+        "file": "TTFocusAssociationSearchVC.nib",
+        "in_detail_scope": false,
+        "evidence_objects": 63,
+        "evidence_connections": 7,
+        "evidence_outlets": 5,
+        "evidence_actions": 2,
+        "evidence_action_set": [
+          "clearButtonClicked:",
+          "returnButtonClicked:"
+        ],
+        "parsed_objects": 188,
+        "parsed_outlets": 5,
+        "parsed_actions": 2,
+        "parsed_distinct_actions": 2,
+        "outlets_match": true,
+        "actions_match": true
+      },
+      {
+        "file": "TTFocusAssociationViewController.nib",
+        "in_detail_scope": false,
+        "evidence_objects": 74,
+        "evidence_connections": 12,
+        "evidence_outlets": 10,
+        "evidence_actions": 2,
+        "evidence_action_set": [
+          "listButtonClicked:",
+          "searchButtonClicked:"
+        ],
+        "parsed_objects": 245,
+        "parsed_outlets": 10,
+        "parsed_actions": 2,
+        "parsed_distinct_actions": 2,
+        "outlets_match": true,
+        "actions_match": true
+      },
+      {
+        "file": "TTFocusDetailContainerViewController.nib",
+        "in_detail_scope": false,
+        "evidence_objects": 5,
+        "evidence_connections": 1,
+        "evidence_outlets": 1,
+        "evidence_actions": 0,
+        "evidence_action_set": [],
+        "parsed_objects": 29,
+        "parsed_outlets": 1,
+        "parsed_actions": 0,
+        "parsed_distinct_actions": 0,
+        "outlets_match": true,
+        "actions_match": true
+      },
+      {
+        "file": "TTFocusDetailRecordsDateCell.nib",
+        "in_detail_scope": false,
+        "evidence_objects": 22,
+        "evidence_connections": 4,
+        "evidence_outlets": 3,
+        "evidence_actions": 1,
+        "evidence_action_set": [
+          "checkboxClicked:"
+        ],
+        "parsed_objects": 80,
+        "parsed_outlets": 3,
+        "parsed_actions": 1,
+        "parsed_distinct_actions": 1,
+        "outlets_match": true,
+        "actions_match": true
+      },
+      {
+        "file": "TTFocusDetailRecordsFocusCell.nib",
+        "in_detail_scope": false,
+        "evidence_objects": 41,
+        "evidence_connections": 11,
+        "evidence_outlets": 10,
+        "evidence_actions": 1,
+        "evidence_action_set": [
+          "checkboxClicked:"
+        ],
+        "parsed_objects": 158,
+        "parsed_outlets": 10,
+        "parsed_actions": 1,
+        "parsed_distinct_actions": 1,
+        "outlets_match": true,
+        "actions_match": true
+      },
+      {
+        "file": "TTFocusDetailRecordsLoadMoreCell.nib",
+        "in_detail_scope": false,
+        "evidence_objects": 15,
+        "evidence_connections": 1,
+        "evidence_outlets": 1,
+        "evidence_actions": 0,
+        "evidence_action_set": [],
+        "parsed_objects": 52,
+        "parsed_outlets": 1,
+        "parsed_actions": 0,
+        "parsed_distinct_actions": 0,
+        "outlets_match": true,
+        "actions_match": true
+      },
+      {
+        "file": "TTFocusDetailRecordsViewController.nib",
+        "in_detail_scope": false,
+        "evidence_objects": 145,
+        "evidence_connections": 27,
+        "evidence_outlets": 14,
+        "evidence_actions": 3,
+        "evidence_action_set": [
+          "addButtonClicked:",
+          "moreButtonClicked:",
+          "returnButtonClicked:"
+        ],
+        "parsed_objects": 437,
+        "parsed_outlets": 22,
+        "parsed_actions": 3,
+        "parsed_distinct_actions": 3,
+        "outlets_match": true,
+        "actions_match": true
+      },
+      {
+        "file": "TTFocusDetailTimelineItemView.nib",
+        "in_detail_scope": false,
+        "evidence_objects": 21,
+        "evidence_connections": 3,
+        "evidence_outlets": 3,
+        "evidence_actions": 0,
+        "evidence_action_set": [],
+        "parsed_objects": 85,
+        "parsed_outlets": 3,
+        "parsed_actions": 0,
+        "parsed_distinct_actions": 0,
+        "outlets_match": true,
+        "actions_match": true
+      },
+      {
+        "file": "TTFocusDetailViewController.nib",
+        "in_detail_scope": false,
+        "evidence_objects": 83,
+        "evidence_connections": 14,
+        "evidence_outlets": 12,
+        "evidence_actions": 2,
+        "evidence_action_set": [
+          "associateButtonClicked:",
+          "titleButtonClicked:"
+        ],
+        "parsed_objects": 269,
+        "parsed_outlets": 12,
+        "parsed_actions": 2,
+        "parsed_distinct_actions": 2,
+        "outlets_match": true,
+        "actions_match": true
+      },
+      {
+        "file": "TTFocusDurationEditViewController.nib",
+        "in_detail_scope": false,
+        "evidence_objects": 41,
+        "evidence_connections": 9,
+        "evidence_outlets": 6,
+        "evidence_actions": 3,
+        "evidence_action_set": [
+          "cancelButtonClicked:",
+          "saveButtonClicked:",
+          "selectButtonClicked:"
+        ],
+        "parsed_objects": 141,
+        "parsed_outlets": 6,
+        "parsed_actions": 3,
+        "parsed_distinct_actions": 3,
+        "outlets_match": true,
+        "actions_match": true
+      },
+      {
+        "file": "TTFocusEstimateViewController.nib",
+        "in_detail_scope": false,
+        "evidence_objects": 82,
+        "evidence_connections": 17,
+        "evidence_outlets": 14,
+        "evidence_actions": 3,
+        "evidence_action_set": [
+          "cancelButtonClicked:",
+          "confirmButtonClicked:",
+          "pomoGoalStepperValueChanged:"
+        ],
+        "parsed_objects": 265,
+        "parsed_outlets": 14,
+        "parsed_actions": 3,
+        "parsed_distinct_actions": 3,
+        "outlets_match": true,
+        "actions_match": true
+      },
+      {
+        "file": "TTFocusImmersiveViewController.nib",
+        "in_detail_scope": false,
+        "evidence_objects": 75,
+        "evidence_connections": 16,
+        "evidence_outlets": 12,
+        "evidence_actions": 2,
+        "evidence_action_set": [
+          "actionButtonClicked:",
+          "exitButtonClicked:"
+        ],
+        "parsed_objects": 249,
+        "parsed_outlets": 12,
+        "parsed_actions": 4,
+        "parsed_distinct_actions": 2,
+        "outlets_match": true,
+        "actions_match": true
+      },
+      {
+        "file": "TTFocusRecordDetailCell.nib",
+        "in_detail_scope": false,
+        "evidence_objects": 70,
+        "evidence_connections": 9,
+        "evidence_outlets": 7,
+        "evidence_actions": 2,
+        "evidence_action_set": [
+          "associatedButtonClicked:",
+          "itemTitleButtonClicked:"
+        ],
+        "parsed_objects": 225,
+        "parsed_outlets": 7,
+        "parsed_actions": 2,
+        "parsed_distinct_actions": 2,
+        "outlets_match": true,
+        "actions_match": true
+      },
+      {
+        "file": "TTFocusRecordDetailNoteCell.nib",
+        "in_detail_scope": false,
+        "evidence_objects": 46,
+        "evidence_connections": 3,
+        "evidence_outlets": 3,
+        "evidence_actions": 0,
+        "evidence_action_set": [],
+        "parsed_objects": 133,
+        "parsed_outlets": 3,
+        "parsed_actions": 0,
+        "parsed_distinct_actions": 0,
+        "outlets_match": true,
+        "actions_match": true
+      },
+      {
+        "file": "TTFocusRecordDetailViewController.nib",
+        "in_detail_scope": false,
+        "evidence_objects": 52,
+        "evidence_connections": 5,
+        "evidence_outlets": 4,
+        "evidence_actions": 1,
+        "evidence_action_set": [
+          "deleteButtonClicked:"
+        ],
+        "parsed_objects": 155,
+        "parsed_outlets": 4,
+        "parsed_actions": 1,
+        "parsed_distinct_actions": 1,
+        "outlets_match": true,
+        "actions_match": true
+      },
+      {
+        "file": "TTFocusRecordEditViewController.nib",
+        "in_detail_scope": false,
+        "evidence_objects": 121,
+        "evidence_connections": 23,
+        "evidence_outlets": 17,
+        "evidence_actions": 6,
+        "evidence_action_set": [
+          "cancelButtonClicked:",
+          "endDateButtonClicked:",
+          "saveButtonClicked:",
+          "startDateButtonClicked:",
+          "taskButtonClicked:",
+          "typeButtonClicked:"
+        ],
+        "parsed_objects": 372,
+        "parsed_outlets": 17,
+        "parsed_actions": 6,
+        "parsed_distinct_actions": 6,
+        "outlets_match": true,
+        "actions_match": true
+      },
+      {
+        "file": "TTFocusSettingsPopWindowController.nib",
+        "in_detail_scope": false,
+        "evidence_objects": 29,
+        "evidence_connections": 4,
+        "evidence_outlets": 4,
+        "evidence_actions": 0,
+        "evidence_action_set": [],
+        "parsed_objects": 106,
+        "parsed_outlets": 4,
+        "parsed_actions": 0,
+        "parsed_distinct_actions": 0,
+        "outlets_match": true,
+        "actions_match": true
+      },
+      {
+        "file": "TTFocusViewController.nib",
+        "in_detail_scope": false,
+        "evidence_objects": 148,
+        "evidence_connections": 37,
+        "evidence_outlets": 25,
+        "evidence_actions": 9,
+        "evidence_action_set": [
+          "actionButtonClicked:",
+          "addTimerButtonClicked:",
+          "associateArrowClicked:",
+          "associateTitleClicked:",
+          "closeButtonClicked:",
+          "minusButtonClicked:",
+          "moreButtonClicked:",
+          "plusButtonClicked:",
+          "ringsButtonClicked:"
+        ],
+        "parsed_objects": 483,
+        "parsed_outlets": 25,
+        "parsed_actions": 11,
+        "parsed_distinct_actions": 9,
+        "outlets_match": true,
+        "actions_match": true
+      },
+      {
+        "file": "TTMatrixQuadrantTaskCell.nib",
+        "in_detail_scope": false,
+        "evidence_objects": 109,
+        "evidence_connections": 29,
+        "evidence_outlets": 27,
+        "evidence_actions": 2,
+        "evidence_action_set": [
+          "assigneeButtonClicked:",
+          "checkButtonClicked:"
+        ],
+        "parsed_objects": 368,
+        "parsed_outlets": 27,
+        "parsed_actions": 2,
+        "parsed_distinct_actions": 2,
+        "outlets_match": true,
+        "actions_match": true
+      },
+      {
+        "file": "TTPomoPreferenceViewController.nib",
+        "in_detail_scope": false,
+        "evidence_objects": 178,
+        "evidence_connections": 29,
+        "evidence_outlets": 26,
+        "evidence_actions": 3,
+        "evidence_action_set": [
+          "autoBreakSwitchButtonClicked:",
+          "autoPomoSwitchButtonClicked:",
+          "focusSyncSwitchButtonClicked:"
+        ],
+        "parsed_objects": 549,
+        "parsed_outlets": 26,
+        "parsed_actions": 3,
+        "parsed_distinct_actions": 3,
+        "outlets_match": true,
+        "actions_match": true
+      },
+      {
+        "file": "TTPomoStatisticsViewController.nib",
+        "in_detail_scope": false,
+        "evidence_objects": 5,
+        "evidence_connections": 1,
+        "evidence_outlets": 1,
+        "evidence_actions": 0,
+        "evidence_action_set": [],
+        "parsed_objects": 29,
+        "parsed_outlets": 1,
+        "parsed_actions": 0,
+        "parsed_distinct_actions": 0,
+        "outlets_match": true,
+        "actions_match": true
+      },
+      {
+        "file": "TTRepeatChangeAlertViewController.nib",
+        "in_detail_scope": false,
+        "evidence_objects": 47,
+        "evidence_connections": 15,
+        "evidence_outlets": 10,
+        "evidence_actions": 3,
+        "evidence_action_set": [
+          "buttonClicked:",
+          "cancelButtonClicked:",
+          "okButtonClicked:"
+        ],
+        "parsed_objects": 169,
+        "parsed_outlets": 10,
+        "parsed_actions": 5,
+        "parsed_distinct_actions": 3,
+        "outlets_match": true,
+        "actions_match": true
+      },
+      {
+        "file": "TTTaskDetailFocusSummaryCell.nib",
+        "in_detail_scope": true,
+        "evidence_objects": 5,
+        "evidence_connections": 0,
+        "evidence_outlets": 0,
+        "evidence_actions": 0,
+        "evidence_action_set": [],
+        "parsed_objects": 26,
+        "parsed_outlets": 0,
+        "parsed_actions": 0,
+        "parsed_distinct_actions": 0,
+        "outlets_match": true,
+        "actions_match": true
+      },
+      {
+        "file": "TTTaskDetailTopView.nib",
+        "in_detail_scope": true,
+        "evidence_objects": 95,
+        "evidence_connections": 25,
+        "evidence_outlets": 18,
+        "evidence_actions": 6,
+        "evidence_action_set": [
+          "assigneeButtonClicked:",
+          "checkboxButtonClicked:",
+          "dateButtonClicked:",
+          "notesInfoButtonClicked:",
+          "priorityButtonClicked:",
+          "returnButtonClicked:"
+        ],
+        "parsed_objects": 322,
+        "parsed_outlets": 18,
+        "parsed_actions": 7,
+        "parsed_distinct_actions": 6,
+        "outlets_match": true,
+        "actions_match": true
+      },
+      {
+        "file": "TTWeekCalTimelineViewItem.nib",
+        "in_detail_scope": false,
+        "evidence_objects": 5,
+        "evidence_connections": 1,
+        "evidence_outlets": 1,
+        "evidence_actions": 0,
+        "evidence_action_set": [],
+        "parsed_objects": 30,
+        "parsed_outlets": 1,
+        "parsed_actions": 0,
+        "parsed_distinct_actions": 0,
+        "outlets_match": true,
+        "actions_match": true
+      }
+    ]
+  },
+  "image_assets": {
+    "car": "/Applications/TickTick.app/Contents/Resources/Assets.car",
+    "checked": 27,
+    "resolved": 25,
+    "missing": [
+      "menu_calendar",
+      "set_repeat"
+    ]
+  },
+  "object_count_reconciliation": {
+    "archive_object_count": 322,
+    "histogram": {
+      "NSNumber": 97,
+      "NSString": 79,
+      "NSLayoutConstraint": 48,
+      "NSNibOutletConnector": 18,
+      "NSArray": 17,
+      "NSClassSwapper": 13,
+      "NSButtonCell": 7,
+      "NSCustomResource": 7,
+      "NSNibControlConnector": 7,
+      "NSValue": 7,
+      "NSMutableArray": 5,
+      "NSColor": 4,
+      "NSCustomObject": 2,
+      "NSFont": 2,
+      "NSMutableSet": 2,
+      "IBClassReference": 1,
+      "NSColorSpace": 1,
+      "NSData": 1,
+      "NSIBObjectData": 1,
+      "NSImageCell": 1,
+      "NSObject": 1,
+      "NSTextFieldCell": 1
+    },
+    "ui_views_swappers": 13,
+    "cells": 9,
+    "connectors": 25,
+    "layout_constraints": 48,
+    "ui_subset_sum": 95,
+    "note": "TopView: archive has 322 objects; the 2026-10-13 evidence entry reports objects=95, which equals views(13)+cells(9)+connectors(25)+constraints(48). The same rule does not hold for other evidence entries (e.g. TTCalendarArrangeCell 31 vs 36), so it is a coincidence-grade fit, not a proven metric."
+  }
+}

@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// 任务详情：顶部状态/日期/优先级，标题与正文连续编辑，一级子任务跟在正文后；
 /// 底部清单入口与正文格式、更多操作入口固定显示。
@@ -7,6 +8,9 @@ struct TaskInspectorShell: View {
     @EnvironmentObject private var environment: AppEnvironment
     @Environment(\.taskFocusStore) private var taskFocusStore
     let showBack: Bool
+    /// 评论条数角标的观察源。由宿主显式传入（测试/预览可以不传）——
+    /// 避免在 body 里直接读 `@EnvironmentObject`（没有 environment 的宿主会崩）。
+    var commentStore: TaskCommentStore? = nil
     /// 浮层里的详情（日历/四象限点任务条打开的那个）：Esc 要关掉浮层，而不是
     /// 把选中项清掉后留在原地不动——对齐 Flutter `TaskInspector._escape()` 的
     /// `_isPopup` 分支（它排在"退回列表"之前）。
@@ -27,6 +31,8 @@ struct TaskInspectorShell: View {
     @State private var focusStartFailed = false
     /// 「添加子任务」整行的悬停态（原版 `InkWell.hoverColor`）。
     @State private var hoveringAddChild = false
+    /// 文件拖到详情时的目标高亮（TI2-03：拖放即附件）。
+    @State private var attachmentDropTargeted = false
     @StateObject private var editorHandle = DocumentEditorHandle()
 
     var body: some View {
@@ -166,7 +172,7 @@ struct TaskInspectorShell: View {
     }
 
     private var hasFooterPopover: Bool {
-        actionPresentation.panel != nil || presentation.activePopover == .deadline
+        actionPresentation.panel != nil
     }
 
     @ViewBuilder
@@ -197,10 +203,6 @@ struct TaskInspectorShell: View {
                     actionPresentation.dismiss(.parent)
                 }
                 .inspectorRenderAnchor(.parentPicker)
-            } else if presentation.activePopover == .deadline {
-                TaskDatePopoverV2(task: task, workspace: workspace, deadline: true) {
-                    presentation.activePopover = nil
-                }
             }
         }
         .background(WFColors.content, in: RoundedRectangle(cornerRadius: 14))
@@ -212,9 +214,6 @@ struct TaskInspectorShell: View {
 
     private func dismissFooterPopover() {
         actionPresentation.dismiss()
-        if presentation.activePopover == .deadline {
-            presentation.activePopover = nil
-        }
     }
 
     /// Opening a date entry also works through accessibility/keyboard actions,
@@ -248,9 +247,8 @@ struct TaskInspectorShell: View {
                     .inspectorRenderAnchor(.tagsMenuRow)
                 moreAction("上传附件", symbol: "paperclip") { addAttachments(to: task.id) }
                 focusSubmenuRow(task)
-                // 专注摘要行改为"有数据才显示"后，设置预计专注的入口放在这里
-                // （滴答无此入口，属本地保留能力的可达性处理）。
-                moreAction("设置预计专注", symbol: "timer") { showFocusEstimate = true }
+                // 预计专注入口随专注动作进子菜单（TI2-10）：滴答的 focus 动作
+                // （番茄 / 正计时 / 预计）同属一个出口，顶层菜单保持滴答的 15 项顺序。
                 Divider().padding(.horizontal, 8).padding(.vertical, 4)
                 moreAction("任务动态", symbol: "list.bullet.rectangle") { actionPresentation.open(.activity) }
                     .inspectorRenderAnchor(.activityMenuRow)
@@ -298,7 +296,7 @@ struct TaskInspectorShell: View {
             isPresented: Binding(get: { actionPresentation.submenu == .focus },
                                  set: { if !$0 { actionPresentation.dismissSubmenu() } }),
             width: 176, placement: .submenu) {
-                TaskFocusSubmenu { stopwatch in
+                TaskFocusSubmenu(onStart: { stopwatch in
                     guard let taskID = workspace.resolveTaskForAction(task.id) else { return }
                     if !TaskInspectorFocusAction.start(taskID: taskID, stopwatch: stopwatch,
                         store: environment.focusStore, presentation: &actionPresentation) {
@@ -308,7 +306,10 @@ struct TaskInspectorShell: View {
                         environment.navigation.taskSelectionToPreserveOnNextNavigation = taskID
                         environment.navigate(to: .focus)
                     }
-                }
+                }, onSetEstimate: {
+                    actionPresentation.dismiss()
+                    showFocusEstimate = true
+                })
             })
     }
 
@@ -357,6 +358,27 @@ struct TaskInspectorShell: View {
             documentEditor(task)
                 .inspectorRenderAnchor(.document)
                 .padding(.top, TaskInspectorMetrics.titleDocumentGap)
+            // 附件行（TI2-03）：此前「上传附件」只写库、详情里看不见；这里复用笔记面的
+            // 同一个 `AttachmentListView`（打开 / Finder / 移除 / 再加）。
+            if !task.attachments.isEmpty {
+                AttachmentListView(attachments: task.attachments) { attachments in
+                    workspace.setAttachments(task.id, attachments)
+                }
+                .inspectorRenderAnchor(.attachments)
+                .padding(.horizontal, TaskInspectorMetrics.horizontalPadding)
+                .padding(.top, 12)
+            }
+            // 标签集合行（TI2-02）：对齐滴答 `TTTaskDetailTagCollectionCell` 的可见 chip。
+            if !task.tags.isEmpty {
+                TaskTagStrip(tags: task.tags,
+                             onEdit: { actionPresentation.open(.tags) },
+                             onRemove: { tag in
+                                 workspace.setTags(task.id, task.tags.filter { $0 != tag })
+                             })
+                    .inspectorRenderAnchor(.tagStrip)
+                    .padding(.horizontal, TaskInspectorMetrics.horizontalPadding)
+                    .padding(.top, 12)
+            }
             // 子任务区只在**已经有子任务**时出现——新建的空任务不自动带上它。
             // 放开嵌套（2026-10-17）后，子任务详情同样显示自己的子任务区（孙任务）。
             if !editorChildren(task.id).isEmpty {
@@ -374,6 +396,24 @@ struct TaskInspectorShell: View {
         }
         .padding(.bottom, WFSpace.xl)
         .frame(maxWidth: .infinity, alignment: .topLeading)
+        // 拖文件到详情即附件（对齐滴答 `TTTaskDetailDropFileView`）。
+        .onDrop(of: [.fileURL], isTargeted: $attachmentDropTargeted) { providers in
+            importDroppedAttachments(providers, taskID: task.id)
+            return true
+        }
+        .overlay(alignment: .top) {
+            if attachmentDropTargeted {
+                Text("松开以添加附件")
+                    .font(WFType.supporting)
+                    .foregroundStyle(WFColors.accent)
+                    .padding(.horizontal, 10)
+                    .frame(height: 24)
+                    .background(WFColors.overlay, in: Capsule())
+                    .overlay(Capsule().stroke(WFColors.border))
+                    .padding(.top, 8)
+                    .allowsHitTesting(false)
+            }
+        }
     }
 
     /// 专注摘要行的显示条件：有预计专注，或有实际专注记录（对齐滴答普通任务不显示该行）。
@@ -396,19 +436,57 @@ struct TaskInspectorShell: View {
         }
     }
 
-    /// 顶部日期入口；点击仍使用现有日期 popover。
+    /// 顶部日期入口：安排日期 chip；有截止日期时右侧并列「截止 …」标签（滴答 `secondaryDateLabel`）。
+    /// 两个面板都锚在日期 chip 上——安排日期面板里再点「截止日期」，宿主就把面板切到截止日期。
     private func scheduleChip(_ task: Task, field: ScheduleField) -> some View {
+        HStack(spacing: WFSpace.dense) {
             AppKitScheduleChip(symbol: field.symbol,
                                title: scheduleChipLabel(task, field: field),
                                tint: NSColor(scheduleChipColor(task, field: field)),
                                accessibilityLabel: scheduleChipLabel(task, field: field),
                                action: { openSchedulePanel(field.popover) })
             .frame(height: WFMetrics.controlHeight)
-        .schedulePopover(isPresented: popoverBinding(field.popover)) {
-            TaskDatePopoverV2(task: task, workspace: workspace, deadline: field == .deadline) {
+            // 显式标出 chip 矩形：两个 popover 都读 `.date` 锚点，没有它时外层面板
+            // 会退化成"整行（chip + 截止日期标签）"锚点。
+            .scheduleTrigger(.date)
+            .schedulePopover(isPresented: popoverBinding(field.popover)) {
+                TaskDatePopoverV2(task: task, workspace: workspace, deadline: field == .deadline,
+                                  onRequestDeadline: field == .due ? { openSchedulePanel(.deadline) } : nil) {
+                    presentation.activePopover = nil
+                }
+            }
+            if field == .due, let deadline = task.schedule.deadlineAt {
+                deadlineLabel(task, deadline: deadline)
+                    .inspectorRenderAnchor(.deadlineLabel)
+            }
+        }
+        .schedulePopover(isPresented: popoverBinding(.deadline)) {
+            TaskDatePopoverV2(task: task, workspace: workspace, deadline: true) {
                 presentation.activePopover = nil
             }
         }
+    }
+
+    /// 顶栏次要日期：只在有截止日期时占位，逾期红字；点击直接改截止日期。
+    private func deadlineLabel(_ task: Task, deadline: Date) -> some View {
+        let now = workspace.clock()
+        let overdue = !task.isClosed
+            && workspace.calendar.startOfDay(for: deadline) < workspace.calendar.startOfDay(for: now)
+        let day = TaskDateLabel.text(deadline, hasTime: false, now: now, calendar: workspace.calendar)
+        return Button { openSchedulePanel(.deadline) } label: {
+            HStack(spacing: 4) {
+                Image(systemName: "calendar.badge.exclamationmark")
+                    .font(.system(size: 11))
+                Text("截止 \(day)")
+                    .lineLimit(1)
+            }
+            .font(WFType.control)
+            .foregroundStyle(overdue ? WFColors.danger : WFColors.secondaryText)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help("修改截止日期")
+        .accessibilityLabel("截止日期：\(day)")
     }
 
     private func scheduleChipColor(_ task: Task, field: ScheduleField) -> Color {
@@ -451,6 +529,9 @@ struct TaskInspectorShell: View {
                             workspace.requestChildTitleEditor(for: parentID)
                         }
                     }
+                },
+                onReorder: { id, index in
+                    workspace.reorder(id, toSiblingIndex: index)
                 }
             )
             .frame(height: subtaskOutlineHeight(task.id))
@@ -527,8 +608,13 @@ struct TaskInspectorShell: View {
                              })
                 .frame(width: 28, height: 28)
                 .inspectorRenderAnchor(.footerFormatting)
-            // 评论出口（commentButton）：打开任务评论面板。
+            // 评论出口（commentButton）：打开任务评论面板；有条数角标（TI2-09）。
             footerIconButton("bubble.left", label: "评论") { actionPresentation.open(.comments) }
+                .overlay(alignment: .topTrailing) {
+                    if let commentStore {
+                        TaskCommentCountBadge(store: commentStore, taskID: task.id)
+                    }
+                }
                 .inspectorRenderAnchor(.footerComment)
             moreMenu(task)
                 .inspectorRenderAnchor(.footerMore)
@@ -590,6 +676,22 @@ struct TaskInspectorShell: View {
             guard case .success(let attachments) = result,
                   let current = workspace.task(for: taskID) else { return }
             workspace.setAttachments(taskID, current.attachments + attachments)
+        }
+    }
+
+    /// 拖放导入：`NSItemProvider` 的文件 URL 收集完后再落盘（顺序按拖入顺序）。
+    private func importDroppedAttachments(_ providers: [NSItemProvider], taskID: UUID) {
+        AttachmentDropImport.collect(from: providers) { urls in
+            guard !urls.isEmpty else { return }
+            do {
+                let imported = try NativeAttachmentFiles.importFiles(urls)
+                guard let current = workspace.task(for: taskID) else { return }
+                workspace.setAttachments(taskID, current.attachments + imported)
+                environment.feedback.show(FeedbackEvent(
+                    kind: .success, message: imported.count == 1 ? "已添加附件" : "已添加 \(imported.count) 个附件"))
+            } catch {
+                environment.feedback.show(FeedbackEvent(kind: .error, message: "无法添加附件"))
+            }
         }
     }
 

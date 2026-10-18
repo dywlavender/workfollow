@@ -2,6 +2,9 @@ import SwiftUI
 
 struct TaskFocusSubmenu: View {
     let onStart: (Bool) -> Void
+    /// 预计专注入口跟着专注动作走（滴答的 focus 动作同属一个委托：
+    /// `StartPomoFocus` / `StartStopWatchFocus` / `SetFocusEstimate`）。
+    let onSetEstimate: () -> Void
 
     var body: some View {
         VStack(spacing: 2) {
@@ -9,6 +12,9 @@ struct TaskFocusSubmenu: View {
                 .inspectorRenderAnchor(.focusPomodoro)
             Button { onStart(true) } label: { row("开始正计时") }
                 .inspectorRenderAnchor(.focusStopwatch)
+            Divider().padding(.vertical, 2)
+            Button { onSetEstimate() } label: { row("设置预计专注") }
+                .inspectorRenderAnchor(.focusEstimate)
         }
         .buttonStyle(.plain)
         .font(WFType.menu)

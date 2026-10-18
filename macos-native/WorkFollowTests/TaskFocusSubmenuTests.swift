@@ -94,6 +94,31 @@ final class TaskFocusSubmenuTests: XCTestCase {
         try InspectorPanelTestSupport.sendEscape(to: date)
     }
 
+    /// TI2-10：预计专注入口跟着专注动作走，顶层「更多」不再单独占一项。
+    func testEstimateEntryLivesInFocusSubmenuAndOpensTheEstimatePanel() throws {
+        let environment = AppEnvironment()
+        let workspace = TaskWorkspaceModel(seedDemoData: false)
+        let id = try XCTUnwrap(workspace.createTask(title: "预计专注入口", in: .inbox).taskID)
+        workspace.select(id)
+        let host = InspectorPanelTestSupport.inspectorHost(workspace: workspace, environment: environment)
+        let window = InspectorPanelTestSupport.ownerWindow(for: host)
+        defer { window.close() }
+
+        try InspectorPanelTestSupport.clickButton(containing: "更多任务操作", in: window)
+        let more = try InspectorPanelTestSupport.actionPanel(in: window)
+        try InspectorPanelTestSupport.clickButton(containing: "开始专注", in: more)
+        let submenu = try InspectorPanelTestSupport.panel(
+            title: InspectorPanelTestSupport.focusSubmenuTitle, below: more)
+
+        try InspectorPanelTestSupport.clickButton(containing: "设置预计专注", in: submenu)
+        XCTAssertFalse(submenu.isVisible, "选完预计专注后子菜单收起")
+        XCTAssertFalse(more.isVisible, "顶层更多也收起")
+        let estimate = try InspectorPanelTestSupport.panel(title: "预计专注", below: window)
+        XCTAssertTrue(estimate.isVisible)
+        try InspectorPanelTestSupport.sendEscape(to: estimate)
+        XCTAssertFalse(estimate.isVisible)
+    }
+
     func testMoreToDateUsesOneOutsideClickAndEscapeCancelsWithoutChangingScheduleTwentyTimes() throws {
         let environment = AppEnvironment()
         let workspace = TaskWorkspaceModel(seedDemoData: false)

@@ -514,6 +514,13 @@ final class TaskWorkspaceModel: ObservableObject {
     }
     func skip(_ id: UUID) { didMutate(withMaterializedTask(id) { actions.skipOccurrence($0) }); select(nil) }
     func reorder(_ id: UUID, before target: UUID) { actions.reorder(id, before: target); revision += 1 }
+    /// 子任务拖拽排序：落点是"移除自己之后的兄弟下标"（等于兄弟数即拖到末尾）。
+    @discardableResult
+    func reorder(_ id: UUID, toSiblingIndex index: Int) -> Bool {
+        let changed = actions.reorder(id, toSiblingIndex: index)
+        if changed { revision += 1 }
+        return changed
+    }
     /// 已过期组头"顺延"（对齐 Flutter _postponeOverdue）：逐任务保留各自时钟，
     /// 整组动作是单条事务，一次撤销整组生效；HUD 报告顺延数量。
     func postponeOverdue(_ ids: Set<UUID>) {

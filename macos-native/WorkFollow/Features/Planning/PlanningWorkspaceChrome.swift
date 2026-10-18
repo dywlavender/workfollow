@@ -66,6 +66,7 @@ struct PlanningWorkspaceChrome: View {
                                      onDismiss: closeEditor) {
                     TaskInspectorShell(workspace: workspace,
                                        showBack: true,
+                                       commentStore: environment.taskCommentStore,
                                        onRequestClose: closeEditor)
                         .environmentObject(environment)
                 }

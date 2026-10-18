@@ -22,12 +22,9 @@ enum TaskInspectorMetrics {
     static let breadcrumbHeight: CGFloat = 30
     /// 滴答子任务行 AX 实测 ≈40（2026-10-16；原 42 为上一轮来源尺寸）。
     static let childRowMinHeight: CGFloat = 40
-    static let childRowRadius: CGFloat = 8
-    static let childRowHorizontalPadding: CGFloat = 12
     /// 滴答子任务完成框 AX 实测 ≈19（2026-10-16）。
     static let childCompletionSize: CGFloat = 19
     static let childAddGap: CGFloat = 6
-    static let childRowGap: CGFloat = 6
     static let childSectionTopGap: CGFloat = 20
     static var footerOverlayInset: CGFloat { footerHeight + 4 }
 }

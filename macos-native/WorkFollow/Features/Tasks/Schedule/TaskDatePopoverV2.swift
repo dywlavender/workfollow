@@ -79,11 +79,17 @@ struct TaskDatePopoverV2: View {
     /// 草稿宿主（日历/四象限的新建卡）：任务还没被创建，确定与清除只把计划交回
     /// 调用方，不写工作区，也不动批量选择。
     private let draftCommit: ((TaskDateDraftModel.CommitPlan) -> Void)?
+    /// 详情编辑栏专用：安排日期面板里多一行「截止日期」，点击把宿主切到截止日期面板。
+    /// 其它宿主不传（行为不变），所以任务行/快速添加/批量面板仍只有安排日期。
+    private let onRequestDeadline: (() -> Void)?
     private let availableHeight: CGFloat
+    /// 截止日期入口只在"安排日期面板"出现，且只对传了回调的宿主出现。
+    private var showsDeadlineRow: Bool { !deadline && onRequestDeadline != nil }
     private var panelHeight: CGFloat {
         SchedulePopoverLayoutV2.height(availableHeight: availableHeight,
             repeating: !deadline && model.frequency != .never,
-            period: !deadline && model.tab == .period)
+            period: !deadline && model.tab == .period,
+            deadlineRow: showsDeadlineRow)
     }
 
     typealias InlineSheet = ScheduleExpandedSection
@@ -129,6 +135,7 @@ struct TaskDatePopoverV2: View {
 
     init(task: Task, workspace: TaskWorkspaceModel, deadline: Bool = false, initialPage: Page = .main,
          draftCommit: ((TaskDateDraftModel.CommitPlan) -> Void)? = nil,
+         onRequestDeadline: (() -> Void)? = nil,
          onClose: @escaping () -> Void) {
         taskID = task.id
         self.task = task
@@ -136,6 +143,7 @@ struct TaskDatePopoverV2: View {
         self.deadline = deadline
         self.initialPage = initialPage
         self.draftCommit = draftCommit
+        self.onRequestDeadline = onRequestDeadline
         availableHeight = NSScreen.main?.visibleFrame.height ?? 900
         self.onClose = onClose
         let draftModel = TaskDateDraftModel(
@@ -251,6 +259,11 @@ struct TaskDatePopoverV2: View {
 
     private var propertyRows: some View {
         VStack(spacing: 0) {
+            // 截止日期是与安排日期并列的独立字段（`TaskDateDraftModel` 的 deadline 分支），
+            // 入口放在属性行最上方；点它由宿主切到截止日期面板。
+            if showsDeadlineRow {
+                deadlineEntryRow
+            }
             propertyRow(.time, icon: "clock", title: "时间", active: model.hasTime,
                      editor: AnyView(timeRowEditor),
                      canClear: model.hasTime) { timePanelBody }
@@ -285,6 +298,52 @@ struct TaskDatePopoverV2: View {
     private var visiblePropertyRows: [InlineSheet] {
         InlineSheet.visibleRows(expanded: inlineSheet, period: model.tab == .period,
                                repeating: model.frequency != .never)
+    }
+
+    // MARK: 截止日期入口（详情编辑栏）
+
+    /// 现有截止日期（只读展示；写入走截止日期面板的「确定」）。
+    private var deadlineEntryDate: Date? { task.schedule.deadlineAt }
+
+    private var deadlineEntryTitle: String {
+        guard let deadline = deadlineEntryDate else { return "截止日期" }
+        let day = TaskDateLabel.text(deadline, hasTime: false,
+                                     now: workspace.clock(), calendar: workspace.calendar)
+        return "截止 \(day)"
+    }
+
+    /// 行宽、行高、内边距与其它属性行一致；行尾用 › 表示"打开子面板"，
+    /// 且**不带清除 ×**——清除截止日期只在截止日期面板里通过「清除」完成。
+    private var deadlineEntryRow: some View {
+        Button {
+            onRequestDeadline?()
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "calendar.badge.exclamationmark")
+                    .font(.system(size: 14))
+                    .foregroundStyle(deadlineEntryDate == nil ? WFColors.secondaryText : WFColors.accent)
+                    .frame(width: 18)
+                Text(deadlineEntryTitle)
+                    .font(WFType.body)
+                    .foregroundStyle(deadlineEntryDate == nil ? WFColors.text : WFColors.accent)
+                    .lineLimit(1)
+                Spacer(minLength: 4)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(WFColors.tertiaryText)
+                    .frame(width: 18, height: 18)
+            }
+            .padding(.horizontal, ScheduleMetrics.propertyRowHorizontalPadding)
+            .frame(height: ScheduleMetrics.rowHeight)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help("设置截止日期")
+        .accessibilityLabel(deadlineEntryTitle)
+        .scheduleRenderAnchor(.deadlineRow, label: deadlineEntryTitle,
+                              active: deadlineEntryDate != nil)
+        // 同时进 Inspector 锚点：测试里要像点顶栏控件一样点这一行（面板窗口没有 AX 树）。
+        .inspectorRenderAnchor(.deadlineRow)
     }
 
     @ViewBuilder

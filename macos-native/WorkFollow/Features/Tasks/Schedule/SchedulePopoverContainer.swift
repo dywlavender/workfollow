@@ -6,9 +6,12 @@ enum SchedulePopoverLayoutV2 {
     static let screenMargin: CGFloat = 32
 
     /// Resolve once when opening, never from expanded content's intrinsic size.
-    static func height(availableHeight: CGFloat, repeating: Bool = false, period: Bool = false) -> CGFloat {
+    /// `deadlineRow` 是详情编辑栏的「截止日期」入口行：与其它属性行同高。
+    static func height(availableHeight: CGFloat, repeating: Bool = false, period: Bool = false,
+                       deadlineRow: Bool = false) -> CGFloat {
         let contentHeight = panelHeight + (repeating ? ScheduleMetrics.rowHeight : 0)
             + (period ? ScheduleMetrics.rowHeight + 24 : 0)
+            + (deadlineRow ? ScheduleMetrics.rowHeight : 0)
         return min(contentHeight, max(440, availableHeight - screenMargin))
     }
 }

@@ -105,6 +105,16 @@ enum InspectorPanelTestSupport {
         settle(window)
     }
 
+    static func sendReturn(to window: NSWindow) throws {
+        let event = try XCTUnwrap(NSEvent.keyEvent(with: .keyDown, location: .zero,
+            modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
+            windowNumber: window.windowNumber, context: nil,
+            characters: "\r", charactersIgnoringModifiers: "\r",
+            isARepeat: false, keyCode: 36))
+        NSApp.sendEvent(event)
+        settle(window)
+    }
+
     static func sendEscape(to window: NSWindow) throws {
         let event = try XCTUnwrap(NSEvent.keyEvent(with: .keyDown, location: .zero,
             modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
@@ -162,7 +172,8 @@ enum InspectorPanelTestSupport {
                 "更多任务操作": .footerMore, "设置日期": .schedule, "任务标题": .title,
                 "开始专注": .focusMenuRow, "关联主任务": .parentMenuRow,
                 "标签": .tagsMenuRow, "任务动态": .activityMenuRow, "创建副本": .duplicateMenuRow,
-                "开始番茄专注": .focusPomodoro, "开始正计时": .focusStopwatch
+                "开始番茄专注": .focusPomodoro, "开始正计时": .focusStopwatch,
+                "设置预计专注": .focusEstimate, "截止日期": .deadlineRow
             ]
             let frames = window === owner ? probe.main : probe.popup
             var rect = anchors[labelFragment].flatMap { frames[$0] }

@@ -6,6 +6,8 @@ enum ScheduleRenderAnchor: Hashable {
     case trailing(TaskDatePopoverV2.InlineSheet)
     case value(TaskDatePopoverV2.InlineSheet)
     case expandedRow(TaskDatePopoverV2.InlineSheet), expandedContent(TaskDatePopoverV2.InlineSheet)
+    /// 详情编辑栏专属：安排日期面板里的「截止日期」入口行。
+    case deadlineRow
     case mainFooter, editorFooter(TaskDatePopoverV2.InlineSheet), option(String)
 }
 struct ScheduleRenderValue: Equatable {

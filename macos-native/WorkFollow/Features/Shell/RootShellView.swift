@@ -201,7 +201,8 @@ private struct TaskWorkspaceView: View {
                             }
                         // 右栏是选中状态的纯投影：批量选中非空 → 批量面板；否则详情。
                         if workspace.bulkSelection.isEmpty {
-                            TaskInspectorShell(workspace: workspace, showBack: false)
+                            TaskInspectorShell(workspace: workspace, showBack: false,
+                                               commentStore: environment.taskCommentStore)
                                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                         } else {
                             TaskBatchPanelView(workspace: workspace)
@@ -213,7 +214,8 @@ private struct TaskWorkspaceView: View {
                 TaskBatchPanelView(workspace: workspace)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if workspace.selectedTask != nil {
-                TaskInspectorShell(workspace: workspace, showBack: true)
+                TaskInspectorShell(workspace: workspace, showBack: true,
+                                   commentStore: environment.taskCommentStore)
             } else {
                 TaskListView(workspace: workspace, navigation: navigation,
                              navigationVisible: navigationVisible)
