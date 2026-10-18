@@ -49,7 +49,10 @@ enum EditorCommandCatalog {
         "format.heading1", "format.heading2", "format.heading3", "format.bullet",
         "format.ordered", "format.checklist", "format.quote"
     ]
-    static let headingPickerIDs = ["format.paragraph", "format.heading1", "format.heading2", "format.heading3"]
+    /// 标题级别选择器：滴答工具条 `md_header1..6`（Assets.car 实证）——本地此前只有 H1–H3。
+    static let headingPickerIDs = ["format.paragraph", "format.heading1", "format.heading2",
+                                   "format.heading3", "format.heading4", "format.heading5",
+                                   "format.heading6"]
     static let selectionFormatIDs = [
         "format.bold", "format.italic", "format.underline", "format.strikethrough",
         "format.highlight", "format.inlineCode"
@@ -113,6 +116,9 @@ struct DocumentFormatCommand {
         .init(id: "format.strikethrough", title: "删除线", block: nil, mark: .strikethrough),
         .init(id: "format.highlight", title: "高亮", block: nil, mark: .highlight),
         .init(id: "format.heading3", title: "三级标题", block: .heading(3), mark: nil),
+        .init(id: "format.heading4", title: "四级标题", block: .heading(4), mark: nil),
+        .init(id: "format.heading5", title: "五级标题", block: .heading(5), mark: nil),
+        .init(id: "format.heading6", title: "六级标题", block: .heading(6), mark: nil),
         .init(id: "format.inlineCode", title: "行内代码", block: nil, mark: .code)
     ]
 }

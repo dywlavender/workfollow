@@ -272,6 +272,8 @@ struct TaskInspectorShell: View {
                     StickyNoteWindowController.shared.open(taskID: task.id)
                 }
                 moreAction("转换为笔记", symbol: "doc.text") { _ = environment.convertTaskToNote(task.id) }
+                // 滴答「…」菜单第 14 项（`bottomActionViewDidClickPrint:`）。
+                moreAction("打印", symbol: "printer") { printTask(task) }
                 moreAction("删除", symbol: "trash") { _ = workspace.delete(task.id) }
             }
             .padding(8)
@@ -700,6 +702,12 @@ struct TaskInspectorShell: View {
                 environment.feedback.show(FeedbackEvent(kind: .error, message: "无法添加附件"))
             }
         }
+    }
+
+    @MainActor
+    private func printTask(_ task: Task) {
+        TaskPrintService.printTask(task, subtasks: editorChildren(task.id),
+                                   calendar: workspace.calendar, now: workspace.clock())
     }
 
     @MainActor

@@ -27,6 +27,7 @@ final class TaskMoreMenuRoundTwoTests: XCTestCase {
             // 本地已有 StickyNoteWindowController 能力，不再作为"已移除入口"。
             #"moreAction("打开便签", symbol: "note")"#,
             #"moreAction("转换为笔记", symbol: "doc.text")"#,
+            #"moreAction("打印", symbol: "printer")"#,
             #"moreAction("删除", symbol: "trash")"#
         ]
 
@@ -39,8 +40,8 @@ final class TaskMoreMenuRoundTwoTests: XCTestCase {
             cursor = range.upperBound
         }
 
-        // 「打印」仍缺席：本地没有打印能力，按"无假按钮"处理（滴答有该项，属能力缺口）。
-        for removedEntry in ["其他操作", "更多属性", "截止日期", "跳过本周期", "打印", "设置预计专注"] {
+        // 「打印」已补（TI2-11，TaskPrintService）；仍不应出现的入口见下。
+        for removedEntry in ["其他操作", "更多属性", "截止日期", "跳过本周期", "设置预计专注"] {
             XCTAssertFalse(menu.contains(removedEntry), "Unexpected more menu entry: \(removedEntry)")
         }
     }
