@@ -112,6 +112,13 @@ struct TaskInspectorShell: View {
                             onRepeat: { openSchedulePanel(.recurrence) },
                             schedule: { scheduleChip(task, field: .due) },
                             priority: { priorityMenu(task) })
+        // 子任务进度条（TI2-07）：贴在顶栏下沿，不改变 Header 高度/内容几何。
+        .overlay(alignment: .bottom) {
+            if let progress = TaskInspectorSubtaskProgress.parse(workspace.subtaskProgress(for: task.id)) {
+                TaskInspectorProgressBar(progress: progress)
+                    .inspectorRenderAnchor(.progressBar)
+            }
+        }
         .schedulePopover(isPresented: popoverBinding(.recurrence), trigger: .recurrence) {
             TaskDatePopoverV2(task: task, workspace: workspace, initialPage: .recurrence) {
                 presentation.activePopover = nil

@@ -152,7 +152,7 @@ final class DocumentDecorationRenderTests: XCTestCase {
             let exited = try XCTUnwrap(view.viewRect(forCharacterAt: 0))
             XCTAssertEqual(exited.minX, original.minX, accuracy: 0.5, "\(kind): exiting the trailing list must not move the preceding marker")
             let emptyLine = try XCTUnwrap(view.viewRect(forCharacterAt: view.string.utf16.count))
-            XCTAssertTrue(view.openEmptyBlockMenu(at: NSPoint(x: DocumentEditorGeometry.decorationMarkerX(visibleMinX: view.decorationVisibleMinX) + 3,
+            XCTAssertTrue(view.openBlockMenu(at: NSPoint(x: DocumentEditorGeometry.decorationMarkerX(visibleMinX: view.decorationVisibleMinX) + 3,
                                                              y: emptyLine.midY)))
             XCTAssertEqual(view.string, "plp\n", "The plus opens a menu without inserting content")
             view.dismissSlash()
@@ -341,11 +341,11 @@ final class DocumentDecorationRenderTests: XCTestCase {
                       "空行活动时沟槽里应画出 +")
     }
 
-    /// 光标在非空正文行：沟槽应保持干净（普通段落没有行首标记）。
+    /// 光标在非空正文行：TI2-21 起沟槽里是六点块手柄（此前为空）。
     @MainActor
-    func testPlainBodyLineLeavesGutterEmpty() throws {
-        let (rep, scale) = try renderedGutter(caret: 5, dump: "plain")
-        XCTAssertFalse(gutterHasInk(rep, scale: scale), "普通非空段落不应在沟槽里画任何标记")
+    func testPlainBodyLineShowsBlockHandleInGutter() throws {
+        let (rep, scale) = try renderedGutter(caret: 5, dump: "plain-handle")
+        XCTAssertTrue(gutterHasInk(rep, scale: scale), "非空正文行应画出块手柄")
     }
 
     /// 两个渲染在指定横向区间（pt）内，B 相对 A 新出现的非白像素数。

@@ -44,7 +44,7 @@ final class TaskInspectorHierarchyRenderTests: XCTestCase {
         let caret = text.convert(window.convertFromScreen(text.firstRect(forCharacterRange:
             NSRange(location: 0, length: 0), actualRange: nil)), from: nil)
         let before = text.string
-        XCTAssertTrue(text.openEmptyBlockMenu(at: NSPoint(x: DocumentEditorGeometry.decorationMarkerX(visibleMinX: text.decorationVisibleMinX) + 2,
+        XCTAssertTrue(text.openBlockMenu(at: NSPoint(x: DocumentEditorGeometry.decorationMarkerX(visibleMinX: text.decorationVisibleMinX) + 2,
                                                         y: caret.midY)))
         XCTAssertNotNil(text.slashPanel)
         XCTAssertEqual(text.slashSession?.range.length, 0)

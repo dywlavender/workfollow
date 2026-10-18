@@ -311,7 +311,7 @@ final class NativeTextView: NSTextView {
 
     override func mouseDown(with event: NSEvent) {
         dismissSlash()
-        if openEmptyBlockMenu(at: convert(event.locationInWindow, from: nil)) { return }
+        if openBlockMenu(at: convert(event.locationInWindow, from: nil)) { return }
         // 文档复选框在任务与笔记两个面都可点（原版 `DocumentCheckboxBuilder` 挂在
         // 共享文档样式上，不分面）。
         if isEditable, let window, let storage = textStorage, storage.length > 0 {
@@ -352,20 +352,28 @@ final class NativeTextView: NSTextView {
     /// The plus is a menu trigger, not document content. Reuse a zero-length
     /// Slash session so selecting/cancelling never introduces a literal slash.
     @discardableResult
-    func openEmptyBlockMenu(at point: NSPoint) -> Bool {
+    /// 行首沟槽的块菜单（TI2-21）：空行的"+"、正文行的六点手柄、标题行的 H 角标
+    /// 都落在这一列，点开都走同一个块类型菜单（Slash 面板的空查询态）。
+    ///
+    /// 列表 / 检查项 / 引用 / 代码行的行首标记另有职责（复选框翻转等），这里不接管。
+    func openBlockMenu(at point: NSPoint) -> Bool {
         guard isEditable, let window, let storage = textStorage else { return false }
         let source = storage.string as NSString
-        // The plus is drawn only on the active line. Hit-test that same line:
+        // The marker is drawn only on the active line. Hit-test that same line:
         // gutter clicks on a characterless trailing paragraph may otherwise
         // resolve to the previous paragraph in TextKit's insertion lookup.
         let offset = min(max(selectedRange().location, 0), source.length)
         let paragraph = source.paragraphRange(for: NSRange(location: offset, length: 0))
-        guard source.substring(with: paragraph).trimmingCharacters(in: .newlines).isEmpty else { return false }
         let kind = paragraph.location < storage.length
             ? DocumentTextCodec.kind(storage.attribute(DocumentTextCodec.blockKey,
                 at: paragraph.location, effectiveRange: nil) as? String ?? "paragraph")
             : pendingTrailingBlock ?? displayedTrailingBlock ?? .paragraph
-        guard kind == .paragraph else { return false }
+        switch kind {
+        case .paragraph, .heading:
+            break
+        case .bullet, .ordered, .checklist, .quote, .code, .divider:
+            return false
+        }
         guard let caret = viewRect(forCharacterAt: paragraph.location) else { return false }
         let hit = NSRect(x: DocumentEditorGeometry.decorationMarkerX(visibleMinX: decorationVisibleMinX) - 2,
                          y: caret.minY, width: 12, height: caret.height)

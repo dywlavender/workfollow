@@ -171,9 +171,33 @@ extension NativeTextView {
                 - (lastCharacter == 0x0A ? 1 : 0)
             if trailingEmpty || contentLength == 0 {
                 drawEmptyLinePlus(centerY: centerY, dirtyRect: dirtyRect)
+            } else {
+                // TI2-21：非空正文行也给出块手柄（滴答 `TTTaskDetailMarkdownCell`
+                // 的 `leadingButtonClicked:`），点它打开块类型菜单。
+                drawBlockHandle(centerY: centerY, dirtyRect: dirtyRect)
             }
         case .bullet, .ordered, .checklist, .quote, .code, .divider:
             break
+        }
+    }
+
+    /// 光标所在正文行的六点块手柄：2 列 × 3 点，落在 20pt 行首沟槽里，
+    /// 与"H 角标 / +"共用同一列，不侵占文字起点。
+    private func drawBlockHandle(centerY: CGFloat, dirtyRect: NSRect) {
+        let radius: CGFloat = 1.1
+        let columnGap: CGFloat = 4.5
+        let rowGap: CGFloat = 3.6
+        let originX = DocumentEditorGeometry.decorationMarkerX(visibleMinX: decorationVisibleMinX)
+        let top = centerY - rowGap - radius
+        NSColor.tertiaryLabelColor.setFill()
+        for row in 0..<3 {
+            for column in 0..<2 {
+                let frame = NSRect(x: originX + CGFloat(column) * columnGap,
+                                   y: top + CGFloat(row) * rowGap,
+                                   width: radius * 2, height: radius * 2)
+                guard frame.intersects(dirtyRect) else { continue }
+                NSBezierPath(ovalIn: frame).fill()
+            }
         }
     }
 
