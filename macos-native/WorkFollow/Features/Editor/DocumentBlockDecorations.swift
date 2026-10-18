@@ -176,9 +176,23 @@ extension NativeTextView {
                 // 的 `leadingButtonClicked:`），点它打开块类型菜单。
                 drawBlockHandle(centerY: centerY, dirtyRect: dirtyRect)
             }
-        case .bullet, .ordered, .checklist, .quote, .code, .divider:
+        case .checklist:
+            // 活动检查项：行尾给出整项删除按钮（TI2-05a）。
+            drawChecklistDeleteGlyph(centerY: centerY, dirtyRect: dirtyRect)
+        case .bullet, .ordered, .quote, .code, .divider:
             break
         }
+    }
+
+    /// 活动检查项行的行尾删除按钮：淡灰 "×"，命中区与 `checklistDeleteHitRect` 一致。
+    private func drawChecklistDeleteGlyph(centerY: CGFloat, dirtyRect: NSRect) {
+        let rect = checklistDeleteHitRect(centerY: centerY)
+        guard rect.intersects(dirtyRect) else { return }
+        let mark = "×" as NSString
+        let font = NSFont.systemFont(ofSize: 13, weight: .regular)
+        let size = mark.size(withAttributes: [.font: font])
+        mark.draw(at: NSPoint(x: rect.midX - size.width / 2, y: rect.midY - size.height / 2),
+                  withAttributes: [.font: font, .foregroundColor: NSColor.tertiaryLabelColor])
     }
 
     /// 光标所在正文行的六点块手柄：2 列 × 3 点，落在 20pt 行首沟槽里，

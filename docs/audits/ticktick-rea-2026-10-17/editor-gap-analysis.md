@@ -388,6 +388,7 @@
 | TI2-02 | **已完成** | 新增 `TaskTagStrip`（流式 chip：点 × 直接 `setTags` 移除、点 chip 或 + 打开既有标签面板），放在正文与子任务之间 | `TaskInspectorPropertyRowsTests` 标签 2 项（存在性 / 顺序） |
 | TI2-03 | **部分完成** | ① 正文后挂载既有 `AttachmentListView`（打开 / Finder / 移除 / 再加，与笔记面同源）；② 详情整体接受文件拖放（`onDrop` + `AttachmentDropImport` 按拖入顺序收集 + `NativeAttachmentFiles.importFiles` 统一落盘），拖拽时有「松开以添加附件」提示。**未做**：粘贴文件转附件（`NativeTextView.paste` 的 file 分支） | `TaskInspectorPropertyRowsTests` 附件/导入 4 项（存在性、顺序、拖放顺序、落盘规则） |
 | TI2-04 | **部分完成** | ① 子任务行支持**同父级拖拽排序**（`pasteboardWriterForItem` / `validateDrop` / `acceptDrop` + `TaskActions.reorder(_:toSiblingIndex:)`，支持拖到末尾，位移为 0 时不产生撤销点）；② **折叠状态持久化**（`SubtaskFoldStore` 按子任务 id 存 `UserDefaults`，重开/切任务后恢复；用户折叠/展开时写回）。**未做**：`TTSubtasksLoadmoreCell` 的分页（一次全渲染在 30 条以内够用） | `SubtaskOrderAndFoldTests` 10 项（前移/后移/拖到末尾/钳制/无位移/只动同父级 + 落点判定 + 下标换算 + 折叠存取 + 视图恢复） |
+| TI2-05a | **部分完成** | 检查项整项操作：空项行首退格删掉该项、活动项行尾 × 删除整项（含换行、可撤销）。**未做**：逐项提醒、清单模式与形态切换（05b，需 Domain `TaskKind`） | `DocumentChecklistItemTests` 5 项（空项退格 / 非空不退 / 删中间项 / 删末项 / 行尾按钮几何） |
 | TI2-16 | **部分完成** | 标题级别 H4–H6：命令 + 工具条 H 选择器补到六级（Assets.car `md_header4..6`）；Slash 保持滴答实测的 12 项不扩。**未做**：工具条「更多」溢出（`md_more`） | `HeadingLevelTests` 3 项（选择器顺序 / 字阶不变 / `####` 输入期） |
 | TI2-11 | **已完成** | 补「打印」（`TaskPrintService`：标题/属性/正文按块排版/子任务 ☐☑ 清单，`NSPrintOperation` 走系统面板）；顶层菜单恢复滴答 15 项顺序 | `TaskPrintServiceTests` 2 项（完整稿 / 空正文）+ `TaskMoreMenuRoundTwoTests` 顺序断言更新 |
 | TI2-21 | **已完成** | 行首块手柄：空行「+」、标题 H 角标、正文六点手柄共用同一条沟槽命中区，点开都是块类型菜单（Slash 空查询态）；列表/检查项/引用/代码行不接管（`openBlockMenu` 取代 `openEmptyBlockMenu`，检查项勾选不受影响） | `DocumentBlockMenuTests` 4 项 + `DocumentDecorationRenderTests` 手柄渲染 1 项（原"沟槽为空"守卫反转） |
@@ -397,7 +398,7 @@
 | TI2-10 | **已完成** | 「预计专注」从顶层「更多」移入「开始专注」子菜单（番茄 / 正计时 / 设置预计专注同属 focus 出口），焦点面板仍锚在「更多」按钮上 | `TaskFocusSubmenuTests.testEstimateEntryLivesInFocusSubmenuAndOpensTheEstimatePanel` |
 | TI2-11 | **部分完成** | 顶层「更多」恢复滴答 15 项顺序（去掉自加的「预计专注」项）；「打印」仍缺席（无打印能力，保持"无假按钮"） | `TaskMoreMenuRoundTwoTests`（新增「预计专注」不得出现在顶层菜单的断言） |
 | TI2-06 / TI2-22 | **待实测** | 标题 Return 落点、新建/切任务是否自动聚焦标题——第 7 节 AX 探针未恢复，不凭推断改行为 | — |
-| TI2-05 / 08 / 13 / 14~18 | **未开始** | 见第 5 节逐项落点（TI2-15 笔记信息、TI2-17 独立窗口仍在其中） | — |
+| TI2-05b / TI2-08 / TI2-13 / TI2-14~18 | **未开始** | 见第 5 节逐项落点（TI2-15 笔记信息、TI2-17 独立窗口仍在其中） | — |
 
 口径说明：
 
@@ -405,7 +406,7 @@
 - 新增的渲染契约锚点：`InspectorRenderAnchor.deadlineLabel / attachments / tagStrip / focusEstimate`、`ScheduleRenderAnchor.deadlineRow`（测试与实现共用同一套锚点，不另建口径）。
 - 回归（第一批，截至 TI2-12）：全量 **1431 项：1424 通过 / 6 跳过 / 1 个与本轮无关的 flaky**（`FocusTaskPickerPanelFlowTests`，单独复跑通过）。
 - 回归（第二批，TI2-21 / TI2-07）：全量套件在本次会话后段被**测试宿主的源码读取门控**拖慢（读 `#filePath` 的契约测试单次约 2 分钟，与代码无关；沙箱/TCC 行为），改为**分组回归**并全部通过：inspector 组 32 项、子任务/专注/进度组逐个类通过（10 + 6 + 2 + 3）、文档组 23 项（块菜单 4 + 装饰 11 + 层级 5 + 进度 3）；`TaskMoreMenuRoundTwoTests` 2 项在门控下 138s 后通过。
-- 新增测试累计 **40** 个方法（截止 8 + 属性行 6 + 专注入口 1 + 排序折叠 10 + 行标记 2 + 角标 1 + 块菜单 4 + 进度 3 + 标题级别 3 + 打印 2），另反转 1 条既有断言（非空正文行沟槽从"必须干净"改为"必须有块手柄"）、扩充 1 条移除清单、1 处测试支撑锚点映射。
+- 新增测试累计 **45** 个方法（截止 8 + 属性行 6 + 专注入口 1 + 排序折叠 10 + 行标记 2 + 角标 1 + 块菜单 4 + 进度 3 + 标题级别 3 + 打印 2 + 检查项整项 5），另反转 1 条既有断言（非空正文行沟槽从"必须干净"改为"必须有块手柄"）、扩充 1 条移除清单、1 处测试支撑锚点映射。
 - 真机路径已由测试覆盖面板切换与写回（`testDeadlineRowSwitchesPanelAndWritesDeadlineThroughTheRealInspector`）；仍未做的是**视觉像素级复核**（AX 不可用），下次开 app 时按第 7 节顺手看一眼即可。
 
 ## 附录：证据索引

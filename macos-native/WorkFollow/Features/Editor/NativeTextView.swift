@@ -321,6 +321,12 @@ final class NativeTextView: NSTextView {
             let token = storage.attribute(DocumentTextCodec.blockKey, at: paragraph.location, effectiveRange: nil) as? String
             if (token == "checklist" || token == "checked"),
                let caret = viewRect(forCharacterAt: paragraph.location) {
+                // 行尾删除按钮（TI2-05a）优先于行首复选框：两者不会重叠，但顺序固定。
+                if checklistDeleteHitRect(centerY: caret.midY).contains(point) {
+                    window.makeFirstResponder(self)
+                    deleteChecklistItem(at: paragraph)
+                    return
+                }
                 let marker = NSRect(x: caret.minX - 28, y: caret.minY, width: 28, height: caret.height)
                 if marker.contains(point) {
                     window.makeFirstResponder(self)
@@ -352,6 +358,51 @@ final class NativeTextView: NSTextView {
     /// The plus is a menu trigger, not document content. Reuse a zero-length
     /// Slash session so selecting/cancelling never introduces a literal slash.
     @discardableResult
+    // MARK: 检查项整项操作（TI2-05a）
+
+    /// 活动检查项行尾的删除按钮矩形（与 `drawChecklistDeleteGlyph` 共用同一几何）。
+    func checklistDeleteHitRect(centerY: CGFloat) -> NSRect {
+        NSRect(x: bounds.maxX - 26, y: centerY - 9, width: 18, height: 18)
+    }
+
+    /// 删除整项：段落区间（含行尾换行）整段移除，光标落到被删位置。
+    @discardableResult
+    func deleteChecklistItem(at paragraph: NSRange) -> Bool {
+        guard isEditable, let storage = textStorage, paragraph.length > 0 else { return false }
+        let source = storage.string as NSString
+        var range = paragraph
+        let endsWithNewline = source.character(at: NSMaxRange(paragraph) - 1) == 0x0A
+        // 末行没有换行：连同前面的换行一起删，避免留下空行。
+        if !endsWithNewline, range.location > 0 {
+            range.location -= 1
+            range.length += 1
+        }
+        insertText("", replacementRange: range)
+        let length = (string as NSString).length
+        setSelectedRange(NSRange(location: min(range.location, length), length: 0))
+        return true
+    }
+
+    /// 空检查项行首退格：返回 true 表示已作为"删项"处理，不再走普通退格。
+    func deleteEmptyChecklistItemOnBackspace() -> Bool {
+        guard isEditable, !hasMarkedText(), let storage = textStorage else { return false }
+        let source = storage.string as NSString
+        guard source.length > 0 else { return false }
+        let selection = selectedRange()
+        guard selection.length == 0 else { return false }
+        let location = min(max(selection.location, 0), source.length)
+        let anchor = min(location, source.length - 1)
+        let paragraph = source.paragraphRange(for: NSRange(location: anchor, length: 0))
+        guard location <= paragraph.location else { return false }
+        let token = storage.attribute(DocumentTextCodec.blockKey, at: paragraph.location,
+                                      effectiveRange: nil) as? String
+        guard token == "checklist" || token == "checked" else { return false }
+        let lastCharacter = source.character(at: NSMaxRange(paragraph) - 1)
+        let contentLength = paragraph.length - (lastCharacter == 0x0A ? 1 : 0)
+        guard contentLength == 0 else { return false }
+        return deleteChecklistItem(at: paragraph)
+    }
+
     /// 行首沟槽的块菜单（TI2-21）：空行的"+"、正文行的六点手柄、标题行的 H 角标
     /// 都落在这一列，点开都走同一个块类型菜单（Slash 面板的空查询态）。
     ///
@@ -435,6 +486,12 @@ final class NativeTextView: NSTextView {
             dismissSelectionToolbar()
         }
         super.viewWillMove(toWindow: newWindow)
+    }
+
+    override func deleteBackward(_ sender: Any?) {
+        // 空检查项行首退格 = 删掉这一项（滴答 `deleteChecklistItemCell:viaBackspace:`）。
+        if deleteEmptyChecklistItemOnBackspace() { return }
+        super.deleteBackward(sender)
     }
 
     override func doCommand(by selector: Selector) {
