@@ -401,15 +401,15 @@ final class SubtaskRowView: NSTableCellView {
         needsDisplay = true
     }
 
-    /// 悬停高亮用 draw 绘制（NSOutlineView 复用 cell 时 layer 背景会丢失）。
+    /// 只画悬停高亮（NSOutlineView 复用 cell 时 layer 背景会丢失）。
+    /// 常态不再铺 4% 灰底——滴答子任务行是白底，底色会让整块子任务区像卡片。
     override func draw(_ dirtyRect: NSRect) {
-        let radius: CGFloat = 5
-        if hovering {
-            NSColor.labelColor.withAlphaComponent(0.07).setFill()
-        } else {
-            NSColor.labelColor.withAlphaComponent(0.04).setFill()
+        guard hovering else {
+            super.draw(dirtyRect)
+            return
         }
-        NSBezierPath(roundedRect: bounds, xRadius: radius, yRadius: radius).fill()
+        NSColor.labelColor.withAlphaComponent(0.06).setFill()
+        NSBezierPath(roundedRect: bounds, xRadius: 5, yRadius: 5).fill()
         super.draw(dirtyRect)
     }
 
