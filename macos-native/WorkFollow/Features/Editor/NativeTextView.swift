@@ -25,6 +25,10 @@ final class NativeTextView: NSTextView {
     /// `#` 标签补全（TI2-08）的会话与候选面板。
     var tagSession: TagCompletionSession?
     var tagPanel: NSPanel?
+    /// 链接悬停菜单（TI2-08）：当前悬停的链接范围与浮层。
+    var hoveredLinkRange: NSRange?
+    var linkHoverPanel: NSPanel?
+    private var linkTrackingArea: NSTrackingArea?
     /// 斜杠面板"跟着滚动与窗口变化走"用的通知观察者（见 `startFollowingSlash`）。
     var slashObservers: [Any] = []
     /// 文末那个"一个字符都没有"的空段落当前的待定段落类型。
@@ -152,6 +156,7 @@ final class NativeTextView: NSTextView {
         super.didChangeText()
         refreshSlash()
         refreshTagCompletion()
+        hideLinkHoverMenu()
         // 行首标记活在文本区外的沟槽里（标题角标 / 空行"+"），文字变化不会
         // 自动把它标脏：段落类型变了要显式重绘。
         needsDisplay = true
@@ -313,9 +318,36 @@ final class NativeTextView: NSTextView {
         layoutManager?.invalidateLayout(forCharacterRange: range, actualCharacterRange: nil)
     }
 
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        if let linkTrackingArea { removeTrackingArea(linkTrackingArea) }
+        let area = NSTrackingArea(rect: .zero,
+                                  options: [.mouseMoved, .mouseEnteredAndExited,
+                                            .activeInKeyWindow, .inVisibleRect],
+                                  owner: self, userInfo: nil)
+        addTrackingArea(area)
+        linkTrackingArea = area
+    }
+
+    override func mouseMoved(with event: NSEvent) {
+        super.mouseMoved(with: event)
+        guard isEditable else { hideLinkHoverMenu(); return }
+        let point = convert(event.locationInWindow, from: nil)
+        guard let range = linkRange(at: point) else { hideLinkHoverMenu(); return }
+        guard range != hoveredLinkRange || linkHoverPanel == nil else { return }
+        hoveredLinkRange = range
+        showLinkHoverMenu(for: range)
+    }
+
+    override func mouseExited(with event: NSEvent) {
+        super.mouseExited(with: event)
+        hideLinkHoverMenu()
+    }
+
     override func mouseDown(with event: NSEvent) {
         dismissSlash()
         dismissTagCompletion()
+        hideLinkHoverMenu()
         if openBlockMenu(at: convert(event.locationInWindow, from: nil)) { return }
         // 文档复选框在任务与笔记两个面都可点（原版 `DocumentCheckboxBuilder` 挂在
         // 共享文档样式上，不分面）。
@@ -489,6 +521,7 @@ final class NativeTextView: NSTextView {
         if newWindow == nil {
             dismissSlash()
             dismissTagCompletion()
+            hideLinkHoverMenu()
             dismissSelectionToolbar()
         }
         super.viewWillMove(toWindow: newWindow)
@@ -833,6 +866,10 @@ final class NativeTextView: NSTextView {
     }
 
     override func cancelOperation(_ sender: Any?) {
+        if linkHoverPanel != nil {
+            hideLinkHoverMenu()
+            return
+        }
         switch DocumentEditorEscapeRoute.resolve(
             composing: hasMarkedText(), slash: slashSession != nil,
             selectionToolbar: selectionPanel != nil,
