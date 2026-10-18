@@ -103,7 +103,46 @@ struct DocumentFormatToolbarView: View {
 
     private static let headingCommands = EditorCommandCatalog.headingPickerIDs.compactMap(EditorCommandCatalog.format)
 
+    /// 「更多」溢出菜单（TI2-16b，滴答 `md_more` / `moreButtonClicked:`）：
+    /// 窄列里横向滚动之外，再给一条能到达全部格式命令的出口。
+    private var overflowMenu: some View {
+        Menu {
+            ForEach(DocumentToolbarOverflow.paragraphIDs, id: \.self) { id in
+                overflowButton(id)
+            }
+            Divider()
+            ForEach(DocumentToolbarOverflow.inlineIDs, id: \.self) { id in
+                overflowButton(id)
+            }
+            Divider()
+            Button("插入当前时间") {
+                handle.insertTime(format: DocumentToolbarPicker.timeFormats[0])
+            }
+            Button("链接") { handle.editLink() }
+            Button("上传附件") { handle.insertAttachment() }
+        } label: {
+            Image(systemName: "ellipsis")
+                .font(.system(size: DocumentFormatToolbarMetrics.iconSize))
+                .foregroundStyle(WFColors.secondaryText)
+                .frame(width: 28, height: DocumentFormatToolbarMetrics.height)
+                .contentShape(Rectangle())
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .help("更多格式")
+        .accessibilityLabel("更多格式")
+    }
+
+    @ViewBuilder
+    private func overflowButton(_ id: String) -> some View {
+        if let command = EditorCommandCatalog.format(id) {
+            Button(command.title) { handle.format(command) }
+        }
+    }
+
     var body: some View {
+        HStack(spacing: 0) {
         ScrollView(.horizontal, showsIndicators: false) {
             // 按钮顺序、分组竖线与原版 `document_editor_toolbar.dart` 的 Row 一致：
             // H · B · A ｜ 检查项 无序 有序 ｜ 斜体 下划线 删除线 分割线 时间 ｜
@@ -159,6 +198,8 @@ struct DocumentFormatToolbarView: View {
             // Optical glyph size is separate from the unchanged hit target.
             .font(.system(size: DocumentFormatToolbarMetrics.iconSize, weight: .regular))
             .padding(.horizontal, DocumentFormatToolbarMetrics.horizontalInset)
+        }
+        overflowMenu
         }
         .frame(maxWidth: maxWidth)
         .frame(height: DocumentFormatToolbarMetrics.height)
@@ -321,4 +362,11 @@ private struct ToolbarButton<Label: View>: View {
         .toolbarTooltip(title, state: state)
         .accessibilityLabel(title)
     }
+}
+
+/// 「更多」溢出菜单的命令分组（测试与菜单共用一份）。
+enum DocumentToolbarOverflow {
+    static let paragraphIDs = ["format.paragraph", "format.quote", "format.codeBlock"]
+    static let inlineIDs = ["format.bold", "format.italic", "format.underline",
+                            "format.strikethrough", "format.highlight", "format.inlineCode"]
 }

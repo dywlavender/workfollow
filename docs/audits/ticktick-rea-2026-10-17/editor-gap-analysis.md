@@ -393,7 +393,7 @@
 | TI2-05b | **部分完成** | 任务形态 `TaskKind { text, note, checklist }` 进 Domain（旧快照缺键 → `.text`）；顶栏类型按钮 + 三行菜单；切到清单把普通/列表段落变检查项，切回文本/笔记还原为段落（已完成项保留删除线），单步撤销；清单形态下顶栏进度条用检查项完成度。**未做**：笔记形态的独立渲染/笔记实体化 | `TaskKindTests` 6 项（迁移 / 两个方向的内容映射 / 撤销 / 顶栏入口 / 清单进度） |
 | TI2-05a | **部分完成** | 检查项整项操作：空项行首退格删掉该项、活动项行尾 × 删除整项（含换行、可撤销）。**未做**：逐项提醒、清单模式与形态切换（05b，需 Domain `TaskKind`） | `DocumentChecklistItemTests` 5 项（空项退格 / 非空不退 / 删中间项 / 删末项 / 行尾按钮几何） |
 | TI2-15 | **已完成** | 笔记信息：有正文时顶栏出现 `info.circle` 入口，浮层给「字数（不计空白）/ 创建 / 修改」三行（对齐 `TTTaskDetailNoteInfoViewController`）；空正文不显示 | `TaskNoteInfoTests` 3 项（字数口径 / 日期格式 / 入口显隐与位置） |
-| TI2-16 | **部分完成** | 标题级别 H4–H6：命令 + 工具条 H 选择器补到六级（Assets.car `md_header4..6`），选择器行徽标补 `H₄–H₆`、面板高 264；Slash 保持滴答实测的 12 项不扩。**未做**：工具条「更多」溢出（`md_more`） | `HeadingLevelTests` 3 项 + `DocumentProfileTests` 选择器契约更新 |
+| TI2-16 | **已完成** | ① 标题级别 H4–H6：命令 + 工具条 H 选择器补到六级（`md_header4..6`），徽标 `H₄–H₆`、面板高 264；② 工具条尾部「更多」溢出菜单（`md_more` / `moreButtonClicked:`）：段落 3 项 + 行内 6 项 + 时间/链接/附件；Slash 仍保持实测的 12 项 | `HeadingLevelTests` 3 项 + `DocumentToolbarOverflowTests` 2 项 + `DocumentProfileTests` 契约更新 |
 | TI2-11 | **已完成** | 补「打印」（`TaskPrintService`：标题/属性/正文按块排版/子任务 ☐☑ 清单，`NSPrintOperation` 走系统面板）；顶层菜单恢复滴答 15 项顺序 | `TaskPrintServiceTests` 2 项（完整稿 / 空正文）+ `TaskMoreMenuRoundTwoTests` 顺序断言更新 |
 | TI2-21 | **已完成** | 行首块手柄：空行「+」、标题 H 角标、正文六点手柄共用同一条沟槽命中区，点开都是块类型菜单（Slash 空查询态）；列表/检查项/引用/代码行不接管（`openBlockMenu` 取代 `openEmptyBlockMenu`，检查项勾选不受影响） | `DocumentBlockMenuTests` 4 项 + `DocumentDecorationRenderTests` 手柄渲染 1 项（原"沟槽为空"守卫反转） |
 | TI2-07 | **部分完成** | 顶栏下沿 2pt **只读**子任务进度条（`TaskInspectorSubtaskProgress` 解析 "2/5"，`fraction` 进度）；不改 Header 高度。**未做**：可拖动 / `expectedProgress` 参照线 | `TaskInspectorProgressBarTests` 3 项（解析 / 比例 / 有无子任务的显隐） |
@@ -402,17 +402,28 @@
 | TI2-10 | **已完成** | 「预计专注」从顶层「更多」移入「开始专注」子菜单（番茄 / 正计时 / 设置预计专注同属 focus 出口），焦点面板仍锚在「更多」按钮上 | `TaskFocusSubmenuTests.testEstimateEntryLivesInFocusSubmenuAndOpensTheEstimatePanel` |
 | TI2-11 | **部分完成** | 顶层「更多」恢复滴答 15 项顺序（去掉自加的「预计专注」项）；「打印」仍缺席（无打印能力，保持"无假按钮"） | `TaskMoreMenuRoundTwoTests`（新增「预计专注」不得出现在顶层菜单的断言） |
 | TI2-06 / TI2-22 | **待实测** | 标题 Return 落点、新建/切任务是否自动聚焦标题——第 7 节 AX 探针未恢复，不凭推断改行为 | — |
-| TI2-08 / TI2-13 / TI2-14 / TI2-16b / TI2-18 | **未开始** | 见第 5 节逐项落点（清单候选、草稿恢复、沉浸书写、工具条溢出、多选面板比对） | — |
+| TI2-08 / TI2-13 / TI2-14 / TI2-18 | **未开始（有意延后）** | 见第 5 节逐项落点。理由见第 10 节 | — |
 
 口径说明：
 
 - 五项改动都不触碰存储格式；`deadlineAt` 早已在 `TaskSchedule` 与 `TaskDateDraftModel` 里，本轮只补入口。
 - 新增的渲染契约锚点：`InspectorRenderAnchor.deadlineLabel / attachments / tagStrip / focusEstimate`、`ScheduleRenderAnchor.deadlineRow`（测试与实现共用同一套锚点，不另建口径）。
 - 回归（第一批，截至 TI2-12）：全量 **1431 项：1424 通过 / 6 跳过 / 1 个与本轮无关的 flaky**（`FocusTaskPickerPanelFlowTests`，单独复跑通过）。
+- 最终合并回归（第 10–11 笔之后）：**198 项 0 失败**（任务形态/领域/持久化/详情/编辑器/工具条），覆盖本轮全部改动面；全量套件仍受测试宿主读源门控限制，未再整跑。
 - 回归（第二批，TI2-21 / TI2-07）：全量套件在本次会话后段被**测试宿主的源码读取门控**拖慢（读 `#filePath` 的契约测试单次约 2 分钟，与代码无关；沙箱/TCC 行为），改为**分组回归**并全部通过：inspector 组 32 项、子任务/专注/进度组逐个类通过（10 + 6 + 2 + 3）、文档组 23 项（块菜单 4 + 装饰 11 + 层级 5 + 进度 3）；`TaskMoreMenuRoundTwoTests` 2 项在门控下 138s 后通过。
-- 新增测试累计 **71** 个方法（截止 8 + 属性行 6 + 专注入口 1 + 排序折叠 10 + 行标记 2 + 角标 1 + 块菜单 4 + 进度 3 + 标题级别 3 + 打印 2 + 检查项整项 5 + 标签补全 6 + 链接悬停 5 + 内联评论 2 + 独立窗口 2 + 笔记信息 3 + 任务形态 6 + 粘贴文件 2），另反转 1 条既有断言（非空正文行沟槽从"必须干净"改为"必须有块手柄"）、扩充 1 条移除清单、1 处测试支撑锚点映射、2 处选择器/目录计数断言随 H4–H6 更新。
+- 新增测试累计 **73** 个方法（截止 8 + 属性行 6 + 专注入口 1 + 排序折叠 10 + 行标记 2 + 角标 1 + 块菜单 4 + 进度 3 + 标题级别 3 + 打印 2 + 检查项整项 5 + 标签补全 6 + 链接悬停 5 + 内联评论 2 + 独立窗口 2 + 笔记信息 3 + 任务形态 6 + 粘贴文件 2 + 工具条溢出 2），另反转 1 条既有断言（非空正文行沟槽从"必须干净"改为"必须有块手柄"）、扩充 1 条移除清单、1 处测试支撑锚点映射、2 处选择器/目录计数断言随 H4–H6 更新。
 - 测试环境注意：`AppEnvironment` + 承载 `NSHostingView` 的窗口在 XCTest 内存检查里"关窗后释放"会过释放（与本轮功能无关，最简 `Text` 复现）；内联评论的渲染断言因此不关窗，真机关窗路径未自动化复核。
 - 真机路径已由测试覆盖面板切换与写回（`testDeadlineRowSwitchesPanelAndWritesDeadlineThroughTheRealInspector`）；仍未做的是**视觉像素级复核**（AX 不可用），下次开 app 时按第 7 节顺手看一眼即可。
+
+## 10. 有意延后（与技术/产品判断）
+
+| 项 | 为什么这轮不做 |
+|---|---|
+| TI2-08 清单候选（`shouldShowQuickList`） | 触发字符与候选来源没有运行证据；猜一个触发器不如不做 |
+| TI2-13 草稿恢复 | workspace 写入是即时的，落盘 debounce 仅 0.4s（`WorkspaceSnapshotDebouncer`），丢失窗口过小；草稿日志+恢复提示是新的产品决策 |
+| TI2-14 沉浸书写 | 需要"单编辑器实例"的架构（主详情与沉浸窗口同时挂两个编辑器会互写同一文档）；应先做 detach 编辑器的所有权模型 |
+| TI2-18 多选面板 | 已有 `TaskBatchPanelView` 在早前批量轮对齐过（属性行 + 动作瓦片），逐项比对价值低于其余项 |
+| TI2-09 回复/编辑/评论附件 | 本地评论是单机单用户，回复语义缺失；附件/表情需要新的存储与渲染 |
 
 ## 附录：证据索引
 
