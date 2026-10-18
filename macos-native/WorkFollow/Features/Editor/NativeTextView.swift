@@ -682,6 +682,16 @@ final class NativeTextView: NSTextView {
     // MARK: - 图片粘贴（迁移自 Flutter onImagePaste：剪贴板图片 → data URL 图片块）
 
     override func paste(_ sender: Any?) {
+        // 剪贴板是文件（Finder 复制/拖到编辑区）：交给宿主落盘成附件（TI2-03）。
+        if let pasteFiles = profile.onPasteFiles {
+            let urls = (NSPasteboard.general.readObjects(
+                forClasses: [NSURL.self],
+                options: [.urlReadingFileURLsOnly: true]) as? [URL]) ?? []
+            if !urls.isEmpty {
+                pasteFiles(urls)
+                return
+            }
+        }
         if insertPastedImage() { return }
         // NSTextView 默认 `paste` 不经过 `insertText`，输入期 Markdown 转换与 Slash
         // 触发都会绕过；纯文本粘贴改走 `insertText`，与逐键输入同一条路径

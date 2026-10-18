@@ -9,6 +9,8 @@ struct TaskEditorHostActions {
     /// `#` 标签补全：候选来自工作区已有标签，选中后把标签挂到任务上。
     var availableTags: () -> [String] = { [] }
     var addTag: (String) -> Void = { _ in }
+    /// 粘贴文件成附件（TI2-03 剩余项）。
+    var pasteFiles: ([URL]) -> Void = { _ in }
 }
 
 enum TaskDocumentProfile {
@@ -26,6 +28,7 @@ enum TaskDocumentProfile {
                                       slashCommandOverride: DocumentProfile.compactDocumentCommands(formatIDs: slashFormatIDs) + commands)
         profile.tagCandidates = host.availableTags
         profile.onTagInserted = host.addTag
+        profile.onPasteFiles = host.pasteFiles
         return profile
     }
 

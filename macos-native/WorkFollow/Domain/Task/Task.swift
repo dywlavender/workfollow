@@ -235,6 +235,8 @@ struct Task: Identifiable, Equatable, Codable {
     var series: TaskSeries? = nil
     var occurrenceKey: OccurrenceKey? = nil
     var occurrenceOverride: OccurrenceOverride? = nil
+    /// 任务形态（TI2-05b）。additive：旧快照缺键 → `.text`。
+    var kind: TaskKind = .text
 
     var isAbandoned: Bool { abandonedAt != nil }
     var isClosed: Bool { status == .completed || isAbandoned }
@@ -250,7 +252,7 @@ extension Task {
         case id, title, document, tags, recurrence, recurrenceRule, reminderAt, reminderOffsets
         case attachments, list, listID, tagReferences, priority, schedule, status, parentID, childOrder
         case createdAt, updatedAt, completedAt, deletedAt, isPinned, abandonedAt, skippedAt, convertedNoteID
-        case sourceNoteID, sectionID, focusEstimate, series, occurrenceKey, occurrenceOverride
+        case sourceNoteID, sectionID, focusEstimate, series, occurrenceKey, occurrenceOverride, kind
     }
 
     init(from decoder: Decoder) throws {
@@ -286,6 +288,7 @@ extension Task {
         series = try values.decodeIfPresent(TaskSeries.self, forKey: .series)
         occurrenceKey = try values.decodeIfPresent(OccurrenceKey.self, forKey: .occurrenceKey)
         occurrenceOverride = try values.decodeIfPresent(OccurrenceOverride.self, forKey: .occurrenceOverride)
+        kind = try values.decodeIfPresent(TaskKind.self, forKey: .kind) ?? .text
     }
 
     func encode(to encoder: Encoder) throws {
@@ -297,6 +300,7 @@ extension Task {
         try values.encodeIfPresent(series, forKey: .series)
         try values.encodeIfPresent(occurrenceKey, forKey: .occurrenceKey)
         try values.encodeIfPresent(occurrenceOverride, forKey: .occurrenceOverride)
+        try values.encode(kind, forKey: .kind)
         try values.encode(title, forKey: .title)
         try values.encode(document, forKey: .document)
         try values.encode(tags, forKey: .tags)

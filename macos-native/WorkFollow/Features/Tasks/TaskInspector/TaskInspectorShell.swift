@@ -37,6 +37,8 @@ struct TaskInspectorShell: View {
     @State private var showComments = false
     /// 笔记信息浮层（TI2-15）。
     @State private var showNoteInfo = false
+    /// 任务类型浮层（TI2-05b）。
+    @State private var showKindMenu = false
     @StateObject private var editorHandle = DocumentEditorHandle()
 
     var body: some View {
@@ -82,6 +84,7 @@ struct TaskInspectorShell: View {
             showFormattingToolbar = false
             showComments = false
             showNoteInfo = false
+            showKindMenu = false
         }
         .onChange(of: workspace.pendingChildTitleEditorID) { _, _ in beginPendingChildEditing() }
         .onExitCommand {
@@ -121,13 +124,22 @@ struct TaskInspectorShell: View {
                                                                        environment: environment)
                             },
                             onInfo: task.document.isEmpty ? nil : { showNoteInfo.toggle() },
+                            onKind: { showKindMenu.toggle() },
+                            kindSymbol: task.kind.symbol,
                             schedule: { scheduleChip(task, field: .due) },
                             priority: { priorityMenu(task) })
         // 子任务进度条（TI2-07）：贴在顶栏下沿，不改变 Header 高度/内容几何。
         .overlay(alignment: .bottom) {
-            if let progress = TaskInspectorSubtaskProgress.parse(workspace.subtaskProgress(for: task.id)) {
+            if let progress = headerProgress(task) {
                 TaskInspectorProgressBar(progress: progress)
                     .inspectorRenderAnchor(.progressBar)
+            }
+        }
+        .background {
+            AnchoredPropertyPanel(isPresented: $showKindMenu, width: 176,
+                                  placement: .verticalInOwner,
+                                  focusPolicy: .preservePresenter, title: "任务类型") {
+                kindPopover(task)
             }
         }
         .background {
@@ -495,6 +507,23 @@ struct TaskInspectorShell: View {
         }
     }
 
+    /// 顶栏进度来源：优先子任务；清单形态下没有子任务时用检查项完成度。
+    private func headerProgress(_ task: Task) -> TaskInspectorSubtaskProgress? {
+        if let progress = TaskInspectorSubtaskProgress.parse(workspace.subtaskProgress(for: task.id)) {
+            return progress
+        }
+        guard task.kind == .checklist else { return nil }
+        var done = 0
+        var total = 0
+        for block in task.document.blocks {
+            guard case .checklist(let checked) = block.kind else { continue }
+            total += 1
+            if checked { done += 1 }
+        }
+        guard total > 0 else { return nil }
+        return TaskInspectorSubtaskProgress(done: done, total: total)
+    }
+
     /// 顶栏次要日期：只在有截止日期时占位，逾期红字；点击直接改截止日期。
     private func deadlineLabel(_ task: Task, deadline: Date) -> some View {
         let now = workspace.clock()
@@ -808,6 +837,12 @@ struct TaskInspectorShell: View {
                         guard let current = workspace.task(for: task.id) else { return }
                         guard !current.tags.contains(tag) else { return }
                         workspace.setTags(task.id, (current.tags + [tag]).sorted())
+                    },
+                    pasteFiles: { urls in
+                        guard let imported = try? NativeAttachmentFiles.importFiles(urls),
+                              !imported.isEmpty else { return }
+                        guard let current = workspace.task(for: task.id) else { return }
+                        workspace.setAttachments(task.id, current.attachments + imported)
                     })),
                 contentSized: true,
                 handle: editorHandle,
@@ -850,6 +885,43 @@ struct TaskInspectorShell: View {
                 }
         }
         .onChange(of: task.id) { _, _ in showPriorityMenu = false }
+    }
+
+    /// 任务类型菜单（TI2-05b）：三行 + 当前值对勾。
+    private func kindPopover(_ task: Task) -> some View {
+        VStack(spacing: 2) {
+            ForEach(TaskKind.allCases, id: \.self) { kind in
+                Button {
+                    showKindMenu = false
+                    workspace.setKind(task.id, kind)
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: kind.symbol)
+                            .font(.system(size: 12))
+                            .foregroundStyle(WFColors.secondaryText)
+                            .frame(width: 16)
+                        Text(kind.title)
+                        Spacer(minLength: 0)
+                        if task.kind == kind {
+                            Image(systemName: "checkmark")
+                                .font(.system(size: 10, weight: .semibold))
+                                .foregroundStyle(WFColors.accent)
+                        }
+                    }
+                    .font(WFType.menu)
+                    .frame(maxWidth: .infinity, minHeight: 32, alignment: .leading)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(WFColors.text)
+                .padding(.horizontal, 8)
+            }
+        }
+        .padding(8)
+        .frame(width: 176)
+        .background(WFColors.content, in: RoundedRectangle(cornerRadius: 14))
+        .overlay(RoundedRectangle(cornerRadius: 14).stroke(WFColors.border))
+        .background(PopupEscapeRouter(depth: 2) { showKindMenu = false })
     }
 
     private func priorityPopover(_ task: Task) -> some View {

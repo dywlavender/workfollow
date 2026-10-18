@@ -347,6 +347,42 @@ final class TaskActions {
         editText(id, document: document)
     }
 
+    /// 任务形态切换（TI2-05b）：切到清单把普通/列表段落变成检查项；切回文本/笔记
+    /// 把检查项变回段落（已完成项保留删除线，避免"勾选状态"静默丢失）。
+    @discardableResult
+    func setKind(_ id: UUID, _ kind: TaskKind) -> TaskActionResult {
+        guard let current = store.task(id), current.kind != kind else { return .success(id) }
+        return edit(id) { task in
+            task.kind = kind
+            task.document = Self.document(task.document, convertingTo: kind)
+        }
+    }
+
+    /// 形态切换的内容映射（纯函数，测试直接调）。
+    static func document(_ document: NativeDocument, convertingTo kind: TaskKind) -> NativeDocument {
+        var document = document
+        document.blocks = document.blocks.map { block in
+            var copy = block
+            switch (kind, block.kind) {
+            case (.checklist, .paragraph), (.checklist, .bullet), (.checklist, .ordered):
+                copy.kind = .checklist(false)
+            case (.text, .checklist(let checked)), (.note, .checklist(let checked)):
+                copy.kind = .paragraph
+                if checked {
+                    copy.runs = copy.runs.map { run in
+                        var run = run
+                        run.marks.insert(.strikethrough)
+                        return run
+                    }
+                }
+            default:
+                break
+            }
+            return copy
+        }
+        return document
+    }
+
     private func editText(_ id: UUID, title: String? = nil,
                           document: NativeDocument? = nil) -> TaskActionResult {
         guard let task = store.task(id) else { return .failure(.missingTask) }

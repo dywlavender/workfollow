@@ -10,6 +10,9 @@ struct TaskInspectorHeader<Schedule: View, Priority: View>: View {
     var onDetach: (() -> Void)? = nil
     /// 笔记信息（TI2-15）：只在宿主给出回调时渲染（有正文的任务）。
     var onInfo: (() -> Void)? = nil
+    /// 任务形态按钮（TI2-05b）：滴答标题 cell 的 kindButton。
+    var onKind: (() -> Void)? = nil
+    var kindSymbol: String = "text.alignleft"
     @ViewBuilder let schedule: () -> Schedule
     @ViewBuilder let priority: () -> Priority
 
@@ -68,6 +71,14 @@ struct TaskInspectorHeader<Schedule: View, Priority: View>: View {
             .frame(maxWidth: .infinity)
             .frame(height: WFMetrics.controlHeight)
             .inspectorRenderAnchor(.scheduleViewport)
+            if let onKind {
+                AppKitIconButton(symbol: kindSymbol, pointSize: 13,
+                                 tint: .inspectorSecondary, accessibilityLabel: "任务类型",
+                                 action: onKind)
+                    .frame(width: 24, height: WFMetrics.controlHeight)
+                    .help("任务类型")
+                    .inspectorRenderAnchor(.kind)
+            }
             if let onInfo {
                 AppKitIconButton(symbol: "info.circle", pointSize: 13,
                                  tint: .inspectorSecondary, accessibilityLabel: "笔记信息",

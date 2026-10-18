@@ -1198,6 +1198,14 @@ final class TaskWorkspaceModel: ObservableObject {
         return result
     }
 
+    /// 任务形态切换（TI2-05b），内容映射见 `TaskActions.document(_:convertingTo:)`。
+    @discardableResult
+    func setKind(_ id: UUID, _ kind: TaskKind) -> TaskActionResult {
+        let result = withMaterializedTask(id) { actions.setKind($0, kind) }
+        didMutate(result)
+        return result
+    }
+
     /// 合并子任务到正文（底栏 mergeButton）：子任务标题并入正文后软删子任务。
     @discardableResult
     func mergeChildrenIntoDocument(_ id: UUID) -> TaskActionResult {
